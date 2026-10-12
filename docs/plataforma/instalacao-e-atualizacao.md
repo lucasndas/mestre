@@ -36,7 +36,7 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 ### Core no Linux (`mestre install core`)
 
 1. Registra a versão do Ubuntu (o [checklist](checklist.md) acompanha).
-2. Cria as contas `mestre` e `mestre-agente` e as pastas de dados com dono e permissão ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
+2. Cria as contas `mestre` e `mestre-agente` (contas de sistema, grupo próprio, sem pasta pessoal, shell `nologin`; os comandos estão em [ambiente](../desenvolvimento/ambiente.md#conta-mestre-agente-nesta-máquina-linux)) e as pastas de dados com dono e permissão ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
 3. Gera a chave do [cofre](cofre.md#chave-do-cofre) e cria o banco ([persistência](../arquitetura/persistencia.md)).
 4. Cria a CA interna, o certificado do servidor do Core e o certificado próprio do Guardião do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)); a chave da CA vai para o cofre.
 5. Instala as unidades systemd `mestre-core`, `mestre-node` (o nó local, com a conta `mestre`, que inicia os agentes como `mestre-agente`, e banco de nó próprio), `mestre-guardiao` e o ajudante de troca `mestre-update` ([atualização automática](autoatualizacao.md)), com as opções de reinício de [camadas](../autocura/camadas.md#valores-padrão), e os arquivos de serviço do Avahi ([descoberta](../conectividade/descoberta.md#mdns)).

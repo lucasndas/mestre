@@ -54,6 +54,20 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 | `go run ./tools/codecheck` | só as regras de código fora do linter ([estilo](convencoes.md#estilo)) |
 | `golangci-lint run ./...` | só o linter |
 
+## Conta `mestre-agente` nesta máquina (Linux)
+
+Criada para os spikes do M1 e mantida: é a mesma conta que o Mestre usa ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). O instalador do Core e do nó Linux faz igual ([instalação](../plataforma/instalacao-e-atualizacao.md)):
+
+```bash
+sudo useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin mestre-agente
+sudo install -d -m 0755 /var/lib/mestre
+sudo install -d -o mestre-agente -g mestre-agente -m 2770 /var/lib/mestre/contas
+```
+
+Só da máquina de desenvolvimento (o instalador não faz):
+- `/opt/mestre-clis/bin/` com cópias de `claude`, `codex` e `agy` (`sudo install -m 0755 "$(readlink -f ~/.local/bin/<cli>)" /opt/mestre-clis/bin/<cli>`), porque os da pasta pessoal (`0750`) não são executáveis pelo `mestre-agente`. Atualize as cópias quando o CLI pessoal mudar de versão.
+- Regra do sudo `/etc/sudoers.d/mestre-dev-agente` (`lucasndas ALL=(mestre-agente) NOPASSWD: ALL`, modo `0440`, conferida com `sudo visudo -cf`), para testes e spikes iniciarem processos como `mestre-agente`. O Mestre não usa sudo: o `mestre-node` usa `CAP_SETUID`/`CAP_SETGID` ([componentes](../arquitetura/componentes.md)).
+
 ## Windows Sandbox para os spikes do M1
 
 Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) rodam no Windows Sandbox (Windows Pro com o recurso ligado), que começa limpo e não guarda nada ao fechar. Arquivos em `tools/winsandbox/`: `mestre-spikes.wsb` (rede ligada; compartilha só `C:\mestre\tools\winsandbox` como `C:\winsandbox`; roda o preparo ao abrir), `setup.ps1` (instala Git for Windows e Go 1.27.2 com SHA-256 conferido e o Claude Code pelo instalador oficial; clona o repositório em `C:\mestre` dentro do Sandbox, na branch `spike/m1-windows`) e `spikes-prompt.md` (o pedido para a sessão do Claude que roda os spikes).
