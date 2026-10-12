@@ -63,11 +63,12 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 | LIN-01 | os dois | Ubuntu LTS; versão registrada na instalação e mudança detectada | aviso | — |
 | LIN-02 | Core | Avahi rodando e nome `.local` resolvendo | grave | reiniciar o Avahi (aprovação) |
 | LIN-03 | Core | firewall (ufw/iptables) libera as portas do motor, do Guardião do Core e da descoberta ([portas](../arquitetura/componentes.md#portas)) | grave | criar regras (aprovação) |
-| LIN-04 | os dois | serviços do motor (`mestre-core` ou `mestre-node`) e `mestre-guardiao` ativos, com `Restart=always` (e watchdog no motor) | grave | reconfigurar (aprovação) |
+| LIN-04 | os dois | serviços do motor (`mestre-node`; no Core, também `mestre-core`) e `mestre-guardiao` ativos, com `Restart=always` (e watchdog no motor) | grave | reconfigurar (aprovação) |
 | LIN-05 | Core | chave do cofre com dono e permissão corretos ([cofre](cofre.md#chave-do-cofre)) | grave | corrigir permissão (aprovação) |
 | LIN-07 | Core | chave do cofre ainda em arquivo num servidor com `systemd-creds` e TPM2 disponíveis ([cofre](cofre.md#chave-do-cofre)) | aviso | mover a chave para `systemd-creds` (aprovação) |
 | LIN-08 | os dois | conta `mestre-agente` existe e os terminais rodam com ela, nunca com `mestre` ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) | grave | recriar a conta (aprovação) |
 | LIN-09 | nó; Core no modo máquina única | firewall libera a porta da página reserva só para a rede local | aviso | criar regra (aprovação) |
+| LIN-10 | os dois | cada provedor usado pelas bases do nó (`claude`, `codex`, `agy`) roda como `mestre-agente`, com a pasta do perfil de conta: `--version` e a verificação de login do ALL-11 feitas com essa conta | grave | manual (o alerta explica o passo) |
 
 ### Itens: todas as máquinas
 
@@ -75,7 +76,7 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 |---|---|---|---|
 | ALL-01 | motor e Guardião conectados ao Core, heartbeat em dia; credencial não revogada | grave | refazer descoberta (sozinho); revogada: manual |
 | ALL-02 | Guardião do Core responde aos nós (sondagem da porta dele) | grave | manual |
-| ALL-03 | certificados TLS válidos e com mais de 30 dias até vencer ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)) | aviso; grave com menos de 7 dias | renovar (sozinho) |
+| ALL-03 | certificados TLS válidos e com mais de 30 dias até vencer; a renovação automática acontece aos 30 dias, então chegar abaixo disso indica que ela falhou ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)) | aviso; grave com menos de 7 dias | renovar (sozinho) |
 | ALL-04 | relógio do nó a menos de 5 s do relógio do Core ([protocolo](../conectividade/protocolo.md)) | aviso | manual |
 | ALL-05 | CLI `mestre` no PATH, `MESTRE_CLI` definido e `mestre debug` passa | grave | manual |
 | ALL-06 | git instalado, versão 2.32 ou maior ([identidades e Apps](../github/identidades-e-apps.md)) | grave | manual |
@@ -85,7 +86,7 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 | ALL-10 | provedores usados pelas bases do nó (`claude`, `codex`, `agy`) instalados, com versão registrada e não abaixo da mínima ([adaptador](../provedores/adaptador.md)) | grave | manual |
 | ALL-11 | cada perfil de conta das fichas está **logado** no seu provedor e, no Codex, com os **hooks do Mestre confiados** (configuração inicial do perfil, [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta)); perfil incompleto não recebe personagens | grave | manual (o painel guia) |
 | ALL-12 | **pré-confiança de pastas por provedor** para o clone principal e os worktrees das mesas do nó: Claude Code (`hasTrustDialogAccepted` no `.claude.json` da conta), Codex (`trust_level = "trusted"`; a confiança dos hooks é do perfil, ALL-11), Antigravity (`trustedWorkspaces`) ([sessão zero da mesa](../sessao-zero/mesa.md)) | grave | pré-confiar de novo (sozinho) |
-| ALL-13 | **cópia `.claude/skills/` ainda necessária:** o teste de conformidade do Claude Code confere se ele já lê `.agents/skills/`; se ler, oferece desligar a cópia ([ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)) | aviso | desligar a cópia (Dono ou Administrador) |
+| ALL-13 | **cópia `.claude/skills/` ainda necessária:** o teste de conformidade do Claude Code confere se ele já lê `.agents/skills/`; se ler, **oferece** desligar a cópia ([ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)); sem a aprovação, a cópia continua sendo gerada ([sessão zero da mesa](../sessao-zero/mesa.md#regras-e-erros)) | aviso | desligar a cópia (só com aprovação de Dono ou Administrador) |
 | ALL-14 | projeto com `CLAUDE.md`: avisa que os agentes Claude leem um arquivo diferente dos outros e sugere unificar no `AGENTS.md` ([precedência](../arquitetura/precedencia.md)) | aviso | manual |
 | ALL-15 | personagens em monitoramento reduzido por falta de hooks ([adaptador](../provedores/adaptador.md)) | aviso | conforme o motivo |
 | ALL-16 | Apps sem `bot_user_id` lido e pastas de skills `mestre-*` sem marcador ([skills geradas](../cli/skills-geradas.md)) | aviso | manual |
@@ -108,7 +109,7 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 - **CA-CHK-07** · *rápida* — **Dado** um comando de verificação ausente, **quando** o item roda, **então** o resultado é "não foi possível verificar", nunca "ok".
 - **CA-CHK-11** · *rápida* — **Dado** um Core Windows falso em que `cofre.key` dá leitura à conta do usuário, **quando** WIN-14 roda, **então** abre alerta grave com a correção da ACL, aplicada só com aprovação.
 - **CA-CHK-12** · *rápida* — **Dado** um Core sem nó remoto pareado, **quando** o checklist roda, **então** ALL-17 fica aberto como aviso; **quando** um nó é pareado, **então** o aviso fecha.
-- **CA-CHK-13** · *rápida* — **Dado** uma máquina Linux no papel de nó, **quando** o checklist monta a lista, **então** roda LIN-01, LIN-04, LIN-08, LIN-09 e os ALL-*, e não roda LIN-02, LIN-03, LIN-05 nem LIN-07.
+- **CA-CHK-13** · *rápida* — **Dado** uma máquina Linux no papel de nó, **quando** o checklist monta a lista, **então** roda LIN-01, LIN-04, LIN-08, LIN-09, LIN-10 e os ALL-*, e não roda LIN-02, LIN-03, LIN-05 nem LIN-07.
 
 ## Depende de
 

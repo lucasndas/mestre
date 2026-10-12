@@ -10,9 +10,9 @@ Repositório: https://github.com/lucasndas/mestre
 
 ## Instalar em 3 passos
 
-1. **Core (Ubuntu ou Windows):** rode o instalador, escolha o papel "Core" e abra o painel no navegador para criar o usuário Dono e os Apps do GitHub.
-2. **Nós (opcionais, Ubuntu ou Windows):** rode o instalador e escolha "nó"; ele encontra o Core sozinho na rede local e pede o código de convite.
-3. **Primeiro workspace:** no painel, informe um repositório do GitHub e a ficha do Grão-Mestre.
+1. **Core (Ubuntu ou Windows):** rode o instalador e escolha o papel "Core". Confie uma vez na CA do Mestre no navegador, abra o painel, crie o usuário Dono e crie os Apps do GitHub pelos links que o painel mostra. Uma máquina só já funciona (só Linux ou só Windows).
+2. **Nós (opcionais, Ubuntu ou Windows):** gere um convite no painel, rode o instalador, escolha "nó" e informe o código; o nó encontra o Core sozinho na rede local.
+3. **Telegram e primeiro workspace:** pareie o bot do Telegram pelo painel, informe um repositório do GitHub e a ficha do Grão-Mestre.
 
 Detalhes em [docs/operacao](docs/operacao/INDEX.md).
 

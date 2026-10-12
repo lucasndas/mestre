@@ -10,7 +10,7 @@ Pergaminhos são notas em Markdown que usuários e agentes conectados leem e esc
 
 ### Arquivo e índice
 
-- Cada pergaminho é um arquivo Markdown no Core, com o clone principal como fonte: `.mestre/mesas/<mesa>/pergaminhos/<id>.md` (pergaminhos de mesa) ou `.mestre/pergaminhos/<id>.md` (do canvas do workspace). O `<id>` é imutável (`p0001`, `p0002`… por mesa), para o arquivo não mudar de nome quando o título muda.
+- Pergaminhos existem **só dentro das mesas** (a visão do workspace não tem pergaminhos). Cada um é um arquivo Markdown no Core, com o clone principal como fonte: `.mestre/mesas/<mesa>/pergaminhos/<id>.md`. O `<id>` é imutável (`p0001`, `p0002`… por mesa), para o arquivo não mudar de nome quando o título muda.
 - O banco guarda só o índice e as conexões: id, mesa, nome, se o nome é fixo, tomo, revisão, tamanho, autor e data da última alteração ([persistência](../arquitetura/persistencia.md)).
 - Nos worktrees onde há personagens (Core e nós), o motor mantém cópias somente leitura atualizadas a cada mudança ([materialização](../sessao-zero/mesa.md)). Alterações vão sempre pela CLI ou pelo canvas; editar a cópia direto não tem efeito e é sobrescrito.
 - Se `.mestre/` é versionado no projeto ou não é decidido na [sessão zero do workspace](../sessao-zero/workspace.md).
@@ -62,6 +62,7 @@ Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 - Conteúdo acima do tamanho máximo: a operação falha dizendo o tamanho atual e o limite.
 - Pergaminho não visível ou inexistente: erro com o nome pedido.
 - `stack` de pergaminho de outra mesa: recusado.
+- Criar pergaminho fora de uma mesa (ex.: pelo Grão-Mestre, que não tem mesa): recusado.
 - Conteúdo de pergaminho é texto; o motor nunca o executa.
 
 ## Critérios de aceite
@@ -72,10 +73,10 @@ Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 - **CA-PERG-04** · *rápida* — **Dado** um tomo conectado ao QA, **quando** um pergaminho novo é empilhado nele, **então** o QA passa a lê-lo.
 - **CA-PERG-05** · *completa* — **Dado** um personagem num nó, **quando** o pergaminho muda no Core, **então** a cópia no worktree do nó é atualizada.
 - **CA-PERG-06** · *pesada* — **Dado** o painel aberto, **quando** um agente escreve num pergaminho da mesa, **então** o canvas mostra a mudança sem recarregar (MVP-11).
+- **CA-PERG-07** · *rápida* — **Dado** o Grão-Mestre, **quando** chama `mestre note create`, **então** é recusado porque pergaminhos só existem em mesas, e nenhum arquivo é criado fora de `.mestre/mesas/`.
 
 ## Depende de
 
 - [Conexões](conexoes.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Sessão zero da mesa](../sessao-zero/mesa.md)
-- [Canvas](../painel/canvas.md)

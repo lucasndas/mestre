@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os hooks do Codex saem do `.codex/hooks.json` do worktree e vão para a camada de usuário do perfil de conta (`$CODEX_HOME/hooks.json`), confiados uma vez por perfil.
 
 ## Contexto
 
@@ -48,6 +48,11 @@ Aceita, 2026-10-12.
      - Um processo por evento, o que exige resposta rápida.
      - É um ponto único de falha, com semânticas de falha opostas entre os provedores.
 
+Onde ficam os hooks do Codex (revisão de 2026-10-12):
+
+- **(a) `.codex/hooks.json` em cada worktree** (primeira versão desta decisão), excluído do git e confiado por worktree. Contras: cada mesa e cada nó exigiria aprovar os hooks de novo em `/hooks`, o que não é automático.
+- **(b) `hooks.json` do `CODEX_HOME` do perfil de conta**, só com a chamada fixa ao `mestre hook`. Prós: confiado uma vez por perfil e por nó, vale para todos os worktrees. Contras: depende de a confiança de camada de usuário valer para pastas novas (verificado na implementação).
+
 ## Decisão
 
 - **Todos os hooks gerados chamam `mestre hook`**, passando o provedor e o evento.
@@ -79,8 +84,8 @@ Aceita, 2026-10-12.
     - Se um arquivo de hook do Mestre acabar versionado, ele precisa funcionar numa máquina sem o Mestre, porque no Antigravity um comando inexistente bloqueia ([sessão zero da mesa](../sessao-zero/mesa.md)).
   - **Antigravity sem eventos:** não há eventos de início e fim de sessão nem de compactação. Esses personagens ficam com **monitoramento reduzido**, mostrado no canvas.
   - **`--dangerously-skip-permissions`:** no Antigravity, essa opção **não desliga os hooks** (testado na 1.3.3; a spec dizia o contrário). Mesmo assim, a base `antigravity` não pode usá-la, porque ela desliga a proteção nativa que serve de defesa em profundidade.
-  - **Confiança antes de iniciar:** o motor precisa pré-confiar a pasta em cada provedor. Sem isso, os hooks não rodam no Claude Code, e no Codex os hooks e o `AGENTS.md` do projeto não carregam.
-- **Confiança dos hooks do Codex:** decidida com o usuário em 2026-10-12: os hooks ficam na camada de usuário do perfil de conta e são confiados **uma vez**, na configuração inicial do perfil Codex, guiada pelo painel. Pré-gravar o hash e `--dangerously-bypass-hook-trust` não são usados.
+  - **Confiança antes de iniciar:** o motor precisa pré-confiar a pasta em cada provedor. Sem isso, os hooks não rodam no Claude Code, e no Codex o `AGENTS.md` do projeto não carrega; os hooks do Mestre no Codex dependem da confiança dada uma vez no perfil.
+- **Confiança dos hooks do Codex:** decidida com o usuário em 2026-10-12 (opção b acima): os hooks ficam na camada de usuário do perfil de conta e são confiados **uma vez**, na configuração inicial do perfil Codex, guiada pelo painel ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Se essa confiança não valer, o plano B é o motor gravar o `trusted_hash` calculado pelo mesmo algoritmo do Codex, validado no teste de conformidade, e, se isso também falhar, o painel guiar a confiança por worktree; o item completo está em [Codex](../provedores/codex.md). `--dangerously-bypass-hook-trust` não é usado.
 
 ## Fontes
 

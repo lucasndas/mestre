@@ -11,14 +11,14 @@ O Grão-Mestre é o agente orquestrador **único de cada [workspace](workspaces.
 ### Papel e limites
 
 - **Conversa:** recebe na [caixa de entrada](esperas-e-caixa-de-entrada.md) as mensagens de usuários (com prioridade) e os eventos das mesas e do GitHub; responde com `mestre reply` e avisa com `mestre notify` (sintaxe em [comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md)). Quais mensagens o motor envia por conta própria e quais são do Grão-Mestre: [bot](../telegram/bot.md).
-- **Mesas:** para cada pedido, decide se cabe numa mesa existente (repassa ao Mestre dela) ou se precisa de uma nova (abre: [mesas.md](mesas.md#abertura)). Recruta **somente Mestres de mesa**; não monta parties.
-- **GitHub:** porteiro do GitHub, sem token nem `gh` ([ações por nível](../github/acoes-por-nivel.md)). Cria épicos, revisa, aprova, conduz merges e cuida das configurações com aprovação ([aprovação no GitHub](../github/aprovacao-no-github.md)), e cria Apps de classes ([criação de Apps](../github/criacao-de-apps.md)).
-- **Aprovações:** é o aprovador delegado padrão ([política](../aprovacoes/politica.md)); não cria decretos permanentes nem amplia o teto.
+- **Mesas:** para cada pedido, decide se cabe numa mesa existente (repassa ao Mestre dela) ou se precisa de uma nova (cria o épico e abre: [mesas.md](mesas.md#abertura)). Quando o motor avisa que o PR de uma mesa foi mesclado, encerra a mesa (`mestre table close`, [encerramento](mesas.md#encerramento)). Recruta **somente Mestres de mesa**; não monta parties.
+- **GitHub:** porteiro do GitHub, sem token nem `gh` ([ações por nível](../github/acoes-por-nivel.md)). Cria os épicos (`mestre gh epic create`, sempre antes de abrir a mesa), revisa, aprova, conduz merges e cuida das configurações com aprovação ([aprovação no GitHub](../github/aprovacao-no-github.md)); prepara os Apps de classes, que o Dono cria e instala pelo link ([criação de Apps](../github/criacao-de-apps.md)).
+- **Aprovações:** é o aprovador delegado padrão: decide sozinho só o que a [política](../aprovacoes/politica.md#o-grão-mestre-como-aprovador-delegado) deixa; fora dela o motor recusa e ele leva o pedido aos usuários. Não cria decretos permanentes nem amplia o teto.
 - **Acompanhamento:** dependências entre mesas (registradas como dependência entre épicos no GitHub e respeitadas por ele: não manda a mesa dependente entregar antes da outra), conflitos entre branches, ordem de entrega e consumo ([limites de uso](../plataforma/limites-de-uso.md)).
 
 ### Onde roda
 
-Nome fixo no canvas e na CLI: `Grão-Mestre`. Roda sempre no **nó local do Core** (no Linux, dentro do motor do Core; no Windows, no serviço `mestre-node` da máquina do Core, com a conta do usuário; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável no Core; o painel recusa outra. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
+Nome fixo no canvas e na CLI: `Grão-Mestre`. Roda sempre no **nó local do Core**: o serviço `mestre-node` que existe em toda máquina Core, ligado ao Core como qualquer nó (no Linux com a conta `mestre`, iniciando os agentes como `mestre-agente`; no Windows com a conta do usuário; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável no Core; o painel recusa outra. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
 
 ### Fixo e protegido
 
@@ -42,7 +42,7 @@ Conteúdo obrigatório do modelo de instruções do Grão-Mestre (versionado com
    - repassar ao Mestre da mesa o pedido **com o texto original e os anexos, sem reescrever** (indicando a mensagem de origem; o motor copia);
    - nunca enviar segredos (tokens, senhas, chaves) pelo Telegram;
    - responder sozinho perguntas gerais ("como estão os épicos?", "o que travou hoje?") usando `mestre table list|status` e `mestre list`.
-3. **GitHub:** criar épicos; revisar e aprovar os PRs abertos pelas mesas; trazer revisões e CI para a mesa certa; conduzir merges; aprovar o que a política permite e perguntar aos usuários quando estiver em dúvida; se uma regra do repositório não puder ser satisfeita, explicar o motivo e não contornar.
+3. **GitHub:** criar o épico (`mestre gh epic create`) antes de abrir a mesa dele; revisar e aprovar os PRs abertos pelas mesas; trazer revisões e CI para a mesa certa; conduzir merges e, quando o motor avisar que o PR foi mesclado, encerrar a mesa com `mestre table close`; aprovar o que a política permite (`mestre approval decide`) e, fora dela ou na dúvida, perguntar aos usuários (`mestre approval ask`); se uma regra do repositório não puder ser satisfeita, explicar o motivo e não contornar.
 4. **Não bloquear:** delegar e encerrar o turno; reagir aos eventos da caixa de entrada. Usar `ask` bloqueante só para perguntas rápidas; para trabalho demorado, ask back ou missão.
 5. **Custo e prestação de contas:** acompanhar o consumo de todas as mesas e, ao fim de cada épico, entregar aos usuários um resultado curto (o que foi feito, PR, pendências).
 
@@ -59,8 +59,8 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 ## Regras e erros
 
 - Exatamente um Grão-Mestre por workspace: tentar recrutar outro é recusado.
-- Comandos exclusivos (`table`, `gh`, `app`, `notify`) chamados por outro personagem retornam erro de permissão ([convenções da CLI](../cli/convencoes.md)).
-- O Grão-Mestre só recruta Mestres de mesa: na abertura (dentro de `mestre table open`) e na troca de ficha de um Mestre de mesa (`recruit --replace`). Qualquer outro `recruit` ou `spawn` dele é recusado.
+- Os comandos exclusivos do Grão-Mestre estão na [CLI do Grão-Mestre](../cli/grao-mestre.md); chamados por outro personagem, retornam erro de permissão ([convenções da CLI](../cli/convencoes.md)).
+- O Grão-Mestre só recruta Mestres de mesa (na abertura, dentro de `mestre table open`, e na troca de ficha de um Mestre de mesa); o nível de cada comando é o da [CLI](../cli/coordenacao.md).
 - Se o Grão-Mestre não conseguir iniciar (ex.: conta do provedor deslogada), as mensagens de usuários ficam na fila e o motor responde ao usuário, como "Sistema", que o Grão-Mestre está indisponível e por quê.
 
 ## Critérios de aceite
@@ -71,12 +71,16 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - **CA-GM-04** · *completa* — **Dado** o Core reiniciado com duas mesas abertas, **quando** o motor volta, **então** o Grão-Mestre é o primeiro personagem iniciado e recebe a mensagem de retomada listando as duas mesas.
 - **CA-GM-05** · *rápida* — **Dado** um Mestre de mesa, **quando** ele chama `mestre table open`, **então** recebe erro de permissão.
 - **CA-GM-06** · *pesada* — **Dado** um pedido de funcionalidade pelo Telegram (dublê), **quando** o Grão-Mestre o trata, **então** cria o épico no GitHub (dublê), abre a mesa e repassa o pedido ao Mestre da mesa sem reescrever (MVP-4).
+- **CA-GM-07** · *rápida* — **Dado** uma política que não deixa o Grão-Mestre aprovar merges sozinho, **quando** ele chama `mestre approval decide` num pedido de merge, **então** recebe `human_required` e nada é aprovado; **quando** chama `mestre approval ask`, **então** o pedido chega aos usuários.
 
 ## Depende de
 
 - [Workspaces](workspaces.md)
-- [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md)
+- [Mesas](mesas.md)
 - [Personagens](personagens.md)
+- [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md)
 - [Precedência](../arquitetura/precedencia.md)
 - [Sessão zero do personagem](../sessao-zero/personagem.md)
 - [Ações por nível no GitHub](../github/acoes-por-nivel.md)
+- [Política de aprovação](../aprovacoes/politica.md)
+- [Roteamento do Telegram](../telegram/roteamento.md)

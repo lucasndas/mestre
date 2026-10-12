@@ -52,7 +52,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 ### Aguardando cota
 
 - **Detecção** (sinais detalhados em cada documento de provedor): Claude Code pelo hook `StopFailure` com `rate_limit` ou pela tela de limite; Codex por `rate_limit_reached_type` preenchido; Antigravity pelo erro de cota no fim do turno ou por uma janela com fração restante zero.
-- O personagem vai para `blocked` com o motivo "aguardando cota" e o horário em que a cota volta, quando conhecido ([personagens](../orquestracao/personagens.md#estados)).
+- O personagem vai para `blocked` com o motivo `quota` ("aguardando cota") e o horário em que a cota volta, quando conhecido ([personagens](../orquestracao/personagens.md#estados)).
 - O Mestre da mesa recebe um evento na caixa de entrada com: personagem, provedor, conta, quando a cota volta e as **fichas da mesma classe que usam outro provedor ou outra conta**, se existirem. Ele decide se troca a ficha (`recruit --replace`, [coordenação](../cli/coordenacao.md)) ou espera.
 - Se quem ficou sem cota é o próprio Mestre da mesa, o evento vai ao Grão-Mestre; se é o Grão-Mestre, o motor avisa os usuários.
 - A cota voltou (horário passou, ou o provedor voltou a responder, ou o `/usage` mostra fração maior que zero): o motor tira o `blocked` e entrega o que estava na fila.
@@ -72,7 +72,7 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - **CA-USO-01** · *rápida* — **Dado** um registro de statusLine gravado, **quando** o motor soma, **então** a mesa e o workspace mostram o custo e os tokens daquele turno.
 - **CA-USO-02** · *rápida* — **Dado** um limite de mesa em 10 USD e uso em 8 USD, **quando** chega novo registro, **então** sai um único alerta de 80%; um segundo registro abaixo de 100% não gera outro.
 - **CA-USO-03** · *rápida* — **Dado** uma mesa a 100% com um personagem ocupado, **quando** o limite é atingido, **então** o turno dele termina normalmente, a mesa fica pausada e nasce um pedido `custo_extra`.
-- **CA-USO-04** · *rápida* — **Dado** um personagem Codex com `rate_limit_reached_type` preenchido, **quando** o uso é lido, **então** ele fica `blocked` "aguardando cota" e o Mestre da mesa recebe as fichas alternativas da mesma classe.
+- **CA-USO-04** · *rápida* — **Dado** um personagem Codex com `rate_limit_reached_type` preenchido, **quando** o uso é lido, **então** ele fica `blocked` com motivo `quota` e o Mestre da mesa recebe as fichas alternativas da mesma classe.
 - **CA-USO-05** · *rápida* — **Dado** um personagem aguardando cota até 14:00 (relógio falso), **quando** passa das 14:00, **então** ele sai de `blocked` e recebe a fila.
 - **CA-USO-06** · *rápida* — **Dado** um provedor sem dado de tokens, **quando** o turno termina, **então** o registro tem tempo ativo e um turno.
 - **CA-USO-07** · *rápida* — **Dado** um pedido `custo_extra` que passaria o teto, **quando** o Grão-Mestre tenta aprovar, **então** é recusado e o pedido vai aos usuários Administrador ou acima.
@@ -87,6 +87,8 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - [Mesas](../orquestracao/mesas.md)
 - [Personagens](../orquestracao/personagens.md)
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
+- [Workspaces](../orquestracao/workspaces.md)
+- [Política de aprovação](../aprovacoes/politica.md)
 
 ## Fontes
 

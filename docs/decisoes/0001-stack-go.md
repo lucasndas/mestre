@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sistema, por um wrapper interno, e emulador de terminal no nó (abaixo).
 
 ## Contexto
 
@@ -37,19 +37,19 @@ Comparação feita com as versões disponíveis em outubro de 2026.
 | Velocidade de testes e relógio falso | `go test` rápido com cache; `testing/synctest` (GA no Go 1.25) torna temporizadores determinísticos e instantâneos; interface de relógio para o que cruza E/S | `tokio::time::pause()`/`advance()`; compilação e link lentos (dezenas de segundos incrementais num projeto async + TLS + SQLite, estimativa) | `bun test` muito rápido, `useFakeTimers`/`setSystemTime` (o construtor `Date` não é falsificado) |
 | Riscos principais | wrapper de ConPTY escrito à mão (estimativa: 300 a 500 linhas); SQLite em Go puro 1,3 a 2x mais lento que o C | iteração mais lenta; `portable-pty` sem release desde fev/2025; compilação cruzada com C; mais atrito com async para um time pequeno | Bun 1.4 (2026-08-20) é a primeira versão reescrita de Zig para Rust, ainda "não 100% compatível com Node.js"; sem serviço do Windows nem sd_notify; cada lacuna empurra para um binário auxiliar |
 
-Com **Node SEA** no lugar do Bun, as lacunas de serviço e de token continuam as mesmas. Além disso, o `node-pty` precisa ser extraído para um arquivo temporário e carregado com `process.dlopen`, e sua compilação exige MSVC com as bibliotecas Spectre.
+Com **Node SEA** no lugar do Bun, as lacunas de serviço do Windows e de ConPTY continuam as mesmas. Além disso, o `node-pty` precisa ser extraído para um arquivo temporário e carregado com `process.dlopen`, e sua compilação exige MSVC com as bibliotecas Spectre.
 
 **Rust**
 - Prós: ConPTY mais testado, menor uso de memória e Whisper dentro do processo (`whisper-rs` 0.16).
-- Contras: ciclo de compilar e testar mais lento, que afeta direto o orçamento de 30 s. Compilação cruzada para Windows com dependências em C. O trabalho do token de sessão é o mesmo que em Go.
+- Contras: ciclo de compilar e testar mais lento, que afeta direto o orçamento de 30 s. Compilação cruzada para Windows com dependências em C. O código de ConPTY, ACL e ambiente do usuário é o mesmo trabalho que em Go.
 
 **TypeScript/Bun**
 - Prós: uma só linguagem com o painel e testes muito rápidos.
-- Contras: runtime recém-reescrito por baixo de um serviço 24/7. Sem integração com o gerenciador de serviços do Windows nem com o sd_notify. ConPTY e notificações de sessão só por FFI.
+- Contras: runtime recém-reescrito por baixo de um serviço 24/7. Sem integração com o gerenciador de serviços do Windows nem com o sd_notify. ConPTY e ACLs só por FFI.
 
 **Go**
 - Prós: é a única opção em que todos os requisitos têm biblioteca madura sem CGO, com compilação cruzada trivial a partir do Linux e tempo falso na biblioteca padrão.
-- Contras: o código de ConPTY e de sessão do Windows é nosso.
+- Contras: o código de ConPTY, ACL e ambiente do usuário do Windows é nosso.
 
 ## Decisão
 
@@ -70,7 +70,10 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço e de token continuam as
   | SQLite | `modernc.org/sqlite` em WAL, com uma conexão de escrita |
   | UI | `embed` para servir o build do painel ([ADR 0017](0017-canvas-react-flow.md)) |
   | Testes | `testing/synctest` + interface de relógio injetável |
+  | Emulador de terminal no nó (tela para `check` e reconhecimento de telas) | `github.com/charmbracelet/x/vt` ou equivalente; escolha e plano B em [terminal](../arquitetura/terminal.md) |
+  | Git | **binário `git` do sistema** (2.32 ou maior) chamado por um wrapper interno único, `internal/gitx`; nunca uma biblioteca Go de git |
 
+- **Por que o binário `git`:** worktrees, `git bundle`, `info/exclude`, `skip-worktree` e `merge --ff-only` precisam se comportar exatamente como o git que a pessoa usa; bibliotecas Go de git não cobrem tudo isso com fidelidade. O `testkit` tem um **git falso** atrás da mesma interface do `gitx`, para a suíte rápida; critérios que precisam de git real ficam na completa ([dublês](../qualidade/dubles.md)).
 - **Fora do processo Go:**
   - Whisper roda como processo auxiliar ([ADR 0016](0016-whisper-cpp-local.md)).
   - O painel é TypeScript ([ADR 0017](0017-canvas-react-flow.md)).
@@ -82,12 +85,13 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço e de token continuam as
   - Instalar e voltar de versão é trocar um arquivo ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)).
   - Os temporizadores (heartbeat, backoff, tempos limite, rituais) são testáveis sem esperar.
 - **Negativas:**
-  - Mantemos de 300 a 500 linhas de código Windows de baixo nível (ConPTY, token, ambiente do usuário).
+  - Mantemos de 300 a 500 linhas de código Windows de baixo nível (ConPTY, ACL, ambiente do usuário).
+  - O git precisa estar instalado em toda máquina, na versão mínima, conferido pelo [checklist](../plataforma/checklist.md) (ALL-06); cada chamada é um processo, o que é irrelevante no volume do Mestre.
   - Os testes reais de ConPTY só rodam num runner Windows, na suíte completa ou na pesada.
   - O `synctest` não cobre E/S real de rede e disco. Nesses pontos usamos transporte e PTY falsos ([dublês](../qualidade/dubles.md)).
   - SQLite em Go puro é mais lento. Isso é irrelevante no volume de um orquestrador. A versão de `modernc.org/libc` fica fixada.
   - O repositório tem duas linguagens (Go e TypeScript). Os tipos compartilhados do protocolo são gerados a partir do Go ou de JSON Schema ([convenções](../desenvolvimento/convencoes.md)).
-- **Verificar na implementação:** ConPTY criado dentro de um serviço que roda com a conta do usuário, na sessão 0, num Windows 11 real antes de fechar o wrapper. Padrão e plano B: [Windows](../arquitetura/windows.md#verificar-na-implementação).
+- **Spike do M1:** o ConPTY criado dentro de um serviço que roda com a conta do usuário, na sessão 0, é testado num Windows 11 real antes de fechar o wrapper ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#spikes-do-m1)); padrão e plano B no documento dono, [Windows](../arquitetura/windows.md#verificar-na-implementação).
 
 ## Fontes
 

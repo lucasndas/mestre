@@ -27,6 +27,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - Só lê `.claude/skills/<nome>/SKILL.md` (e `~/.claude/skills/`, não usada pelo Mestre). `.agents/skills/` não aparece na documentação: tratar como não lida. Por isso o Mestre mantém a cópia gerenciada ([mesa](../sessao-zero/mesa.md), [ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)).
 - Num worktree, a busca para na raiz do worktree: a cópia precisa existir em cada worktree, **antes** de o agente iniciar (pasta criada depois exige `/reload-skills`; edições em pasta existente recarregam sozinhas).
 - `description` (com `when_to_use`) é cortada em 1.536 caracteres.
+- **Skills por personagem** (nível e classe): ficam em `.mestre/agents/<id>/.claude/skills/`, e o motor passa `--add-dir .mestre/agents/<id>`; o worktree compartilhado só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 
 ### Hooks
 
@@ -55,7 +56,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 | Usadas pela base | Para quê |
 |---|---|
 | `--append-system-prompt-file <MESTRE.md>` | camada do Mestre |
-| `--settings .mestre/agents/<id>/claude-settings.json` | regras nativas da classe e statusLine do personagem ([permissões](../classes/permissoes.md)) |
+| `--settings .mestre/agents/<id>/claude-settings.json` | regras nativas do personagem e statusLine ([reforço nativo](../classes/reforco-nativo.md)) |
 | `--session-id <uuid>` / `--resume <uuid>` | id gerado pelo motor, liga hooks ao PTY; retomada |
 | `--permission-mode default` | único modo permitido |
 
@@ -72,7 +73,11 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - **StopFailure** com `error = rate_limit` (também `overloaded`, `billing_error`, `authentication_failed`): sinal estruturado de limite.
 - **Notification** `quota_auto_resume_fired`, `quota_auto_resume_stale`, `quota_auto_resume_disabled`: a espera pelo limite continuou, parou esperando Enter ou terminou.
 - Reserva pela tela: `You've hit your session limit · resets …`, `Usage limit reached`, `API Error: Request rejected (429)`.
-- A continuação automática após o limite vem ligada; o personagem fica "aguardando cota" até ela disparar ([limites](../plataforma/limites-de-uso.md)).
+- A continuação automática após o limite vem ligada; o personagem fica `blocked` com motivo `quota` ("aguardando cota") até ela disparar ([limites](../plataforma/limites-de-uso.md)).
+
+### Digitação
+
+Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](adaptador.md#digitação-de-mensagens)). Colagens longas aparecem na tela como `[Pasted text #N +M lines]`, mas o texto chega inteiro ao modelo; o reconhecimento de telas ignora esse marcador.
 
 ### Telas que o PTY precisa tratar
 
@@ -87,6 +92,8 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 | pedido de permissão nativo | responder com a decisão registrada; sem decisão, negar |
 | primeiro uso e login | escalar como alerta do checklist |
 
+Quem chama estas operações na criação de mesas e personagens é a sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)); os perfis de conta estão em [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta).
+
 ## Regras e erros
 
 - Versão abaixo de 2.1.295: base recusada no nó (sem `onFailure`, o despachante falharia aberto).
@@ -99,14 +106,12 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - **CA-CLAUDE-02** · *rápida* — **Dado** qualquer base e ficha válidas, **quando** `BuildLaunch` monta o comando, **então** ele contém `--append-system-prompt-file`, `--settings` e `CLAUDE_CONFIG_DIR`, e nenhuma flag proibida.
 - **CA-CLAUDE-03** · *rápida* — **Dado** um `.claude.json` com outras chaves, **quando** `PreTrust` roda duas vezes, **então** o worktree fica com `hasTrustDialogAccepted = true` e o resto do arquivo não muda.
 - **CA-CLAUDE-04** · *rápida* — **Dado** um JSON de statusLine gravado com `rate_limits`, **quando** `ReadUsage` lê, **então** o registro de uso tem custo, % de contexto e as duas janelas com `used_pct` e `resets_at`.
-- **CA-CLAUDE-05** · *completa* — **Dado** o agente falso do Claude mostrando o menu de limite de uso, **quando** o adaptador reconhece a tela, **então** responde a opção de esperar e o personagem fica "aguardando cota".
+- **CA-CLAUDE-05** · *completa* — **Dado** o agente falso do Claude mostrando o menu de limite de uso, **quando** o adaptador reconhece a tela, **então** responde a opção de esperar e o personagem fica `blocked` com motivo `quota`.
 
 ## Depende de
 
-- [Adaptador](adaptador.md)
-- [Sessão zero da mesa](../sessao-zero/mesa.md) e [do personagem](../sessao-zero/personagem.md)
-- [Permissões](../classes/permissoes.md)
-- [Bases e fichas](../orquestracao/bases-e-fichas.md)
+- [Adaptador](adaptador.md) · [Despachante de hooks](despachante-de-hooks.md)
+- [Reforço nativo](../classes/reforco-nativo.md)
 
 ## Verificar na implementação
 
@@ -116,6 +121,7 @@ Todos são conferidos pelo [teste de conformidade](conformidade.md).
 - **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição.
 - **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 no nó Windows.
 - **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`). **Onde:** etapa 7.
+- **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** o motor manda mensagens de várias linhas pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e digita só a linha que pede para lê-lo. **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
 
 ## Fontes
 

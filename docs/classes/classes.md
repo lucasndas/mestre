@@ -12,13 +12,13 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
 
 | Escopo | Pasta (fonte no Core) | Quem cria | Aprovação |
 |---|---|---|---|
-| global | `<dados do Core>/classes/<classe>/` | Dono ou Administrador, pelo painel | — |
+| global | `<dados do Core>/classes-globais/<classe>/` ([persistência](../arquitetura/persistencia.md#arquivos)) | Dono ou Administrador, pelo painel | — |
 | workspace | `.mestre/classes/<classe>/` no clone principal | Dono ou Administrador; o Grão-Mestre pode propor | de um Administrador ou acima; o Grão-Mestre nunca aprova a própria proposta |
 | mesa | `.mestre/mesas/<mesa>/classes/<classe>/` | Mestre da mesa (ou usuários) | nenhuma, desde que dentro do [teto do workspace](teto-do-workspace.md) |
 
 - As classes são arquivos, para poderem ser versionadas; o banco do Core guarda o índice ([persistência](../arquitetura/persistencia.md)). Os nós recebem cópias materializadas pelo motor ([mesa](../sessao-zero/mesa.md)).
 - O nome (slug `[a-z0-9-]`) é único entre os escopos visíveis numa mesa (global + workspace + mesa). Variações têm nome próprio (ex.: `qa-api`).
-- Criar, editar e excluir têm a sintaxe em [comandos de coordenação](../cli/coordenacao.md) e também podem ser feitos no [painel](../painel/administracao.md).
+- Criar, editar e excluir têm a sintaxe em [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) e também podem ser feitos no [painel](../painel/administracao.md).
 
 ### Estrutura do pacote
 
@@ -46,7 +46,7 @@ O corpo do `CLASS.md` traz as instruções: o que fazer, como entregar, critéri
 
 ### Vínculo com um App do GitHub
 
-Toda classe nasce vinculada a um App: `novo` (o Grão-Mestre cria; até ficar pronto, a classe usa o App "Mestre" com o nome dela na mensagem e aparece "em criação"), `herdar:<classe>` (usa o App da classe de origem; só se `git.workflows` não for maior que o dela, ver [workflows](../github/identidades-e-apps.md#workflows)) ou o slug de um App existente. O vínculo fica no frontmatter e no banco; trocar de App só vale para ações novas. Detalhes em [identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md).
+Toda classe nasce vinculada a um App: `novo` (o Grão-Mestre prepara o App e o Dono o cria e instala pelo link; até ficar pronto, a classe usa o App "Mestre" com o nome dela na mensagem e aparece "em criação"), `herdar:<classe>` (usa o App da classe de origem; só se `git.workflows` não for maior que o dela, ver [workflows](../github/identidades-e-apps.md#workflows)) ou o slug de um App existente. O vínculo fica no frontmatter e no banco; trocar de App só vale para ações novas. Detalhes em [identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md).
 
 ### Hooks extras da classe
 
@@ -86,7 +86,7 @@ pre_tool:
 
 ### Skills da classe
 
-`skills` lista nomes de skills do pacote (`skills/<nome>/`) ou já existentes no `.agents/skills/` do projeto. O motor materializa as do pacote no worktree onde rodam personagens da classe ([mesa](../sessao-zero/mesa.md)). Como a pasta é compartilhada no worktree, todos os personagens dali enxergam essas skills; a camada do Mestre de cada um diz quais são as dele. As skills da CLI `mestre` estão em [skills geradas](../cli/skills-geradas.md).
+`skills` lista nomes de skills do pacote (`skills/<nome>/`) ou já existentes no `.agents/skills/` do projeto. As do pacote chegam **só aos personagens da classe**, nunca à pasta compartilhada do worktree: no Claude Code, em `.mestre/agents/<id>/`, lida por `--add-dir`; no Codex e no Antigravity, como seção compacta na camada do Mestre do personagem (`MESTRE.md` ou arquivo de agente). A regra única de entrega por provedor está em [sessão zero do personagem](../sessao-zero/personagem.md); as skills da CLI `mestre`, em [skills geradas](../cli/skills-geradas.md).
 
 ### Como a classe chega ao personagem
 
@@ -97,7 +97,9 @@ pre_tool:
 
 ### Validação (`mestre class check`)
 
-Confere: frontmatter e nome único; esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado e estado (pronto, em criação, herdado). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali.
+Confere: frontmatter e nome único; esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali.
+
+A entrega aos personagens (sessão zero), o vínculo com Apps (GitHub) e a aprovação de classes do workspace chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
@@ -119,9 +121,6 @@ Confere: frontmatter e nome único; esquema do `permissions.yaml`; que tudo cabe
 
 ## Depende de
 
-- [Permissões](permissoes.md) e [teto do workspace](teto-do-workspace.md)
-- [Adaptador](../provedores/adaptador.md)
-- [Sessão zero da mesa](../sessao-zero/mesa.md) e [do personagem](../sessao-zero/personagem.md)
-- [Identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md)
-- [Fluxo de aprovações](../aprovacoes/fluxo.md)
+- [Permissões](permissoes.md) · [Teto do workspace](teto-do-workspace.md)
+- [Adaptador](../provedores/adaptador.md) (eventos do Mestre para os hooks extras)
 - [Persistência](../arquitetura/persistencia.md)

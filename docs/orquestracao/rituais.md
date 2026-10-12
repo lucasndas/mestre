@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Um ritual dispara, por horário, um prompt ou comando num personagem, ou uma missão salva (ex.: "toda noite às 2h, rode a missão de testes"). O motor agenda e entrega pela [caixa de entrada](esperas-e-caixa-de-entrada.md); nunca digita no meio do trabalho de alguém.
+Um ritual dispara, por horário, um prompt ou comando num personagem existente, ou uma missão salva (ex.: "toda noite às 2h, rode a missão de testes"). O motor agenda e entrega pela [caixa de entrada](esperas-e-caixa-de-entrada.md); nunca digita no meio do trabalho de alguém.
 
 ## Comportamento
 
@@ -12,18 +12,18 @@ Um ritual dispara, por horário, um prompt ou comando num personagem, ou uma mis
 
 | Escopo | Criado por | Alvos possíveis | Dono (recebe devoluções) |
 |---|---|---|---|
-| Mesa | Mestre da mesa, ou usuário Administrador ou acima pelo painel | personagem ou ficha da mesa, ou missão da mesa | Mestre da mesa |
+| Mesa | Mestre da mesa, ou usuário Administrador ou acima pelo painel | personagem da mesa ou missão da mesa | Mestre da mesa |
 | Workspace | Grão-Mestre, ou usuário Administrador ou acima pelo painel | o Grão-Mestre ou um Mestre de mesa | Grão-Mestre |
 
-Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../cli/skills-geradas.md)). Sintaxe de `mestre ritual create|list|show|edit|enable|disable|run|delete`: [coordenação](../cli/coordenacao.md).
+Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../cli/skills-geradas.md)). Sintaxe de `mestre ritual create|list|show|edit|enable|disable|run|delete` (conteúdo por `--prompt "<texto>"` ou `--command "<linha>"`): [coordenação de classes e rituais](../cli/coordenacao-classes-e-rituais.md).
 
 ### Campos
 
 | Campo | Significado |
 |---|---|
 | `name` | único no escopo |
-| alvo | personagem (pelo nome), ficha (o motor aloca um personagem livre com ela ou recruta um efêmero, encerrado após o `done`) ou missão salva (o disparo é um `quest run`) |
-| conteúdo | `prompt` (entregue como item `ritual`, com cabeçalho) ou `command` (texto digitado cru, como `ask --raw`; ex.: `/compact` ou um comando num terminal simples) |
+| alvo | um personagem existente (pelo nome) ou uma missão salva (o disparo é um `quest run`); ritual não cria personagem |
+| conteúdo | `prompt` (texto entregue a um agente como item `ritual`, com cabeçalho) ou `command` (linha digitada crua num terminal simples, criado por `spawn`, seguida de Enter) |
 | agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: fuso do Core) |
 | `--pre-run` | comando cuja saída substitui `{{output}}` no conteúdo (opcional) |
 | tempo limite na fila | padrão 30 min, nunca maior que o intervalo do ritual |
@@ -74,6 +74,7 @@ stateDiagram-v2
 - Agenda inválida, `--every` abaixo do mínimo ou `--once` no passado: erro ao criar.
 - `{{output}}` no conteúdo sem `--pre-run`: erro ao criar.
 - O alvo precisa estar conectado ao dono ou ser da mesa dele; alvos fora do escopo são recusados.
+- Alvo personagem encerrado depois de criado o ritual: o disparo vira `failed` e é devolvido ao dono, que ajusta o alvo (`ritual edit`).
 
 ## Critérios de aceite
 

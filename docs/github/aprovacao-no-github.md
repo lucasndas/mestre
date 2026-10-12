@@ -16,14 +16,14 @@ Aplicar no GitHub as aprovações decididas pelo Grão-Mestre ou pelos usuários
 
 ### Teste na sessão zero: o review do App conta?
 
-Não há confirmação oficial de que o review de um App próprio conta para as revisões obrigatórias (o do `github-actions[bot]` não conta; o Renovate usa Apps aprovadores). Por isso a [sessão zero do workspace](../sessao-zero/workspace.md) dispara este teste:
+Não há confirmação oficial de que o review de um App próprio conta para as revisões obrigatórias (o do `github-actions[bot]` não conta; o Renovate usa Apps aprovadores). Por isso a [sessão zero do workspace](../sessao-zero/workspace.md) dispara este teste (é a etapa `approval_test`; este documento é a fonte única do passo a passo):
 
 1. O motor lê as regras da branch principal: `GET /repos/{o}/{r}/rules/branches/{branch}` e a proteção clássica da branch.
 2. Se nenhuma regra exige revisão, o resultado é `sem_exigencia` e o teste termina.
 3. Se exige: o App "Mestre" cria a branch `mestre/teste-aprovacao` com um arquivo de teste e abre o PR "[Mestre] Teste de aprovação (pode ignorar)".
 4. O App "Grão-Mestre" envia um review `APPROVE`.
-5. O motor lê `reviewDecision` do PR (GraphQL): `APPROVED` → `conta`; `REVIEW_REQUIRED` → `nao_conta`.
-6. O PR é fechado sem merge e a branch é apagada.
+5. O motor lê `reviewDecision` do PR (GraphQL): `APPROVED` → `conta`; qualquer outro valor → `nao_conta`.
+6. O PR é fechado sem merge e a branch é apagada, sempre, mesmo se um passo anterior falhar.
 
 O resultado fica no banco, por workspace, com a data e um resumo das regras lidas. O teste roda de novo quando um merge aprovado pelo App é recusado por falta de revisão.
 
@@ -72,7 +72,8 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 ## Regras e erros
 
 - O Mestre nunca contorna proteção do GitHub. Se uma regra não pode ser satisfeita pelos caminhos acima, o Grão-Mestre explica o motivo aos usuários e para.
-- Mudar ruleset ou proteção só com aprovação do Dono ([política](../aprovacoes/politica.md)).
+- Mudar ruleset ou proteção só com a aprovação do tipo `configuracao_repositorio` ([política](../aprovacoes/politica.md#tipos-de-ação)).
+- `mestre gh approve` só aprova com uma aprovação vigente para aquele PR e aquele hash: a do próprio Grão-Mestre, quando a política deixa, ou a de um usuário ([o Grão-Mestre como aprovador delegado](../aprovacoes/politica.md#o-grão-mestre-como-aprovador-delegado)).
 - Review recusado com 422 (ex.: autor tentando aprovar o próprio PR): o motor registra e o Grão-Mestre pede aprovação humana.
 
 ## Critérios de aceite
@@ -91,17 +92,19 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - [Identidades e Apps](identidades-e-apps.md)
 - [Fluxo de aprovação](../aprovacoes/fluxo.md)
 - [Política de aprovação](../aprovacoes/politica.md)
+- [Ações por nível no GitHub](acoes-por-nivel.md)
 - [Decretos](../telegram/decretos.md)
 - [Cofre](../plataforma/cofre.md)
 - [Sessão zero do workspace](../sessao-zero/workspace.md)
 
 ## Verificar na implementação
 
-Todos são conferidos à mão na sessão zero do primeiro repositório real que exige revisão; as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
+As respostas reais conferidas à mão viram gravações do [GitHub falso](../qualidade/dubles.md).
 
-- **Verificar na implementação:** o review `APPROVE` do App "Grão-Mestre" conta para as revisões obrigatórias (é o teste acima), com as permissões da [tabela](identidades-e-apps.md#permissões-mínimas). **Padrão:** conta (o Renovate usa Apps aprovadores). **Se falhar:** plano B do ruleset; se ele também falhar, modo "aprovação humana".
-- **Verificar na implementação:** `actor_type: Integration` é aceito na lista de exceção de ruleset em repositório pessoal (a documentação da API só exclui `OrganizationAdmin` ali), e `bypass_mode: pull_request` permite o merge pela API. **Padrão:** os dois funcionam, como no plano B acima. **Se falhar:** com `pull_request` recusado, a proposta ao Dono passa a usar `bypass_mode: always` (o ruleset só tem a regra de revisão, e o motor nunca envia direto à principal); com `Integration` recusado, modo "aprovação humana".
-- **Verificar na implementação:** o review feito com o user access token aparece como review real do usuário e conta como aprovação dele. **Padrão:** conta. **Se falhar:** a credencial pessoal deixa de ser usada para aprovar; vale o caso "a pessoa exigida não tem credencial" da tabela acima (link do PR pelo Telegram).
+- **Verificar na implementação:** `reviewDecision` reflete as revisões obrigatórias de rulesets (não só da proteção clássica) num repositório pessoal. **Padrão:** reflete, e o teste usa só ele. **Se falhar:** o teste deixa de confiar só em `reviewDecision`: um merge aprovado pelo App e recusado por falta de revisão registra `nao_conta` direto e leva ao plano B. **Onde:** à mão, na sessão zero do primeiro repositório real com ruleset de revisão.
+- **Verificar na implementação:** o review `APPROVE` do App "Grão-Mestre" conta para as revisões obrigatórias (é o teste acima), com as permissões da [tabela](identidades-e-apps.md#permissões-mínimas). **Padrão:** conta (o Renovate usa Apps aprovadores). **Se falhar:** plano B do ruleset; se ele também falhar, modo "aprovação humana". **Onde:** à mão, na sessão zero do primeiro repositório real que exige revisão.
+- **Verificar na implementação:** `actor_type: Integration` é aceito na lista de exceção de ruleset em repositório pessoal (a documentação da API só exclui `OrganizationAdmin` ali), e `bypass_mode: pull_request` permite o merge pela API. **Padrão:** os dois funcionam, como no plano B acima. **Se falhar:** com `pull_request` recusado, a proposta ao Dono passa a usar `bypass_mode: always` (o ruleset só tem a regra de revisão, e o motor nunca envia direto à principal); com `Integration` recusado, modo "aprovação humana". **Onde:** à mão, no primeiro repositório real com resultado `nao_conta`.
+- **Verificar na implementação:** o review feito com o user access token aparece como review real do usuário e conta como aprovação dele. **Padrão:** conta. **Se falhar:** a credencial pessoal deixa de ser usada para aprovar; vale o caso "a pessoa exigida não tem credencial" da tabela acima (link do PR pelo Telegram). **Onde:** à mão, com o primeiro usuário que conectar o GitHub pelo device flow.
 
 ## Fontes
 

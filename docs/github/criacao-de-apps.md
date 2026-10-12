@@ -27,7 +27,7 @@ stateDiagram-v2
   pronto --> com_erro: token recusado
 ```
 
-`mestre class check` mostra "em criação" em todos os estados antes de `pronto`.
+Estes são os identificadores únicos do estado de um App; os outros documentos os usam ou linkam aqui. Rótulos na interface (painel, `mestre class check`, `mestre app list`): `aguardando_criacao`, `aguardando_instalacao` e `expirado` → "em criação"; `pronto` → "pronto"; `falhou` e `com_erro` → "com erro". Uma classe que herda o App de outra mostra o estado do App herdado.
 
 ### O link e o fluxo de manifesto
 
@@ -110,16 +110,15 @@ sequenceDiagram
 
 - [Cofre](../plataforma/cofre.md)
 - [Identidades e Apps](identidades-e-apps.md)
-- [Login do painel](../painel/login.md)
+- [Usuários e níveis](../telegram/usuarios-e-niveis.md)
 - [Bot do Telegram](../telegram/bot.md)
-- [CLI do Grão-Mestre](../cli/grao-mestre.md)
 
 ## Verificar na implementação
 
 Os itens são conferidos na primeira criação real, a dos Apps fixos no [primeiro acesso](../operacao/primeiro-acesso.md), e no primeiro workspace com mais de um repositório; as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
 
-- **Verificar na implementação:** o GitHub aceita `redirect_url` e `setup_url` com o endereço do Core na rede local (nome `.local` ou IP, certificado da CA interna); a documentação não exige endereço público. **Padrão:** aceita, como acima. **Se falhar:** o manifesto usa `http://localhost/…`, a navegação de volta falha no aparelho, e a página do link pede ao Dono para colar no painel o endereço que o navegador mostrou (ele traz o `code` e o `state`), a tempo da janela de 1 hora.
-- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal). **Padrão:** aceita. **Se falhar:** repositório novo vai sempre pelo link da configuração da instalação.
+- **Verificar na implementação:** o GitHub aceita `redirect_url` e `setup_url` com o endereço do Core na rede local (nome `.local` ou IP, certificado da CA interna); a documentação não exige endereço público. **Padrão:** aceita, como acima. **Se falhar:** o manifesto usa `http://localhost/…`, a navegação de volta falha no aparelho, e a página do link pede ao Dono para colar no painel o endereço que o navegador mostrou (ele traz o `code` e o `state`), a tempo da janela de 1 hora. **Onde:** à mão, na criação dos Apps fixos no primeiro acesso.
+- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal). **Padrão:** aceita. **Se falhar:** repositório novo vai sempre pelo link da configuração da instalação. **Onde:** à mão, no primeiro workspace criado com a credencial pessoal do Dono conectada.
 
 ## Fontes
 

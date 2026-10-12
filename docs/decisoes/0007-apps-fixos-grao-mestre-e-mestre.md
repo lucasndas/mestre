@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** a permissão Workflows passa a acompanhar o App de cada classe que a pede (`git.workflows`), sem App dedicado a workflows.
 
 ## Contexto
 
@@ -32,6 +32,9 @@ Aceita, 2026-10-12.
      - Identidades distintas para abrir e aprovar.
      - Permissões de merge e administração ficam só num App.
    - Contras: um App a mais contando no limite de 100.
+4. **Um terceiro App fixo só para workflows** (`-workflows`), usado quando uma mudança em `.github/workflows/` é aprovada (opção da primeira versão desta decisão, descartada na revisão).
+   - Prós: nenhum App de classe tem a permissão Workflows.
+   - Contras: as mudanças de CI sairiam com uma identidade que não é a da classe que as fez, quebrando a autoria por papel; mais um App fixo para criar e instalar.
 
 **Credenciais do motor**, alternativas consideradas:
 

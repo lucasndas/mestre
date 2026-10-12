@@ -1,6 +1,6 @@
 # Dublês de teste
 
-> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub e rede falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub, rede, PTY e git falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-12
 
 ## Objetivo
 
@@ -15,14 +15,14 @@ Permitir que quase todos os testes rodem sem tempo real, sem provedores reais, s
 - **`testing/synctest`** (Go 1.25+) é a primeira escolha para lógica com goroutines e temporizadores dentro de um processo: dentro de `synctest.Test`, o tempo só anda quando todas as goroutines estão bloqueadas, e `synctest.Wait()` espera o sistema assentar. Nesse caso o código usa o `Clock` real, e o tempo falso vem da "bolha".
 - **Relógio falso** quando o teste precisa de uma data de calendário (ritual diário às 02:00, fuso horário, horário de verão), porque a bolha do synctest sempre começa em 2000-01-01 UTC.
 - Rede e disco reais não contam como "bloqueio durável" para o synctest: dentro da bolha, use a rede falsa em memória (abaixo).
-- **Suíte completa (vários processos):** binários compilados com a tag `full` aceitam `MESTRE_TEST_CLOCK=<socket>`, e o teste avança o relógio de todos os processos por esse canal. Binários de produção não contêm esse código.
+- **Suíte completa (vários processos):** binários compilados com a tag `full` aceitam `MESTRE_TEST_CLOCK=<socket>`, e o teste avança o relógio de todos os processos por esse canal: o teste é o servidor; cada processo conecta e recebe linhas `set <RFC 3339>` ou `advance <duração>`, aplica no relógio falso dele e responde `ok <agora em RFC 3339>`. O teste só segue depois do `ok` de todos. Binários de produção não contêm esse código.
 
 ### Agente falso (`fakeagent`)
 
-Um único programa que imita Claude Code, Codex e Antigravity. O provedor vem de `--provider claude|codex|antigravity` ou do nome com que foi chamado (cópias chamadas `claude`, `codex`, `agy`, com `.exe` no Windows), assim as [bases](../orquestracao/bases-e-fichas.md) funcionam sem mudança.
+Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#layout-do-repositório)) que imita Claude Code, Codex e Antigravity. O provedor vem de `--provider claude|codex|antigravity` ou do nome com que foi chamado (cópias chamadas `claude`, `codex`, `agy`, com `.exe` no Windows), assim as [bases](../orquestracao/bases-e-fichas.md) funcionam sem mudança.
 
-- **Dois modos, mesmo código:** na rápida, roda dentro do processo do teste, ligado ao PTY falso; na completa, roda como processo num PTY real (ConPTY no Windows).
-- **TUI mínima:** cabeçalho, linha de entrada, indicador de "ocupado" enquanto trabalha e o sinal de "pronto" que a base usa; aceita redimensionamento e entrada crua (`\x03` interrompe, setas movem em menus).
+- **Dois modos, mesmo código:** na rápida, roda dentro do processo do teste, ligado ao PTY falso, por uma interface de **lançador**: o lançador em memória troca "iniciar processo" por uma goroutine, e as chamadas ao `mestre hook` e à CLI viram chamadas de função ao mesmo código, com o canal local falso. Na completa, o lançador real inicia processos num PTY real (ConPTY no Windows).
+- **TUI mínima:** cabeçalho, linha de entrada, indicador de "ocupado" enquanto trabalha e o sinal de "pronto" que a base usa; aceita entrada crua (`\x03` interrompe, setas movem em menus) e colagem entre colchetes, com a tecla de envio do provedor imitado ([digitação](../provedores/adaptador.md#digitação-de-mensagens)).
 - **Telas de início**, com os textos do provedor imitado: login (quando o perfil de conta não tem credencial falsa), confiança da pasta e, no Codex, a revisão de hooks. O agente falso lê **os mesmos arquivos de confiança** que o real, então o teste prova que a pré-confiança do motor funciona. Regras de cada provedor: [claude-code.md](../provedores/claude-code.md), [codex.md](../provedores/codex.md), [antigravity.md](../provedores/antigravity.md).
 - **Instruções e skills:** lê o que o real leria (arquivo do projeto, arquivo extra pela flag ou configuração do provedor, pastas de skills) e responde ao comando `/fake-dump` com um JSON do que recebeu. É assim que testes rápidos conferem a entrega da camada do Mestre ([personagem.md](../sessao-zero/personagem.md)).
 - **Hooks:** lê o arquivo de hooks do provedor, chama os comandos configurados com os payloads gravados (preenchendo `cwd`, ids de sessão, ferramenta e entrada) e aplica a resposta com a semântica do provedor: no Claude e no Codex, só exit 2 ou decisão explícita bloqueia e falha libera; no Antigravity, falha, saída inválida ou ausência de `allow` bloqueia; no Codex, hook novo ou modificado só roda depois de confiado. O contrato está em [adaptador.md](../provedores/adaptador.md).
@@ -64,8 +64,13 @@ Um único programa que imita Claude Code, Codex e Antigravity. O provedor vem de
 
 ### Outros dublês
 
-- **PTY falso:** par de terminal em memória com a mesma interface do PTY real e uma tela virtual (para `mestre check`).
+- **PTY falso:** par de terminal em memória com a mesma interface do PTY real; a tela vem do mesmo emulador do [terminal](../arquitetura/terminal.md).
+- **Git falso:** implementação em memória da interface do `internal/gitx` (refs, commits, arquivos preparados, bundles e worktrees como dados), para a rápida. Critério que precisa do comportamento real do git vai para a completa ([testes](testes.md#regras-e-erros)).
 - **whisper-server falso:** devolve o texto configurado, erro ou demora.
+
+### Quando cada dublê cresce
+
+O `testkit` nasce no M0 com relógio, rede, PTY, git e o esqueleto do agente falso; cada dublê ganha o comportamento de um assunto no marco desse assunto: rede e descoberta falsas com o [protocolo](../conectividade/protocolo.md) e a [descoberta](../conectividade/descoberta.md) (M2), o agente falso de cada provedor com o [adaptador](../provedores/adaptador.md) e a [conformidade](../provedores/conformidade.md) (M3), Telegram e GitHub falsos com o [bot](../telegram/bot.md) e os [eventos](../github/eventos.md) (M5) ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
@@ -91,12 +96,6 @@ Um único programa que imita Claude Code, Codex e Antigravity. O provedor vem de
 ## Depende de
 
 - [testes.md](testes.md)
-- [adaptador.md](../provedores/adaptador.md)
-- [conformidade.md](../provedores/conformidade.md)
-- [bot.md](../telegram/bot.md)
-- [eventos.md](../github/eventos.md)
-- [protocolo.md](../conectividade/protocolo.md)
-- [descoberta.md](../conectividade/descoberta.md)
 
 ## Fontes
 

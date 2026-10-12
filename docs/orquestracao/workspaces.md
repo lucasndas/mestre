@@ -32,9 +32,11 @@ Pastas padrão no Core (`<dados>` é a pasta de dados do serviço, ver [persist�
 
 Os nós têm a própria cópia, sincronizada só através do espelho (nunca direto com o GitHub); o comportamento está em [mesas.md](mesas.md#worktree-por-nó-e-sincronização).
 
-**Sincronização do espelho com o GitHub** (só o motor, com o token de instalação do App "Grão-Mestre"):
-- `git clone --bare` na criação do workspace;
-- `git fetch` antes de abrir uma mesa (para a branch nascer da ponta atual da principal), antes de enviar a branch de uma mesa, quando a [consulta de eventos](../github/eventos.md) indicar push na principal, e a cada **15 min** (padrão configurável);
+**Sincronização do espelho com o GitHub** (só o motor, com o token de instalação do App "Grão-Mestre", pelo `git` do sistema; [componentes](../arquitetura/componentes.md)):
+- `git clone --bare` na criação do workspace, seguido de `git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'` (o clone `--bare` não grava refspec; sem isso, um `fetch` não atualiza nada);
+- `git fetch origin` antes de abrir uma mesa, antes de enviar a branch de uma mesa, quando a [consulta de eventos](../github/eventos.md) indicar push na principal, e a cada **15 min** (padrão configurável);
+- as branches de mesa nascem de `origin/<principal>` (a ponta que veio do GitHub), nunca da branch local em checkout no clone principal;
+- o **clone principal** avança com `git merge --ff-only origin/<principal>` depois de cada `fetch`, só quando o Grão-Mestre está `idle` ou `waiting` ([estados](personagens.md#estados)) e o `git status --porcelain` do clone principal está vazio; senão o avanço fica para o próximo `fetch` e, depois de 1 hora (padrão) sem conseguir, o Grão-Mestre recebe um item `system` com o motivo;
 - o motor **nunca** envia a branch principal; só envia branches de mesa, quando pedido ([ações por nível](../github/acoes-por-nivel.md)).
 
 ### Identificador (slug)
@@ -59,25 +61,34 @@ Cada item tem o seu documento dono; aqui só a lista do que pertence ao workspac
 | Fuso horário dos rituais (padrão: fuso do Core) | [rituais.md](rituais.md) |
 | Usuários com acesso | [usuários e níveis](../telegram/usuarios-e-niveis.md) |
 
-Configuração fica no banco do Core; alterações pelo painel ([administração](../painel/administracao.md)) exigem nível Administrador ou acima.
+Configuração fica no banco do Core; quem altera cada item pelo painel ([administração](../painel/administracao.md)) está na [tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades) (a política de aprovação, por exemplo, só o Dono).
 
 ### Estados
 
 | Estado | Identificador | Significado |
 |---|---|---|
-| Preparando | `preparing` | sessão zero em andamento ([sessão zero do workspace](../sessao-zero/workspace.md)); só o Grão-Mestre existe |
-| Ativo | `active` | funcionamento normal |
+| Preparando | `preparing` | [sessão zero do workspace](../sessao-zero/workspace.md) em andamento; o Grão-Mestre já pode existir, mas não há mesas |
+| Ativo | `active` | funcionamento normal; **só aqui se abrem mesas** |
 | Pausado | `paused` | todas as mesas pausadas e o Grão-Mestre recebe só mensagens de usuários (ver [pausa](mesas.md#pausa)) |
+
+Enquanto está em `preparing`, o workspace registra a **etapa** da sessão zero em que está, nesta ordem: `apps` (Apps fixos instalados no repositório) → `mirror` (espelho e clone principal) → `files` (`.mestre/`, skills, hooks e exclusões; ao fim, o Grão-Mestre inicia) → `analysis` (análise do projeto e envio da proposta de `AGENTS.md`, se faltar) → `approval_test` (teste de aprovação de App). O que cada etapa faz está na sessão zero. Uma etapa que falha fica marcada com o erro e o motivo (visíveis no painel); o workspace continua `preparing` e a etapa é tentada de novo (pelo motor, com espera crescente, ou pelo botão "tentar de novo" do painel). Concluída a `approval_test`, o workspace vai para `active`. Perguntas da sessão zero que dependem de resposta de usuário (aprovar o `AGENTS.md` proposto, versionar `.mestre/`) não seguram o workspace em `preparing`: ficam pendentes no painel.
 
 ```mermaid
 stateDiagram-v2
     [*] --> preparing : criado no painel
-    preparing --> active : sessão zero concluída
+    state preparing {
+        [*] --> apps
+        apps --> mirror
+        mirror --> files
+        files --> analysis
+        analysis --> approval_test
+    }
+    preparing --> active : approval_test concluída
     active --> paused : /pausar ou painel
     paused --> active : /retomar ou painel
 ```
 
-A criação (pelo painel, por Dono ou Administrador) e tudo o que a sessão zero gera estão em [sessão zero do workspace](../sessao-zero/workspace.md). Remover um workspace não faz parte do MVP.
+A criação (pelo painel, por Dono ou Administrador) e o que cada etapa gera estão em [sessão zero do workspace](../sessao-zero/workspace.md). O Mestre não remove workspaces: para parar de usar um repositório, pause o workspace.
 
 ### Vários workspaces
 
@@ -90,18 +101,19 @@ Cada workspace é independente: Grão-Mestre, mesas, caixas de entrada e limites
 - Falha no `fetch` do espelho: novas tentativas com backoff (30 s, 1 min, 2 min… até 15 min); depois de **1 hora** (padrão) sem sucesso, o motor envia alerta operacional ([bot](../telegram/bot.md)). As mesas continuam trabalhando localmente.
 - Nenhum agente tem acesso de escrita ao espelho; só o motor o altera (proteção em [mesas.md](mesas.md#regras-e-erros)).
 - Pausar um workspace em `preparing` é recusado (não há mesas).
+- Abrir mesa num workspace que não está `active` é recusado dizendo o estado e, em `preparing`, a etapa atual.
 
 ## Critérios de aceite
 
 - **CA-WS-01** · *rápida* — **Dado** um repositório `lucas/Meu_App`, **quando** o slug é gerado, **então** resulta `meu-app`, e um segundo workspace com o mesmo repositório é recusado.
-- **CA-WS-02** · *completa* — **Dado** um workspace com repositório falso local, **quando** é criado, **então** existem `espelho.git` (bare) e `principal/` na branch principal, e o estado vai de `preparing` para `active` ao fim da sessão zero simulada.
+- **CA-WS-02** · *completa* — **Dado** um workspace com repositório falso local, **quando** é criado, **então** existem `espelho.git` (bare, com o refspec `+refs/heads/*:refs/remotes/origin/*`) e `principal/` na branch principal, o workspace passa pelas etapas `apps`, `mirror`, `files`, `analysis` e `approval_test` nessa ordem e só então fica `active`; um `table open` antes disso é recusado.
 - **CA-WS-03** · *rápida* — **Dado** um relógio falso, **quando** passam 15 min sem eventos, **então** o motor agenda um `fetch` do espelho; **quando** o `fetch` falha por 1 h, **então** um alerta operacional é emitido uma única vez.
 - **CA-WS-04** · *rápida* — **Dado** um workspace pausado, **quando** chega mensagem de usuário e mensagem de agente para o Grão-Mestre, **então** só a de usuário é entregue; a outra fica na fila até a retomada.
 - **CA-WS-05** · *pesada* — **Dado** o Core reiniciado, **quando** volta, **então** os workspaces aparecem com o mesmo estado e configuração anteriores (MVP-12).
+- **CA-WS-06** · *rápida* — **Dado** o git falso com `origin/main` à frente e o Grão-Mestre `busy`, **quando** o `fetch` termina, **então** o clone principal não avança; **quando** o Grão-Mestre fica `idle` e o próximo `fetch` termina, **então** o motor pede `git merge --ff-only origin/main` no clone principal.
+- **CA-WS-07** · *rápida* — **Dado** um workspace em `preparing` com a etapa `mirror` falhando, **quando** o painel consulta o estado, **então** vê a etapa `mirror` com o erro e o motivo, e o workspace continua `preparing`.
 
 ## Depende de
 
 - [Persistência](../arquitetura/persistencia.md)
-- [Sessão zero do workspace](../sessao-zero/workspace.md)
-- [Identidades e Apps](../github/identidades-e-apps.md)
-- [Grão-Mestre](grao-mestre.md)
+- [Componentes](../arquitetura/componentes.md)

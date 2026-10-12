@@ -10,15 +10,15 @@ Uma mesa é um pedido/épico: **um git worktree com a sua própria branch**, lig
 
 ### Abertura
 
-Só o Grão-Mestre abre mesas (sintaxe em [CLI do Grão-Mestre](../cli/grao-mestre.md)). O motor, em ordem:
-1. cria o épico no GitHub com o App "Grão-Mestre" (título, descrição, critérios de aceite);
-2. faz `fetch` do espelho e cria a branch `epico/<número>-<slug>` (padrão configurável do prefixo `epico/`; `<slug>` = título em minúsculas, `[a-z0-9-]`, até 30 caracteres) a partir da ponta da branch principal;
-3. cria o worktree no Core em `<dados>/workspaces/<slug do workspace>/mesas/<mesa>/` ([pastas](workspaces.md#espelho-e-clone-principal-no-core)); o identificador da mesa (`<mesa>`, `MESTRE_MESA`) é `<número>-<slug>` da branch;
+Só o Grão-Mestre abre mesas, e só num workspace `active` ([estados do workspace](workspaces.md#estados)). O épico vem antes: o Grão-Mestre o cria com `mestre gh epic create` (issue com rótulo `epico`, App "Grão-Mestre") e depois abre a mesa com `mestre table open --epic <n>` (sintaxe dos dois em [CLI do Grão-Mestre](../cli/grao-mestre.md)). `table open` **nunca cria épico**. O motor, em ordem:
+1. valida o épico `<n>`: existe, tem o rótulo `epico`, está aberto e não pertence a outra mesa aberta;
+2. faz `fetch` do espelho e cria a branch `epico/<n>-<slug>` a partir de `origin/<principal>` ([espelho](workspaces.md#espelho-e-clone-principal-no-core)). O **motor gera o slug** do título do épico: minúsculas, acentos removidos, tudo fora de `[a-z0-9]` vira `-` (sem `-` repetido nem nas pontas), cortado em 30 caracteres; título sem nenhum caractere válido → `mesa`. O prefixo `epico/` é o padrão (configurável por workspace);
+3. cria o worktree no Core em `<dados>/workspaces/<slug do workspace>/mesas/<mesa>/` ([pastas](workspaces.md#espelho-e-clone-principal-no-core)); o identificador da mesa (`<mesa>`, `MESTRE_MESA`) é `<n>-<slug>`, o mesmo da branch sem o prefixo;
 4. roda a sessão zero da mesa ([materialização de arquivos](../sessao-zero/mesa.md));
 5. recruta o Mestre da mesa com a ficha padrão do workspace (ou a indicada), conectado ao Grão-Mestre;
 6. entrega ao Mestre da mesa, como primeira mensagem, o **texto original** da(s) mensagem(ns) de usuário indicada(s) e cópias dos anexos ([anexos](../telegram/anexos-e-transcricao.md)), seguidos das observações do Grão-Mestre em bloco separado. O motor copia o original; o Grão-Mestre não o reescreve.
 
-Se algum passo falhar, o motor desfaz os anteriores que não tocaram o GitHub, mantém o épico, e devolve o erro ao Grão-Mestre.
+Se algum passo falhar, o motor desfaz os anteriores (branch e worktree) e devolve o erro ao Grão-Mestre; o épico não é tocado, porque já existia.
 
 ### Estados
 
@@ -27,7 +27,7 @@ Se algum passo falhar, o motor desfaz os anteriores que não tocaram o GitHub, m
 | Aberta | `open` | passos 1–5 da abertura em andamento |
 | Em trabalho | `working` | Mestre da mesa pronto e pedido entregue; ou nova missão iniciada estando em revisão |
 | Em revisão | `in_review` | `mestre pr open` (ou `pr update`) concluído com sucesso |
-| Encerrando | `closing` | merge do PR confirmado |
+| Encerrando | `closing` | `mestre table close` do Grão-Mestre, com o merge do PR já confirmado |
 | Encerrada | `closed` | personagens encerrados e worktrees removidos (ou retenção decidida) |
 | Cancelando | `cancelling` | cancelamento aceito |
 | Cancelada | `cancelled` | passos do cancelamento concluídos |
@@ -38,7 +38,7 @@ stateDiagram-v2
     open --> working : Mestre da mesa pronto
     working --> in_review : pr open/update ok
     in_review --> working : missão de ajuste iniciada
-    in_review --> closing : merge confirmado
+    in_review --> closing : table close (merge confirmado)
     closing --> closed : encerramento concluído
     open --> cancelling : cancelamento
     working --> cancelling : cancelamento
@@ -48,7 +48,7 @@ stateDiagram-v2
     cancelled --> [*]
 ```
 
-O merge é confirmado pelo resultado do `mestre gh merge` ou, se uma pessoa fizer o merge no GitHub, pelo evento da [consulta periódica](../github/eventos.md). PR fechado sem merge por uma pessoa não muda o estado: vira evento para o Grão-Mestre decidir.
+O merge é confirmado pelo resultado do `mestre gh merge` ou, se uma pessoa fizer o merge no GitHub, pelo evento da [consulta periódica](../github/eventos.md). Confirmado o merge, o motor marca a mesa como mesclada e coloca na caixa de entrada do Grão-Mestre um item `github` ("PR da mesa <mesa> mesclado"); **quem dispara o encerramento é o Grão-Mestre**, com `mestre table close`. `table close` numa mesa sem merge confirmado é recusado dizendo o que falta. PR fechado sem merge por uma pessoa não muda o estado: vira evento para o Grão-Mestre decidir.
 
 ### Pausa
 
@@ -80,39 +80,42 @@ Regras de integração (sempre só *fast-forward*; o motor nunca faz merge sozin
 
 ### Encerramento
 
-Ao entrar em `closing`, o motor:
+Ao entrar em `closing` (pelo `table close`), o motor:
 1. encerra os personagens da mesa com o [encerramento seguro](personagens.md#encerramento-seguro), o Mestre da mesa por último;
 2. desativa os rituais da mesa ([rituais](rituais.md));
 3. remove cada worktree (Core e nós) **somente se** a branch está integrada (PR mesclado e a ponta local é o commit-cabeça do PR ou ancestral dele) e `git status --porcelain` está vazio; depois apaga a branch do espelho;
-4. se algum worktree não cumprir isso, ou houver personagem fixado, o motor pergunta ao Grão-Mestre (que pergunta aos usuários) e a mesa fica em `closing` até a decisão.
+4. se algum worktree não cumprir isso, ou houver personagem fixado, o `table close` devolve ao Grão-Mestre o que falta (ele pergunta aos usuários) e a mesa fica em `closing` até a decisão; um novo `table close` com a decisão retoma os passos.
 
 O histórico (mesa, missões, esperas, personagens, consumo) fica no banco; pergaminhos e classes da mesa continuam em `.mestre/mesas/<mesa>/`.
 
 ### Cancelamento
 
-Pedido por um usuário com nível para dar ordens, via Grão-Mestre (o motor só aceita vinculado a essa mensagem; regra de ações destrutivas em [convenções da CLI](../cli/convencoes.md)). O motor: encerra os personagens com encerramento seguro; fecha o PR sem merge, se houver; fecha o épico como "não planejado"; mantém a branch no espelho por **30 dias** (padrão configurável por workspace) e depois a apaga do espelho (a branch no GitHub, se enviada, não é apagada); remove cada worktree só se não houver commits nem alterações não enviados ao espelho, senão pergunta como no encerramento.
+Pedido por um usuário com nível para dar ordens, via Grão-Mestre (`mestre table close --cancel`). É **ação destrutiva**: o motor só executa com uma exceção pontual para exatamente essa ação ou com a aprovação do tipo `acao_destrutiva`, que o Grão-Mestre nunca dá sozinho ([política](../aprovacoes/politica.md#tipos-de-ação), [convenções da CLI](../cli/convencoes.md)). Aprovado, o motor: encerra os personagens com encerramento seguro; fecha o PR sem merge, se houver; fecha o épico como "não planejado"; mantém a branch no espelho por **30 dias** (padrão configurável por workspace) e depois a apaga do espelho (a branch no GitHub, se enviada, não é apagada); remove cada worktree só se não houver commits nem alterações não enviados ao espelho, senão pergunta como no encerramento.
 
 ## Regras e erros
 
 - Agentes só alteram a branch da própria mesa: as regras fixas do Mestre bloqueiam comandos git que mudam outras refs, outros worktrees ou o espelho, e `git push` ([permissões](../classes/permissoes.md)).
-- Abrir mesa com épico já usado por outra mesa aberta é recusado.
+- Abrir mesa com épico inexistente, sem o rótulo `epico`, fechado ou já usado por outra mesa aberta é recusado; abrir mesa em workspace que não está `active` também.
 - Mesa encerrada ou cancelada não reabre; trabalho novo é mesa nova.
 - Bundle com hash inválido é descartado e pedido de novo (até 3 vezes; depois, alerta ao Mestre da mesa).
 
 ## Critérios de aceite
 
-- **CA-MESAS-01** · *completa* — **Dado** um workspace com repositório falso, **quando** o Grão-Mestre abre a mesa da issue 42 "Login", **então** existem a branch `epico/42-login` a partir da principal, o worktree no Core, o Mestre da mesa conectado ao Grão-Mestre e a primeira mensagem dele contém o texto original do usuário byte a byte.
+- **CA-MESAS-01** · *completa* — **Dado** um workspace com repositório falso, **quando** o Grão-Mestre cria o épico 42 "Login de usuários" com `gh epic create` e abre a mesa com `table open --epic 42`, **então** existem a branch `epico/42-login-de-usuarios` a partir da principal, o worktree no Core, o Mestre da mesa conectado ao Grão-Mestre e a primeira mensagem dele contém o texto original do usuário byte a byte.
 - **CA-MESAS-02** · *rápida* — **Dado** a máquina de estados, **quando** cada evento da tabela ocorre em cada estado, **então** só as transições do diagrama são aceitas e as demais retornam erro.
 - **CA-MESAS-03** · *completa* — **Dado** Core e nó reais na mesma máquina, **quando** um personagem no nó commita e dá `done`, **então** o commit aparece na branch do worktree do Core; **quando** a próxima etapa roda no nó, **então** o worktree do nó recebe os commits do Core antes dela começar.
 - **CA-MESAS-04** · *completa* — **Dado** commits divergentes no Core e no nó, **quando** o nó envia o bundle, **então** a branch do Core não muda e o Mestre da mesa recebe o aviso de divergência.
-- **CA-MESAS-05** · *rápida* — **Dado** uma mesa cancelada e relógio falso, **quando** passam 30 dias, **então** a branch é apagada do espelho, e não antes.
-- **CA-MESAS-06** · *rápida* — **Dado** um worktree com arquivo não commitado, **quando** a mesa encerra, **então** o worktree não é removido e o Grão-Mestre recebe a pergunta.
+- **CA-MESAS-05** · *rápida* — **Dado** uma mesa cancelada, relógio falso e o git falso, **quando** passam 30 dias, **então** o motor pede ao git a remoção da branch no espelho, e não antes.
+- **CA-MESAS-06** · *rápida* — **Dado** o git falso informando um arquivo não commitado no worktree da mesa e o merge confirmado, **quando** o Grão-Mestre chama `table close`, **então** o motor não pede a remoção do worktree, a mesa fica `closing` e o Grão-Mestre recebe o que falta.
 - **CA-MESAS-07** · *pesada* — **Dado** duas mesas abertas em paralelo com personagens em Linux e Windows, **quando** ambas trabalham, **então** cada uma só altera a própria branch e a mesa termina encerrada após o merge no GitHub (dublê) (MVP-4).
+- **CA-MESAS-08** · *rápida* — **Dado** títulos de épico "Login de usuários", "Ação: pagar!" e "!!!", **quando** o slug é gerado, **então** resulta `login-de-usuarios`, `acao-pagar` e `mesa`, e nenhum passa de 30 caracteres.
+- **CA-MESAS-09** · *rápida* — **Dado** uma mesa `in_review` com o merge recém-confirmado, **quando** o motor processa a confirmação, **então** a mesa continua `in_review`, o Grão-Mestre recebe o item `github` do merge, e só um `table close` a leva a `closing`; **dado** `table close` sem merge confirmado, **então** é recusado.
+- **CA-MESAS-10** · *rápida* — **Dado** o GitHub falso sem o épico 7, **quando** o Grão-Mestre chama `table open --epic 7`, **então** é recusado, nenhum épico é criado e nenhuma branch existe.
 
 ## Depende de
 
 - [Workspaces](workspaces.md)
 - [Sessão zero da mesa](../sessao-zero/mesa.md)
-- [Protocolo](../conectividade/protocolo.md)
-- [Ações por nível no GitHub](../github/acoes-por-nivel.md)
 - [Personagens](personagens.md)
+- [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md)
+- [Protocolo](../conectividade/protocolo.md)

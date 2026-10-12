@@ -41,7 +41,7 @@ Antes de iniciar num nó novo para a mesa, o motor cria lá o worktree ([sincron
 | Por workspace | 16 |
 | Cópias simultâneas da mesma ficha | definido na ficha (padrão 3) |
 
-Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite: pedidos de **missão** esperam vaga (etapa fica `aguardando vaga`, com o tempo limite da [espera](esperas-e-caixa-de-entrada.md)); `recruit`/`spawn` diretos **falham na hora** dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
+Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite, o pedido **espera vaga**: o motor registra uma espera `waiting_slot` ("aguardando vaga") com tempo limite ([esperas](esperas-e-caixa-de-entrada.md#esperas)), seja uma etapa de missão, seja um `recruit`/`spawn` direto (que responde na hora com "pendente", e o personagem criado chega depois pela caixa de entrada; [coordenação](../cli/coordenacao.md)). Abrindo vaga, a criação segue na ordem de chegada; estourado o tempo limite, o pedido falha com aviso a quem pediu, dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
 
 ### Ciclo de vida (definido na ficha)
 
@@ -51,7 +51,7 @@ Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples 
 
 ### Encerramento seguro
 
-Um personagem só é encerrado quando: está `idle` (aguardar não é ocioso), a caixa de entrada está vazia, entregou `done` da última tarefa/etapa recebida e não está fixado. `dismiss` ou ciclo de vida fora dessas condições ficam **agendados** e executam quando elas forem atendidas. Ao encerrar, o motor:
+Um personagem só é encerrado quando: está `idle` (aguardar não é ocioso), a caixa de entrada está vazia, entregou `done` da última tarefa/etapa recebida e não está fixado. `dismiss` ou ciclo de vida fora dessas condições ficam **agendados** para o próximo ponto seguro e executam quando elas forem atendidas; o `dismiss` responde na hora com "pendente" (`scheduled`, [coordenação](../cli/coordenacao.md)) e quem pediu recebe um item `system` quando o encerramento acontece. Ao encerrar, o motor:
 1. grava no [pergaminho da missão](pergaminhos-e-tomos.md#pergaminho-da-missão) (ou, sem missão, no histórico da mesa) um resumo: nome, ficha, classe, os textos de `done` que ele entregou e o uso;
 2. pede a saída normal ao provedor ([adaptador](../provedores/adaptador.md)) e, após 30 s, encerra a árvore de processos.
 
@@ -59,7 +59,7 @@ Exceção: personagem `stuck` ou `interrupted` pode ser encerrado pelo Mestre da
 
 ### Troca de ficha
 
-`recruit --replace` troca a ficha mantendo nome, posição no canvas, conexões, caixa de entrada, esperas e a etapa atribuída. Segue o encerramento seguro do antigo (agendado se ocupado) e inicia o novo no mesmo nó, se ele ainda atender, senão escolhe outro.
+`recruit --replace` troca a ficha mantendo nome, posição no canvas, conexões, caixa de entrada, esperas e a etapa atribuída. Segue o encerramento seguro do antigo (agendado para o próximo ponto seguro se ocupado; a CLI responde "pendente", `scheduled`) e inicia o novo no mesmo nó, se ele ainda atender, senão escolhe outro.
 
 ### Estados
 
@@ -69,7 +69,7 @@ Exceção: personagem `stuck` ou `interrupted` pode ser encerrado pelo Mestre da
 | Ocioso | `idle` | sim | sim |
 | Ocupado | `busy` | não | não |
 | Aguardando (motivo) | `waiting` | sim | não |
-| Bloqueado: aguardando permissão ou cota | `blocked` | não | não |
+| Bloqueado (motivo `permission`, `quota` ou `input`) | `blocked` | não | não |
 | Travado | `stuck` | não | não |
 | Encerrando | `stopping` | não | não |
 | Encerrado | `stopped` | não | — |
@@ -80,13 +80,15 @@ stateDiagram-v2
     [*] --> starting
     starting --> idle : pronto
     starting --> interrupted : falhou ou 120 s
+    starting --> blocked : tela que pede entrada
     idle --> busy : entrega ou início de turno
     waiting --> busy : entrega
     busy --> idle : fim de turno sem espera
     busy --> waiting : fim de turno com espera ativa
     waiting --> idle : espera resolvida sem entrega
     busy --> blocked : pedido de permissão ou cota
-    blocked --> busy : decidido ou cota liberada
+    blocked --> busy : decidido, cota liberada ou entrada dada
+    blocked --> idle : entrada dada e agente de volta ao prompt
     busy --> stuck : 15 min sem sinal
     stuck --> busy : sinal volta
     idle --> stopping : encerramento seguro
@@ -101,11 +103,12 @@ stateDiagram-v2
 - **Início/fim de turno:** eventos normalizados do `mestre hook` ([adaptador](../provedores/adaptador.md)); a própria entrega pelo motor já marca `busy`. Terminal simples: `busy` após entrada, `idle` quando o critério de prontidão reaparece.
 - **Sinal:** qualquer evento de hook ou saída no terminal. `busy` sem sinal por **15 min** (padrão) vira `stuck` e o Mestre da mesa é avisado.
 - Qualquer estado vivo vai para `interrupted` se o processo morrer sem pedido.
+- **Motivos de `blocked`:** `permission` (pedido de permissão do provedor em decisão, [adaptador](../provedores/adaptador.md)); `quota` (limite de uso do provedor, [limites de uso](../plataforma/limites-de-uso.md)); `input` (tela interativa que o adaptador não reconhece e que espera resposta; o Mestre da mesa é avisado e responde com `check` e `ask --raw`). O motivo é guardado no registro do terminal.
 - `waiting` e `blocked` aparecem como "aguardando <motivo>" no canvas e no `mestre list` ([esperas](esperas-e-caixa-de-entrada.md#status-aguardando)).
 
 ### Registro de terminais
 
-Tabela no banco do Core (cópia dos terminais locais no banco de cada nó, ver [persistência](../arquitetura/persistencia.md)). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, nó, ficha, base, classe, perfil de conta, PID, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por, missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
+Tabela no banco do Core (cópia dos terminais locais no banco de cada nó, inclusive o nó local do Core, ver [persistência](../arquitetura/persistencia.md)). PTY, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, nó, ficha, base, classe, perfil de conta, PID, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por, missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
 
 ### Retomada após reinício
 
@@ -125,18 +128,21 @@ Tabela no banco do Core (cópia dos terminais locais no banco de cada nó, ver [
 ## Critérios de aceite
 
 - **CA-PERS-01** · *rápida* — **Dado** um nó Linux sem GPU e um Windows com `gpu: true`, **quando** se recruta com ficha que exige `gpu: true`, **então** vai para o Windows; **quando** o Windows está desconectado, **então** a criação falha listando o motivo de cada nó.
-- **CA-PERS-02** · *rápida* — **Dado** limite por mesa 2 atingido, **quando** uma etapa pede personagem, **então** fica `aguardando vaga`; **quando** é `recruit` direto, **então** falha na hora; em nenhum caso alguém é encerrado.
-- **CA-PERS-03** · *rápida* — **Dado** um personagem `busy`, **quando** recebe `dismiss`, **então** o encerramento fica agendado e só ocorre após `done` e `idle`, com resumo gravado no pergaminho da missão.
+- **CA-PERS-02** · *rápida* — **Dado** limite por mesa 2 atingido e relógio falso, **quando** uma etapa pede personagem e um `recruit` direto é feito, **então** os dois ficam em `waiting_slot` (o `recruit` responde "pendente"); **quando** uma vaga abre, **então** o primeiro a chegar é criado; **quando** o tempo limite do outro estoura, **então** ele falha com aviso dizendo o limite e quem ocupa; em nenhum caso alguém é encerrado.
+- **CA-PERS-03** · *rápida* — **Dado** um personagem `busy`, **quando** recebe `dismiss`, **então** a CLI responde "pendente" (`scheduled`), o encerramento fica agendado e só ocorre após `done` e `idle`, com resumo gravado no pergaminho da missão.
 - **CA-PERS-04** · *rápida* — **Dado** relógio falso e persistente com ociosidade 120 min, **quando** fica 119 min `idle` e 30 min `waiting`, **então** não é encerrado; **quando** completa 120 min `idle` contínuos, **então** é.
 - **CA-PERS-05** · *rápida* — **Dado** um personagem fixado, **quando** o ciclo de vida ou `dismiss` tentam encerrá-lo, **então** nada acontece e a recusa é registrada.
 - **CA-PERS-06** · *rápida* — **Dado** a tabela de estados, **quando** os eventos de hook falsos chegam em cada estado, **então** só as transições do diagrama ocorrem; 15 min sem sinal em `busy` levam a `stuck`.
 - **CA-PERS-07** · *completa* — **Dado** um motor de nó encerrado à força com dois personagens, **quando** volta, **então** ambos passam por `interrupted` e são retomados com o id de sessão salvo, mantendo caixa de entrada e esperas.
 - **CA-PERS-08** · *pesada* — **Dado** Core e nós reiniciados, **quando** voltam, **então** Grão-Mestre, Mestres de mesa e persistentes voltam ao estado anterior, e nenhum personagem fica sem estado visível (MVP-12).
+- **CA-PERS-09** · *rápida* — **Dado** um agente falso que mostra uma tela que o adaptador não reconhece, **quando** a tela fica estável, **então** o personagem vai a `blocked` com motivo `input`, o Mestre da mesa é avisado, e uma entrada `ask --raw` leva o personagem de volta a `busy` ou `idle`.
 
 ## Depende de
 
 - [Bases e fichas](bases-e-fichas.md)
-- [Mesas](mesas.md)
+- [Workspaces](workspaces.md)
+- [Sessão zero do personagem](../sessao-zero/personagem.md)
 - [Adaptador de provedores](../provedores/adaptador.md)
+- [Terminal](../arquitetura/terminal.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Protocolo](../conectividade/protocolo.md)

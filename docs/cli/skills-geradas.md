@@ -13,12 +13,12 @@ Fazer Claude Code, Codex e Antigravity saberem usar o `mestre` sem que ninguém 
 | Skill (`name`) | Quem recebe | Onde é entregue |
 |---|---|---|
 | `mestre-comunicacao` | todo personagem iniciado pelo Mestre | compartilhada no worktree: `.agents/skills/` e a cópia em `.claude/skills/` |
-| `mestre-coordenacao-mesa` | Mestres de mesa | por personagem, em `.mestre/agents/<id>/` |
-| `mestre-grao-mestre` | Grão-Mestre | por personagem |
-| `mestre-rituais` | Grão-Mestre e Mestres de mesa | por personagem |
+| `mestre-coordenacao-mesa` | Mestres de mesa | só ao personagem |
+| `mestre-grao-mestre` | Grão-Mestre | só ao personagem |
+| `mestre-rituais` | Grão-Mestre e Mestres de mesa | só ao personagem |
 
-- Skills extras da classe ou da ficha vão pelo mesmo caminho "por personagem" ([classes](../classes/classes.md)).
-- Por que só a de comunicação é compartilhada: a pasta do worktree é vista por todos os agentes dali; as de coordenação ficam só com quem tem o nível. Como o arquivo compartilhado é gerado em cada worktree: [mesa](../sessao-zero/mesa.md). Como o arquivo por personagem chega a cada provedor: [personagem](../sessao-zero/personagem.md).
+- **Só ao personagem**, por provedor: no Claude Code, em `.mestre/agents/<id>/.claude/skills/`, lida por `--add-dir`; no Codex e no Antigravity, que não têm pasta por personagem, como seção compacta na camada do Mestre do personagem (`MESTRE.md` ou arquivo de agente). Regra única em [personagem](../sessao-zero/personagem.md#skills-por-personagem). As skills extras da classe seguem o mesmo caminho ([classes](../classes/classes.md#skills-da-classe)).
+- A pasta compartilhada do worktree (`.agents/skills/`) só tem a de comunicação, porque todos os agentes dali a veem; assim cada agente só recebe as skills do seu nível, nos três provedores. Como o arquivo compartilhado é gerado em cada worktree: [mesa](../sessao-zero/mesa.md).
 - Ficha com "recebe as skills do Mestre = não": o personagem não recebe as skills por personagem; a compartilhada continua visível na pasta (ela só ensina; quem decide o que pode é o motor).
 - Terminais de `spawn` não recebem skills.
 
@@ -46,7 +46,7 @@ description: >-
 1. Quem sou e quem vejo: `mestre list`; o Grão-Mestre é sempre `Grão-Mestre` e o Mestre da mesa, `Mestre`; o CLI está no PATH ou em `$MESTRE_CLI`; se falhar, `mestre debug`.
 2. Pedir algo: `ask` só para pergunta rápida; trabalho longo com `--no-wait` e o padrão "ask back" (pedir que o outro responda com `mestre ask "<meu nome>" "<resultado>"`).
 3. Tempo estourado (exit 6): nunca reenviar; usar `check` e esperar.
-4. Pergaminhos: `note create|read|write|edit|stack`; usar `--expect-rev` ao gravar; `delete` só a pedido de usuário.
+4. Pergaminhos (só dentro das mesas): `note create|read|write|edit|stack`; usar `--expect-rev` ao gravar; `delete` só a pedido de usuário.
 5. Terminar: toda tarefa ou etapa termina com `mestre done "<resumo>"` (ou `--return "<motivo>"` para devolver à etapa anterior); sem isso a etapa é dada como travada.
 6. Esperar sem gastar: `mestre wait …` e encerrar o turno; `inbox` e `waits` para ver a fila e as esperas.
 7. Etiqueta: não interromper quem trabalha; `--raw` só para menus; não editar arquivo que outro está mexendo (perguntar ao Mestre da mesa).
@@ -62,34 +62,34 @@ description: >-
 
 **`mestre-grao-mestre`** (Grão-Mestre)
 1. Conversar: identificar quem fala e o nível; perguntar na ambiguidade; responder sempre com `reply`; repassar pedidos com `ask --from-message` ou `table open --from-message`, sem reescrever; nunca mandar segredos.
-2. Mesas: decidir mesa nova ou existente; `gh epic create` → `table open`; `table list|status|close`.
-3. GitHub: `gh review|approve|merge` conforme a política, `gh settings` só com aprovação; o que fazer com cada erro de regra do repositório.
+2. Mesas: decidir mesa nova ou existente; criar o épico com `gh epic create` e depois `table open --epic <n>` (`table open` não cria épico); `table close` quando o motor avisar que o PR foi mesclado; `table list|status`.
+3. GitHub: `gh review|approve|merge`; `gh approve` só com aprovação vigente (dele pela política ou de um usuário); `gh settings` só com aprovação; o que fazer com cada erro de regra do repositório.
 4. Apps: `app list|status|create`; decidir entre App novo e herdado.
-5. Decretos e aprovações: `decree propose` só depois de entender a ordem, mostrando exatamente o que vai valer ([decretos](../telegram/decretos.md)); `approval decide` no que a política deixa, `approval ask` na dúvida ([fluxo](../aprovacoes/fluxo.md)).
+5. Decretos e aprovações: `decree propose` só depois de entender a ordem, mostrando exatamente o que vai valer ([decretos](../telegram/decretos.md)); `approval decide` no que a política deixa; `human_required` ou dúvida → `approval ask` ([política](../aprovacoes/politica.md)).
 6. Não bloquear e prestar contas: delegar e encerrar o turno; `notify` para avisos; resumo curto ao fim de cada épico.
 
 **`mestre-rituais`** (Grão-Mestre e Mestres de mesa)
-1. Criar com uma agenda (`--every`, `--daily`, `--weekly`, `--once`) e `--prompt` ou `--quest`.
+1. Criar com uma agenda (`--every`, `--daily`, `--weekly`, `--once`), para um personagem existente (`--target` com `--prompt` ou `--command`) ou uma missão (`--quest`); nunca para uma ficha.
 2. `--pre-run` e o marcador `{{output}}`.
 3. Alvo ocupado: o disparo entra na fila; passou do `--timeout`, volta para o dono com o motivo.
 4. `list|show|edit|enable|disable|run`; `delete` só a pedido de usuário.
 
+A entrega aos personagens é feita pela sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)), que depende deste documento. A skill `mestre-grao-mestre` ganha a sintaxe dos comandos do [Grão-Mestre](grao-mestre.md) quando eles existem (M5), pela mesma definição de comandos.
+
 ## Regras e erros
 
 - Skills geradas nunca são editadas à mão: a regeneração sobrescreve tudo que tem o marcador. Uma pasta `mestre-*` sem o marcador (feita por alguém) não é tocada; o motor avisa o conflito no checklist.
-- A cópia em `.claude/skills/` é desligada quando o checklist detecta que o Claude Code passou a ler `.agents/skills/` ([checklist](../plataforma/checklist.md)).
+- A cópia em `.claude/skills/` só é desligada quando a conformidade detecta que o Claude Code passou a ler `.agents/skills/`, o checklist oferece desligá-la e um Dono ou Administrador aprova ([checklist](../plataforma/checklist.md), ALL-13).
 - O teste de conformidade de cada provedor confere que as skills aparecem ([conformidade](../provedores/conformidade.md)).
 
 ## Critérios de aceite
 
 - **CA-CLI-SKL-01** · *rápida* — **Dado** os quatro modelos, **quando** o motor gera as skills, **então** cada SKILL.md tem só `name` (casando `^mestre-[a-z0-9-]+$`) e `description` (não vazia, até 500 caracteres) no frontmatter, e o marcador com a versão na linha seguinte.
 - **CA-CLI-SKL-02** · *rápida* — **Dado** a definição de comandos da CLI, **quando** as skills são geradas, **então** todo comando e flag citado nelas existe na definição, e um comando removido faz o teste falhar.
-- **CA-CLI-SKL-03** · *completa* — **Dado** uma mesa com o Mestre da mesa e um Dev, **quando** os dois iniciam, **então** o Mestre tem `mestre-comunicacao`, `mestre-coordenacao-mesa` e `mestre-rituais`, e o Dev só `mestre-comunicacao` (MVP-3).
+- **CA-CLI-SKL-03** · *completa* — **Dado** uma mesa com o Mestre da mesa e um Dev, no mesmo provedor, para cada um dos três provedores (agente falso), **quando** os dois iniciam, **então** o `/fake-dump` do Mestre mostra `mestre-comunicacao`, `mestre-coordenacao-mesa` e `mestre-rituais` (pasta por personagem no Claude, seção da camada do Mestre no Codex e no Antigravity), o do Dev só `mestre-comunicacao`, e o `.agents/skills/` do worktree só tem `mestre-comunicacao` (MVP-3).
 - **CA-CLI-SKL-04** · *completa* — **Dado** o Grão-Mestre iniciando no clone principal, **quando** ele inicia, **então** recebe `mestre-comunicacao`, `mestre-grao-mestre` e `mestre-rituais`, e nenhuma outra skill do Mestre.
 - **CA-CLI-SKL-05** · *rápida* — **Dado** uma pasta `.agents/skills/mestre-comunicacao/` sem o marcador, **quando** o motor regenera, **então** ela não é alterada e um alerta de conflito é registrado.
 
 ## Depende de
 
-- [convencoes](convencoes.md) · [comunicacao](comunicacao.md) · [coordenacao](coordenacao.md) · [grao-mestre](grao-mestre.md)
-- [mesa](../sessao-zero/mesa.md) · [personagem](../sessao-zero/personagem.md)
-- [classes](../classes/classes.md) · [conformidade](../provedores/conformidade.md)
+- [convencoes](convencoes.md) · [comunicacao](comunicacao.md) · [coordenacao](coordenacao.md) · [coordenacao-classes-e-rituais](coordenacao-classes-e-rituais.md)

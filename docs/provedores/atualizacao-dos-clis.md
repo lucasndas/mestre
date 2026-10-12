@@ -77,13 +77,7 @@ Os personagens que já rodavam continuam com o processo da versão antiga até s
 
 ### Retomada de sessão por provedor
 
-O id da sessão fica no registro de terminais ([personagens](../orquestracao/personagens.md#registro-de-terminais)). Opções do tipo "a mais recente" (`--continue`, `-c`, `--last`) não são usadas, porque vários personagens dividem a mesma pasta.
-
-| Provedor | Comando de retomada | De onde vem o id | Situação |
-|---|---|---|---|
-| Claude Code | `claude --resume <uuid>` com as mesmas flags da base | o `--session-id` que o motor gerou ao iniciar | flag documentada no modo interativo. O prompt de sistema gravado é reaproveitado até a compactação ([Claude Code](claude-code.md)) |
-| Codex | `codex resume <SESSION_ID>` com os mesmos `-c` | `session_id` dos hooks | subcomando interativo no código-fonte. Se `-c developer_instructions` não valer na sessão retomada, a camada entra pelo contexto do turno (verificado na etapa 10 da [conformidade](conformidade.md)) |
-| Antigravity | `agy --conversation <id> --agent <nome>` | `conversationId` dos hooks | flag na ajuda do 1.3.3 ("Resume a previous conversation by ID"). Se não funcionar no modo interativo ou não reaplicar o `--agent`, o personagem renasce (etapa 10 da [conformidade](conformidade.md)) |
+O comando de retomada de cada provedor, de onde vem o id da sessão e o que acontece quando a retomada falha estão no [adaptador](adaptador.md#retomada-de-sessão), que é usado também na retomada após reinício do Mestre. A etapa 10 da [conformidade](conformidade.md) confere a retomada com a versão nova antes de liberar.
 
 ## Regras e erros
 
@@ -99,7 +93,7 @@ O id da sessão fica no registro de terminais ([personagens](../orquestracao/per
 - **CA-CLIUPD-03** · *rápida* — **Dado** a política `automatico`, **quando** sai uma versão nova, **então** ela é instalada sem pedido, mas só é liberada depois do teste de conformidade.
 - **CA-CLIUPD-04** · *rápida* — **Dado** um agente falso cuja versão nova reprova no teste, **quando** o resultado chega, **então** a cópia anterior volta, os usuários são alertados e nenhum personagem é reiniciado.
 - **CA-CLIUPD-05** · *rápida* — **Dado** a versão aprovada no teste e três personagens (um `busy`), **quando** o reinício roda, **então** os `idle` reiniciam um por vez e o `busy` só depois do `done`.
-- **CA-CLIUPD-06** · *rápida* — **Dado** um personagem com id de sessão salvo, **quando** é reiniciado, **então** o comando é o da tabela de retomada daquele provedor, com camada do Mestre, hooks e confiança reaplicados.
+- **CA-CLIUPD-06** · *rápida* — **Dado** um personagem com id de sessão salvo, **quando** é reiniciado pela atualização, **então** o comando é o da [retomada](adaptador.md#retomada-de-sessão) daquele provedor, com camada do Mestre, hooks e confiança reaplicados.
 - **CA-CLIUPD-07** · *rápida* — **Dado** uma retomada que falha, **quando** o motor percebe, **então** o personagem renasce com a mensagem de retomada e o canvas o mostra como "renascido".
 - **CA-CLIUPD-08** · *rápida* — **Dado** uma versão instalada por fora, **quando** o checklist a detecta, **então** os recrutamentos daquele provedor no nó esperam o resultado do teste de conformidade.
 - **CA-CLIUPD-09** · *rápida* — **Dado** personagens comuns, um Mestre de mesa e o Grão-Mestre na versão antiga, **quando** a nova é liberada, **então** o Grão-Mestre é o último a reiniciar.
@@ -109,8 +103,8 @@ O id da sessão fica no registro de terminais ([personagens](../orquestracao/per
 
 - [Teste de conformidade](conformidade.md) · [Adaptador](adaptador.md)
 - [Claude Code](claude-code.md) · [Codex](codex.md) · [Antigravity](antigravity.md)
-- [Personagens](../orquestracao/personagens.md) · [Checklist](../plataforma/checklist.md)
-- [Autoatualização do Mestre](../plataforma/autoatualizacao.md) · [Fluxo de aprovação](../aprovacoes/fluxo.md)
+- [Personagens](../orquestracao/personagens.md) (ponto seguro) · [Fluxo de aprovação](../aprovacoes/fluxo.md)
+- [Checklist](../plataforma/checklist.md) · [Autoatualização do Mestre](../plataforma/autoatualizacao.md) (trava de atualização)
 
 ## Verificar na implementação
 

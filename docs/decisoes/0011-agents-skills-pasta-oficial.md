@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas guardam só a skill de comunicação; as de nível e de classe passam a ser entregues por personagem.
 
 ## Contexto
 
@@ -43,7 +43,8 @@ Aceita, 2026-10-12.
 - **Fonte única:** `.agents/skills/` em cada worktree.
 - **Cópia gerenciada:** em `.claude/skills/`, regenerada pelo motor a partir da fonte e nunca editada à mão. É uma cópia, não um link.
 - **Frontmatter:** todo `SKILL.md` gerado tem sempre `name` e `description`, o que atende ao provedor mais exigente (Codex).
-- **Desligar a cópia:** o checklist detecta quando o Claude Code passar a ler `.agents/skills/`, e a cópia é desligada ([checklist](../plataforma/checklist.md)).
+- **Só a skill de comunicação nas pastas compartilhadas:** as skills de nível e de classe são entregues só ao personagem que as recebe: no Claude Code por `--add-dir` de uma pasta por personagem; no Codex e no Antigravity como seção compacta da camada do Mestre ([sessão zero do personagem](../sessao-zero/personagem.md#skills-por-personagem)).
+- **Desligar a cópia:** o teste de conformidade detecta quando o Claude Code passar a ler `.agents/skills/`; o checklist (ALL-13) então **oferece** desligar a cópia, e ela só deixa de ser gerada depois da aprovação de um Dono ou Administrador ([checklist](../plataforma/checklist.md), [sessão zero da mesa](../sessao-zero/mesa.md#regras-e-erros)).
 - **Onde estão os detalhes:** materialização por worktree e exclusão do git em [sessão zero da mesa](../sessao-zero/mesa.md).
 
 ## Consequências

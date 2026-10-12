@@ -16,17 +16,17 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 | **Regra permanente** | daqui pra frente, até ser revogada ou expirar | "o Dev pode fazer push na develop" | Administrador ou acima |
 
 - **Aprovação vira exceção pontual:** responder "Aprovar" a um pedido de aprovação cria uma exceção pontual. O fluxo do pedido está em [fluxo de aprovação](../aprovacoes/fluxo.md).
-- **Efeitos possíveis** de um decreto. Cada decreto tem um efeito e um escopo (workspace e, se houver, mesa, classe ou personagem):
-  - **permissão:** libera ou proíbe arquivos, comandos, git, rede ou comandos da CLI, com o mesmo vocabulário do [permissions.yaml](../classes/permissoes.md);
-  - **comportamento:** uma instrução curta, que entra na camada do Mestre dos personagens afetados;
-  - **política:** ajusta a [política de aprovação](../aprovacoes/politica.md) (ex.: "me pergunte tudo esta semana");
-  - **teto:** amplia o [teto do workspace](../classes/teto-do-workspace.md);
-  - **delegação:** autoriza o Grão-Mestre a aprovar no GitHub em nome do autor ([aprovação no GitHub](../github/aprovacao-no-github.md)).
+- **Efeitos possíveis** de um decreto (identificador entre parênteses, usado pelo `--effect` da CLI). Cada decreto tem um efeito, um alvo (classe, personagem, workspace ou mesa) e um escopo (workspace e, se houver, mesa):
+  - **permissão** (`permission`): libera ou proíbe arquivos, comandos, git, rede ou comandos da CLI, com o mesmo vocabulário do [permissions.yaml](../classes/permissoes.md);
+  - **comportamento** (`behavior`): uma instrução curta, que entra na camada do Mestre dos personagens afetados;
+  - **política** (`policy`): ajusta a [política de aprovação](../aprovacoes/politica.md) (ex.: "me pergunte tudo esta semana");
+  - **teto** (`ceiling`): amplia o [teto do workspace](../classes/teto-do-workspace.md);
+  - **delegação** (`delegation`): autoriza o Grão-Mestre a aprovar no GitHub em nome do autor ([aprovação no GitHub](../github/aprovacao-no-github.md)).
 
 ### Criação
 
 1. O usuário dá a ordem em linguagem natural (texto, áudio ou painel).
-2. O Grão-Mestre interpreta e envia ao motor uma **proposta estruturada**: tipo, efeito, escopo, validade e o texto original da mensagem. A sintaxe do comando está em [CLI do Grão-Mestre](../cli/grao-mestre.md).
+2. O Grão-Mestre interpreta e envia ao motor uma **proposta estruturada** com `mestre decree propose`: tipo, efeito (`--effect`), alvo (`--target`), escopo (`--scope`), validade (`--until`) e o texto original da mensagem (`--text`). A sintaxe está em [CLI do Grão-Mestre](../cli/grao-mestre.md).
 3. O motor confere o nível do autor e mostra o que vai valer, com os botões **Confirmar** e **Cancelar**. Exemplo: "Entendi: permitir push na develop para a classe Dev, permanente. Confirma?".
    - Mensagens ambíguas: o Grão-Mestre pergunta antes de propor.
    - Ordens vindas de **áudio** sempre passam por essa confirmação, com o texto transcrito à vista ([transcrição](anexos-e-transcricao.md)). O mesmo vale para aprovações dadas por áudio.
@@ -104,7 +104,7 @@ Cada decreto fica no banco do Core com:
 
 - Um decreto fora do nível do autor é recusado antes da confirmação, com o nível exigido.
 - Um decreto fora dos workspaces do autor é recusado.
-- Um decreto nunca libera o que o motor proíbe por regra local fixa de segurança, como ler o cofre ou contornar proteção do GitHub. Nesse caso, o motor explica.
+- Um decreto que libera algo numa [invariante arquitetural](../arquitetura/precedencia.md#invariantes-arquiteturais) (ex.: "o Dev pode fazer push na develop") é **cumprido pelo motor**, nunca entregando a capacidade ao agente: o `git push` continua negado ao Dev, e o envio da branch é feito pelo motor quando o Dev pede pela CLI. O que nem o motor pode fazer (contornar proteção do GitHub, entregar segredo do cofre a um agente) é recusado antes da confirmação, com a explicação.
 - Se a proposta do Grão-Mestre não bate com a confirmação do usuário, nada é gravado.
 
 ## Critérios de aceite
@@ -117,12 +117,14 @@ Cada decreto fica no banco do Core com:
 - **CA-DEC-06** · *rápida* — **Dado** um decreto com validade "por 3 dias", **quando** o relógio falso avança 72 horas, **então** ele fica expirado e o autor é avisado.
 - **CA-DEC-07** · *rápida* — **Dado** uma ordem vinda de áudio, **quando** o Grão-Mestre propõe o decreto, **então** a confirmação mostra o texto transcrito e nada vale sem o clique do autor.
 - **CA-DEC-08** · *pesada* — **Dado** o sistema instalado, **quando** o Dono cria pelo Telegram (dublê) um decreto permanente, vê o efeito num agente e o revoga, **então** o comportamento muda e volta, e o registro mostra os dois momentos (MVP-8).
+- **CA-DEC-09** · *rápida* — **Dado** o decreto "o Dev pode fazer push na develop" ativo, **quando** o Dev tenta `git push`, **então** o `mestre hook` continua negando; **quando** o Dev pede o envio pela CLI, **então** o motor envia a branch para a develop com o App da classe e registra a execução no decreto; **dado** um decreto "pode ignorar a revisão obrigatória", **então** ele é recusado antes da confirmação com a explicação.
 
 ## Depende de
 
 - [Precedência](../arquitetura/precedencia.md)
 - [Usuários e níveis](usuarios-e-niveis.md)
 - [Permissões das classes](../classes/permissoes.md)
-- [Fluxo de aprovação](../aprovacoes/fluxo.md)
 - [Adaptador de provedores](../provedores/adaptador.md)
-- [CLI do Grão-Mestre](../cli/grao-mestre.md)
+- [Política de aprovação](../aprovacoes/politica.md)
+- [Fluxo de aprovação](../aprovacoes/fluxo.md)
+- [Bot](bot.md)

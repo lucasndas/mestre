@@ -34,9 +34,9 @@ Conexões de missão são removidas quando a missão termina, se nenhum outro mo
 
 ### Manuais
 
-- **Mestre da mesa:** `mestre connect "A" "B"` dentro da própria mesa (sintaxe em [coordenação](../cli/coordenacao.md)). Motivo `manual`.
+- **Mestre da mesa e Grão-Mestre:** `mestre connect "A" "B"`, o Mestre da mesa dentro da própria mesa e o Grão-Mestre em qualquer mesa do workspace (sintaxe em [coordenação](../cli/coordenacao.md)). Motivo `manual`.
 - **Usuários:** arrastando no canvas (nível Administrador ou acima). Também podem remover conexões manuais; conexões automáticas não podem ser removidas enquanto o motivo existir (o canvas mostra o motivo).
-- Agentes comuns não criam conexões, salvo se a classe permitir `connect` ([permissões](../classes/permissoes.md)).
+- Agentes comuns não criam conexões: `connect` chamado por eles é recusado pelo nível do comando ([convenções da CLI](../cli/convencoes.md)).
 
 ### Visibilidade
 
@@ -45,7 +45,7 @@ Para um agente X, o motor calcula na hora de cada comando:
 - **Pergaminhos visíveis:** os conectados a X e, a partir deles, os alcançáveis por cadeias de conexões pergaminho ↔ pergaminho.
 - Nada atravessa mesas, exceto a conexão Mestre da mesa ↔ Grão-Mestre.
 
-`mestre list` mostra exatamente isso: o próprio nome de X, os personagens visíveis (com nó, classe e estado/motivo de espera) e os pergaminhos visíveis com suas conexões. Os comandos que miram um alvo não visível falham com "<Nome> não está conectado a você". O encaminhamento entre nós é transparente ([convenções da CLI](../cli/convencoes.md)).
+`mestre list` mostra exatamente isso: o próprio nome de X, os personagens visíveis (com nó, classe e estado/motivo de espera) e os pergaminhos visíveis com suas conexões. Os comandos que miram um personagem não visível falham com "<Nome> não está conectado a você" (exit 3, `not_connected`; [convenções da CLI](../cli/convencoes.md)). O encaminhamento entre nós é transparente ([convenções da CLI](../cli/convencoes.md)).
 
 ## Regras e erros
 
@@ -61,10 +61,10 @@ Para um agente X, o motor calcula na hora de cada comando:
 - **CA-CONX-03** · *rápida* — **Dado** pergaminhos P1 ↔ P2 e P1 ligado ao Dev, **quando** o Dev lê P2, **então** consegue; um pergaminho sem caminho até o Dev é recusado.
 - **CA-CONX-04** · *rápida* — **Dado** duas mesas, **quando** o Mestre da mesa A tenta `connect` com um personagem da mesa B, **então** é recusado.
 - **CA-CONX-05** · *rápida* — **Dado** a conexão automática Mestre da mesa ↔ Grão-Mestre, **quando** um usuário tenta removê-la no canvas, **então** é recusado com o motivo mostrado.
+- **CA-CONX-06** · *rápida* — **Dado** um Dev de classe comum, **quando** chama `mestre connect "QA" "Revisor"`, **então** é recusado pelo nível; **quando** o Grão-Mestre faz o mesmo na mesa deles, **então** a conexão é criada com motivo `manual`.
+- **CA-CONX-07** · *rápida* — **Dado** um Dev não conectado ao QA, **quando** chama `mestre ask "QA" "oi"`, **então** sai com exit 3 `not_connected` e a mensagem "QA não está conectado a você".
 
 ## Depende de
 
 - [Personagens](personagens.md)
-- [Pergaminhos e tomos](pergaminhos-e-tomos.md)
-- [Missões](missoes.md)
 - [Convenções da CLI](../cli/convencoes.md)

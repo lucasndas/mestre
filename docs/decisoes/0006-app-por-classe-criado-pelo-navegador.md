@@ -64,7 +64,7 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser cri
   - **Limite de Apps:** com 100 Apps por conta, o painel acompanha a contagem ([administração](../painel/administracao.md)) e o Grão-Mestre evita Apps para simples variações.
   - **Segredos:** mais chaves privadas no cofre, uma por App.
   - **Prazo do manifesto:** a troca do código precisa acontecer em até uma hora depois do clique.
-- **Verificar na implementação:** endereço do Core na rede local como `redirect_url` e `setup_url`, e o user access token do App "Grão-Mestre" ([ADR 0008](0008-grao-mestre-aprovador-delegado.md)) para adicionar repositórios sem link. Padrão e plano B de cada um: [criação de Apps](../github/criacao-de-apps.md#verificar-na-implementação).
+- **Pontos em aberto, conferidos na implementação** (endereço do Core na rede local como `redirect_url` e `setup_url`; o user access token do App "Grão-Mestre", [ADR 0008](0008-grao-mestre-aprovador-delegado.md), para adicionar repositórios sem link): os itens completos estão em [criação de Apps](../github/criacao-de-apps.md#verificar-na-implementação).
 
 ## Fontes
 

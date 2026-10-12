@@ -1,10 +1,10 @@
 # Permissões das classes
 
-> **Assunto:** formato do `permissions.yaml`, pipeline de decisão do despachante, reforço nativo por provedor e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** formato do `permissions.yaml`, regras fixas, regras efetivas por personagem, pipeline de decisão do despachante, modo degradado e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-12
 
 ## Objetivo
 
-Um formato só, do Mestre, para dizer o que uma [classe](classes.md) pode fazer, aplicado igual nos três provedores pelo `mestre hook` ([adaptador](../provedores/adaptador.md)) e reforçado pelos controles nativos de cada um (defesa em profundidade). Detalha o critério global MVP-6 ([escopo do MVP](../produto/escopo-mvp.md)).
+Um formato só, do Mestre, para dizer o que uma [classe](classes.md) pode fazer, aplicado igual nos três provedores pelo `mestre hook` ([despachante](../provedores/despachante-de-hooks.md)) e reforçado pelos controles nativos de cada um ([reforço nativo](reforco-nativo.md), defesa em profundidade). Detalha o critério global MVP-6 ([escopo do MVP](../produto/escopo-mvp.md)).
 
 ## Comportamento
 
@@ -48,16 +48,41 @@ default: ask                # ferramenta de tipo mcp ou other que não casa com 
 ### Regras fixas de segurança
 
 Aplicação das [invariantes arquiteturais](../arquitetura/precedencia.md#invariantes-arquiteturais), embutidas no binário: nenhuma camada as entrega ao agente, e um decreto nessa área é cumprido pelo motor (regra e exemplo no documento dono). Negam sempre:
-- ler ou escrever o cofre, a pasta de dados do Mestre e as credenciais dos perfis de conta (`.credentials.json`, `auth.json`, token do Antigravity, chaves SSH);
+- ler ou escrever o cofre, as pastas de dados do Mestre (inclusive a do retrato `policy.json` e a fila do `mestre hook`, [persistência](../arquitetura/persistencia.md#arquivos)) e as credenciais dos perfis de conta (`.credentials.json`, `auth.json`, token do Antigravity, chaves SSH);
 - `git push` e mudar remotos (`git remote add|set-url|remove`);
 - comandos git que alteram refs de outras branches, outros worktrees ou o espelho, já que os worktrees das mesas compartilham as refs do espelho (ex.: `git branch -D|-f|-m` de outra branch, `git update-ref`, `git tag`, `git worktree`, `git gc`/`prune`, `git fetch` para refs locais, `git --git-dir`/`-C` apontando para fora do worktree); na própria branch da mesa valem as regras de `git`;
 - escrever pela ferramenta de escrita em `.git/**`, `.mestre/**` (pergaminhos e classes só pela CLI), `.claude/settings*.json`, `.codex/`, `.agents/hooks.json` e `.agents/agents/`;
 - iniciar `claude`, `codex` ou `agy` pelo shell (personagens nascem só pelo motor);
+- executar arquivos de `.mestre/anexos/` ou dar permissão de execução a eles: **anexos nunca são executados** ([anexos](../telegram/anexos-e-transcricao.md));
 - editar um arquivo que outro personagem da mesa editou no turno ainda em andamento (o motivo cita quem).
+
+### Regras efetivas
+
+A **ordem de precedência** e a **regra de combinação** entre decretos, regras do Mestre, teto, classe e ficha são donas de [precedência](../arquitetura/precedencia.md). O Core aplica essa combinação e envia ao nó, para cada personagem, **um documento JSON já combinado**: as regras efetivas (mensagem `agent.rules`, [mensagens](../conectividade/mensagens.md)), de novo sempre que uma camada muda. O nó guarda a última versão no banco e o retrato `policy.json` para o [modo degradado](#modo-degradado). Assim a decisão acontece no próprio nó, em menos de 1 s, sem ida ao Core.
+
+```json
+{"version": 1, "agent_id": "01J…", "class": "qa", "generated_at": "2026-10-12T14:00:00Z",
+ "fixed_rules_version": 3,
+ "files": {"read": ["**"], "write": ["tests/**"], "deny": ["**/.env"]},
+ "commands": {"allow": ["npm test"], "ask": ["npm install *"], "deny": ["curl *"], "default": "ask"},
+ "git": {"commit": true, "branches": ["epico/42-login"], "request_push": false, "workflows": "never"},
+ "network": {"internet": false, "domains": []},
+ "tools": {"allow": ["mcp__playwright__*"], "ask": [], "deny": [], "default": "ask"},
+ "cli": {"allow": ["issue comment"]},
+ "decrees": [{"id": 12, "effect": {"kind": "permission", "allow": {"commands": ["make deploy-teste"]}}, "until": "2026-10-19T00:00:00Z"}],
+ "origin": {"commands.deny:curl *": "ceiling"},
+ "locked": false}
+```
+
+- Os blocos têm o mesmo sentido do `permissions.yaml`, já cortados pelo teto e endurecidos pela ficha; marcadores como `{mesa.branch}` já vêm resolvidos.
+- `decrees`: decretos e exceções pontuais ativos que valem para o personagem ([decretos](../telegram/decretos.md)); exceção pontual consumida sai da lista na versão seguinte.
+- `origin`: camada de origem (`fixed`, `decree`, `ceiling`, `class`, `sheet`) de cada padrão que não vem da classe, para o motivo da negação citar, por exemplo, "teto do workspace".
+- `locked`: sistema travado ([segurança do canal](../telegram/seguranca-do-canal.md)); com `true`, toda ferramenta é negada.
+- `version` muda só quando um campo muda de sentido; campos novos são acrescentados sem mudar a versão.
 
 ### Pipeline de decisão
 
-A **ordem de precedência** e a **regra de combinação** entre decretos, regras do Mestre, teto, classe e ficha são donas de [precedência](../arquitetura/precedencia.md). O Core aplica essa combinação e envia ao nó as **regras efetivas** de cada personagem (mensagem `agent.rules` do [protocolo](../conectividade/protocolo.md)), de novo sempre que uma camada muda. Assim a decisão acontece no próprio nó, em menos de 1 s, sem ida ao Core. O passo a passo do despachante, a cada `pre_tool` e `permission_request`:
+O passo a passo do despachante, a cada `pre_tool` e `permission_request`:
 
 ```mermaid
 flowchart LR
@@ -79,7 +104,7 @@ flowchart LR
 4. Se liberou, rodam os hooks `pre_tool` síncronos da classe, que só podem negar ([classes](classes.md#hooks-extras-da-classe)).
 5. `ask` segue o fluxo da seção seguinte.
 
-**A ficha só restringe:** o bloco `permissions` da ficha ([bases e fichas](../orquestracao/bases-e-fichas.md)) usa o mesmo formato; um `allow` da ficha que a classe não dá é ignorado, e salvar a ficha avisa isso.
+**A ficha só restringe:** o campo `restrictions` da ficha ([bases e fichas](../orquestracao/bases-e-fichas.md)) usa o mesmo formato; um `allow` da ficha que a classe não dá é ignorado, e salvar a ficha avisa isso.
 
 ### Quando a decisão é "pedir aprovação"
 
@@ -87,28 +112,18 @@ O despachante responde **negar**, com o motivo "pedido de aprovação #N aberto 
 
 ### Modo degradado
 
-O motor do nó grava o retrato das regras efetivas de cada personagem em `<dados do nó>/agents/<id>/policy.json`, fora do worktree (padrão). Com o motor fora do ar, o `mestre hook` aplica as regras fixas e esse retrato: `deny` nega, `ask` nega com "motor indisponível, tente depois", o resto libera ([adaptador](../provedores/adaptador.md#mestre-hook-despachante)).
+O motor do nó grava o retrato das regras efetivas de cada personagem em `policy.json`, fora do worktree: `/var/lib/mestre/agentes/<id>/` no Linux (dono `mestre`, grupo `mestre-agente`, modo 0640, pasta 0750: o hook, que roda como `mestre-agente`, lê e não altera) e `%ProgramData%\Mestre\no\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Com o motor fora do ar, o `mestre hook` aplica as regras fixas e esse retrato: `deny` nega, `ask` nega com "motor indisponível, tente depois", o resto libera ([despachante](../provedores/despachante-de-hooks.md#modo-degradado)). O hook em si não passa pelo pipeline; as regras fixas negam às ferramentas do agente qualquer acesso a essas pastas.
 
-### Reforço nativo por provedor
+### Reforço nativo
 
-O adaptador traduz as regras efetivas para o que cada provedor aceita por personagem, na hora de iniciar. Se o despachante falhar, isso ainda segura o essencial.
+A tradução das regras efetivas para os controles nativos de cada provedor está em [reforço nativo](reforco-nativo.md).
 
-| Política | Claude Code (`--settings` do personagem) | Codex (flags de início) | Antigravity |
-|---|---|---|---|
-| `files.write` | `allow`: `Edit(<glob>)`, `Write(<glob>)`; sem escrita: `--disallowedTools Edit Write NotebookEdit` | sem escrita: `-s read-only`; senão `-s workspace-write` (sem regra por caminho) | sem regra por caminho |
-| `files.deny` | `deny`: `Read(<glob>)`, `Edit(<glob>)` | — | — |
-| `commands.allow` / `deny` | `allow` / `deny`: `Bash(<padrão>)` | — (contido pelo sandbox) | — |
-| regras fixas | `deny`: `Bash(git push *)`, `Bash(git remote *)` | `.git` fora do alcance de escrita do sandbox | `permissions.deny` no `settings.json` do perfil (só regras fixas, pois o arquivo é compartilhado) |
-| `network.internet: false` | `--disallowedTools WebFetch WebSearch` | `sandbox_workspace_write.network_access=false`, sem `--search` | `--sandbox` |
-| `network.domains` | `allow`: `WebFetch(domain:<d>)` | só liga/desliga | — |
-| falha do despachante | `onFailure: block` | sandbox | falha fechada nativa |
-
-`ask` nunca vira regra nativa (o despachante cuida). No Claude, os globs de caminho saem sempre absolutos (`Edit(//<worktree>/tests/**)`), para não depender de a regra relativa ser lida a partir da pasta do arquivo `--settings`. Quando um decreto libera algo bloqueado no nível nativo, o motor regenera o arquivo do personagem; como o Mestre trata o `--settings` do Claude e as flags do Codex como lidos só no início, o personagem é reiniciado com retomada quando estiver livre ([personagens](../orquestracao/personagens.md)). Flags de cada provedor: [Claude Code](../provedores/claude-code.md), [Codex](../provedores/codex.md), [Antigravity](../provedores/antigravity.md).
+Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o [reforço nativo](reforco-nativo.md), [classes](classes.md) e o [teto](teto-do-workspace.md) (M3); fichas, esperas e aprovações chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
 - `permissions.yaml` inválido: a classe não é salva; numa classe já salva que fica inválida (edição manual), o motor mantém a última versão válida e avisa.
-- Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `default`. O reforço nativo não tem regra de `tools`; ela fica só no despachante, como `ask`.
+- Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `default`.
 - Limite conhecido: comandos de shell que escrevem arquivos sem caminho literal escapam da regra de arquivos; por isso classes restritas devem usar lista de comandos permitidos, e o `git commit` confere os arquivos preparados.
 
 ## Critérios de aceite
@@ -117,23 +132,15 @@ O adaptador traduz as regras efetivas para o que cada provedor aceita por person
 - **CA-PERM-02** · *rápida* — **Dado** regras efetivas que negam `src/**`, uma exceção pontual para editar `src/a.ts` e um decreto que libera `git push`, **quando** o despachante decide, **então** a edição de `src/a.ts` passa uma vez, a seguinte é negada, e `git push` continua negado pela regra fixa.
 - **CA-PERM-03** · *rápida* — **Dado** `commands.allow: ["npm test"]`, **quando** chegam `npm test && git push` e `npm test $(curl x)`, **então** o primeiro é negado e o segundo fica no mínimo em `ask`.
 - **CA-PERM-08** · *rápida* — **Dado** um personagem da mesa A, **quando** roda `git branch -f epico/7-outra HEAD` ou lê o `auth.json` de um perfil de conta, **então** os dois são negados pelas regras fixas.
-- **CA-PERM-04** · *rápida* — **Dado** `files.write: ["tests/**"]` e `src/a.ts` preparado, **quando** chega `git commit -m x`, **então** é negado com a lista dos arquivos fora do permitido.
+- **CA-PERM-04** · *completa* — **Dado** um worktree com git real, `files.write: ["tests/**"]` e `src/a.ts` preparado, **quando** chega `git commit -m x`, **então** é negado com a lista dos arquivos fora do permitido.
 - **CA-PERM-05** · *completa* — **Dado** `npm install *` em `ask`, **quando** o agente falso roda `npm install x`, **então** recebe negação com o pedido #N, fica "aguardando permissão"; aprovado, recebe a mensagem, a repetição passa uma vez e a seguinte volta a pedir.
-- **CA-PERM-06** · *rápida* — **Dado** a classe QA acima sem internet, **quando** o adaptador traduz, **então** o Claude recebe `Edit(//<worktree>/tests/**)` em `allow` e `Bash(git push *)` em `deny`, o Codex `-s workspace-write` sem rede, e o Antigravity `--sandbox`.
 - **CA-PERM-07** · *rápida* — **Dado** o motor fora do ar e um retrato que nega `src/**`, **quando** chega uma edição em `src/a.ts` e um comando em `ask`, **então** os dois são negados, o segundo com "motor indisponível".
 - **CA-PERM-09** · *rápida* — **Dado** `tools.allow: ["mcp__playwright__*"]`, `tools.deny: ["mcp__*__delete_*"]` e `default: deny`, **quando** chegam `mcp__playwright__browser_navigate`, `mcp__playwright__delete_cookies` e `mcp__github__create_issue`, **então** o primeiro é liberado e os outros dois negados, igual para os provedores que expõem esses nomes.
+- **CA-PERM-10** · *rápida* — **Dado** uma classe que libera `curl *`, um teto que nega `curl *` e uma ficha que nega `git commit *`, **quando** o Core monta as regras efetivas, **então** o documento tem `curl *` em `commands.deny` com `origin` `ceiling`, `git.commit` falso e nenhum marcador sem resolver.
+- **CA-PERM-11** · *rápida* — **Dado** qualquer classe, **quando** o agente pede `chmod +x .mestre/anexos/x.sh` ou `sh .mestre/anexos/x.sh`, **então** os dois são negados pela regra fixa de anexos.
 
 ## Depende de
 
-- [Precedência](../arquitetura/precedencia.md) e [decretos](../telegram/decretos.md)
-- [Protocolo](../conectividade/protocolo.md)
-- [Classes](classes.md) e [teto do workspace](teto-do-workspace.md)
-- [Adaptador](../provedores/adaptador.md)
-- [Fluxo](../aprovacoes/fluxo.md) e [política](../aprovacoes/politica.md) de aprovações
-- [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
-- [Bases e fichas](../orquestracao/bases-e-fichas.md)
-
-## Verificar na implementação
-
-- **Verificar na implementação:** a regra `Edit(//<caminho absoluto>/<glob>)` do Claude casa os arquivos do worktree. **Padrão:** casa. **Se falhar:** o motor gera a forma relativa que a conformidade aceitar; enquanto isso, a regra de caminho fica só no despachante. **Onde:** etapa 4 do [teste de conformidade](../provedores/conformidade.md), com o despachante em modo degradado.
-- **Verificar na implementação:** a sintaxe `action(target)` com curinga no `permissions.deny` do Antigravity (ex.: `command(git push*)`). **Padrão:** essa forma. **Se falhar:** as regras fixas desse provedor ficam só no hook, que as aplica até em modo degradado ([adaptador](../provedores/adaptador.md)). **Onde:** à mão na implementação do adaptador, pedindo `git push` com o hook respondendo `allow`.
+- [Adaptador](../provedores/adaptador.md) (evento normalizado, mapa de ferramentas)
+- [Protocolo](../conectividade/protocolo.md) (`agent.rules`)
+- [Precedência](../arquitetura/precedencia.md)

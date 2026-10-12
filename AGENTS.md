@@ -13,12 +13,7 @@ Termos como Mesa, Ficha, Classe e Grimório estão no [glossário](docs/produto/
 
 ## Testes
 
-Política completa em [docs/qualidade/testes.md](docs/qualidade/testes.md). O essencial:
-
-- Três suítes com orçamento: **rápida** (≤ 30 s, antes de cada commit), **completa** (≤ 3 min, antes do merge), **pesada** (noturna e sob demanda).
-- Proibido `sleep` em teste: use o relógio injetável. Provedores, Telegram, GitHub e rede são falsos nas suítes rápida e completa ([dublês](docs/qualidade/dubles.md)).
-- Cada comportamento é testado uma vez, no nível mais baixo possível. Durante o trabalho, rode só os testes afetados.
-- Teste instável vai para quarentena; nunca "com retry".
+Política completa em [docs/qualidade/testes.md](docs/qualidade/testes.md); não a repita aqui. Comandos: `go run ./tools/testrun fast` (antes de cada commit), `go run ./tools/testrun affected` (durante o trabalho) e `go run ./tools/testrun full` (antes do merge). Sem `sleep` em teste; Telegram e GitHub são sempre falsos, em todas as suítes ([dublês](docs/qualidade/dubles.md)).
 
 ## Documentação
 
@@ -27,11 +22,12 @@ Política completa em [docs/qualidade/testes.md](docs/qualidade/testes.md). O es
 - A mesma alteração que muda um comportamento atualiza o documento correspondente.
 - Proibido criar relatórios ou resumos (`SUMMARY.md`, `PROGRESS.md`, `CHANGES.md`, `IMPLEMENTATION_NOTES.md`…). Histórico fica no git.
 - Todo documento tem o cabeçalho de assunto, componente e data, fica listado num `INDEX.md` e tem até ~150 linhas. A suíte rápida verifica ([verificação](docs/qualidade/verificacao-de-docs.md)).
+- Em documento de funcionalidade, "Depende de" lista só o que precisa existir antes (mesmo marco ou anterior, sem ciclos); "ver também" vai no corpo ([ordem de implementação](docs/desenvolvimento/ordem-de-implementacao.md)).
 - Documentação em português; código, identificadores e commits em inglês.
 
 ## Código, commits e branches
 
-Convenções em [docs/desenvolvimento/convencoes.md](docs/desenvolvimento/convencoes.md): layout do código, Conventional Commits, branches e PRs.
+Convenções em [docs/desenvolvimento/convencoes.md](docs/desenvolvimento/convencoes.md): layout do código, Conventional Commits, branches e PRs. A ordem de desenvolvimento (marcos) está em [docs/desenvolvimento/ordem-de-implementacao.md](docs/desenvolvimento/ordem-de-implementacao.md).
 
 ## Quando uma tarefa está pronta
 

@@ -16,7 +16,7 @@ Levar uma versão nova do Mestre a todas as máquinas sem ninguém entrar nelas:
 
 ### Pacote assinado
 
-Cada release traz os binários `mestre` e `mestre-guardiao` por plataforma ([componentes](../arquitetura/componentes.md#binários)) e:
+Uma release por versão, com tag única `vX.Y.Z` (a versão do motor), traz os binários `mestre` e `mestre-guardiao` por plataforma ([componentes](../arquitetura/componentes.md#binários)). A versão do Guardião vai só no manifesto (`guardiao.versao`) e no `mestre-guardiao version`: não existem tags nem releases próprias do Guardião, então `releases/latest` sempre devolve a release completa. Arquivos:
 
 | Arquivo | Conteúdo |
 |---|---|
@@ -38,7 +38,7 @@ Cada release traz os binários `mestre` e `mestre-guardiao` por plataforma ([com
 
 - **Um passo por vez no sistema inteiro:** uma **trava de atualização** no Core (a mesma usada pelos [CLIs](../provedores/atualizacao-dos-clis.md)). Core e nó nunca atualizam juntos; motor e Guardião também não.
 - **Sequência:** motor do Core → Guardião do Core → cada nó, um por vez, pela prioridade da [eleição](../autocura/camadas.md#eleição-do-nó-condutor): motor do nó → Guardião do nó. O passo do Guardião é pulado se a versão dele no manifesto for igual à instalada. Nó desligado é atualizado quando reconectar.
-- **Máquina única** (só Linux, só Windows): a sequência é só motor do Core → Guardião do Core. **Core Windows:** `mestre-core` e o `mestre-node` local usam o mesmo `mestre.exe`, então o passo do motor troca o binário uma vez e reinicia os dois (primeiro `mestre-core`, depois `mestre-node`); o ponto seguro vale para os terminais do nó local e a confirmação exige os dois saudáveis.
+- **Máquina única** (só Linux, só Windows): a sequência é só motor do Core → Guardião do Core. **Máquina do Core (Linux ou Windows):** `mestre-core` e o nó local `mestre-node` usam o mesmo binário `mestre`, então o passo do motor troca o binário uma vez e reinicia os dois (primeiro `mestre-core`, depois `mestre-node`); o ponto seguro vale para os terminais do nó local e a confirmação exige os dois saudáveis.
 - **Convivência:** o Core aceita a versão atual e a anterior do protocolo ([protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades)). Antes de começar, confere se todos os nós pareados entram na faixa nova; se algum não entrar, não começa e o Dono recebe a explicação.
 - **Nunca os dois fora:** quem vigia a troca do motor é o Guardião; quem troca e vigia o Guardião é o motor **saudável** da mesma máquina. O passo do Guardião só começa depois que o motor novo passou na confirmação; com o motor degradado, o Guardião não é atualizado.
 
@@ -65,7 +65,7 @@ sequenceDiagram
 1. **Preparar:** no nó, a release chega por transferência `kind: release` ([protocolo](../conectividade/protocolo.md#transferência-em-partes)); o destino verifica tudo e confirma o `update.apply`.
 2. **Ponto seguro:** os terminais da máquina vão morrer; o motor espera cada personagem chegar ao ponto seguro (abaixo).
 3. **Trocar:** backup do banco ([instalação e atualização](instalacao-e-atualizacao.md)), marca "atualização em curso" (versão anterior e nova) e chamada ao **ajudante de troca**, que troca o binário guardando o anterior e reinicia o serviço.
-4. **Confirmar:** o Guardião local vigia a **janela de confirmação**, 5 min (padrão). O motor novo precisa ficar saudável a janela inteira: heartbeat local em dia, `/healthz` respondendo, banco aberto com as migrações aplicadas e, no nó, `welcome` do Core recebido.
+4. **Confirmar:** o Guardião local vigia a **janela de confirmação**, 5 min (padrão). O motor novo precisa ficar saudável a janela inteira: heartbeat local em dia, `health` respondendo pelo canal local ([Guardião](../autocura/guardiao.md#canal-local-motor--guardião)) e, no Core, `/healthz`, banco aberto com as migrações aplicadas e, no nó, `welcome` do Core recebido.
 5. **Falhou** → o Guardião faz `rollback` ([lista fechada](../autocura/guardiao.md#lista-fechada-de-ações)) na hora, sem esperar o laço de queda. **Saudável** → passo concluído e personagens retomados ([personagens](../orquestracao/personagens.md#retomada-após-reinício)).
 6. **Cura durante a janela:** a máquina fica "em atualização" e a camada 3 espera, porque o Guardião local tem a vez; no Core, o Guardião (árbitro da eleição) responde `updating` aos pedidos de trava. Se até o `rollback` falhar, vale o incidente normal das [camadas](../autocura/camadas.md).
 
@@ -111,7 +111,7 @@ Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro`
 - Nada começa sem aprovação, nem com incidente de autocura aberto em qualquer máquina. Incidente no meio → pausa depois do passo em curso.
 - **Passo revertido:** a release vira `revertida`, os passos seguintes não rodam, o que já foi atualizado fica (o protocolo convive), os usuários recebem alerta "Sistema" com os logs mascarados, e aquela versão só é tentada de novo com aprovação nova.
 - Assinatura, tag, hash ou versão inválidos em qualquer ponto → `release_rejected`, alerta ao Dono, nada é trocado.
-- **Migrações do banco** são só aditivas dentro de uma versão maior, para o `rollback` funcionar sem restaurar o banco; restaurar exige aprovação ([Guardião](../autocura/guardiao.md#lista-fechada-de-ações)).
+- **Migrações do banco** são só aditivas dentro de uma versão maior, para o `rollback` funcionar sem restaurar o banco. O `rollback` com restauração do banco (backup do passo 3) é raro e nunca automático: exige Dono ou Administrador com PIN e perde tudo o que aconteceu entre a atualização e a volta ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
 - Nó fora da faixa de protocolo (desligado por muito tempo) → recebe `4003` e precisa de atualização manual.
 
 ## Critérios de aceite
@@ -129,7 +129,8 @@ Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro`
 - **CA-AUTO-11** · *completa* — **Dado** um personagem `busy` no nó, **quando** chega o passo do motor, **então** o reinício espera o `done`, e depois o personagem é retomado sem sumir.
 - **CA-AUTO-12** · *rápida* — **Dado** um incidente aberto, **quando** a release é aprovada, **então** fica `pausada` até o incidente fechar.
 - **CA-AUTO-13** · *rápida* — **Dado** o motor do Core em janela de confirmação, **quando** um Guardião de nó pede a trava de condução, **então** recebe `updating` e não conduz cura.
-- **CA-AUTO-14** · *rápida* — **Dado** um Core Windows sem nó remoto (dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é: troca do binário com reinício de `mestre-core` e do `mestre-node` local, confirmação dos dois, e só então o Guardião.
+- **CA-AUTO-14** · *rápida* — **Dado** uma máquina Core (Linux e Windows) sem nó remoto (dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é: troca do binário com reinício de `mestre-core` e do `mestre-node` local, confirmação dos dois, e só então o Guardião.
+- **CA-AUTO-15** · *rápida* — **Dado** uma atualização revertida com migração do banco, **quando** o Guardião volta a versão, **então** faz só o `rollback` comum e o pedido de restauração do banco fica esperando Dono ou Administrador com PIN, mostrando o intervalo que será perdido.
 
 ## Depende de
 

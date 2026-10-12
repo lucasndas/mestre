@@ -14,12 +14,12 @@ Garantir que todo worktree onde roda um personagem tenha a fiação que os prove
 - antes de iniciar cada personagem (verifica e corrige, sem reescrever o que já está certo);
 - ao regenerar depois de uma versão nova dos modelos ([personagem](personagem.md)).
 
-A geração é idempotente: rodar de novo sem mudança nos modelos não altera nenhum byte (importante para o Codex, que invalida a confiança de hook editado).
+A geração é idempotente: rodar de novo sem mudança nos modelos não altera nenhum byte (o Antigravity e o Claude Code recarregam a configuração a cada mudança de arquivo).
 
 ### Arquivos gerados no worktree
 | Arquivo | Para | Conteúdo | Dono do formato |
 |---|---|---|---|
-| `.agents/skills/mestre-comunicacao/SKILL.md` | Codex, Antigravity | skill compartilhada | [skills-geradas](../cli/skills-geradas.md) |
+| `.agents/skills/mestre-comunicacao/SKILL.md` | Codex, Antigravity | a única skill compartilhada (as de nível e de classe são por personagem: [personagem](personagem.md#skills-por-personagem)) | [skills-geradas](../cli/skills-geradas.md) |
 | `.claude/skills/mestre-comunicacao/SKILL.md` | Claude Code | cópia gerenciada da anterior (cópia, não link: links no Windows exigem permissão especial) | idem |
 | `.claude/settings.local.json` | Claude Code | só a chave `hooks`, mesclada | [claude-code](../provedores/claude-code.md) |
 | `.agents/hooks.json` | Antigravity | um hook nomeado `mestre` | [antigravity](../provedores/antigravity.md) |
@@ -52,7 +52,7 @@ Para arquivos que podem já existir com conteúdo da pessoa:
 1. Ler o arquivo. Se não for válido (JSON quebrado, por exemplo), **não tocar**: registrar o erro, alertar no checklist e não iniciar personagens daquele provedor ali até resolver.
 2. Retirar só a parte do Mestre, reconhecida pelo marcador do tipo de arquivo:
    - texto (`info/exclude`): o bloco entre `# >>> mestre` e `# <<< mestre <<<`;
-   - hooks do Claude Code e do Codex: os handlers cujo comando é a chamada do Mestre (abaixo); handlers da pessoa ficam onde estão, e os do Mestre entram **no fim** de cada lista;
+   - hooks do Claude Code: os handlers cujo comando é a chamada do Mestre (abaixo); handlers da pessoa ficam onde estão, e os do Mestre entram **no fim** de cada lista;
    - hooks do Antigravity: a chave de topo `mestre`;
    - skills: pastas `mestre-*` com o marcador de gerado ([skills-geradas](../cli/skills-geradas.md)).
 3. Acrescentar a parte atual do Mestre e gravar de forma atômica (arquivo temporário + renomear), só se o conteúdo mudou.
@@ -70,7 +70,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 
 - A chave exata (worktree ou raiz do checkout principal) e os detalhes de cada provedor estão nos documentos de provedor.
 - Os provedores reescrevem esses arquivos: o motor grava de forma atômica, relê logo antes de iniciar o personagem e grava de novo se a entrada sumiu.
-- A sessão zero guia o usuário no passo que não pode ser automático (confiar os hooks do Codex), e o [checklist](../plataforma/checklist.md) detecta quando a confiança falta.
+- A confiança dos hooks do Codex não é da mesa nem da sessão zero: é dada uma vez, na [configuração inicial do perfil de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta); o checklist (ALL-11, [checklist](../plataforma/checklist.md)) detecta quando falta.
 - Ao remover o worktree, o motor retira as entradas de confiança que criou para ele.
 
 ### Não atrapalhar quem clona
@@ -86,7 +86,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 
 - Nada é apagado nem sobrescrito fora das partes marcadas como do Mestre.
 - Falha ao gerar um arquivo de um provedor bloqueia só personagens daquele provedor naquele worktree, com o motivo no painel; os outros seguem.
-- Se o checklist detectar que o Claude Code lê `.agents/skills/`, a cópia em `.claude/skills/` deixa de ser gerada e a existente é removida.
+- A cópia em `.claude/skills/` só deixa de ser gerada por decisão de usuário: quando o teste de conformidade detecta que o Claude Code lê `.agents/skills/`, o checklist (ALL-13) **oferece** desligar a cópia; só depois que um Dono ou Administrador aprova, ela deixa de ser gerada e a existente é removida. Sem a aprovação, nada muda.
 
 ## Critérios de aceite
 
@@ -98,12 +98,14 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 - **CA-SZ-MESA-06** · *completa* — **Dado** um `.agents/hooks.json` versionado e mesclado, **quando** um agente faz commit de tudo, **então** o commit não contém o hook `mestre`; e, num clone novo sem o `mestre` no PATH, o agente Antigravity falso tem o PreToolUse liberado (MVP-3).
 - **CA-SZ-MESA-07** · *completa* — **Dado** um worktree com confiança gravada nos três provedores, **quando** a mesa é encerrada e o worktree removido, **então** as entradas de confiança daquele caminho deixam de existir.
 - **CA-SZ-MESA-08** · *rápida* — **Dado** o comando de hook gerado, **quando** roda sem `MESTRE_AGENT_ID`, **então** imprime a resposta neutra do evento, sai com 0 e não executa o `mestre`.
+- **CA-SZ-MESA-09** · *rápida* — **Dado** a conformidade marcando que o Claude Code lê `.agents/skills/`, **quando** a geração roda sem a aprovação de um Dono ou Administrador, **então** a cópia em `.claude/skills/` continua sendo gerada; **quando** a aprovação existe, **então** a cópia é removida e não volta.
 
 ## Depende de
 
-- [workspace](workspace.md) · [personagem](personagem.md) · [mesas](../orquestracao/mesas.md)
-- [adaptador](../provedores/adaptador.md) · [claude-code](../provedores/claude-code.md) · [codex](../provedores/codex.md) · [antigravity](../provedores/antigravity.md)
-- [skills-geradas](../cli/skills-geradas.md) · [bases-e-fichas](../orquestracao/bases-e-fichas.md) · [checklist](../plataforma/checklist.md)
+- [Sessão zero do workspace](workspace.md)
+- [Bases e fichas](../orquestracao/bases-e-fichas.md)
+- [Adaptador](../provedores/adaptador.md) · [Claude Code](../provedores/claude-code.md) · [Codex](../provedores/codex.md) · [Antigravity](../provedores/antigravity.md)
+- [Classes](../classes/classes.md)
 
 ## Verificar na implementação
 

@@ -41,7 +41,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 
 ### Abertura, versão e capacidades
 
-1. O nó conecta e envia `hello` com: faixa de versões do protocolo que entende (`{min, max}`, inteiros), versão do binário e [registro e capacidades](#registro-e-capacidades).
+1. O nó conecta e envia `hello` com: faixa de versões do protocolo que entende (`{min, max}`, inteiros; a primeira versão é **1**), versão do binário e [registro e capacidades](#registro-e-capacidades).
 2. O Core responde `welcome` com a versão escolhida (a maior em comum), a versão dele e a hora do Core.
    - Sem versão em comum, o Core fecha com o código `4003`, informando a faixa que aceita.
 3. **Mudanças compatíveis:**
@@ -52,13 +52,13 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 
 ### Registro e capacidades
 
-- **O que vai no `hello`:** `node_id` e nome; `os` e `arch`; `local` (verdadeiro para o nó local do Core); `gpu` e `transcricao` (booleanos); ferramentas com versão (ex.: `claude`, `codex`, `agy`, `git`, `ffmpeg`); perfis de conta do nó; terminais que já estão rodando.
+- **O que vai no `hello`:** `node_id` e nome; `os` e `arch`; `local` (verdadeiro para o nó local do Core, o `mestre-node` da máquina do Core, que conecta por `127.0.0.1` como qualquer nó); `gpu` e `transcricao` (booleanos); ferramentas com versão (ex.: `claude`, `codex`, `agy`, `git`, `ffmpeg`); perfis de conta do nó; terminais que já estão rodando.
 - **Mudanças depois do `hello`:** vão em `node.capabilities`. Exemplo: `transcricao` passa a falso quando o modelo Whisper falha na verificação ([instalação e versões](../plataforma/instalacao-e-atualizacao.md#whisper)).
 - **Uso:** o Core escolhe o nó de cada personagem por essas capacidades ([personagens](../orquestracao/personagens.md)).
 
 ### Ack e idempotência
 
-- **Remetente:** toda mensagem com `ack: true` é gravada numa caixa de saída no SQLite até chegar o `ack`. Depois de reconectar, ela é reenviada **com o mesmo `id`** e na ordem original.
+- **Remetente:** toda mensagem com `ack: true` é gravada na tabela `outbox` do banco do remetente (Core ou nó, [persistência](../arquitetura/persistencia.md)) até chegar o `ack`. Depois de reconectar, ela é reenviada **com o mesmo `id`** e na ordem original.
 - **Destinatário:** guarda os `id`s processados por remetente, com a resposta dada, por 24 horas (padrão). Um `id` repetido devolve a mesma resposta, com `status: "duplicate"`, **sem executar de novo**.
 - **O que o ack significa:** `ack` (`payload` `{status: ok|duplicate|error}`) quer dizer "recebido e aceito", não "concluído". A conclusão vem numa mensagem de resultado própria, ligada por `reply_to`.
 - A saída de terminal não tem ack. Ela se recupera por replay (abaixo).
@@ -70,7 +70,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 - **Frame binário:** `[1 byte tipo][16 bytes ID (ULID)][8 bytes posição, big-endian][dados]`.
   - Tipo `0x01`: saída de terminal. O ID é o do terminal e a posição é o deslocamento em bytes.
   - Tipo `0x02`: parte de transferência. O ID é o da transferência e a posição é o índice da parte.
-- **Replay de terminal:** o nó mantém um buffer circular de 1 MiB (padrão) por terminal. Depois de reconectar, o Core pede `terminal.replay` a partir do último deslocamento que recebeu. Se o trecho já saiu do buffer, o Core marca "trecho perdido"; o log completo continua no disco do nó ([persistência](../arquitetura/persistencia.md)).
+- **Replay de terminal:** o buffer de cada terminal fica só no nó (1 MiB, padrão; [terminal](../arquitetura/terminal.md)). Depois de reconectar, ou quando um navegador abre um terminal, o Core pede `terminal.replay` a partir do deslocamento que precisa. Se o trecho já saiu do buffer, a resposta marca "trecho perdido"; o log completo continua no disco do nó.
 
 ### Heartbeat e reconexão
 
@@ -80,30 +80,12 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 - **Uma conexão por `node_id`:** uma conexão nova substitui a antiga.
 - **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (o nó para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Core desligando (reconectar logo).
 
-### Tipos de mensagem principais
+### Tipos de mensagem
 
-| `type` | Sentido | Ack | Para quê |
-|---|---|---|---|
-| `hello` / `welcome` | N→C / C→N | — | abertura e versão |
-| `node.heartbeat` | N→C | não | sinal de vida e carga |
-| `node.capabilities` | N→C | sim | capacidades mudaram |
-| `ack` / `error` | ambos | — | confirmação e erro |
-| `terminal.open` | C→N | sim | abrir terminal com a base já resolvida (comando, argumentos, pasta, ambiente, tamanho). Resultado: `terminal.opened` (PID) ou `error` |
-| `terminal.input` | C→N | sim | digitar texto ou entrada crua |
-| `terminal.resize` | C→N | não | mudar colunas e linhas |
-| `terminal.close` | C→N | sim | encerrar (`graceful` ou `kill`) |
-| `terminal.status` | N→C | sim | rodando, ocioso, ocupado, travado, encerrado |
-| `terminal.replay` / `terminal.screen` | C→N | não | pedir saída a partir de um ponto / tela atual (`mestre check`) |
-| `inbox.deliver` | C→N | sim | entregar mensagem da caixa de entrada ou etapa de missão. Se o terminal não estiver livre, o nó responde `busy` |
-| `agent.rules` | C→N | sim | regras efetivas de cada personagem, para o `mestre hook` decidir no nó ([adaptador](../provedores/adaptador.md)) |
-| `agent.event` | N→C | sim | evento de hook normalizado |
-| `cli.call` / `cli.result` | N→C / C→N | sim | chamada da CLI `mestre` encaminhada, inclusive `done` ([CLI](../cli/convencoes.md)) |
-| `sync.request` / `sync.applied` | ambos | sim | pedir ou confirmar sincronização da branch de uma mesa ([mesas](../orquestracao/mesas.md)) |
-| `xfer.begin` / `xfer.progress` / `xfer.end` / `xfer.done` / `xfer.abort` | ambos | sim | transferência em partes |
-| `transcribe.request` / `transcribe.result` | C→N / N→C | sim | transcrição em outro nó ([transcrição](../telegram/anexos-e-transcricao.md)) |
-| `cache.users` | C→N | sim | cópia dos usuários para o login da [página reserva](../autocura/pagina-reserva.md) |
-| `cert.renew` | N→C | sim | renovar o certificado do nó ou do Guardião ([pareamento](pareamento.md#credenciais)) |
-| `update.apply` | C→N | sim | aplicar uma versão já transferida do motor ou do Guardião ([autoatualização](../plataforma/autoatualizacao.md)) |
+O catálogo de tipos, com os campos principais e as respostas, e a tabela de códigos de erro estão em [mensagens](mensagens.md). Três regras valem para todos:
+- **Resultado separado do ack:** um comando que termina depois (ex.: `terminal.open`, `inbox.deliver`, `transcribe.request`) responde com uma mensagem de resultado ligada por `reply_to`; recusa por estado, como terminal ocupado, vem no resultado (`inbox.result` com `busy`), nunca no ack.
+- **CLI encaminhada:** `cli.call` e `cli.result` carregam exatamente o corpo do pedido e da resposta do [canal local](../arquitetura/canal-local.md), sem tradução.
+- **Regras efetivas:** `agent.rules` leva o documento de [regras efetivas](../classes/permissoes.md#regras-efetivas) do personagem; o nó guarda a última versão e o retrato para o modo degradado.
 
 ### Transferência em partes
 
@@ -128,28 +110,24 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 ### Conexão do Guardião
 
 - **Conexão própria:** o Guardião do nó abre a própria conexão (`/ws/guardian`), com credencial própria. Ela não depende do motor do nó.
-- **Mensagens:** usa o mesmo envelope e as mesmas regras de versão e ack. Os tipos dela:
-  - `guardian.hello`;
-  - `guardian.heartbeat`;
-  - `guardian.action` / `guardian.result`, só para ações da [lista fechada](../autocura/guardiao.md);
-  - `guardian.replica`: cópia criptografada do token do bot, da lista de usuários e do estado "travado" ([o que o Guardião guarda](../autocura/guardiao.md));
-  - mensagens do Telegram em modo reduzido ([modo reduzido](../autocura/telegram-modo-reduzido.md)).
+- **Mensagens:** mesmo envelope e mesmas regras de ack. A versão é **própria** (começa em 1 e é negociada no `guardian.hello` do mesmo jeito), porque o Guardião tem binário e versão independentes; o manifesto de cada release traz as duas faixas ([autoatualização](../plataforma/autoatualizacao.md)). Tipos: [mensagens do Guardião](mensagens.md#guardião-do-nó--core). A `guardian.replica` é a única cópia de usuários que serve login (página reserva); o `cache.users` do motor do nó é só cache de operação.
 - **Nada derruba a conexão:** nenhuma mensagem desta conexão pede ao Guardião que a feche, se desligue ou se atualize. A atualização do Guardião é feita pelo motor saudável da própria máquina ([autoatualização](../plataforma/autoatualizacao.md)).
 
 ### Canal do navegador
 
 - **Conexão:** `/ws/ui`, autenticado pelo cookie de sessão (`HttpOnly`, `Secure`, `SameSite=Strict`), com o `Origin` conferido. O envelope é o mesmo, sem `node_id`.
-- **Assinaturas:** o navegador assina tópicos com `ui.subscribe` (`workspace:<id>`, `mesa:<id>`, `terminal:<id>`). Recebe um retrato inicial e depois os eventos (`ui.event`).
+- **Assinaturas:** o navegador assina tópicos com `ui.subscribe` (`workspace:<id>`, `table:<id>`, `terminal:<id>`). Recebe um retrato inicial e depois os eventos (`ui.event`).
 - **Terminais:**
-  - A saída chega em frames `0x01`. O Core guarda o próprio buffer de 1 MiB por terminal, então reabrir o navegador não pesa no nó.
-  - Para cada navegador, a fila tem limite. Cliente lento perde o fluxo e recebe `terminal.snapshot`.
+  - A saída chega em frames `0x01`, repassados pelo Core sem guardar buffer. Ao abrir um terminal, o Core pede ao nó o `terminal.replay` do buffer e repassa ao navegador; o tamanho do terminal é fixo e o navegador nunca o muda ([terminal](../arquitetura/terminal.md)).
+  - Para cada navegador, a fila tem limite. Cliente lento perde o fluxo e recebe de novo o replay do buffer.
   - `terminal.input` pelo navegador exige o nível em [usuários e níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades).
+
+Pareamento e descoberta usam este protocolo e vêm depois dele no mesmo marco ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
 - Um comando com ack, ao ser reenviado depois de uma queda, nunca executa duas vezes. Isso vale principalmente para `terminal.input` e `inbox.deliver`.
-- Credencial revogada (`4002`): o nó para e mostra o estado no checklist.
-- Uma mensagem maior que 1 MiB é recusada com `error` `too_large`.
+- Credencial revogada (`4002`): o nó para e mostra o estado no checklist. Mensagem maior que 1 MiB: `error` `too_large`.
 
 ## Critérios de aceite
 
@@ -157,14 +135,15 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 - **CA-PROTO-02** · *rápida* — **Dado** um nó com versões 3–4 e um Core com 4–5, **quando** conectam, **então** usam a 4. **Dado** um nó só com a 2, **então** o Core fecha com `4003`.
 - **CA-PROTO-03** · *rápida* — **Dado** um terminal mandando 50 MiB de saída, **quando** sai um heartbeat, **então** ele é enviado antes dos próximos 64 KiB de dados.
 - **CA-PROTO-04** · *rápida* — **Dado** uma transferência interrompida na parte 40, **quando** a conexão volta, **então** ela retoma da 40 e o SHA-256 final confere.
-- **CA-PROTO-05** · *rápida* — **Dado** um bundle cujo pré-requisito o Core não tem, **quando** chega o `xfer.end`, **então** a resposta é `missing_prerequisite` e o nó envia a branch inteira.
+- **CA-PROTO-05** · *completa* — **Dado** um bundle cujo pré-requisito o Core não tem, **quando** chega o `xfer.end`, **então** a resposta é `missing_prerequisite` e o nó envia a branch inteira.
 - **CA-PROTO-06** · *completa* — **Dado** Core e nó reais na mesma máquina, **quando** a conexão cai e volta durante uma etapa, **então** a saída do terminal continua sem buraco e nenhum comando repete.
 - **CA-PROTO-07** · *rápida* — **Dado** o motor do nó parado, **quando** o Core manda `guardian.action` de status, **então** o Guardião responde pela própria conexão.
 
+- **CA-PROTO-08** · *rápida* — **Dado** um `inbox.deliver` para um terminal que ficou ocupado, **quando** o nó responde, **então** o ack é `ok`, o resultado é `inbox.result` com `busy` e o item volta para a fila do Core.
+- **CA-PROTO-09** · *rápida* — **Dado** um navegador que abre um terminal cujo nó já mandou 300 KiB de saída, **quando** o Core atende, **então** pede `terminal.replay` ao nó a partir do deslocamento 0 e o navegador recebe os 300 KiB.
+
 ## Depende de
 
-- [Pareamento](pareamento.md)
-- [Descoberta](descoberta.md)
-- [Segurança](../arquitetura/seguranca.md)
-- [Persistência](../arquitetura/persistencia.md)
-- [Componentes](../arquitetura/componentes.md)
+- [Terminal](../arquitetura/terminal.md) · [Canal local](../arquitetura/canal-local.md)
+- [Dublês](../qualidade/dubles.md) (rede falsa)
+- [Segurança](../arquitetura/seguranca.md) · [Persistência](../arquitetura/persistencia.md) · [Componentes](../arquitetura/componentes.md)

@@ -18,7 +18,7 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 
 | Elemento | Tipo no React Flow | O que mostra | Dono do comportamento |
 |---|---|---|---|
-| Personagem | nó personalizado com xterm.js | nome, classe, **selo do nó** onde roda, estado e motivo (ocioso, ocupado, aguardando, aguardando permissão ou cota, travado, interrompido…), ícone de fixado, aviso de monitoramento reduzido | [personagens](../orquestracao/personagens.md) |
+| Personagem | nó personalizado com xterm.js | nome, classe, **selo do nó** onde roda, estado e motivo (ocioso, ocupado, aguardando, aguardando permissão, cota ou entrada, travado, interrompido…), ícone de fixado, aviso de monitoramento reduzido | [personagens](../orquestracao/personagens.md) |
 | Terminal simples (`spawn`) | igual ao personagem, sem classe | base usada e nó | [personagens](../orquestracao/personagens.md) |
 | Pergaminho | nó com editor Markdown | conteúdo ao vivo, editável por pessoas e agentes | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
 | Tomo | nó-grupo de pergaminhos empilhados | título e quantidade; abre ao clicar | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
@@ -35,15 +35,15 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 
 ### Terminais no canvas
 
-- O PTY tem tamanho fixo, definido pela base (padrão 120 × 36). O xterm.js desenha nesse tamanho e o nó do canvas só **escala** o desenho; redimensionar o nó não muda o PTY.
-- Ao conectar ou reconectar, o motor do nó manda o **buffer recente** do terminal (padrão 256 KiB) e depois o fluxo ao vivo. Cliente lento recebe um retrato da tela em vez da fila inteira.
+- O PTY tem tamanho fixo, definido pelo nó (padrão 200 × 50; [terminal](../arquitetura/terminal.md)). O navegador nunca redimensiona: o xterm.js desenha nesse tamanho e o nó do canvas mostra com rolagem e zoom; redimensionar o nó do canvas não muda o PTY.
+- Ao conectar ou reconectar, o Core pede ao nó o **buffer recente** do terminal (`terminal.replay`; o buffer de 1 MiB fica no nó, o Core não guarda) e depois repassa o fluxo ao vivo. Cliente lento recebe um retrato da tela em vez da fila inteira.
 - Para não pesar o navegador: no máximo 8 terminais com renderização WebGL ao mesmo tempo (padrão); os fora da tela ou muito afastados no zoom viram um retrato estático, atualizado a cada 2 s.
 - As classes `nodrag`, `nowheel` e `nopan` do React Flow ficam no terminal, para o mouse e a rolagem irem para o xterm.
 
 ### Digitar no terminal
 
 - Só **Administrador ou acima** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)). Para os outros, o terminal é só leitura (cursor oculto, sem foco de teclado).
-- A digitação vai direto ao PTY, sem passar pela caixa de entrada. Antes de liberar o teclado num personagem ocupado, o painel mostra o aviso "o agente está trabalhando".
+- A digitação vai ao PTY pelo motor do nó, sem passar pela caixa de entrada ([digitação](../arquitetura/terminal.md#digitação)). Antes de liberar o teclado num personagem ocupado, o painel mostra o aviso "o agente está trabalhando".
 - Cada sessão de digitação fica na auditoria: usuário, personagem, início e fim (o conteúdo digitado não é guardado na auditoria; ele já está no log do terminal).
 - O servidor confere o nível de novo a cada mensagem de entrada; o bloqueio no navegador é só conveniência.
 
@@ -77,7 +77,7 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 - **CA-CANVAS-01** · *pesada* — **Dado** uma mesa com missão em andamento em dois nós, **quando** abro o canvas, **então** vejo personagens com selo do nó, conexões, pergaminhos ao vivo, setas numeradas com a etapa atual destacada e linhas tracejadas de espera com motivo (MVP-11).
 - **CA-CANVAS-02** · *rápida* — **Dado** o glossário com o termo "Party", **quando** o build roda, **então** a ajuda do "?" de Party é exatamente a Ajuda curta da tabela; e um termo sem linha faz o build falhar.
 - **CA-CANVAS-03** · *rápida* — **Dado** um Aprovador, **quando** envia entrada para um terminal pelo WebSocket, **então** o servidor recusa e nada chega ao PTY.
-- **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** recebe o buffer recente e a tela fica igual à do motor.
+- **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** o Core pede ao nó o `terminal.replay` e a tela do navegador fica igual à do emulador do nó.
 - **CA-CANVAS-05** · *rápida* — **Dado** uma conexão arrastada que o motor recusa, **quando** a resposta chega, **então** a aresta some e o motivo aparece.
 - **CA-CANVAS-06** · *rápida* — **Dado** elementos movidos, **quando** recarrego a página, **então** as posições e grupos são os mesmos (MVP-12).
 - **CA-CANVAS-07** · *rápida* — **Dado** 12 terminais visíveis, **quando** o canvas renderiza, **então** no máximo 8 usam WebGL e os demais mostram retrato.
@@ -85,6 +85,7 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 ## Depende de
 
 - [Visão geral](../arquitetura/visao-geral.md)
+- [Terminal](../arquitetura/terminal.md)
 - [Protocolo](../conectividade/protocolo.md)
 - [Login](login.md)
 - [Personagens](../orquestracao/personagens.md)

@@ -26,6 +26,7 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 ### Skills
 
 - Lê `.agents/skills/` nativamente, de cada pasta entre a atual e a raiz do projeto. Também lê `$HOME/.agents/skills` (compartilhada entre todos os `CODEX_HOME`; o Mestre não usa).
+- **Skills por personagem** (nível e classe): o Codex não tem pasta por personagem, então o conteúdo delas vai como seção compacta no `MESTRE.md` do personagem; `.agents/skills/` do worktree só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 - `name` e `description` são **obrigatórios** no `SKILL.md`. O catálogo ocupa no máximo ~2% da janela de contexto (ou 8.000 caracteres); o corpo só é lido quando a skill é escolhida. Mudanças são detectadas sozinhas.
 
 ### Hooks
@@ -35,9 +36,9 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 - **Eventos ligados:** SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, Stop, PreCompact, SessionEnd, Interrupt. Matcher `*`. O matcher `Edit`/`Write` também casa `apply_patch`, mas `tool_name` continua `apply_patch`.
 - **Entrada:** JSON no stdin, `snake_case`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`; PreToolUse traz `turn_id`, `tool_name`, `tool_use_id`, `tool_input`; Stop traz `last_assistant_message`; Interrupt traz `turn_id`.
 - **Saída:** exit 0 com `hookSpecificOutput` (`hookEventName`, `additionalContext`, `permissionDecision: allow|deny`, `permissionDecisionReason`; PermissionRequest: `decision.behavior`). **`ask` ainda não é aceito.** Texto puro no stdout é inválido em Stop e Interrupt: o despachante não imprime nada neles. Campo não suportado marca o hook como falho.
-- **Falha:** exit 2 bloqueia (motivo no stderr). Erro, tempo esgotado e saída inválida **liberam** (falha aberta), sem opção para mudar. O despachante só sai com 0 ou 2; qualquer outro código é tratado como falha, que libera. A proteção que sobra é o sandbox nativo ([permissões](../classes/permissoes.md)).
+- **Falha:** exit 2 bloqueia (motivo no stderr). Erro, tempo esgotado e saída inválida **liberam** (falha aberta), sem opção para mudar. O despachante só sai com 0 ou 2; qualquer outro código é tratado como falha, que libera. A proteção que sobra é o sandbox nativo ([reforço nativo](../classes/reforco-nativo.md)).
 - **Tempos limite gerados:** 30 s em PreToolUse, PermissionRequest, UserPromptSubmit e SessionStart; 60 s em PostToolUse, Stop e PreCompact; 3 s (máximo do provedor) em SessionEnd e Interrupt.
-- **Confiança dos hooks:** todo hook não gerenciado precisa ser revisado e confiado (`/hooks`), e a confiança fica presa ao hash do hook (editar invalida). Por isso o arquivo tem **conteúdo fixo** (só chama `mestre hook` pelo caminho estável do binário) e é confiado **uma vez por perfil**, na **configuração inicial do perfil Codex**: depois do login, o painel abre uma sessão do Codex com aquele perfil e guia o usuário a aprovar os hooks do Mestre em `/hooks` ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Pré-gravar a confiança (hash interno) é frágil e não é feito. O [checklist](../plataforma/checklist.md) detecta perfil sem a confiança, e o perfil não recebe personagens até ela existir.
+- **Confiança dos hooks:** todo hook não gerenciado precisa ser revisado e confiado (`/hooks`), e a confiança fica presa ao hash do hook (editar invalida). Por isso o arquivo tem **conteúdo fixo** (só chama `mestre hook` pelo caminho estável do binário) e é confiado **uma vez por perfil**, na **configuração inicial do perfil Codex**: depois do login, o painel abre uma sessão do Codex com aquele perfil e guia o usuário a aprovar os hooks do Mestre em `/hooks` ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). O [checklist](../plataforma/checklist.md) detecta perfil sem a confiança (ALL-11), e o perfil não recebe personagens até ela existir. Plano B, se a confiança não valer para worktrees novos: [Verificar](#verificar-na-implementação).
 
 ### Confiança do projeto
 
@@ -53,10 +54,10 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 | `-s workspace-write` (ou `-s read-only` se a classe não escreve) | sandbox nativo |
 | `-a on-request` | pedidos de escalonamento passam pelo PermissionRequest |
 | `-c sandbox_workspace_write.network_access=true\|false` | rede da classe |
-| `-m <modelo>` | modelo preferido da classe ou ficha, se houver |
+| `-m <modelo>` | modelo preferido da classe, se houver |
 | `--search` | só se a classe libera internet sem lista de domínios (a busca hospedada não passa por hook) |
 
-**Proibidas:** `--dangerously-bypass-approvals-and-sandbox` (`--yolo`); `-s danger-full-access`; `--full-auto` (obsoleta); `--disable hooks` ou `features.hooks = false`; `model_instructions_file`; `project_doc_max_bytes = 0`; `--add-dir`; `--dangerously-bypass-hook-trust` (só com decisão registrada em ADR).
+**Proibidas:** `--dangerously-bypass-approvals-and-sandbox` (`--yolo`); `-s danger-full-access`; `--full-auto` (obsoleta); `--disable hooks` ou `features.hooks = false`; `model_instructions_file`; `project_doc_max_bytes = 0`; `--add-dir`; `--dangerously-bypass-hook-trust`.
 
 ### Contas múltiplas
 
@@ -70,6 +71,10 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 - `rate_limit_reached_type` preenchido: o personagem fica "aguardando cota" até `resets_at` ([limites](../plataforma/limites-de-uso.md)). O Codex não informa custo em dinheiro.
 - Reserva: `/status` e `/usage` na tela. O formato do JSONL é interno e pode mudar: o teste de conformidade confere.
 
+### Digitação
+
+Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](adaptador.md#digitação-de-mensagens)). Na caixa de entrada do Codex, `\r` envia e uma quebra de linha dentro da colagem só quebra a linha.
+
 ### Telas que o PTY precisa tratar
 
 | Tela | Ação |
@@ -79,6 +84,8 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 | revisão de hooks na inicialização ("Review hooks" / "Trust all and continue" / "Continue without trusting") | escalar: confiar em tudo poderia aprovar hooks de terceiros vindos do repositório |
 | apresentação do sandbox do Windows | escalar na primeira vez por perfil |
 | pedido de aprovação nativo (se o PermissionRequest falhar) | responder com a decisão registrada; sem decisão, negar |
+
+Quem chama estas operações na criação de mesas e personagens é a sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)); os perfis de conta estão em [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta).
 
 ## Regras e erros
 
@@ -92,22 +99,21 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 - **CA-CODEX-03** · *rápida* — **Dado** um `MESTRE.md` com aspas, quebras de linha e acentos, **quando** `BuildLaunch` monta `-c developer_instructions`, **então** o valor lido de volta como TOML é igual ao arquivo.
 - **CA-CODEX-04** · *rápida* — **Dado** um JSONL gravado com `token_count`, **quando** `ReadUsage` lê, **então** o registro tem os tokens e as duas janelas de limite, e marca limite atingido quando `rate_limit_reached_type` vem preenchido.
 - **CA-CODEX-05** · *rápida* — **Dado** os eventos Stop e Interrupt, **quando** `FormatResponse` responde, **então** o stdout fica vazio e o exit é 0.
-- **CA-CODEX-06** · *completa* — **Dado** o agente falso do Codex mostrando a revisão de hooks, **quando** o adaptador reconhece a tela, **então** o personagem fica "aguardando entrada" e o checklist registra o alerta.
+- **CA-CODEX-06** · *completa* — **Dado** o agente falso do Codex mostrando a revisão de hooks, **quando** o adaptador reconhece a tela, **então** o personagem fica `blocked` com motivo `input` e o checklist registra o alerta.
 
 ## Depende de
 
-- [Adaptador](adaptador.md)
-- [Sessão zero da mesa](../sessao-zero/mesa.md) e [do personagem](../sessao-zero/personagem.md)
-- [Permissões](../classes/permissoes.md)
-- [Bases e fichas](../orquestracao/bases-e-fichas.md)
+- [Adaptador](adaptador.md) · [Despachante de hooks](despachante-de-hooks.md)
+- [Reforço nativo](../classes/reforco-nativo.md)
 
 ## Verificar na implementação
 
 Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 
 - **Verificar na implementação:** `-c developer_instructions` vale no modo interativo (o código diz que sim). **Padrão:** é o canal da camada do Mestre. **Se falhar:** a base passa à reserva SessionStart com `additionalContext`, e depois à primeira mensagem. **Onde:** etapa 2.
-- **Verificar na implementação:** a confiança dada uma vez em `/hooks`, na configuração inicial do perfil, vale para todos os worktrees daquele perfil. **Padrão:** vale, porque os hooks estão na camada de usuário e a confiança fica presa ao hash do hook. **Se falhar:** cada worktree novo mostraria a revisão de hooks, que escala; a saída é decidir num ADR o uso de `--dangerously-bypass-hook-trust` só nos personagens do Mestre (o arquivo de hooks tem conteúdo fixo gerado pelo motor). **Onde:** etapas 4 a 6, que rodam num worktree novo a cada execução.
-- **Verificar na implementação:** `git commit` num worktree saído do espelho (o `.git` do worktree fica no espelho, fora da pasta e só leitura no sandbox) gera pedido de escalonamento respondido pelo PermissionRequest. **Padrão:** sim; o motor responde pela regra da classe. **Se falhar:** a base acrescenta a pasta git daquele worktree no espelho em `sandbox_workspace_write.writable_roots`; a proteção das outras branches continua no hook ([permissões](../classes/permissoes.md)). **Onde:** etapa 5.
+- **Verificar na implementação:** a confiança dada uma vez em `/hooks`, na configuração inicial do perfil, vale para todos os worktrees daquele perfil. **Padrão:** vale, porque os hooks estão na camada de usuário e a confiança fica presa ao hash do hook. **Se falhar:** o motor grava no perfil a entrada de confiança (`trusted_hash`) dos hooks do Mestre, calculada pelo mesmo algoritmo do Codex e validada pela conformidade (o hook tem conteúdo fixo, então o hash é conhecido); se isso também falhar, o painel guia a confiança em `/hooks` por worktree, e o personagem fica `blocked` (`input`) até ela existir. **Onde:** etapas 4 a 6, que rodam num worktree novo a cada execução.
+- **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** mensagens de várias linhas vão pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
+- **Verificar na implementação:** `git commit` num worktree saído do espelho (o `.git` do worktree fica no espelho, fora da pasta e só leitura no sandbox) gera pedido de escalonamento respondido pelo PermissionRequest. **Padrão:** sim; o motor responde pela regra da classe. **Se falhar:** a base acrescenta a pasta git daquele worktree no espelho em `sandbox_workspace_write.writable_roots`; a proteção das outras branches continua no hook ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)). **Onde:** etapa 5.
 - **Verificar na implementação:** `cli_auth_credentials_store = "file"` separa as contas de fato (não é recurso oficial), e o processo de fundo do modo interativo (`/daemon`) respeita `CODEX_HOME`. **Padrão:** separa e respeita. **Se falhar:** só um perfil de conta Codex por nó; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis Codex de contas diferentes na mesma VM (`codex login status` em cada um).
 
 ## Fontes

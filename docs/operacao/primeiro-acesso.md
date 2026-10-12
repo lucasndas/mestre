@@ -1,6 +1,6 @@
 # Primeiro acesso
 
-> **Assunto:** passo a passo para confiar na CA do Mestre, criar o Dono e criar os GitHub Apps fixos por link · **Componente:** Painel · **Atualizado:** 2026-10-12
+> **Assunto:** passo a passo para confiar na CA do Mestre, criar o Dono, criar os GitHub Apps fixos pelo link e configurar os perfis de conta · **Componente:** Painel · **Atualizado:** 2026-10-12
 
 Guia para quem usa, depois de [instalar o Core](instalar.md) (no Ubuntu ou no Windows). Tenha à mão o que o instalador mostrou: endereço do painel, impressão digital da CA e código de configuração. Regras do login e do assistente: [login](../painel/login.md).
 
@@ -56,6 +56,17 @@ O Mestre age no GitHub com dois Apps fixos, **"Grão-Mestre"** e **"Mestre"**, c
 6. Opcional: em **Usuários**, **Conectar GitHub** mostra um código e o endereço `https://github.com/login/device`. Autorizar ali dá ao Mestre a sua credencial pessoal, usada para incluir repositórios nas instalações sem link e, se você delegar, para aprovar em seu nome ([aprovação no GitHub](../github/aprovacao-no-github.md)).
 
 Faça isso num aparelho na rede local e que já confia na CA (passo 1): os retornos do GitHub voltam para o painel. Os Apps de classe criados depois seguem o mesmo caminho: o Grão-Mestre manda o link pelo Telegram e pelo painel, e você clica em **Criar** e **Instalar**.
+
+## 4. Configurar os perfis de conta
+
+Cada conta de provedor que os agentes vão usar é um **perfil de conta** de uma máquina ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Faça a configuração inicial uma vez por perfil, em cada máquina, inclusive no Core:
+
+1. No painel, abra **Perfis de conta** e escolha a máquina e o provedor. Crie o perfil (ex.: `claude-trabalho`) ou use o padrão.
+2. Clique em **Configurar**. O painel abre o terminal do perfil e guia o **login** na conta do provedor.
+3. **Só no Codex:** no mesmo terminal, o painel pede para abrir `/hooks` e **aprovar uma vez os hooks do Mestre**. Sem isso o Codex não chama o Mestre, e o perfil não recebe agentes.
+4. O perfil fica **pronto** quando o checklist confirma login e, no Codex, a confiança dos hooks (item ALL-11, [checklist](../plataforma/checklist.md)).
+
+Repita para cada nó novo, depois de [pareá-lo](parear-no.md).
 
 ## Depois
 

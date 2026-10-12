@@ -13,13 +13,14 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 - Fica no topo de todas as telas do painel.
 - Lista só os workspaces que o usuário pode ver ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); o Dono vê todos.
 - O último workspace aberto fica lembrado por usuário (no banco do Core, não no navegador).
-- Criar workspace (Dono ou Administrador) abre o fluxo de [sessão zero do workspace](../sessao-zero/workspace.md).
+- Criar workspace (Dono ou Administrador) abre o fluxo de [sessão zero do workspace](../sessao-zero/workspace.md). Enquanto o workspace está `preparing`, a tela mostra a etapa atual da sessão zero, as concluídas e o erro de uma etapa que falhou, com o botão "tentar de novo" ([estados do workspace](../orquestracao/workspaces.md#estados)).
 
 ### Layout
 
 - Canvas do mesmo tipo do [canvas da mesa](canvas.md) (React Flow), só que com elementos do workspace.
 - **Grão-Mestre ao centro**, como personagem com terminal ao vivo (mesmas regras de leitura e digitação do [canvas](canvas.md#digitar-no-terminal)).
 - **Cada mesa é um bloco** ligado ao Grão-Mestre por uma linha. Posição inicial automática em círculo; o usuário pode arrastar, e a posição fica salva.
+- Não há outros elementos: pergaminhos existem só dentro das mesas ([pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md)).
 
 ### Bloco da mesa
 
@@ -57,6 +58,7 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 - **CA-VWS-03** · *rápida* — **Dado** um bloco de mesa, **quando** clico nele, **então** a rota do canvas daquela mesa abre.
 - **CA-VWS-04** · *rápida* — **Dado** uma mesa que muda de "em trabalho" para "em revisão" no motor, **quando** o evento chega pelo WebSocket, **então** o bloco muda sem recarregar a página.
 - **CA-VWS-05** · *pesada* — **Dado** duas mesas trabalhando em paralelo, **quando** abro a visão do workspace e entro em cada mesa, **então** vejo o estado de cada uma e o canvas certo de cada uma (MVP-11).
+- **CA-VWS-06** · *rápida* — **Dado** um workspace em `preparing` com a etapa `mirror` com erro, **quando** a tela abre, **então** mostra `apps` concluída, `mirror` com o motivo do erro e o botão "tentar de novo", e nenhum bloco de mesa nem pergaminho.
 
 ## Depende de
 

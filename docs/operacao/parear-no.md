@@ -36,7 +36,8 @@ O convite é pedido durante a instalação do nó, no Windows ou no Ubuntu ([ins
 1. No painel, em **Saúde dos nós**, o nó aparece como **conectado**, com versões do motor e do Guardião e o último sinal de vida.
 2. Na coluna **Capacidades**, confira o sistema (`os`) e os provedores encontrados.
 3. Na coluna **Checklist**, resolva os alertas abertos com a correção oferecida ([checklist](../plataforma/checklist.md)).
-4. Ajuste a **Prioridade** do nó, se tiver mais de um. Ela decide qual nó conduz a recuperação quando o Core cai ([camadas](../autocura/camadas.md#eleição-do-nó-condutor)).
+4. Configure os **perfis de conta** do nó: login de cada conta e, no Codex, a aprovação dos hooks do Mestre ([primeiro acesso](primeiro-acesso.md#4-configurar-os-perfis-de-conta)). Sem isso, o nó não recebe agentes daquele perfil.
+5. Ajuste a **Prioridade** do nó, se tiver mais de um. Ela decide qual nó conduz a recuperação quando o Core cai ([camadas](../autocura/camadas.md#eleição-do-nó-condutor)).
 
 O nó reconecta sozinho depois de reinícios e de mudanças de IP. Não há nada a refazer.
 

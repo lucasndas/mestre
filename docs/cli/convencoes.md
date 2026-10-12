@@ -11,7 +11,7 @@ Dar a todos os comandos da CLI `mestre` a mesma forma de uso, de saída e de err
 ### Forma geral
 - O binário `mestre` está no PATH do Core e de todos os nós ([componentes](../arquitetura/componentes.md)). `MESTRE_CLI` guarda o caminho absoluto dele: skills e arquivos de hook usam `mestre` e, se não acharem, `$MESTRE_CLI` (PowerShell: `& $env:MESTRE_CLI`).
 - Uso: `mestre <comando> [subcomando] [argumentos] [flags]`. Nomes com espaço vão entre aspas. Comandos, flags e textos de saída ficam em inglês.
-- Flags globais: `--json` (saída em JSON) e `--help`. Durações: `90s`, `10m`, `2h`. Horários: `HH:MM` ou ISO 8601, no fuso do Core.
+- Flags globais: `--json` (saída em JSON) e `--help`. Durações: `90s`, `10m`, `2h`. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o do Core; [workspaces](../orquestracao/workspaces.md)).
 - `mestre hook` é interno (só os arquivos de hook o chamam) e **não** segue as regras de saída abaixo: ver [adaptador](../provedores/adaptador.md). Subcomandos de serviço (`mestre core`, `mestre node`…) são de [componentes](../arquitetura/componentes.md).
 
 ### Saída em texto (padrão)
@@ -45,9 +45,9 @@ Um único objeto JSON em stdout, stderr vazio e o mesmo código de saída do mod
 
 ### Identificação do chamador
 - Ao iniciar um personagem, o motor põe no ambiente dele `MESTRE_AGENT_ID` (id do personagem) e `MESTRE_ENDPOINT` (endereço do motor local). Lista completa: seção "Variáveis de ambiente" de [personagem](../sessao-zero/personagem.md).
-- A CLI fala só com o **motor local**, sem porta TCP: socket Unix `/run/mestre/cli.sock` no Linux e named pipe `\\.\pipe\mestre-cli` no Windows. Permissões do canal e a verificação de que o processo que chama pertence à árvore de processos do terminal daquele `MESTRE_AGENT_ID` (`SO_PEERCRED` / `GetNamedPipeClientProcessId`) estão em [seguranca](../arquitetura/seguranca.md); falhou a verificação: exit 3, `not_identified`.
+- A CLI fala só com o **motor local** (`mestre-node`), sem porta TCP, pelo [canal local](../arquitetura/canal-local.md): endpoint, formato do pedido e da resposta, respostas parciais, tempo limite e a verificação de que o processo que chama pertence à árvore de processos do terminal daquele `MESTRE_AGENT_ID`. Falhou a verificação: exit 3, `not_identified`.
 - Nível, classe e mesa vêm do registro do personagem no motor, nunca de argumentos. Não existe "chamar em nome de outro".
-- Sem `MESTRE_AGENT_ID` (ex.: uma pessoa num shell) ou num terminal criado por `spawn` (não recebe o id): só `help`, `debug` e `hook` funcionam; o resto sai com exit 3, `not_identified`.
+- Sem `MESTRE_AGENT_ID` (ex.: uma pessoa num shell) ou num terminal criado por `spawn` (não recebe o id): só `help`, `debug`, `hook` e os subcomandos de serviço ([componentes](../arquitetura/componentes.md#mestre)) funcionam; o resto sai com exit 3, `not_identified`. As pessoas usam o painel e o Telegram.
 
 ### Quem pode usar (nível)
 Cada comando declara o nível máximo que pode usá-lo:
@@ -74,14 +74,14 @@ sequenceDiagram
   L-->>A: stdout + código de saída
 ```
 - O Core é a fonte da verdade: o motor local encaminha ao Core toda chamada (menos `help`, `debug` e `hook`), mesmo com o alvo no mesmo nó. O agente nunca precisa saber em que nó o outro roda. Transporte: [protocolo](../conectividade/protocolo.md).
-- A CLI gera um `request_id` por chamada; um reenvio da mesma chamada após reconexão não executa duas vezes.
+- A CLI gera um `request_id` (o `id` do pedido no [canal local](../arquitetura/canal-local.md)) por chamada; um reenvio da mesma chamada após reconexão não executa duas vezes.
 - Core fora: exit 5, `core_unreachable`, exceto `mestre done`, que o motor do nó guarda no banco local e entrega uma única vez quando o Core volta (exit 0, `"queued": true`).
 - Nó do alvo fora: comandos que precisam do terminal do alvo (`check`, `ask --raw`) saem com exit 5, `node_unreachable`; mensagens normais ficam na caixa de entrada do alvo.
 
 ### Regras de segurança da CLI
-1. **Ações destrutivas** (`note delete`, `ritual delete`, `class delete`, e `table close --cancel`) só rodam se um usuário autorizado pediu explicitamente: o motor procura uma exceção pontual ([decretos](../telegram/decretos.md)) para exatamente aquela ação; sem ela, abre um pedido de aprovação aos usuários ([fluxo](../aprovacoes/fluxo.md)) e sai com exit 9. O Grão-Mestre, como aprovador delegado, não aprova ação destrutiva.
-2. **`dismiss`** só por Mestre da mesa (na própria mesa), Grão-Mestre (ao encerrar uma mesa) e motor. Personagem fixado: exit 3, `pinned`. Alvo ocupado ou sem `done` entregue: exit 7, `busy`. Ciclo de vida: [personagens](../orquestracao/personagens.md).
-3. **Ninguém interrompe quem trabalha.** Mensagens só são digitadas com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). `ask --raw` para alvo ocupado: exit 7, `busy`; para alvo "aguardando permissão": exit 3, `permission_prompt` (permissão se decide pelo `mestre hook` e pelo fluxo de aprovação, nunca por teclas).
+1. **Ações destrutivas** (`note delete`, `ritual delete`, `class delete`, e `table close --cancel`) só rodam se um usuário autorizado pediu explicitamente: o motor procura uma exceção pontual ([decretos](../telegram/decretos.md)) para exatamente aquela ação; sem ela, abre um pedido de aprovação do tipo `acao_destrutiva` aos usuários ([política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md)) e sai com exit 9. O Grão-Mestre nunca aprova esse tipo sozinho.
+2. **`dismiss`** só por Mestre da mesa (na própria mesa), Grão-Mestre (ao encerrar uma mesa) e motor. Personagem fixado: exit 3, `pinned`. Alvo ocupado ou sem `done` entregue: o encerramento fica **agendado** para o próximo ponto seguro e a CLI sai com exit 9, `scheduled` (o mesmo vale para `recruit --replace`). Ciclo de vida: [personagens](../orquestracao/personagens.md).
+3. **Ninguém interrompe quem trabalha.** Mensagens só são digitadas com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). `ask --raw` para alvo ocupado: exit 7, `busy`; para alvo "aguardando permissão": exit 3, `permission_prompt` (permissão se decide pelo `mestre hook` e pelo fluxo de aprovação, nunca por teclas). Alvo `blocked` com motivo `input` (tela não reconhecida) recebe o `--raw`: é assim que o Mestre da mesa responde a ela.
 4. **Arquivos de outro agente:** não editar o que outro está modificando é regra da camada do Mestre ([personagem](../sessao-zero/personagem.md)) e coordenação do Mestre da mesa ([mesas](../orquestracao/mesas.md)).
 5. **Sem comando livre:** `recruit` e `spawn` só aceitam fichas e bases existentes.
 6. **Sem segredos:** nenhum comando mostra segredos; `reply` e `notify` recusam texto que pareça segredo (exit 3, `secret_detected`), com o mesmo detector do mascaramento de logs ([seguranca](../arquitetura/seguranca.md)).
@@ -91,6 +91,8 @@ sequenceDiagram
 - `mestre help` lista, agrupados, só os comandos que o chamador pode usar. `mestre help <comando>` e `mestre <comando> --help` mostram uso, argumentos, flags, nível, exemplo e códigos de saída. Sem motor alcançável, a ajuda mostra tudo e avisa que não filtrou.
 - Ajuda, validação de argumentos e a parte de sintaxe das [skills geradas](skills-geradas.md) saem de **uma única definição de comandos** no código.
 - `mestre debug` roda, em ordem, e mostra `ok`/`fail` + dica de cada item: (1) versão do binário e do protocolo; (2) `MESTRE_AGENT_ID`, `MESTRE_ENDPOINT`, `MESTRE_CLI` presentes e coerentes; (3) motor local responde no endpoint (com tempo); (4) motor aceita a identificação (pulado sem id); (5) motor local alcança o Core com protocolo compatível. Exit 0 se tudo passa; senão o código da primeira falha. O [checklist](../plataforma/checklist.md) roda `mestre debug` em cada nó.
+
+As variáveis de ambiente vêm da sessão zero do personagem (M4); decretos e aprovações das regras de segurança chegam no M5 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
@@ -102,7 +104,9 @@ sequenceDiagram
 | protocolo incompatível | 5 | `protocol_mismatch` | atualização pendente ([instalacao](../plataforma/instalacao-e-atualizacao.md)) |
 | comando acima do nível | 3 | `level_denied` | peça a quem tem o nível (Mestre da mesa ou Grão-Mestre) |
 | classe não libera | 3 | `class_denied` | peça ao Mestre da mesa |
+| alvo da mesa que não está conectado ao chamador | 3 | `not_connected` | peça a conexão ao Mestre da mesa ([conexões](../orquestracao/conexoes.md)) |
 | alvo invisível ou inexistente | 4 | `not_visible` | veja `mestre list` |
+| encerramento ou troca de alvo ocupado | 9 | `scheduled` | o motor encerra no próximo ponto seguro |
 | flag desconhecida | 2 | `usage` | `mestre <comando> --help` |
 
 ## Critérios de aceite
@@ -120,7 +124,6 @@ sequenceDiagram
 
 ## Depende de
 
+- [canal local](../arquitetura/canal-local.md) · [protocolo](../conectividade/protocolo.md) (encaminhamento ao Core)
+- [permissoes](../classes/permissoes.md) (bloco `cli` das classes)
 - [componentes](../arquitetura/componentes.md) · [seguranca](../arquitetura/seguranca.md) · [precedencia](../arquitetura/precedencia.md)
-- [protocolo](../conectividade/protocolo.md) · [windows](../arquitetura/windows.md)
-- [personagem](../sessao-zero/personagem.md) · [permissoes](../classes/permissoes.md)
-- [decretos](../telegram/decretos.md) · [fluxo de aprovações](../aprovacoes/fluxo.md)

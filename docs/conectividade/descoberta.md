@@ -75,6 +75,8 @@ O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem int
 - A checagem de identidade é a mesma. Para o navegador abrir o painel por esse endereço, o nome entra nos nomes extras do certificado do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
 - Nenhuma porta do Core é exposta diretamente na internet: o caminho até o Core é responsabilidade da rede do usuário.
 
+A CA e o `core_id` usados na checagem vêm do [pareamento](pareamento.md); os arquivos do Avahi e as regras de firewall, da [instalação](../plataforma/instalacao-e-atualizacao.md) e do [checklist](../plataforma/checklist.md).
+
 ## Regras e erros
 
 - A descoberta nunca faz o nó confiar num Core novo. Confiança só nasce no [pareamento](pareamento.md).
@@ -89,16 +91,14 @@ O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem int
 - **CA-DESC-04** · *rápida* — **Dado** o broadcast bloqueado e um mDNS falso anunciando `_mestre._tcp`, **quando** o nó descobre, **então** conecta pelo endereço do mDNS.
 - **CA-DESC-05** · *rápida* — **Dado** o Core que mudou de IP, **quando** a conexão ao endereço em cache falha 3 vezes, **então** o nó redescobre, conecta e atualiza o cache (MVP-1).
 - **CA-DESC-06** · *completa* — **Dado** Core e nó reais na mesma máquina, sem endereço configurado e com cache vazio, **quando** o nó inicia, **então** acha o Core por broadcast e conecta.
-- **CA-DESC-07** · *completa* — **Dado** um Core Windows real com o serviço `mestre-core` parado e o Guardião ativo, **quando** outro processo consulta `_mestre._tcp.local`, **então** recebe o anúncio com o `core_id` no TXT.
+- **CA-DESC-07** · *pesada* — **Dado** um Core Windows instalado com o serviço `mestre-core` parado e o Guardião ativo, **quando** outra máquina consulta `_mestre._tcp.local`, **então** recebe o anúncio com o `core_id` no TXT (MVP-13).
 
 ## Depende de
 
-- [Protocolo](protocolo.md)
-- [Pareamento](pareamento.md)
-- [Checklist](../plataforma/checklist.md)
-- [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
-- [Windows](../arquitetura/windows.md)
+- [Protocolo](protocolo.md) (reconexão)
+- [Dublês](../qualidade/dubles.md) (broadcast e mDNS falsos)
+- [Segurança](../arquitetura/seguranca.md) · [Windows](../arquitetura/windows.md)
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** `DnsServiceRegister`, chamado pelo Guardião (LocalSystem, sessão 0), anuncia `_mestre._tcp` e `_mestre-guardiao._tcp` na rede e mantém o anúncio enquanto o Guardião roda. **Padrão:** o mDNS nativo do Windows, como acima. **Se falhar:** o Guardião do Core publica com uma biblioteca Go de mDNS, escutando a porta 5353 em compartilhamento com o respondedor do Windows. **Onde:** CA-DESC-07 na suíte completa no Windows e instalação dos usos 3 e 4 na suíte pesada.
+- **Verificar na implementação:** `DnsServiceRegister`, chamado pelo Guardião (LocalSystem, sessão 0), anuncia `_mestre._tcp` e `_mestre-guardiao._tcp` na rede e mantém o anúncio enquanto o Guardião roda. **Padrão:** o mDNS nativo do Windows, como acima. **Se falhar:** o Guardião do Core publica com uma biblioteca Go de mDNS, escutando a porta 5353 em compartilhamento com o respondedor do Windows. **Onde:** CA-DESC-07 e a instalação dos usos 3 e 4 na suíte pesada.

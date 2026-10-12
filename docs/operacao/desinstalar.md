@@ -25,8 +25,8 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 2. Na máquina do Core, como administrador:
    - **Ubuntu:** `sudo mestre uninstall` e depois `sudo apt remove mestre`;
    - **Windows:** `mestre uninstall` num PowerShell de administrador, ou "Desinstalar" em Aplicativos instalados.
-3. Isso para e remove os serviços do Core (`mestre-core`, no Windows também o `mestre-node` local, e `mestre-guardiao`), a tarefa agendada no Windows e as regras de firewall.
-4. Confira: `systemctl status mestre-core` responde que a unidade não existe, ou `Get-Service mestre-*` não acha nada.
+3. Isso para e remove os serviços do Core (`mestre-core`, o nó local `mestre-node` e `mestre-guardiao`), a tarefa agendada no Windows e as regras de firewall.
+4. Confira: `systemctl status mestre-core mestre-node` responde que as unidades não existem, ou `Get-Service mestre-*` não acha nada.
 5. Os dados ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos): cofre, banco, espelhos, worktrees, anexos, perfis de conta dos provedores e a CA. Se não vai reinstalar, peça para apagar tudo ou apague essas pastas. Sem a chave do cofre, os segredos guardados não podem mais ser lidos.
 
 ## Limpar fora das máquinas

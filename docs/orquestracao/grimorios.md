@@ -37,7 +37,7 @@ Pelo painel, numa mesa em `working` ou `in_review` ([estados](mesas.md#estados))
 3. **Criação**, nesta ordem: classes copiadas; pergaminhos e tomos; personagens (escolha de nó normal, [personagens](personagens.md#escolha-do-nó)); conexões; missões (criadas como qualquer missão nova, em `draft`, com issue sob o épico de destino).
 4. O Mestre da mesa de destino recebe um item `system` listando o que foi restaurado.
 
-Classe copiada mantém o App vinculado. Se o App não estiver instalado no repositório de destino, o Grão-Mestre o instala; até lá, as ações saem com o App "Mestre" com a classe na assinatura ([identidades e Apps](../github/identidades-e-apps.md)).
+Classe copiada mantém o App vinculado. Se o App não estiver instalado no repositório de destino, o motor o acrescenta à instalação ou o Dono recebe o link para isso ([repositórios novos](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas)); até lá, as ações saem com o App "Mestre" com a classe na assinatura ([identidades e Apps](../github/identidades-e-apps.md)).
 
 ### Listar e apagar
 
@@ -61,7 +61,9 @@ O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, 
 
 ## Depende de
 
+- [Mesas](mesas.md)
 - [Personagens](personagens.md)
+- [Bases e fichas](bases-e-fichas.md)
 - [Missões](missoes.md)
 - [Pergaminhos e tomos](pergaminhos-e-tomos.md)
 - [Conexões](conexoes.md)

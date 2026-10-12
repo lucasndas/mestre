@@ -4,7 +4,8 @@
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
-| [adaptador.md](adaptador.md) | contrato do adaptador, formato interno de evento, mapa de eventos e de ferramentas, comportamento do `mestre hook`, monitoramento reduzido, telas interativas | antes de mexer em qualquer provedor, nos hooks ou na entrega de instruções |
+| [adaptador.md](adaptador.md) | contrato do adaptador, formato interno de evento, mapa de eventos e de ferramentas, telas interativas, digitação de mensagens (`TypeMessage`), retomada de sessão, monitoramento reduzido | antes de mexer em qualquer provedor ou na entrega de instruções e mensagens |
+| [despachante-de-hooks.md](despachante-de-hooks.md) | o comando `mestre hook`: fluxo, prazos, modo degradado, erro interno, respostas por provedor | ao mexer nos hooks ou nas decisões de permissão no nó |
 | [claude-code.md](claude-code.md) | Claude Code: instruções, camada do Mestre, skills, hooks, confiança, flags, contas, uso e rate limit, telas | ao implementar ou atualizar o adaptador do Claude Code |
 | [codex.md](codex.md) | Codex: instruções, camada do Mestre, skills, hooks e confiança dos hooks, sandbox, flags, contas, uso e rate limit, telas | ao implementar ou atualizar o adaptador do Codex |
 | [antigravity.md](antigravity.md) | Antigravity CLI (`agy`): instruções, agente próprio, skills, os cinco hooks e a falha fechada, confiança, flags, contas, uso, telas | ao implementar ou atualizar o adaptador do Antigravity |

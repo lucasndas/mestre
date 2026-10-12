@@ -12,7 +12,7 @@ Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a pa
 |---|---|---|
 | `recruit`, `spawn` | Mestre da mesa; Grão-Mestre só recruta Mestres de mesa | [personagens](../orquestracao/personagens.md), [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | `dismiss` | Mestre da mesa; Grão-Mestre ao encerrar mesa | [personagens](../orquestracao/personagens.md) |
-| `connect` | Mestre da mesa | [conexoes](../orquestracao/conexoes.md) |
+| `connect` | Mestre da mesa (na própria mesa); Grão-Mestre (em qualquer mesa do workspace) | [conexoes](../orquestracao/conexoes.md) |
 | `sheet list\|show`, `base list\|show` | Mestre da mesa, Grão-Mestre; classes autorizadas | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | `quest create\|run\|pause\|resume\|cancel` | Mestre da mesa | [missoes](../orquestracao/missoes.md) |
 | `quest status` | Mestre da mesa, Grão-Mestre | [missoes](../orquestracao/missoes.md) |
@@ -25,16 +25,16 @@ mestre recruit --replace "<Nome>" --sheet "<Ficha>" [--class "<Classe>"]
 - Cria um personagem a partir de uma ficha existente, já conectado a quem recrutou. `--class` troca a classe padrão da ficha; `--node` pede um nó (que ainda precisa atender às capacidades).
 - `--replace` troca a ficha de um personagem existente, mantendo nome, conexões e posição no canvas; o terminal antigo só é encerrado pelas regras de encerramento seguro.
 - Texto: `recruited Dev-2 (class Dev, node windows-pc, starting)`. `--json` → `{name, id, sheet, class, node, status, connected_to}`.
-- Erros: ficha, classe ou nó inexistente → 4; nenhum nó atende → 4 `no_capable_node` (com o motivo por nó); nome em uso → 7 `name_taken`; `--replace` com alvo ocupado → 7 `busy`; limite de personagens atingido → 8 `agent_limit` ou, se a regra do limite for esperar vaga, 9 `waiting_slot`; ficha fora do teto → 3 `ceiling_denied`.
+- Erros: ficha, classe ou nó inexistente → 4; nenhum nó atende → 4 `no_capable_node` (com o motivo por nó); nome em uso → 7 `name_taken`; `--replace` com alvo ocupado → 9 `scheduled` (o antigo é encerrado no próximo ponto seguro e o novo nasce em seguida); limite de personagens atingido → 9 `waiting_slot` ("pendente": o pedido espera vaga até o tempo limite e o personagem criado, ou a falha `agent_limit` com o aviso, chega pela caixa de entrada; [limites](../orquestracao/personagens.md#limites)); ficha fora do teto → 3 `ceiling_denied`.
 
 ### `mestre spawn`
 `mestre spawn "<Nome>" --base "<Base>" [--node "<nó>"]` — cria um terminal simples (sem agente) a partir de uma base, conectado a quem chamou. Não há opção de comando livre. Use `ask --raw` para digitar e `check` para ler. `--json` → `{name, id, base, node, status}`. Erros iguais aos de `recruit`.
 
 ### `mestre dismiss`
-`mestre dismiss "<Nome>"` — encerra um personagem ou terminal. Antes, o resumo do que ele fez vai para o pergaminho da missão. Fixado → 3 `pinned`; ocupado ou sem `done` entregue → 7 `busy`; outra mesa → 4 `not_visible`. `--json` → `{name, status: "dismissed"}`.
+`mestre dismiss "<Nome>"` — encerra um personagem ou terminal. Antes, o resumo do que ele fez vai para o pergaminho da missão. Fixado → 3 `pinned`; ocupado ou sem `done` entregue → 9 `scheduled` (encerrado no próximo ponto seguro, regra 2 de [convencoes](convencoes.md)); outra mesa → 4 `not_visible`. `--json` → `{name, status: "dismissed" | "scheduled"}`.
 
 ### `mestre connect`
-`mestre connect "<A>" "<B>"` — liga agente↔agente, pergaminho↔agente ou pergaminho↔pergaminho na mesma mesa. Já ligados: exit 0, `already_connected: true`. Elemento inexistente → 4.
+`mestre connect "<A>" "<B>" [--table "<mesa>"]` — liga agente↔agente, pergaminho↔agente ou pergaminho↔pergaminho na mesma mesa. Já ligados: exit 0, `already_connected: true`. Elemento inexistente → 4. O Grão-Mestre indica a mesa com `--table` (sem isso → 2 `table_required`); itens de mesas diferentes → 2.
 
 ### `mestre sheet` e `mestre base`
 ```
@@ -60,7 +60,7 @@ mestre quest cancel "<Missão>" [--reason "<texto>"]
 
 - O Grão-Mestre não monta party de mesa: `recruit` dele só aceita a ficha de Mestre de mesa (outras → 3 `level_denied`); normalmente o Mestre é recrutado por `table open` ([grao-mestre](grao-mestre.md)).
 - Personagens criados por etapa de missão são recrutados pelo motor, não pela CLI.
-- Ao atingir um limite, nada que está trabalhando é derrubado: a criação espera (9) ou falha (8), conforme [personagens](../orquestracao/personagens.md).
+- Ao atingir um limite, nada que está trabalhando é derrubado: a criação espera vaga (9 `waiting_slot`) e, vencido o tempo limite, falha com aviso pela caixa de entrada, conforme [personagens](../orquestracao/personagens.md#limites).
 
 ## Critérios de aceite
 
@@ -70,6 +70,7 @@ mestre quest cancel "<Missão>" [--reason "<texto>"]
 - **CA-CLI-COORD-04** · *completa* — **Dado** "Dev-1" com duas conexões, **quando** o Mestre roda `mestre recruit --replace "Dev-1" --sheet "Dev Codex"`, **então** o novo terminal usa a ficha nova, mantém o nome, as duas conexões e a posição.
 - **CA-CLI-COORD-05** · *rápida* — **Dado** `mestre spawn "srv" --base "bash" --command "rm -rf /"`, **quando** roda, **então** sai com 2 `usage` (opção inexistente).
 - **CA-CLI-COORD-06** · *rápida* — **Dado** uma definição com devolução sem número máximo de voltas, **quando** roda `mestre quest create`, **então** sai com 2 `invalid_quest` apontando a etapa.
+- **CA-CLI-COORD-08** · *rápida* — **Dado** um personagem `busy`, **quando** o Mestre da mesa roda `mestre dismiss` nele, **então** sai com 9 `scheduled` e o personagem continua vivo até o próximo ponto seguro.
 - **CA-CLI-COORD-07** · *rápida* — **Dado** uma missão válida, **quando** o Mestre roda `mestre quest run`, **então** o comando volta em menos de 1s com `status: "running"`.
 
 ## Depende de

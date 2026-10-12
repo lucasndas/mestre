@@ -83,5 +83,4 @@ O painel esconde o que o nível não permite, mas quem decide é o servidor, em 
 - [Segurança](../arquitetura/seguranca.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Cofre](../plataforma/cofre.md)
-- [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
 

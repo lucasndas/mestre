@@ -29,9 +29,9 @@ permissions:
     domains: ["registry.npmjs.org", "github.com"]
   cli:
     allow: ["issue *", "pr comment", "pr reply", "pr status"]
-cost:                       # na unidade de limites-de-uso.md
-  per_table: 50
-  per_day: 100
+cost:                       # máximo por unidade de limites-de-uso.md: usd | tokens | hours
+  usd: {per_table: 50, per_day: 100}
+  hours: {per_table: 20}
 ```
 
 - Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existir, `commands.allow` dizem o que **pode** ser dado; o que fica fora é negado. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada.
@@ -41,7 +41,7 @@ cost:                       # na unidade de limites-de-uso.md
 
 - **Ao criar ou editar uma classe** (de workspace ou de mesa): o motor confere se ela cabe no teto e recusa mostrando o que passa. A conferência de padrões é conservadora; serve para avisar cedo.
 - **A cada decisão:** o teto entra nas regras efetivas de cada personagem, combinado com as outras camadas como diz [precedência](../arquitetura/precedencia.md), e é aplicado pelo [pipeline de permissões](permissoes.md). Por isso vale mesmo para uma classe antiga ou editada à mão. Cada regra efetiva guarda a camada de origem, e a negação diz "teto do workspace".
-- **Custo:** `per_table` e `per_day` (do workspace) são o máximo que os limites configurados podem ter. O comportamento de aviso e pausa está em [limites de uso](../plataforma/limites-de-uso.md). Passar do teto de custo exige a aprovação de um usuário Administrador ou acima; o Grão-Mestre, aprovador delegado, não aprova isso ([política](../aprovacoes/politica.md)).
+- **Custo:** em cada unidade presente (`usd`, `tokens`, `hours`), `per_table` e `per_day` (do workspace) são o máximo que os limites configurados naquela unidade podem ter; unidade ausente não tem teto. O comportamento de aviso e pausa está em [limites de uso](../plataforma/limites-de-uso.md). Passar do teto de custo exige a aprovação de um usuário Administrador ou acima; o Grão-Mestre, aprovador delegado, não aprova isso ([política](../aprovacoes/politica.md)).
 
 ### Quem muda o teto
 
@@ -61,6 +61,8 @@ Se `teto.yaml` mudar sem passar pelo painel ou por decreto (edição manual, ou 
 
 Classes que passam do novo teto aparecem como "acima do teto" no `mestre class check` e no painel. Nada é apagado: o pipeline simplesmente corta o que passou, com o motivo.
 
+Quem usa o teto: [classes](classes.md) (M3); a sessão zero cria o arquivo (M4); decretos, limites de uso e aprovações (M5) e a administração no painel (M6) o ampliam, consomem ou editam ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
+
 ## Regras e erros
 
 - `teto.yaml` inválido: vale a última versão aprovada, com alerta aos Administradores.
@@ -77,9 +79,5 @@ Classes que passam do novo teto aparecem como "acima do teto" no `mestre class c
 
 ## Depende de
 
-- [Permissões](permissoes.md) e [classes](classes.md)
+- [Permissões](permissoes.md)
 - [Precedência](../arquitetura/precedencia.md)
-- [Decretos](../telegram/decretos.md) e [usuários e níveis](../telegram/usuarios-e-niveis.md)
-- [Limites de uso](../plataforma/limites-de-uso.md)
-- [Política de aprovação](../aprovacoes/politica.md)
-- [Administração no painel](../painel/administracao.md)

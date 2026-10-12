@@ -52,11 +52,11 @@ Cada personagem executa uma etapa por vez. Com `join: any`, as anteriores que ai
 
 ### Devolução com limite
 
-A etapa com `can_return_to` pode terminar devolvendo (opção do `done`, ver [comunicação](../cli/comunicacao.md)) com o motivo. O motor soma uma volta para essa etapa; se não passou de `max_returns`, a etapa-alvo volta a `preparing` recebendo o motivo como entrada, e toda etapa que dependa dela (direta ou indiretamente) volta a `pending`. Etapa afetada que ainda roda termina, mas o resultado é descartado. Passou do limite: a missão vai para `paused` com o motivo "limite de voltas" e o Mestre da mesa decide.
+A etapa com `can_return_to` pode terminar devolvendo (opção do `done`, ver [comunicação](../cli/comunicacao.md)) com o motivo. O motor soma uma volta para essa etapa; se não passou de `max_returns`, a etapa-alvo volta a `preparing` recebendo o motivo como entrada, e toda etapa que dependa dela (direta ou indiretamente) volta a `pending`. Etapa afetada que ainda roda termina, mas o resultado é descartado. Passou do limite: o `done` é registrado normalmente (não é recusado), a devolução não acontece, a missão vai para `paused` com o motivo "limite de voltas" e o motor coloca na caixa de entrada do Mestre da mesa um evento `return_limit` (etapa, voltas feitas e o último motivo) para ele decidir. Quem deu o `done` recebe a resposta dizendo que a missão foi pausada ([comunicação](../cli/comunicacao.md)).
 
 ### Pontos de aprovação
 
-Quem aprova é o Grão-Mestre, que pergunta aos usuários na dúvida ([política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md)). `before` negado: missão `paused`, Mestre da mesa avisado. `after` negado: a etapa volta a `preparing` com o motivo (conta como volta).
+Quem aprova é o Grão-Mestre, dentro da política, ou os usuários, quando a política exige ou ele está em dúvida ([política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md)); enquanto isso a etapa fica numa espera de aprovação ([esperas](esperas-e-caixa-de-entrada.md#esperas)). `before` negado: missão `paused`, Mestre da mesa avisado. `after` negado: a etapa volta a `preparing` com o motivo (conta como volta).
 
 ### Etapa travada
 
@@ -126,8 +126,8 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 ## Critérios de aceite
 
 - **CA-MIS-01** · *rápida* — **Dado** uma definição com `after` apontando para etapa posterior, **quando** é validada, **então** é recusada com o id inválido.
-- **CA-MIS-02** · *rápida* — **Dado** a missão do exemplo com agentes falsos, **quando** roda, **então** `review` e `qa` começam juntos após `dev`, `fix` só após os dois, e o pergaminho tem uma seção por etapa com resumo e arquivos.
-- **CA-MIS-03** · *rápida* — **Dado** `max_returns: 3`, **quando** o Revisor devolve 4 vezes, **então** as 3 primeiras voltam ao Dev e a 4ª pausa a missão com "limite de voltas".
+- **CA-MIS-02** · *rápida* — **Dado** a missão do exemplo com agentes falsos, **quando** roda, **então** `review` e `qa` começam juntos após `dev`, `fix` só após os dois, e o pergaminho tem uma seção por etapa com resumo e os arquivos informados pelo git falso.
+- **CA-MIS-03** · *rápida* — **Dado** `max_returns: 3`, **quando** o Revisor devolve 4 vezes, **então** as 3 primeiras voltam ao Dev; o 4º `done` é registrado, a missão fica `paused` com "limite de voltas" e o Mestre da mesa recebe o evento `return_limit`.
 - **CA-MIS-04** · *rápida* — **Dado** relógio falso, **quando** o personagem da etapa fica 20 min `idle` sem `done`, **então** a etapa vira `stuck` e o Mestre da mesa é avisado; 30 min depois, Grão-Mestre e usuários.
 - **CA-MIS-05** · *completa* — **Dado** um motor de nó derrubado com `qa` em andamento, **quando** volta, **então** `plan` e `dev` continuam concluídas e `qa` é entregue de novo com a nota de retomada.
 - **CA-MIS-06** · *rápida* — **Dado** GitHub falso, **quando** a missão é criada e `dev` conclui, **então** existem a issue sob o épico, a sub-issue de `dev` fechada e o comentário com o App da classe.
@@ -135,9 +135,9 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 
 ## Depende de
 
+- [Mesas](mesas.md)
 - [Personagens](personagens.md)
 - [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md)
-- [Mesas](mesas.md)
+- [Conexões](conexoes.md)
 - [Pergaminhos e tomos](pergaminhos-e-tomos.md)
-- [Fluxo de aprovações](../aprovacoes/fluxo.md)
-- [Identidades e Apps](../github/identidades-e-apps.md)
+- [Teto do workspace](../classes/teto-do-workspace.md)

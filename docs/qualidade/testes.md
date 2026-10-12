@@ -13,8 +13,8 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 | Suíte | Nome no executor | Quando roda | Orçamento | O que contém |
 |---|---|---|---|---|
 | **rápida** | `fast` | a cada alteração e no gancho de pré-commit | **30 s** | a grande maioria: unitários Go, unitários e de componente do painel (Vitest), [verificação de docs](verificacao-de-docs.md). Sem rede real, sem disco lento, sem processos externos |
-| **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Core e nó reais na mesma máquina, banco temporário, agente falso como processo num PTY real |
-| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 13 critérios do MVP, testes de falha da autocura e [conformidade com os provedores reais](../provedores/conformidade.md), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
+| **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Core e nó reais na mesma máquina, rodando como **processos comuns** (sem instalar serviços), banco temporário, git real, agente falso como processo num PTY real |
+| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 13 critérios do MVP, testes de falha da autocura, [conformidade com os provedores reais](../provedores/conformidade.md) e tudo o que exige instalar serviços ou mexer na integração com o sistema (contas, ACLs, mDNS do sistema), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
 
 ### Como as suítes são selecionadas
 
@@ -69,6 +69,8 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 | MVP-12 | `TestMVP12_RestartRestoresState` | reinício real do Core e dos nós |
 | MVP-13 | `TestMVP13_FourUses` | instaladores reais nos quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows), cada um montado do zero |
 
+**Critério *pesada* vira subteste:** cada CA *pesada* é um subteste `TestMVPnn/CA-<SIGLA>-<NN>` do primeiro MVP que ele cita (ex.: `TestMVP13_FourUses/CA-PAR-09`), e o comentário `// CA-…` fica acima do subteste.
+
 **Onde roda cada teste:** instalação (MVP-1 e MVP-13) e os testes de falha da autocura (MVP-2) rodam nos **quatro usos**; os demais testes de ponta a ponta rodam **uma vez, no uso Linux + Windows** ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
 
 **Testes de falha da autocura** (`TestChaos_*`): matar o motor, travar o processo, encher o disco, derrubar a rede e falhar uma atualização, em cada máquina dos quatro usos, inclusive o [modo máquina única](../autocura/camadas.md#modo-máquina-única). O comportamento esperado está em [camadas.md](../autocura/camadas.md); os critérios desses testes citam `(MVP-2)`, e os de conformidade citam `(MVP-6)`.
@@ -89,7 +91,9 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 ## Regras e erros
 
 - **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint) recusa `time.Sleep`, `time.Now`, `time.After`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc` e `time.Since` fora do pacote do relógio. No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
-- **Rápida sem processos e sem rede:** com `MESTRE_TEST_SUITE=fast`, a camada única que inicia processos e a que abre conexões recusam com erro claro ("processo externo na suíte rápida: use o PTY falso"). Teste que precisa disso é da completa.
+- **Rápida sem processos e sem rede:** com `MESTRE_TEST_SUITE=fast`, a camada única que inicia processos e a que abre conexões recusam com erro claro ("processo externo na suíte rápida: use o PTY falso"). Na rápida, o agente falso, o `mestre hook` e a CLI rodam dentro do processo do teste pelo lançador em memória ([dublês](dubles.md#agente-falso-fakeagent)). Teste que precisa de processo real é da completa.
+- **Git:** o motor usa o binário `git` do sistema (2.32 ou mais novo) só pelo wrapper `internal/gitx` ([convenções](../desenvolvimento/convencoes.md)). Na rápida, `gitx` é o git falso do `testkit`; critério que precisa de git real (bundle, worktree, `info/exclude`, commit) é da completa.
+- **Serviços do sistema:** a completa nunca instala serviços nem muda contas, ACLs ou o mDNS do sistema; critério que precisa disso é da pesada e cita `(MVP-1)` ou `(MVP-13)`.
 - **Paralelo e isolado:** todo teste Go chama `t.Parallel()` (linter `paralleltest`). Cada teste usa `t.TempDir()` para pastas e banco SQLite próprios, porta `127.0.0.1:0` quando houver rede real, e nenhum estado global. `t.Setenv` e `t.Chdir` não combinam com `t.Parallel()`: passe a configuração por parâmetro.
 - **Um comportamento, um teste, no nível mais baixo possível.** Nada de testar a mesma regra em unitário, integração e ponta a ponta. Ponta a ponta só para os critérios MVP-1..13; a [verificação de docs](verificacao-de-docs.md) recusa critério *pesada* que não cite um MVP.
 - **Rastreabilidade:** o teste que cobre um critério de aceite traz o identificador num comentário logo acima (ex.: `// CA-MESAS-03`), para ser achado com `grep`.
@@ -108,12 +112,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 
 ## Depende de
 
-- [dubles.md](dubles.md)
-- [verificacao-de-docs.md](verificacao-de-docs.md)
-- [escopo-mvp.md](../produto/escopo-mvp.md)
-- [conformidade.md](../provedores/conformidade.md)
-- [camadas.md](../autocura/camadas.md)
-- [convencoes.md](../desenvolvimento/convencoes.md)
+- [convencoes.md](../desenvolvimento/convencoes.md) · [escopo-mvp.md](../produto/escopo-mvp.md)
 
 ## Fontes
 

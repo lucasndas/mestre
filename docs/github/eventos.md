@@ -68,6 +68,7 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 - A mesa é descoberta pelas regras de [ações por nível](acoes-por-nivel.md). Sem mesa, o evento vai marcado "sem mesa".
 - Os eventos do mesmo ciclo e da mesma mesa viram **uma única mensagem** na caixa de entrada do Grão-Mestre, para não gastar um turno por evento.
 - Prioridade e entrega: [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md).
+- `pr_mergeado` do PR de uma mesa confirma o merge: o motor marca a mesa como mesclada e o item ao Grão-Mestre diz isso, para ele encerrar a mesa ([encerramento](../orquestracao/mesas.md#encerramento)).
 - Revisões feitas por pessoas direto no GitHub também servem para concluir pedidos de aprovação ([fluxo](../aprovacoes/fluxo.md)).
 
 ### Orçamento de cota

@@ -57,8 +57,7 @@ flowchart TD
   - anexos;
   - se o texto veio de transcrição.
   - É com isso que `mestre reply` volta pelo mesmo canal.
-- **Primeira linha do texto entregue ao agente,** para ele saber quem fala:
-  `[Telegram · <nome> (<nível>) · mesa <mesa>]`. A parte da mesa só aparece quando há indicação de mesa. Depois vem o texto original, sem alteração.
+- **Primeira linha do texto entregue ao agente:** o cabeçalho único dos itens da caixa de entrada, com `via Telegram` e, quando há indicação de mesa, `mesa <mesa>` ([formato](../orquestracao/esperas-e-caixa-de-entrada.md#caixa-de-entrada)). Depois vem o texto original, sem alteração.
 - **Áudio e anexos:** o agente recebe as linhas do formato descrito em [anexos e transcrição](anexos-e-transcricao.md).
 
 ### Cabeçalho
@@ -88,7 +87,7 @@ flowchart TD
 - **CA-ROTA-02** · *rápida* — **Dado** um usuário com ativo A, **quando** ele envia `#b corrige o build`, **então** o Grão-Mestre de B recebe "corrige o build" e o ativo continua A.
 - **CA-ROTA-03** · *rápida* — **Dado** um usuário sem acesso a C, **quando** ele envia `#c oi`, **então** o bot recusa e lista os workspaces permitidos, sem enfileirar nada.
 - **CA-ROTA-04** · *rápida* — **Dado** um usuário de dois workspaces sem ativo, **quando** ele manda texto, **então** o bot pergunta com botões e entrega o texto ao workspace escolhido, que vira o ativo.
-- **CA-ROTA-05** · *rápida* — **Dado** uma resposta a uma mensagem do bot sobre a mesa #42, **quando** ela é entregue, **então** a primeira linha para o Grão-Mestre traz "mesa #42" e a origem guarda a mesa.
+- **CA-ROTA-05** · *rápida* — **Dado** uma resposta a uma mensagem do bot sobre a mesa #42, **quando** ela é entregue, **então** o cabeçalho entregue ao Grão-Mestre traz `via Telegram` e `mesa <mesa da #42>`, e a origem guarda a mesa.
 - **CA-ROTA-06** · *rápida* — **Dado** qualquer mensagem de saída, **quando** é enviada, **então** a primeira linha é o cabeçalho correto (workspace, workspace · mesa ou Sistema).
 - **CA-ROTA-07** · *rápida* — **Dado** uma resposta em texto a um alerta "Sistema", **quando** ela chega, **então** o motor responde com as ações possíveis e nada entra na caixa de entrada de agentes.
 

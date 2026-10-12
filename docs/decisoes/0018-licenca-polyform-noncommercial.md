@@ -8,7 +8,7 @@ Aceita, 2026-10-12.
 
 ## Contexto
 
-- O repositório do Mestre será **público no GitHub**.
+- O repositório do Mestre é **público no GitHub**.
 - O autor quer:
   - permitir uso, estudo e modificação para fins **não comerciais**;
   - exigir o **aviso de autoria**;

@@ -12,7 +12,7 @@ Fazer o histórico do GitHub mostrar quem fez cada coisa: todo commit, comentár
 
 | App | Quem usa | Para quê |
 |---|---|---|
-| **Grão-Mestre** | o Grão-Mestre de todos os workspaces | criar épicos, revisar, aprovar, fazer merge, configurações aprovadas pelo Dono, clonar e atualizar o espelho |
+| **Grão-Mestre** | o Grão-Mestre de todos os workspaces | criar épicos, revisar, aprovar, fazer merge, configurações do repositório aprovadas (`configuracao_repositorio`), clonar e atualizar o espelho |
 | **Mestre** | os Mestres de mesa | abrir e atualizar o PR da mesa, organizar as issues do épico. É separado do "Grão-Mestre" porque o GitHub não deixa ninguém aprovar o próprio PR |
 | **um por classe** (ex.: Dev, QA, Revisor) | os personagens da classe | commits, comentários, atualizações de issue e revisões pedidas pelo personagem |
 
@@ -45,7 +45,7 @@ Todas as permissões são de repositório; nenhuma permissão de conta. O webhoo
 | Pull requests | escrita | escrita | escrita | abrir e atualizar PR, comentar, revisar, aprovar |
 | Checks | leitura | leitura | leitura | ler CI |
 | Commit statuses | leitura | leitura | leitura | ler CI por status |
-| Administration | escrita | — | — | rulesets e configurações aprovadas pelo Dono |
+| Administration | escrita | — | — | rulesets e configurações aprovadas ([política](../aprovacoes/politica.md#tipos-de-ação)) |
 | Workflows | — | — | só se a classe tiver `git.workflows` `ask` ou `allow` | enviar mudanças no CI (abaixo) |
 | Secrets | — | — | — | nunca |
 
@@ -61,7 +61,7 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 
 - Os agentes fazem commits locais. O autor e o committer são o bot do App: nome `<slug>[bot]`, e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com`.
 - `bot_user_id` **não** é o id do App: o motor lê `GET /users/<slug>%5Bbot%5D` → `.id` uma vez e guarda no banco.
-- A identidade fica num arquivo de configuração git por personagem (`.mestre/agents/<id>/gitconfig`), apontado por `GIT_CONFIG_GLOBAL` (existe a partir do git 2.32; o [checklist](../plataforma/checklist.md) confere a versão em cada nó). Esse arquivo inclui o `.gitconfig` global do usuário e só define `user.name` e `user.email`. Assim o motor pode trocar a identidade sem reiniciar o agente (ex.: quando o App da classe fica pronto). Outras variáveis do personagem: [personagem](../sessao-zero/personagem.md).
+- A identidade fica num arquivo de configuração git por personagem (`.mestre/agents/<id>/gitconfig`), apontado por `GIT_CONFIG_GLOBAL` (existe a partir do git 2.32; o [checklist](../plataforma/checklist.md) confere a versão em cada nó). Esse arquivo inclui o `.gitconfig` global do usuário e só define `user.name` e `user.email`. É a **única** fonte da identidade: o motor nunca põe `GIT_AUTHOR_*` nem `GIT_COMMITTER_*` no ambiente, porque essas variáveis venceriam o arquivo e não mudariam com o processo vivo. Assim o motor pode trocar a identidade sem reiniciar o agente (ex.: quando o App da classe fica pronto). Outras variáveis do personagem: [personagem](../sessao-zero/personagem.md).
 - Personagem sem classe própria: Mestre da mesa usa o App "Mestre"; Grão-Mestre usa o App "Grão-Mestre".
 - A mensagem de commit cita a mesa e a issue, com trailers no fim: `Mestre-Mesa: epico/42-login` e `Refs: #57`. A skill ensina o formato ([skills geradas](../cli/skills-geradas.md)).
 - **Commits sem assinatura:** não aparecem como "Verified" ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)).
@@ -77,7 +77,7 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 ### Workflows
 
 - O GitHub só aceita o envio de uma branch que altera `.github/workflows/` (o CI do repositório) se o App tiver a permissão **Workflows**. Sem ela, recusa ("refusing to allow a GitHub App to create or update workflow … without `workflows` permission").
-- Quem pode mexer no CI é decidido **na classe**, pela opção `git.workflows` do [`permissions.yaml`](../classes/permissoes.md), limitada pelo [teto](../classes/teto-do-workspace.md) (padrão `never`). O App da classe acompanha essa escolha:
+- Quem pode mexer no CI é decidido **na classe** (escolha registrada no [ADR 0007](../decisoes/0007-apps-fixos-grao-mestre-e-mestre.md): em vez de um App dedicado, a permissão acompanha o App da classe), pela opção `git.workflows` do [`permissions.yaml`](../classes/permissoes.md), limitada pelo [teto](../classes/teto-do-workspace.md) (padrão `never`). O App da classe acompanha essa escolha:
   - `never`: o App é criado **sem** a permissão Workflows;
   - `ask` ou `allow`: o App é criado **com** a permissão. Como a chave do App nunca chega ao agente, a permissão é só a capacidade técnica; quem decide se ela é usada é o motor, pela regra da classe (`ask` = só depois do "Aprovar" de um usuário, no hash aprovado).
 - O Grão-Mestre e o "Mestre" não têm a permissão. Uma classe que **herda** o App de outra (`herdar:<classe>`) só pode ter `git.workflows` igual ou menor que a da classe de origem; se precisar de mais, recebe App próprio ([classes](../classes/classes.md)).
@@ -87,33 +87,34 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 ## Regras e erros
 
 - Nenhum agente recebe chave, token, `gh` ou credencial. Só o motor usa o cofre ([segurança](../arquitetura/seguranca.md)).
-- App sem instalação no repositório da ação: o pedido falha com "App `<nome>` não instalado em `<repo>`", e o Grão-Mestre é avisado para instalar ([criação de Apps](criacao-de-apps.md)).
+- App sem instalação no repositório da ação: o pedido falha com "App `<nome>` não instalado em `<repo>`"; o motor acrescenta o repositório à instalação ou o Dono recebe o link para isso ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)).
 - Falha ao ler `bot_user_id` de um App de classe: os personagens usam a identidade temporária do App "Mestre" (seção acima), o motor tenta de novo a cada início de personagem e o [checklist](../plataforma/checklist.md) registra o alerta.
 - Token recusado (chave revogada ou App apagado): o App vai para o estado "com erro" e o Grão-Mestre avisa o Dono.
 
 ## Critérios de aceite
 
 - **CA-GH-ID-01** · *rápida* — **Dado** a classe "QA de integração com APIs externas" e o prefixo `lucas-mestre`, **quando** o motor gera o nome do App, **então** o nome tem até 34 caracteres, só minúsculas, números e `-`, e começa com `lucas-mestre-`.
-- **CA-GH-ID-02** · *rápida* — **Dado** o App `lucas-mestre-qa` com `bot_user_id` 123, **quando** um personagem QA inicia, **então** o `gitconfig` dele tem `user.name = lucas-mestre-qa[bot]` e `user.email = 123+lucas-mestre-qa[bot]@users.noreply.github.com`.
+- **CA-GH-ID-02** · *rápida* — **Dado** o App `lucas-mestre-qa` com `bot_user_id` 123, **quando** um personagem QA inicia, **então** o `gitconfig` dele tem `user.name = lucas-mestre-qa[bot]` e `user.email = 123+lucas-mestre-qa[bot]@users.noreply.github.com`, e o ambiente dele tem `GIT_CONFIG_GLOBAL` e nenhuma `GIT_AUTHOR_*` ou `GIT_COMMITTER_*`.
 - **CA-GH-ID-03** · *rápida* — **Dado** a classe QA com App "em criação", **quando** um personagem QA comenta numa issue, **então** o comentário sai com o token do App "Mestre" e o texto começa com `**[QA]**`.
 - **CA-GH-ID-04** · *rápida* — **Dado** o App da classe QA passando a "pronto", **quando** o motor processa a mudança, **então** o `gitconfig` dos personagens QA vivos passa a ter a identidade do App QA.
 - **CA-GH-ID-05** · *rápida* — **Dado** uma branch que altera `.github/workflows/ci.yml` pedida por uma classe com `git.workflows: ask`, **quando** a mesa pede `mestre pr update`, **então** o motor não envia e cria um pedido de aprovação do tipo `envio_workflows`; com `never`, recusa com `workflow_not_allowed` e avisa o Grão-Mestre.
-- **CA-GH-ID-09** · *rápida* — **Dado** uma classe nova com `git.workflows: allow` e `app: herdar:qa` (App QA sem a permissão Workflows), **quando** o motor valida a classe, **então** recusa e explica que ela precisa de App próprio.
 - **CA-GH-ID-06** · *rápida* — **Dado** 100 Apps contados, **quando** o Grão-Mestre pede um App novo, **então** a criação é recusada com o motivo.
 - **CA-GH-ID-07** · *rápida* — **Dado** um pedido de token para uma ação no repositório X, **quando** o motor pede o token de instalação ao GitHub falso, **então** o pedido lista só o repositório X.
 - **CA-GH-ID-08** · *pesada* — **Dado** uma mesa com personagens Dev e QA, **quando** eles fazem commits e comentam, **então** no GitHub (dublê) cada commit e comentário fica registrado com o App da classe de quem fez (MVP-5).
+- **CA-GH-ID-09** · *rápida* — **Dado** uma classe nova com `git.workflows: allow` e `app: herdar:qa` (App QA sem a permissão Workflows), **quando** o motor valida a classe, **então** recusa e explica que ela precisa de App próprio.
 
 ## Depende de
 
-- [Criação de Apps](criacao-de-apps.md)
 - [Cofre](../plataforma/cofre.md)
+- [Persistência](../arquitetura/persistencia.md)
+- [Workspaces](../orquestracao/workspaces.md)
 - [Classes](../classes/classes.md)
 - [Personagem na sessão zero](../sessao-zero/personagem.md)
 
 ## Verificar na implementação
 
 - **Verificar na implementação:** o e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot (formato não documentado oficialmente). **Padrão:** o formato acima. **Se falhar:** os commits continuam válidos, com o nome do bot mas sem a ligação ao perfil dele no GitHub; o checklist alerta, e a autoria por papel continua visível no nome do autor e nos trailers ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)). **Onde:** no primeiro envio real (o PR `mestre/sessao-zero` ou o primeiro PR de mesa), conferindo `author.login` em `GET /repos/{o}/{r}/commits/{sha}`.
-- **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado passa a ter a permissão depois do aceite do dono na instalação. **Padrão:** os dois links acima; o motor confere `permissions.workflows` em `GET /app/installations/{id}` antes de liberar os envios. **Se falhar** (o pedido de aceite não aparece para um App da própria conta): o Grão-Mestre manda ao Dono o link para desinstalar e instalar de novo o App naquele repositório. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
+- **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado passa a ter a permissão depois do aceite do dono na instalação. **Padrão:** os dois links acima; o motor confere `permissions.workflows` em `GET /app/installations/{id}` antes de liberar os envios. **Se falhar:** se o pedido de aceite não aparece para um App da própria conta, o Grão-Mestre manda ao Dono o link para desinstalar e instalar de novo o App naquele repositório. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
 
 ## Fontes
 

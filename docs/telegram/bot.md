@@ -16,7 +16,7 @@ Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspa
   - É só conexão de saída: sem webhook e sem porta aberta.
 - **Ao iniciar,** o motor chama `deleteWebhook`, porque `getUpdates` não funciona com webhook ativo.
 - **Offset:**
-  - Cada update é gravado no banco (tabela de entrada) **antes** de o offset avançar.
+  - Cada update é gravado no banco (tabela `telegram_updates`) **antes** de o offset avançar.
   - O último `update_id` processado também fica no banco.
   - Assim um reinício não perde nem repete updates (deduplicação por `update_id`).
 - **Erros de rede:** o laço tenta de novo com backoff de 1 s a 60 s, com variação aleatória.
@@ -64,7 +64,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 | `/missoes [workspace]` | missões em andamento com a etapa atual; sem argumento, as do workspace ativo |
 | `/aprovacoes` | pedidos esperando por este usuário, cada um com os botões de decisão ([fluxo](../aprovacoes/fluxo.md)) |
 | `/decretos` | decretos ativos e suspensos, com autor e validade ([decretos](decretos.md)) |
-| `/pausar [workspace\|mesa]` | pausa as missões e os rituais do escopo e para a entrega de tarefas novas aos personagens dali |
+| `/pausar [workspace\|mesa]` | pausa o escopo (efeito em [pausa](../orquestracao/mesas.md#pausa)) |
 | `/retomar [workspace\|mesa]` | desfaz o `/pausar` |
 | `/travar`, `/destravar` | emergência ([segurança do canal](seguranca-do-canal.md)) |
 
@@ -77,7 +77,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Mensagens de saída
 
 - **Quem envia:**
-  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN e confirmações de decreto.
+  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) e os pedidos "Sistema" de atualização do Mestre e dos CLIs ([política](../aprovacoes/politica.md#tipos-de-ação)).
   - **Grão-Mestre:** conversa, ou seja, respostas (`mestre reply`), resumos de épico, missões concluídas, notificações (`mestre notify`) e pedidos de aprovação. A sintaxe está em [CLI de comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md).
 - **Para quem:**
   - Uma resposta vai ao usuário e à conversa de origem ([resposta pelo mesmo canal](../orquestracao/esperas-e-caixa-de-entrada.md)).
@@ -101,7 +101,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 
 - Antes de enviar, o motor procura no texto os termos do [glossário](../produto/glossario.md) (coluna "Termo", sem diferenciar maiúsculas, palavra inteira, fora de blocos de código).
 - Na **primeira vez** que um termo aparece para aquele usuário, o motor acrescenta a "Ajuda curta" entre parênteses logo depois do termo.
-- O banco registra o par usuário+termo. O Dono pode zerar esse registro de um usuário no painel.
+- O banco registra o par usuário+termo (tabela `glossary_seen`). O Dono pode zerar esse registro de um usuário no painel.
 
 ## Regras e erros
 
@@ -122,11 +122,10 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 
 ## Depende de
 
-- [Segurança do canal](seguranca-do-canal.md)
 - [Usuários e níveis](usuarios-e-niveis.md)
-- [Roteamento](roteamento.md)
-- [Caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
+- [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Cofre](../plataforma/cofre.md)
+- [Persistência](../arquitetura/persistencia.md)
 - [Glossário](../produto/glossario.md)
 
 ## Fontes

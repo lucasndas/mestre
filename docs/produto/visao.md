@@ -72,6 +72,6 @@ flowchart LR
 
 ### Onde cada coisa roda
 
-O Core roda o Grão-Mestre, guarda o estado e serve o painel; os nós rodam agentes, todos de terminal, sem interface gráfica; o Guardião de cada máquina cuida do motor local. Detalhes em [componentes](../arquitetura/componentes.md).
+O Core guarda o estado e serve o painel, e o nó local dele roda o Grão-Mestre; os nós rodam agentes, todos de terminal, sem interface gráfica; o Guardião de cada máquina cuida do motor local. Detalhes em [componentes](../arquitetura/componentes.md).
 
 O que é o MVP e os critérios globais: [escopo do MVP](escopo-mvp.md).

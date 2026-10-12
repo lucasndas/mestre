@@ -4,7 +4,7 @@
 
 ## O que é o MVP
 
-Tudo o que a especificação original descreve é o MVP, e só isso. Nenhum documento acrescenta funcionalidade além dela; escolhas de detalhe necessárias para implementar (valores padrão, nomes, formatos) são propostas nos documentos e marcadas como "padrão" quando configuráveis.
+O MVP é a especificação original mais as decisões do usuário registradas depois dela (nos ADRs, como a autoatualização, [0019](../decisoes/0019-autoatualizacao-por-releases.md), e os quatro usos, [0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)), e só isso. Nenhum documento acrescenta funcionalidade além da spec e das decisões registradas; escolhas de detalhe necessárias para implementar (valores padrão, nomes, formatos) são propostas nos documentos e marcadas como "padrão" quando configuráveis.
 
 **Ambiente:**
 - Quatro usos: só Linux, Linux + Windows, Windows + Linux e só Windows; em todos, o Core aceita N nós ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).

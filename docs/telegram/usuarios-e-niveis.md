@@ -39,16 +39,20 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | `/destravar` (com PIN) | sim | não | não | não |
 | Digitar no terminal de um agente pelo canvas | sim | sim | não | não |
 | Criar workspace | sim | sim | não | não |
+| Alterar a configuração de um workspace pelo painel (fichas do Grão-Mestre e dos Mestres de mesa, instruções extras, limites, retenção, fuso), menos o que outra linha reserva | sim | sim | não | não |
 | Aprovar classe do workspace ([classes](../classes/classes.md)) | sim | sim | não | não |
 | Ampliar o teto ou passar do teto de custo ([teto](../classes/teto-do-workspace.md)) | sim | sim | não | não |
 | Aprovar ações de cura que pedem pessoa e correções de rede, firewall ou serviços do checklist | sim | sim | não | não |
 | Cadastrar, editar, suspender e remover usuários; gerar código de pareamento | sim | não | não | não |
 | Parear e revogar nós ([pareamento](../conectividade/pareamento.md)) | sim | não | não | não |
 | Editar bases, fichas, política de aprovação e acessar o cofre | sim | não | não | não |
+| Criar e instalar GitHub Apps pelo link ([criação de Apps](../github/criacao-de-apps.md)) | sim | não | não | não |
+| Configurar perfis de conta: login e, no Codex, confiança dos hooks ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)) | sim | não | não | não |
 | Transferir o posto de Dono | sim | não | não | não |
 
 - **Observador:** se escrever texto livre, a mensagem não vai ao Grão-Mestre. O bot responde, uma vez por dia no máximo, com os comandos que ele pode usar.
 - **Grão-Mestre não é usuário.** Ele é o aprovador delegado, com as regras de [política](../aprovacoes/politica.md).
+- **Aprovar pedidos:** a linha "aprovar ou negar" é o máximo; cada tipo de pedido tem o seu nível mínimo na [política](../aprovacoes/politica.md#tipos-de-ação) (ex.: `acao_destrutiva` e `proposta_agents_md` exigem Administrador ou acima).
 - **Ações sensíveis com PIN:** a lista única está em [PIN pessoal](#pin-pessoal).
 
 ### Pareamento por código
@@ -133,7 +137,6 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 
 ## Depende de
 
-- [Login do painel](../painel/login.md)
 - [Cofre](../plataforma/cofre.md)
-- [Bot](bot.md)
 - [Persistência](../arquitetura/persistencia.md)
+- [Segurança](../arquitetura/seguranca.md)

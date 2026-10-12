@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o serviço `mestre-node` também no Core Linux, com o mesmo caminho de código de um nó remoto.
 
 ## Contexto
 
@@ -38,7 +38,7 @@ Aceita, 2026-10-12.
   | 4. Só Windows | Windows, com o nó local | nenhum | máquina única |
 
 - **Mesmo binário, partes por sistema:** serviço do systemd com watchdog no Linux e serviço do Windows com recuperação; caminhos (`/var/lib/mestre/…` ou `%ProgramData%\Mestre\…`); regras de firewall no [checklist](../plataforma/checklist.md); anúncio mDNS pelo Avahi no Linux e pelo mDNS nativo do Windows, registrado pelo Guardião, no Windows ([descoberta](../conectividade/descoberta.md)); `whisper-server` e `ffmpeg` para os dois sistemas; ajudante de troca `mestre-update` nos dois ([componentes](../arquitetura/componentes.md)).
-- **Agente nunca roda com a conta dona do cofre**, nos dois sistemas. No Core Windows isso vira dois serviços: `mestre-core` na conta virtual `NT SERVICE\MestreCore`, dona do cofre, do banco, do espelho e do painel; e `mestre-node`, com a conta do usuário, que roda os agentes, inclusive o Grão-Mestre ([Windows](../arquitetura/windows.md)).
+- **Agente nunca roda com a conta dona do cofre**, nos dois sistemas. Em toda máquina Core isso vira dois serviços: `mestre-core`, dono do cofre, do banco, do espelho e do painel, que nunca roda agentes (Linux: conta `mestre`; Windows: conta virtual `NT SERVICE\MestreCore`); e o nó local `mestre-node`, que roda os agentes, inclusive o Grão-Mestre (Linux: conta `mestre`, iniciando os agentes como `mestre-agente`; Windows: conta do usuário), ligado ao Core pela mesma WSS com mTLS de um nó remoto, em `127.0.0.1:7443`, com banco de nó próprio ([componentes](../arquitetura/componentes.md), [Windows](../arquitetura/windows.md)).
 - **Sem interface gráfica em lugar nenhum.** O acesso é pelo painel no navegador; os agentes são de terminal; os nós, nos dois sistemas, são só serviços. Saem o processo na sessão do usuário, a tarefa de logon, o canal entre serviço e sessão, a notificação na área de trabalho, a capacidade `gui` e o navegador dedicado.
   - Navegação web dos agentes: pelas ferramentas MCP de navegador do próprio provedor, liberadas ou negadas pela classe como qualquer ferramenta ([permissões](../classes/permissoes.md)). O Mestre não fornece nem gerencia navegador.
   - GitHub Apps: o Grão-Mestre prepara o manifesto e o usuário cria e instala com um clique por link ([ADR 0006](0006-app-por-classe-criado-pelo-navegador.md)).
@@ -54,7 +54,7 @@ Aceita, 2026-10-12.
   - Menos peças no Windows: um processo e um canal local a menos.
 - **Negativas:**
   - **Máquina única não tem quem perceba a queda da máquina inteira.** O painel e os guias dizem isso; a recomendação é parear um segundo nó ([checklist](../plataforma/checklist.md)).
-  - **Core Windows com dois serviços do motor:** mais um processo a vigiar, ACLs nas pastas dos workspaces para a conta do usuário e a senha dessa conta pedida na instalação ([Windows](../arquitetura/windows.md)).
+  - **Core com dois serviços do motor, nos dois sistemas:** mais um processo a vigiar; no Windows, também ACLs nas pastas dos workspaces para a conta do usuário e a senha dessa conta pedida na instalação ([Windows](../arquitetura/windows.md)).
   - **Laboratório maior:** a pesada monta os quatro usos a partir de duas VMs ([testes](../qualidade/testes.md#laboratório)).
   - **Agentes não usam programas com janela.** Trabalho que exigiria tela é feito pelas ferramentas do provedor (MCP) ou não é feito pelo Mestre.
   - **Criação de App depende de um clique do usuário**, por link no Telegram ou no painel; até lá a classe usa o App "Mestre" ([identidades e Apps](../github/identidades-e-apps.md)).

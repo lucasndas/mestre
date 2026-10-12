@@ -8,11 +8,13 @@ Deixar o Grão-Mestre aprovar sozinho o que é seguro e obrigá-lo a perguntar n
 
 ## Comportamento
 
-### Grão-Mestre como aprovador delegado
+### O Grão-Mestre como aprovador delegado
 
 - É o aprovador padrão de tudo que pede aprovação. Age como representante dos usuários, com o nível **aprovador delegado**: aprova e nega ações pontuais ([ADR 0008](../decisoes/0008-grao-mestre-aprovador-delegado.md)).
 - **Não** cria decretos permanentes, **não** amplia o teto do workspace e **não** aprova uma proposta feita por ele mesmo.
 - Toda decisão dele precisa de um motivo escrito, que vai para a auditoria ([fluxo](fluxo.md)).
+- **Fora da política** (este é o texto dono da regra; a CLI e os outros documentos linkam aqui): quando a política manda perguntar (tipo `nunca`, condição do motor que falhou, regra de quórum que casa, `exigir_usuarios`), `mestre approval decide` recusa com `human_required` e diz o motivo; o motor não abre pedido sozinho. O Grão-Mestre então leva o pedido aos usuários com `mestre approval ask` ([fluxo](fluxo.md)). Sintaxe: [CLI do Grão-Mestre](../cli/grao-mestre.md).
+- **`mestre gh approve`** só aprova o PR com uma **aprovação vigente** para aquele PR e aquele hash: a do próprio Grão-Mestre, decidida dentro da política, ou a de usuários pelo fluxo. Sem ela, recusa com o mesmo `human_required`.
 
 ### Tipos de ação
 
@@ -26,6 +28,8 @@ Deixar o Grão-Mestre aprovar sozinho o que é seguro e obrigá-lo a perguntar n
 | `envio_workflows` | enviar branch que altera `.github/workflows/`, por classe com `git.workflows: ask` ([workflows](../github/identidades-e-apps.md#workflows)) | nunca | Administrador |
 | `configuracao_repositorio` | ruleset, proteção de branch, Apps ([aprovação no GitHub](../github/aprovacao-no-github.md)) | nunca | Dono, com PIN |
 | `classe_workspace` | criar classe do workspace ([teto](../classes/teto-do-workspace.md)) | nunca | Administrador |
+| `acao_destrutiva` | `note delete`, `ritual delete`, `class delete`, `table close --cancel`, sem exceção pontual para aquela ação ([convenções da CLI](../cli/convencoes.md)); alvo = o comando e o objeto | nunca | Administrador |
+| `proposta_agents_md` | criar o `AGENTS.md` proposto na [sessão zero](../sessao-zero/workspace.md#análise-do-projeto-e-agentsmd-etapa-analysis); o pedido mostra o texto inteiro | nunca | Administrador |
 | `atualizacao_mestre` | versão nova do Mestre ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) | nunca | Administrador |
 | `atualizacao_provedor` | versão nova de um CLI de provedor ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md#política-por-provedor)) | nunca | Administrador |
 
@@ -43,12 +47,12 @@ Ampliar o teto do workspace não é aprovação: só por decreto ([decretos](../
 | arquivos em áreas sensíveis; comandos sensíveis | apagar dados de forma não coberta pelas regras |
 | custo dentro do teto; regra de quórum que exige pessoas | |
 
-Se uma condição do motor falha, `mestre gh approve` (e os equivalentes) recusa, diz qual condição falhou e oferece abrir o pedido aos usuários. Se o Grão-Mestre tem dúvida, ele pergunta mesmo com tudo verde.
+Se uma condição do motor falha, a decisão do Grão-Mestre é recusada como em [fora da política](#o-grão-mestre-como-aprovador-delegado), dizendo qual condição falhou. Se o Grão-Mestre tem dúvida, ele pergunta mesmo com tudo verde.
 
 ### Arquivo de política
 
 - Fica em `.mestre/regras/politica-de-aprovacao.yaml`, no clone principal do workspace no Core. É criado na [sessão zero](../sessao-zero/workspace.md) com o conteúdo padrão abaixo.
-- Editado pelo usuário no painel ([administração](../painel/administracao.md)) ou direto no arquivo. Nenhum agente pode editá-lo: é regra fixa do Mestre.
+- Editado só pelo Dono ([tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), no painel ([administração](../painel/administracao.md)) ou direto no arquivo. Nenhum agente pode editá-lo: é regra fixa do Mestre.
 - O motor valida ao carregar. Arquivo inválido: continua valendo a última versão válida e o Dono recebe alerta com o erro.
 
 Conteúdo padrão (é também o exemplo do formato):
@@ -89,6 +93,8 @@ tipos:                         # sozinho: se_condicoes | nunca
   envio_workflows: { sozinho: nunca, nivel_minimo: administrador }
   configuracao_repositorio: { sozinho: nunca, nivel_minimo: dono, pin: true }
   classe_workspace: { sozinho: nunca, nivel_minimo: administrador }
+  acao_destrutiva: { sozinho: nunca, nivel_minimo: administrador }
+  proposta_agents_md: { sozinho: nunca, nivel_minimo: administrador }
 
 quorum:                        # quando o pedido vai aos usuários
   padrao: { aprovacoes: 1 }
@@ -120,18 +126,19 @@ Um decreto pode mudar a política sem editar o arquivo (ex.: "pode aprovar migra
 ## Critérios de aceite
 
 - **CA-APROV-POL-01** · *rápida* — **Dado** um PR com CI verde, revisão concluída e 10 arquivos fora das áreas sensíveis, **quando** o Grão-Mestre aprova, **então** o motor aceita e registra o motivo.
-- **CA-APROV-POL-02** · *rápida* — **Dado** um PR que altera `db/migrations/0003.sql`, **quando** o Grão-Mestre tenta aprovar sozinho, **então** o motor recusa citando a área `migracoes` e oferece abrir o pedido aos usuários (MVP-7).
+- **CA-APROV-POL-02** · *rápida* — **Dado** um PR que altera `db/migrations/0003.sql`, **quando** o Grão-Mestre tenta aprovar sozinho, **então** o motor recusa com `human_required` citando a área `migracoes`, nada é aprovado no GitHub, e o pedido só chega aos usuários quando o Grão-Mestre usa `mestre approval ask` (MVP-7).
 - **CA-APROV-POL-03** · *rápida* — **Dado** a regra de quórum `{tipo: merge, aprovacoes: 2}`, **quando** um merge com tudo verde chega, **então** o pedido vai aos usuários pedindo 2 aprovações.
 - **CA-APROV-POL-04** · *rápida* — **Dado** um arquivo de política com erro de sintaxe, **quando** o motor recarrega, **então** a versão anterior continua valendo e o Dono recebe alerta.
 - **CA-APROV-POL-05** · *rápida* — **Dado** um decreto ativo "pode aprovar migrações", **quando** chega um PR em `**/migrations/**` com tudo verde, **então** o Grão-Mestre pode aprovar sozinho.
 - **CA-APROV-POL-06** · *rápida* — **Dado** um pedido `configuracao_repositorio`, **quando** o Grão-Mestre tenta aprovar, **então** o motor recusa sempre.
 - **CA-APROV-POL-07** · *rápida* — **Dado** um personagem tentando escrever em `.mestre/regras/politica-de-aprovacao.yaml`, **quando** o `mestre hook` avalia, **então** a ação é negada.
+- **CA-APROV-POL-08** · *rápida* — **Dado** um `mestre note delete` sem exceção pontual, **quando** o motor avalia, **então** cria um pedido `acao_destrutiva` com o comando e o pergaminho como alvo, só para Administradores e o Dono, e um `approval decide` do Grão-Mestre nele recebe `human_required`.
+- **CA-APROV-POL-09** · *rápida* — **Dado** nenhuma aprovação vigente para o PR 12 no hash atual, **quando** o Grão-Mestre chama `mestre gh approve 12`, **então** recebe `human_required` e nenhum review é enviado; **dado** a aprovação de um usuário para esse hash, **então** o review sai.
 
 ## Depende de
 
-- [Fluxo de aprovação](fluxo.md)
-- [Decretos](../telegram/decretos.md)
 - [Usuários e níveis](../telegram/usuarios-e-niveis.md)
+- [Workspaces](../orquestracao/workspaces.md)
 - [Permissões das classes](../classes/permissoes.md)
 - [Teto do workspace](../classes/teto-do-workspace.md)
 - [Precedência](../arquitetura/precedencia.md)

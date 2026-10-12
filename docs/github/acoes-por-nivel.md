@@ -18,13 +18,13 @@ Garantir que cada mesa só mexa no que é dela no GitHub, sem que nenhum agente 
 | Comentar nas issues e no PR **da mesa**, e responder comentários de revisão | sim | sim |
 | Enviar a branch da mesa e abrir/atualizar o PR **da mesa** | sim | sim |
 | Mexer em issues ou PRs de **outra mesa** | não (pede ao Grão-Mestre) | sim |
-| Criar épicos, abrir e encerrar mesas | não | sim |
+| Criar épicos (`gh epic create`, antes de abrir a mesa), abrir e encerrar mesas | não | sim |
 | Revisar, aprovar e fazer merge | não | sim |
-| Configurações do repositório (proteção de branch, rulesets, Apps) | não | sim, com aprovação do Dono |
+| Configurações do repositório (proteção de branch, rulesets, Apps) | não | sim, com a aprovação do tipo `configuracao_repositorio` ([política](../aprovacoes/politica.md#tipos-de-ação)) |
 
 - Dentro da mesa, o `permissions.yaml` da classe diz quais comandos `mestre issue` e `mestre pr` cada classe usa ([permissões](../classes/permissoes.md)). O Mestre da mesa sempre pode.
 - A ação sai com o App de quem pediu ([identidades](identidades-e-apps.md)).
-- Sintaxe dos comandos: [coordenação](../cli/coordenacao.md) (`issue`, `pr`) e [Grão-Mestre](../cli/grao-mestre.md) (`gh`).
+- Sintaxe dos comandos: [coordenação no GitHub](../cli/coordenacao-github.md) (`issue`, `pr`) e [Grão-Mestre](../cli/grao-mestre.md) (`gh`).
 
 ### Árvore do épico
 
@@ -73,7 +73,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 
 ### Merge
 
-- Feito pelo Grão-Mestre com o App "Grão-Mestre", depois da aprovação ([aprovação no GitHub](aprovacao-no-github.md)).
+- Feito pelo Grão-Mestre com o App "Grão-Mestre", depois da aprovação ([aprovação no GitHub](aprovacao-no-github.md)). Mesclado o PR, o motor avisa o Grão-Mestre, que encerra a mesa ([encerramento](../orquestracao/mesas.md#encerramento)).
 - O motor envia o `sha` da cabeça aprovada no pedido de merge; se o PR mudou, o GitHub recusa.
 - Método padrão: **merge commit**, para manter cada commit com o autor da classe que o fez. Configurável por workspace, dentro dos métodos que o repositório permite.
 

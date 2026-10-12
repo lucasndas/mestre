@@ -4,7 +4,7 @@
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
-| [0001-stack-go.md](0001-stack-go.md) | Go como linguagem do motor, da CLI e do Guardião; comparação com Rust e TypeScript/Bun; bibliotecas escolhidas | Antes de escrever código ou adicionar uma dependência |
+| [0001-stack-go.md](0001-stack-go.md) | Go como linguagem do motor, da CLI e do Guardião; comparação com Rust e TypeScript/Bun; bibliotecas escolhidas; git pelo binário do sistema | Antes de escrever código ou adicionar uma dependência |
 | [0002-wss-iniciado-pelo-no.md](0002-wss-iniciado-pelo-no.md) | Por que cada nó abre uma conexão WSS de saída até o Core, multiplexada | Ao mexer na conectividade nó↔Core ou no protocolo |
 | [0003-autocura-com-guardiao-sem-ssh.md](0003-autocura-com-guardiao-sem-ssh.md) | Por que a autocura usa um Guardião local com lista fechada de ações, sem SSH | Ao mexer no Guardião ou na recuperação |
 | [0004-mesa-igual-worktree.md](0004-mesa-igual-worktree.md) | Por que cada mesa é um git worktree com branch própria, saído do espelho do Core | Ao mexer no ciclo de vida das mesas ou no espelho |

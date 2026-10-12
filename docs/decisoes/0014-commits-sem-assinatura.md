@@ -58,7 +58,7 @@ Aceita, 2026-10-12.
   - **Sem selo:** nenhum commit dos agentes aparece como "Verified".
   - **Repositórios bloqueados:** repositórios com "exigir commits assinados" não aceitam os envios do Mestre; o Dono decide se tira a regra daquele repositório.
   - **Formato do e-mail:** o formato do e-mail do bot pode mudar sem aviso, segundo uma resposta da equipe do GitHub. Isso quebraria a ligação do commit com o bot, embora o commit continue válido.
-- **Verificar na implementação:** se o e-mail `<id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot; padrão e plano B em [identidades e Apps](../github/identidades-e-apps.md#verificar-na-implementação). Se commits pela Contents API saem "Verified" não precisa ser verificado: o Mestre não usa a Contents API para commits.
+- **Ponto em aberto, conferido na implementação** (o e-mail `<id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot): o item completo está em [identidades e Apps](../github/identidades-e-apps.md#verificar-na-implementação). O Mestre não usa a Contents API para commits, então não há o que verificar sobre commits "Verified" por ela.
 
 ## Fontes
 

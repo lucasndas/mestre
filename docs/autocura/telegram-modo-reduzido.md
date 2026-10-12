@@ -21,7 +21,7 @@ Manter os usuários avisados e permitir aprovar curas pelo Telegram enquanto o C
 | Entrada | Resposta |
 |---|---|
 | `/status` | Core (desde quando está fora), nós, incidente e camada atual, nó condutor, link da [página reserva](pagina-reserva.md) |
-| Botões de aprovação de cura (Aprovar / Negar / Ver detalhes) | segue o [diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação); o PIN é pedido do mesmo jeito que no Core ([PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)) |
+| Botões de aprovação de cura (Aprovar / Negar / Ver detalhes) | scripts de diagnóstico seguem o [diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação); o `rollback` com restauração do banco mostra antes o intervalo que será perdido ([Guardião](guardiao.md#rollback-com-restauração-do-banco)); o PIN é pedido do mesmo jeito que no Core ([PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)) |
 | Qualquer outra mensagem ou comando | resposta fixa: "Sistema · O Core está fora do ar e o bot está em modo reduzido. Só `/status` e aprovações de cura funcionam agora. Sua mensagem **não** foi entregue; mande de novo quando o Core voltar." |
 
 - O modo reduzido **não guarda** mensagens de conversa: o Guardião não guarda estado do produto ([Guardião](guardiao.md)).

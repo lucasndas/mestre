@@ -9,9 +9,9 @@
 
 ## Topologia
 
-O sistema tem um **Core** e **N nós**. Core e nós rodam em Linux ou em Windows, com o mesmo binário, o que dá os quatro usos: só Linux, Linux + Windows, Windows + Linux e só Windows ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). Nos usos "só Linux" e "só Windows" a máquina do Core é a única (**modo máquina única**: [camadas](../autocura/camadas.md#modo-máquina-única)). O Core sempre tem um **nó local**, que roda o Grão-Mestre. Nada no código pressupõe um sistema para cada papel: cada nó declara capacidades ao se registrar e o roteamento usa essas capacidades ([personagens](../orquestracao/personagens.md)). Cada máquina tem também um **Guardião**, separado do motor.
+O sistema tem um **Core** e **N nós**. Core e nós rodam em Linux ou em Windows, com o mesmo binário, o que dá os quatro usos: só Linux, Linux + Windows, Windows + Linux e só Windows ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). Nos usos "só Linux" e "só Windows" a máquina do Core é a única (**modo máquina única**: [camadas](../autocura/camadas.md#modo-máquina-única)). O Core sempre tem um **nó local**, o serviço `mestre-node` da própria máquina, que roda o Grão-Mestre e os agentes dali: o motor do Core nunca roda agentes no próprio processo, e o nó local fala com ele pela mesma WSS de um nó remoto ([componentes](componentes.md)). Nada no código pressupõe um sistema para cada papel: cada nó declara capacidades ao se registrar e o roteamento usa essas capacidades ([personagens](../orquestracao/personagens.md)). Cada máquina tem também um **Guardião**, separado do motor.
 
-O diagrama mostra um Core e um nó remoto; no Core Windows, o nó local é um serviço próprio ([Windows](windows.md#windows-como-core)).
+O diagrama mostra um Core (com o nó local) e um nó remoto.
 
 ```mermaid
 flowchart TB
@@ -20,13 +20,16 @@ flowchart TB
     TG[(Telegram Bot API)]
   end
   subgraph Core["Core (Linux ou Windows)"]
-    MC["motor do Core<br/>mestre core<br/>(painel + API + nó local)"]
+    MC["motor do Core<br/>mestre core<br/>(painel + API)"]
+    NL["nó local<br/>mestre node"]
     GC["Guardião do Core<br/>mestre-guardiao"]
     WS["whisper-server<br/>(processo auxiliar)"]
     DBC[(SQLite do Core)]
     MC --- DBC
-    MC --> WS
+    NL --> WS
+    NL == "WSS + mTLS (127.0.0.1)" ==> MC
     GC -. vigia .-> MC
+    GC -. vigia .-> NL
   end
   subgraph No["Nó (Linux ou Windows)"]
     MN["serviço mestre-node<br/>(mestre node)"]
@@ -54,7 +57,7 @@ flowchart TB
 | Guardião do nó → Guardião do Core | o Guardião do nó condutor (eleito), quando o motor do Core falha | TLS na porta do Guardião do Core, com o certificado do nó | [camadas](../autocura/camadas.md#camada-3-supervisão-cruzada) |
 | Navegador → Core | o navegador | HTTPS e WSS (atualizações e terminais) | [canvas](../painel/canvas.md), [login](../painel/login.md) |
 | Navegador → Guardião do nó (no modo máquina única, do Core) | o navegador, na rede local | HTTPS com login | [página reserva](../autocura/pagina-reserva.md) |
-| CLI `mestre` → motor local | o agente (ou pessoa) na mesma máquina | socket local | [componentes](componentes.md), [convenções da CLI](../cli/convencoes.md) |
+| CLI `mestre` → motor local (`mestre-node`) | o agente na mesma máquina | socket Unix ou named pipe | [canal local](canal-local.md), [convenções da CLI](../cli/convencoes.md) |
 | Core → GitHub | o motor do Core | HTTPS, consulta periódica condicional | [eventos](../github/eventos.md) |
 | Core → Telegram | o motor do Core | HTTPS, long polling | [bot](../telegram/bot.md) |
 | Nó encontra o Core | o nó | broadcast UDP e mDNS | [descoberta](../conectividade/descoberta.md) |
@@ -73,7 +76,7 @@ Portas padrão: [componentes](componentes.md#portas). Segurança dos canais: [se
 
 ## Terminais
 
-Cada agente roda num pseudo-terminal gerenciado pelo motor do nó onde ele vive: PTY no Linux, ConPTY no Windows. Não há janela nem interface gráfica em nenhuma máquina: o painel no navegador é a única interface, e os agentes navegam na web pelas ferramentas MCP do próprio provedor ([permissões](../classes/permissoes.md)). O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows (só serviços, contas, ConPTY): [Windows](windows.md).
+Cada agente roda num pseudo-terminal gerenciado pelo motor do nó onde ele vive: PTY no Linux, ConPTY no Windows, com tamanho fixo, emulador de terminal e buffer no nó ([terminal](terminal.md)). Não há janela nem interface gráfica em nenhuma máquina: o painel no navegador é a única interface, e os agentes navegam na web pelas ferramentas MCP do próprio provedor ([permissões](../classes/permissoes.md)). O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows (só serviços, contas, ConPTY): [Windows](windows.md).
 
 ## Mesa em mais de um nó
 
@@ -82,6 +85,8 @@ O worktree de uma mesa vive no disco de cada nó que roda agentes dela; os nós 
 ## Onde continuar
 
 - Processos, binários e portas: [componentes](componentes.md).
+- Terminais e canal local da CLI: [terminal](terminal.md), [canal local](canal-local.md).
+- Ordem de desenvolvimento: [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md).
 - Banco, arquivos e logs: [persistência](persistencia.md).
 - Ameaças e proteções: [segurança](seguranca.md).
 - Ordem das regras: [precedência](precedencia.md).

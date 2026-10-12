@@ -50,16 +50,17 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 
 - **Motor de transcrição:** whisper.cpp, `whisper-server`, com o modelo `large-v3-turbo` quantizado ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)).
   - A quantização é q5_0 ou q8_0, escolhida por benchmark na máquina durante a instalação.
-  - O modelo é baixado na instalação ([instalação](../plataforma/instalacao-e-atualizacao.md)).
+  - O modelo é baixado na instalação do Core ou quando um nó passa a transcrever ([Whisper na instalação](../plataforma/instalacao-e-atualizacao.md#whisper)).
 - **Processo auxiliar:**
   - O motor do nó que transcreve sobe o `whisper-server` e o supervisiona.
-  - Opções: `--host 127.0.0.1`, porta livre escolhida pelo motor, `-t <núcleos físicos>`, `-l auto` e um `--prompt` curto em português. O idioma pode ser fixado em `pt` na configuração.
+  - Opções: `--host 127.0.0.1 --port 7447` (porta fixa, só local; [componentes](../arquitetura/componentes.md)), `-t <núcleos físicos>`, `-l auto` e um `--prompt` curto em português. O idioma pode ser fixado em `pt` na configuração.
   - O modelo fica carregado (servidor quente).
   - Se o processo cair, o motor o reinicia com backoff de 1 s a 60 s. Com 5 quedas em 10 minutos, o motor gera um alerta e o item fica com erro no [checklist](../plataforma/checklist.md).
 - **Qual nó transcreve:**
-  - Um nó que declara a capacidade `transcricao: true`, de preferência com `gpu: true` ([capacidades](../conectividade/protocolo.md#registro-e-capacidades)).
-  - **Padrão: o Core, por CPU.**
+  - O `whisper-server` roda em qualquer nó que declara a capacidade `transcricao: true` ([capacidades](../conectividade/protocolo.md#registro-e-capacidades)); havendo mais de um, o com `gpu: true` é preferido.
+  - **Padrão: o nó local do Core, por CPU** (o serviço `mestre-node` da máquina do Core, [componentes](../arquitetura/componentes.md)).
   - Se o nó preferido estiver offline, o próximo capaz assume.
+  - O motor do Core manda o áudio já convertido ao motor do nó escolhido pela conexão WSS (`transcribe.request`) e recebe o texto de volta (`transcribe.result`) ([protocolo](../conectividade/protocolo.md)); o motor do nó chama o `whisper-server` local. Vale também para o nó local do Core.
 - **Conversão:**
   - A voz do Telegram vem em OGG/Opus, e o `whisper-server` aceita WAV.
   - O motor **do Core** converte com `ffmpeg` (dependência do pacote do Core no Ubuntu; no Windows, vem no instalador) para WAV 16 kHz mono antes de enviar ao nó que transcreve, seja ele qual for. Assim nenhum nó precisa do `ffmpeg`, nem um nó que passe a transcrever. O servidor não roda com `--convert`.
@@ -68,20 +69,23 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - O tempo limite é o maior entre 60 s e 2 vezes a duração do áudio (padrão).
 - **Privacidade:**
   - O servidor só escuta em `127.0.0.1`.
-  - Se o nó que transcreve não for o Core, o áudio e o texto viajam só pela conexão WSS com mTLS.
+  - O áudio e o texto viajam só pela conexão WSS com mTLS entre o Core e o nó que transcreve.
   - Nada sai das máquinas.
 
 ```mermaid
 sequenceDiagram
   participant T as Telegram
   participant M as Motor do Core
-  participant W as whisper-server (nó escolhido)
+  participant N as Motor do nó de transcrição
+  participant W as whisper-server (127.0.0.1:7447)
   participant G as Grão-Mestre
   T->>M: voice (OGG/Opus)
   M->>M: filtro, roteamento, download, anexo
   M->>M: ffmpeg → WAV 16 kHz mono
-  M->>W: POST /inference (WAV)
-  W-->>M: texto
+  M->>N: transcribe.request (WAV, pela WSS)
+  N->>W: POST /inference
+  W-->>N: texto
+  N-->>M: transcribe.result
   M->>G: [áudio transcrito] texto + [anexo] arquivo original
 ```
 
@@ -103,7 +107,7 @@ sequenceDiagram
 - **CA-ANEXO-02** · *rápida* — **Dado** um documento com `file_size` de 30 MB, **quando** ele chega, **então** `getFile` não é chamado e o usuário recebe o limite.
 - **CA-ANEXO-03** · *rápida* — **Dado** uma voz e um whisper falso, **quando** ela chega, **então** o Grão-Mestre recebe o texto marcado como transcrito e o anexo original.
 - **CA-ANEXO-04** · *rápida* — **Dado** o whisper falso que não responde, **quando** o relógio falso passa do tempo limite, **então** o Grão-Mestre recebe o áudio com o motivo da falha.
-- **CA-ANEXO-05** · *rápida* — **Dado** um nó `gpu: true` com transcrição e o Core, **quando** o nó está offline, **então** a transcrição vai para o Core.
+- **CA-ANEXO-05** · *rápida* — **Dado** um nó `gpu: true` com transcrição e o nó local do Core, **quando** o nó está offline, **então** o `transcribe.request` vai para o nó local do Core.
 - **CA-ANEXO-06** · *rápida* — **Dado** `mestre reply --attach /etc/passwd`, **quando** o motor processa, **então** recusa por caminho fora do workspace.
 - **CA-ANEXO-07** · *rápida* — **Dado** uma mensagem do Grão-Mestre ao Mestre da mesa citando um anexo, **quando** ela é entregue, **então** o arquivo já existe nos worktrees da mesa.
 - **CA-ANEXO-08** · *pesada* — **Dado** o sistema instalado, **quando** mando um áudio e depois um PDF pelo Telegram (dublê), **então** o áudio é transcrito localmente pelo `whisper-server` real e respondido no Telegram, e o PDF chega à mesa certa e é usado na tarefa (MVP-10).
@@ -113,7 +117,7 @@ sequenceDiagram
 - [Bot](bot.md)
 - [Roteamento](roteamento.md)
 - [Protocolo](../conectividade/protocolo.md)
-- [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
+- [Componentes](../arquitetura/componentes.md)
 - [Sessão zero da mesa](../sessao-zero/mesa.md)
 
 ## Verificar na implementação

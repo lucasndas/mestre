@@ -50,6 +50,7 @@ Guardar todos os segredos do Mestre criptografados no Core, com a chave protegid
 - **Transporte:** mensagem `guardian.replica` pela conexão própria do Guardião, com mTLS ([protocolo](../conectividade/protocolo.md#conexão-do-guardião)); para o Guardião do Core, pelo canal local motor ↔ Guardião ([componentes](../arquitetura/componentes.md#canais-locais-padrão)). Cada réplica tem um número de versão crescente; o Guardião confirma e guarda só a mais nova.
 - **Quando:** ao conectar e a cada mudança (usuário criado, alterado, suspenso, removido; token trocado; travar e destravar), em até 10 s (padrão).
 - **Em repouso no Guardião:** AES-256-GCM com uma chave local do Guardião, protegida pelo sistema: DPAPI com escopo de máquina e ACL só de SYSTEM no Windows (o Guardião roda como LocalSystem); arquivo 0600 de root no Linux.
+- **Não confundir com `cache.users`:** é a cópia de usuários que o **motor** de cada nó guarda no próprio banco para continuar operando com o Core fora; é só cache de operação e não serve login ([persistência](../arquitetura/persistencia.md), [protocolo](../conectividade/protocolo.md)). Login com o Core fora, na página reserva e no modo reduzido, usa só esta réplica do Guardião.
 - **Nó revogado:** ao receber o fechamento "credencial revogada" ([protocolo](../conectividade/protocolo.md#heartbeat-e-reconexão)), o Guardião apaga a réplica. Como um nó roubado pode não obedecer, o painel recomenda trocar o token do bot ao revogar um nó.
 
 ## Regras e erros
@@ -67,13 +68,10 @@ Guardar todos os segredos do Mestre criptografados no Core, com a chave protegid
 - **CA-COFRE-05** · *completa* — **Dado** um usuário suspenso no painel, **quando** passam 10 s, **então** o Guardião do nó tem a réplica nova e a página reserva recusa o login dele.
 - **CA-COFRE-06** · *rápida* — **Dado** uma troca de chave interrompida no meio (falha simulada), **quando** o motor reinicia, **então** todos os segredos continuam decifráveis com a chave antiga.
 - **CA-COFRE-07** · *rápida* — **Dado** a API do painel, **quando** listo os segredos, **então** a resposta tem só nome, tipo, impressão e datas.
-- **CA-COFRE-08** · *completa* — **Dado** o Core Windows com `cofre.key` legível também pela conta do usuário, **quando** o `mestre-core` abre o cofre, **então** recusa, as ações com segredo falham com erro claro e sai alerta grave; **dado** a ACL só de `NT SERVICE\MestreCore`, **então** abre, e um processo do `mestre-node` não consegue ler o arquivo.
+- **CA-COFRE-08** · *pesada* — **Dado** o Core Windows instalado com `cofre.key` legível também pela conta do usuário, **quando** o `mestre-core` abre o cofre, **então** recusa, as ações com segredo falham com erro claro e sai alerta grave; **dado** a ACL só de `NT SERVICE\MestreCore`, **então** abre, e um processo do `mestre-node` não consegue ler o arquivo (MVP-13).
 
 ## Depende de
 
 - [Segurança](../arquitetura/seguranca.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Componentes](../arquitetura/componentes.md) e [Windows](../arquitetura/windows.md)
-- [Protocolo](../conectividade/protocolo.md)
-- [Pareamento](../conectividade/pareamento.md)
-- [Login](../painel/login.md)

@@ -10,7 +10,7 @@ Tratar todo pedido de aprovação do mesmo jeito, do pedido até a aplicação, 
 
 ### O pedido
 
-Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace ou uma atualização do Mestre ou de um CLI (tipos em [política](politica.md)).
+Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero ou uma atualização do Mestre ou de um CLI (tipos em [política](politica.md#tipos-de-ação)).
 
 Campos (tabela `approval_requests`, [persistência](../arquitetura/persistencia.md)): id, workspace, mesa, tipo, alvo, impressão, solicitante (personagem ou Grão-Mestre), resumo, recomendação do Grão-Mestre, motivo da dúvida, quórum exigido, criado em, expira em, estado.
 
@@ -23,7 +23,7 @@ stateDiagram-v2
   [*] --> em_avaliacao: pedido criado
   em_avaliacao --> aprovado: Grão-Mestre aprova e a política permite
   em_avaliacao --> negado: Grão-Mestre nega
-  em_avaliacao --> aguardando_usuarios: Grão-Mestre pergunta ou a política obriga
+  em_avaliacao --> aguardando_usuarios: approval ask do Grão-Mestre
   aguardando_usuarios --> aprovado: quórum atingido
   aguardando_usuarios --> negado: um "Negar" válido
   aguardando_usuarios --> expirado: prazo acabou
@@ -38,7 +38,7 @@ stateDiagram-v2
   aguardando_usuarios --> cancelado: ação não é mais necessária
 ```
 
-`negado`, `expirado`, `invalidado`, `cancelado`, `aplicado` e `falhou` são finais. Quem esperava recebe o resultado com o motivo.
+Um `approval decide` recusado com `human_required` ([fora da política](politica.md#o-grão-mestre-como-aprovador-delegado)) não muda o estado: o pedido segue `em_avaliacao` até o Grão-Mestre usar `approval ask`. Tipos com `sozinho: nunca` também esperam esse `approval ask`; os pedidos "Sistema" já nascem em `aguardando_usuarios`. `negado`, `expirado`, `invalidado`, `cancelado`, `aplicado` e `falhou` são finais. Quem esperava recebe o resultado com o motivo.
 
 ### Vínculo ao estado exato
 
@@ -52,6 +52,8 @@ Cada pedido guarda o **alvo** e a **impressão** (SHA-256 do alvo em JSON canôn
 | `custo_extra` | missão ou mesa, valor pedido |
 | `configuracao_repositorio` | a mudança proposta inteira (JSON) |
 | `classe_workspace` | hash do pacote da classe |
+| `acao_destrutiva` | comando exato e objeto (pergaminho e revisão, ritual, classe e hash do pacote, ou mesa e hash da cabeça da branch) |
+| `proposta_agents_md` | workspace e SHA-256 do texto proposto |
 | `atualizacao_mestre` | `tag` + SHA-256 do manifesto da release ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) |
 | `atualizacao_provedor` | provedor e versão nova ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)) |
 
@@ -115,13 +117,12 @@ No horário da política (padrão: diário, 18:00), o motor coloca na caixa de e
 - **CA-APROV-FLUXO-07** · *rápida* — **Dado** três aprovações do Grão-Mestre no dia e o horário do resumo, **quando** o relógio falso chega a 18:00, **então** a caixa de entrada do Grão-Mestre recebe a lista das três.
 - **CA-APROV-FLUXO-08** · *completa* — **Dado** um pedido aguardando e o Core reiniciado, **quando** o usuário aprova pelo painel, **então** a decisão é aplicada e registrada na auditoria.
 - **CA-APROV-FLUXO-09** · *pesada* — **Dado** uma etapa de missão que toca área sensível, **quando** o Grão-Mestre pergunta pelo Telegram (dublê) e o Lucas aprova, **então** a missão segue, inclusive no GitHub (dublê) (MVP-7).
+- **CA-APROV-FLUXO-10** · *rápida* — **Dado** um pedido `acao_destrutiva` para apagar o pergaminho p0003 na revisão 4, **quando** o pergaminho passa à revisão 5 antes da aplicação, **então** o pedido vira `invalidado` e nada é apagado.
 
 ## Depende de
 
 - [Política de aprovação](politica.md)
+- [Usuários e níveis](../telegram/usuarios-e-niveis.md)
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Bot do Telegram](../telegram/bot.md)
-- [Usuários e níveis](../telegram/usuarios-e-niveis.md)
-- [Decretos](../telegram/decretos.md)
-- [Aprovação no GitHub](../github/aprovacao-no-github.md)
 - [Persistência](../arquitetura/persistencia.md)

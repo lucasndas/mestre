@@ -29,7 +29,7 @@ Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks,
 | # | O motor faz | Passa quando |
 |---|---|---|
 | 1 | espera o personagem ficar pronto | pronto em até 60 s (padrão), sem tela desconhecida |
-| 2 | pede os códigos recebidos nas instruções e a palavra-teste | a resposta contém `M-…`, `P-…` e VERDE (não AZUL) |
+| 2 | pede, numa mensagem de três linhas (digitada pela `TypeMessage`), os códigos recebidos nas instruções e a palavra-teste | a resposta contém `M-…`, `P-…` e VERDE (não AZUL) |
 | 3 | pede para usar a skill `mestre-conformidade` | a resposta contém `S-…` |
 | 4 | pede para criar `proibido/x.txt` pela ferramenta de escrita | o arquivo não existe e o motor registrou `pre_tool` negado |
 | 5 | pede para rodar um comando que escreve em `permitido/y.txt` e depois para fazer commit dele | o arquivo existe, o commit foi criado no worktree e chegaram `pre_tool` e `post_tool` |
@@ -37,21 +37,23 @@ Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks,
 | 7 | chama `ReadUsage` | devolve um registro de uso válido |
 | 8 | pede `/compact` (onde existe) e encerra a sessão | chegaram `pre_compact` e `session_end` nos provedores que têm esses eventos |
 | 9 | só Claude: pergunta se a skill `mestre-sonda` está disponível | resultado informativo: se sim, "o Claude já lê `.agents/skills/`; a cópia gerenciada pode ser desligada" |
-| 10 | retoma a sessão pelo comando de [retomada](atualizacao-dos-clis.md#retomada-de-sessão-por-provedor) e repete a pergunta da etapa 2 | a sessão é a mesma e a resposta contém `M-…`, `P-…` e VERDE |
+| 10 | retoma a sessão pelo comando de [retomada](adaptador.md#retomada-de-sessão) e repete a pergunta da etapa 2 | a sessão é a mesma e a resposta contém `M-…`, `P-…` e VERDE |
 | 11 | roda o provedor no modo do [diagnóstico com IA](../autocura/diagnostico-com-ia.md), pedindo para criar um arquivo e rodar um comando | nada foi criado nem executado |
 
-**Itens de "Verificar na implementação":** os itens marcados assim nos documentos dos provedores e da [sessão zero](../sessao-zero/personagem.md) são conferidos por estas etapas: canal das instruções (2), skills (3), hooks, nomes de ferramentas e campos de caminho (4 a 6, pelos payloads gravados), confiança da pasta e commit no worktree (1 e 5), uso (7), retomada (10) e só leitura do diagnóstico (11). Na primeira implementação de cada adaptador, o resultado fixa o **Padrão** ou o plano **Se falhar** do documento.
+**Itens de "Verificar na implementação":** os itens marcados assim nos documentos dos provedores e da [sessão zero](../sessao-zero/personagem.md) são conferidos por estas etapas: canal das instruções e digitação de várias linhas (2), skills (3), hooks, nomes de ferramentas e campos de caminho (4 a 6, pelos payloads gravados), confiança da pasta e commit no worktree (1 e 5), uso (7), retomada (10) e só leitura do diagnóstico (11). Na primeira implementação de cada adaptador, o resultado fixa o **Padrão** ou o plano **Se falhar** do documento.
 
 Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa ter chegado ao menos uma vez com os campos obrigatórios do formato interno. As respostas do modelo são conferidas só pela presença dos códigos aleatórios, nunca pelo texto exato.
 
 ### Resultado
 
-- Fica registrado por nó, provedor, versão e perfil: cada etapa com passou ou falhou, a duração e a transcrição do terminal.
+- Fica registrado por nó, provedor, versão e perfil (tabela `conformance_results`, [persistência](../arquitetura/persistencia.md)): cada etapa com passou ou falhou, a duração e a transcrição do terminal.
 - Os payloads de hook e as telas capturadas ficam guardados como gravações; depois de revisadas, atualizam o agente falso do provedor ([dublês](../qualidade/dubles.md)).
 - **Falha nas etapas 1, 2, 4 ou 6, ou evento obrigatório ausente:** o provedor fica **não conforme** naquele nó. O motor não cria personagens novos com bases desse provedor ali: o recrutamento escolhe outro nó ou falha com a explicação ([personagens](../orquestracao/personagens.md)). Os personagens que já rodam continuam, marcados, e os usuários recebem o alerta do checklist.
 - **Falha nas etapas 3, 5, 7, 8 ou 10:** só aviso no checklist; o provedor continua utilizável (na etapa 10, a retomada daquele provedor passa a renascer o personagem).
 - **Falha na etapa 11:** o diagnóstico com IA não usa aquele provedor no nó; aviso no checklist.
 - A etapa 9 nunca falha; o resultado aparece no checklist.
+
+No M3 a preparação monta o worktree, a camada do Mestre e os hooks direto pelas operações do adaptador; a sessão zero (M4) reaproveita o mesmo caminho. Quem pede a conformidade depois da instalação: [checklist](../plataforma/checklist.md) e [atualização dos CLIs](atualizacao-dos-clis.md) (M7).
 
 ## Regras e erros
 
@@ -71,8 +73,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 
 ## Depende de
 
-- [Adaptador](adaptador.md), [Claude Code](claude-code.md), [Codex](codex.md), [Antigravity](antigravity.md)
-- [Permissões](../classes/permissoes.md)
-- [Sessão zero do personagem](../sessao-zero/personagem.md)
-- [Checklist](../plataforma/checklist.md) e [atualização dos CLIs](atualizacao-dos-clis.md)
-- [Testes](../qualidade/testes.md) e [dublês](../qualidade/dubles.md)
+- [Adaptador](adaptador.md) · [Despachante de hooks](despachante-de-hooks.md)
+- [Claude Code](claude-code.md) · [Codex](codex.md) · [Antigravity](antigravity.md)
+- [Permissões](../classes/permissoes.md) · [Reforço nativo](../classes/reforco-nativo.md) · [Classes](../classes/classes.md)
+- [Testes](../qualidade/testes.md) · [Dublês](../qualidade/dubles.md)

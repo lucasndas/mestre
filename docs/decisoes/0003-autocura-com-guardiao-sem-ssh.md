@@ -56,6 +56,7 @@ Aceita, 2026-10-12.
 - **Onde estão os detalhes:**
   - Lista de ações e o que o Guardião guarda: [Guardião](../autocura/guardiao.md).
   - Camadas, eleição do nó condutor e anti-loop: [camadas](../autocura/camadas.md).
+  - Máquina única (só Linux ou só Windows): sem camada 3; o Guardião do Core conduz o incidente, o diagnóstico, a página reserva e o Telegram reduzido ([ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md), [modo máquina única](../autocura/camadas.md#modo-máquina-única)).
   - Diagnóstico com IA: [diagnóstico com IA](../autocura/diagnostico-com-ia.md).
 
 ## Consequências
@@ -68,6 +69,6 @@ Aceita, 2026-10-12.
   - Dois serviços por máquina. O checklist precisa conferir os dois ([checklist](../plataforma/checklist.md)).
   - O Guardião precisa de exceções explícitas à regra de "não guardar estado do produto". Ele guarda, criptografados, o token do bot e a lista de usuários, porque serve a [página reserva](../autocura/pagina-reserva.md) e o [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md). Isso aumenta a superfície de segredos fora do Core ([cofre](../plataforma/cofre.md)).
   - Problemas fora da lista fechada só se resolvem pelo diagnóstico com IA, com aprovação de Dono ou Administrador, ou por intervenção humana. A cura é mais lenta, mas é a troca aceita pela segurança.
-  - O Guardião precisa ser pequeno e estável. Qualquer mudança nele é rara e entra pelo processo normal de atualização ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)). Nenhuma ação de cura pode alterá-lo.
+  - O Guardião precisa ser pequeno e estável. Qualquer mudança nele é rara e entra como ação de atualização aprovada, feita pelo motor saudável da mesma máquina ([ADR 0019](0019-autoatualizacao-por-releases.md), [autoatualização](../plataforma/autoatualizacao.md)). Nenhuma ação de cura pode alterá-lo.
   - O Core precisa expor mais uma porta (a do Guardião) na rede local, liberada no firewall.
-  - O Guardião de cada nó também escuta uma porta, só na rede local, para a [página reserva](../autocura/pagina-reserva.md); a cura em si continua sem porta no nó ([portas](../arquitetura/componentes.md#portas)).
+  - O Guardião de cada nó (e o do Core, no modo máquina única) também escuta uma porta, só na rede local, para a [página reserva](../autocura/pagina-reserva.md); a cura em si continua sem porta no nó ([portas](../arquitetura/componentes.md#portas)).

@@ -36,9 +36,9 @@ Aceita, 2026-10-12.
 4. **Container por mesa.**
    - Prós: isolamento de processos e dependências.
    - Contras:
-     - Exige runtime de containers no Core e no Windows.
+     - Exige runtime de containers em cada máquina.
      - Complica PTY e credenciais dos provedores.
-     - Fora do escopo do MVP.
+     - Não é exigido pela spec e acrescenta um runtime a manter.
 
 ## Decisão
 

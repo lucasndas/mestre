@@ -73,7 +73,7 @@ Aceita, 2026-10-12.
   - **Limite do Codex:** as instruções somadas têm limite de **32 KiB** por padrão, o que obriga a camada do Mestre a ser enxuta.
   - **Força desigual:** no Codex, `developer_instructions` entra como mensagem de papel "developer", não como prompt de sistema. A prioridade depende da regra escrita no início da camada.
   - **Atualização por turno:** decretos que mudam comportamento precisam atualizar a camada a cada turno, pelo hook de início de turno ou pela reserva ([decretos](../telegram/decretos.md)).
-- **Verificar na implementação:** no Codex, `-c developer_instructions` no modo interativo (o código-fonte indica que sim); no Antigravity, o arquivo de agente com `--agent` no modo interativo. Os dois são conferidos na etapa 2 do [teste de conformidade](../provedores/conformidade.md) antes de fechar o adaptador; padrão e plano B em [Codex](../provedores/codex.md#verificar-na-implementação) e [Antigravity](../provedores/antigravity.md#verificar-na-implementação).
+- **Pontos em aberto, conferidos na implementação** (no Codex, `-c developer_instructions` no modo interativo; no Antigravity, o arquivo de agente com `--agent` no modo interativo, ambos na etapa 2 do [teste de conformidade](../provedores/conformidade.md)): os itens completos estão em [sessão zero do personagem](../sessao-zero/personagem.md#verificar-na-implementação), [Codex](../provedores/codex.md#verificar-na-implementação) e [Antigravity](../provedores/antigravity.md#verificar-na-implementação).
 
 ## Fontes
 

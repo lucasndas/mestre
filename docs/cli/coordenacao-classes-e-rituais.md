@@ -25,12 +25,12 @@ mestre class assign "<Personagem>" "<classe>"
 mestre class check "<classe>"
 mestre class delete "<classe>"
 ```
-- `list`: nome, escopo, App vinculado e estado do App (`ready`, `in_creation`, `inherited`), provedor preferido. Padrão: todas as visíveis ao chamador.
+- `list`: nome, escopo, App vinculado, se o vínculo é herdado (`inherited: true`), estado do App com os identificadores de [criação de Apps](../github/criacao-de-apps.md) (`solicitado` enquanto o Grão-Mestre ainda não preparou o link) e provedor preferido. Padrão: todas as visíveis ao chamador.
 - `show`: `CLASS.md`, resumo do `permissions.yaml`, hooks extras, skills extras e App.
 - `create`: `--app` é **obrigatório** (sem ele → 2 `app_required`). `--from` aponta uma pasta com o pacote (`CLASS.md`, `permissions.yaml`, `hooks/`, lista de skills; estrutura em [classes](../classes/classes.md)); o motor valida, confere contra o teto e copia para o lugar do escopo. `--scope` padrão `table`.
   - escopo da mesa, dentro do teto: criada na hora (exit 0);
   - escopo do workspace: vira proposta para um usuário Administrador ou acima (exit 9);
-  - `--app novo`: a classe já funciona com o App "Mestre" e a marca `[Classe]`; o pedido vai ao Grão-Mestre (`app_status: "in_creation"`), que cria o App ou vincula a uma classe existente explicando o porquê ([identidades-e-apps](../github/identidades-e-apps.md)).
+  - `--app novo`: a classe já funciona com o App "Mestre" e a marca `[Classe]`; o pedido vai ao Grão-Mestre (`app_status: "solicitado"`), que prepara o App (`mestre app create`, com o link de criação enviado ao Dono) ou vincula a uma classe existente explicando o porquê ([identidades-e-apps](../github/identidades-e-apps.md)).
   - `--json` → `{name, scope, path, app, app_status}`.
 - `edit`: troca o pacote e/ou o App, com as mesmas validações e aprovações do escopo. Trocar o App só vale para ações novas.
 - `assign`: muda a classe de um personagem da mesa; vale a partir do próximo turno dele (nunca no meio de um).
@@ -40,9 +40,9 @@ mestre class delete "<classe>"
 
 ### `mestre ritual`
 ```
-mestre ritual create "<nome>" --target "<Personagem>" (--prompt "<texto>" | --quest "<Missão>")
+mestre ritual create "<nome>" (--target "<Personagem>" (--prompt "<texto>" | --command "<linha>") | --quest "<Missão>")
                      (--every <dur> | --daily <HH:MM> | --weekly "<dias> <HH:MM>" | --once "<ISO 8601>")
-                     [--pre-run "<comando>"] [--timeout <dur>]
+                     [--table "<mesa>"] [--pre-run "<comando>"] [--timeout <dur>]
 mestre ritual list
 mestre ritual show "<nome>"
 mestre ritual edit "<nome>" [mesmas flags de create]
@@ -50,14 +50,16 @@ mestre ritual enable "<nome>"      mestre ritual disable "<nome>"
 mestre ritual run "<nome>"
 mestre ritual delete "<nome>"
 ```
-- `--prompt` é o texto entregue ao alvo (um prompt para agente, uma linha de comando para terminal de `spawn`); `--quest` dispara uma missão da mesa.
-- Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. Fuso do Core. Exatamente uma das quatro.
-- `--pre-run`: comando rodado antes do disparo; a saída dele substitui `{{output}}` no `--prompt` (onde roda e com que permissões: [rituais](../orquestracao/rituais.md)). `{{output}}` sem `--pre-run` → 2.
+- O alvo é sempre um **personagem existente** (`--target`) ou uma **missão** (`--quest`), nunca uma ficha. `--prompt` é o texto entregue a um agente; `--command` é uma linha digitada num terminal de `spawn`, seguida de Enter; `--quest` dispara uma missão da mesa. `--table` indica a mesa quando o Grão-Mestre cria o ritual para um Mestre de mesa ou uma missão (sem isso → 2 `table_required`).
+- Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. No fuso do workspace (padrão: o do Core; [rituais](../orquestracao/rituais.md)). Exatamente uma das quatro.
+- `--pre-run`: comando rodado antes do disparo; a saída dele substitui `{{output}}` no `--prompt` ou no `--command` (onde roda e com que permissões: [rituais](../orquestracao/rituais.md)). `{{output}}` sem `--pre-run` → 2.
 - `--timeout`: quanto o disparo pode ficar na fila do alvo ocupado antes de ser cancelado e devolvido ao dono do ritual (padrão 30m).
-- `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o histórico recente. `--json` → `{name, target, action, schedule, pre_run, timeout, enabled, next_run, last_result}`.
+- `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o histórico recente. `--json` → `{name, target, quest, table, action: "prompt" | "command" | "quest", schedule, pre_run, timeout, enabled, next_run, last_result}`.
 - `run`: dispara agora, pelo mesmo caminho da agenda (entra na fila se o alvo estiver ocupado). `enable`/`disable`: liga e desliga sem apagar.
 - `delete`: ação destrutiva → 9 sem pedido explícito.
 - Erros: alvo fora da mesa do chamador → 4 `not_visible`; agenda inválida → 2 `invalid_schedule`; nome repetido → 7 `name_taken`.
+
+O estado do App das classes vem com o GitHub, no M5 ([criação de Apps](../github/criacao-de-apps.md)).
 
 ## Regras e erros
 
@@ -69,14 +71,15 @@ mestre ritual delete "<nome>"
 - **CA-CLI-CLR-01** · *rápida* — **Dado** `mestre class create "QA" --from ./qa` sem `--app`, **quando** roda, **então** sai com 2 `app_required` e nada é criado.
 - **CA-CLI-CLR-02** · *rápida* — **Dado** um teto que proíbe internet e um pacote que libera `example.com`, **quando** o Mestre da mesa roda `class create`, **então** sai com 3 `ceiling_denied` citando o item de rede.
 - **CA-CLI-CLR-03** · *rápida* — **Dado** o Grão-Mestre criando classe com `--scope workspace`, **quando** roda, **então** sai com 9 e a proposta aparece para Administradores, não para o próprio Grão-Mestre.
-- **CA-CLI-CLR-04** · *rápida* — **Dado** `class create "QA API" --app novo` pelo Mestre da mesa, **quando** roda, **então** sai com 0, `app_status: "in_creation"`, e o Grão-Mestre recebe o pedido na caixa de entrada.
+- **CA-CLI-CLR-04** · *rápida* — **Dado** `class create "QA API" --app novo` pelo Mestre da mesa, **quando** roda, **então** sai com 0, `app_status: "solicitado"`, e o Grão-Mestre recebe o pedido na caixa de entrada.
 - **CA-CLI-CLR-05** · *rápida* — **Dado** `ritual create` com `--daily` e `--every` juntos, **quando** roda, **então** sai com 2 `invalid_schedule`.
 - **CA-CLI-CLR-06** · *rápida* — **Dado** um ritual com `--pre-run "date"` e `--prompt "Hoje é {{output}}"`, **quando** dispara, **então** o alvo recebe o texto com a saída do comando no lugar do marcador.
+- **CA-CLI-CLR-08** · *rápida* — **Dado** `ritual create "x" --target "Dev Claude" --prompt "oi" --daily 09:00` em que `Dev Claude` é o nome de uma ficha e não de um personagem da mesa, **quando** roda, **então** sai com 4 `not_visible` e nenhum ritual é criado.
+- **CA-CLI-CLR-09** · *rápida* — **Dado** `ritual create "limpa" --target "srv" --command "make clean" --every 1h`, **quando** dispara com `srv` livre, **então** o terminal recebe `make clean` seguido de Enter.
 - **CA-CLI-CLR-07** · *rápida* — **Dado** `mestre class check "Dev"` de uma classe válida, **quando** roda, **então** a saída tem uma seção por provedor (Claude Code, Codex, Antigravity) e a linha do App com o estado.
 
 ## Depende de
 
 - [convencoes](convencoes.md)
 - [classes](../classes/classes.md) · [permissoes](../classes/permissoes.md) · [teto-do-workspace](../classes/teto-do-workspace.md)
-- [identidades-e-apps](../github/identidades-e-apps.md)
 - [rituais](../orquestracao/rituais.md) · [missoes](../orquestracao/missoes.md)

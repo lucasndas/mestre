@@ -25,7 +25,7 @@ Pode, sem pedir aprovação, sempre dentro do [teto do workspace](../classes/tet
 - criar conexões extras, pergaminhos e [rituais](rituais.md) da mesa;
 - pedir operações no GitHub restritas ao épico da mesa (`mestre issue`, `mestre pr`; [ações por nível](../github/acoes-por-nivel.md)).
 
-Nunca libera para uma classe algo que o teto proíbe; o motor recusa a classe se o fizer. Sintaxe dos comandos: [coordenação](../cli/coordenacao.md).
+Nunca libera para uma classe algo que o teto proíbe; o motor recusa a classe se o fizer. Sintaxe dos comandos: [coordenação](../cli/coordenacao.md), [classes e rituais](../cli/coordenacao-classes-e-rituais.md) e [issues e PRs](../cli/coordenacao-github.md).
 
 ### Fixo enquanto a mesa estiver aberta
 
@@ -58,7 +58,7 @@ Recebe as skills de comunicação, de coordenação de mesa e de rituais ([skill
 - Não fala com usuários: `mestre reply` e `mestre notify` chamados por ele retornam erro de permissão. Para falar com usuários, pede ao Grão-Mestre.
 - Não mexe em issues ou PRs de outra mesa (pede ao Grão-Mestre); o motor recusa.
 - Classe da mesa com permissão acima do teto: o motor recusa a criação e lista os itens que excedem.
-- Ações destrutivas (`note delete`, `ritual delete`, apagar classe) só com pedido explícito de um usuário autorizado ([convenções da CLI](../cli/convencoes.md)).
+- Ações destrutivas (`note delete`, `ritual delete`, `class delete`) só com pedido explícito de um usuário autorizado: exceção pontual para aquela ação ou aprovação do tipo `acao_destrutiva` ([política](../aprovacoes/politica.md#tipos-de-ação), [convenções da CLI](../cli/convencoes.md)).
 
 ## Critérios de aceite
 
@@ -76,3 +76,4 @@ Recebe as skills de comunicação, de coordenação de mesa e de rituais ([skill
 - [Missões](missoes.md)
 - [Teto do workspace](../classes/teto-do-workspace.md)
 - [Sessão zero do personagem](../sessao-zero/personagem.md)
+- [Conexões](conexoes.md)

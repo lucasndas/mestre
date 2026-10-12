@@ -53,7 +53,7 @@ Decretos que afrouxam a segurança pedem o PIN do autor. A lista de casos está 
 - **O Mestre nunca envia segredos pelo Telegram** (tokens, senhas, chaves), porque conversas com bots não têm criptografia ponta a ponta.
   - Toda mensagem de saída passa pelo mesmo mascarador dos logs ([segurança](../arquitetura/seguranca.md)).
   - Se algo for mascarado, o motor avisa o remetente (agente ou motor) de que o trecho foi retirado.
-- **Anexos** são conteúdo trazido pelo usuário. Os agentes os leem, mas nunca os executam ([anexos](anexos-e-transcricao.md)).
+- **Anexos** são conteúdo trazido pelo usuário. Os agentes os leem, mas nunca os executam: é regra fixa do Mestre ([permissões](../classes/permissoes.md), [anexos](anexos-e-transcricao.md)).
 
 ## Regras e erros
 

@@ -12,7 +12,7 @@ Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas e mand
 
 - Endereço: `https://<nome-da-máquina>.local:<porta>` ou o IP dela na rede local. Porta padrão em [componentes](../arquitetura/componentes.md#portas).
 - Só na rede local: o firewall da máquina libera a porta só para a rede local (no Windows, só no perfil de rede **Privada**) ([checklist](../plataforma/checklist.md)). Nunca exposta na internet.
-- **TLS:** no nó, certificado emitido pela CA interna do Core para o Guardião do nó no [pareamento](../conectividade/pareamento.md), com o nome do nó, o nome `.local` e os IPs locais; no Core, o certificado do servidor do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)). O navegador já confia na CA porque fez isso para o painel ([login](../painel/login.md)). A renovação segue o [pareamento](../conectividade/pareamento.md).
+- **TLS:** no nó, certificado emitido pela CA interna do Core para o Guardião do nó no [pareamento](../conectividade/pareamento.md), com o nome do nó, o nome `.local` e os IPs locais; no Core, o certificado próprio do Guardião do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)). Os dois são reemitidos quando os IPs da máquina mudam. O navegador já confia na CA porque fez isso para o painel ([login](../painel/login.md)). A renovação segue o [pareamento](../conectividade/pareamento.md).
 - O painel mostra o endereço da página reserva de cada nó em "Saúde dos nós" ([administração](../painel/administracao.md)), e o alerta de Core fora traz o link.
 
 ### Login
@@ -27,11 +27,11 @@ Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas e mand
 
 | Seção | Conteúdo | Origem |
 |---|---|---|
-| Esta máquina | motor (rodando, travado, parado; no Core Windows, os dois serviços), versão do motor e do Guardião, disco, memória; no modo máquina única, o aviso de que a queda da máquina inteira não é percebida por ninguém | o próprio Guardião |
+| Esta máquina | motor (rodando, travado, parado; na máquina do Core, os dois serviços, `mestre-core` e `mestre-node`), versão do motor e do Guardião, disco, memória; no modo máquina única, o aviso de que a queda da máquina inteira não é percebida por ninguém | o próprio Guardião |
 | Core | motor do Core (com ou sem sinal, desde quando) e Guardião do Core (respondendo ou não) | WSS própria e sondagem da porta do Guardião do Core |
 | Outros nós | último estado conhecido, com horário; com o Core fora, o resultado da sondagem entre Guardiões | cache e [eleição](camadas.md#eleição-do-nó-condutor) |
 | Incidente | camada atual, passos feitos e resultados, quem é o nó condutor | auditoria do incidente |
-| Aprovações de cura pendentes | scripts de diagnóstico e `rollback` com restauração do banco | [diagnóstico com IA](diagnostico-com-ia.md) |
+| Aprovações de cura pendentes | scripts de diagnóstico e `rollback` com restauração do banco, este com o intervalo que será perdido | [diagnóstico com IA](diagnostico-com-ia.md), [Guardião](guardiao.md#rollback-com-restauração-do-banco) |
 
 Com o Core no ar, a página mostra um aviso "use o painel", com o link, e continua só para leitura de estado e aprovações de cura.
 
@@ -40,7 +40,7 @@ Com o Core no ar, a página mostra um aviso "use o painel", com o link, e contin
 | Ação | Quem | O que acontece |
 |---|---|---|
 | Ver estado | qualquer nível | — |
-| Aprovar ou negar cura | Dono ou Administrador, com PIN | aprovação presa ao hash do script ([diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação)) |
+| Aprovar ou negar cura | Dono ou Administrador, com PIN | aprovação presa ao hash do script ([diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação)) ou, no `rollback` com restauração do banco, à versão e ao backup indicados |
 | **Recuperar o Core** | Dono ou Administrador | se este nó é o condutor, ou consegue a trava, começa ou retoma o runbook do zero (zera o backoff e as tentativas do incidente). Se outro nó é o condutor, mostra qual é e o link da página reserva dele. No modo máquina única, o Guardião do Core recomeça o runbook sobre o próprio motor |
 | Pedir diagnóstico com IA | Dono ou Administrador | `diagnose` no Guardião do Core, dentro do limite por incidente |
 

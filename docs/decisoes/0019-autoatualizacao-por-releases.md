@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assinatura fica só no computador do autor, e cada versão é uma release única com os dois binários.
 
 ## Contexto
 
@@ -73,7 +73,8 @@ Aceita, 2026-10-12.
   - as chaves públicas (atual e próxima) ficam embutidas nos binários;
   - a verificação acontece no Core, na máquina de destino e no ajudante de troca;
   - versão menor que a instalada é recusada;
-  - a chave privada fica **só no computador do autor**, num arquivo cifrado com senha (formato nativo do minisign), fora do repositório e do GitHub Actions; as versões são assinadas na máquina do autor antes de publicar. Assinatura automática no Actions (com chave secundária revogável) fica para quando houver mais gente publicando.
+  - a chave privada fica **só no computador do autor**, num arquivo cifrado com senha (formato nativo do minisign), fora do repositório e do GitHub Actions; as versões são assinadas na máquina do autor antes de publicar.
+- **Release única:** cada versão é uma release com tag `vX.Y.Z` e os dois binários (`mestre` e `mestre-guardiao`); a versão do Guardião vai só no manifesto, sem tags próprias.
 - **Aprovação:** o fluxo normal de aprovação, com Dono ou Administrador. O Grão-Mestre não aprova sozinho. Depois da aprovação, o Mestre aplica e reinicia sozinho.
 - **Ordem:**
   - Core primeiro, depois um nó por vez;
@@ -92,10 +93,10 @@ Aceita, 2026-10-12.
 - **Negativas:**
   - É preciso guardar e girar uma chave privada de assinatura fora do repositório.
   - É preciso um ajudante de troca com privilégio (root/LocalSystem) que só a conta do motor pode iniciar.
-  - As migrações do banco precisam ser aditivas para a volta funcionar sem restaurar o banco.
+  - As migrações do banco precisam ser aditivas para a volta funcionar sem restaurar o banco; restaurar o banco é ação rara, nunca automática, com Dono ou Administrador e PIN ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
   - Uma atualização completa leva tempo: um passo por vez, com janela de confirmação e espera de ponto seguro dos terminais.
 - **Riscos:**
-  - **Perder a chave privada** obriga a uma atualização manual para trocar a chave embutida.
+  - **Perder as duas chaves privadas** (a atual e a próxima, ambas no computador do autor) obriga a uma atualização manual para trocar as chaves embutidas; perder só a atual não, porque a próxima assume.
   - **Nó desligado por muito tempo** pode sair da faixa de protocolo e precisar de atualização manual.
 
 ## Fontes

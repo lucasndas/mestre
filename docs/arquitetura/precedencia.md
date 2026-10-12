@@ -54,7 +54,7 @@ Em seguida vêm, nesta ordem: decretos ativos que mudam comportamento, regras fi
 
 ## Combinação na decisão de permissão
 
-Cada decisão do `mestre hook` termina em **permitir**, **negar** ou **pedir aprovação**. Regra de combinação entre camadas (o passo a passo do despachante está em [permissões](../classes/permissoes.md)):
+Cada decisão do `mestre hook` termina em **permitir**, **negar** ou **pedir aprovação**. Regra de combinação entre camadas, que o Core aplica ao montar as [regras efetivas](../classes/permissoes.md#regras-efetivas) de cada personagem (o passo a passo do despachante está em [permissões](../classes/permissoes.md#pipeline-de-decisão)):
 
 0. **Invariantes** ([acima](#invariantes-arquiteturais)): o agente nunca recebe a capacidade; um decreto nessa área vira ação do motor.
 1. **Decretos:** entre os ativos que casam com a ação, decide o de autor de nível mais alto. Decretos suspensos (conflito no mesmo nível, ou sistema travado) não contam ([decretos](../telegram/decretos.md)).
@@ -71,10 +71,6 @@ Resultado "pedir aprovação" abre um pedido ([fluxo de aprovação](../aprovaco
 - A ficha "Dev Júnior" proíbe `git commit` em `main`, que a classe Dev permite: passo 4 endurece → negado.
 - O `AGENTS.md` diz "rode `npm run lint` antes de commitar" e a classe não fala nisso: vale o `AGENTS.md`, porque não há conflito.
 
-## Depende de
+## Onde cada camada é implementada
 
-- [decretos](../telegram/decretos.md)
-- [permissões](../classes/permissoes.md)
-- [teto do workspace](../classes/teto-do-workspace.md)
-- [sessão zero do personagem](../sessao-zero/personagem.md)
-- [adaptador](../provedores/adaptador.md)
+Este documento é de referência e não pertence a um marco ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). A combinação é implementada nas [regras efetivas](../classes/permissoes.md#regras-efetivas) (M3); cada camada chega no seu marco: [classes](../classes/classes.md), [teto](../classes/teto-do-workspace.md) e o [despachante](../provedores/despachante-de-hooks.md) no M3, [fichas](../orquestracao/bases-e-fichas.md) e a [camada do Mestre](../sessao-zero/personagem.md) no M4, [decretos](../telegram/decretos.md) no M5.

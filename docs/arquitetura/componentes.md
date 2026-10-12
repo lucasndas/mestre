@@ -9,13 +9,13 @@ Este documento é a **fonte única** dos nomes de binários, subcomandos de serv
 | Componente | O que faz | Onde roda |
 |---|---|---|
 | **Motor do Core** | fonte da verdade: workspaces, mesas, missões, esperas, rituais, decretos, aprovações; espelhos dos repositórios; GitHub e Telegram; cofre; serve o painel e a API; recebe os nós | Core (Linux ou Windows) |
-| **Nó local do Core** | roda o Grão-Mestre e os agentes da máquina do Core como qualquer nó: no Linux, dentro do processo do motor do Core; no Windows, no serviço `mestre-node` separado ([Windows](windows.md#windows-como-core)) | Core |
+| **Nó local do Core** | roda o Grão-Mestre e os agentes da máquina do Core como qualquer nó: é sempre o serviço `mestre-node`, separado do motor do Core, com banco de nó próprio, ligado ao Core pela mesma WSS com mTLS de um nó remoto, em `127.0.0.1:7443`, e pareado sozinho pelo instalador. O motor do Core nunca roda agentes no próprio processo | Core |
 | **Motor do nó** | registra o nó e suas capacidades, roda terminais (PTY/ConPTY), mantém os worktrees das mesas daquele nó, encaminha a CLI, guarda cache local | cada nó (Linux ou Windows) |
 | **Guardião** | vigia e conserta o motor da própria máquina; lista fechada de ações; página reserva e Telegram em modo reduzido ([Guardião](../autocura/guardiao.md)) | todas as máquinas |
-| **CLI `mestre`** | comandos dos agentes e das pessoas; fala com o motor local ([convenções da CLI](../cli/convencoes.md)) | todas as máquinas (no PATH, e em `MESTRE_CLI`) |
+| **CLI `mestre`** | comandos dos agentes; fala com o motor local pelo [canal local](canal-local.md) ([convenções da CLI](../cli/convencoes.md)). As pessoas usam o painel e o Telegram; da CLI, só os subcomandos de serviço (abaixo) e o `mestre debug` | todas as máquinas (no PATH, e em `MESTRE_CLI`) |
 | **Despachante de hooks** | `mestre hook`: recebe os hooks dos provedores e aplica as regras ([adaptador](../provedores/adaptador.md)) | onde houver agentes |
 | **Painel** | React + TypeScript + Vite, embutido no binário e servido pelo motor do Core ([ADR 0017](../decisoes/0017-canvas-react-flow.md)); a única interface gráfica do Mestre ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)) | navegador |
-| **whisper-server** | processo auxiliar (whisper.cpp) supervisionado pelo motor, para transcrever áudio ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)) | nó com a capacidade de transcrição; padrão: o Core, por CPU |
+| **whisper-server** | processo auxiliar (whisper.cpp) supervisionado pelo motor, para transcrever áudio ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)) | qualquer nó com a capacidade `transcricao`; padrão: o nó local do Core, por CPU ([transcrição](../telegram/anexos-e-transcricao.md)) |
 
 ## Binários
 
@@ -25,15 +25,15 @@ Dois binários por plataforma (Linux amd64 e Windows amd64), compilados com `CGO
 
 | Subcomando | Plataforma | Papel |
 |---|---|---|
-| `mestre core` | Linux, Windows | motor do Core (serviço `mestre-core`), com o painel e a API; no Linux, também o nó local |
+| `mestre core` | Linux, Windows | motor do Core (serviço `mestre-core`), com o painel e a API; não roda agentes |
 | `mestre core setup-code` | Linux, Windows | gera um novo código de configuração do Dono (invalida o anterior) quando o da instalação se perdeu; só root ou administrador na máquina do Core e só enquanto não existe usuário ([login](../painel/login.md#assistente-do-dono-primeira-vez)) |
 | `mestre core export-key --out <arquivo>` | Windows | grava a chave do cofre decifrada num arquivo, para a cópia de segurança fora da máquina (o arquivo protegido por DPAPI só abre nesta máquina); só administrador na máquina do Core ([cofre](../plataforma/cofre.md#chave-do-cofre)) |
-| `mestre node` | Linux, Windows | motor de nó (serviço `mestre-node`); no Core Windows, o nó local |
+| `mestre node` | Linux, Windows | motor de nó (serviço `mestre-node`); na máquina do Core, o nó local |
 | `mestre node pair --invite <código> [--core <endereço>]` | Linux, Windows | pareia o nó com o Core usando o código de convite; usado pelo instalador e para repetir o pareamento; só administrador/root local ([pareamento](../conectividade/pareamento.md#convite)) |
 | `mestre hook --provider <p> --event <e>` | todas | despachante de hooks; uso interno dos arquivos de hooks ([adaptador](../provedores/adaptador.md)) |
 | `mestre install core\|node`, `mestre uninstall` | Linux, Windows | registram ou removem os serviços (motor e Guardião) conforme o papel escolhido no instalador; comportamento em [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | `mestre version` | todas | versão do binário e versões de protocolo suportadas |
-| demais (`list`, `ask`, `note`, `done`, `table`, `gh`, …) | todas | CLI dos agentes e das pessoas; sintaxe em [cli](../cli/convencoes.md) |
+| demais (`list`, `ask`, `note`, `done`, `table`, `gh`, …) | todas | CLI dos agentes; sintaxe em [cli](../cli/convencoes.md) |
 
 Regra: `core`, `node` (com os subcomandos, inclusive `export-key`), `install` e `uninstall` recusam rodar quando `MESTRE_AGENT_ID` está no ambiente (um agente nunca inicia ou instala serviços).
 
@@ -55,8 +55,8 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 
 | Sistema | Papel | Serviço | Executa | Conta | Supervisionado por |
 |---|---|---|---|---|---|
-| Linux | Core | `mestre-core` (systemd, `Type=notify`, watchdog) | `mestre core` (com o nó local) | `mestre`; agentes como `mestre-agente` | systemd e Guardião |
-| Linux | nó | `mestre-node` (systemd, `Type=notify`, watchdog) | `mestre node` | `mestre`; agentes como `mestre-agente` | systemd e Guardião |
+| Linux | Core | `mestre-core` (systemd, `Type=notify`, watchdog) | `mestre core` | `mestre`, dona do cofre; não roda agentes | systemd e Guardião |
+| Linux | os dois | `mestre-node` (systemd, `Type=notify`, watchdog) | `mestre node` (no Core, o nó local) | `mestre`, com `CAP_SETUID` e `CAP_SETGID` só para iniciar os agentes como `mestre-agente` | systemd e Guardião |
 | Linux | os dois | `mestre-guardiao` (systemd) | `mestre-guardiao run` | root | systemd |
 | Linux | os dois | `mestre-update` (systemd, oneshot) | `mestre-guardiao apply-update` | root; só a conta `mestre` pode iniciar | — (uso único por troca) |
 | Windows | Core | `mestre-core` (serviço do Windows) | `mestre core` | conta virtual `NT SERVICE\MestreCore`, dona do cofre | recuperação do serviço e Guardião |
@@ -69,7 +69,7 @@ Detalhes do Windows (por que o Core tem dois serviços, ACLs, conta do usuário)
 
 ## Portas
 
-Todas configuráveis; os valores abaixo são o **padrão**.
+Todas configuráveis, menos a do whisper-server; os valores abaixo são o **padrão**.
 
 | Porta | Quem escuta | Para quê | Exposição |
 |---|---|---|---|
@@ -78,20 +78,21 @@ Todas configuráveis; os valores abaixo são o **padrão**.
 | 7445/udp | motor do Core | resposta ao broadcast de descoberta | rede local |
 | 5353/udp | Core: Avahi no Linux; mDNS nativo do Windows, registrado pelo Guardião, no Windows | mDNS (nome `.local` e serviços) | rede local |
 | 7446/tcp | Guardião de cada nó; no Core, só no modo máquina única | página reserva | só rede local |
-| 7447/tcp | whisper-server | transcrição | só `127.0.0.1` |
+| 7447/tcp (fixa) | whisper-server de cada nó com a capacidade `transcricao` | transcrição | só `127.0.0.1` |
 
 - Nenhuma porta é exposta na internet. O motor do nó não escuta em rede.
+- **Saúde do motor:** o motor do Core responde `GET /healthz` na 7443; o motor do nó, que não escuta em rede, responde o pedido `health` pelo canal local com o Guardião (catálogo desse canal em [Guardião](../autocura/guardiao.md)).
 - Mecânica da descoberta: [descoberta](../conectividade/descoberta.md). Firewall conferido pelo [checklist](../plataforma/checklist.md). Modo máquina única: [camadas](../autocura/camadas.md#modo-máquina-única).
 
 ## Canais locais (padrão)
 
 | Canal | Linux | Windows | Acesso |
 |---|---|---|---|
-| CLI → motor | socket `/run/mestre/cli.sock` | named pipe `\\.\pipe\mestre-cli`, servido pelo `mestre-node` (também no Core) | Linux: dono `mestre`, grupo `mestre-agente`, modo 0660. Windows: a conta do `mestre-node` |
+| CLI → motor | socket `/run/mestre/cli.sock` | named pipe `\\.\pipe\mestre-cli` | servido pelo `mestre-node` em toda máquina, também no Core; contrato e acesso em [canal local](canal-local.md) |
 | Motor ↔ Guardião | socket `/run/mestre-guardiao/guardiao.sock` | named pipe `\\.\pipe\mestre-guardiao` | só as contas do motor e a do Guardião (no Core Windows, `NT SERVICE\MestreCore` e a do `mestre-node`) |
-| Nó local → Core | — (mesmo processo) | WSS com mTLS em `127.0.0.1:7443` | só no Core Windows, como um nó remoto ([Windows](windows.md#windows-como-core)) |
+| Nó local → Core | WSS com mTLS em `127.0.0.1:7443` | WSS com mTLS em `127.0.0.1:7443` | o mesmo caminho de código de um nó remoto ([protocolo](../conectividade/protocolo.md)) |
 
-O motor confere quem chama a CLI antes de aceitar o `MESTRE_AGENT_ID` ([segurança](seguranca.md)).
+O motor confere quem chama a CLI antes de aceitar o `MESTRE_AGENT_ID` ([segurança](seguranca.md#identidade-de-quem-chama-a-cli)).
 
 ## Quem vigia quem
 

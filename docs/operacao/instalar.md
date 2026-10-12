@@ -15,7 +15,7 @@ Todo uso começa por **uma** máquina instalada como **Core** (ela já roda agen
 | Windows + Linux | [Core no Windows](#core-no-windows) → [nó no Ubuntu](#nó-no-ubuntu) | — |
 | Só Windows | [Core no Windows](#core-no-windows) | máquina única, como no "só Linux" |
 
-**Ordem completa:** instalar o Core → [primeiro acesso](primeiro-acesso.md) (CA, Dono e Apps do GitHub) → instalar cada nó e [pareá-lo](parear-no.md) → [parear o Telegram](parear-telegram.md).
+**Ordem completa:** instalar o Core → [primeiro acesso](primeiro-acesso.md) (CA, Dono, Apps do GitHub e perfis de conta) → instalar cada nó e [pareá-lo](parear-no.md) → [parear o Telegram](parear-telegram.md).
 
 ## Antes de começar
 
@@ -23,7 +23,7 @@ Todo uso começa por **uma** máquina instalada como **Core** (ela já roda agen
 - **Senha da sua conta do Windows** (em qualquer máquina Windows): o serviço que roda os agentes usa a sua conta, e o Windows pede a senha dela. É a senha da conta (local ou da Microsoft), não o PIN do Windows Hello. Se você só entra por PIN, descubra ou redefina a senha antes.
 - **Rede do Windows como "Privada":** Configurações → Rede e Internet → sua conexão → Tipo de perfil de rede → **Privada**.
 - **Conta pessoal do GitHub** e **Telegram** no celular, para os passos seguintes.
-- **Provedores:** os CLIs que você vai usar (`claude`, `codex`, `agy`) instalados nas máquinas onde os agentes vão rodar, inclusive no Core. O login de cada conta pode ser feito depois da instalação; o [checklist](../plataforma/checklist.md) mostra o que falta.
+- **Provedores:** os CLIs que você vai usar (`claude`, `codex`, `agy`) instalados nas máquinas onde os agentes vão rodar, inclusive no Core. O login de cada conta (e, no Codex, a aprovação dos hooks do Mestre) é feito depois da instalação, na [configuração inicial de cada perfil de conta](primeiro-acesso.md#4-configurar-os-perfis-de-conta); sem ela o perfil não recebe agentes, e o [checklist](../plataforma/checklist.md) mostra o que falta.
 
 ## Core no Ubuntu
 
@@ -37,7 +37,7 @@ Todo uso começa por **uma** máquina instalada como **Core** (ela já roda agen
 2. Espere terminar. O passo mais demorado é baixar e testar o modelo de transcrição (centenas de MB).
 3. No fim, o terminal mostra três coisas. **Anote as três:** o **endereço do painel** (ex.: `https://servidor.local:7443`), a **impressão digital SHA-256 da CA** e o **código de configuração** (usado uma vez para criar o Dono).
 4. Guarde uma **cópia da chave do cofre** (`/etc/mestre/cofre.key`) fora do servidor: sem ela, um disco perdido leva junto todos os segredos ([cofre](../plataforma/cofre.md)).
-5. Confira: `systemctl status mestre-core mestre-guardiao` mostra os dois `active (running)`.
+5. Confira: `systemctl status mestre-core mestre-node mestre-guardiao` mostra os três `active (running)`. O `mestre-core` guarda o cofre e não roda agentes; o `mestre-node` é o nó local, que roda os agentes desta máquina.
 6. Siga para o [primeiro acesso](primeiro-acesso.md).
 
 ## Core no Windows
