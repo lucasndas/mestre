@@ -10,7 +10,7 @@ Tratar todo pedido de aprovação do mesmo jeito, do pedido até a aplicação, 
 
 ### O pedido
 
-Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero ou uma atualização do Mestre ou de um CLI (tipos em [política](politica.md#tipos-de-ação)).
+Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador) ou uma atualização do Mestre ou de um CLI (tipos em [política](politica.md#tipos-de-ação)).
 
 Campos (tabela `approval_requests`, [persistência](../arquitetura/persistencia.md)): id, workspace, mesa, tipo, alvo, impressão, solicitante (personagem ou Grão-Mestre), resumo, recomendação do Grão-Mestre, motivo da dúvida, quórum exigido, criado em, expira em, estado.
 
@@ -54,6 +54,7 @@ Cada pedido guarda o **alvo** e a **impressão** (SHA-256 do alvo em JSON canôn
 | `classe_workspace` | hash do pacote da classe |
 | `acao_destrutiva` | comando exato e objeto (pergaminho e revisão, ritual, classe e hash do pacote, ou mesa e hash da cabeça da branch) |
 | `proposta_agents_md` | workspace e SHA-256 do texto proposto |
+| `ativacao_operador` | mesa, missão (se houver), ficha, classe, nó, tarefa (texto inteiro) e duração pedida; o pedido mostra tudo isso ao Dono |
 | `atualizacao_mestre` | `tag` + SHA-256 do manifesto da release ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) |
 | `atualizacao_provedor` | provedor e versão nova ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)) |
 
@@ -105,6 +106,7 @@ No horário da política (padrão: diário, 18:00), o motor coloca na caixa de e
 - Uma aprovação nunca vale para outra ação, outro estado ou depois do prazo.
 - Canal de origem fora do ar: a pergunta fica no painel e é entregue no Telegram quando ele voltar, se o pedido ainda estiver aberto.
 - Falha ao aplicar: o pedido vira `falhou`, com o motivo, e o Grão-Mestre avisa quem aprovou. O motor não tenta de novo sozinho.
+- Em `ativacao_operador`, "aplicar" é iniciar a sessão do Operador do PC; se o nó não anunciar `operador` em até 10 min (padrão) depois da aprovação, o pedido vira `falhou` com o motivo ("tela bloqueada" ou "usuário não logado") ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 
 ## Critérios de aceite
 
@@ -117,6 +119,7 @@ No horário da política (padrão: diário, 18:00), o motor coloca na caixa de e
 - **CA-APROV-FLUXO-07** · *rápida* — **Dado** três aprovações do Grão-Mestre no dia e o horário do resumo, **quando** o relógio falso chega a 18:00, **então** a caixa de entrada do Grão-Mestre recebe a lista das três.
 - **CA-APROV-FLUXO-08** · *completa* — **Dado** um pedido aguardando e o Core reiniciado, **quando** o usuário aprova pelo painel, **então** a decisão é aplicada e registrada na auditoria.
 - **CA-APROV-FLUXO-09** · *pesada* — **Dado** uma etapa de missão que toca área sensível, **quando** o Grão-Mestre pergunta pelo Telegram (dublê) e o Lucas aprova, **então** a missão segue, inclusive no GitHub (dublê) (MVP-7).
+- **CA-APROV-FLUXO-11** · *rápida* — **Dado** um pedido `ativacao_operador` aprovado pelo Dono e o nó sem a capacidade `operador`, **quando** o relógio falso avança 10 min, **então** o pedido vira `falhou` com "tela bloqueada" ou "usuário não logado", conforme o nó informou, e quem pediu recebe o motivo.
 - **CA-APROV-FLUXO-10** · *rápida* — **Dado** um pedido `acao_destrutiva` para apagar o pergaminho p0003 na revisão 4, **quando** o pergaminho passa à revisão 5 antes da aplicação, **então** o pedido vira `invalidado` e nada é apagado.
 
 ## Depende de

@@ -27,15 +27,15 @@ Dois binários por plataforma (Linux amd64 e Windows amd64), compilados com `CGO
 |---|---|---|
 | `mestre core` | Linux, Windows | motor do Core (serviço `mestre-core`), com o painel e a API; não roda agentes |
 | `mestre core setup-code` | Linux, Windows | gera um novo código de configuração do Dono (invalida o anterior) quando o da instalação se perdeu; só root ou administrador na máquina do Core e só enquanto não existe usuário ([login](../painel/login.md#assistente-do-dono-primeira-vez)) |
-| `mestre core export-key --out <arquivo>` | Windows | grava a chave do cofre decifrada num arquivo, para a cópia de segurança fora da máquina (o arquivo protegido por DPAPI só abre nesta máquina); só administrador na máquina do Core ([cofre](../plataforma/cofre.md#chave-do-cofre)) |
 | `mestre node` | Linux, Windows | motor de nó (serviço `mestre-node`); na máquina do Core, o nó local |
+| `mestre node operator-session` | Windows | processo da sessão do [Operador do PC](windows.md#operador-do-pc): iniciado pela tarefa agendada `\Mestre\Operador` no logon do usuário configurado, com a conta dele; liga-se ao `mestre-node` pelo pipe do Operador e cria os terminais do Operador; recusa rodar como serviço ou com outra conta |
 | `mestre node pair --invite <código> [--core <endereço>]` | Linux, Windows | pareia o nó com o Core usando o código de convite; usado pelo instalador e para repetir o pareamento; só administrador/root local ([pareamento](../conectividade/pareamento.md#convite)) |
 | `mestre hook --provider <p> --event <e>` | todas | despachante de hooks; uso interno dos arquivos de hooks ([adaptador](../provedores/adaptador.md)) |
-| `mestre install core\|node`, `mestre uninstall` | Linux, Windows | registram ou removem os serviços (motor e Guardião) conforme o papel escolhido no instalador; comportamento em [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
+| `mestre install core\|node`, `mestre uninstall` | Linux, Windows | registram ou removem os serviços (motor e Guardião) conforme o papel escolhido no instalador; `mestre install core --restore <pasta do backup>` restaura um Core com a chave de recuperação ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)); `mestre install node --operator-user <usuário>` habilita o Operador do PC no Windows; comportamento em [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | `mestre version` | todas | versão do binário e versões de protocolo suportadas |
 | demais (`list`, `ask`, `note`, `done`, `table`, `gh`, …) | todas | CLI dos agentes; sintaxe em [cli](../cli/convencoes.md) |
 
-Regra: `core`, `node` (com os subcomandos, inclusive `export-key`), `install` e `uninstall` recusam rodar quando `MESTRE_AGENT_ID` está no ambiente (um agente nunca inicia ou instala serviços).
+Regra: `core`, `node` (com os subcomandos), `install` e `uninstall` recusam rodar quando `MESTRE_AGENT_ID` está no ambiente (um agente nunca inicia ou instala serviços).
 
 ### `mestre-guardiao`
 
@@ -51,7 +51,7 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 
 ## Serviços e contas (padrão)
 
-**Princípio, nos dois sistemas:** nenhum agente roda com a conta dona do cofre nem com a conta do usuário; os agentes rodam com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). Os quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows) combinam as linhas abaixo ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
+**Princípio, nos dois sistemas:** nenhum agente roda com a conta dona do cofre nem com a conta do usuário; os agentes rodam com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). Exceção única: o Operador do PC ([ADR 0021](../decisoes/0021-operador-do-pc.md)), cuja tarefa agendada aparece abaixo da tabela. Os quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows) combinam as linhas abaixo ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
 
 | Sistema | Papel | Serviço | Executa | Conta | Supervisionado por |
 |---|---|---|---|---|---|
@@ -63,6 +63,8 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 | Windows | os dois | `mestre-node` (serviço do Windows) | `mestre node` (no Core, o nó local) | conta virtual `NT SERVICE\MestreNode`, com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` só para iniciar os agentes como `mestre-agente` | recuperação do serviço e Guardião |
 | Windows | os dois | `mestre-guardiao` (serviço do Windows) | `mestre-guardiao run` | LocalSystem | recuperação do serviço |
 | Windows | os dois | `mestre-update` (serviço do Windows, início sob demanda) | `mestre-guardiao apply-update` | LocalSystem; só a conta do motor que conduz a troca pode iniciar (`NT SERVICE\MestreCore` no Core, `NT SERVICE\MestreNode` no nó) | — (uso único por troca) |
+
+**Tarefa agendada `\Mestre\Operador`** (Windows, só com o Operador do PC habilitado na instalação): executa `mestre node operator-session` no logon do usuário configurado, com a conta dele e privilégios normais; não é serviço e é vigiada pelo `mestre-node` e pelo checklist (WIN-22), não pelo Guardião ([Windows](windows.md#operador-do-pc)).
 
 A conta `mestre-agente` não é de serviço: é a conta local com que o `mestre-node` inicia os terminais dos agentes e o Guardião inicia o agente de diagnóstico (no Linux, uma conta de sistema; no Windows, uma conta local comum sem logon interativo). Detalhes do Windows (por que o Core tem dois serviços, contas virtuais, `mestre-agente`): [Windows](windows.md). As configurações de reinício (Restart=always, watchdog, recuperação do Windows) estão em [camadas](../autocura/camadas.md).
 
@@ -89,6 +91,7 @@ Todas configuráveis, menos a do whisper-server; os valores abaixo são o **padr
 |---|---|---|---|
 | CLI → motor | socket `/run/mestre/cli.sock` | named pipe `\\.\pipe\mestre-cli` | servido pelo `mestre-node` em toda máquina, também no Core; contrato e acesso em [canal local](canal-local.md) |
 | Motor ↔ Guardião | socket `/run/mestre-guardiao/guardiao.sock` | named pipe `\\.\pipe\mestre-guardiao` | só as contas do motor e a do Guardião (no Windows, `NT SERVICE\MestreNode` e, no Core, `NT SERVICE\MestreCore`) |
+| Operador do PC ↔ motor (Windows) | — | named pipes `\\.\pipe\mestre-operador` (processo da sessão) e `\\.\pipe\mestre-operador-cli` (CLI e `mestre hook` dos terminais do Operador) | só a conta do usuário configurado e `NT SERVICE\MestreNode` ([Windows](windows.md#operador-do-pc)) |
 | Nó local → Core | WSS com mTLS em `127.0.0.1:7443` | WSS com mTLS em `127.0.0.1:7443` | o mesmo caminho de código de um nó remoto ([protocolo](../conectividade/protocolo.md)) |
 
 O motor confere quem chama a CLI antes de aceitar o `MESTRE_AGENT_ID` ([segurança](seguranca.md#identidade-de-quem-chama-a-cli)).

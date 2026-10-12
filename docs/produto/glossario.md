@@ -44,6 +44,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Base | A receita de como um terminal é iniciado: comando, pasta e em quais máquinas pode rodar. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Ficha | Um tipo de personagem pronto: usa uma base e define agente, classe, conta e limites. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Perfil de conta | Qual assinatura do provedor (Claude, Codex, Antigravity) um personagem usa naquele nó. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
+| Operador do PC | Agente que usa o seu PC Windows com a sua conta, só com aprovação do Dono, por pouco tempo e com aviso na tela. | [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) |
 | Classe | O papel de um personagem (ex.: Dev, QA): instruções, permissões, hooks e skills próprios. | [classes](../classes/classes.md) |
 | Teto do workspace | O máximo de permissões e de custo que qualquer classe deste workspace pode ter. | [teto do workspace](../classes/teto-do-workspace.md) |
 | Pergaminho | Nota em Markdown no canvas que os agentes conectados leem e escrevem. | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |

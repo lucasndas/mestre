@@ -29,13 +29,14 @@ permissions:
     domains: ["registry.npmjs.org", "github.com"]
   cli:
     allow: ["issue *", "pr comment", "pr reply", "pr status"]
+  operator: false           # nenhuma classe usa o Operador do PC; só o Dono liga
 cost:                       # máximo por unidade de limites-de-uso.md: usd | tokens | hours
   usd: {per_table: 50, per_day: 100}
   hours: {per_table: 20}
 ```
 
 - Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existir, `commands.allow` dizem o que **pode** ser dado; o que fica fora é negado. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada.
-- **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas, com `git.request_push: false`, `git.workflows: never` e sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)).
+- **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas, com `git.request_push: false`, `git.workflows: never`, `operator: false` e sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)).
 
 ### Onde o teto age
 
@@ -49,6 +50,7 @@ cost:                       # máximo por unidade de limites-de-uso.md: usd | to
 |---|---|---|
 | restringir | Administrador ou Dono | painel ([administração](../painel/administracao.md)) |
 | ampliar | Administrador ou Dono | só por decreto permanente ([decretos](../telegram/decretos.md)); ampliar pelo painel cria esse decreto, com o autor |
+| ligar `operator` ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) | só o Dono | decreto `ceiling` do Dono, com PIN; ligar pelo painel cria esse decreto |
 | propor | Grão-Mestre ou Mestre da mesa | pedem ao usuário; nunca ampliam sozinhos |
 
 Níveis: [usuários e níveis](../telegram/usuarios-e-niveis.md).
@@ -76,6 +78,7 @@ Quem usa o teto: [classes](classes.md) (M3); a sessão zero cria o arquivo (M4);
 - **CA-TETO-03** · *completa* — **Dado** `teto.yaml` editado à mão para liberar `docker *`, **quando** o motor percebe a mudança, **então** segue negando `docker *`, avisa os Administradores e só aplica a nova versão depois de um decreto.
 - **CA-TETO-04** · *completa* — **Dado** uma mesa no teto de custo, **quando** o Grão-Mestre tenta aprovar mais gasto, **então** a aprovação é recusada e o pedido vai aos usuários Administrador ou acima.
 - **CA-TETO-05** · *rápida* — **Dado** uma classe que escreve em `src/**`, **quando** o teto passa a negar `src/**`, **então** `class check` mostra a classe como "acima do teto".
+- **CA-TETO-06** · *rápida* — **Dado** o teto padrão e uma classe com `operator: true`, **quando** o Core monta as regras efetivas, **então** `operator` sai `false` com `origin` `ceiling`; **dado** um decreto `ceiling` de um Administrador que liga `operator`, **então** ele é recusado antes da confirmação.
 
 ## Depende de
 

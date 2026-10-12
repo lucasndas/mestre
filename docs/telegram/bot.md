@@ -30,7 +30,7 @@ flowchart LR
   F -->|descartado| A[alerta ao Dono]
   F --> T{tipo}
   T -->|comando rápido| M[motor responde]
-  T -->|código / PIN / botão| M
+  T -->|código / PIN / segundo fator / botão| M
   T -->|texto| R[roteamento]
   T -->|áudio| W[transcrição] --> R
   T -->|imagem / documento| X[anexo] --> R
@@ -67,6 +67,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 | `/pausar [workspace\|mesa]` | pausa o escopo (efeito em [pausa](../orquestracao/mesas.md#pausa)) |
 | `/retomar [workspace\|mesa]` | desfaz o `/pausar` |
 | `/travar`, `/destravar` | emergência ([segurança do canal](seguranca-do-canal.md)) |
+| `/operador encerrar` | encerra na hora as sessões ativas do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) nos workspaces do usuário, sem a espera de 60 s |
 
 - **`/pausar` e `/retomar`:**
   - Sem argumento, valem para o workspace ativo.
@@ -77,7 +78,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Mensagens de saída
 
 - **Quem envia:**
-  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) e os pedidos "Sistema" de atualização do Mestre e dos CLIs ([política](../aprovacoes/politica.md#tipos-de-ação)).
+  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) os pedidos "Sistema" de atualização do Mestre e dos CLIs ([política](../aprovacoes/politica.md#tipos-de-ação)), os pedidos de segundo fator e o aviso do Operador do PC (abaixo).
   - **Grão-Mestre:** conversa, ou seja, respostas (`mestre reply`), resumos de épico, missões concluídas, notificações (`mestre notify`) e pedidos de aprovação. A sintaxe está em [CLI de comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md).
 - **Para quem:**
   - Uma resposta vai ao usuário e à conversa de origem ([resposta pelo mesmo canal](../orquestracao/esperas-e-caixa-de-entrada.md)).
@@ -96,6 +97,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
   - Um erro `429` faz a fila respeitar o `retry_after`.
 - **Telegram fora do ar:** a fila de saída fica no banco e é entregue quando ele volta.
 - **Registro:** o motor guarda o `message_id` de cada mensagem enviada, com o workspace e a mesa dela ([roteamento](roteamento.md#resposta-encadeada)).
+- **Pedido de segundo fator** (login em sites): mensagem direta do motor ao dono da credencial, em texto ("código de <site>") ou com a imagem do captcha como foto (`sendPhoto`). Enquanto o pedido está aberto, a próxima mensagem de texto desse usuário (ou a resposta encadeada ao pedido) é **capturada pelo motor**, como o PIN: não vai ao Grão-Mestre, à caixa de entrada nem ao histórico, e é apagada com o pedido depois de usada. Mensagem de outro usuário não conta. Regras, prazos e casos em [segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha).
+- **Aviso do Operador do PC:** enquanto uma sessão está ativa, o motor mantém no chat do Dono (também quando quem aprovou foi o Grão-Mestre, por delegação) uma mensagem fixada no chat (`pinChatMessage`) com nó, tarefa, "até HH:MM", a contagem regressiva, editada a cada minuto (padrão), e o botão **Encerrar agora**; no fim, a mensagem é editada com o motivo e desafixada ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 
 ### Explicação de termos na primeira vez
 
@@ -118,6 +121,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **CA-BOT-05** · *rápida* — **Dado** um `429` com `retry_after=7`, **quando** a fila tenta de novo, **então** só envia depois de 7 s no relógio falso.
 - **CA-BOT-06** · *rápida* — **Dado** o termo "Party" ainda não visto pelo usuário, **quando** saem duas mensagens com ele, **então** só a primeira traz a ajuda entre parênteses.
 - **CA-BOT-07** · *rápida* — **Dado** o Telegram falso fora do ar, **quando** o Grão-Mestre responde, **então** a mensagem fica na fila do banco e é entregue quando ele volta.
+- **CA-BOT-09** · *rápida* — **Dado** um pedido de segundo fator aberto para Ana e o Grão-Mestre livre, **quando** Ana manda `482913`, **então** o motor usa o texto no login, a caixa de entrada do Grão-Mestre não recebe nada e as duas mensagens são apagadas; **quando** Bia manda um texto ao mesmo tempo, **então** ele segue o caminho normal até o Grão-Mestre.
+- **CA-BOT-10** · *rápida* — **Dado** uma sessão do Operador do PC ativa, **quando** o Dono toca **Encerrar agora** na mensagem fixada ou manda `/operador encerrar`, **então** o motor manda fechar o terminal do Operador na hora, a mensagem passa a "encerrado por <nome>" e é desafixada.
 - **CA-BOT-08** · *rápida* — **Dado** um usuário autorizado, **quando** ele manda uma figurinha, **então** o bot recusa e lista os tipos aceitos, sem enfileirar nada.
 
 ## Depende de

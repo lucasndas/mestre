@@ -37,8 +37,9 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 | Telegram | `telegram_state` (offset do long polling, workspace ativo por usuário), `telegram_updates` (updates recebidos, gravados antes de o offset avançar), `bot_messages` (mensagem do bot → workspace e mesa), `glossary_seen` (termos já explicados a cada usuário) | [bot](../telegram/bot.md), [roteamento](../telegram/roteamento.md) |
 | Anexos | `attachments` (autor, data, origem, caminho, tamanho) | [anexos e transcrição](../telegram/anexos-e-transcricao.md) |
 | Uso e custo | `usage_records`, `usage_limits` | [limites de uso](../plataforma/limites-de-uso.md) |
-| Cofre | `secrets` (segredos cifrados) | [cofre](../plataforma/cofre.md) |
+| Cofre | `secrets` (segredos cifrados; nas credenciais de site, os metadados `owner_user`, `classes`, `domains`, `kind` e `expires_at` fora da parte cifrada), `site_login_attempts` (estado de cada login, sem código nem senha) | [cofre](../plataforma/cofre.md) |
 | Atualizações | `releases` (versões do Mestre vistas, estado, aprovação), `update_steps` (passos por máquina e trava de atualização), `conformance_results` (por nó, provedor, versão e perfil) | [autoatualização](../plataforma/autoatualizacao.md), [atualização dos CLIs](../provedores/atualizacao-dos-clis.md), [conformidade](../provedores/conformidade.md) |
+| Operador do PC | `operator_sessions`, `operator_captures` (abaixo) | [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) |
 | Operação | `checklist_alerts`, `healing_log`, `audit_log`, `processed_commands` (idempotência) | [checklist](../plataforma/checklist.md), [camadas](../autocura/camadas.md), [protocolo](../conectividade/protocolo.md) |
 
 ## Tabelas principais do nó (proposta)
@@ -88,6 +89,8 @@ Pastas de dados (padrão). Os mesmos caminhos valem para o Core e para os nós d
 | `/var/lib/mestre/workspaces/` | `%ProgramData%\Mestre\workspaces\` | espelhos, clones e worktrees (estrutura em [workspaces](../orquestracao/workspaces.md#espelho-e-clone-principal-no-core) e [mesas](../orquestracao/mesas.md#worktree-por-nó-e-sincronização)) | todas |
 | `/var/lib/mestre/contas/` | `%ProgramData%\Mestre\contas\` | perfis de conta | todas |
 | `/var/lib/mestre/classes-globais/`, `/var/lib/mestre/modelos/` | `%ProgramData%\Mestre\classes-globais\`, `%ProgramData%\Mestre\modelos\` | classes globais e modelos versionados | Core |
+| `/var/lib/mestre/operador/` | `%ProgramData%\Mestre\operador\` | capturas de tela cifradas do Operador do PC (abaixo) | Core |
+| — | `%ProgramData%\Mestre\no\operador\` | capturas ainda não confirmadas pelo Core | nó com o Operador |
 | `/var/lib/mestre/whisper/` | `%ProgramData%\Mestre\whisper\` | `whisper-server` e modelo de transcrição | nó de transcrição |
 | `/var/log/mestre/` | `%ProgramData%\Mestre\logs\` | logs do motor e dos terminais | todas |
 
@@ -96,6 +99,13 @@ Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso
 - **Windows, contas de serviço:** num nó, `NT SERVICE\MestreNode` é dona de todas as pastas de dados. No Core, `NT SERVICE\MestreCore` é dona de `%ProgramData%\Mestre\` e `NT SERVICE\MestreNode` é dona de `no\` e tem modificação em `workspaces\` e `contas\` ([Windows](windows.md#windows-como-core)).
 - **Windows, `mestre-agente`** (Core e nó; [Windows](windows.md#conta-dos-agentes-mestre-agente)): modificação só em `workspaces\`, `contas\` e `no\agentes\<id>\tmp\`; leitura só em `no\agentes\<id>\policy.json`; em `no\fila-hook\`, só criar arquivos (sem ler nem listar). Nada em `config\`, `banco\`, `backups\`, `logs\` nem no resto de `no\`. Como todos os personagens usam essa conta, a separação entre a `MESTRE_TMP` de um e de outro é do despachante, como no Linux; o motor valida tudo o que lê da fila.
 - **Windows (Core e nó):** o instalador cria `%ProgramData%\Mestre\` com a **herança desligada** e remove as entradas herdadas de `%ProgramData%` (`Users`, `Authenticated Users`, `CREATOR OWNER`); ficam só as contas listadas acima, SYSTEM e Administradores, sem `Users`, `Authenticated Users` nem `Everyone`. Nenhum outro usuário da máquina, nem o que instalou, lê nada ali sem elevar.
+
+## Operador do PC
+
+- **`operator_sessions`:** uma linha por ativação: pedido de aprovação, quem aprovou (Dono ou Grão-Mestre e o decreto de delegação), mesa, missão, personagem, nó, usuário do Windows, tarefa, duração pedida, início, fim previsto, fim real e motivo (`prazo`, `done`, `encerrado_por`, `parar_no_pc`, `travar`, `tela_bloqueada`, `queda_da_sessao`). As ações vão completas para `audit_log`, com o id da sessão ([bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
+- **`operator_captures`:** sessão, horário, gatilho (`intervalo` ou `acao`, com o id do evento do hook), mesa, missão, caminho e SHA-256 do arquivo cifrado.
+- **Arquivos:** `operador/<sessão>/<horário>.png.enc` na pasta do Core, cifrado com AES-256-GCM por uma chave própria guardada no [cofre](../plataforma/cofre.md) (segredo `operator_capture_key`); só a pasta do motor do Core, sem acesso de `mestre-agente`. O painel decifra só para o Dono ([administração](../painel/administracao.md#operador-do-pc)).
+- **Retenção:** 30 dias depois do fim da sessão (padrão); a limpeza apaga arquivos e linhas de `operator_captures`, e `operator_sessions` fica. No nó, `no\operador\` só guarda a captura até o Core confirmar o recebimento, e os backups do banco não levam as imagens.
 
 ## Logs
 
@@ -108,3 +118,4 @@ Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso
 - Diário, às 03:00 no horário local (padrão), com `VACUUM INTO` (cópia consistente com o banco em uso), seguido de `PRAGMA quick_check` na cópia.
 - Mantém os **últimos 7**; o mais antigo é apagado só depois de um backup novo íntegro.
 - Vale para o banco do Core e para o banco de cada nó. Falha de backup vira alerta do [checklist](../plataforma/checklist.md).
+- **Cofre no backup do Core:** os segredos vão no banco, já cifrados, e junto vai `cofre-envelope.bin`, a chave do cofre cifrada pela chave de recuperação; o arquivo da chave protegido pelo sistema não vai. Sem a chave de recuperação, que o Mestre não guarda, o cofre do backup não abre ([backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação)). As capturas do Operador do PC não vão no backup.

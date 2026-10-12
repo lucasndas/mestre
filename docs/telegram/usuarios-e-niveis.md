@@ -37,6 +37,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | `/pausar` e `/retomar` | sim | sim | não | não |
 | `/travar` ([segurança do canal](seguranca-do-canal.md)) | sim | sim | não | não |
 | `/destravar` (com PIN) | sim | não | não | não |
+| Encerrar uma sessão do Operador do PC: `/operador encerrar` e botão **Encerrar agora** ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) | sim | sim | não | não |
 | Digitar no terminal de um agente pelo canvas | sim | sim | não | não |
 | Criar workspace | sim | sim | não | não |
 | Alterar a configuração de um workspace pelo painel (fichas do Grão-Mestre e dos Mestres de mesa, instruções extras, limites, retenção, fuso), menos o que outra linha reserva | sim | sim | não | não |
@@ -48,6 +49,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Editar bases, fichas, política de aprovação e acessar o cofre | sim | não | não | não |
 | Criar e instalar GitHub Apps pelo link ([criação de Apps](../github/criacao-de-apps.md)) | sim | não | não | não |
 | Configurar perfis de conta: login e, no Codex, confiança dos hooks ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)) | sim | não | não | não |
+| Aprovar a ativação do Operador do PC (`ativacao_operador`), ligar `operator` no teto, delegar essa aprovação ao Grão-Mestre e ver as capturas de tela das sessões ([política](../aprovacoes/politica.md#tipos-de-ação)) | sim | não | não | não |
 | Transferir o posto de Dono | sim | não | não | não |
 
 - **Observador:** se escrever texto livre, a mensagem não vai ao Grão-Mestre. O bot responde, uma vez por dia no máximo, com os comandos que ele pode usar.

@@ -40,7 +40,7 @@ Roda quando um serviço do motor sobe (`mestre-node` e, no Core, `mestre-core`).
 
 ### Itens: Windows
 
-Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são reaproveitados.
+Papel: **os dois** (Core e nó), **Core**, **nó** ou **com Operador do PC** (máquina cujo `mestre-node` tem o Operador habilitado). Ids que saíram não são reaproveitados.
 
 | Id | Papel | Verifica | Gravidade | Correção |
 |---|---|---|---|---|
@@ -57,6 +57,8 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 | WIN-18 | os dois | `mestre-agente` tem "Negar logon local" e "Negar logon pelos Serviços de Área de Trabalho Remota" e não está em `Remote Desktop Users` | grave | reaplicar os direitos (aprovação) |
 | WIN-19 | os dois | `mestre-node` roda como `NT SERVICE\MestreNode` (nunca com a conta de um usuário) e o token dele tem `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | grave | reconfigurar o serviço e conceder os privilégios (aprovação) |
 | WIN-20 | os dois | cada provedor usado pelas bases do nó (`claude`, `codex`, `agy`) roda como `mestre-agente`, com a pasta do perfil de conta: `--version` e a verificação de login do ALL-11 feitas com essa conta | grave | manual (o alerta explica o passo) |
+| WIN-21 | com Operador do PC | UAC para o [Operador do PC](../arquitetura/windows.md#operador-do-pc): `EnableLUA = 1`, `PromptOnSecureDesktop = 1` e `ConsentPromptBehaviorAdmin` com pedido (1 a 5; nunca 0, "elevar sem perguntar"), em `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System`; falhou → o nó não anuncia `operador` | grave | manual (o alerta explica o passo; o Mestre não muda o UAC) |
+| WIN-22 | com Operador do PC | tarefa `\Mestre\Operador` existe para o usuário configurado (logon dele, privilégios normais, sem limite de tempo, reiniciar em falha) e, com ele logado, o processo da sessão está ligado ao `mestre-node`; falhou → o nó não anuncia `operador` | aviso | recriar a tarefa (aprovação de Dono) |
 
 ### Itens: Linux
 
@@ -112,6 +114,7 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 - **CA-CHK-11** · *rápida* — **Dado** um Core Windows falso em que `cofre.key` dá leitura a `NT SERVICE\MestreNode`, **quando** WIN-14 roda, **então** abre alerta grave com a correção da ACL, aplicada só com aprovação.
 - **CA-CHK-12** · *rápida* — **Dado** um Core sem nó remoto pareado, **quando** o checklist roda, **então** ALL-17 fica aberto como aviso; **quando** um nó é pareado, **então** o aviso fecha.
 - **CA-CHK-13** · *rápida* — **Dado** uma máquina Linux no papel de nó, **quando** o checklist monta a lista, **então** roda LIN-01, LIN-04, LIN-08, LIN-09, LIN-10 e os ALL-*, e não roda LIN-02, LIN-03, LIN-05 nem LIN-07.
+- **CA-CHK-15** · *rápida* — **Dado** um nó Windows falso com o Operador habilitado e `ConsentPromptBehaviorAdmin = 0` (ou `PromptOnSecureDesktop = 0`), **quando** o checklist roda, **então** WIN-21 abre alerta grave e o nó passa a anunciar `operador: false`; corrigido o valor, o alerta fecha e a capacidade volta; num nó sem o Operador, WIN-21 e WIN-22 não rodam.
 - **CA-CHK-14** · *rápida* — **Dado** um Windows falso em que `mestre-agente` está em `Administradores` e o `mestre-node` roda com a conta de um usuário, **quando** o checklist roda, **então** WIN-17 e WIN-19 abrem alertas graves, e nenhuma correção é aplicada sem aprovação.
 
 ## Depende de

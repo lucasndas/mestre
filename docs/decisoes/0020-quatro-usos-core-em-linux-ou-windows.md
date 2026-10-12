@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o serviço `mestre-node` também no Core Linux, com o mesmo caminho de código de um nó remoto. Revisada em 2026-10-12: no Windows, o `mestre-node` deixa a conta do usuário e passa à conta virtual `NT SERVICE\MestreNode`, e os agentes rodam na conta local própria `mestre-agente`, como no Linux; saem a senha do usuário na instalação e a tarefa agendada de diagnóstico.
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o serviço `mestre-node` também no Core Linux, com o mesmo caminho de código de um nó remoto. Revisada em 2026-10-12: no Windows, o `mestre-node` deixa a conta do usuário e passa à conta virtual `NT SERVICE\MestreNode`, e os agentes rodam na conta local própria `mestre-agente`, como no Linux; saem a senha do usuário na instalação e a tarefa agendada de diagnóstico. Exceção aberta em 2026-10-12 pelo [ADR 0021](0021-operador-do-pc.md): o Operador do PC, opcional, roda com a conta do usuário quando habilitado e ativado.
 
 ## Contexto
 

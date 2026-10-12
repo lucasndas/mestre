@@ -60,6 +60,11 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 | Salvar seleção como grimório e restaurar em outra mesa | botão na barra da seleção | [grimórios](../orquestracao/grimorios.md) |
 | Ver e editar rituais da mesa | painel lateral | [rituais](../orquestracao/rituais.md) |
 
+### Operador do PC
+
+- Enquanto uma sessão do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) está ativa, uma faixa fixa no topo de todas as telas do painel, para os usuários daquele workspace, mostra nó, tarefa, "até HH:MM" e a contagem regressiva, com o botão **Encerrar agora** para quem tem o nível ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).
+- No canvas, o personagem do Operador tem o selo "Operador do PC" e a hora do fim. As capturas de tela não aparecem aqui: só o Dono as vê, em [administração](administracao.md#operador-do-pc).
+
 ### Ajuda nos termos
 
 - Todo termo do vocabulário (Party, Ficha, Classe, Grimório, Pergaminho, Ritual, Decreto etc.) tem um ícone "?" ao lado; passar o mouse ou tocar mostra a **Ajuda curta**.
@@ -80,6 +85,7 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 - **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** o Core pede ao nó o `terminal.replay` e a tela do navegador fica igual à do emulador do nó.
 - **CA-CANVAS-05** · *rápida* — **Dado** uma conexão arrastada que o motor recusa, **quando** a resposta chega, **então** a aresta some e o motivo aparece.
 - **CA-CANVAS-06** · *rápida* — **Dado** elementos movidos, **quando** recarrego a página, **então** as posições e grupos são os mesmos (MVP-12).
+- **CA-CANVAS-08** · *rápida* — **Dado** uma sessão do Operador ativa e o relógio falso, **quando** um Aprovador e o Dono abrem o painel, **então** os dois veem a faixa com a contagem, o botão **Encerrar agora** aparece só para o Dono (e a API recusa o encerramento vindo do Aprovador), e um toque nele manda encerrar a sessão na hora; ao fim, a faixa some.
 - **CA-CANVAS-07** · *rápida* — **Dado** 12 terminais visíveis, **quando** o canvas renderiza, **então** no máximo 8 usam WebGL e os demais mostram retrato.
 
 ## Depende de

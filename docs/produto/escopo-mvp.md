@@ -1,10 +1,10 @@
 # Escopo do MVP
 
-> **Assunto:** o que é o MVP, o ambiente e os 13 critérios globais de aceite · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** o que é o MVP, o ambiente e os 14 critérios globais de aceite · **Componente:** Projeto · **Atualizado:** 2026-10-12
 
 ## O que é o MVP
 
-O MVP é a especificação original mais as decisões do usuário registradas depois dela (nos ADRs, como a autoatualização, [0019](../decisoes/0019-autoatualizacao-por-releases.md), e os quatro usos, [0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)), e só isso. Nenhum documento acrescenta funcionalidade além da spec e das decisões registradas; escolhas de detalhe necessárias para implementar (valores padrão, nomes, formatos) são propostas nos documentos e marcadas como "padrão" quando configuráveis.
+O MVP é a especificação original mais as decisões do usuário registradas depois dela (nos ADRs, como a autoatualização, [0019](../decisoes/0019-autoatualizacao-por-releases.md), os quatro usos, [0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md), e o Operador do PC, [0021](../decisoes/0021-operador-do-pc.md)), e só isso. Nenhum documento acrescenta funcionalidade além da spec e das decisões registradas; escolhas de detalhe necessárias para implementar (valores padrão, nomes, formatos) são propostas nos documentos e marcadas como "padrão" quando configuráveis.
 
 **Ambiente:**
 - Quatro usos: só Linux, Linux + Windows, Windows + Linux e só Windows; em todos, o Core aceita N nós ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
@@ -13,7 +13,7 @@ O MVP é a especificação original mais as decisões do usuário registradas de
 - Repositórios na conta pessoal do GitHub do Dono ([ADR 0015](../decisoes/0015-epico-como-rotulo.md)).
 - Sem interface gráfica além do painel no navegador; os agentes são de terminal.
 
-## Critérios globais (MVP-1 a MVP-13)
+## Critérios globais (MVP-1 a MVP-14)
 
 Cada critério é coberto por um teste de ponta a ponta na suíte pesada (máquinas e provedores reais; Telegram e GitHub falsos); o mapa critério → teste está em [testes](../qualidade/testes.md) (seção "Mapa do MVP para a suíte pesada"). Os documentos listados detalham o critério em critérios menores (que citam `(MVP-N)`).
 
@@ -32,3 +32,4 @@ Cada critério é coberto por um teste de ponta a ponta na suíte pesada (máqui
 | **MVP-11** | Vejo tudo no painel: a visão do workspace com as mesas e, dentro de cada mesa, personagens, conexões, pergaminhos, missões, esperas, saúde dos nós e consumo de uso; salvo um grimório e restauro em outra mesa; uso rituais. | [canvas](../painel/canvas.md), [visão do workspace](../painel/visao-do-workspace.md), [administração](../painel/administracao.md), [grimórios](../orquestracao/grimorios.md), [rituais](../orquestracao/rituais.md), [limites de uso](../plataforma/limites-de-uso.md) |
 | **MVP-12** | Reinicio o Core e os nós: workspaces, mesas, personagens persistentes, esperas e missões em andamento voltam ao estado anterior. | [persistência](../arquitetura/persistencia.md), [personagens](../orquestracao/personagens.md), [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md), [missões](../orquestracao/missoes.md), [camadas](../autocura/camadas.md) |
 | **MVP-13** | Instalo em cada um dos quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows) e o Mestre funciona, com as limitações de cada uso documentadas. | [ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md), [componentes](../arquitetura/componentes.md), [Windows](../arquitetura/windows.md), [instalação e versões](../plataforma/instalacao-e-atualizacao.md), [checklist](../plataforma/checklist.md), [camadas](../autocura/camadas.md#modo-máquina-única), [instalar](../operacao/instalar.md), [testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada) |
+| **MVP-14** | Ativo o Operador pelo Telegram, ele executa uma tarefa no meu PC dentro do prazo, eu vejo o aviso e as capturas, e ele é encerrado sozinho ao fim (ou na hora, com /travar). | [ADR 0021](../decisoes/0021-operador-do-pc.md), [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), [Windows](../arquitetura/windows.md#operador-do-pc), [segurança](../arquitetura/seguranca.md#operador-do-pc), [permissões](../classes/permissoes.md), [teto do workspace](../classes/teto-do-workspace.md), [política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md), [decretos](../telegram/decretos.md#delegação-da-ativação-do-operador), [bot](../telegram/bot.md), [segurança do canal](../telegram/seguranca-do-canal.md), [persistência](../arquitetura/persistencia.md#operador-do-pc), [checklist](../plataforma/checklist.md), [instalação e versões](../plataforma/instalacao-e-atualizacao.md), [canvas](../painel/canvas.md#operador-do-pc), [administração](../painel/administracao.md#operador-do-pc), [instalar](../operacao/instalar.md) |

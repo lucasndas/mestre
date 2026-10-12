@@ -30,10 +30,13 @@ Deixar o Grão-Mestre aprovar sozinho o que é seguro e obrigá-lo a perguntar n
 | `classe_workspace` | criar classe do workspace ([teto](../classes/teto-do-workspace.md)) | nunca | Administrador |
 | `acao_destrutiva` | `note delete`, `ritual delete`, `class delete`, `table close --cancel`, sem exceção pontual para aquela ação ([convenções da CLI](../cli/convencoes.md)); alvo = o comando e o objeto | nunca | Administrador |
 | `proposta_agents_md` | criar o `AGENTS.md` proposto na [sessão zero](../sessao-zero/workspace.md#análise-do-projeto-e-agentsmd-etapa-analysis); o pedido mostra o texto inteiro | nunca | Administrador |
+| `ativacao_operador` | ativar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) para uma tarefa, por um tempo | nunca; só com decreto de delegação do Dono (abaixo) | Dono, com PIN |
 | `atualizacao_mestre` | versão nova do Mestre ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) | nunca | Administrador |
 | `atualizacao_provedor` | versão nova de um CLI de provedor ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md#política-por-provedor)) | nunca | Administrador |
 
 **Pedidos "Sistema"** (`atualizacao_mestre`, `atualizacao_provedor`): criados pelo motor, não pertencem a um workspace e vão ao Dono e aos Administradores; o Grão-Mestre só recebe um evento informativo e **nunca** aprova. Padrões: quórum 1, prazo de 7 dias, sem PIN. Não aparecem no arquivo de política do workspace (abaixo).
+
+**`ativacao_operador`** é regra fixa: não aparece no arquivo de política, que não consegue mudar quem aprova nem tirar o PIN, e decreto `policy` não o alcança. Só o Dono aprova, pelo botão no Telegram ou no painel. A única forma de o Grão-Mestre aprovar é um decreto `delegation` **do Dono** com alvo `ativacao_operador` ([decretos](../telegram/decretos.md#delegação-da-ativação-do-operador)); fora do escopo, da duração ou da validade desse decreto, `approval decide` recebe `human_required`. Prazo do pedido: 1 h (padrão).
 
 Ampliar o teto do workspace não é aprovação: só por decreto ([decretos](../telegram/decretos.md)). Aprovações de cura seguem a [autocura](../autocura/camadas.md).
 
@@ -134,6 +137,7 @@ Um decreto pode mudar a política sem editar o arquivo (ex.: "pode aprovar migra
 - **CA-APROV-POL-07** · *rápida* — **Dado** um personagem tentando escrever em `.mestre/regras/politica-de-aprovacao.yaml`, **quando** o `mestre hook` avalia, **então** a ação é negada.
 - **CA-APROV-POL-08** · *rápida* — **Dado** um `mestre note delete` sem exceção pontual, **quando** o motor avalia, **então** cria um pedido `acao_destrutiva` com o comando e o pergaminho como alvo, só para Administradores e o Dono, e um `approval decide` do Grão-Mestre nele recebe `human_required`.
 - **CA-APROV-POL-09** · *rápida* — **Dado** nenhuma aprovação vigente para o PR 12 no hash atual, **quando** o Grão-Mestre chama `mestre gh approve 12`, **então** recebe `human_required` e nenhum review é enviado; **dado** a aprovação de um usuário para esse hash, **então** o review sai.
+- **CA-APROV-POL-10** · *rápida* — **Dado** um pedido `ativacao_operador` e nenhum decreto de delegação, **quando** o Grão-Mestre chama `approval decide` ou um Administrador toca Aprovar, **então** os dois são recusados e o pedido segue esperando o Dono; **dado** um arquivo de política com `ativacao_operador: { sozinho: se_condicoes }`, **então** o arquivo é inválido e vale a versão anterior.
 
 ## Depende de
 

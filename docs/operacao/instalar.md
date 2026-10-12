@@ -36,7 +36,7 @@ Todo uso começa por **uma** máquina instalada como **Core** (ela já roda agen
 
 2. Espere terminar. O passo mais demorado é baixar e testar o modelo de transcrição (centenas de MB).
 3. No fim, o terminal mostra três coisas. **Anote as três:** o **endereço do painel** (ex.: `https://servidor.local:7443`), a **impressão digital SHA-256 da CA** e o **código de configuração** (usado uma vez para criar o Dono).
-4. Guarde uma **cópia da chave do cofre** (`/etc/mestre/cofre.key`) fora do servidor: sem ela, um disco perdido leva junto todos os segredos ([cofre](../plataforma/cofre.md)).
+4. O instalador mostra **uma única vez** a **chave de recuperação** do cofre (52 caracteres em grupos de 4) e pede que você redigite dois grupos. Guarde-a fora do Mestre (papel, gerenciador de senhas): sem ela, o backup do cofre é inútil e um disco perdido leva junto todos os segredos ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)).
 5. Confira: `systemctl status mestre-core mestre-node mestre-guardiao` mostra os três `active (running)`. O `mestre-core` guarda o cofre e não roda agentes; o `mestre-node` é o nó local, que roda os agentes desta máquina.
 6. Siga para o [primeiro acesso](primeiro-acesso.md).
 
@@ -45,7 +45,7 @@ Todo uso começa por **uma** máquina instalada como **Core** (ela já roda agen
 1. Baixe `mestre-<versão>-x64.msi` da página de Releases, confira o SHA-256 publicado (`Get-FileHash .\mestre-<versão>-x64.msi`) e abra. O instalador não tem assinatura de código: se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações** → **Executar assim mesmo**, e aceite o pedido de administrador.
 2. Escolha **Core** como papel da máquina.
 3. No fim, ele mostra o endereço do painel, a impressão digital da CA e o código de configuração. **Anote os três.**
-4. Guarde uma cópia da chave do cofre: num PowerShell de administrador, `mestre core export-key --out <pendrive>\cofre.key`, e tire o arquivo do PC.
+4. Guarde a **chave de recuperação** do cofre que o instalador mostra uma única vez, como no Ubuntu (passo 4).
 5. Confira: `Get-Service mestre-core, mestre-node, mestre-guardiao` mostra os três `Running`. O `mestre-core` guarda o cofre numa conta própria do sistema; o `mestre-node` roda em outra e inicia os agentes com a conta `mestre-agente` ([Windows](../arquitetura/windows.md#windows-como-core)). `Get-LocalUser mestre-agente` mostra a conta ativa.
 6. Siga para o [primeiro acesso](primeiro-acesso.md).
 
@@ -56,6 +56,7 @@ Todo uso começa por **uma** máquina instalada como **Core** (ela já roda agen
 3. O instalador procura o Core na rede local; confira o que ele achou e cole o **código de convite**.
 4. O instalador cria a conta `mestre-agente` e os serviços; os agentes trabalham mesmo com você deslogado.
 5. Confira: `Get-Service mestre-node, mestre-guardiao` mostra os dois `Running`, e `Get-LocalUser mestre-agente` mostra a conta ativa.
+6. **Operador do PC (opcional):** o instalador pergunta se quer habilitar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), um agente que usa este PC com a sua conta, só quando o Dono aprova, por pouco tempo e com aviso na tela. Se quiser, responda **sim** e escolha o seu usuário do Windows. Antes, deixe o Controle de Conta de Usuário (UAC) ligado, com "Sempre notificar" ou o nível padrão, e o Chrome com a extensão Claude in Chrome instalada. Depois, faça a configuração inicial em **Administração → Operador do PC**. Também vale para o nó local de um Core no Windows. Para desligar, rode o instalador de novo e responda **não**.
 
 ## Nó no Ubuntu
 

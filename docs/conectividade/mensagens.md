@@ -8,12 +8,12 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 
 | `type` | Sentido | Ack | Campos principais do `payload` | Resposta |
 |---|---|---|---|---|
-| `hello` | N→C | — | `protocol {min, max}`, `version`, `node_id`, `name`, `os`, `arch`, `local`, `gpu`, `transcricao`, `tools {nome: versão}`, `account_profiles[]`, `terminals[]` (estado atual) | `welcome {protocol, core_version, core_time}` ou fechamento `4003` |
+| `hello` | N→C | — | `protocol {min, max}`, `version`, `node_id`, `name`, `os`, `arch`, `local`, `gpu`, `transcricao`, `operador` (com `operador_reason` quando falso e o Operador está habilitado: `sem_usuario`, `tela_bloqueada`, `uac`, `tarefa`), `tools {nome: versão}`, `account_profiles[]`, `terminals[]` (estado atual) | `welcome {protocol, core_version, core_time}` ou fechamento `4003` |
 | `node.heartbeat` | N→C | não | `cpu_pct`, `mem_pct`, `disk_free_bytes`, `terminals` | — |
 | `node.capabilities` | N→C | sim | os campos de capacidade do `hello` que mudaram | — |
 | `ack` | ambos | — | `status`: `ok` \| `duplicate` \| `error` | — |
 | `error` | ambos | — | `code`, `message`, `retryable` | — |
-| `terminal.open` | C→N | sim | `terminal_id`, `agent_id`, `command`, `args[]`, `env {}`, `cwd`, `adapter` | `terminal.opened {terminal_id, pid}` ou `error` |
+| `terminal.open` | C→N | sim | `terminal_id`, `agent_id`, `command`, `args[]`, `env {}`, `cwd`, `adapter`; no Operador do PC, `operator {session_id, ends_at}` (o nó cria o terminal pelo processo da sessão) | `terminal.opened {terminal_id, pid}` ou `error` |
 | `terminal.input` | C→N | sim | `terminal_id`, `mode` (`message` pela `TypeMessage` do adaptador \| `raw`), `data` | — (ack basta) |
 | `terminal.close` | C→N | sim | `terminal_id`, `mode` (`graceful` \| `kill`) | `terminal.status` com `stopped` |
 | `terminal.status` | N→C | sim | `terminal_id`, `state` (`starting`, `idle`, `busy`, `blocked`, `stuck`, `stopped`, `interrupted`, os identificadores de [personagens](../orquestracao/personagens.md)), `reason` (em `blocked`: `permission` \| `quota` \| `input`), `exit_code`, `session_id` | — |
@@ -21,7 +21,11 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `terminal.screen` | C→N | não | `terminal_id`, `lines` (histórico) | `terminal.screen_result {text, cursor, captured_at}` ([terminal](../arquitetura/terminal.md)) |
 | `inbox.deliver` | C→N | sim | `terminal_id`, `item_id`, `text`, `header` | `inbox.result {item_id, status: delivered \| busy}`; `busy` devolve o item à fila no Core ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) |
 | `agent.rules` | C→N | sim | o documento de [regras efetivas](../classes/permissoes.md#regras-efetivas) de um personagem | — |
-| `agent.site_session` | C→N | sim | `agent_id`, `domains[]`, `state` (estado de sessão no formato `storageState`, nunca a senha) ou `failed {domain, reason}` | — (o nó grava na `MESTRE_TMP` do personagem; [login em sites](../plataforma/cofre.md#login-em-sites)) |
+| `agent.site_login` | C→N | sim | `attempt_id`, `agent_id`, `domains[]`, `login_url`, `username`, `secret`, seletores e verificação de sucesso; o nó guarda só em memória, registrado no mascarador | `agent.site_login_status` ([login em sites](../plataforma/cofre.md#login-em-sites)) |
+| `agent.site_login_status` | N→C | sim | `attempt_id`, `state` (`needs_code` \| `needs_push` \| `needs_captcha` com `xfer_id` da imagem \| `ok` \| `requires_human` \| `failed` com `reason`) | o Core conduz o [segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha); com `ok`, o nó já gravou o estado na `MESTRE_TMP` |
+| `agent.site_login_input` | C→N | sim | `attempt_id`, `value` (código ou resposta do captcha; nunca vai para log) | — |
+| `operator.session` | N→C | sim | `session_id`, `state` (`started` \| `locked` \| `stopped_on_pc` \| `session_lost`), `at` | — (o Core encerra a sessão com o motivo; [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) |
+| `operator.capture` | N→C | sim | `session_id`, `captured_at`, `trigger` (`intervalo` \| `acao`), `event_id`, `xfer_id` da imagem já transferida | — (o Core cifra e guarda; [persistência](../arquitetura/persistencia.md#operador-do-pc)) |
 | `agent.event` | N→C | sim | o evento normalizado do [adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento) | — |
 | `cli.call` | N→C | sim | o pedido do [canal local](../arquitetura/canal-local.md#pedido), mais `caller {agent_id, terminal_id, node_id}` já verificado | `cli.result` |
 | `cli.result` | C→N | sim | a resposta do canal local, inclusive as parciais (`partial: true`) | — |

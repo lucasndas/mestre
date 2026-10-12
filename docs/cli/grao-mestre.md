@@ -70,11 +70,11 @@ mestre approval list [--state pending|decided|all] [--table "<mesa>"]
 ### `mestre decree`
 ```
 mestre decree propose --kind exception|rule --effect permission|behavior|policy|ceiling|delegation
-                     --target "<classe|personagem|workspace|mesa>" --scope "<o que o efeito cobre>"
+                     --target "<classe|personagem|workspace|mesa|ativacao_operador>" --scope "<o que o efeito cobre>"
                      --text "<texto original do usuário>" [--until "<ISO 8601>"] --from-message <id>
 mestre decree list [--all]
 ```
-- `propose`: transforma a ordem de um usuário (a mensagem de `--from-message`) numa proposta estruturada com os campos que [decretos](../telegram/decretos.md) exige: `--effect` (o tipo de efeito), `--target` (a quem vale, no formato `classe:<nome>`, `personagem:<nome>`, `workspace` ou `mesa:<id>`), `--scope` (o que o efeito cobre, no vocabulário do `permissions.yaml` ou da política, ex.: `commands.allow:make deploy-teste`), `--until` (validade) e `--text` (o texto original, guardado sem reescrever); o motor mostra ao autor exatamente o que vai valer e pede confirmação por botão (e PIN, quando o decreto afrouxa segurança). Volta com 9; o resultado chega pela caixa de entrada. Autor sem nível para aquele tipo de decreto → 3 `level_denied`. O Grão-Mestre nunca cria decreto sozinho.
+- `propose`: transforma a ordem de um usuário (a mensagem de `--from-message`) numa proposta estruturada com os campos que [decretos](../telegram/decretos.md) exige: `--effect` (o tipo de efeito), `--target` (a quem vale, no formato `classe:<nome>`, `personagem:<nome>`, `workspace` ou `mesa:<id>`; na delegação da ativação do Operador do PC, `ativacao_operador`, com `--scope` `missao:<nome>` ou `classe:<nome>`), `--scope` (o que o efeito cobre, no vocabulário do `permissions.yaml` ou da política, ex.: `commands.allow:make deploy-teste`), `--until` (validade) e `--text` (o texto original, guardado sem reescrever); o motor mostra ao autor exatamente o que vai valer e pede confirmação por botão (e PIN, quando o decreto afrouxa segurança). Volta com 9; o resultado chega pela caixa de entrada. Autor sem nível para aquele tipo de decreto → 3 `level_denied`. O Grão-Mestre nunca cria decreto sozinho.
 - `list`: decretos ativos (número, autor e nível, texto, escopo, validade); `--all` inclui revogados e expirados.
 
 ### `mestre notify`

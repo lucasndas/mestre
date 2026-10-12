@@ -43,7 +43,7 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 6. Se o `ufw` estiver ativo, libera as portas do Core ([portas](../arquitetura/componentes.md#portas)).
 7. Pareia sozinho o nó local com o Core, em `127.0.0.1:7443` ([pareamento](../conectividade/pareamento.md#convite)), e baixa e prepara o Whisper no nó local (abaixo).
 8. Inicia os serviços e mostra no terminal o endereço do painel, a impressão da CA (para conferir no navegador) e o **código de configuração** do assistente do Dono ([login](../painel/login.md#assistente-do-dono-primeira-vez)).
-9. Orienta guardar uma cópia da chave do cofre fora do servidor.
+9. Mostra **uma única vez** a chave de recuperação do cofre e só termina depois de o usuário redigitar dois grupos dela; diz que sem ela o backup do cofre é inútil ([backup e chave de recuperação](cofre.md#backup-e-chave-de-recuperação)). Com `--restore <pasta do backup>`, em vez de gerar cofre e CA novos, restaura o banco e o cofre do backup pedindo essa chave.
 
 ### Core no Windows (`mestre install core`, elevado)
 
@@ -52,8 +52,8 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 3. Cria a conta `mestre-agente` e registra o `mestre-node` local na conta virtual `NT SERVICE\MestreNode`, como no nó Windows (abaixo), com banco de nó próprio, e o pareia sozinho com o Core em `127.0.0.1:7443` ([pareamento](../conectividade/pareamento.md#convite)).
 4. Registra `mestre-guardiao` (LocalSystem) e o ajudante `mestre-update` (sob demanda), com a recuperação de [camadas](../autocura/camadas.md#valores-padrão).
 5. Cria as regras de firewall das portas do Core, só no perfil Privado ([portas](../arquitetura/componentes.md#portas)).
-6. Baixa e prepara o Whisper no nó local (abaixo); o `ffmpeg.exe` já vem no instalador.
-7. Inicia os serviços, mostra o endereço do painel, a impressão da CA e o código de configuração, e orienta a cópia da chave do cofre por `mestre core export-key`.
+6. Baixa e prepara o Whisper no nó local (abaixo); o `ffmpeg.exe` já vem no instalador. Oferece o Operador do PC no nó local, como no nó Windows (abaixo).
+7. Inicia os serviços, mostra o endereço do painel, a impressão da CA e o código de configuração, e mostra a chave de recuperação do cofre, como no Linux (passo 9).
 
 A instalação no Windows não pede senha nenhuma: nenhum serviço usa a conta de quem instala.
 
@@ -66,6 +66,7 @@ Nos dois sistemas, os Apps fixos "Grão-Mestre" e "Mestre" nascem no primeiro ac
 3. Registra os serviços `mestre-node` (conta virtual `NT SERVICE\MestreNode`, com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` concedidos e declarados) e `mestre-guardiao` (início automático, recuperação de [camadas](../autocura/camadas.md#valores-padrão)) e o ajudante `mestre-update` (sob demanda).
 4. Cria as regras de firewall da descoberta e da [página reserva](../autocura/pagina-reserva.md), só no perfil Privado.
 5. Cria as pastas de dados com ACL ([persistência](../arquitetura/persistencia.md#arquivos)), inicia os serviços, roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
+6. **Operador do PC (opcional; padrão: não):** pergunta se habilita o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) e para qual usuário do Windows (no `mestre install node`, `--operator-user <usuário>`). Se sim, cria a tarefa `\Mestre\Operador` ([Windows](../arquitetura/windows.md#operador-do-pc)) e grava o usuário na configuração do nó; não dá à conta dele nenhuma entrada em `%ProgramData%\Mestre\`. O checklist confere o UAC (WIN-21) e a tarefa (WIN-22). Desabilitar é rodar a instalação de novo sem a opção: a tarefa é apagada e o nó deixa de anunciar `operador`.
 
 ### Nó no Linux (`mestre install node`)
 
@@ -96,7 +97,7 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 
 ### Remoção (`mestre uninstall`)
 
-Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela e o arquivo da senha. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil ([bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
+Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela, o arquivo da senha e a tarefa `\Mestre\Operador`. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil ([bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
 
 ## Regras e erros
 
@@ -116,9 +117,10 @@ Para e remove serviços, unidades, regras de firewall criadas pela instalação 
 - **CA-INST-08** · *pesada* — **Dado** a instalação do Core concluída no Ubuntu e no Windows, **quando** listo os serviços, **então** existem `mestre-core` e o nó local `mestre-node`, pareado sozinho e conectado em `127.0.0.1:7443`; no Windows, `mestre-core` roda como `NT SERVICE\MestreCore`, `mestre-node` como `NT SERVICE\MestreNode` e os terminais como `mestre-agente`; no Linux, `mestre-core` e `mestre-node` como `mestre` e os terminais como `mestre-agente` (MVP-13).
 - **CA-INST-09** · *rápida* — **Dado** um nó sem transcrição e dublês de rede e relógio, **quando** um Administrador ativa a transcrição dele no painel, **então** o Core envia os arquivos por transferência, o nó roda o benchmark e passa a anunciar `transcricao: true`; com um arquivo de hash errado, nada é anunciado.
 - **CA-INST-10** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), **quando** listo a ACL de `%ProgramData%\Mestre\` e de cada subpasta, **então** a herança está desligada, não há entrada para `Users`, `Authenticated Users` nem `Everyone`, e `mestre-agente` só tem as entradas de [persistência](../arquitetura/persistencia.md#arquivos); uma conta comum de teste da máquina não consegue listar a pasta (MVP-13).
-- **CA-INST-11** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), o usuário logado na sessão dele e personagens de teste rodando (com MCP de navegador), **quando** listo os processos do Mestre e seus donos, **então** nenhum roda com a conta do usuário: `mestre-core` como `NT SERVICE\MestreCore`, `mestre-node` como `NT SERVICE\MestreNode`, o Guardião como SYSTEM, e os terminais, seus filhos e o agente de diagnóstico como `mestre-agente` (MVP-13).
+- **CA-INST-11** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), o usuário logado na sessão dele e personagens de teste rodando (com MCP de navegador), **quando** listo os processos do Mestre e seus donos, **então** nenhum roda com a conta do usuário: `mestre-core` como `NT SERVICE\MestreCore`, `mestre-node` como `NT SERVICE\MestreNode`, o Guardião como SYSTEM, e os terminais, seus filhos e o agente de diagnóstico como `mestre-agente`; a única exceção é o [Operador do PC](../decisoes/0021-operador-do-pc.md): com ele habilitado, só `mestre node operator-session` roda com a conta do usuário e, durante uma ativação aprovada, também o terminal do Operador e seus filhos, e mais nenhum processo (MVP-13, MVP-14).
 - **CA-INST-12** · *pesada* — **Dado** a instalação concluída no Windows e um arquivo em `C:\Users\<usuário>\Documents`, **quando** um processo como `mestre-agente` (o agente falso, por comando direto, sem passar pelo despachante) tenta listar `C:\Users\<usuário>` e ler o arquivo, **então** o Windows nega os dois (MVP-13).
 - **CA-INST-13** · *pesada* — **Dado** a instalação concluída no Windows e a senha guardada do `mestre-agente`, **quando** se tenta entrar com ela na tela de login, por `runas /user:mestre-agente` e por Área de Trabalho Remota, **então** o Windows recusa os três, a conta não aparece na tela de login nem no grupo Administradores, e o `mestre-node` continua iniciando personagens com ela (MVP-13).
+- **CA-INST-14** · *pesada* — **Dado** um nó Windows instalado com o Operador habilitado para o usuário de teste, **quando** listo a tarefa `\Mestre\Operador` e a ACL de `%ProgramData%\Mestre\`, **então** a tarefa tem o gatilho de logon desse usuário, privilégios normais, sem limite de tempo e reinício em falha, e a ACL não tem entrada para a conta dele; reinstalado sem a opção, a tarefa não existe mais (MVP-14).
 
 ## Depende de
 

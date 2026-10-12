@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-12
 
 Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
@@ -23,10 +23,28 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 | M4 | Orquestração | workspaces, sessão zero, mesas, personagens, conexões, esperas e caixa de entrada, missões, pergaminhos, rituais, grimórios, bases e fichas, comandos de comunicação e coordenação, skills geradas |
 | M5 | Integrações | GitHub, Telegram, usuários e níveis, decretos, aprovações, Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
 | M6 | Painel | login, canvas, visão do workspace, conversa e aprovações, administração |
-| M7 | Plataforma e autocura | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, atualização dos CLIs; suíte pesada (MVP-1 a MVP-13) |
+| M7 | Plataforma, autocura e Operador do PC | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, atualização dos CLIs; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-14) |
 
 - **Guardião em paralelo:** [guardiao.md](../autocura/guardiao.md) depende só de documentos até o M2 e pode começar logo depois do M2, em paralelo com M3 a M6.
 - **Escolhas antes de cada marco:** biblioteca de mDNS antes do M2 e gerador de tipos TypeScript antes do M6 ([convenções](convencoes.md#código-gerado)).
+
+### Operador do PC no M7
+
+O [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) ([ADR 0021](../decisoes/0021-operador-do-pc.md)) é implementado no fim do M7, depois da instalação e do checklist, porque precisa de tudo antes: permissões e teto (M3), bases e personagens (M4), aprovações, decretos e Telegram (M5), painel (M6), instalação e checklist (M7). As partes dele ficam nos documentos donos, que continuam no marco de origem no mapa; os critérios abaixo é que são implementados no M7. Começa por um spike na VM Windows com os três itens de "Verificar na implementação" do Operador em [Windows](../arquitetura/windows.md#verificar-na-implementação).
+
+| Documento (marco no mapa) | Critérios implementados no M7 |
+|---|---|
+| [permissões](../classes/permissoes.md) (M3) | CA-PERM-14, CA-PERM-15 |
+| [teto do workspace](../classes/teto-do-workspace.md) (M3) | CA-TETO-06 |
+| [bases e fichas](../orquestracao/bases-e-fichas.md) (M4) | CA-BF-06, CA-BF-07, CA-BF-08 |
+| [política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md), [decretos](../telegram/decretos.md) (M5) | CA-APROV-POL-10, CA-APROV-FLUXO-11, CA-DEC-10 |
+| [bot](../telegram/bot.md), [segurança do canal](../telegram/seguranca-do-canal.md) (M5) | CA-BOT-10, CA-CANAL-08 |
+| [canvas](../painel/canvas.md), [administração](../painel/administracao.md) (M6) | CA-CANVAS-08, CA-ADM-09 |
+| [instalação](../plataforma/instalacao-e-atualizacao.md), [checklist](../plataforma/checklist.md) (M7) | CA-INST-14, CA-CHK-15 (e CA-INST-11 ganha a exceção do Operador) |
+
+### Critérios do cofre em marcos posteriores
+
+O [cofre](../plataforma/cofre.md) é do M1, mas o segundo fator, o filtro de segredos nas mensagens e os avisos de validade usam o Telegram, o Grão-Mestre e a caixa de entrada: CA-COFRE-10 a CA-COFRE-17 são implementados no M5, junto do [bot](../telegram/bot.md) (com CA-BOT-09), CA-COFRE-18 no M4, junto das [bases e fichas](../orquestracao/bases-e-fichas.md) (MCP de navegador do personagem), CA-COFRE-20 no M6, com a [administração](../painel/administracao.md), e CA-COFRE-19 no M7, com a [instalação](../plataforma/instalacao-e-atualizacao.md).
 
 ### Spikes do M1
 
@@ -59,4 +77,4 @@ Tabela lida pela verificação de docs: cada link da coluna "Documentos" é um d
 
 - Comece um marco só com o anterior pronto (critérios de aceite das suítes rápida e completa passando), salvo o Guardião, acima.
 - Dentro do marco, implemente na ordem do grafo de "Depende de"; documentos sem dependência entre si podem andar em paralelo.
-- Os critérios *pesada* (MVP-1 a MVP-13) fecham no M7, quando instalação, autocura e laboratório existem ([testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada)).
+- Os critérios *pesada* (MVP-1 a MVP-14) fecham no M7, quando instalação, autocura e laboratório existem ([testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada)).

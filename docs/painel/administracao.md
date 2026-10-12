@@ -24,7 +24,7 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 | Workspaces | lista, criar (abre a sessão zero), acompanhar as etapas da sessão zero e tentar de novo a que falhou, pausar e retomar | [workspaces](../orquestracao/workspaces.md), [sessão zero do workspace](../sessao-zero/workspace.md) |
 | Consumo de uso | gráficos e tabelas por personagem, missão, mesa, workspace, conta e dia; limites configurados e quanto falta | [limites de uso](../plataforma/limites-de-uso.md) |
 | Saúde dos nós | ver seção abaixo | [camadas](../autocura/camadas.md), [checklist](../plataforma/checklist.md) |
-| Segredos | nomes dos segredos do cofre, tipo, impressão curta e data; trocar e remover; cadastrar credenciais de site (domínio, página de login, usuário, senha) | [cofre](../plataforma/cofre.md) |
+| Segredos | nomes dos segredos do cofre, tipo, impressão curta, datas e metadados; nenhum valor salvo é mostrado de novo, nem ao Dono: só substituir e apagar, com PIN; é o único lugar de cadastro de credenciais de site (página de login, usuário, segredo, dono, classes, domínios, tipo, com a sugestão de preferir senha de app, token ou chave de API, e validade opcional); avisos de validade; gerar nova chave de recuperação, com PIN, avisando que backups antigos exigem a anterior e que sem ela o backup do cofre é inútil | [credenciais de site](../plataforma/cofre.md#credenciais-de-site), [backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação) |
 | Diagnóstico com IA | ficha de diagnóstico de cada máquina | [diagnóstico com IA](../autocura/diagnostico-com-ia.md#ficha-de-diagnóstico) |
 | Auditoria | trilha de auditoria com filtros (quem, o quê, quando, workspace) | [persistência](../arquitetura/persistencia.md) |
 
@@ -41,7 +41,7 @@ Uma linha por máquina (Core e cada nó), atualizada em tempo real. Na máquina 
 |---|---|
 | Estado | conectado, sem sinal (desde quando), revogado; selo do incidente aberto, se houver |
 | Motor e Guardião | versão de cada um, protocolo negociado, último heartbeat de cada conexão |
-| Capacidades | `os`, `local` (nó local do Core), `gpu`, `transcricao`, ferramentas e versões ([protocolo](../conectividade/protocolo.md)) |
+| Capacidades | `os`, `local` (nó local do Core), `gpu`, `transcricao`, `operador` (e, se falso com o Operador habilitado, o motivo), ferramentas e versões ([protocolo](../conectividade/protocolo.md)) |
 | Carga | CPU, memória, disco livre, terminais rodando |
 | Agentes | personagens rodando no nó, com mesa e estado (link para o canvas) |
 | Autocura | ações de cura recentes (últimos 7 dias), com resultado ([camadas](../autocura/camadas.md#anti-loop-e-auditoria)) |
@@ -50,6 +50,13 @@ Uma linha por máquina (Core e cada nó), atualizada em tempo real. Na máquina 
 | Página reserva | endereço da [página reserva](../autocura/pagina-reserva.md) do nó (no modo máquina única, a do Core) |
 
 Ações da tela: gerar convite de nó e revogar a credencial de um nó ([pareamento](../conectividade/pareamento.md)); aplicar uma correção oferecida pelo checklist; ativar ou desativar a transcrição num nó ([nó de transcrição](../plataforma/instalacao-e-atualizacao.md#whisper)); pedir ao Guardião as ações da [lista fechada](../autocura/guardiao.md#lista-fechada-de-ações) (status, logs, reiniciar, checklist).
+
+### Operador do PC
+
+Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); comportamento em [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
+- **Por nó habilitado:** usuário do Windows configurado, estado (sem usuário logado, tela bloqueada, pronto, em sessão), duração máxima (padrão 2 h), a configuração inicial guiada (conferência do Chrome e da extensão e o terminal de login do Claude Code no perfil do Operador, aberto com a conta do usuário, sem agente).
+- **Lista de MCPs de controle** do computador e do navegador do usuário, usada pela regra fixa ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)): o padrão e o nome do MCP de controle do computador que o Dono instalou.
+- **Sessões:** cada sessão de `operator_sessions` com tarefa, quem aprovou, início, fim e motivo, as ações completas da auditoria e as **capturas de tela** numa linha do tempo, decifradas só para o Dono, a cada abertura, com auditoria de quem viu ([persistência](../arquitetura/persistencia.md#operador-do-pc)).
 
 ### Contagem de Apps
 
@@ -76,6 +83,7 @@ Ações da tela: gerar convite de nó e revogar a credencial de um nó ([pareame
 - **CA-ADM-05** · *rápida* — **Dado** uma ficha exportada em YAML, **quando** importo de volta, **então** a ficha resultante é igual à original.
 - **CA-ADM-06** · *pesada* — **Dado** Core e nó instalados, **quando** paro o serviço do motor do nó, **então** a linha do nó mostra "sem sinal" com o horário, a coluna Autocura mostra a ação do Guardião e, de volta, a coluna Checklist fica em dia (MVP-11, MVP-13).
 - **CA-ADM-07** · *rápida* — **Dado** uma política com erro de formato, **quando** salvo, **então** nada muda e o erro aponta a linha.
+- **CA-ADM-09** · *rápida* — **Dado** uma sessão do Operador com capturas, **quando** um Administrador chama a API de capturas, **então** recebe a recusa e nenhum arquivo é decifrado; **quando** o Dono abre a sessão, **então** vê as capturas em ordem e a abertura entra na auditoria.
 - **CA-ADM-08** · *rápida* — **Dado** um Core sem nó remoto, **quando** a tela carrega, **então** aparece a faixa do modo máquina única; **dado** um nó pareado, **então** ela some.
 
 ## Depende de

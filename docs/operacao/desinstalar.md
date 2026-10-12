@@ -9,7 +9,7 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 ## Antes de começar
 
 - Veja no painel as **mesas abertas**. Trabalho que ainda não foi enviado ao GitHub existe só nas máquinas do Mestre; encerre as mesas ou peça ao Grão-Mestre para enviar o que importa.
-- Para guardar uma cópia, copie a pasta de backups do banco e a chave do cofre antes de apagar dados (Core no Ubuntu: `/var/lib/mestre/backups/` e `/etc/mestre/cofre.key`; Core no Windows: `%ProgramData%\Mestre\backups\` e a cópia feita por `mestre core export-key`).
+- Para guardar uma cópia, copie a pasta de backups antes de apagar dados (Core no Ubuntu: `/var/lib/mestre/backups/`; Core no Windows: `%ProgramData%\Mestre\backups\`). O cofre vai nela, cifrado; para restaurar, você precisa da **chave de recuperação** guardada na instalação ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)).
 
 ## Remover um nó
 

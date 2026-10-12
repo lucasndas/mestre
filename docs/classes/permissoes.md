@@ -29,7 +29,7 @@ git:
 network:
   internet: false
   domains: []               # internet: true e lista vazia = qualquer domínio
-  credentials: []           # credenciais de site do cofre liberadas (nome); o domínio de cada uma precisa estar em domains
+  credentials: []           # credenciais de site do cofre (nome); o domínio precisa estar em domains, e a classe, na lista da credencial
 cli:
   allow: ["issue comment"]  # comandos de GitHub e coordenação que o nível permite
 tools:                      # ferramentas de tipo mcp e other, pelo nome nativo; * casa qualquer texto
@@ -37,13 +37,15 @@ tools:                      # ferramentas de tipo mcp e other, pelo nome nativo;
   ask: []
   deny: ["mcp__*__delete_*"]
 default: ask                # ferramenta de tipo mcp ou other que não casa com `tools`
+operator: false             # pode ser usada na base Operador do PC
 ```
 
 - **Arquivos:** valem para as ferramentas de ler, escrever e editar, para caminhos literais em argumentos de comandos e para redirecionamentos (`>`, `>>`). Leitura fora do worktree é negada, a não ser por caminho absoluto listado em `read`.
 - **Comandos:** a linha é dividida em comandos simples (`&&`, `||`, `;`, `|`, `&`, quebra de linha); prefixos `VAR=valor` são ignorados; cada parte é avaliada e vale a mais restritiva. Trechos que não dá para analisar (`$(…)`, crases, `eval`, `sh -c`, `bash -c`, `powershell -Command`) ficam no mínimo em `ask`. Comandos só de leitura (`cd`, `pwd`, `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `find`, `wc`, `git status|diff|log|show` e equivalentes do PowerShell) são liberados por padrão, ainda sujeitos a `files.deny` e a `commands.deny`.
 - **Git:** `git commit` só com `commit: true`, na branch que casa com `branches` e com todos os arquivos preparados (`git diff --cached --name-only`) dentro de `files.write`. Trocar de branch só para uma que casa com `branches`.
 - **Rede:** vale para as ferramentas web (domínio da URL) e é reforçada pelo sandbox nativo; comandos de shell só são contidos pelo controle nativo.
-- **Ferramentas (`tools`):** padrões sobre o nome nativo das ferramentas de tipo `mcp` e `other` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), com a mesma regra de casamento de `commands`; vale a mais restritiva entre `deny`, `ask` e `allow`, e o que não casa cai em `default`. **Navegação web:** cada personagem que navega tem o **próprio** MCP de navegador (ex.: Playwright MCP com `--headless --isolated`), configurado no perfil de conta ([bases e fichas](../orquestracao/bases-e-fichas.md)) e iniciado pelo CLI do personagem, portanto como `mestre-agente`, com navegador limpo: perfil de navegador só em memória, sem acesso às sessões, cookies e perfis de navegador do usuário ([segurança](../arquitetura/seguranca.md#navegação-web-e-login-em-sites)). A classe libera ou nega as ferramentas dele aqui (ex.: `mcp__playwright__*`, ou `mcp__*` para todas). Ferramentas MCP não passam por `network`: classe sem internet não deve liberar um MCP de navegador. **Login em sites:** só com credencial do cofre listada em `network.credentials`; o personagem recebe o estado de sessão, nunca a senha ([cofre](../plataforma/cofre.md#login-em-sites)).
+- **Ferramentas (`tools`):** padrões sobre o nome nativo das ferramentas de tipo `mcp` e `other` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), com a mesma regra de casamento de `commands`; vale a mais restritiva entre `deny`, `ask` e `allow`, e o que não casa cai em `default`. **Navegação web:** cada personagem que navega tem o **próprio** MCP de navegador (ex.: Playwright MCP com `--headless --isolated`), configurado no perfil de conta ([bases e fichas](../orquestracao/bases-e-fichas.md)) e iniciado pelo CLI do personagem, portanto como `mestre-agente`, com navegador limpo: perfil de navegador só em memória, sem acesso às sessões, cookies e perfis de navegador do usuário ([segurança](../arquitetura/seguranca.md#navegação-web-e-login-em-sites)). A classe libera ou nega as ferramentas dele aqui (ex.: `mcp__playwright__*`, ou `mcp__*` para todas). Ferramentas MCP não passam por `network`: classe sem internet não deve liberar um MCP de navegador. **Login em sites:** só com credencial do cofre listada em `network.credentials` e que liste a classe nos metadados dela; o personagem recebe o estado de sessão, nunca a senha ([cofre](../plataforma/cofre.md#login-em-sites)).
+- **Operador do PC (`operator`):** `true` deixa a classe ser usada na base especial Operador do PC, que roda com a conta do usuário ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)); só vale se o [teto](teto-do-workspace.md) também tiver `operator: true`. Padrão `false`.
 - **CLI `mestre`:** comandos de comunicação são de todos; os demais seguem o nível de quem chama ([convenções da CLI](../cli/convencoes.md)) e `cli.allow`; `git.request_push` cobre `mestre pr open|update`. `git.workflows` decide o envio de branches que alteram `.github/workflows/` (o CI do repositório): `never` (padrão) o motor recusa; `ask` cada envio vira pedido de aprovação `envio_workflows` a um usuário ([política](../aprovacoes/politica.md)); `allow` envia sem perguntar. Classes `ask` e `allow` precisam de um App com a permissão "Workflows" ([workflows](../github/identidades-e-apps.md#workflows)). A checagem acontece no motor, na hora da chamada. O que cada nível pode fazer no GitHub está em [ações por nível](../github/acoes-por-nivel.md).
 
 ### Regras fixas de segurança
@@ -55,7 +57,9 @@ Aplicação das [invariantes arquiteturais](../arquitetura/precedencia.md#invari
 - escrever, pela ferramenta de escrita **ou por comando de shell** (redirecionamento `>`/`>>`, `cp`, `mv`, `tee`, `sed -i`, `rm` e equivalentes reconhecidos pelo despachante), em `.git/**`, `.mestre/**` (pergaminhos e classes só pela CLI), `.claude/settings*.json`, `.codex/`, `.agents/hooks.json`, `.agents/agents/` e `.claude/agents/` (o agente não cria nem altera definições de agente ou subagente). O reconhecimento de comandos de shell é a primeira barreira; a garantia final é que o motor nunca usa uma classe alterada por fora sem aprovação ([classes](classes.md#onde-a-classe-é-alterada));
 - iniciar `claude`, `codex` ou `agy` pelo shell (personagens nascem só pelo motor);
 - executar arquivos de `.mestre/anexos/` ou dar permissão de execução a eles: **anexos nunca são executados** ([anexos](../telegram/anexos-e-transcricao.md));
-- editar um arquivo que outro personagem da mesa editou no turno ainda em andamento (o motivo cita quem).
+- editar um arquivo que outro personagem da mesa editou no turno ainda em andamento (o motivo cita quem);
+- fora da base Operador do PC, usar MCPs de controle do computador e do navegador do usuário, pelo nome da ferramenta e **qualquer que seja o transporte** do servidor (stdio, HTTP/SSE, servidor remoto pela rede). A lista de padrões é configurável pelo Dono ([administração](../painel/administracao.md#operador-do-pc)); padrão: `mcp__claude-in-chrome__*`, `mcp__computer-use__*` e o MCP de controle do computador cadastrado no Operador. O motor também recusa configurar esses servidores em perfis de conta e fichas de outra base, e aceita `--chrome` só na base Operador ([bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc));
+- comandos de elevação no Windows (`runas`, `Start-Process -Verb RunAs`, `gsudo`, `sudo` do Windows), em qualquer personagem; no Operador, junto com a negação das pastas de dados acima, é a defesa contra pedir privilégio de administrador ([segurança](../arquitetura/seguranca.md#operador-do-pc)).
 
 ### Regras efetivas
 
@@ -69,7 +73,7 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
  "git": {"commit": true, "branches": ["epico/42-login"], "request_push": false, "workflows": "never"},
  "network": {"internet": false, "domains": [], "credentials": []},
  "tools": {"allow": ["mcp__playwright__*"], "ask": [], "deny": [], "default": "ask"},
- "cli": {"allow": ["issue comment"]},
+ "cli": {"allow": ["issue comment"]}, "operator": false,
  "decrees": [{"id": 12, "effect": {"kind": "permission", "allow": {"commands": ["make deploy-teste"]}}, "until": "2026-10-19T00:00:00Z"}],
  "origin": {"commands.deny:curl *": "ceiling"},
  "locked": false}
@@ -148,6 +152,8 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 - **CA-PERM-11** · *rápida* — **Dado** qualquer classe, **quando** o agente pede `chmod +x .mestre/anexos/x.sh` ou `sh .mestre/anexos/x.sh`, **então** os dois são negados pela regra fixa de anexos.
 - **CA-PERM-12** · *rápida* — **Dado** uma classe com `tools.deny: ["Agent"]`, **quando** chega um `pre_tool` de tipo `subagent` com esse nome, **então** é negado; e, com a ferramenta liberada, um `pre_tool` de escrita vindo de dentro do subagente (mesmo `MESTRE_AGENT_ID`) passa pelas regras do personagem.
 - **CA-PERM-13** · *rápida* — **Dado** um personagem qualquer, **quando** chega um `pre_tool` de shell com `cp x.md .mestre/classes/qa/CLASS.md` ou `echo y > .claude/agents/a.md`, **então** os dois são negados; e uma escrita na pasta `MESTRE_TMP` do próprio personagem é liberada, enquanto na de outro personagem é negada.
+- **CA-PERM-14** · *rápida* — **Dado** um personagem comum com `tools.allow: ["mcp__*"]` e o servidor `claude-in-chrome` configurado por HTTP remoto, **quando** chega `mcp__claude-in-chrome__navigate` ou `mcp__computer-use__left_click`, **então** os dois são negados pela regra fixa; **dado** o mesmo nome num terminal do Operador com classe `operator: true` e teto permitindo, **então** segue as regras efetivas.
+- **CA-PERM-15** · *rápida* — **Dado** qualquer personagem, inclusive o Operador, **quando** chega `Start-Process pwsh -Verb RunAs`, `runas /user:Administrador cmd` ou `gsudo x`, **então** os três são negados pela regra fixa; **dado** um perfil de conta de base comum com o servidor `claude-in-chrome` na configuração MCP, **quando** o Dono salva, **então** o motor recusa.
 
 ## Depende de
 

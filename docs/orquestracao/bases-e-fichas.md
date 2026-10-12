@@ -99,11 +99,24 @@ Para usar várias contas do mesmo provedor, cada nó declara **perfis de conta**
 - O Codex sempre usa um perfil do Mestre: ficha de Codex sem `account` usa o perfil padrão criado pelo Mestre no nó, nunca o `~/.codex` pessoal.
 - Perfis são cadastrados no painel, por nó ([administração](../painel/administracao.md)).
 
+### Base especial: Operador do PC
+
+Agente que age na área de trabalho do usuário, com a conta dele, por tempo curto e com aprovação do Dono: a única exceção a "nenhum processo do Mestre usa a conta do usuário" ([ADR 0021](../decisoes/0021-operador-do-pc.md)). Só em nó Windows com o Operador habilitado na instalação; tarefa, processo da sessão, pipe e aviso na área de trabalho estão em [Windows](../arquitetura/windows.md#operador-do-pc).
+
+- **Base `operador`:** criada pelo Mestre e não apagável: `command: claude.exe`, `args: [--chrome]`, `platforms: [{os: windows}]`, `requires: {operador: true}`, `ready: hook`. O terminal é criado pelo processo da sessão do usuário, com a conta dele, e não como `mestre-agente`. Só o Dono edita os argumentos; nenhuma outra base vira Operador, e `--chrome` em outra base é recusado ao salvar.
+- **Ficha padrão "Operador":** base `operador`, `agent: claude-code`, classe global padrão `operador` (com `operator: true` e as ferramentas da extensão Claude in Chrome e do MCP de controle do computador cadastrado pelo Dono em `tools.allow`), `lifecycle: ephemeral`, `max_copies: 1`. A base só aceita fichas cuja classe tenha `operator: true`, e só fichas dela configuram esses MCPs ([regras fixas](../classes/permissoes.md#regras-fixas-de-segurança)).
+- **Perfil e pasta:** a conta do usuário não alcança `%ProgramData%\Mestre`, então o Operador não usa os perfis de `contas\`: usa `CLAUDE_CONFIG_DIR` em `%LOCALAPPDATA%\Mestre\Operador\claude\`, logado uma vez pelo Dono num terminal de login aberto pelo painel com a conta do usuário ([administração](../painel/administracao.md#operador-do-pc)), e trabalha em `%LOCALAPPDATA%\Mestre\Operador\sessoes\<id>\`, fora de `{mesa}`, onde o motor grava a camada do Mestre e os hooks como numa mesa. `MESTRE_ENDPOINT` aponta para o pipe do Operador.
+- **Pedido:** um Mestre da mesa, ou o Grão-Mestre numa mesa, chama `mestre recruit` com a ficha, a tarefa e a duração ([CLI](../cli/coordenacao.md#mestre-recruit)). O motor confere classe, teto e se algum nó tem o Operador habilitado e abre `ativacao_operador` ([política](../aprovacoes/politica.md#tipos-de-ação), [fluxo](../aprovacoes/fluxo.md)). Duração: padrão 30 min; máximo 2 h (padrão), configurável pelo Dono.
+- **Ativação:** aprovado o pedido, o motor espera até 10 min (padrão) um nó anunciar `operador` (processo da sessão ativo e tela desbloqueada); senão, falha com "tela bloqueada" ou "usuário não logado". Abre o terminal, entrega a tarefa como primeira mensagem e começa a contar o prazo. Enquanto ativo: mensagem fixada no Telegram ([bot](../telegram/bot.md#mensagens-de-saída)), aviso no painel ([canvas](../painel/canvas.md#operador-do-pc)) e faixa "Mestre operando — até HH:MM" com **Parar** na área de trabalho, todos com a hora do fim.
+- **Fim:** no fim do prazo, o motor interrompe o agente, espera 60 s e encerra o processo e a árvore dele (Job Object). Encerra **na hora**: **Encerrar agora** (Telegram ou painel), `/operador encerrar`, **Parar** na área de trabalho, `/travar`, tela bloqueada (motivo "tela bloqueada") e queda do processo da sessão. Entregue o `done`, encerra como efêmero. Os avisos passam a "encerrado: <motivo>".
+- **Auditoria reforçada:** todo `pre_tool` e `post_tool` do Operador fica na auditoria completo (entrada e resultado, depois do mascaramento), com a sessão; o processo da sessão captura a tela a cada 30 s (padrão) e a cada ação do MCP de controle do computador, e as capturas vão cifradas para o Core, vinculadas à missão e à mesa, visíveis só ao Dono ([persistência](../arquitetura/persistencia.md#operador-do-pc)).
+- **Login em sites:** o Operador é o recurso para os logins que o motor não conclui (`login_requires_human`, [segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha)): entra pelo Chrome do usuário, já logado.
+
 ## Regras e erros
 
 - `env` não pode definir variáveis `MESTRE_*` nem conter segredos; valores que parecem segredo são recusados ao salvar ([segurança](../arquitetura/seguranca.md)).
 - Apagar base usada por ficha, ou ficha usada por personagem vivo, é recusado com a lista de quem usa. Missões e grimórios que citam uma ficha apagada falham ao rodar/restaurar, dizendo qual ficha falta.
-- Base sem nenhuma plataforma, ou `cwd` de agente fora de `{mesa}`: recusada ao salvar.
+- Base sem nenhuma plataforma, ou `cwd` de agente fora de `{mesa}` (exceto a base `operador`): recusada ao salvar.
 
 ## Critérios de aceite
 
@@ -112,6 +125,9 @@ Para usar várias contas do mesmo provedor, cada nó declara **perfis de conta**
 - **CA-BF-03** · *rápida* — **Dado** o arquivo do exemplo exportado em YAML, **quando** é importado como JSON equivalente num banco vazio, **então** bases e fichas ficam idênticas; **quando** importado de novo com "pular", **então** nada muda.
 - **CA-BF-04** · *rápida* — **Dado** uma base com `env: {MESTRE_AGENT_ID: x}`, **quando** é salva, **então** é recusada.
 - **CA-BF-05** · *rápida* — **Dado** uma ficha com `account: agy-pessoal` e só um nó com esse perfil, **quando** se escolhe o nó, **então** só esse nó é candidato.
+- **CA-BF-06** · *rápida* — **Dado** uma base `claude-dev` com `args: [--chrome]` e uma ficha da base `operador` com a classe Dev (sem `operator: true`), **quando** são salvas, **então** as duas são recusadas, com o motivo.
+- **CA-BF-07** · *rápida* — **Dado** uma sessão do Operador aprovada por 30 min, o nó falso anunciando `operador` e o relógio falso, **quando** passam 30 min, **então** o motor manda a interrupção, espera 60 s, fecha o terminal com `kill` e edita os avisos para "encerrado: prazo"; **quando** o nó informa a tela bloqueada no meio da sessão, **então** o fechamento é imediato, com o motivo "tela bloqueada".
+- **CA-BF-08** · *pesada* — **Dado** o uso Linux + Windows com o Operador habilitado, o usuário logado na VM Windows com o Chrome e a extensão, **quando** o Dono pede pelo Telegram (dublê) uma tarefa no PC, aprova a ativação com PIN e acompanha, **então** o Operador abre uma página no Chrome do usuário dentro do prazo, a faixa aparece na área de trabalho, as capturas aparecem no painel só para o Dono, a sessão termina sozinha no prazo, e uma segunda ativação termina na hora com `/travar` (MVP-14).
 
 ## Depende de
 

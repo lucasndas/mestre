@@ -10,7 +10,7 @@ Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a pa
 
 | Comando | Quem pode usar | Comportamento em |
 |---|---|---|
-| `recruit`, `spawn` | Mestre da mesa; Grão-Mestre só recruta Mestres de mesa | [personagens](../orquestracao/personagens.md), [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
+| `recruit`, `spawn` | Mestre da mesa; Grão-Mestre só recruta Mestres de mesa e o Operador do PC | [personagens](../orquestracao/personagens.md), [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | `dismiss` | Mestre da mesa; Grão-Mestre ao encerrar mesa | [personagens](../orquestracao/personagens.md) |
 | `connect` | Mestre da mesa (na própria mesa); Grão-Mestre (em qualquer mesa do workspace) | [conexoes](../orquestracao/conexoes.md) |
 | `sheet list\|show`, `base list\|show` | Mestre da mesa, Grão-Mestre; classes autorizadas | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
@@ -21,11 +21,13 @@ Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a pa
 ```
 mestre recruit "<Nome>" --sheet "<Ficha>" [--class "<Classe>"] [--node "<nó>"]
 mestre recruit --replace "<Nome>" --sheet "<Ficha>" [--class "<Classe>"]
+mestre recruit "<Nome>" --sheet "<Ficha da base Operador>" --task "<tarefa>" [--for <duração>] [--table "<mesa>"]
 ```
 - Cria um personagem a partir de uma ficha existente, já conectado a quem recrutou. `--class` troca a classe padrão da ficha; `--node` pede um nó (que ainda precisa atender às capacidades).
 - `--replace` troca a ficha de um personagem existente, mantendo nome, conexões e posição no canvas; o terminal antigo só é encerrado pelas regras de encerramento seguro.
 - Texto: `recruited Dev-2 (class Dev, node windows-pc, starting)`. `--json` → `{name, id, sheet, class, node, status, connected_to}`.
 - Erros: ficha, classe ou nó inexistente → 4; nenhum nó atende → 4 `no_capable_node` (com o motivo por nó); nome em uso → 7 `name_taken`; `--replace` com alvo ocupado → 9 `scheduled` (o antigo é encerrado no próximo ponto seguro e o novo nasce em seguida); limite de personagens atingido → 9 `waiting_slot` ("pendente": o pedido espera vaga até o tempo limite e o personagem criado, ou a falha `agent_limit` com o aviso, chega pela caixa de entrada; [limites](../orquestracao/personagens.md#limites)); ficha fora do teto → 3 `ceiling_denied`.
+- **Operador do PC** (ficha da base Operador): não cria o personagem na hora; o motor abre o pedido `ativacao_operador` com a tarefa (`--task`, obrigatória) e a duração (`--for`, padrão `30m`) e volta com 9 `approval_pending` e o id do pedido; o personagem nasce depois da aprovação, e o resultado chega pela caixa de entrada. O Grão-Mestre indica a mesa com `--table`. Classe sem `operator: true` ou teto que não permite → 3 `operator_denied`; nenhum nó com o Operador habilitado → 4 `no_capable_node`; `--for` acima do máximo → 2. Comportamento em [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
 
 ### `mestre spawn`
 `mestre spawn "<Nome>" --base "<Base>" [--node "<nó>"]` — cria um terminal simples (sem agente) a partir de uma base, conectado a quem chamou. Não há opção de comando livre. Use `ask --raw` para digitar e `check` para ler. `--json` → `{name, id, base, node, status}`. Erros iguais aos de `recruit`.

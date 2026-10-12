@@ -17,16 +17,17 @@
 | Pessoa não autorizada escreve ao bot | só IDs autorizados, só chat privado; tentativa gera alerta | [segurança do canal](../telegram/seguranca-do-canal.md) |
 | Aparelho na rede local abre o painel, a API ou a página reserva | TLS sempre, login, sessões com expiração, PIN em ações sensíveis | [login](../painel/login.md), [página reserva](../autocura/pagina-reserva.md) |
 | Máquina estranha tenta entrar como nó | convite de uso único com validade; depois, mTLS com credencial própria | [pareamento](../conectividade/pareamento.md) |
-| Nó roubado ou comprometido | credencial revogável no painel (derruba as conexões na hora); segredos do GitHub e do cofre nunca vão para o nó, exceto as cópias do Guardião | [pareamento](../conectividade/pareamento.md), [cofre](../plataforma/cofre.md) |
+| Nó roubado ou comprometido | credencial revogável no painel (derruba as conexões na hora); segredos do GitHub e do cofre nunca vão para o nó, exceto as cópias do Guardião e, só em memória durante um login, a credencial de site do personagem daquele nó | [pareamento](../conectividade/pareamento.md), [cofre](../plataforma/cofre.md) |
 | Agente manipulado por conteúdo (issue, anexo, código) | nenhum agente tem credencial; permissões por classe no `mestre hook` + reforço nativo; anexos nunca são executados; ações destrutivas só a pedido explícito de usuário | [permissões](../classes/permissoes.md), [anexos e transcrição](../telegram/anexos-e-transcricao.md), [convenções da CLI](../cli/convencoes.md) |
 | Agente se passa por outro (`MESTRE_AGENT_ID` falso) | o motor confere o processo chamador (abaixo) | [convenções da CLI](../cli/convencoes.md) |
-| Agente lê segredos, o banco ou arquivos pessoais no disco | o agente nunca roda com a conta dona do cofre nem com a conta do usuário: roda como `mestre-agente`, que só alcança as pastas liberadas pela ACL | abaixo, [persistência](persistencia.md#arquivos) |
+| Agente lê segredos, o banco ou arquivos pessoais no disco | o agente nunca roda com a conta dona do cofre nem com a conta do usuário (exceto o Operador do PC, abaixo): roda como `mestre-agente`, que só alcança as pastas liberadas pela ACL | abaixo, [persistência](persistencia.md#arquivos) |
 | Agente usa as sessões do usuário em sites | navegador próprio do personagem, limpo, como `mestre-agente`; login em sites só com credencial do cofre, entregue ao personagem como estado de sessão, nunca a senha | abaixo, [cofre](../plataforma/cofre.md#login-em-sites) |
+| Operador do PC age com a conta do usuário | só na base especial, com aprovação do Dono, prazo curto, aviso visível, auditoria com capturas; UAC na área de trabalho segura; elevação negada | abaixo, [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) |
 | Agente gasta sem controle | limites por missão, mesa, workspace e dia | [limites de uso](../plataforma/limites-de-uso.md) |
 | Usuário age acima do seu nível | níveis por workspace; ninguém revoga decreto de nível acima | [usuários e níveis](../telegram/usuarios-e-niveis.md), [decretos](../telegram/decretos.md) |
 | Cura vira acesso remoto | sem SSH, lista fechada de ações; script de diagnóstico mostrado inteiro e aprovado por Dono ou Administrador, executado uma vez | [Guardião](../autocura/guardiao.md), [diagnóstico com IA](../autocura/diagnostico-com-ia.md) |
 | Segredo vaza por log | mascaramento (abaixo) | este documento |
-| Segredo vaza pelo Telegram (sem criptografia ponta a ponta) | o Mestre nunca envia segredos pelo Telegram | [segurança do canal](../telegram/seguranca-do-canal.md) |
+| Segredo vaza pelo Telegram (sem criptografia ponta a ponta) | o Mestre nunca envia segredos pelo Telegram; credenciais só se cadastram pelo painel, e as mandadas por mensagem são tiradas, apagadas e geram recomendação de troca | [segurança do canal](../telegram/seguranca-do-canal.md) |
 | Arquivos gerados atrapalham quem clona o repositório | arquivos locais e `.git/info/exclude`; `mestre hook` só age com `MESTRE_AGENT_ID` | [sessão zero da mesa](../sessao-zero/mesa.md), [adaptador](../provedores/adaptador.md) |
 | Emergência (algo saiu do controle) | `/travar` congela agentes e suspende decretos | [segurança do canal](../telegram/seguranca-do-canal.md) |
 
@@ -59,35 +60,46 @@ O `MESTRE_AGENT_ID` está no ambiente de cada agente, mas qualquer processo pode
 
 ## Contas do sistema e isolamento dos agentes
 
-**Princípio, nos dois sistemas: agente nunca roda com a conta dona do cofre nem com a conta do usuário.** Quem guarda cofre, banco e configuração do Core é uma conta que nenhum terminal usa; os agentes rodam numa conta própria, `mestre-agente`, sem acesso aos arquivos pessoais de quem usa a máquina.
+**Princípio, nos dois sistemas: agente nunca roda com a conta dona do cofre nem com a conta do usuário.** Exceção única: o [Operador do PC](#operador-do-pc) ([ADR 0021](../decisoes/0021-operador-do-pc.md)). Quem guarda cofre, banco e configuração do Core é uma conta que nenhum terminal usa; os agentes rodam numa conta própria, `mestre-agente`, sem acesso aos arquivos pessoais de quem usa a máquina.
 
 - **Linux (Core e nó):** os motores (`mestre-core` e `mestre-node`) rodam como `mestre`; os agentes, como `mestre-agente` (só o `mestre-node` tem `CAP_SETUID` e `CAP_SETGID`, para iniciar os terminais com essa conta). Banco, cofre, configuração e logs ficam com dono `mestre`, modo 0700/0600. Workspaces, perfis de conta, o retrato `policy.json` e a fila do `mestre hook` ficam no grupo `mestre-agente`, com os modos de [persistência](persistencia.md#arquivos). O Guardião roda como root ([componentes](componentes.md#serviços-e-contas-padrão)).
-- **Windows (Core e nó):** no Core, o `mestre-core` roda na conta virtual `NT SERVICE\MestreCore`, dona do cofre (DPAPI de máquina + ACL só para ela, [cofre](../plataforma/cofre.md#chave-do-cofre)), do banco, do espelho e do painel. Em toda máquina, o `mestre-node` roda na conta virtual `NT SERVICE\MestreNode` e inicia os agentes com a conta local `mestre-agente`: usuário comum, fora de Administradores, sem logon interativo, com senha aleatória guardada pelo Mestre ([Windows](windows.md#conta-dos-agentes-mestre-agente)). O Guardião roda como LocalSystem. Nenhum processo do Mestre usa a conta do usuário.
+- **Windows (Core e nó):** no Core, o `mestre-core` roda na conta virtual `NT SERVICE\MestreCore`, dona do cofre (DPAPI de máquina + ACL só para ela, [cofre](../plataforma/cofre.md#chave-do-cofre)), do banco, do espelho e do painel. Em toda máquina, o `mestre-node` roda na conta virtual `NT SERVICE\MestreNode` e inicia os agentes com a conta local `mestre-agente`: usuário comum, fora de Administradores, sem logon interativo, com senha aleatória guardada pelo Mestre ([Windows](windows.md#conta-dos-agentes-mestre-agente)). O Guardião roda como LocalSystem. Nenhum processo do Mestre usa a conta do usuário, exceto o Operador do PC, quando habilitado.
 - **Arquivos pessoais (Windows):** o perfil do usuário (`C:\Users\<usuário>`) não é acessível ao `mestre-agente` pelas ACLs padrão do Windows. Pastas fora do perfil que dão leitura a `Users` continuam legíveis por ele; o Mestre não altera ACLs fora das pastas dele, e quem guarda algo sensível fora do perfil deve restringir a pasta.
 - **Entre personagens, a separação não é do sistema operacional.** Todos os personagens de uma máquina rodam com a **mesma** conta, `mestre-agente`, nos dois sistemas. Pelo sistema operacional, um personagem consegue ler e escrever o worktree de outra mesa, a `MESTRE_TMP` de outro personagem e ler o `policy.json` alheio. Quem impede isso é o **despachante** (`mestre hook`), pelas regras fixas ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)), com o reforço nativo de cada provedor ([reforço nativo](../classes/reforco-nativo.md)) onde ele existe. **Risco residual aceito:** nenhum desses arquivos dá acesso ao cofre, e o motor valida tudo o que lê das pastas compartilhadas.
 
 ## Navegação web e login em sites
 
 - Cada personagem que navega usa o **próprio** MCP de navegador (ex.: Playwright MCP headless), iniciado pelo CLI dele e, portanto, como `mestre-agente`, com navegador limpo: sem acesso às sessões, aos cookies e aos perfis de navegador do usuário ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)).
-- **Login em sites só pelo cofre:** credenciais de site ficam no cofre, por domínio, e a classe libera quais o personagem pode usar. O motor faz o login num navegador que ele controla e entrega ao personagem só o estado de sessão resultante, apagado no fim; a senha nunca chega ao personagem ([cofre](../plataforma/cofre.md#login-em-sites)).
+- **Login em sites só pelo cofre:** credenciais de site ficam no cofre, por domínio, e a classe libera quais o personagem pode usar. O motor do nó do personagem faz o login num navegador que ele controla, com o mesmo navegador e versão do MCP do personagem, e entrega a ele só o estado de sessão resultante, apagado no fim; a senha nunca chega ao personagem ([cofre](../plataforma/cofre.md#login-em-sites)). Segundo fator e captcha de imagem o motor resolve com o dono da credencial pelo Telegram, sem passar por agente; captcha interativo vira `login_requires_human` e proposta de Operador do PC ([segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha)).
+- **Navegador e computador do usuário:** MCPs que controlam o computador ou o navegador do usuário só funcionam na base Operador do PC; em qualquer outra, uma regra fixa os nega, qualquer que seja o transporte ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
+
+## Operador do PC
+
+A única exceção ao princípio de contas, só num nó Windows com o Operador habilitado ([ADR 0021](../decisoes/0021-operador-do-pc.md); comportamento em [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), peças em [Windows](windows.md#operador-do-pc)).
+
+- **Critério:** nenhum processo do Mestre roda com a conta do usuário, exceto o processo da sessão `mestre node operator-session` (com o Operador habilitado) e, durante uma ativação aprovada, os terminais do Operador e seus filhos (CA-INST-11, [instalação](../plataforma/instalacao-e-atualizacao.md)).
+- **Cofre e pastas:** com UAC ligado o processo roda com token filtrado (Administradores só para negar); `%ProgramData%\Mestre` não tem entrada para a conta do usuário ([persistência](persistencia.md#arquivos)); a chave do cofre só abre para `NT SERVICE\MestreCore` ([cofre](../plataforma/cofre.md#chave-do-cofre)); regras fixas negam acesso a essas pastas e os comandos de elevação ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
+- **Clicar "Sim" num UAC:** o pedido de elevação aparece na área de trabalho segura, que cliques e teclas sintéticos não alcançam (UIPI). O [checklist](../plataforma/checklist.md) exige UAC ligado, `PromptOnSecureDesktop = 1` e `ConsentPromptBehaviorAdmin` com pedido (nunca "elevar sem perguntar"); se falhar, o nó não anuncia `operador`.
+- **Risco residual aceito:** ações de mouse e teclado não são filtráveis pelo hook (ele vê "clicar em (x, y)", não o efeito). A proteção é prazo curto, aprovação explícita do Dono, aviso visível no PC, no Telegram e no painel, `/travar` e auditoria completa com capturas de tela.
 
 ## Mascaramento em logs
 
 Aplicado a tudo o que vai para log (motor, Guardião, histórico de terminais, auditoria), antes de gravar:
 1. **Valores conhecidos:** todo segredo carregado do cofre é registrado no mascarador na hora em que é lido; ocorrências exatas viram `[segredo]`.
-2. **Formatos conhecidos:** tokens do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), tokens de bot do Telegram (`<números>:<35 caracteres>`), blocos `-----BEGIN … PRIVATE KEY-----`, cabeçalhos `Authorization:`, chaves `sk-…`, e pares `password=`/`token=`/`secret=`.
+2. **Formatos conhecidos:** tokens do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), tokens de bot do Telegram (`<números>:<35 caracteres>`), tokens do Slack (`xoxb-`, `xoxp-`), JWT (três partes base64url começando por `eyJ`), blocos `-----BEGIN … PRIVATE KEY-----`, cabeçalhos `Authorization:`, chaves `sk-…`, pares `password=`/`token=`/`secret=` e palavras de alta entropia (20 caracteres ou mais, padrão). O mesmo mascarador filtra as mensagens de usuários antes de chegarem ao Grão-Mestre ([credenciais de site](../plataforma/cofre.md#credenciais-de-site)).
 3. Histórico de terminal: o mascaramento é por linha, depois de remover as sequências de escape. O fluxo ao vivo no painel não é mascarado (é a tela do agente).
 
 ## Quem vê o quê
 
 | Dado | Agentes | Motor | Guardião | Usuários |
 |---|---|---|---|---|
-| Cofre (chaves dos Apps, tokens de usuários, credenciais) | nunca | só o motor do Core, para a ação específica | não | não; Dono gerencia com PIN ([cofre](../plataforma/cofre.md)) |
+| Cofre (chaves dos Apps, tokens de usuários, credenciais) | nunca | só o motor do Core, para a ação específica | não | ninguém vê um valor salvo, nem o Dono; ele cadastra, substitui e apaga com PIN ([cofre](../plataforma/cofre.md)) |
 | Token do bot e lista de usuários | nunca | Core (o motor do nó guarda só o cache `cache_users`, que não serve login) | cópia criptografada nos Guardiões dos nós e, no modo máquina única, no do Core ([cofre](../plataforma/cofre.md)) | Dono gerencia |
-| Credenciais de site | nunca a senha; só o estado de sessão dos domínios liberados pela classe, durante a tarefa | só o motor do Core, para fazer o login | não | não; Dono gerencia com PIN ([cofre](../plataforma/cofre.md#login-em-sites)) |
-| Arquivos pessoais do usuário (Windows: `C:\Users\<usuário>`) | não (ACL do Windows) | não | não | o próprio usuário |
+| Credenciais de site | nunca a senha; só o estado de sessão dos domínios liberados pela classe, durante a tarefa | o motor do Core, que a entrega ao motor do nó do personagem só em memória, para o login | não | não; Dono gerencia com PIN ([cofre](../plataforma/cofre.md#login-em-sites)) |
+| Arquivos pessoais do usuário (Windows: `C:\Users\<usuário>`) | não (ACL do Windows); o Operador do PC, sim, durante a sessão | não | não | o próprio usuário |
 | Código e worktrees | os da própria mesa (o Grão-Mestre, o clone principal) | sim | não | pelo GitHub |
 | Terminais (tela e entrada) | `check` só em agentes conectados | sim | não | ver: todos com acesso ao workspace; digitar: Administrador ou acima ([canvas](../painel/canvas.md)) |
+| Capturas de tela do Operador do PC | não | só o motor do Core, cifradas ([persistência](persistencia.md#operador-do-pc)) | não | só o Dono, no painel |
 | Decretos, aprovações, auditoria | decretos que os afetam, na camada do Mestre | sim | não | conforme o nível ([usuários e níveis](../telegram/usuarios-e-niveis.md)) |
 | Logs | não | sim | lê os do motor local (lista fechada) | pelo painel, conforme o nível |
 

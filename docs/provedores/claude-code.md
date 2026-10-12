@@ -65,7 +65,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 ### Contas múltiplas
 
 - `CLAUDE_CONFIG_DIR=<pasta do perfil>` no ambiente do processo: configuração, histórico e login próprios (`.credentials.json` dentro dela). O perfil de conta é definido em [bases e fichas](../orquestracao/bases-e-fichas.md).
-- O processo roda como `mestre-agente` nos dois sistemas; no Windows, `USERPROFILE` e `APPDATA` são os do perfil carregado dessa conta e só `CLAUDE_CONFIG_DIR` aponta para o perfil de conta ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)).
+- O processo roda como `mestre-agente` nos dois sistemas; no Windows, `USERPROFILE` e `APPDATA` são os do perfil carregado dessa conta e só `CLAUDE_CONFIG_DIR` aponta para o perfil de conta ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)). Exceção: o Operador do PC roda com a conta do usuário e com `--chrome`, opção aceita só na base dele ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 - Verificar login: `claude auth status` (JSON com `configDirectory` e `authMethod`), usado pelo [checklist](../plataforma/checklist.md).
 
 ### Uso, custo e rate limit

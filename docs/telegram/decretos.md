@@ -21,7 +21,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
   - **comportamento** (`behavior`): uma instrução curta, que entra na camada do Mestre dos personagens afetados;
   - **política** (`policy`): ajusta a [política de aprovação](../aprovacoes/politica.md) (ex.: "me pergunte tudo esta semana");
   - **teto** (`ceiling`): amplia o [teto do workspace](../classes/teto-do-workspace.md);
-  - **delegação** (`delegation`): autoriza o Grão-Mestre a aprovar no GitHub em nome do autor ([aprovação no GitHub](../github/aprovacao-no-github.md)).
+  - **delegação** (`delegation`): autoriza o Grão-Mestre a aprovar no GitHub em nome do autor ([aprovação no GitHub](../github/aprovacao-no-github.md)) ou, com alvo `ativacao_operador`, a aprovar ativações do Operador do PC (abaixo).
 
 ### Criação
 
@@ -43,10 +43,17 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
   - liberar push ou merge em branch protegida;
   - liberar comandos destrutivos ou proibidos pela classe;
   - ampliar o teto;
-  - delegação de aprovação no GitHub;
+  - delegação (aprovação no GitHub ou ativação do Operador do PC);
   - revogar um decreto que restringia algo.
 - Uma aprovação comum, dentro do que a política já prevê, não pede PIN.
 - PIN errado ou expirado deixa a proposta como **cancelada**.
+
+### Delegação da ativação do Operador
+
+- Só um decreto **do Dono**, efeito `delegation` e alvo `ativacao_operador`, deixa o Grão-Mestre aprovar pedidos de ativação do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) ([política](../aprovacoes/politica.md#tipos-de-ação)). Proposto por outro nível, é recusado antes da confirmação.
+- **Escopo obrigatório:** uma missão ou uma classe específica (`--scope "missao:<nome>"` ou `"classe:<nome>"`); sem escopo, recusado.
+- **Limites:** duração de cada ativação até o padrão (30 min); validade obrigatória, de no máximo 7 dias. Pedido fora do escopo ou com duração maior continua só com o Dono.
+- Cada ativação aprovada pelo Grão-Mestre com base no decreto fica registrada nele e avisa o Dono no Telegram, com o botão **Encerrar agora** ([bot](bot.md#mensagens-de-saída)).
 
 ### Vínculo ao estado (exceção pontual)
 
@@ -116,6 +123,7 @@ Cada decreto fica no banco do Core com:
 - **CA-DEC-05** · *rápida* — **Dado** um decreto de Dono e outro oposto de Administrador, **quando** há decisão sobre o alvo, **então** vale o do Dono e o outro aparece como sobreposto.
 - **CA-DEC-06** · *rápida* — **Dado** um decreto com validade "por 3 dias", **quando** o relógio falso avança 72 horas, **então** ele fica expirado e o autor é avisado.
 - **CA-DEC-07** · *rápida* — **Dado** uma ordem vinda de áudio, **quando** o Grão-Mestre propõe o decreto, **então** a confirmação mostra o texto transcrito e nada vale sem o clique do autor.
+- **CA-DEC-10** · *rápida* — **Dado** um decreto do Dono `delegation` para `ativacao_operador` com escopo `classe:operador`, validade de 3 dias e duração até 30 min, **quando** o Grão-Mestre aprova um pedido dessa classe de 20 min, **então** o motor aceita, registra no decreto e avisa o Dono com o botão **Encerrar agora**; **quando** o pedido é de 45 min ou de outra classe, **então** recebe `human_required`; **dado** a mesma proposta de um Administrador ou com validade de 10 dias, **então** é recusada antes da confirmação.
 - **CA-DEC-08** · *pesada* — **Dado** o sistema instalado, **quando** o Dono cria pelo Telegram (dublê) um decreto permanente, vê o efeito num agente e o revoga, **então** o comportamento muda e volta, e o registro mostra os dois momentos (MVP-8).
 - **CA-DEC-09** · *rápida* — **Dado** o decreto "o Dev pode fazer push na develop" ativo, **quando** o Dev tenta `git push`, **então** o `mestre hook` continua negando; **quando** o Dev pede o envio pela CLI, **então** o motor envia a branch para a develop com o App da classe e registra a execução no decreto; **dado** um decreto "pode ignorar a revisão obrigatória", **então** ele é recusado antes da confirmação com a explicação.
 
