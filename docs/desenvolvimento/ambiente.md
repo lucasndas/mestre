@@ -54,6 +54,16 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 | `go run ./tools/codecheck` | só as regras de código fora do linter ([estilo](convencoes.md#estilo)) |
 | `golangci-lint run ./...` | só o linter |
 
+## Windows Sandbox para os spikes do M1
+
+Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) rodam no Windows Sandbox (Windows Pro com o recurso ligado), que começa limpo e não guarda nada ao fechar. Arquivos em `tools/winsandbox/`: `mestre-spikes.wsb` (rede ligada; compartilha só `C:\mestre\tools\winsandbox` como `C:\winsandbox`; roda o preparo ao abrir), `setup.ps1` (instala Git for Windows e Go 1.27.2 com SHA-256 conferido e o Claude Code pelo instalador oficial; clona o repositório em `C:\mestre` dentro do Sandbox, na branch `spike/m1-windows`) e `spikes-prompt.md` (o pedido para a sessão do Claude que roda os spikes).
+
+1. No Windows do Dono, clone o repositório em `C:\mestre` (ou atualize com `git pull`).
+2. Abra `C:\mestre\tools\winsandbox\mestre-spikes.wsb` (duplo clique) e espere a janela do preparo terminar.
+3. Nessa janela, rode `claude` uma vez e faça o login no navegador do Sandbox; saia com `/exit`.
+4. Comece os spikes: `cd C:\mestre; claude --model opus --effort high (Get-Content -Raw tools\winsandbox\spikes-prompt.md)`.
+5. No fim, a sessão faz commit e `git push` da branch `spike/m1-windows` (o Git pede login do GitHub no navegador do Sandbox) e copia o relatório e os logs para `C:\winsandbox\resultados\`, que no Windows do Dono é `C:\mestre\tools\winsandbox\resultados\` (fora do git). Feche o Sandbox só depois disso.
+
 ## O que não precisa
 
 - Nenhum serviço instalado (systemd, serviço do Windows, Avahi): a completa roda Core e nó como processos comuns.

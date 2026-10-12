@@ -74,7 +74,7 @@ func TestModelSuiteIsFastAndHiddenTestsCatchTheTasks(t *testing.T) {
 		},
 		"T2": func(t *testing.T, dir string) {
 			appendTo(t, filepath.Join(dir, "stats", "stats.go"),
-				"\n// Media returns the arithmetic mean of xs.\nfunc Media(xs []float64) (float64, error) {\n\tif len(xs) == 0 {\n\t\treturn 0, ErrEmpty\n\t}\n\treturn Sum(xs) / float64(len(xs)), nil\n}\n")
+				"\n// Mean returns the arithmetic mean of xs.\nfunc Mean(xs []float64) (float64, error) {\n\tif len(xs) == 0 {\n\t\treturn 0, ErrEmpty\n\t}\n\treturn Sum(xs) / float64(len(xs)), nil\n}\n")
 		},
 		"T3": func(t *testing.T, dir string) {
 			replaceIn(t, filepath.Join(dir, "README.md"), "- `CountAbove`", "- `Max`: o maior número.\n- `CountAbove`")
@@ -89,7 +89,7 @@ func TestModelSuiteIsFastAndHiddenTestsCatchTheTasks(t *testing.T) {
 			}
 			p := testkit.NewProject(t, "go-basico")
 			p.ApplyHiddenTests(t, task.ID)
-			if out, ok, _ := goTest(t, p.Dir); ok || !strings.Contains(out, "TestHidden"+task.ID) && !strings.Contains(out, "undefined: stats.Media") {
+			if out, ok, _ := goTest(t, p.Dir); ok || !strings.Contains(out, "TestHidden"+task.ID) && !strings.Contains(out, "undefined: stats.Mean") {
 				t.Fatalf("hidden tests of %s pass on the unchanged copy:\n%s", task.ID, out)
 			}
 			fn(t, p.Dir)

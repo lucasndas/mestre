@@ -52,7 +52,7 @@ Os [dublês](../qualidade/dubles.md) são do M0, mas dois critérios dependem de
 
 ### Spikes do M1
 
-Os spikes de Windows rodam numa **VM Windows 11 dedicada**, a mesma do [laboratório](../qualidade/testes.md#laboratório) da suíte pesada, nunca no PC de uso do Dono; os de Linux, nesta máquina de desenvolvimento ou na VM Ubuntu do laboratório. Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
+Os spikes de Windows rodam no **Windows Sandbox** do PC do Dono, descartável a cada abertura ([como preparar e rodar](ambiente.md#windows-sandbox-para-os-spikes-do-m1)); a VM Windows dedicada continua só para o [laboratório](../qualidade/testes.md#laboratório) da suíte pesada. Os de Linux rodam nesta máquina de desenvolvimento. Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
 
 | Spike | Se falhar, muda | Onde está o item |
 |---|---|---|
@@ -110,7 +110,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 ### Regras de execução da ordem
 
 - **M0, além dos documentos:** layout do repositório em Go ([convenções](convencoes.md)) e o `logging` com mascaramento, antes da etapa 1.
-- **M1:** os [spikes](#spikes-do-m1) vêm antes da etapa 1; banco e migrações ([persistência](../arquitetura/persistencia.md)) e `internal/gitx` entram junto da etapa 1.
+- **M1:** os [spikes](#spikes-do-m1) de Linux vêm antes da etapa 1, e as partes de Linux do M1 andam primeiro, com o início de processos atrás de uma interface (`internal/terminal`, `Launcher`) que o Windows implementa depois. **Os spikes de Windows precisam rodar antes de fechar o M1, e nada do M2 nem do `winsvc` começa antes deles.** banco e migrações ([persistência](../arquitetura/persistencia.md)) e `internal/gitx` entram junto da etapa 1.
 - **M2:** TLS e CA interna entram junto da etapa 1. Depois do M2, o [Guardião](../autocura/guardiao.md) pode começar em paralelo com M3 a M6 (a etapa 1 do M7 só confere que ele está pronto).
 - **Conformidade real no fim do M3:** depois da etapa 5, uma primeira rodada do [teste de conformidade](../provedores/conformidade.md) com os CLIs reais nesta máquina Linux, para achar cedo mudanças dos provedores; a rodada completa, nos dois sistemas, é a da suíte pesada no laboratório.
 - **"Casca" dos comandos da CLI:** um comando que outro documento usa antes da sua etapa (ex.: `mestre done` nas [missões](../orquestracao/missoes.md), etapa 9, antes da [CLI de comunicação](../cli/comunicacao.md), etapa 10) é implementado como casca junto do documento que o usa: sintaxe, chamada pelo [canal local](../arquitetura/canal-local.md) e o caminho feliz. Os critérios de aceite do documento da CLI (erros, códigos de saída, `--json`) fecham na etapa dele.

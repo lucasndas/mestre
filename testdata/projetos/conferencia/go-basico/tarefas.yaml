@@ -15,7 +15,7 @@ tasks:
       max_turns: 30
   - id: T2
     prompt: >-
-      Adicione ao pacote stats a função Media(xs []float64) (float64, error),
+      Adicione ao pacote stats a função Mean(xs []float64) (float64, error),
       que devolve a média aritmética e ErrEmpty para lista vazia, com teste.
     may_change: [stats/stats.go, stats/stats_test.go]
     verify:

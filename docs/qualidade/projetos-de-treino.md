@@ -40,7 +40,7 @@ Cada variação nasce com um critério de aceite no documento do marco que a usa
 | Tarefa | Pedido | Verificação | Em uso a partir de |
 |---|---|---|---|
 | T1 | corrigir o bug de `Max` | teste oculto que hoje falha | M0 (dados); M3 na primeira conformidade real |
-| T2 | adicionar `Media` com teste | teste oculto de `Media` | M4 |
+| T2 | adicionar `Mean` (média) com teste | teste oculto de `Mean` | M4 |
 | T3 | atualizar o README (só documentação) | teste oculto que lê o README; a classe QA não edita código | M3 |
 | T4 | mudar o workflow de CI | regra `git.workflows` ([workflows](../github/identidades-e-apps.md#workflows)) | M5, com `com-workflows` |
 
