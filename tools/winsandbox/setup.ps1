@@ -40,20 +40,28 @@ function Add-ToPath([string]$Dir) {
 }
 
 # Git for Windows (includes Git Credential Manager for the GitHub login on push).
-$gitExe = Join-Path $Downloads $GitFile
-Get-Checked "https://github.com/git-for-windows/git/releases/download/v$GitVersion/$GitFile" $gitExe $GitSha256
-Start-Process -FilePath $gitExe -ArgumentList '/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-', '/SUPPRESSMSGBOXES' -Wait
+if (-not (Test-Path 'C:\Program Files\Git\cmd\git.exe')) {
+    $gitExe = Join-Path $Downloads $GitFile
+    Get-Checked "https://github.com/git-for-windows/git/releases/download/v$GitVersion/$GitFile" $gitExe $GitSha256
+    Start-Process -FilePath $gitExe -ArgumentList '/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-', '/SUPPRESSMSGBOXES' -Wait
+}
 Add-ToPath 'C:\Program Files\Git\cmd'
 
 # Go.
-$goZip = Join-Path $Downloads $GoFile
-Get-Checked "https://go.dev/dl/$GoFile" $goZip $GoSha256
-Expand-Archive -Path $goZip -DestinationPath 'C:\' -Force
+# tar.exe ships with Windows; Expand-Archive may not load in the Sandbox.
+if (-not (Test-Path 'C:\go\bin\go.exe')) {
+    $goZip = Join-Path $Downloads $GoFile
+    Get-Checked "https://go.dev/dl/$GoFile" $goZip $GoSha256
+    tar.exe -xf $goZip -C 'C:\'
+    if ($LASTEXITCODE -ne 0) { throw "tar.exe falhou ao extrair $goZip" }
+}
 Add-ToPath 'C:\go\bin'
 
 # Claude Code, official installer (it downloads and installs the native binary).
-Write-Host 'Instalando o Claude Code pelo instalador oficial'
-Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression
+if (-not (Test-Path (Join-Path $env:USERPROFILE '.local\bin\claude.exe'))) {
+    Write-Host 'Instalando o Claude Code pelo instalador oficial'
+    Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression
+}
 Add-ToPath (Join-Path $env:USERPROFILE '.local\bin')
 
 # Repository, on the spike branch.
