@@ -237,7 +237,7 @@ func (e *Engine) Launch(s Spec) (*Running, error) {
 	if err != nil {
 		return nil, err
 	}
-	script := s.Script + "\nread -r _\n"
+	script := "export SPIKE_ROOT=$$\n" + s.Script + "\nread -r _\n"
 	cmd := exec.Command("/bin/bash", "-c", script)
 	if e.Mode == ModeSubreaper {
 		cmd = exec.Command(self, "spike-shim", script)

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -65,25 +66,37 @@ func prctl(op, arg uintptr) error {
 	return nil
 }
 
-// waitOrphaned returns once the parent that existed at the call has died
-// (the kernel reparents before sending PR_SET_PDEATHSIG).
+// waitOrphaned returns once this process has been reparented: its parent
+// is the terminal root ($SPIKE_ROOT, a subreaper) or a process outside the
+// root's tree. PR_SET_PDEATHSIG is armed before the check, so a parent that
+// dies at any moment is seen (the kernel reparents before signalling).
 func waitOrphaned(ctx context.Context) error {
-	initial := os.Getppid()
+	root, err := strconv.Atoi(os.Getenv("SPIKE_ROOT"))
+	if err != nil {
+		return fmt.Errorf("SPIKE_ROOT: %w", err)
+	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 	defer signal.Stop(ch)
 	if err := prctl(prSetPdeathsig, uintptr(syscall.SIGUSR1)); err != nil {
 		return err
 	}
-	if os.Getppid() != initial {
-		return nil
+	orphaned := func() bool {
+		pp := os.Getppid()
+		if pp == root {
+			return true
+		}
+		_, _, err := Walk(SysProc{}, pp, func(s Stat) bool { return s.PID == root })
+		return err != nil
 	}
-	select {
-	case <-ch:
-		return nil
-	case <-ctx.Done():
-		return fmt.Errorf("still not orphaned: %w", ctx.Err())
+	for !orphaned() {
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return fmt.Errorf("still not orphaned: %w", ctx.Err())
+		}
 	}
+	return nil
 }
 
 func runClient(args []string) (int, error) {

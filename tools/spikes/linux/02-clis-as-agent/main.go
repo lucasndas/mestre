@@ -67,20 +67,21 @@ func main() {
 	out := flag.String("out", "", "file for the raw transcript")
 	cols := flag.Int("cols", 120, "terminal columns")
 	rows := flag.Int("rows", 40, "terminal rows")
+	settle := flag.Duration("settle", 300*time.Millisecond, "quiet period before a step fires (lets the TUI finish its start-up negotiation)")
 	flag.Var(&steps, "step", "'regex|||keys' (repeatable, in order); keys use Go escapes")
 	flag.Parse()
 	if flag.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "usage: 02-clis-as-agent [flags] -- command args…")
 		os.Exit(1)
 	}
-	code, err := run(flag.Args(), steps, *until, *out, *deadline, uint16(*cols), uint16(*rows))
+	code, err := run(flag.Args(), steps, *until, *out, *deadline, *settle, uint16(*cols), uint16(*rows))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 	}
 	os.Exit(code)
 }
 
-func run(argv []string, steps []step, until, outPath string, deadline time.Duration, cols, rows uint16) (int, error) {
+func run(argv []string, steps []step, until, outPath string, deadline, settle time.Duration, cols, rows uint16) (int, error) {
 	master, slave, err := openPTY(cols, rows)
 	if err != nil {
 		return 1, err
@@ -113,6 +114,7 @@ func run(argv []string, steps []step, until, outPath string, deadline time.Durat
 		mu      sync.Mutex
 		all     strings.Builder // stripped, whole session
 		pending strings.Builder // stripped, since the last step fired
+		lastOut = time.Now()
 	)
 	changed := make(chan struct{}, 1)
 	readDone := make(chan struct{})
@@ -129,6 +131,7 @@ func run(argv []string, steps []step, until, outPath string, deadline time.Durat
 				mu.Lock()
 				all.WriteString(s)
 				pending.WriteString(s)
+				lastOut = time.Now()
 				mu.Unlock()
 				select {
 				case changed <- struct{}{}:
@@ -148,12 +151,17 @@ func run(argv []string, steps []step, until, outPath string, deadline time.Durat
 	code := 2
 	var childErr error
 	childGone := false
+	var settleC <-chan time.Time
 loop:
 	for {
 		mu.Lock()
 		text := pending.String()
+		quiet := time.Since(lastOut)
 		mu.Unlock()
-		if len(steps) > 0 && steps[0].wait.MatchString(flatten(text)) {
+		settleC = nil
+		if len(steps) > 0 && steps[0].wait.MatchString(flatten(text)) && quiet < settle {
+			settleC = time.After(settle - quiet)
+		} else if len(steps) > 0 && steps[0].wait.MatchString(flatten(text)) {
 			fmt.Fprintf(os.Stderr, "[pty] step matched %q, sending %q\n", steps[0].wait, steps[0].keys)
 			mu.Lock()
 			pending.Reset()
@@ -176,6 +184,7 @@ loop:
 		}
 		select {
 		case <-changed:
+		case <-settleC:
 		case childErr = <-exited:
 			childGone = true
 			<-readDone
@@ -272,9 +281,6 @@ func answerQueries(w io.Writer, chunk []byte, rows, cols uint16) {
 	}
 	if strings.Contains(s, "\x1b]11;?") {
 		_, _ = io.WriteString(w, "\x1b]11;rgb:0000/0000/0000\x1b\\")
-	}
-	if strings.Contains(s, "\x1b[?u") {
-		_, _ = io.WriteString(w, "\x1b[?0u")
 	}
 	if strings.Contains(s, "\x1b[18t") {
 		_, _ = fmt.Fprintf(w, "\x1b[8;%d;%dt", rows, cols)

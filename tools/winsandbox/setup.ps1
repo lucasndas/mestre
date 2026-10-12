@@ -1,4 +1,4 @@
-# Prepares a fresh Windows Sandbox for the M1 Windows spikes.
+﻿# Prepares a fresh Windows Sandbox for the M1 Windows spikes.
 # Installs Git for Windows and Go (SHA-256 checked) and Claude Code (official
 # installer), then clones the repository. Nothing persists after the Sandbox
 # closes, so this runs on every opening. See docs/desenvolvimento/ambiente.md.
