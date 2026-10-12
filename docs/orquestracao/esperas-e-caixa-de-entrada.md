@@ -1,0 +1,121 @@
+# Esperas e caixa de entrada
+
+> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Core · **Atualizado:** 2026-10-12
+
+## Objetivo
+
+Esperar é responsabilidade do **motor**, nunca de um agente parado em loop consultando outro. O motor guarda o que cada personagem tem a receber, entrega só quando ele está livre e acorda quem espera quando o resultado chega. O Grão-Mestre e os Mestres de mesa nunca ficam bloqueados: delegam, encerram o turno e são acordados pela caixa de entrada.
+
+## Comportamento
+
+### Caixa de entrada
+
+Uma fila por personagem, no banco do Core. Cada item tem: `id`, destino, tipo (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`), remetente, texto, anexos, origem (só para `user`: canal, usuário, nível, conversa e mensagem respondida), referências (ask, espera, mesa, missão), criado em e estado (`queued` → `delivered`, ou `expired`/`cancelled`).
+
+**Prioridade** (dentro de cada nível, ordem de chegada): 1) mensagens do Dono; 2) mensagens dos demais usuários; 3) todo o resto. Usuários só escrevem ao Grão-Mestre ([roteamento](../telegram/roteamento.md)).
+
+**Entrega:**
+- O motor digita o item no terminal só quando o destino está `idle` ou `waiting` ([estados](personagens.md#estados)) e a mesa/workspace não está pausada (mensagens de usuários ao Grão-Mestre passam mesmo com pausa). Nada é digitado no meio do trabalho de alguém.
+- Um item por vez; o próximo só depois do fim do turno que o primeiro provocou.
+- Formato: uma linha de cabeçalho `[Mestre · <tipo> · de <remetente> · <id>]` seguida do texto. Para `user`, o cabeçalho traz nome e nível do autor e "(áudio transcrito)" quando for o caso; anexos vêm como caminhos de arquivo.
+- Texto com mais de **2.000 caracteres** (padrão): o motor grava em `.mestre/agents/<id>/inbox/<item>.md` e digita só o cabeçalho e o pedido para ler o arquivo. Como digitar com segurança em cada provedor: [adaptador](../provedores/adaptador.md).
+- Se o início de turno não chegar em 30 s após a entrega, o motor reenvia só a tecla Enter uma vez; persistindo, marca o personagem `stuck`.
+- `mestre inbox` mostra a fila do próprio personagem (sintaxe em [comunicação](../cli/comunicacao.md)).
+
+Usuários com nível para isso ainda podem digitar direto num terminal pelo canvas; isso não passa pela fila ([canvas](../painel/canvas.md)).
+
+### Resposta pelo mesmo canal
+
+- Cada mensagem de usuário carrega a origem. A **mensagem corrente** do Grão-Mestre é a última de usuário entregue a ele; `mestre reply` responde a ela, ou a outra indicada pelo id.
+- O motor entrega a resposta exatamente pela origem: Telegram daquele usuário, ou painel ([conversa](../painel/conversa-e-aprovacoes.md)). O agente não conhece detalhes do canal.
+- Canal indisponível: a resposta fica guardada, é entregue quando o canal voltar e aparece no painel.
+
+### ask, check e ask back
+
+- **`ask` bloqueante** (só para perguntas rápidas): vira item `agent` na fila do alvo. A resposta é o texto do `done` dado no turno que tratou o pedido; sem `done`, a última mensagem do agente naquele turno, obtida pelo [adaptador](../provedores/adaptador.md). Tempo limite em [tempos limite](#tempos-limite).
+- **Ao estourar:** o `ask` retorna "sem resposta no prazo" e lembra: não reenviar, usar `check` e esperar. O pedido continua aberto: a resposta que chegar depois vai para a caixa de entrada de quem perguntou como item `answer`.
+- **`--batch`:** um pedido por alvo em paralelo; retorna o resultado de cada alvo (formato em [comunicação](../cli/comunicacao.md#mestre-ask)).
+- **`--raw`:** entrada crua para menus; digitada na hora se o alvo estiver `idle`, `blocked` ou `stuck`; se `busy`, entra na fila. Não espera resposta.
+- **`check`:** lê a tela atual do alvo em qualquer estado, sem enviar nada.
+- **Ask back:** para tarefas longas, quem delega (A) pede ao outro (B) que responda com `mestre ask "A" "<resultado>"`. Quando B faz isso e A tem pedido aberto para B: se A ainda está bloqueado no `ask`, a resposta resolve esse `ask`; se o prazo já estourou, chega a A como `answer`, completa. O `ask` de B retorna na hora ("entregue"), sem esperar A. Sem pedido aberto, é uma mensagem nova comum.
+
+### Esperas
+
+| Tipo | Satisfeita quando | Quem cria |
+|---|---|---|
+| Personagem | o alvo dá `done` ou faz ask back para quem espera | `mestre wait "Nome"` |
+| Etapas (`todas` \| `primeira`) | todas / a primeira das etapas indicadas concluem | motor ([missões](missoes.md)) ou `mestre wait --quest` |
+| Aprovação | a aprovação é decidida ([fluxo](../aprovacoes/fluxo.md)) | motor |
+| Horário | chega o horário | `mestre wait --until` |
+| Vaga, sincronização | abre vaga ([limites](personagens.md#limites)) / sincronização concluída ([mesas](mesas.md#worktree-por-nó-e-sincronização)) | motor, só para etapas |
+
+`mestre wait` **registra e retorna na hora**; o agente deve encerrar o turno. Quando a espera é satisfeita, o motor coloca um item `wake` com o resultado na fila de quem espera.
+
+| Estado | Identificador |
+|---|---|
+| Ativa | `active` |
+| Satisfeita | `satisfied` |
+| Expirada | `expired` |
+| Cancelada (quem espera foi encerrado, ou a missão cancelada) | `cancelled` |
+
+```mermaid
+stateDiagram-v2
+    [*] --> active : registrada
+    active --> satisfied : condição atendida
+    active --> expired : tempo limite
+    active --> cancelled : dono encerrado ou missão cancelada
+    satisfied --> [*]
+    expired --> [*]
+    cancelled --> [*]
+```
+
+### Status "aguardando"
+
+Quem tem espera ativa (ou está `blocked`) aparece no canvas e no `mestre list` com o motivo e uma linha tracejada até o que espera ([canvas](../painel/canvas.md)). Textos: "aguardando Revisor", "aguardando QA e Revisor (todas)", "aguardando aprovação do Lucas", "aguardando 14:00", "aguardando vaga", "aguardando sincronização", "aguardando permissão", "aguardando cota". Aguardar não conta como ocioso ([ciclo de vida](personagens.md#ciclo-de-vida-definido-na-ficha)).
+
+### Tempos limite
+
+| Espera | Padrão (configurável por workspace e por espera) |
+|---|---|
+| `ask` bloqueante | 90 s; máximo 9 min (o `ask` segura a ferramenta de shell do agente, cujo tempo limite padrão no Claude Code é 2 min) |
+| Personagem | 60 min |
+| Etapas | 120 min |
+| Aprovação | o prazo de expiração da aprovação ([fluxo](../aprovacoes/fluxo.md)) |
+| Horário | sem tempo limite |
+| Vaga, sincronização | 30 min |
+
+Ao estourar, o motor avisa quem espera (em geral o Mestre da mesa; o Grão-Mestre nas esperas dele) com as opções: consultar com `check`, reenviar com mais contexto, trocar o personagem ou avisar os usuários. **O motor nunca reenvia automaticamente o mesmo pedido.**
+
+### Detecção de impasse
+
+O motor mantém um grafo "quem espera quem" (esperas de personagem, `ask` abertos e esperas de etapa, apontando para o personagem responsável). A cada aresta nova, procura ciclo. Achando (ex.: A → B → A), avisa uma vez por ciclo o Mestre da mesa (ou o Grão-Mestre, se o ciclo envolver mais de uma mesa) e os usuários, com o ciclo escrito e destacado no canvas. Nada é cancelado sozinho.
+
+### Persistência e retomada
+
+Filas, esperas, `ask` abertos e o grafo ficam no banco. Depois de uma queda, o motor recarrega tudo: esperas de horário vencidas durante a queda são satisfeitas, prazos vencidos viram `expired` (com aviso), e um item que estava sendo entregue volta para `queued` se nenhum início de turno foi registrado depois dele.
+
+## Regras e erros
+
+- `ask`, `wait` ou `check` para alvo não conectado: erro ([conexões](conexoes.md)).
+- `wait` por si mesmo, ou por horário no passado: erro.
+- Fila com mais de 50 itens (padrão): aviso ao Mestre da mesa (ou ao Grão-Mestre). Itens nunca são descartados.
+- Personagem encerrado com itens na fila: o encerramento espera a fila esvaziar ([encerramento seguro](personagens.md#encerramento-seguro)).
+
+## Critérios de aceite
+
+- **CA-ESP-01** · *rápida* — **Dado** o Grão-Mestre `busy` com fila [agente, Aprovador, Dono], **quando** fica `idle`, **então** a ordem de entrega é Dono, Aprovador, agente, um por turno.
+- **CA-ESP-02** · *rápida* — **Dado** um personagem `busy`, **quando** chega mensagem, **então** nada é digitado até o fim do turno.
+- **CA-ESP-03** · *rápida* — **Dado** mensagem vinda do Telegram e Telegram falso fora do ar, **quando** o Grão-Mestre dá `reply`, **então** a resposta fica guardada, aparece no painel e é enviada ao Telegram daquele usuário quando ele volta.
+- **CA-ESP-04** · *rápida* — **Dado** relógio falso, **quando** um `ask` passa de 90 s, **então** retorna "sem resposta no prazo"; **quando** o alvo faz ask back depois, **então** a resposta chega completa como `answer` e nenhum reenvio ocorreu.
+- **CA-ESP-05** · *rápida* — **Dado** espera `todas` em QA e Revisor, **quando** só o QA conclui, **então** continua `active`; **quando** o Revisor conclui, **então** vira `satisfied` e chega um `wake`.
+- **CA-ESP-06** · *rápida* — **Dado** A esperando B, **quando** B registra espera por A, **então** um aviso de impasse com "A → B → A" é emitido uma única vez.
+- **CA-ESP-07** · *completa* — **Dado** esperas e filas no banco, **quando** o Core reinicia, **então** voltam iguais e uma espera de horário vencida durante a queda é satisfeita.
+- **CA-ESP-08** · *pesada* — **Dado** uma missão com etapas paralelas e um ask back, **quando** ela roda até o fim, **então** as esperas aparecem e são resolvidas sem reenvio (MVP-4).
+
+## Depende de
+
+- [Personagens](personagens.md)
+- [Conexões](conexoes.md)
+- [Adaptador de provedores](../provedores/adaptador.md)
+- [Fluxo de aprovações](../aprovacoes/fluxo.md)
+- [Persistência](../arquitetura/persistencia.md)

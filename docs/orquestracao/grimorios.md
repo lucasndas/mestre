@@ -1,0 +1,69 @@
+# Grimórios
+
+> **Assunto:** salvar um pedaço do canvas (time, classes, pergaminhos, conexões e missões) e restaurá-lo em mesa de qualquer workspace · **Componente:** Core · **Atualizado:** 2026-10-12
+
+## Objetivo
+
+Um grimório é um time salvo: uma seleção do canvas de uma mesa que pode ser restaurada em outra mesa, **de qualquer workspace**, para reaproveitar o time inteiro com o fluxo pronto. Ele guarda a receita, não o estado: nada de sessões, filas ou histórico.
+
+## Comportamento
+
+### Salvar
+
+Pelo painel, com uma seleção no canvas da mesa (usuário Administrador ou acima; [canvas](../painel/canvas.md)). O motor grava no banco do Core um documento JSON (`version: 1`) com nome único, autor, data, workspace e mesa de origem, contendo:
+
+| Elemento | O que é salvo | O que não é salvo |
+|---|---|---|
+| Personagens | nome, ficha, classe (se diferente da padrão da ficha), nó indicado, posição, fixado | processo, sessão do provedor, caixa de entrada, esperas, uso |
+| Classes usadas | globais: só a referência; do workspace ou da mesa: referência **e** cópia do pacote ([classes](../classes/classes.md)) com o App vinculado | — |
+| Pergaminhos e tomos | nomes, conteúdo, tomos e posição (o usuário pode optar por salvar só a estrutura, sem conteúdo) | revisões anteriores |
+| Conexões | as manuais entre elementos salvos (as automáticas são recriadas pelo motor) | conexões com elementos fora da seleção |
+| Missões | a definição ([missões](missoes.md#definição)) cujas etapas usam personagens ou fichas da seleção | estado, rodadas, números de issue |
+
+Grão-Mestre e Mestre da mesa nunca entram num grimório (são da mesa/workspace).
+
+### Restaurar
+
+Pelo painel, numa mesa em `working` ou `in_review` ([estados](mesas.md#estados)), por Administrador ou acima com acesso ao workspace de destino.
+
+1. **Validação** (nada é criado ainda):
+   - fichas citadas existem ([bases e fichas](bases-e-fichas.md)); se faltar alguma, a restauração é recusada listando quais;
+   - cada classe é resolvida no destino: global → a mesma; do workspace com o mesmo nome no destino → a do destino; classe da mesa de origem → copiada como classe da mesa de destino;
+   - **classe do workspace de origem que não existe no destino:** aviso, e o usuário escolhe para cada uma: **copiar como classe da mesa** (usa a cópia do pacote), **mapear para outra classe** existente no destino, ou **cancelar** a restauração;
+   - toda classe copiada precisa caber no [teto do workspace](../classes/teto-do-workspace.md) de destino; se não couber, a restauração é recusada listando os itens excedentes;
+   - os [limites](personagens.md#limites) de personagens precisam comportar o time; se não, recusa mostrando quantos cabem;
+   - nomes de personagens, pergaminhos e tomos que já existem no destino recebem sufixo (" (2)"…), mostrado ao usuário antes de confirmar.
+2. **Confirmação** do usuário com o resumo do que será criado.
+3. **Criação**, nesta ordem: classes copiadas; pergaminhos e tomos; personagens (escolha de nó normal, [personagens](personagens.md#escolha-do-nó)); conexões; missões (criadas como qualquer missão nova, em `draft`, com issue sob o épico de destino).
+4. O Mestre da mesa de destino recebe um item `system` listando o que foi restaurado.
+
+Classe copiada mantém o App vinculado. Se o App não estiver instalado no repositório de destino, o Grão-Mestre o instala; até lá, as ações saem com o App "Mestre" com a classe na assinatura ([identidades e Apps](../github/identidades-e-apps.md)).
+
+### Listar e apagar
+
+O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, conteúdo). Apagar exige pedido explícito de Administrador ou acima e não afeta mesas já restauradas.
+
+## Regras e erros
+
+- Personagem que não conseguir iniciar na criação (ex.: nó caiu) não desfaz o resto: fica `interrupted` e entra no relatório ao Mestre da mesa.
+- Restaurar em mesa `open`, `closing`, `closed`, `cancelling` ou `cancelled`: recusado.
+- Grimório com `version` maior que a suportada: recusado dizendo a versão esperada.
+- Nome de grimório repetido ao salvar: o usuário escolhe substituir ou outro nome.
+
+## Critérios de aceite
+
+- **CA-GRIM-01** · *rápida* — **Dado** uma seleção com dois personagens, um pergaminho, uma conexão manual e uma missão, **quando** é salva, **então** o documento contém esses elementos e nenhum dado de sessão, fila ou espera.
+- **CA-GRIM-02** · *rápida* — **Dado** um grimório com classe do workspace A ausente no workspace B, **quando** é restaurado em mesa de B, **então** o usuário recebe o aviso com as três opções e, escolhendo "copiar como classe da mesa", a classe aparece em `.mestre/mesas/<mesa>/classes/`.
+- **CA-GRIM-03** · *rápida* — **Dado** uma classe copiada que excede o teto de B, **quando** se tenta restaurar, **então** é recusado listando o item excedente e nada é criado.
+- **CA-GRIM-04** · *rápida* — **Dado** um personagem "Dev" já existente no destino, **quando** se restaura um grimório com "Dev", **então** o novo se chama "Dev (2)" e o resumo de confirmação mostra isso.
+- **CA-GRIM-05** · *completa* — **Dado** um grimório válido, **quando** é restaurado, **então** personagens nascem conectados conforme o salvo, pergaminhos têm o conteúdo salvo e a missão existe em `draft` com issue sob o épico de destino.
+- **CA-GRIM-06** · *pesada* — **Dado** o painel, **quando** salvo um grimório de uma mesa e restauro em outra mesa, **então** o time volta funcionando e uma missão restaurada roda (MVP-11).
+
+## Depende de
+
+- [Personagens](personagens.md)
+- [Missões](missoes.md)
+- [Pergaminhos e tomos](pergaminhos-e-tomos.md)
+- [Conexões](conexoes.md)
+- [Classes](../classes/classes.md)
+- [Teto do workspace](../classes/teto-do-workspace.md)
