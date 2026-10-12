@@ -48,10 +48,11 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
 
 ### Checagem da ordem de implementação
 
-10. **"Depende de" só para trás e sem ciclos.** A ferramenta lê o [mapa de documentos por marco](../desenvolvimento/ordem-de-implementacao.md#mapa-de-documentos-por-marco) e confere:
+10. **"Depende de" só para trás e sem ciclos.** A ferramenta lê o [mapa de documentos por marco e etapa](../desenvolvimento/ordem-de-implementacao.md#mapa-de-documentos-por-marco-e-etapa) e confere:
     - todo documento de funcionalidade está no mapa, uma vez só, e todo documento do mapa é de funcionalidade;
     - cada link da seção "Depende de" que aponta para um documento de funcionalidade aponta para um do **mesmo marco ou de marco anterior**; links para documentos de referência (sem a seção Objetivo) são aceitos e não entram no grafo;
-    - o grafo formado por esses links **não tem ciclos**; num ciclo, o erro mostra o caminho inteiro (`a.md → b.md → a.md`).
+    - o grafo formado por esses links **não tem ciclos**; num ciclo, o erro mostra o caminho inteiro (`a.md → b.md → a.md`);
+    - **a ordem registrada é coerente com as dependências:** para cada link de "Depende de" entre documentos do mesmo marco, a etapa de quem depende é maior que a da dependência; o erro mostra os dois documentos e as etapas (`missoes.md (M4, etapa 9) depende de mesas.md (M4, etapa 9)`). Assim, mudar uma dependência sem ajustar a etapa faz a verificação falhar.
 
 O formato conferido vem dos documentos de referência [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md), [glossário](../produto/glossario.md) e [convenções](../desenvolvimento/convencoes.md).
 
@@ -76,6 +77,7 @@ O formato conferido vem dos documentos de referência [ordem de implementação]
 - **CA-VERDOCS-10** · *rápida* — **Dado** a pasta `docs/` real do repositório, **quando** a suíte rápida roda, **então** a verificação passa em menos de 1 s.
 - **CA-VERDOCS-11** · *rápida* — **Dado** uma árvore em que `a.md` depende de `b.md` e `b.md` depende de `a.md`, ambos no M3, **quando** a verificação roda, **então** ela falha mostrando o ciclo `a.md → b.md → a.md`.
 - **CA-VERDOCS-12** · *rápida* — **Dado** um documento do M3 cujo "Depende de" aponta para um documento do M5, e um documento de funcionalidade fora do mapa, **quando** a verificação roda, **então** ela aponta os dois erros; **dado** o mesmo documento apontando para `../arquitetura/seguranca.md` (referência), **então** não há erro.
+- **CA-VERDOCS-13** · *rápida* — **Dado** um documento na etapa 3 do M4 que passa a depender de outro na etapa 5 do mesmo marco, **quando** a verificação roda, **então** ela falha com os dois nomes e as etapas; ajustando a etapa do primeiro para 6, passa.
 
 ## Depende de
 

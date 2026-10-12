@@ -2,7 +2,7 @@
 
 > **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-12
 
-Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
+Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco-e-etapa). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
 ## Regra de "Depende de"
 
@@ -48,7 +48,7 @@ O [cofre](../plataforma/cofre.md) é do M1, mas o segundo fator, o filtro de seg
 
 ### Spikes do M1
 
-Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
+Os spikes de Windows rodam numa **VM Windows 11 dedicada**, a mesma do [laboratório](../qualidade/testes.md#laboratório) da suíte pesada, nunca no PC de uso do Dono; os de Linux, nesta máquina de desenvolvimento ou na VM Ubuntu do laboratório. Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
 
 | Spike | Se falhar, muda | Onde está o item |
 |---|---|---|
@@ -58,20 +58,59 @@ Seis itens de "Verificar na implementação" mudam camadas de base se falharem; 
 | identificação do chamador subindo a árvore de processos | um grupo de processos por terminal (cgroup ou Job Object) | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
 | `claude`, `codex` e `agy` rodando como `mestre-agente` no Linux | pasta pessoal própria para a conta dos agentes | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
 
-## Mapa de documentos por marco
+## Mapa de documentos por marco e etapa
 
-Tabela lida pela verificação de docs: cada link da coluna "Documentos" é um documento de funcionalidade daquele marco.
+Tabela lida pela verificação de docs; é a **única** lista de documentos por marco. Cada link é um documento de funcionalidade, em exatamente uma linha. Dentro de um marco, as etapas seguem os "Depende de": um documento fica numa etapa **maior** que a de cada dependência do mesmo marco, e documentos da mesma etapa podem ser feitos **em paralelo**. A ordem não é escrita à mão em outro lugar: quem muda um "Depende de" ajusta a etapa aqui na mesma alteração, e a [verificação de docs](../qualidade/verificacao-de-docs.md#checagem-da-ordem-de-implementação) falha se a tabela ficar incoerente.
 
-| Marco | Documentos |
-|---|---|
-| M0 | [testes](../qualidade/testes.md) · [dublês](../qualidade/dubles.md) · [verificação de docs](../qualidade/verificacao-de-docs.md) |
-| M1 | [terminal](../arquitetura/terminal.md) · [canal local](../arquitetura/canal-local.md) · [cofre](../plataforma/cofre.md) |
-| M2 | [protocolo](../conectividade/protocolo.md) · [descoberta](../conectividade/descoberta.md) · [pareamento](../conectividade/pareamento.md) |
-| M3 | [convenções da CLI](../cli/convencoes.md) · [adaptador](../provedores/adaptador.md) · [despachante de hooks](../provedores/despachante-de-hooks.md) · [permissões](../classes/permissoes.md) · [reforço nativo](../classes/reforco-nativo.md) · [teto do workspace](../classes/teto-do-workspace.md) · [classes](../classes/classes.md) · [Claude Code](../provedores/claude-code.md) · [Codex](../provedores/codex.md) · [Antigravity](../provedores/antigravity.md) · [conformidade](../provedores/conformidade.md) |
-| M4 | [workspaces](../orquestracao/workspaces.md) · [bases e fichas](../orquestracao/bases-e-fichas.md) · [personagens](../orquestracao/personagens.md) · [conexões](../orquestracao/conexoes.md) · [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) · [mesas](../orquestracao/mesas.md) · [missões](../orquestracao/missoes.md) · [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) · [rituais](../orquestracao/rituais.md) · [grimórios](../orquestracao/grimorios.md) · [sessão zero do workspace](../sessao-zero/workspace.md) · [sessão zero da mesa](../sessao-zero/mesa.md) · [sessão zero do personagem](../sessao-zero/personagem.md) · [CLI de comunicação](../cli/comunicacao.md) · [CLI de coordenação](../cli/coordenacao.md) · [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) · [skills geradas](../cli/skills-geradas.md) |
-| M5 | [usuários e níveis](../telegram/usuarios-e-niveis.md) · [bot](../telegram/bot.md) · [roteamento](../telegram/roteamento.md) · [segurança do canal](../telegram/seguranca-do-canal.md) · [decretos](../telegram/decretos.md) · [anexos e transcrição](../telegram/anexos-e-transcricao.md) · [política de aprovação](../aprovacoes/politica.md) · [fluxo de aprovação](../aprovacoes/fluxo.md) · [identidades e Apps](../github/identidades-e-apps.md) · [criação de Apps](../github/criacao-de-apps.md) · [eventos do GitHub](../github/eventos.md) · [ações por nível](../github/acoes-por-nivel.md) · [aprovação no GitHub](../github/aprovacao-no-github.md) · [Grão-Mestre](../orquestracao/grao-mestre.md) · [Mestre da mesa](../orquestracao/mestre-da-mesa.md) · [limites de uso](../plataforma/limites-de-uso.md) · [CLI de issues e PRs](../cli/coordenacao-github.md) · [CLI do Grão-Mestre](../cli/grao-mestre.md) |
-| M6 | [login](../painel/login.md) · [canvas](../painel/canvas.md) · [visão do workspace](../painel/visao-do-workspace.md) · [conversa e aprovações](../painel/conversa-e-aprovacoes.md) · [administração](../painel/administracao.md) |
-| M7 | [Guardião](../autocura/guardiao.md) · [camadas](../autocura/camadas.md) · [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) · [checklist](../plataforma/checklist.md) · [autoatualização](../plataforma/autoatualizacao.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) |
+| Marco | Etapa | Documentos |
+|---|---|---|
+| M0 | 1 | [testes](../qualidade/testes.md) |
+| M0 | 2 | [dublês](../qualidade/dubles.md) |
+| M0 | 3 | [verificação de docs](../qualidade/verificacao-de-docs.md) |
+| M1 | 1 | [terminal](../arquitetura/terminal.md) · [cofre](../plataforma/cofre.md) |
+| M1 | 2 | [canal local](../arquitetura/canal-local.md) |
+| M2 | 1 | [protocolo](../conectividade/protocolo.md) |
+| M2 | 2 | [descoberta](../conectividade/descoberta.md) |
+| M2 | 3 | [pareamento](../conectividade/pareamento.md) |
+| M3 | 1 | [adaptador](../provedores/adaptador.md) |
+| M3 | 2 | [permissões](../classes/permissoes.md) |
+| M3 | 3 | [reforço nativo](../classes/reforco-nativo.md) · [teto do workspace](../classes/teto-do-workspace.md) · [convenções da CLI](../cli/convencoes.md) · [despachante de hooks](../provedores/despachante-de-hooks.md) |
+| M3 | 4 | [classes](../classes/classes.md) · [Claude Code](../provedores/claude-code.md) · [Codex](../provedores/codex.md) · [Antigravity](../provedores/antigravity.md) |
+| M3 | 5 | [conformidade](../provedores/conformidade.md) |
+| M4 | 1 | [workspaces](../orquestracao/workspaces.md) · [bases e fichas](../orquestracao/bases-e-fichas.md) |
+| M4 | 2 | [sessão zero do workspace](../sessao-zero/workspace.md) |
+| M4 | 3 | [sessão zero da mesa](../sessao-zero/mesa.md) |
+| M4 | 4 | [sessão zero do personagem](../sessao-zero/personagem.md) |
+| M4 | 5 | [personagens](../orquestracao/personagens.md) |
+| M4 | 6 | [conexões](../orquestracao/conexoes.md) |
+| M4 | 7 | [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) · [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
+| M4 | 8 | [mesas](../orquestracao/mesas.md) |
+| M4 | 9 | [missões](../orquestracao/missoes.md) |
+| M4 | 10 | [CLI de comunicação](../cli/comunicacao.md) · [CLI de coordenação](../cli/coordenacao.md) · [grimórios](../orquestracao/grimorios.md) · [rituais](../orquestracao/rituais.md) |
+| M4 | 11 | [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) |
+| M4 | 12 | [skills geradas](../cli/skills-geradas.md) |
+| M5 | 1 | [identidades e Apps](../github/identidades-e-apps.md) · [usuários e níveis](../telegram/usuarios-e-niveis.md) |
+| M5 | 2 | [política de aprovação](../aprovacoes/politica.md) · [ações por nível](../github/acoes-por-nivel.md) · [bot](../telegram/bot.md) |
+| M5 | 3 | [fluxo de aprovação](../aprovacoes/fluxo.md) · [CLI de issues e PRs](../cli/coordenacao-github.md) · [criação de Apps](../github/criacao-de-apps.md) · [eventos do GitHub](../github/eventos.md) · [segurança do canal](../telegram/seguranca-do-canal.md) |
+| M5 | 4 | [limites de uso](../plataforma/limites-de-uso.md) · [decretos](../telegram/decretos.md) · [roteamento](../telegram/roteamento.md) |
+| M5 | 5 | [aprovação no GitHub](../github/aprovacao-no-github.md) · [Grão-Mestre](../orquestracao/grao-mestre.md) · [anexos e transcrição](../telegram/anexos-e-transcricao.md) |
+| M5 | 6 | [CLI do Grão-Mestre](../cli/grao-mestre.md) · [Mestre da mesa](../orquestracao/mestre-da-mesa.md) |
+| M6 | 1 | [login](../painel/login.md) |
+| M6 | 2 | [administração](../painel/administracao.md) · [canvas](../painel/canvas.md) · [conversa e aprovações](../painel/conversa-e-aprovacoes.md) |
+| M6 | 3 | [visão do workspace](../painel/visao-do-workspace.md) |
+| M7 | 1 | [Guardião](../autocura/guardiao.md) · [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
+| M7 | 2 | [camadas](../autocura/camadas.md) · [checklist](../plataforma/checklist.md) |
+| M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) |
+| M7 | 4 | [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) |
+
+### Regras de execução da ordem
+
+- **M0, além dos documentos:** layout do repositório em Go ([convenções](convencoes.md)) e o `logging` com mascaramento, antes da etapa 1.
+- **M1:** os [spikes](#spikes-do-m1) vêm antes da etapa 1; banco e migrações ([persistência](../arquitetura/persistencia.md)) e `internal/gitx` entram junto da etapa 1.
+- **M2:** TLS e CA interna entram junto da etapa 1. Depois do M2, o [Guardião](../autocura/guardiao.md) pode começar em paralelo com M3 a M6 (a etapa 1 do M7 só confere que ele está pronto).
+- **Conformidade real no fim do M3:** depois da etapa 5, uma primeira rodada do [teste de conformidade](../provedores/conformidade.md) com os CLIs reais nesta máquina Linux, para achar cedo mudanças dos provedores; a rodada completa, nos dois sistemas, é a da suíte pesada no laboratório.
+- **"Casca" dos comandos da CLI:** um comando que outro documento usa antes da sua etapa (ex.: `mestre done` nas [missões](../orquestracao/missoes.md), etapa 9, antes da [CLI de comunicação](../cli/comunicacao.md), etapa 10) é implementado como casca junto do documento que o usa: sintaxe, chamada pelo [canal local](../arquitetura/canal-local.md) e o caminho feliz. Os critérios de aceite do documento da CLI (erros, códigos de saída, `--json`) fecham na etapa dele.
+- **M7:** depois da etapa 4, o [Operador do PC](#operador-do-pc-no-m7) e, por último, a suíte pesada (MVP-1 a MVP-14).
 
 ## Como usar no dia a dia
 
