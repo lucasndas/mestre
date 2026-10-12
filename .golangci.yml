@@ -1,6 +1,6 @@
 # golangci-lint v2 configuration (docs/desenvolvimento/convencoes.md#estilo).
-# tools/codecheck enforces the forbidigo, depguard and paralleltest rules in
-# the fast suite as well, for machines without golangci-lint.
+# tools/testrun runs it in the fast and full suites; tools/codecheck keeps
+# only the rule the linter does not cover (t.Parallel in subtests).
 version: "2"
 
 linters:
@@ -14,6 +14,7 @@ linters:
     - depguard
   settings:
     forbidigo:
+      analyze-types: true # also catches an aliased time import
       forbid:
         - pattern: ^time\.(Sleep|Now|After|NewTimer|NewTicker|AfterFunc|Since)$
           msg: use the injectable clock in pkg/clock (docs/qualidade/testes.md)

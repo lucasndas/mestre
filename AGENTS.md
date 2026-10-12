@@ -13,6 +13,8 @@ Termos como Mesa, Ficha, Classe e Grimório estão no [glossário](docs/produto/
 
 ## Testes
 
+Ferramentas e versões para desenvolver: [docs/desenvolvimento/ambiente.md](docs/desenvolvimento/ambiente.md).
+
 Política completa em [docs/qualidade/testes.md](docs/qualidade/testes.md); não a repita aqui. Comandos: `go run ./tools/testrun fast` (antes de cada commit), `go run ./tools/testrun affected` (durante o trabalho) e `go run ./tools/testrun full` (antes do merge). Sem `sleep` em teste; Telegram e GitHub são sempre falsos, em todas as suítes ([dublês](docs/qualidade/dubles.md)).
 
 ## Documentação

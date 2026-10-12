@@ -1,7 +1,7 @@
 // Package testkit holds the shared test doubles (docs/qualidade/dubles.md):
 // recordings, the secret scan of the recordings, the "not implemented"
 // rule, temporary files and ports. Production code must not import it
-// (tools/codecheck, depguard in .golangci.yml).
+// (depguard in .golangci.yml).
 package testkit
 
 import (

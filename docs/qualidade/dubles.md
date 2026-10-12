@@ -33,7 +33,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 
 - Ficam em `internal/testkit/testdata/recordings/<origem>/<versão>/` (ex.: `claude-code/2.1.296/`, `telegram/bot-api-10.3/`, `github/rest-2022-11-28/`), um arquivo JSON por evento ou resposta com `origin`, `version`, `captured_at`, `source` (documentação ou captura) e `body`.
 - **Provedores:** capturadas dos CLIs reais pelo [teste de conformidade](../provedores/conformidade.md). Quando ele encontra um campo diferente do gravado, falha apontando o campo e grava a versão nova para revisão em PR.
-- **Telegram e GitHub:** formatos tirados da documentação oficial e de respostas reais conferidas à mão (ex.: os itens do GitHub verificados na [sessão zero](../sessao-zero/workspace.md)), já mascaradas.
+- **Telegram e GitHub:** formatos tirados da documentação oficial e de respostas reais conferidas à mão (ex.: os itens do GitHub verificados no [sandbox](projetos-de-treino.md#sandbox-real-no-github)), já mascaradas.
 - O agente falso usa a gravação mais nova por padrão; o teste pode fixar uma versão.
 
 ### Telegram falso
@@ -47,7 +47,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 - API REST em memória com o que o motor usa: issues e rótulos (inclusive `epico`), sub-issues (pelo `id`, como o real), comentários, PRs, revisões, merge, CI, rulesets, instalações e tokens de instalação (expiram em 1 hora pelo relógio), conversão de manifesto (código vale 1 hora), device flow, `GET /users/<slug>[bot]` e Releases (última release e download dos arquivos, para a [atualização automática](../plataforma/autoatualizacao.md)).
 - Fiel no que importa: `ETag` e `If-None-Match` devolvem 304 sem gastar cota; cabeçalhos de limite por instalação; cada ação registra o App que a fez; um App não aprova o PR que abriu; envio que altera `.github/workflows/` é recusado sem a permissão "Workflows".
 - Páginas mínimas de criação e instalação de App que recebem o formulário do manifesto, têm os botões "Create GitHub App" e "Install" e redirecionam com o `code` e com o `installation_id`, para testar o link de [criação de Apps](../github/criacao-de-apps.md) de ponta a ponta com um navegador real. As páginas reais do GitHub são usadas só pelo Dono, no próprio navegador; o Mestre não as automatiza.
-- Envio de branch: na completa, um repositório git local faz o papel do remoto; na rápida, a camada de envio é uma interface falsa.
+- Envio de branch: na completa, a cópia de um [projeto de treino](projetos-de-treino.md) faz o papel do remoto; na rápida, a camada de envio é uma interface falsa.
 
 ### Telegram e GitHub na pesada
 

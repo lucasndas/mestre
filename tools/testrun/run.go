@@ -38,12 +38,13 @@ type Suite struct {
 	Tags     string
 	Budget   time.Duration // 0: no hard limit (measured)
 	FlagSlow bool
+	Lint     bool // also run golangci-lint, in parallel with the tests
 }
 
 // Suites by executor name.
 var Suites = map[string]Suite{
-	"fast":  {Name: "fast", Budget: 30 * time.Second, FlagSlow: true},
-	"full":  {Name: "full", Tags: "full", Budget: 3 * time.Minute},
+	"fast":  {Name: "fast", Budget: 30 * time.Second, FlagSlow: true, Lint: true},
+	"full":  {Name: "full", Tags: "full", Budget: 3 * time.Minute, Lint: true},
 	"heavy": {Name: "heavy", Tags: "full,heavy"},
 }
 
@@ -53,6 +54,8 @@ const (
 	slowestShown = 10
 	quarantineN  = 20
 	envSuite     = "MESTRE_TEST_SUITE"
+	// LintDoc says how to install the pinned golangci-lint.
+	LintDoc = "docs/desenvolvimento/ambiente.md"
 )
 
 // Runner runs the suites.
@@ -98,7 +101,9 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	goCmd := Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}
 
 	start := r.Clock.Now()
+	lintDone := r.startLint(ctx, s)
 	goOut, goCode, goErr, webOut, webCode, webErr := r.runParallel(ctx, goCmd, r.vitestRun())
+	lintFailed := r.reportLint(<-lintDone)
 	wall := clock.Since(r.Clock, start)
 
 	rep := parseEvents(goOut)
@@ -109,6 +114,9 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	}
 	if webErr != nil || webCode != 0 {
 		r.printf("FAIL vitest (exit %d) %v\n", webCode, errOrEmpty(webErr))
+		code = 1
+	}
+	if lintFailed {
 		code = 1
 	}
 	tests := len(rep.leaves())
@@ -145,6 +153,51 @@ func errOrEmpty(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// lintResult is the outcome of one golangci-lint run.
+type lintResult struct {
+	ran  bool
+	out  []byte
+	code int
+	err  error
+}
+
+// startLint runs golangci-lint in the background when the suite asks for it,
+// with the suite build tags so tagged files are linted too.
+func (r *Runner) startLint(ctx context.Context, s Suite) <-chan lintResult {
+	done := make(chan lintResult, 1)
+	if !s.Lint {
+		done <- lintResult{}
+		return done
+	}
+	args := []string{"run"}
+	if s.Tags != "" {
+		args = append(args, "--build-tags", s.Tags)
+	}
+	args = append(args, "./...")
+	go func() {
+		var b bytes.Buffer
+		code, err := r.Exec.Run(ctx, Cmd{Name: "golangci-lint", Args: args}, &b)
+		done <- lintResult{ran: true, out: b.Bytes(), code: code, err: err}
+	}()
+	return done
+}
+
+// reportLint prints a lint failure and says whether there was one. A missing
+// binary points to the setup document.
+func (r *Runner) reportLint(l lintResult) bool {
+	switch {
+	case !l.ran:
+		return false
+	case l.err != nil:
+		r.printf("FAIL golangci-lint did not run (%v): install the pinned version as in %s\n", l.err, LintDoc)
+		return true
+	case l.code != 0:
+		r.printf("FAIL golangci-lint (exit %d):\n%s", l.code, l.out)
+		return true
+	}
+	return false
 }
 
 // vitestRun is the panel command of the suites, or nil without web/.

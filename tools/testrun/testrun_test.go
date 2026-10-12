@@ -22,15 +22,19 @@ var today = time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
 
 // fakeExec answers commands with recorded output and keeps the calls.
 type fakeExec struct {
-	mu     sync.Mutex
-	calls  []Cmd
-	handle func(c Cmd, out io.Writer) int
+	mu      sync.Mutex
+	calls   []Cmd
+	handle  func(c Cmd, out io.Writer) int
+	missing string // a command name that is not installed
 }
 
 func (f *fakeExec) Run(_ context.Context, c Cmd, out io.Writer) (int, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, c)
 	f.mu.Unlock()
+	if c.Name == f.missing {
+		return -1, fmt.Errorf("run %s: exec: %q: executable file not found in $PATH", c, c.Name)
+	}
 	return f.handle(c, out), nil
 }
 
@@ -177,7 +181,7 @@ func TestQuarantineSkipsAndExpiredFailsFull(t *testing.T) {
 
 	code := r.RunSuite(context.Background(), Suites["full"])
 
-	main := ex.callsMatching("./...")
+	main := ex.callsMatching("go test")
 	if len(main) != 1 || !strings.Contains(main[0].String(), "-tags full -skip ^(TestRecent|TestOld)$ ./...") {
 		t.Fatalf("go test call = %v", main)
 	}
@@ -208,7 +212,7 @@ func TestFailingTestRunsOnce(t *testing.T) {
 	if code == 0 {
 		t.Fatal("failing test passed the suite")
 	}
-	if n := len(ex.calls); n != 1 {
+	if n := len(ex.callsMatching("go test")); n != 1 {
 		t.Fatalf("go test called %d times, want once: %v", n, ex.calls)
 	}
 	if text := out.String(); !strings.Contains(text, "--- FAIL: "+pkg+" TestBroken") || !strings.Contains(text, "sample_test.go:9: boom") {
@@ -242,6 +246,56 @@ func TestAffectedCallsVitestRelatedWithChangedPanelFiles(t *testing.T) {
 	g := ex.callsMatching("go test")
 	if len(g) != 1 || strings.Contains(g[0].String(), "-count") {
 		t.Fatalf("go test must use the test cache: %v", g)
+	}
+}
+
+// CA-TESTES-08
+func TestLintRunsWithSuiteTagsAndMissingBinaryPointsToSetup(t *testing.T) {
+	t.Parallel()
+	for _, suite := range []string{"fast", "full"} {
+		t.Run(suite, func(t *testing.T) {
+			t.Parallel()
+			ex := &fakeExec{missing: "golangci-lint", handle: func(Cmd, io.Writer) int { return 0 }}
+			r, out := newRunner(nil, clock.NewFake(today), ex)
+
+			code := r.RunSuite(context.Background(), Suites[suite])
+
+			if code == 0 || !strings.Contains(out.String(), "FAIL golangci-lint did not run") ||
+				!strings.Contains(out.String(), "docs/desenvolvimento/ambiente.md") {
+				t.Fatalf("exit %d:\n%s", code, out)
+			}
+			want := "golangci-lint run ./..."
+			if suite == "full" {
+				want = "golangci-lint run --build-tags full ./..."
+			}
+			if calls := ex.callsMatching("golangci-lint"); len(calls) != 1 || calls[0].String() != want {
+				t.Fatalf("lint calls = %v, want %q", calls, want)
+			}
+		})
+	}
+}
+
+func TestLintIssuesFailTheSuite(t *testing.T) {
+	t.Parallel()
+	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
+		if c.Name == "golangci-lint" {
+			_, _ = io.WriteString(out, "x.go:1:1: use of `time.Sleep` forbidden (forbidigo)\n")
+			return 1
+		}
+		return 0
+	}}
+	r, out := newRunner(nil, clock.NewFake(today), ex)
+
+	if code := r.RunSuite(context.Background(), Suites["fast"]); code == 0 || !strings.Contains(out.String(), "(forbidigo)") {
+		t.Fatalf("exit %d:\n%s", code, out)
+	}
+	if n := len(ex.callsMatching("golangci-lint")); n != 1 {
+		t.Fatalf("lint ran %d times", n)
+	}
+	r2, _ := newRunner(nil, clock.NewFake(today), ex)
+	r2.RunSuite(context.Background(), Suites["heavy"])
+	if n := len(ex.callsMatching("golangci-lint")); n != 1 {
+		t.Fatalf("heavy suite ran the linter")
 	}
 }
 

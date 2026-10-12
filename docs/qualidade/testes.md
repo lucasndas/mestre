@@ -32,6 +32,7 @@ Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tool
 4. **Sinaliza** todo teste da rápida acima de **100 ms**. Antes de sinalizar, roda o teste sozinho uma vez para descontar a disputa de CPU (só mede tempo; não é nova tentativa de aprovação). A sinalização é aviso na saída e no resumo do CI; não falha a suíte.
 5. Na pesada, guarda o tempo de cada execução (em `.testrun/heavy-history.json`, fora do git) e avisa quando o total passa **20%** (padrão) da mediana das últimas 7.
 6. Define `MESTRE_TEST_SUITE=fast|full|heavy` no ambiente dos testes (uso em [Regras e erros](#regras-e-erros)).
+7. Na rápida e na completa, roda também o `golangci-lint run ./...` em paralelo (na completa com `--build-tags full`), dentro do orçamento; problema do linter falha a suíte, e o binário ausente falha apontando para o [ambiente](../desenvolvimento/ambiente.md).
 
 ### Testes afetados
 
@@ -80,7 +81,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 
 - **Decisão:** a pesada usa máquinas reais e os CLIs reais dos provedores, e Telegram e GitHub **falsos**: os dublês de [dubles.md](dubles.md), com os formatos gravados. Vale para todos os testes de ponta a ponta, inclusive MVP-5, 7, 8, 9 e 10.
 - Por quê: o lado do usuário do Telegram não é automatizável pela Bot API (um bot não fala com outro bot), e o MVP-5 criaria Apps reais a cada noite, contra o limite de 100 por conta.
-- Nenhuma suíte usa Telegram ou GitHub reais. O comportamento real do GitHub que os docs marcam como **Verificar na implementação** é conferido à mão na [sessão zero](../sessao-zero/workspace.md), e as respostas reais conferidas viram gravações dos dublês.
+- Nenhuma suíte usa Telegram ou GitHub reais. O comportamento real do GitHub que os docs marcam como **Verificar na implementação** é conferido à mão no repositório sandbox ([projetos de treino](projetos-de-treino.md#sandbox-real-no-github)), e as respostas reais conferidas viram gravações dos dublês. O repositório que os testes usam no lugar do projeto do usuário também está lá.
 - Na pesada, os dublês do Telegram e do GitHub rodam como servidores HTTP no hospedeiro do laboratório, e o Core instalado aponta para eles ([como](dubles.md#telegram-e-github-na-pesada)).
 
 ### Laboratório
@@ -91,7 +92,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 
 ## Regras e erros
 
-- **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint, repetido na rápida pelo `TestCodeRules`) recusa `time.Sleep`, `time.Now`, `time.After`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc` e `time.Since` fora do pacote do relógio. No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
+- **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint; [divisão das regras](../desenvolvimento/convencoes.md#estilo)) recusa `time.Sleep`, `time.Now`, `time.After`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc` e `time.Since` fora do pacote do relógio. No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
 - **Rápida sem processos e sem rede:** com `MESTRE_TEST_SUITE=fast`, a camada única que inicia processos e a que abre conexões recusam com erro claro ("processo externo na suíte rápida: use o PTY falso"). Na rápida, o agente falso, o `mestre hook` e a CLI rodam dentro do processo do teste pelo lançador em memória ([dublês](dubles.md#agente-falso-fakeagent)). Teste que precisa de processo real é da completa.
 - **Git:** o motor usa o binário `git` do sistema (2.32 ou mais novo) só pelo wrapper `internal/gitx` ([convenções](../desenvolvimento/convencoes.md)). Na rápida, `gitx` é o git falso do `testkit`; critério que precisa de git real (bundle, worktree, `info/exclude`, commit) é da completa.
 - **Serviços do sistema:** a completa nunca instala serviços nem muda contas, ACLs ou o mDNS do sistema; critério que precisa disso é da pesada e cita `(MVP-1)` ou `(MVP-13)`.
@@ -110,6 +111,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 - **CA-TESTES-05** · *rápida* — **Dado** `MESTRE_TEST_SUITE=fast`, **quando** o código pede para iniciar um processo externo, **então** recebe o erro de processo externo na suíte rápida.
 - **CA-TESTES-06** · *rápida* — **Dado** arquivos alterados do painel, **quando** o `testrun affected` roda, **então** ele chama `vitest related` só com esses arquivos.
 - **CA-TESTES-07** · *rápida* — **Dado** sete execuções anteriores da pesada com mediana de 40 min, **quando** uma nova leva 50 min, **então** o `testrun heavy` avisa o aumento.
+- **CA-TESTES-08** · *rápida* — **Dado** o `golangci-lint` fora do `PATH`, **quando** o `testrun fast` ou o `full` roda, **então** a suíte falha com a mensagem que aponta para `docs/desenvolvimento/ambiente.md`; **dado** o linter com problemas, **então** a suíte falha mostrando a saída dele.
 
 ## Depende de
 

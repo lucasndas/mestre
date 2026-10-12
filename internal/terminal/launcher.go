@@ -129,6 +129,12 @@ func (p *pipePTY) Read(b []byte) (int, error)  { return p.r.Read(b) }
 func (p *pipePTY) Write(b []byte) (int, error) { return p.w.Write(b) }
 func (p *pipePTY) Resize(_, _ uint16) error    { return nil }
 
+// Close ends the input (the process sees EOF) and drains the remaining
+// output in the background, so the process's writes never hit a closed pipe
+// and Wait reports the real exit status. The output pipe is closed by the
+// wait goroutine when the process exits, which also ends the drain.
 func (p *pipePTY) Close() error {
-	return errors.Join(p.r.Close(), p.w.Close())
+	err := p.w.Close()
+	go func() { _, _ = io.Copy(io.Discard, p.r) }()
+	return err
 }

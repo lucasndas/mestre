@@ -16,7 +16,7 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 
 | Marco | Nome | O que fica pronto ao final |
 |---|---|---|
-| M0 | Fundação | executor das suítes (`tools/testrun`), verificação de docs (`tools/docscheck`), dublês e `testkit` (relógio injetável, rede, PTY, git, Telegram e GitHub falsos, agente falso), `logging` com [mascaramento](../arquitetura/seguranca.md#mascaramento-em-logs) |
+| M0 | Fundação | executor das suítes (`tools/testrun`), verificação de docs (`tools/docscheck`), dublês e `testkit` (relógio injetável, rede, PTY, git, Telegram e GitHub falsos, agente falso), projetos de treino (`testkit.NewProject`), `logging` com [mascaramento](../arquitetura/seguranca.md#mascaramento-em-logs) |
 | M1 | Base local | banco e migrações ([persistência](../arquitetura/persistencia.md)), cofre, terminal (PTY/ConPTY e emulador), `internal/gitx` (wrapper do binário `git`), canal local CLI ↔ motor |
 | M2 | Transporte | TLS e CA interna ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)), protocolo WSS, pareamento e descoberta |
 | M3 | CLI e provedores | CLI (convenções), adaptador e `mestre hook`, [precedência](../arquitetura/precedencia.md), permissões, reforço nativo, classes, teto, os três provedores e o teste de conformidade |
@@ -70,7 +70,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 |---|---|---|
 | M0 | 1 | [testes](../qualidade/testes.md) |
 | M0 | 2 | [dublês](../qualidade/dubles.md) |
-| M0 | 3 | [verificação de docs](../qualidade/verificacao-de-docs.md) |
+| M0 | 3 | [verificação de docs](../qualidade/verificacao-de-docs.md) · [projetos de treino](../qualidade/projetos-de-treino.md) |
 | M1 | 1 | [terminal](../arquitetura/terminal.md) · [cofre](../plataforma/cofre.md) |
 | M1 | 2 | [canal local](../arquitetura/canal-local.md) |
 | M2 | 1 | [protocolo](../conectividade/protocolo.md) |

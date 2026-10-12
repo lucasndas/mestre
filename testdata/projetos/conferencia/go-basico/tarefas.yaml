@@ -1,0 +1,34 @@
+# Tasks of the go-basico training project (docs/qualidade/projetos-de-treino.md).
+# Kept outside the copy: the agent never sees this file nor the hidden tests,
+# which are copied into the project only when the result is checked.
+tasks:
+  - id: T1
+    prompt: >-
+      A função Max devolve 0 quando todos os números da lista são negativos;
+      ela deveria devolver o maior deles. Corrija e cubra o caso com um teste.
+    may_change: [stats/stats.go, stats/stats_test.go]
+    verify:
+      hidden: ocultos/T1
+      command: [go, test, -count=1, ./...]
+    heavy:
+      max_minutes: 10
+      max_turns: 30
+  - id: T2
+    prompt: >-
+      Adicione ao pacote stats a função Media(xs []float64) (float64, error),
+      que devolve a média aritmética e ErrEmpty para lista vazia, com teste.
+    may_change: [stats/stats.go, stats/stats_test.go]
+    verify:
+      hidden: ocultos/T2
+      command: [go, test, -count=1, ./...]
+  - id: T3
+    prompt: >-
+      O README não cita a função Max. Inclua-a na lista de funções, no mesmo
+      formato das outras. Não mude código.
+    may_change: [README.md]
+    verify:
+      hidden: ocultos/T3
+      command: [go, test, -count=1, ./...]
+    heavy:
+      max_minutes: 10
+      max_turns: 20

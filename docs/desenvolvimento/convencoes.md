@@ -4,7 +4,7 @@
 
 ## Layout do repositório
 
-Um único módulo Go na raiz (Go 1.25+, `CGO_ENABLED=0`; [ADR 0001](../decisoes/0001-stack-go.md)) e o painel em `web/`.
+Um único módulo Go na raiz (Go 1.25+, `CGO_ENABLED=0`; [ADR 0001](../decisoes/0001-stack-go.md)) e o painel em `web/`. O `go.mod` fixa `toolchain go1.27.2` ([ambiente](ambiente.md)).
 
 ```
 cmd/
@@ -48,8 +48,9 @@ web/                 painel: React + TypeScript + Vite
   src/gen/           tipos TypeScript gerados a partir do Go
 tools/testrun/       executor das suítes (ver testes.md)
 tools/docscheck/     verificação da documentação (ver verificacao-de-docs.md)
-tools/codecheck/     regras do linter (tempo, depguard, paralleltest) repetidas como teste da rápida
+tools/codecheck/     regras de código que o linter não cobre (ver Estilo)
 test/quarantine.yaml testes em quarentena
+testdata/projetos/   projetos de treino dos testes (ver projetos-de-treino.md)
 packaging/           units do systemd e instalador do Windows
 docs/                esta documentação
 ```
@@ -87,7 +88,8 @@ Exceções herdadas, mantidas como estão: identificadores de protocolo, variáv
 ## Estilo
 
 **Go**
-- `gofmt` e `goimports`; `golangci-lint` com `govet`, `staticcheck`, `errcheck`, `forbidigo`, `paralleltest` e `depguard` (configuração em `.golangci.yml`). As regras de `forbidigo`, `depguard` e `paralleltest` também rodam na suíte rápida, como o teste `TestCodeRules` de `tools/codecheck`, para valer onde o linter não está instalado.
+- `gofmt` e `goimports`; `golangci-lint` 2.14.0 ([ambiente](ambiente.md)) com `govet`, `staticcheck`, `errcheck`, `forbidigo`, `paralleltest` e `depguard` (configuração em `.golangci.yml`), rodado pelo `testrun` na rápida e na completa ([executor](../qualidade/testes.md#executor-testrun)).
+- **Cada regra de código vive numa ferramenta só:** o golangci-lint cobre tempo só em `pkg/clock` (`forbidigo`: `time.Sleep`, `Now`, `After`, `NewTimer`, `NewTicker`, `AfterFunc` e `Since`), `internal/testkit` importado só por testes, pelo próprio `testkit`, por `cmd/fakeagent` e por `tools`, e o isolamento do `guardian/` ([layout](#layout-do-repositório)) (`depguard`), e `t.Parallel()` em toda função `TestXxx` (`paralleltest`); o `tools/codecheck` (teste `TestCodeRules`, na rápida) cobre só o `t.Parallel()` dos subtestes de `t.Run`, que o `paralleltest` não verifica.
 - Erros com contexto: `fmt.Errorf("open table %s: %w", id, err)`. Sem `panic` fora de `main` e de invariantes impossíveis.
 - `context.Context` como primeiro parâmetro de tudo que faz E/S ou espera.
 - Tempo só pelo `clock` (regra e motivo em [testes](../qualidade/testes.md)). Processos, rede e git só pelas camadas únicas de `terminal/` (lançador), `transport/` e `gitx/`, que os dublês substituem ([dublês](../qualidade/dubles.md)).

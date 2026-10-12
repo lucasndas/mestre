@@ -54,6 +54,7 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço do Windows e de ConPTY 
 ## Decisão
 
 - **Go 1.25 ou superior**, um único módulo, compilado com `CGO_ENABLED=0`.
+- O `go.mod` mantém `go 1.25` e fixa `toolchain go1.27.2`, a versão de desenvolvimento ([ambiente](../desenvolvimento/ambiente.md)).
 - **Dois binários por plataforma:**
   - `mestre`: CLI, motor e subcomandos.
   - `mestre-guardiao`: separado, com código e versão independentes.
