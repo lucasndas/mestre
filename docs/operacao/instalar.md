@@ -24,7 +24,7 @@ Guia para quem usa. O que cada passo cria por dentro (pastas, contas, serviços,
    sudo bash install.sh
    ```
 
-   **A confirmar:** o endereço do repositório público. Se preferir, baixe o `mestre_<versão>_amd64.deb` da mesma página e rode `sudo apt install ./mestre_<versão>_amd64.deb`.
+   Se preferir, baixe o `mestre_<versão>_amd64.deb` da mesma página e rode `sudo apt install ./mestre_<versão>_amd64.deb`.
 2. Espere terminar. O passo mais demorado é baixar e testar o modelo de transcrição (centenas de MB). Se o `ufw` estiver ativo, as portas do Mestre são liberadas sozinhas.
 3. No fim, o terminal mostra três coisas. **Anote as três:**
    - o **endereço do painel** (ex.: `https://servidor.local:7443`);

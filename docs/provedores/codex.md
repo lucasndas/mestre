@@ -30,14 +30,14 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 
 ### Hooks
 
-- **Arquivo:** `.codex/hooks.json` do worktree, no mesmo formato do Claude Code, listado no `.git/info/exclude` ([mesa](../sessao-zero/mesa.md)). Hooks do projeto só carregam com o projeto confiável. Camadas somam: todos os hooks que casam rodam.
+- **Arquivo:** `hooks.json` na **camada de usuário do perfil de conta** (`$CODEX_HOME/hooks.json`), no mesmo formato do Claude Code. Como o `CODEX_HOME` de cada perfil é exclusivo do Mestre ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)), os hooks não afetam o uso pessoal do Codex e não dependem do caminho de cada worktree. Nada de hooks do Codex é gravado no worktree. Camadas somam: hooks de projeto do próprio repositório continuam rodando junto, se a pessoa tiver.
 - **Eventos do provedor:** SessionStart, SessionEnd, SubagentStart, SubagentStop, PreToolUse, PermissionRequest, PostToolUse, UserPromptSubmit, PreCompact, PostCompact, Stop, Interrupt.
 - **Eventos ligados:** SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, Stop, PreCompact, SessionEnd, Interrupt. Matcher `*`. O matcher `Edit`/`Write` também casa `apply_patch`, mas `tool_name` continua `apply_patch`.
 - **Entrada:** JSON no stdin, `snake_case`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`; PreToolUse traz `turn_id`, `tool_name`, `tool_use_id`, `tool_input`; Stop traz `last_assistant_message`; Interrupt traz `turn_id`.
 - **Saída:** exit 0 com `hookSpecificOutput` (`hookEventName`, `additionalContext`, `permissionDecision: allow|deny`, `permissionDecisionReason`; PermissionRequest: `decision.behavior`). **`ask` ainda não é aceito.** Texto puro no stdout é inválido em Stop e Interrupt: o despachante não imprime nada neles. Campo não suportado marca o hook como falho.
 - **Falha:** exit 2 bloqueia (motivo no stderr). Erro, tempo esgotado e saída inválida **liberam** (falha aberta), sem opção para mudar. A proteção que sobra é o sandbox nativo ([permissões](../classes/permissoes.md)).
 - **Tempos limite gerados:** 30 s em PreToolUse, PermissionRequest, UserPromptSubmit e SessionStart; 60 s em PostToolUse, Stop e PreCompact; 3 s (máximo do provedor) em SessionEnd e Interrupt.
-- **Confiança dos hooks:** todo hook não gerenciado precisa ser revisado e confiado (`/hooks`). A confiança fica presa ao hash do hook: editar invalida. Por isso o arquivo gerado tem **conteúdo fixo**, igual em todo worktree do mesmo nó (só chama `mestre hook` pelo caminho estável do binário). Pré-gravar a confiança (`[hooks.state."<chave>"] trusted_hash`) é frágil (hash interno), então o MVP não faz isso: a sessão zero guia o usuário na primeira confiança e o [checklist](../plataforma/checklist.md) detecta quando falta.
+- **Confiança dos hooks:** todo hook não gerenciado precisa ser revisado e confiado (`/hooks`), e a confiança fica presa ao hash do hook (editar invalida). Por isso o arquivo tem **conteúdo fixo** (só chama `mestre hook` pelo caminho estável do binário) e é confiado **uma vez por perfil**, na **configuração inicial do perfil Codex**: depois do login, o painel abre uma sessão do Codex com aquele perfil e guia o usuário a aprovar os hooks do Mestre em `/hooks` ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Pré-gravar a confiança (hash interno) é frágil e não é feito. O [checklist](../plataforma/checklist.md) detecta perfil sem a confiança, e o perfil não recebe personagens até ela existir.
 
 ### Confiança do projeto
 
@@ -87,7 +87,7 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 
 ## Critérios de aceite
 
-- **CA-CODEX-01** · *rápida* — **Dado** dois worktrees no mesmo nó, **quando** `HookFiles` gera `.codex/hooks.json` para os dois, **então** os arquivos são idênticos byte a byte.
+- **CA-CODEX-01** · *rápida* — **Dado** dois perfis de conta Codex no mesmo nó, **quando** `HookFiles` gera o `hooks.json` de cada `CODEX_HOME`, **então** os arquivos são idênticos byte a byte e nenhum arquivo de hooks do Codex é criado no worktree.
 - **CA-CODEX-02** · *rápida* — **Dado** um `config.toml` com comentários e outras tabelas, **quando** `PreTrust` roda duas vezes, **então** o projeto fica `trusted` e o resto do arquivo não muda.
 - **CA-CODEX-03** · *rápida* — **Dado** um `MESTRE.md` com aspas, quebras de linha e acentos, **quando** `BuildLaunch` monta `-c developer_instructions`, **então** o valor lido de volta como TOML é igual ao arquivo.
 - **CA-CODEX-04** · *rápida* — **Dado** um JSONL gravado com `token_count`, **quando** `ReadUsage` lê, **então** o registro tem os tokens e as duas janelas de limite, e marca limite atingido quando `rate_limit_reached_type` vem preenchido.
@@ -104,7 +104,7 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 ## A confirmar
 
 - **A confirmar:** `-c developer_instructions` no modo interativo, num teste ao vivo (o código diz que sim).
-- **A confirmar:** se a chave de confiança de hook inclui o caminho do arquivo. Se incluir, cada worktree novo pede confiança; alternativa a decidir em ADR: hooks na camada de usuário do `CODEX_HOME` do perfil (confiança uma vez por perfil) ou `--dangerously-bypass-hook-trust`.
+- **A confirmar:** que hooks na camada de usuário (`$CODEX_HOME/hooks.json`) carregam em qualquer projeto confiável e que a confiança dada uma vez em `/hooks` vale para todos os worktrees daquele perfil.
 - **A confirmar:** qual raiz o Codex usa para worktrees saídos do espelho sem área de trabalho, e se `git commit` (o `.git` fica fora do worktree e só leitura no sandbox) gera pedido de escalonamento respondido pelo PermissionRequest.
 - **A confirmar:** `cli_auth_credentials_store = "file"` separa as contas de fato (não é recurso oficial); e se o processo de fundo do modo interativo (`/daemon`) respeita `CODEX_HOME`.
 - **A confirmar:** exit diferente de 0 e 2 tratado como não bloqueante; nome da ferramenta de shell no `tool_name`.

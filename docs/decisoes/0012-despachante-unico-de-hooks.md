@@ -11,7 +11,7 @@ Aceita, 2026-10-12.
 - O motor precisa saber o que cada agente está fazendo sem depender de ler a tela. Também precisa aplicar as permissões da classe da mesma forma nos três provedores (MVP-6).
 - **Os arquivos de hooks do projeto são compartilhados** por todos os agentes do mesmo provedor naquele worktree:
   - `.claude/settings.local.json` no Claude Code;
-  - `.codex/hooks.json` no Codex;
+  - `hooks.json` do `CODEX_HOME` do perfil de conta no Codex (camada de usuário, exclusiva do Mestre; confiado uma vez por perfil);
   - `.agents/hooks.json` no Antigravity.
 
   Por isso eles não podem conter regras de uma classe específica.
@@ -80,7 +80,7 @@ Aceita, 2026-10-12.
   - **Antigravity sem eventos:** não há eventos de início e fim de sessão nem de compactação. Esses personagens ficam com **monitoramento reduzido**, mostrado no canvas.
   - **`--dangerously-skip-permissions`:** no Antigravity, essa opção **não desliga os hooks** (testado na 1.3.3; a spec dizia o contrário). Mesmo assim, a base `antigravity` não pode usá-la, porque ela desliga a proteção nativa que serve de defesa em profundidade.
   - **Confiança antes de iniciar:** o motor precisa pré-confiar a pasta em cada provedor. Sem isso, os hooks não rodam no Claude Code, e no Codex os hooks e o `AGENTS.md` do projeto não carregam.
-- **A confirmar:** como confiar os hooks do Codex sem interação. A confiança usa um hash interno, e pré-gravar esse hash é frágil. `--dangerously-bypass-hook-trust` existe, mas não deve ser usado sem decisão própria.
+- **Confiança dos hooks do Codex:** decidida com o usuário em 2026-10-12: os hooks ficam na camada de usuário do perfil de conta e são confiados **uma vez**, na configuração inicial do perfil Codex, guiada pelo painel. Pré-gravar o hash e `--dangerously-bypass-hook-trust` não são usados.
 
 ## Fontes
 

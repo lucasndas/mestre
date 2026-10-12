@@ -94,7 +94,8 @@ sheets:
 
 Para usar várias contas do mesmo provedor, cada nó declara **perfis de conta**: `name` (ex.: `claude-trabalho`), `provider` e a pasta de configuração isolada da conta. O motor aplica a pasta pela variável que cada provedor usa (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `HOME` separado), detalhada em [Claude Code](../provedores/claude-code.md), [Codex](../provedores/codex.md) e [Antigravity](../provedores/antigravity.md).
 - O mesmo nome de perfil pode existir em vários nós (cada nó faz login na mesma conta). A ficha aponta para o nome; um nó sem esse perfil não é candidato.
-- O login em cada perfil é feito pelo usuário, uma vez por nó; o [checklist](../plataforma/checklist.md) confere se continua logado.
+- **Configuração inicial do perfil**, guiada pelo painel, uma vez por nó: (1) login do usuário na conta; (2) no Codex, aprovar uma vez os hooks do Mestre em `/hooks` ([codex](../provedores/codex.md)). O [checklist](../plataforma/checklist.md) confere se continua logado e, no Codex, se a confiança dos hooks existe.
+- O Codex sempre usa um perfil do Mestre: ficha de Codex sem `account` usa o perfil padrão criado pelo Mestre no nó, nunca o `~/.codex` pessoal.
 - Perfis são cadastrados no painel, por nó ([administração](../painel/administracao.md)).
 
 ## Regras e erros

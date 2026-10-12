@@ -22,12 +22,11 @@ A geração é idempotente: rodar de novo sem mudança nos modelos não altera n
 | `.agents/skills/mestre-comunicacao/SKILL.md` | Codex, Antigravity | skill compartilhada | [skills-geradas](../cli/skills-geradas.md) |
 | `.claude/skills/mestre-comunicacao/SKILL.md` | Claude Code | cópia gerenciada da anterior (cópia, não link: links no Windows exigem permissão especial) | idem |
 | `.claude/settings.local.json` | Claude Code | só a chave `hooks`, mesclada | [claude-code](../provedores/claude-code.md) |
-| `.codex/hooks.json` | Codex | hooks de conteúdo fixo, só chamam `mestre hook` | [codex](../provedores/codex.md) |
 | `.agents/hooks.json` | Antigravity | um hook nomeado `mestre` | [antigravity](../provedores/antigravity.md) |
 | `.mestre/run/classes/<classe>/` | todos | cópia das classes usadas ali (os hooks extras rodam no nó) | [classes](../classes/classes.md) |
 | `.mestre/anexos/…` | todos | cópias dos anexos repassados à mesa | [anexos-e-transcricao](../telegram/anexos-e-transcricao.md) |
 
-Arquivos por personagem (`.mestre/agents/<id>/` e `.agents/agents/mestre-<id>.md`) são gerados ao criar o personagem: [personagem](personagem.md). Classes da mesa e pergaminhos têm o Core como fonte; o motor do nó atualiza as cópias quando o Core avisa que mudaram. O conteúdo dos hooks (eventos, comandos e respostas) é do adaptador ([adaptador](../provedores/adaptador.md), [0012](../decisoes/0012-despachante-unico-de-hooks.md)).
+Os hooks do Codex não ficam no worktree, e sim no perfil de conta ([codex](../provedores/codex.md)). Arquivos por personagem (`.mestre/agents/<id>/` e `.agents/agents/mestre-<id>.md`) são gerados ao criar o personagem: [personagem](personagem.md). Classes da mesa e pergaminhos têm o Core como fonte; o motor do nó atualiza as cópias quando o Core avisa que mudaram. O conteúdo dos hooks (eventos, comandos e respostas) é do adaptador ([adaptador](../provedores/adaptador.md), [0012](../decisoes/0012-despachante-unico-de-hooks.md)).
 
 ### `.git/info/exclude`
 O motor mantém um bloco próprio no `info/exclude` do repositório de onde o worktree sai (o arquivo vale para todos os worktrees daquele repositório):
@@ -40,13 +39,12 @@ O motor mantém um bloco próprio no `info/exclude` do repositório de onde o wo
 /.claude/skills/mestre-*/
 /.agents/agents/mestre-*.md
 /.claude/settings.local.json
-/.codex/hooks.json
 /.agents/hooks.json
 /.mestre/
 # <<< mestre <<<
 ```
 - `/.mestre/` só aparece quando o workspace escolheu "só local" ([workspace](workspace.md)).
-- `.codex/hooks.json` e `.agents/hooks.json` só entram se foi o Mestre que criou o arquivo (um arquivo da pessoa, ainda não versionado, continua aparecendo para ela no `git status`).
+- `.agents/hooks.json` só entra se foi o Mestre que criou o arquivo (um arquivo da pessoa, ainda não versionado, continua aparecendo para ela no `git status`).
 - Linhas fora do bloco nunca são tocadas; o `.gitignore` do projeto nunca é alterado.
 
 ### Mescla gerenciada
@@ -110,5 +108,4 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 ## A confirmar
 
 - **A confirmar:** a forma Windows da linha de hook em cada provedor (`cmd /c` no Antigravity, `command_windows` no Codex, shell usado pelo Claude Code); o teste de conformidade ([conformidade](../provedores/conformidade.md)) valida cada forma.
-- **A confirmar:** se a chave de confiança de hooks do Codex depende do caminho do arquivo; se depender, cada worktree novo exigiria nova confiança, e a alternativa é gravar os hooks na camada de usuário do perfil de conta (`$CODEX_HOME/hooks.json`). Decidir em [codex](../provedores/codex.md).
 - **A confirmar:** o comportamento de `skip-worktree` quando a principal muda o mesmo arquivo durante um rebase da mesa.
