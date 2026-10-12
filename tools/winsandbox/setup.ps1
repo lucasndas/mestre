@@ -18,8 +18,8 @@ New-Item -ItemType Directory -Force -Path $Downloads | Out-Null
 $GitVersion = '2.56.0.windows.2'
 $GitFile    = 'Git-2.56.0.2-64-bit.exe'
 $GitSha256  = '52188f917b378f00c70ec136bcf090005f30d44fbc4eba0bce759cc6592d60f6'
-$GoFile     = 'go1.27.2.windows-amd64.zip'
-$GoSha256   = '1314008898bd40df77af4b014f777f08873dbdfbcd3d92308728ee03304fe04f'
+$GoFile     = 'go1.27.2.windows-amd64.msi'
+$GoSha256   = 'dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9'
 $Repo       = 'https://github.com/lucasndas/mestre.git'
 $Branch     = 'spike/m1-windows'
 
@@ -48,14 +48,14 @@ if (-not (Test-Path 'C:\Program Files\Git\cmd\git.exe')) {
 Add-ToPath 'C:\Program Files\Git\cmd'
 
 # Go.
-# tar.exe ships with Windows; Expand-Archive may not load in the Sandbox.
-if (-not (Test-Path 'C:\go\bin\go.exe')) {
-    $goZip = Join-Path $Downloads $GoFile
-    Get-Checked "https://go.dev/dl/$GoFile" $goZip $GoSha256
-    tar.exe -xf $goZip -C 'C:\'
-    if ($LASTEXITCODE -ne 0) { throw "tar.exe falhou ao extrair $goZip" }
+# Official MSI (archive extraction is unreliable inside the Sandbox).
+if (-not (Test-Path 'C:\Program Files\Go\bin\go.exe')) {
+    $goMsi = Join-Path $Downloads $GoFile
+    Get-Checked "https://go.dev/dl/$GoFile" $goMsi $GoSha256
+    $p = Start-Process -FilePath msiexec.exe -ArgumentList '/i', $goMsi, '/qn', '/norestart' -Wait -PassThru
+    if ($p.ExitCode -ne 0) { throw "msiexec falhou ao instalar $goMsi (codigo $($p.ExitCode))" }
 }
-Add-ToPath 'C:\go\bin'
+Add-ToPath 'C:\Program Files\Go\bin'
 
 # Claude Code, official installer (it downloads and installs the native binary).
 if (-not (Test-Path (Join-Path $env:USERPROFILE '.local\bin\claude.exe'))) {
