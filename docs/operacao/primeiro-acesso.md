@@ -62,7 +62,7 @@ Faça isso num aparelho na rede local e que já confia na CA (passo 1): os retor
 Cada conta de provedor que os agentes vão usar é um **perfil de conta** de uma máquina ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Faça a configuração inicial uma vez por perfil, em cada máquina, inclusive no Core:
 
 1. No painel, abra **Perfis de conta** e escolha a máquina e o provedor. Crie o perfil (ex.: `claude-trabalho`) ou use o padrão.
-2. Clique em **Configurar**. O painel abre o terminal do perfil e guia o **login** na conta do provedor.
+2. Clique em **Configurar**. O painel abre o terminal de login do perfil, que roda com a conta dos agentes (`mestre-agente`), e guia o **login** na conta do provedor. Quando o provedor mostra um link ou um código, conclua no seu navegador (no celular ou no PC). Os seus logins pessoais nos CLIs não são usados.
 3. **Só no Codex:** no mesmo terminal, o painel pede para abrir `/hooks` e **aprovar uma vez os hooks do Mestre**. Sem isso o Codex não chama o Mestre, e o perfil não recebe agentes.
 4. O perfil fica **pronto** quando o checklist confirma login e, no Codex, a confiança dos hooks (item ALL-11, [checklist](../plataforma/checklist.md)).
 

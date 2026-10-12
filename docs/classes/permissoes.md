@@ -29,10 +29,11 @@ git:
 network:
   internet: false
   domains: []               # internet: true e lista vazia = qualquer domínio
+  credentials: []           # credenciais de site do cofre liberadas (nome); o domínio de cada uma precisa estar em domains
 cli:
   allow: ["issue comment"]  # comandos de GitHub e coordenação que o nível permite
 tools:                      # ferramentas de tipo mcp e other, pelo nome nativo; * casa qualquer texto
-  allow: ["mcp__playwright__*"]       # ex.: o MCP de navegador do provedor
+  allow: ["mcp__playwright__*"]       # ex.: o MCP de navegador do personagem
   ask: []
   deny: ["mcp__*__delete_*"]
 default: ask                # ferramenta de tipo mcp ou other que não casa com `tools`
@@ -42,7 +43,7 @@ default: ask                # ferramenta de tipo mcp ou other que não casa com 
 - **Comandos:** a linha é dividida em comandos simples (`&&`, `||`, `;`, `|`, `&`, quebra de linha); prefixos `VAR=valor` são ignorados; cada parte é avaliada e vale a mais restritiva. Trechos que não dá para analisar (`$(…)`, crases, `eval`, `sh -c`, `bash -c`, `powershell -Command`) ficam no mínimo em `ask`. Comandos só de leitura (`cd`, `pwd`, `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `find`, `wc`, `git status|diff|log|show` e equivalentes do PowerShell) são liberados por padrão, ainda sujeitos a `files.deny` e a `commands.deny`.
 - **Git:** `git commit` só com `commit: true`, na branch que casa com `branches` e com todos os arquivos preparados (`git diff --cached --name-only`) dentro de `files.write`. Trocar de branch só para uma que casa com `branches`.
 - **Rede:** vale para as ferramentas web (domínio da URL) e é reforçada pelo sandbox nativo; comandos de shell só são contidos pelo controle nativo.
-- **Ferramentas (`tools`):** padrões sobre o nome nativo das ferramentas de tipo `mcp` e `other` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), com a mesma regra de casamento de `commands`; vale a mais restritiva entre `deny`, `ask` e `allow`, e o que não casa cai em `default`. **Navegação web:** o Mestre não fornece nem gerencia navegador; quando um agente precisa navegar, usa as ferramentas MCP de navegador do próprio provedor, configuradas no perfil de conta ([bases e fichas](../orquestracao/bases-e-fichas.md)), e a classe as libera ou nega aqui (ex.: `mcp__playwright__*`, ou `mcp__*` para todas). Ferramentas MCP não passam por `network`: classe sem internet não deve liberar um MCP de navegador.
+- **Ferramentas (`tools`):** padrões sobre o nome nativo das ferramentas de tipo `mcp` e `other` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), com a mesma regra de casamento de `commands`; vale a mais restritiva entre `deny`, `ask` e `allow`, e o que não casa cai em `default`. **Navegação web:** cada personagem que navega tem o **próprio** MCP de navegador (ex.: Playwright MCP com `--headless --isolated`), configurado no perfil de conta ([bases e fichas](../orquestracao/bases-e-fichas.md)) e iniciado pelo CLI do personagem, portanto como `mestre-agente`, com navegador limpo: perfil de navegador só em memória, sem acesso às sessões, cookies e perfis de navegador do usuário ([segurança](../arquitetura/seguranca.md#navegação-web-e-login-em-sites)). A classe libera ou nega as ferramentas dele aqui (ex.: `mcp__playwright__*`, ou `mcp__*` para todas). Ferramentas MCP não passam por `network`: classe sem internet não deve liberar um MCP de navegador. **Login em sites:** só com credencial do cofre listada em `network.credentials`; o personagem recebe o estado de sessão, nunca a senha ([cofre](../plataforma/cofre.md#login-em-sites)).
 - **CLI `mestre`:** comandos de comunicação são de todos; os demais seguem o nível de quem chama ([convenções da CLI](../cli/convencoes.md)) e `cli.allow`; `git.request_push` cobre `mestre pr open|update`. `git.workflows` decide o envio de branches que alteram `.github/workflows/` (o CI do repositório): `never` (padrão) o motor recusa; `ask` cada envio vira pedido de aprovação `envio_workflows` a um usuário ([política](../aprovacoes/politica.md)); `allow` envia sem perguntar. Classes `ask` e `allow` precisam de um App com a permissão "Workflows" ([workflows](../github/identidades-e-apps.md#workflows)). A checagem acontece no motor, na hora da chamada. O que cada nível pode fazer no GitHub está em [ações por nível](../github/acoes-por-nivel.md).
 
 ### Regras fixas de segurança
@@ -66,7 +67,7 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
  "files": {"read": ["**"], "write": ["tests/**"], "deny": ["**/.env"]},
  "commands": {"allow": ["npm test"], "ask": ["npm install *"], "deny": ["curl *"], "default": "ask"},
  "git": {"commit": true, "branches": ["epico/42-login"], "request_push": false, "workflows": "never"},
- "network": {"internet": false, "domains": []},
+ "network": {"internet": false, "domains": [], "credentials": []},
  "tools": {"allow": ["mcp__playwright__*"], "ask": [], "deny": [], "default": "ask"},
  "cli": {"allow": ["issue comment"]},
  "decrees": [{"id": 12, "effect": {"kind": "permission", "allow": {"commands": ["make deploy-teste"]}}, "until": "2026-10-19T00:00:00Z"}],
@@ -130,6 +131,7 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 
 - `permissions.yaml` inválido: a classe não é salva; numa classe já salva que fica inválida (edição manual), o motor mantém a última versão válida e avisa.
 - Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `default`.
+- Nome em `network.credentials` que não existe no cofre, ou cujo domínio não está em `network.domains`: a classe não é salva.
 - Limite conhecido: comandos de shell que escrevem arquivos sem caminho literal escapam da regra de arquivos; por isso classes restritas devem usar lista de comandos permitidos, e o `git commit` confere os arquivos preparados.
 
 ## Critérios de aceite

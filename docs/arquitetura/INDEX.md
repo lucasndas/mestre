@@ -6,7 +6,7 @@
 |---|---|---|
 | [visao-geral.md](visao-geral.md) | motor e interface, topologia Core + nós + Guardiões nos quatro usos, diagrama geral, canais e quem inicia cada um, princípios | primeiro contato com a arquitetura |
 | [componentes.md](componentes.md) | componentes, binários `mestre` e `mestre-guardiao`, subcomandos, serviços e contas por sistema e papel, portas e canais locais | criar ou mudar um processo, serviço, subcomando ou porta |
-| [windows.md](windows.md) | o Windows como Core ou nó, só com serviços e sem interface gráfica: dois serviços do motor no Core, conta virtual, conta do usuário, tarefa de diagnóstico, ConPTY | qualquer trabalho em máquina Windows |
+| [windows.md](windows.md) | o Windows como Core ou nó, só com serviços e sem interface gráfica: dois serviços do motor no Core, contas virtuais, a conta dos agentes `mestre-agente`, diagnóstico com IA, ConPTY | qualquer trabalho em máquina Windows |
 | [terminal.md](terminal.md) | PTY/ConPTY no nó, emulador de terminal, tamanho fixo, buffer de 1 MiB, log, digitação e encerramento da árvore de processos | implementar ou mudar qualquer coisa que leia ou escreva num terminal |
 | [canal-local.md](canal-local.md) | canal entre a CLI (e o `mestre hook`) e o motor local: endpoint, JSON Lines, pedido, resposta, parciais, tempo limite, versão, encaminhamento ao Core | implementar a CLI, o despachante ou o lado do motor que os atende |
 | [persistencia.md](persistencia.md) | SQLite por nó, migrações, tabelas principais do Core e do nó, registro de terminais, arquivos, pastas, logs, backup | mexer no banco, em arquivos de dados ou em logs |

@@ -64,7 +64,7 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 
 - `CODEX_HOME=<pasta do perfil>` (a pasta precisa existir): configuração, `auth.json`, sessões e logs próprios. Perfil de conta: [bases e fichas](../orquestracao/bases-e-fichas.md).
 - No `config.toml` do perfil: `cli_auth_credentials_store = "file"`, para os perfis não disputarem o chaveiro do sistema.
-- Login: `codex login --device-auth` (sem navegador no servidor) ou `codex login` (retorno em `localhost:1455`). Verificar: `codex login status` sai com 0 quando logado.
+- Login, feito como `mestre-agente` na configuração inicial do perfil: `codex login --device-auth` (o Dono abre o link e digita o código no próprio navegador); `codex login` (retorno em `localhost:1455`) só serve com o navegador na mesma máquina. No Windows, `USERPROFILE` é o do perfil carregado do `mestre-agente` ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)). Verificar: `codex login status` sai com 0 quando logado.
 
 ### Uso, custo e rate limit
 

@@ -59,7 +59,7 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 | `MESTRE_CLI` | caminho absoluto do binário `mestre` | [convencoes](../cli/convencoes.md) |
 | `MESTRE_WORKSPACE` | slug do workspace | [workspaces](../orquestracao/workspaces.md) |
 | `MESTRE_MESA` | identificador da mesa, `<número>-<slug>` (vazio no Grão-Mestre) | [mesas](../orquestracao/mesas.md#abertura) |
-| `MESTRE_TMP` | pasta temporária só deste personagem, fora do worktree e fora do git: `/var/lib/mestre/agentes/<id>/tmp/` ou `%ProgramData%\Mestre\no\agentes\<id>\tmp\` ([persistência](../arquitetura/persistencia.md#arquivos)); é onde ele monta pacotes de classe para `mestre class edit --from` | [CLI de classes](../cli/coordenacao-classes-e-rituais.md) |
+| `MESTRE_TMP` | pasta temporária só deste personagem, fora do worktree e fora do git: `/var/lib/mestre/agentes/<id>/tmp/` ou `%ProgramData%\Mestre\no\agentes\<id>\tmp\` ([persistência](../arquitetura/persistencia.md#arquivos)); é onde ele monta pacotes de classe para `mestre class edit --from` e onde fica o estado de sessão de sites, quando a classe libera credenciais ([cofre](../plataforma/cofre.md#login-em-sites)) | [CLI de classes](../cli/coordenacao-classes-e-rituais.md) |
 | `GIT_CONFIG_GLOBAL` | `.mestre/agents/<id>/gitconfig` (autor = bot do App da classe ou do App "Mestre") | [identidades-e-apps](../github/identidades-e-apps.md) |
 | `CLAUDE_CONFIG_DIR`, `CODEX_HOME` ou `HOME` (Antigravity) | pasta do perfil de conta da ficha | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | variáveis da base | como definidas na base | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |

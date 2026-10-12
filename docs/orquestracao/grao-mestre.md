@@ -18,7 +18,7 @@ O Grão-Mestre é o agente orquestrador **único de cada [workspace](workspaces.
 
 ### Onde roda
 
-Nome fixo no canvas e na CLI: `Grão-Mestre`. Roda sempre no **nó local do Core**: o serviço `mestre-node` que existe em toda máquina Core, ligado ao Core como qualquer nó (no Linux com a conta `mestre`, iniciando os agentes como `mestre-agente`; no Windows com a conta do usuário; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável no Core; o painel recusa outra. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
+Nome fixo no canvas e na CLI: `Grão-Mestre`. Roda sempre no **nó local do Core**: o serviço `mestre-node` que existe em toda máquina Core, ligado ao Core como qualquer nó (no Linux com a conta `mestre` e no Windows com a conta virtual `NT SERVICE\MestreNode`, iniciando os agentes como `mestre-agente`; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável no Core; o painel recusa outra. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
 
 ### Fixo e protegido
 

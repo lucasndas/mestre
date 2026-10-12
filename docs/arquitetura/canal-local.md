@@ -13,7 +13,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 | Sistema | Endereço | Acesso |
 |---|---|---|
 | Linux | socket Unix `/run/mestre/cli.sock` | dono `mestre`, grupo `mestre-agente`, modo 0660 |
-| Windows | named pipe `\\.\pipe\mestre-cli` | ACL só para a conta do `mestre-node` (a do usuário) e SYSTEM |
+| Windows | named pipe `\\.\pipe\mestre-cli` | ACL só para `NT SERVICE\MestreNode` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
 
 - `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/cli.sock` ou `npipe:////./pipe/mestre-cli`. Sem a variável, a CLI usa o endereço padrão do sistema.
 - Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo.

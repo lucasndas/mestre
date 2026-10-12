@@ -11,7 +11,7 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sist
 O Mestre tem serviços que ficam ligados o tempo todo em duas plataformas, e a linguagem precisa atender a todos estes requisitos ao mesmo tempo:
 
 - **Terminais:** cada agente roda num PTY no Linux e num ConPTY no Windows.
-- **Windows:** Core e nó são serviços do Windows, sem interface gráfica; o serviço que roda os agentes usa a conta do usuário e cria os ConPTY dentro dele. O desenho está em [Windows](../arquitetura/windows.md).
+- **Windows:** Core e nó são serviços do Windows, sem interface gráfica; o serviço que roda os agentes (`mestre-node`, numa conta virtual) cria os ConPTY e inicia cada agente com a conta `mestre-agente` (`CreateProcessAsUser`). O desenho está em [Windows](../arquitetura/windows.md).
 - **Linux:** Core e nó são serviços do systemd com watchdog (`Type=notify`, `WatchdogSec=`). A camada 1 da autocura depende disso ([camadas](../autocura/camadas.md)).
 - **Conexões:** WSS com TLS e CA interna, com mTLS entre nó e Core ([protocolo](../conectividade/protocolo.md), [segurança](../arquitetura/seguranca.md)).
 - **Banco:** SQLite em modo WAL em cada nó ([persistência](../arquitetura/persistencia.md)).
@@ -91,7 +91,7 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço do Windows e de ConPTY 
   - O `synctest` não cobre E/S real de rede e disco. Nesses pontos usamos transporte e PTY falsos ([dublês](../qualidade/dubles.md)).
   - SQLite em Go puro é mais lento. Isso é irrelevante no volume de um orquestrador. A versão de `modernc.org/libc` fica fixada.
   - O repositório tem duas linguagens (Go e TypeScript). Os tipos compartilhados do protocolo são gerados a partir do Go ou de JSON Schema ([convenções](../desenvolvimento/convencoes.md)).
-- **Spike do M1:** o ConPTY criado dentro de um serviço que roda com a conta do usuário, na sessão 0, é testado num Windows 11 real antes de fechar o wrapper ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#spikes-do-m1)); padrão e plano B no documento dono, [Windows](../arquitetura/windows.md#verificar-na-implementação).
+- **Spike do M1:** o ConPTY com o processo iniciado como `mestre-agente` a partir de um serviço com conta virtual, na sessão 0, é testado num Windows 11 real antes de fechar o wrapper ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#spikes-do-m1)); padrão e plano B no documento dono, [Windows](../arquitetura/windows.md#verificar-na-implementação).
 
 ## Fontes
 

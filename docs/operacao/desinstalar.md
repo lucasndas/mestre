@@ -4,7 +4,7 @@
 
 Guia para quem usa. O que a remoção apaga por dentro está em [instalação e versões](../plataforma/instalacao-e-atualizacao.md#remoção-mestre-uninstall); onde ficam os dados, em [persistência](../arquitetura/persistencia.md#arquivos).
 
-**Regra geral:** `mestre uninstall` remove serviços, tarefas, regras de firewall e programas, mas **mantém os dados** (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo. Assim dá para reinstalar sem perder nada.
+**Regra geral:** `mestre uninstall` remove serviços, a conta dos agentes no Windows, regras de firewall e programas, mas **mantém os dados** (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo. Assim dá para reinstalar sem perder nada.
 
 ## Antes de começar
 
@@ -15,8 +15,8 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 
 1. No painel, em **Saúde dos nós**, **revogue** o nó e confirme com o PIN ([parear nó](parear-no.md#revogar-um-nó)).
 2. Na máquina do nó, rode `mestre uninstall` como administrador (PowerShell **como administrador** no Windows; `sudo mestre uninstall` no Ubuntu, seguido de `sudo apt remove mestre`).
-3. Isso para e remove os serviços `mestre-node` e `mestre-guardiao`, a tarefa agendada `\Mestre\Diagnostico` (no Windows), as regras de firewall do Mestre e os programas.
-4. Confira: `Get-Service mestre-*` (Windows) ou `systemctl status mestre-node` (Ubuntu) não acha nada.
+3. Isso para e remove os serviços `mestre-node` e `mestre-guardiao`, a conta `mestre-agente` e o perfil dela (no Windows), as regras de firewall do Mestre e os programas. Os logins dos perfis de conta feitos por essa conta deixam de valer: numa reinstalação no Windows, refaça o login de cada perfil ([primeiro acesso](primeiro-acesso.md#4-configurar-os-perfis-de-conta)).
+4. Confira: `Get-Service mestre-*` e `Get-LocalUser mestre-agente` (Windows) ou `systemctl status mestre-node` (Ubuntu) não acham nada.
 5. Os dados ficam em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
 
 ## Remover o Core
@@ -25,7 +25,7 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 2. Na máquina do Core, como administrador:
    - **Ubuntu:** `sudo mestre uninstall` e depois `sudo apt remove mestre`;
    - **Windows:** `mestre uninstall` num PowerShell de administrador, ou "Desinstalar" em Aplicativos instalados.
-3. Isso para e remove os serviços do Core (`mestre-core`, o nó local `mestre-node` e `mestre-guardiao`), a tarefa agendada no Windows e as regras de firewall.
+3. Isso para e remove os serviços do Core (`mestre-core`, o nó local `mestre-node` e `mestre-guardiao`), a conta `mestre-agente` e o perfil dela no Windows e as regras de firewall.
 4. Confira: `systemctl status mestre-core mestre-node` responde que as unidades não existem, ou `Get-Service mestre-*` não acha nada.
 5. Os dados ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos): cofre, banco, espelhos, worktrees, anexos, perfis de conta dos provedores e a CA. Se não vai reinstalar, peça para apagar tudo ou apague essas pastas. Sem a chave do cofre, os segredos guardados não podem mais ser lidos.
 

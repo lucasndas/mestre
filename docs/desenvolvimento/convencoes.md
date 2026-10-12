@@ -35,7 +35,7 @@ internal/
   transport/         WSS, TLS, CA interna, mTLS
   discovery/ pairing/
   terminal/          PTY (creack/pty) e ConPTY (wrapper próprio), emulador, buffer circular
-  winsvc/            partes só do Windows: serviço, conta do usuário, ACLs, DPAPI
+  winsvc/            partes só do Windows: serviço, contas virtuais e `mestre-agente`, início de processo com outra conta, ACLs, DPAPI
   store/             SQLite e migrações (core/, node/)
   vault/             cofre
   logging/           slog + mascaramento de segredos

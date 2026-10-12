@@ -51,7 +51,7 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 
 ## Serviços e contas (padrão)
 
-**Princípio, nos dois sistemas:** nenhum agente roda com a conta dona do cofre ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). Os quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows) combinam as linhas abaixo ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
+**Princípio, nos dois sistemas:** nenhum agente roda com a conta dona do cofre nem com a conta do usuário; os agentes rodam com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). Os quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows) combinam as linhas abaixo ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
 
 | Sistema | Papel | Serviço | Executa | Conta | Supervisionado por |
 |---|---|---|---|---|---|
@@ -60,12 +60,11 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 | Linux | os dois | `mestre-guardiao` (systemd) | `mestre-guardiao run` | root | systemd |
 | Linux | os dois | `mestre-update` (systemd, oneshot) | `mestre-guardiao apply-update` | root; só a conta `mestre` pode iniciar | — (uso único por troca) |
 | Windows | Core | `mestre-core` (serviço do Windows) | `mestre core` | conta virtual `NT SERVICE\MestreCore`, dona do cofre | recuperação do serviço e Guardião |
-| Windows | os dois | `mestre-node` (serviço do Windows) | `mestre node` (no Core, o nó local) | conta do usuário ("Fazer logon como"); os agentes rodam aqui | recuperação do serviço e Guardião |
+| Windows | os dois | `mestre-node` (serviço do Windows) | `mestre node` (no Core, o nó local) | conta virtual `NT SERVICE\MestreNode`, com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` só para iniciar os agentes como `mestre-agente` | recuperação do serviço e Guardião |
 | Windows | os dois | `mestre-guardiao` (serviço do Windows) | `mestre-guardiao run` | LocalSystem | recuperação do serviço |
-| Windows | os dois | `mestre-update` (serviço do Windows, início sob demanda) | `mestre-guardiao apply-update` | LocalSystem; só a conta do motor que conduz a troca pode iniciar (`NT SERVICE\MestreCore` no Core, a do `mestre-node` no nó) | — (uso único por troca) |
-| Windows | os dois | tarefa agendada `\Mestre\Diagnostico` | agente de diagnóstico | conta do usuário, conectado ou não | disparada pelo Guardião ([Windows](windows.md#tarefa-mestrediagnostico)) |
+| Windows | os dois | `mestre-update` (serviço do Windows, início sob demanda) | `mestre-guardiao apply-update` | LocalSystem; só a conta do motor que conduz a troca pode iniciar (`NT SERVICE\MestreCore` no Core, `NT SERVICE\MestreNode` no nó) | — (uso único por troca) |
 
-Detalhes do Windows (por que o Core tem dois serviços, ACLs, conta do usuário): [Windows](windows.md). As configurações de reinício (Restart=always, watchdog, recuperação do Windows) estão em [camadas](../autocura/camadas.md).
+A conta `mestre-agente` não é de serviço: é a conta local com que o `mestre-node` inicia os terminais dos agentes e o Guardião inicia o agente de diagnóstico (no Linux, uma conta de sistema; no Windows, uma conta local comum sem logon interativo). Detalhes do Windows (por que o Core tem dois serviços, contas virtuais, `mestre-agente`): [Windows](windows.md). As configurações de reinício (Restart=always, watchdog, recuperação do Windows) estão em [camadas](../autocura/camadas.md).
 
 ## Portas
 
@@ -89,7 +88,7 @@ Todas configuráveis, menos a do whisper-server; os valores abaixo são o **padr
 | Canal | Linux | Windows | Acesso |
 |---|---|---|---|
 | CLI → motor | socket `/run/mestre/cli.sock` | named pipe `\\.\pipe\mestre-cli` | servido pelo `mestre-node` em toda máquina, também no Core; contrato e acesso em [canal local](canal-local.md) |
-| Motor ↔ Guardião | socket `/run/mestre-guardiao/guardiao.sock` | named pipe `\\.\pipe\mestre-guardiao` | só as contas do motor e a do Guardião (no Core Windows, `NT SERVICE\MestreCore` e a do `mestre-node`) |
+| Motor ↔ Guardião | socket `/run/mestre-guardiao/guardiao.sock` | named pipe `\\.\pipe\mestre-guardiao` | só as contas do motor e a do Guardião (no Windows, `NT SERVICE\MestreNode` e, no Core, `NT SERVICE\MestreCore`) |
 | Nó local → Core | WSS com mTLS em `127.0.0.1:7443` | WSS com mTLS em `127.0.0.1:7443` | o mesmo caminho de código de um nó remoto ([protocolo](../conectividade/protocolo.md)) |
 
 O motor confere quem chama a CLI antes de aceitar o `MESTRE_AGENT_ID` ([segurança](seguranca.md#identidade-de-quem-chama-a-cli)).

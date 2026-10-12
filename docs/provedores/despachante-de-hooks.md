@@ -22,7 +22,7 @@ Uso interno, só pelos arquivos de hooks gerados: `mestre hook --provider <id> -
 
 Motor fora do ar (sem conexão ou sem resposta no prazo): valem só as regras locais que o hook checa sozinho:
 - as regras fixas de segurança embutidas no binário ([permissões](../classes/permissoes.md#regras-fixas-de-segurança));
-- o retrato das regras efetivas do personagem, `policy.json`, lido de `/var/lib/mestre/agentes/<id>/` no Linux ou `%ProgramData%\Mestre\no\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). No Linux o hook roda como `mestre-agente`, que pode ler o retrato e não pode alterá-lo.
+- o retrato das regras efetivas do personagem, `policy.json`, lido de `/var/lib/mestre/agentes/<id>/` no Linux ou `%ProgramData%\Mestre\no\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Nos dois sistemas o hook roda como `mestre-agente`, que pode ler o retrato e não pode alterá-lo.
 
 O que elas negarem é negado; o que pediria aprovação é negado com o motivo "motor indisponível, tente depois"; o resto é liberado. O evento vai para a fila local do hook (`/var/spool/mestre/hook/`, ou `no\fila-hook\` no Windows), em que o hook só cria arquivos; o motor reenvia ao voltar e valida cada arquivo antes de usar. Em `turn_start`, o turno segue sem contexto novo.
 

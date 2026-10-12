@@ -18,7 +18,7 @@ Descobrir cedo o que impede o Mestre de funcionar em cada máquina, explicar o p
 
 ### Verificação de início (Windows)
 
-Roda quando um serviço do motor sobe (`mestre-node` e, no Core, `mestre-core`). Confere, nesta ordem, os itens WIN-06 (serviço com a conta do usuário), WIN-14 (no Core: conta virtual e chave do cofre), ALL-01 (motor e Guardião conectados ao Core) e WIN-05 (serviços e Guardião ativos). O resultado vai para o painel (saúde do nó) e, se grave, para o Telegram, como qualquer item. Não há aviso na área de trabalho: o Mestre não tem interface gráfica ([Windows](../arquitetura/windows.md)).
+Roda quando um serviço do motor sobe (`mestre-node` e, no Core, `mestre-core`). Confere, nesta ordem, os itens WIN-19 (`mestre-node` na conta virtual, com os privilégios), WIN-17 (conta `mestre-agente`), WIN-14 (no Core: conta virtual e chave do cofre), ALL-01 (motor e Guardião conectados ao Core) e WIN-05 (serviços e Guardião ativos). O resultado vai para o painel (saúde do nó) e, se grave, para o Telegram, como qualquer item. Não há aviso na área de trabalho: o Mestre não tem interface gráfica ([Windows](../arquitetura/windows.md)).
 
 ### Gravidade e alertas
 
@@ -35,8 +35,8 @@ Roda quando um serviço do motor sobe (`mestre-node` e, no Core, `mestre-core`).
 | Tipo de correção | Quem aplica |
 |---|---|
 | O que o motor já faz no trabalho normal (pré-confiar pastas, regenerar arquivos da mesa, refazer a descoberta) | o motor, sozinho, com registro |
-| Rede, firewall, serviços e tarefas agendadas do sistema | só com aprovação de Dono ou Administrador ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); executada pelo Guardião da máquina |
-| Login em provedor, senha do serviço | manual: o alerta explica o passo |
+| Rede, firewall, serviços e contas do sistema | só com aprovação de Dono ou Administrador ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); executada pelo Guardião da máquina |
+| Login em provedor | manual: o alerta explica o passo |
 
 ### Itens: Windows
 
@@ -49,12 +49,14 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 | WIN-03 | os dois | firewall libera a descoberta (UDP broadcast e mDNS; no Core, a entrada em 7445/udp e 5353/udp) | grave | criar regras (aprovação) |
 | WIN-04 | nó; Core no modo máquina única | firewall libera a porta da [página reserva](../autocura/pagina-reserva.md) só no perfil Privado ([portas](../arquitetura/componentes.md#portas)) | aviso | criar regra (aprovação) |
 | WIN-05 | os dois | serviços do motor (`mestre-node`; no Core, também `mestre-core`) e `mestre-guardiao` com início automático e recuperação configurada ([camadas](../autocura/camadas.md#valores-padrão)) | grave | reconfigurar (aprovação) |
-| WIN-06 | os dois | `mestre-node` roda com a conta do usuário ("Fazer logon como") e consegue iniciar (sem erro de logon por senha alterada) | grave | manual: refazer a configuração da conta ([Windows](../arquitetura/windows.md#conta-do-usuário-fazer-logon-como)) |
-| WIN-09 | os dois | tarefa agendada `\Mestre\Diagnostico` existe ([diagnóstico com IA](../autocura/diagnostico-com-ia.md)) | aviso | recriar (aprovação) |
 | WIN-13 | Core | firewall libera a entrada em 7443/tcp e 7444/tcp só no perfil Privado | grave | criar regras (aprovação) |
 | WIN-14 | Core | `mestre-core` roda como `NT SERVICE\MestreCore`; `cofre.key` protegido por DPAPI de máquina com ACL só dessa conta ([cofre](cofre.md#chave-do-cofre)) | grave | corrigir ACL (aprovação) |
-| WIN-15 | Core | ACLs de `workspaces\` e `contas\` dão modificação à conta do `mestre-node`, e nada mais dela fora dessas pastas e de `no\` ([Windows](../arquitetura/windows.md#windows-como-core)) | grave | corrigir ACL (aprovação) |
+| WIN-15 | os dois | ACLs de `%ProgramData%\Mestre\` como em [persistência](../arquitetura/persistencia.md#arquivos): `mestre-agente` só com modificação em `workspaces\`, `contas\` e `no\agentes\<id>\tmp\`, leitura em `policy.json` e só criar na fila do hook; no Core, `NT SERVICE\MestreNode` só com modificação em `workspaces\` e `contas\` além de `no\` | grave | corrigir ACL (aprovação) |
 | WIN-16 | Core | anúncio mDNS do Guardião respondendo (`_mestre._tcp`) ([descoberta](../conectividade/descoberta.md#mdns)) | grave | manual |
+| WIN-17 | os dois | conta local `mestre-agente` existe, ativa, só no grupo `Users` (fora de `Administradores`), oculta da tela de login, e o logon em lote com a senha guardada funciona ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)) | grave | recriar a conta ou gerar e guardar senha nova (aprovação) |
+| WIN-18 | os dois | `mestre-agente` tem "Negar logon local" e "Negar logon pelos Serviços de Área de Trabalho Remota" e não está em `Remote Desktop Users` | grave | reaplicar os direitos (aprovação) |
+| WIN-19 | os dois | `mestre-node` roda como `NT SERVICE\MestreNode` (nunca com a conta de um usuário) e o token dele tem `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | grave | reconfigurar o serviço e conceder os privilégios (aprovação) |
+| WIN-20 | os dois | cada provedor usado pelas bases do nó (`claude`, `codex`, `agy`) roda como `mestre-agente`, com a pasta do perfil de conta: `--version` e a verificação de login do ALL-11 feitas com essa conta | grave | manual (o alerta explica o passo) |
 
 ### Itens: Linux
 
@@ -107,9 +109,10 @@ Papel: **os dois** (Core e nó), **Core** ou **nó**. Ids que saíram não são 
 - **CA-CHK-04** · *rápida* — **Dado** o caminho de um worktree ausente de `trustedWorkspaces`, **quando** ALL-12 roda, **então** o motor grava a confiança sozinho e fecha o alerta.
 - **CA-CHK-05** · *rápida* — **Dado** um alerta grave aberto, **quando** o checklist roda de novo sem mudança, **então** nenhum novo envio ao Telegram acontece.
 - **CA-CHK-07** · *rápida* — **Dado** um comando de verificação ausente, **quando** o item roda, **então** o resultado é "não foi possível verificar", nunca "ok".
-- **CA-CHK-11** · *rápida* — **Dado** um Core Windows falso em que `cofre.key` dá leitura à conta do usuário, **quando** WIN-14 roda, **então** abre alerta grave com a correção da ACL, aplicada só com aprovação.
+- **CA-CHK-11** · *rápida* — **Dado** um Core Windows falso em que `cofre.key` dá leitura a `NT SERVICE\MestreNode`, **quando** WIN-14 roda, **então** abre alerta grave com a correção da ACL, aplicada só com aprovação.
 - **CA-CHK-12** · *rápida* — **Dado** um Core sem nó remoto pareado, **quando** o checklist roda, **então** ALL-17 fica aberto como aviso; **quando** um nó é pareado, **então** o aviso fecha.
 - **CA-CHK-13** · *rápida* — **Dado** uma máquina Linux no papel de nó, **quando** o checklist monta a lista, **então** roda LIN-01, LIN-04, LIN-08, LIN-09, LIN-10 e os ALL-*, e não roda LIN-02, LIN-03, LIN-05 nem LIN-07.
+- **CA-CHK-14** · *rápida* — **Dado** um Windows falso em que `mestre-agente` está em `Administradores` e o `mestre-node` roda com a conta de um usuário, **quando** o checklist roda, **então** WIN-17 e WIN-19 abrem alertas graves, e nenhuma correção é aplicada sem aprovação.
 
 ## Depende de
 

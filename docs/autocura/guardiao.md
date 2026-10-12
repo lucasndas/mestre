@@ -64,7 +64,7 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 - **Guardião de nó:** mantém a própria conexão WSS de saída até o motor do Core, separada da do motor do nó, com credencial própria emitida no [pareamento](../conectividade/pareamento.md). Reconecta com backoff. Assim o Core fala com ele mesmo com o motor do nó morto, sem porta aberta no nó.
 - **Guardião do Core:** escuta na porta própria ([componentes](../arquitetura/componentes.md#portas)), com **certificado próprio** de servidor da CA interna ([pareamento](../conectividade/pareamento.md)), e só aceita clientes com certificado de nó válido e não revogado (mTLS). Quando o motor do Core cai, os nós continuam chegando pelo mesmo endereço.
 - O canal do Guardião com o Core tem **versão de protocolo própria** (v1), separada da do motor, e muda raramente.
-- **Canal local no Windows:** o Guardião roda como LocalSystem e cria o pipe `\\.\pipe\mestre-guardiao` com SDDL que dá acesso só a SYSTEM e às contas dos serviços do motor daquela máquina, lidas da configuração dos serviços ao subir: a do `mestre-node` e, no Core, `NT SERVICE\MestreCore`; com `PIPE_REJECT_REMOTE_CLIENTS`. Um teste da suíte completa no Windows confere que os motores escrevem no pipe e que outra conta não abre.
+- **Canal local no Windows:** o Guardião roda como LocalSystem e cria o pipe `\\.\pipe\mestre-guardiao` com SDDL que dá acesso só a SYSTEM e às contas dos serviços do motor daquela máquina: `NT SERVICE\MestreNode` e, no Core, `NT SERVICE\MestreCore`; com `PIPE_REJECT_REMOTE_CLIENTS`. Um teste da suíte completa no Windows confere que os motores escrevem no pipe e que outra conta não abre.
 
 ### Canal local motor ↔ Guardião
 

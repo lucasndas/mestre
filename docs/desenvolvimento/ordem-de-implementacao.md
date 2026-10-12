@@ -30,11 +30,13 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 
 ### Spikes do M1
 
-Três itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
+Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
 
 | Spike | Se falhar, muda | Onde está o item |
 |---|---|---|
-| ConPTY dentro de serviço com conta de usuário, na sessão 0 | a distribuição passa a levar o `OpenConsole.exe` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
+| ConPTY com o processo iniciado como `mestre-agente` (`CreateProcessAsUser`, perfil carregado) a partir do serviço, na sessão 0 | o serviço auxiliar `mestre-launcher` (LocalSystem) inicia os processos; ou a distribuição passa a levar o `OpenConsole.exe` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
+| conta virtual `NT SERVICE\MestreNode` com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | o serviço auxiliar `mestre-launcher` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
+| `claude`, `codex` e `agy` gravando e achando o login no perfil do `mestre-agente` no Windows | login em arquivo no perfil de conta, ou o provedor não é oferecido naquela máquina | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
 | identificação do chamador subindo a árvore de processos | um grupo de processos por terminal (cgroup ou Job Object) | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
 | `claude`, `codex` e `agy` rodando como `mestre-agente` no Linux | pasta pessoal própria para a conta dos agentes | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
 

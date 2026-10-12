@@ -21,6 +21,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `terminal.screen` | C→N | não | `terminal_id`, `lines` (histórico) | `terminal.screen_result {text, cursor, captured_at}` ([terminal](../arquitetura/terminal.md)) |
 | `inbox.deliver` | C→N | sim | `terminal_id`, `item_id`, `text`, `header` | `inbox.result {item_id, status: delivered \| busy}`; `busy` devolve o item à fila no Core ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) |
 | `agent.rules` | C→N | sim | o documento de [regras efetivas](../classes/permissoes.md#regras-efetivas) de um personagem | — |
+| `agent.site_session` | C→N | sim | `agent_id`, `domains[]`, `state` (estado de sessão no formato `storageState`, nunca a senha) ou `failed {domain, reason}` | — (o nó grava na `MESTRE_TMP` do personagem; [login em sites](../plataforma/cofre.md#login-em-sites)) |
 | `agent.event` | N→C | sim | o evento normalizado do [adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento) | — |
 | `cli.call` | N→C | sim | o pedido do [canal local](../arquitetura/canal-local.md#pedido), mais `caller {agent_id, terminal_id, node_id}` já verificado | `cli.result` |
 | `cli.result` | C→N | sim | a resposta do canal local, inclusive as parciais (`partial: true`) | — |

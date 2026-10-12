@@ -12,7 +12,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 - Só o motor do nó cria terminais, a pedido do Core (`terminal.open`, [protocolo](../conectividade/protocolo.md)), com a base já resolvida: executável, argumentos, ambiente e pasta ([adaptador](../provedores/adaptador.md)).
 - **Linux:** `creack/pty`; o processo nasce com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) numa sessão nova (`setsid`), que agrupa a árvore dele.
-- **Windows:** wrapper próprio de ConPTY dentro do serviço ([Windows](windows.md#conpty)); cada terminal entra num Job Object próprio com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, que agrupa a árvore dele.
+- **Windows:** wrapper próprio de ConPTY dentro do serviço; o processo nasce com a conta `mestre-agente`, por `CreateProcessAsUser` com o perfil dela carregado ([Windows](windows.md#conpty)); cada terminal entra num Job Object próprio com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, que agrupa a árvore dele.
 - `TERM=xterm-256color` no ambiente de todo terminal.
 - **Tamanho:** 200 colunas × 50 linhas (padrão, configurável no nó), definido na criação e **fixo**. O navegador nunca redimensiona: o xterm.js mostra o terminal com rolagem e zoom. Assim vários navegadores veem exatamente a mesma tela, e as telas reconhecidas pelo adaptador não mudam com quem está olhando.
 - O terminal é registrado em `terminals` ([persistência](persistencia.md#registro-de-terminais)) antes de o processo começar a rodar.
@@ -69,4 +69,4 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 - **Verificar na implementação:** `github.com/charmbracelet/x/vt` renderiza fielmente as telas de Claude Code, Codex e Antigravity (modo alternativo de tela, regiões de rolagem, caracteres largos). **Padrão:** essa biblioteca. **Se falhar:** `github.com/hinshun/vt10x`, atrás da mesma interface interna do emulador. **Onde:** CA-TERM-02 com as gravações de tela capturadas pelo [teste de conformidade](../provedores/conformidade.md).
 
-O ConPTY dentro do serviço com conta de usuário é um spike do M1 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#spikes-do-m1)); o item está em [Windows](windows.md#verificar-na-implementação).
+O ConPTY com o processo iniciado como `mestre-agente` a partir do serviço é um spike do M1 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#spikes-do-m1)); o item está em [Windows](windows.md#verificar-na-implementação).

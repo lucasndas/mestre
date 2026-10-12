@@ -81,7 +81,7 @@ Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos
 | `internal` | `TodoWrite` | `update_plan` | `manage_task`, `ask_question`, `list_permissions`, `ask_permission` |
 | `other` | qualquer nome não mapeado | idem | `generate_image`, `schedule`, não mapeados |
 
-Ferramentas `mcp` (inclusive as de navegador que o agente usa para navegar na web; o Mestre não fornece navegador) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
+Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
 
 ### Prontidão e telas interativas
 

@@ -47,25 +47,25 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 
 ### Core no Windows (`mestre install core`, elevado)
 
-1. Registra a versão do Windows e pede a senha da conta do usuário, validada com `LogonUser` ([Windows](../arquitetura/windows.md#conta-do-usuário-fazer-logon-como)).
-2. Registra o serviço `mestre-core` com a conta virtual `NT SERVICE\MestreCore` e cria as pastas de dados com as ACLs de [persistência](../arquitetura/persistencia.md#arquivos).
-3. Gera a chave do [cofre](cofre.md#chave-do-cofre) (DPAPI de máquina, ACL só da conta virtual), cria o banco, a CA interna, o certificado do servidor do Core e o certificado próprio do Guardião do Core.
-4. Registra o `mestre-node` local com a conta do usuário e banco de nó próprio, e o pareia sozinho com o Core em `127.0.0.1:7443` ([pareamento](../conectividade/pareamento.md#convite)).
-5. Registra `mestre-guardiao` (LocalSystem), o ajudante `mestre-update` (sob demanda) e a tarefa `\Mestre\Diagnostico` (como no nó Windows, abaixo), com a recuperação de [camadas](../autocura/camadas.md#valores-padrão).
-6. Cria as regras de firewall das portas do Core, só no perfil Privado ([portas](../arquitetura/componentes.md#portas)).
-7. Baixa e prepara o Whisper no nó local (abaixo); o `ffmpeg.exe` já vem no instalador.
-8. Inicia os serviços, mostra o endereço do painel, a impressão da CA e o código de configuração, e orienta a cópia da chave do cofre por `mestre core export-key`.
+1. Registra a versão do Windows, registra o serviço `mestre-core` com a conta virtual `NT SERVICE\MestreCore` e cria as pastas de dados com as ACLs de [persistência](../arquitetura/persistencia.md#arquivos).
+2. Gera a chave do [cofre](cofre.md#chave-do-cofre) (DPAPI de máquina, ACL só da conta virtual), cria o banco, a CA interna, o certificado do servidor do Core e o certificado próprio do Guardião do Core.
+3. Cria a conta `mestre-agente` e registra o `mestre-node` local na conta virtual `NT SERVICE\MestreNode`, como no nó Windows (abaixo), com banco de nó próprio, e o pareia sozinho com o Core em `127.0.0.1:7443` ([pareamento](../conectividade/pareamento.md#convite)).
+4. Registra `mestre-guardiao` (LocalSystem) e o ajudante `mestre-update` (sob demanda), com a recuperação de [camadas](../autocura/camadas.md#valores-padrão).
+5. Cria as regras de firewall das portas do Core, só no perfil Privado ([portas](../arquitetura/componentes.md#portas)).
+6. Baixa e prepara o Whisper no nó local (abaixo); o `ffmpeg.exe` já vem no instalador.
+7. Inicia os serviços, mostra o endereço do painel, a impressão da CA e o código de configuração, e orienta a cópia da chave do cofre por `mestre core export-key`.
+
+A instalação no Windows não pede senha nenhuma: nenhum serviço usa a conta de quem instala.
 
 Nos dois sistemas, os Apps fixos "Grão-Mestre" e "Mestre" nascem no primeiro acesso, pelo link de criação ([criação de Apps](../github/criacao-de-apps.md)).
 
 ### Nó no Windows (`mestre install node`, elevado)
 
 1. Encontra o Core pela [descoberta](../conectividade/descoberta.md) ou pelo endereço informado, e faz o [pareamento](../conectividade/pareamento.md) com o código de convite. Pergunta também se o nó vai transcrever áudio (padrão: não; abaixo).
-2. Pede a senha da conta do usuário e configura o serviço `mestre-node` com "Fazer logon como" ([Windows](../arquitetura/windows.md#conta-do-usuário-fazer-logon-como)).
-3. Registra os serviços `mestre-node` e `mestre-guardiao` (início automático, recuperação de [camadas](../autocura/camadas.md#valores-padrão)) e o ajudante `mestre-update` (sob demanda).
-4. Cria a tarefa agendada **`\Mestre\Diagnostico`**: roda como o usuário, conectado ou não, sem gatilho (disparada pelo Guardião) ([Windows](../arquitetura/windows.md#tarefa-mestrediagnostico)). Usa a mesma senha do passo 2, pedida uma vez só; quem a guarda é o Agendador de Tarefas, e o Mestre não a grava. Refazer a configuração da conta (checklist WIN-06) refaz as duas.
-5. Cria as regras de firewall da descoberta e da [página reserva](../autocura/pagina-reserva.md), só no perfil Privado.
-6. Cria as pastas de dados com ACL ([persistência](../arquitetura/persistencia.md#arquivos)), inicia os serviços, roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
+2. Cria a conta local `mestre-agente` ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)): fora de Administradores, senha aleatória de 32 caracteres guardada com DPAPI de máquina, "Negar logon local", "Negar logon pelos Serviços de Área de Trabalho Remota", logon em lote e oculta da tela de login.
+3. Registra os serviços `mestre-node` (conta virtual `NT SERVICE\MestreNode`, com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` concedidos e declarados) e `mestre-guardiao` (início automático, recuperação de [camadas](../autocura/camadas.md#valores-padrão)) e o ajudante `mestre-update` (sob demanda).
+4. Cria as regras de firewall da descoberta e da [página reserva](../autocura/pagina-reserva.md), só no perfil Privado.
+5. Cria as pastas de dados com ACL ([persistência](../arquitetura/persistencia.md#arquivos)), inicia os serviços, roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
 
 ### Nó no Linux (`mestre install node`)
 
@@ -75,7 +75,7 @@ Nos dois sistemas, os Apps fixos "Grão-Mestre" e "Mestre" nascem no primeiro ac
 4. Se o `ufw` estiver ativo, libera a porta da página reserva só para a rede local.
 5. Inicia os serviços e roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
 
-Nas atualizações, a tarefa `\Mestre\Diagnostico` e as regras de firewall são preservadas.
+Nas atualizações, a conta `mestre-agente` (com a senha guardada e o perfil dela) e as regras de firewall são preservadas.
 
 ### Whisper
 
@@ -96,12 +96,12 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 
 ### Remoção (`mestre uninstall`)
 
-Para e remove serviços, unidades, a tarefa agendada, regras de firewall criadas pela instalação e as pastas de versões. Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
+Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela e o arquivo da senha. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil ([bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
 
 ## Regras e erros
 
 - `mestre install` recusa rodar sem privilégio de administrador e com `MESTRE_AGENT_ID` no ambiente ([componentes](../arquitetura/componentes.md#binários)).
-- Rodar de novo numa máquina já instalada não duplica nada: confere e completa o que falta (contas, pastas, serviços, tarefas, regras).
+- Rodar de novo numa máquina já instalada não duplica nada: confere e completa o que falta (contas, direitos, privilégios, pastas, serviços, regras).
 - Falha no meio da instalação → mostra o passo que falhou e como repetir; nada do que já foi criado é apagado sozinho.
 - O Guardião nunca é trocado por ação de cura ([Guardião](../autocura/guardiao.md#proteções)).
 
@@ -112,11 +112,13 @@ Para e remove serviços, unidades, a tarefa agendada, regras de firewall criadas
 - **CA-INST-03** · *rápida* — **Dado** um modelo baixado com SHA-256 diferente, **quando** a instalação confere, **então** apaga e baixa de novo, até 3 vezes, e depois marca `transcricao` falso.
 - **CA-INST-04** · *rápida* — **Dado** o benchmark com q8_0 a 0,25 do tempo do áudio, **quando** termina, **então** fica q8_0 e o modelo q5_0 é apagado.
 - **CA-INST-05** · *pesada* — **Dado** uma máquina de cada sistema já instalada, **quando** `mestre install node` roda de novo, **então** nenhum serviço, tarefa ou regra fica duplicado (MVP-13).
-- **CA-INST-06** · *pesada* — **Dado** a instalação concluída numa máquina Windows (Core ou nó), **quando** listo as tarefas agendadas, **então** só `\Mestre\Diagnostico` existe, com as opções acima; depois de `mestre uninstall`, não existe (MVP-13).
 - **CA-INST-07** · *pesada* — **Dado** máquinas limpas, **quando** instalo cada um dos quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows), escolhendo o papel no instalador, **então** em cada um o painel abre, o Dono é criado, o nó local e os nós remotos aparecem conectados, e um personagem de teste roda em cada máquina (MVP-13).
-- **CA-INST-08** · *pesada* — **Dado** a instalação do Core concluída no Ubuntu e no Windows, **quando** listo os serviços, **então** existem `mestre-core` e o nó local `mestre-node`, pareado sozinho e conectado em `127.0.0.1:7443`; no Windows, `mestre-core` roda como `NT SERVICE\MestreCore` e `mestre-node` e os terminais com a conta do usuário; no Linux, `mestre-core` e `mestre-node` como `mestre` e os terminais como `mestre-agente` (MVP-13).
+- **CA-INST-08** · *pesada* — **Dado** a instalação do Core concluída no Ubuntu e no Windows, **quando** listo os serviços, **então** existem `mestre-core` e o nó local `mestre-node`, pareado sozinho e conectado em `127.0.0.1:7443`; no Windows, `mestre-core` roda como `NT SERVICE\MestreCore`, `mestre-node` como `NT SERVICE\MestreNode` e os terminais como `mestre-agente`; no Linux, `mestre-core` e `mestre-node` como `mestre` e os terminais como `mestre-agente` (MVP-13).
 - **CA-INST-09** · *rápida* — **Dado** um nó sem transcrição e dublês de rede e relógio, **quando** um Administrador ativa a transcrição dele no painel, **então** o Core envia os arquivos por transferência, o nó roda o benchmark e passa a anunciar `transcricao: true`; com um arquivo de hash errado, nada é anunciado.
-- **CA-INST-10** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), **quando** listo a ACL de `%ProgramData%\Mestre\` e de cada subpasta, **então** a herança está desligada e não há entrada para `Users`, `Authenticated Users` nem `Everyone`; uma conta comum de teste da máquina não consegue listar a pasta (MVP-13).
+- **CA-INST-10** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), **quando** listo a ACL de `%ProgramData%\Mestre\` e de cada subpasta, **então** a herança está desligada, não há entrada para `Users`, `Authenticated Users` nem `Everyone`, e `mestre-agente` só tem as entradas de [persistência](../arquitetura/persistencia.md#arquivos); uma conta comum de teste da máquina não consegue listar a pasta (MVP-13).
+- **CA-INST-11** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), o usuário logado na sessão dele e personagens de teste rodando (com MCP de navegador), **quando** listo os processos do Mestre e seus donos, **então** nenhum roda com a conta do usuário: `mestre-core` como `NT SERVICE\MestreCore`, `mestre-node` como `NT SERVICE\MestreNode`, o Guardião como SYSTEM, e os terminais, seus filhos e o agente de diagnóstico como `mestre-agente` (MVP-13).
+- **CA-INST-12** · *pesada* — **Dado** a instalação concluída no Windows e um arquivo em `C:\Users\<usuário>\Documents`, **quando** um processo como `mestre-agente` (o agente falso, por comando direto, sem passar pelo despachante) tenta listar `C:\Users\<usuário>` e ler o arquivo, **então** o Windows nega os dois (MVP-13).
+- **CA-INST-13** · *pesada* — **Dado** a instalação concluída no Windows e a senha guardada do `mestre-agente`, **quando** se tenta entrar com ela na tela de login, por `runas /user:mestre-agente` e por Área de Trabalho Remota, **então** o Windows recusa os três, a conta não aparece na tela de login nem no grupo Administradores, e o `mestre-node` continua iniciando personagens com ela (MVP-13).
 
 ## Depende de
 

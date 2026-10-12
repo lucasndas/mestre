@@ -4,14 +4,14 @@
 
 ## Status
 
-Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o serviço `mestre-node` também no Core Linux, com o mesmo caminho de código de um nó remoto.
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o serviço `mestre-node` também no Core Linux, com o mesmo caminho de código de um nó remoto. Revisada em 2026-10-12: no Windows, o `mestre-node` deixa a conta do usuário e passa à conta virtual `NT SERVICE\MestreNode`, e os agentes rodam na conta local própria `mestre-agente`, como no Linux; saem a senha do usuário na instalação e a tarefa agendada de diagnóstico.
 
 ## Contexto
 
 - O desenho começou com um Core em Ubuntu e um nó Windows, a máquina do autor. Muita gente tem só uma máquina, ou tem o servidor em Windows e um Linux de apoio.
 - O motor é um binário Go único por plataforma, sem CGO ([ADR 0001](0001-stack-go.md)): o que muda entre Linux e Windows é pouco e já existe dos dois lados (serviço, PTY/ConPTY, caminhos, firewall).
 - O nó Windows tinha um processo na sessão do usuário, iniciado por tarefa agendada no logon, só para agentes com tela e para o navegador que criava GitHub Apps. Isso prendia parte do trabalho a um usuário logado, criava um canal local a mais e não tinha equivalente no Linux.
-- Os agentes de terminal dos três provedores já navegam na web pelas ferramentas MCP de navegador do próprio provedor, e o GitHub permite criar um App a partir de um manifesto com um clique do usuário ([ADR 0006](0006-app-por-classe-criado-pelo-navegador.md)).
+- Os agentes de terminal dos três provedores navegam na web por ferramentas MCP de navegador, e o GitHub permite criar um App a partir de um manifesto com um clique do usuário ([ADR 0006](0006-app-por-classe-criado-pelo-navegador.md)).
 - A segurança do Core no Linux depende de contas separadas: o motor, dono do cofre, roda como `mestre`; os agentes, como `mestre-agente` ([segurança](../arquitetura/seguranca.md)).
 
 ## Opções consideradas
@@ -25,6 +25,9 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o 
 3. **Core no Windows com um serviço só, rodando motor e agentes na conta do usuário.**
    - Prós: mais simples de instalar.
    - Contras: os agentes rodariam com a conta que lê o cofre. Descartada.
+4. **No Windows, `mestre-node` e agentes na conta do usuário** (o desenho anterior à revisão).
+   - Prós: os CLIs acham os logins que o usuário já tem.
+   - Contras: os agentes alcançam os arquivos pessoais e as sessões de navegador do usuário e os dados do nó; a instalação precisa da senha do usuário, e trocá-la derruba o serviço; o diagnóstico precisava de uma tarefa agendada. Descartada na revisão.
 
 ## Decisão
 
@@ -38,9 +41,9 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o 
   | 4. Só Windows | Windows, com o nó local | nenhum | máquina única |
 
 - **Mesmo binário, partes por sistema:** serviço do systemd com watchdog no Linux e serviço do Windows com recuperação; caminhos (`/var/lib/mestre/…` ou `%ProgramData%\Mestre\…`); regras de firewall no [checklist](../plataforma/checklist.md); anúncio mDNS pelo Avahi no Linux e pelo mDNS nativo do Windows, registrado pelo Guardião, no Windows ([descoberta](../conectividade/descoberta.md)); `whisper-server` e `ffmpeg` para os dois sistemas; ajudante de troca `mestre-update` nos dois ([componentes](../arquitetura/componentes.md)).
-- **Agente nunca roda com a conta dona do cofre**, nos dois sistemas. Em toda máquina Core isso vira dois serviços: `mestre-core`, dono do cofre, do banco, do espelho e do painel, que nunca roda agentes (Linux: conta `mestre`; Windows: conta virtual `NT SERVICE\MestreCore`); e o nó local `mestre-node`, que roda os agentes, inclusive o Grão-Mestre (Linux: conta `mestre`, iniciando os agentes como `mestre-agente`; Windows: conta do usuário), ligado ao Core pela mesma WSS com mTLS de um nó remoto, em `127.0.0.1:7443`, com banco de nó próprio ([componentes](../arquitetura/componentes.md), [Windows](../arquitetura/windows.md)).
+- **Agente nunca roda com a conta dona do cofre nem com a conta do usuário**, nos dois sistemas. Em toda máquina Core isso vira dois serviços: `mestre-core`, dono do cofre, do banco, do espelho e do painel, que nunca roda agentes (Linux: conta `mestre`; Windows: conta virtual `NT SERVICE\MestreCore`); e o nó local `mestre-node`, que roda os agentes, inclusive o Grão-Mestre (Linux: conta `mestre`; Windows: conta virtual `NT SERVICE\MestreNode`; nos dois, iniciando os agentes como `mestre-agente`), ligado ao Core pela mesma WSS com mTLS de um nó remoto, em `127.0.0.1:7443`, com banco de nó próprio ([componentes](../arquitetura/componentes.md), [Windows](../arquitetura/windows.md)).
 - **Sem interface gráfica em lugar nenhum.** O acesso é pelo painel no navegador; os agentes são de terminal; os nós, nos dois sistemas, são só serviços. Saem o processo na sessão do usuário, a tarefa de logon, o canal entre serviço e sessão, a notificação na área de trabalho, a capacidade `gui` e o navegador dedicado.
-  - Navegação web dos agentes: pelas ferramentas MCP de navegador do próprio provedor, liberadas ou negadas pela classe como qualquer ferramenta ([permissões](../classes/permissoes.md)). O Mestre não fornece nem gerencia navegador.
+  - Navegação web dos agentes: pelo MCP de navegador próprio de cada personagem (ex.: Playwright MCP headless), como `mestre-agente` e com navegador limpo, liberado ou negado pela classe como qualquer ferramenta ([permissões](../classes/permissoes.md)); login em sites só com credencial do cofre ([cofre](../plataforma/cofre.md#login-em-sites)).
   - GitHub Apps: o Grão-Mestre prepara o manifesto e o usuário cria e instala com um clique por link ([ADR 0006](0006-app-por-classe-criado-pelo-navegador.md)).
 - **Modo máquina única** (usos 1 e 4): a autocura usa as camadas 1, 2 e 5; não há supervisão cruzada; o diagnóstico com IA, a página reserva e o Telegram em modo reduzido ficam com o Guardião da própria máquina ([camadas](../autocura/camadas.md#modo-máquina-única)).
 - **Instalação:** os dois instaladores perguntam o papel da máquina: "Core" (com o nó local) ou "nó" ([instalação](../plataforma/instalacao-e-atualizacao.md)).
@@ -50,11 +53,12 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: o nó local do Core é o 
 
 - **Positivas:**
   - Quem tem uma máquina só, de qualquer sistema, usa o Mestre.
+  - Nenhum processo do Mestre usa a conta do usuário: os agentes não alcançam os arquivos pessoais nem as sessões de navegador dele, e trocar a senha do Windows não afeta o Mestre.
   - Linux e Windows ficam simétricos: nó é serviço, agentes rodam deslogado, nenhuma parte depende de alguém estar na frente da tela.
   - Menos peças no Windows: um processo e um canal local a menos.
 - **Negativas:**
   - **Máquina única não tem quem perceba a queda da máquina inteira.** O painel e os guias dizem isso; a recomendação é parear um segundo nó ([checklist](../plataforma/checklist.md)).
-  - **Core com dois serviços do motor, nos dois sistemas:** mais um processo a vigiar; no Windows, também ACLs nas pastas dos workspaces para a conta do usuário e a senha dessa conta pedida na instalação ([Windows](../arquitetura/windows.md)).
+  - **Core com dois serviços do motor, nos dois sistemas:** mais um processo a vigiar; no Windows, também a conta `mestre-agente` (senha guardada pelo Mestre, sem logon interativo), privilégios da conta virtual do `mestre-node` para iniciar processos com ela e ACLs nas pastas dos workspaces ([Windows](../arquitetura/windows.md)).
   - **Laboratório maior:** a pesada monta os quatro usos a partir de duas VMs ([testes](../qualidade/testes.md#laboratório)).
   - **Agentes não usam programas com janela.** Trabalho que exigiria tela é feito pelas ferramentas do provedor (MCP) ou não é feito pelo Mestre.
   - **Criação de App depende de um clique do usuário**, por link no Telegram ou no painel; até lá a classe usa o App "Mestre" ([identidades e Apps](../github/identidades-e-apps.md)).

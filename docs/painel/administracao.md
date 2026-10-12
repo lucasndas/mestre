@@ -24,7 +24,7 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 | Workspaces | lista, criar (abre a sessão zero), acompanhar as etapas da sessão zero e tentar de novo a que falhou, pausar e retomar | [workspaces](../orquestracao/workspaces.md), [sessão zero do workspace](../sessao-zero/workspace.md) |
 | Consumo de uso | gráficos e tabelas por personagem, missão, mesa, workspace, conta e dia; limites configurados e quanto falta | [limites de uso](../plataforma/limites-de-uso.md) |
 | Saúde dos nós | ver seção abaixo | [camadas](../autocura/camadas.md), [checklist](../plataforma/checklist.md) |
-| Segredos | nomes dos segredos do cofre, tipo, impressão curta e data; trocar e remover | [cofre](../plataforma/cofre.md) |
+| Segredos | nomes dos segredos do cofre, tipo, impressão curta e data; trocar e remover; cadastrar credenciais de site (domínio, página de login, usuário, senha) | [cofre](../plataforma/cofre.md) |
 | Diagnóstico com IA | ficha de diagnóstico de cada máquina | [diagnóstico com IA](../autocura/diagnostico-com-ia.md#ficha-de-diagnóstico) |
 | Auditoria | trilha de auditoria com filtros (quem, o quê, quando, workspace) | [persistência](../arquitetura/persistencia.md) |
 

@@ -76,7 +76,7 @@ Portas padrão: [componentes](componentes.md#portas). Segurança dos canais: [se
 
 ## Terminais
 
-Cada agente roda num pseudo-terminal gerenciado pelo motor do nó onde ele vive: PTY no Linux, ConPTY no Windows, com tamanho fixo, emulador de terminal e buffer no nó ([terminal](terminal.md)). Não há janela nem interface gráfica em nenhuma máquina: o painel no navegador é a única interface, e os agentes navegam na web pelas ferramentas MCP do próprio provedor ([permissões](../classes/permissoes.md)). O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows (só serviços, contas, ConPTY): [Windows](windows.md).
+Cada agente roda num pseudo-terminal gerenciado pelo motor do nó onde ele vive: PTY no Linux, ConPTY no Windows, com tamanho fixo, emulador de terminal e buffer no nó ([terminal](terminal.md)). Não há janela nem interface gráfica em nenhuma máquina: o painel no navegador é a única interface, e os agentes navegam na web pelo MCP de navegador próprio de cada personagem, com navegador limpo ([permissões](../classes/permissoes.md)). O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows (só serviços, contas, ConPTY): [Windows](windows.md).
 
 ## Mesa em mais de um nó
 
