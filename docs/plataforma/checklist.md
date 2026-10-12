@@ -73,6 +73,10 @@ Papel: **os dois** (Core e nó), **Core**, **nó** ou **com Operador do PC** (m�
 | LIN-08 | os dois | conta `mestre-agente` existe e os terminais rodam com ela, nunca com `mestre` ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) | grave | recriar a conta (aprovação) |
 | LIN-09 | nó; Core no modo máquina única | firewall libera a porta da página reserva só para a rede local | aviso | criar regra (aprovação) |
 | LIN-10 | os dois | cada provedor usado pelas bases do nó (`claude`, `codex`, `agy`) roda como `mestre-agente`, com a pasta do perfil de conta: `--version` e a verificação de login do ALL-11 feitas com essa conta | grave | manual (o alerta explica o passo) |
+| LIN-11 | os dois | cgroup v2 unificado, kernel 5.14 ou maior e cgroup delegado ao `mestre-node` (`Delegate=yes`, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)): o motor cria e remove um cgroup de teste sob o seu; falhou → os terminais novos nascem sem cgroup e a identificação volta à subida pela árvore, que recusa órfãos ([segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli)) | grave | reconfigurar a unidade (aprovação); kernel ou cgroup v1: manual |
+| LIN-12 | os dois | `kernel.yama.ptrace_scope` 1 ou maior (um personagem não depura processos de outro terminal) | grave | gravar o `sysctl` (aprovação) |
+| LIN-13 | os dois | `/proc` legível pela conta `mestre`: sem `hidepid`, ou com `mestre` no grupo `gid=` da montagem | grave | manual |
+| LIN-14 | os dois | `mestre-agente` sem gerenciador de usuário (`user@<uid>.service` parado, `Linger=no`): com ele, tmux e D-Bus tiram processos do cgroup do terminal | aviso | `loginctl disable-linger` e parar o gerenciador (aprovação) |
 
 ### Itens: todas as máquinas
 
@@ -113,8 +117,10 @@ Papel: **os dois** (Core e nó), **Core**, **nó** ou **com Operador do PC** (m�
 - **CA-CHK-07** · *rápida* — **Dado** um comando de verificação ausente, **quando** o item roda, **então** o resultado é "não foi possível verificar", nunca "ok".
 - **CA-CHK-11** · *rápida* — **Dado** um Core Windows falso em que `cofre.key` dá leitura a `NT SERVICE\MestreNode`, **quando** WIN-14 roda, **então** abre alerta grave com a correção da ACL, aplicada só com aprovação.
 - **CA-CHK-12** · *rápida* — **Dado** um Core sem nó remoto pareado, **quando** o checklist roda, **então** ALL-17 fica aberto como aviso; **quando** um nó é pareado, **então** o aviso fecha.
-- **CA-CHK-13** · *rápida* — **Dado** uma máquina Linux no papel de nó, **quando** o checklist monta a lista, **então** roda LIN-01, LIN-04, LIN-08, LIN-09, LIN-10 e os ALL-*, e não roda LIN-02, LIN-03, LIN-05 nem LIN-07.
+- **CA-CHK-13** · *rápida* — **Dado** uma máquina Linux no papel de nó, **quando** o checklist monta a lista, **então** roda LIN-01, LIN-04, LIN-08 a LIN-14 e os ALL-*, e não roda LIN-02, LIN-03, LIN-05 nem LIN-07.
 - **CA-CHK-15** · *rápida* — **Dado** um nó Windows falso com o Operador habilitado e `ConsentPromptBehaviorAdmin = 0` (ou `PromptOnSecureDesktop = 0`), **quando** o checklist roda, **então** WIN-21 abre alerta grave e o nó passa a anunciar `operador: false`; corrigido o valor, o alerta fecha e a capacidade volta; num nó sem o Operador, WIN-21 e WIN-22 não rodam.
+- **CA-CHK-16** · *rápida* — **Dado** um Linux falso com cgroup v1 (ou um `mestre-node` sem cgroup delegado), **quando** LIN-11 roda, **então** abre alerta grave e o motor passa a criar os terminais novos sem cgroup e a identificar pela subida pela árvore; corrigido, o alerta fecha e os terminais novos voltam a nascer no cgroup próprio.
+- **CA-CHK-17** · *rápida* — **Dado** um Linux falso com `kernel.yama.ptrace_scope = 0`, `/proc` montado com `hidepid=2` sem o grupo de `mestre` e linger ligado para `mestre-agente`, **quando** o checklist roda, **então** LIN-12 e LIN-13 abrem alertas graves e LIN-14 um aviso, e nenhuma correção é aplicada sem aprovação.
 - **CA-CHK-14** · *rápida* — **Dado** um Windows falso em que `mestre-agente` está em `Administradores` e o `mestre-node` roda com a conta de um usuário, **quando** o checklist roda, **então** WIN-17 e WIN-19 abrem alertas graves, e nenhuma correção é aplicada sem aprovação.
 
 ## Depende de

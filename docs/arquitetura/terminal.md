@@ -11,7 +11,8 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 ### Criação
 
 - Só o motor do nó cria terminais, a pedido do Core (`terminal.open`, [protocolo](../conectividade/protocolo.md)), com a base já resolvida: executável, argumentos, ambiente e pasta ([adaptador](../provedores/adaptador.md)).
-- **Linux:** `creack/pty`; o processo nasce com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) numa sessão nova (`setsid`), que agrupa a árvore dele.
+- **Linux:** `creack/pty`; o processo nasce com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) numa sessão nova (`setsid`) e dentro do cgroup v2 próprio do terminal, `term-<id>`, criado sob o cgroup delegado do `mestre-node` (`Delegate=yes`, [componentes](componentes.md#serviços-e-contas-padrão)) e passado ao `clone` (`CLONE_INTO_CGROUP`). O processo já nasce no cgroup, sem janela de corrida, e todo descendente fica nele, mesmo o que troca de pai ou de sessão (`nohup`, double fork, `setsid -f`). O cgroup agrupa a árvore para o encerramento e identifica o terminal no [canal local](canal-local.md#identificação-e-versão).
+- **Linux sem cgroup delegado** (suíte completa, que roda como processos comuns, ou LIN-11 do [checklist](../plataforma/checklist.md#itens-linux) falhou): o terminal nasce só na sessão nova, que agrupa a árvore dele.
 - **Windows:** wrapper próprio de ConPTY dentro do serviço; o processo nasce com a conta `mestre-agente`, por `CreateProcessAsUser` com o perfil dela carregado ([Windows](windows.md#conpty)); cada terminal entra num Job Object próprio com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, que agrupa a árvore dele.
 - `TERM=xterm-256color` no ambiente de todo terminal.
 - **Tamanho:** 200 colunas × 50 linhas (padrão, configurável no nó), definido na criação e **fixo**. O navegador nunca redimensiona: o xterm.js mostra o terminal com rolagem e zoom. Assim vários navegadores veem exatamente a mesma tela, e as telas reconhecidas pelo adaptador não mudam com quem está olhando.
@@ -39,7 +40,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 1. **Gracioso:** o adaptador pede a saída normal do agente (comando do provedor) e o motor espera até 10 s (padrão).
 2. **Sinal:** no Linux, `SIGTERM` para o grupo da sessão; no Windows, `ClosePseudoConsole`. Espera mais 10 s.
-3. **Forçado:** no Linux, `SIGKILL` para o grupo e para todo processo que ainda tenha a mesma sessão; no Windows, `TerminateJobObject`.
+3. **Forçado:** no Linux, `cgroup.kill` no cgroup do terminal (alcança também quem saiu da sessão com `setsid -f`), espera `populated 0` em `cgroup.events` (por inotify, sem consulta periódica) e remove o cgroup; sem cgroup delegado, `SIGKILL` para o grupo e para todo processo que ainda tenha a mesma sessão. No Windows, `TerminateJobObject`.
 
 - Quando encerrar é seguro (e quando é forçado) é decidido em [personagens](../orquestracao/personagens.md); este documento só garante que nenhum processo da árvore sobra.
 - Processo que termina sem pedido: o nó registra o código de saída e informa `terminal.status`; o personagem vai para `interrupted` ([personagens](../orquestracao/personagens.md)).
@@ -48,6 +49,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 - Saída sem ninguém olhando continua indo para o buffer, o emulador e o log; nada depende de o painel estar aberto.
 - Falha ao criar o PTY ou o ConPTY: `error` na resposta ao `terminal.open`, com o motivo, e alerta no [checklist](../plataforma/checklist.md).
+- Com cgroup delegado, falha ao criar o cgroup do terminal também é `error` no `terminal.open`: o terminal nunca nasce fora dele.
 - Pedido de tamanho vindo do navegador é ignorado (não existe mensagem de redimensionar).
 - O emulador nunca bloqueia a leitura do processo: se ficar para trás, a saída continua indo para buffer e log, e a tela é refeita a partir do buffer.
 
@@ -57,13 +59,13 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 - **CA-TERM-02** · *rápida* — **Dado** a gravação da tela de início de cada provedor, **quando** os bytes passam pelo emulador, **então** o texto da tela tem o prompt de entrada na linha esperada e nenhuma sequência de controle.
 - **CA-TERM-03** · *rápida* — **Dado** uma tela que muda a cada 300 ms e depois para, **quando** passam 500 ms de relógio falso sem mudança, **então** a tela é dada como estável uma única vez.
 - **CA-TERM-04** · *rápida* — **Dado** dois navegadores abrindo o mesmo terminal com larguras diferentes, **quando** recebem a saída, **então** o tamanho do terminal continua 200×50 e os dois recebem os mesmos bytes.
-- **CA-TERM-05** · *completa* — **Dado** um terminal real cujo processo iniciou um neto que ignora `SIGTERM`, **quando** o encerramento chega ao passo 3, **então** nenhum processo da árvore continua vivo, no Linux e no Windows.
+- **CA-TERM-05** · *completa* — **Dado** um terminal real cujo processo iniciou um neto que ignora `SIGTERM` e, no Linux, outro neto que saiu da sessão com `setsid -f`, **quando** o encerramento chega ao passo 3, **então** nenhum processo da árvore continua vivo, no Linux e no Windows, e no Linux o cgroup do terminal foi removido; o neto com `setsid -f` precisa de cgroup delegado (`systemd-run --user --scope -p Delegate=yes`) e, sem gerenciador systemd de usuário, essa parte é pulada com o motivo.
 - **CA-TERM-06** · *completa* — **Dado** um terminal real que imprime um token `ghp_…`, **quando** a linha vai para o log, **então** o arquivo de log tem `[segredo]` no lugar do token e o buffer guarda os bytes como saíram.
 
 ## Depende de
 
 - [Dublês](../qualidade/dubles.md) (PTY falso, relógio injetável)
-- [Persistência](persistencia.md) · [Windows](windows.md) · [Segurança](seguranca.md)
+- [Persistência](persistencia.md) · [Windows](windows.md) · [Segurança](seguranca.md) · [Componentes](componentes.md) (`Delegate=yes` no `mestre-node`)
 
 ## Verificar na implementação
 

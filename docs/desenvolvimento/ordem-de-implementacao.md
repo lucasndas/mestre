@@ -59,7 +59,8 @@ Os spikes de Windows rodam no **Windows Sandbox** do PC do Dono, descartável a 
 | ConPTY com o processo iniciado como `mestre-agente` (`CreateProcessAsUser`, perfil carregado) a partir do serviço, na sessão 0 | o serviço auxiliar `mestre-launcher` (LocalSystem) inicia os processos; ou a distribuição passa a levar o `OpenConsole.exe` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
 | conta virtual `NT SERVICE\MestreNode` com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | o serviço auxiliar `mestre-launcher` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
 | `claude`, `codex` e `agy` gravando e achando o login no perfil do `mestre-agente` no Windows | login em arquivo no perfil de conta, ou o provedor não é oferecido naquela máquina | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
-| identificação do chamador subindo a árvore de processos | um grupo de processos por terminal (cgroup ou Job Object) | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
+| identificação do chamador subindo a árvore de processos, no Windows | um Job Object por terminal na verificação | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
+| identificação do chamador, no Linux: **feito** (2026-10-12); a árvore falhou para órfãos (`nohup … &`, `setsid -f`, tmux) | adotado um cgroup v2 por terminal | [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli) |
 | `claude`, `codex` e `agy` rodando como `mestre-agente` no Linux | pasta pessoal própria para a conta dos agentes | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
 
 ## Mapa de documentos por marco e etapa

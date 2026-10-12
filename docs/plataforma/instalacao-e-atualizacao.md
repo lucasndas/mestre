@@ -39,7 +39,7 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 2. Cria as contas `mestre` e `mestre-agente` (contas de sistema, grupo próprio, sem pasta pessoal, shell `nologin`; os comandos estão em [ambiente](../desenvolvimento/ambiente.md#conta-mestre-agente-nesta-máquina-linux)) e as pastas de dados com dono e permissão ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
 3. Gera a chave do [cofre](cofre.md#chave-do-cofre) e cria o banco ([persistência](../arquitetura/persistencia.md)).
 4. Cria a CA interna, o certificado do servidor do Core e o certificado próprio do Guardião do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)); a chave da CA vai para o cofre.
-5. Instala as unidades systemd `mestre-core`, `mestre-node` (o nó local, com a conta `mestre`, que inicia os agentes como `mestre-agente`, e banco de nó próprio), `mestre-guardiao` e o ajudante de troca `mestre-update` ([atualização automática](autoatualizacao.md)), com as opções de reinício de [camadas](../autocura/camadas.md#valores-padrão), e os arquivos de serviço do Avahi ([descoberta](../conectividade/descoberta.md#mdns)).
+5. Instala as unidades systemd `mestre-core`, `mestre-node` (o nó local, com a conta `mestre`, que inicia os agentes como `mestre-agente`, banco de nó próprio e cgroup delegado, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), `mestre-guardiao` e o ajudante de troca `mestre-update` ([atualização automática](autoatualizacao.md)), com as opções de reinício de [camadas](../autocura/camadas.md#valores-padrão), e os arquivos de serviço do Avahi ([descoberta](../conectividade/descoberta.md#mdns)).
 6. Se o `ufw` estiver ativo, libera as portas do Core ([portas](../arquitetura/componentes.md#portas)).
 7. Pareia sozinho o nó local com o Core, em `127.0.0.1:7443` ([pareamento](../conectividade/pareamento.md#convite)), e baixa e prepara o Whisper no nó local (abaixo).
 8. Inicia os serviços e mostra no terminal o endereço do painel, a impressão da CA (para conferir no navegador) e o **código de configuração** do assistente do Dono ([login](../painel/login.md#assistente-do-dono-primeira-vez)).
@@ -72,7 +72,7 @@ Nos dois sistemas, os Apps fixos "Grão-Mestre" e "Mestre" nascem no primeiro ac
 
 1. Registra a versão do Ubuntu; encontra o Core e faz o pareamento, como no Windows.
 2. Cria as contas `mestre` e `mestre-agente` e as pastas de dados ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
-3. Instala as unidades systemd `mestre-node`, `mestre-guardiao` e `mestre-update`, com as opções de [camadas](../autocura/camadas.md#valores-padrão).
+3. Instala as unidades systemd `mestre-node` (com cgroup delegado, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), `mestre-guardiao` e `mestre-update`, com as opções de [camadas](../autocura/camadas.md#valores-padrão).
 4. Se o `ufw` estiver ativo, libera a porta da página reserva só para a rede local.
 5. Inicia os serviços e roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
 

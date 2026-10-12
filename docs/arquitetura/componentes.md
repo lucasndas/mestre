@@ -56,7 +56,7 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 | Sistema | Papel | Serviço | Executa | Conta | Supervisionado por |
 |---|---|---|---|---|---|
 | Linux | Core | `mestre-core` (systemd, `Type=notify`, watchdog) | `mestre core` | `mestre`, dona do cofre; não roda agentes | systemd e Guardião |
-| Linux | os dois | `mestre-node` (systemd, `Type=notify`, watchdog) | `mestre node` (no Core, o nó local) | `mestre`, com `CAP_SETUID` e `CAP_SETGID` só para iniciar os agentes como `mestre-agente` | systemd e Guardião |
+| Linux | os dois | `mestre-node` (systemd, `Type=notify`, watchdog, `Delegate=yes` e, no systemd 254 ou maior, `DelegateSubgroup=engine`) | `mestre node` (no Core, o nó local) | `mestre`, com `CAP_SETUID` e `CAP_SETGID` só para iniciar os agentes como `mestre-agente` | systemd e Guardião |
 | Linux | os dois | `mestre-guardiao` (systemd) | `mestre-guardiao run` | root | systemd |
 | Linux | os dois | `mestre-update` (systemd, oneshot) | `mestre-guardiao apply-update` | root; só a conta `mestre` pode iniciar | — (uso único por troca) |
 | Windows | Core | `mestre-core` (serviço do Windows) | `mestre core` | conta virtual `NT SERVICE\MestreCore`, dona do cofre | recuperação do serviço e Guardião |
@@ -65,6 +65,8 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 | Windows | os dois | `mestre-update` (serviço do Windows, início sob demanda) | `mestre-guardiao apply-update` | LocalSystem; só a conta do motor que conduz a troca pode iniciar (`NT SERVICE\MestreCore` no Core, `NT SERVICE\MestreNode` no nó) | — (uso único por troca) |
 
 **Tarefa agendada `\Mestre\Operador`** (Windows, só com o Operador do PC habilitado na instalação): executa `mestre node operator-session` no logon do usuário configurado, com a conta dele e privilégios normais; não é serviço e é vigiada pelo `mestre-node` e pelo checklist (WIN-22), não pelo Guardião ([Windows](windows.md#operador-do-pc)).
+
+No Linux, o `Delegate=yes` entrega ao `mestre-node` o próprio cgroup, onde ele cria um cgroup por terminal ([terminal](terminal.md#criação), [segurança](seguranca.md#identidade-de-quem-chama-a-cli)). Pela regra do cgroup v2 de manter processos só nas folhas de uma árvore delegada, o motor roda numa folha (`engine`): o `DelegateSubgroup=engine` o põe lá ao iniciar; num systemd mais antigo, o próprio motor se move para ela antes de criar terminais.
 
 A conta `mestre-agente` não é de serviço: é a conta local com que o `mestre-node` inicia os terminais dos agentes e o Guardião inicia o agente de diagnóstico (no Linux, uma conta de sistema; no Windows, uma conta local comum sem logon interativo). Detalhes do Windows (por que o Core tem dois serviços, contas virtuais, `mestre-agente`): [Windows](windows.md). As configurações de reinício (Restart=always, watchdog, recuperação do Windows) estão em [camadas](../autocura/camadas.md).
 

@@ -16,7 +16,7 @@ Fazer cada provedor segurar o essencial das [permissões](permissoes.md) mesmo s
 | `files.deny` | `deny`: `Read(<glob>)`, `Edit(<glob>)` | — | — |
 | `commands.allow` / `deny` | `allow` / `deny`: `Bash(<padrão>)` | — (contido pelo sandbox) | — |
 | regras fixas | `deny`: `Bash(git push *)`, `Bash(git remote *)` | `.git` fora do alcance de escrita do sandbox | `permissions.deny` no `settings.json` do perfil (só regras fixas, pois o arquivo é compartilhado) |
-| `network.internet: false` | `--disallowedTools WebFetch WebSearch` | `sandbox_workspace_write.network_access=false`, sem `--search` | `--sandbox` |
+| `network.internet: false` | `--disallowedTools WebFetch WebSearch` | `sandbox_workspace_write.network_access=false`, sem `--search`, com o socket do canal local liberado (abaixo) | `--sandbox` |
 | `network.domains` | `allow`: `WebFetch(domain:<d>)` | só liga/desliga | — |
 | ferramentas disponíveis | — | — | campo `tools` do arquivo de agente `mestre-<id>.md`: só as ferramentas nativas que as regras efetivas não negam por inteiro (sem escrita: sem as de escrita; sem internet: sem as de web) |
 | falha do despachante | `onFailure: block` | sandbox | falha fechada nativa |
@@ -24,6 +24,7 @@ Fazer cada provedor segurar o essencial das [permissões](permissoes.md) mesmo s
 - `ask` nunca vira regra nativa: o despachante cuida.
 - `tools` (ferramentas `mcp` e `other`) não tem regra nativa; fica só no despachante.
 - No Claude, os globs de caminho saem sempre absolutos (`Edit(//<worktree>/tests/**)`), para não depender de a regra relativa ser lida a partir da pasta do arquivo `--settings`.
+- **Codex e o canal local:** no Codex 0.162.1, `network_access=false` também bloqueia o `connect()` ao socket do [canal local](../arquitetura/canal-local.md) (`EPERM`), e a CLI `mestre` deixa de alcançar o motor. A base do Codex precisa liberar esse socket sem liberar a rede; como, e o que acontece se não houver jeito, está no item de "Verificar" do [Codex](../provedores/codex.md#verificar-na-implementação).
 - Flags de cada provedor: [Claude Code](../provedores/claude-code.md), [Codex](../provedores/codex.md), [Antigravity](../provedores/antigravity.md).
 
 ### Quando as regras mudam

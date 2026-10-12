@@ -63,7 +63,8 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 ### Identificação e versão
 
-- Antes de ler o pedido, o motor identifica o processo do outro lado (`SO_PEERCRED` / `GetNamedPipeClientProcessId`) e sobe a árvore de processos até um terminal registrado, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli). O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`.
+- Antes de ler o pedido, o motor identifica o processo do outro lado e o terminal dele, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli): no Linux, `SO_PEERCRED` e `SO_PEERPIDFD` e o cgroup do terminal em `/proc/<pid>/cgroup` (sem cgroup delegado, a subida pela árvore de processos); no Windows, `GetNamedPipeClientProcessId` e a subida pela árvore. O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`.
+- Também é `not_identified`: chamador sem pidfd (já colhido antes de o motor aceitar a conexão), pidfd que deixou de apontar para o mesmo PID depois da leitura do `/proc`, e subida pela árvore que encontrou pai mais novo que o filho em 3 tentativas seguidas.
 - `v` desconhecido: resposta `protocol_mismatch` (exit 5). O motor aceita a versão atual e a anterior, como no [protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades).
 
 ### Encaminhamento ao Core
@@ -77,7 +78,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 |---|---|---|
 | linha maior que o limite | `too_large` | 8 |
 | JSON inválido ou campo obrigatório faltando | `bad_request` | 1 (é bug da CLI) |
-| processo fora da árvore do terminal de `agent_id` | `not_identified` | 3 |
+| processo fora do terminal de `agent_id` (cgroup no Linux, árvore no Windows), chamador já encerrado ou árvore que mudou em 3 tentativas | `not_identified` | 3 |
 | motor não aceita a conexão | `engine_unreachable` (gerado pela CLI) | 5 |
 | versão do canal não suportada | `protocol_mismatch` | 5 |
 
@@ -92,9 +93,13 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 - **CA-LOCAL-05** · *rápida* — **Dado** o mesmo pedido enviado duas vezes com o mesmo `id`, **quando** o motor recebe o segundo, **então** devolve a resposta do primeiro sem executar de novo.
 - **CA-LOCAL-06** · *rápida* — **Dado** um pedido com `v: 99`, **quando** chega ao motor, **então** a resposta é `protocol_mismatch` e a CLI sai com 5.
 - **CA-LOCAL-07** · *completa* — **Dado** motor e CLI reais, **quando** um agente falso chama `mestre list` pelo socket (ou pipe), **então** recebe a lista e o motor registrou o pedido com o `agent_id` verificado.
+- **CA-LOCAL-08** · *rápida* — **Dado** um `/proc` falso em que o chamador está em `…/term-A`, terminal de outro personagem, e outro chamador em `…/term-B`, terminal do personagem de `agent_id`, **quando** o motor identifica, **então** o primeiro recebe `not_identified` e o segundo é aceito.
+- **CA-LOCAL-09** · *rápida* — **Dado** um chamador sem pidfd, e outro cujo pidfd deixa de apontar para o PID depois da leitura do `/proc` falso, **quando** o motor identifica, **então** os dois recebem `not_identified`, mesmo com o cgroup certo.
+- **CA-LOCAL-10** · *rápida* — **Dado** um `/proc` falso em que o pai lido começou depois do filho, **quando** o motor sobe a árvore, **então** recomeça do chamador; se a corrida continua em 3 tentativas, responde `not_identified`; se some na segunda, identifica o terminal.
+- **CA-LOCAL-11** · *completa* — **Dado** um cgroup delegado real (`systemd-run --user --scope -p Delegate=yes`) e um terminal real cujo processo dispara `nohup mestre list &`, `( mestre list & )` e `setsid -f mestre list` e sai, **quando** os órfãos chamam, **então** os três são aceitos com o terminal certo, e sem o cgroup (só a subida pela árvore) os três recebem `not_identified`; sem gerenciador systemd de usuário, o teste é pulado com o motivo.
 
 ## Depende de
 
-- [Terminal](terminal.md) (registro e árvore de processos de cada terminal)
+- [Terminal](terminal.md) (registro e cgroup de cada terminal)
 - [Dublês](../qualidade/dubles.md)
 - [Segurança](seguranca.md) · [Componentes](componentes.md)
