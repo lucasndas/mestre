@@ -116,3 +116,68 @@ func (sc Scenario) Run(ctx context.Context, mode Mode, cgroupBase string) (Resul
 		return Result{}, fmt.Errorf("%s/%s: no connection: %w\n%s", mode, sc.Name, ctx.Err(), log)
 	}
 }
+
+// EscapeeAfterKill starts a terminal whose child leaves the session
+// (setsid -f) and stays alive, then ends the terminal as terminal.md says:
+// SIGKILL to the root group and to every process of the root session (in
+// ModeCgroup, cgroup.kill instead). It reports whether the escapee is still
+// alive afterwards, and kills it if so.
+func EscapeeAfterKill(ctx context.Context, mode Mode, cgroupBase string) (bool, error) {
+	dir, err := os.MkdirTemp("", "spk-")
+	if err != nil {
+		return false, err
+	}
+	defer os.RemoveAll(dir)
+	fifo := filepath.Join(dir, "esc")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		return false, err
+	}
+	e, err := NewEngine(mode, filepath.Join(dir, "s.sock"))
+	if err != nil {
+		return false, err
+	}
+	defer e.Close()
+	r, err := e.Launch(Spec{ID: "escapee", AgentID: "agent-A", Dir: dir, CgroupBase: cgroupBase,
+		Script: `setsid -f sh -c 'echo $$ > "$SPIKE_DIR/esc"; exec tail -f /dev/null'`})
+	if err != nil {
+		return false, err
+	}
+	f, err := os.OpenFile(fifo, os.O_RDWR, 0)
+	if err != nil {
+		return false, err
+	}
+	stop := context.AfterFunc(ctx, func() { f.Close() })
+	buf := make([]byte, 32)
+	n, rerr := f.Read(buf)
+	stop()
+	f.Close()
+	if rerr != nil {
+		return false, rerr
+	}
+	var esc int
+	if _, err := fmt.Sscan(string(buf[:n]), &esc); err != nil {
+		return false, err
+	}
+	if mode != ModeCgroup {
+		_ = syscall.Kill(-r.PID, syscall.SIGKILL)
+		ents, _ := os.ReadDir("/proc")
+		for _, d := range ents {
+			var pid int
+			if _, err := fmt.Sscan(d.Name(), &pid); err != nil {
+				continue
+			}
+			if s, err := (SysProc{}).Stat(pid); err == nil && s.SID == r.PID {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	}
+	if err := r.Stop(ctx); err != nil { // ModeCgroup: cgroup.kill and wait for empty
+		return false, err
+	}
+	s, err := (SysProc{}).Stat(esc)
+	alive := err == nil && s.State != 'Z'
+	if alive {
+		_ = syscall.Kill(esc, syscall.SIGKILL)
+	}
+	return alive, nil
+}

@@ -152,11 +152,18 @@ func (e *Engine) handle(c *net.UnixConn) {
 		term, res.Chain, idErr = e.Identify(int(cred.Pid))
 		// The /proc reads are about the caller only if it was not reaped
 		// meanwhile (its PID could have been reused): check the pidfd.
-		if pidfd >= 0 {
+		// No pidfd: the caller was reaped before accept (EINVAL) and the
+		// SO_PEERCRED PID may already be someone else. Only a kernel
+		// without SO_PEERPIDFD (< 6.5, ENOPROTOOPT) falls back to the
+		// starttime checks of Walk alone.
+		switch {
+		case pidfd >= 0:
 			if idErr == nil && pidfdPID(pidfd) != int(cred.Pid) {
 				idErr = ErrCallerGone
 			}
 			syscall.Close(pidfd)
+		case idErr == nil && !errors.Is(res.PidfdErr, syscall.ENOPROTOOPT):
+			idErr = fmt.Errorf("%w: SO_PEERPIDFD: %v", ErrCallerGone, res.PidfdErr)
 		}
 	}
 	// The real engine identifies before reading; the spike reads anyway to
@@ -310,12 +317,19 @@ func (r *Running) Stop(ctx context.Context) error {
 	return err
 }
 
+// cleanEnv is the environment of a terminal. Like mestre-agente (no login
+// session), it has no systemd user bus: with one, tmux moves its panes into
+// a scope of its own (tmux-spawn-*.scope) and they leave the terminal cgroup.
 func cleanEnv() []string {
 	var env []string
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "MESTRE_") && !strings.HasPrefix(kv, "SPIKE_") && !strings.HasPrefix(kv, "TMUX") {
-			env = append(env, kv)
+		k, _, _ := strings.Cut(kv, "=")
+		switch {
+		case strings.HasPrefix(k, "MESTRE_"), strings.HasPrefix(k, "SPIKE_"), strings.HasPrefix(k, "TMUX"),
+			k == "DBUS_SESSION_BUS_ADDRESS", k == "XDG_RUNTIME_DIR":
+			continue
 		}
+		env = append(env, kv)
 	}
 	return env
 }

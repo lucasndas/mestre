@@ -7,10 +7,10 @@ import (
 	"errors"
 	"net"
 	"os"
-	"path/filepath"
-	"syscall"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -26,6 +26,19 @@ func TestMain(m *testing.M) {
 const scenarioDeadline = 20 * time.Second
 
 func runMatrix(t *testing.T, mode Mode, cgroupBase string) {
+	t.Run("kill-reaches-setsid-escapee", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithTimeout(context.Background(), scenarioDeadline)
+		defer cancel()
+		survived, err := EscapeeAfterKill(ctx, mode, cgroupBase)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Only the cgroup reaches a process that left the session.
+		if want := mode != ModeCgroup; survived != want {
+			t.Errorf("escapee survived = %v, want %v", survived, want)
+		}
+	})
 	for _, sc := range Scenarios {
 		t.Run(sc.Name, func(t *testing.T) {
 			t.Parallel()
@@ -94,6 +107,11 @@ func TestCgroupPerTerminal(t *testing.T) {
 	}
 	if err != nil || !strings.Contains(string(out), "--- PASS: TestCgroupPerTerminal") {
 		t.Fatalf("cgroup matrix in a delegated scope: %v\n%s", err, out)
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		if strings.Contains(l, "--- ") {
+			t.Log(strings.TrimSpace(l))
+		}
 	}
 }
 

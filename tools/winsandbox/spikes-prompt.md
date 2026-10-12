@@ -1,4 +1,4 @@
-Você está num Windows Sandbox descartável (usuário WDAGUtilityAccount, administrador, rede ligada), no repositório do Mestre em C:\mestre, na branch `spike/m1-windows`. Sua tarefa são os **três spikes de Windows do M1**. Tudo o que não for enviado ao GitHub ou copiado para C:\winsandbox\resultados se perde ao fechar o Sandbox.
+﻿Você está num Windows Sandbox descartável (usuário WDAGUtilityAccount, administrador, rede ligada), no repositório do Mestre em C:\mestre, na branch `spike/m1-windows`. Sua tarefa são os **três spikes de Windows do M1**. Tudo o que não for enviado ao GitHub ou copiado para C:\winsandbox\resultados se perde ao fechar o Sandbox.
 
 Leia antes, nesta ordem: `AGENTS.md`; `docs/desenvolvimento/ordem-de-implementacao.md` (seção "Spikes do M1"); `docs/arquitetura/windows.md` (seções da conta `mestre-agente`, do serviço e "Verificar na implementação"); `docs/arquitetura/terminal.md`; `docs/arquitetura/seguranca.md` (contas e isolamento). Não carregue a pasta `docs/` inteira.
 
