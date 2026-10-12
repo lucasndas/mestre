@@ -1,5 +1,3 @@
-<!-- Windows Sandbox for the Windows spikes of M1. See docs/desenvolvimento/ambiente.md. -->
-<!-- Expects the repository cloned at C:\mestre on the host. -->
 <Configuration>
   <Networking>Enable</Networking>
   <MemoryInMB>8192</MemoryInMB>
