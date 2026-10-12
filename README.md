@@ -2,7 +2,7 @@
 
 O Mestre orquestra agentes de IA (Claude Code, Codex, Antigravity CLI ou um shell comum) que trabalham juntos em repositórios do GitHub. Cada pedido vira uma **mesa** (um worktree com sua branch), com um time de agentes coordenado por um **Mestre da mesa**; acima de todos, o **Grão-Mestre** conversa com você pelo painel ou pelo Telegram e cuida do GitHub.
 
-Diferente de um orquestrador local, o Mestre é distribuído (um **Core** Linux e vários **nós**, como um PC Windows) e se cura sozinho: cada máquina tem um **Guardião** que vigia e conserta o motor, sem SSH.
+Diferente de um orquestrador local, o Mestre é distribuído (um **Core** e vários **nós**, cada um em Linux ou Windows, ou uma máquina só) e se cura sozinho: cada máquina tem um **Guardião** que vigia e conserta o motor, sem SSH. Não há interface gráfica além do painel no navegador; os agentes são de terminal.
 
 Repositório: https://github.com/lucasndas/mestre
 
@@ -10,8 +10,8 @@ Repositório: https://github.com/lucasndas/mestre
 
 ## Instalar em 3 passos
 
-1. **Core (Ubuntu):** instale o pacote do Mestre Core e abra o painel no navegador para criar o usuário Dono.
-2. **Nó (Windows):** instale o Mestre Node; ele encontra o Core sozinho na rede local e pede o pareamento.
+1. **Core (Ubuntu ou Windows):** rode o instalador, escolha o papel "Core" e abra o painel no navegador para criar o usuário Dono e os Apps do GitHub.
+2. **Nós (opcionais, Ubuntu ou Windows):** rode o instalador e escolha "nó"; ele encontra o Core sozinho na rede local e pede o código de convite.
 3. **Primeiro workspace:** no painel, informe um repositório do GitHub e a ficha do Grão-Mestre.
 
 Detalhes em [docs/operacao](docs/operacao/INDEX.md).

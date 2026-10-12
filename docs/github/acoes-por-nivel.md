@@ -80,7 +80,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 ## Regras e erros
 
 - **Respeitar as regras do repositório** (branch protegida, revisões obrigatórias, CI, rulesets). O Mestre nunca contorna proteção. Quando o GitHub recusa, o motor traduz o motivo e o Grão-Mestre avisa os usuários.
-- Ruleset que exige commits assinados: os commits do MVP não são assinados ([ADR 0014](../decisoes/0014-commits-sem-assinatura-no-mvp.md)). O motor explica e o Grão-Mestre avisa; não há contorno.
+- Ruleset que exige commits assinados: os commits do Mestre não são assinados ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)). O motor explica e o Grão-Mestre avisa; não há contorno.
 - Pedido fora do épico, rótulo `epico` mexido pela mesa ou push forçado fora das regras: recusado com motivo, registrado na auditoria.
 - GitHub fora do ar ou limite de cota: o pedido falha com o motivo; o motor não repete sozinho ações que mudam dados.
 - Mais de 100 sub-issues num pai: recusado com explicação.

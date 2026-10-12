@@ -38,6 +38,7 @@ Cada release traz os binários `mestre` e `mestre-guardiao` por plataforma ([com
 
 - **Um passo por vez no sistema inteiro:** uma **trava de atualização** no Core (a mesma usada pelos [CLIs](../provedores/atualizacao-dos-clis.md)). Core e nó nunca atualizam juntos; motor e Guardião também não.
 - **Sequência:** motor do Core → Guardião do Core → cada nó, um por vez, pela prioridade da [eleição](../autocura/camadas.md#eleição-do-nó-condutor): motor do nó → Guardião do nó. O passo do Guardião é pulado se a versão dele no manifesto for igual à instalada. Nó desligado é atualizado quando reconectar.
+- **Máquina única** (só Linux, só Windows): a sequência é só motor do Core → Guardião do Core. **Core Windows:** `mestre-core` e o `mestre-node` local usam o mesmo `mestre.exe`, então o passo do motor troca o binário uma vez e reinicia os dois (primeiro `mestre-core`, depois `mestre-node`); o ponto seguro vale para os terminais do nó local e a confirmação exige os dois saudáveis.
 - **Convivência:** o Core aceita a versão atual e a anterior do protocolo ([protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades)). Antes de começar, confere se todos os nós pareados entram na faixa nova; se algum não entrar, não começa e o Dono recebe a explicação.
 - **Nunca os dois fora:** quem vigia a troca do motor é o Guardião; quem troca e vigia o Guardião é o motor **saudável** da mesma máquina. O passo do Guardião só começa depois que o motor novo passou na confirmação; com o motor degradado, o Guardião não é atualizado.
 
@@ -68,7 +69,7 @@ sequenceDiagram
 5. **Falhou** → o Guardião faz `rollback` ([lista fechada](../autocura/guardiao.md#lista-fechada-de-ações)) na hora, sem esperar o laço de queda. **Saudável** → passo concluído e personagens retomados ([personagens](../orquestracao/personagens.md#retomada-após-reinício)).
 6. **Cura durante a janela:** a máquina fica "em atualização" e a camada 3 espera, porque o Guardião local tem a vez; no Core, o Guardião (árbitro da eleição) responde `updating` aos pedidos de trava. Se até o `rollback` falhar, vale o incidente normal das [camadas](../autocura/camadas.md).
 
-**Ajudante de troca:** serviço de uso único (`mestre-update`: unidade oneshot com root no Linux, serviço sob demanda com LocalSystem no Windows) que só a conta do motor pode iniciar: no Linux, uma regra do polkit dá à conta `mestre` só a ação `org.freedesktop.systemd1.manage-units` para a unidade `mestre-update.service` com o verbo `start`; no Windows, a DACL do serviço (`sc sdset`) dá a permissão de iniciar só ao SID da conta do `mestre-node`. Um teste da suíte completa em cada sistema confere que a conta do motor inicia o ajudante e outra conta não. Ele roda `mestre-guardiao apply-update` do Guardião **instalado**, que confere de novo a assinatura antes de mexer em arquivo. Assim, um motor comprometido só consegue instalar uma release assinada.
+**Ajudante de troca:** serviço de uso único (`mestre-update`: unidade oneshot com root no Linux, serviço sob demanda com LocalSystem no Windows) que só a conta do motor pode iniciar: no Linux, uma regra do polkit dá à conta `mestre` só a ação `org.freedesktop.systemd1.manage-units` para a unidade `mestre-update.service` com o verbo `start`; no Windows, a DACL do serviço (`sc sdset`) dá a permissão de iniciar só ao SID da conta do motor que conduz a troca (`NT SERVICE\MestreCore` no Core, a do `mestre-node` no nó). Um teste da suíte completa em cada sistema confere que a conta do motor inicia o ajudante e outra conta não. Ele roda `mestre-guardiao apply-update` do Guardião **instalado**, que confere de novo a assinatura antes de mexer em arquivo. Assim, um motor comprometido só consegue instalar uma release assinada.
 
 ### Um passo do Guardião
 
@@ -128,6 +129,7 @@ Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro`
 - **CA-AUTO-11** · *completa* — **Dado** um personagem `busy` no nó, **quando** chega o passo do motor, **então** o reinício espera o `done`, e depois o personagem é retomado sem sumir.
 - **CA-AUTO-12** · *rápida* — **Dado** um incidente aberto, **quando** a release é aprovada, **então** fica `pausada` até o incidente fechar.
 - **CA-AUTO-13** · *rápida* — **Dado** o motor do Core em janela de confirmação, **quando** um Guardião de nó pede a trava de condução, **então** recebe `updating` e não conduz cura.
+- **CA-AUTO-14** · *rápida* — **Dado** um Core Windows sem nó remoto (dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é: troca do binário com reinício de `mestre-core` e do `mestre-node` local, confirmação dos dois, e só então o Guardião.
 
 ## Depende de
 

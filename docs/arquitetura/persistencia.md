@@ -4,7 +4,7 @@
 
 ## Princípios
 
-- Cada máquina com motor (Core e nós) tem **um banco SQLite local**, em modo WAL, com migrações versionadas.
+- Cada máquina com motor (Core e nós) tem **um banco SQLite local**, em modo WAL, com migrações versionadas. No Core Windows, o nó local é um serviço à parte e tem o próprio banco de nó (pasta `no\`, abaixo).
 - O **Core é a fonte da verdade**. O nó guarda o que ele roda e um cache do essencial para continuar funcionando quando o Core está fora; ao reconectar, sincroniza com o Core.
 - O que precisa ser lido ou versionado por pessoas fica em **arquivo** (classes, pergaminhos, anexos, logs); o banco guarda só o índice e os vínculos.
 - Segredos nunca vão para o banco em texto puro: ficam no [cofre](../plataforma/cofre.md).
@@ -70,17 +70,25 @@ Campos: id, personagem (agente), nó, PID, pasta, classe, status, início e últ
 | Histórico dos terminais | arquivos de log com rotação | nada |
 | Logs do motor | JSON por linha, com rotação | nada |
 
-Pastas de dados (padrão):
+Pastas de dados (padrão). Os mesmos caminhos valem para o Core e para os nós de cada sistema; a última coluna diz onde cada uma existe.
 
-| Linux (Core) | Windows (nó) | Conteúdo |
-|---|---|---|
-| `/etc/mestre/` | `%ProgramData%\Mestre\config\` | configuração |
-| `/var/lib/mestre/banco/` | `%ProgramData%\Mestre\banco\` | `mestre.db` |
-| `/var/lib/mestre/backups/` | `%ProgramData%\Mestre\backups\` | backups diários |
-| `/var/lib/mestre/workspaces/` | `%ProgramData%\Mestre\workspaces\` | espelhos, clones e worktrees (estrutura em [workspaces](../orquestracao/workspaces.md#espelho-e-clone-principal-no-core) e [mesas](../orquestracao/mesas.md#worktree-por-nó-e-sincronização)) |
-| `/var/lib/mestre/contas/` | `%ProgramData%\Mestre\contas\` | perfis de conta |
-| `/var/lib/mestre/classes-globais/`, `/var/lib/mestre/modelos/` | — | classes globais e modelos versionados |
-| `/var/log/mestre/` | `%ProgramData%\Mestre\logs\` | logs do motor e dos terminais |
+| Linux | Windows | Conteúdo | Onde |
+|---|---|---|---|
+| `/etc/mestre/` | `%ProgramData%\Mestre\config\` | configuração | todas |
+| `/etc/mestre/cofre.key` | `%ProgramData%\Mestre\config\cofre.key` (DPAPI de máquina, ACL só de `NT SERVICE\MestreCore`) | chave do [cofre](../plataforma/cofre.md#chave-do-cofre) | Core |
+| `/var/lib/mestre/banco/` | `%ProgramData%\Mestre\banco\` | `mestre.db` | todas |
+| `/var/lib/mestre/backups/` | `%ProgramData%\Mestre\backups\` | backups diários | todas |
+| `/var/lib/mestre/workspaces/` | `%ProgramData%\Mestre\workspaces\` | espelhos, clones e worktrees (estrutura em [workspaces](../orquestracao/workspaces.md#espelho-e-clone-principal-no-core) e [mesas](../orquestracao/mesas.md#worktree-por-nó-e-sincronização)) | todas |
+| `/var/lib/mestre/contas/` | `%ProgramData%\Mestre\contas\` | perfis de conta | todas |
+| `/var/lib/mestre/classes-globais/`, `/var/lib/mestre/modelos/` | `%ProgramData%\Mestre\classes-globais\`, `%ProgramData%\Mestre\modelos\` | classes globais e modelos versionados | Core |
+| `/var/lib/mestre/whisper/` | `%ProgramData%\Mestre\whisper\` | `whisper-server` e modelo de transcrição | nó de transcrição |
+| — (mesmo processo do Core) | `%ProgramData%\Mestre\no\` | banco, logs e dados de agentes do nó local | Core Windows |
+| `/var/log/mestre/` | `%ProgramData%\Mestre\logs\` | logs do motor e dos terminais | todas |
+
+Donos e acessos:
+- **Linux:** dono `mestre`; `workspaces/` e `contas/` no grupo `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
+- **Core Windows:** dono `NT SERVICE\MestreCore`; a conta do usuário do `mestre-node` tem modificação só em `workspaces\` e `contas\`, e é dona de `no\` ([Windows](windows.md#windows-como-core)).
+- **Nó Windows:** ACL para a conta do `mestre-node`, SYSTEM e Administradores.
 
 ## Logs
 

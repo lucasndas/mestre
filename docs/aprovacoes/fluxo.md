@@ -92,7 +92,7 @@ Um toque em **Aprovar** só vale se: o usuário está ativo, tem o nível e o wo
 
 ### Auditoria
 
-Todo pedido e toda resposta ficam no banco do Core (tabelas `approval_requests` e `approval_responses`): quem decidiu (Grão-Mestre ou usuário), canal, texto original, motivo (obrigatório para o Grão-Mestre), impressão, horários e resultado da aplicação. Nada é apagado no MVP. O painel mostra o histórico com filtros.
+Todo pedido e toda resposta ficam no banco do Core (tabelas `approval_requests` e `approval_responses`): quem decidiu (Grão-Mestre ou usuário), canal, texto original, motivo (obrigatório para o Grão-Mestre), impressão, horários e resultado da aplicação. Nada é apagado. O painel mostra o histórico com filtros.
 
 ### Resumo periódico
 

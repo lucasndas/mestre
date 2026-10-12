@@ -1,140 +1,125 @@
 # Criação e instalação de Apps
 
-> **Assunto:** como o Grão-Mestre cria e instala GitHub Apps pelo fluxo de manifesto, com navegador dedicado no Windows · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** como o Grão-Mestre prepara um GitHub App pelo fluxo de manifesto e o Dono o cria e instala com um clique, por link no próprio navegador · **Componente:** Core · **Atualizado:** 2026-10-12
 
 ## Objetivo
 
-Criar e instalar os Apps do Mestre sem trabalho manual repetido. O GitHub não cria App por API: a criação e a primeira instalação exigem telas do site. O Dono autoriza uma vez; depois o Grão-Mestre cria e instala os Apps de classe sozinho, por um navegador dedicado no nó Windows ([ADR 0006](../decisoes/0006-app-por-classe-criado-pelo-navegador.md)).
+Criar e instalar os Apps do Mestre com o mínimo de trabalho do usuário. O GitHub não cria App por API: a criação e a primeira instalação exigem um clique de quem é dono da conta. O Grão-Mestre prepara tudo (nome, permissões, manifesto) e manda um link; o Dono abre no próprio navegador, no celular ou no PC, clica em "Criar" e depois em "Instalar"; o Core termina sozinho ([ADR 0006](../decisoes/0006-app-por-classe-criado-pelo-navegador.md)).
 
 ## Comportamento
 
-### Autorização inicial (uma vez, na instalação)
+### Quando acontece
 
-1. O assistente de instalação abre o navegador dedicado no nó Windows, e o Dono entra na conta dele do GitHub (com senha e 2FA, na frente do PC).
-2. O Dono confirma no painel que autoriza o Grão-Mestre a criar e instalar Apps em nome dele. O banco registra quem autorizou e quando.
-3. O assistente cria os Apps fixos "Grão-Mestre" e "Mestre" pelo fluxo abaixo ([identidades](identidades-e-apps.md)) e liga o **device flow** no App "Grão-Mestre", usado para a credencial pessoal dos usuários ([aprovação no GitHub](aprovacao-no-github.md)).
-
-Passo a passo para quem instala: [instalação](../plataforma/instalacao-e-atualizacao.md).
+- **Apps fixos "Grão-Mestre" e "Mestre":** no primeiro acesso, logo depois de criar o Dono; o assistente do painel encadeia os dois links ([primeiro acesso](../operacao/primeiro-acesso.md), [identidades](identidades-e-apps.md)). A primeira instalação deles acontece com o primeiro workspace ([sessão zero do workspace](../sessao-zero/workspace.md)).
+- **App de classe:** quando uma classe pede App próprio (`mestre app create`, [CLI do Grão-Mestre](../cli/grao-mestre.md); [classes](../classes/classes.md)). Até ele ficar pronto, vale o [App temporário "Mestre"](identidades-e-apps.md#app-temporário-mestre-com-classe).
+- Um pedido por App; vários podem estar abertos ao mesmo tempo, cada um com o seu link.
 
 ### Estados de um App
 
 ```mermaid
 stateDiagram-v2
-  [*] --> pedido: mestre app create
-  pedido --> em_criacao: navegador livre
-  em_criacao --> aguardando_instalacao: chave no cofre
-  aguardando_instalacao --> pronto: instalado nos repositórios
-  em_criacao --> aguardando_usuario: senha, 2FA ou tela inesperada
-  aguardando_instalacao --> aguardando_usuario: idem
-  aguardando_usuario --> em_criacao: link concluído
-  aguardando_usuario --> aguardando_instalacao: link concluído
-  em_criacao --> falhou: passou 1 hora
-  aguardando_usuario --> falhou: passou 1 hora
+  [*] --> aguardando_criacao: mestre app create (link enviado)
+  aguardando_criacao --> aguardando_instalacao: code trocado, chave no cofre
+  aguardando_criacao --> expirado: link vencido
+  expirado --> aguardando_criacao: novo link
+  aguardando_instalacao --> pronto: instalação confirmada nos repositórios
+  aguardando_criacao --> falhou: code não trocado em 1 hora
   pronto --> com_erro: token recusado
 ```
 
-`mestre class check` mostra "em criação" em todos os estados antes de `pronto`. Enquanto isso, vale o [App temporário "Mestre"](identidades-e-apps.md). Um App é criado por vez; os pedidos seguintes esperam na fila.
+`mestre class check` mostra "em criação" em todos os estados antes de `pronto`.
 
-### Fluxo de manifesto
+### O link e o fluxo de manifesto
 
 ```mermaid
 sequenceDiagram
   participant GM as Grão-Mestre
-  participant C as Core (motor)
-  participant S as Nó Windows (processo da sessão)
-  participant B as Navegador dedicado
+  participant C as Core (motor e painel)
+  participant D as Dono (Telegram e navegador próprio)
   participant G as github.com
   GM->>C: mestre app create
-  C->>S: manifesto + state (via WSS e named pipe)
-  S->>S: abre ouvinte em 127.0.0.1:<porta aleatória>
-  S->>B: abre http://localhost:<porta>/iniciar
-  B->>G: POST /settings/apps/new?state=… (formulário com o manifesto)
-  B->>G: clica "Create GitHub App"
-  G-->>B: redireciona para http://localhost:<porta>/callback?code=…&state=…
-  B->>S: entrega code e state
-  S->>C: code (state conferido)
+  C->>D: link https://<core>:7443/github/apps/novo/<token> (Telegram e painel)
+  D->>C: abre o link e entra no painel como Dono
+  C-->>D: página com nome, permissões e o botão "Criar no GitHub"
+  D->>G: POST /settings/apps/new?state=… (formulário com o manifesto)
+  D->>G: clica "Create GitHub App"
+  G-->>D: redireciona para https://<core>:7443/github/manifest/callback?code=…&state=…
+  D->>C: entrega code e state
   C->>G: POST /app-manifests/{code}/conversions
-  G-->>C: id, slug, client_id, client_secret, webhook_secret, pem
-  C->>C: pem e segredos no cofre; dados no banco
+  G-->>C: id, slug, owner, client_id, client_secret, webhook_secret, pem
+  C-->>D: redireciona para github.com/apps/<slug>/installations/new
+  D->>G: escolhe os repositórios e clica "Install"
+  G-->>D: redireciona para https://<core>:7443/github/apps/instalado?installation_id=…
+  D->>C: entrega installation_id
+  C->>G: confere a instalação com o JWT do App
+  C->>GM: App pronto (caixa de entrada)
 ```
 
-- O navegador e o ouvinte rodam no **processo da sessão do usuário** no Windows, porque o serviço não tem área de trabalho ([nó Windows](../arquitetura/no-windows.md)). Os comandos ao navegador passam pelo canal do navegador do [protocolo](../conectividade/protocolo.md).
-- O `state` é aleatório, de uso único e vale 1 hora. O ouvinte local recusa `state` diferente e fecha depois do primeiro `code`.
-- Só o `code` sai do nó. A troca do `code` é feita pelo Core, e a chave privada (`pem`) vai direto para o [cofre](../plataforma/cofre.md): nunca passa pelo nó, pelo banco ou por log.
-- O fluxo inteiro precisa terminar em **1 hora** (regra do GitHub). Depois disso o App vai para `falhou` e o Grão-Mestre pode pedir de novo.
-- Depois da troca, o motor lê o `bot_user_id` ([identidades](identidades-e-apps.md)).
+- **O link:** página do painel, com token aleatório de uso único, válido por 24 h (padrão), preso ao pedido. Vai ao Dono pelo [bot](../telegram/bot.md) e aparece em "Apps do GitHub" no [painel](../painel/administracao.md). Abrir exige login de Dono ([login](../painel/login.md)), porque os Apps nascem na conta pessoal dele.
+- **Antes do clique**, a página mostra o nome do App, a classe, as permissões e os repositórios que serão marcados na instalação.
+- **Redirecionamentos:** são navegações do próprio navegador do Dono, então basta o aparelho alcançar o Core na rede local e confiar na CA ([primeiro acesso](../operacao/primeiro-acesso.md)). O endereço usado é o do painel.
+- **Troca do `code`:** feita pelo Core, dentro de 1 hora (regra do GitHub). A chave privada (`pem`) vai direto para o [cofre](../plataforma/cofre.md): nunca passa pelo banco, pelo navegador ou por log. O `state` é aleatório e de uso único; o callback com outro `state` é recusado.
+- **Conferências depois da troca:** o `owner` do App precisa ser a conta do GitHub do Dono; o motor lê o `bot_user_id` ([identidades](identidades-e-apps.md#autoria-dos-commits)).
+- **Instalação:** a página de instalação já vem com os repositórios sugeridos; o Dono mantém "Only select repositories". O retorno pelo `setup_url` não é aceito às cegas: o motor confere a instalação e os repositórios dela com o JWT do App. Se o retorno não chegar (aparelho saiu da rede), o motor consulta `GET /users/<login-do-dono>/installation` a cada 30 s por até 1 hora.
+- **App "Grão-Mestre":** a mesma página traz um passo a mais, o link da configuração do App para marcar **"Enable Device Flow"**, usado pela credencial pessoal dos usuários ([aprovação no GitHub](aprovacao-no-github.md)). O motor confere iniciando um device flow de teste e só marca o App como pronto depois disso.
 
 ### Conteúdo do manifesto
 
 | Campo | Valor |
 |---|---|
-| `name` | nome gerado pelas regras de [nomes](identidades-e-apps.md) |
+| `name` | nome gerado pelas regras de [nomes](identidades-e-apps.md#nomes) |
 | `url` | `https://github.com/<login-do-dono>` (padrão) |
 | `description` | "App do Mestre para a classe <Classe>" |
 | `public` | `false` (só a conta do Dono instala) |
-| `hook_attributes` | `{"url": "https://example.invalid", "active": false}`, sempre enviado (é o formato documentado para webhook inativo; o Mestre não testa omiti-lo) |
-| `redirect_url` | `http://localhost:<porta>/callback` |
-| `default_permissions` | as do papel, pela tabela de [permissões mínimas](identidades-e-apps.md) |
+| `hook_attributes` | `{"url": "https://example.invalid", "active": false}`, sempre enviado (formato documentado para webhook inativo) |
+| `redirect_url` | `https://<core>:7443/github/manifest/callback` |
+| `setup_url` | `https://<core>:7443/github/apps/instalado` |
+| `default_permissions` | as do papel, pela tabela de [permissões mínimas](identidades-e-apps.md#permissões-mínimas) |
 | `default_events` | `[]` |
-| `request_oauth_on_install`, `setup_on_update` | `false` |
+| `request_oauth_on_install`, `setup_on_update` | `false` e `true` |
 
-### Instalação nos repositórios
+### Repositórios novos e permissões novas
 
-1. **Primeira instalação de cada App (navegador):** o navegador abre `https://github.com/apps/<slug>/installations/new`, escolhe "Only select repositories", marca os repositórios dos workspaces que usam o App e confirma.
-2. O motor descobre o id da instalação com `GET /users/<login-do-dono>/installation` (autenticado com o JWT do App) e passa o App para `pronto`.
-3. **Repositórios novos depois (API):** o motor chama `PUT /user/installations/{installation_id}/repositories/{repository_id}` com a credencial pessoal do Dono ([aprovação no GitHub](aprovacao-no-github.md)). Se a credencial não existir ou for recusada, volta ao navegador, na página de configuração da instalação.
-- A instalação usa sempre "repositórios selecionados", para o menor escopo e para permitir remover repositórios depois.
-- Quais Apps um workspace novo precisa ter instalados: [sessão zero do workspace](../sessao-zero/workspace.md).
-
-### Reserva: link pelo Telegram
-
-Quando o navegador não consegue seguir (GitHub pede senha ou 2FA, tela diferente da esperada, sessão expirada, nó Windows fora do ar ou sem o processo da sessão), o App vai para `aguardando_usuario` e o Grão-Mestre manda ao Dono, pelo Telegram, um link para concluir com um clique:
-
-- **Criação:** link para uma página do painel que faz o mesmo POST do manifesto no navegador do próprio Dono, com `redirect_url` apontando para o painel do Core (`https://<core>:<porta>/github/manifest/callback`). O redirecionamento é uma navegação do navegador, então basta o aparelho alcançar o Core na rede local.
-- **Instalação:** link direto para `https://github.com/apps/<slug>/installations/new`. O motor confere a instalação a cada 30 segundos até ela aparecer ou até 1 hora.
-- O link não leva segredo nenhum; a página do painel exige login ([login](../painel/login.md)).
-
-### Componente isolado
-
-- Só um componente do código conhece as telas do GitHub (abrir, enviar o manifesto, confirmar, instalar, escolher repositórios, reconhecer pedido de senha/2FA/login). Seletores e textos esperados ficam num só lugar.
-- Navegador padrão: Microsoft Edge com perfil próprio (`--user-data-dir` só do Mestre), controlado pelo protocolo de depuração via pipe (`--remote-debugging-pipe`), sem porta TCP aberta.
-- Se uma tela mudar e o componente quebrar, o Grão-Mestre cai para o link pelo Telegram e o alerta diz a etapa que quebrou. A tela real não tem teste automatizado no escopo atual ([testes](../qualidade/testes.md#escopo-da-pesada-telegram-e-github)).
+- **Repositório novo para um App já instalado:** o motor chama `PUT /user/installations/{installation_id}/repositories/{repository_id}` com a credencial pessoal do Dono, se ele a tiver conectado ([aprovação no GitHub](aprovacao-no-github.md)). Sem ela, ou se for recusada, o Grão-Mestre manda ao Dono o link da configuração da instalação (`https://github.com/settings/installations/<id>`) para marcar o repositório; o motor confere como acima.
+- **Permissão nova num App existente** (ex.: Workflows): link para a página de permissões do App e, depois, para o aceite na instalação ([workflows](identidades-e-apps.md#workflows)).
+- A instalação usa sempre "repositórios selecionados", para o menor escopo. Quais Apps um workspace novo precisa: [sessão zero do workspace](../sessao-zero/workspace.md).
 
 ## Regras e erros
 
-- O navegador dedicado só serve para isso e fica fora do alcance dos agentes: a pasta do perfil é bloqueada pelas regras fixas do Mestre para todos os personagens ([segurança](../arquitetura/seguranca.md)).
-- Nome já em uso: o componente reconhece o erro na tela, gera o próximo nome (`-2`, `-3`…) e recomeça.
-- Limite de 100 Apps atingido: nem começa ([identidades](identidades-e-apps.md)).
-- Pedido de senha ou 2FA (modo sudo): o componente não supõe em que etapa ele aparece; reconhece a tela em qualquer etapa da criação ou da instalação e passa o App para `aguardando_usuario`.
+- O link só funciona para o Dono; outro usuário logado vê "exige Dono" e nada vai ao GitHub.
+- Link vencido ou já usado: a página explica; o Dono gera outro no painel e o Grão-Mestre pode pedir de novo (`expirado` → `aguardando_criacao`). A classe segue com o App "Mestre".
+- `code` não trocado em 1 hora → `falhou`; o App pode ter sido criado sem a chave chegar ao Core: o Grão-Mestre manda ao Dono o link para excluí-lo, e o próximo pedido usa o nome seguinte.
+- `owner` diferente da conta do Dono (o navegador estava em outra conta do GitHub): o motor apaga a chave do cofre, não usa o App e avisa o Dono para excluí-lo naquela conta.
+- Nome já em uso: o próprio GitHub mostra o erro na página de criação; o Dono pode ajustar o nome ali (o motor usa o nome e o slug que a conversão devolver) ou pedir novo link, que já sai com `-2`, `-3`…
+- Limite de 100 Apps atingido: nem gera link ([identidades](identidades-e-apps.md#limite-de-100-apps)).
 - O endpoint de conversão tem limite de uso; em erro 403/429 o motor respeita `retry-after` dentro da janela de 1 hora.
-- Sessão do GitHub expirada no navegador: o [checklist](../plataforma/checklist.md) detecta e o Grão-Mestre avisa o Dono para entrar de novo.
-- Toda criação e instalação fica na auditoria (quem pediu, App, repositórios, caminho usado: navegador ou link).
+- Toda criação e instalação fica na auditoria (quem pediu, quem abriu o link, App, repositórios, horários).
 
 ## Critérios de aceite
 
-- **CA-GH-APPS-01** · *rápida* — **Dado** um ouvinte de callback aberto com `state` X, **quando** chega um callback com `state` Y, **então** ele recusa e não repassa o `code`.
+- **CA-GH-APPS-01** · *rápida* — **Dado** um pedido com `state` X, **quando** chega um callback com `state` Y, **então** o Core recusa e não troca o `code`.
 - **CA-GH-APPS-02** · *rápida* — **Dado** um `code` válido e o GitHub falso respondendo à conversão, **quando** o Core faz a troca, **então** o `pem` está no cofre, não aparece no banco nem nos logs, e o App fica `aguardando_instalacao`.
-- **CA-GH-APPS-03** · *rápida* — **Dado** um App `em_criacao` há 1 hora no relógio falso, **quando** o relógio avança, **então** o App vai para `falhou` e o Grão-Mestre recebe o aviso.
-- **CA-GH-APPS-04** · *rápida* — **Dado** o componente informando "pedido de 2FA", **quando** o motor processa, **então** o App vai para `aguardando_usuario` e sai para o Dono uma mensagem do Telegram com o link do painel.
-- **CA-GH-APPS-05** · *completa* — **Dado** um App `pronto` e um workspace novo, **quando** o motor instala o App no repositório novo, **então** usa o `PUT` da API com a credencial do Dono e não abre o navegador.
-- **CA-GH-APPS-06** · *pesada* — **Dado** uma classe nova com `--app novo`, **quando** o Grão-Mestre pede o App, **então** o App é criado e instalado pelo navegador dedicado nas páginas do GitHub (dublê), e a ação seguinte da classe sai com ele (MVP-5).
+- **CA-GH-APPS-03** · *rápida* — **Dado** um link enviado há 24 h no relógio falso, **quando** o relógio avança, **então** o App vai para `expirado`, o token do link deixa de valer e o Dono recebe o aviso com a opção de novo link.
+- **CA-GH-APPS-04** · *rápida* — **Dado** um Administrador logado, **quando** abre o link de criação, **então** recebe "exige Dono" e nenhum formulário é montado.
+- **CA-GH-APPS-05** · *completa* — **Dado** um App `pronto` e um workspace novo, **quando** o Dono tem a credencial pessoal, **então** o motor usa o `PUT` da API; **quando** não tem, **então** o Dono recebe o link da configuração da instalação e o motor conclui ao ver o repositório na instalação.
+- **CA-GH-APPS-06** · *pesada* — **Dado** uma classe nova com `--app novo`, **quando** o Grão-Mestre pede o App, **então** o link chega ao Dono pelo Telegram (dublê), o teste abre o link num navegador real, clica "Criar" e "Instalar" nas páginas do GitHub falso, e a ação seguinte da classe sai com o App novo (MVP-5).
+- **CA-GH-APPS-07** · *rápida* — **Dado** um retorno de instalação com `installation_id` que não é deste App, **quando** o motor confere com o JWT, **então** recusa e o App continua `aguardando_instalacao`.
+- **CA-GH-APPS-08** · *rápida* — **Dado** uma conversão que devolve `owner` diferente da conta do Dono, **quando** o motor confere, **então** a chave é apagada do cofre, o App não é usado e o Dono é avisado.
 
 ## Depende de
 
-- [Nó Windows](../arquitetura/no-windows.md)
-- [Protocolo](../conectividade/protocolo.md)
 - [Cofre](../plataforma/cofre.md)
 - [Identidades e Apps](identidades-e-apps.md)
+- [Login do painel](../painel/login.md)
 - [Bot do Telegram](../telegram/bot.md)
 - [CLI do Grão-Mestre](../cli/grao-mestre.md)
 
 ## Verificar na implementação
 
-Os três itens são conferidos na primeira criação real, a dos Apps fixos no [primeiro acesso](../operacao/primeiro-acesso.md), e no primeiro workspace com mais de um repositório; o resultado fica na auditoria e as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
+Os itens são conferidos na primeira criação real, a dos Apps fixos no [primeiro acesso](../operacao/primeiro-acesso.md), e no primeiro workspace com mais de um repositório; as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
 
-- **Verificar na implementação:** `redirect_url` com `http://localhost:<porta>` é aceito (a documentação não proíbe; o Probot usa). **Padrão:** o ouvinte local do processo da sessão, como no fluxo acima. **Se falhar:** o manifesto do navegador dedicado usa o callback do painel do Core (`https://<core>:<porta>/github/manifest/callback`), o mesmo da reserva pelo Telegram.
-- **Verificar na implementação:** o manifesto não tem campo para ligar o device flow. **Padrão:** logo depois de criar o App "Grão-Mestre", o componente marca "Enable Device Flow" na página de configuração do App. **Se falhar:** o Grão-Mestre manda ao Dono, pelo Telegram, o link dessa página para marcar a opção.
-- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal). **Padrão:** aceita, como no passo 3 da instalação. **Se falhar:** o motor usa sempre o navegador dedicado na página de configuração da instalação, e o link pelo Telegram como reserva.
+- **Verificar na implementação:** o GitHub aceita `redirect_url` e `setup_url` com o endereço do Core na rede local (nome `.local` ou IP, certificado da CA interna); a documentação não exige endereço público. **Padrão:** aceita, como acima. **Se falhar:** o manifesto usa `http://localhost/…`, a navegação de volta falha no aparelho, e a página do link pede ao Dono para colar no painel o endereço que o navegador mostrou (ele traz o `code` e o `state`), a tempo da janela de 1 hora.
+- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal). **Padrão:** aceita. **Se falhar:** repositório novo vai sempre pelo link da configuração da instalação.
 
 ## Fontes
 

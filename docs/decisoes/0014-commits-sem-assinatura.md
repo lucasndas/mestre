@@ -1,4 +1,4 @@
-# ADR 0014: Commits sem assinatura no MVP
+# ADR 0014: Commits sem assinatura
 
 > **Assunto:** por que os commits dos agentes saem com o autor do bot do App, mas sem assinatura · **Componente:** Core · **Atualizado:** 2026-10-12
 
@@ -44,9 +44,9 @@ Aceita, 2026-10-12.
 
 ## Decisão
 
-- **No MVP, commits locais sem assinatura.** O autor e o e-mail são os do **usuário bot do App** da classe (ou do App "Mestre", para o Mestre da mesa). O formato e a forma de obter o id do bot estão em [identidades e Apps](../github/identidades-e-apps.md).
+- **Commits locais sem assinatura.** O autor e o e-mail são os do **usuário bot do App** da classe (ou do App "Mestre", para o Mestre da mesa). O formato e a forma de obter o id do bot estão em [identidades e Apps](../github/identidades-e-apps.md).
 - **Ruleset que exige assinatura:** se um ruleset do repositório exigir commits assinados, o motor explica o motivo e o Grão-Mestre avisa os usuários. Nada é contornado ([ações por nível](../github/acoes-por-nivel.md)).
-- **Opção futura registrada:** recriar os commits pela Git Data API no envio, para saírem "Verified" (opção 3).
+- **Por que não a opção 3:** recriar os commits no envio troca os hashes entre o espelho, os worktrees e o GitHub ([ADR 0013](0013-sincronizacao-de-worktrees-por-git-bundle.md)) e multiplica as chamadas de API, em troca só do selo "Verified"; a autoria por classe já aparece sem ele.
 
 ## Consequências
 
@@ -56,9 +56,8 @@ Aceita, 2026-10-12.
   - A autoria por classe aparece no GitHub.
 - **Negativas:**
   - **Sem selo:** nenhum commit dos agentes aparece como "Verified".
-  - **Repositórios bloqueados:** repositórios com "exigir commits assinados" não aceitam os envios do Mestre até a opção futura ser implementada.
+  - **Repositórios bloqueados:** repositórios com "exigir commits assinados" não aceitam os envios do Mestre; o Dono decide se tira a regra daquele repositório.
   - **Formato do e-mail:** o formato do e-mail do bot pode mudar sem aviso, segundo uma resposta da equipe do GitHub. Isso quebraria a ligação do commit com o bot, embora o commit continue válido.
-  - **Custo de migrar:** adotar a opção 3 depois exige tratar a troca de hashes entre o espelho e os worktrees ([ADR 0013](0013-sincronizacao-de-worktrees-por-git-bundle.md)).
 - **Verificar na implementação:** se o e-mail `<id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot; padrão e plano B em [identidades e Apps](../github/identidades-e-apps.md#verificar-na-implementação). Se commits pela Contents API saem "Verified" não precisa ser verificado: o Mestre não usa a Contents API para commits.
 
 ## Fontes

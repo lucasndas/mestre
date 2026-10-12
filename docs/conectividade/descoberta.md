@@ -1,10 +1,10 @@
 # Descoberta do Core
 
-> **Assunto:** como o nó (motor e Guardião) encontra o Core na rede local sem configuração: broadcast UDP, mDNS via Avahi, cache e endereço configurado · **Componente:** Node · **Atualizado:** 2026-10-12
+> **Assunto:** como o nó (motor e Guardião) encontra o Core na rede local sem configuração: broadcast UDP, mDNS (Avahi no Linux, nativo no Windows), cache e endereço configurado · **Componente:** Node · **Atualizado:** 2026-10-12
 
 ## Objetivo
 
-O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem intervenção do usuário. No MVP tudo roda em rede local. Nós fora dela usam endereço configurado (Tailscale fica como opção futura, abaixo).
+O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem intervenção do usuário. Vale para Core e nós em Linux ou Windows. Um nó fora da rede local usa o endereço do Core configurado à mão (abaixo).
 
 ## Comportamento
 
@@ -48,16 +48,19 @@ O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem int
   - As mensagens têm menos de 512 bytes, e o Core responde a no máximo 10 pedidos por segundo.
   - Campos desconhecidos são ignorados. Com `v` diferente, o pedido é ignorado.
 
-### mDNS via Avahi
+### mDNS
 
-- **O que o Core publica,** pelo Avahi, com arquivos de serviço estáticos gravados na instalação:
+- **O que o Core publica:**
   - o nome `<host>.local`;
   - o serviço `_mestre._tcp`, na porta 7443;
   - o serviço `_mestre-guardiao._tcp`, na porta 7444;
   - TXT com `core_id=<id>` e `v=1`.
-- Como é o Avahi que publica, o anúncio continua mesmo com o motor do Core fora do ar. Isso ajuda a [recuperação](../autocura/camadas.md).
+- **Quem publica, por sistema:**
+  - Core Linux: o **Avahi**, com arquivos de serviço estáticos gravados na instalação;
+  - Core Windows: o **Guardião do Core**, pelo mDNS nativo do Windows (`DnsServiceRegister`; o próprio Windows já responde pelo nome `<host>.local`).
+- Nos dois casos, quem publica não é o motor: o anúncio continua com o motor do Core fora do ar. Isso ajuda a [recuperação](../autocura/camadas.md).
 - **No nó,** a biblioteca de mDNS do binário faz a consulta DNS-SD de `_mestre._tcp.local` e lê o TXT para saber o `core_id`.
-- O nó Windows precisa do perfil de rede "Privada" e das regras de firewall para broadcast e mDNS. O [checklist](../plataforma/checklist.md) confere isso.
+- Máquinas Windows (Core ou nó) precisam do perfil de rede "Privada" e das regras de firewall para broadcast e mDNS; o Core Linux, das regras do firewall dele. O [checklist](../plataforma/checklist.md) confere isso.
 
 ### Cache
 
@@ -65,14 +68,12 @@ O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem int
 - **Guardião do nó:** faz a mesma descoberta e mantém o próprio cache num arquivo pequeno, porque não usa o banco do motor ([Guardião](../autocura/guardiao.md)).
 - Cada conexão bem-sucedida atualiza o cache. Endereços sem sucesso há 30 dias (padrão) saem da lista.
 
-### Fora da rede local e Tailscale (opção futura)
+### Nó fora da rede local
 
-- No MVP não há Tailscale: tudo roda em rede local.
-- Para um nó fora da rede, a forma recomendada no futuro é pôr o Core e o nó numa rede privada Tailscale e configurar `core.endereco` com o nome MagicDNS do Core.
-  - Broadcast e mDNS não atravessam essa rede. Vale só o endereço configurado e o cache.
-  - A checagem de identidade dos nós continua a mesma.
-  - Para o navegador, o certificado do Core precisa incluir o nome Tailscale ([segurança](../arquitetura/seguranca.md)).
-- Nenhuma porta do Core é exposta diretamente na internet.
+- O nó usa o endereço do Core configurado à mão (`core.endereco`, nome ou IP e porta), informado no instalador ou na configuração do nó.
+- Broadcast e mDNS não atravessam redes; valem só o endereço configurado e o cache.
+- A checagem de identidade é a mesma. Para o navegador abrir o painel por esse endereço, o nome entra nos nomes extras do certificado do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
+- Nenhuma porta do Core é exposta diretamente na internet: o caminho até o Core é responsabilidade da rede do usuário.
 
 ## Regras e erros
 
@@ -88,6 +89,7 @@ O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem int
 - **CA-DESC-04** · *rápida* — **Dado** o broadcast bloqueado e um mDNS falso anunciando `_mestre._tcp`, **quando** o nó descobre, **então** conecta pelo endereço do mDNS.
 - **CA-DESC-05** · *rápida* — **Dado** o Core que mudou de IP, **quando** a conexão ao endereço em cache falha 3 vezes, **então** o nó redescobre, conecta e atualiza o cache (MVP-1).
 - **CA-DESC-06** · *completa* — **Dado** Core e nó reais na mesma máquina, sem endereço configurado e com cache vazio, **quando** o nó inicia, **então** acha o Core por broadcast e conecta.
+- **CA-DESC-07** · *completa* — **Dado** um Core Windows real com o serviço `mestre-core` parado e o Guardião ativo, **quando** outro processo consulta `_mestre._tcp.local`, **então** recebe o anúncio com o `core_id` no TXT.
 
 ## Depende de
 
@@ -95,3 +97,8 @@ O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem int
 - [Pareamento](pareamento.md)
 - [Checklist](../plataforma/checklist.md)
 - [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
+- [Windows](../arquitetura/windows.md)
+
+## Verificar na implementação
+
+- **Verificar na implementação:** `DnsServiceRegister`, chamado pelo Guardião (LocalSystem, sessão 0), anuncia `_mestre._tcp` e `_mestre-guardiao._tcp` na rede e mantém o anúncio enquanto o Guardião roda. **Padrão:** o mDNS nativo do Windows, como acima. **Se falhar:** o Guardião do Core publica com uma biblioteca Go de mDNS, escutando a porta 5353 em compartilhamento com o respondedor do Windows. **Onde:** CA-DESC-07 na suíte completa no Windows e instalação dos usos 3 e 4 na suíte pesada.

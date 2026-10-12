@@ -11,7 +11,7 @@ cmd/
   mestre/            main do binário mestre: só monta os subcomandos
   mestre-guardiao/   main do Guardião
 internal/
-  app/               montagem dos papéis: core, node, node session
+  app/               montagem dos papéis: core (com o nó local no Linux) e node
   cli/               comandos da CLI e saída
   hook/              despachante `mestre hook`
   providers/         adaptadores: claude, codex, antigravity, shell
@@ -25,7 +25,7 @@ internal/
   transport/         WSS, TLS, CA interna, mTLS
   discovery/ pairing/
   terminal/          PTY (creack/pty) e ConPTY (wrapper próprio), buffer circular
-  winsession/        serviço ↔ processo de sessão no Windows
+  winsvc/            partes só do Windows: serviço, conta do usuário, ACLs, DPAPI
   store/             SQLite e migrações (core/, node/)
   vault/             cofre
   logging/           slog + mascaramento de segredos

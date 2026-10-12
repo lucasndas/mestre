@@ -46,12 +46,12 @@ Um único programa que imita Claude Code, Codex e Antigravity. O provedor vem de
 
 - API REST em memória com o que o motor usa: issues e rótulos (inclusive `epico`), sub-issues (pelo `id`, como o real), comentários, PRs, revisões, merge, CI, rulesets, instalações e tokens de instalação (expiram em 1 hora pelo relógio), conversão de manifesto (código vale 1 hora), device flow, `GET /users/<slug>[bot]` e Releases (última release e download dos arquivos, para a [atualização automática](../plataforma/autoatualizacao.md)).
 - Fiel no que importa: `ETag` e `If-None-Match` devolvem 304 sem gastar cota; cabeçalhos de limite por instalação; cada ação registra o App que a fez; um App não aprova o PR que abriu; envio que altera `.github/workflows/` é recusado sem a permissão "Workflows".
-- Páginas mínimas de criação e instalação de App que redirecionam com o código, para testar o motor e o navegador dedicado no fluxo de [criação de Apps](../github/criacao-de-apps.md). A automação da tela real do GitHub não tem teste automatizado no escopo atual; se ela quebrar no uso, vale a reserva do link pelo Telegram.
+- Páginas mínimas de criação e instalação de App que recebem o formulário do manifesto, têm os botões "Create GitHub App" e "Install" e redirecionam com o `code` e com o `installation_id`, para testar o link de [criação de Apps](../github/criacao-de-apps.md) de ponta a ponta com um navegador real. As páginas reais do GitHub são usadas só pelo Dono, no próprio navegador; o Mestre não as automatiza.
 - Envio de branch: na completa, um repositório git local faz o papel do remoto; na rápida, a camada de envio é uma interface falsa.
 
 ### Telegram e GitHub na pesada
 
-- Os mesmos dublês rodam como servidores HTTP na VM Linux do [laboratório](testes.md#laboratório), com TLS pela CA de teste.
+- Os mesmos dublês rodam como servidores HTTP no hospedeiro do [laboratório](testes.md#laboratório), com TLS pela CA de teste, para servir aos quatro usos.
 - Binários compilados com a tag `full` (os que o laboratório instala) aceitam `MESTRE_TEST_TELEGRAM_URL` e `MESTRE_TEST_GITHUB_URL` para trocar a URL base das duas APIs. Binários de produção não contêm esse código.
 - O teste controla o lado do usuário (mensagens, cliques, revisões humanas) pelo mesmo controle da completa.
 
@@ -66,14 +66,13 @@ Um único programa que imita Claude Code, Codex e Antigravity. O provedor vem de
 
 - **PTY falso:** par de terminal em memória com a mesma interface do PTY real e uma tela virtual (para `mestre check`).
 - **whisper-server falso:** devolve o texto configurado, erro ou demora.
-- **Navegador dedicado falso:** devolve resultados prontos (sucesso, pedido de 2FA, tela mudou).
 
 ## Regras e erros
 
 - Dublês ficam em `internal/testkit/` ([layout do código](../desenvolvimento/convencoes.md)); código de produção não pode importá-lo (linter `depguard`).
 - Um dublê implementa só o que o Mestre usa. Rota, campo ou evento que ele não conhece faz o teste falhar com "não implementado no dublê: <rota>", nunca devolve sucesso vazio.
 - Gravações nunca contêm segredos: a captura mascara tokens e chaves, e um teste da rápida procura padrões de segredo em `testdata/recordings/` (tokens do GitHub, token de bot do Telegram, chaves PEM).
-- Provedores reais só na suíte pesada. Telegram e GitHub reais ficam fora de todas as suítes no escopo atual.
+- Provedores reais só na suíte pesada. Telegram e GitHub reais não entram em nenhuma suíte.
 
 ## Critérios de aceite
 

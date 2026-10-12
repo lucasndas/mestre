@@ -24,7 +24,7 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 
 - Depois que existe um usuário, o assistente não abre mais; a rota dele responde 404.
 - Código errado: 5 tentativas por endereço IP a cada 15 min (padrão).
-- Perdeu o código antes de usar: o subcomando local `mestre core setup-code`, só para root na máquina do Core, gera outro e invalida o anterior ([componentes](../arquitetura/componentes.md#mestre)).
+- Perdeu o código antes de usar: o subcomando local `mestre core setup-code`, só para root ou administrador na máquina do Core, gera outro e invalida o anterior ([componentes](../arquitetura/componentes.md#mestre)).
 
 ### Primeiro acesso de cada usuário
 

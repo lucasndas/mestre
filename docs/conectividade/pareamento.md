@@ -16,6 +16,7 @@ Deixar um nó novo entrar no sistema com um único passo do usuário (informar o
   - O Core guarda só o hash do código.
 - **Onde se usa:** na instalação do nó, o instalador pede o código. Também dá para usar `mestre node pair --invite <código> [--core <endereço>]`, por exemplo para repetir o pareamento ([componentes](../arquitetura/componentes.md#mestre)).
 - **Depois disso, nada é manual:** o nó acha o Core sozinho ([descoberta](descoberta.md), com `core_id` vazio) e completa o pareamento.
+- **Nó local do Core Windows:** a própria instalação do Core gera um convite interno e pareia o `mestre-node` local, em `127.0.0.1`, pelo mesmo fluxo; o usuário não vê código ([Windows](../arquitetura/windows.md#windows-como-core)). No Linux, o nó local roda dentro do motor do Core e não é pareado.
 
 ### Prova mútua no primeiro contato
 
@@ -46,7 +47,7 @@ sequenceDiagram
 
 - **Chaves no nó:** o nó gera **dois pares de chaves** ECDSA P-256 localmente, um para o motor e outro para o Guardião. As chaves privadas nunca saem da máquina.
   - Ficam em arquivos com acesso só para a conta do serviço dono e para o sistema: no Windows, em `%ProgramData%\Mestre\` com ACL; no Linux, `0600`.
-  - A chave do Guardião fica na pasta do Guardião ([nó Windows](../arquitetura/no-windows.md)).
+  - A chave do Guardião fica na pasta do Guardião ([Windows](../arquitetura/windows.md)).
 - **Certificados emitidos pela CA interna,** válidos por 1 ano (padrão):
   - motor do nó: SAN de URI `mestre://node/<node_id>`;
   - Guardião do nó: `mestre://guardian/<node_id>`;
@@ -97,6 +98,7 @@ sequenceDiagram
 - **CA-PAR-05** · *rápida* — **Dado** um nó revogado, **quando** o motor ou o Guardião dele conectam ao Core ou ao Guardião do Core, **então** o handshake é recusado.
 - **CA-PAR-06** · *rápida* — **Dado** um certificado com 2/3 da validade passados (relógio falso), **quando** o nó está conectado, **então** pede e instala um certificado novo sem cair.
 - **CA-PAR-07** · *completa* — **Dado** Core e nó reais na mesma máquina, **quando** o nó é pareado com um convite, **então** passa a conectar só por mTLS e reconecta depois de reiniciar.
+- **CA-PAR-09** · *completa* — **Dado** a instalação de um Core Windows, **quando** ela termina, **então** o `mestre-node` local está pareado, conectado por mTLS em `127.0.0.1:7443` e marcado como nó local, sem convite ativo sobrando.
 - **CA-PAR-08** · *pesada* — **Dado** Core instalado no Linux e Dono criado, **quando** instalo o nó no Windows e informo o convite, **então** o nó acha o Core sozinho na rede local, pareia e aparece online no painel com as capacidades dele (MVP-1).
 
 ## Depende de

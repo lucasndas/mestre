@@ -14,12 +14,12 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 |---|---|---|---|---|
 | **rápida** | `fast` | a cada alteração e no gancho de pré-commit | **30 s** | a grande maioria: unitários Go, unitários e de componente do painel (Vitest), [verificação de docs](verificacao-de-docs.md). Sem rede real, sem disco lento, sem processos externos |
 | **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Core e nó reais na mesma máquina, banco temporário, agente falso como processo num PTY real |
-| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 12 critérios do MVP, testes de falha da autocura e [conformidade com os provedores reais](../provedores/conformidade.md), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
+| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 13 critérios do MVP, testes de falha da autocura e [conformidade com os provedores reais](../provedores/conformidade.md), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
 
 ### Como as suítes são selecionadas
 
 - **Go:** por *build tags*. Teste sem tag é da rápida. Integração usa `//go:build full` em arquivos `*_full_test.go`; ponta a ponta e falhas usam `//go:build heavy` em `*_heavy_test.go`. A completa compila com `-tags full`; a pesada com `-tags full,heavy`. Testes que dependem do Windows (ConPTY, serviço) somam `&& windows`.
-- **Painel:** Vitest. A rápida roda `vitest run` (unitários e componentes com DOM simulado e servidor WebSocket falso). A pesada usa navegador real com Playwright (proposta) para o que o MVP-11 exige.
+- **Painel:** Vitest. A rápida roda `vitest run` (unitários e componentes com DOM simulado e servidor WebSocket falso). A pesada usa navegador real com Playwright (proposta) para o que o MVP-5 (link de criação de App) e o MVP-11 exigem.
 - **Onde rodam:** rápida na máquina de quem desenvolve; completa no CI do GitHub em Linux e em Windows, em paralelo, cada um com o seu orçamento; pesada no laboratório (abaixo).
 
 ### Executor `testrun`
@@ -59,7 +59,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 | MVP-2 | `TestMVP02_SelfHealing` (+ testes de falha abaixo) | systemd, serviço Windows, Guardiões, painel (Telegram falso) |
 | MVP-3 | `TestMVP03_SessionZero` | clone de terceiro sem o Mestre (GitHub falso) |
 | MVP-4 | `TestMVP04_EpicToResult` | três provedores reais, Core e nó Windows, duas mesas em paralelo |
-| MVP-5 | `TestMVP05_GitHubIdentities` | navegador dedicado, criação de App (GitHub falso, com as páginas de criação e instalação) |
+| MVP-5 | `TestMVP05_GitHubIdentities` | link de criação de App aberto num navegador real (Playwright), contra as páginas de criação e instalação do GitHub falso |
 | MVP-6 | `TestMVP06_ClassPermissions` | três provedores reais |
 | MVP-7 | `TestMVP07_ApprovalPolicy` | painel, provedores reais (Telegram e GitHub falsos) |
 | MVP-8 | `TestMVP08_PermanentDecree` | provedores reais (Telegram falso) |
@@ -67,27 +67,31 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 | MVP-10 | `TestMVP10_AudioAndAttachments` | whisper-server com modelo real (Telegram falso) |
 | MVP-11 | `TestMVP11_PanelOverview` | navegador real (Playwright) |
 | MVP-12 | `TestMVP12_RestartRestoresState` | reinício real do Core e dos nós |
+| MVP-13 | `TestMVP13_FourUses` | instaladores reais nos quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows), cada um montado do zero |
 
-**Testes de falha da autocura** (`TestChaos_*`): matar o motor, travar o processo, encher o disco, derrubar a rede e falhar uma atualização, no Core e no nó. O comportamento esperado está em [camadas.md](../autocura/camadas.md); os critérios desses testes citam `(MVP-2)`, e os de conformidade citam `(MVP-6)`.
+**Onde roda cada teste:** instalação (MVP-1 e MVP-13) e os testes de falha da autocura (MVP-2) rodam nos **quatro usos**; os demais testes de ponta a ponta rodam **uma vez, no uso Linux + Windows** ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
+
+**Testes de falha da autocura** (`TestChaos_*`): matar o motor, travar o processo, encher o disco, derrubar a rede e falhar uma atualização, em cada máquina dos quatro usos, inclusive o [modo máquina única](../autocura/camadas.md#modo-máquina-única). O comportamento esperado está em [camadas.md](../autocura/camadas.md); os critérios desses testes citam `(MVP-2)`, e os de conformidade citam `(MVP-6)`.
 
 ### Escopo da pesada: Telegram e GitHub
 
-- **Decisão (escopo atual):** a pesada usa máquinas reais e os CLIs reais dos provedores, mas Telegram e GitHub continuam **falsos**: os dublês de [dubles.md](dubles.md), com os formatos gravados. Vale para todos os testes de ponta a ponta, inclusive MVP-5, 7, 8, 9 e 10.
+- **Decisão:** a pesada usa máquinas reais e os CLIs reais dos provedores, e Telegram e GitHub **falsos**: os dublês de [dubles.md](dubles.md), com os formatos gravados. Vale para todos os testes de ponta a ponta, inclusive MVP-5, 7, 8, 9 e 10.
 - Por quê: o lado do usuário do Telegram não é automatizável pela Bot API (um bot não fala com outro bot), e o MVP-5 criaria Apps reais a cada noite, contra o limite de 100 por conta.
-- Testes contra Telegram e GitHub reais ficam **fora do escopo atual**. O comportamento real do GitHub que os docs marcam como **Verificar na implementação** é conferido à mão na [sessão zero](../sessao-zero/workspace.md), e as respostas reais conferidas viram gravações dos dublês.
-- Na pesada, os dublês do Telegram e do GitHub rodam como servidores HTTP na VM Linux, e o Core instalado aponta para eles ([como](dubles.md#telegram-e-github-na-pesada)).
+- Nenhuma suíte usa Telegram ou GitHub reais. O comportamento real do GitHub que os docs marcam como **Verificar na implementação** é conferido à mão na [sessão zero](../sessao-zero/workspace.md), e as respostas reais conferidas viram gravações dos dublês.
+- Na pesada, os dublês do Telegram e do GitHub rodam como servidores HTTP no hospedeiro do laboratório, e o Core instalado aponta para eles ([como](dubles.md#telegram-e-github-na-pesada)).
 
 ### Laboratório
 
-- **Duas VMs dedicadas**, separadas das máquinas de uso: Core numa VM Ubuntu LTS e nó numa VM Windows 11 ou superior, na mesma rede local, com as contas de teste dos provedores já logadas.
-- **Disparo:** toda noite por um timer do systemd na VM Linux (`mestre-heavy.timer`, que roda `testrun heavy`), e sob demanda por quem desenvolve, rodando o mesmo comando na VM Linux. O resultado e o tempo de cada execução ficam guardados para a comparação com a mediana (passo 5 do executor).
+- **Duas VMs dedicadas**, separadas das máquinas de uso: uma Ubuntu LTS e uma Windows 11 ou superior, na mesma rede local, com as contas de teste dos provedores já logadas, num hospedeiro Linux.
+- **Os quatro usos** saem dessas duas VMs, restauradas de um retrato limpo a cada uso: só Linux (VM Ubuntu sozinha), Linux + Windows (Core na Ubuntu), Windows + Linux (Core na Windows) e só Windows (VM Windows sozinha).
+- **Disparo:** toda noite por um timer do systemd no hospedeiro (`mestre-heavy.timer`, que roda `testrun heavy` e restaura as VMs), e sob demanda por quem desenvolve, rodando o mesmo comando no hospedeiro. O resultado e o tempo de cada execução ficam guardados para a comparação com a mediana (passo 5 do executor).
 
 ## Regras e erros
 
 - **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint) recusa `time.Sleep`, `time.Now`, `time.After`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc` e `time.Since` fora do pacote do relógio. No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
 - **Rápida sem processos e sem rede:** com `MESTRE_TEST_SUITE=fast`, a camada única que inicia processos e a que abre conexões recusam com erro claro ("processo externo na suíte rápida: use o PTY falso"). Teste que precisa disso é da completa.
 - **Paralelo e isolado:** todo teste Go chama `t.Parallel()` (linter `paralleltest`). Cada teste usa `t.TempDir()` para pastas e banco SQLite próprios, porta `127.0.0.1:0` quando houver rede real, e nenhum estado global. `t.Setenv` e `t.Chdir` não combinam com `t.Parallel()`: passe a configuração por parâmetro.
-- **Um comportamento, um teste, no nível mais baixo possível.** Nada de testar a mesma regra em unitário, integração e ponta a ponta. Ponta a ponta só para os critérios MVP-1..12; a [verificação de docs](verificacao-de-docs.md) recusa critério *pesada* que não cite um MVP.
+- **Um comportamento, um teste, no nível mais baixo possível.** Nada de testar a mesma regra em unitário, integração e ponta a ponta. Ponta a ponta só para os critérios MVP-1..13; a [verificação de docs](verificacao-de-docs.md) recusa critério *pesada* que não cite um MVP.
 - **Rastreabilidade:** o teste que cobre um critério de aceite traz o identificador num comentário logo acima (ex.: `// CA-MESAS-03`), para ser achado com `grep`.
 - **Sem nova tentativa:** o executor nunca roda de novo um teste que falhou; Vitest com `retry: 0`; o CI não tem "rerun" automático. Instável vai para a quarentena.
 - Orçamento estourado não é resolvido aumentando o orçamento: muda-se o teste de suíte, ou ele é acelerado.

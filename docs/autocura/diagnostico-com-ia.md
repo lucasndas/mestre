@@ -10,7 +10,7 @@ Quando o runbook não resolve, usar um agente de IA na própria máquina com pro
 
 ### Quando roda
 
-- Automaticamente, quando a camada 3 esgota as tentativas ([camadas](camadas.md)).
+- Automaticamente, quando a camada 3 esgota as tentativas ou, no [modo máquina única](camadas.md#modo-máquina-única), quando o runbook do próprio Guardião do Core se esgota.
 - A pedido de um Dono ou Administrador (painel, [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md)), em incidente aberto.
 - No máximo **2 execuções do agente por incidente** (padrão). Depois disso, só camada 5.
 
@@ -28,7 +28,7 @@ Quando o runbook não resolve, usar um agente de IA na própria máquina com pro
    - saída de `status`, `checklist` e o histórico de ações do incidente.
 2. Inicia o agente **em modo não interativo**, com a pasta temporária como pasta de trabalho, como a conta dos agentes (nunca root ou LocalSystem):
    - Linux: troca para a conta dos agentes ([componentes](../arquitetura/componentes.md#serviços-e-contas-padrão));
-   - Windows: dispara a tarefa agendada `\Mestre\Diagnostico`, registrada na instalação para rodar como o usuário, conectado ou não ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md#windows)).
+   - Windows (Core ou nó): dispara a tarefa agendada `\Mestre\Diagnostico`, registrada na instalação para rodar como o usuário, conectado ou não; por que ela continua: [Windows](../arquitetura/windows.md#tarefa-mestrediagnostico).
 3. Restrições nativas de só leitura, por provedor:
 
    | Provedor | Restrição proposta |
@@ -99,7 +99,7 @@ Cada etapa gera registro: início do agente (ficha, provedor, versão), proposta
 ## Verificar na implementação
 
 - **Verificar na implementação:** as restrições de só leitura da tabela impedem, em cada CLI no modo não interativo, que o agente escreva ou rode comandos. **Padrão:** a tabela acima. **Se falhar:** aquele provedor não faz diagnóstico naquele nó; o Guardião usa outro provedor que passou e, sem nenhum, o incidente segue sem diagnóstico com IA para a camada seguinte ([camadas](camadas.md)). **Onde:** etapa 11 do [teste de conformidade](../provedores/conformidade.md).
-- **Verificar na implementação:** no Windows, o Guardião (LocalSystem) dispara a tarefa `\Mestre\Diagnostico`, que roda como o usuário mesmo deslogado, com a senha guardada pelo Agendador de Tarefas. **Padrão:** funciona. **Se falhar:** o diagnóstico com IA num nó Windows só roda com o usuário logado; deslogado, o incidente segue sem ele para a camada seguinte, com aviso. **Onde:** suíte pesada, num teste de falha da autocura na VM Windows sem usuário logado.
+- **Verificar na implementação:** no Windows, o Guardião (LocalSystem) dispara a tarefa `\Mestre\Diagnostico`, que roda como o usuário mesmo deslogado, com a senha guardada pelo Agendador de Tarefas. **Padrão:** funciona. **Se falhar:** o diagnóstico com IA não é oferecido nas máquinas Windows; o incidente segue sem ele para a camada 5, com o motivo, e a ficha de diagnóstico dessas máquinas fica bloqueada no painel com a explicação. **Onde:** suíte pesada, nos testes de falha da autocura com a VM Windows como Core e como nó, sem usuário logado.
 
 ## Fontes
 

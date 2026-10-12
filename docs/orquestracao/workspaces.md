@@ -26,7 +26,7 @@ Pastas padrão no Core (`<dados>` é a pasta de dados do serviço, ver [persist�
 
 | Caminho | O que é |
 |---|---|
-| `<dados>/workspaces/<slug>/espelho.git` | **espelho**: clone sem área de trabalho (`--bare`) do repositório, fonte de todas as cópias |
+| `<dados>/workspaces/<slug>/espelho.git` | **espelho**: clone sem cópia de trabalho (`--bare`) do repositório, fonte de todas as cópias |
 | `<dados>/workspaces/<slug>/principal/` | **clone principal**: worktree do espelho na branch principal; pasta de trabalho do Grão-Mestre e fonte de `.mestre/` |
 | `<dados>/workspaces/<slug>/mesas/<mesa>/` | worktrees das mesas no Core ([mesas.md](mesas.md)) |
 

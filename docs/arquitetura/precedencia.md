@@ -22,7 +22,7 @@ Fora da ordem, valendo sempre:
 ## Invariantes arquiteturais
 
 Decretos valem acima das regras do Mestre sobre **o que** é permitido. Um pequeno conjunto de invariantes, porém, não é uma "regra" que se libera: é **ausência de capacidade** do agente, embutida no binário:
-- agentes nunca recebem credenciais nem acesso ao cofre ([cofre](../plataforma/cofre.md));
+- agentes nunca recebem credenciais nem acesso ao cofre ([cofre](../plataforma/cofre.md)), e nunca rodam com a conta do sistema dona do cofre, no Linux e no Windows ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes));
 - ações no GitHub, inclusive `git push` e mudança de remotos, são sempre executadas pelo motor ([ADR 0005](../decisoes/0005-motor-executa-github-grao-mestre-porteiro.md));
 - agentes não editam os arquivos de hooks e de configuração do Mestre nem iniciam CLIs de agente pelo shell (personagens nascem só pelo motor, de fichas e bases);
 - agentes não mexem no trabalho de outras mesas nem na edição em andamento de outro personagem.

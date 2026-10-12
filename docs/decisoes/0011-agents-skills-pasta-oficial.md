@@ -28,7 +28,7 @@ Aceita, 2026-10-12.
      - A cópia precisa ser mantida em sincronia.
 2. **Link simbólico `.claude/skills/<nome>` → `.agents/skills/<nome>`.**
    - Prós: sem duplicação, e é suportado pela documentação do Claude Code.
-   - Contras: no Windows exige permissão especial, e o nó Windows roda agentes.
+   - Contras: no Windows exige permissão especial, e máquinas Windows rodam agentes.
 3. **`.claude/skills/` como fonte, copiando para `.agents/skills/`.**
    - Prós: o Claude Code lê a fonte direto.
    - Contras: a fonte fica na pasta de um único provedor, ao contrário do padrão que dois dos três já usam.
@@ -57,7 +57,7 @@ Aceita, 2026-10-12.
   - **Ocultas no git:** as duas pastas precisam ficar fora do git quando não forem versionadas (via `.git/info/exclude`), em todos os worktrees de todos os nós.
   - **Worktrees novos:** como o Claude Code procura skills só até a raiz do worktree, cada mesa nova precisa da cópia materializada ([ADR 0004](0004-mesa-igual-worktree.md)).
   - **Recarregar:** uma pasta de skills que não existia quando o agente iniciou pode exigir recarga (`/reload-skills` no Claude Code, `/skills reload` no Antigravity). O motor deve gerar as skills **antes** de iniciar o personagem.
-- **Antigravity e `.claude/skills/`:** não está documentado que ele leia essa pasta, e o Mestre não depende disso nem verifica: o Antigravity recebe as skills por `.agents/skills/`. Se um dia ele ler as duas, vê a mesma skill duas vezes com o mesmo conteúdo, sem efeito nas permissões.
+- **Antigravity e `.claude/skills/`:** não está documentado que ele leia essa pasta, e o Mestre não depende disso nem verifica: o Antigravity recebe as skills por `.agents/skills/`. Se ele ler as duas, vê a mesma skill duas vezes com o mesmo conteúdo, sem efeito nas permissões.
 
 ## Fontes
 

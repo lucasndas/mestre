@@ -44,7 +44,7 @@ Aceita, 2026-10-12.
 
 ## Decisão
 
-- **Apps fixos:** dois, **"Grão-Mestre"** e **"Mestre"**, criados na instalação do Mestre ([criação de Apps](../github/criacao-de-apps.md)).
+- **Apps fixos:** dois, **"Grão-Mestre"** e **"Mestre"**, criados pelo Dono no primeiro acesso, pelo link de criação preparado pelo Grão-Mestre ([criação de Apps](../github/criacao-de-apps.md)).
 - **Quem usa qual:**
   - A mesa abre o PR com o App "Mestre" (ou o da classe que pediu).
   - O Grão-Mestre aprova com o App "Grão-Mestre".

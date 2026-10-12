@@ -52,8 +52,8 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 
 ### Registro e capacidades
 
-- **O que vai no `hello`:** `node_id` e nome; `os` e `arch`; `gui`, `gpu` e `transcricao` (booleanos); ferramentas com versão (ex.: `claude`, `codex`, `agy`, `git`, `ffmpeg`); perfis de conta do nó; terminais que já estão rodando.
-- **Mudanças depois do `hello`:** vão em `node.capabilities`. Exemplo: no Windows, `gui` só é verdadeiro enquanto o processo na sessão do usuário está ativo ([nó Windows](../arquitetura/no-windows.md)).
+- **O que vai no `hello`:** `node_id` e nome; `os` e `arch`; `local` (verdadeiro para o nó local do Core); `gpu` e `transcricao` (booleanos); ferramentas com versão (ex.: `claude`, `codex`, `agy`, `git`, `ffmpeg`); perfis de conta do nó; terminais que já estão rodando.
+- **Mudanças depois do `hello`:** vão em `node.capabilities`. Exemplo: `transcricao` passa a falso quando o modelo Whisper falha na verificação ([instalação e versões](../plataforma/instalacao-e-atualizacao.md#whisper)).
 - **Uso:** o Core escolhe o nó de cada personagem por essas capacidades ([personagens](../orquestracao/personagens.md)).
 
 ### Ack e idempotência
@@ -88,7 +88,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 | `node.heartbeat` | N→C | não | sinal de vida e carga |
 | `node.capabilities` | N→C | sim | capacidades mudaram |
 | `ack` / `error` | ambos | — | confirmação e erro |
-| `terminal.open` | C→N | sim | abrir terminal com a base já resolvida (comando, argumentos, pasta, ambiente, `gui`, tamanho). Resultado: `terminal.opened` (PID) ou `error` |
+| `terminal.open` | C→N | sim | abrir terminal com a base já resolvida (comando, argumentos, pasta, ambiente, tamanho). Resultado: `terminal.opened` (PID) ou `error` |
 | `terminal.input` | C→N | sim | digitar texto ou entrada crua |
 | `terminal.resize` | C→N | não | mudar colunas e linhas |
 | `terminal.close` | C→N | sim | encerrar (`graceful` ou `kill`) |

@@ -24,8 +24,8 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 | Codex | eventos `token_count` no JSONL da sessão | tokens e janelas de limite; **sem custo** | [Codex](../provedores/codex.md) |
 | Antigravity | `agy -p "/usage" --output-format json`, por perfil de conta | fração restante das janelas semanal e de 5 h; não gasta cota | [Antigravity](../provedores/antigravity.md) |
 
-- No Antigravity, o `/usage` roda a cada 10 min (padrão) para cada perfil de conta com personagem ativo. Tokens por turno no modo interativo não são lidos no MVP; valem tempo ativo e turnos ([Antigravity](../provedores/antigravity.md)).
-- Claude Code sem statusLine (pasta sem confiança): vale o monitoramento reduzido do [adaptador](../provedores/adaptador.md#monitoramento-reduzido). O MVP não recebe as métricas OpenTelemetry (`claude_code.cost.usage`, `claude_code.token.usage`); um coletor local fica como opção futura.
+- No Antigravity, o `/usage` roda a cada 10 min (padrão) para cada perfil de conta com personagem ativo. Tokens por turno no modo interativo não são lidos; valem tempo ativo e turnos ([Antigravity](../provedores/antigravity.md)).
+- Claude Code sem statusLine (pasta sem confiança): vale o monitoramento reduzido do [adaptador](../provedores/adaptador.md#monitoramento-reduzido).
 
 ### Limites
 
@@ -92,5 +92,5 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 
 - Claude Code, dados do statusLine e custos: https://code.claude.com/docs/en/statusline#available-data , https://code.claude.com/docs/en/monitoring-usage
 - Claude Code, limites de uso: https://code.claude.com/docs/en/errors#usage-limits
-- Codex, configuração e OTel: https://learn.chatgpt.com/docs/config-file/config-reference
+- Codex, configuração: https://learn.chatgpt.com/docs/config-file/config-reference
 - Antigravity, `/usage`: https://antigravity.google/docs/cli/commands/usage

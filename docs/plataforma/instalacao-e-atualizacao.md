@@ -1,6 +1,6 @@
 # Instalação e versões
 
-> **Assunto:** visão técnica da instalação no Ubuntu e no Windows, pastas de versões, versão anterior guardada, volta de versão, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** visão técnica da instalação no Ubuntu e no Windows, como Core ou como nó, pastas de versões, versão anterior guardada, volta de versão, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-12
 
 ## Objetivo
 
@@ -12,12 +12,12 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 
 | Plataforma | Artefato | O que faz |
 |---|---|---|
-| Ubuntu (LTS atual) | `mestre_<versão>_amd64.deb`, mais um `install.sh` que baixa o `.deb` das [Releases](https://github.com/lucasndas/mestre/releases), confere o SHA-256 e roda `apt install` | coloca os binários em `/usr/lib/mestre/pacote/` e chama `mestre install core` |
-| Windows 11 ou superior | instalador `mestre-<versão>-x64.msi` (MSI gerado com WiX v4), elevado | copia os binários e chama `mestre install node` |
+| Ubuntu (LTS atual) | `mestre_<versão>_amd64.deb` (depende de `ffmpeg` e `avahi-daemon`), mais um `install.sh` que baixa o `.deb` das [Releases](https://github.com/lucasndas/mestre/releases), confere o SHA-256 e roda `apt install` | coloca os binários em `/usr/lib/mestre/pacote/`, pergunta o papel e chama `mestre install core` ou `mestre install node` |
+| Windows 11 ou superior | instalador `mestre-<versão>-x64.msi` (MSI gerado com WiX v4), elevado, com o `ffmpeg.exe` numa versão fixada | copia os binários, pergunta o papel e chama `mestre install core` ou `mestre install node` |
 
+- **Papel da máquina:** os dois instaladores perguntam primeiro: **"Core"** (o servidor principal, que já inclui o nó local) ou **"nó"** (pareia com um Core existente). Os quatro usos saem dessa escolha em cada máquina ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)); no `install.sh`, também por `--papel core|no`.
 - A lógica toda fica nos subcomandos `mestre install core|node` ([componentes](../arquitetura/componentes.md#binários)); o pacote e o instalador são finos.
-- **Sem assinatura de código no MVP:** o MSI e os `.exe` saem sem assinatura Authenticode. O SHA-256 de cada artefato é publicado na Release, e o guia de [instalação](../operacao/instalar.md) explica o aviso do SmartScreen. As atualizações seguintes usam o manifesto assinado da [atualização automática](autoatualizacao.md).
-- Depois da instalação, as versões novas chegam pela [atualização automática](autoatualizacao.md), fora do `dpkg` e do instalador.
+- **Sem assinatura de código Authenticode:** o MSI e os `.exe` são publicados sem ela. O SHA-256 de cada artefato é publicado na Release, e o guia de [instalação](../operacao/instalar.md) explica o aviso do SmartScreen. As versões seguintes chegam pelo manifesto assinado da [atualização automática](autoatualizacao.md), fora do `dpkg` e do instalador.
 
 ### Pastas de versões
 
@@ -33,39 +33,55 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 - Ficam no disco só a versão atual e a anterior; a mais velha é apagada depois que a nova é confirmada.
 - Dados, configuração e logs ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos), fora das pastas de versões.
 
-### Instalação do Core (`mestre install core`)
+### Core no Linux (`mestre install core`)
 
 1. Registra a versão do Ubuntu (o [checklist](checklist.md) acompanha).
 2. Cria as contas `mestre` e `mestre-agente` e as pastas de dados com dono e permissão ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
 3. Gera a chave do [cofre](cofre.md#chave-do-cofre) e cria o banco ([persistência](../arquitetura/persistencia.md)).
 4. Cria a CA interna e o certificado do servidor ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)); a chave da CA vai para o cofre.
-5. Instala as unidades systemd `mestre-core`, `mestre-guardiao` e o ajudante de troca `mestre-update` ([atualização automática](autoatualizacao.md)), com as opções de reinício de [camadas](../autocura/camadas.md#valores-padrão).
+5. Instala as unidades systemd `mestre-core`, `mestre-guardiao` e o ajudante de troca `mestre-update` ([atualização automática](autoatualizacao.md)), com as opções de reinício de [camadas](../autocura/camadas.md#valores-padrão), e os arquivos de serviço do Avahi ([descoberta](../conectividade/descoberta.md#mdns)).
 6. Se o `ufw` estiver ativo, libera as portas do Core ([portas](../arquitetura/componentes.md#portas)).
 7. Baixa e prepara o Whisper (abaixo).
 8. Inicia os serviços e mostra no terminal o endereço do painel, a impressão da CA (para conferir no navegador) e o **código de configuração** do assistente do Dono ([login](../painel/login.md#assistente-do-dono-primeira-vez)).
 9. Orienta guardar uma cópia da chave do cofre fora do servidor.
 
-Os Apps fixos "Grão-Mestre" e "Mestre" são criados depois, no primeiro acesso pelo painel ([criação de Apps](../github/criacao-de-apps.md)).
+### Core no Windows (`mestre install core`, elevado)
 
-### Windows
+1. Registra a versão do Windows e pede a senha da conta do usuário, validada com `LogonUser` ([Windows](../arquitetura/windows.md#conta-do-usuário-fazer-logon-como)).
+2. Registra o serviço `mestre-core` com a conta virtual `NT SERVICE\MestreCore` e cria as pastas de dados com as ACLs de [persistência](../arquitetura/persistencia.md#arquivos).
+3. Gera a chave do [cofre](cofre.md#chave-do-cofre) (DPAPI de máquina, ACL só da conta virtual), cria o banco, a CA interna e o certificado do servidor.
+4. Registra o `mestre-node` local com a conta do usuário e o pareia sozinho com o Core ([pareamento](../conectividade/pareamento.md#convite)).
+5. Registra `mestre-guardiao` (LocalSystem), o ajudante `mestre-update` (sob demanda) e a tarefa `\Mestre\Diagnostico` (como no nó Windows, abaixo), com a recuperação de [camadas](../autocura/camadas.md#valores-padrão).
+6. Cria as regras de firewall das portas do Core, só no perfil Privado ([portas](../arquitetura/componentes.md#portas)).
+7. Baixa e prepara o Whisper (abaixo); o `ffmpeg.exe` já vem no instalador.
+8. Inicia os serviços, mostra o endereço do painel, a impressão da CA e o código de configuração, e orienta a cópia da chave do cofre por `mestre core export-key`.
 
-`mestre install node` (elevado):
+Nos dois sistemas, os Apps fixos "Grão-Mestre" e "Mestre" nascem no primeiro acesso, pelo link de criação ([criação de Apps](../github/criacao-de-apps.md)).
+
+### Nó no Windows (`mestre install node`, elevado)
 
 1. Encontra o Core pela [descoberta](../conectividade/descoberta.md) ou pelo endereço informado, e faz o [pareamento](../conectividade/pareamento.md) com o código de convite.
-2. Pede a senha da conta do usuário e configura o serviço `mestre-node` com "Fazer logon como" ([nó Windows](../arquitetura/no-windows.md)).
+2. Pede a senha da conta do usuário e configura o serviço `mestre-node` com "Fazer logon como" ([Windows](../arquitetura/windows.md#conta-do-usuário-fazer-logon-como)).
 3. Registra os serviços `mestre-node` e `mestre-guardiao` (início automático, recuperação de [camadas](../autocura/camadas.md#valores-padrão)) e o ajudante `mestre-update` (sob demanda).
-4. Cria a tarefa agendada **`\Mestre\Sessao`**: gatilho no logon do usuário dono do serviço, ação `mestre node session`, só com o usuário logado, privilégios normais, sem limite de tempo, reiniciar em falha ([nó Windows](../arquitetura/no-windows.md)).
-5. Cria a tarefa agendada **`\Mestre\Diagnostico`**: roda como o usuário, conectado ou não, sem gatilho (disparada pelo Guardião) ([diagnóstico com IA](../autocura/diagnostico-com-ia.md)). Usa a mesma senha do passo 2, pedida uma vez só; quem a guarda é o Agendador de Tarefas, e o Mestre não a grava. Refazer a configuração da conta (checklist WIN-06) refaz as duas.
-6. Cria as regras de firewall da descoberta e da [página reserva](../autocura/pagina-reserva.md), só no perfil Privado.
-7. Cria as pastas de dados com ACL ([persistência](../arquitetura/persistencia.md#arquivos)), inicia os serviços, roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
+4. Cria a tarefa agendada **`\Mestre\Diagnostico`**: roda como o usuário, conectado ou não, sem gatilho (disparada pelo Guardião) ([Windows](../arquitetura/windows.md#tarefa-mestrediagnostico)). Usa a mesma senha do passo 2, pedida uma vez só; quem a guarda é o Agendador de Tarefas, e o Mestre não a grava. Refazer a configuração da conta (checklist WIN-06) refaz as duas.
+5. Cria as regras de firewall da descoberta e da [página reserva](../autocura/pagina-reserva.md), só no perfil Privado.
+6. Cria as pastas de dados com ACL ([persistência](../arquitetura/persistencia.md#arquivos)), inicia os serviços, roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
 
-Nas atualizações, as tarefas são preservadas e o processo da sessão é reiniciado depois do motor novo.
+### Nó no Linux (`mestre install node`)
+
+1. Registra a versão do Ubuntu; encontra o Core e faz o pareamento, como no Windows.
+2. Cria as contas `mestre` e `mestre-agente` e as pastas de dados ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
+3. Instala as unidades systemd `mestre-node`, `mestre-guardiao` e `mestre-update`, com as opções de [camadas](../autocura/camadas.md#valores-padrão).
+4. Se o `ufw` estiver ativo, libera a porta da página reserva só para a rede local.
+5. Inicia os serviços e roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
+
+Nas atualizações, a tarefa `\Mestre\Diagnostico` e as regras de firewall são preservadas.
 
 ### Whisper
 
-- O motor do nó de transcrição (no MVP, o Core) baixa o `whisper-server` e os modelos `large-v3-turbo` q5_0 e q8_0 ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)). O `whisper-server` é compilado pelo próprio Mestre (whisper.cpp numa versão fixada) e publicado nas Releases do Mestre, sem depender do que o projeto whisper.cpp publica. Endereços e SHA-256 de cada arquivo vêm fixos na versão do Mestre; arquivo com hash diferente é apagado e baixado de novo (3 tentativas).
+- O motor do nó de transcrição (padrão: o Core) baixa o `whisper-server` (Linux ou Windows) e os modelos `large-v3-turbo` q5_0 e q8_0 ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)). O `whisper-server` é compilado pelo próprio Mestre (whisper.cpp numa versão fixada) e publicado nas Releases do Mestre, sem depender do que o projeto whisper.cpp publica. Endereços e SHA-256 de cada arquivo vêm fixos na versão do Mestre; arquivo com hash diferente é apagado e baixado de novo (3 tentativas).
 - **Benchmark:** transcreve um áudio de teste embutido (30 s, em português) com cada quantização, usando tantas threads quanto os núcleos físicos. Fica com **q8_0 se levar até 0,3 do tempo do áudio** (padrão); senão, q5_0. O outro modelo é apagado e a escolha fica na configuração.
-- Arquivos em `/var/lib/mestre/whisper/`. Falhou → o nó anuncia `transcricao` falso e o checklist acusa ([anexos e transcrição](../telegram/anexos-e-transcricao.md)).
+- Arquivos na pasta `whisper` de [persistência](../arquitetura/persistencia.md#arquivos). Falhou → o nó anuncia `transcricao` falso e o checklist acusa ([anexos e transcrição](../telegram/anexos-e-transcricao.md)).
 
 ### Versão de protocolo
 
@@ -79,7 +95,7 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 
 ### Remoção (`mestre uninstall`)
 
-Para e remove serviços, unidades, tarefas agendadas, regras de firewall criadas pela instalação e as pastas de versões. No Windows, apaga também o perfil do navegador dedicado, com a sessão do GitHub, sempre (mesmo sem pedido para apagar os dados). Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
+Para e remove serviços, unidades, a tarefa agendada, regras de firewall criadas pela instalação e as pastas de versões. Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
 
 ## Regras e erros
 
@@ -91,18 +107,20 @@ Para e remove serviços, unidades, tarefas agendadas, regras de firewall criadas
 ## Critérios de aceite
 
 - **CA-INST-01** · *pesada* — **Dado** um Ubuntu e um Windows 11 limpos, **quando** instalo o Core, crio o Dono e instalo o nó, **então** o nó encontra o Core na rede local, pareia e aparece conectado no painel (MVP-1).
+- **CA-INST-07** · *pesada* — **Dado** máquinas limpas, **quando** instalo cada um dos quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows), escolhendo o papel no instalador, **então** em cada um o painel abre, o Dono é criado, o nó local e os nós remotos aparecem conectados, e um personagem de teste roda em cada máquina (MVP-13).
 - **CA-INST-02** · *rápida* — **Dado** as versões 1.2.0 (atual) e 1.1.0 (anterior) num sistema de arquivos falso, **quando** roda a volta só de binário, **então** `atual` aponta para 1.1.0 e nenhum arquivo do banco muda.
 - **CA-INST-03** · *rápida* — **Dado** um modelo baixado com SHA-256 diferente, **quando** a instalação confere, **então** apaga e baixa de novo, até 3 vezes, e depois marca `transcricao` falso.
 - **CA-INST-04** · *rápida* — **Dado** o benchmark com q8_0 a 0,25 do tempo do áudio, **quando** termina, **então** fica q8_0 e o modelo q5_0 é apagado.
 - **CA-INST-05** · *completa* — **Dado** uma máquina já instalada, **quando** `mestre install node` roda de novo, **então** nenhum serviço, tarefa ou regra fica duplicado.
-- **CA-INST-06** · *completa* — **Dado** a instalação do nó concluída, **quando** listo as tarefas agendadas, **então** `\Mestre\Sessao` e `\Mestre\Diagnostico` existem com as opções acima; depois de `mestre uninstall`, não existem.
+- **CA-INST-06** · *completa* — **Dado** a instalação concluída numa máquina Windows (Core ou nó), **quando** listo as tarefas agendadas, **então** só `\Mestre\Diagnostico` existe, com as opções acima; depois de `mestre uninstall`, não existe.
+- **CA-INST-08** · *completa* — **Dado** a instalação do Core Windows concluída, **quando** listo os serviços, **então** `mestre-core` roda como `NT SERVICE\MestreCore` e `mestre-node` com a conta do usuário, e os terminais do nó local nascem com a conta do usuário.
 
 ## Depende de
 
 - [Componentes](../arquitetura/componentes.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Segurança](../arquitetura/seguranca.md)
-- [Nó Windows](../arquitetura/no-windows.md)
+- [Windows](../arquitetura/windows.md)
 - [Cofre](cofre.md)
 - [Pareamento](../conectividade/pareamento.md)
 - [Descoberta](../conectividade/descoberta.md)

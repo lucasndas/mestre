@@ -11,8 +11,8 @@ Aceita, 2026-10-12.
 O Mestre tem serviços que ficam ligados o tempo todo em duas plataformas, e a linguagem precisa atender a todos estes requisitos ao mesmo tempo:
 
 - **Terminais:** cada agente roda num PTY no Linux e num ConPTY no Windows.
-- **Windows:** o nó é um serviço do Windows. Ele roda com a conta do usuário e conta com um processo na sessão do usuário, iniciado por tarefa agendada no logon (`\Mestre\Sessao`), que cria os ConPTY dos agentes com interface gráfica e o navegador dedicado. O desenho está em [nó Windows](../arquitetura/no-windows.md).
-- **Linux:** o Core é um serviço do systemd com watchdog (`Type=notify`, `WatchdogSec=`). A camada 1 da autocura depende disso ([camadas](../autocura/camadas.md)).
+- **Windows:** Core e nó são serviços do Windows, sem interface gráfica; o serviço que roda os agentes usa a conta do usuário e cria os ConPTY dentro dele. O desenho está em [Windows](../arquitetura/windows.md).
+- **Linux:** Core e nó são serviços do systemd com watchdog (`Type=notify`, `WatchdogSec=`). A camada 1 da autocura depende disso ([camadas](../autocura/camadas.md)).
 - **Conexões:** WSS com TLS e CA interna, com mTLS entre nó e Core ([protocolo](../conectividade/protocolo.md), [segurança](../arquitetura/seguranca.md)).
 - **Banco:** SQLite em modo WAL em cada nó ([persistência](../arquitetura/persistencia.md)).
 - **Entrega:** um binário por componente e plataforma, fácil de instalar, atualizar e voltar de versão. O Guardião é separado e quase nunca muda ([ADR 0003](0003-autocura-com-guardiao-sem-ssh.md)).
@@ -25,8 +25,8 @@ Comparação feita com as versões disponíveis em outubro de 2026.
 | Requisito | Go | Rust | TypeScript / Bun |
 |---|---|---|---|
 | PTY no Linux | `creack/pty`, padrão de fato | `portable-pty` 0.9.0 (do WezTerm) | `Bun.Terminal` (openpty) ou `node-pty` |
-| ConPTY no Windows | `golang.org/x/sys/windows` (v0.49) tem `CreatePseudoConsole`, `ResizePseudoConsole` e `NewProcThreadAttributeList`. `creack/pty` não suporta Windows (`ErrUnsupported`), então o wrapper é próprio, tendo como modelos `aymanbagabas/go-pty` e `UserExistsError/conpty` (o Tailscale também mantém o seu) | backend ConPTY do `portable-pty`, o mais testado dos três (WezTerm) | `Bun.Terminal` no Windows com ressalvas documentadas: sem termios, sequências de escape recodificadas, `\r` não traduzido, sem SIGWINCH fora do modo raw, `close()` pode não matar o filho antes do Windows 11 24H2 |
-| Processo na sessão do usuário (tarefa agendada + ConPTY, ver [nó Windows](../arquitetura/no-windows.md)) | APIs nativas em `x/sys/windows`: notificações de sessão do serviço, `CreatePseudoConsole`, lista de atributos; a tarefa é disparada por `schtasks` | crate `windows` tem tudo; o spawn com ConPTY é próprio (mesmo trabalho que em Go) | só por FFI (`bun:ffi`/koffi) para kernel32: possível, mas frágil |
+| ConPTY no Windows | `golang.org/x/sys/windows` (v0.49) tem `CreatePseudoConsole`, `ResizePseudoConsole` e `NewProcThreadAttributeList`. `creack/pty` não suporta Windows (`ErrUnsupported`), então o wrapper é próprio, tendo como modelos `aymanbagabas/go-pty` e `UserExistsError/conpty` | backend ConPTY do `portable-pty`, o mais testado dos três (WezTerm) | `Bun.Terminal` no Windows com ressalvas documentadas: sem termios, sequências de escape recodificadas, `\r` não traduzido, sem SIGWINCH fora do modo raw, `close()` pode não matar o filho antes do Windows 11 24H2 |
+| ConPTY dentro de serviço com conta de usuário, ACLs, DPAPI e mDNS nativo (ver [Windows](../arquitetura/windows.md)) | APIs nativas em `x/sys/windows`: `CreatePseudoConsole`, lista de atributos, `CreateEnvironmentBlock`, segurança de arquivos, `CryptProtectData`; `DnsServiceRegister` pela DLL do sistema | crate `windows` tem tudo; o spawn com ConPTY é próprio (mesmo trabalho que em Go) | só por FFI (`bun:ffi`/koffi) para kernel32: possível, mas frágil |
 | Serviço do Windows | `kardianos/service` v1.3.0 (jul/2026) ou `x/sys/windows/svc` | `windows-service` 0.8.1 (Mullvad, mai/2026) | nada nativo; exige um wrapper (WinSW, NSSM, shawl), o que quebra o binário único |
 | systemd + watchdog | `coreos/go-systemd/v22/daemon` v22.7.0 (`SdNotify`, `SdWatchdogEnabled`) | `sd-notify` 0.5.0 | sem socket datagrama AF_UNIX; teria de chamar `systemd-notify` com `NotifyAccess=all` |
 | WebSocket, TLS e CA interna | `coder/websocket` + `crypto/tls` e `crypto/x509` da biblioteca padrão (emite certificados, mTLS) | `tokio-tungstenite` ou `axum` + `rustls` + `rcgen` | `Bun.serve` com TLS + ws; `node:tls` |
@@ -87,13 +87,12 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço e de token continuam as
   - O `synctest` não cobre E/S real de rede e disco. Nesses pontos usamos transporte e PTY falsos ([dublês](../qualidade/dubles.md)).
   - SQLite em Go puro é mais lento. Isso é irrelevante no volume de um orquestrador. A versão de `modernc.org/libc` fica fixada.
   - O repositório tem duas linguagens (Go e TypeScript). Os tipos compartilhados do protocolo são gerados a partir do Go ou de JSON Schema ([convenções](../desenvolvimento/convencoes.md)).
-- **Quando revisar:** se for preciso Whisper dentro do processo, memória mínima no Guardião ou se o time passar a dominar Rust. O Bun só volta a ser opção para os serviços depois de algumas versões estáveis do runtime reescrito e de uma solução para serviço do Windows.
-- **Verificar na implementação:** ConPTY criado dentro de um serviço que roda com a conta do usuário, na sessão 0, para os agentes sem GUI, num Windows 11 real antes de fechar o wrapper. Padrão e plano B: [nó Windows](../arquitetura/no-windows.md#verificar-na-implementação).
+- **Verificar na implementação:** ConPTY criado dentro de um serviço que roda com a conta do usuário, na sessão 0, num Windows 11 real antes de fechar o wrapper. Padrão e plano B: [Windows](../arquitetura/windows.md#verificar-na-implementação).
 
 ## Fontes
 
 - creack/pty (sem Windows): https://github.com/creack/pty , https://raw.githubusercontent.com/creack/pty/master/start_windows.go
-- ConPTY em Go: https://github.com/aymanbagabas/go-pty , https://pkg.go.dev/github.com/UserExistsError/conpty , https://pkg.go.dev/tailscale.com/util/winutil/conpty , https://pkg.go.dev/github.com/charmbracelet/x/conpty
+- ConPTY em Go: https://github.com/aymanbagabas/go-pty , https://pkg.go.dev/github.com/UserExistsError/conpty , https://pkg.go.dev/github.com/charmbracelet/x/conpty
 - x/sys/windows: https://pkg.go.dev/golang.org/x/sys/windows
 - Sessão ConPTY (Microsoft): https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session
 - kardianos/service: https://pkg.go.dev/github.com/kardianos/service ; go-systemd: https://pkg.go.dev/github.com/coreos/go-systemd/v22/daemon

@@ -46,7 +46,7 @@ flowchart TD
 ```
 
 1. **Detectar:**
-   - **Disponível:** o motor do Core consulta a versão mais nova a cada 6 h (padrão). Codex: Releases de `openai/codex`, a mesma fonte que o próprio CLI usa. Claude: dist-tag `latest` do pacote npm `@anthropic-ai/claude-code`. `agy`: não há fonte pública conhecida, então no MVP só vale a detecção de versão instalada por fora (abaixo).
+   - **Disponível:** o motor do Core consulta a versão mais nova a cada 6 h (padrão). Codex: Releases de `openai/codex`, a mesma fonte que o próprio CLI usa. Claude: dist-tag `latest` do pacote npm `@anthropic-ai/claude-code`. `agy`: não há fonte pública conhecida, então vale só a detecção de versão instalada por fora (abaixo).
    - **Instalada por fora:** o [checklist](../plataforma/checklist.md) ou o `hello` do nó mostram uma versão diferente da registrada. Exemplo: alguém rodou `claude update`.
 2. **Instalar:**
    - um nó por vez, com a conta que roda os agentes daquele nó;

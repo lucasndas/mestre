@@ -14,7 +14,7 @@ Um usuário Dono ou Administrador cria o workspace no painel ([administracao](..
 ```mermaid
 flowchart TD
   A[Painel: repositório + fichas] --> B{Apps fixos instalados no repo?}
-  B -- não --> C[Grão-Mestre de outro workspace ou assistente instala]
+  B -- não --> C[API com a credencial do Dono ou link de instalação ao Dono]
   C --> B
   B -- sim --> D[Clona o espelho com o App Grão-Mestre]
   D --> E[Cria o clone principal e .mestre/]
@@ -23,8 +23,8 @@ flowchart TD
   G --> H[Grão-Mestre: análise, AGENTS.md, versionar?, teste de aprovação]
 ```
 
-1. **Apps fixos:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, o workspace fica `aguardando Apps`: o Grão-Mestre de outro workspace acrescenta o repositório à instalação pela API ou, se for a primeira instalação, o assistente pede o navegador ([criacao-de-apps](../github/criacao-de-apps.md), [identidades-e-apps](../github/identidades-e-apps.md)).
-2. **Espelho:** o motor clona o repositório sem área de trabalho na pasta de dados do Core (padrão `workspaces/<slug>/espelho.git`; [persistencia](../arquitetura/persistencia.md)), com um token de instalação do App "Grão-Mestre". Daí sai o **clone principal** (padrão `workspaces/<slug>/principal/`), onde o Grão-Mestre trabalha. Como mesas e nós usam o espelho: [mesas](../orquestracao/mesas.md).
+1. **Apps fixos:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, o workspace fica `aguardando Apps`: o motor acrescenta o repositório à instalação pela API, com a credencial pessoal do Dono, ou o Dono recebe o link para instalar (primeira instalação) ou marcar o repositório na instalação ([criacao-de-apps](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas), [identidades-e-apps](../github/identidades-e-apps.md)).
+2. **Espelho:** o motor clona o repositório sem cópia de trabalho (`--bare`) na pasta de dados do Core (padrão `workspaces/<slug>/espelho.git`; [persistencia](../arquitetura/persistencia.md)), com um token de instalação do App "Grão-Mestre". Daí sai o **clone principal** (padrão `workspaces/<slug>/principal/`), onde o Grão-Mestre trabalha. Como mesas e nós usam o espelho: [mesas](../orquestracao/mesas.md).
 3. **`.mestre/` e arquivos gerados:** o motor cria a estrutura abaixo (sem apagar nada que já exista) e gera, no clone principal, os mesmos arquivos que gera em cada worktree de mesa ([mesa](mesa.md)). Até o usuário responder à pergunta de versionamento, `.mestre/` fica só local.
 4. **Grão-Mestre:** o motor inicia o Grão-Mestre (fixo e protegido) e o workspace passa a `pronto`; já é possível abrir mesas. Os passos seguintes correm em paralelo, conduzidos pelo Grão-Mestre como itens da sessão zero, cada um visível no painel como pendente ou feito.
 

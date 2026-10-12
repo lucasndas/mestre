@@ -76,11 +76,11 @@ Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos
 | `search` | `Glob`, `Grep` | — | `list_dir`, `find_by_name`, `grep_search` |
 | `web` | `WebFetch`, `WebSearch` | (busca hospedada não dispara hook) | `search_web`, `read_url_content`, `browser_*` |
 | `subagent` | `Agent` | — | `invoke_subagent`, `define_subagent`, `send_message`, `manage_subagents` |
-| `mcp` | `mcp__<servidor>__<ferramenta>` | `mcp__…` | — |
+| `mcp` | `mcp__<servidor>__<ferramenta>` | `mcp__…` | o nome visto no hook ([verificar](#verificar-na-implementação)) |
 | `internal` | `TodoWrite` | `update_plan` | `manage_task`, `ask_question`, `list_permissions`, `ask_permission` |
 | `other` | qualquer nome não mapeado | idem | `generate_image`, `schedule`, não mapeados |
 
-O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
+Ferramentas `mcp` (inclusive as de navegador que o agente usa para navegar na web; o Mestre não fornece navegador) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
 
 ### `mestre hook` (despachante)
 
@@ -141,7 +141,7 @@ Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela 
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** nomes dos campos de caminho nos argumentos do Antigravity e nome da ferramenta de shell do Codex e do Claude no Windows. **Padrão:** o mapa usa os nomes vistos nos payloads gravados (no Antigravity, `CommandLine` e `Cwd` já são conhecidos). **Se falhar:** campo ou ferramenta fora do mapa vira tipo `other`, decidido pelo padrão da classe (regra acima), e o reforço nativo segue valendo. **Onde:** etapas 4 a 6 do [teste de conformidade](conformidade.md), que gravam os payloads.
+- **Verificar na implementação:** nomes dos campos de caminho nos argumentos do Antigravity, nome da ferramenta de shell do Codex e do Claude no Windows, e o nome com que o Antigravity entrega ferramentas MCP ao hook. **Padrão:** o mapa usa os nomes vistos nos payloads gravados (no Antigravity, `CommandLine` e `Cwd` já são conhecidos). **Se falhar:** campo ou ferramenta fora do mapa vira tipo `other`, decidido pelo padrão da classe (regra acima), e o reforço nativo segue valendo. **Onde:** etapas 4 a 6 do [teste de conformidade](conformidade.md), que gravam os payloads.
 
 ## Fontes
 

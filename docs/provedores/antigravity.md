@@ -78,7 +78,7 @@ No `settings.json` do perfil: `toolPermission` fica em `request-review` (nunca `
 - `agy -p "/usage" --output-format json`, com o `HOME` do perfil: `command.data.groups[].buckets[]` com `id`, `window` (`weekly` ou `5h`), `remaining_fraction` e `reset_time`. Não chama modelo nem gasta tokens. O motor roda no fim de cada turno (no máximo uma vez por minuto por perfil, padrão) e a cada 10 minutos com personagem ativo. Uso da janela = 1 − `remaining_fraction`.
 - Há um limite semanal e um de 5 horas por grupo de modelos (Gemini; Claude e GPT), consumidos conforme o custo dos tokens.
 - Desde a 1.3.3, cota esgotada é avisada na hora: o turno termina com Stop `terminationReason = error`, e o personagem fica "aguardando cota" ([limites](../plataforma/limites-de-uso.md)). O adaptador não depende do texto do erro: Stop com `error` seguido de `/usage` com `remaining_fraction` 0 numa janela basta.
-- Tokens por turno no modo interativo não são lidos no MVP (nem da linha de status nem do `transcript_full.jsonl`): o uso vem do `/usage`, com tempo ativo e turnos.
+- Tokens por turno no modo interativo não são lidos (nem da linha de status nem do `transcript_full.jsonl`): o uso vem do `/usage`, com tempo ativo e turnos.
 
 ### Telas que o PTY precisa tratar
 

@@ -20,7 +20,7 @@
 | Nó roubado ou comprometido | credencial revogável no painel (derruba as conexões na hora); segredos do GitHub e do cofre nunca vão para o nó, exceto as cópias do Guardião | [pareamento](../conectividade/pareamento.md), [cofre](../plataforma/cofre.md) |
 | Agente manipulado por conteúdo (issue, anexo, código) | nenhum agente tem credencial; permissões por classe no `mestre hook` + reforço nativo; anexos nunca são executados; ações destrutivas só a pedido explícito de usuário | [permissões](../classes/permissoes.md), [anexos e transcrição](../telegram/anexos-e-transcricao.md), [convenções da CLI](../cli/convencoes.md) |
 | Agente se passa por outro (`MESTRE_AGENT_ID` falso) | o motor confere o processo chamador (abaixo) | [convenções da CLI](../cli/convencoes.md) |
-| Agente lê segredos ou o banco no disco | Linux: contas separadas para motor e agentes; Windows: regras fixas do Mestre no hook (risco residual, abaixo) | [precedência](precedencia.md) |
+| Agente lê segredos ou o banco no disco | o agente nunca roda com a conta dona do cofre, nos dois sistemas; no nó Windows, regras fixas do Mestre no hook (risco residual, abaixo) | abaixo, [precedência](precedencia.md) |
 | Agente gasta sem controle | limites por missão, mesa, workspace e dia | [limites de uso](../plataforma/limites-de-uso.md) |
 | Usuário age acima do seu nível | níveis por workspace; ninguém revoga decreto de nível acima | [usuários e níveis](../telegram/usuarios-e-niveis.md), [decretos](../telegram/decretos.md) |
 | Cura vira acesso remoto | sem SSH, lista fechada de ações; script de diagnóstico mostrado inteiro e aprovado por Dono ou Administrador, executado uma vez | [Guardião](../autocura/guardiao.md), [diagnóstico com IA](../autocura/diagnostico-com-ia.md) |
@@ -36,7 +36,7 @@ Todo tráfego é TLS 1.3, inclusive na rede local ([ADR 0002](../decisoes/0002-w
 | Certificado | Emitido por | Chave | Validade | Nomes (SAN) |
 |---|---|---|---|---|
 | CA interna | a si mesma, na instalação do Core | ECDSA P-256, no cofre | 10 anos | — |
-| Servidor do Core (portas 7443 e 7444) | CA interna | ECDSA P-256 | 1 ano | nome da máquina, nome `.local`, IPs da rede local (e nome Tailscale, se configurado) |
+| Servidor do Core (portas 7443, 7444 e, no modo máquina única, 7446) | CA interna | ECDSA P-256 | 1 ano | nome da máquina, nome `.local`, IPs da rede local e os nomes extras configurados no Core |
 | Página reserva de cada nó | CA interna, no pareamento | ECDSA P-256 | 1 ano | nome do nó, nome `.local`, IPs da rede local |
 | Cliente do motor de cada nó (mTLS) | CA interna, no pareamento | ECDSA P-256, só no nó | 1 ano | identificador do nó + papel `motor` |
 | Cliente do Guardião de cada nó (mTLS) | CA interna, no pareamento | ECDSA P-256, só no nó | 1 ano | identificador do nó + papel `guardiao` |
@@ -50,14 +50,17 @@ Todo tráfego é TLS 1.3, inclusive na rede local ([ADR 0002](../decisoes/0002-w
 ## Identidade de quem chama a CLI
 
 O `MESTRE_AGENT_ID` está no ambiente de cada agente, mas qualquer processo pode definir essa variável. Por isso o motor confere o chamador:
-- Linux: PID do socket por `SO_PEERCRED`; Windows: `GetNamedPipeClientProcessId`.
+- Linux: PID do socket por `SO_PEERCRED`; Windows: `GetNamedPipeClientProcessId` (no Core Windows, quem confere é o `mestre-node`, que roda os agentes).
 - O motor sobe a árvore de processos do chamador até achar o processo raiz de um terminal registrado. Esse terminal tem de ser do personagem do `MESTRE_AGENT_ID` informado; senão, a chamada é recusada e registrada na auditoria.
 - Chamadas encaminhadas entre nós carregam a identidade já verificada pelo motor de origem, autenticado por mTLS.
 
 ## Contas do sistema e isolamento dos agentes
 
-- **Core (Linux):** o motor roda como `mestre`; os agentes, como `mestre-agente` (o motor tem só `CAP_SETUID` e `CAP_SETGID` para iniciar os terminais com essa conta). Banco, cofre, configuração e logs ficam com dono `mestre`, modo 0700/0600. Worktrees e perfis de conta ficam no grupo `mestre-agente`. O Guardião roda como root ([componentes](componentes.md)).
-- **Nó Windows:** motor e agentes usam a mesma conta do usuário ([nó Windows](no-windows.md)). Um agente, em tese, consegue ler os arquivos do nó, inclusive a chave de cliente. **Risco residual aceito:** a regra fixa do Mestre proíbe aos agentes ler ou escrever as pastas de dados do Mestre, e o `mestre hook` e o reforço nativo a aplicam. Se a credencial vazar, ela não dá acesso ao cofre e pode ser revogada.
+**Princípio, nos dois sistemas: nenhum agente roda com a conta dona do cofre.** Quem guarda cofre, banco e configuração do Core é uma conta que nenhum terminal usa.
+
+- **Linux (Core e nó):** o motor roda como `mestre`; os agentes, como `mestre-agente` (o motor tem só `CAP_SETUID` e `CAP_SETGID` para iniciar os terminais com essa conta). Banco, cofre, configuração e logs ficam com dono `mestre`, modo 0700/0600. Workspaces e perfis de conta ficam no grupo `mestre-agente`. O Guardião roda como root ([componentes](componentes.md#serviços-e-contas-padrão)).
+- **Core Windows:** o `mestre-core` roda na conta virtual `NT SERVICE\MestreCore`, dona do cofre (DPAPI de máquina + ACL só para ela, [cofre](../plataforma/cofre.md#chave-do-cofre)), do banco, do espelho e do painel; os agentes rodam no `mestre-node`, com a conta do usuário, que só tem acesso aos workspaces e aos perfis de conta ([Windows](windows.md#windows-como-core)). O Guardião roda como LocalSystem.
+- **Nó Windows:** não há cofre. Motor e agentes usam a mesma conta do usuário ([Windows](windows.md)). Um agente, em tese, consegue ler os arquivos do nó, inclusive a chave de cliente. **Risco residual aceito:** a regra fixa do Mestre proíbe aos agentes ler ou escrever as pastas de dados do Mestre, e o `mestre hook` e o reforço nativo a aplicam. Se a credencial vazar, ela não dá acesso ao cofre e pode ser revogada.
 
 ## Mascaramento em logs
 
@@ -79,5 +82,5 @@ Aplicado a tudo o que vai para log (motor, Guardião, histórico de terminais, a
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** `claude`, `codex` e `agy` funcionam como `mestre-agente` (conta de sistema sem login) com os perfis de conta em `/var/lib/mestre/contas/`. **Padrão:** funcionam, com `HOME` e as variáveis de conta de cada provedor apontando para o perfil. **Se falhar:** a instalação dá a `mestre-agente` uma pasta pessoal própria em `/var/lib/mestre/agente/` e o perfil de conta continua pelas variáveis do provedor; se o CLI ainda falhar, aquele provedor não é oferecido no Core (só nos nós) e o checklist explica. **Onde:** [conformidade](../provedores/conformidade.md) no Core, na instalação e na suíte pesada.
+- **Verificar na implementação:** `claude`, `codex` e `agy` funcionam como `mestre-agente` (conta de sistema sem login) com os perfis de conta em `/var/lib/mestre/contas/`. **Padrão:** funcionam, com `HOME` e as variáveis de conta de cada provedor apontando para o perfil. **Se falhar:** a instalação dá a `mestre-agente` uma pasta pessoal própria em `/var/lib/mestre/agente/` e o perfil de conta continua pelas variáveis do provedor; se o CLI ainda falhar, aquele provedor não é oferecido naquela máquina Linux e o checklist explica (ALL-10). **Onde:** [conformidade](../provedores/conformidade.md) em cada máquina Linux (Core ou nó), na instalação e na suíte pesada.
 - **Verificar na implementação:** a subida pela árvore de processos acha o terminal mesmo quando o provedor roda comandos por shell intermediário (`sh -c`, `cmd /c` no Antigravity) ou por processo que troca de pai. **Padrão:** a subida pela árvore, como acima. **Se falhar:** cada terminal passa a rodar num grupo que não depende do pai (um cgroup por terminal no Linux, um Job Object no Windows), e a verificação passa a ser "o chamador pertence ao grupo do terminal". **Onde:** conformidade de cada provedor (o agente chama a CLI pela ferramenta de shell) no Linux e no Windows.

@@ -46,7 +46,7 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 
 ### Skills por personagem
 - Claude Code: o motor passa `--add-dir .mestre/agents/<id>`; o Claude carrega o `.claude/skills/` dessa pasta.
-- Codex e Antigravity: sem canal por personagem no MVP. A skill de nível vai para a pasta compartilhada do worktree onde está o personagem que a usa (só o Mestre da mesa no worktree da mesa; só o Grão-Mestre no clone principal); quem mais a vê não ganha permissão nenhuma, porque o motor confere o nível em toda chamada ([convencoes](../cli/convencoes.md)).
+- Codex e Antigravity: sem canal por personagem. A skill de nível vai para a pasta compartilhada do worktree onde está o personagem que a usa (só o Mestre da mesa no worktree da mesa; só o Grão-Mestre no clone principal); quem mais a vê não ganha permissão nenhuma, porque o motor confere o nível em toda chamada ([convencoes](../cli/convencoes.md)).
 
 ### Variáveis de ambiente
 | Variável | Valor | Dono do assunto |

@@ -2,18 +2,18 @@
 
 > **Assunto:** objetivo do Mestre, público, princípios e como as peças se relacionam · **Componente:** Projeto · **Atualizado:** 2026-10-12
 
-## Objetivo
+## Para que serve
 
 O **Mestre** é um orquestrador de agentes de IA (Claude Code, Codex, Antigravity CLI ou um shell comum) que trabalham juntos em repositórios do GitHub. É inspirado no Maestri (themaestri.app), com duas diferenças centrais:
 
-- **Distribuído:** um **Core** (servidor Linux) e vários **nós** (o primeiro é um PC Windows). Os agentes rodam onde houver a capacidade de que precisam, e conversam entre si de forma transparente, estejam no mesmo nó ou não.
+- **Distribuído:** um **Core** e vários **nós**, cada um em Linux ou Windows; também roda numa máquina só, de qualquer dos dois sistemas ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). Os agentes rodam onde houver a capacidade de que precisam, e conversam entre si de forma transparente, estejam no mesmo nó ou não.
 - **Autocura:** cada máquina tem um **Guardião** que vigia e conserta o motor local, sem SSH ([ADR 0003](../decisoes/0003-autocura-com-guardiao-sem-ssh.md)).
 
 O usuário pede uma funcionalidade em linguagem natural (pelo Telegram ou pelo painel) e o Mestre transforma o pedido em trabalho de um time de agentes, até o PR aprovado e integrado no GitHub.
 
 ## Público
 
-- **Dono:** quem instala o Mestre (o Lucas). Desenvolve sozinho ou com poucas pessoas, tem um servidor Linux sempre ligado e um PC Windows.
+- **Dono:** quem instala o Mestre (o Lucas). Desenvolve sozinho ou com poucas pessoas; o Lucas tem um servidor Linux sempre ligado e um PC Windows, e quem tem uma máquina só também usa.
 - **Usuários autorizados pelo Dono:** conversam com o Grão-Mestre, aprovam pedidos ou só acompanham, conforme o nível ([usuários e níveis](../telegram/usuarios-e-niveis.md)).
 - **Agentes de IA:** são "usuários" da CLI `mestre` e da documentação gerada para eles ([skills geradas](../cli/skills-geradas.md)).
 
@@ -72,6 +72,6 @@ flowchart LR
 
 ### Onde cada coisa roda
 
-O Core roda o Grão-Mestre, guarda o estado e serve o painel; os nós rodam agentes (inclusive os que precisam de interface gráfica, no Windows); o Guardião de cada máquina cuida do motor local. Detalhes em [componentes](../arquitetura/componentes.md).
+O Core roda o Grão-Mestre, guarda o estado e serve o painel; os nós rodam agentes, todos de terminal, sem interface gráfica; o Guardião de cada máquina cuida do motor local. Detalhes em [componentes](../arquitetura/componentes.md).
 
-O que entra no MVP e o que fica de fora: [escopo do MVP](escopo-mvp.md).
+O que é o MVP e os critérios globais: [escopo do MVP](escopo-mvp.md).

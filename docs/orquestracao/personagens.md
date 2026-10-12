@@ -25,7 +25,7 @@ O personagem nasce já conectado a quem o criou e ao Mestre da mesa ([conexões]
 
 ### Escolha do nó
 
-1. **Candidatos:** nós conectados com heartbeat em dia que: estão entre os sistemas/nós permitidos pela base; anunciam todas as capacidades exigidas pela base e pela ficha (ex.: `gui: true`); têm o perfil de conta da ficha; e não atingiram o limite de personagens.
+1. **Candidatos:** nós conectados com heartbeat em dia que: estão entre os sistemas/nós permitidos pela base; anunciam todas as capacidades exigidas pela base e pela ficha (ex.: `gpu: true`); têm o perfil de conta da ficha; e não atingiram o limite de personagens.
 2. Com `--node`, só esse nó é considerado.
 3. Ordem de preferência: nó preferido da ficha → nó onde a mesa já tem worktree (o Core primeiro) → nó com menos personagens ativos → ordem alfabética do id.
 4. Sem candidato: a criação falha com uma explicação que lista cada nó e o primeiro requisito não atendido (ex.: "windows-pc: perfil de conta `claude-trabalho` não existe").
@@ -124,7 +124,7 @@ Tabela no banco do Core (cópia dos terminais locais no banco de cada nó, ver [
 
 ## Critérios de aceite
 
-- **CA-PERS-01** · *rápida* — **Dado** um nó Linux sem GUI e um Windows com `gui: true`, **quando** se recruta com ficha que exige `gui: true`, **então** vai para o Windows; **quando** o Windows está desconectado, **então** a criação falha listando o motivo de cada nó.
+- **CA-PERS-01** · *rápida* — **Dado** um nó Linux sem GPU e um Windows com `gpu: true`, **quando** se recruta com ficha que exige `gpu: true`, **então** vai para o Windows; **quando** o Windows está desconectado, **então** a criação falha listando o motivo de cada nó.
 - **CA-PERS-02** · *rápida* — **Dado** limite por mesa 2 atingido, **quando** uma etapa pede personagem, **então** fica `aguardando vaga`; **quando** é `recruit` direto, **então** falha na hora; em nenhum caso alguém é encerrado.
 - **CA-PERS-03** · *rápida* — **Dado** um personagem `busy`, **quando** recebe `dismiss`, **então** o encerramento fica agendado e só ocorre após `done` e `idle`, com resumo gravado no pergaminho da missão.
 - **CA-PERS-04** · *rápida* — **Dado** relógio falso e persistente com ociosidade 120 min, **quando** fica 119 min `idle` e 30 min `waiting`, **então** não é encerrado; **quando** completa 120 min `idle` contínuos, **então** é.

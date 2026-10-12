@@ -66,7 +66,7 @@ Aceita, 2026-10-12.
   - O Core nunca precisa "chamar" o nó.
   - Um único transporte serve aos nós e ao navegador.
 - **Negativas:**
-  - O Core precisa ser alcançável pelos nós. No MVP isso vale só na rede local. Nós fora dela dependem de configuração manual do endereço e, de preferência, de uma rede privada como Tailscale (opção documentada, não requisito do MVP; ver [descoberta](../conectividade/descoberta.md)).
+  - O Core precisa ser alcançável pelos nós. Na rede local, a descoberta resolve; um nó fora dela usa o endereço do Core configurado à mão, e o caminho até ele é da rede do usuário ([descoberta](../conectividade/descoberta.md#nó-fora-da-rede-local)).
   - A queda da conexão corta o nó inteiro do Core. Por isso o nó guarda estado local ([persistência](../arquitetura/persistencia.md)) e os comandos precisam ser idempotentes para não executar duas vezes depois de reconectar.
   - Saída de terminal com muito volume divide a conexão com comandos de controle. O protocolo precisa de prioridade ou controle de fluxo para um terminal barulhento não atrasar um heartbeat.
   - O Guardião do nó não usa essa conexão. Ele tem a dele, com credencial própria, para continuar alcançável com o motor morto ([ADR 0003](0003-autocura-com-guardiao-sem-ssh.md)).

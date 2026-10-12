@@ -90,7 +90,7 @@ O histórico (mesa, missões, esperas, personagens, consumo) fica no banco; perg
 
 ### Cancelamento
 
-Pedido por um usuário com nível para dar ordens, via Grão-Mestre (o motor só aceita vinculado a essa mensagem; regra de ações destrutivas em [convenções da CLI](../cli/convencoes.md)). O motor: encerra os personagens com encerramento seguro; fecha o PR sem merge, se houver; fecha o épico como "não planejado"; mantém a branch no espelho por **30 dias** (padrão configurável por workspace) e depois a apaga do espelho (a branch no GitHub, se enviada, não é apagada no MVP); remove cada worktree só se não houver commits nem alterações não enviados ao espelho, senão pergunta como no encerramento.
+Pedido por um usuário com nível para dar ordens, via Grão-Mestre (o motor só aceita vinculado a essa mensagem; regra de ações destrutivas em [convenções da CLI](../cli/convencoes.md)). O motor: encerra os personagens com encerramento seguro; fecha o PR sem merge, se houver; fecha o épico como "não planejado"; mantém a branch no espelho por **30 dias** (padrão configurável por workspace) e depois a apaga do espelho (a branch no GitHub, se enviada, não é apagada); remove cada worktree só se não houver commits nem alterações não enviados ao espelho, senão pergunta como no encerramento.
 
 ## Regras e erros
 

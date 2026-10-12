@@ -9,7 +9,9 @@
 
 ## Topologia
 
-O sistema tem um **Core** e **N nós** (no MVP, um nó Windows; [escopo](../produto/escopo-mvp.md)). Nada no código pressupõe "um Linux + um Windows": cada nó declara capacidades ao se registrar e o roteamento usa essas capacidades ([personagens](../orquestracao/personagens.md)). Cada máquina tem também um **Guardião**, separado do motor.
+O sistema tem um **Core** e **N nós**. Core e nós rodam em Linux ou em Windows, com o mesmo binário, o que dá os quatro usos: só Linux, Linux + Windows, Windows + Linux e só Windows ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). Nos usos "só Linux" e "só Windows" a máquina do Core é a única (**modo máquina única**: [camadas](../autocura/camadas.md#modo-máquina-única)). O Core sempre tem um **nó local**, que roda o Grão-Mestre. Nada no código pressupõe um sistema para cada papel: cada nó declara capacidades ao se registrar e o roteamento usa essas capacidades ([personagens](../orquestracao/personagens.md)). Cada máquina tem também um **Guardião**, separado do motor.
+
+O diagrama mostra um Core e um nó remoto; no Core Windows, o nó local é um serviço próprio ([Windows](windows.md#windows-como-core)).
 
 ```mermaid
 flowchart TB
@@ -17,8 +19,8 @@ flowchart TB
     GH[(GitHub API)]
     TG[(Telegram Bot API)]
   end
-  subgraph Core["Core (Ubuntu)"]
-    MC["motor do Core<br/>mestre core<br/>(nó local + painel + API)"]
+  subgraph Core["Core (Linux ou Windows)"]
+    MC["motor do Core<br/>mestre core<br/>(painel + API + nó local)"]
     GC["Guardião do Core<br/>mestre-guardiao"]
     WS["whisper-server<br/>(processo auxiliar)"]
     DBC[(SQLite do Core)]
@@ -26,13 +28,11 @@ flowchart TB
     MC --> WS
     GC -. vigia .-> MC
   end
-  subgraph NoWin["Nó Windows"]
+  subgraph No["Nó (Linux ou Windows)"]
     MN["serviço mestre-node<br/>(mestre node)"]
-    SS["processo na sessão do usuário<br/>(mestre node session)"]
     GN["Guardião do nó<br/>mestre-guardiao"]
     DBN[(SQLite do nó)]
     MN --- DBN
-    MN <-- named pipe --> SS
     GN -. vigia .-> MN
   end
   NAV["Navegador (painel)"]
@@ -53,7 +53,7 @@ flowchart TB
 | Guardião do nó → motor do Core | o Guardião do nó (saída), conexão própria | WSS com mTLS | [Guardião](../autocura/guardiao.md) |
 | Guardião do nó → Guardião do Core | o Guardião do nó condutor (eleito), quando o motor do Core falha | TLS na porta do Guardião do Core, com o certificado do nó | [camadas](../autocura/camadas.md#camada-3-supervisão-cruzada) |
 | Navegador → Core | o navegador | HTTPS e WSS (atualizações e terminais) | [canvas](../painel/canvas.md), [login](../painel/login.md) |
-| Navegador → Guardião do nó | o navegador, na rede local | HTTPS com login | [página reserva](../autocura/pagina-reserva.md) |
+| Navegador → Guardião do nó (no modo máquina única, do Core) | o navegador, na rede local | HTTPS com login | [página reserva](../autocura/pagina-reserva.md) |
 | CLI `mestre` → motor local | o agente (ou pessoa) na mesma máquina | socket local | [componentes](componentes.md), [convenções da CLI](../cli/convencoes.md) |
 | Core → GitHub | o motor do Core | HTTPS, consulta periódica condicional | [eventos](../github/eventos.md) |
 | Core → Telegram | o motor do Core | HTTPS, long polling | [bot](../telegram/bot.md) |
@@ -73,7 +73,7 @@ Portas padrão: [componentes](componentes.md#portas). Segurança dos canais: [se
 
 ## Terminais
 
-Cada agente roda num pseudo-terminal gerenciado pelo motor do nó onde ele vive: PTY no Linux, ConPTY no Windows. Não há janela. O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows (serviço na sessão 0 e processo na sessão do usuário): [nó Windows](no-windows.md).
+Cada agente roda num pseudo-terminal gerenciado pelo motor do nó onde ele vive: PTY no Linux, ConPTY no Windows. Não há janela nem interface gráfica em nenhuma máquina: o painel no navegador é a única interface, e os agentes navegam na web pelas ferramentas MCP do próprio provedor ([permissões](../classes/permissoes.md)). O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows (só serviços, contas, ConPTY): [Windows](windows.md).
 
 ## Mesa em mais de um nó
 

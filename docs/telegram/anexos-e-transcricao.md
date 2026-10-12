@@ -13,7 +13,6 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 - **Tamanho:**
   - O limite é configurável. O padrão é **20 MB**, que é também o teto para o Telegram, porque a Bot API na nuvem só baixa arquivos de até 20 MB.
   - O motor confere o `file_size` **antes** de chamar `getFile`. Acima do limite, responde com o limite e não baixa nada.
-  - Um servidor local da Bot API (até 2.000 MB) fica fora do MVP.
 - **Download:** `getFile` e depois o link de arquivo, que vale pelo menos 1 hora. De uma foto, o motor baixa o maior tamanho disponível.
 - **Onde fica:** `.mestre/anexos/<AAAA>/<MM>/<id>-<nome>` no clone principal do workspace, no Core.
   - O nome é saneado: sem separadores de caminho nem caracteres de controle, com até 100 caracteres. Uma foto sem nome vira `foto-<id>.jpg`.
@@ -34,7 +33,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - Quando o motor encontra um caminho em `.mestre/anexos/` numa mensagem para um personagem de mesa, ele copia o arquivo para os worktrees daquela mesa, inclusive nos outros nós, pela conexão do nó ([protocolo](../conectividade/protocolo.md#transferência-em-partes)).
   - Onde a cópia fica está em [sessão zero da mesa](../sessao-zero/mesa.md).
 - **Nunca executar:** anexos são conteúdo trazido pelo usuário. Os agentes leem e usam, mas nunca executam. É regra fixa do Mestre: o `mestre hook` nega executar ou dar permissão de execução a arquivos de `.mestre/anexos/` ([permissões](../classes/permissoes.md)).
-- **Limpeza:** não há limpeza automática no MVP.
+- **Limpeza:** não há limpeza automática; os anexos ficam até alguém apagá-los.
 
 ### Envio de arquivos (`mestre reply --attach`)
 
@@ -59,11 +58,11 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - Se o processo cair, o motor o reinicia com backoff de 1 s a 60 s. Com 5 quedas em 10 minutos, o motor gera um alerta e o item fica com erro no [checklist](../plataforma/checklist.md).
 - **Qual nó transcreve:**
   - Um nó que declara a capacidade `transcricao: true`, de preferência com `gpu: true` ([capacidades](../conectividade/protocolo.md#registro-e-capacidades)).
-  - **No MVP, é o Core, por CPU.**
+  - **Padrão: o Core, por CPU.**
   - Se o nó preferido estiver offline, o próximo capaz assume.
 - **Conversão:**
   - A voz do Telegram vem em OGG/Opus, e o `whisper-server` aceita WAV.
-  - O motor **do Core** converte com `ffmpeg` (dependência do pacote do Core) para WAV 16 kHz mono antes de enviar ao nó que transcreve, seja ele qual for. Assim nenhum nó precisa do `ffmpeg`, nem um nó Windows que passe a transcrever. O servidor não roda com `--convert`.
+  - O motor **do Core** converte com `ffmpeg` (dependência do pacote do Core no Ubuntu; no Windows, vem no instalador) para WAV 16 kHz mono antes de enviar ao nó que transcreve, seja ele qual for. Assim nenhum nó precisa do `ffmpeg`, nem um nó que passe a transcrever. O servidor não roda com `--convert`.
 - **Fila e tempo:**
   - Uma transcrição por vez por nó, em ordem de chegada.
   - O tempo limite é o maior entre 60 s e 2 vezes a duração do áudio (padrão).

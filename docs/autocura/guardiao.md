@@ -16,8 +16,9 @@ Ter, em cada máquina (Core e nós), um serviço pequeno e estável que continua
 - Vigia o motor; o sistema operacional vigia o Guardião ([camadas](camadas.md)).
 - Tarefas próprias além da vigilância:
   - conduzir a cura do Core quando o nó dele é o condutor ([camadas](camadas.md#eleição-do-nó-condutor));
-  - servir a [página reserva](pagina-reserva.md) (só nos nós);
-  - conduzir o [Telegram em modo reduzido](telegram-modo-reduzido.md) (só nos nós);
+  - servir a [página reserva](pagina-reserva.md) (nos nós e, no [modo máquina única](camadas.md#modo-máquina-única), no Core);
+  - conduzir o [Telegram em modo reduzido](telegram-modo-reduzido.md) (no nó condutor ou, no modo máquina única, no Core);
+  - no Core Windows, manter o anúncio mDNS ([descoberta](../conectividade/descoberta.md#mdns));
   - iniciar o [diagnóstico com IA](diagnostico-com-ia.md).
 
 ### O que vigia
@@ -53,7 +54,7 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 
 | Quem | A qual Guardião | Por onde |
 |---|---|---|
-| O próprio Guardião (camada 2) | o local | — |
+| O próprio Guardião (camada 2 e, no modo máquina única, o incidente inteiro) | o local | — |
 | Motor do Core | Guardião de um nó | conexão WSS própria do Guardião do nó |
 | Guardião do nó condutor | Guardião do Core | TLS na porta do Guardião do Core, com certificado de nó |
 | Usuário logado (Dono ou Administrador) | o do nó, ou o do Core por ele | painel (pelo Core), [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md) |
@@ -61,17 +62,17 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 ### Como é alcançado
 
 - **Guardião de nó:** mantém a própria conexão WSS de saída até o motor do Core, separada da do motor do nó, com credencial própria emitida no [pareamento](../conectividade/pareamento.md). Reconecta com backoff. Assim o Core fala com ele mesmo com o motor do nó morto, sem porta aberta no nó.
-- **Guardião do Core:** escuta na porta própria ([componentes](../arquitetura/componentes.md#portas)), com certificado da CA interna, e só aceita clientes com certificado de nó válido e não revogado (mTLS). Quando o motor do Core cai, os nós continuam chegando pelo mesmo endereço (rede local ou Tailscale).
+- **Guardião do Core:** escuta na porta própria ([componentes](../arquitetura/componentes.md#portas)), com certificado da CA interna, e só aceita clientes com certificado de nó válido e não revogado (mTLS). Quando o motor do Core cai, os nós continuam chegando pelo mesmo endereço.
 - O canal do Guardião tem **versão de protocolo própria**, separada da do motor, e muda raramente.
-- **Canal local no Windows:** o motor roda com a conta do usuário e o Guardião como LocalSystem. O Guardião cria o pipe `\\.\pipe\mestre-guardiao` com SDDL que dá acesso só a SYSTEM e ao SID da conta do serviço `mestre-node` (lido da configuração do serviço ao subir) e com `PIPE_REJECT_REMOTE_CLIENTS`. Um teste da suíte completa no Windows confere que o motor escreve no pipe e que outra conta não abre.
+- **Canal local no Windows:** o Guardião roda como LocalSystem e cria o pipe `\\.\pipe\mestre-guardiao` com SDDL que dá acesso só a SYSTEM e às contas dos serviços do motor daquela máquina, lidas da configuração dos serviços ao subir: a do `mestre-node` e, no Core, `NT SERVICE\MestreCore`; com `PIPE_REJECT_REMOTE_CLIENTS`. Um teste da suíte completa no Windows confere que os motores escrevem no pipe e que outra conta não abre.
 
 ### O que guarda
 
 | Item | Onde | Observação |
 |---|---|---|
 | Chave privada e certificado do Guardião | pasta do Guardião, protegida pelo SO | [pareamento](../conectividade/pareamento.md) |
-| Token do bot e lista de usuários, criptografados | só nos Guardiões de nó | réplica restrita do [cofre](../plataforma/cofre.md#réplica-para-os-guardiões) |
-| Estado "travado" do sistema | só nos Guardiões de nó | não é segredo; recebido do Core ([segurança do canal](../telegram/seguranca-do-canal.md)) |
+| Token do bot e lista de usuários, criptografados | Guardiões de nó; no modo máquina única, o do Core | réplica restrita do [cofre](../plataforma/cofre.md#réplica-para-os-guardiões) |
+| Estado "travado" do sistema | Guardiões de nó; no modo máquina única, o do Core | não é segredo; recebido do Core ([segurança do canal](../telegram/seguranca-do-canal.md)) |
 | Lista de nós com prioridade e endereços | todos | cache para a eleição |
 | Valores padrão da autocura | todos | recebidos do Core |
 | Configuração de diagnóstico (ficha resolvida) | todos | [diagnóstico com IA](diagnostico-com-ia.md#ficha-de-diagnóstico) |

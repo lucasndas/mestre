@@ -16,7 +16,7 @@ Fazer o histórico do GitHub mostrar quem fez cada coisa: todo commit, comentár
 | **Mestre** | os Mestres de mesa | abrir e atualizar o PR da mesa, organizar as issues do épico. É separado do "Grão-Mestre" porque o GitHub não deixa ninguém aprovar o próprio PR |
 | **um por classe** (ex.: Dev, QA, Revisor) | os personagens da classe | commits, comentários, atualizações de issue e revisões pedidas pelo personagem |
 
-- Os fixos são criados na instalação do Mestre ([ADR 0007](../decisoes/0007-apps-fixos-grao-mestre-e-mestre.md)); os de classe, quando surge uma classe que pede App próprio ([criação de Apps](criacao-de-apps.md)).
+- Os fixos nascem no primeiro acesso ([ADR 0007](../decisoes/0007-apps-fixos-grao-mestre-e-mestre.md)); os de classe, quando surge uma classe que pede App próprio. Todos são preparados pelo Grão-Mestre e criados pelo Dono com um clique, por link ([criação de Apps](criacao-de-apps.md)).
 - O App de uma classe é **o mesmo em todos os workspaces** e é instalado em cada repositório onde for usado.
 - Como uma classe escolhe o App (`--app novo|herdar:<classe>|<nome>`) e quando o Grão-Mestre nega um App próprio a uma variação: [classes](../classes/classes.md).
 - Trocar o App de uma classe só vale para as ações novas; o histórico continua com o App que fez.
@@ -64,7 +64,7 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 - A identidade fica num arquivo de configuração git por personagem (`.mestre/agents/<id>/gitconfig`), apontado por `GIT_CONFIG_GLOBAL` (existe a partir do git 2.32; o [checklist](../plataforma/checklist.md) confere a versão em cada nó). Esse arquivo inclui o `.gitconfig` global do usuário e só define `user.name` e `user.email`. Assim o motor pode trocar a identidade sem reiniciar o agente (ex.: quando o App da classe fica pronto). Outras variáveis do personagem: [personagem](../sessao-zero/personagem.md).
 - Personagem sem classe própria: Mestre da mesa usa o App "Mestre"; Grão-Mestre usa o App "Grão-Mestre".
 - A mensagem de commit cita a mesa e a issue, com trailers no fim: `Mestre-Mesa: epico/42-login` e `Refs: #57`. A skill ensina o formato ([skills geradas](../cli/skills-geradas.md)).
-- **Commits sem assinatura no MVP:** não aparecem como "Verified" ([ADR 0014](../decisoes/0014-commits-sem-assinatura-no-mvp.md)).
+- **Commits sem assinatura:** não aparecem como "Verified" ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)).
 
 ### App temporário "Mestre" com [Classe]
 
@@ -82,7 +82,7 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
   - `ask` ou `allow`: o App é criado **com** a permissão. Como a chave do App nunca chega ao agente, a permissão é só a capacidade técnica; quem decide se ela é usada é o motor, pela regra da classe (`ask` = só depois do "Aprovar" de um usuário, no hash aprovado).
 - O Grão-Mestre e o "Mestre" não têm a permissão. Uma classe que **herda** o App de outra (`herdar:<classe>`) só pode ter `git.workflows` igual ou menor que a da classe de origem; se precisar de mais, recebe App próprio ([classes](../classes/classes.md)).
 - Antes de enviar, o motor confere os arquivos alterados. Mudança em `.github/workflows/` com classe `never`: o motor não envia, explica o motivo ao Grão-Mestre, que pergunta aos usuários se querem mudar a classe ou passar a tarefa a uma classe que pode.
-- Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado, pelo navegador dedicado ([criação de Apps](criacao-de-apps.md)); o aceite das permissões novas está em [Verificar na implementação](#verificar-na-implementação).
+- Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado: o Grão-Mestre manda ao Dono o link da página de permissões do App e o do aceite na instalação ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)). Até o aceite, o envio sai com erro `workflow_permission` ([coordenação no GitHub](../cli/coordenacao-github.md)).
 
 ## Regras e erros
 
@@ -112,8 +112,8 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** o e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot (formato não documentado oficialmente). **Padrão:** o formato acima. **Se falhar:** os commits continuam válidos, só sem a ligação; o checklist alerta, e a correção é a opção de recriar os commits pela API do [ADR 0014](../decisoes/0014-commits-sem-assinatura-no-mvp.md), que tem o App como autor. **Onde:** no primeiro envio real (o PR `mestre/sessao-zero` ou o primeiro PR de mesa), conferindo `author.login` em `GET /repos/{o}/{r}/commits/{sha}`.
-- **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado precisa que o dono aceite as permissões novas na tela da instalação. **Padrão:** o navegador dedicado edita a permissão e aceita na tela da instalação. **Se falhar** (tela não reconhecida, senha ou 2FA): o Grão-Mestre manda ao Dono, pelo Telegram, o link da tela de aceite para concluir com um clique. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
+- **Verificar na implementação:** o e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot (formato não documentado oficialmente). **Padrão:** o formato acima. **Se falhar:** os commits continuam válidos, com o nome do bot mas sem a ligação ao perfil dele no GitHub; o checklist alerta, e a autoria por papel continua visível no nome do autor e nos trailers ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)). **Onde:** no primeiro envio real (o PR `mestre/sessao-zero` ou o primeiro PR de mesa), conferindo `author.login` em `GET /repos/{o}/{r}/commits/{sha}`.
+- **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado passa a ter a permissão depois do aceite do dono na instalação. **Padrão:** os dois links acima; o motor confere `permissions.workflows` em `GET /app/installations/{id}` antes de liberar os envios. **Se falhar** (o pedido de aceite não aparece para um App da própria conta): o Grão-Mestre manda ao Dono o link para desinstalar e instalar de novo o App naquele repositório. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
 
 ## Fontes
 

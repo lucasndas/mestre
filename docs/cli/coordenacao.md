@@ -64,7 +64,7 @@ mestre quest cancel "<Missão>" [--reason "<texto>"]
 
 ## Critérios de aceite
 
-- **CA-CLI-COORD-01** · *rápida* — **Dado** uma ficha "QA Codex" que exige `gui: true` e nenhum nó com `gui`, **quando** o Mestre da mesa roda `mestre recruit "QA-1" --sheet "QA Codex"`, **então** sai com 4 `no_capable_node` e a mensagem diz que capacidade faltou em cada nó.
+- **CA-CLI-COORD-01** · *rápida* — **Dado** uma ficha "QA Codex" que exige `gpu: true` e nenhum nó com `gpu`, **quando** o Mestre da mesa roda `mestre recruit "QA-1" --sheet "QA Codex"`, **então** sai com 4 `no_capable_node` e a mensagem diz que capacidade faltou em cada nó.
 - **CA-CLI-COORD-02** · *rápida* — **Dado** um personagem comum, **quando** roda `mestre recruit "X" --sheet "Dev Claude"`, **então** sai com 3 `level_denied`.
 - **CA-CLI-COORD-03** · *rápida* — **Dado** um personagem fixado, **quando** o Mestre da mesa roda `mestre dismiss` nele, **então** sai com 3 `pinned` e o personagem continua vivo.
 - **CA-CLI-COORD-04** · *completa* — **Dado** "Dev-1" com duas conexões, **quando** o Mestre roda `mestre recruit --replace "Dev-1" --sheet "Dev Codex"`, **então** o novo terminal usa a ficha nova, mantém o nome, as duas conexões e a posição.

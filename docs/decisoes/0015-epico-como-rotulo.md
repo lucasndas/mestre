@@ -58,7 +58,7 @@ Aceita, 2026-10-12.
   - **Rótulo removido:** se alguém remover o rótulo, a mesa continua funcionando, porque o banco é a fonte. Mas o GitHub deixa de mostrar a issue como épico até alguém recolocar o rótulo.
   - **Ids:** o motor precisa guardar o `id` de cada issue, além do número, para usar a API de sub-issues.
   - **Limites:** 100 sub-issues por pai limita o tamanho de uma missão ou de um épico. Acima disso, o Mestre da mesa precisa agrupar etapas.
-  - **Se um dia for organização:** se um workspace passar a ser de uma organização, o tipo de issue fica disponível. Migrar para ele seria uma decisão nova.
+  - **Conta pessoal é a premissa:** os repositórios ficam na conta pessoal do Dono, onde o tipo de issue não existe; o rótulo é o único marcador de épico.
 
 ## Fontes
 

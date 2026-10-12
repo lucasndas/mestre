@@ -121,6 +121,6 @@ sequenceDiagram
 ## Depende de
 
 - [componentes](../arquitetura/componentes.md) · [seguranca](../arquitetura/seguranca.md) · [precedencia](../arquitetura/precedencia.md)
-- [protocolo](../conectividade/protocolo.md) · [no-windows](../arquitetura/no-windows.md)
+- [protocolo](../conectividade/protocolo.md) · [windows](../arquitetura/windows.md)
 - [personagem](../sessao-zero/personagem.md) · [permissoes](../classes/permissoes.md)
 - [decretos](../telegram/decretos.md) · [fluxo de aprovações](../aprovacoes/fluxo.md)

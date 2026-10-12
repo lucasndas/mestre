@@ -9,35 +9,25 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 ## Antes de começar
 
 - Veja no painel as **mesas abertas**. Trabalho que ainda não foi enviado ao GitHub existe só nas máquinas do Mestre; encerre as mesas ou peça ao Grão-Mestre para enviar o que importa.
-- Para guardar uma cópia, copie a pasta de backups do banco e a chave do cofre antes de apagar dados (no Core: `/var/lib/mestre/backups/` e `/etc/mestre/cofre.key`).
+- Para guardar uma cópia, copie a pasta de backups do banco e a chave do cofre antes de apagar dados (Core no Ubuntu: `/var/lib/mestre/backups/` e `/etc/mestre/cofre.key`; Core no Windows: `%ProgramData%\Mestre\backups\` e a cópia feita por `mestre core export-key`).
 
 ## Remover um nó
 
 1. No painel, em **Saúde dos nós**, **revogue** o nó e confirme com o PIN ([parear nó](parear-no.md#revogar-um-nó)).
-2. No PC Windows, abra o PowerShell **como administrador** e rode:
-
-   ```powershell
-   mestre uninstall
-   ```
-
-   Isso para e remove os serviços `mestre-node` e `mestre-guardiao`, as tarefas agendadas `\Mestre\Sessao` e `\Mestre\Diagnostico`, as regras de firewall do Mestre, o perfil do navegador dedicado (com a sessão do GitHub, mesmo quando os dados ficam) e os programas.
-3. Confira: `Get-Service mestre-*` não lista nada, e a pasta **Mestre** sumiu do Agendador de Tarefas.
-4. Os dados ficam em `%ProgramData%\Mestre\`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague a pasta à mão.
-5. Se esse PC era o do navegador dedicado do GitHub, o Grão-Mestre não consegue mais criar Apps até outro nó Windows ser pareado; ele cai para o link pelo Telegram ([criação de Apps](../github/criacao-de-apps.md)).
+2. Na máquina do nó, rode `mestre uninstall` como administrador (PowerShell **como administrador** no Windows; `sudo mestre uninstall` no Ubuntu, seguido de `sudo apt remove mestre`).
+3. Isso para e remove os serviços `mestre-node` e `mestre-guardiao`, a tarefa agendada `\Mestre\Diagnostico` (no Windows), as regras de firewall do Mestre e os programas.
+4. Confira: `Get-Service mestre-*` (Windows) ou `systemctl status mestre-node` (Ubuntu) não acha nada.
+5. Os dados ficam em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
 
 ## Remover o Core
 
-1. Remova antes todos os nós (seção acima). Nós sem Core ficam tentando reconectar.
-2. No Ubuntu:
-
-   ```bash
-   sudo mestre uninstall
-   sudo apt remove mestre
-   ```
-
-   O primeiro comando para e remove os serviços `mestre-core` e `mestre-guardiao` e as regras de firewall; o segundo remove o pacote.
-3. Confira: `systemctl status mestre-core` responde que a unidade não existe.
-4. Os dados ficam em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`: cofre, banco, espelhos, worktrees, anexos, perfis de conta dos provedores e a CA. Se não vai reinstalar, peça para apagar tudo ou apague essas pastas. Sem a chave do cofre, os segredos guardados não podem mais ser lidos.
+1. Remova antes todos os nós remotos (seção acima). Nós sem Core ficam tentando reconectar.
+2. Na máquina do Core, como administrador:
+   - **Ubuntu:** `sudo mestre uninstall` e depois `sudo apt remove mestre`;
+   - **Windows:** `mestre uninstall` num PowerShell de administrador, ou "Desinstalar" em Aplicativos instalados.
+3. Isso para e remove os serviços do Core (`mestre-core`, no Windows também o `mestre-node` local, e `mestre-guardiao`), a tarefa agendada no Windows e as regras de firewall.
+4. Confira: `systemctl status mestre-core` responde que a unidade não existe, ou `Get-Service mestre-*` não acha nada.
+5. Os dados ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos): cofre, banco, espelhos, worktrees, anexos, perfis de conta dos provedores e a CA. Se não vai reinstalar, peça para apagar tudo ou apague essas pastas. Sem a chave do cofre, os segredos guardados não podem mais ser lidos.
 
 ## Limpar fora das máquinas
 

@@ -17,7 +17,7 @@ Provar, para cada provedor instalado num nó, que um personagem real recebe a ca
 ### Preparação
 
 O motor do nó cria, numa pasta temporária própria:
-- um repositório git de teste, com espelho sem área de trabalho e um worktree para o personagem, como numa [mesa](../sessao-zero/mesa.md), e com um `AGENTS.md` contendo um código `P-<aleatório>` e a regra "a palavra-teste é AZUL";
+- um repositório git de teste, com espelho `--bare` e um worktree para o personagem, como numa [mesa](../sessao-zero/mesa.md), e com um `AGENTS.md` contendo um código `P-<aleatório>` e a regra "a palavra-teste é AZUL";
 - uma classe temporária `conformidade`, invisível aos usuários, cujo `CLASS.md` tem um código `M-<aleatório>` e a regra "a palavra-teste é VERDE", e cujo `permissions.yaml` só deixa escrever em `permitido/**`;
 - uma skill de teste `mestre-conformidade` cujo corpo (não a descrição) manda responder `S-<aleatório>`;
 - para o Claude Code, uma segunda skill `mestre-sonda` só em `.agents/skills/` (sem a cópia em `.claude/skills/`).
@@ -63,7 +63,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 
 ## Critérios de aceite
 
-- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados num nó, **quando** a conformidade roda, **então** as etapas 1 a 8, 10 e 11 passam para os três, inclusive a negação da etapa 4, e o resultado fica registrado com a versão de cada um. (MVP-6)
+- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados num nó, **quando** a conformidade roda, **então** as etapas 1 a 8, 10 e 11 passam para os três, inclusive a negação da etapa 4, e o resultado fica registrado com a versão de cada um (MVP-6).
 - **CA-CONF-02** · *completa* — **Dado** o agente falso de um provedor configurado para nunca disparar PreToolUse, **quando** a conformidade roda, **então** o provedor fica não conforme no nó e um recrutamento com essa base naquele nó falha com a explicação.
 - **CA-CONF-03** · *completa* — **Dado** um pedido de conformidade para um provedor num nó (vindo da [atualização dos CLIs](atualizacao-dos-clis.md)), **quando** a conformidade roda, **então** só aquele provedor naquele nó é testado e o resultado substitui o anterior dessa combinação.
 - **CA-CONF-04** · *completa* — **Dado** um agente falso do Claude que enxerga `.agents/skills/`, **quando** a etapa 9 roda, **então** o checklist mostra que a cópia gerenciada pode ser desligada.

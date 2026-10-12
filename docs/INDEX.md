@@ -7,7 +7,7 @@ Comece por aqui. Desça pelo índice da área até achar o documento de que prec
 | Área | O que cobre | Quando ler |
 |---|---|---|
 | [produto](produto/INDEX.md) | visão, glossário (termos RPG) e escopo do MVP | primeiro contato com o projeto; dúvida sobre um termo |
-| [arquitetura](arquitetura/INDEX.md) | componentes, nó Windows, persistência, segurança, precedência de regras | antes de mexer em mais de um componente |
+| [arquitetura](arquitetura/INDEX.md) | componentes, Windows como Core ou nó, persistência, segurança, precedência de regras | antes de mexer em mais de um componente |
 | [decisoes](decisoes/INDEX.md) | registros de decisão (por que cada escolha foi feita) | antes de propor mudar uma escolha estrutural |
 | [orquestracao](orquestracao/INDEX.md) | workspaces, mesas, Grão-Mestre, Mestre da mesa, personagens, missões, esperas, rituais, pergaminhos, grimórios | trabalho no núcleo de orquestração |
 | [cli](cli/INDEX.md) | referência de sintaxe da CLI `mestre` e skills geradas | implementar ou usar um comando |

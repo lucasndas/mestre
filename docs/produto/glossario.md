@@ -20,8 +20,8 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 |---|---|---|
 | Mestre | O sistema inteiro: o orquestrador que inicia, conecta e acompanha os agentes de IA. | [visão](visao.md) |
 | Motor | A parte invisível do Mestre, sempre ligada, que faz o trabalho; fechar o navegador não a interrompe. | [visão geral](../arquitetura/visao-geral.md) |
-| Core | O servidor principal (Linux): guarda o estado, roda o Grão-Mestre e serve o painel. | [componentes](../arquitetura/componentes.md) |
-| Nó | Uma máquina que roda agentes para o Core, como o PC Windows. | [componentes](../arquitetura/componentes.md) |
+| Core | O servidor principal (Linux ou Windows): guarda o estado, roda o Grão-Mestre e serve o painel. | [componentes](../arquitetura/componentes.md) |
+| Nó | Uma máquina (Linux ou Windows) que roda agentes para o Core. | [componentes](../arquitetura/componentes.md) |
 | Guardião | Pequeno serviço em cada máquina que vigia o motor dela e o conserta quando ele falha. | [Guardião](../autocura/guardiao.md) |
 | Página reserva | Página mínima do nó para ver o status e aprovar curas quando o Core está fora do ar. | [página reserva](../autocura/pagina-reserva.md) |
 | Workspace | Um repositório do GitHub cuidado por um Grão-Mestre. | [workspaces](../orquestracao/workspaces.md) |

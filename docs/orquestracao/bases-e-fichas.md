@@ -25,7 +25,7 @@ Todo terminal nasce de uma **base** (o "como iniciar") e todo agente de uma **fi
 | `env` | mapa | não | variáveis de ambiente extras |
 | `platforms` | lista de `{os, command?, args?}` | sim | sistemas onde pode rodar, com comando próprio por sistema quando preciso |
 | `nodes` | lista de ids de nó | não | restringe a esses nós |
-| `requires` | mapa de capacidades | não | ex.: `gui: true` |
+| `requires` | mapa de capacidades | não | ex.: `gpu: true` |
 | `ready` | `hook` \| `pattern: <regex>` \| `delay: <segundos>` | sim | como saber que está pronto para receber entrada |
 
 - **Variáveis de `cwd`:** `{mesa}` = worktree da mesa no nó (para o Grão-Mestre, o clone principal); `{workspace}` = clone principal no Core, ou `<dados-no>/workspaces/<slug>` num nó; `{home}` = pasta do usuário do serviço. Para personagens com agente, `cwd` precisa ficar dentro de `{mesa}`.

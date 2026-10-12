@@ -14,9 +14,9 @@ Recuperar o motor de qualquer máquina, sem SSH, na ordem do mais simples ao mai
 |---|---|---|---|
 | 1. Sistema operacional | systemd / recuperação de serviço do Windows | o processo morreu | reinicia o processo |
 | 2. Guardião local | Guardião da própria máquina | motor vivo mas travado, laço de queda, disco cheio | reinicia, limpa, volta versão |
-| 3. Supervisão cruzada | o lado saudável (Core → nós; nó condutor → Core) | máquina ainda fora após o tempo de graça | segue o runbook pedindo ações ao Guardião da máquina com problema |
-| 4. Diagnóstico com IA | Guardião da máquina com problema, a pedido do lado saudável | runbook esgotado | agente local propõe script; Dono ou Administrador aprova ([diagnóstico com IA](diagnostico-com-ia.md)) |
-| 5. Usuários | motor do Core ou nó condutor | nada resolveu, ou máquina inteira fora | alerta com o diagnóstico até ali |
+| 3. Supervisão cruzada | o lado saudável (Core → nós; nó condutor → Core); não existe no modo máquina única | máquina ainda fora após o tempo de graça | segue o runbook pedindo ações ao Guardião da máquina com problema |
+| 4. Diagnóstico com IA | Guardião da máquina com problema, a pedido do lado saudável (no modo máquina única, por conta própria) | runbook esgotado | agente local propõe script; Dono ou Administrador aprova ([diagnóstico com IA](diagnostico-com-ia.md)) |
+| 5. Usuários | motor do Core, nó condutor ou, no modo máquina única, o Guardião do Core | nada resolveu, ou máquina inteira fora | alerta com o diagnóstico até ali |
 
 ### Valores padrão
 
@@ -47,7 +47,7 @@ Um **incidente** abre quando uma máquina é declarada fora (camada 2 desistiu o
 
 1. **Travado** (processo vivo, heartbeat perdido): encerra o processo à força e deixa a camada 1 subir de novo.
 2. **Disco grave:** roda `cleanup` antes de reiniciar.
-3. **Laço de queda:** se o problema começou depois de uma atualização, faz `rollback` ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md#volta-de-versão)); se não, para de reiniciar por conta própria, abre o incidente e avisa o Core (ou, no Core, aguarda o nó condutor).
+3. **Laço de queda:** se o problema começou depois de uma atualização, faz `rollback` ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md#volta-de-versão)); se não, para de reiniciar por conta própria, abre o incidente e avisa o Core (no Core, aguarda o nó condutor; no [modo máquina única](#modo-máquina-única), segue ele mesmo).
 
 ### Camada 3: supervisão cruzada
 
@@ -96,6 +96,15 @@ sequenceDiagram
   end
 ```
 
+### Modo máquina única
+
+Vale nos usos "só Linux" e "só Windows": o Core sem nenhum nó remoto pareado ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). Parear um nó encerra o modo; revogar o último o traz de volta.
+
+- Continuam as camadas 1, 2 e 5. **Não há camada 3**: nenhuma outra máquina vigia o Core.
+- Quando a camada 2 desiste, o **Guardião do Core** conduz o incidente no lugar do nó condutor: segue o [runbook](#camada-3-supervisão-cruzada) sobre o próprio motor, inicia o [diagnóstico com IA](diagnostico-com-ia.md) (camada 4), serve a [página reserva](pagina-reserva.md) e assume o [Telegram em modo reduzido](telegram-modo-reduzido.md), por onde sai o alerta da camada 5.
+- No Core Windows, o Guardião vigia os dois serviços do motor (`mestre-core` e `mestre-node`); com o `mestre-core` no ar, a queda do `mestre-node` segue o caso "Core → nó" da camada 3, pelo canal local ([Windows](../arquitetura/windows.md#windows-como-core)).
+- **Limite:** se a máquina inteira cair (desligada, sem rede, sistema travado), **ninguém de fora percebe**. O painel diz isso em "Saúde dos nós" e o [checklist](../plataforma/checklist.md) mantém o aviso ALL-17 enquanto o modo durar.
+
 ### Camada 5: alerta
 
 Vai pelo Telegram (motor do Core ou modo reduzido) e pelo painel ou [página reserva](pagina-reserva.md), marcado "Sistema" ([roteamento](../telegram/roteamento.md)). Contém: máquina, desde quando, camadas tentadas, resultado de cada ação, últimos erros (mascarados) e uma sugestão (ex.: "verifique se a máquina está ligada").
@@ -120,7 +129,7 @@ Quando um motor reinicia, cada personagem que estava rodando é **retomado** ou 
 
 ## Critérios de aceite
 
-- **CA-CURA-01** · *pesada* — **Dado** Core e nó rodando, **quando** mato o processo do motor (de um lado ou do outro), **então** ele volta pela camada 1 e o heartbeat se restabelece em até 30 s, com registro (MVP-2).
+- **CA-CURA-01** · *pesada* — **Dado** cada um dos quatro usos instalado, **quando** mato o processo de cada serviço do motor (em cada máquina), **então** ele volta pela camada 1 e o heartbeat se restabelece em até 30 s, com registro (MVP-2, MVP-13).
 - **CA-CURA-02** · *pesada* — **Dado** o motor do Core travado (processo parado), **quando** passa o tempo de graça, **então** um único nó é eleito, o Guardião do Core reinicia o motor e a auditoria mostra a sequência do diagrama (MVP-2).
 - **CA-CURA-03** · *pesada* — **Dado** o Core desligado, **quando** as camadas se esgotam, **então** os usuários recebem o alerta da camada 5 no Telegram (dublê) em modo reduzido e na página reserva (MVP-2).
 - **CA-CURA-04** · *pesada* — **Dado** uma atualização cujo motor cai ao iniciar, **quando** ocorre o laço de queda, **então** o Guardião local volta à versão anterior e o motor fica saudável (MVP-2).
@@ -130,6 +139,7 @@ Quando um motor reinicia, cada personagem que estava rodando é **retomado** ou 
 - **CA-CURA-08** · *rápida* — **Dado** um runbook que nunca dá certo, **quando** roda, **então** os intervalos seguem 15 s, 30 s, 60 s… (±20%) e após 5 tentativas o incidente passa à camada 4.
 - **CA-CURA-09** · *rápida* — **Dado** o árbitro fora e o nó A respondendo à sondagem, **quando** B avalia, **então** B não assume; com A falhando 3 vezes, B assume.
 - **CA-CURA-10** · *rápida* — **Dado** um laço de queda sem atualização nas últimas 24 h, **quando** a camada 2 avalia, **então** não faz `rollback` e abre o incidente.
+- **CA-CURA-12** · *pesada* — **Dado** um uso de máquina única (só Linux e só Windows) com o motor do Core em laço de queda sem atualização, **quando** a camada 2 desiste, **então** o Guardião do Core abre o incidente, roda o runbook e o diagnóstico, serve a página reserva e manda o alerta da camada 5 pelo Telegram (dublê) em modo reduzido (MVP-2, MVP-13).
 - **CA-CURA-11** · *completa* — **Dado** personagens rodando num nó, **quando** o motor do nó reinicia, **então** cada um aparece retomado ou interrompido, e nenhum some (MVP-12).
 
 ## Depende de

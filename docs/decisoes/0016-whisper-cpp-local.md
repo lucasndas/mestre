@@ -12,7 +12,7 @@ Aceita, 2026-10-12.
 - **A spec:** sugeria faster-whisper (CTranslate2).
 - **A experiência do usuário:** ele já roda o large-v3-turbo **por CPU** e funciona.
 - **O motor:** é Go sem CGO ([ADR 0001](0001-stack-go.md)).
-- **No MVP:** não há nó com GPU; a transcrição roda no Core.
+- **As máquinas do usuário:** não há nó com GPU; a transcrição roda no Core.
 - **O modelo turbo:** reduz o decodificador de 32 para 4 camadas (809M contra 1,55B de parâmetros).
 
 ## Opções consideradas
@@ -48,8 +48,8 @@ Aceita, 2026-10-12.
   - `large-v3-turbo` quantizado, **q5_0 ou q8_0**, escolhido por benchmark na máquina durante a instalação.
   - O processo fica com o modelo carregado.
 - **Onde roda:**
-  - **No MVP, no Core por CPU.**
-  - O nó de transcrição é escolhido por capacidade, com preferência por `gpu: true` quando existir.
+  - No nó com a capacidade de transcrição (`transcricao: true`); se houver mais de um, o que anuncia `gpu: true`.
+  - **Padrão: o Core, por CPU.**
 - **Onde estão os detalhes:**
   - Comportamento, idioma e falhas: [anexos e transcrição](../telegram/anexos-e-transcricao.md).
   - Download do modelo e do binário: [instalação e atualização](../plataforma/instalacao-e-atualizacao.md).

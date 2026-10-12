@@ -1,6 +1,6 @@
 # Telegram em modo reduzido
 
-> **Assunto:** o Guardião do nó condutor assume o bot quando o Core cai: o que aceita, trava de um só leitor e devolução ao Core · **Componente:** Guardião · **Atualizado:** 2026-10-12
+> **Assunto:** o Guardião do nó condutor (ou o do Core, no modo máquina única) assume o bot quando o Core cai: o que aceita, trava de um só leitor e devolução ao Core · **Componente:** Guardião · **Atualizado:** 2026-10-12
 
 ## Objetivo
 
@@ -11,6 +11,7 @@ Manter os usuários avisados e permitir aprovar curas pelo Telegram enquanto o C
 ### Quem assume e quando
 
 - Assume o **Guardião do nó condutor**, escolhido pela [eleição](camadas.md#eleição-do-nó-condutor), assim que ganha a trava (ou, sem árbitro, assim que assume pela sondagem).
+- No [modo máquina única](camadas.md#modo-máquina-única), não há eleição: assume o **Guardião do Core**, quando a camada 2 desiste. A devolução abaixo é igual, pelo canal local em vez da WSS.
 - Usa o token do bot e a lista de usuários da réplica do [cofre](../plataforma/cofre.md#réplica-para-os-guardiões).
 - Antes de ler, carrega o último `update_id` processado que o Core mandou na réplica, para não repetir updates já tratados.
 - Lê por long polling, como o Core ([bot](../telegram/bot.md#recepção-por-long-polling)), com `allowed_updates=["message","callback_query"]`.
@@ -34,7 +35,7 @@ O mesmo do Core, aplicado antes de tudo ([segurança do canal](../telegram/segur
 
 Todas marcadas "Sistema" ([roteamento](../telegram/roteamento.md)) e mascaradas antes de sair:
 
-- ao assumir: "Core fora do ar desde HH:MM. Nó <nome> conduzindo a recuperação." com o link da página reserva;
+- ao assumir: "Core fora do ar desde HH:MM. Nó <nome> conduzindo a recuperação." (no modo máquina única: "Guardião do Core conduzindo a recuperação.") com o link da página reserva;
 - a cada mudança de camada do incidente e ao esgotar as tentativas (alerta da camada 5, [camadas](camadas.md#camada-5-alerta));
 - pedidos de aprovação de cura (para Dono e Administradores);
 - ao devolver: "Core de volta. Bot devolvido ao Core."

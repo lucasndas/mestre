@@ -1,6 +1,6 @@
 # Cofre de segredos
 
-> **Assunto:** onde e como o Core guarda segredos, quem pode usá-los e a réplica restrita para os Guardiões dos nós · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** onde e como o Core (Linux ou Windows) guarda segredos, quem pode usá-los e a réplica restrita para os Guardiões · **Componente:** Core · **Atualizado:** 2026-10-12
 
 ## Objetivo
 
@@ -30,9 +30,10 @@ Guardar todos os segredos do Mestre criptografados no Core, com a chave protegid
 ### Chave do cofre
 
 - 32 bytes aleatórios gerados na instalação do Core ([instalação e atualização](instalacao-e-atualizacao.md)).
-- **Padrão:** arquivo `/etc/mestre/cofre.key`, dono `mestre` (conta do motor, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), modo 0600, pasta 0700. O motor se recusa a abrir o cofre se o arquivo tiver permissão mais aberta ou outro dono, e o [checklist](checklist.md) acusa como grave.
-- **Opção "chaveiro do sistema":** guardar a chave com `systemd-creds` (cifrada pelo TPM2 ou pela chave do host) e entregá-la ao serviço com `LoadCredentialEncrypted=`. O motor lê de `$CREDENTIALS_DIRECTORY`. É opcional: a instalação sempre começa com o arquivo 0600; o [checklist](checklist.md) (LIN-07) detecta suporte (`systemd-creds has-tpm2`) e oferece a troca, feita só com aprovação.
-- **Backup da chave:** os backups do banco ([persistência](../arquitetura/persistencia.md#backup)) **não** levam a chave. Sem ela, um backup restaurado perde os segredos (é preciso cadastrá-los de novo). A instalação orienta guardar uma cópia da chave fora do servidor ([instalar](../operacao/instalar.md)).
+- **Padrão no Linux:** arquivo `/etc/mestre/cofre.key`, dono `mestre` (conta do motor, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), modo 0600, pasta 0700. O motor se recusa a abrir o cofre se o arquivo tiver permissão mais aberta ou outro dono, e o [checklist](checklist.md) acusa como grave (LIN-05).
+- **Padrão no Windows:** arquivo `%ProgramData%\Mestre\config\cofre.key` com a chave cifrada por **DPAPI com escopo de máquina** (`CryptProtectData` com `CRYPTPROTECT_LOCAL_MACHINE`) e **ACL só para `NT SERVICE\MestreCore`**, sem herança. O escopo de máquina deixa a chave presa a este Windows (uma cópia do arquivo não abre em outra máquina); quem impede outras contas locais de ler é a ACL, porque o DPAPI de máquina decifra para qualquer processo local que consiga ler o arquivo. O motor confere dono e ACL antes de abrir, como no Linux, e o checklist acusa como grave (WIN-14) ([Windows](../arquitetura/windows.md#windows-como-core)).
+- **Opção "chaveiro do sistema" (Linux):** guardar a chave com `systemd-creds` (cifrada pelo TPM2 ou pela chave do host) e entregá-la ao serviço com `LoadCredentialEncrypted=`. O motor lê de `$CREDENTIALS_DIRECTORY`. É opcional: a instalação sempre começa com o arquivo 0600; o [checklist](checklist.md) (LIN-07) detecta suporte (`systemd-creds has-tpm2`) e oferece a troca, feita só com aprovação.
+- **Backup da chave:** os backups do banco ([persistência](../arquitetura/persistencia.md#backup)) **não** levam a chave. Sem ela, um backup restaurado perde os segredos (é preciso cadastrá-los de novo). A instalação orienta guardar uma cópia da chave fora do servidor ([instalar](../operacao/instalar.md)); no Windows, a cópia sai por `mestre core export-key` ([componentes](../arquitetura/componentes.md#mestre)), porque o arquivo protegido por DPAPI não abre em outra máquina.
 - **Troca da chave:** o Dono pede no painel (com PIN); o motor gera a chave nova, decifra e cifra de novo todos os segredos numa transação, incrementa `key_version` e só então substitui o arquivo.
 
 ### Uso
@@ -45,10 +46,10 @@ Guardar todos os segredos do Mestre criptografados no Core, com a chave protegid
 ### Réplica para os Guardiões
 
 - **Conteúdo, e só isto:** o token do bot e a lista de usuários (id, nome, login, nível, workspaces, ID do Telegram, hash da senha, hash do PIN, ativo ou suspenso). Junto, sem ser segredo, vão o estado "travado" e o último `update_id` do bot ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
-- **Para quem:** só os Guardiões dos **nós** (são eles que servem a [página reserva](../autocura/pagina-reserva.md) e o modo reduzido). Nunca vão chaves do GitHub, tokens de usuários, chaves de provedor ou a chave da CA.
-- **Transporte:** mensagem `guardian.replica` pela conexão própria do Guardião, com mTLS ([protocolo](../conectividade/protocolo.md#conexão-do-guardião)). Cada réplica tem um número de versão crescente; o Guardião confirma e guarda só a mais nova.
+- **Para quem:** os Guardiões dos **nós** e, no [modo máquina única](../autocura/camadas.md#modo-máquina-única), o Guardião do Core (são eles que servem a [página reserva](../autocura/pagina-reserva.md) e o modo reduzido). Nunca vão chaves do GitHub, tokens de usuários, chaves de provedor ou a chave da CA.
+- **Transporte:** mensagem `guardian.replica` pela conexão própria do Guardião, com mTLS ([protocolo](../conectividade/protocolo.md#conexão-do-guardião)); para o Guardião do Core, pelo canal local motor ↔ Guardião ([componentes](../arquitetura/componentes.md#canais-locais-padrão)). Cada réplica tem um número de versão crescente; o Guardião confirma e guarda só a mais nova.
 - **Quando:** ao conectar e a cada mudança (usuário criado, alterado, suspenso, removido; token trocado; travar e destravar), em até 10 s (padrão).
-- **Em repouso no nó:** AES-256-GCM com uma chave local do Guardião, protegida pelo sistema: DPAPI com escopo de máquina no Windows (o Guardião roda como LocalSystem); arquivo 0600 de root no Linux.
+- **Em repouso no Guardião:** AES-256-GCM com uma chave local do Guardião, protegida pelo sistema: DPAPI com escopo de máquina e ACL só de SYSTEM no Windows (o Guardião roda como LocalSystem); arquivo 0600 de root no Linux.
 - **Nó revogado:** ao receber o fechamento "credencial revogada" ([protocolo](../conectividade/protocolo.md#heartbeat-e-reconexão)), o Guardião apaga a réplica. Como um nó roubado pode não obedecer, o painel recomenda trocar o token do bot ao revogar um nó.
 
 ## Regras e erros
@@ -66,12 +67,13 @@ Guardar todos os segredos do Mestre criptografados no Core, com a chave protegid
 - **CA-COFRE-05** · *completa* — **Dado** um usuário suspenso no painel, **quando** passam 10 s, **então** o Guardião do nó tem a réplica nova e a página reserva recusa o login dele.
 - **CA-COFRE-06** · *rápida* — **Dado** uma troca de chave interrompida no meio (falha simulada), **quando** o motor reinicia, **então** todos os segredos continuam decifráveis com a chave antiga.
 - **CA-COFRE-07** · *rápida* — **Dado** a API do painel, **quando** listo os segredos, **então** a resposta tem só nome, tipo, impressão e datas.
+- **CA-COFRE-08** · *completa* — **Dado** o Core Windows com `cofre.key` legível também pela conta do usuário, **quando** o `mestre-core` abre o cofre, **então** recusa, as ações com segredo falham com erro claro e sai alerta grave; **dado** a ACL só de `NT SERVICE\MestreCore`, **então** abre, e um processo do `mestre-node` não consegue ler o arquivo.
 
 ## Depende de
 
 - [Segurança](../arquitetura/seguranca.md)
 - [Persistência](../arquitetura/persistencia.md)
-- [Componentes](../arquitetura/componentes.md)
+- [Componentes](../arquitetura/componentes.md) e [Windows](../arquitetura/windows.md)
 - [Protocolo](../conectividade/protocolo.md)
 - [Pareamento](../conectividade/pareamento.md)
 - [Login](../painel/login.md)
