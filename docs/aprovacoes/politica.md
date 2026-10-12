@@ -26,7 +26,7 @@ Deixar o Grão-Mestre aprovar sozinho o que é seguro e obrigá-lo a perguntar n
 | `permissao_de_classe` | comando marcado "pedir aprovação" ([permissões](../classes/permissoes.md)) | se as condições passarem | Aprovador |
 | `custo_extra` | missão ou mesa em 100% do limite ([limites](../plataforma/limites-de-uso.md)) | se dentro do teto do workspace | Aprovador; acima do teto, Administrador |
 | `envio_workflows` | enviar branch que altera `.github/workflows/`, por classe com `git.workflows: ask` ([workflows](../github/identidades-e-apps.md#workflows)) | nunca | Administrador |
-| `configuracao_repositorio` | ruleset, proteção de branch, Apps ([aprovação no GitHub](../github/aprovacao-no-github.md)) | nunca | Dono, com PIN |
+| `configuracao_repositorio` | ruleset, proteção de branch, Apps ([aprovação no GitHub](../github/aprovacao-no-github.md)) | nunca | Dono, com PIN (delegada por decreto: sem PIN a cada vez) |
 | `classe_workspace` | criar classe do workspace ([teto](../classes/teto-do-workspace.md)) | nunca | Administrador |
 | `acao_destrutiva` | `note delete`, `ritual delete`, `class delete`, `table close --cancel`, sem exceção pontual para aquela ação ([convenções da CLI](../cli/convencoes.md)); alvo = o comando e o objeto | nunca | Administrador |
 | `proposta_agents_md` | criar o `AGENTS.md` proposto na [sessão zero](../sessao-zero/workspace.md#análise-do-projeto-e-agentsmd-etapa-analysis); o pedido mostra o texto inteiro | nunca | Administrador |
@@ -36,7 +36,7 @@ Deixar o Grão-Mestre aprovar sozinho o que é seguro e obrigá-lo a perguntar n
 
 **Pedidos "Sistema"** (`atualizacao_mestre`, `atualizacao_provedor`): criados pelo motor, não pertencem a um workspace e vão ao Dono e aos Administradores; o Grão-Mestre só recebe um evento informativo e **nunca** aprova. Padrões: quórum 1, prazo de 7 dias, sem PIN. Não aparecem no arquivo de política do workspace (abaixo).
 
-**`ativacao_operador`** é regra fixa: não aparece no arquivo de política, que não consegue mudar quem aprova nem tirar o PIN, e decreto `policy` não o alcança. Só o Dono aprova, pelo botão no Telegram ou no painel. A única forma de o Grão-Mestre aprovar é um decreto `delegation` **do Dono** com alvo `ativacao_operador` ([decretos](../telegram/decretos.md#delegação-da-ativação-do-operador)); fora do escopo, da duração ou da validade desse decreto, `approval decide` recebe `human_required`. Prazo do pedido: 1 h (padrão).
+**`ativacao_operador`** é regra fixa: não aparece no arquivo de política, que não consegue mudar quem aprova nem tirar o PIN, e decreto `policy` não o alcança. Só o Dono aprova, pelo botão no Telegram ou no painel. A única forma de o Grão-Mestre aprovar é um decreto `delegation` **do Dono** com alvo `ativacao_operador` ([decretos](../telegram/decretos.md#delegação-da-ativação-do-operador)); fora do escopo, da duração ou da validade desse decreto, `approval decide` recebe `human_required`. **PIN:** a aprovação manual pelo Dono pede o PIN a cada ativação; as ativações aprovadas pelo Grão-Mestre dentro de um decreto de delegação não pedem PIN, porque ele foi exigido ao criar o decreto. Prazo do pedido: 1 h (padrão).
 
 Ampliar o teto do workspace não é aprovação: só por decreto ([decretos](../telegram/decretos.md)). Aprovações de cura seguem a [autocura](../autocura/camadas.md).
 
@@ -138,6 +138,7 @@ Um decreto pode mudar a política sem editar o arquivo (ex.: "pode aprovar migra
 - **CA-APROV-POL-08** · *rápida* — **Dado** um `mestre note delete` sem exceção pontual, **quando** o motor avalia, **então** cria um pedido `acao_destrutiva` com o comando e o pergaminho como alvo, só para Administradores e o Dono, e um `approval decide` do Grão-Mestre nele recebe `human_required`.
 - **CA-APROV-POL-09** · *rápida* — **Dado** nenhuma aprovação vigente para o PR 12 no hash atual, **quando** o Grão-Mestre chama `mestre gh approve 12`, **então** recebe `human_required` e nenhum review é enviado; **dado** a aprovação de um usuário para esse hash, **então** o review sai.
 - **CA-APROV-POL-10** · *rápida* — **Dado** um pedido `ativacao_operador` e nenhum decreto de delegação, **quando** o Grão-Mestre chama `approval decide` ou um Administrador toca Aprovar, **então** os dois são recusados e o pedido segue esperando o Dono; **dado** um arquivo de política com `ativacao_operador: { sozinho: se_condicoes }`, **então** o arquivo é inválido e vale a versão anterior.
+- **CA-APROV-POL-11** · *rápida* — **Dado** um pedido `ativacao_operador`, **quando** o Dono aprova pelo botão, **então** o PIN é pedido e, sem ele, nada é ativado; **e dado** um decreto de delegação válido, **quando** o Grão-Mestre aprova um pedido dentro do escopo, **então** nenhum PIN é pedido e o Dono recebe o aviso com **Encerrar agora**.
 
 ## Depende de
 

@@ -50,6 +50,20 @@ model: ""                # opcional
 
 O corpo do `CLASS.md` traz as instruções: o que fazer, como entregar, critérios de pronto e quando sinalizar `mestre done`.
 
+### Exemplo: classe para o Operador do PC
+
+Só um exemplo, para o Dono criar pelo painel se quiser usar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc); o Mestre não a cria sozinho.
+```yaml
+# permissions.yaml (escopo global, criada pelo Dono)
+operator: true                     # só valida com o teto que tenha operator: true
+tools:
+  allow: ["mcp__claude-in-chrome__*", "mcp__<mcp-de-controle>__*"]
+  default: ask
+files: { write: [] }               # o Operador age pela tela, não pelos arquivos da mesa
+git: { commit: false, request_push: false, workflows: never }
+```
+O `CLASS.md` descreve a tarefa típica, o que nunca fazer (ex.: compras, mudar senhas) e como entregar o `done`.
+
 ### Vínculo com um App do GitHub
 
 Toda classe nasce vinculada a um App: `novo` (o Grão-Mestre prepara o App e o Dono o cria e instala pelo link; até ficar pronto, a classe usa o App "Mestre" com o nome dela na mensagem e aparece "em criação"), `herdar:<classe>` (usa o App da classe de origem; só se `git.workflows` não for maior que o dela, ver [workflows](../github/identidades-e-apps.md#workflows)) ou o slug de um App existente. O vínculo fica no frontmatter e no banco; trocar de App só vale para ações novas. Detalhes em [identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md).

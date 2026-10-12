@@ -52,6 +52,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 - Só um decreto **do Dono**, efeito `delegation` e alvo `ativacao_operador`, deixa o Grão-Mestre aprovar pedidos de ativação do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) ([política](../aprovacoes/politica.md#tipos-de-ação)). Proposto por outro nível, é recusado antes da confirmação.
 - **Escopo obrigatório:** uma missão ou uma classe específica (`--scope "missao:<nome>"` ou `"classe:<nome>"`); sem escopo, recusado.
+- **PIN:** criar o decreto de delegação sempre pede o PIN do Dono; as ativações aprovadas pelo Grão-Mestre dentro dele não pedem PIN a cada vez (a aprovação manual pelo Dono continua pedindo).
 - **Limites:** duração de cada ativação até o padrão (30 min); validade obrigatória, de no máximo 7 dias. Pedido fora do escopo ou com duração maior continua só com o Dono.
 - Cada ativação aprovada pelo Grão-Mestre com base no decreto fica registrada nele e avisa o Dono no Telegram, com o botão **Encerrar agora** ([bot](bot.md#mensagens-de-saída)).
 
