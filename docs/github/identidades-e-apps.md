@@ -46,7 +46,7 @@ Todas as permissões são de repositório; nenhuma permissão de conta. O webhoo
 | Checks | leitura | leitura | leitura | ler CI |
 | Commit statuses | leitura | leitura | leitura | ler CI por status |
 | Administration | escrita | — | — | rulesets e configurações aprovadas pelo Dono |
-| Workflows | — | — | — | nunca por padrão (abaixo) |
+| Workflows | — | — | só se a classe tiver `git.workflows` `ask` ou `allow` | enviar mudanças no CI (abaixo) |
 | Secrets | — | — | — | nunca |
 
 O GitHub não tem permissão separada de merge: merge exige Contents escrita, que o "Mestre" e as classes também têm para enviar a branch. Quem garante que só o Grão-Mestre faz merge é o motor ([ações por nível](acoes-por-nivel.md)), já que nenhum agente tem token.
@@ -76,9 +76,13 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 
 ### Workflows
 
-- Nenhum App tem a permissão **Workflows**, então o GitHub recusa o envio de uma branch que altera `.github/workflows/` (mensagem "refusing to allow a GitHub App to create or update workflow … without `workflows` permission").
-- Antes de enviar, o motor confere os arquivos alterados. Se houver mudança em `.github/workflows/`, ele não tenta o envio: explica o motivo ao Grão-Mestre, que pergunta aos usuários ([política](../aprovacoes/politica.md)).
-- **Padrão proposto:** se autorizado, o envio usa um App dedicado `<prefixo>-workflows` (Metadata, Contents escrita, Workflows escrita), criado na primeira autorização e instalado só nos repositórios autorizados. Ele é usado só para aquele envio, no hash aprovado. Os autores dos commits não mudam.
+- O GitHub só aceita o envio de uma branch que altera `.github/workflows/` (o CI do repositório) se o App tiver a permissão **Workflows**. Sem ela, recusa ("refusing to allow a GitHub App to create or update workflow … without `workflows` permission").
+- Quem pode mexer no CI é decidido **na classe**, pela opção `git.workflows` do [`permissions.yaml`](../classes/permissoes.md), limitada pelo [teto](../classes/teto-do-workspace.md) (padrão `never`). O App da classe acompanha essa escolha:
+  - `never`: o App é criado **sem** a permissão Workflows;
+  - `ask` ou `allow`: o App é criado **com** a permissão. Como a chave do App nunca chega ao agente, a permissão é só a capacidade técnica; quem decide se ela é usada é o motor, pela regra da classe (`ask` = só depois do "Aprovar" de um usuário, no hash aprovado).
+- O Grão-Mestre e o "Mestre" não têm a permissão. Uma classe que **herda** o App de outra (`herdar:<classe>`) só pode ter `git.workflows` igual ou menor que a da classe de origem; se precisar de mais, recebe App próprio ([classes](../classes/classes.md)).
+- Antes de enviar, o motor confere os arquivos alterados. Mudança em `.github/workflows/` com classe `never`: o motor não envia, explica o motivo ao Grão-Mestre, que pergunta aos usuários se querem mudar a classe ou passar a tarefa a uma classe que pode.
+- Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado. **A confirmar:** o GitHub pede ao dono que aceite as novas permissões na tela da instalação; o Grão-Mestre manda o link pelo Telegram para concluir com um clique ([criação de Apps](criacao-de-apps.md)).
 
 ## Regras e erros
 
@@ -93,7 +97,8 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 - **CA-GH-ID-02** · *rápida* — **Dado** o App `lucas-mestre-qa` com `bot_user_id` 123, **quando** um personagem QA inicia, **então** o `gitconfig` dele tem `user.name = lucas-mestre-qa[bot]` e `user.email = 123+lucas-mestre-qa[bot]@users.noreply.github.com`.
 - **CA-GH-ID-03** · *rápida* — **Dado** a classe QA com App "em criação", **quando** um personagem QA comenta numa issue, **então** o comentário sai com o token do App "Mestre" e o texto começa com `**[QA]**`.
 - **CA-GH-ID-04** · *rápida* — **Dado** o App da classe QA passando a "pronto", **quando** o motor processa a mudança, **então** o `gitconfig` dos personagens QA vivos passa a ter a identidade do App QA.
-- **CA-GH-ID-05** · *rápida* — **Dado** uma branch que altera `.github/workflows/ci.yml`, **quando** a mesa pede `mestre pr update`, **então** o motor não envia e cria um pedido de aprovação do tipo `envio_workflows`.
+- **CA-GH-ID-05** · *rápida* — **Dado** uma branch que altera `.github/workflows/ci.yml` pedida por uma classe com `git.workflows: ask`, **quando** a mesa pede `mestre pr update`, **então** o motor não envia e cria um pedido de aprovação do tipo `envio_workflows`; com `never`, recusa com `workflow_not_allowed` e avisa o Grão-Mestre.
+- **CA-GH-ID-09** · *rápida* — **Dado** uma classe nova com `git.workflows: allow` e `app: herdar:qa` (App QA sem a permissão Workflows), **quando** o motor valida a classe, **então** recusa e explica que ela precisa de App próprio.
 - **CA-GH-ID-06** · *rápida* — **Dado** 100 Apps contados, **quando** o Grão-Mestre pede um App novo, **então** a criação é recusada com o motivo.
 - **CA-GH-ID-07** · *rápida* — **Dado** um pedido de token para uma ação no repositório X, **quando** o motor pede o token de instalação ao GitHub falso, **então** o pedido lista só o repositório X.
 - **CA-GH-ID-08** · *pesada* — **Dado** uma mesa com personagens Dev e QA, **quando** eles fazem commits e comentam, **então** no GitHub cada commit e comentário aparece com o App da classe de quem fez (MVP-5).

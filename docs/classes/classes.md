@@ -46,7 +46,7 @@ O corpo do `CLASS.md` traz as instruções: o que fazer, como entregar, critéri
 
 ### Vínculo com um App do GitHub
 
-Toda classe nasce vinculada a um App: `novo` (o Grão-Mestre cria; até ficar pronto, a classe usa o App "Mestre" com o nome dela na mensagem e aparece "em criação"), `herdar:<classe>` (usa o App da classe de origem) ou o slug de um App existente. O vínculo fica no frontmatter e no banco; trocar de App só vale para ações novas. Detalhes em [identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md).
+Toda classe nasce vinculada a um App: `novo` (o Grão-Mestre cria; até ficar pronto, a classe usa o App "Mestre" com o nome dela na mensagem e aparece "em criação"), `herdar:<classe>` (usa o App da classe de origem; só se `git.workflows` não for maior que o dela, ver [workflows](../github/identidades-e-apps.md#workflows)) ou o slug de um App existente. O vínculo fica no frontmatter e no banco; trocar de App só vale para ações novas. Detalhes em [identidades e Apps](../github/identidades-e-apps.md) e [criação de Apps](../github/criacao-de-apps.md).
 
 ### Hooks extras da classe
 

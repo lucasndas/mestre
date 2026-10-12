@@ -41,7 +41,9 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 
 | Situação | Exit | `error.code` | O que o motor explica |
 |---|---|---|---|
-| branch altera `.github/workflows/` e o App não tem a permissão "Workflows" | 3 | `workflow_permission` | o envio foi recusado; o Grão-Mestre pergunta aos usuários se autoriza ([identidades-e-apps](../github/identidades-e-apps.md)) |
+| branch altera `.github/workflows/` e a classe tem `git.workflows: never` | 3 | `workflow_not_allowed` | o envio foi recusado; o Grão-Mestre pergunta aos usuários se mudam a classe ([workflows](../github/identidades-e-apps.md#workflows)) |
+| o GitHub recusou por falta da permissão "Workflows" no App (ex.: permissão nova ainda não aceita na instalação) | 3 | `workflow_permission` | o Grão-Mestre manda o link para aceitar a permissão ([workflows](../github/identidades-e-apps.md#workflows)) |
+| branch altera `.github/workflows/` e a classe tem `git.workflows: ask` | 9 | `approval_pending` | o envio espera o "Aprovar" de um usuário ([fluxo](../aprovacoes/fluxo.md)) |
 | regra do repositório exige commits assinados | 3 | `signature_required` | commits do MVP não são assinados ([0014](../decisoes/0014-commits-sem-assinatura-no-mvp.md)); o Grão-Mestre avisa os usuários |
 | proteção ou ruleset recusou o envio | 3 | `protected` | qual regra recusou; nada é contornado |
 | branch da mesa em conflito com a principal | 7 | `conflict` | atualizar a branch dentro da mesa ([acoes-por-nivel](../github/acoes-por-nivel.md)) |

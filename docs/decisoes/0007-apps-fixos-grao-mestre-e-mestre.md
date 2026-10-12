@@ -51,7 +51,7 @@ Aceita, 2026-10-12.
 - **Último push:** o App "Grão-Mestre" **não faz push** em branches de mesa. O envio da branch é sempre feito com o App de quem pediu, para que a regra "aprovação do push mais recente" seja satisfeita.
 - **Permissões:**
   - Só o "Grão-Mestre" tem merge e a administração necessária.
-  - Nenhum App tem permissão de workflows ou de segredos por padrão.
+  - Nenhum App tem permissão de segredos. A permissão de workflows só existe no App de classes que a pedem (`git.workflows` `ask` ou `allow`), decisão do usuário em 2026-10-12.
   - Detalhes em [identidades e Apps](../github/identidades-e-apps.md).
 - **Credenciais:** o motor usa a **chave privada de cada App**, guardada no [cofre](../plataforma/cofre.md), e gera **tokens de instalação** sob demanda. Nenhum token chega aos agentes.
 
@@ -64,7 +64,7 @@ Aceita, 2026-10-12.
 - **Negativas:**
   - **Correção pelo Grão-Mestre:** se o Grão-Mestre quiser corrigir algo no PR, ele não faz isso. Pede à mesa, que faz o push. Isso preserva a validade da aprovação.
   - **Aprovação de App pode não contar:** ainda não se sabe se a aprovação de um App próprio conta para revisões obrigatórias. O plano B e o teste estão no [ADR 0008](0008-grao-mestre-aprovador-delegado.md) e em [aprovação no GitHub](../github/aprovacao-no-github.md).
-  - **Arquivos de workflow:** uma mesa que altera `.github/workflows/` tem o envio recusado pelo GitHub, porque nenhum App tem a permissão "Workflows" por padrão. O motor explica o motivo, e o Grão-Mestre pergunta aos usuários.
+  - **Arquivos de workflow:** uma mesa que altera `.github/workflows/` só consegue enviar se a classe permitir (`git.workflows`); o App da classe é criado com ou sem a permissão "Workflows" conforme essa escolha ([workflows](../github/identidades-e-apps.md#workflows)).
   - **Tokens de instalação:** o motor precisa renovar tokens de 1 hora e lidar com expiração no meio de uma operação.
   - **Instalação:** os dois Apps entram na contagem de 100 e precisam ser instalados em cada repositório de workspace antes da sessão zero ([sessão zero do workspace](../sessao-zero/workspace.md)).
 

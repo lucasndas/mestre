@@ -23,7 +23,7 @@ Deixar o Grão-Mestre aprovar sozinho o que é seguro e obrigá-lo a perguntar n
 | `ponto_de_missao` | etapa que espera aprovação ([missões](../orquestracao/missoes.md)) | se as condições passarem | Aprovador |
 | `permissao_de_classe` | comando marcado "pedir aprovação" ([permissões](../classes/permissoes.md)) | se as condições passarem | Aprovador |
 | `custo_extra` | missão ou mesa em 100% do limite ([limites](../plataforma/limites-de-uso.md)) | se dentro do teto do workspace | Aprovador; acima do teto, Administrador |
-| `envio_workflows` | enviar branch que altera `.github/workflows/` ([identidades](../github/identidades-e-apps.md)) | nunca | Administrador |
+| `envio_workflows` | enviar branch que altera `.github/workflows/`, por classe com `git.workflows: ask` ([workflows](../github/identidades-e-apps.md#workflows)) | nunca | Administrador |
 | `configuracao_repositorio` | ruleset, proteção de branch, Apps ([aprovação no GitHub](../github/aprovacao-no-github.md)) | nunca | Dono, com PIN |
 | `classe_workspace` | criar classe do workspace ([teto](../classes/teto-do-workspace.md)) | nunca | Administrador |
 | `atualizacao_mestre` | versão nova do Mestre ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) | nunca | Administrador |

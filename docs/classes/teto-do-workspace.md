@@ -23,6 +23,7 @@ permissions:
     deny: ["docker *", "terraform *"]
   git:
     request_push: false     # nenhuma classe pede envio; o Mestre da mesa pode, pelo nível dele
+    workflows: never        # nenhuma classe envia mudanças no CI
   network:
     internet: true
     domains: ["registry.npmjs.org", "github.com"]
@@ -34,7 +35,7 @@ cost:                       # na unidade de limites-de-uso.md
 ```
 
 - Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existir, `commands.allow` dizem o que **pode** ser dado; o que fica fora é negado. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada.
-- **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas, com `git.request_push: false` e sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)).
+- **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas, com `git.request_push: false`, `git.workflows: never` e sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)).
 
 ### Onde o teto age
 
