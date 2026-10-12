@@ -48,10 +48,10 @@ default: ask                # ferramenta de tipo mcp ou other que não casa com 
 ### Regras fixas de segurança
 
 Aplicação das [invariantes arquiteturais](../arquitetura/precedencia.md#invariantes-arquiteturais), embutidas no binário: nenhuma camada as entrega ao agente, e um decreto nessa área é cumprido pelo motor (regra e exemplo no documento dono). Negam sempre:
-- ler ou escrever o cofre, as pastas de dados do Mestre (inclusive a do retrato `policy.json` e a fila do `mestre hook`, [persistência](../arquitetura/persistencia.md#arquivos)) e as credenciais dos perfis de conta (`.credentials.json`, `auth.json`, token do Antigravity, chaves SSH);
+- ler ou escrever o cofre, as pastas de dados do Mestre (inclusive a do retrato `policy.json` e a fila do `mestre hook`; a única exceção é a pasta temporária do próprio personagem, `MESTRE_TMP` ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)), e nunca a de outro personagem; [persistência](../arquitetura/persistencia.md#arquivos)) e as credenciais dos perfis de conta (`.credentials.json`, `auth.json`, token do Antigravity, chaves SSH);
 - `git push` e mudar remotos (`git remote add|set-url|remove`);
 - comandos git que alteram refs de outras branches, outros worktrees ou o espelho, já que os worktrees das mesas compartilham as refs do espelho (ex.: `git branch -D|-f|-m` de outra branch, `git update-ref`, `git tag`, `git worktree`, `git gc`/`prune`, `git fetch` para refs locais, `git --git-dir`/`-C` apontando para fora do worktree); na própria branch da mesa valem as regras de `git`;
-- escrever pela ferramenta de escrita em `.git/**`, `.mestre/**` (pergaminhos e classes só pela CLI), `.claude/settings*.json`, `.codex/`, `.agents/hooks.json`, `.agents/agents/` e `.claude/agents/` (o agente não cria nem altera definições de agente ou subagente);
+- escrever, pela ferramenta de escrita **ou por comando de shell** (redirecionamento `>`/`>>`, `cp`, `mv`, `tee`, `sed -i`, `rm` e equivalentes reconhecidos pelo despachante), em `.git/**`, `.mestre/**` (pergaminhos e classes só pela CLI), `.claude/settings*.json`, `.codex/`, `.agents/hooks.json`, `.agents/agents/` e `.claude/agents/` (o agente não cria nem altera definições de agente ou subagente). O reconhecimento de comandos de shell é a primeira barreira; a garantia final é que o motor nunca usa uma classe alterada por fora sem aprovação ([classes](classes.md#onde-a-classe-é-alterada));
 - iniciar `claude`, `codex` ou `agy` pelo shell (personagens nascem só pelo motor);
 - executar arquivos de `.mestre/anexos/` ou dar permissão de execução a eles: **anexos nunca são executados** ([anexos](../telegram/anexos-e-transcricao.md));
 - editar um arquivo que outro personagem da mesa editou no turno ainda em andamento (o motivo cita quem).
@@ -145,6 +145,7 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 - **CA-PERM-10** · *rápida* — **Dado** uma classe que libera `curl *`, um teto que nega `curl *` e uma ficha que nega `git commit *`, **quando** o Core monta as regras efetivas, **então** o documento tem `curl *` em `commands.deny` com `origin` `ceiling`, `git.commit` falso e nenhum marcador sem resolver.
 - **CA-PERM-11** · *rápida* — **Dado** qualquer classe, **quando** o agente pede `chmod +x .mestre/anexos/x.sh` ou `sh .mestre/anexos/x.sh`, **então** os dois são negados pela regra fixa de anexos.
 - **CA-PERM-12** · *rápida* — **Dado** uma classe com `tools.deny: ["Agent"]`, **quando** chega um `pre_tool` de tipo `subagent` com esse nome, **então** é negado; e, com a ferramenta liberada, um `pre_tool` de escrita vindo de dentro do subagente (mesmo `MESTRE_AGENT_ID`) passa pelas regras do personagem.
+- **CA-PERM-13** · *rápida* — **Dado** um personagem qualquer, **quando** chega um `pre_tool` de shell com `cp x.md .mestre/classes/qa/CLASS.md` ou `echo y > .claude/agents/a.md`, **então** os dois são negados; e uma escrita na pasta `MESTRE_TMP` do próprio personagem é liberada, enquanto na de outro personagem é negada.
 
 ## Depende de
 

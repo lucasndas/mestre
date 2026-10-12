@@ -18,7 +18,7 @@ Referência de sintaxe dos comandos que gerenciam classes (pacotes de função d
 ### `mestre class`
 ```
 mestre class list [--scope global|workspace|table]
-mestre class show "<classe>"
+mestre class show "<classe>" [--export]
 mestre class create "<classe>" --app <novo | herdar:<classe> | <nome-do-app>> --from <pasta> [--scope table|workspace]
 mestre class edit "<classe>" [--from <pasta>] [--app <…>]
 mestre class assign "<Personagem>" "<classe>"
@@ -26,13 +26,14 @@ mestre class check "<classe>"
 mestre class delete "<classe>"
 ```
 - `list`: nome, escopo, App vinculado, se o vínculo é herdado (`inherited: true`), estado do App com os identificadores de [criação de Apps](../github/criacao-de-apps.md) (`solicitado` enquanto o Grão-Mestre ainda não preparou o link) e provedor preferido. Padrão: todas as visíveis ao chamador.
-- `show`: `CLASS.md`, resumo do `permissions.yaml`, hooks extras, skills extras e App.
+- `show`: `CLASS.md`, resumo do `permissions.yaml`, hooks extras, skills extras e App. Com `--export`, copia o pacote da **versão aprovada** para `$MESTRE_TMP/classes/<classe>/` (sobrescreve) e devolve o caminho, para ser editado e enviado de volta com `edit --from`.
 - `create`: `--app` é **obrigatório** (sem ele → 2 `app_required`). `--from` aponta uma pasta com o pacote (`CLASS.md`, `permissions.yaml`, `hooks/`, lista de skills; estrutura em [classes](../classes/classes.md)); o motor valida, confere contra o teto e copia para o lugar do escopo. `--scope` padrão `table`.
   - escopo da mesa, dentro do teto: criada na hora (exit 0);
   - escopo do workspace: vira proposta para um usuário Administrador ou acima (exit 9);
   - `--app novo`: a classe já funciona com o App "Mestre" e a marca `[Classe]`; o pedido vai ao Grão-Mestre (`app_status: "solicitado"`), que prepara o App (`mestre app create`, com o link de criação enviado ao Dono) ou vincula a uma classe existente explicando o porquê ([identidades-e-apps](../github/identidades-e-apps.md)).
   - `--json` → `{name, scope, path, app, app_status}`.
-- `edit`: troca o pacote e/ou o App, com as mesmas validações e aprovações do escopo. Trocar o App só vale para ações novas.
+- `edit`: troca o pacote e/ou o App, com as mesmas validações e aprovações do escopo ([onde a classe é alterada](../classes/classes.md#onde-a-classe-é-alterada)). Trocar o App só vale para ações novas.
+- `--from` (em `create` e `edit`) só aceita uma pasta dentro de `$MESTRE_TMP` do próprio personagem; fora dela → 2 `from_outside_tmp`. Usuários pelo painel não usam a CLI.
 - `assign`: muda a classe de um personagem da mesa; vale a partir do próximo turno dele (nunca no meio de um).
 - `check`: valida o pacote e mostra, por provedor, como cada permissão será aplicada (`mestre hook` e reforço nativo) e o App com o estado dele. Exit 0 se válido; 2 `invalid_class` com a lista de problemas. Também avisa quando o `CLASS.md` passa do tamanho recomendado ([personagem](../sessao-zero/personagem.md)).
 - `delete`: ação destrutiva (regra 1 de [convencoes](convencoes.md)) → 9 sem pedido explícito; classe em uso por personagem vivo → 7 `in_use`.
@@ -76,6 +77,7 @@ O estado do App das classes vem com o GitHub, no M5 ([criação de Apps](../gith
 - **CA-CLI-CLR-06** · *rápida* — **Dado** um ritual com `--pre-run "date"` e `--prompt "Hoje é {{output}}"`, **quando** dispara, **então** o alvo recebe o texto com a saída do comando no lugar do marcador.
 - **CA-CLI-CLR-08** · *rápida* — **Dado** `ritual create "x" --target "Dev Claude" --prompt "oi" --daily 09:00` em que `Dev Claude` é o nome de uma ficha e não de um personagem da mesa, **quando** roda, **então** sai com 4 `not_visible` e nenhum ritual é criado.
 - **CA-CLI-CLR-09** · *rápida* — **Dado** `ritual create "limpa" --target "srv" --command "make clean" --every 1h`, **quando** dispara com `srv` livre, **então** o terminal recebe `make clean` seguido de Enter.
+- **CA-CLI-CLR-10** · *rápida* — **Dado** um pacote em `./rascunho/qa` dentro do worktree, **quando** o Mestre da mesa roda `mestre class edit "qa" --from ./rascunho/qa`, **então** sai com 2 `from_outside_tmp` e nada muda; e, depois de `class show "qa" --export`, o pacote aparece em `$MESTRE_TMP/classes/qa/` igual à versão aprovada.
 - **CA-CLI-CLR-07** · *rápida* — **Dado** `mestre class check "Dev"` de uma classe válida, **quando** roda, **então** a saída tem uma seção por provedor (Claude Code, Codex, Antigravity) e a linha do App com o estado.
 
 ## Depende de

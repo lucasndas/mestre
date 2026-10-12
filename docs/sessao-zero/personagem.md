@@ -59,6 +59,7 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 | `MESTRE_CLI` | caminho absoluto do binário `mestre` | [convencoes](../cli/convencoes.md) |
 | `MESTRE_WORKSPACE` | slug do workspace | [workspaces](../orquestracao/workspaces.md) |
 | `MESTRE_MESA` | identificador da mesa, `<número>-<slug>` (vazio no Grão-Mestre) | [mesas](../orquestracao/mesas.md#abertura) |
+| `MESTRE_TMP` | pasta temporária só deste personagem, fora do worktree e fora do git: `/var/lib/mestre/agentes/<id>/tmp/` ou `%ProgramData%\Mestre\no\agentes\<id>\tmp\` ([persistência](../arquitetura/persistencia.md#arquivos)); é onde ele monta pacotes de classe para `mestre class edit --from` | [CLI de classes](../cli/coordenacao-classes-e-rituais.md) |
 | `GIT_CONFIG_GLOBAL` | `.mestre/agents/<id>/gitconfig` (autor = bot do App da classe ou do App "Mestre") | [identidades-e-apps](../github/identidades-e-apps.md) |
 | `CLAUDE_CONFIG_DIR`, `CODEX_HOME` ou `HOME` (Antigravity) | pasta do perfil de conta da ficha | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | variáveis da base | como definidas na base | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
@@ -71,7 +72,7 @@ A identidade git vem **só** do `gitconfig` do personagem: o motor nunca põe `G
 - Mudou a versão: o painel marca as mesas com personagens em versão antiga e oferece **Regenerar** (Administrador ou acima). A regeneração refaz os arquivos do worktree ([mesa](mesa.md)) e de cada personagem; os vivos recebem o conteúdo novo pela atualização do início do próximo turno (no Claude Code, o prompt de sistema completo só muda num reinício do personagem, feito quando ele estiver ocioso).
 
 ### Ao encerrar
-Quando o personagem é encerrado de vez (estado final em [personagens](../orquestracao/personagens.md#estados), não um reinício com retomada), o motor do nó apaga `.mestre/agents/<id>/` e, no Antigravity, `.agents/agents/mestre-<id>.md`. Esses arquivos estão na exclusão local do git desde a abertura da mesa ([mesa](mesa.md#gitinfoexclude)). Um reinício com retomada mantém os arquivos (e os regenera, se a classe ou os decretos mudaram).
+Quando o personagem é encerrado de vez (estado final em [personagens](../orquestracao/personagens.md#estados), não um reinício com retomada), o motor do nó apaga `.mestre/agents/<id>/`, a pasta `MESTRE_TMP` do personagem e, no Antigravity, `.agents/agents/mestre-<id>.md`. Esses arquivos estão na exclusão local do git desde a abertura da mesa ([mesa](mesa.md#gitinfoexclude)). Um reinício com retomada mantém os arquivos e a `MESTRE_TMP` (e regenera os arquivos, se a classe ou os decretos mudaram).
 
 ## Regras e erros
 
@@ -93,6 +94,7 @@ Quando o personagem é encerrado de vez (estado final em [personagens](../orques
 - **CA-SZ-PERS-09** · *rápida* — **Dado** um Mestre da mesa e um Dev, ambos Codex, na mesma mesa, **quando** os arquivos dos dois são montados, **então** o `.agents/skills/` do worktree só tem `mestre-comunicacao`, a seção de skills do `MESTRE.md` do Mestre traz a coordenação de mesa e a do Dev não traz.
 - **CA-SZ-PERS-10** · *rápida* — **Dado** um personagem com App da classe "Dev", **quando** o ambiente é montado, **então** `GIT_CONFIG_GLOBAL` aponta para `.mestre/agents/<id>/gitconfig`, cujo `user.name` é o bot do App; **quando** a classe troca de App, **então** só o arquivo muda e o próximo commit sai com o autor novo, sem reiniciar o personagem.
 - **CA-SZ-PERS-11** · *rápida* — **Dado** um personagem Antigravity encerrado, **quando** o encerramento termina, **então** `.mestre/agents/<id>/` e `.agents/agents/mestre-<id>.md` não existem mais e o `git status` do worktree não mostrou esses arquivos em nenhum momento; num reinício com retomada, eles continuam.
+- **CA-SZ-PERS-12** · *rápida* — **Dado** um personagem com arquivos em `MESTRE_TMP`, **quando** ele é encerrado de vez, **então** a pasta `MESTRE_TMP` dele não existe mais; e, num reinício com retomada, ela continua com o mesmo conteúdo.
 
 ## Depende de
 

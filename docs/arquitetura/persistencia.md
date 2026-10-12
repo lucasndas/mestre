@@ -81,7 +81,7 @@ Pastas de dados (padrão). Os mesmos caminhos valem para o Core e para os nós d
 | `/etc/mestre/cofre.key` | `%ProgramData%\Mestre\config\cofre.key` (DPAPI de máquina, ACL só de `NT SERVICE\MestreCore`) | chave do [cofre](../plataforma/cofre.md#chave-do-cofre) | Core |
 | `/var/lib/mestre/banco/` | `%ProgramData%\Mestre\banco\` | `mestre.db`, o banco do Core | Core |
 | `/var/lib/mestre/no/` | `%ProgramData%\Mestre\no\` | `no.db`, o banco do nó, e os dados do motor do nó | todas |
-| `/var/lib/mestre/agentes/<id>/` | `%ProgramData%\Mestre\no\agentes\<id>\` | `policy.json`, retrato das regras efetivas para o modo degradado do `mestre hook` ([permissões](../classes/permissoes.md#modo-degradado)) | todas |
+| `/var/lib/mestre/agentes/<id>/` | `%ProgramData%\Mestre\no\agentes\<id>\` | `policy.json`, retrato das regras efetivas para o modo degradado do `mestre hook` ([permissões](../classes/permissoes.md#modo-degradado)); `tmp/`, a `MESTRE_TMP` do personagem ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)), apagada no encerramento definitivo | todas |
 | `/var/spool/mestre/hook/` | `%ProgramData%\Mestre\no\fila-hook\` | fila local de eventos do `mestre hook` com o motor fora | todas |
 | `/var/lib/mestre/backups/` | `%ProgramData%\Mestre\backups\` | backups diários dos bancos da máquina | todas |
 | `/var/lib/mestre/workspaces/` | `%ProgramData%\Mestre\workspaces\` | espelhos, clones e worktrees (estrutura em [workspaces](../orquestracao/workspaces.md#espelho-e-clone-principal-no-core) e [mesas](../orquestracao/mesas.md#worktree-por-nó-e-sincronização)) | todas |
@@ -91,7 +91,7 @@ Pastas de dados (padrão). Os mesmos caminhos valem para o Core e para os nós d
 | `/var/log/mestre/` | `%ProgramData%\Mestre\logs\` | logs do motor e dos terminais | todas |
 
 Donos e acessos:
-- **Linux:** dono `mestre`; `workspaces/` e `contas/` no grupo `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). `agentes/` (pasta 0750, `policy.json` 0640) e a fila do hook (1730: o grupo `mestre-agente` só cria arquivos) também ficam no grupo `mestre-agente`; o motor valida tudo o que lê da fila. As regras fixas negam às ferramentas dos agentes qualquer acesso a essas pastas ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
+- **Linux:** dono `mestre`; `workspaces/` e `contas/` no grupo `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). `agentes/` (pasta 0750, `policy.json` 0640, `tmp/` 2770 com escrita do grupo) e a fila do hook (1730: o grupo `mestre-agente` só cria arquivos) também ficam no grupo `mestre-agente`; o motor valida tudo o que lê da fila. As regras fixas negam às ferramentas dos agentes qualquer acesso a essas pastas ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
 - **Core Windows:** dono `NT SERVICE\MestreCore`; a conta do usuário do `mestre-node` tem modificação só em `workspaces\` e `contas\`, e é dona de `no\` ([Windows](windows.md#windows-como-core)).
 - **Nó Windows:** ACL para a conta do `mestre-node`, SYSTEM e Administradores. `no\agentes\` e `no\fila-hook\` ficam legíveis pela conta do usuário, a mesma dos agentes (risco aceito em [segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)); as regras fixas negam às ferramentas dos agentes o acesso.
 

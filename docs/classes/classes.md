@@ -20,6 +20,12 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
 - O nome (slug `[a-z0-9-]`) é único entre os escopos visíveis numa mesa (global + workspace + mesa). Variações têm nome próprio (ex.: `qa-api`).
 - Criar, editar e excluir têm a sintaxe em [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) e também podem ser feitos no [painel](../painel/administracao.md).
 
+### Onde a classe é alterada
+
+- A **única** forma de criar, alterar ou excluir uma classe é `mestre class create|edit|delete` ([CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md)) ou o [painel](../painel/administracao.md). Quem grava os arquivos é o motor, depois de validar o pacote, conferir o teto e obter as aprovações do escopo; a regra fixa que proíbe o agente de escrever em `.mestre/**` não atinge esse caminho ([permissões](permissoes.md#regras-fixas-de-segurança)).
+- A cada versão aprovada, o motor registra no banco o hash do pacote. **O motor só usa uma classe cujos arquivos batem com o hash registrado.**
+- Qualquer mudança feita por fora (edição manual, `git pull`, PR mesclado que altere `.mestre/classes/` ou `.mestre/mesas/<mesa>/classes/`), válida ou não, vira uma **proposta**: passa pelas mesmas validações e aprovações do escopo. Até ser aprovada (ou se for inválida), vale a última versão aprovada, e o painel e o Grão-Mestre avisam os usuários. É a mesma regra do [teto](teto-do-workspace.md).
+
 ### Estrutura do pacote
 
 ```
@@ -104,6 +110,7 @@ A entrega aos personagens (sessão zero), o vínculo com Apps (GitHub) e a aprov
 ## Regras e erros
 
 - Criar sem `--app`: recusado, com a explicação das três opções.
+- Arquivos da classe diferentes do hash registrado: a classe continua na última versão aprovada e nasce a proposta descrita acima.
 - Nome já usado num escopo visível: recusado.
 - Mestre da mesa criando ou editando algo fora do teto: recusado, mostrando o que passa do teto.
 - Excluir só a pedido explícito de um usuário autorizado ([convenções da CLI](../cli/convencoes.md)); classe em uso por personagem ativo não é excluída até ele trocar de classe ou ser encerrado.
@@ -118,6 +125,7 @@ A entrega aos personagens (sessão zero), o vínculo com Apps (GitHub) e a aprov
 - **CA-CLASSES-05** · *rápida* — **Dado** uma classe da mesa com um script em `hooks/`, **quando** `class check` roda, **então** aponta o erro e a classe não é salva.
 - **CA-CLASSES-06** · *completa* — **Dado** uma classe de workspace proposta pelo Grão-Mestre, **quando** o próprio Grão-Mestre tenta aprovar, **então** a aprovação é recusada e a classe só passa a valer com o "Aprovar" de um Administrador.
 - **CA-CLASSES-07** · *rápida* — **Dado** uma classe com `app: novo` e hook `pre_compact`, **quando** `class check` roda, **então** mostra o App "em criação" e que o hook não roda no Antigravity.
+- **CA-CLASSES-08** · *rápida* — **Dado** uma classe aprovada e uma edição manual **válida** no `permissions.yaml` dela (hash diferente do registrado), **quando** um personagem dessa classe inicia um turno, **então** valem as regras da última versão aprovada e existe uma proposta pendente com a mudança.
 
 ## Depende de
 
