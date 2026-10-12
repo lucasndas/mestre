@@ -30,24 +30,24 @@ Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tool
 2. Mede o **tempo de parede** total, do início ao fim, com o cache de compilação já aquecido.
 3. Se o total passar do orçamento, **falha** e mostra os **10 testes mais lentos** (nome, pacote, tempo).
 4. **Sinaliza** todo teste da rápida acima de **100 ms**. Antes de sinalizar, roda o teste sozinho uma vez para descontar a disputa de CPU (só mede tempo; não é nova tentativa de aprovação). A sinalização é aviso na saída e no resumo do CI; não falha a suíte.
-5. Na pesada, guarda o tempo de cada execução e avisa quando o total passa **20%** (padrão) da mediana das últimas 7.
+5. Na pesada, guarda o tempo de cada execução (em `.testrun/heavy-history.json`, fora do git) e avisa quando o total passa **20%** (padrão) da mediana das últimas 7.
 6. Define `MESTRE_TEST_SUITE=fast|full|heavy` no ambiente dos testes (uso em [Regras e erros](#regras-e-erros)).
 
 ### Testes afetados
 
 `testrun affected` roda só o que as alterações podem ter quebrado:
 - **Go:** `go test ./...` **com** o cache de testes. O Go só roda de novo os pacotes cujo código, dependências, arquivos lidos ou variáveis de ambiente mudaram; o resto sai do cache. Esse é o mecanismo de "afetados" do Go, sem lista manual.
-- **Painel:** `vitest related <arquivos alterados>`, com a lista vinda de `git diff --name-only HEAD` mais os arquivos novos (`git ls-files --others --exclude-standard`).
+- **Painel:** `vitest related --run <arquivos alterados>`, com a lista vinda de `git diff --name-only HEAD` mais os arquivos novos (`git ls-files --others --exclude-standard`).
 - **Docs:** a verificação de docs é um teste Go que lê `docs/`; o cache detecta a mudança e a roda de novo.
 - Antes do commit roda a rápida inteira; antes do merge, a completa inteira.
 
 ### Quarentena
 
-- Teste instável vai para `test/quarantine.yaml`: identificador do teste, link da issue (rótulo `flaky`), data de entrada e motivo.
+- Teste instável vai para `test/quarantine.yaml`: identificador do teste (o nome Go de nível mais alto, como no `-skip`: `test`), link da issue (rótulo `flaky`: `issue`), data de entrada (`added`, AAAA-MM-DD) e motivo (`reason`).
 - O executor pula esses testes (`go test -skip`, `exclude` do Vitest) e lista os pulados no fim.
 - Prazo padrão: **14 dias**. Entrada vencida faz a completa falhar até o teste ser corrigido ou apagado.
 - Toda noite, `testrun quarantine` roda cada teste da quarentena 20 vezes; quando passa todas, o executor avisa que ele pode sair.
-- Para achar instáveis: toda noite a rápida roda com `-count=5 -shuffle=on` (Vitest com ordem embaralhada); resultado misto vira issue `flaky`.
+- Para achar instáveis: toda noite a rápida roda com `-count=5 -shuffle=on` (`testrun fast -count 5 -shuffle`; Vitest com ordem embaralhada); resultado misto vira issue `flaky`.
 
 ### Mapa do MVP para a suíte pesada
 
@@ -91,7 +91,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 
 ## Regras e erros
 
-- **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint) recusa `time.Sleep`, `time.Now`, `time.After`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc` e `time.Since` fora do pacote do relógio. No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
+- **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint, repetido na rápida pelo `TestCodeRules`) recusa `time.Sleep`, `time.Now`, `time.After`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc` e `time.Since` fora do pacote do relógio. No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
 - **Rápida sem processos e sem rede:** com `MESTRE_TEST_SUITE=fast`, a camada única que inicia processos e a que abre conexões recusam com erro claro ("processo externo na suíte rápida: use o PTY falso"). Na rápida, o agente falso, o `mestre hook` e a CLI rodam dentro do processo do teste pelo lançador em memória ([dublês](dubles.md#agente-falso-fakeagent)). Teste que precisa de processo real é da completa.
 - **Git:** o motor usa o binário `git` do sistema (2.32 ou mais novo) só pelo wrapper `internal/gitx` ([convenções](../desenvolvimento/convencoes.md)). Na rápida, `gitx` é o git falso do `testkit`; critério que precisa de git real (bundle, worktree, `info/exclude`, commit) é da completa.
 - **Serviços do sistema:** a completa nunca instala serviços nem muda contas, ACLs ou o mDNS do sistema; critério que precisa disso é da pesada e cita `(MVP-1)` ou `(MVP-13)`.

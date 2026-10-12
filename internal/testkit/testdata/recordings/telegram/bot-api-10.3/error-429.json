@@ -1,0 +1,7 @@
+{
+  "origin": "telegram",
+  "version": "bot-api-10.3",
+  "captured_at": "2026-10-12",
+  "source": "documentation: https://core.telegram.org/bots/api#responseparameters",
+  "body": {"ok": false, "error_code": 429, "description": "Too Many Requests: retry after 3", "parameters": {"retry_after": 3}}
+}

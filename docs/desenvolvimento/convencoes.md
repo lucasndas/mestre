@@ -48,13 +48,14 @@ web/                 painel: React + TypeScript + Vite
   src/gen/           tipos TypeScript gerados a partir do Go
 tools/testrun/       executor das suítes (ver testes.md)
 tools/docscheck/     verificação da documentação (ver verificacao-de-docs.md)
+tools/codecheck/     regras do linter (tempo, depguard, paralleltest) repetidas como teste da rápida
 test/quarantine.yaml testes em quarentena
 packaging/           units do systemd e instalador do Windows
 docs/                esta documentação
 ```
 
 - **Guardião isolado:** `guardian/` só importa a biblioteca padrão, `pkg/clock` e as dependências permitidas: `golang.org/x/sys`, `golang.org/x/crypto` (argon2id do login e do PIN da página reserva), `kardianos/service`, `coder/websocket`, `go-systemd`, `aead.dev/minisign` (verificação no `apply-update`) e `brutella/dnssd` (mDNS). O protocolo motor ↔ Guardião mora em `guardian/protocol`, que o motor importa (nunca o contrário). Regra verificada pelo linter (`depguard`). Binários, subcomandos e portas: [componentes](../arquitetura/componentes.md).
-- **Dependências escolhidas:** mDNS e DNS-SD com `github.com/brutella/dnssd` (consulta no nó, anúncio de reserva no Guardião do Core Windows); minisign com `aead.dev/minisign`; emulador de terminal com `github.com/charmbracelet/x/vt` ([terminal](../arquitetura/terminal.md)); git pelo binário do sistema, 2.32 ou mais novo, só por `internal/gitx`, nunca por biblioteca Go (worktrees, bundles e `info/exclude` precisam de fidelidade total). O resto da stack está no [ADR 0001](../decisoes/0001-stack-go.md).
+- **Dependências escolhidas:** mDNS e DNS-SD com `github.com/brutella/dnssd` (consulta no nó, anúncio de reserva no Guardião do Core Windows); minisign com `aead.dev/minisign`; emulador de terminal com `github.com/charmbracelet/x/vt` ([terminal](../arquitetura/terminal.md)); git pelo binário do sistema, 2.32 ou mais novo, só por `internal/gitx`, nunca por biblioteca Go (worktrees, bundles e `info/exclude` precisam de fidelidade total); YAML (quarentena, roteiros do agente falso, `permissions.yaml`) com `go.yaml.in/yaml/v3` (MIT e Apache 2.0, o fork mantido do `gopkg.in/yaml.v3`). O resto da stack está no [ADR 0001](../decisoes/0001-stack-go.md).
 - **Código só de Windows** em arquivos `_windows.go`; o resto compila em Linux e Windows.
 - **Painel embutido:** o build do painel vai para `internal/panel/webdist/` (fora do git, exceto um arquivo marcador para o `go build` funcionar sem o build do painel). Em desenvolvimento, o servidor do Vite encaminha a API para um `mestre core` local.
 
@@ -86,7 +87,7 @@ Exceções herdadas, mantidas como estão: identificadores de protocolo, variáv
 ## Estilo
 
 **Go**
-- `gofmt` e `goimports`; `golangci-lint` com `govet`, `staticcheck`, `errcheck`, `forbidigo`, `paralleltest` e `depguard` (configuração no repositório).
+- `gofmt` e `goimports`; `golangci-lint` com `govet`, `staticcheck`, `errcheck`, `forbidigo`, `paralleltest` e `depguard` (configuração em `.golangci.yml`). As regras de `forbidigo`, `depguard` e `paralleltest` também rodam na suíte rápida, como o teste `TestCodeRules` de `tools/codecheck`, para valer onde o linter não está instalado.
 - Erros com contexto: `fmt.Errorf("open table %s: %w", id, err)`. Sem `panic` fora de `main` e de invariantes impossíveis.
 - `context.Context` como primeiro parâmetro de tudo que faz E/S ou espera.
 - Tempo só pelo `clock` (regra e motivo em [testes](../qualidade/testes.md)). Processos, rede e git só pelas camadas únicas de `terminal/` (lançador), `transport/` e `gitx/`, que os dublês substituem ([dublês](../qualidade/dubles.md)).

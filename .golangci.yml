@@ -1,0 +1,59 @@
+# golangci-lint v2 configuration (docs/desenvolvimento/convencoes.md#estilo).
+# tools/codecheck enforces the forbidigo, depguard and paralleltest rules in
+# the fast suite as well, for machines without golangci-lint.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - forbidigo
+    - paralleltest
+    - depguard
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^time\.(Sleep|Now|After|NewTimer|NewTicker|AfterFunc|Since)$
+          msg: use the injectable clock in pkg/clock (docs/qualidade/testes.md)
+    depguard:
+      rules:
+        no-testkit-in-production:
+          files:
+            - $all
+            - "!$test"
+            - "!**/internal/testkit/**"
+            - "!**/cmd/fakeagent/**"
+            - "!**/tools/**"
+          deny:
+            - pkg: github.com/lucasndas/mestre/internal/testkit
+              desc: test doubles are for tests only (docs/qualidade/dubles.md)
+        guardian-isolated:
+          files:
+            - "**/guardian/**"
+            - "!$test"
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/lucasndas/mestre/pkg/clock
+            - github.com/lucasndas/mestre/guardian
+            - golang.org/x/sys
+            - golang.org/x/crypto
+            - github.com/kardianos/service
+            - github.com/coder/websocket
+            - github.com/coreos/go-systemd
+            - aead.dev/minisign
+            - github.com/brutella/dnssd
+  exclusions:
+    presets:
+      - std-error-handling # unchecked Close, Flush and fmt.Fprint*
+    rules:
+      - path: pkg/clock/
+        linters:
+          - forbidigo
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

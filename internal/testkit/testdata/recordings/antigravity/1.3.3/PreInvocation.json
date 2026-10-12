@@ -1,0 +1,7 @@
+{
+  "origin": "antigravity",
+  "version": "1.3.3",
+  "captured_at": "2026-10-12",
+  "source": "documentation: https://antigravity.google/docs/hooks",
+  "body": {"conversationId": "b38a07d5-f7a3-4e27-b4d0-43e9110f60bb", "modelName": "gemini-3.8-flash-high", "invocationNum": 1, "transcriptPath": "/home/user/.gemini/antigravity-cli/brain/b38a07d5-f7a3-4e27-b4d0-43e9110f60bb/.system_generated/logs/transcript_full.jsonl", "workspacePaths": ["/home/user/p"]}
+}

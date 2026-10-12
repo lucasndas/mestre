@@ -46,6 +46,10 @@ O [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-p
 
 O [cofre](../plataforma/cofre.md) é do M1, mas o segundo fator, o filtro de segredos nas mensagens e os avisos de validade usam o Telegram, o Grão-Mestre e a caixa de entrada: CA-COFRE-10 a CA-COFRE-17 são implementados no M5, junto do [bot](../telegram/bot.md) (com CA-BOT-09), CA-COFRE-18 no M4, junto das [bases e fichas](../orquestracao/bases-e-fichas.md) (MCP de navegador do personagem), CA-COFRE-20 no M6, com a [administração](../painel/administracao.md), e CA-COFRE-19 no M7, com a [instalação](../plataforma/instalacao-e-atualizacao.md).
 
+### Critérios dos dublês em marcos posteriores
+
+Os [dublês](../qualidade/dubles.md) são do M0, mas dois critérios dependem de peças de marcos seguintes: CA-DUBLES-08 fecha no M2, quando o nó real do [protocolo](../conectividade/protocolo.md) substitui o cliente de teste que reconecta com o mesmo backoff, e CA-DUBLES-11 fecha no M4, com os [personagens](../orquestracao/personagens.md) (precisa do terminal real do M1 e do `mestre hook` do M3).
+
 ### Spikes do M1
 
 Os spikes de Windows rodam numa **VM Windows 11 dedicada**, a mesma do [laboratório](../qualidade/testes.md#laboratório) da suíte pesada, nunca no PC de uso do Dono; os de Linux, nesta máquina de desenvolvimento ou na VM Ubuntu do laboratório. Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:

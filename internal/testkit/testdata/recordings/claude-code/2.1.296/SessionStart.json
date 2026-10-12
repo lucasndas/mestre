@@ -1,0 +1,7 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.296",
+  "captured_at": "2026-10-12",
+  "source": "documentation: https://code.claude.com/docs/en/hooks#sessionstart",
+  "body": {"session_id": "abc123", "transcript_path": "/home/user/.claude/projects/p/abc123.jsonl", "cwd": "/home/user/p", "hook_event_name": "SessionStart", "source": "startup", "model": "claude-opus-5"}
+}

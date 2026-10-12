@@ -1,0 +1,79 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"regexp"
+	"strings"
+	"time"
+
+	"go.yaml.in/yaml/v3"
+)
+
+// QuarantinePath is the quarantine file (docs/qualidade/testes.md#quarentena).
+const QuarantinePath = "test/quarantine.yaml"
+
+// QuarantineDays is the default time a test may stay in quarantine.
+const QuarantineDays = 14
+
+// QuarantineEntry is one quarantined test. Test is the top-level Go test
+// name, as used by `go test -skip`.
+type QuarantineEntry struct {
+	Test   string `yaml:"test"`
+	Issue  string `yaml:"issue"`
+	Added  string `yaml:"added"` // AAAA-MM-DD
+	Reason string `yaml:"reason"`
+}
+
+type quarantineFile struct {
+	Tests []QuarantineEntry `yaml:"tests"`
+}
+
+var topLevelTestRe = regexp.MustCompile(`^Test[A-Za-z0-9_]*$`)
+
+// loadQuarantine reads the quarantine file; a missing file is empty.
+func loadQuarantine(fsys fs.FS) ([]QuarantineEntry, error) {
+	b, err := fs.ReadFile(fsys, QuarantinePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", QuarantinePath, err)
+	}
+	var f quarantineFile
+	if err := yaml.Unmarshal(b, &f); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", QuarantinePath, err)
+	}
+	for i, e := range f.Tests {
+		switch {
+		case !topLevelTestRe.MatchString(e.Test):
+			return nil, fmt.Errorf("%s: entry %d: test %q is not a top-level Go test name", QuarantinePath, i+1, e.Test)
+		case e.Issue == "" || e.Reason == "":
+			return nil, fmt.Errorf("%s: entry %d (%s): issue and reason are required", QuarantinePath, i+1, e.Test)
+		}
+		if _, err := time.Parse(time.DateOnly, e.Added); err != nil {
+			return nil, fmt.Errorf("%s: entry %d (%s): added %q is not AAAA-MM-DD", QuarantinePath, i+1, e.Test, e.Added)
+		}
+	}
+	return f.Tests, nil
+}
+
+// expired reports whether the entry is past its deadline on today.
+func (e QuarantineEntry) expired(today time.Time) bool {
+	added, _ := time.Parse(time.DateOnly, e.Added)
+	deadline := added.AddDate(0, 0, QuarantineDays).Format(time.DateOnly)
+	return today.Format(time.DateOnly) > deadline
+}
+
+// skipPattern is the -skip value for the entries.
+func skipPattern(es []QuarantineEntry) string {
+	if len(es) == 0 {
+		return ""
+	}
+	names := make([]string, len(es))
+	for i, e := range es {
+		names[i] = e.Test
+	}
+	return "^(" + strings.Join(names, "|") + ")$"
+}

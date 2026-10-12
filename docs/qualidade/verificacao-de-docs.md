@@ -34,7 +34,7 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
    - *documento de funcionalidade* (todo documento com a seção Objetivo): as seções de nível 2 `Objetivo`, `Comportamento`, `Regras e erros`, `Critérios de aceite`, `Depende de` e, opcionais no fim, `Verificar na implementação`, `A confirmar` e `Fontes`;
    - cada item da seção `Verificar na implementação` (em qualquer documento) começa com `**Verificar na implementação:**` e traz, no próprio item, os três marcadores `**Padrão:**` (o que se implementa até lá), `**Se falhar:**` (o plano concreto) e `**Onde:**` (em que teste ou etapa é verificado);
    - *ADR* (`docs/decisoes/`): `Status`, `Contexto`, `Opções consideradas`, `Decisão`, `Consequências` e, opcional, `Fontes`;
-   - *índice*: depois do cabeçalho, só a tabela com as colunas `| Documento | O que cobre | Quando ler |`;
+   - *índice*: depois do cabeçalho, só a tabela com as colunas `| Documento | O que cobre | Quando ler |`; a raiz `docs/INDEX.md` pode ter parágrafos de orientação antes da tabela, que usa a primeira coluna `Área`;
    - os guias de `docs/operacao/` só precisam do cabeçalho.
 7. **Critérios de aceite** (cada item da seção `Critérios de aceite`):
    - formato: `- **CA-<SIGLA>-<NN>** · *<suíte>* — **Dado** …, **quando** …, **então** ….`;
@@ -52,7 +52,7 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
     - todo documento de funcionalidade está no mapa, uma vez só, e todo documento do mapa é de funcionalidade;
     - cada link da seção "Depende de" que aponta para um documento de funcionalidade aponta para um do **mesmo marco ou de marco anterior**; links para documentos de referência (sem a seção Objetivo) são aceitos e não entram no grafo;
     - o grafo formado por esses links **não tem ciclos**; num ciclo, o erro mostra o caminho inteiro (`a.md → b.md → a.md`);
-    - **a ordem registrada é coerente com as dependências:** para cada link de "Depende de" entre documentos do mesmo marco, a etapa de quem depende é maior que a da dependência; o erro mostra os dois documentos e as etapas (`missoes.md (M4, etapa 9) depende de mesas.md (M4, etapa 9)`). Assim, mudar uma dependência sem ajustar a etapa faz a verificação falhar.
+    - **a ordem registrada é coerente com as dependências:** para cada link de "Depende de" entre documentos do mesmo marco, a etapa de quem depende é maior que a da dependência; o erro mostra os dois documentos, com o caminho relativo a `docs/`, e as etapas (`orquestracao/missoes.md (M4, etapa 9) depende de orquestracao/mesas.md (M4, etapa 9)`). Assim, mudar uma dependência sem ajustar a etapa faz a verificação falhar.
 
 O formato conferido vem dos documentos de referência [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md), [glossário](../produto/glossario.md) e [convenções](../desenvolvimento/convencoes.md).
 

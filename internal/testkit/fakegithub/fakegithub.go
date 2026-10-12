@@ -1,0 +1,247 @@
+// Package fakegithub is the in-memory GitHub REST API of every suite
+// (docs/qualidade/dubles.md#github-falso). M0 serves issues (create, get,
+// list) with what matters for the poller: ETag and If-None-Match answering
+// 304 without spending quota, rate-limit headers per installation,
+// installation tokens that expire after one hour by the clock, and the App
+// that did each action. The rest of the API (sub-issues, PRs, reviews,
+// rulesets, manifests, device flow, releases, the App pages) arrives with
+// the GitHub documents in M5; until then it fails the test as not
+// implemented.
+package fakegithub
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/lucasndas/mestre/pkg/clock"
+)
+
+const (
+	origin = "github"
+	// RateLimit is the hourly quota of an installation.
+	RateLimit = 5000
+	// TokenTTL is the life of an installation token.
+	TokenTTL = time.Hour
+)
+
+// Action is one write done through the API, with the App that did it.
+type Action struct {
+	App    string
+	Method string
+	Path   string
+}
+
+type installation struct {
+	app       string
+	expiresAt time.Time
+	used      int
+	resetAt   time.Time
+}
+
+type repo struct {
+	issues []map[string]any
+}
+
+// Server is the fake API. Use it as an http.Handler.
+type Server struct {
+	clk  clock.Clock
+	rep  testkit.Reporter
+	recs fs.FS
+	ver  string
+
+	mu      sync.Mutex
+	tokens  map[string]*installation
+	repos   map[string]*repo
+	actions []Action
+	nextID  int64
+}
+
+// New returns an empty server using the newest recordings.
+func New(clk clock.Clock, rep testkit.Reporter) (*Server, error) {
+	recs := testkit.Recordings()
+	ver, err := testkit.LatestVersion(recs, origin)
+	if err != nil {
+		return nil, err
+	}
+	return &Server{clk: clk, rep: rep, recs: recs, ver: ver,
+		tokens: map[string]*installation{}, repos: map[string]*repo{}, nextID: 1}, nil
+}
+
+// AddRepo creates owner/name.
+func (s *Server) AddRepo(owner, name string) {
+	s.mu.Lock()
+	s.repos[owner+"/"+name] = &repo{}
+	s.mu.Unlock()
+}
+
+// IssueToken creates an installation token for the App slug, valid for
+// TokenTTL from now.
+func (s *Server) IssueToken(token, app string) {
+	now := s.clk.Now()
+	s.mu.Lock()
+	s.tokens[token] = &installation{app: app, expiresAt: now.Add(TokenTTL), resetAt: now.Add(time.Hour)}
+	s.mu.Unlock()
+}
+
+// Actions returns the writes done so far.
+func (s *Server) Actions() []Action {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Action(nil), s.actions...)
+}
+
+// ServeHTTP serves the REST API.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	route := r.Method + " " + r.URL.Path
+	inst, ok := s.auth(w, r)
+	if !ok {
+		return
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 4 || parts[0] != "repos" || parts[3] != "issues" || len(parts) > 5 {
+		testkit.NotImplemented(s.rep, w, route)
+		return
+	}
+	s.mu.Lock()
+	rp, ok := s.repos[parts[1]+"/"+parts[2]]
+	s.mu.Unlock()
+	if !ok {
+		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	switch {
+	case len(parts) == 4 && r.Method == http.MethodGet:
+		s.mu.Lock()
+		list := append(make([]map[string]any, 0, len(rp.issues)), rp.issues...)
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusOK, list)
+	case len(parts) == 4 && r.Method == http.MethodPost:
+		s.createIssue(w, r, inst, rp, parts[1]+"/"+parts[2])
+	case len(parts) == 5 && r.Method == http.MethodGet:
+		n, err := strconv.Atoi(parts[4])
+		s.mu.Lock()
+		var found map[string]any
+		if err == nil && n >= 1 && n <= len(rp.issues) {
+			found = rp.issues[n-1]
+		}
+		s.mu.Unlock()
+		if found == nil {
+			s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+			return
+		}
+		s.write(w, r, inst, http.StatusOK, found)
+	default:
+		testkit.NotImplemented(s.rep, w, route)
+	}
+}
+
+func (s *Server) auth(w http.ResponseWriter, r *http.Request) (*installation, bool) {
+	h := r.Header.Get("Authorization")
+	tok := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(h, "Bearer "), "token "))
+	s.mu.Lock()
+	inst, ok := s.tokens[tok]
+	s.mu.Unlock()
+	if !ok || !s.clk.Now().Before(inst.expiresAt) {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"message": "Bad credentials"})
+		return nil, false
+	}
+	return inst, true
+}
+
+func (s *Server) createIssue(w http.ResponseWriter, r *http.Request, inst *installation, rp *repo, full string) {
+	var in struct {
+		Title  string   `json:"title"`
+		Body   string   `json:"body"`
+		Labels []string `json:"labels"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Title == "" {
+		s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	rec, err := testkit.LoadRecording(s.recs, origin, s.ver, "issue")
+	var issue map[string]any
+	if err == nil {
+		err = json.Unmarshal(rec.Body, &issue)
+	}
+	if err != nil {
+		s.rep.Errorf("fakegithub: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	now := s.clk.Now().UTC().Format(time.RFC3339)
+	s.mu.Lock()
+	n := len(rp.issues) + 1
+	id := s.nextID
+	s.nextID++
+	labels := make([]map[string]any, 0, len(in.Labels))
+	for _, l := range in.Labels {
+		labels = append(labels, map[string]any{"name": l})
+	}
+	issue["id"], issue["number"], issue["title"], issue["body"] = id, n, in.Title, in.Body
+	issue["labels"], issue["created_at"], issue["updated_at"] = labels, now, now
+	issue["url"] = fmt.Sprintf("https://api.github.com/repos/%s/issues/%d", full, n)
+	issue["html_url"] = fmt.Sprintf("https://github.com/%s/issues/%d", full, n)
+	if u, ok := issue["user"].(map[string]any); ok {
+		u["login"] = inst.app + "[bot]"
+	}
+	rp.issues = append(rp.issues, issue)
+	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+	s.mu.Unlock()
+	s.write(w, r, inst, http.StatusCreated, issue)
+}
+
+// write answers with ETag and rate-limit headers. A GET whose ETag matches
+// If-None-Match gets 304 and does not count against the quota.
+func (s *Server) write(w http.ResponseWriter, r *http.Request, inst *installation, status int, v any) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sum := sha256.Sum256(body)
+	etag := `W/"` + hex.EncodeToString(sum[:16]) + `"`
+	notModified := r.Method == http.MethodGet && status == http.StatusOK && r.Header.Get("If-None-Match") == etag
+
+	now := s.clk.Now()
+	s.mu.Lock()
+	if !now.Before(inst.resetAt) {
+		inst.used, inst.resetAt = 0, now.Add(time.Hour)
+	}
+	if !notModified {
+		inst.used++
+	}
+	used, reset := inst.used, inst.resetAt
+	s.mu.Unlock()
+
+	h := w.Header()
+	h.Set("x-ratelimit-limit", strconv.Itoa(RateLimit))
+	h.Set("x-ratelimit-remaining", strconv.Itoa(max(RateLimit-used, 0)))
+	h.Set("x-ratelimit-used", strconv.Itoa(used))
+	h.Set("x-ratelimit-reset", strconv.FormatInt(reset.Unix(), 10))
+	h.Set("x-ratelimit-resource", "core")
+	if r.Method == http.MethodGet {
+		h.Set("ETag", etag)
+	}
+	if notModified {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	h.Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}

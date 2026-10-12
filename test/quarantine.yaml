@@ -1,0 +1,11 @@
+# Unstable tests (docs/qualidade/testes.md#quarentena). One entry per
+# top-level Go test name; the runner skips them and lists them at the end.
+# Default deadline: 14 days after "added"; an expired entry fails the full
+# suite.
+#
+# tests:
+#   - test: TestExample
+#     issue: https://github.com/lucasndas/mestre/issues/123
+#     added: 2026-10-12
+#     reason: what makes it unstable
+tests: []

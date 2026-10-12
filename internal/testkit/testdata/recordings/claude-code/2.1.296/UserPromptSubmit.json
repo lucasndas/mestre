@@ -1,0 +1,7 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.296",
+  "captured_at": "2026-10-12",
+  "source": "documentation: https://code.claude.com/docs/en/hooks#userpromptsubmit",
+  "body": {"session_id": "abc123", "prompt_id": "p1", "transcript_path": "/home/user/.claude/projects/p/abc123.jsonl", "cwd": "/home/user/p", "permission_mode": "default", "hook_event_name": "UserPromptSubmit", "prompt": "hello"}
+}
