@@ -102,8 +102,8 @@ func TestCgroupPerTerminal(t *testing.T) {
 		os.Args[0], "-test.run=^TestCgroupPerTerminal$", "-test.v", "-test.count=1")
 	cmd.Env = append(os.Environ(), "SPIKE_IN_SCOPE=1")
 	out, err := cmd.CombinedOutput()
-	if err != nil && strings.Contains(string(out), "Failed to connect to bus") {
-		t.Skipf("no systemd user manager: %s", out)
+	if err != nil && !strings.Contains(string(out), "=== RUN") {
+		t.Skipf("systemd-run could not start the scope (no user manager?): %s", out)
 	}
 	if err != nil || !strings.Contains(string(out), "--- PASS: TestCgroupPerTerminal") {
 		t.Fatalf("cgroup matrix in a delegated scope: %v\n%s", err, out)
@@ -208,6 +208,9 @@ func TestPeerPidfdTracksReap(t *testing.T) {
 	}
 	defer c.Close()
 	cred, pidfd, err := peer(c)
+	if errors.Is(err, syscall.ENOPROTOOPT) {
+		t.Skip("kernel without SO_PEERPIDFD (< 6.5)")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

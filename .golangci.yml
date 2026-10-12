@@ -47,6 +47,9 @@ linters:
             - aead.dev/minisign
             - github.com/brutella/dnssd
   exclusions:
+    paths:
+      - tools/spikes/ # spike code: kept for reference, never imported (docs/desenvolvimento/convencoes.md)
+      - tools/winsandbox/spikes/
     presets:
       - std-error-handling # unchecked Close, Flush and fmt.Fprint*
     rules:
