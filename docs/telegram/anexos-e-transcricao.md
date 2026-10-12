@@ -63,7 +63,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - Se o nó preferido estiver offline, o próximo capaz assume.
 - **Conversão:**
   - A voz do Telegram vem em OGG/Opus, e o `whisper-server` aceita WAV.
-  - O motor converte com `ffmpeg` (dependência do pacote) para WAV 16 kHz mono antes de enviar. O servidor não roda com `--convert`.
+  - O motor **do Core** converte com `ffmpeg` (dependência do pacote do Core) para WAV 16 kHz mono antes de enviar ao nó que transcreve, seja ele qual for. Assim nenhum nó precisa do `ffmpeg`, nem um nó Windows que passe a transcrever. O servidor não roda com `--convert`.
 - **Fila e tempo:**
   - Uma transcrição por vez por nó, em ordem de chegada.
   - O tempo limite é o maior entre 60 s e 2 vezes a duração do áudio (padrão).
@@ -107,7 +107,7 @@ sequenceDiagram
 - **CA-ANEXO-05** · *rápida* — **Dado** um nó `gpu: true` com transcrição e o Core, **quando** o nó está offline, **então** a transcrição vai para o Core.
 - **CA-ANEXO-06** · *rápida* — **Dado** `mestre reply --attach /etc/passwd`, **quando** o motor processa, **então** recusa por caminho fora do workspace.
 - **CA-ANEXO-07** · *rápida* — **Dado** uma mensagem do Grão-Mestre ao Mestre da mesa citando um anexo, **quando** ela é entregue, **então** o arquivo já existe nos worktrees da mesa.
-- **CA-ANEXO-08** · *pesada* — **Dado** o sistema instalado, **quando** mando um áudio e depois um PDF pelo Telegram, **então** o áudio é transcrito localmente pelo `whisper-server` real e respondido no Telegram, e o PDF chega à mesa certa e é usado na tarefa (MVP-10).
+- **CA-ANEXO-08** · *pesada* — **Dado** o sistema instalado, **quando** mando um áudio e depois um PDF pelo Telegram (dublê), **então** o áudio é transcrito localmente pelo `whisper-server` real e respondido no Telegram, e o PDF chega à mesa certa e é usado na tarefa (MVP-10).
 
 ## Depende de
 
@@ -117,10 +117,9 @@ sequenceDiagram
 - [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
 - [Sessão zero da mesa](../sessao-zero/mesa.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** se o `--prompt` em português melhora a detecção em áudios curtos sem atrapalhar outros idiomas. Testar no benchmark da instalação, com amostras em pt e en.
-- **A confirmar:** a necessidade de `ffmpeg` nos nós Windows, caso um nó Windows passe a transcrever.
+- **Verificar na implementação:** o `--prompt` curto em português melhora a detecção em áudios curtos sem atrapalhar outros idiomas. **Padrão:** usar o `--prompt` com `-l auto`. **Se falhar:** o servidor sobe sem `--prompt`; quem fala só português fixa o idioma em `pt` na configuração. **Onde:** à mão na implementação, com áudios curtos em pt e en no modelo escolhido; as amostras ficam para repetir a cada troca de modelo.
 
 ## Fontes
 

@@ -85,7 +85,7 @@ O resultado aparece em `mestre gh settings show` e no painel; `nao_conta` leva a
 
 ## Critérios de aceite
 
-- **CA-SZ-WS-01** · *pesada* — **Dado** um repositório de teste com `AGENTS.md` e regra de revisão obrigatória, **quando** crio o workspace pelo painel, **então** `.mestre/`, skills e hooks são gerados, o `AGENTS.md` fica idêntico byte a byte, `git status` no clone principal fica limpo, um clone novo feito por outra pessoa não traz nenhum arquivo do Mestre, e o resultado do teste de aprovação aparece no painel (MVP-3).
+- **CA-SZ-WS-01** · *pesada* — **Dado** um repositório de teste no GitHub (dublê) com `AGENTS.md` e regra de revisão obrigatória, **quando** crio o workspace pelo painel, **então** `.mestre/`, skills e hooks são gerados, o `AGENTS.md` fica idêntico byte a byte, `git status` no clone principal fica limpo, um clone novo feito por outra pessoa não traz nenhum arquivo do Mestre, e o resultado do teste de aprovação aparece no painel (MVP-3).
 - **CA-SZ-WS-02** · *completa* — **Dado** um repositório sem os Apps fixos, **quando** o workspace é criado, **então** fica `aguardando Apps`, nenhum clone é feito com outra credencial e, instalados os Apps, segue sozinho.
 - **CA-SZ-WS-03** · *completa* — **Dado** um repositório sem `AGENTS.md`, **quando** a sessão zero roda, **então** a proposta chega a um Administrador e nenhum `AGENTS.md` existe antes da aprovação; aprovado, o PR `mestre/sessao-zero` contém o arquivo.
 - **CA-SZ-WS-04** · *completa* — **Dado** um repositório com `CLAUDE.md` e `AGENTS.md`, **quando** a sessão zero roda, **então** os usuários recebem o aviso de leitura diferente e o checklist mostra o item.
@@ -99,6 +99,6 @@ O resultado aparece em `mestre gh settings show` e no painel; `nao_conta` leva a
 - [identidades-e-apps](../github/identidades-e-apps.md) · [criacao-de-apps](../github/criacao-de-apps.md) · [aprovacao-no-github](../github/aprovacao-no-github.md)
 - [mesa](mesa.md) · [personagem](personagem.md) · [persistencia](../arquitetura/persistencia.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** se `reviewDecision` reflete exatamente as revisões obrigatórias de rulesets (não só da proteção clássica) num repositório pessoal; validar com o primeiro repositório real.
+- **Verificar na implementação:** `reviewDecision` reflete as revisões obrigatórias de rulesets (não só da proteção clássica) num repositório pessoal. **Padrão:** reflete, e o teste de aprovação usa só ele. **Se falhar:** o teste deixa de confiar só em `reviewDecision`: um merge aprovado pelo App e recusado por falta de revisão registra `nao_conta` direto e leva ao plano B ([aprovação no GitHub](../github/aprovacao-no-github.md)). **Onde:** à mão, na sessão zero do primeiro repositório real com ruleset de revisão.

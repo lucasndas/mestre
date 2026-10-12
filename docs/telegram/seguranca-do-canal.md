@@ -70,7 +70,7 @@ Decretos que afrouxam a segurança pedem o PIN do autor. A lista de casos está 
 - **CA-CANAL-04** · *rápida* — **Dado** `/travar` confirmado por um Administrador, **quando** um personagem tenta usar uma ferramenta, **então** o `mestre hook` nega e todos os decretos aparecem suspensos.
 - **CA-CANAL-05** · *rápida* — **Dado** o sistema travado, **quando** o Dono manda `/destravar` com o PIN certo, **então** os decretos voltam ao estado anterior e as mensagens guardadas são entregues.
 - **CA-CANAL-06** · *rápida* — **Dado** uma resposta do Grão-Mestre contendo algo com formato de token, **quando** ela sai pelo Telegram, **então** o trecho está mascarado.
-- **CA-CANAL-07** · *pesada* — **Dado** o sistema instalado e um Telegram falso com um remetente desconhecido, **quando** ele escreve ao bot, **então** é ignorado e o alerta aparece no Telegram do Dono e no painel (MVP-9).
+- **CA-CANAL-07** · *pesada* — **Dado** o sistema instalado e o Telegram (dublê) com um remetente desconhecido, **quando** ele escreve ao bot, **então** é ignorado e o alerta aparece no Telegram do Dono e no painel (MVP-9).
 
 ## Depende de
 

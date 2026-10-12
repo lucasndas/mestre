@@ -114,7 +114,7 @@ No horário da política (padrão: diário, 18:00), o motor coloca na caixa de e
 - **CA-APROV-FLUXO-06** · *rápida* — **Dado** um callback "Aprovar" com o id do pedido vindo de um usuário Observador, **quando** o motor valida, **então** recusa e o pedido não muda.
 - **CA-APROV-FLUXO-07** · *rápida* — **Dado** três aprovações do Grão-Mestre no dia e o horário do resumo, **quando** o relógio falso chega a 18:00, **então** a caixa de entrada do Grão-Mestre recebe a lista das três.
 - **CA-APROV-FLUXO-08** · *completa* — **Dado** um pedido aguardando e o Core reiniciado, **quando** o usuário aprova pelo painel, **então** a decisão é aplicada e registrada na auditoria.
-- **CA-APROV-FLUXO-09** · *pesada* — **Dado** uma etapa de missão que toca área sensível, **quando** o Grão-Mestre pergunta pelo Telegram e o Lucas aprova, **então** a missão segue, inclusive no GitHub (MVP-7).
+- **CA-APROV-FLUXO-09** · *pesada* — **Dado** uma etapa de missão que toca área sensível, **quando** o Grão-Mestre pergunta pelo Telegram (dublê) e o Lucas aprova, **então** a missão segue, inclusive no GitHub (dublê) (MVP-7).
 
 ## Depende de
 

@@ -35,7 +35,7 @@ Um único arquivo-fonte, entregue pelo canal mais forte de cada provedor:
 |---|---|---|
 | Claude Code | `--append-system-prompt-file .mestre/agents/<id>/MESTRE.md` | primeira mensagem |
 | Codex | `-c developer_instructions="<conteúdo>"` (o motor escapa como string TOML) | hook `SessionStart` com `additionalContext`; depois, primeira mensagem |
-| Antigravity | arquivo de agente `.agents/agents/mestre-<id>.md` (corpo = conteúdo do `MESTRE.md`) + `--agent mestre-<id>` | primeiro `PreInvocation` devolvendo `injectSteps` com `ephemeralMessage`; depois, primeira mensagem |
+| Antigravity | arquivo de agente `.agents/agents/mestre-<id>.md` (frontmatter sempre com `name` e `description`; corpo = conteúdo do `MESTRE.md`) + `--agent mestre-<id>` | primeiro `PreInvocation` devolvendo `injectSteps` com `ephemeralMessage`; depois, primeira mensagem |
 
 - **Reserva universal:** se o canal principal falhar, o motor envia o `MESTRE.md` como a primeira mensagem do personagem, antes de qualquer tarefa.
 - Qual canal está valendo para cada versão de cada provedor é decidido pelo teste de conformidade ([conformidade](../provedores/conformidade.md)) e guardado no banco. Detalhes de cada provedor: [claude-code](../provedores/claude-code.md), [codex](../provedores/codex.md), [antigravity](../provedores/antigravity.md).
@@ -46,7 +46,7 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 
 ### Skills por personagem
 - Claude Code: o motor passa `--add-dir .mestre/agents/<id>`; o Claude carrega o `.claude/skills/` dessa pasta.
-- Codex e Antigravity: canal por personagem **a confirmar** (abaixo). Até confirmar, a skill de nível vai para a pasta compartilhada do worktree onde está o personagem que a usa (só o Mestre da mesa no worktree da mesa; só o Grão-Mestre no clone principal); quem mais a vê não ganha permissão nenhuma, porque o motor confere o nível em toda chamada ([convencoes](../cli/convencoes.md)).
+- Codex e Antigravity: sem canal por personagem no MVP. A skill de nível vai para a pasta compartilhada do worktree onde está o personagem que a usa (só o Mestre da mesa no worktree da mesa; só o Grão-Mestre no clone principal); quem mais a vê não ganha permissão nenhuma, porque o motor confere o nível em toda chamada ([convencoes](../cli/convencoes.md)).
 
 ### Variáveis de ambiente
 | Variável | Valor | Dono do assunto |
@@ -92,9 +92,7 @@ Nenhuma variável leva token do GitHub, chave do cofre ou credencial de usuário
 - [classes](../classes/classes.md) · [decretos](../telegram/decretos.md) · [bases-e-fichas](../orquestracao/bases-e-fichas.md)
 - [skills-geradas](../cli/skills-geradas.md) · [identidades-e-apps](../github/identidades-e-apps.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** `-c developer_instructions` no Codex interativo (lido do código, não testado ao vivo).
-- **A confirmar:** `--agent mestre-<id>` no `agy` interativo e se o arquivo de agente exige frontmatter (`name`, `description`).
-- **A confirmar:** canal de skills por personagem no Codex (ex.: `-c` desligando skills por caminho) e no Antigravity (ex.: `--add-dir` ou `.agents/skills.json`).
-- **A confirmar:** o tempo limite da ferramenta de shell de Codex e Antigravity, para manter o `ask` padrão da CLI abaixo dele.
+- Os canais principais do Codex e do Antigravity são conferidos na etapa 2 do [teste de conformidade](../provedores/conformidade.md); padrão e plano B em [codex](../provedores/codex.md#verificar-na-implementação) e [antigravity](../provedores/antigravity.md#verificar-na-implementação).
+- **Verificar na implementação:** o tempo limite da ferramenta de shell do Codex e do Antigravity fica acima do `ask` bloqueante padrão ([tempos limite](../orquestracao/esperas-e-caixa-de-entrada.md#tempos-limite)); no Antigravity, o payload mostra `WaitMsBeforeAsync`, sinal de que o comando pode passar a rodar em segundo plano. **Padrão:** o `ask` bloqueante padrão funciona nos três. **Se falhar:** a skill daquele provedor ensina `mestre ask --no-wait` seguido do fim do turno, e o motor acorda o personagem com a resposta, como no `wait`. **Onde:** à mão na implementação de cada adaptador, com um `ask` de 3 min, e na suíte pesada (CA-ESP-08).

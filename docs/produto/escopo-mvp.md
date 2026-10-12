@@ -14,7 +14,7 @@ Tudo o que a especificação original descreve é o MVP, e só isso. Nenhum docu
 
 ## Critérios globais (MVP-1 a MVP-12)
 
-Cada critério é coberto por um teste de ponta a ponta na suíte pesada; o mapa critério → teste está em [testes](../qualidade/testes.md) (seção "Mapa do MVP para a suíte pesada"). Os documentos listados detalham o critério em critérios menores (que citam `(MVP-N)`).
+Cada critério é coberto por um teste de ponta a ponta na suíte pesada (máquinas e provedores reais; Telegram e GitHub falsos); o mapa critério → teste está em [testes](../qualidade/testes.md) (seção "Mapa do MVP para a suíte pesada"). Os documentos listados detalham o critério em critérios menores (que citam `(MVP-N)`).
 
 | Critério | Texto | Detalhado em |
 |---|---|---|

@@ -57,7 +57,7 @@ Para arquivos que podem já existir com conteúdo da pessoa:
    - skills: pastas `mestre-*` com o marcador de gerado ([skills-geradas](../cli/skills-geradas.md)).
 3. Acrescentar a parte atual do Mestre e gravar de forma atômica (arquivo temporário + renomear), só se o conteúdo mudou.
 
-**Arquivo já versionado pelo projeto** (ex.: um `.agents/hooks.json` do repositório): a mescla é feita e o motor marca o arquivo com `git update-index --skip-worktree`, para que a parte do Mestre não apareça no `git status` nem entre em commits. Antes de sincronizar a branch ou atualizar da principal, o motor tira o bloco e a marca, sincroniza e reaplica.
+**Arquivo já versionado pelo projeto** (ex.: um `.agents/hooks.json` do repositório): a mescla é feita e o motor marca o arquivo com `git update-index --skip-worktree`, para que a parte do Mestre não apareça no `git status` nem entre em commits. Antes de sincronizar a branch ou atualizar da principal (inclusive por rebase), o motor tira o bloco e a marca, sincroniza e reaplica; assim o `skip-worktree` nunca está ligado durante um rebase. Se o projeto mudou o mesmo arquivo, vale a versão do projeto e a parte do Mestre é mesclada de novo por cima.
 
 ### Confiança de pasta por provedor
 Sem confiança, hooks e instruções do projeto não carregam. O motor grava a confiança antes de iniciar o personagem, em cada perfil de conta do nó que vai rodar ali ([bases-e-fichas](../orquestracao/bases-e-fichas.md)):
@@ -105,7 +105,6 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 - [adaptador](../provedores/adaptador.md) · [claude-code](../provedores/claude-code.md) · [codex](../provedores/codex.md) · [antigravity](../provedores/antigravity.md)
 - [skills-geradas](../cli/skills-geradas.md) · [bases-e-fichas](../orquestracao/bases-e-fichas.md) · [checklist](../plataforma/checklist.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** a forma Windows da linha de hook em cada provedor (`cmd /c` no Antigravity, `command_windows` no Codex, shell usado pelo Claude Code); o teste de conformidade ([conformidade](../provedores/conformidade.md)) valida cada forma.
-- **A confirmar:** o comportamento de `skip-worktree` quando a principal muda o mesmo arquivo durante um rebase da mesa.
+- **Verificar na implementação:** a forma Windows da linha de hook em cada provedor (`cmd /c` no Antigravity, `command_windows` no Codex, shell usado pelo Claude Code). **Padrão:** a linha é só o executável e os argumentos (`mestre hook --provider … --event …`), sem sintaxe própria de shell, e só o teste de existência do binário muda por sistema. **Se falhar:** a linha passa a usar o caminho absoluto estável do `mestre.exe` e, no Codex, o campo `command_windows`. **Onde:** etapas 4 a 6 do [teste de conformidade](../provedores/conformidade.md) no nó Windows.

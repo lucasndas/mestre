@@ -19,7 +19,7 @@ Aplicar no GitHub as aprovações decididas pelo Grão-Mestre ou pelos usuários
 Não há confirmação oficial de que o review de um App próprio conta para as revisões obrigatórias (o do `github-actions[bot]` não conta; o Renovate usa Apps aprovadores). Por isso a [sessão zero do workspace](../sessao-zero/workspace.md) dispara este teste:
 
 1. O motor lê as regras da branch principal: `GET /repos/{o}/{r}/rules/branches/{branch}` e a proteção clássica da branch.
-2. Se nenhuma regra exige revisão, o resultado é `nao_se_aplica` e o teste termina.
+2. Se nenhuma regra exige revisão, o resultado é `sem_exigencia` e o teste termina.
 3. Se exige: o App "Mestre" cria a branch `mestre/teste-aprovacao` com um arquivo de teste e abre o PR "[Mestre] Teste de aprovação (pode ignorar)".
 4. O App "Grão-Mestre" envia um review `APPROVE`.
 5. O motor lê `reviewDecision` do PR (GraphQL): `APPROVED` → `conta`; `REVIEW_REQUIRED` → `nao_conta`.
@@ -83,8 +83,8 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - **CA-GH-APROV-04** · *rápida* — **Dado** um PR aberto pelo App "Grão-Mestre", **quando** a política permitiria aprovar sozinho, **então** o motor exige aprovação humana.
 - **CA-GH-APROV-05** · *rápida* — **Dado** um code owner exigido, sem decreto de delegação, **quando** o Grão-Mestre tenta aprovar com a credencial dele, **então** o motor recusa e cria o pedido para essa pessoa.
 - **CA-GH-APROV-06** · *rápida* — **Dado** o device flow com o GitHub falso devolvendo um login diferente do cadastro, **quando** o motor confere, **então** descarta o token e mostra o erro no painel.
-- **CA-GH-APROV-07** · *pesada* — **Dado** um PR de mesa aberto pelo App "Mestre", **quando** o Grão-Mestre aprova pela política, **então** o review aparece no GitHub com o App "Grão-Mestre" e o merge acontece (MVP-5).
-- **CA-GH-APROV-08** · *pesada* — **Dado** um PR que toca área sensível, **quando** o Lucas toca "Aprovar" no Telegram, **então** a aprovação aparece no GitHub e o merge acontece (MVP-7).
+- **CA-GH-APROV-07** · *pesada* — **Dado** um PR de mesa aberto pelo App "Mestre", **quando** o Grão-Mestre aprova pela política, **então** o review aparece no GitHub (dublê) com o App "Grão-Mestre" e o merge acontece (MVP-5).
+- **CA-GH-APROV-08** · *pesada* — **Dado** um PR que toca área sensível, **quando** o Lucas toca "Aprovar" no Telegram (dublê), **então** a aprovação aparece no GitHub (dublê) e o merge acontece (MVP-7).
 
 ## Depende de
 
@@ -95,11 +95,13 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - [Cofre](../plataforma/cofre.md)
 - [Sessão zero do workspace](../sessao-zero/workspace.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** se o review de um App próprio conta (é o teste acima) e quais permissões ele exige.
-- **A confirmar:** se `actor_type: Integration` é aceito na lista de exceção de ruleset em repositório pessoal, e se `bypass_mode: pull_request` permite o merge pela API (senão, avaliar `always`).
-- **A confirmar:** se o review feito com o user access token aparece como review real do usuário e conta como aprovação dele.
+Todos são conferidos à mão na sessão zero do primeiro repositório real que exige revisão; as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
+
+- **Verificar na implementação:** o review `APPROVE` do App "Grão-Mestre" conta para as revisões obrigatórias (é o teste acima), com as permissões da [tabela](identidades-e-apps.md#permissões-mínimas). **Padrão:** conta (o Renovate usa Apps aprovadores). **Se falhar:** plano B do ruleset; se ele também falhar, modo "aprovação humana".
+- **Verificar na implementação:** `actor_type: Integration` é aceito na lista de exceção de ruleset em repositório pessoal (a documentação da API só exclui `OrganizationAdmin` ali), e `bypass_mode: pull_request` permite o merge pela API. **Padrão:** os dois funcionam, como no plano B acima. **Se falhar:** com `pull_request` recusado, a proposta ao Dono passa a usar `bypass_mode: always` (o ruleset só tem a regra de revisão, e o motor nunca envia direto à principal); com `Integration` recusado, modo "aprovação humana".
+- **Verificar na implementação:** o review feito com o user access token aparece como review real do usuário e conta como aprovação dele. **Padrão:** conta. **Se falhar:** a credencial pessoal deixa de ser usada para aprovar; vale o caso "a pessoa exigida não tem credencial" da tabela acima (link do PR pelo Telegram).
 
 ## Fontes
 

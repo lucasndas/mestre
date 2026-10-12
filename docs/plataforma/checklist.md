@@ -68,6 +68,7 @@ Roda (a) quando o serviço `mestre-node` sobe e (b) quando o processo da sessão
 | LIN-04 | serviços `mestre-core` e `mestre-guardiao` ativos, com `Restart=always` (e watchdog no motor) | grave | reconfigurar (aprovação) |
 | LIN-05 | chave do cofre com dono e permissão corretos ([cofre](cofre.md#chave-do-cofre)) | grave | corrigir permissão (aprovação) |
 | LIN-06 | token do bot presente no cofre e bot conectado ([bot](../telegram/bot.md)) | grave | manual: cadastrar o token ([parear Telegram](../operacao/parear-telegram.md)) |
+| LIN-07 | chave do cofre ainda em arquivo num servidor com `systemd-creds` e TPM2 disponíveis ([cofre](cofre.md#chave-do-cofre)) | aviso | mover a chave para `systemd-creds` (aprovação) |
 
 ### Itens: todas as máquinas
 

@@ -94,7 +94,7 @@ Uso interno, chamado só pelos arquivos de hooks gerados: `mestre hook --provide
 
 **Motor fora do ar** (sem conexão ou sem resposta no prazo): modo degradado. Valem só as regras locais que o hook checa sozinho: as regras fixas de segurança embutidas no binário e o retrato das regras efetivas do personagem ([permissões](../classes/permissoes.md#modo-degradado)). O que elas negarem é negado; o que pediria aprovação é negado com o motivo "motor indisponível, tente depois"; o resto é liberado. O evento vai para uma fila local no disco do nó e é reenviado quando o motor voltar. Em `turn_start`, o turno segue sem contexto novo.
 
-**Erro interno do próprio hook:** em `pre_tool` e `permission_request`, bloqueia (Claude e Codex: exit 2 com o motivo no stderr; Antigravity: decisão `deny`); nos demais eventos, exit 0 sem saída.
+**Erro interno do próprio hook:** em `pre_tool` e `permission_request`, bloqueia (Claude e Codex: exit 2 com o motivo no stderr; Antigravity: decisão `deny`); nos demais eventos, exit 0 sem saída (no Antigravity, exit 0 com a resposta neutra em JSON: o despachante trata todos os eventos dele como falha fechada, sem depender de testar cada um).
 
 | Resposta | Claude Code | Codex | Antigravity |
 |---|---|---|---|
@@ -139,10 +139,9 @@ Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela 
 - [Sessão zero da mesa](../sessao-zero/mesa.md) e [do personagem](../sessao-zero/personagem.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** nomes exatos dos campos de caminho nos argumentos do Antigravity e o nome da ferramenta de shell no Codex e no Claude no Windows; capturar os payloads no teste de conformidade.
-- **A confirmar:** comportamento do Antigravity quando PostToolUse, PreInvocation ou Stop falham; até lá, tratar como bloqueante e sempre devolver JSON válido.
+- **Verificar na implementação:** nomes dos campos de caminho nos argumentos do Antigravity e nome da ferramenta de shell do Codex e do Claude no Windows. **Padrão:** o mapa usa os nomes vistos nos payloads gravados (no Antigravity, `CommandLine` e `Cwd` já são conhecidos). **Se falhar:** campo ou ferramenta fora do mapa vira tipo `other`, decidido pelo padrão da classe (regra acima), e o reforço nativo segue valendo. **Onde:** etapas 4 a 6 do [teste de conformidade](conformidade.md), que gravam os payloads.
 
 ## Fontes
 

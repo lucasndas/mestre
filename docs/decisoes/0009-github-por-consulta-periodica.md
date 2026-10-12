@@ -54,9 +54,7 @@ Aceita, 2026-10-12.
   - **Mais requisições:** há eventos que exigem consultar vários endpoints (PR, revisões, comentários, checks). O motor precisa comparar estados para descobrir o que é novo.
   - **Requisições estáveis:** os parâmetros e a ordenação precisam ser sempre os mesmos para aproveitar o `304`.
   - **Limites secundários:** mesmo com `304`, a consulta pode contar para eles (no máximo 100 requisições simultâneas, pontos por minuto). O motor respeita `retry-after` e `x-ratelimit-reset`.
-- **A confirmar:**
-  - Se respostas `304` contam para os limites secundários.
-  - Se `hook_attributes` pode ser omitido do manifesto ou precisa ir com `active: false`.
+- **Decidido na documentação:** para os limites secundários, o motor conta toda requisição, inclusive as que voltam `304` ([eventos](../github/eventos.md)); o manifesto sempre envia `hook_attributes` com `active: false` ([criação de Apps](../github/criacao-de-apps.md)).
 
 ## Fontes
 

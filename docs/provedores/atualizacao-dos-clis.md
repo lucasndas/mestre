@@ -15,8 +15,8 @@ O [adaptador](adaptador.md) aplica o mecanismo da tabela ao montar o início de 
 | Provedor | O que o CLI faz sozinho | Como o Mestre desliga | Instalar versão exata / voltar |
 |---|---|---|---|
 | Claude Code (instalação nativa) | baixa a versão nova em segundo plano; ela vale no próximo início | `DISABLE_AUTOUPDATER=1` no ambiente do processo. **Não** usar `DISABLE_UPDATES`, que bloqueia também o `claude install` usado pelo Mestre | `claude install <versão>`; voltar = `claude install <anterior>`. O instalador mantém as duas versões mais novas em `~/.local/share/claude/versions/` |
-| Codex | ao iniciar, procura a versão nova e mostra a tela "Update now / Skip / Skip until next version" | `check_for_update_on_startup = false` no `config.toml` do `CODEX_HOME` do perfil de conta (a documentação indica isso quando a atualização é gerida centralmente) | `codex update` instala só a mais nova. **A confirmar:** versão exata (instalador próprio, npm `@openai/codex@<versão>` ou winget). Voltar = restaurar a cópia guardada |
-| Antigravity (`agy`) | atualizador automático em segundo plano (citado no changelog) | **A confirmar:** variável `AGY_CLI_DISABLE_AUTO_UPDATE`, achada nas strings do binário 1.3.3 e não documentada | `agy update` instala só a mais nova; versão exata não documentada. Voltar = restaurar a cópia guardada |
+| Codex | ao iniciar, procura a versão nova e mostra a tela "Update now / Skip / Skip until next version" | `check_for_update_on_startup = false` no `config.toml` do `CODEX_HOME` do perfil de conta (a documentação indica isso quando a atualização é gerida centralmente) | versão exata: binário da Release daquela versão em `openai/codex` (ver [Verificar](#verificar-na-implementação)); `codex update` instala só a mais nova. Voltar = restaurar a cópia guardada |
+| Antigravity (`agy`) | atualizador automático em segundo plano (citado no changelog) | variável `AGY_CLI_DISABLE_AUTO_UPDATE=1`, achada nas strings do binário 1.3.3 e não documentada (ver [Verificar](#verificar-na-implementação)) | `agy update` instala só a mais nova; versão exata não documentada. Voltar = restaurar a cópia guardada |
 
 Antes de instalar, o motor sempre guarda uma cópia do executável atual de cada CLI no nó. Essa cópia é o caminho de volta quando o provedor não oferece outro.
 
@@ -46,7 +46,7 @@ flowchart TD
 ```
 
 1. **Detectar:**
-   - **Disponível:** o motor do Core consulta a versão mais nova de cada provedor a cada 6 h (padrão). **A confirmar:** a fonte de cada um. Codex: Releases de `openai/codex`, a mesma fonte que o próprio CLI usa. Claude e `agy`: a definir.
+   - **Disponível:** o motor do Core consulta a versão mais nova a cada 6 h (padrão). Codex: Releases de `openai/codex`, a mesma fonte que o próprio CLI usa. Claude: dist-tag `latest` do pacote npm `@anthropic-ai/claude-code`. `agy`: não há fonte pública conhecida, então no MVP só vale a detecção de versão instalada por fora (abaixo).
    - **Instalada por fora:** o [checklist](../plataforma/checklist.md) ou o `hello` do nó mostram uma versão diferente da registrada. Exemplo: alguém rodou `claude update`.
 2. **Instalar:**
    - um nó por vez, com a conta que roda os agentes daquele nó;
@@ -82,12 +82,12 @@ O id da sessão fica no registro de terminais ([personagens](../orquestracao/per
 | Provedor | Comando de retomada | De onde vem o id | Situação |
 |---|---|---|---|
 | Claude Code | `claude --resume <uuid>` com as mesmas flags da base | o `--session-id` que o motor gerou ao iniciar | flag documentada no modo interativo. O prompt de sistema gravado é reaproveitado até a compactação ([Claude Code](claude-code.md)) |
-| Codex | `codex resume <SESSION_ID>` com os mesmos `-c` | `session_id` dos hooks | subcomando interativo no código-fonte. **A confirmar:** se `-c developer_instructions` vale numa sessão retomada; se não valer, entra pelo contexto do turno |
-| Antigravity | `agy --conversation <id> --agent <nome>` | `conversationId` dos hooks | flag na ajuda do 1.3.3 ("Resume a previous conversation by ID"). **A confirmar:** no modo interativo, e se o `--agent` é reaplicado |
+| Codex | `codex resume <SESSION_ID>` com os mesmos `-c` | `session_id` dos hooks | subcomando interativo no código-fonte. Se `-c developer_instructions` não valer na sessão retomada, a camada entra pelo contexto do turno (verificado na etapa 10 da [conformidade](conformidade.md)) |
+| Antigravity | `agy --conversation <id> --agent <nome>` | `conversationId` dos hooks | flag na ajuda do 1.3.3 ("Resume a previous conversation by ID"). Se não funcionar no modo interativo ou não reaplicar o `--agent`, o personagem renasce (etapa 10 da [conformidade](conformidade.md)) |
 
 ## Regras e erros
 
-- Nenhum personagem iniciado pelo Mestre roda com a autoatualização própria do CLI ligada. Onde o mecanismo ainda está "a confirmar", o checklist avisa quando a versão muda sem pedido.
+- Nenhum personagem iniciado pelo Mestre roda com a autoatualização própria do CLI ligada. Em todos os provedores, o checklist avisa quando a versão muda sem pedido, e a versão nova segue o caminho de "instalada por fora".
 - Instalação, teste e volta ficam na auditoria: nó, provedor, versão anterior e nova, resultado.
 - Uma versão reprovada nunca é liberada sem aprovação de Dono ou Administrador.
 - Teste de conformidade sem cota do provedor: a versão fica "em verificação", os recrutamentos vão para outro nó e o teste é tentado de novo quando a cota voltar.
@@ -112,11 +112,12 @@ O id da sessão fica no registro de terminais ([personagens](../orquestracao/per
 - [Personagens](../orquestracao/personagens.md) · [Checklist](../plataforma/checklist.md)
 - [Autoatualização do Mestre](../plataforma/autoatualizacao.md) · [Fluxo de aprovação](../aprovacoes/fluxo.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** a fonte de "versão disponível" do Claude e do `agy`. Para o Claude, testar a dist-tag do npm `@anthropic-ai/claude-code` ou o canal do instalador nativo.
-- **A confirmar:** se trocar o binário com personagens rodando funciona no Windows (arquivo em uso) para o Codex e o `agy`. Se não funcionar, a instalação espera todos os personagens do provedor no nó chegarem ao ponto seguro.
-- **A confirmar:** se o Codex sem a tela de atualização ainda usa um daemon local com atualizador próprio (`app-server-daemon`, visto no código).
+- **Verificar na implementação:** `AGY_CLI_DISABLE_AUTO_UPDATE=1` desliga o atualizador do `agy`, e o Codex sem a tela de atualização não se atualiza por um processo de fundo próprio (`app-server-daemon`, visto no código). **Padrão:** a tabela acima basta. **Se falhar:** a versão muda sem pedido, o checklist detecta e ela segue o caminho de "instalada por fora" (teste de conformidade antes de liberar). **Onde:** na primeira versão nova de cada CLI depois da implementação, no laboratório da [suíte pesada](../qualidade/testes.md#laboratório): a versão dos personagens não pode mudar sozinha.
+- **Verificar na implementação:** instalar uma versão exata do Codex pelo binário da Release `openai/codex`. **Padrão:** baixar o arquivo da plataforma, conferir e trocar o executável, guardando a cópia. **Se falhar:** o Codex passa a instalar só a mais nova (`codex update`), como o `agy`. **Onde:** na implementação do instalador, no laboratório.
+- **Verificar na implementação:** a dist-tag `latest` do npm acompanha a versão que o instalador nativo do Claude instala. **Padrão:** acompanha. **Se falhar:** o Claude fica como o `agy`, só com a detecção de versão instalada por fora. **Onde:** no laboratório, comparando a dist-tag com o resultado de `claude install`.
+- **Verificar na implementação:** trocar o binário do Codex e do `agy` no Windows com personagens rodando (arquivo em uso). **Padrão:** o executável em uso é renomeado e o novo entra no lugar; os processos antigos seguem até o ponto seguro. **Se falhar:** a instalação naquele nó espera todos os personagens do provedor chegarem ao ponto seguro. **Onde:** suíte completa no Windows, com o agente falso em uso.
 
 ## Fontes
 

@@ -14,7 +14,7 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 |---|---|---|---|---|
 | **rápida** | `fast` | a cada alteração e no gancho de pré-commit | **30 s** | a grande maioria: unitários Go, unitários e de componente do painel (Vitest), [verificação de docs](verificacao-de-docs.md). Sem rede real, sem disco lento, sem processos externos |
 | **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Core e nó reais na mesma máquina, banco temporário, agente falso como processo num PTY real |
-| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 12 critérios do MVP, testes de falha da autocura e [conformidade com os provedores reais](../provedores/conformidade.md) |
+| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 12 critérios do MVP, testes de falha da autocura e [conformidade com os provedores reais](../provedores/conformidade.md), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
 
 ### Como as suítes são selecionadas
 
@@ -56,21 +56,31 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 | Critério | Teste | Peças reais |
 |---|---|---|
 | MVP-1 | `TestMVP01_InstallAndAutoPair` | instalador Ubuntu e Windows, descoberta na rede local, CA |
-| MVP-2 | `TestMVP02_SelfHealing` (+ testes de falha abaixo) | systemd, serviço Windows, Guardiões, Telegram, painel |
-| MVP-3 | `TestMVP03_SessionZero` | GitHub, clone de terceiro sem o Mestre |
+| MVP-2 | `TestMVP02_SelfHealing` (+ testes de falha abaixo) | systemd, serviço Windows, Guardiões, painel (Telegram falso) |
+| MVP-3 | `TestMVP03_SessionZero` | clone de terceiro sem o Mestre (GitHub falso) |
 | MVP-4 | `TestMVP04_EpicToResult` | três provedores reais, Core e nó Windows, duas mesas em paralelo |
-| MVP-5 | `TestMVP05_GitHubIdentities` | GitHub, navegador dedicado, criação de App |
+| MVP-5 | `TestMVP05_GitHubIdentities` | navegador dedicado, criação de App (GitHub falso, com as páginas de criação e instalação) |
 | MVP-6 | `TestMVP06_ClassPermissions` | três provedores reais |
-| MVP-7 | `TestMVP07_ApprovalPolicy` | Telegram, painel, GitHub |
-| MVP-8 | `TestMVP08_PermanentDecree` | Telegram |
-| MVP-9 | `TestMVP09_UnauthorizedUser` | Telegram |
-| MVP-10 | `TestMVP10_AudioAndAttachments` | Telegram, whisper-server com modelo real |
+| MVP-7 | `TestMVP07_ApprovalPolicy` | painel, provedores reais (Telegram e GitHub falsos) |
+| MVP-8 | `TestMVP08_PermanentDecree` | provedores reais (Telegram falso) |
+| MVP-9 | `TestMVP09_UnauthorizedUser` | Core e painel reais (Telegram falso) |
+| MVP-10 | `TestMVP10_AudioAndAttachments` | whisper-server com modelo real (Telegram falso) |
 | MVP-11 | `TestMVP11_PanelOverview` | navegador real (Playwright) |
 | MVP-12 | `TestMVP12_RestartRestoresState` | reinício real do Core e dos nós |
 
 **Testes de falha da autocura** (`TestChaos_*`): matar o motor, travar o processo, encher o disco, derrubar a rede e falhar uma atualização, no Core e no nó. O comportamento esperado está em [camadas.md](../autocura/camadas.md); os critérios desses testes citam `(MVP-2)`, e os de conformidade citam `(MVP-6)`.
 
-**Laboratório:** Core numa VM Ubuntu LTS, nó numa VM Windows 11 ou superior, mesma rede local; conta pessoal de teste no GitHub com um repositório de teste; bot de teste do Telegram; contas de teste dos provedores, já logadas.
+### Escopo da pesada: Telegram e GitHub
+
+- **Decisão (escopo atual):** a pesada usa máquinas reais e os CLIs reais dos provedores, mas Telegram e GitHub continuam **falsos**: os dublês de [dubles.md](dubles.md), com os formatos gravados. Vale para todos os testes de ponta a ponta, inclusive MVP-5, 7, 8, 9 e 10.
+- Por quê: o lado do usuário do Telegram não é automatizável pela Bot API (um bot não fala com outro bot), e o MVP-5 criaria Apps reais a cada noite, contra o limite de 100 por conta.
+- Testes contra Telegram e GitHub reais ficam **fora do escopo atual**. O comportamento real do GitHub que os docs marcam como **Verificar na implementação** é conferido à mão na [sessão zero](../sessao-zero/workspace.md), e as respostas reais conferidas viram gravações dos dublês.
+- Na pesada, os dublês do Telegram e do GitHub rodam como servidores HTTP na VM Linux, e o Core instalado aponta para eles ([como](dubles.md#telegram-e-github-na-pesada)).
+
+### Laboratório
+
+- **Duas VMs dedicadas**, separadas das máquinas de uso: Core numa VM Ubuntu LTS e nó numa VM Windows 11 ou superior, na mesma rede local, com as contas de teste dos provedores já logadas.
+- **Disparo:** toda noite por um timer do systemd na VM Linux (`mestre-heavy.timer`, que roda `testrun heavy`), e sob demanda por quem desenvolve, rodando o mesmo comando na VM Linux. O resultado e o tempo de cada execução ficam guardados para a comparação com a mediana (passo 5 do executor).
 
 ## Regras e erros
 
@@ -100,12 +110,6 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 - [conformidade.md](../provedores/conformidade.md)
 - [camadas.md](../autocura/camadas.md)
 - [convencoes.md](../desenvolvimento/convencoes.md)
-
-## A confirmar
-
-- **A confirmar:** como automatizar o lado do usuário do Telegram na pesada (o bot não fala com outro bot): conta de teste dirigida por um cliente MTProto (ex.: biblioteca `gotd/td`) ou o ambiente de testes do Telegram. Verificar viabilidade e termos de uso.
-- **A confirmar:** o MVP-5 cria Apps reais; o limite é 100 por conta. Definir se o teste apaga o App ao fim (exige o navegador) ou reaproveita um conjunto fixo de nomes.
-- **A confirmar:** onde fica o laboratório da pesada (máquinas próprias ou executor auto-hospedado do GitHub Actions) e quem dispara a execução noturna.
 
 ## Fontes
 

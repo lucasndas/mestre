@@ -64,7 +64,7 @@ Aceita, 2026-10-12.
 - **Negativas:**
   - **Distribuição:** a instalação baixa o binário do whisper.cpp e o modelo (estimativa: 0,5 a 0,9 GB) e roda o benchmark para escolher a quantização.
   - **Supervisão:** o motor supervisiona mais um processo, com checagem de saúde, reinício e porta local.
-  - **Desempenho:** áudios longos transcrevem mais devagar que com faster-whisper em lote. Para mensagens de voz curtas isso é irrelevante: na CPU de um desktop moderno com 8 núcleos, o turbo q5 deve ficar bem abaixo do tempo real (estimativa a confirmar no benchmark).
+  - **Desempenho:** áudios longos transcrevem mais devagar que com faster-whisper em lote. Para mensagens de voz curtas isso é irrelevante: na CPU de um desktop moderno com 8 núcleos, o turbo q5 deve ficar bem abaixo do tempo real (estimativa; o benchmark da instalação mede na máquina).
   - **Checklist:** o checklist precisa conferir o modelo baixado e uma transcrição de teste dentro do tempo esperado ([checklist](../plataforma/checklist.md)).
 - **Quando revisar:** se a vazão em arquivos longos importar mais que a simplicidade de instalação, o faster-whisper volta a ser opção.
 

@@ -31,7 +31,7 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
    - componente: `Core`, `Node`, `Guardião`, `CLI`, `Painel`, `Todos` ou `Projeto`;
    - data válida e não futura (a ferramenta recebe o relógio injetável, ver [dubles.md](dubles.md)).
 6. **Seções na ordem certa:**
-   - *documento de funcionalidade* (todo documento com `## Objetivo`): `## Objetivo`, `## Comportamento`, `## Regras e erros`, `## Critérios de aceite`, `## Depende de` e, opcionais no fim, `## A confirmar` e `## Fontes`;
+   - *documento de funcionalidade* (todo documento com `## Objetivo`): `## Objetivo`, `## Comportamento`, `## Regras e erros`, `## Critérios de aceite`, `## Depende de` e, opcionais no fim, `## Verificar na implementação` e `## Fontes` (cada item dessa seção traz o que verificar, o **Padrão** que se implementa até lá, o plano **Se falhar** e **Onde** é verificado);
    - *ADR* (`docs/decisoes/`): `## Status`, `## Contexto`, `## Opções consideradas`, `## Decisão`, `## Consequências` e, opcional, `## Fontes`;
    - *índice*: depois do cabeçalho, só a tabela com as colunas `| Documento | O que cobre | Quando ler |`;
    - os guias de `docs/operacao/` só precisam do cabeçalho.

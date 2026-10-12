@@ -96,10 +96,10 @@ Cada etapa gera registro: início do agente (ficha, provedor, versão), proposta
 - [Página reserva](pagina-reserva.md)
 - [Telegram em modo reduzido](telegram-modo-reduzido.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** as restrições de só leitura por provedor. Verificar em cada CLI, no modo não interativo, que o agente não consegue escrever nem rodar comandos (teste de conformidade).
-- **A confirmar:** no Windows, o Guardião (LocalSystem) disparar a tarefa agendada que roda como o usuário, deslogado, com a senha guardada pelo Agendador de Tarefas.
+- **Verificar na implementação:** as restrições de só leitura da tabela impedem, em cada CLI no modo não interativo, que o agente escreva ou rode comandos. **Padrão:** a tabela acima. **Se falhar:** aquele provedor não faz diagnóstico naquele nó; o Guardião usa outro provedor que passou e, sem nenhum, o incidente segue sem diagnóstico com IA para a camada seguinte ([camadas](camadas.md)). **Onde:** etapa 11 do [teste de conformidade](../provedores/conformidade.md).
+- **Verificar na implementação:** no Windows, o Guardião (LocalSystem) dispara a tarefa `\Mestre\Diagnostico`, que roda como o usuário mesmo deslogado, com a senha guardada pelo Agendador de Tarefas. **Padrão:** funciona. **Se falhar:** o diagnóstico com IA num nó Windows só roda com o usuário logado; deslogado, o incidente segue sem ele para a camada seguinte, com aviso. **Onde:** suíte pesada, num teste de falha da autocura na VM Windows sem usuário logado.
 
 ## Fontes
 

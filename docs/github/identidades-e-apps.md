@@ -30,7 +30,7 @@ Fazer o histórico do GitHub mostrar quem fez cada coisa: todo commit, comentár
 ### Limite de 100 Apps
 
 - Uma conta pode registrar até **100 Apps**. O banco guarda os Apps do Mestre (tabela `github_apps`, [persistência](../arquitetura/persistencia.md): nome, slug, `app_id`, `client_id`, `bot_user_id`, estado).
-- Contagem = Apps do Mestre + outros Apps da conta. **A confirmar:** ler os outros Apps pela página de Apps da conta no navegador dedicado; se não der, o Dono informa o número no painel.
+- Contagem = Apps do Mestre + outros Apps da conta. Os outros o Dono informa no painel ([administração](../painel/administracao.md#contagem-de-apps)); o Mestre não lê a página de Apps da conta pelo navegador.
 - Com 90 ou mais, o painel e o Dono recebem aviso ([administração](../painel/administracao.md)). Com 100, a criação é recusada e o Grão-Mestre vincula a classe nova a um App existente.
 
 ### Permissões mínimas
@@ -61,7 +61,7 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 
 - Os agentes fazem commits locais. O autor e o committer são o bot do App: nome `<slug>[bot]`, e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com`.
 - `bot_user_id` **não** é o id do App: o motor lê `GET /users/<slug>%5Bbot%5D` → `.id` uma vez e guarda no banco.
-- A identidade fica num arquivo de configuração git por personagem (`.mestre/agents/<id>/gitconfig`), apontado por `GIT_CONFIG_GLOBAL`. Esse arquivo inclui o `.gitconfig` global do usuário e só define `user.name` e `user.email`. Assim o motor pode trocar a identidade sem reiniciar o agente (ex.: quando o App da classe fica pronto). Outras variáveis do personagem: [personagem](../sessao-zero/personagem.md).
+- A identidade fica num arquivo de configuração git por personagem (`.mestre/agents/<id>/gitconfig`), apontado por `GIT_CONFIG_GLOBAL` (existe a partir do git 2.32; o [checklist](../plataforma/checklist.md) confere a versão em cada nó). Esse arquivo inclui o `.gitconfig` global do usuário e só define `user.name` e `user.email`. Assim o motor pode trocar a identidade sem reiniciar o agente (ex.: quando o App da classe fica pronto). Outras variáveis do personagem: [personagem](../sessao-zero/personagem.md).
 - Personagem sem classe própria: Mestre da mesa usa o App "Mestre"; Grão-Mestre usa o App "Grão-Mestre".
 - A mensagem de commit cita a mesa e a issue, com trailers no fim: `Mestre-Mesa: epico/42-login` e `Refs: #57`. A skill ensina o formato ([skills geradas](../cli/skills-geradas.md)).
 - **Commits sem assinatura no MVP:** não aparecem como "Verified" ([ADR 0014](../decisoes/0014-commits-sem-assinatura-no-mvp.md)).
@@ -82,7 +82,7 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
   - `ask` ou `allow`: o App é criado **com** a permissão. Como a chave do App nunca chega ao agente, a permissão é só a capacidade técnica; quem decide se ela é usada é o motor, pela regra da classe (`ask` = só depois do "Aprovar" de um usuário, no hash aprovado).
 - O Grão-Mestre e o "Mestre" não têm a permissão. Uma classe que **herda** o App de outra (`herdar:<classe>`) só pode ter `git.workflows` igual ou menor que a da classe de origem; se precisar de mais, recebe App próprio ([classes](../classes/classes.md)).
 - Antes de enviar, o motor confere os arquivos alterados. Mudança em `.github/workflows/` com classe `never`: o motor não envia, explica o motivo ao Grão-Mestre, que pergunta aos usuários se querem mudar a classe ou passar a tarefa a uma classe que pode.
-- Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado. **A confirmar:** o GitHub pede ao dono que aceite as novas permissões na tela da instalação; o Grão-Mestre manda o link pelo Telegram para concluir com um clique ([criação de Apps](criacao-de-apps.md)).
+- Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado, pelo navegador dedicado ([criação de Apps](criacao-de-apps.md)); o aceite das permissões novas está em [Verificar na implementação](#verificar-na-implementação).
 
 ## Regras e erros
 
@@ -101,7 +101,7 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 - **CA-GH-ID-09** · *rápida* — **Dado** uma classe nova com `git.workflows: allow` e `app: herdar:qa` (App QA sem a permissão Workflows), **quando** o motor valida a classe, **então** recusa e explica que ela precisa de App próprio.
 - **CA-GH-ID-06** · *rápida* — **Dado** 100 Apps contados, **quando** o Grão-Mestre pede um App novo, **então** a criação é recusada com o motivo.
 - **CA-GH-ID-07** · *rápida* — **Dado** um pedido de token para uma ação no repositório X, **quando** o motor pede o token de instalação ao GitHub falso, **então** o pedido lista só o repositório X.
-- **CA-GH-ID-08** · *pesada* — **Dado** uma mesa com personagens Dev e QA, **quando** eles fazem commits e comentam, **então** no GitHub cada commit e comentário aparece com o App da classe de quem fez (MVP-5).
+- **CA-GH-ID-08** · *pesada* — **Dado** uma mesa com personagens Dev e QA, **quando** eles fazem commits e comentam, **então** no GitHub (dublê) cada commit e comentário fica registrado com o App da classe de quem fez (MVP-5).
 
 ## Depende de
 
@@ -110,10 +110,10 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 - [Classes](../classes/classes.md)
 - [Personagem na sessão zero](../sessao-zero/personagem.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** o formato do e-mail do bot não é documentado oficialmente; conferir num commit real que o GitHub liga o commit ao bot.
-- **A confirmar:** `GIT_CONFIG_GLOBAL` exige git 2.32 ou mais novo; o checklist confere a versão do git em cada nó.
+- **Verificar na implementação:** o e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot (formato não documentado oficialmente). **Padrão:** o formato acima. **Se falhar:** os commits continuam válidos, só sem a ligação; o checklist alerta, e a correção é a opção de recriar os commits pela API do [ADR 0014](../decisoes/0014-commits-sem-assinatura-no-mvp.md), que tem o App como autor. **Onde:** no primeiro envio real (o PR `mestre/sessao-zero` ou o primeiro PR de mesa), conferindo `author.login` em `GET /repos/{o}/{r}/commits/{sha}`.
+- **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado precisa que o dono aceite as permissões novas na tela da instalação. **Padrão:** o navegador dedicado edita a permissão e aceita na tela da instalação. **Se falhar** (tela não reconhecida, senha ou 2FA): o Grão-Mestre manda ao Dono, pelo Telegram, o link da tela de aceite para concluir com um clique. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
 
 ## Fontes
 

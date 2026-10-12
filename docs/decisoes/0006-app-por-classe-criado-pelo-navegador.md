@@ -52,7 +52,7 @@ Aceita, 2026-10-12.
   - O motor troca o código pela chave privada, que vai para o cofre.
 - **Onde roda o navegador:** no **processo da sessão do usuário do nó Windows** ([nó Windows](../arquitetura/no-windows.md)), fora do alcance dos agentes das mesas.
 - **Enquanto o App não existe:** as ações da classe saem com o App "Mestre" e a classe na assinatura.
-- **Isolamento e reserva:** a automação fica num componente isolado, com teste na suíte pesada. Se ela quebrar, o usuário recebe o link pelo Telegram para concluir.
+- **Isolamento e reserva:** a automação fica num componente isolado, testada contra as páginas do GitHub falso ([testes](../qualidade/testes.md#escopo-da-pesada-telegram-e-github)). Se ela quebrar na tela real, o usuário recebe o link pelo Telegram para concluir.
 - **Onde estão os detalhes:**
   - Fluxo, manifesto e 2FA: [criação de Apps](../github/criacao-de-apps.md).
   - Identidades, nomes e permissões mínimas: [identidades e Apps](../github/identidades-e-apps.md).
@@ -70,10 +70,8 @@ Aceita, 2026-10-12.
   - **Limite de Apps:** com 100 Apps por conta, o painel acompanha a contagem ([administração](../painel/administracao.md)) e o Grão-Mestre evita Apps para simples variações.
   - **Segredos:** mais chaves privadas no cofre, uma por App.
   - **Prazo do manifesto:** as três etapas do fluxo precisam terminar em até uma hora.
-- **A confirmar:**
-  - **Redirect local:** se `redirect_url` com `http://localhost:<porta>`, ouvido pelo processo da sessão do Windows, funciona. Testar na instalação.
-  - **Senha e 2FA:** quando o GitHub pede senha ou 2FA nesse caminho.
-  - **Repositórios novos:** qual credencial adiciona um repositório a uma instalação existente sem navegador. A API `PUT /user/installations/{id}/repositories/{repo}` exige um token de usuário com admin no repositório. Testar se o user access token do App "Grão-Mestre" ([ADR 0008](0008-grao-mestre-aprovador-delegado.md)) serve.
+- **Verificar na implementação:** o redirect local (`http://localhost:<porta>`) e o user access token do App "Grão-Mestre" ([ADR 0008](0008-grao-mestre-aprovador-delegado.md)) para adicionar repositórios sem navegador. Padrão e plano B de cada um: [criação de Apps](../github/criacao-de-apps.md#verificar-na-implementação).
+- **Senha e 2FA:** o componente não supõe em que etapa o GitHub os pede; reconhece a tela em qualquer etapa e cai para o link pelo Telegram.
 
 ## Fontes
 

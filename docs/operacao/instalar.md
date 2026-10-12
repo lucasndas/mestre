@@ -43,9 +43,9 @@ Guia para quem usa. O que cada passo cria por dentro (pastas, contas, serviços,
 ## Parte 2: nó (Windows)
 
 1. No painel, gere um **convite de nó** ([parear nó](parear-no.md), passo 1). Deixe o código à mão.
-2. Baixe `mestre-setup-<versão>.exe` da página de Releases e abra. Aceite o pedido de permissão de administrador.
+2. Baixe `mestre-<versão>-x64.msi` da página de Releases. Confira o SHA-256 publicado na Release (`Get-FileHash .\mestre-<versão>-x64.msi`) e abra. O instalador não tem assinatura de código no MVP: se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações** → **Executar assim mesmo**. Aceite o pedido de permissão de administrador.
 3. O instalador procura o Core na rede local e mostra o que encontrou. Confira e cole o **código de convite** quando ele pedir. Detalhes: [parear nó](parear-no.md).
-4. O instalador pede a **senha da sua conta do Windows**. É só isso que você precisa fazer. Para que serve:
+4. O instalador pede a **senha da sua conta do Windows** (com conta Microsoft, a senha dela, não o PIN) e confere na hora. É só isso que você precisa fazer. Para que serve:
    - o serviço `mestre-node` roda com a sua conta ("Fazer logon como"), para os CLIs acharem o seu perfil e os seus logins;
    - assim, agentes **sem tela** continuam trabalhando mesmo com você deslogado;
    - quem guarda a senha é o próprio Windows; o Mestre não a grava ([nó Windows](../arquitetura/no-windows.md)).

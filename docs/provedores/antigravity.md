@@ -38,6 +38,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 - **Saída:** PreToolUse `{"decision": "allow"|"deny"|"ask"|"force_ask"|"deny_unless_prior_grant", "reason", "permissionOverrides", "overwrite"}`; PostToolUse `{}`; PreInvocation `{"injectSteps": […]}`; PostInvocation `{"injectSteps": [], "terminationBehavior": ""}`; Stop `{}` (só `"decision":"continue"` impediria a parada).
 - **Falha fechada (testado no PreToolUse):** exit diferente de 0, saída que não é JSON, tempo esgotado e `{}` sem decisão **bloqueiam** a ferramenta. O despachante sempre imprime a decisão explícita ([adaptador](adaptador.md#mestre-hook-despachante)).
 - Um `allow` do hook **não** passa por cima do sistema de permissões nativo.
+- Para PostToolUse, PreInvocation, PostInvocation e Stop, o despachante supõe a mesma falha fechada do PreToolUse: sempre devolve JSON válido e nunca sai com erro de propósito, então não depende do comportamento de falha desses eventos.
 - **Tempos limite gerados:** 30 s em PreToolUse, PreInvocation e PostInvocation; 60 s em PostToolUse e Stop.
 - **Binário ausente:** um hook cujo comando não existe bloqueia o agente. O comando gerado testa se o `mestre` existe no caminho estável e, se não existir, imprime a resposta neutra (`{"decision":"allow"}` ou `{}`). A forma exata por sistema (sh ou cmd) fica no gerador.
 
@@ -51,7 +52,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 ### Confiança de pasta
 
 - No modo interativo, pasta sem confiança mostra "Do you trust the contents of this project?" ("Yes, I trust this folder" / "No, exit").
-- A confiança fica no array `trustedWorkspaces` (caminhos absolutos) de `~/.gemini/antigravity-cli/settings.json`, com o `HOME` do perfil de conta. **Pré-confiar:** acrescentar o caminho de cada worktree (a lista parece exigir caminho exato). JSON inválido impede o `agy` de iniciar. Não existe flag `--trust`.
+- A confiança fica no array `trustedWorkspaces` (caminhos absolutos) de `~/.gemini/antigravity-cli/settings.json`, com o `HOME` do perfil de conta. **Pré-confiar:** acrescentar o caminho exato de cada worktree; o Mestre não depende de a confiança de uma pasta cobrir as subpastas. JSON inválido impede o `agy` de iniciar. Não existe flag `--trust`.
 
 ### Flags
 
@@ -76,7 +77,8 @@ No `settings.json` do perfil: `toolPermission` fica em `request-review` (nunca `
 
 - `agy -p "/usage" --output-format json`, com o `HOME` do perfil: `command.data.groups[].buckets[]` com `id`, `window` (`weekly` ou `5h`), `remaining_fraction` e `reset_time`. Não chama modelo nem gasta tokens. O motor roda no fim de cada turno (no máximo uma vez por minuto por perfil, padrão) e a cada 10 minutos com personagem ativo. Uso da janela = 1 − `remaining_fraction`.
 - Há um limite semanal e um de 5 horas por grupo de modelos (Gemini; Claude e GPT), consumidos conforme o custo dos tokens.
-- Desde a 1.3.3, cota esgotada é avisada na hora: o turno termina com Stop `terminationReason = error`, e o personagem fica "aguardando cota" ([limites](../plataforma/limites-de-uso.md)).
+- Desde a 1.3.3, cota esgotada é avisada na hora: o turno termina com Stop `terminationReason = error`, e o personagem fica "aguardando cota" ([limites](../plataforma/limites-de-uso.md)). O adaptador não depende do texto do erro: Stop com `error` seguido de `/usage` com `remaining_fraction` 0 numa janela basta.
+- Tokens por turno no modo interativo não são lidos no MVP (nem da linha de status nem do `transcript_full.jsonl`): o uso vem do `/usage`, com tempo ativo e turnos.
 
 ### Telas que o PTY precisa tratar
 
@@ -108,13 +110,14 @@ No `settings.json` do perfil: `toolPermission` fica em `request-review` (nunca `
 - [Permissões](../classes/permissoes.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** no modo interativo, se o corpo de `.agents/agents/<nome>.md` com `--agent` soma ao prompt do agente ou o substitui, e quais campos de frontmatter ele exige.
-- **A confirmar:** se o `AGENTS.md` da raiz carrega no primeiro turno ou só quando o agente toca um arquivo; e o que acontece com `AGENTS.md` e `GEMINI.md` na mesma pasta.
-- **A confirmar:** se `permissionOverrides` no `allow` evita a tela de permissão nativa; e o comportamento de falha de PostToolUse, PreInvocation, PostInvocation e Stop.
-- **A confirmar:** se `HOME` separado isola o chaveiro; qual variável vale no Windows (`HOME` ou `USERPROFILE`); se confiar numa pasta cobre as subpastas.
-- **A confirmar:** fonte de tokens por turno no modo interativo (linha de status ou `transcript_full.jsonl`) e o texto de erro de cota esgotada.
+Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
+
+- **Verificar na implementação:** `--agent mestre-<id>` no modo interativo, e se o corpo do arquivo de agente soma ao prompt do agente ou o substitui. **Padrão:** o canal funciona; o corpo é escrito para valer sozinho, sem supor o prompt padrão. **Se falhar:** a camada do Mestre vai pelo primeiro `PreInvocation` (`injectSteps`) e, por último, pela primeira mensagem ([personagem](../sessao-zero/personagem.md)). **Onde:** etapas 2 e 5.
+- **Verificar na implementação:** o `AGENTS.md` da raiz carrega já no primeiro turno (e não só quando o agente toca um arquivo), e o que acontece com `AGENTS.md` e `GEMINI.md` na mesma pasta. **Padrão:** carrega no primeiro turno, e os dois somam. **Se falhar:** a camada do Mestre do Antigravity manda ler o `AGENTS.md` da raiz antes de começar; com só um dos dois lido, a sessão zero avisa como faz com o `CLAUDE.md` ([sessão zero do workspace](../sessao-zero/workspace.md)). **Onde:** etapa 2 (código `P-…`); a pasta com os dois arquivos, à mão.
+- **Verificar na implementação:** `permissionOverrides` no `allow` evita a tela de permissão nativa. **Padrão:** o despachante devolve no `allow` a ação já permitida em `permissionOverrides`. **Se falhar:** o adaptador responde a tela nativa com a decisão registrada (tabela de telas). **Onde:** etapa 5.
+- **Verificar na implementação:** `HOME` separado isola o chaveiro, e qual variável vale no Windows. **Padrão:** isola (o login tem arquivo de reserva sob `HOME`); no Windows o motor define `HOME` e `USERPROFILE` com a pasta do perfil. **Se falhar:** só um perfil de conta Antigravity por nó; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis de contas diferentes em cada VM.
 
 ## Fontes
 

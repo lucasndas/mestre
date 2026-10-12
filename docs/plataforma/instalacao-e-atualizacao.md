@@ -13,9 +13,10 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 | Plataforma | Artefato | O que faz |
 |---|---|---|
 | Ubuntu (LTS atual) | `mestre_<versão>_amd64.deb`, mais um `install.sh` que baixa o `.deb` das [Releases](https://github.com/lucasndas/mestre/releases), confere o SHA-256 e roda `apt install` | coloca os binários em `/usr/lib/mestre/pacote/` e chama `mestre install core` |
-| Windows 11 ou superior | instalador `mestre-setup-<versão>.exe`, elevado | copia os binários e chama `mestre install node` |
+| Windows 11 ou superior | instalador `mestre-<versão>-x64.msi` (MSI gerado com WiX v4), elevado | copia os binários e chama `mestre install node` |
 
 - A lógica toda fica nos subcomandos `mestre install core|node` ([componentes](../arquitetura/componentes.md#binários)); o pacote e o instalador são finos.
+- **Sem assinatura de código no MVP:** o MSI e os `.exe` saem sem assinatura Authenticode. O SHA-256 de cada artefato é publicado na Release, e o guia de [instalação](../operacao/instalar.md) explica o aviso do SmartScreen. As atualizações seguintes usam o manifesto assinado da [atualização automática](autoatualizacao.md).
 - Depois da instalação, as versões novas chegam pela [atualização automática](autoatualizacao.md), fora do `dpkg` e do instalador.
 
 ### Pastas de versões
@@ -54,7 +55,7 @@ Os Apps fixos "Grão-Mestre" e "Mestre" são criados depois, no primeiro acesso 
 2. Pede a senha da conta do usuário e configura o serviço `mestre-node` com "Fazer logon como" ([nó Windows](../arquitetura/no-windows.md)).
 3. Registra os serviços `mestre-node` e `mestre-guardiao` (início automático, recuperação de [camadas](../autocura/camadas.md#valores-padrão)) e o ajudante `mestre-update` (sob demanda).
 4. Cria a tarefa agendada **`\Mestre\Sessao`**: gatilho no logon do usuário dono do serviço, ação `mestre node session`, só com o usuário logado, privilégios normais, sem limite de tempo, reiniciar em falha ([nó Windows](../arquitetura/no-windows.md)).
-5. Cria a tarefa agendada **`\Mestre\Diagnostico`**: roda como o usuário, conectado ou não, sem gatilho (disparada pelo Guardião) ([diagnóstico com IA](../autocura/diagnostico-com-ia.md)).
+5. Cria a tarefa agendada **`\Mestre\Diagnostico`**: roda como o usuário, conectado ou não, sem gatilho (disparada pelo Guardião) ([diagnóstico com IA](../autocura/diagnostico-com-ia.md)). Usa a mesma senha do passo 2, pedida uma vez só; quem a guarda é o Agendador de Tarefas, e o Mestre não a grava. Refazer a configuração da conta (checklist WIN-06) refaz as duas.
 6. Cria as regras de firewall da descoberta e da [página reserva](../autocura/pagina-reserva.md), só no perfil Privado.
 7. Cria as pastas de dados com ACL ([persistência](../arquitetura/persistencia.md#arquivos)), inicia os serviços, roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
 
@@ -62,7 +63,7 @@ Nas atualizações, as tarefas são preservadas e o processo da sessão é reini
 
 ### Whisper
 
-- O motor do nó de transcrição (no MVP, o Core) baixa o `whisper-server` (whisper.cpp) e os modelos `large-v3-turbo` q5_0 e q8_0 ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)). Endereços e SHA-256 de cada arquivo vêm fixos na versão do Mestre; arquivo com hash diferente é apagado e baixado de novo (3 tentativas).
+- O motor do nó de transcrição (no MVP, o Core) baixa o `whisper-server` e os modelos `large-v3-turbo` q5_0 e q8_0 ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)). O `whisper-server` é compilado pelo próprio Mestre (whisper.cpp numa versão fixada) e publicado nas Releases do Mestre, sem depender do que o projeto whisper.cpp publica. Endereços e SHA-256 de cada arquivo vêm fixos na versão do Mestre; arquivo com hash diferente é apagado e baixado de novo (3 tentativas).
 - **Benchmark:** transcreve um áudio de teste embutido (30 s, em português) com cada quantização, usando tantas threads quanto os núcleos físicos. Fica com **q8_0 se levar até 0,3 do tempo do áudio** (padrão); senão, q5_0. O outro modelo é apagado e a escolha fica na configuração.
 - Arquivos em `/var/lib/mestre/whisper/`. Falhou → o nó anuncia `transcricao` falso e o checklist acusa ([anexos e transcrição](../telegram/anexos-e-transcricao.md)).
 
@@ -78,7 +79,7 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 
 ### Remoção (`mestre uninstall`)
 
-Para e remove serviços, unidades, tarefas agendadas, regras de firewall criadas pela instalação e as pastas de versões. Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
+Para e remove serviços, unidades, tarefas agendadas, regras de firewall criadas pela instalação e as pastas de versões. No Windows, apaga também o perfil do navegador dedicado, com a sessão do GitHub, sempre (mesmo sem pedido para apagar os dados). Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
 
 ## Regras e erros
 
@@ -106,12 +107,6 @@ Para e remove serviços, unidades, tarefas agendadas, regras de firewall criadas
 - [Pareamento](../conectividade/pareamento.md)
 - [Descoberta](../conectividade/descoberta.md)
 - [Atualização automática](autoatualizacao.md)
-
-## A confirmar
-
-- **A confirmar:** ferramenta do instalador do Windows e assinatura de código do `.exe`.
-- **A confirmar:** se o whisper.cpp publica `whisper-server` pronto para Linux; se não, o Mestre compila e publica o binário nas próprias Releases.
-- **A confirmar:** a tarefa `\Mestre\Diagnostico` rodar como o usuário deslogado exige guardar a senha no Agendador de Tarefas; conferir o pedido de senha junto com o de "Fazer logon como".
 
 ## Fontes
 

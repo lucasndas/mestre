@@ -116,7 +116,7 @@ Cada decreto fica no banco do Core com:
 - **CA-DEC-05** · *rápida* — **Dado** um decreto de Dono e outro oposto de Administrador, **quando** há decisão sobre o alvo, **então** vale o do Dono e o outro aparece como sobreposto.
 - **CA-DEC-06** · *rápida* — **Dado** um decreto com validade "por 3 dias", **quando** o relógio falso avança 72 horas, **então** ele fica expirado e o autor é avisado.
 - **CA-DEC-07** · *rápida* — **Dado** uma ordem vinda de áudio, **quando** o Grão-Mestre propõe o decreto, **então** a confirmação mostra o texto transcrito e nada vale sem o clique do autor.
-- **CA-DEC-08** · *pesada* — **Dado** o sistema instalado, **quando** o Dono cria pelo Telegram um decreto permanente, vê o efeito num agente e o revoga, **então** o comportamento muda e volta, e o registro mostra os dois momentos (MVP-8).
+- **CA-DEC-08** · *pesada* — **Dado** o sistema instalado, **quando** o Dono cria pelo Telegram (dublê) um decreto permanente, vê o efeito num agente e o revoga, **então** o comportamento muda e volta, e o registro mostra os dois momentos (MVP-8).
 
 ## Depende de
 

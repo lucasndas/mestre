@@ -52,6 +52,7 @@ Aceita, 2026-10-12.
 - **Licença:** **PolyForm Noncommercial 1.0.0**, no arquivo `LICENSE` da raiz, com a linha de aviso obrigatório (`Required Notice`) identificando o autor.
 - **Como chamar:** o projeto se descreve como **"código disponível"**, nunca como "open source".
 - **Uso comercial:** só com autorização do autor.
+- **Contribuições externas:** por ora o projeto **não aceita contribuições externas de código**; pull requests de terceiros são fechados com um agradecimento e a indicação de abrir uma issue. Issues (erros, ideias, dúvidas) são bem-vindas. Um acordo de contribuição (CLA) só será adotado se essa regra mudar.
 - **Repositório:** https://github.com/lucasndas/mestre (público).
 
 ## Consequências
@@ -62,10 +63,9 @@ Aceita, 2026-10-12.
   - O autor mantém o controle do uso comercial.
 - **Negativas:**
   - **Fora de "open source":** o projeto não pode ser chamado de "open source" nem entrar em catálogos que exigem licença OSI. Algumas pessoas e empresas evitam contribuir nesse modelo.
-  - **Contribuições externas:** para continuar podendo licenciar comercialmente, o autor precisa de direitos sobre as contribuições recebidas.
+  - **Contribuições externas:** para continuar podendo licenciar comercialmente, o autor precisaria de direitos sobre as contribuições recebidas. Por isso, por ora, código de terceiros não entra (seção Decisão).
   - **Dependências:** precisam ter licenças compatíveis com a redistribuição (MIT, BSD, Apache). Bibliotecas com licença paga ou restrita, como o tldraw, ficam fora ([ADR 0017](0017-canvas-react-flow.md)). As licenças das dependências são conferidas antes de adicionar cada uma ([convenções](../desenvolvimento/convencoes.md)).
   - **Detecção pelo GitHub:** o GitHub pode não reconhecer a licença automaticamente e mostrá-la como "Other". Isso é só visual.
-- **A confirmar:** como aceitar contribuições externas, por exemplo com um acordo de contribuição (CLA). Isso fica para quando houver a primeira contribuição.
 
 ## Fontes
 

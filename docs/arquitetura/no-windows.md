@@ -84,12 +84,14 @@ Quando o processo de sessão termina (logoff, queda):
 - O Guardião do nó roda como LocalSystem, para poder reiniciar e trocar a versão do motor ([Guardião](../autocura/guardiao.md)).
 - Dados do nó em `%ProgramData%\Mestre\` ([persistência](persistencia.md)), com ACL para a conta do serviço, SYSTEM e Administradores.
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** ConPTY criado dentro de um serviço com conta de usuário, na sessão 0, para agentes sem GUI. Indício a favor: o OpenSSH do Windows usa ConPTY a partir de serviço na sessão 0. Testar `claude`, `codex` e `agy` num Windows 11 real.
-- **A confirmar:** dentro do serviço com conta de usuário, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA` apontam para o perfil do usuário, e DPAPI/Gerenciador de Credenciais funcionam para os CLIs.
-- **A confirmar:** como a instalação pede a senha exigida pelo "Fazer logon como" e se funciona com conta Microsoft e com contas que entram só por PIN/Windows Hello.
-- **A confirmar:** a tarefa agendada com token interativo inicia na sessão certa também com login automático, e `schtasks /run` pela conta do serviço funciona sem elevação.
+Cada item é conferido no laboratório da [suíte pesada](../qualidade/testes.md#laboratório) (VM Windows) e, nas máquinas de uso, pelo [checklist](../plataforma/checklist.md).
+
+- **Verificar na implementação:** ConPTY criado dentro do serviço com conta de usuário, na sessão 0, roda `claude`, `codex` e `agy` sem GUI. **Padrão:** como descrito acima (indício a favor: o OpenSSH do Windows usa ConPTY a partir de serviço na sessão 0). **Se falhar:** os terminais sem GUI também passam para o processo de sessão; agentes passam a exigir usuário logado, e o checklist recomenda o login automático. **Onde:** testes de ConPTY da suíte completa no Windows e [conformidade](../provedores/conformidade.md) no nó Windows.
+- **Verificar na implementação:** no serviço com conta de usuário, `USERPROFILE`, `APPDATA` e `LOCALAPPDATA` apontam para o perfil do usuário, e DPAPI e o Gerenciador de Credenciais funcionam para os CLIs. **Padrão:** o ambiente vem de `CreateEnvironmentBlock` do usuário, sem ajuste extra. **Se falhar:** o serviço carrega o perfil com `LoadUserProfile` antes de montar o ambiente; o CLI cuja credencial ainda falhar roda só no processo de sessão. **Onde:** conformidade no nó Windows (login de cada provedor válido dentro do serviço).
+- **Senha do "Fazer logon como" (decidido):** o instalador pede a senha numa janela própria e a valida com `LogonUser` antes de configurar o serviço e a tarefa `\Mestre\Diagnostico`; senha errada é pedida de novo. Em conta Microsoft, é a senha da conta Microsoft. **Verificar na implementação:** conta Microsoft e conta que entra só por PIN/Windows Hello. **Padrão:** a senha da conta funciona. **Se falhar:** o instalador explica como reativar o login por senha da conta; sem isso, o nó instala no modo em que todos os terminais rodam no processo de sessão (como no item do ConPTY). **Onde:** instalação na VM Windows do laboratório, com os dois tipos de conta.
+- **Verificar na implementação:** a tarefa `\Mestre\Sessao` inicia na sessão certa também com login automático, e `schtasks /run` pela conta do serviço funciona sem elevação. **Padrão:** como descrito acima. **Se falhar:** vale a alternativa registrada: o Guardião (LocalSystem) inicia o processo de sessão com `WTSQueryUserToken` + `CreateProcessAsUser`. **Onde:** suíte pesada (MVP-1 e MVP-12 na VM Windows com login automático) e checklist WIN-07/WIN-08.
 
 ## Fontes
 

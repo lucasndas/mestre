@@ -77,10 +77,7 @@ Para o GitHub, as alternativas foram:
     - Um App como quem ignora a regra pula a revisão; não a satisfaz.
     - Em repositório privado sem GitHub Pro não há ruleset, e o plano B não existe.
   - **Token de usuário:** é mais um segredo de pessoa no cofre, que precisa ser renovado e pode ser revogado por ela.
-- **A confirmar:**
-  - **Bypass em conta pessoal:** se `actor_type: Integration` é aceito como quem pode ignorar a regra num ruleset de repositório pessoal. A documentação indica que sim, e há relato da comunidade. Testar na sessão zero.
-  - **Review real:** se o review feito com o user access token do App sai como review real do usuário e conta para code owners. Testar na implementação.
-  - **Permissões necessárias:** quais permissões do App fazem a aprovação dele contar (`pull_requests: write`, talvez `contents: write`).
+- **Verificar na implementação:** se o review do App próprio conta e com quais permissões, se `actor_type: Integration` vale como exceção de ruleset em repositório pessoal e se o review com o user access token conta como do usuário. Padrão e plano B de cada um: [aprovação no GitHub](../github/aprovacao-no-github.md#verificar-na-implementação).
 
 ## Fontes
 

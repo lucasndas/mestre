@@ -51,7 +51,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **CA-CONV-03** · *rápida* — **Dado** um pedido aberto na central, **quando** outro usuário aprova pelo Telegram, **então** o item mostra "Já respondido por <nome>" sem botões, sem recarregar a página.
 - **CA-CONV-04** · *rápida* — **Dado** um Observador, **quando** chama a rota de aprovar, **então** o servidor recusa com o nível exigido.
 - **CA-CONV-05** · *completa* — **Dado** um PDF enviado pela conversa do painel, **quando** chega, **então** é salvo como anexo do workspace com origem "painel" e entregue ao Grão-Mestre com o caminho (MVP-10).
-- **CA-CONV-06** · *pesada* — **Dado** um PR numa área sensível, **quando** o Grão-Mestre pergunta e eu aprovo pela central do painel, **então** a decisão é aplicada no GitHub (MVP-7).
+- **CA-CONV-06** · *pesada* — **Dado** um PR numa área sensível, **quando** o Grão-Mestre pergunta e eu aprovo pela central do painel, **então** a decisão é aplicada no GitHub (dublê) (MVP-7).
 
 ## Depende de
 

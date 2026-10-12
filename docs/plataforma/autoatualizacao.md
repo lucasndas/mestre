@@ -68,7 +68,7 @@ sequenceDiagram
 5. **Falhou** → o Guardião faz `rollback` ([lista fechada](../autocura/guardiao.md#lista-fechada-de-ações)) na hora, sem esperar o laço de queda. **Saudável** → passo concluído e personagens retomados ([personagens](../orquestracao/personagens.md#retomada-após-reinício)).
 6. **Cura durante a janela:** a máquina fica "em atualização" e a camada 3 espera, porque o Guardião local tem a vez; no Core, o Guardião (árbitro da eleição) responde `updating` aos pedidos de trava. Se até o `rollback` falhar, vale o incidente normal das [camadas](../autocura/camadas.md).
 
-**Ajudante de troca:** serviço de uso único (`mestre-update`: unidade oneshot com root no Linux, serviço sob demanda com LocalSystem no Windows) que só a conta do motor pode iniciar. Ele roda `mestre-guardiao apply-update` do Guardião **instalado**, que confere de novo a assinatura antes de mexer em arquivo. Assim, um motor comprometido só consegue instalar uma release assinada.
+**Ajudante de troca:** serviço de uso único (`mestre-update`: unidade oneshot com root no Linux, serviço sob demanda com LocalSystem no Windows) que só a conta do motor pode iniciar: no Linux, uma regra do polkit dá à conta `mestre` só a ação `org.freedesktop.systemd1.manage-units` para a unidade `mestre-update.service` com o verbo `start`; no Windows, a DACL do serviço (`sc sdset`) dá a permissão de iniciar só ao SID da conta do `mestre-node`. Um teste da suíte completa em cada sistema confere que a conta do motor inicia o ajudante e outra conta não. Ele roda `mestre-guardiao apply-update` do Guardião **instalado**, que confere de novo a assinatura antes de mexer em arquivo. Assim, um motor comprometido só consegue instalar uma release assinada.
 
 ### Um passo do Guardião
 
@@ -122,8 +122,8 @@ Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro`
 - **CA-AUTO-05** · *rápida* — **Dado** Core e nós com prioridade 200 e 100 (dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é motor e Guardião do Core, motor e Guardião do nó 200, motor e Guardião do nó 100, um passo por vez.
 - **CA-AUTO-06** · *rápida* — **Dado** um passo em curso no Core, **quando** um nó fica pronto, **então** espera a trava: Core e nó não atualizam juntos.
 - **CA-AUTO-07** · *rápida* — **Dado** o motor de uma máquina sem heartbeat em dia, **quando** chega a vez do Guardião dela, **então** o passo não começa: motor e Guardião nunca ficam fora ao mesmo tempo.
-- **CA-AUTO-08** · *pesada* — **Dado** uma release cujo motor sobe mas não recebe `welcome` do Core, **quando** passa a janela de confirmação, **então** a atualização do motor que falhou volta sozinha: o Guardião restaura a versão anterior, o motor fica saudável e a release vira `revertida` (MVP-2).
-- **CA-AUTO-09** · *pesada* — **Dado** uma release cujo Guardião não abre a porta, **quando** o motor confere a saúde, **então** a atualização do Guardião que falhou volta sozinha e os usuários são alertados (MVP-2).
+- **CA-AUTO-08** · *pesada* — **Dado** uma release publicada no GitHub (dublê) cujo motor sobe mas não recebe `welcome` do Core, **quando** passa a janela de confirmação, **então** a atualização do motor que falhou volta sozinha: o Guardião restaura a versão anterior, o motor fica saudável e a release vira `revertida` (MVP-2).
+- **CA-AUTO-09** · *pesada* — **Dado** uma release publicada no GitHub (dublê) cujo Guardião não abre a porta, **quando** o motor confere a saúde, **então** a atualização do Guardião que falhou volta sozinha e os usuários são alertados (MVP-2).
 - **CA-AUTO-10** · *rápida* — **Dado** um Core falso que manda binário não assinado com `update.apply`, **quando** o nó verifica, **então** recusa; o ajudante de troca também recusa um arquivo trocado depois da verificação.
 - **CA-AUTO-11** · *completa* — **Dado** um personagem `busy` no nó, **quando** chega o passo do motor, **então** o reinício espera o `done`, e depois o personagem é retomado sem sumir.
 - **CA-AUTO-12** · *rápida* — **Dado** um incidente aberto, **quando** a release é aprovada, **então** fica `pausada` até o incidente fechar.
@@ -136,10 +136,6 @@ Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro`
 - [Protocolo](../conectividade/protocolo.md)
 - [Fluxo de aprovação](../aprovacoes/fluxo.md) · [Bot do Telegram](../telegram/bot.md)
 - [Personagens](../orquestracao/personagens.md)
-
-## A confirmar
-
-- **A confirmar:** como só a conta do motor pode iniciar `mestre-update`: regra polkit para a unidade no Linux; DACL do serviço (`sc sdset`) no Windows. Testar as duas na instalação.
 
 ## Fontes
 

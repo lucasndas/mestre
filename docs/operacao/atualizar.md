@@ -30,7 +30,7 @@ Atualizações do Mestre não passam pelo `apt` nem pelo instalador do Windows: 
 
 ### Nó que ficou muito tempo desligado
 
-Se um nó ficou desligado por tanto tempo que a versão dele não conversa mais com o Core, o painel mostra o nó como fora da versão aceita. Atualize esse nó à mão: baixe o `mestre-setup-<versão>.exe` mais novo e rode, como na [instalação](instalar.md#parte-2-nó-windows). Ele mantém o pareamento, as tarefas agendadas e os dados.
+Se um nó ficou desligado por tanto tempo que a versão dele não conversa mais com o Core, o painel mostra o nó como fora da versão aceita. Atualize esse nó à mão: baixe o `mestre-<versão>-x64.msi` mais novo e rode, como na [instalação](instalar.md#parte-2-nó-windows). Ele mantém o pareamento, as tarefas agendadas e os dados.
 
 ## Atualizar os CLIs dos provedores
 

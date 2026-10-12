@@ -70,7 +70,7 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - **CA-GM-03** · *rápida* — **Dado** um workspace com instruções extras, **quando** a camada do Mestre do Grão-Mestre é montada, **então** o texto extra aparece depois das instruções do sistema, sob o título definido, e as do sistema continuam completas.
 - **CA-GM-04** · *completa* — **Dado** o Core reiniciado com duas mesas abertas, **quando** o motor volta, **então** o Grão-Mestre é o primeiro personagem iniciado e recebe a mensagem de retomada listando as duas mesas.
 - **CA-GM-05** · *rápida* — **Dado** um Mestre de mesa, **quando** ele chama `mestre table open`, **então** recebe erro de permissão.
-- **CA-GM-06** · *pesada* — **Dado** um pedido de funcionalidade pelo Telegram, **quando** o Grão-Mestre o trata, **então** cria o épico, abre a mesa e repassa o pedido ao Mestre da mesa sem reescrever (MVP-4).
+- **CA-GM-06** · *pesada* — **Dado** um pedido de funcionalidade pelo Telegram (dublê), **quando** o Grão-Mestre o trata, **então** cria o épico no GitHub (dublê), abre a mesa e repassa o pedido ao Mestre da mesa sem reescrever (MVP-4).
 
 ## Depende de
 

@@ -72,7 +72,7 @@ sequenceDiagram
 | `url` | `https://github.com/<login-do-dono>` (padrão) |
 | `description` | "App do Mestre para a classe <Classe>" |
 | `public` | `false` (só a conta do Dono instala) |
-| `hook_attributes` | `{"url": "https://example.invalid", "active": false}` |
+| `hook_attributes` | `{"url": "https://example.invalid", "active": false}`, sempre enviado (é o formato documentado para webhook inativo; o Mestre não testa omiti-lo) |
 | `redirect_url` | `http://localhost:<porta>/callback` |
 | `default_permissions` | as do papel, pela tabela de [permissões mínimas](identidades-e-apps.md) |
 | `default_events` | `[]` |
@@ -98,13 +98,14 @@ Quando o navegador não consegue seguir (GitHub pede senha ou 2FA, tela diferent
 
 - Só um componente do código conhece as telas do GitHub (abrir, enviar o manifesto, confirmar, instalar, escolher repositórios, reconhecer pedido de senha/2FA/login). Seletores e textos esperados ficam num só lugar.
 - Navegador padrão: Microsoft Edge com perfil próprio (`--user-data-dir` só do Mestre), controlado pelo protocolo de depuração via pipe (`--remote-debugging-pipe`), sem porta TCP aberta.
-- Se uma tela mudar e o componente quebrar, o Grão-Mestre cai para o link pelo Telegram, e o teste da suíte pesada acusa.
+- Se uma tela mudar e o componente quebrar, o Grão-Mestre cai para o link pelo Telegram e o alerta diz a etapa que quebrou. A tela real não tem teste automatizado no escopo atual ([testes](../qualidade/testes.md#escopo-da-pesada-telegram-e-github)).
 
 ## Regras e erros
 
 - O navegador dedicado só serve para isso e fica fora do alcance dos agentes: a pasta do perfil é bloqueada pelas regras fixas do Mestre para todos os personagens ([segurança](../arquitetura/seguranca.md)).
 - Nome já em uso: o componente reconhece o erro na tela, gera o próximo nome (`-2`, `-3`…) e recomeça.
 - Limite de 100 Apps atingido: nem começa ([identidades](identidades-e-apps.md)).
+- Pedido de senha ou 2FA (modo sudo): o componente não supõe em que etapa ele aparece; reconhece a tela em qualquer etapa da criação ou da instalação e passa o App para `aguardando_usuario`.
 - O endpoint de conversão tem limite de uso; em erro 403/429 o motor respeita `retry-after` dentro da janela de 1 hora.
 - Sessão do GitHub expirada no navegador: o [checklist](../plataforma/checklist.md) detecta e o Grão-Mestre avisa o Dono para entrar de novo.
 - Toda criação e instalação fica na auditoria (quem pediu, App, repositórios, caminho usado: navegador ou link).
@@ -116,7 +117,7 @@ Quando o navegador não consegue seguir (GitHub pede senha ou 2FA, tela diferent
 - **CA-GH-APPS-03** · *rápida* — **Dado** um App `em_criacao` há 1 hora no relógio falso, **quando** o relógio avança, **então** o App vai para `falhou` e o Grão-Mestre recebe o aviso.
 - **CA-GH-APPS-04** · *rápida* — **Dado** o componente informando "pedido de 2FA", **quando** o motor processa, **então** o App vai para `aguardando_usuario` e sai para o Dono uma mensagem do Telegram com o link do painel.
 - **CA-GH-APPS-05** · *completa* — **Dado** um App `pronto` e um workspace novo, **quando** o motor instala o App no repositório novo, **então** usa o `PUT` da API com a credencial do Dono e não abre o navegador.
-- **CA-GH-APPS-06** · *pesada* — **Dado** uma classe nova com `--app novo`, **quando** o Grão-Mestre pede o App, **então** o App é criado e instalado no GitHub real pelo navegador dedicado, e a ação seguinte da classe sai com ele (MVP-5).
+- **CA-GH-APPS-06** · *pesada* — **Dado** uma classe nova com `--app novo`, **quando** o Grão-Mestre pede o App, **então** o App é criado e instalado pelo navegador dedicado nas páginas do GitHub (dublê), e a ação seguinte da classe sai com ele (MVP-5).
 
 ## Depende de
 
@@ -127,13 +128,13 @@ Quando o navegador não consegue seguir (GitHub pede senha ou 2FA, tela diferent
 - [Bot do Telegram](../telegram/bot.md)
 - [CLI do Grão-Mestre](../cli/grao-mestre.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** `redirect_url` com `http://localhost:<porta>` (a documentação não proíbe; o Probot usa). Testar no primeiro App.
-- **A confirmar:** o manifesto não tem campo para ligar o device flow; se for assim, o componente liga a opção na página de configuração do App "Grão-Mestre".
-- **A confirmar:** em que momento o GitHub pede senha ou 2FA (modo sudo) ao criar ou instalar App.
-- **A confirmar:** se `PUT /user/installations/.../repositories/...` aceita o user access token do App "Grão-Mestre"; a documentação cita token pessoal.
-- **A confirmar:** se `hook_attributes` pode ser omitido em vez de usar `active: false`.
+Os três itens são conferidos na primeira criação real, a dos Apps fixos no [primeiro acesso](../operacao/primeiro-acesso.md), e no primeiro workspace com mais de um repositório; o resultado fica na auditoria e as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
+
+- **Verificar na implementação:** `redirect_url` com `http://localhost:<porta>` é aceito (a documentação não proíbe; o Probot usa). **Padrão:** o ouvinte local do processo da sessão, como no fluxo acima. **Se falhar:** o manifesto do navegador dedicado usa o callback do painel do Core (`https://<core>:<porta>/github/manifest/callback`), o mesmo da reserva pelo Telegram.
+- **Verificar na implementação:** o manifesto não tem campo para ligar o device flow. **Padrão:** logo depois de criar o App "Grão-Mestre", o componente marca "Enable Device Flow" na página de configuração do App. **Se falhar:** o Grão-Mestre manda ao Dono, pelo Telegram, o link dessa página para marcar a opção.
+- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal). **Padrão:** aceita, como no passo 3 da instalação. **Se falhar:** o motor usa sempre o navegador dedicado na página de configuração da instalação, e o link pelo Telegram como reserva.
 
 ## Fontes
 

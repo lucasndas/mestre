@@ -63,6 +63,7 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 - **Guardião de nó:** mantém a própria conexão WSS de saída até o motor do Core, separada da do motor do nó, com credencial própria emitida no [pareamento](../conectividade/pareamento.md). Reconecta com backoff. Assim o Core fala com ele mesmo com o motor do nó morto, sem porta aberta no nó.
 - **Guardião do Core:** escuta na porta própria ([componentes](../arquitetura/componentes.md#portas)), com certificado da CA interna, e só aceita clientes com certificado de nó válido e não revogado (mTLS). Quando o motor do Core cai, os nós continuam chegando pelo mesmo endereço (rede local ou Tailscale).
 - O canal do Guardião tem **versão de protocolo própria**, separada da do motor, e muda raramente.
+- **Canal local no Windows:** o motor roda com a conta do usuário e o Guardião como LocalSystem. O Guardião cria o pipe `\\.\pipe\mestre-guardiao` com SDDL que dá acesso só a SYSTEM e ao SID da conta do serviço `mestre-node` (lido da configuração do serviço ao subir) e com `PIPE_REJECT_REMOTE_CLIENTS`. Um teste da suíte completa no Windows confere que o motor escreve no pipe e que outra conta não abre.
 
 ### O que guarda
 
@@ -109,7 +110,3 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 - [Cofre](../plataforma/cofre.md)
 - [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
 - [Atualização automática](../plataforma/autoatualizacao.md)
-
-## A confirmar
-
-- **A confirmar:** no Windows, o motor roda com a conta do usuário e o Guardião como LocalSystem. Conferir que a ACL do named pipe do Guardião permite o motor escrever, criando o pipe com SDDL que inclua a conta do serviço `mestre-node`.

@@ -17,7 +17,7 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 
 ### Camada do Mestre
 
-- Canal preferido: `-c developer_instructions="<conteúdo de MESTRE.md>"` no início, como string TOML (aspas e quebras de linha escapadas). Vira uma mensagem de papel `developer`. O código mostra que o modo interativo aplica a opção; falta testar ao vivo.
+- Canal preferido: `-c developer_instructions="<conteúdo de MESTRE.md>"` no início, como string TOML (aspas e quebras de linha escapadas). Vira uma mensagem de papel `developer`. O código mostra que o modo interativo aplica a opção; o teste ao vivo está em [Verificar na implementação](#verificar-na-implementação).
 - Reserva: hook SessionStart devolvendo o conteúdo em `additionalContext`. Reserva final: primeira mensagem ([personagem](../sessao-zero/personagem.md)).
 - Não usar `model_instructions_file` (substitui as instruções embutidas), `instructions` (reservado) nem `experimental_instructions_file` (não existe mais).
 - Atualização a cada turno: `additionalContext` do UserPromptSubmit. Acima de cerca de 2.500 tokens o Codex grava o texto em arquivo e manda só um trecho; o contexto do turno fica bem abaixo disso.
@@ -35,13 +35,13 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 - **Eventos ligados:** SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, Stop, PreCompact, SessionEnd, Interrupt. Matcher `*`. O matcher `Edit`/`Write` também casa `apply_patch`, mas `tool_name` continua `apply_patch`.
 - **Entrada:** JSON no stdin, `snake_case`: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`; PreToolUse traz `turn_id`, `tool_name`, `tool_use_id`, `tool_input`; Stop traz `last_assistant_message`; Interrupt traz `turn_id`.
 - **Saída:** exit 0 com `hookSpecificOutput` (`hookEventName`, `additionalContext`, `permissionDecision: allow|deny`, `permissionDecisionReason`; PermissionRequest: `decision.behavior`). **`ask` ainda não é aceito.** Texto puro no stdout é inválido em Stop e Interrupt: o despachante não imprime nada neles. Campo não suportado marca o hook como falho.
-- **Falha:** exit 2 bloqueia (motivo no stderr). Erro, tempo esgotado e saída inválida **liberam** (falha aberta), sem opção para mudar. A proteção que sobra é o sandbox nativo ([permissões](../classes/permissoes.md)).
+- **Falha:** exit 2 bloqueia (motivo no stderr). Erro, tempo esgotado e saída inválida **liberam** (falha aberta), sem opção para mudar. O despachante só sai com 0 ou 2; qualquer outro código é tratado como falha, que libera. A proteção que sobra é o sandbox nativo ([permissões](../classes/permissoes.md)).
 - **Tempos limite gerados:** 30 s em PreToolUse, PermissionRequest, UserPromptSubmit e SessionStart; 60 s em PostToolUse, Stop e PreCompact; 3 s (máximo do provedor) em SessionEnd e Interrupt.
 - **Confiança dos hooks:** todo hook não gerenciado precisa ser revisado e confiado (`/hooks`), e a confiança fica presa ao hash do hook (editar invalida). Por isso o arquivo tem **conteúdo fixo** (só chama `mestre hook` pelo caminho estável do binário) e é confiado **uma vez por perfil**, na **configuração inicial do perfil Codex**: depois do login, o painel abre uma sessão do Codex com aquele perfil e guia o usuário a aprovar os hooks do Mestre em `/hooks` ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Pré-gravar a confiança (hash interno) é frágil e não é feito. O [checklist](../plataforma/checklist.md) detecta perfil sem a confiança, e o perfil não recebe personagens até ela existir.
 
 ### Confiança do projeto
 
-- **Pré-confiar:** gravar no `config.toml` do `CODEX_HOME` do perfil `[projects."<caminho>"] trust_level = "trusted"`. A busca usa a pasta atual, a raiz do projeto e a raiz git (num worktree, a do checkout principal); o motor grava a do worktree e a raiz resolvida.
+- **Pré-confiar:** gravar no `config.toml` do `CODEX_HOME` do perfil `[projects."<caminho>"] trust_level = "trusted"`. A busca usa a pasta atual, a raiz do projeto e a raiz git (num worktree, a do checkout principal), nessa ordem; o motor grava a do worktree, que é a pasta atual do personagem e vem primeiro, e também a raiz resolvida.
 - Projeto sem confiança pula as camadas `.codex/` (configuração, hooks e regras). Sem `trust_level`, o modo interativo abre a tela de confiança.
 - O Codex reescreve o `config.toml`: editar preservando o resto do TOML e sem gravações simultâneas de dois personagens do mesmo perfil.
 
@@ -101,13 +101,14 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 - [Permissões](../classes/permissoes.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** `-c developer_instructions` no modo interativo, num teste ao vivo (o código diz que sim).
-- **A confirmar:** que hooks na camada de usuário (`$CODEX_HOME/hooks.json`) carregam em qualquer projeto confiável e que a confiança dada uma vez em `/hooks` vale para todos os worktrees daquele perfil.
-- **A confirmar:** qual raiz o Codex usa para worktrees saídos do espelho sem área de trabalho, e se `git commit` (o `.git` fica fora do worktree e só leitura no sandbox) gera pedido de escalonamento respondido pelo PermissionRequest.
-- **A confirmar:** `cli_auth_credentials_store = "file"` separa as contas de fato (não é recurso oficial); e se o processo de fundo do modo interativo (`/daemon`) respeita `CODEX_HOME`.
-- **A confirmar:** exit diferente de 0 e 2 tratado como não bloqueante; nome da ferramenta de shell no `tool_name`.
+Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
+
+- **Verificar na implementação:** `-c developer_instructions` vale no modo interativo (o código diz que sim). **Padrão:** é o canal da camada do Mestre. **Se falhar:** a base passa à reserva SessionStart com `additionalContext`, e depois à primeira mensagem. **Onde:** etapa 2.
+- **Verificar na implementação:** a confiança dada uma vez em `/hooks`, na configuração inicial do perfil, vale para todos os worktrees daquele perfil. **Padrão:** vale, porque os hooks estão na camada de usuário e a confiança fica presa ao hash do hook. **Se falhar:** cada worktree novo mostraria a revisão de hooks, que escala; a saída é decidir num ADR o uso de `--dangerously-bypass-hook-trust` só nos personagens do Mestre (o arquivo de hooks tem conteúdo fixo gerado pelo motor). **Onde:** etapas 4 a 6, que rodam num worktree novo a cada execução.
+- **Verificar na implementação:** `git commit` num worktree saído do espelho (o `.git` do worktree fica no espelho, fora da pasta e só leitura no sandbox) gera pedido de escalonamento respondido pelo PermissionRequest. **Padrão:** sim; o motor responde pela regra da classe. **Se falhar:** a base acrescenta a pasta git daquele worktree no espelho em `sandbox_workspace_write.writable_roots`; a proteção das outras branches continua no hook ([permissões](../classes/permissoes.md)). **Onde:** etapa 5.
+- **Verificar na implementação:** `cli_auth_credentials_store = "file"` separa as contas de fato (não é recurso oficial), e o processo de fundo do modo interativo (`/daemon`) respeita `CODEX_HOME`. **Padrão:** separa e respeita. **Se falhar:** só um perfil de conta Codex por nó; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis Codex de contas diferentes na mesma VM (`codex login status` em cada um).
 
 ## Fontes
 

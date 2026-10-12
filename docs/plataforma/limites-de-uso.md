@@ -24,8 +24,8 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 | Codex | eventos `token_count` no JSONL da sessão | tokens e janelas de limite; **sem custo** | [Codex](../provedores/codex.md) |
 | Antigravity | `agy -p "/usage" --output-format json`, por perfil de conta | fração restante das janelas semanal e de 5 h; não gasta cota | [Antigravity](../provedores/antigravity.md) |
 
-- No Antigravity, o `/usage` roda a cada 10 min (padrão) para cada perfil de conta com personagem ativo. Tokens por turno no modo interativo: **a confirmar**; sem eles, valem tempo ativo e turnos.
-- Reserva para o Claude Code: métricas OpenTelemetry `claude_code.cost.usage` e `claude_code.token.usage`. **A confirmar** se compensa recebê-las num coletor local do motor quando o statusLine não roda.
+- No Antigravity, o `/usage` roda a cada 10 min (padrão) para cada perfil de conta com personagem ativo. Tokens por turno no modo interativo não são lidos no MVP; valem tempo ativo e turnos ([Antigravity](../provedores/antigravity.md)).
+- Claude Code sem statusLine (pasta sem confiança): vale o monitoramento reduzido do [adaptador](../provedores/adaptador.md#monitoramento-reduzido). O MVP não recebe as métricas OpenTelemetry (`claude_code.cost.usage`, `claude_code.token.usage`); um coletor local fica como opção futura.
 
 ### Limites
 

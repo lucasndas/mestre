@@ -88,9 +88,7 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço e de token continuam as
   - SQLite em Go puro é mais lento. Isso é irrelevante no volume de um orquestrador. A versão de `modernc.org/libc` fica fixada.
   - O repositório tem duas linguagens (Go e TypeScript). Os tipos compartilhados do protocolo são gerados a partir do Go ou de JSON Schema ([convenções](../desenvolvimento/convencoes.md)).
 - **Quando revisar:** se for preciso Whisper dentro do processo, memória mínima no Guardião ou se o time passar a dominar Rust. O Bun só volta a ser opção para os serviços depois de algumas versões estáveis do runtime reescrito e de uma solução para serviço do Windows.
-- **A confirmar:**
-  - Comportamento de ConPTY criado dentro de um serviço que roda com a conta do usuário, na sessão 0, para os agentes sem GUI ([nó Windows](../arquitetura/no-windows.md)).
-  - Testar num Windows 11 real antes de fechar o wrapper.
+- **Verificar na implementação:** ConPTY criado dentro de um serviço que roda com a conta do usuário, na sessão 0, para os agentes sem GUI, num Windows 11 real antes de fechar o wrapper. Padrão e plano B: [nó Windows](../arquitetura/no-windows.md#verificar-na-implementação).
 
 ## Fontes
 

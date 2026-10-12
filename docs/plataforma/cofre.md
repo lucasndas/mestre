@@ -31,7 +31,7 @@ Guardar todos os segredos do Mestre criptografados no Core, com a chave protegid
 
 - 32 bytes aleatórios gerados na instalação do Core ([instalação e atualização](instalacao-e-atualizacao.md)).
 - **Padrão:** arquivo `/etc/mestre/cofre.key`, dono `mestre` (conta do motor, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), modo 0600, pasta 0700. O motor se recusa a abrir o cofre se o arquivo tiver permissão mais aberta ou outro dono, e o [checklist](checklist.md) acusa como grave.
-- **Opção "chaveiro do sistema":** guardar a chave com `systemd-creds` (cifrada pelo TPM2 ou pela chave do host) e entregá-la ao serviço com `LoadCredentialEncrypted=`. O motor lê de `$CREDENTIALS_DIRECTORY`. A instalação usa esta opção quando o servidor tiver suporte.
+- **Opção "chaveiro do sistema":** guardar a chave com `systemd-creds` (cifrada pelo TPM2 ou pela chave do host) e entregá-la ao serviço com `LoadCredentialEncrypted=`. O motor lê de `$CREDENTIALS_DIRECTORY`. É opcional: a instalação sempre começa com o arquivo 0600; o [checklist](checklist.md) (LIN-07) detecta suporte (`systemd-creds has-tpm2`) e oferece a troca, feita só com aprovação.
 - **Backup da chave:** os backups do banco ([persistência](../arquitetura/persistencia.md#backup)) **não** levam a chave. Sem ela, um backup restaurado perde os segredos (é preciso cadastrá-los de novo). A instalação orienta guardar uma cópia da chave fora do servidor ([instalar](../operacao/instalar.md)).
 - **Troca da chave:** o Dono pede no painel (com PIN); o motor gera a chave nova, decifra e cifra de novo todos os segredos numa transação, incrementa `key_version` e só então substitui o arquivo.
 
@@ -75,7 +75,3 @@ Guardar todos os segredos do Mestre criptografados no Core, com a chave protegid
 - [Protocolo](../conectividade/protocolo.md)
 - [Pareamento](../conectividade/pareamento.md)
 - [Login](../painel/login.md)
-
-## A confirmar
-
-- **A confirmar:** suporte a `systemd-creds` com TPM2 no servidor (versão do systemd do Ubuntu LTS instalado e presença do TPM); sem isso, fica o arquivo 0600.

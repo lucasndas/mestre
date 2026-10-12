@@ -20,6 +20,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - Canal: `--append-system-prompt-file .mestre/agents/<id>/MESTRE.md`. Funciona no modo interativo e entra no prompt de sistema, acima do `AGENTS.md`.
 - Atualização a cada turno (decretos): `additionalContext` do UserPromptSubmit; o Claude mostra como lembrete do sistema. Limite do provedor: 10.000 caracteres.
 - Montagem do arquivo e reserva pela primeira mensagem: [personagem](../sessao-zero/personagem.md).
+- Sessão retomada: o Mestre não usa `--system-prompt-snapshot`; o prompt gravado é reaproveitado, e mudanças na camada do Mestre entram pelo contexto do turno.
 
 ### Skills
 
@@ -58,7 +59,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 | `--session-id <uuid>` / `--resume <uuid>` | id gerado pelo motor, liga hooks ao PTY; retomada |
 | `--permission-mode default` | único modo permitido |
 
-**Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits`; `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir`; `-p` (a base é interativa).
+**Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits`; `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir` com qualquer pasta que não seja `.mestre/agents/<id>` do próprio personagem (essa única é passada pelo motor para as skills por personagem, ver [personagem](../sessao-zero/personagem.md)); `-p` (a base é interativa).
 
 ### Contas múltiplas
 
@@ -107,12 +108,14 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - [Permissões](../classes/permissoes.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** se, com `CLAUDE_CONFIG_DIR`, o arquivo de confiança é `$CLAUDE_CONFIG_DIR/.claude.json`; e qual chave o Claude usa para worktrees saídos do espelho sem área de trabalho. Verificar pelo log de debug, que mostra a chave exata.
-- **A confirmar:** se `--system-prompt-snapshot off` faz o Claude reler `MESTRE.md` regenerado numa sessão retomada; até lá, mudanças entram pelo contexto do turno.
-- **A confirmar:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa (gravar no teste de conformidade).
-- **A confirmar:** nome da ferramenta de shell no Windows (`PowerShell`) e se a statusLine aceita o comando no `--settings` do jeito descrito.
+Todos são conferidos pelo [teste de conformidade](conformidade.md).
+
+- **Verificar na implementação:** com `CLAUDE_CONFIG_DIR`, o arquivo de confiança é `$CLAUDE_CONFIG_DIR/.claude.json`, e qual chave o Claude usa para um worktree saído do espelho sem área de trabalho. **Padrão:** esse arquivo, com as duas chaves descritas em Confiança de pasta. **Se falhar:** o motor grava também em `.claude.json` na pasta pessoal do processo e usa a chave que o log de debug (`--debug`) mostrar, registrada por versão do CLI. **Onde:** etapa 1 (sem tela de confiança).
+- **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição.
+- **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 no nó Windows.
+- **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`). **Onde:** etapa 7.
 
 ## Fontes
 

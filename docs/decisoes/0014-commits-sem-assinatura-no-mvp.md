@@ -59,9 +59,7 @@ Aceita, 2026-10-12.
   - **Repositórios bloqueados:** repositórios com "exigir commits assinados" não aceitam os envios do Mestre até a opção futura ser implementada.
   - **Formato do e-mail:** o formato do e-mail do bot pode mudar sem aviso, segundo uma resposta da equipe do GitHub. Isso quebraria a ligação do commit com o bot, embora o commit continue válido.
   - **Custo de migrar:** adotar a opção 3 depois exige tratar a troca de hashes entre o espelho e os worktrees ([ADR 0013](0013-sincronizacao-de-worktrees-por-git-bundle.md)).
-- **A confirmar:**
-  - Se o e-mail `<id>+<slug>[bot]@users.noreply.github.com`, com o id obtido em `GET /users/<slug>%5Bbot%5D`, liga o commit ao bot do App. Testar na sessão zero.
-  - Se commits pela Contents API saem "Verified". Há relatos divergentes.
+- **Verificar na implementação:** se o e-mail `<id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot; padrão e plano B em [identidades e Apps](../github/identidades-e-apps.md#verificar-na-implementação). Se commits pela Contents API saem "Verified" não precisa ser verificado: o Mestre não usa a Contents API para commits.
 
 ## Fontes
 

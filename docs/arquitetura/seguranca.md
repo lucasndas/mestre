@@ -77,7 +77,7 @@ Aplicado a tudo o que vai para log (motor, Guardião, histórico de terminais, a
 | Decretos, aprovações, auditoria | decretos que os afetam, na camada do Mestre | sim | não | conforme o nível ([usuários e níveis](../telegram/usuarios-e-niveis.md)) |
 | Logs | não | sim | lê os do motor local (lista fechada) | pelo painel, conforme o nível |
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** `claude`, `codex` e `agy` funcionam como `mestre-agente` (conta de sistema sem login) com os perfis de conta em `/var/lib/mestre/contas/`.
-- **A confirmar:** a verificação da árvore de processos funciona com os provedores que iniciam subprocessos por shell intermediário (ex.: `sh -c`, `cmd /c` no Antigravity).
+- **Verificar na implementação:** `claude`, `codex` e `agy` funcionam como `mestre-agente` (conta de sistema sem login) com os perfis de conta em `/var/lib/mestre/contas/`. **Padrão:** funcionam, com `HOME` e as variáveis de conta de cada provedor apontando para o perfil. **Se falhar:** a instalação dá a `mestre-agente` uma pasta pessoal própria em `/var/lib/mestre/agente/` e o perfil de conta continua pelas variáveis do provedor; se o CLI ainda falhar, aquele provedor não é oferecido no Core (só nos nós) e o checklist explica. **Onde:** [conformidade](../provedores/conformidade.md) no Core, na instalação e na suíte pesada.
+- **Verificar na implementação:** a subida pela árvore de processos acha o terminal mesmo quando o provedor roda comandos por shell intermediário (`sh -c`, `cmd /c` no Antigravity) ou por processo que troca de pai. **Padrão:** a subida pela árvore, como acima. **Se falhar:** cada terminal passa a rodar num grupo que não depende do pai (um cgroup por terminal no Linux, um Job Object no Windows), e a verificação passa a ser "o chamador pertence ao grupo do terminal". **Onde:** conformidade de cada provedor (o agente chama a CLI pela ferramenta de shell) no Linux e no Windows.

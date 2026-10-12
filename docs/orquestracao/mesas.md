@@ -107,7 +107,7 @@ Pedido por um usuário com nível para dar ordens, via Grão-Mestre (o motor só
 - **CA-MESAS-04** · *completa* — **Dado** commits divergentes no Core e no nó, **quando** o nó envia o bundle, **então** a branch do Core não muda e o Mestre da mesa recebe o aviso de divergência.
 - **CA-MESAS-05** · *rápida* — **Dado** uma mesa cancelada e relógio falso, **quando** passam 30 dias, **então** a branch é apagada do espelho, e não antes.
 - **CA-MESAS-06** · *rápida* — **Dado** um worktree com arquivo não commitado, **quando** a mesa encerra, **então** o worktree não é removido e o Grão-Mestre recebe a pergunta.
-- **CA-MESAS-07** · *pesada* — **Dado** duas mesas abertas em paralelo com personagens em Linux e Windows, **quando** ambas trabalham, **então** cada uma só altera a própria branch e a mesa termina encerrada após o merge (MVP-4).
+- **CA-MESAS-07** · *pesada* — **Dado** duas mesas abertas em paralelo com personagens em Linux e Windows, **quando** ambas trabalham, **então** cada uma só altera a própria branch e a mesa termina encerrada após o merge no GitHub (dublê) (MVP-4).
 
 ## Depende de
 

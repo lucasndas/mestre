@@ -20,12 +20,10 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
    mestre uninstall
    ```
 
-   Isso para e remove os serviços `mestre-node` e `mestre-guardiao`, as tarefas agendadas `\Mestre\Sessao` e `\Mestre\Diagnostico`, as regras de firewall do Mestre e os programas.
+   Isso para e remove os serviços `mestre-node` e `mestre-guardiao`, as tarefas agendadas `\Mestre\Sessao` e `\Mestre\Diagnostico`, as regras de firewall do Mestre, o perfil do navegador dedicado (com a sessão do GitHub, mesmo quando os dados ficam) e os programas.
 3. Confira: `Get-Service mestre-*` não lista nada, e a pasta **Mestre** sumiu do Agendador de Tarefas.
 4. Os dados ficam em `%ProgramData%\Mestre\`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague a pasta à mão.
 5. Se esse PC era o do navegador dedicado do GitHub, o Grão-Mestre não consegue mais criar Apps até outro nó Windows ser pareado; ele cai para o link pelo Telegram ([criação de Apps](../github/criacao-de-apps.md)).
-
-**A confirmar:** se o `mestre uninstall` apaga o perfil do navegador dedicado (com a sessão do GitHub). Se não apagar, saia da conta do GitHub nesse navegador antes de desinstalar.
 
 ## Remover o Core
 

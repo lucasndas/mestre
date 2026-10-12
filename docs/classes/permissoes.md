@@ -98,7 +98,7 @@ O adaptador traduz as regras efetivas para o que cada provedor aceita por person
 | `network.domains` | `allow`: `WebFetch(domain:<d>)` | só liga/desliga | — |
 | falha do despachante | `onFailure: block` | sandbox | falha fechada nativa |
 
-`ask` nunca vira regra nativa (o despachante cuida). Quando um decreto libera algo bloqueado no nível nativo, o motor regenera o arquivo do personagem; se o provedor só lê no início, o personagem é reiniciado com retomada quando estiver livre ([personagens](../orquestracao/personagens.md)). Flags de cada provedor: [Claude Code](../provedores/claude-code.md), [Codex](../provedores/codex.md), [Antigravity](../provedores/antigravity.md).
+`ask` nunca vira regra nativa (o despachante cuida). No Claude, os globs de caminho saem sempre absolutos (`Edit(//<worktree>/tests/**)`), para não depender de a regra relativa ser lida a partir da pasta do arquivo `--settings`. Quando um decreto libera algo bloqueado no nível nativo, o motor regenera o arquivo do personagem; como o Mestre trata o `--settings` do Claude e as flags do Codex como lidos só no início, o personagem é reiniciado com retomada quando estiver livre ([personagens](../orquestracao/personagens.md)). Flags de cada provedor: [Claude Code](../provedores/claude-code.md), [Codex](../provedores/codex.md), [Antigravity](../provedores/antigravity.md).
 
 ## Regras e erros
 
@@ -114,7 +114,7 @@ O adaptador traduz as regras efetivas para o que cada provedor aceita por person
 - **CA-PERM-08** · *rápida* — **Dado** um personagem da mesa A, **quando** roda `git branch -f epico/7-outra HEAD` ou lê o perfil do navegador dedicado, **então** os dois são negados pelas regras fixas.
 - **CA-PERM-04** · *rápida* — **Dado** `files.write: ["tests/**"]` e `src/a.ts` preparado, **quando** chega `git commit -m x`, **então** é negado com a lista dos arquivos fora do permitido.
 - **CA-PERM-05** · *completa* — **Dado** `npm install *` em `ask`, **quando** o agente falso roda `npm install x`, **então** recebe negação com o pedido #N, fica "aguardando permissão"; aprovado, recebe a mensagem, a repetição passa uma vez e a seguinte volta a pedir.
-- **CA-PERM-06** · *rápida* — **Dado** a classe QA acima sem internet, **quando** o adaptador traduz, **então** o Claude recebe `Edit(tests/**)` em `allow` e `Bash(git push *)` em `deny`, o Codex `-s workspace-write` sem rede, e o Antigravity `--sandbox`.
+- **CA-PERM-06** · *rápida* — **Dado** a classe QA acima sem internet, **quando** o adaptador traduz, **então** o Claude recebe `Edit(//<worktree>/tests/**)` em `allow` e `Bash(git push *)` em `deny`, o Codex `-s workspace-write` sem rede, e o Antigravity `--sandbox`.
 - **CA-PERM-07** · *rápida* — **Dado** o motor fora do ar e um retrato que nega `src/**`, **quando** chega uma edição em `src/a.ts` e um comando em `ask`, **então** os dois são negados, o segundo com "motor indisponível".
 
 ## Depende de
@@ -127,7 +127,7 @@ O adaptador traduz as regras efetivas para o que cada provedor aceita por person
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
 
-## A confirmar
+## Verificar na implementação
 
-- **A confirmar:** sintaxe de caminhos nas regras `Edit(...)`/`Read(...)` do Claude e se o arquivo de `--settings` recarrega sozinho quando muda.
-- **A confirmar:** sintaxe `action(target)` com curinga no `permissions.deny` do Antigravity (ex.: `command(git push*)`).
+- **Verificar na implementação:** a regra `Edit(//<caminho absoluto>/<glob>)` do Claude casa os arquivos do worktree. **Padrão:** casa. **Se falhar:** o motor gera a forma relativa que a conformidade aceitar; enquanto isso, a regra de caminho fica só no despachante. **Onde:** etapa 4 do [teste de conformidade](../provedores/conformidade.md), com o despachante em modo degradado.
+- **Verificar na implementação:** a sintaxe `action(target)` com curinga no `permissions.deny` do Antigravity (ex.: `command(git push*)`). **Padrão:** essa forma. **Se falhar:** as regras fixas desse provedor ficam só no hook, que as aplica até em modo degradado ([adaptador](../provedores/adaptador.md)). **Onde:** à mão na implementação do adaptador, pedindo `git push` com o hook respondendo `allow`.

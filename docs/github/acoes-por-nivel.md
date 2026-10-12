@@ -94,7 +94,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - **CA-GH-ACOES-05** · *rápida* — **Dado** `mestre pr update --force` pedido por um personagem que não é o Mestre da mesa, ou apontando para a branch principal, **quando** o motor avalia, **então** recusa sem enviar nada.
 - **CA-GH-ACOES-06** · *completa* — **Dado** commits da mesa em dois nós, **quando** o Mestre da mesa pede `mestre pr open`, **então** o espelho recebe os commits dos dois nós antes do envio e o GitHub falso recebe uma única branch com todos eles.
 - **CA-GH-ACOES-07** · *rápida* — **Dado** o GitHub falso recusando um push por regra de commit assinado, **quando** o motor recebe a recusa, **então** gera uma mensagem ao Grão-Mestre com o motivo e não tenta outro caminho.
-- **CA-GH-ACOES-08** · *pesada* — **Dado** uma mesa trabalhando, **quando** o épico chega ao fim, **então** o GitHub mostra a árvore épico → issues → sub-issues e o PR aberto pela mesa e aprovado pelo Grão-Mestre (MVP-5).
+- **CA-GH-ACOES-08** · *pesada* — **Dado** uma mesa trabalhando, **quando** o épico chega ao fim, **então** o GitHub (dublê) mostra a árvore épico → issues → sub-issues e o PR aberto pela mesa e aprovado pelo Grão-Mestre (MVP-5).
 
 ## Depende de
 

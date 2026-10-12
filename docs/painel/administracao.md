@@ -52,7 +52,7 @@ Ações da tela: gerar convite de nó e revogar a credencial de um nó ([pareame
 
 ### Contagem de Apps
 
-- O topo da tela de Apps mostra "N de 100 Apps na conta".
+- O topo da tela de Apps mostra "N de 100 Apps na conta": os Apps do Mestre, contados pelo banco, mais o número de outros Apps da conta, que o Dono informa nessa tela (padrão 0) e atualiza quando quiser. O Mestre não lê a página de Apps do GitHub.
 - Com 90 ou mais (padrão), uma faixa de aviso aparece também na tela de classes ([identidades e Apps](../github/identidades-e-apps.md)).
 
 ### Exportar e importar

@@ -36,6 +36,7 @@ O motor do Core, um laço por workspace, com o token de instalação do App "Gr�
 | CI da cabeça de cada PR de mesa | `GET /repos/{o}/{r}/commits/{sha}/check-runs?per_page=100` e `GET /repos/{o}/{r}/commits/{sha}/status` | até todos os checks daquele `sha` terminarem |
 
 - As URLs são sempre as mesmas (mesmos parâmetros e ordem), para o GitHub responder `304` sempre que possível.
+- Revisões de PR de mesa vêm sempre da consulta por PR, nunca da lista de issues: o motor não depende de uma revisão mudar o `updated_at` do PR.
 - Nas listas ordenadas por `updated`, o motor lê só a primeira página. Se todos os itens dela forem mais novos que o cursor, lê a próxima, até alcançar o cursor.
 
 ### Requisições condicionais
@@ -77,7 +78,7 @@ Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerc
 
 - Erro 403 ou 429: o motor respeita `retry-after` ou `x-ratelimit-reset` e só volta depois disso.
 - Cota restante abaixo de 10%: o workspace fica em "parado" até a cota renovar, e o [checklist](../plataforma/checklist.md) registra o alerta. `GET /rate_limit` pode ser usado, porque não gasta cota.
-- No máximo 4 requisições simultâneas por workspace, abaixo dos limites secundários do GitHub.
+- No máximo 4 requisições simultâneas por workspace, abaixo dos limites secundários do GitHub. Para esses limites, o motor conta toda requisição, inclusive as que voltam `304` (hipótese conservadora; nada depende de medir isso).
 - GitHub fora do ar ou erro de rede: o laço tenta de novo no próximo ciclo, com backoff até o intervalo "parado". Nada se perde, porque o cursor só avança depois que o evento é gravado.
 - Consultas só leem; nenhuma consulta muda dados no GitHub.
 
@@ -97,11 +98,6 @@ Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerc
 - [Ações por nível](acoes-por-nivel.md)
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Persistência](../arquitetura/persistencia.md)
-
-## A confirmar
-
-- **A confirmar:** se respostas `304` contam para os limites secundários. Medir na suíte pesada com o cabeçalho `x-ratelimit-used`.
-- **A confirmar:** se enviar uma revisão altera o `updated_at` do PR na lista de issues; se não alterar, a consulta de revisões por PR (já prevista) cobre.
 
 ## Fontes
 

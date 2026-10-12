@@ -122,7 +122,7 @@ Quando um motor reinicia, cada personagem que estava rodando é **retomado** ou 
 
 - **CA-CURA-01** · *pesada* — **Dado** Core e nó rodando, **quando** mato o processo do motor (de um lado ou do outro), **então** ele volta pela camada 1 e o heartbeat se restabelece em até 30 s, com registro (MVP-2).
 - **CA-CURA-02** · *pesada* — **Dado** o motor do Core travado (processo parado), **quando** passa o tempo de graça, **então** um único nó é eleito, o Guardião do Core reinicia o motor e a auditoria mostra a sequência do diagrama (MVP-2).
-- **CA-CURA-03** · *pesada* — **Dado** o Core desligado, **quando** as camadas se esgotam, **então** os usuários recebem o alerta da camada 5 no Telegram em modo reduzido e na página reserva (MVP-2).
+- **CA-CURA-03** · *pesada* — **Dado** o Core desligado, **quando** as camadas se esgotam, **então** os usuários recebem o alerta da camada 5 no Telegram (dublê) em modo reduzido e na página reserva (MVP-2).
 - **CA-CURA-04** · *pesada* — **Dado** uma atualização cujo motor cai ao iniciar, **quando** ocorre o laço de queda, **então** o Guardião local volta à versão anterior e o motor fica saudável (MVP-2).
 - **CA-CURA-05** · *pesada* — **Dado** o disco com menos de 5% livre, **quando** o motor cai, **então** o Guardião roda `cleanup` antes de reiniciar (MVP-2).
 - **CA-CURA-06** · *rápida* — **Dado** candidatos A (200), B (100) e C (200, `node_id` menor que A), **quando** a janela de eleição fecha, **então** a trava vai para C.
