@@ -80,5 +80,5 @@ claude --version
 Write-Host ''
 Write-Host 'Preparo pronto. Agora:'
 Write-Host '  1. claude            (faça o login no navegador e saia com /exit)'
-Write-Host '  2. cd C:\mestre; claude --model opus --effort high (Get-Content -Raw -Encoding UTF8 tools\winsandbox\spikes-prompt.md)'
+Write-Host '  2. cd C:\mestre; claude --model opus --effort high "Leia e execute o arquivo tools/winsandbox/spikes-prompt.md"'
 Stop-Transcript | Out-Null

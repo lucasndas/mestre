@@ -85,13 +85,13 @@ type Engine struct {
 	terms []Terminal
 }
 
-// NewEngine listens on sock.
-func NewEngine(mode Mode, sock string) (*Engine, error) {
+// NewEngine listens on sock; before (optional) is the BeforeIdentify hook.
+func NewEngine(mode Mode, sock string, before func()) (*Engine, error) {
 	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: sock, Net: "unix"})
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{Mode: mode, Proc: SysProc{}, Sock: sock, Results: make(chan Result, 16), ln: ln}
+	e := &Engine{Mode: mode, Proc: SysProc{}, Sock: sock, Results: make(chan Result, 16), ln: ln, BeforeIdentify: before}
 	go e.serve()
 	return e, nil
 }

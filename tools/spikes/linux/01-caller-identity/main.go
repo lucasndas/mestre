@@ -164,7 +164,7 @@ func runProvider(args []string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
-	e, err := NewEngine(ModeTreeSession, dir+"/s.sock")
+	e, err := NewEngine(ModeTreeSession, dir+"/s.sock", nil)
 	if err != nil {
 		return err
 	}

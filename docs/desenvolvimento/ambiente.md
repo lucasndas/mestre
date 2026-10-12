@@ -75,7 +75,7 @@ Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) rodam no Windows 
 1. No Windows do Dono, clone o repositório em `C:\mestre` (ou atualize com `git pull`).
 2. Abra `C:\mestre\tools\winsandbox\mestre-spikes.wsb` (duplo clique) e espere a janela do preparo terminar.
 3. Nessa janela, rode `claude` uma vez e faça o login no navegador do Sandbox; saia com `/exit`.
-4. Comece os spikes: `cd C:\mestre; claude --model opus --effort high (Get-Content -Raw -Encoding UTF8 tools\winsandbox\spikes-prompt.md)`.
+4. Comece os spikes: `cd C:\mestre; claude --model opus --effort high "Leia e execute o arquivo tools/winsandbox/spikes-prompt.md"`.
 5. No fim, a sessão faz commit e `git push` da branch `spike/m1-windows` (o Git pede login do GitHub no navegador do Sandbox) e copia o relatório e os logs para `C:\winsandbox\resultados\`, que no Windows do Dono é `C:\mestre\tools\winsandbox\resultados\` (fora do git). Feche o Sandbox só depois disso.
 
 ## O que não precisa

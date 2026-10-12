@@ -70,17 +70,13 @@ func (sc Scenario) Run(ctx context.Context, mode Mode, cgroupBase string) (Resul
 			return Result{}, err
 		}
 	}
-	e, err := NewEngine(mode, filepath.Join(dir, "s.sock"))
-	if err != nil {
-		return Result{}, err
-	}
-	defer e.Close()
+	var before func()
 	if sc.EarlyExit {
 		gate := filepath.Join(dir, "gate")
 		if err := syscall.Mkfifo(gate, 0o600); err != nil {
 			return Result{}, err
 		}
-		e.BeforeIdentify = func() {
+		before = func() {
 			f, err := os.OpenFile(gate, os.O_RDWR, 0)
 			if err != nil {
 				return
@@ -91,6 +87,11 @@ func (sc Scenario) Run(ctx context.Context, mode Mode, cgroupBase string) (Resul
 			_, _ = f.Read(make([]byte, 1))
 		}
 	}
+	e, err := NewEngine(mode, filepath.Join(dir, "s.sock"), before)
+	if err != nil {
+		return Result{}, err
+	}
+	defer e.Close()
 	r, err := e.Launch(Spec{ID: sc.Name, AgentID: "agent-A", Script: sc.Script, Dir: dir, CgroupBase: cgroupBase})
 	if err != nil {
 		return Result{}, err
@@ -132,7 +133,7 @@ func EscapeeAfterKill(ctx context.Context, mode Mode, cgroupBase string) (bool, 
 	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
 		return false, err
 	}
-	e, err := NewEngine(mode, filepath.Join(dir, "s.sock"))
+	e, err := NewEngine(mode, filepath.Join(dir, "s.sock"), nil)
 	if err != nil {
 		return false, err
 	}
