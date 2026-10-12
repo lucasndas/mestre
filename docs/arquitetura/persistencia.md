@@ -90,9 +90,10 @@ Pastas de dados (padrão). Os mesmos caminhos valem para o Core e para os nós d
 | `/var/lib/mestre/whisper/` | `%ProgramData%\Mestre\whisper\` | `whisper-server` e modelo de transcrição | nó de transcrição |
 | `/var/log/mestre/` | `%ProgramData%\Mestre\logs\` | logs do motor e dos terminais | todas |
 
-Donos e acessos:
-- **Linux:** dono `mestre`; `workspaces/` e `contas/` no grupo `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). `agentes/` (pasta 0750, `policy.json` 0640, `tmp/` 2770 com escrita do grupo) e a fila do hook (1730: o grupo `mestre-agente` só cria arquivos) também ficam no grupo `mestre-agente`; o motor valida tudo o que lê da fila. As regras fixas negam às ferramentas dos agentes qualquer acesso a essas pastas ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
+Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso**):
+- **Linux:** dono `mestre`; `workspaces/` e `contas/` no grupo `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). `agentes/` (pasta 0750, `policy.json` 0640, `tmp/` 2770 com escrita do grupo; como todos os personagens usam a conta `mestre-agente`, a separação entre a `MESTRE_TMP` de um e de outro é do despachante, não do sistema operacional, [segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) e a fila do hook (1730: o grupo `mestre-agente` só cria arquivos) também ficam no grupo `mestre-agente`; o motor valida tudo o que lê da fila. As regras fixas negam às ferramentas dos agentes qualquer acesso a essas pastas ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
 - **Core Windows:** dono `NT SERVICE\MestreCore`; a conta do usuário do `mestre-node` tem modificação só em `workspaces\` e `contas\`, e é dona de `no\` ([Windows](windows.md#windows-como-core)).
+- **Windows (Core e nó):** o instalador cria `%ProgramData%\Mestre\` com a **herança desligada** e remove as entradas herdadas de `%ProgramData%` (`Users`, `Authenticated Users`, `CREATOR OWNER`); ficam só as contas listadas abaixo, SYSTEM e Administradores. Nenhum outro usuário da máquina lê nada ali.
 - **Nó Windows:** ACL para a conta do `mestre-node`, SYSTEM e Administradores. `no\agentes\` e `no\fila-hook\` ficam legíveis pela conta do usuário, a mesma dos agentes (risco aceito em [segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)); as regras fixas negam às ferramentas dos agentes o acesso.
 
 ## Logs
