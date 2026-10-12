@@ -17,7 +17,8 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 
 ### Camada do Mestre
 
-- Canal preferido: `-c developer_instructions="<conteúdo de MESTRE.md>"` no início, como string TOML (aspas e quebras de linha escapadas). Vira uma mensagem de papel `developer`. O código mostra que o modo interativo aplica a opção; o teste ao vivo está em [Verificar na implementação](#verificar-na-implementação).
+- Canal preferido: `-c developer_instructions="<conteúdo de MESTRE.md>"` no início, como string TOML (aspas e quebras de linha escapadas). Vira uma mensagem de papel `developer` que **soma** às instruções de fábrica. A documentação e o código confirmam que o modo interativo aplica a opção; a etapa 2 do [teste de conformidade](conformidade.md) continua conferindo a cada versão.
+- Arquivos de agente do Codex (`.codex/agents/<nome>.toml`) só valem para subagentes; o Mestre não os gera ([ADR 0010](../decisoes/0010-instrucoes-em-duas-camadas.md)).
 - Reserva: hook SessionStart devolvendo o conteúdo em `additionalContext`. Reserva final: primeira mensagem ([personagem](../sessao-zero/personagem.md)).
 - Não usar `model_instructions_file` (substitui as instruções embutidas), `instructions` (reservado) nem `experimental_instructions_file` (não existe mais).
 - Atualização a cada turno: `additionalContext` do UserPromptSubmit. Acima de cerca de 2.500 tokens o Codex grava o texto em arquivo e manda só um trecho; o contexto do turno fica bem abaixo disso.
@@ -110,7 +111,6 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 
-- **Verificar na implementação:** `-c developer_instructions` vale no modo interativo (o código diz que sim). **Padrão:** é o canal da camada do Mestre. **Se falhar:** a base passa à reserva SessionStart com `additionalContext`, e depois à primeira mensagem. **Onde:** etapa 2.
 - **Verificar na implementação:** a confiança dada uma vez em `/hooks`, na configuração inicial do perfil, vale para todos os worktrees daquele perfil. **Padrão:** vale, porque os hooks estão na camada de usuário e a confiança fica presa ao hash do hook. **Se falhar:** o motor grava no perfil a entrada de confiança (`trusted_hash`) dos hooks do Mestre, calculada pelo mesmo algoritmo do Codex e validada pela conformidade (o hook tem conteúdo fixo, então o hash é conhecido); se isso também falhar, o painel guia a confiança em `/hooks` por worktree, e o personagem fica `blocked` (`input`) até ela existir. **Onde:** etapas 4 a 6, que rodam num worktree novo a cada execução.
 - **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** mensagens de várias linhas vão pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
 - **Verificar na implementação:** `git commit` num worktree saído do espelho (o `.git` do worktree fica no espelho, fora da pasta e só leitura no sandbox) gera pedido de escalonamento respondido pelo PermissionRequest. **Padrão:** sim; o motor responde pela regra da classe. **Se falhar:** a base acrescenta a pasta git daquele worktree no espelho em `sandbox_workspace_write.writable_roots`; a proteção das outras branches continua no hook ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)). **Onde:** etapa 5.

@@ -19,7 +19,9 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 ### Camada do Mestre
 
 - Não existe flag nem configuração de prompt de sistema.
-- **Canal principal:** arquivo de agente próprio `.agents/agents/mestre-<id>.md`, gerado por personagem (frontmatter + corpo; o corpo vira o prompt de sistema desse agente), com `--agent mestre-<id>` na base. Fica fora do git ([mesa](../sessao-zero/mesa.md)).
+- **Canal principal:** arquivo de agente próprio `.agents/agents/mestre-<id>.md`, gerado por personagem (frontmatter + corpo; o corpo vira o prompt de sistema desse agente), com `--agent mestre-<id>` na base. Fica fora do git ([mesa](../sessao-zero/mesa.md)) e é apagado quando o personagem é encerrado ([personagem](../sessao-zero/personagem.md#ao-encerrar)).
+- **Frontmatter gerado:** `name` (igual ao do `--agent`), `description`, `mainAgent: true`, `subagent: false` e `tools` (reforço nativo, [reforço nativo](../classes/reforco-nativo.md)). Nunca `excludeDefaultComponents` (tiraria as seções de fábrica do prompt). `permissionMode` não existe na 1.3.3 (não aparece no binário) e não é usado.
+- **Nome inexistente cai no agente padrão sem erro** (issue #1213). Defesa: antes de iniciar, o motor confere que o arquivo existe e que o `name` é igual ao do `--agent`; depois, a falta do código `M-…` na etapa 2 do [teste de conformidade](conformidade.md) acusa o problema.
 - **Atualização a cada turno e início de sessão:** PreInvocation devolvendo `injectSteps: [{"ephemeralMessage": "…"}]`. Não existe `additionalContext`. O primeiro PreInvocation de uma conversa conta como início de sessão.
 - Reserva final: primeira mensagem ([personagem](../sessao-zero/personagem.md)).
 
@@ -108,6 +110,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 - **CA-AGY-03** · *rápida* — **Dado** um `settings.json` com outras chaves, **quando** `PreTrust` roda duas vezes, **então** o worktree aparece uma vez em `trustedWorkspaces` e o JSON continua válido.
 - **CA-AGY-04** · *rápida* — **Dado** qualquer base e ficha válidas, **quando** `BuildLaunch` monta o comando, **então** ele tem `--agent mestre-<id>` e o `HOME` do perfil, e nunca `--dangerously-skip-permissions`.
 - **CA-AGY-05** · *rápida* — **Dado** a saída gravada de `/usage` em JSON, **quando** `ReadUsage` lê, **então** cada janela tem `used_pct = 1 − remaining_fraction` e `resets_at`.
+- **CA-AGY-07** · *rápida* — **Dado** um personagem Antigravity, **quando** `BuildLaunch` gera o arquivo de agente, **então** o `name` do frontmatter é igual ao do `--agent`, há `mainAgent: true` e nunca `excludeDefaultComponents` nem `permissionMode`; e, se o arquivo não existir no disco na hora de iniciar, o início falha com erro em vez de abrir o agente padrão.
 - **CA-AGY-06** · *completa* — **Dado** um nó sem o binário `mestre` no caminho estável, **quando** o comando gerado do PreToolUse roda, **então** imprime `{"decision":"allow"}` e sai com 0.
 
 ## Depende de
@@ -119,7 +122,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 
-- **Verificar na implementação:** `--agent mestre-<id>` no modo interativo, e se o corpo do arquivo de agente soma ao prompt do agente ou o substitui. **Padrão:** o canal funciona; o corpo é escrito para valer sozinho, sem supor o prompt padrão. **Se falhar:** a camada do Mestre vai pelo primeiro `PreInvocation` (`injectSteps`) e, por último, pela primeira mensagem ([personagem](../sessao-zero/personagem.md)). **Onde:** etapas 2 e 5.
+- **Verificar na implementação:** `--agent mestre-<id>` no modo interativo (existe desde a 1.1.1), e se o corpo **soma** às seções de fábrica do prompt. **Padrão:** soma — o changelog 1.2.1 só tira as seções de fábrica com `excludeDefaultComponents: true`, que o Mestre nunca usa; ainda assim o corpo é escrito para valer sozinho. **Se falhar:** a camada do Mestre vai pelo primeiro `PreInvocation` (`injectSteps`) e, por último, pela primeira mensagem ([personagem](../sessao-zero/personagem.md)). **Onde:** etapas 2 e 5.
 - **Verificar na implementação:** o `AGENTS.md` da raiz carrega já no primeiro turno (e não só quando o agente toca um arquivo), e o que acontece com `AGENTS.md` e `GEMINI.md` na mesma pasta. **Padrão:** carrega no primeiro turno, e os dois somam. **Se falhar:** a camada do Mestre do Antigravity manda ler o `AGENTS.md` da raiz antes de começar; com só um dos dois lido, a sessão zero avisa como faz com o `CLAUDE.md` ([sessão zero do workspace](../sessao-zero/workspace.md)). **Onde:** etapa 2 (código `P-…`); a pasta com os dois arquivos, à mão.
 - **Verificar na implementação:** o `agy` aceita colagem entre colchetes no modo interativo e envia com `\r`. **Padrão:** como em Digitação. **Se falhar:** mensagens de várias linhas vão pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e só a linha que pede para lê-lo é digitada. **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
 - **Verificar na implementação:** `permissionOverrides` no `allow` evita a tela de permissão nativa. **Padrão:** o despachante devolve no `allow` a ação já permitida em `permissionOverrides`. **Se falhar:** o adaptador responde a tela nativa com a decisão registrada (tabela de telas). **Onde:** etapa 5.
@@ -139,6 +142,7 @@ Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 - https://antigravity.google/docs/skills
 - https://antigravity.google/docs/permissions
 - https://antigravity.google/docs/subagents
+- Issue #1213 (nome de agente inexistente cai no padrão): https://github.com/google-antigravity/antigravity-cli/issues/1213
 - https://antigravity.google/docs/cli/gcli-migration
 - https://antigravity.google/docs/cli/commands/usage
 - https://codelabs.developers.google.com/antigravity-cli-hands-on

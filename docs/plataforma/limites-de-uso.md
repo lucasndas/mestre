@@ -15,6 +15,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
   - custo estimado em USD;
   - sempre, mesmo sem nada do provedor: **tempo ativo** (soma dos intervalos em `busy`, pelos eventos de início e fim de turno do [adaptador](../provedores/adaptador.md)) e **número de turnos**.
 - O adaptador de cada provedor entrega um registro normalizado (`ReadUsage`) no fim de cada turno e periodicamente. Os registros são somados por personagem, missão, mesa, workspace, conta e dia.
+- **Subagentes nativos** usados por um personagem são trabalho dele: o uso entra no registro do personagem e conta para os limites da missão, da mesa, do workspace e do dia como qualquer outro ([subagentes nativos](../classes/permissoes.md#subagentes-nativos)). Enquanto um subagente roda, o personagem segue `busy`, então o tempo ativo já o inclui.
 
 ### De onde vem o uso, por provedor
 
@@ -76,6 +77,7 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - **CA-USO-05** · *rápida* — **Dado** um personagem aguardando cota até 14:00 (relógio falso), **quando** passa das 14:00, **então** ele sai de `blocked` e recebe a fila.
 - **CA-USO-06** · *rápida* — **Dado** um provedor sem dado de tokens, **quando** o turno termina, **então** o registro tem tempo ativo e um turno.
 - **CA-USO-07** · *rápida* — **Dado** um pedido `custo_extra` que passaria o teto, **quando** o Grão-Mestre tenta aprovar, **então** é recusado e o pedido vai aos usuários Administrador ou acima.
+- **CA-USO-09** · *rápida* — **Dado** um registro de uso gravado de um turno em que o personagem usou um subagente nativo, **quando** o uso é somado, **então** os tokens do subagente entram no personagem, na missão e na mesa dele.
 - **CA-USO-08** · *pesada* — **Dado** uma mesa trabalhando, **quando** abro o painel, **então** vejo o consumo da mesa e de cada personagem (MVP-11).
 
 ## Depende de
@@ -89,6 +91,10 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Workspaces](../orquestracao/workspaces.md)
 - [Política de aprovação](../aprovacoes/politica.md)
+
+## Verificar na implementação
+
+- **Verificar na implementação:** as fontes de uso de cada provedor incluem o consumo dos subagentes. **Padrão:** Claude Code, pelo custo acumulado do statusLine e pelo uso do subagente no PostToolUse da ferramenta `Agent`; Codex, pelos eventos `token_count` das threads filhas no JSONL da sessão; Antigravity, pelo `/usage` do perfil (que já soma tudo). **Se falhar:** vale o tempo ativo do personagem (que inclui o subagente) e o registro é marcado como estimado. **Onde:** etapas 7 e 12 do [teste de conformidade](../provedores/conformidade.md).
 
 ## Fontes
 

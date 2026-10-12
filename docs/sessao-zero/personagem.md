@@ -70,6 +70,9 @@ A identidade git vem **só** do `gitconfig` do personagem: o motor nunca põe `G
 - Personagens novos nascem sempre com a versão atual.
 - Mudou a versão: o painel marca as mesas com personagens em versão antiga e oferece **Regenerar** (Administrador ou acima). A regeneração refaz os arquivos do worktree ([mesa](mesa.md)) e de cada personagem; os vivos recebem o conteúdo novo pela atualização do início do próximo turno (no Claude Code, o prompt de sistema completo só muda num reinício do personagem, feito quando ele estiver ocioso).
 
+### Ao encerrar
+Quando o personagem é encerrado de vez (estado final em [personagens](../orquestracao/personagens.md#estados), não um reinício com retomada), o motor do nó apaga `.mestre/agents/<id>/` e, no Antigravity, `.agents/agents/mestre-<id>.md`. Esses arquivos estão na exclusão local do git desde a abertura da mesa ([mesa](mesa.md#gitinfoexclude)). Um reinício com retomada mantém os arquivos (e os regenera, se a classe ou os decretos mudaram).
+
 ## Regras e erros
 
 - O motor nunca escreve a camada do Mestre no `AGENTS.md`, no `CLAUDE.md` nem em arquivos globais do usuário.
@@ -89,6 +92,7 @@ A identidade git vem **só** do `gitconfig` do personagem: o motor nunca põe `G
 - **CA-SZ-PERS-08** · *completa* — **Dado** os modelos na versão 3 e um personagem nascido na 2, **quando** um personagem novo é criado, **então** ele nasce na 3 e o antigo continua na 2 até alguém regenerar.
 - **CA-SZ-PERS-09** · *rápida* — **Dado** um Mestre da mesa e um Dev, ambos Codex, na mesma mesa, **quando** os arquivos dos dois são montados, **então** o `.agents/skills/` do worktree só tem `mestre-comunicacao`, a seção de skills do `MESTRE.md` do Mestre traz a coordenação de mesa e a do Dev não traz.
 - **CA-SZ-PERS-10** · *rápida* — **Dado** um personagem com App da classe "Dev", **quando** o ambiente é montado, **então** `GIT_CONFIG_GLOBAL` aponta para `.mestre/agents/<id>/gitconfig`, cujo `user.name` é o bot do App; **quando** a classe troca de App, **então** só o arquivo muda e o próximo commit sai com o autor novo, sem reiniciar o personagem.
+- **CA-SZ-PERS-11** · *rápida* — **Dado** um personagem Antigravity encerrado, **quando** o encerramento termina, **então** `.mestre/agents/<id>/` e `.agents/agents/mestre-<id>.md` não existem mais e o `git status` do worktree não mostrou esses arquivos em nenhum momento; num reinício com retomada, eles continuam.
 
 ## Depende de
 

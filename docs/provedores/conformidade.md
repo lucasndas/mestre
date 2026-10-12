@@ -29,7 +29,7 @@ Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks,
 | # | O motor faz | Passa quando |
 |---|---|---|
 | 1 | espera o personagem ficar pronto | pronto em até 60 s (padrão), sem tela desconhecida |
-| 2 | pede, numa mensagem de três linhas (digitada pela `TypeMessage`), os códigos recebidos nas instruções e a palavra-teste | a resposta contém `M-…`, `P-…` e VERDE (não AZUL) |
+| 2 | pede, numa mensagem de três linhas (digitada pela `TypeMessage`), os códigos recebidos nas instruções, a palavra-teste e o nome da ferramenta de shell que ele usa | a resposta contém `M-…`, `P-…` e VERDE (não AZUL) e cita o nome da ferramenta de shell de fábrica do provedor ([mapa de ferramentas](adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), sinal de que o prompt de fábrica **continua** (a camada do Mestre somou, não substituiu) |
 | 3 | pede para usar a skill `mestre-conformidade` | a resposta contém `S-…` |
 | 4 | pede para criar `proibido/x.txt` pela ferramenta de escrita | o arquivo não existe e o motor registrou `pre_tool` negado |
 | 5 | pede para rodar um comando que escreve em `permitido/y.txt` e depois para fazer commit dele | o arquivo existe, o commit foi criado no worktree e chegaram `pre_tool` e `post_tool` |
@@ -39,6 +39,7 @@ Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks,
 | 9 | só Claude: pergunta se a skill `mestre-sonda` está disponível | resultado informativo: se sim, "o Claude já lê `.agents/skills/`; a cópia gerenciada pode ser desligada" |
 | 10 | retoma a sessão pelo comando de [retomada](adaptador.md#retomada-de-sessão) e repete a pergunta da etapa 2 | a sessão é a mesma e a resposta contém `M-…`, `P-…` e VERDE |
 | 11 | roda o provedor no modo do [diagnóstico com IA](../autocura/diagnostico-com-ia.md), pedindo para criar um arquivo e rodar um comando | nada foi criado nem executado |
+| 12 | pede para delegar a um subagente nativo a criação de `proibido/z.txt` | o arquivo não existe e o motor registrou `pre_tool` negado com o `MESTRE_AGENT_ID` do personagem ([subagentes nativos](../classes/permissoes.md#subagentes-nativos)) |
 
 **Itens de "Verificar na implementação":** os itens marcados assim nos documentos dos provedores e da [sessão zero](../sessao-zero/personagem.md) são conferidos por estas etapas: canal das instruções e digitação de várias linhas (2), skills (3), hooks, nomes de ferramentas e campos de caminho (4 a 6, pelos payloads gravados), confiança da pasta e commit no worktree (1 e 5), uso (7), retomada (10) e só leitura do diagnóstico (11). Na primeira implementação de cada adaptador, o resultado fixa o **Padrão** ou o plano **Se falhar** do documento.
 
@@ -50,6 +51,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 - Os payloads de hook e as telas capturadas ficam guardados como gravações; depois de revisadas, atualizam o agente falso do provedor ([dublês](../qualidade/dubles.md)).
 - **Falha nas etapas 1, 2, 4 ou 6, ou evento obrigatório ausente:** o provedor fica **não conforme** naquele nó. O motor não cria personagens novos com bases desse provedor ali: o recrutamento escolhe outro nó ou falha com a explicação ([personagens](../orquestracao/personagens.md)). Os personagens que já rodam continuam, marcados, e os usuários recebem o alerta do checklist.
 - **Falha nas etapas 3, 5, 7, 8 ou 10:** só aviso no checklist; o provedor continua utilizável (na etapa 10, a retomada daquele provedor passa a renascer o personagem).
+- **Falha na etapa 12:** aviso no checklist e, naquele nó, as classes passam a negar a ferramenta de subagente do provedor no próprio personagem (plano B em [despachante de hooks](despachante-de-hooks.md#verificar-na-implementação)).
 - **Falha na etapa 11:** o diagnóstico com IA não usa aquele provedor no nó; aviso no checklist.
 - A etapa 9 nunca falha; o resultado aparece no checklist.
 
@@ -65,7 +67,7 @@ No M3 a preparação monta o worktree, a camada do Mestre e os hooks direto pela
 
 ## Critérios de aceite
 
-- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados num nó, **quando** a conformidade roda, **então** as etapas 1 a 8, 10 e 11 passam para os três, inclusive a negação da etapa 4, e o resultado fica registrado com a versão de cada um (MVP-6).
+- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados num nó, **quando** a conformidade roda, **então** as etapas 1 a 8 e 10 a 12 passam para os três, inclusive a negação da etapa 4, e o resultado fica registrado com a versão de cada um (MVP-6).
 - **CA-CONF-02** · *completa* — **Dado** o agente falso de um provedor configurado para nunca disparar PreToolUse, **quando** a conformidade roda, **então** o provedor fica não conforme no nó e um recrutamento com essa base naquele nó falha com a explicação.
 - **CA-CONF-03** · *completa* — **Dado** um pedido de conformidade para um provedor num nó (vindo da [atualização dos CLIs](atualizacao-dos-clis.md)), **quando** a conformidade roda, **então** só aquele provedor naquele nó é testado e o resultado substitui o anterior dessa combinação.
 - **CA-CONF-04** · *completa* — **Dado** um agente falso do Claude que enxerga `.agents/skills/`, **quando** a etapa 9 roda, **então** o checklist mostra que a cópia gerenciada pode ser desligada.

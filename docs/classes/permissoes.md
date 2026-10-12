@@ -51,7 +51,7 @@ Aplicação das [invariantes arquiteturais](../arquitetura/precedencia.md#invari
 - ler ou escrever o cofre, as pastas de dados do Mestre (inclusive a do retrato `policy.json` e a fila do `mestre hook`, [persistência](../arquitetura/persistencia.md#arquivos)) e as credenciais dos perfis de conta (`.credentials.json`, `auth.json`, token do Antigravity, chaves SSH);
 - `git push` e mudar remotos (`git remote add|set-url|remove`);
 - comandos git que alteram refs de outras branches, outros worktrees ou o espelho, já que os worktrees das mesas compartilham as refs do espelho (ex.: `git branch -D|-f|-m` de outra branch, `git update-ref`, `git tag`, `git worktree`, `git gc`/`prune`, `git fetch` para refs locais, `git --git-dir`/`-C` apontando para fora do worktree); na própria branch da mesa valem as regras de `git`;
-- escrever pela ferramenta de escrita em `.git/**`, `.mestre/**` (pergaminhos e classes só pela CLI), `.claude/settings*.json`, `.codex/`, `.agents/hooks.json` e `.agents/agents/`;
+- escrever pela ferramenta de escrita em `.git/**`, `.mestre/**` (pergaminhos e classes só pela CLI), `.claude/settings*.json`, `.codex/`, `.agents/hooks.json`, `.agents/agents/` e `.claude/agents/` (o agente não cria nem altera definições de agente ou subagente);
 - iniciar `claude`, `codex` ou `agy` pelo shell (personagens nascem só pelo motor);
 - executar arquivos de `.mestre/anexos/` ou dar permissão de execução a eles: **anexos nunca são executados** ([anexos](../telegram/anexos-e-transcricao.md));
 - editar um arquivo que outro personagem da mesa editou no turno ainda em andamento (o motivo cita quem).
@@ -79,6 +79,12 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
 - `origin`: camada de origem (`fixed`, `decree`, `ceiling`, `class`, `sheet`) de cada padrão que não vem da classe, para o motivo da negação citar, por exemplo, "teto do workspace".
 - `locked`: sistema travado ([segurança do canal](../telegram/seguranca-do-canal.md)); com `true`, toda ferramenta é negada.
 - `version` muda só quando um campo muda de sentido; campos novos são acrescentados sem mudar a versão.
+
+### Subagentes nativos
+
+- Um personagem pode usar os subagentes nativos do provedor (ex.: a ferramenta `Agent` do Claude) como ferramenta de tipo `subagent` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), liberada ou negada pela classe em `tools` pelo nome nativo, como qualquer ferramenta.
+- O subagente é trabalho do personagem: herda as regras efetivas dele (os hooks rodam com o mesmo `MESTRE_AGENT_ID`), e o consumo entra no registro do personagem ([limites de uso](../plataforma/limites-de-uso.md#registro-de-uso)).
+- A classe **não** vira arquivo de subagente; o Mestre não gera definições de subagente. Definições que o próprio projeto já tenha podem ser usadas, sujeitas às mesmas regras.
 
 ### Pipeline de decisão
 
@@ -138,6 +144,7 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 - **CA-PERM-09** · *rápida* — **Dado** `tools.allow: ["mcp__playwright__*"]`, `tools.deny: ["mcp__*__delete_*"]` e `default: deny`, **quando** chegam `mcp__playwright__browser_navigate`, `mcp__playwright__delete_cookies` e `mcp__github__create_issue`, **então** o primeiro é liberado e os outros dois negados, igual para os provedores que expõem esses nomes.
 - **CA-PERM-10** · *rápida* — **Dado** uma classe que libera `curl *`, um teto que nega `curl *` e uma ficha que nega `git commit *`, **quando** o Core monta as regras efetivas, **então** o documento tem `curl *` em `commands.deny` com `origin` `ceiling`, `git.commit` falso e nenhum marcador sem resolver.
 - **CA-PERM-11** · *rápida* — **Dado** qualquer classe, **quando** o agente pede `chmod +x .mestre/anexos/x.sh` ou `sh .mestre/anexos/x.sh`, **então** os dois são negados pela regra fixa de anexos.
+- **CA-PERM-12** · *rápida* — **Dado** uma classe com `tools.deny: ["Agent"]`, **quando** chega um `pre_tool` de tipo `subagent` com esse nome, **então** é negado; e, com a ferramenta liberada, um `pre_tool` de escrita vindo de dentro do subagente (mesmo `MESTRE_AGENT_ID`) passa pelas regras do personagem.
 
 ## Depende de
 

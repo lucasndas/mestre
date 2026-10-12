@@ -62,3 +62,7 @@ No Claude, nunca usar exit 1 para bloquear: exit 1 não bloqueia. No Antigravity
 
 - [Adaptador](adaptador.md) · [Canal local](../arquitetura/canal-local.md)
 - [Permissões](../classes/permissoes.md) (pipeline, regras efetivas, regras fixas)
+
+## Verificar na implementação
+
+- **Verificar na implementação:** os hooks disparam para as ferramentas usadas **dentro** de um subagente nativo, com o mesmo `MESTRE_AGENT_ID` do personagem, nos três provedores ([subagentes nativos](../classes/permissoes.md#subagentes-nativos)). **Padrão:** disparam (o subagente roda no mesmo processo e herda o ambiente). **Se falhar:** naquele provedor e nó, as regras efetivas passam a negar a ferramenta de subagente no próprio personagem (a chamada ao subagente passa pelo `pre_tool` do personagem antes de existir), e o checklist avisa. **Onde:** etapa 12 do [teste de conformidade](conformidade.md).

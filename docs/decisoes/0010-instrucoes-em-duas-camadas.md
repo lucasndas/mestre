@@ -36,7 +36,14 @@ Aceita, 2026-10-12.
    - Contras:
      - Joga fora as instruções de fábrica do provedor, o que piora o comportamento.
      - O Antigravity não oferece isso.
-4. **Duas camadas.**
+4. **Arquivo de agente nativo de cada provedor** (`.claude/agents/<nome>.md` + `claude --agent`, `.codex/agents/<nome>.toml`, `.agents/agents/<nome>.md` + `agy --agent`), gerado a partir da classe.
+   - Prós: usa o mecanismo de "papel" que cada provedor já tem, com campos de ferramentas e modelo.
+   - Contras:
+     - **Claude Code:** o corpo do agente **substitui** o prompt de fábrica inteiro, como `--system-prompt` (cai na opção 3).
+     - **Codex:** o arquivo de agente só vale para subagentes; não há como a sessão principal assumir um, e o código só aplica dele as instruções e o modelo.
+     - Não existe padrão aberto de definição de agente: os três formatos são incompatíveis, e o Agent Plugins 1.0 cobre só skills e MCP. Seriam três geradores sem ganho sobre os canais da opção 5.
+     - No **Antigravity** o arquivo de agente é o único canal forte que existe, então ele é usado lá, só como recipiente da camada do Mestre (decisão abaixo).
+5. **Duas camadas.**
    - A **camada do Mestre** é um arquivo por personagem (`MESTRE.md`), entregue pelo canal mais forte que cada provedor oferece.
    - A **camada do projeto** é o `AGENTS.md`, intocado.
    - Prós:
@@ -53,7 +60,7 @@ Aceita, 2026-10-12.
 - **Canal mais forte por provedor.** Os canais escolhidos e a reserva universal (primeira mensagem) estão em [sessão zero do personagem](../sessao-zero/personagem.md). O porquê de cada escolha:
   - **Claude Code:** `--append-system-prompt-file`. A documentação garante que funciona no modo interativo e que soma ao prompt de fábrica.
   - **Codex:** não há flag de prompt de sistema.
-    - O canal preferido é `-c developer_instructions=...`, porque entra na partida, sem depender de hook confiado.
+    - O canal preferido é `-c developer_instructions=...`, porque entra na partida, sem depender de hook confiado. A documentação e o código confirmam que vale no modo interativo e que **soma** uma mensagem de papel developer às instruções de fábrica.
     - A reserva é o hook `SessionStart` com `additionalContext`.
   - **Antigravity:** não há flag de prompt de sistema nem `additionalContext`.
     - O canal é um **arquivo de agente próprio**, cujo corpo vira o prompt de sistema, selecionado com `--agent`. Ele é gerado por personagem e fica fora do git.
@@ -73,7 +80,7 @@ Aceita, 2026-10-12.
   - **Limite do Codex:** as instruções somadas têm limite de **32 KiB** por padrão, o que obriga a camada do Mestre a ser enxuta.
   - **Força desigual:** no Codex, `developer_instructions` entra como mensagem de papel "developer", não como prompt de sistema. A prioridade depende da regra escrita no início da camada.
   - **Atualização por turno:** decretos que mudam comportamento precisam atualizar a camada a cada turno, pelo hook de início de turno ou pela reserva ([decretos](../telegram/decretos.md)).
-- **Pontos em aberto, conferidos na implementação** (no Codex, `-c developer_instructions` no modo interativo; no Antigravity, o arquivo de agente com `--agent` no modo interativo, ambos na etapa 2 do [teste de conformidade](../provedores/conformidade.md)): os itens completos estão em [sessão zero do personagem](../sessao-zero/personagem.md#verificar-na-implementação), [Codex](../provedores/codex.md#verificar-na-implementação) e [Antigravity](../provedores/antigravity.md#verificar-na-implementação).
+- **Pontos conferidos na implementação** (no Antigravity, o arquivo de agente com `--agent` no modo interativo e se o prompt de fábrica continua; nos três, que as camadas chegaram e o prompt de fábrica continua, na etapa 2 do [teste de conformidade](../provedores/conformidade.md)): os itens completos estão em [sessão zero do personagem](../sessao-zero/personagem.md#verificar-na-implementação), [Codex](../provedores/codex.md#verificar-na-implementação) e [Antigravity](../provedores/antigravity.md#verificar-na-implementação).
 
 ## Fontes
 
@@ -82,3 +89,6 @@ Aceita, 2026-10-12.
 - Codex, AGENTS.md e limite: https://learn.chatgpt.com/docs/agent-configuration/agents-md
 - Codex, `developer_instructions`: https://learn.chatgpt.com/docs/config-file/config-reference
 - Antigravity, regras e arquivos de agente: https://antigravity.google/docs/rules , https://antigravity.google/docs/subagents
+- Claude Code, subagentes e `--agent` (substitui o prompt padrão): https://code.claude.com/docs/en/sub-agents
+- Codex, agentes como subagentes: https://learn.chatgpt.com/docs/agent-configuration/subagents
+- Agent Plugins 1.0 (só skills e MCP): https://agent-plugins.org , https://aaif.io/blog/from-skills-and-tools-to-portable-agent-plugins

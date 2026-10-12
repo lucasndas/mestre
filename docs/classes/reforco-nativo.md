@@ -18,6 +18,7 @@ Fazer cada provedor segurar o essencial das [permissões](permissoes.md) mesmo s
 | regras fixas | `deny`: `Bash(git push *)`, `Bash(git remote *)` | `.git` fora do alcance de escrita do sandbox | `permissions.deny` no `settings.json` do perfil (só regras fixas, pois o arquivo é compartilhado) |
 | `network.internet: false` | `--disallowedTools WebFetch WebSearch` | `sandbox_workspace_write.network_access=false`, sem `--search` | `--sandbox` |
 | `network.domains` | `allow`: `WebFetch(domain:<d>)` | só liga/desliga | — |
+| ferramentas disponíveis | — | — | campo `tools` do arquivo de agente `mestre-<id>.md`: só as ferramentas nativas que as regras efetivas não negam por inteiro (sem escrita: sem as de escrita; sem internet: sem as de web) |
 | falha do despachante | `onFailure: block` | sandbox | falha fechada nativa |
 
 - `ask` nunca vira regra nativa: o despachante cuida.
@@ -39,6 +40,7 @@ Quando um decreto ou uma mudança de classe libera algo bloqueado no nível nati
 - **CA-NATIVO-01** · *rápida* — **Dado** uma classe QA que só escreve em `tests/**`, sem internet, **quando** o adaptador traduz, **então** o Claude recebe `Edit(//<worktree>/tests/**)` em `allow` e `Bash(git push *)` em `deny`, o Codex `-s workspace-write` sem rede, e o Antigravity `--sandbox`.
 - **CA-NATIVO-02** · *rápida* — **Dado** regras efetivas com `commands.ask` e `tools.allow`, **quando** o adaptador traduz para os três provedores, **então** nenhuma regra nativa sai desses dois blocos.
 - **CA-NATIVO-03** · *rápida* — **Dado** um personagem Claude ocupado e um decreto que libera `Bash(make deploy *)`, **quando** as regras efetivas chegam, **então** o arquivo `--settings` é regenerado e o reinício com retomada fica agendado para quando ele estiver livre.
+- **CA-NATIVO-04** · *rápida* — **Dado** uma classe sem escrita e sem internet, **quando** o adaptador do Antigravity gera o arquivo de agente, **então** o campo `tools` não lista ferramentas de escrita nem de web.
 
 ## Depende de
 
@@ -48,3 +50,4 @@ Quando um decreto ou uma mudança de classe libera algo bloqueado no nível nati
 
 - **Verificar na implementação:** a regra `Edit(//<caminho absoluto>/<glob>)` do Claude casa os arquivos do worktree. **Padrão:** casa. **Se falhar:** o motor gera a forma relativa que a conformidade aceitar; enquanto isso, a regra de caminho fica só no despachante. **Onde:** etapa 4 do [teste de conformidade](../provedores/conformidade.md), com o despachante em modo degradado.
 - **Verificar na implementação:** a sintaxe `action(target)` com curinga no `permissions.deny` do Antigravity (ex.: `command(git push*)`). **Padrão:** essa forma. **Se falhar:** as regras fixas desse provedor ficam só no hook, que as aplica até em modo degradado ([despachante](../provedores/despachante-de-hooks.md#modo-degradado)). **Onde:** etapa 5 do [teste de conformidade](../provedores/conformidade.md), pedindo `git push` com o hook respondendo `allow`.
+- **Verificar na implementação:** o campo `tools` do arquivo de agente do Antigravity restringe as ferramentas da **sessão principal** (`mainAgent: true`), e não só de subagentes. **Padrão:** restringe. **Se falhar:** o campo continua gerado, sem efeito, e o bloqueio fica só no despachante (falha fechada) e no `--sandbox`. **Onde:** etapa 4 do [teste de conformidade](../provedores/conformidade.md), conferindo que a ferramenta de escrita nem chega a ser oferecida.
