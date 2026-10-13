@@ -127,6 +127,10 @@ func Create(ctx context.Context, cfg CreateConfig) (*Founded, error) {
 		return nil, fmt.Errorf("guild: record the Guild: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO epochs (epoch, citadel_machine_id, from_lsn, started_at) VALUES (1, ?, 0, ?)`, machineID, now); err != nil {
+		return nil, fmt.Errorf("guild: record the first epoch: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES (?, ?, ?, 0, 0, 'active', ?, ?)`,
 		m.ID, m.Name, m.Instance, encodeNames(m.Hostname, m.IPs, m.ExtraNames), now); err != nil {
 		return nil, fmt.Errorf("guild: register this machine: %w", err)

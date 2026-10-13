@@ -384,7 +384,7 @@ func (s *Session) finish(ctx context.Context, id string, a Ack) {
 }
 
 func (s *Session) sendReply(ctx context.Context, to string, r *Reply) {
-	if _, err := s.link.Send(ctx, Outgoing{Type: r.Type, Payload: r.Payload, ReplyTo: to, transient: r.Transient}); err != nil && !errors.Is(err, ErrNotConnected) {
+	if _, err := s.link.Send(ctx, Outgoing{Type: r.Type, Payload: r.Payload, ReplyTo: to, Transient: r.Transient}); err != nil && !errors.Is(err, ErrNotConnected) {
 		s.cfg.Logger.Error("protocol: reply", "to", to, "type", r.Type, "err", err)
 	}
 }

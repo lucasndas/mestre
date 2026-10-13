@@ -1,7 +1,8 @@
-// Command mestre is the CLI of the Mestre (docs/cli/convencoes.md). It only
-// assembles the process around internal/cli: the environment, the folder and
-// the signals. Every command talks to the engine of the machine through the
-// local channel (docs/arquitetura/canal-local.md).
+// Command mestre is the CLI of the Mestre (docs/cli/convencoes.md) and the
+// engine (`mestre run`, docs/arquitetura/componentes.md). It only assembles
+// the process around internal/cli and internal/app: the environment, the
+// folder and the signals. Every command of the CLI talks to the engine of the
+// machine through the local channel (docs/arquitetura/canal-local.md).
 package main
 
 import (
@@ -9,7 +10,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 
+	"github.com/lucasndas/mestre/internal/app"
 	"github.com/lucasndas/mestre/internal/cli"
 )
 
@@ -18,7 +21,12 @@ import (
 var version = "dev"
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	if len(os.Args) > 1 && os.Args[1] == "run" {
+		code := app.Main(ctx, os.Args[2:], os.Stderr, os.Getenv, version)
+		stop()
+		os.Exit(code)
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: cannot read the current folder:", err)
