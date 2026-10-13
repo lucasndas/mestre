@@ -244,6 +244,37 @@ func TestFailingTestRunsOnce(t *testing.T) {
 	}
 }
 
+// A goroutine that panics after its test ended takes the binary down while
+// other tests run: `go test -json` puts the panic text under the test that was
+// running, which never finishes. The report shows it instead of a bare
+// "(package)" failure.
+func TestACrashedBinaryShowsThePanicUnderTheTestThatWasRunning(t *testing.T) {
+	t.Parallel()
+	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
+		if !isMainRun(c) {
+			return 0
+		}
+		_, _ = io.WriteString(out, ev("TestDone", "pass", 0.1))
+		for _, o := range []string{"=== CONT  TestRunning", "panic: nil pointer dereference", "goroutine 8 [running]:"} {
+			line, _ := json.Marshal(event{Action: "output", Package: pkg, Test: "TestRunning", Output: o + "\n"})
+			_, _ = out.Write(append(line, '\n'))
+		}
+		_, _ = io.WriteString(out, ev("", "fail", 0.4, "FAIL\t"+pkg+"\t0.4s"))
+		return 1
+	}}
+	r, out := newRunner(nil, clock.NewFake(today), ex)
+
+	code := r.RunSuite(context.Background(), Suites["fast"])
+
+	text := out.String()
+	if code == 0 || !strings.Contains(text, "--- FAIL: "+pkg+" TestRunning") || !strings.Contains(text, "panic: nil pointer dereference") {
+		t.Fatalf("code %d, the report does not show the panic:\n%s", code, text)
+	}
+	if strings.Contains(text, "TestDone") || strings.Contains(text, "(package)") {
+		t.Fatalf("the report names a test that passed or the package:\n%s", text)
+	}
+}
+
 // CA-TESTES-08
 func TestLintRunsWithSuiteTagsAndMissingBinaryPointsToSetup(t *testing.T) {
 	t.Parallel()
