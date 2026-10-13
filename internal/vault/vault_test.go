@@ -554,7 +554,7 @@ func TestRotationCommitIsDurableBeforeTheOldKeyIsDropped(t *testing.T) {
 // A commit that would not be synced is refused, and nothing changes.
 func TestRotationRefusesACommitThatIsNotDurable(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, nil)
+	f := newDurableFixture(t, nil)
 	v := f.create(t)
 	putSamples(t, v)
 	v.durableHook = func(ctx context.Context, fn func(*sql.Tx) error) error {
