@@ -33,6 +33,7 @@ func (c *checker) checkOrder() {
 		return
 	}
 	place := map[string]placement{}
+	c.place = place
 	for i := start; i < end; i++ {
 		m := mapRowRe.FindStringSubmatch(od.lines[i])
 		if m == nil {

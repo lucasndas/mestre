@@ -22,6 +22,6 @@ Comece por aqui. Desça pelo índice da área até achar o documento de que prec
 | [conectividade](conectividade/INDEX.md) | protocolo, mensagens, descoberta da Guilda | comunicação entre as máquinas da Guilda e o navegador |
 | [painel](painel/INDEX.md) | canvas, visão do workspace, conversa, administração, login | interface web |
 | [plataforma](plataforma/INDEX.md) | cofre, limites de uso, checklist, instalação e atualização | serviços transversais |
-| [qualidade](qualidade/INDEX.md) | política de testes, dublês, verificação da documentação | escrever ou rodar testes |
+| [qualidade](qualidade/INDEX.md) | política de testes, dublês, regras de código, verificação da documentação | escrever ou rodar testes |
 | [desenvolvimento](desenvolvimento/INDEX.md) | convenções de código, commits, branches e definição de pronto | antes do primeiro commit |
 | [operacao](operacao/INDEX.md) | guias para quem usa: instalar, entrar na Guilda, atualizar, desinstalar | instalar e operar o Mestre |

@@ -1,6 +1,8 @@
 # CI of the repository: the fast and full suites on Linux and Windows, in
 # parallel, required by the ruleset of main (docs/desenvolvimento/ambiente.md
-# and docs/qualidade/testes.md). Third-party actions are pinned by commit SHA;
+# and docs/qualidade/testes.md). The Linux job also runs both suites with the
+# race detector (budgets times 3), and both jobs build and vet with cgo off,
+# like the release builds. Third-party actions are pinned by commit SHA;
 # golangci-lint is the pinned release binary, checked by its SHA-256.
 name: CI
 
@@ -29,7 +31,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Linux also runs the race detector (docs/qualidade/testes.md).
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -94,6 +97,15 @@ jobs:
       - name: Code rules
         run: go run ./tools/codecheck
 
+      # The release binaries are built with cgo off (ADR 0001): the same build
+      # and vet must pass that way too, on both systems.
+      - name: Build and vet with cgo off
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go build ./...
+          go vet ./...
+
       # The suite budgets are measured with a warm build cache
       # (docs/qualidade/testes.md#executor-testrun): compile the test
       # binaries of both suites first, running no test.
@@ -109,3 +121,19 @@ jobs:
 
       - name: Full suite
         run: go run ./tools/testrun full
+
+      # The detector needs cgo and a build cache of its own; compile the race
+      # test binaries first, so the budgets (3x the normal ones) measure tests.
+      - name: Warm the build cache (race)
+        if: runner.os == 'Linux'
+        run: |
+          go test -race -run '^$' ./...
+          go test -race -tags full -run '^$' ./...
+
+      - name: Fast suite (race)
+        if: runner.os == 'Linux'
+        run: go run ./tools/testrun fast -race
+
+      - name: Full suite (race)
+        if: runner.os == 'Linux'
+        run: go run ./tools/testrun full -race

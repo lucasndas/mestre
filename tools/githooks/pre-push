@@ -1,0 +1,59 @@
+#!/bin/sh
+# Pre-push hook of the repository: the full suite with -race on the packages
+# the push changed, and the ones that import them (docs/qualidade/testes.md,
+# "Antes do push"). Like the pre-commit hook it tests what is being pushed,
+# not the working tree: the pushed commit is written to a folder inside the
+# git directory (the same path every time, to keep the Go build cache warm)
+# with a private index, so nothing in the working tree is touched.
+# Enable once per clone with
+#   git config core.hooksPath tools/githooks
+# (docs/desenvolvimento/ambiente.md). Skip only in an emergency with
+# git push --no-verify; the CI runs the suites anyway.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+zero=0000000000000000000000000000000000000000
+gitdir="$(cd "$(git rev-parse --git-dir)" && pwd)"
+snap="$gitdir/prepush-snapshot"
+idx="$gitdir/prepush-index"
+status=0
+
+# base prints the commit to compare the pushed one with: what the remote
+# branch has, or, for a new branch (or a remote commit this clone does not
+# have), where the branch left origin/main. Nothing when there is neither.
+base() {
+	if [ "$1" != "$zero" ] && git cat-file -e "$1^{commit}" 2>/dev/null; then
+		echo "$1"
+	else
+		git merge-base "$2" origin/main 2>/dev/null || true
+	fi
+}
+
+while read -r _ local_sha _ remote_sha; do
+	[ "$local_sha" = "$zero" ] && continue # deleting a branch
+	from="$(base "$remote_sha" "$local_sha")"
+	if [ -n "$from" ]; then
+		files="$(git diff --name-only --no-renames "$from" "$local_sha")"
+	else
+		files="$(git ls-tree -r --name-only "$local_sha")"
+	fi
+	# Nothing but documents: nothing to run, and no time spent on a snapshot.
+	if [ -z "$(printf '%s\n' "$files" | grep -v -e '^$' -e '^docs/' -e '\.md$')" ]; then
+		echo "pre-push: only documents changed, skipped"
+		continue
+	fi
+	start="$(date +%s)"
+	rm -rf "$snap" "$idx"
+	mkdir -p "$snap"
+	GIT_INDEX_FILE="$idx" git read-tree "$local_sha"
+	GIT_INDEX_FILE="$idx" git checkout-index --all --prefix="$snap/"
+	rm -f "$idx"
+	# The suite starts no git; the snapshot is not a repository.
+	if ! (
+		unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX
+		cd "$snap" && printf '%s\n' "$files" | go run ./tools/testrun prepush
+	); then
+		status=1
+	fi
+	echo "pre-push: $(($(date +%s) - start)) s"
+done
+exit $status

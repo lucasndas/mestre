@@ -1,4 +1,4 @@
-package terminal
+package privdir
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"syscall"
 )
 
-// checkPrivateDir verifies the owner and sets the mode 0700.
-func checkPrivateDir(dir string) error {
+// check verifies the owner and sets the mode 0700.
+func check(dir string) error {
 	fi, err := os.Lstat(dir) // Lstat: a link to a folder is not the folder
 	if err != nil {
 		return err

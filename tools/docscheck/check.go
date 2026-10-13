@@ -44,6 +44,10 @@ const (
 	ckName      = "nome"
 	ckGlossary  = "glossário"
 	ckOrder     = "ordem"
+	ckAudit     = "auditoria"
+	ckCoverage  = "cobertura"
+	ckStale     = "comentário velho"
+	ckPin       = "pino"
 )
 
 // Limits and fixed paths.
@@ -86,9 +90,10 @@ type Result struct {
 type checker struct {
 	fsys  fs.FS
 	today time.Time
-	docs  map[string]*doc // every parsed markdown file by path
-	files []string        // the checked files: docs/**.md, AGENTS.md, README.md
-	dirs  []string        // docs and its subfolders
+	docs  map[string]*doc      // every parsed markdown file by path
+	files []string             // the checked files: docs/**.md, AGENTS.md, README.md
+	dirs  []string             // docs and its subfolders
+	place map[string]placement // feature document -> milestone and stage (the map of the order document)
 	res   Result
 }
 
@@ -120,6 +125,8 @@ func Check(fsys fs.FS, today time.Time) Result {
 	c.checkCriteria()
 	c.checkGlossary()
 	c.checkOrder()
+	c.checkMilestones()
+	c.checkGoPins()
 	sortIssues(c.res.Errors)
 	sortIssues(c.res.Warnings)
 	return c.res

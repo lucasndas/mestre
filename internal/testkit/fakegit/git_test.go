@@ -55,7 +55,7 @@ func TestHandleSharesTheDataModel(t *testing.T) {
 	}
 }
 
-// CA-MESAS-06 is owned by the table lifecycle (M3); this is the primitive it
+// The table lifecycle (M3, CA-MESAS-06) owns the rule; this is the primitive it
 // stands on: the fake reports a file not committed in the worktree of a mesa.
 func TestFakeReportsUncommittedFileInWorktree(t *testing.T) {
 	t.Parallel()

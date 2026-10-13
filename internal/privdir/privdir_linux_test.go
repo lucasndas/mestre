@@ -1,4 +1,4 @@
-package terminal
+package privdir
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestEnsurePrivateDir(t *testing.T) {
+func TestEnsure(t *testing.T) {
 	t.Parallel()
 	mode := func(t *testing.T, p string) os.FileMode {
 		t.Helper()
@@ -20,7 +20,7 @@ func TestEnsurePrivateDir(t *testing.T) {
 	t.Run("makes it private", func(t *testing.T) {
 		t.Parallel()
 		d := filepath.Join(t.TempDir(), "a", "b")
-		if err := EnsurePrivateDir(d); err != nil {
+		if err := Ensure(d); err != nil {
 			t.Fatal(err)
 		}
 		if m := mode(t, d); m != 0o700 {
@@ -36,7 +36,7 @@ func TestEnsurePrivateDir(t *testing.T) {
 		if err := os.Chmod(d, 0o777); err != nil { // the umask may have taken some
 			t.Fatal(err)
 		}
-		if err := EnsurePrivateDir(d); err != nil {
+		if err := Ensure(d); err != nil {
 			t.Fatal(err)
 		}
 		if m := mode(t, d); m != 0o700 {
@@ -54,7 +54,7 @@ func TestEnsurePrivateDir(t *testing.T) {
 		if err := os.Symlink(target, link); err != nil {
 			t.Fatal(err)
 		}
-		if err := EnsurePrivateDir(link); err == nil {
+		if err := Ensure(link); err == nil {
 			t.Error("a link to a folder was taken for the folder")
 		}
 		if m := mode(t, target); m != 0o755 {
@@ -67,7 +67,7 @@ func TestEnsurePrivateDir(t *testing.T) {
 		if err := os.WriteFile(f, nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := EnsurePrivateDir(f); err == nil {
+		if err := Ensure(f); err == nil {
 			t.Error("a file was taken for a folder")
 		}
 	})

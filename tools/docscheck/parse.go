@@ -105,6 +105,22 @@ func (d *doc) section(name string) (start, end int, ok bool) {
 	return start, len(d.lines), ok
 }
 
+// body returns the 1-based line range (start, end] below the first heading
+// whose text is name, at any level, up to the next heading of the same or a
+// higher level.
+func (d *doc) body(name string) (start, end int, ok bool) {
+	level := 0
+	for _, h := range d.headings {
+		if ok && h.level <= level {
+			return start, h.line - 1, true
+		}
+		if !ok && h.text == name {
+			start, level, ok = h.line, h.level, true
+		}
+	}
+	return start, len(d.lines), ok
+}
+
 // linksIn returns the links whose line is in (start, end].
 func (d *doc) linksIn(start, end int) []link {
 	var out []link

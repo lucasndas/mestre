@@ -41,6 +41,16 @@ tar -xzf $f.tar.gz && install -m 0755 $f/golangci-lint ~/.local/bin/
 
 `~/.local/bin` precisa estar no `PATH`. Sem o binário, as suítes rápida e completa falham apontando para este documento. Trocar a versão é mudar esta tabela e conferir o `.golangci.yml` na mesma alteração.
 
+## Pinos do `go.mod`
+
+Valores que o `go.mod` mantém, escritos só aqui: a [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) lê esta tabela e falha, apontando para cá, se o arquivo divergir. Mudar um pino é uma decisão: edite a tabela e o `go.mod` na mesma alteração e rode a completa nos dois sistemas. Um `go get` ou `go mod tidy` pode subir a diretiva `go` por conta própria, e o `x/sys` sustenta o que é específico do Windows (ConPTY, ACLs, DPAPI).
+
+| Pino | Valor |
+|---|---|
+| `go` | `1.25.0` |
+| `toolchain` | `go1.27.2` |
+| `golang.org/x/sys` | `v0.47.0` |
+
 ## Rodar as suítes e a verificação
 
 Na raiz do repositório (o que cada suíte contém e quando roda está em [testes](../qualidade/testes.md)):
@@ -50,17 +60,23 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 | `go run ./tools/testrun affected` | durante o trabalho |
 | `go run ./tools/testrun fast` | antes de cada commit (inclui o golangci-lint e a verificação de docs) |
 | `go run ./tools/testrun full` | antes do merge |
+| `go run ./tools/testrun fast -race` (ou `full -race`) | o que o CI Linux roda a mais: o detector de corridas, com orçamento 3 vezes maior (precisa de cgo e de `gcc`) |
 | `go run ./tools/docscheck` | só a [verificação de docs](../qualidade/verificacao-de-docs.md) |
 | `go run ./tools/codecheck` | só as regras de código fora do linter ([estilo](convencoes.md#estilo)) |
 | `golangci-lint run ./...` | só o linter |
 
-**Gancho de pré-commit:** versionado em `tools/githooks/pre-commit` (roda a rápida). Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks`. Ele testa **o que vai no commit**, não a pasta de trabalho: grava o índice (`git checkout-index`, que vale também para `commit -a` e `commit <caminhos>`) em `<pasta do git>/precommit-snapshot` e roda a rápida lá. Nada da pasta de trabalho é guardado, trocado ou restaurado (sem `stash`), então edições não adicionadas e arquivos novos não entram no teste e nenhum trabalho se perde; a pasta tem sempre o mesmo caminho, para o cache de compilação do Go e do lint continuar quente. No Windows, o Git for Windows roda o gancho com o `sh` dele.
+### Ganchos de git
+
+Versionados em `tools/githooks/`. Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks` (no Windows, o Git for Windows roda os ganchos com o `sh` dele). Os dois testam **o que vai ser gravado ou enviado**, não a pasta de trabalho: escrevem esse conteúdo numa pasta dentro da pasta do git, sempre com o mesmo caminho, para o cache de compilação do Go e do lint continuar quente. Nada da pasta de trabalho é guardado, trocado ou restaurado (sem `stash`): edições não adicionadas e arquivos novos não entram no teste.
+
+- **`pre-commit`** roda a rápida sobre o índice (`git checkout-index`, que vale também para `commit -a` e `commit <caminhos>`), em `precommit-snapshot`.
+- **`pre-push`** roda o [`testrun prepush`](../qualidade/testes.md#antes-do-push) sobre o commit enviado (`git read-tree` num índice próprio, em `prepush-snapshot`): a completa com `-race` só nos pacotes mudados em relação à branch remota (numa branch nova, em relação a `origin/main`) e nos que os importam. Se só documentos mudaram, sai na hora, sem montar nada. Imprime os segundos gastos. Mexer em `pkg/clock` leva a completa inteira com `-race`. Em emergência, `git push --no-verify` (o CI roda tudo de qualquer jeito).
 
 ## CI e proteção da `main`
 
-O CI é `.github/workflows/ci.yml`: em cada PR e push na `main`, em `ubuntu-latest` e `windows-latest` em paralelo, instala o Go da `toolchain` do `go.mod` e o golangci-lint 2.14.0 (binário oficial, SHA-256 conferido) e roda `go vet ./...`, `tools/docscheck`, `tools/codecheck` e as suítes `fast` e `full` do `testrun` (o lint roda dentro delas). O cache de análise do golangci-lint fica guardado entre execuções (`actions/cache`, chave por sistema, versão do lint, `go.sum` e `.golangci.yml`), porque a primeira análise de uma dependência grande, como o `modernc.org/sqlite`, leva segundos. Ações de terceiros fixadas por SHA de commit; permissão só `contents: read`. As verificações se chamam `test (ubuntu-latest)` e `test (windows-latest)`.
+O CI é `.github/workflows/ci.yml`: em cada PR e push na `main`, em `ubuntu-latest` e `windows-latest` em paralelo, instala o Go da `toolchain` do `go.mod` e o golangci-lint 2.14.0 (binário oficial, SHA-256 conferido) e roda `go vet ./...`, `tools/docscheck`, `tools/codecheck`, `go build` e `go vet` com `CGO_ENABLED=0` (como os binários de release) e as suítes `fast` e `full` do `testrun` (o lint roda dentro delas). **No Linux, o mesmo job roda ainda `fast -race` e `full -race`**, com orçamento 3 vezes maior ([testes](../qualidade/testes.md#executor-testrun)), depois de compilar os binários de teste com `-race` fora do orçamento; ficam dentro do job `test (ubuntu-latest)`, que o ruleset já exige, então não há verificação nova a exigir. O cache de análise do golangci-lint fica guardado entre execuções (`actions/cache`, chave por sistema, versão do lint, `go.sum` e `.golangci.yml`), porque a primeira análise de uma dependência grande, como o `modernc.org/sqlite`, leva segundos. Ações de terceiros fixadas por SHA de commit; permissão só `contents: read`. As verificações se chamam `test (ubuntu-latest)` e `test (windows-latest)`.
 
-**Jobs da noite:** `.github/workflows/nightly.yml` (agendado às 03:23 UTC e sob demanda), com as mesmas ações fixadas por SHA e permissão `contents: read`. `quarantine` roda `testrun quarantine` nos dois sistemas; `flaky-hunt` roda `testrun fast -count 5 -shuffle` nos dois e guarda as linhas `mixed:` num artefato; `report`, o único job com `issues: write` (e sem rodar código do repositório), abre uma issue com o rótulo `flaky` por teste misto, ou comenta na já aberta, com o `gh` do runner e o `GITHUB_TOKEN`. O resumo do job traz os testes lentos e a quarentena que pode sair ([testes](../qualidade/testes.md#quarentena)).
+**Jobs da noite:** `.github/workflows/nightly.yml` (agendado às 03:23 UTC e sob demanda), com as mesmas ações fixadas por SHA e permissão `contents: read`. `quarantine` roda `testrun quarantine` nos dois sistemas; `flaky-hunt` roda `testrun fast -count 5 -shuffle` nos dois e guarda as linhas `mixed:` num artefato; `report`, um dos dois jobs com `issues: write` (nenhum roda código do repositório), abre uma issue com o rótulo `flaky` por teste misto, ou comenta na já aberta, com o `gh` do runner e o `GITHUB_TOKEN`. O resumo do job traz os testes lentos e a quarentena que pode sair ([testes](../qualidade/testes.md#quarentena)). `ruleset` compara o ruleset `main` ao vivo (`gh api repos/<repo>/rulesets`, depois o de nome `main`) com o JSON do bloco abaixo, a fonte única, com `tools/rulesetcheck`: ignora o que o servidor acrescenta (identificadores, links, datas, `do_not_enforce_on_create`, `required_reviewers`, `require_extra_approval_for_unattributed_changes`) e campo novo vazio; regra ou verificação a mais ou a menos, outro valor ou ajuste ligado é desvio. Com desvio, o job falha e `report ruleset drift` (o outro) abre ou reescreve uma issue com o rótulo `ruleset` e a fecha quando voltam a coincidir.
 
 Passo do Dono, uma vez, com a conta dele (`gh auth login`): criar o ruleset da `main` que exige as duas verificações, PR com squash e proíbe apagar e forçar push. Rulesets em repositório privado pedem plano pago do GitHub.
 

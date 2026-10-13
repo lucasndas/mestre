@@ -18,6 +18,7 @@ import (
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
+	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -142,7 +143,7 @@ func (d *DB) prepare(ctx context.Context, set Set, opts Options) error {
 // restores, and checks it with PRAGMA quick_check: migrations never run
 // without a sound copy to go back to.
 func (d *DB) backupBeforeMigrating(ctx context.Context, dir string, have int) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := privdir.Ensure(dir); err != nil {
 		return fmt.Errorf("store: pre-migration backup: %w", err)
 	}
 	dst := filepath.Join(dir, BackupName(d.path, have))
