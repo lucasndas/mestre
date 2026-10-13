@@ -28,6 +28,7 @@ func signedEpoch(t *testing.T, ca *transport.CA, guildID string, epoch uint64, c
 	return c
 }
 
+// CA-REPL-07
 func TestTheCertificateOfEpochVerifiesOnlyWithTheSignatureOfTheCAOfTheGuild(t *testing.T) {
 	t.Parallel()
 	clk := clock.NewFake(day0)
@@ -66,6 +67,7 @@ func TestTheCertificateOfEpochVerifiesOnlyWithTheSignatureOfTheCAOfTheGuild(t *t
 	}
 }
 
+// CA-REPL-07
 func TestAMachineKeepsTheHighestCertificateItSawAndRefusesTheRest(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, clock.NewFake(day0))

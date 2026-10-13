@@ -1,0 +1,558 @@
+package replication
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/vault"
+	"github.com/lucasndas/mestre/pkg/clock"
+)
+
+// ReplicaConfig wires the Tower side.
+type ReplicaConfig struct {
+	// DB is the replica of the Guild database (opened with Options.Replica).
+	DB    *store.DB
+	Clock clock.Clock
+	// GuildID, when set, makes the Tower ignore records of another Guild.
+	GuildID string
+	// Vault keeps the copy of the vault that vault.replica brings; nil means
+	// the machine takes none.
+	Vault *vault.Copier
+	// Files and Mirrors are where the files and the mirrors of the Citadel are
+	// copied to. Both optional.
+	Files   *Files
+	Mirrors *MirrorStore
+	// AckEvery and AckRecords: confirm every second or 256 records.
+	AckEvery   time.Duration
+	AckRecords int
+	// MaxQueueBytes bounds the records waiting to be applied.
+	MaxQueueBytes int
+	Retention     Retention
+	// OnApplied, when set, is told after each batch of records is committed
+	// to the replica: the first and the last lsn of it.
+	OnApplied func(first, last uint64)
+	Logger    *slog.Logger
+}
+
+// Replica is the replication on a Tower.
+type Replica struct {
+	cfg  ReplicaConfig
+	gid  protocol.ULID
+	hasG bool
+
+	// applyMu serializes the writes to the replica: applying records, swapping
+	// the file for a full copy, erasing the vault.
+	applyMu sync.Mutex
+
+	mu          sync.Mutex
+	link        *protocol.Link
+	queue       []store.LogRow
+	queueBytes  int
+	lastQueued  uint64
+	applied     uint64
+	lastAcked   uint64
+	kick        chan struct{}
+	needCopy    bool
+	resyncAsked bool
+	excluded    bool
+	state       string
+	lastErr     string
+	oldest      time.Time // when the oldest record waiting in the queue was received
+}
+
+// NewReplica checks the configuration.
+func NewReplica(ctx context.Context, cfg ReplicaConfig) (*Replica, error) {
+	if cfg.DB == nil || !cfg.DB.IsReplica() {
+		return nil, errors.New("replication: the Tower side needs a database opened as a replica")
+	}
+	if cfg.Clock == nil {
+		cfg.Clock = clock.Real{}
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.DiscardHandler)
+	}
+	if cfg.AckEvery <= 0 {
+		cfg.AckEvery = DefaultAckEvery
+	}
+	if cfg.AckRecords <= 0 {
+		cfg.AckRecords = DefaultAckRecords
+	}
+	if cfg.MaxQueueBytes <= 0 {
+		cfg.MaxQueueBytes = DefaultMaxQueueBytes
+	}
+	cfg.Retention = cfg.Retention.withDefaults()
+	r := &Replica{cfg: cfg, kick: make(chan struct{}, 1), state: "ok"}
+	if cfg.GuildID != "" {
+		g, err := protocol.ParseULID(cfg.GuildID)
+		if err != nil {
+			return nil, fmt.Errorf("replication: guild_id %q: %w", cfg.GuildID, err)
+		}
+		r.gid, r.hasG = g, true
+	}
+	lsn, err := cfg.DB.LastLSN(ctx)
+	if err != nil {
+		// A replica that never got a copy has no log yet.
+		lsn = 0
+	}
+	r.lastQueued, r.applied, r.lastAcked = lsn, lsn, lsn
+	return r, nil
+}
+
+// Attach tells the Replica which Link to send through (the Client's).
+func (r *Replica) Attach(l *protocol.Link) {
+	r.mu.Lock()
+	r.link = l
+	r.mu.Unlock()
+}
+
+// Hello fills what the hello says of the replica: the last lsn applied and the
+// epoch it belongs to.
+func (r *Replica) Hello(ctx context.Context, info *protocol.HelloInfo) {
+	lsn, err := r.cfg.DB.LastLSN(ctx)
+	if err != nil {
+		lsn = 0
+	}
+	info.ReplicaLSN = lsn
+	if lsn > 0 {
+		_, info.ReplicaEpoch, _ = readGuild(ctx, r.cfg.DB)
+	}
+}
+
+// Register adds the receivers of what the Citadel sends: the records, the vault
+// and the order to erase it.
+func (r *Replica) Register(router *protocol.Router) {
+	router.HandleData(protocol.DataReplica, protocol.DataHandlerFunc(r.handleData))
+	router.HandleFunc(protocol.TypeVaultReplica, r.handleVaultReplica)
+	router.HandleFunc(protocol.TypeVaultDrop, r.handleVaultDrop)
+}
+
+// Finalizers are the receivers of the transfers that belong to the
+// replication: the full copy, the files and the mirrors.
+func (r *Replica) Finalizers() map[string]protocol.Finalizer {
+	m := map[string]protocol.Finalizer{protocol.KindDBSnapshot: protocol.FinalizerFunc(r.finalizeSnapshot)}
+	if r.cfg.Files != nil {
+		m[protocol.KindFile] = &fileReceiver{files: r.cfg.Files}
+	}
+	if r.cfg.Mirrors != nil {
+		m[protocol.KindGitBundle] = newMirrorReceiver(*r.cfg.Mirrors)
+	}
+	return m
+}
+
+// Status is the state of the replica, for the checklist and the panel.
+type Status struct {
+	// LSN is the last record applied; Queued how many wait to be applied.
+	LSN    uint64
+	Queued int
+	// State is ok, waiting-copy (a full copy was asked for), disk-full or failed;
+	// Err says why when it is not ok.
+	State string
+	Err   string
+	// Lag is how long the oldest record in the queue has been waiting.
+	Lag time.Duration
+	// VaultDropped is true after vault.drop, until the vault comes back.
+	VaultDropped bool
+}
+
+// Status returns the state of the replica.
+func (r *Replica) Status() Status {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	st := Status{LSN: r.applied, Queued: len(r.queue), State: r.state, Err: r.lastErr, VaultDropped: r.excluded}
+	if len(r.queue) > 0 {
+		st.Lag = max(0, r.cfg.Clock.Now().Sub(r.oldest))
+	}
+	return st
+}
+
+// LagSeconds is the lag for machine.heartbeat: how long records have waited
+// to be applied.
+func (r *Replica) LagSeconds() *float64 {
+	l := r.Status().Lag.Seconds()
+	return &l
+}
+
+// handleData runs on the read goroutine of the connection and so only queues.
+func (r *Replica) handleData(_ context.Context, _ protocol.Peer, f protocol.DataFrame) {
+	if r.hasG && f.ID != r.gid {
+		return
+	}
+	rows, err := parseRecords(f.Pos, f.Data)
+	if err != nil {
+		r.cfg.Logger.Warn("replication: bad frame of records", "err", err)
+		r.askFrom(true)
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.needCopy || len(rows) == 0 {
+		return
+	}
+	skip := 0
+	for skip < len(rows) && rows[skip].LSN <= r.lastQueued {
+		skip++ // a repeat
+	}
+	rows = rows[skip:]
+	if len(rows) == 0 {
+		return
+	}
+	if rows[0].LSN != r.lastQueued+1 {
+		r.askFromLocked(false)
+		return
+	}
+	size := 0
+	for _, row := range rows {
+		size += len(row.Body)
+	}
+	if r.queueBytes+size > r.cfg.MaxQueueBytes {
+		r.askFromLocked(false)
+		return
+	}
+	if len(r.queue) == 0 {
+		r.oldest = r.cfg.Clock.Now()
+	}
+	r.queue = append(r.queue, rows...)
+	r.queueBytes += size
+	r.lastQueued = rows[len(rows)-1].LSN
+	r.resyncAsked = false
+	select {
+	case r.kick <- struct{}{}:
+	default:
+	}
+}
+
+// askFrom asks the Citadel to send again from the last record queued (a hole)
+// or, when full is true, for a full copy.
+func (r *Replica) askFrom(full bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.askFromLocked(full)
+}
+
+func (r *Replica) askFromLocked(full bool) {
+	if r.link == nil {
+		return
+	}
+	var from *uint64
+	if !full {
+		if r.resyncAsked {
+			return // already asked; the answer is on its way
+		}
+		r.resyncAsked = true
+		v := r.lastQueued
+		from = &v
+	} else {
+		r.needCopy = true
+		r.state = "waiting-copy"
+		r.queue, r.queueBytes = nil, 0
+	}
+	link := r.link
+	go func() {
+		if _, err := link.Send(context.Background(), protocol.Outgoing{Type: protocol.TypeReplicaResync, Payload: protocol.ReplicaResync{FromLSN: from}}); err != nil {
+			r.cfg.Logger.Warn("replication: replica.resync", "err", err)
+		}
+	}()
+}
+
+// Run applies the records as they come and confirms them, and applies the
+// retention of the log of the replica, until ctx ends.
+func (r *Replica) Run(ctx context.Context) error {
+	ack := r.cfg.Clock.NewTicker(r.cfg.AckEvery)
+	defer ack.Stop()
+	prune := r.cfg.Clock.NewTicker(PruneEvery)
+	defer prune.Stop()
+	for {
+		r.drain(ctx)
+		r.sendAck(false)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-r.kick:
+		case <-ack.C():
+			r.sendAck(true)
+		case <-prune.C():
+			r.applyMu.Lock()
+			if _, err := r.cfg.DB.PruneLog(ctx, r.cfg.Retention.MaxAge, r.cfg.Retention.MaxBytes); err != nil && ctx.Err() == nil {
+				r.cfg.Logger.Warn("replication: pruning the log of the replica", "err", err)
+			}
+			r.applyMu.Unlock()
+		}
+	}
+}
+
+// drain applies what is queued.
+func (r *Replica) drain(ctx context.Context) {
+	for ctx.Err() == nil {
+		r.mu.Lock()
+		if len(r.queue) == 0 || r.needCopy {
+			r.mu.Unlock()
+			return
+		}
+		n, bytes := 0, 0
+		for n < len(r.queue) && n < 1000 && bytes < 8<<20 {
+			bytes += len(r.queue[n].Body)
+			n++
+		}
+		batch := append([]store.LogRow(nil), r.queue[:n]...)
+		excluded := r.excluded
+		r.mu.Unlock()
+
+		if excluded { // vault.drop may overtake records still on their way
+			tables := tableSet(VaultTables)
+			for i := range batch {
+				if row, err := strip(batch[i], tables); err == nil {
+					batch[i] = row
+				}
+			}
+		}
+		r.applyMu.Lock()
+		_, err := r.cfg.DB.ApplyLog(ctx, batch)
+		r.applyMu.Unlock()
+		if err != nil {
+			r.failed(err)
+			return
+		}
+		r.mu.Lock()
+		r.queue = r.queue[n:]
+		for _, row := range batch {
+			r.queueBytes -= len(row.Body)
+		}
+		if len(r.queue) == 0 {
+			r.queue, r.queueBytes = nil, 0
+		} else {
+			r.oldest = r.cfg.Clock.Now()
+		}
+		r.applied = batch[len(batch)-1].LSN
+		if r.state == "disk-full" {
+			r.state, r.lastErr = "ok", ""
+		}
+		r.mu.Unlock()
+		if cb := r.cfg.OnApplied; cb != nil {
+			cb(batch[0].LSN, batch[len(batch)-1].LSN)
+		}
+	}
+}
+
+// failed decides what an error of the apply means.
+func (r *Replica) failed(err error) {
+	var gap *store.GapError
+	switch {
+	case errors.As(err, &gap):
+		r.mu.Lock()
+		r.queue, r.queueBytes = nil, 0
+		r.lastQueued, r.applied = gap.Have, gap.Have
+		r.resyncAsked = false
+		r.askFromLocked(false)
+		r.mu.Unlock()
+	case strings.Contains(err.Error(), "disk is full"):
+		// The records stay queued and are tried again; the Citadel sees the
+		// acks stop and marks the replica as late.
+		r.mu.Lock()
+		if r.state != "disk-full" {
+			r.cfg.Logger.Error("replication: the disk is full; replication paused", "err", err)
+		}
+		r.state, r.lastErr = "disk-full", err.Error()
+		r.mu.Unlock()
+	default:
+		// The replica no longer matches the primary: throw it away and ask for a
+		// full copy.
+		r.cfg.Logger.Error("replication: could not apply a record; asking for a full copy", "err", err)
+		r.mu.Lock()
+		r.lastErr = err.Error()
+		r.mu.Unlock()
+		r.askFrom(true)
+	}
+}
+
+// sendAck confirms the last record applied when the Citadel is 256 records
+// behind the last confirmation or, with force, whenever something is new.
+func (r *Replica) sendAck(force bool) {
+	r.mu.Lock()
+	lsn, link := r.applied, r.link
+	due := lsn > r.lastAcked && (force || lsn-r.lastAcked >= uint64(r.cfg.AckRecords))
+	if due {
+		r.lastAcked = lsn
+	}
+	r.mu.Unlock()
+	if !due || link == nil {
+		return
+	}
+	if _, err := link.Send(context.Background(), protocol.Outgoing{Type: protocol.TypeReplicaAck, Payload: protocol.ReplicaAck{LSN: lsn}}); err != nil {
+		if !errors.Is(err, protocol.ErrNotConnected) {
+			r.cfg.Logger.Warn("replication: replica.ack", "err", err)
+		}
+		r.mu.Lock()
+		r.lastAcked = min(r.lastAcked, lsn-1) // try again at the next tick
+		r.mu.Unlock()
+	}
+}
+
+// ---- full copy ----
+
+func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, file string) error {
+	var meta snapshotMeta
+	raw, _ := json.Marshal(b.Meta)
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return protocol.NewError(protocol.CodeInvalidPayload, "db-snapshot meta: %v", err)
+	}
+	r.applyMu.Lock()
+	defer r.applyMu.Unlock()
+	if err := r.cfg.DB.Replace(ctx, file, meta.LSN); err != nil {
+		var ns *store.NewerSchemaError
+		if errors.As(err, &ns) {
+			return protocol.NewError(protocol.CodeUnavailable, "%v", err)
+		}
+		return protocol.NewError(protocol.CodeHashMismatch, "%v", err)
+	}
+	r.mu.Lock()
+	r.queue, r.queueBytes = nil, 0
+	r.lastQueued, r.applied, r.lastAcked = meta.LSN, meta.LSN, 0
+	r.needCopy, r.resyncAsked = false, false
+	r.state, r.lastErr = "ok", ""
+	r.mu.Unlock()
+	r.sendAck(true)
+	return nil
+}
+
+// ---- the vault ----
+
+func (r *Replica) handleVaultReplica(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
+	if r.cfg.Vault == nil {
+		return nil, protocol.NewError(protocol.CodeUnavailable, "this machine takes no copy of the vault")
+	}
+	p := m.Payload.(*protocol.VaultReplica)
+	ring, err := base64.StdEncoding.DecodeString(p.Keyring.Reveal())
+	if err != nil {
+		return nil, protocol.NewError(protocol.CodeInvalidPayload, "keyring: not base64")
+	}
+	defer clear(ring)
+	held := r.cfg.Vault.Holds(ctx)
+	if err := r.cfg.Vault.Import(ctx, vault.Copy{Keyring: ring, Envelope: p.Envelope}); err != nil {
+		return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
+	}
+	r.mu.Lock()
+	r.excluded = false
+	have := r.applied
+	r.mu.Unlock()
+	if !held && have > 0 {
+		// The machine had no vault and has a replica: the exclusion was undone,
+		// and the replica lacks the vault tables. A full copy has them.
+		r.askFrom(true)
+	}
+	return nil, nil
+}
+
+func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+	r.mu.Lock()
+	r.excluded = true
+	link := r.link
+	r.mu.Unlock()
+	// A purge rewrites the file: it answers later, with the receipt. A machine
+	// that had nothing to erase (the order comes again at every connection of
+	// an excluded machine) gives no receipt: there is nothing to put in the audit.
+	go func() {
+		ctx := context.Background()
+		r.applyMu.Lock()
+		erased, err := r.dropVault(ctx)
+		r.applyMu.Unlock()
+		if err != nil {
+			r.cfg.Logger.Error("replication: erasing the vault", "err", err)
+			return
+		}
+		if !erased || link == nil {
+			return
+		}
+		if _, err := link.Send(ctx, protocol.Outgoing{Type: protocol.TypeVaultDropped, Payload: protocol.Empty{}, ReplyTo: m.Env.ID}); err != nil {
+			r.cfg.Logger.Warn("replication: vault.dropped", "err", err)
+		}
+	}()
+	return nil, nil
+}
+
+// dropVault erases the key, the envelope and the vault tables, and the log of
+// what they held. It says whether there was anything to erase.
+func (r *Replica) dropVault(ctx context.Context) (bool, error) {
+	held := r.cfg.Vault != nil && r.cfg.Vault.Holds(ctx)
+	if r.cfg.Vault != nil {
+		if err := r.cfg.Vault.Drop(ctx); err != nil {
+			return false, err
+		}
+	}
+	if !held {
+		var rows int
+		for _, t := range VaultTables {
+			var n int
+			if err := r.cfg.DB.Reader().QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, t).Scan(&n); err != nil {
+				return false, err
+			}
+			if n == 0 {
+				continue
+			}
+			if err := r.cfg.DB.Reader().QueryRowContext(ctx, `SELECT count(*) FROM `+t).Scan(&n); err != nil {
+				return false, err
+			}
+			rows += n
+		}
+		if rows == 0 {
+			return false, nil
+		}
+	}
+	return true, r.cfg.DB.Purge(ctx, VaultTables...)
+}
+
+// ---- leaving the Guild ----
+
+// Wipe erases this machine's share of the Guild when it leaves
+// (guild.Wiper): the copy of the vault, the replica and the replicated
+// files. The Replica is no good afterwards.
+func (r *Replica) Wipe(ctx context.Context, _ string) error {
+	r.applyMu.Lock()
+	defer r.applyMu.Unlock()
+	var errs []error
+	if r.cfg.Vault != nil {
+		errs = append(errs, r.cfg.Vault.Drop(ctx))
+	}
+	path := r.cfg.DB.Path()
+	errs = append(errs, r.cfg.DB.Close())
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal", ".incoming"} {
+		if err := os.Remove(path + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	if r.cfg.Files != nil {
+		for _, name := range r.cfg.Files.order {
+			dir := r.cfg.Files.roots[name].Dir
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					errs = append(errs, err)
+				}
+				continue
+			}
+			for _, e := range entries {
+				errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
+			}
+		}
+	}
+	if r.cfg.Mirrors != nil {
+		entries, err := os.ReadDir(r.cfg.Mirrors.Root)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
+		for _, e := range entries {
+			errs = append(errs, os.RemoveAll(filepath.Join(r.cfg.Mirrors.Root, e.Name())))
+		}
+	}
+	return errors.Join(errs...)
+}

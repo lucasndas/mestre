@@ -176,7 +176,7 @@ func (c *Client) open(ctx context.Context, conn Conn) (*Session, error) {
 	}
 	raw, err := cfg.Registry.Marshal(cfg.Profile.HelloType, Hello{
 		Protocol: cfg.Profile.Versions, Capabilities: cfg.Capabilities, Version: info.Version, Sheet: info.Sheet,
-		Certificate: cfg.Epoch.Certificate(), ReplicaLSN: info.ReplicaLSN, Terminals: info.Terminals,
+		Certificate: cfg.Epoch.Certificate(), ReplicaLSN: info.ReplicaLSN, ReplicaEpoch: info.ReplicaEpoch, Terminals: info.Terminals,
 	}, false)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrOpening, err)

@@ -35,6 +35,15 @@ type Finalizer interface {
 	Finalize(ctx context.Context, begin XferBegin, file string) error
 }
 
+// Skipper is an optional part of a Finalizer: asked at xfer.begin, before any
+// part is sent, it says whether the receiver already has this very content
+// (the SHA-256 of the begin), and then the transfer ends at once with no part
+// on the wire. A file that did not change since the last connection costs a
+// hash, not a transfer.
+type Skipper interface {
+	Have(ctx context.Context, begin XferBegin) bool
+}
+
 // FinalizerFunc adapts a function to Finalizer.
 type FinalizerFunc func(ctx context.Context, begin XferBegin, file string) error
 
@@ -157,7 +166,8 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 	if cfg == nil {
 		return nil, NewError(CodeUnavailable, "this machine does not receive transfers")
 	}
-	if _, ok := cfg.Finalizers[b.Kind]; !ok {
+	finalizer, known := cfg.Finalizers[b.Kind]
+	if !known {
 		return nil, NewError(CodeUnavailable, "this machine has no receiver for transfers of kind %s", b.Kind)
 	}
 	h.mu.Lock()
@@ -169,6 +179,14 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 	delete(h.finished, b.XferID) // a transfer that failed starts again
 	prev := h.recv[b.XferID]
 	h.mu.Unlock()
+	if s, ok := finalizer.(Skipper); ok && s.Have(ctx, *b) {
+		// The content is already here: say every part arrived, and the end
+		// finds the transfer done.
+		h.mu.Lock()
+		h.finished[b.XferID] = finishedXfer{done: XferDone{XferID: b.XferID, OK: true}, at: h.l.cfg.Clock.Now()}
+		h.mu.Unlock()
+		return &Reply{Type: TypeXferReady, Payload: XferReady{XferID: b.XferID, NextIndex: b.Parts()}, Transient: true}, nil
+	}
 	if prev != nil {
 		prev.mu.Lock()
 		if prev.f != nil {
