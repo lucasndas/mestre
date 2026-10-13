@@ -26,18 +26,18 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 ### Formato (proposta)
 
 - Tabela `secrets` no banco da Cidadela ([persistência](../arquitetura/persistencia.md)): `name`, `type`, `ciphertext`, `nonce`, `key_version`, `fingerprint`, os metadados de `site_credential` (`owner_user`, `classes`, `domains`, `kind`, `expires_at`, fora da parte cifrada, para o motor decidir sem decifrar), `created_at`, `updated_at`, `last_used_at`.
-- **Criptografia:** AES-256-GCM, com nonce aleatório de 96 bits a cada gravação e dados associados (AAD) = `name` + `type` + `key_version`. Assim um valor copiado para outra linha não decifra.
-- **Impressão (`fingerprint`):** HMAC-SHA256 do valor com uma chave derivada da chave do cofre (HKDF), mostrando 8 caracteres. Serve para comparar sem revelar o valor.
+- **Criptografia:** AES-256-GCM, com nonce aleatório de 96 bits a cada gravação e dados associados (AAD) = `name` + `type` + `key_version`, cada um com o tamanho na frente. Assim um valor copiado para outra linha não decifra. A chave do GCM e a da impressão são derivadas da chave do cofre por HKDF-SHA256, com rótulos diferentes; a chave do cofre nunca cifra direto.
+- **Impressão (`fingerprint`):** HMAC-SHA256 do valor com a chave derivada, guardando e mostrando 8 caracteres hexadecimais. Serve para comparar sem revelar o valor; muda quando a chave do cofre é trocada.
 
 ### Chave do cofre
 
 - 32 bytes aleatórios gerados na criação da Guilda ([instalação e atualização](instalacao-e-atualizacao.md)).
 - **Em toda máquina, aberto só na Cidadela:** o cofre inteiro (tabelas cifradas e a chave do cofre, protegida pela chave de cada máquina como abaixo) e o envelope de recuperação vão a toda máquina não excluída pelo Dono, para que qualquer uma possa assumir ([replicação](../guilda/replicacao.md)). Só o motor da Cidadela abre o cofre, ao virar Cidadela; a máquina excluída nunca recebe cofre nem envelope. Sem nenhuma máquina não excluída, o caminho é a chave de recuperação (abaixo).
 - **Regra do programa, não criptográfica:** a chave do cofre está em toda máquina não excluída; quem impede uma Torre de abrir o cofre é o código do Mestre. **Uma máquina roubada tem o mesmo risco da Cidadela**; por isso o painel recomenda trocar os segredos ao excluir ou remover uma máquina que sumiu.
-- **Padrão no Linux:** arquivo `/etc/mestre/cofre.key`, dono `mestre` (conta do motor, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), modo 0600, pasta 0700. O motor se recusa a abrir o cofre se o arquivo tiver permissão mais aberta ou outro dono, e o [checklist](checklist.md) acusa como grave (LIN-05).
+- **Padrão no Linux:** arquivo `/etc/mestre/cofre.key`, dono `mestre` (conta do motor, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), modo 0600, pasta 0700. O motor se recusa a abrir o cofre se o arquivo tiver permissão mais aberta, outro dono ou não for arquivo comum (link simbólico, por exemplo), e o [checklist](checklist.md) acusa como grave (LIN-05).
 - **Padrão no Windows:** arquivo `%ProgramData%\Mestre\config\cofre.key` com a chave cifrada por **DPAPI com escopo de máquina** (`CryptProtectData` com `CRYPTPROTECT_LOCAL_MACHINE`) e **ACL só para `NT SERVICE\Mestre`**, sem herança. O escopo de máquina deixa a chave presa a este Windows (uma cópia do arquivo não abre em outra máquina); quem impede outras contas locais de ler é a ACL, porque o DPAPI de máquina decifra para qualquer processo local que consiga ler o arquivo. O motor confere dono e ACL antes de abrir, como no Linux, e o checklist acusa como grave (WIN-14) ([Windows](../arquitetura/windows.md)).
 - **Opção "chaveiro do sistema" (Linux):** guardar a chave com `systemd-creds` (cifrada pelo TPM2 ou pela chave do host) e entregá-la ao serviço com `LoadCredentialEncrypted=`. O motor lê de `$CREDENTIALS_DIRECTORY`. É opcional: a instalação sempre começa com o arquivo 0600; o [checklist](checklist.md) (LIN-07) detecta suporte (`systemd-creds has-tpm2`) e oferece a troca, feita só com aprovação.
-- **Troca da chave:** o Dono pede no painel (com PIN); o motor gera a chave nova, decifra e cifra de novo todos os segredos numa transação, incrementa `key_version`, envelopa a chave nova com a chave pública de recuperação (abaixo), substitui o arquivo e reenvia cofre e envelope a todas as máquinas não excluídas.
+- **Troca da chave:** o Dono pede no painel (com PIN). O arquivo da chave e o envelope guardam as versões vivas da chave (uma; duas durante a troca), para que uma troca interrompida em qualquer passo deixe tudo decifrável: (1) o motor gera a chave nova (`key_version` + 1) e grava arquivo e envelope (chave pública de recuperação, abaixo) com a antiga e a nova; (2) decifra e cifra de novo todos os segredos numa transação; (3) grava arquivo e envelope só com a nova; (4) reenvia cofre e envelope a todas as máquinas não excluídas. Na subida, o motor descarta as versões que nenhum segredo usa (a mais nova fica, se a tabela está vazia) e regrava o envelope se ele não confere.
 
 ### Backup e chave de recuperação
 
@@ -108,7 +108,7 @@ Quando a página de login pede um segundo passo, o motor trata nesta ordem, semp
 
 ## Regras e erros
 
-- Chave ausente ou errada (falha na verificação do GCM) → o cofre fica fechado, as funções que dependem dele param com erro claro, o motor continua o resto e manda alerta grave. Nunca há tentativa de "seguir sem cofre" usando valores em texto.
+- Chave ausente ou errada (não abre nenhum segredo guardado; uma linha alterada só falha a própria leitura) → o cofre fica fechado, as funções que dependem dele param com erro claro, o motor continua o resto e manda alerta grave. Nunca há tentativa de "seguir sem cofre" usando valores em texto.
 - Segredo inexistente → a ação que pediu falha com o nome do segredo que falta (nunca com o valor).
 - Gravar segredo pelo painel exige Dono e PIN ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); fluxos automáticos (manifesto de App, device flow) gravam pelo motor, com auditoria.
 

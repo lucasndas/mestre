@@ -41,6 +41,7 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 
 - O **envelope** (`cofre-envelope.bin`, a chave de dados cifrada para a chave de recuperação) é replicado junto com o cofre, para toda máquina não excluída.
 - A **chave de recuperação** é a semente de um **par de chaves X25519**: a Guilda guarda só a chave **pública** (no banco). Envelopar uma chave de dados nova precisa só da pública, então qualquer Cidadela consegue, inclusive depois de uma troca; abrir o envelope precisa da privada, derivada da chave de recuperação que só o Dono tem ([backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação)).
+- **Formato do envelope:** cabeçalho em claro com a chave pública de recuperação, uma chave pública X25519 efêmera e as versões da chave do cofre que ele leva; depois, as versões vivas da chave do cofre cifradas com AES-256-GCM, numa chave tirada por HKDF-SHA256 do segredo X25519 (efêmera × pública de recuperação), com o cabeçalho como dados associados. O motor confere pelo cabeçalho, sem a privada, se o envelope está em dia ([troca da chave](../plataforma/cofre.md#chave-do-cofre)).
 - **Troca da chave do cofre:** a Cidadela gera uma chave de dados nova, recifra o cofre, reenvelopa com a pública e replica tudo a todas as máquinas não excluídas.
 
 ### Arquivos e espelhos
