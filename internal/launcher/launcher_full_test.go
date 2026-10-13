@@ -45,18 +45,18 @@ func TestMain(m *testing.M) {
 			os.Exit(code)
 		}
 	}
+	if dir := os.Getenv(envBuilds); dir != "" {
+		// A test run again in a delegated scope (delegated.Rerun): the
+		// binaries of the run that started it, which also removes them.
+		useBuilds(dir)
+		os.Exit(m.Run())
+	}
 	dir, err := os.MkdirTemp("", "mlbin")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	builds.dir = dir
-	builds.bin = filepath.Join(dir, "bin")
-	name := "mestre-pty"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	builds.pty = filepath.Join(builds.bin, ptyVersion, name)
+	useBuilds(dir)
 	out, err := exec.Command("go", "build", "-o", builds.pty, "-ldflags", "-X main.version="+ptyVersion,
 		"github.com/lucasndas/mestre/cmd/mestre-pty").CombinedOutput()
 	if err != nil {
@@ -66,6 +66,19 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
+}
+
+// envBuilds names the folder of the binaries of the run that started this one.
+const envBuilds = "MESTRE_TEST_BUILDS"
+
+func useBuilds(dir string) {
+	name := "mestre-pty"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	builds.dir = dir
+	builds.bin = filepath.Join(dir, "bin")
+	builds.pty = filepath.Join(builds.bin, ptyVersion, name)
 }
 
 // auditLog keeps the records the launcher makes of each request.

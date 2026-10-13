@@ -19,6 +19,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/terminal"
 	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/lucasndas/mestre/internal/testkit/delegated"
 )
 
 // readPIDs reads the PIDs the tree helper wrote, one per line.
@@ -39,7 +40,7 @@ func readPIDs(t *testing.T, path string) []int {
 	return pids
 }
 
-// CA-TERM-05
+// CA-TERM-05 (the parts with a delegated cgroup run again in a systemd scope)
 func TestStopLeavesNothingOfTheTree(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -53,16 +54,19 @@ func TestStopLeavesNothingOfTheTree(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			h := newHarness(t, harnessOptions{})
 			if tt.escape {
 				if !canLeaveSession {
 					t.Skip("a process cannot leave the Job Object of the terminal on Windows: nothing to test")
 				}
-				if h.cfg.CgroupBase == "" {
-					t.Skip("a grandchild that left the session needs a delegated cgroup " +
-						"(systemd-run --user --scope -p Delegate=yes) and this machine has none")
+				// A grandchild that left the session only dies with the
+				// cgroup of the terminal: this process has no delegated one,
+				// so the test runs again in a systemd scope that has.
+				if _, err := terminal.DelegatedCgroup(); err != nil {
+					delegated.Rerun(t, envBuilds+"="+builds.dir)
+					return
 				}
 			}
+			h := newHarness(t, harnessOptions{})
 			pidsFile := filepath.Join(h.cfg.Root, "pids")
 			flag := "0"
 			if tt.escape {
