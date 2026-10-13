@@ -268,6 +268,18 @@ func TestOpenRefusesSchemaNewerThanBinary(t *testing.T) {
 	}
 }
 
+// readOnly opens a database file to inspect it as it is: no WAL switch, no
+// migration, no write.
+func readOnly(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", path+"?_pragma=query_only(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
 func fileSum(t *testing.T, path string) [sha256.Size]byte {
 	t.Helper()
 	b, err := os.ReadFile(path)
@@ -300,14 +312,14 @@ func TestPreMigrationBackup(t *testing.T) {
 	if v, _ := db.Version(context.Background()); v != 2 {
 		t.Fatalf("Version = %d, want 2", v)
 	}
-	bak := open(t, filepath.Join(backups, "pre-migracao-x-1.db"), load(t, createItems), store.Options{})
-	if v, _ := bak.Version(context.Background()); v != 1 {
+	bak := readOnly(t, filepath.Join(backups, "pre-migracao-x-1.db"))
+	if v := scan[int](t, bak, `SELECT max(version) FROM schema_migrations`); v != 1 {
 		t.Errorf("backup version = %d, want 1 (the schema before migrating)", v)
 	}
-	if got := scan[string](t, bak.Reader(), `SELECT name FROM items`); got != "keep" {
+	if got := scan[string](t, bak, `SELECT name FROM items`); got != "keep" {
 		t.Errorf("backup row = %q, want keep", got)
 	}
-	if got := scan[string](t, bak.Reader(), `PRAGMA quick_check`); got != "ok" {
+	if got := scan[string](t, bak, `PRAGMA quick_check`); got != "ok" {
 		t.Errorf("quick_check = %q", got)
 	}
 	db.Close()
@@ -337,8 +349,8 @@ func TestPreMigrationBackupsOfTwoDatabasesDoNotCollide(t *testing.T) {
 		open(t, path, load(t, createItems, createNotes), store.Options{BackupDir: backups}).Close()
 	}
 	for _, name := range []string{"mestre", "maquina"} {
-		bak := open(t, filepath.Join(backups, store.BackupName(name+".db", 1)), load(t, createItems), store.Options{})
-		if got := scan[string](t, bak.Reader(), `SELECT name FROM items`); got != name {
+		bak := readOnly(t, filepath.Join(backups, store.BackupName(name+".db", 1)))
+		if got := scan[string](t, bak, `SELECT name FROM items`); got != name {
 			t.Errorf("backup of %s holds %q", name, got)
 		}
 	}
