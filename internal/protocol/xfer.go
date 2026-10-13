@@ -520,8 +520,11 @@ func pruneTransfers(c *Config, links []*Link, ttl time.Duration) int {
 			// two) will never be resumed: it goes when it is as old as ttl
 			if part, ok := strings.CutSuffix(name, ".part"); ok {
 				if _, err := os.Stat(filepath.Join(cfg.Dir, part+".json")); errors.Is(err, os.ErrNotExist) {
-					if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > ttl && os.Remove(filepath.Join(cfg.Dir, name)) == nil {
-						n++
+					if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > ttl {
+						forgetRecv(cfg, links, part)
+						if os.Remove(filepath.Join(cfg.Dir, name)) == nil {
+							n++
+						}
 					}
 				}
 			}
@@ -531,21 +534,7 @@ func pruneTransfers(c *Config, links []*Link, ttl time.Duration) int {
 		if err != nil || now.Sub(info.ModTime()) <= ttl {
 			continue
 		}
-		for _, l := range links {
-			h := l.xfer
-			h.mu.Lock()
-			cfg.unreserve(id)
-			if r := h.recv[id]; r != nil {
-				r.mu.Lock()
-				if r.f != nil {
-					_ = r.f.Close()
-					r.f = nil
-				}
-				r.mu.Unlock()
-				delete(h.recv, id)
-			}
-			h.mu.Unlock()
-		}
+		forgetRecv(cfg, links, id)
 		for _, f := range []string{id + ".part", name} {
 			if os.Remove(filepath.Join(cfg.Dir, f)) == nil {
 				n++
@@ -553,6 +542,27 @@ func pruneTransfers(c *Config, links []*Link, ttl time.Duration) int {
 		}
 	}
 	return n
+}
+
+// forgetRecv closes the temporary file of a transfer that is going away (a
+// file open cannot be removed on Windows), forgets it and gives back its
+// space.
+func forgetRecv(cfg *XferConfig, links []*Link, id string) {
+	cfg.unreserve(id)
+	for _, l := range links {
+		h := l.xfer
+		h.mu.Lock()
+		if r := h.recv[id]; r != nil {
+			r.mu.Lock()
+			if r.f != nil {
+				_ = r.f.Close()
+				r.f = nil
+			}
+			r.mu.Unlock()
+			delete(h.recv, id)
+		}
+		h.mu.Unlock()
+	}
 }
 
 // releaseFiles closes the temporary files of the transfers in progress when
