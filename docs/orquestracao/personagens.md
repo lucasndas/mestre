@@ -54,7 +54,7 @@ Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples 
 
 ### Encerramento seguro
 
-Um personagem só é encerrado quando: está `idle` (aguardar não é ocioso), a caixa de entrada está vazia, entregou `done` da última tarefa/etapa recebida e não está fixado. `dismiss` ou ciclo de vida fora dessas condições ficam **agendados** para o próximo ponto seguro e executam quando elas forem atendidas; o `dismiss` responde na hora com "pendente" (`scheduled`, [coordenação](../cli/coordenacao.md)) e quem pediu recebe um item `system` quando o encerramento acontece. Ao encerrar, o motor:
+Um personagem só é encerrado quando: está `idle` (aguardar não é ocioso), a caixa de entrada está vazia, entregou `done` da última tarefa/etapa recebida e não está fixado. Esse é o **ponto seguro** do personagem. `dismiss` ou ciclo de vida fora dessas condições ficam **agendados** para o próximo ponto seguro e executam quando elas forem atendidas; o `dismiss` responde na hora com "pendente" (`scheduled`, [coordenação](../cli/coordenacao.md)) e quem pediu recebe um item `system` quando o encerramento acontece. Ao encerrar, o motor:
 1. grava no [pergaminho da missão](pergaminhos-e-tomos.md#pergaminho-da-missão) (ou, sem missão, no histórico da mesa) um resumo: nome, ficha, classe, os textos de `done` que ele entregou e o uso;
 2. pede a saída normal ao provedor ([adaptador](../provedores/adaptador.md)) e, após 30 s, encerra a árvore de processos.
 
@@ -111,11 +111,12 @@ stateDiagram-v2
 
 ### Registro de terminais
 
-Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). PTY, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por, missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
+Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). `mestre-pty`, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID do `mestre-pty` com o horário de início, versão do `mestre-pty`, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por, missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
 
 ### Retomada após reinício
 
-- **Motor de uma máquina reinicia:** os processos dele morreram; a máquina marca seus terminais não encerrados como `interrupted` e a Cidadela decide a retomada.
+- **Motor de uma máquina reinicia** (atualização, queda, cura): os terminais continuam no `mestre-pty` de cada um; o motor reconecta e cada personagem segue no estado em que estava, sem `interrupted` ([volta do motor](../arquitetura/terminal.md#volta-do-motor)).
+- **Máquina reinicia, ou o `mestre-pty` de um terminal morre:** o agente morreu junto; o motor marca o terminal como `interrupted` e a Cidadela decide a retomada, abaixo.
 - **Motor da Cidadela reinicia com Torres vivas:** os terminais das Torres continuam; ao reconectar, cada máquina informa os que estão vivos e a Cidadela reconcilia (a máquina é a verdade sobre o processo; a Cidadela, sobre o resto).
 - **Troca de Cidadela:** quem fica `interrupted`, quem segue e o que a antiga encerra ao voltar como Torre estão nas [regras da troca](../guilda/cidadela-e-torres.md); a retomada segue as regras abaixo.
 - **Ordem de retomada:** Grão-Mestre → Mestres de mesa → personagens com etapa ou tarefa em andamento → persistentes → demais.
@@ -137,7 +138,7 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 - **CA-PERS-04** · *rápida* — **Dado** relógio falso e persistente com ociosidade 120 min, **quando** fica 119 min `idle` e 30 min `waiting`, **então** não é encerrado; **quando** completa 120 min `idle` contínuos, **então** é.
 - **CA-PERS-05** · *rápida* — **Dado** um personagem fixado, **quando** o ciclo de vida ou `dismiss` tentam encerrá-lo, **então** nada acontece e a recusa é registrada.
 - **CA-PERS-06** · *rápida* — **Dado** a tabela de estados, **quando** os eventos de hook falsos chegam em cada estado, **então** só as transições do diagrama ocorrem; 15 min sem sinal em `busy` levam a `stuck`.
-- **CA-PERS-07** · *completa* — **Dado** um motor de máquina encerrado à força com dois personagens, **quando** volta, **então** ambos passam por `interrupted` e são retomados com o id de sessão salvo, mantendo caixa de entrada e esperas.
+- **CA-PERS-07** · *completa* — **Dado** um motor de máquina encerrado à força com dois personagens, um `busy` e um `waiting`, **quando** volta, **então** os dois seguem nos mesmos estados, sem `interrupted`; **dado** o `mestre-pty` de um deles encerrado à força, **então** esse passa por `interrupted` e é retomado com o id de sessão salvo, mantendo caixa de entrada e esperas.
 - **CA-PERS-08** · *pesada* — **Dado** a Cidadela e as Torres reiniciadas, **quando** voltam, **então** Grão-Mestre, Mestres de mesa e persistentes voltam ao estado anterior, e nenhum personagem fica sem estado visível (MVP-12).
 - **CA-PERS-09** · *rápida* — **Dado** um agente falso que mostra uma tela que o adaptador não reconhece, **quando** a tela fica estável, **então** o personagem vai a `blocked` com motivo `input`, o Mestre da mesa é avisado, e uma entrada `ask --raw` leva o personagem de volta a `busy` ou `idle`.
 

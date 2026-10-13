@@ -116,7 +116,7 @@ Vai pelo Telegram (motor da Cidadela ou modo reduzido) e pelo painel ou [página
 
 ### Retomada dos agentes
 
-Quando um motor reinicia, cada personagem que estava rodando é **retomado** ou fica **interrompido** de forma visível (canvas, `mestre list`, alerta ao Mestre da mesa). Nenhum some em silêncio. A mecânica (ordem e estado `interrupted`) é de [personagens](../orquestracao/personagens.md#retomada-após-reinício).
+Reiniciar o motor (camadas 1 a 3, `rollback`, atualização) **não interrompe os agentes**: cada terminal roda no seu `mestre-pty`, e o motor que volta reconecta ([volta do motor](../arquitetura/terminal.md#volta-do-motor)). Quando a própria máquina reinicia, ou um `mestre-pty` morre, cada personagem é **retomado** ou fica **interrompido** de forma visível (canvas, `mestre list`, alerta ao Mestre da mesa). Nenhum some em silêncio. A mecânica (ordem e estado `interrupted`) é de [personagens](../orquestracao/personagens.md#retomada-após-reinício).
 
 ## Regras e erros
 
@@ -137,7 +137,7 @@ Quando um motor reinicia, cada personagem que estava rodando é **retomado** ou 
 - **CA-CURA-08** · *rápida* — **Dado** um runbook que nunca dá certo, **quando** roda, **então** os intervalos seguem 15 s, 30 s, 60 s… (±20%) e após 5 tentativas o incidente passa à camada 4.
 - **CA-CURA-09** · *rápida* — **Dado** o árbitro fora e a máquina A respondendo à sondagem, **quando** B avalia, **então** B não assume; com A falhando 3 vezes, B assume.
 - **CA-CURA-10** · *rápida* — **Dado** um laço de queda sem atualização nas últimas 24 h, **quando** a camada 2 avalia, **então** não faz `rollback` e abre o incidente.
-- **CA-CURA-11** · *completa* — **Dado** personagens rodando numa máquina, **quando** o motor da máquina reinicia, **então** cada um aparece retomado ou interrompido, e nenhum some (MVP-12).
+- **CA-CURA-11** · *completa* — **Dado** personagens rodando numa máquina, **quando** o motor da máquina reinicia, **então** todos seguem vivos no mesmo estado; **quando** os `mestre-pty` deles são encerrados à força, **então** cada um aparece retomado ou interrompido, e nenhum some (MVP-12).
 - **CA-CURA-12** · *pesada* — **Dado** um uso de máquina única (só Linux e só Windows) com o motor da Cidadela em laço de queda sem atualização, **quando** a camada 2 desiste, **então** o Guardião da Cidadela abre o incidente, roda o runbook e o diagnóstico, serve a página reserva e manda o alerta da camada 5 pelo Telegram (dublê) em modo reduzido (MVP-2, MVP-13).
 
 ## Depende de

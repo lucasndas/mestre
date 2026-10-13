@@ -9,7 +9,7 @@ Um único módulo Go na raiz (Go 1.25+, `CGO_ENABLED=0`; [ADR 0001](../decisoes/
 ```
 cmd/
   mestre/            main do binário mestre: só monta os subcomandos
-  mestre-guardiao/   main do Guardião
+  mestre-guardiao/ mestre-pty/   mains do Guardião e do mestre-pty (um por terminal, ver terminal.md)
   fakeagent/         agente falso dos testes (ver dubles.md); fora dos pacotes de release
 internal/
   app/               montagem do motor e das funções que a Cidadela liga e desliga
@@ -34,8 +34,8 @@ internal/
   protocol/          envelope (com época) e mensagens entre máquinas, versões
   transport/         WSS, TLS, CA da Guilda, mTLS
   discovery/         descoberta da Guilda (broadcast e mDNS)
-  terminal/          PTY (creack/pty) e ConPTY (wrapper próprio), emulador, buffer circular
-  winsvc/            partes só do Windows: serviço, contas virtuais e `mestre-agente`, início de processo com outra conta, ACLs, DPAPI
+  terminal/          mestre-pty e o lado do motor: PTY/ConPTY (go-pty), emulador, buffer, protocolo, aperto de mão, reconciliação
+  winsvc/            partes só do Windows: serviço, contas virtuais e `mestre-agente`, `mestre-launcher`, ACLs, DPAPI
   store/             SQLite e migrações (guild/: banco da Guilda; machine/: banco local de máquina)
   vault/ logging/    cofre; slog + mascaramento de segredos
   glossary/          textos de ajuda gerados do glossário
@@ -58,7 +58,7 @@ docs/                esta documentação
 
 - **Guardião isolado:** `guardian/` só importa a biblioteca padrão, `pkg/clock` e as dependências permitidas: `golang.org/x/sys`, `golang.org/x/crypto` (argon2id do login e do PIN da página reserva), `kardianos/service`, `coder/websocket`, `go-systemd`, `aead.dev/minisign` (verificação no `apply-update`) e `brutella/dnssd` (mDNS). O protocolo motor ↔ Guardião mora em `guardian/protocol`, que o motor importa (nunca o contrário). Regra verificada pelo linter (`depguard`). Binários, subcomandos e portas: [componentes](../arquitetura/componentes.md).
 - **Dependências escolhidas:** mDNS e DNS-SD com `github.com/brutella/dnssd` (consulta em toda máquina, anúncio de reserva no Guardião de máquina Windows); minisign com `aead.dev/minisign`; emulador de terminal com `github.com/charmbracelet/x/vt` ([terminal](../arquitetura/terminal.md)); git pelo binário do sistema, 2.32 ou mais novo, só por `internal/gitx`, nunca por biblioteca Go (worktrees, bundles e `info/exclude` precisam de fidelidade total); YAML (quarentena, roteiros do agente falso, `permissions.yaml`) com `go.yaml.in/yaml/v3` (MIT e Apache 2.0, o fork mantido do `gopkg.in/yaml.v3`). O resto da stack está no [ADR 0001](../decisoes/0001-stack-go.md).
-- **Código só de Windows** em arquivos `_windows.go`; o resto compila em Linux e Windows.
+- **Código por sistema:** um código só para os dois sistemas sempre que der; o que muda vai em arquivos `_linux.go` e `_windows.go` atrás de uma interface, e o resto compila nos dois. No `terminal`, só três coisas são por sistema: iniciar o processo como `mestre-agente`, matar a árvore (`cgroup.kill` ou Job Object) e identificar um processo pelo horário de início ([terminal](../arquitetura/terminal.md#mestre-pty)).
 - **Painel embutido:** o build do painel vai para `internal/panel/webdist/` (fora do git, exceto um arquivo marcador para o `go build` funcionar sem o build do painel). Em desenvolvimento, o servidor do Vite encaminha a API para um `mestre run` local, Cidadela de uma Guilda de teste.
 
 ## Idioma
@@ -95,7 +95,7 @@ Exceções herdadas, mantidas como estão: identificadores de protocolo, variáv
 - **Código de spike** (`tools/spikes/`, `tools/winsandbox/spikes/`): guardado como referência do resultado de um spike, fora do lint (exclusão em `.golangci.yml`) e nunca importado por código de produção; teste de spike usa a tag `spike` (`//go:build spike`), fora de todas as suítes, e roda só à mão (`go test -tags spike ./tools/spikes/...`); o que for aproveitado é reescrito no pacote definitivo, com testes e as regras acima ([ordem de implementação](ordem-de-implementacao.md#spikes-do-m1)).
 - Erros com contexto: `fmt.Errorf("open table %s: %w", id, err)`. Sem `panic` fora de `main` e de invariantes impossíveis.
 - `context.Context` como primeiro parâmetro de tudo que faz E/S ou espera.
-- Tempo só pelo `clock` (regra e motivo em [testes](../qualidade/testes.md)). Processos, rede e git só pelas camadas únicas de `terminal/` (lançador), `transport/` e `gitx/`, que os dublês substituem ([dublês](../qualidade/dubles.md)).
+- Tempo só pelo `clock` (regra e motivo em [testes](../qualidade/testes.md)). Processos, rede e git só pelas camadas únicas de `terminal/` (lançador e `mestre-pty`), `transport/` e `gitx/`, que os dublês substituem ([dublês](../qualidade/dubles.md)).
 - Logs só por `logging` (slog em JSON por linha, com mascaramento; [segurança](../arquitetura/seguranca.md)).
 - Sem estado global; dependências passadas por construtor. Interfaces pequenas, declaradas por quem as usa.
 
@@ -132,7 +132,7 @@ Conventional Commits 1.0.0, em inglês:
 - **Branches de trabalho:** `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, com `slug` curto em inglês, kebab-case (ex.: `feat/table-lifecycle`). Testes, build e refatorações usam `fix/` quando corrigem algo e `feat/` nos demais casos.
 - **PR:** um assunto, pequeno. Título no formato de commit (vira a mensagem do squash). Descrição: o quê e por quê, documentos alterados, critérios de aceite cobertos (`CA-…`), tempos da rápida e da completa.
 - **Merge:** squash. A branch é apagada depois.
-- **Versões:** SemVer. Uma tag e uma release por versão, `vX.Y.Z` (a versão do motor), com os dois binários; a versão do Guardião vai só no manifesto `mestre-release.json` e no `mestre-guardiao version`, sem tag própria ([autoatualização](../plataforma/autoatualizacao.md)). As versões dos protocolos são independentes ([protocolo](../conectividade/protocolo.md)).
+- **Versões:** SemVer. Uma tag e uma release por versão, `vX.Y.Z` (a versão do motor), com os três binários; as versões do Guardião e do `mestre-pty` vão só no manifesto `mestre-release.json` e no `version` de cada um, sem tag própria ([autoatualização](../plataforma/autoatualizacao.md)). As versões dos protocolos são independentes ([protocolo](../conectividade/protocolo.md)).
 
 ## Definição de pronto
 

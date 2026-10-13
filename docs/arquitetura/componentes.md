@@ -1,6 +1,6 @@
 # Componentes
 
-> **Assunto:** motor, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** motor, `mestre-pty`, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 Este documento é a **fonte única** dos nomes de binários, subcomandos de serviço, serviços do sistema, portas e rotas, e das instâncias. A escolha da stack está no [ADR 0001](../decisoes/0001-stack-go.md); a Guilda, no [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md).
 
@@ -10,16 +10,17 @@ Toda máquina da Guilda tem os mesmos componentes; o papel (Cidadela ou Torre) v
 
 | Componente | O que faz | Onde roda |
 |---|---|---|
-| **Motor** (serviço `mestre`) | em toda máquina: entra na Guilda, manda a ficha da máquina, roda terminais (PTY/ConPTY) dos personagens dali, mantém os worktrees das mesas, atende a CLI, guarda o banco local de máquina e a réplica do banco. **Na Cidadela**, também: banco principal, workspaces, mesas, missões, esperas, rituais, decretos, aprovações, espelhos, GitHub, Telegram, cofre, painel e API, Grão-Mestre e a recepção das Torres | todas as máquinas |
+| **Motor** (serviço `mestre`) | em toda máquina: entra na Guilda, manda a ficha da máquina, inicia e acompanha os terminais dos personagens dali (cada um no seu `mestre-pty`), mantém os worktrees das mesas, atende a CLI, guarda o banco local de máquina e a réplica do banco. **Na Cidadela**, também: banco principal, workspaces, mesas, missões, esperas, rituais, decretos, aprovações, espelhos, GitHub, Telegram, cofre, painel e API, Grão-Mestre e a recepção das Torres | todas as máquinas |
+| **`mestre-pty`** | um processo por terminal, com a conta `mestre-agente`: segura o PTY ou ConPTY, o agente, o emulador e o buffer, e continua vivo quando o motor reinicia ([terminal](terminal.md#mestre-pty)) | toda máquina com terminais |
 | **Guardião** | vigia e conserta o motor da própria máquina; lista fechada de ações; página reserva e Telegram em modo reduzido ([Guardião](../autocura/guardiao.md)) | todas as máquinas |
-| **CLI `mestre`** | comandos dos agentes; fala com o motor local pelo [canal local](canal-local.md) ([convenções da CLI](../cli/convencoes.md)). As pessoas usam o painel e o Telegram; da CLI, só os subcomandos de serviço (abaixo) e o `mestre debug` | todas as máquinas (no PATH, e em `MESTRE_CLI`) |
+| **CLI `mestre`** | comandos dos agentes; fala com o motor local pelo [canal local](canal-local.md) ([convenções da CLI](../cli/convencoes.md)). As pessoas usam o painel e o Telegram; da CLI, só os subcomandos de serviço (abaixo), o `mestre attach` e o `mestre debug` | todas as máquinas (no PATH, e em `MESTRE_CLI`) |
 | **Despachante de hooks** | `mestre hook`: recebe os hooks dos provedores e aplica as regras ([adaptador](../provedores/adaptador.md)) | onde houver agentes |
 | **Painel** | React + TypeScript + Vite, embutido no binário e servido pelo motor da Cidadela; as Torres redirecionam para ele ([ADR 0017](../decisoes/0017-canvas-react-flow.md)); a única interface gráfica do Mestre ([ADR 0020](../decisoes/0020-linux-e-windows-em-qualquer-papel.md)) | navegador |
 | **whisper-server** | processo auxiliar (whisper.cpp) supervisionado pelo motor, para transcrever áudio ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)) | qualquer máquina com `transcricao` na ficha; padrão: a Cidadela, por CPU, em Linux ou Windows ([transcrição](../telegram/anexos-e-transcricao.md)) |
 
 ## Binários
 
-Dois binários por plataforma (Linux amd64 e Windows amd64), compilados com `CGO_ENABLED=0`, e um instalador único por sistema que leva os dois.
+Três binários por plataforma (Linux amd64 e Windows amd64), compilados com `CGO_ENABLED=0`, e um instalador único por sistema que leva os três: `mestre`, `mestre-guardiao` e `mestre-pty`.
 
 ### `mestre`
 
@@ -32,11 +33,16 @@ Dois binários por plataforma (Linux amd64 e Windows amd64), compilados com `CGO
 | `mestre setup-code` | Linux, Windows | gera um novo código de configuração do Dono (invalida o anterior) quando o da instalação se perdeu; só root ou administrador na Cidadela e só enquanto não existe usuário ([login](../painel/login.md)) |
 | `mestre launcher` | Windows | o serviço `mestre-launcher` ([Windows](windows.md#iniciador-mestre-launcher)); recusa rodar fora do serviço |
 | `mestre operator-session` | Windows | processo da sessão do [Operador do PC](windows.md#operador-do-pc): iniciado pela tarefa agendada `\Mestre\Operador` no logon do usuário configurado, com a conta dele; liga-se ao `mestre` pelo pipe do Operador e cria os terminais do Operador; recusa rodar como serviço ou com outra conta |
+| `mestre attach <personagem> [--write]` | todas | abre o terminal de um personagem de qualquer máquina da Guilda no terminal de quem chama, pela Cidadela, com login de usuário ([attach](../cli/attach.md)) |
 | `mestre hook --provider <p> --event <e>` | todas | despachante de hooks; uso interno dos arquivos de hooks ([adaptador](../provedores/adaptador.md)) |
 | `mestre version` | todas | versão do binário e versões de protocolo suportadas |
 | demais (`list`, `ask`, `note`, `done`, `table`, `gh`, …) | todas | CLI dos agentes; sintaxe em [cli](../cli/convencoes.md) |
 
-Regras: `run`, `launcher`, `install`, `join`, `uninstall`, `setup-code` e `operator-session` recusam rodar quando `MESTRE_AGENT_ID` está no ambiente (um agente nunca inicia, instala ou junta máquinas); `install`, `join`, `uninstall` e `setup-code` exigem root ou administrador local.
+Regras: `run`, `launcher`, `attach`, `install`, `join`, `uninstall`, `setup-code` e `operator-session` recusam rodar quando `MESTRE_AGENT_ID` está no ambiente (um agente nunca inicia, instala ou junta máquinas); `install`, `join`, `uninstall` e `setup-code` exigem root ou administrador local.
+
+### `mestre-pty`
+
+Binário separado, com versão própria, que muda raramente; só o motor (no Linux) ou o `mestre-launcher` (no Windows) o iniciam, um por terminal. Cada versão fica na sua pasta, e terminais vivos seguem na versão em que nasceram ([versão do `mestre-pty`](terminal.md#protocolo-motor--mestre-pty)). Recusa rodar sem o socket e o segredo entregues na criação.
 
 ### `mestre-guardiao`
 
@@ -56,17 +62,17 @@ O agente de diagnóstico (camada 4) é iniciado pelo Guardião a partir de uma f
 
 | Sistema | Serviço | Executa | Conta | Supervisionado por |
 |---|---|---|---|---|
-| Linux | `mestre` (systemd, `Type=notify`, watchdog, `Delegate=yes` e, no systemd 254 ou maior, `DelegateSubgroup=engine`) | `mestre run` | `mestre`, dona do cofre, do banco e da configuração, com `CAP_SETUID` e `CAP_SETGID` só para iniciar os agentes como `mestre-agente` | systemd e Guardião |
+| Linux | `mestre` (systemd, `Type=notify`, watchdog, `Delegate=yes`, `KillMode=process` e, no systemd 254 ou maior, `DelegateSubgroup=engine`) | `mestre run` | `mestre`, dona do cofre, do banco e da configuração, com `CAP_SETUID` e `CAP_SETGID` só para iniciar os `mestre-pty` como `mestre-agente` | systemd e Guardião |
 | Linux | `mestre-guardiao` (systemd) | `mestre-guardiao run` | root | systemd |
 | Linux | `mestre-update` (systemd, oneshot) | `mestre-guardiao apply-update` | root; só a conta `mestre` pode iniciar | — (uso único por troca) |
-| Windows | `mestre` (serviço do Windows) | `mestre run` | conta virtual `NT SERVICE\Mestre`, dona do cofre, do banco e da configuração, com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` só para criar os processos dos agentes com o token do `mestre-agente` ([Windows](windows.md#conta-dos-agentes-mestre-agente)) | recuperação do serviço e Guardião |
-| Windows | `mestre-launcher` (serviço do Windows, início automático) | `mestre launcher` | LocalSystem, **mínimo**: só faz o logon do `mestre-agente` e entrega o token ao `mestre`; só aceita pedidos do serviço `mestre` da mesma instância ([Windows](windows.md#iniciador-mestre-launcher)) | recuperação do serviço e Guardião |
+| Windows | `mestre` (serviço do Windows) | `mestre run` | conta virtual `NT SERVICE\Mestre`, dona do cofre, do banco e da configuração; não cria processos com outra conta: pede ao `mestre-launcher` ([Windows](windows.md#serviços-no-windows)) | recuperação do serviço e Guardião |
+| Windows | `mestre-launcher` (serviço do Windows, início automático) | `mestre launcher` | LocalSystem, **mínimo**: só inicia o `mestre-pty` instalado como `mestre-agente`; só aceita pedidos do serviço `mestre` da mesma instância ([Windows](windows.md#iniciador-mestre-launcher)) | recuperação do serviço e Guardião |
 | Windows | `mestre-guardiao` (serviço do Windows) | `mestre-guardiao run` | LocalSystem | recuperação do serviço |
 | Windows | `mestre-update` (serviço do Windows, início sob demanda) | `mestre-guardiao apply-update` | LocalSystem; só `NT SERVICE\Mestre` pode iniciar | — (uso único por troca) |
 
 **Tarefa agendada `\Mestre\Operador`** (Windows, só com o Operador do PC habilitado na instalação): executa `mestre operator-session` no logon do usuário configurado, com a conta dele e privilégios normais; não é serviço e é vigiada pelo `mestre` e pelo checklist (WIN-22), não pelo Guardião ([Windows](windows.md#operador-do-pc)).
 
-No Linux, o `Delegate=yes` entrega ao `mestre` o próprio cgroup, onde ele cria um cgroup por terminal, `term-<id>` ([terminal](terminal.md#criação), [segurança](seguranca.md#identidade-de-quem-chama-a-cli)). Pela regra do cgroup v2 de manter processos só nas folhas de uma árvore delegada, o motor roda numa folha (`engine`): o `DelegateSubgroup=engine` o põe lá ao iniciar; num systemd mais antigo, o próprio motor se move para ela antes de criar terminais.
+No Linux, o `Delegate=yes` entrega ao `mestre` o próprio cgroup, onde ele cria um cgroup por terminal, `term-<id>` ([terminal](terminal.md#criação), [segurança](seguranca.md#identidade-de-quem-chama-a-cli)). Pela regra do cgroup v2 de manter processos só nas folhas de uma árvore delegada, o motor roda numa folha (`engine`): o `DelegateSubgroup=engine` o põe lá ao iniciar; num systemd mais antigo, o próprio motor se move para ela antes de criar terminais. **`KillMode=process`:** parar ou reiniciar a unidade encerra só o processo do motor; os cgroups `term-<id>`, com os `mestre-pty` e os agentes, continuam, e o motor novo os reencontra ([volta do motor](terminal.md#volta-do-motor)). Por isso `mestre uninstall` encerra os terminais antes de parar o serviço. No Windows, o `mestre-pty` nasce do `mestre-launcher`, fora de qualquer Job do motor, e o serviço do Windows não encerra processos filhos ao parar.
 
 A conta `mestre-agente` não é de serviço: é a conta local com que o `mestre` inicia os terminais dos agentes e o Guardião inicia o agente de diagnóstico (no Linux, uma conta de sistema; no Windows, uma conta local comum sem logon interativo). Detalhes do Windows: [Windows](windows.md). As configurações de reinício (Restart=always, watchdog, recuperação do Windows) estão em [camadas](../autocura/camadas.md).
 
@@ -91,7 +97,8 @@ Tabela única de portas e rotas. Os números são os da instância padrão; cada
 
 | Canal | Linux | Windows | Acesso |
 |---|---|---|---|
-| CLI → motor | socket `/run/mestre/<inst>/cli.sock` | named pipe `\\.\pipe\mestre-<inst>-cli` | servido pelo `mestre` em toda máquina; contrato e acesso em [canal local](canal-local.md) |
+| CLI → motor | socket `/run/mestre/<inst>/cli.sock` | socket Unix `%ProgramData%\Mestre\<inst>\run\cli.sock` | servido pelo `mestre` em toda máquina; contrato e acesso em [canal local](canal-local.md) |
+| Motor → `mestre-pty` | socket `/run/mestre/<inst>/pty/<id>.sock` | socket Unix `%ProgramData%\Mestre\<inst>\pty\<id>.sock` | só a conta do motor, com aperto de mão pelo segredo do terminal ([terminal](terminal.md#socket-e-aperto-de-mão)) |
 | Motor ↔ Guardião | socket `/run/mestre-guardiao/<inst>/guardiao.sock` | named pipe `\\.\pipe\mestre-<inst>-guardiao` | só a conta do motor (`mestre` ou `NT SERVICE\Mestre`) e a do Guardião; leva o `health` e a concessão `lease` (a cada 30 s, com a época, sem depender do GitHub; [Guardião](../autocura/guardiao.md#canal-local-motor--guardião)) |
 | Motor → `mestre-launcher` (Windows) | — | named pipe `\\.\pipe\mestre-<inst>-launcher` | só `NT SERVICE\Mestre`, conferido também pelo processo cliente ([Windows](windows.md#iniciador-mestre-launcher)) |
 | Operador do PC ↔ motor (Windows) | — | named pipes `\\.\pipe\mestre-<inst>-operador` (processo da sessão) e `\\.\pipe\mestre-<inst>-operador-cli` (CLI e `mestre hook` dos terminais do Operador) | só a conta do usuário configurado e `NT SERVICE\Mestre` ([Windows](windows.md#operador-do-pc)) |
@@ -108,7 +115,7 @@ Uma máquina pode ter **várias instâncias** do Mestre, em qualquer sistema e m
 | Pastas | `/etc/mestre/<inst>/`, `/var/lib/mestre/<inst>/`, `/var/log/mestre/<inst>/` e `/var/spool/mestre/<inst>/` no Linux; `%ProgramData%\Mestre\<inst>\` no Windows. A padrão também usa subpasta, para haver um formato só ([persistência](persistencia.md#arquivos)) |
 | Portas | um bloco livre, escolhido na instalação e gravado na configuração: a padrão usa 7443, 7444, 7446 e 7447; as outras, blocos de 10 acima (7453, 7454, 7456 e 7457; depois 7463…). A 7445/udp é compartilhada |
 | Serviços | systemd: `mestre@<inst>`, `mestre-guardiao@<inst>`, `mestre-update@<inst>`; Windows: `Mestre$<inst>`, `MestreLauncher$<inst>`, `MestreGuardiao$<inst>`, `MestreUpdate$<inst>`, com as contas virtuais `NT SERVICE\Mestre$<inst>` (o `$` é aceito em nomes de serviço, como nas instâncias nomeadas do SQL Server) |
-| Conta dos agentes e canal local | `mestre-agente-<inst>`; canais locais com `<inst>` no caminho (acima); o `MESTRE_ENDPOINT` de cada personagem aponta para a instância dele |
+| Conta dos agentes e canal local | `mestre-agente-<inst>`; canais locais e sockets dos `mestre-pty` com `<inst>` no caminho (acima); o `MESTRE_ENDPOINT` de cada personagem aponta para a instância dele |
 | cgroup e identidade | o cgroup delegado da unidade `mestre@<inst>`; `machine_id` próprio, anunciado na [descoberta](../conectividade/descoberta.md) como máquina separada; a [ficha da máquina](../guilda/ficha-da-maquina.md#campos) traz o nome do computador e o da instância |
 
 - Nos outros documentos, `mestre`, `mestre-guardiao`, `mestre-update`, `mestre-launcher`, `NT SERVICE\Mestre`, `mestre-agente`, as pastas e as portas querem dizer os da instância.
@@ -122,7 +129,8 @@ flowchart LR
   SO --> M[motor: mestre]
   G -- reinicia, volta versão --> M
   M -- supervisiona --> W[whisper-server]
-  M -- inicia e encerra --> T[terminais dos agentes]
+  M -- inicia, reconecta e encerra --> P[mestre-pty de cada terminal]
+  P -- segura --> T[agente]
 ```
 
 O Guardião nunca é alterado por uma ação de cura ([Guardião](../autocura/guardiao.md)). Entre máquinas, as Torres vigiam a Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).

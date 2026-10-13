@@ -26,6 +26,7 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 |---|---|---|
 | Motor | `/opt/mestre/versoes/<versão>/mestre` | `%ProgramFiles%\Mestre\versoes\<versão>\mestre.exe` |
 | Guardião | `/opt/mestre-guardiao/versoes/<versão>/mestre-guardiao` | `%ProgramFiles%\Mestre Guardiao\versoes\<versão>\mestre-guardiao.exe` |
+| `mestre-pty` | `/opt/mestre/pty/<versão>/mestre-pty` (cada versão fica enquanto houver terminal vivo nela) | `%ProgramFiles%\Mestre\pty\<versão>\mestre-pty.exe` |
 | Versão em uso | link `atual` → `versoes/<versão>` | junção de diretório `atual` → `versoes\<versão>` |
 | Versão anterior | link `anterior` → `versoes/<versão anterior>` | junção `anterior` |
 | No PATH | `/usr/local/bin/mestre` → `/opt/mestre/atual/mestre` | `%ProgramFiles%\Mestre\atual` |
@@ -74,7 +75,7 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 
 ### Remoção (`mestre uninstall`)
 
-Numa Torre, pede antes a saída da Guilda e **apaga a réplica** (banco, arquivos e espelhos) **e a cópia do cofre**, mesmo sem pedir para apagar tudo; a Cidadela com Torres na Guilda recusa e manda passar a Cidadela a outra máquina ([saída e remoção](../guilda/guilda.md#saída-e-remoção)). Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela, o arquivo da senha e a tarefa `\Mestre\Operador`. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil. Na Cidadela sozinha, dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo.
+Numa Torre, pede antes a saída da Guilda e **apaga a réplica** (banco, arquivos e espelhos) **e a cópia do cofre**, mesmo sem pedir para apagar tudo; a Cidadela com Torres na Guilda recusa e manda passar a Cidadela a outra máquina ([saída e remoção](../guilda/guilda.md#saída-e-remoção)). Antes de parar o `mestre`, encerra os terminais da máquina (o `mestre-pty` de cada um e a árvore dele), porque parar o serviço não os encerra ([componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)). Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela, o arquivo da senha e a tarefa `\Mestre\Operador`. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil. Na Cidadela sozinha, dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo.
 
 ## Regras e erros
 

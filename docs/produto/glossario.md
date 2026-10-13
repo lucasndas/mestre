@@ -43,7 +43,8 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Efêmero | Personagem encerrado sozinho quando termina a tarefa ou a missão que o criou. | [personagens](../orquestracao/personagens.md#ciclo-de-vida-definido-na-ficha) |
 | Persistente | Personagem que continua vivo entre tarefas até ficar ocioso tempo demais. | [personagens](../orquestracao/personagens.md#ciclo-de-vida-definido-na-ficha) |
 | Renascido | Personagem que não pôde retomar a sessão e recomeçou com um resumo do trabalho. | [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) |
-| Ponto seguro | Momento em que um personagem pode ser reiniciado sem perder trabalho: livre e com a tarefa entregue. | [autoatualização](../plataforma/autoatualizacao.md#ponto-seguro-dos-terminais) |
+| Terminal | Onde cada agente roda na máquina; continua vivo quando o motor reinicia ou é atualizado. | [terminal](../arquitetura/terminal.md) |
+| Ponto seguro | Momento em que um personagem pode ser encerrado sem perder trabalho: livre e com a tarefa entregue. | [personagens](../orquestracao/personagens.md#encerramento-seguro) |
 | Party | O time de personagens conectados desta mesa. | [conexões](../orquestracao/conexoes.md) |
 | Base | A receita de como um terminal é iniciado: comando, pasta e em quais máquinas pode rodar. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Ficha | Um tipo de personagem pronto: usa uma base e define agente, classe, conta e limites. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
