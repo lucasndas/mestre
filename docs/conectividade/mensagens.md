@@ -8,7 +8,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 
 | `type` | Sentido | Ack | Campos principais do `payload` | Resposta |
 |---|---|---|---|---|
-| `hello` | T→C | — | `protocol {min, max}`, `version`, `sheet` (a [ficha da máquina](../guilda/ficha-da-maquina.md) inteira), `certificate` (certidão de época que segue), `replica_lsn`, `terminals[]` (estado atual) | `welcome {protocol, citadel_version, citadel_time, certificate}`, ou fechamento `4003`, `4006` ou `4007` |
+| `hello` | T→C | — | `protocol {min, max}`, `capabilities[]` (opcional), `version`, `sheet` (a [ficha da máquina](../guilda/ficha-da-maquina.md) inteira), `certificate` (certidão de época que segue), `replica_lsn`, `terminals[]` (estado atual) | `welcome {protocol, capabilities[], citadel_version, citadel_time, certificate}`, ou fechamento `4003`, `4006` ou `4007` |
 | `machine.heartbeat` | T→C | não | `cpu_pct`, `mem_pct`, `disk_free_bytes`, `terminals`, `replica_lag_s` | — |
 | `machine.sheet` | T→C | sim | os campos da ficha da máquina que mudaram | — |
 | `guild.epoch` | ambos | sim | pedido sem campos; resposta com a certidão de época atual (`guild_id`, `epoch`, `citadel_machine_id`, `approved_by`, `approval_id`, `issued_at`, `signature`) | ([certidão](../guilda/replicacao.md#certidão-de-época)) |
@@ -17,11 +17,11 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `replica.ack` | T→C | não | `lsn` aplicado | — (os registros vão em frames `0x03`; [replicação](../guilda/replicacao.md)) |
 | `replica.resync` | T→C | sim | `from_lsn`; pede de novo a partir dali, ou cópia completa sem `from_lsn` | `xfer.begin` com `kind: db-snapshot` ou frames `0x03` |
 | `vault.replica` | C→T | sim | para toda máquina não excluída: a chave de dados do cofre, cifrada para a máquina, e o envelope | — ([cofre em toda máquina](../guilda/replicacao.md#cofre-em-toda-máquina)) |
-| `vault.request` | T→C | sim | `agent_id`, `secret`, `purpose`: credencial pedida no momento do uso; a Cidadela confere a classe e registra | a credencial, só em memória, ou `error` `forbidden` |
+| `vault.request` | T→C | sim | `agent_id`, `secret`, `purpose`: credencial pedida no momento do uso; a Cidadela confere a classe e registra | `vault.credential {value}`, só em memória (tipo volátil), ou `error` `forbidden` |
 | `vault.drop` | C→T | sim | máquina excluída: apagar a chave, o envelope e as tabelas do cofre da réplica | recibo `vault.dropped` |
 | `citadel.handover` | C→T | sim | troca planejada: `target_machine_id`, `last_lsn`, `approval_id` | a máquina escolhida promove-se pela trava e responde com a certidão nova ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)) |
 | `terminal.adopt` | T→C | sim | a antiga Cidadela, rebaixada: terminais dela que a nova não retomou | a nova Cidadela os adota ou manda encerrar ([volta da antiga](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)) |
-| `ack` | ambos | — | `status`: `ok` \| `duplicate` \| `error` | — |
+| `ack` | ambos | — | `status`: `ok` \| `duplicate` \| `error`; com `error`, o `error` (`code`, `message`, `retryable`); num `duplicate`, o mesmo `error` da primeira vez | — |
 | `error` | ambos | — | `code`, `message`, `retryable` | — |
 | `terminal.open` | C→T | sim | `terminal_id`, `agent_id`, `command`, `args[]`, `env {}`, `cwd`, `adapter`; no Operador do PC, `operator {session_id, ends_at}` (a máquina cria o terminal pelo processo da sessão) | `terminal.opened {terminal_id, pid}` ou `error` |
 | `terminal.input` | C→T | sim | `terminal_id`, `mode` (`message` pela `TypeMessage` do adaptador \| `raw`), `data` | — (ack basta) |
@@ -40,10 +40,12 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `cli.call` | T→C | sim | o pedido do [canal local](../arquitetura/canal-local.md#pedido), mais `caller {agent_id, terminal_id, machine_id}` já verificado | `cli.result` |
 | `cli.result` | C→T | sim | a resposta do canal local, inclusive as parciais (`partial: true`) | — |
 | `sync.request` / `sync.applied` | ambos | sim | `table_id`, `branch`, `base_commit`, `tip_commit` | ([mesas](../orquestracao/mesas.md)) |
-| `xfer.*` | ambos | sim | ver [transferência em partes](protocolo.md#transferência-em-partes) | — |
+| `xfer.*` | ambos | sim (menos `xfer.progress`) | `xfer.begin {xfer_id, kind, size, sha256, chunk_size, meta}` → `xfer.ready {xfer_id, next_index}`; `xfer.progress {xfer_id, next_index}`; `xfer.end {xfer_id}` → `xfer.done {xfer_id, ok, error}` ([transferência em partes](protocolo.md#transferência-em-partes)); nenhum passa pelo `outbox` | — |
 | `transcribe.request` | C→T | sim | `audio_xfer_id` (WAV já transferido), `language` | `transcribe.result {text, duration_s}` ou `error` ([transcrição](../telegram/anexos-e-transcricao.md)) |
 | `cert.renew` | T→C | sim | `role` (`motor`), `csr` | `cert.issued {cert}` ([credenciais](../guilda/guilda.md#credenciais)) |
 | `update.apply` | C→T | sim | `release_tag`, `component` (`motor` \| `guardiao`), `xfer_id` | resultado no passo da [autoatualização](../plataforma/autoatualizacao.md) |
+
+**Tipos voláteis:** os que levam segredo (`vault.credential`, `agent.site_login`, `agent.site_login_input`) têm ack, mas esperam por ele só em memória: um reinício do processo os perde, e a Cidadela recomeça o pedido.
 
 ## Guardião da Torre ↔ Cidadela
 

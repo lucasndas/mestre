@@ -1,0 +1,566 @@
+package protocol
+
+import (
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"slices"
+
+	"github.com/lucasndas/mestre/internal/logging"
+)
+
+// The payload of every message type of docs/conectividade/mensagens.md. The
+// struct is the source of the fields; the comment names the row of the
+// table. A field tagged `proto:"req"` must be present (and not null) in the
+// JSON; the others are optional, and unknown fields are ignored.
+
+// Object is a JSON object whose fields are defined by another document
+// (the machine sheet, the effective rules, an adapter event, a local-channel
+// request).
+type Object map[string]json.RawMessage
+
+// Empty is the payload of a message that has no fields.
+type Empty struct{}
+
+// Secret is a value that must never reach a log: it prints as redacted and
+// travels in clear only inside the JSON of the message.
+type Secret string
+
+func (Secret) String() string   { return logging.Redacted }
+func (Secret) GoString() string { return `"` + logging.Redacted + `"` }
+
+// Reveal returns the value.
+func (s Secret) Reveal() string { return string(s) }
+
+// Certificate is the certificate of epoch (docs/guilda/replicacao.md#certidão-de-época),
+// the payload of the answer to guild.epoch.
+type Certificate struct {
+	GuildID          string    `json:"guild_id" proto:"req"`
+	Epoch            uint64    `json:"epoch" proto:"req"`
+	CitadelMachineID string    `json:"citadel_machine_id" proto:"req"`
+	ApprovedBy       string    `json:"approved_by,omitempty"`
+	ApprovalID       string    `json:"approval_id,omitempty"`
+	IssuedAt         Timestamp `json:"issued_at" proto:"req"`
+	Signature        string    `json:"signature" proto:"req"`
+}
+
+// Validate checks the epoch.
+func (c *Certificate) Validate() error {
+	if c.Epoch == 0 {
+		return fmt.Errorf("certificate: epoch starts at 1")
+	}
+	return nil
+}
+
+// TerminalState is the state of a terminal that is already running, as the
+// machine announces it in the opening and when it hands terminals over.
+type TerminalState struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	AgentID    string `json:"agent_id" proto:"req"`
+	State      string `json:"state" proto:"req"`
+	SessionID  string `json:"session_id,omitempty"`
+}
+
+// Hello is `hello`, Tower to Citadel (mensagens.md, row hello).
+type Hello struct {
+	Protocol     Range           `json:"protocol" proto:"req"`
+	Capabilities Capabilities    `json:"capabilities,omitempty"`
+	Version      string          `json:"version" proto:"req"`
+	Sheet        Object          `json:"sheet" proto:"req"`
+	Certificate  *Certificate    `json:"certificate" proto:"req"`
+	ReplicaLSN   uint64          `json:"replica_lsn" proto:"req"`
+	Terminals    []TerminalState `json:"terminals,omitempty"`
+}
+
+// Validate checks the range.
+func (h *Hello) Validate() error {
+	if !h.Protocol.Valid() {
+		return fmt.Errorf("protocol range %s is not valid", h.Protocol)
+	}
+	return nil
+}
+
+// Welcome is the answer to hello (mensagens.md, row hello).
+type Welcome struct {
+	Protocol     int          `json:"protocol" proto:"req"`
+	Capabilities Capabilities `json:"capabilities,omitempty"`
+	CitadelVer   string       `json:"citadel_version" proto:"req"`
+	CitadelTime  Timestamp    `json:"citadel_time" proto:"req"`
+	Certificate  *Certificate `json:"certificate" proto:"req"`
+}
+
+// Validate checks the version.
+func (w *Welcome) Validate() error {
+	if w.Protocol < 1 {
+		return fmt.Errorf("protocol version %d is not valid", w.Protocol)
+	}
+	return nil
+}
+
+// MachineHeartbeat is `machine.heartbeat`.
+type MachineHeartbeat struct {
+	CPUPct        float64  `json:"cpu_pct" proto:"req"`
+	MemPct        float64  `json:"mem_pct" proto:"req"`
+	DiskFreeBytes uint64   `json:"disk_free_bytes" proto:"req"`
+	Terminals     int      `json:"terminals" proto:"req"`
+	ReplicaLagS   *float64 `json:"replica_lag_s,omitempty"`
+}
+
+// GuildConfigMachine is one machine of guild.config.
+type GuildConfigMachine struct {
+	MachineID string   `json:"machine_id" proto:"req"`
+	Name      string   `json:"name"`
+	Instance  string   `json:"instance,omitempty"`
+	Addresses []string `json:"addresses,omitempty"`
+	Priority  int      `json:"priority"`
+	Excluded  bool     `json:"excluded"`
+}
+
+// GuildConfig is `guild.config`.
+type GuildConfig struct {
+	Machines []GuildConfigMachine `json:"machines"`
+	Revoked  []string             `json:"revoked,omitempty"`
+	Timezone string               `json:"timezone" proto:"req"`
+}
+
+// GuildLeave is `guild.leave`.
+type GuildLeave struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+// ReplicaAck is `replica.ack`.
+type ReplicaAck struct {
+	LSN uint64 `json:"lsn" proto:"req"`
+}
+
+// ReplicaResync is `replica.resync`; without FromLSN it asks for a full copy.
+type ReplicaResync struct {
+	FromLSN *uint64 `json:"from_lsn,omitempty"`
+}
+
+// VaultRequest is `vault.request`.
+type VaultRequest struct {
+	AgentID string `json:"agent_id" proto:"req"`
+	Secret  string `json:"secret" proto:"req"`
+	Purpose string `json:"purpose" proto:"req"`
+}
+
+// VaultCredential answers vault.request; the value lives only in memory.
+type VaultCredential struct {
+	Value Secret `json:"value" proto:"req"`
+}
+
+// CitadelHandover is `citadel.handover`.
+type CitadelHandover struct {
+	TargetMachineID string `json:"target_machine_id" proto:"req"`
+	LastLSN         uint64 `json:"last_lsn" proto:"req"`
+	ApprovalID      string `json:"approval_id" proto:"req"`
+}
+
+// TerminalAdopt is `terminal.adopt`.
+type TerminalAdopt struct {
+	Terminals []TerminalState `json:"terminals" proto:"req"`
+}
+
+// The statuses of an ack.
+const (
+	AckOK        = "ok"
+	AckDuplicate = "duplicate"
+	AckError     = "error"
+)
+
+// Ack is `ack`: "received and accepted", not "done".
+type Ack struct {
+	Status string `json:"status" proto:"req"`
+	// Error says why the status is "error".
+	Error *Error `json:"error,omitempty"`
+}
+
+// Validate checks the status.
+func (a *Ack) Validate() error {
+	if !slices.Contains([]string{AckOK, AckDuplicate, AckError}, a.Status) {
+		return fmt.Errorf("ack status %q is not ok, duplicate or error", a.Status)
+	}
+	return nil
+}
+
+// OperatorRef is the operator field of terminal.open.
+type OperatorRef struct {
+	SessionID string    `json:"session_id" proto:"req"`
+	EndsAt    Timestamp `json:"ends_at" proto:"req"`
+}
+
+// TerminalOpen is `terminal.open`.
+type TerminalOpen struct {
+	TerminalID string            `json:"terminal_id" proto:"req"`
+	AgentID    string            `json:"agent_id" proto:"req"`
+	Command    string            `json:"command" proto:"req"`
+	Args       []string          `json:"args,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	Cwd        string            `json:"cwd,omitempty"`
+	Adapter    string            `json:"adapter,omitempty"`
+	Operator   *OperatorRef      `json:"operator,omitempty"`
+}
+
+// TerminalOpened is `terminal.opened`.
+type TerminalOpened struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	PID        int    `json:"pid" proto:"req"`
+}
+
+// The modes of terminal.input and terminal.close.
+const (
+	InputMessage  = "message"
+	InputRaw      = "raw"
+	CloseGraceful = "graceful"
+	CloseKill     = "kill"
+)
+
+// TerminalInput is `terminal.input`.
+type TerminalInput struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	Mode       string `json:"mode" proto:"req"`
+	Data       string `json:"data" proto:"req"`
+}
+
+// Validate checks the mode.
+func (t *TerminalInput) Validate() error {
+	if t.Mode != InputMessage && t.Mode != InputRaw {
+		return fmt.Errorf("mode %q is not message or raw", t.Mode)
+	}
+	return nil
+}
+
+// TerminalClose is `terminal.close`.
+type TerminalClose struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	Mode       string `json:"mode" proto:"req"`
+}
+
+// Validate checks the mode.
+func (t *TerminalClose) Validate() error {
+	if t.Mode != CloseGraceful && t.Mode != CloseKill {
+		return fmt.Errorf("mode %q is not graceful or kill", t.Mode)
+	}
+	return nil
+}
+
+// TerminalStatus is `terminal.status`. The states are owned by the
+// characters (docs/orquestracao/personagens.md), so they are not checked.
+type TerminalStatus struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	State      string `json:"state" proto:"req"`
+	Reason     string `json:"reason,omitempty"`
+	ExitCode   *int   `json:"exit_code,omitempty"`
+	SessionID  string `json:"session_id,omitempty"`
+}
+
+// TerminalReplay is `terminal.replay`.
+type TerminalReplay struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	From       uint64 `json:"from" proto:"req"`
+}
+
+// TerminalReplayed is `terminal.replayed`; Lost marks a stretch that already
+// left the buffer.
+type TerminalReplayed struct {
+	TerminalID string `json:"terminal_id,omitempty"`
+	From       uint64 `json:"from" proto:"req"`
+	To         uint64 `json:"to" proto:"req"`
+	Lost       bool   `json:"lost"`
+}
+
+// TerminalScreen is `terminal.screen`.
+type TerminalScreen struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	Lines      int    `json:"lines"`
+}
+
+// TerminalScreenResult is `terminal.screen_result`.
+type TerminalScreenResult struct {
+	Text       string    `json:"text" proto:"req"`
+	Cursor     Object    `json:"cursor,omitempty"`
+	CapturedAt Timestamp `json:"captured_at" proto:"req"`
+}
+
+// InboxDeliver is `inbox.deliver`.
+type InboxDeliver struct {
+	TerminalID string `json:"terminal_id" proto:"req"`
+	ItemID     string `json:"item_id" proto:"req"`
+	Text       string `json:"text" proto:"req"`
+	Header     string `json:"header,omitempty"`
+}
+
+// The statuses of inbox.result.
+const (
+	InboxDelivered = "delivered"
+	InboxBusy      = "busy"
+)
+
+// InboxResult is `inbox.result`; busy gives the item back to the queue of
+// the Citadel.
+type InboxResult struct {
+	ItemID string `json:"item_id" proto:"req"`
+	Status string `json:"status" proto:"req"`
+}
+
+// Validate checks the status.
+func (r *InboxResult) Validate() error {
+	if r.Status != InboxDelivered && r.Status != InboxBusy {
+		return fmt.Errorf("status %q is not delivered or busy", r.Status)
+	}
+	return nil
+}
+
+// AgentSiteLogin is `agent.site_login`; the machine keeps the secret only in
+// memory.
+type AgentSiteLogin struct {
+	AttemptID    string   `json:"attempt_id" proto:"req"`
+	AgentID      string   `json:"agent_id" proto:"req"`
+	Domains      []string `json:"domains" proto:"req"`
+	LoginURL     string   `json:"login_url" proto:"req"`
+	Username     string   `json:"username" proto:"req"`
+	Secret       Secret   `json:"secret" proto:"req"`
+	Selectors    Object   `json:"selectors,omitempty"`
+	SuccessCheck Object   `json:"success_check,omitempty"`
+}
+
+// The states of agent.site_login_status.
+const (
+	SiteLoginNeedsCode     = "needs_code"
+	SiteLoginNeedsPush     = "needs_push"
+	SiteLoginNeedsCaptcha  = "needs_captcha"
+	SiteLoginOK            = "ok"
+	SiteLoginRequiresHuman = "requires_human"
+	SiteLoginFailed        = "failed"
+)
+
+// AgentSiteLoginStatus is `agent.site_login_status`.
+type AgentSiteLoginStatus struct {
+	AttemptID string `json:"attempt_id" proto:"req"`
+	State     string `json:"state" proto:"req"`
+	XferID    string `json:"xfer_id,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// Validate checks the state and what each one needs.
+func (s *AgentSiteLoginStatus) Validate() error {
+	switch s.State {
+	case SiteLoginNeedsCode, SiteLoginNeedsPush, SiteLoginOK, SiteLoginRequiresHuman:
+	case SiteLoginNeedsCaptcha:
+		if s.XferID == "" {
+			return fmt.Errorf("needs_captcha carries the xfer_id of the image")
+		}
+	case SiteLoginFailed:
+		if s.Reason == "" {
+			return fmt.Errorf("failed carries a reason")
+		}
+	default:
+		return fmt.Errorf("state %q is unknown", s.State)
+	}
+	return nil
+}
+
+// AgentSiteLoginInput is `agent.site_login_input`; the value never goes to a
+// log.
+type AgentSiteLoginInput struct {
+	AttemptID string `json:"attempt_id" proto:"req"`
+	Value     Secret `json:"value" proto:"req"`
+}
+
+// OperatorSession is `operator.session`.
+type OperatorSession struct {
+	SessionID string    `json:"session_id" proto:"req"`
+	State     string    `json:"state" proto:"req"`
+	At        Timestamp `json:"at" proto:"req"`
+}
+
+// Validate checks the state.
+func (o *OperatorSession) Validate() error {
+	if !slices.Contains([]string{"started", "locked", "stopped_on_pc", "session_lost"}, o.State) {
+		return fmt.Errorf("state %q is unknown", o.State)
+	}
+	return nil
+}
+
+// OperatorCapture is `operator.capture`.
+type OperatorCapture struct {
+	SessionID  string    `json:"session_id" proto:"req"`
+	CapturedAt Timestamp `json:"captured_at" proto:"req"`
+	Trigger    string    `json:"trigger" proto:"req"`
+	EventID    string    `json:"event_id" proto:"req"`
+	XferID     string    `json:"xfer_id" proto:"req"`
+}
+
+// Validate checks the trigger.
+func (o *OperatorCapture) Validate() error {
+	if o.Trigger != "intervalo" && o.Trigger != "acao" {
+		return fmt.Errorf("trigger %q is not intervalo or acao", o.Trigger)
+	}
+	return nil
+}
+
+// CLICall is `cli.call`: the request of the local channel exactly as it is,
+// plus the verified caller. CLIResult is `cli.result`: the response of the
+// local channel exactly as it is.
+type (
+	CLICall   Object
+	CLIResult Object
+)
+
+// Validate checks the caller.
+func (c CLICall) Validate() error {
+	var caller struct {
+		AgentID    string `json:"agent_id"`
+		TerminalID string `json:"terminal_id"`
+		MachineID  string `json:"machine_id"`
+	}
+	raw, ok := c["caller"]
+	if !ok {
+		return fmt.Errorf("caller is required")
+	}
+	if err := json.Unmarshal(raw, &caller); err != nil {
+		return fmt.Errorf("caller: %w", err)
+	}
+	if caller.AgentID == "" || caller.TerminalID == "" || caller.MachineID == "" {
+		return fmt.Errorf("caller needs agent_id, terminal_id and machine_id")
+	}
+	return nil
+}
+
+// SyncMessage is `sync.request` and `sync.applied`.
+type SyncMessage struct {
+	TableID    string `json:"table_id" proto:"req"`
+	Branch     string `json:"branch" proto:"req"`
+	BaseCommit string `json:"base_commit,omitempty"`
+	TipCommit  string `json:"tip_commit" proto:"req"`
+}
+
+// TranscribeRequest is `transcribe.request`.
+type TranscribeRequest struct {
+	AudioXferID string `json:"audio_xfer_id" proto:"req"`
+	Language    string `json:"language,omitempty"`
+}
+
+// TranscribeResult is `transcribe.result`.
+type TranscribeResult struct {
+	Text      string  `json:"text" proto:"req"`
+	DurationS float64 `json:"duration_s" proto:"req"`
+}
+
+// CertRenew is `cert.renew`.
+type CertRenew struct {
+	Role string `json:"role" proto:"req"`
+	CSR  string `json:"csr" proto:"req"`
+}
+
+// Validate checks the role.
+func (c *CertRenew) Validate() error {
+	if c.Role != "motor" && c.Role != "guardiao" {
+		return fmt.Errorf("role %q is not motor or guardiao", c.Role)
+	}
+	return nil
+}
+
+// CertIssued is `cert.issued`.
+type CertIssued struct {
+	Cert string `json:"cert" proto:"req"`
+}
+
+// UpdateApply is `update.apply`.
+type UpdateApply struct {
+	ReleaseTag string `json:"release_tag" proto:"req"`
+	Component  string `json:"component" proto:"req"`
+	XferID     string `json:"xfer_id" proto:"req"`
+}
+
+// Validate checks the component.
+func (u *UpdateApply) Validate() error {
+	if u.Component != "motor" && u.Component != "guardiao" {
+		return fmt.Errorf("component %q is not motor or guardiao", u.Component)
+	}
+	return nil
+}
+
+// The kinds of transfer (docs/conectividade/protocolo.md#transferência-em-partes).
+const (
+	KindGitBundle  = "git-bundle"
+	KindFile       = "file"
+	KindDBSnapshot = "db-snapshot"
+	KindRelease    = "release"
+)
+
+// DefaultChunkSize is the size of a part unless the sender says otherwise.
+const DefaultChunkSize = 256 << 10
+
+// XferBegin is `xfer.begin`. For a bundle Meta carries the table, the
+// branch, the prerequisite commits and the tip; for a file, the destination
+// path.
+type XferBegin struct {
+	XferID    string `json:"xfer_id" proto:"req"`
+	Kind      string `json:"kind" proto:"req"`
+	Size      int64  `json:"size" proto:"req"`
+	SHA256    string `json:"sha256" proto:"req"`
+	ChunkSize int    `json:"chunk_size,omitempty"`
+	Meta      Object `json:"meta,omitempty"`
+}
+
+// Chunk is the size of a part, with the default applied.
+func (b *XferBegin) Chunk() int {
+	if b.ChunkSize <= 0 {
+		return DefaultChunkSize
+	}
+	return b.ChunkSize
+}
+
+// Parts is how many parts the transfer has.
+func (b *XferBegin) Parts() uint64 {
+	c := int64(b.Chunk())
+	return uint64((b.Size + c - 1) / c)
+}
+
+// Validate checks the transfer.
+func (b *XferBegin) Validate() error {
+	if _, err := ParseULID(b.XferID); err != nil {
+		return fmt.Errorf("xfer_id: %w", err)
+	}
+	if !slices.Contains([]string{KindGitBundle, KindFile, KindDBSnapshot, KindRelease}, b.Kind) {
+		return fmt.Errorf("kind %q is unknown", b.Kind)
+	}
+	if b.Size < 0 {
+		return fmt.Errorf("size %d is negative", b.Size)
+	}
+	if b.ChunkSize < 0 || b.ChunkSize > MaxDataPayload {
+		return fmt.Errorf("chunk_size %d is out of range", b.ChunkSize)
+	}
+	if sum, err := hex.DecodeString(b.SHA256); err != nil || len(sum) != 32 {
+		return fmt.Errorf("sha256 is not 64 hex digits")
+	}
+	return nil
+}
+
+// XferReady answers xfer.begin with the part to start from: 0, or the point
+// where the receiver already has its temporary file.
+type XferReady struct {
+	XferID    string `json:"xfer_id" proto:"req"`
+	NextIndex uint64 `json:"next_index" proto:"req"`
+}
+
+// XferProgress is `xfer.progress`: the next part the receiver expects; it
+// frees the window of the sender.
+type XferProgress struct {
+	XferID    string `json:"xfer_id" proto:"req"`
+	NextIndex uint64 `json:"next_index" proto:"req"`
+}
+
+// XferEnd is `xfer.end`.
+type XferEnd struct {
+	XferID string `json:"xfer_id" proto:"req"`
+}
+
+// XferDone is `xfer.done`: ok, or the error.
+type XferDone struct {
+	XferID string `json:"xfer_id" proto:"req"`
+	OK     bool   `json:"ok" proto:"req"`
+	Error  *Error `json:"error,omitempty"`
+}
