@@ -48,6 +48,13 @@ O papel do launcher nos dois sistemas está em [componentes](componentes.md#inic
 - **Sem serviço (CI, suíte completa):** o launcher roda como processo comum e a "conta dos agentes" é a do próprio processo, com o token dele no lugar do `LogonUser` e sem perfil a carregar; o resto do caminho é o mesmo (pipe e ACL, conferência por SID e PID, `CREATE_BREAKAWAY_FROM_JOB`, descritores de segurança, segredo no pipe herdado, liberação ao fim do `mestre-pty` e readoção). Como a sessão é a do runner, a varredura da sessão de logon nunca roda ali (recusada); no CI ficam a lógica de seleção e a enumeração e o encerramento restritos a um processo de teste. O logon real, a varredura de uma sessão de terminal, o `LoadUserProfile` e a estação de janela são da suíte pesada e do [checklist](../plataforma/checklist.md).
 - **Coberto por** CA-TERM-07 ([terminal](terminal.md#critérios-de-aceite)).
 
+## ACLs do socket da CLI e da pasta `pty`
+
+Código em `internal/winsvc` (`CLIAccess`, `PTYDirACL`); as SIDs são parâmetros, e os testes dão a do usuário do teste.
+- **`run\cli.sock`:** o motor o cria e aplica na hora uma DACL protegida (sem herança): dono `NT SERVICE\Mestre` e SYSTEM com controle total, `mestre-agente` com leitura e escrita (o que conectar pede). Nenhuma outra conta o abre.
+- **Pasta `pty`:** DACL protegida: SYSTEM e `NT SERVICE\Mestre` com controle total, herdável pelos sockets; `OWNER RIGHTS` só com `READ_CONTROL`, herdável (o dono do socket, `mestre-agente`, não muda a ACL nem conecta); `mestre-agente` só com o direito de **criar arquivo**, sem herança e sem listar nem ler. O motor a cria e aplica antes de pedir cada terminal ao launcher (idempotente: uma pasta restaurada ou feita à mão volta ao certo); a conta dos agentes da instância é `mestre-agente-<inst>` fora da principal ([componentes](componentes.md#instâncias)).
+- **Instalador (M7):** aplica as mesmas ACLs na instalação, na criação das pastas `run` e `pty`. Até lá, o motor as aplica sozinho e o CI confere a DACL montada e a aplicação com o usuário do teste; duas contas distintas só se separam na suíte pesada ([ordem](../desenvolvimento/ordem-de-implementacao.md#critérios-em-marcos-posteriores)).
+
 ## Diagnóstico com IA
 
 O agente de diagnóstico ([diagnóstico com IA](../autocura/diagnostico-com-ia.md)) precisa rodar justamente quando o `mestre` pode estar fora. Quem o inicia é o Guardião (LocalSystem), **direto como `mestre-agente`**, pelo mesmo mecanismo do launcher (lê a senha guardada; logon em lote; perfil carregado; `CreateProcessAsUser`), sem ConPTY: entrada e saída por pipes. Não há tarefa agendada.

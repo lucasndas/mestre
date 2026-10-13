@@ -13,7 +13,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 | Sistema | Endereço | Acesso |
 |---|---|---|
 | Linux | socket Unix `/run/mestre/<inst>/cli.sock` | dono `mestre`, grupo `mestre-agente`, modo 0660 |
-| Windows | socket Unix `%ProgramData%\Mestre\<inst>\run\cli.sock` | ACL do arquivo só para `NT SERVICE\Mestre` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
+| Windows | socket Unix `%ProgramData%\Mestre\<inst>\run\cli.sock` | ACL do arquivo só para `NT SERVICE\Mestre` (dono), `mestre-agente` (ler e escrever) e SYSTEM, aplicada pelo motor ao criar o socket ([ACLs](windows.md#acls-do-socket-da-cli-e-da-pasta-pty)) |
 
 - **Socket Unix nos dois sistemas** (`AF_UNIX`; no Windows 10 1803 ou maior), com o mesmo código Go; o mesmo vale para o socket de cada [`mestre-pty`](terminal.md#socket-e-aperto-de-mão). Se o spike 5 mostrar que a ACL do arquivo do socket não basta no Windows, o plano B é o named pipe `\\.\pipe\mestre-<inst>-cli` com a mesma ACL ([Windows](windows.md#verificar-na-implementação)).
 - `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/<inst>/cli.sock` ou `unix://C:/ProgramData/Mestre/<inst>/run/cli.sock`, sempre da [instância](componentes.md#instâncias) do personagem. Sem a variável, a CLI usa o endereço da instância `principal`.
