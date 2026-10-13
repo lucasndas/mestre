@@ -12,8 +12,16 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// DefaultMaxPerSecond is how many requests a machine answers per second.
-const DefaultMaxPerSecond = 10
+// DefaultMaxPerSecond is how many requests a machine answers per second, in
+// all; DefaultMaxPerSource, how many of them may come from one address (a
+// search sends one per second, and the instances of a machine share its
+// address).
+const (
+	DefaultMaxPerSecond = 10
+	DefaultMaxPerSource = 3
+	// maxSources bounds the addresses the limit remembers within a second.
+	maxSources = 256
+)
 
 // maxReadFailures is how many reads in a row may fail before a socket is
 // given up.
@@ -44,6 +52,7 @@ type ResponderConfig struct {
 	// Guild yet, and then nothing is answered.
 	Info         func() (Info, bool)
 	MaxPerSecond int          // zero means DefaultMaxPerSecond
+	MaxPerSource int          // zero means DefaultMaxPerSource
 	Logger       *slog.Logger // nil discards
 }
 
@@ -56,9 +65,11 @@ type Responder struct {
 	wg   sync.WaitGroup
 	once sync.Once
 
-	// sent are the times of the last answers, newest last, for the limit.
-	sent    []time.Time
-	dropped atomic.Int64
+	// sent are the times of the last answers, newest last, for the limit;
+	// bySource the same per address, for the limit of each one.
+	sent     []time.Time
+	bySource map[string][]time.Time
+	dropped  atomic.Int64
 }
 
 // StartResponder binds the shared port and answers until Close or until ctx
@@ -73,6 +84,9 @@ func StartResponder(ctx context.Context, cfg ResponderConfig) (*Responder, error
 	if cfg.MaxPerSecond <= 0 {
 		cfg.MaxPerSecond = DefaultMaxPerSecond
 	}
+	if cfg.MaxPerSource <= 0 {
+		cfg.MaxPerSource = DefaultMaxPerSource
+	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
@@ -80,7 +94,7 @@ func StartResponder(ctx context.Context, cfg ResponderConfig) (*Responder, error
 	if err != nil {
 		return nil, err
 	}
-	r := &Responder{cfg: cfg, conn: conn}
+	r := &Responder{cfg: cfg, conn: conn, bySource: map[string][]time.Time{}}
 	stop := context.AfterFunc(ctx, r.Close)
 	r.wg.Go(func() {
 		defer stop()
@@ -135,7 +149,7 @@ func (r *Responder) handle(b []byte, from string) {
 	if req.GuildID != "" && req.GuildID != info.GuildID {
 		return
 	}
-	if !r.allow() {
+	if !r.allow(from) {
 		r.dropped.Add(1)
 		return
 	}
@@ -153,15 +167,44 @@ func (r *Responder) handle(b []byte, from string) {
 	}
 }
 
-// allow counts one more answer in the last second.
-func (r *Responder) allow() bool {
+// allow counts one more answer to from in the last second: at most
+// MaxPerSource for that address (its host, whatever the port) and
+// MaxPerSecond in all. A request refused for its address does not use the
+// shared budget, so one noisy sender does not silence the others.
+func (r *Responder) allow(from string) bool {
 	now := r.cfg.Clock.Now()
-	if len(r.sent) >= r.cfg.MaxPerSecond && now.Sub(r.sent[len(r.sent)-r.cfg.MaxPerSecond]) < time.Second {
+	src := from
+	if h, _, err := net.SplitHostPort(from); err == nil {
+		src = h
+	}
+	mine := r.bySource[src]
+	if full(mine, r.cfg.MaxPerSource, now) || full(r.sent, r.cfg.MaxPerSecond, now) {
 		return false
 	}
-	r.sent = append(r.sent, now)
-	if len(r.sent) > 4*r.cfg.MaxPerSecond {
-		r.sent = append([]time.Time(nil), r.sent[len(r.sent)-r.cfg.MaxPerSecond:]...)
+	if _, ok := r.bySource[src]; !ok && len(r.bySource) >= maxSources {
+		for s, ts := range r.bySource {
+			if now.Sub(ts[len(ts)-1]) >= time.Second {
+				delete(r.bySource, s)
+			}
+		}
+		if len(r.bySource) >= maxSources {
+			return false // more senders in one second than the limit can tell apart
+		}
 	}
+	r.sent = keepLast(append(r.sent, now), r.cfg.MaxPerSecond)
+	r.bySource[src] = keepLast(append(mine, now), r.cfg.MaxPerSource)
 	return true
+}
+
+// full says whether n answers already went out in the second before now.
+func full(sent []time.Time, n int, now time.Time) bool {
+	return len(sent) >= n && now.Sub(sent[len(sent)-n]) < time.Second
+}
+
+// keepLast trims the times to the last n.
+func keepLast(ts []time.Time, n int) []time.Time {
+	if len(ts) > 4*n {
+		return append([]time.Time(nil), ts[len(ts)-n:]...)
+	}
+	return ts
 }

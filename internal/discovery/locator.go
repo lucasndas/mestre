@@ -118,7 +118,33 @@ type Locator struct {
 	found  bool
 	known  bool   // OnState was called at least once
 	asked  string // the address of the last hint, so the next one is another
+	// hint is the target of a higher epoch the last pass took only as a
+	// hint, with the epoch known then; refuted are the hints that did not
+	// prove it (the 4007 that came brought no newer certificate), skipped
+	// until their time.
+	hint    *pendingHint
+	refuted map[string]refutation
 }
+
+type pendingHint struct {
+	addr  string
+	epoch uint64
+}
+
+type refutation struct {
+	until time.Time
+	delay time.Duration
+}
+
+// Backoff of a refuted hint: 30 s, doubling to 30 min.
+const (
+	hintBackoffMin = 30 * time.Second
+	hintBackoffMax = 30 * time.Minute
+)
+
+// ErrRefutedHint: the address was a hint of a higher epoch that did not
+// prove it the last time; it is skipped for a while.
+var ErrRefutedHint = errors.New("discovery: a hint of a higher epoch that did not hold, skipped for now")
 
 // NewLocator checks cfg.
 func NewLocator(cfg LocatorConfig) (*Locator, error) {
@@ -172,8 +198,14 @@ func (l *Locator) Current() (Target, bool) {
 }
 
 // Rediscover is the hook of protocol.Hooks.Rediscover: it looks for the
-// Citadel until it is found or ctx is done.
+// Citadel until it is found or ctx is done. The protocol calls it when the
+// target did not work (three failures, or a 4007); if that target was only a
+// hint of a higher epoch and the epoch known has not grown since (the 4007
+// brought no newer certificate), the hint is refuted: it is skipped for 30 s,
+// doubling to 30 min each time it fails again, so a forged answer cannot
+// keep the machine away from the real Citadel.
 func (l *Locator) Rediscover(ctx context.Context) {
+	l.refuteHint()
 	if _, err := l.Run(ctx); err != nil && ctx.Err() == nil {
 		l.cfg.Logger.Error("discovery: rediscovery ended", "err", err)
 	}
@@ -187,6 +219,13 @@ func (l *Locator) Connected(ctx context.Context) {
 	if !ok {
 		return
 	}
+	l.mu.Lock()
+	if l.hint != nil && l.hint.addr == t.Addr {
+		// the connection opened: the welcome proved the epoch
+		delete(l.refuted, t.Addr)
+		l.hint = nil
+	}
+	l.mu.Unlock()
 	now := l.cfg.Clock.Now()
 	if err := l.cfg.Cache.Success(ctx, t.Addr, t.MachineID, t.Source, now); err != nil {
 		l.cfg.Logger.Error("discovery: updating the cache", "err", err)
@@ -249,16 +288,18 @@ func (l *Locator) Run(ctx context.Context) (Target, error) {
 // ErrNotFound when none does.
 func (l *Locator) Find(ctx context.Context) (Target, error) {
 	tried := map[string]bool{}
+	var hint *pendingHint // set when the target passed only as a hint
 	try := func(c Candidate) (Target, bool) {
 		if tried[c.Addr] {
 			return Target{}, false
 		}
 		tried[c.Addr] = true
-		id, err := l.check(ctx, c)
+		id, h, err := l.check(ctx, c)
 		if err != nil {
 			l.cfg.Logger.Info("discovery: address discarded", "addr", c.Addr, "source", c.Source, "err", err)
 			return Target{}, false
 		}
+		hint = h
 		return Target{Addr: c.Addr, MachineID: id, Source: c.Source}, true
 	}
 	done := func(t Target) (Target, error) {
@@ -266,6 +307,9 @@ func (l *Locator) Find(ctx context.Context) (Target, error) {
 		if err := l.cfg.Cache.Success(ctx, t.Addr, t.MachineID, t.Source, now); err != nil {
 			l.cfg.Logger.Error("discovery: updating the cache", "err", err)
 		}
+		l.mu.Lock()
+		l.hint = hint
+		l.mu.Unlock()
 		l.setFound(t)
 		return t, nil
 	}
@@ -304,6 +348,9 @@ func (l *Locator) Find(ctx context.Context) (Target, error) {
 	}
 	if l.cfg.AskOthers {
 		if t, ok := l.askOther(ctx); ok {
+			l.mu.Lock()
+			l.hint = nil // askOther rotates by itself
+			l.mu.Unlock()
 			l.setFound(t)
 			return t, nil
 		}
@@ -316,20 +363,20 @@ func (l *Locator) Find(ctx context.Context) (Target, error) {
 // of the Guild that answers the TLS check, whoever it is.
 func (l *Locator) askOther(ctx context.Context) (Target, bool) {
 	var addrs []string
-	seen := map[string]bool{}
-	add := func(a string) {
-		if !seen[a] {
-			seen[a] = true
+	source := map[string]Source{} // where each address came from
+	add := func(a string, src Source) {
+		if _, ok := source[a]; !ok {
+			source[a] = src
 			addrs = append(addrs, a)
 		}
 	}
 	for _, a := range l.cfg.Configured {
-		add(withDefaultPort(a))
+		add(withDefaultPort(a), SourceConfigured)
 	}
 	if es, err := l.cfg.Cache.List(ctx); err == nil {
 		SortForTrying(es)
 		for _, e := range es {
-			add(e.Addr)
+			add(e.Addr, SourceCache)
 		}
 	}
 	if len(addrs) == 0 {
@@ -356,7 +403,7 @@ func (l *Locator) askOther(ctx context.Context) (Target, bool) {
 		l.asked = a
 		l.mu.Unlock()
 		l.cfg.Logger.Info("discovery: asking another machine of the Guild for the Citadel", "addr", a, "machine", id)
-		return Target{Addr: a, MachineID: id, Source: SourceConfigured}, true
+		return Target{Addr: a, MachineID: id, Source: source[a]}, true
 	}
 	return Target{}, false
 }
@@ -396,22 +443,73 @@ func (l *Locator) cacheCandidates(ctx context.Context) []Candidate {
 // highest epoch certificate. A hint from a higher epoch than the one known
 // is let through: the welcome of the protocol brings the certificate that
 // proves it, and the protocol refuses the connection if it does not.
-func (l *Locator) check(ctx context.Context, c Candidate) (string, error) {
+//
+// A hint must lead to the machine it named, and one refuted lately is
+// skipped without opening TLS (Rediscover).
+func (l *Locator) check(ctx context.Context, c Candidate) (string, *pendingHint, error) {
+	known := l.cfg.Known()
+	isHint := known.CitadelMachineID != "" && c.Epoch > known.Epoch && c.MachineID != known.CitadelMachineID
+	if isHint {
+		l.mu.Lock()
+		r, ok := l.refuted[c.Addr]
+		l.mu.Unlock()
+		if ok && l.cfg.Clock.Now().Before(r.until) {
+			return "", nil, fmt.Errorf("%w: %s until %s", ErrRefutedHint, c.Addr, r.until.Format(time.RFC3339))
+		}
+	}
 	vctx, cancel := clock.WithTimeout(ctx, l.cfg.Clock, l.cfg.VerifyTimeout)
 	defer cancel()
 	id, err := l.cfg.Verifier.Verify(vctx, c.Addr)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	known := l.cfg.Known()
 	switch {
 	case known.CitadelMachineID == "" || id == known.CitadelMachineID:
-		return id, nil
+		return id, nil, nil
 	case c.Epoch > known.Epoch:
-		return id, nil
+		if c.MachineID != "" && id != c.MachineID {
+			l.refute(c.Addr)
+			return "", nil, fmt.Errorf("%w: %s is %s, not %s as the answer of epoch %d said",
+				ErrNotTheCitadel, c.Addr, id, c.MachineID, c.Epoch)
+		}
+		return id, &pendingHint{addr: c.Addr, epoch: known.Epoch}, nil
 	}
-	return "", fmt.Errorf("%w: %s is %s and the certificate of epoch %d names %s",
+	return "", nil, fmt.Errorf("%w: %s is %s and the certificate of epoch %d names %s",
 		ErrNotTheCitadel, c.Addr, id, known.Epoch, known.CitadelMachineID)
+}
+
+// refuteHint marks the last hint as refuted when the epoch known has not
+// grown since it was taken: the machine there was not the Citadel of a newer
+// epoch. Each refusal in a row doubles the time it is skipped.
+func (l *Locator) refuteHint() {
+	l.mu.Lock()
+	h := l.hint
+	l.hint = nil
+	l.mu.Unlock()
+	if h == nil || l.cfg.Known().Epoch > h.epoch {
+		return
+	}
+	l.refute(h.addr)
+}
+
+// refute skips the hint at addr for a while, twice as long as the last time.
+func (l *Locator) refute(addr string) {
+	now := l.cfg.Clock.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.refuted == nil {
+		l.refuted = map[string]refutation{}
+	}
+	for a, r := range l.refuted {
+		if now.Sub(r.until) > 2*hintBackoffMax {
+			delete(l.refuted, a) // long forgiven
+		}
+	}
+	r := l.refuted[addr]
+	r.delay = min(max(r.delay*2, hintBackoffMin), hintBackoffMax)
+	r.until = now.Add(r.delay)
+	l.refuted[addr] = r
+	l.cfg.Logger.Info("discovery: a hint of a higher epoch did not hold", "addr", addr, "skipped_for", r.delay)
 }
 
 func (l *Locator) setFound(t Target) { l.setState(true, t) }

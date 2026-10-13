@@ -64,7 +64,7 @@ Uma Guilda de uma máquina só é a Cidadela sozinha ([modo máquina única](../
 
 1. O Guardião da condutora confere o PIN e manda `citadel.promote` ao Guardião da máquina escolhida ([mensagens](../conectividade/mensagens.md#guardião-da-torre--cidadela)), que repassa ao motor local.
 2. O motor para de aplicar replicação (a CLI dele responde `citadel_in_failover`), abre a réplica como banco principal, o cofre e a CA, e tenta criar a época N+1 na [trava](trava-no-github.md#promoção-pela-trava); se perde ou não chega à trava, volta a Torre e avisa o Dono.
-3. Vencendo: assina a certidão nova e passa o espelho a principal; o último `lsn` aplicado, lido antes de abrir o cofre (abrir a chave da CA já grava), fica em `epochs.from_lsn` e na auditoria (`citadel.promoted`).
+3. Vencendo: assina a certidão nova e passa o espelho a principal; o último `lsn` aplicado, lido antes de abrir o cofre (abrir a chave da CA já grava), fica em `epochs.from_lsn` e na auditoria (`citadel.promoted`). Com a certidão gravada, emite para si o certificado da Cidadela, o único com `mestre.local`, de 7 dias, e passa a servi-lo na 7443 ([TLS e CA](../arquitetura/seguranca.md#tls-e-ca-interna)).
 4. [Espera 60 s](trava-no-github.md#espera-do-promovido) sem nenhuma ação externa, confere a trava, [reconcilia o GitHub](#github-depois-da-troca) e só então liga GitHub, Telegram (o Guardião sai do modo reduzido), painel e API, `/join` e `mestre.local`.
 5. Retoma personagens e missões (abaixo) e o Grão-Mestre de cada workspace, com a [retomada](../provedores/adaptador.md#retomada-de-sessão) quando possível. As outras Torres reconectam, aceitam a certidão e retomam a replicação.
 
@@ -74,7 +74,7 @@ O Dono pode passar a Cidadela a outra máquina pelo painel, com PIN: a Cidadela 
 
 ### Volta da antiga Cidadela
 
-- Ao subir, a antiga se acha Cidadela da época antiga e fica suspensa. Uma Torre, a descoberta ou a trava mostram a época maior: ela se **rebaixa a Torre antes de qualquer ação externa** e fecha as Torres com `4007`, guarda o banco como `descartado-<época>.db`, recebe cópia completa do banco numa réplica nova e conecta na nova Cidadela. Ela nunca disputa o comando.
+- Ao subir, a antiga se acha Cidadela da época antiga e fica suspensa. Uma Torre, a descoberta ou a trava mostram a época maior: ela se **rebaixa a Torre antes de qualquer ação externa** e fecha as Torres com `4007`, guarda o banco como `descartado-<época>.db`, recebe cópia completa do banco numa réplica nova e conecta na nova Cidadela. Ela nunca disputa o comando. O certificado com `mestre.local` que ela tinha vence em até 7 dias, e a primeira renovação dela como Torre já o troca pelo de máquina.
 - **O que descartou:** quando a réplica conhece a época seguinte (`epochs.from_lsn`), a antiga lista as transações do banco guardado com `lsn` maior, sem as tabelas de controle do protocolo (`outbox`, `processed_commands`), e as manda à nova Cidadela em `guild.discarded`, pela fila de saída; a nova grava cada uma uma vez na auditoria (`citadel.discarded`), e o resumo fica em `descartado-<época>.json` ([perda na troca](replicacao.md#perda-na-troca)).
 - **Personagens:** encerra tudo o que a nova Cidadela já retomou; os terminais dela que não foram retomados são informados à nova, que os adota.
 

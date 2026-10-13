@@ -36,8 +36,8 @@ func (n lazyNames) Machine(ctx context.Context, id string) (guild.Machine, error
 	return (*n.c).Machine(ctx, id)
 }
 
-func (n lazyNames) UpdateNames(ctx context.Context, id, hostname string, ips []net.IP, extra []string) error {
-	return (*n.c).UpdateNames(ctx, id, hostname, ips, extra)
+func (n lazyNames) UpdateNames(ctx context.Context, id, hostname string, ips []net.IP) error {
+	return (*n.c).UpdateNames(ctx, id, hostname, ips)
 }
 
 // takeover is what a promotion already opened for the Citadel it becomes.

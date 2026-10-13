@@ -18,6 +18,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
+// CA-PROTO-11 (the Citadel sees the machine_id of the SAN)
 func TestTowerAndGuardianConnectByMTLS(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
@@ -185,6 +186,28 @@ func TestRevocationRefusesHandshakeAndClosesOpenConnections(t *testing.T) {
 		if _, err := tower.Dial(context.Background(), citadelAddr, transport.RouteTower); err == nil {
 			t.Fatal("a revoked machine reconnected")
 		}
+		// The refusal is in the TLS handshake, before any HTTP: the server
+		// answers the revoked client certificate with an alert.
+		raw, err := g.net.Host("tower1").DialContext(context.Background(), citadelAddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer raw.Close()
+		tc := tls.Client(raw, &tls.Config{
+			MinVersion: tls.VersionTLS13, InsecureSkipVerify: true, NextProtos: []string{"http/1.1"},
+			GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				return g.tower.TLSForTest(), nil
+			},
+		})
+		err = tc.Handshake()
+		if err == nil {
+			// TLS 1.3: the client finishes first; the server's verdict on
+			// its certificate is the next record.
+			_, err = tc.Read(make([]byte, 1))
+		}
+		if err == nil || !strings.Contains(err.Error(), "tls: bad certificate") {
+			t.Fatalf("handshake of a revoked machine = %v, want the TLS alert bad certificate", err)
+		}
 	})
 }
 
@@ -292,6 +315,36 @@ func TestOversizedMessageIsDiscardedAndTheConnectionStays(t *testing.T) {
 		}
 		if _, p, err := sv.Read(ctx); err != nil || len(p) != transport.MaxMessageSize {
 			t.Fatalf("exactly 1 MiB: %d bytes, %v", len(p), err)
+		}
+	})
+}
+
+// A message of exactly 16 MiB is still discarded with the connection up; one
+// byte more closes it with 1009 (docs/conectividade/protocolo.md#envelope).
+func TestAMessageOver16MiBClosesWith1009(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		g := newGuild(t, clock.Real{})
+		srv := g.serve(t)
+		ctx := context.Background()
+		cl, sv := connect(t, g.clientWith(t, transport.ClientConfig{Cert: g.tower, MaxMessageSize: 2 * transport.MaxDiscard}), srv.tower, transport.RouteTower)
+		go func() {
+			_ = cl.Write(ctx, transport.MessageBinary, make([]byte, transport.MaxDiscard))
+			_ = cl.Write(ctx, transport.MessageText, []byte("next"))
+			_ = cl.Write(ctx, transport.MessageBinary, make([]byte, transport.MaxDiscard+1))
+		}()
+		clErr := readLoop(cl)
+		if _, _, err := sv.Read(ctx); !errors.Is(err, transport.ErrTooLarge) {
+			t.Fatalf("Read of 16 MiB = %v, want ErrTooLarge", err)
+		}
+		if _, p, err := sv.Read(ctx); err != nil || string(p) != "next" {
+			t.Fatalf("after 16 MiB the connection must stay: %q, %v", p, err)
+		}
+		if _, _, err := sv.Read(ctx); !errors.Is(err, transport.ErrTooLarge) {
+			t.Fatalf("Read of 16 MiB + 1 = %v, want ErrTooLarge", err)
+		}
+		if err := <-clErr; transport.CloseStatus(err) != transport.StatusMessageTooBig {
+			t.Fatalf("the sender sees %v, want close 1009", err)
 		}
 	})
 }

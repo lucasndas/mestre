@@ -274,10 +274,23 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	if bytes.Equal(req.CSRMotor, req.CSRGuardian) {
 		return "", fmt.Errorf("%w: the engine and the Guardian need keys of their own", ErrBadRequest)
 	}
+	// The CA is a root the browsers trust: no name goes in a certificate
+	// unchecked (docs/arquitetura/seguranca.md#nomes-dos-certificados).
+	host, err := transport.CheckHostname(req.Hostname)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrBadRequest, err)
+	}
+	req.Hostname = host
+	ips := make([]net.IP, 0, len(req.IPs))
 	for _, s := range req.IPs {
-		if net.ParseIP(s) == nil {
+		ip := net.ParseIP(s)
+		if ip == nil {
 			return "", fmt.Errorf("%w: %q is not an IP address", ErrBadRequest, s)
 		}
+		ips = append(ips, ip)
+	}
+	if err := transport.CheckIPs(ips); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrBadRequest, err)
 	}
 	if len(req.Sheet) > 0 && !json.Valid(req.Sheet) {
 		return "", fmt.Errorf("%w: the sheet is not JSON", ErrBadRequest)
@@ -488,7 +501,7 @@ func (c *Citadel) admit(ctx context.Context, tx *sql.Tx, j joinRow, d Decision, 
 	}
 	m := Machine{
 		ID: machineID, Name: name, Instance: j.Req.Instance, Excluded: d.Excluded, State: MachineActive,
-		Hostname: j.Req.Hostname, IPs: ips, ExtraNames: j.Req.ExtraNames, JoinedAt: now.UTC(),
+		Hostname: j.Req.Hostname, IPs: ips, JoinedAt: now.UTC(),
 	}
 	motor, err := c.cfg.CA.IssueMachine(j.Req.CSRMotor, m.Names())
 	if err != nil {
@@ -504,7 +517,7 @@ func (c *Citadel) admit(ctx context.Context, tx *sql.Tx, j joinRow, d Decision, 
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, sheet, joined_at) VALUES (?, ?, ?, 0, ?, 'active', ?, ?, ?)`,
-		m.ID, m.Name, m.Instance, boolInt(m.Excluded), encodeNames(m.Hostname, m.IPs, m.ExtraNames), sheet, now.UnixMilli()); err != nil {
+		m.ID, m.Name, m.Instance, boolInt(m.Excluded), encodeNames(m.Hostname, m.IPs), sheet, now.UnixMilli()); err != nil {
 		return Machine{}, fmt.Errorf("guild: register the machine: %w", err)
 	}
 	for _, cred := range []struct {

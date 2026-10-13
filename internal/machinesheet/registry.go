@@ -14,6 +14,7 @@ import (
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/transport"
 )
 
 // Presence says whether a machine is connected to the Citadel now.
@@ -35,7 +36,7 @@ func (p serverPresence) Connected(id string) bool { return p.srv.Link(id).Connec
 // certificates follow them. *guild.Citadel is one.
 type NameBook interface {
 	Machine(ctx context.Context, id string) (guild.Machine, error)
-	UpdateNames(ctx context.Context, machineID, hostname string, ips []net.IP, extra []string) error
+	UpdateNames(ctx context.Context, machineID, hostname string, ips []net.IP) error
 }
 
 // RegistryConfig configures the Citadel side.
@@ -173,7 +174,10 @@ func (r *Registry) apply(ctx context.Context, machineID string, payload protocol
 }
 
 // followNames tells the registry the host name and the addresses the sheet
-// reports, so the certificate follows them.
+// reports, so the certificate follows them: the first label of the host name
+// and only the addresses a certificate may carry (transport.HostLabel and
+// CertificateIPs; a global IPv6 address of the machine is left out). The
+// registry checks them again.
 func (r *Registry) followNames(ctx context.Context, machineID string, s Sheet) {
 	if r.cfg.Names == nil || s.Host == "" {
 		return
@@ -189,10 +193,11 @@ func (r *Registry) followNames(ctx context.Context, machineID string, s Sheet) {
 			ips = append(ips, ip)
 		}
 	}
-	if m.Hostname == s.Host && sameIPs(m.IPs, ips) {
+	host, ips := transport.HostLabel(s.Host), transport.CertificateIPs(ips)
+	if m.Hostname == host && sameIPs(m.IPs, ips) {
 		return
 	}
-	if err := r.cfg.Names.UpdateNames(ctx, machineID, s.Host, ips, m.ExtraNames); err != nil {
+	if err := r.cfg.Names.UpdateNames(ctx, machineID, host, ips); err != nil {
 		r.cfg.Logger.Warn("machinesheet: update the names of a machine", "machine", machineID, "err", err)
 	}
 }

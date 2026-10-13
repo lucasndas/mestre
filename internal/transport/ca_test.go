@@ -41,8 +41,7 @@ func TestGuildCAAndCertificates(t *testing.T) {
 	}
 	names := transport.Names{
 		MachineID: "01JTOWER", Hostname: "Desktop-Ana",
-		IPs:   []net.IP{net.ParseIP("192.168.1.20"), net.ParseIP("fd00::20")},
-		Extra: []string{"mestre.casa.lan"},
+		IPs: []net.IP{net.ParseIP("192.168.1.20"), net.ParseIP("fd00::20")},
 	}
 
 	t.Run("the CA is ECDSA P-256 for 10 years and signs only leaves", func(t *testing.T) {
@@ -66,7 +65,7 @@ func TestGuildCAAndCertificates(t *testing.T) {
 		if got := cert.URIs; len(got) != 1 || got[0].String() != "mestre://machine/01JTOWER" {
 			t.Fatalf("URIs = %v", got)
 		}
-		want := []string{"desktop-ana", "desktop-ana.local", "mestre.casa.lan", "mestre.local"}
+		want := []string{"desktop-ana.local"} // never mestre.local: only the Citadel's has it
 		if !slices.Equal(cert.DNSNames, want) {
 			t.Fatalf("DNSNames = %v, want %v", cert.DNSNames, want)
 		}
@@ -86,16 +85,47 @@ func TestGuildCAAndCertificates(t *testing.T) {
 		}
 	})
 
-	t.Run("the excluded machine has no mestre.local", func(t *testing.T) {
+	t.Run("only the certificate of the Citadel has mestre.local, for 7 days", func(t *testing.T) {
 		t.Parallel()
-		n := names
-		n.Excluded = true
-		cert, _ := issueCert(t, ca, transport.KindMachine, n)
-		if slices.Contains(cert.DNSNames, transport.PanelName) {
-			t.Fatalf("excluded machine got %v", cert.DNSNames)
+		key, _ := transport.GenerateKey()
+		csr, _ := transport.NewCSR(key)
+		cert, err := ca.IssueCitadel(csr, names, []string{"Painel.Casa.Home.Arpa"})
+		if err != nil {
+			t.Fatal(err)
 		}
+		if want := []string{"desktop-ana.local", "mestre.local", "painel.casa.home.arpa"}; !slices.Equal(cert.DNSNames, want) {
+			t.Fatalf("DNSNames = %v, want %v", cert.DNSNames, want)
+		}
+		if id, _ := transport.IdentityOf(cert); id != (transport.Identity{Kind: transport.KindMachine, MachineID: "01JTOWER"}) {
+			t.Fatalf("identity = %v", id)
+		}
+		if want := day0.Add(7 * 24 * time.Hour); !cert.NotAfter.Equal(want) {
+			t.Fatalf("NotAfter = %v, want 7 days: %v", cert.NotAfter, want)
+		}
+		if err := verify(t, ca, cert, day0, x509.ExtKeyUsageServerAuth); err != nil {
+			t.Fatal(err)
+		}
+		if transport.NeedsRenewal(cert, cert.NotAfter.Add(-49*time.Hour)) || !transport.NeedsRenewal(cert, cert.NotAfter.Add(-48*time.Hour)) {
+			t.Fatal("the certificate of the Citadel renews 2 days before its end")
+		}
+		if transport.CitadelNamesChanged(cert, names, []string{"painel.casa.home.arpa"}) || !transport.CitadelNamesChanged(cert, names, nil) {
+			t.Fatal("CitadelNamesChanged must follow the extra names")
+		}
+		// A machine that stops being the Citadel renews at once into a
+		// certificate without the name of the panel.
 		if !transport.NamesChanged(cert, names) {
-			t.Fatal("undoing the exclusion must reissue the certificate (mestre.local comes back)")
+			t.Fatal("the certificate of the Citadel is not a machine certificate")
+		}
+		csr2, _ := transport.NewCSR(mustKey(t))
+		back, err := ca.Reissue(cert, csr2, names)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if slices.Contains(back.DNSNames, transport.PanelName) || !back.NotAfter.Equal(day0.AddDate(1, 0, 0)) {
+			t.Fatalf("reissued as a machine: %v until %v", back.DNSNames, back.NotAfter)
+		}
+		if _, err := ca.IssueCitadel(csr, names, []string{"*.home.arpa"}); err == nil {
+			t.Fatal("a wildcard extra name was signed")
 		}
 	})
 
@@ -105,7 +135,7 @@ func TestGuildCAAndCertificates(t *testing.T) {
 		if cert.URIs[0].String() != "mestre://guardian/01JTOWER" {
 			t.Fatalf("URI = %v", cert.URIs[0])
 		}
-		if want := []string{"desktop-ana", "desktop-ana.local"}; !slices.Equal(cert.DNSNames, want) {
+		if want := []string{"desktop-ana.local"}; !slices.Equal(cert.DNSNames, want) {
 			t.Fatalf("DNSNames = %v, want %v", cert.DNSNames, want)
 		}
 		if err := verify(t, ca, cert, day0, x509.ExtKeyUsageClientAuth); err != nil {
@@ -135,6 +165,13 @@ func TestGuildCAAndCertificates(t *testing.T) {
 		}
 		if renewed.SerialNumber.Cmp(cert.SerialNumber) == 0 || !renewed.PublicKey.(*ecdsa.PublicKey).Equal(&key.PublicKey) {
 			t.Fatal("renewal must have a new serial and the new key")
+		}
+		before, _ := transport.IdentityOf(cert)
+		if after, err := transport.IdentityOf(renewed); err != nil || after != before {
+			t.Fatalf("renewal changed the identity from %v to %v (%v)", before, after, err)
+		}
+		if _, err := ca.Reissue(renewed, csr, n); !errors.Is(err, transport.ErrSameKey) {
+			t.Fatalf("renewal with the key already in use = %v, want ErrSameKey", err)
 		}
 		if !renewed.IPAddresses[0].Equal(net.ParseIP("192.168.1.99")) {
 			t.Fatalf("renewed IPs = %v", renewed.IPAddresses)

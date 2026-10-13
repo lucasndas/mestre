@@ -83,7 +83,7 @@ func TestWhenTheIPsOfAMachineChangeItsCertificateFollowsAtOnce(t *testing.T) {
 		// the machine sheet brings the new address to the Citadel; the machine
 		// sees its own address change
 		ip := net.ParseIP("192.168.7.7")
-		if err := r.citadel.UpdateNames(t.Context(), j.MachineID, "tower1", []net.IP{ip}, nil); err != nil {
+		if err := r.citadel.UpdateNames(t.Context(), j.MachineID, "tower1", []net.IP{ip}); err != nil {
 			t.Fatal(err)
 		}
 		tw.names.Store(&transport.Names{MachineID: j.MachineID, Hostname: "tower1", IPs: []net.IP{ip}})

@@ -1,6 +1,6 @@
 # Segurança
 
-> **Assunto:** modelo de ameaças, TLS e CA da Guilda, certificados com `mestre.local`, credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, git do motor, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** modelo de ameaças, TLS e CA da Guilda, nomes dos certificados (`mestre.local` só na Cidadela), credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, git do motor, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## O que proteger
 
@@ -40,12 +40,22 @@ Todo tráfego é TLS 1.3, inclusive na rede local ([ADR 0002](../decisoes/0002-w
 
 | Certificado | Emitido por | Chave | Validade | Nomes (SAN) |
 |---|---|---|---|---|
-| CA da Guilda | a si mesma, na criação da Guilda | ECDSA P-256, dentro do cofre | 10 anos | — |
-| Motor de cada máquina (cliente mTLS e servidor da 7443) | CA, na [entrada](../guilda/guilda.md#credenciais) | ECDSA P-256, só na máquina | 1 ano | `mestre://machine/<machine_id>`, nome da máquina, nome `.local`, IPs da rede local, nomes extras configurados e `mestre.local` (menos na [máquina excluída](../guilda/guilda.md#máquina-excluída), que nunca é Cidadela) |
-| Guardião de cada máquina (cliente mTLS, servidor da 7444 e da página reserva 7446) | CA, na entrada | ECDSA P-256, na pasta do Guardião | 1 ano | `mestre://guardian/<machine_id>`, nome da máquina, nome `.local`, IPs da rede local |
+| CA da Guilda | a si mesma, na criação da Guilda | ECDSA P-256, dentro do cofre | 10 anos | — (com *Name Constraints*, abaixo) |
+| Motor de cada máquina (cliente mTLS e servidor da 7443) | CA, na [entrada](../guilda/guilda.md#credenciais) | ECDSA P-256, só na máquina | 1 ano | `mestre://machine/<machine_id>`, `<host>.local`, IPs da rede local; **nunca `mestre.local`** |
+| Motor da **Cidadela em exercício** (servidor da 7443 e do painel) | a própria Cidadela, que tem a CA, ao assumir o comando | ECDSA P-256, a do motor | **7 dias** | os do motor, mais `mestre.local` e os nomes extras da Guilda |
+| Guardião de cada máquina (cliente mTLS, servidor da 7444 e da página reserva 7446) | CA, na entrada | ECDSA P-256, na pasta do Guardião | 1 ano | `mestre://guardian/<machine_id>`, `<host>.local`, IPs da rede local |
 
-- **`mestre.local` em todo certificado de motor** (menos o da excluída): qualquer máquina pode virar Cidadela e servir o painel nesse nome sem certificado novo. Por isso os retornos dos GitHub Apps (`redirect_url`, `setup_url`) usam `https://mestre.local:<porta>/…`, nunca um IP ([criação de Apps](../github/criacao-de-apps.md)), e o redirecionamento `307` das Torres preserva caminho e query ([painel redirecionado](../guilda/cidadela-e-torres.md#painel-redirecionado)).
-- Renovação automática **30 dias antes de vencer**, pela conexão já autenticada com a Cidadela atual ([credenciais](../guilda/guilda.md#credenciais)); o [checklist](../plataforma/checklist.md) alerta se um certificado chegar a menos de 30 dias sem ter sido renovado. Certificados com IPs são reemitidos quando os IPs da máquina mudam.
+- **`mestre.local` só no certificado da Cidadela em exercício, por 7 dias:** o navegador confia na CA, mas não vê a lista de revogados da Guilda; um nome de painel num certificado de 1 ano deixaria uma máquina excluída, removida ou que deixou de ser Cidadela servir um painel falso em que o navegador confia. A Cidadela emite o próprio ao assumir (na criação da Guilda, ao subir e na [promoção](../guilda/cidadela-e-torres.md#promoção)) e de novo 2 dias antes de vencer; a antiga, ao virar Torre, troca-o pelo de máquina no primeiro `cert.renew`, e no pior caso o nome vale 7 dias depois de ela perder o comando. Os retornos dos GitHub Apps (`redirect_url`, `setup_url`) usam `https://mestre.local:<porta>/…`, nunca um IP ([criação de Apps](../github/criacao-de-apps.md)), e o `307` das Torres preserva caminho e query ([painel redirecionado](../guilda/cidadela-e-torres.md#painel-redirecionado)).
+- Renovação automática **30 dias antes de vencer** (o da Cidadela, 2 dias), pela conexão já autenticada com a Cidadela atual ([credenciais](../guilda/guilda.md#credenciais)), sempre com chave nova; o [checklist](../plataforma/checklist.md) alerta se um certificado passar do prazo sem renovar. Certificados são reemitidos quando o nome ou os IPs da máquina mudam.
+
+### Nomes dos certificados
+
+A CA é uma raiz em que o navegador confia, então nenhum nome entra num certificado sem conferência, na entrada, na mudança de nomes pela ficha e na renovação; o que não passa é recusado com o motivo (`ErrBadName`):
+
+- **Nome da máquina:** um rótulo RFC 1123 (letras, dígitos e `-`, até 63, sem `-` nas pontas), sem ponto, nunca `mestre`; vira `<host>.local`. A máquina manda só o primeiro rótulo do nome do computador; um nome que não passa (`mestre`, `desk_top`) fica fora, e o certificado leva só os IPs.
+- **IPs:** só privados (RFC 1918 e IPv6 ULA `fc00::/7`), loopback e link-local, no máximo 16; a máquina deixa de fora os outros (um IPv6 global, por exemplo).
+- **Nomes extras** do painel (para abrir de fora da rede local, [descoberta](../conectividade/descoberta.md#máquina-fora-da-rede-local)): só o Dono, com PIN, para a Guilda (`guild.extra_names`), nunca uma máquina; até 8, sob `home.arpa` (RFC 8375) ou `.internal`, sem curinga; nunca `.local`, que é dos nomes das máquinas e do painel. Vão só no certificado da Cidadela.
+- **Name Constraints:** a CA criada a partir de 2026-10-13 traz a extensão crítica que só permite `local`, `home.arpa` e `internal` e as faixas de IP acima. Go e os navegadores atuais (Chrome e Edge, Firefox, Safari) a aplicam também a uma raiz instalada à mão: mesmo com a chave da CA vazada, um certificado para outro site falha. Um verificador que não conhece a extensão recusa a CA (crítica). Por isso um nome extra fora desses domínios exigiria uma CA nova, fora do MVP.
 - A Cidadela exige certificado de cliente nas rotas das Torres e dos Guardiões; o painel usa login. No handshake da 7443 o certificado de cliente é opcional (`/ca.crt`, `/join` e o painel não o têm), mas um certificado apresentado precisa ter cadeia até a CA, o SAN `mestre://` e não estar revogado, senão o handshake é recusado; as rotas mTLS recusam o pedido sem certificado (`401`) ou de outro tipo (`403`) antes do upgrade. A validade dos certificados é conferida pelo relógio injetável. O Guardião da Cidadela aceita os certificados de motor e de Guardião das máquinas da Guilda.
 - **Quem é a Cidadela:** uma Torre só aceita como Cidadela a máquina nomeada na certidão de época mais alta que viu, assinada pela CA ([certidão de época](../guilda/replicacao.md#certidão-de-época)); um certificado válido de outra máquina da Guilda não basta.
 - Revogação: a Cidadela confere a credencial em `machine_credentials` a cada conexão (no handshake e de novo antes de aceitar a rota); revogar fecha as conexões abertas daquela máquina com `4002`. A lista de revogados vai às Torres na réplica, para valer também depois de uma troca de Cidadela.

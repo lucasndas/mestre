@@ -28,6 +28,9 @@ var (
 	// ErrExpiredCredential: the certificate is expired; the machine needs a
 	// new entry (docs/guilda/guilda.md#credenciais).
 	ErrExpiredCredential = errors.New("guild: the certificate expired; the machine needs a new entry")
+	// ErrRenewRefused: the renewal came with the key already in use, or the
+	// names in the registry are not allowed in a certificate.
+	ErrRenewRefused = errors.New("guild: renewal refused")
 )
 
 // Machines lists the registry, oldest entry first.
@@ -100,8 +103,8 @@ func (c *Citadel) activeNotCitadel(ctx context.Context, id string) (Machine, err
 // SetExcluded excludes a machine from the secrets, or undoes it (the Owner,
 // with the PIN, in the panel or by /guilda). The Citadel cannot be excluded.
 // The registry changes and the hook fires; sending vault.drop (or the vault
-// again) and guild.config belongs to the replication, and the machine then
-// renews its certificates, which lose mestre.local while it is excluded.
+// again) and guild.config belongs to the replication. The certificates do
+// not change: only the acting Citadel's carries mestre.local.
 func (c *Citadel) SetExcluded(ctx context.Context, machineID string, excluded bool) error {
 	m, err := c.activeNotCitadel(ctx, machineID)
 	if err != nil {
@@ -137,12 +140,23 @@ func (c *Citadel) Promotable(ctx context.Context, machineID string) error {
 	return nil
 }
 
-// UpdateNames records the names a machine reports (its host name, its IPs
-// and its extra names), from the machine sheet. The certificates follow when
-// the machine next renews; Renewer asks at once when they change.
-func (c *Citadel) UpdateNames(ctx context.Context, machineID, hostname string, ips []net.IP, extra []string) error {
+// UpdateNames records the names a machine reports (its host name and its
+// IPs), from the machine sheet. They are checked first, as for an entry: one
+// label that is not "mestre", private, loopback or link-local addresses, at
+// most transport.MaxIPs; an error wraps transport.ErrBadName. The extra names
+// are the Owner's, for the Guild (SetExtraNames), never a machine's. The
+// certificates follow when the machine next renews; Renewer asks at once
+// when they change.
+func (c *Citadel) UpdateNames(ctx context.Context, machineID, hostname string, ips []net.IP) error {
+	host, err := transport.CheckHostname(hostname)
+	if err == nil {
+		err = transport.CheckIPs(ips)
+	}
+	if err != nil {
+		return fmt.Errorf("guild: the names of %s: %w", machineID, err)
+	}
 	res, err := c.db.Writer().ExecContext(ctx, `UPDATE machines SET names = ? WHERE machine_id = ? AND state = 'active'`,
-		encodeNames(hostname, ips, extra), machineID)
+		encodeNames(host, ips), machineID)
 	if err != nil {
 		return fmt.Errorf("guild: update the names of a machine: %w", err)
 	}
@@ -285,8 +299,11 @@ func (c *Citadel) Renew(ctx context.Context, machineID string, kind transport.Ki
 	cert, err := c.cfg.CA.Reissue(old, csrDER, m.Names())
 	if err != nil {
 		var invalid x509.CertificateInvalidError
-		if errors.As(err, &invalid) && invalid.Reason == x509.Expired {
+		switch {
+		case errors.As(err, &invalid) && invalid.Reason == x509.Expired:
 			return nil, fmt.Errorf("%w: %v", ErrExpiredCredential, err)
+		case errors.Is(err, transport.ErrBadName), errors.Is(err, transport.ErrSameKey):
+			return nil, fmt.Errorf("%w: %v", ErrRenewRefused, err)
 		}
 		return nil, fmt.Errorf("guild: renew: %w", err)
 	}
@@ -325,7 +342,7 @@ func (c *Citadel) HandleCertRenew(ctx context.Context, m *protocol.Message) (*pr
 	}
 	cert, err := c.Renew(ctx, m.Peer.ID, kind, block.Bytes)
 	switch {
-	case errors.Is(err, ErrNotActive), errors.Is(err, ErrExpiredCredential), errors.Is(err, errNoMachine):
+	case errors.Is(err, ErrNotActive), errors.Is(err, ErrExpiredCredential), errors.Is(err, errNoMachine), errors.Is(err, ErrRenewRefused):
 		return nil, protocol.NewError(protocol.CodeForbidden, "%v", err)
 	case err != nil:
 		return nil, err

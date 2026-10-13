@@ -114,7 +114,7 @@ func (n *names) Machine(context.Context, string) (guild.Machine, error) {
 	return n.machine, nil
 }
 
-func (n *names) UpdateNames(_ context.Context, id, host string, ips []net.IP, _ []string) error {
+func (n *names) UpdateNames(_ context.Context, id, host string, ips []net.IP) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.updates = append(n.updates, fmt.Sprintf("%s %s %v", id, host, ips))

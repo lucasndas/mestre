@@ -48,10 +48,12 @@ type JoinRequest struct {
 	OS       string `json:"os,omitempty"`
 	Hostname string `json:"hostname"`
 	Instance string `json:"instance,omitempty"`
-	// IPs are the addresses of the machine on the local network.
+	// Hostname is one label and IPs are private, loopback or link-local
+	// addresses, at most transport.MaxIPs: the Citadel refuses any other
+	// (docs/arquitetura/seguranca.md#nomes-dos-certificados). The extra names
+	// of the panel are the Owner's, for the Guild; a machine never asks for
+	// a name.
 	IPs []string `json:"ips,omitempty"`
-	// ExtraNames are configured extra names for the engine certificate.
-	ExtraNames []string `json:"extra_names,omitempty"`
 	// Sheet is the machine sheet (docs/guilda/ficha-da-maquina.md).
 	Sheet json.RawMessage `json:"sheet,omitempty"`
 	// CSRMotor and CSRGuardian are the DER certificate requests of the

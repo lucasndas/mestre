@@ -50,7 +50,25 @@ type ServerConfig struct {
 	// MaxMessageSize defaults to MaxMessageSize.
 	MaxMessageSize int64
 	Keepalive      Keepalive
+	// MaxConns bounds the open TCP connections (DefaultMaxConns); a new one
+	// waits in the backlog until another closes.
+	MaxConns int
+	// AcceptWait bounds how long an upgraded connection waits for Accept
+	// (DefaultAcceptWait); then it is closed with 1013, try again later.
+	AcceptWait time.Duration
 }
+
+// Limits of the HTTP server of port 7443 (docs/conectividade/protocolo.md#endpoints-e-portas).
+const (
+	DefaultMaxConns   = 256
+	DefaultAcceptWait = 10 * time.Second
+	// readHeaderTimeout also bounds the TLS handshake.
+	readHeaderTimeout = 10 * time.Second
+	idleTimeout       = 2 * time.Minute
+	maxHeaderBytes    = 32 << 10
+	// StatusTryAgainLater closes an upgrade nobody accepted in time.
+	StatusTryAgainLater StatusCode = 1013
+)
 
 // Server is the TLS server of the engine's port: the mTLS WebSocket routes,
 // /ca.crt and /healthz, and any plain route added with Handle.
@@ -79,6 +97,12 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
+	if cfg.MaxConns <= 0 {
+		cfg.MaxConns = DefaultMaxConns
+	}
+	if cfg.AcceptWait <= 0 {
+		cfg.AcceptWait = DefaultAcceptWait
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{
 		cfg:    cfg,
@@ -100,7 +124,9 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	})
 	s.hs = &http.Server{
 		Handler:           s.mux,
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
 		ErrorLog:          slog.NewLogLogger(cfg.Logger.Handler(), slog.LevelInfo), // refused handshakes
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
@@ -122,9 +148,10 @@ func (s *Server) Route(path string, kinds ...Kind) Listener {
 	return l
 }
 
-// Serve accepts connections on ln (plain TCP; TLS is done here) until Close.
+// Serve accepts connections on ln (plain TCP; TLS is done here) until Close,
+// at most MaxConns at a time.
 func (s *Server) Serve(ln net.Listener) error {
-	err := s.hs.Serve(tls.NewListener(ln, s.tls))
+	err := s.hs.Serve(tls.NewListener(newLimitListener(ln, s.cfg.MaxConns), s.tls))
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
@@ -159,13 +186,62 @@ func (s *Server) upgrade(w http.ResponseWriter, r *http.Request, kinds []Kind, l
 		_ = c.Close(StatusGoingAway, "server closing")
 		return
 	}
+	wait := s.cfg.Clock.NewTimer(s.cfg.AcceptWait)
+	defer wait.Stop()
 	select {
 	case l.ch <- c:
 	case <-l.closed:
 		_ = c.Close(StatusGoingAway, "route closed")
+	case <-wait.C():
+		s.cfg.Logger.Warn("transport: nobody accepted the connection", "route", r.URL.Path, "remote", r.RemoteAddr)
+		_ = c.Close(StatusTryAgainLater, "busy, try again later")
 	case <-s.ctx.Done():
 	case <-c.Done():
 	}
+}
+
+// limitListener holds at most n connections open: Accept waits for a free
+// place before it takes the next one from the backlog.
+type limitListener struct {
+	net.Listener
+	sem    chan struct{}
+	once   sync.Once
+	closed chan struct{}
+}
+
+func newLimitListener(ln net.Listener, n int) net.Listener {
+	return &limitListener{Listener: ln, sem: make(chan struct{}, n), closed: make(chan struct{})}
+}
+
+func (l *limitListener) Close() error {
+	l.once.Do(func() { close(l.closed) })
+	return l.Listener.Close()
+}
+
+func (l *limitListener) Accept() (net.Conn, error) {
+	select {
+	case l.sem <- struct{}{}:
+	case <-l.closed:
+		return nil, net.ErrClosed
+	}
+	c, err := l.Listener.Accept()
+	if err != nil {
+		<-l.sem
+		return nil, err
+	}
+	return &limitConn{Conn: c, release: func() { <-l.sem }}, nil
+}
+
+type limitConn struct {
+	net.Conn
+	once    sync.Once
+	release func()
+}
+
+func (c *limitConn) Close() error {
+	err := c.Conn.Close()
+	c.once.Do(c.release)
+	return err
 }
 
 func (s *Server) track(c *wsConn) bool {

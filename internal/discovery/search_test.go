@@ -171,28 +171,46 @@ func TestARequestOfAnotherVersionOrTooBigIsIgnoredAndUnknownFieldsAreNot(t *test
 	})
 }
 
-func TestAMachineAnswersAtMostTenRequestsPerSecond(t *testing.T) {
+// At most 10 answers per second in all and 3 to one address: one noisy
+// sender does not use the budget of the others.
+func TestAMachineAnswersAtMostTenRequestsPerSecondAndThreePerSource(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		n := bubbleNet()
 		r := startResponder(t, n, "citadel", citadelInfo(guildID, "citadel", 7443))
-		sock, err := n.Host("tower").ListenPacket(0, false)
-		if err != nil {
-			t.Fatal(err)
+		open := func(host string) *fakenet.PacketConn {
+			t.Helper()
+			sock, err := n.Host(host).ListenPacket(0, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = sock.Close() })
+			return sock
 		}
-		defer sock.Close()
 		req, _ := discovery.Request{Nonce: otherNonce, GuildID: guildID}.Encode()
 		before := n.Datagrams()
+		flood := open("tower")
 		for range 25 {
-			_ = sock.WriteTo(req, "192.168.1.10:7445")
+			_ = flood.WriteTo(req, "192.168.1.10:7445")
 		}
 		synctest.Wait()
-		if got := n.Datagrams() - before - 25; got != 10 || r.Dropped() != 15 {
-			t.Fatalf("%d answers, %d dropped; want 10 and 15", got, r.Dropped())
+		if got := n.Datagrams() - before - 25; got != 3 || r.Dropped() != 22 {
+			t.Fatalf("one sender: %d answers, %d dropped; want 3 and 22", got, r.Dropped())
+		}
+		// Ten other senders: the budget left in this second is 7.
+		before = n.Datagrams()
+		for i := range 10 {
+			host := fmt.Sprintf("other%d", i)
+			n.SetIP(host, fmt.Sprintf("192.168.1.%d", 100+i))
+			_ = open(host).WriteTo(req, "192.168.1.10:7445")
+		}
+		synctest.Wait()
+		if got := n.Datagrams() - before - 10; got != 7 || r.Dropped() != 25 {
+			t.Fatalf("other senders: %d answers, %d dropped; want 7 and 25 in all", got, r.Dropped())
 		}
 		_ = clock.Sleep(t.Context(), clock.Real{}, time.Second)
 		before = n.Datagrams()
-		_ = sock.WriteTo(req, "192.168.1.10:7445")
+		_ = flood.WriteTo(req, "192.168.1.10:7445")
 		synctest.Wait()
 		if got := n.Datagrams() - before - 1; got != 1 {
 			t.Fatalf("%d answers one second later, want 1", got)
@@ -324,6 +342,35 @@ func TestCandidatesAreOrderedByEpochThenByWhoAnsweredForItself(t *testing.T) {
 		if strings.HasPrefix(c.Addr, "192.168.1.200") {
 			t.Fatalf("the address of a Tower is a candidate: %+v", c)
 		}
+	}
+}
+
+// What an answer points to is only an IP literal that can be dialed (a name
+// would send the machine to a DNS lookup of the sender's choice), and a pass
+// checks at most MaxCandidates addresses.
+func TestCandidatesAreIPLiteralsAndBounded(t *testing.T) {
+	t.Parallel()
+	var many []string
+	for i := range 40 {
+		many = append(many, fmt.Sprintf("192.168.2.%d", i+1))
+	}
+	seen := []discovery.Seen{
+		{Source: discovery.SourceBroadcast, Addrs: []string{"192.168.1.9"}, Port: 7443, MachineID: "c", Role: discovery.RoleCitadel, Epoch: 1,
+			Citadel: &discovery.CitadelRef{MachineID: "c", Addrs: []string{"evil.example.com", "0.0.0.0", "fe80::1", "192.168.1.8"}, Port: 7443}},
+		{Source: discovery.SourceBroadcast, Addrs: []string{"192.168.1.200"}, Port: 7443, MachineID: "t", Role: discovery.RoleTower, Epoch: 1,
+			Citadel: &discovery.CitadelRef{MachineID: "c", Addrs: []string{"mestre.local"}, Port: 7443}},
+	}
+	var got []string
+	for _, c := range discovery.CandidatesFrom(seen, discovery.Known{}) {
+		got = append(got, c.Addr)
+	}
+	if want := "192.168.1.9:7443 192.168.1.8:7443"; strings.Join(got, " ") != want {
+		t.Fatalf("candidates = %v, want %s", got, want)
+	}
+	flood := []discovery.Seen{{Source: discovery.SourceBroadcast, Addrs: []string{"192.168.1.200"}, Port: 7443, MachineID: "t",
+		Role: discovery.RoleTower, Epoch: 9, Citadel: &discovery.CitadelRef{MachineID: "c", Addrs: many, Port: 7443}}}
+	if n := len(discovery.CandidatesFrom(flood, discovery.Known{})); n != discovery.MaxCandidates {
+		t.Fatalf("%d candidates, want at most %d", n, discovery.MaxCandidates)
 	}
 }
 

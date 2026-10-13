@@ -41,8 +41,8 @@ func TestExcludingAMachineFiresTheHookDropsThePanelNameAndBarsThePromotionUntilI
 	ctx := t.Context()
 	n := r.newNode("tower1")
 	j := r.enroll(n)
-	if !hasPanelName(j.Motor) {
-		t.Fatal("a machine that is not excluded lacks mestre.local")
+	if hasPanelName(j.Motor) {
+		t.Fatal("the certificate of a Tower carries mestre.local, which only the acting Citadel's has")
 	}
 	if err := r.citadel.Promotable(ctx, j.MachineID); err != nil {
 		t.Fatalf("a Tower is not promotable: %v", err)
@@ -95,8 +95,8 @@ func TestExcludingAMachineFiresTheHookDropsThePanelNameAndBarsThePromotionUntilI
 	if err := r.citadel.Promotable(ctx, j.MachineID); err != nil {
 		t.Errorf("Promotable after undoing = %v", err)
 	}
-	if !hasPanelName(renewMotor(t, r, j.MachineID)) {
-		t.Error("after undoing the exclusion the certificate lacks mestre.local")
+	if hasPanelName(renewMotor(t, r, j.MachineID)) {
+		t.Error("after undoing the exclusion the certificate of a Tower carries mestre.local")
 	}
 
 	// the Citadel cannot be excluded, and a machine that is not in the Guild

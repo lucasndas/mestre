@@ -28,8 +28,10 @@ type RenewerConfig struct {
 	// Source holds the certificate in use; the new one is put in it, so new
 	// handshakes use it and open connections stay up.
 	Source *transport.CertSource
-	// Names says which names the machine has now (the IPs it has on the
-	// network, whether it is excluded); a change renews at once.
+	// Names says which names the machine has now (its host name and the IPs
+	// it has on the network); a change renews at once, and so does a
+	// certificate of the Citadel (with mestre.local) on a machine that is a
+	// Tower again.
 	Names func() transport.Names
 	// Link is the connection to the Citadel.
 	Link Caller
