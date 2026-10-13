@@ -51,6 +51,7 @@ type Link struct {
 
 	mu      sync.Mutex
 	sess    *Session
+	order   uint64        // last order given by admit
 	up      chan struct{} // closed while there is a connection
 	vol     []Envelope    // messages of volatile types, in memory only
 	waiters map[string]chan AckResult
@@ -182,12 +183,31 @@ func (l *Link) SendData(ctx context.Context, f DataFrame) error {
 	return s.lanes.pushData(ctx, Frame{Kind: FrameBinary, Data: b})
 }
 
+// errSuperseded is returned by attach to a connection that a newer one of the
+// same machine already took the place of.
+var errSuperseded = errors.New("protocol: replaced by a newer connection")
+
+// admit gives the next order of the link to a connection that was just
+// accepted, before its welcome goes out: the newest connection is the one
+// accepted last, whatever the order in which they attach.
+func (l *Link) admit() uint64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.order++
+	return l.order
+}
+
 // attach makes s the current connection and puts on it, in order, everything
 // that still waits for an ack. A connection that was current is closed with
-// 4004.
+// 4004. If the current one is newer than s (s was accepted first but got here
+// later), s is the one that is not taken: attach returns errSuperseded and
+// the link stays as it was.
 func (l *Link) attach(ctx context.Context, s *Session) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.sess != nil && l.sess.order > s.order {
+		return errSuperseded
+	}
 	pending, err := l.cfg.Outbox.Pending(ctx, l.key)
 	if err != nil {
 		return fmt.Errorf("outbox: %w", err)

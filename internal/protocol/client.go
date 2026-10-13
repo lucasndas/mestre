@@ -259,7 +259,7 @@ func (c *Client) open(ctx context.Context, conn Conn) (*Session, error) {
 		}
 	}
 	caps := cfg.Capabilities.Intersect(w.Capabilities)
-	return newSession(cfg, c.link, conn, SideTower, w.Protocol, caps), nil
+	return newSession(cfg, c.link, conn, c.link.admit(), SideTower, w.Protocol, caps), nil
 }
 
 // notCitadel handles the answer of a machine that is not the Citadel: its

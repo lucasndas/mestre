@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // CA-DUBLES-08
@@ -234,10 +235,6 @@ func TestANewConnectionOfTheSameMachineReplacesTheOldOne(t *testing.T) {
 		first := rawTower(t, w)
 		defer first.Close(1000, "")
 		openRaw(t, w, first, protocol.DefaultRange())
-		// The welcome leaves before the Citadel attaches the connection to
-		// the link. Without waiting, the second connection could attach
-		// first and the older one would replace the newer.
-		settle()
 		second := rawTower(t, w)
 		defer second.Close(1000, "")
 		openRaw(t, w, second, protocol.DefaultRange())
@@ -255,6 +252,67 @@ func TestANewConnectionOfTheSameMachineReplacesTheOldOne(t *testing.T) {
 		}
 		if !w.toTower().Connected() {
 			t.Fatal("the new connection is not the current one")
+		}
+	})
+}
+
+// The welcome of the older connection went out, but it only attaches to the
+// link after the newer one did: the newer one stays and the older is the one
+// closed with 4004.
+func TestAnOlderConnectionThatAttachesAfterANewerOneDoesNotReplaceIt(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := newWorld(t, opts{})
+		var connects atomic.Int32
+		release := make(chan struct{})
+		w.cfgC.Hooks.OnConnect = func(*protocol.Session) {
+			if connects.Add(1) == 1 {
+				<-release // the first connection is held just before it attaches
+			}
+		}
+		w.startServer()
+		defer w.stop()
+		settle()
+		first := rawTower(t, w)
+		defer first.Close(1000, "")
+		openRaw(t, w, first, protocol.DefaultRange())
+		second := rawTower(t, w)
+		defer second.Close(1000, "")
+		openRaw(t, w, second, protocol.DefaultRange())
+		settle()
+		if !w.toTower().Connected() {
+			t.Fatal("the newer connection did not attach")
+		}
+		// Something that waits for an ack goes out on the connection that is
+		// current; the held one must neither take it nor lose it.
+		id, err := w.toTower().Send(t.Context(), input("echo\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		close(release)
+		settle()
+
+		// A bounded wait (in the time of the bubble), so the failure is a
+		// failure and not a hang.
+		ctx, cancel := clock.WithTimeout(t.Context(), w.clk, time.Minute)
+		defer cancel()
+		var ce *protocol.CloseError
+		for {
+			_, _, err := first.Read(ctx)
+			if err == nil {
+				continue
+			}
+			if !errors.As(err, &ce) || ce.Code != protocol.CloseReplaced {
+				t.Fatalf("older connection ended with %v, want 4004", err)
+			}
+			break
+		}
+		if !w.toTower().Connected() {
+			t.Fatal("the older connection took the place of the newer one")
+		}
+		got := recvRaw(t, second)
+		if got.ID != id || got.Type != protocol.TypeTerminalInput {
+			t.Fatalf("the newer connection received %s %s, want the message %s", got.Type, got.ID, id)
 		}
 	})
 }

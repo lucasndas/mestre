@@ -199,9 +199,13 @@ func (srv *Server) open(ctx context.Context, conn Conn) (*Session, error) {
 		_ = conn.Close(1011, "internal")
 		return nil, fmt.Errorf("%w: %v", ErrOpening, err)
 	}
+	// The order among the connections of the machine is fixed here, before
+	// the welcome: from then on the Tower considers itself connected.
+	link := srv.Link(peer.ID)
+	order := link.admit()
 	if _, err := cfg.sendNow(hctx, conn, gen, cfg.Profile.WelcomeType, raw, env.ID); err != nil {
 		_ = conn.Close(1011, "internal")
 		return nil, fmt.Errorf("%w: sending the welcome: %v", ErrOpening, err)
 	}
-	return newSession(cfg, srv.Link(peer.ID), conn, SideCitadel, version, caps), nil
+	return newSession(cfg, link, conn, order, SideCitadel, version, caps), nil
 }
