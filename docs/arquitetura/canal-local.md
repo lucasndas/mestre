@@ -98,7 +98,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 - **CA-LOCAL-01** · *rápida* — **Dado** respostas com `ok: true` sem `exit`, com `exit: 9` e com `ok: false` e `error.code` de cada família, **quando** a CLI as recebe, **então** sai com 0, 9 e o código da família, respectivamente.
 - **CA-LOCAL-02** · *rápida* — **Dado** um `ask` que recebe três parciais e depois a resposta, **quando** a CLI termina, **então** stdout tem só a resposta final e o código é 0.
 - **CA-LOCAL-03** · *rápida* — **Dado** um `ask --timeout 1m` sem resposta, **quando** o relógio falso passa de 1 min e 5 s, **então** a CLI sai com 6 e o pedido continua pendente no motor.
-- **CA-LOCAL-04** · *rápida* — **Dado** um `ask` em andamento cuja conexão fecha (CLI morta), **quando** o alvo responde, **então** a resposta vai para a caixa de entrada de quem perguntou.
+- **CA-LOCAL-04** · *rápida* — **Dado** um `ask` em andamento cuja conexão fecha (CLI morta), **quando** o alvo responde, **então** a resposta vai para a caixa de entrada de quem perguntou (no M1 o destino é um dublê; a caixa real chega no M4, [ordem](../desenvolvimento/ordem-de-implementacao.md#critérios-em-marcos-posteriores)).
 - **CA-LOCAL-05** · *rápida* — **Dado** o mesmo pedido enviado duas vezes com o mesmo `id`, **quando** o motor recebe o segundo, **então** devolve a resposta do primeiro sem executar de novo.
 - **CA-LOCAL-06** · *rápida* — **Dado** um pedido com `v: 99`, **quando** chega ao motor, **então** a resposta é `protocol_mismatch` e a CLI sai com 5.
 - **CA-LOCAL-07** · *completa* — **Dado** motor e CLI reais, **quando** um agente falso chama `mestre list` pelo socket (ou pipe), **então** recebe a lista e o motor registrou o pedido com o `agent_id` verificado.

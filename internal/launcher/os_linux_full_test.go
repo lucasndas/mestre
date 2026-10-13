@@ -87,6 +87,24 @@ func TestResolveCgroupBase(t *testing.T) {
 	}
 }
 
+// TestDropAmbient (fast suite) skips in a binary that uses cgo, where the Go
+// runtime cannot change a capability for all threads, and the test binary of
+// this package does: it needs os/user and net, which link the C resolver. The
+// release is built with CGO_ENABLED=0, so the test runs once more here in a
+// binary built that way, and must pass, not skip.
+func TestDropAmbientRunsWithoutCgo(t *testing.T) {
+	t.Parallel()
+	cmd := exec.CommandContext(t.Context(), "go", "test", "-count=1", "-v", "-run", "^TestDropAmbient$", ".")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go test with CGO_ENABLED=0: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "--- PASS: TestDropAmbient ") || strings.Contains(string(out), "--- SKIP") {
+		t.Fatalf("TestDropAmbient did not pass without cgo:\n%s", out)
+	}
+}
+
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	cg, err := terminal.ProcCgroup(os.Getpid())
