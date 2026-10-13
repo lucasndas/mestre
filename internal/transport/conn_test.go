@@ -235,10 +235,11 @@ func TestKeepaliveDropsAHalfOpenConnection(t *testing.T) {
 		g := newGuild(t, clock.Real{})
 		srv := g.serve(t)
 		cl, sv := connect(t, g.client(t, g.tower), srv.tower, transport.RouteTower)
+		t0 := clock.Real{}.Now() // the bubble's fake time; pings at t0 + 15 s·k
 		clErr, svErr := readLoop(cl), readLoop(sv)
 
 		// Answered pings keep an idle connection up.
-		if err := clock.Sleep(context.Background(), clock.Real{}, 10*time.Minute); err != nil {
+		if err := clock.Sleep(context.Background(), clock.Real{}, 10*time.Minute+5*time.Second); err != nil {
 			t.Fatal(err)
 		}
 		select {
@@ -247,7 +248,7 @@ func TestKeepaliveDropsAHalfOpenConnection(t *testing.T) {
 		default:
 		}
 
-		start := clock.Real{}.Now() // the bubble's fake time
+		lastPong := t0.Add(10 * time.Minute) // the ping of minute 10 was answered
 		g.net.HalfOpen("tower1", "citadel")
 		for name, ch := range map[string]<-chan error{"Tower": clErr, "Citadel": svErr} {
 			err := <-ch
@@ -255,8 +256,8 @@ func TestKeepaliveDropsAHalfOpenConnection(t *testing.T) {
 				t.Fatalf("%s read = %v, want ErrNoPong", name, err)
 			}
 		}
-		if d := clock.Since(clock.Real{}, start); d < 45*time.Second || d > 60*time.Second {
-			t.Fatalf("dead after %v, want between 45 s and 60 s (ping every 15 s, 45 s without pong)", d)
+		if d := clock.Since(clock.Real{}, lastPong); d < 45*time.Second || d > 60*time.Second {
+			t.Fatalf("dead %v after the last pong, want between 45 s and 60 s (ping every 15 s)", d)
 		}
 	})
 }

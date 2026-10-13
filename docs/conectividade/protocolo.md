@@ -69,7 +69,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 
 ### Heartbeat e reconexão
 
-- **Ping:** ping do WebSocket a cada 15 s, pelos dois lados. Sem pong em 45 s, a conexão é dada como morta e fechada sem o aperto de fechamento.
+- **Ping:** ping do WebSocket a cada 15 s, pelos dois lados. Sem pong em 45 s (contados do último pong, mesmo que o ping não tenha saído por uma escrita longa), a conexão é dada como morta e fechada sem o aperto de fechamento.
 - **Heartbeat:** `machine.heartbeat` a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
 - **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%. Depois de 3 falhas seguidas, a Torre refaz a [descoberta](descoberta.md).
 - **Uma conexão por `machine_id`:** uma conexão nova substitui a antiga.
@@ -135,7 +135,7 @@ Descoberta, entrada na Guilda, ficha da máquina e replicação usam este protoc
 - **CA-PROTO-11** · *rápida* — **Dado** a Cidadela na rede falsa, **quando** chegam a `/ws/tower` um motor com certificado de outra CA, um vencido (relógio falso), um Guardião, um cliente só com TLS 1.2, e a `/ws/guardian` um motor, **então** nenhum chega à rota; **dado** o motor válido, **então** a Cidadela vê o `machine_id` do SAN, e a Torre recusa um servidor de outra CA.
 - **CA-PROTO-12** · *rápida* — **Dado** o motor e o Guardião de uma Torre conectados, **quando** a credencial da máquina é revogada, **então** as duas conexões caem com `4002`, as de outras máquinas continuam e uma nova conexão dela é recusada no handshake.
 - **CA-PROTO-13** · *rápida* — **Dado** um cliente sem certificado, **quando** pede `/ca.crt`, **então** recebe a CA em DER, com o SHA-256 igual à impressão digital dela; `/healthz` responde `200` e `/ws/tower` responde `401`.
-- **CA-PROTO-14** · *rápida* — **Dado** uma conexão parada por 10 min com os pongs chegando, **então** ela continua; **dado** a rede falsa meio aberta, **quando** passam de 45 s a 60 s (tempo falso), **então** os dois lados dão a conexão como morta.
+- **CA-PROTO-14** · *rápida* — **Dado** uma conexão parada por 10 min com os pongs chegando, **então** ela continua; **dado** a rede falsa meio aberta, **quando** passam de 45 s a 60 s sem pong (tempo falso), **então** os dois lados dão a conexão como morta.
 - **CA-PROTO-15** · *rápida* — **Dado** a CA criada (relógio falso), **quando** ela emite o certificado do motor de uma máquina, **então** a CA é ECDSA P-256 por 10 anos, o certificado tem os SANs da [tabela](../arquitetura/seguranca.md#tls-e-ca-interna), `mestre.local` só fora da máquina excluída, 1 ano de validade, e pede renovação a 30 dias do fim; a renovação mantém a identidade, troca a chave e segue os IPs novos.
 - **CA-PROTO-16** · *rápida* — **Dado** a CA guardada no cofre, **quando** a Cidadela a carrega, **então** a chave é o segredo `ca_key`, a leitura vai à auditoria com a finalidade, e os certificados emitidos são da mesma CA; a chave não abre a CA de outra Guilda.
 - **CA-PROTO-17** · *rápida* — **Dado** uma mensagem de 1 MiB + 1 byte, **quando** chega, **então** é descartada com `too_large` e a conexão segue com a mensagem seguinte; uma de 1 MiB passa.

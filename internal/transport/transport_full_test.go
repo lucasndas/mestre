@@ -55,12 +55,24 @@ func TestRealSocketsCarryTheMTLSRoutes(t *testing.T) {
 	if sv.Peer().MachineID != "tower1" || cl.Peer().MachineID != "citadel" {
 		t.Fatalf("peers: %+v / %+v", sv.Peer(), cl.Peer())
 	}
+	// The other side always reads while one writes (a socket buffer is
+	// small on Windows): a message bigger than it needs a reader.
 	data := bytes.Repeat([]byte{0x01, 0xfe}, 300<<10)
+	type msg struct {
+		typ transport.MessageType
+		p   []byte
+		err error
+	}
+	got := make(chan msg, 1)
+	go func() {
+		typ, p, err := sv.Read(ctx)
+		got <- msg{typ, p, err}
+	}()
 	if err := cl.Write(ctx, transport.MessageBinary, data); err != nil {
 		t.Fatal(err)
 	}
-	if typ, p, err := sv.Read(ctx); err != nil || typ != transport.MessageBinary || !bytes.Equal(p, data) {
-		t.Fatalf("binary over TCP: %v, %d bytes, %v", typ, len(p), err)
+	if m := <-got; m.err != nil || m.typ != transport.MessageBinary || !bytes.Equal(m.p, data) {
+		t.Fatalf("binary over TCP: %v, %d bytes, %v", m.typ, len(m.p), m.err)
 	}
 	if err := sv.Write(ctx, transport.MessageText, []byte(`{"type":"welcome"}`)); err != nil {
 		t.Fatal(err)

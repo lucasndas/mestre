@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"sync"
 	"time"
 
@@ -129,7 +130,8 @@ type wsConn struct {
 	cancel context.CancelFunc
 
 	mu    sync.Mutex
-	cause error // set when the keepalive gave the connection up
+	pong  time.Time // last pong, or the start
+	cause error     // set when the keepalive gave the connection up
 }
 
 var _ Conn = (*wsConn)(nil)
@@ -142,7 +144,7 @@ func newWSConn(ws *websocket.Conn, peer Peer, max int64, ka Keepalive, clk clock
 	// discarded instead of closing the connection.
 	ws.SetReadLimit(-1)
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &wsConn{ws: ws, peer: peer, max: max, ctx: ctx, cancel: cancel}
+	c := &wsConn{ws: ws, peer: peer, max: max, ctx: ctx, cancel: cancel, pong: clk.Now()}
 	go c.keepalive(ka.withDefaults(), clk)
 	return c
 }
@@ -214,8 +216,10 @@ func (c *wsConn) fatal(err error) error {
 	return fmt.Errorf("transport: %w", err)
 }
 
-// keepalive pings every Interval; a ping without pong within Timeout drops
-// the connection with ErrNoPong as the cause.
+// keepalive pings every Interval and drops the connection, with ErrNoPong
+// as the cause, at the first tick that finds no pong for Timeout. Counting
+// from the last pong, and not per ping, also covers a ping that cannot even
+// be written because a long write holds the connection.
 func (c *wsConn) keepalive(ka Keepalive, clk clock.Clock) {
 	t := clk.NewTicker(ka.Interval)
 	defer t.Stop()
@@ -224,9 +228,23 @@ func (c *wsConn) keepalive(ka Keepalive, clk clock.Clock) {
 		case <-c.ctx.Done():
 			return
 		case <-t.C():
+			if clock.Since(clk, c.lastPong()) >= ka.Timeout {
+				c.mu.Lock()
+				c.cause = ErrNoPong
+				c.mu.Unlock()
+				_ = c.ws.CloseNow()
+				c.finish()
+				return
+			}
 			go c.ping(ka.Timeout, clk)
 		}
 	}
+}
+
+func (c *wsConn) lastPong() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pong
 }
 
 func (c *wsConn) ping(timeout time.Duration, clk clock.Clock) {
@@ -235,14 +253,12 @@ func (c *wsConn) ping(timeout time.Duration, clk clock.Clock) {
 	err := c.ws.Ping(ctx)
 	switch {
 	case err == nil:
-	case errors.Is(err, context.DeadlineExceeded):
 		c.mu.Lock()
-		c.cause = ErrNoPong
+		c.pong = clk.Now()
 		c.mu.Unlock()
-		_ = c.ws.CloseNow()
-		c.finish()
-	default:
-		// Closed under us (or by us): the readers see why.
+	case errors.Is(err, net.ErrClosed):
 		c.finish()
 	}
+	// Any other failure (no pong yet, write lock busy) is judged by the
+	// next tick, from the last pong.
 }
