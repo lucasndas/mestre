@@ -108,6 +108,8 @@ Enquanto o motor está fora, o agente continua, a saída vai para o buffer, nada
 - **CA-TERM-10** · *completa* — **Dado** um terminal criado por um `mestre-pty` da versão anterior, **quando** o motor de versão nova sobe, **então** reconecta, lê a tela, digita e encerra esse terminal, e um terminal novo nasce com a versão nova.
 - **CA-TERM-11** · *completa* — **Dado** um terminal real, **quando** um processo sem o segredo conecta ao socket, ou um motor falso com o segredo errado faz o aperto de mão, **então** os dois são recusados e registrados e nada chega ao agente; no Linux, `/proc/<pid>/environ` e `ptrace` do `mestre-pty` são negados a outro processo da mesma conta.
 
+- **CA-TERM-12** · *completa* — **Dado** a DACL padrão que o launcher dá ao token de um terminal, **quando** é montada, **então** tem SYSTEM e a SID de logon do terminal com controle total, o motor só com consulta limitada e `SYNCHRONIZE`, `OWNER RIGHTS` sem direito e nenhuma entrada para o usuário `mestre-agente`; e o Job Object do `mestre-pty` só tem SYSTEM e a SID de logon dele (Windows). Que um processo de um terminal não abra os de outro, com dois logons reais da conta de agentes, fica na suíte pesada ([ordem](../desenvolvimento/ordem-de-implementacao.md#critérios-em-marcos-posteriores)).
+
 ## Depende de
 
 - [Dublês](../qualidade/dubles.md) (PTY falso, relógio injetável)

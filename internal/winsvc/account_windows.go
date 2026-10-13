@@ -84,7 +84,9 @@ type AgentAccount struct {
 	Password func() (string, error)
 	// Engine is the SID of the engine's account (NT SERVICE\Mestre): it
 	// gets query and wait rights over every process of the terminal, through
-	// the default DACL of the token, so the engine can tell who calls it.
+	// the default DACL of the token, so the engine can tell who calls it. The
+	// account itself gets nothing in that DACL, only the logon session of the
+	// terminal does (see terminalDACL).
 	Engine *windows.SID
 }
 
@@ -95,8 +97,8 @@ var _ Account = (*AgentAccount)(nil)
 const engineProcessMask = windows.PROCESS_QUERY_LIMITED_INFORMATION | windows.SYNCHRONIZE
 
 // Logon does the batch logon (one logon session per terminal), loads the
-// profile, builds the environment block, adds the engine to the default DACL
-// of the token and gives the logon SID access to the window station and the
+// profile, builds the environment block, sets the default DACL of the token
+// (terminalDACL) and gives the logon SID access to the window station and the
 // desktop of the service, which the process needs to start.
 func (a *AgentAccount) Logon(id string) (*Session, error) {
 	pw, err := a.Password()
@@ -188,10 +190,10 @@ func (a *AgentAccount) prepare(t windows.Token, id string) (*Session, error) {
 	if a.Engine == nil {
 		return fail(errors.New("no engine account configured"))
 	}
-	if err = addToDefaultDACL(t, a.Engine, engineProcessMask); err != nil {
+	if logon, err = logonSID(t); err != nil {
 		return fail(err)
 	}
-	if logon, err = logonSID(t); err != nil {
+	if err = setDefaultDACL(t, logon, a.Engine); err != nil {
 		return fail(err)
 	}
 	if err = setObjectACE(winsta, logon, winstaAllAccess, true); err != nil {
