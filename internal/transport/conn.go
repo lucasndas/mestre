@@ -68,8 +68,8 @@ func CloseStatus(err error) StatusCode {
 const (
 	// MaxMessageSize bounds every message, text or binary.
 	MaxMessageSize = 1 << 20
-	// maxDiscard bounds what Read discards of a message over the limit
-	// before it closes the connection with StatusMessageTooBig.
+	// maxDiscard bounds a message over the limit that Read discards: one
+	// longer than 16 MiB closes the connection with StatusMessageTooBig.
 	maxDiscard = 16 << 20
 )
 
@@ -165,13 +165,14 @@ func (c *wsConn) Read(ctx context.Context) (MessageType, []byte, error) {
 	if int64(len(buf)) <= c.max {
 		return MessageType(typ), buf, nil
 	}
-	n, err := io.Copy(io.Discard, io.LimitReader(r, maxDiscard))
+	// Discard up to maxDiscard in all; one byte more closes with 1009.
+	n, err := io.Copy(io.Discard, io.LimitReader(r, maxDiscard-int64(len(buf))+1))
 	if err != nil {
 		return 0, nil, c.fatal(err)
 	}
-	if n == maxDiscard {
+	if total := int64(len(buf)) + n; total > maxDiscard {
 		_ = c.ws.Close(websocket.StatusMessageTooBig, "message too large")
-		return 0, nil, c.fatal(fmt.Errorf("%w: over %d bytes", ErrTooLarge, int64(len(buf))+n))
+		return 0, nil, c.fatal(fmt.Errorf("%w: over %d bytes", ErrTooLarge, int64(maxDiscard)))
 	}
 	return 0, nil, fmt.Errorf("%w: %d bytes, limit %d", ErrTooLarge, int64(len(buf))+n, c.max)
 }
