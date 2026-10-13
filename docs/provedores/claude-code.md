@@ -1,6 +1,6 @@
 # Claude Code
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -48,8 +48,9 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 ### Confiança de pasta
 
 - No modo interativo, sem confiança na pasta, **nenhum hook de arquivo de configuração e nenhuma statusLine rodam**, nem os do usuário.
-- A chave é a raiz do repositório git; num worktree, a raiz do checkout principal. A pasta pessoal (home) nunca fica confiada.
-- **Pré-confiar:** gravar `projects["<caminho absoluto>"].hasTrustDialogAccepted = true` no `.claude.json` do perfil de conta. O motor grava para o caminho do worktree e para a raiz que o Claude resolver, com escrita atômica (o Claude reescreve esse arquivo e guarda cópias em `backups/`). Quando acontece: [mesa](../sessao-zero/mesa.md).
+- A confiança fica em `$CLAUDE_CONFIG_DIR/.claude.json` (confirmado no spike do Linux). A pasta pessoal (home) nunca fica confiada.
+- **Pré-confiar:** gravar `projects["<caminho absoluto do worktree>"].hasTrustDialogAccepted = true` nesse arquivo, com escrita atômica (o Claude reescreve esse arquivo e guarda cópias em `backups/`). **Só a chave do worktree basta** (confirmado). Quando acontece: [mesa](../sessao-zero/mesa.md).
+- **A chave do espelho nunca é gravada:** respondendo "confiar" na tela, o Claude grava a chave do **espelho `--bare`** de onde o worktree saiu, o que confia **todos** os worktrees daquele espelho. Por isso o motor nunca grava essa chave e, ao pré-confiar, remove `hasTrustDialogAccepted` dela se a encontrar.
 
 ### Flags
 
@@ -67,6 +68,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - `CLAUDE_CONFIG_DIR=<pasta do perfil>` no ambiente do processo: configuração, histórico e login próprios (`.credentials.json` dentro dela). O perfil de conta é definido em [bases e fichas](../orquestracao/bases-e-fichas.md).
 - O processo roda como `mestre-agente` nos dois sistemas; no Windows, `USERPROFILE` e `APPDATA` são os do perfil carregado dessa conta e só `CLAUDE_CONFIG_DIR` aponta para o perfil de conta ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)). Exceção: o Operador do PC roda com a conta do usuário e com `--chrome`, opção aceita só na base dele ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 - Verificar login: `claude auth status` (JSON com `configDirectory` e `authMethod`), usado pelo [checklist](../plataforma/checklist.md).
+- **Linux, como `mestre-agente`** (spike, [segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)): a credencial fica em `$CLAUDE_CONFIG_DIR/.credentials.json`, modo `0600`, sem chaveiro nem D-Bus. `DISABLE_AUTOUPDATER=1` é obrigatório no ambiente ([atualização dos CLIs](atualizacao-dos-clis.md)). Escritas fora do perfil: `/tmp/claude-<uid>/…`, `/tmp/cc-socks-<uid>/` e `/tmp/claude-{plugin,skill}-<pid>-*.zip` (às vezes sobram); limpeza em [personagem](../sessao-zero/personagem.md#variáveis-de-ambiente).
 
 ### Uso, custo e rate limit
 
@@ -84,7 +86,7 @@ Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](ad
 
 | Tela | Ação |
 |---|---|
-| confiar na pasta | evitar (pré-confiança); se aparecer num worktree do Mestre, responder "confiar" |
+| confiar na pasta | evitar (pré-confiança); **nunca responder "confiar"** (gravaria a chave do espelho). Se aparecer: sair sem confiar, regravar a chave do worktree, remover a do espelho e reiniciar o personagem uma vez; se aparecer de novo, escalar (`blocked`, motivo `input`, alerta ALL-12) |
 | aprovação de import externo | escalar |
 | aprovação de servidores do `.mcp.json` | escalar |
 | "usar esta `ANTHROPIC_API_KEY`?" | escalar (uma vez por perfil) |
@@ -105,7 +107,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 - **CA-CLAUDE-01** · *rápida* — **Dado** um `settings.local.json` com hooks do usuário, **quando** `HookFiles` roda duas vezes, **então** o arquivo tem os hooks do usuário intactos, a parte gerenciada uma vez só, matcher `*` e `onFailure: block` só em PreToolUse e PermissionRequest.
 - **CA-CLAUDE-02** · *rápida* — **Dado** qualquer base e ficha válidas, **quando** `BuildLaunch` monta o comando, **então** ele contém `--append-system-prompt-file`, `--settings` e `CLAUDE_CONFIG_DIR`, e nenhuma flag proibida.
-- **CA-CLAUDE-03** · *rápida* — **Dado** um `.claude.json` com outras chaves, **quando** `PreTrust` roda duas vezes, **então** o worktree fica com `hasTrustDialogAccepted = true` e o resto do arquivo não muda.
+- **CA-CLAUDE-03** · *rápida* — **Dado** um `.claude.json` com outras chaves e a chave do espelho com `hasTrustDialogAccepted = true`, **quando** `PreTrust` roda duas vezes, **então** o worktree fica com `hasTrustDialogAccepted = true`, a chave do espelho perde esse campo e o resto do arquivo não muda.
 - **CA-CLAUDE-04** · *rápida* — **Dado** um JSON de statusLine gravado com `rate_limits`, **quando** `ReadUsage` lê, **então** o registro de uso tem custo, % de contexto e as duas janelas com `used_pct` e `resets_at`.
 - **CA-CLAUDE-05** · *completa* — **Dado** o agente falso do Claude mostrando o menu de limite de uso, **quando** o adaptador reconhece a tela, **então** responde a opção de esperar e o personagem fica `blocked` com motivo `quota`.
 
@@ -118,7 +120,6 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 Todos são conferidos pelo [teste de conformidade](conformidade.md).
 
-- **Verificar na implementação:** com `CLAUDE_CONFIG_DIR`, o arquivo de confiança é `$CLAUDE_CONFIG_DIR/.claude.json`, e qual chave o Claude usa para um worktree saído do espelho `--bare`. **Padrão:** esse arquivo, com as duas chaves descritas em Confiança de pasta. **Se falhar:** o motor grava também em `.claude.json` na pasta pessoal do processo e usa a chave que o log de debug (`--debug`) mostrar, registrada por versão do CLI. **Onde:** etapa 1 (sem tela de confiança).
 - **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição.
 - **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 no nó Windows.
 - **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`). **Onde:** etapa 7.

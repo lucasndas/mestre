@@ -1,6 +1,6 @@
 # Instalação e versões
 
-> **Assunto:** visão técnica da instalação no Ubuntu e no Windows, como Core ou como nó, pastas de versões, versão anterior guardada, volta de versão, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** visão técnica da instalação no Ubuntu e no Windows, como Core ou como nó, pastas de versões, versão anterior guardada, volta de versão, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -32,6 +32,12 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 - Os serviços apontam sempre para `atual`. Trocar de versão é trocar `atual` e `anterior` e reiniciar o serviço; o binário em execução nunca é sobrescrito.
 - Ficam no disco só a versão atual e a anterior; a mais velha é apagada depois que a nova é confirmada.
 - Dados, configuração e logs ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos), fora das pastas de versões.
+
+### CLIs dos provedores
+
+- **Linux:** `claude`, `codex` e `agy` ficam numa pasta do root, `/opt/mestre-clis/`, que o `mestre-agente` executa e não grava. Assim a autoatualização própria de cada CLI falha sem estrago, e só o Mestre troca de versão ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
+- `claude` e `agy`: o binário em `/opt/mestre-clis/bin/`. **Codex:** o pacote completo da versão (`bin/`, `codex-path/`, `codex-resources/`, `codex-package.json`) em `/opt/mestre-clis/codex-<versão>/`, com o link `/opt/mestre-clis/bin/codex` → `codex-<versão>/bin/codex`; o binário solto não funciona ([Codex](../provedores/codex.md#contas-múltiplas)). Trocar a versão do Codex é trocar o link.
+- Resultado do spike do M1 no Linux ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)); na máquina de desenvolvimento, os comandos estão em [ambiente](../desenvolvimento/ambiente.md#conta-mestre-agente-nesta-máquina-linux).
 
 ### Core no Linux (`mestre install core`)
 

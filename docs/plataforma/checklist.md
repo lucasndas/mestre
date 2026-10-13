@@ -1,6 +1,6 @@
 # Checklist de ambiente
 
-> **Assunto:** verificação de pré-requisitos de cada máquina: itens, quando roda, gravidade, alertas e correções · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** verificação de pré-requisitos de cada máquina: itens, quando roda, gravidade, alertas e correções · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -72,7 +72,7 @@ Papel: **os dois** (Core e nó), **Core**, **nó** ou **com Operador do PC** (m�
 | LIN-07 | Core | chave do cofre ainda em arquivo num servidor com `systemd-creds` e TPM2 disponíveis ([cofre](cofre.md#chave-do-cofre)) | aviso | mover a chave para `systemd-creds` (aprovação) |
 | LIN-08 | os dois | conta `mestre-agente` existe e os terminais rodam com ela, nunca com `mestre` ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) | grave | recriar a conta (aprovação) |
 | LIN-09 | nó; Core no modo máquina única | firewall libera a porta da página reserva só para a rede local | aviso | criar regra (aprovação) |
-| LIN-10 | os dois | cada provedor usado pelas bases do nó (`claude`, `codex`, `agy`) roda como `mestre-agente`, com a pasta do perfil de conta: `--version` e a verificação de login do ALL-11 feitas com essa conta | grave | manual (o alerta explica o passo) |
+| LIN-10 | os dois | cada provedor usado pelas bases do nó (`claude`, `codex`, `agy`) roda como `mestre-agente`, com a pasta do perfil de conta: `--version` e a verificação de login do ALL-11 feitas com essa conta (`claude auth status`, `codex login status`, `agy -p "/usage" --output-format json`); o Codex instalado como pacote completo ([instalação](instalacao-e-atualizacao.md#clis-dos-provedores)) | grave | manual (o alerta explica o passo) |
 | LIN-11 | os dois | cgroup v2 unificado, kernel 5.14 ou maior e cgroup delegado ao `mestre-node` (`Delegate=yes`, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)): o motor cria e remove um cgroup de teste sob o seu; falhou → os terminais novos nascem sem cgroup e a identificação volta à subida pela árvore, que recusa órfãos ([segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli)) | grave | reconfigurar a unidade (aprovação); kernel ou cgroup v1: manual |
 | LIN-12 | os dois | `kernel.yama.ptrace_scope` 1 ou maior (um personagem não depura processos de outro terminal) | grave | gravar o `sysctl` (aprovação) |
 | LIN-13 | os dois | `/proc` legível pela conta `mestre`: sem `hidepid`, ou com `mestre` no grupo `gid=` da montagem | grave | manual |

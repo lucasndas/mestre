@@ -1,6 +1,6 @@
 # Sessão zero da mesa
 
-> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Node · **Atualizado:** 2026-10-12
+> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Node · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -64,7 +64,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 
 | Provedor | Onde | O quê |
 |---|---|---|
-| Claude Code | `.claude.json` do `CLAUDE_CONFIG_DIR` do perfil | `projects["<raiz>"].hasTrustDialogAccepted = true` |
+| Claude Code | `.claude.json` do `CLAUDE_CONFIG_DIR` do perfil | `projects["<worktree>"].hasTrustDialogAccepted = true` (nunca a chave do espelho) |
 | Codex | `config.toml` do `CODEX_HOME` do perfil | `[projects."<raiz git>"] trust_level = "trusted"`; hooks: confiar uma vez (ver [codex](../provedores/codex.md)) |
 | Antigravity | `settings.json` em `.gemini/antigravity-cli/` do `HOME` do perfil | caminho do worktree em `trustedWorkspaces` |
 

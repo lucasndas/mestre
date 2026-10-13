@@ -1,6 +1,6 @@
 # Codex
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Codex (OpenAI) · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Codex (OpenAI) · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -43,14 +43,16 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 
 ### Confiança do projeto
 
-- **Pré-confiar:** gravar no `config.toml` do `CODEX_HOME` do perfil `[projects."<caminho>"] trust_level = "trusted"`. A busca usa a pasta atual, a raiz do projeto e a raiz git (num worktree, a do checkout principal), nessa ordem; o motor grava a do worktree, que é a pasta atual do personagem e vem primeiro, e também a raiz resolvida.
+- **Pré-confiar:** gravar no `config.toml` do `CODEX_HOME` do perfil `[projects."<caminho>"] trust_level = "trusted"`. A busca usa a pasta atual, a raiz do projeto e a raiz git (num worktree, a do checkout principal), nessa ordem; o motor grava a do worktree, que é a pasta atual do personagem e vem primeiro, e **só** ela: nunca a raiz git resolvida, que num worktree saído do espelho é o espelho e confiaria todos os worktrees dele (o mesmo problema do [Claude Code](claude-code.md)).
 - Projeto sem confiança pula as camadas `.codex/` (configuração, hooks e regras). Sem `trust_level`, o modo interativo abre a tela de confiança.
 - O Codex reescreve o `config.toml`: editar preservando o resto do TOML e sem gravações simultâneas de dois personagens do mesmo perfil.
+- **Confirmado no spike do Linux** ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)): com o `trust_level` gravado, a tela de confiança não aparece; ao responder a tela, o Codex grava a chave do próprio worktree.
 
 ### Flags
 
 | Usadas pela base | Para quê |
 |---|---|
+| `--no-daemon` | **obrigatória**: sem processo de fundo compartilhado (abaixo) |
 | `-c developer_instructions="…"` | camada do Mestre |
 | `-s workspace-write` (ou `-s read-only` se a classe não escreve) | sandbox nativo |
 | `-a on-request` | pedidos de escalonamento passam pelo PermissionRequest |
@@ -58,16 +60,22 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 | `-m <modelo>` | modelo preferido da classe, se houver |
 | `--search` | só se a classe libera internet sem lista de domínios (a busca hospedada não passa por hook) |
 
+### Processo de fundo e `--no-daemon`
+
+Sem `--no-daemon`, o TUI sobe `codex app-server --managed-daemon`, **um por perfil**, compartilhado por todos os terminais daquele `CODEX_HOME` (spike do Linux, [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli)). Ele vira filho do init, ignora SIGTERM, fica no cgroup do terminal que o iniciou, copia ~430 MB para `$CODEX_HOME/packages/app-server-daemon/` e tem atualizador próprio; os comandos da ferramenta de shell viram filhos dele. Resultado: a identificação do chamador quebra, as variáveis `MESTRE_*` do personagem não chegam aos comandos e o cgroup por terminal aponta o terminal errado. Com `--no-daemon`, tudo descende do TUI, a variável chega e não há daemon nem cópia. Por isso a flag é obrigatória na base.
+
 ### Canal local dentro do sandbox
 
 No Codex 0.162.1, com `-s workspace-write` e `network_access=false`, o `connect()` ao socket Unix do [canal local](../arquitetura/canal-local.md) devolve `EPERM`: a CLI `mestre` chamada pela ferramenta de shell não alcança o motor. Com `sandbox_workspace_write.network_access=true`, alcança. Por isso a base do Codex precisa liberar o socket do canal local; como fazer isso sem liberar a rede inteira numa classe sem internet está em [Verificar](#verificar-na-implementação).
 
-**Proibidas:** `--dangerously-bypass-approvals-and-sandbox` (`--yolo`); `-s danger-full-access`; `--full-auto` (obsoleta); `--disable hooks` ou `features.hooks = false`; `model_instructions_file`; `project_doc_max_bytes = 0`; `--add-dir`; `--dangerously-bypass-hook-trust`.
+**Proibidas:** iniciar sem `--no-daemon`; `--dangerously-bypass-approvals-and-sandbox` (`--yolo`); `-s danger-full-access`; `--full-auto` (obsoleta); `--disable hooks` ou `features.hooks = false`; `model_instructions_file`; `project_doc_max_bytes = 0`; `--add-dir`; `--dangerously-bypass-hook-trust`.
 
 ### Contas múltiplas
 
 - `CODEX_HOME=<pasta do perfil>` (a pasta precisa existir): configuração, `auth.json`, sessões e logs próprios. Perfil de conta: [bases e fichas](../orquestracao/bases-e-fichas.md).
-- No `config.toml` do perfil: `cli_auth_credentials_store = "file"`, para os perfis não disputarem o chaveiro do sistema.
+- No `config.toml` do perfil: `cli_auth_credentials_store = "file"`, para os perfis não disputarem o chaveiro do sistema. Confirmado no Linux: a credencial fica em `$CODEX_HOME/auth.json`, modo `0600`.
+- **Instalação:** o pacote completo da versão (`bin/`, `codex-path/`, `codex-resources/`, `codex-package.json`); o binário `codex` solto não funciona ([instalação](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores)).
+- **Escritas fora do perfil** (Linux): `/tmp/codex-daemon-<uid>`, `/tmp/codex-bwrap-synthetic-mount-targets-<uid>` e `/var/tmp/etilqs_*` (temporários do SQLite); limpeza em [personagem](../sessao-zero/personagem.md#variáveis-de-ambiente).
 - Login, feito como `mestre-agente` na configuração inicial do perfil: `codex login --device-auth` (o Dono abre o link e digita o código no próprio navegador); `codex login` (retorno em `localhost:1455`) só serve com o navegador na mesma máquina. No Windows, `USERPROFILE` é o do perfil carregado do `mestre-agente` ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)). Verificar: `codex login status` sai com 0 quando logado.
 
 ### Uso, custo e rate limit
@@ -119,7 +127,7 @@ Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 - **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** mensagens de várias linhas vão pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
 - **Verificar na implementação:** `git commit` num worktree saído do espelho (o `.git` do worktree fica no espelho, fora da pasta e só leitura no sandbox) gera pedido de escalonamento respondido pelo PermissionRequest. **Padrão:** sim; o motor responde pela regra da classe. **Se falhar:** a base acrescenta a pasta git daquele worktree no espelho em `sandbox_workspace_write.writable_roots`; a proteção das outras branches continua no hook ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)). **Onde:** etapa 5.
 - **Verificar na implementação:** a base do Codex deixa a CLI `mestre` alcançar o socket do canal local numa classe sem internet, sem liberar a rede inteira. **Padrão:** a primeira forma que a conformidade aceitar, nesta ordem: uma regra do sandbox que libere só esse socket, se a versão tiver; a pasta do socket em `sandbox_workspace_write.writable_roots`; um socket do canal local dentro de uma pasta já liberada ao personagem (ex.: a `MESTRE_TMP` dele), com o mesmo contrato e a mesma identificação. Classe com internet: `network_access=true`, que já libera o socket. **Se falhar:** a base do Codex roda sempre com `network_access=true`; numa classe sem internet, a rede fica contida só pelo despachante, que no Codex falha aberto, e o painel mostra na ficha que essa combinação não tem reforço nativo de rede ([reforço nativo](../classes/reforco-nativo.md)). **Onde:** teste de conformidade do Codex com uma classe sem internet: o comando da etapa 5 chama também `mestre list` (tem de responder) e um `curl` para fora (tem de falhar).
-- **Verificar na implementação:** `cli_auth_credentials_store = "file"` separa as contas de fato (não é recurso oficial), e o processo de fundo do modo interativo (`/daemon`) respeita `CODEX_HOME`. **Padrão:** separa e respeita. **Se falhar:** só um perfil de conta Codex por nó; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis Codex de contas diferentes na mesma VM (`codex login status` em cada um).
+- **Verificar na implementação:** `cli_auth_credentials_store = "file"` separa as contas de fato (não é recurso oficial) com dois perfis Codex de contas diferentes. O processo de fundo e os hooks rodando nele deixaram de importar: com `--no-daemon` não há daemon. **Padrão:** separa. **Se falhar:** só um perfil de conta Codex por nó; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis Codex de contas diferentes na mesma VM (`codex login status` em cada um).
 
 ## Fontes
 

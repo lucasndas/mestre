@@ -1,6 +1,6 @@
 # Antigravity CLI (`agy`)
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -55,7 +55,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 ### Confiança de pasta
 
 - No modo interativo, pasta sem confiança mostra "Do you trust the contents of this project?" ("Yes, I trust this folder" / "No, exit").
-- A confiança fica no array `trustedWorkspaces` (caminhos absolutos) de `~/.gemini/antigravity-cli/settings.json`, com o `HOME` do perfil de conta. **Pré-confiar:** acrescentar o caminho exato de cada worktree; o Mestre não depende de a confiança de uma pasta cobrir as subpastas. JSON inválido impede o `agy` de iniciar. Não existe flag `--trust`.
+- A confiança fica no array `trustedWorkspaces` (caminhos absolutos) de `~/.gemini/antigravity-cli/settings.json`, com o `HOME` do perfil de conta. **Pré-confiar:** acrescentar o caminho exato de cada worktree; o Mestre não depende de a confiança de uma pasta cobrir as subpastas. JSON inválido impede o `agy` de iniciar. Não existe flag `--trust`. Pré-confiança confirmada no spike do Linux.
 
 ### Flags
 
@@ -72,8 +72,8 @@ No `settings.json` do perfil: `toolPermission` fica em `request-review` (nunca `
 
 ### Contas múltiplas
 
-- Não há variável de pasta de configuração (issue #155 aberta). O estado fica em `~/.gemini/antigravity-cli/` e o login no chaveiro do sistema (com arquivo de reserva), uma conta Google por usuário.
-- Contas separadas só com `HOME` diferente por perfil de conta ([bases e fichas](../orquestracao/bases-e-fichas.md)). Esse `HOME` vale para tudo o que o agente roda (git, caches); a identidade git vem do `gitconfig` do personagem, apontado por `GIT_CONFIG_GLOBAL` ([personagem](../sessao-zero/personagem.md), [identidades](../github/identidades-e-apps.md)).
+- Não há variável de pasta de configuração (issue #155 aberta). O estado fica em `~/.gemini/antigravity-cli/`, uma conta Google por `HOME`. No Linux, como `mestre-agente` (spike, [segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)), o login fica em arquivo, `$HOME/.gemini/antigravity-cli/antigravity-oauth-token`, modo `0600`, sem chaveiro nem D-Bus.
+- Contas separadas só com `HOME` diferente por perfil de conta ([bases e fichas](../orquestracao/bases-e-fichas.md)). O `HOME` do perfil é **obrigatório**: sem `HOME` gravável o `agy` não inicia. Esse `HOME` vale para tudo o que o agente roda (git, caches); a identidade git vem do `gitconfig` do personagem, apontado por `GIT_CONFIG_GLOBAL` ([personagem](../sessao-zero/personagem.md), [identidades](../github/identidades-e-apps.md)).
 - `AGY_ACCOUNT` **não** é o login Google (escolhe contas conectadas para comandos como `gh`): não usar.
 
 ### Uso, custo e rate limit
@@ -102,6 +102,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 - O Antigravity sempre roda com monitoramento reduzido ([adaptador](adaptador.md#monitoramento-reduzido)).
 - `settings.json` do perfil é editado relendo, mesclando e validando o JSON antes de gravar; nunca deixar arquivo inválido.
+- **Risco:** o `agy` grava `/tmp/unleash-repo-schema-v1-codeium-language-server.json`, nome fixo que colide entre personagens e perfis da máquina. Plano: `TMPDIR` próprio de cada personagem ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)).
 
 ## Critérios de aceite
 
@@ -126,7 +127,8 @@ Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 - **Verificar na implementação:** o `AGENTS.md` da raiz carrega já no primeiro turno (e não só quando o agente toca um arquivo), e o que acontece com `AGENTS.md` e `GEMINI.md` na mesma pasta. **Padrão:** carrega no primeiro turno, e os dois somam. **Se falhar:** a camada do Mestre do Antigravity manda ler o `AGENTS.md` da raiz antes de começar; com só um dos dois lido, a sessão zero avisa como faz com o `CLAUDE.md` ([sessão zero do workspace](../sessao-zero/workspace.md)). **Onde:** etapa 2 (código `P-…`); a pasta com os dois arquivos, à mão.
 - **Verificar na implementação:** o `agy` aceita colagem entre colchetes no modo interativo e envia com `\r`. **Padrão:** como em Digitação. **Se falhar:** mensagens de várias linhas vão pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e só a linha que pede para lê-lo é digitada. **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
 - **Verificar na implementação:** `permissionOverrides` no `allow` evita a tela de permissão nativa. **Padrão:** o despachante devolve no `allow` a ação já permitida em `permissionOverrides`. **Se falhar:** o adaptador responde a tela nativa com a decisão registrada (tabela de telas). **Onde:** etapa 5.
-- **Verificar na implementação:** `HOME` separado isola o chaveiro, e qual variável vale no Windows. **Padrão:** isola (o login tem arquivo de reserva sob `HOME`); no Windows, o processo roda como `mestre-agente` com o perfil dessa conta carregado, e o motor define `HOME` e `USERPROFILE` com a pasta do perfil de conta (em `%ProgramData%\Mestre\contas\`); o Gerenciador de Credenciais é o do `mestre-agente`, comum a todos os perfis, por isso vale o arquivo de reserva sob `HOME`. **Se falhar:** só um perfil de conta Antigravity por nó; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis de contas diferentes em cada VM.
+- **Verificar na implementação:** `HOME` separado isola o chaveiro, e qual variável vale no Windows. No Linux, o spike confirmou o login só em arquivo sob `HOME`, sem chaveiro; falta a separação com duas contas reais. **Padrão:** isola; no Windows, o processo roda como `mestre-agente` com o perfil dessa conta carregado, e o motor define `HOME` e `USERPROFILE` com a pasta do perfil de conta (em `%ProgramData%\Mestre\contas\`); o Gerenciador de Credenciais é o do `mestre-agente`, comum a todos os perfis, por isso vale o arquivo de reserva sob `HOME`. **Se falhar:** só um perfil de conta Antigravity por nó; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis de contas diferentes em cada VM.
+- **Verificar na implementação:** o `agy` renova sozinho o token de login, que vale 1 h, gravando o arquivo do perfil. **Padrão:** renova. **Se falhar:** o perfil aparece deslogado no ALL-11 do [checklist](../plataforma/checklist.md), o personagem fica `blocked` e o alerta pede novo login. **Onde:** suíte pesada, com um personagem ativo por mais de 1 h.
 
 ## Fontes
 
@@ -143,7 +145,6 @@ Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 - https://antigravity.google/docs/permissions
 - https://antigravity.google/docs/subagents
 - Issue #1213 (nome de agente inexistente cai no padrão): https://github.com/google-antigravity/antigravity-cli/issues/1213
-- https://antigravity.google/docs/cli/gcli-migration
-- https://antigravity.google/docs/cli/commands/usage
+- https://antigravity.google/docs/cli/gcli-migration · https://antigravity.google/docs/cli/commands/usage
 - https://codelabs.developers.google.com/antigravity-cli-hands-on
 - https://github.com/quaywin/agys

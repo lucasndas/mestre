@@ -1,6 +1,6 @@
 # Sessão zero do personagem
 
-> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Node · **Atualizado:** 2026-10-12
+> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Node · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -60,6 +60,7 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 | `MESTRE_WORKSPACE` | slug do workspace | [workspaces](../orquestracao/workspaces.md) |
 | `MESTRE_MESA` | identificador da mesa, `<número>-<slug>` (vazio no Grão-Mestre) | [mesas](../orquestracao/mesas.md#abertura) |
 | `MESTRE_TMP` | pasta temporária só deste personagem, fora do worktree e fora do git: `/var/lib/mestre/agentes/<id>/tmp/` ou `%ProgramData%\Mestre\no\agentes\<id>\tmp\` ([persistência](../arquitetura/persistencia.md#arquivos)); é onde ele monta pacotes de classe para `mestre class edit --from` e onde fica o estado de sessão de sites, quando a classe libera credenciais ([cofre](../plataforma/cofre.md#login-em-sites)) | [CLI de classes](../cli/coordenacao-classes-e-rituais.md) |
+| `TMPDIR` | o mesmo valor de `MESTRE_TMP`, nos três provedores: os temporários dos CLIs ficam na pasta do personagem, não colidem entre personagens (todos são `mestre-agente`) e somem com ela no encerramento ([Ao encerrar](#ao-encerrar)) | este documento |
 | `GIT_CONFIG_GLOBAL` | `.mestre/agents/<id>/gitconfig` (autor = bot do App da classe ou do App "Mestre") | [identidades-e-apps](../github/identidades-e-apps.md) |
 | `CLAUDE_CONFIG_DIR`, `CODEX_HOME` ou `HOME` (Antigravity) | pasta do perfil de conta da ficha | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | variáveis da base | como definidas na base | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
@@ -109,3 +110,4 @@ Quando o personagem é encerrado de vez (estado final em [personagens](../orques
 
 - **Verificar na implementação:** o canal principal da camada do Mestre no Codex (`-c developer_instructions` no modo interativo) e no Antigravity (`--agent mestre-<id>`) chega ao modelo. **Padrão:** os canais principais da tabela. **Se falhar:** o canal de reserva da tabela daquele provedor (hook e, depois, primeira mensagem), registrado no banco para aquela versão; detalhes em [codex](../provedores/codex.md) e [antigravity](../provedores/antigravity.md). **Onde:** etapa 2 do [teste de conformidade](../provedores/conformidade.md).
 - **Verificar na implementação:** o tempo limite da ferramenta de shell do Codex e do Antigravity fica acima do `ask` bloqueante padrão ([tempos limite](../orquestracao/esperas-e-caixa-de-entrada.md#tempos-limite)); no Antigravity, o payload mostra `WaitMsBeforeAsync`, sinal de que o comando pode passar a rodar em segundo plano. **Padrão:** o `ask` bloqueante padrão funciona nos três. **Se falhar:** a skill daquele provedor ensina `mestre ask --no-wait` seguido do fim do turno, e o motor acorda o personagem com a resposta, como no `wait`. **Onde:** à mão na implementação de cada adaptador, com um `ask` de 3 min, e na suíte pesada (CA-ESP-08).
+- **Verificar na implementação:** `claude`, `codex` e `agy` respeitam `TMPDIR` e deixam de gravar em `/tmp` os temporários vistos no spike do Linux ([Claude Code](../provedores/claude-code.md#contas-múltiplas), [Codex](../provedores/codex.md#contas-múltiplas), [Antigravity](../provedores/antigravity.md#regras-e-erros)). **Padrão:** respeitam. **Se falhar:** no encerramento do personagem, o motor apaga `/tmp/claude-{plugin,skill}-<pid>-*.zip` dos processos dele e, quando não resta personagem vivo daquele provedor no nó (o uid é o mesmo para todos), `/tmp/claude-<uid>`, `/tmp/cc-socks-<uid>` e `/tmp/codex-*-<uid>`. **Onde:** [conformidade](../provedores/conformidade.md) de cada provedor, listando o `/tmp` antes e depois.

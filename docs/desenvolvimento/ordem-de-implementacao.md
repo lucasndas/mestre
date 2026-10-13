@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco-e-etapa). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
@@ -61,7 +61,7 @@ Os spikes de Windows rodam no **Windows Sandbox** do PC do Dono, descartável a 
 | `claude`, `codex` e `agy` gravando e achando o login no perfil do `mestre-agente` no Windows | login em arquivo no perfil de conta, ou o provedor não é oferecido naquela máquina | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
 | identificação do chamador subindo a árvore de processos, no Windows | um Job Object por terminal na verificação | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
 | identificação do chamador, no Linux: **feito** (2026-10-12); a árvore falhou para órfãos (`nohup … &`, `setsid -f`, tmux) | adotado um cgroup v2 por terminal | [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli) |
-| `claude`, `codex` e `agy` rodando como `mestre-agente` no Linux | pasta pessoal própria para a conta dos agentes | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
+| `claude`, `codex` e `agy` rodando como `mestre-agente` no Linux: **feito** (2026-10-13); os três funcionam só com o perfil de conta, sem pasta pessoal, com credencial em arquivo `0600`; o Codex exige `--no-daemon` | dispensada a pasta pessoal própria para a conta dos agentes | [segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes) |
 
 ## Mapa de documentos por marco e etapa
 

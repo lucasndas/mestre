@@ -1,6 +1,6 @@
 # Atualização dos CLIs dos provedores
 
-> **Assunto:** como o Mestre detecta, instala, testa, libera ou volta versões de `claude`, `codex` e `agy`, e reinicia os personagens em ponto seguro retomando a sessão · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** como o Mestre detecta, instala, testa, libera ou volta versões de `claude`, `codex` e `agy`, e reinicia os personagens em ponto seguro retomando a sessão · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -15,10 +15,12 @@ O [adaptador](adaptador.md) aplica o mecanismo da tabela ao montar o início de 
 | Provedor | O que o CLI faz sozinho | Como o Mestre desliga | Instalar versão exata / voltar |
 |---|---|---|---|
 | Claude Code (instalação nativa) | baixa a versão nova em segundo plano; ela vale no próximo início | `DISABLE_AUTOUPDATER=1` no ambiente do processo. **Não** usar `DISABLE_UPDATES`, que bloqueia também o `claude install` usado pelo Mestre | `claude install <versão>`; voltar = `claude install <anterior>`. O instalador mantém as duas versões mais novas em `~/.local/share/claude/versions/` |
-| Codex | ao iniciar, procura a versão nova e mostra a tela "Update now / Skip / Skip until next version" | `check_for_update_on_startup = false` no `config.toml` do `CODEX_HOME` do perfil de conta (a documentação indica isso quando a atualização é gerida centralmente) | versão exata: binário da Release daquela versão em `openai/codex` (ver [Verificar](#verificar-na-implementação)); `codex update` instala só a mais nova. Voltar = restaurar a cópia guardada |
+| Codex | ao iniciar, procura a versão nova e mostra a tela "Update now / Skip / Skip until next version" | `check_for_update_on_startup = false` no `config.toml` do `CODEX_HOME` do perfil de conta (a documentação indica isso quando a atualização é gerida centralmente) | versão exata: pacote completo da Release daquela versão em `openai/codex`, numa pasta por versão, com o link do executável apontando para ela ([instalação](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores); ver [Verificar](#verificar-na-implementação)); `codex update` instala só a mais nova. Voltar = apontar o link para a pasta anterior |
 | Antigravity (`agy`) | atualizador automático em segundo plano (citado no changelog) | variável `AGY_CLI_DISABLE_AUTO_UPDATE=1`, achada nas strings do binário 1.3.3 e não documentada (ver [Verificar](#verificar-na-implementação)) | `agy update` instala só a mais nova; versão exata não documentada. Voltar = restaurar a cópia guardada |
 
-Antes de instalar, o motor sempre guarda uma cópia do executável atual de cada CLI no nó. Essa cópia é o caminho de volta quando o provedor não oferece outro.
+Antes de instalar, o motor sempre guarda uma cópia do executável atual de cada CLI no nó (no Codex, a pasta da versão). Essa cópia é o caminho de volta quando o provedor não oferece outro.
+
+No Linux, os CLIs ficam numa pasta do root que o `mestre-agente` não grava ([instalação](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores)): mesmo que um atualizador próprio rode, ele falha sem estrago.
 
 ### Política por provedor
 
@@ -49,7 +51,7 @@ flowchart TD
    - **Disponível:** o motor do Core consulta a versão mais nova a cada 6 h (padrão). Codex: Releases de `openai/codex`, a mesma fonte que o próprio CLI usa. Claude: dist-tag `latest` do pacote npm `@anthropic-ai/claude-code`. `agy`: não há fonte pública conhecida, então vale só a detecção de versão instalada por fora (abaixo).
    - **Instalada por fora:** o [checklist](../plataforma/checklist.md) ou o `hello` do nó mostram uma versão diferente da registrada. Exemplo: alguém rodou `claude update`.
 2. **Instalar:**
-   - um nó por vez, com a conta que roda os agentes daquele nó;
+   - um nó por vez, na pasta de CLIs do nó, que no Linux é do root (o `mestre-agente` só executa);
    - se o instalador falhar, a versão anterior continua, e a falha é registrada e alertada.
 3. **Testar:**
    - roda o [teste de conformidade](conformidade.md) daquele provedor no próprio nó, com a versão nova;
@@ -108,8 +110,8 @@ O comando de retomada de cada provedor, de onde vem o id da sessão e o que acon
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** `AGY_CLI_DISABLE_AUTO_UPDATE=1` desliga o atualizador do `agy`, e o Codex sem a tela de atualização não se atualiza por um processo de fundo próprio (`app-server-daemon`, visto no código). **Padrão:** a tabela acima basta. **Se falhar:** a versão muda sem pedido, o checklist detecta e ela segue o caminho de "instalada por fora" (teste de conformidade antes de liberar). **Onde:** na primeira versão nova de cada CLI depois da implementação, no laboratório da [suíte pesada](../qualidade/testes.md#laboratório): a versão dos personagens não pode mudar sozinha.
-- **Verificar na implementação:** instalar uma versão exata do Codex pelo binário da Release `openai/codex`. **Padrão:** baixar o arquivo da plataforma, conferir e trocar o executável, guardando a cópia. **Se falhar:** o Codex passa a instalar só a mais nova (`codex update`), como o `agy`. **Onde:** na implementação do instalador, no laboratório.
+- **Verificar na implementação:** `AGY_CLI_DISABLE_AUTO_UPDATE=1` desliga o atualizador do `agy`. No spike do Linux, o `agy` ainda tentou um teste de escrita em `/opt/mestre-clis/` com a variável ligada, recusado pela pasta do root: o atualizador não fica claramente desligado, e o item segue aberto. O atualizador próprio do processo de fundo do Codex (`app-server-daemon`) não existe com `--no-daemon`, obrigatório na base ([Codex](codex.md#processo-de-fundo-e---no-daemon)). **Padrão:** a tabela acima basta. **Se falhar:** a versão muda sem pedido, o checklist detecta e ela segue o caminho de "instalada por fora" (teste de conformidade antes de liberar). **Onde:** na primeira versão nova de cada CLI depois da implementação, no laboratório da [suíte pesada](../qualidade/testes.md#laboratório): a versão dos personagens não pode mudar sozinha.
+- **Verificar na implementação:** instalar uma versão exata do Codex pela Release `openai/codex`. **Padrão:** baixar o pacote completo da plataforma, conferir, extrair numa pasta nova da versão e trocar o link, mantendo a pasta anterior. **Se falhar:** o Codex passa a instalar só a mais nova (`codex update`), como o `agy`. **Onde:** na implementação do instalador, no laboratório.
 - **Verificar na implementação:** a dist-tag `latest` do npm acompanha a versão que o instalador nativo do Claude instala. **Padrão:** acompanha. **Se falhar:** o Claude fica como o `agy`, só com a detecção de versão instalada por fora. **Onde:** no laboratório, comparando a dist-tag com o resultado de `claude install`.
 - **Verificar na implementação:** trocar o binário do Codex e do `agy` no Windows com personagens rodando (arquivo em uso). **Padrão:** o executável em uso é renomeado e o novo entra no lugar; os processos antigos seguem até o ponto seguro. **Se falhar:** a instalação naquele nó espera todos os personagens do provedor chegarem ao ponto seguro. **Onde:** suíte completa no Windows, com o agente falso em uso.
 

@@ -1,6 +1,6 @@
 # Preparar a máquina de desenvolvimento
 
-> **Assunto:** o que instalar para desenvolver o Mestre, em que versão e como conferir, por marco; como rodar as suítes e a verificação · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** o que instalar para desenvolver o Mestre, em que versão e como conferir, por marco; como rodar as suítes e a verificação · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 Referência para quem vai desenvolver (pessoa ou agente) numa máquina Linux. Instale só o que o marco em andamento pede ([ordem de implementação](ordem-de-implementacao.md)).
 
@@ -65,7 +65,10 @@ sudo install -d -o mestre-agente -g mestre-agente -m 2770 /var/lib/mestre/contas
 ```
 
 Só da máquina de desenvolvimento (o instalador não faz):
-- `/opt/mestre-clis/bin/` com cópias de `claude`, `codex` e `agy` (`sudo install -m 0755 "$(readlink -f ~/.local/bin/<cli>)" /opt/mestre-clis/bin/<cli>`), porque os da pasta pessoal (`0750`) não são executáveis pelo `mestre-agente`. Atualize as cópias quando o CLI pessoal mudar de versão.
+- `/opt/mestre-clis/`, do root, com os CLIs que o `mestre-agente` executa, porque os da pasta pessoal (`0750`) não são executáveis por ele. Atualize quando o CLI pessoal mudar de versão:
+  - `claude` e `agy`: cópia do binário, `sudo install -m 0755 "$(readlink -f ~/.local/bin/<cli>)" /opt/mestre-clis/bin/<cli>`;
+  - `codex`: a cópia solta do binário **não** funciona; copie o pacote completo e aponte o link: `sudo cp -a ~/.codex/packages/standalone/releases/<versão>-<alvo> /opt/mestre-clis/codex-<versão>` e `sudo ln -sfn /opt/mestre-clis/codex-<versão>/bin/codex /opt/mestre-clis/bin/codex` ([Codex](../provedores/codex.md#contas-múltiplas)).
+- **Sobras do spike dos CLIs** (podem ser apagadas): os perfis `spike-*` em `/var/lib/mestre/contas/` guardam logins reais; apague com `sudo rm -rf /var/lib/mestre/contas/spike-*` quando não forem mais úteis.
 - Regra do sudo `/etc/sudoers.d/mestre-dev-agente` (`lucasndas ALL=(mestre-agente) NOPASSWD: ALL`, modo `0440`, conferida com `sudo visudo -cf`), para testes e spikes iniciarem processos como `mestre-agente`. O Mestre não usa sudo: o `mestre-node` usa `CAP_SETUID`/`CAP_SETGID` ([componentes](../arquitetura/componentes.md)).
 
 ## Windows Sandbox para os spikes do M1
