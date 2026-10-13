@@ -31,6 +31,14 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 - **Só aditivo:** campos e mensagens novos podem entrar; nada sai nem muda de sentido. Assim, qualquer motor novo fala com qualquer `mestre-pty` antigo, e um recurso novo só vale em terminais novos.
 - **Versão do `mestre-pty`:** própria, gravada em `terminals`, e muda raramente. Cada versão fica na sua pasta ([instalação](../plataforma/instalacao-e-atualizacao.md)): terminal novo usa a mais nova; terminal vivo segue na versão em que nasceu até ser encerrado; versão sem terminal vivo é apagada na atualização seguinte ([autoatualização](../plataforma/autoatualizacao.md)).
 
+#### Detalhes do protocolo
+
+- **Quadros:** uma linha JSON começa por `{`; um quadro binário, por `0x01`, e leva o id do pedido que o originou, o deslocamento do primeiro byte e o tamanho. Um salto entre dois quadros do mesmo fluxo é um trecho perdido. Mensagem desconhecida (de um motor mais novo) recebe `error` com `unknown_message` e a conexão segue; campo desconhecido é ignorado.
+- **Aperto de mão:** `hello` do motor (versão do protocolo e nonce) → `hello` do `mestre-pty` (nonce e prova) → `auth` do motor (prova) → `ready` (versão, PID). A prova é HMAC-SHA256 do segredo sobre um rótulo por sentido e os dois nonces; o motor confere a do `mestre-pty` antes de mandar a sua, e o `mestre-pty` só diz versão e PID a quem provou. Quem falha, ou não termina em 5 s, é desconectado e registrado no log do `mestre-pty` (`terminal handshake refused`); o motor registra o que recusa (`terminal connection refused`).
+- **Mensagens:** `start` leva também colunas e linhas (fixas dali em diante); `screen` leva `lines` para pedir histórico e `ping` confere que o `mestre-pty` responde (ambos desde o protocolo 2: um `mestre-pty` de protocolo 1 ignora o campo e recusa a mensagem, e o motor trata como "sem suporte"); `replay` devolve no máximo 4 MiB por pedido, e o chamador pede de novo a partir do fim; `follow` manda a saída ao vivo a partir de um deslocamento (um fluxo por conexão); `stop` tem os modos `signal` e `kill`. O motor grava o log por `follow` a partir do último `ack` e confirma com `ack` depois de gravar: uma queda do motor entre gravar e confirmar repete, no máximo, o último trecho no log.
+- **Identidade do `mestre-pty`:** PID mais o início do processo (Linux: boot id e `starttime` de `/proc/<pid>/stat`; Windows: horário de criação). No Linux o PID do outro lado do socket só é o do `mestre-pty` se ele chamar `listen` de novo no descritor herdado (o kernel grava quem chamou por último); por isso ele avisa o motor, por um pipe (`--ready-fd`), e o motor só conecta depois.
+- **Registro:** esta camada grava `starting` ao criar, `interrupted` e `stopped`; os demais valores de `status` são dos estados do personagem.
+
 ### Criação
 
 - Só o motor da máquina cria terminais, a pedido da Cidadela (`terminal.open`, [protocolo](../conectividade/protocolo.md)), com a base já resolvida: executável, argumentos, ambiente e pasta ([adaptador](../provedores/adaptador.md)).
@@ -76,7 +84,7 @@ Enquanto o motor está fora, o agente continua, a saída vai para o buffer, nada
 3. **Forçado:** no Linux, o motor pede ao launcher o `kill`, que faz `cgroup.kill` no cgroup do terminal (alcança o `mestre-pty` e quem saiu da sessão com `setsid -f`), espera `populated 0` em `cgroup.events` (por inotify, sem consulta periódica) e remove o cgroup; sem cgroup delegado, o `mestre-pty` manda `SIGKILL` ao grupo e a todo processo da mesma sessão e sai. No Windows, o `mestre-pty` faz `TerminateJobObject` (obrigatório: um processo com console próprio e o `conhost.exe` dele sobrevivem ao `ClosePseudoConsole`), encerra o que restou da sessão de logon do terminal (o que escapou pelo WMI, [Windows](windows.md#verificar-na-implementação)) e sai; se não responder, o motor encerra o `mestre-pty` (`TerminateProcess`), e o fechamento do Job leva a árvore.
 
 - Depois, o motor apaga o socket e atualiza a linha. Quando encerrar é seguro (e quando é forçado) é decidido em [personagens](../orquestracao/personagens.md); este documento só garante que nenhum processo da árvore sobra.
-- Agente que termina sem pedido: o `mestre-pty` informa o código de saída (`exit`) e sai; o motor manda `terminal.status`, e o personagem vai para `interrupted`.
+- Agente que termina sem pedido: o `mestre-pty` informa o código de saída (`exit`) e fica até o motor confirmar (`ack`) toda a saída no log, para não perdê-la; então sai. O motor manda `terminal.status`, e o personagem vai para `interrupted`.
 
 ## Regras e erros
 
