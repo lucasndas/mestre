@@ -1,9 +1,23 @@
 #!/bin/sh
-# Pre-commit hook of the repository: runs the fast suite before each commit
-# (docs/qualidade/testes.md). Enable once per clone with
+# Pre-commit hook of the repository: runs the fast suite on what is about to
+# be committed, the index, not the working tree (docs/qualidade/testes.md).
+# The index is written to a folder inside the git directory with
+# `git checkout-index`, so unstaged edits and untracked files never reach the
+# test and nothing in the working tree is touched, stashed or restored.
+# The folder keeps the same path between commits, which keeps the Go build
+# cache warm. Enable once per clone with
 #   git config core.hooksPath tools/githooks
 # (docs/desenvolvimento/ambiente.md). Skip only in an emergency with
 # git commit --no-verify; the CI runs the suites anyway.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
+snap="$(cd "$(git rev-parse --git-dir)" && pwd)/precommit-snapshot"
+rm -rf "$snap"
+mkdir -p "$snap"
+# GIT_INDEX_FILE is the index of this commit (also for `commit -a` and
+# `commit <paths>`); checkout-index honours it.
+git checkout-index --all --prefix="$snap/"
+# The fast suite starts no git; the snapshot is not a repository.
+unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX
+cd "$snap"
 exec go run ./tools/testrun fast

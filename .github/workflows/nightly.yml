@@ -1,0 +1,137 @@
+# Nightly jobs of docs/qualidade/testes.md (quarantine and flaky hunt),
+# described in docs/desenvolvimento/ambiente.md. Third-party actions are
+# pinned by commit SHA, like ci.yml. The jobs that run repository code only
+# read the repository; only the report job may write issues.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  # `testrun quarantine`: each quarantined test 20 times; the ::notice and
+  # the job summary say which ones may leave (test/quarantine.yaml).
+  quarantine:
+    name: quarantine (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run the quarantined tests 20 times
+        run: go run ./tools/testrun quarantine
+
+  # `testrun fast -count 5 -shuffle`: a test that passes and fails in the same
+  # run is flaky. The lines "mixed: <package> <Test> passed N failed M" go to
+  # an artifact for the report job.
+  flaky-hunt:
+    name: flaky hunt (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The budget (scaled by -count) is measured with a warm build cache.
+      - name: Warm the build cache
+        run: go test -run '^$' ./...
+
+      - name: Run the fast suite five times, shuffled
+        run: |
+          set +e
+          go run ./tools/testrun fast -count 5 -shuffle 2>&1 | tee hunt.log
+          code=${PIPESTATUS[0]}
+          mkdir -p flaky
+          grep '^mixed: ' hunt.log > "flaky/${{ matrix.os }}.txt" || true
+          exit "$code"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: flaky-${{ matrix.os }}
+          path: flaky/
+          if-no-files-found: ignore
+
+  # One issue labeled `flaky` per test with mixed results (a comment when it
+  # is already open). The only job with write access, and it runs no
+  # repository code: just the gh CLI of the runner.
+  report:
+    name: report flaky tests
+    needs: flaky-hunt
+    if: always() && needs.flaky-hunt.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: flaky-*
+          path: flaky
+          merge-multiple: true
+
+      - name: Open or update the flaky issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gh label create flaky --description "Test with mixed results (nightly flaky hunt)" --color D93F0B 2>/dev/null || true
+          for f in flaky/*.txt; do
+            os=$(basename "$f" .txt)
+            while read -r _ pkg test _ passed _ failed; do
+              title="flaky: $test"
+              body="Nightly flaky hunt on $os (\`testrun fast -count 5 -shuffle\`): \`$test\` in \`$pkg\` passed $passed and failed $failed of 5 runs. Run: $RUN_URL
+
+          Fix it, or quarantine it in \`test/quarantine.yaml\` with this issue (docs/qualidade/testes.md)."
+              number=$(gh issue list --label flaky --state open --search "\"$title\" in:title" --json number,title \
+                --jq "map(select(.title == \"$title\")) | first | .number // empty")
+              if [ -n "$number" ]; then
+                gh issue comment "$number" --body "$body"
+              else
+                gh issue create --label flaky --title "$title" --body "$body"
+              fi
+            done < "$f"
+          done
