@@ -110,3 +110,60 @@ func TestUnknownRouteFailsTheTestAsNotImplemented(t *testing.T) {
 		t.Fatalf("test failures = %q", rep.msgs)
 	}
 }
+
+// CA-DUBLES-09: the route is checked before the credentials, and what the
+// double ignores would answer a different question, so it fails too.
+func TestUnknownRouteParameterOrFieldFailsEvenWithoutCredentials(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, method, path, body, token, want string
+	}{
+		{"unauthenticated unknown route", "GET", "/repos/octo/repo/pulls", "", "", "GET /repos/octo/repo/pulls"},
+		{"bad token unknown route", "GET", "/rate_limit", "", "wrong", "GET /rate_limit"},
+		{"unauthenticated unknown method", "DELETE", "/repos/octo/repo/issues", "", "", "DELETE /repos/octo/repo/issues"},
+		{"unknown method on an issue", "POST", "/repos/octo/repo/issues/1", "{}", "inst-token", "POST /repos/octo/repo/issues/1"},
+		{"unknown query parameter", "GET", "/repos/octo/repo/issues?labels=epico&state=closed", "", "inst-token", "GET /repos/octo/repo/issues?labels"},
+		{"unauthenticated unknown query parameter", "GET", "/repos/octo/repo/issues?state=closed", "", "", "GET /repos/octo/repo/issues?state"},
+		{"unknown body field", "POST", "/repos/octo/repo/issues", `{"title":"x","assignees":["a"]}`, "inst-token", `POST /repos/octo/repo/issues field "assignees"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rep := &recorder{}
+			s, _, _ := setup(t, rep)
+			c := &http.Client{Transport: fakenet.HandlerTransport(s)}
+			req, _ := http.NewRequest(tc.method, "https://api.github.com"+tc.path, strings.NewReader(tc.body))
+			if tc.token != "" {
+				req.Header.Set("Authorization", "Bearer "+tc.token)
+			}
+
+			resp, err := c.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = resp.Body.Close()
+
+			if resp.StatusCode != http.StatusNotImplemented {
+				t.Fatalf("status = %d, want 501", resp.StatusCode)
+			}
+			if want := testkit.NotImplementedPrefix + tc.want; len(rep.msgs) != 1 || rep.msgs[0] != want {
+				t.Fatalf("test failures = %q, want [%q]", rep.msgs, want)
+			}
+		})
+	}
+}
+
+func TestKnownRouteWithoutCredentialsIsStill401(t *testing.T) {
+	t.Parallel()
+	rep := &recorder{}
+	s, _, _ := setup(t, rep)
+	c := &http.Client{Transport: fakenet.HandlerTransport(s)}
+	resp, err := c.Get("https://api.github.com/repos/octo/repo/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized || len(rep.msgs) != 0 {
+		t.Fatalf("status = %d, failures = %q", resp.StatusCode, rep.msgs)
+	}
+}
