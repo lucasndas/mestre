@@ -1,38 +1,44 @@
 // Package fakegit is the in-memory git of the fast suite
 // (docs/qualidade/dubles.md#outros-dublês): refs, commits, files,
-// worktrees, bundles and info/exclude kept as plain data. The internal/gitx
-// interface arrives in M1 and this fake implements it there; criteria that
-// need the real git behavior stay in the full suite.
+// worktrees, bundles and info/exclude kept as plain data. Git (git.go)
+// implements gitx.Git on top of Repo, the data model; the same conformance
+// suite (internal/testkit/gitxsuite) runs against it and against the real
+// git. Criteria that need the real git behavior stay in the full suite.
 package fakegit
 
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
+
+	"github.com/lucasndas/mestre/internal/gitx"
 )
 
-// Errors returned by the fake.
+// Errors returned by the fake: the sentinels of gitx, so errors.Is works the
+// same against the fake and the real git.
 var (
-	ErrUnknownRef     = errors.New("fakegit: unknown ref")
-	ErrBranchInUse    = errors.New("fakegit: branch already checked out in a worktree")
-	ErrNotFastForward = errors.New("fakegit: not a fast-forward")
-	ErrNoSuchFile     = errors.New("fakegit: no such file")
+	ErrUnknownRef     = gitx.ErrRefNotFound
+	ErrBranchInUse    = gitx.ErrBranchInUse
+	ErrNotFastForward = gitx.ErrNotFastForward
+	ErrNoSuchFile     = gitx.ErrFileNotFound
 )
 
 // Hash identifies a commit.
-type Hash string
+type Hash = gitx.Hash
 
 // Commit is one snapshot.
 type Commit struct {
-	Hash    Hash
-	Parent  Hash // "" for the root commit
-	Message string
-	Files   map[string]string // full tree: path -> content
+	Hash      Hash
+	Parent    Hash // "" for the root commit
+	Message   string
+	Files     map[string]string // full tree: path -> content
+	Author    gitx.Signature    // zero for commits made with Repo.Commit
+	Committer gitx.Signature
 }
 
 // Bundle carries commits and refs between repositories, like git bundle.
@@ -41,43 +47,88 @@ type Bundle struct {
 	Commits []Commit
 }
 
-// Repo is one repository.
+// Repo is one repository. Refs live in branches: a key without "refs/" is a
+// branch (refs/heads/<key>), any other key is a full ref name such as
+// refs/mestre/cidadela/main.
 type Repo struct {
 	mu        sync.Mutex
 	commits   map[Hash]Commit
 	branches  map[string]Hash
 	worktrees map[string]string // path -> branch
 	exclude   []string
+	blocks    map[string][]string // info/exclude blocks of gitx
+	config    map[string]string
+	mainDir   string // set by Git: the repository's own directory
+	head      string // default branch (HEAD of a bare repository)
+	bare      bool
 }
 
 // New returns an empty repository.
 func New() *Repo {
-	return &Repo{commits: map[Hash]Commit{}, branches: map[string]Hash{}, worktrees: map[string]string{}}
+	return &Repo{
+		commits: map[Hash]Commit{}, branches: map[string]Hash{}, worktrees: map[string]string{},
+		blocks: map[string][]string{}, config: map[string]string{},
+	}
+}
+
+// refKey turns a ref name given by a caller into the key of branches.
+func refKey(name string) string {
+	if s, ok := strings.CutPrefix(name, "refs/heads/"); ok {
+		return s
+	}
+	return name
+}
+
+// fullName is the inverse of refKey.
+func fullName(key string) string {
+	if strings.HasPrefix(key, "refs/") {
+		return key
+	}
+	return "refs/heads/" + key
 }
 
 // Commit records files on top of branch (created if missing). An empty
 // content deletes the path.
 func (r *Repo) Commit(branch, msg string, files map[string]string) Hash {
+	set := map[string]string{}
+	var del []string
+	for p, c := range files {
+		if c == "" {
+			del = append(del, p)
+		} else {
+			set[p] = c
+		}
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.commitLocked(refKey(branch), msg, set, del, gitx.Signature{}, gitx.Signature{})
+}
+
+// commitLocked records set and del on top of the branch key. A path in set
+// may have empty content.
+func (r *Repo) commitLocked(branch, msg string, set map[string]string, del []string, author, committer gitx.Signature) Hash {
 	parent := r.branches[branch]
 	tree := map[string]string{}
 	if parent != "" {
 		maps.Copy(tree, r.commits[parent].Files)
 	}
-	for p, c := range files {
-		if c == "" {
-			delete(tree, p)
-		} else {
-			tree[p] = c
-		}
+	for _, p := range del {
+		delete(tree, p)
 	}
+	maps.Copy(tree, set)
 	h := sha1.New()
 	fmt.Fprintf(h, "parent %s\nmessage %s\n", parent, msg)
+	if author != (gitx.Signature{}) {
+		fmt.Fprintf(h, "author %s <%s> %d\ncommitter %s <%s> %d\n",
+			author.Name, author.Email, author.When.Unix(), committer.Name, committer.Email, committer.When.Unix())
+	}
 	for _, p := range slices.Sorted(maps.Keys(tree)) {
 		fmt.Fprintf(h, "%s\x00%s\x00", p, tree[p])
 	}
-	c := Commit{Hash: Hash(hex.EncodeToString(h.Sum(nil))), Parent: parent, Message: msg, Files: tree}
+	c := Commit{
+		Hash: Hash(hex.EncodeToString(h.Sum(nil))), Parent: parent, Message: msg, Files: tree,
+		Author: author, Committer: committer,
+	}
 	r.commits[c.Hash] = c
 	r.branches[branch] = c.Hash
 	return c.Hash
@@ -91,7 +142,7 @@ func (r *Repo) Branch(name, from string) error {
 	if err != nil {
 		return err
 	}
-	r.branches[name] = h
+	r.branches[refKey(name)] = h
 	return nil
 }
 
@@ -103,7 +154,7 @@ func (r *Repo) Resolve(ref string) (Hash, error) {
 }
 
 func (r *Repo) resolveLocked(ref string) (Hash, error) {
-	if h, ok := r.branches[ref]; ok {
+	if h, ok := r.branches[refKey(ref)]; ok {
 		return h, nil
 	}
 	if _, ok := r.commits[Hash(ref)]; ok {
@@ -131,7 +182,14 @@ func (r *Repo) ReadFile(ref, path string) (string, error) {
 func (r *Repo) Branches() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return slices.Sorted(maps.Keys(r.branches))
+	var names []string
+	for k := range r.branches {
+		if !strings.HasPrefix(k, "refs/") {
+			names = append(names, k)
+		}
+	}
+	slices.Sort(names)
+	return names
 }
 
 // AddWorktree checks branch out at path; a branch lives in one worktree.

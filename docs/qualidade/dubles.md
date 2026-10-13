@@ -66,7 +66,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 ### Outros dublês
 
 - **PTY falso:** par de terminal em memória com a mesma interface do PTY real; a tela vem do mesmo emulador do [terminal](../arquitetura/terminal.md).
-- **Git falso:** implementação em memória da interface do `internal/gitx` (refs, commits, arquivos preparados, bundles e worktrees como dados), para a rápida. Critério que precisa do comportamento real do git vai para a completa ([testes](testes.md#regras-e-erros)).
+- **Git falso:** `internal/testkit/fakegit` implementa em memória as interfaces `gitx.Git` e `gitx.Repo` (refs, commits com autor e committer, arquivos preparados, bundles, worktrees, `info/exclude` e `skip-worktree` como dados), para a rápida. Os arquivos de um worktree são os que o teste põe com `SetFile`; o falso não cria pastas, só grava e lê os arquivos de bundle. Uma suíte de conformidade (`internal/testkit/gitxsuite`) roda os mesmos cenários no falso, na rápida, e no git real, na completa, para o falso não se afastar do real. Critério que precisa do comportamento real do git vai para a completa ([testes](testes.md#regras-e-erros)).
 - **whisper-server falso:** devolve o texto configurado, erro ou demora.
 
 ### Quando cada dublê cresce
