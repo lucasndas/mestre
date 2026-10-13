@@ -1,0 +1,49 @@
+# TEMPORARY: runs the M2 spike "captura das mudanças do banco" on Linux and
+# Windows runners (tools/spikes/m2-db-capture). Removed from the branch
+# before it is handed over; never merged.
+name: spike m2 db capture
+
+on:
+  push:
+    branches: [spike/m2-db-capture]
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    name: spike (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: System
+        run: |
+          go version
+          if [ "$RUNNER_OS" = Windows ]; then
+            powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem) | Select-Object Caption, Version, BuildNumber | Format-List; Get-Volume -DriveLetter C,D -ErrorAction SilentlyContinue | Format-Table DriveLetter, FileSystemType"
+          else
+            uname -a; grep PRETTY_NAME /etc/os-release; df -T "$RUNNER_TEMP" | tail -1
+          fi
+
+      - name: Spike
+        env:
+          CGO_ENABLED: "0"
+        run: go test -tags spike -count=1 -v -timeout 25m ./tools/spikes/m2-db-capture
