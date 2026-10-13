@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/store/machine"
@@ -57,11 +58,11 @@ func TestMain(m *testing.M) {
 			os.Exit(runTree(os.Args[2:]))
 		case helperSleeper:
 			signal.Ignore(syscall.SIGTERM)
-			select {}
+			block()
 		case helperPrinter:
 			fmt.Print(os.Args[2] + "\r\n")
 			signal.Ignore(syscall.SIGTERM)
-			select {}
+			block()
 		case helperEngine:
 			os.Exit(runEngine(os.Args[2]))
 		}
@@ -122,7 +123,16 @@ func runTree(args []string) int {
 		return 1
 	}
 	fmt.Print("READY\r\n")
-	select {}
+	block()
+	return 0
+}
+
+// block waits for ever. It is not a bare select{}: on Windows a program with
+// nothing else running dies of "all goroutines are asleep", and the helpers
+// must stay alive until their terminal ends them. A pending timer keeps the
+// runtime from calling it a deadlock.
+func block() {
+	<-clock.Real{}.NewTimer(1000 * time.Hour).C()
 }
 
 // harnessConfig is what the test and the helper engine process share.
@@ -183,7 +193,7 @@ func runEngine(path string) int {
 	buf := make([]byte, 1)
 	for {
 		if _, err := os.Stdin.Read(buf); err != nil {
-			select {}
+			block()
 		}
 	}
 }
@@ -191,6 +201,7 @@ func runEngine(path string) int {
 // harness is one machine of the test: its folders, registry and engine.
 type harness struct {
 	t   *testing.T
+	ctx context.Context // ends with the test or after a minute and a half, whichever is first
 	cfg harnessConfig
 	mgr *terminal.Manager
 	db  *store.DB
@@ -226,7 +237,9 @@ func newHarness(t *testing.T, o harnessOptions) *harness {
 	if base, err := terminal.DelegatedCgroup(); err == nil {
 		cfg.CgroupBase = base
 	}
-	h := &harness{t: t, cfg: cfg, sys: terminal.NewSystem()}
+	ctx, cancel := clock.WithTimeout(t.Context(), clock.Real{}, 90*time.Second)
+	t.Cleanup(cancel)
+	h := &harness{t: t, ctx: ctx, cfg: cfg, sys: terminal.NewSystem()}
 	h.open()
 	t.Cleanup(h.cleanup)
 	return h
@@ -236,7 +249,7 @@ func newHarness(t *testing.T, o harnessOptions) *harness {
 // restarted engine does.
 func (h *harness) open() {
 	h.t.Helper()
-	m, db, err := buildManager(h.t.Context(), h.cfg)
+	m, db, err := buildManager(h.ctx, h.cfg)
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -275,7 +288,7 @@ func (h *harness) agentSpec(id string) terminal.CreateSpec {
 		"work-" + id + "/.git/HEAD":        "ref: refs/heads/main\n",
 		"cfg-" + id + "/.credentials.json": "{}",
 		"cfg-" + id + "/.claude.json": fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`,
-			filepath.ToSlash(work)),
+			work),
 	})
 	return terminal.CreateSpec{
 		ID: id, CharacterID: "c-" + id, Dir: work,
@@ -300,7 +313,7 @@ func (h *harness) selfSpec(id string, args ...string) terminal.CreateSpec {
 // create makes a terminal and registers it for the cleanup.
 func (h *harness) create(spec terminal.CreateSpec) *terminal.Terminal {
 	h.t.Helper()
-	t, err := h.mgr.Create(h.t.Context(), spec)
+	t, err := h.mgr.Create(h.ctx, spec)
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -312,13 +325,13 @@ func (h *harness) create(spec terminal.CreateSpec) *terminal.Terminal {
 // output, from the start of the buffer.
 func (h *harness) observe(rec terminal.Record) (*syncBuffer, *terminal.Client) {
 	h.t.Helper()
-	c, err := terminal.Dial(h.t.Context(), clock.Real{}, rec.SocketPath, rec.Secret, 0)
+	c, err := terminal.Dial(h.ctx, clock.Real{}, rec.SocketPath, rec.Secret, 0)
 	if err != nil {
 		h.t.Fatal(err)
 	}
 	h.t.Cleanup(func() { _ = c.Close() })
 	buf := &syncBuffer{}
-	if _, err := c.Follow(h.t.Context(), 0, func(f ptywire.Frame) { _, _ = buf.Write(f.Data) }); err != nil {
+	if _, err := c.Follow(h.ctx, 0, func(f ptywire.Frame) { _, _ = buf.Write(f.Data) }); err != nil {
 		h.t.Fatal(err)
 	}
 	return buf, c
@@ -326,7 +339,7 @@ func (h *harness) observe(rec terminal.Record) (*syncBuffer, *terminal.Client) {
 
 func (h *harness) record(id string) terminal.Record {
 	h.t.Helper()
-	rec, err := h.mgr.Record(h.t.Context(), id)
+	rec, err := h.mgr.Record(h.ctx, id)
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -337,7 +350,7 @@ func (h *harness) record(id string) terminal.Record {
 // it waits on the process itself, not on a timer.
 func (h *harness) gone(pid int, what string) {
 	h.t.Helper()
-	if err := h.sys.WaitExit(h.t.Context(), pid); err != nil {
+	if err := h.sys.WaitExit(h.ctx, pid); err != nil {
 		h.t.Fatalf("%s (PID %d) still alive: %v", what, pid, err)
 	}
 }

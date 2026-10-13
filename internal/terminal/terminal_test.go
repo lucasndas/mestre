@@ -54,6 +54,8 @@ func (s *syncBuffer) Write(p []byte) (int, error) {
 // waitFor blocks until the text holds sub, without polling.
 func (s *syncBuffer) waitFor(t *testing.T, sub string) string {
 	t.Helper()
+	limit := clock.Real{}.NewTimer(time.Minute) // a hang is a failure, not a 10-minute timeout
+	defer limit.Stop()
 	for {
 		s.mu.Lock()
 		text := s.b.String()
@@ -68,7 +70,9 @@ func (s *syncBuffer) waitFor(t *testing.T, sub string) string {
 		select {
 		case <-ch:
 		case <-t.Context().Done():
-			t.Fatalf("log never held %q:\n%s", sub, text)
+			t.Fatalf("output never held %q:\n%s", sub, text)
+		case <-limit.C():
+			t.Fatalf("output did not hold %q in a minute:\n%s", sub, text)
 		}
 	}
 }

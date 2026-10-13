@@ -77,7 +77,7 @@ func TestStopLeavesNothingOfTheTree(t *testing.T) {
 
 			// The agent and its grandchildren ignore SIGTERM, so the
 			// termination reaches step 3.
-			step, err := term.Stop(t.Context(), terminal.StopPlan{TerminateWait: 300 * time.Millisecond})
+			step, err := term.Stop(h.ctx, terminal.StopPlan{TerminateWait: 300 * time.Millisecond})
 
 			if err != nil {
 				t.Fatalf("Stop: %v", err)
@@ -114,7 +114,7 @@ func TestLogMasksTheTokenAndTheBufferKeepsTheBytes(t *testing.T) {
 	out, _ := h.observe(h.record("t6"))
 	out.waitFor(t, token)
 
-	if err := term.FlushLog(t.Context()); err != nil {
+	if err := term.FlushLog(h.ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -125,7 +125,7 @@ func TestLogMasksTheTokenAndTheBufferKeepsTheBytes(t *testing.T) {
 	if !strings.Contains(string(log), "deploy with [segredo]") || strings.Contains(string(log), token) {
 		t.Fatalf("log = %q, want the token replaced by [segredo]", log)
 	}
-	got, err := term.Replay(t.Context(), 0)
+	got, err := term.Replay(h.ctx, 0)
 	if err != nil || !strings.Contains(string(got.Data), token) {
 		t.Fatalf("buffer = %q, %v, want the bytes as they came out", got.Data, err)
 	}
@@ -161,10 +161,18 @@ func TestEngineKilledAndStartedAgainFindsTheAgentWhereItWas(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stdin.Close()
-	engine.Stderr = os.Stderr
+	// Its output goes to a file: a process that holds the pipes of the test
+	// keeps `go test` waiting for it.
+	engineLog, err := os.Create(filepath.Join(h.cfg.Root, "engine.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engineLog.Close()
+	engine.Stderr = engineLog
 	if err := engine.Start(); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = engine.Process.Kill() })
 	var ptyPID, agentPID int
 	line, err := bufio.NewReader(stdout).ReadString('\n')
 	if err != nil {
@@ -180,7 +188,7 @@ func TestEngineKilledAndStartedAgainFindsTheAgentWhereItWas(t *testing.T) {
 	rec := h.record("t8")
 	out, c := h.observe(rec)
 	out.waitFor(t, ">")
-	before, err := c.Screen(t.Context(), 0)
+	before, err := c.Screen(h.ctx, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +206,7 @@ func TestEngineKilledAndStartedAgainFindsTheAgentWhereItWas(t *testing.T) {
 	}
 
 	h.open() // the new engine
-	rep, err := h.mgr.Reconcile(t.Context())
+	rep, err := h.mgr.Reconcile(h.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,11 +216,11 @@ func TestEngineKilledAndStartedAgainFindsTheAgentWhereItWas(t *testing.T) {
 	term := rep.Reconnected[0]
 	h.track(term)
 
-	st, err := term.Status(t.Context())
+	st, err := term.Status(h.ctx)
 	if err != nil || st.AgentPID != agentPID || term.PTY().PID != ptyPID {
 		t.Fatalf("agent PID %d (was %d), mestre-pty %d (was %d), %v: want the same processes", st.AgentPID, agentPID, term.PTY().PID, ptyPID, err)
 	}
-	after, err := term.Screen(t.Context(), 0)
+	after, err := term.Screen(h.ctx, 0)
 	if err != nil || after.Text != before.Text || after.Col != before.CurCol || after.Row != before.CurRow {
 		t.Fatalf("screen after = %q at %d,%d, before = %q at %d,%d (%v)", after.Text, after.Col, after.Row, before.Text, before.CurCol, before.CurRow, err)
 	}
@@ -220,11 +228,11 @@ func TestEngineKilledAndStartedAgainFindsTheAgentWhereItWas(t *testing.T) {
 		t.Fatalf("the terminal passed through %q", got)
 	}
 	// A keystroke after the return reaches the agent.
-	if err := term.Input(t.Context(), []byte("/fake-dump\r")); err != nil {
+	if err := term.Input(h.ctx, []byte("/fake-dump\r")); err != nil {
 		t.Fatal(err)
 	}
 	out.waitFor(t, `"provider":"claude"`)
-	if err := term.FlushLog(t.Context()); err != nil {
+	if err := term.FlushLog(h.ctx); err != nil {
 		t.Fatal(err)
 	}
 	log, err := os.ReadFile(filepath.Join(h.cfg.Logs, "t8.log"))
@@ -237,7 +245,7 @@ func TestEngineKilledAndStartedAgainFindsTheAgentWhereItWas(t *testing.T) {
 func TestReconciliationOfTheThreeCases(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, harnessOptions{})
-	ctx := t.Context()
+	ctx := h.ctx
 	alive := h.create(h.agentSpec("alive"))
 	noPID := h.create(h.agentSpec("nopid"))
 	dead := h.create(h.agentSpec("dead"))
@@ -339,7 +347,7 @@ func sorted(s []string) []string {
 func TestEngineOfANewVersionServesATerminalOfThePreviousOne(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, harnessOptions{version: versionPrevious})
-	ctx := t.Context()
+	ctx := h.ctx
 	old := h.create(h.agentSpec("old"))
 	out, _ := h.observe(h.record("old"))
 	out.waitFor(t, ">")
@@ -389,7 +397,7 @@ func TestEngineOfANewVersionServesATerminalOfThePreviousOne(t *testing.T) {
 func TestOnlyTheEngineWithTheSecretGetsIn(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, harnessOptions{})
-	ctx := t.Context()
+	ctx := h.ctx
 	term := h.create(h.agentSpec("t11"))
 	rec := h.record("t11")
 	out, _ := h.observe(rec)
