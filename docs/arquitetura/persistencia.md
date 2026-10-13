@@ -18,10 +18,14 @@
 - Biblioteca `modernc.org/sqlite` ([ADR 0001](../decisoes/0001-stack-go.md)).
 - `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000` (padrão).
 - **Uma conexão de escrita** e um grupo de conexões só de leitura. Numa Torre, a conexão de escrita do banco da Guilda é só da replicação.
-- **Migrações:** arquivos SQL numerados, embutidos no binário, um conjunto para o banco da Guilda e outro para o banco local de máquina; aplicados na subida, em transação, registrados em `schema_migrations`. Numa Torre, as migrações do banco da Guilda chegam pela replicação, nunca aplicadas localmente.
-- **Migrações só aditivas** dentro de uma versão maior (acrescentar tabela ou coluna; remover só numa versão seguinte), para a versão anterior do motor ainda abrir o banco depois de uma volta de versão. Antes de migrar, o motor grava uma cópia `pre-migracao-<versão>.db` ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)). É essa cópia que a ação `rollback` com restauração do banco usa: rara, nunca automática, só com Dono ou Administrador e PIN ([Guardião](../autocura/guardiao.md)).
+- **Migrações:** arquivos SQL numerados (`NNNN_nome.sql`, de 1 em diante, sem buracos), embutidos no binário, um conjunto para o banco da Guilda (`internal/store/guild/migrations/`) e outro para o banco local de máquina (`internal/store/machine/migrations/`); aplicados na subida, cada um na própria transação junto com a linha em `schema_migrations` (`version`, `name`, `applied_at`), de modo que uma migração que falha deixa o banco na última versão inteira. Só para frente: não há migração de volta. Numa Torre, as migrações do banco da Guilda chegam pela replicação, nunca aplicadas localmente (o banco é aberto como réplica).
+- **Banco mais novo que o binário:** o motor recusa abrir, sem alterar o arquivo, quando `schema_migrations` tem versão maior que a última migração embutida (vale também para a réplica).
+- **Datas:** colunas `*_at` guardam inteiros em milissegundos Unix, em UTC, vindos do relógio injetável.
+- **Migrações só aditivas** dentro de uma versão maior (acrescentar tabela ou coluna; remover só numa versão seguinte), para a versão anterior do motor ainda abrir o banco depois de uma volta de versão. Antes de migrar, o motor grava, se houver migração pendente num banco que já tinha esquema, uma cópia `pre-migracao-<versão>.db` (`VACUUM INTO`; `<versão>` é a versão do esquema antes de migrar, a que a restauração devolve; banco novo não tem o que copiar) ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)). É essa cópia que a ação `rollback` com restauração do banco usa: rara, nunca automática, só com Dono ou Administrador e PIN ([Guardião](../autocura/guardiao.md)).
 
 ## Tabelas principais do banco da Guilda (proposta)
+
+Cada marco cria só as tabelas de que precisa, em migração nova ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). Existem hoje: `secrets` no banco da Guilda e `terminals` no banco local de máquina (M1); as demais abaixo são proposta.
 
 Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas ficam nas migrações; o significado de cada dado, no documento da funcionalidade.
 
@@ -122,3 +126,14 @@ Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso
 - Mantém os **últimos 7**; o mais antigo é apagado só depois de um backup novo íntegro.
 - Vale para o banco principal na Cidadela e para o banco local de cada máquina; a réplica de uma Torre não tem backup próprio (a Cidadela é a fonte). Falha de backup vira alerta do [checklist](../plataforma/checklist.md).
 - **Cofre no backup da Cidadela:** os segredos vão no banco, já cifrados, e junto vai `cofre-envelope.bin`, a chave de dados cifrada para a chave pública de recuperação; o arquivo da chave protegido pelo sistema não vai. Sem a chave de recuperação, de que o Mestre guarda só a parte pública, o cofre do backup não abre ([cofre na troca](../guilda/replicacao.md#cofre-na-troca), [backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação)). As capturas do Operador do PC não vão no backup.
+
+## Critérios de aceite
+
+- **CA-PERSIST-01** · *rápida* — **Dado** um banco novo, **quando** é aberto, **então** a conexão de escrita e as de leitura estão em WAL, com `foreign_keys=ON` e `busy_timeout=5000`, a escrita com `synchronous=NORMAL` e uma só conexão, e as de leitura recusam gravar.
+- **CA-PERSIST-02** · *rápida* — **Dado** um conjunto de migrações, **quando** o banco é aberto, **então** elas são aplicadas em ordem e registradas em `schema_migrations` com a data do relógio injetável; reabrir não aplica de novo e um binário com migração a mais aplica só a nova.
+- **CA-PERSIST-03** · *rápida* — **Dado** uma migração que falha no meio, **quando** o banco é aberto, **então** a abertura falha e nada dela fica: nem a versão registrada, nem as tabelas que ela criou.
+- **CA-PERSIST-04** · *rápida* — **Dado** um banco com versão maior que a do binário, **quando** é aberto (como principal ou réplica), **então** a abertura é recusada com erro de esquema mais novo e o arquivo não muda.
+- **CA-PERSIST-05** · *rápida* — **Dado** uma migração pendente num banco que já tinha esquema, **quando** é aberto, **então** `pre-migracao-<versão>.db` existe, íntegra e com os dados anteriores; num banco novo, ou sem migração pendente, nada é gravado.
+- **CA-PERSIST-06** · *rápida* — **Dado** um banco aberto como réplica, **quando** há migrações no binário, **então** nenhuma é aplicada, nem num banco novo nem num mais antigo.
+- **CA-PERSIST-07** · *rápida* — **Dado** uma transação de escrita aberta, **quando** uma conexão de leitura consulta, **então** ela não espera e só vê o que foi confirmado.
+- **CA-PERSIST-08** · *rápida* — **Dado** os conjuntos embutidos da Guilda e da máquina, **quando** são aplicados a um banco vazio, **então** chegam à última versão, com as tabelas do marco e sem violação de chave estrangeira.
