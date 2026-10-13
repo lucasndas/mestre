@@ -60,7 +60,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 
 - Rede em memória: `Listen` e `Dial` por nome, sem sockets, funciona dentro do synctest; `Host(<nome>)` é a rede vista de uma máquina, no formato da rede do `transport`. TLS real roda por cima, com uma CA de teste ou a da Guilda, então mTLS e a [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda) são testados de verdade. Como no TCP, a primeira escrita depois que o outro lado fechou é aceita e perdida, e as seguintes falham com reset. Os prazos de leitura seguem o relógio da rede; com `net/http` por cima, use o relógio real (o da bolha do synctest).
 - Falhas injetadas: latência (pelo relógio), conexão cortada, partição entre dois pontos, conexão meio aberta (nada passa, nem o aviso de fim), perda de pacotes UDP, troca do IP de uma máquina e máquina isolada da rede inteira (para o [GitHub fora](../guilda/trava-no-github.md#github-fora) na Cidadela isolada).
-- Broadcast UDP e mDNS falsos para a [descoberta](../conectividade/descoberta.md).
+- Para a [descoberta](../conectividade/descoberta.md): UDP em memória com porta compartilhada entre soquetes (o broadcast chega a todos, inclusive aos da própria máquina; o unicast, a um só), `BlockBroadcast` (o firewall), perda dos próximos datagramas, e mDNS falso (`AnnounceMDNS`, `WatchMDNS`, `BlockMDNS`); `SetIP` dá um IP à máquina e o troca, reiniciando as conexões. `internal/testkit/discorig` liga a descoberta real a isso e anuncia um serviço como o Guardião faz.
 - `http.RoundTripper` em memória para os clientes do Telegram, do GitHub e do whisper-server.
 
 ### Outros dublês

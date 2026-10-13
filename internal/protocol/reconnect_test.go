@@ -234,6 +234,10 @@ func TestANewConnectionOfTheSameMachineReplacesTheOldOne(t *testing.T) {
 		first := rawTower(t, w)
 		defer first.Close(1000, "")
 		openRaw(t, w, first, protocol.DefaultRange())
+		// The welcome leaves before the Citadel attaches the connection to
+		// the link. Without waiting, the second connection could attach
+		// first and the older one would replace the newer.
+		settle()
 		second := rawTower(t, w)
 		defer second.Close(1000, "")
 		openRaw(t, w, second, protocol.DefaultRange())

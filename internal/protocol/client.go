@@ -75,7 +75,11 @@ func (c *Client) Run(ctx context.Context) error {
 		if err := c.afterEnd(ctx, peer, cause); err != nil {
 			return err
 		}
-		if failures > 0 && failures%c.cfg.Timing.RediscoverAfter == 0 {
+		// Three failures in a row, or a machine of the Guild that answered it
+		// is not the Citadel (4007, with the certificate): look for the
+		// Citadel again.
+		var notCitadel *NotCitadelError
+		if (failures > 0 && failures%c.cfg.Timing.RediscoverAfter == 0) || errors.As(cause, &notCitadel) {
 			if h := c.cfg.Hooks.Rediscover; h != nil {
 				h(ctx)
 			}
@@ -118,6 +122,19 @@ func (c *Client) incompatible(remote Range) {
 	if h := c.cfg.Hooks.Incompatible; h != nil {
 		h(c.cfg.Profile.Versions, remote)
 	}
+}
+
+// NotCitadelError is why a connection did not open: the machine reached is of
+// the Guild but is not the Citadel (close 4007). The certificate it answered
+// with is the current one, already followed if it was newer, and names the
+// Citadel to look for (docs/conectividade/protocolo.md#códigos-de-fechamento).
+type NotCitadelError struct {
+	Peer        Peer
+	Certificate Certificate
+}
+
+func (e *NotCitadelError) Error() string {
+	return fmt.Sprintf("%v: %s is not the Citadel; epoch %d names %s", ErrOpening, e.Peer.ID, e.Certificate.Epoch, e.Certificate.CitadelMachineID)
 }
 
 // remoteError is an `error` message that came instead of the welcome.
@@ -194,6 +211,9 @@ func (c *Client) open(ctx context.Context, conn Conn) (*Session, error) {
 		}
 		return nil, &remoteError{e: &e, peer: peer}
 	}
+	if env.Type == TypeGuildEpoch && env.ReplyTo == hello.ID {
+		return nil, c.notCitadel(hctx, peer, env)
+	}
 	if env.Type != cfg.Profile.WelcomeType || env.ReplyTo != hello.ID {
 		return nil, fmt.Errorf("%w: expected %s answering %s, got %s answering %q", ErrOpening, cfg.Profile.WelcomeType, hello.ID, env.Type, env.ReplyTo)
 	}
@@ -215,6 +235,12 @@ func (c *Client) open(ctx context.Context, conn Conn) (*Session, error) {
 		_ = conn.Close(CloseBadCredential, "certificate refused")
 		return nil, fmt.Errorf("%w: the certificate of the welcome was refused: %v", ErrOpening, err)
 	}
+	// The machine that answers has to be the one the certificate names:
+	// being in the Guild is not being the Citadel.
+	if cert.CitadelMachineID != peer.ID {
+		_ = conn.Close(CloseBadCredential, "not the Citadel of the certificate")
+		return nil, fmt.Errorf("%w: %s presented the certificate of epoch %d, which names %s", ErrOpening, peer.ID, cert.Epoch, cert.CitadelMachineID)
+	}
 	if cert.Epoch != env.Epoch {
 		_ = conn.Close(1002, "epoch mismatch")
 		return nil, fmt.Errorf("%w: the welcome says epoch %d and its certificate %d", ErrOpening, env.Epoch, cert.Epoch)
@@ -234,6 +260,19 @@ func (c *Client) open(ctx context.Context, conn Conn) (*Session, error) {
 	}
 	caps := cfg.Capabilities.Intersect(w.Capabilities)
 	return newSession(cfg, c.link, conn, SideTower, w.Protocol, caps), nil
+}
+
+// notCitadel handles the answer of a machine that is not the Citadel: its
+// certificate, if valid, is followed when newer.
+func (c *Client) notCitadel(ctx context.Context, peer Peer, env Envelope) error {
+	var cert Certificate
+	if err := json.Unmarshal(env.Payload, &cert); err != nil {
+		return fmt.Errorf("%w: unreadable certificate from %s: %v", ErrOpening, peer.ID, err)
+	}
+	if perr := c.cfg.follow(ctx, cert, cert.Epoch); perr != nil {
+		return fmt.Errorf("%w: %v", ErrOpening, perr)
+	}
+	return &NotCitadelError{Peer: peer, Certificate: cert}
 }
 
 // pruneLoop forgets the processed ids older than the TTL.

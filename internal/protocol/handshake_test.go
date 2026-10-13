@@ -318,6 +318,40 @@ func TestAWelcomeWithAForgedCertificateIsNotFollowed(t *testing.T) {
 	})
 }
 
+func TestAWelcomeFromAMachineThatTheCertificateDoesNotNameIsRefused(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := newWorld(t, opts{epochC: 1})
+		w.partsC.Epochs.Set(protorig.Cert(1, "someone-else", "ok")) // valid, but it names another machine
+		w.start()
+		defer w.stop()
+		settle()
+		if w.toTower().Connected() {
+			t.Fatal("the Tower connected to a machine that the certificate does not name")
+		}
+	})
+}
+
+func TestAMachineThatIsNotTheCitadelSendsTheTowerToTheOneItsCertificateNames(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := newWorld(t, opts{epochC: 2, epochT: 1})
+		w.cfgC.IsCitadel = func() bool { return false }
+		var rediscovered int
+		w.cfgT.Hooks.Rediscover = func(context.Context) { rediscovered++ }
+		w.start()
+		defer w.stop()
+		settle()
+		if got := w.partsT.Epochs.Followed(); len(got) != 1 || got[0] != 2 {
+			t.Fatalf("followed = %v, want the certificate of epoch 2", got)
+		}
+		// at once, not after the third failure
+		if rediscovered != 1 || len(w.gaps()) != 0 {
+			t.Fatalf("rediscovered %d times after %d retries", rediscovered, len(w.gaps()))
+		}
+	})
+}
+
 func TestATowerDoesNotConnectIfTheCitadelCannotFollowItsEpoch(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
