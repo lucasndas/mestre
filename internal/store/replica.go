@@ -401,7 +401,10 @@ func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 	}
 	// Next to the target, so the move below is a rename.
 	incoming := d.path + ".incoming"
-	if err := copyFile(src, incoming); err != nil {
+	// The copy is flushed to disk unless the database runs without flushes (the
+	// tests that are not about durability: a flush costs tens of milliseconds
+	// on a Windows runner).
+	if err := copyFile(src, incoming, d.opts.Synchronous != "OFF"); err != nil {
 		return fmt.Errorf("store: replace: %w", err)
 	}
 	d.mu.Lock()
@@ -428,14 +431,14 @@ func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 }
 
 func (d *DB) checkCopy(ctx context.Context, path string, wantLSN uint64) error {
-	if err := quickCheck(ctx, path); err != nil {
-		return fmt.Errorf("store: the copy is damaged: %w", err)
-	}
 	db, err := sql.Open("sqlite", dsn(path, []string{"query_only(1)"}, ""))
 	if err != nil {
 		return fmt.Errorf("store: the copy: %w", err)
 	}
 	defer db.Close()
+	if err := quickCheckDB(ctx, db); err != nil {
+		return fmt.Errorf("store: the copy is damaged: %w", err)
+	}
 	have, err := appliedVersion(ctx, db)
 	if err != nil {
 		return fmt.Errorf("store: the copy: %w", err)
@@ -453,7 +456,7 @@ func (d *DB) checkCopy(ctx context.Context, path string, wantLSN uint64) error {
 	return nil
 }
 
-func copyFile(src, dst string) error {
+func copyFile(src, dst string, flush bool) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -468,10 +471,12 @@ func copyFile(src, dst string) error {
 		_ = os.Remove(dst)
 		return err
 	}
-	if err := out.Sync(); err != nil {
-		_ = out.Close()
-		_ = os.Remove(dst)
-		return err
+	if flush {
+		if err := out.Sync(); err != nil {
+			_ = out.Close()
+			_ = os.Remove(dst)
+			return err
+		}
 	}
 	return out.Close()
 }

@@ -237,6 +237,11 @@ func quickCheck(ctx context.Context, path string) error {
 		return err
 	}
 	defer db.Close()
+	return quickCheckDB(ctx, db)
+}
+
+// quickCheckDB runs PRAGMA quick_check through db.
+func quickCheckDB(ctx context.Context, db *sql.DB) error {
 	rows, err := db.QueryContext(ctx, `PRAGMA quick_check`)
 	if err != nil {
 		return fmt.Errorf("quick_check: %w", err)

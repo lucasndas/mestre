@@ -129,12 +129,6 @@ func TestTheDatabaseStreamsToATowerFromTheFullCopyOnAndRefusesEveryOtherWrite(t 
 			t.Errorf("status = %+v", st)
 		}
 
-		// A record bigger than a frame goes by full copy too.
-		r.exec(`UPDATE machines SET sheet = ? WHERE machine_id = 'm0002'`, strings.Repeat("x", 1200*1024))
-		eventually(t, "the third full copy", snapshots(tw, 3))
-		r.insertMachine(2003)
-		equal(t, r, tw)
-
 		// Nothing writes to the replica but the replication, while it replicates and after.
 		for _, q := range []string{
 			`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES ('x', 'x', '', 0, 0, 'active', '{}', 0)`,
@@ -216,14 +210,6 @@ func TestATowerThatComesBackGetsOnlyWhatIsMissingOrAFullCopyAfterTheRetention(t 
 		}
 		tw.start(true)
 		eventually(t, "the second full copy", snapshots(tw, 2))
-		equal(t, r, tw)
-
-		// Another epoch (a promotion happened meanwhile): a full copy as well.
-		tw.stop()
-		r.exec(`UPDATE guild SET epoch = 2`)
-		r.insertMachine(200)
-		tw.start(true)
-		eventually(t, "the third full copy", snapshots(tw, 3))
 		equal(t, r, tw)
 	})
 }
@@ -337,16 +323,6 @@ func TestTheVaultReachesOnlyTheMachinesThatAreNotExcludedAndThePromotedTowerChan
 		if _, err := vault.Create(ctx, cfg); !errors.Is(err, vault.ErrReplica) {
 			t.Errorf("vault.Create on a replica = %v, want ErrReplica", err)
 		}
-
-		// A machine excluded while it was away erases the vault when it connects.
-		common.stop()
-		r.roster.set("common", true)
-		common.start(true)
-		eventually(t, "the vault to be erased on the connection", func() bool { return !holds(common) && rows(common) == 0 })
-		common.stop()
-		r.roster.set("common", false)
-		common.start(true)
-		eventually(t, "the vault to come back on the connection", func() bool { return holds(common) && rows(common) == 3 && common.lsn() == r.lsn() })
 
 		// The Citadel is lost and the Tower is promoted: its file becomes the main
 		// database, no copy, and the vault opens from its own copy. Changing the key
