@@ -97,7 +97,7 @@ func sweep(target LUID, opts Options) (int, error) {
 	keep := append([]uint32{uint32(os.Getpid())}, opts.Keep...)
 	total := 0
 	for range MaxRounds {
-		n, err := sweepOnce(target, keep, opts.Only)
+		n, err := sweepOnce(target, keep, opts.Only, opts.terminate)
 		total += n
 		if err != nil {
 			return total, err
@@ -112,7 +112,10 @@ func sweep(target LUID, opts Options) (int, error) {
 // sweepOnce takes one snapshot, ends the processes of the target session and
 // waits for them to be gone. The token is read on the very handle that is then
 // terminated, so a PID reused between the snapshot and the kill is never hit.
-func sweepOnce(target LUID, keep []uint32, only func(uint32) bool) (int, error) {
+func sweepOnce(target LUID, keep []uint32, only func(uint32) bool, terminate func(uintptr) error) (int, error) {
+	if terminate == nil {
+		terminate = func(h uintptr) error { return windows.TerminateProcess(windows.Handle(h), 1) }
+	}
 	pids, err := snapshot()
 	if err != nil {
 		return 0, err
@@ -145,22 +148,47 @@ func sweepOnce(target LUID, keep []uint32, only func(uint32) bool) (int, error) 
 	}
 	var errs []error
 	var ended []windows.Handle
+	// denied has the processes TerminateProcess answered "access denied" for:
+	// that is what Windows says of a process that is already ending (the Job
+	// Object of the terminal was terminated a moment ago, or the process ended
+	// and someone still holds a handle). They are waited for like the others,
+	// and only an error if they do not end.
+	denied := map[windows.Handle]error{}
 	for _, pid := range Select(procs, target, keep...) {
 		if only != nil && !only(pid) {
 			continue
 		}
-		if err := windows.TerminateProcess(handles[pid], 1); err != nil {
-			errs = append(errs, fmt.Errorf("terminate process %d: %w", pid, err))
-			continue
+		h := handles[pid]
+		if err := terminate(uintptr(h)); err != nil {
+			err = fmt.Errorf("terminate process %d (%s): %w", pid, imageName(h), err)
+			if !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+				errs = append(errs, err)
+				continue
+			}
+			denied[h] = err
 		}
-		ended = append(ended, handles[pid])
+		ended = append(ended, h)
 	}
 	for _, h := range ended {
 		if ev, err := windows.WaitForSingleObject(h, 10_000); err != nil || ev != windows.WAIT_OBJECT_0 {
-			errs = append(errs, errors.New("a process of the logon session did not end"))
+			if d := denied[h]; d != nil {
+				errs = append(errs, d)
+			} else {
+				errs = append(errs, errors.New("a process of the logon session did not end"))
+			}
 		}
 	}
 	return len(ended), errors.Join(errs...)
+}
+
+// imageName is the executable of the process, for the messages.
+func imageName(h windows.Handle) string {
+	buf := make([]uint16, windows.MAX_PATH)
+	n := uint32(len(buf))
+	if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &n); err != nil {
+		return "?"
+	}
+	return windows.UTF16ToString(buf[:n])
 }
 
 // snapshot lists the PIDs of the running processes.

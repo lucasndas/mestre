@@ -48,7 +48,8 @@ func startHelper(t *testing.T) *exec.Cmd {
 // logon session of the test): the full suite cannot make a logon session of
 // its own, and sweeping the one of the runner would end the runner, so the
 // test narrows the sweep to one helper process. The sweep of a real terminal
-// session (conhost.exe, a process created through WMI) is in the heavy suite.
+// session (conhost.exe, a process created through WMI) is in the real-account
+// tests.
 func TestTheSweepEndsTheProcessesOfTheSession(t *testing.T) {
 	t.Parallel()
 	self, err := SessionOfSelf()
@@ -93,6 +94,36 @@ func TestTheSweepEndsTheProcessesOfTheSession(t *testing.T) {
 	}
 	if !alive(t, bystander.Process.Pid) {
 		t.Fatal("the bystander was ended too")
+	}
+}
+
+// CA-TERM-05 (the sweep after the Job Object): TerminateProcess answers
+// "access denied" for a process that is already ending, which is what a
+// process the Job Object of the terminal is just ending looks like to the sweep
+// that follows it (the real-account tests met it). That is not a failure of the
+// sweep: the process is waited for like the others. The test makes the answer
+// real: the process ends meanwhile and the system call says "denied".
+func TestTheSweepDoesNotFailOnAProcessThatIsAlreadyEnding(t *testing.T) {
+	t.Parallel()
+	self, err := SessionOfSelf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := startHelper(t)
+	pid := uint32(child.Process.Pid)
+	opts := Options{
+		Only: func(p uint32) bool { return p == pid },
+		terminate: func(h uintptr) error {
+			_ = windows.TerminateProcess(windows.Handle(h), 1)
+			return windows.ERROR_ACCESS_DENIED
+		},
+	}
+	n, err := sweep(self.ID, opts)
+	if err != nil || n != 1 {
+		t.Fatalf("sweep = %d, %v; want the ending helper taken as done, without an error", n, err)
+	}
+	if alive(t, child.Process.Pid) {
+		t.Fatal("the helper is still running")
 	}
 }
 

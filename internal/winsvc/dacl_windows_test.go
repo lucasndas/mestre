@@ -13,8 +13,8 @@ type ace struct {
 }
 
 // CA-TERM-12 (the DACL that is built; that a process of another terminal
-// cannot open it is in the heavy suite, which can make two logon sessions
-// of the agent account)
+// cannot open it is in the real-account tests, which can make two logon
+// sessions of the agent account)
 func TestTheDefaultDACLOfATerminalExcludesTheAccount(t *testing.T) {
 	t.Parallel()
 	logon, err := windows.StringToSid("S-1-5-5-0-123456")

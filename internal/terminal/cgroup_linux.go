@@ -69,7 +69,9 @@ func CreateCgroup(base, id string) (string, *os.File, error) {
 // KillCgroupDir ends every process of the cgroup with cgroup.kill (Linux
 // 5.14+), waits for "populated 0" in cgroup.events through inotify, with no
 // polling, and removes the directory. A directory that is already gone is
-// success.
+// success, also when it goes while this waits: the engine can ask twice for the
+// same terminal at once (a stop, and the end of its agent), and the second
+// request finds the cgroup removed by the first.
 func KillCgroupDir(ctx context.Context, dir string) error {
 	if err := os.WriteFile(filepath.Join(dir, "cgroup.kill"), []byte("1"), 0); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -78,6 +80,9 @@ func KillCgroupDir(ctx context.Context, dir string) error {
 		return fmt.Errorf("cgroup.kill %s: %w", dir, err)
 	}
 	if err := waitUnpopulated(ctx, dir); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
 		return err
 	}
 	if err := os.Remove(dir); err != nil && !errors.Is(err, fs.ErrNotExist) {

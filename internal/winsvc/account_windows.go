@@ -49,7 +49,7 @@ type Account interface {
 // itself, with its own token and environment and no profile to load. The
 // whole path of the launcher runs, except the logon; what the logon needs
 // (a local account and its password, LoadUserProfile, the window station)
-// belongs to the heavy suite.
+// belongs to the real-account tests (internal/realaccount).
 type SelfAccount struct {
 	// Released is called when a session is released (once per session).
 	Released func(id string)
