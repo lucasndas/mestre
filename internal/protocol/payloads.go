@@ -210,6 +210,21 @@ const (
 	AckError     = "error"
 )
 
+// OutboxFloor is `outbox.floor`: no message the sender may still send again
+// on this link has an id lower than ID, so the receiver may forget the ids
+// below it (docs/conectividade/protocolo.md#ack-e-idempotência).
+type OutboxFloor struct {
+	ID string `json:"id" proto:"req"`
+}
+
+// Validate checks the id.
+func (f *OutboxFloor) Validate() error {
+	if _, err := ParseULID(f.ID); err != nil {
+		return fmt.Errorf("id: %w", err)
+	}
+	return nil
+}
+
 // Ack is `ack`: "received and accepted", not "done".
 type Ack struct {
 	Status string `json:"status" proto:"req"`
@@ -534,6 +549,9 @@ const (
 // DefaultChunkSize is the size of a part unless the sender says otherwise.
 const DefaultChunkSize = 256 << 10
 
+// MaxXferSize is the largest content a transfer may announce (64 GiB).
+const MaxXferSize = 64 << 30
+
 // XferBegin is `xfer.begin`. For a bundle Meta carries the table, the
 // branch, the prerequisite commits and the tip; for a file, the destination
 // path.
@@ -554,10 +572,18 @@ func (b *XferBegin) Chunk() int {
 	return b.ChunkSize
 }
 
-// Parts is how many parts the transfer has.
+// Parts is how many parts the transfer has; it does not overflow whatever
+// the size.
 func (b *XferBegin) Parts() uint64 {
-	c := int64(b.Chunk())
-	return uint64((b.Size + c - 1) / c)
+	if b.Size <= 0 {
+		return 0
+	}
+	c, s := uint64(b.Chunk()), uint64(b.Size)
+	n := s / c
+	if s%c != 0 {
+		n++
+	}
+	return n
 }
 
 // Validate checks the transfer.
@@ -568,8 +594,8 @@ func (b *XferBegin) Validate() error {
 	if !slices.Contains([]string{KindGitBundle, KindFile, KindDBSnapshot, KindRelease}, b.Kind) {
 		return fmt.Errorf("kind %q is unknown", b.Kind)
 	}
-	if b.Size < 0 {
-		return fmt.Errorf("size %d is negative", b.Size)
+	if b.Size < 0 || b.Size > MaxXferSize {
+		return fmt.Errorf("size %d is out of range (at most %d)", b.Size, int64(MaxXferSize))
 	}
 	if b.ChunkSize < 0 || b.ChunkSize > MaxDataPayload {
 		return fmt.Errorf("chunk_size %d is out of range", b.ChunkSize)
@@ -588,10 +614,12 @@ type XferReady struct {
 }
 
 // XferProgress is `xfer.progress`: the next part the receiver expects; it
-// frees the window of the sender.
+// frees the window of the sender. Resend says the receiver dropped what came
+// after NextIndex (a part was missing): the sender goes back to it.
 type XferProgress struct {
 	XferID    string `json:"xfer_id" proto:"req"`
 	NextIndex uint64 `json:"next_index" proto:"req"`
+	Resend    bool   `json:"resend,omitempty"`
 }
 
 // XferEnd is `xfer.end`.

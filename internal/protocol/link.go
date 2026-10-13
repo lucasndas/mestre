@@ -52,16 +52,33 @@ type Link struct {
 	gen  *IDGen
 	xfer *xferHub
 
+	// turn makes the messages of the link run one at a time, also while an
+	// older connection that is being replaced still has a message in its
+	// handler: whoever runs one holds its only token.
+	turn chan struct{}
+
 	mu      sync.Mutex
 	sess    *Session
 	order   uint64        // last order given by admit
 	up      chan struct{} // closed while there is a connection
-	vol     []Envelope    // messages of volatile types, in memory only
+	seq     uint64        // order of the messages put in this process, durable or volatile
+	putSeq  map[string]uint64
+	vol     []volatileMsg // messages of volatile types, in memory only
 	waiters map[string]chan AckResult
 }
 
+// volatileMsg is a message of a volatile type that waits for its ack, with
+// its place among the messages put in this process.
+type volatileMsg struct {
+	env Envelope
+	seq uint64
+}
+
 func newLink(cfg *Config, key string, side Side) *Link {
-	l := &Link{cfg: cfg, key: key, side: side, gen: NewIDGen(cfg.Clock), waiters: map[string]chan AckResult{}, up: make(chan struct{})}
+	l := &Link{
+		cfg: cfg, key: key, side: side, gen: NewIDGen(cfg.Clock), waiters: map[string]chan AckResult{}, up: make(chan struct{}),
+		putSeq: map[string]uint64{}, turn: make(chan struct{}, 1),
+	}
 	l.xfer = newXferHub(l)
 	return l
 }
@@ -91,10 +108,8 @@ func (l *Link) Send(ctx context.Context, o Outgoing) (string, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if spec.Ack && !o.Transient {
-		if spec.Volatile {
-			l.vol = append(l.vol, env)
-		} else if err := l.cfg.Outbox.Put(ctx, l.key, env); err != nil {
-			return "", fmt.Errorf("outbox: %w", err)
+		if err := l.keep(ctx, env, spec.Volatile); err != nil {
+			return "", err
 		}
 	}
 	if l.sess == nil {
@@ -110,6 +125,30 @@ func (l *Link) Send(ctx context.Context, o Outgoing) (string, error) {
 		return env.ID, err
 	}
 	return env.ID, nil
+}
+
+// keep puts a message that waits for its ack in the outbox, or in memory for
+// a volatile type, and notes its place in the line. A message that is
+// already kept keeps its place. The caller holds l.mu.
+func (l *Link) keep(ctx context.Context, env Envelope, volatile bool) error {
+	if _, ok := l.putSeq[env.ID]; ok {
+		return nil
+	}
+	if volatile {
+		for _, v := range l.vol {
+			if v.env.ID == env.ID {
+				return nil
+			}
+		}
+	} else if err := l.cfg.Outbox.Put(ctx, l.key, env); err != nil {
+		return fmt.Errorf("outbox: %w", err)
+	}
+	l.seq++
+	l.putSeq[env.ID] = l.seq
+	if volatile {
+		l.vol = append(l.vol, volatileMsg{env: env, seq: l.seq})
+	}
+	return nil
 }
 
 func (l *Link) build(o *Outgoing) (Envelope, Spec, error) {
@@ -220,30 +259,91 @@ func (l *Link) attach(ctx context.Context, s *Session) error {
 	if old == nil {
 		close(l.up)
 	}
-	for _, env := range pending {
+	resend := l.inOrder(pending)
+	for _, env := range resend {
 		if err := s.enqueue(env); err != nil {
 			return err
 		}
 	}
-	for _, env := range l.vol {
-		if err := s.enqueue(env); err != nil {
-			return err
-		}
-	}
+	// After what it sends again, the floor: nothing of ours below it can come
+	// again, so the peer may forget those ids.
+	l.sendFloor(s, resend)
 	if old != nil && old != s {
 		old.Close(CloseReplaced, "replaced by a newer connection")
 	}
 	return nil
 }
 
+// inOrder puts the volatile messages among the durable ones in the order
+// they were put: a durable message of an earlier process goes first, then
+// every one of this process by its place in the line. The caller holds l.mu.
+func (l *Link) inOrder(pending []Envelope) []Envelope {
+	out := make([]Envelope, 0, len(pending)+len(l.vol))
+	vi := 0
+	for _, env := range pending {
+		if seq, ok := l.putSeq[env.ID]; ok {
+			for vi < len(l.vol) && l.vol[vi].seq < seq {
+				out = append(out, l.vol[vi].env)
+				vi++
+			}
+		}
+		out = append(out, env)
+	}
+	for ; vi < len(l.vol); vi++ {
+		out = append(out, l.vol[vi].env)
+	}
+	return out
+}
+
+// sendFloor tells the peer the lowest id this machine may still send it
+// again: the oldest of what waits for an ack, or, with nothing waiting, an
+// id newer than every one already used. The ids are ULIDs, ordered as the
+// strings are. The caller holds l.mu and passes what waits now.
+func (l *Link) sendFloor(s *Session, waiting []Envelope) {
+	if _, ok := l.cfg.Registry.Spec(TypeOutboxFloor); !ok {
+		return
+	}
+	floor := l.gen.NewString()
+	for _, env := range waiting {
+		if env.ID < floor {
+			floor = env.ID
+		}
+	}
+	if err := s.sendTyped(TypeOutboxFloor, OutboxFloor{ID: floor}); err != nil && !errors.Is(err, ErrPeerStale) && !errors.Is(err, ErrSessionClosed) {
+		l.cfg.Logger.Warn("protocol: outbox floor", "peer", l.key, "err", err)
+	}
+}
+
+// refreshFloor sends the floor again on the current connection, so the
+// peer can forget the ids of a connection that lasts long.
+func (l *Link) refreshFloor(ctx context.Context) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.sess == nil {
+		return
+	}
+	pending, err := l.cfg.Outbox.Pending(ctx, l.key)
+	if err != nil {
+		l.cfg.Logger.Warn("protocol: outbox floor", "peer", l.key, "err", err)
+		return
+	}
+	l.sendFloor(l.sess, l.inOrder(pending))
+}
+
+// detach takes s off the link when it ends. Only the current connection
+// releases the files of the transfers: an older one that ends after it was
+// replaced must not close what the newer one is writing.
 func (l *Link) detach(s *Session) {
 	l.mu.Lock()
-	if l.sess == s {
+	current := l.sess == s
+	if current {
 		l.sess = nil
 		l.up = make(chan struct{})
 	}
 	l.mu.Unlock()
-	l.xfer.releaseFiles()
+	if current {
+		l.xfer.releaseFiles()
+	}
 }
 
 // waitConnected returns the current connection, waiting for one if there is
@@ -264,15 +364,18 @@ func (l *Link) waitConnected(ctx context.Context) (*Session, error) {
 	}
 }
 
-// ackArrived is the confirmation of a message of ours.
+// ackArrived is the answer of the handler of the peer to a message of ours.
+// Whatever its status the message leaves the outbox: with a retryable error
+// it is the sender that decides whether to send it again, with the same id
+// (docs/conectividade/protocolo.md#ack-e-idempotência).
 func (l *Link) ackArrived(ctx context.Context, id string, a *Ack) {
 	l.finish(ctx, id, AckResult{Status: a.Status, Error: a.Error}, true)
 }
 
-// errorArrived is the refusal of a message of ours. Unless it can work when
-// sent again, or it only says that our epoch is old (the message goes to
-// the right Citadel later), the message leaves the outbox: it would only
-// be refused again.
+// errorArrived is a refusal in place of the ack: the message did not reach a
+// handler. Unless it can work when sent again, or it only says that our
+// epoch is old (the message goes to the right Citadel later), the message
+// leaves the outbox: it would only be refused again.
 func (l *Link) errorArrived(ctx context.Context, id string, e *Error) {
 	l.finish(ctx, id, AckResult{Status: AckError, Error: e}, !e.Retryable && e.Code != CodeStaleEpoch)
 }
@@ -285,8 +388,9 @@ func (l *Link) finish(ctx context.Context, id string, r AckResult, drop bool) {
 	}
 	l.mu.Lock()
 	if drop {
-		for i, e := range l.vol {
-			if e.ID == id {
+		delete(l.putSeq, id)
+		for i, v := range l.vol {
+			if v.env.ID == id {
 				l.vol = append(l.vol[:i], l.vol[i+1:]...)
 				break
 			}
@@ -306,22 +410,10 @@ func (l *Link) finish(ctx context.Context, id string, r AckResult, drop bool) {
 // the application.
 func (l *Link) handlerFor(typ string) (Handler, bool) {
 	switch typ {
-	case TypeGuildEpoch:
-		return HandlerFunc(l.handleEpochRequest), true
 	case TypeXferBegin, TypeXferEnd, TypeXferReady, TypeXferProgress, TypeXferDone:
 		return l.xfer, true
 	}
 	return l.cfg.Router.lookup(typ)
-}
-
-// handleEpochRequest answers guild.epoch with the certificate this machine
-// follows.
-func (l *Link) handleEpochRequest(_ context.Context, _ *Message) (*Reply, error) {
-	c := l.cfg.Epoch.Certificate()
-	if c == nil {
-		return nil, NewError(CodeNotFound, "this machine has no certificate of epoch")
-	}
-	return &Reply{Type: TypeGuildEpoch, Payload: c}, nil
 }
 
 // jsonOf encodes v, which always encodes for the protocol types.

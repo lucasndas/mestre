@@ -41,14 +41,16 @@ func (c *Client) Link() *Link { return c.link }
 
 // Run keeps the connection until ctx is done or the credential is revoked
 // (4002). Between attempts it waits 1 s, doubling to 60 s with a variation of
-// 20%; a connection that opened resets the delay. After 3 failures in a row
-// it asks Hooks.Rediscover to find the Guild again.
+// 20%; only a connection that lasted Timing.StableAfter resets the delay, so
+// a Citadel that drops every connection at once is not dialed every second.
+// After 3 failures in a row to open a connection it asks Hooks.Rediscover to
+// find the Guild again.
 func (c *Client) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	pctx, stop := context.WithCancel(ctx)
 	defer stop()
-	wg.Go(func() { pruneLoop(pctx, c.cfg) })
+	wg.Go(func() { pruneLoop(pctx, c.cfg, func() []*Link { return []*Link{c.link} }) })
 
 	b := newBackoff(c.cfg.Timing, c.cfg.Rand)
 	failures := 0
@@ -58,11 +60,14 @@ func (c *Client) Run(ctx context.Context) error {
 		var cause error
 		if err == nil {
 			failures = 0
-			b.reset()
 			peer = sess.peer
+			opened := c.cfg.Clock.Now()
 			cause = sess.serve(ctx)
 			if errors.Is(cause, ErrStaleEpoch) { // the Citadel we reached is an old one
 				failures++
+			}
+			if clock.Since(c.cfg.Clock, opened) >= c.cfg.Timing.StableAfter {
+				b.reset()
 			}
 		} else {
 			failures++
@@ -76,10 +81,12 @@ func (c *Client) Run(ctx context.Context) error {
 			return err
 		}
 		// Three failures in a row, or a machine of the Guild that answered it
-		// is not the Citadel (4007, with the certificate): look for the
-		// Citadel again.
+		// is not the Citadel (4007, at the opening with the certificate, or
+		// later, after an epoch was followed): look for the Citadel again.
 		var notCitadel *NotCitadelError
-		if (failures > 0 && failures%c.cfg.Timing.RediscoverAfter == 0) || errors.As(cause, &notCitadel) {
+		var ce *CloseError
+		if (failures > 0 && failures%c.cfg.Timing.RediscoverAfter == 0) || errors.As(cause, &notCitadel) ||
+			errors.Is(cause, ErrNotCitadel) || (errors.As(cause, &ce) && ce.Code == CloseNotCitadel) {
 			if h := c.cfg.Hooks.Rediscover; h != nil {
 				h(ctx)
 			}
@@ -275,15 +282,32 @@ func (c *Client) notCitadel(ctx context.Context, peer Peer, env Envelope) error 
 	return &NotCitadelError{Peer: peer, Certificate: cert}
 }
 
-// pruneLoop forgets the processed ids older than the TTL.
-func pruneLoop(ctx context.Context, cfg *Config) {
+// pruneLoop, every Timing.ProcessedPrune: sends each connected peer the
+// floor of our outbox; forgets, of each peer connected now, the ids older
+// than the TTL below the floor it sent (a peer that is away keeps all its
+// ids, because it may still send them again); and removes the temporary
+// files of transfers nobody touched for Timing.XferTTL.
+func pruneLoop(ctx context.Context, cfg *Config, links func() []*Link) {
 	t := cfg.Clock.NewTicker(cfg.Timing.ProcessedPrune)
 	defer t.Stop()
 	for {
 		cutoff := cfg.Clock.Now().Add(-cfg.Timing.ProcessedTTL)
-		if _, err := cfg.Processed.Prune(ctx, cutoff); err != nil && ctx.Err() == nil {
-			cfg.Logger.Error("protocol: prune processed commands", "err", err)
+		ls := links()
+		for _, l := range ls {
+			l.refreshFloor(ctx)
+			s := l.Session()
+			if s == nil {
+				continue
+			}
+			floor := s.peerFloor()
+			if floor == "" {
+				continue
+			}
+			if _, err := cfg.Processed.Prune(ctx, l.key, cutoff, floor); err != nil && ctx.Err() == nil {
+				cfg.Logger.Error("protocol: prune processed commands", "peer", l.key, "err", err)
+			}
 		}
+		pruneTransfers(cfg, ls, cfg.Timing.XferTTL)
 		select {
 		case <-t.C():
 		case <-ctx.Done():

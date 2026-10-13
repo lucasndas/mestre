@@ -40,18 +40,23 @@ func sendRaw(t *testing.T, w *world, c protocol.Conn, e protocol.Envelope) {
 	}
 }
 
-// recvRaw reads the next envelope.
+// recvRaw reads the next envelope, past the floors of the outbox that the
+// Citadel sends on its own.
 func recvRaw(t *testing.T, c protocol.Conn) protocol.Envelope {
 	t.Helper()
-	_, data, err := c.Read(t.Context())
-	if err != nil {
-		t.Fatalf("Read: %v", err)
+	for {
+		_, data, err := c.Read(t.Context())
+		if err != nil {
+			t.Fatalf("Read: %v", err)
+		}
+		e, perr := protocol.Decode(data)
+		if perr != nil {
+			t.Fatalf("Decode: %v", perr)
+		}
+		if e.Type != protocol.TypeOutboxFloor {
+			return e
+		}
 	}
-	e, perr := protocol.Decode(data)
-	if perr != nil {
-		t.Fatalf("Decode: %v", perr)
-	}
-	return e
 }
 
 // helloPayload is the hello of the Tower with the range r and its certificate.

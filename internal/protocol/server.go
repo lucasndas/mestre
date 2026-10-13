@@ -44,13 +44,14 @@ func (srv *Server) Link(machineID string) *Link {
 }
 
 // Serve accepts connections until ctx is done or the listener fails. It also
-// prunes the processed ids older than Timing.ProcessedTTL.
+// keeps the processed ids and the temporary files of the transfers in check
+// (pruneLoop).
 func (srv *Server) Serve(ctx context.Context, l Listener) error {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	wg.Go(func() { pruneLoop(ctx, srv.cfg) })
+	wg.Go(func() { pruneLoop(ctx, srv.cfg, srv.allLinks) })
 	go func() {
 		<-ctx.Done()
 		_ = l.Close()
@@ -65,6 +66,16 @@ func (srv *Server) Serve(ctx context.Context, l Listener) error {
 		}
 		wg.Go(func() { srv.handle(ctx, conn) })
 	}
+}
+
+func (srv *Server) allLinks() []*Link {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	out := make([]*Link, 0, len(srv.links))
+	for _, l := range srv.links {
+		out = append(out, l)
+	}
+	return out
 }
 
 // Shutdown closes every connection with 4005, so the Towers reconnect soon.

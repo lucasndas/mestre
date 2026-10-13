@@ -60,8 +60,8 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 | `terminals` | terminais que esta máquina roda (registro abaixo) |
 | `local_worktrees` | worktrees de mesa nesta máquina: caminho, branch, último commit sincronizado |
 | `account_profiles` | perfis de conta locais (pastas de configuração por provedor) |
-| `outbox` | a **fila de saída**: eventos, `done`, resultados e pedidos da CLI que esperam a Cidadela, cada um com id idempotente; reenviados ao reconectar ([Cidadela fora](../guilda/cidadela-e-torres.md#cidadela-fora-e-fila-de-saída)) |
-| `processed_commands` | comandos da Cidadela já executados (idempotência) |
+| `outbox` | a **fila de saída**: eventos, `done`, resultados e o mais que espera ack da Cidadela (os pedidos da CLI, não: vão só na conexão aberta), cada um com id idempotente; reenviados ao reconectar, na ordem e sem prazo ([Cidadela fora](../guilda/cidadela-e-torres.md#cidadela-fora-e-fila-de-saída)) |
+| `processed_commands` | comandos da Cidadela já executados (idempotência), sob a chave "a Cidadela", qualquer que seja a máquina; um id sai só depois de 24 h e abaixo do piso (`outbox.floor`) que a Cidadela conectada mandou ([ack e idempotência](../conectividade/protocolo.md#ack-e-idempotência)) |
 | `agent_rules` | regras efetivas de cada personagem desta máquina ([permissões](../classes/permissoes.md#regras-efetivas)) |
 | `checklist_results` | último resultado local do [checklist](../plataforma/checklist.md) |
 
