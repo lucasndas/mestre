@@ -126,6 +126,15 @@ jobs:
           # TestDropAmbientRunsWithoutCgo builds the launcher tests with cgo off.
           CGO_ENABLED=0 go test -run '^$' ./internal/launcher/
 
+      # Like the build cache, the analysis cache of the linter is warm when
+      # the suites are measured: the packages this change touches are analysed
+      # here, not inside the budget of the fast and the full suite (both run
+      # the linter, the full one with the tag).
+      - name: Warm the lint cache
+        run: |
+          golangci-lint run ./...
+          golangci-lint run --build-tags full ./...
+
       - name: Fast suite
         run: go run ./tools/testrun fast
 
