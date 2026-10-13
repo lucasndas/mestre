@@ -77,10 +77,45 @@ func newDurableFixture(t *testing.T, keys KeyStore) *fixture {
 	return newFixtureWith(t, keys, true)
 }
 
+// guildTemplate is a Guild database already migrated, built once by TestMain
+// outside the time of every test (creating and migrating a database file
+// costs tens of milliseconds on a Windows runner); each fixture starts from
+// a copy. The migrations themselves are tested in internal/store/guild.
+var guildTemplate []byte
+
+func TestMain(m *testing.M) {
+	if err := buildGuildTemplate(); err != nil {
+		fmt.Fprintln(os.Stderr, "vault: guild template:", err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+func buildGuildTemplate() error {
+	dir, err := os.MkdirTemp("", "vault-template")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "mestre.db")
+	db, err := guild.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		return err
+	}
+	if err := db.Close(); err != nil {
+		return err
+	}
+	guildTemplate, err = os.ReadFile(path)
+	return err
+}
+
 func newFixtureWith(t *testing.T, keys KeyStore, durable bool) *fixture {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mestre.db"), guildTemplate, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
 	opts := store.Options{Clock: clk, Synchronous: "OFF"}
 	if durable {

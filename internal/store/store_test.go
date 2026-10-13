@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,69 @@ func load(t *testing.T, sql ...string) store.Set {
 		t.Fatal(err)
 	}
 	return set
+}
+
+// templates holds, per list of migrations, a database file already migrated
+// with it. TestMain builds them once, outside the time of every test:
+// creating and migrating a database file costs tens of milliseconds on a
+// Windows runner. Tests about creating or migrating a database never use
+// them.
+var templates = map[string][]byte{}
+
+func templateKey(sqls []string) string { return strings.Join(sqls, "\x00") }
+
+func TestMain(m *testing.M) {
+	if err := buildTemplates(); err != nil {
+		fmt.Fprintln(os.Stderr, "store templates:", err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+func buildTemplates() error {
+	dir, err := os.MkdirTemp("", "store-templates")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	for i, sqls := range [][]string{{createItems}, {createItems, createNotes}, {createItems, createNotes, createTags}} {
+		set, err := store.Load(files(sqls...), "migrations")
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(dir, fmt.Sprintf("t%d.db", i))
+		db, err := store.Open(context.Background(), path, set, fast)
+		if err != nil {
+			return err
+		}
+		if err := db.Close(); err != nil {
+			return err
+		}
+		if templates[templateKey(sqls)], err = os.ReadFile(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seed writes at path a database already migrated with sqls.
+func seed(t *testing.T, path string, sqls ...string) {
+	t.Helper()
+	b, ok := templates[templateKey(sqls)]
+	if !ok {
+		t.Fatalf("no template for %d migrations", len(sqls))
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// seeded is a new x.db already migrated with sqls.
+func seeded(t *testing.T, sqls ...string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "x.db")
+	seed(t, path, sqls...)
+	return path
 }
 
 // fast are the options of the tests that are not about durability: no fsync,
@@ -112,7 +176,7 @@ func TestOpenConfiguresEveryConnection(t *testing.T) {
 
 func TestOpenHonoursBusyTimeoutOption(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{BusyTimeout: 1500 * time.Millisecond})
+	db := open(t, seeded(t, createItems), load(t, createItems), store.Options{BusyTimeout: 1500 * time.Millisecond})
 	if got := scan[int](t, db.Writer(), `PRAGMA busy_timeout`); got != 1500 {
 		t.Errorf("busy_timeout = %d, want 1500", got)
 	}
@@ -179,7 +243,7 @@ func TestOpenRefusesSchemaNewerThanBinary(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "x.db")
 	newer := load(t, createItems, createNotes, createTags)
-	open(t, path, newer, store.Options{}).Close()
+	seed(t, path, createItems, createNotes, createTags)
 	before := fileSum(t, path)
 
 	_, err := store.Open(context.Background(), path, load(t, createItems, createNotes), fast)
@@ -264,6 +328,7 @@ func TestPreMigrationBackupsOfTwoDatabasesDoNotCollide(t *testing.T) {
 	backups := filepath.Join(dir, "backups")
 	for _, name := range []string{"mestre", "maquina"} {
 		path := filepath.Join(dir, name+".db")
+		seed(t, path, createItems)
 		db := open(t, path, load(t, createItems), store.Options{})
 		if _, err := db.Writer().Exec(`INSERT INTO items (name) VALUES (?)`, name); err != nil {
 			t.Fatal(err)
@@ -287,6 +352,7 @@ func TestQuickCheckRefusesADamagedCopy(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "x.db")
+	seed(t, path, createItems)
 	db := open(t, path, load(t, createItems), store.Options{})
 	for i := range 200 {
 		if _, err := db.Writer().Exec(`INSERT INTO items (name) VALUES (?)`, strings.Repeat("x", 100)+string(rune('a'+i%26))); err != nil {
@@ -334,7 +400,7 @@ func TestReplicaNeverMigrates(t *testing.T) {
 
 	// An older replica is not migrated either.
 	main := filepath.Join(t.TempDir(), "main.db")
-	open(t, main, load(t, createItems), store.Options{}).Close()
+	seed(t, main, createItems)
 	db = open(t, main, set, store.Options{Replica: true})
 	if v, _ := db.Version(context.Background()); v != 1 {
 		t.Errorf("Version = %d, want 1: a replica must not migrate", v)
@@ -344,7 +410,7 @@ func TestReplicaNeverMigrates(t *testing.T) {
 // CA-PERSIST-07
 func TestReaderSeesOnlyCommittedWhileWriterWorks(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "x.db")
+	path := seeded(t, createItems)
 	// A 1 ms busy timeout: a read that had to wait for the writer would fail
 	// with SQLITE_BUSY instead of waiting.
 	db := open(t, path, load(t, createItems), store.Options{BusyTimeout: time.Millisecond})
@@ -406,7 +472,7 @@ func fileSize(t *testing.T, path string) int64 {
 // that transaction with synchronous=FULL and goes back to NORMAL.
 func TestWriteDurableCommitsWithFullSync(t *testing.T) {
 	t.Parallel()
-	db := openAsShipped(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
+	db := openAsShipped(t, seeded(t, createItems), load(t, createItems), store.Options{})
 	ctx := context.Background()
 	err := db.WriteDurable(ctx, func(tx *sql.Tx) error {
 		var level int
@@ -449,7 +515,7 @@ func TestWriteDurableCommitsWithFullSync(t *testing.T) {
 
 func TestForeignKeysAreEnforced(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems, createNotes), store.Options{})
+	db := open(t, seeded(t, createItems, createNotes), load(t, createItems, createNotes), store.Options{})
 	if _, err := db.Writer().Exec(`INSERT INTO notes (item_id) VALUES (42)`); err == nil {
 		t.Error("insert violating a foreign key succeeded")
 	}
@@ -484,7 +550,7 @@ func TestLoadValidatesTheMigrationFiles(t *testing.T) {
 
 func TestOpenRejectsAnInconsistentVersionTable(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "x.db")
+	path := seeded(t, createItems, createNotes)
 	set := load(t, createItems, createNotes)
 	db := open(t, path, set, store.Options{})
 	if _, err := db.Writer().Exec(`DELETE FROM schema_migrations WHERE version = 1`); err != nil {
