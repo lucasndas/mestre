@@ -23,10 +23,11 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 
 ### Banco: cópia completa e envio contínuo
 
-- **Número de sequência:** cada transação confirmada no banco principal recebe um `lsn` crescente, guardado com a época (`epoch`, `lsn`).
+- **Número de sequência:** cada transação confirmada no banco principal que muda alguma linha recebe um `lsn` crescente, guardado com a época (`epoch`, `lsn`). O `lsn` é a chave de `replication_log(lsn, at, body)`, gravada **na mesma transação** pela conexão de escrita do `store` ([persistência](../arquitetura/persistencia.md#banco-configuração)); transação que não muda linha não ganha `lsn`.
 - **Cópia completa:** na entrada da máquina na Guilda e quando a Torre volta depois de muito tempo fora. A Cidadela faz `VACUUM INTO` num arquivo temporário (sem as tabelas do cofre, para a excluída), anota o `lsn` e envia por [transferência em partes](../conectividade/protocolo.md#transferência-em-partes) com `kind: db-snapshot`. A Torre confere o SHA-256, roda `PRAGMA quick_check` e troca a réplica de uma vez.
-- **Envio contínuo:** depois da cópia, cada transação vai como um registro de mudanças, em ordem, em frames binários do tipo `0x03` ([multiplexação](../conectividade/protocolo.md#multiplexação-e-prioridade)), logo depois de confirmada. A Torre aplica cada registro numa transação e confirma com `replica.ack {lsn}` a cada 1 s ou 256 registros (padrão).
-- **Reconexão:** o `hello` da Torre traz o último `lsn` aplicado e a época dele. Se a Cidadela ainda guarda os registros desde ali (padrão: 1 hora ou 256 MiB), continua dali; senão, ou se a época mudou, manda cópia completa nova.
+- **Envio contínuo:** depois da cópia, cada linha de `replication_log` vai como um registro de mudanças, em ordem, em frames binários do tipo `0x03` ([multiplexação](../conectividade/protocolo.md#multiplexação-e-prioridade)), logo depois de confirmada. O registro traz, de cada mudança, a tabela, a operação e as linhas antiga e nova (inclusive as de cascata) e, numa migração, o SQL com a linha de `schema_migrations`. A Torre aplica pela chave primária, com `foreign_keys` desligado durante a aplicação, e grava a mesma linha no `replication_log` dela na mesma transação: o último `lsn` aplicado é o `max(lsn)` da réplica. Na excluída, o registro vai sem as mudanças das tabelas do cofre. A Torre confirma com `replica.ack {lsn}` a cada 1 s ou 256 registros (padrão).
+- **Reconexão:** o `hello` da Torre traz o último `lsn` aplicado e a época dele. Se a Cidadela ainda guarda os registros desde ali (as linhas de `replication_log`; uma limpeza apaga as mais velhas que 1 hora e além de 256 MiB, padrão), continua dali; senão, ou se a época mudou, manda cópia completa nova.
+- **Resultado do spike de captura** (2026-10-13; código em `tools/spikes/m2-db-capture/`): ler os frames do WAL, como o Litestream, funcionou no Linux e no Windows, mas não filtra as tabelas do cofre para a excluída, não aceita o `VACUUM INTO` como base da cópia completa e não dá a lista das transações descartadas. Por isso a captura é o registro lógico acima, preenchido pelo *preupdate hook* do `modernc.org/sqlite` na conexão de escrita; ele exige chave primária declarada em toda tabela e nenhum gatilho (um gatilho dispararia de novo na réplica).
 - **Atraso:** a Cidadela acompanha o atraso de cada Torre (diferença entre o último `lsn` confirmado e o atual, em segundos). Atraso acima de **5 s** por mais de 1 min (padrão) vira alerta do [checklist](../plataforma/checklist.md).
 
 ### Cofre em toda máquina
@@ -61,7 +62,7 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 
 ### Perda na troca
 
-- O que a Cidadela antiga gravou e a máquina promovida não recebeu se perde: a nova Cidadela parte do último `lsn` que aplicou. Alvo: perda máxima de **5 s** de dados.
+- O que a Cidadela antiga gravou e a máquina promovida não recebeu se perde: a nova Cidadela parte do último `lsn` que aplicou. A lista das transações descartadas sai das linhas do `replication_log` da antiga com `lsn` maior que esse. Alvo: perda máxima de **5 s** de dados.
 - Quando a antiga volta e vira Torre, ela grava na auditoria da Guilda a lista das transações descartadas (tabela, chave e horário, sem valores do cofre) e guarda o banco antigo em `banco/descartado-<época>.db` por 30 dias (padrão) ([volta da antiga](cidadela-e-torres.md#volta-da-antiga-cidadela)). Os commits que só ela tinha voltam por bundle ([worktrees na troca](cidadela-e-torres.md#worktrees-e-espelho-na-troca)).
 
 ## Regras e erros
@@ -82,12 +83,9 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 - **CA-REPL-08** · *completa* — **Dado** duas instâncias na mesma máquina (Cidadela e Torre), **quando** a Cidadela grava em ritmo constante, **então** o atraso medido da Torre fica abaixo de 5 s e os arquivos e o espelho chegam antes das mudanças do banco que os citam.
 - **CA-REPL-09** · *pesada* — **Dado** a Guilda do laboratório com a Cidadela gravando sem parar, **quando** derrubo a Cidadela no meio das gravações e promovo a Torre à mão, **então** a nova Cidadela tem tudo até no máximo 5 s antes da queda e, na volta da antiga, a auditoria lista o que se perdeu (MVP-15).
 - **CA-REPL-10** · *rápida* — **Dado** uma Guilda que guarda só a chave pública de recuperação, **quando** a chave do cofre é trocada depois de uma promoção, **então** a nova Cidadela reenvelopa sem a privada, as Torres recebem o cofre novo, e o envelope abre com a chave de recuperação.
+- **CA-REPL-11** · *rápida* — **Dado** o conjunto de migrações do banco da Guilda, **quando** é aplicado a um banco vazio, **então** toda tabela tem chave primária declarada e não há gatilho; **dado** uma escrita que não passa pela conexão de escrita do `store`, **então** o commit é recusado.
 
 ## Depende de
 
 - [Protocolo](../conectividade/protocolo.md) · [Guilda](guilda.md) · [Cofre](../plataforma/cofre.md)
 - [Persistência](../arquitetura/persistencia.md) · [Segurança](../arquitetura/seguranca.md)
-
-## Verificar na implementação
-
-- **Verificar na implementação:** captura das mudanças do banco com `modernc.org/sqlite` lendo os frames do WAL. **Padrão:** o motor controla os checkpoints e lê os frames novos do arquivo `-wal` depois de cada transação, como o Litestream, enviando-os como registro de mudanças. **Se falhar:** a camada `store` grava um registro lógico de mudanças (`replication_log`: tabela, chave, operação, valores) na mesma transação, e é ele que viaja. **Onde:** no spike de captura do M2, num teste da completa com duas instâncias (CA-REPL-08), no Linux e no Windows ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem)).
