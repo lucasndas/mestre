@@ -127,7 +127,9 @@ func (w *world) listenAndRun(withClient bool) {
 
 func (w *world) runServer() {
 	var err error
-	if w.lis, err = w.nw.Listen(citadelAddr, protocol.Peer{Role: protocol.RoleMachine, ID: citadelID}); err != nil {
+	// the machine that answers at the address is the one of the configuration
+	// (a promoted Citadel, in a test of a change of Citadel)
+	if w.lis, err = w.nw.Listen(citadelAddr, protocol.Peer{Role: protocol.RoleMachine, ID: w.cfgC.MachineID}); err != nil {
 		w.t.Fatal(err)
 	}
 	w.lis = &tapListener{Listener: w.lis, w: w}

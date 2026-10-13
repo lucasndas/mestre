@@ -201,9 +201,18 @@ func TestTheProcessedCommandsSurviveReopeningAndAreForgottenAfterTheTTL(t *testi
 			if fresh, _, _ := s.Claim(ctx, "tower2", "id1", "terminal.input", t0); !fresh {
 				t.Fatal("a released claim must run again")
 			}
-			n, err := s.Prune(ctx, t0.Add(24*time.Hour).Add(-time.Hour)) // 23 h after t0: keeps id2 (at 23 h)
-			if err != nil || n != 2 {                                    // tower1/id1 and tower2/id1, both older than that
-				t.Fatalf("Prune = %d, %v; want 2", n, err)
+			// 23 h after t0, below a floor above every id: only tower1/id1 is
+			// older than that (id2 is at 23 h, and tower2 is another sender)
+			n, err := s.Prune(ctx, "tower1", t0.Add(23*time.Hour), "zz")
+			if err != nil || n != 1 {
+				t.Fatalf("Prune = %d, %v; want 1", n, err)
+			}
+			// the floor of tower2 is its id1: the sender may still send it again
+			if n, err := s.Prune(ctx, "tower2", t0.Add(23*time.Hour), "id1"); err != nil || n != 0 {
+				t.Fatalf("Prune below the floor = %d, %v; want 0", n, err)
+			}
+			if fresh, _, _ := s.Claim(ctx, "tower2", "id1", "terminal.input", t0.Add(25*time.Hour)); fresh {
+				t.Fatal("an id at the floor of its sender was forgotten")
 			}
 			if fresh, _, _ := s.Claim(ctx, "tower1", "id1", "terminal.input", t0.Add(25*time.Hour)); !fresh {
 				t.Fatal("an id older than the TTL is forgotten")

@@ -19,8 +19,9 @@ type Outbox interface {
 }
 
 // Processed is the memory of the receiver (table processed_commands): the
-// ids it has already taken from each sender, with the answer given, kept for
-// 24 hours by default so a message sent again never runs twice.
+// ids it has already taken from each sender, with the answer given, so a
+// message sent again never runs twice. The sender is the key of the link:
+// the machine id on the Citadel, CitadelKey on a Tower.
 type Processed interface {
 	// Claim records, durably and before the handler runs, that the message
 	// of the sender is being taken. fresh is false when the id was already
@@ -33,9 +34,12 @@ type Processed interface {
 	// Release forgets a claim, so a message the handler refused with a
 	// retryable error can run when it is sent again.
 	Release(ctx context.Context, sender, id string) error
-	// Prune forgets what was claimed before cutoff and returns how many.
-	Prune(ctx context.Context, cutoff time.Time) (int, error)
+	// Prune forgets, of one sender, the ids claimed before cutoff that are
+	// lower than floor (the outbox.floor of the sender: it will never send
+	// them again), and returns how many.
+	Prune(ctx context.Context, sender string, cutoff time.Time, floor string) (int, error)
 }
 
-// DefaultProcessedTTL is how long the ids of the processed commands are kept.
+// DefaultProcessedTTL is the least time the ids of the processed commands
+// are kept; they go only once the sender said it will not send them again.
 const DefaultProcessedTTL = 24 * time.Hour

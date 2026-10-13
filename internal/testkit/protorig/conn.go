@@ -5,6 +5,11 @@
 // code, the identity of the peer), plus in-memory versions of the durable
 // halves of the protocol and a fake epoch, so a test plays a Tower and a
 // Citadel without a socket.
+//
+// Like the WebSocket under the transport, the control frames (a ping, the
+// pong that answers ours) are seen only while the connection is read: a
+// frame that nobody takes holds the ones behind it, so a reader that stops
+// stops the pongs too.
 package protorig
 
 import (
@@ -61,7 +66,7 @@ var (
 // end is, as the TLS handshake does with the certificates.
 func NewConn(ctx context.Context, nc net.Conn, self protocol.Peer) (*Conn, error) {
 	c := &Conn{
-		nc: nc, frames: make(chan protocol.Frame, 1024), pong: make(chan struct{}, 1),
+		nc: nc, frames: make(chan protocol.Frame), pong: make(chan struct{}, 1),
 		dead: make(chan struct{}), closed: make(chan struct{}),
 	}
 	// the exchange of identities is part of the establishment: ctx bounds it

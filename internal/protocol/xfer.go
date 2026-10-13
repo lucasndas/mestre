@@ -61,7 +61,14 @@ type XferConfig struct {
 	// Finalizers says what to do with a finished transfer of each kind; a
 	// kind without one is refused as `unavailable`.
 	Finalizers map[string]Finalizer
+	// FreeSpace says how many bytes the disk of Dir still has (default: the
+	// system's answer). A transfer that would leave less than
+	// XferDiskReserve is refused as `unavailable` at xfer.begin.
+	FreeSpace func(dir string) (uint64, error)
 }
+
+// XferDiskReserve is what a transfer must leave free on the disk.
+const XferDiskReserve = 64 << 20
 
 // Source is the content to transfer.
 type Source struct {
@@ -83,7 +90,12 @@ type Transfer struct {
 	ID string
 }
 
-var errLostConnection = errors.New("protocol: the connection was lost during the transfer")
+var (
+	errLostConnection = errors.New("protocol: the connection was lost during the transfer")
+	// errStalled ends an attempt whose receiver gave no sign for
+	// Timing.XferStall: the next attempt sends xfer.begin again.
+	errStalled = errors.New("protocol: the receiver of the transfer stopped answering")
+)
 
 // finishedXfer is the outcome the receiver remembers, so a sender that lost
 // the connection before it heard `xfer.done` finds it again.
@@ -101,13 +113,14 @@ type recvXfer struct {
 	f          *os.File
 	next       uint64
 	since      int
+	asked      bool // the sender was asked to go back to next; parts after it are dropped quietly
 	finalizing bool
 	failed     bool
 }
 
 type sendXfer struct {
 	ready    chan uint64
-	progress chan uint64
+	progress chan XferProgress
 	done     chan XferDone
 }
 
@@ -136,7 +149,7 @@ func (h *xferHub) Handle(ctx context.Context, m *Message) (*Reply, error) {
 	case *XferReady:
 		h.push(p.XferID, func(s *sendXfer) { offer(s.ready, p.NextIndex) })
 	case *XferProgress:
-		h.push(p.XferID, func(s *sendXfer) { offer(s.progress, p.NextIndex) })
+		h.push(p.XferID, func(s *sendXfer) { offer(s.progress, *p) })
 	case *XferDone:
 		h.push(p.XferID, func(s *sendXfer) { offer(s.done, *p) })
 	}
@@ -179,6 +192,16 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 	delete(h.finished, b.XferID) // a transfer that failed starts again
 	prev := h.recv[b.XferID]
 	h.mu.Unlock()
+	if prev != nil {
+		prev.mu.Lock()
+		finalizing := prev.finalizing
+		prev.mu.Unlock()
+		if finalizing {
+			// Every part is here and the end is being checked: xfer.done
+			// goes to the sender when it finishes.
+			return &Reply{Type: TypeXferReady, Payload: XferReady{XferID: b.XferID, NextIndex: b.Parts()}, Transient: true}, nil
+		}
+	}
 	if s, ok := finalizer.(Skipper); ok && s.Have(ctx, *b) {
 		// The content is already here: say every part arrived, and the end
 		// finds the transfer done.
@@ -195,6 +218,9 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 		}
 		prev.mu.Unlock()
 	}
+	if err := h.checkSpace(cfg, *b); err != nil {
+		return nil, err
+	}
 	r, err := h.openRecv(cfg, *b)
 	if err != nil {
 		return nil, err
@@ -203,6 +229,32 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 	h.recv[b.XferID] = r
 	h.mu.Unlock()
 	return &Reply{Type: TypeXferReady, Payload: XferReady{XferID: b.XferID, NextIndex: r.next}, Transient: true}, nil
+}
+
+// checkSpace refuses, as `unavailable`, a transfer that the disk cannot take
+// with XferDiskReserve to spare; what an earlier attempt already wrote counts
+// as taken. A disk that cannot be asked does not stop the transfer.
+func (h *xferHub) checkSpace(cfg *XferConfig, b XferBegin) error {
+	if err := privdir.Ensure(cfg.Dir); err != nil {
+		return NewError(CodeUnavailable, "transfer folder: %v", err)
+	}
+	free := cfg.FreeSpace
+	if free == nil {
+		free = diskFree
+	}
+	avail, err := free(cfg.Dir)
+	if err != nil {
+		h.l.cfg.Logger.Warn("protocol: free disk space unknown", "dir", cfg.Dir, "err", err)
+		return nil
+	}
+	need := uint64(b.Size)
+	if st, err := os.Stat(filepath.Join(cfg.Dir, b.XferID+".part")); err == nil {
+		need -= min(need, uint64(st.Size()))
+	}
+	if avail < need+XferDiskReserve {
+		return NewError(CodeUnavailable, "the disk has %d bytes free; transfer %s needs %d more and %d to spare", avail, b.XferID, need, XferDiskReserve)
+	}
+	return nil
 }
 
 // openRecv opens the temporary file of the transfer, and resumes it if the
@@ -248,7 +300,8 @@ func (h *xferHub) touch(r *recvXfer) {
 	_ = os.Chtimes(r.meta, now, now)
 }
 
-// onPart writes a part. It runs on the read goroutine of the connection.
+// onPart writes a part. It runs on the goroutine of the parts of the
+// connection, never on its read loop: a slow disk does not stop the pongs.
 func (h *xferHub) onPart(_ context.Context, s *Session, f DataFrame) {
 	id := f.ID.String()
 	h.mu.Lock()
@@ -262,19 +315,31 @@ func (h *xferHub) onPart(_ context.Context, s *Session, f DataFrame) {
 	if r.f == nil || r.finalizing || r.failed || f.Pos < r.next {
 		return
 	}
-	progress := func() {
+	progress := func(resend bool) {
 		r.since = 0
 		h.touch(r)
-		_ = s.sendTyped(TypeXferProgress, XferProgress{XferID: id, NextIndex: r.next})
+		_ = s.sendTyped(TypeXferProgress, XferProgress{XferID: id, NextIndex: r.next, Resend: resend})
 	}
-	if f.Pos > r.next { // a part is missing: say where to go on from
-		progress()
+	if f.Pos > r.next {
+		// A part is missing: ask once to go back to it; what is already on
+		// the way after it is dropped quietly.
+		if !r.asked {
+			r.asked = true
+			progress(true)
+		}
+		return
+	}
+	if f.Pos >= r.parts {
 		return
 	}
 	chunk := int64(r.begin.Chunk())
 	want := min(chunk, r.begin.Size-int64(f.Pos)*chunk)
 	if int64(len(f.Data)) != want {
-		h.l.cfg.Logger.Warn("protocol: part with the wrong size", "xfer", id, "index", f.Pos, "size", len(f.Data), "want", want)
+		// The sender cuts the parts by the size and the chunk it announced:
+		// a part of another size is not a loss on the way, and sending it
+		// again would not mend it. The transfer ends with the error.
+		r.failed = true
+		go h.fail(context.Background(), r, "", NewError(CodeInvalidPayload, "part %d of transfer %s has %d bytes, not %d", f.Pos, id, len(f.Data), want))
 		return
 	}
 	if _, err := r.f.WriteAt(f.Data, int64(f.Pos)*chunk); err != nil {
@@ -282,10 +347,11 @@ func (h *xferHub) onPart(_ context.Context, s *Session, f DataFrame) {
 		go h.fail(context.Background(), r, "", NewError(CodeUnavailable, "writing the transfer: %v", err))
 		return
 	}
+	r.asked = false
 	r.next++
 	r.since++
 	if r.since >= XferProgressEvery || r.next == r.parts {
-		progress()
+		progress(false)
 	}
 }
 
@@ -379,21 +445,28 @@ func fileSHA256(path string) (string, error) {
 
 // PruneTransfers removes the temporary files that nobody touched for ttl
 // (24 hours in the protocol) and forgets the old outcomes; it returns how
-// many files it removed.
+// many files it removed. The Client and the Server run it by themselves
+// (pruneLoop), over every link that shares the folder.
 func (l *Link) PruneTransfers(ttl time.Duration) int {
-	cfg := l.cfg.Xfer
+	return pruneTransfers(l.cfg, []*Link{l}, ttl)
+}
+
+func pruneTransfers(c *Config, links []*Link, ttl time.Duration) int {
+	cfg := c.Xfer
 	if cfg == nil {
 		return 0
 	}
-	now := l.cfg.Clock.Now()
-	h := l.xfer
-	h.mu.Lock()
-	for id, f := range h.finished {
-		if now.Sub(f.at) > ttl {
-			delete(h.finished, id)
+	now := c.Clock.Now()
+	for _, l := range links {
+		h := l.xfer
+		h.mu.Lock()
+		for id, f := range h.finished {
+			if now.Sub(f.at) > ttl {
+				delete(h.finished, id)
+			}
 		}
+		h.mu.Unlock()
 	}
-	h.mu.Unlock()
 	entries, err := os.ReadDir(cfg.Dir)
 	if err != nil {
 		return 0
@@ -411,17 +484,20 @@ func (l *Link) PruneTransfers(ttl time.Duration) int {
 		if err != nil || now.Sub(info.ModTime()) <= ttl {
 			continue
 		}
-		h.mu.Lock()
-		if r := h.recv[id]; r != nil {
-			r.mu.Lock()
-			if r.f != nil {
-				_ = r.f.Close()
-				r.f = nil
+		for _, l := range links {
+			h := l.xfer
+			h.mu.Lock()
+			if r := h.recv[id]; r != nil {
+				r.mu.Lock()
+				if r.f != nil {
+					_ = r.f.Close()
+					r.f = nil
+				}
+				r.mu.Unlock()
+				delete(h.recv, id)
 			}
-			r.mu.Unlock()
-			delete(h.recv, id)
+			h.mu.Unlock()
 		}
-		h.mu.Unlock()
 		for _, f := range []string{id + ".part", name} {
 			if os.Remove(filepath.Join(cfg.Dir, f)) == nil {
 				n++
@@ -457,7 +533,9 @@ func (h *xferHub) releaseFiles() {
 // the outcome: nil if it checked the SHA-256 and finished, the *Error it
 // gave otherwise (`missing_prerequisite`, `hash_mismatch`…). When the
 // connection drops it waits for the next one, repeats xfer.begin with the
-// same xfer_id and goes on from the part the receiver already has.
+// same xfer_id and goes on from the part the receiver already has; it does
+// the same, on the same connection, when the receiver gives no sign for
+// Timing.XferStall.
 func (l *Link) Transfer(ctx context.Context, t Transfer) error {
 	if t.Source.ReaderAt == nil {
 		return errors.New("protocol: transfer without a source")
@@ -476,7 +554,7 @@ func (l *Link) Transfer(ctx context.Context, t Transfer) error {
 	}
 
 	hub := l.xfer
-	snd := &sendXfer{ready: make(chan uint64, 4), progress: make(chan uint64, XferWindow), done: make(chan XferDone, 4)}
+	snd := &sendXfer{ready: make(chan uint64, 4), progress: make(chan XferProgress, XferWindow), done: make(chan XferDone, 4)}
 	hub.mu.Lock()
 	hub.send[begin.XferID] = snd
 	hub.mu.Unlock()
@@ -493,7 +571,7 @@ func (l *Link) Transfer(ctx context.Context, t Transfer) error {
 		}
 		done, err := hub.attempt(ctx, snd, sess, begin, t.Source)
 		switch {
-		case errors.Is(err, errLostConnection):
+		case errors.Is(err, errLostConnection), errors.Is(err, errStalled):
 			continue
 		case err != nil:
 			return err
@@ -541,6 +619,11 @@ func (h *xferHub) attempt(ctx context.Context, snd *sendXfer, sess *Session, beg
 	refused := func(a AckResult) XferDone {
 		return XferDone{XferID: begin.XferID, Error: a.Error}
 	}
+	// Every sign of the receiver restarts the stall timer; without one for
+	// Timing.XferStall the attempt ends and the next one begins again.
+	stall := l.cfg.Clock.NewTimer(l.cfg.Timing.XferStall)
+	defer stall.Stop()
+	alive := func() { stall.Reset(l.cfg.Timing.XferStall) }
 	beginAck, release, err := send(Outgoing{Type: TypeXferBegin, Payload: begin})
 	if err != nil {
 		return XferDone{}, err
@@ -551,13 +634,17 @@ waitReady:
 	for {
 		select {
 		case acked = <-snd.ready:
+			alive()
 			break waitReady
 		case a := <-beginAck:
 			if a.Status == AckError {
 				return refused(a), nil
 			}
+			alive()
 		case d := <-snd.done:
 			return d, nil
+		case <-stall.C():
+			return XferDone{}, errStalled
 		case <-sess.Done():
 			return XferDone{}, errLostConnection
 		case <-ctx.Done():
@@ -585,12 +672,15 @@ waitReady:
 		}
 		select {
 		case p := <-snd.progress:
-			if p < acked { // the receiver lost ground: send again from there
-				sent = p
+			alive()
+			if p.Resend || p.NextIndex < acked { // the receiver lost ground: send again from there
+				sent = p.NextIndex
 			}
-			acked = p
+			acked = p.NextIndex
 		case d := <-snd.done: // the receiver gave up
 			return d, nil
+		case <-stall.C():
+			return XferDone{}, errStalled
 		case <-sess.Done():
 			return XferDone{}, errLostConnection
 		case <-ctx.Done():
@@ -604,6 +694,7 @@ waitReady:
 		return XferDone{}, err
 	}
 	defer releaseEnd()
+	alive()
 	for {
 		select {
 		case d := <-snd.done:
@@ -612,6 +703,9 @@ waitReady:
 			if a.Status == AckError {
 				return refused(a), nil
 			}
+			alive()
+		case <-stall.C():
+			return XferDone{}, errStalled
 		case <-sess.Done():
 			return XferDone{}, errLostConnection
 		case <-ctx.Done():

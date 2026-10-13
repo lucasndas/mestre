@@ -15,9 +15,35 @@ import (
 // Client or Server over it.
 type MemStore struct {
 	mu        sync.Mutex
-	outbox    map[string][]protocol.Envelope
+	outbox    map[string]*queue
 	processed map[[2]string]*claimed
 	claims    int
+}
+
+// queue is the outbox of one peer, in the order of Put; Done leaves a hole
+// that a later Put sweeps away, so thousands of messages cost little.
+type queue struct {
+	envs []protocol.Envelope
+	gone []bool
+	at   map[string]int // id -> index in envs, for the ones not done
+}
+
+func (q *queue) live() []protocol.Envelope {
+	out := make([]protocol.Envelope, 0, len(q.at))
+	for i, e := range q.envs {
+		if !q.gone[i] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (q *queue) compact() {
+	envs := q.live()
+	q.envs, q.gone, q.at = envs, make([]bool, len(envs)), make(map[string]int, len(envs))
+	for i, e := range envs {
+		q.at[e.ID] = i
+	}
 }
 
 type claimed struct {
@@ -32,19 +58,32 @@ var (
 
 // NewMemStore returns an empty store.
 func NewMemStore() *MemStore {
-	return &MemStore{outbox: map[string][]protocol.Envelope{}, processed: map[[2]string]*claimed{}}
+	return &MemStore{outbox: map[string]*queue{}, processed: map[[2]string]*claimed{}}
+}
+
+func (m *MemStore) queue(peer string) *queue {
+	q := m.outbox[peer]
+	if q == nil {
+		q = &queue{at: map[string]int{}}
+		m.outbox[peer] = q
+	}
+	return q
 }
 
 // Put implements protocol.Outbox.
 func (m *MemStore) Put(_ context.Context, peer string, env protocol.Envelope) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, e := range m.outbox[peer] {
-		if e.ID == env.ID {
-			return nil
-		}
+	q := m.queue(peer)
+	if _, ok := q.at[env.ID]; ok {
+		return nil
 	}
-	m.outbox[peer] = append(m.outbox[peer], env)
+	if len(q.envs) > 64 && len(q.at) < len(q.envs)/2 {
+		q.compact()
+	}
+	q.at[env.ID] = len(q.envs)
+	q.envs = append(q.envs, env)
+	q.gone = append(q.gone, false)
 	return nil
 }
 
@@ -52,12 +91,10 @@ func (m *MemStore) Put(_ context.Context, peer string, env protocol.Envelope) er
 func (m *MemStore) Done(_ context.Context, peer, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	q := m.outbox[peer]
-	for i, e := range q {
-		if e.ID == id {
-			m.outbox[peer] = append(q[:i:i], q[i+1:]...)
-			break
-		}
+	q := m.queue(peer)
+	if i, ok := q.at[id]; ok {
+		q.gone[i] = true
+		delete(q.at, id)
 	}
 	return nil
 }
@@ -66,14 +103,14 @@ func (m *MemStore) Done(_ context.Context, peer, id string) error {
 func (m *MemStore) Pending(_ context.Context, peer string) ([]protocol.Envelope, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]protocol.Envelope(nil), m.outbox[peer]...), nil
+	return m.queue(peer).live(), nil
 }
 
 // Waiting is how many messages of the peer wait for an ack.
 func (m *MemStore) Waiting(peer string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return len(m.outbox[peer])
+	return len(m.queue(peer).at)
 }
 
 // Claim implements protocol.Processed.
@@ -108,17 +145,51 @@ func (m *MemStore) Release(_ context.Context, sender, id string) error {
 }
 
 // Prune implements protocol.Processed.
-func (m *MemStore) Prune(_ context.Context, cutoff time.Time) (int, error) {
+func (m *MemStore) Prune(_ context.Context, sender string, cutoff time.Time, floor string) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	n := 0
 	for k, c := range m.processed {
-		if c.at.Before(cutoff) {
+		if k[0] == sender && c.at.Before(cutoff) && k[1] < floor {
 			delete(m.processed, k)
 			n++
 		}
 	}
 	return n, nil
+}
+
+// Remembered is how many ids of the sender are remembered now.
+func (m *MemStore) Remembered(sender string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for k := range m.processed {
+		if k[0] == sender {
+			n++
+		}
+	}
+	return n
+}
+
+// Clone is a copy of the store, as the replication hands the outbox and the
+// processed ids of an old Citadel to the one promoted.
+func (m *MemStore) Clone() *MemStore {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c := NewMemStore()
+	for peer, q := range m.outbox {
+		cq := c.queue(peer)
+		for _, e := range q.live() {
+			cq.at[e.ID] = len(cq.envs)
+			cq.envs = append(cq.envs, e)
+			cq.gone = append(cq.gone, false)
+		}
+	}
+	for k, v := range m.processed {
+		cp := *v
+		c.processed[k] = &cp
+	}
+	return c
 }
 
 // Claims is how many ids were ever claimed as new.

@@ -288,6 +288,7 @@ func TestAKindWithoutAReceiverIsUnavailable(t *testing.T) {
 	})
 }
 
+// The Citadel removes them by itself, in the prune of every hour.
 func TestTemporaryFilesNobodyTouchedFor24HoursAreRemoved(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
@@ -313,12 +314,15 @@ func TestTemporaryFilesNobodyTouchedFor24HoursAreRemoved(t *testing.T) {
 			t.Fatalf("temporary files = %v, want the data and its description", entries)
 		}
 		advance(23 * time.Hour)
-		if n := w.server.Link(towerID).PruneTransfers(24 * time.Hour); n != 0 {
-			t.Fatalf("pruned %d files after 23 hours", n)
+		if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+			t.Fatalf("temporary files after 23 hours = %v, want both", entries)
 		}
 		advance(2 * time.Hour)
-		if n := w.server.Link(towerID).PruneTransfers(24 * time.Hour); n != 2 {
-			t.Fatalf("pruned %d files after 25 hours, want 2", n)
+		if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+			t.Fatalf("temporary files after 25 hours = %v, want none", entries)
+		}
+		if n := w.server.Link(towerID).PruneTransfers(24 * time.Hour); n != 0 {
+			t.Fatalf("a prune by hand found %d files the Citadel left", n)
 		}
 	})
 }

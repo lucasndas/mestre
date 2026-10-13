@@ -2,8 +2,9 @@ package protocol
 
 // Message types of the base protocol, used by every kind of connection.
 const (
-	TypeAck   = "ack"
-	TypeError = "error"
+	TypeAck         = "ack"
+	TypeError       = "error"
+	TypeOutboxFloor = "outbox.floor"
 )
 
 // Message types between the motor of a Tower and the motor of the Citadel
@@ -60,13 +61,14 @@ const (
 	TypeUpdateApply          = "update.apply"
 )
 
-// BaseRegistry returns a registry with `ack` and `error`, which every
-// connection speaks; the Guardian connection adds its own types to it.
+// BaseRegistry returns a registry with `ack`, `error` and `outbox.floor`,
+// which every connection speaks; the Guardian connection adds its own types to it.
 func BaseRegistry() *Registry {
 	r := NewRegistry()
 	mustAdd(r,
 		Spec{Type: TypeAck, Dir: Both, Payload: Ack{}},
 		Spec{Type: TypeError, Dir: Both, Payload: Error{}},
+		Spec{Type: TypeOutboxFloor, Dir: Both, Payload: OutboxFloor{}},
 	)
 	return r
 }
@@ -82,7 +84,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeWelcome, Dir: CitadelToTower, Payload: Welcome{}},
 		Spec{Type: TypeMachineHeartbeat, Dir: TowerToCitadel, Payload: MachineHeartbeat{}},
 		Spec{Type: TypeMachineSheet, Dir: TowerToCitadel, Ack: true, Payload: Object{}},
-		Spec{Type: TypeGuildEpoch, Dir: Both, Ack: true, Payload: Empty{}, Reply: Certificate{}},
+		Spec{Type: TypeGuildEpoch, Dir: Both, Payload: Empty{}, Reply: Certificate{}},
 		Spec{Type: TypeGuildConfig, Dir: CitadelToTower, Ack: true, Payload: GuildConfig{}},
 		Spec{Type: TypeGuildLeave, Dir: Both, Ack: true, Payload: GuildLeave{}},
 		Spec{Type: TypeGuildDiscarded, Dir: TowerToCitadel, Ack: true, Payload: GuildDiscarded{}},

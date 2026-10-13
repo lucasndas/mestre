@@ -36,9 +36,18 @@ type Timing struct {
 	// RediscoverAfter is how many failures in a row make the Tower look for
 	// the Guild again (3).
 	RediscoverAfter int
-	// ProcessedTTL is how long processed ids are kept (24 h) and
-	// ProcessedPrune how often they are pruned (1 h).
+	// StableAfter is how long a connection must last for its end to reset
+	// the backoff (30 s).
+	StableAfter time.Duration
+	// ProcessedTTL is the least time processed ids are kept (24 h) and
+	// ProcessedPrune how often they are pruned and the floor of the outbox
+	// is sent (1 h).
 	ProcessedTTL, ProcessedPrune time.Duration
+	// XferStall is how long a sender waits for a sign of the receiver
+	// (xfer.ready, xfer.progress, xfer.done) before it sends xfer.begin again
+	// (2 min); XferTTL is how long a temporary file of a transfer may go
+	// untouched before it is removed (24 h).
+	XferStall, XferTTL time.Duration
 }
 
 func (t Timing) withDefaults() Timing {
@@ -55,8 +64,11 @@ func (t Timing) withDefaults() Timing {
 	def(&t.CertTimeout, 10*time.Second)
 	def(&t.BackoffMin, time.Second)
 	def(&t.BackoffMax, 60*time.Second)
+	def(&t.StableAfter, 30*time.Second)
 	def(&t.ProcessedTTL, DefaultProcessedTTL)
 	def(&t.ProcessedPrune, time.Hour)
+	def(&t.XferStall, 2*time.Minute)
+	def(&t.XferTTL, 24*time.Hour)
 	if t.Jitter <= 0 {
 		t.Jitter = 0.2
 	}
@@ -168,6 +180,10 @@ type Config struct {
 	Heartbeat func(ctx context.Context) (MachineHeartbeat, error)
 	// Xfer receives the transfers in parts (nil refuses them as unavailable).
 	Xfer *XferConfig
+	// InboundLimit bounds the bytes that wait to run on one connection
+	// (default DefaultInboundLimit); over it the connection is closed with
+	// 4008.
+	InboundLimit int64
 	// Rand supplies the jitter of the backoff, in [0,1) (default math/rand).
 	Rand func() float64
 	// Logger receives the events of the connection (default discards).
@@ -205,6 +221,9 @@ func (c *Config) prepare() error {
 		return fmt.Errorf("%w: Profile.Versions %s", ErrBadConfig, c.Profile.Versions)
 	}
 	c.Timing = c.Timing.withDefaults()
+	if c.InboundLimit <= 0 {
+		c.InboundLimit = DefaultInboundLimit
+	}
 	if c.Rand == nil {
 		c.Rand = rand.Float64
 	}

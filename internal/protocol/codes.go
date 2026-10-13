@@ -15,6 +15,7 @@ const (
 	CloseShuttingDown  = 4005 // the Citadel is shutting down: reconnect soon
 	CloseStaleEpoch    = 4006 // the epoch of the sender is old
 	CloseNotCitadel    = 4007 // I am not the Citadel
+	CloseOverloaded    = 4008 // the receiver is behind: what was sent waits too long to run
 )
 
 // Codes of the `error` message (docs/conectividade/mensagens.md#códigos-de-erro).

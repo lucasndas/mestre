@@ -20,18 +20,25 @@ var errGraceful = errors.New("protocol: closing")
 // before it gives up and drops the connection.
 const closeGrace = 5 * time.Second
 
-// dispatchQueue is how many validated messages wait for their handler before
-// the read loop waits too.
-const dispatchQueue = 4096
-
 type dispatchItem struct {
 	env     Envelope
+	spec    Spec
 	payload any
+}
+
+// ackItem is the answer of the peer to a message of ours: an ack, or an
+// error in its place.
+type ackItem struct {
+	id  string
+	ack *Ack
+	err *Error
 }
 
 // Session is one connection, after its opening. It reads, writes with the
 // two lanes, runs the handlers in order, pings, sends the heartbeat and
-// watches for it.
+// watches for it. The read loop never waits for a handler, the outbox or the
+// disk: what it reads goes to three queues, each emptied by a goroutine of
+// its own, so the pongs keep coming while a handler is slow.
 type Session struct {
 	cfg     *Config
 	link    *Link
@@ -42,24 +49,36 @@ type Session struct {
 	caps    Capabilities
 	order   uint64 // the order of acceptance on the link: the highest is the newest
 
-	lanes *lanes
-	disp  chan dispatchItem
-	stale atomic.Bool
-	done  chan struct{}
+	lanes  *lanes
+	budget atomic.Int64
+	disp   *inbound[dispatchItem] // messages for the handlers
+	acks   *inbound[ackItem]      // answers to our messages, for the outbox
+	parts  *inbound[DataFrame]    // parts of transfers, for the disk
+	stale  atomic.Bool            // the peer refused our epoch
+	fenced atomic.Bool            // we refused the peer: nothing more of it runs
+	epoch  atomic.Uint64          // the highest epoch the peer has shown on this connection
+	done   chan struct{}
 
-	mu     sync.Mutex
-	cancel context.CancelCauseFunc
-	cause  error // why a graceful close happened
-	certs  map[string]chan Certificate
-	hb     clock.Timer
+	mu      sync.Mutex
+	cancel  context.CancelCauseFunc
+	cause   error // why a graceful close happened
+	certs   map[string]chan Certificate
+	floor   string    // the last outbox.floor of the peer on this connection
+	floorAt time.Time // when it came
+	hb      clock.Timer
 }
 
 func newSession(cfg *Config, link *Link, conn Conn, order uint64, side Side, version int, caps Capabilities) *Session {
-	return &Session{
+	s := &Session{
 		cfg: cfg, link: link, conn: conn, order: order, peer: conn.Peer(), side: side, version: version, caps: caps,
-		lanes: newLanes(), disp: make(chan dispatchItem, dispatchQueue), done: make(chan struct{}),
-		certs: map[string]chan Certificate{},
+		lanes: newLanes(), done: make(chan struct{}), certs: map[string]chan Certificate{},
 	}
+	s.disp = newInbound[dispatchItem](&s.budget, cfg.InboundLimit)
+	s.acks = newInbound[ackItem](&s.budget, cfg.InboundLimit)
+	s.parts = newInbound[DataFrame](&s.budget, cfg.InboundLimit)
+	// Both ends agreed on this epoch in the opening.
+	s.epoch.Store(cfg.Epoch.Epoch())
+	return s
 }
 
 // Peer is the identity of the other end.
@@ -159,7 +178,11 @@ func (s *Session) serve(ctx context.Context) error {
 	}
 	start(s.readLoop)
 	start(func(ctx context.Context) error { return s.lanes.run(ctx, s.conn) })
-	start(s.dispatchLoop)
+	start(func(ctx context.Context) error { return s.disp.run(ctx, func(it dispatchItem) { s.process(ctx, it) }) })
+	start(func(ctx context.Context) error { return s.acks.run(ctx, func(it ackItem) { s.answered(ctx, it) }) })
+	start(func(ctx context.Context) error {
+		return s.parts.run(ctx, func(f DataFrame) { s.link.xfer.onPart(ctx, s, f) })
+	})
 	if _, ok := s.conn.(Pinger); ok {
 		start(s.keepAlive)
 	}
@@ -174,6 +197,9 @@ func (s *Session) serve(ctx context.Context) error {
 	_ = s.conn.Close(1000, "")
 	wg.Wait()
 
+	// The answers that arrived before the end still count: their messages
+	// leave the outbox and their callers hear of them.
+	s.acks.drain(func(it ackItem) { s.answered(context.WithoutCancel(ctx), it) })
 	cause := context.Cause(ctx)
 	s.link.detach(s)
 	var ce *CloseError
@@ -200,36 +226,84 @@ func (s *Session) readLoop(ctx context.Context) error {
 		}
 		switch kind {
 		case FrameBinary:
-			s.onBinary(ctx, data)
+			err = s.onBinary(ctx, data)
 		case FrameText:
-			if err := s.onText(ctx, data); err != nil {
-				return err
-			}
+			err = s.onText(data)
+		}
+		if err != nil {
+			return err
 		}
 	}
 }
 
-func (s *Session) onBinary(ctx context.Context, data []byte) {
+// overloaded closes a peer that sends faster than its messages run: the read
+// loop never waits for them, so it keeps seeing the pongs, and the peer
+// sends again, after reconnecting, what still waits for an ack.
+func (s *Session) overloaded() error {
+	s.cfg.Logger.Warn("protocol: the peer sends faster than its messages run", "peer", s.peer.ID, "limit", s.cfg.InboundLimit)
+	s.closeWith(CloseOverloaded, "too far behind", fmt.Errorf("%w: %s", ErrOverloaded, s.peer.ID))
+	return errGraceful
+}
+
+// refuseStale is the answer to a message of an older epoch: stale_epoch,
+// nothing more of the peer runs, and the connection closes with 4006.
+func (s *Session) refuseStale(replyTo string, theirs, mine uint64) error {
+	s.fenced.Store(true)
+	s.sendError(replyTo, NewError(CodeStaleEpoch, "epoch %d is older than %d", theirs, mine))
+	s.closeWith(CloseStaleEpoch, "stale epoch", fmt.Errorf("refused epoch %d of %s: %w", theirs, s.peer.ID, ErrStaleEpoch))
+	return errGraceful
+}
+
+// sawEpoch records that the peer showed epoch e on this connection.
+func (s *Session) sawEpoch(e uint64) {
+	for {
+		cur := s.epoch.Load()
+		if e <= cur || s.epoch.CompareAndSwap(cur, e) {
+			return
+		}
+	}
+}
+
+// onBinary takes a binary frame. It carries no epoch: it is taken only while
+// the peer has shown, on this connection, an epoch at least ours, so the
+// records of a Citadel that this machine has since seen replaced are not
+// applied.
+func (s *Session) onBinary(ctx context.Context, data []byte) error {
+	if s.fenced.Load() {
+		return nil
+	}
 	f, err := DecodeData(data)
 	if err != nil {
 		s.cfg.Logger.Warn("protocol: bad binary frame", "peer", s.peer.ID, "err", err)
-		return
+		return nil
+	}
+	if s.peer.Role != RoleBrowser {
+		if theirs, mine := s.epoch.Load(), s.cfg.Epoch.Epoch(); theirs < mine {
+			return s.refuseStale("", theirs, mine)
+		}
 	}
 	if f.Type == DataXfer {
-		s.link.xfer.onPart(ctx, s, f)
-		return
+		if !s.parts.push(f, len(data)) {
+			return s.overloaded()
+		}
+		return nil
 	}
 	if h, ok := s.cfg.Router.dataHandler(f.Type); ok {
 		h.HandleData(ctx, s.peer, f)
-		return
+		return nil
 	}
 	s.cfg.Logger.Debug("protocol: binary frame of an unknown kind", "peer", s.peer.ID, "type", f.Type)
+	return nil
 }
 
 // onText applies the checks in the order that matters: the form of the
 // envelope, who sent it, the epoch (nothing is done for a message of an old
-// epoch), then the type, the direction and the schema.
-func (s *Session) onText(ctx context.Context, data []byte) error {
+// epoch), then the type, the direction and the schema. It never waits: what
+// runs later is queued.
+func (s *Session) onText(data []byte) error {
+	if s.fenced.Load() {
+		return nil
+	}
 	env, perr := Decode(data)
 	if perr != nil {
 		replyTo := ""
@@ -244,11 +318,17 @@ func (s *Session) onText(ctx context.Context, data []byte) error {
 		return nil
 	}
 	if s.peer.Role != RoleBrowser {
-		if mine := s.cfg.Epoch.Epoch(); env.Epoch < mine {
-			s.sendError(env.ID, NewError(CodeStaleEpoch, "epoch %d is older than %d", env.Epoch, mine))
-			s.closeWith(CloseStaleEpoch, "stale epoch", fmt.Errorf("refused epoch %d of %s: %w", env.Epoch, s.peer.ID, ErrStaleEpoch))
-			return errGraceful
+		if env.Type == TypeGuildEpoch && env.ReplyTo == "" {
+			// A peer that asks for our certificate gets it whatever its
+			// epoch: this is how a machine that is behind catches up, and
+			// nothing runs.
+			s.answerEpoch(env)
+			return nil
 		}
+		if mine := s.cfg.Epoch.Epoch(); env.Epoch < mine {
+			return s.refuseStale(env.ID, env.Epoch, mine)
+		}
+		s.sawEpoch(env.Epoch)
 	}
 	spec, ok := s.cfg.Registry.Spec(env.Type)
 	if !ok {
@@ -269,8 +349,8 @@ func (s *Session) onText(ctx context.Context, data []byte) error {
 		s.sendError(env.ID, NewError(CodeForbidden, "the connection is already open"))
 		return nil
 	case TypeAck:
-		if env.ReplyTo != "" {
-			s.link.ackArrived(ctx, env.ReplyTo, payload.(*Ack))
+		if env.ReplyTo != "" && !s.acks.push(ackItem{id: env.ReplyTo, ack: payload.(*Ack)}, len(data)) {
+			return s.overloaded()
 		}
 		return nil
 	case TypeError:
@@ -278,45 +358,69 @@ func (s *Session) onText(ctx context.Context, data []byte) error {
 		if e.Code == CodeStaleEpoch {
 			s.stale.Store(true)
 		}
-		if env.ReplyTo != "" {
-			s.link.errorArrived(ctx, env.ReplyTo, e)
+		if env.ReplyTo != "" && !s.acks.push(ackItem{id: env.ReplyTo, err: e}, len(data)) {
+			return s.overloaded()
 		}
 		return nil
-	case TypeGuildEpoch:
-		if env.ReplyTo != "" {
-			s.deliverCertificate(env, payload.(*Certificate))
-			return nil
-		}
+	case TypeOutboxFloor:
+		s.mu.Lock()
+		s.floor, s.floorAt = payload.(*OutboxFloor).ID, s.cfg.Clock.Now()
+		s.mu.Unlock()
+		return nil
+	case TypeGuildEpoch: // the answer to our request (requests were answered above)
+		s.deliverCertificate(env, payload.(*Certificate))
+		return nil
 	case TypeMachineHeartbeat:
 		s.heartbeatSeen()
 	}
-	select {
-	case s.disp <- dispatchItem{env: env, payload: payload}:
-	case <-ctx.Done():
+	if !s.disp.push(dispatchItem{env: env, spec: spec, payload: payload}, len(data)) {
+		return s.overloaded()
 	}
 	return nil
 }
 
-func (s *Session) dispatchLoop(ctx context.Context) error {
-	for {
-		select {
-		case it := <-s.disp:
-			s.process(ctx, it)
-		case <-ctx.Done():
-			return nil
-		}
+// answered hands the answer of the peer to the link, off the read loop: it
+// may write the outbox.
+func (s *Session) answered(ctx context.Context, it ackItem) {
+	if it.ack != nil {
+		s.link.ackArrived(ctx, it.id, it.ack)
+		return
 	}
+	s.link.errorArrived(ctx, it.id, it.err)
 }
 
+// process runs one message. The messages of a link run one at a time, in
+// order, even while a newer connection replaces an older one; and the epoch
+// is checked again, because ours may have moved while the message waited.
 func (s *Session) process(ctx context.Context, it dispatchItem) {
+	l := s.link
+	select {
+	case l.turn <- struct{}{}:
+		defer func() { <-l.turn }()
+	case <-ctx.Done():
+		return
+	}
+	if ctx.Err() != nil || s.fenced.Load() {
+		return // not run: the peer sends again, on its next connection, what needs an answer
+	}
 	env := it.env
-	if s.peer.Role != RoleBrowser && env.Epoch > s.cfg.Epoch.Epoch() {
-		if perr := s.followHigher(ctx, env.Epoch); perr != nil {
-			s.sendError(env.ID, perr)
+	if s.peer.Role != RoleBrowser {
+		mine := s.cfg.Epoch.Epoch()
+		if env.Epoch < mine {
+			_ = s.refuseStale(env.ID, env.Epoch, mine)
 			return
 		}
+		if env.Epoch > mine {
+			if perr := s.followHigher(ctx, env.Epoch); perr != nil {
+				s.sendError(env.ID, perr)
+				return
+			}
+			if !s.stillTheRightPeer() {
+				return
+			}
+		}
 	}
-	h, ok := s.link.handlerFor(env.Type)
+	h, ok := l.handlerFor(env.Type)
 	if !ok {
 		if env.Type == TypeMachineHeartbeat {
 			return // watched by the session itself; the application may not care
@@ -324,8 +428,10 @@ func (s *Session) process(ctx context.Context, it dispatchItem) {
 		s.sendError(env.ID, NewError(CodeUnknownType, "%s has no handler in this build", env.Type))
 		return
 	}
-	m := &Message{Env: env, Payload: it.payload, Peer: s.peer, Link: s.link}
-	if env.Ack {
+	m := &Message{Env: env, Payload: it.payload, Peer: s.peer, Link: l}
+	// The catalogue, not the flag of the envelope, says whether the message
+	// is run once: a peer cannot skip the memory of ids by leaving it out.
+	if it.spec.Ack {
 		s.runAcked(ctx, m, h)
 		return
 	}
@@ -339,12 +445,42 @@ func (s *Session) process(ctx context.Context, it dispatchItem) {
 	}
 }
 
+// stillTheRightPeer is checked after this machine followed the higher epoch
+// of a message: a Tower runs only what the Citadel of that epoch sends, and a
+// Citadel that the new epoch replaced is no longer one. Either way the
+// connection closes with 4007 and nothing of the message runs.
+func (s *Session) stillTheRightPeer() bool {
+	switch s.side {
+	case SideTower:
+		if c := s.cfg.Epoch.Certificate(); c != nil && c.CitadelMachineID != s.peer.ID {
+			s.fenced.Store(true)
+			s.closeWith(CloseNotCitadel, "not the Citadel of the epoch",
+				fmt.Errorf("%w: epoch %d names %s, not %s", ErrNotCitadel, c.Epoch, c.CitadelMachineID, s.peer.ID))
+			return false
+		}
+	case SideCitadel:
+		if s.cfg.IsCitadel != nil && !s.cfg.IsCitadel() {
+			s.fenced.Store(true)
+			s.closeWith(CloseNotCitadel, "this machine is not the Citadel", fmt.Errorf("%w: this machine followed a higher epoch", ErrNotCitadel))
+			return false
+		}
+	}
+	return true
+}
+
+// ErrNotCitadel is the cause of a session closed with 4007 after a higher
+// epoch was followed.
+var ErrNotCitadel = errors.New("protocol: not the Citadel of the epoch")
+
 // runAcked is the idempotency of the receiver: the id is claimed durably
 // before the handler runs, so a repeat of it, after a reconnection, gets
-// "duplicate" and runs nothing.
+// "duplicate" and runs nothing. The ids are kept per link, not per machine:
+// on a Tower the sender is "the Citadel", whichever machine it is, because
+// the outbox that a promoted Citadel sends again is the replicated one of the
+// old Citadel, with the same ids.
 func (s *Session) runAcked(ctx context.Context, m *Message, h Handler) {
-	env := m.Env
-	fresh, prev, err := s.cfg.Processed.Claim(ctx, s.peer.ID, env.ID, env.Type, s.cfg.Clock.Now())
+	env, key := m.Env, s.link.key
+	fresh, prev, err := s.cfg.Processed.Claim(ctx, key, env.ID, env.Type, s.cfg.Clock.Now())
 	if err != nil {
 		s.sendError(env.ID, NewError(CodeInternal, "idempotency store: %v", err))
 		return
@@ -361,7 +497,7 @@ func (s *Session) runAcked(ctx context.Context, m *Message, h Handler) {
 	if herr != nil {
 		pe := asError(herr)
 		if pe.Retryable {
-			if err := s.cfg.Processed.Release(ctx, s.peer.ID, env.ID); err != nil {
+			if err := s.cfg.Processed.Release(ctx, key, env.ID); err != nil {
 				s.cfg.Logger.Error("protocol: release", "id", env.ID, "err", err)
 			}
 		} else {
@@ -378,7 +514,7 @@ func (s *Session) runAcked(ctx context.Context, m *Message, h Handler) {
 }
 
 func (s *Session) finish(ctx context.Context, id string, a Ack) {
-	if err := s.cfg.Processed.Finish(ctx, s.peer.ID, id, jsonOf(a)); err != nil {
+	if err := s.cfg.Processed.Finish(ctx, s.link.key, id, jsonOf(a)); err != nil {
 		s.cfg.Logger.Error("protocol: processed finish", "id", id, "err", err)
 	}
 }
@@ -467,7 +603,7 @@ func (s *Session) fetchCertificate(ctx context.Context) (Certificate, error) {
 		delete(s.certs, id)
 		s.mu.Unlock()
 	}()
-	env := s.newEnvelope(TypeGuildEpoch, Empty{}, "", true)
+	env := s.newEnvelope(TypeGuildEpoch, Empty{}, "", false)
 	env.ID = id
 	if err := s.enqueueRaw(env); err != nil {
 		return Certificate{}, err
@@ -486,15 +622,37 @@ func (s *Session) deliverCertificate(env Envelope, c *Certificate) {
 	s.mu.Lock()
 	ch := s.certs[env.ReplyTo]
 	s.mu.Unlock()
-	if env.Ack {
-		s.sendAck(env.ID, Ack{Status: AckOK})
-	}
 	if ch != nil {
 		select {
 		case ch <- *c:
 		default:
 		}
 	}
+}
+
+// answerEpoch answers a guild.epoch request with the certificate this
+// machine follows, at once, on the read loop: the answer is the
+// confirmation, it goes on this connection only (never the outbox) and
+// nothing is claimed, because reading the certificate twice is harmless.
+func (s *Session) answerEpoch(req Envelope) {
+	c := s.cfg.Epoch.Certificate()
+	if c == nil {
+		s.sendError(req.ID, NewError(CodeNotFound, "this machine has no certificate of epoch"))
+		return
+	}
+	_ = s.enqueueRaw(s.newEnvelope(TypeGuildEpoch, c, req.ID, false))
+}
+
+// peerFloor is the outbox.floor the peer sent on this connection, or "" if
+// none came in the last two rounds of the prune: a floor that is not kept
+// fresh is not trusted.
+func (s *Session) peerFloor() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.floor == "" || clock.Since(s.cfg.Clock, s.floorAt) > 2*s.cfg.Timing.ProcessedPrune {
+		return ""
+	}
+	return s.floor
 }
 
 func (s *Session) heartbeatSeen() {

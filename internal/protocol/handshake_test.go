@@ -259,17 +259,27 @@ func TestATowerOnEpochTwoRefusesAMessageOfACitadelOnEpochOne(t *testing.T) {
 		w := newWorld(t, opts{epochC: 1, epochT: 1})
 		ty := &typist{}
 		w.cfgT.Router.Handle(protocol.TypeTerminalInput, ty)
+		ended := make(chan error, 8)
+		w.cfgC.Hooks.OnDisconnect = func(_ *protocol.Session, cause error) { ended <- cause }
 		w.start()
 		defer w.stop()
 		settle()
 		// the Tower learns epoch 2 (a promotion happened elsewhere)
 		w.partsT.Epochs.Set(protorig.Cert(2, "other", protorig.SignedOK))
 		r, err := w.toTower().Call(t.Context(), input("rm -rf\n"))
-		_ = r
-		_ = err
+		if err != nil || r.Status != protocol.AckError || r.Error == nil || r.Error.Code != protocol.CodeStaleEpoch {
+			t.Fatalf("answer = %+v, %v; want stale_epoch", r, err)
+		}
 		settle()
+		var ce *protocol.CloseError
+		if cause := <-ended; !errors.As(cause, &ce) || ce.Code != protocol.CloseStaleEpoch {
+			t.Fatalf("the connection ended with %v, want 4006", cause)
+		}
 		if got := ty.list(); len(got) != 0 {
 			t.Fatalf("typed = %q: a message of an old epoch ran", got)
+		}
+		if w.partsT.Store.Claims() != 0 {
+			t.Fatal("a message of an old epoch was claimed")
 		}
 		if w.partsC.Epochs.StaleCalls() == 0 {
 			t.Fatal("the Citadel was not told that its epoch is old")

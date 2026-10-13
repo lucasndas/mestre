@@ -36,8 +36,8 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 
 ### Época
 
-- Quem recebe uma mensagem com `epoch` **menor** que a sua responde `error` `stale_epoch` sem executar nada e fecha a conexão com `4006`; o remetente atualiza a época (pede a certidão) e se reconecta na Cidadela certa. O `hello` é a exceção: de época menor, ele não é recusado, e o `welcome` leva a certidão atual, que a Torre segue.
-- Quem recebe `epoch` **maior** pede a certidão (`guild.epoch`), confere a assinatura e passa a seguir a nova época **antes** de tratar a mensagem; no `hello` a certidão já vem junto. Uma Cidadela que vê época maior se rebaixa a Torre antes de qualquer ação externa e fecha com `4007` ([volta da antiga Cidadela](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)). Uma Torre que recebe um `welcome` de época menor que a sua não fala com aquela Cidadela, nem com uma máquina que o TLS identificou como outra que não a nomeada na certidão do `welcome`.
+- Quem recebe uma mensagem com `epoch` **menor** que a sua responde `error` `stale_epoch` sem executar nada e fecha a conexão com `4006`; o remetente atualiza a época (pede a certidão) e se reconecta na Cidadela certa. A época é conferida ao ler e de novo na hora de executar: uma mensagem que esperou na fila enquanto a máquina passou a seguir época maior também é recusada assim. O `hello` é a exceção: de época menor, ele não é recusado, e o `welcome` leva a certidão atual, que a Torre segue. Frames binários não têm época: valem só enquanto o par mostrou, na conexão, época pelo menos igual à de quem recebe; senão, `stale_epoch` e `4006`.
+- Quem recebe `epoch` **maior** pede a certidão (`guild.epoch`), confere a assinatura e passa a seguir a nova época **antes** de tratar a mensagem; no `hello` a certidão já vem junto. O pedido de certidão é respondido na hora, qualquer que seja a época de quem pede, e não executa nada. Depois de seguir, uma Torre só executa o que vem da máquina que a certidão nomeia, e uma Cidadela que deixou de sê-lo não executa nada; as duas fecham com `4007`. Uma Cidadela que vê época maior se rebaixa a Torre antes de qualquer ação externa e fecha com `4007` ([volta da antiga Cidadela](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)). Uma Torre que recebe um `welcome` de época menor que a sua não fala com aquela Cidadela, nem com uma máquina que o TLS identificou como outra que não a nomeada na certidão do `welcome`.
 
 ### Abertura, versão e capacidades
 
@@ -53,8 +53,9 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 
 ### Ack e idempotência
 
-- **Remetente:** toda mensagem com `ack: true` é gravada, de forma durável, na tabela `outbox` do banco do remetente (Cidadela ou Torre, [persistência](../arquitetura/persistencia.md)) até chegar o `ack`; a chave é a máquina, e na Torre é sempre "a Cidadela", para a mensagem seguir uma troca de Cidadela. Depois de reconectar, ela é reenviada **com o mesmo `id`**, na ordem original e com a época de agora. Os tipos com segredo (`vault.credential`, `agent.site_login`, `agent.site_login_input`) esperam o ack só em memória, nunca no disco. Um `error` não retentável sobre a mensagem a tira do `outbox`; `stale_epoch` não.
-- **Destinatário:** reserva no banco, antes de executar, o `id` das mensagens com ack, por remetente, e guarda a resposta dada por 24 horas (padrão). Um `id` repetido devolve a mesma resposta, com `status: "duplicate"`, **sem executar de novo**; uma execução que caiu no meio também conta como feita, porque executar duas vezes é pior. Um erro `retryable` do tratamento esquece o `id`, e reenviar a mesma mensagem pode dar certo.
+- **Remetente:** toda mensagem com `ack: true` é gravada, de forma durável, na tabela `outbox` do banco do remetente (Cidadela ou Torre, [persistência](../arquitetura/persistencia.md)) até chegar o `ack`; a chave é a máquina, e na Torre é sempre "a Cidadela", para a mensagem seguir uma troca de Cidadela. Depois de reconectar, ela é reenviada **com o mesmo `id`**, na ordem original e com a época de agora. Os tipos com segredo (`vault.replica`, `vault.credential`, `agent.site_login`, `agent.site_login_input`) esperam o ack só em memória, nunca no disco, e voltam na ordem original junto com os outros. `cli.call`, `cli.result` e `xfer.*` não passam pelo `outbox`: vão só na conexão aberta. O `ack` encerra a espera, qualquer que seja o status: com erro, mesmo retentável, a mensagem sai do `outbox`, e quem a enviou decide se a manda de novo, com o mesmo `id`. Um `error` no lugar do ack (a mensagem nem chegou ao tratamento) a tira do `outbox` se não é retentável; retentável ou `stale_epoch`, ela fica para a próxima conexão.
+- **Destinatário:** reserva no banco, antes de executar, o `id` das mensagens cujo tipo exige ack (vale o catálogo, não o campo `ack` do envelope), por vínculo: na Cidadela, cada Torre; na Torre, "a Cidadela", qualquer que seja a máquina, porque o `outbox` que uma Cidadela promovida reenvia é o replicado da antiga, com os mesmos ids. Guarda a resposta dada. Um `id` repetido devolve a mesma resposta, com `status: "duplicate"`, **sem executar de novo**; uma execução que caiu no meio também conta como feita, porque executar duas vezes é pior. Um erro `retryable` do tratamento esquece o `id`, e reenviar a mesma mensagem pode dar certo.
+- **Por quanto tempo:** cada lado manda ao outro, ao conectar (depois do que reenvia) e a cada hora, `outbox.floor` com o menor `id` que ainda pode reenviar (o mais antigo do `outbox`, ou um novo se ele está vazio; os ULIDs ordenam como texto). O destinatário só esquece um `id` com mais de 24 horas (padrão) **e** abaixo do piso que o remetente, conectado agora, mandou nas últimas duas horas; do remetente que está fora, nada é esquecido. Assim nenhum comando reenviado executa duas vezes, por mais que o remetente fique fora; o limite é o banco do destinatário (perdido ou restaurado de backup, ele não lembra o que já fez).
 - **O que o ack significa:** `ack` (`payload` `{status: ok|duplicate|error}`) quer dizer "recebido e aceito", não "concluído". A conclusão vem numa mensagem de resultado própria, ligada por `reply_to`.
 - A saída de terminal não tem ack. Ela se recupera por replay (abaixo).
 
@@ -66,15 +67,16 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
   - Tipo `0x01`: saída de terminal. O ID é o do terminal e a posição é o deslocamento em bytes.
   - Tipo `0x02`: parte de transferência. O ID é o da transferência e a posição é o índice da parte.
   - Tipo `0x03`: registros de mudança do banco ([replicação](../guilda/replicacao.md)). O ID é o `guild_id` e a posição é o `lsn` do primeiro registro.
+- **Leitura sem espera:** quem lê a conexão nunca espera um tratamento, o banco ou o disco: mensagens, confirmações e partes vão para filas próprias, e os pongs (vistos só enquanto a conexão é lida) continuam chegando com um tratamento lento. As filas de uma conexão somam até 64 MiB (padrão); acima disso, a conexão fecha com `4008` e o par reenvia depois o que espera ack. As mensagens de uma máquina rodam uma por vez e na ordem, também enquanto uma conexão nova substitui a antiga.
 - **Replay de terminal:** o buffer de cada terminal fica só na máquina dele (1 MiB, padrão; [terminal](../arquitetura/terminal.md)). Depois de reconectar, ou quando um navegador abre um terminal, a Cidadela pede `terminal.replay` a partir do deslocamento que precisa. Se o trecho já saiu do buffer, a resposta marca "trecho perdido"; o log completo continua no disco da máquina.
 
 ### Heartbeat e reconexão
 
 - **Ping:** ping do WebSocket a cada 15 s, pelos dois lados. Sem pong em 45 s (contados do último pong, mesmo que o ping não tenha saído por uma escrita longa), a conexão é dada como morta e fechada sem o aperto de fechamento.
 - **Heartbeat:** `machine.heartbeat` logo depois do `welcome` e a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
-- **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%. Depois de 3 falhas seguidas, a Torre refaz a [descoberta](descoberta.md).
+- **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%; só uma conexão que durou 30 s volta o atraso a 1 s. Depois de 3 falhas seguidas ao abrir, a Torre refaz a [descoberta](descoberta.md).
 - **Uma conexão por `machine_id`:** uma conexão nova substitui a antiga. "Nova" é a aceita por último (a ordem é fixada ao aceitar a conexão, antes do `welcome`), não a que se liga primeiro ao vínculo: uma conexão mais velha que chega depois da mais nova é ela quem se fecha com `4004`, e o que espera ack é reenviado na que ficou.
-- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual, assinada pela CA, que a Torre segue se for mais nova antes de refazer a [descoberta](descoberta.md) na hora; vale também para o Guardião de uma Cidadela antiga, que se retira na hora ao receber certidão mais nova, [concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
+- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual, assinada pela CA, que a Torre segue se for mais nova antes de refazer a [descoberta](descoberta.md) na hora; vale também para o Guardião de uma Cidadela antiga, que se retira na hora ao receber certidão mais nova, [concessão do motor](../autocura/guardiao.md#concessão-do-motor)) · `4008` quem recebe não dá conta do que chega (reconectar com backoff).
 
 ### Tipos de mensagem
 
@@ -87,16 +89,16 @@ O catálogo de tipos, com os campos principais e as respostas, e a tabela de có
 
 - **Usos:** git bundles das mesas e dos espelhos ([ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md)), anexos, classes e pergaminhos materializados nas máquinas, cópia completa do banco e arquivos da Cidadela ([replicação](../guilda/replicacao.md)), áudio para transcrição e binários de atualização ([autoatualização](../plataforma/autoatualizacao.md)).
 - **Passo a passo:**
-  1. O remetente envia `xfer.begin`, com `xfer_id`; `kind` (`git-bundle`, `file`, `db-snapshot` ou `release`); `size` e `sha256` do total; `chunk_size` (padrão 256 KiB); e `meta` (para bundle, mesa, branch, commits pré-requisito e ponta; para arquivo, o caminho de destino).
-  2. O destinatário responde `xfer.ready` com `next_index`: 0, ou o ponto de retomada se já tiver partes num arquivo temporário. Uma recusa (tipo sem receptor, disco) vem no ack.
-  3. As partes vão em frames binários `0x02`, com até 16 partes em trânsito. O destinatário envia `xfer.progress` com o próximo índice esperado a cada 8 partes e ao fim, e isso libera a janela.
+  1. O remetente envia `xfer.begin`, com `xfer_id`; `kind` (`git-bundle`, `file`, `db-snapshot` ou `release`); `size` (até 64 GiB) e `sha256` do total; `chunk_size` (padrão 256 KiB); e `meta` (para bundle, mesa, branch, commits pré-requisito e ponta; para arquivo, o caminho de destino).
+  2. O destinatário responde `xfer.ready` com `next_index`: 0, ou o ponto de retomada se já tiver partes num arquivo temporário. Uma recusa (tipo sem receptor; disco sem espaço para o que falta com 64 MiB de folga: `unavailable`) vem no ack.
+  3. As partes vão em frames binários `0x02`, com até 16 partes em trânsito. O destinatário envia `xfer.progress` com o próximo índice esperado a cada 8 partes e ao fim, e isso libera a janela. Se falta uma parte, ele pede uma vez (`resend`) que o remetente volte a ela; uma parte de tamanho errado encerra a transferência com `invalid_payload`. Sem sinal do destinatário (`xfer.ready`, `xfer.progress`, `xfer.done` ou ack) por 2 min, o remetente repete o `xfer.begin`, com o mesmo `xfer_id`, na mesma conexão.
   4. O remetente só envia `xfer.end` depois de o destinatário confirmar todas as partes (a fila de controle passaria na frente das partes). O destinatário confere o SHA-256 total e roda o fim do `kind`; para bundle, `git bundle verify` no repositório de destino.
   5. O destinatário responde `xfer.done` com `ok` ou o erro. Um `kind` pode responder já no `xfer.begin` que tem o conteúdo (mesmo SHA-256): o `xfer.ready` dá todas as partes como recebidas e nenhuma é enviada (arquivo que não mudou, espelho em dia).
 - **Bundles:**
   - São incrementais. O pré-requisito é o último commit que os dois lados têm daquela mesa.
   - Se faltar o pré-requisito, o erro `missing_prerequisite` faz o remetente mandar um bundle da branch inteira.
   - Como o bundle é aplicado (avanço, conflito) está em [mesas](../orquestracao/mesas.md).
-- **Reconexão:** depois de reconectar, o remetente repete `xfer.begin` com o mesmo `xfer_id` (e uma mensagem nova, sem passar pelo `outbox`); quem já terminou responde com o resultado guardado. Uma nova tentativa depois de erro usa outro `xfer_id`. Arquivos temporários sem uso por 24 horas são apagados.
+- **Reconexão:** depois de reconectar, o remetente repete `xfer.begin` com o mesmo `xfer_id` (e uma mensagem nova, sem passar pelo `outbox`); quem já terminou responde com o resultado guardado. Uma nova tentativa depois de erro usa outro `xfer_id`. Ao cair, só a conexão atual da máquina fecha os arquivos temporários; uma já substituída não mexe nos da nova. Arquivos temporários sem uso por 24 horas são apagados pelo próprio motor, a cada hora.
 
 ### Conexão do Guardião
 
@@ -118,7 +120,7 @@ Descoberta, entrada na Guilda, ficha da máquina e replicação usam este protoc
 
 ## Regras e erros
 
-- Um comando com ack, ao ser reenviado depois de uma queda, nunca executa duas vezes. Isso vale principalmente para `terminal.input` e `inbox.deliver`.
+- Um comando com ack, ao ser reenviado depois de uma queda, nunca executa duas vezes, por mais que o remetente fique fora e também quando quem reenvia é uma Cidadela promovida ([ack e idempotência](#ack-e-idempotência)). Isso vale principalmente para `terminal.input` e `inbox.deliver`.
 - Credencial revogada (`4002`): a máquina para e mostra o estado no checklist. Época vencida (`4006`): a máquina nunca reenvia a mensagem recusada para a Cidadela antiga; segue a certidão nova. Mensagem maior que 1 MiB: `error` `too_large`.
 
 ## Critérios de aceite
@@ -144,6 +146,5 @@ Descoberta, entrada na Guilda, ficha da máquina e replicação usam este protoc
 
 ## Depende de
 
-- [Terminal](../arquitetura/terminal.md) · [Canal local](../arquitetura/canal-local.md)
-- [Dublês](../qualidade/dubles.md) (rede falsa)
+- [Terminal](../arquitetura/terminal.md) · [Canal local](../arquitetura/canal-local.md) · [Dublês](../qualidade/dubles.md) (rede falsa)
 - [Segurança](../arquitetura/seguranca.md) · [Persistência](../arquitetura/persistencia.md) · [Componentes](../arquitetura/componentes.md)

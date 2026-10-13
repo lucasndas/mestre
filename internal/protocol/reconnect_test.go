@@ -37,12 +37,14 @@ func TestTheTowerReconnectsWithTheConfiguredBackoffMeasuredInFakeTime(t *testing
 			t.Fatalf("gaps after a cut = %v, want [1s]", g)
 		}
 
-		// the Citadel is unreachable: 1 s, doubling to 60 s
+		// the connection holds for a minute, which resets the delay; then the
+		// Citadel is unreachable: 1 s, doubling to 60 s
+		advance(time.Minute)
 		w.net.Partition(towerHost, citadelID)
 		advance(10 * time.Minute)
-		// reconnected at 1 s, partitioned at 10 s: the first attempt is 1 s
-		// after the partition (10 s after the last dial), then 2, 4, ... 60 s
-		want := []time.Duration{10 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 32 * time.Second, 60 * time.Second, 60 * time.Second}
+		// reconnected at 1 s, partitioned at 70 s: the first attempt is 1 s
+		// after the partition (70 s after the last dial), then 2, 4, ... 60 s
+		want := []time.Duration{70 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 32 * time.Second, 60 * time.Second, 60 * time.Second}
 		if g := w.gaps(); len(g) < 1+len(want) || !slices.Equal(g[1:1+len(want)], want) {
 			t.Fatalf("gaps = %v, want [1s] followed by %v", g, want)
 		}

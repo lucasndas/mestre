@@ -98,21 +98,29 @@ func (s *SQLStore) Claim(ctx context.Context, sender, id, typ string, now time.T
 	return fresh, prev, err
 }
 
-// Finish stores the ack that was given.
+// Finish stores the ack that was given, durably: a repeat after a crash
+// still gets the first answer.
 func (s *SQLStore) Finish(ctx context.Context, sender, id string, ack []byte) error {
-	_, err := s.db.Writer().ExecContext(ctx, `UPDATE processed_commands SET ack = ? WHERE sender = ? AND id = ?`, ack, sender, id)
-	return err
+	return s.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE processed_commands SET ack = ? WHERE sender = ? AND id = ?`, ack, sender, id)
+		return err
+	})
 }
 
-// Release forgets a claim.
+// Release forgets a claim, durably: a message refused with a retryable error
+// must be able to run when it comes again, even after a crash.
 func (s *SQLStore) Release(ctx context.Context, sender, id string) error {
-	_, err := s.db.Writer().ExecContext(ctx, `DELETE FROM processed_commands WHERE sender = ? AND id = ?`, sender, id)
-	return err
+	return s.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM processed_commands WHERE sender = ? AND id = ?`, sender, id)
+		return err
+	})
 }
 
-// Prune forgets what was claimed before cutoff.
-func (s *SQLStore) Prune(ctx context.Context, cutoff time.Time) (int, error) {
-	res, err := s.db.Writer().ExecContext(ctx, `DELETE FROM processed_commands WHERE processed_at < ?`, cutoff.UnixMilli())
+// Prune forgets, of one sender, what was claimed before cutoff with an id
+// lower than floor (ULIDs sort as their strings).
+func (s *SQLStore) Prune(ctx context.Context, sender string, cutoff time.Time, floor string) (int, error) {
+	res, err := s.db.Writer().ExecContext(ctx,
+		`DELETE FROM processed_commands WHERE sender = ? AND processed_at < ? AND id < ?`, sender, cutoff.UnixMilli(), floor)
 	if err != nil {
 		return 0, err
 	}
