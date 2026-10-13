@@ -69,6 +69,11 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 	t.Parallel()
 	clk := clock.Real{}
 	ctx, cancel := context.WithCancel(t.Context())
+	// Everything that uses the databases ends before they are closed (by
+	// t.Cleanup, after these defers): a handler that outlives the test would
+	// use a closed database.
+	var running sync.WaitGroup
+	defer running.Wait()
 	defer cancel()
 	dir := t.TempDir()
 	sys := transport.SystemNetwork{Suite: os.Getenv("MESTRE_TEST_SUITE")}
@@ -128,7 +133,7 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cdb.Close()
+	t.Cleanup(func() { _ = cdb.Close() })
 	filesDir := filepath.Join(dir, "citadel", "classes")
 	cfiles, err := replication.NewFiles(replication.FileRoot{Name: "classes", Dir: filesDir})
 	if err != nil {
@@ -163,8 +168,8 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 		t.Fatal(err)
 	}
 	primary.Attach(protoSrv)
-	go func() { _ = protoSrv.Serve(ctx, protocol.FromTransportListener(towers)) }()
-	go func() { _ = primary.Run(ctx) }()
+	running.Go(func() { _ = protoSrv.Serve(ctx, protocol.FromTransportListener(towers)) })
+	running.Go(func() { _ = primary.Run(ctx) })
 
 	// The Tower
 	events := &fullEvents{}
@@ -176,7 +181,7 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tdb.Close()
+	t.Cleanup(func() { _ = tdb.Close() })
 	tfilesDir := filepath.Join(dir, "tower", "classes")
 	tfiles, err := replication.NewFiles(replication.FileRoot{Name: "classes", Dir: tfilesDir})
 	if err != nil {
@@ -214,8 +219,8 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 		t.Fatal(err)
 	}
 	rep.Attach(cli.Link())
-	go func() { _ = cli.Run(ctx) }()
-	go func() { _ = rep.Run(ctx) }()
+	running.Go(func() { _ = cli.Run(ctx) })
+	running.Go(func() { _ = rep.Run(ctx) })
 
 	deadline, stop := clock.WithTimeout(ctx, clk, 60*time.Second)
 	defer stop()
@@ -234,6 +239,15 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 	waitFor("the Tower to get its full copy", func() bool {
 		n, _ := tdb.LastLSN(ctx)
 		return n > 0
+	})
+	// The lag counts from the commit of the oldest record the Tower has not
+	// confirmed. While the full copy is going the records of the copy are the
+	// oldest, and they were committed when the process built its template, as
+	// long ago as the process is old: the pace starts when the Citadel
+	// confirms that the Tower has them and streams.
+	waitFor("the Citadel to stream to the Tower", func() bool {
+		st, err := primary.Status(ctx)
+		return err == nil && len(st) == 1 && st[0].State == "streaming" && st[0].Behind == 0
 	})
 
 	// A steady pace: a record every 25 ms for three seconds; every fifth cites a
