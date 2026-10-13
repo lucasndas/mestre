@@ -164,6 +164,33 @@ type VaultCredential struct {
 	Value Secret `json:"value" proto:"req"`
 }
 
+// GuildDiscarded is `guild.discarded`: the old Citadel, demoted to a Tower,
+// lists the transactions it had committed that the promoted machine never
+// applied (docs/guilda/replicacao.md#perda-na-troca), for the audit of the
+// Guild. Total counts them all; Transactions may carry fewer, to fit a
+// message.
+type GuildDiscarded struct {
+	Epoch        uint64        `json:"epoch" proto:"req"`
+	FromLSN      uint64        `json:"from_lsn"`
+	Total        int           `json:"total" proto:"req"`
+	Transactions []DiscardedTx `json:"transactions"`
+}
+
+// DiscardedTx is one discarded transaction: its lsn, when it committed and
+// the rows it changed, by table and key, never the values.
+type DiscardedTx struct {
+	LSN     uint64            `json:"lsn"`
+	At      Timestamp         `json:"at"`
+	Changes []DiscardedChange `json:"changes"`
+}
+
+// DiscardedChange is a row of a discarded transaction.
+type DiscardedChange struct {
+	Table string `json:"table"`
+	Op    string `json:"op"`
+	Key   []any  `json:"key,omitempty"`
+}
+
 // CitadelHandover is `citadel.handover`.
 type CitadelHandover struct {
 	TargetMachineID string `json:"target_machine_id" proto:"req"`

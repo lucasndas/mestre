@@ -16,6 +16,7 @@ const (
 	TypeGuildEpoch           = "guild.epoch"
 	TypeGuildConfig          = "guild.config"
 	TypeGuildLeave           = "guild.leave"
+	TypeGuildDiscarded       = "guild.discarded"
 	TypeReplicaAck           = "replica.ack"
 	TypeReplicaResync        = "replica.resync"
 	TypeVaultReplica         = "vault.replica"
@@ -84,6 +85,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeGuildEpoch, Dir: Both, Ack: true, Payload: Empty{}, Reply: Certificate{}},
 		Spec{Type: TypeGuildConfig, Dir: CitadelToTower, Ack: true, Payload: GuildConfig{}},
 		Spec{Type: TypeGuildLeave, Dir: Both, Ack: true, Payload: GuildLeave{}},
+		Spec{Type: TypeGuildDiscarded, Dir: TowerToCitadel, Ack: true, Payload: GuildDiscarded{}},
 		Spec{Type: TypeReplicaAck, Dir: TowerToCitadel, Payload: ReplicaAck{}},
 		Spec{Type: TypeReplicaResync, Dir: TowerToCitadel, Ack: true, Payload: ReplicaResync{}},
 		Spec{Type: TypeVaultReplica, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: VaultReplica{}},

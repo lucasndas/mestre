@@ -23,6 +23,13 @@
 //     the protocol.
 //   - PlanInstall is the decision of the installer after the discovery:
 //     create the Guild, join the one that answered, choose, or give up.
+//   - The change of Citadel (docs/guilda/cidadela-e-torres.md): Lock is the
+//     witness of the epoch outside the Guild (the GitHub, milestone 5);
+//     Fence keeps a Citadel from acting outside unless the lock confirms its
+//     epoch (suspended at the start, the lease, the wait of the promoted
+//     machine, the demotion); ClaimEpoch, Promoter and TakeCommand are the
+//     promotion; ListDiscarded and RecordDiscarded the transactions the
+//     change lost; DownWatch the notice to the Owner. internal/app runs them.
 //
 // # What stays out
 //

@@ -27,9 +27,12 @@ type Outgoing struct {
 	// ID is optional: set it to send again a message that the peer refused
 	// with a retryable error (the same id is the same message).
 	ID string
-	// transient keeps the message out of the outbox: the transfer machine
-	// recovers by itself after a reconnection.
-	transient bool
+	// Transient keeps a message that demands an ack out of the outbox: it
+	// goes only on the connection that is open now, or fails with
+	// ErrNotConnected. The transfer machine recovers by itself after a
+	// reconnection; a request that needs an answer now (cli.call) must not
+	// run later, after its caller gave up.
+	Transient bool
 }
 
 // AckResult is how the peer answered a message that demanded an ack.
@@ -87,7 +90,7 @@ func (l *Link) Send(ctx context.Context, o Outgoing) (string, error) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if spec.Ack && !o.transient {
+	if spec.Ack && !o.Transient {
 		if spec.Volatile {
 			l.vol = append(l.vol, env)
 		} else if err := l.cfg.Outbox.Put(ctx, l.key, env); err != nil {
@@ -95,13 +98,13 @@ func (l *Link) Send(ctx context.Context, o Outgoing) (string, error) {
 		}
 	}
 	if l.sess == nil {
-		if spec.Ack && !o.transient {
+		if spec.Ack && !o.Transient {
 			return env.ID, nil
 		}
 		return env.ID, ErrNotConnected
 	}
 	if err := l.sess.enqueue(env); err != nil {
-		if spec.Ack && !o.transient {
+		if spec.Ack && !o.Transient {
 			return env.ID, nil // stays in the outbox for the next connection
 		}
 		return env.ID, err

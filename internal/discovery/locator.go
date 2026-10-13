@@ -88,6 +88,14 @@ type LocatorConfig struct {
 	// OnState is called when the state of the search changes: false while
 	// no Citadel was found ("Cidadela não encontrada"), true when one was.
 	OnState func(found bool)
+	// AskOthers, after a pass that found no Citadel, hands out one machine
+	// of the Guild that is not the known Citadel (the configured addresses
+	// and the cache, in turn), only as a hint: the Citadel of a newer epoch
+	// proves itself with the certificate of the welcome, and any other
+	// machine answers 4007 with the certificate it follows. It is how a
+	// Tower finds the Citadel after a change of Citadel when the broadcast
+	// does not reach it (docs/conectividade/descoberta.md#checagem-de-identidade).
+	AskOthers bool
 }
 
 // Target is the Citadel the Locator found.
@@ -108,7 +116,8 @@ type Locator struct {
 	mu     sync.Mutex
 	target Target
 	found  bool
-	known  bool // OnState was called at least once
+	known  bool   // OnState was called at least once
+	asked  string // the address of the last hint, so the next one is another
 }
 
 // NewLocator checks cfg.
@@ -293,8 +302,63 @@ func (l *Locator) Find(ctx context.Context) (Target, error) {
 			}
 		}
 	}
+	if l.cfg.AskOthers {
+		if t, ok := l.askOther(ctx); ok {
+			l.setFound(t)
+			return t, nil
+		}
+	}
 	l.setNotFound()
 	return Target{}, ErrNotFound
+}
+
+// askOther picks, after the last one it gave, the next address of a machine
+// of the Guild that answers the TLS check, whoever it is.
+func (l *Locator) askOther(ctx context.Context) (Target, bool) {
+	var addrs []string
+	seen := map[string]bool{}
+	add := func(a string) {
+		if !seen[a] {
+			seen[a] = true
+			addrs = append(addrs, a)
+		}
+	}
+	for _, a := range l.cfg.Configured {
+		add(withDefaultPort(a))
+	}
+	if es, err := l.cfg.Cache.List(ctx); err == nil {
+		SortForTrying(es)
+		for _, e := range es {
+			add(e.Addr)
+		}
+	}
+	if len(addrs) == 0 {
+		return Target{}, false
+	}
+	l.mu.Lock()
+	start := 0
+	for i, a := range addrs {
+		if a == l.asked {
+			start = i + 1
+			break
+		}
+	}
+	l.mu.Unlock()
+	for k := range addrs {
+		a := addrs[(start+k)%len(addrs)]
+		vctx, cancel := clock.WithTimeout(ctx, l.cfg.Clock, l.cfg.VerifyTimeout)
+		id, err := l.cfg.Verifier.Verify(vctx, a)
+		cancel()
+		if err != nil {
+			continue
+		}
+		l.mu.Lock()
+		l.asked = a
+		l.mu.Unlock()
+		l.cfg.Logger.Info("discovery: asking another machine of the Guild for the Citadel", "addr", a, "machine", id)
+		return Target{Addr: a, MachineID: id, Source: SourceConfigured}, true
+	}
+	return Target{}, false
 }
 
 func (l *Locator) guildID() string { return l.cfg.Search.GuildID }

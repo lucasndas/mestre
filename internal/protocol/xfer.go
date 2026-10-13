@@ -359,7 +359,7 @@ func (h *xferHub) conclude(ctx context.Context, r *recvXfer, endID string, d Xfe
 	delete(h.recv, d.XferID)
 	h.finished[d.XferID] = finishedXfer{done: d, at: h.l.cfg.Clock.Now()}
 	h.mu.Unlock()
-	if _, err := h.l.Send(ctx, Outgoing{Type: TypeXferDone, Payload: d, ReplyTo: endID, transient: true}); err != nil && !errors.Is(err, ErrNotConnected) {
+	if _, err := h.l.Send(ctx, Outgoing{Type: TypeXferDone, Payload: d, ReplyTo: endID, Transient: true}); err != nil && !errors.Is(err, ErrNotConnected) {
 		h.l.cfg.Logger.Warn("protocol: xfer.done", "xfer", d.XferID, "err", err)
 	}
 }
@@ -526,7 +526,7 @@ func (h *xferHub) attempt(ctx context.Context, snd *sendXfer, sess *Session, beg
 	// of its ack: a refusal (the kind has no receiver, the disk is full)
 	// comes there, and ends the transfer with that error.
 	send := func(o Outgoing) (<-chan AckResult, func(), error) {
-		o.transient = true
+		o.Transient = true
 		o.ID = l.gen.NewString()
 		ch, release := l.track(o.ID)
 		if _, err := l.Send(ctx, o); err != nil {

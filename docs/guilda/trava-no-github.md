@@ -22,7 +22,7 @@ Dar à Guilda uma testemunha de fora que só uma máquina consegue ganhar, para 
 3. Tenta criar `refs/mestre/epoca-(N+1)` apontando para esse commit (`POST …/git/refs`). Criar uma ref que já existe é recusado com `422`.
 4. Qualquer que seja a resposta (`201` ou `422`, que também cobre "spammed"), **lê a ref** (`GET …/git/ref/mestre/epoca-(N+1)`). Só vence se ela aponta para o commit dele; senão perdeu, suspende-se e avisa o Dono.
 
-O passo 4 não depende de a criação ser atômica no servidor: vence quem a ref nomeia. **Promoção exige o GitHub:** sem criar e ler a ref, ninguém vence, e é isso que impede duas Cidadelas.
+O passo 4 não depende de a criação ser atômica no servidor: vence quem a ref nomeia. No motor, os passos 1 a 4 são `guild.Lock.Claim`, e a conferência do aluguel é `guild.Lock.Check` ([época e fencing](cidadela-e-torres.md#época-e-fencing)). **Promoção exige o GitHub:** sem criar e ler a ref, ninguém vence, e é isso que impede duas Cidadelas.
 
 ### Aluguel
 

@@ -198,7 +198,9 @@ func (e *Epochs) Follow(ctx context.Context, c protocol.Certificate) error {
 			return err
 		}
 	}
-	if err := e.cfg.Member.SaveEpoch(ctx, c); err != nil {
+	// A verified certificate is kept even if the caller gives up now: the
+	// Citadel that follows it already stepped down in OnFollow.
+	if err := e.cfg.Member.SaveEpoch(context.WithoutCancel(ctx), c); err != nil {
 		return err
 	}
 	e.cfg.Logger.Info("guild: following a higher epoch", "from", e.cert.Epoch, "epoch", c.Epoch, "citadel", c.CitadelMachineID)
