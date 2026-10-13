@@ -66,6 +66,20 @@ if (-not (Test-Path (Join-Path $env:USERPROFILE '.local\bin\claude.exe'))) {
 }
 Add-ToPath (Join-Path $env:USERPROFILE '.local\bin')
 
+# Windows Terminal (portable build): the classic console lacks the glyphs
+# Claude Code draws. Optional: if it fails, the classic console still works.
+$WtFile   = 'Microsoft.WindowsTerminal_1.25.2733.0_x64.zip'
+$WtSha256 = 'bf3ef2012f6c44d8340a4c58125acc9498d19b580f9890dc043cdf831852e796'
+$WtDir    = 'C:\tools\wt'
+try {
+    if (-not (Get-ChildItem $WtDir -Filter wt.exe -Recurse -ErrorAction SilentlyContinue)) {
+        $wtZip = Join-Path $Downloads $WtFile
+        Get-Checked "https://github.com/microsoft/terminal/releases/download/v1.25.2733.0/$WtFile" $wtZip $WtSha256
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($wtZip, $WtDir)
+    }
+} catch { Write-Host "Windows Terminal nao instalado ($_); siga no console classico." }
+
 # Repository, on the spike branch.
 git config --global user.name 'Lucas Novais'
 git config --global user.email 'lucasndas@gmail.com'
@@ -83,4 +97,9 @@ Write-Host ''
 Write-Host 'Preparo pronto. Agora:'
 Write-Host '  1. claude            (faça o login no navegador e saia com /exit)'
 Write-Host "  2. cd C:\mestre; claude --model opus --effort high `"Leia e execute o arquivo $Prompt`""
+$wt = Get-ChildItem $WtDir -Filter wt.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($wt) {
+    Write-Host 'Abrindo o Windows Terminal em C:\mestre: use aquela janela para os passos acima.'
+    Start-Process $wt.FullName -ArgumentList '-d', 'C:\mestre', 'powershell.exe', '-NoExit', '-ExecutionPolicy', 'Bypass'
+}
 Stop-Transcript | Out-Null
