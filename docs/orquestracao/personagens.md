@@ -1,6 +1,6 @@
 # Personagens
 
-> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados, histórico de estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -108,6 +108,7 @@ stateDiagram-v2
 - Qualquer estado vivo vai para `interrupted` se o processo morrer sem pedido.
 - **Motivos de `blocked`:** `permission` (pedido de permissão do provedor em decisão, [adaptador](../provedores/adaptador.md)); `quota` (limite de uso do provedor, [limites de uso](../plataforma/limites-de-uso.md)); `input` (tela interativa que o adaptador não reconhece e que espera resposta; o Mestre da mesa é avisado e responde com `check` e `ask --raw`). O motivo é guardado no registro do terminal.
 - `waiting` e `blocked` aparecem como "aguardando <motivo>" no canvas e no `mestre list` ([esperas](esperas-e-caixa-de-entrada.md#status-aguardando)).
+- **Histórico de estados:** toda transição é gravada em `character_state_log` ([persistência](../arquitetura/persistencia.md)): personagem, estado anterior, estado novo, motivo (o de `waiting` ou `blocked`, ou o evento que causou a mudança) e horário, pelo relógio injetável. É o que permite medir quanto tempo cada personagem passou ocioso, ocupado ou aguardando. Linhas com mais de 90 dias (padrão) são apagadas pela limpeza diária.
 
 ### Registro de terminais
 
@@ -141,6 +142,7 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 - **CA-PERS-07** · *completa* — **Dado** um motor de máquina encerrado à força com dois personagens, um `busy` e um `waiting`, **quando** volta, **então** os dois seguem nos mesmos estados, sem `interrupted`; **dado** o `mestre-pty` de um deles encerrado à força, **então** esse passa por `interrupted` e é retomado com o id de sessão salvo, mantendo caixa de entrada e esperas.
 - **CA-PERS-08** · *pesada* — **Dado** a Cidadela e as Torres reiniciadas, **quando** voltam, **então** Grão-Mestre, Mestres de mesa e persistentes voltam ao estado anterior, e nenhum personagem fica sem estado visível (MVP-12).
 - **CA-PERS-09** · *rápida* — **Dado** um agente falso que mostra uma tela que o adaptador não reconhece, **quando** a tela fica estável, **então** o personagem vai a `blocked` com motivo `input`, o Mestre da mesa é avisado, e uma entrada `ask --raw` leva o personagem de volta a `busy` ou `idle`.
+- **CA-PERS-10** · *rápida* — **Dado** um personagem que passa por `starting`, `idle`, `busy`, `waiting` (motivo: espera por outro personagem) e `idle`, e o relógio falso, **quando** consulto `character_state_log`, **então** há uma linha por transição, em ordem, com o estado anterior, o novo, o motivo e o horário de cada uma; **quando** o relógio passa de 90 dias, **então** a limpeza apaga as linhas antigas.
 
 ## Depende de
 
