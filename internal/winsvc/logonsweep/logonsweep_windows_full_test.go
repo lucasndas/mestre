@@ -48,7 +48,8 @@ func startHelper(t *testing.T) *exec.Cmd {
 // logon session of the test): the full suite cannot make a logon session of
 // its own, and sweeping the one of the runner would end the runner, so the
 // test narrows the sweep to one helper process. The sweep of a real terminal
-// session (conhost.exe, a process created through WMI) is in the heavy suite.
+// session (conhost.exe, a process created through WMI) is in the real-account
+// tests.
 func TestTheSweepEndsTheProcessesOfTheSession(t *testing.T) {
 	t.Parallel()
 	self, err := SessionOfSelf()

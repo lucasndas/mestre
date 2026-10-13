@@ -8,8 +8,8 @@ import (
 )
 
 // CA-TERM-05 (what the sweep takes: the matching logic; the real sweep of a
-// logon session is in the heavy suite, because the full suite cannot make a
-// logon session of its own)
+// logon session is in the real-account tests, because the full suite cannot
+// make a logon session of its own)
 func TestSelectTakesTheProcessesOfTheSessionOnly(t *testing.T) {
 	t.Parallel()
 	const mine, other = logonsweep.LUID(0x12345), logonsweep.LUID(0x6789a)

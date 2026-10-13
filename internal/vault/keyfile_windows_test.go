@@ -3,7 +3,7 @@
 // (mode 0600, owner, symbolic link). The test runs as the developer or CI
 // user, the account the store expects when it is not the engine's virtual
 // account; the real NT SERVICE\Mestre and mestre-agente are CA-COFRE-08, in
-// the heavy suite.
+// the real-account tests (internal/realaccount) and the lab.
 
 package vault
 
