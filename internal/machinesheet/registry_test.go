@@ -251,6 +251,17 @@ func TestTheHostNameAndTheAddressesOfTheSheetReachTheRegistryOfNames(t *testing.
 	if got := r.names.got(); len(got) != 1 || got[0] != "m1 linux-pc [192.168.7.7]" {
 		t.Errorf("names updated = %v", got)
 	}
+	// Only the first label of the host name and the addresses a certificate
+	// may carry reach the registry.
+	fqdn := moved.Clone()
+	fqdn.Rev, fqdn.Host, fqdn.IPs = 102, "Linux-PC.lan", []string{"2001:db8::5", "192.168.7.8", "8.8.8.8"}
+	patch, _ = machinesheet.Diff(moved, fqdn)
+	if err := r.patch(t, "m1", patch); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.names.got(); len(got) != 2 || got[1] != "m1 linux-pc [192.168.7.8]" {
+		t.Errorf("names updated = %v", got)
+	}
 }
 
 func TestTheCitadelAppliesItsOwnSheetWithoutAConnection(t *testing.T) {

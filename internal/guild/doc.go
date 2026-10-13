@@ -30,6 +30,12 @@
 //     machine, the demotion); ClaimEpoch, Promoter and TakeCommand are the
 //     promotion; ListDiscarded and RecordDiscarded the transactions the
 //     change lost; DownWatch the notice to the Owner. internal/app runs them.
+//   - IssueCitadelCertificate is the certificate of the acting Citadel, the
+//     only one with mestre.local (and the extra names of the Guild that
+//     Citadel.SetExtraNames keeps), valid for 7 days: the Citadel issues it
+//     to itself when it takes the command and again when
+//     Citadel.CitadelCertificateDue says so. Every name a machine reports is
+//     checked first (docs/arquitetura/seguranca.md#nomes-dos-certificados).
 //
 // # What stays out
 //

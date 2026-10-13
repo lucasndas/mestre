@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/vault"
@@ -25,6 +26,11 @@ const (
 	LeafValidityYears = 1
 	// RenewBefore is how long before expiry a certificate is renewed.
 	RenewBefore = 30 * 24 * time.Hour
+	// CitadelValidity is the validity of the certificate of the acting
+	// Citadel, the only one with mestre.local; CitadelRenewBefore is when the
+	// Citadel issues the next one.
+	CitadelValidity    = 7 * 24 * time.Hour
+	CitadelRenewBefore = 2 * 24 * time.Hour
 	// backdate absorbs small clock differences between machines (up to 5 s
 	// is only a checklist warning, docs/conectividade/protocolo.md).
 	backdate = time.Hour
@@ -44,7 +50,10 @@ type CA struct {
 }
 
 // NewCA creates the Guild CA, at the creation of the Guild: ECDSA P-256,
-// valid for CAValidityYears. Store saves its key in the vault.
+// valid for CAValidityYears, with critical Name Constraints that allow only
+// PermittedDomains and PermittedNets. The browsers that trust the CA (and
+// Go) then refuse any other name it signs, so a leaked CA key cannot
+// impersonate a site. Store saves its key in the vault.
 func NewCA(guildID string, clk clock.Clock) (*CA, error) {
 	if guildID == "" {
 		return nil, errors.New("transport: the Guild CA needs the guild_id")
@@ -71,6 +80,11 @@ func NewCA(guildID string, clk clock.Clock) (*CA, error) {
 		MaxPathLenZero:        true,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
 		// SubjectKeyId is derived from the key by x509 for a CA.
+		// RFC 5280 asks for the extension to be critical: a verifier that
+		// does not know it refuses the CA instead of trusting it unbounded.
+		PermittedDNSDomainsCritical: true,
+		PermittedDNSDomains:         slices.Clone(PermittedDomains),
+		PermittedIPRanges:           slices.Clone(PermittedNets),
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {

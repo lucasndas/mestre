@@ -100,10 +100,9 @@ func TestBothSidesComputeTheSameCodeAndTheOwnerAcceptingIssuesTheCertificates(t 
 		if len(cert.URIs) != 1 || cert.URIs[0].String() != wantURI[kind] {
 			t.Errorf("%s certificate URIs = %v, want %s", kind, cert.URIs, wantURI[kind])
 		}
-		for _, name := range []string{"desktop-ana", "desktop-ana.local"} {
-			if !slices.Contains(cert.DNSNames, name) {
-				t.Errorf("%s certificate lacks the name %s: %v", kind, name, cert.DNSNames)
-			}
+		// never mestre.local: only the certificate of the acting Citadel has it
+		if !slices.Equal(cert.DNSNames, []string{"desktop-ana.local"}) {
+			t.Errorf("%s certificate names = %v, want only desktop-ana.local", kind, cert.DNSNames)
 		}
 		if len(cert.IPAddresses) != 1 || !cert.IPAddresses[0].Equal(net.ParseIP("192.168.1.20")) {
 			t.Errorf("%s certificate IPs = %v", kind, cert.IPAddresses)
@@ -114,9 +113,6 @@ func TestBothSidesComputeTheSameCodeAndTheOwnerAcceptingIssuesTheCertificates(t 
 		if d := cert.NotAfter.Sub(clk.Now()); d < 364*24*time.Hour || d > 366*24*time.Hour {
 			t.Errorf("%s certificate lives %s, want a year", kind, d)
 		}
-	}
-	if !slices.Contains(got.Motor.DNSNames, "mestre.local") || slices.Contains(got.Guardian.DNSNames, "mestre.local") {
-		t.Errorf("mestre.local: engine %v, Guardian %v; want it only in the engine's", got.Motor.DNSNames, got.Guardian.DNSNames)
 	}
 	if len(got.Config.Machines) != 2 || got.Config.Timezone != "America/Sao_Paulo" {
 		t.Errorf("configuration = %+v, want the two machines and the Guild time zone", got.Config)
@@ -336,6 +332,41 @@ func TestARequestOlderThanAnHourIsExpiredAndNothingIsCreated(t *testing.T) {
 			t.Errorf("a second sweep ended %d", n)
 		}
 	})
+}
+
+// B1 of the audit: the CA is a root the browsers trust, so a request whose
+// names a certificate may not carry is refused before anything is recorded
+// or asked.
+func TestARequestWithNamesACertificateMayNotCarryIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, clock.NewFake(day0))
+	many := make([]string, transport.MaxIPs+1)
+	for i := range many {
+		many[i] = fmt.Sprintf("10.0.0.%d", i+1)
+	}
+	for name, mod := range map[string]func(*guild.JoinRequest){
+		"the name of the panel":   func(q *guild.JoinRequest) { q.Hostname = "mestre" },
+		"a host name with dots":   func(q *guild.JoinRequest) { q.Hostname = "accounts.google.com" },
+		"a wildcard host name":    func(q *guild.JoinRequest) { q.Hostname = "*" },
+		"a public address":        func(q *guild.JoinRequest) { q.IPs = []string{"8.8.8.8"} },
+		"a global IPv6 address":   func(q *guild.JoinRequest) { q.IPs = []string{"2001:db8::1"} },
+		"more than 16 addresses":  func(q *guild.JoinRequest) { q.IPs = many },
+		"something that is no IP": func(q *guild.JoinRequest) { q.IPs = []string{"servidor"} },
+	} {
+		req, _ := rawRequest(t, "m1")
+		mod(&req)
+		if _, err := r.citadel.Begin(t.Context(), req, "new1"); !errors.Is(err, guild.ErrBadRequest) {
+			t.Errorf("%s: Begin = %v, want ErrBadRequest", name, err)
+		}
+	}
+	if r.count("join_requests") != 0 || r.approver.questions() != 0 {
+		t.Fatal("a refused request was recorded or reached the Owner")
+	}
+	req, _ := rawRequest(t, "m1")
+	req.Hostname, req.IPs = "Desk-01", []string{"192.168.1.5", "fd00::5", "fe80::5", "127.0.0.1"}
+	if _, err := r.citadel.Begin(t.Context(), req, "new1"); err != nil {
+		t.Fatalf("names inside the rules: %v", err)
+	}
 }
 
 // CA-GUILDA-05

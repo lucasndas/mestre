@@ -88,7 +88,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 |---|---|---|---|---|
 | ALL-01 | Torre | motor e Guardião conectados à Cidadela atual, heartbeat em dia, seguindo a época atual; credencial não revogada | grave | refazer descoberta (sozinho); revogada: manual |
 | ALL-02 | Torre | Guardião da Cidadela responde (sondagem da porta dele) | grave | manual |
-| ALL-03 | todas | certificados TLS válidos e com mais de 30 dias até vencer; a renovação automática acontece aos 30 dias, então chegar abaixo disso indica que ela falhou ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)) | aviso; grave com menos de 7 dias | renovar (sozinho) |
+| ALL-03 | todas | certificados TLS válidos e com mais de 30 dias até vencer (o da Cidadela em exercício, de 7 dias, com mais de 2); a renovação automática acontece nesse prazo, então chegar abaixo dele indica que ela falhou ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)) | aviso; grave com menos de 7 dias (o da Cidadela, com menos de 1) | renovar (sozinho) |
 | ALL-04 | Torre | relógio da máquina a menos de 5 s do relógio da Cidadela ([protocolo](../conectividade/protocolo.md)) | aviso | manual |
 | ALL-05 | todas | CLI `mestre` no PATH, `MESTRE_CLI` definido e `mestre debug` passa | grave | manual |
 | ALL-06 | todas | git instalado, na versão mínima de segurança do [ADR 0001](../decisoes/0001-stack-go.md) (piso por sistema; [identidades e Apps](../github/identidades-e-apps.md)) | grave | manual |

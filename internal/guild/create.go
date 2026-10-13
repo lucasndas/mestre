@@ -28,12 +28,12 @@ type CreateConfig struct {
 	Clock   clock.Clock
 
 	// Name is the name of the computer shown in the Guild; Hostname gives the
-	// certificate names.
-	Name       string
-	Hostname   string
-	Instance   string
-	IPs        []net.IP
-	ExtraNames []string
+	// certificate names (its first label, <host>.local) and IPs the addresses
+	// (those a certificate may carry, transport.CertificateIPs).
+	Name     string
+	Hostname string
+	Instance string
+	IPs      []net.IP
 	// Timezone is the Guild time zone, the one of this machine's system.
 	Timezone string
 	// RecoveryPublicKey is the public part of the recovery key, which the
@@ -87,6 +87,8 @@ func Create(ctx context.Context, cfg CreateConfig) (*Founded, error) {
 		return nil, fmt.Errorf("%w: the machine has no name", ErrBadRequest)
 	}
 
+	host := transport.HostLabel(cfg.Hostname)
+
 	ids := protocol.NewIDGen(cfg.Clock)
 	guildID, machineID := ids.NewString(), ids.NewString()
 	ca, err := transport.NewCA(guildID, cfg.Clock)
@@ -98,7 +100,7 @@ func Create(ctx context.Context, cfg CreateConfig) (*Founded, error) {
 	}
 	m := Machine{
 		ID: machineID, Name: name, Instance: cfg.Instance, State: MachineActive,
-		Hostname: cfg.Hostname, IPs: cfg.IPs, ExtraNames: cfg.ExtraNames, JoinedAt: cfg.Clock.Now().UTC(),
+		Hostname: host, IPs: transport.CertificateIPs(cfg.IPs), JoinedAt: cfg.Clock.Now().UTC(),
 	}
 	motorKey, motor, err := issueOwn(ca, transport.KindMachine, m.Names())
 	if err != nil {
@@ -132,7 +134,7 @@ func Create(ctx context.Context, cfg CreateConfig) (*Founded, error) {
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES (?, ?, ?, 0, 0, 'active', ?, ?)`,
-		m.ID, m.Name, m.Instance, encodeNames(m.Hostname, m.IPs, m.ExtraNames), now); err != nil {
+		m.ID, m.Name, m.Instance, encodeNames(m.Hostname, m.IPs), now); err != nil {
 		return nil, fmt.Errorf("guild: register this machine: %w", err)
 	}
 	for _, c := range []struct {

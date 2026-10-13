@@ -31,28 +31,26 @@ type Machine struct {
 	// Priority orders the machines for the choice of the leading Tower.
 	Priority int
 	// Excluded machines keep no secrets and are never promoted.
-	Excluded   bool
-	State      MachineState
-	Hostname   string
-	IPs        []net.IP
-	ExtraNames []string
-	JoinedAt   time.Time
-	RemovedAt  time.Time
+	Excluded  bool
+	State     MachineState
+	Hostname  string
+	IPs       []net.IP
+	JoinedAt  time.Time
+	RemovedAt time.Time
 }
 
 // Names are the names the certificates of the machine carry.
 func (m Machine) Names() transport.Names {
-	return transport.Names{MachineID: m.ID, Hostname: m.Hostname, IPs: m.IPs, Extra: m.ExtraNames, Excluded: m.Excluded}
+	return transport.Names{MachineID: m.ID, Hostname: m.Hostname, IPs: m.IPs}
 }
 
 type namesDoc struct {
 	Hostname string   `json:"hostname"`
 	IPs      []string `json:"ips,omitempty"`
-	Extra    []string `json:"extra,omitempty"`
 }
 
-func encodeNames(hostname string, ips []net.IP, extra []string) string {
-	d := namesDoc{Hostname: hostname, Extra: extra}
+func encodeNames(hostname string, ips []net.IP) string {
+	d := namesDoc{Hostname: hostname}
 	for _, ip := range ips {
 		d.IPs = append(d.IPs, ip.String())
 	}
@@ -80,7 +78,7 @@ func scanMachine(r scanner) (Machine, error) {
 	if err := json.Unmarshal([]byte(names), &d); err != nil {
 		return Machine{}, fmt.Errorf("guild: names of machine %s: %w", m.ID, err)
 	}
-	m.Excluded, m.State, m.Hostname, m.ExtraNames = excluded != 0, MachineState(state), d.Hostname, d.Extra
+	m.Excluded, m.State, m.Hostname = excluded != 0, MachineState(state), d.Hostname
 	for _, s := range d.IPs {
 		if ip := net.ParseIP(s); ip != nil {
 			m.IPs = append(m.IPs, ip)
@@ -133,6 +131,8 @@ type guildRow struct {
 	CA       []byte
 	Epoch    protocol.Certificate
 	Timezone string
+	// ExtraNames are the extra names of the panel the Owner set.
+	ExtraNames []string
 }
 
 // ErrNoGuild: the Guild database holds no Guild yet.
@@ -140,9 +140,9 @@ var ErrNoGuild = errors.New("guild: there is no Guild in this database")
 
 func readGuild(ctx context.Context, q querier) (guildRow, error) {
 	var g guildRow
-	var cert string
-	err := q.QueryRowContext(ctx, `SELECT guild_id, ca_cert, epoch_certificate, timezone FROM guild WHERE id = 1`).
-		Scan(&g.GuildID, &g.CA, &cert, &g.Timezone)
+	var cert, extra string
+	err := q.QueryRowContext(ctx, `SELECT guild_id, ca_cert, epoch_certificate, timezone, extra_names FROM guild WHERE id = 1`).
+		Scan(&g.GuildID, &g.CA, &cert, &g.Timezone, &extra)
 	if errors.Is(err, sql.ErrNoRows) {
 		return guildRow{}, ErrNoGuild
 	}
@@ -151,6 +151,9 @@ func readGuild(ctx context.Context, q querier) (guildRow, error) {
 	}
 	if g.Epoch, err = decodeCert(cert); err != nil {
 		return guildRow{}, err
+	}
+	if err := json.Unmarshal([]byte(extra), &g.ExtraNames); err != nil {
+		return guildRow{}, fmt.Errorf("guild: the extra names: %w", err)
 	}
 	return g, nil
 }

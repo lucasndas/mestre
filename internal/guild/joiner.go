@@ -50,13 +50,14 @@ type JoinConfig struct {
 	Network transport.Network
 	Clock   clock.Clock
 
-	Name       string
-	Hostname   string
-	OS         string
-	Instance   string
-	IPs        []net.IP
-	ExtraNames []string
-	Sheet      json.RawMessage
+	Name string
+	// Hostname is the computer name; only its first label is sent. Of IPs,
+	// only the addresses a certificate may carry are (transport.CertificateIPs).
+	Hostname string
+	OS       string
+	Instance string
+	IPs      []net.IP
+	Sheet    json.RawMessage
 
 	// OnCode is called with the code to show: "Código de entrada: 123 456".
 	OnCode func(code string)
@@ -126,10 +127,10 @@ func Join(ctx context.Context, cfg JoinConfig) (*Joined, error) {
 	defer ch.close()
 	var ticket JoinTicket
 	req := JoinRequest{
-		Name: cfg.Name, OS: cfg.OS, Hostname: cfg.Hostname, Instance: cfg.Instance, ExtraNames: cfg.ExtraNames,
+		Name: cfg.Name, OS: cfg.OS, Hostname: transport.HostLabel(cfg.Hostname), Instance: cfg.Instance,
 		Sheet: cfg.Sheet, CSRMotor: csrMotor, CSRGuardian: csrGuard, Commitment: commitment(nonceN),
 	}
-	for _, ip := range cfg.IPs {
+	for _, ip := range transport.CertificateIPs(cfg.IPs) {
 		req.IPs = append(req.IPs, ip.String())
 	}
 	if err := ch.do(ctx, http.MethodPost, RouteJoin, req, &ticket); err != nil {
