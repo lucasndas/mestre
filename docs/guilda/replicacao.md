@@ -58,7 +58,8 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 ### Certidão de época
 
 - A **época** é o número que diz qual Cidadela vale ([época e fencing](cidadela-e-torres.md#época-e-fencing)). A prova dela é a **certidão de época**: `{guild_id, epoch, citadel_machine_id, approved_by, approval_id, issued_at}`, assinada com a chave da CA.
-- Toda máquina guarda a certidão mais alta que viu, no banco local e no Guardião. Uma certidão com assinatura inválida, ou de época menor que a guardada, é recusada e registrada.
+- **Assinatura:** ECDSA P-256 sobre o SHA-256 dos campos, cada um com o tamanho na frente, depois de um rótulo de domínio (`mestre/guild/epoch-certificate/v1`), em base64 (`guild.SignEpoch`, `guild.Verifier`); só quem tem a chave da CA, a Cidadela, assina. A da época 1 nasce na criação da Guilda, sem `approved_by` nem `approval_id`.
+- Toda máquina guarda a certidão mais alta que viu, no banco local (`machine_identity`, só substituída por uma mais alta) e no Guardião. Uma certidão com assinatura inválida, de outra Guilda ou de época menor ou igual à guardada é recusada e registrada (log e gancho `OnRefused`, para a auditoria).
 
 ### Perda na troca
 

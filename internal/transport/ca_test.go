@@ -279,3 +279,35 @@ func TestCAKeyLivesInTheVault(t *testing.T) {
 		t.Fatal("the vault key of guild-1 must not open the CA of guild-2")
 	}
 }
+
+func TestTheCASignsAndOnlyItsCertificateVerifies(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(day0)
+	ca, err := transport.NewCA("guild-1", clk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := transport.NewCA("guild-2", clk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := []byte("epoch 2")
+	sig, err := ca.Sign(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := transport.VerifySignature(ca.Certificate(), msg, sig); err != nil {
+		t.Fatalf("own signature: %v", err)
+	}
+	for name, c := range map[string]struct {
+		cert *x509.Certificate
+		msg  []byte
+	}{
+		"another message": {ca.Certificate(), []byte("epoch 3")},
+		"another CA":      {other.Certificate(), msg},
+	} {
+		if err := transport.VerifySignature(c.cert, c.msg, sig); !errors.Is(err, transport.ErrBadSignature) {
+			t.Errorf("%s: err = %v, want ErrBadSignature", name, err)
+		}
+	}
+}

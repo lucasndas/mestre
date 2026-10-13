@@ -36,6 +36,44 @@ func TestEmbeddedMigrationsBuildTheGuildSchema(t *testing.T) {
 	}
 }
 
+// CA-REPL-11, the schema half: the replication log works by primary key and a
+// trigger would fire again on the replica.
+func TestEveryGuildTableHasAPrimaryKeyAndThereAreNoTriggers(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var triggers int
+	if err := db.Reader().QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'trigger'`).Scan(&triggers); err != nil || triggers != 0 {
+		t.Errorf("triggers = %d, %v; want none", triggers, err)
+	}
+	rows, err := db.Reader().QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		tables = append(tables, name)
+	}
+	rows.Close()
+	if len(tables) == 0 {
+		t.Fatal("no tables")
+	}
+	for _, name := range tables {
+		var pk int
+		if err := db.Reader().QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info(?) WHERE pk > 0`, name).Scan(&pk); err != nil || pk == 0 {
+			t.Errorf("table %s has no declared primary key (%d, %v)", name, pk, err)
+		}
+	}
+}
+
 // The Tower's copy is opened through the same wrapper without migrating (the
 // rule itself is CA-PERSIST-06 in package store).
 func TestReplicaOfTheGuildDatabaseIsNotMigrated(t *testing.T) {

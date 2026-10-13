@@ -32,7 +32,7 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 
 | Grupo | Tabelas | Dono do comportamento |
 |---|---|---|
-| Guilda e máquinas | `replication_log` (`lsn`, horário, mudanças; [replicação](../guilda/replicacao.md)), `guild` (`guild_id`, época atual e certidão, fuso da Guilda, chave pública de recuperação do cofre), `machines` (ficha da máquina, prioridade, se é excluída, versão, estado), `machine_heartbeats`, `join_requests`, `machine_credentials` (identificador e revogação, não a chave), `account_profiles`, `outbox` (mensagens com ack ainda sem confirmação, por máquina), `replication_state` (último `lsn` confirmado por Torre) | [Guilda](../guilda/guilda.md), [ficha da máquina](../guilda/ficha-da-maquina.md), [replicação](../guilda/replicacao.md), [protocolo](../conectividade/protocolo.md), [bases e fichas](../orquestracao/bases-e-fichas.md) |
+| Guilda e máquinas | `replication_log` (`lsn`, horário, mudanças; [replicação](../guilda/replicacao.md)), `guild` (uma linha: `guild_id`, certificado da CA, época atual e certidão, fuso da Guilda, chave pública de recuperação do cofre), `machines` (nome, nomes dos certificados, ficha da máquina, prioridade, se é excluída, versão, estado `active`, `removed` ou `left`), `machine_heartbeats`, `join_requests`, `machine_credentials` (série, certificado público e revogação de cada certificado, nunca a chave), `account_profiles`, `outbox` (mensagens com ack ainda sem confirmação, por máquina), `replication_state` (último `lsn` confirmado por Torre) | [Guilda](../guilda/guilda.md), [ficha da máquina](../guilda/ficha-da-maquina.md), [replicação](../guilda/replicacao.md), [protocolo](../conectividade/protocolo.md), [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Usuários | `users`, `user_workspaces`, `panel_sessions`, `telegram_pairing_codes` | [usuários e níveis](../telegram/usuarios-e-niveis.md), [login](../painel/login.md) |
 | Workspaces e mesas | `workspaces`, `tables` (mesas: épico, branch, estado), `table_worktrees` (máquina, caminho, último commit sincronizado), `bundle_transfers` | [workspaces](../orquestracao/workspaces.md), [mesas](../orquestracao/mesas.md) |
 | Presets e classes | `bases`, `sheets`, `classes` (índice: nome, escopo, caminho, App), `templates` (versões dos modelos) | [bases e fichas](../orquestracao/bases-e-fichas.md), [classes](../classes/classes.md), [sessão zero do personagem](../sessao-zero/personagem.md) |
@@ -55,7 +55,7 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 | Tabela | Conteúdo |
 |---|---|
 | `schema_migrations` | migrações aplicadas |
-| `machine_identity` | `machine_id`, `guild_id`, papel, maior certidão de época vista, endereços conhecidos da Cidadela, versão de protocolo negociada |
+| `machine_identity` | uma linha, só se a máquina está numa Guilda: `machine_id`, `guild_id`, instância, a CA e os certificados do motor e do Guardião (públicos), a maior certidão de época vista e a versão de protocolo negociada; o papel não é gravado, é a máquina que a certidão nomeia. A chave privada do motor fica em arquivo protegido pelo sistema, nunca aqui |
 | `known_addresses` | endereços da Cidadela e das outras máquinas da Guilda, com a origem, a máquina que respondeu e o último sucesso; saem após 30 dias sem uso ([descoberta](../conectividade/descoberta.md#cache)) |
 | `terminals` | terminais que esta máquina roda (registro abaixo) |
 | `local_worktrees` | worktrees de mesa nesta máquina: caminho, branch, último commit sincronizado |
