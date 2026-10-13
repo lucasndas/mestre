@@ -242,9 +242,12 @@ type backend struct {
 
 var _ launcher.Backend = (*backend)(nil)
 
-// Kill does nothing: the mestre-pty ends its own Job Object, and the engine
-// ends the mestre-pty (it holds the right to) when it does not answer.
-func (b *backend) Kill(context.Context, string) error { return nil }
+// Kill is refused: on Windows the launcher only starts. The mestre-pty ends
+// its own Job Object, and the engine ends the mestre-pty (it holds the right
+// to) when it does not answer.
+func (b *backend) Kill(context.Context, string) error {
+	return launcher.Refused("the Windows launcher only does start-pty")
+}
 
 // Start creates the mestre-pty with the token of the agent account.
 func (b *backend) Start(_ context.Context, r launcher.StartRequest) (launcher.Started, error) {

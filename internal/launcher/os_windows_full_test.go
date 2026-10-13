@@ -244,6 +244,20 @@ func (e *env) waitEnded(t *testing.T, ctx context.Context, id string) {
 
 // osCases registers what only Windows has to check.
 func osCases(t *testing.T) {
+	t.Run("refuses kill: the Windows launcher only does start-pty", func(t *testing.T) {
+		t.Parallel()
+		e := newEnv(t)
+		resp, err := e.raw(ctxFor(t), mustJSON(t, map[string]any{"op": "kill", "id": "t07-kill"}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.OK || resp.Code != launcher.CodeRefused {
+			t.Errorf("answer = %+v, want a refusal", resp)
+		}
+		if e.audit.count(launcher.OutcomeRefused) != 1 {
+			t.Errorf("refusals recorded = %d, want 1", e.audit.count(launcher.OutcomeRefused))
+		}
+	})
 	t.Run("releases the session when the mestre-pty ends", func(t *testing.T) {
 		t.Parallel()
 		e := newEnv(t)
