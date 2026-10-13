@@ -36,7 +36,7 @@ import (
 func TestMain(m *testing.M) {
 	if os.Getenv("MESTRE_TEST_RUN_ENGINE") == "1" && len(os.Args) > 1 && os.Args[1] == "run" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-		code := app.Main(ctx, os.Args[2:], os.Stderr, os.Getenv, "test")
+		code := app.Main(ctx, os.Args[2:], os.Stderr, os.LookupEnv, "test")
 		stop()
 		os.Exit(code)
 	}
@@ -542,6 +542,82 @@ func TestAPlannedHandoverPassesTheCommandWithTheData(t *testing.T) {
 	for _, l := range ra[0] {
 		if strings.HasPrefix(l, "on 2") {
 			t.Errorf("the old Citadel acted with the epoch 2: %q", l)
+		}
+	}
+}
+
+// A promoted machine whose process stops during the wait of 60 s waits, when
+// it starts again, what was left of it, counted from when it took the
+// command (docs/guilda/trava-no-github.md#espera-do-promovido): never less.
+func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ports := freePorts(t, 2)
+	a := w.add("a", ports[0], nil)
+	b := w.add("b", ports[1], nil)
+	a.cfg.Addresses = []string{b.addr()}
+	b.cfg.Addresses = []string{a.addr()}
+	ctx := t.Context()
+	founded, rk, err := app.Found(ctx, a.cfg, app.DirPaths(a.dir), clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rk.Destroy()
+	if err := os.WriteFile(filepath.Join(w.lock, "epoca-1"), []byte(founded.MachineID), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w.start(a)
+	w.waitFor("a to act as the Citadel", 0, func() bool {
+		st, ok := w.status(a)
+		return ok && st.Role == app.RoleCitadel && st.Acting
+	})
+	if _, err := app.Enroll(ctx, b.cfg, app.DirPaths(b.dir), a.addr(), transport.SystemNetwork{Suite: suite()}, clock.Real{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	w.start(b)
+	lsn := w.mark(a, "t1")
+	w.waitFor("b to apply t1", 0, func() bool {
+		st, ok := w.status(b)
+		return ok && st.Connected && st.LSN >= lsn
+	})
+
+	// the Citadel stops for good and b takes the command
+	w.kill(a)
+	w.must(b, map[string]string{"op": "promote"})
+	w.waitFor("b to take the command", 0, func() bool {
+		st, ok := w.status(b)
+		return ok && st.Role == app.RoleCitadel && st.Epoch == 2
+	})
+	r := w.must(b, map[string]string{"op": "query", "sql": `SELECT started_at FROM epochs WHERE epoch = 2`})
+	if len(r.Rows) != 1 {
+		t.Fatalf("epochs: %v", r.Rows)
+	}
+	took := time.UnixMilli(int64(r.Rows[0][0].(float64)))
+
+	// 30 s into the wait the process stops and starts again
+	w.clk.Advance(30 * time.Second)
+	w.kill(b)
+	w.start(b)
+	w.waitFor("b to come back as the Citadel of the epoch 2", 0, func() bool {
+		st, ok := w.status(b)
+		return ok && st.Role == app.RoleCitadel && st.Epoch == 2
+	})
+	w.clk.Advance(29 * time.Second)
+	if st, _ := w.status(b); st.Acting || st.Fence != "waiting" {
+		t.Fatalf("59 s after taking the command the restarted Citadel is %s (acting %v); want it waiting", st.Fence, st.Acting)
+	}
+	w.clk.Advance(time.Second)
+	w.waitFor("b to act after the wait and the check of the lock", 0, func() bool {
+		st, ok := w.status(b)
+		return ok && st.Acting
+	})
+	for i, run := range w.externalRuns(b) {
+		for _, l := range run {
+			f := strings.Fields(l)
+			ms, _ := strconv.ParseInt(f[len(f)-1], 10, 64)
+			if f[0] == "on" && time.UnixMilli(ms).Before(took.Add(60*time.Second)) {
+				t.Errorf("run %d of b acted outside %s after taking the command: %q", i+1, time.UnixMilli(ms).Sub(took), l)
+			}
 		}
 	}
 }

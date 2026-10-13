@@ -13,13 +13,16 @@ import (
 // Main is `mestre run [--instance <inst>] [--dir <pasta>]`: the engine of the
 // instance in the foreground, until ctx ends (docs/arquitetura/componentes.md).
 // The service that runs it is milestone 7. --dir puts every folder of the
-// instance under one folder, as the full suite and development use it. It
-// returns the exit code.
-func Main(ctx context.Context, args []string, stderr io.Writer, getenv func(string) string, version string) int {
-	if getenv("MESTRE_AGENT_ID") != "" {
-		fmt.Fprintln(stderr, "error: an agent never starts the engine (MESTRE_AGENT_ID is set)")
+// instance under one folder, as the full suite and development use it.
+// lookupEnv is os.LookupEnv. It returns the exit code.
+func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(string) (string, bool), version string) int {
+	// present is enough, even empty: an agent never starts the engine
+	// (docs/arquitetura/componentes.md#mestre)
+	if _, agent := lookupEnv("MESTRE_AGENT_ID"); agent {
+		fmt.Fprintln(stderr, "error: an agent never starts the engine (MESTRE_AGENT_ID is in the environment)")
 		return 3
 	}
+	getenv := func(k string) string { v, _ := lookupEnv(k); return v }
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	instance := fs.String("instance", DefaultInstance, "the instance of the Mestre")
@@ -51,7 +54,10 @@ func Main(ctx context.Context, args []string, stderr io.Writer, getenv func(stri
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
-	deps.Logger = logging.New(stderr, logging.NewMasker(), logging.Options{Level: slog.LevelInfo, Clock: deps.Clock})
+	// one masker for the log and the vault: a secret the vault opens is
+	// hidden in every line after it
+	deps.Masker = logging.NewMasker()
+	deps.Logger = logging.New(stderr, deps.Masker, logging.Options{Level: slog.LevelInfo, Clock: deps.Clock})
 	e, err := New(cfg, paths, deps)
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)

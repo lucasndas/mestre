@@ -16,9 +16,11 @@ import (
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
+	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
@@ -72,9 +74,14 @@ type ExternalFunc func(ctx context.Context, fence *guild.Fence) error
 // Owner.
 type Deps struct {
 	Clock clock.Clock
-	// Network defaults to the TCP of the system; Packets to its UDP.
+	// Network defaults to the TCP of the system; Packets to its UDP and
+	// Browser to its mDNS (both off with no_discovery).
 	Network transport.Network
 	Packets discovery.PacketNetwork
+	Browser discovery.Browser
+	// Masker hides the secrets the vault opens in the logs: the one of the
+	// Logger, so a secret read here never reaches the log. Nil makes one.
+	Masker *logging.Masker
 	// Lock is the lock of the epoch (milestone 5); nil means no promotion.
 	Lock guild.Lock
 	// Approver asks the Owner about an entry; Promotions about a promotion.
@@ -96,8 +103,11 @@ type Deps struct {
 	// not happen.
 	OnCitadelDown     func(since time.Time, n int)
 	OnPromotionFailed func(err error)
-	Version           string
-	Logger            *slog.Logger
+	// RenewEvery is how often a machine sees whether its engine certificate
+	// is due (a minute by default).
+	RenewEvery time.Duration
+	Version    string
+	Logger     *slog.Logger
 }
 
 // Engine is one instance of the engine: the parts every machine runs (the
@@ -115,7 +125,8 @@ type Engine struct {
 	id       guild.Identity
 	epochs   *guild.Epochs
 	creds    *guild.Credentials
-	cert     *transport.CertSource
+	cert     *transport.CertSource // presented: the machine's, or the Citadel's with mestre.local
+	machine  *transport.CertSource // the engine certificate of the machine
 	tcli     *transport.Client
 	tls      *transport.Server
 	towers   protocol.Listener
@@ -161,11 +172,20 @@ func New(cfg Config, paths Paths, deps Deps) (*Engine, error) {
 	if deps.Packets == nil && !cfg.NoDiscovery {
 		deps.Packets = discovery.SystemPacketNetwork{Suite: os.Getenv("MESTRE_TEST_SUITE")}
 	}
+	if deps.Browser == nil && !cfg.NoDiscovery {
+		deps.Browser = discovery.SystemBrowser{Suite: os.Getenv("MESTRE_TEST_SUITE")}
+	}
+	if deps.Masker == nil {
+		deps.Masker = logging.NewMasker()
+	}
 	if deps.Approver == nil {
 		deps.Approver = noOwner{}
 	}
 	if deps.Version == "" {
 		deps.Version = "dev"
+	}
+	if deps.RenewEvery <= 0 {
+		deps.RenewEvery = renewCheck
 	}
 	e := &Engine{
 		cfg: cfg, paths: paths, deps: deps, clk: deps.Clock, log: deps.Logger.With("instance", cfg.Instance),
@@ -251,6 +271,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	defer mdb.Close()
 	e.mdb = mdb
 	e.member = guild.NewMember(mdb, vault.NewFileKeyStore(e.paths.engineKey()), e.clk)
+	e.member.UsePendingKey(vault.NewFileKeyStore(e.paths.pendingKey()))
 	id, src, err := e.member.TLS(ctx)
 	if errors.Is(err, guild.ErrNotMember) {
 		return fmt.Errorf("app: the instance %s is in no Guild: create one or join one first", e.cfg.Instance)
@@ -258,12 +279,18 @@ func (e *Engine) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	e.id, e.cert = id, src
-	if e.epochs, err = guild.LoadEpochs(ctx, guild.EpochsConfig{Member: e.member, Logger: e.log, OnFollow: e.onFollow}); err != nil {
+	// cert is what this machine presents; machine its engine certificate of
+	// one year, which an acting Citadel keeps aside while it serves the
+	// certificate of mestre.local
+	e.id, e.machine, e.cert = id, src, transport.NewCertSource(src.Leaf(), src.Key())
+	if e.epochs, err = guild.LoadEpochs(ctx, guild.EpochsConfig{Member: e.member, Logger: e.log, OnFollow: e.onFollow, OnRefused: e.refusedCert}); err != nil {
 		return err
 	}
 	e.creds = guild.NewCredentials()
-	if e.tls, err = transport.NewServer(transport.ServerConfig{CA: id.CA, Cert: src, Credentials: e.creds, Clock: e.clk, Logger: e.log}); err != nil {
+	if err := e.preflight(ctx); err != nil {
+		return err
+	}
+	if e.tls, err = transport.NewServer(transport.ServerConfig{CA: id.CA, Cert: e.cert, Credentials: e.creds, Clock: e.clk, Logger: e.log}); err != nil {
 		return err
 	}
 	e.towers = keepOpen{protocol.FromTransportListener(e.tls.Route(transport.RouteTower, transport.KindMachine))}
@@ -278,7 +305,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		}
 	})
 	defer func() { _ = e.tls.Close(transport.StatusGoingAway, "the engine is stopping") }()
-	if e.tcli, err = transport.NewClient(transport.ClientConfig{CA: id.CA, Cert: src, Network: e.deps.Network, Clock: e.clk, Credentials: e.creds}); err != nil {
+	if e.tcli, err = transport.NewClient(transport.ClientConfig{CA: id.CA, Cert: e.cert, Network: e.deps.Network, Clock: e.clk, Credentials: e.creds}); err != nil {
 		return err
 	}
 	if err := e.serveCLI(ctx, &wg); err != nil {
@@ -306,6 +333,65 @@ func (e *Engine) Run(ctx context.Context) error {
 	return nil
 }
 
+// preflight reads, before the engine port serves anything, what the Guild
+// database on this disk says: the refusals of the credentials, without which
+// the engine does not start (a connection of a removed machine would pass
+// meanwhile), and a certificate of epoch higher than the one the machine
+// kept, which a stop between the promotion and the record of the identity
+// left there (the machine follows it, verified).
+func (e *Engine) preflight(ctx context.Context) error {
+	db, err := guilddb.Open(ctx, e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: e.cfg.Synchronous, Replica: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := e.creds.Reload(ctx, db); err != nil {
+		return fmt.Errorf("app: the engine does not start without the list of refused credentials: %w", err)
+	}
+	cert, err := guild.GuildCertificate(ctx, db)
+	switch {
+	case errors.Is(err, guild.ErrNoGuild):
+		return nil // a replica that did not receive its copy yet
+	case err != nil:
+		return err
+	case cert.Epoch <= e.epochs.Epoch():
+		return nil
+	}
+	if err := e.epochs.Follow(ctx, cert); err != nil {
+		e.log.Warn("app: the Guild database holds a higher certificate of epoch that does not hold", "epoch", cert.Epoch, "err", err)
+		return nil
+	}
+	e.log.Warn("app: following the higher certificate of epoch the Guild database holds", "epoch", cert.Epoch, "citadel", cert.CitadelMachineID)
+	return nil
+}
+
+// reloadCreds reads the refusals of the credentials from db again and drops
+// at once the open connections they refuse now (4002).
+func (e *Engine) reloadCreds(ctx context.Context, db *store.DB) error {
+	err := e.creds.Reload(ctx, db)
+	if e.tls != nil {
+		e.tls.CloseRevoked()
+	}
+	return err
+}
+
+// refusedCert is the audit of a certificate of epoch this machine refused
+// (a bad signature, another Guild, not higher): on the Citadel a row of the
+// audit, once per epoch, Citadel and reason; on a Tower the log has it.
+func (e *Engine) refusedCert(c protocol.Certificate, reason error) {
+	e.mu.Lock()
+	run := e.cit
+	e.mu.Unlock()
+	if run == nil {
+		return
+	}
+	go func() {
+		if err := guild.RecordRefused(context.Background(), run.db, e.clk, e.id.MachineID, c, reason); err != nil {
+			e.log.Warn("app: the audit of a refused certificate of epoch", "err", err)
+		}
+	}()
+}
+
 // initial is the role at the start: the Citadel if the certificate names this
 // machine, unless it was demoted from that epoch already (it kept the
 // database it discarded and waits for the certificate of the new epoch).
@@ -331,6 +417,7 @@ func (e *Engine) onFollow(_ context.Context, cert protocol.Certificate) error {
 	e.mu.Unlock()
 	if role == RoleCitadel && run != nil && cert.CitadelMachineID != e.id.MachineID && run.fence.Demote() {
 		e.log.Warn("app: a higher epoch names another Citadel; stepping down", "epoch", cert.Epoch, "citadel", cert.CitadelMachineID)
+		e.cert.Set(e.machine.Leaf(), e.machine.Key()) // mestre.local is the new Citadel's
 		e.signal(transition{to: RoleTower})
 	}
 	e.changed()

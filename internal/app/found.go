@@ -53,7 +53,8 @@ func Found(ctx context.Context, cfg Config, paths Paths, clk clock.Clock) (*guil
 	defer v.Close()
 	f, err := guild.Create(ctx, guild.CreateConfig{
 		GuildDB: gdb, Member: guild.NewMember(mdb, vault.NewFileKeyStore(paths.engineKey()), clk), Secrets: v, Clock: clk,
-		Name: cfg.Name, Hostname: cfg.Hostname, Instance: cfg.Instance, IPs: parseIPs(cfg.IPs), RecoveryPublicKey: rk.PublicKey(),
+		Name: cfg.Name, Hostname: cfg.Hostname, Instance: cfg.Instance, IPs: parseIPs(cfg.IPs), EnginePort: cfg.EnginePort,
+		RecoveryPublicKey: rk.PublicKey(),
 	})
 	if err != nil {
 		rk.Destroy()
@@ -82,7 +83,7 @@ func Enroll(ctx context.Context, cfg Config, paths Paths, addr string, network t
 	defer mdb.Close()
 	return guild.Enroll(ctx, guild.NewMember(mdb, vault.NewFileKeyStore(paths.engineKey()), clk), guild.JoinConfig{
 		Addr: addr, Network: network, Clock: clk, Name: cfg.Name, Hostname: cfg.Hostname, OS: osName(),
-		Instance: cfg.Instance, IPs: parseIPs(cfg.IPs), OnCode: onCode,
+		Instance: cfg.Instance, IPs: parseIPs(cfg.IPs), EnginePort: cfg.EnginePort, OnCode: onCode,
 	})
 }
 

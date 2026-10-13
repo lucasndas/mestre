@@ -132,13 +132,7 @@ func (o *testOwner) Ask(ctx context.Context, r guild.ApprovalRequest) (string, e
 	if e == nil {
 		return "", errors.New("test owner: no engine")
 	}
-	e.mu.Lock()
-	run := e.cit
-	e.mu.Unlock()
-	if run == nil {
-		return "", errors.New("test owner: not the Citadel")
-	}
-	if err := run.citadel.Decide(ctx, r.JoinID, guild.Decision{Accept: true, ApprovedBy: "dono"}); err != nil {
+	if err := e.DecideEntry(ctx, r.JoinID, guild.Decision{Accept: true, ApprovedBy: "dono"}); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("entrada-%d", o.n.Add(1)), nil
@@ -268,7 +262,7 @@ func control(ctx context.Context, e *Engine, req controlRequest) controlAnswer {
 		return controlAnswer{OK: true}
 	case "handover":
 		go func() {
-			if err := e.Handover(context.WithoutCancel(ctx), req.Target, "aprovacao-teste", 0); err != nil {
+			if err := e.Handover(context.WithoutCancel(ctx), req.Target, "aprovacao-teste", "dono", 0); err != nil {
 				e.log.Error("test: handover", "err", err)
 			}
 		}()

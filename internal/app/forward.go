@@ -37,9 +37,13 @@ func (f forwarder) Forward(ctx context.Context, c *localchan.Call) localchan.Res
 	case failover:
 		return errFailover
 	case cit != nil:
-		if !cit.fence.Acting() {
-			return errUnavailable
+		if refusal, ok := cit.cliRefusal(); !ok {
+			return refusal
 		}
+		if !cit.gate.enter() {
+			return errFailover
+		}
+		defer cit.gate.leave()
 		return e.local.Forward(ctx, c)
 	case tow != nil:
 		return e.callCitadel(ctx, tow.client.Link(), c)
@@ -91,41 +95,73 @@ func (e *Engine) callCitadel(ctx context.Context, link *protocol.Link, c *localc
 	}
 }
 
+// cliRefusal says whether the Citadel of this period serves a call of the
+// CLI now, and the answer when it does not: citadel_in_failover while it
+// hands the command over, citadel_unavailable while it does not act
+// (suspended at the start, or stepping down).
+func (r *citadelRun) cliRefusal() (localchan.Response, bool) {
+	switch {
+	case r.gate.isDraining():
+		return errFailover, false
+	case !r.fence.Acting():
+		return errUnavailable, false
+	}
+	return localchan.Response{}, true
+}
+
 // handleCLICall is cli.call on the Citadel: the request runs with the
 // commands of this Citadel and the answer goes back as cli.result. The
-// handler only starts it: a command may take long.
-func (e *Engine) handleCLICall(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
-	raw, err := json.Marshal(m.Payload)
-	if err != nil {
-		return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
-	}
-	var call cliCall
-	if err := json.Unmarshal(raw, &call); err != nil {
-		return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
-	}
-	if call.Caller.MachineID != m.Peer.ID {
-		return nil, protocol.NewError(protocol.CodeForbidden, "the caller is of %s, the message of %s", call.Caller.MachineID, m.Peer.ID)
-	}
-	link, id := m.Link, m.Env.ID
-	go func() {
-		bg := context.WithoutCancel(ctx)
-		resp := e.local.Forward(bg, &localchan.Call{Request: call.Request, Caller: localchan.Caller{
-			Identified: true, AgentID: call.Caller.AgentID, TerminalID: call.Caller.TerminalID,
-		}})
-		resp.V, resp.ID = call.V, call.ID
-		b, err := json.Marshal(resp)
+// handler only starts it: a command may take long. It passes the same fence
+// as a call made on this machine: a Citadel that does not act answers
+// citadel_unavailable (citadel_in_failover while it hands over), and a
+// command runs inside the gate of the handover until it ends.
+func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
+	return func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
+		raw, err := json.Marshal(m.Payload)
 		if err != nil {
-			return
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
 		}
-		var obj protocol.CLIResult
-		if err := json.Unmarshal(b, &obj); err != nil {
-			return
+		var call cliCall
+		if err := json.Unmarshal(raw, &call); err != nil {
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
 		}
-		if _, err := link.Send(bg, protocol.Outgoing{Type: protocol.TypeCLIResult, Payload: obj, ReplyTo: id, Transient: true}); err != nil && !errors.Is(err, protocol.ErrNotConnected) {
-			e.log.Warn("app: cli.result", "err", err)
+		if call.Caller.MachineID != m.Peer.ID {
+			return nil, protocol.NewError(protocol.CodeForbidden, "the caller is of %s, the message of %s", call.Caller.MachineID, m.Peer.ID)
 		}
-	}()
-	return nil, nil
+		link, id := m.Link, m.Env.ID
+		bg := context.WithoutCancel(ctx)
+		answer := func(resp localchan.Response) {
+			resp.V, resp.ID = call.V, call.ID
+			b, err := json.Marshal(resp)
+			if err != nil {
+				return
+			}
+			var obj protocol.CLIResult
+			if err := json.Unmarshal(b, &obj); err != nil {
+				return
+			}
+			if _, err := link.Send(bg, protocol.Outgoing{Type: protocol.TypeCLIResult, Payload: obj, ReplyTo: id, Transient: true}); err != nil && !errors.Is(err, protocol.ErrNotConnected) {
+				e.log.Warn("app: cli.result", "err", err)
+			}
+		}
+		if refusal, ok := run.cliRefusal(); !ok {
+			answer(refusal)
+			return nil, nil
+		}
+		// the gate of the message is left when the handler returns: the
+		// command holds one of its own until it ends
+		if !run.gate.enter() {
+			answer(errFailover)
+			return nil, nil
+		}
+		go func() {
+			defer run.gate.leave()
+			answer(e.local.Forward(bg, &localchan.Call{Request: call.Request, Caller: localchan.Caller{
+				Identified: true, AgentID: call.Caller.AgentID, TerminalID: call.Caller.TerminalID,
+			}}))
+		}()
+		return nil, nil
+	}
 }
 
 // results are the cli.call waiting for their cli.result on a Tower.

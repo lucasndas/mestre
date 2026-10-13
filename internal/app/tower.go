@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/x509"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -21,6 +23,7 @@ import (
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -35,6 +38,8 @@ type towerRun struct {
 	client  *protocol.Client
 	replica *replication.Replica
 	locator *discovery.Locator
+	agent   *machinesheet.Agent
+	renewer *guild.Renewer
 }
 
 func (e *Engine) sheetBuilder() (*machinesheet.Builder, error) {
@@ -74,8 +79,8 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		db.Close()
 		e.changed()
 	}()
-	if err := e.creds.Reload(ctx, db); err != nil {
-		e.log.Debug("app: no credentials in the replica yet", "err", err)
+	if err := e.reloadCreds(ctx, db); err != nil {
+		return transition{err: fmt.Errorf("app: the refused credentials of the replica: %w", err)}
 	}
 	e.pruneDiscarded()
 
@@ -94,7 +99,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	locator, err := discovery.NewLocator(discovery.LocatorConfig{
 		Clock: e.clk, Logger: e.log, Configured: e.cfg.Addresses, Disabled: e.cfg.NoDiscovery,
 		Cache: discovery.NewSQLCache(e.mdb), Known: e.known, Verifier: discovery.TLSVerifier{Prober: e.tcli},
-		Search:    discovery.SearchConfig{Net: e.deps.Packets, Port: e.cfg.DiscoveryPort, GuildID: e.id.GuildID},
+		Search:    discovery.SearchConfig{Net: e.deps.Packets, Browser: e.deps.Browser, Port: e.cfg.DiscoveryPort, GuildID: e.id.GuildID},
 		AskOthers: true,
 	})
 	if err != nil {
@@ -102,9 +107,16 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	}
 	router := protocol.NewRouter()
 	replica.Register(router)
-	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: replica}})
 	router.HandleFunc(protocol.TypeCLIResult, e.results.handle)
 	router.HandleFunc(protocol.TypeCitadelHandover, e.handleHandover)
+	renewKick := make(chan struct{}, 1)
+	kickRenew := func() {
+		select {
+		case renewKick <- struct{}{}:
+		default:
+		}
+	}
+	router.HandleFunc(protocol.TypeGuildConfig, e.handleGuildConfig(db, locator, kickRenew))
 	msql := protocol.NewSQLStore(e.mdb)
 	client, err := protocol.NewClient(protocol.Config{
 		MachineID: e.id.MachineID, Clock: e.clk, Router: router, Epoch: e.epochs, Certs: e.epochs, Outbox: msql, Processed: msql,
@@ -124,6 +136,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 				locator.Connected(pctx)
 				e.setConnected(true)
 				e.down.Back()
+				kickRenew()
 			},
 			OnDisconnect: func(*protocol.Session, error) {
 				e.setConnected(false)
@@ -137,6 +150,27 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	}
 	replica.Attach(client.Link())
 	agent.Attach(client.Link())
+	// The engine certificate renews over the connection to the Citadel, 30
+	// days before it expires and when the registry gives it other names
+	// (docs/guilda/guilda.md#credenciais).
+	renewer, err := guild.NewRenewer(guild.RenewerConfig{
+		Kind: transport.KindMachine, CA: e.id.CA, Source: e.machine, Link: client.Link(), Clock: e.clk, Logger: e.log,
+		Names: func() transport.Names {
+			m, _ := guild.MachineOf(context.Background(), db, e.id.MachineID)
+			return m.Names()
+		},
+		Save: func(ctx context.Context, cert *x509.Certificate, key *ecdsa.PrivateKey) error {
+			if err := e.member.SaveRenewal(ctx, cert, key); err != nil {
+				return err
+			}
+			e.cert.Set(cert, key) // a Tower presents its machine certificate
+			return nil
+		},
+	})
+	if err != nil {
+		return transition{err: err}
+	}
+	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: replica}, Renewer: renewer})
 	// Whoever takes this machine for the Citadel is told 4007, with the
 	// certificate this machine follows.
 	refuser, err := protocol.NewServer(protocol.Config{
@@ -146,7 +180,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	run := &towerRun{db: db, client: client, replica: replica, locator: locator}
+	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer}
 	e.setGuildDB(db)
 	e.mu.Lock()
 	e.role, e.tow, e.cit, e.unknown = RoleTower, run, nil, unknown
@@ -161,6 +195,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	})
 	wg.Go(func() { _ = replica.Run(pctx) })
 	wg.Go(func() { _ = agent.Run(pctx) })
+	wg.Go(func() { e.renewTower(pctx, db, renewer, client.Link(), renewKick) })
 	wg.Go(func() { e.reportDiscarded(pctx, db, client.Link()) })
 	e.changed()
 	e.log.Info("app: serving as a Tower", "epoch", e.epochs.Epoch(), "citadel", e.known().CitadelMachineID)
@@ -208,6 +243,22 @@ func (e *Engine) Promote(ctx context.Context, reason string) error {
 	return e.startPromotion(ctx, approvalID, by, 0)
 }
 
+// DecideEntry is the Owner's answer to the entry of a machine, given by the
+// bot or the panel after the PIN (docs/guilda/guilda.md#entrada-na-guilda).
+func (e *Engine) DecideEntry(ctx context.Context, joinID string, d guild.Decision) error {
+	e.mu.Lock()
+	run := e.cit
+	e.mu.Unlock()
+	if run == nil {
+		return errors.New("app: only the Citadel takes entries")
+	}
+	c := run.guild()
+	if c == nil {
+		return guild.ErrSuspended
+	}
+	return c.Decide(ctx, joinID, d)
+}
+
 // DecidePromotion is the Owner's answer to the request of Promote, given by
 // the bot or the fallback page after the PIN.
 func (e *Engine) DecidePromotion(approvalID string, d guild.Decision) error {
@@ -250,10 +301,14 @@ func (e *Engine) promotable(ctx context.Context, db *store.DB) error {
 }
 
 // promote takes the command, once the Tower period stopped applying the
-// replication: it opens the replica as the main database with the vault and
-// the CA, wins the next epoch in the lock, signs its certificate and becomes
-// the Citadel, which waits before acting outside. Losing the lock, or
-// anything before it, leaves the machine a Tower and warns the Owner.
+// replication: it reads the last lsn of the replica and wins the next epoch
+// in the lock before anything writes, so losing the lock, or not reaching it,
+// leaves the replica exactly as the Citadel sent it and the machine goes on
+// as its Tower. Winning, it opens the replica as the main database with the
+// vault and the CA, signs its certificate and becomes the Citadel, which
+// waits before acting outside. A failure after the lock was won leaves the
+// epoch in the lock without a certificate: the Owner is warned and promotes
+// again (the next epoch).
 func (e *Engine) promote(ctx context.Context, p *promotion) transition {
 	fail := func(err error) transition {
 		e.log.Error("app: the promotion did not happen", "err", err)
@@ -264,20 +319,25 @@ func (e *Engine) promote(ctx context.Context, p *promotion) transition {
 		}
 		return transition{to: RoleTower}
 	}
-	take, err := e.openMain(ctx)
+	from, err := e.replicaLSN(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	release := func() { take.vault.Close(); take.db.Close() }
-	from := take.lastLSN
 	if from < p.wantLSN {
-		release()
 		return fail(fmt.Errorf("app: the replica has the lsn %d, the handover %d", from, p.wantLSN))
 	}
 	n, err := guild.ClaimEpoch(ctx, e.deps.Lock, e.epochs.Epoch(), e.id.MachineID)
 	if err != nil {
-		release()
 		return fail(err)
+	}
+	take, err := e.openMain(ctx)
+	if err != nil {
+		return fail(fmt.Errorf("app: won the epoch %d in the lock, but cannot take the command: %w", n, err))
+	}
+	release := func() { take.vault.Close(); take.db.Close() }
+	if take.ca, err = guild.LoadCA(ctx, take.db, take.vault, caPurpose, e.clk); err != nil {
+		release()
+		return fail(fmt.Errorf("app: won the epoch %d in the lock, but cannot take the command: %w", n, err))
 	}
 	cert, err := guild.TakeCommand(ctx, take.db, take.ca, e.clk, guild.Command{
 		Epoch: n, MachineID: e.id.MachineID, ApprovalID: p.approvalID, ApprovedBy: p.approvedBy, FromLSN: from,
@@ -291,9 +351,106 @@ func (e *Engine) promote(ctx context.Context, p *promotion) transition {
 		return fail(err)
 	}
 	e.log.Warn("app: this machine took the command", "epoch", n, "from_lsn", from)
+	// the promoted machine issues its own certificate of mestre.local
+	if c, err := guild.IssueCitadelCertificate(ctx, take.db, take.ca, e.id.MachineID, e.machine.Key(), e.clk); err != nil {
+		e.log.Error("app: the certificate of the Citadel", "err", err)
+	} else {
+		e.cert.Set(c, e.machine.Key())
+	}
 	p.done <- nil
 	take.promoted = true
 	return transition{to: RoleCitadel, take: take}
+}
+
+// replicaLSN is the last lsn the replica on this disk applied, read without
+// writing anything.
+func (e *Engine) replicaLSN(ctx context.Context) (uint64, error) {
+	db, err := guilddb.Open(ctx, e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: e.cfg.Synchronous, Replica: true})
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+	if _, err := guild.GuildCertificate(ctx, db); err != nil {
+		return 0, fmt.Errorf("app: the replica holds no Guild: %w", err)
+	}
+	return db.LastLSN(ctx)
+}
+
+// handleGuildConfig is guild.config on a Tower (docs/conectividade/mensagens.md):
+// the refusals of the credentials (the replica's and the list it carries),
+// with the open connections they now refuse closed, the addresses and ports
+// of the machines for a change of Citadel outside the local network
+// (docs/conectividade/descoberta.md#máquina-fora-da-rede-local), and a check
+// of the engine certificate, whose names may have changed (an exclusion, new
+// addresses).
+func (e *Engine) handleGuildConfig(db *store.DB, locator *discovery.Locator, kickRenew func()) protocol.HandlerFunc {
+	return func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
+		cfg, ok := m.Payload.(*protocol.GuildConfig)
+		if !ok {
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "guild.config payload is %T", m.Payload)
+		}
+		if m.Peer.Role != protocol.RoleMachine || m.Peer.ID != e.epochs.Citadel() {
+			return nil, protocol.NewError(protocol.CodeForbidden, "only the Citadel sends guild.config")
+		}
+		if err := e.creds.Reload(ctx, db); err != nil {
+			e.log.Warn("app: the refused credentials of the replica", "err", err)
+		}
+		e.creds.Add(cfg.Revoked...)
+		e.tls.CloseRevoked()
+		var ms []discovery.MachineAddrs
+		for _, mc := range cfg.Machines {
+			if mc.MachineID == e.id.MachineID || mc.Port <= 0 || len(mc.Addresses) == 0 {
+				continue
+			}
+			ms = append(ms, discovery.MachineAddrs{MachineID: mc.MachineID, Addrs: mc.Addresses, Port: mc.Port})
+		}
+		if err := locator.RememberMachines(ctx, ms); err != nil {
+			e.log.Warn("app: keeping the addresses of guild.config", "err", err)
+		}
+		kickRenew()
+		return nil, nil
+	}
+}
+
+// renewTower renews the engine certificate of this Tower when it is due: in
+// its last 30 days, or when the registry (the replica) gives it other names
+// than it carries. It checks every renewCheck and when kicked (a connection,
+// guild.config). Names that a renewal did not change wait renewNamesHold.
+func (e *Engine) renewTower(ctx context.Context, db *store.DB, r *guild.Renewer, link *protocol.Link, kick <-chan struct{}) {
+	var hold time.Time
+	check := func() {
+		if !link.Connected() {
+			return
+		}
+		now := e.clk.Now()
+		leaf := e.machine.Leaf()
+		byTime := transport.NeedsRenewal(leaf, now)
+		m, err := guild.MachineOf(ctx, db, e.id.MachineID)
+		byNames := err == nil && transport.NamesChanged(leaf, m.Names())
+		if !byTime && (!byNames || now.Before(hold)) {
+			return
+		}
+		if err := r.Renew(ctx); err != nil {
+			if ctx.Err() == nil {
+				e.log.Warn("app: renewing the engine certificate", "err", err)
+			}
+			return
+		}
+		if byNames && transport.NamesChanged(e.machine.Leaf(), m.Names()) {
+			hold = e.clk.Now().Add(renewNamesHold)
+		}
+	}
+	t := e.clk.NewTicker(e.deps.RenewEvery)
+	defer t.Stop()
+	for {
+		check()
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C():
+		case <-kick:
+		}
+	}
 }
 
 // handleHandover is citadel.handover on the machine the Citadel chose: when
@@ -336,7 +493,7 @@ func (e *Engine) handleHandover(ctx context.Context, m *protocol.Message) (*prot
 				return
 			}
 		}
-		if err := e.startPromotion(bg, h.ApprovalID, "", h.LastLSN); err != nil {
+		if err := e.startPromotion(bg, h.ApprovalID, h.ApprovedBy, h.LastLSN); err != nil {
 			e.log.Error("app: the handover failed", "err", err)
 		}
 	}()
@@ -349,6 +506,26 @@ type discardReport struct {
 	FromLSN uint64   `json:"from_lsn"`
 	Total   int      `json:"total"`
 	LSNs    []uint64 `json:"lsns"`
+	// Dropped are the external actions the fence dropped at the demotion.
+	Dropped []string `json:"dropped,omitempty"`
+}
+
+// saveDropped keeps the names of the external actions a demotion dropped,
+// until the report of what was discarded takes them to the new Citadel.
+func saveDropped(path string, names []string) error {
+	b, err := json.Marshal(names)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600)
+}
+
+func loadDropped(path string) []string {
+	var names []string
+	if b, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(b, &names)
+	}
+	return names
 }
 
 // discardedFiles lists the databases this machine discarded, by epoch.
@@ -425,13 +602,13 @@ func (e *Engine) listDiscarded(ctx context.Context, path string, epoch, from uin
 	if err != nil {
 		return discardReport{}, err
 	}
-	r := discardReport{Epoch: epoch, FromLSN: from, Total: total}
+	r := discardReport{Epoch: epoch, FromLSN: from, Total: total, Dropped: loadDropped(e.paths.droppedActions(epoch))}
 	for _, t := range txs {
 		r.LSNs = append(r.LSNs, t.LSN)
 	}
-	if total > 0 {
+	if total > 0 || len(r.Dropped) > 0 {
 		if _, err := link.Send(ctx, protocol.Outgoing{Type: protocol.TypeGuildDiscarded, Payload: protocol.GuildDiscarded{
-			Epoch: epoch, FromLSN: from, Total: total, Transactions: txs,
+			Epoch: epoch, FromLSN: from, Total: total, Transactions: txs, Dropped: r.Dropped,
 		}}); err != nil {
 			return discardReport{}, err
 		}
@@ -454,6 +631,9 @@ func (e *Engine) pruneDiscarded() {
 		}
 		for _, suffix := range []string{"", "-wal", "-shm"} {
 			_ = os.Remove(path + suffix)
+		}
+		if n, err := strconv.ParseUint(strings.TrimSuffix(strings.TrimPrefix(filepath.Base(path), "descartado-"), ".db"), 10, 64); err == nil {
+			_ = os.Remove(e.paths.droppedActions(n))
 		}
 		e.log.Info("app: a discarded database left after the retention", "file", path)
 	}
