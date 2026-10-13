@@ -11,7 +11,7 @@ Dar a todos os comandos da CLI `mestre` a mesma forma de uso, de saída e de err
 ### Forma geral
 - O binário `mestre` está no PATH de toda máquina da Guilda ([componentes](../arquitetura/componentes.md)). `MESTRE_CLI` guarda o caminho absoluto dele: skills e arquivos de hook usam `mestre` e, se não acharem, `$MESTRE_CLI` (PowerShell: `& $env:MESTRE_CLI`).
 - Uso: `mestre <comando> [subcomando] [argumentos] [flags]`. Nomes com espaço vão entre aspas. Comandos, flags e textos de saída ficam em inglês.
-- Flags globais: `--json` (saída em JSON) e `--help`. Durações: `90s`, `10m`, `2h`. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
+- Flags globais: `--json` (saída em JSON), `--help` e `--debug` (mostra no stderr as respostas parciais, que a CLI não imprime; [canal local](../arquitetura/canal-local.md#respostas-parciais)). Durações: `90s`, `10m`, `2h`. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
 - `mestre hook` é interno (só os arquivos de hook o chamam) e **não** segue as regras de saída abaixo: ver [adaptador](../provedores/adaptador.md). Subcomandos de serviço (`mestre run`, `mestre install`, `mestre join`…) são de [componentes](../arquitetura/componentes.md).
 
 ### Saída em texto (padrão)

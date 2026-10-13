@@ -148,6 +148,10 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 			}
 			return fmt.Errorf("accept on the local channel: %w", err)
 		}
+		// The time of the accept is taken here, before anything else is done
+		// to the connection: the identifier compares it with the start of
+		// the caller.
+		acceptedAt := s.clk.Now()
 		if !s.track(c) {
 			_ = c.Close()
 			return nil
@@ -156,7 +160,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		go func() {
 			defer s.wg.Done()
 			defer s.untrack(c)
-			s.serveConn(ctx, c)
+			s.serveConn(ctx, c, acceptedAt)
 		}()
 	}
 }
@@ -192,10 +196,10 @@ func (s *Server) closeConns() {
 }
 
 // serveConn serves one connection: one request, and its response.
-func (s *Server) serveConn(ctx context.Context, c net.Conn) {
+func (s *Server) serveConn(ctx context.Context, c net.Conn, acceptedAt time.Time) {
 	// The peer is read before anything else: the caller can die, and its
 	// PID be reused, at any moment after the accept.
-	peer, peerErr := s.cfg.Identifier.Accept(c)
+	peer, peerErr := s.cfg.Identifier.Accept(c, acceptedAt)
 	defer func() { peer.Close() }() // a peer that failed to be read may still hold a pidfd
 
 	br := bufio.NewReaderSize(c, 64<<10)

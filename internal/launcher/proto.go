@@ -39,7 +39,10 @@ import (
 const (
 	// OpStartPTY starts the mestre-pty of a terminal.
 	OpStartPTY = "start-pty"
-	// OpKill ends the process tree of a terminal (Linux: cgroup.kill).
+	// OpKill ends the process tree of a terminal: with only the id, the
+	// cgroup of the terminal (Linux: cgroup.kill); with a PID, its start
+	// identity and the sessions, the mestre-pty and the sessions by identity,
+	// for a terminal that has no cgroup (Linux without a delegated one).
 	OpKill = "kill"
 )
 
@@ -76,7 +79,16 @@ type Request struct {
 	Secret []byte `json:"secret,omitempty"`
 	// Files names the descriptors passed along (Linux, SCM_RIGHTS).
 	Files []string `json:"files,omitempty"`
+	// PID and Start (kill only) are the mestre-pty to end, by PID and start
+	// identity: nothing is ended on a PID alone. Sessions are the session IDs
+	// of its agent, whose members that started after it are ended too.
+	PID      int    `json:"pid,omitempty"`
+	Start    string `json:"start,omitempty"`
+	Sessions []int  `json:"sessions,omitempty"`
 }
+
+// maxSessions bounds the sessions of one kill request.
+const maxSessions = 16
 
 // Response is the answer.
 type Response struct {
@@ -261,12 +273,41 @@ func validateRequest(r Request) error {
 	}
 	if r.Op == OpKill {
 		if r.Version != "" || r.Socket != "" || len(r.Secret) != 0 || len(r.Files) != 0 {
-			return errors.New("kill takes only the terminal id")
+			return errors.New("kill takes only the terminal id, or the mestre-pty and its sessions")
 		}
-		return nil
+		return validateKillTarget(r)
+	}
+	if r.PID != 0 || r.Start != "" || len(r.Sessions) != 0 {
+		return errors.New("start-pty takes no process to end")
 	}
 	if len(r.Secret) != 0 && len(r.Secret) != ptywire.SecretSize {
 		return fmt.Errorf("secret of %d bytes: want %d", len(r.Secret), ptywire.SecretSize)
 	}
 	return ValidateVersion(r.Version)
+}
+
+// validateKillTarget checks the identity a kill by process carries: a PID
+// above 1 with its start identity, and a few session IDs above 1.
+func validateKillTarget(r Request) error {
+	if r.PID == 0 {
+		if r.Start != "" || len(r.Sessions) != 0 {
+			return errors.New("kill: sessions and a start identity need the PID of the mestre-pty")
+		}
+		return nil
+	}
+	if r.PID <= 1 {
+		return fmt.Errorf("kill: PID %d", r.PID)
+	}
+	if r.Start == "" || len(r.Start) > 128 {
+		return errors.New("kill: a PID needs its start identity")
+	}
+	if len(r.Sessions) > maxSessions {
+		return fmt.Errorf("kill: %d sessions, the limit is %d", len(r.Sessions), maxSessions)
+	}
+	for _, s := range r.Sessions {
+		if s <= 1 {
+			return fmt.Errorf("kill: session %d", s)
+		}
+	}
+	return nil
 }

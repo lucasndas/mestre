@@ -9,7 +9,6 @@ import (
 
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/testkit/localrig"
-	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // idRig is a ProcIdentifier over a fake /proc, as the engine builds one.
@@ -21,7 +20,7 @@ type idRig struct {
 
 func newIDRig(mode localchan.Mode) *idRig {
 	r := &idRig{proc: &localrig.FakeProc{}, terms: &localrig.FakeTerminals{}}
-	r.id = &localchan.ProcIdentifier{Proc: r.proc, Terminals: r.terms, Clock: clock.Real{}, Mode: mode, CgroupBase: "/mestre.service"}
+	r.id = &localchan.ProcIdentifier{Proc: r.proc, Terminals: r.terms, Mode: mode, CgroupBase: "/mestre.service"}
 	return r
 }
 

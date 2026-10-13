@@ -72,6 +72,11 @@ type ManagerConfig struct {
 	// failed to start after OnStarting.
 	OnStarting  func(Starting)
 	OnDiscarded func(id string)
+	// OnEnded is called with the id of a terminal whose agent ended on its
+	// own, after the engine swept what the agent left behind and marked the
+	// row interrupted; the local channel forgets the terminal here
+	// (Directory.Remove). It must not block.
+	OnEnded func(id string)
 	// HandshakeTimeout (default 5 s) bounds connecting to a mestre-pty.
 	HandshakeTimeout time.Duration
 	// AckDelay (default 200 ms): see DefaultAckDelay.
@@ -119,8 +124,8 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	for _, d := range []string{cfg.SocketDir, cfg.LogDir} {
-		if err := os.MkdirAll(d, 0o700); err != nil {
-			return nil, fmt.Errorf("create %s: %w", d, err)
+		if err := EnsurePrivateDir(d); err != nil {
+			return nil, err
 		}
 	}
 	return &Manager{cfg: cfg, clk: cfg.Clock, reg: registry{cfg.DB}, log: log}, nil
@@ -222,7 +227,7 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) (*Terminal, error
 func (m *Manager) discard(rec Record, p ProcID) {
 	ctx := context.Background()
 	if p.PID != 0 {
-		_ = m.cfg.System.KillTree(ctx, p, nil)
+		_ = m.killTree(ctx, rec.ID, p, nil)
 	}
 	_ = m.cfg.Spawner.KillCgroup(ctx, rec.ID)
 	_ = os.Remove(rec.SocketPath)

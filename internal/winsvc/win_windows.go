@@ -257,30 +257,3 @@ func aceFor(sid *windows.SID, mask uint32, mode windows.ACCESS_MODE) windows.EXP
 		},
 	}
 }
-
-// tokenDefaultDACL is TOKEN_DEFAULT_DACL.
-type tokenDefaultDACL struct{ DefaultDacl *windows.ACL }
-
-// addToDefaultDACL grants mask to sid in the default DACL of the token, the
-// DACL that processes created with the token (and their children) get.
-func addToDefaultDACL(t windows.Token, sid *windows.SID, mask uint32) error {
-	var n uint32
-	_ = windows.GetTokenInformation(t, windows.TokenDefaultDacl, nil, 0, &n)
-	if n == 0 {
-		return errors.New("GetTokenInformation(TokenDefaultDacl): empty size")
-	}
-	buf := make([]byte, n)
-	if err := windows.GetTokenInformation(t, windows.TokenDefaultDacl, &buf[0], n, &n); err != nil {
-		return fmt.Errorf("GetTokenInformation(TokenDefaultDacl): %w", err)
-	}
-	old := (*tokenDefaultDACL)(unsafe.Pointer(&buf[0])).DefaultDacl
-	acl, err := windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{aceFor(sid, mask, windows.GRANT_ACCESS)}, old)
-	if err != nil {
-		return fmt.Errorf("ACLFromEntries: %w", err)
-	}
-	info := tokenDefaultDACL{acl}
-	if err := windows.SetTokenInformation(t, windows.TokenDefaultDacl, (*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
-		return fmt.Errorf("SetTokenInformation(TokenDefaultDacl): %w", err)
-	}
-	return nil
-}

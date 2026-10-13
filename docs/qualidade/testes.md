@@ -29,6 +29,11 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 - No Windows, o mesmo teste roda no CI; o Dono repete à mão com duas instâncias **instaladas** como serviços (entrada, replicação e troca de Cidadela).
 - Rodam nos dois sistemas do CI, dentro do orçamento da completa.
 
+### Cgroup delegado na completa
+
+- A completa roda como processos comuns, sem cgroup delegado, e o que depende dele (o neto que saiu da sessão em CA-TERM-05, o cgroup do terminal e o reinício do launcher em CA-TERM-07, os órfãos de CA-LOCAL-11) **roda de novo dentro de `systemd-run --user --scope -p Delegate=yes`**: o teste se reexecuta sozinho (`internal/testkit/delegated`) e relata o resultado; só é pulado, com o motivo, onde não há gerenciador systemd de usuário (contêiner, WSL sem systemd).
+- O `ubuntu-latest` do GitHub **tem** esse gerenciador (conferido em 2026-10-13: `systemd-run --user --scope -p Delegate=yes` sai com 0, cgroup v2, systemd 255), então essas partes rodam no CI Linux; no Windows não há cgroup e o Job Object cumpre o papel. A parte que exige trocar de conta (`CAP_SETUID`: o `kill` do launcher como `mestre-agente`) fica na pesada e no [checklist](../plataforma/checklist.md).
+
 ### Executor `testrun`
 
 Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tools/testrun fast|full|heavy|affected|quarantine`.

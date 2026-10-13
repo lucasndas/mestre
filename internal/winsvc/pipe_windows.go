@@ -47,6 +47,9 @@ type pipeListener struct {
 	sa   *windows.SecurityAttributes
 	stop windows.Handle // set when the listener closes
 
+	// connectFn waits for a client on an instance (connect; a test replaces it).
+	connectFn func(windows.Handle) error
+
 	mu     sync.Mutex
 	next   windows.Handle // instance already created and waiting
 	closed bool
@@ -65,6 +68,7 @@ func ListenPipe(name, sddl string) (net.Listener, error) {
 		return nil, fmt.Errorf("CreateEvent: %w", err)
 	}
 	l := &pipeListener{name: name, sa: sa, stop: stop, first: true}
+	l.connectFn = l.connect
 	h, err := l.create()
 	if err != nil {
 		_ = windows.CloseHandle(stop)
@@ -92,27 +96,56 @@ func (l *pipeListener) create() (windows.Handle, error) {
 
 func (l *pipeListener) Addr() net.Addr { return pipeAddr(l.name) }
 
+// maxConnectFailures is how many instances in a row may fail to connect
+// before Accept gives up: a client that connects and leaves (ERROR_NO_DATA)
+// fails one instance and says nothing about the next, but a pipe that fails
+// every time is broken.
+const maxConnectFailures = 16
+
 func (l *pipeListener) Accept() (net.Conn, error) {
+	for failures := 0; ; failures++ {
+		h, err := l.instance()
+		if err != nil {
+			return nil, err
+		}
+		if err := l.connectFn(h); err != nil {
+			_ = windows.CloseHandle(h)
+			// The failure belongs to this instance and its client (it left
+			// before the connection was made: ERROR_NO_DATA, ERROR_BROKEN_PIPE,
+			// ERROR_PIPE_NOT_CONNECTED): serve the next one. Ending Accept
+			// would end the launcher.
+			if errors.Is(err, net.ErrClosed) || l.isClosed() || failures+1 >= maxConnectFailures {
+				return nil, err
+			}
+			continue
+		}
+		return l.serve(h)
+	}
+}
+
+func (l *pipeListener) isClosed() bool {
 	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.closed
+}
+
+// instance returns the instance waiting for the next client, or makes one.
+func (l *pipeListener) instance() (windows.Handle, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.closed {
-		l.mu.Unlock()
-		return nil, net.ErrClosed
+		return 0, net.ErrClosed
 	}
 	h := l.next
 	l.next = 0
 	if h == 0 {
-		var err error
-		if h, err = l.create(); err != nil {
-			l.mu.Unlock()
-			return nil, err
-		}
+		return l.create()
 	}
-	l.mu.Unlock()
+	return h, nil
+}
 
-	if err := l.connect(h); err != nil {
-		_ = windows.CloseHandle(h)
-		return nil, err
-	}
+// serve makes the connection of an instance a client connected to.
+func (l *pipeListener) serve(h windows.Handle) (net.Conn, error) {
 	// The next instance is ready before this client is served, so that the
 	// name is never without one.
 	l.mu.Lock()

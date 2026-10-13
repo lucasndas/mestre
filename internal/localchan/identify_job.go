@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
-
-	"github.com/lucasndas/mestre/pkg/clock"
+	"time"
 )
 
 // JobIdentifier identifies callers on Windows: the PID on the other end of
@@ -18,17 +17,14 @@ type JobIdentifier struct {
 	Peers     PeerSource
 	Terminals Terminals
 	Jobs      JobAsker
-	Clock     clock.Clock
 }
 
 var _ Identifier = (*JobIdentifier)(nil)
 
 // Accept reads the peer before anything else happens to the connection.
-func (i *JobIdentifier) Accept(c net.Conn) (Peer, error) {
+func (i *JobIdentifier) Accept(c net.Conn, acceptedAt time.Time) (Peer, error) {
 	p, err := i.Peers.Peer(c)
-	if i.Clock != nil {
-		p.AcceptedAt = i.Clock.Now()
-	}
+	p.AcceptedAt = acceptedAt
 	return p, err
 }
 

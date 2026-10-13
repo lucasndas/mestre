@@ -13,7 +13,7 @@ func NewSystemIdentifier(cfg SystemConfig) Identifier {
 	if sys == nil {
 		sys = terminal.NewSystem()
 	}
-	return &JobIdentifier{Peers: NewPeerSource(sys), Terminals: cfg.Terminals, Jobs: cfg.Jobs, Clock: cfg.Clock}
+	return &JobIdentifier{Peers: NewPeerSource(sys), Terminals: cfg.Terminals, Jobs: cfg.Jobs}
 }
 
 // systemPeers reads the peer with SIO_AF_UNIX_GETPEERPID.

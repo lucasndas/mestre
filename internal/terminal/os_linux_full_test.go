@@ -19,6 +19,9 @@ const canLeaveSession = true
 
 func leaveSessionAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setsid: true} }
 
+// runBreak is the Windows agent of the Job Object test; nothing on Linux.
+func runBreak(string) int { return 2 }
+
 // checkHardened is the Linux part of CA-TERM-11: PR_SET_DUMPABLE 0 keeps
 // another process of the same account out of the mestre-pty. The test
 // process is the parent of the mestre-pty, which even the Yama ptrace_scope

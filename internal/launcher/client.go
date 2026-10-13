@@ -93,6 +93,36 @@ func (c *Client) KillCgroup(ctx context.Context, id string) error {
 	return nil
 }
 
+var _ terminal.TreeKiller = (*Client)(nil)
+
+// ErrNoKill is returned by KillTree where the launcher does not end
+// processes (Windows: the Job Object of the mestre-pty ends the tree, and the
+// engine holds the right to end the mestre-pty).
+var ErrNoKill = errors.New("this launcher does not end processes")
+
+// KillTree asks the launcher to end the mestre-pty p of terminal id and the
+// sessions of its agent, with the right of the account of the agents; the
+// launcher checks the start identity of every process before it signals.
+func (c *Client) KillTree(ctx context.Context, id string, p terminal.ProcID, sessions []int) error {
+	if c.NoKill {
+		return ErrNoKill
+	}
+	if err := terminal.ValidateID(id); err != nil {
+		return err
+	}
+	req := Request{Op: OpKill, ID: id, PID: p.PID, Start: p.Start, Sessions: sessions}
+	if err := validateKillTarget(req); err != nil {
+		return err
+	}
+	if req.PID == 0 {
+		return errors.New("kill by identity: no process")
+	}
+	if _, err := c.exchange(ctx, req, nil); err != nil {
+		return fmt.Errorf("kill the processes of terminal %s: %w", id, err)
+	}
+	return nil
+}
+
 // exchange sends one request and reads the answer.
 func (c *Client) exchange(ctx context.Context, req Request, files []*os.File) (Response, error) {
 	if err := ctx.Err(); err != nil {
