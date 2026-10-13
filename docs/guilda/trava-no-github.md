@@ -27,7 +27,7 @@ O passo 4 não depende de a criação ser atômica no servidor: vence quem a ref
 ### Aluguel
 
 - A Cidadela **confere** a trava a cada **30 s**: lista o prefixo com requisição condicional (`If-None-Match` com o `ETag` da última listagem). A época está **confirmada** se o maior N é a dela (um `304` repete a listagem anterior, que a confirmou).
-- Cada confirmação abre um **aluguel de 60 s**, contado do envio da requisição, não da resposta. Ele vence pelo primeiro de dois relógios a passar de 60 s, o monotônico e o de parede, porque o monotônico do Linux não conta o tempo da máquina dormindo.
+- Cada confirmação abre um **aluguel de 60 s**, contado do envio da requisição, não da resposta. Ele vence pelo primeiro de dois relógios a passar de 60 s, o monotônico e o de parede, porque o monotônico do Linux não conta o tempo da máquina dormindo; um relógio de parede que volta também o vence. O relógio falso lê os dois separados (`clock.Stamp`, `Fake.SkipWall`), para a regra ser testada.
 - **Toda chamada ao GitHub** (envio de branch, comentário, review, merge, criação de issue, consulta de eventos e de releases), menos a própria conferência, só começa com o aluguel válido. Nenhuma ação faz conferência própria: vale o aluguel.
 - O Telegram não depende do aluguel, só de a Cidadela não estar [suspensa](cidadela-e-torres.md#cidadela-suspensa) e da regra do [`409`](#o-409-do-telegram).
 - Conferência que **lê uma época maior:** a Cidadela se suspende na hora, sem mais nenhuma chamada ao GitHub nem ao Telegram, e segue a certidão nova ([volta da antiga](cidadela-e-torres.md#volta-da-antiga-cidadela)).
@@ -37,7 +37,7 @@ O passo 4 não depende de a criação ser atômica no servidor: vence quem a ref
 
 - Quem vence a criação da ref **espera 60 s**, contados depois da leitura do passo 4, antes de qualquer ação externa (GitHub e Telegram). A última confirmação da antiga Cidadela foi enviada antes de a ref nova existir, então o aluguel dela vence antes do fim da espera; se ela ainda alcança o GitHub, a conferência seguinte (em até 30 s) lê a época nova e a suspende.
 - Durante a espera, o promovido segue os passos internos da [promoção](cidadela-e-torres.md#promoção) (cofre, certidão, banco), e o bot continua com o [modo reduzido](../autocura/telegram-modo-reduzido.md) da condutora.
-- Ao fim da espera, confere a trava (o primeiro aluguel dele), reconcilia o GitHub ([GitHub depois da troca](cidadela-e-torres.md#github-depois-da-troca)), o que inclui o que a antiga criou até o fim do aluguel dela, e só então pede a devolução do bot e age para fora. A [troca planejada](cidadela-e-torres.md#troca-planejada) também espera.
+- Ao fim da espera, confere a trava (o primeiro aluguel dele), reconcilia o GitHub ([GitHub depois da troca](cidadela-e-torres.md#github-depois-da-troca)), o que inclui o que a antiga criou até o fim do aluguel dela, e só então pede a devolução do bot e age para fora; se essa conferência falha, continua esperando e confere de novo a cada 30 s (o promovido nunca age no modo GitHub fora sem ter confirmado a época uma vez). Um reinício durante a espera espera o que faltava. A [troca planejada](cidadela-e-torres.md#troca-planejada) também espera.
 
 ### GitHub fora
 
