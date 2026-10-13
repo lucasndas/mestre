@@ -2,6 +2,7 @@ package vault
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"slices"
@@ -11,6 +12,9 @@ import (
 // decryptable: the key store and the envelope hold both keys from
 // "keyfile-staged" until the database commit has moved every row to the new
 // key, and only then drop the old one (docs/plataforma/cofre.md#chave-do-cofre).
+// The commit is durable (synchronous=FULL, store.DB.WriteDurable) before the
+// old key is dropped: with the default synchronous=NORMAL a power loss could
+// bring back rows that need the old key after the key file lost it.
 const (
 	stepKeyFileStaged  = "keyfile-staged"
 	stepEnvelopeStaged = "envelope-staged"
@@ -59,7 +63,8 @@ func (v *Vault) Rotate(ctx context.Context) error {
 		return err
 	}
 
-	// 2. Every row to the new key, all or nothing.
+	// 2. Every row to the new key, all or nothing, in a commit that is on
+	// disk before step 3 drops the old key.
 	if err := v.reencrypt(ctx, old, nk); err != nil {
 		return err
 	}
@@ -88,17 +93,35 @@ func (v *Vault) Rotate(ctx context.Context) error {
 }
 
 func (v *Vault) reencrypt(ctx context.Context, old *keyring, nk *dataKey) error {
+	return v.writeDurable(ctx, func(tx *sql.Tx) error {
+		// The rows move to the new key only in a commit that is on disk when
+		// it returns; check it rather than trust the connection settings.
+		var sync int
+		if err := tx.QueryRowContext(ctx, `PRAGMA synchronous`).Scan(&sync); err != nil {
+			return fmt.Errorf("vault: rotate key: %w", err)
+		}
+		if sync < 2 {
+			return fmt.Errorf("vault: rotate key: the commit would not be durable (synchronous=%d); nothing was changed", sync)
+		}
+		return v.reencryptRows(ctx, tx, old, nk)
+	})
+}
+
+// writeDurable runs fn in a durable write transaction of the Guild database;
+// tests wrap it to observe when the commit happens.
+func (v *Vault) writeDurable(ctx context.Context, fn func(*sql.Tx) error) error {
+	if v.durableHook != nil {
+		return v.durableHook(ctx, fn)
+	}
+	return v.cfg.DB.WriteDurable(ctx, fn)
+}
+
+func (v *Vault) reencryptRows(ctx context.Context, tx *sql.Tx, old *keyring, nk *dataKey) error {
 	type row struct {
 		name, typ string
 		ct, nonce []byte
 		version   uint32
 	}
-	tx, err := v.cfg.DB.Writer().BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("vault: rotate key: %w", err)
-	}
-	defer tx.Rollback() //nolint:errcheck // no-op after Commit
-
 	rs, err := tx.QueryContext(ctx, `SELECT name, type, ciphertext, nonce, key_version FROM secrets ORDER BY name`)
 	if err != nil {
 		return fmt.Errorf("vault: rotate key: %w", err)
@@ -139,9 +162,6 @@ func (v *Vault) reencrypt(ctx context.Context, old *keyring, nk *dataKey) error 
 				return err
 			}
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("vault: rotate key: %w", err)
 	}
 	return nil
 }

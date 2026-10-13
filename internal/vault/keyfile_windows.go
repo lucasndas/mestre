@@ -90,6 +90,25 @@ func (s *FileKeyStore) Save(_ context.Context, data []byte) error {
 	return nil
 }
 
+// replaceFile moves from over to with MoveFileEx: atomic replacement, and
+// MOVEFILE_WRITE_THROUGH returns only after the move is flushed to disk (an
+// os.Rename may still be in the cache when the power goes).
+func replaceFile(from, to string) error {
+	f, err := windows.UTF16PtrFromString(from)
+	if err != nil {
+		return err
+	}
+	t, err := windows.UTF16PtrFromString(to)
+	if err != nil {
+		return err
+	}
+	if err := windows.MoveFileEx(f, t, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH); err != nil {
+		return &os.LinkError{Op: "MoveFileEx", Old: from, New: to, Err: err}
+	}
+	return nil
+}
+
 // syncDir is a no-op: Windows cannot open a directory for FlushFileBuffers
-// without backup semantics, and MoveFileEx already replaces atomically.
+// without backup semantics; replaceFile already waits for the move to reach
+// the disk.
 func syncDir(string) error { return nil }

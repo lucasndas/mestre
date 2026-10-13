@@ -128,11 +128,13 @@ type Vault struct {
 
 	// failAfter, set by tests, simulates a crash after a rotation step.
 	failAfter func(step string) error
+	// durableHook, set by tests, wraps the durable transaction of Rotate.
+	durableHook func(ctx context.Context, fn func(*sql.Tx) error) error
 }
 
 // Create generates the first data key at the creation of the Guild, saves it
 // in cfg.Keys and writes the recovery envelope. It refuses when a key
-// already exists.
+// already exists or when secrets are already stored (a lost key).
 func Create(ctx context.Context, cfg Config) (*Vault, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -142,6 +144,15 @@ func Create(ctx context.Context, cfg Config) (*Vault, error) {
 		return nil, errors.New("vault: a key already exists; refusing to replace it")
 	} else if !errors.Is(err, ErrNoKey) {
 		return nil, fmt.Errorf("vault: create: %w", err)
+	}
+	// Rows without a key mean the key was lost, not that the vault is new: a
+	// new key would never open them. The way back is the recovery envelope.
+	var rows int
+	if err := cfg.DB.Reader().QueryRowContext(ctx, `SELECT count(*) FROM secrets`).Scan(&rows); err != nil {
+		return nil, fmt.Errorf("vault: create: %w", err)
+	}
+	if rows > 0 {
+		return nil, fmt.Errorf("vault: create: the key is missing but %d secrets are stored; restore the key with the recovery key (mestre install --restore) instead of creating a new one", rows)
 	}
 	k, err := newRandomKey(1)
 	if err != nil {
@@ -263,6 +274,9 @@ func (v *Vault) Put(ctx context.Context, name string, typ Type, value []byte, si
 	if err := validateSite(name, typ, site); err != nil {
 		return err
 	}
+	if err := validateValue(name, typ, value); err != nil {
+		return err
+	}
 	cols, err := siteColumns(site)
 	if err != nil {
 		return fmt.Errorf("vault: secret %q: %w", name, err)
@@ -293,7 +307,8 @@ func (v *Vault) Put(ctx context.Context, name string, typ Type, value []byte, si
 	return nil
 }
 
-// Use decrypts the named secret, registers it in the masker, records the
+// Use decrypts the named secret, registers it in the masker (the whole value,
+// each sensitive component and each line; see maskParts), records the
 // read (last_used_at and OnUse with purpose) and passes it to fn. The
 // buffer is wiped when fn returns: fn must not keep it.
 func (v *Vault) Use(ctx context.Context, name, purpose string, fn func(value []byte) error) error {
@@ -307,7 +322,9 @@ func (v *Vault) Use(ctx context.Context, name, purpose string, fn func(value []b
 		return err
 	}
 	defer zero(plain)
-	v.cfg.Masker.Register(string(plain))
+	for _, part := range maskParts(typ, plain) {
+		v.cfg.Masker.Register(part)
+	}
 
 	now := v.cfg.Clock.Now()
 	if _, err := v.cfg.DB.Writer().ExecContext(ctx,

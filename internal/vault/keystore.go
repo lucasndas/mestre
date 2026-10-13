@@ -49,7 +49,9 @@ type Alert struct {
 }
 
 // writeFileAtomic replaces path with data: a 0600 temporary file in the same
-// directory, synced, then renamed over path, then the directory synced.
+// directory, synced, then moved over path and the move made durable (the
+// directory synced on Linux; MoveFileEx with MOVEFILE_WRITE_THROUGH on
+// Windows, where a directory cannot be synced).
 func writeFileAtomic(path string, data []byte) (err error) {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
@@ -75,7 +77,7 @@ func writeFileAtomic(path string, data []byte) (err error) {
 	if err = f.Close(); err != nil {
 		return err
 	}
-	if err = os.Rename(tmp, path); err != nil {
+	if err = replaceFile(tmp, path); err != nil {
 		return err
 	}
 	return syncDir(dir)
