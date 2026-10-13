@@ -47,8 +47,14 @@ func TestFramesCarryDescriptors(t *testing.T) {
 	}
 	defer pr.Close()
 	defer pw.Close()
-	go func() { _ = launcher.NewConn(a).WriteFrame([]byte(`{"op":"x"}`), []*os.File{pw}) }()
+	// The writer reads the descriptor of pw: it ends before pw is closed.
+	written := make(chan struct{})
+	go func() {
+		defer close(written)
+		_ = launcher.NewConn(a).WriteFrame([]byte(`{"op":"x"}`), []*os.File{pw})
+	}()
 	frame, files, err := launcher.NewConn(b).ReadFrame()
+	<-written
 	if err != nil || string(frame) != `{"op":"x"}` || len(files) != 1 {
 		t.Fatalf("ReadFrame = %q, %v, %v", frame, files, err)
 	}
@@ -77,10 +83,17 @@ func TestFramesRefuseTooManyDescriptors(t *testing.T) {
 		defer w.Close()
 		fs = append(fs, r)
 	}
-	go func() { _ = launcher.NewConn(a).WriteFrame([]byte(`{}`), fs) }()
+	// The writer reads the descriptors of fs: it ends before the deferred
+	// Close calls run.
+	written := make(chan struct{})
+	go func() {
+		defer close(written)
+		_ = launcher.NewConn(a).WriteFrame([]byte(`{}`), fs)
+	}()
 	if _, _, err := launcher.NewConn(b).ReadFrame(); err == nil {
 		t.Error("five descriptors accepted")
 	}
+	<-written
 }
 
 func TestPeerPolicy(t *testing.T) {
