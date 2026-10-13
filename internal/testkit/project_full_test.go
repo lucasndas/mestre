@@ -24,9 +24,10 @@ func TestNewProjectFullSuiteMakesRealCommit(t *testing.T) {
 	if a.Git != nil {
 		t.Fatal("full-suite copy still uses the fake git")
 	}
-	log := testkit.ProjectGit(t, a.Dir, "log", "--format=%an <%ae>|%aI|%cI|%s", testkit.ProjectBranch)
-	// ProjectCommitDate is 2026-01-01T00:00:00Z; git prints UTC as +00:00.
-	want := "Mestre Treino <treino@example.invalid>|2026-01-01T00:00:00+00:00|2026-01-01T00:00:00+00:00|chore: initial commit"
+	// Unix timestamps: the ISO form of UTC differs between git versions
+	// (+00:00 in 2.43, Z in newer ones). 1767225600 is 2026-01-01T00:00:00Z.
+	log := testkit.ProjectGit(t, a.Dir, "log", "--format=%an <%ae>|%at|%ct|%s", testkit.ProjectBranch)
+	want := "Mestre Treino <treino@example.invalid>|1767225600|1767225600|chore: initial commit"
 	if got := strings.TrimSpace(log); got != want {
 		t.Fatalf("git log = %q, want %q", got, want)
 	}
