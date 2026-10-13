@@ -16,8 +16,10 @@ linters:
     forbidigo:
       analyze-types: true # also catches an aliased time import
       forbid:
-        - pattern: ^time\.(Sleep|Now|After|NewTimer|NewTicker|AfterFunc|Since)$
+        - pattern: ^time\.(Sleep|Now|After|NewTimer|NewTicker|AfterFunc|Since|Until|Tick)$
           msg: use the injectable clock in pkg/clock (docs/qualidade/testes.md)
+        - pattern: ^context\.(WithTimeout|WithTimeoutCause|WithDeadline|WithDeadlineCause)$
+          msg: use clock.WithTimeout from pkg/clock, driven by the injectable clock (docs/qualidade/testes.md)
     depguard:
       rules:
         no-testkit-in-production:

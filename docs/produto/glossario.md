@@ -22,9 +22,11 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Motor | A parte invisível do Mestre, sempre ligada, que faz o trabalho; fechar o navegador não a interrompe. | [visão geral](../arquitetura/visao-geral.md) |
 | Guilda | O grupo de todas as máquinas com o Mestre instalado, que trabalham juntas. | [Guilda](../guilda/guilda.md) |
 | Cidadela | A máquina no comando da Guilda: guarda o estado, serve o painel e roda o Grão-Mestre. Só há uma por vez. | [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
-| Torre | Cada outra máquina da Guilda: roda personagens, guarda uma cópia do estado e vigia a Cidadela. | [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
+| Torre | Cada outra máquina da Guilda: roda personagens, guarda uma cópia do estado e vigia a Cidadela; pode assumir o comando. | [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
 | Ficha da máquina | O que uma máquina tem: sistema, tela, provedores logados, navegador, CPU, memória e GPU. | [ficha da máquina](../guilda/ficha-da-maquina.md) |
 | Época | O número que diz qual Cidadela vale; sobe a cada troca, e ordens de época antiga são ignoradas. | [Cidadela e Torres](../guilda/cidadela-e-torres.md#época-e-fencing) |
+| Cidadela suspensa | Cidadela que não conseguiu confirmar a época: não age para fora e manda o painel para a Cidadela atual. | [Cidadela e Torres](../guilda/cidadela-e-torres.md#cidadela-suspensa) |
+| Máquina excluída | Máquina que o Dono deixou sem segredos: não guarda o cofre e nunca vira Cidadela. | [Guilda](../guilda/guilda.md#máquina-excluída) |
 | Guardião | Pequeno serviço em cada máquina que vigia o motor dela e o conserta quando ele falha. | [Guardião](../autocura/guardiao.md) |
 | Página reserva | Página mínima servida pelo Guardião para ver o status e aprovar curas quando a Cidadela está fora do ar. | [página reserva](../autocura/pagina-reserva.md) |
 | Modo máquina única | A Guilda com uma máquina só: se ela cair inteira, ninguém de fora percebe. | [camadas](../autocura/camadas.md#modo-máquina-única) |
@@ -33,7 +35,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Grão-Mestre | O agente chefe do workspace: o único que conversa com os usuários e cuida do GitHub. | [Grão-Mestre](../orquestracao/grao-mestre.md) |
 | Mesa | Um pedido em andamento: uma branch própria ligada a um épico, com seu Mestre e seu canvas. | [mesas](../orquestracao/mesas.md) |
 | Épico | A issue do GitHub que representa uma mesa. | [ADR 0015](../decisoes/0015-epico-como-rotulo.md) |
-| Espelho | Cópia do repositório guardada na Cidadela, de onde saem as branches das mesas. | [mesas](../orquestracao/mesas.md) |
+| Espelho | Cópia do repositório em cada máquina (a da Cidadela é a principal), de onde saem as branches das mesas. | [mesas](../orquestracao/mesas.md) |
 | Mestre da mesa | O agente que coordena o time de uma mesa e presta contas ao Grão-Mestre. | [Mestre da mesa](../orquestracao/mestre-da-mesa.md) |
 | Personagem | Um agente de IA (ou terminal) trabalhando numa mesa, mostrado no canvas. | [personagens](../orquestracao/personagens.md) |
 | Terminal simples | Um terminal sem agente (um shell), criado a partir de uma base. | [personagens](../orquestracao/personagens.md) |
@@ -65,5 +67,5 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Regra permanente | Decreto que vale daqui pra frente, até ser revogado ou expirar. | [decretos](../telegram/decretos.md#tipos) |
 | Aprovação | Pedido para liberar uma ação; o Grão-Mestre decide ou pergunta aos usuários. | [fluxo de aprovação](../aprovacoes/fluxo.md) |
 | Nível | O que um usuário pode fazer no Mestre: Dono, Administrador, Aprovador ou Observador. | [usuários e níveis](../telegram/usuarios-e-niveis.md) |
-| Cofre | Lugar criptografado da Cidadela onde ficam os segredos; os agentes nunca o leem. | [cofre](../plataforma/cofre.md) |
+| Cofre | Lugar criptografado onde ficam os segredos; só a Cidadela o abre, e os agentes nunca o leem. | [cofre](../plataforma/cofre.md) |
 | Em criação | O GitHub App desta classe ainda não foi criado e instalado; as ações saem com o App "Mestre". | [criação de Apps](../github/criacao-de-apps.md#estados-de-um-app) |

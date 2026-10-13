@@ -12,13 +12,15 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `machine.heartbeat` | T→C | não | `cpu_pct`, `mem_pct`, `disk_free_bytes`, `terminals`, `replica_lag_s` | — |
 | `machine.sheet` | T→C | sim | os campos da ficha da máquina que mudaram | — |
 | `guild.epoch` | ambos | sim | pedido sem campos; resposta com a certidão de época atual (`guild_id`, `epoch`, `citadel_machine_id`, `approved_by`, `approval_id`, `issued_at`, `signature`) | ([certidão](../guilda/replicacao.md#certidão-de-época)) |
-| `guild.config` | C→T | sim | máquinas da Guilda (`machine_id`, nome, endereços, prioridade, `can_be_citadel`), lista de revogados | — |
-| `guild.leave` | ambos | sim | C→T: a máquina foi removida (apagar réplica, cofre e configuração); T→C: pedido de saída, `reason` (`uninstall`) | ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
+| `guild.config` | C→T | sim | máquinas da Guilda (`machine_id`, nome, instância, endereços, prioridade, `excluded`), lista de revogados, fuso da Guilda | — |
+| `guild.leave` | ambos | sim | C→T: a máquina foi removida (apagar réplica, arquivos, cofre e configuração); T→C: pedido de saída, `reason` (`uninstall`) | ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
 | `replica.ack` | T→C | não | `lsn` aplicado | — (os registros vão em frames `0x03`; [replicação](../guilda/replicacao.md)) |
 | `replica.resync` | T→C | sim | `from_lsn`; pede de novo a partir dali, ou cópia completa sem `from_lsn` | `xfer.begin` com `kind: db-snapshot` ou frames `0x03` |
-| `vault.replica` | C→T | sim | só para candidatas: chave do cofre e chave da CA, cifradas para a máquina | — ([cofre só nas candidatas](../guilda/replicacao.md#cofre-só-nas-candidatas)) |
-| `vault.drop` | C→T | sim | apagar a cópia do cofre e as tabelas do cofre da réplica | recibo `vault.dropped` |
-| `citadel.handover` | C→T | sim | troca planejada: `target_machine_id`, `last_lsn`, `approval_id` | a candidata promove-se e responde com a certidão nova ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)) |
+| `vault.replica` | C→T | sim | para toda máquina não excluída: a chave de dados do cofre, cifrada para a máquina, e o envelope | — ([cofre em toda máquina](../guilda/replicacao.md#cofre-em-toda-máquina)) |
+| `vault.request` | T→C | sim | `agent_id`, `secret`, `purpose`: credencial pedida no momento do uso; a Cidadela confere a classe e registra | a credencial, só em memória, ou `error` `forbidden` |
+| `vault.drop` | C→T | sim | máquina excluída: apagar a chave, o envelope e as tabelas do cofre da réplica | recibo `vault.dropped` |
+| `citadel.handover` | C→T | sim | troca planejada: `target_machine_id`, `last_lsn`, `approval_id` | a máquina escolhida promove-se pela trava e responde com a certidão nova ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)) |
+| `terminal.adopt` | T→C | sim | a antiga Cidadela, rebaixada: terminais dela que a nova não retomou | a nova Cidadela os adota ou manda encerrar ([volta da antiga](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)) |
 | `ack` | ambos | — | `status`: `ok` \| `duplicate` \| `error` | — |
 | `error` | ambos | — | `code`, `message`, `retryable` | — |
 | `terminal.open` | C→T | sim | `terminal_id`, `agent_id`, `command`, `args[]`, `env {}`, `cwd`, `adapter`; no Operador do PC, `operator {session_id, ends_at}` (a máquina cria o terminal pelo processo da sessão) | `terminal.opened {terminal_id, pid}` ou `error` |
@@ -52,9 +54,10 @@ Conexão própria (`/ws/guardian`), com versão própria ([conexão do Guardião
 | `guardian.hello` / `guardian.welcome` | G→C / C→G | abertura e versão do protocolo do Guardião, com a certidão de época |
 | `guardian.heartbeat` | G→C | sinal de vida e estado do motor local visto pelo Guardião |
 | `guardian.action` / `guardian.result` | C→G / G→C | só ações da [lista fechada](../autocura/guardiao.md) |
-| `guardian.replica` | C→G | cópia criptografada do token do bot, da lista de usuários (com o necessário para o login da página reserva) e do estado "travado"; a **única** cópia de usuários que serve login ([cofre](../plataforma/cofre.md)) |
+| `guardian.replica` | C→G | a [réplica para os Guardiões](../plataforma/cofre.md#réplica-para-os-guardiões) (conteúdo e regras lá; para a máquina excluída, só a lista de usuários); a **única** cópia de usuários que serve login |
 | `cert.renew` / `cert.issued` | G→C / C→G | renovar o certificado do Guardião da máquina (`role`: `guardiao`), inclusive quando os IPs da máquina mudam ([credenciais](../guilda/guilda.md#credenciais)) |
-| `citadel.promote` | Guardião da Torre condutora → Guardião da candidata | ordem de promoção depois da aprovação do Dono, com `approval_id` e a certidão anterior; se a candidata é outra máquina, vai pela porta do Guardião dela (7446), com mTLS ([Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção)) |
+| `citadel.promote` | Guardião da Torre condutora → Guardião da máquina escolhida | ordem de promoção depois da aprovação do Dono, com `approval_id` e a certidão anterior; se a escolhida é outra máquina, vai por `wss /guardian/promote` na 7446 dela, com mTLS ([portas](../arquitetura/componentes.md#portas), [promoção](../guilda/cidadela-e-torres.md#promoção)) |
+| `lease` | motor → Guardião da mesma máquina, pelo canal local | concessão renovada a cada 30 s, com a época confirmada na trava; sem ela, o Guardião deixa de publicar `mestre.local` e de arbitrar em até 60 s ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)) |
 | `guardian.telegram` | ambos | mensagens do [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) |
 
 ## Códigos de erro

@@ -4,7 +4,7 @@
 
 Guia para quem usa. O que a remoção apaga por dentro está em [instalação e versões](../plataforma/instalacao-e-atualizacao.md#remoção-mestre-uninstall); onde ficam os dados, em [persistência](../arquitetura/persistencia.md#arquivos).
 
-**Regra geral:** `mestre uninstall` remove serviços, a conta dos agentes no Windows, regras de firewall e programas, mas **mantém os dados** (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo. Assim dá para reinstalar sem perder nada.
+**Regra geral:** `mestre uninstall` remove serviços, a conta dos agentes no Windows, regras de firewall e programas. Numa **Torre**, apaga também a réplica (banco, arquivos e espelhos) e a cópia do cofre, porque tudo isso está na Cidadela. Na **Cidadela sozinha**, mantém os dados (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo, para dar para reinstalar sem perder nada.
 
 ## Antes de começar
 
@@ -16,11 +16,11 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 1. Na Torre, rode `mestre uninstall` como administrador (PowerShell **como administrador** no Windows; `sudo mestre uninstall` no Ubuntu, seguido de `sudo apt remove mestre`). Ele pede antes a saída da Guilda à Cidadela; com a Cidadela fora, desinstala assim mesmo e o painel mostra a máquina como "sumida": remova-a no painel ([remover uma máquina](entrar-na-guilda.md#remover-uma-máquina)).
 2. Isso para e remove os serviços `mestre`, `mestre-guardiao` e `mestre-update`, a conta `mestre-agente` e o perfil dela (no Windows), as regras de firewall do Mestre e os programas. Os logins dos perfis de conta feitos por essa conta deixam de valer: numa reinstalação no Windows, refaça o login de cada perfil ([primeiro acesso](primeiro-acesso.md#4-configurar-os-perfis-de-conta)).
 3. Confira: `Get-Service mestre*` e `Get-LocalUser mestre-agente` (Windows) ou `systemctl status mestre` (Ubuntu) não acham nada.
-4. Os dados ficam em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
+4. A réplica e a cópia do cofre já foram apagadas. O que sobra (logs, worktrees locais, perfis de conta) fica em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
 
 ## Remover a Cidadela
 
-- **Com Torres na Guilda:** o `mestre uninstall` recusa. Antes, passe o comando a uma Torre candidata pelo painel ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)); a antiga vira Torre e sai como na seção acima. Para acabar com a Guilda inteira, remova todas as Torres primeiro.
+- **Com Torres na Guilda:** o `mestre uninstall` recusa. Antes, **passe a Cidadela** a uma Torre não excluída e na rede local, pelo painel, com o PIN ([Cidadela e Torres](../guilda/cidadela-e-torres.md)); a antiga vira Torre e sai como na seção acima. Para acabar com a Guilda inteira, remova todas as Torres primeiro.
 - **Sozinha:** na máquina, como administrador, `sudo mestre uninstall` e depois `sudo apt remove mestre` (Ubuntu), ou `mestre uninstall` num PowerShell de administrador, ou "Desinstalar" em Aplicativos instalados (Windows). A Guilda acaba.
 - Isso remove os mesmos serviços, conta e regras de uma Torre. Confira como na seção acima.
 - Os dados ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos): cofre, banco, espelhos, worktrees, anexos, perfis de conta dos provedores e a CA. Se não vai reinstalar, peça para apagar tudo ou apague essas pastas. Sem a chave do cofre, os segredos guardados não podem mais ser lidos.

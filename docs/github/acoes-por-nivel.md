@@ -56,9 +56,15 @@ Para um pedido sobre a issue `#N`:
 
 A recusa diz o motivo em texto simples (ex.: "a issue #57 pertence ao épico #40, de outra mesa; peça ao Grão-Mestre").
 
+### Marcador de operação
+
+- Toda criação no GitHub (issue, sub-issue, comentário, PR, review) leva um **marcador de operação** com um uuid gerado antes do envio: `<!-- mestre:op=<uuid> -->` no fim do corpo (comentário HTML, invisível na página). O que não tem corpo (ligação de sub-issue, rótulo, merge) tem o uuid gravado em `github_objects` antes do envio.
+- O mesmo uuid acompanha a operação na fila de saída e no reenvio: antes de criar, o motor procura o marcador no GitHub e, se ele já existe, só registra o objeto, sem criar de novo.
+- Na troca de Cidadela, a nova Cidadela usa os marcadores para reconciliar com o GitHub antes de qualquer ação externa ([regras da troca](../guilda/cidadela-e-torres.md)); o que tem marcador da própria Guilda nunca vira evento externo ([eventos](eventos.md#deduplicação)).
+
 ### Envio pelo espelho
 
-- Só o motor da Cidadela envia para o GitHub, sempre a partir do espelho da Cidadela e com a época atual da Guilda confirmada ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Antes de enviar, ele traz os commits dos worktrees da mesa em outras máquinas ([mesas](../orquestracao/mesas.md)).
+- Só o motor da Cidadela envia para o GitHub, sempre a partir do espelho da Cidadela e com a época confirmada na trava ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)). Antes de enviar, ele traz os commits dos worktrees da mesa em outras máquinas ([mesas](../orquestracao/mesas.md)).
 - O envio acontece quando a mesa pede (`mestre pr open|update`) ou o Grão-Mestre manda. Usa um token de instalação do App de quem pediu, passado ao git só durante o comando e nunca gravado em configuração.
 - Antes de enviar, o motor confere se a branch altera `.github/workflows/` ([workflows](identidades-e-apps.md#workflows)).
 
@@ -84,7 +90,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - Pedido fora do épico, rótulo `epico` mexido pela mesa ou push forçado fora das regras: recusado com motivo, registrado na auditoria.
 - GitHub fora do ar ou limite de cota: o pedido falha com o motivo; o motor não repete sozinho ações que mudam dados.
 - Mais de 100 sub-issues num pai: recusado com explicação.
-- **Época:** toda ação no GitHub (envio, comentário, review, merge, criação de issue) leva a época da Guilda; uma Torre ou uma Cidadela suspensa (época não confirmada ou menor que a gravada no banco) não faz nenhuma ação e registra a recusa na auditoria. Assim duas Cidadelas nunca agem no mesmo repositório.
+- **Época:** toda ação no GitHub (envio, comentário, review, merge, criação de issue) só sai depois de a Cidadela confirmar na trava que a época dela é a mais recente ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); uma Torre ou uma Cidadela suspensa não faz nenhuma ação e registra a recusa na auditoria. Assim duas Cidadelas nunca agem no mesmo repositório.
 
 ## Critérios de aceite
 
@@ -97,6 +103,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - **CA-GH-ACOES-07** · *rápida* — **Dado** o GitHub falso recusando um push por regra de commit assinado, **quando** o motor recebe a recusa, **então** gera uma mensagem ao Grão-Mestre com o motivo e não tenta outro caminho.
 - **CA-GH-ACOES-08** · *pesada* — **Dado** uma mesa trabalhando, **quando** o épico chega ao fim, **então** o GitHub (dublê) mostra a árvore épico → issues → sub-issues e o PR aberto pela mesa e aprovado pelo Grão-Mestre (MVP-5).
 - **CA-GH-ACOES-09** · *completa* — **Dado** uma Cidadela antiga que volta depois de uma promoção (época dela menor que a da Guilda), **quando** um pedido pendente dela tentaria comentar numa issue, **então** o GitHub falso não recebe nenhuma chamada, a máquina se rebaixa a Torre e a recusa fica na auditoria.
+- **CA-GH-ACOES-10** · *rápida* — **Dado** uma criação de comentário cujo envio caiu depois de chegar ao GitHub falso, **quando** a fila de saída a reenvia com o mesmo uuid, **então** o motor acha `<!-- mestre:op=<uuid> -->` no comentário existente, só o registra em `github_objects` e o GitHub falso tem um comentário só.
 
 ## Depende de
 

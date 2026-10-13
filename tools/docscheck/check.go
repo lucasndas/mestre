@@ -264,8 +264,10 @@ func (c *checker) checkHeader(d *doc) {
 	switch {
 	case err != nil:
 		c.errf(d.path, 3, ckHeader, "data %q inválida; use AAAA-MM-DD", m[3])
-	case date.Format(time.DateOnly) > c.today.Format(time.DateOnly):
-		c.errf(d.path, 3, ckHeader, "data %s está no futuro (hoje é %s)", m[3], c.today.Format(time.DateOnly))
+	case date.Format(time.DateOnly) > c.today.UTC().Format(time.DateOnly):
+		// Header dates are UTC days: a document dated today in UTC is not
+		// in the future on a machine still in yesterday's local day.
+		c.errf(d.path, 3, ckHeader, "data %s está no futuro (hoje é %s em UTC)", m[3], c.today.UTC().Format(time.DateOnly))
 	}
 }
 

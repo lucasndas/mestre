@@ -43,7 +43,7 @@ Aceita, 2026-10-12. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-gu
 ## Decisão
 
 - **Mesa = um git worktree com a sua branch**, ligado a uma issue do GitHub (o épico).
-- A Cidadela mantém um **espelho local** (`--bare`, sem cópia de trabalho) de cada workspace, copiado às Torres candidatas. O clone principal do Grão-Mestre e os worktrees das mesas na Cidadela saem dele.
+- A Cidadela mantém um **espelho local** (`--bare`, sem cópia de trabalho) de cada workspace, com réplica em cada Torre. O clone principal do Grão-Mestre sai do espelho da Cidadela, e os worktrees das mesas de cada máquina saem do espelho local dela ([worktrees na troca](../guilda/cidadela-e-torres.md#worktrees-e-espelho-na-troca)).
 - **Mesa em outra máquina:** cada máquina que roda agentes de uma mesa tem o **próprio worktree** da mesma branch. A sincronização é feita com o espelho da Cidadela, nunca direto com o GitHub ([ADR 0013](0013-sincronizacao-de-worktrees-por-git-bundle.md)).
 - **Onde estão os detalhes:**
   - Ciclo de vida, nome da branch, remoção do worktree e cancelamento: [mesas](../orquestracao/mesas.md).

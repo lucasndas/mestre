@@ -1,6 +1,6 @@
 # Administração no painel
 
-> **Assunto:** telas de administração: decretos, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, Guilda e saúde das máquinas, segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-13
+> **Assunto:** telas de administração: decretos, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, Guilda e saúde das máquinas (excluir máquina, passar a Cidadela, fuso da Guilda), segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -39,10 +39,10 @@ Uma linha por máquina da Guilda, atualizada em tempo real, com a época atual n
 | Coluna | Conteúdo |
 |---|---|
 | Papel | Cidadela ou Torre; "Cidadela suspensa" quando for o caso |
-| Estado | conectada, sem sinal (desde quando), removida; selo do incidente aberto, se houver |
+| Estado | conectada, sem sinal (desde quando), removida; "fora da rede local" quando entrou por endereço; selo do incidente aberto, se houver |
 | Motor e Guardião | versão de cada um, protocolo negociado, último heartbeat de cada conexão |
 | Ficha da máquina | sistema, interface gráfica, provedores logados por perfil, navegador e Operador do PC (e, se indisponível, o motivo), CPU, memória, GPU, transcrição ([ficha da máquina](../guilda/ficha-da-maquina.md)) |
-| Pode ser Cidadela | marca do Dono, com PIN; só as marcadas recebem a cópia do cofre (pendência P2 em [replicação](../guilda/replicacao.md)) e o estado da réplica do banco |
+| Excluída | marca do Dono, com PIN: a máquina excluída não recebe o cofre nem o envelope e fica fora da troca de Cidadela ([replicação](../guilda/replicacao.md)); também o estado da réplica (banco, arquivos e, se não excluída, cofre) |
 | Carga | CPU, memória, disco livre, terminais rodando |
 | Agentes | personagens rodando na máquina, com mesa e estado (link para o canvas) |
 | Autocura | ações de cura recentes (últimos 7 dias), com resultado ([camadas](../autocura/camadas.md#anti-loop-e-auditoria)) |
@@ -50,7 +50,13 @@ Uma linha por máquina da Guilda, atualizada em tempo real, com a época atual n
 | Prioridade | prioridade da máquina para ser a Torre condutora e para propor a promoção (editável pelo Dono) ([camadas](../autocura/camadas.md#eleição-da-torre-condutora)) |
 | Página reserva | endereço da [página reserva](../autocura/pagina-reserva.md) da máquina (no modo máquina única, a da Cidadela) |
 
-Ações da tela: aceitar ou recusar uma máquina que pediu para entrar na Guilda e remover uma máquina (só o Dono, com PIN; [Guilda](../guilda/guilda.md)); marcar ou desmarcar "pode ser Cidadela"; aplicar uma correção oferecida pelo checklist; ativar ou desativar a transcrição numa máquina ([Whisper](../plataforma/instalacao-e-atualizacao.md#whisper)); pedir ao Guardião as ações da [lista fechada](../autocura/guardiao.md#lista-fechada-de-ações) (status, logs, reiniciar, checklist).
+Ações da tela: aceitar ou recusar uma máquina que pediu para entrar na Guilda, remover uma máquina, **excluir** uma máquina ou tirar a exclusão, **passar a Cidadela** a uma máquina online (troca planejada) e responder ao pedido de promoção, tudo só o Dono, com PIN ([Guilda](../guilda/guilda.md), [Cidadela e Torres](../guilda/cidadela-e-torres.md)); mudar a prioridade (Dono); aplicar uma correção oferecida pelo checklist; ativar ou desativar a transcrição numa máquina ([Whisper](../plataforma/instalacao-e-atualizacao.md#whisper)); pedir ao Guardião as ações da [lista fechada](../autocura/guardiao.md#lista-fechada-de-ações) (status, logs, reiniciar, checklist).
+
+- **Promoção recusada:** passar a Cidadela ou promover uma máquina excluída ou **fora da rede local** é recusado com o motivo, no painel e no Telegram: ninguém da Guilda alcança essa máquina pelo `mestre.local`.
+
+### Fuso da Guilda
+
+O fuso da Guilda (padrão: o do sistema da máquina que criou a Guilda) fica no banco da Guilda e só o Dono o muda, nesta tela. Vale para o backup diário às 03:00 ([persistência](../arquitetura/persistencia.md#backup)), a virada do dia dos [limites de uso](../plataforma/limites-de-uso.md), as validades dos [decretos](../telegram/decretos.md) e, quando o workspace não tem um próprio, os [rituais](../orquestracao/rituais.md). Não muda numa troca de Cidadela.
 
 ### Operador do PC
 
@@ -86,7 +92,8 @@ Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capac
 - **CA-ADM-07** · *rápida* — **Dado** uma política com erro de formato, **quando** salvo, **então** nada muda e o erro aponta a linha.
 - **CA-ADM-09** · *rápida* — **Dado** uma sessão do Operador com capturas, **quando** um Administrador chama a API de capturas, **então** recebe a recusa e nenhum arquivo é decifrado; **quando** o Dono abre a sessão, **então** vê as capturas em ordem e a abertura entra na auditoria.
 - **CA-ADM-08** · *rápida* — **Dado** uma Guilda só com a Cidadela, **quando** a tela carrega, **então** aparece a faixa do modo máquina única; **dado** uma Torre aceita na Guilda, **então** ela some.
-- **CA-ADM-10** · *rápida* — **Dado** um Administrador, **quando** chama a API de marcar uma máquina como "pode ser Cidadela" ou de mudar a prioridade, **então** recebe a recusa; **dado** o Dono sem PIN, **então** nada muda; com PIN, a marca é gravada e a linha mostra a réplica do cofre sendo preparada.
+- **CA-ADM-10** · *rápida* — **Dado** um Administrador, **quando** chama a API de excluir uma máquina, de passar a Cidadela ou de mudar a prioridade, **então** recebe a recusa; **dado** o Dono sem PIN, **então** nada muda; com PIN, a exclusão é gravada e a linha mostra o cofre e o envelope apagados naquela máquina.
+- **CA-ADM-11** · *rápida* — **Dado** uma Torre que entrou por endereço (fora da rede local) e outra excluída, **quando** o Dono pede, com PIN, para passar a Cidadela a cada uma, **então** as duas são recusadas com o motivo e nada muda; **dado** uma Torre na rede local e não excluída, **então** a troca planejada começa.
 
 ## Depende de
 

@@ -16,7 +16,7 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser cri
   - Cada conta pode registrar **até 100 Apps**.
   - O nome tem **até 34 caracteres** e precisa ser **único no GitHub inteiro**.
 - As classes nascem sob demanda, criadas pelos usuários, pelo Grão-Mestre ou pelos Mestres de mesa.
-- O Mestre não tem interface gráfica em nenhuma máquina ([ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md)).
+- O Mestre não tem interface gráfica em nenhuma máquina ([ADR 0020](0020-linux-e-windows-em-qualquer-papel.md)).
 
 ## Opções consideradas
 
@@ -45,7 +45,7 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser cri
   - O link vai ao Dono pelo Telegram e aparece no painel. Ele abre no próprio navegador, clica em "Criar" e depois em "Instalar".
   - Os redirecionamentos do manifesto voltam ao painel da Cidadela, que troca o código pela chave privada, guarda no cofre e segue sozinho.
   - Os Apps fixos "Grão-Mestre" e "Mestre" seguem o mesmo fluxo no primeiro acesso.
-- **Por que a opção 4 saiu:** a decisão de não ter interface gráfica em lugar nenhum ([ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md)) tirou o processo da sessão do Windows, onde o navegador dedicado rodava; e o fluxo por link já era o caminho de reserva da opção 4. Ficou o caminho mais simples, que vale em qualquer sistema.
+- **Por que a opção 4 saiu:** a decisão de não ter interface gráfica em lugar nenhum ([ADR 0020](0020-linux-e-windows-em-qualquer-papel.md)) tirou o processo da sessão do Windows, onde o navegador dedicado rodava; e o fluxo por link já era o caminho de reserva da opção 4. Ficou o caminho mais simples, que vale em qualquer sistema.
 - **Enquanto o App não existe:** as ações da classe saem com o App "Mestre" e a classe na assinatura.
 - **Onde estão os detalhes:**
   - Fluxo, manifesto e link: [criação de Apps](../github/criacao-de-apps.md).

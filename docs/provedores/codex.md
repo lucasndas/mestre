@@ -73,8 +73,8 @@ No Codex 0.162.1, com `-s workspace-write` e `network_access=false`, o `connect(
 ### Contas múltiplas
 
 - `CODEX_HOME=<pasta do perfil>` (a pasta precisa existir): configuração, `auth.json`, sessões e logs próprios. Perfil de conta: [bases e fichas](../orquestracao/bases-e-fichas.md).
-- No `config.toml` do perfil: `cli_auth_credentials_store = "file"`, para os perfis não disputarem o chaveiro do sistema. Confirmado no Linux: a credencial fica em `$CODEX_HOME/auth.json`, modo `0600`.
-- **Instalação:** o pacote completo da versão (`bin/`, `codex-path/`, `codex-resources/`, `codex-package.json`); o binário `codex` solto não funciona ([instalação](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores)).
+- No `config.toml` do perfil: `cli_auth_credentials_store = "file"`, sempre explícito, para os perfis não disputarem o chaveiro do sistema. Confirmado no Linux e no Windows (spike): a credencial fica em `CODEX_HOME/auth.json` (no Linux, modo `0600`); no Windows o arquivo já é o padrão sem `config.toml`, mas a linha fica explícita para não depender do padrão.
+- **Instalação:** o pacote completo da versão (`bin/`, `codex-path/`, `codex-resources/`, `codex-package.json`); o binário `codex` solto não funciona, também no Windows, onde o spike confirmou que o `codex.exe` precisa da pasta inteira da versão (cerca de 450 MB, com `codex-path\rg.exe` e `codex-resources\`) ([instalação](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores)).
 - **Escritas fora do perfil** (Linux): `/tmp/codex-daemon-<uid>`, `/tmp/codex-bwrap-synthetic-mount-targets-<uid>` e `/var/tmp/etilqs_*` (temporários do SQLite); limpeza em [personagem](../sessao-zero/personagem.md#variáveis-de-ambiente).
 - Login, feito como `mestre-agente` na configuração inicial do perfil: `codex login --device-auth` (o Dono abre o link e digita o código no próprio navegador); `codex login` (retorno em `localhost:1455`) só serve com o navegador na mesma máquina. No Windows, `USERPROFILE` é o do perfil carregado do `mestre-agente` ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)). Verificar: `codex login status` sai com 0 quando logado.
 

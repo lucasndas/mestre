@@ -4,7 +4,8 @@
 // functions are in .golangci.yml; this command keeps only
 //
 //   - subtests: every func literal passed to t.Run calls t.Parallel
-//     (paralleltest does not report subtests).
+//     (paralleltest does not report subtests), in TestXxx functions and in
+//     any helper that takes a *testing.T.
 //
 // It runs as TestCodeRules and alone as `go run ./tools/codecheck`.
 package main
@@ -76,12 +77,13 @@ func Check(fsys fs.FS) ([]Issue, error) {
 }
 
 // checkSubtests requires t.Parallel() in every func literal passed to t.Run
-// inside a TestXxx(t *testing.T).
+// inside a function or method with a *testing.T parameter: TestXxx(t
+// *testing.T) and helpers such as runCases(t *testing.T, cases []c).
 func checkSubtests(fset *token.FileSet, p string, f *ast.File) []Issue {
 	var issues []Issue
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Recv != nil || !strings.HasPrefix(fn.Name.Name, "Test") || fn.Body == nil || testingParam(fn.Type) == "" {
+		if !ok || fn.Body == nil || !hasTestingParam(fn.Type) {
 			continue
 		}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
@@ -111,18 +113,36 @@ func testingParam(ft *ast.FuncType) string {
 	if ft.Params == nil || len(ft.Params.List) != 1 || len(ft.Params.List[0].Names) != 1 {
 		return ""
 	}
-	star, ok := ft.Params.List[0].Type.(*ast.StarExpr)
-	if !ok {
-		return ""
-	}
-	sel, ok := star.X.(*ast.SelectorExpr)
-	if !ok || sel.Sel.Name != "T" {
-		return ""
-	}
-	if id, ok := sel.X.(*ast.Ident); !ok || id.Name != "testing" {
+	if !isTestingT(ft.Params.List[0].Type) {
 		return ""
 	}
 	return ft.Params.List[0].Names[0].Name
+}
+
+// hasTestingParam says whether any parameter is a *testing.T.
+func hasTestingParam(ft *ast.FuncType) bool {
+	if ft.Params == nil {
+		return false
+	}
+	for _, field := range ft.Params.List {
+		if isTestingT(field.Type) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTestingT(e ast.Expr) bool {
+	star, ok := e.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "T" {
+		return false
+	}
+	id, ok := sel.X.(*ast.Ident)
+	return ok && id.Name == "testing"
 }
 
 // callsParallel looks for <t>.Parallel() among the top-level statements.

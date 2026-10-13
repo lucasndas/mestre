@@ -1,4 +1,4 @@
-//go:build full && linux
+//go:build spike && linux
 
 package main
 

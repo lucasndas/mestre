@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Um workspace representa **um repositório do GitHub** (na conta pessoal do usuário) dentro do Mestre. Ele é o nível mais alto da orquestração: tem exatamente um [Grão-Mestre](grao-mestre.md), um espelho local do repositório na Cidadela e as [mesas](mesas.md) abertas nele. Termos em [glossário](../produto/glossario.md).
+Um workspace representa **um repositório do GitHub** (na conta pessoal do usuário) dentro do Mestre. Ele é o nível mais alto da orquestração: tem exatamente um [Grão-Mestre](grao-mestre.md), um espelho local do repositório (o principal na Cidadela, réplicas nas Torres) e as [mesas](mesas.md) abertas nele. Termos em [glossário](../produto/glossario.md).
 
 ## Comportamento
 
@@ -22,17 +22,17 @@ O motor cria e atualiza essa árvore no GitHub com o App de quem pediu ([identid
 
 ### Espelho e clone principal (na Cidadela)
 
-Pastas padrão na Cidadela (`<dados>` é a pasta de dados do serviço, ver [persistência](../arquitetura/persistencia.md)):
+Pastas padrão (`<dados>` é a pasta de dados da instância, ver [persistência](../arquitetura/persistencia.md)); as mesmas em toda máquina:
 
 | Caminho | O que é |
 |---|---|
-| `<dados>/workspaces/<slug>/espelho.git` | **espelho**: clone sem cópia de trabalho (`--bare`) do repositório, fonte de todas as cópias |
-| `<dados>/workspaces/<slug>/principal/` | **clone principal**: worktree do espelho na branch principal; pasta de trabalho do Grão-Mestre e fonte de `.mestre/` |
-| `<dados>/workspaces/<slug>/mesas/<mesa>/` | worktrees das mesas na Cidadela ([mesas.md](mesas.md)) |
+| `<dados>/workspaces/<slug>/espelho.git` | **espelho**: clone sem cópia de trabalho (`--bare`) do repositório; na Cidadela, o principal, fonte de todas as cópias; nas Torres, a réplica dele ([replicação](../guilda/replicacao.md)) |
+| `<dados>/workspaces/<slug>/principal/` | **clone principal**: worktree do espelho na branch principal; pasta de trabalho do Grão-Mestre e fonte de `.mestre/`; existe na Cidadela e vai às Torres como arquivos replicados |
+| `<dados>/workspaces/<slug>/mesas/<mesa>/` | worktrees das mesas nesta máquina, sempre do espelho local ([mesas.md](mesas.md)) |
 
-As Torres onde há personagens têm a própria cópia, sincronizada só pela Cidadela, através do espelho (nunca direto com o GitHub); o comportamento está em [mesas.md](mesas.md#worktree-por-máquina-e-sincronização).
+As Torres nunca falam direto com o GitHub; os commits das mesas passam sempre pela Cidadela ([mesas.md](mesas.md#worktree-por-máquina-e-sincronização)).
 
-**Troca de Cidadela:** a Torre promovida já tem o espelho de cada workspace e os arquivos da Cidadela, inclusive o `.mestre/` do clone principal (que pode ser só local), por [replicação](../guilda/replicacao.md#arquivos-e-espelhos); ela recria o clone principal a partir deles e faz um `git fetch origin` antes de qualquer outra coisa. Os worktrees das mesas voltam como descrito em [mesas.md](mesas.md#worktree-por-máquina-e-sincronização).
+**Troca de Cidadela:** o que acontece com o espelho, o clone principal e os worktrees (nada muda de caminho) está nas [regras da troca](../guilda/cidadela-e-torres.md); a nova Cidadela faz um `git fetch origin` antes de qualquer outra coisa.
 
 **Sincronização do espelho com o GitHub** (só o motor, com o token de instalação do App "Grão-Mestre", pelo `git` do sistema; [componentes](../arquitetura/componentes.md)):
 - `git clone --bare` na criação do workspace, seguido de `git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'` (o clone `--bare` não grava refspec; sem isso, um `fetch` não atualiza nada);
@@ -60,7 +60,7 @@ Cada item tem o seu documento dono; aqui só a lista do que pertence ao workspac
 | Política de aprovação | [política](../aprovacoes/politica.md) |
 | Limites de uso | [limites de uso](../plataforma/limites-de-uso.md) |
 | Prazo de retenção de branch cancelada | [mesas.md](mesas.md#cancelamento) |
-| Fuso horário dos rituais (padrão: fuso da Cidadela) | [rituais.md](rituais.md) |
+| Fuso horário dos rituais (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda)) | [rituais.md](rituais.md) |
 | Usuários com acesso | [usuários e níveis](../telegram/usuarios-e-niveis.md) |
 
 Configuração fica no banco da Cidadela; quem altera cada item pelo painel ([administração](../painel/administracao.md)) está na [tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades) (a política de aprovação, por exemplo, só o Dono).

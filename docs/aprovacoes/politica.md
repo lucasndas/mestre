@@ -32,14 +32,14 @@ Deixar o Grão-Mestre aprovar sozinho o que é seguro e obrigá-lo a perguntar n
 | `proposta_agents_md` | criar o `AGENTS.md` proposto na [sessão zero](../sessao-zero/workspace.md#análise-do-projeto-e-agentsmd-etapa-analysis); o pedido mostra o texto inteiro | nunca | Administrador |
 | `ativacao_operador` | ativar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) para uma tarefa, por um tempo | nunca; só com decreto de delegação do Dono (abaixo) | Dono, com PIN |
 | `atualizacao_mestre` | versão nova do Mestre ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) | nunca | Administrador |
-| `entrada_na_guilda` | aceitar uma instalação nova na Guilda ([Guilda](../guilda/guilda.md)) | nunca, nem por decreto | Dono, com PIN |
-| `promocao_cidadela` | promover uma Torre a Cidadela depois que a autocura da Cidadela falhou ([Cidadela e Torres](../guilda/cidadela-e-torres.md)) | nunca, nem por decreto | Dono, com PIN |
+| `entrada_na_guilda` | aceitar uma instalação nova na Guilda; expira em 1 h ([Guilda](../guilda/guilda.md#entrada-na-guilda)) | nunca, nem por decreto | Dono, com PIN |
+| `promocao_cidadela` | promover outra máquina a Cidadela quando a Cidadela não volta; só manual ([Cidadela e Torres](../guilda/cidadela-e-torres.md)) | nunca, nem por decreto | Dono, com PIN |
 
 **Pedidos "Sistema"** (`atualizacao_mestre`): criados pelo motor, não pertencem a um workspace e vão ao Dono e aos Administradores; o Grão-Mestre só recebe um evento informativo e **nunca** aprova. Padrões: quórum 1, prazo de 7 dias, sem PIN. Não aparecem no arquivo de política do workspace (abaixo).
 
 **`ativacao_operador`** é regra fixa: não aparece no arquivo de política, que não consegue mudar quem aprova nem tirar o PIN, e decreto `policy` não o alcança. Só o Dono aprova, pelo botão no Telegram ou no painel. A única forma de o Grão-Mestre aprovar é um decreto `delegation` **do Dono** com alvo `ativacao_operador` ([decretos](../telegram/decretos.md#delegação-da-ativação-do-operador)); fora do escopo, da duração ou da validade desse decreto, `approval decide` recebe `human_required`. **PIN:** a aprovação manual pelo Dono pede o PIN a cada ativação; as ativações aprovadas pelo Grão-Mestre dentro de um decreto de delegação não pedem PIN, porque ele foi exigido ao criar o decreto. Prazo do pedido: 1 h (padrão).
 
-**Pedidos da Guilda** (`entrada_na_guilda`, `promocao_cidadela`) são regra fixa, mais estrita que a do Operador: não aparecem no arquivo de política, decreto nenhum os alcança (nem `delegation`) e só o **Dono** aprova, pelo botão no Telegram ou no painel, **com PIN a cada vez**. O Grão-Mestre nunca recebe esses pedidos e `approval decide` neles sempre recebe `human_required`; Administradores também não respondem. Não pertencem a um workspace. `entrada_na_guilda` é criado pela Cidadela, com o prazo da [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda) (a forma do pedido é a pendência P1 de lá). `promocao_cidadela` é criado pelo Guardião da Torre condutora quando não há Cidadela, e chega pelo [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md); o caminho dele está em [fluxo](fluxo.md#pedidos-da-guilda).
+**Pedidos da Guilda** (`entrada_na_guilda`, `promocao_cidadela`) são regra fixa, mais estrita que a do Operador: não aparecem no arquivo de política, decreto nenhum os alcança (nem `delegation`) e só o **Dono** aprova, pelo botão no Telegram ou no painel, **com PIN a cada vez**. O Grão-Mestre nunca recebe esses pedidos e `approval decide` neles sempre recebe `human_required`; Administradores também não respondem. Não pertencem a um workspace. `entrada_na_guilda` é criado pela Cidadela e expira em 1 h, o prazo da [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). `promocao_cidadela` é criado pelo Guardião da Torre condutora quando não há Cidadela, e chega pelo [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md); o caminho dele está em [fluxo](fluxo.md#pedidos-da-guilda). **Passar a Cidadela** e **excluir máquina** seguem a mesma regra fixa, mas não são pedidos: são ações diretas do Dono, com PIN a cada vez ([fluxo](fluxo.md#pedidos-da-guilda)).
 
 Ampliar o teto do workspace não é aprovação: só por decreto ([decretos](../telegram/decretos.md)). Aprovações de cura seguem a [autocura](../autocura/camadas.md).
 
@@ -146,8 +146,5 @@ Um decreto pode mudar a política sem editar o arquivo (ex.: "pode aprovar migra
 
 ## Depende de
 
-- [Usuários e níveis](../telegram/usuarios-e-niveis.md)
-- [Workspaces](../orquestracao/workspaces.md)
-- [Permissões das classes](../classes/permissoes.md)
-- [Teto do workspace](../classes/teto-do-workspace.md)
-- [Precedência](../arquitetura/precedencia.md)
+- [Usuários e níveis](../telegram/usuarios-e-niveis.md) · [Workspaces](../orquestracao/workspaces.md) · [Precedência](../arquitetura/precedencia.md)
+- [Permissões das classes](../classes/permissoes.md) · [Teto do workspace](../classes/teto-do-workspace.md)

@@ -299,6 +299,36 @@ func TestLintIssuesFailTheSuite(t *testing.T) {
 	}
 }
 
+// The heavy suite has no hard limit, so go test must not kill it at its
+// default 10 minutes; the timed suites keep the default.
+func TestOnlyHeavyDisablesTheGoTestTimeout(t *testing.T) {
+	t.Parallel()
+	for _, suite := range []string{"fast", "full", "heavy"} {
+		t.Run(suite, func(t *testing.T) {
+			t.Parallel()
+			ex := &fakeExec{handle: func(Cmd, io.Writer) int { return 0 }}
+			r, _ := newRunner(nil, clock.NewFake(today), ex)
+			r.WriteFile = func(string, []byte) error { return nil }
+
+			r.RunSuite(context.Background(), Suites[suite])
+
+			var main []Cmd
+			for _, c := range ex.callsMatching("./...") {
+				if isMainRun(c) {
+					main = append(main, c)
+				}
+			}
+			if len(main) != 1 {
+				t.Fatalf("go test calls = %v", main)
+			}
+			has := strings.Contains(main[0].String(), " -timeout 0 ")
+			if has != (suite == "heavy") {
+				t.Fatalf("%s suite: %s", suite, main[0])
+			}
+		})
+	}
+}
+
 // CA-TESTES-07
 func TestHeavyWarnsAboveMedian(t *testing.T) {
 	t.Parallel()

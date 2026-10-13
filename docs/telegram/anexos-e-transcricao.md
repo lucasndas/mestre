@@ -50,10 +50,10 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 
 - **Motor de transcrição:** whisper.cpp, `whisper-server`, com o modelo `large-v3-turbo` quantizado ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)).
   - A quantização é q5_0 ou q8_0, escolhida por benchmark na máquina durante a instalação.
-  - O modelo é baixado na instalação de toda máquina que pode ser Cidadela ou quando uma máquina passa a transcrever ([Whisper na instalação](../plataforma/instalacao-e-atualizacao.md#whisper)).
+  - O modelo é baixado em toda máquina não excluída pelo Dono, porque qualquer uma pode virar Cidadela, e numa máquina excluída só quando ela passa a transcrever; a que não passa no benchmark não anuncia a transcrição ([Whisper na instalação](../plataforma/instalacao-e-atualizacao.md#whisper)).
 - **Processo auxiliar:**
   - O motor da máquina que transcreve sobe o `whisper-server` e o supervisiona.
-  - Opções: `--host 127.0.0.1 --port 7447` (porta fixa, só local; [componentes](../arquitetura/componentes.md)), `-t <núcleos físicos>`, `-l auto` e um `--prompt` curto em português. O idioma pode ser fixado em `pt` na configuração.
+  - Opções: `--host 127.0.0.1 --port <porta do Whisper da instância>` (7447 na instância padrão, só local; [componentes](../arquitetura/componentes.md)), `-t <núcleos físicos>`, `-l auto` e um `--prompt` curto em português. O idioma pode ser fixado em `pt` na configuração.
   - O modelo fica carregado (servidor quente).
   - Se o processo cair, o motor o reinicia com backoff de 1 s a 60 s. Com 5 quedas em 10 minutos, o motor gera um alerta e o item fica com erro no [checklist](../plataforma/checklist.md).
 - **Qual máquina transcreve:**
@@ -64,7 +64,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - Numa troca de Cidadela, o padrão passa a ser a nova Cidadela.
 - **Conversão:**
   - A voz do Telegram vem em OGG/Opus, e o `whisper-server` aceita WAV.
-  - O motor **da Cidadela** converte com `ffmpeg` (dependência do pacote no Ubuntu e no instalador do Windows, presente em toda máquina que pode ser Cidadela) para WAV 16 kHz mono antes de enviar à máquina que transcreve, seja ela qual for. Assim as outras Torres não precisam do `ffmpeg`, nem uma máquina que passe a transcrever. O servidor não roda com `--convert`.
+  - O motor **da Cidadela** converte com `ffmpeg` (dependência do pacote no Ubuntu e do instalador do Windows, presente em toda máquina) para WAV 16 kHz mono antes de enviar à máquina que transcreve, seja ela qual for. Assim a máquina que transcreve nunca converte. O servidor não roda com `--convert`.
 - **Fila e tempo:**
   - Uma transcrição por vez por máquina, em ordem de chegada.
   - O tempo limite é o maior entre 60 s e 2 vezes a duração do áudio (padrão).
@@ -78,7 +78,7 @@ sequenceDiagram
   participant T as Telegram
   participant M as Motor da Cidadela
   participant N as Motor da máquina de transcrição
-  participant W as whisper-server (127.0.0.1:7447)
+  participant W as whisper-server (127.0.0.1, porta da instância)
   participant G as Grão-Mestre
   T->>M: voice (OGG/Opus)
   M->>M: filtro, roteamento, download, anexo

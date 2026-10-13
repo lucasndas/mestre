@@ -10,14 +10,14 @@ Aceita, 2026-10-12. **Revista em 2026-10-13** pelo [ADR 0022](0022-guilda-cidade
 
 - O Mestre suporta N máquinas desde o início. Eles podem estar na rede local ou fora dela (outra casa, nuvem, notebook em viagem), atrás de roteador e sem IP fixo.
 - A Cidadela precisa mandar comandos à Torre a qualquer momento: abrir terminal, digitar, rodar etapa. As Torres mandam à Cidadela saída de terminal, `done`, status e chamadas da CLI encaminhadas.
-- A spec proíbe depender de SSH e de abrir porta no lado da Torre.
+- A spec proíbe depender de SSH e de exigir que a Torre seja alcançável de fora (porta aberta no roteador, IP fixo).
 - O painel no navegador também precisa receber atualizações e o fluxo dos terminais em tempo real.
 
 ## Opções consideradas
 
 1. **WSS iniciado pela Torre, uma conexão multiplexada.**
    - Prós:
-     - Funciona atrás de NAT sem abrir porta na Torre.
+     - Funciona atrás de NAT sem que ninguém precise alcançar a Torre.
      - É o mesmo transporte que o navegador usa para o canvas.
      - TLS e mTLS saem da biblioteca padrão ([ADR 0001](0001-stack-go.md)).
      - Comandos e eventos fluem nos dois sentidos pela mesma conexão.
@@ -29,7 +29,7 @@ Aceita, 2026-10-12. **Revista em 2026-10-13** pelo [ADR 0022](0022-guilda-cidade
    - Contras:
      - Exige porta aberta e endereço alcançável em cada Torre.
      - Não funciona atrás de roteador sem configuração.
-     - Viola a regra de não abrir portas na Torre.
+     - Viola a regra de não depender de alcançar a Torre.
 3. **gRPC com streaming bidirecional iniciado pela Torre.**
    - Prós: contratos tipados e streaming nativo.
    - Contras:
@@ -63,7 +63,7 @@ Aceita, 2026-10-12. **Revista em 2026-10-13** pelo [ADR 0022](0022-guilda-cidade
 ## Consequências
 
 - **Positivas:**
-  - A Torre funciona atrás de roteador e fora da rede local sem abrir porta.
+  - A Torre funciona atrás de roteador e fora da rede local sem ser alcançável. As portas que ela escuta na rede local (redirecionamento do painel, descoberta, Guardião; [portas](../arquitetura/componentes.md#portas)) servem ao navegador e aos Guardiões, nunca ao caminho Cidadela → Torre.
   - A Cidadela nunca precisa "chamar" a Torre.
   - Um único transporte serve às Torres e ao navegador.
 - **Negativas:**

@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a party (e o Grão-Mestre recruta Mestres de mesa). Classes e rituais estão em [coordenacao-classes-e-rituais](coordenacao-classes-e-rituais.md); issues e PRs em [coordenacao-github](coordenacao-github.md). Saída e códigos seguem [convencoes](convencoes.md).
+Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a party (e o Grão-Mestre recruta Mestres de mesa e o Operador do PC). Classes e rituais estão em [coordenacao-classes-e-rituais](coordenacao-classes-e-rituais.md); issues e PRs em [coordenacao-github](coordenacao-github.md). Saída e códigos seguem [convencoes](convencoes.md).
 
 ## Comportamento
 
@@ -60,7 +60,7 @@ mestre quest cancel "<Missão>" [--reason "<texto>"]
 
 ## Regras e erros
 
-- O Grão-Mestre não monta party de mesa: `recruit` dele só aceita a ficha de Mestre de mesa (outras → 3 `level_denied`); normalmente o Mestre é recrutado por `table open` ([grao-mestre](grao-mestre.md)).
+- O Grão-Mestre não monta party de mesa: `recruit` dele só aceita a ficha de Mestre de mesa e as da base Operador (outras → 3 `level_denied`); normalmente o Mestre é recrutado por `table open` ([grao-mestre](grao-mestre.md)).
 - Personagens criados por etapa de missão são recrutados pelo motor, não pela CLI.
 - Ao atingir um limite, nada que está trabalhando é derrubado: a criação espera vaga (9 `waiting_slot`) e, vencido o tempo limite, falha com aviso pela caixa de entrada, conforme [personagens](../orquestracao/personagens.md#limites).
 

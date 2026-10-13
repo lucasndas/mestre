@@ -1,0 +1,9 @@
+#!/bin/sh
+# Pre-commit hook of the repository: runs the fast suite before each commit
+# (docs/qualidade/testes.md). Enable once per clone with
+#   git config core.hooksPath tools/githooks
+# (docs/desenvolvimento/ambiente.md). Skip only in an emergency with
+# git commit --no-verify; the CI runs the suites anyway.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+exec go run ./tools/testrun fast

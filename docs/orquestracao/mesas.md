@@ -62,11 +62,11 @@ A pausa é uma marca (`paused`) sobre o estado, ligada por `/pausar`, pelo paine
 
 ### Worktree por máquina e sincronização
 
-Uma mesa pode ter personagens em várias máquinas da Guilda. O espelho e o clone principal ficam só na Cidadela ([workspaces](workspaces.md#espelho-e-clone-principal-na-cidadela)); cada Torre que roda personagem da mesa tem **o próprio worktree da branch da mesa**: um repositório local por workspace em `<dados da máquina>/workspaces/<slug>/repo.git` e um worktree por mesa em `<dados da máquina>/workspaces/<slug>/mesas/<mesa>/`. Toda sincronização passa pela Cidadela; Torres não trocam commits entre si. A transferência é por **git bundle pela conexão WSS** ([ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md); formato das mensagens em [protocolo](../conectividade/protocolo.md)). Nada de SSH nem acesso direto ao GitHub pela máquina.
+Uma mesa pode ter personagens em várias máquinas da Guilda. Em **toda** máquina, os worktrees das mesas são worktrees do espelho local, em `<dados>/workspaces/<slug>/mesas/<mesa>/`: na Cidadela, o espelho principal; numa Torre, a réplica dele ([workspaces](workspaces.md#espelho-e-clone-principal-na-cidadela), [replicação](../guilda/replicacao.md)). Toda sincronização passa pela Cidadela; Torres não trocam commits entre si. A transferência é por **git bundle pela conexão WSS** ([ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md); formato das mensagens em [protocolo](../conectividade/protocolo.md)). Nada de SSH nem acesso direto ao GitHub pela máquina.
 
 | Momento | Direção | Conteúdo |
 |---|---|---|
-| Primeiro personagem da mesa numa Torre | Cidadela → Torre | bundle completo da branch da mesa e da principal; a Torre cria repo e worktree |
+| Primeiro personagem da mesa numa Torre | Cidadela → Torre | bundle incremental da branch da mesa e da principal, se a réplica do espelho ainda não tem a ponta; a Torre cria o worktree |
 | Depois de cada `mestre done` de personagem na Torre | Torre → Cidadela | bundle incremental (`<último commit conhecido pela Cidadela>..<branch>`) |
 | Antes de cada etapa que rode numa Torre | Cidadela → Torre | bundle incremental da branch da mesa e da principal |
 
@@ -77,7 +77,7 @@ Regras de integração (sempre só *fast-forward*; o motor nunca faz merge sozin
 - Cada transferência é idempotente pelo hash do bundle. Torre desconectada: o envio fica pendente e é refeito ao reconectar; a etapa que depende dele fica `aguardando sincronização` ([esperas](esperas-e-caixa-de-entrada.md)).
 - Evitar edição simultânea dos mesmos arquivos em máquinas diferentes é tarefa do [Mestre da mesa](mestre-da-mesa.md#instruções-do-sistema).
 - Só o motor envia a branch da mesa do espelho para o GitHub ([ações por nível](../github/acoes-por-nivel.md)). Se uma Torre da mesa estiver desconectada no envio, a resposta do `mestre pr` inclui o aviso.
-- **Troca de Cidadela:** os worktrees das Torres continuam; a nova Cidadela recria os worktrees das mesas dela a partir do espelho ([workspaces](workspaces.md#espelho-e-clone-principal-na-cidadela)) e pede a cada Torre o bundle incremental das branches das mesas. Os commits que só existiam na Cidadela antiga voltam quando ela entra de novo como Torre e envia os bundles dela.
+- **Troca de Cidadela:** o espelho e os worktrees continuam válidos (nada muda de caminho), e os commits que só a Cidadela antiga tinha voltam em `refs/mestre/recuperados/…`, com aviso ao Mestre da mesa; o procedimento está nas [regras da troca](../guilda/cidadela-e-torres.md).
 
 ### Encerramento
 

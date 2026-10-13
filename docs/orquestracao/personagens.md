@@ -25,12 +25,13 @@ O personagem nasce já conectado a quem o criou e ao Mestre da mesa ([conexões]
 
 ### Escolha da máquina
 
-Personagens rodam em qualquer máquina da Guilda, inclusive na Cidadela. Quem escolhe é a Cidadela, comparando os **requisitos** da base e da ficha com a **ficha da máquina** de cada uma ([ficha da máquina](../guilda/ficha-da-maquina.md): campos, requisitos e a regra de escolha).
+Personagens rodam em qualquer máquina da Guilda, inclusive na Cidadela. Quem escolhe é a Cidadela, comparando os **requisitos** da base e da ficha com a **ficha da máquina** de cada uma ([ficha da máquina](../guilda/ficha-da-maquina.md): campos, requisitos e casamento). A ordem de escolha fica só aqui.
 
-1. **Candidatas:** máquinas online, com heartbeat em dia, que estão entre os sistemas/máquinas permitidos pela base; atendem a todos os requisitos da base e da ficha (ex.: precisa de GPU, precisa de Windows, precisa do provedor X logado); têm o perfil de conta da ficha; e não atingiram o limite de personagens. "Precisa de interface" só é atendido para a base do Operador do PC ([ficha da máquina](../guilda/ficha-da-maquina.md)).
+1. **Máquinas que atendem:** online, com heartbeat em dia, entre os sistemas/máquinas permitidos pela base, atendendo a todos os requisitos da base e da ficha (ex.: precisa de GPU, precisa de Windows, precisa do provedor X logado e conforme no perfil) e com o perfil de conta da ficha. "Precisa de interface" só é atendido pela base do Operador do PC ([ficha da máquina](../guilda/ficha-da-maquina.md#requisitos)).
 2. Com `--machine`, só essa máquina é considerada.
-3. Ordem de preferência: máquina preferida da ficha → máquina onde a mesa já tem worktree (a Cidadela primeiro) → máquina com menos personagens ativos → ordem alfabética do id.
-4. **Nenhuma atende:** a criação não roda em outra máquina; falha com uma explicação que lista cada máquina e o primeiro requisito não atendido (ex.: "windows-pc: perfil de conta `claude-trabalho` não existe"), e o Dono é avisado pelo Telegram e pelo painel.
+3. Ordem de preferência entre as que atendem e têm vaga: máquina preferida da ficha → máquina onde a mesa já tem worktree → máquina com menos personagens ativos → ordem alfabética do id. A Cidadela não tem preferência própria.
+4. **Atendem, mas todas estão cheias:** o pedido espera vaga (`waiting_slot`, abaixo em [limites](#limites)).
+5. **Nenhuma atende aos requisitos:** a criação não roda em outra máquina; falha com `no_capable_machine` e uma explicação que lista cada máquina e o primeiro requisito não atendido (ex.: "windows-pc: perfil de conta `claude-trabalho` não existe"), e o Dono é avisado pelo Telegram e pelo painel.
 
 Antes de iniciar numa máquina nova para a mesa, o motor cria lá o worktree ([sincronização](mesas.md#worktree-por-máquina-e-sincronização)).
 
@@ -43,7 +44,7 @@ Antes de iniciar numa máquina nova para a mesa, o motor cria lá o worktree ([s
 | Por workspace | 16 |
 | Cópias simultâneas da mesma ficha | definido na ficha (padrão 3) |
 
-Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite, o pedido **espera vaga**: o motor registra uma espera `waiting_slot` ("aguardando vaga") com tempo limite ([esperas](esperas-e-caixa-de-entrada.md#esperas)), seja uma etapa de missão, seja um `recruit`/`spawn` direto (que responde na hora com "pendente", e o personagem criado chega depois pela caixa de entrada; [coordenação](../cli/coordenacao.md)). Abrindo vaga, a criação segue na ordem de chegada; estourado o tempo limite, o pedido falha com aviso a quem pediu, dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
+Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite (o da mesa, o do workspace, o da ficha, ou o por máquina em todas as que atendem), o pedido **espera vaga**: o motor registra uma espera `waiting_slot` ("aguardando vaga") com tempo limite ([esperas](esperas-e-caixa-de-entrada.md#esperas)), seja uma etapa de missão, seja um `recruit`/`spawn` direto (que responde na hora com "pendente", e o personagem criado chega depois pela caixa de entrada; [coordenação](../cli/coordenacao.md)). Abrindo vaga, a criação segue na ordem de chegada; estourado o tempo limite, o pedido falha com aviso a quem pediu, dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
 
 ### Ciclo de vida (definido na ficha)
 
@@ -116,7 +117,7 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 
 - **Motor de uma máquina reinicia:** os processos dele morreram; a máquina marca seus terminais não encerrados como `interrupted` e a Cidadela decide a retomada.
 - **Motor da Cidadela reinicia com Torres vivas:** os terminais das Torres continuam; ao reconectar, cada máquina informa os que estão vivos e a Cidadela reconcilia (a máquina é a verdade sobre o processo; a Cidadela, sobre o resto).
-- **Troca de Cidadela:** os terminais das Torres continuam; a nova Cidadela reconcilia pelo banco replicado e pelos terminais que cada Torre informa ao reconectar ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Os personagens que rodavam na Cidadela antiga ficam `interrupted` até ela voltar como Torre ou serem retomados em outra máquina que atenda.
+- **Troca de Cidadela:** quem fica `interrupted`, quem segue e o que a antiga encerra ao voltar como Torre estão nas [regras da troca](../guilda/cidadela-e-torres.md); a retomada segue as regras abaixo.
 - **Ordem de retomada:** Grão-Mestre → Mestres de mesa → personagens com etapa ou tarefa em andamento → persistentes → demais.
 - Retoma com a sessão do provedor (id salvo) quando o adaptador permite; senão inicia do zero e entrega uma mensagem de retomada (etapa atual, último `done`, link do pergaminho da missão). Caixa de entrada e esperas são preservadas.
 - Efêmero sem tarefa pendente não é retomado: vai a `stopped` com o motivo registrado. Terminal simples fica `interrupted` e o criador é avisado (o motor não reexecuta comandos sozinho).
@@ -142,11 +143,5 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 
 ## Depende de
 
-- [Bases e fichas](bases-e-fichas.md)
-- [Workspaces](workspaces.md)
-- [Sessão zero do personagem](../sessao-zero/personagem.md)
-- [Adaptador de provedores](../provedores/adaptador.md)
-- [Terminal](../arquitetura/terminal.md)
-- [Persistência](../arquitetura/persistencia.md)
-- [Protocolo](../conectividade/protocolo.md)
-- [Ficha da máquina](../guilda/ficha-da-maquina.md)
+- [Bases e fichas](bases-e-fichas.md) · [Workspaces](workspaces.md) · [Sessão zero do personagem](../sessao-zero/personagem.md) · [Adaptador de provedores](../provedores/adaptador.md)
+- [Terminal](../arquitetura/terminal.md) · [Persistência](../arquitetura/persistencia.md) · [Protocolo](../conectividade/protocolo.md) · [Ficha da máquina](../guilda/ficha-da-maquina.md)

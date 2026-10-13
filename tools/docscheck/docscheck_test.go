@@ -207,6 +207,21 @@ func TestHeaderComponentAndFutureDate(t *testing.T) {
 	}
 }
 
+// Header dates are UTC days, whatever the local zone of the clock.
+func TestHeaderDateIsComparedInUTC(t *testing.T) {
+	t.Parallel()
+	saoPaulo := time.FixedZone("BRT", -3*60*60)
+	tr := newTree().area("a").
+		add("docs/a/hoje.md", "# H\n\n> **Assunto:** x · **Componente:** Motor · **Atualizado:** 2026-10-13\n").
+		add("docs/a/amanha.md", "# A\n\n> **Assunto:** x · **Componente:** Motor · **Atualizado:** 2026-10-14\n")
+	// 22:00 on Oct 12 in São Paulo is 01:00 on Oct 13 in UTC.
+	evening := time.Date(2026, 10, 12, 22, 0, 0, 0, saoPaulo)
+	got := only(Check(tr.fs, evening), ckHeader)
+	if len(got) != 1 || !strings.HasPrefix(got[0], "docs/a/amanha.md:3: cabeçalho: data 2026-10-14 está no futuro (hoje é 2026-10-13 em UTC)") {
+		t.Fatalf("errors = %q", got)
+	}
+}
+
 // CA-VERDOCS-06
 func TestSectionOrderAndIncompleteVerifyItem(t *testing.T) {
 	t.Parallel()

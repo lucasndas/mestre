@@ -1,10 +1,11 @@
 # Guilda
 
-> **Assunto:** índice da Guilda: formação, entrada e saída de máquinas, Cidadela e Torres, replicação do banco e ficha da máquina · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** índice da Guilda: formação, entrada e exclusão de máquinas, Cidadela e Torres, trava de época no GitHub, replicação e ficha da máquina · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
-| [guilda.md](guilda.md) | instalar → descobrir → entrar ou criar; entrada na Guilda com código e aprovação do Dono; credenciais da máquina; saída e remoção de máquina | instalar uma máquina, aceitar ou remover uma máquina, mexer em certificados de máquina |
+| [guilda.md](guilda.md) | instalar → descobrir → entrar ou criar; entrada na Guilda com código e aprovação do Dono; credenciais da máquina; máquina excluída; saída e remoção | instalar uma máquina, aceitar, excluir ou remover uma máquina, mexer em certificados de máquina |
 | [ficha-da-maquina.md](ficha-da-maquina.md) | campos da ficha da máquina, atualização sozinha, requisitos de bases, fichas e classes, casamento requisito × ficha e o que acontece quando nenhuma máquina atende | escolher onde um personagem roda; declarar requisitos; mexer no que cada máquina informa |
-| [replicacao.md](replicacao.md) | banco principal na Cidadela e réplicas nas Torres, cofre só nas candidatas, CA da Guilda e certidão de época, perda aceitável | mexer no banco, no cofre, na CA ou em qualquer dado que precise sobreviver à troca de Cidadela |
-| [cidadela-e-torres.md](cidadela-e-torres.md) | papéis e o que roda onde, época e fencing, Cidadela suspensa, Torre condutora, proposta de assumir com aprovação do Dono, troca planejada, volta da antiga Cidadela, painel redirecionado | mexer no que só a Cidadela faz, em ações externas ou na queda da Cidadela |
+| [replicacao.md](replicacao.md) | banco, arquivos e espelhos da Cidadela para todas as Torres, cofre cifrado em toda máquina não excluída, envelope e chave de recuperação, CA da Guilda e certidão de época, perda máxima de 5 s | mexer no banco, no cofre, na CA ou em qualquer dado que precise sobreviver à troca de Cidadela |
+| [cidadela-e-torres.md](cidadela-e-torres.md) | papéis e o que roda onde, época e fencing, Cidadela suspensa, Cidadela fora e fila de saída, aviso ao Dono, promoção manual, troca planejada, volta da antiga, personagens, worktrees, missões e GitHub na troca, painel redirecionado | mexer no que só a Cidadela faz, em ações externas ou na queda da Cidadela |
+| [trava-no-github.md](trava-no-github.md) | repositório e refs da trava de época, quem vence a época nova, confirmação antes de ação externa, o `409` do Telegram como sinal | mexer na promoção, em qualquer chamada ao GitHub ou ao Telegram |

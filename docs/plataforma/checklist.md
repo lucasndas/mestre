@@ -1,6 +1,6 @@
 # Checklist de ambiente
 
-> **Assunto:** verificação de pré-requisitos de cada máquina da Guilda, por sistema e por papel (Cidadela, Torre, candidata a Cidadela): itens, quando roda, gravidade, alertas e correções · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** verificação de pré-requisitos de cada máquina da Guilda, por sistema e por papel (Cidadela, Torre, máquina não excluída): itens, quando roda, gravidade, alertas e correções · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -13,12 +13,12 @@ Descobrir cedo o que impede o Mestre de funcionar em cada máquina, explicar o p
 - Ao iniciar o motor, a cada 30 min (padrão) e sob demanda (painel, ação `checklist` do [Guardião](../autocura/guardiao.md#lista-fechada-de-ações)).
 - Itens baratos (conexões, heartbeat, serviços) são reavaliados a cada evento que os afeta, sem esperar o ciclo.
 - **Verificação de início** no Windows (seção abaixo).
-- Mudança de versão de um provedor detectada (os CLIs se atualizam sozinhos) → roda o [teste de conformidade](../provedores/conformidade.md) daquele provedor naquela máquina ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
-- Cada máquina roda os itens do seu **sistema** (Linux ou Windows) e do seu **papel**: **todas**; **Cidadela** (só enquanto é a Cidadela); **Torre**; **candidata** (Torre marcada "pode ser Cidadela", que já confere os itens de Cidadela que dependem só dela, para a promoção dar certo); **com Operador do PC**. Ao mudar de papel (promoção, volta da antiga Cidadela, marca de candidata), roda de novo na hora. O resultado local fica em `checklist_results`, os alertas abertos em `checklist_alerts` ([persistência](../arquitetura/persistencia.md)), e vai à Cidadela.
+- Mudança de versão de um provedor detectada num perfil (os CLIs se atualizam sozinhos) → roda o [teste de conformidade](../provedores/conformidade.md) daquele provedor naquele perfil e máquina ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
+- Cada máquina roda os itens do seu **sistema** (Linux ou Windows) e do seu **papel**: **todas**; **Cidadela** (só enquanto é a Cidadela); **Torre**; **não excluída** (toda máquina que o Dono não excluiu, inclusive a Cidadela: guarda o cofre e pode assumir, então já confere os itens de Cidadela que dependem só dela, para a promoção dar certo); **com Operador do PC**. Ao mudar de papel (promoção, volta da antiga Cidadela, exclusão pelo Dono ou fim dela), roda de novo na hora. O resultado local fica em `checklist_results`, os alertas abertos em `checklist_alerts` ([persistência](../arquitetura/persistencia.md)), e vai à Cidadela.
 
 ### Verificação de início (Windows)
 
-Roda quando o serviço `mestre` sobe. Confere, nesta ordem, os itens WIN-19 (`mestre` na conta virtual, com os privilégios), WIN-17 (conta `mestre-agente`), WIN-14 (Cidadela e candidata: chave do cofre), ALL-01 (Torre: motor e Guardião conectados à Cidadela) e WIN-05 (serviços e Guardião ativos). O resultado vai para o painel (Guilda e saúde das máquinas) e, se grave, para o Telegram, como qualquer item. Não há aviso na área de trabalho: o Mestre não tem interface gráfica ([Windows](../arquitetura/windows.md)).
+Roda quando o serviço `mestre` sobe. Confere, nesta ordem, os itens WIN-19 (`mestre` na conta virtual, com os privilégios), WIN-17 (conta `mestre-agente`), WIN-14 (não excluída: chave do cofre), ALL-01 (Torre: motor e Guardião conectados à Cidadela) e WIN-05 (serviços e Guardião ativos). O resultado vai para o painel (Guilda e saúde das máquinas) e, se grave, para o Telegram, como qualquer item. Não há aviso na área de trabalho: o Mestre não tem interface gráfica ([Windows](../arquitetura/windows.md)).
 
 ### Gravidade e alertas
 
@@ -40,7 +40,7 @@ Roda quando o serviço `mestre` sobe. Confere, nesta ordem, os itens WIN-19 (`me
 
 ### Itens: Windows
 
-Ids que saíram não são reaproveitados. Toda máquina abre as mesmas portas, porque toda máquina responde no endereço do painel e qualquer uma pode virar Cidadela.
+Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas da sua instância ([portas](../arquitetura/componentes.md#portas)), porque toda máquina responde no endereço do painel e qualquer uma pode virar Cidadela.
 
 | Id | Papel | Verifica | Gravidade | Correção |
 |---|---|---|---|---|
@@ -50,15 +50,16 @@ Ids que saíram não são reaproveitados. Toda máquina abre as mesmas portas, p
 | WIN-04 | todas | firewall libera a porta da [página reserva](../autocura/pagina-reserva.md) só no perfil Privado ([portas](../arquitetura/componentes.md#portas)) | aviso | criar regra (aprovação) |
 | WIN-05 | todas | serviços `mestre` e `mestre-guardiao` com início automático e recuperação configurada ([camadas](../autocura/camadas.md#valores-padrão)) | grave | reconfigurar (aprovação) |
 | WIN-13 | todas | firewall libera a entrada em 7443/tcp e 7444/tcp só no perfil Privado | grave | criar regras (aprovação) |
-| WIN-14 | Cidadela, candidata | `cofre.key` (na candidata, a chave da cópia do cofre) protegido por DPAPI de máquina com ACL só de `NT SERVICE\Mestre` ([cofre](cofre.md#chave-do-cofre)) | grave | corrigir ACL (aprovação) |
+| WIN-14 | não excluída | `cofre.key` protegido por DPAPI de máquina com ACL só de `NT SERVICE\Mestre` ([cofre](cofre.md#chave-do-cofre)) | grave | corrigir ACL (aprovação) |
 | WIN-15 | todas | ACLs de `%ProgramData%\Mestre\` como em [persistência](../arquitetura/persistencia.md#arquivos): `mestre-agente` só com modificação em `workspaces\`, `contas\` e `maquina\agentes\<id>\tmp\`, leitura em `policy.json` e só criar na fila do hook | grave | corrigir ACL (aprovação) |
-| WIN-16 | Cidadela | anúncio mDNS do Guardião respondendo (`_mestre._tcp` e o nome do painel) ([descoberta](../conectividade/descoberta.md#mdns)) | grave | manual |
+| WIN-16 | todas | anúncio mDNS do Guardião respondendo (`_mestre._tcp` da máquina); na Cidadela, também `mestre.local`, publicado só com a [concessão do motor](../autocura/guardiao.md#concessão-do-motor); numa Torre, sem `mestre.local` ([descoberta](../conectividade/descoberta.md#mdns)) | grave | manual |
 | WIN-17 | todas | conta local `mestre-agente` existe, ativa, só no grupo `Users` (fora de `Administradores`), oculta da tela de login, e o logon em lote com a senha guardada funciona ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)) | grave | recriar a conta ou gerar e guardar senha nova (aprovação) |
 | WIN-18 | todas | `mestre-agente` tem "Negar logon local" e "Negar logon pelos Serviços de Área de Trabalho Remota" e não está em `Remote Desktop Users` | grave | reaplicar os direitos (aprovação) |
 | WIN-19 | todas | `mestre` roda como `NT SERVICE\Mestre` (nunca com a conta de um usuário) e o token dele tem `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | grave | reconfigurar o serviço e conceder os privilégios (aprovação) |
-| WIN-20 | todas | cada provedor usado pelas bases da máquina (`claude`, `codex`, `agy`) roda como `mestre-agente`, com o `HOME` do perfil de conta, onde o próprio CLI se instala e se atualiza ([CLIs dos provedores](instalacao-e-atualizacao.md#clis-dos-provedores)): `--version` e a verificação de login do ALL-11 feitas com essa conta | grave | manual (o alerta explica o passo) |
+| WIN-20 | todas | cada provedor usado pelas bases da máquina (`claude`, `codex`, `agy`) roda como `mestre-agente`, com o `HOME` do perfil de conta, onde o próprio CLI se instala e se atualiza ([CLIs dos provedores](instalacao-e-atualizacao.md#clis-dos-provedores)): `--version` e a verificação de login do ALL-11 feitas com essa conta. O `agy` guarda o login no Gerenciador de Credenciais do `mestre-agente`, comum a todos os perfis: **um só perfil Antigravity por máquina Windows**; um segundo é recusado com essa explicação ([Antigravity](../provedores/antigravity.md#contas-múltiplas)) | grave | manual (o alerta explica o passo) |
 | WIN-21 | com Operador do PC | UAC para o [Operador do PC](../arquitetura/windows.md#operador-do-pc): `EnableLUA = 1`, `PromptOnSecureDesktop = 1` e `ConsentPromptBehaviorAdmin` com pedido (1 a 5; nunca 0, "elevar sem perguntar"), em `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System`; falhou → a ficha da máquina não anuncia o Operador | grave | manual (o alerta explica o passo; o Mestre não muda o UAC) |
 | WIN-22 | com Operador do PC | tarefa `\Mestre\Operador` existe para o usuário configurado (logon dele, privilégios normais, sem limite de tempo, reiniciar em falha) e, com ele logado, o processo da sessão está ligado ao `mestre`; falhou → a ficha da máquina não anuncia o Operador | aviso | recriar a tarefa (aprovação de Dono) |
+| WIN-23 | todas | serviço `mestre-launcher` roda como LocalSystem, o pipe dele só aceita a conta `NT SERVICE\Mestre` e o arquivo da senha do `mestre-agente` tem ACL só de SYSTEM ([Windows](../arquitetura/windows.md#iniciador-mestre-launcher)) | grave | reaplicar as ACLs (sozinho) |
 
 ### Itens: Linux
 
@@ -68,8 +69,8 @@ Ids que saíram não são reaproveitados. Toda máquina abre as mesmas portas, p
 | LIN-02 | todas | Avahi rodando e nome `.local` resolvendo | grave | reiniciar o Avahi (aprovação) |
 | LIN-03 | todas | firewall (ufw/iptables) libera as portas do motor, do Guardião e da descoberta ([portas](../arquitetura/componentes.md#portas)) | grave | criar regras (aprovação) |
 | LIN-04 | todas | serviços `mestre` e `mestre-guardiao` ativos, com `Restart=always` (e watchdog no motor) | grave | reconfigurar (aprovação) |
-| LIN-05 | Cidadela, candidata | chave do cofre (na candidata, a da cópia do cofre) com dono e permissão corretos ([cofre](cofre.md#chave-do-cofre)) | grave | corrigir permissão (aprovação) |
-| LIN-07 | Cidadela, candidata | chave do cofre ainda em arquivo numa máquina com `systemd-creds` e TPM2 disponíveis ([cofre](cofre.md#chave-do-cofre)) | aviso | mover a chave para `systemd-creds` (aprovação) |
+| LIN-05 | não excluída | chave do cofre com dono e permissão corretos ([cofre](cofre.md#chave-do-cofre)) | grave | corrigir permissão (aprovação) |
+| LIN-07 | não excluída | chave do cofre ainda em arquivo numa máquina com `systemd-creds` e TPM2 disponíveis ([cofre](cofre.md#chave-do-cofre)) | aviso | mover a chave para `systemd-creds` (aprovação) |
 | LIN-08 | todas | conta `mestre-agente` existe e os terminais rodam com ela, nunca com `mestre` ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) | grave | recriar a conta (aprovação) |
 | LIN-09 | todas | firewall libera a porta da página reserva só para a rede local | aviso | criar regra (aprovação) |
 | LIN-10 | todas | cada provedor usado pelas bases da máquina (`claude`, `codex`, `agy`) roda como `mestre-agente`, com o `HOME` do perfil de conta, onde o próprio CLI se instala e se atualiza: `--version` e a verificação de login do ALL-11 feitas com essa conta (`claude auth status`, `codex login status`, `agy -p "/usage" --output-format json`); o Codex como pacote completo ([CLIs dos provedores](instalacao-e-atualizacao.md#clis-dos-provedores)) | grave | manual (o alerta explica o passo) |
@@ -90,7 +91,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre as mesmas portas, p
 | ALL-06 | todas | git instalado, versão 2.32 ou maior ([identidades e Apps](../github/identidades-e-apps.md)) | grave | manual |
 | ALL-07 | Cidadela | último backup diário íntegro ([persistência](../arquitetura/persistencia.md#backup)) | grave | rodar backup (sozinho) |
 | ALL-08 | todas | disco livre acima dos limites da autocura ([camadas](../autocura/camadas.md#valores-padrão)) | aviso / grave | `cleanup` (sozinho) |
-| ALL-09 | Cidadela, candidata e máquina de transcrição | modelo Whisper baixado com o hash certo e transcrição de teste (5 s de áudio) em até 10 s (padrão); na Cidadela e na candidata, também o `ffmpeg` convertendo o áudio de teste ([anexos e transcrição](../telegram/anexos-e-transcricao.md)) | grave | baixar de novo (sozinho) |
+| ALL-09 | não excluída e máquina de transcrição | modelo Whisper baixado com o hash certo e transcrição de teste (5 s de áudio) em até 10 s (padrão); nas não excluídas, também o `ffmpeg` convertendo o áudio de teste ([anexos e transcrição](../telegram/anexos-e-transcricao.md)) | grave | baixar de novo (sozinho) |
 | ALL-10 | todas | provedores usados pelas bases da máquina (`claude`, `codex`, `agy`) instalados, com versão registrada e não abaixo da mínima ([adaptador](../provedores/adaptador.md)) | grave | manual |
 | ALL-11 | todas | cada perfil de conta das fichas está **logado** no seu provedor e, no Codex, com os **hooks do Mestre confiados** (configuração inicial do perfil, [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta)); perfil incompleto não recebe personagens | grave | manual (o painel guia) |
 | ALL-12 | todas | **pré-confiança de pastas por provedor** para o clone principal e os worktrees das mesas da máquina: Claude Code (`hasTrustDialogAccepted` no `.claude.json` da conta), Codex (`trust_level = "trusted"`; a confiança dos hooks é do perfil, ALL-11), Antigravity (`trustedWorkspaces`) ([sessão zero da mesa](../sessao-zero/mesa.md)) | grave | pré-confiar de novo (sozinho) |
@@ -99,9 +100,11 @@ Ids que saíram não são reaproveitados. Toda máquina abre as mesmas portas, p
 | ALL-15 | todas | personagens em monitoramento reduzido por falta de hooks ([adaptador](../provedores/adaptador.md)) | aviso | conforme o motivo |
 | ALL-16 | Cidadela | Apps sem `bot_user_id` lido e pastas de skills `mestre-*` sem marcador ([skills geradas](../cli/skills-geradas.md)) | aviso | manual |
 | ALL-17 | Cidadela | Guilda sem nenhuma Torre ([modo máquina única](../autocura/camadas.md#modo-máquina-única)): se a máquina inteira cair, ninguém de fora percebe | aviso, aberto enquanto o modo durar | manual: instalar o Mestre numa segunda máquina e aceitá-la ([entrar na Guilda](../operacao/entrar-na-guilda.md)) |
-| ALL-18 | Cidadela | token do bot presente no cofre e bot conectado, sem `409 Conflict` ([bot](../telegram/bot.md)) | grave | manual: cadastrar o token ([parear Telegram](../operacao/parear-telegram.md)) |
-| ALL-19 | Cidadela | Guilda com Torres e nenhuma candidata: se a Cidadela se perder, só a chave de recuperação traz o cofre de volta ([cofre](cofre.md#backup-e-chave-de-recuperação)) | aviso | manual: marcar uma Torre como "pode ser Cidadela" ([administração](../painel/administracao.md)) |
-| ALL-20 | candidata | réplica do banco e cópia do cofre em dia, dentro do alvo de atraso de [replicação](../guilda/replicacao.md) | aviso | refazer a cópia completa (sozinho) |
+| ALL-18 | Cidadela | token do bot presente no cofre e bot conectado com a época confirmada na trava; um `409 Conflict` recente aparece como detalhe ([bot](../telegram/bot.md)) | grave | manual: cadastrar o token ([parear Telegram](../operacao/parear-telegram.md)) |
+| ALL-19 | Cidadela | Guilda com Torres, todas excluídas: se a Cidadela se perder, só a chave de recuperação traz o cofre de volta ([cofre](cofre.md#backup-e-chave-de-recuperação)) | aviso | manual: tirar a exclusão de uma Torre ([administração](../painel/administracao.md)) |
+| ALL-20 | Torre | réplica do banco, dos arquivos e (se não excluída) do cofre em dia, dentro do alvo de atraso de [replicação](../guilda/replicacao.md) | aviso | refazer a cópia completa (sozinho) |
+| ALL-21 | não excluída | a ficha do Grão-Mestre de cada workspace tem base executável nesta máquina ([Grão-Mestre](../orquestracao/grao-mestre.md#onde-roda)) | aviso | manual: instalar e logar o provedor, ou excluir a máquina |
+| ALL-22 | Cidadela | [repositório da trava](../github/identidades-e-apps.md#repositório-da-trava) acessível e última confirmação da época bem-sucedida; sem ele, não há promoção | grave | manual (o alerta traz o link) |
 
 ## Regras e erros
 
@@ -118,8 +121,8 @@ Ids que saíram não são reaproveitados. Toda máquina abre as mesmas portas, p
 - **CA-CHK-05** · *rápida* — **Dado** um alerta grave aberto, **quando** o checklist roda de novo sem mudança, **então** nenhum novo envio ao Telegram acontece.
 - **CA-CHK-07** · *rápida* — **Dado** um comando de verificação ausente, **quando** o item roda, **então** o resultado é "não foi possível verificar", nunca "ok".
 - **CA-CHK-11** · *rápida* — **Dado** uma Cidadela Windows falsa em que `cofre.key` dá leitura a `mestre-agente`, **quando** WIN-14 roda, **então** abre alerta grave com a correção da ACL, aplicada só com aprovação.
-- **CA-CHK-12** · *rápida* — **Dado** uma Guilda só com a Cidadela, **quando** o checklist roda, **então** ALL-17 fica aberto como aviso; **quando** uma Torre entra na Guilda, **então** o aviso fecha e ALL-19 abre até uma Torre ser marcada "pode ser Cidadela".
-- **CA-CHK-13** · *rápida* — **Dado** uma Torre Linux que não é candidata, **quando** o checklist monta a lista, **então** roda os LIN-* de "todas" e os ALL-* de "todas" e de Torre, e não roda LIN-05, LIN-07, ALL-07 nem ALL-18; **quando** ela é marcada candidata, **então** passa a rodar LIN-05, LIN-07, ALL-09 e ALL-20; **quando** é promovida, **então** troca os itens de Torre pelos de Cidadela na hora.
+- **CA-CHK-12** · *rápida* — **Dado** uma Guilda só com a Cidadela, **quando** o checklist roda, **então** ALL-17 fica aberto como aviso; **quando** uma Torre entra na Guilda, **então** o aviso fecha; **quando** o Dono exclui a única Torre, **então** ALL-19 abre até a exclusão sair.
+- **CA-CHK-13** · *rápida* — **Dado** uma Torre Linux excluída pelo Dono, **quando** o checklist monta a lista, **então** roda os LIN-* de "todas" e os ALL-* de "todas" e de Torre, e não roda LIN-05, LIN-07, ALL-07 nem ALL-18; **quando** a exclusão sai, **então** passa a rodar também LIN-05, LIN-07, ALL-09 e ALL-21; **quando** é promovida, **então** troca os itens de Torre pelos de Cidadela na hora.
 - **CA-CHK-15** · *rápida* — **Dado** uma máquina Windows falsa com o Operador habilitado e `ConsentPromptBehaviorAdmin = 0` (ou `PromptOnSecureDesktop = 0`), **quando** o checklist roda, **então** WIN-21 abre alerta grave e a ficha da máquina passa a mostrar o Operador indisponível; corrigido o valor, o alerta fecha e o Operador volta; numa máquina sem o Operador, WIN-21 e WIN-22 não rodam.
 - **CA-CHK-16** · *rápida* — **Dado** um Linux falso com cgroup v1 (ou um `mestre` sem cgroup delegado), **quando** LIN-11 roda, **então** abre alerta grave e o motor passa a criar os terminais novos sem cgroup e a identificar pela subida pela árvore; corrigido, o alerta fecha e os terminais novos voltam a nascer no cgroup próprio.
 - **CA-CHK-17** · *rápida* — **Dado** um Linux falso com `kernel.yama.ptrace_scope = 0`, `/proc` montado com `hidepid=2` sem o grupo de `mestre` e linger ligado para `mestre-agente`, **quando** o checklist roda, **então** LIN-12 e LIN-13 abrem alertas graves e LIN-14 um aviso, e nenhuma correção é aplicada sem aprovação.

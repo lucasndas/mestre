@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12. Abre uma exceção ao princípio do [ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md) "nenhum processo do Mestre usa a conta do usuário". **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
+Aceita, 2026-10-12. Abre uma exceção ao princípio do [ADR 0020](0020-linux-e-windows-em-qualquer-papel.md) "nenhum processo do Mestre usa a conta do usuário". **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 

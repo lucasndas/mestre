@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
+Aceita, 2026-10-12. **Revista em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina), e a Cidadela pode ser qualquer máquina, então toda instalação baixa o `whisper-server` e o modelo; a escolha do whisper.cpp não muda.
 
 ## Contexto
 

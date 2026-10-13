@@ -34,26 +34,28 @@ O instalador é o mesmo em toda máquina e não pergunta papel. Ele procura uma 
    sudo bash install.sh
    ```
 
-2. Espere terminar. Na primeira máquina, o passo mais demorado é baixar e testar o modelo de transcrição (centenas de MB).
+2. Espere terminar. O passo mais demorado é baixar e testar o modelo de transcrição (centenas de MB).
 3. Siga [O que aparece no fim](#o-que-aparece-no-fim).
-4. Confira: `systemctl status mestre mestre-guardiao` mostra os dois `active (running)`. O `mestre` guarda o cofre (na Cidadela) e inicia os agentes com a conta `mestre-agente`.
+4. Confira: `systemctl status mestre mestre-guardiao` mostra os dois `active (running)`. Os dois sobem sozinhos com o sistema e, depois de um reinício, o Mestre retoma o que estava fazendo. O `mestre` guarda o cofre cifrado (só a Cidadela o abre) e inicia os agentes com a conta `mestre-agente`.
 
 ## No Windows
 
 1. Baixe `mestre-<versão>-x64.msi` da página de Releases, confira o SHA-256 publicado (`Get-FileHash .\mestre-<versão>-x64.msi`) e abra. O instalador não tem assinatura de código: se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações** → **Executar assim mesmo**, e aceite o pedido de administrador.
 2. Siga [O que aparece no fim](#o-que-aparece-no-fim).
-3. Confira: `Get-Service mestre, mestre-guardiao` mostra os dois `Running`, e `Get-LocalUser mestre-agente` mostra a conta ativa. O `mestre` roda numa conta própria do sistema e inicia os agentes com a conta `mestre-agente` ([Windows](../arquitetura/windows.md)); eles trabalham mesmo com você deslogado.
+3. Confira: `Get-Service mestre, mestre-guardiao` mostra os dois `Running`, e `Get-LocalUser mestre-agente` mostra a conta ativa. O `mestre` roda numa conta própria do sistema e inicia os agentes com a conta `mestre-agente` ([Windows](../arquitetura/windows.md)); eles trabalham mesmo com você deslogado. Os serviços sobem sozinhos com o Windows e, depois de um reinício, o Mestre retoma o que estava fazendo.
 4. **Operador do PC (opcional):** o instalador pergunta se quer habilitar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), um agente que usa este PC com a sua conta, só quando o Dono aprova, por pouco tempo e com aviso na tela. Se quiser, responda **sim** e escolha o seu usuário do Windows. Antes, deixe o Controle de Conta de Usuário (UAC) ligado, com "Sempre notificar" ou o nível padrão, e o Chrome com a extensão Claude in Chrome instalada. Depois, faça a configuração inicial em **Administração → Operador do PC**. Para desligar, rode o instalador de novo e responda **não**.
 
 ## O que aparece no fim
 
-- **Primeira máquina (cria a Guilda):** o terminal mostra o **endereço do painel** (ex.: `https://mestre.local:7443`), a **impressão digital SHA-256 da CA** e o **código de configuração** (usado uma vez para criar o Dono). **Anote os três.** Depois mostra **uma única vez** a **chave de recuperação** do cofre (52 caracteres em grupos de 4) e pede que você redigite dois grupos. Guarde-a fora do Mestre (papel, gerenciador de senhas): sem ela, o backup do cofre é inútil e uma Cidadela perdida sem Torre candidata leva junto todos os segredos ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)). Siga para o [primeiro acesso](primeiro-acesso.md).
+- **Primeira máquina (cria a Guilda):** o terminal mostra o **endereço do painel** (ex.: `https://mestre.local:7443`), a **impressão digital SHA-256 da CA** e o **código de configuração** (usado uma vez para criar o Dono). **Anote os três.** Depois mostra **uma única vez** a **chave de recuperação** do cofre (52 caracteres em grupos de 4) e pede que você redigite dois grupos. Guarde-a fora do Mestre (papel, gerenciador de senhas): sem ela, o backup do cofre é inútil e uma Cidadela perdida sem nenhuma outra máquina não excluída leva junto todos os segredos ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)). Siga para o [primeiro acesso](primeiro-acesso.md).
 - **Outras máquinas (entram na Guilda):** o instalador mostra a Guilda que achou e um **código de entrada** de 6 dígitos, e espera o Dono aceitar: siga [entrar na Guilda](entrar-na-guilda.md).
 
 ## Conferir tudo
 
 1. No painel, abra **Guilda e saúde das máquinas**. A Cidadela e cada Torre aparecem **conectadas**, com motor e Guardião em dia. Numa máquina única, uma faixa lembra que ninguém de fora percebe se ela cair inteira.
 2. Veja a coluna **Checklist** de cada máquina e use a correção oferecida; correções de rede, firewall ou serviços pedem a sua aprovação ([checklist](../plataforma/checklist.md)).
-3. Portas, iguais em toda máquina, se precisar conferir um firewall ([componentes](../arquitetura/componentes.md#portas)): `7443/tcp` (painel e conexões da Guilda), `7444/tcp` (Guardião), `7445/udp` (descoberta) e `7446/tcp` (página reserva).
+3. Portas da instância padrão, se precisar conferir um firewall ([componentes](../arquitetura/componentes.md#portas)): `7443/tcp` (painel e conexões da Guilda), `7444/tcp` (Guardião), `7445/udp` (descoberta) e `7446/tcp` (página reserva).
 
-Em seguida: [primeiro acesso](primeiro-acesso.md), [parear o Telegram](parear-telegram.md) e criar o primeiro workspace (**Workspaces → Criar**, [sessão zero do workspace](../sessao-zero/workspace.md)). Máquina em outra rede: `--join <endereço da Cidadela>` no instalador ([entrar na Guilda](entrar-na-guilda.md#máquina-fora-da-rede-local)).
+Em seguida: [primeiro acesso](primeiro-acesso.md), [parear o Telegram](parear-telegram.md) e criar o primeiro workspace (**Workspaces → Criar**, [sessão zero do workspace](../sessao-zero/workspace.md)). Máquina em outra rede: `--join <endereço da Cidadela>` no instalador, ou `JOIN=<endereço>` no MSI ([entrar na Guilda](entrar-na-guilda.md#máquina-fora-da-rede-local)).
+
+**Testar a Guilda numa máquina só:** instale uma segunda instância com `sudo mestre install --instance teste` (no Windows, num terminal de administrador). Ela tem pasta, portas e serviços próprios e entra na Guilda como outra máquina, o que basta para testar a entrada, a replicação e a troca de Cidadela ([instâncias](../arquitetura/componentes.md#instâncias)).

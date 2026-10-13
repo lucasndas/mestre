@@ -10,7 +10,7 @@ Tratar todo pedido de aprovação do mesmo jeito, do pedido até a aplicação, 
 
 ### O pedido
 
-Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador) uma atualização do Mestre, a entrada de uma máquina na Guilda ou a promoção de uma Torre a Cidadela (tipos em [política](politica.md#tipos-de-ação)).
+Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador) uma atualização do Mestre, a entrada de uma máquina na Guilda ou a promoção de outra máquina a Cidadela quando a Cidadela não volta (tipos em [política](politica.md#tipos-de-ação)).
 
 Campos (tabela `approval_requests`, [persistência](../arquitetura/persistencia.md)): id, workspace, mesa, tipo, alvo, impressão, solicitante (personagem ou Grão-Mestre), resumo, recomendação do Grão-Mestre, motivo da dúvida, quórum exigido, criado em, expira em, estado.
 
@@ -57,7 +57,7 @@ Cada pedido guarda o **alvo** e a **impressão** (SHA-256 do alvo em JSON canôn
 | `ativacao_operador` | mesa, missão (se houver), ficha, classe, máquina, tarefa (texto inteiro) e duração pedida; o pedido mostra tudo isso ao Dono |
 | `atualizacao_mestre` | `tag` + SHA-256 do manifesto da release ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) |
 | `entrada_na_guilda` | nome e sistema da máquina, os pedidos de certificado (CSRs) e o código de entrada de 6 dígitos ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
-| `promocao_cidadela` | Torre proposta, época atual e nova, e o último ponto do banco replicado nela |
+| `promocao_cidadela` | máquina proposta, época atual e nova, e o último ponto do banco replicado nela |
 
 Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commit novo no PR), o pedido vira `invalidado`, e o Grão-Mestre reavalia e, se for o caso, cria um pedido novo. No GitHub, o hash também vai no review e no merge ([aprovação no GitHub](../github/aprovacao-no-github.md)).
 
@@ -65,8 +65,9 @@ Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commi
 
 `entrada_na_guilda` e `promocao_cidadela` nascem em `aguardando_usuarios`, vão só ao Dono, sem quórum maior, e pedem o PIN depois do botão ([política](politica.md#tipos-de-ação)). Nunca passam pelo Grão-Mestre, nem como evento.
 
-- **`entrada_na_guilda`:** criado pela Cidadela quando uma instalação nova pede para entrar ([Guilda](../guilda/guilda.md); a forma do pedido é a pendência P1 de lá). O prazo é o da [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Na aceitação o Dono marca também se a máquina pode ser Cidadela. Aplicar é emitir os certificados e mandar a configuração da Guilda.
-- **`promocao_cidadela`:** criado pelo Guardião da Torre condutora quando a autocura da Cidadela falhou ([camadas](../autocura/camadas.md)). Como não há Cidadela, o pedido fica no Guardião e vai pelo [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) e pela [página reserva](../autocura/pagina-reserva.md), com os botões **Promover** e **Esperar**; o PIN é conferido na cópia de usuários do Guardião. Não expira: vale até a resposta, com lembrete a cada 1 h (padrão); se a Cidadela volta antes, vira `cancelado` ([proposta de assumir](../guilda/cidadela-e-torres.md#proposta-de-assumir)). Aplicar é a promoção ([Cidadela e Torres](../guilda/cidadela-e-torres.md)); depois dela, o pedido e a resposta entram na auditoria do banco principal da nova Cidadela.
+- **`entrada_na_guilda`:** criado pela Cidadela quando uma instalação nova pede para entrar, com o código de 6 dígitos mostrado nas duas máquinas. **Expira em 1 h**, o prazo da [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Aplicar é emitir os certificados e mandar a configuração da Guilda.
+- **`promocao_cidadela`:** criado pelo Guardião da Torre condutora quando a Cidadela não volta no prazo ([camadas](../autocura/camadas.md#cidadela-que-não-volta-proposta-de-promoção)). A promoção é **só manual**: nunca há aprovação automática, e máquina excluída ou fora da rede local é recusada como alvo. Como não há Cidadela, o pedido fica no Guardião e vai pelo [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) e pela [página reserva](../autocura/pagina-reserva.md), com os botões **Promover** e **Esperar**; o PIN é conferido na cópia de usuários do Guardião. Não expira: vale até a resposta, com lembrete a cada 1 h (padrão); se a Cidadela volta antes, vira `cancelado` ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Aplicar é a promoção ([Cidadela e Torres](../guilda/cidadela-e-torres.md)); depois dela, o pedido e a resposta entram na auditoria do banco principal da nova Cidadela.
+- **Ações diretas do Dono na Guilda:** passar a Cidadela a outra máquina (troca planejada, a mesma promoção) e excluir uma máquina não são pedidos: o Dono as faz no painel ([administração](../painel/administracao.md#guilda-e-saúde-das-máquinas)) ou pelo `/guilda` no Telegram, com PIN a cada vez, e ninguém mais pode ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)). As regras de cada uma estão na [Guilda](../guilda/guilda.md) e em [Cidadela e Torres](../guilda/cidadela-e-torres.md).
 
 ### Pergunta aos usuários
 

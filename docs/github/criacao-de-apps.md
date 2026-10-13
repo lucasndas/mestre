@@ -10,7 +10,7 @@ Criar e instalar os Apps do Mestre com o mínimo de trabalho do usuário. O GitH
 
 ### Quando acontece
 
-- **Apps fixos "Grão-Mestre" e "Mestre":** no primeiro acesso, logo depois de criar o Dono; o assistente do painel encadeia os dois links ([primeiro acesso](../operacao/primeiro-acesso.md), [identidades](identidades-e-apps.md)). A primeira instalação deles acontece com o primeiro workspace ([sessão zero do workspace](../sessao-zero/workspace.md)).
+- **Apps fixos "Grão-Mestre" e "Mestre":** no primeiro acesso, logo depois de criar o Dono; o assistente do painel encadeia os dois links ([primeiro acesso](../operacao/primeiro-acesso.md), [identidades](identidades-e-apps.md)). A primeira instalação deles acontece com o primeiro workspace ([sessão zero do workspace](../sessao-zero/workspace.md)); logo depois da instalação do "Grão-Mestre", o motor cria o [repositório da trava](identidades-e-apps.md#repositório-da-trava).
 - **App de classe:** quando uma classe pede App próprio (`mestre app create`, [CLI do Grão-Mestre](../cli/grao-mestre.md); [classes](../classes/classes.md)). Até ele ficar pronto, vale o [App temporário "Mestre"](identidades-e-apps.md#app-temporário-mestre-com-classe).
 - Um pedido por App; vários podem estar abertos ao mesmo tempo, cada um com o seu link.
 
@@ -38,18 +38,18 @@ sequenceDiagram
   participant D as Dono (Telegram e navegador próprio)
   participant G as github.com
   GM->>C: mestre app create
-  C->>D: link https://<cidadela>:7443/github/apps/novo/<token> (Telegram e painel)
+  C->>D: link https://mestre.local:<porta>/github/apps/novo/<token> (Telegram e painel)
   D->>C: abre o link e entra no painel como Dono
   C-->>D: página com nome, permissões e o botão "Criar no GitHub"
   D->>G: POST /settings/apps/new?state=… (formulário com o manifesto)
   D->>G: clica "Create GitHub App"
-  G-->>D: redireciona para https://<cidadela>:7443/github/manifest/callback?code=…&state=…
+  G-->>D: redireciona para https://mestre.local:<porta>/github/manifest/callback?code=…&state=…
   D->>C: entrega code e state
   C->>G: POST /app-manifests/{code}/conversions
   G-->>C: id, slug, owner, client_id, client_secret, webhook_secret, pem
   C-->>D: redireciona para github.com/apps/<slug>/installations/new
   D->>G: escolhe os repositórios e clica "Install"
-  G-->>D: redireciona para https://<cidadela>:7443/github/apps/instalado?installation_id=…
+  G-->>D: redireciona para https://mestre.local:<porta>/github/apps/instalado?installation_id=…
   D->>C: entrega installation_id
   C->>G: confere a instalação com o JWT do App
   C->>GM: App pronto (caixa de entrada)
@@ -57,7 +57,7 @@ sequenceDiagram
 
 - **O link:** página do painel, com token aleatório de uso único, válido por 24 h (padrão), preso ao pedido. Vai ao Dono pelo [bot](../telegram/bot.md) e aparece em "Apps do GitHub" no [painel](../painel/administracao.md). Abrir exige login de Dono ([login](../painel/login.md)), porque os Apps nascem na conta pessoal dele.
 - **Antes do clique**, a página mostra o nome do App, a classe, as permissões e os repositórios que serão marcados na instalação.
-- **Redirecionamentos:** são navegações do próprio navegador do Dono, então basta o aparelho alcançar a Cidadela na rede local e confiar na CA ([primeiro acesso](../operacao/primeiro-acesso.md)). O endereço usado é o do painel.
+- **Redirecionamentos:** são navegações do próprio navegador do Dono, então basta o aparelho alcançar a Cidadela na rede local e confiar na CA ([primeiro acesso](../operacao/primeiro-acesso.md)). O endereço usado é sempre o nome do painel, `https://mestre.local:<porta do painel>` (porta da instância, [portas](../arquitetura/componentes.md#portas)), nunca um IP: o certificado de toda máquina não excluída traz `mestre.local`, e o nome segue a Cidadela depois de uma troca.
 - **Troca do `code`:** feita pela Cidadela, dentro de 1 hora (regra do GitHub). A chave privada (`pem`) vai direto para o [cofre](../plataforma/cofre.md): nunca passa pelo banco, pelo navegador ou por log. O `state` é aleatório e de uso único; o callback com outro `state` é recusado.
 - **Conferências depois da troca:** o `owner` do App precisa ser a conta do GitHub do Dono; o motor lê o `bot_user_id` ([identidades](identidades-e-apps.md#autoria-dos-commits)).
 - **Instalação:** a página de instalação já vem com os repositórios sugeridos; o Dono mantém "Only select repositories". O retorno pelo `setup_url` não é aceito às cegas: o motor confere a instalação e os repositórios dela com o JWT do App. Se o retorno não chegar (aparelho saiu da rede), o motor consulta `GET /users/<login-do-dono>/installation` a cada 30 s por até 1 hora.
@@ -72,8 +72,8 @@ sequenceDiagram
 | `description` | "App do Mestre para a classe <Classe>" |
 | `public` | `false` (só a conta do Dono instala) |
 | `hook_attributes` | `{"url": "https://example.invalid", "active": false}`, sempre enviado (formato documentado para webhook inativo) |
-| `redirect_url` | `https://<cidadela>:7443/github/manifest/callback` |
-| `setup_url` | `https://<cidadela>:7443/github/apps/instalado` |
+| `redirect_url` | `https://mestre.local:<porta>/github/manifest/callback` |
+| `setup_url` | `https://mestre.local:<porta>/github/apps/instalado` |
 | `default_permissions` | as do papel, pela tabela de [permissões mínimas](identidades-e-apps.md#permissões-mínimas) |
 | `default_events` | `[]` |
 | `request_oauth_on_install`, `setup_on_update` | `false` e `true` |

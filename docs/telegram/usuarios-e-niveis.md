@@ -19,7 +19,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
   - credencial pessoal do GitHub (opcional, para as aprovações dele; ver [aprovação no GitHub](../github/aprovacao-no-github.md)).
 - Os usuários do painel e do Telegram são os mesmos. O primeiro Dono nasce no assistente de primeiro acesso ([login](../painel/login.md)).
 - O Dono atua em todos os workspaces. Os demais só nos workspaces da lista dele.
-- Existe **um único Dono** por instalação.
+- Existe **um único Dono** por Guilda.
 
 ### Níveis e capacidades
 
@@ -28,7 +28,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Capacidade | Dono | Administrador | Aprovador | Observador |
 |---|---|---|---|---|
 | Receber alertas e notificações ([roteamento](roteamento.md)) | sim | sim | sim | sim |
-| Consultar status: `/status`, `/missoes`, `/aprovacoes`, `/decretos`, painel em leitura | sim | sim | sim | sim |
+| Consultar status: `/status`, `/missoes`, `/aprovacoes`, `/decretos`, `/guilda` (os pedidos e botões da Guilda só ao Dono), painel em leitura | sim | sim | sim | sim |
 | Conversar com o Grão-Mestre (pedidos e perguntas) | sim | sim | sim | não |
 | Aprovar ou negar pedidos de aprovação | sim | sim | sim | não |
 | Criar exceção pontual por iniciativa própria ([decretos](decretos.md)) | sim | sim | sim | não |
@@ -44,8 +44,9 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Aprovar classe do workspace ([classes](../classes/classes.md)) | sim | sim | não | não |
 | Ampliar o teto ou passar do teto de custo ([teto](../classes/teto-do-workspace.md)) | sim | sim | não | não |
 | Aprovar ações de cura que pedem pessoa e correções de rede, firewall ou serviços do checklist | sim | sim | não | não |
+| Ativar ou desativar a transcrição numa máquina ([Whisper](../plataforma/instalacao-e-atualizacao.md#whisper)) | sim | sim | não | não |
 | Cadastrar, editar, suspender e remover usuários; gerar código de pareamento | sim | não | não | não |
-| Aceitar máquinas na Guilda, remover máquinas, marcar "pode ser Cidadela", mudar a prioridade e aprovar a promoção de uma Torre a Cidadela ([Guilda](../guilda/guilda.md)) | sim | não | não | não |
+| Aceitar máquinas na Guilda, remover e excluir máquinas, mudar a prioridade, aprovar a promoção a Cidadela e passar a Cidadela a outra máquina ([Guilda](../guilda/guilda.md), [Cidadela e Torres](../guilda/cidadela-e-torres.md)) | sim | não | não | não |
 | Editar bases, fichas, política de aprovação e acessar o cofre | sim | não | não | não |
 | Criar e instalar GitHub Apps pelo link ([criação de Apps](../github/criacao-de-apps.md)) | sim | não | não | não |
 | Configurar perfis de conta: login e, no Codex, confiança dos hooks ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)) | sim | não | não | não |
@@ -87,7 +88,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
   - cofre ([cofre](../plataforma/cofre.md));
   - `/destravar` ([segurança do canal](seguranca-do-canal.md));
   - aprovar script de cura ou volta de versão com restauração do banco ([diagnóstico com IA](../autocura/diagnostico-com-ia.md));
-  - aceitar e remover máquinas da Guilda e aprovar a promoção a Cidadela ([Guilda](../guilda/guilda.md));
+  - aceitar, remover e excluir máquinas da Guilda, aprovar a promoção a Cidadela e passar a Cidadela a outra máquina ([Guilda](../guilda/guilda.md));
   - tipos de aprovação marcados com PIN na [política](../aprovacoes/politica.md).
 - **Troca e reset:** trocar o PIN pede o PIN atual. O Dono pode resetar o PIN de outro usuário, que define um novo no próximo login.
 - **Pedido de PIN no Telegram:**

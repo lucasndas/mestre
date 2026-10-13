@@ -49,7 +49,8 @@ Decretos que afrouxam a segurança pedem o PIN do autor. A lista de casos está 
 
 ### Segredos
 
-- O token do bot fica no [cofre](../plataforma/cofre.md). Nunca vai para arquivo do projeto, banco em texto puro, log ou ambiente dos agentes.
+- O token do bot fica no [cofre](../plataforma/cofre.md). Nunca vai para arquivo do projeto, banco em texto puro, log ou ambiente dos agentes. Só a Cidadela abre o cofre para usá-lo; a única exceção é a Torre condutora em [modo reduzido](../autocura/telegram-modo-reduzido.md).
+- **Uma só instância age pelo bot:** toda chamada ao Telegram, inclusive o `getUpdates`, exige a época confirmada na trava; um `409 Conflict` é só sinal para conferir a trava ([bot](bot.md#recepção-por-long-polling)).
 - **O Mestre nunca envia segredos pelo Telegram** (tokens, senhas, chaves), porque conversas com bots não têm criptografia ponta a ponta.
   - Toda mensagem de saída passa pelo mesmo mascarador dos logs ([segurança](../arquitetura/seguranca.md)).
   - Se algo for mascarado, o motor avisa o remetente (agente ou motor) de que o trecho foi retirado.

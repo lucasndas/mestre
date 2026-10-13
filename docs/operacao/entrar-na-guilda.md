@@ -1,6 +1,6 @@
 # Entrar na Guilda
 
-> **Assunto:** passo a passo para uma máquina nova (Windows ou Ubuntu) entrar na Guilda: comparar o código de entrada, aceitar com PIN, conferir, marcar "pode ser Cidadela" e remover uma máquina · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** passo a passo para uma máquina nova (Windows ou Ubuntu) entrar na Guilda: comparar o código de entrada, aceitar com PIN, conferir, excluir e remover uma máquina, máquina fora da rede local · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 Guia para quem usa. Só o Dono aceita e remove máquinas. Como a entrada funciona por dentro (código de comparação, certificados, prazo): [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Como a máquina acha a Guilda: [descoberta](../conectividade/descoberta.md).
 
@@ -16,10 +16,10 @@ No fim, o instalador mostra o **código de entrada**, com 6 dígitos (ex.: `123 
 
 1. O Dono recebe no Telegram (e vê no painel, em **Guilda e saúde das máquinas**) a pergunta "Aceitar `<máquina>` (`<sistema>`) na Guilda? Código 123 456".
 2. **Compare o código** da mensagem com o da tela do instalador. Só aceite se forem iguais; diferentes indicam que alguém está no meio da conexão: recuse.
-3. Toque em **Aceitar** e responda o seu PIN. Na mesma hora, marque se a máquina **pode ser Cidadela** (padrão: não; dá para mudar depois). Só as marcadas recebem a cópia do cofre e podem assumir se a Cidadela cair ([replicação](../guilda/replicacao.md#cofre-só-nas-candidatas)).
+3. Toque em **Aceitar** e responda o seu PIN. A máquina recebe uma cópia de tudo, inclusive o cofre cifrado, e pode assumir se a Cidadela cair; para que ela nunca guarde segredos nem assuma, **exclua-a** depois (abaixo; [replicação](../guilda/replicacao.md)).
 4. O instalador termina sozinho: a máquina recebe a configuração, passa a confiar na CA da Guilda e conecta como Torre.
 
-O pedido expira se ninguém responder a tempo ([prazo](../guilda/guilda.md#entrada-na-guilda)): rode o instalador de novo. Ele não duplica nada: confere o que já existe e completa o que falta.
+O pedido **expira em 1 hora** sem resposta ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)): rode o instalador de novo. Ele não duplica nada: confere o que já existe e completa o que falta.
 
 ### Se a Guilda não for encontrada
 
@@ -44,17 +44,21 @@ O pedido expira se ninguém responder a tempo ([prazo](../guilda/guilda.md#entra
 
 A máquina reconecta sozinha depois de reinícios, de mudanças de IP e de uma troca de Cidadela. Não há nada a refazer.
 
+## Excluir uma máquina
+
+Use para uma máquina que não deve guardar segredos nem assumir o comando (por exemplo, um PC compartilhado). No painel, em **Guilda e saúde das máquinas**, marque **Excluída** e confirme com o PIN: ela apaga o cofre e o envelope, continua rodando agentes e fica fora da troca de Cidadela. Tirar a marca devolve tudo. Regras: [Guilda](../guilda/guilda.md).
+
 ## Remover uma máquina
 
 Use quando a máquina for aposentada, trocada, perdida ou se suspeitar de que foi comprometida.
 
 1. No painel, em **Guilda e saúde das máquinas**, escolha a máquina e clique em **Remover**. Confirme com o PIN.
-2. Na hora, a máquina e o Guardião dela perdem o acesso à Guilda, e os personagens que rodavam ali aparecem como **interrompidos** no canvas. Se ela era candidata e estava offline, o painel recomenda substituir os segredos do cofre.
+2. Na hora, a máquina e o Guardião dela perdem o acesso à Guilda, e os personagens que rodavam ali aparecem como **interrompidos** no canvas. Se ela não era excluída e estava offline, o cofre cifrado continua no disco dela, e o painel recomenda substituir os segredos do cofre.
 3. Para essa máquina voltar, rode o instalador de novo e aceite a entrada. Ela entra como uma máquina nova; o histórico da antiga fica guardado.
 4. Se a máquina não vai mais ser usada, [desinstale](desinstalar.md#remover-uma-torre) o Mestre dela.
 
-A Cidadela não é removida assim: antes, passe o comando a uma Torre candidata ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)).
+A Cidadela não é removida assim: antes, **passe a Cidadela** a uma Torre não excluída e na rede local, no painel, com o PIN ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
 
 ## Máquina fora da rede local
 
-A descoberta automática só funciona na rede local. Informe o endereço da Cidadela (nome ou IP e porta) que alcança a rede dela: no Ubuntu, `sudo bash install.sh --join <endereço>`; no Windows, depois do instalador, num terminal de administrador, `mestre join <endereço>` ([formação](../guilda/guilda.md#formação)).
+A descoberta automática só funciona na rede local. Informe o endereço da Cidadela (nome ou IP e porta) que alcança a rede dela **já na instalação**: no Ubuntu, `sudo bash install.sh --join <endereço>`; no Windows, num terminal de administrador, `msiexec /i mestre-<versão>-x64.msi JOIN=<endereço>`. Sem isso, o instalador do Windows não acha a Guilda e cria uma nova por engano; se já aconteceu, use `mestre join <endereço>` como em "Criou uma Guilda por engano?" ([formação](../guilda/guilda.md#formação)). Uma máquina fora da rede local nunca pode receber a Cidadela: ninguém a alcança pelo `mestre.local`.

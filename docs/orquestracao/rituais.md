@@ -24,7 +24,7 @@ Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../c
 | `name` | único no escopo |
 | alvo | um personagem existente (pelo nome) ou uma missão salva (o disparo é um `quest run`); ritual não cria personagem |
 | conteúdo | `prompt` (texto entregue a um agente como item `ritual`, com cabeçalho) ou `command` (linha digitada crua num terminal simples, criado por `spawn`, seguida de Enter) |
-| agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: fuso da Cidadela) |
+| agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda)) |
 | `--pre-run` | comando cuja saída substitui `{{output}}` no conteúdo (opcional) |
 | tempo limite na fila | padrão 30 min, nunca maior que o intervalo do ritual |
 

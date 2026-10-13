@@ -38,14 +38,15 @@ type Suite struct {
 	Tags     string
 	Budget   time.Duration // 0: no hard limit (measured)
 	FlagSlow bool
-	Lint     bool // also run golangci-lint, in parallel with the tests
+	Lint     bool   // also run golangci-lint, in parallel with the tests
+	Timeout  string // -timeout of go test; "" keeps the go default (10m)
 }
 
 // Suites by executor name.
 var Suites = map[string]Suite{
 	"fast":  {Name: "fast", Budget: 30 * time.Second, FlagSlow: true, Lint: true},
 	"full":  {Name: "full", Tags: "full", Budget: 3 * time.Minute, Lint: true},
-	"heavy": {Name: "heavy", Tags: "full,heavy"},
+	"heavy": {Name: "heavy", Tags: "full,heavy", Timeout: "0"}, // measured, no hard limit
 }
 
 // Limits of the runner.
@@ -93,6 +94,9 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	}
 	if s.Tags != "" {
 		args = append(args, "-tags", s.Tags)
+	}
+	if s.Timeout != "" {
+		args = append(args, "-timeout", s.Timeout)
 	}
 	if p := skipPattern(quarantine); p != "" {
 		args = append(args, "-skip", p)

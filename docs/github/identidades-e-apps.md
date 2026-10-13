@@ -35,7 +35,7 @@ Fazer o histórico do GitHub mostrar quem fez cada coisa: todo commit, comentár
 
 ### Permissões mínimas
 
-Todas as permissões são de repositório; nenhuma permissão de conta. O webhook fica inativo e nenhum evento é assinado ([eventos](eventos.md)).
+Todas as permissões são de repositório, menos **Repository creation: write** do App "Grão-Mestre", usada só para criar o [repositório da trava](#repositório-da-trava). O webhook fica inativo e nenhum evento é assinado ([eventos](eventos.md)).
 
 | Permissão | Grão-Mestre | Mestre | Classe comum | Para quê |
 |---|---|---|---|---|
@@ -47,6 +47,7 @@ Todas as permissões são de repositório; nenhuma permissão de conta. O webhoo
 | Commit statuses | leitura | leitura | leitura | ler CI por status |
 | Administration | escrita | — | — | rulesets e configurações aprovadas ([política](../aprovacoes/politica.md#tipos-de-ação)) |
 | Workflows | — | — | só se a classe tiver `git.workflows` `ask` ou `allow` | enviar mudanças no CI (abaixo) |
+| Repository creation | escrita | — | — | criar o repositório da trava (abaixo) |
 | Secrets | — | — | — | nunca |
 
 O GitHub não tem permissão separada de merge: merge exige Contents escrita, que o "Mestre" e as classes também têm para enviar a branch. Quem garante que só o Grão-Mestre faz merge é o motor ([ações por nível](acoes-por-nivel.md)), já que nenhum agente tem token.
@@ -56,6 +57,12 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 - O motor assina um JWT com a chave privada do App (no [cofre](../plataforma/cofre.md)) e pede um token de instalação (`POST /app/installations/{id}/access_tokens`) **restrito ao repositório da ação** e às permissões que ela usa.
 - O token dura 1 hora; o motor guarda em memória e renova 5 minutos antes. Nunca vai para disco, log ou ambiente de agente.
 - Cada instalação tem a própria cota (5.000 requisições por hora no mínimo), então cada App tem orçamento separado.
+
+### Repositório da trava
+
+- A Guilda tem um repositório **privado** só para a trava de época: `<login-do-dono>/mestre-guilda-<guild_id curto>`. Como a trava funciona (refs `refs/mestre/epoca-N`, confirmação antes de toda ação externa, quem vence a promoção) está em [trava no GitHub](../guilda/trava-no-github.md); aqui só a criação e o acesso.
+- **Criação:** na configuração do GitHub, logo depois da instalação do App "Grão-Mestre" ([criação de Apps](criacao-de-apps.md#quando-acontece)), o motor chama `POST /user/repos` (`private: true`, `auto_init: true`, porque não se cria ref em repositório vazio) com o token de instalação desse App. O App ganha acesso automático ao repositório que cria; o motor confere com `GET /installation/repositories` e grava o nome no banco.
+- O repositório só guarda o commit inicial, os commits dos pretendentes e as refs da trava; nenhum agente o vê, e o Mestre nunca o apaga sozinho. Sem ele, a Guilda não tem promoção de Cidadela.
 
 ### Autoria dos commits
 
@@ -102,6 +109,7 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 - **CA-GH-ID-07** · *rápida* — **Dado** um pedido de token para uma ação no repositório X, **quando** o motor pede o token de instalação ao GitHub falso, **então** o pedido lista só o repositório X.
 - **CA-GH-ID-08** · *pesada* — **Dado** uma mesa com personagens Dev e QA, **quando** eles fazem commits e comentam, **então** no GitHub (dublê) cada commit e comentário fica registrado com o App da classe de quem fez (MVP-5).
 - **CA-GH-ID-09** · *rápida* — **Dado** uma classe nova com `git.workflows: allow` e `app: herdar:qa` (App QA sem a permissão Workflows), **quando** o motor valida a classe, **então** recusa e explica que ela precisa de App próprio.
+- **CA-GH-ID-10** · *rápida* — **Dado** o App "Grão-Mestre" recém-instalado e o GitHub falso, **quando** a configuração do GitHub termina, **então** o motor cria `mestre-guilda-<guild_id curto>` privado e com `auto_init`, e grava o nome; **dado** o GitHub falso recusando a criação com `403`, **então** o Dono recebe o link para criar o repositório pelo navegador e nenhuma promoção é possível até o motor confirmar o acesso.
 
 ## Depende de
 
@@ -116,11 +124,14 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 - **Verificar na implementação:** o e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com` liga o commit ao bot (formato não documentado oficialmente). **Padrão:** o formato acima. **Se falhar:** os commits continuam válidos, com o nome do bot mas sem a ligação ao perfil dele no GitHub; o checklist alerta, e a autoria por papel continua visível no nome do autor e nos trailers ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)). **Onde:** no primeiro envio real (o PR `mestre/sessao-zero` ou o primeiro PR de mesa), conferindo `author.login` em `GET /repos/{o}/{r}/commits/{sha}`.
 - **Verificar na implementação:** ao ganhar a permissão Workflows, o App instalado passa a ter a permissão depois do aceite do dono na instalação. **Padrão:** os dois links acima; o motor confere `permissions.workflows` em `GET /app/installations/{id}` antes de liberar os envios. **Se falhar:** se o pedido de aceite não aparece para um App da própria conta, o Grão-Mestre manda ao Dono o link para desinstalar e instalar de novo o App naquele repositório. **Onde:** à mão, na primeira classe de teste mudada de `never` para `ask`.
 
+- **Verificar na implementação:** o token de instalação do App "Grão-Mestre" com **Repository creation: write** cria o repositório privado na conta pessoal (`POST /user/repos`), e o App ganha acesso a ele. A documentação oficial lista o endpoint para esse token; discussões antigas da comunidade dizem que não funciona, e um relato recente diz que funciona. **Padrão:** funciona. **Se falhar:** o Mestre manda ao Dono, pelo Telegram e pelo painel, o link para criar o repositório privado pelo navegador, com o nome já preenchido, e o da instalação do App "Grão-Mestre" só nele, como no fluxo dos Apps ([criação de Apps](criacao-de-apps.md)); o motor confere o acesso e segue. **Onde:** na sandbox `lucasndas/mestre-sandbox`, no primeiro acesso de teste.
+
 ## Fontes
 
 - https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
 - https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app
 - https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps
 - https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+- https://docs.github.com/en/rest/authentication/endpoints-available-for-github-app-installation-access-tokens
 - https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification
 - https://jvt.me/posts/2023/04/20/github-app-email-address

@@ -5,11 +5,13 @@ package main_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21,24 +23,65 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
+// TestMain lets the hook of the test below be this same test binary, so the
+// test needs no shell tool (cat) and runs on Linux and Windows alike.
+func TestMain(m *testing.M) {
+	if len(os.Args) == 3 && os.Args[1] == hookArg {
+		os.Exit(copyStdin(os.Args[2]))
+	}
+	os.Exit(m.Run())
+}
+
+const hookArg = "fakeagent-test-copy-stdin"
+
+// copyStdin is the hook: it saves the payload it receives on stdin.
+func copyStdin(path string) int {
+	b, err := io.ReadAll(os.Stdin)
+	if err == nil {
+		err = os.WriteFile(path, b, 0o600)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
 // The fake agent binary, called "claude", runs as a real process started by
-// the real launcher and runs its hooks as real processes. CA-DUBLES-11
-// itself (motor, base and `mestre hook`) closes when those exist (M3/M4).
+// the real launcher and runs its hooks as real processes (sh -c on Linux,
+// cmd /c on Windows). CA-DUBLES-11 itself (motor, base and `mestre hook`)
+// closes when those exist (M3/M4).
 func TestFakeAgentBinaryAsClaudeRunsRealHooks(t *testing.T) {
 	t.Parallel()
-	root := t.TempDir()
+	// Long, symlink-free path: the agent compares its working folder with
+	// the trusted one, and Windows temp folders may use 8.3 short names.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	bin := filepath.Join(root, "bin", "claude")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	build := exec.Command("go", "build", "-o", bin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 	work, cfg := filepath.Join(root, "work"), filepath.Join(root, "cfg")
 	payload := filepath.Join(root, "payload.json")
+	hook, err := json.Marshal(fmt.Sprintf(`"%s" %s "%s"`, self, hookArg, payload))
+	if err != nil {
+		t.Fatal(err)
+	}
 	testkit.WriteFiles(t, root, map[string]string{
 		"cfg/.credentials.json": "{}",
 		"cfg/.claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, work),
 		"work/.claude/settings.local.json": fmt.Sprintf(
-			`{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "cat > %s"}]}]}}`, payload),
+			`{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": %s}]}]}}`, hook),
 	})
 	l := terminal.NewExecLauncher(func(string) string { return "full" })
 	p, err := l.Start(context.Background(), terminal.Spec{

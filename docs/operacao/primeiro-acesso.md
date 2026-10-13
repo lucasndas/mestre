@@ -52,7 +52,7 @@ O Mestre age no GitHub com dois Apps fixos, **"Grão-Mestre"** e **"Mestre"**, c
 2. Clique em **Criar no GitHub**. O seu navegador abre o GitHub (entre na sua conta pessoal, se ele pedir) com o App já preenchido. Clique em **Create GitHub App**.
 3. O GitHub volta para o painel sozinho. Na mesma página, abra o link **Ligar o device flow**, marque **Enable Device Flow** na configuração do App e salve.
 4. O painel passa para o App **"Mestre"**: clique em **Criar no GitHub** e em **Create GitHub App** de novo.
-5. Em **Apps do GitHub**, os dois aparecem criados. Eles são instalados nos repositórios quando você cria cada workspace: o painel, ou o Telegram, manda o link de instalação, e você só escolhe o repositório e clica em **Install** ([sessão zero do workspace](../sessao-zero/workspace.md)).
+5. Em **Apps do GitHub**, os dois aparecem criados. Eles são instalados nos repositórios quando você cria cada workspace: o painel, ou o Telegram, manda o link de instalação, e você só escolhe o repositório e clica em **Install** ([sessão zero do workspace](../sessao-zero/workspace.md)). Logo depois da primeira instalação do "Grão-Mestre", o Mestre cria sozinho um repositório privado `mestre-guilda-…` na sua conta, a trava que garante uma só Cidadela; não apague ([repositório da trava](../github/identidades-e-apps.md#repositório-da-trava)). Se o GitHub não deixar, o painel manda o link para você criá-lo com um clique.
 6. Opcional: em **Usuários**, **Conectar GitHub** mostra um código e o endereço `https://github.com/login/device`. Autorizar ali dá ao Mestre a sua credencial pessoal, usada para incluir repositórios nas instalações sem link e, se você delegar, para aprovar em seu nome ([aprovação no GitHub](../github/aprovacao-no-github.md)).
 
 Faça isso num aparelho na rede local e que já confia na CA (passo 1): os retornos do GitHub voltam para o painel. Os Apps de classe criados depois seguem o mesmo caminho: o Grão-Mestre manda o link pelo Telegram e pelo painel, e você clica em **Criar** e **Instalar**.
@@ -64,7 +64,7 @@ Cada conta de provedor que os agentes vão usar é um **perfil de conta** de uma
 1. No painel, abra **Perfis de conta** e escolha a máquina e o provedor. Crie o perfil (ex.: `claude-trabalho`) ou use o padrão.
 2. Clique em **Configurar**. Se o CLI do provedor ainda não está no perfil, o painel o instala com o instalador oficial do provedor (depois ele se atualiza sozinho). Em seguida abre o terminal de login do perfil, que roda com a conta dos agentes (`mestre-agente`), e guia o **login** na conta do provedor. Quando o provedor mostra um link ou um código, conclua no seu navegador (no celular ou no PC). Os seus logins pessoais nos CLIs não são usados.
 3. **Só no Codex:** no mesmo terminal, o painel pede para abrir `/hooks` e **aprovar uma vez os hooks do Mestre**. Sem isso o Codex não chama o Mestre, e o perfil não recebe agentes.
-4. O perfil fica **pronto** quando o checklist confirma login e, no Codex, a confiança dos hooks (item ALL-11, [checklist](../plataforma/checklist.md)).
+4. O Mestre roda o [teste de conformidade](../provedores/conformidade.md) do provedor nesse perfil. O perfil fica **pronto** quando o teste passa e o checklist confirma login e, no Codex, a confiança dos hooks (item ALL-11, [checklist](../plataforma/checklist.md)). No Windows, só cabe um perfil Antigravity por máquina ([Antigravity](../provedores/antigravity.md#contas-múltiplas)).
 
 Repita para cada máquina nova, depois de [aceitá-la na Guilda](entrar-na-guilda.md).
 

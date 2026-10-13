@@ -31,7 +31,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
    - Mensagens ambíguas: o Grão-Mestre pergunta antes de propor.
    - Ordens vindas de **áudio** sempre passam por essa confirmação, com o texto transcrito à vista ([transcrição](anexos-e-transcricao.md)). O mesmo vale para aprovações dadas por áudio.
 4. Se for preciso, o motor pede a **confirmação reforçada** (abaixo).
-5. O decreto passa a **ativo** e recebe um número sequencial por instalação (ex.: "decreto 7"). A resposta ao usuário cita esse número.
+5. O decreto passa a **ativo** e recebe um número sequencial por Guilda (ex.: "decreto 7"). A resposta ao usuário cita esse número.
 
 - O agente só propõe. Quem grava, confere nível e aplica é o motor.
 - Só o motor aceita o clique em Confirmar, e só do próprio autor.
@@ -65,7 +65,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 ### Validade (regra permanente)
 
-- A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no fuso da Cidadela; "por 3 dias" vira 72 horas.
+- A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no fuso do workspace ([fuso da Guilda](../painel/administracao.md#fuso-da-guilda), se o workspace não tem um próprio); "por 3 dias" vira 72 horas.
 - O Grão-Mestre converte a validade em data e hora absolutas, e elas aparecem na confirmação.
 - Ao vencer, o decreto passa a **expirado** sozinho. O motor avisa o autor.
 

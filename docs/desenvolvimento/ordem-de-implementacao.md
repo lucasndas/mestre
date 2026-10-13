@@ -17,22 +17,22 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 | Marco | Nome | O que fica pronto ao final |
 |---|---|---|
 | M0 | Fundação | executor das suítes (`tools/testrun`), verificação de docs (`tools/docscheck`), dublês e `testkit` (relógio injetável, rede, PTY, git, Telegram e GitHub falsos, agente falso), projetos de treino (`testkit.NewProject`), `logging` com [mascaramento](../arquitetura/seguranca.md#mascaramento-em-logs) |
-| M1 | Base local | banco e migrações ([persistência](../arquitetura/persistencia.md)), cofre (DPAPI no Windows e arquivo `0600` no Linux), terminal (PTY/ConPTY e emulador), `internal/gitx` (wrapper do binário `git`), canal local CLI ↔ motor |
-| M2 | Transporte e Guilda | TLS e CA da Guilda ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)), protocolo WSS com época, descoberta da Guilda, entrada na Guilda, ficha da máquina e replicação do banco e do cofre |
+| M1 | Base local | CI com matriz Linux e Windows e a `main` protegida ([testes](../qualidade/testes.md#como-as-suítes-são-selecionadas)), banco e migrações ([persistência](../arquitetura/persistencia.md)), cofre (DPAPI no Windows e arquivo `0600` no Linux), terminal (PTY/ConPTY, emulador e `mestre-launcher`), `internal/gitx` (wrapper do binário `git`), canal local CLI ↔ motor |
+| M2 | Transporte e Guilda | TLS e CA da Guilda ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)), protocolo WSS com época, descoberta da Guilda, entrada e exclusão de máquinas, instâncias múltiplas, ficha da máquina, replicação do banco, dos arquivos e do cofre, e época, fencing e troca de Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md)) atrás da interface da trava |
 | M3 | CLI e provedores | CLI (convenções), adaptador e `mestre hook`, [precedência](../arquitetura/precedencia.md), permissões, reforço nativo, classes, teto, os três provedores e o teste de conformidade |
 | M4 | Orquestração | workspaces, sessão zero, mesas, personagens, conexões, esperas e caixa de entrada, missões, pergaminhos, rituais, grimórios, bases e fichas, comandos de comunicação e coordenação, skills geradas |
-| M5 | Integrações | GitHub, Telegram, usuários e níveis, decretos, aprovações, Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
+| M5 | Integrações | GitHub e a [trava no GitHub](../guilda/trava-no-github.md) (primeiro marco com ação externa; antes dele não há promoção), Telegram, usuários e níveis, decretos, aprovações, Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
 | M6 | Painel | login, canvas, visão do workspace, conversa e aprovações, administração |
-| M7 | Plataforma, autocura, troca de Cidadela e Operador do PC | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs, troca de Cidadela; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
+| M7 | Plataforma, autocura e Operador do PC | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
 
 - **Guardião em paralelo:** [guardiao.md](../autocura/guardiao.md) depende só de documentos até o M2 e pode começar logo depois do M2, em paralelo com M3 a M6.
-- **Escolhas antes de cada marco:** biblioteca de mDNS e o modo de captura das mudanças do banco ([replicação](../guilda/replicacao.md#verificar-na-implementação)) antes do M2, e gerador de tipos TypeScript antes do M6 ([convenções](convencoes.md#código-gerado)).
+- **Escolhas já feitas:** a biblioteca de mDNS e o gerador de tipos TypeScript ([convenções](convencoes.md#código-gerado)). O modo de captura das mudanças do banco sai do spike do começo do M2 ([regras de execução](#regras-de-execução-da-ordem)).
 
 ### Tudo roda nos dois sistemas
 
 Qualquer máquina da Guilda pode virar Cidadela ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)), então **nada do Mestre é "só Linux"**: painel, bot do Telegram, `whisper-server` e `ffmpeg`, banco, GitHub, cofre e replicação precisam funcionar também no Windows, desde o marco em que nascem.
 
-- **Pronto, em cada marco,** inclui a suíte completa passando no CI Windows, além do Linux ([testes](../qualidade/testes.md)): o cofre com DPAPI e o banco no M1; protocolo, descoberta, entrada na Guilda e replicação no M2; GitHub, Telegram (falso) e transcrição no M5; o painel servido pelo motor no M6.
+- **Pronto, em cada marco,** inclui a suíte completa passando no CI Windows, além do Linux, desde o M1 ([testes](../qualidade/testes.md)): o cofre com DPAPI, o banco e o `mestre-launcher` no M1; protocolo, descoberta, entrada na Guilda, replicação e troca de Cidadela (com instâncias múltiplas) no M2; GitHub, Telegram (falso) e transcrição no M5; o painel servido pelo motor no M6.
 - O que depende de serviço instalado ou de modelo real (Whisper com o modelo, mDNS do sistema) fecha na pesada, com a Cidadela em cada sistema ([laboratório](../qualidade/testes.md#laboratório)).
 - Um teste da completa que só roda num sistema precisa dizer por quê (ConPTY, systemd) e ter o par no outro sistema.
 
@@ -50,26 +50,32 @@ O [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-p
 | [canvas](../painel/canvas.md), [administração](../painel/administracao.md) (M6) | CA-CANVAS-08, CA-ADM-09 |
 | [instalação](../plataforma/instalacao-e-atualizacao.md), [checklist](../plataforma/checklist.md) (M7) | CA-INST-14, CA-CHK-15 (e CA-INST-11 ganha a exceção do Operador) |
 
-### Critérios do cofre em marcos posteriores
+### Critérios em marcos posteriores
 
-O [cofre](../plataforma/cofre.md) é do M1, mas o segundo fator, o filtro de segredos nas mensagens e os avisos de validade usam o Telegram, o Grão-Mestre e a caixa de entrada: CA-COFRE-10 a CA-COFRE-17 são implementados no M5, junto do [bot](../telegram/bot.md) (com CA-BOT-09), CA-COFRE-18 no M4, junto das [bases e fichas](../orquestracao/bases-e-fichas.md) (MCP de navegador do personagem), CA-COFRE-20 no M6, com a [administração](../painel/administracao.md), e CA-COFRE-19 no M7, com a [instalação](../plataforma/instalacao-e-atualizacao.md).
+Critérios de documentos de um marco que usam peças de marcos seguintes; cada um é implementado no marco indicado, e o documento continua no marco de origem no mapa. "Guardião" quer dizer quando o [Guardião](../autocura/guardiao.md) estiver pronto (depois do M2, até a etapa 1 do M7).
 
-### Critérios dos dublês em marcos posteriores
-
-Os [dublês](../qualidade/dubles.md) são do M0, mas dois critérios dependem de peças de marcos seguintes: CA-DUBLES-08 fecha no M2, quando a Torre real do [protocolo](../conectividade/protocolo.md) substitui o cliente de teste que reconecta com o mesmo backoff, e CA-DUBLES-11 fecha no M4, com os [personagens](../orquestracao/personagens.md) (precisa do terminal real do M1 e do `mestre hook` do M3).
+| Documento (marco no mapa) | Critério → marco em que fecha |
+|---|---|
+| [dublês](../qualidade/dubles.md) (M0) | CA-DUBLES-08 → M2 (Torre real do protocolo); CA-DUBLES-11 → M4 (personagens) |
+| [cofre](../plataforma/cofre.md) (M1) | CA-COFRE-09 e CA-COFRE-18 → M4 (personagens e MCP de navegador); CA-COFRE-10 a CA-COFRE-17 → M5 (bot, com CA-BOT-09); CA-COFRE-20 → M6 (administração); CA-COFRE-05 → Guardião (réplica e página reserva); CA-COFRE-19 → M7 (instalação) |
+| [protocolo](../conectividade/protocolo.md) (M2) | CA-PROTO-08 → M4 (esperas); CA-PROTO-09 → M6 (painel); CA-PROTO-07 → Guardião |
+| [Guilda](../guilda/guilda.md) (M2) | CA-GUILDA-02, CA-GUILDA-09 e CA-GUILDA-12 → M5 (aprovação e PIN do Dono pelo bot); CA-GUILDA-06 → Guardião; CA-GUILDA-08 → M7 (instalação) |
+| [ficha da máquina](../guilda/ficha-da-maquina.md) (M2) | CA-FMAQ-04 → M3 (classes); CA-FMAQ-03 → M4 (fichas e perfis de conta) |
+| [replicação](../guilda/replicacao.md) (M2) | CA-REPL-08 → M4 (espelho do workspace); CA-REPL-06 → M7 (checklist) |
+| [Cidadela e Torres](../guilda/cidadela-e-torres.md) (M2) | CA-CIDADELA-10, CA-CIDADELA-11 e CA-CIDADELA-13 → M4 (personagens, missões, esperas); CA-CIDADELA-03 e CA-CIDADELA-12 → M5 (ações no GitHub e trava); CA-CIDADELA-08 → M6 (painel); CA-CIDADELA-05, CA-CIDADELA-06 e CA-CIDADELA-07 → M7 (Torre condutora, Telegram em modo reduzido, página reserva) |
 
 ### Spikes do M1
 
-Os resultados dos spikes valem para o serviço único `mestre` (os nomes de papel mudaram depois, [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)). Os spikes de Windows rodam no **Windows Sandbox** do PC do Dono, descartável a cada abertura ([como preparar e rodar](ambiente.md#windows-sandbox-para-os-spikes-do-m1)); a VM Windows dedicada continua só para o [laboratório](../qualidade/testes.md#laboratório) da suíte pesada. Os de Linux rodam nesta máquina de desenvolvimento. Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
+Os resultados dos spikes valem para o serviço único `mestre` ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)). Os spikes de Windows rodam no **Windows Sandbox** do PC do Dono, descartável a cada abertura ([como preparar e rodar](ambiente.md#windows-sandbox-para-os-spikes-do-m1)); a VM Windows dedicada continua só para o [laboratório](../qualidade/testes.md#laboratório) da suíte pesada. Os de Linux rodam nesta máquina de desenvolvimento. São itens de "Verificar na implementação" que mudam camadas de base se falharem, testados antes de fechar o terminal e o canal local:
 
-| Spike | Se falhar, muda | Onde está o item |
+| Spike | Resultado ou plano se falhar | Onde está o item |
 |---|---|---|
-| ConPTY com o processo iniciado como `mestre-agente` (`CreateProcessAsUser`, perfil carregado) a partir do serviço, na sessão 0 | o serviço auxiliar `mestre-launcher` (LocalSystem) inicia os processos; ou a distribuição passa a levar o `OpenConsole.exe` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
-| conta virtual `NT SERVICE\Mestre` com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | o serviço auxiliar `mestre-launcher` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
-| `claude`, `codex` e `agy` gravando e achando o login no perfil do `mestre-agente` no Windows | login em arquivo no perfil de conta, ou o provedor não é oferecido naquela máquina | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
-| identificação do chamador subindo a árvore de processos, no Windows | um Job Object por terminal na verificação | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
-| identificação do chamador, no Linux: **feito** (2026-10-12); a árvore falhou para órfãos (`nohup … &`, `setsid -f`, tmux) | adotado um cgroup v2 por terminal | [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli) |
-| `claude`, `codex` e `agy` rodando como `mestre-agente` no Linux: **feito** (2026-10-13); os três funcionam só com o perfil de conta, sem pasta pessoal, com credencial em arquivo `0600`; o Codex exige `--no-daemon` | dispensada a pasta pessoal própria para a conta dos agentes | [segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes) |
+| ConPTY como `mestre-agente` a partir do serviço, na sessão 0: **feito** (2026-10-13) | falhou no padrão (`LoadUserProfile` recusado à conta virtual); adotado o `mestre-launcher` mínimo, que entrega o token | [Windows](../arquitetura/windows.md#resultado-dos-spikes-do-m1) |
+| conta virtual `NT SERVICE\Mestre` com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege`: **feito** (2026-10-13) | passou; declarar os privilégios exigidos tira `SeImpersonate` e `SeCreateGlobal` | [Windows](../arquitetura/windows.md#serviços-no-windows) |
+| `claude`, `codex` e `agy` com o login no perfil do `mestre-agente` no Windows: **feito** (2026-10-13) | passou; `agy` no Gerenciador de Credenciais (um perfil Antigravity por máquina Windows); fica um item do `agy` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
+| identificação do chamador subindo a árvore de processos, no Windows: **aberto** | um Job Object por terminal na verificação | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
+| identificação do chamador, no Linux: **feito** (2026-10-12) | a árvore falhou para órfãos; adotado um cgroup v2 por terminal | [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli) |
+| `claude`, `codex` e `agy` como `mestre-agente` no Linux: **feito** (2026-10-13) | funcionam só com o perfil de conta, credencial em arquivo `0600`; o Codex exige `--no-daemon` | [segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes) |
 
 ## Mapa de documentos por marco e etapa
 
@@ -86,6 +92,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M2 | 2 | [descoberta](../conectividade/descoberta.md) |
 | M2 | 3 | [Guilda](../guilda/guilda.md) |
 | M2 | 4 | [ficha da máquina](../guilda/ficha-da-maquina.md) · [replicação](../guilda/replicacao.md) |
+| M2 | 5 | [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
 | M3 | 1 | [adaptador](../provedores/adaptador.md) |
 | M3 | 2 | [permissões](../classes/permissoes.md) |
 | M3 | 3 | [reforço nativo](../classes/reforco-nativo.md) · [teto do workspace](../classes/teto-do-workspace.md) · [convenções da CLI](../cli/convencoes.md) · [despachante de hooks](../provedores/despachante-de-hooks.md) |
@@ -104,7 +111,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M4 | 11 | [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) |
 | M4 | 12 | [skills geradas](../cli/skills-geradas.md) |
 | M5 | 1 | [identidades e Apps](../github/identidades-e-apps.md) · [usuários e níveis](../telegram/usuarios-e-niveis.md) |
-| M5 | 2 | [política de aprovação](../aprovacoes/politica.md) · [ações por nível](../github/acoes-por-nivel.md) · [bot](../telegram/bot.md) |
+| M5 | 2 | [política de aprovação](../aprovacoes/politica.md) · [ações por nível](../github/acoes-por-nivel.md) · [bot](../telegram/bot.md) · [trava no GitHub](../guilda/trava-no-github.md) |
 | M5 | 3 | [fluxo de aprovação](../aprovacoes/fluxo.md) · [CLI de issues e PRs](../cli/coordenacao-github.md) · [criação de Apps](../github/criacao-de-apps.md) · [eventos do GitHub](../github/eventos.md) · [segurança do canal](../telegram/seguranca-do-canal.md) |
 | M5 | 4 | [limites de uso](../plataforma/limites-de-uso.md) · [decretos](../telegram/decretos.md) · [roteamento](../telegram/roteamento.md) |
 | M5 | 5 | [aprovação no GitHub](../github/aprovacao-no-github.md) · [Grão-Mestre](../orquestracao/grao-mestre.md) · [anexos e transcrição](../telegram/anexos-e-transcricao.md) |
@@ -115,16 +122,16 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M7 | 1 | [Guardião](../autocura/guardiao.md) · [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | M7 | 2 | [camadas](../autocura/camadas.md) · [checklist](../plataforma/checklist.md) |
 | M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) |
-| M7 | 4 | [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) · [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
+| M7 | 4 | [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) |
 
 ### Regras de execução da ordem
 
 - **M0, além dos documentos:** layout do repositório em Go ([convenções](convencoes.md)) e o `logging` com mascaramento, antes da etapa 1.
-- **M1:** os [spikes](#spikes-do-m1) de Linux vêm antes da etapa 1, e as partes de Linux do M1 andam primeiro, com o início de processos atrás de uma interface (`internal/terminal`, `Launcher`) que o Windows implementa depois. **Os spikes de Windows precisam rodar antes de fechar o M1, e nada do M2 nem do `winsvc` começa antes deles.** banco e migrações ([persistência](../arquitetura/persistencia.md)) e `internal/gitx` entram junto da etapa 1.
-- **M2:** TLS e CA da Guilda entram junto da etapa 1; a época vai no envelope desde a etapa 1, e a certidão nasce com a [Guilda](../guilda/guilda.md) (etapa 3). A replicação (etapa 4) começa com o spike de captura das mudanças do banco, nos dois sistemas. Depois do M2, o [Guardião](../autocura/guardiao.md) pode começar em paralelo com M3 a M6 (a etapa 1 do M7 só confere que ele está pronto).
+- **M1:** o CI (`.github/workflows/ci.yml`, matriz `ubuntu-latest` e `windows-latest`) e o ruleset da `main` que o exige ([passo do Dono](ambiente.md#ci-e-proteção-da-main)) entram antes da etapa 1; os [spikes](#spikes-do-m1) de Linux vêm antes da etapa 1, e as partes de Linux do M1 andam primeiro, com o início de processos atrás de uma interface (`internal/terminal`, `Launcher`) que o Windows implementa depois. Os três primeiros spikes de Windows já rodaram; o da identificação do chamador roda antes de fechar o M1, e nada do M2 nem do `winsvc` começa antes dele. banco e migrações ([persistência](../arquitetura/persistencia.md)) e `internal/gitx` entram junto da etapa 1.
+- **M2:** começa pelo spike de captura das mudanças do banco, nos dois sistemas, **antes da replicação** ([replicação](../guilda/replicacao.md#verificar-na-implementação)); é o único momento dele. TLS e CA da Guilda entram junto da etapa 1; a época vai no envelope desde a etapa 1, e a certidão nasce com a [Guilda](../guilda/guilda.md) (etapa 3). Época, fencing e troca de Cidadela (etapa 5) chegam com a replicação, atrás de uma interface da trava; nos testes do M2 a trava é a falsa do `testkit`, e a [trava no GitHub](../guilda/trava-no-github.md) chega no M5: até lá não há promoção numa Guilda real. O teste de troca da completa usa [instâncias múltiplas](../arquitetura/componentes.md#instâncias), com os Guardiões. Depois do M2, o [Guardião](../autocura/guardiao.md) pode começar em paralelo com M3 a M6 (a etapa 1 do M7 só confere que ele está pronto).
 - **Conformidade real no fim do M3:** depois da etapa 5, uma primeira rodada do [teste de conformidade](../provedores/conformidade.md) com os CLIs reais nesta máquina Linux, para achar cedo mudanças dos provedores; a rodada completa, nos dois sistemas, é a da suíte pesada no laboratório.
 - **"Casca" dos comandos da CLI:** um comando que outro documento usa antes da sua etapa (ex.: `mestre done` nas [missões](../orquestracao/missoes.md), etapa 9, antes da [CLI de comunicação](../cli/comunicacao.md), etapa 10) é implementado como casca junto do documento que o usa: sintaxe, chamada pelo [canal local](../arquitetura/canal-local.md) e o caminho feliz. Os critérios de aceite do documento da CLI (erros, códigos de saída, `--json`) fecham na etapa dele.
-- **M7:** a troca de Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md)) entra na etapa 4, com a autocura pronta (camadas, Telegram em modo reduzido, página reserva); depois da etapa 4, o [Operador do PC](#operador-do-pc-no-m7) e, por último, a suíte pesada (MVP-1 a MVP-15).
+- **M7:** com a autocura pronta (camadas, Telegram em modo reduzido, página reserva) fecham os critérios da troca de Cidadela que dependem dela ([acima](#critérios-em-marcos-posteriores)); depois da etapa 4, o [Operador do PC](#operador-do-pc-no-m7) e, por último, a suíte pesada (MVP-1 a MVP-15).
 
 ## Como usar no dia a dia
 

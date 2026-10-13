@@ -12,7 +12,9 @@
 //
 // The cgroup column needs a delegated cgroup; without one the command
 // re-runs itself under `systemd-run --user --scope -p Delegate=yes`.
-// The same matrix is asserted by spike_full_test.go (full suite).
+// The same matrix is asserted by spike_test.go, outside every suite:
+//
+//	go test -tags spike ./tools/spikes/linux/01-caller-identity
 package main
 
 import (

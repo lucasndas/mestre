@@ -1,0 +1,96 @@
+# CI of the repository: the fast and full suites on Linux and Windows, in
+# parallel, required by the ruleset of main (docs/desenvolvimento/ambiente.md
+# and docs/qualidade/testes.md). Third-party actions are pinned by commit SHA;
+# golangci-lint is the pinned release binary, checked by its SHA-256.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOLANGCI_LINT_VERSION: 2.14.0
+
+jobs:
+  test:
+    # The ruleset of main requires these two check names.
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Byte-identical checkout on Windows too: gofmt and docscheck expect LF.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Uses the toolchain line of go.mod.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install golangci-lint (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          f="golangci-lint-$GOLANGCI_LINT_VERSION-linux-amd64"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "https://github.com/golangci/golangci-lint/releases/download/v$GOLANGCI_LINT_VERSION/$f.tar.gz"
+          echo "ab90aeb7b066f92a33415b638a50fe5344bbb75a0d32ad30cc248d88f81032ab  $f.tar.gz" | sha256sum -c -
+          tar -xzf "$f.tar.gz"
+          echo "$RUNNER_TEMP/$f" >> "$GITHUB_PATH"
+
+      - name: Install golangci-lint (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $f = "golangci-lint-$env:GOLANGCI_LINT_VERSION-windows-amd64"
+          $zip = Join-Path $env:RUNNER_TEMP "$f.zip"
+          Invoke-WebRequest -Uri "https://github.com/golangci/golangci-lint/releases/download/v$env:GOLANGCI_LINT_VERSION/$f.zip" -OutFile $zip
+          $sum = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
+          if ($sum -ne 'b15f903d1649283a2ab6e8d2f0c317eaf1f9f6b3763950e7e8b7e72a43dd724f') { throw "golangci-lint checksum mismatch: $sum" }
+          Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $env:RUNNER_TEMP $f)
+
+      - name: golangci-lint version
+        run: golangci-lint version
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Documentation check
+        run: go run ./tools/docscheck
+
+      - name: Code rules
+        run: go run ./tools/codecheck
+
+      # The suite budgets are measured with a warm build cache
+      # (docs/qualidade/testes.md#executor-testrun): compile the test
+      # binaries of both suites first, running no test.
+      - name: Warm the build cache
+        run: |
+          go test -run '^$' ./...
+          go test -tags full -run '^$' ./...
+
+      - name: Fast suite
+        run: go run ./tools/testrun fast
+
+      - name: Full suite
+        run: go run ./tools/testrun full

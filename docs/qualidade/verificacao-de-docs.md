@@ -29,7 +29,7 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
    - linha 1: `# <Título>`; linha 2: vazia;
    - linha 3: `> **Assunto:** <texto> · **Componente:** <valor> · **Atualizado:** <AAAA-MM-DD>`;
    - componente: `Motor`, `Guardião`, `CLI`, `Painel`, `Todos` ou `Projeto`;
-   - data válida e não futura (a ferramenta recebe o relógio injetável, ver [dubles.md](dubles.md)).
+   - data válida e não futura, comparada com o dia de hoje em UTC, qualquer que seja o fuso da máquina (a ferramenta recebe o relógio injetável, ver [dubles.md](dubles.md)).
 6. **Seções na ordem certa:**
    - *documento de funcionalidade* (todo documento com a seção Objetivo): as seções de nível 2 `Objetivo`, `Comportamento`, `Regras e erros`, `Critérios de aceite`, `Depende de` e, opcionais no fim, `Verificar na implementação`, `A confirmar` e `Fontes`;
    - cada item da seção `Verificar na implementação` (em qualquer documento) começa com `**Verificar na implementação:**` e traz, no próprio item, os três marcadores `**Padrão:**` (o que se implementa até lá), `**Se falhar:**` (o plano concreto) e `**Onde:**` (em que teste ou etapa é verificado);

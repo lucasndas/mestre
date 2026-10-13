@@ -13,7 +13,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 - Só o motor da máquina cria terminais, a pedido da Cidadela (`terminal.open`, [protocolo](../conectividade/protocolo.md)), com a base já resolvida: executável, argumentos, ambiente e pasta ([adaptador](../provedores/adaptador.md)).
 - **Linux:** `creack/pty`; o processo nasce com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) numa sessão nova (`setsid`) e dentro do cgroup v2 próprio do terminal, `term-<id>`, criado sob o cgroup delegado do `mestre` (`Delegate=yes`, [componentes](componentes.md#serviços-e-contas-padrão)) e passado ao `clone` (`CLONE_INTO_CGROUP`). O processo já nasce no cgroup, sem janela de corrida, e todo descendente fica nele, mesmo o que troca de pai ou de sessão (`nohup`, double fork, `setsid -f`). O cgroup agrupa a árvore para o encerramento e identifica o terminal no [canal local](canal-local.md#identificação-e-versão).
 - **Linux sem cgroup delegado** (suíte completa, que roda como processos comuns, ou LIN-11 do [checklist](../plataforma/checklist.md#itens-linux) falhou): o terminal nasce só na sessão nova, que agrupa a árvore dele.
-- **Windows:** wrapper próprio de ConPTY dentro do serviço; o processo nasce com a conta `mestre-agente`, por `CreateProcessAsUser` com o perfil dela carregado ([Windows](windows.md#conpty)); cada terminal entra num Job Object próprio com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, que agrupa a árvore dele.
+- **Windows:** wrapper próprio de ConPTY dentro do serviço; o processo nasce com o token do `mestre-agente`, com o perfil dela carregado, entregue pelo [`mestre-launcher`](windows.md#iniciador-mestre-launcher), por `CreateProcessAsUser` ([Windows](windows.md#conpty)); cada terminal entra num Job Object próprio com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, que agrupa a árvore dele.
 - `TERM=xterm-256color` no ambiente de todo terminal.
 - **Tamanho:** 200 colunas × 50 linhas (padrão, configurável por máquina), definido na criação e **fixo**. O navegador nunca redimensiona: o xterm.js mostra o terminal com rolagem e zoom. Assim vários navegadores veem exatamente a mesma tela, e as telas reconhecidas pelo adaptador não mudam com quem está olhando.
 - O terminal é registrado em `terminals` ([persistência](persistencia.md#registro-de-terminais)) antes de o processo começar a rodar.
@@ -25,6 +25,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
   - `mestre check` e a mensagem `terminal.screen` devolvem o texto da tela (e, com `--lines`, do histórico), sem sequências de controle;
   - a operação `Screens` do adaptador recebe a tela renderizada para reconhecer prontidão e telas interativas ([adaptador](../provedores/adaptador.md#prontidão-e-telas-interativas));
   - "tela estável" é a tela sem mudança por 500 ms (padrão), medidos pelo relógio injetável.
+- No Windows, um `ResizePseudoConsole` faz o ConPTY redesenhar a tela inteira, e o texto antigo volta no fluxo: o emulador trata o redesenho como tela refeita, não como saída nova, e o adaptador não conta de novo um texto que só reapareceu. Por isso o tamanho é fixo e só se define na criação (abaixo).
 
 ### Buffer, painel e log
 
@@ -40,7 +41,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 1. **Gracioso:** o adaptador pede a saída normal do agente (comando do provedor) e o motor espera até 10 s (padrão).
 2. **Sinal:** no Linux, `SIGTERM` para o grupo da sessão; no Windows, `ClosePseudoConsole`. Espera mais 10 s.
-3. **Forçado:** no Linux, `cgroup.kill` no cgroup do terminal (alcança também quem saiu da sessão com `setsid -f`), espera `populated 0` em `cgroup.events` (por inotify, sem consulta periódica) e remove o cgroup; sem cgroup delegado, `SIGKILL` para o grupo e para todo processo que ainda tenha a mesma sessão. No Windows, `TerminateJobObject`.
+3. **Forçado:** no Linux, `cgroup.kill` no cgroup do terminal (alcança também quem saiu da sessão com `setsid -f`), espera `populated 0` em `cgroup.events` (por inotify, sem consulta periódica) e remove o cgroup; sem cgroup delegado, `SIGKILL` para o grupo e para todo processo que ainda tenha a mesma sessão. No Windows, `TerminateJobObject`: é obrigatório, porque um processo com console próprio (e o `conhost.exe` dele) sobrevive ao `ClosePseudoConsole` do passo 2; o Job alcança os dois.
 
 - Quando encerrar é seguro (e quando é forçado) é decidido em [personagens](../orquestracao/personagens.md); este documento só garante que nenhum processo da árvore sobra.
 - Processo que termina sem pedido: o motor registra o código de saída e informa `terminal.status`; o personagem vai para `interrupted` ([personagens](../orquestracao/personagens.md)).
@@ -61,6 +62,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 - **CA-TERM-04** · *rápida* — **Dado** dois navegadores abrindo o mesmo terminal com larguras diferentes, **quando** recebem a saída, **então** o tamanho do terminal continua 200×50 e os dois recebem os mesmos bytes.
 - **CA-TERM-05** · *completa* — **Dado** um terminal real cujo processo iniciou um neto que ignora `SIGTERM` e, no Linux, outro neto que saiu da sessão com `setsid -f`, **quando** o encerramento chega ao passo 3, **então** nenhum processo da árvore continua vivo, no Linux e no Windows, e no Linux o cgroup do terminal foi removido; o neto com `setsid -f` precisa de cgroup delegado (`systemd-run --user --scope -p Delegate=yes`) e, sem gerenciador systemd de usuário, essa parte é pulada com o motivo.
 - **CA-TERM-06** · *completa* — **Dado** um terminal real que imprime um token `ghp_…`, **quando** a linha vai para o log, **então** o arquivo de log tem `[segredo]` no lugar do token e o buffer guarda os bytes como saíram.
+- **CA-TERM-07** · *completa* — **Dado** o `mestre-launcher` iniciado como processo comum no CI Windows, configurado para aceitar só a conta do processo de teste e só a conta de agente do teste, **quando** um processo com outra conta abre o pipe, o cliente pede outra conta ou pede algo que não seja `logon` ou `release`, **então** cada pedido é recusado e registrado, e nenhum token é entregue; **dado** o processo de teste que cai com um token entregue, **então** o launcher descarrega o perfil e fecha o token.
 
 ## Depende de
 
@@ -71,4 +73,4 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 - **Verificar na implementação:** `github.com/charmbracelet/x/vt` renderiza fielmente as telas de Claude Code, Codex e Antigravity (modo alternativo de tela, regiões de rolagem, caracteres largos). **Padrão:** essa biblioteca. **Se falhar:** `github.com/hinshun/vt10x`, atrás da mesma interface interna do emulador. **Onde:** CA-TERM-02 com as gravações de tela capturadas pelo [teste de conformidade](../provedores/conformidade.md).
 
-O ConPTY com o processo iniciado como `mestre-agente` a partir do serviço é um spike do M1 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#spikes-do-m1)); o item está em [Windows](windows.md#verificar-na-implementação).
+O ConPTY com o processo iniciado como `mestre-agente` a partir do serviço foi spike do M1 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#spikes-do-m1)); o resultado e o item que ficou estão em [Windows](windows.md#resultado-dos-spikes-do-m1).

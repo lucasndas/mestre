@@ -20,11 +20,11 @@ Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspa
   - O último `update_id` processado também fica no banco.
   - Assim um reinício não perde nem repete updates (deduplicação por `update_id`).
 - **Erros de rede:** o laço tenta de novo com backoff de 1 s a 60 s, com variação aleatória.
-- **Um só leitor:** só um processo pode ler os updates por vez.
-  - **Época:** o motor só lê e envia com a época da Guilda confirmada; cada envio e cada ação disparada por um botão levam a época, e o motor recusa a de época menor que a do banco ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
-  - Um erro `409 Conflict` no `getUpdates` indica outra instância ativa: o motor para de ler **e de enviar**, fica em "Cidadela suspensa", registra o alerta na auditoria e no painel e confere a época antes de voltar a agir.
-  - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em modo reduzido, com trava para só um assumir.
-  - Quando a Cidadela volta, ou uma Torre é promovida a Cidadela, o motor da Cidadela de época atual retoma o bot ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
+- **Um só leitor:** só a Cidadela da época mais recente lê e envia.
+  - **Época:** toda chamada ao Telegram (inclusive cada `getUpdates`, cada envio e cada ação disparada por um botão) só sai depois de a Cidadela confirmar na trava que a época dela é a mais recente ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); sem a confirmação, nada sai e o envio fica na fila de saída.
+  - **O `409 Conflict` é só sinal** ([por quê](../guilda/trava-no-github.md#o-409-do-telegram)): quem o recebe confere a trava na hora; se a época dele não é a mais recente, para de ler e de enviar e se suspende ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)); se é, segue e registra o alerta na auditoria e no painel.
+  - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em [modo reduzido](../autocura/telegram-modo-reduzido.md), a única exceção sem trava (só alertas, os botões Promover e Esperar e `/status`).
+  - Quando a Cidadela volta, ou uma máquina é promovida a Cidadela, o motor da Cidadela de época confirmada retoma o bot.
 
 ```mermaid
 flowchart LR
@@ -69,7 +69,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 | `/pausar [workspace\|mesa]` | pausa o escopo (efeito em [pausa](../orquestracao/mesas.md#pausa)) |
 | `/retomar [workspace\|mesa]` | desfaz o `/pausar` |
 | `/travar`, `/destravar` | emergência ([segurança do canal](seguranca-do-canal.md)) |
-| `/guilda` | máquinas da Guilda com papel (Cidadela ou Torre), online/offline e a época; ao Dono, também os pedidos de entrada na Guilda e de promoção pendentes, com os botões ([Guilda](../guilda/guilda.md)) |
+| `/guilda` | máquinas da Guilda com papel (Cidadela ou Torre), online/offline, excluída ou não e a época; ao Dono, também os pedidos de entrada na Guilda e de promoção pendentes e os botões **Passar a Cidadela** e **Excluir**, todos com PIN ([Guilda](../guilda/guilda.md)) |
 | `/operador encerrar` | encerra na hora as sessões ativas do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) nos workspaces do usuário, sem a espera de 60 s |
 
 - **`/pausar` e `/retomar`:**
@@ -81,7 +81,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Mensagens de saída
 
 - **Quem envia:**
-  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) os pedidos "Sistema" de atualização do Mestre, de entrada de máquina na Guilda e de promoção de uma Torre a Cidadela, todos com botão e PIN, só ao Dono ([política](../aprovacoes/politica.md#tipos-de-ação); a forma da entrada é a pendência P1 em [Guilda](../guilda/guilda.md)), os pedidos de segundo fator e o aviso do Operador do PC (abaixo).
+  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) os pedidos "Sistema" de atualização do Mestre, de entrada de máquina na Guilda, de promoção a Cidadela, de passar a Cidadela e de excluir máquina, todos com botão e PIN, só ao Dono ([política](../aprovacoes/politica.md#tipos-de-ação); a entrada em [Guilda](../guilda/guilda.md#entrada-na-guilda)), os pedidos de segundo fator e o aviso do Operador do PC (abaixo).
   - **Grão-Mestre:** conversa, ou seja, respostas (`mestre reply`), resumos de épico, missões concluídas, notificações (`mestre notify`) e pedidos de aprovação. A sintaxe está em [CLI de comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md).
 - **Para quem:**
   - Uma resposta vai ao usuário e à conversa de origem ([resposta pelo mesmo canal](../orquestracao/esperas-e-caixa-de-entrada.md)).
@@ -127,8 +127,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **CA-BOT-09** · *rápida* — **Dado** um pedido de segundo fator aberto para Ana e o Grão-Mestre livre, **quando** Ana manda `482913`, **então** o motor usa o texto no login, a caixa de entrada do Grão-Mestre não recebe nada e as duas mensagens são apagadas; **quando** Bia manda um texto ao mesmo tempo, **então** ele segue o caminho normal até o Grão-Mestre.
 - **CA-BOT-10** · *rápida* — **Dado** uma sessão do Operador do PC ativa, **quando** o Dono toca **Encerrar agora** na mensagem fixada ou manda `/operador encerrar`, **então** o motor manda fechar o terminal do Operador na hora, a mensagem passa a "encerrado por <nome>" e é desafixada.
 - **CA-BOT-08** · *rápida* — **Dado** um usuário autorizado, **quando** ele manda uma figurinha, **então** o bot recusa e lista os tipos aceitos, sem enfileirar nada.
-- **CA-BOT-11** · *rápida* — **Dado** o Telegram falso respondendo `409 Conflict` ao `getUpdates` e uma mensagem na fila de saída, **quando** o laço recebe o erro, **então** o motor para de ler e de enviar, entra em "Cidadela suspensa" e registra o alerta, e a mensagem fica na fila.
-- **CA-BOT-12** · *rápida* — **Dado** uma Cidadela com época 3 e o banco com época 4, **quando** ela tentaria enviar a fila de saída ou executar o clique de um botão, **então** o Telegram falso não recebe nada e o clique não é executado.
+- **CA-BOT-11** · *rápida* — **Dado** o Telegram falso respondendo `409 Conflict` ao `getUpdates`, uma mensagem na fila de saída e a trava falsa com uma época maior que a da Cidadela, **quando** o laço recebe o erro, **então** o motor confere a trava, para de ler e de enviar, entra em "Cidadela suspensa" e a mensagem fica na fila; **dado** a trava com a época dela, **então** ela segue lendo e só registra o alerta.
+- **CA-BOT-12** · *rápida* — **Dado** uma Cidadela com época 3 e a trava falsa com `refs/mestre/epoca-4`, **quando** ela tentaria chamar `getUpdates`, enviar a fila de saída ou executar o clique de um botão, **então** o Telegram falso não recebe nada e o clique não é executado.
 
 ## Depende de
 
@@ -142,3 +142,4 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 
 - Telegram Bot API (versão 10.3, 24/08/2026): https://core.telegram.org/bots/api (`getUpdates`, `deleteWebhook`, `answerCallbackQuery`, limite de 4.096 caracteres, `callback_data` de 1 a 64 bytes)
 - Limites de envio (1 msg/s por chat, cerca de 30 msg/s no total): https://core.telegram.org/bots/faq
+- Servidor oficial da Bot API (`telegram-bot-api/Client.cpp`, `do_get_updates` e `abort_long_poll`): https://github.com/tdlib/telegram-bot-api

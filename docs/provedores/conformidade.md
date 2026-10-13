@@ -4,14 +4,14 @@
 
 ## Objetivo
 
-Provar, para cada provedor instalado numa máquina, que um personagem real recebe a camada do Mestre e a do projeto (e que o Mestre prevalece num conflito), enxerga as skills, dispara cada hook esperado do [mapa de eventos](adaptador.md#mapa-de-eventos) e respeita uma negação de permissão. Os provedores mudam rápido; este teste é o que avisa quando uma versão nova quebra o Mestre.
+Provar, para cada provedor e perfil de conta de uma máquina, que um personagem real recebe a camada do Mestre e a do projeto (e que o Mestre prevalece num conflito), enxerga as skills, dispara cada hook esperado do [mapa de eventos](adaptador.md#mapa-de-eventos) e respeita uma negação de permissão. Os provedores mudam rápido; este teste é o que avisa quando uma versão nova quebra o Mestre.
 
 ## Comportamento
 
 ### Quando roda
 
-- Na instalação da máquina, para cada provedor encontrado ([instalação](../plataforma/instalacao-e-atualizacao.md)).
-- Quando a versão de um CLI de provedor muda naquela máquina (só aquele provedor); a detecção e o que acontece em volta estão em [atualização dos CLIs](atualizacao-dos-clis.md).
+- Ao configurar um perfil de conta, logo depois do login ([configuração inicial do perfil](../orquestracao/bases-e-fichas.md#perfis-de-conta)), para o provedor daquele perfil.
+- Quando a versão de um CLI de provedor muda num perfil daquela máquina (só aquele provedor e perfil); a detecção e o que acontece em volta estão em [atualização dos CLIs](atualizacao-dos-clis.md).
 - Na suíte pesada, toda noite e sob demanda ([testes](../qualidade/testes.md)).
 
 ### Preparação
@@ -22,7 +22,7 @@ O motor da máquina cria, numa pasta temporária própria:
 - uma skill de teste `mestre-conformidade` cujo corpo (não a descrição) manda responder `S-<aleatório>`;
 - para o Claude Code, uma segunda skill `mestre-sonda` só em `.agents/skills/` (sem a cópia em `.claude/skills/`).
 
-Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks, camada do Mestre e início pela base do provedor, com o primeiro perfil de conta da máquina logado naquele provedor.
+Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks, camada do Mestre e início pela base do provedor, com o perfil de conta que está sendo testado.
 
 ### Etapas
 
@@ -47,15 +47,15 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 
 ### Resultado
 
-- Fica registrado por máquina, provedor, versão e perfil (tabela `conformance_results`, [persistência](../arquitetura/persistencia.md)): cada etapa com passou ou falhou, a duração e a transcrição do terminal.
+- Fica registrado por máquina, perfil, provedor e versão (versão e conformidade são sempre por máquina e perfil) (tabela `conformance_results`, [persistência](../arquitetura/persistencia.md)): cada etapa com passou ou falhou, a duração e a transcrição do terminal.
 - Os payloads de hook e as telas capturadas ficam guardados como gravações; depois de revisadas, atualizam o agente falso do provedor ([dublês](../qualidade/dubles.md)).
-- **Falha nas etapas 1, 2, 4 ou 6, ou evento obrigatório ausente:** o provedor fica **não conforme** naquela máquina. O motor não cria personagens novos com bases desse provedor ali: o recrutamento escolhe outra máquina ou falha com a explicação ([personagens](../orquestracao/personagens.md)). Os personagens que já rodam continuam, marcados, e os usuários recebem o alerta do checklist.
+- **Falha nas etapas 1, 2, 4 ou 6, ou evento obrigatório ausente:** o provedor fica **não conforme** naquela máquina e perfil. O requisito `provider` deixa de ser atendido ali ([requisitos](../guilda/ficha-da-maquina.md#requisitos)): o recrutamento escolhe outra máquina ou falha com a explicação ([escolha da máquina](../orquestracao/personagens.md#escolha-da-máquina)). Os personagens que já rodam continuam, marcados, e os usuários recebem o alerta do checklist.
 - **Falha nas etapas 3, 5, 7, 8 ou 10:** só aviso no checklist; o provedor continua utilizável (na etapa 10, a retomada daquele provedor passa a renascer o personagem).
 - **Falha na etapa 12:** aviso no checklist e, naquela máquina, as classes passam a negar a ferramenta de subagente do provedor no próprio personagem (plano B em [despachante de hooks](despachante-de-hooks.md#verificar-na-implementação)).
 - **Falha na etapa 11:** o diagnóstico com IA não usa aquele provedor na máquina; aviso no checklist.
 - A etapa 9 nunca falha; o resultado aparece no checklist.
 
-No M3 a preparação monta o worktree, a camada do Mestre e os hooks direto pelas operações do adaptador; a sessão zero (M4) reaproveita o mesmo caminho. Quem pede a conformidade depois da instalação: [checklist](../plataforma/checklist.md) e [atualização dos CLIs](atualizacao-dos-clis.md) (M7).
+No M3 a preparação monta o worktree, a camada do Mestre e os hooks direto pelas operações do adaptador; a sessão zero (M4) reaproveita o mesmo caminho. Quem pede a conformidade depois da configuração do perfil: [checklist](../plataforma/checklist.md) e [atualização dos CLIs](atualizacao-dos-clis.md) (M7).
 
 ## Regras e erros
 
@@ -69,7 +69,7 @@ No M3 a preparação monta o worktree, a camada do Mestre e os hooks direto pela
 
 - **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados numa máquina, **quando** a conformidade roda, **então** as etapas 1 a 8 e 10 a 12 passam para os três, inclusive a negação da etapa 4, e o resultado fica registrado com a versão de cada um (MVP-6).
 - **CA-CONF-02** · *completa* — **Dado** o agente falso de um provedor configurado para nunca disparar PreToolUse, **quando** a conformidade roda, **então** o provedor fica não conforme na máquina e um recrutamento com essa base naquela máquina falha com a explicação.
-- **CA-CONF-03** · *completa* — **Dado** um pedido de conformidade para um provedor numa máquina (vindo da [atualização dos CLIs](atualizacao-dos-clis.md)), **quando** a conformidade roda, **então** só aquele provedor naquela máquina é testado e o resultado substitui o anterior dessa combinação.
+- **CA-CONF-03** · *completa* — **Dado** um pedido de conformidade para um provedor numa máquina (vindo da [atualização dos CLIs](atualizacao-dos-clis.md)), **quando** a conformidade roda, **então** só aquele provedor naquele perfil e máquina é testado e o resultado substitui o anterior dessa combinação.
 - **CA-CONF-04** · *completa* — **Dado** um agente falso do Claude que enxerga `.agents/skills/`, **quando** a etapa 9 roda, **então** o checklist mostra que a cópia gerenciada pode ser desligada.
 - **CA-CONF-05** · *rápida* — **Dado** transcrições gravadas com e sem os códigos aleatórios e com AZUL no lugar de VERDE, **quando** o verificador das etapas 2 e 3 roda, **então** classifica cada uma corretamente.
 

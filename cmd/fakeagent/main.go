@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"runtime"
 
 	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -22,7 +21,10 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if err := run(ctx, os.Args); err != nil {
+	restore := rawConsole()
+	err := run(ctx, os.Args)
+	restore()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -53,19 +55,8 @@ func run(ctx context.Context, argv []string) error {
 }
 
 // shell runs hooks and commands the way the providers do: sh -c on Linux,
-// cmd /c on Windows.
+// cmd /c on Windows (command, in command_*.go).
 type shell struct{}
-
-func command(ctx context.Context, line, dir string, env []string) *exec.Cmd {
-	var c *exec.Cmd
-	if runtime.GOOS == "windows" {
-		c = exec.CommandContext(ctx, "cmd", "/c", line)
-	} else {
-		c = exec.CommandContext(ctx, "sh", "-c", line)
-	}
-	c.Dir, c.Env = dir, env
-	return c
-}
 
 func (shell) RunHook(ctx context.Context, call fakeagent.HookCall) (fakeagent.HookResult, error) {
 	c := command(ctx, call.Command, call.Dir, call.Env)

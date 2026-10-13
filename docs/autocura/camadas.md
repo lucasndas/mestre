@@ -1,6 +1,6 @@
 # Camadas de recuperação
 
-> **Assunto:** as cinco camadas da autocura, valores padrão, runbook, eleição da Torre condutora, proposta de promoção quando a Cidadela não volta e anti-loop · **Componente:** Guardião · **Atualizado:** 2026-10-13
+> **Assunto:** as cinco camadas da autocura, valores padrão, runbook, eleição da Torre condutora, recuperação da Cidadela e aviso quando ela não volta, modo máquina única e anti-loop · **Componente:** Guardião · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -18,7 +18,7 @@ Recuperar o motor de qualquer máquina, sem SSH, na ordem do mais simples ao mai
 | 4. Diagnóstico com IA | Guardião da máquina com problema, a pedido do lado saudável (no modo máquina única, por conta própria) | runbook esgotado | agente local propõe script; Dono ou Administrador aprova ([diagnóstico com IA](diagnostico-com-ia.md)) |
 | 5. Usuários | motor da Cidadela, Torre condutora ou, no modo máquina única, o Guardião da Cidadela | nada resolveu, ou máquina inteira fora | alerta com o diagnóstico até ali; Cidadela caída: também a [proposta de promoção](#cidadela-que-não-volta-proposta-de-promoção) |
 
-A autocura é mútua entre quaisquer duas máquinas da Guilda: cada Guardião cuida do motor da própria máquina, e o lado saudável pede as ações ao Guardião do outro, seja qual for o papel de cada uma.
+Os serviços `mestre` e `mestre-guardiao` sobem sozinhos com o sistema, no Linux e no Windows ([instalação](../plataforma/instalacao-e-atualizacao.md)), e o motor retoma o estado depois de um reinício (personagens, mesas, esperas e fila de saída; [retomada](#retomada-dos-agentes)). A autocura é mútua entre quaisquer duas máquinas da Guilda: cada Guardião cuida do motor da própria máquina, e o lado saudável pede as ações ao Guardião do outro, seja qual for o papel de cada uma.
 
 ### Valores padrão
 
@@ -27,21 +27,14 @@ Todos configuráveis na Cidadela (replicados aos Guardiões). Os testes usam rel
 | Parâmetro | Padrão |
 |---|---|
 | Heartbeat motor → Guardião local (canal local, [componentes](../arquitetura/componentes.md#canais-locais-padrão)) | a cada 5 s; **travado** após 3 perdidos (15 s) com o processo vivo |
-| Heartbeat na WSS (motor da máquina e Guardião da máquina → motor da Cidadela) e quando o lado vira **sem sinal** | definidos em [protocolo](../conectividade/protocolo.md#heartbeat-e-reconexão) |
-| Tempo de graça (camadas 1 e 2 agirem) antes da camada 3 | 60 s depois de declarado sem sinal |
-| systemd do motor | `Type=notify`, `Restart=always`, `RestartSec=2s`, `WatchdogSec=30s` (o motor manda `WATCHDOG=1` a cada 10 s), `StartLimitIntervalSec=0` |
-| systemd do Guardião | `Restart=always`, `RestartSec=2s`, `StartLimitIntervalSec=0` |
+| Heartbeat na WSS (motor e Guardião da máquina → motor da Cidadela) e **sem sinal**; tempo de graça (camadas 1 e 2 agirem) antes da camada 3 | definidos em [protocolo](../conectividade/protocolo.md#heartbeat-e-reconexão); 60 s depois de declarado sem sinal |
+| systemd do motor; do Guardião | `Type=notify`, `Restart=always`, `RestartSec=2s`, `WatchdogSec=30s` (o motor manda `WATCHDOG=1` a cada 10 s), `StartLimitIntervalSec=0`; o do Guardião, sem `Type=notify` nem `WatchdogSec` |
 | Recuperação de serviço do Windows (motor e Guardião) | reiniciar após 5 s, 10 s e 30 s; zerar contagem após 1 dia; vale também para saída sem crash |
-| Laço de queda | 3 reinícios em 10 min |
-| "Depois de uma atualização" | o problema começou até 24 h após trocar a versão do motor |
-| Disco | aviso abaixo de 10% livre; grave abaixo de 5% |
-| Backoff entre passos do runbook | 15 s, dobrando a cada tentativa, máximo 10 min, variação aleatória de ±20% |
-| Limite de tentativas da camada 3 | 5 por incidente |
-| Confirmação de sucesso | heartbeat de volta em até 60 s após a ação |
-| Janela de eleição | 10 s |
-| Trava de condução | dura 60 s; a condutora renova a cada 20 s |
-| Sondagem entre Guardiões (sem árbitro) | a cada 5 s; 3 falhas seguidas = máquina fora |
-| Incidente encerrado | 5 min saudável |
+| Laço de queda; "depois de uma atualização" | 3 reinícios em 10 min; o problema começou até 24 h após trocar a versão do motor |
+| Disco; backoff entre passos do runbook | aviso abaixo de 10% livre, grave abaixo de 5%; 15 s, dobrando a cada tentativa, máximo 10 min, variação aleatória de ±20% |
+| Limite de tentativas da camada 3; confirmação de sucesso | 5 por incidente; heartbeat de volta em até 60 s após a ação |
+| Janela de eleição; trava de condução | 10 s; a trava dura 60 s e a condutora renova a cada 20 s |
+| Sondagem entre Guardiões (sem árbitro); incidente encerrado | a cada 5 s, 3 falhas seguidas = máquina fora; 5 min saudável |
 
 Um **incidente** abre quando uma máquina é declarada fora (camada 2 desistiu ou camada 3 começou) e fecha depois de 5 min saudável. Tentativas e limites contam por incidente.
 
@@ -67,9 +60,9 @@ Um **incidente** abre quando uma máquina é declarada fora (camada 2 desistiu o
 
 ### Eleição da Torre condutora
 
-- **Ordem das candidatas** (determinística, a mesma que escolhe quem propõe a promoção): primeiro as Torres online com motor saudável; depois a maior **prioridade** configurada pelo Dono no painel (padrão 100); empate → melhor [ficha da máquina](../guilda/ficha-da-maquina.md); depois → menor `machine_id`. Cada Guardião guarda essa lista (cache recebido da Cidadela).
-- **Trava com árbitro (caso normal, motor da Cidadela travado):** o Guardião da Cidadela é o árbitro. Cada candidata pede a trava; o árbitro espera a janela de eleição desde o primeiro pedido e concede a trava à melhor candidata. As outras recebem "condutora = X". A condutora renova; se parar de renovar, a trava expira e a próxima candidata que pedir a recebe.
-- **Sem árbitro (Guardião da Cidadela não responde):** não há cura possível na Cidadela, mas é preciso uma única Torre para alertar, cuidar do Telegram e propor a promoção. Cada Guardião sonda os Guardiões de prioridade maior (HTTPS na porta da página reserva, rota de vida autenticada com certificado de máquina) e só assume se todos falharem 3 vezes seguidas. Quando o árbitro volta, a condutora passa a pedir a trava a ele.
+- **Ordem da eleição** (determinística, a mesma que escolhe quem propõe a promoção): primeiro as Torres online com motor saudável; depois a maior **prioridade** configurada pelo Dono no painel (padrão 100); empate → melhor [ficha da máquina](../guilda/ficha-da-maquina.md); depois → menor `machine_id`. Cada Guardião guarda essa lista (cache recebido da Cidadela).
+- **Trava com árbitro (caso normal, motor da Cidadela travado):** o Guardião da Cidadela é o árbitro enquanto tem a [concessão do motor](guardiao.md#concessão-do-motor); sem ela, vale a eleição sem árbitro (abaixo). Cada Torre pede a trava; o árbitro espera a janela de eleição desde o primeiro pedido e concede a trava à melhor pela ordem. As outras recebem "condutora = X". A condutora renova; se parar de renovar, a trava expira e a próxima Torre que pedir a recebe.
+- **Sem árbitro (Guardião da Cidadela não responde ou sem concessão):** não há cura possível na Cidadela, mas é preciso uma única Torre para alertar, cuidar do Telegram e propor a promoção. Cada Guardião sonda os Guardiões de prioridade maior (HTTPS na porta da página reserva, rota de vida autenticada com certificado de máquina) e só assume se todos falharem 3 vezes seguidas. Quando o árbitro volta, a condutora passa a pedir a trava a ele.
 - A condutora também assume o [Telegram em modo reduzido](telegram-modo-reduzido.md).
 
 ```mermaid
@@ -100,11 +93,11 @@ sequenceDiagram
 
 ### Cidadela que não volta: proposta de promoção
 
-Quando a Torre condutora esgota as camadas sobre a Cidadela sem resolver, ou a máquina da Cidadela fica inalcançável (motor e Guardião), a condutora **propõe** uma Torre candidata como nova Cidadela, junto com o alerta da camada 5. O pedido `promocao_cidadela` vai só ao Dono, pelo [Telegram em modo reduzido](telegram-modo-reduzido.md) e pela [página reserva](pagina-reserva.md), com botão e PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); nunca há promoção automática. Prazos, quem é proposta e a promoção em si: [proposta de assumir](../guilda/cidadela-e-torres.md#proposta-de-assumir). A autocura continua enquanto o pedido espera: se a Cidadela volta, ele é cancelado.
+Com a Cidadela fora, as Torres seguem trabalhando ([Cidadela fora e fila de saída](../guilda/cidadela-e-torres.md#cidadela-fora-e-fila-de-saída)) e a autocura acima tenta consertá-la enquanto a máquina estiver ligada. Se ela não volta no prazo (15 min, padrão, configurável pelo Dono), a Torre condutora manda o aviso com o diagnóstico e o pedido `promocao_cidadela`, junto com o alerta da camada 5, pelo [Telegram em modo reduzido](telegram-modo-reduzido.md) e pela [página reserva](pagina-reserva.md), e o repete a cada 1 h; nunca há promoção automática. Prazos, alvos aceitos e a promoção: [recuperação e aviso ao Dono](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono) (critério CA-CIDADELA-05 de lá). A autocura continua enquanto o pedido espera: se a Cidadela volta, ele é cancelado.
 
 ### Modo máquina única
 
-Vale na Guilda de uma máquina só ("só Linux" e "só Windows"): a Cidadela sem nenhuma Torre ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). A entrada de uma máquina na Guilda encerra o modo; remover a última Torre o traz de volta. Não há promoção possível.
+Vale na Guilda de uma máquina só ("só Linux" e "só Windows"): a Cidadela sem nenhuma Torre ([ADR 0020](../decisoes/0020-linux-e-windows-em-qualquer-papel.md)). A entrada de uma máquina na Guilda encerra o modo; remover a última Torre o traz de volta. Não há promoção possível.
 
 - Continuam as camadas 1, 2 e 5. **Não há camada 3**: nenhuma outra máquina vigia a Cidadela.
 - Quando a camada 2 desiste, o **Guardião da Cidadela** conduz o incidente no lugar da Torre condutora: segue o [runbook](#camada-3-supervisão-cruzada) sobre o próprio motor, inicia o [diagnóstico com IA](diagnostico-com-ia.md) (camada 4), serve a [página reserva](pagina-reserva.md) e assume o [Telegram em modo reduzido](telegram-modo-reduzido.md), por onde sai o alerta da camada 5.
@@ -129,7 +122,7 @@ Quando um motor reinicia, cada personagem que estava rodando é **retomado** ou 
 
 - Nenhuma camada altera, desliga ou atualiza o Guardião ([Guardião](guardiao.md#proteções)).
 - Pedido de trava de uma máquina sem certificado válido → recusado e auditado.
-- Dois condutores ao mesmo tempo é erro grave: o árbitro só concede uma trava por incidente; no modo sem árbitro, o `409 Conflict` do Telegram é a última proteção ([Telegram em modo reduzido](telegram-modo-reduzido.md)).
+- Dois condutores ao mesmo tempo é erro grave: o árbitro só concede uma trava por incidente; no modo sem árbitro, quem vê o `409 Conflict` do Telegram para de ler e volta a sondar ([Telegram em modo reduzido](telegram-modo-reduzido.md)).
 - A máquina inteira desligada não tem cura: vai direto para a camada 5 depois do tempo de graça.
 
 ## Critérios de aceite
@@ -139,26 +132,19 @@ Quando um motor reinicia, cada personagem que estava rodando é **retomado** ou 
 - **CA-CURA-03** · *pesada* — **Dado** a Cidadela desligada, **quando** as camadas se esgotam, **então** os usuários recebem o alerta da camada 5 no Telegram (dublê) em modo reduzido e na página reserva (MVP-2).
 - **CA-CURA-04** · *pesada* — **Dado** uma atualização cujo motor cai ao iniciar, **quando** ocorre o laço de queda, **então** o Guardião local volta à versão anterior e o motor fica saudável (MVP-2).
 - **CA-CURA-05** · *pesada* — **Dado** o disco com menos de 5% livre, **quando** o motor cai, **então** o Guardião roda `cleanup` antes de reiniciar (MVP-2).
-- **CA-CURA-06** · *rápida* — **Dado** candidatas A (200), B (100) e C (200, mesma ficha, `machine_id` menor que A), **quando** a janela de eleição fecha, **então** a trava vai para C; **dado** A e C empatadas na prioridade e A com ficha melhor, **então** vai para A.
-- **CA-CURA-07** · *rápida* — **Dado** uma condutora que para de renovar (relógio falso), **quando** passam 60 s, **então** a trava expira e a próxima candidata a recebe.
+- **CA-CURA-06** · *rápida* — **Dado** Torres A (200), B (100) e C (200, mesma ficha, `machine_id` menor que A), **quando** a janela de eleição fecha, **então** a trava vai para C; **dado** A e C empatadas na prioridade e A com ficha melhor, **então** vai para A.
+- **CA-CURA-07** · *rápida* — **Dado** uma condutora que para de renovar (relógio falso), **quando** passam 60 s, **então** a trava expira e a próxima Torre na ordem a recebe.
 - **CA-CURA-08** · *rápida* — **Dado** um runbook que nunca dá certo, **quando** roda, **então** os intervalos seguem 15 s, 30 s, 60 s… (±20%) e após 5 tentativas o incidente passa à camada 4.
 - **CA-CURA-09** · *rápida* — **Dado** o árbitro fora e a máquina A respondendo à sondagem, **quando** B avalia, **então** B não assume; com A falhando 3 vezes, B assume.
 - **CA-CURA-10** · *rápida* — **Dado** um laço de queda sem atualização nas últimas 24 h, **quando** a camada 2 avalia, **então** não faz `rollback` e abre o incidente.
 - **CA-CURA-11** · *completa* — **Dado** personagens rodando numa máquina, **quando** o motor da máquina reinicia, **então** cada um aparece retomado ou interrompido, e nenhum some (MVP-12).
 - **CA-CURA-12** · *pesada* — **Dado** um uso de máquina única (só Linux e só Windows) com o motor da Cidadela em laço de queda sem atualização, **quando** a camada 2 desiste, **então** o Guardião da Cidadela abre o incidente, roda o runbook e o diagnóstico, serve a página reserva e manda o alerta da camada 5 pelo Telegram (dublê) em modo reduzido (MVP-2, MVP-13).
-- **CA-CURA-13** · *rápida* — **Dado** a Cidadela caída e as camadas 3 e 4 esgotadas, **quando** a camada 5 dispara, **então** o alerta e o pedido `promocao_cidadela` saem juntos pelo Telegram em modo reduzido, só ao Dono; **quando** a Cidadela volta antes da resposta, **então** o pedido é cancelado e o incidente fecha como numa cura comum.
 
 ## Depende de
 
-- [Guardião](guardiao.md)
-- [Componentes](../arquitetura/componentes.md)
-- [Persistência](../arquitetura/persistencia.md)
-- [Protocolo](../conectividade/protocolo.md)
-- [Guilda](../guilda/guilda.md)
-- [Personagens](../orquestracao/personagens.md)
-- [Bot do Telegram](../telegram/bot.md)
+- [Guardião](guardiao.md) · [Componentes](../arquitetura/componentes.md) · [Persistência](../arquitetura/persistencia.md) · [Protocolo](../conectividade/protocolo.md)
+- [Guilda](../guilda/guilda.md) · [Personagens](../orquestracao/personagens.md) · [Bot do Telegram](../telegram/bot.md)
 
 ## Fontes
 
-- systemd `WatchdogSec`, `sd_notify`: https://pkg.go.dev/github.com/coreos/go-systemd/v22/daemon
-- Serviço do Windows em Go: https://pkg.go.dev/github.com/kardianos/service
+- systemd `WatchdogSec`, `sd_notify`: https://pkg.go.dev/github.com/coreos/go-systemd/v22/daemon · serviço do Windows em Go: https://pkg.go.dev/github.com/kardianos/service

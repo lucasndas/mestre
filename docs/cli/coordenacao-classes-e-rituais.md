@@ -52,7 +52,7 @@ mestre ritual run "<nome>"
 mestre ritual delete "<nome>"
 ```
 - O alvo é sempre um **personagem existente** (`--target`) ou uma **missão** (`--quest`), nunca uma ficha. `--prompt` é o texto entregue a um agente; `--command` é uma linha digitada num terminal de `spawn`, seguida de Enter; `--quest` dispara uma missão da mesa. `--table` indica a mesa quando o Grão-Mestre cria o ritual para um Mestre de mesa ou uma missão (sem isso → 2 `table_required`).
-- Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. No fuso do workspace (padrão: o da Cidadela; [rituais](../orquestracao/rituais.md)). Exatamente uma das quatro.
+- Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. No fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [rituais](../orquestracao/rituais.md)). Exatamente uma das quatro.
 - `--pre-run`: comando rodado antes do disparo; a saída dele substitui `{{output}}` no `--prompt` ou no `--command` (onde roda e com que permissões: [rituais](../orquestracao/rituais.md)). `{{output}}` sem `--pre-run` → 2.
 - `--timeout`: quanto o disparo pode ficar na fila do alvo ocupado antes de ser cancelado e devolvido ao dono do ritual (padrão 30m).
 - `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o histórico recente. `--json` → `{name, target, quest, table, action: "prompt" | "command" | "quest", schedule, pre_run, timeout, enabled, next_run, last_result}`.

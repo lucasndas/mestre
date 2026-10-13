@@ -22,8 +22,7 @@ internal/
   sessionzero/       geração de arquivos de workspace, mesa e personagem
   classes/           pacotes de classe, permissions.yaml, teto, regras efetivas
   decrees/ approvals/
-  users/             usuários, níveis, login, sessões e PIN
-  audit/             trilha de auditoria
+  users/ audit/      usuários, níveis, login, sessões e PIN; trilha de auditoria
   github/            cliente, Apps, consulta periódica
   gitx/              wrapper único do binário git (worktrees, bundles, info/exclude)
   sync/              sincronização de worktrees Torre ↔ Cidadela por bundle
@@ -38,8 +37,7 @@ internal/
   terminal/          PTY (creack/pty) e ConPTY (wrapper próprio), emulador, buffer circular
   winsvc/            partes só do Windows: serviço, contas virtuais e `mestre-agente`, início de processo com outra conta, ACLs, DPAPI
   store/             SQLite e migrações (guild/: banco da Guilda; machine/: banco local de máquina)
-  vault/             cofre
-  logging/           slog + mascaramento de segredos
+  vault/ logging/    cofre; slog + mascaramento de segredos
   glossary/          textos de ajuda gerados do glossário
   panel/             HTTP do painel e API; webdist/ embutido com //go:embed
   testkit/           dublês compartilhados (ver dubles.md)
@@ -47,9 +45,11 @@ guardian/            código do Guardião; não importa nada de internal/
 pkg/clock/           relógio injetável: único pacote que usa time.Now e temporizadores (usado pelo motor e pelo Guardião)
 web/                 painel: React + TypeScript + Vite
   src/gen/           tipos TypeScript gerados a partir do Go
-tools/testrun/       executor das suítes (ver testes.md)
-tools/docscheck/     verificação da documentação (ver verificacao-de-docs.md)
-tools/codecheck/     regras de código que o linter não cobre (ver Estilo)
+tools/
+  testrun/ docscheck/ codecheck/   executor das suítes (testes.md), verificação de docs, regras fora do linter (Estilo)
+  githooks/          gancho de pré-commit versionado (ver ambiente.md)
+  spikes/ winsandbox/   spikes de Linux; Windows Sandbox e spikes/ de Windows (ver Estilo e ambiente.md)
+.github/workflows/   CI: rápida e completa em Linux e Windows (ver ambiente.md)
 test/quarantine.yaml testes em quarentena
 testdata/projetos/   projetos de treino dos testes (ver projetos-de-treino.md)
 packaging/           units do systemd e instalador do Windows
@@ -91,8 +91,8 @@ Exceções herdadas, mantidas como estão: identificadores de protocolo, variáv
 
 **Go**
 - `gofmt` e `goimports`; `golangci-lint` 2.14.0 ([ambiente](ambiente.md)) com `govet`, `staticcheck`, `errcheck`, `forbidigo`, `paralleltest` e `depguard` (configuração em `.golangci.yml`), rodado pelo `testrun` na rápida e na completa ([executor](../qualidade/testes.md#executor-testrun)).
-- **Cada regra de código vive numa ferramenta só:** o golangci-lint cobre tempo só em `pkg/clock` (`forbidigo`: `time.Sleep`, `Now`, `After`, `NewTimer`, `NewTicker`, `AfterFunc` e `Since`), `internal/testkit` importado só por testes, pelo próprio `testkit`, por `cmd/fakeagent` e por `tools`, e o isolamento do `guardian/` ([layout](#layout-do-repositório)) (`depguard`), e `t.Parallel()` em toda função `TestXxx` (`paralleltest`); o `tools/codecheck` (teste `TestCodeRules`, na rápida) cobre só o `t.Parallel()` dos subtestes de `t.Run`, que o `paralleltest` não verifica.
-- **Código de spike** (`tools/spikes/`, `tools/winsandbox/spikes/`): guardado como referência do resultado de um spike, fora do lint (exclusão em `.golangci.yml`) e nunca importado por código de produção; o que for aproveitado é reescrito no pacote definitivo, com testes e as regras acima ([ordem de implementação](ordem-de-implementacao.md#spikes-do-m1)).
+- **Cada regra de código vive numa ferramenta só:** o golangci-lint cobre tempo só em `pkg/clock` (`forbidigo`: `time.Sleep`, `Now`, `After`, `NewTimer`, `NewTicker`, `AfterFunc`, `Since`, `Until` e `Tick`, e `context.WithTimeout` e `WithDeadline`, com as variantes `Cause`; use `clock.WithTimeout`), `internal/testkit` importado só por testes, pelo próprio `testkit`, por `cmd/fakeagent` e por `tools`, e o isolamento do `guardian/` ([layout](#layout-do-repositório)) (`depguard`), e `t.Parallel()` em toda função `TestXxx` (`paralleltest`); o `tools/codecheck` (teste `TestCodeRules`, na rápida) cobre só o `t.Parallel()` dos subtestes de `t.Run`, que o `paralleltest` não verifica, em `TestXxx` e em qualquer função auxiliar com parâmetro `*testing.T`.
+- **Código de spike** (`tools/spikes/`, `tools/winsandbox/spikes/`): guardado como referência do resultado de um spike, fora do lint (exclusão em `.golangci.yml`) e nunca importado por código de produção; teste de spike usa a tag `spike` (`//go:build spike`), fora de todas as suítes, e roda só à mão (`go test -tags spike ./tools/spikes/...`); o que for aproveitado é reescrito no pacote definitivo, com testes e as regras acima ([ordem de implementação](ordem-de-implementacao.md#spikes-do-m1)).
 - Erros com contexto: `fmt.Errorf("open table %s: %w", id, err)`. Sem `panic` fora de `main` e de invariantes impossíveis.
 - `context.Context` como primeiro parâmetro de tudo que faz E/S ou espera.
 - Tempo só pelo `clock` (regra e motivo em [testes](../qualidade/testes.md)). Processos, rede e git só pelas camadas únicas de `terminal/` (lançador), `transport/` e `gitx/`, que os dublês substituem ([dublês](../qualidade/dubles.md)).
@@ -121,14 +121,14 @@ Conventional Commits 1.0.0, em inglês:
 ```
 
 - **type:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `revert`.
-- **scope** (opcional): `guild`, `replication`, `guardian`, `cli`, `hook`, `providers`, `orchestration`, `classes`, `github`, `telegram`, `approvals`, `healing`, `protocol`, `store`, `vault`, `panel`, `web`, `tools`, `docs`, `sessionzero`, `gitx`, `sync`, `update`, `usage`, `checklist`, `users`, `audit`, `terminal`.
+- **scope** (opcional): `guild`, `machinesheet`, `replication`, `guardian`, `cli`, `hook`, `providers`, `orchestration`, `classes`, `github`, `telegram`, `approvals`, `healing`, `protocol`, `store`, `vault`, `panel`, `web`, `tools`, `docs`, `sessionzero`, `gitx`, `sync`, `update`, `usage`, `checklist`, `users`, `audit`, `terminal`, `localchan`, `transport`, `discovery`, `winsvc`, `logging`, `glossary`, `clock`, `testkit`, `ci`, `spike`, `winsandbox`.
 - **summary:** imperativo, minúsculo, sem ponto final, até 72 caracteres. Ex.: `feat(hook): normalize antigravity camelCase payloads`.
 - Mudança incompatível (protocolo, banco, CLI): `!` depois do tipo e rodapé `BREAKING CHANGE:`.
 - Um commit, um assunto; código, testes e documentação da mesma mudança vão juntos.
 
 ## Branches e PRs
 
-- **`main`:** sempre verde; protegida; só recebe PR com a suíte completa passando (Linux e Windows).
+- **`main`:** sempre verde; protegida por um ruleset que exige o CI (`.github/workflows/ci.yml`: rápida e completa em Linux e Windows) e só aceita PR com squash ([CI e ruleset](ambiente.md#ci-e-proteção-da-main)).
 - **Branches de trabalho:** `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, com `slug` curto em inglês, kebab-case (ex.: `feat/table-lifecycle`). Testes, build e refatorações usam `fix/` quando corrigem algo e `feat/` nos demais casos.
 - **PR:** um assunto, pequeno. Título no formato de commit (vira a mensagem do squash). Descrição: o quê e por quê, documentos alterados, critérios de aceite cobertos (`CA-…`), tempos da rápida e da completa.
 - **Merge:** squash. A branch é apagada depois.

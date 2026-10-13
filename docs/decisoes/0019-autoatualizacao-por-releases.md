@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assinatura fica só no computador do autor, e cada versão é uma release única com os dois binários. **Revista em 2026-10-13:** (1) pelo [ADR 0022](0022-guilda-cidadela-e-torres.md), Core e nó viram Cidadela e Torre: quem consulta as Releases e distribui é a Cidadela atual, e a ordem é Cidadela primeiro, depois uma Torre por vez; (2) **os CLIs dos provedores saem desta decisão:** eles se atualizam sozinhos, o Mestre não desliga a autoatualização deles e não controla mais a versão deles (não aprova, não instala, não volta versão); só detecta a versão nova e roda a conformidade depois ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assinatura fica só no computador do autor, e cada versão é uma release única com os dois binários. **Revista em 2026-10-13:** (1) pelo [ADR 0022](0022-guilda-cidadela-e-torres.md), Core e nó viram Cidadela e Torre: quem consulta as Releases e distribui é a Cidadela atual, e a ordem passou a ser definida no item (3); (2) **os CLIs dos provedores saem desta decisão:** eles se atualizam sozinhos, o Mestre não desliga a autoatualização deles e não controla mais a versão deles (não aprova, não instala, não volta versão); só detecta a versão nova e roda a conformidade depois ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)); (3) também pelo ADR 0022, a ordem passa a ser **Torres primeiro, Cidadela por último**: uma Torre que falha custa pouco, e a máquina no comando só muda de versão depois de a versão nova ter rodado nas outras; toda máquina aceita a versão de protocolo atual e a anterior ([protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades)).
 
 ## Contexto
 
@@ -12,7 +12,7 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assina
 - **O código** fica num repositório público no GitHub ([ADR 0018](0018-licenca-polyform-noncommercial.md)).
 - **A rede:**
   - nenhuma porta aberta na internet;
-  - as Torres só falam com a Cidadela, por WSS iniciada por elas ([ADR 0002](0002-wss-iniciado-pelo-no.md));
+  - as Torres só falam com a Cidadela, por WSS iniciada por elas ([ADR 0002](0002-wss-iniciado-pela-torre.md));
   - tudo roda na rede local.
 - **A autocura** depende de o Guardião continuar de pé quando o motor quebra ([ADR 0003](0003-autocura-com-guardiao-sem-ssh.md)), e nenhuma ação de cura pode alterar o Guardião. Mas o Guardião também precisa receber correções de vez em quando.
 - **O risco:** um binário trocado é o pior ataque possível, porque roda como serviço, e o Guardião roda como root/LocalSystem. Só HTTPS e SHA-256 não protegem contra uma release ou uma Cidadela comprometidas.
@@ -77,9 +77,9 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assina
 - **Release única:** cada versão é uma release com tag `vX.Y.Z` e os dois binários (`mestre` e `mestre-guardiao`); a versão do Guardião vai só no manifesto, sem tags próprias.
 - **Aprovação:** o fluxo normal de aprovação, com Dono ou Administrador. O Grão-Mestre não aprova sozinho. Depois da aprovação, o Mestre aplica e reinicia sozinho.
 - **Ordem:**
-  - Cidadela primeiro, depois uma Torre por vez;
+  - primeiro as Torres, uma por vez, da menor para a maior prioridade (a Torre condutora por último); por fim, a Cidadela;
   - em cada máquina, primeiro o motor, depois o Guardião;
-  - uma trava única: nunca duas peças ao mesmo tempo, nem Cidadela e Torre juntas.
+  - uma trava única: nunca duas peças ao mesmo tempo; em especial, nunca a Cidadela e a Torre condutora juntas, para sempre haver quem conduza a recuperação.
 - **Alternância:** opção 4. A atualização do Guardião é uma **ação de atualização aprovada**, não uma ação de cura. Só começa com o motor saudável.
 - **Detalhes:** o comportamento completo está em [autoatualização](../plataforma/autoatualizacao.md). Os CLIs dos provedores não seguem esta decisão: atualizam-se sozinhos, e o Mestre só detecta e confere ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
 

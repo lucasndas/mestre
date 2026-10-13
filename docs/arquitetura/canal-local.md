@@ -12,10 +12,10 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 | Sistema | Endereço | Acesso |
 |---|---|---|
-| Linux | socket Unix `/run/mestre/cli.sock` | dono `mestre`, grupo `mestre-agente`, modo 0660 |
-| Windows | named pipe `\\.\pipe\mestre-cli` | ACL só para `NT SERVICE\Mestre` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
+| Linux | socket Unix `/run/mestre/<inst>/cli.sock` | dono `mestre`, grupo `mestre-agente`, modo 0660 |
+| Windows | named pipe `\\.\pipe\mestre-<inst>-cli` | ACL só para `NT SERVICE\Mestre` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
 
-- `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/cli.sock` ou `npipe:////./pipe/mestre-cli`. Sem a variável, a CLI usa o endereço padrão do sistema.
+- `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/<inst>/cli.sock` ou `npipe:////./pipe/mestre-<inst>-cli`, sempre da [instância](componentes.md#instâncias) do personagem. Sem a variável, a CLI usa o endereço da instância `principal`.
 - Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo.
 
 ### Enquadramento
@@ -70,7 +70,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 ### Encaminhamento à Cidadela
 
 - O motor local resolve sozinho `help`, `debug` e `hook`; todo o resto vai à Cidadela na mensagem `cli.call` (na própria Cidadela, a chamada é atendida no mesmo processo, pelo mesmo código), cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. A Cidadela devolve `cli.result` com **a mesma resposta** (inclusive as parciais), que o motor repassa linha a linha ([mensagens](../conectividade/mensagens.md)).
-- Cidadela fora: `citadel_unreachable`, exceto `done`, que o motor guarda e entrega uma vez quando a Cidadela volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
+- Cidadela fora ou suspensa: `citadel_unavailable`; durante uma promoção, `citadel_in_failover`; exceto `done`, que vai para a fila de saída e é aplicado uma vez quando a Cidadela volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
 
 ## Regras e erros
 

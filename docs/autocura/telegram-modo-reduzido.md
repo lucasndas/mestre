@@ -1,6 +1,6 @@
 # Telegram em modo reduzido
 
-> **Assunto:** o Guardião da Torre condutora (ou o da Cidadela, no modo máquina única) assume o bot quando a Cidadela cai: o que aceita, pedido de promoção, trava de um só leitor e devolução à Cidadela · **Componente:** Guardião · **Atualizado:** 2026-10-13
+> **Assunto:** o Guardião da Torre condutora (ou o da Cidadela, no modo máquina única) assume o bot quando a Cidadela cai: o que aceita, pedido de promoção, um só leitor, exceção à trava de época e devolução à Cidadela · **Componente:** Guardião · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,9 +10,10 @@ Manter os usuários avisados e permitir aprovar curas e a promoção de uma Torr
 
 ### Quem assume e quando
 
-- Assume o **Guardião da Torre condutora** (qualquer Torre pode sê-lo), escolhida pela [eleição](camadas.md#eleição-da-torre-condutora), assim que ganha a trava (ou, sem árbitro, assim que assume pela sondagem).
+- Assume o **Guardião da Torre condutora** (qualquer Torre pode sê-lo), escolhida pela [eleição](camadas.md#eleição-da-torre-condutora), assim que ganha a trava da eleição (ou, sem árbitro, assim que assume pela sondagem).
 - No [modo máquina única](camadas.md#modo-máquina-única), não há eleição: assume o **Guardião da Cidadela**, quando a camada 2 desiste. A devolução abaixo é igual, pelo canal local em vez da WSS.
-- Usa o token do bot e a lista de usuários da réplica do [cofre](../plataforma/cofre.md#réplica-para-os-guardiões).
+- Usa o token do bot e a lista de usuários da [réplica dos Guardiões](../plataforma/cofre.md#réplica-para-os-guardiões): é a **única** abertura de segredo fora da Cidadela, e só para isto. Uma máquina excluída pelo Dono não tem o token e não conduz o modo reduzido.
+- **Sem trava de época:** o modo reduzido não confere a trava de época no GitHub, porque não age como Cidadela: só envia alertas e recebe Promover, Esperar e `/status` (mais as aprovações de cura). É a exceção registrada em [época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing).
 - Antes de ler, carrega o último `update_id` processado que a Cidadela mandou na réplica, para não repetir updates já tratados.
 - Lê por long polling, como a Cidadela ([bot](../telegram/bot.md#recepção-por-long-polling)), com `allowed_updates=["message","callback_query"]`.
 
@@ -39,16 +40,17 @@ Todas marcadas "Sistema" ([roteamento](../telegram/roteamento.md)) e mascaradas 
 - ao assumir: "Cidadela fora do ar desde HH:MM. Torre <nome> conduzindo a recuperação." (no modo máquina única: "Guardião da Cidadela conduzindo a recuperação.") com o link da página reserva;
 - a cada mudança de camada do incidente e ao esgotar as tentativas (alerta da camada 5, [camadas](camadas.md#camada-5-alerta));
 - pedidos de aprovação de cura (para Dono e Administradores);
-- o pedido de promoção, quando a Cidadela não volta, e o lembrete a cada 1 h (só para o Dono; [camadas](camadas.md#cidadela-que-não-volta-proposta-de-promoção));
+- o aviso de Cidadela que não volta, com o diagnóstico e a opção de promover outra máquina, depois de **15 min** (padrão, configurável pelo Dono) e **repetido a cada 1 h** enquanto ela continuar fora (só para o Dono; [camadas](camadas.md#cidadela-que-não-volta-proposta-de-promoção));
 - ao devolver: "Cidadela de volta. Bot devolvido à Cidadela."
 
 Quem recebe alertas segue a [tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades); alertas de sistema vão a todos os usuários ativos.
 
 ### Um só leitor
 
-- Só a Torre condutora lê. A trava da eleição garante isso no caso normal.
-- Proteção extra: se o `getUpdates` responder `409 Conflict`, o Guardião para de ler na hora, registra alerta e só tenta de novo se continuar condutora depois de 60 s (padrão).
-- Se a condutora perde a trava (não renovou), para de ler antes de a trava expirar do lado do árbitro.
+- Só a Torre condutora lê. A trava da eleição, dada pelo árbitro ([camadas](camadas.md#eleição-da-torre-condutora)), garante isso entre os Guardiões.
+- Se o `getUpdates` responder `409 Conflict`, o Guardião para de ler na hora, registra alerta e só tenta de novo se continuar condutora depois de 60 s (padrão).
+- Um `409` repetido entre a condutora e uma Cidadela viva mas isolada é degradação aceita: o Dono continua podendo decidir pela [página reserva](pagina-reserva.md).
+- Se a condutora perde a trava da eleição (não renovou), para de ler antes de ela expirar do lado do árbitro.
 
 ### Devolução à Cidadela
 
@@ -66,7 +68,7 @@ sequenceDiagram
   MC->>T: aviso "Cidadela de volta"
 ```
 
-- Ao iniciar, o motor da Cidadela **não lê** o bot até receber a devolução, ou até 30 s (padrão) sem resposta de nenhum Guardião. Depois disso lê mesmo assim (o `409` resolve o resto).
+- Ao iniciar, o motor da Cidadela **não lê** o bot até receber a devolução, ou até 30 s (padrão) sem resposta de nenhum Guardião. Depois disso lê mesmo assim, como sempre só com a época confirmada na trava ([bot](../telegram/bot.md#recepção-por-long-polling)).
 - O aviso "Cidadela de volta" é enviado pelo motor da Cidadela, já com o bot.
 - **Depois de uma promoção:** a devolução vai ao motor da nova Cidadela (pelo canal local, quando é a própria Torre condutora), e o aviso diz "<máquina> é a nova Cidadela". A Cidadela antiga, ao voltar, vê a época maior e não lê o bot ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
 

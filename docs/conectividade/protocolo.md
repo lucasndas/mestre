@@ -4,22 +4,14 @@
 
 ## Objetivo
 
-Definir como a Cidadela, os motores das Torres, os Guardiões e o painel conversam. O canal é uma conexão WebSocket segura (WSS), sempre aberta pelo lado de fora (Torre ou navegador) até a **Cidadela atual**, em que nenhuma reconexão executa nada duas vezes e nenhuma mensagem de uma Cidadela antiga é aceita. O porquê está no [ADR 0002](../decisoes/0002-wss-iniciado-pelo-no.md) e no [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md).
+Definir como a Cidadela, os motores das Torres, os Guardiões e o painel conversam. O canal é uma conexão WebSocket segura (WSS), sempre aberta pelo lado de fora (Torre ou navegador) até a **Cidadela atual**, em que nenhuma reconexão executa nada duas vezes e nenhuma mensagem de uma Cidadela antiga é aceita. O porquê está no [ADR 0002](../decisoes/0002-wss-iniciado-pela-torre.md) e no [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md).
 
 ## Comportamento
 
-### Endpoints e portas (padrão)
+### Endpoints e portas
 
-| Endpoint | Quem conecta | Autenticação |
-|---|---|---|
-| `wss://<cidadela>:7443/ws/tower` | motor de cada Torre | mTLS com o certificado da máquina ([credenciais](../guilda/guilda.md#credenciais)) |
-| `wss://<cidadela>:7443/ws/guardian` | Guardião de cada Torre | mTLS com o certificado do Guardião da máquina |
-| `wss://<cidadela>:7443/ws/ui` | navegador (painel) | cookie de sessão ([login](../painel/login.md)) |
-| `https://<cidadela>:7443/join` | máquina pedindo entrada | código de comparação e aprovação do Dono ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
-| `wss://<cidadela>:7444/ws/guardian-citadel` | Torres, quando o motor da Cidadela está fora | mTLS com o certificado da máquina ou do Guardião |
-
-- A porta 7443 é do motor (na Cidadela, também serve o painel e a API por HTTPS; numa Torre, só redireciona, [painel redirecionado](../guilda/cidadela-e-torres.md#painel-redirecionado)). A 7444 é do Guardião da Cidadela; quem a usa e quando está em [camadas](../autocura/camadas.md).
-- As portas são configuráveis. Tudo é sempre TLS, com a CA da Guilda, inclusive na rede local.
+- Portas, rotas e a autenticação de cada uma estão na tabela única de [portas](../arquitetura/componentes.md#portas): `wss /ws/tower` (motor de cada Torre, mTLS de máquina), `wss /ws/guardian` (Guardião de cada Torre, mTLS de Guardião) e `wss /ws/ui` (navegador, cookie de sessão) na 7443 da Cidadela; `/join` para a [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda); `wss /ws/guardian-citadel` na 7444 do Guardião da Cidadela; e, na 7446 do Guardião de toda máquina, a sondagem `GET /guardian/alive` e a ordem `wss /guardian/promote`.
+- Tudo é sempre TLS, com a CA da Guilda, inclusive na rede local. Numa Torre, a 7443 só redireciona ([painel redirecionado](../guilda/cidadela-e-torres.md#painel-redirecionado)).
 - **A Torre sempre conecta na Cidadela atual:** a da certidão de época mais alta que conhece; achar o endereço é da [descoberta](descoberta.md).
 
 ### Envelope
@@ -54,7 +46,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 3. **Mudanças compatíveis:**
    - Campo opcional novo e tipo novo **não** mudam a versão.
    - Remover um campo ou mudar o significado de algo exige versão nova.
-   - A Cidadela aceita pelo menos a versão atual e a anterior, para conviver com Torres ainda não atualizadas ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)).
+   - Toda máquina aceita pelo menos a versão atual e a anterior: a [autoatualização](../plataforma/autoatualizacao.md) troca as Torres primeiro e a Cidadela por último, então durante ela Torres novas convivem com a Cidadela antiga, e qualquer uma pode ser promovida no meio.
 4. **Relógio:** uma diferença de mais de 5 s entre o relógio da Torre e o da Cidadela vira aviso no [checklist](../plataforma/checklist.md).
 5. **Ficha depois do `hello`:** mudanças vão em `machine.sheet`; a Cidadela escolhe a máquina de cada personagem pela ficha ([ficha da máquina](../guilda/ficha-da-maquina.md)).
 
@@ -78,10 +70,10 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 ### Heartbeat e reconexão
 
 - **Ping:** ping do WebSocket a cada 15 s. Sem pong em 45 s, a conexão é dada como morta.
-- **Heartbeat:** `machine.heartbeat` a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#torre-condutora)).
+- **Heartbeat:** `machine.heartbeat` a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
 - **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%. Depois de 3 falhas seguidas, a Torre refaz a [descoberta](descoberta.md).
 - **Uma conexão por `machine_id`:** uma conexão nova substitui a antiga.
-- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual).
+- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual, assinada pela CA; vale também para o Guardião de uma Cidadela antiga, que se retira na hora ao receber certidão mais nova, [concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
 
 ### Tipos de mensagem
 
@@ -109,6 +101,7 @@ O catálogo de tipos, com os campos principais e as respostas, e a tabela de có
 
 - **Conexão própria:** o Guardião de cada Torre abre a própria conexão até a Cidadela atual (`/ws/guardian`), com credencial própria. Ela não depende do motor da Torre.
 - **Mensagens:** mesmo envelope e mesmas regras de ack. A versão é **própria** (começa em 1 e é negociada no `guardian.hello` do mesmo jeito), porque o Guardião tem binário e versão independentes; o manifesto de cada release traz as duas faixas ([autoatualização](../plataforma/autoatualizacao.md)). Tipos: [mensagens do Guardião](mensagens.md#guardião-da-torre--cidadela). A `guardian.replica` é a única cópia de usuários que serve login (página reserva); a réplica do banco no motor da Torre não serve login.
+- **Concessão:** pelo canal local, o motor de cada máquina manda ao próprio Guardião a mensagem `lease` a cada 30 s, com a época confirmada; é ela que deixa o Guardião da Cidadela publicar `mestre.local` e arbitrar ([mensagens](mensagens.md#guardião-da-torre--cidadela), [concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
 - **Nada derruba a conexão:** nenhuma mensagem desta conexão pede ao Guardião que a feche, se desligue ou se atualize. A atualização do Guardião é feita pelo motor saudável da própria máquina ([autoatualização](../plataforma/autoatualizacao.md)).
 
 ### Canal do navegador
@@ -138,7 +131,7 @@ Descoberta, entrada na Guilda, ficha da máquina e replicação usam este protoc
 - **CA-PROTO-07** · *rápida* — **Dado** o motor da Torre parado, **quando** a Cidadela manda `guardian.action` de status, **então** o Guardião responde pela própria conexão.
 - **CA-PROTO-08** · *rápida* — **Dado** um `inbox.deliver` para um terminal que ficou ocupado, **quando** a máquina responde, **então** o ack é `ok`, o resultado é `inbox.result` com `busy` e o item volta para a fila da Cidadela.
 - **CA-PROTO-09** · *rápida* — **Dado** um navegador que abre um terminal cuja máquina já mandou 300 KiB de saída, **quando** a Cidadela atende, **então** pede `terminal.replay` à máquina a partir do deslocamento 0 e o navegador recebe os 300 KiB.
-- **CA-PROTO-10** · *rápida* — **Dado** uma Torre na época 2, **quando** chega uma mensagem da época 1, **então** ela responde `stale_epoch`, fecha com `4006` e nada é executado; **dado** um `welcome` com certidão da época 3 válida, **então** a Torre passa a seguir a época 3.
+- **CA-PROTO-10** · *rápida* — **Dado** uma máquina (Torre ou Cidadela) na época 2, **quando** chega uma mensagem da época 1, **então** ela responde `stale_epoch`, fecha com `4006` e nada é executado ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); **dado** um `welcome` com certidão da época 3 válida, **então** a Torre passa a seguir a época 3.
 
 ## Depende de
 

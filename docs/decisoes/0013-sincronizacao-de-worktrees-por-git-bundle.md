@@ -14,7 +14,7 @@ Aceita, 2026-10-12. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-gu
   - Não pode haver SSH.
   - A Torre não abre porta.
   - Só o motor envia para o GitHub.
-- Já existe uma conexão autenticada e cifrada entre cada Torre e a Cidadela ([ADR 0002](0002-wss-iniciado-pelo-no.md)).
+- Já existe uma conexão autenticada e cifrada entre cada Torre e a Cidadela ([ADR 0002](0002-wss-iniciado-pela-torre.md)).
 
 ## Opções consideradas
 
@@ -66,7 +66,7 @@ Aceita, 2026-10-12. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-gu
   - Nada além do motor fala com o GitHub.
 - **Negativas:**
   - **Transferência própria:** o motor precisa implementar divisão em partes, retomada depois de reconexão, verificação de hash e limpeza de transferências abandonadas.
-  - **Concorrência com terminais:** bundles grandes dividem a conexão com o fluxo dos terminais. O protocolo precisa de controle de fluxo para não atrasar heartbeats ([ADR 0002](0002-wss-iniciado-pelo-no.md)).
+  - **Concorrência com terminais:** bundles grandes dividem a conexão com o fluxo dos terminais. O protocolo precisa de controle de fluxo para não atrasar heartbeats ([ADR 0002](0002-wss-iniciado-pela-torre.md)).
   - **Só commits viajam:** o que não foi commitado não sincroniza. Os agentes precisam commitar antes de `mestre done`, e as skills ensinam isso ([skills geradas](../cli/skills-geradas.md)).
   - **Conflitos:** duas máquinas com commits divergentes na mesma branch geram conflito ao aplicar o bundle. O Mestre da mesa evita que duas máquinas editem os mesmos arquivos ao mesmo tempo, e o motor nunca resolve conflito sozinho.
   - **Testes:** a troca de bundles precisa de repositórios git reais em pastas temporárias. Por isso, só a lógica de partes e hash cabe na suíte rápida ([testes](../qualidade/testes.md)).

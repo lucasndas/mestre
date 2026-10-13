@@ -1,10 +1,10 @@
 # Guilda
 
-> **Assunto:** formação da Guilda (instalar → descobrir → entrar ou criar), entrada de uma máquina com código e aprovação do Dono, credenciais da máquina, saída e remoção · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** formação da Guilda (instalar → descobrir → entrar ou criar), entrada de uma máquina com código e aprovação do Dono, credenciais da máquina, máquina excluída, saída e remoção · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Toda máquina recebe a mesma instalação do Mestre, em Linux ou Windows, e se junta às outras sem configuração: a primeira cria a **Guilda** e vira a [Cidadela](cidadela-e-torres.md); as seguintes a encontram na rede local e pedem para entrar, com um único passo do Dono (aprovar e conferir um código). A partir daí, cada máquina usa só credenciais próprias, que o Dono pode revogar a qualquer momento. O passo a passo para quem usa está em [instalar](../operacao/instalar.md) e [entrar na Guilda](../operacao/entrar-na-guilda.md).
+Toda máquina recebe a mesma instalação do Mestre, em Linux ou Windows, e se junta às outras sem configuração: a primeira cria a **Guilda** e vira a [Cidadela](cidadela-e-torres.md); as seguintes a encontram na rede local e pedem para entrar, com um único passo do Dono (aprovar e conferir um código). A partir daí, cada máquina usa só credenciais próprias, que o Dono pode revogar a qualquer momento, e recebe tudo replicado, inclusive o cofre cifrado, salvo se o Dono a excluir. Uma máquina pode ter várias [instâncias](../arquitetura/componentes.md#instâncias), cada uma uma máquina da Guilda. O passo a passo para quem usa está em [instalar](../operacao/instalar.md) e [entrar na Guilda](../operacao/entrar-na-guilda.md).
 
 ## Comportamento
 
@@ -17,7 +17,7 @@ Toda máquina recebe a mesma instalação do Mestre, em Linux ou Windows, e se j
    - achou **mais de uma**: o instalador lista as Guildas (nome da Cidadela e quantas máquinas) e pergunta em qual entrar;
    - achou uma Guilda **sem Cidadela no ar** (só Torres responderam): não cria outra; avisa "a Guilda existe, mas a Cidadela está fora; tente de novo depois" e sai com erro;
    - **não achou nenhuma**: cria a Guilda nesta máquina, que vira a Cidadela da época 1.
-- **Criar a Guilda:** gera o `guild_id` (ULID), a [CA da Guilda](replicacao.md#ca-da-guilda) e o cofre, emite os certificados desta máquina, grava a [certidão](replicacao.md#certidão-de-época) da época 1 e cria o banco principal. Mostra o endereço do painel e o código de configuração do Dono ([login](../painel/login.md)).
+- **Criar a Guilda:** gera o `guild_id` (ULID), o cofre e, dentro dele, a [CA da Guilda](replicacao.md#ca-da-guilda), emite os certificados desta máquina, grava a [certidão](replicacao.md#certidão-de-época) da época 1, cria o banco principal e grava o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda) (o do sistema desta máquina). Mostra o endereço do painel e o código de configuração do Dono ([login](../painel/login.md)).
 - `mestre install --new-guild` cria uma Guilda nova mesmo que outra responda (duas Guildas independentes na mesma rede).
 
 ### Entrada na Guilda
@@ -42,26 +42,33 @@ sequenceDiagram
 ```
 
 - **Por que o código protege:** um intermediário mostra à máquina nova outro certificado, então `fp` muda e os dois códigos ficam diferentes. Como a máquina nova se compromete com `nonce_n` antes de ver `nonce_c`, o intermediário não consegue escolher valores que façam os códigos baterem (uma chance em um milhão por pedido, e cada pedido passa pelo Dono).
-- **O Dono compara** o código da tela do instalador com o da mensagem; só aceita se forem iguais. O pedido (tipo `entrada_na_guilda`, só o Dono, com PIN; [pedidos da Guilda](../aprovacoes/fluxo.md#pedidos-da-guilda)) aparece no Telegram ([bot](../telegram/bot.md)) e no painel ([Guilda e saúde das máquinas](../painel/administracao.md#guilda-e-saúde-das-máquinas)). Antes de o Dono existir, o pedido espera e aparece no painel depois do assistente do Dono.
-- **Na aceitação** o Dono também marca se a máquina **pode ser Cidadela** (padrão: não; muda depois no painel), o que decide se ela recebe o cofre ([replicação](replicacao.md#cofre-só-nas-candidatas)).
-- **Espera:** o instalador acompanha o pedido em `GET /join/<join_id>` (espera longa) e mostra o andamento. Sem resposta em **24 horas** (padrão), o pedido expira.
-- **Depois de aceita:** a máquina conecta como Torre, manda a [ficha da máquina](ficha-da-maquina.md) no `hello` e recebe a cópia completa do banco ([replicação](replicacao.md)).
+- **O Dono compara** o código da tela do instalador com o da mensagem; só aceita se forem iguais. O pedido (tipo `entrada_na_guilda`, só o Dono, com PIN; [pedidos da Guilda](../aprovacoes/fluxo.md#pedidos-da-guilda)) aparece no Telegram ([bot](../telegram/bot.md)) e no painel ([Guilda e saúde das máquinas](../painel/administracao.md#guilda-e-saúde-das-máquinas)). Antes de o Dono existir, o pedido aparece no painel depois do assistente do Dono, dentro do mesmo prazo.
+- **Na aceitação** o Dono pode já marcar a máquina como [excluída](#máquina-excluída) (padrão: não).
+- **Espera:** o instalador acompanha o pedido em `GET /join/<join_id>` (espera longa) e mostra o andamento. Sem resposta em **1 hora**, o pedido expira.
+- **Depois de aceita:** a máquina conecta como Torre, manda a [ficha da máquina](ficha-da-maquina.md) no `hello` e recebe a cópia completa do banco, os arquivos e, se não é excluída, o cofre ([replicação](replicacao.md)).
 - **Entrada manual:** `mestre join <endereço>` repete a entrada numa máquina já instalada que está fora da Guilda (removida, ou que criou uma Guilda por engano e ainda não tem nada); só root ou administrador local ([componentes](../arquitetura/componentes.md#mestre)).
 
 ### Credenciais
 
 - **Chaves na máquina:** a máquina gera localmente dois pares ECDSA P-256: o do **motor** (cliente e servidor) e o do **Guardião** (cliente, cura cruzada e página reserva). As chaves privadas nunca saem da máquina: no Linux, `0600` com dono `mestre` (a do Guardião, na pasta do Guardião, dono root); no Windows, com ACL só para a conta do serviço dono e SYSTEM.
-- **Certificados** emitidos pela CA da Guilda, 1 ano (padrão), com o SAN `mestre://machine/<machine_id>` no do motor e `mestre://guardian/<machine_id>` no do Guardião, mais o nome da máquina, `<host>.local` e os IPs da rede local; o de uma máquina que **pode ser Cidadela** traz também `mestre.local`, o nome do painel. Tabela completa em [segurança](../arquitetura/seguranca.md#tls-e-ca-interna).
+- **Certificados** emitidos pela CA da Guilda, 1 ano (padrão), com o SAN `mestre://machine/<machine_id>` no do motor e `mestre://guardian/<machine_id>` no do Guardião, mais o nome da máquina, `<host>.local`, os IPs da rede local e `mestre.local`, o nome do painel (menos na máquina excluída). Tabela completa em [segurança](../arquitetura/seguranca.md#tls-e-ca-interna).
 - **Renovação:** automática pela conexão já autenticada, **30 dias antes de vencer** (padrão), com chave nova (`cert.renew`); quando os IPs da máquina mudam, na hora. Quem emite é a Cidadela atual. Certificado vencido (máquina desligada por mais de um ano) exige entrada nova.
-- **Registro da máquina** no banco principal (`machines`): `machine_id` e nome, prioridade (usada na escolha da [Torre condutora](cidadela-e-torres.md#torre-condutora), editável no painel), se pode ser Cidadela, a última ficha, números de série dos certificados, estado e datas de entrada e de remoção.
+- **Registro da máquina** no banco principal (`machines`): `machine_id` e nome, prioridade (usada na escolha da [Torre condutora](cidadela-e-torres.md#recuperação-e-aviso-ao-dono), editável no painel), se é excluída, a última ficha, números de série dos certificados, estado e datas de entrada e de remoção.
 - **Confiança:** cada máquina confia só na CA da Guilda para falar com as outras, ignora o repositório de certificados do sistema e confere o SAN e a lista de máquinas da Guilda ([checagem de identidade](../conectividade/descoberta.md#checagem-de-identidade)). O navegador confia na CA uma vez ([primeiro acesso](../operacao/primeiro-acesso.md)).
+
+### Máquina excluída
+
+- O Dono pode **excluir** uma máquina específica, no painel ou pelo `/guilda` no Telegram, com PIN ([administração](../painel/administracao.md#guilda-e-saúde-das-máquinas)); desfazer é igual. Não pode excluir a Cidadela atual.
+- A **máquina excluída** fica **sem segredos**: a Cidadela manda `vault.drop`, e ela apaga a cópia do cofre, o envelope e as tabelas do cofre da réplica, com recibo na auditoria; a réplica do Guardião dela passa a levar só a lista de usuários, sem o token do bot ([réplica para os Guardiões](../plataforma/cofre.md#réplica-para-os-guardiões)). Os certificados são reemitidos sem `mestre.local`.
+- Fica **fora da troca de Cidadela**: não pode ser promovida nem conduzir a promoção ([Cidadela e Torres](cidadela-e-torres.md#promoção)). Continua rodando personagens e recebendo o banco e os arquivos.
+- Desfeita a exclusão, a máquina volta a receber o cofre e os certificados com `mestre.local`.
 
 ### Saída e remoção
 
-- **Remover pelo painel** (só o Dono, com PIN, [níveis](../telegram/usuarios-e-niveis.md)): os certificados da máquina entram na lista de revogados, as conexões do motor e do Guardião caem com `4002`, toda conexão nova com eles é recusada e os personagens dela ficam interrompidos ([personagens](../orquestracao/personagens.md)). Se a máquina está online, a Cidadela manda antes `guild.leave`: ela apaga a réplica do banco, a cópia do cofre e a configuração da Guilda e fica "fora da Guilda", com os serviços parados até nova entrada.
-- **`mestre uninstall` numa Torre:** pede a saída à Cidadela (`guild.leave` com `reason: uninstall`) antes de remover os serviços; com a Cidadela fora, desinstala assim mesmo e o painel mostra a máquina como "sumida", para o Dono remover.
-- **A Cidadela não se desinstala com Torres na Guilda:** o instalador recusa e explica que antes é preciso passar a Cidadela para uma Torre candidata ([troca planejada](cidadela-e-torres.md#troca-planejada)). Sozinha, a Cidadela desinstala e a Guilda acaba.
-- **Candidata removida offline:** a cópia cifrada do cofre fica no disco dela; o painel recomenda substituir os segredos do cofre ([cofre](../plataforma/cofre.md)).
+- **Remover pelo painel** (só o Dono, com PIN, [níveis](../telegram/usuarios-e-niveis.md)): os certificados da máquina entram na lista de revogados, as conexões do motor e do Guardião caem com `4002`, toda conexão nova com eles é recusada e os personagens dela ficam interrompidos ([personagens](../orquestracao/personagens.md)). Se a máquina está online, a Cidadela manda antes `guild.leave`: ela apaga a réplica do banco e dos arquivos, a cópia do cofre e a configuração da Guilda e fica "fora da Guilda", com os serviços parados até nova entrada.
+- **`mestre uninstall` numa Torre:** pede a saída à Cidadela (`guild.leave` com `reason: uninstall`), apaga a réplica, os arquivos replicados e a cópia do cofre e remove os serviços; com a Cidadela fora, apaga do mesmo jeito, desinstala assim mesmo e o painel mostra a máquina como "sumida", para o Dono remover.
+- **A Cidadela não se desinstala com Torres na Guilda:** o instalador recusa e explica que antes é preciso passar a Cidadela para outra máquina ([troca planejada](cidadela-e-torres.md#troca-planejada)). Sozinha, a Cidadela desinstala e a Guilda acaba.
+- **Máquina removida offline** (não excluída): a cópia cifrada do cofre fica no disco dela, e quem tem a máquina tem o mesmo risco da Cidadela ([segurança](../arquitetura/seguranca.md#ameaças-e-proteções)); o painel recomenda substituir os segredos do cofre ([cofre](../plataforma/cofre.md)).
 - **Voltar:** entrada nova, com `machine_id` novo; o histórico da antiga fica no banco.
 
 ## Regras e erros
@@ -77,21 +84,19 @@ sequenceDiagram
 - **CA-GUILDA-01** · *rápida* — **Dado** uma rede falsa sem nenhuma Guilda, **quando** a instalação descobre, **então** cria a Guilda com `guild_id`, CA, certidão da época 1 e papel Cidadela; **dado** só uma Torre respondendo, **então** não cria nada e sai com o aviso de Cidadela fora.
 - **CA-GUILDA-02** · *rápida* — **Dado** uma Cidadela e uma máquina nova, **quando** a máquina pede entrada, **então** os dois lados calculam o mesmo código; aceito pelo Dono com PIN, ela recebe os certificados com os SANs certos, e sem aceitação nada é emitido.
 - **CA-GUILDA-03** · *rápida* — **Dado** um intermediário com outro certificado TLS, **quando** a máquina pede entrada através dele, **então** o código da máquina e o da Cidadela são diferentes.
-- **CA-GUILDA-04** · *rápida* — **Dado** um pedido com 24 h e 1 min (relógio falso), **quando** o Dono tenta aceitar, **então** o pedido está expirado e nada é criado.
+- **CA-GUILDA-04** · *rápida* — **Dado** um pedido com 1 h e 1 min (relógio falso), **quando** o Dono tenta aceitar, **então** o pedido está expirado e nada é criado.
 - **CA-GUILDA-05** · *rápida* — **Dado** 10 pedidos de um IP numa hora, **quando** chega o 11º, **então** é recusado sem mensagem ao Dono.
-- **CA-GUILDA-06** · *rápida* — **Dado** uma máquina removida pelo Dono, **quando** o motor ou o Guardião dela conectam, **então** o handshake é recusado; **dado** que ela estava online, **então** recebeu `guild.leave` e apagou réplica, cofre e configuração.
+- **CA-GUILDA-06** · *rápida* — **Dado** uma máquina removida pelo Dono, **quando** o motor ou o Guardião dela conectam, **então** o handshake é recusado; **dado** que ela estava online, **então** recebeu `guild.leave` e apagou réplica, arquivos, cofre e configuração.
 - **CA-GUILDA-07** · *rápida* — **Dado** um certificado a 30 dias de vencer (relógio falso), **quando** a máquina está conectada, **então** pede e instala um novo sem cair; **dado** a mudança de IP, **então** recebe certificados com o IP novo.
 - **CA-GUILDA-08** · *rápida* — **Dado** a Cidadela com uma Torre na Guilda, **quando** roda `mestre uninstall` nela, **então** a desinstalação é recusada com a explicação da troca planejada.
-- **CA-GUILDA-09** · *completa* — **Dado** duas instâncias na mesma máquina, a primeira já Cidadela, **quando** a segunda é instalada como processo comum, **então** acha a Guilda por broadcast, entra com a aprovação pelo Telegram falso, conecta só por mTLS e reconecta depois de reiniciar.
+- **CA-GUILDA-09** · *completa* — **Dado** duas [instâncias](../arquitetura/componentes.md#instâncias) na mesma máquina, a primeira já Cidadela, **quando** a segunda é iniciada como processo comum, **então** acha a Guilda por broadcast, entra com a aprovação pelo Telegram falso, conecta só por mTLS e reconecta depois de reiniciar.
 - **CA-GUILDA-10** · *pesada* — **Dado** a instalação no Linux e o Dono criado, **quando** instalo no Windows, **então** a instalação acha a Guilda sozinha na rede local, o pedido chega ao Telegram com o código igual ao da tela, e depois de aprovado a máquina aparece online no painel com a ficha dela (MVP-1).
-- **CA-GUILDA-11** · *pesada* — **Dado** cada uma das quatro composições (só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux, só Windows), **quando** instalo do zero, **então** a primeira máquina cria a Guilda, a segunda (se houver) entra, e os serviços `mestre` e `mestre-guardiao` estão no ar em todas (MVP-13).
+- **CA-GUILDA-11** · *pesada* — **Dado** cada uma das quatro composições (só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux, só Windows), **quando** instalo do zero, **então** a primeira máquina cria a Guilda, a segunda (se houver) entra, os serviços `mestre` e `mestre-guardiao` estão no ar em todas, o painel abre, o Dono é criado, as Torres aparecem conectadas e um personagem de teste roda em cada máquina, inclusive na Cidadela (MVP-13).
+
+- **CA-GUILDA-12** · *rápida* — **Dado** uma Torre com o cofre, **quando** o Dono a exclui com PIN, **então** ela apaga o cofre, o envelope e as tabelas do cofre da réplica, recebe certificados sem `mestre.local`, e uma promoção dela é recusada; **dado** a exclusão desfeita, **então** recebe o cofre de novo.
 
 ## Depende de
 
 - [Protocolo](../conectividade/protocolo.md) · [Descoberta](../conectividade/descoberta.md)
-- [Cofre](../plataforma/cofre.md) (chave privada da CA)
+- [Cofre](../plataforma/cofre.md) (a CA vive dentro dele)
 - [Segurança](../arquitetura/seguranca.md) · [Componentes](../arquitetura/componentes.md)
-
-## A confirmar
-
-- **Pendente (decisão do Dono):** como uma instalação nova é aceita na Guilda. **Recomendação:** a nova instalação mostra um código curto (6 dígitos) e a Cidadela pede ao Dono pelo Telegram e pelo painel "Aceitar <máquina> na Guilda? código 123456", com botão e PIN; sem aprovação no prazo, expira (o fluxo acima). Alternativa: convite gerado antes no painel e digitado no instalador, como era o pareamento.

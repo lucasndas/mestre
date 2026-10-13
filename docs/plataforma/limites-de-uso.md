@@ -32,7 +32,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 
 - Configuráveis por **missão**, por **mesa**, por **workspace** e **por dia** (por workspace e no total da instalação).
 - Cada limite tem uma **unidade**: custo estimado (USD), tokens ou horas ativas. Uso sem dado naquela unidade (ex.: Codex num limite em USD) não conta para ele, e o painel mostra essa lacuna ao lado do limite.
-- O dia vira à meia-noite no fuso configurado da Cidadela (padrão: o fuso do sistema).
+- O dia vira à meia-noite no [fuso da Guilda](../painel/administracao.md#fuso-da-guilda).
 - Quem configura: Administrador ou acima nos workspaces dele; o limite diário total, só o Dono. Nenhum limite pode passar o **teto de custo do workspace** ([teto](../classes/teto-do-workspace.md)).
 - Valores padrão: sem limites configurados (a instalação sugere configurar um limite diário por workspace no primeiro acesso).
 

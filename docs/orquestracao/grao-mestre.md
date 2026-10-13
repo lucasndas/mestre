@@ -18,9 +18,9 @@ O Grão-Mestre é o agente orquestrador **único de cada [workspace](workspaces.
 
 ### Onde roda
 
-Nome fixo no canvas e na CLI: `Grão-Mestre`. Grão-Mestre é nome de agente, não de máquina. Roda sempre **na Cidadela**, no próprio motor dela (o serviço `mestre`, iniciando os agentes como `mestre-agente`; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável em toda máquina que pode ser Cidadela; o painel recusa outra e avisa quando uma máquina marcada "pode ser Cidadela" não atende ([ficha da máquina](../guilda/ficha-da-maquina.md)).
+Nome fixo no canvas e na CLI: `Grão-Mestre`. Grão-Mestre é nome de agente, não de máquina. Roda sempre **na Cidadela**, no próprio motor dela (o serviço `mestre`, iniciando os agentes como `mestre-agente`; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável em toda máquina que pode assumir como Cidadela (toda máquina não excluída pelo Dono); o painel recusa outra e o [checklist](../plataforma/checklist.md) avisa quando uma dessas máquinas não atende ([ficha da máquina](../guilda/ficha-da-maquina.md)).
 
-**Troca de Cidadela:** quando uma Torre é promovida ([Cidadela e Torres](../guilda/cidadela-e-torres.md)), o Grão-Mestre muda junto: a nova Cidadela o inicia no clone principal dela e ele retoma o contexto pelo banco replicado (mensagem de retomada abaixo). O processo da Cidadela antiga, se ainda existir, é encerrado quando ela se rebaixa a Torre; ela nunca o mantém vivo nem age por ele. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
+**Troca de Cidadela:** o Grão-Mestre muda junto com a Cidadela; quem o encerra e quem o retoma, e quando, está nas [regras da troca](../guilda/cidadela-e-torres.md). Ele retoma o contexto pelo banco replicado (mensagem de retomada abaixo) e nunca fica vivo em duas máquinas. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
 
 ### Fixo e protegido
 

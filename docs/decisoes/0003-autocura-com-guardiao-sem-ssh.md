@@ -53,11 +53,11 @@ Aceita, 2026-10-12. **Revista em 2026-10-13** pelo [ADR 0022](0022-guilda-cidade
   3. supervisão cruzada com runbook;
   4. diagnóstico com IA, com script aprovado por pessoa;
   5. alerta aos usuários;
-  6. se a Cidadela não volta, proposta de troca de Cidadela ao Dono ([Cidadela e Torres](../guilda/cidadela-e-torres.md#proposta-de-assumir)).
+  6. se a Cidadela não volta, proposta de troca de Cidadela ao Dono ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
 - **Onde estão os detalhes:**
   - Lista de ações e o que o Guardião guarda: [Guardião](../autocura/guardiao.md).
   - Camadas, eleição da Torre condutora e anti-loop: [camadas](../autocura/camadas.md).
-  - Guilda de uma máquina (só Linux ou só Windows): sem camada 3; o Guardião da Cidadela conduz o incidente, o diagnóstico, a página reserva e o Telegram reduzido ([ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md), [modo máquina única](../autocura/camadas.md#modo-máquina-única)).
+  - Guilda de uma máquina (só Linux ou só Windows): sem camada 3; o Guardião da Cidadela conduz o incidente, o diagnóstico, a página reserva e o Telegram reduzido ([ADR 0020](0020-linux-e-windows-em-qualquer-papel.md), [modo máquina única](../autocura/camadas.md#modo-máquina-única)).
   - Diagnóstico com IA: [diagnóstico com IA](../autocura/diagnostico-com-ia.md).
 
 ## Consequências

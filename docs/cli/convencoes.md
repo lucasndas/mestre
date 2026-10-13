@@ -11,7 +11,7 @@ Dar a todos os comandos da CLI `mestre` a mesma forma de uso, de saída e de err
 ### Forma geral
 - O binário `mestre` está no PATH de toda máquina da Guilda ([componentes](../arquitetura/componentes.md)). `MESTRE_CLI` guarda o caminho absoluto dele: skills e arquivos de hook usam `mestre` e, se não acharem, `$MESTRE_CLI` (PowerShell: `& $env:MESTRE_CLI`).
 - Uso: `mestre <comando> [subcomando] [argumentos] [flags]`. Nomes com espaço vão entre aspas. Comandos, flags e textos de saída ficam em inglês.
-- Flags globais: `--json` (saída em JSON) e `--help`. Durações: `90s`, `10m`, `2h`. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o da Cidadela; [workspaces](../orquestracao/workspaces.md)).
+- Flags globais: `--json` (saída em JSON) e `--help`. Durações: `90s`, `10m`, `2h`. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
 - `mestre hook` é interno (só os arquivos de hook o chamam) e **não** segue as regras de saída abaixo: ver [adaptador](../provedores/adaptador.md). Subcomandos de serviço (`mestre run`, `mestre install`, `mestre join`…) são de [componentes](../arquitetura/componentes.md).
 
 ### Saída em texto (padrão)
@@ -75,7 +75,7 @@ sequenceDiagram
 ```
 - A Cidadela é a fonte da verdade: o motor local encaminha à Cidadela toda chamada (menos `help`, `debug` e `hook`), mesmo com o alvo na mesma máquina; na própria Cidadela, o encaminhamento é interno. O agente nunca precisa saber em que máquina o outro roda. Transporte: [protocolo](../conectividade/protocolo.md).
 - A CLI gera um `request_id` (o `id` do pedido no [canal local](../arquitetura/canal-local.md)) por chamada; um reenvio da mesma chamada após reconexão não executa duas vezes.
-- Cidadela fora (ou suspensa, ou em troca): exit 5, `citadel_unreachable`, exceto `mestre done`, que o motor local guarda no banco local de máquina e entrega uma única vez à Cidadela atual quando ela volta (exit 0, `"queued": true`).
+- Cidadela fora (ou suspensa): exit 5, `citadel_unavailable`; durante uma promoção, `citadel_in_failover`. Exceção: `mestre done`, que não precisa de resposta imediata, vai para a [fila de saída](../guilda/cidadela-e-torres.md#cidadela-fora-e-fila-de-saída) da máquina e é aplicado uma única vez pela Cidadela atual quando ela volta (exit 0, `"queued": true`).
 - Máquina do alvo fora: comandos que precisam do terminal do alvo (`check`, `ask --raw`) saem com exit 5, `machine_unreachable`; mensagens normais ficam na caixa de entrada do alvo.
 
 ### Regras de segurança da CLI
@@ -100,7 +100,8 @@ As variáveis de ambiente vêm da sessão zero do personagem (M4); decretos e ap
 |---|---|---|---|
 | sem id, id desconhecido ou processo fora do terminal dele | 3 | `not_identified` | rode `mestre debug` |
 | motor local não responde | 5 | `engine_unreachable` | rode `mestre debug`; o Guardião reinicia o motor |
-| Cidadela fora | 5 | `citadel_unreachable` | o motor reconecta sozinho; tente em instantes |
+| Cidadela fora ou suspensa | 5 | `citadel_unavailable` | o pedido não foi feito; o Dono já é avisado ([recuperação](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)); `mestre done` não falha, vai para a fila |
+| troca de Cidadela em andamento | 5 | `citadel_in_failover` | o pedido não foi feito; repita depois que a nova Cidadela assumir |
 | protocolo incompatível | 5 | `protocol_mismatch` | atualização pendente ([instalacao](../plataforma/instalacao-e-atualizacao.md)) |
 | comando acima do nível | 3 | `level_denied` | peça a quem tem o nível (Mestre da mesa ou Grão-Mestre) |
 | classe não libera | 3 | `class_denied` | peça ao Mestre da mesa |

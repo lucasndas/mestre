@@ -11,7 +11,8 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 ### Acesso por HTTPS
 
 - O painel é servido pelo motor da Cidadela por HTTPS, na porta padrão de [componentes](../arquitetura/componentes.md#portas), com o certificado da CA interna da Guilda ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
-- **Qualquer máquina leva ao painel:** toda máquina da Guilda responde no endereço do painel e redireciona o navegador para a Cidadela atual. O nome mDNS do painel (`mestre.local`) é anunciado pela Cidadela e muda de máquina junto com ela numa troca de Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Uma Torre nunca serve o painel nem a API.
+- **Qualquer máquina leva ao painel:** toda máquina da Guilda responde no endereço do painel e redireciona o navegador para a Cidadela atual com `307`, **preservando o caminho e a query** (um link de criação de App ou de aprovação aberto numa Torre chega inteiro). O nome mDNS do painel (`mestre.local`) é publicado só pela Cidadela e muda de máquina junto com ela numa troca de Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Uma Torre nunca serve o painel nem a API.
+- **Cidadela suspensa:** responde `307` para a Cidadela atual quando a conhece; senão mostra só uma página "Cidadela suspensa", sem login e sem ações, e não anuncia `mestre.local` ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)).
 - Confiar na CA no navegador é feito uma vez por aparelho; o passo a passo está em [primeiro acesso](../operacao/primeiro-acesso.md).
 - Qualquer rota do painel ou da API sem sessão válida responde 401 e o navegador vai para a tela de login.
 
@@ -78,6 +79,7 @@ O painel esconde o que o nível não permite, mas quem decide é o servidor, em 
 - **CA-LOGIN-06** · *rápida* — **Dado** uma requisição de mudança com `Origin` diferente do painel, **quando** chega, **então** é recusada.
 - **CA-LOGIN-07** · *rápida* — **Dado** um código de primeiro acesso com mais de 24 h, **quando** é usado, **então** é recusado.
 - **CA-LOGIN-08** · *completa* — **Dado** uma Guilda com Cidadela A e Torre B, **quando** o navegador abre o endereço do painel em B, **então** é redirecionado para A, e a API em B não responde com dados; **depois** de B ser promovida, o mesmo endereço em A redireciona para B.
+- **CA-LOGIN-09** · *rápida* — **Dado** uma Torre e a Cidadela no ar, **quando** o navegador abre na Torre `/github/apps/novo/abc?origem=telegram`, **então** recebe `307` para o mesmo caminho e a mesma query na Cidadela; **dado** uma Cidadela suspensa que não conhece a Cidadela atual, **então** ela mostra só a página "Cidadela suspensa", sem login nem ações.
 
 ## Depende de
 

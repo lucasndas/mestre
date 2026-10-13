@@ -10,7 +10,7 @@ Saber o que mudou no GitHub (comentário, revisão, CI, mudança de issue ou PR)
 
 ### Quem consulta
 
-O motor da Cidadela, um laço por workspace, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API. Só a Cidadela consulta; depois de uma troca de Cidadela, a nova retoma os laços pelo estado do banco replicado (cursores e ETags; [replicação](../guilda/replicacao.md)).
+O motor da Cidadela, um laço por workspace, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API. Só a Cidadela consulta, com a época confirmada na trava ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); depois de uma troca de Cidadela, a nova reconcilia pelos marcadores de operação ([regras da troca](../guilda/cidadela-e-torres.md)) e retoma os laços pelo estado do banco replicado (cursores e ETags; [replicação](../guilda/replicacao.md)).
 
 ### Intervalo adaptativo (padrão, configurável por workspace)
 
@@ -60,7 +60,7 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 | status combinado | `status:<sha>:<state>` |
 
 - Chave já vista é ignorada. Isso cobre páginas lidas de novo, reinícios e o mesmo fato visto por dois endpoints.
-- **Eco:** o que o próprio motor criou ou alterou (registrado em `github_objects` com o `updated_at` devolvido pela API, ver [ações por nível](acoes-por-nivel.md)) não vira evento.
+- **Eco:** o que o próprio motor criou ou alterou (registrado em `github_objects` com o `updated_at` devolvido pela API, ver [ações por nível](acoes-por-nivel.md)) não vira evento. Item com o [marcador de operação](acoes-por-nivel.md#marcador-de-operação) da própria Guilda também nunca vira evento externo, mesmo que não esteja em `github_objects` (ex.: criado pela Cidadela antiga logo antes de uma troca); o motor o importa em `github_objects`.
 
 ### Entrega na caixa de entrada
 

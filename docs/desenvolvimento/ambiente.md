@@ -1,6 +1,6 @@
 # Preparar a máquina de desenvolvimento
 
-> **Assunto:** o que instalar para desenvolver o Mestre, em que versão e como conferir, por marco; como rodar as suítes e a verificação · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** o que instalar para desenvolver o Mestre, em que versão e como conferir, por marco; como rodar as suítes e a verificação; gancho de pré-commit; CI e proteção da `main` · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 Referência para quem vai desenvolver (pessoa ou agente) numa máquina Linux. Instale só o que o marco em andamento pede ([ordem de implementação](ordem-de-implementacao.md)).
 
@@ -25,7 +25,7 @@ Referência para quem vai desenvolver (pessoa ou agente) numa máquina Linux. In
 export PATH="$HOME/.local/go/bin:$PATH"
 ```
 
-O `go.mod` pede `go 1.25` (versão mínima da linguagem, [convenções](convencoes.md#layout-do-repositório)) e `toolchain go1.27.2`; com outra versão instalada, o `go` baixa a 1.27.2 sozinho, se puder.
+O `go.mod` pede `go 1.25.0` (versão mínima da linguagem, [convenções](convencoes.md#layout-do-repositório)) e `toolchain go1.27.2`; com outra versão instalada, o `go` baixa a 1.27.2 sozinho, se puder.
 
 ### golangci-lint
 
@@ -54,6 +54,40 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 | `go run ./tools/codecheck` | só as regras de código fora do linter ([estilo](convencoes.md#estilo)) |
 | `golangci-lint run ./...` | só o linter |
 
+**Gancho de pré-commit:** versionado em `tools/githooks/pre-commit` (roda a rápida). Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks`. No Windows, o Git for Windows roda o gancho com o `sh` dele.
+
+## CI e proteção da `main`
+
+O CI é `.github/workflows/ci.yml`: em cada PR e push na `main`, em `ubuntu-latest` e `windows-latest` em paralelo, instala o Go da `toolchain` do `go.mod` e o golangci-lint 2.14.0 (binário oficial, SHA-256 conferido) e roda `go vet ./...`, `tools/docscheck`, `tools/codecheck` e as suítes `fast` e `full` do `testrun` (o lint roda dentro delas). Ações de terceiros fixadas por SHA de commit; permissão só `contents: read`. As verificações se chamam `test (ubuntu-latest)` e `test (windows-latest)`.
+
+Passo do Dono, uma vez, com a conta dele (`gh auth login`): criar o ruleset da `main` que exige as duas verificações, PR com squash e proíbe apagar e forçar push. Rulesets em repositório privado pedem plano pago do GitHub.
+
+```bash
+gh api -X POST repos/lucasndas/mestre/rulesets --input - <<'JSON'
+{
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+  "rules": [
+    {"type": "deletion"},
+    {"type": "non_fast_forward"},
+    {"type": "pull_request", "parameters": {
+      "required_approving_review_count": 0, "dismiss_stale_reviews_on_push": false,
+      "require_code_owner_review": false, "require_last_push_approval": false,
+      "required_review_thread_resolution": false, "allowed_merge_methods": ["squash"]}},
+    {"type": "required_status_checks", "parameters": {
+      "strict_required_status_checks_policy": true,
+      "required_status_checks": [
+        {"context": "test (ubuntu-latest)", "integration_id": 15368},
+        {"context": "test (windows-latest)", "integration_id": 15368}]}}
+  ]
+}
+JSON
+```
+
+Conferir com `gh api repos/lucasndas/mestre/rulesets`. O `integration_id` 15368 é o do GitHub Actions; o nome das verificações muda se mudar o `name` do job no `ci.yml`, e o ruleset muda junto.
+
 ## Conta `mestre-agente` nesta máquina (Linux)
 
 Criada para os spikes do M1 e mantida: é a mesma conta que o Mestre usa ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). O instalador do Mestre faz igual em toda máquina Linux ([instalação](../plataforma/instalacao-e-atualizacao.md)):
@@ -70,7 +104,7 @@ sudo install -d -o mestre-agente -g mestre-agente -m 2770 /var/lib/mestre/contas
 
 ## Windows Sandbox para os spikes do M1
 
-Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) continuam rodando no Windows Sandbox (Windows Pro com o recurso ligado), que começa limpo e não guarda nada ao fechar. Arquivos em `tools/winsandbox/`: `mestre-spikes.wsb` (rede ligada; compartilha só `C:\mestre\tools\winsandbox` como `C:\winsandbox`; roda o preparo ao abrir), `setup.ps1` (instala Git for Windows e Go 1.27.2 com SHA-256 conferido e o Claude Code pelo instalador oficial; clona o repositório em `C:\mestre` dentro do Sandbox, na branch `spike/m1-windows`) e `spikes-prompt.md` (o pedido para a sessão do Claude que roda os spikes).
+Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) continuam rodando no Windows Sandbox (Windows Pro com o recurso ligado), que começa limpo e não guarda nada ao fechar. Arquivos em `tools/winsandbox/`: `mestre-spikes.wsb` (rede ligada; compartilha só `C:\mestre\tools\winsandbox` como `C:\winsandbox`; roda o preparo ao abrir), `setup.ps1` (instala Git for Windows e Go 1.27.2 com SHA-256 conferido e o Claude Code pelo instalador oficial; clona o repositório em `C:\mestre` dentro do Sandbox, na branch `spike/m1-windows`) `spikes-prompt.md` (o pedido para a sessão do Claude que roda os quatro spikes) e `spikes/` (o código dos spikes, guardado como referência; [convenções](convencoes.md#estilo)).
 
 1. No Windows do Dono, clone o repositório em `C:\mestre` (ou atualize com `git pull`).
 2. Abra `C:\mestre\tools\winsandbox\mestre-spikes.wsb` (duplo clique) e espere a janela do preparo terminar.

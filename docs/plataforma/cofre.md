@@ -1,10 +1,10 @@
 # Cofre de segredos
 
-> **Assunto:** onde e como a Cidadela (Linux ou Windows) guarda segredos, a cópia cifrada nas Torres candidatas, quem pode usá-los e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Guardar todos os segredos do Mestre criptografados na Cidadela, com a chave protegida pelo sistema operacional, para que só o motor os use, só na ação que precisa deles, e que nenhum agente, arquivo de projeto, banco em texto puro ou log os contenha.
+Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo sistema operacional, para que só o motor da Cidadela os abra, só na ação que precisa deles, e que nenhum agente, arquivo de projeto, banco em texto puro ou log os contenha.
 
 ## Comportamento
 
@@ -12,13 +12,13 @@ Guardar todos os segredos do Mestre criptografados na Cidadela, com a chave prot
 
 | Segredo | Tipo | Quem usa |
 |---|---|---|
-| Token do bot do Telegram | `telegram_bot_token` | motor da Cidadela ([bot](../telegram/bot.md)); réplica nos Guardiões |
+| Token do bot do Telegram | `telegram_bot_token` | motor da Cidadela ([bot](../telegram/bot.md)); a Torre condutora em [modo reduzido](../autocura/telegram-modo-reduzido.md), pela réplica dos Guardiões (abaixo) |
 | Chave privada de cada GitHub App (fixos e por classe) | `github_app_key` | motor da Cidadela, para gerar tokens de instalação ([identidades e Apps](../github/identidades-e-apps.md)) |
 | Token de acesso e de renovação de usuário do GitHub (device flow do App "Grão-Mestre") | `github_user_token` | motor da Cidadela, só com delegação ou aprovação daquele usuário ([aprovação no GitHub](../github/aprovacao-no-github.md)) |
-| Chave de API de provedor, quando a conta usa chave em vez de login | `provider_api_key` | motor da máquina que inicia o personagem daquela conta ([bases e fichas](../orquestracao/bases-e-fichas.md)) |
+| Chave de API de provedor, quando a conta usa chave em vez de login | `provider_api_key` | motor da máquina que inicia o personagem daquela conta, pedida à Cidadela no uso ([bases e fichas](../orquestracao/bases-e-fichas.md)) |
 | Credencial de site: endereço da página de login, usuário, senha (ou senha de app, token, chave de API) e, se preciso, os seletores dos campos e a verificação de sucesso; metadados em [credenciais de site](#credenciais-de-site) | `site_credential` | motor da Cidadela, para fazer o login e entregar ao personagem só o estado de sessão ([login em sites](#login-em-sites)) |
 | Chave das capturas de tela do Operador do PC (AES-256, gerada quando a primeira máquina habilita o Operador) | `operator_capture_key` | motor da Cidadela, ao gravar e ao mostrar ao Dono as capturas ([persistência](../arquitetura/persistencia.md#operador-do-pc)) |
-| Chave privada da CA interna | `ca_key` | motor da Cidadela, ao emitir e renovar certificados ([segurança](../arquitetura/seguranca.md)) |
+| Chave privada da CA da Guilda (só aqui, em nenhum outro lugar) | `ca_key` | motor da Cidadela, ao emitir e renovar certificados e assinar a certidão de época ([segurança](../arquitetura/seguranca.md)) |
 
 - As chaves privadas das máquinas e dos Guardiões **não** ficam no cofre: nascem e ficam nas máquinas ([Guilda](../guilda/guilda.md)). A Cidadela guarda só os certificados.
 - Senhas e PINs não ficam no cofre: o banco guarda só hashes ([login](../painel/login.md), [usuários e níveis](../telegram/usuarios-e-niveis.md#pin-pessoal)).
@@ -32,25 +32,27 @@ Guardar todos os segredos do Mestre criptografados na Cidadela, com a chave prot
 ### Chave do cofre
 
 - 32 bytes aleatórios gerados na criação da Guilda ([instalação e atualização](instalacao-e-atualizacao.md)).
-- **Cofre ativo só na Cidadela:** só o motor da Cidadela abre e usa o cofre. Cada Torre que **pode ser Cidadela** guarda uma cópia cifrada, protegida pela chave da própria máquina do mesmo jeito que abaixo (arquivo 0600 ou DPAPI de máquina), para poder assumir numa promoção; as outras Torres nunca recebem segredos ([cofre só nas candidatas](../guilda/replicacao.md#cofre-só-nas-candidatas), pendência P2). Sem nenhuma candidata, o caminho é a chave de recuperação (abaixo).
+- **Em toda máquina, aberto só na Cidadela:** o cofre inteiro (tabelas cifradas e a chave do cofre, protegida pela chave de cada máquina como abaixo) e o envelope de recuperação vão a toda máquina não excluída pelo Dono, para que qualquer uma possa assumir ([replicação](../guilda/replicacao.md)). Só o motor da Cidadela abre o cofre, ao virar Cidadela; a máquina excluída nunca recebe cofre nem envelope. Sem nenhuma máquina não excluída, o caminho é a chave de recuperação (abaixo).
+- **Regra do programa, não criptográfica:** a chave do cofre está em toda máquina não excluída; quem impede uma Torre de abrir o cofre é o código do Mestre. **Uma máquina roubada tem o mesmo risco da Cidadela**; por isso o painel recomenda trocar os segredos ao excluir ou remover uma máquina que sumiu.
 - **Padrão no Linux:** arquivo `/etc/mestre/cofre.key`, dono `mestre` (conta do motor, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), modo 0600, pasta 0700. O motor se recusa a abrir o cofre se o arquivo tiver permissão mais aberta ou outro dono, e o [checklist](checklist.md) acusa como grave (LIN-05).
 - **Padrão no Windows:** arquivo `%ProgramData%\Mestre\config\cofre.key` com a chave cifrada por **DPAPI com escopo de máquina** (`CryptProtectData` com `CRYPTPROTECT_LOCAL_MACHINE`) e **ACL só para `NT SERVICE\Mestre`**, sem herança. O escopo de máquina deixa a chave presa a este Windows (uma cópia do arquivo não abre em outra máquina); quem impede outras contas locais de ler é a ACL, porque o DPAPI de máquina decifra para qualquer processo local que consiga ler o arquivo. O motor confere dono e ACL antes de abrir, como no Linux, e o checklist acusa como grave (WIN-14) ([Windows](../arquitetura/windows.md)).
 - **Opção "chaveiro do sistema" (Linux):** guardar a chave com `systemd-creds` (cifrada pelo TPM2 ou pela chave do host) e entregá-la ao serviço com `LoadCredentialEncrypted=`. O motor lê de `$CREDENTIALS_DIRECTORY`. É opcional: a instalação sempre começa com o arquivo 0600; o [checklist](checklist.md) (LIN-07) detecta suporte (`systemd-creds has-tpm2`) e oferece a troca, feita só com aprovação.
-- **Troca da chave:** o Dono pede no painel (com PIN); o motor gera a chave nova, decifra e cifra de novo todos os segredos numa transação, incrementa `key_version`, refaz o envelope de recuperação (abaixo) e só então substitui o arquivo.
+- **Troca da chave:** o Dono pede no painel (com PIN); o motor gera a chave nova, decifra e cifra de novo todos os segredos numa transação, incrementa `key_version`, envelopa a chave nova com a chave pública de recuperação (abaixo), substitui o arquivo e reenvia cofre e envelope a todas as máquinas não excluídas.
 
 ### Backup e chave de recuperação
 
-- **No backup diário:** a tabela `secrets` vai no backup do banco ([persistência](../arquitetura/persistencia.md#backup)) já cifrada, e junto vai `cofre-envelope.bin`: a chave do cofre cifrada (AES-256-GCM) com uma chave derivada da **chave de recuperação** por Argon2id (sal aleatório e parâmetros no próprio arquivo). O arquivo da chave protegido pelo sistema (0600, `systemd-creds` ou DPAPI) nunca vai no backup.
-- **Chave de recuperação:** 32 bytes aleatórios, mostrados **uma única vez** na criação da Guilda, em base32 (52 caracteres em grupos de 4), para o usuário guardar fora do Mestre. A instalação só termina depois de ele redigitar dois grupos sorteados ([instalação](instalacao-e-atualizacao.md)). O Mestre não a guarda em lugar nenhum (disco, banco, log, cofre): guarda só um verificador (SHA-256 da chave derivada, dentro do envelope), para conferir a digitação na restauração. **Sem ela, o backup do cofre é inútil**: a instalação e a tela de backup dizem isso.
-- **Restaurar** (mesma máquina ou outra, Linux ou Windows; também quando a Cidadela se perdeu e nenhuma Torre candidata sobrou): `mestre install --restore <pasta do backup>` pede a chave de recuperação, confere o verificador, abre o envelope e grava a chave do cofre protegida pelo sistema da máquina nova. É o único caminho de restauração do cofre nos dois sistemas.
-- **Nova chave de recuperação:** o Dono gera pelo painel, com PIN; ela aparece uma vez, e o envelope dos backups seguintes passa a usá-la. Backups antigos continuam exigindo a chave anterior, e o painel avisa isso antes de confirmar.
+- **No backup diário:** a tabela `secrets` vai no backup do banco ([persistência](../arquitetura/persistencia.md#backup)) já cifrada, e junto vai `cofre-envelope.bin`, o mesmo envelope replicado: a chave do cofre envelopada para a chave pública do par X25519 cuja semente é a **chave de recuperação** (formato em [replicação](../guilda/replicacao.md)). O arquivo da chave protegido pelo sistema (0600, `systemd-creds` ou DPAPI) nunca vai no backup.
+- **Chave de recuperação:** 32 bytes aleatórios, mostrados **uma única vez** na criação da Guilda, em base32 (52 caracteres em grupos de 4), para o usuário guardar fora do Mestre. A instalação só termina depois de ele redigitar dois grupos sorteados ([instalação](instalacao-e-atualizacao.md)). O Mestre não a guarda em lugar nenhum (disco, banco, log, cofre): guarda só a chave pública derivada dela, que basta para envelopar uma chave do cofre nova e serve para conferir a digitação na restauração. **Sem ela, o backup do cofre é inútil**: a instalação e a tela de backup dizem isso.
+- **Restaurar** (mesma máquina ou outra, Linux ou Windows; também quando a Cidadela se perdeu e nenhuma outra máquina não excluída sobrou): `mestre install --restore <pasta do backup>` pede a chave de recuperação, deriva a chave privada, confere com a pública, abre o envelope e grava a chave do cofre protegida pelo sistema da máquina nova. É o único caminho de restauração do cofre nos dois sistemas.
+- **Nova chave de recuperação:** o Dono gera pelo painel, com PIN; ela aparece uma vez, a Cidadela reenvelopa a chave do cofre com a pública nova e replica o envelope. Backups antigos continuam exigindo a chave anterior, e o painel avisa isso antes de confirmar.
 
 ### Uso
 
 - Só o motor da Cidadela lê o cofre, por uma função interna que recebe o nome do segredo e a finalidade (ex.: "gerar token de instalação do App QA para o PR #42").
+- **Pedido de uma Torre:** uma Torre que precisa de uma credencial (chave de API de provedor, login em site) pede à Cidadela no momento do uso; a Cidadela confere se a classe do personagem pode usá-la, registra quem pediu, para quê e quando, e manda o valor cifrado pela conexão, só para aquele uso, sem gravar. Com a Cidadela fora, o pedido falha com `citadel_unavailable`.
 - Cada leitura entra na auditoria (nome, finalidade, ação) e atualiza `last_used_at`. O valor lido é registrado no mascarador na hora ([segurança](../arquitetura/seguranca.md#mascaramento-em-logs)).
 - Nenhuma rota da API, comando da CLI ou mensagem para agente devolve um valor. O painel mostra só nome, tipo, impressão, datas e metadados, e permite substituir ou remover com PIN; um valor salvo nunca é mostrado de novo, nem ao Dono ([administração](../painel/administracao.md)).
-- **Chave de API de provedor:** sai da Cidadela, como a credencial de site no login (abaixo). Vai cifrada pela conexão da máquina só no momento de iniciar o personagem e entra só no ambiente do processo do provedor; nunca vai para arquivo. **Risco aceito:** o agente consegue ler o próprio ambiente. Por isso o Mestre recomenda login por assinatura (perfil de conta) em vez de chave.
+- **Chave de API de provedor:** pedida como acima, só no momento de iniciar o personagem, entra só no ambiente do processo do provedor; nunca vai para arquivo. **Risco aceito:** o agente consegue ler o próprio ambiente. Por isso o Mestre recomenda login por assinatura (perfil de conta) em vez de chave.
 
 ### Credenciais de site
 
@@ -96,7 +98,8 @@ Quando a página de login pede um segundo passo, o motor trata nesta ordem, semp
 ### Réplica para os Guardiões
 
 - **Conteúdo, e só isto:** o token do bot e a lista de usuários (id, nome, login, nível, workspaces, ID do Telegram, hash da senha, hash do PIN, ativo ou suspenso). Junto, sem ser segredo, vão o estado "travado" e o último `update_id` do bot ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
-- **Para quem:** os Guardiões das **Torres** e, no [modo máquina única](../autocura/camadas.md#modo-máquina-única), o Guardião da Cidadela (são eles que servem a [página reserva](../autocura/pagina-reserva.md) e o modo reduzido). Nunca vão chaves do GitHub, tokens de usuários, chaves de provedor ou a chave da CA.
+- **Para quem:** os Guardiões das **Torres** e, no [modo máquina única](../autocura/camadas.md#modo-máquina-única), o Guardião da Cidadela (são eles que servem a [página reserva](../autocura/pagina-reserva.md) e o modo reduzido). O de uma máquina excluída recebe só a lista de usuários, sem o token. Nunca vão chaves do GitHub, tokens de usuários, chaves de provedor ou a chave da CA.
+- **A única abertura fora da Cidadela:** o Guardião da Torre condutora usa o token e a lista de usuários desta réplica só no [modo reduzido](../autocura/telegram-modo-reduzido.md), para avisar o Dono e receber a aprovação de promoção.
 - **Transporte:** mensagem `guardian.replica` pela conexão própria do Guardião, com mTLS ([protocolo](../conectividade/protocolo.md#conexão-do-guardião)); para o Guardião da Cidadela, pelo canal local motor ↔ Guardião ([componentes](../arquitetura/componentes.md#canais-locais-padrão)). Cada réplica tem um número de versão crescente; o Guardião confirma e guarda só a mais nova.
 - **Quando:** ao conectar e a cada mudança (usuário criado, alterado, suspenso, removido; token trocado; travar e destravar), em até 10 s (padrão).
 - **Em repouso no Guardião:** AES-256-GCM com uma chave local do Guardião, protegida pelo sistema: DPAPI com escopo de máquina e ACL só de SYSTEM no Windows (o Guardião roda como LocalSystem); arquivo 0600 de root no Linux.
@@ -131,6 +134,7 @@ Quando a página de login pede um segundo passo, o motor trata nesta ordem, semp
 - **CA-COFRE-18** · *completa* — **Dado** um personagem numa máquina com o Playwright MCP numa versão e um site falso local, **quando** o login acontece, **então** ele roda no motor dessa máquina, com o mesmo navegador e versão do MCP, e a credencial não aparece em nenhum arquivo da máquina.
 - **CA-COFRE-19** · *completa* — **Dado** uma instalação que cria a Guilda numa pasta temporária, **quando** ela termina, **então** a chave de recuperação foi mostrada uma vez e não aparece em disco, banco nem log; **dado** o backup dela numa máquina nova, **quando** restauro sem a chave ou com uma errada, **então** falha com a explicação; com a chave certa, os segredos abrem.
 - **CA-COFRE-20** · *rápida* — **Dado** o Dono no painel, **quando** pede uma nova chave de recuperação, **então** é exigido o PIN, o aviso sobre backups antigos aparece antes de confirmar, e o envelope do backup seguinte só abre com a chave nova.
+- **CA-COFRE-21** · *rápida* — **Dado** uma Torre que pede à Cidadela uma credencial de site para um personagem cuja classe não a libera, e outra que pede para uma classe que libera, **quando** a Cidadela avalia, **então** a primeira é recusada e a segunda recebe o valor só em memória, e a auditoria registra as duas (máquina, personagem, finalidade, horário), sem o valor; **dado** a Cidadela fora, **então** o pedido falha com `citadel_unavailable`.
 
 ## Depende de
 
