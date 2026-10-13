@@ -41,7 +41,22 @@ func load(t *testing.T, sql ...string) store.Set {
 	return set
 }
 
+// fast are the options of the tests that are not about durability: no fsync,
+// which costs tens of milliseconds each on a Windows runner. The tests of
+// the shipped settings and of WriteDurable use openAsShipped.
+var fast = store.Options{Synchronous: "OFF"}
+
+// open opens with synchronous=OFF unless opts sets a level.
 func open(t *testing.T, path string, set store.Set, opts store.Options) *store.DB {
+	t.Helper()
+	if opts.Synchronous == "" {
+		opts.Synchronous = fast.Synchronous
+	}
+	return openAsShipped(t, path, set, opts)
+}
+
+// openAsShipped opens with opts as given: synchronous=NORMAL by default.
+func openAsShipped(t *testing.T, path string, set store.Set, opts store.Options) *store.DB {
 	t.Helper()
 	db, err := store.Open(context.Background(), path, set, opts)
 	if err != nil {
@@ -63,7 +78,7 @@ func scan[T any](t *testing.T, db *sql.DB, query string, args ...any) T {
 // CA-PERSIST-01
 func TestOpenConfiguresEveryConnection(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
+	db := openAsShipped(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
 
 	for name, pool := range map[string]*sql.DB{"writer": db.Writer(), "reader": db.Reader()} {
 		t.Run(name, func(t *testing.T) {
@@ -81,6 +96,9 @@ func TestOpenConfiguresEveryConnection(t *testing.T) {
 	}
 	if got := scan[int](t, db.Writer(), `PRAGMA synchronous`); got != 1 {
 		t.Errorf("writer synchronous = %d, want 1 (NORMAL)", got)
+	}
+	if _, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "y.db"), load(t, createItems), store.Options{Synchronous: "sometimes"}); err == nil {
+		t.Error("Open accepted an unknown synchronous level")
 	}
 
 	// The reader pool cannot write; the writer is a single connection.
@@ -143,7 +161,7 @@ func TestFailedMigrationIsRolledBackWhole(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x.db")
 	broken := load(t, createItems, `CREATE TABLE half (id INTEGER); INSERT INTO missing_table VALUES (1);`)
 
-	if _, err := store.Open(context.Background(), path, broken, store.Options{}); err == nil {
+	if _, err := store.Open(context.Background(), path, broken, fast); err == nil {
 		t.Fatal("Open succeeded with a failing migration")
 	}
 
@@ -164,7 +182,7 @@ func TestOpenRefusesSchemaNewerThanBinary(t *testing.T) {
 	open(t, path, newer, store.Options{}).Close()
 	before := fileSum(t, path)
 
-	_, err := store.Open(context.Background(), path, load(t, createItems, createNotes), store.Options{})
+	_, err := store.Open(context.Background(), path, load(t, createItems, createNotes), fast)
 	if !errors.Is(err, store.ErrNewerSchema) {
 		t.Fatalf("err = %v, want ErrNewerSchema", err)
 	}
@@ -174,7 +192,7 @@ func TestOpenRefusesSchemaNewerThanBinary(t *testing.T) {
 	}
 
 	// The refused database is untouched, and the replica mode refuses it too.
-	if _, err := store.Open(context.Background(), path, load(t, createItems), store.Options{Replica: true}); !errors.Is(err, store.ErrNewerSchema) {
+	if _, err := store.Open(context.Background(), path, load(t, createItems), store.Options{Replica: true, Synchronous: "OFF"}); !errors.Is(err, store.ErrNewerSchema) {
 		t.Errorf("replica err = %v, want ErrNewerSchema", err)
 	}
 	if after := fileSum(t, path); after != before {
@@ -388,7 +406,7 @@ func fileSize(t *testing.T, path string) int64 {
 // that transaction with synchronous=FULL and goes back to NORMAL.
 func TestWriteDurableCommitsWithFullSync(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
+	db := openAsShipped(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
 	ctx := context.Background()
 	err := db.WriteDurable(ctx, func(tx *sql.Tx) error {
 		var level int
@@ -473,7 +491,7 @@ func TestOpenRejectsAnInconsistentVersionTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Close()
-	if _, err := store.Open(context.Background(), path, set, store.Options{}); err == nil {
+	if _, err := store.Open(context.Background(), path, set, fast); err == nil {
 		t.Error("Open accepted schema_migrations with a missing version")
 	}
 }
@@ -481,7 +499,7 @@ func TestOpenRejectsAnInconsistentVersionTable(t *testing.T) {
 func TestOpenRejectsUnusablePaths(t *testing.T) {
 	t.Parallel()
 	for _, p := range []string{"", "a?b.db", "a#b.db", filepath.Join(t.TempDir(), "missing-dir", "x.db")} {
-		if _, err := store.Open(context.Background(), p, load(t, createItems), store.Options{}); err == nil {
+		if _, err := store.Open(context.Background(), p, load(t, createItems), fast); err == nil {
 			t.Errorf("Open(%q) succeeded", p)
 		}
 	}

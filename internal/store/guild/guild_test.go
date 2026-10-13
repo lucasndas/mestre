@@ -13,7 +13,7 @@ import (
 func TestEmbeddedMigrationsBuildTheGuildSchema(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{})
+	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestEmbeddedMigrationsBuildTheGuildSchema(t *testing.T) {
 func TestReplicaOfTheGuildDatabaseIsNotMigrated(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Replica: true})
+	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

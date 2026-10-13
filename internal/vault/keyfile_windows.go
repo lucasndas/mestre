@@ -92,8 +92,9 @@ func (s *FileKeyStore) Save(_ context.Context, data []byte) error {
 
 // replaceFile moves from over to with MoveFileEx: atomic replacement, and
 // MOVEFILE_WRITE_THROUGH returns only after the move is flushed to disk (an
-// os.Rename may still be in the cache when the power goes).
-func replaceFile(from, to string) error {
+// os.Rename may still be in the cache when the power goes); without durable,
+// the move is not waited for.
+func replaceFile(from, to string, durable bool) error {
 	f, err := windows.UTF16PtrFromString(from)
 	if err != nil {
 		return err
@@ -102,7 +103,11 @@ func replaceFile(from, to string) error {
 	if err != nil {
 		return err
 	}
-	if err := windows.MoveFileEx(f, t, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH); err != nil {
+	flags := uint32(windows.MOVEFILE_REPLACE_EXISTING)
+	if durable {
+		flags |= windows.MOVEFILE_WRITE_THROUGH
+	}
+	if err := windows.MoveFileEx(f, t, flags); err != nil {
 		return &os.LinkError{Op: "MoveFileEx", Old: from, New: to, Err: err}
 	}
 	return nil

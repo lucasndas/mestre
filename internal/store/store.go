@@ -36,6 +36,11 @@ type Options struct {
 	BusyTimeout time.Duration
 	// ReadConns caps the read-only pool; zero means DefaultReadConns.
 	ReadConns int
+	// Synchronous is the synchronous level of the writer: "" means NORMAL,
+	// the documented default. Tests that are not about durability use OFF:
+	// every fsync costs tens of milliseconds on a Windows runner. WriteDurable
+	// always commits with FULL, whatever the level.
+	Synchronous string
 	// BackupDir, when set, receives pre-migracao-<name>-<version>.db before
 	// pending migrations run on a database that already has a schema; <name>
 	// is the database file name without its extension (mestre, maquina), so
@@ -53,6 +58,7 @@ type DB struct {
 	writer *sql.DB
 	reader *sql.DB
 	clock  clock.Clock
+	sync   string // synchronous level of the writer
 }
 
 // Open opens (creating it if needed) the database at path, refuses it when
@@ -71,15 +77,22 @@ func Open(ctx context.Context, path string, set Set, opts Options) (*DB, error) 
 	if opts.ReadConns <= 0 {
 		opts.ReadConns = DefaultReadConns
 	}
+	switch opts.Synchronous {
+	case "":
+		opts.Synchronous = "NORMAL"
+	case "OFF", "NORMAL", "FULL":
+	default:
+		return nil, fmt.Errorf("store: invalid synchronous level %q (OFF, NORMAL or FULL)", opts.Synchronous)
+	}
 
-	writer, err := sql.Open("sqlite", dsn(path, writerPragmas(opts.BusyTimeout), "immediate"))
+	writer, err := sql.Open("sqlite", dsn(path, writerPragmas(opts.BusyTimeout, opts.Synchronous), "immediate"))
 	if err != nil {
 		return nil, fmt.Errorf("store: open %s: %w", path, err)
 	}
 	writer.SetMaxOpenConns(1)
 	writer.SetMaxIdleConns(1)
 	writer.SetConnMaxLifetime(0)
-	d := &DB{path: path, writer: writer, clock: opts.Clock}
+	d := &DB{path: path, writer: writer, clock: opts.Clock, sync: opts.Synchronous}
 
 	if err := d.prepare(ctx, set, opts); err != nil {
 		writer.Close()
@@ -212,9 +225,9 @@ func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error 
 		return fmt.Errorf("store: durable write: %w", err)
 	}
 	defer func() {
-		// Back to the documented NORMAL. If that fails, the connection is
+		// Back to the level of the writer. If that fails, the connection is
 		// dropped and the pool opens a new one with the pragmas of the DSN.
-		if _, err := conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA synchronous = NORMAL`); err != nil {
+		if _, err := conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA synchronous = `+d.sync); err != nil {
 			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 		}
 		conn.Close()
@@ -245,11 +258,11 @@ func (d *DB) Close() error {
 	return errors.Join(rerr, d.writer.Close())
 }
 
-func writerPragmas(busy time.Duration) []string {
+func writerPragmas(busy time.Duration, sync string) []string {
 	return []string{
 		fmt.Sprintf("busy_timeout(%d)", busy.Milliseconds()),
 		"journal_mode(WAL)",
-		"synchronous(NORMAL)",
+		"synchronous(" + sync + ")",
 		"foreign_keys(1)",
 	}
 }

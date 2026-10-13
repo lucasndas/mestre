@@ -63,12 +63,30 @@ type fixture struct {
 	uses   []UseEvent
 }
 
+// newFixture skips the flushes to disk (synchronous=OFF, envelope not
+// flushed): the vault logic does not depend on them, and each costs tens of
+// milliseconds on a Windows runner. The durability tests use
+// newDurableFixture, with the shipped settings.
 func newFixture(t *testing.T, keys KeyStore) *fixture {
+	t.Helper()
+	return newFixtureWith(t, keys, false)
+}
+
+func newDurableFixture(t *testing.T, keys KeyStore) *fixture {
+	t.Helper()
+	return newFixtureWith(t, keys, true)
+}
+
+func newFixtureWith(t *testing.T, keys KeyStore, durable bool) *fixture {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
 	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
-	db, err := guild.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Clock: clk})
+	opts := store.Options{Clock: clk, Synchronous: "OFF"}
+	if durable {
+		opts.Synchronous = ""
+	}
+	db, err := guild.Open(ctx, filepath.Join(dir, "mestre.db"), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,6 +108,7 @@ func newFixture(t *testing.T, keys KeyStore) *fixture {
 		Clock:             clk,
 		OnAlert:           func(a Alert) { f.mu.Lock(); f.alerts = append(f.alerts, a); f.mu.Unlock() },
 		OnUse:             func(u UseEvent) { f.mu.Lock(); f.uses = append(f.uses, u); f.mu.Unlock() },
+		fastEnvelope:      !durable,
 	}
 	return f
 }
@@ -453,7 +472,7 @@ func TestRotationReencryptsWithANewKey(t *testing.T) {
 func TestRotationCommitIsDurableBeforeTheOldKeyIsDropped(t *testing.T) {
 	t.Parallel()
 	keys := &memKeys{}
-	f := newFixture(t, keys)
+	f := newDurableFixture(t, keys)
 	v := f.create(t)
 	putSamples(t, v)
 

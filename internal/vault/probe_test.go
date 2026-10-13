@@ -19,7 +19,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-func TestZZTimingProbe(t *testing.T) {
+func TestZZTimingProbe(t *testing.T) { //nolint:paralleltest // temporary probe
 	if os.Getenv("MESTRE_PROBE") == "" && runtime.GOOS != "windows" {
 		t.Skip("probe")
 	}
@@ -60,6 +60,13 @@ func TestZZTimingProbe(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+	var off *store.DB
+	lap("open-fresh-off", func() {
+		off, _ = guild.Open(ctx, filepath.Join(dir, "off.db"), store.Options{Synchronous: "OFF"})
+	})
+	lap("insert-off", func() { _, _ = off.Writer().Exec(`DELETE FROM secrets`) })
+	lap("close-off", func() { off.Close() })
+	lap("write-nosync", func() { _ = writeFile(filepath.Join(dir, "env2.bin"), []byte("x"), false) })
 	lap("write-durable", func() { _ = db.WriteDurable(ctx, func(tx *sql.Tx) error { return nil }) })
 	lap("write-atomic", func() { _ = writeFileAtomic(filepath.Join(dir, "env.bin"), []byte("x")) })
 	lap("write-plain", func() { _ = os.WriteFile(filepath.Join(dir, "plain.bin"), []byte("x"), 0o600) })

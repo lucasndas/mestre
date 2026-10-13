@@ -117,7 +117,7 @@ func (s *FileKeyStore) unsafe(reason string) error {
 }
 
 // replaceFile moves from over to; syncDir then makes the rename durable.
-func replaceFile(from, to string) error { return os.Rename(from, to) }
+func replaceFile(from, to string, _ bool) error { return os.Rename(from, to) }
 
 // Save replaces the key file atomically with mode 0600.
 func (s *FileKeyStore) Save(_ context.Context, data []byte) error {

@@ -98,6 +98,10 @@ type Config struct {
 	OnAlert func(Alert)
 	// OnUse receives every read, for the audit trail.
 	OnUse func(UseEvent)
+
+	// fastEnvelope, set only by tests that are not about durability, writes
+	// the envelope without flushing it to disk.
+	fastEnvelope bool
 }
 
 // ErrClosed is wrapped by every error of a vault that could not open.
@@ -539,7 +543,7 @@ func writeEnvelope(cfg Config, ring *keyring) error {
 	if err != nil {
 		return err
 	}
-	if err := writeFileAtomic(cfg.EnvelopePath, env); err != nil {
+	if err := writeFile(cfg.EnvelopePath, env, !cfg.fastEnvelope); err != nil {
 		return fmt.Errorf("vault: write recovery envelope: %w", err)
 	}
 	return nil
