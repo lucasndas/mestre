@@ -28,7 +28,7 @@ func (d *DirectSpawner) Spawn(ctx context.Context, spec SpawnSpec) (Spawned, err
 		return Spawned{}, fmt.Errorf("socket folder: %w", err)
 	}
 	_ = os.Remove(spec.SocketPath) // a stale socket of a dead terminal
-	sr, err := secretPipe(spec.Secret)
+	sr, err := SecretPipe(spec.Secret)
 	if err != nil {
 		return Spawned{}, err
 	}

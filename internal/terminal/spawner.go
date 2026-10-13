@@ -15,7 +15,11 @@ import (
 // SpawnSpec is what it takes to start the mestre-pty of a terminal.
 type SpawnSpec struct {
 	ID string
-	// Binary is the mestre-pty of the version chosen for this terminal.
+	// Version is the mestre-pty version chosen for this terminal; the
+	// launcher spawners start the installed binary of that version, and
+	// ignore Binary.
+	Version string
+	// Binary is the mestre-pty of that version, for the direct spawner.
 	Binary string
 	// SocketPath is where the terminal listens. On Linux the spawner
 	// creates and binds it (mode 0600) and hands the listening descriptor
@@ -125,9 +129,9 @@ func (d *DirectSpawner) logFile(spec SpawnSpec) (*os.File, error) {
 	return f, nil
 }
 
-// secretPipe returns the read end of a pipe that already holds secret and is
+// SecretPipe returns the read end of a pipe that already holds secret and is
 // closed for writing.
-func secretPipe(secret []byte) (*os.File, error) {
+func SecretPipe(secret []byte) (*os.File, error) {
 	r, w, err := os.Pipe()
 	if err != nil {
 		return nil, fmt.Errorf("secret pipe: %w", err)
