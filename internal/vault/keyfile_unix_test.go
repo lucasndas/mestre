@@ -1,8 +1,8 @@
 //go:build !windows
 
 // Linux only: file modes and owners are how the key is protected on Linux.
-// The Windows pair is the DPAPI and ACL check, CA-COFRE-08 in the heavy
-// suite (internal/winsvc), and keyfile_windows_test.go meanwhile.
+// The Windows pair is keyfile_windows_test.go (DPAPI and the file ACL); the
+// real service accounts are CA-COFRE-08, in the heavy suite.
 
 package vault
 
