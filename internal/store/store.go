@@ -7,6 +7,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net/url"
@@ -35,8 +36,10 @@ type Options struct {
 	BusyTimeout time.Duration
 	// ReadConns caps the read-only pool; zero means DefaultReadConns.
 	ReadConns int
-	// BackupDir, when set, receives pre-migracao-<version>.db before
-	// pending migrations run on a database that already has a schema.
+	// BackupDir, when set, receives pre-migracao-<name>-<version>.db before
+	// pending migrations run on a database that already has a schema; <name>
+	// is the database file name without its extension (mestre, maquina), so
+	// both databases can share one backups folder.
 	BackupDir string
 	// Replica opens a database whose schema arrives by replication (a Tower's
 	// copy of the Guild database): migrations are never applied locally,
@@ -121,19 +124,63 @@ func (d *DB) prepare(ctx context.Context, set Set, opts Options) error {
 	return d.migrate(ctx, set, have)
 }
 
-// backupBeforeMigrating writes pre-migracao-<version>.db, a consistent copy
-// of the database at schema version have, the one a rollback restores.
+// backupBeforeMigrating writes pre-migracao-<name>-<version>.db, a
+// consistent copy of the database at schema version have, the one a rollback
+// restores, and checks it with PRAGMA quick_check: migrations never run
+// without a sound copy to go back to.
 func (d *DB) backupBeforeMigrating(ctx context.Context, dir string, have int) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("store: pre-migration backup: %w", err)
 	}
-	dst := filepath.Join(dir, fmt.Sprintf("pre-migracao-%d.db", have))
+	dst := filepath.Join(dir, BackupName(d.path, have))
 	if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("store: pre-migration backup: %w", err)
 	}
 	// VACUUM INTO copies a consistent snapshot while the database stays in use.
 	if _, err := d.writer.ExecContext(ctx, `VACUUM INTO ?`, dst); err != nil {
 		return fmt.Errorf("store: pre-migration backup: %w", err)
+	}
+	if err := quickCheck(ctx, dst); err != nil {
+		return fmt.Errorf("store: pre-migration backup %s: %w; migrations not applied", dst, err)
+	}
+	return nil
+}
+
+// BackupName is the file name of the pre-migration copy of the database at
+// path, taken at schema version have: pre-migracao-<name>-<version>.db.
+func BackupName(path string, have int) string {
+	base := filepath.Base(path)
+	return fmt.Sprintf("pre-migracao-%s-%d.db", strings.TrimSuffix(base, filepath.Ext(base)), have)
+}
+
+// quickCheck runs PRAGMA quick_check on the database file at path through a
+// read-only connection of its own.
+func quickCheck(ctx context.Context, path string) error {
+	db, err := sql.Open("sqlite", dsn(path, []string{"query_only(1)"}, ""))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, `PRAGMA quick_check`)
+	if err != nil {
+		return fmt.Errorf("quick_check: %w", err)
+	}
+	defer rows.Close()
+	var problems []string
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			return fmt.Errorf("quick_check: %w", err)
+		}
+		if line != "ok" {
+			problems = append(problems, line)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("quick_check: %w", err)
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("quick_check failed: %s", strings.Join(problems, "; "))
 	}
 	return nil
 }
@@ -150,6 +197,44 @@ func (d *DB) Reader() *sql.DB { return d.reader }
 
 // Version is the schema version recorded in schema_migrations.
 func (d *DB) Version(ctx context.Context) (int, error) { return appliedVersion(ctx, d.reader) }
+
+// WriteDurable runs fn in one write transaction whose commit is on disk when
+// WriteDurable returns nil. The writer normally runs with synchronous=NORMAL,
+// where a WAL commit survives a crash of the process but not a power loss
+// until the next checkpoint; for this transaction the connection switches to
+// synchronous=FULL, so SQLite fsyncs the WAL at commit. Use it when something
+// outside the database is about to depend on the commit (the vault drops the
+// old key only after the rows moved to the new one). fn must use tx only:
+// the writer pool has a single connection and WriteDurable holds it.
+func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	conn, err := d.writer.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("store: durable write: %w", err)
+	}
+	defer func() {
+		// Back to the documented NORMAL. If that fails, the connection is
+		// dropped and the pool opens a new one with the pragmas of the DSN.
+		if _, err := conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA synchronous = NORMAL`); err != nil {
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
+		conn.Close()
+	}()
+	if _, err := conn.ExecContext(ctx, `PRAGMA synchronous = FULL`); err != nil {
+		return fmt.Errorf("store: durable write: %w", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: durable write: %w", err)
+	}
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: durable write: %w", err)
+	}
+	return nil
+}
 
 // Close closes both pools.
 func (d *DB) Close() error {
