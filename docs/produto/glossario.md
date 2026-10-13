@@ -2,7 +2,7 @@
 
 > **Assunto:** vocabulário do Mestre e textos de ajuda da interface e do Telegram · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
-Este glossário é a **fonte única** dos textos de ajuda: o "?" dos termos no painel ([canvas](../painel/canvas.md)) e a explicação entre parênteses na primeira vez que um termo aparece numa conversa do Telegram ([bot](../telegram/bot.md)). O build do Mestre lê a tabela abaixo e embute os textos ([convenções](../desenvolvimento/convencoes.md)).
+Este glossário é a **fonte única** dos textos de ajuda: o "?" dos termos no painel ([canvas](../painel/canvas.md)) e a explicação entre parênteses na primeira vez que um termo aparece numa conversa do Telegram ([bot](../telegram/bot.md)). O `go generate ./internal/glossary` lê a tabela abaixo e gera os textos que o Mestre embute; a suíte rápida falha se o arquivo gerado estiver desatualizado ([código gerado](../desenvolvimento/convencoes.md#código-gerado)).
 
 Vocabulário: na interface os rótulos ficam em português, com estes termos; os comandos da CLI ficam em inglês ([convenções da CLI](../cli/convencoes.md)). "O Mestre", sozinho, é sempre o sistema; os agentes orquestradores são sempre "Grão-Mestre" e "Mestre da mesa".
 
