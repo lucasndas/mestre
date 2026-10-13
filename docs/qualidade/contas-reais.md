@@ -32,7 +32,7 @@ Partes de CA-TERM-05, CA-TERM-07, CA-TERM-11, CA-TERM-12 e CA-COFRE-08 exigem o 
 ### Onde e quando roda
 
 - **CI:** `.github/workflows/real-accounts.yml`, `ubuntu-latest` e `windows-latest` em paralelo, `contents: read`, ações fixadas por SHA como no `ci.yml`. Dispara no pull request que mexe em `internal/launcher`, `winsvc`, `terminal`, `vault`, `localchan`, `realaccount`, `cmd`, `tools/realaccount`, `packaging/systemd`, `go.mod`, `go.sum` ou no próprio arquivo, toda noite (03:47 UTC) e sob demanda. **Não é exigido pelo ruleset** ([CI](../desenvolvimento/ambiente.md#ci-e-proteção-da-main)): falhar nele não trava a `main`, abre trabalho. É um workflow à parte, e não um job do `nightly.yml`, porque roda também no PR e porque a falha dele não é a de um verificador da noite.
-- **Orçamento:** 15 minutos para a rodada inteira (compilação, contas, testes e limpeza), medidos pela ferramenta; o job tem 30 minutos de folga. O tempo de cada rodada fica no log do job.
+- **Orçamento:** 5 minutos para a rodada inteira (compilação, contas, testes e limpeza), medidos pela ferramenta; o job tem 30 minutos de folga. Medido no PR: a rodada leva 19 s no Linux e 42 s no Windows (os jobs, com o Go e a cópia do repositório, 38 s e 1 min 41 s); o tempo de cada rodada fica no log do job.
 - **Laboratório:** o mesmo comando nas duas VMs (descartáveis por retrato) antes do `testrun heavy`.
 
 ### O que continua no laboratório e no M7

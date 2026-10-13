@@ -47,8 +47,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    # The budget of the run (build, accounts, tests, cleanup) is the 15 minutes
-    # given to the tool below; the rest is the margin of the machine.
+    # The budget of the run (build, accounts, tests, cleanup) is the 5 minutes
+    # given to the tool below (measured: under a minute); the rest is the margin
+    # of the machine.
     timeout-minutes: 30
     defaults:
       run:
@@ -68,4 +69,4 @@ jobs:
       - name: Real-account tests
         env:
           MESTRE_REAL_ACCOUNT: "1"
-        run: go run ./tools/realaccount run -budget 15m
+        run: go run ./tools/realaccount run -budget 5m
