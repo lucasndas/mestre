@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -34,16 +36,30 @@ func (p PeerPolicy) Check(c net.Conn) (string, error) {
 		return "?", err
 	}
 	var cred *unix.Ucred
-	var sockErr error
+	var sockErr, pidfdErr error
+	pidfd := -1
 	if err := rc.Control(func(fd uintptr) {
 		cred, sockErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+		if sockErr == nil {
+			// Right after the credentials, before anything is read from /proc.
+			var n int
+			if n, pidfdErr = unix.GetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_PEERPIDFD); pidfdErr == nil {
+				pidfd = n
+			}
+		}
 	}); err != nil {
 		return "?", err
 	}
 	if sockErr != nil {
 		return "?", fmt.Errorf("SO_PEERCRED: %w", sockErr)
 	}
+	if pidfd >= 0 {
+		defer unix.Close(pidfd)
+	}
 	who := fmt.Sprintf("pid=%d uid=%d", cred.Pid, cred.Uid)
+	if pidfdErr != nil && !errors.Is(pidfdErr, unix.ENOPROTOOPT) {
+		return who, fmt.Errorf("the peer was already gone when the connection was accepted (SO_PEERPIDFD: %w)", pidfdErr)
+	}
 	if cred.Uid != p.UID {
 		return who, fmt.Errorf("uid %d is not the account of the engine (%d)", cred.Uid, p.UID)
 	}
@@ -58,5 +74,36 @@ func (p PeerPolicy) Check(c net.Conn) (string, error) {
 	if cg != p.Cgroup && !strings.HasPrefix(cg, strings.TrimSuffix(p.Cgroup, "/")+"/") {
 		return who, fmt.Errorf("cgroup %s is not the one of the engine (%s)", cg, p.Cgroup)
 	}
+	// Last: the pidfd must still point to the PID whose cgroup was read, so
+	// the process was not reaped, and its PID not reused, meanwhile. A kernel
+	// older than 6.5 has no SO_PEERPIDFD and the uid and cgroup are all there is.
+	if pidfd >= 0 {
+		got, err := pidfdPID(pidfd)
+		if err != nil {
+			return who, fmt.Errorf("the peer was reaped while it was checked: %w", err)
+		}
+		if got != int(cred.Pid) {
+			return who, fmt.Errorf("the pidfd of the peer points to PID %d, not %d", got, cred.Pid)
+		}
+	}
 	return who, nil
+}
+
+// pidfdPID is the PID a pidfd points to, from /proc/self/fdinfo, which shows
+// -1 once the process was reaped.
+func pidfdPID(fd int) (int, error) {
+	b, err := os.ReadFile("/proc/self/fdinfo/" + strconv.Itoa(fd))
+	if err != nil {
+		return 0, fmt.Errorf("read fdinfo of the pidfd: %w", err)
+	}
+	for line := range strings.SplitSeq(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "Pid:"); ok {
+			pid, err := strconv.Atoi(strings.TrimSpace(v))
+			if err != nil || pid <= 0 {
+				return 0, errors.New("the process was reaped")
+			}
+			return pid, nil
+		}
+	}
+	return 0, errors.New("the pidfd shows no PID")
 }

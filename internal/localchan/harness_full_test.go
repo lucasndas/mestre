@@ -214,6 +214,13 @@ func (o *outbuf) waitFor(t *testing.T, sub string) {
 	}
 }
 
+// callWait is how long a test waits for a call (or a refusal) it expects. The
+// wait ends the moment it arrives, so the bound only matters for a failure,
+// and it is generous: the calls of CA-LOCAL-13 go through cmd and Windows
+// PowerShell, whose cold start on a loaded CI runner took more than 20 s once
+// (the first two calls of the same terminal were served 8 s into the test).
+const callWait = 90 * time.Second
+
 // call is what the `list` handler of the engine saw.
 type call struct {
 	Cwd    string
@@ -277,7 +284,7 @@ func newFullEngine(t *testing.T, o engineOptions) *fullEngine {
 		PTYVersion: ptyVersion,
 		// The terminal is known to the local channel before its agent
 		// starts: an agent can call in its first instant.
-		OnStarting: dir.Starting, OnDiscarded: dir.Remove,
+		OnStarting: dir.Starting, OnDiscarded: dir.Remove, OnEnded: dir.Remove,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -294,7 +301,7 @@ func newFullEngine(t *testing.T, o engineOptions) *fullEngine {
 	srv := localchan.NewServer(localchan.Config{
 		Clock: clock.Real{},
 		Identifier: localchan.NewSystemIdentifier(localchan.SystemConfig{
-			Clock: clock.Real{}, Terminals: e.dir, Jobs: e.dir, System: sys, Mode: o.mode, CgroupBase: o.cgroup,
+			Terminals: e.dir, Jobs: e.dir, System: sys, Mode: o.mode, CgroupBase: o.cgroup,
 		}),
 		Forwarder: fwd, Instance: "test", EngineVersion: "test",
 		OnAudit: func(a localchan.Audit) {
@@ -375,13 +382,13 @@ func (e *fullEngine) watch(id string) *outbuf {
 // nextCall waits for the next call that reached the handler.
 func (e *fullEngine) nextCall(what string) call {
 	e.t.Helper()
-	limit := clock.Real{}.NewTimer(20 * time.Second)
+	limit := clock.Real{}.NewTimer(callWait)
 	defer limit.Stop()
 	select {
 	case c := <-e.Calls:
 		return c
 	case <-limit.C():
-		e.t.Fatalf("no call in 20 s: %s\naudits: %s", what, e.drainAudits())
+		e.t.Fatalf("no call in 90 s: %s\naudits: %s", what, e.drainAudits())
 	case <-e.ctx.Done():
 		e.t.Fatalf("the test ended before a call: %s", what)
 	}
@@ -403,7 +410,7 @@ func (e *fullEngine) drainAudits() string {
 // nextAudit waits for the next audit record of a refusal.
 func (e *fullEngine) nextRefusal(what string) localchan.Audit {
 	e.t.Helper()
-	limit := clock.Real{}.NewTimer(20 * time.Second)
+	limit := clock.Real{}.NewTimer(callWait)
 	defer limit.Stop()
 	for {
 		select {
@@ -412,7 +419,7 @@ func (e *fullEngine) nextRefusal(what string) localchan.Audit {
 				return a
 			}
 		case <-limit.C():
-			e.t.Fatalf("no refusal in 20 s: %s", what)
+			e.t.Fatalf("no refusal in 90 s: %s", what)
 		case <-e.ctx.Done():
 			e.t.Fatalf("the test ended before a refusal: %s", what)
 		}

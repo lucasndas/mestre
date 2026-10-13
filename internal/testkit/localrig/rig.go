@@ -37,7 +37,7 @@ type Rig struct {
 // Options configure New; the zero value is a tree-less engine that reads
 // cgroups.
 type Options struct {
-	Config localchan.Config // Clock, Identifier and OnAudit are the rig's
+	Config localchan.Config // Clock and OnAudit are the rig's; Identifier is, unless set
 	Mode   localchan.Mode
 }
 
@@ -49,7 +49,9 @@ func New(clk clock.Clock, o Options) *Rig {
 	}
 	cfg := o.Config
 	cfg.Clock = clk
-	cfg.Identifier = &localchan.ProcIdentifier{Peers: r.Peers, Proc: r.Proc, Terminals: r.Terminals, Clock: clk, Mode: o.Mode, CgroupBase: CgroupBase}
+	if cfg.Identifier == nil {
+		cfg.Identifier = &localchan.ProcIdentifier{Peers: r.Peers, Proc: r.Proc, Terminals: r.Terminals, Mode: o.Mode, CgroupBase: CgroupBase}
+	}
 	if cfg.Forwarder == nil {
 		cfg.Forwarder = r.Forwarder
 	}

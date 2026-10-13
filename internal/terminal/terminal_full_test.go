@@ -19,6 +19,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/terminal"
 	"github.com/lucasndas/mestre/internal/terminal/ptywire"
+	"github.com/lucasndas/mestre/internal/testkit/delegated"
 )
 
 // readPIDs reads the PIDs the tree helper wrote, one per line.
@@ -39,7 +40,7 @@ func readPIDs(t *testing.T, path string) []int {
 	return pids
 }
 
-// CA-TERM-05
+// CA-TERM-05 (the parts with a delegated cgroup run again in a systemd scope)
 func TestStopLeavesNothingOfTheTree(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -53,16 +54,19 @@ func TestStopLeavesNothingOfTheTree(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			h := newHarness(t, harnessOptions{})
 			if tt.escape {
 				if !canLeaveSession {
 					t.Skip("a process cannot leave the Job Object of the terminal on Windows: nothing to test")
 				}
-				if h.cfg.CgroupBase == "" {
-					t.Skip("a grandchild that left the session needs a delegated cgroup " +
-						"(systemd-run --user --scope -p Delegate=yes) and this machine has none")
+				// A grandchild that left the session only dies with the
+				// cgroup of the terminal: this process has no delegated one,
+				// so the test runs again in a systemd scope that has.
+				if _, err := terminal.DelegatedCgroup(); err != nil {
+					delegated.Rerun(t, envBuilds+"="+builds.dir)
+					return
 				}
 			}
+			h := newHarness(t, harnessOptions{})
 			pidsFile := filepath.Join(h.cfg.Root, "pids")
 			flag := "0"
 			if tt.escape {
@@ -102,6 +106,41 @@ func TestStopLeavesNothingOfTheTree(t *testing.T) {
 				t.Fatalf("status = %q, want stopped", got)
 			}
 		})
+	}
+}
+
+// The agent ends on its own and leaves a process behind (nohup, a job in the
+// background): the engine sweeps the terminal, marks its row interrupted,
+// removes the socket and tells whoever keeps the terminal by id (OnEnded). The
+// process left behind would otherwise go on in the session or the cgroup of
+// the terminal and still identify as the character on the local channel.
+//
+// CA-TERM-13
+func TestWhatTheAgentLeavesBehindEndsWithIt(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, harnessOptions{})
+	const id = "t5c"
+	ended := make(chan struct{})
+	endedSignals.Store(id, ended)
+	pidsFile := filepath.Join(h.cfg.Root, "pids")
+	term := h.create(h.selfSpec(id, helperLeaver, pidsFile))
+	rec := h.record(id)
+	ptyPID := term.PTY().PID
+
+	select {
+	case <-ended:
+	case <-h.ctx.Done():
+		t.Fatal("the engine never reported the end of the agent")
+	}
+	for _, pid := range readPIDs(t, pidsFile) {
+		h.gone(pid, "the process the agent left behind")
+	}
+	h.gone(ptyPID, "mestre-pty")
+	if got := h.record(id).Status; got != terminal.StatusInterrupted {
+		t.Errorf("status = %q, want interrupted", got)
+	}
+	if _, err := os.Stat(rec.SocketPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the socket is still there: %v", err)
 	}
 }
 
@@ -450,7 +489,8 @@ func TestOnlyTheEngineWithTheSecretGetsIn(t *testing.T) {
 
 	// Linux: another process of the same account (this one) cannot read the
 	// mestre-pty's environment, attach to it or take its descriptors.
-	// Windows has the process security descriptor of the launcher instead
-	// (internal/winsvc, spike 5), which does not exist yet.
+	// Windows has the process security descriptor of the launcher instead,
+	// which only a mestre-pty started by it has: that is checked in
+	// internal/launcher (CA-TERM-07).
 	checkHardened(t, term.PTY().PID)
 }

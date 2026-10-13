@@ -68,13 +68,12 @@ func EndpointFromEnv(getenv func(string) string) (string, error) {
 
 // Access sets who may connect to the socket of the engine. The engine
 // creates the socket and then applies it: on Linux the mode and owner
-// (LinuxAccess), on Windows the ACL, which internal/winsvc applies.
+// (LinuxAccess), on Windows the ACL (winsvc.CLIAccess).
 type Access interface {
 	Apply(path string) error
 }
 
-// NoAccess leaves the socket as the system created it: tests, and Windows
-// until internal/winsvc applies its ACL.
+// NoAccess leaves the socket as the system created it: the tests.
 type NoAccess struct{}
 
 // Apply does nothing.

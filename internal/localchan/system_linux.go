@@ -21,7 +21,7 @@ func NewSystemIdentifier(cfg SystemConfig) Identifier {
 		sys = terminal.NewSystem()
 	}
 	return &ProcIdentifier{
-		Peers: NewPeerSource(sys), Proc: NewProc(sys), Terminals: cfg.Terminals, Clock: cfg.Clock,
+		Peers: NewPeerSource(sys), Proc: NewProc(sys), Terminals: cfg.Terminals,
 		Mode: cfg.Mode, CgroupBase: cfg.CgroupBase,
 	}
 }

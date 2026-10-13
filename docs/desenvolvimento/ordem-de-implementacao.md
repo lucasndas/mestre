@@ -58,6 +58,8 @@ Critérios de documentos de um marco que usam peças de marcos seguintes; cada u
 |---|---|
 | [dublês](../qualidade/dubles.md) (M0) | CA-DUBLES-08 → M2 (Torre real do protocolo); CA-DUBLES-11 → M4 (personagens) |
 | [cofre](../plataforma/cofre.md) (M1) | CA-COFRE-21 → M2 (pedido da Torre pelo protocolo); CA-COFRE-09 e CA-COFRE-18 → M4 (personagens e MCP de navegador); CA-COFRE-10 a CA-COFRE-17 → M5 (bot, com CA-BOT-09); CA-COFRE-07 e CA-COFRE-20 → M6 (rotas do painel e administração); CA-COFRE-05 → Guardião (réplica e página reserva); CA-COFRE-19 → M7 (instalação) |
+| [terminal](../arquitetura/terminal.md) (M1) | CA-TERM-02 com as gravações reais de tela dos provedores e o item "Verificar" do `x/vt` → M3 (conformidade; no M1 a tela é falsa); a parte de CA-TERM-05, CA-TERM-07 e CA-TERM-12 que exige logon real da conta de agentes ou troca de conta (varredura da sessão de logon, DACL entre dois terminais, `kill` do launcher como `mestre-agente`) → M7 (pesada e checklist); o instalador aplicar as ACLs de `run\` e `pty\` no Windows e a unidade do launcher (`RuntimeDirectory=` e o resto) → M7 (instalação) |
+| [canal local](../arquitetura/canal-local.md) (M1) | CA-LOCAL-04 com a entrega na caixa de entrada real → M4 (esperas e caixa de entrada; no M1 o destino é um dublê) |
 | [protocolo](../conectividade/protocolo.md) (M2) | CA-PROTO-08 → M4 (esperas); CA-PROTO-09 → M6 (painel); CA-PROTO-07 → Guardião |
 | [Guilda](../guilda/guilda.md) (M2) | CA-GUILDA-02, CA-GUILDA-09 e CA-GUILDA-12 → M5 (aprovação e PIN do Dono pelo bot); CA-GUILDA-06 → Guardião; CA-GUILDA-08 → M7 (instalação) |
 | [ficha da máquina](../guilda/ficha-da-maquina.md) (M2) | CA-FMAQ-04 → M3 (classes); CA-FMAQ-03 → M4 (fichas e perfis de conta) |

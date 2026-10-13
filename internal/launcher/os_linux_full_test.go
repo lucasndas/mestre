@@ -18,6 +18,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/launcher"
 	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/testkit/delegated"
 )
 
 // osEnv is the Linux side of the fixture: the launcher listens on a Unix
@@ -83,6 +84,24 @@ func TestResolveCgroupBase(t *testing.T) {
 	}
 	if want := strings.TrimPrefix(base, "/sys/fs/cgroup") + "/launcher"; lines[1] != want {
 		t.Errorf("the launcher is in %q, want its leaf %q", lines[1], want)
+	}
+}
+
+// TestDropAmbient (fast suite) skips in a binary that uses cgo, where the Go
+// runtime cannot change a capability for all threads, and the test binary of
+// this package does: it needs os/user and net, which link the C resolver. The
+// release is built with CGO_ENABLED=0, so the test runs once more here in a
+// binary built that way, and must pass, not skip.
+func TestDropAmbientRunsWithoutCgo(t *testing.T) {
+	t.Parallel()
+	cmd := exec.CommandContext(t.Context(), "go", "test", "-count=1", "-v", "-run", "^TestDropAmbient$", ".")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go test with CGO_ENABLED=0: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "--- PASS: TestDropAmbient ") || strings.Contains(string(out), "--- SKIP") {
+		t.Fatalf("TestDropAmbient did not pass without cgo:\n%s", out)
 	}
 }
 
@@ -186,7 +205,10 @@ func (e *env) checkStarted(t *testing.T, _ context.Context, spec terminal.SpawnS
 	t.Run("in the cgroup of the terminal", func(t *testing.T) {
 		t.Parallel()
 		if e.os.cgBase == "" {
-			t.Skip("this process has no delegated cgroup v2 (run it with systemd-run --user --scope -p Delegate=yes): the cgroup of the terminal cannot be created")
+			// No delegated cgroup here: the whole test runs again in a
+			// systemd scope that has one.
+			delegated.Rerun(t, envBuilds+"="+builds.dir)
+			return
 		}
 		want := filepath.Join(e.os.cgBase, "term-"+spec.ID)
 		if sp.CgroupDir != want {
@@ -233,7 +255,10 @@ func (e *env) checkRestart(t *testing.T) {
 	}
 	if e.os.cgBase == "" {
 		_ = e.sys.KillTree(ctx, sp.ProcID, nil)
-		t.Skip("no delegated cgroup v2: the new launcher cannot end the terminal by its cgroup")
+		// The new launcher ends the terminal by its cgroup: run again in a
+		// systemd scope that has a delegated one.
+		delegated.Rerun(t, envBuilds+"="+builds.dir)
+		return
 	}
 	if err := e.client.KillCgroup(ctx, spec.ID); err != nil {
 		t.Fatalf("the new launcher cannot end the terminal: %v", err)

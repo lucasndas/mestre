@@ -9,6 +9,8 @@
 //	--listen-fd Linux: the descriptor of the socket the engine already made
 //	--secret-fd descriptor (handle on Windows) of the pipe that carries the
 //	            32-byte secret of the handshake: never argv, never the environment
+//	--own-logon Windows: the launcher made a logon session for this terminal
+//	            alone, so the forced stop may end what is left of it
 //	--ready-fd  optional: descriptor of a pipe to write one byte to once the
 //	            socket belongs to this process (Linux; see signalReady)
 package main
@@ -49,6 +51,7 @@ func run(args []string, stderr io.Writer) error {
 	listenFD := fs.Int("listen-fd", 0, "descriptor of the listening socket")
 	secretFD := fs.Int("secret-fd", 0, "descriptor of the pipe with the secret")
 	readyFD := fs.Int("ready-fd", 0, "descriptor of the pipe to signal readiness on")
+	ownLogon := fs.Bool("own-logon", false, "Windows: the logon session is this terminal's alone")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -75,7 +78,7 @@ func run(args []string, stderr io.Writer) error {
 
 	var srv *ptyd.Server
 	sess := ptyd.NewSession(ptyd.SessionConfig{
-		Runner:  &ptyd.PTYRunner{Suite: os.Getenv(ptywire.EnvTestSuite)},
+		Runner:  &ptyd.PTYRunner{Suite: os.Getenv(ptywire.EnvTestSuite), SweepLogonSession: *ownLogon},
 		Clock:   clock.Real{},
 		OnEvent: func(m ptywire.Msg) { srv.Broadcast(m) },
 		Logger:  log,

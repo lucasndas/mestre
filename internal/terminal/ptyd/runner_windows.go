@@ -11,6 +11,8 @@ import (
 
 	"github.com/aymanbagabas/go-pty"
 	"golang.org/x/sys/windows"
+
+	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
 )
 
 // sysAgent is the Windows part of an agent: the Job Object of the terminal.
@@ -20,12 +22,63 @@ import (
 // it (docs/arquitetura/windows.md#conpty).
 type sysAgent struct {
 	job windows.Handle
+	// sweep ends what is left of the logon session when the tree is killed.
+	sweep bool
 }
 
 var ntResumeProcess = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtResumeProcess")
 
-func prepare(cmd *pty.Cmd) (*sysAgent, error) {
-	job, err := windows.CreateJobObject(nil, nil)
+// jobSDDL is the DACL of the Job Object: SYSTEM and the logon session of the
+// mestre-pty, which the launcher made for this terminal alone. The account
+// (mestre-agente) is not in it, because every terminal runs with it: the
+// Job is anonymous and only this process holds a handle, and the DACL keeps
+// it that way even if another process of the account got hold of one.
+func jobSDDL(logon *windows.SID) string {
+	return "D:P(A;;GA;;;SY)(A;;GA;;;" + logon.String() + ")"
+}
+
+// jobAttributes are the security attributes of the Job Object. Without a
+// logon SID in the token (not a session made by LogonUser) the Job is only
+// for SYSTEM and the user of the process.
+func jobAttributes() (*windows.SecurityAttributes, error) {
+	t := windows.GetCurrentProcessToken()
+	sid, err := logonSID(t)
+	if err != nil {
+		u, uerr := t.GetTokenUser()
+		if uerr != nil {
+			return nil, fmt.Errorf("user of the mestre-pty: %w", uerr)
+		}
+		sid = u.User.Sid
+	}
+	sd, err := windows.SecurityDescriptorFromString(jobSDDL(sid))
+	if err != nil {
+		return nil, fmt.Errorf("security descriptor of the job: %w", err)
+	}
+	return &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}, nil
+}
+
+// logonSID is the logon SID of the token (SE_GROUP_LOGON_ID).
+func logonSID(t windows.Token) (*windows.SID, error) {
+	g, err := t.GetTokenGroups()
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range g.AllGroups() {
+		if s.Attributes&seGroupLogonID == seGroupLogonID {
+			return s.Sid.Copy()
+		}
+	}
+	return nil, errors.New("token has no logon SID")
+}
+
+const seGroupLogonID = 0xC0000000
+
+func prepare(cmd *pty.Cmd, sweep bool) (*sysAgent, error) {
+	sa, err := jobAttributes()
+	if err != nil {
+		return nil, err
+	}
+	job, err := windows.CreateJobObject(sa, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create job object: %w", err)
 	}
@@ -38,7 +91,7 @@ func prepare(cmd *pty.Cmd) (*sysAgent, error) {
 		return nil, fmt.Errorf("set job limits: %w", err)
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED}
-	return &sysAgent{job: job}, nil
+	return &sysAgent{job: job, sweep: sweep}, nil
 }
 
 func (s *sysAgent) abort() { _ = windows.CloseHandle(s.job) }
@@ -69,10 +122,24 @@ func (*sysAgent) release() {}
 func (*sysAgent) signal(a *ptyAgent) error { return a.closePTY() }
 
 // kill is TerminateJobObject, mandatory: a process with its own console and
-// the conhost.exe of that console survive ClosePseudoConsole.
+// the conhost.exe of that console survive ClosePseudoConsole. Then, when the
+// launcher gave this terminal a logon session of its own, it ends what is
+// left of the session: the conhost.exe of the ConPTY (outside the Job) and
+// whatever escaped the Job through WMI, which carries the logon session of
+// the account that asked (docs/arquitetura/terminal.md#encerramento).
 func (s *sysAgent) kill(*ptyAgent) error {
 	if err := windows.TerminateJobObject(s.job, 1); err != nil {
 		return fmt.Errorf("terminate job: %w", err)
+	}
+	if !s.sweep {
+		return nil
+	}
+	session, err := logonsweep.SessionOfSelf()
+	if err != nil {
+		return fmt.Errorf("logon session of the mestre-pty: %w", err)
+	}
+	if _, err := logonsweep.Run(session, logonsweep.Options{}); err != nil {
+		return fmt.Errorf("sweep the logon session: %w", err)
 	}
 	return nil
 }

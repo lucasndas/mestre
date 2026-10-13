@@ -59,6 +59,7 @@ type StopPlan struct {
 // is left, not even the mestre-pty. Afterwards the socket is removed and
 // the registry row says "stopped". The waits use the engine's clock.
 func (t *Terminal) Stop(ctx context.Context, plan StopPlan) (StopStep, error) {
+	t.stopping.Store(true)
 	gw, tw := plan.GracefulWait, plan.TerminateWait
 	if gw == 0 {
 		gw = DefaultGracefulWait
@@ -124,7 +125,8 @@ func (t *Terminal) ended() bool {
 // terminal is killed (it reaches whoever left the session with setsid -f,
 // and the mestre-pty itself) and the mestre-pty and the sessions of the
 // agent are ended by PID, which covers Linux without a cgroup and a
-// mestre-pty that does not answer. On Windows the Job Object holds the
+// mestre-pty that does not answer (the engine has no right over the agents'
+// processes there, so the launcher does it: TreeKiller). On Windows the Job Object holds the
 // tree: ending the mestre-pty ends it.
 func (t *Terminal) sweep(ctx context.Context, forced bool) error {
 	var errs []error
@@ -139,7 +141,7 @@ func (t *Terminal) sweep(ctx context.Context, forced bool) error {
 	if err := t.m.cfg.Spawner.KillCgroup(ctx, t.id); err != nil {
 		errs = append(errs, err)
 	}
-	if err := t.m.cfg.System.KillTree(ctx, t.proc, []int{t.agentPID}); err != nil {
+	if err := t.m.killTree(ctx, t.id, t.proc, []int{t.agentPID}); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

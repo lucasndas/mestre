@@ -51,6 +51,14 @@ type Backend interface {
 	Kill(ctx context.Context, id string) error
 }
 
+// ProcKiller is a Backend that can end the mestre-pty and the sessions of a
+// terminal by process identity, with the right of the account of the agents
+// (Linux, where the engine has none). A Backend without it refuses a kill that
+// names a process.
+type ProcKiller interface {
+	KillProcs(ctx context.Context, id string, p terminal.ProcID, sessions []int) error
+}
+
 // PeerCheck says whether the other end of a connection may ask anything.
 // who describes it for the log (even when err is set).
 type PeerCheck func(c net.Conn) (who string, err error)
@@ -273,7 +281,17 @@ func checkRoles(roles []string, got int) error {
 }
 
 func (s *Server) kill(ctx context.Context, ev Event, req Request) Response {
-	if err := s.cfg.Backend.Kill(ctx, req.ID); err != nil {
+	var err error
+	if req.PID != 0 {
+		pk, ok := s.cfg.Backend.(ProcKiller)
+		if !ok {
+			return s.refuse(ev, errors.New("this launcher does not end processes by identity"))
+		}
+		err = pk.KillProcs(ctx, req.ID, terminal.ProcID{PID: req.PID, Start: req.Start}, req.Sessions)
+	} else {
+		err = s.cfg.Backend.Kill(ctx, req.ID)
+	}
+	if err != nil {
 		return s.fail(ev, err)
 	}
 	s.record(withOutcome(ev, OutcomeOK, ""))

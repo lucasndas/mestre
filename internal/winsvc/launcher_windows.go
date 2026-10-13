@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 
 	"github.com/lucasndas/mestre/internal/launcher"
+	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -334,6 +335,11 @@ func (b *backend) create(sess *Session, r launcher.StartRequest) (windows.Handle
 		return 0, 0, err
 	}
 	argv := []string{r.Binary, "--id", r.ID, "--socket", r.Socket, "--secret-fd", strconv.FormatUint(uint64(rd), 10)}
+	if logonsweep.Allowed(sess.Logon) == nil {
+		// The logon session is this terminal's alone: the mestre-pty may end
+		// what is left of it at a forced stop.
+		argv = append(argv, "--own-logon")
+	}
 	flags := uint32(windows.CREATE_BREAKAWAY_FROM_JOB | windows.CREATE_UNICODE_ENVIRONMENT |
 		windows.EXTENDED_STARTUPINFO_PRESENT | windows.DETACHED_PROCESS)
 	var pi windows.ProcessInformation
@@ -361,6 +367,7 @@ func (b *backend) watch(id string, proc windows.Handle, sess *Session) {
 		if err == nil && which != windows.WAIT_OBJECT_0 {
 			return
 		}
+		b.sweepLogon(id, sess)
 		sess.Release()
 		if err := b.list.Remove(id); err != nil {
 			b.log.Warn("list of mestre-pty not written", "terminal", id, "error", err.Error())
@@ -370,6 +377,23 @@ func (b *backend) watch(id string, proc windows.Handle, sess *Session) {
 			b.cfg.Ended(id)
 		}
 	}()
+}
+
+// sweepLogon ends what is left of the logon session of a terminal whose
+// mestre-pty ended (a conhost.exe, a process created through WMI). It does
+// nothing for a session that is not the terminal's alone (the launcher of the
+// CI shares the one of the test runner).
+func (b *backend) sweepLogon(id string, sess *Session) {
+	if err := logonsweep.Allowed(sess.Logon); err != nil {
+		return
+	}
+	n, err := logonsweep.Run(sess.Logon, logonsweep.Options{})
+	switch {
+	case err != nil:
+		b.log.Warn("logon session of the terminal not swept", "terminal", id, "ended", n, "error", err.Error())
+	case n > 0:
+		b.log.Info("processes left in the logon session of the terminal ended", "terminal", id, "ended", n)
+	}
 }
 
 // adopt takes back the mestre-pty of the list that are still the same

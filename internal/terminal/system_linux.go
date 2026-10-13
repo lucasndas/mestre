@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -122,40 +121,12 @@ func (linuxSystem) WaitExit(ctx context.Context, pid int) error {
 
 // KillTree ends the mestre-pty and everything of its terminal that stayed in
 // the sessions: the sessions of its children are collected first, because
-// once it is gone they are adopted by init.
+// once it is gone they are adopted by init. It needs the right to signal
+// them (the same account, or CAP_KILL): from the engine, which runs as
+// another account than the agents, the error wraps fs.ErrPermission and the
+// Manager asks the launcher (TreeKiller).
 func (s linuxSystem) KillTree(ctx context.Context, p ProcID, sessions []int) error {
-	pidfd, err := unix.PidfdOpen(p.PID, 0)
-	if err != nil && !errors.Is(err, unix.ESRCH) {
-		return fmt.Errorf("pidfd_open %d: %w", p.PID, err)
-	}
-	if err == nil {
-		defer unix.Close(pidfd)
-		// Identity after the pidfd: the pidfd cannot point to another
-		// process than the one identified.
-		if p.Start != "" {
-			if start, ierr := s.Identify(p.PID); ierr != nil || start != p.Start {
-				pidfd = -1
-			}
-		}
-		if pidfd >= 0 {
-			sessions = append(sessions, childSessions(p.PID)...)
-			if err := unix.PidfdSendSignal(pidfd, unix.SIGKILL, nil, 0); err != nil && !errors.Is(err, unix.ESRCH) {
-				return fmt.Errorf("kill mestre-pty %d: %w", p.PID, err)
-			}
-			if err := s.WaitExit(ctx, p.PID); err != nil {
-				return err
-			}
-		}
-	}
-	var errs []error
-	for _, sid := range sessions {
-		if sid > 1 {
-			if err := killSession(sid); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-	return errors.Join(errs...)
+	return s.killTree(ctx, p, sessions, treeScope{uid: -1})
 }
 
 // childSessions returns the session IDs of the direct children of pid.
@@ -181,29 +152,6 @@ func childSessions(pid int) []int {
 		}
 	}
 	return out
-}
-
-// killSession is SIGKILL to every process that still has the session,
-// repeated until none is left, waiting for each to die.
-func killSession(sid int) error {
-	const maxSweeps = 50
-	for range maxSweeps {
-		members := sessionMembers(sid)
-		if len(members) == 0 {
-			return nil
-		}
-		for _, pid := range members {
-			if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
-				return fmt.Errorf("kill %d of session %d: %w", pid, sid, err)
-			}
-		}
-		for _, pid := range members {
-			if err := (linuxSystem{}).WaitExit(context.Background(), pid); err != nil {
-				return err
-			}
-		}
-	}
-	return fmt.Errorf("session %d still has processes after %d rounds", sid, maxSweeps)
 }
 
 // sessionMembers returns the PIDs of the live processes of session sid.

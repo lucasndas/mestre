@@ -101,6 +101,8 @@ jobs:
         run: |
           go test -run '^$' ./...
           go test -tags full -run '^$' ./...
+          # TestDropAmbientRunsWithoutCgo builds the launcher tests with cgo off.
+          CGO_ENABLED=0 go test -run '^$' ./internal/launcher/
 
       - name: Fast suite
         run: go run ./tools/testrun fast
