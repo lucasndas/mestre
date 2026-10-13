@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/unix"
 
@@ -70,11 +71,14 @@ func Prepare(cfg RunConfig) (*Server, net.Listener, error) {
 	return srv, ln, nil
 }
 
-// Run is the mestre-launcher on Linux: it drops the ambient capabilities
-// (it keeps CAP_SETUID and CAP_SETGID for itself, never for what it
-// starts) and serves until ctx ends.
+// Run is the mestre-launcher on Linux: it drops the ambient and inheritable
+// capabilities (it keeps CAP_SETUID and CAP_SETGID, permitted and effective,
+// for itself, never for what it starts) and serves until ctx ends.
 func Run(ctx context.Context, cfg RunConfig) error {
 	if err := DropAmbient(); err != nil {
+		return err
+	}
+	if err := DropInheritable(); err != nil {
 		return err
 	}
 	srv, ln, err := Prepare(cfg)
@@ -135,6 +139,27 @@ func DropAmbient() error {
 	// PR_CAP_AMBIENT is per thread; all threads must do it.
 	if _, _, errno := syscall.AllThreadsSyscall6(unix.SYS_PRCTL, unix.PR_CAP_AMBIENT, unix.PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0, 0); errno != 0 {
 		return fmt.Errorf("drop the ambient capabilities: %w", errno)
+	}
+	return nil
+}
+
+// DropInheritable empties the inheritable capability set of every thread.
+// systemd puts the capabilities it gives as ambient in the inheritable set
+// too, and a child inherits it. Without file capabilities that gives the
+// child nothing, but nothing the launcher starts should carry a trace of
+// CAP_SETUID and CAP_SETGID, not even in a set that only a file with
+// inheritable capabilities could turn into power. The permitted and effective
+// sets, which the launcher needs to switch accounts in the child, stay.
+func DropInheritable() error {
+	hdr := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
+	var data [2]unix.CapUserData
+	if err := unix.Capget(&hdr, &data[0]); err != nil {
+		return fmt.Errorf("read the capabilities: %w", err)
+	}
+	data[0].Inheritable, data[1].Inheritable = 0, 0
+	// capset is per thread; all threads must do it.
+	if _, _, errno := syscall.AllThreadsSyscall(unix.SYS_CAPSET, uintptr(unsafe.Pointer(&hdr)), uintptr(unsafe.Pointer(&data[0])), 0); errno != 0 {
+		return fmt.Errorf("drop the inheritable capabilities: %w", errno)
 	}
 	return nil
 }

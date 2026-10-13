@@ -28,7 +28,8 @@ RuntimeDirectory=mestre/%i
 RuntimeDirectoryMode=0750
 RuntimeDirectoryPreserve=yes
 # CAP_SETUID and CAP_SETGID only to switch to mestre-agente in the child; the
-# launcher empties the ambient set at start, so what it starts has none.
+# launcher empties the ambient and the inheritable sets at start, so what it
+# starts has none.
 AmbientCapabilities=CAP_SETUID CAP_SETGID
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID
 Restart=always

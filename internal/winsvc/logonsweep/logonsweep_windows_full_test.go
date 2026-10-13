@@ -96,6 +96,39 @@ func TestTheSweepEndsTheProcessesOfTheSession(t *testing.T) {
 	}
 }
 
+// CA-TERM-05 (the sweep after the Job Object): TerminateProcess answers
+// "access denied" for a process that has already ended and whose handle
+// somebody holds, which is what a process the Job Object of the terminal is
+// just ending looks like to the sweep that follows it. That is not a failure
+// of the sweep: the process is waited for like the others.
+func TestTheSweepDoesNotFailOnAProcessThatIsAlreadyEnding(t *testing.T) {
+	t.Parallel()
+	self, err := SessionOfSelf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := startHelper(t)
+	pid := uint32(child.Process.Pid)
+	// The handle of os/exec stays open until Wait, so the ended process is
+	// still there for the sweep to find.
+	if err := child.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = windows.CloseHandle(h) }()
+	if ev, err := windows.WaitForSingleObject(h, windows.INFINITE); err != nil || ev != windows.WAIT_OBJECT_0 {
+		t.Fatalf("the helper did not end: %d, %v", ev, err)
+	}
+
+	n, err := sweep(self.ID, Options{Only: func(p uint32) bool { return p == pid }})
+	if err != nil || n != 1 {
+		t.Fatalf("sweep = %d, %v; want the ended helper taken as done, without an error", n, err)
+	}
+}
+
 // alive reports whether the process still runs.
 func alive(t *testing.T, pid int) bool {
 	t.Helper()

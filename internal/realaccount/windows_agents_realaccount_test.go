@@ -27,6 +27,7 @@ import (
 	"github.com/lucasndas/mestre/internal/terminal"
 	"github.com/lucasndas/mestre/internal/winsvc"
 	"github.com/lucasndas/mestre/internal/winsvc/dpapi"
+	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
 )
 
 // The Windows side, part one: the services and the agents. The test binary is
@@ -306,17 +307,34 @@ func denialOf(err error) string {
 	switch {
 	case err == nil:
 		return "ok"
-	case errors.Is(err, windows.ERROR_ACCESS_DENIED), errors.Is(err, os.ErrPermission):
+	case errors.Is(err, windows.ERROR_ACCESS_DENIED), errors.Is(err, windows.WSAEACCES), errors.Is(err, os.ErrPermission):
 		return "denied"
 	}
 	return err.Error()
 }
 
-// runWhoami reports what a process of the terminal sees of the profile that
-// the launcher loaded: the profile folder of the environment block, and the
-// user hive.
+// runWhoami reports what a process of the terminal sees of itself: the user
+// and the logon session of its own token and of its mestre-pty's (its parent,
+// which its owner may query), the profile folder of the environment block and
+// the user hive the launcher loaded.
 func runWhoami(report string) int {
 	rep := map[string]string{"USERPROFILE": os.Getenv("USERPROFILE"), "APPDATA": os.Getenv("APPDATA")}
+	describe := func(prefix string, t windows.Token) {
+		if u, err := t.GetTokenUser(); err == nil {
+			rep[prefix+"user"] = u.User.Sid.String()
+		}
+		if s, err := logonsweep.SessionOfToken(t); err == nil {
+			rep[prefix+"logon session"] = fmt.Sprintf("%#x", uint64(s.ID))
+			rep[prefix+"logon type"] = strconv.Itoa(int(s.LogonType))
+		}
+	}
+	describe("", windows.GetCurrentProcessToken())
+	if t, err := procToken(os.Getppid()); err == nil {
+		describe("mestre-pty ", t)
+		_ = t.Close()
+	} else {
+		rep["mestre-pty token"] = denialOf(err)
+	}
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software`, registry.QUERY_VALUE)
 	if err == nil {
 		_ = k.Close()

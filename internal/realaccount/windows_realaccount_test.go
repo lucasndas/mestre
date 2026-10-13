@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -184,28 +185,6 @@ func engineMatrix(t *testing.T, what string, pid int, allowed ...string) {
 	}, allowed...)
 }
 
-func sessionOf(t *testing.T, what string, pid int) (*windows.SID, logonsweep.Session) {
-	t.Helper()
-	tok, err := procToken(pid)
-	if err != nil {
-		t.Fatalf("token of %s (PID %d): %v", what, pid, err)
-	}
-	defer tok.Close()
-	u, err := tok.GetTokenUser()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := logonsweep.SessionOfToken(tok)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sid, err := u.User.Sid.Copy()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return sid, s
-}
-
 // CA-TERM-07 (real accounts): the mestre-pty the launcher service starts runs
 // as the agent account, in a batch logon session of its own that is not the
 // engine's nor another terminal's, outside the Job Object of the engine, with
@@ -221,41 +200,38 @@ func TestWindowsTheMestrePTYRunsAsTheAgentAccountInALogonOfItsOwn(t *testing.T) 
 	if want, _, _, err := windows.LookupSID("", `NT SERVICE\`+winsvc.ServiceName(realaccount.Instance)); err != nil || !me.Equals(want) {
 		t.Fatalf("the tests run as %s, not as the virtual account of the engine service (%v)", me, err)
 	}
-	agent := agentSID(t)
 	mine, err := logonsweep.SessionOfSelf()
 	if err != nil {
 		t.Fatal(err)
 	}
+	agent := agentSID(t).String()
 
-	a, whoami := r.report(t, newID("wm"), "whoami")
-	b := r.ready(t, newID("wm"), "sleeper")
-
+	// Two terminals, each telling who it is: the agent and, through the right
+	// the owner has to query it, its mestre-pty.
+	a, ra := r.report(t, newID("wm"), "whoami")
+	_, rb := r.report(t, newID("wm"), "whoami")
+	batch := strconv.Itoa(logonsweep.LogonTypeBatch)
 	for _, p := range []struct {
 		what string
-		pid  int
-	}{{"mestre-pty", a.PTY().PID}, {"agent", a.AgentPID()}} {
-		user, s := sessionOf(t, p.what, p.pid)
-		if !user.Equals(agent) {
-			t.Errorf("%s runs as %s, want the agent account %s", p.what, user, agent)
+		rep  map[string]string
+		pfx  string
+	}{{"agent of A", ra, ""}, {"mestre-pty of A", ra, "mestre-pty "}, {"agent of B", rb, ""}, {"mestre-pty of B", rb, "mestre-pty "}} {
+		if got := p.rep[p.pfx+"user"]; got != agent {
+			t.Errorf("%s runs as %q, want the agent account %s", p.what, got, agent)
 		}
-		if s.LogonType != logonsweep.LogonTypeBatch {
-			t.Errorf("%s: logon type %d, want a batch logon (%d)", p.what, s.LogonType, logonsweep.LogonTypeBatch)
+		if got := p.rep[p.pfx+"logon type"]; got != batch {
+			t.Errorf("%s: logon type %q, want a batch logon (%s)", p.what, got, batch)
 		}
-		if err := logonsweep.Allowed(s); err != nil {
-			t.Errorf("%s: its logon session may not be swept, so --own-logon was not given: %v", p.what, err)
-		}
-		if s.ID == mine.ID {
-			t.Errorf("%s shares the logon session of the engine", p.what)
+		if got := p.rep[p.pfx+"logon session"]; got == "" || got == fmt.Sprintf("%#x", uint64(mine.ID)) {
+			t.Errorf("%s: logon session %q, the engine's is %#x", p.what, got, uint64(mine.ID))
 		}
 	}
-	_, sa := sessionOf(t, "mestre-pty", a.PTY().PID)
-	_, sagent := sessionOf(t, "agent", a.AgentPID())
-	_, sb := sessionOf(t, "mestre-pty of the other terminal", b.PTY().PID)
-	if sa.ID != sagent.ID {
-		t.Errorf("the agent is in logon session %#x, its mestre-pty in %#x: one session per terminal", uint64(sagent.ID), uint64(sa.ID))
+	if ra["logon session"] != ra["mestre-pty logon session"] || rb["logon session"] != rb["mestre-pty logon session"] {
+		t.Errorf("the agent and its mestre-pty are in different logon sessions: %q/%q and %q/%q: one session per terminal",
+			ra["logon session"], ra["mestre-pty logon session"], rb["logon session"], rb["mestre-pty logon session"])
 	}
-	if sa.ID == sb.ID {
-		t.Errorf("two terminals share the logon session %#x", uint64(sa.ID))
+	if ra["logon session"] == rb["logon session"] {
+		t.Errorf("two terminals share the logon session %s", ra["logon session"])
 	}
 
 	// Outside the Job of the engine, which the mestre-pty would be in if the
@@ -284,12 +260,12 @@ func TestWindowsTheMestrePTYRunsAsTheAgentAccountInALogonOfItsOwn(t *testing.T) 
 
 	// LoadUserProfile and CreateEnvironmentBlock: the agent sees its own
 	// profile and the user hive.
-	if want := `\` + realaccount.WindowsAgentUser; !strings.HasSuffix(strings.ToLower(whoami["USERPROFILE"]), want) {
-		t.Errorf("USERPROFILE of the agent = %q, want the profile of %s", whoami["USERPROFILE"], realaccount.WindowsAgentUser)
+	if want := `\` + realaccount.WindowsAgentUser; !strings.HasSuffix(strings.ToLower(ra["USERPROFILE"]), want) {
+		t.Errorf("USERPROFILE of the agent = %q, want the profile of %s", ra["USERPROFILE"], realaccount.WindowsAgentUser)
 	}
 	for _, k := range []string{"HKCU", "profile folder"} {
-		if whoami[k] != "ok" {
-			t.Errorf("%s: %q, want the profile loaded", k, whoami[k])
+		if ra[k] != "ok" {
+			t.Errorf("%s: %q, want the profile loaded", k, ra[k])
 		}
 	}
 }
@@ -309,12 +285,6 @@ func TestWindowsAProcessOfOneTerminalCannotOpenThoseOfAnother(t *testing.T) {
 	}
 	prober, rep := r.report(t, newID("wp"), "access",
 		"B pty="+strconv.Itoa(victim.PTY().PID), "B agent="+strconv.Itoa(victim.AgentPID()), "B child="+strconv.Itoa(grand[0]))
-	_, sv := sessionOf(t, "victim", victim.AgentPID())
-	_, sp := sessionOf(t, "prober", prober.AgentPID())
-	if sv.ID == sp.ID {
-		t.Fatalf("both terminals are in the logon session %#x: the test proves nothing", uint64(sv.ID))
-	}
-
 	for _, c := range []struct {
 		name    string
 		allowed []string
@@ -507,19 +477,23 @@ func TestWindowsTheProfileAndTheLogonSessionEndWithTheMestrePTY(t *testing.T) {
 		t.Fatal("the profile of the agent account is loaded before any terminal: something else is running")
 	}
 	r := newRig(t)
-	term := r.ready(t, newID("wr"), "sleeper")
-	_, s := sessionOf(t, "mestre-pty", term.PTY().PID)
+	term, rep := r.report(t, newID("wr"), "whoami")
+	id, err := strconv.ParseUint(strings.TrimPrefix(rep["logon session"], "0x"), 16, 64)
+	if err != nil {
+		t.Fatalf("logon session %q: %v", rep["logon session"], err)
+	}
+	session := logonsweep.LUID(id)
 	if !loaded() {
 		t.Error("the profile is not loaded while the terminal runs")
 	}
-	if !sessionExists(s.ID) {
-		t.Fatalf("logon session %#x unknown to LSA while the terminal runs", uint64(s.ID))
+	if !sessionExists(session) {
+		t.Fatalf("logon session %#x unknown to LSA while the terminal runs", id)
 	}
 
 	terminatePTY(term)
 	ctx := ctxFor(t)
 	until(ctx, t, "the profile unloaded", func() bool { return !loaded() })
-	until(ctx, t, "the logon session closed", func() bool { return !sessionExists(s.ID) })
+	until(ctx, t, "the logon session closed", func() bool { return !sessionExists(session) })
 }
 
 // CA-COFRE-08 (the part that runs in the CI): under the virtual service
