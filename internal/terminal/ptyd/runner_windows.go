@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"syscall"
 	"unsafe"
 
@@ -75,6 +76,46 @@ func (s *sysAgent) kill(*ptyAgent) error {
 	}
 	return nil
 }
+
+var procIsProcessInJob = windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob")
+
+// inTree is IsProcessInJob on the Job of the terminal, on the very handle
+// whose creation time was compared with start, so a PID that was reused is
+// never taken for the process asked about (the start identity is the
+// decimal FILETIME of GetProcessTimes, as terminal.System.Identify gives).
+func (s *sysAgent) inTree(pid int, start string) (bool, error) {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+			return false, nil // no such process
+		}
+		return false, fmt.Errorf("open process %d: %w", pid, err)
+	}
+	defer func() { _ = windows.CloseHandle(h) }()
+	var c, e, k, u windows.Filetime
+	if err := windows.GetProcessTimes(h, &c, &e, &k, &u); err != nil {
+		return false, fmt.Errorf("process times of %d: %w", pid, err)
+	}
+	if start != "" && strconv.FormatUint(uint64(c.HighDateTime)<<32|uint64(c.LowDateTime), 10) != start {
+		return false, nil
+	}
+	var code uint32
+	if err := windows.GetExitCodeProcess(h, &code); err != nil {
+		return false, fmt.Errorf("exit code of %d: %w", pid, err)
+	}
+	if code != stillActive {
+		return false, nil
+	}
+	var in int32
+	r, _, callErr := procIsProcessInJob.Call(uintptr(h), uintptr(s.job), uintptr(unsafe.Pointer(&in)))
+	if r == 0 {
+		return false, fmt.Errorf("IsProcessInJob: %w", callErr)
+	}
+	return in != 0, nil
+}
+
+// stillActive is STILL_ACTIVE, the exit code of a running process.
+const stillActive = 259
 
 func endOfOutput(err error) error {
 	if errors.Is(err, os.ErrClosed) || errors.Is(err, windows.ERROR_BROKEN_PIPE) {

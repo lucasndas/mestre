@@ -205,10 +205,35 @@ func (s *Server) dispatch(ctx context.Context, p *peer, m *ptywire.Msg) {
 			return
 		}
 		p.enqueue(out{msg: &ptywire.Msg{T: ptywire.TypeOK, ID: m.ID, End: s.sess.Buffer().End()}})
+	case ptywire.TypeInJob:
+		s.handleInJob(p, m)
 	default:
 		// Additive protocol: a message from a newer engine is refused for
 		// this request only, the connection goes on.
 		p.enqueue(replyErr(m.ID, ptywire.CodeUnknownMessage, "unknown message "+m.T))
+	}
+}
+
+// handleInJob answers whether a process is in the Job Object of the
+// terminal: how the engine identifies the caller of the CLI on Windows
+// (docs/arquitetura/canal-local.md#identificação-e-versão).
+func (s *Server) handleInJob(p *peer, m *ptywire.Msg) {
+	if s.cfg.ProtoVersion < ptywire.ProtoInJob {
+		p.enqueue(replyErr(m.ID, ptywire.CodeUnknownMessage, "unknown message injob"))
+		return
+	}
+	if m.PID <= 0 {
+		p.enqueue(replyErr(m.ID, ptywire.CodeBadRequest, "injob without a pid"))
+		return
+	}
+	in, err := s.sess.InTree(m.PID, m.Start)
+	switch {
+	case errors.Is(err, ErrNoJob):
+		p.enqueue(replyErr(m.ID, ptywire.CodeNotSupported, err.Error()))
+	case err != nil:
+		p.enqueue(replyErr(m.ID, ptywire.CodeNotRunning, err.Error()))
+	default:
+		p.enqueue(out{msg: &ptywire.Msg{T: ptywire.TypeOK, ID: m.ID, InJob: &in}})
 	}
 }
 

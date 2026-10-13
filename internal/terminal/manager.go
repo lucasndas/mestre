@@ -65,10 +65,24 @@ type ManagerConfig struct {
 	Logger     *slog.Logger
 	// OnEvent receives stable, exit and lost events; it must not block.
 	OnEvent func(Event)
+	// OnStarting is called once the mestre-pty proved the secret and before
+	// the agent starts, so whoever identifies callers (the local channel)
+	// already knows the terminal when the agent makes its first call. It
+	// must not block. OnDiscarded is called with the id of a terminal that
+	// failed to start after OnStarting.
+	OnStarting  func(Starting)
+	OnDiscarded func(id string)
 	// HandshakeTimeout (default 5 s) bounds connecting to a mestre-pty.
 	HandshakeTimeout time.Duration
 	// AckDelay (default 200 ms): see DefaultAckDelay.
 	AckDelay time.Duration
+}
+
+// Starting is a terminal about to start its agent.
+type Starting struct {
+	Record Record
+	// Client is the connection to its mestre-pty.
+	Client *Client
 }
 
 // Manager creates the terminals of this machine and, when the engine comes
@@ -165,7 +179,11 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) (*Terminal, error
 		return nil, err
 	}
 	rec.PTY = sp.ProcID
+	started := false
 	abort := func(err error) (*Terminal, error) {
+		if started && m.cfg.OnDiscarded != nil {
+			m.cfg.OnDiscarded(rec.ID)
+		}
 		m.discard(rec, sp.ProcID)
 		return nil, err
 	}
@@ -175,6 +193,10 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) (*Terminal, error
 	c, err := m.connect(ctx, rec) // 4
 	if err != nil {
 		return abort(err)
+	}
+	if f := m.cfg.OnStarting; f != nil {
+		f(Starting{Record: rec, Client: c})
+		started = true
 	}
 	agent, err := c.Start(ctx, ptywire.Msg{ // 5
 		Path: spec.Path, Args: spec.Args, Env: spec.Env, Dir: spec.WorkDir, Cols: m.cfg.Cols, Rows: m.cfg.Rows,

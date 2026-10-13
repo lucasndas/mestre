@@ -62,6 +62,10 @@ func (*sysAgent) kill(a *ptyAgent) error {
 	return killSession(a.PID())
 }
 
+// inTree: there is no Job Object on Linux; the engine identifies a caller
+// by its cgroup.
+func (*sysAgent) inTree(int, string) (bool, error) { return false, ErrNoJob }
+
 // endOfOutput turns the EIO the master returns when the last holder of the
 // slave is gone into io.EOF.
 func endOfOutput(err error) error {

@@ -287,7 +287,7 @@ func (c *Client) do(ctx context.Context, req ptywire.Msg) (reply, error) {
 			return reply{}, r.err
 		}
 		if r.msg.T == ptywire.TypeError {
-			if r.msg.Code == ptywire.CodeUnknownMessage {
+			if r.msg.Code == ptywire.CodeUnknownMessage || r.msg.Code == ptywire.CodeNotSupported {
 				return reply{}, fmt.Errorf("%w: %s", ErrUnsupported, req.T)
 			}
 			return reply{}, &RemoteError{Code: r.msg.Code, Text: r.msg.Error}
@@ -393,4 +393,21 @@ func (c *Client) Ping(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 	return r.msg.End, nil
+}
+
+// InJob asks whether the process pid, whose start identity is start (as
+// System.Identify gives it), is in the Job Object of the terminal: how the
+// engine identifies who calls the CLI on Windows
+// (docs/arquitetura/canal-local.md#identificação-e-versão). It is
+// ErrUnsupported for a mestre-pty older than protocol 3 and on Linux, where
+// the terminal has no Job Object.
+func (c *Client) InJob(ctx context.Context, pid int, start string) (bool, error) {
+	if c.info.Proto < ptywire.ProtoInJob {
+		return false, fmt.Errorf("%w: injob needs protocol %d, this one speaks %d", ErrUnsupported, ptywire.ProtoInJob, c.info.Proto)
+	}
+	r, err := c.do(ctx, ptywire.Msg{T: ptywire.TypeInJob, PID: pid, Start: start})
+	if err != nil {
+		return false, err
+	}
+	return r.msg.InJob != nil && *r.msg.InJob, nil
 }
