@@ -19,6 +19,7 @@ var (
 	patToken = "github_pat_" + strings.Repeat("Z9y8", 6)
 	tgToken  = "123456789:" + strings.Repeat("AbCdEfG", 5)
 	pemBlock = "-----BEGIN " + "RSA PRIVATE KEY-----\nMIIEow\nabc\n-----END RSA " + "PRIVATE KEY-----"
+	tgDash   = "123456789:" + strings.Repeat("AbCdEfG", 4) + "AbCdEf-" // 35 chars, last char is "-"
 	jwt      = "eyJ" + "hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"
 )
 
@@ -37,6 +38,19 @@ func TestMaskKnownFormats(t *testing.T) {
 		"sk key":          {"use sk-" + "proj_abcdefghijklmnop", "use [segredo]"},
 		"password pair":   {"url?password=hunter2&x=1", "url?password=[segredo]&x=1"},
 		"token pair":      {"token=abc secret=def", "token=[segredo] secret=[segredo]"},
+		"prefixed key":    {"db_password=x access_token=y X-Api-Secret=z", "db_password=[segredo] access_token=[segredo] X-Api-Secret=[segredo]"},
+		"key at start":    {"password=hunter2", "password=[segredo]"},
+		"double quoted":   {`password="my secret" ok`, `password=[segredo] ok`},
+		"single quoted":   {"token='a b c';x", "token=[segredo];x"},
+		"unterminated":    {`secret="never closed`, "secret=[segredo]"},
+		"env style":       {"GITHUB_TOKEN=abc123def", "GITHUB_TOKEN=[segredo]"},
+		"word kept":       {"mypassword and tokenizer=1", "mypassword and tokenizer=1"},
+		"telegram dash":   {"bot " + tgDash + " next", "bot [segredo] next"},
+		"telegram at eol": {"bot " + tgDash, "bot [segredo]"},
+		"test name kept":  {"run TestMVP13_FourCompositions ok", "run TestMVP13_FourCompositions ok"},
+		"branch kept":     {"branch feat/table-lifecycle-v2Beta10 ok", "branch feat/table-lifecycle-v2Beta10 ok"},
+		"slash splits":    {"/x/Xk9qL2mN8pR4tV7wZ1yB3/y", "/x/[segredo]/y"},
+		"env key kept":    {"HOME=/home/Xk9qL2mN8pR4tV7wZ1yB3", "HOME=/home/[segredo]"},
 		"high entropy":    {"value Xk9qL2mN8pR4tV7wZ1yB3 end", "value [segredo] end"},
 		"uuid kept":       {"session 00893aaf-19fa-41d2-8238-13269b9b3ca0", "session 00893aaf-19fa-41d2-8238-13269b9b3ca0"},
 		"sha kept":        {"commit 3f786850e387550fdab836ed7e6dc881de23001b", "commit 3f786850e387550fdab836ed7e6dc881de23001b"},
@@ -71,6 +85,18 @@ func TestMaskTerminalLineStripsEscapes(t *testing.T) {
 	line := "\x1b[1;32m$\x1b[0m export GH=" + ghToken + "\x1b]0;title\x07"
 	if got := m.MaskTerminalLine(line); got != "$ export GH=[segredo]" {
 		t.Fatalf("got %q", got)
+	}
+	// tput sgr0 prints ESC ( B before ESC [ m; left behind, "(B" glues to the
+	// token and hides its word boundary.
+	for name, in := range map[string]string{
+		"sgr0":         "\x1b(B\x1b[m" + ghToken,
+		"save restore": "\x1b7\x1b8\x1b=\x1b>" + ghToken,
+		"charset 0":    "\x1b)0\x1b*B\x1b+B" + ghToken,
+		"stray esc":    "\x1b" + ghToken + "\x1b",
+	} {
+		if got := m.MaskTerminalLine(in); got != "[segredo]" {
+			t.Fatalf("%s: got %q", name, got)
+		}
 	}
 }
 

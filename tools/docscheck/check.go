@@ -177,7 +177,9 @@ func (c *checker) checkNames() {
 			return nil //nolint:nilerr // unreadable entries are skipped
 		}
 		name := d.Name()
-		if d.IsDir() && (name == ".git" || name == "node_modules") {
+		// Like the go tool, skip folders starting with "." or "_" (.git,
+		// .claude/worktrees with agent checkouts, ...) and node_modules.
+		if d.IsDir() && p != "." && (name == "node_modules" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")) {
 			return fs.SkipDir
 		}
 		if !d.IsDir() && slices.ContainsFunc(reportNames, func(r string) bool { return strings.EqualFold(r, name) }) {

@@ -54,11 +54,13 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 | `go run ./tools/codecheck` | só as regras de código fora do linter ([estilo](convencoes.md#estilo)) |
 | `golangci-lint run ./...` | só o linter |
 
-**Gancho de pré-commit:** versionado em `tools/githooks/pre-commit` (roda a rápida). Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks`. No Windows, o Git for Windows roda o gancho com o `sh` dele.
+**Gancho de pré-commit:** versionado em `tools/githooks/pre-commit` (roda a rápida). Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks`. Ele testa **o que vai no commit**, não a pasta de trabalho: grava o índice (`git checkout-index`, que vale também para `commit -a` e `commit <caminhos>`) em `<pasta do git>/precommit-snapshot` e roda a rápida lá. Nada da pasta de trabalho é guardado, trocado ou restaurado (sem `stash`), então edições não adicionadas e arquivos novos não entram no teste e nenhum trabalho se perde; a pasta tem sempre o mesmo caminho, para o cache de compilação do Go e do lint continuar quente. No Windows, o Git for Windows roda o gancho com o `sh` dele.
 
 ## CI e proteção da `main`
 
 O CI é `.github/workflows/ci.yml`: em cada PR e push na `main`, em `ubuntu-latest` e `windows-latest` em paralelo, instala o Go da `toolchain` do `go.mod` e o golangci-lint 2.14.0 (binário oficial, SHA-256 conferido) e roda `go vet ./...`, `tools/docscheck`, `tools/codecheck` e as suítes `fast` e `full` do `testrun` (o lint roda dentro delas). O cache de análise do golangci-lint fica guardado entre execuções (`actions/cache`, chave por sistema, versão do lint, `go.sum` e `.golangci.yml`), porque a primeira análise de uma dependência grande, como o `modernc.org/sqlite`, leva segundos. Ações de terceiros fixadas por SHA de commit; permissão só `contents: read`. As verificações se chamam `test (ubuntu-latest)` e `test (windows-latest)`.
+
+**Jobs da noite:** `.github/workflows/nightly.yml` (agendado às 03:23 UTC e sob demanda), com as mesmas ações fixadas por SHA e permissão `contents: read`. `quarantine` roda `testrun quarantine` nos dois sistemas; `flaky-hunt` roda `testrun fast -count 5 -shuffle` nos dois e guarda as linhas `mixed:` num artefato; `report`, o único job com `issues: write` (e sem rodar código do repositório), abre uma issue com o rótulo `flaky` por teste misto, ou comenta na já aberta, com o `gh` do runner e o `GITHUB_TOKEN`. O resumo do job traz os testes lentos e a quarentena que pode sair ([testes](../qualidade/testes.md#quarentena)).
 
 Passo do Dono, uma vez, com a conta dele (`gh auth login`): criar o ruleset da `main` que exige as duas verificações, PR com squash e proíbe apagar e forçar push. Rulesets em repositório privado pedem plano pago do GitHub.
 

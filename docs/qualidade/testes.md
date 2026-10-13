@@ -12,14 +12,14 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 
 | Suíte | Nome no executor | Quando roda | Orçamento | O que contém |
 |---|---|---|---|---|
-| **rápida** | `fast` | a cada alteração e no gancho de pré-commit | **30 s** | a grande maioria: unitários Go, unitários e de componente do painel (Vitest), [verificação de docs](verificacao-de-docs.md). Sem rede real, sem disco lento, sem processos externos |
+| **rápida** | `fast` | a cada alteração e no gancho de pré-commit | **30 s** | a grande maioria: unitários Go, unitários e de componente do painel (Vitest, a partir do M6), [verificação de docs](verificacao-de-docs.md). Sem rede real, sem disco lento, sem processos externos |
 | **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Cidadela e Torres reais na mesma máquina, como [instâncias](../arquitetura/componentes.md#instâncias) rodando como **processos comuns** (motor e Guardião de cada uma; sem instalar serviços) ou como instâncias do motor no processo do teste, banco temporário, git real, agente falso como processo num PTY real; inclui a [troca de Cidadela e a replicação](#troca-de-cidadela-e-replicação-na-completa) |
 | **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 15 critérios do MVP, testes de falha da autocura, [conformidade com os provedores reais](../provedores/conformidade.md) e tudo o que exige instalar serviços ou mexer na integração com o sistema (contas, ACLs, mDNS do sistema), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
 
 ### Como as suítes são selecionadas
 
 - **Go:** por *build tags*. Teste sem tag é da rápida. Integração usa `//go:build full` em arquivos `*_full_test.go`; ponta a ponta e falhas usam `//go:build heavy` em `*_heavy_test.go`. A completa compila com `-tags full`; a pesada com `-tags full,heavy` e roda com `-timeout 0` (sem o limite de 10 min do `go test`). Testes que dependem do Windows (ConPTY, serviço) somam `&& windows`. Código de spike tem a tag própria `spike`, fora de todas as suítes, e roda à mão ([convenções](../desenvolvimento/convencoes.md#estilo)).
-- **Painel:** Vitest. A rápida roda `vitest run` (unitários e componentes com DOM simulado e servidor WebSocket falso). A pesada usa navegador real com Playwright (proposta) para o que o MVP-5 (link de criação de App) e o MVP-11 exigem.
+- **Painel (M6):** Vitest. A rápida roda `vitest run` (unitários e componentes com DOM simulado e servidor WebSocket falso). A pesada usa navegador real com Playwright (proposta) para o que o MVP-5 (link de criação de App) e o MVP-11 exigem.
 - **Onde rodam:** rápida na máquina de quem desenvolve (e no gancho de pré-commit); rápida e completa no **CI** (`.github/workflows/ci.yml`, desde o M1), numa matriz `ubuntu-latest` e `windows-latest` em paralelo, cada uma com o orçamento de 3 min, junto do lint, da verificação de docs e da de código; as verificações `test (ubuntu-latest)` e `test (windows-latest)` são exigidas para juntar na `main` por um ruleset que o Dono cria uma vez ([CI e proteção da `main`](../desenvolvimento/ambiente.md#ci-e-proteção-da-main)); pesada no laboratório (abaixo). Como qualquer máquina pode virar Cidadela, o painel, o Telegram (falso), o banco, o cofre, a replicação e o cliente do `whisper-server` têm testes da completa que passam no CI Windows ([tudo roda nos dois sistemas](../desenvolvimento/ordem-de-implementacao.md#tudo-roda-nos-dois-sistemas)); o Whisper com o modelo real fica na pesada.
 
 ### Troca de Cidadela e replicação na completa
@@ -33,29 +33,30 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 
 Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tools/testrun fast|full|heavy|affected|quarantine`.
 
-1. Roda `go test -json -count=1` (sem cache de resultado, para medir de verdade) e `vitest run --reporter=json` em paralelo.
-2. Mede o **tempo de parede** total, do início ao fim, com o cache de compilação já aquecido.
+1. Roda `go test -json -count=1` (sem cache de resultado, para medir de verdade), com `-timeout` um pouco acima do orçamento (1,5 vez: 45 s na rápida, 4 min 30 s na completa; a pesada usa `-timeout 0`), para um teste travado morrer logo depois do orçamento. **Vitest fica para o M6:** se existir `web/package.json`, o executor não roda nada e sai com 2 e uma mensagem clara, porque ainda faltam ao Vitest a exclusão da quarentena, a ordem embaralhada e `-count`, a sinalização de lentos e `retry: 0`.
+2. Mede o **tempo de parede** total, do início ao fim, com o cache de compilação já aquecido, **inclusive a reexecução isolada do passo 4**, e imprime esse total e quanto dele foi essa reexecução.
 3. Se o total passar do orçamento, **falha** e mostra os **10 testes mais lentos** (nome, pacote, tempo).
-4. **Sinaliza** todo teste da rápida acima de **100 ms**. Antes de sinalizar, roda o teste sozinho uma vez para descontar a disputa de CPU (só mede tempo; não é nova tentativa de aprovação). A sinalização é aviso na saída e no resumo do CI; não falha a suíte.
+4. **Sinaliza** todo teste da rápida acima de **100 ms**. Antes de sinalizar, roda os candidatos sozinhos para descontar a disputa de CPU, num único `go test -run '^(A|B)$'` por pacote, os pacotes mais lentos primeiro (só mede tempo; não é nova tentativa de aprovação). Esse tempo conta no total do passo 2, mas só com o orçamento que sobra menos 10%: o `go test` que não couber é interrompido e seus testes saem sinalizados com o tempo da execução normal e `(not re-run: no budget left)`. Medir nunca reprova a suíte. A sinalização é aviso na saída e, no CI, no resumo do job (`GITHUB_STEP_SUMMARY`) e numa anotação `::warning`; não falha a suíte.
 5. Na pesada, guarda o tempo de cada execução (em `.testrun/heavy-history.json`, fora do git) e avisa quando o total passa **20%** (padrão) da mediana das últimas 7.
 6. Define `MESTRE_TEST_SUITE=fast|full|heavy` no ambiente dos testes (uso em [Regras e erros](#regras-e-erros)).
 7. Na rápida e na completa, roda também o `golangci-lint run ./...` em paralelo (na completa com `--build-tags full`), dentro do orçamento; problema do linter falha a suíte, e o binário ausente falha apontando para o [ambiente](../desenvolvimento/ambiente.md).
+8. **`-count n` e `-shuffle`** (caçada de instáveis): o orçamento e o `-timeout` valem `n` vezes; o linter e a sinalização de lentos não rodam (as execuções normais já cobrem). Falha em qualquer das `n` execuções falha o teste, e o que passa em umas e falha em outras sai numa linha `mixed: <pacote> <Teste> passed N failed M` (e no resumo do CI).
 
 ### Testes afetados
 
 `testrun affected` roda só o que as alterações podem ter quebrado:
-- **Go:** `go test ./...` **com** o cache de testes. O Go só roda de novo os pacotes cujo código, dependências, arquivos lidos ou variáveis de ambiente mudaram; o resto sai do cache. Esse é o mecanismo de "afetados" do Go, sem lista manual.
-- **Painel:** `vitest related --run <arquivos alterados>`, com a lista vinda de `git diff --name-only HEAD` mais os arquivos novos (`git ls-files --others --exclude-standard`).
+- **Go:** `go test ./...` **com** o cache de testes, pulando a quarentena (`-skip`). O Go só roda de novo os pacotes cujo código, dependências, arquivos lidos ou variáveis de ambiente mudaram; o resto sai do cache. Esse é o mecanismo de "afetados" do Go, sem lista manual.
+- **Painel (M6):** `vitest related --run <arquivos alterados>`, com a lista vinda de `git diff --name-only HEAD` mais os arquivos novos (`git ls-files --others --exclude-standard`). Até o M6 o executor recusa quando existe `web/` ([executor](#executor-testrun)).
 - **Docs:** a verificação de docs é um teste Go que lê `docs/`; o cache detecta a mudança e a roda de novo.
 - Antes do commit roda a rápida inteira; antes do merge, a completa inteira.
 
 ### Quarentena
 
-- Teste instável vai para `test/quarantine.yaml`: identificador do teste (o nome Go de nível mais alto, como no `-skip`: `test`), link da issue (rótulo `flaky`: `issue`), data de entrada (`added`, AAAA-MM-DD) e motivo (`reason`).
-- O executor pula esses testes (`go test -skip`, `exclude` do Vitest) e lista os pulados no fim.
+- Teste instável vai para `test/quarantine.yaml`: identificador do teste (o nome Go de nível mais alto, como no `-skip`: `test`), link da issue (rótulo `flaky`: `issue`), data de entrada (`added`, AAAA-MM-DD), motivo (`reason`) e, se não for da completa, a suíte (`suite`: `fast`, `full`, padrão, ou `heavy`), que dá as *build tags* do `testrun quarantine`.
+- O executor pula esses testes (`go test -skip`, também no `affected`; `exclude` do Vitest no M6) e lista os pulados no fim.
 - Prazo padrão: **14 dias**. Entrada vencida faz a completa falhar até o teste ser corrigido ou apagado.
-- Toda noite, `testrun quarantine` roda cada teste da quarentena 20 vezes; quando passa todas, o executor avisa que ele pode sair.
-- Para achar instáveis: toda noite a rápida roda com `-count=5 -shuffle=on` (`testrun fast -count 5 -shuffle`; Vitest com ordem embaralhada); resultado misto vira issue `flaky`.
+- Toda noite (`.github/workflows/nightly.yml`, [CI](../desenvolvimento/ambiente.md#ci-e-proteção-da-main)), `testrun quarantine` roda cada teste da quarentena 20 vezes, com as *build tags* da suíte dele; quando passa todas, o executor avisa (anotação e resumo do job) que ele pode sair.
+- Para achar instáveis: toda noite, nos dois sistemas, a rápida roda com `-count=5 -shuffle=on` (`testrun fast -count 5 -shuffle`; o Vitest, no M6); resultado misto abre (ou comenta) uma issue `flaky` por teste, num job à parte, o único com permissão de escrever issues.
 
 ### Mapa do MVP para a suíte pesada
 
@@ -100,8 +101,8 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 
 ## Regras e erros
 
-- **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint; [divisão das regras](../desenvolvimento/convencoes.md#estilo)) recusa `time.Sleep`, `time.Now`, `time.After`, `time.NewTimer`, `time.NewTicker`, `time.AfterFunc` e `time.Since` fora do pacote do relógio. No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
-- **Rápida sem processos e sem rede:** com `MESTRE_TEST_SUITE=fast`, a camada única que inicia processos e a que abre conexões recusam com erro claro ("processo externo na suíte rápida: use o PTY falso"). Na rápida, o agente falso, o `mestre hook` e a CLI rodam dentro do processo do teste pelo lançador em memória ([dublês](dubles.md#agente-falso-fakeagent)). Teste que precisa de processo real é da completa.
+- **Proibido `sleep` em teste.** Código que depende de tempo recebe o relógio injetável ([dubles.md](dubles.md)). O linter (`forbidigo` no golangci-lint) recusa as funções de tempo fora do pacote do relógio; a lista única está nas [convenções](../desenvolvimento/convencoes.md#estilo). No painel, `vi.useFakeTimers()`; nada de esperar com `setTimeout`.
+- **Rápida sem processos e sem rede:** com `MESTRE_TEST_SUITE=fast`, a camada única que inicia processos e a que abre conexões recusam com erro claro ("processo externo na suíte rápida: use o PTY falso"). Na rápida, o agente falso, o `mestre hook` e a CLI rodam dentro do processo do teste pelo lançador em memória ([dublês](dubles.md#agente-falso-fakeagent)). Teste que precisa de processo real é da completa. O guarda não depende de boa vontade: `os/exec` (`depguard`), `net.Dial*`/`Listen*` e `os.StartProcess` (`forbidigo`) só compilam nas camadas designadas ([convenções](../desenvolvimento/convencoes.md#estilo)), cada uma com o guarda; o guarda de rede da camada `transport/` chega com ela, no M2.
 - **Git:** o motor usa o binário `git` do sistema (2.32 ou mais novo) só pelo wrapper `internal/gitx` ([convenções](../desenvolvimento/convencoes.md)). Na rápida, `gitx` é o git falso do `testkit`; critério que precisa de git real (bundle, worktree, `info/exclude`, commit) é da completa.
 - **Serviços do sistema:** a completa nunca instala serviços nem muda contas, ACLs ou o mDNS do sistema; critério que precisa disso é da pesada e cita `(MVP-1)` ou `(MVP-13)`.
 - **Paralelo e isolado:** todo teste Go chama `t.Parallel()` (linter `paralleltest`). Cada teste usa `t.TempDir()` para pastas e banco SQLite próprios, porta `127.0.0.1:0` quando houver rede real, e nenhum estado global. `t.Setenv` e `t.Chdir` não combinam com `t.Parallel()`: passe a configuração por parâmetro.
@@ -117,9 +118,11 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 - **CA-TESTES-03** · *rápida* — **Dado** `test/quarantine.yaml` com um teste dentro do prazo e outro vencido, **quando** o `testrun full` monta a execução, **então** os dois são pulados e listados, e a suíte falha citando o vencido.
 - **CA-TESTES-04** · *rápida* — **Dado** um teste que falha, **quando** o `testrun` roda, **então** ele executa esse teste uma única vez e informa a falha.
 - **CA-TESTES-05** · *rápida* — **Dado** `MESTRE_TEST_SUITE=fast`, **quando** o código pede para iniciar um processo externo, **então** recebe o erro de processo externo na suíte rápida.
-- **CA-TESTES-06** · *rápida* — **Dado** arquivos alterados do painel, **quando** o `testrun affected` roda, **então** ele chama `vitest related` só com esses arquivos.
+- **CA-TESTES-06** · *rápida* — **Dado** a pasta `web/` com `package.json`, **quando** o `testrun` roda (suítes ou `affected`), **então** ele não executa nada, sai com código 2 e a mensagem cita o M6; o `vitest related` do `affected` volta com o Vitest, no M6.
 - **CA-TESTES-07** · *rápida* — **Dado** sete execuções anteriores da pesada com mediana de 40 min, **quando** uma nova leva 50 min, **então** o `testrun heavy` avisa o aumento.
-- **CA-TESTES-08** · *rápida* — **Dado** o `golangci-lint` fora do `PATH`, **quando** o `testrun fast` ou o `full` roda, **então** a suíte falha com a mensagem que aponta para `docs/desenvolvimento/ambiente.md`; **dado** o linter com problemas, **então** a suíte falha mostrando a saída dele.
+- **CA-TESTES-08** · *rápida* — **Dado** o `golangci-lint` fora do `PATH`, **quando** o `testrun fast` ou o `full` roda, **então** a suíte falha com a mensagem que aponta para `docs/desenvolvimento/ambiente.md`; **dado** o linter com problemas, **então** a suíte falha mostrando a saída dele (nos dois casos, na rápida e na completa).
+- **CA-TESTES-09** · *rápida* — **Dado** `testrun fast -count 5 -shuffle` e um teste que passa em 3 execuções e falha em 2, **quando** o `testrun` termina, **então** ele falha, nomeia o teste numa linha `mixed:` e o orçamento vale 5 vezes o da rápida.
+- **CA-TESTES-10** · *rápida* — **Dado** uma execução da rápida de 20 s e um teste lento, **quando** o `testrun` o reexecuta sozinho, **então** o total impresso inclui a reexecução, que só usa o orçamento que sobra menos 10% (o resto vira `not re-run`) e não reprova a suíte; **dado** uma execução de 31 s, **então** falha, sem reexecutar nada.
 
 ## Depende de
 

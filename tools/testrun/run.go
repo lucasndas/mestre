@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -39,7 +37,7 @@ type Suite struct {
 	Budget   time.Duration // 0: no hard limit (measured)
 	FlagSlow bool
 	Lint     bool   // also run golangci-lint, in parallel with the tests
-	Timeout  string // -timeout of go test; "" keeps the go default (10m)
+	Timeout  string // -timeout of go test; "" derives it from Budget; "0" is none
 }
 
 // Suites by executor name.
@@ -57,7 +55,15 @@ const (
 	envSuite     = "MESTRE_TEST_SUITE"
 	// LintDoc says how to install the pinned golangci-lint.
 	LintDoc = "docs/desenvolvimento/ambiente.md"
+	// The go test -timeout of a budgeted suite is its budget times 3/2, so
+	// a hung test dies soon after the budget.
+	timeoutNum, timeoutDen = 3, 2
 )
+
+// VitestMsg is printed when web/ exists: the runner does not drive Vitest yet.
+const VitestMsg = "testrun: web/ found, but Vitest support is deferred to M6 (it still lacks the quarantine exclude, " +
+	"shuffle and count, the slow-test flag and retry: 0; docs/qualidade/testes.md#executor-testrun). " +
+	"Run the panel tests by hand until then."
 
 // Runner runs the suites.
 type Runner struct {
@@ -68,6 +74,11 @@ type Runner struct {
 	WriteFile func(path string, data []byte) error // relative to the root
 	Count     int                                  // -count for go test (default 1)
 	Shuffle   bool
+
+	// Getenv reads the CI variables (GITHUB_STEP_SUMMARY); nil reads none.
+	Getenv func(string) string
+	// AppendFile appends to an absolute file path (the CI job summary).
+	AppendFile func(path string, data []byte) error
 }
 
 func (r *Runner) printf(format string, args ...any) { fmt.Fprintf(r.Out, format, args...) }
@@ -77,17 +88,37 @@ func (r *Runner) hasWeb() bool {
 	return err == nil
 }
 
+func (r *Runner) count() int {
+	if r.Count < 1 {
+		return 1
+	}
+	return r.Count
+}
+
+// goTimeout is the -timeout for runs of the suite: none for the heavy one, a
+// little above the budget of that many runs for the others.
+func goTimeout(s Suite, runs int) string {
+	switch {
+	case s.Timeout != "":
+		return s.Timeout
+	case s.Budget > 0:
+		return (s.Budget * time.Duration(runs) * timeoutNum / timeoutDen).String()
+	}
+	return ""
+}
+
 // RunSuite runs fast, full or heavy and returns the exit code.
 func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
+	if r.hasWeb() {
+		r.printf("%s\n", VitestMsg)
+		return 2
+	}
 	quarantine, err := loadQuarantine(r.FS)
 	if err != nil {
 		r.printf("testrun: %v\n", err)
 		return 2
 	}
-	count := r.Count
-	if count == 0 {
-		count = 1
-	}
+	count := r.count()
 	args := []string{"test", "-json", fmt.Sprintf("-count=%d", count)}
 	if r.Shuffle {
 		args = append(args, "-shuffle=on")
@@ -95,8 +126,8 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	if s.Tags != "" {
 		args = append(args, "-tags", s.Tags)
 	}
-	if s.Timeout != "" {
-		args = append(args, "-timeout", s.Timeout)
+	if to := goTimeout(s, count); to != "" {
+		args = append(args, "-timeout", to)
 	}
 	if p := skipPattern(quarantine); p != "" {
 		args = append(args, "-skip", p)
@@ -105,34 +136,43 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	goCmd := Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}
 
 	start := r.Clock.Now()
-	lintDone := r.startLint(ctx, s)
-	goOut, goCode, goErr, webOut, webCode, webErr := r.runParallel(ctx, goCmd, r.vitestRun())
+	lintSuite := s
+	if count > 1 {
+		lintSuite.Lint = false // the linter result does not change from run to run
+	}
+	lintDone := r.startLint(ctx, lintSuite)
+	var b bytes.Buffer
+	goCode, goErr := r.Exec.Run(ctx, goCmd, &b)
 	lintFailed := r.reportLint(<-lintDone)
-	wall := clock.Since(r.Clock, start)
 
-	rep := parseEvents(goOut)
-	addVitest(rep, webOut)
+	rep := parseEvents(b.Bytes())
 	code := 0
 	if r.printFailures(rep, goCode, goErr) {
-		code = 1
-	}
-	if webErr != nil || webCode != 0 {
-		r.printf("FAIL vitest (exit %d) %v\n", webCode, errOrEmpty(webErr))
 		code = 1
 	}
 	if lintFailed {
 		code = 1
 	}
+	r.reportMixed(rep, count)
+	budget := s.Budget * time.Duration(count)
+	// The slow-test timing runs the tests again, alone. That time is part of
+	// the wall time the budget checks, but only what the budget has left
+	// (less a margin) may be spent on it: the measuring never makes a suite
+	// fail. With -count > 1 the elapsed times mix runs, so nothing is flagged.
+	var slowWall time.Duration
+	if s.FlagSlow && count == 1 {
+		t0 := r.Clock.Now()
+		r.flagSlow(ctx, s, rep, rerunAllowance(budget, clock.Since(r.Clock, start)))
+		slowWall = clock.Since(r.Clock, t0)
+	}
+	wall := clock.Since(r.Clock, start)
 	tests := len(rep.leaves())
-	if s.Budget > 0 && wall > s.Budget {
-		r.printf("FAIL %s suite took %v, budget %v. The %d slowest tests:\n", s.Name, wall.Round(time.Millisecond), s.Budget, slowestShown)
+	if budget > 0 && wall > budget {
+		r.printf("FAIL %s suite took %v, budget %v. The %d slowest tests:\n", s.Name, wall.Round(time.Millisecond), budget, slowestShown)
 		for _, t := range rep.slowest(slowestShown) {
 			r.printf("  %8v  %s  %s\n", t.Elapsed.Round(time.Millisecond), t.Package, t.Test)
 		}
 		code = 1
-	}
-	if s.FlagSlow {
-		r.flagSlow(ctx, s, rep)
 	}
 	if s.Name == "heavy" {
 		r.recordHeavy(start, wall)
@@ -144,12 +184,46 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	if code != 0 {
 		status = "FAIL"
 	}
-	budget := "no limit, measured"
-	if s.Budget > 0 {
-		budget = "budget " + s.Budget.String()
+	limit := "no limit, measured"
+	if budget > 0 {
+		limit = "budget " + budget.String()
 	}
-	r.printf("%s %s: %d tests in %v (%s)\n", status, s.Name, tests, wall.Round(time.Millisecond), budget)
+	timing := ""
+	if slowWall.Round(time.Millisecond) > 0 {
+		timing = fmt.Sprintf(", %v of it timing slow tests alone", slowWall.Round(time.Millisecond))
+	}
+	r.printf("%s %s: %d tests in %v (%s%s)\n", status, s.Name, tests, wall.Round(time.Millisecond), limit, timing)
 	return code
+}
+
+// rerunAllowance is the time the solo re-runs may take: what is left of the
+// budget minus a tenth of it, so the process teardown cannot push the suite
+// over. A suite without budget has no limit (-1).
+func rerunAllowance(budget, used time.Duration) time.Duration {
+	if budget <= 0 {
+		return -1
+	}
+	return max(budget-used-budget/10, 0)
+}
+
+// reportMixed names every test that passed in some runs and failed in others
+// (a flaky one), which only happens with -count > 1. Each line starts with
+// "mixed: " so the nightly job can open one issue per test.
+func (r *Runner) reportMixed(rep *report, count int) {
+	mixed := rep.mixedTests()
+	if len(mixed) == 0 {
+		return
+	}
+	r.printf("flaky: %d test(s) passed and failed in the same %d runs:\n", len(mixed), count)
+	var md strings.Builder
+	md.WriteString("### Flaky tests (mixed results)\n\n| Package | Test | Passed | Failed |\n|---|---|---|---|\n")
+	names := make([]string, len(mixed))
+	for i, t := range mixed {
+		r.printf("mixed: %s %s passed %d failed %d\n", t.Package, t.Test, t.Pass, t.Fail)
+		fmt.Fprintf(&md, "| %s | %s | %d | %d |\n", t.Package, t.Test, t.Pass, t.Fail)
+		names[i] = t.Test
+	}
+	r.ciReport("warning", "Flaky tests", fmt.Sprintf("%d test(s) with mixed results: %s", len(mixed), strings.Join(names, ", ")), md.String())
 }
 
 func errOrEmpty(err error) string {
@@ -204,32 +278,6 @@ func (r *Runner) reportLint(l lintResult) bool {
 	return false
 }
 
-// vitestRun is the panel command of the suites, or nil without web/.
-func (r *Runner) vitestRun() *Cmd {
-	if !r.hasWeb() {
-		return nil
-	}
-	return &Cmd{Name: "npx", Args: []string{"vitest", "run", "--reporter=json"}, Dir: "web"}
-}
-
-func (r *Runner) runParallel(ctx context.Context, goCmd Cmd, web *Cmd) (goOut []byte, goCode int, goErr error, webOut []byte, webCode int, webErr error) {
-	var wg sync.WaitGroup
-	if web != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			var b bytes.Buffer
-			webCode, webErr = r.Exec.Run(ctx, *web, &b)
-			webOut = b.Bytes()
-		}()
-	}
-	var b bytes.Buffer
-	goCode, goErr = r.Exec.Run(ctx, goCmd, &b)
-	goOut = b.Bytes()
-	wg.Wait()
-	return
-}
-
 // printFailures prints every failed test once, with its output; it never
 // runs a failed test again (docs/qualidade/testes.md#regras-e-erros).
 func (r *Runner) printFailures(rep *report, code int, err error) bool {
@@ -252,45 +300,6 @@ func (r *Runner) printFailures(rep *report, code int, err error) bool {
 		return true
 	}
 	return len(failed) > 0 || code != 0
-}
-
-// flagSlow warns about every passing fast-suite test above 100 ms, after
-// timing it alone once to discount CPU contention. It only measures; a
-// failure here does not change the suite result.
-func (r *Runner) flagSlow(ctx context.Context, s Suite, rep *report) {
-	var flagged []string
-	for _, t := range rep.leaves() {
-		if t.Action != "pass" || t.Elapsed <= slowTest || t.Package == "vitest" {
-			continue
-		}
-		alone := r.timeAlone(ctx, s, t)
-		if alone > slowTest {
-			flagged = append(flagged, fmt.Sprintf("  %8v  %s  %s", alone.Round(time.Millisecond), t.Package, t.Test))
-		}
-	}
-	if len(flagged) > 0 {
-		r.printf("warning: %d fast-suite test(s) above %v when run alone:\n%s\n", len(flagged), slowTest, strings.Join(flagged, "\n"))
-	}
-}
-
-func (r *Runner) timeAlone(ctx context.Context, s Suite, t *result) time.Duration {
-	parts := strings.Split(t.Test, "/")
-	for i, p := range parts {
-		parts[i] = "^" + regexp.QuoteMeta(p) + "$"
-	}
-	args := []string{"test", "-json", "-count=1", "-run", strings.Join(parts, "/")}
-	if s.Tags != "" {
-		args = append(args, "-tags", s.Tags)
-	}
-	args = append(args, t.Package)
-	var b bytes.Buffer
-	if _, err := r.Exec.Run(ctx, Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}, &b); err != nil {
-		return t.Elapsed
-	}
-	if again, ok := parseEvents(b.Bytes()).tests[t.id()]; ok && again.Action == "pass" {
-		return again.Elapsed
-	}
-	return t.Elapsed
 }
 
 // reportQuarantine lists the skipped tests; an expired entry fails the full
@@ -335,99 +344,41 @@ func (r *Runner) recordHeavy(start time.Time, wall time.Duration) {
 	}
 }
 
-// addVitest merges the Vitest JSON report into rep, under package "vitest".
-func addVitest(rep *report, out []byte) {
-	if len(out) == 0 {
-		return
-	}
-	var v struct {
-		TestResults []struct {
-			Name             string `json:"name"`
-			AssertionResults []struct {
-				FullName string  `json:"fullName"`
-				Status   string  `json:"status"`
-				Duration float64 `json:"duration"` // ms
-			} `json:"assertionResults"`
-		} `json:"testResults"`
-	}
-	if json.Unmarshal(out, &v) != nil {
-		return
-	}
-	for _, f := range v.TestResults {
-		for _, a := range f.AssertionResults {
-			res := rep.get("vitest", f.Name+" > "+a.FullName)
-			res.Elapsed = time.Duration(a.Duration * float64(time.Millisecond))
-			switch a.Status {
-			case "passed":
-				res.Action = "pass"
-			case "failed":
-				res.Action = "fail"
-			default:
-				res.Action = "skip"
-			}
-		}
-	}
-}
-
 // Affected runs only what the changes may have broken
-// (docs/qualidade/testes.md#testes-afetados).
+// (docs/qualidade/testes.md#testes-afetados). It honours the quarantine.
 func (r *Runner) Affected(ctx context.Context) int {
-	goCmd := Cmd{Name: "go", Args: []string{"test", "-json", "./..."}, Env: []string{envSuite + "=fast"}}
-	var web *Cmd
 	if r.hasWeb() {
-		files, err := r.changedFiles(ctx)
-		if err != nil {
-			r.printf("testrun: %v\n", err)
-			return 2
-		}
-		var related []string
-		for _, f := range files {
-			if rel, ok := strings.CutPrefix(f, "web/"); ok {
-				related = append(related, rel)
-			}
-		}
-		if len(related) > 0 {
-			web = &Cmd{Name: "npx", Args: append([]string{"vitest", "related", "--run", "--reporter=json"}, related...), Dir: "web"}
-		}
+		r.printf("%s\n", VitestMsg)
+		return 2
 	}
+	quarantine, err := loadQuarantine(r.FS)
+	if err != nil {
+		r.printf("testrun: %v\n", err)
+		return 2
+	}
+	args := []string{"test", "-json", "-timeout", goTimeout(Suites["fast"], 1)}
+	if p := skipPattern(quarantine); p != "" {
+		args = append(args, "-skip", p)
+	}
+	args = append(args, "./...")
+	goCmd := Cmd{Name: "go", Args: args, Env: []string{envSuite + "=fast"}}
 	start := r.Clock.Now()
-	goOut, goCode, goErr, webOut, webCode, webErr := r.runParallel(ctx, goCmd, web)
-	rep := parseEvents(goOut)
-	addVitest(rep, webOut)
+	var b bytes.Buffer
+	goCode, goErr := r.Exec.Run(ctx, goCmd, &b)
+	rep := parseEvents(b.Bytes())
 	code := 0
 	if r.printFailures(rep, goCode, goErr) {
 		code = 1
 	}
-	if webErr != nil || webCode != 0 {
-		r.printf("FAIL vitest related (exit %d) %v\n", webCode, errOrEmpty(webErr))
-		code = 1
-	}
 	r.printf("affected: %d tests in %v (cached packages are not run again)\n", len(rep.leaves()), clock.Since(r.Clock, start).Round(time.Millisecond))
+	if len(quarantine) > 0 {
+		r.printf("skipped (quarantine, %s): %s\n", QuarantinePath, strings.Join(quarantineNames(quarantine), ", "))
+	}
 	return code
 }
 
-// changedFiles lists modified and new files, relative to the root.
-func (r *Runner) changedFiles(ctx context.Context) ([]string, error) {
-	var files []string
-	for _, c := range []Cmd{
-		{Name: "git", Args: []string{"diff", "--name-only", "HEAD"}},
-		{Name: "git", Args: []string{"ls-files", "--others", "--exclude-standard"}},
-	} {
-		var b bytes.Buffer
-		code, err := r.Exec.Run(ctx, c, &b)
-		if err != nil || code != 0 {
-			return nil, fmt.Errorf("%s: exit %d %v", c, code, errOrEmpty(err))
-		}
-		for _, l := range strings.Split(b.String(), "\n") {
-			if l = strings.TrimSpace(l); l != "" {
-				files = append(files, l)
-			}
-		}
-	}
-	return files, nil
-}
-
-// Quarantine runs each quarantined test 20 times and says which may leave.
+// Quarantine runs each quarantined test 20 times, with the build tags of its
+// suite, and says which may leave.
 func (r *Runner) Quarantine(ctx context.Context) int {
 	q, err := loadQuarantine(r.FS)
 	if err != nil {
@@ -438,19 +389,39 @@ func (r *Runner) Quarantine(ctx context.Context) int {
 		r.printf("quarantine is empty\n")
 		return 0
 	}
+	var md strings.Builder
+	md.WriteString("### Quarantine (20 runs each)\n\n| Test | Result |\n|---|---|\n")
+	leaving := 0
 	for _, e := range q {
+		s := Suites[e.suiteName()]
+		args := []string{"test", "-json", fmt.Sprintf("-count=%d", quarantineN)}
+		if s.Tags != "" {
+			args = append(args, "-tags", s.Tags)
+		}
+		// The timeout covers all 20 runs of a test of that suite.
+		if to := goTimeout(s, quarantineN); to != "" {
+			args = append(args, "-timeout", to)
+		}
+		args = append(args, "-run", "^"+e.Test+"$", "./...")
 		var b bytes.Buffer
-		c := Cmd{Name: "go", Args: []string{"test", "-json", fmt.Sprintf("-count=%d", quarantineN), "-tags", "full", "-run", "^" + e.Test + "$", "./..."}, Env: []string{envSuite + "=full"}}
-		if _, err := r.Exec.Run(ctx, c, &b); err != nil {
+		if _, err := r.Exec.Run(ctx, Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}, &b); err != nil {
 			r.printf("%s: %v\n", e.Test, err)
 			continue
 		}
 		pass, fail := countRuns(b.Bytes(), e.Test)
 		if fail == 0 && pass >= quarantineN {
 			r.printf("%s passed %d/%d: it can leave the quarantine\n", e.Test, pass, quarantineN)
+			fmt.Fprintf(&md, "| %s | passed %d/%d: can leave the quarantine (%s) |\n", e.Test, pass, quarantineN, e.Issue)
+			leaving++
 		} else {
 			r.printf("%s passed %d, failed %d: keep it in quarantine\n", e.Test, pass, fail)
+			fmt.Fprintf(&md, "| %s | passed %d, failed %d: keep |\n", e.Test, pass, fail)
 		}
+	}
+	if leaving > 0 {
+		r.ciReport("notice", "Quarantine", fmt.Sprintf("%d quarantined test(s) passed every run and can leave", leaving), md.String())
+	} else {
+		r.ciReport("", "", "", md.String())
 	}
 	return 0
 }
