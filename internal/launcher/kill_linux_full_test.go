@@ -76,8 +76,8 @@ func sessionMembers(t *testing.T, sid int) int {
 // another account than the agents, cannot signal their processes, so the
 // launcher ends the mestre-pty and the session of the agent, by identity.
 // Here the account is the same one (the test has no CAP_SETUID), so the
-// switch of the user ID of the thread is not exercised; that part is the
-// checklist's (LIN-11 and the installation, M7). What is: the identity of
+// switch of the user ID of the thread is not exercised; that part is in the
+// real-account tests (internal/realaccount). What is: the identity of
 // the mestre-pty, the account filter and the sessions.
 func TestTheLauncherEndsATerminalWithoutACgroupByIdentity(t *testing.T) {
 	t.Parallel()

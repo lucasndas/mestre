@@ -1,6 +1,8 @@
 # The unit of the mestre-launcher of an instance (docs/arquitetura/componentes.md,
 # "Iniciador"). The installer (M7) installs it; this is the text it carries.
-# Not exercised by any suite: Delegate and the capabilities need the real systemd.
+# Exercised by the real-account tests (docs/qualidade/contas-reais.md): a drop-in
+# swaps only the account and the binary, so Delegate, KillMode and the
+# capabilities below are the ones that run.
 [Unit]
 Description=Mestre launcher (%i)
 
@@ -26,7 +28,8 @@ RuntimeDirectory=mestre/%i
 RuntimeDirectoryMode=0750
 RuntimeDirectoryPreserve=yes
 # CAP_SETUID and CAP_SETGID only to switch to mestre-agente in the child; the
-# launcher empties the ambient set at start, so what it starts has none.
+# launcher empties the ambient and the inheritable sets at start, so what it
+# starts has none.
 AmbientCapabilities=CAP_SETUID CAP_SETGID
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID
 Restart=always

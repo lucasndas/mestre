@@ -176,6 +176,26 @@ func TestDropAmbient(t *testing.T) {
 	}
 }
 
+// The inheritable set goes too (the real thing, with systemd giving the two
+// capabilities, is checked by the real-account tests, CA-TERM-07).
+func TestDropInheritable(t *testing.T) {
+	t.Parallel()
+	if err := launcher.DropInheritable(); errors.Is(err, syscall.ENOTSUP) {
+		t.Skip("this test binary uses cgo, where the Go runtime cannot change a capability for all threads; the release is built with CGO_ENABLED=0")
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(l, "CapInh:") && strings.TrimSpace(strings.TrimPrefix(l, "CapInh:")) != "0000000000000000" {
+			t.Errorf("inheritable capabilities left: %s", l)
+		}
+	}
+}
+
 func TestLookupAgent(t *testing.T) {
 	t.Parallel()
 	if c, err := launcher.LookupAgent(""); c != nil || err != nil {

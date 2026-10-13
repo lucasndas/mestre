@@ -40,6 +40,7 @@ linters:
             - "!**/internal/launcher/**"
             - "!**/internal/winsvc/**"
             - "!**/internal/testkit/**"
+            - "!**/internal/realaccount/**"
             - "!**/cmd/**"
             - "!**/tools/**"
             - "!**/*_full_test.go"
@@ -85,7 +86,7 @@ linters:
           - forbidigo
       # Dialing and listening: the layers that own connections (transport/
       # joins them in M2).
-      - path: ^(internal/(terminal|launcher|winsvc|localchan|testkit)|cmd|tools)/
+      - path: ^(internal/(terminal|launcher|winsvc|localchan|testkit|realaccount)|cmd|tools)/
         text: designated layers
         linters:
           - forbidigo

@@ -28,7 +28,7 @@ import (
 // which plays the engine and the agent), and starts the real mestre-pty,
 // built here, from a folder of installed binaries. What can only be
 // checked as a service of the system (the accounts of the installation,
-// the logon of mestre-agente) is the heavy suite's.
+// the logon of mestre-agente) is the real-account tests'.
 
 const ptyVersion = "1.0.0"
 

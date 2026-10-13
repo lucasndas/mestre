@@ -127,7 +127,7 @@ func applied(t *testing.T, path string) (acl *windows.ACL, protected bool) {
 
 // The ACLs are applied for real, with the user of the test in every role,
 // and the socket still works for it. Two accounts cannot be told apart
-// without a second logon (heavy suite).
+// without a second logon (the real-account tests).
 func TestTheACLsAreApplied(t *testing.T) {
 	t.Parallel()
 	self, err := currentUserSID()

@@ -91,6 +91,9 @@ type Options struct {
 	// returns true are ended. The tests use it to run the real enumeration
 	// and termination on a throwaway process, in a session they cannot own.
 	Only func(pid uint32) bool
+	// terminate replaces TerminateProcess (Windows tests of a process that is
+	// already ending, which no test can arrange for real).
+	terminate func(handle uintptr) error
 }
 
 // MaxRounds bounds the rounds of a sweep: each round ends what the previous
