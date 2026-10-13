@@ -11,7 +11,9 @@ $Results = Join-Path $Shared 'resultados'
 New-Item -ItemType Directory -Force -Path $Results | Out-Null
 Start-Transcript -Path (Join-Path $Results 'setup.log') -Append | Out-Null
 
-$Downloads = 'C:\downloads'
+# Installers are cached in the shared folder, so the next openings skip the
+# download (the Sandbox itself starts clean every time).
+$Downloads = Join-Path $Shared 'cache'
 New-Item -ItemType Directory -Force -Path $Downloads | Out-Null
 
 # Pinned versions and checksums (update together).
@@ -26,6 +28,10 @@ $Branch     = 'spike/m1-windows-2'
 $Prompt     = 'tools/winsandbox/rodada-2-prompt.md'
 
 function Get-Checked([string]$Url, [string]$Path, [string]$Sha256) {
+    if ((Test-Path $Path) -and ((Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant() -eq $Sha256)) {
+        Write-Host "Usando o cache: $Path"
+        return
+    }
     Write-Host "Baixando $Url"
     Invoke-WebRequest -Uri $Url -OutFile $Path -UseBasicParsing
     $actual = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant()
