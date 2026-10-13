@@ -1,6 +1,6 @@
 # Roteamento de mensagens
 
-> **Assunto:** para qual workspace vai cada mensagem do Telegram, o cabeçalho das mensagens do bot e as mensagens "Sistema" · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** para qual workspace vai cada mensagem do Telegram, o cabeçalho das mensagens do bot e as mensagens "Sistema" · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -70,7 +70,7 @@ flowchart TD
 
 ### Mensagens "Sistema"
 
-- **O que é "Sistema":** alertas que não pertencem a um workspace, como autocura de um nó, checklist da máquina, tentativas não autorizadas, pareamento e `/travar`.
+- **O que é "Sistema":** alertas que não pertencem a um workspace, como autocura de uma máquina, checklist da máquina, tentativas não autorizadas, pareamento de usuário, entrada de máquina na Guilda, troca de Cidadela e `/travar`.
 - **Quem responde:** as respostas a essas mensagens são tratadas **pelo próprio motor**, não pelo Grão-Mestre:
   - botões (por exemplo, a aprovação de uma ação de cura, [camadas](../autocura/camadas.md)) são executados pelo motor;
   - texto livre respondendo a uma mensagem "Sistema" recebe a lista de ações possíveis naquela mensagem.

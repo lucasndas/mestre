@@ -1,10 +1,10 @@
 # ADR 0016: Transcrição local com whisper.cpp
 
-> **Assunto:** por que a transcrição de áudio usa o `whisper-server` do whisper.cpp como processo auxiliar · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** por que a transcrição de áudio usa o `whisper-server` do whisper.cpp como processo auxiliar · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 
@@ -12,7 +12,7 @@ Aceita, 2026-10-12.
 - **A spec:** sugeria faster-whisper (CTranslate2).
 - **A experiência do usuário:** ele já roda o large-v3-turbo **por CPU** e funciona.
 - **O motor:** é Go sem CGO ([ADR 0001](0001-stack-go.md)).
-- **As máquinas do usuário:** não há nó com GPU; a transcrição roda no Core.
+- **As máquinas do usuário:** não há máquina com GPU; a transcrição roda na Cidadela, que pode ser Linux ou Windows.
 - **O modelo turbo:** reduz o decodificador de 32 para 4 camadas (809M contra 1,55B de parâmetros).
 
 ## Opções consideradas
@@ -48,8 +48,8 @@ Aceita, 2026-10-12.
   - `large-v3-turbo` quantizado, **q5_0 ou q8_0**, escolhido por benchmark na máquina durante a instalação.
   - O processo fica com o modelo carregado.
 - **Onde roda:**
-  - No nó com a capacidade de transcrição (`transcricao: true`); se houver mais de um, o que anuncia `gpu: true`.
-  - **Padrão: o Core, por CPU.**
+  - Na máquina com `transcricao: true` na [ficha da máquina](../guilda/ficha-da-maquina.md); se houver mais de uma, a que tem GPU.
+  - **Padrão: a Cidadela, por CPU.** Por isso o `whisper-server` e o `ffmpeg` precisam funcionar nos dois sistemas.
 - **Onde estão os detalhes:**
   - Comportamento, idioma e falhas: [anexos e transcrição](../telegram/anexos-e-transcricao.md).
   - Download do modelo e do binário: [instalação e atualização](../plataforma/instalacao-e-atualizacao.md).

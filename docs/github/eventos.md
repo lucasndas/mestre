@@ -1,6 +1,6 @@
 # Eventos do GitHub
 
-> **Assunto:** consulta periódica, condicional e adaptativa à API do GitHub, transformada em eventos na caixa de entrada · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** consulta periódica, condicional e adaptativa à API do GitHub, transformada em eventos na caixa de entrada · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Saber o que mudou no GitHub (comentário, revisão, CI, mudança de issue ou PR)
 
 ### Quem consulta
 
-O motor do Core, um laço por workspace, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API.
+O motor da Cidadela, um laço por workspace, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API. Só a Cidadela consulta; depois de uma troca de Cidadela, a nova retoma os laços pelo estado do banco replicado (cursores e ETags; [replicação](../guilda/replicacao.md)).
 
 ### Intervalo adaptativo (padrão, configurável por workspace)
 
@@ -87,7 +87,7 @@ Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerc
 
 - **CA-GH-EV-01** · *rápida* — **Dado** um `ETag` guardado para a lista de comentários, **quando** o motor consulta de novo, **então** a requisição leva `If-None-Match` com esse valor, e uma resposta `304` não gera evento.
 - **CA-GH-EV-02** · *rápida* — **Dado** um workspace "ativo" sem mudanças, **quando** o relógio falso avança 5 minutos, **então** o intervalo passa a 2 minutos; e uma mudança vista volta o intervalo a 30 s.
-- **CA-GH-EV-03** · *rápida* — **Dado** um comentário já processado, **quando** o Core reinicia e a primeira consulta devolve `200` com o mesmo comentário, **então** nenhum evento novo é criado.
+- **CA-GH-EV-03** · *rápida* — **Dado** um comentário já processado, **quando** a Cidadela reinicia e a primeira consulta devolve `200` com o mesmo comentário, **então** nenhum evento novo é criado.
 - **CA-GH-EV-04** · *rápida* — **Dado** um comentário criado pelo próprio motor, **quando** ele aparece na consulta, **então** não vira evento.
 - **CA-GH-EV-05** · *rápida* — **Dado** uma revisão e o fim do CI do PR da mesa A no mesmo ciclo, **quando** o motor entrega, **então** a caixa de entrada do Grão-Mestre recebe uma única mensagem citando a mesa A e os dois eventos.
 - **CA-GH-EV-06** · *rápida* — **Dado** uma resposta 429 com `retry-after: 60`, **quando** o motor processa, **então** a próxima consulta daquele workspace só acontece após 60 s no relógio falso.

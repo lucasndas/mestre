@@ -1,32 +1,34 @@
 # Persistência
 
-> **Assunto:** SQLite por nó, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** banco principal na Cidadela, réplica nas Torres e banco local de máquina, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Princípios
 
-- Cada motor tem **um banco SQLite local**, em modo WAL, com migrações versionadas: o motor do Core tem o banco do Core, e todo motor de nó tem um banco de nó. Na máquina do Core, o nó local é sempre o serviço `mestre-node`, à parte, com o próprio banco de nó (pasta `no/`, abaixo; [componentes](componentes.md)).
-- O **Core é a fonte da verdade**. O nó guarda o que ele roda e um cache do essencial para continuar funcionando quando o Core está fora; ao reconectar, sincroniza com o Core.
+- Toda máquina da Guilda tem **dois bancos SQLite**, em modo WAL, com migrações versionadas:
+  - o **banco da Guilda** (`mestre.db`): na Cidadela é o **banco principal**, a fonte da verdade; em cada Torre é uma **réplica só de leitura**, mantida pela [replicação](../guilda/replicacao.md). O mesmo arquivo vira principal numa promoção, sem cópia;
+  - o **banco local de máquina** (`maquina.db`): o que só aquela máquina sabe (terminais que roda, worktrees, perfis de conta, fila de saída). Nunca é replicado.
+- Uma Torre continua operando com a Cidadela fora lendo a réplica (usuários, fichas, bases, classes, regras efetivas); ao reconectar, a Cidadela decide e a replicação traz o resultado.
 - O que precisa ser lido ou versionado por pessoas fica em **arquivo** (classes, pergaminhos, anexos, logs); o banco guarda só o índice e os vínculos.
-- Segredos nunca vão para o banco em texto puro: ficam no [cofre](../plataforma/cofre.md).
+- Segredos nunca vão para o banco em texto puro: ficam cifrados pelo [cofre](../plataforma/cofre.md), e as tabelas do cofre só vão às Torres candidatas.
 - O Guardião não usa o banco do motor; o que ele guarda está em [Guardião](../autocura/guardiao.md).
 
 ## Banco: configuração
 
 - Biblioteca `modernc.org/sqlite` ([ADR 0001](../decisoes/0001-stack-go.md)).
 - `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000` (padrão).
-- **Uma conexão de escrita** e um grupo de conexões só de leitura.
-- **Migrações:** arquivos SQL numerados, embutidos no binário, um conjunto para o Core e outro para o nó; aplicados na subida, em transação, registrados em `schema_migrations`.
+- **Uma conexão de escrita** e um grupo de conexões só de leitura. Numa Torre, a conexão de escrita do banco da Guilda é só da replicação.
+- **Migrações:** arquivos SQL numerados, embutidos no binário, um conjunto para o banco da Guilda e outro para o banco local de máquina; aplicados na subida, em transação, registrados em `schema_migrations`. Numa Torre, as migrações do banco da Guilda chegam pela replicação, nunca aplicadas localmente.
 - **Migrações só aditivas** dentro de uma versão maior (acrescentar tabela ou coluna; remover só numa versão seguinte), para a versão anterior do motor ainda abrir o banco depois de uma volta de versão. Antes de migrar, o motor grava uma cópia `pre-migracao-<versão>.db` ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)). É essa cópia que a ação `rollback` com restauração do banco usa: rara, nunca automática, só com Dono ou Administrador e PIN ([Guardião](../autocura/guardiao.md)).
 
-## Tabelas principais do Core (proposta)
+## Tabelas principais do banco da Guilda (proposta)
 
 Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas ficam nas migrações; o significado de cada dado, no documento da funcionalidade.
 
 | Grupo | Tabelas | Dono do comportamento |
 |---|---|---|
-| Nós e conexão | `nodes` (capacidades, prioridade, versão, estado, se é o nó local), `node_heartbeats`, `pairing_invites`, `node_credentials` (identificador e revogação, não a chave), `account_profiles`, `outbox` (mensagens com ack ainda sem confirmação, por nó) | [protocolo](../conectividade/protocolo.md), [pareamento](../conectividade/pareamento.md), [bases e fichas](../orquestracao/bases-e-fichas.md) |
+| Guilda e máquinas | `guild` (`guild_id`, época atual e certidão), `machines` (ficha da máquina, prioridade, se pode ser Cidadela, versão, estado), `machine_heartbeats`, `join_requests`, `machine_credentials` (identificador e revogação, não a chave), `account_profiles`, `outbox` (mensagens com ack ainda sem confirmação, por máquina), `replication_state` (último `lsn` confirmado por Torre) | [Guilda](../guilda/guilda.md), [ficha da máquina](../guilda/ficha-da-maquina.md), [replicação](../guilda/replicacao.md), [protocolo](../conectividade/protocolo.md), [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Usuários | `users`, `user_workspaces`, `panel_sessions`, `telegram_pairing_codes` | [usuários e níveis](../telegram/usuarios-e-niveis.md), [login](../painel/login.md) |
-| Workspaces e mesas | `workspaces`, `tables` (mesas: épico, branch, estado), `table_worktrees` (nó, caminho, último commit sincronizado), `bundle_transfers` | [workspaces](../orquestracao/workspaces.md), [mesas](../orquestracao/mesas.md) |
+| Workspaces e mesas | `workspaces`, `tables` (mesas: épico, branch, estado), `table_worktrees` (máquina, caminho, último commit sincronizado), `bundle_transfers` | [workspaces](../orquestracao/workspaces.md), [mesas](../orquestracao/mesas.md) |
 | Presets e classes | `bases`, `sheets`, `classes` (índice: nome, escopo, caminho, App), `templates` (versões dos modelos) | [bases e fichas](../orquestracao/bases-e-fichas.md), [classes](../classes/classes.md), [sessão zero do personagem](../sessao-zero/personagem.md) |
 | Personagens e canvas | `characters`, `terminals`, `connections`, `notes` (índice de pergaminhos), `tomes`, `canvas_layout`, `grimoires` | [personagens](../orquestracao/personagens.md), [conexões](../orquestracao/conexoes.md), [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md), [grimórios](../orquestracao/grimorios.md) |
 | Missões | `quests`, `quest_steps` (com issue/sub-issue), `step_runs` | [missões](../orquestracao/missoes.md) |
@@ -37,79 +39,78 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 | Telegram | `telegram_state` (offset do long polling, workspace ativo por usuário), `telegram_updates` (updates recebidos, gravados antes de o offset avançar), `bot_messages` (mensagem do bot → workspace e mesa), `glossary_seen` (termos já explicados a cada usuário) | [bot](../telegram/bot.md), [roteamento](../telegram/roteamento.md) |
 | Anexos | `attachments` (autor, data, origem, caminho, tamanho) | [anexos e transcrição](../telegram/anexos-e-transcricao.md) |
 | Uso e custo | `usage_records`, `usage_limits` | [limites de uso](../plataforma/limites-de-uso.md) |
-| Cofre | `secrets` (segredos cifrados; nas credenciais de site, os metadados `owner_user`, `classes`, `domains`, `kind` e `expires_at` fora da parte cifrada), `site_login_attempts` (estado de cada login, sem código nem senha) | [cofre](../plataforma/cofre.md) |
-| Atualizações | `releases` (versões do Mestre vistas, estado, aprovação), `update_steps` (passos por máquina e trava de atualização), `conformance_results` (por nó, provedor, versão e perfil) | [autoatualização](../plataforma/autoatualizacao.md), [atualização dos CLIs](../provedores/atualizacao-dos-clis.md), [conformidade](../provedores/conformidade.md) |
+| Cofre | `secrets` (segredos cifrados, só na Cidadela e nas candidatas; nas credenciais de site, os metadados `owner_user`, `classes`, `domains`, `kind` e `expires_at` fora da parte cifrada), `site_login_attempts` (estado de cada login, sem código nem senha) | [cofre](../plataforma/cofre.md) |
+| Atualizações | `releases` (versões do Mestre vistas, estado, aprovação), `update_steps` (passos por máquina e trava de atualização), `conformance_results` (por máquina, provedor, versão e perfil) | [autoatualização](../plataforma/autoatualizacao.md), [atualização dos CLIs](../provedores/atualizacao-dos-clis.md), [conformidade](../provedores/conformidade.md) |
 | Operador do PC | `operator_sessions`, `operator_captures` (abaixo) | [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) |
-| Operação | `checklist_alerts`, `healing_log`, `audit_log`, `processed_commands` (idempotência) | [checklist](../plataforma/checklist.md), [camadas](../autocura/camadas.md), [protocolo](../conectividade/protocolo.md) |
+| Operação | `checklist_alerts`, `healing_log`, `audit_log` (inclusive as transações descartadas numa troca de Cidadela), `processed_commands` (idempotência) | [checklist](../plataforma/checklist.md), [camadas](../autocura/camadas.md), [protocolo](../conectividade/protocolo.md), [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
 
-## Tabelas principais do nó (proposta)
+## Tabelas principais do banco local de máquina (proposta)
 
 | Tabela | Conteúdo |
 |---|---|
 | `schema_migrations` | migrações aplicadas |
-| `node_identity` | id do nó, último endereço conhecido do Core, versão de protocolo negociada |
-| `terminals` | terminais que este nó roda (registro abaixo) |
-| `local_worktrees` | worktrees de mesa neste nó: caminho, branch, último commit sincronizado |
+| `machine_identity` | `machine_id`, `guild_id`, papel, maior certidão de época vista, endereços conhecidos da Cidadela, versão de protocolo negociada |
+| `terminals` | terminais que esta máquina roda (registro abaixo) |
+| `local_worktrees` | worktrees de mesa nesta máquina: caminho, branch, último commit sincronizado |
 | `account_profiles` | perfis de conta locais (pastas de configuração por provedor) |
-| `outbox` | eventos ainda sem ack do Core (enviados de novo ao reconectar) |
-| `processed_commands` | comandos do Core já executados (idempotência) |
-| `cache_users`, `cache_sheets`, `cache_bases`, `cache_classes` | cópia do essencial para o motor do nó continuar operando sem o Core (mensagem `cache.users` e afins); não serve para login. A cópia de usuários para a página reserva e o Telegram reduzido é outra, a `guardian.replica` do Guardião ([cofre](../plataforma/cofre.md)) |
-| `agent_rules` | regras efetivas de cada personagem deste nó ([permissões](../classes/permissoes.md#regras-efetivas)) |
+| `outbox` | eventos ainda sem ack da Cidadela (enviados de novo ao reconectar) |
+| `processed_commands` | comandos da Cidadela já executados (idempotência) |
+| `agent_rules` | regras efetivas de cada personagem desta máquina ([permissões](../classes/permissoes.md#regras-efetivas)) |
 | `checklist_results` | último resultado local do [checklist](../plataforma/checklist.md) |
 
-Ao reconectar: o nó envia o `outbox` e o estado dos `terminals`; o Core responde com o que mudou no cache. Em conflito, vale o Core, exceto o estado real dos processos, que só o nó conhece ([protocolo](../conectividade/protocolo.md)).
+Ao reconectar: a máquina envia o `outbox` e o estado dos `terminals`; a Cidadela decide e a replicação traz o que mudou. Em conflito, vale a Cidadela, exceto o estado real dos processos, que só a máquina conhece ([protocolo](../conectividade/protocolo.md)). Na Cidadela, o banco local de máquina guarda o mesmo que numa Torre, para os personagens que rodam nela.
 
 ## Registro de terminais
 
-Campos: id, personagem (agente), nó, PID, pasta, classe, status, id da sessão do provedor (para a [retomada](../provedores/adaptador.md#retomada-de-sessão)), início e último sinal de vida. O terminal em si (PTY, buffer, log) está em [terminal](terminal.md). Fica em `terminals` no nó que roda o terminal e é espelhado no Core. É com ele que o motor sabe o que reabrir depois de um reinício. Os valores de status e as transições estão em [personagens](../orquestracao/personagens.md).
+Campos: id, personagem (agente), máquina, PID, pasta, classe, status, id da sessão do provedor (para a [retomada](../provedores/adaptador.md#retomada-de-sessão)), início e último sinal de vida. O terminal em si (PTY, buffer, log) está em [terminal](terminal.md). Fica em `terminals` no banco local da máquina que roda o terminal e é espelhado no banco da Guilda. É com ele que o motor sabe o que reabrir depois de um reinício. Os valores de status e as transições estão em [personagens](../orquestracao/personagens.md).
 
 ## Arquivos
 
 | O quê | Onde | Banco guarda |
 |---|---|---|
 | Classes do workspace e da mesa | `.mestre/classes/`, `.mestre/mesas/<mesa>/classes/` | índice e App vinculado |
-| Classes globais | pasta do Core (abaixo) | índice |
+| Classes globais | pasta da Cidadela (abaixo), copiada às candidatas | índice |
 | Pergaminhos | Markdown no disco ([pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md)) | índice e conexões |
 | Anexos | `.mestre/anexos/` do workspace (fora do git) | registro |
 | Histórico dos terminais | arquivos de log com rotação | nada |
 | Logs do motor | JSON por linha, com rotação | nada |
 
-Pastas de dados (padrão). Os mesmos caminhos valem para o Core e para os nós de cada sistema; a última coluna diz onde cada uma existe.
+Pastas de dados (padrão). Os mesmos caminhos valem para toda máquina de cada sistema; a última coluna diz onde cada uma existe. "Cidadela e candidatas" quer dizer: original na Cidadela, cópia nas Torres que podem ser Cidadela ([replicação](../guilda/replicacao.md)).
 
 | Linux | Windows | Conteúdo | Onde |
 |---|---|---|---|
 | `/etc/mestre/` | `%ProgramData%\Mestre\config\` | configuração | todas |
-| `/etc/mestre/cofre.key` | `%ProgramData%\Mestre\config\cofre.key` (DPAPI de máquina, ACL só de `NT SERVICE\MestreCore`) | chave do [cofre](../plataforma/cofre.md#chave-do-cofre) | Core |
-| `/var/lib/mestre/banco/` | `%ProgramData%\Mestre\banco\` | `mestre.db`, o banco do Core | Core |
-| `/var/lib/mestre/no/` | `%ProgramData%\Mestre\no\` | `no.db`, o banco do nó, e os dados do motor do nó | todas |
-| `/var/lib/mestre/agentes/<id>/` | `%ProgramData%\Mestre\no\agentes\<id>\` | `policy.json`, retrato das regras efetivas para o modo degradado do `mestre hook` ([permissões](../classes/permissoes.md#modo-degradado)); `tmp/`, a `MESTRE_TMP` do personagem ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)), apagada no encerramento definitivo | todas |
-| — | `%ProgramData%\Mestre\no\mestre-agente.senha` (DPAPI de máquina, ACL só de `NT SERVICE\MestreNode` e SYSTEM) | senha da conta `mestre-agente` ([Windows](windows.md#conta-dos-agentes-mestre-agente)) | Windows |
-| `/var/spool/mestre/hook/` | `%ProgramData%\Mestre\no\fila-hook\` | fila local de eventos do `mestre hook` com o motor fora | todas |
+| `/etc/mestre/cofre.key` | `%ProgramData%\Mestre\config\cofre.key` (DPAPI de máquina, ACL só de `NT SERVICE\Mestre`) | chave do [cofre](../plataforma/cofre.md#chave-do-cofre) e chave privada da CA da Guilda | Cidadela e candidatas |
+| `/var/lib/mestre/banco/` | `%ProgramData%\Mestre\banco\` | `mestre.db`, o banco da Guilda: principal na Cidadela, réplica nas Torres; `descartado-<época>.db` depois de uma [troca de Cidadela](../guilda/replicacao.md#perda-na-troca) | todas |
+| `/var/lib/mestre/maquina/` | `%ProgramData%\Mestre\maquina\` | `maquina.db`, o banco local de máquina, e os dados locais do motor | todas |
+| `/var/lib/mestre/agentes/<id>/` | `%ProgramData%\Mestre\maquina\agentes\<id>\` | `policy.json`, retrato das regras efetivas para o modo degradado do `mestre hook` ([permissões](../classes/permissoes.md#modo-degradado)); `tmp/`, a `MESTRE_TMP` do personagem ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)), apagada no encerramento definitivo | todas |
+| — | `%ProgramData%\Mestre\maquina\mestre-agente.senha` (DPAPI de máquina, ACL só de `NT SERVICE\Mestre` e SYSTEM) | senha da conta `mestre-agente` ([Windows](windows.md#conta-dos-agentes-mestre-agente)) | Windows |
+| `/var/spool/mestre/hook/` | `%ProgramData%\Mestre\maquina\fila-hook\` | fila local de eventos do `mestre hook` com o motor fora | todas |
 | `/var/lib/mestre/backups/` | `%ProgramData%\Mestre\backups\` | backups diários dos bancos da máquina | todas |
-| `/var/lib/mestre/workspaces/` | `%ProgramData%\Mestre\workspaces\` | espelhos, clones e worktrees (estrutura em [workspaces](../orquestracao/workspaces.md#espelho-e-clone-principal-no-core) e [mesas](../orquestracao/mesas.md#worktree-por-nó-e-sincronização)) | todas |
+| `/var/lib/mestre/workspaces/` | `%ProgramData%\Mestre\workspaces\` | espelhos, clones e worktrees (estrutura em [workspaces](../orquestracao/workspaces.md#espelho-e-clone-principal-na-cidadela) e [mesas](../orquestracao/mesas.md#worktree-por-máquina-e-sincronização)); espelhos na Cidadela e nas candidatas | todas |
 | `/var/lib/mestre/contas/` | `%ProgramData%\Mestre\contas\` | perfis de conta | todas |
-| `/var/lib/mestre/classes-globais/`, `/var/lib/mestre/modelos/` | `%ProgramData%\Mestre\classes-globais\`, `%ProgramData%\Mestre\modelos\` | classes globais e modelos versionados | Core |
-| `/var/lib/mestre/operador/` | `%ProgramData%\Mestre\operador\` | capturas de tela cifradas do Operador do PC (abaixo) | Core |
-| — | `%ProgramData%\Mestre\no\operador\` | capturas ainda não confirmadas pelo Core | nó com o Operador |
-| `/var/lib/mestre/whisper/` | `%ProgramData%\Mestre\whisper\` | `whisper-server` e modelo de transcrição | nó de transcrição |
+| `/var/lib/mestre/classes-globais/`, `/var/lib/mestre/modelos/` | `%ProgramData%\Mestre\classes-globais\`, `%ProgramData%\Mestre\modelos\` | classes globais e modelos versionados | Cidadela e candidatas |
+| `/var/lib/mestre/operador/` | `%ProgramData%\Mestre\operador\` | capturas de tela cifradas do Operador do PC (abaixo) | Cidadela e candidatas |
+| — | `%ProgramData%\Mestre\maquina\operador\` | capturas ainda não confirmadas pela Cidadela | máquina com o Operador |
+| `/var/lib/mestre/whisper/` | `%ProgramData%\Mestre\whisper\` | `whisper-server` e modelo de transcrição | máquina com `transcricao` |
 | `/var/log/mestre/` | `%ProgramData%\Mestre\logs\` | logs do motor e dos terminais | todas |
 
 Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso**):
 - **Linux:** dono `mestre`; `workspaces/` e `contas/` no grupo `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). `agentes/` (pasta 0750, `policy.json` 0640, `tmp/` 2770 com escrita do grupo; como todos os personagens usam a conta `mestre-agente`, a separação entre a `MESTRE_TMP` de um e de outro é do despachante, não do sistema operacional, [segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) e a fila do hook (1730: o grupo `mestre-agente` só cria arquivos) também ficam no grupo `mestre-agente`; o motor valida tudo o que lê da fila. As regras fixas negam às ferramentas dos agentes qualquer acesso a essas pastas ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
-- **Windows, contas de serviço:** num nó, `NT SERVICE\MestreNode` é dona de todas as pastas de dados. No Core, `NT SERVICE\MestreCore` é dona de `%ProgramData%\Mestre\` e `NT SERVICE\MestreNode` é dona de `no\` e tem modificação em `workspaces\` e `contas\` ([Windows](windows.md#windows-como-core)).
-- **Windows, `mestre-agente`** (Core e nó; [Windows](windows.md#conta-dos-agentes-mestre-agente)): modificação só em `workspaces\`, `contas\` e `no\agentes\<id>\tmp\`; leitura só em `no\agentes\<id>\policy.json`; em `no\fila-hook\`, só criar arquivos (sem ler nem listar). Nada em `config\`, `banco\`, `backups\`, `logs\` nem no resto de `no\`. Como todos os personagens usam essa conta, a separação entre a `MESTRE_TMP` de um e de outro é do despachante, como no Linux; o motor valida tudo o que lê da fila.
-- **Windows (Core e nó):** o instalador cria `%ProgramData%\Mestre\` com a **herança desligada** e remove as entradas herdadas de `%ProgramData%` (`Users`, `Authenticated Users`, `CREATOR OWNER`); ficam só as contas listadas acima, SYSTEM e Administradores, sem `Users`, `Authenticated Users` nem `Everyone`. Nenhum outro usuário da máquina, nem o que instalou, lê nada ali sem elevar.
+- **Windows, conta de serviço:** `NT SERVICE\Mestre` é dona de `%ProgramData%\Mestre\` e de todas as pastas de dados ([Windows](windows.md#serviços-no-windows)).
+- **Windows, `mestre-agente`** ([Windows](windows.md#conta-dos-agentes-mestre-agente)): modificação só em `workspaces\`, `contas\` e `maquina\agentes\<id>\tmp\`; leitura só em `maquina\agentes\<id>\policy.json`; em `maquina\fila-hook\`, só criar arquivos (sem ler nem listar). Nada em `config\`, `banco\`, `backups\`, `logs\` nem no resto de `maquina\`. Como todos os personagens usam essa conta, a separação entre a `MESTRE_TMP` de um e de outro é do despachante, como no Linux; o motor valida tudo o que lê da fila.
+- **Windows:** o instalador cria `%ProgramData%\Mestre\` com a **herança desligada** e remove as entradas herdadas de `%ProgramData%` (`Users`, `Authenticated Users`, `CREATOR OWNER`); ficam só as contas listadas acima, SYSTEM e Administradores, sem `Users`, `Authenticated Users` nem `Everyone`. Nenhum outro usuário da máquina, nem o que instalou, lê nada ali sem elevar.
 
 ## Operador do PC
 
-- **`operator_sessions`:** uma linha por ativação: pedido de aprovação, quem aprovou (Dono ou Grão-Mestre e o decreto de delegação), mesa, missão, personagem, nó, usuário do Windows, tarefa, duração pedida, início, fim previsto, fim real e motivo (`prazo`, `done`, `encerrado_por`, `parar_no_pc`, `travar`, `tela_bloqueada`, `queda_da_sessao`). As ações vão completas para `audit_log`, com o id da sessão ([bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
+- **`operator_sessions`:** uma linha por ativação: pedido de aprovação, quem aprovou (Dono ou Grão-Mestre e o decreto de delegação), mesa, missão, personagem, máquina, usuário do Windows, tarefa, duração pedida, início, fim previsto, fim real e motivo (`prazo`, `done`, `encerrado_por`, `parar_no_pc`, `travar`, `tela_bloqueada`, `queda_da_sessao`). As ações vão completas para `audit_log`, com o id da sessão ([bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 - **`operator_captures`:** sessão, horário, gatilho (`intervalo` ou `acao`, com o id do evento do hook), mesa, missão, caminho e SHA-256 do arquivo cifrado.
-- **Arquivos:** `operador/<sessão>/<horário>.png.enc` na pasta do Core, cifrado com AES-256-GCM por uma chave própria guardada no [cofre](../plataforma/cofre.md) (segredo `operator_capture_key`); só a pasta do motor do Core, sem acesso de `mestre-agente`. O painel decifra só para o Dono ([administração](../painel/administracao.md#operador-do-pc)).
-- **Retenção:** 30 dias depois do fim da sessão (padrão); a limpeza apaga arquivos e linhas de `operator_captures`, e `operator_sessions` fica. No nó, `no\operador\` só guarda a captura até o Core confirmar o recebimento, e os backups do banco não levam as imagens.
+- **Arquivos:** `operador/<sessão>/<horário>.png.enc` na pasta da Cidadela (copiada às candidatas), cifrado com AES-256-GCM por uma chave própria guardada no [cofre](../plataforma/cofre.md) (segredo `operator_capture_key`); só a pasta do motor, sem acesso de `mestre-agente`. O painel decifra só para o Dono ([administração](../painel/administracao.md#operador-do-pc)).
+- **Retenção:** 30 dias depois do fim da sessão (padrão); a limpeza apaga arquivos e linhas de `operator_captures`, e `operator_sessions` fica. Na máquina do Operador, `maquina\operador\` só guarda a captura até a Cidadela confirmar o recebimento, e os backups do banco não levam as imagens.
 
 ## Logs
 
-- Logs do motor: `core.log` (motor do Core) e `no.log` (motor do nó), rotação a cada 20 MB, 10 arquivos (padrão).
+- Logs do motor: `mestre.log`, rotação a cada 20 MB, 10 arquivos (padrão).
 - Histórico de cada terminal: `terminais/<terminal-id>.log`, rotação a cada 10 MB, 5 arquivos por terminal; apagado 30 dias depois do encerramento (padrão). A ação "limpar logs antigos" do Guardião segue os mesmos limites.
 - Tudo o que vai para log passa pelo mascaramento de segredos ([segurança](seguranca.md)).
 
@@ -117,5 +118,5 @@ Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso
 
 - Diário, às 03:00 no horário local (padrão), com `VACUUM INTO` (cópia consistente com o banco em uso), seguido de `PRAGMA quick_check` na cópia.
 - Mantém os **últimos 7**; o mais antigo é apagado só depois de um backup novo íntegro.
-- Vale para o banco do Core e para o banco de cada nó. Falha de backup vira alerta do [checklist](../plataforma/checklist.md).
-- **Cofre no backup do Core:** os segredos vão no banco, já cifrados, e junto vai `cofre-envelope.bin`, a chave do cofre cifrada pela chave de recuperação; o arquivo da chave protegido pelo sistema não vai. Sem a chave de recuperação, que o Mestre não guarda, o cofre do backup não abre ([backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação)). As capturas do Operador do PC não vão no backup.
+- Vale para o banco principal na Cidadela e para o banco local de cada máquina; a réplica de uma Torre não tem backup próprio (a Cidadela é a fonte). Falha de backup vira alerta do [checklist](../plataforma/checklist.md).
+- **Cofre no backup da Cidadela:** os segredos vão no banco, já cifrados, e junto vai `cofre-envelope.bin`, a chave do cofre cifrada pela chave de recuperação; o arquivo da chave protegido pelo sistema não vai. Sem a chave de recuperação, que o Mestre não guarda, o cofre do backup não abre ([backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação)). As capturas do Operador do PC não vão no backup.

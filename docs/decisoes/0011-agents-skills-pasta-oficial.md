@@ -1,10 +1,10 @@
 # ADR 0011: `.agents/skills/` como pasta oficial de skills
 
-> **Assunto:** por que as skills ficam em `.agents/skills/` com cópia gerenciada para o Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** por que as skills ficam em `.agents/skills/` com cópia gerenciada para o Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas guardam só a skill de comunicação; as de nível e de classe passam a ser entregues por personagem.
+Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas guardam só a skill de comunicação; as de nível e de classe passam a ser entregues por personagem. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 
@@ -55,7 +55,7 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas
   - Nada toca nas pastas globais do usuário.
 - **Negativas:**
   - **Sincronia:** a geração precisa ser idempotente e detectar cópias divergentes, por exemplo quando alguém edita `.claude/skills/` à mão.
-  - **Ocultas no git:** as duas pastas precisam ficar fora do git quando não forem versionadas (via `.git/info/exclude`), em todos os worktrees de todos os nós.
+  - **Ocultas no git:** as duas pastas precisam ficar fora do git quando não forem versionadas (via `.git/info/exclude`), em todos os worktrees de todas as máquinas.
   - **Worktrees novos:** como o Claude Code procura skills só até a raiz do worktree, cada mesa nova precisa da cópia materializada ([ADR 0004](0004-mesa-igual-worktree.md)).
   - **Recarregar:** uma pasta de skills que não existia quando o agente iniciou pode exigir recarga (`/reload-skills` no Claude Code, `/skills reload` no Antigravity). O motor deve gerar as skills **antes** de iniciar o personagem.
 - **Antigravity e `.claude/skills/`:** não está documentado que ele leia essa pasta, e o Mestre não depende disso nem verifica: o Antigravity recebe as skills por `.agents/skills/`. Se ele ler as duas, vê a mesma skill duas vezes com o mesmo conteúdo, sem efeito nas permissões.

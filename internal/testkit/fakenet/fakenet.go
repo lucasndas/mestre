@@ -1,8 +1,9 @@
 // Package fakenet is the in-memory network of the fast suite
 // (docs/qualidade/dubles.md#rede-falsa): Listen and Dial by name, no
 // sockets, usable inside testing/synctest, with injected failures. Real TLS
-// runs on top of its net.Conn. UDP broadcast, fake mDNS and the Core IP
-// change arrive with discovery in M2.
+// runs on top of its net.Conn. UDP broadcast, fake mDNS and the Citadel IP
+// change arrive with discovery in M2; isolating a whole machine arrives with
+// the Citadel switch in M7.
 package fakenet
 
 import (

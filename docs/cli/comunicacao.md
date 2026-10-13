@@ -1,6 +1,6 @@
 # CLI: comandos de comunicação
 
-> **Assunto:** sintaxe de `list`, `ask`, `check`, `note`, `reply`, `done`, `wait`, `inbox` e `waits` · **Componente:** CLI · **Atualizado:** 2026-10-12
+> **Assunto:** sintaxe de `list`, `ask`, `check`, `note`, `reply`, `done`, `wait`, `inbox` e `waits` · **Componente:** CLI · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -20,8 +20,8 @@ Referência de sintaxe dos comandos que qualquer personagem usa para falar com o
 A classe pode restringir qualquer um deles ([permissoes](../classes/permissoes.md)).
 
 ### `mestre list`
-`mestre list` — sem argumentos. Mostra quem chamou (`you:` nome, id, mesa, nó), os agentes, pergaminhos e conexões visíveis, com o nó e o status de cada agente (inclusive o motivo de espera, ex.: `waiting for Revisor`).
-`--json` → `data`: `{self, agents: [{name, id, class, node, status, waiting_for, pinned}], notes: [{name, stack}], connections: [{from, to}]}`.
+`mestre list` — sem argumentos. Mostra quem chamou (`you:` nome, id, mesa, máquina), os agentes, pergaminhos e conexões visíveis, com a **máquina** de cada personagem (nome da máquina da Guilda onde ele roda) e o status de cada agente (inclusive o motivo de espera, ex.: `waiting for Revisor`).
+`--json` → `data`: `{self, agents: [{name, id, class, machine, status, waiting_for, pinned}], notes: [{name, stack}], connections: [{from, to}]}`.
 
 ### `mestre ask`
 ```
@@ -38,7 +38,7 @@ mestre ask "<Nome>" --raw "<texto>"
 - Erros: alvo não conectado → 3 `not_connected`; perguntar a si mesmo → 2; alvo ocupado com `--raw` → 7 `busy`; alvo aguardando permissão com `--raw` → 3 `permission_prompt` (alvo `blocked` por `input` recebe a entrada normalmente).
 
 ### `mestre check`
-`mestre check "<Nome>" [--table "<mesa>"] [--lines <n>]` — lê a tela atual do alvo sem enviar nada. Padrão: a tela visível; `--lines` inclui até `n` linhas do histórico. Texto: a tela, sem sequências de controle. `--json` → `{name, status, waiting_for, screen, captured_at}`. Nó do alvo fora → 5 `node_unreachable`.
+`mestre check "<Nome>" [--table "<mesa>"] [--lines <n>]` — lê a tela atual do alvo sem enviar nada. Padrão: a tela visível; `--lines` inclui até `n` linhas do histórico. Texto: a tela, sem sequências de controle. `--json` → `{name, status, waiting_for, screen, captured_at}`. Máquina do alvo fora → 5 `machine_unreachable`.
 
 ### `mestre note`
 ```

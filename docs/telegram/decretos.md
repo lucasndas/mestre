@@ -1,6 +1,6 @@
 # Decretos
 
-> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -65,7 +65,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 ### Validade (regra permanente)
 
-- A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no fuso do Core; "por 3 dias" vira 72 horas.
+- A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no fuso da Cidadela; "por 3 dias" vira 72 horas.
 - O Grão-Mestre converte a validade em data e hora absolutas, e elas aparecem na confirmação.
 - Ao vencer, o decreto passa a **expirado** sozinho. O motor avisa o autor.
 
@@ -95,7 +95,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 ### Registro
 
-Cada decreto fica no banco do Core com:
+Cada decreto fica no banco da Cidadela com:
 
 - número;
 - tipo, efeito e escopo;

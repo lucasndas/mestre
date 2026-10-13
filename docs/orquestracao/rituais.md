@@ -1,6 +1,6 @@
 # Rituais
 
-> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -24,14 +24,14 @@ Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../c
 | `name` | único no escopo |
 | alvo | um personagem existente (pelo nome) ou uma missão salva (o disparo é um `quest run`); ritual não cria personagem |
 | conteúdo | `prompt` (texto entregue a um agente como item `ritual`, com cabeçalho) ou `command` (linha digitada crua num terminal simples, criado por `spawn`, seguida de Enter) |
-| agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: fuso do Core) |
+| agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: fuso da Cidadela) |
 | `--pre-run` | comando cuja saída substitui `{{output}}` no conteúdo (opcional) |
 | tempo limite na fila | padrão 30 min, nunca maior que o intervalo do ritual |
 
 ### Disparo
 
 1. No horário, o motor cria um **disparo** e o coloca na fila do alvo (prioridade comum). **Alvo ocupado não impede o disparo: ele enfileira.**
-2. Quando o alvo fica livre, o motor reserva a vez dele e roda o `--pre-run`, se houver, no nó e na pasta do alvo: sem interação, tempo limite 60 s, saída limitada a 16 KiB (padrões). O comando passa pela mesma decisão de permissões que um comando do próprio alvo ([permissões](../classes/permissoes.md)).
+2. Quando o alvo fica livre, o motor reserva a vez dele e roda o `--pre-run`, se houver, na máquina e na pasta do alvo: sem interação, tempo limite 60 s, saída limitada a 16 KiB (padrões). O comando passa pela mesma decisão de permissões que um comando do próprio alvo ([permissões](../classes/permissoes.md)).
 3. Entrega o conteúdo, com `{{output}}` substituído. Para missão, inicia a missão (se ela já estiver rodando, conta como alvo ocupado até ela terminar).
 4. **Tempo limite na fila:** se o disparo não foi entregue até o limite, ele é cancelado e **devolvido ao dono do ritual** como item `ritual` na caixa de entrada dele, com o motivo (ex.: "Dev ocupado desde 01:58"). O dono decide se roda de novo (`ritual run`), ajusta o ritual ou age de outra forma; o Grão-Mestre avisa os usuários se for preciso.
 5. Disparo de um ritual cujo disparo anterior ainda está na fila: o novo é registrado como `skipped` (não acumula).

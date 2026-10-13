@@ -1,6 +1,6 @@
 # Missões
 
-> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -19,7 +19,7 @@ steps:
   - {id: plan,   sheet: Arquiteto Claude, instructions: "Planeje o login"}
   - {id: dev,    sheet: Dev Claude, after: [plan], sub_issue: true}
   - {id: review, sheet: Revisor Codex, after: [dev], can_return_to: dev}
-  - {id: qa,     sheet: QA Antigravity, after: [dev], node: windows-pc}
+  - {id: qa,     sheet: QA Antigravity, after: [dev], machine: windows-pc}
   - {id: fix,    character: Dev Claude 1, after: [review, qa], join: all, approval: before}
 ```
 
@@ -27,7 +27,7 @@ steps:
 |---|---|
 | `id`, `name` | identificador único na missão; nome exibido (padrão: o id) |
 | `sheet` ou `character` | ficha a usar, ou um personagem existente da mesa |
-| `class`, `node` | substituem a classe da ficha / fixam o nó (opcionais) |
+| `class`, `machine` | substituem a classe da ficha / fixam a máquina (opcionais) |
 | `instructions` | o que a etapa deve fazer |
 | `after`, `join` | etapas anteriores; `all` (padrão, "esperar todas") ou `any` ("esperar a primeira") |
 | `can_return_to` | etapa anterior para a qual esta pode devolver |
@@ -40,7 +40,7 @@ Validação: ids únicos; `after` e `can_return_to` só apontam para etapas ante
 ### Execução
 
 1. `quest run` (ou um [ritual](rituais.md)) põe a missão em `running`.
-2. Uma etapa sai de `pending` quando suas anteriores concluem conforme `join`; vai para `preparing`, onde o motor resolve, nesta ordem: aprovação prévia; personagem (personagem indicado, ou persistente livre da mesa com a mesma ficha, ou recruta um novo, respeitando [limites](personagens.md#limites)); [sincronização](mesas.md#worktree-por-nó-e-sincronização) do worktree se roda em outro nó. Cada uma dessas pendências é uma [espera](esperas-e-caixa-de-entrada.md) com motivo.
+2. Uma etapa sai de `pending` quando suas anteriores concluem conforme `join`; vai para `preparing`, onde o motor resolve, nesta ordem: aprovação prévia; personagem (personagem indicado, ou persistente livre da mesa com a mesma ficha, ou recruta um novo, respeitando [limites](personagens.md#limites)); [sincronização](mesas.md#worktree-por-máquina-e-sincronização) do worktree se roda em outra máquina. Cada uma dessas pendências é uma [espera](esperas-e-caixa-de-entrada.md) com motivo.
 3. O motor coloca na fila do personagem um item `quest` com: instruções da etapa, issue/sub-issue, resultado das etapas anteriores e caminho do pergaminho da missão. Etapa vai para `running` e o motor guarda o commit de início.
 4. O personagem termina com `mestre done "<resumo>"` (fim explícito, ensinado pela skill). O motor nunca adivinha o fim pela tela.
 5. **Passagem de bastão:** o resultado = resumo do `done` + arquivos alterados (o motor calcula `git diff --name-status <commit de início>..HEAD` e lista os não commitados). Ele vira a entrada das próximas etapas e é acrescentado ao [pergaminho da missão](pergaminhos-e-tomos.md#pergaminho-da-missão).
@@ -106,7 +106,7 @@ Pausar: nenhuma etapa nova começa; as que rodam terminam e o resultado é guard
 
 ### Retomada
 
-Estado de missões e etapas fica no banco. Depois de queda de nó ou do Core, a missão continua da última etapa concluída: etapas `running`/`stuck` voltam a `preparing` e são entregues de novo, com a nota "retomada após reinício", quando o personagem for retomado ([retomada](personagens.md#retomada-após-reinício)).
+Estado de missões e etapas fica no banco. Depois de queda de máquina ou da Cidadela, a missão continua da última etapa concluída: etapas `running`/`stuck` voltam a `preparing` e são entregues de novo, com a nota "retomada após reinício", quando o personagem for retomado ([retomada](personagens.md#retomada-após-reinício)).
 
 ### Espelho no GitHub
 
@@ -119,7 +119,7 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 ## Regras e erros
 
 - `done` de personagem sem etapa nem tarefa: registrado e ignorado, com aviso a ele.
-- Ficha ausente, nenhum nó possível ou classe acima do teto: missão `paused` com o motivo, Mestre da mesa avisado.
+- Ficha ausente, nenhuma máquina possível ou classe acima do teto: missão `paused` com o motivo, Mestre da mesa avisado.
 - 100% do limite de uso da missão: `paused` até aprovação ([limites de uso](../plataforma/limites-de-uso.md)).
 - Editar uma missão `running` só altera etapas ainda `pending`.
 
@@ -129,9 +129,9 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 - **CA-MIS-02** · *rápida* — **Dado** a missão do exemplo com agentes falsos, **quando** roda, **então** `review` e `qa` começam juntos após `dev`, `fix` só após os dois, e o pergaminho tem uma seção por etapa com resumo e os arquivos informados pelo git falso.
 - **CA-MIS-03** · *rápida* — **Dado** `max_returns: 3`, **quando** o Revisor devolve 4 vezes, **então** as 3 primeiras voltam ao Dev; o 4º `done` é registrado, a missão fica `paused` com "limite de voltas" e o Mestre da mesa recebe o evento `return_limit`.
 - **CA-MIS-04** · *rápida* — **Dado** relógio falso, **quando** o personagem da etapa fica 20 min `idle` sem `done`, **então** a etapa vira `stuck` e o Mestre da mesa é avisado; 30 min depois, Grão-Mestre e usuários.
-- **CA-MIS-05** · *completa* — **Dado** um motor de nó derrubado com `qa` em andamento, **quando** volta, **então** `plan` e `dev` continuam concluídas e `qa` é entregue de novo com a nota de retomada.
+- **CA-MIS-05** · *completa* — **Dado** um motor de máquina derrubado com `qa` em andamento, **quando** volta, **então** `plan` e `dev` continuam concluídas e `qa` é entregue de novo com a nota de retomada.
 - **CA-MIS-06** · *rápida* — **Dado** GitHub falso, **quando** a missão é criada e `dev` conclui, **então** existem a issue sob o épico, a sub-issue de `dev` fechada e o comentário com o App da classe.
-- **CA-MIS-07** · *pesada* — **Dado** uma mesa real, **quando** uma missão Dev → Revisor → QA roda em Claude Code, Codex e Antigravity entre Linux e Windows com uma devolução, **então** chega ao fim e os efêmeros são encerrados (MVP-4); **quando** o Core reinicia no meio, **então** ela continua (MVP-12).
+- **CA-MIS-07** · *pesada* — **Dado** uma mesa real, **quando** uma missão Dev → Revisor → QA roda em Claude Code, Codex e Antigravity entre Linux e Windows com uma devolução, **então** chega ao fim e os efêmeros são encerrados (MVP-4); **quando** a Cidadela reinicia no meio, **então** ela continua (MVP-12).
 
 ## Depende de
 

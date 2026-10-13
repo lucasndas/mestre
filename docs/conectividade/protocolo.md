@@ -1,10 +1,10 @@
-# Protocolo entre Core, nós e navegador
+# Protocolo entre as máquinas da Guilda e o navegador
 
-> **Assunto:** conexão WSS iniciada pelo nó: endpoints, envelope, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** conexão WSS iniciada pela Torre até a Cidadela atual: endpoints, envelope com época, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Definir como Core, motores dos nós, Guardiões e o painel conversam. O canal é uma conexão WebSocket segura (WSS), sempre aberta pelo lado de fora (nó ou navegador), em que nenhuma reconexão executa nada duas vezes. O porquê está no [ADR 0002](../decisoes/0002-wss-iniciado-pelo-no.md).
+Definir como a Cidadela, os motores das Torres, os Guardiões e o painel conversam. O canal é uma conexão WebSocket segura (WSS), sempre aberta pelo lado de fora (Torre ou navegador) até a **Cidadela atual**, em que nenhuma reconexão executa nada duas vezes e nenhuma mensagem de uma Cidadela antiga é aceita. O porquê está no [ADR 0002](../decisoes/0002-wss-iniciado-pelo-no.md) e no [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md).
 
 ## Comportamento
 
@@ -12,14 +12,15 @@ Definir como Core, motores dos nós, Guardiões e o painel conversam. O canal é
 
 | Endpoint | Quem conecta | Autenticação |
 |---|---|---|
-| `wss://<core>:7443/ws/node` | motor de cada nó | mTLS com o certificado do nó ([pareamento](pareamento.md)) |
-| `wss://<core>:7443/ws/guardian` | Guardião de cada nó | mTLS com o certificado do Guardião do nó |
-| `wss://<core>:7443/ws/ui` | navegador (painel) | cookie de sessão ([login](../painel/login.md)) |
-| `https://<core>:7443/pair` | nó em pareamento | código de convite ([pareamento](pareamento.md)) |
-| `wss://<core>:7444/ws/guardian-core` | nós, quando o motor do Core está fora | mTLS com o certificado do nó ou do Guardião |
+| `wss://<cidadela>:7443/ws/tower` | motor de cada Torre | mTLS com o certificado da máquina ([credenciais](../guilda/guilda.md#credenciais)) |
+| `wss://<cidadela>:7443/ws/guardian` | Guardião de cada Torre | mTLS com o certificado do Guardião da máquina |
+| `wss://<cidadela>:7443/ws/ui` | navegador (painel) | cookie de sessão ([login](../painel/login.md)) |
+| `https://<cidadela>:7443/join` | máquina pedindo entrada | código de comparação e aprovação do Dono ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
+| `wss://<cidadela>:7444/ws/guardian-citadel` | Torres, quando o motor da Cidadela está fora | mTLS com o certificado da máquina ou do Guardião |
 
-- A porta 7443 é do motor do Core (também serve o painel e a API por HTTPS). A 7444 é do Guardião do Core; quem a usa e quando está em [camadas](../autocura/camadas.md).
-- As portas são configuráveis. Tudo é sempre TLS, com a CA interna, inclusive na rede local.
+- A porta 7443 é do motor (na Cidadela, também serve o painel e a API por HTTPS; numa Torre, só redireciona, [painel redirecionado](../guilda/cidadela-e-torres.md#painel-redirecionado)). A 7444 é do Guardião da Cidadela; quem a usa e quando está em [camadas](../autocura/camadas.md).
+- As portas são configuráveis. Tudo é sempre TLS, com a CA da Guilda, inclusive na rede local.
+- **A Torre sempre conecta na Cidadela atual:** a da certidão de época mais alta que conhece; achar o endereço é da [descoberta](descoberta.md).
 
 ### Envelope
 
@@ -29,7 +30,8 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 |---|---|---|
 | `id` | sim | ULID único por remetente. É também a chave de idempotência |
 | `type` | sim | `<domínio>.<ação>`, ex.: `terminal.open` |
-| `node_id` | sim (nós) | ID do nó da conexão. Nas mensagens do navegador, é omitido |
+| `machine_id` | sim (entre máquinas) | ID da máquina remetente. Nas mensagens do navegador, é omitido |
+| `epoch` | sim (entre máquinas) | a época da Guilda que o remetente segue ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)). Nas mensagens do navegador, é omitido |
 | `ts` | sim | RFC 3339 em UTC com milissegundos, no relógio do remetente (só informativo) |
 | `payload` | sim | objeto, que depende do `type` |
 | `reply_to` | não | `id` da mensagem que esta responde (resultado, ack, erro) |
@@ -39,64 +41,60 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 - **Tamanho:** o máximo é 1 MiB por mensagem JSON. Conteúdo maior usa a [transferência em partes](#transferência-em-partes).
 - **Campos e tipos desconhecidos:** campos são ignorados. Um `type` desconhecido recebe `error` com `code: "unknown_type"`, sem derrubar a conexão.
 
+### Época
+
+- Quem recebe uma mensagem com `epoch` **menor** que a sua responde `error` `stale_epoch` sem executar nada e fecha a conexão com `4006`; o remetente atualiza a época (pede a certidão) e se reconecta na Cidadela certa.
+- Quem recebe `epoch` **maior** pede a certidão (`guild.epoch`), confere a assinatura e passa a seguir a nova época; uma Cidadela que vê época maior se rebaixa a Torre antes de qualquer ação externa ([volta da antiga Cidadela](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)).
+
 ### Abertura, versão e capacidades
 
-1. O nó conecta e envia `hello` com: faixa de versões do protocolo que entende (`{min, max}`, inteiros; a primeira versão é **1**), versão do binário e [registro e capacidades](#registro-e-capacidades).
-2. O Core responde `welcome` com a versão escolhida (a maior em comum), a versão dele e a hora do Core.
-   - Sem versão em comum, o Core fecha com o código `4003`, informando a faixa que aceita.
+1. A Torre conecta e envia `hello` com: faixa de versões do protocolo que entende (`{min, max}`, inteiros; a primeira versão é **1**), versão do binário, a [ficha da máquina](../guilda/ficha-da-maquina.md), a certidão de época que segue, o último `lsn` da réplica ([replicação](../guilda/replicacao.md)) e os terminais que já estão rodando.
+2. A Cidadela responde `welcome` com a versão escolhida (a maior em comum), a versão dela, a hora dela e a certidão de época atual.
+   - Sem versão em comum, a Cidadela fecha com o código `4003`, informando a faixa que aceita.
 3. **Mudanças compatíveis:**
    - Campo opcional novo e tipo novo **não** mudam a versão.
    - Remover um campo ou mudar o significado de algo exige versão nova.
-   - O Core aceita pelo menos a versão atual e a anterior, para conviver com nós ainda não atualizados ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)).
-4. **Relógio:** uma diferença de mais de 5 s entre o relógio do nó e o do Core vira aviso no [checklist](../plataforma/checklist.md).
-
-### Registro e capacidades
-
-- **O que vai no `hello`:** `node_id` e nome; `os` e `arch`; `local` (verdadeiro para o nó local do Core, o `mestre-node` da máquina do Core, que conecta por `127.0.0.1` como qualquer nó); `gpu` e `transcricao` (booleanos); ferramentas com versão (ex.: `claude`, `codex`, `agy`, `git`, `ffmpeg`); perfis de conta do nó; terminais que já estão rodando.
-- **Mudanças depois do `hello`:** vão em `node.capabilities`. Exemplo: `transcricao` passa a falso quando o modelo Whisper falha na verificação ([instalação e versões](../plataforma/instalacao-e-atualizacao.md#whisper)).
-- **Uso:** o Core escolhe o nó de cada personagem por essas capacidades ([personagens](../orquestracao/personagens.md)).
+   - A Cidadela aceita pelo menos a versão atual e a anterior, para conviver com Torres ainda não atualizadas ([instalação e atualização](../plataforma/instalacao-e-atualizacao.md)).
+4. **Relógio:** uma diferença de mais de 5 s entre o relógio da Torre e o da Cidadela vira aviso no [checklist](../plataforma/checklist.md).
+5. **Ficha depois do `hello`:** mudanças vão em `machine.sheet`; a Cidadela escolhe a máquina de cada personagem pela ficha ([ficha da máquina](../guilda/ficha-da-maquina.md)).
 
 ### Ack e idempotência
 
-- **Remetente:** toda mensagem com `ack: true` é gravada na tabela `outbox` do banco do remetente (Core ou nó, [persistência](../arquitetura/persistencia.md)) até chegar o `ack`. Depois de reconectar, ela é reenviada **com o mesmo `id`** e na ordem original.
+- **Remetente:** toda mensagem com `ack: true` é gravada na tabela `outbox` do banco do remetente (Cidadela ou Torre, [persistência](../arquitetura/persistencia.md)) até chegar o `ack`. Depois de reconectar, ela é reenviada **com o mesmo `id`** e na ordem original.
 - **Destinatário:** guarda os `id`s processados por remetente, com a resposta dada, por 24 horas (padrão). Um `id` repetido devolve a mesma resposta, com `status: "duplicate"`, **sem executar de novo**.
 - **O que o ack significa:** `ack` (`payload` `{status: ok|duplicate|error}`) quer dizer "recebido e aceito", não "concluído". A conclusão vem numa mensagem de resultado própria, ligada por `reply_to`.
 - A saída de terminal não tem ack. Ela se recupera por replay (abaixo).
 
 ### Multiplexação e prioridade
 
-- **Duas classes de frame:** controle (JSON em frame de texto) e dados (frame binário, com saída de terminal e partes de transferência).
+- **Duas classes de frame:** controle (JSON em frame de texto) e dados (frame binário, com saída de terminal, partes de transferência e replicação).
 - **Prioridade:** o escritor de cada conexão esvazia primeiro a fila de controle e manda no máximo 64 KiB de dados entre duas checagens dessa fila. Assim um terminal barulhento não atrasa heartbeat nem comando.
 - **Frame binário:** `[1 byte tipo][16 bytes ID (ULID)][8 bytes posição, big-endian][dados]`.
   - Tipo `0x01`: saída de terminal. O ID é o do terminal e a posição é o deslocamento em bytes.
   - Tipo `0x02`: parte de transferência. O ID é o da transferência e a posição é o índice da parte.
-- **Replay de terminal:** o buffer de cada terminal fica só no nó (1 MiB, padrão; [terminal](../arquitetura/terminal.md)). Depois de reconectar, ou quando um navegador abre um terminal, o Core pede `terminal.replay` a partir do deslocamento que precisa. Se o trecho já saiu do buffer, a resposta marca "trecho perdido"; o log completo continua no disco do nó.
+  - Tipo `0x03`: registros de mudança do banco ([replicação](../guilda/replicacao.md)). O ID é o `guild_id` e a posição é o `lsn` do primeiro registro.
+- **Replay de terminal:** o buffer de cada terminal fica só na máquina dele (1 MiB, padrão; [terminal](../arquitetura/terminal.md)). Depois de reconectar, ou quando um navegador abre um terminal, a Cidadela pede `terminal.replay` a partir do deslocamento que precisa. Se o trecho já saiu do buffer, a resposta marca "trecho perdido"; o log completo continua no disco da máquina.
 
 ### Heartbeat e reconexão
 
 - **Ping:** ping do WebSocket a cada 15 s. Sem pong em 45 s, a conexão é dada como morta.
-- **Heartbeat:** `node.heartbeat` a cada 30 s, com CPU, memória, disco livre e número de terminais. Sem heartbeat por 90 s, o Core considera o nó offline ([camadas](../autocura/camadas.md)).
-- **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%. Depois de 3 falhas seguidas, o nó refaz a [descoberta](descoberta.md).
-- **Uma conexão por `node_id`:** uma conexão nova substitui a antiga.
-- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (o nó para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Core desligando (reconectar logo).
+- **Heartbeat:** `machine.heartbeat` a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#torre-condutora)).
+- **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%. Depois de 3 falhas seguidas, a Torre refaz a [descoberta](descoberta.md).
+- **Uma conexão por `machine_id`:** uma conexão nova substitui a antiga.
+- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual).
 
 ### Tipos de mensagem
 
 O catálogo de tipos, com os campos principais e as respostas, e a tabela de códigos de erro estão em [mensagens](mensagens.md). Três regras valem para todos:
 - **Resultado separado do ack:** um comando que termina depois (ex.: `terminal.open`, `inbox.deliver`, `transcribe.request`) responde com uma mensagem de resultado ligada por `reply_to`; recusa por estado, como terminal ocupado, vem no resultado (`inbox.result` com `busy`), nunca no ack.
 - **CLI encaminhada:** `cli.call` e `cli.result` carregam exatamente o corpo do pedido e da resposta do [canal local](../arquitetura/canal-local.md), sem tradução.
-- **Regras efetivas:** `agent.rules` leva o documento de [regras efetivas](../classes/permissoes.md#regras-efetivas) do personagem; o nó guarda a última versão e o retrato para o modo degradado.
+- **Regras efetivas:** `agent.rules` leva o documento de [regras efetivas](../classes/permissoes.md#regras-efetivas) do personagem; a máquina guarda a última versão e o retrato para o modo degradado.
 
 ### Transferência em partes
 
-- **Usos:** git bundles das mesas ([ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md)), anexos, classes e pergaminhos materializados nos nós, áudio para transcrição e binários de atualização ([autoatualização](../plataforma/autoatualizacao.md)).
+- **Usos:** git bundles das mesas e dos espelhos ([ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md)), anexos, classes e pergaminhos materializados nas máquinas, cópia completa do banco e arquivos da Cidadela ([replicação](../guilda/replicacao.md)), áudio para transcrição e binários de atualização ([autoatualização](../plataforma/autoatualizacao.md)).
 - **Passo a passo:**
-  1. O remetente envia `xfer.begin`, com:
-     - `xfer_id`;
-     - `kind` (`git-bundle`, `file` ou `release`);
-     - `size` e `sha256` do total;
-     - `chunk_size` (padrão 256 KiB);
-     - `meta`: para bundle, mesa, branch, commits pré-requisito e ponta; para arquivo, o caminho de destino.
+  1. O remetente envia `xfer.begin`, com `xfer_id`; `kind` (`git-bundle`, `file`, `db-snapshot` ou `release`); `size` e `sha256` do total; `chunk_size` (padrão 256 KiB); e `meta` (para bundle, mesa, branch, commits pré-requisito e ponta; para arquivo, o caminho de destino).
   2. O destinatário responde com `next_index`: 0, ou o ponto de retomada se já tiver partes num arquivo temporário.
   3. As partes vão em frames binários `0x02`, com até 16 partes em trânsito. O destinatário envia `xfer.progress` com o próximo índice esperado, e isso libera a janela.
   4. O remetente envia `xfer.end`. O destinatário confere o SHA-256 total. Se for bundle, roda `git bundle verify` no repositório de destino.
@@ -109,38 +107,38 @@ O catálogo de tipos, com os campos principais e as respostas, e a tabela de có
 
 ### Conexão do Guardião
 
-- **Conexão própria:** o Guardião do nó abre a própria conexão (`/ws/guardian`), com credencial própria. Ela não depende do motor do nó.
-- **Mensagens:** mesmo envelope e mesmas regras de ack. A versão é **própria** (começa em 1 e é negociada no `guardian.hello` do mesmo jeito), porque o Guardião tem binário e versão independentes; o manifesto de cada release traz as duas faixas ([autoatualização](../plataforma/autoatualizacao.md)). Tipos: [mensagens do Guardião](mensagens.md#guardião-do-nó--core). A `guardian.replica` é a única cópia de usuários que serve login (página reserva); o `cache.users` do motor do nó é só cache de operação.
+- **Conexão própria:** o Guardião de cada Torre abre a própria conexão até a Cidadela atual (`/ws/guardian`), com credencial própria. Ela não depende do motor da Torre.
+- **Mensagens:** mesmo envelope e mesmas regras de ack. A versão é **própria** (começa em 1 e é negociada no `guardian.hello` do mesmo jeito), porque o Guardião tem binário e versão independentes; o manifesto de cada release traz as duas faixas ([autoatualização](../plataforma/autoatualizacao.md)). Tipos: [mensagens do Guardião](mensagens.md#guardião-da-torre--cidadela). A `guardian.replica` é a única cópia de usuários que serve login (página reserva); a réplica do banco no motor da Torre não serve login.
 - **Nada derruba a conexão:** nenhuma mensagem desta conexão pede ao Guardião que a feche, se desligue ou se atualize. A atualização do Guardião é feita pelo motor saudável da própria máquina ([autoatualização](../plataforma/autoatualizacao.md)).
 
 ### Canal do navegador
 
-- **Conexão:** `/ws/ui`, autenticado pelo cookie de sessão (`HttpOnly`, `Secure`, `SameSite=Strict`), com o `Origin` conferido. O envelope é o mesmo, sem `node_id`.
+- **Conexão:** `/ws/ui`, autenticado pelo cookie de sessão (`HttpOnly`, `Secure`, `SameSite=Strict`), com o `Origin` conferido. O envelope é o mesmo, sem `machine_id` nem `epoch`.
 - **Assinaturas:** o navegador assina tópicos com `ui.subscribe` (`workspace:<id>`, `table:<id>`, `terminal:<id>`). Recebe um retrato inicial e depois os eventos (`ui.event`).
 - **Terminais:**
-  - A saída chega em frames `0x01`, repassados pelo Core sem guardar buffer. Ao abrir um terminal, o Core pede ao nó o `terminal.replay` do buffer e repassa ao navegador; o tamanho do terminal é fixo e o navegador nunca o muda ([terminal](../arquitetura/terminal.md)).
+  - A saída chega em frames `0x01`, repassados pela Cidadela sem guardar buffer. Ao abrir um terminal, a Cidadela pede à máquina dele o `terminal.replay` do buffer e repassa ao navegador; o tamanho do terminal é fixo e o navegador nunca o muda ([terminal](../arquitetura/terminal.md)).
   - Para cada navegador, a fila tem limite. Cliente lento perde o fluxo e recebe de novo o replay do buffer.
   - `terminal.input` pelo navegador exige o nível em [usuários e níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades).
 
-Pareamento e descoberta usam este protocolo e vêm depois dele no mesmo marco ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
+Descoberta, entrada na Guilda, ficha da máquina e replicação usam este protocolo e vêm depois dele no mesmo marco ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
 - Um comando com ack, ao ser reenviado depois de uma queda, nunca executa duas vezes. Isso vale principalmente para `terminal.input` e `inbox.deliver`.
-- Credencial revogada (`4002`): o nó para e mostra o estado no checklist. Mensagem maior que 1 MiB: `error` `too_large`.
+- Credencial revogada (`4002`): a máquina para e mostra o estado no checklist. Época vencida (`4006`): a máquina nunca reenvia a mensagem recusada para a Cidadela antiga; segue a certidão nova. Mensagem maior que 1 MiB: `error` `too_large`.
 
 ## Critérios de aceite
 
 - **CA-PROTO-01** · *rápida* — **Dado** um `terminal.input` com ack já executado, **quando** o mesmo `id` chega depois de reconectar, **então** nada é digitado de novo e a resposta é `duplicate`.
-- **CA-PROTO-02** · *rápida* — **Dado** um nó com versões 3–4 e um Core com 4–5, **quando** conectam, **então** usam a 4. **Dado** um nó só com a 2, **então** o Core fecha com `4003`.
+- **CA-PROTO-02** · *rápida* — **Dado** uma Torre com versões 3–4 e uma Cidadela com 4–5, **quando** conectam, **então** usam a 4. **Dado** uma Torre só com a 2, **então** a Cidadela fecha com `4003`.
 - **CA-PROTO-03** · *rápida* — **Dado** um terminal mandando 50 MiB de saída, **quando** sai um heartbeat, **então** ele é enviado antes dos próximos 64 KiB de dados.
 - **CA-PROTO-04** · *rápida* — **Dado** uma transferência interrompida na parte 40, **quando** a conexão volta, **então** ela retoma da 40 e o SHA-256 final confere.
-- **CA-PROTO-05** · *completa* — **Dado** um bundle cujo pré-requisito o Core não tem, **quando** chega o `xfer.end`, **então** a resposta é `missing_prerequisite` e o nó envia a branch inteira.
-- **CA-PROTO-06** · *completa* — **Dado** Core e nó reais na mesma máquina, **quando** a conexão cai e volta durante uma etapa, **então** a saída do terminal continua sem buraco e nenhum comando repete.
-- **CA-PROTO-07** · *rápida* — **Dado** o motor do nó parado, **quando** o Core manda `guardian.action` de status, **então** o Guardião responde pela própria conexão.
-
-- **CA-PROTO-08** · *rápida* — **Dado** um `inbox.deliver` para um terminal que ficou ocupado, **quando** o nó responde, **então** o ack é `ok`, o resultado é `inbox.result` com `busy` e o item volta para a fila do Core.
-- **CA-PROTO-09** · *rápida* — **Dado** um navegador que abre um terminal cujo nó já mandou 300 KiB de saída, **quando** o Core atende, **então** pede `terminal.replay` ao nó a partir do deslocamento 0 e o navegador recebe os 300 KiB.
+- **CA-PROTO-05** · *completa* — **Dado** um bundle cujo pré-requisito a Cidadela não tem, **quando** chega o `xfer.end`, **então** a resposta é `missing_prerequisite` e a Torre envia a branch inteira.
+- **CA-PROTO-06** · *completa* — **Dado** Cidadela e Torre reais na mesma máquina, **quando** a conexão cai e volta durante uma etapa, **então** a saída do terminal continua sem buraco e nenhum comando repete.
+- **CA-PROTO-07** · *rápida* — **Dado** o motor da Torre parado, **quando** a Cidadela manda `guardian.action` de status, **então** o Guardião responde pela própria conexão.
+- **CA-PROTO-08** · *rápida* — **Dado** um `inbox.deliver` para um terminal que ficou ocupado, **quando** a máquina responde, **então** o ack é `ok`, o resultado é `inbox.result` com `busy` e o item volta para a fila da Cidadela.
+- **CA-PROTO-09** · *rápida* — **Dado** um navegador que abre um terminal cuja máquina já mandou 300 KiB de saída, **quando** a Cidadela atende, **então** pede `terminal.replay` à máquina a partir do deslocamento 0 e o navegador recebe os 300 KiB.
+- **CA-PROTO-10** · *rápida* — **Dado** uma Torre na época 2, **quando** chega uma mensagem da época 1, **então** ela responde `stale_epoch`, fecha com `4006` e nada é executado; **dado** um `welcome` com certidão da época 3 válida, **então** a Torre passa a seguir a época 3.
 
 ## Depende de
 

@@ -1,10 +1,10 @@
 # ADR 0006: Um GitHub App por classe, criado pelo usuário com um clique
 
-> **Assunto:** por que cada classe tem o seu App e por que ele é preparado pelo Grão-Mestre e criado pelo usuário, por link, no próprio navegador · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** por que cada classe tem o seu App e por que ele é preparado pelo Grão-Mestre e criado pelo usuário, por link, no próprio navegador · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser criados pelo usuário com um clique, a partir do manifesto preparado pelo Grão-Mestre, no lugar do navegador dedicado. O histórico está em "Opções consideradas" e "Decisão".
+Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser criados pelo usuário com um clique, a partir do manifesto preparado pelo Grão-Mestre, no lugar do navegador dedicado. O histórico está em "Opções consideradas" e "Decisão". **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 
@@ -43,7 +43,7 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser cri
 - **Criação (opção 5):**
   - O Grão-Mestre pede o App; o motor monta o manifesto e gera um link de uso único.
   - O link vai ao Dono pelo Telegram e aparece no painel. Ele abre no próprio navegador, clica em "Criar" e depois em "Instalar".
-  - Os redirecionamentos do manifesto voltam ao painel do Core, que troca o código pela chave privada, guarda no cofre e segue sozinho.
+  - Os redirecionamentos do manifesto voltam ao painel da Cidadela, que troca o código pela chave privada, guarda no cofre e segue sozinho.
   - Os Apps fixos "Grão-Mestre" e "Mestre" seguem o mesmo fluxo no primeiro acesso.
 - **Por que a opção 4 saiu:** a decisão de não ter interface gráfica em lugar nenhum ([ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md)) tirou o processo da sessão do Windows, onde o navegador dedicado rodava; e o fluxo por link já era o caminho de reserva da opção 4. Ficou o caminho mais simples, que vale em qualquer sistema.
 - **Enquanto o App não existe:** as ações da classe saem com o App "Mestre" e a classe na assinatura.
@@ -60,11 +60,11 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser cri
   - Nenhuma credencial do GitHub do Dono fica com o Mestre para criar Apps; nada depende de telas do GitHub além do clique do próprio usuário.
 - **Negativas:**
   - **Espera pelo Dono:** o App só nasce quando o Dono clica. Até lá, a classe usa o App provisório e aparece "em criação".
-  - **Rede local:** os redirecionamentos só chegam ao Core se o aparelho do Dono estiver na rede local e confiar na CA.
+  - **Rede local:** os redirecionamentos só chegam à Cidadela se o aparelho do Dono estiver na rede local e confiar na CA.
   - **Limite de Apps:** com 100 Apps por conta, o painel acompanha a contagem ([administração](../painel/administracao.md)) e o Grão-Mestre evita Apps para simples variações.
   - **Segredos:** mais chaves privadas no cofre, uma por App.
   - **Prazo do manifesto:** a troca do código precisa acontecer em até uma hora depois do clique.
-- **Pontos em aberto, conferidos na implementação** (endereço do Core na rede local como `redirect_url` e `setup_url`; o user access token do App "Grão-Mestre", [ADR 0008](0008-grao-mestre-aprovador-delegado.md), para adicionar repositórios sem link): os itens completos estão em [criação de Apps](../github/criacao-de-apps.md#verificar-na-implementação).
+- **Pontos em aberto, conferidos na implementação** (endereço da Cidadela na rede local como `redirect_url` e `setup_url`; o user access token do App "Grão-Mestre", [ADR 0008](0008-grao-mestre-aprovador-delegado.md), para adicionar repositórios sem link): os itens completos estão em [criação de Apps](../github/criacao-de-apps.md#verificar-na-implementação).
 
 ## Fontes
 

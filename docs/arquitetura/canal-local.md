@@ -1,10 +1,10 @@
 # Canal local
 
-> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Node · **Atualizado:** 2026-10-12
+> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mestre` (um comando da CLI ou o despachante `mestre hook`) abre o canal local do motor do nó onde roda, manda um pedido e recebe a resposta. O motor local é sempre o serviço `mestre-node`, também na máquina do Core ([componentes](componentes.md#canais-locais-padrão)). A forma dos comandos e os códigos de saída estão em [convenções da CLI](../cli/convencoes.md).
+Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mestre` (um comando da CLI ou o despachante `mestre hook`) abre o canal local do motor da máquina onde roda, manda um pedido e recebe a resposta. O motor local é sempre o serviço `mestre`, na Cidadela e nas Torres ([componentes](componentes.md#canais-locais-padrão)). A forma dos comandos e os códigos de saída estão em [convenções da CLI](../cli/convencoes.md).
 
 ## Comportamento
 
@@ -13,7 +13,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 | Sistema | Endereço | Acesso |
 |---|---|---|
 | Linux | socket Unix `/run/mestre/cli.sock` | dono `mestre`, grupo `mestre-agente`, modo 0660 |
-| Windows | named pipe `\\.\pipe\mestre-cli` | ACL só para `NT SERVICE\MestreNode` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
+| Windows | named pipe `\\.\pipe\mestre-cli` | ACL só para `NT SERVICE\Mestre` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
 
 - `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/cli.sock` ou `npipe:////./pipe/mestre-cli`. Sem a variável, a CLI usa o endereço padrão do sistema.
 - Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo.
@@ -21,7 +21,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 ### Enquadramento
 
 - **JSON Lines:** cada mensagem é um objeto JSON em uma linha UTF-8 terminada por `\n`. Máximo de 1 MiB por linha (padrão).
-- Conteúdo maior (`--file`, `--attach`) vai como **caminho absoluto**; o motor lê o arquivo no disco do nó e confere que o chamador pode lê-lo pelas regras da classe ([permissões](../classes/permissoes.md)).
+- Conteúdo maior (`--file`, `--attach`) vai como **caminho absoluto**; o motor lê o arquivo no disco da máquina e confere que o chamador pode lê-lo pelas regras da classe ([permissões](../classes/permissoes.md)).
 
 ### Pedido
 
@@ -67,10 +67,10 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 - Também é `not_identified`: chamador sem pidfd (já colhido antes de o motor aceitar a conexão), pidfd que deixou de apontar para o mesmo PID depois da leitura do `/proc`, e subida pela árvore que encontrou pai mais novo que o filho em 3 tentativas seguidas.
 - `v` desconhecido: resposta `protocol_mismatch` (exit 5). O motor aceita a versão atual e a anterior, como no [protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades).
 
-### Encaminhamento ao Core
+### Encaminhamento à Cidadela
 
-- O motor local resolve sozinho `help`, `debug` e `hook`; todo o resto vai ao Core na mensagem `cli.call`, cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. O Core devolve `cli.result` com **a mesma resposta** (inclusive as parciais), que o motor repassa linha a linha ([mensagens](../conectividade/mensagens.md)).
-- Core fora: `core_unreachable`, exceto `done`, que o motor guarda e entrega uma vez quando o Core volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-entre-nós)).
+- O motor local resolve sozinho `help`, `debug` e `hook`; todo o resto vai à Cidadela na mensagem `cli.call` (na própria Cidadela, a chamada é atendida no mesmo processo, pelo mesmo código), cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. A Cidadela devolve `cli.result` com **a mesma resposta** (inclusive as parciais), que o motor repassa linha a linha ([mensagens](../conectividade/mensagens.md)).
+- Cidadela fora: `citadel_unreachable`, exceto `done`, que o motor guarda e entrega uma vez quando a Cidadela volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
 
 ## Regras e erros
 

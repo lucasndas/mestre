@@ -1,6 +1,6 @@
 # CLI: comandos do Grão-Mestre
 
-> **Assunto:** sintaxe de `table`, `gh`, `app`, `approval`, `decree` e `notify`, exclusivos do Grão-Mestre · **Componente:** CLI · **Atualizado:** 2026-10-12
+> **Assunto:** sintaxe de `table`, `gh`, `app`, `approval`, `decree` e `notify`, exclusivos do Grão-Mestre · **Componente:** CLI · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -24,8 +24,8 @@ mestre table list [--state open|closed|all]
 mestre table status "<mesa>"
 mestre table close "<mesa>" [--cancel --reason "<texto>"]
 ```
-- `open`: abre a mesa de um épico **já criado** por `gh epic create`: branch `epico/<n>-<slug>`, com o slug gerado pelo motor a partir do título do épico ([mesas](../orquestracao/mesas.md)), a partir de `--base-branch` (padrão: a branch principal), worktree no Core e Mestre da mesa recrutado com `--sheet` (padrão: a ficha de Mestres de mesa do workspace). `--from-message` indica a mensagem de usuário de origem: o motor copia o texto original e os anexos para a caixa de entrada do novo Mestre (sem reescrever). Volta quando o Mestre foi recrutado; não espera ele trabalhar. `--json` → `{name, branch, epic, worktree, master: {name, id, node}}`. Épico inexistente ou sem rótulo `epico` → 4 `epic_not_found` (`table open` nunca cria épico); mesa já aberta para o épico → 7 `table_exists`; workspace fora do estado `active` → 7 `workspace_not_active` ([workspaces](../orquestracao/workspaces.md)).
-- `list`: nome, estado com os identificadores de [mesas](../orquestracao/mesas.md) (`open`, `working`, `in_review`, `closing`, `closed`, `cancelling`, `cancelled`) e a marca de pausa, épico, branch, Mestre, nós em uso, PR e consumo. `--state open` mostra as não encerradas.
+- `open`: abre a mesa de um épico **já criado** por `gh epic create`: branch `epico/<n>-<slug>`, com o slug gerado pelo motor a partir do título do épico ([mesas](../orquestracao/mesas.md)), a partir de `--base-branch` (padrão: a branch principal), worktree na Cidadela e Mestre da mesa recrutado com `--sheet` (padrão: a ficha de Mestres de mesa do workspace). `--from-message` indica a mensagem de usuário de origem: o motor copia o texto original e os anexos para a caixa de entrada do novo Mestre (sem reescrever). Volta quando o Mestre foi recrutado; não espera ele trabalhar. `--json` → `{name, branch, epic, worktree, master: {name, id, machine}}`. Épico inexistente ou sem rótulo `epico` → 4 `epic_not_found` (`table open` nunca cria épico); mesa já aberta para o épico → 7 `table_exists`; workspace fora do estado `active` → 7 `workspace_not_active` ([workspaces](../orquestracao/workspaces.md)).
+- `list`: nome, estado com os identificadores de [mesas](../orquestracao/mesas.md) (`open`, `working`, `in_review`, `closing`, `closed`, `cancelling`, `cancelled`) e a marca de pausa, épico, branch, Mestre, máquinas em uso, PR e consumo. `--state open` mostra as não encerradas.
 - `status`: missões e etapa atual, esperas, PR (CI e revisões), personagens e consumo da mesa.
 - `close`: o Grão-Mestre chama quando o motor avisa (item `github` na caixa de entrada) que o PR da mesa foi mesclado; é o que leva a mesa a `closing`. Sem merge confirmado → 7 `not_merged`. O motor só remove um worktree se a branch foi integrada e não há alterações pendentes; senão a mesa fica `closing` e a CLI sai com 7 `unmerged_changes` listando o que falta (o Grão-Mestre pergunta aos usuários e chama `close` de novo com a decisão). `--cancel` fecha o PR sem merge e a issue como "não planejada"; é ação destrutiva: sem pedido explícito de usuário sai com 9 (regra 1 de [convencoes](convencoes.md)).
 

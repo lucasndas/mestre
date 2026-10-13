@@ -1,6 +1,6 @@
 # Mestre da mesa
 
-> **Assunto:** papel do Mestre da mesa, liberdade dentro do teto, proteção, instruções do sistema e instruções extras do usuário · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** papel do Mestre da mesa, liberdade dentro do teto, proteção, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -12,7 +12,7 @@ O Mestre da mesa é o agente orquestrador de **uma [mesa](mesas.md)**: monta e c
 
 - Um por mesa, recrutado pelo motor na abertura da mesa ([abertura](mesas.md#abertura)) com a ficha padrão de Mestres de mesa do workspace (ou outra indicada pelo Grão-Mestre a pedido de um usuário).
 - Nome fixo no canvas e na CLI: `Mestre` (único dentro da mesa).
-- Inicia no worktree da mesa no Core. Pode rodar em outro nó se a ficha exigir, mas o worktree de referência continua sendo o do Core ([sincronização](mesas.md#worktree-por-nó-e-sincronização)).
+- Inicia no worktree da mesa na Cidadela. Pode rodar em outra máquina se a ficha exigir, mas o worktree de referência continua sendo o da Cidadela ([sincronização](mesas.md#worktree-por-máquina-e-sincronização)).
 - No GitHub, tudo o que ele pede sai com o App "Mestre" ([identidades](../github/identidades-e-apps.md)).
 - Conexões automáticas: com o Grão-Mestre e com todo personagem da mesa ([conexões](conexoes.md)).
 
@@ -40,7 +40,7 @@ Conteúdo obrigatório do modelo de instruções do Mestre da mesa (versionado c
 1. **Papel:** coordenar a party da mesa; o trabalho de execução é delegado. Fazer sozinho só o que for trivial (ex.: ler um arquivo para planejar, ajustar um pergaminho).
 2. **Planejar:** transformar o pedido em [missão](missoes.md): etapas; classe e ficha de cada etapa; o que roda em paralelo; onde há devolução (com limite de voltas); onde é preciso aprovação; quais etapas viram sub-issue.
 3. **Montar o time:** consultar classes, fichas e personagens (`mestre list`, `mestre class list`, `mestre sheet list`); reaproveitar persistentes livres; respeitar os limites; criar classes da mesa quando precisar, dentro do teto, já com o App definido.
-4. **Coordenar nós:** não deixar dois personagens em nós diferentes editarem os mesmos arquivos ao mesmo tempo (dividir por arquivos/pastas nas instruções das etapas, ou sequenciar); tratar avisos de divergência de branch pedindo a um personagem que integre.
+4. **Coordenar máquinas:** não deixar dois personagens em máquinas diferentes editarem os mesmos arquivos ao mesmo tempo (dividir por arquivos/pastas nas instruções das etapas, ou sequenciar); tratar avisos de divergência de branch pedindo a um personagem que integre.
 5. **Não bloquear:** delegar e encerrar o turno; reagir aos eventos da caixa de entrada. `ask` bloqueante só para perguntas rápidas; para trabalho demorado, ask back ou missão. Ao estourar um tempo limite, nunca reenviar o mesmo pedido: usar `check`, reenviar com mais contexto, trocar o personagem ou avisar o Grão-Mestre.
 6. **Relatar ao Grão-Mestre** (pela caixa de entrada): andamento relevante, bloqueios, pedidos de decisão e o resultado final (o que foi feito, arquivos alterados, pendências). Ao terminar o épico, abrir o PR (`mestre pr open`) e avisar.
 7. **Respeitar o trabalho dos outros:** nunca interromper um personagem ocupado nem pedir que edite arquivos que outro está modificando.
@@ -66,7 +66,7 @@ Recebe as skills de comunicação, de coordenação de mesa e de rituais ([skill
 - **CA-MM-02** · *rápida* — **Dado** um teto que proíbe internet, **quando** o Mestre da mesa cria uma classe da mesa com rede liberada, **então** a criação é recusada e o erro lista o item excedente.
 - **CA-MM-03** · *rápida* — **Dado** um Mestre da mesa, **quando** chama `mestre reply`, `mestre notify` ou `mestre issue update` numa issue de outra mesa, **então** recebe erro de permissão.
 - **CA-MM-04** · *rápida* — **Dado** instruções extras para Mestres de mesa, **quando** a camada de dois Mestres de mesa do mesmo workspace é montada, **então** ambas contêm o texto extra depois das instruções do sistema.
-- **CA-MM-05** · *pesada* — **Dado** uma mesa com pedido de funcionalidade, **quando** o Mestre da mesa planeja, **então** monta uma missão com classes diferentes em provedores e nós diferentes e relata o resultado ao Grão-Mestre (MVP-4).
+- **CA-MM-05** · *pesada* — **Dado** uma mesa com pedido de funcionalidade, **quando** o Mestre da mesa planeja, **então** monta uma missão com classes diferentes em provedores e máquinas diferentes e relata o resultado ao Grão-Mestre (MVP-4).
 
 ## Depende de
 

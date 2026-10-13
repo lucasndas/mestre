@@ -1,6 +1,6 @@
 # Anexos e transcrição
 
-> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -14,7 +14,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - O limite é configurável. O padrão é **20 MB**, que é também o teto para o Telegram, porque a Bot API na nuvem só baixa arquivos de até 20 MB.
   - O motor confere o `file_size` **antes** de chamar `getFile`. Acima do limite, responde com o limite e não baixa nada.
 - **Download:** `getFile` e depois o link de arquivo, que vale pelo menos 1 hora. De uma foto, o motor baixa o maior tamanho disponível.
-- **Onde fica:** `.mestre/anexos/<AAAA>/<MM>/<id>-<nome>` no clone principal do workspace, no Core.
+- **Onde fica:** `.mestre/anexos/<AAAA>/<MM>/<id>-<nome>` no clone principal do workspace, na Cidadela.
   - O nome é saneado: sem separadores de caminho nem caracteres de controle, com até 100 caracteres. Uma foto sem nome vira `foto-<id>.jpg`.
   - A pasta fica fora do git ([sessão zero do workspace](../sessao-zero/workspace.md)).
 - **Registro no banco:**
@@ -30,7 +30,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 - **Entrega ao Grão-Mestre:** depois da linha de origem ([roteamento](roteamento.md#entrega-ao-grão-mestre)), vêm a legenda (como texto) e uma linha por arquivo:
   `[anexo] .mestre/anexos/2026/10/a1b2-relatorio.pdf · application/pdf · 1,2 MB`
 - **Repasse à mesa:** o Grão-Mestre repassa o pedido ao Mestre da mesa com o texto original e os caminhos dos anexos ([Grão-Mestre](../orquestracao/grao-mestre.md)).
-  - Quando o motor encontra um caminho em `.mestre/anexos/` numa mensagem para um personagem de mesa, ele copia o arquivo para os worktrees daquela mesa, inclusive nos outros nós, pela conexão do nó ([protocolo](../conectividade/protocolo.md#transferência-em-partes)).
+  - Quando o motor encontra um caminho em `.mestre/anexos/` numa mensagem para um personagem de mesa, ele copia o arquivo para os worktrees daquela mesa, inclusive nas Torres, pela conexão de cada Torre ([protocolo](../conectividade/protocolo.md#transferência-em-partes)).
   - Onde a cópia fica está em [sessão zero da mesa](../sessao-zero/mesa.md).
 - **Nunca executar:** anexos são conteúdo trazido pelo usuário. Os agentes leem e usam, mas nunca executam. É regra fixa do Mestre: o `mestre hook` nega executar ou dar permissão de execução a arquivos de `.mestre/anexos/` ([permissões](../classes/permissoes.md)).
 - **Limpeza:** não há limpeza automática; os anexos ficam até alguém apagá-los.
@@ -50,33 +50,34 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 
 - **Motor de transcrição:** whisper.cpp, `whisper-server`, com o modelo `large-v3-turbo` quantizado ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)).
   - A quantização é q5_0 ou q8_0, escolhida por benchmark na máquina durante a instalação.
-  - O modelo é baixado na instalação do Core ou quando um nó passa a transcrever ([Whisper na instalação](../plataforma/instalacao-e-atualizacao.md#whisper)).
+  - O modelo é baixado na instalação de toda máquina que pode ser Cidadela ou quando uma máquina passa a transcrever ([Whisper na instalação](../plataforma/instalacao-e-atualizacao.md#whisper)).
 - **Processo auxiliar:**
-  - O motor do nó que transcreve sobe o `whisper-server` e o supervisiona.
+  - O motor da máquina que transcreve sobe o `whisper-server` e o supervisiona.
   - Opções: `--host 127.0.0.1 --port 7447` (porta fixa, só local; [componentes](../arquitetura/componentes.md)), `-t <núcleos físicos>`, `-l auto` e um `--prompt` curto em português. O idioma pode ser fixado em `pt` na configuração.
   - O modelo fica carregado (servidor quente).
   - Se o processo cair, o motor o reinicia com backoff de 1 s a 60 s. Com 5 quedas em 10 minutos, o motor gera um alerta e o item fica com erro no [checklist](../plataforma/checklist.md).
-- **Qual nó transcreve:**
-  - O `whisper-server` roda em qualquer nó que declara a capacidade `transcricao: true` ([capacidades](../conectividade/protocolo.md#registro-e-capacidades)); havendo mais de um, o com `gpu: true` é preferido.
-  - **Padrão: o nó local do Core, por CPU** (o serviço `mestre-node` da máquina do Core, [componentes](../arquitetura/componentes.md)).
-  - Se o nó preferido estiver offline, o próximo capaz assume.
-  - O motor do Core manda o áudio já convertido ao motor do nó escolhido pela conexão WSS (`transcribe.request`) e recebe o texto de volta (`transcribe.result`) ([protocolo](../conectividade/protocolo.md)); o motor do nó chama o `whisper-server` local. Vale também para o nó local do Core.
+- **Qual máquina transcreve:**
+  - O `whisper-server` roda em qualquer máquina da Guilda, Linux ou Windows, cuja [ficha da máquina](../guilda/ficha-da-maquina.md) diz que transcreve; havendo mais de uma, a com GPU é preferida.
+  - **Padrão: a própria Cidadela, por CPU**, no próprio motor (serviço `mestre`, [componentes](../arquitetura/componentes.md)).
+  - Se a máquina preferida estiver offline, a próxima capaz assume.
+  - O motor da Cidadela manda o áudio já convertido ao motor da máquina escolhida pela conexão WSS (`transcribe.request`) e recebe o texto de volta (`transcribe.result`) ([protocolo](../conectividade/protocolo.md)); o motor dela chama o `whisper-server` local. Quando é a própria Cidadela, a chamada é direta, sem WSS.
+  - Numa troca de Cidadela, o padrão passa a ser a nova Cidadela.
 - **Conversão:**
   - A voz do Telegram vem em OGG/Opus, e o `whisper-server` aceita WAV.
-  - O motor **do Core** converte com `ffmpeg` (dependência do pacote do Core no Ubuntu; no Windows, vem no instalador) para WAV 16 kHz mono antes de enviar ao nó que transcreve, seja ele qual for. Assim nenhum nó precisa do `ffmpeg`, nem um nó que passe a transcrever. O servidor não roda com `--convert`.
+  - O motor **da Cidadela** converte com `ffmpeg` (dependência do pacote no Ubuntu e no instalador do Windows, presente em toda máquina que pode ser Cidadela) para WAV 16 kHz mono antes de enviar à máquina que transcreve, seja ela qual for. Assim as outras Torres não precisam do `ffmpeg`, nem uma máquina que passe a transcrever. O servidor não roda com `--convert`.
 - **Fila e tempo:**
-  - Uma transcrição por vez por nó, em ordem de chegada.
+  - Uma transcrição por vez por máquina, em ordem de chegada.
   - O tempo limite é o maior entre 60 s e 2 vezes a duração do áudio (padrão).
 - **Privacidade:**
   - O servidor só escuta em `127.0.0.1`.
-  - O áudio e o texto viajam só pela conexão WSS com mTLS entre o Core e o nó que transcreve.
+  - O áudio e o texto viajam só pela conexão WSS com mTLS entre a Cidadela e a máquina que transcreve.
   - Nada sai das máquinas.
 
 ```mermaid
 sequenceDiagram
   participant T as Telegram
-  participant M as Motor do Core
-  participant N as Motor do nó de transcrição
+  participant M as Motor da Cidadela
+  participant N as Motor da máquina de transcrição
   participant W as whisper-server (127.0.0.1:7447)
   participant G as Grão-Mestre
   T->>M: voice (OGG/Opus)
@@ -99,7 +100,7 @@ sequenceDiagram
 
 - Um anexo que falha no download é tentado 3 vezes. Depois disso, o bot avisa o usuário e o Grão-Mestre não recebe nada.
 - O tipo MIME detectado prevalece sobre o declarado. A divergência fica registrada.
-- Sem modelo baixado ou sem nó capaz, todo áudio cai no caminho de falha e o checklist acusa.
+- Sem modelo baixado ou sem máquina capaz, todo áudio cai no caminho de falha e o checklist acusa.
 
 ## Critérios de aceite
 
@@ -107,7 +108,7 @@ sequenceDiagram
 - **CA-ANEXO-02** · *rápida* — **Dado** um documento com `file_size` de 30 MB, **quando** ele chega, **então** `getFile` não é chamado e o usuário recebe o limite.
 - **CA-ANEXO-03** · *rápida* — **Dado** uma voz e um whisper falso, **quando** ela chega, **então** o Grão-Mestre recebe o texto marcado como transcrito e o anexo original.
 - **CA-ANEXO-04** · *rápida* — **Dado** o whisper falso que não responde, **quando** o relógio falso passa do tempo limite, **então** o Grão-Mestre recebe o áudio com o motivo da falha.
-- **CA-ANEXO-05** · *rápida* — **Dado** um nó `gpu: true` com transcrição e o nó local do Core, **quando** o nó está offline, **então** o `transcribe.request` vai para o nó local do Core.
+- **CA-ANEXO-05** · *rápida* — **Dado** uma Torre com GPU e transcrição e a Cidadela com transcrição, **quando** a Torre está offline, **então** o áudio é transcrito pela própria Cidadela.
 - **CA-ANEXO-06** · *rápida* — **Dado** `mestre reply --attach /etc/passwd`, **quando** o motor processa, **então** recusa por caminho fora do workspace.
 - **CA-ANEXO-07** · *rápida* — **Dado** uma mensagem do Grão-Mestre ao Mestre da mesa citando um anexo, **quando** ela é entregue, **então** o arquivo já existe nos worktrees da mesa.
 - **CA-ANEXO-08** · *pesada* — **Dado** o sistema instalado, **quando** mando um áudio e depois um PDF pelo Telegram (dublê), **então** o áudio é transcrito localmente pelo `whisper-server` real e respondido no Telegram, e o PDF chega à mesa certa e é usado na tarefa (MVP-10).

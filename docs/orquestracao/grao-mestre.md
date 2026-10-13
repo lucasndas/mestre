@@ -1,6 +1,6 @@
 # Grão-Mestre
 
-> **Assunto:** papel do Grão-Mestre, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** papel do Grão-Mestre, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -18,13 +18,15 @@ O Grão-Mestre é o agente orquestrador **único de cada [workspace](workspaces.
 
 ### Onde roda
 
-Nome fixo no canvas e na CLI: `Grão-Mestre`. Roda sempre no **nó local do Core**: o serviço `mestre-node` que existe em toda máquina Core, ligado ao Core como qualquer nó (no Linux com a conta `mestre` e no Windows com a conta virtual `NT SERVICE\MestreNode`, iniciando os agentes como `mestre-agente`; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável no Core; o painel recusa outra. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
+Nome fixo no canvas e na CLI: `Grão-Mestre`. Grão-Mestre é nome de agente, não de máquina. Roda sempre **na Cidadela**, no próprio motor dela (o serviço `mestre`, iniciando os agentes como `mestre-agente`; [componentes](../arquitetura/componentes.md)), no clone principal do workspace (é ali que fica a fonte de `.mestre/`). A ficha do Grão-Mestre é escolhida na criação do workspace e deve ter base executável em toda máquina que pode ser Cidadela; o painel recusa outra e avisa quando uma máquina marcada "pode ser Cidadela" não atende ([ficha da máquina](../guilda/ficha-da-maquina.md)).
+
+**Troca de Cidadela:** quando uma Torre é promovida ([Cidadela e Torres](../guilda/cidadela-e-torres.md)), o Grão-Mestre muda junto: a nova Cidadela o inicia no clone principal dela e ele retoma o contexto pelo banco replicado (mensagem de retomada abaixo). O processo da Cidadela antiga, se ainda existir, é encerrado quando ela se rebaixa a Torre; ela nunca o mantém vivo nem age por ele. Trocar a ficha depois (Administrador ou acima, pelo painel) segue a troca de ficha de [personagens](personagens.md#troca-de-ficha).
 
 ### Fixo e protegido
 
 - Nasce fixado e não pode ser desafixado, encerrado por `dismiss` nem encerrado por ociosidade.
 - Se o processo dele morrer, o motor o reinicia na hora; novas falhas usam backoff (5 s, 30 s, 2 min). Com **3 falhas em 10 min** (padrão), o motor envia alerta operacional aos usuários e continua tentando a cada 2 min.
-- Depois de reinício do Core ou de uma cura, é o **primeiro** personagem retomado ([retomada](personagens.md#retomada-após-reinício)).
+- Depois de reinício da Cidadela, de uma cura ou de uma troca de Cidadela, é o **primeiro** personagem retomado ([retomada](personagens.md#retomada-após-reinício)).
 
 ### Retomada de contexto
 
@@ -70,7 +72,7 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - **CA-GM-01** · *rápida* — **Dado** um Grão-Mestre fixado, **quando** qualquer agente ou o ciclo de ociosidade tenta encerrá-lo, **então** a ação é recusada e registrada.
 - **CA-GM-02** · *rápida* — **Dado** relógio falso e um agente falso que morre ao iniciar, **quando** falha 3 vezes em 10 min, **então** há reinícios em 5 s, 30 s e 2 min e um único alerta operacional.
 - **CA-GM-03** · *rápida* — **Dado** um workspace com instruções extras, **quando** a camada do Mestre do Grão-Mestre é montada, **então** o texto extra aparece depois das instruções do sistema, sob o título definido, e as do sistema continuam completas.
-- **CA-GM-04** · *completa* — **Dado** o Core reiniciado com duas mesas abertas, **quando** o motor volta, **então** o Grão-Mestre é o primeiro personagem iniciado e recebe a mensagem de retomada listando as duas mesas.
+- **CA-GM-04** · *completa* — **Dado** a Cidadela reiniciada com duas mesas abertas, **quando** o motor volta, **então** o Grão-Mestre é o primeiro personagem iniciado e recebe a mensagem de retomada listando as duas mesas.
 - **CA-GM-05** · *rápida* — **Dado** um Mestre de mesa, **quando** ele chama `mestre table open`, **então** recebe erro de permissão.
 - **CA-GM-06** · *pesada* — **Dado** um pedido de funcionalidade pelo Telegram (dublê), **quando** o Grão-Mestre o trata, **então** cria o épico no GitHub (dublê), abre a mesa e repassa o pedido ao Mestre da mesa sem reescrever (MVP-4).
 - **CA-GM-07** · *rápida* — **Dado** uma política que não deixa o Grão-Mestre aprovar merges sozinho, **quando** ele chama `mestre approval decide` num pedido de merge, **então** recebe `human_required` e nada é aprovado; **quando** chama `mestre approval ask`, **então** o pedido chega aos usuários.

@@ -1,17 +1,25 @@
 # Visão geral da arquitetura
 
-> **Assunto:** as duas camadas (motor e interface), a topologia Core + nós + Guardiões e os canais entre eles · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** as duas camadas (motor e interface), a Guilda com a Cidadela, as Torres e os Guardiões, e os canais entre eles · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Duas camadas
 
 - **Motor:** serviços invisíveis, sempre ligados, que sobem com a máquina. Rodam os agentes, guardam o estado, conduzem missões e esperas, falam com o GitHub e com o Telegram.
 - **Interface:** o painel (canvas) aberto no navegador. É só uma janela para o motor: fechar o navegador nunca interrompe o trabalho, e ao reabrir o estado aparece como estava ([canvas](../painel/canvas.md)).
 
-## Topologia
+## Topologia: a Guilda
 
-O sistema tem um **Core** e **N nós**. Core e nós rodam em Linux ou em Windows, com o mesmo binário, o que dá os quatro usos: só Linux, Linux + Windows, Windows + Linux e só Windows ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). Nos usos "só Linux" e "só Windows" a máquina do Core é a única (**modo máquina única**: [camadas](../autocura/camadas.md#modo-máquina-única)). O Core sempre tem um **nó local**, o serviço `mestre-node` da própria máquina, que roda o Grão-Mestre e os agentes dali: o motor do Core nunca roda agentes no próprio processo, e o nó local fala com ele pela mesma WSS de um nó remoto ([componentes](componentes.md)). Nada no código pressupõe um sistema para cada papel: cada nó declara capacidades ao se registrar e o roteamento usa essas capacidades ([personagens](../orquestracao/personagens.md)). Cada máquina tem também um **Guardião**, separado do motor.
+Toda máquina recebe **a mesma instalação** do Mestre, em Linux ou Windows, com o mesmo binário. As instalações formam a **Guilda** ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)): a primeira cria a Guilda e as outras a encontram na rede local e pedem para entrar ([Guilda](../guilda/guilda.md)).
 
-O diagrama mostra um Core (com o nó local) e um nó remoto.
+- **Cidadela:** a única máquina no comando por vez. Tem o Grão-Mestre, o bot do Telegram, a integração com o GitHub, o painel, o banco principal (fonte da verdade) e o cofre ativo.
+- **Torres:** as demais. Rodam personagens, mantêm uma réplica do banco e vigiam a Cidadela.
+- **Personagens** (Mestres de mesa e party) rodam em qualquer máquina da Guilda, inclusive na Cidadela, escolhida pela [ficha da máquina](../guilda/ficha-da-maquina.md). Grão-Mestre e Mestre da mesa são nomes de agentes, nunca de máquinas.
+- **Guardião:** cada máquina tem um, separado do motor, que vigia e conserta o motor local.
+- Se a Cidadela cai de vez, uma Torre pode assumir, sempre com aprovação do Dono ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
+
+As quatro composições: só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux e só Windows; a Guilda de uma máquina só é o [modo máquina única](../autocura/camadas.md#modo-máquina-única). Como qualquer máquina pode virar Cidadela, tudo o que a Cidadela faz (painel, Telegram, transcrição, banco, GitHub, cofre) roda nos dois sistemas.
+
+O diagrama mostra uma Cidadela e uma Torre.
 
 ```mermaid
 flowchart TB
@@ -19,31 +27,33 @@ flowchart TB
     GH[(GitHub API)]
     TG[(Telegram Bot API)]
   end
-  subgraph Core["Core (Linux ou Windows)"]
-    MC["motor do Core<br/>mestre core<br/>(painel + API)"]
-    NL["nó local<br/>mestre node"]
-    GC["Guardião do Core<br/>mestre-guardiao"]
+  subgraph Cidadela["Cidadela (Linux ou Windows)"]
+    MC["motor: serviço mestre<br/>painel, API, Grão-Mestre,<br/>personagens"]
+    GC["Guardião<br/>mestre-guardiao"]
     WS["whisper-server<br/>(processo auxiliar)"]
-    DBC[(SQLite do Core)]
-    MC --- DBC
-    NL --> WS
-    NL == "WSS + mTLS (127.0.0.1)" ==> MC
+    DBP[(banco principal)]
+    DBLC[(banco local de máquina)]
+    MC --- DBP
+    MC --- DBLC
+    MC --> WS
     GC -. vigia .-> MC
-    GC -. vigia .-> NL
   end
-  subgraph No["Nó (Linux ou Windows)"]
-    MN["serviço mestre-node<br/>(mestre node)"]
-    GN["Guardião do nó<br/>mestre-guardiao"]
-    DBN[(SQLite do nó)]
-    MN --- DBN
-    GN -. vigia .-> MN
+  subgraph Torre["Torre (Linux ou Windows)"]
+    MT["motor: serviço mestre<br/>personagens"]
+    GT["Guardião<br/>mestre-guardiao"]
+    DBR[(réplica do banco)]
+    DBLT[(banco local de máquina)]
+    MT --- DBR
+    MT --- DBLT
+    GT -. vigia .-> MT
   end
   NAV["Navegador (painel)"]
-  MN == "WSS + mTLS (saída do nó)" ==> MC
-  GN == "WSS + mTLS (saída do nó)" ==> MC
-  GN -- "TLS (cura cruzada, Guardião do nó condutor)" --> GC
+  MT == "WSS + mTLS (saída da Torre): protocolo e replicação" ==> MC
+  GT == "WSS + mTLS (saída da Torre)" ==> MC
+  GT -- "TLS (cura cruzada, Torre condutora)" --> GC
   NAV -- HTTPS/WSS --> MC
-  NAV -. "HTTPS (página reserva, Core fora)" .-> GN
+  NAV -. "HTTPS (redireciona para a Cidadela)" .-> MT
+  NAV -. "HTTPS (página reserva, Cidadela fora)" .-> GT
   MC -- "HTTPS (consulta periódica)" --> GH
   MC -- "HTTPS (long polling)" --> TG
 ```
@@ -52,39 +62,42 @@ flowchart TB
 
 | Canal | Quem inicia | Transporte | Dono do detalhe |
 |---|---|---|---|
-| Motor do nó → motor do Core | o nó (saída) | WSS com mTLS, mensagens multiplexadas | [protocolo](../conectividade/protocolo.md), [ADR 0002](../decisoes/0002-wss-iniciado-pelo-no.md) |
-| Guardião do nó → motor do Core | o Guardião do nó (saída), conexão própria | WSS com mTLS | [Guardião](../autocura/guardiao.md) |
-| Guardião do nó → Guardião do Core | o Guardião do nó condutor (eleito), quando o motor do Core falha | TLS na porta do Guardião do Core, com o certificado do nó | [camadas](../autocura/camadas.md#camada-3-supervisão-cruzada) |
-| Navegador → Core | o navegador | HTTPS e WSS (atualizações e terminais) | [canvas](../painel/canvas.md), [login](../painel/login.md) |
-| Navegador → Guardião do nó (no modo máquina única, do Core) | o navegador, na rede local | HTTPS com login | [página reserva](../autocura/pagina-reserva.md) |
-| CLI `mestre` → motor local (`mestre-node`) | o agente na mesma máquina | socket Unix ou named pipe | [canal local](canal-local.md), [convenções da CLI](../cli/convencoes.md) |
-| Core → GitHub | o motor do Core | HTTPS, consulta periódica condicional | [eventos](../github/eventos.md) |
-| Core → Telegram | o motor do Core | HTTPS, long polling | [bot](../telegram/bot.md) |
-| Nó encontra o Core | o nó | broadcast UDP e mDNS | [descoberta](../conectividade/descoberta.md) |
+| Motor da Torre → motor da Cidadela (protocolo e replicação) | a Torre (saída), sempre para a Cidadela atual | WSS com mTLS, mensagens multiplexadas | [protocolo](../conectividade/protocolo.md), [replicação](../guilda/replicacao.md), [ADR 0002](../decisoes/0002-wss-iniciado-pelo-no.md) |
+| Guardião da Torre → motor da Cidadela | o Guardião da Torre (saída), conexão própria | WSS com mTLS | [Guardião](../autocura/guardiao.md) |
+| Guardião da Torre → Guardião da Cidadela | o Guardião da Torre condutora, quando o motor da Cidadela falha | TLS na porta do Guardião da Cidadela, com o certificado da máquina | [camadas](../autocura/camadas.md) |
+| Navegador → Cidadela | o navegador | HTTPS e WSS (atualizações e terminais) | [canvas](../painel/canvas.md), [login](../painel/login.md) |
+| Navegador → Torre | o navegador, na rede local | HTTPS, só redirecionamento | [painel redirecionado](../guilda/cidadela-e-torres.md#painel-redirecionado) |
+| Navegador → Guardião da Torre (no modo máquina única, o da Cidadela) | o navegador, na rede local | HTTPS com login | [página reserva](../autocura/pagina-reserva.md) |
+| CLI `mestre` → motor local | o agente na mesma máquina | socket Unix ou named pipe | [canal local](canal-local.md), [convenções da CLI](../cli/convencoes.md) |
+| Cidadela → GitHub | o motor da Cidadela, com a época confirmada | HTTPS, consulta periódica condicional | [eventos](../github/eventos.md) |
+| Cidadela → Telegram | o motor da Cidadela, com a época confirmada | HTTPS, long polling | [bot](../telegram/bot.md) |
+| Máquina encontra a Guilda | a máquina | broadcast UDP e mDNS | [descoberta](../conectividade/descoberta.md) |
 
 Portas padrão: [componentes](componentes.md#portas). Segurança dos canais: [segurança](seguranca.md).
 
 ## Princípios de arquitetura
 
-1. **O Core é a fonte da verdade.** Os nós guardam só o que rodam e um cache para continuar funcionando sem o Core ([persistência](persistencia.md)).
-2. **O nó nunca é chamado.** Toda conexão com o nó parte dele; ele funciona atrás de roteador. A única exceção é a página reserva, na rede local ([ADR 0002](../decisoes/0002-wss-iniciado-pelo-no.md)).
+1. **A Cidadela é a fonte da verdade, e só há uma por vez.** As Torres têm só uma réplica de leitura e o banco local de máquina ([persistência](persistencia.md)); a época impede duas Cidadelas agindo para fora ([fencing](../guilda/cidadela-e-torres.md#época-e-fencing)).
+2. **A Cidadela nunca chama uma Torre.** Toda conexão entre máquinas parte da Torre; ela funciona atrás de roteador. Uma Torre só escuta na rede local, para o redirecionamento do painel, a página reserva e a descoberta ([ADR 0002](../decisoes/0002-wss-iniciado-pelo-no.md)).
 3. **Sem SSH e sem shell remoto.** A cura passa pelo Guardião, que só aceita uma lista fechada de ações ([ADR 0003](../decisoes/0003-autocura-com-guardiao-sem-ssh.md)).
 4. **Sem portas abertas para a internet.** GitHub por consulta periódica, Telegram por long polling ([ADR 0009](../decisoes/0009-github-por-consulta-periodica.md)).
 5. **Agentes conversam por texto digitado.** O motor entrega as mensagens no terminal do destinatário, só quando ele está livre; os agentes só precisam da CLI `mestre` ([esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)).
 6. **O motor conduz, deterministicamente:** missões, esperas, rituais, sincronização de worktrees e ações no GitHub são código do motor, não comportamento esperado de um agente ([missões](../orquestracao/missoes.md), [ADR 0005](../decisoes/0005-motor-executa-github-grao-mestre-porteiro.md)).
 7. **Uma lógica de hooks para todos os provedores**, no comando `mestre hook` ([ADR 0012](../decisoes/0012-despachante-unico-de-hooks.md)).
+8. **Mudar de Cidadela é sempre decisão do Dono** ([Cidadela e Torres](../guilda/cidadela-e-torres.md#proposta-de-assumir)).
 
 ## Terminais
 
-Cada agente roda num pseudo-terminal gerenciado pelo motor do nó onde ele vive: PTY no Linux, ConPTY no Windows, com tamanho fixo, emulador de terminal e buffer no nó ([terminal](terminal.md)). Não há janela nem interface gráfica em nenhuma máquina: o painel no navegador é a única interface, e os agentes navegam na web pelo MCP de navegador próprio de cada personagem, com navegador limpo ([permissões](../classes/permissoes.md)). O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows (só serviços, contas, ConPTY): [Windows](windows.md).
+Cada agente roda num pseudo-terminal gerenciado pelo motor da máquina onde ele vive: PTY no Linux, ConPTY no Windows, com tamanho fixo, emulador de terminal e buffer na máquina ([terminal](terminal.md)). Não há janela nem interface gráfica em nenhuma máquina, salvo o Operador do PC: o painel no navegador é a única interface, e os agentes navegam na web pelo MCP de navegador próprio de cada personagem, com navegador limpo ([permissões](../classes/permissoes.md)). O painel mostra os terminais em tempo real (xterm.js por WebSocket) e permite digitar neles, conforme o nível do usuário ([canvas](../painel/canvas.md)). Particularidades do Windows: [Windows](windows.md).
 
-## Mesa em mais de um nó
+## Mesa em mais de uma máquina
 
-O worktree de uma mesa vive no disco de cada nó que roda agentes dela; os nós sincronizam com o espelho do Core por git bundle pela própria conexão WSS, nunca direto com o GitHub ([mesas](../orquestracao/mesas.md), [ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md)).
+O worktree de uma mesa vive no disco de cada máquina que roda agentes dela; as Torres sincronizam com o espelho da Cidadela por git bundle pela própria conexão WSS, nunca direto com o GitHub ([mesas](../orquestracao/mesas.md), [ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md)).
 
 ## Onde continuar
 
 - Processos, binários e portas: [componentes](componentes.md).
+- Guilda, papéis e troca de Cidadela: [Guilda](../guilda/INDEX.md).
 - Terminais e canal local da CLI: [terminal](terminal.md), [canal local](canal-local.md).
 - Ordem de desenvolvimento: [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md).
 - Banco, arquivos e logs: [persistência](persistencia.md).

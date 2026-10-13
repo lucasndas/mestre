@@ -1,122 +1,78 @@
 # Atualização dos CLIs dos provedores
 
-> **Assunto:** como o Mestre detecta, instala, testa, libera ou volta versões de `claude`, `codex` e `agy`, e reinicia os personagens em ponto seguro retomando a sessão · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** os CLIs `claude`, `codex` e `agy` se atualizam sozinhos; o Mestre detecta a versão nova por máquina e por perfil, roda a conformidade logo depois, marca o provedor como não conforme se ela falhar e avisa o Dono · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Manter os CLIs dos provedores atualizados sem quebrar ninguém. O Mestre escolhe o momento: desliga a autoatualização própria de cada CLI nos personagens, só libera uma versão nova depois do [teste de conformidade](conformidade.md) e reinicia cada personagem num ponto seguro, retomando a conversa dele. A atualização do próprio Mestre está em [autoatualização](../plataforma/autoatualizacao.md).
+Deixar cada CLI de provedor se atualizar pelo próprio mecanismo, sem o Mestre desligar nada, e ainda assim nunca entregar personagem novo a uma versão que quebra o Mestre: o motor percebe a mudança de versão, roda o [teste de conformidade](conformidade.md) em seguida e, se a versão nova falhar, para de usar aquele provedor naquela máquina e avisa o Dono. O Mestre não aprova, não instala e não volta versões dos CLIs. A atualização do próprio Mestre está em [autoatualização](../plataforma/autoatualizacao.md).
 
 ## Comportamento
 
-### Autoatualização própria desligada
+### O que cada CLI faz sozinho
 
-O [adaptador](adaptador.md) aplica o mecanismo da tabela ao montar o início de todo personagem. Detalhes de cada provedor ficam no documento dele: [Claude Code](claude-code.md), [Codex](codex.md), [Antigravity](antigravity.md).
+O Mestre não desliga a autoatualização de nenhum CLI: nada de `DISABLE_AUTOUPDATER`, `check_for_update_on_startup = false` ou `AGY_CLI_DISABLE_AUTO_UPDATE`. Detalhes de cada provedor ficam no documento dele: [Claude Code](claude-code.md), [Codex](codex.md), [Antigravity](antigravity.md).
 
-| Provedor | O que o CLI faz sozinho | Como o Mestre desliga | Instalar versão exata / voltar |
-|---|---|---|---|
-| Claude Code (instalação nativa) | baixa a versão nova em segundo plano; ela vale no próximo início | `DISABLE_AUTOUPDATER=1` no ambiente do processo. **Não** usar `DISABLE_UPDATES`, que bloqueia também o `claude install` usado pelo Mestre | `claude install <versão>`; voltar = `claude install <anterior>`. O instalador mantém as duas versões mais novas em `~/.local/share/claude/versions/` |
-| Codex | ao iniciar, procura a versão nova e mostra a tela "Update now / Skip / Skip until next version" | `check_for_update_on_startup = false` no `config.toml` do `CODEX_HOME` do perfil de conta (a documentação indica isso quando a atualização é gerida centralmente) | versão exata: pacote completo da Release daquela versão em `openai/codex`, numa pasta por versão, com o link do executável apontando para ela ([instalação](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores); ver [Verificar](#verificar-na-implementação)); `codex update` instala só a mais nova. Voltar = apontar o link para a pasta anterior |
-| Antigravity (`agy`) | atualizador automático em segundo plano (citado no changelog) | variável `AGY_CLI_DISABLE_AUTO_UPDATE=1`, achada nas strings do binário 1.3.3 e não documentada (ver [Verificar](#verificar-na-implementação)) | `agy update` instala só a mais nova; versão exata não documentada. Voltar = restaurar a cópia guardada |
+| Provedor | O que o CLI faz sozinho | O que o Mestre faz |
+|---|---|---|
+| Claude Code (instalação nativa) | baixa a versão nova em segundo plano; ela vale no próximo início | nada no início; detecta a versão no próximo início ou no checklist |
+| Codex | ao iniciar, procura a versão nova e mostra a tela "Update now / Skip / Skip until next version" | o [adaptador](adaptador.md#prontidão-e-telas-interativas) escolhe **atualizar** (ver [Verificar](#verificar-na-implementação)) |
+| Antigravity (`agy`) | atualizador automático em segundo plano (citado no changelog) | nada no início; detecta a versão no próximo início ou no checklist |
 
-Antes de instalar, o motor sempre guarda uma cópia do executável atual de cada CLI no nó (no Codex, a pasta da versão). Essa cópia é o caminho de volta quando o provedor não oferece outro.
+**Onde ficam:** cada CLI fica no `HOME` do perfil de conta, numa pasta que a própria atualização consegue gravar ([CLIs dos provedores](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores)). Assim cada perfil se atualiza por conta própria e pode estar numa versão diferente de outro perfil da mesma máquina. Como os agentes rodam como `mestre-agente`, dono dessas pastas, as regras fixas negam às ferramentas deles as pastas de dados do Mestre, perfis incluídos ([regras fixas](../classes/permissoes.md#regras-fixas-de-segurança)).
 
-No Linux, os CLIs ficam numa pasta do root que o `mestre-agente` não grava ([instalação](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores)): mesmo que um atualizador próprio rode, ele falha sem estrago.
+### Detecção
 
-### Política por provedor
+- O motor de cada máquina registra a versão de cada CLI **por perfil de conta** e compara com a anterior: ao iniciar ou retomar um personagem (o `--version` daquele perfil), no [checklist](../plataforma/checklist.md) a cada ciclo e no anúncio da [ficha da máquina](../guilda/ficha-da-maquina.md).
+- Versão diferente da registrada → entra na auditoria (máquina, perfil, provedor, versão anterior e nova) e dispara a conformidade daquele provedor com aquele perfil, naquela máquina. Não há consulta de "versão disponível": o Mestre só reage ao que o CLI já instalou.
+- O registro de terminais guarda a versão com que cada personagem iniciou ([personagens](../orquestracao/personagens.md#registro-de-terminais)).
 
-- Configurada no painel, por provedor, valendo para todos os nós:
-  - `aprovacao` (padrão): pede aprovação do tipo `atualizacao_provedor`, escopo "Sistema", destino Dono e Administradores, pelo [fluxo de aprovação](../aprovacoes/fluxo.md);
-  - `automatico`: instala sem pedir.
-- Nos dois casos, a versão só é liberada depois do teste de conformidade.
-- Usa a mesma **trava de atualização** do Mestre: um passo por vez no sistema inteiro.
+### Conformidade logo depois
 
-### Fluxo
+- Enquanto o teste roda, o provedor fica "em verificação" naquela máquina e perfil: recrutamentos desse provedor ali esperam ou vão para outra máquina que atenda ([escolha da máquina](../orquestracao/personagens.md#escolha-da-máquina)).
+- **Passou:** a versão fica registrada como conforme e os personagens novos já nascem nela.
+- **Falhou:** o provedor fica **não conforme** naquela máquina, pela regra da [conformidade](conformidade.md#regras-e-erros): não recebe personagens novos ali, e o Dono recebe o aviso pelo Telegram e no painel com o relatório do teste. Não há volta de versão: o caminho é a próxima versão do provedor, testada quando aparecer, ou a correção manual pelo Dono.
 
-```mermaid
-flowchart TD
-  D[versão nova: disponível ou instalada por fora] --> P{política}
-  P -- aprovacao --> A[pedido de aprovação]
-  P -- automatico --> I
-  A -- aprovado --> I[instalar num nó, guardando a cópia anterior]
-  D -- instalada por fora --> C
-  I --> C[teste de conformidade com a versão nova]
-  C -- passou --> L[liberar: novos personagens já usam a nova]
-  L --> R[reiniciar os personagens antigos em ponto seguro, um por vez]
-  C -- falhou --> V{dá para voltar?}
-  V -- sim --> B[voltar a versão anterior e alertar]
-  V -- não --> X[base bloqueada no nó e alerta]
-```
+### Personagens já rodando
 
-1. **Detectar:**
-   - **Disponível:** o motor do Core consulta a versão mais nova a cada 6 h (padrão). Codex: Releases de `openai/codex`, a mesma fonte que o próprio CLI usa. Claude: dist-tag `latest` do pacote npm `@anthropic-ai/claude-code`. `agy`: não há fonte pública conhecida, então vale só a detecção de versão instalada por fora (abaixo).
-   - **Instalada por fora:** o [checklist](../plataforma/checklist.md) ou o `hello` do nó mostram uma versão diferente da registrada. Exemplo: alguém rodou `claude update`.
-2. **Instalar:**
-   - um nó por vez, na pasta de CLIs do nó, que no Linux é do root (o `mestre-agente` só executa);
-   - se o instalador falhar, a versão anterior continua, e a falha é registrada e alertada.
-3. **Testar:**
-   - roda o [teste de conformidade](conformidade.md) daquele provedor no próprio nó, com a versão nova;
-   - enquanto o teste roda, a base do provedor fica "em verificação" no nó, e os recrutamentos desse provedor esperam ou vão para outro nó.
-4. **Liberar ou voltar:**
-   - **passou:** a versão fica registrada no nó e os personagens novos já nascem nela;
-   - **falhou:** volta para a cópia anterior pelo caminho da tabela, confere com `--version` e alerta os usuários com o relatório do teste;
-   - **sem volta possível:** a base do provedor fica bloqueada naquele nó, e os recrutamentos vão para outro nó ou falham com a explicação ([personagens](../orquestracao/personagens.md#escolha-do-nó));
-   - a mesma versão não é tentada de novo sozinha; a próxima versão mais nova é.
-5. Passa ao próximo nó.
+- Seguem com a versão com que iniciaram até o próximo reinício natural (fim do ciclo de vida, troca de ficha, retomada depois de um reinício do motor). **Nenhum reinício é forçado** por causa de uma versão nova.
+- Num reinício natural, o personagem sobe com a versão que estiver instalada no perfil. Se o provedor estiver não conforme ali, a retomada acontece assim mesmo e o personagem fica marcado, como os que já rodavam ([conformidade](conformidade.md#regras-e-erros)).
 
-### Reinício em ponto seguro
+### Risco aceito
 
-Os personagens que já rodavam continuam com o processo da versão antiga até serem reiniciados.
-
-- **Ponto seguro:** `idle` e com o `done` da última tarefa entregue, sem espera ativa que dependa do processo (nenhuma chamada da CLI `mestre` em andamento no terminal). Enquanto o personagem reinicia, as entregas ficam na caixa de entrada.
-- **Um por vez em cada nó:** o próximo só reinicia quando o anterior voltar a `idle`.
-- **Ordem:** personagens comuns, depois Mestres de mesa, por último o Grão-Mestre. Fixados e o Grão-Mestre também reiniciam, sempre no ponto seguro.
-- **Ninguém é reiniciado à força.** Quem não chega ao ponto seguro continua na versão antiga até chegar.
-- **Como reinicia:**
-  - saída normal pelo adaptador;
-  - novo início com o comando de retomada (tabela abaixo);
-  - o motor reaplica a camada do Mestre, os arquivos de hooks e a confiança da pasta ([sessão zero do personagem](../sessao-zero/personagem.md), [mesa](../sessao-zero/mesa.md)).
-- **Se não der para retomar** (o comando falha ou não há id salvo): o personagem renasce do zero com a mensagem de retomada feita do pergaminho da missão ([personagens](../orquestracao/personagens.md#retomada-após-reinício)), e o canvas o marca como "renascido".
-
-### Retomada de sessão por provedor
-
-O comando de retomada de cada provedor, de onde vem o id da sessão e o que acontece quando a retomada falha estão no [adaptador](adaptador.md#retomada-de-sessão), que é usado também na retomada após reinício do Mestre. A etapa 10 da [conformidade](conformidade.md) confere a retomada com a versão nova antes de liberar.
+Uma versão nova pode entrar entre duas tarefas sem teste prévio: o CLI se atualiza antes de o Mestre saber. A conformidade roda logo depois e, até ela terminar, o provedor não recebe personagens novos naquela máquina e perfil. Personagens que iniciarem nesse intervalo por retomada usam a versão nova sem teste.
 
 ## Regras e erros
 
-- Nenhum personagem iniciado pelo Mestre roda com a autoatualização própria do CLI ligada. Em todos os provedores, o checklist avisa quando a versão muda sem pedido, e a versão nova segue o caminho de "instalada por fora".
-- Instalação, teste e volta ficam na auditoria: nó, provedor, versão anterior e nova, resultado.
-- Uma versão reprovada nunca é liberada sem aprovação de Dono ou Administrador.
-- Teste de conformidade sem cota do provedor: a versão fica "em verificação", os recrutamentos vão para outro nó e o teste é tentado de novo quando a cota voltar.
+- O Mestre nunca desliga a autoatualização dos CLIs, nunca instala nem volta uma versão deles e não pede aprovação para isso.
+- Conformidade sem cota do provedor: a versão fica "em verificação" e o teste é tentado de novo quando a cota voltar.
+- Versão que muda de novo durante o teste: o teste em curso é descartado e começa outro com a versão mais nova.
+- Versão abaixo da mínima do documento do provedor: a base é recusada naquela máquina e o checklist avisa (ALL-10).
 
 ## Critérios de aceite
 
-- **CA-CLIUPD-01** · *rápida* — **Dado** uma ficha de cada provedor, **quando** o adaptador monta o início, **então** o ambiente do Claude tem `DISABLE_AUTOUPDATER=1` (e não `DISABLE_UPDATES`), o `config.toml` do perfil Codex tem `check_for_update_on_startup = false` e o ambiente do `agy` tem a variável de desligar.
-- **CA-CLIUPD-02** · *rápida* — **Dado** a política `aprovacao` e uma versão nova disponível, **quando** ninguém aprova, **então** nada é instalado.
-- **CA-CLIUPD-03** · *rápida* — **Dado** a política `automatico`, **quando** sai uma versão nova, **então** ela é instalada sem pedido, mas só é liberada depois do teste de conformidade.
-- **CA-CLIUPD-04** · *rápida* — **Dado** um agente falso cuja versão nova reprova no teste, **quando** o resultado chega, **então** a cópia anterior volta, os usuários são alertados e nenhum personagem é reiniciado.
-- **CA-CLIUPD-05** · *rápida* — **Dado** a versão aprovada no teste e três personagens (um `busy`), **quando** o reinício roda, **então** os `idle` reiniciam um por vez e o `busy` só depois do `done`.
-- **CA-CLIUPD-06** · *rápida* — **Dado** um personagem com id de sessão salvo, **quando** é reiniciado pela atualização, **então** o comando é o da [retomada](adaptador.md#retomada-de-sessão) daquele provedor, com camada do Mestre, hooks e confiança reaplicados.
-- **CA-CLIUPD-07** · *rápida* — **Dado** uma retomada que falha, **quando** o motor percebe, **então** o personagem renasce com a mensagem de retomada e o canvas o mostra como "renascido".
-- **CA-CLIUPD-08** · *rápida* — **Dado** uma versão instalada por fora, **quando** o checklist a detecta, **então** os recrutamentos daquele provedor no nó esperam o resultado do teste de conformidade.
-- **CA-CLIUPD-09** · *rápida* — **Dado** personagens comuns, um Mestre de mesa e o Grão-Mestre na versão antiga, **quando** a nova é liberada, **então** o Grão-Mestre é o último a reiniciar.
-- **CA-CLIUPD-10** · *completa* — **Dado** Core e nó reais com o agente falso trocando da versão 1 para a 2, **quando** o fluxo roda, **então** o teste passa, os personagens são retomados na versão 2 e nenhum some.
+- **CA-CLIUPD-01** · *rápida* — **Dado** uma ficha de cada provedor, **quando** o adaptador monta o início, **então** o ambiente não tem `DISABLE_AUTOUPDATER`, `DISABLE_UPDATES` nem `AGY_CLI_DISABLE_AUTO_UPDATE`, e o `config.toml` do perfil Codex não tem `check_for_update_on_startup = false`.
+- **CA-CLIUPD-02** · *rápida* — **Dado** a versão do `claude` do perfil A que passou de 1 para 2 numa máquina, **quando** o checklist roda, **então** a mudança entra na auditoria com máquina, perfil e versões, e a conformidade roda só para o Claude Code com o perfil A naquela máquina.
+- **CA-CLIUPD-03** · *rápida* — **Dado** a conformidade reprovando a versão nova, **quando** o resultado chega, **então** o provedor fica não conforme na máquina, um recrutamento desse provedor vai para outra máquina que atenda ou falha com a explicação, o Dono recebe o aviso com o relatório, e nenhum personagem é reiniciado nem nada é desinstalado.
+- **CA-CLIUPD-04** · *rápida* — **Dado** três personagens rodando na versão 1, **quando** a versão 2 aparece e passa na conformidade, **então** nenhum deles é reiniciado; o próximo personagem criado usa a 2 e o registro de terminais mostra a versão de cada um.
+- **CA-CLIUPD-05** · *rápida* — **Dado** uma conformidade em andamento para o Codex numa máquina, **quando** chega um recrutamento de ficha Codex, **então** ele espera ou vai para outra máquina que atenda.
+- **CA-CLIUPD-06** · *rápida* — **Dado** o agente falso do Codex mostrando a tela de atualização ao iniciar, **quando** o personagem começa, **então** o adaptador escolhe atualizar, o personagem chega a pronto e a versão nova é detectada.
+- **CA-CLIUPD-10** · *completa* — **Dado** uma Cidadela e uma Torre reais com o agente falso trocando sozinho da versão 1 para a 2 na Torre, **quando** o motor detecta, **então** a conformidade roda na Torre e passa, os personagens existentes seguem na versão 1 e o próximo criado nasce na 2.
 
 ## Depende de
 
 - [Teste de conformidade](conformidade.md) · [Adaptador](adaptador.md)
 - [Claude Code](claude-code.md) · [Codex](codex.md) · [Antigravity](antigravity.md)
-- [Personagens](../orquestracao/personagens.md) (ponto seguro) · [Fluxo de aprovação](../aprovacoes/fluxo.md)
-- [Checklist](../plataforma/checklist.md) · [Autoatualização do Mestre](../plataforma/autoatualizacao.md) (trava de atualização)
+- [Personagens](../orquestracao/personagens.md)
+- [Checklist](../plataforma/checklist.md)
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** `AGY_CLI_DISABLE_AUTO_UPDATE=1` desliga o atualizador do `agy`. No spike do Linux, o `agy` ainda tentou um teste de escrita em `/opt/mestre-clis/` com a variável ligada, recusado pela pasta do root: o atualizador não fica claramente desligado, e o item segue aberto. O atualizador próprio do processo de fundo do Codex (`app-server-daemon`) não existe com `--no-daemon`, obrigatório na base ([Codex](codex.md#processo-de-fundo-e---no-daemon)). **Padrão:** a tabela acima basta. **Se falhar:** a versão muda sem pedido, o checklist detecta e ela segue o caminho de "instalada por fora" (teste de conformidade antes de liberar). **Onde:** na primeira versão nova de cada CLI depois da implementação, no laboratório da [suíte pesada](../qualidade/testes.md#laboratório): a versão dos personagens não pode mudar sozinha.
-- **Verificar na implementação:** instalar uma versão exata do Codex pela Release `openai/codex`. **Padrão:** baixar o pacote completo da plataforma, conferir, extrair numa pasta nova da versão e trocar o link, mantendo a pasta anterior. **Se falhar:** o Codex passa a instalar só a mais nova (`codex update`), como o `agy`. **Onde:** na implementação do instalador, no laboratório.
-- **Verificar na implementação:** a dist-tag `latest` do npm acompanha a versão que o instalador nativo do Claude instala. **Padrão:** acompanha. **Se falhar:** o Claude fica como o `agy`, só com a detecção de versão instalada por fora. **Onde:** no laboratório, comparando a dist-tag com o resultado de `claude install`.
-- **Verificar na implementação:** trocar o binário do Codex e do `agy` no Windows com personagens rodando (arquivo em uso). **Padrão:** o executável em uso é renomeado e o novo entra no lugar; os processos antigos seguem até o ponto seguro. **Se falhar:** a instalação naquele nó espera todos os personagens do provedor chegarem ao ponto seguro. **Onde:** suíte completa no Windows, com o agente falso em uso.
+- **Verificar na implementação:** no Codex, escolher "Update now" na tela de início atualiza e deixa o personagem seguir. **Padrão:** o Codex atualiza e continua o início (ou sai, e o motor o inicia de novo uma vez, já na versão nova). **Se falhar:** se a tela atrapalhar o início (o Codex para, pede reinício manual ou trava), o adaptador escolhe "Skip" naquele início e o motor roda `codex update` como `mestre-agente` com o `CODEX_HOME` do perfil quando nenhum personagem Codex daquele perfil estiver rodando; a versão nova segue a detecção acima. **Onde:** no laboratório da [suíte pesada](../qualidade/testes.md#laboratório), na primeira versão nova do Codex depois da implementação.
+- **Verificar na implementação:** o atualizador próprio de cada CLI grava só no `HOME` do perfil, sem precisar de pasta do root nem de outra conta. **Padrão:** grava (o instalador nativo do Claude Code usa `$HOME/.local/share/claude`). **Se falhar:** aquele CLI deixa de se atualizar naquele perfil; o checklist mostra a versão parada e, abaixo da mínima, recusa a base (ALL-10), e o Dono atualiza à mão. **Onde:** no laboratório, com dois perfis do mesmo provedor numa VM de cada sistema.
+- **Verificar na implementação:** no Windows, a atualização própria de cada CLI com personagens do mesmo perfil rodando (arquivo em uso). **Padrão:** o atualizador do CLI lida com isso (o Claude Code guarda versões em pastas separadas). **Se falhar:** a atualização falha naquele momento e o CLI tenta de novo depois; nada muda para o Mestre além de a versão demorar a mudar. **Onde:** no laboratório, na VM Windows.
 
 ## Fontes
 
-- Claude Code, atualizações e versões: https://code.claude.com/docs/en/setup (Auto-updates, Disable auto-updates, Install a specific version) · retomada: https://code.claude.com/docs/en/cli-reference
-- Codex, `check_for_update_on_startup`: https://learn.chatgpt.com/docs/config-file/config-reference · código-fonte `openai/codex` (commit `b3c3bad`): `codex-rs/tui/src/updates.rs`, `update_prompt.rs`, `codex-rs/cli/src/main.rs` (`resume`, `update`)
-- Antigravity, `agy update`: https://antigravity.google/docs/cli/install · `--conversation`, `AGY_CLI_DISABLE_AUTO_UPDATE` e changelog: binário `agy` 1.3.3 instalado (`agy --help`, `agy changelog`, strings)
+- Claude Code, atualizações e versões: https://code.claude.com/docs/en/setup (Auto-updates) · retomada: https://code.claude.com/docs/en/cli-reference
+- Codex, `check_for_update_on_startup`: https://learn.chatgpt.com/docs/config-file/config-reference · código-fonte `openai/codex` (commit `b3c3bad`): `codex-rs/tui/src/updates.rs`, `update_prompt.rs`, `codex-rs/cli/src/main.rs` (`update`)
+- Antigravity, `agy update`: https://antigravity.google/docs/cli/install · changelog: binário `agy` 1.3.3 instalado (`agy changelog`)

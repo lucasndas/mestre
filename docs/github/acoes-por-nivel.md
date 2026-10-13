@@ -1,6 +1,6 @@
 # Ações no GitHub por nível
 
-> **Assunto:** o que a mesa e o Grão-Mestre podem fazer no GitHub, e como o motor confere · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** o que a mesa e o Grão-Mestre podem fazer no GitHub, e como o motor confere · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -44,7 +44,7 @@ graph TD
 
 ### Como o motor confere que o alvo é da mesa
 
-O banco do Core guarda, por mesa, o épico (número e `id`), a branch e os PRs. Todo objeto que o motor cria para uma mesa (issue, sub-issue, PR, comentário) é registrado na tabela `github_objects` (`table_id`, `kind`, `number`, `github_id`, `parent_id`; [persistência](../arquitetura/persistencia.md)).
+O banco da Cidadela guarda, por mesa, o épico (número e `id`), a branch e os PRs. Todo objeto que o motor cria para uma mesa (issue, sub-issue, PR, comentário) é registrado na tabela `github_objects` (`table_id`, `kind`, `number`, `github_id`, `parent_id`; [persistência](../arquitetura/persistencia.md)).
 
 Para um pedido sobre a issue `#N`:
 
@@ -58,7 +58,7 @@ A recusa diz o motivo em texto simples (ex.: "a issue #57 pertence ao épico #40
 
 ### Envio pelo espelho
 
-- Só o motor envia para o GitHub, sempre a partir do espelho do Core. Antes de enviar, ele traz os commits dos worktrees da mesa em outros nós ([mesas](../orquestracao/mesas.md)).
+- Só o motor da Cidadela envia para o GitHub, sempre a partir do espelho da Cidadela e com a época atual da Guilda confirmada ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Antes de enviar, ele traz os commits dos worktrees da mesa em outras máquinas ([mesas](../orquestracao/mesas.md)).
 - O envio acontece quando a mesa pede (`mestre pr open|update`) ou o Grão-Mestre manda. Usa um token de instalação do App de quem pediu, passado ao git só durante o comando e nunca gravado em configuração.
 - Antes de enviar, o motor confere se a branch altera `.github/workflows/` ([workflows](identidades-e-apps.md#workflows)).
 
@@ -84,6 +84,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - Pedido fora do épico, rótulo `epico` mexido pela mesa ou push forçado fora das regras: recusado com motivo, registrado na auditoria.
 - GitHub fora do ar ou limite de cota: o pedido falha com o motivo; o motor não repete sozinho ações que mudam dados.
 - Mais de 100 sub-issues num pai: recusado com explicação.
+- **Época:** toda ação no GitHub (envio, comentário, review, merge, criação de issue) leva a época da Guilda; uma Torre ou uma Cidadela suspensa (época não confirmada ou menor que a gravada no banco) não faz nenhuma ação e registra a recusa na auditoria. Assim duas Cidadelas nunca agem no mesmo repositório.
 
 ## Critérios de aceite
 
@@ -92,9 +93,10 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - **CA-GH-ACOES-03** · *rápida* — **Dado** um pedido da mesa que adiciona o rótulo `epico`, **quando** o motor avalia, **então** recusa.
 - **CA-GH-ACOES-04** · *rápida* — **Dado** um repositório sem o rótulo `epico`, **quando** o Grão-Mestre cria o primeiro épico, **então** o motor cria o rótulo e depois a issue com ele.
 - **CA-GH-ACOES-05** · *rápida* — **Dado** `mestre pr update --force` pedido por um personagem que não é o Mestre da mesa, ou apontando para a branch principal, **quando** o motor avalia, **então** recusa sem enviar nada.
-- **CA-GH-ACOES-06** · *completa* — **Dado** commits da mesa em dois nós, **quando** o Mestre da mesa pede `mestre pr open`, **então** o espelho recebe os commits dos dois nós antes do envio e o GitHub falso recebe uma única branch com todos eles.
+- **CA-GH-ACOES-06** · *completa* — **Dado** commits da mesa em duas máquinas, **quando** o Mestre da mesa pede `mestre pr open`, **então** o espelho recebe os commits das duas máquinas antes do envio e o GitHub falso recebe uma única branch com todos eles.
 - **CA-GH-ACOES-07** · *rápida* — **Dado** o GitHub falso recusando um push por regra de commit assinado, **quando** o motor recebe a recusa, **então** gera uma mensagem ao Grão-Mestre com o motivo e não tenta outro caminho.
 - **CA-GH-ACOES-08** · *pesada* — **Dado** uma mesa trabalhando, **quando** o épico chega ao fim, **então** o GitHub (dublê) mostra a árvore épico → issues → sub-issues e o PR aberto pela mesa e aprovado pelo Grão-Mestre (MVP-5).
+- **CA-GH-ACOES-09** · *completa* — **Dado** uma Cidadela antiga que volta depois de uma promoção (época dela menor que a da Guilda), **quando** um pedido pendente dela tentaria comentar numa issue, **então** o GitHub falso não recebe nenhuma chamada, a máquina se rebaixa a Torre e a recusa fica na auditoria.
 
 ## Depende de
 

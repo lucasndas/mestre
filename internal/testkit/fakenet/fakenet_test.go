@@ -21,7 +21,7 @@ import (
 func TestDialRefusedWithoutListener(t *testing.T) {
 	t.Parallel()
 	n := fakenet.New(clock.Real{})
-	_, err := n.Dial(context.Background(), "node", "core:7443")
+	_, err := n.Dial(context.Background(), "tower", "citadel:7443")
 	if !errors.Is(err, fakenet.ErrConnectionRefused) {
 		t.Fatalf("err = %v", err)
 	}
@@ -31,7 +31,7 @@ func TestEchoAndCloseGivesEOF(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		n := fakenet.New(clock.Real{})
-		l, err := n.Listen("core:7443")
+		l, err := n.Listen("citadel:7443")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -44,11 +44,11 @@ func TestEchoAndCloseGivesEOF(t *testing.T) {
 			_, _ = io.Copy(s, s)
 			_ = s.Close()
 		}()
-		c, err := n.Dial(t.Context(), "node", "core:7443")
+		c, err := n.Dial(t.Context(), "tower", "citadel:7443")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.RemoteAddr().String() != "core:7443" {
+		if c.RemoteAddr().String() != "citadel:7443" {
 			t.Fatalf("remote = %v", c.RemoteAddr())
 		}
 		_, _ = c.Write([]byte("ping"))
@@ -69,10 +69,10 @@ func TestLatencyFollowsTheClock(t *testing.T) {
 		clk := clock.Real{}
 		n := fakenet.New(clk)
 		n.SetLatency(250 * time.Millisecond)
-		l, _ := n.Listen("core:1")
+		l, _ := n.Listen("citadel:1")
 		defer l.Close()
 		go func() {
-			c, err := n.Dial(t.Context(), "node", "core:1")
+			c, err := n.Dial(t.Context(), "tower", "citadel:1")
 			if err == nil {
 				_, _ = c.Write([]byte("x"))
 			}
@@ -98,12 +98,12 @@ func TestHeartbeatLossDetectedInFakeTime(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		clk := clock.Real{} // fake time comes from the bubble
 		n := fakenet.New(clk)
-		l, _ := n.Listen("core:7443")
+		l, _ := n.Listen("citadel:7443")
 		defer l.Close()
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		go func() { // the other side: one heartbeat every 30 s
-			c, err := n.Dial(ctx, "node", "core:7443")
+			c, err := n.Dial(ctx, "tower", "citadel:7443")
 			if err != nil {
 				return
 			}
@@ -127,7 +127,7 @@ func TestHeartbeatLossDetectedInFakeTime(t *testing.T) {
 		var last time.Time
 		for beats := 0; ; beats++ {
 			if beats == 2 {
-				n.HalfOpen("node", "core") // stops answering, no FIN
+				n.HalfOpen("tower", "citadel") // stops answering, no FIN
 			}
 			_ = s.SetReadDeadline(clk.Now().Add(timeout))
 			if _, err := r.ReadString('\n'); err != nil {
@@ -148,13 +148,13 @@ func TestHeartbeatLossDetectedInFakeTime(t *testing.T) {
 	}
 }
 
-// nodeLoop is a test-local reconnecting client with the protocol backoff
-// (1 s doubling). The real node replaces it in M2 (conectividade/protocolo.md).
-func nodeLoop(ctx context.Context, n *fakenet.Network, clk clock.Clock, attempts chan<- time.Time) {
+// towerLoop is a test-local reconnecting client with the protocol backoff
+// (1 s doubling). The real Tower replaces it in M2 (conectividade/protocolo.md).
+func towerLoop(ctx context.Context, n *fakenet.Network, clk clock.Clock, attempts chan<- time.Time) {
 	wait := time.Second
 	for ctx.Err() == nil {
 		attempts <- clk.Now()
-		c, err := n.Dial(ctx, "node", "core:7443")
+		c, err := n.Dial(ctx, "tower", "citadel:7443")
 		if err == nil {
 			_, _ = io.Copy(io.Discard, c) // until the connection drops
 			wait = time.Second
@@ -167,18 +167,18 @@ func nodeLoop(ctx context.Context, n *fakenet.Network, clk clock.Clock, attempts
 	}
 }
 
-// CA-DUBLES-08 (double side: the real node replaces nodeLoop in M2)
+// CA-DUBLES-08 (double side: the real Tower replaces towerLoop in M2)
 func TestCutConnectionReconnectsWithBackoff(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		clk := clock.Real{}
 		n := fakenet.New(clk)
-		l, _ := n.Listen("core:7443")
+		l, _ := n.Listen("citadel:7443")
 		defer l.Close()
 		ctx, cancel := context.WithCancel(t.Context())
 		attempts := make(chan time.Time, 16)
 		done := make(chan struct{})
-		go func() { nodeLoop(ctx, n, clk, attempts); close(done) }()
+		go func() { towerLoop(ctx, n, clk, attempts); close(done) }()
 		go func() {
 			for {
 				c, err := l.Accept()
@@ -191,20 +191,20 @@ func TestCutConnectionReconnectsWithBackoff(t *testing.T) {
 		t0 := <-attempts
 		synctest.Wait()
 
-		n.Cut("node", "core")
+		n.Cut("tower", "citadel")
 		cut := clk.Now()
 		if got := (<-attempts).Sub(cut); got != time.Second {
 			t.Fatalf("reconnected %v after the cut, want 1s", got)
 		}
 		synctest.Wait()
 
-		n.Partition("node", "core")
+		n.Partition("tower", "citadel")
 		p := clk.Now()
 		var offsets []time.Duration
 		for range 3 { // 1 s after the cut, then 2 s and 4 s after each failed dial
 			offsets = append(offsets, (<-attempts).Sub(p))
 			if len(offsets) == 2 {
-				n.Heal("node", "core")
+				n.Heal("tower", "citadel")
 			}
 		}
 		want := []time.Duration{time.Second, 3 * time.Second, 7 * time.Second}
@@ -215,7 +215,7 @@ func TestCutConnectionReconnectsWithBackoff(t *testing.T) {
 		}
 		cancel()
 		_ = l.Close()
-		n.Cut("node", "core")
+		n.Cut("tower", "citadel")
 		<-done
 	})
 }
@@ -245,11 +245,11 @@ func TestMutualTLSOverFakeNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverCert, _ := ca.Issue("core")
-	clientCert, _ := ca.Issue("node")
+	serverCert, _ := ca.Issue("citadel")
+	clientCert, _ := ca.Issue("tower")
 	synctest.Test(t, func(t *testing.T) {
 		n := fakenet.New(clock.Real{})
-		raw, _ := n.Listen("core:7443")
+		raw, _ := n.Listen("citadel:7443")
 		l := tls.NewListener(raw, &tls.Config{
 			Certificates: []tls.Certificate{serverCert},
 			ClientCAs:    ca.Pool,
@@ -269,17 +269,17 @@ func TestMutualTLSOverFakeNetwork(t *testing.T) {
 			}
 			_, _ = c.Write([]byte("hello " + tc.ConnectionState().PeerCertificates[0].Subject.CommonName))
 		}()
-		rawc, err := n.Dial(t.Context(), "node", "core:7443")
+		rawc, err := n.Dial(t.Context(), "tower", "citadel:7443")
 		if err != nil {
 			t.Fatal(err)
 		}
 		c := tls.Client(rawc, &tls.Config{
-			ServerName: "core", RootCAs: ca.Pool,
+			ServerName: "citadel", RootCAs: ca.Pool,
 			Certificates: []tls.Certificate{clientCert}, MinVersion: tls.VersionTLS13,
 		})
 		defer c.Close()
 		got, err := io.ReadAll(c)
-		if err != nil || string(got) != "hello node" {
+		if err != nil || string(got) != "hello tower" {
 			t.Fatalf("got %q, %v", got, err)
 		}
 	})

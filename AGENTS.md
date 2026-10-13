@@ -9,7 +9,7 @@ Este arquivo é curto de propósito. O detalhe está em [`docs/`](docs/INDEX.md)
 3. Abra só esse documento; siga links apenas se precisar de mais detalhe.
 4. Nunca carregue uma pasta inteira de `docs/`.
 
-Termos como Mesa, Ficha, Classe e Grimório estão no [glossário](docs/produto/glossario.md).
+Termos como Guilda, Cidadela, Torre, Mesa, Ficha, Classe e Grimório estão no [glossário](docs/produto/glossario.md).
 
 ## Testes
 

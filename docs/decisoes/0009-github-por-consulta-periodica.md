@@ -1,26 +1,26 @@
 # ADR 0009: Eventos do GitHub por consulta periódica
 
-> **Assunto:** por que o Mestre consulta a API em vez de receber webhooks · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** por que o Mestre consulta a API em vez de receber webhooks · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 
 - O Grão-Mestre precisa saber de comentários, revisões, resultados de CI e mudanças em issues e PRs, para repassar às mesas.
 - O GitHub entrega eventos por **webhook**, mas isso exige uma URL pública que receba conexões.
-- O Mestre não expõe nenhuma porta do Core na internet. Os Apps são criados com o webhook inativo ([ADR 0006](0006-app-por-classe-criado-pelo-navegador.md)).
+- O Mestre não expõe nenhuma porta da Cidadela na internet. Os Apps são criados com o webhook inativo ([ADR 0006](0006-app-por-classe-criado-pelo-navegador.md)).
 - **Regras da API do GitHub:**
   - Uma requisição condicional que recebe `304` **não gasta a cota principal**.
   - Cada instalação de App tem 5.000 requisições por hora.
 
 ## Opções consideradas
 
-1. **Webhook com porta pública no Core.**
+1. **Webhook com porta pública na Cidadela.**
    - Prós: eventos na hora, sem gastar cota.
    - Contras:
-     - Exige expor o Core na internet, com domínio e certificado público.
+     - Exige expor a Cidadela na internet (e mudar o endereço público a cada troca de Cidadela), com domínio e certificado público.
      - Viola a regra de nenhuma porta exposta.
 2. **Webhook por um repassador externo** (ex.: túnel ou serviço de relay).
    - Prós: eventos quase na hora, sem abrir porta.

@@ -1,6 +1,6 @@
 # Precedência das regras
 
-> **Assunto:** ordem decretos > regras do Mestre > classe > ficha > AGENTS.md e como cada camada é aplicada · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** ordem decretos > regras do Mestre > classe > ficha > AGENTS.md e como cada camada é aplicada · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 Este documento é a **fonte única** da ordem de precedência. Os outros documentos fazem link para cá.
 
@@ -35,10 +35,10 @@ Cada camada atua por até três canais: **texto** de instruções (o que o agent
 
 | Camada | Onde mora | Texto | Decisão no `mestre hook` | Reforço nativo |
 |---|---|---|---|---|
-| Decretos | banco do Core ([decretos](../telegram/decretos.md)) | os que mudam comportamento entram no topo da camada do Mestre dos personagens afetados, atualizada a cada início de turno | todos os ativos, em toda decisão | não (mudam a qualquer momento) |
-| Regras fixas do Mestre | modelos versionados no Core ([sessão zero do personagem](../sessao-zero/personagem.md)) | camada do Mestre (`MESTRE.md`) | sim | sim, o que for expressável |
+| Decretos | banco da Guilda ([decretos](../telegram/decretos.md)) | os que mudam comportamento entram no topo da camada do Mestre dos personagens afetados, atualizada a cada início de turno | todos os ativos, em toda decisão | não (mudam a qualquer momento) |
+| Regras fixas do Mestre | modelos versionados na Cidadela ([sessão zero do personagem](../sessao-zero/personagem.md)) | camada do Mestre (`MESTRE.md`) | sim | sim, o que for expressável |
 | Classe | pacote da classe ([classes](../classes/classes.md)) | `CLASS.md` entra na camada do Mestre | `permissions.yaml` e hooks extras da classe ([permissões](../classes/permissoes.md)) | sim, traduzido pelo adaptador |
-| Ficha | banco do Core ([bases e fichas](../orquestracao/bases-e-fichas.md)) | — | restrições da ficha | sim |
+| Ficha | banco da Guilda ([bases e fichas](../orquestracao/bases-e-fichas.md)) | — | restrições da ficha | sim |
 | Projeto | `AGENTS.md` do repositório | lido nativamente pelo provedor | não participa | não |
 
 - **Atualização dos decretos no texto:** no evento "início de turno" (`UserPromptSubmit` no Claude Code e no Codex, `PreInvocation` no Antigravity) o `mestre hook` injeta a lista atual; quando o provedor não tem esse canal, vale a reserva descrita em [sessão zero do personagem](../sessao-zero/personagem.md). O mapa de eventos está no [adaptador](../provedores/adaptador.md).
@@ -54,7 +54,7 @@ Em seguida vêm, nesta ordem: decretos ativos que mudam comportamento, regras fi
 
 ## Combinação na decisão de permissão
 
-Cada decisão do `mestre hook` termina em **permitir**, **negar** ou **pedir aprovação**. Regra de combinação entre camadas, que o Core aplica ao montar as [regras efetivas](../classes/permissoes.md#regras-efetivas) de cada personagem (o passo a passo do despachante está em [permissões](../classes/permissoes.md#pipeline-de-decisão)):
+Cada decisão do `mestre hook` termina em **permitir**, **negar** ou **pedir aprovação**. Regra de combinação entre camadas, que a Cidadela aplica ao montar as [regras efetivas](../classes/permissoes.md#regras-efetivas) de cada personagem (o passo a passo do despachante está em [permissões](../classes/permissoes.md#pipeline-de-decisão)):
 
 0. **Invariantes** ([acima](#invariantes-arquiteturais)): o agente nunca recebe a capacidade; um decreto nessa área vira ação do motor.
 1. **Decretos:** entre os ativos que casam com a ação, decide o de autor de nível mais alto. Decretos suspensos (conflito no mesmo nível, ou sistema travado) não contam ([decretos](../telegram/decretos.md)).

@@ -1,6 +1,6 @@
 # Desinstalar
 
-> **Assunto:** passo a passo para remover um nó, o Core e o que o Mestre deixou no GitHub, no Telegram e nos aparelhos · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** passo a passo para remover uma Torre, a Cidadela e o que o Mestre deixou no GitHub, no Telegram e nos aparelhos · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 Guia para quem usa. O que a remoção apaga por dentro está em [instalação e versões](../plataforma/instalacao-e-atualizacao.md#remoção-mestre-uninstall); onde ficam os dados, em [persistência](../arquitetura/persistencia.md#arquivos).
 
@@ -9,25 +9,21 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 ## Antes de começar
 
 - Veja no painel as **mesas abertas**. Trabalho que ainda não foi enviado ao GitHub existe só nas máquinas do Mestre; encerre as mesas ou peça ao Grão-Mestre para enviar o que importa.
-- Para guardar uma cópia, copie a pasta de backups antes de apagar dados (Core no Ubuntu: `/var/lib/mestre/backups/`; Core no Windows: `%ProgramData%\Mestre\backups\`). O cofre vai nela, cifrado; para restaurar, você precisa da **chave de recuperação** guardada na instalação ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)).
+- Para guardar uma cópia, copie a pasta de backups da Cidadela antes de apagar dados (Ubuntu: `/var/lib/mestre/backups/`; Windows: `%ProgramData%\Mestre\backups\`). O cofre vai nela, cifrado; para restaurar, você precisa da **chave de recuperação** guardada na instalação ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)).
 
-## Remover um nó
+## Remover uma Torre
 
-1. No painel, em **Saúde dos nós**, **revogue** o nó e confirme com o PIN ([parear nó](parear-no.md#revogar-um-nó)).
-2. Na máquina do nó, rode `mestre uninstall` como administrador (PowerShell **como administrador** no Windows; `sudo mestre uninstall` no Ubuntu, seguido de `sudo apt remove mestre`).
-3. Isso para e remove os serviços `mestre-node` e `mestre-guardiao`, a conta `mestre-agente` e o perfil dela (no Windows), as regras de firewall do Mestre e os programas. Os logins dos perfis de conta feitos por essa conta deixam de valer: numa reinstalação no Windows, refaça o login de cada perfil ([primeiro acesso](primeiro-acesso.md#4-configurar-os-perfis-de-conta)).
-4. Confira: `Get-Service mestre-*` e `Get-LocalUser mestre-agente` (Windows) ou `systemctl status mestre-node` (Ubuntu) não acham nada.
-5. Os dados ficam em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
+1. Na Torre, rode `mestre uninstall` como administrador (PowerShell **como administrador** no Windows; `sudo mestre uninstall` no Ubuntu, seguido de `sudo apt remove mestre`). Ele pede antes a saída da Guilda à Cidadela; com a Cidadela fora, desinstala assim mesmo e o painel mostra a máquina como "sumida": remova-a no painel ([remover uma máquina](entrar-na-guilda.md#remover-uma-máquina)).
+2. Isso para e remove os serviços `mestre`, `mestre-guardiao` e `mestre-update`, a conta `mestre-agente` e o perfil dela (no Windows), as regras de firewall do Mestre e os programas. Os logins dos perfis de conta feitos por essa conta deixam de valer: numa reinstalação no Windows, refaça o login de cada perfil ([primeiro acesso](primeiro-acesso.md#4-configurar-os-perfis-de-conta)).
+3. Confira: `Get-Service mestre*` e `Get-LocalUser mestre-agente` (Windows) ou `systemctl status mestre` (Ubuntu) não acham nada.
+4. Os dados ficam em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
 
-## Remover o Core
+## Remover a Cidadela
 
-1. Remova antes todos os nós remotos (seção acima). Nós sem Core ficam tentando reconectar.
-2. Na máquina do Core, como administrador:
-   - **Ubuntu:** `sudo mestre uninstall` e depois `sudo apt remove mestre`;
-   - **Windows:** `mestre uninstall` num PowerShell de administrador, ou "Desinstalar" em Aplicativos instalados.
-3. Isso para e remove os serviços do Core (`mestre-core`, o nó local `mestre-node` e `mestre-guardiao`), a conta `mestre-agente` e o perfil dela no Windows e as regras de firewall.
-4. Confira: `systemctl status mestre-core mestre-node` responde que as unidades não existem, ou `Get-Service mestre-*` não acha nada.
-5. Os dados ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos): cofre, banco, espelhos, worktrees, anexos, perfis de conta dos provedores e a CA. Se não vai reinstalar, peça para apagar tudo ou apague essas pastas. Sem a chave do cofre, os segredos guardados não podem mais ser lidos.
+- **Com Torres na Guilda:** o `mestre uninstall` recusa. Antes, passe o comando a uma Torre candidata pelo painel ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)); a antiga vira Torre e sai como na seção acima. Para acabar com a Guilda inteira, remova todas as Torres primeiro.
+- **Sozinha:** na máquina, como administrador, `sudo mestre uninstall` e depois `sudo apt remove mestre` (Ubuntu), ou `mestre uninstall` num PowerShell de administrador, ou "Desinstalar" em Aplicativos instalados (Windows). A Guilda acaba.
+- Isso remove os mesmos serviços, conta e regras de uma Torre. Confira como na seção acima.
+- Os dados ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos): cofre, banco, espelhos, worktrees, anexos, perfis de conta dos provedores e a CA. Se não vai reinstalar, peça para apagar tudo ou apague essas pastas. Sem a chave do cofre, os segredos guardados não podem mais ser lidos.
 
 ## Limpar fora das máquinas
 

@@ -1,6 +1,6 @@
 # ADR 0007: Apps fixos "Grão-Mestre" e "Mestre"
 
-> **Assunto:** por que há dois Apps fixos separados e como o motor se autentica com eles · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** por que há dois Apps fixos separados e como o motor se autentica com eles · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 

@@ -1,10 +1,10 @@
 # Instalação e versões
 
-> **Assunto:** visão técnica da instalação no Ubuntu e no Windows, como Core ou como nó, pastas de versões, versão anterior guardada, volta de versão, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** visão técnica do instalador único no Ubuntu e no Windows (descobre a Guilda e entra, ou cria), pastas de versões, versão anterior guardada, volta de versão, CLIs dos provedores, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Definir o que a instalação cria em cada máquina e como as versões ficam no disco, para que atualizar e voltar de versão seja só trocar um apontamento. O passo a passo para quem usa está em [instalar](../operacao/instalar.md), [primeiro acesso](../operacao/primeiro-acesso.md), [parear nó](../operacao/parear-no.md), [atualizar](../operacao/atualizar.md) e [desinstalar](../operacao/desinstalar.md). O fluxo de atualização (descoberta, assinatura, aprovação, ordem) está em [atualização automática](autoatualizacao.md).
+Definir o que a instalação cria em cada máquina e como as versões ficam no disco, para que atualizar e voltar de versão seja só trocar um apontamento. Toda máquina recebe a mesma instalação, porque qualquer uma pode virar Cidadela. O passo a passo para quem usa está em [instalar](../operacao/instalar.md), [primeiro acesso](../operacao/primeiro-acesso.md), [entrar na Guilda](../operacao/entrar-na-guilda.md), [atualizar](../operacao/atualizar.md) e [desinstalar](../operacao/desinstalar.md). O fluxo de atualização (descoberta, assinatura, aprovação, ordem) está em [atualização automática](autoatualizacao.md).
 
 ## Comportamento
 
@@ -12,11 +12,11 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 
 | Plataforma | Artefato | O que faz |
 |---|---|---|
-| Ubuntu (LTS atual) | `mestre_<versão>_amd64.deb` (depende de `ffmpeg` e `avahi-daemon`), mais um `install.sh` que baixa o `.deb` das [Releases](https://github.com/lucasndas/mestre/releases), confere o SHA-256 e roda `apt install` | coloca os binários em `/usr/lib/mestre/pacote/`, pergunta o papel e chama `mestre install core` ou `mestre install node` |
-| Windows 11 ou superior | instalador `mestre-<versão>-x64.msi` (MSI gerado com WiX v4), elevado, com o `ffmpeg.exe` numa versão fixada | copia os binários, pergunta o papel e chama `mestre install core` ou `mestre install node` |
+| Ubuntu (LTS atual) | `mestre_<versão>_amd64.deb` (depende de `ffmpeg` e `avahi-daemon`), mais um `install.sh` que baixa o `.deb` das [Releases](https://github.com/lucasndas/mestre/releases), confere o SHA-256 e roda `apt install` | coloca os binários em `/usr/lib/mestre/pacote/` e chama `mestre install` |
+| Windows 11 ou superior | instalador `mestre-<versão>-x64.msi` (MSI gerado com WiX v4), elevado, com o `ffmpeg.exe` numa versão fixada | copia os binários e chama `mestre install` |
 
-- **Papel da máquina:** os dois instaladores perguntam primeiro: **"Core"** (o servidor principal, que já inclui o nó local) ou **"nó"** (pareia com um Core existente). Os quatro usos saem dessa escolha em cada máquina ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)); no `install.sh`, também por `--papel core|no`.
-- A lógica toda fica nos subcomandos `mestre install core|node` ([componentes](../arquitetura/componentes.md#binários)); o pacote e o instalador são finos.
+- **Sem papel para escolher:** o instalador é o mesmo em toda máquina. Ele procura uma Guilda na rede e **entra** nela, ou, sem nenhuma, **cria** a Guilda e a máquina vira a Cidadela ([formação](../guilda/guilda.md#formação)). As quatro composições (só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux, só Windows) saem só da ordem em que as máquinas são instaladas ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
+- A lógica toda fica no subcomando `mestre install` ([componentes](../arquitetura/componentes.md#binários)); o pacote e o instalador são finos. Opções: `--join <endereço>` (máquina fora da rede local), `--new-guild` (cria outra Guilda mesmo que uma responda), `--restore <pasta do backup>` e, no Windows, `--operator-user <usuário>`.
 - **Sem assinatura de código Authenticode:** o MSI e os `.exe` são publicados sem ela. O SHA-256 de cada artefato é publicado na Release, e o guia de [instalação](../operacao/instalar.md) explica o aviso do SmartScreen. As versões seguintes chegam pelo manifesto assinado da [atualização automática](autoatualizacao.md), fora do `dpkg` e do instalador.
 
 ### Pastas de versões
@@ -33,67 +33,37 @@ Definir o que a instalação cria em cada máquina e como as versões ficam no d
 - Ficam no disco só a versão atual e a anterior; a mais velha é apagada depois que a nova é confirmada.
 - Dados, configuração e logs ficam nas pastas de [persistência](../arquitetura/persistencia.md#arquivos), fora das pastas de versões.
 
+### `mestre install` (Linux como root; Windows elevado)
+
+1. Registra a versão do sistema (o [checklist](checklist.md) acompanha).
+2. **Contas:** no Linux, `mestre` (o motor, com `CAP_SETUID` e `CAP_SETGID` só para iniciar os agentes) e `mestre-agente` (os agentes), contas de sistema com grupo próprio, sem pasta pessoal, shell `nologin` ([ambiente](../desenvolvimento/ambiente.md#conta-mestre-agente-nesta-máquina-linux)); no Windows, a conta virtual `NT SERVICE\Mestre` (com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` concedidos e declarados) e a conta local `mestre-agente` ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)): fora de Administradores, senha aleatória de 32 caracteres guardada com DPAPI de máquina, "Negar logon local", "Negar logon pelos Serviços de Área de Trabalho Remota", logon em lote e oculta da tela de login. Cria as pastas de dados com dono, permissão e ACL ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes), [persistência](../arquitetura/persistencia.md#arquivos)).
+3. **Serviços** ([componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), com as opções de reinício e recuperação de [camadas](../autocura/camadas.md#valores-padrão): o motor `mestre` (no Linux, unidade systemd com cgroup delegado, `Delegate=yes`, onde cada terminal ganha o cgroup `term-<id>`), o `mestre-guardiao` (no Windows, LocalSystem) e o ajudante de troca `mestre-update` ([atualização automática](autoatualizacao.md)); no Linux, também os arquivos de serviço do Avahi ([descoberta](../conectividade/descoberta.md#mdns)).
+4. **Firewall:** libera as portas do Mestre ([portas](../arquitetura/componentes.md#portas)) só para a rede local (no Linux, se o `ufw` estiver ativo; no Windows, só no perfil Privado). São as mesmas em toda máquina, porque toda máquina responde no endereço do painel e qualquer uma pode virar Cidadela.
+5. **Guilda:** procura uma Guilda e entra ou cria, conforme [formação](../guilda/guilda.md#formação):
+   - **Entra:** mostra o código de entrada e espera a aceitação do Dono ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)); aceita, a máquina conecta como Torre e recebe a configuração e a cópia do banco.
+   - **Cria:** gera o cofre ([chave do cofre](cofre.md#chave-do-cofre); no Windows, DPAPI de máquina com ACL só da conta virtual), o banco, a CA da Guilda e os certificados; mostra o endereço do painel, a impressão da CA (para conferir no navegador) e o **código de configuração** do assistente do Dono ([login](../painel/login.md#assistente-do-dono-primeira-vez)). Mostra **uma única vez** a chave de recuperação do cofre e só termina depois de o usuário redigitar dois grupos dela; diz que sem ela o backup do cofre é inútil ([backup e chave de recuperação](cofre.md#backup-e-chave-de-recuperação)). Com `--restore`, em vez de criar cofre e CA novos, restaura o banco e o cofre do backup pedindo essa chave.
+6. **Operador do PC (Windows, opcional; padrão: não):** pergunta se habilita o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) e para qual usuário. Se sim, cria a tarefa `\Mestre\Operador` ([Windows](../arquitetura/windows.md#operador-do-pc)) e grava o usuário na configuração da máquina; não dá à conta dele nenhuma entrada em `%ProgramData%\Mestre\`. O checklist confere o UAC (WIN-21) e a tarefa (WIN-22). Desabilitar é rodar a instalação de novo sem a opção: a tarefa é apagada e a ficha da máquina deixa de anunciar o Operador.
+7. Inicia os serviços e roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado. Na Cidadela, o Whisper é preparado (abaixo).
+
+A instalação no Windows não pede senha nenhuma: nenhum serviço usa a conta de quem instala. Os Apps fixos "Grão-Mestre" e "Mestre" nascem no primeiro acesso, pelo link de criação ([criação de Apps](../github/criacao-de-apps.md)). Nas atualizações, a conta `mestre-agente` (com a senha guardada e o perfil dela) e as regras de firewall são preservadas.
+
 ### CLIs dos provedores
 
-- **Linux:** `claude`, `codex` e `agy` ficam numa pasta do root, `/opt/mestre-clis/`, que o `mestre-agente` executa e não grava. Assim a autoatualização própria de cada CLI falha sem estrago, e só o Mestre troca de versão ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
-- `claude` e `agy`: o binário em `/opt/mestre-clis/bin/`. **Codex:** o pacote completo da versão (`bin/`, `codex-path/`, `codex-resources/`, `codex-package.json`) em `/opt/mestre-clis/codex-<versão>/`, com o link `/opt/mestre-clis/bin/codex` → `codex-<versão>/bin/codex`; o binário solto não funciona ([Codex](../provedores/codex.md#contas-múltiplas)). Trocar a versão do Codex é trocar o link.
-- Resultado do spike do M1 no Linux ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)); na máquina de desenvolvimento, os comandos estão em [ambiente](../desenvolvimento/ambiente.md#conta-mestre-agente-nesta-máquina-linux).
-
-### Core no Linux (`mestre install core`)
-
-1. Registra a versão do Ubuntu (o [checklist](checklist.md) acompanha).
-2. Cria as contas `mestre` e `mestre-agente` (contas de sistema, grupo próprio, sem pasta pessoal, shell `nologin`; os comandos estão em [ambiente](../desenvolvimento/ambiente.md#conta-mestre-agente-nesta-máquina-linux)) e as pastas de dados com dono e permissão ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
-3. Gera a chave do [cofre](cofre.md#chave-do-cofre) e cria o banco ([persistência](../arquitetura/persistencia.md)).
-4. Cria a CA interna, o certificado do servidor do Core e o certificado próprio do Guardião do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)); a chave da CA vai para o cofre.
-5. Instala as unidades systemd `mestre-core`, `mestre-node` (o nó local, com a conta `mestre`, que inicia os agentes como `mestre-agente`, banco de nó próprio e cgroup delegado, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), `mestre-guardiao` e o ajudante de troca `mestre-update` ([atualização automática](autoatualizacao.md)), com as opções de reinício de [camadas](../autocura/camadas.md#valores-padrão), e os arquivos de serviço do Avahi ([descoberta](../conectividade/descoberta.md#mdns)).
-6. Se o `ufw` estiver ativo, libera as portas do Core ([portas](../arquitetura/componentes.md#portas)).
-7. Pareia sozinho o nó local com o Core, em `127.0.0.1:7443` ([pareamento](../conectividade/pareamento.md#convite)), e baixa e prepara o Whisper no nó local (abaixo).
-8. Inicia os serviços e mostra no terminal o endereço do painel, a impressão da CA (para conferir no navegador) e o **código de configuração** do assistente do Dono ([login](../painel/login.md#assistente-do-dono-primeira-vez)).
-9. Mostra **uma única vez** a chave de recuperação do cofre e só termina depois de o usuário redigitar dois grupos dela; diz que sem ela o backup do cofre é inútil ([backup e chave de recuperação](cofre.md#backup-e-chave-de-recuperação)). Com `--restore <pasta do backup>`, em vez de gerar cofre e CA novos, restaura o banco e o cofre do backup pedindo essa chave.
-
-### Core no Windows (`mestre install core`, elevado)
-
-1. Registra a versão do Windows, registra o serviço `mestre-core` com a conta virtual `NT SERVICE\MestreCore` e cria as pastas de dados com as ACLs de [persistência](../arquitetura/persistencia.md#arquivos).
-2. Gera a chave do [cofre](cofre.md#chave-do-cofre) (DPAPI de máquina, ACL só da conta virtual), cria o banco, a CA interna, o certificado do servidor do Core e o certificado próprio do Guardião do Core.
-3. Cria a conta `mestre-agente` e registra o `mestre-node` local na conta virtual `NT SERVICE\MestreNode`, como no nó Windows (abaixo), com banco de nó próprio, e o pareia sozinho com o Core em `127.0.0.1:7443` ([pareamento](../conectividade/pareamento.md#convite)).
-4. Registra `mestre-guardiao` (LocalSystem) e o ajudante `mestre-update` (sob demanda), com a recuperação de [camadas](../autocura/camadas.md#valores-padrão).
-5. Cria as regras de firewall das portas do Core, só no perfil Privado ([portas](../arquitetura/componentes.md#portas)).
-6. Baixa e prepara o Whisper no nó local (abaixo); o `ffmpeg.exe` já vem no instalador. Oferece o Operador do PC no nó local, como no nó Windows (abaixo).
-7. Inicia os serviços, mostra o endereço do painel, a impressão da CA e o código de configuração, e mostra a chave de recuperação do cofre, como no Linux (passo 9).
-
-A instalação no Windows não pede senha nenhuma: nenhum serviço usa a conta de quem instala.
-
-Nos dois sistemas, os Apps fixos "Grão-Mestre" e "Mestre" nascem no primeiro acesso, pelo link de criação ([criação de Apps](../github/criacao-de-apps.md)).
-
-### Nó no Windows (`mestre install node`, elevado)
-
-1. Encontra o Core pela [descoberta](../conectividade/descoberta.md) ou pelo endereço informado, e faz o [pareamento](../conectividade/pareamento.md) com o código de convite. Pergunta também se o nó vai transcrever áudio (padrão: não; abaixo).
-2. Cria a conta local `mestre-agente` ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)): fora de Administradores, senha aleatória de 32 caracteres guardada com DPAPI de máquina, "Negar logon local", "Negar logon pelos Serviços de Área de Trabalho Remota", logon em lote e oculta da tela de login.
-3. Registra os serviços `mestre-node` (conta virtual `NT SERVICE\MestreNode`, com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` concedidos e declarados) e `mestre-guardiao` (início automático, recuperação de [camadas](../autocura/camadas.md#valores-padrão)) e o ajudante `mestre-update` (sob demanda).
-4. Cria as regras de firewall da descoberta e da [página reserva](../autocura/pagina-reserva.md), só no perfil Privado.
-5. Cria as pastas de dados com ACL ([persistência](../arquitetura/persistencia.md#arquivos)), inicia os serviços, roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
-6. **Operador do PC (opcional; padrão: não):** pergunta se habilita o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) e para qual usuário do Windows (no `mestre install node`, `--operator-user <usuário>`). Se sim, cria a tarefa `\Mestre\Operador` ([Windows](../arquitetura/windows.md#operador-do-pc)) e grava o usuário na configuração do nó; não dá à conta dele nenhuma entrada em `%ProgramData%\Mestre\`. O checklist confere o UAC (WIN-21) e a tarefa (WIN-22). Desabilitar é rodar a instalação de novo sem a opção: a tarefa é apagada e o nó deixa de anunciar `operador`.
-
-### Nó no Linux (`mestre install node`)
-
-1. Registra a versão do Ubuntu; encontra o Core e faz o pareamento, como no Windows.
-2. Cria as contas `mestre` e `mestre-agente` e as pastas de dados ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)).
-3. Instala as unidades systemd `mestre-node` (com cgroup delegado, [componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)), `mestre-guardiao` e `mestre-update`, com as opções de [camadas](../autocura/camadas.md#valores-padrão).
-4. Se o `ufw` estiver ativo, libera a porta da página reserva só para a rede local.
-5. Inicia os serviços e roda o [checklist](checklist.md) e o [teste de conformidade](../provedores/conformidade.md) de cada provedor encontrado.
-
-Nas atualizações, a conta `mestre-agente` (com a senha guardada e o perfil dela) e as regras de firewall são preservadas.
+- `claude`, `codex` e `agy` são instalados pelo instalador oficial de cada provedor, rodando como `mestre-agente` com o `HOME` do perfil de conta (`/var/lib/mestre/contas/<perfil>/` ou `%ProgramData%\Mestre\contas\<perfil>\`; [perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)), na configuração inicial do perfil. Ficam onde esse instalador grava (ex.: o do Claude Code, em `$HOME/.local/share/claude`); o motor resolve o executável pelo perfil.
+- **Os CLIs se atualizam sozinhos:** o Mestre não desliga a autoatualização deles. Ele detecta a versão nova e roda a conformidade depois ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
+- **Cuidado:** como a pasta do CLI é gravável por `mestre-agente`, um agente poderia alterar o binário. As regras fixas negam às ferramentas dos agentes as pastas de dados do Mestre, inclusive os perfis de conta ([regras fixas](../classes/permissoes.md#regras-fixas-de-segurança)).
+- **Codex:** precisa do pacote completo da versão (`bin/`, `codex-path/`, `codex-resources/`, `codex-package.json`); o binário solto não funciona ([Codex](../provedores/codex.md#contas-múltiplas)).
 
 ### Whisper
 
-- **Qual nó transcreve:** o nó local do Core, por padrão, preparado na instalação do Core. Outro nó passa a transcrever por escolha no instalador dele ou depois, pelo painel ("Saúde dos nós" → "Ativar transcrição", Dono ou Administrador; [administração](../painel/administracao.md)); a escolha fica na configuração do nó, no banco do Core. Desativar apaga os arquivos e o nó deixa de anunciar a capacidade. Como o trabalho é distribuído: [anexos e transcrição](../telegram/anexos-e-transcricao.md).
-- **Arquivos:** o Core baixa o `whisper-server` (Linux ou Windows) e os modelos `large-v3-turbo` q5_0 e q8_0 ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)) e os entrega ao nó de transcrição pela conexão WSS (transferência em partes, [protocolo](../conectividade/protocolo.md)); os nós não acessam a internet para isso. O `whisper-server` é compilado pelo próprio Mestre (whisper.cpp numa versão fixada) e publicado nas Releases do Mestre, sem depender do que o projeto whisper.cpp publica. Endereços e SHA-256 de cada arquivo vêm fixos na versão do Mestre; arquivo com hash diferente é apagado e baixado de novo (3 tentativas).
+- **Qual máquina transcreve:** a Cidadela, por padrão, e toda máquina marcada "pode ser Cidadela", preparadas quando a Guilda é criada ou quando a marca é posta, para transcrever logo depois de uma promoção. Outra máquina passa a transcrever por escolha no painel ("Guilda e saúde das máquinas" → "Ativar transcrição", Dono ou Administrador; [administração](../painel/administracao.md)); a escolha fica no banco da Cidadela. Desativar apaga os arquivos e a ficha da máquina deixa de anunciar a transcrição. Como o trabalho é distribuído: [anexos e transcrição](../telegram/anexos-e-transcricao.md).
+- **Arquivos:** a Cidadela baixa o `whisper-server` (Linux ou Windows) e os modelos `large-v3-turbo` q5_0 e q8_0 ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)) e os entrega às Torres pela conexão WSS (transferência em partes, [protocolo](../conectividade/protocolo.md)); as Torres não acessam a internet para isso. O `whisper-server` é compilado pelo próprio Mestre (whisper.cpp numa versão fixada) e publicado nas Releases do Mestre. Endereços e SHA-256 de cada arquivo vêm fixos na versão do Mestre; arquivo com hash diferente é apagado e baixado de novo (3 tentativas).
 - **Benchmark:** transcreve um áudio de teste embutido (30 s, em português) com cada quantização, usando tantas threads quanto os núcleos físicos. Fica com **q8_0 se levar até 0,3 do tempo do áudio** (padrão); senão, q5_0. O outro modelo é apagado e a escolha fica na configuração.
-- Arquivos na pasta `whisper` de [persistência](../arquitetura/persistencia.md#arquivos). Benchmark feito → o nó passa a anunciar `transcricao: true`. Falhou → anuncia `transcricao` falso e o checklist acusa.
+- Arquivos na pasta `whisper` de [persistência](../arquitetura/persistencia.md#arquivos). Benchmark feito → a ficha da máquina anuncia a transcrição. Falhou → não anuncia e o checklist acusa.
 
 ### Versão de protocolo
 
-Cada binário declara a faixa de versões de protocolo que entende (`mestre version`). O Core aceita a atual e a anterior, para nós ainda não atualizados conviverem ([protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades)). Um nó fora da faixa recebe `4003` e precisa da instalação manual da versão nova.
+Cada binário declara a faixa de versões de protocolo que entende (`mestre version`). A Cidadela aceita a atual e a anterior, para Torres ainda não atualizadas conviverem ([protocolo](../conectividade/protocolo.md)). Uma Torre fora da faixa recebe `4003` e precisa da instalação manual da versão nova.
 
 ### Volta de versão
 
@@ -103,30 +73,31 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 
 ### Remoção (`mestre uninstall`)
 
-Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela, o arquivo da senha e a tarefa `\Mestre\Operador`. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil ([bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo. A credencial do nó deve ser revogada no painel ([pareamento](../conectividade/pareamento.md)).
+Numa Torre, pede antes a saída da Guilda; a Cidadela com Torres na Guilda recusa e manda passar o comando a uma Torre ([saída e remoção](../guilda/guilda.md#saída-e-remoção)). Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela, o arquivo da senha e a tarefa `\Mestre\Operador`. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil. Dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo.
 
 ## Regras e erros
 
 - `mestre install` recusa rodar sem privilégio de administrador e com `MESTRE_AGENT_ID` no ambiente ([componentes](../arquitetura/componentes.md#binários)).
-- Rodar de novo numa máquina já instalada não duplica nada: confere e completa o que falta (contas, direitos, privilégios, pastas, serviços, regras).
+- Rodar de novo numa máquina já instalada não duplica nada: confere e completa o que falta (contas, direitos, privilégios, pastas, serviços, regras) e não procura a Guilda de novo.
 - Falha no meio da instalação → mostra o passo que falhou e como repetir; nada do que já foi criado é apagado sozinho.
 - O Guardião nunca é trocado por ação de cura ([Guardião](../autocura/guardiao.md#proteções)).
 
 ## Critérios de aceite
 
-- **CA-INST-01** · *pesada* — **Dado** um Ubuntu e um Windows 11 limpos, **quando** instalo o Core, crio o Dono e instalo o nó, **então** o nó encontra o Core na rede local, pareia e aparece conectado no painel (MVP-1).
+- **CA-INST-01** · *pesada* — **Dado** um Ubuntu e um Windows 11 limpos, **quando** instalo no Ubuntu, crio o Dono e instalo no Windows, **então** o Windows encontra a Guilda na rede local, pede para entrar, o Dono aceita com PIN e ele aparece como Torre conectada no painel (MVP-1).
 - **CA-INST-02** · *rápida* — **Dado** as versões 1.2.0 (atual) e 1.1.0 (anterior) num sistema de arquivos falso, **quando** roda a volta só de binário, **então** `atual` aponta para 1.1.0 e nenhum arquivo do banco muda.
-- **CA-INST-03** · *rápida* — **Dado** um modelo baixado com SHA-256 diferente, **quando** a instalação confere, **então** apaga e baixa de novo, até 3 vezes, e depois marca `transcricao` falso.
+- **CA-INST-03** · *rápida* — **Dado** um modelo baixado com SHA-256 diferente, **quando** a instalação confere, **então** apaga e baixa de novo, até 3 vezes, e depois a ficha da máquina não anuncia a transcrição.
 - **CA-INST-04** · *rápida* — **Dado** o benchmark com q8_0 a 0,25 do tempo do áudio, **quando** termina, **então** fica q8_0 e o modelo q5_0 é apagado.
-- **CA-INST-05** · *pesada* — **Dado** uma máquina de cada sistema já instalada, **quando** `mestre install node` roda de novo, **então** nenhum serviço, tarefa ou regra fica duplicado (MVP-13).
-- **CA-INST-07** · *pesada* — **Dado** máquinas limpas, **quando** instalo cada um dos quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows), escolhendo o papel no instalador, **então** em cada um o painel abre, o Dono é criado, o nó local e os nós remotos aparecem conectados, e um personagem de teste roda em cada máquina (MVP-13).
-- **CA-INST-08** · *pesada* — **Dado** a instalação do Core concluída no Ubuntu e no Windows, **quando** listo os serviços, **então** existem `mestre-core` e o nó local `mestre-node`, pareado sozinho e conectado em `127.0.0.1:7443`; no Windows, `mestre-core` roda como `NT SERVICE\MestreCore`, `mestre-node` como `NT SERVICE\MestreNode` e os terminais como `mestre-agente`; no Linux, `mestre-core` e `mestre-node` como `mestre` e os terminais como `mestre-agente` (MVP-13).
-- **CA-INST-09** · *rápida* — **Dado** um nó sem transcrição e dublês de rede e relógio, **quando** um Administrador ativa a transcrição dele no painel, **então** o Core envia os arquivos por transferência, o nó roda o benchmark e passa a anunciar `transcricao: true`; com um arquivo de hash errado, nada é anunciado.
-- **CA-INST-10** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), **quando** listo a ACL de `%ProgramData%\Mestre\` e de cada subpasta, **então** a herança está desligada, não há entrada para `Users`, `Authenticated Users` nem `Everyone`, e `mestre-agente` só tem as entradas de [persistência](../arquitetura/persistencia.md#arquivos); uma conta comum de teste da máquina não consegue listar a pasta (MVP-13).
-- **CA-INST-11** · *pesada* — **Dado** a instalação concluída no Windows (Core e nó), o usuário logado na sessão dele e personagens de teste rodando (com MCP de navegador), **quando** listo os processos do Mestre e seus donos, **então** nenhum roda com a conta do usuário: `mestre-core` como `NT SERVICE\MestreCore`, `mestre-node` como `NT SERVICE\MestreNode`, o Guardião como SYSTEM, e os terminais, seus filhos e o agente de diagnóstico como `mestre-agente`; a única exceção é o [Operador do PC](../decisoes/0021-operador-do-pc.md): com ele habilitado, só `mestre node operator-session` roda com a conta do usuário e, durante uma ativação aprovada, também o terminal do Operador e seus filhos, e mais nenhum processo (MVP-13, MVP-14).
+- **CA-INST-05** · *pesada* — **Dado** uma máquina de cada sistema já instalada, **quando** `mestre install` roda de novo, **então** nenhum serviço, tarefa ou regra fica duplicado e nenhuma Guilda nova é criada (MVP-13).
+- **CA-INST-07** · *pesada* — **Dado** máquinas limpas, **quando** monto cada uma das quatro composições da Guilda só pela ordem de instalação, **então** em cada uma o painel abre, o Dono é criado, as Torres aparecem conectadas e um personagem de teste roda em cada máquina, inclusive na Cidadela (MVP-13).
+- **CA-INST-08** · *pesada* — **Dado** a instalação concluída no Ubuntu e no Windows, como Cidadela e como Torre, **quando** listo os serviços, **então** em toda máquina existem só `mestre`, `mestre-guardiao` e `mestre-update`; o `mestre` roda como `mestre` no Linux e como `NT SERVICE\Mestre` no Windows, e os terminais como `mestre-agente` (MVP-13).
+- **CA-INST-09** · *rápida* — **Dado** uma Torre sem transcrição e dublês de rede e relógio, **quando** um Administrador ativa a transcrição dela no painel, **então** a Cidadela envia os arquivos por transferência, a Torre roda o benchmark e a ficha dela passa a anunciar a transcrição; com um arquivo de hash errado, nada é anunciado.
+- **CA-INST-10** · *pesada* — **Dado** a instalação concluída no Windows (Cidadela e Torre), **quando** listo a ACL de `%ProgramData%\Mestre\` e de cada subpasta, **então** a herança está desligada, não há entrada para `Users`, `Authenticated Users` nem `Everyone`, e `mestre-agente` só tem as entradas de [persistência](../arquitetura/persistencia.md#arquivos); uma conta comum de teste da máquina não consegue listar a pasta (MVP-13).
+- **CA-INST-11** · *pesada* — **Dado** a instalação concluída no Windows (Cidadela e Torre), o usuário logado e personagens de teste rodando (com MCP de navegador), **quando** listo os processos do Mestre e seus donos, **então** nenhum roda com a conta do usuário: `mestre` como `NT SERVICE\Mestre`, o Guardião como SYSTEM, e os terminais, seus filhos e o agente de diagnóstico como `mestre-agente`; a única exceção é o [Operador do PC](../decisoes/0021-operador-do-pc.md): com ele habilitado, só `mestre operator-session` roda com a conta do usuário e, durante uma ativação aprovada, também o terminal do Operador e seus filhos (MVP-13, MVP-14).
 - **CA-INST-12** · *pesada* — **Dado** a instalação concluída no Windows e um arquivo em `C:\Users\<usuário>\Documents`, **quando** um processo como `mestre-agente` (o agente falso, por comando direto, sem passar pelo despachante) tenta listar `C:\Users\<usuário>` e ler o arquivo, **então** o Windows nega os dois (MVP-13).
-- **CA-INST-13** · *pesada* — **Dado** a instalação concluída no Windows e a senha guardada do `mestre-agente`, **quando** se tenta entrar com ela na tela de login, por `runas /user:mestre-agente` e por Área de Trabalho Remota, **então** o Windows recusa os três, a conta não aparece na tela de login nem no grupo Administradores, e o `mestre-node` continua iniciando personagens com ela (MVP-13).
-- **CA-INST-14** · *pesada* — **Dado** um nó Windows instalado com o Operador habilitado para o usuário de teste, **quando** listo a tarefa `\Mestre\Operador` e a ACL de `%ProgramData%\Mestre\`, **então** a tarefa tem o gatilho de logon desse usuário, privilégios normais, sem limite de tempo e reinício em falha, e a ACL não tem entrada para a conta dele; reinstalado sem a opção, a tarefa não existe mais (MVP-14).
+- **CA-INST-13** · *pesada* — **Dado** a instalação concluída no Windows e a senha guardada do `mestre-agente`, **quando** se tenta entrar com ela na tela de login, por `runas /user:mestre-agente` e por Área de Trabalho Remota, **então** o Windows recusa os três, a conta não aparece na tela de login nem no grupo Administradores, e o `mestre` continua iniciando personagens com ela (MVP-13).
+- **CA-INST-14** · *pesada* — **Dado** uma máquina Windows instalada com o Operador habilitado para o usuário de teste, **quando** listo a tarefa `\Mestre\Operador` e a ACL de `%ProgramData%\Mestre\`, **então** a tarefa tem o gatilho de logon desse usuário, privilégios normais, sem limite de tempo e reinício em falha, e a ACL não tem entrada para a conta dele; reinstalado sem a opção, a tarefa não existe mais (MVP-14).
+- **CA-INST-15** · *rápida* — **Dado** uma Torre sem a marca "pode ser Cidadela" e dublês de rede, **quando** o Dono põe a marca, **então** a Torre recebe os arquivos do Whisper e roda o benchmark; **quando** a marca sai, **então** os arquivos são apagados, a não ser que a transcrição dela esteja ativada no painel.
 
 ## Depende de
 
@@ -135,7 +106,7 @@ Para e remove serviços, unidades, regras de firewall criadas pela instalação 
 - [Segurança](../arquitetura/seguranca.md)
 - [Windows](../arquitetura/windows.md)
 - [Cofre](cofre.md)
-- [Pareamento](../conectividade/pareamento.md)
+- [Guilda](../guilda/guilda.md)
 - [Descoberta](../conectividade/descoberta.md)
 - [Protocolo](../conectividade/protocolo.md)
 

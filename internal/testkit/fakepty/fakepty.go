@@ -27,7 +27,7 @@ func New(clk clock.Clock, cols, rows uint16) *Pair {
 	return &Pair{in: memio.New(clk, true), out: memio.New(clk, true), cols: cols, rows: rows}
 }
 
-// Terminal returns the side used by the node (and by tests as the user).
+// Terminal returns the side used by the machine's engine (and by tests as the user).
 func (p *Pair) Terminal() terminal.PTY { return termSide{p} }
 
 // Process returns the side given to the process.

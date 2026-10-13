@@ -1,6 +1,6 @@
 # Personagens
 
-> **Assunto:** criação sob demanda, escolha do nó, limites, efêmero/persistente, encerramento seguro, fixar, estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -19,24 +19,26 @@ Todo personagem nasce de uma **ficha** (agente) e todo terminal simples de uma *
 | Mestre da mesa | personagens e terminais simples | só na própria mesa |
 | Usuário Administrador ou acima | personagens e terminais simples, pelo canvas | qualquer mesa permitida |
 
-O personagem nasce já conectado a quem o criou e ao Mestre da mesa ([conexões](conexoes.md)), e inicia no worktree da mesa no nó escolhido.
+O personagem nasce já conectado a quem o criou e ao Mestre da mesa ([conexões](conexoes.md)), e inicia no worktree da mesa na máquina escolhida.
 
 **Nomes:** 1 a 32 caracteres (letras, dígitos, espaço, `-`, `_`), únicos na mesa sem diferenciar maiúsculas. `Grão-Mestre` e `Mestre` são reservados. Sem nome, o motor usa `<ficha> <n>` (ex.: "Dev Claude 2").
 
-### Escolha do nó
+### Escolha da máquina
 
-1. **Candidatos:** nós conectados com heartbeat em dia que: estão entre os sistemas/nós permitidos pela base; anunciam todas as capacidades exigidas pela base e pela ficha (ex.: `gpu: true`); têm o perfil de conta da ficha; e não atingiram o limite de personagens.
-2. Com `--node`, só esse nó é considerado.
-3. Ordem de preferência: nó preferido da ficha → nó onde a mesa já tem worktree (o Core primeiro) → nó com menos personagens ativos → ordem alfabética do id.
-4. Sem candidato: a criação falha com uma explicação que lista cada nó e o primeiro requisito não atendido (ex.: "windows-pc: perfil de conta `claude-trabalho` não existe").
+Personagens rodam em qualquer máquina da Guilda, inclusive na Cidadela. Quem escolhe é a Cidadela, comparando os **requisitos** da base e da ficha com a **ficha da máquina** de cada uma ([ficha da máquina](../guilda/ficha-da-maquina.md): campos, requisitos e a regra de escolha).
 
-Antes de iniciar num nó novo para a mesa, o motor cria lá o worktree ([sincronização](mesas.md#worktree-por-nó-e-sincronização)).
+1. **Candidatas:** máquinas online, com heartbeat em dia, que estão entre os sistemas/máquinas permitidos pela base; atendem a todos os requisitos da base e da ficha (ex.: precisa de GPU, precisa de Windows, precisa do provedor X logado); têm o perfil de conta da ficha; e não atingiram o limite de personagens. "Precisa de interface" só é atendido para a base do Operador do PC ([ficha da máquina](../guilda/ficha-da-maquina.md)).
+2. Com `--machine`, só essa máquina é considerada.
+3. Ordem de preferência: máquina preferida da ficha → máquina onde a mesa já tem worktree (a Cidadela primeiro) → máquina com menos personagens ativos → ordem alfabética do id.
+4. **Nenhuma atende:** a criação não roda em outra máquina; falha com uma explicação que lista cada máquina e o primeiro requisito não atendido (ex.: "windows-pc: perfil de conta `claude-trabalho` não existe"), e o Dono é avisado pelo Telegram e pelo painel.
+
+Antes de iniciar numa máquina nova para a mesa, o motor cria lá o worktree ([sincronização](mesas.md#worktree-por-máquina-e-sincronização)).
 
 ### Limites
 
 | Limite | Padrão (configurável) |
 |---|---|
-| Personagens simultâneos por nó | 8 |
+| Personagens simultâneos por máquina | 8 |
 | Por mesa | 6 |
 | Por workspace | 16 |
 | Cópias simultâneas da mesma ficha | definido na ficha (padrão 3) |
@@ -59,7 +61,7 @@ Exceção: personagem `stuck` ou `interrupted` pode ser encerrado pelo Mestre da
 
 ### Troca de ficha
 
-`recruit --replace` troca a ficha mantendo nome, posição no canvas, conexões, caixa de entrada, esperas e a etapa atribuída. Segue o encerramento seguro do antigo (agendado para o próximo ponto seguro se ocupado; a CLI responde "pendente", `scheduled`) e inicia o novo no mesmo nó, se ele ainda atender, senão escolhe outro.
+`recruit --replace` troca a ficha mantendo nome, posição no canvas, conexões, caixa de entrada, esperas e a etapa atribuída. Segue o encerramento seguro do antigo (agendado para o próximo ponto seguro se ocupado; a CLI responde "pendente", `scheduled`) e inicia o novo na mesma máquina, se ela ainda atender, senão escolhe outra.
 
 ### Estados
 
@@ -108,16 +110,17 @@ stateDiagram-v2
 
 ### Registro de terminais
 
-Tabela no banco do Core (cópia dos terminais locais no banco de cada nó, inclusive o nó local do Core, ver [persistência](../arquitetura/persistencia.md)). PTY, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, nó, ficha, base, classe, perfil de conta, PID, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por, missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
+Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). PTY, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por, missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
 
 ### Retomada após reinício
 
-- **Motor de um nó reinicia:** os processos dele morreram; o nó marca seus terminais não encerrados como `interrupted` e o Core decide a retomada.
-- **Core reinicia com nós vivos:** os terminais dos nós continuam; ao reconectar, cada nó informa os que estão vivos e o Core reconcilia (o nó é a verdade sobre o processo; o Core, sobre o resto).
+- **Motor de uma máquina reinicia:** os processos dele morreram; a máquina marca seus terminais não encerrados como `interrupted` e a Cidadela decide a retomada.
+- **Motor da Cidadela reinicia com Torres vivas:** os terminais das Torres continuam; ao reconectar, cada máquina informa os que estão vivos e a Cidadela reconcilia (a máquina é a verdade sobre o processo; a Cidadela, sobre o resto).
+- **Troca de Cidadela:** os terminais das Torres continuam; a nova Cidadela reconcilia pelo banco replicado e pelos terminais que cada Torre informa ao reconectar ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Os personagens que rodavam na Cidadela antiga ficam `interrupted` até ela voltar como Torre ou serem retomados em outra máquina que atenda.
 - **Ordem de retomada:** Grão-Mestre → Mestres de mesa → personagens com etapa ou tarefa em andamento → persistentes → demais.
 - Retoma com a sessão do provedor (id salvo) quando o adaptador permite; senão inicia do zero e entrega uma mensagem de retomada (etapa atual, último `done`, link do pergaminho da missão). Caixa de entrada e esperas são preservadas.
 - Efêmero sem tarefa pendente não é retomado: vai a `stopped` com o motivo registrado. Terminal simples fica `interrupted` e o criador é avisado (o motor não reexecuta comandos sozinho).
-- Se o nó estiver fora, o personagem fica `interrupted` (visível) e o Mestre da mesa é avisado; tenta-se de novo quando o nó voltar. **Nenhum personagem some em silêncio.** As camadas de cura que levam a isso: [camadas](../autocura/camadas.md).
+- Se a máquina estiver fora, o personagem fica `interrupted` (visível) e o Mestre da mesa é avisado; tenta-se de novo quando a máquina voltar. **Nenhum personagem some em silêncio.** As camadas de cura que levam a isso: [camadas](../autocura/camadas.md).
 
 ## Regras e erros
 
@@ -127,14 +130,14 @@ Tabela no banco do Core (cópia dos terminais locais no banco de cada nó, inclu
 
 ## Critérios de aceite
 
-- **CA-PERS-01** · *rápida* — **Dado** um nó Linux sem GPU e um Windows com `gpu: true`, **quando** se recruta com ficha que exige `gpu: true`, **então** vai para o Windows; **quando** o Windows está desconectado, **então** a criação falha listando o motivo de cada nó.
+- **CA-PERS-01** · *rápida* — **Dado** uma máquina Linux sem GPU e uma Windows com GPU na ficha da máquina, **quando** se recruta com ficha que exige GPU, **então** vai para a Windows; **quando** a Windows está desconectada, **então** a criação falha listando o motivo de cada máquina, nada roda na Linux e o Dono recebe o aviso.
 - **CA-PERS-02** · *rápida* — **Dado** limite por mesa 2 atingido e relógio falso, **quando** uma etapa pede personagem e um `recruit` direto é feito, **então** os dois ficam em `waiting_slot` (o `recruit` responde "pendente"); **quando** uma vaga abre, **então** o primeiro a chegar é criado; **quando** o tempo limite do outro estoura, **então** ele falha com aviso dizendo o limite e quem ocupa; em nenhum caso alguém é encerrado.
 - **CA-PERS-03** · *rápida* — **Dado** um personagem `busy`, **quando** recebe `dismiss`, **então** a CLI responde "pendente" (`scheduled`), o encerramento fica agendado e só ocorre após `done` e `idle`, com resumo gravado no pergaminho da missão.
 - **CA-PERS-04** · *rápida* — **Dado** relógio falso e persistente com ociosidade 120 min, **quando** fica 119 min `idle` e 30 min `waiting`, **então** não é encerrado; **quando** completa 120 min `idle` contínuos, **então** é.
 - **CA-PERS-05** · *rápida* — **Dado** um personagem fixado, **quando** o ciclo de vida ou `dismiss` tentam encerrá-lo, **então** nada acontece e a recusa é registrada.
 - **CA-PERS-06** · *rápida* — **Dado** a tabela de estados, **quando** os eventos de hook falsos chegam em cada estado, **então** só as transições do diagrama ocorrem; 15 min sem sinal em `busy` levam a `stuck`.
-- **CA-PERS-07** · *completa* — **Dado** um motor de nó encerrado à força com dois personagens, **quando** volta, **então** ambos passam por `interrupted` e são retomados com o id de sessão salvo, mantendo caixa de entrada e esperas.
-- **CA-PERS-08** · *pesada* — **Dado** Core e nós reiniciados, **quando** voltam, **então** Grão-Mestre, Mestres de mesa e persistentes voltam ao estado anterior, e nenhum personagem fica sem estado visível (MVP-12).
+- **CA-PERS-07** · *completa* — **Dado** um motor de máquina encerrado à força com dois personagens, **quando** volta, **então** ambos passam por `interrupted` e são retomados com o id de sessão salvo, mantendo caixa de entrada e esperas.
+- **CA-PERS-08** · *pesada* — **Dado** a Cidadela e as Torres reiniciadas, **quando** voltam, **então** Grão-Mestre, Mestres de mesa e persistentes voltam ao estado anterior, e nenhum personagem fica sem estado visível (MVP-12).
 - **CA-PERS-09** · *rápida* — **Dado** um agente falso que mostra uma tela que o adaptador não reconhece, **quando** a tela fica estável, **então** o personagem vai a `blocked` com motivo `input`, o Mestre da mesa é avisado, e uma entrada `ask --raw` leva o personagem de volta a `busy` ou `idle`.
 
 ## Depende de
@@ -146,3 +149,4 @@ Tabela no banco do Core (cópia dos terminais locais no banco de cada nó, inclu
 - [Terminal](../arquitetura/terminal.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Protocolo](../conectividade/protocolo.md)
+- [Ficha da máquina](../guilda/ficha-da-maquina.md)

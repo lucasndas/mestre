@@ -1,6 +1,6 @@
 # Grimórios
 
-> **Assunto:** salvar um pedaço do canvas (time, classes, pergaminhos, conexões e missões) e restaurá-lo em mesa de qualquer workspace · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** salvar um pedaço do canvas (time, classes, pergaminhos, conexões e missões) e restaurá-lo em mesa de qualquer workspace · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,11 +10,11 @@ Um grimório é um time salvo: uma seleção do canvas de uma mesa que pode ser 
 
 ### Salvar
 
-Pelo painel, com uma seleção no canvas da mesa (usuário Administrador ou acima; [canvas](../painel/canvas.md)). O motor grava no banco do Core um documento JSON (`version: 1`) com nome único, autor, data, workspace e mesa de origem, contendo:
+Pelo painel, com uma seleção no canvas da mesa (usuário Administrador ou acima; [canvas](../painel/canvas.md)). O motor grava no banco da Cidadela um documento JSON (`version: 1`) com nome único, autor, data, workspace e mesa de origem, contendo:
 
 | Elemento | O que é salvo | O que não é salvo |
 |---|---|---|
-| Personagens | nome, ficha, classe (se diferente da padrão da ficha), nó indicado, posição, fixado | processo, sessão do provedor, caixa de entrada, esperas, uso |
+| Personagens | nome, ficha, classe (se diferente da padrão da ficha), máquina indicada, posição, fixado | processo, sessão do provedor, caixa de entrada, esperas, uso |
 | Classes usadas | globais: só a referência; do workspace ou da mesa: referência **e** cópia do pacote ([classes](../classes/classes.md)) com o App vinculado | — |
 | Pergaminhos e tomos | nomes, conteúdo, tomos e posição (o usuário pode optar por salvar só a estrutura, sem conteúdo) | revisões anteriores |
 | Conexões | as manuais entre elementos salvos (as automáticas são recriadas pelo motor) | conexões com elementos fora da seleção |
@@ -34,7 +34,7 @@ Pelo painel, numa mesa em `working` ou `in_review` ([estados](mesas.md#estados))
    - os [limites](personagens.md#limites) de personagens precisam comportar o time; se não, recusa mostrando quantos cabem;
    - nomes de personagens, pergaminhos e tomos que já existem no destino recebem sufixo (" (2)"…), mostrado ao usuário antes de confirmar.
 2. **Confirmação** do usuário com o resumo do que será criado.
-3. **Criação**, nesta ordem: classes copiadas; pergaminhos e tomos; personagens (escolha de nó normal, [personagens](personagens.md#escolha-do-nó)); conexões; missões (criadas como qualquer missão nova, em `draft`, com issue sob o épico de destino).
+3. **Criação**, nesta ordem: classes copiadas; pergaminhos e tomos; personagens (escolha de máquina normal, [personagens](personagens.md#escolha-da-máquina)); conexões; missões (criadas como qualquer missão nova, em `draft`, com issue sob o épico de destino).
 4. O Mestre da mesa de destino recebe um item `system` listando o que foi restaurado.
 
 Classe copiada mantém o App vinculado. Se o App não estiver instalado no repositório de destino, o motor o acrescenta à instalação ou o Dono recebe o link para isso ([repositórios novos](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas)); até lá, as ações saem com o App "Mestre" com a classe na assinatura ([identidades e Apps](../github/identidades-e-apps.md)).
@@ -45,7 +45,7 @@ O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, 
 
 ## Regras e erros
 
-- Personagem que não conseguir iniciar na criação (ex.: nó caiu) não desfaz o resto: fica `interrupted` e entra no relatório ao Mestre da mesa.
+- Personagem que não conseguir iniciar na criação (ex.: a máquina caiu) não desfaz o resto: fica `interrupted` e entra no relatório ao Mestre da mesa.
 - Restaurar em mesa `open`, `closing`, `closed`, `cancelling` ou `cancelled`: recusado.
 - Grimório com `version` maior que a suportada: recusado dizendo a versão esperada.
 - Nome de grimório repetido ao salvar: o usuário escolhe substituir ou outro nome.

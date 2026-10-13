@@ -1,10 +1,10 @@
 # ADR 0012: Despachante único de hooks (`mestre hook`)
 
-> **Assunto:** por que toda a lógica de hooks e permissões passa por um único comando · **Componente:** CLI · **Atualizado:** 2026-10-12
+> **Assunto:** por que toda a lógica de hooks e permissões passa por um único comando · **Componente:** CLI · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os hooks do Codex saem do `.codex/hooks.json` do worktree e vão para a camada de usuário do perfil de conta (`$CODEX_HOME/hooks.json`), confiados uma vez por perfil.
+Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os hooks do Codex saem do `.codex/hooks.json` do worktree e vão para a camada de usuário do perfil de conta (`$CODEX_HOME/hooks.json`), confiados uma vez por perfil. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 
@@ -50,8 +50,8 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os hooks do Codex saem d
 
 Onde ficam os hooks do Codex (revisão de 2026-10-12):
 
-- **(a) `.codex/hooks.json` em cada worktree** (primeira versão desta decisão), excluído do git e confiado por worktree. Contras: cada mesa e cada nó exigiria aprovar os hooks de novo em `/hooks`, o que não é automático.
-- **(b) `hooks.json` do `CODEX_HOME` do perfil de conta**, só com a chamada fixa ao `mestre hook`. Prós: confiado uma vez por perfil e por nó, vale para todos os worktrees. Contras: depende de a confiança de camada de usuário valer para pastas novas (verificado na implementação).
+- **(a) `.codex/hooks.json` em cada worktree** (primeira versão desta decisão), excluído do git e confiado por worktree. Contras: cada mesa e cada máquina exigiria aprovar os hooks de novo em `/hooks`, o que não é automático.
+- **(b) `hooks.json` do `CODEX_HOME` do perfil de conta**, só com a chamada fixa ao `mestre hook`. Prós: confiado uma vez por perfil e por máquina, vale para todos os worktrees. Contras: depende de a confiança de camada de usuário valer para pastas novas (verificado na implementação).
 
 ## Decisão
 

@@ -1,6 +1,6 @@
 # Limites de uso e custo
 
-> **Assunto:** registro de uso por provedor, limites por missão, mesa, workspace e dia, avisos em 80% e pausa em 100%, e o estado "aguardando cota" · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** registro de uso por provedor, limites por missão, mesa, workspace e dia, avisos em 80% e pausa em 100%, e o estado "aguardando cota" · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 
 ### Registro de uso
 
-- Tabela `usage_records` no Core ([persistência](../arquitetura/persistencia.md)). Cada registro tem: personagem, etapa, missão, mesa, workspace, perfil de conta, provedor, modelo, horário, origem do dado e o que o provedor informar:
+- Tabela `usage_records` na Cidadela ([persistência](../arquitetura/persistencia.md)). Cada registro tem: personagem, etapa, missão, mesa, workspace, perfil de conta, provedor, modelo, horário, origem do dado e o que o provedor informar:
   - tokens (entrada, saída, cache lido e escrito, raciocínio);
   - custo estimado em USD;
   - sempre, mesmo sem nada do provedor: **tempo ativo** (soma dos intervalos em `busy`, pelos eventos de início e fim de turno do [adaptador](../provedores/adaptador.md)) e **número de turnos**.
@@ -32,7 +32,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 
 - Configuráveis por **missão**, por **mesa**, por **workspace** e **por dia** (por workspace e no total da instalação).
 - Cada limite tem uma **unidade**: custo estimado (USD), tokens ou horas ativas. Uso sem dado naquela unidade (ex.: Codex num limite em USD) não conta para ele, e o painel mostra essa lacuna ao lado do limite.
-- O dia vira à meia-noite no fuso configurado do Core (padrão: o fuso do sistema).
+- O dia vira à meia-noite no fuso configurado da Cidadela (padrão: o fuso do sistema).
 - Quem configura: Administrador ou acima nos workspaces dele; o limite diário total, só o Dono. Nenhum limite pode passar o **teto de custo do workspace** ([teto](../classes/teto-do-workspace.md)).
 - Valores padrão: sem limites configurados (a instalação sugere configurar um limite diário por workspace no primeiro acesso).
 

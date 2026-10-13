@@ -1,6 +1,6 @@
 # Testes
 
-> **Assunto:** política de testes: suítes, orçamentos de tempo, executor, testes afetados, quarentena e mapa do MVP · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** política de testes: suítes, orçamentos de tempo, executor, testes afetados, quarentena e mapa do MVP · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -13,14 +13,20 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 | Suíte | Nome no executor | Quando roda | Orçamento | O que contém |
 |---|---|---|---|---|
 | **rápida** | `fast` | a cada alteração e no gancho de pré-commit | **30 s** | a grande maioria: unitários Go, unitários e de componente do painel (Vitest), [verificação de docs](verificacao-de-docs.md). Sem rede real, sem disco lento, sem processos externos |
-| **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Core e nó reais na mesma máquina, rodando como **processos comuns** (sem instalar serviços), banco temporário, git real, agente falso como processo num PTY real |
-| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 14 critérios do MVP, testes de falha da autocura, [conformidade com os provedores reais](../provedores/conformidade.md) e tudo o que exige instalar serviços ou mexer na integração com o sistema (contas, ACLs, mDNS do sistema), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
+| **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Cidadela e Torre reais na mesma máquina, rodando como **processos comuns** ou como duas instâncias do motor no processo do teste (sem instalar serviços), banco temporário, git real, agente falso como processo num PTY real; inclui a [troca de Cidadela e a replicação](#troca-de-cidadela-e-replicação-na-completa) |
+| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 15 critérios do MVP, testes de falha da autocura, [conformidade com os provedores reais](../provedores/conformidade.md) e tudo o que exige instalar serviços ou mexer na integração com o sistema (contas, ACLs, mDNS do sistema), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
 
 ### Como as suítes são selecionadas
 
 - **Go:** por *build tags*. Teste sem tag é da rápida. Integração usa `//go:build full` em arquivos `*_full_test.go`; ponta a ponta e falhas usam `//go:build heavy` em `*_heavy_test.go`. A completa compila com `-tags full`; a pesada com `-tags full,heavy`. Testes que dependem do Windows (ConPTY, serviço) somam `&& windows`.
 - **Painel:** Vitest. A rápida roda `vitest run` (unitários e componentes com DOM simulado e servidor WebSocket falso). A pesada usa navegador real com Playwright (proposta) para o que o MVP-5 (link de criação de App) e o MVP-11 exigem.
-- **Onde rodam:** rápida na máquina de quem desenvolve; completa no CI do GitHub em Linux e em Windows, em paralelo, cada um com o seu orçamento; pesada no laboratório (abaixo).
+- **Onde rodam:** rápida na máquina de quem desenvolve; completa no CI do GitHub em Linux **e** em Windows, em paralelo, cada um com o orçamento de 3 min; pesada no laboratório (abaixo). Como qualquer máquina pode virar Cidadela, o painel, o Telegram (falso), o banco, o cofre, a replicação e o cliente do `whisper-server` têm testes da completa que passam no CI Windows ([tudo roda nos dois sistemas](../desenvolvimento/ordem-de-implementacao.md#tudo-roda-nos-dois-sistemas)); o Whisper com o modelo real fica na pesada.
+
+### Troca de Cidadela e replicação na completa
+
+- Duas instâncias do motor no mesmo processo de teste, cada uma com banco, pastas e certificados próprios, ligadas por rede real em `127.0.0.1`, com o **relógio falso** ([dublês](dubles.md)) e o Telegram e o GitHub falsos. Uma cria a Guilda e é a Cidadela; a outra entra e é Torre candidata.
+- Cobrem: replicação contínua e cópia completa ([replicação](../guilda/replicacao.md)), época e fencing, Cidadela suspensa, proposta e promoção com aprovação pelo Telegram falso, volta da antiga como Torre e painel redirecionado ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
+- Rodam nos dois sistemas do CI, dentro do orçamento da completa.
 
 ### Executor `testrun`
 
@@ -56,38 +62,39 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 
 | Critério | Teste | Peças reais |
 |---|---|---|
-| MVP-1 | `TestMVP01_InstallAndAutoPair` | instalador Ubuntu e Windows, descoberta na rede local, CA |
+| MVP-1 | `TestMVP01_InstallAndJoinGuild` | instalador único no Ubuntu e no Windows, descoberta da Guilda na rede local, entrada com aprovação (Telegram falso), CA da Guilda |
 | MVP-2 | `TestMVP02_SelfHealing` (+ testes de falha abaixo) | systemd, serviço Windows, Guardiões, painel (Telegram falso) |
 | MVP-3 | `TestMVP03_SessionZero` | clone de terceiro sem o Mestre (GitHub falso) |
-| MVP-4 | `TestMVP04_EpicToResult` | três provedores reais, Core e nó Windows, duas mesas em paralelo |
+| MVP-4 | `TestMVP04_EpicToResult` | três provedores reais, Cidadela Linux e Torre Windows, duas mesas em paralelo |
 | MVP-5 | `TestMVP05_GitHubIdentities` | link de criação de App aberto num navegador real (Playwright), contra as páginas de criação e instalação do GitHub falso |
 | MVP-6 | `TestMVP06_ClassPermissions` | três provedores reais |
 | MVP-7 | `TestMVP07_ApprovalPolicy` | painel, provedores reais (Telegram e GitHub falsos) |
 | MVP-8 | `TestMVP08_PermanentDecree` | provedores reais (Telegram falso) |
-| MVP-9 | `TestMVP09_UnauthorizedUser` | Core e painel reais (Telegram falso) |
+| MVP-9 | `TestMVP09_UnauthorizedUser` | Cidadela e painel reais (Telegram falso) |
 | MVP-10 | `TestMVP10_AudioAndAttachments` | whisper-server com modelo real (Telegram falso) |
 | MVP-11 | `TestMVP11_PanelOverview` | navegador real (Playwright) |
-| MVP-12 | `TestMVP12_RestartRestoresState` | reinício real do Core e dos nós |
-| MVP-13 | `TestMVP13_FourUses` | instaladores reais nos quatro usos (só Linux, Linux + Windows, Windows + Linux, só Windows), cada um montado do zero |
+| MVP-12 | `TestMVP12_RestartRestoresState` | reinício real da Cidadela e das Torres |
+| MVP-13 | `TestMVP13_FourCompositions` | instalador real nas quatro composições (só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux, só Windows), cada uma montada do zero |
 | MVP-14 | `TestMVP14_PCOperator` | VM Windows com o Operador habilitado, o usuário de teste logado (logon automático) e a tela desbloqueada, Chrome com a extensão Claude in Chrome, Claude Code real, um site local de teste, painel em navegador real (Playwright) (Telegram falso) |
+| MVP-15 | `TestMVP15_CitadelTakeover` | as duas VMs com a Cidadela em cada sistema (Linux com Torre candidata Windows, e o inverso): derrubar a VM da Cidadela, autocura sem sucesso, proposta e aprovação pelo Telegram falso, promoção, volta da antiga como Torre |
 
-**Critério *pesada* vira subteste:** cada CA *pesada* é um subteste `TestMVPnn/CA-<SIGLA>-<NN>` do primeiro MVP que ele cita (ex.: `TestMVP13_FourUses/CA-PAR-09`), e o comentário `// CA-…` fica acima do subteste.
+**Critério *pesada* vira subteste:** cada CA *pesada* é um subteste `TestMVPnn/CA-<SIGLA>-<NN>` do primeiro MVP que ele cita (ex.: `TestMVP13_FourCompositions/CA-GUILDA-11`), e o comentário `// CA-…` fica acima do subteste.
 
-**Onde roda cada teste:** instalação (MVP-1 e MVP-13) e os testes de falha da autocura (MVP-2) rodam nos **quatro usos**; os demais testes de ponta a ponta rodam **uma vez, no uso Linux + Windows** ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)).
+**Onde roda cada teste:** instalação (MVP-1 e MVP-13) e os testes de falha da autocura (MVP-2) rodam nas **quatro composições**; a troca de Cidadela (MVP-15) roda com a Cidadela em cada sistema; os demais testes de ponta a ponta rodam **uma vez, na composição Cidadela Linux + Torre Windows** ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)).
 
-**Testes de falha da autocura** (`TestChaos_*`): matar o motor, travar o processo, encher o disco, derrubar a rede e falhar uma atualização, em cada máquina dos quatro usos, inclusive o [modo máquina única](../autocura/camadas.md#modo-máquina-única). O comportamento esperado está em [camadas.md](../autocura/camadas.md); os critérios desses testes citam `(MVP-2)`, e os de conformidade citam `(MVP-6)`.
+**Testes de falha da autocura** (`TestChaos_*`): matar o motor, travar o processo, encher o disco, derrubar a rede e falhar uma atualização, em cada máquina das quatro composições, inclusive o [modo máquina única](../autocura/camadas.md#modo-máquina-única). O comportamento esperado está em [camadas.md](../autocura/camadas.md); os critérios desses testes citam `(MVP-2)`, e os de conformidade citam `(MVP-6)`.
 
 ### Escopo da pesada: Telegram e GitHub
 
 - **Decisão:** a pesada usa máquinas reais e os CLIs reais dos provedores, e Telegram e GitHub **falsos**: os dublês de [dubles.md](dubles.md), com os formatos gravados. Vale para todos os testes de ponta a ponta, inclusive MVP-5, 7, 8, 9 e 10.
 - Por quê: o lado do usuário do Telegram não é automatizável pela Bot API (um bot não fala com outro bot), e o MVP-5 criaria Apps reais a cada noite, contra o limite de 100 por conta.
 - Nenhuma suíte usa Telegram ou GitHub reais. O comportamento real do GitHub que os docs marcam como **Verificar na implementação** é conferido à mão no repositório sandbox ([projetos de treino](projetos-de-treino.md#sandbox-real-no-github)), e as respostas reais conferidas viram gravações dos dublês. O repositório que os testes usam no lugar do projeto do usuário também está lá.
-- Na pesada, os dublês do Telegram e do GitHub rodam como servidores HTTP no hospedeiro do laboratório, e o Core instalado aponta para eles ([como](dubles.md#telegram-e-github-na-pesada)).
+- Na pesada, os dublês do Telegram e do GitHub rodam como servidores HTTP no hospedeiro do laboratório, e a Cidadela instalada aponta para eles, inclusive depois de uma troca de Cidadela ([como](dubles.md#telegram-e-github-na-pesada)).
 
 ### Laboratório
 
 - **Duas VMs dedicadas**, separadas das máquinas de uso: uma Ubuntu LTS e uma Windows 11 ou superior, na mesma rede local, com as contas de teste dos provedores já logadas, num hospedeiro Linux. Para o MVP-14, a VM Windows tem um usuário de teste com logon automático, o Chrome com a extensão Claude in Chrome logada na conta de teste e o UAC no padrão.
-- **Os quatro usos** saem dessas duas VMs, restauradas de um retrato limpo a cada uso: só Linux (VM Ubuntu sozinha), Linux + Windows (Core na Ubuntu), Windows + Linux (Core na Windows) e só Windows (VM Windows sozinha).
+- **As quatro composições** saem dessas duas VMs, restauradas de um retrato limpo a cada uma: só Linux (VM Ubuntu sozinha), Cidadela Linux + Torre Windows (a Ubuntu instalada primeiro), Cidadela Windows + Torre Linux (a Windows instalada primeiro) e só Windows (VM Windows sozinha). A **troca de Cidadela** (MVP-15) roda nas duas composições de duas máquinas, com a Torre marcada como "pode ser Cidadela", para que haja Cidadela em cada sistema antes e depois da troca.
 - **Disparo:** toda noite por um timer do systemd no hospedeiro (`mestre-heavy.timer`, que roda `testrun heavy` e restaura as VMs), e sob demanda por quem desenvolve, rodando o mesmo comando no hospedeiro. O resultado e o tempo de cada execução ficam guardados para a comparação com a mediana (passo 5 do executor).
 
 ## Regras e erros
@@ -97,7 +104,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 - **Git:** o motor usa o binário `git` do sistema (2.32 ou mais novo) só pelo wrapper `internal/gitx` ([convenções](../desenvolvimento/convencoes.md)). Na rápida, `gitx` é o git falso do `testkit`; critério que precisa de git real (bundle, worktree, `info/exclude`, commit) é da completa.
 - **Serviços do sistema:** a completa nunca instala serviços nem muda contas, ACLs ou o mDNS do sistema; critério que precisa disso é da pesada e cita `(MVP-1)` ou `(MVP-13)`.
 - **Paralelo e isolado:** todo teste Go chama `t.Parallel()` (linter `paralleltest`). Cada teste usa `t.TempDir()` para pastas e banco SQLite próprios, porta `127.0.0.1:0` quando houver rede real, e nenhum estado global. `t.Setenv` e `t.Chdir` não combinam com `t.Parallel()`: passe a configuração por parâmetro.
-- **Um comportamento, um teste, no nível mais baixo possível.** Nada de testar a mesma regra em unitário, integração e ponta a ponta. Ponta a ponta só para os critérios MVP-1..14; a [verificação de docs](verificacao-de-docs.md) recusa critério *pesada* que não cite um MVP.
+- **Um comportamento, um teste, no nível mais baixo possível.** Nada de testar a mesma regra em unitário, integração e ponta a ponta. Ponta a ponta só para os critérios MVP-1..15; a [verificação de docs](verificacao-de-docs.md) recusa critério *pesada* que não cite um MVP.
 - **Rastreabilidade:** o teste que cobre um critério de aceite traz o identificador num comentário logo acima (ex.: `// CA-MESAS-03`), para ser achado com `grep`.
 - **Sem nova tentativa:** o executor nunca roda de novo um teste que falhou; Vitest com `retry: 0`; o CI não tem "rerun" automático. Instável vai para a quarentena.
 - Orçamento estourado não é resolvido aumentando o orçamento: muda-se o teste de suíte, ou ele é acelerado.

@@ -1,10 +1,10 @@
 # Página reserva
 
-> **Assunto:** página mínima servida pelo Guardião de cada nó (e do Core, no modo máquina única), na rede local, com TLS e login, para quando o Core está fora · **Componente:** Guardião · **Atualizado:** 2026-10-12
+> **Assunto:** página mínima servida pelo Guardião de qualquer Torre (e da Cidadela, no modo máquina única), na rede local, com TLS e login, para quando a Cidadela está fora · **Componente:** Guardião · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas e mandar recuperar o Core quando o motor do Core está fora do ar. Ela é servida pelo Guardião do nó, então funciona mesmo com o motor do nó parado. No [modo máquina única](camadas.md#modo-máquina-única) (sem nó remoto), quem a serve é o Guardião do Core.
+Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas, aprovar a promoção de uma Torre e mandar recuperar a Cidadela quando o motor da Cidadela está fora do ar. Ela é servida pelo Guardião de cada Torre, então funciona mesmo com o motor da Torre parado. No [modo máquina única](camadas.md#modo-máquina-única) (sem Torre), quem a serve é o Guardião da Cidadela.
 
 ## Comportamento
 
@@ -12,12 +12,12 @@ Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas e mand
 
 - Endereço: `https://<nome-da-máquina>.local:<porta>` ou o IP dela na rede local. Porta padrão em [componentes](../arquitetura/componentes.md#portas).
 - Só na rede local: o firewall da máquina libera a porta só para a rede local (no Windows, só no perfil de rede **Privada**) ([checklist](../plataforma/checklist.md)). Nunca exposta na internet.
-- **TLS:** no nó, certificado emitido pela CA interna do Core para o Guardião do nó no [pareamento](../conectividade/pareamento.md), com o nome do nó, o nome `.local` e os IPs locais; no Core, o certificado próprio do Guardião do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)). Os dois são reemitidos quando os IPs da máquina mudam. O navegador já confia na CA porque fez isso para o painel ([login](../painel/login.md)). A renovação segue o [pareamento](../conectividade/pareamento.md).
-- O painel mostra o endereço da página reserva de cada nó em "Saúde dos nós" ([administração](../painel/administracao.md)), e o alerta de Core fora traz o link.
+- **TLS:** na Torre, certificado emitido pela CA interna da Guilda para o Guardião da Torre na [entrada na Guilda](../guilda/guilda.md), com o nome da máquina, o nome `.local` e os IPs locais; na Cidadela, o certificado próprio do Guardião da Cidadela ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)). Os dois são reemitidos quando os IPs da máquina mudam. O navegador já confia na CA porque fez isso para o painel ([login](../painel/login.md)). A renovação segue a [Guilda](../guilda/guilda.md).
+- O painel mostra o endereço da página reserva de cada máquina em "Guilda e saúde das máquinas" ([administração](../painel/administracao.md)), e o alerta de Cidadela fora traz o link.
 
 ### Login
 
-- Mesmos usuários e níveis do painel, a partir da cópia local criptografada que o Guardião recebe do Core ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)).
+- Mesmos usuários e níveis do painel, a partir da cópia local criptografada que o Guardião recebe da Cidadela ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)).
 - Usuário e senha, conferidos contra o hash da cópia. Ações que pedem PIN pedem o PIN, conferido do mesmo jeito.
 - Sessão curta: expira após 30 min sem uso (padrão) e sempre que a cópia de usuários muda para aquele usuário (suspenso, removido, nível alterado).
 - 5 senhas erradas em 15 min para o mesmo usuário → bloqueio de 15 min (padrão) e registro na auditoria local.
@@ -27,13 +27,14 @@ Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas e mand
 
 | Seção | Conteúdo | Origem |
 |---|---|---|
-| Esta máquina | motor (rodando, travado, parado; na máquina do Core, os dois serviços, `mestre-core` e `mestre-node`), versão do motor e do Guardião, disco, memória; no modo máquina única, o aviso de que a queda da máquina inteira não é percebida por ninguém | o próprio Guardião |
-| Core | motor do Core (com ou sem sinal, desde quando) e Guardião do Core (respondendo ou não) | WSS própria e sondagem da porta do Guardião do Core |
-| Outros nós | último estado conhecido, com horário; com o Core fora, o resultado da sondagem entre Guardiões | cache e [eleição](camadas.md#eleição-do-nó-condutor) |
-| Incidente | camada atual, passos feitos e resultados, quem é o nó condutor | auditoria do incidente |
+| Esta máquina | papel (Cidadela ou Torre) e época, motor (rodando, travado, parado), versão do motor e do Guardião, disco, memória; no modo máquina única, o aviso de que a queda da máquina inteira não é percebida por ninguém | o próprio Guardião |
+| Cidadela | motor da Cidadela (com ou sem sinal, desde quando) e Guardião da Cidadela (respondendo ou não) | WSS própria e sondagem da porta do Guardião da Cidadela |
+| Outras Torres | último estado conhecido, com horário; com a Cidadela fora, o resultado da sondagem entre Guardiões | cache e [eleição](camadas.md#eleição-da-torre-condutora) |
+| Incidente | camada atual, passos feitos e resultados, quem é a Torre condutora | auditoria do incidente |
+| Pedido de promoção | Torre proposta e desde quando a Cidadela está fora, com **Promover** e **Esperar** só para o Dono, **Promover** com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)) | Guardião da Torre condutora |
 | Aprovações de cura pendentes | scripts de diagnóstico e `rollback` com restauração do banco, este com o intervalo que será perdido | [diagnóstico com IA](diagnostico-com-ia.md), [Guardião](guardiao.md#rollback-com-restauração-do-banco) |
 
-Com o Core no ar, a página mostra um aviso "use o painel", com o link, e continua só para leitura de estado e aprovações de cura.
+Com a Cidadela no ar, a página mostra um aviso "use o painel", com o link, e continua só para leitura de estado e aprovações de cura.
 
 ### Ações
 
@@ -41,12 +42,13 @@ Com o Core no ar, a página mostra um aviso "use o painel", com o link, e contin
 |---|---|---|
 | Ver estado | qualquer nível | — |
 | Aprovar ou negar cura | Dono ou Administrador, com PIN | aprovação presa ao hash do script ([diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação)) ou, no `rollback` com restauração do banco, à versão e ao backup indicados |
-| **Recuperar o Core** | Dono ou Administrador | se este nó é o condutor, ou consegue a trava, começa ou retoma o runbook do zero (zera o backoff e as tentativas do incidente). Se outro nó é o condutor, mostra qual é e o link da página reserva dele. No modo máquina única, o Guardião do Core recomeça o runbook sobre o próprio motor |
-| Pedir diagnóstico com IA | Dono ou Administrador | `diagnose` no Guardião do Core, dentro do limite por incidente |
+| **Recuperar a Cidadela** | Dono ou Administrador | se esta Torre é a condutora, ou consegue a trava, começa ou retoma o runbook do zero (zera o backoff e as tentativas do incidente). Se outra Torre é a condutora, mostra qual é e o link da página reserva dela. No modo máquina única, o Guardião da Cidadela recomeça o runbook sobre o próprio motor |
+| Promover ou esperar | só o Dono; **Promover** com PIN | a promoção segue [Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção); em outra Torre, a página leva à da condutora |
+| Pedir diagnóstico com IA | Dono ou Administrador | `diagnose` no Guardião da Cidadela, dentro do limite por incidente |
 
 - Níveis: tabela única em [usuários e níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades).
 - Com o sistema travado ([segurança do canal](../telegram/seguranca-do-canal.md)), a página ainda mostra estado e permite aprovar cura: o travamento congela agentes e decretos, não a autocura.
-- Toda ação entra na auditoria local do Guardião e sobe ao Core quando ele volta.
+- Toda ação entra na auditoria local do Guardião e sobe à Cidadela quando ele volta.
 
 ### Interface
 
@@ -56,25 +58,25 @@ Com o Core no ar, a página mostra um aviso "use o painel", com o link, e contin
 ## Regras e erros
 
 - Porta ocupada → o Guardião registra o erro, segue vigiando o motor e o checklist acusa.
-- Cópia de usuários ausente (nó recém-pareado sem réplica) → a página mostra "sem usuários sincronizados" e não aceita login.
+- Cópia de usuários ausente (máquina recém-entrada na Guilda, sem réplica) → a página mostra "sem usuários sincronizados" e não aceita login.
 - Certificado vencido → o Guardião continua servindo e mostra o problema no `status`; o checklist acusa antes ([checklist](../plataforma/checklist.md)).
 - A página não oferece nenhuma ação fora da lista fechada do [Guardião](guardiao.md#lista-fechada-de-ações).
 
 ## Critérios de aceite
 
-- **CA-RESERVA-01** · *completa* — **Dado** o motor do Core parado, **quando** abro a página reserva do nó por HTTPS e entro com um usuário do painel, **então** vejo o Core sem sinal, o nó condutor e o incidente (MVP-2).
-- **CA-RESERVA-02** · *completa* — **Dado** o motor do nó parado, **quando** abro a página reserva, **então** ela responde e mostra o motor do nó parado.
+- **CA-RESERVA-01** · *completa* — **Dado** o motor da Cidadela parado, **quando** abro a página reserva da máquina por HTTPS e entro com um usuário do painel, **então** vejo a Cidadela sem sinal, a Torre condutora e o incidente (MVP-2).
+- **CA-RESERVA-02** · *completa* — **Dado** o motor da máquina parado, **quando** abro a página reserva, **então** ela responde e mostra o motor da máquina parado.
 - **CA-RESERVA-03** · *rápida* — **Dado** um Observador logado, **quando** chama a rota de aprovar cura, **então** recebe "exige Administrador" e nada muda.
 - **CA-RESERVA-04** · *rápida* — **Dado** 5 senhas erradas em 15 min (relógio falso), **quando** chega a sexta, **então** o login é recusado sem conferir a senha.
-- **CA-RESERVA-05** · *rápida* — **Dado** um usuário suspenso no Core, **quando** a nova cópia chega ao Guardião, **então** a sessão dele na página reserva acaba e o login é recusado.
-- **CA-RESERVA-06** · *rápida* — **Dado** outro nó com a trava de condução, **quando** um Administrador pede "Recuperar o Core", **então** nada é executado e a página mostra o condutor.
-- **CA-RESERVA-07** · *completa* — **Dado** o modo máquina única com o motor do Core parado, **quando** abro a página reserva do Core e peço "Recuperar o Core", **então** ela mostra o motor parado e o aviso de máquina única, e o Guardião do Core recomeça o runbook.
+- **CA-RESERVA-05** · *rápida* — **Dado** um usuário suspenso na Cidadela, **quando** a nova cópia chega ao Guardião, **então** a sessão dele na página reserva acaba e o login é recusado.
+- **CA-RESERVA-06** · *rápida* — **Dado** outra Torre com a trava de condução, **quando** um Administrador pede "Recuperar a Cidadela", **então** nada é executado e a página mostra a condutora.
+- **CA-RESERVA-07** · *completa* — **Dado** o modo máquina única com o motor da Cidadela parado, **quando** abro a página reserva da Cidadela e peço "Recuperar a Cidadela", **então** ela mostra o motor parado e o aviso de máquina única, e o Guardião da Cidadela recomeça o runbook.
 
 ## Depende de
 
 - [Guardião](guardiao.md)
 - [Camadas](camadas.md)
 - [Cofre](../plataforma/cofre.md)
-- [Pareamento](../conectividade/pareamento.md)
+- [Guilda](../guilda/guilda.md)
 - [Login do painel](../painel/login.md)
 - [Usuários e níveis](../telegram/usuarios-e-niveis.md)

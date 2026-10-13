@@ -85,7 +85,7 @@ func TestLoggerMasksMessageAndAttributes(t *testing.T) {
 	m.Register("vault-value-1")
 	at := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
 	log := logging.New(&buf, m, logging.Options{Clock: clock.NewFake(at)})
-	log.With("node", "n1").WithGroup("req").Info("calling with "+ghToken,
+	log.With("machine", "m1").WithGroup("req").Info("calling with "+ghToken,
 		"header", "Authorization: token vault-value-1",
 		"token", "anything",
 		"err", errors.New("bad "+tgToken),
@@ -105,7 +105,7 @@ func TestLoggerMasksMessageAndAttributes(t *testing.T) {
 	if rec["time"] != "2026-10-12T10:00:00Z" {
 		t.Fatalf("time = %v", rec["time"])
 	}
-	if rec["msg"] != "calling with [segredo]" || rec["node"] != "n1" {
+	if rec["msg"] != "calling with [segredo]" || rec["machine"] != "m1" {
 		t.Fatalf("record = %v", rec)
 	}
 	req, _ := rec["req"].(map[string]any)

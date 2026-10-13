@@ -1,6 +1,6 @@
 # Dublês de teste
 
-> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub, rede, PTY e git falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub, rede, PTY e git falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -39,7 +39,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 ### Telegram falso
 
 - Servidor da Bot API em memória com só o que o [bot](../telegram/bot.md) usa: `getUpdates` (long polling, com o tempo limite pelo relógio), envio e edição de mensagens, botões (`answerCallbackQuery`), envio de documentos e `getFile` com download.
-- Controle para o teste: "usuário X manda texto, voz, foto, documento, clique em botão ou resposta a uma mensagem", em chat privado ou em grupo; lista do que o bot enviou; falhas injetadas (429 com `retry_after`, erro 5xx, conexão cortada).
+- Controle para o teste: "usuário X manda texto, voz, foto, documento, clique em botão ou resposta a uma mensagem", em chat privado ou em grupo; lista do que o bot enviou; falhas injetadas (429 com `retry_after`, erro 5xx, conexão cortada). Dois clientes em `getUpdates` ao mesmo tempo recebem `409 Conflict`, como o real, para os testes de [fencing](../guilda/cidadela-e-torres.md#época-e-fencing).
 - Limites de tamanho de arquivo configuráveis no dublê, com os valores de [anexos-e-transcricao.md](../telegram/anexos-e-transcricao.md).
 
 ### GitHub falso
@@ -51,14 +51,14 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 
 ### Telegram e GitHub na pesada
 
-- Os mesmos dublês rodam como servidores HTTP no hospedeiro do [laboratório](testes.md#laboratório), com TLS pela CA de teste, para servir aos quatro usos.
+- Os mesmos dublês rodam como servidores HTTP no hospedeiro do [laboratório](testes.md#laboratório), com TLS pela CA de teste, para servir às quatro composições e à troca de Cidadela.
 - Binários compilados com a tag `full` (os que o laboratório instala) aceitam `MESTRE_TEST_TELEGRAM_URL` e `MESTRE_TEST_GITHUB_URL` para trocar a URL base das duas APIs. Binários de produção não contêm esse código.
 - O teste controla o lado do usuário (mensagens, cliques, revisões humanas) pelo mesmo controle da completa.
 
 ### Rede falsa
 
-- Rede em memória: `Listen` e `Dial` por nome, sem sockets, funciona dentro do synctest. TLS real roda por cima, com uma CA de teste, então mTLS e [pareamento](../conectividade/pareamento.md) são testados de verdade.
-- Falhas injetadas: latência (pelo relógio), conexão cortada, partição entre dois pontos, conexão meio aberta (sem aviso de fim), perda de pacotes UDP e troca do IP do Core.
+- Rede em memória: `Listen` e `Dial` por nome, sem sockets, funciona dentro do synctest. TLS real roda por cima, com uma CA de teste, então mTLS e a [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda) são testados de verdade.
+- Falhas injetadas: latência (pelo relógio), conexão cortada, partição entre dois pontos, conexão meio aberta (sem aviso de fim), perda de pacotes UDP, troca do IP de uma máquina e máquina isolada da rede inteira (para a [Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)).
 - Broadcast UDP e mDNS falsos para a [descoberta](../conectividade/descoberta.md).
 - `http.RoundTripper` em memória para os clientes do Telegram, do GitHub e do whisper-server.
 
@@ -70,7 +70,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 
 ### Quando cada dublê cresce
 
-O `testkit` nasce no M0 com relógio, rede, PTY, git, o esqueleto do agente falso e o mínimo do Telegram e do GitHub falsos que os critérios deste documento pedem (mensagem de texto, `ETag` e cota); cada dublê ganha o comportamento de um assunto no marco desse assunto: rede e descoberta falsas com o [protocolo](../conectividade/protocolo.md) e a [descoberta](../conectividade/descoberta.md) (M2), o agente falso de cada provedor com o [adaptador](../provedores/adaptador.md) e a [conformidade](../provedores/conformidade.md) (M3), Telegram e GitHub falsos com o [bot](../telegram/bot.md) e os [eventos](../github/eventos.md) (M5) ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
+O `testkit` nasce no M0 com relógio, rede, PTY, git, o esqueleto do agente falso e o mínimo do Telegram e do GitHub falsos que os critérios deste documento pedem (mensagem de texto, `ETag` e cota); cada dublê ganha o comportamento de um assunto no marco desse assunto: rede e descoberta falsas com o [protocolo](../conectividade/protocolo.md) e a [descoberta](../conectividade/descoberta.md) (M2), o agente falso de cada provedor com o [adaptador](../provedores/adaptador.md) e a [conformidade](../provedores/conformidade.md) (M3), Telegram e GitHub falsos com o [bot](../telegram/bot.md) e os [eventos](../github/eventos.md) (M5); o isolamento de uma máquina na rede falsa e o `409 Conflict` do Telegram falso entram no M7, com os critérios CA-CIDADELA-03 e CA-CIDADELA-04 de [Cidadela e Torres](../guilda/cidadela-e-torres.md#época-e-fencing) ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
@@ -88,7 +88,7 @@ O `testkit` nasce no M0 com relógio, rede, PTY, git, o esqueleto do agente fals
 - **CA-DUBLES-05** · *rápida* — **Dado** o agente falso como Codex com um hook já confiado, **quando** o arquivo de hooks muda, **então** ele mostra a revisão de hooks e não roda o hook modificado.
 - **CA-DUBLES-06** · *rápida* — **Dado** o Telegram falso, **quando** o teste injeta uma mensagem do usuário 123 em chat privado, **então** ela sai no próximo `getUpdates` com o formato gravado, e a resposta do bot aparece na lista de enviadas.
 - **CA-DUBLES-07** · *rápida* — **Dado** o GitHub falso e uma consulta que devolveu `ETag`, **quando** a mesma consulta volta com `If-None-Match` e nada mudou, **então** a resposta é 304 e a cota restante não diminui.
-- **CA-DUBLES-08** · *rápida* — **Dado** um nó conectado ao Core pela rede falsa, **quando** o teste corta a conexão, **então** o nó reconecta com o backoff configurado, medido no tempo falso.
+- **CA-DUBLES-08** · *rápida* — **Dado** uma Torre conectada à Cidadela pela rede falsa, **quando** o teste corta a conexão, **então** a Torre reconecta com o backoff configurado, medido no tempo falso.
 - **CA-DUBLES-09** · *rápida* — **Dado** um dublê que recebe uma rota que não implementa, **quando** o código a chama, **então** o teste falha com a mensagem de não implementado.
 - **CA-DUBLES-10** · *rápida* — **Dado** um arquivo em `testdata/recordings/` com um token de bot do Telegram, **quando** a suíte rápida roda, **então** ela falha apontando o arquivo.
 - **CA-DUBLES-11** · *completa* — **Dado** o binário do agente falso chamado `claude` no PATH e uma base `claude-code`, **quando** o motor cria um personagem, **então** o agente roda num PTY real e os hooks chamam o `mestre hook` de verdade.

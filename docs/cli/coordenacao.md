@@ -1,6 +1,6 @@
 # CLI: coordenação da party
 
-> **Assunto:** sintaxe de `recruit`, `spawn`, `dismiss`, `connect`, `sheet`, `base` e `quest` · **Componente:** CLI · **Atualizado:** 2026-10-12
+> **Assunto:** sintaxe de `recruit`, `spawn`, `dismiss`, `connect`, `sheet`, `base` e `quest` · **Componente:** CLI · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -19,18 +19,18 @@ Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a pa
 
 ### `mestre recruit`
 ```
-mestre recruit "<Nome>" --sheet "<Ficha>" [--class "<Classe>"] [--node "<nó>"]
+mestre recruit "<Nome>" --sheet "<Ficha>" [--class "<Classe>"] [--machine "<máquina>"]
 mestre recruit --replace "<Nome>" --sheet "<Ficha>" [--class "<Classe>"]
 mestre recruit "<Nome>" --sheet "<Ficha da base Operador>" --task "<tarefa>" [--for <duração>] [--table "<mesa>"]
 ```
-- Cria um personagem a partir de uma ficha existente, já conectado a quem recrutou. `--class` troca a classe padrão da ficha; `--node` pede um nó (que ainda precisa atender às capacidades).
+- Cria um personagem a partir de uma ficha existente, já conectado a quem recrutou. `--class` troca a classe padrão da ficha; `--machine` pede uma máquina da Guilda (que ainda precisa atender aos requisitos; [ficha da máquina](../guilda/ficha-da-maquina.md)).
 - `--replace` troca a ficha de um personagem existente, mantendo nome, conexões e posição no canvas; o terminal antigo só é encerrado pelas regras de encerramento seguro.
-- Texto: `recruited Dev-2 (class Dev, node windows-pc, starting)`. `--json` → `{name, id, sheet, class, node, status, connected_to}`.
-- Erros: ficha, classe ou nó inexistente → 4; nenhum nó atende → 4 `no_capable_node` (com o motivo por nó); nome em uso → 7 `name_taken`; `--replace` com alvo ocupado → 9 `scheduled` (o antigo é encerrado no próximo ponto seguro e o novo nasce em seguida); limite de personagens atingido → 9 `waiting_slot` ("pendente": o pedido espera vaga até o tempo limite e o personagem criado, ou a falha `agent_limit` com o aviso, chega pela caixa de entrada; [limites](../orquestracao/personagens.md#limites)); ficha fora do teto → 3 `ceiling_denied`.
-- **Operador do PC** (ficha da base Operador): não cria o personagem na hora; o motor abre o pedido `ativacao_operador` com a tarefa (`--task`, obrigatória) e a duração (`--for`, padrão `30m`) e volta com 9 `approval_pending` e o id do pedido; o personagem nasce depois da aprovação, e o resultado chega pela caixa de entrada. O Grão-Mestre indica a mesa com `--table`. Classe sem `operator: true` ou teto que não permite → 3 `operator_denied`; nenhum nó com o Operador habilitado → 4 `no_capable_node`; `--for` acima do máximo → 2. Comportamento em [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
+- Texto: `recruited Dev-2 (class Dev, machine windows-pc, starting)`. `--json` → `{name, id, sheet, class, machine, status, connected_to}`.
+- Erros: ficha, classe ou máquina inexistente → 4; nenhuma máquina atende → 4 `no_capable_machine` (com o primeiro requisito não atendido de cada máquina; o Dono também é avisado); nome em uso → 7 `name_taken`; `--replace` com alvo ocupado → 9 `scheduled` (o antigo é encerrado no próximo ponto seguro e o novo nasce em seguida); limite de personagens atingido → 9 `waiting_slot` ("pendente": o pedido espera vaga até o tempo limite e o personagem criado, ou a falha `agent_limit` com o aviso, chega pela caixa de entrada; [limites](../orquestracao/personagens.md#limites)); ficha fora do teto → 3 `ceiling_denied`.
+- **Operador do PC** (ficha da base Operador): não cria o personagem na hora; o motor abre o pedido `ativacao_operador` com a tarefa (`--task`, obrigatória) e a duração (`--for`, padrão `30m`) e volta com 9 `approval_pending` e o id do pedido; o personagem nasce depois da aprovação, e o resultado chega pela caixa de entrada. O Grão-Mestre indica a mesa com `--table`. Classe sem `operator: true` ou teto que não permite → 3 `operator_denied`; nenhuma máquina com o Operador habilitado → 4 `no_capable_machine`; `--for` acima do máximo → 2. Comportamento em [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
 
 ### `mestre spawn`
-`mestre spawn "<Nome>" --base "<Base>" [--node "<nó>"]` — cria um terminal simples (sem agente) a partir de uma base, conectado a quem chamou. Não há opção de comando livre. Use `ask --raw` para digitar e `check` para ler. `--json` → `{name, id, base, node, status}`. Erros iguais aos de `recruit`.
+`mestre spawn "<Nome>" --base "<Base>" [--machine "<máquina>"]` — cria um terminal simples (sem agente) a partir de uma base, conectado a quem chamou. Não há opção de comando livre. Use `ask --raw` para digitar e `check` para ler. `--json` → `{name, id, base, machine, status}`. Erros iguais aos de `recruit`.
 
 ### `mestre dismiss`
 `mestre dismiss "<Nome>"` — encerra um personagem ou terminal. Antes, o resumo do que ele fez vai para o pergaminho da missão. Fixado → 3 `pinned`; ocupado ou sem `done` entregue → 9 `scheduled` (encerrado no próximo ponto seguro, regra 2 de [convencoes](convencoes.md)); outra mesa → 4 `not_visible`. `--json` → `{name, status: "dismissed" | "scheduled"}`.
@@ -43,7 +43,7 @@ mestre recruit "<Nome>" --sheet "<Ficha da base Operador>" --task "<tarefa>" [--
 mestre sheet list            mestre sheet show "<Ficha>"
 mestre base list             mestre base show "<Base>"
 ```
-Somente leitura. `list` mostra nome, base/agente, classe padrão, ciclo de vida (efêmero/persistente) e nós possíveis; `show` mostra todos os campos, sem segredos (a conta aparece só pelo nome do perfil). `--json` → os campos de [bases-e-fichas](../orquestracao/bases-e-fichas.md).
+Somente leitura. `list` mostra nome, base/agente, classe padrão, ciclo de vida (efêmero/persistente), requisitos e máquinas que atendem agora; `show` mostra todos os campos, sem segredos (a conta aparece só pelo nome do perfil). `--json` → os campos de [bases-e-fichas](../orquestracao/bases-e-fichas.md).
 
 ### `mestre quest`
 ```
@@ -66,7 +66,7 @@ mestre quest cancel "<Missão>" [--reason "<texto>"]
 
 ## Critérios de aceite
 
-- **CA-CLI-COORD-01** · *rápida* — **Dado** uma ficha "QA Codex" que exige `gpu: true` e nenhum nó com `gpu`, **quando** o Mestre da mesa roda `mestre recruit "QA-1" --sheet "QA Codex"`, **então** sai com 4 `no_capable_node` e a mensagem diz que capacidade faltou em cada nó.
+- **CA-CLI-COORD-01** · *rápida* — **Dado** uma ficha "QA Codex" que exige `gpu: true` e nenhuma máquina com GPU, **quando** o Mestre da mesa roda `mestre recruit "QA-1" --sheet "QA Codex"`, **então** sai com 4 `no_capable_machine` e a mensagem diz que requisito faltou em cada máquina.
 - **CA-CLI-COORD-02** · *rápida* — **Dado** um personagem comum, **quando** roda `mestre recruit "X" --sheet "Dev Claude"`, **então** sai com 3 `level_denied`.
 - **CA-CLI-COORD-03** · *rápida* — **Dado** um personagem fixado, **quando** o Mestre da mesa roda `mestre dismiss` nele, **então** sai com 3 `pinned` e o personagem continua vivo.
 - **CA-CLI-COORD-04** · *completa* — **Dado** "Dev-1" com duas conexões, **quando** o Mestre roda `mestre recruit --replace "Dev-1" --sheet "Dev Codex"`, **então** o novo terminal usa a ficha nova, mantém o nome, as duas conexões e a posição.

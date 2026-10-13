@@ -1,6 +1,6 @@
 # Mesas
 
-> **Assunto:** ciclo de vida da mesa, worktree por nó e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** ciclo de vida da mesa, worktree por máquina e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -12,8 +12,8 @@ Uma mesa é um pedido/épico: **um git worktree com a sua própria branch**, lig
 
 Só o Grão-Mestre abre mesas, e só num workspace `active` ([estados do workspace](workspaces.md#estados)). O épico vem antes: o Grão-Mestre o cria com `mestre gh epic create` (issue com rótulo `epico`, App "Grão-Mestre") e depois abre a mesa com `mestre table open --epic <n>` (sintaxe dos dois em [CLI do Grão-Mestre](../cli/grao-mestre.md)). `table open` **nunca cria épico**. O motor, em ordem:
 1. valida o épico `<n>`: existe, tem o rótulo `epico`, está aberto e não pertence a outra mesa aberta;
-2. faz `fetch` do espelho e cria a branch `epico/<n>-<slug>` a partir de `origin/<principal>` ([espelho](workspaces.md#espelho-e-clone-principal-no-core)). O **motor gera o slug** do título do épico: minúsculas, acentos removidos, tudo fora de `[a-z0-9]` vira `-` (sem `-` repetido nem nas pontas), cortado em 30 caracteres; título sem nenhum caractere válido → `mesa`. O prefixo `epico/` é o padrão (configurável por workspace);
-3. cria o worktree no Core em `<dados>/workspaces/<slug do workspace>/mesas/<mesa>/` ([pastas](workspaces.md#espelho-e-clone-principal-no-core)); o identificador da mesa (`<mesa>`, `MESTRE_MESA`) é `<n>-<slug>`, o mesmo da branch sem o prefixo;
+2. faz `fetch` do espelho e cria a branch `epico/<n>-<slug>` a partir de `origin/<principal>` ([espelho](workspaces.md#espelho-e-clone-principal-na-cidadela)). O **motor gera o slug** do título do épico: minúsculas, acentos removidos, tudo fora de `[a-z0-9]` vira `-` (sem `-` repetido nem nas pontas), cortado em 30 caracteres; título sem nenhum caractere válido → `mesa`. O prefixo `epico/` é o padrão (configurável por workspace);
+3. cria o worktree na Cidadela em `<dados>/workspaces/<slug do workspace>/mesas/<mesa>/` ([pastas](workspaces.md#espelho-e-clone-principal-na-cidadela)); o identificador da mesa (`<mesa>`, `MESTRE_MESA`) é `<n>-<slug>`, o mesmo da branch sem o prefixo;
 4. roda a sessão zero da mesa ([materialização de arquivos](../sessao-zero/mesa.md));
 5. recruta o Mestre da mesa com a ficha padrão do workspace (ou a indicada), conectado ao Grão-Mestre;
 6. entrega ao Mestre da mesa, como primeira mensagem, o **texto original** da(s) mensagem(ns) de usuário indicada(s) e cópias dos anexos ([anexos](../telegram/anexos-e-transcricao.md)), seguidos das observações do Grão-Mestre em bloco separado. O motor copia o original; o Grão-Mestre não o reescreve.
@@ -60,30 +60,31 @@ A pausa é uma marca (`paused`) sobre o estado, ligada por `/pausar`, pelo paine
 
 `/retomar` tira a marca e as entregas recomeçam pela ordem da fila. O congelamento de emergência `/travar` é outra coisa ([segurança do canal](../telegram/seguranca-do-canal.md)).
 
-### Worktree por nó e sincronização
+### Worktree por máquina e sincronização
 
-Uma mesa pode ter personagens em vários nós. Cada nó que roda personagem da mesa tem **o próprio worktree da branch da mesa**: um repositório local por workspace em `<dados-no>/workspaces/<slug>/repo.git` e um worktree por mesa em `<dados-no>/workspaces/<slug>/mesas/<mesa>/`. A transferência é por **git bundle pela conexão WSS** ([ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md); formato das mensagens em [protocolo](../conectividade/protocolo.md)). Nada de SSH nem acesso direto ao GitHub pelo nó.
+Uma mesa pode ter personagens em várias máquinas da Guilda. O espelho e o clone principal ficam só na Cidadela ([workspaces](workspaces.md#espelho-e-clone-principal-na-cidadela)); cada Torre que roda personagem da mesa tem **o próprio worktree da branch da mesa**: um repositório local por workspace em `<dados da máquina>/workspaces/<slug>/repo.git` e um worktree por mesa em `<dados da máquina>/workspaces/<slug>/mesas/<mesa>/`. Toda sincronização passa pela Cidadela; Torres não trocam commits entre si. A transferência é por **git bundle pela conexão WSS** ([ADR 0013](../decisoes/0013-sincronizacao-de-worktrees-por-git-bundle.md); formato das mensagens em [protocolo](../conectividade/protocolo.md)). Nada de SSH nem acesso direto ao GitHub pela máquina.
 
 | Momento | Direção | Conteúdo |
 |---|---|---|
-| Primeiro personagem da mesa num nó | Core → nó | bundle completo da branch da mesa e da principal; o nó cria repo e worktree |
-| Depois de cada `mestre done` de personagem no nó | nó → Core | bundle incremental (`<último commit conhecido pelo Core>..<branch>`) |
-| Antes de cada etapa que rode num nó | Core → nó | bundle incremental da branch da mesa e da principal |
+| Primeiro personagem da mesa numa Torre | Cidadela → Torre | bundle completo da branch da mesa e da principal; a Torre cria repo e worktree |
+| Depois de cada `mestre done` de personagem na Torre | Torre → Cidadela | bundle incremental (`<último commit conhecido pela Cidadela>..<branch>`) |
+| Antes de cada etapa que rode numa Torre | Cidadela → Torre | bundle incremental da branch da mesa e da principal |
 
 Regras de integração (sempre só *fast-forward*; o motor nunca faz merge sozinho):
-- **No Core:** o bundle chega como `refs/mestre/nos/<no>/<branch>`. Se for avanço direto da branch, o motor faz `git merge --ff-only` **dentro do worktree da mesa no Core** (atualizando branch e arquivos juntos). Se divergir, ou se o worktree do Core tiver alterações que conflitam, nada muda e o Mestre da mesa recebe na caixa de entrada um aviso de divergência com os commits de cada lado.
-- **No nó:** a ponta do Core chega como `refs/mestre/core/<branch>`. Se a branch local for ancestral, o motor faz `--ff-only` no worktree; se divergir, mantém o local e avisa o Mestre da mesa. Um personagem daquele nó resolve com `git rebase`/`git merge` local da ref do Core e sinaliza `done`, gerando novo envio.
+- **Na Cidadela:** o bundle chega como `refs/mestre/torres/<torre>/<branch>`. Se for avanço direto da branch, o motor faz `git merge --ff-only` **dentro do worktree da mesa na Cidadela** (atualizando branch e arquivos juntos). Se divergir, ou se o worktree da Cidadela tiver alterações que conflitam, nada muda e o Mestre da mesa recebe na caixa de entrada um aviso de divergência com os commits de cada lado.
+- **Na Torre:** a ponta da Cidadela chega como `refs/mestre/cidadela/<branch>`. Se a branch local for ancestral, o motor faz `--ff-only` no worktree; se divergir, mantém o local e avisa o Mestre da mesa. Um personagem daquela Torre resolve com `git rebase`/`git merge` local da ref da Cidadela e sinaliza `done`, gerando novo envio.
 - Só commits viajam. Se houver alterações não commitadas no `done`, o motor anexa ao resultado o aviso "alterações não commitadas não foram sincronizadas" e lista os arquivos.
-- Cada transferência é idempotente pelo hash do bundle. Nó desconectado: o envio fica pendente e é refeito ao reconectar; a etapa que depende dele fica `aguardando sincronização` ([esperas](esperas-e-caixa-de-entrada.md)).
-- Evitar edição simultânea dos mesmos arquivos em nós diferentes é tarefa do [Mestre da mesa](mestre-da-mesa.md#instruções-do-sistema).
-- Só o motor envia a branch da mesa do espelho para o GitHub ([ações por nível](../github/acoes-por-nivel.md)). Se um nó da mesa estiver desconectado no envio, a resposta do `mestre pr` inclui o aviso.
+- Cada transferência é idempotente pelo hash do bundle. Torre desconectada: o envio fica pendente e é refeito ao reconectar; a etapa que depende dele fica `aguardando sincronização` ([esperas](esperas-e-caixa-de-entrada.md)).
+- Evitar edição simultânea dos mesmos arquivos em máquinas diferentes é tarefa do [Mestre da mesa](mestre-da-mesa.md#instruções-do-sistema).
+- Só o motor envia a branch da mesa do espelho para o GitHub ([ações por nível](../github/acoes-por-nivel.md)). Se uma Torre da mesa estiver desconectada no envio, a resposta do `mestre pr` inclui o aviso.
+- **Troca de Cidadela:** os worktrees das Torres continuam; a nova Cidadela recria os worktrees das mesas dela a partir do espelho ([workspaces](workspaces.md#espelho-e-clone-principal-na-cidadela)) e pede a cada Torre o bundle incremental das branches das mesas. Os commits que só existiam na Cidadela antiga voltam quando ela entra de novo como Torre e envia os bundles dela.
 
 ### Encerramento
 
 Ao entrar em `closing` (pelo `table close`), o motor:
 1. encerra os personagens da mesa com o [encerramento seguro](personagens.md#encerramento-seguro), o Mestre da mesa por último;
 2. desativa os rituais da mesa ([rituais](rituais.md));
-3. remove cada worktree (Core e nós) **somente se** a branch está integrada (PR mesclado e a ponta local é o commit-cabeça do PR ou ancestral dele) e `git status --porcelain` está vazio; depois apaga a branch do espelho;
+3. remove cada worktree (Cidadela e Torres) **somente se** a branch está integrada (PR mesclado e a ponta local é o commit-cabeça do PR ou ancestral dele) e `git status --porcelain` está vazio; depois apaga a branch do espelho;
 4. se algum worktree não cumprir isso, ou houver personagem fixado, o `table close` devolve ao Grão-Mestre o que falta (ele pergunta aos usuários) e a mesa fica em `closing` até a decisão; um novo `table close` com a decisão retoma os passos.
 
 O histórico (mesa, missões, esperas, personagens, consumo) fica no banco; pergaminhos e classes da mesa continuam em `.mestre/mesas/<mesa>/`.
@@ -101,10 +102,10 @@ Pedido por um usuário com nível para dar ordens, via Grão-Mestre (`mestre tab
 
 ## Critérios de aceite
 
-- **CA-MESAS-01** · *completa* — **Dado** um workspace com repositório falso, **quando** o Grão-Mestre cria o épico 42 "Login de usuários" com `gh epic create` e abre a mesa com `table open --epic 42`, **então** existem a branch `epico/42-login-de-usuarios` a partir da principal, o worktree no Core, o Mestre da mesa conectado ao Grão-Mestre e a primeira mensagem dele contém o texto original do usuário byte a byte.
+- **CA-MESAS-01** · *completa* — **Dado** um workspace com repositório falso, **quando** o Grão-Mestre cria o épico 42 "Login de usuários" com `gh epic create` e abre a mesa com `table open --epic 42`, **então** existem a branch `epico/42-login-de-usuarios` a partir da principal, o worktree na Cidadela, o Mestre da mesa conectado ao Grão-Mestre e a primeira mensagem dele contém o texto original do usuário byte a byte.
 - **CA-MESAS-02** · *rápida* — **Dado** a máquina de estados, **quando** cada evento da tabela ocorre em cada estado, **então** só as transições do diagrama são aceitas e as demais retornam erro.
-- **CA-MESAS-03** · *completa* — **Dado** Core e nó reais na mesma máquina, **quando** um personagem no nó commita e dá `done`, **então** o commit aparece na branch do worktree do Core; **quando** a próxima etapa roda no nó, **então** o worktree do nó recebe os commits do Core antes dela começar.
-- **CA-MESAS-04** · *completa* — **Dado** commits divergentes no Core e no nó, **quando** o nó envia o bundle, **então** a branch do Core não muda e o Mestre da mesa recebe o aviso de divergência.
+- **CA-MESAS-03** · *completa* — **Dado** duas instâncias reais na mesma máquina, uma Cidadela e uma Torre, **quando** um personagem na Torre commita e dá `done`, **então** o commit aparece na branch do worktree da Cidadela; **quando** a próxima etapa roda na Torre, **então** o worktree da Torre recebe os commits da Cidadela antes dela começar.
+- **CA-MESAS-04** · *completa* — **Dado** commits divergentes na Cidadela e na Torre, **quando** a Torre envia o bundle, **então** a branch da Cidadela não muda e o Mestre da mesa recebe o aviso de divergência.
 - **CA-MESAS-05** · *rápida* — **Dado** uma mesa cancelada, relógio falso e o git falso, **quando** passam 30 dias, **então** o motor pede ao git a remoção da branch no espelho, e não antes.
 - **CA-MESAS-06** · *rápida* — **Dado** o git falso informando um arquivo não commitado no worktree da mesa e o merge confirmado, **quando** o Grão-Mestre chama `table close`, **então** o motor não pede a remoção do worktree, a mesa fica `closing` e o Grão-Mestre recebe o que falta.
 - **CA-MESAS-07** · *pesada* — **Dado** duas mesas abertas em paralelo com personagens em Linux e Windows, **quando** ambas trabalham, **então** cada uma só altera a própria branch e a mesa termina encerrada após o merge no GitHub (dublê) (MVP-4).

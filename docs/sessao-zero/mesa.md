@@ -1,15 +1,15 @@
 # Sessão zero da mesa
 
-> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Node · **Atualizado:** 2026-10-13
+> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Garantir que todo worktree onde roda um personagem tenha a fiação que os provedores exigem (skills, hooks, confiança), sem nada disso entrar no git do projeto, sem estragar arquivos da pessoa e sem atrapalhar quem clonar o repositório sem o Mestre. Vale para o motor do Core e de cada nó.
+Garantir que todo worktree onde roda um personagem tenha a fiação que os provedores exigem (skills, hooks, confiança), sem nada disso entrar no git do projeto, sem estragar arquivos da pessoa e sem atrapalhar quem clonar o repositório sem o Mestre. Vale para o motor de cada máquina da Guilda, inclusive a Cidadela.
 
 ## Comportamento
 
 ### Quando roda
-- ao abrir uma mesa (worktree no Core) e quando um nó recebe o primeiro personagem da mesa (worktree no nó; [mesas](../orquestracao/mesas.md));
+- ao abrir uma mesa (worktree na Cidadela) e quando uma Torre recebe o primeiro personagem da mesa (worktree na Torre; [mesas](../orquestracao/mesas.md));
 - no clone principal, na criação do workspace ([workspace](workspace.md));
 - antes de iniciar cada personagem (verifica e corrige, sem reescrever o que já está certo);
 - ao regenerar depois de uma versão nova dos modelos ([personagem](personagem.md)).
@@ -23,10 +23,10 @@ A geração é idempotente: rodar de novo sem mudança nos modelos não altera n
 | `.claude/skills/mestre-comunicacao/SKILL.md` | Claude Code | cópia gerenciada da anterior (cópia, não link: links no Windows exigem permissão especial) | idem |
 | `.claude/settings.local.json` | Claude Code | só a chave `hooks`, mesclada | [claude-code](../provedores/claude-code.md) |
 | `.agents/hooks.json` | Antigravity | um hook nomeado `mestre` | [antigravity](../provedores/antigravity.md) |
-| `.mestre/run/classes/<classe>/` | todos | cópia das classes usadas ali (os hooks extras rodam no nó) | [classes](../classes/classes.md) |
+| `.mestre/run/classes/<classe>/` | todos | cópia das classes usadas ali (os hooks extras rodam na máquina) | [classes](../classes/classes.md) |
 | `.mestre/anexos/…` | todos | cópias dos anexos repassados à mesa | [anexos-e-transcricao](../telegram/anexos-e-transcricao.md) |
 
-Os hooks do Codex não ficam no worktree, e sim no perfil de conta ([codex](../provedores/codex.md)). Arquivos por personagem (`.mestre/agents/<id>/` e `.agents/agents/mestre-<id>.md`) são gerados ao criar o personagem: [personagem](personagem.md). Classes da mesa e pergaminhos têm o Core como fonte; o motor do nó atualiza as cópias quando o Core avisa que mudaram. O conteúdo dos hooks (eventos, comandos e respostas) é do adaptador ([adaptador](../provedores/adaptador.md), [0012](../decisoes/0012-despachante-unico-de-hooks.md)).
+Os hooks do Codex não ficam no worktree, e sim no perfil de conta ([codex](../provedores/codex.md)). Arquivos por personagem (`.mestre/agents/<id>/` e `.agents/agents/mestre-<id>.md`) são gerados ao criar o personagem: [personagem](personagem.md). Classes da mesa e pergaminhos têm a Cidadela como fonte; o motor de cada Torre atualiza as cópias quando a Cidadela avisa que mudaram. O conteúdo dos hooks (eventos, comandos e respostas) é do adaptador ([adaptador](../provedores/adaptador.md), [0012](../decisoes/0012-despachante-unico-de-hooks.md)).
 
 ### `.git/info/exclude`
 O motor mantém um bloco próprio no `info/exclude` do repositório de onde o worktree sai (o arquivo vale para todos os worktrees daquele repositório):
@@ -60,7 +60,7 @@ Para arquivos que podem já existir com conteúdo da pessoa:
 **Arquivo já versionado pelo projeto** (ex.: um `.agents/hooks.json` do repositório): a mescla é feita e o motor marca o arquivo com `git update-index --skip-worktree`, para que a parte do Mestre não apareça no `git status` nem entre em commits. Antes de sincronizar a branch ou atualizar da principal (inclusive por rebase), o motor tira o bloco e a marca, sincroniza e reaplica; assim o `skip-worktree` nunca está ligado durante um rebase. Se o projeto mudou o mesmo arquivo, vale a versão do projeto e a parte do Mestre é mesclada de novo por cima.
 
 ### Confiança de pasta por provedor
-Sem confiança, hooks e instruções do projeto não carregam. O motor grava a confiança antes de iniciar o personagem, em cada perfil de conta do nó que vai rodar ali ([bases-e-fichas](../orquestracao/bases-e-fichas.md)):
+Sem confiança, hooks e instruções do projeto não carregam. O motor grava a confiança antes de iniciar o personagem, em cada perfil de conta da máquina que vai rodar ali ([bases-e-fichas](../orquestracao/bases-e-fichas.md)):
 
 | Provedor | Onde | O quê |
 |---|---|---|
@@ -94,7 +94,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 - **CA-SZ-MESA-02** · *rápida* — **Dado** um `.claude/settings.local.json` com `permissions` e um hook da pessoa, **quando** a mescla roda duas vezes, **então** o conteúdo da pessoa fica igual e os handlers do Mestre aparecem uma vez, depois dos dela.
 - **CA-SZ-MESA-03** · *rápida* — **Dado** um `.agents/hooks.json` com JSON inválido, **quando** a geração roda, **então** o arquivo não muda, um alerta é registrado e nenhum personagem Antigravity inicia ali.
 - **CA-SZ-MESA-04** · *rápida* — **Dado** um `info/exclude` com linhas da pessoa, **quando** o bloco é atualizado, **então** as linhas dela ficam iguais e existe um só bloco do Mestre.
-- **CA-SZ-MESA-05** · *completa* — **Dado** uma mesa com worktree no Core e num nó, **quando** os dois são gerados, **então** todos os arquivos da tabela existem nos dois e `git status --porcelain` fica vazio nos dois (MVP-3).
+- **CA-SZ-MESA-05** · *completa* — **Dado** uma mesa com worktree na Cidadela e numa Torre, **quando** os dois são gerados, **então** todos os arquivos da tabela existem nos dois e `git status --porcelain` fica vazio nos dois (MVP-3).
 - **CA-SZ-MESA-06** · *completa* — **Dado** um `.agents/hooks.json` versionado e mesclado, **quando** um agente faz commit de tudo, **então** o commit não contém o hook `mestre`; e, num clone novo sem o `mestre` no PATH, o agente Antigravity falso tem o PreToolUse liberado (MVP-3).
 - **CA-SZ-MESA-07** · *completa* — **Dado** um worktree com confiança gravada nos três provedores, **quando** a mesa é encerrada e o worktree removido, **então** as entradas de confiança daquele caminho deixam de existir.
 - **CA-SZ-MESA-08** · *rápida* — **Dado** o comando de hook gerado, **quando** roda sem `MESTRE_AGENT_ID`, **então** imprime a resposta neutra do evento, sai com 0 e não executa o `mestre`.
@@ -109,4 +109,4 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** a forma Windows da linha de hook em cada provedor (`cmd /c` no Antigravity, `command_windows` no Codex, shell usado pelo Claude Code). **Padrão:** a linha é só o executável e os argumentos (`mestre hook --provider … --event …`), sem sintaxe própria de shell, e só o teste de existência do binário muda por sistema. **Se falhar:** a linha passa a usar o caminho absoluto estável do `mestre.exe` e, no Codex, o campo `command_windows`. **Onde:** etapas 4 a 6 do [teste de conformidade](../provedores/conformidade.md) no nó Windows.
+- **Verificar na implementação:** a forma Windows da linha de hook em cada provedor (`cmd /c` no Antigravity, `command_windows` no Codex, shell usado pelo Claude Code). **Padrão:** a linha é só o executável e os argumentos (`mestre hook --provider … --event …`), sem sintaxe própria de shell, e só o teste de existência do binário muda por sistema. **Se falhar:** a linha passa a usar o caminho absoluto estável do `mestre.exe` e, no Codex, o campo `command_windows`. **Onde:** etapas 4 a 6 do [teste de conformidade](../provedores/conformidade.md) na máquina Windows.

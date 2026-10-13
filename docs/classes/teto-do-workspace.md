@@ -1,6 +1,6 @@
 # Teto do workspace
 
-> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Dar liberdade aos Mestres de mesa sem perder o controle: eles criam classes da m
 
 ### Arquivo
 
-Fica em `.mestre/regras/teto.yaml` ([estrutura de `.mestre/`](../sessao-zero/workspace.md#estrutura-de-mestre)), no clone principal do workspace no Core. Usa o mesmo formato do [`permissions.yaml`](permissoes.md#formato-do-permissionsyaml), lido como **máximo**, mais o bloco de custo:
+Fica em `.mestre/regras/teto.yaml` ([estrutura de `.mestre/`](../sessao-zero/workspace.md#estrutura-de-mestre)), no clone principal do workspace na Cidadela. Usa o mesmo formato do [`permissions.yaml`](permissoes.md#formato-do-permissionsyaml), lido como **máximo**, mais o bloco de custo:
 
 ```yaml
 version: 1
@@ -78,7 +78,7 @@ Quem usa o teto: [classes](classes.md) (M3); a sessão zero cria o arquivo (M4);
 - **CA-TETO-03** · *completa* — **Dado** `teto.yaml` editado à mão para liberar `docker *`, **quando** o motor percebe a mudança, **então** segue negando `docker *`, avisa os Administradores e só aplica a nova versão depois de um decreto.
 - **CA-TETO-04** · *completa* — **Dado** uma mesa no teto de custo, **quando** o Grão-Mestre tenta aprovar mais gasto, **então** a aprovação é recusada e o pedido vai aos usuários Administrador ou acima.
 - **CA-TETO-05** · *rápida* — **Dado** uma classe que escreve em `src/**`, **quando** o teto passa a negar `src/**`, **então** `class check` mostra a classe como "acima do teto".
-- **CA-TETO-06** · *rápida* — **Dado** o teto padrão e uma classe com `operator: true`, **quando** o Core monta as regras efetivas, **então** `operator` sai `false` com `origin` `ceiling`; **dado** um decreto `ceiling` de um Administrador que liga `operator`, **então** ele é recusado antes da confirmação.
+- **CA-TETO-06** · *rápida* — **Dado** o teto padrão e uma classe com `operator: true`, **quando** a Cidadela monta as regras efetivas, **então** `operator` sai `false` com `origin` `ceiling`; **dado** um decreto `ceiling` de um Administrador que liga `operator`, **então** ele é recusado antes da confirmação.
 
 ## Depende de
 

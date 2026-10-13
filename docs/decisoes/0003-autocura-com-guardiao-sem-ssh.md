@@ -1,14 +1,14 @@
 # ADR 0003: Autocura com Guardião local, sem SSH
 
-> **Assunto:** por que cada máquina tem um Guardião com lista fechada de ações em vez de acesso remoto · **Componente:** Guardião · **Atualizado:** 2026-10-12
+> **Assunto:** por que cada máquina tem um Guardião com lista fechada de ações em vez de acesso remoto · **Componente:** Guardião · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Revista em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): "Core" e "nó" viram Cidadela e Torre, e quando a autocura não resolve a queda da Cidadela, a Torre condutora propõe assumir como nova Cidadela, sempre com aprovação do Dono. A autocura mútua continua entre quaisquer duas máquinas. O texto abaixo já usa os nomes novos.
 
 ## Contexto
 
-- A autocura é requisito central. Um lado precisa conseguir recuperar o outro quando o motor cai, trava ou quebra depois de uma atualização, inclusive quando o Core está fora do ar.
+- A autocura é requisito central. Um lado precisa conseguir recuperar o outro quando o motor cai, trava ou quebra depois de uma atualização, inclusive quando a Cidadela está fora do ar.
 - O sistema operacional reinicia um processo que caiu, mas não resolve um processo travado nem um motor que quebra a cada partida.
 - A recuperação também não pode exigir que uma máquina tenha acesso total à outra.
 
@@ -19,7 +19,7 @@ Aceita, 2026-10-12.
    - Contras:
      - Exige OpenSSH Server no Windows, troca de chaves e porta aberta.
      - Dá shell livre: um erro ou um agente comprometido pode fazer qualquer coisa.
-     - Não funciona com o nó atrás de roteador.
+     - Não funciona com a Torre atrás de roteador.
      - A spec proíbe.
 2. **Só a supervisão do sistema operacional** (systemd com `Restart=always` + watchdog, recuperação de serviço do Windows).
    - Prós: zero código próprio.
@@ -32,11 +32,11 @@ Aceita, 2026-10-12.
    - Contras:
      - Se o motor quebra, ou uma atualização dele dá errado, a cura quebra junto.
      - Não há quem volte a versão.
-4. **Guardião local separado, com lista fechada de ações, alcançado sem porta no nó.**
+4. **Guardião local separado, com lista fechada de ações, alcançado sem porta na Torre.**
    - Prós:
      - Continua de pé quando o motor quebra.
      - Não existe shell livre.
-     - Funciona atrás de roteador porque o Guardião do nó abre conexão de saída.
+     - Funciona atrás de roteador porque o Guardião da Torre abre conexão de saída.
    - Contras: um segundo serviço para instalar, manter e vigiar.
 
 ## Decisão
@@ -45,18 +45,19 @@ Aceita, 2026-10-12.
 - **O que ele aceita:** só uma **lista fechada de ações**, nunca shell livre.
 - **Supervisão:** o Guardião vigia o motor, e o sistema operacional vigia o Guardião.
 - **Como é alcançado:**
-  - Guardião de nó: mantém **sua própria conexão de saída** até o Core, com credencial própria.
-  - Guardião do Core: escuta numa **porta própria**, separada da do motor, com TLS e as credenciais dos nós.
+  - Guardião de Torre: mantém **sua própria conexão de saída** até a Cidadela, com credencial própria.
+  - Guardião da Cidadela: escuta numa **porta própria**, separada da do motor, com TLS e as credenciais das máquinas da Guilda.
 - **Recuperação em camadas:**
   1. sistema operacional;
   2. Guardião local;
   3. supervisão cruzada com runbook;
   4. diagnóstico com IA, com script aprovado por pessoa;
-  5. alerta aos usuários.
+  5. alerta aos usuários;
+  6. se a Cidadela não volta, proposta de troca de Cidadela ao Dono ([Cidadela e Torres](../guilda/cidadela-e-torres.md#proposta-de-assumir)).
 - **Onde estão os detalhes:**
   - Lista de ações e o que o Guardião guarda: [Guardião](../autocura/guardiao.md).
-  - Camadas, eleição do nó condutor e anti-loop: [camadas](../autocura/camadas.md).
-  - Máquina única (só Linux ou só Windows): sem camada 3; o Guardião do Core conduz o incidente, o diagnóstico, a página reserva e o Telegram reduzido ([ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md), [modo máquina única](../autocura/camadas.md#modo-máquina-única)).
+  - Camadas, eleição da Torre condutora e anti-loop: [camadas](../autocura/camadas.md).
+  - Guilda de uma máquina (só Linux ou só Windows): sem camada 3; o Guardião da Cidadela conduz o incidente, o diagnóstico, a página reserva e o Telegram reduzido ([ADR 0020](0020-quatro-usos-core-em-linux-ou-windows.md), [modo máquina única](../autocura/camadas.md#modo-máquina-única)).
   - Diagnóstico com IA: [diagnóstico com IA](../autocura/diagnostico-com-ia.md).
 
 ## Consequências
@@ -64,11 +65,11 @@ Aceita, 2026-10-12.
 - **Positivas:**
   - Nenhuma máquina tem acesso amplo à outra.
   - Um motor quebrado por atualização é revertido localmente.
-  - A cura funciona fora da rede local sem abrir porta no nó.
+  - A cura funciona fora da rede local sem abrir porta na Torre.
 - **Negativas:**
   - Dois serviços por máquina. O checklist precisa conferir os dois ([checklist](../plataforma/checklist.md)).
-  - O Guardião precisa de exceções explícitas à regra de "não guardar estado do produto". Ele guarda, criptografados, o token do bot e a lista de usuários, porque serve a [página reserva](../autocura/pagina-reserva.md) e o [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md). Isso aumenta a superfície de segredos fora do Core ([cofre](../plataforma/cofre.md)).
+  - O Guardião precisa de exceções explícitas à regra de "não guardar estado do produto". Ele guarda, criptografados, o token do bot e a lista de usuários, porque serve a [página reserva](../autocura/pagina-reserva.md) e o [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md). Isso aumenta a superfície de segredos fora da Cidadela ([cofre](../plataforma/cofre.md)).
   - Problemas fora da lista fechada só se resolvem pelo diagnóstico com IA, com aprovação de Dono ou Administrador, ou por intervenção humana. A cura é mais lenta, mas é a troca aceita pela segurança.
   - O Guardião precisa ser pequeno e estável. Qualquer mudança nele é rara e entra como ação de atualização aprovada, feita pelo motor saudável da mesma máquina ([ADR 0019](0019-autoatualizacao-por-releases.md), [autoatualização](../plataforma/autoatualizacao.md)). Nenhuma ação de cura pode alterá-lo.
-  - O Core precisa expor mais uma porta (a do Guardião) na rede local, liberada no firewall.
-  - O Guardião de cada nó (e o do Core, no modo máquina única) também escuta uma porta, só na rede local, para a [página reserva](../autocura/pagina-reserva.md); a cura em si continua sem porta no nó ([portas](../arquitetura/componentes.md#portas)).
+  - A Cidadela precisa expor mais uma porta (a do Guardião) na rede local, liberada no firewall; como qualquer máquina pode virar Cidadela, a regra fica em todas.
+  - O Guardião de cada Torre (e o da Cidadela, no modo máquina única) também escuta uma porta, só na rede local, para a [página reserva](../autocura/pagina-reserva.md); a cura em si continua sem porta na Torre ([portas](../arquitetura/componentes.md#portas)).

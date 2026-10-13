@@ -1,6 +1,6 @@
 # Administração no painel
 
-> **Assunto:** telas de administração: decretos, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, saúde dos nós, segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-12
+> **Assunto:** telas de administração: decretos, usuários, bases, fichas, perfis de conta, classes e Apps, teto, política, consumo, Guilda e saúde das máquinas, segredos e diagnóstico · **Componente:** Painel · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -15,7 +15,7 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 | Decretos | decretos ativos e suspensos por workspace, com autor, texto original, validade e o que liberaram; criar regra permanente ou exceção pontual; revogar | [decretos](../telegram/decretos.md) |
 | Usuários | lista, cadastro, nível, workspaces, credencial do GitHub do usuário, códigos de pareamento do Telegram e de primeiro acesso, suspender, remover, transferir o posto de Dono | [usuários e níveis](../telegram/usuarios-e-niveis.md), [login](login.md) |
 | Bases e fichas | criar, editar, apagar, exportar e importar em YAML ou JSON | [bases e fichas](../orquestracao/bases-e-fichas.md) |
-| Perfis de conta | perfis por nó e provedor; configuração inicial guiada (login e, no Codex, aprovar uma vez os hooks do Mestre em `/hooks`); estado do login e da confiança (checklist ALL-11) | [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta) |
+| Perfis de conta | perfis por máquina e provedor; configuração inicial guiada (login e, no Codex, aprovar uma vez os hooks do Mestre em `/hooks`); estado do login e da confiança (checklist ALL-11) | [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta) |
 | Classes | classes globais, do workspace e das mesas, com o App vinculado e o estado dele (rótulos de [estados de um App](../github/criacao-de-apps.md#estados-de-um-app)); propostas de classe do workspace esperando aprovação | [classes](../classes/classes.md), [identidades e Apps](../github/identidades-e-apps.md) |
 | Apps do GitHub | Apps fixos e por classe, workspaces em que estão instalados, contagem "N de 100"; para o Dono, os pedidos de criação abertos com o link de criação e o botão "novo link" para os vencidos | [identidades e Apps](../github/identidades-e-apps.md), [criação de Apps](../github/criacao-de-apps.md) |
 | Teto do workspace | o teto em vigor; "ampliar" abre a criação de um decreto, nunca edita direto | [teto do workspace](../classes/teto-do-workspace.md) |
@@ -23,7 +23,7 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 | Instruções extras | texto do usuário para o Grão-Mestre e para os Mestres de mesa de cada workspace | [Grão-Mestre](../orquestracao/grao-mestre.md), [Mestre da mesa](../orquestracao/mestre-da-mesa.md) |
 | Workspaces | lista, criar (abre a sessão zero), acompanhar as etapas da sessão zero e tentar de novo a que falhou, pausar e retomar | [workspaces](../orquestracao/workspaces.md), [sessão zero do workspace](../sessao-zero/workspace.md) |
 | Consumo de uso | gráficos e tabelas por personagem, missão, mesa, workspace, conta e dia; limites configurados e quanto falta | [limites de uso](../plataforma/limites-de-uso.md) |
-| Saúde dos nós | ver seção abaixo | [camadas](../autocura/camadas.md), [checklist](../plataforma/checklist.md) |
+| Guilda e saúde das máquinas | ver seção abaixo | [camadas](../autocura/camadas.md), [checklist](../plataforma/checklist.md) |
 | Segredos | nomes dos segredos do cofre, tipo, impressão curta, datas e metadados; nenhum valor salvo é mostrado de novo, nem ao Dono: só substituir e apagar, com PIN; é o único lugar de cadastro de credenciais de site (página de login, usuário, segredo, dono, classes, domínios, tipo, com a sugestão de preferir senha de app, token ou chave de API, e validade opcional); avisos de validade; gerar nova chave de recuperação, com PIN, avisando que backups antigos exigem a anterior e que sem ela o backup do cofre é inútil | [credenciais de site](../plataforma/cofre.md#credenciais-de-site), [backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação) |
 | Diagnóstico com IA | ficha de diagnóstico de cada máquina | [diagnóstico com IA](../autocura/diagnostico-com-ia.md#ficha-de-diagnóstico) |
 | Auditoria | trilha de auditoria com filtros (quem, o quê, quando, workspace) | [persistência](../arquitetura/persistencia.md) |
@@ -32,29 +32,30 @@ Reunir num só lugar as telas para configurar e acompanhar o Mestre. Cada tela �
 - Ações sensíveis pedem PIN ([login](login.md#pin-em-ações-sensíveis)).
 - Toda alteração feita aqui entra na auditoria com o usuário e o antes/depois (sem valores de segredos).
 
-### Saúde dos nós
+### Guilda e saúde das máquinas
 
-Uma linha por máquina (Core e cada nó), atualizada em tempo real. Na máquina do Core (Linux ou Windows), a linha mostra os dois serviços do motor (`mestre-core` e o nó local `mestre-node`). No [modo máquina única](../autocura/camadas.md#modo-máquina-única), uma faixa fixa avisa que, se a máquina inteira cair, ninguém de fora percebe, e sugere parear um segundo nó.
-
+Uma linha por máquina da Guilda, atualizada em tempo real, com a época atual no topo. Regras da Guilda em [Guilda](../guilda/guilda.md) e [Cidadela e Torres](../guilda/cidadela-e-torres.md). No [modo máquina única](../autocura/camadas.md#modo-máquina-única), uma faixa fixa avisa que, se a máquina inteira cair, ninguém de fora percebe, e sugere instalar o Mestre em uma segunda máquina para ela entrar na Guilda.
 
 | Coluna | Conteúdo |
 |---|---|
-| Estado | conectado, sem sinal (desde quando), revogado; selo do incidente aberto, se houver |
+| Papel | Cidadela ou Torre; "Cidadela suspensa" quando for o caso |
+| Estado | conectada, sem sinal (desde quando), removida; selo do incidente aberto, se houver |
 | Motor e Guardião | versão de cada um, protocolo negociado, último heartbeat de cada conexão |
-| Capacidades | `os`, `local` (nó local do Core), `gpu`, `transcricao`, `operador` (e, se falso com o Operador habilitado, o motivo), ferramentas e versões ([protocolo](../conectividade/protocolo.md)) |
+| Ficha da máquina | sistema, interface gráfica, provedores logados por perfil, navegador e Operador do PC (e, se indisponível, o motivo), CPU, memória, GPU, transcrição ([ficha da máquina](../guilda/ficha-da-maquina.md)) |
+| Pode ser Cidadela | marca do Dono, com PIN; só as marcadas recebem a cópia do cofre (pendência P2 em [replicação](../guilda/replicacao.md)) e o estado da réplica do banco |
 | Carga | CPU, memória, disco livre, terminais rodando |
-| Agentes | personagens rodando no nó, com mesa e estado (link para o canvas) |
+| Agentes | personagens rodando na máquina, com mesa e estado (link para o canvas) |
 | Autocura | ações de cura recentes (últimos 7 dias), com resultado ([camadas](../autocura/camadas.md#anti-loop-e-auditoria)) |
 | Checklist | alertas abertos, com a correção oferecida ([checklist](../plataforma/checklist.md)) |
-| Prioridade | prioridade para a eleição do nó condutor (editável) ([camadas](../autocura/camadas.md#eleição-do-nó-condutor)) |
-| Página reserva | endereço da [página reserva](../autocura/pagina-reserva.md) do nó (no modo máquina única, a do Core) |
+| Prioridade | prioridade da máquina para ser a Torre condutora e para propor a promoção (editável pelo Dono) ([camadas](../autocura/camadas.md#eleição-da-torre-condutora)) |
+| Página reserva | endereço da [página reserva](../autocura/pagina-reserva.md) da máquina (no modo máquina única, a da Cidadela) |
 
-Ações da tela: gerar convite de nó e revogar a credencial de um nó ([pareamento](../conectividade/pareamento.md)); aplicar uma correção oferecida pelo checklist; ativar ou desativar a transcrição num nó ([nó de transcrição](../plataforma/instalacao-e-atualizacao.md#whisper)); pedir ao Guardião as ações da [lista fechada](../autocura/guardiao.md#lista-fechada-de-ações) (status, logs, reiniciar, checklist).
+Ações da tela: aceitar ou recusar uma máquina que pediu para entrar na Guilda e remover uma máquina (só o Dono, com PIN; [Guilda](../guilda/guilda.md)); marcar ou desmarcar "pode ser Cidadela"; aplicar uma correção oferecida pelo checklist; ativar ou desativar a transcrição numa máquina ([Whisper](../plataforma/instalacao-e-atualizacao.md#whisper)); pedir ao Guardião as ações da [lista fechada](../autocura/guardiao.md#lista-fechada-de-ações) (status, logs, reiniciar, checklist).
 
 ### Operador do PC
 
 Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); comportamento em [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
-- **Por nó habilitado:** usuário do Windows configurado, estado (sem usuário logado, tela bloqueada, pronto, em sessão), duração máxima (padrão 2 h), a configuração inicial guiada (conferência do Chrome e da extensão e o terminal de login do Claude Code no perfil do Operador, aberto com a conta do usuário, sem agente).
+- **Por máquina habilitada:** usuário do Windows configurado, estado (sem usuário logado, tela bloqueada, pronto, em sessão), duração máxima (padrão 2 h), a configuração inicial guiada (conferência do Chrome e da extensão e o terminal de login do Claude Code no perfil do Operador, aberto com a conta do usuário, sem agente).
 - **Lista de MCPs de controle** do computador e do navegador do usuário, usada pela regra fixa ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)): o padrão e o nome do MCP de controle do computador que o Dono instalou.
 - **Sessões:** cada sessão de `operator_sessions` com tarefa, quem aprovou, início, fim e motivo, as ações completas da auditoria e as **capturas de tela** numa linha do tempo, decifradas só para o Dono, a cada abertura, com auditoria de quem viu ([persistência](../arquitetura/persistencia.md#operador-do-pc)).
 
@@ -72,7 +73,7 @@ Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capac
 - O servidor confere o nível em toda requisição; telas sem permissão nem aparecem no menu.
 - Salvar um arquivo inválido (política, importação) → nada é gravado; os erros aparecem com a linha.
 - Valores de segredos nunca são devolvidos pela API, nem mascarados: só nome, tipo, impressão curta e datas.
-- Revogar um nó com personagens rodando → o painel avisa quantos e quais antes de confirmar.
+- Remover uma máquina da Guilda com personagens rodando → o painel avisa quantos e quais antes de confirmar.
 
 ## Critérios de aceite
 
@@ -81,10 +82,11 @@ Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capac
 - **CA-ADM-03** · *rápida* — **Dado** um segredo no cofre de teste, **quando** a tela de segredos carrega, **então** a resposta da API não contém o valor nem parte dele.
 - **CA-ADM-04** · *rápida* — **Dado** "ampliar teto" com um novo valor, **quando** confirmo, **então** é criado um pedido de decreto (com PIN) e o teto em vigor não muda antes dele.
 - **CA-ADM-05** · *rápida* — **Dado** uma ficha exportada em YAML, **quando** importo de volta, **então** a ficha resultante é igual à original.
-- **CA-ADM-06** · *pesada* — **Dado** Core e nó instalados, **quando** paro o serviço do motor do nó, **então** a linha do nó mostra "sem sinal" com o horário, a coluna Autocura mostra a ação do Guardião e, de volta, a coluna Checklist fica em dia (MVP-11, MVP-13).
+- **CA-ADM-06** · *pesada* — **Dado** uma Cidadela e uma Torre instaladas, **quando** paro o serviço do motor da Torre, **então** a linha da Torre mostra "sem sinal" com o horário, a coluna Autocura mostra a ação do Guardião e, de volta, a coluna Checklist fica em dia (MVP-11, MVP-13).
 - **CA-ADM-07** · *rápida* — **Dado** uma política com erro de formato, **quando** salvo, **então** nada muda e o erro aponta a linha.
 - **CA-ADM-09** · *rápida* — **Dado** uma sessão do Operador com capturas, **quando** um Administrador chama a API de capturas, **então** recebe a recusa e nenhum arquivo é decifrado; **quando** o Dono abre a sessão, **então** vê as capturas em ordem e a abertura entra na auditoria.
-- **CA-ADM-08** · *rápida* — **Dado** um Core sem nó remoto, **quando** a tela carrega, **então** aparece a faixa do modo máquina única; **dado** um nó pareado, **então** ela some.
+- **CA-ADM-08** · *rápida* — **Dado** uma Guilda só com a Cidadela, **quando** a tela carrega, **então** aparece a faixa do modo máquina única; **dado** uma Torre aceita na Guilda, **então** ela some.
+- **CA-ADM-10** · *rápida* — **Dado** um Administrador, **quando** chama a API de marcar uma máquina como "pode ser Cidadela" ou de mudar a prioridade, **então** recebe a recusa; **dado** o Dono sem PIN, **então** nada muda; com PIN, a marca é gravada e a linha mostra a réplica do cofre sendo preparada.
 
 ## Depende de
 
@@ -99,4 +101,4 @@ Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capac
 - [Política de aprovação](../aprovacoes/politica.md)
 - [Cofre](../plataforma/cofre.md)
 - [Limites de uso](../plataforma/limites-de-uso.md)
-- [Pareamento](../conectividade/pareamento.md)
+- [Guilda](../guilda/guilda.md)

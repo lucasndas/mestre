@@ -1,6 +1,6 @@
 # GitHub
 
-> **Assunto:** índice da integração com o GitHub · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** índice da integração com o GitHub · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|

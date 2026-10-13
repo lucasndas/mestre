@@ -1,6 +1,6 @@
 # Reforço nativo das permissões
 
-> **Assunto:** tradução das regras efetivas de cada personagem para os controles nativos de Claude Code, Codex e Antigravity (defesa em profundidade) · **Componente:** Node · **Atualizado:** 2026-10-12
+> **Assunto:** tradução das regras efetivas de cada personagem para os controles nativos de Claude Code, Codex e Antigravity (defesa em profundidade) · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 

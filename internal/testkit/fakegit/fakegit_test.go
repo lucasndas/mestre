@@ -36,24 +36,24 @@ func TestCommitsWorktreesAndExclude(t *testing.T) {
 
 func TestBundleFetchFastForwardOnly(t *testing.T) {
 	t.Parallel()
-	core, node := fakegit.New(), fakegit.New()
-	core.Commit("mesa", "a", map[string]string{"a": "1"})
-	b, err := core.Bundle("mesa")
+	citadel, tower := fakegit.New(), fakegit.New()
+	citadel.Commit("mesa", "a", map[string]string{"a": "1"})
+	b, err := citadel.Bundle("mesa")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := node.Fetch(b); err != nil {
+	if err := tower.Fetch(b); err != nil {
 		t.Fatal(err)
 	}
-	node.Commit("mesa", "b", map[string]string{"b": "2"})
-	back, _ := node.Bundle("mesa")
-	if err := core.Fetch(back); err != nil {
+	tower.Commit("mesa", "b", map[string]string{"b": "2"})
+	back, _ := tower.Bundle("mesa")
+	if err := citadel.Fetch(back); err != nil {
 		t.Fatalf("fast-forward refused: %v", err)
 	}
-	core.Commit("mesa", "c", map[string]string{"c": "3"})
-	node.Commit("mesa", "d", map[string]string{"d": "4"})
-	diverged, _ := node.Bundle("mesa")
-	if err := core.Fetch(diverged); !errors.Is(err, fakegit.ErrNotFastForward) {
+	citadel.Commit("mesa", "c", map[string]string{"c": "3"})
+	tower.Commit("mesa", "d", map[string]string{"d": "4"})
+	diverged, _ := tower.Bundle("mesa")
+	if err := citadel.Fetch(diverged); !errors.Is(err, fakegit.ErrNotFastForward) {
 		t.Fatalf("diverged fetch: %v", err)
 	}
 }

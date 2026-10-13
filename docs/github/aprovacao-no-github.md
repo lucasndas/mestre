@@ -1,6 +1,6 @@
 # Aprovação no GitHub
 
-> **Assunto:** como as aprovações viram reviews no GitHub, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** como as aprovações viram reviews no GitHub, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 

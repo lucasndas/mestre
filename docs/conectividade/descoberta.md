@@ -1,97 +1,101 @@
-# Descoberta do Core
+# Descoberta da Guilda
 
-> **Assunto:** como o nó (motor e Guardião) encontra o Core na rede local sem configuração: broadcast UDP, mDNS (Avahi no Linux, nativo no Windows), cache e endereço configurado · **Componente:** Node · **Atualizado:** 2026-10-12
+> **Assunto:** como uma máquina (motor e Guardião) encontra a Guilda e a Cidadela atual na rede local sem configuração: broadcast UDP, mDNS (Avahi no Linux, nativo no Windows), cache e endereço configurado · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-O nó acha o Core sozinho na rede local e o reencontra quando o IP muda, sem intervenção do usuário. Vale para Core e nós em Linux ou Windows. Um nó fora da rede local usa o endereço do Core configurado à mão (abaixo).
+Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada ([Guilda](../guilda/guilda.md#formação)), e uma máquina que já é da Guilda reencontra a **Cidadela atual** quando o IP muda ou quando outra máquina vira Cidadela, sem intervenção do usuário. Vale para máquinas Linux e Windows. Uma máquina fora da rede local usa o endereço configurado à mão (abaixo).
 
 ## Comportamento
 
 ### Ordem de tentativa
 
-1. **Endereço configurado** (`core.endereco` na configuração do nó), se houver.
-2. **Cache:** os últimos endereços que funcionaram, do mais recente para o mais antigo.
-3. **Broadcast UDP e mDNS, em paralelo,** por até 3 s. Os candidatos vão para uma lista.
-4. Para cada candidato, o nó abre TLS e faz a **checagem de identidade**. O primeiro que passa é usado e entra no cache.
+1. **Endereço configurado** (`guild.endereco` na configuração da máquina), se houver.
+2. **Cache:** os últimos endereços da Cidadela que funcionaram, do mais recente para o mais antigo, e os endereços das máquinas da Guilda recebidos em `guild.config`.
+3. **Broadcast UDP e mDNS, em paralelo,** por até 3 s. Os candidatos vão para uma lista; a resposta de uma Torre aponta para a Cidadela que ela segue.
+4. Para cada candidato, a máquina abre TLS e faz a **checagem de identidade**. O primeiro que passa é usado e entra no cache.
 
 - A descoberta roda no início, quando não há endereço que funcione e depois de 3 falhas seguidas de conexão ([reconexão](protocolo.md#heartbeat-e-reconexão)).
-- Sem nenhum candidato, o nó tenta de novo com o mesmo backoff da reconexão e mostra "Core não encontrado" no [checklist](../plataforma/checklist.md).
+- Sem nenhum candidato, a máquina tenta de novo com o mesmo backoff da reconexão e mostra "Cidadela não encontrada" no [checklist](../plataforma/checklist.md).
 
 ### Checagem de identidade
 
-- **Descoberta é só uma dica.** Quem garante que é o Core certo é o TLS:
-  - o certificado do servidor precisa ter cadeia até a CA interna guardada no pareamento;
-  - e precisa trazer o SAN de URI `mestre://core/<core_id>` do Core pareado ([pareamento](pareamento.md)).
-- O IP e o nome não entram na checagem. Por isso uma mudança de IP não exige certificado novo para os nós.
-- Um candidato que falha na checagem é descartado e registrado em log. O nó tenta o próximo.
+- **Descoberta é só uma dica.** Quem garante que é a Cidadela certa é o TLS mais a certidão:
+  - o certificado do servidor precisa ter cadeia até a CA da Guilda guardada na entrada;
+  - precisa trazer o SAN de URI `mestre://machine/<machine_id>` de uma máquina da Guilda;
+  - e essa máquina precisa ser a nomeada na certidão de época mais alta (a que a máquina conhece, ou uma mais alta e válida que o candidato apresenta no `welcome`; [certidão de época](../guilda/replicacao.md#certidão-de-época)).
+- O IP e o nome não entram na checagem. Por isso uma mudança de IP não exige certificado novo para ninguém.
+- Um candidato que falha na checagem é descartado e registrado em log. A máquina tenta o próximo. Um candidato que é da Guilda mas não é a Cidadela responde `4007` com a certidão atual, e a máquina segue para a Cidadela nomeada nela.
 
 ### Broadcast UDP
 
-- **Porta:** `7445/udp` (padrão, configurável). O motor do Core escuta em `0.0.0.0:7445`.
-- **Pedido:** o nó envia 3 pedidos, com 1 s de intervalo, para `255.255.255.255` e para o broadcast de cada interface ativa (ex.: `192.168.1.255`):
+- **Porta:** `7445/udp` (padrão, configurável). O motor de toda máquina da Guilda escuta em `0.0.0.0:7445`.
+- **Pedido:** a máquina envia 3 pedidos, com 1 s de intervalo, para `255.255.255.255` e para o broadcast de cada interface ativa (ex.: `192.168.1.255`):
 
 ```json
-{"mestre":"discover","v":1,"nonce":"9f2c…(32 hex)","core_id":"<core_id pareado ou vazio>"}
+{"mestre":"discover","v":1,"nonce":"9f2c…(32 hex)","guild_id":"<guild_id ou vazio>"}
 ```
 
-- **Resposta:** o Core responde em unicast para a origem do pedido:
+- **Resposta:** cada máquina da Guilda responde em unicast para a origem do pedido, dizendo o próprio papel e onde está a Cidadela que ela segue:
 
 ```json
-{"mestre":"here","v":1,"nonce":"9f2c…","core_id":"01J…","name":"servidor","port":7443,
- "guardian_port":7444,"addrs":["192.168.1.10"],"ca_fp":"sha256:…"}
+{"mestre":"here","v":1,"nonce":"9f2c…","guild_id":"01J…","machine_id":"01J…","name":"servidor",
+ "role":"cidadela","epoch":2,"port":7443,"citadel":{"machine_id":"01J…","addrs":["192.168.1.10"],"port":7443},
+ "machines":3,"ca_fp":"sha256:…"}
 ```
 
 - **Regras:**
-  - O Core só responde se o `core_id` do pedido for o dele ou vier vazio (vazio só serve ao [pareamento](pareamento.md)).
-  - O nó só aceita respostas com o `nonce` que enviou.
-  - As mensagens têm menos de 512 bytes, e o Core responde a no máximo 10 pedidos por segundo.
+  - Uma máquina só responde se o `guild_id` do pedido for o dela ou vier vazio (vazio só serve à [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)).
+  - A máquina só aceita respostas com o `nonce` que enviou.
+  - Com `guild_id` vazio, o instalador agrupa as respostas por `guild_id` para saber quantas Guildas existem e se a Cidadela de cada uma respondeu.
+  - As mensagens têm menos de 512 bytes, e cada máquina responde a no máximo 10 pedidos por segundo.
   - Campos desconhecidos são ignorados. Com `v` diferente, o pedido é ignorado.
 
 ### mDNS
 
-- **O que o Core publica:**
+- **O que cada máquina publica:**
   - o nome `<host>.local`;
-  - o serviço `_mestre._tcp`, na porta 7443;
-  - o serviço `_mestre-guardiao._tcp`, na porta 7444;
-  - TXT com `core_id=<id>` e `v=1`.
+  - o serviço `_mestre._tcp`, na porta 7443, com TXT `guild_id=<id>`, `machine_id=<id>`, `role=cidadela|torre`, `epoch=<n>` e `v=1`;
+  - o serviço `_mestre-guardiao._tcp`, na porta do Guardião.
+- **Só a Cidadela** publica também o nome **`mestre.local`**, o endereço do painel. Ao virar Torre, a máquina retira o nome; ao virar Cidadela, publica ([Cidadela e Torres](../guilda/cidadela-e-torres.md#painel-redirecionado)).
 - **Quem publica, por sistema:**
-  - Core Linux: o **Avahi**, com arquivos de serviço estáticos gravados na instalação;
-  - Core Windows: o **Guardião do Core**, pelo mDNS nativo do Windows (`DnsServiceRegister`; o próprio Windows já responde pelo nome `<host>.local`).
-- Nos dois casos, quem publica não é o motor: o anúncio continua com o motor do Core fora do ar. Isso ajuda a [recuperação](../autocura/camadas.md).
-- **No nó,** a biblioteca de mDNS do binário faz a consulta DNS-SD de `_mestre._tcp.local` e lê o TXT para saber o `core_id`.
-- Máquinas Windows (Core ou nó) precisam do perfil de rede "Privada" e das regras de firewall para broadcast e mDNS; o Core Linux, das regras do firewall dele. O [checklist](../plataforma/checklist.md) confere isso.
+  - Linux: o **Avahi**, com o arquivo de serviço `/etc/avahi/services/mestre.service` e a entrada de `mestre.local` em `/etc/avahi/hosts`, reescritos pelo Guardião quando o papel muda;
+  - Windows: o **Guardião**, pelo mDNS nativo do Windows (`DnsServiceRegister`; o próprio Windows já responde pelo nome `<host>.local`).
+- Nos dois casos, quem publica não é o motor: o anúncio continua com o motor fora do ar. Isso ajuda a [recuperação](../autocura/camadas.md).
+- **Na consulta,** a biblioteca de mDNS do binário faz a consulta DNS-SD de `_mestre._tcp.local` e lê o TXT.
+- Máquinas Windows precisam do perfil de rede "Privada" e das regras de firewall para broadcast e mDNS; as Linux, das regras do firewall delas. O [checklist](../plataforma/checklist.md) confere isso.
 
 ### Cache
 
-- **Motor do nó:** guarda no próprio SQLite o `core_id` e uma lista de endereços (IP ou nome e porta), cada um com a origem (configurado, broadcast ou mDNS) e o último sucesso.
-- **Guardião do nó:** faz a mesma descoberta e mantém o próprio cache num arquivo pequeno, porque não usa o banco do motor ([Guardião](../autocura/guardiao.md)).
+- **Motor:** guarda no banco local de máquina o `guild_id`, a certidão de época mais alta vista e uma lista de endereços (IP ou nome e porta) da Cidadela e das outras máquinas, cada um com a origem (configurado, broadcast, mDNS ou `guild.config`) e o último sucesso.
+- **Guardião:** faz a mesma descoberta e mantém o próprio cache num arquivo pequeno, porque não usa o banco do motor ([Guardião](../autocura/guardiao.md)).
 - Cada conexão bem-sucedida atualiza o cache. Endereços sem sucesso há 30 dias (padrão) saem da lista.
 
-### Nó fora da rede local
+### Máquina fora da rede local
 
-- O nó usa o endereço do Core configurado à mão (`core.endereco`, nome ou IP e porta), informado no instalador ou na configuração do nó.
-- Broadcast e mDNS não atravessam redes; valem só o endereço configurado e o cache.
-- A checagem de identidade é a mesma. Para o navegador abrir o painel por esse endereço, o nome entra nos nomes extras do certificado do Core ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
-- Nenhuma porta do Core é exposta diretamente na internet: o caminho até o Core é responsabilidade da rede do usuário.
+- A máquina usa o endereço configurado à mão (`guild.endereco`, nome ou IP e porta), informado no instalador (`mestre install --join <endereço>`) ou na configuração.
+- Broadcast e mDNS não atravessam redes; valem só o endereço configurado, o cache e os endereços de `guild.config`. Depois de uma troca de Cidadela, a máquina tenta os endereços das candidatas recebidos em `guild.config`.
+- A checagem de identidade é a mesma. Para o navegador abrir o painel por esse endereço, o nome entra nos nomes extras do certificado das máquinas que podem ser Cidadela ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
+- Nenhuma porta é exposta diretamente na internet: o caminho até a Cidadela é responsabilidade da rede do usuário.
 
-A CA e o `core_id` usados na checagem vêm do [pareamento](pareamento.md); os arquivos do Avahi e as regras de firewall, da [instalação](../plataforma/instalacao-e-atualizacao.md) e do [checklist](../plataforma/checklist.md).
+A CA, o `guild_id` e a certidão usados na checagem vêm da [entrada na Guilda](../guilda/guilda.md); os arquivos do Avahi e as regras de firewall, da [instalação](../plataforma/instalacao-e-atualizacao.md) e do [checklist](../plataforma/checklist.md).
 
 ## Regras e erros
 
-- A descoberta nunca faz o nó confiar num Core novo. Confiança só nasce no [pareamento](pareamento.md).
-- Uma resposta forjada só consegue apontar para um endereço que falha no TLS. O nó segue para o próximo candidato.
-- Com o endereço configurado e a descoberta desligada (`descoberta: false`), o nó usa só a configuração e o cache.
+- A descoberta nunca faz uma máquina confiar em algo novo. Confiança só nasce na entrada na Guilda.
+- Uma resposta forjada só consegue apontar para um endereço que falha no TLS ou na certidão. A máquina segue para o próximo candidato.
+- Com o endereço configurado e a descoberta desligada (`descoberta: false`), a máquina usa só a configuração e o cache.
 
 ## Critérios de aceite
 
 - **CA-DESC-01** · *rápida* — **Dado** uma rede UDP falsa, **quando** chegam duas respostas, uma com o `nonce` certo e outra com `nonce` errado, **então** só a primeira vira candidata.
-- **CA-DESC-02** · *rápida* — **Dado** um candidato com certificado de outra CA, **quando** o nó testa a identidade, **então** o candidato é descartado e o próximo é tentado.
-- **CA-DESC-03** · *rápida* — **Dado** um pedido com outro `core_id`, **quando** chega ao Core, **então** o Core não responde.
-- **CA-DESC-04** · *rápida* — **Dado** o broadcast bloqueado e um mDNS falso anunciando `_mestre._tcp`, **quando** o nó descobre, **então** conecta pelo endereço do mDNS.
-- **CA-DESC-05** · *rápida* — **Dado** o Core que mudou de IP, **quando** a conexão ao endereço em cache falha 3 vezes, **então** o nó redescobre, conecta e atualiza o cache (MVP-1).
-- **CA-DESC-06** · *completa* — **Dado** Core e nó reais na mesma máquina, sem endereço configurado e com cache vazio, **quando** o nó inicia, **então** acha o Core por broadcast e conecta.
-- **CA-DESC-07** · *pesada* — **Dado** um Core Windows instalado com o serviço `mestre-core` parado e o Guardião ativo, **quando** outra máquina consulta `_mestre._tcp.local`, **então** recebe o anúncio com o `core_id` no TXT (MVP-13).
+- **CA-DESC-02** · *rápida* — **Dado** um candidato com certificado de outra CA, **quando** a máquina testa a identidade, **então** o candidato é descartado e o próximo é tentado.
+- **CA-DESC-03** · *rápida* — **Dado** um pedido com outro `guild_id`, **quando** chega a uma máquina da Guilda, **então** ela não responde.
+- **CA-DESC-04** · *rápida* — **Dado** o broadcast bloqueado e um mDNS falso anunciando `_mestre._tcp` com `role=cidadela`, **quando** a máquina descobre, **então** conecta pelo endereço do mDNS.
+- **CA-DESC-05** · *rápida* — **Dado** a Cidadela que mudou de IP, **quando** a conexão ao endereço em cache falha 3 vezes, **então** a máquina redescobre, conecta e atualiza o cache (MVP-1).
+- **CA-DESC-06** · *completa* — **Dado** a Cidadela e uma Torre reais na mesma máquina, sem endereço configurado e com cache vazio, **quando** a Torre inicia, **então** acha a Cidadela por broadcast e conecta.
+- **CA-DESC-07** · *pesada* — **Dado** uma Cidadela Windows instalada com o serviço `mestre` parado e o Guardião ativo, **quando** outra máquina consulta `_mestre._tcp.local` e `mestre.local`, **então** recebe o anúncio com o `guild_id` e `role=cidadela` no TXT e o endereço do painel (MVP-13).
+- **CA-DESC-08** · *rápida* — **Dado** uma Torre que segue a época 1 e uma resposta de outra Torre apontando a Cidadela da época 2, **quando** a primeira descobre, **então** conecta na Cidadela da época 2 e guarda a certidão nova; **dado** só a antiga Cidadela respondendo com a época 1, **então** a Torre não conecta nela.
 
 ## Depende de
 
@@ -101,4 +105,4 @@ A CA e o `core_id` usados na checagem vêm do [pareamento](pareamento.md); os ar
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** `DnsServiceRegister`, chamado pelo Guardião (LocalSystem, sessão 0), anuncia `_mestre._tcp` e `_mestre-guardiao._tcp` na rede e mantém o anúncio enquanto o Guardião roda. **Padrão:** o mDNS nativo do Windows, como acima. **Se falhar:** o Guardião do Core publica com uma biblioteca Go de mDNS, escutando a porta 5353 em compartilhamento com o respondedor do Windows. **Onde:** CA-DESC-07 e a instalação dos usos 3 e 4 na suíte pesada.
+- **Verificar na implementação:** `DnsServiceRegister`, chamado pelo Guardião (LocalSystem, sessão 0), anuncia `_mestre._tcp` e `_mestre-guardiao._tcp`, publica o nome `mestre.local` com o endereço da máquina e mantém os anúncios enquanto o Guardião roda; retirá-los ao virar Torre funciona sem reiniciar. **Padrão:** o mDNS nativo do Windows, como acima. **Se falhar:** o Guardião publica com uma biblioteca Go de mDNS, escutando a porta 5353 em compartilhamento com o respondedor do Windows. **Onde:** CA-DESC-07 e a instalação das composições com Cidadela Windows na suíte pesada.

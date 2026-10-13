@@ -1,18 +1,18 @@
 # Autoatualização do Mestre
 
-> **Assunto:** como o motor e o Guardião de cada máquina se atualizam sozinhos a partir das Releases do GitHub: assinatura, aprovação, ordem, alternância motor/Guardião e volta automática · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** como o motor e o Guardião de cada máquina se atualizam sozinhos a partir das Releases do GitHub: assinatura, aprovação, ordem, alternância motor/Guardião e volta automática · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Levar uma versão nova do Mestre a todas as máquinas sem ninguém entrar nelas: o Core descobre a versão, confere a assinatura, pede aprovação e aplica uma peça por vez. Uma atualização que dá errado volta sozinha, e o motor e o Guardião de uma máquina nunca ficam fora ao mesmo tempo. O porquê está no [ADR 0019](../decisoes/0019-autoatualizacao-por-releases.md). Onde ficam os arquivos, a versão anterior guardada e o backup do banco: [instalação e atualização](instalacao-e-atualizacao.md). Os CLIs dos provedores têm fluxo próprio: [atualização dos CLIs](../provedores/atualizacao-dos-clis.md).
+Levar uma versão nova do Mestre a todas as máquinas sem ninguém entrar nelas: a Cidadela descobre a versão, confere a assinatura, pede aprovação e aplica uma peça por vez. Uma atualização que dá errado volta sozinha, e o motor e o Guardião de uma máquina nunca ficam fora ao mesmo tempo. O porquê está no [ADR 0019](../decisoes/0019-autoatualizacao-por-releases.md). Onde ficam os arquivos, a versão anterior guardada e o backup do banco: [instalação e atualização](instalacao-e-atualizacao.md). Os CLIs dos provedores se atualizam sozinhos, fora deste fluxo: [atualização dos CLIs](../provedores/atualizacao-dos-clis.md).
 
 ## Comportamento
 
 ### Origem e consulta
 
-- **Fonte:** Releases do repositório público do Mestre no GitHub. **Quem consulta:** só o motor do Core, por conexão de saída; os nós nunca acessam o GitHub.
+- **Fonte:** Releases do repositório público do Mestre no GitHub. **Quem consulta:** só o motor da Cidadela, por conexão de saída; as Torres nunca acessam o GitHub.
 - **Como:** `GET /repos/{dono}/{repo}/releases/latest` (ignora rascunhos e pré-lançamentos) a cada 6 h (padrão) e pelo botão "verificar agora" do painel. O pedido é condicional (`If-None-Match` com o ETag guardado) e sem autenticação; o limite de 60 pedidos por hora por IP sobra.
-- **Versão nova:** a tag é SemVer (`vX.Y.Z`), é a versão do motor e é maior que a instalada no Core. Tag igual ou menor é ignorada.
+- **Versão nova:** a tag é SemVer (`vX.Y.Z`), é a versão do motor e é maior que a instalada na Cidadela. Tag igual ou menor é ignorada.
 
 ### Pacote assinado
 
@@ -24,8 +24,8 @@ Uma release por versão, com tag única `vX.Y.Z` (a versão do motor), traz os b
 | `mestre-release.json.minisig` | assinatura Ed25519 do manifesto no formato minisign; o comentário confiável repete a `tag` |
 
 - **Chaves:** as chaves públicas aceitas (a atual e a próxima, para troca de chave) ficam **embutidas** nos dois binários. A privada fica só no computador do autor, num arquivo cifrado com senha, e as versões são assinadas lá antes de publicar ([ADR 0019](../decisoes/0019-autoatualizacao-por-releases.md)); nunca fica no repositório nem no GitHub Actions. Se a chave atual for perdida, a próxima chave embutida assume.
-- **Verificação em três pontos:** (1) o Core, ao baixar; (2) a máquina de destino, com a chave embutida no binário dela (o nó não confia no Core às cegas); (3) o ajudante de troca, logo antes de trocar o arquivo. Em cada ponto: assinatura e chave, `tag` igual no comentário e no manifesto, SHA-256 e tamanho de cada binário, e versão maior que a instalada (não se volta versão por esse caminho).
-- O Core baixa só as plataformas em uso (a dele e a dos nós pareados) e guarda as duas últimas releases verificadas.
+- **Verificação em três pontos:** (1) a Cidadela, ao baixar; (2) a máquina de destino, com a chave embutida no binário dela (a máquina não confia na Cidadela às cegas); (3) o ajudante de troca, logo antes de trocar o arquivo. Em cada ponto: assinatura e chave, `tag` igual no comentário e no manifesto, SHA-256 e tamanho de cada binário, e versão maior que a instalada (não se volta versão por esse caminho).
+- A Cidadela baixa só as plataformas em uso na Guilda e guarda as duas últimas releases verificadas.
 
 ### Aprovação
 
@@ -36,53 +36,54 @@ Uma release por versão, com tag única `vX.Y.Z` (a versão do motor), traz os b
 
 ### Ordem e alternância
 
-- **Um passo por vez no sistema inteiro:** uma **trava de atualização** no Core (a mesma usada pelos [CLIs](../provedores/atualizacao-dos-clis.md)). Core e nó nunca atualizam juntos; motor e Guardião também não.
-- **Sequência:** motor do Core → Guardião do Core → cada nó, um por vez, pela prioridade da [eleição](../autocura/camadas.md#eleição-do-nó-condutor): motor do nó → Guardião do nó. O passo do Guardião é pulado se a versão dele no manifesto for igual à instalada. Nó desligado é atualizado quando reconectar.
-- **Máquina única** (só Linux, só Windows): a sequência é só motor do Core → Guardião do Core. **Máquina do Core (Linux ou Windows):** `mestre-core` e o nó local `mestre-node` usam o mesmo binário `mestre`, então o passo do motor troca o binário uma vez e reinicia os dois (primeiro `mestre-core`, depois `mestre-node`); o ponto seguro vale para os terminais do nó local e a confirmação exige os dois saudáveis.
-- **Convivência:** o Core aceita a versão atual e a anterior do protocolo ([protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades)). Antes de começar, confere se todos os nós pareados entram na faixa nova; se algum não entrar, não começa e o Dono recebe a explicação.
+- **Um passo por vez na Guilda inteira:** uma **trava de atualização** na Cidadela. Duas máquinas nunca atualizam juntas (em especial, nunca a Cidadela e a Torre condutora); motor e Guardião também não.
+- **Sequência:** primeiro as Torres, uma por vez, da menor para a maior prioridade da [eleição](../autocura/camadas.md#eleição-da-torre-condutora) (motor da Torre → Guardião da Torre), de modo que a Torre condutora termina antes e está saudável e na versão nova quando chega a vez da Cidadela; por último, motor da Cidadela → Guardião da Cidadela. O passo do Guardião é pulado se a versão dele no manifesto for igual à instalada. Torre desligada é atualizada quando reconectar.
+- **Máquina única** (Guilda só com a Cidadela): a sequência é só motor da Cidadela → Guardião da Cidadela; o ponto seguro vale para os terminais dela.
+- **Convivência:** cada binário aceita a versão atual e a anterior do protocolo ([protocolo](../conectividade/protocolo.md)), então Torres novas conversam com a Cidadela ainda antiga. Antes de começar, a Cidadela confere se todas as máquinas da Guilda entram na faixa nova; se alguma não entrar, não começa e o Dono recebe a explicação.
 - **Nunca os dois fora:** quem vigia a troca do motor é o Guardião; quem troca e vigia o Guardião é o motor **saudável** da mesma máquina. O passo do Guardião só começa depois que o motor novo passou na confirmação; com o motor degradado, o Guardião não é atualizado.
 
 ```mermaid
 sequenceDiagram
-  participant MC as Motor do Core
-  participant GC as Guardião do Core
-  participant MN as Motor do nó
-  participant GN as Guardião do nó
-  MC->>MC: 1. troca o motor e reinicia
-  GC-->>MC: vigia a confirmação (volta versão se falhar)
-  MC->>GC: 2. troca o Guardião e reinicia o serviço
-  MC-->>GC: confere heartbeat, porta e conexão (volta se falhar)
-  MC->>MN: 3. xfer (release) + update.apply motor
+  participant MC as Motor da Cidadela
+  participant GC as Guardião da Cidadela
+  participant MN as Motor da Torre
+  participant GN as Guardião da Torre
+  MC->>MN: 1. xfer (release) + update.apply motor
   MN->>MN: troca o motor e reinicia
   GN-->>MN: vigia a confirmação (volta versão se falhar)
-  MC->>MN: 4. update.apply guardiao
+  MC->>MN: 2. update.apply guardiao
   MN->>GN: troca o Guardião e reinicia o serviço
-  MN-->>GN: confere heartbeat, porta e conexão ao Core (volta se falhar)
+  MN-->>GN: confere heartbeat, porta e conexão à Cidadela (volta se falhar)
+  Note over MC,GN: repete para cada Torre; por último a Cidadela
+  MC->>MC: 3. troca o motor e reinicia
+  GC-->>MC: vigia a confirmação (volta versão se falhar)
+  MC->>GC: 4. troca o Guardião e reinicia o serviço
+  MC-->>GC: confere heartbeat, porta e conexão (volta se falhar)
 ```
 
 ### Um passo do motor
 
-1. **Preparar:** no nó, a release chega por transferência `kind: release` ([protocolo](../conectividade/protocolo.md#transferência-em-partes)); o destino verifica tudo e confirma o `update.apply`.
+1. **Preparar:** numa Torre, a release chega por transferência `kind: release` ([protocolo](../conectividade/protocolo.md#transferência-em-partes)); o destino verifica tudo e confirma o `update.apply`.
 2. **Ponto seguro:** os terminais da máquina vão morrer; o motor espera cada personagem chegar ao ponto seguro (abaixo).
 3. **Trocar:** backup do banco ([instalação e atualização](instalacao-e-atualizacao.md)), marca "atualização em curso" (versão anterior e nova) e chamada ao **ajudante de troca**, que troca o binário guardando o anterior e reinicia o serviço.
-4. **Confirmar:** o Guardião local vigia a **janela de confirmação**, 5 min (padrão). O motor novo precisa ficar saudável a janela inteira: heartbeat local em dia, `health` respondendo pelo canal local ([Guardião](../autocura/guardiao.md#canal-local-motor--guardião)) e, no Core, `/healthz`, banco aberto com as migrações aplicadas e, no nó, `welcome` do Core recebido.
+4. **Confirmar:** o Guardião local vigia a **janela de confirmação**, 5 min (padrão). O motor novo precisa ficar saudável a janela inteira: heartbeat local em dia, `health` respondendo pelo canal local ([Guardião](../autocura/guardiao.md#canal-local-motor--guardião)) e, na Cidadela, `/healthz`, banco aberto com as migrações aplicadas e, numa Torre, `welcome` da Cidadela recebido.
 5. **Falhou** → o Guardião faz `rollback` ([lista fechada](../autocura/guardiao.md#lista-fechada-de-ações)) na hora, sem esperar o laço de queda. **Saudável** → passo concluído e personagens retomados ([personagens](../orquestracao/personagens.md#retomada-após-reinício)).
-6. **Cura durante a janela:** a máquina fica "em atualização" e a camada 3 espera, porque o Guardião local tem a vez; no Core, o Guardião (árbitro da eleição) responde `updating` aos pedidos de trava. Se até o `rollback` falhar, vale o incidente normal das [camadas](../autocura/camadas.md).
+6. **Cura durante a janela:** a máquina fica "em atualização" e a camada 3 espera, porque o Guardião local tem a vez; na Cidadela, o Guardião (árbitro da eleição) responde `updating` aos pedidos de trava. Se até o `rollback` falhar, vale o incidente normal das [camadas](../autocura/camadas.md).
 
-**Ajudante de troca:** serviço de uso único (`mestre-update`: unidade oneshot com root no Linux, serviço sob demanda com LocalSystem no Windows) que só a conta do motor pode iniciar: no Linux, uma regra do polkit dá à conta `mestre` só a ação `org.freedesktop.systemd1.manage-units` para a unidade `mestre-update.service` com o verbo `start`; no Windows, a DACL do serviço (`sc sdset`) dá a permissão de iniciar só ao SID da conta do motor que conduz a troca (`NT SERVICE\MestreCore` no Core, `NT SERVICE\MestreNode` no nó). Um teste da suíte completa em cada sistema confere que a conta do motor inicia o ajudante e outra conta não. Ele roda `mestre-guardiao apply-update` do Guardião **instalado**, que confere de novo a assinatura antes de mexer em arquivo. Assim, um motor comprometido só consegue instalar uma release assinada.
+**Ajudante de troca:** serviço de uso único (`mestre-update`: unidade oneshot com root no Linux, serviço sob demanda com LocalSystem no Windows) que só a conta do motor pode iniciar: no Linux, uma regra do polkit dá à conta `mestre` só a ação `org.freedesktop.systemd1.manage-units` para a unidade `mestre-update.service` com o verbo `start`; no Windows, a DACL do serviço (`sc sdset`) dá a permissão de iniciar só ao SID da conta do motor, `NT SERVICE\Mestre`. Um teste da suíte completa em cada sistema confere que a conta do motor inicia o ajudante e outra conta não. Ele roda `mestre-guardiao apply-update` do Guardião **instalado**, que confere de novo a assinatura antes de mexer em arquivo. Assim, um motor comprometido só consegue instalar uma release assinada.
 
 ### Um passo do Guardião
 
 É uma **atualização aprovada, não uma ação de cura**: a regra "nenhuma ação de cura altera o Guardião" ([Guardião](../autocura/guardiao.md#proteções)) continua valendo.
 
 1. O motor saudável chama o ajudante de troca para o Guardião, que guarda a versão anterior e reinicia o serviço dele.
-2. Em até 2 min (padrão), o motor confere o heartbeat do canal local, a porta do Guardião ([portas](../arquitetura/componentes.md#portas)) e, no nó, o `guardian.hello` com a versão nova recebido pelo Core.
+2. Em até 2 min (padrão), o motor confere o heartbeat do canal local, a porta do Guardião ([portas](../arquitetura/componentes.md#portas)) e, numa Torre, o `guardian.hello` com a versão nova recebido pela Cidadela.
 3. Falhou → o motor chama o ajudante para voltar a versão anterior e confere de novo.
 4. Os terminais não são afetados. O sistema operacional segue reiniciando os dois serviços ([camadas](../autocura/camadas.md#valores-padrão)).
 
 ### Ponto seguro dos terminais
 
-- Durante o passo do motor, a máquina não recebe trabalho novo: entregas ficam na caixa de entrada e recrutamentos vão a outro nó ou esperam.
+- Durante o passo do motor, a máquina não recebe trabalho novo: entregas ficam na caixa de entrada e recrutamentos vão a outra máquina ou esperam.
 - **Ponto seguro de um personagem:** `idle` com o `done` da última tarefa entregue, ou `waiting` com espera guardada pelo motor e nenhuma chamada da CLI em andamento no terminal.
 - **Prazo:** 30 min (padrão). Estourou → o passo é adiado 1 h e as entregas voltam. Depois de 3 adiamentos, Dono e Administradores escolhem "aplicar agora" (os ocupados viram `interrupted` e são retomados) ou "continuar esperando".
 - Nenhum personagem some: é retomado ou fica `interrupted` de forma visível ([camadas](../autocura/camadas.md#retomada-dos-agentes)).
@@ -112,24 +113,24 @@ Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro`
 - **Passo revertido:** a release vira `revertida`, os passos seguintes não rodam, o que já foi atualizado fica (o protocolo convive), os usuários recebem alerta "Sistema" com os logs mascarados, e aquela versão só é tentada de novo com aprovação nova.
 - Assinatura, tag, hash ou versão inválidos em qualquer ponto → `release_rejected`, alerta ao Dono, nada é trocado.
 - **Migrações do banco** são só aditivas dentro de uma versão maior, para o `rollback` funcionar sem restaurar o banco. O `rollback` com restauração do banco (backup do passo 3) é raro e nunca automático: exige Dono ou Administrador com PIN e perde tudo o que aconteceu entre a atualização e a volta ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
-- Nó fora da faixa de protocolo (desligado por muito tempo) → recebe `4003` e precisa de atualização manual.
+- Torre fora da faixa de protocolo (desligada por muito tempo) → recebe `4003` e precisa de atualização manual.
 
 ## Critérios de aceite
 
-- **CA-AUTO-01** · *rápida* — **Dado** um manifesto assinado por chave desconhecida, **quando** o Core verifica, **então** a release vira `recusada`, nenhum binário é baixado e o Dono é alertado.
-- **CA-AUTO-02** · *rápida* — **Dado** um manifesto válido e um binário com SHA-256 diferente, **quando** o nó verifica a transferência, **então** responde `release_rejected` e mantém a versão atual.
+- **CA-AUTO-01** · *rápida* — **Dado** um manifesto assinado por chave desconhecida, **quando** a Cidadela verifica, **então** a release vira `recusada`, nenhum binário é baixado e o Dono é alertado.
+- **CA-AUTO-02** · *rápida* — **Dado** um manifesto válido e um binário com SHA-256 diferente, **quando** a máquina verifica a transferência, **então** responde `release_rejected` e mantém a versão atual.
 - **CA-AUTO-03** · *rápida* — **Dado** uma release assinada com versão menor que a instalada, **quando** chega, **então** é ignorada.
 - **CA-AUTO-04** · *rápida* — **Dado** um pedido `atualizacao_mestre`, **quando** o Grão-Mestre tenta aprovar, **então** o motor recusa; com o "Aprovar" de um Administrador, a atualização começa.
-- **CA-AUTO-05** · *rápida* — **Dado** Core e nós com prioridade 200 e 100 (dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é motor e Guardião do Core, motor e Guardião do nó 200, motor e Guardião do nó 100, um passo por vez.
-- **CA-AUTO-06** · *rápida* — **Dado** um passo em curso no Core, **quando** um nó fica pronto, **então** espera a trava: Core e nó não atualizam juntos.
+- **CA-AUTO-05** · *rápida* — **Dado** uma Cidadela e Torres com prioridade 200 e 100 (dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é motor e Guardião da Torre 100, motor e Guardião da Torre 200 (a condutora), motor e Guardião da Cidadela, um passo por vez.
+- **CA-AUTO-06** · *rápida* — **Dado** um passo em curso na Torre condutora, **quando** a Cidadela fica pronta, **então** espera a trava: as duas não atualizam juntas.
 - **CA-AUTO-07** · *rápida* — **Dado** o motor de uma máquina sem heartbeat em dia, **quando** chega a vez do Guardião dela, **então** o passo não começa: motor e Guardião nunca ficam fora ao mesmo tempo.
-- **CA-AUTO-08** · *pesada* — **Dado** uma release publicada no GitHub (dublê) cujo motor sobe mas não recebe `welcome` do Core, **quando** passa a janela de confirmação, **então** a atualização do motor que falhou volta sozinha: o Guardião restaura a versão anterior, o motor fica saudável e a release vira `revertida` (MVP-2).
+- **CA-AUTO-08** · *pesada* — **Dado** uma release publicada no GitHub (dublê) cujo motor sobe mas não recebe `welcome` da Cidadela, **quando** passa a janela de confirmação, **então** a atualização do motor que falhou volta sozinha: o Guardião restaura a versão anterior, o motor fica saudável e a release vira `revertida` (MVP-2).
 - **CA-AUTO-09** · *pesada* — **Dado** uma release publicada no GitHub (dublê) cujo Guardião não abre a porta, **quando** o motor confere a saúde, **então** a atualização do Guardião que falhou volta sozinha e os usuários são alertados (MVP-2).
-- **CA-AUTO-10** · *rápida* — **Dado** um Core falso que manda binário não assinado com `update.apply`, **quando** o nó verifica, **então** recusa; o ajudante de troca também recusa um arquivo trocado depois da verificação.
-- **CA-AUTO-11** · *completa* — **Dado** um personagem `busy` no nó, **quando** chega o passo do motor, **então** o reinício espera o `done`, e depois o personagem é retomado sem sumir.
+- **CA-AUTO-10** · *rápida* — **Dado** uma Cidadela falsa que manda binário não assinado com `update.apply`, **quando** a máquina verifica, **então** recusa; o ajudante de troca também recusa um arquivo trocado depois da verificação.
+- **CA-AUTO-11** · *completa* — **Dado** um personagem `busy` na máquina, **quando** chega o passo do motor, **então** o reinício espera o `done`, e depois o personagem é retomado sem sumir.
 - **CA-AUTO-12** · *rápida* — **Dado** um incidente aberto, **quando** a release é aprovada, **então** fica `pausada` até o incidente fechar.
-- **CA-AUTO-13** · *rápida* — **Dado** o motor do Core em janela de confirmação, **quando** um Guardião de nó pede a trava de condução, **então** recebe `updating` e não conduz cura.
-- **CA-AUTO-14** · *rápida* — **Dado** uma máquina Core (Linux e Windows) sem nó remoto (dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é: troca do binário com reinício de `mestre-core` e do `mestre-node` local, confirmação dos dois, e só então o Guardião.
+- **CA-AUTO-13** · *rápida* — **Dado** o motor da Cidadela em janela de confirmação, **quando** um Guardião de Torre pede a trava de condução, **então** recebe `updating` e não conduz cura.
+- **CA-AUTO-14** · *rápida* — **Dado** uma Guilda só com a Cidadela (Linux e Windows; dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é: troca do binário com reinício do `mestre`, confirmação, e só então o Guardião.
 - **CA-AUTO-15** · *rápida* — **Dado** uma atualização revertida com migração do banco, **quando** o Guardião volta a versão, **então** faz só o `rollback` comum e o pedido de restauração do banco fica esperando Dono ou Administrador com PIN, mostrando o intervalo que será perdido.
 
 ## Depende de

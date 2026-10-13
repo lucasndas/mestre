@@ -1,6 +1,6 @@
 # CLI: issues e PRs da mesa
 
-> **Assunto:** sintaxe de `issue` e `pr`, as operações no GitHub restritas ao épico da mesa · **Componente:** CLI · **Atualizado:** 2026-10-12
+> **Assunto:** sintaxe de `issue` e `pr`, as operações no GitHub restritas ao épico da mesa · **Componente:** CLI · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -57,7 +57,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 
 - **CA-CLI-GH-01** · *rápida* — **Dado** a mesa do épico #42 e a issue #50 de outra mesa, **quando** o Mestre da mesa roda `mestre issue comment 50 "x"`, **então** sai com 3 `outside_epic` e nada é publicado.
 - **CA-CLI-GH-02** · *rápida* — **Dado** um personagem cuja classe não libera `pr`, **quando** roda `mestre pr open`, **então** sai com 3 `class_denied`.
-- **CA-CLI-GH-03** · *completa* — **Dado** um GitHub falso, **quando** o Mestre da mesa roda `mestre pr open`, **então** a branch enviada é a do espelho do Core, o PR sai com o App "Mestre" e a descrição contém `Closes #42` (MVP-5).
+- **CA-CLI-GH-03** · *completa* — **Dado** um GitHub falso, **quando** o Mestre da mesa roda `mestre pr open`, **então** a branch enviada é a do espelho da Cidadela, o PR sai com o App "Mestre" e a descrição contém `Closes #42` (MVP-5).
 - **CA-CLI-GH-04** · *rápida* — **Dado** um QA autorizado a usar `pr`, **quando** roda `mestre pr update --force`, **então** sai com 3 `level_denied`.
 - **CA-CLI-GH-05** · *completa* — **Dado** um GitHub falso que recusa o envio por falta da permissão "Workflows", **quando** roda `mestre pr update`, **então** sai com 3 `workflow_permission` e o Grão-Mestre recebe o evento na caixa de entrada.
 - **CA-CLI-GH-06** · *rápida* — **Dado** `mestre issue create --title "Testes" --parent 42`, **quando** roda na mesa do épico #42, **então** a sub-issue é criada sob a #42 com o App da classe de quem pediu.

@@ -1,10 +1,10 @@
 # Guardião
 
-> **Assunto:** o serviço separado que vigia e conserta o motor da própria máquina: lista fechada de ações, como é alcançado e o que guarda · **Componente:** Guardião · **Atualizado:** 2026-10-12
+> **Assunto:** o serviço separado que vigia e conserta o motor da própria máquina: lista fechada de ações, como é alcançado e o que guarda · **Componente:** Guardião · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Ter, em cada máquina (Core e nós), um serviço pequeno e estável que continua de pé quando o motor quebra, conserta o motor localmente e obedece só a uma lista fechada de ações. Ninguém precisa de acesso remoto à máquina. O porquê está no [ADR 0003](../decisoes/0003-autocura-com-guardiao-sem-ssh.md); binário, serviço, conta e porta estão em [componentes](../arquitetura/componentes.md).
+Ter, em cada máquina da Guilda (Cidadela e Torres), um serviço pequeno e estável que continua de pé quando o motor quebra, conserta o motor localmente e obedece só a uma lista fechada de ações. Ninguém precisa de acesso remoto à máquina. O porquê está no [ADR 0003](../decisoes/0003-autocura-com-guardiao-sem-ssh.md); binário, serviço, conta e porta estão em [componentes](../arquitetura/componentes.md).
 
 ## Comportamento
 
@@ -15,10 +15,11 @@ Ter, em cada máquina (Core e nós), um serviço pequeno e estável que continua
 - Não roda agentes de trabalho e não guarda estado do produto, com as exceções da seção "O que guarda".
 - Vigia o motor; o sistema operacional vigia o Guardião ([camadas](camadas.md)).
 - Tarefas próprias além da vigilância:
-  - conduzir a cura do Core quando o nó dele é o condutor ([camadas](camadas.md#eleição-do-nó-condutor));
-  - servir a [página reserva](pagina-reserva.md) (nos nós e, no [modo máquina única](camadas.md#modo-máquina-única), no Core);
-  - conduzir o [Telegram em modo reduzido](telegram-modo-reduzido.md) (no nó condutor ou, no modo máquina única, no Core);
-  - no Core Windows, manter o anúncio mDNS ([descoberta](../conectividade/descoberta.md#mdns));
+  - conduzir a cura da Cidadela quando a Torre dele é a condutora ([camadas](camadas.md#eleição-da-torre-condutora)) e, se ela não volta, propor a promoção ([camadas](camadas.md#cidadela-que-não-volta-proposta-de-promoção));
+  - servir a [página reserva](pagina-reserva.md) (em qualquer Torre e, no [modo máquina única](camadas.md#modo-máquina-única), na Cidadela);
+  - conduzir o [Telegram em modo reduzido](telegram-modo-reduzido.md) (na Torre condutora ou, no modo máquina única, na Cidadela);
+  - na Cidadela Windows, manter o anúncio mDNS, que muda de máquina junto com a Cidadela ([descoberta](../conectividade/descoberta.md#mdns));
+  - guardar a **época** da Guilda e recusar pedido com época menor ([Cidadela e Torres](../guilda/cidadela-e-torres.md));
   - iniciar o [diagnóstico com IA](diagnostico-com-ia.md).
 
 ### O que vigia
@@ -27,7 +28,7 @@ Ter, em cada máquina (Core e nós), um serviço pequeno e estável que continua
 |---|---|---|
 | Processo vivo | estado do serviço (systemd / gerenciador de serviços do Windows) | — |
 | Heartbeat interno | o motor manda "vivo" pelo canal local motor ↔ Guardião | [valores padrão](camadas.md#valores-padrão) |
-| Saúde respondendo | pedido `health` pelo canal local (abaixo) a cada 15 s, tempo limite 3 s (padrão); no Core, também `GET /healthz` na porta do painel ([componentes](../arquitetura/componentes.md#portas)) | 3 falhas seguidas = travado |
+| Saúde respondendo | pedido `health` pelo canal local (abaixo) a cada 15 s, tempo limite 3 s (padrão); na Cidadela, também `GET /healthz` na porta do painel ([componentes](../arquitetura/componentes.md#portas)) | 3 falhas seguidas = travado |
 | Disco | espaço livre na partição de dados do Mestre | [valores padrão](camadas.md#valores-padrão) |
 | Memória | memória livre do sistema e memória do motor | aviso com menos de 5% livre por 2 min (padrão) |
 
@@ -55,16 +56,16 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 | Quem | A qual Guardião | Por onde |
 |---|---|---|
 | O próprio Guardião (camada 2 e, no modo máquina única, o incidente inteiro) | o local | — |
-| Motor do Core | Guardião de um nó | conexão WSS própria do Guardião do nó |
-| Guardião do nó condutor | Guardião do Core | TLS na porta do Guardião do Core (certificado próprio do Guardião do Core), com certificado de nó |
-| Usuário logado (Dono ou Administrador) | o do nó, ou o do Core por ele | painel (pelo Core), [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md) |
+| Motor da Cidadela | Guardião de uma Torre | conexão WSS própria do Guardião da Torre |
+| Guardião da Torre condutora | Guardião da Cidadela | TLS na porta do Guardião da Cidadela (certificado próprio do Guardião da Cidadela), com certificado de máquina |
+| Usuário logado (Dono ou Administrador) | o da máquina, ou o da Cidadela por ele | painel (pela Cidadela), [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md) |
 
 ### Como é alcançado
 
-- **Guardião de nó:** mantém a própria conexão WSS de saída até o motor do Core, separada da do motor do nó, com credencial própria emitida no [pareamento](../conectividade/pareamento.md). Reconecta com backoff. Assim o Core fala com ele mesmo com o motor do nó morto, sem porta aberta no nó.
-- **Guardião do Core:** escuta na porta própria ([componentes](../arquitetura/componentes.md#portas)), com **certificado próprio** de servidor da CA interna ([pareamento](../conectividade/pareamento.md)), e só aceita clientes com certificado de nó válido e não revogado (mTLS). Quando o motor do Core cai, os nós continuam chegando pelo mesmo endereço.
-- O canal do Guardião com o Core tem **versão de protocolo própria** (v1), separada da do motor, e muda raramente.
-- **Canal local no Windows:** o Guardião roda como LocalSystem e cria o pipe `\\.\pipe\mestre-guardiao` com SDDL que dá acesso só a SYSTEM e às contas dos serviços do motor daquela máquina: `NT SERVICE\MestreNode` e, no Core, `NT SERVICE\MestreCore`; com `PIPE_REJECT_REMOTE_CLIENTS`. Um teste da suíte completa no Windows confere que os motores escrevem no pipe e que outra conta não abre.
+- **Guardião de Torre:** mantém a própria conexão WSS de saída até o motor da Cidadela atual, separada da do motor da Torre, com credencial própria emitida na [entrada na Guilda](../guilda/guilda.md). Reconecta com backoff e, depois de uma troca de Cidadela, conecta na nova. Assim a Cidadela fala com ele mesmo com o motor da Torre morto, sem porta aberta na Torre.
+- **Guardião da Cidadela:** escuta na porta própria ([componentes](../arquitetura/componentes.md#portas)), com **certificado próprio** de servidor da CA interna da Guilda ([Guilda](../guilda/guilda.md)), e só aceita clientes com certificado de máquina válido e não revogado (mTLS). Quando o motor da Cidadela cai, as Torres continuam chegando pelo mesmo endereço. O papel segue a Cidadela: na promoção, o Guardião da máquina promovida passa a agir como Guardião da Cidadela; o da antiga, ao voltar, passa a Guardião de Torre.
+- O canal do Guardião com a Cidadela tem **versão de protocolo própria** (v1), separada da do motor, e muda raramente.
+- **Canal local no Windows:** o Guardião roda como LocalSystem e cria o pipe `\\.\pipe\mestre-guardiao` com SDDL que dá acesso só a SYSTEM e à conta do serviço do motor, `NT SERVICE\Mestre`; com `PIPE_REJECT_REMOTE_CLIENTS`. Um teste da suíte completa no Windows confere que o motor escreve no pipe e que outra conta não abre.
 
 ### Canal local motor ↔ Guardião
 
@@ -73,10 +74,10 @@ Socket Unix ou named pipe da própria máquina ([canais locais](../arquitetura/c
 | Tipo | Sentido | Conteúdo |
 |---|---|---|
 | `heartbeat` | motor → Guardião | "vivo", versão do motor, hora; a cada 5 s ([valores padrão](camadas.md#valores-padrão)) |
-| `health` / `health.result` | Guardião → motor → Guardião | banco aberto e migrado, conexão com o Core (no nó), filas; `ok` ou o item que falhou |
-| `replica` | motor → Guardião | a réplica restrita do cofre e o estado "travado", com versão crescente ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)); só o Guardião do Core a recebe por aqui |
-| `revoked` | motor → Guardião | lista de certificados revogados (Guardião do Core) |
-| `nodes` | motor → Guardião | lista de nós com prioridade e endereços, valores da autocura e ficha de diagnóstico |
+| `health` / `health.result` | Guardião → motor → Guardião | banco aberto e migrado, conexão com a Cidadela (na máquina), filas; `ok` ou o item que falhou |
+| `replica` | motor → Guardião | a réplica restrita do cofre e o estado "travado", com versão crescente ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)); só o Guardião da Cidadela a recebe por aqui |
+| `revoked` | motor → Guardião | lista de certificados revogados (Guardião da Cidadela) |
+| `guild` | motor → Guardião | máquinas da Guilda com papel, prioridade e endereços, a época, valores da autocura e ficha de diagnóstico |
 | `update.prepare` / `update.done` | motor ↔ Guardião | coordenação das trocas de versão ([atualização automática](../plataforma/autoatualizacao.md)) |
 | `ack` | os dois | confirma o `id` recebido |
 
@@ -84,13 +85,14 @@ Socket Unix ou named pipe da própria máquina ([canais locais](../arquitetura/c
 
 | Item | Onde | Observação |
 |---|---|---|
-| Chave privada e certificado do Guardião | pasta do Guardião, protegida pelo SO | [pareamento](../conectividade/pareamento.md) |
-| Token do bot e lista de usuários, criptografados | Guardiões de nó; no modo máquina única, o do Core | réplica restrita do [cofre](../plataforma/cofre.md#réplica-para-os-guardiões) |
-| Estado "travado" do sistema | Guardiões de nó; no modo máquina única, o do Core | não é segredo; recebido do Core ([segurança do canal](../telegram/seguranca-do-canal.md)) |
-| Lista de nós com prioridade e endereços | todos | cache para a eleição |
-| Valores padrão da autocura | todos | recebidos do Core |
+| Chave privada e certificado do Guardião | pasta do Guardião, protegida pelo SO | [Guilda](../guilda/guilda.md) |
+| Token do bot e lista de usuários, criptografados | Guardiões de Torre; no modo máquina única, o da Cidadela | réplica restrita do [cofre](../plataforma/cofre.md#réplica-para-os-guardiões) |
+| Estado "travado" do sistema | Guardiões de Torre; no modo máquina única, o da Cidadela | não é segredo; recebido da Cidadela ([segurança do canal](../telegram/seguranca-do-canal.md)) |
+| Máquinas da Guilda com papel, prioridade e endereços | todos | cache para a eleição |
+| Época atual da Guilda | todos | recebida da Cidadela e gravada a cada mudança; base da recusa de época menor |
+| Valores padrão da autocura | todos | recebidos da Cidadela |
 | Configuração de diagnóstico (ficha resolvida) | todos | [diagnóstico com IA](diagnostico-com-ia.md#ficha-de-diagnóstico) |
-| Registro local de auditoria | todos | linhas JSON só de acréscimo; enviado ao Core quando há conexão e apagado depois de confirmado |
+| Registro local de auditoria | todos | linhas JSON só de acréscimo; enviado à Cidadela quando há conexão e apagado depois de confirmado |
 
 ### Rollback com restauração do banco
 
@@ -106,7 +108,7 @@ Ação **rara e nunca automática**: só existe quando uma atualização migrou 
 
 - Ação desconhecida → `unknown_action`, auditada.
 - Quem pede sem credencial válida → conexão recusada e alerta ao Dono.
-- Sem conexão com o Core → continua a camada 2 sozinho e acumula a auditoria local.
+- Sem conexão com a Cidadela → continua a camada 2 sozinho e acumula a auditoria local.
 - Guardião fora → o motor segue funcionando; o SO o reinicia e o checklist acusa.
 
 ## Critérios de aceite
@@ -116,10 +118,10 @@ Ação **rara e nunca automática**: só existe quando uma atualização migrou 
 - **CA-GUARD-03** · *rápida* — **Dado** um log com um token falso, **quando** `logs` responde, **então** o token aparece mascarado.
 - **CA-GUARD-04** · *rápida* — **Dado** um script que cita `mestre-guardiao`, **quando** é submetido, **então** é recusado com `affects_guardian`.
 - **CA-GUARD-05** · *rápida* — **Dado** um `restart` em curso, **quando** chega outro pedido, **então** ele recebe `busy`.
-- **CA-GUARD-06** · *completa* — **Dado** o motor do nó parado, **quando** o Core pede `status` e `logs`, **então** o Guardião do nó responde pela conexão própria.
-- **CA-GUARD-07** · *completa* — **Dado** o motor do Core parado, **quando** um nó com certificado válido chama o Guardião do Core, **então** recebe `status`; sem certificado de nó, a conexão TLS é recusada.
+- **CA-GUARD-06** · *completa* — **Dado** o motor da máquina parado, **quando** a Cidadela pede `status` e `logs`, **então** o Guardião da máquina responde pela conexão própria.
+- **CA-GUARD-07** · *completa* — **Dado** o motor da Cidadela parado, **quando** uma máquina com certificado válido chama o Guardião da Cidadela, **então** recebe `status`; sem certificado de máquina, a conexão TLS é recusada.
 - **CA-GUARD-08** · *rápida* — **Dado** um `rollback` com restauração do banco sem aprovação, **quando** é pedido, **então** fica esperando aprovação de Dono ou Administrador com PIN, o pedido mostra o intervalo que será perdido e nada é feito; nenhuma camada da autocura o pede sozinha.
-- **CA-GUARD-09** · *rápida* — **Dado** o motor do nó vivo mas sem responder `health` por 3 ciclos no relógio falso, **quando** o Guardião avalia, **então** marca o motor como travado; **dado** uma mensagem do canal local com `v` = 2, **então** é recusada e registrada.
+- **CA-GUARD-09** · *rápida* — **Dado** o motor da máquina vivo mas sem responder `health` por 3 ciclos no relógio falso, **quando** o Guardião avalia, **então** marca o motor como travado; **dado** uma mensagem do canal local com `v` = 2, **então** é recusada e registrada.
 
 ## Depende de
 
@@ -127,4 +129,4 @@ Ação **rara e nunca automática**: só existe quando uma atualização migrou 
 - [Segurança](../arquitetura/seguranca.md)
 - [Cofre](../plataforma/cofre.md)
 - [Protocolo](../conectividade/protocolo.md)
-- [Pareamento](../conectividade/pareamento.md)
+- [Guilda](../guilda/guilda.md)

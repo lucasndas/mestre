@@ -1,6 +1,6 @@
 # Sessão zero do workspace
 
-> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, versionamento e teste de aprovação de App · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -26,7 +26,7 @@ flowchart TD
 ```
 
 1. **Apps fixos** (etapa `apps`)**:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, a etapa `apps` fica esperando: o motor acrescenta o repositório à instalação pela API, com a credencial pessoal do Dono, ou o Dono recebe o link para instalar (primeira instalação) ou marcar o repositório na instalação ([criacao-de-apps](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas), [identidades-e-apps](../github/identidades-e-apps.md)).
-2. **Espelho** (etapa `mirror`)**:** o motor clona o repositório sem cópia de trabalho (`--bare`) na pasta de dados do Core (padrão `workspaces/<slug>/espelho.git`; [persistencia](../arquitetura/persistencia.md)), com um token de instalação do App "Grão-Mestre". Daí sai o **clone principal** (padrão `workspaces/<slug>/principal/`), onde o Grão-Mestre trabalha. Como mesas e nós usam o espelho: [mesas](../orquestracao/mesas.md).
+2. **Espelho** (etapa `mirror`)**:** o motor clona o repositório sem cópia de trabalho (`--bare`) na pasta de dados da Cidadela (padrão `workspaces/<slug>/espelho.git`; [persistencia](../arquitetura/persistencia.md)), com um token de instalação do App "Grão-Mestre". Daí sai o **clone principal** (padrão `workspaces/<slug>/principal/`), onde o Grão-Mestre trabalha. Como as mesas e as máquinas da Guilda usam o espelho: [mesas](../orquestracao/mesas.md).
 3. **`.mestre/` e arquivos gerados** (etapa `files`)**:** o motor cria a estrutura abaixo (sem apagar nada que já exista) e gera, no clone principal, os mesmos arquivos que gera em cada worktree de mesa ([mesa](mesa.md)). Até o usuário responder à pergunta de versionamento, `.mestre/` fica só local.
 4. **Grão-Mestre:** ao fim da etapa `files`, o motor inicia o Grão-Mestre (fixo e protegido); ele já conversa com os usuários, mas mesas só se abrem com o workspace `active`. As etapas seguintes (`analysis` e `approval_test`) são conduzidas pelo Grão-Mestre e pelo motor, cada uma visível no painel como pendente, feita ou com erro; concluída a `approval_test`, o workspace vai para `active`.
 
@@ -49,7 +49,7 @@ flowchart TD
 ├── mesas/<mesa>/
 │   ├── classes/<classe>/            classes criadas na mesa
 │   └── pergaminhos/                 pergaminhos e tomos da mesa   → pergaminhos-e-tomos
-├── modelos/VERSAO                   versão dos modelos do Core em uso (personagem)
+├── modelos/VERSAO                   versão dos modelos da Cidadela em uso (personagem)
 ├── agents/<id>/                     execução: camada do Mestre e arquivos por personagem
 ├── anexos/                          execução: anexos recebidos    → anexos-e-transcricao
 └── run/                             execução: estado local, cópias de classes nos worktrees
@@ -57,7 +57,7 @@ flowchart TD
 - O formato de cada arquivo é do documento indicado à direita ([teto-do-workspace](../classes/teto-do-workspace.md), [politica](../aprovacoes/politica.md), [grao-mestre](../orquestracao/grao-mestre.md), [mestre-da-mesa](../orquestracao/mestre-da-mesa.md), [classes](../classes/classes.md), [pergaminhos-e-tomos](../orquestracao/pergaminhos-e-tomos.md), [anexos-e-transcricao](../telegram/anexos-e-transcricao.md), [personagem](personagem.md)).
 - `teto.yaml` e `politica-de-aprovacao.yaml` nascem com o padrão sensato definido nos documentos donos.
 - **Arquivos de execução** (`agents/`, `anexos/`, `run/`) nunca vão para o git, qualquer que seja a escolha abaixo.
-- A fonte de `.mestre/` é o clone principal no Core; o que cada worktree recebe está em [mesa](mesa.md).
+- A fonte de `.mestre/` é o clone principal na Cidadela; o que cada worktree recebe está em [mesa](mesa.md).
 
 ### Versionar ou não `.mestre/`
 - O Grão-Mestre pergunta aos usuários (Administrador ou acima) se `.mestre/`, menos os arquivos de execução, deve ser versionado no projeto ou ficar só local.

@@ -1,6 +1,6 @@
 # Esperas e caixa de entrada
 
-> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Esperar é responsabilidade do **motor**, nunca de um agente parado em loop cons
 
 ### Caixa de entrada
 
-Uma fila por personagem, no banco do Core. Cada item tem: `id`, destino, tipo (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`), remetente, texto, anexos, origem (só para `user`: canal, usuário, nível, conversa e mensagem respondida), referências (ask, espera, mesa, missão), criado em e estado (`queued` → `delivered`, ou `expired`/`cancelled`).
+Uma fila por personagem, no banco da Cidadela. Cada item tem: `id`, destino, tipo (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`), remetente, texto, anexos, origem (só para `user`: canal, usuário, nível, conversa e mensagem respondida), referências (ask, espera, mesa, missão), criado em e estado (`queued` → `delivered`, ou `expired`/`cancelled`).
 
 **Prioridade** (dentro de cada nível, ordem de chegada): 1) mensagens do Dono; 2) mensagens dos demais usuários; 3) todo o resto. Usuários só escrevem ao Grão-Mestre ([roteamento](../telegram/roteamento.md)).
 
@@ -48,7 +48,7 @@ Usuários com nível para isso ainda podem digitar direto num terminal pelo canv
 | Aprovação | a aprovação é decidida ([fluxo](../aprovacoes/fluxo.md)) | motor |
 | Horário | chega o horário | `mestre wait --until` |
 | Vaga (`waiting_slot`) | abre vaga ([limites](personagens.md#limites)) | motor, para etapas e para `recruit`/`spawn` diretos |
-| Sincronização | sincronização concluída ([mesas](mesas.md#worktree-por-nó-e-sincronização)) | motor, só para etapas |
+| Sincronização | sincronização concluída ([mesas](mesas.md#worktree-por-máquina-e-sincronização)) | motor, só para etapas |
 
 `mestre wait` **registra e retorna na hora**; o agente deve encerrar o turno. Quando a espera é satisfeita, o motor coloca um item `wake` com o resultado na fila de quem espera.
 
@@ -110,7 +110,7 @@ Filas, esperas, `ask` abertos e o grafo ficam no banco. Depois de uma queda, o m
 - **CA-ESP-04** · *rápida* — **Dado** relógio falso, **quando** um `ask` passa de 90 s, **então** retorna "sem resposta no prazo"; **quando** o alvo faz ask back depois, **então** a resposta chega completa como `answer` e nenhum reenvio ocorreu.
 - **CA-ESP-05** · *rápida* — **Dado** espera `todas` em QA e Revisor, **quando** só o QA conclui, **então** continua `active`; **quando** o Revisor conclui, **então** vira `satisfied` e chega um `wake`.
 - **CA-ESP-06** · *rápida* — **Dado** A esperando B, **quando** B registra espera por A, **então** um aviso de impasse com "A → B → A" é emitido uma única vez.
-- **CA-ESP-07** · *completa* — **Dado** esperas e filas no banco, **quando** o Core reinicia, **então** voltam iguais e uma espera de horário vencida durante a queda é satisfeita.
+- **CA-ESP-07** · *completa* — **Dado** esperas e filas no banco, **quando** a Cidadela reinicia, **então** voltam iguais e uma espera de horário vencida durante a queda é satisfeita.
 - **CA-ESP-09** · *rápida* — **Dado** um alvo `busy`, outro `blocked` por `permission` e outro `blocked` por `input`, **quando** chega `ask --raw` para cada um, **então** os dois primeiros são recusados (`busy`, `permission_prompt`) sem nada digitado e o terceiro recebe a entrada na hora.
 - **CA-ESP-10** · *rápida* — **Dado** uma mensagem do Lucas (Dono) pelo Telegram citando a mesa 42-login, **quando** é entregue ao Grão-Mestre, **então** a primeira linha é `[Mestre · user · de Lucas (Dono) · via Telegram · mesa 42-login · <id>]`.
 - **CA-ESP-08** · *pesada* — **Dado** uma missão com etapas paralelas e um ask back, **quando** ela roda até o fim, **então** as esperas aparecem e são resolvidas sem reenvio (MVP-4).

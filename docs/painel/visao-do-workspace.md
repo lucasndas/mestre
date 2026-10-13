@@ -1,6 +1,6 @@
 # Visão do workspace
 
-> **Assunto:** tela do workspace com o Grão-Mestre ao centro e as mesas ao redor, e o seletor de workspaces · **Componente:** Painel · **Atualizado:** 2026-10-12
+> **Assunto:** tela do workspace com o Grão-Mestre ao centro e as mesas ao redor, e o seletor de workspaces · **Componente:** Painel · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -12,7 +12,7 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 
 - Fica no topo de todas as telas do painel.
 - Lista só os workspaces que o usuário pode ver ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); o Dono vê todos.
-- O último workspace aberto fica lembrado por usuário (no banco do Core, não no navegador).
+- O último workspace aberto fica lembrado por usuário (no banco da Cidadela, não no navegador).
 - Criar workspace (Dono ou Administrador) abre o fluxo de [sessão zero do workspace](../sessao-zero/workspace.md). Enquanto o workspace está `preparing`, a tela mostra a etapa atual da sessão zero, as concluídas e o erro de uma etapa que falhou, com o botão "tentar de novo" ([estados do workspace](../orquestracao/workspaces.md#estados)).
 
 ### Layout
@@ -30,7 +30,7 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 | Status | estado da mesa ([mesas](../orquestracao/mesas.md#estados)) e a marca "pausada", quando houver |
 | Branch | nome da branch da mesa (ex.: `epico/42-login`) |
 | Em andamento | a issue da missão atual, com link, e a etapa atual |
-| Party | quantos personagens, e em quais nós (selos) |
+| Party | quantos personagens, e em quais máquinas (selos) |
 | Esperas | marcador quando a mesa está aguardando algo (aprovação, cota, outra mesa), com o motivo |
 | PR | link do PR da mesa, quando existir |
 | Uso | consumo da mesa em relação ao limite, quando houver limite ([limites de uso](../plataforma/limites-de-uso.md)) |
@@ -43,7 +43,7 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 
 - Abrir a [conversa com o Grão-Mestre](conversa-e-aprovacoes.md) do workspace.
 - Contador de aprovações pendentes do usuário, que leva à [central de aprovações](conversa-e-aprovacoes.md#central-de-aprovações).
-- Selo de saúde (Core e nós), que leva a [administração](administracao.md#saúde-dos-nós).
+- Selo de saúde (Cidadela e Torres), que leva a [administração](administracao.md#guilda-e-saúde-das-máquinas).
 
 ## Regras e erros
 

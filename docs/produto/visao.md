@@ -1,12 +1,12 @@
 # Visão do produto
 
-> **Assunto:** objetivo do Mestre, público, princípios e como as peças se relacionam · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** objetivo do Mestre, público, princípios e como as peças se relacionam · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 ## Para que serve
 
 O **Mestre** é um orquestrador de agentes de IA (Claude Code, Codex, Antigravity CLI ou um shell comum) que trabalham juntos em repositórios do GitHub. É inspirado no Maestri (themaestri.app), com duas diferenças centrais:
 
-- **Distribuído:** um **Core** e vários **nós**, cada um em Linux ou Windows; também roda numa máquina só, de qualquer dos dois sistemas ([ADR 0020](../decisoes/0020-quatro-usos-core-em-linux-ou-windows.md)). Os agentes rodam onde houver a capacidade de que precisam, e conversam entre si de forma transparente, estejam no mesmo nó ou não.
+- **Distribuído:** a mesma instalação em cada máquina, Linux ou Windows, forma uma **Guilda**: uma máquina no comando, a **Cidadela**, e as outras, as **Torres**; também roda numa máquina só, de qualquer dos dois sistemas ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)). Os agentes rodam na máquina cuja ficha atende ao que eles precisam e conversam entre si de forma transparente, estejam na mesma máquina ou não. Se a Cidadela cai de vez, uma Torre assume com a aprovação do Dono.
 - **Autocura:** cada máquina tem um **Guardião** que vigia e conserta o motor local, sem SSH ([ADR 0003](../decisoes/0003-autocura-com-guardiao-sem-ssh.md)).
 
 O usuário pede uma funcionalidade em linguagem natural (pelo Telegram ou pelo painel) e o Mestre transforma o pedido em trabalho de um time de agentes, até o PR aprovado e integrado no GitHub.
@@ -37,7 +37,7 @@ Uso não comercial; o código é disponível sob a PolyForm Noncommercial 1.0.0 
 
 | Nível | O que é | Quem coordena | No GitHub |
 |---|---|---|---|
-| **Workspace** | um repositório do GitHub (espelho e clone principal no Core) | o **Grão-Mestre** | o repositório |
+| **Workspace** | um repositório do GitHub (espelho e clone principal na Cidadela) | o **Grão-Mestre** | o repositório |
 | **Mesa** | um pedido: um worktree com a sua branch, ligado a um épico | o **Mestre da mesa** | issue com rótulo `epico` ([ADR 0015](../decisoes/0015-epico-como-rotulo.md)) |
 | **Missão** | um fluxo de etapas dentro da mesa | o motor, montada pelo Mestre da mesa | sub-issue do épico |
 | **Etapa** | um passo da missão | o personagem que a executa | sub-issue da missão (opcional) |
@@ -66,12 +66,12 @@ flowchart LR
 
 1. O usuário pede ao Grão-Mestre: "implementa o login com testes".
 2. O Grão-Mestre cria o épico "Login" no GitHub, abre a mesa `epico/42-login` e recruta o Mestre dessa mesa.
-3. O Mestre da mesa monta uma missão (ex.: Dev → Revisor → QA); o motor recruta os personagens a partir das fichas, escolhe os nós e cria as conexões.
+3. O Mestre da mesa monta uma missão (ex.: Dev → Revisor → QA); o motor recruta os personagens a partir das fichas, escolhe as máquinas e cria as conexões.
 4. Ao terminar, o Mestre da mesa abre o PR do épico e avisa o Grão-Mestre, que revisa e, se a política permitir, aprova; na dúvida, pergunta ao usuário pelo Telegram ([política de aprovação](../aprovacoes/politica.md)).
 5. O merge acontece, a mesa é encerrada e o Grão-Mestre manda um resumo.
 
 ### Onde cada coisa roda
 
-O Core guarda o estado e serve o painel, e o nó local dele roda o Grão-Mestre; os nós rodam agentes, todos de terminal, sem interface gráfica; o Guardião de cada máquina cuida do motor local. Detalhes em [componentes](../arquitetura/componentes.md).
+A Cidadela guarda o estado, serve o painel e roda o Grão-Mestre; personagens rodam em qualquer máquina da Guilda, todos de terminal, sem interface gráfica; as Torres guardam uma réplica do banco e vigiam a Cidadela; o Guardião de cada máquina cuida do motor local. Detalhes em [Cidadela e Torres](../guilda/cidadela-e-torres.md) e [componentes](../arquitetura/componentes.md).
 
 O que é o MVP e os critérios globais: [escopo do MVP](escopo-mvp.md).

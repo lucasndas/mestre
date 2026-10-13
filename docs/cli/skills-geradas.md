@@ -1,6 +1,6 @@
 # Skills geradas da CLI
 
-> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-12
+> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -38,7 +38,7 @@ description: >-
 - `name` em minúsculas com hífen e prefixo `mestre-` (o prefixo também permite achar e excluir do git só as skills do Mestre). `description` em inglês, até 500 caracteres (padrão), dizendo o que faz e quando usar. O limite fica bem abaixo do corte do Claude Code (1.536) e não depende dos limites não documentados do Codex e do Antigravity; a etapa 3 do [teste de conformidade](../provedores/conformidade.md) mostra se a skill é achada.
 - A linha de comentário logo abaixo é o marcador de arquivo gerado, com a versão do modelo.
 - Corpo em inglês, como o resto do texto voltado aos agentes; até ~6 KiB por skill (padrão), sem arquivos auxiliares.
-- A parte de sintaxe (uso, flags, códigos de saída) é gerada da mesma definição de comandos que produz o `--help` ([convencoes](convencoes.md)); o texto de orientação vem do modelo versionado no Core ([personagem](../sessao-zero/personagem.md)).
+- A parte de sintaxe (uso, flags, códigos de saída) é gerada da mesma definição de comandos que produz o `--help` ([convencoes](convencoes.md)); o texto de orientação vem do modelo versionado na Cidadela ([personagem](../sessao-zero/personagem.md)).
 
 ### Esboço de cada skill
 

@@ -1,6 +1,6 @@
 # Pergaminhos e tomos
 
-> **Assunto:** notas em Markdown no canvas (pergaminhos), grupos de notas (tomos), operações, concorrência e o pergaminho da missão · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** notas em Markdown no canvas (pergaminhos), grupos de notas (tomos), operações, concorrência e o pergaminho da missão · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,9 +10,9 @@ Pergaminhos são notas em Markdown que usuários e agentes conectados leem e esc
 
 ### Arquivo e índice
 
-- Pergaminhos existem **só dentro das mesas** (a visão do workspace não tem pergaminhos). Cada um é um arquivo Markdown no Core, com o clone principal como fonte: `.mestre/mesas/<mesa>/pergaminhos/<id>.md`. O `<id>` é imutável (`p0001`, `p0002`… por mesa), para o arquivo não mudar de nome quando o título muda.
+- Pergaminhos existem **só dentro das mesas** (a visão do workspace não tem pergaminhos). Cada um é um arquivo Markdown na Cidadela, com o clone principal como fonte: `.mestre/mesas/<mesa>/pergaminhos/<id>.md`. O `<id>` é imutável (`p0001`, `p0002`… por mesa), para o arquivo não mudar de nome quando o título muda.
 - O banco guarda só o índice e as conexões: id, mesa, nome, se o nome é fixo, tomo, revisão, tamanho, autor e data da última alteração ([persistência](../arquitetura/persistencia.md)).
-- Nos worktrees onde há personagens (Core e nós), o motor mantém cópias somente leitura atualizadas a cada mudança ([materialização](../sessao-zero/mesa.md)). Alterações vão sempre pela CLI ou pelo canvas; editar a cópia direto não tem efeito e é sobrescrito.
+- Nos worktrees onde há personagens (Cidadela e Torres), o motor mantém cópias somente leitura atualizadas a cada mudança ([materialização](../sessao-zero/mesa.md)). Alterações vão sempre pela CLI ou pelo canvas; editar a cópia direto não tem efeito e é sobrescrito.
 - Se `.mestre/` é versionado no projeto ou não é decidido na [sessão zero do workspace](../sessao-zero/workspace.md).
 
 ### Nome
@@ -34,7 +34,7 @@ Sintaxe de `mestre note create|read|write|edit|stack|delete` em [comunicação](
 | `delete` | apaga; só com pedido explícito de um usuário autorizado ([convenções da CLI](../cli/convencoes.md)) |
 
 - **Quem:** agentes só operam pergaminhos visíveis para eles ([conexões](conexoes.md#visibilidade)). Usuários Administrador ou acima editam no canvas; os demais níveis só leem.
-- **Concorrência:** o Core aplica as mudanças uma de cada vez, na ordem de chegada; cada uma aumenta a revisão em 1 e é enviada ao canvas na hora ([canvas](../painel/canvas.md)).
+- **Concorrência:** a Cidadela aplica as mudanças uma de cada vez, na ordem de chegada; cada uma aumenta a revisão em 1 e é enviada ao canvas na hora ([canvas](../painel/canvas.md)).
 - **Tamanho máximo:** 256 KiB por pergaminho (padrão configurável).
 
 ### Tomos
@@ -71,7 +71,7 @@ Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 - **CA-PERG-02** · *rápida* — **Dado** um pergaminho com o trecho "TODO" duas vezes, **quando** um agente faz `edit` de "TODO", **então** falha por ambiguidade e nada muda.
 - **CA-PERG-03** · *rápida* — **Dado** a revisão 4, **quando** dois `write` chegam esperando a revisão 4, **então** o primeiro vence (revisão 5) e o segundo falha.
 - **CA-PERG-04** · *rápida* — **Dado** um tomo conectado ao QA, **quando** um pergaminho novo é empilhado nele, **então** o QA passa a lê-lo.
-- **CA-PERG-05** · *completa* — **Dado** um personagem num nó, **quando** o pergaminho muda no Core, **então** a cópia no worktree do nó é atualizada.
+- **CA-PERG-05** · *completa* — **Dado** um personagem numa máquina, **quando** o pergaminho muda na Cidadela, **então** a cópia no worktree da máquina é atualizada.
 - **CA-PERG-06** · *pesada* — **Dado** o painel aberto, **quando** um agente escreve num pergaminho da mesa, **então** o canvas mostra a mudança sem recarregar (MVP-11).
 - **CA-PERG-07** · *rápida* — **Dado** o Grão-Mestre, **quando** chama `mestre note create`, **então** é recusado porque pergaminhos só existem em mesas, e nenhum arquivo é criado fora de `.mestre/mesas/`.
 

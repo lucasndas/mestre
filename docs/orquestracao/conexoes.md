@@ -1,6 +1,6 @@
 # Conexões
 
-> **Assunto:** conexões automáticas e manuais entre personagens e pergaminhos, e o que cada agente enxerga · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** conexões automáticas e manuais entre personagens e pergaminhos, e o que cada agente enxerga · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -45,7 +45,7 @@ Para um agente X, o motor calcula na hora de cada comando:
 - **Pergaminhos visíveis:** os conectados a X e, a partir deles, os alcançáveis por cadeias de conexões pergaminho ↔ pergaminho.
 - Nada atravessa mesas, exceto a conexão Mestre da mesa ↔ Grão-Mestre.
 
-`mestre list` mostra exatamente isso: o próprio nome de X, os personagens visíveis (com nó, classe e estado/motivo de espera) e os pergaminhos visíveis com suas conexões. Os comandos que miram um personagem não visível falham com "<Nome> não está conectado a você" (exit 3, `not_connected`; [convenções da CLI](../cli/convencoes.md)). O encaminhamento entre nós é transparente ([convenções da CLI](../cli/convencoes.md)).
+`mestre list` mostra exatamente isso: o próprio nome de X, os personagens visíveis (com máquina, classe e estado/motivo de espera) e os pergaminhos visíveis com suas conexões. Os comandos que miram um personagem não visível falham com "<Nome> não está conectado a você" (exit 3, `not_connected`; [convenções da CLI](../cli/convencoes.md)). O encaminhamento entre máquinas da Guilda é transparente ([convenções da CLI](../cli/convencoes.md)).
 
 ## Regras e erros
 

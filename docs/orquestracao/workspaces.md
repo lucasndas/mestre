@@ -1,10 +1,10 @@
 # Workspaces
 
-> **Assunto:** o que é um workspace, a árvore de níveis, o espelho e o clone principal, configuração e estados · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** o que é um workspace, a árvore de níveis, o espelho e o clone principal, configuração e estados · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Um workspace representa **um repositório do GitHub** (na conta pessoal do usuário) dentro do Mestre. Ele é o nível mais alto da orquestração: tem exatamente um [Grão-Mestre](grao-mestre.md), um espelho local do repositório no Core e as [mesas](mesas.md) abertas nele. Termos em [glossário](../produto/glossario.md).
+Um workspace representa **um repositório do GitHub** (na conta pessoal do usuário) dentro do Mestre. Ele é o nível mais alto da orquestração: tem exatamente um [Grão-Mestre](grao-mestre.md), um espelho local do repositório na Cidadela e as [mesas](mesas.md) abertas nele. Termos em [glossário](../produto/glossario.md).
 
 ## Comportamento
 
@@ -20,17 +20,19 @@ Um workspace representa **um repositório do GitHub** (na conta pessoal do usuá
 
 O motor cria e atualiza essa árvore no GitHub com o App de quem pediu ([identidades](../github/identidades-e-apps.md)); nenhum agente recebe credencial do GitHub. O que cada nível pode fazer lá está em [ações por nível](../github/acoes-por-nivel.md).
 
-### Espelho e clone principal (no Core)
+### Espelho e clone principal (na Cidadela)
 
-Pastas padrão no Core (`<dados>` é a pasta de dados do serviço, ver [persistência](../arquitetura/persistencia.md)):
+Pastas padrão na Cidadela (`<dados>` é a pasta de dados do serviço, ver [persistência](../arquitetura/persistencia.md)):
 
 | Caminho | O que é |
 |---|---|
 | `<dados>/workspaces/<slug>/espelho.git` | **espelho**: clone sem cópia de trabalho (`--bare`) do repositório, fonte de todas as cópias |
 | `<dados>/workspaces/<slug>/principal/` | **clone principal**: worktree do espelho na branch principal; pasta de trabalho do Grão-Mestre e fonte de `.mestre/` |
-| `<dados>/workspaces/<slug>/mesas/<mesa>/` | worktrees das mesas no Core ([mesas.md](mesas.md)) |
+| `<dados>/workspaces/<slug>/mesas/<mesa>/` | worktrees das mesas na Cidadela ([mesas.md](mesas.md)) |
 
-Os nós têm a própria cópia, sincronizada só através do espelho (nunca direto com o GitHub); o comportamento está em [mesas.md](mesas.md#worktree-por-nó-e-sincronização).
+As Torres onde há personagens têm a própria cópia, sincronizada só pela Cidadela, através do espelho (nunca direto com o GitHub); o comportamento está em [mesas.md](mesas.md#worktree-por-máquina-e-sincronização).
+
+**Troca de Cidadela:** a Torre promovida já tem o espelho de cada workspace e os arquivos da Cidadela, inclusive o `.mestre/` do clone principal (que pode ser só local), por [replicação](../guilda/replicacao.md#arquivos-e-espelhos); ela recria o clone principal a partir deles e faz um `git fetch origin` antes de qualquer outra coisa. Os worktrees das mesas voltam como descrito em [mesas.md](mesas.md#worktree-por-máquina-e-sincronização).
 
 **Sincronização do espelho com o GitHub** (só o motor, com o token de instalação do App "Grão-Mestre", pelo `git` do sistema; [componentes](../arquitetura/componentes.md)):
 - `git clone --bare` na criação do workspace, seguido de `git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'` (o clone `--bare` não grava refspec; sem isso, um `fetch` não atualiza nada);
@@ -41,7 +43,7 @@ Os nós têm a própria cópia, sincronizada só através do espelho (nunca dire
 
 ### Identificador (slug)
 
-- Gerado do nome do repositório: minúsculas, `[a-z0-9-]`, 2 a 32 caracteres, único no Core. O usuário pode trocar na criação; depois é imutável.
+- Gerado do nome do repositório: minúsculas, `[a-z0-9-]`, 2 a 32 caracteres, único na Cidadela. O usuário pode trocar na criação; depois é imutável.
 - É usado no atalho `#slug` do Telegram ([roteamento](../telegram/roteamento.md)), nas pastas e nos cabeçalhos das mensagens.
 
 ### Configuração do workspace
@@ -58,10 +60,10 @@ Cada item tem o seu documento dono; aqui só a lista do que pertence ao workspac
 | Política de aprovação | [política](../aprovacoes/politica.md) |
 | Limites de uso | [limites de uso](../plataforma/limites-de-uso.md) |
 | Prazo de retenção de branch cancelada | [mesas.md](mesas.md#cancelamento) |
-| Fuso horário dos rituais (padrão: fuso do Core) | [rituais.md](rituais.md) |
+| Fuso horário dos rituais (padrão: fuso da Cidadela) | [rituais.md](rituais.md) |
 | Usuários com acesso | [usuários e níveis](../telegram/usuarios-e-niveis.md) |
 
-Configuração fica no banco do Core; quem altera cada item pelo painel ([administração](../painel/administracao.md)) está na [tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades) (a política de aprovação, por exemplo, só o Dono).
+Configuração fica no banco da Cidadela; quem altera cada item pelo painel ([administração](../painel/administracao.md)) está na [tabela de níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades) (a política de aprovação, por exemplo, só o Dono).
 
 ### Estados
 
@@ -92,7 +94,7 @@ A criação (pelo painel, por Dono ou Administrador) e o que cada etapa gera est
 
 ### Vários workspaces
 
-Cada workspace é independente: Grão-Mestre, mesas, caixas de entrada e limites próprios. O que é compartilhado entre eles: bases e fichas ([bases-e-fichas.md](bases-e-fichas.md)), classes globais ([classes](../classes/classes.md)), Apps por classe ([identidades](../github/identidades-e-apps.md)), grimórios ([grimorios.md](grimorios.md)) e os nós. Um único bot do Telegram atende todos ([roteamento](../telegram/roteamento.md)).
+Cada workspace é independente: Grão-Mestre, mesas, caixas de entrada e limites próprios. O que é compartilhado entre eles: bases e fichas ([bases-e-fichas.md](bases-e-fichas.md)), classes globais ([classes](../classes/classes.md)), Apps por classe ([identidades](../github/identidades-e-apps.md)), grimórios ([grimorios.md](grimorios.md)) e as máquinas. Um único bot do Telegram atende todos ([roteamento](../telegram/roteamento.md)).
 
 ## Regras e erros
 
@@ -109,7 +111,7 @@ Cada workspace é independente: Grão-Mestre, mesas, caixas de entrada e limites
 - **CA-WS-02** · *completa* — **Dado** um workspace com repositório falso local, **quando** é criado, **então** existem `espelho.git` (bare, com o refspec `+refs/heads/*:refs/remotes/origin/*`) e `principal/` na branch principal, o workspace passa pelas etapas `apps`, `mirror`, `files`, `analysis` e `approval_test` nessa ordem e só então fica `active`; um `table open` antes disso é recusado.
 - **CA-WS-03** · *rápida* — **Dado** um relógio falso, **quando** passam 15 min sem eventos, **então** o motor agenda um `fetch` do espelho; **quando** o `fetch` falha por 1 h, **então** um alerta operacional é emitido uma única vez.
 - **CA-WS-04** · *rápida* — **Dado** um workspace pausado, **quando** chega mensagem de usuário e mensagem de agente para o Grão-Mestre, **então** só a de usuário é entregue; a outra fica na fila até a retomada.
-- **CA-WS-05** · *pesada* — **Dado** o Core reiniciado, **quando** volta, **então** os workspaces aparecem com o mesmo estado e configuração anteriores (MVP-12).
+- **CA-WS-05** · *pesada* — **Dado** a Cidadela reiniciada, **quando** volta, **então** os workspaces aparecem com o mesmo estado e configuração anteriores (MVP-12).
 - **CA-WS-06** · *rápida* — **Dado** o git falso com `origin/main` à frente e o Grão-Mestre `busy`, **quando** o `fetch` termina, **então** o clone principal não avança; **quando** o Grão-Mestre fica `idle` e o próximo `fetch` termina, **então** o motor pede `git merge --ff-only origin/main` no clone principal.
 - **CA-WS-07** · *rápida* — **Dado** um workspace em `preparing` com a etapa `mirror` falhando, **quando** o painel consulta o estado, **então** vê a etapa `mirror` com o erro e o motivo, e o workspace continua `preparing`.
 

@@ -63,7 +63,7 @@ var (
 	featureOptional  = []string{"Verificar na implementação", "A confirmar", "Fontes"}
 	adrSections      = []string{"Status", "Contexto", "Opções consideradas", "Decisão", "Consequências"}
 	adrOptional      = []string{"Fontes"}
-	components       = []string{"Core", "Node", "Guardião", "CLI", "Painel", "Todos", "Projeto"}
+	components       = []string{"Motor", "Guardião", "CLI", "Painel", "Todos", "Projeto"}
 	reportNames      = []string{"SUMMARY.md", "IMPLEMENTATION_NOTES.md", "CHANGES.md", "PROGRESS.md", "resumo.md", "relatorio.md", "progresso.md", "mudancas.md"}
 	indexHeader      = "| Documento | O que cobre | Quando ler |"
 	rootIndexHeader  = "| Área | O que cobre | Quando ler |"
@@ -73,7 +73,7 @@ var (
 	criterionRe      = regexp.MustCompile(`^- \*\*CA-([A-Z0-9]+(?:-[A-Z0-9]+)*)-([0-9]{2})\*\* · \*(rápida|completa|pesada)\* — \*\*Dado\*\* .+, \*\*quando\*\* .+, \*\*então\*\* .+\.$`)
 	criterionIDRe    = regexp.MustCompile(`^- \*\*CA-([A-Z0-9]+(?:-[A-Z0-9]+)*)-([0-9]{2})\*\*`)
 	criterionSuiteRe = regexp.MustCompile(`^- \*\*CA-[A-Z0-9-]+\*\* · \*(rápida|completa|pesada)\*`)
-	mvpRe            = regexp.MustCompile(`\(MVP-(?:1[0-4]|[1-9])(?:, MVP-(?:1[0-4]|[1-9]))*\)`)
+	mvpRe            = regexp.MustCompile(`\(MVP-(?:1[0-5]|[1-9])(?:, MVP-(?:1[0-5]|[1-9]))*\)`)
 	verifyMarkers    = []string{"**Padrão:**", "**Se falhar:**", "**Onde:**"}
 )
 
@@ -480,7 +480,7 @@ func (c *checker) checkCriteria() {
 			case !criterionRe.MatchString(l):
 				c.errf(f, ln, ckCriteria, "CA-%s-%s fora do formato `- **CA-<SIGLA>-<NN>** · *<suíte>* — **Dado** …, **quando** …, **então** ….`", sigla, nn)
 			case strings.Contains(l, "· *pesada*") && !mvpRe.MatchString(l):
-				c.errf(f, ln, ckCriteria, "CA-%s-%s é *pesada* e não cita um critério global (MVP-1 a MVP-14)", sigla, nn)
+				c.errf(f, ln, ckCriteria, "CA-%s-%s é *pesada* e não cita um critério global (MVP-1 a MVP-15)", sigla, nn)
 			}
 			if docSigla == "" {
 				docSigla = sigla

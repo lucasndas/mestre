@@ -1,16 +1,16 @@
 # Bot do Telegram
 
-> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspace, de qualquer lugar, sem abrir porta no Core. Um único bot atende todos os workspaces.
+Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspace, de qualquer lugar, sem abrir porta na Cidadela. Um único bot atende todos os workspaces.
 
 ## Comportamento
 
 ### Recepção por long polling
 
-- O motor do Core chama `getUpdates` em laço:
+- O bot roda só na Cidadela: o motor dela chama `getUpdates` em laço:
   - `timeout=50` segundos (padrão);
   - `allowed_updates=["message","callback_query"]`.
   - É só conexão de saída: sem webhook e sem porta aberta.
@@ -20,9 +20,11 @@ Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspa
   - O último `update_id` processado também fica no banco.
   - Assim um reinício não perde nem repete updates (deduplicação por `update_id`).
 - **Erros de rede:** o laço tenta de novo com backoff de 1 s a 60 s, com variação aleatória.
-- **Um só leitor:** só um processo pode ler os updates por vez. Um erro `409 Conflict` indica outro leitor, e o motor para de ler e registra um alerta.
-  - Se o Core cair, um Guardião assume o bot em modo reduzido, com trava para só um assumir.
-  - Quando o Core volta, ele retoma o bot ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
+- **Um só leitor:** só um processo pode ler os updates por vez.
+  - **Época:** o motor só lê e envia com a época da Guilda confirmada; cada envio e cada ação disparada por um botão levam a época, e o motor recusa a de época menor que a do banco ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
+  - Um erro `409 Conflict` no `getUpdates` indica outra instância ativa: o motor para de ler **e de enviar**, fica em "Cidadela suspensa", registra o alerta na auditoria e no painel e confere a época antes de voltar a agir.
+  - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em modo reduzido, com trava para só um assumir.
+  - Quando a Cidadela volta, ou uma Torre é promovida a Cidadela, o motor da Cidadela de época atual retoma o bot ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
 
 ```mermaid
 flowchart LR
@@ -60,13 +62,14 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 |---|---|
 | `/start [código]` | com código: pareamento ([usuários](usuarios-e-niveis.md#pareamento-por-código)); sem código: ajuda curta |
 | `/workspace` | escolhe o workspace ativo, com botões ([roteamento](roteamento.md)) |
-| `/status` | estado do Core, dos nós (online, último heartbeat) e dos agentes por workspace |
+| `/status` | estado da Cidadela, das máquinas (online, último heartbeat) e dos agentes por workspace |
 | `/missoes [workspace]` | missões em andamento com a etapa atual; sem argumento, as do workspace ativo |
 | `/aprovacoes` | pedidos esperando por este usuário, cada um com os botões de decisão ([fluxo](../aprovacoes/fluxo.md)) |
 | `/decretos` | decretos ativos e suspensos, com autor e validade ([decretos](decretos.md)) |
 | `/pausar [workspace\|mesa]` | pausa o escopo (efeito em [pausa](../orquestracao/mesas.md#pausa)) |
 | `/retomar [workspace\|mesa]` | desfaz o `/pausar` |
 | `/travar`, `/destravar` | emergência ([segurança do canal](seguranca-do-canal.md)) |
+| `/guilda` | máquinas da Guilda com papel (Cidadela ou Torre), online/offline e a época; ao Dono, também os pedidos de entrada na Guilda e de promoção pendentes, com os botões ([Guilda](../guilda/guilda.md)) |
 | `/operador encerrar` | encerra na hora as sessões ativas do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) nos workspaces do usuário, sem a espera de 60 s |
 
 - **`/pausar` e `/retomar`:**
@@ -78,7 +81,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Mensagens de saída
 
 - **Quem envia:**
-  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) os pedidos "Sistema" de atualização do Mestre e dos CLIs ([política](../aprovacoes/politica.md#tipos-de-ação)), os pedidos de segundo fator e o aviso do Operador do PC (abaixo).
+  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) os pedidos "Sistema" de atualização do Mestre, de entrada de máquina na Guilda e de promoção de uma Torre a Cidadela, todos com botão e PIN, só ao Dono ([política](../aprovacoes/politica.md#tipos-de-ação); a forma da entrada é a pendência P1 em [Guilda](../guilda/guilda.md)), os pedidos de segundo fator e o aviso do Operador do PC (abaixo).
   - **Grão-Mestre:** conversa, ou seja, respostas (`mestre reply`), resumos de épico, missões concluídas, notificações (`mestre notify`) e pedidos de aprovação. A sintaxe está em [CLI de comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md).
 - **Para quem:**
   - Uma resposta vai ao usuário e à conversa de origem ([resposta pelo mesmo canal](../orquestracao/esperas-e-caixa-de-entrada.md)).
@@ -98,7 +101,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **Telegram fora do ar:** a fila de saída fica no banco e é entregue quando ele volta.
 - **Registro:** o motor guarda o `message_id` de cada mensagem enviada, com o workspace e a mesa dela ([roteamento](roteamento.md#resposta-encadeada)).
 - **Pedido de segundo fator** (login em sites): mensagem direta do motor ao dono da credencial, em texto ("código de <site>") ou com a imagem do captcha como foto (`sendPhoto`). Enquanto o pedido está aberto, a próxima mensagem de texto desse usuário (ou a resposta encadeada ao pedido) é **capturada pelo motor**, como o PIN: não vai ao Grão-Mestre, à caixa de entrada nem ao histórico, e é apagada com o pedido depois de usada. Mensagem de outro usuário não conta. Regras, prazos e casos em [segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha).
-- **Aviso do Operador do PC:** enquanto uma sessão está ativa, o motor mantém no chat do Dono (também quando quem aprovou foi o Grão-Mestre, por delegação) uma mensagem fixada no chat (`pinChatMessage`) com nó, tarefa, "até HH:MM", a contagem regressiva, editada a cada minuto (padrão), e o botão **Encerrar agora**; no fim, a mensagem é editada com o motivo e desafixada ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
+- **Aviso do Operador do PC:** enquanto uma sessão está ativa, o motor mantém no chat do Dono (também quando quem aprovou foi o Grão-Mestre, por delegação) uma mensagem fixada no chat (`pinChatMessage`) com máquina, tarefa, "até HH:MM", a contagem regressiva, editada a cada minuto (padrão), e o botão **Encerrar agora**; no fim, a mensagem é editada com o motivo e desafixada ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 
 ### Explicação de termos na primeira vez
 
@@ -124,6 +127,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **CA-BOT-09** · *rápida* — **Dado** um pedido de segundo fator aberto para Ana e o Grão-Mestre livre, **quando** Ana manda `482913`, **então** o motor usa o texto no login, a caixa de entrada do Grão-Mestre não recebe nada e as duas mensagens são apagadas; **quando** Bia manda um texto ao mesmo tempo, **então** ele segue o caminho normal até o Grão-Mestre.
 - **CA-BOT-10** · *rápida* — **Dado** uma sessão do Operador do PC ativa, **quando** o Dono toca **Encerrar agora** na mensagem fixada ou manda `/operador encerrar`, **então** o motor manda fechar o terminal do Operador na hora, a mensagem passa a "encerrado por <nome>" e é desafixada.
 - **CA-BOT-08** · *rápida* — **Dado** um usuário autorizado, **quando** ele manda uma figurinha, **então** o bot recusa e lista os tipos aceitos, sem enfileirar nada.
+- **CA-BOT-11** · *rápida* — **Dado** o Telegram falso respondendo `409 Conflict` ao `getUpdates` e uma mensagem na fila de saída, **quando** o laço recebe o erro, **então** o motor para de ler e de enviar, entra em "Cidadela suspensa" e registra o alerta, e a mensagem fica na fila.
+- **CA-BOT-12** · *rápida* — **Dado** uma Cidadela com época 3 e o banco com época 4, **quando** ela tentaria enviar a fila de saída ou executar o clique de um botão, **então** o Telegram falso não recebe nada e o clique não é executado.
 
 ## Depende de
 

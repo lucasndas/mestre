@@ -1,6 +1,6 @@
 # Conversa e aprovações no painel
 
-> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-12
+> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -34,8 +34,8 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 ### Avisos
 
 - Um sino no topo com os avisos que o usuário receberia no Telegram: notificações do Grão-Mestre (`mestre notify`), alertas operacionais do motor (autocura, etapa travada, impasse, limite de uso) e mensagens "Sistema" ([bot](../telegram/bot.md)).
-- Cada aviso tem workspace e mesa (ou "Sistema"), horário e link para o lugar certo (mesa, nó, pedido).
-- Lido/não lido por usuário, guardado no Core.
+- Cada aviso tem workspace e mesa (ou "Sistema"), horário e link para o lugar certo (mesa, máquina, pedido).
+- Lido/não lido por usuário, guardado na Cidadela.
 
 ## Regras e erros
 

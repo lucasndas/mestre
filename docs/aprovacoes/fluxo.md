@@ -1,6 +1,6 @@
 # Fluxo de aprovação
 
-> **Assunto:** vida de um pedido de aprovação: estados, vínculo ao estado exato, perguntas aos usuários, quórum, expiração, invalidação, auditoria e resumo · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** vida de um pedido de aprovação: estados, vínculo ao estado exato, perguntas aos usuários, quórum, expiração, invalidação, auditoria e resumo · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,11 +10,11 @@ Tratar todo pedido de aprovação do mesmo jeito, do pedido até a aplicação, 
 
 ### O pedido
 
-Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador) ou uma atualização do Mestre ou de um CLI (tipos em [política](politica.md#tipos-de-ação)).
+Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador) uma atualização do Mestre, a entrada de uma máquina na Guilda ou a promoção de uma Torre a Cidadela (tipos em [política](politica.md#tipos-de-ação)).
 
 Campos (tabela `approval_requests`, [persistência](../arquitetura/persistencia.md)): id, workspace, mesa, tipo, alvo, impressão, solicitante (personagem ou Grão-Mestre), resumo, recomendação do Grão-Mestre, motivo da dúvida, quórum exigido, criado em, expira em, estado.
 
-O pedido entra na caixa de entrada do Grão-Mestre como evento; quem pediu fica "aguardando aprovação" ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). Exceção: os pedidos "Sistema" (`atualizacao_mestre`, `atualizacao_provedor`), criados pelo motor, vão direto a `aguardando_usuarios`, sem workspace, para Dono e Administradores; ao Grão-Mestre chega só um evento informativo ([política](politica.md#tipos-de-ação)).
+O pedido entra na caixa de entrada do Grão-Mestre como evento; quem pediu fica "aguardando aprovação" ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). Exceções: os [pedidos da Guilda](#pedidos-da-guilda), abaixo, e os pedidos "Sistema" (`atualizacao_mestre`), criados pelo motor, que vão direto a `aguardando_usuarios`, sem workspace, para Dono e Administradores; ao Grão-Mestre chega só um evento informativo ([política](politica.md#tipos-de-ação)).
 
 ### Estados
 
@@ -54,11 +54,19 @@ Cada pedido guarda o **alvo** e a **impressão** (SHA-256 do alvo em JSON canôn
 | `classe_workspace` | hash do pacote da classe |
 | `acao_destrutiva` | comando exato e objeto (pergaminho e revisão, ritual, classe e hash do pacote, ou mesa e hash da cabeça da branch) |
 | `proposta_agents_md` | workspace e SHA-256 do texto proposto |
-| `ativacao_operador` | mesa, missão (se houver), ficha, classe, nó, tarefa (texto inteiro) e duração pedida; o pedido mostra tudo isso ao Dono |
+| `ativacao_operador` | mesa, missão (se houver), ficha, classe, máquina, tarefa (texto inteiro) e duração pedida; o pedido mostra tudo isso ao Dono |
 | `atualizacao_mestre` | `tag` + SHA-256 do manifesto da release ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) |
-| `atualizacao_provedor` | provedor e versão nova ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)) |
+| `entrada_na_guilda` | nome e sistema da máquina, os pedidos de certificado (CSRs) e o código de entrada de 6 dígitos ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
+| `promocao_cidadela` | Torre proposta, época atual e nova, e o último ponto do banco replicado nela |
 
 Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commit novo no PR), o pedido vira `invalidado`, e o Grão-Mestre reavalia e, se for o caso, cria um pedido novo. No GitHub, o hash também vai no review e no merge ([aprovação no GitHub](../github/aprovacao-no-github.md)).
+
+### Pedidos da Guilda
+
+`entrada_na_guilda` e `promocao_cidadela` nascem em `aguardando_usuarios`, vão só ao Dono, sem quórum maior, e pedem o PIN depois do botão ([política](politica.md#tipos-de-ação)). Nunca passam pelo Grão-Mestre, nem como evento.
+
+- **`entrada_na_guilda`:** criado pela Cidadela quando uma instalação nova pede para entrar ([Guilda](../guilda/guilda.md); a forma do pedido é a pendência P1 de lá). O prazo é o da [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Na aceitação o Dono marca também se a máquina pode ser Cidadela. Aplicar é emitir os certificados e mandar a configuração da Guilda.
+- **`promocao_cidadela`:** criado pelo Guardião da Torre condutora quando a autocura da Cidadela falhou ([camadas](../autocura/camadas.md)). Como não há Cidadela, o pedido fica no Guardião e vai pelo [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) e pela [página reserva](../autocura/pagina-reserva.md), com os botões **Promover** e **Esperar**; o PIN é conferido na cópia de usuários do Guardião. Não expira: vale até a resposta, com lembrete a cada 1 h (padrão); se a Cidadela volta antes, vira `cancelado` ([proposta de assumir](../guilda/cidadela-e-torres.md#proposta-de-assumir)). Aplicar é a promoção ([Cidadela e Torres](../guilda/cidadela-e-torres.md)); depois dela, o pedido e a resposta entram na auditoria do banco principal da nova Cidadela.
 
 ### Pergunta aos usuários
 
@@ -95,7 +103,7 @@ Um toque em **Aprovar** só vale se: o usuário está ativo, tem o nível e o wo
 
 ### Auditoria
 
-Todo pedido e toda resposta ficam no banco do Core (tabelas `approval_requests` e `approval_responses`): quem decidiu (Grão-Mestre ou usuário), canal, texto original, motivo (obrigatório para o Grão-Mestre), impressão, horários e resultado da aplicação. Nada é apagado. O painel mostra o histórico com filtros.
+Todo pedido e toda resposta ficam no banco da Cidadela (tabelas `approval_requests` e `approval_responses`): quem decidiu (Grão-Mestre ou usuário), canal, texto original, motivo (obrigatório para o Grão-Mestre), impressão, horários e resultado da aplicação. Nada é apagado. O painel mostra o histórico com filtros.
 
 ### Resumo periódico
 
@@ -106,7 +114,7 @@ No horário da política (padrão: diário, 18:00), o motor coloca na caixa de e
 - Uma aprovação nunca vale para outra ação, outro estado ou depois do prazo.
 - Canal de origem fora do ar: a pergunta fica no painel e é entregue no Telegram quando ele voltar, se o pedido ainda estiver aberto.
 - Falha ao aplicar: o pedido vira `falhou`, com o motivo, e o Grão-Mestre avisa quem aprovou. O motor não tenta de novo sozinho.
-- Em `ativacao_operador`, "aplicar" é iniciar a sessão do Operador do PC; se o nó não anunciar `operador` em até 10 min (padrão) depois da aprovação, o pedido vira `falhou` com o motivo ("tela bloqueada" ou "usuário não logado") ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
+- Em `ativacao_operador`, "aplicar" é iniciar a sessão do Operador do PC; se a máquina não anunciar `operador` em até 10 min (padrão) depois da aprovação, o pedido vira `falhou` com o motivo ("tela bloqueada" ou "usuário não logado") ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 
 ## Critérios de aceite
 
@@ -117,9 +125,10 @@ No horário da política (padrão: diário, 18:00), o motor coloca na caixa de e
 - **CA-APROV-FLUXO-05** · *rápida* — **Dado** uma aprovação de Ana ainda não aplicada, **quando** Ana é suspensa, **então** o pedido vira `invalidado`.
 - **CA-APROV-FLUXO-06** · *rápida* — **Dado** um callback "Aprovar" com o id do pedido vindo de um usuário Observador, **quando** o motor valida, **então** recusa e o pedido não muda.
 - **CA-APROV-FLUXO-07** · *rápida* — **Dado** três aprovações do Grão-Mestre no dia e o horário do resumo, **quando** o relógio falso chega a 18:00, **então** a caixa de entrada do Grão-Mestre recebe a lista das três.
-- **CA-APROV-FLUXO-08** · *completa* — **Dado** um pedido aguardando e o Core reiniciado, **quando** o usuário aprova pelo painel, **então** a decisão é aplicada e registrada na auditoria.
+- **CA-APROV-FLUXO-08** · *completa* — **Dado** um pedido aguardando e a Cidadela reiniciada, **quando** o usuário aprova pelo painel, **então** a decisão é aplicada e registrada na auditoria.
 - **CA-APROV-FLUXO-09** · *pesada* — **Dado** uma etapa de missão que toca área sensível, **quando** o Grão-Mestre pergunta pelo Telegram (dublê) e o Lucas aprova, **então** a missão segue, inclusive no GitHub (dublê) (MVP-7).
-- **CA-APROV-FLUXO-11** · *rápida* — **Dado** um pedido `ativacao_operador` aprovado pelo Dono e o nó sem a capacidade `operador`, **quando** o relógio falso avança 10 min, **então** o pedido vira `falhou` com "tela bloqueada" ou "usuário não logado", conforme o nó informou, e quem pediu recebe o motivo.
+- **CA-APROV-FLUXO-11** · *rápida* — **Dado** um pedido `ativacao_operador` aprovado pelo Dono e a ficha da máquina sem o Operador pronto, **quando** o relógio falso avança 10 min, **então** o pedido vira `falhou` com "tela bloqueada" ou "usuário não logado", conforme a máquina informou, e quem pediu recebe o motivo.
+- **CA-APROV-FLUXO-12** · *rápida* — **Dado** a Cidadela caída e um pedido `promocao_cidadela` aberto pelo Guardião da Torre condutora, **quando** a Cidadela volta antes da resposta, **então** o pedido vira `cancelado`, os botões somem da mensagem e nenhuma promoção acontece; **dado** o mesmo pedido respondido com **Promover** e o PIN do Dono, **então**, depois da promoção, o pedido e a resposta aparecem na auditoria da nova Cidadela.
 - **CA-APROV-FLUXO-10** · *rápida* — **Dado** um pedido `acao_destrutiva` para apagar o pergaminho p0003 na revisão 4, **quando** o pergaminho passa à revisão 5 antes da aplicação, **então** o pedido vira `invalidado` e nada é apagado.
 
 ## Depende de

@@ -1,6 +1,6 @@
 # Classes
 
-> **Assunto:** o que cada personagem faz e pode fazer: pacote da classe, permissões e teto do workspace · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** o que cada personagem faz e pode fazer: pacote da classe, permissões e teto do workspace · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|

@@ -1,10 +1,10 @@
 # ADR 0015: Épico como issue com rótulo `epico`
 
-> **Assunto:** como marcar o épico de uma mesa num repositório de conta pessoal · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** como marcar o épico de uma mesa num repositório de conta pessoal · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 
@@ -44,7 +44,7 @@ Aceita, 2026-10-12.
 
 - **Épico = issue com o rótulo `epico`.** O motor cria o rótulo no repositório se ele não existir.
 - **Hierarquia:** usa **sub-issues** nativas, com épico → issue → sub-issue.
-- **Fonte da verdade:** o vínculo entre mesa e épico fica no banco do Core. O rótulo serve para a visualização no GitHub.
+- **Fonte da verdade:** o vínculo entre mesa e épico fica no banco da Guilda. O rótulo serve para a visualização no GitHub.
 - **Onde estão os detalhes:**
   - Quando cada nível é criado: [mesas](../orquestracao/mesas.md) e [missões](../orquestracao/missoes.md).
   - Quem pode criar cada nível: [ações por nível](../github/acoes-por-nivel.md).

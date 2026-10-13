@@ -1,20 +1,20 @@
 # ADR 0001: Stack em Go
 
-> **Assunto:** linguagem e bibliotecas do motor, da CLI e do Guardião · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** linguagem e bibliotecas do motor, da CLI e do Guardião · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Status
 
-Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sistema, por um wrapper interno, e emulador de terminal no nó (abaixo).
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sistema, por um wrapper interno, e emulador de terminal na máquina do terminal (abaixo). **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
 
 ## Contexto
 
 O Mestre tem serviços que ficam ligados o tempo todo em duas plataformas, e a linguagem precisa atender a todos estes requisitos ao mesmo tempo:
 
 - **Terminais:** cada agente roda num PTY no Linux e num ConPTY no Windows.
-- **Windows:** Core e nó são serviços do Windows, sem interface gráfica; o serviço que roda os agentes (`mestre-node`, numa conta virtual) cria os ConPTY e inicia cada agente com a conta `mestre-agente` (`CreateProcessAsUser`). O desenho está em [Windows](../arquitetura/windows.md).
-- **Linux:** Core e nó são serviços do systemd com watchdog (`Type=notify`, `WatchdogSec=`). A camada 1 da autocura depende disso ([camadas](../autocura/camadas.md)).
-- **Conexões:** WSS com TLS e CA interna, com mTLS entre nó e Core ([protocolo](../conectividade/protocolo.md), [segurança](../arquitetura/seguranca.md)).
-- **Banco:** SQLite em modo WAL em cada nó ([persistência](../arquitetura/persistencia.md)).
+- **Windows:** toda máquina, Cidadela ou Torre, roda serviços do Windows, sem interface gráfica; o serviço do motor (`mestre`, numa conta virtual) cria os ConPTY e inicia cada agente com a conta `mestre-agente` (`CreateProcessAsUser`). O desenho está em [Windows](../arquitetura/windows.md).
+- **Linux:** toda máquina roda serviços do systemd com watchdog (`Type=notify`, `WatchdogSec=`). A camada 1 da autocura depende disso ([camadas](../autocura/camadas.md)).
+- **Conexões:** WSS com TLS e CA interna, com mTLS entre Torre e Cidadela ([protocolo](../conectividade/protocolo.md), [segurança](../arquitetura/seguranca.md)).
+- **Banco:** SQLite em modo WAL em cada máquina, com réplica do banco da Cidadela nas Torres ([persistência](../arquitetura/persistencia.md)).
 - **Entrega:** um binário por componente e plataforma, fácil de instalar, atualizar e voltar de versão. O Guardião é separado e quase nunca muda ([ADR 0003](0003-autocura-com-guardiao-sem-ssh.md)).
 - **Testes:** a suíte rápida tem orçamento de 30 segundos, sem `sleep` e com relógio injetável ([testes](../qualidade/testes.md), [dublês](../qualidade/dubles.md)). O sistema tem muitos temporizadores.
 
@@ -71,7 +71,7 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço do Windows e de ConPTY 
   | SQLite | `modernc.org/sqlite` em WAL, com uma conexão de escrita |
   | UI | `embed` para servir o build do painel ([ADR 0017](0017-canvas-react-flow.md)) |
   | Testes | `testing/synctest` + interface de relógio injetável |
-  | Emulador de terminal no nó (tela para `check` e reconhecimento de telas) | `github.com/charmbracelet/x/vt` ou equivalente; escolha e plano B em [terminal](../arquitetura/terminal.md) |
+  | Emulador de terminal na máquina (tela para `check` e reconhecimento de telas) | `github.com/charmbracelet/x/vt` ou equivalente; escolha e plano B em [terminal](../arquitetura/terminal.md) |
   | Git | **binário `git` do sistema** (2.32 ou maior) chamado por um wrapper interno único, `internal/gitx`; nunca uma biblioteca Go de git |
 
 - **Por que o binário `git`:** worktrees, `git bundle`, `info/exclude`, `skip-worktree` e `merge --ff-only` precisam se comportar exatamente como o git que a pessoa usa; bibliotecas Go de git não cobrem tudo isso com fidelidade. O `testkit` tem um **git falso** atrás da mesma interface do `gitx`, para a suíte rápida; critérios que precisam de git real ficam na completa ([dublês](../qualidade/dubles.md)).

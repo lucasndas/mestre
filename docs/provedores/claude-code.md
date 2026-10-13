@@ -68,7 +68,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - `CLAUDE_CONFIG_DIR=<pasta do perfil>` no ambiente do processo: configuração, histórico e login próprios (`.credentials.json` dentro dela). O perfil de conta é definido em [bases e fichas](../orquestracao/bases-e-fichas.md).
 - O processo roda como `mestre-agente` nos dois sistemas; no Windows, `USERPROFILE` e `APPDATA` são os do perfil carregado dessa conta e só `CLAUDE_CONFIG_DIR` aponta para o perfil de conta ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)). Exceção: o Operador do PC roda com a conta do usuário e com `--chrome`, opção aceita só na base dele ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
 - Verificar login: `claude auth status` (JSON com `configDirectory` e `authMethod`), usado pelo [checklist](../plataforma/checklist.md).
-- **Linux, como `mestre-agente`** (spike, [segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)): a credencial fica em `$CLAUDE_CONFIG_DIR/.credentials.json`, modo `0600`, sem chaveiro nem D-Bus. `DISABLE_AUTOUPDATER=1` é obrigatório no ambiente ([atualização dos CLIs](atualizacao-dos-clis.md)). Escritas fora do perfil: `/tmp/claude-<uid>/…`, `/tmp/cc-socks-<uid>/` e `/tmp/claude-{plugin,skill}-<pid>-*.zip` (às vezes sobram); limpeza em [personagem](../sessao-zero/personagem.md#variáveis-de-ambiente).
+- **Linux, como `mestre-agente`** (spike, [segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)): a credencial fica em `$CLAUDE_CONFIG_DIR/.credentials.json`, modo `0600`, sem chaveiro nem D-Bus. A autoatualização fica ligada e grava no `HOME` do perfil ([atualização dos CLIs](atualizacao-dos-clis.md)). Escritas fora do perfil: `/tmp/claude-<uid>/…`, `/tmp/cc-socks-<uid>/` e `/tmp/claude-{plugin,skill}-<pid>-*.zip` (às vezes sobram); limpeza em [personagem](../sessao-zero/personagem.md#variáveis-de-ambiente).
 
 ### Uso, custo e rate limit
 
@@ -99,7 +99,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 ## Regras e erros
 
-- Versão abaixo de 2.1.295: base recusada no nó (sem `onFailure`, o despachante falharia aberto).
+- Versão abaixo de 2.1.295: base recusada na máquina (sem `onFailure`, o despachante falharia aberto).
 - Pasta sem confiança detectada (tela de confiança ou ausência de hooks): ver monitoramento reduzido no [adaptador](adaptador.md#monitoramento-reduzido).
 - Se o `.claude.json` estiver sendo reescrito pelo Claude, a pré-confiança relê, mescla e grava de novo (até 3 tentativas) e confere o resultado.
 
@@ -121,7 +121,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 Todos são conferidos pelo [teste de conformidade](conformidade.md).
 
 - **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição.
-- **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 no nó Windows.
+- **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 na máquina Windows.
 - **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`). **Onde:** etapa 7.
 - **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** o motor manda mensagens de várias linhas pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e digita só a linha que pede para lê-lo. **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
 

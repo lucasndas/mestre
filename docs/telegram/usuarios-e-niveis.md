@@ -1,6 +1,6 @@
 # Usuários e níveis
 
-> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -45,7 +45,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Ampliar o teto ou passar do teto de custo ([teto](../classes/teto-do-workspace.md)) | sim | sim | não | não |
 | Aprovar ações de cura que pedem pessoa e correções de rede, firewall ou serviços do checklist | sim | sim | não | não |
 | Cadastrar, editar, suspender e remover usuários; gerar código de pareamento | sim | não | não | não |
-| Parear e revogar nós ([pareamento](../conectividade/pareamento.md)) | sim | não | não | não |
+| Aceitar máquinas na Guilda, remover máquinas, marcar "pode ser Cidadela", mudar a prioridade e aprovar a promoção de uma Torre a Cidadela ([Guilda](../guilda/guilda.md)) | sim | não | não | não |
 | Editar bases, fichas, política de aprovação e acessar o cofre | sim | não | não | não |
 | Criar e instalar GitHub Apps pelo link ([criação de Apps](../github/criacao-de-apps.md)) | sim | não | não | não |
 | Configurar perfis de conta: login e, no Codex, confiança dos hooks ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)) | sim | não | não | não |
@@ -79,7 +79,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 
 ### PIN pessoal
 
-- **Definição:** cada usuário define o próprio PIN no painel. São de 6 a 12 dígitos. O Core guarda só o hash (argon2id), nunca o PIN.
+- **Definição:** cada usuário define o próprio PIN no painel. São de 6 a 12 dígitos. A Cidadela guarda só o hash (argon2id), nunca o PIN.
 - **Sem PIN:** quem não tem PIN não conclui nenhuma ação que exige PIN.
 - **Ações que pedem PIN** (lista única; a cada vez, no Telegram ou no painel):
   - decretos que afrouxam a segurança ([decretos](decretos.md));
@@ -87,7 +87,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
   - cofre ([cofre](../plataforma/cofre.md));
   - `/destravar` ([segurança do canal](seguranca-do-canal.md));
   - aprovar script de cura ou volta de versão com restauração do banco ([diagnóstico com IA](../autocura/diagnostico-com-ia.md));
-  - parear e revogar nós ([pareamento](../conectividade/pareamento.md));
+  - aceitar e remover máquinas da Guilda e aprovar a promoção a Cidadela ([Guilda](../guilda/guilda.md));
   - tipos de aprovação marcados com PIN na [política](../aprovacoes/politica.md).
 - **Troca e reset:** trocar o PIN pede o PIN atual. O Dono pode resetar o PIN de outro usuário, que define um novo no próximo login.
 - **Pedido de PIN no Telegram:**

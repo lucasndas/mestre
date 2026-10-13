@@ -1,6 +1,6 @@
 # ADR 0014: Commits sem assinatura
 
-> **Assunto:** por que os commits dos agentes saem com o autor do bot do App, mas sem assinatura · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** por que os commits dos agentes saem com o autor do bot do App, mas sem assinatura · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 

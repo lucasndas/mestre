@@ -17,16 +17,24 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 | Marco | Nome | O que fica pronto ao final |
 |---|---|---|
 | M0 | Fundação | executor das suítes (`tools/testrun`), verificação de docs (`tools/docscheck`), dublês e `testkit` (relógio injetável, rede, PTY, git, Telegram e GitHub falsos, agente falso), projetos de treino (`testkit.NewProject`), `logging` com [mascaramento](../arquitetura/seguranca.md#mascaramento-em-logs) |
-| M1 | Base local | banco e migrações ([persistência](../arquitetura/persistencia.md)), cofre, terminal (PTY/ConPTY e emulador), `internal/gitx` (wrapper do binário `git`), canal local CLI ↔ motor |
-| M2 | Transporte | TLS e CA interna ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)), protocolo WSS, pareamento e descoberta |
+| M1 | Base local | banco e migrações ([persistência](../arquitetura/persistencia.md)), cofre (DPAPI no Windows e arquivo `0600` no Linux), terminal (PTY/ConPTY e emulador), `internal/gitx` (wrapper do binário `git`), canal local CLI ↔ motor |
+| M2 | Transporte e Guilda | TLS e CA da Guilda ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)), protocolo WSS com época, descoberta da Guilda, entrada na Guilda, ficha da máquina e replicação do banco e do cofre |
 | M3 | CLI e provedores | CLI (convenções), adaptador e `mestre hook`, [precedência](../arquitetura/precedencia.md), permissões, reforço nativo, classes, teto, os três provedores e o teste de conformidade |
 | M4 | Orquestração | workspaces, sessão zero, mesas, personagens, conexões, esperas e caixa de entrada, missões, pergaminhos, rituais, grimórios, bases e fichas, comandos de comunicação e coordenação, skills geradas |
 | M5 | Integrações | GitHub, Telegram, usuários e níveis, decretos, aprovações, Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
 | M6 | Painel | login, canvas, visão do workspace, conversa e aprovações, administração |
-| M7 | Plataforma, autocura e Operador do PC | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, atualização dos CLIs; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-14) |
+| M7 | Plataforma, autocura, troca de Cidadela e Operador do PC | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs, troca de Cidadela; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
 
 - **Guardião em paralelo:** [guardiao.md](../autocura/guardiao.md) depende só de documentos até o M2 e pode começar logo depois do M2, em paralelo com M3 a M6.
-- **Escolhas antes de cada marco:** biblioteca de mDNS antes do M2 e gerador de tipos TypeScript antes do M6 ([convenções](convencoes.md#código-gerado)).
+- **Escolhas antes de cada marco:** biblioteca de mDNS e o modo de captura das mudanças do banco ([replicação](../guilda/replicacao.md#verificar-na-implementação)) antes do M2, e gerador de tipos TypeScript antes do M6 ([convenções](convencoes.md#código-gerado)).
+
+### Tudo roda nos dois sistemas
+
+Qualquer máquina da Guilda pode virar Cidadela ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)), então **nada do Mestre é "só Linux"**: painel, bot do Telegram, `whisper-server` e `ffmpeg`, banco, GitHub, cofre e replicação precisam funcionar também no Windows, desde o marco em que nascem.
+
+- **Pronto, em cada marco,** inclui a suíte completa passando no CI Windows, além do Linux ([testes](../qualidade/testes.md)): o cofre com DPAPI e o banco no M1; protocolo, descoberta, entrada na Guilda e replicação no M2; GitHub, Telegram (falso) e transcrição no M5; o painel servido pelo motor no M6.
+- O que depende de serviço instalado ou de modelo real (Whisper com o modelo, mDNS do sistema) fecha na pesada, com a Cidadela em cada sistema ([laboratório](../qualidade/testes.md#laboratório)).
+- Um teste da completa que só roda num sistema precisa dizer por quê (ConPTY, systemd) e ter o par no outro sistema.
 
 ### Operador do PC no M7
 
@@ -48,16 +56,16 @@ O [cofre](../plataforma/cofre.md) é do M1, mas o segundo fator, o filtro de seg
 
 ### Critérios dos dublês em marcos posteriores
 
-Os [dublês](../qualidade/dubles.md) são do M0, mas dois critérios dependem de peças de marcos seguintes: CA-DUBLES-08 fecha no M2, quando o nó real do [protocolo](../conectividade/protocolo.md) substitui o cliente de teste que reconecta com o mesmo backoff, e CA-DUBLES-11 fecha no M4, com os [personagens](../orquestracao/personagens.md) (precisa do terminal real do M1 e do `mestre hook` do M3).
+Os [dublês](../qualidade/dubles.md) são do M0, mas dois critérios dependem de peças de marcos seguintes: CA-DUBLES-08 fecha no M2, quando a Torre real do [protocolo](../conectividade/protocolo.md) substitui o cliente de teste que reconecta com o mesmo backoff, e CA-DUBLES-11 fecha no M4, com os [personagens](../orquestracao/personagens.md) (precisa do terminal real do M1 e do `mestre hook` do M3).
 
 ### Spikes do M1
 
-Os spikes de Windows rodam no **Windows Sandbox** do PC do Dono, descartável a cada abertura ([como preparar e rodar](ambiente.md#windows-sandbox-para-os-spikes-do-m1)); a VM Windows dedicada continua só para o [laboratório](../qualidade/testes.md#laboratório) da suíte pesada. Os de Linux rodam nesta máquina de desenvolvimento. Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
+Os resultados dos spikes valem para o serviço único `mestre` (os nomes de papel mudaram depois, [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)). Os spikes de Windows rodam no **Windows Sandbox** do PC do Dono, descartável a cada abertura ([como preparar e rodar](ambiente.md#windows-sandbox-para-os-spikes-do-m1)); a VM Windows dedicada continua só para o [laboratório](../qualidade/testes.md#laboratório) da suíte pesada. Os de Linux rodam nesta máquina de desenvolvimento. Seis itens de "Verificar na implementação" mudam camadas de base se falharem; são testados no começo do M1, antes de fechar o terminal e o canal local:
 
 | Spike | Se falhar, muda | Onde está o item |
 |---|---|---|
 | ConPTY com o processo iniciado como `mestre-agente` (`CreateProcessAsUser`, perfil carregado) a partir do serviço, na sessão 0 | o serviço auxiliar `mestre-launcher` (LocalSystem) inicia os processos; ou a distribuição passa a levar o `OpenConsole.exe` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
-| conta virtual `NT SERVICE\MestreNode` com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | o serviço auxiliar `mestre-launcher` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
+| conta virtual `NT SERVICE\Mestre` com `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | o serviço auxiliar `mestre-launcher` | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
 | `claude`, `codex` e `agy` gravando e achando o login no perfil do `mestre-agente` no Windows | login em arquivo no perfil de conta, ou o provedor não é oferecido naquela máquina | [Windows](../arquitetura/windows.md#verificar-na-implementação) |
 | identificação do chamador subindo a árvore de processos, no Windows | um Job Object por terminal na verificação | [segurança](../arquitetura/seguranca.md#verificar-na-implementação) |
 | identificação do chamador, no Linux: **feito** (2026-10-12); a árvore falhou para órfãos (`nohup … &`, `setsid -f`, tmux) | adotado um cgroup v2 por terminal | [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli) |
@@ -76,7 +84,8 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M1 | 2 | [canal local](../arquitetura/canal-local.md) |
 | M2 | 1 | [protocolo](../conectividade/protocolo.md) |
 | M2 | 2 | [descoberta](../conectividade/descoberta.md) |
-| M2 | 3 | [pareamento](../conectividade/pareamento.md) |
+| M2 | 3 | [Guilda](../guilda/guilda.md) |
+| M2 | 4 | [ficha da máquina](../guilda/ficha-da-maquina.md) · [replicação](../guilda/replicacao.md) |
 | M3 | 1 | [adaptador](../provedores/adaptador.md) |
 | M3 | 2 | [permissões](../classes/permissoes.md) |
 | M3 | 3 | [reforço nativo](../classes/reforco-nativo.md) · [teto do workspace](../classes/teto-do-workspace.md) · [convenções da CLI](../cli/convencoes.md) · [despachante de hooks](../provedores/despachante-de-hooks.md) |
@@ -106,19 +115,19 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M7 | 1 | [Guardião](../autocura/guardiao.md) · [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | M7 | 2 | [camadas](../autocura/camadas.md) · [checklist](../plataforma/checklist.md) |
 | M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) |
-| M7 | 4 | [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) |
+| M7 | 4 | [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) · [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
 
 ### Regras de execução da ordem
 
 - **M0, além dos documentos:** layout do repositório em Go ([convenções](convencoes.md)) e o `logging` com mascaramento, antes da etapa 1.
 - **M1:** os [spikes](#spikes-do-m1) de Linux vêm antes da etapa 1, e as partes de Linux do M1 andam primeiro, com o início de processos atrás de uma interface (`internal/terminal`, `Launcher`) que o Windows implementa depois. **Os spikes de Windows precisam rodar antes de fechar o M1, e nada do M2 nem do `winsvc` começa antes deles.** banco e migrações ([persistência](../arquitetura/persistencia.md)) e `internal/gitx` entram junto da etapa 1.
-- **M2:** TLS e CA interna entram junto da etapa 1. Depois do M2, o [Guardião](../autocura/guardiao.md) pode começar em paralelo com M3 a M6 (a etapa 1 do M7 só confere que ele está pronto).
+- **M2:** TLS e CA da Guilda entram junto da etapa 1; a época vai no envelope desde a etapa 1, e a certidão nasce com a [Guilda](../guilda/guilda.md) (etapa 3). A replicação (etapa 4) começa com o spike de captura das mudanças do banco, nos dois sistemas. Depois do M2, o [Guardião](../autocura/guardiao.md) pode começar em paralelo com M3 a M6 (a etapa 1 do M7 só confere que ele está pronto).
 - **Conformidade real no fim do M3:** depois da etapa 5, uma primeira rodada do [teste de conformidade](../provedores/conformidade.md) com os CLIs reais nesta máquina Linux, para achar cedo mudanças dos provedores; a rodada completa, nos dois sistemas, é a da suíte pesada no laboratório.
 - **"Casca" dos comandos da CLI:** um comando que outro documento usa antes da sua etapa (ex.: `mestre done` nas [missões](../orquestracao/missoes.md), etapa 9, antes da [CLI de comunicação](../cli/comunicacao.md), etapa 10) é implementado como casca junto do documento que o usa: sintaxe, chamada pelo [canal local](../arquitetura/canal-local.md) e o caminho feliz. Os critérios de aceite do documento da CLI (erros, códigos de saída, `--json`) fecham na etapa dele.
-- **M7:** depois da etapa 4, o [Operador do PC](#operador-do-pc-no-m7) e, por último, a suíte pesada (MVP-1 a MVP-14).
+- **M7:** a troca de Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md)) entra na etapa 4, com a autocura pronta (camadas, Telegram em modo reduzido, página reserva); depois da etapa 4, o [Operador do PC](#operador-do-pc-no-m7) e, por último, a suíte pesada (MVP-1 a MVP-15).
 
 ## Como usar no dia a dia
 
 - Comece um marco só com o anterior pronto (critérios de aceite das suítes rápida e completa passando), salvo o Guardião, acima.
 - Dentro do marco, implemente na ordem do grafo de "Depende de"; documentos sem dependência entre si podem andar em paralelo.
-- Os critérios *pesada* (MVP-1 a MVP-14) fecham no M7, quando instalação, autocura e laboratório existem ([testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada)).
+- Os critérios *pesada* (MVP-1 a MVP-15) fecham no M7, quando instalação, autocura e laboratório existem ([testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada)).

@@ -1,12 +1,12 @@
 # Primeiro acesso
 
-> **Assunto:** passo a passo para confiar na CA do Mestre, criar o Dono, criar os GitHub Apps fixos pelo link e configurar os perfis de conta · **Componente:** Painel · **Atualizado:** 2026-10-12
+> **Assunto:** passo a passo para confiar na CA do Mestre, criar o Dono, criar os GitHub Apps fixos pelo link e configurar os perfis de conta · **Componente:** Painel · **Atualizado:** 2026-10-13
 
-Guia para quem usa, depois de [instalar o Core](instalar.md) (no Ubuntu ou no Windows). Tenha à mão o que o instalador mostrou: endereço do painel, impressão digital da CA e código de configuração. Regras do login e do assistente: [login](../painel/login.md).
+Guia para quem usa, depois de [instalar a Cidadela](instalar.md) (no Ubuntu ou no Windows). Tenha à mão o que o instalador mostrou: endereço do painel, impressão digital da CA e código de configuração. Regras do login e do assistente: [login](../painel/login.md).
 
 ## 1. Confiar na CA do Mestre
 
-O Core usa uma autoridade certificadora (CA) própria, criada na instalação ([segurança](../arquitetura/seguranca.md)). Enquanto o aparelho não confia nela, o navegador avisa que a conexão "não é particular". Faça isto **uma vez em cada aparelho** que vai abrir o painel (PC, notebook, celular).
+A Cidadela usa uma autoridade certificadora (CA) própria, criada na instalação ([segurança](../arquitetura/seguranca.md)). Enquanto o aparelho não confia nela, o navegador avisa que a conexão "não é particular". Faça isto **uma vez em cada aparelho** que vai abrir o painel (PC, notebook, celular).
 
 ### Baixar e conferir o certificado
 
@@ -31,16 +31,16 @@ A rota e o formato do arquivo estão em [segurança](../arquitetura/seguranca.md
 
 Depois, feche e abra o navegador. O painel deve abrir com o cadeado, sem aviso.
 
-O motor e o Guardião dos nós confiam na CA sozinhos, no pareamento ([pareamento](../conectividade/pareamento.md)). O navegador de cada máquina, inclusive a do Core, ainda precisa deste passo, como qualquer aparelho.
+O motor e o Guardião de cada máquina confiam na CA sozinhos, na entrada na Guilda ([Guilda](../guilda/guilda.md#credenciais)). O navegador de cada máquina, inclusive a da Cidadela, ainda precisa deste passo, como qualquer aparelho.
 
 ## 2. Criar o Dono
 
 1. Abra o endereço do painel. Como ainda não existe nenhum usuário, aparece o **assistente do Dono**.
 2. Informe o **código de configuração** mostrado pelo instalador.
 3. Preencha nome, nome de login, senha (duas vezes) e **PIN pessoal** (duas vezes). O PIN é pedido de novo em toda ação sensível; regras em [usuários e níveis](../telegram/usuarios-e-niveis.md#pin-pessoal).
-4. Pronto: você entra como **Dono**, e o painel mostra os próximos passos (nós, GitHub, Telegram).
+4. Pronto: você entra como **Dono**, e o painel mostra os próximos passos (outras máquinas da Guilda, GitHub, Telegram).
 
-Perdeu o código antes de usar? Há um comando local de recuperação, só para root ou administrador na máquina do Core ([login](../painel/login.md#assistente-do-dono-primeira-vez)). Depois que o Dono existe, o assistente não abre mais.
+Perdeu o código antes de usar? Há um comando local de recuperação, só para root ou administrador na máquina da Cidadela ([login](../painel/login.md#assistente-do-dono-primeira-vez)). Depois que o Dono existe, o assistente não abre mais.
 
 Outras pessoas entram com um código de primeiro acesso que você gera em **Usuários** ([login](../painel/login.md#primeiro-acesso-de-cada-usuário)).
 
@@ -59,14 +59,14 @@ Faça isso num aparelho na rede local e que já confia na CA (passo 1): os retor
 
 ## 4. Configurar os perfis de conta
 
-Cada conta de provedor que os agentes vão usar é um **perfil de conta** de uma máquina ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Faça a configuração inicial uma vez por perfil, em cada máquina, inclusive no Core:
+Cada conta de provedor que os agentes vão usar é um **perfil de conta** de uma máquina ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Faça a configuração inicial uma vez por perfil, em cada máquina, inclusive na Cidadela:
 
 1. No painel, abra **Perfis de conta** e escolha a máquina e o provedor. Crie o perfil (ex.: `claude-trabalho`) ou use o padrão.
-2. Clique em **Configurar**. O painel abre o terminal de login do perfil, que roda com a conta dos agentes (`mestre-agente`), e guia o **login** na conta do provedor. Quando o provedor mostra um link ou um código, conclua no seu navegador (no celular ou no PC). Os seus logins pessoais nos CLIs não são usados.
+2. Clique em **Configurar**. Se o CLI do provedor ainda não está no perfil, o painel o instala com o instalador oficial do provedor (depois ele se atualiza sozinho). Em seguida abre o terminal de login do perfil, que roda com a conta dos agentes (`mestre-agente`), e guia o **login** na conta do provedor. Quando o provedor mostra um link ou um código, conclua no seu navegador (no celular ou no PC). Os seus logins pessoais nos CLIs não são usados.
 3. **Só no Codex:** no mesmo terminal, o painel pede para abrir `/hooks` e **aprovar uma vez os hooks do Mestre**. Sem isso o Codex não chama o Mestre, e o perfil não recebe agentes.
 4. O perfil fica **pronto** quando o checklist confirma login e, no Codex, a confiança dos hooks (item ALL-11, [checklist](../plataforma/checklist.md)).
 
-Repita para cada nó novo, depois de [pareá-lo](parear-no.md).
+Repita para cada máquina nova, depois de [aceitá-la na Guilda](entrar-na-guilda.md).
 
 ## Depois
 

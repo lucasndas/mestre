@@ -1,6 +1,6 @@
 # Convenções de desenvolvimento
 
-> **Assunto:** layout do código Go e do painel, idioma, estilo, código gerado, commits, branches, PRs e definição de pronto · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** layout do código Go e do painel, idioma, estilo, código gerado, commits, branches, PRs e definição de pronto · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 ## Layout do repositório
 
@@ -12,7 +12,8 @@ cmd/
   mestre-guardiao/   main do Guardião
   fakeagent/         agente falso dos testes (ver dubles.md); fora dos pacotes de release
 internal/
-  app/               montagem dos papéis: core e node (o nó local do Core é um node)
+  app/               montagem do motor e das funções que a Cidadela liga e desliga
+  guild/ machinesheet/ replication/   Guilda (entrada, época, troca de Cidadela), ficha da máquina, replicação
   cli/               comandos da CLI, definição única dos comandos e saída
   localchan/         canal local CLI e hook ↔ motor (ver canal-local.md)
   hook/              despachante `mestre hook`
@@ -25,18 +26,18 @@ internal/
   audit/             trilha de auditoria
   github/            cliente, Apps, consulta periódica
   gitx/              wrapper único do binário git (worktrees, bundles, info/exclude)
-  sync/              sincronização de worktrees nó ↔ Core por bundle
+  sync/              sincronização de worktrees Torre ↔ Cidadela por bundle
   telegram/          bot, roteamento, cliente do whisper-server
   usage/             coleta de uso e limites
   checklist/         itens do checklist e alertas
-  update/            autoatualização do Mestre e dos CLIs dos provedores
+  update/            autoatualização do Mestre e detecção de versão nova dos CLIs dos provedores
   healing/           lado do motor da autocura (supervisão cruzada, runbook)
-  protocol/          envelope e mensagens Core ↔ nó, versões
-  transport/         WSS, TLS, CA interna, mTLS
-  discovery/ pairing/
+  protocol/          envelope (com época) e mensagens entre máquinas, versões
+  transport/         WSS, TLS, CA da Guilda, mTLS
+  discovery/         descoberta da Guilda (broadcast e mDNS)
   terminal/          PTY (creack/pty) e ConPTY (wrapper próprio), emulador, buffer circular
   winsvc/            partes só do Windows: serviço, contas virtuais e `mestre-agente`, início de processo com outra conta, ACLs, DPAPI
-  store/             SQLite e migrações (core/, node/)
+  store/             SQLite e migrações (guild/: banco da Guilda; machine/: banco local de máquina)
   vault/             cofre
   logging/           slog + mascaramento de segredos
   glossary/          textos de ajuda gerados do glossário
@@ -56,9 +57,9 @@ docs/                esta documentação
 ```
 
 - **Guardião isolado:** `guardian/` só importa a biblioteca padrão, `pkg/clock` e as dependências permitidas: `golang.org/x/sys`, `golang.org/x/crypto` (argon2id do login e do PIN da página reserva), `kardianos/service`, `coder/websocket`, `go-systemd`, `aead.dev/minisign` (verificação no `apply-update`) e `brutella/dnssd` (mDNS). O protocolo motor ↔ Guardião mora em `guardian/protocol`, que o motor importa (nunca o contrário). Regra verificada pelo linter (`depguard`). Binários, subcomandos e portas: [componentes](../arquitetura/componentes.md).
-- **Dependências escolhidas:** mDNS e DNS-SD com `github.com/brutella/dnssd` (consulta no nó, anúncio de reserva no Guardião do Core Windows); minisign com `aead.dev/minisign`; emulador de terminal com `github.com/charmbracelet/x/vt` ([terminal](../arquitetura/terminal.md)); git pelo binário do sistema, 2.32 ou mais novo, só por `internal/gitx`, nunca por biblioteca Go (worktrees, bundles e `info/exclude` precisam de fidelidade total); YAML (quarentena, roteiros do agente falso, `permissions.yaml`) com `go.yaml.in/yaml/v3` (MIT e Apache 2.0, o fork mantido do `gopkg.in/yaml.v3`). O resto da stack está no [ADR 0001](../decisoes/0001-stack-go.md).
+- **Dependências escolhidas:** mDNS e DNS-SD com `github.com/brutella/dnssd` (consulta em toda máquina, anúncio de reserva no Guardião de máquina Windows); minisign com `aead.dev/minisign`; emulador de terminal com `github.com/charmbracelet/x/vt` ([terminal](../arquitetura/terminal.md)); git pelo binário do sistema, 2.32 ou mais novo, só por `internal/gitx`, nunca por biblioteca Go (worktrees, bundles e `info/exclude` precisam de fidelidade total); YAML (quarentena, roteiros do agente falso, `permissions.yaml`) com `go.yaml.in/yaml/v3` (MIT e Apache 2.0, o fork mantido do `gopkg.in/yaml.v3`). O resto da stack está no [ADR 0001](../decisoes/0001-stack-go.md).
 - **Código só de Windows** em arquivos `_windows.go`; o resto compila em Linux e Windows.
-- **Painel embutido:** o build do painel vai para `internal/panel/webdist/` (fora do git, exceto um arquivo marcador para o `go build` funcionar sem o build do painel). Em desenvolvimento, o servidor do Vite encaminha a API para um `mestre core` local.
+- **Painel embutido:** o build do painel vai para `internal/panel/webdist/` (fora do git, exceto um arquivo marcador para o `go build` funcionar sem o build do painel). Em desenvolvimento, o servidor do Vite encaminha a API para um `mestre run` local, Cidadela de uma Guilda de teste.
 
 ## Idioma
 
@@ -80,7 +81,8 @@ Nomes dos termos do produto no código (use sempre estes):
 | Base / Ficha | `Base` / `Sheet` | Decreto | `Decree` |
 | Classe | `Class` | Caixa de entrada / Espera | `Inbox` / `Wait` |
 | Grão-Mestre | `GrandMaster` | Guardião | `Guardian` |
-| Mestre da mesa | `TableMaster` | Nó / Core | `Node` / `Core` |
+| Mestre da mesa | `TableMaster` | Guilda / Cidadela / Torre | `Guild` / `Citadel` / `Tower` |
+| Ficha da máquina | `MachineSheet` | Época | `Epoch` |
 | Sessão zero | `SessionZero` | Perfil de conta | `AccountProfile` |
 
 Exceções herdadas, mantidas como estão: identificadores de protocolo, variáveis de ambiente e pastas usam `agent` para personagem (`agent.rules`, `MESTRE_AGENT_ID`, `.mestre/agents/`) e `mesa` para mesa (`MESTRE_MESA`, `.mestre/mesas/`). No código Go, os tipos continuam `Character` e `Table`.
@@ -119,7 +121,7 @@ Conventional Commits 1.0.0, em inglês:
 ```
 
 - **type:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `revert`.
-- **scope** (opcional): `core`, `node`, `guardian`, `cli`, `hook`, `providers`, `orchestration`, `classes`, `github`, `telegram`, `approvals`, `healing`, `protocol`, `store`, `vault`, `panel`, `web`, `tools`, `docs`, `sessionzero`, `gitx`, `sync`, `update`, `usage`, `checklist`, `users`, `audit`, `terminal`.
+- **scope** (opcional): `guild`, `replication`, `guardian`, `cli`, `hook`, `providers`, `orchestration`, `classes`, `github`, `telegram`, `approvals`, `healing`, `protocol`, `store`, `vault`, `panel`, `web`, `tools`, `docs`, `sessionzero`, `gitx`, `sync`, `update`, `usage`, `checklist`, `users`, `audit`, `terminal`.
 - **summary:** imperativo, minúsculo, sem ponto final, até 72 caracteres. Ex.: `feat(hook): normalize antigravity camelCase payloads`.
 - Mudança incompatível (protocolo, banco, CLI): `!` depois do tipo e rodapé `BREAKING CHANGE:`.
 - Um commit, um assunto; código, testes e documentação da mesma mudança vão juntos.

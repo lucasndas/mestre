@@ -1,6 +1,6 @@
 # Verificação de docs
 
-> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite e grafo de "Depende de") na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite e grafo de "Depende de") na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -28,7 +28,7 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
 5. **Cabeçalho obrigatório** em todo documento, inclusive `INDEX.md`:
    - linha 1: `# <Título>`; linha 2: vazia;
    - linha 3: `> **Assunto:** <texto> · **Componente:** <valor> · **Atualizado:** <AAAA-MM-DD>`;
-   - componente: `Core`, `Node`, `Guardião`, `CLI`, `Painel`, `Todos` ou `Projeto`;
+   - componente: `Motor`, `Guardião`, `CLI`, `Painel`, `Todos` ou `Projeto`;
    - data válida e não futura (a ferramenta recebe o relógio injetável, ver [dubles.md](dubles.md)).
 6. **Seções na ordem certa:**
    - *documento de funcionalidade* (todo documento com a seção Objetivo): as seções de nível 2 `Objetivo`, `Comportamento`, `Regras e erros`, `Critérios de aceite`, `Depende de` e, opcionais no fim, `Verificar na implementação`, `A confirmar` e `Fontes`;
@@ -42,7 +42,7 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
    - suíte: `rápida`, `completa` ou `pesada`;
    - um documento usa uma sigla só, e nenhuma sigla aparece em dois documentos;
    - `NN` não se repete no documento (pode haver buracos: critério removido não renumera os outros);
-   - critério *pesada* precisa citar um critério global, `(MVP-1)` a `(MVP-14)` (sozinho ou numa lista, como `(MVP-2, MVP-13)`), porque a suíte pesada só existe para eles ([testes.md](testes.md)): os testes de falha da autocura citam `(MVP-2)`, os de conformidade com provedores citam `(MVP-6)` e os que exigem instalar serviços citam `(MVP-1)` ou `(MVP-13)`.
+   - critério *pesada* precisa citar um critério global, `(MVP-1)` a `(MVP-15)` (sozinho ou numa lista, como `(MVP-2, MVP-13)`), porque a suíte pesada só existe para eles ([testes.md](testes.md)): os testes de falha da autocura citam `(MVP-2)`, os de conformidade com provedores citam `(MVP-6)`, os que exigem instalar serviços citam `(MVP-1)` ou `(MVP-13)` e os de troca de Cidadela citam `(MVP-15)`.
 8. **Nomes de arquivo:** pastas e arquivos de `docs/` só com minúsculas sem acento, dígitos e hífen, terminando em `.md` (os ADRs começam com quatro dígitos). Nomes de relatório são recusados: `SUMMARY.md`, `IMPLEMENTATION_NOTES.md`, `CHANGES.md`, `PROGRESS.md` e os equivalentes `resumo.md`, `relatorio.md`, `progresso.md`, `mudancas.md` (lista padrão, em qualquer pasta).
 9. **Glossário legível:** a tabela de [glossario.md](../produto/glossario.md) é lida pelo mesmo leitor que gera a ajuda dos termos no painel e no Telegram, que confere o formato definido lá (três colunas, tamanho da ajuda curta, link de detalhes válido); se ele não conseguir ler, falha.
 

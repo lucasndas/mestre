@@ -1,26 +1,26 @@
 # Terminal
 
-> **Assunto:** pseudo-terminal de cada agente no nó: PTY/ConPTY, emulador de terminal, tamanho fixo, buffer, log, digitação e encerramento da árvore de processos · **Componente:** Node · **Atualizado:** 2026-10-12
+> **Assunto:** pseudo-terminal de cada agente na máquina onde roda: PTY/ConPTY, emulador de terminal, tamanho fixo, buffer, log, digitação e encerramento da árvore de processos · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Ser o dono de tudo o que acontece entre o processo de um agente (ou de um terminal simples) e o resto do Mestre: como o terminal nasce, como a tela é lida pelo motor, como a saída chega ao painel, quem pode digitar nele e como ele termina. Cada terminal vive no motor do nó onde roda (`mestre-node`, inclusive no Core: [componentes](componentes.md)).
+Ser o dono de tudo o que acontece entre o processo de um agente (ou de um terminal simples) e o resto do Mestre: como o terminal nasce, como a tela é lida pelo motor, como a saída chega ao painel, quem pode digitar nele e como ele termina. Cada terminal vive no motor (`mestre`) da máquina onde roda, Cidadela ou Torre ([componentes](componentes.md)).
 
 ## Comportamento
 
 ### Criação
 
-- Só o motor do nó cria terminais, a pedido do Core (`terminal.open`, [protocolo](../conectividade/protocolo.md)), com a base já resolvida: executável, argumentos, ambiente e pasta ([adaptador](../provedores/adaptador.md)).
-- **Linux:** `creack/pty`; o processo nasce com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) numa sessão nova (`setsid`) e dentro do cgroup v2 próprio do terminal, `term-<id>`, criado sob o cgroup delegado do `mestre-node` (`Delegate=yes`, [componentes](componentes.md#serviços-e-contas-padrão)) e passado ao `clone` (`CLONE_INTO_CGROUP`). O processo já nasce no cgroup, sem janela de corrida, e todo descendente fica nele, mesmo o que troca de pai ou de sessão (`nohup`, double fork, `setsid -f`). O cgroup agrupa a árvore para o encerramento e identifica o terminal no [canal local](canal-local.md#identificação-e-versão).
+- Só o motor da máquina cria terminais, a pedido da Cidadela (`terminal.open`, [protocolo](../conectividade/protocolo.md)), com a base já resolvida: executável, argumentos, ambiente e pasta ([adaptador](../provedores/adaptador.md)).
+- **Linux:** `creack/pty`; o processo nasce com a conta `mestre-agente` ([segurança](seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)) numa sessão nova (`setsid`) e dentro do cgroup v2 próprio do terminal, `term-<id>`, criado sob o cgroup delegado do `mestre` (`Delegate=yes`, [componentes](componentes.md#serviços-e-contas-padrão)) e passado ao `clone` (`CLONE_INTO_CGROUP`). O processo já nasce no cgroup, sem janela de corrida, e todo descendente fica nele, mesmo o que troca de pai ou de sessão (`nohup`, double fork, `setsid -f`). O cgroup agrupa a árvore para o encerramento e identifica o terminal no [canal local](canal-local.md#identificação-e-versão).
 - **Linux sem cgroup delegado** (suíte completa, que roda como processos comuns, ou LIN-11 do [checklist](../plataforma/checklist.md#itens-linux) falhou): o terminal nasce só na sessão nova, que agrupa a árvore dele.
 - **Windows:** wrapper próprio de ConPTY dentro do serviço; o processo nasce com a conta `mestre-agente`, por `CreateProcessAsUser` com o perfil dela carregado ([Windows](windows.md#conpty)); cada terminal entra num Job Object próprio com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, que agrupa a árvore dele.
 - `TERM=xterm-256color` no ambiente de todo terminal.
-- **Tamanho:** 200 colunas × 50 linhas (padrão, configurável no nó), definido na criação e **fixo**. O navegador nunca redimensiona: o xterm.js mostra o terminal com rolagem e zoom. Assim vários navegadores veem exatamente a mesma tela, e as telas reconhecidas pelo adaptador não mudam com quem está olhando.
+- **Tamanho:** 200 colunas × 50 linhas (padrão, configurável por máquina), definido na criação e **fixo**. O navegador nunca redimensiona: o xterm.js mostra o terminal com rolagem e zoom. Assim vários navegadores veem exatamente a mesma tela, e as telas reconhecidas pelo adaptador não mudam com quem está olhando.
 - O terminal é registrado em `terminals` ([persistência](persistencia.md#registro-de-terminais)) antes de o processo começar a rodar.
 
-### Emulador de terminal no nó
+### Emulador de terminal na máquina
 
-- Toda saída do processo passa por um emulador VT no motor do nó (biblioteca Go `github.com/charmbracelet/x/vt`, ver [Verificar](#verificar-na-implementação)), que mantém a tela atual, a posição do cursor e um histórico de 5.000 linhas (padrão).
+- Toda saída do processo passa por um emulador VT no motor da máquina (biblioteca Go `github.com/charmbracelet/x/vt`, ver [Verificar](#verificar-na-implementação)), que mantém a tela atual, a posição do cursor e um histórico de 5.000 linhas (padrão).
 - O emulador é a única fonte de "tela" do Mestre:
   - `mestre check` e a mensagem `terminal.screen` devolvem o texto da tela (e, com `--lines`, do histórico), sem sequências de controle;
   - a operação `Screens` do adaptador recebe a tela renderizada para reconhecer prontidão e telas interativas ([adaptador](../provedores/adaptador.md#prontidão-e-telas-interativas));
@@ -28,8 +28,8 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 ### Buffer, painel e log
 
-- **Buffer circular de 1 MiB** (padrão) por terminal, **no nó**, com os bytes crus e o deslocamento de cada um. O Core não guarda buffer: para mostrar um terminal no painel, ou depois de uma reconexão, ele pede ao nó `terminal.replay` a partir de um deslocamento ([protocolo](../conectividade/protocolo.md#multiplexação-e-prioridade)). Trecho que já saiu do buffer aparece como "trecho perdido".
-- **Log completo** de cada terminal no disco do nó, com rotação e mascaramento por linha ([persistência](persistencia.md#logs)). O fluxo ao vivo não é mascarado: é a tela do agente.
+- **Buffer circular de 1 MiB** (padrão) por terminal, **na máquina do terminal**, com os bytes crus e o deslocamento de cada um. A Cidadela não guarda buffer: para mostrar um terminal no painel, ou depois de uma reconexão, ela pede à máquina `terminal.replay` a partir de um deslocamento ([protocolo](../conectividade/protocolo.md#multiplexação-e-prioridade)). Trecho que já saiu do buffer aparece como "trecho perdido".
+- **Log completo** de cada terminal no disco da máquina, com rotação e mascaramento por linha ([persistência](persistencia.md#logs)). O fluxo ao vivo não é mascarado: é a tela do agente.
 
 ### Digitação
 
@@ -43,7 +43,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 3. **Forçado:** no Linux, `cgroup.kill` no cgroup do terminal (alcança também quem saiu da sessão com `setsid -f`), espera `populated 0` em `cgroup.events` (por inotify, sem consulta periódica) e remove o cgroup; sem cgroup delegado, `SIGKILL` para o grupo e para todo processo que ainda tenha a mesma sessão. No Windows, `TerminateJobObject`.
 
 - Quando encerrar é seguro (e quando é forçado) é decidido em [personagens](../orquestracao/personagens.md); este documento só garante que nenhum processo da árvore sobra.
-- Processo que termina sem pedido: o nó registra o código de saída e informa `terminal.status`; o personagem vai para `interrupted` ([personagens](../orquestracao/personagens.md)).
+- Processo que termina sem pedido: o motor registra o código de saída e informa `terminal.status`; o personagem vai para `interrupted` ([personagens](../orquestracao/personagens.md)).
 
 ## Regras e erros
 
@@ -55,7 +55,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 
 ## Critérios de aceite
 
-- **CA-TERM-01** · *rápida* — **Dado** um PTY falso que escreveu 1,5 MiB, **quando** o Core pede `terminal.replay` a partir do deslocamento 0, **então** recebe o trecho a partir de 0,5 MiB e a marca de "trecho perdido" antes dele.
+- **CA-TERM-01** · *rápida* — **Dado** um PTY falso que escreveu 1,5 MiB, **quando** a Cidadela pede `terminal.replay` a partir do deslocamento 0, **então** recebe o trecho a partir de 0,5 MiB e a marca de "trecho perdido" antes dele.
 - **CA-TERM-02** · *rápida* — **Dado** a gravação da tela de início de cada provedor, **quando** os bytes passam pelo emulador, **então** o texto da tela tem o prompt de entrada na linha esperada e nenhuma sequência de controle.
 - **CA-TERM-03** · *rápida* — **Dado** uma tela que muda a cada 300 ms e depois para, **quando** passam 500 ms de relógio falso sem mudança, **então** a tela é dada como estável uma única vez.
 - **CA-TERM-04** · *rápida* — **Dado** dois navegadores abrindo o mesmo terminal com larguras diferentes, **quando** recebem a saída, **então** o tamanho do terminal continua 200×50 e os dois recebem os mesmos bytes.
@@ -65,7 +65,7 @@ Ser o dono de tudo o que acontece entre o processo de um agente (ou de um termin
 ## Depende de
 
 - [Dublês](../qualidade/dubles.md) (PTY falso, relógio injetável)
-- [Persistência](persistencia.md) · [Windows](windows.md) · [Segurança](seguranca.md) · [Componentes](componentes.md) (`Delegate=yes` no `mestre-node`)
+- [Persistência](persistencia.md) · [Windows](windows.md) · [Segurança](seguranca.md) · [Componentes](componentes.md) (`Delegate=yes` no `mestre`)
 
 ## Verificar na implementação
 

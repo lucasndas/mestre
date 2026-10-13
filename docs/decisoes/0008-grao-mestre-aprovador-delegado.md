@@ -1,6 +1,6 @@
 # ADR 0008: Grão-Mestre como aprovador delegado
 
-> **Assunto:** por que o Grão-Mestre aprova em nome dos usuários, com política, e como isso chega ao GitHub · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** por que o Grão-Mestre aprova em nome dos usuários, com política, e como isso chega ao GitHub · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 

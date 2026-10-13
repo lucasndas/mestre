@@ -1,6 +1,6 @@
 # Parear o Telegram
 
-> **Assunto:** passo a passo para criar o bot do Telegram, ligá-lo ao Mestre e parear cada usuário por código · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** passo a passo para criar o bot do Telegram, ligá-lo ao Mestre e parear cada usuário por código · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 Guia para quem usa. Há duas partes: **ligar o bot** (uma vez, feito pelo Dono) e **parear cada usuário** (inclusive o próprio Dono). As regras de níveis, códigos e PIN estão em [usuários e níveis](../telegram/usuarios-e-niveis.md); o funcionamento do bot, em [bot](../telegram/bot.md).
 
@@ -25,7 +25,7 @@ Antes: tenha feito o [primeiro acesso](primeiro-acesso.md) (Dono criado, com PIN
 2. O painel mostra um **código** e um **link**. O código é de uso único e vence em pouco tempo.
 3. No celular, toque no link: ele abre a conversa com o bot. Toque em **Iniciar**. Se preferir, abra a conversa privada com o bot e envie `/start <código>` ou só o código.
 4. O bot responde com o seu nível, os workspaces e uma mensagem de boas-vindas.
-5. Teste: envie `/status`. O bot responde com o estado do Core, dos nós e dos agentes.
+5. Teste: envie `/status`. O bot responde com o estado da Cidadela, das máquinas e dos agentes.
 
 ### Outro usuário
 
@@ -44,7 +44,7 @@ Antes: tenha feito o [primeiro acesso](primeiro-acesso.md) (Dono criado, com PIN
 | O bot não responde mais nada às tentativas | Muitas tentativas erradas: o bot fica em silêncio por um tempo ([regras](../telegram/usuarios-e-niveis.md#pareamento-por-código)). Espere e use um código novo. |
 | O código foi enviado num grupo | Mensagens em grupo são ignoradas. Envie de novo na conversa privada com o bot. |
 | A pessoa trocou de conta do Telegram | O Dono limpa o ID do Telegram no cadastro dela e gera um código novo. |
-| O painel não mostra o bot como conectado | Confira se o token foi colado inteiro e se o Core tem acesso à internet. Os alertas aparecem no painel de saúde ([checklist](../plataforma/checklist.md)). |
+| O painel não mostra o bot como conectado | Confira se o token foi colado inteiro e se a Cidadela tem acesso à internet. Os alertas aparecem no painel de saúde ([checklist](../plataforma/checklist.md)). |
 | Um Observador escreve e nada acontece | É o esperado: Observador consulta e recebe alertas, mas não conversa com o Grão-Mestre. |
 
 ## Se o token vazar

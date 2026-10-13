@@ -1,6 +1,6 @@
 # Telegram
 
-> **Assunto:** índice do canal Telegram com os usuários autorizados · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** índice do canal Telegram com os usuários autorizados · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|

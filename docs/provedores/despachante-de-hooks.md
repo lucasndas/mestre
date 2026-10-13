@@ -1,6 +1,6 @@
 # Despachante de hooks (`mestre hook`)
 
-> **Assunto:** o comando `mestre hook`: fluxo de cada chamada, prazos, modo degradado, erro interno e formato das respostas por provedor · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** o comando `mestre hook`: fluxo de cada chamada, prazos, modo degradado, erro interno e formato das respostas por provedor · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -14,7 +14,7 @@ Uso interno, só pelos arquivos de hooks gerados: `mestre hook --provider <id> -
 
 1. **Sem `MESTRE_AGENT_ID` no ambiente:** responde neutro e sai na hora, sem ler configuração nem abrir conexão. Neutro é: nada no stdout e exit 0 (Claude, Codex); `{"decision":"allow"}` no PreToolUse e JSON vazio válido nos demais eventos (Antigravity).
 2. Lê o stdin (até 4 MiB, padrão; o excesso é descartado e marcado como truncado) e normaliza (`NormalizeHook`).
-3. Pede ao motor do próprio nó, pelo [canal local](../arquitetura/canal-local.md) (`cmd: "hook"`), a decisão (`pre_tool`, `permission_request`) ou o contexto (`session_start`, `turn_start`). A decisão é local: o nó já tem as [regras efetivas](../classes/permissoes.md#regras-efetivas) do personagem e aplica o [pipeline de permissões](../classes/permissoes.md#pipeline-de-decisão) sem ida ao Core. A resposta traz também os hooks síncronos da classe a rodar ([classes](../classes/classes.md#hooks-extras-da-classe)).
+3. Pede ao motor da própria máquina, pelo [canal local](../arquitetura/canal-local.md) (`cmd: "hook"`), a decisão (`pre_tool`, `permission_request`) ou o contexto (`session_start`, `turn_start`). A decisão é local: a máquina já tem as [regras efetivas](../classes/permissoes.md#regras-efetivas) do personagem e aplica o [pipeline de permissões](../classes/permissoes.md#pipeline-de-decisão) sem ida à Cidadela. A resposta traz também os hooks síncronos da classe a rodar ([classes](../classes/classes.md#hooks-extras-da-classe)).
 4. **Prazo:** a decisão sai em menos de 1 s (padrão: 800 ms para `pre_tool` e `permission_request`; 300 ms para eventos só informativos, que o motor confirma e processa depois). Hooks síncronos da classe podem usar mais tempo, até o tempo limite deles, sempre 2 s abaixo do tempo limite configurado no provedor.
 5. Formata a resposta (`FormatResponse`, tabela abaixo) e sai.
 
@@ -22,7 +22,7 @@ Uso interno, só pelos arquivos de hooks gerados: `mestre hook --provider <id> -
 
 Motor fora do ar (sem conexão ou sem resposta no prazo): valem só as regras locais que o hook checa sozinho:
 - as regras fixas de segurança embutidas no binário ([permissões](../classes/permissoes.md#regras-fixas-de-segurança));
-- o retrato das regras efetivas do personagem, `policy.json`, lido de `/var/lib/mestre/agentes/<id>/` no Linux ou `%ProgramData%\Mestre\no\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Nos dois sistemas o hook roda como `mestre-agente`, que pode ler o retrato e não pode alterá-lo.
+- o retrato das regras efetivas do personagem, `policy.json`, lido de `/var/lib/mestre/agentes/<id>/` no Linux ou `%ProgramData%\Mestre\maquina\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Nos dois sistemas o hook roda como `mestre-agente`, que pode ler o retrato e não pode alterá-lo.
 
 O que elas negarem é negado; o que pediria aprovação é negado com o motivo "motor indisponível, tente depois"; o resto é liberado. O evento vai para a fila local do hook (`/var/spool/mestre/hook/`, ou `no\fila-hook\` no Windows), em que o hook só cria arquivos; o motor reenvia ao voltar e valida cada arquivo antes de usar. Em `turn_start`, o turno segue sem contexto novo.
 
@@ -65,4 +65,4 @@ No Claude, nunca usar exit 1 para bloquear: exit 1 não bloqueia. No Antigravity
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** os hooks disparam para as ferramentas usadas **dentro** de um subagente nativo, com o mesmo `MESTRE_AGENT_ID` do personagem, nos três provedores ([subagentes nativos](../classes/permissoes.md#subagentes-nativos)). **Padrão:** disparam (o subagente roda no mesmo processo e herda o ambiente). **Se falhar:** naquele provedor e nó, as regras efetivas passam a negar a ferramenta de subagente no próprio personagem (a chamada ao subagente passa pelo `pre_tool` do personagem antes de existir), e o checklist avisa. **Onde:** etapa 12 do [teste de conformidade](conformidade.md).
+- **Verificar na implementação:** os hooks disparam para as ferramentas usadas **dentro** de um subagente nativo, com o mesmo `MESTRE_AGENT_ID` do personagem, nos três provedores ([subagentes nativos](../classes/permissoes.md#subagentes-nativos)). **Padrão:** disparam (o subagente roda no mesmo processo e herda o ambiente). **Se falhar:** naquele provedor e máquina, as regras efetivas passam a negar a ferramenta de subagente no próprio personagem (a chamada ao subagente passa pelo `pre_tool` do personagem antes de existir), e o checklist avisa. **Onde:** etapa 12 do [teste de conformidade](conformidade.md).

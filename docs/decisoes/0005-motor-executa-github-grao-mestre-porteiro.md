@@ -1,6 +1,6 @@
 # ADR 0005: O motor executa o GitHub; o Grão-Mestre é o porteiro
 
-> **Assunto:** por que nenhum agente tem credencial do GitHub · **Componente:** Core · **Atualizado:** 2026-10-12
+> **Assunto:** por que nenhum agente tem credencial do GitHub · **Componente:** Motor · **Atualizado:** 2026-10-13
 
 ## Status
 

@@ -195,10 +195,14 @@ func TestHeaderComponentAndFutureDate(t *testing.T) {
 	t.Parallel()
 	tr := newTree().area("a").
 		add("docs/a/srv.md", "# S\n\n> **Assunto:** x · **Componente:** Servidor · **Atualizado:** 2026-10-12\n").
-		add("docs/a/fut.md", "# F\n\n> **Assunto:** x · **Componente:** Core · **Atualizado:** 2026-10-13\n")
+		add("docs/a/fut.md", "# F\n\n> **Assunto:** x · **Componente:** Motor · **Atualizado:** 2026-10-13\n").
+		add("docs/a/core.md", "# C\n\n> **Assunto:** x · **Componente:** Core · **Atualizado:** 2026-10-12\n").
+		add("docs/a/node.md", "# N\n\n> **Assunto:** x · **Componente:** Node · **Atualizado:** 2026-10-12\n")
 	got := only(run1(t, tr), ckHeader)
-	if len(got) != 2 || !strings.HasPrefix(got[0], "docs/a/fut.md:3: cabeçalho: data 2026-10-13 está no futuro") ||
-		!strings.HasPrefix(got[1], `docs/a/srv.md:3: cabeçalho: componente "Servidor" inválido`) {
+	if len(got) != 4 || !strings.HasPrefix(got[0], `docs/a/core.md:3: cabeçalho: componente "Core" inválido`) ||
+		!strings.HasPrefix(got[1], "docs/a/fut.md:3: cabeçalho: data 2026-10-13 está no futuro") ||
+		!strings.HasPrefix(got[2], `docs/a/node.md:3: cabeçalho: componente "Node" inválido`) ||
+		!strings.HasPrefix(got[3], `docs/a/srv.md:3: cabeçalho: componente "Servidor" inválido`) {
 		t.Fatalf("errors = %q", got)
 	}
 }
@@ -256,6 +260,12 @@ func TestHeavyCriterionNeedsMVP(t *testing.T) {
 	}
 	ok := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-4)."
 	mustClean(t, run1(t, newTree().area("a").add("docs/a/p.md", feature("P", "P", []string{ok}))))
+	last := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-13, MVP-15)."
+	mustClean(t, run1(t, newTree().area("a").add("docs/a/p.md", feature("P", "P", []string{last}))))
+	beyond := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-16)."
+	if got := only(run1(t, newTree().area("a").add("docs/a/p.md", feature("P", "P", []string{beyond}))), ckCriteria); len(got) != 1 {
+		t.Fatalf("MVP-16 must be rejected, errors = %q", got)
+	}
 }
 
 // CA-VERDOCS-09

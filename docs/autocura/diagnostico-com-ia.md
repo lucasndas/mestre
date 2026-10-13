@@ -1,6 +1,6 @@
 # Diagnóstico com IA
 
-> **Assunto:** camada 4 da autocura: agente local restrito propõe um script, uma pessoa aprova, o Guardião executa uma vez · **Componente:** Guardião · **Atualizado:** 2026-10-12
+> **Assunto:** camada 4 da autocura: agente local restrito propõe um script, uma pessoa aprova, o Guardião executa uma vez · **Componente:** Guardião · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -10,14 +10,14 @@ Quando o runbook não resolve, usar um agente de IA na própria máquina com pro
 
 ### Quando roda
 
-- Automaticamente, quando a camada 3 esgota as tentativas ou, no [modo máquina única](camadas.md#modo-máquina-única), quando o runbook do próprio Guardião do Core se esgota.
+- Automaticamente, quando a camada 3 esgota as tentativas ou, no [modo máquina única](camadas.md#modo-máquina-única), quando o runbook do próprio Guardião da Cidadela se esgota.
 - A pedido de um Dono ou Administrador (painel, [página reserva](pagina-reserva.md) ou [Telegram em modo reduzido](telegram-modo-reduzido.md)), em incidente aberto.
 - No máximo **2 execuções do agente por incidente** (padrão). Depois disso, só camada 5.
 
 ### Ficha de diagnóstico
 
 - O Dono escolhe no painel uma ficha de diagnóstico **por máquina** ([administração](../painel/administracao.md)), porque cada máquina tem os próprios provedores e logins ([bases e fichas](../orquestracao/bases-e-fichas.md)).
-- O Core envia a cada Guardião a ficha resolvida: provedor, comando por sistema, perfil de conta. Não é segredo; as credenciais do provedor ficam onde já estão (perfil da conta).
+- A Cidadela envia a cada Guardião a ficha resolvida: provedor, comando por sistema, perfil de conta. Não é segredo; as credenciais do provedor ficam onde já estão (perfil da conta).
 - Sem ficha configurada, ou provedor não instalado/logado (checklist), a camada 4 é pulada e o incidente vai para a camada 5 com o motivo.
 
 ### Execução restrita
@@ -28,7 +28,7 @@ Quando o runbook não resolve, usar um agente de IA na própria máquina com pro
    - saída de `status`, `checklist` e o histórico de ações do incidente.
 2. Inicia o agente **em modo não interativo**, com a pasta temporária (legível pela conta dos agentes) como pasta de trabalho, como `mestre-agente` (nunca root, LocalSystem ou a conta do usuário), com o perfil de conta da ficha:
    - Linux: troca para a conta `mestre-agente` ([componentes](../arquitetura/componentes.md#serviços-e-contas-padrão));
-   - Windows (Core ou nó): o próprio Guardião inicia o processo direto como `mestre-agente`, pelo mesmo mecanismo do `mestre-node` (senha guardada, logon em lote, perfil carregado), funcionando com o `mestre-node` fora e sem ninguém logado ([Windows](../arquitetura/windows.md#diagnóstico-com-ia)).
+   - Windows (Cidadela ou Torre): o próprio Guardião inicia o processo direto como `mestre-agente`, pelo mesmo mecanismo do serviço `mestre` (senha guardada, logon em lote, perfil carregado), funcionando com o `mestre` fora e sem ninguém logado ([Windows](../arquitetura/windows.md#diagnóstico-com-ia)).
 3. Restrições nativas de só leitura, por provedor:
 
    | Provedor | Restrição proposta |
@@ -50,8 +50,8 @@ O agente não recebe segredos, não enxerga o sistema vivo (só cópias) e não 
   - trechos destrutivos (apagar arquivos em massa, mexer em firewall, serviços ou usuários do sistema) são **destacados** como "ação destrutiva".
 - O pedido de aprovação mostra: máquina, incidente, diagnóstico, causa provável, riscos, como reverter, os 8 primeiros caracteres do hash e o **script inteiro, nunca resumido nem cortado**.
 - Canais:
-  - Core no ar: [central de aprovações](../painel/conversa-e-aprovacoes.md) e Telegram pelo motor ([fluxo](../aprovacoes/fluxo.md));
-  - Core fora: [página reserva](pagina-reserva.md) e [Telegram em modo reduzido](telegram-modo-reduzido.md). No Telegram, script com mais de 3.500 caracteres vai como arquivo `.sh` ou `.ps1` anexado.
+  - Cidadela no ar: [central de aprovações](../painel/conversa-e-aprovacoes.md) e Telegram pelo motor ([fluxo](../aprovacoes/fluxo.md));
+  - Cidadela fora: [página reserva](pagina-reserva.md) e [Telegram em modo reduzido](telegram-modo-reduzido.md). No Telegram, script com mais de 3.500 caracteres vai como arquivo `.sh` ou `.ps1` anexado.
 - Só **Dono ou Administrador** aprova, sempre com **PIN** ([PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)). O Grão-Mestre nunca aprova scripts de cura.
 - A aprovação vale para aquele hash e expira em 30 min (padrão). Negar ou expirar → camada 5 (ou nova proposta, se ainda couber no limite).
 
@@ -83,8 +83,8 @@ Cada etapa gera registro: início do agente (ficha, provedor, versão), proposta
 - **CA-DIAG-04** · *rápida* — **Dado** um script já executado, **quando** chega novo pedido de execução, **então** a resposta é `already_executed`.
 - **CA-DIAG-05** · *rápida* — **Dado** um script que contém `systemctl stop mestre-guardiao`, **quando** a proposta chega, **então** é recusada sem ir para aprovação.
 - **CA-DIAG-06** · *completa* — **Dado** um agente falso de diagnóstico, **quando** o Guardião monta a pasta temporária, **então** ela contém logs e configuração mascarados e nenhum valor do cofre de teste.
-- **CA-DIAG-07** · *rápida* — **Dado** um script de 5.000 caracteres e o Core fora, **quando** vai ao Telegram em modo reduzido, **então** segue como arquivo anexado e a mensagem traz o hash.
-- **CA-DIAG-08** · *completa* — **Dado** o motor do Core fora e um script aprovado na página reserva, **quando** o Guardião do Core executa, **então** a auditoria local chega ao Core depois que ele volta.
+- **CA-DIAG-07** · *rápida* — **Dado** um script de 5.000 caracteres e a Cidadela fora, **quando** vai ao Telegram em modo reduzido, **então** segue como arquivo anexado e a mensagem traz o hash.
+- **CA-DIAG-08** · *completa* — **Dado** o motor da Cidadela fora e um script aprovado na página reserva, **quando** o Guardião da Cidadela executa, **então** a auditoria local chega à Cidadela depois que ele volta.
 
 ## Depende de
 
@@ -98,8 +98,8 @@ Cada etapa gera registro: início do agente (ficha, provedor, versão), proposta
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** as restrições de só leitura da tabela impedem, em cada CLI no modo não interativo, que o agente escreva ou rode comandos. **Padrão:** a tabela acima. **Se falhar:** aquele provedor não faz diagnóstico naquele nó; o Guardião usa outro provedor que passou e, sem nenhum, o incidente segue sem diagnóstico com IA para a camada seguinte ([camadas](camadas.md)). **Onde:** etapa 11 do [teste de conformidade](../provedores/conformidade.md).
-- **Verificar na implementação:** no Windows, o Guardião (LocalSystem) inicia o agente como `mestre-agente`, com o `mestre-node` parado e sem ninguém logado, e o CLI encontra o login do perfil de conta. **Padrão:** funciona; LocalSystem já tem os privilégios de iniciar processo com outra conta e lê a senha guardada. **Se falhar:** o diagnóstico com IA não é oferecido nas máquinas Windows; o incidente segue sem ele para a camada 5, com o motivo, e a ficha de diagnóstico dessas máquinas fica bloqueada no painel com a explicação. **Onde:** suíte pesada, nos testes de falha da autocura com a VM Windows como Core e como nó, sem usuário logado.
+- **Verificar na implementação:** as restrições de só leitura da tabela impedem, em cada CLI no modo não interativo, que o agente escreva ou rode comandos. **Padrão:** a tabela acima. **Se falhar:** aquele provedor não faz diagnóstico naquela máquina; o Guardião usa outro provedor que passou e, sem nenhum, o incidente segue sem diagnóstico com IA para a camada seguinte ([camadas](camadas.md)). **Onde:** etapa 11 do [teste de conformidade](../provedores/conformidade.md).
+- **Verificar na implementação:** no Windows, o Guardião (LocalSystem) inicia o agente como `mestre-agente`, com o serviço `mestre` parado e sem ninguém logado, e o CLI encontra o login do perfil de conta. **Padrão:** funciona; LocalSystem já tem os privilégios de iniciar processo com outra conta e lê a senha guardada. **Se falhar:** o diagnóstico com IA não é oferecido nas máquinas Windows; o incidente segue sem ele para a camada 5, com o motivo, e a ficha de diagnóstico dessas máquinas fica bloqueada no painel com a explicação. **Onde:** suíte pesada, nos testes de falha da autocura com a VM Windows como Cidadela e como Torre, sem usuário logado.
 
 ## Fontes
 

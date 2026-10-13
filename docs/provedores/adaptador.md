@@ -1,6 +1,6 @@
 # Adaptador de provedor
 
-> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-12
+> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -14,8 +14,8 @@ Cada provedor tem um adaptador registrado pelo seu id (`claude-code`, `codex`, `
 
 | Operação | Recebe | Devolve | Quando |
 |---|---|---|---|
-| `BuildLaunch` (montar comando de início) | base, ficha, personagem, perfil de conta, SO do nó, regras efetivas, id de sessão a retomar (opcional) | executável, argumentos, ambiente, pasta | ao criar ou [retomar](#retomada-de-sessão) um personagem |
-| `HookFiles` (gerar arquivos de hooks) | worktree ou perfil de conta, SO do nó, caminho estável do binário `mestre` | lista de arquivos e a parte gerenciada de cada um | ao abrir a mesa ([mesa](../sessao-zero/mesa.md)), ao configurar o perfil e ao regenerar |
+| `BuildLaunch` (montar comando de início) | base, ficha, personagem, perfil de conta, SO da máquina, regras efetivas, id de sessão a retomar (opcional) | executável, argumentos, ambiente, pasta | ao criar ou [retomar](#retomada-de-sessão) um personagem |
+| `HookFiles` (gerar arquivos de hooks) | worktree ou perfil de conta, SO da máquina, caminho estável do binário `mestre` | lista de arquivos e a parte gerenciada de cada um | ao abrir a mesa ([mesa](../sessao-zero/mesa.md)), ao configurar o perfil e ao regenerar |
 | `PreTrust` (pré-confiar pasta) | perfil de conta, caminho do worktree, raiz do repositório | entradas gravadas no arquivo de confiança do provedor | antes do primeiro personagem do worktree; idempotente |
 | `DeliverMestreLayer` (entregar camada do Mestre) | caminho de `MESTRE.md` do personagem | argumentos e/ou arquivos extras | junto com `BuildLaunch` ([personagem](../sessao-zero/personagem.md)) |
 | `NormalizeHook` (normalizar entrada de hook) | evento nativo, JSON do stdin | evento no formato interno | a cada chamada de `mestre hook` |
@@ -43,7 +43,7 @@ Regras do contrato: nenhuma operação escreve no `AGENTS.md`; toda geração é
 | `prompt`, `last_message` | texto do turno e última resposta, quando existem (truncados) |
 | `stop_reason`, `error` | `normal`, `interrupted`, `max_steps`, `rate_limit`, `auth`, `error` e o detalhe nativo |
 | `usage` | só em `usage`: tokens, custo estimado, % de contexto, janelas de limite (`window`, `used_pct`, `resets_at`) |
-| `received_at` | instante pelo relógio do nó |
+| `received_at` | instante pelo relógio da máquina |
 
 Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos; sem diferença de maiúsculas no Windows) antes de qualquer decisão.
 
@@ -85,7 +85,7 @@ Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` sã
 
 ### Prontidão e telas interativas
 
-Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela renderizada e ação. **Evitar:** pré-configurar para a tela não aparecer. **Responder:** o adaptador digita a resposta, só quando ela vem de uma decisão já tomada pelo motor (ex.: confiar num worktree criado pelo Mestre; responder a um pedido de permissão nativo com a decisão já registrada para aquela chamada; sem decisão registrada, nega). **Escalar:** o personagem fica `blocked` com motivo `input` ([personagens](../orquestracao/personagens.md)) e o Mestre da mesa é avisado (pode responder com `mestre ask --raw`); login vira alerta do checklist. Tela parada sem hook e sem padrão conhecido por 30 s (padrão) durante o início também escala. "Pronto" é: prompt de entrada visível e tela estável ([terminal](../arquitetura/terminal.md#emulador-de-terminal-no-nó)), ou `session_start` recebido e prompt visível.
+Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela renderizada e ação. **Evitar:** pré-configurar para a tela não aparecer. **Responder:** o adaptador digita a resposta, só quando ela vem de uma decisão já tomada pelo motor (ex.: confiar num worktree criado pelo Mestre; responder a um pedido de permissão nativo com a decisão já registrada para aquela chamada; sem decisão registrada, nega). **Escalar:** o personagem fica `blocked` com motivo `input` ([personagens](../orquestracao/personagens.md)) e o Mestre da mesa é avisado (pode responder com `mestre ask --raw`); login vira alerta do checklist. Tela parada sem hook e sem padrão conhecido por 30 s (padrão) durante o início também escala. "Pronto" é: prompt de entrada visível e tela estável ([terminal](../arquitetura/terminal.md#emulador-de-terminal-na-máquina)), ou `session_start` recebido e prompt visível.
 
 ### Digitação de mensagens
 
@@ -117,7 +117,7 @@ O personagem fica marcado com monitoramento reduzido, com o motivo, quando o pro
 
 ## Regras e erros
 
-- Versão do provedor abaixo da mínima do documento dele: a base é recusada naquele nó com a explicação, e o checklist avisa.
+- Versão do provedor abaixo da mínima do documento dele: a base é recusada naquela máquina com a explicação, e o checklist avisa.
 - Evento nativo desconhecido: registrado no log e respondido com a resposta neutra ([despachante](despachante-de-hooks.md)).
 - Ferramenta não mapeada: tipo `other`, decidida pelo padrão da classe ([permissões](../classes/permissoes.md)).
 

@@ -56,7 +56,7 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 
 ## Conta `mestre-agente` nesta máquina (Linux)
 
-Criada para os spikes do M1 e mantida: é a mesma conta que o Mestre usa ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). O instalador do Core e do nó Linux faz igual ([instalação](../plataforma/instalacao-e-atualizacao.md)):
+Criada para os spikes do M1 e mantida: é a mesma conta que o Mestre usa ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)). O instalador do Mestre faz igual em toda máquina Linux ([instalação](../plataforma/instalacao-e-atualizacao.md)):
 
 ```bash
 sudo useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin mestre-agente
@@ -64,16 +64,13 @@ sudo install -d -m 0755 /var/lib/mestre
 sudo install -d -o mestre-agente -g mestre-agente -m 2770 /var/lib/mestre/contas
 ```
 
-Só da máquina de desenvolvimento (o instalador não faz):
-- `/opt/mestre-clis/`, do root, com os CLIs que o `mestre-agente` executa, porque os da pasta pessoal (`0750`) não são executáveis por ele. Atualize quando o CLI pessoal mudar de versão:
-  - `claude` e `agy`: cópia do binário, `sudo install -m 0755 "$(readlink -f ~/.local/bin/<cli>)" /opt/mestre-clis/bin/<cli>`;
-  - `codex`: a cópia solta do binário **não** funciona; copie o pacote completo e aponte o link: `sudo cp -a ~/.codex/packages/standalone/releases/<versão>-<alvo> /opt/mestre-clis/codex-<versão>` e `sudo ln -sfn /opt/mestre-clis/codex-<versão>/bin/codex /opt/mestre-clis/bin/codex` ([Codex](../provedores/codex.md#contas-múltiplas)).
-- **Sobras do spike dos CLIs** (podem ser apagadas): os perfis `spike-*` em `/var/lib/mestre/contas/` guardam logins reais; apague com `sudo rm -rf /var/lib/mestre/contas/spike-*` quando não forem mais úteis.
-- Regra do sudo `/etc/sudoers.d/mestre-dev-agente` (`lucasndas ALL=(mestre-agente) NOPASSWD: ALL`, modo `0440`, conferida com `sudo visudo -cf`), para testes e spikes iniciarem processos como `mestre-agente`. O Mestre não usa sudo: o `mestre-node` usa `CAP_SETUID`/`CAP_SETGID` ([componentes](../arquitetura/componentes.md)).
+- **CLIs dos provedores:** ficam no `HOME` de cada perfil de conta (`/var/lib/mestre/contas/<perfil>`), gravável pelo `mestre-agente`, instalados pelo instalador oficial de cada provedor na configuração do perfil ([bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta)). Assim a autoatualização deles funciona, e o Mestre não a desliga ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)). Os CLIs da pasta pessoal de quem desenvolve não são usados pelo `mestre-agente`.
+- **Histórico do spike dos CLIs:** o spike usou cópias dos binários em `/opt/mestre-clis/` (e, no Codex, o pacote completo com um link), só porque os CLIs da pasta pessoal (`0750`) não eram executáveis pelo `mestre-agente`; essa pasta pode ser apagada (`sudo rm -rf /opt/mestre-clis`), assim como os perfis `spike-*` em `/var/lib/mestre/contas/`, que guardam logins reais.
+- Regra do sudo `/etc/sudoers.d/mestre-dev-agente` (`lucasndas ALL=(mestre-agente) NOPASSWD: ALL`, modo `0440`, conferida com `sudo visudo -cf`), só da máquina de desenvolvimento, para testes e spikes iniciarem processos como `mestre-agente`. O Mestre não usa sudo: o serviço `mestre` usa `CAP_SETUID`/`CAP_SETGID` ([componentes](../arquitetura/componentes.md)).
 
 ## Windows Sandbox para os spikes do M1
 
-Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) rodam no Windows Sandbox (Windows Pro com o recurso ligado), que começa limpo e não guarda nada ao fechar. Arquivos em `tools/winsandbox/`: `mestre-spikes.wsb` (rede ligada; compartilha só `C:\mestre\tools\winsandbox` como `C:\winsandbox`; roda o preparo ao abrir), `setup.ps1` (instala Git for Windows e Go 1.27.2 com SHA-256 conferido e o Claude Code pelo instalador oficial; clona o repositório em `C:\mestre` dentro do Sandbox, na branch `spike/m1-windows`) e `spikes-prompt.md` (o pedido para a sessão do Claude que roda os spikes).
+Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) continuam rodando no Windows Sandbox (Windows Pro com o recurso ligado), que começa limpo e não guarda nada ao fechar. Arquivos em `tools/winsandbox/`: `mestre-spikes.wsb` (rede ligada; compartilha só `C:\mestre\tools\winsandbox` como `C:\winsandbox`; roda o preparo ao abrir), `setup.ps1` (instala Git for Windows e Go 1.27.2 com SHA-256 conferido e o Claude Code pelo instalador oficial; clona o repositório em `C:\mestre` dentro do Sandbox, na branch `spike/m1-windows`) e `spikes-prompt.md` (o pedido para a sessão do Claude que roda os spikes).
 
 1. No Windows do Dono, clone o repositório em `C:\mestre` (ou atualize com `git pull`).
 2. Abra `C:\mestre\tools\winsandbox\mestre-spikes.wsb` (duplo clique) e espere a janela do preparo terminar.
@@ -83,6 +80,6 @@ Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) rodam no Windows 
 
 ## O que não precisa
 
-- Nenhum serviço instalado (systemd, serviço do Windows, Avahi): a completa roda Core e nó como processos comuns.
+- Nenhum serviço instalado (systemd, serviço do Windows, Avahi): a completa roda a Cidadela e as Torres como processos comuns ou instâncias no processo do teste.
 - Nenhuma conta real de Telegram ou GitHub: as suítes usam os [dublês](../qualidade/dubles.md); o repositório sandbox do GitHub é só para conferências manuais ([projetos de treino](../qualidade/projetos-de-treino.md#sandbox-real-no-github)).
 - Os CLIs dos provedores antes do M3: até lá, o agente falso faz o papel deles.
