@@ -419,6 +419,29 @@ func TestReplicaNeverMigrates(t *testing.T) {
 	}
 }
 
+// A handler that is still running when the database is closed gets an error,
+// not a nil pointer that takes the whole process down.
+func TestUsingTheDatabaseAfterCloseFailsWithAnErrorInsteadOfPanicking(t *testing.T) {
+	t.Parallel()
+	db := open(t, seeded(t, createItems), load(t, createItems), store.Options{})
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := db.Reader().QueryRowContext(ctx, `SELECT 1`).Scan(new(int)); err == nil {
+		t.Error("a read after Close succeeded")
+	}
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO items (name) VALUES ('x')`); err == nil {
+		t.Error("a write after Close succeeded")
+	}
+	if _, err := db.Version(ctx); err == nil {
+		t.Error("Version after Close succeeded")
+	}
+	if err := db.Close(); err != nil {
+		t.Errorf("a second Close = %v", err)
+	}
+}
+
 // CA-PERSIST-07
 func TestReaderSeesOnlyCommittedWhileWriterWorks(t *testing.T) {
 	t.Parallel()
