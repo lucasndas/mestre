@@ -92,7 +92,7 @@ Tabela única de portas e rotas. Os números são os da instância padrão; cada
 | Canal | Linux | Windows | Acesso |
 |---|---|---|---|
 | CLI → motor | socket `/run/mestre/<inst>/cli.sock` | named pipe `\\.\pipe\mestre-<inst>-cli` | servido pelo `mestre` em toda máquina; contrato e acesso em [canal local](canal-local.md) |
-| Motor ↔ Guardião | socket `/run/mestre-guardiao/<inst>/guardiao.sock` | named pipe `\\.\pipe\mestre-<inst>-guardiao` | só a conta do motor (`mestre` ou `NT SERVICE\Mestre`) e a do Guardião; leva o `health` e a concessão `lease` (a cada 30 s, com a época confirmada; [Guardião](../autocura/guardiao.md#canal-local-motor--guardião)) |
+| Motor ↔ Guardião | socket `/run/mestre-guardiao/<inst>/guardiao.sock` | named pipe `\\.\pipe\mestre-<inst>-guardiao` | só a conta do motor (`mestre` ou `NT SERVICE\Mestre`) e a do Guardião; leva o `health` e a concessão `lease` (a cada 30 s, com a época, sem depender do GitHub; [Guardião](../autocura/guardiao.md#canal-local-motor--guardião)) |
 | Motor → `mestre-launcher` (Windows) | — | named pipe `\\.\pipe\mestre-<inst>-launcher` | só `NT SERVICE\Mestre`, conferido também pelo processo cliente ([Windows](windows.md#iniciador-mestre-launcher)) |
 | Operador do PC ↔ motor (Windows) | — | named pipes `\\.\pipe\mestre-<inst>-operador` (processo da sessão) e `\\.\pipe\mestre-<inst>-operador-cli` (CLI e `mestre hook` dos terminais do Operador) | só a conta do usuário configurado e `NT SERVICE\Mestre` ([Windows](windows.md#operador-do-pc)) |
 

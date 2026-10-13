@@ -101,7 +101,7 @@ O catálogo de tipos, com os campos principais e as respostas, e a tabela de có
 
 - **Conexão própria:** o Guardião de cada Torre abre a própria conexão até a Cidadela atual (`/ws/guardian`), com credencial própria. Ela não depende do motor da Torre.
 - **Mensagens:** mesmo envelope e mesmas regras de ack. A versão é **própria** (começa em 1 e é negociada no `guardian.hello` do mesmo jeito), porque o Guardião tem binário e versão independentes; o manifesto de cada release traz as duas faixas ([autoatualização](../plataforma/autoatualizacao.md)). Tipos: [mensagens do Guardião](mensagens.md#guardião-da-torre--cidadela). A `guardian.replica` é a única cópia de usuários que serve login (página reserva); a réplica do banco no motor da Torre não serve login.
-- **Concessão:** pelo canal local, o motor de cada máquina manda ao próprio Guardião a mensagem `lease` a cada 30 s, com a época confirmada; é ela que deixa o Guardião da Cidadela publicar `mestre.local` e arbitrar ([mensagens](mensagens.md#guardião-da-torre--cidadela), [concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
+- **Concessão:** pelo canal local, o motor de cada máquina manda ao próprio Guardião a mensagem `lease` a cada 30 s, com a época, enquanto não está suspenso (não depende do GitHub); é ela que deixa o Guardião da Cidadela publicar `mestre.local` e arbitrar ([mensagens](mensagens.md#guardião-da-torre--cidadela), [concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
 - **Nada derruba a conexão:** nenhuma mensagem desta conexão pede ao Guardião que a feche, se desligue ou se atualize. A atualização do Guardião é feita pelo motor saudável da própria máquina ([autoatualização](../plataforma/autoatualizacao.md)).
 
 ### Canal do navegador

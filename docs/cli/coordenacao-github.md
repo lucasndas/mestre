@@ -48,7 +48,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 | proteção ou ruleset recusou o envio | 3 | `protected` | qual regra recusou; nada é contornado |
 | branch da mesa em conflito com a principal | 7 | `conflict` | atualizar a branch dentro da mesa ([acoes-por-nivel](../github/acoes-por-nivel.md)) |
 | push forçado pedido na branch principal | 3 | `force_main_denied` | push forçado só na branch da mesa |
-| GitHub fora ou cota esgotada | 5 | `github_unavailable` | quando tentar de novo (a resposta do GitHub diz) |
+| GitHub fora ou cota esgotada | 5 | `github_unavailable` | quando tentar de novo (a resposta do GitHub diz); com o aluguel da trava vencido, só as leituras (`issue list`, `pr status`) saem assim, e os comandos que mudam dados saem com 0 e `"queued": true` ([GitHub fora](../guilda/trava-no-github.md#github-fora)) |
 
 - Nenhum comando recebe ou mostra token; nenhum agente faz `git push` para o GitHub.
 - Nenhum comando de mesa revisa, aprova ou faz merge: isso é `mestre gh` ([grao-mestre](grao-mestre.md)).

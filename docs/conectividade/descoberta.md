@@ -57,7 +57,7 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
   - o nome `<host>.local`;
   - o serviço `_mestre._tcp`, na porta do motor da instância, com TXT `guild_id=<id>`, `machine_id=<id>`, `instance=<nome>`, `role=cidadela|torre`, `epoch=<n>` e `v=1`;
   - o serviço `_mestre-guardiao._tcp`, na porta do Guardião.
-- **Só o Guardião da Cidadela** publica também o nome **`mestre.local`**, o endereço do painel, e só enquanto tem a concessão do motor; sem ela, ou com certidão mais nova, retira o nome em até 60 s ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)). Uma Cidadela suspensa e uma Torre nunca o publicam ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)).
+- **Só o Guardião da Cidadela** publica também o nome **`mestre.local`**, o endereço do painel, e só enquanto tem a concessão do motor, que não depende do GitHub; sem ela, ou com certidão mais nova, retira o nome em até 60 s ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)). Uma Cidadela suspensa e uma Torre nunca o publicam ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)).
 - **Quem publica, por sistema:**
   - Linux: o **Avahi**, com o arquivo de serviço `/etc/avahi/services/mestre.service` e a entrada de `mestre.local` em `/etc/avahi/hosts`, reescritos pelo Guardião quando o papel muda;
   - Windows: o **Guardião**, pelo mDNS nativo do Windows (`DnsServiceRegister`; o próprio Windows já responde pelo nome `<host>.local`).

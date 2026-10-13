@@ -21,10 +21,10 @@ Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspa
   - Assim um reinício não perde nem repete updates (deduplicação por `update_id`).
 - **Erros de rede:** o laço tenta de novo com backoff de 1 s a 60 s, com variação aleatória.
 - **Um só leitor:** só a Cidadela da época mais recente lê e envia.
-  - **Época:** toda chamada ao Telegram (inclusive cada `getUpdates`, cada envio e cada ação disparada por um botão) só sai depois de a Cidadela confirmar na trava que a época dela é a mais recente ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); sem a confirmação, nada sai e o envio fica na fila de saída.
-  - **O `409 Conflict` é só sinal** ([por quê](../guilda/trava-no-github.md#o-409-do-telegram)): quem o recebe confere a trava na hora; se a época dele não é a mais recente, para de ler e de enviar e se suspende ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)); se é, segue e registra o alerta na auditoria e no painel.
+  - **Época:** toda chamada ao Telegram (inclusive cada `getUpdates`, cada envio e cada ação disparada por um botão) só sai da Cidadela não suspensa ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)); suspensa, nada sai e o envio fica na fila de saída. O Telegram não depende do GitHub: com o [GitHub fora](../guilda/trava-no-github.md#github-fora), o bot segue lendo e enviando.
+  - **O `409 Conflict` é só sinal** ([regra](../guilda/trava-no-github.md#o-409-do-telegram)): com o aluguel da trava válido, dispara uma conferência imediata (época maior: para de ler e de enviar e se suspende; senão segue e registra o alerta na auditoria e no painel); com o aluguel vencido, para de ler e de enviar até reconfirmar a trava, e o painel mostra "Telegram parado".
   - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em [modo reduzido](../autocura/telegram-modo-reduzido.md), a única exceção sem trava (só alertas, os botões Promover e Esperar e `/status`).
-  - Quando a Cidadela volta, ou uma máquina é promovida a Cidadela, o motor da Cidadela de época confirmada retoma o bot.
+  - Quando a Cidadela volta, ou uma máquina é promovida a Cidadela (depois da [espera de 60 s](../guilda/trava-no-github.md#espera-do-promovido)), o motor da Cidadela retoma o bot.
 
 ```mermaid
 flowchart LR
@@ -127,8 +127,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **CA-BOT-09** · *rápida* — **Dado** um pedido de segundo fator aberto para Ana e o Grão-Mestre livre, **quando** Ana manda `482913`, **então** o motor usa o texto no login, a caixa de entrada do Grão-Mestre não recebe nada e as duas mensagens são apagadas; **quando** Bia manda um texto ao mesmo tempo, **então** ele segue o caminho normal até o Grão-Mestre.
 - **CA-BOT-10** · *rápida* — **Dado** uma sessão do Operador do PC ativa, **quando** o Dono toca **Encerrar agora** na mensagem fixada ou manda `/operador encerrar`, **então** o motor manda fechar o terminal do Operador na hora, a mensagem passa a "encerrado por <nome>" e é desafixada.
 - **CA-BOT-08** · *rápida* — **Dado** um usuário autorizado, **quando** ele manda uma figurinha, **então** o bot recusa e lista os tipos aceitos, sem enfileirar nada.
-- **CA-BOT-11** · *rápida* — **Dado** o Telegram falso respondendo `409 Conflict` ao `getUpdates`, uma mensagem na fila de saída e a trava falsa com uma época maior que a da Cidadela, **quando** o laço recebe o erro, **então** o motor confere a trava, para de ler e de enviar, entra em "Cidadela suspensa" e a mensagem fica na fila; **dado** a trava com a época dela, **então** ela segue lendo e só registra o alerta.
-- **CA-BOT-12** · *rápida* — **Dado** uma Cidadela com época 3 e a trava falsa com `refs/mestre/epoca-4`, **quando** ela tentaria chamar `getUpdates`, enviar a fila de saída ou executar o clique de um botão, **então** o Telegram falso não recebe nada e o clique não é executado.
+- **CA-BOT-11** · *rápida* — **Dado** o Telegram falso respondendo `409 Conflict` ao `getUpdates`, uma mensagem na fila de saída, o aluguel da trava válido e a trava falsa com uma época maior que a da Cidadela, **quando** o laço recebe o erro, **então** o motor confere a trava, para de ler e de enviar, entra em "Cidadela suspensa" e a mensagem fica na fila; **dado** a trava com a época dela, **então** ela segue lendo e só registra o alerta.
+- **CA-BOT-12** · *rápida* — **Dado** uma Cidadela com época 3 cuja conferência leu `refs/mestre/epoca-4` na trava falsa, **quando** ela tentaria chamar `getUpdates`, enviar a fila de saída ou executar o clique de um botão, **então** o Telegram falso não recebe nada e o clique não é executado.
 
 ## Depende de
 

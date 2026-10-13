@@ -70,8 +70,8 @@ flowchart TB
 | Navegador → Torre | o navegador, na rede local | HTTPS, só redirecionamento | [painel redirecionado](../guilda/cidadela-e-torres.md#painel-redirecionado) |
 | Navegador → Guardião da Torre (no modo máquina única, o da Cidadela) | o navegador, na rede local | HTTPS com login | [página reserva](../autocura/pagina-reserva.md) |
 | CLI `mestre` → motor local | o agente na mesma máquina | socket Unix ou named pipe | [canal local](canal-local.md), [convenções da CLI](../cli/convencoes.md) |
-| Cidadela → GitHub | o motor da Cidadela, com a época confirmada na trava | HTTPS, consulta periódica condicional; trava de época por refs | [eventos](../github/eventos.md), [trava no GitHub](../guilda/trava-no-github.md) |
-| Cidadela → Telegram | o motor da Cidadela, com a época confirmada | HTTPS, long polling | [bot](../telegram/bot.md) |
+| Cidadela → GitHub | o motor da Cidadela, com o aluguel da trava válido; com o GitHub fora, as ações esperam na fila | HTTPS, consulta periódica condicional; trava de época por refs | [eventos](../github/eventos.md), [trava no GitHub](../guilda/trava-no-github.md) |
+| Cidadela → Telegram | o motor da Cidadela não suspensa, inclusive com o GitHub fora ([o `409`](../guilda/trava-no-github.md#o-409-do-telegram)) | HTTPS, long polling | [bot](../telegram/bot.md) |
 | Máquina encontra a Guilda | a máquina | broadcast UDP e mDNS | [descoberta](../conectividade/descoberta.md) |
 
 Portas padrão: [componentes](componentes.md#portas). Segurança dos canais: [segurança](seguranca.md).

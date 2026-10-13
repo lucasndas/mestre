@@ -60,11 +60,11 @@ A recusa diz o motivo em texto simples (ex.: "a issue #57 pertence ao épico #40
 
 - Toda criação no GitHub (issue, sub-issue, comentário, PR, review) leva um **marcador de operação** com um uuid gerado antes do envio: `<!-- mestre:op=<uuid> -->` no fim do corpo (comentário HTML, invisível na página). O que não tem corpo (ligação de sub-issue, rótulo, merge) tem o uuid gravado em `github_objects` antes do envio.
 - O mesmo uuid acompanha a operação na fila de saída e no reenvio: antes de criar, o motor procura o marcador no GitHub e, se ele já existe, só registra o objeto, sem criar de novo.
-- Na troca de Cidadela, a nova Cidadela usa os marcadores para reconciliar com o GitHub antes de qualquer ação externa ([regras da troca](../guilda/cidadela-e-torres.md)); o que tem marcador da própria Guilda nunca vira evento externo ([eventos](eventos.md#deduplicação)).
+- Na troca de Cidadela, a nova Cidadela usa os marcadores para reconciliar com o GitHub antes da primeira ação externa ([regras da troca](../guilda/cidadela-e-torres.md#github-depois-da-troca)); a fila de saída do [GitHub fora](../guilda/trava-no-github.md#github-fora) também confere o marcador antes de criar; o que tem marcador da própria Guilda nunca vira evento externo ([eventos](eventos.md#deduplicação)).
 
 ### Envio pelo espelho
 
-- Só o motor da Cidadela envia para o GitHub, sempre a partir do espelho da Cidadela e com a época confirmada na trava ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)). Antes de enviar, ele traz os commits dos worktrees da mesa em outras máquinas ([mesas](../orquestracao/mesas.md)).
+- Só o motor da Cidadela envia para o GitHub, sempre a partir do espelho da Cidadela e com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)). Antes de enviar, ele traz os commits dos worktrees da mesa em outras máquinas ([mesas](../orquestracao/mesas.md)).
 - O envio acontece quando a mesa pede (`mestre pr open|update`) ou o Grão-Mestre manda. Usa um token de instalação do App de quem pediu, passado ao git só durante o comando e nunca gravado em configuração.
 - Antes de enviar, o motor confere se a branch altera `.github/workflows/` ([workflows](identidades-e-apps.md#workflows)).
 
@@ -88,9 +88,9 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - **Respeitar as regras do repositório** (branch protegida, revisões obrigatórias, CI, rulesets). O Mestre nunca contorna proteção. Quando o GitHub recusa, o motor traduz o motivo e o Grão-Mestre avisa os usuários.
 - Ruleset que exige commits assinados: os commits do Mestre não são assinados ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)). O motor explica e o Grão-Mestre avisa; não há contorno.
 - Pedido fora do épico, rótulo `epico` mexido pela mesa ou push forçado fora das regras: recusado com motivo, registrado na auditoria.
-- GitHub fora do ar ou limite de cota: o pedido falha com o motivo; o motor não repete sozinho ações que mudam dados.
+- Erro do GitHub numa chamada com o aluguel válido (`5xx`, limite de cota): o pedido falha com o motivo; o motor não repete sozinho ações que mudam dados. Com o aluguel vencido ([GitHub fora](../guilda/trava-no-github.md#github-fora)), a ação nem começa: espera na fila de saída e sai uma vez quando o aluguel volta.
 - Mais de 100 sub-issues num pai: recusado com explicação.
-- **Época:** toda ação no GitHub (envio, comentário, review, merge, criação de issue) só sai depois de a Cidadela confirmar na trava que a época dela é a mais recente ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); uma Torre ou uma Cidadela suspensa não faz nenhuma ação e registra a recusa na auditoria. Assim duas Cidadelas nunca agem no mesmo repositório.
+- **Época:** toda ação no GitHub (envio, comentário, review, merge, criação de issue) só sai com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)); uma Torre ou uma Cidadela suspensa não faz nenhuma ação e registra a recusa na auditoria. Assim duas Cidadelas nunca agem no mesmo repositório.
 
 ## Critérios de aceite
 

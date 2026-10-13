@@ -10,7 +10,7 @@ Saber o que mudou no GitHub (comentário, revisão, CI, mudança de issue ou PR)
 
 ### Quem consulta
 
-O motor da Cidadela, um laço por workspace, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API. Só a Cidadela consulta, com a época confirmada na trava ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); depois de uma troca de Cidadela, a nova reconcilia pelos marcadores de operação ([regras da troca](../guilda/cidadela-e-torres.md)) e retoma os laços pelo estado do banco replicado (cursores e ETags; [replicação](../guilda/replicacao.md)).
+O motor da Cidadela, um laço por workspace, com o token de instalação do App "Grão-Mestre" ([identidades](identidades-e-apps.md)). Nenhum agente consulta a API. Só a Cidadela consulta, com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)); com o [GitHub fora](../guilda/trava-no-github.md#github-fora), os laços param e retomam pelos cursores; depois de uma troca de Cidadela, a nova reconcilia pelos marcadores de operação ([regras da troca](../guilda/cidadela-e-torres.md)) e retoma os laços pelo estado do banco replicado (cursores e ETags; [replicação](../guilda/replicacao.md)).
 
 ### Intervalo adaptativo (padrão, configurável por workspace)
 

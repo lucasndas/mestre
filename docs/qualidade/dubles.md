@@ -45,6 +45,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 ### GitHub falso
 
 - API REST em memória com o que o motor usa: o repositório da [trava](../guilda/trava-no-github.md) (`POST /user/repos`, commits, criação de ref com `422` para ref existente, `matching-refs` por prefixo com `ETag`), issues e rótulos (inclusive `epico`), sub-issues (pelo `id`, como o real), comentários, PRs, revisões, merge, CI, rulesets, instalações e tokens de instalação (expiram em 1 hora pelo relógio), conversão de manifesto (código vale 1 hora), device flow, `GET /users/<slug>[bot]` e Releases (última release e download dos arquivos, para a [atualização automática](../plataforma/autoatualizacao.md)).
+- Falhas injetadas: GitHub fora (conexão cortada, tempo esgotado, `5xx`, `403`/`429` de limite com `retry-after`), na API inteira ou só para uma máquina (partição), por quanto tempo o teste quiser no relógio falso, para o [GitHub fora](../guilda/trava-no-github.md#github-fora).
 - Fiel no que importa: `ETag` e `If-None-Match` devolvem 304 sem gastar cota; cabeçalhos de limite por instalação; cada ação registra o App que a fez; um App não aprova o PR que abriu; envio que altera `.github/workflows/` é recusado sem a permissão "Workflows".
 - Páginas mínimas de criação e instalação de App que recebem o formulário do manifesto, têm os botões "Create GitHub App" e "Install" e redirecionam com o `code` e com o `installation_id`, para testar o link de [criação de Apps](../github/criacao-de-apps.md) de ponta a ponta com um navegador real. As páginas reais do GitHub são usadas só pelo Dono, no próprio navegador; o Mestre não as automatiza.
 - Envio de branch: na completa, a cópia de um [projeto de treino](projetos-de-treino.md) faz o papel do remoto; na rápida, a camada de envio é uma interface falsa.
@@ -58,7 +59,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 ### Rede falsa
 
 - Rede em memória: `Listen` e `Dial` por nome, sem sockets, funciona dentro do synctest. TLS real roda por cima, com uma CA de teste, então mTLS e a [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda) são testados de verdade.
-- Falhas injetadas: latência (pelo relógio), conexão cortada, partição entre dois pontos, conexão meio aberta (sem aviso de fim), perda de pacotes UDP, troca do IP de uma máquina e máquina isolada da rede inteira (para a [Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)).
+- Falhas injetadas: latência (pelo relógio), conexão cortada, partição entre dois pontos, conexão meio aberta (sem aviso de fim), perda de pacotes UDP, troca do IP de uma máquina e máquina isolada da rede inteira (para o [GitHub fora](../guilda/trava-no-github.md#github-fora) na Cidadela isolada).
 - Broadcast UDP e mDNS falsos para a [descoberta](../conectividade/descoberta.md).
 - `http.RoundTripper` em memória para os clientes do Telegram, do GitHub e do whisper-server.
 

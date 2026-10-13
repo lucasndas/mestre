@@ -28,19 +28,19 @@ Uma Guilda de uma máquina só é a Cidadela sozinha ([modo máquina única](../
 
 - A Guilda tem uma **época**: um número crescente, gravado no banco, no banco local de cada máquina e em cada Guardião, provado pela [certidão de época](replicacao.md#certidão-de-época). Promover uma máquina incrementa a época.
 - **Toda mensagem entre máquinas leva a época** ([época no protocolo](../conectividade/protocolo.md#época)): época menor é recusada com `stale_epoch`; época maior faz pedir a certidão e, se vale, segui-la.
-- **Trava no GitHub:** a época N vale quando a ref `refs/mestre/epoca-N` existe no repositório da trava da Guilda e é a de maior número. Criar uma ref existente é recusado, então só uma máquina vence a criação da época seguinte. Repositório, criação da ref e confirmação: [trava no GitHub](trava-no-github.md).
-- **Toda ação externa** (GitHub e Telegram, inclusive cada `getUpdates`) só sai depois de a Cidadela confirmar na trava que a época dela é a mais recente; a confirmação vale no máximo 2 s, e as ações dentro desse intervalo a compartilham. Quem não enxerga o GitHub não age nele nem no Telegram. Vale para qualquer número de máquinas, inclusive duas.
-- **O `409 Conflict` do Telegram é só sinal:** quem o recebe confere a trava; quem não tem a época mais recente se suspende.
-- **Exceção registrada:** o [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) da Torre condutora envia alertas e recebe só Promover, Esperar e `/status` do Dono sem a trava, porque não age como Cidadela. Um `409` entre ela e uma Cidadela viva isolada é degradação aceita: o Dono também decide pela página reserva.
+- **Trava no GitHub:** a época N vale quando a ref `refs/mestre/epoca-N` existe no repositório da trava da Guilda e é a de maior número. Criar uma ref existente é recusado, então só uma máquina vence a criação da época seguinte, e sem o GitHub não há promoção. Repositório, criação da ref, aluguel e cota: [trava no GitHub](trava-no-github.md).
+- **Aluguel:** a Cidadela confere a trava a cada 30 s, e cada confirmação vale 60 s; toda chamada ao GitHub só sai com o aluguel válido, e quem é promovido espera 60 s antes de qualquer ação externa ([aluguel](trava-no-github.md#aluguel), [espera do promovido](trava-no-github.md#espera-do-promovido)). Vale para qualquer número de máquinas, inclusive duas.
+- **GitHub fora não suspende:** se a conferência falha, a Cidadela segue no comando e no Telegram, guarda as ações do GitHub na fila e avisa o Dono; se ela lê uma época maior, suspende-se na hora ([GitHub fora](trava-no-github.md#github-fora)).
+- **O `409 Conflict` do Telegram é só sinal:** com o aluguel válido, dispara uma conferência; com o aluguel vencido, para o Telegram até reconfirmar ([o `409`](trava-no-github.md#o-409-do-telegram)).
+- **Exceção registrada:** o [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) da Torre condutora envia alertas e recebe só Promover, Esperar e `/status` do Dono sem a trava, porque não age como Cidadela. Um `409` entre ela e uma Cidadela viva isolada é degradação aceita: o Dono também decide pela página reserva ([risco residual](trava-no-github.md#regras-e-erros)).
 - **Sem GitHub configurado na Guilda não há promoção** (a época não muda), e a Cidadela age no Telegram sem a trava.
-- **Guardião da Cidadela:** só publica `mestre.local` e só é árbitro da eleição com a concessão do motor, que o motor só renova com a época confirmada; com certidão mais nova, retira-se na hora ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
+- **Guardião da Cidadela:** só publica `mestre.local` e só é árbitro da eleição com a concessão do motor, que o motor renova enquanto está no comando e não suspenso, sem depender do GitHub; com certidão mais nova, retira-se na hora ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
 
 ### Cidadela suspensa
 
-- Uma Cidadela sem época confirmada fica **suspensa**: não age para fora (o que ia ao GitHub e ao Telegram espera na fila dela), não anuncia `mestre.local` e não aceita entradas (`503` em `/join`). Continua atendendo as Torres que seguem a época dela.
+- A Cidadela fica **suspensa** quando a trava mostra uma época maior que a dela e, ao subir, até a primeira conferência da trava terminar. Suspensa, não age para fora (nem GitHub nem Telegram; o que ia sair espera na fila dela), deixa de renovar a concessão do Guardião, que retira `mestre.local`, e não aceita entradas (`503` em `/join`). Continua atendendo as Torres que seguem a época dela.
 - **Painel:** quando conhece a Cidadela atual (certidão mais nova), responde `307` para ela; senão mostra só uma página "Cidadela suspensa: confirmando a época", sem ações.
-- Confirmou a mesma época: sai da suspensão e esvazia a fila, na ordem. Viu época maior: rebaixa-se a Torre ([volta da antiga](#volta-da-antiga-cidadela)) e descarta a fila, com registro na auditoria.
-- Caso típico: a máquina ficou isolada da rede. Sem rede, nada confirma, e ela espera suspensa.
+- Ao subir, a primeira conferência que confirma a mesma época tira da suspensão e esvazia a fila, na ordem; uma que falha também tira, no modo [GitHub fora](trava-no-github.md#github-fora). Viu época maior: rebaixa-se a Torre ([volta da antiga](#volta-da-antiga-cidadela)) e descarta a fila, com registro na auditoria.
 
 ### Cidadela fora e fila de saída
 
@@ -63,12 +63,12 @@ Uma Guilda de uma máquina só é a Cidadela sozinha ([modo máquina única](../
 1. O Guardião da condutora confere o PIN e manda `citadel.promote` ao Guardião da máquina escolhida ([mensagens](../conectividade/mensagens.md#guardião-da-torre--cidadela)), que repassa ao motor local.
 2. O motor para de aplicar replicação e tenta criar a época N+1 na [trava](trava-no-github.md#promoção-pela-trava); se perde, suspende-se e avisa o Dono.
 3. Vencendo: abre o cofre, assina a certidão nova, passa a réplica a banco principal e o espelho a principal; a auditoria registra o último `lsn` aplicado.
-4. Antes de qualquer ação externa, [reconcilia o GitHub](#github-depois-da-troca); depois liga GitHub, Telegram (o Guardião sai do modo reduzido), painel e API, `/join` e `mestre.local`.
+4. [Espera 60 s](trava-no-github.md#espera-do-promovido) sem nenhuma ação externa, confere a trava, [reconcilia o GitHub](#github-depois-da-troca) e só então liga GitHub, Telegram (o Guardião sai do modo reduzido), painel e API, `/join` e `mestre.local`.
 5. Retoma personagens e missões (abaixo) e o Grão-Mestre de cada workspace, com a [retomada](../provedores/adaptador.md#retomada-de-sessão) quando possível. As outras Torres reconectam, aceitam a certidão e retomam a replicação.
 
 ### Troca planejada
 
-O Dono pode passar a Cidadela a outra máquina pelo painel, com PIN: a Cidadela atual para de agir para fora, espera a máquina escolhida confirmar o último `lsn` (`citadel.handover`), e a promoção segue os passos acima, sem perda. A antiga vira Torre na hora. Devolver o comando à antiga é outra troca igual. É o caminho para desinstalar a Cidadela ([saída](guilda.md#saída-e-remoção)).
+O Dono pode passar a Cidadela a outra máquina pelo painel, com PIN: a Cidadela atual para de agir para fora, espera a máquina escolhida confirmar o último `lsn` (`citadel.handover`), e a promoção segue os passos acima, com a espera de 60 s, sem perda. A antiga vira Torre na hora. Devolver o comando à antiga é outra troca igual. É o caminho para desinstalar a Cidadela ([saída](guilda.md#saída-e-remoção)).
 
 ### Volta da antiga Cidadela
 
@@ -89,7 +89,7 @@ O Dono pode passar a Cidadela a outra máquina pelo painel, com PIN: a Cidadela 
 ### GitHub depois da troca
 
 - Toda criação no GitHub leva um [marcador de operação](../github/acoes-por-nivel.md#marcador-de-operação).
-- Antes da primeira ação externa, a nova Cidadela **reconcilia**: lê o que os Apps da Guilda criaram nos últimos 30 min (padrão) e importa em `github_objects` os marcadores que não conhece ([persistência](../arquitetura/persistencia.md)). A fila de saída reenviada confere o marcador antes de criar. Evento externo com marcador da própria Guilda nunca vira "evento externo" ([eventos](../github/eventos.md)).
+- Ao fim da [espera do promovido](trava-no-github.md#espera-do-promovido) e antes da primeira ação externa, a nova Cidadela **reconcilia**: lê o que os Apps da Guilda criaram nos últimos 30 min (padrão) e importa em `github_objects` os marcadores que não conhece ([persistência](../arquitetura/persistencia.md)). A fila de saída reenviada confere o marcador antes de criar. Evento externo com marcador da própria Guilda nunca vira "evento externo" ([eventos](../github/eventos.md)).
 
 ### Painel redirecionado
 
@@ -106,7 +106,7 @@ Ver também, de marcos posteriores: a [trava no GitHub](trava-no-github.md) (M5)
 ## Critérios de aceite
 
 - **CA-CIDADELA-02** · *rápida* — **Dado** uma Cidadela da época 1 que sobe e uma Torre que conecta com a certidão da época 2, **quando** o motor inicia, **então** ele se rebaixa a Torre e o GitHub e o Telegram falsos não recebem nenhuma chamada dele.
-- **CA-CIDADELA-03** · *rápida* — **Dado** uma Cidadela isolada (rede falsa cortada), **quando** precisa comentar no GitHub, **então** fica suspensa, o comentário fica na fila e o painel mostra só a página "suspensa"; **dado** a rede de volta e a mesma época confirmada, **então** o comentário sai uma vez.
+- **CA-CIDADELA-03** · *rápida* — **Dado** uma Cidadela isolada (rede falsa cortada) com o aluguel vencido, **quando** precisa comentar no GitHub, **então** não se suspende, o comentário fica na fila e o painel mostra "GitHub fora"; **dado** a rede de volta e a mesma época confirmada, **então** o comentário sai uma vez.
 - **CA-CIDADELA-05** · *rápida* — **Dado** a Cidadela fora há 15 min (relógio falso), **quando** a condutora avalia, **então** o Dono recebe o aviso com o diagnóstico e os botões, e de novo 1 h depois; **dado** Promover com PIN errado, nenhuma resposta ou a Cidadela de volta, **então** nada muda e o pedido é cancelado na volta; **dado** como alvo a máquina excluída ou uma fora da rede local, **então** a promoção é recusada.
 - **CA-CIDADELA-06** · *completa* — **Dado** três instâncias na mesma máquina (motor e Guardião de cada uma como processos comuns), relógio falso, trava e Telegram falsos, **quando** o motor e o Guardião da Cidadela param e o Dono aprova a promoção pelo Telegram falso, **então** a Torre escolhida vira Cidadela da época 2, com o estado do banco, o espelho e o Grão-Mestre (agente falso) retomados, e a terceira instância segue a nova Cidadela.
 - **CA-CIDADELA-07** · *completa* — **Dado** o cenário do CA-CIDADELA-06, **quando** a antiga Cidadela volta, **então** entra como Torre, encerra os personagens que a nova já retomou, entrega um commit só dela em `refs/mestre/recuperados/epoca-1/<mesa>`, a auditoria lista as transações descartadas e o GitHub falso não recebe nenhuma chamada dela.

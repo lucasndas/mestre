@@ -38,7 +38,7 @@ Uma linha por máquina da Guilda, atualizada em tempo real, com a época atual n
 
 | Coluna | Conteúdo |
 |---|---|
-| Papel | Cidadela ou Torre; "Cidadela suspensa" quando for o caso |
+| Papel | Cidadela ou Torre; "Cidadela suspensa", "GitHub fora" ou "Telegram parado" quando for o caso ([trava no GitHub](../guilda/trava-no-github.md#github-fora)) |
 | Estado | conectada, sem sinal (desde quando), removida; "fora da rede local" quando entrou por endereço; selo do incidente aberto, se houver |
 | Motor e Guardião | versão de cada um, protocolo negociado, último heartbeat de cada conexão |
 | Ficha da máquina | sistema, interface gráfica, provedores logados por perfil, navegador e Operador do PC (e, se indisponível, o motivo), CPU, memória, GPU, transcrição ([ficha da máquina](../guilda/ficha-da-maquina.md)) |

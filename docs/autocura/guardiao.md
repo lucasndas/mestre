@@ -24,8 +24,8 @@ Ter, em cada máquina da Guilda (Cidadela e Torres), um serviço pequeno e está
 
 ### Concessão do motor
 
-- O Guardião da Cidadela só publica `mestre.local` e só atua como **árbitro** da [eleição](camadas.md#eleição-da-torre-condutora) com uma **concessão** do motor local, renovada a cada **30 s** pelo canal local (`lease`). O motor só renova com a época confirmada na trava ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)).
-- Sem concessão válida (motor fora, época perdida), o Guardião retira o anúncio de `mestre.local` e deixa de ser árbitro em até **60 s**. Volta a agir quando recebe uma concessão nova.
+- O Guardião da Cidadela só publica `mestre.local` e só atua como **árbitro** da [eleição](camadas.md#eleição-da-torre-condutora) com uma **concessão** do motor local, renovada a cada **30 s** pelo canal local (`lease`). O motor renova enquanto está no comando e não [suspenso](../guilda/cidadela-e-torres.md#cidadela-suspensa); a concessão não depende do GitHub, e continua com o [GitHub fora](../guilda/trava-no-github.md#github-fora).
+- Sem concessão válida (motor fora, Cidadela suspensa), o Guardião retira o anúncio de `mestre.local` e deixa de ser árbitro em até **60 s**. Volta a agir quando recebe uma concessão nova.
 - **Certidão nova:** a [certidão de época](../guilda/replicacao.md) mais nova chega ao Guardião (a) por qualquer Torre que reconecta a ele, no fechamento `4007` com a certidão assinada pela CA ([protocolo](../conectividade/protocolo.md)), ou (b) pelo próprio motor, ao conferir a trava. Com certidão mais nova que a sua, o Guardião se retira **na hora**: sem `mestre.local`, sem árbitro, e passa a Guardião de Torre.
 
 ### O que vigia
@@ -81,7 +81,7 @@ Socket Unix ou named pipe da própria máquina ([canais locais](../arquitetura/c
 |---|---|---|
 | `heartbeat` | motor → Guardião | "vivo", versão do motor, hora; a cada 5 s ([valores padrão](camadas.md#valores-padrão)) |
 | `health` / `health.result` | Guardião → motor → Guardião | banco aberto e migrado, conexão com a Cidadela (na máquina), filas; `ok` ou o item que falhou |
-| `lease` | motor → Guardião | concessão para publicar `mestre.local` e ser árbitro, com a época confirmada e a validade (60 s); a cada 30 s, só na Cidadela ([concessão do motor](#concessão-do-motor)) |
+| `lease` | motor → Guardião | concessão para publicar `mestre.local` e ser árbitro, com a época e a validade (60 s); a cada 30 s, só na Cidadela não suspensa, sem depender do GitHub ([concessão do motor](#concessão-do-motor)) |
 | `replica` | motor → Guardião | a réplica restrita do cofre e o estado "travado", com versão crescente ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)); só o Guardião da Cidadela a recebe por aqui |
 | `revoked` | motor → Guardião | lista de certificados revogados (Guardião da Cidadela) |
 | `guild` | motor → Guardião | máquinas da Guilda com papel, prioridade e endereços, a época, valores da autocura e ficha de diagnóstico |
@@ -129,7 +129,7 @@ Ação **rara e nunca automática**: só existe quando uma atualização migrou 
 - **CA-GUARD-07** · *completa* — **Dado** o motor da Cidadela parado, **quando** uma máquina com certificado válido chama o Guardião da Cidadela, **então** recebe `status`; sem certificado de máquina, a conexão TLS é recusada.
 - **CA-GUARD-08** · *rápida* — **Dado** um `rollback` com restauração do banco sem aprovação, **quando** é pedido, **então** fica esperando aprovação de Dono ou Administrador com PIN, o pedido mostra o intervalo que será perdido e nada é feito; nenhuma camada da autocura o pede sozinha.
 - **CA-GUARD-09** · *rápida* — **Dado** o motor da máquina vivo mas sem responder `health` por 3 ciclos no relógio falso, **quando** o Guardião avalia, **então** marca o motor como travado; **dado** uma mensagem do canal local com `v` = 2, **então** é recusada e registrada.
-- **CA-GUARD-10** · *rápida* — **Dado** o Guardião da Cidadela com concessão do motor e o relógio falso, **quando** o motor para de renovar, **então** em até 60 s o anúncio de `mestre.local` some e os pedidos de trava da eleição são recusados; **dado** uma Torre que reconecta e fecha com `4007` e uma certidão de época mais nova e válida, **então** ele se retira na hora; com certidão de assinatura inválida, nada muda e a tentativa é registrada.
+- **CA-GUARD-10** · *rápida* — **Dado** o Guardião da Cidadela com concessão do motor e o relógio falso, **quando** o motor para de renovar, **então** em até 60 s o anúncio de `mestre.local` some e os pedidos de trava da eleição são recusados; **dado** o GitHub falso fora e o motor no comando, **então** a concessão continua; **dado** uma Torre que reconecta e fecha com `4007` e uma certidão de época mais nova e válida, **então** ele se retira na hora; com certidão de assinatura inválida, nada muda e a tentativa é registrada.
 
 ## Depende de
 

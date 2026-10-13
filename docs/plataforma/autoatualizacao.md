@@ -10,7 +10,7 @@ Levar uma versão nova do Mestre a todas as máquinas sem ninguém entrar nelas:
 
 ### Origem e consulta
 
-- **Fonte:** Releases do repositório público do Mestre no GitHub. **Quem consulta:** só o motor da Cidadela, por conexão de saída e com a época confirmada na trava ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); as Torres nunca acessam o GitHub.
+- **Fonte:** Releases do repositório público do Mestre no GitHub. **Quem consulta:** só o motor da Cidadela, por conexão de saída e com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)); as Torres nunca acessam o GitHub.
 - **Como:** `GET /repos/{dono}/{repo}/releases/latest` (ignora rascunhos e pré-lançamentos) a cada 6 h (padrão) e pelo botão "verificar agora" do painel. O pedido é condicional (`If-None-Match` com o ETag guardado) e sem autenticação; o limite de 60 pedidos por hora por IP sobra.
 - **Versão nova:** a tag é SemVer (`vX.Y.Z`), é a versão do motor e é maior que a instalada na Cidadela. Tag igual ou menor é ignorada.
 

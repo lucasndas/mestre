@@ -25,7 +25,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Torre | Cada outra máquina da Guilda: roda personagens, guarda uma cópia do estado e vigia a Cidadela; pode assumir o comando. | [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
 | Ficha da máquina | O que uma máquina tem: sistema, tela, provedores logados, navegador, CPU, memória e GPU. | [ficha da máquina](../guilda/ficha-da-maquina.md) |
 | Época | O número que diz qual Cidadela vale; sobe a cada troca, e ordens de época antiga são ignoradas. | [Cidadela e Torres](../guilda/cidadela-e-torres.md#época-e-fencing) |
-| Cidadela suspensa | Cidadela que não conseguiu confirmar a época: não age para fora e manda o painel para a Cidadela atual. | [Cidadela e Torres](../guilda/cidadela-e-torres.md#cidadela-suspensa) |
+| Cidadela suspensa | Cidadela que viu uma época mais nova: não age para fora e manda o painel para a Cidadela atual. | [Cidadela e Torres](../guilda/cidadela-e-torres.md#cidadela-suspensa) |
 | Máquina excluída | Máquina que o Dono deixou sem segredos: não guarda o cofre e nunca vira Cidadela. | [Guilda](../guilda/guilda.md#máquina-excluída) |
 | Guardião | Pequeno serviço em cada máquina que vigia o motor dela e o conserta quando ele falha. | [Guardião](../autocura/guardiao.md) |
 | Página reserva | Página mínima servida pelo Guardião para ver o status e aprovar curas quando a Cidadela está fora do ar. | [página reserva](../autocura/pagina-reserva.md) |

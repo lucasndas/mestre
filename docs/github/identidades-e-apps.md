@@ -60,7 +60,7 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 
 ### Repositório da trava
 
-- A Guilda tem um repositório **privado** só para a trava de época: `<login-do-dono>/mestre-guilda-<guild_id curto>`. Como a trava funciona (refs `refs/mestre/epoca-N`, confirmação antes de toda ação externa, quem vence a promoção) está em [trava no GitHub](../guilda/trava-no-github.md); aqui só a criação e o acesso.
+- A Guilda tem um repositório **privado** só para a trava de época: `<login-do-dono>/mestre-guilda-<guild_id curto>`. Como a trava funciona (refs `refs/mestre/epoca-N`, aluguel de 60 s, quem vence a promoção, GitHub fora e cota) está em [trava no GitHub](../guilda/trava-no-github.md); aqui só a criação e o acesso.
 - **Criação:** na configuração do GitHub, logo depois da instalação do App "Grão-Mestre" ([criação de Apps](criacao-de-apps.md#quando-acontece)), o motor chama `POST /user/repos` (`private: true`, `auto_init: true`, porque não se cria ref em repositório vazio) com o token de instalação desse App. O App ganha acesso automático ao repositório que cria; o motor confere com `GET /installation/repositories` e grava o nome no banco.
 - O repositório só guarda o commit inicial, os commits dos pretendentes e as refs da trava; nenhum agente o vê, e o Mestre nunca o apaga sozinho. Sem ele, a Guilda não tem promoção de Cidadela.
 

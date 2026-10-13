@@ -49,7 +49,7 @@ Quem recebe alertas segue a [tabela de níveis](../telegram/usuarios-e-niveis.md
 
 - Só a Torre condutora lê. A trava da eleição, dada pelo árbitro ([camadas](camadas.md#eleição-da-torre-condutora)), garante isso entre os Guardiões.
 - Se o `getUpdates` responder `409 Conflict`, o Guardião para de ler na hora, registra alerta e só tenta de novo se continuar condutora depois de 60 s (padrão).
-- Um `409` repetido entre a condutora e uma Cidadela viva mas isolada é degradação aceita: o Dono continua podendo decidir pela [página reserva](pagina-reserva.md).
+- Um `409` repetido entre a condutora e uma Cidadela viva mas isolada é degradação aceita: o Dono continua podendo decidir pela [página reserva](pagina-reserva.md). Se a Cidadela isolada também perdeu o GitHub, ela sai do bot no primeiro `409` ([o `409`](../guilda/trava-no-github.md#o-409-do-telegram), risco residual em [regras](../guilda/trava-no-github.md#regras-e-erros)).
 - Se a condutora perde a trava da eleição (não renovou), para de ler antes de ela expirar do lado do árbitro.
 
 ### Devolução à Cidadela
@@ -68,9 +68,9 @@ sequenceDiagram
   MC->>T: aviso "Cidadela de volta"
 ```
 
-- Ao iniciar, o motor da Cidadela **não lê** o bot até receber a devolução, ou até 30 s (padrão) sem resposta de nenhum Guardião. Depois disso lê mesmo assim, como sempre só com a época confirmada na trava ([bot](../telegram/bot.md#recepção-por-long-polling)).
+- Ao iniciar, o motor da Cidadela **não lê** o bot até receber a devolução, ou até 30 s (padrão) sem resposta de nenhum Guardião. Depois disso lê mesmo assim, como sempre só fora da suspensão ([bot](../telegram/bot.md#recepção-por-long-polling)).
 - O aviso "Cidadela de volta" é enviado pelo motor da Cidadela, já com o bot.
-- **Depois de uma promoção:** a devolução vai ao motor da nova Cidadela (pelo canal local, quando é a própria Torre condutora), e o aviso diz "<máquina> é a nova Cidadela". A Cidadela antiga, ao voltar, vê a época maior e não lê o bot ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
+- **Depois de uma promoção:** a devolução vai ao motor da nova Cidadela (pelo canal local, quando é a própria Torre condutora), que a pede só ao fim da [espera de 60 s](../guilda/trava-no-github.md#espera-do-promovido); e o aviso diz "<máquina> é a nova Cidadela". A Cidadela antiga, ao voltar, vê a época maior e não lê o bot ([Cidadela e Torres](../guilda/cidadela-e-torres.md)).
 
 ## Regras e erros
 

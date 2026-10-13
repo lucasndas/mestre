@@ -83,7 +83,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 
 | Id | Papel | Verifica | Gravidade | Correção |
 |---|---|---|---|---|
-| ALL-01 | Torre | motor e Guardião conectados à Cidadela atual, heartbeat em dia, época confirmada; credencial não revogada | grave | refazer descoberta (sozinho); revogada: manual |
+| ALL-01 | Torre | motor e Guardião conectados à Cidadela atual, heartbeat em dia, seguindo a época atual; credencial não revogada | grave | refazer descoberta (sozinho); revogada: manual |
 | ALL-02 | Torre | Guardião da Cidadela responde (sondagem da porta dele) | grave | manual |
 | ALL-03 | todas | certificados TLS válidos e com mais de 30 dias até vencer; a renovação automática acontece aos 30 dias, então chegar abaixo disso indica que ela falhou ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)) | aviso; grave com menos de 7 dias | renovar (sozinho) |
 | ALL-04 | Torre | relógio da máquina a menos de 5 s do relógio da Cidadela ([protocolo](../conectividade/protocolo.md)) | aviso | manual |
@@ -100,11 +100,11 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 | ALL-15 | todas | personagens em monitoramento reduzido por falta de hooks ([adaptador](../provedores/adaptador.md)) | aviso | conforme o motivo |
 | ALL-16 | Cidadela | Apps sem `bot_user_id` lido e pastas de skills `mestre-*` sem marcador ([skills geradas](../cli/skills-geradas.md)) | aviso | manual |
 | ALL-17 | Cidadela | Guilda sem nenhuma Torre ([modo máquina única](../autocura/camadas.md#modo-máquina-única)): se a máquina inteira cair, ninguém de fora percebe | aviso, aberto enquanto o modo durar | manual: instalar o Mestre numa segunda máquina e aceitá-la ([entrar na Guilda](../operacao/entrar-na-guilda.md)) |
-| ALL-18 | Cidadela | token do bot presente no cofre e bot conectado com a época confirmada na trava; um `409 Conflict` recente aparece como detalhe ([bot](../telegram/bot.md)) | grave | manual: cadastrar o token ([parear Telegram](../operacao/parear-telegram.md)) |
+| ALL-18 | Cidadela | token do bot presente no cofre e bot conectado; um `409 Conflict` recente aparece como detalhe, e o Telegram parado pelo `409` com o aluguel da trava vencido é falha ([o `409`](../guilda/trava-no-github.md#o-409-do-telegram)) | grave | manual: cadastrar o token ([parear Telegram](../operacao/parear-telegram.md)) |
 | ALL-19 | Cidadela | Guilda com Torres, todas excluídas: se a Cidadela se perder, só a chave de recuperação traz o cofre de volta ([cofre](cofre.md#backup-e-chave-de-recuperação)) | aviso | manual: tirar a exclusão de uma Torre ([administração](../painel/administracao.md)) |
 | ALL-20 | Torre | réplica do banco, dos arquivos e (se não excluída) do cofre em dia, dentro do alvo de atraso de [replicação](../guilda/replicacao.md) | aviso | refazer a cópia completa (sozinho) |
 | ALL-21 | não excluída | a ficha do Grão-Mestre de cada workspace tem base executável nesta máquina ([Grão-Mestre](../orquestracao/grao-mestre.md#onde-roda)) | aviso | manual: instalar e logar o provedor, ou excluir a máquina |
-| ALL-22 | Cidadela | [repositório da trava](../github/identidades-e-apps.md#repositório-da-trava) acessível e última confirmação da época bem-sucedida; sem ele, não há promoção | grave | manual (o alerta traz o link) |
+| ALL-22 | Cidadela | [repositório da trava](../github/identidades-e-apps.md#repositório-da-trava) acessível e aluguel válido (última conferência confirmada há menos de 60 s); vencido, é o [GitHub fora](../guilda/trava-no-github.md#github-fora): ações no GitHub na fila e nenhuma promoção possível | grave | sozinho quando o GitHub volta; repositório apagado ou sem acesso: manual (o alerta traz o link) |
 
 ## Regras e erros
 

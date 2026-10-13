@@ -57,7 +57,7 @@ Conexão própria (`/ws/guardian`), com versão própria ([conexão do Guardião
 | `guardian.replica` | C→G | a [réplica para os Guardiões](../plataforma/cofre.md#réplica-para-os-guardiões) (conteúdo e regras lá; para a máquina excluída, só a lista de usuários); a **única** cópia de usuários que serve login |
 | `cert.renew` / `cert.issued` | G→C / C→G | renovar o certificado do Guardião da máquina (`role`: `guardiao`), inclusive quando os IPs da máquina mudam ([credenciais](../guilda/guilda.md#credenciais)) |
 | `citadel.promote` | Guardião da Torre condutora → Guardião da máquina escolhida | ordem de promoção depois da aprovação do Dono, com `approval_id` e a certidão anterior; se a escolhida é outra máquina, vai por `wss /guardian/promote` na 7446 dela, com mTLS ([portas](../arquitetura/componentes.md#portas), [promoção](../guilda/cidadela-e-torres.md#promoção)) |
-| `lease` | motor → Guardião da mesma máquina, pelo canal local | concessão renovada a cada 30 s, com a época confirmada na trava; sem ela, o Guardião deixa de publicar `mestre.local` e de arbitrar em até 60 s ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)) |
+| `lease` | motor → Guardião da mesma máquina, pelo canal local | concessão renovada a cada 30 s enquanto o motor está no comando e não suspenso (não depende do GitHub); sem ela, o Guardião deixa de publicar `mestre.local` e de arbitrar em até 60 s ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)) |
 | `guardian.telegram` | ambos | mensagens do [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) |
 
 ## Códigos de erro
