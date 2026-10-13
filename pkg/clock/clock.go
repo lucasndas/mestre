@@ -6,6 +6,8 @@ package clock
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"time"
 )
 
@@ -48,13 +50,56 @@ func Sleep(ctx context.Context, c Clock, d time.Duration) error {
 }
 
 // WithTimeout is context.WithTimeout driven by c instead of the wall clock.
-func WithTimeout(ctx context.Context, c Clock, d time.Duration) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancelCause(ctx)
-	t := c.AfterFunc(d, func() { cancel(context.DeadlineExceeded) })
+// Like the standard one, the context reports context.DeadlineExceeded from
+// Err once d has elapsed on c (and as its cause), and Deadline is the time of
+// c d from now, or the parent's deadline when that is earlier. Cancelling
+// through the returned function reports context.Canceled.
+func WithTimeout(parent context.Context, c Clock, d time.Duration) (context.Context, context.CancelFunc) {
+	inner, cancelCause := context.WithCancelCause(parent)
+	ctx := &timeoutCtx{Context: inner, deadline: c.Now().Add(d), done: make(chan struct{})}
+	if pd, ok := parent.Deadline(); ok && pd.Before(ctx.deadline) {
+		ctx.deadline = pd
+	}
+	// The wrapper has its own Done channel, so contexts derived from it ask
+	// it for Err and get DeadlineExceeded; inner stays the source of Value
+	// and of the cause.
+	stopAfter := context.AfterFunc(inner, ctx.finish)
+	expire := func() {
+		cancelCause(context.DeadlineExceeded)
+		ctx.finish()
+	}
+	if d <= 0 {
+		expire()
+		return ctx, func() {}
+	}
+	t := c.AfterFunc(d, expire)
 	return ctx, func() {
 		t.Stop()
-		cancel(context.Canceled)
+		stopAfter()
+		cancelCause(context.Canceled)
+		ctx.finish()
 	}
+}
+
+type timeoutCtx struct {
+	context.Context // cancellable parent: Value, and the cause for context.Cause
+	deadline        time.Time
+	done            chan struct{}
+	once            sync.Once
+}
+
+func (t *timeoutCtx) finish() { t.once.Do(func() { close(t.done) }) }
+
+func (t *timeoutCtx) Deadline() (time.Time, bool) { return t.deadline, true }
+
+func (t *timeoutCtx) Done() <-chan struct{} { return t.done }
+
+func (t *timeoutCtx) Err() error {
+	err := t.Context.Err()
+	if err != nil && errors.Is(context.Cause(t.Context), context.DeadlineExceeded) {
+		return context.DeadlineExceeded
+	}
+	return err
 }
 
 // Real is the Clock backed by package time.

@@ -58,6 +58,68 @@ func TestFakeStopAndReset(t *testing.T) {
 	}
 }
 
+// Like the real clock since Go 1.23, no stale tick is delivered after Stop
+// or Reset returns.
+func TestFakeStopAndResetDiscardUnreadTick(t *testing.T) {
+	t.Parallel()
+	empty := func(t *testing.T, ch <-chan time.Time, what string) {
+		t.Helper()
+		select {
+		case v := <-ch:
+			t.Fatalf("%s: stale tick %v", what, v)
+		default:
+		}
+	}
+	t.Run("timer Stop", func(t *testing.T) {
+		t.Parallel()
+		c := clock.NewFake(epoch)
+		tm := c.NewTimer(time.Second)
+		c.Advance(time.Second) // fires, nobody reads
+		if !tm.Stop() {
+			t.Fatal("Stop of a timer with an unread tick returned false")
+		}
+		empty(t, tm.C(), "after Stop")
+	})
+	t.Run("timer Reset", func(t *testing.T) {
+		t.Parallel()
+		c := clock.NewFake(epoch)
+		tm := c.NewTimer(time.Second)
+		c.Advance(time.Second)
+		if !tm.Reset(time.Minute) {
+			t.Fatal("Reset of a timer with an unread tick returned false")
+		}
+		empty(t, tm.C(), "after Reset")
+		c.Advance(time.Minute)
+		select {
+		case <-tm.C():
+		default:
+			t.Fatal("reset timer did not fire")
+		}
+	})
+	t.Run("ticker Stop", func(t *testing.T) {
+		t.Parallel()
+		c := clock.NewFake(epoch)
+		tk := c.NewTicker(time.Second)
+		c.Advance(time.Second)
+		tk.Stop()
+		empty(t, tk.C(), "after Stop")
+	})
+	t.Run("ticker Reset", func(t *testing.T) {
+		t.Parallel()
+		c := clock.NewFake(epoch)
+		tk := c.NewTicker(time.Second)
+		c.Advance(time.Second)
+		tk.Reset(time.Minute)
+		empty(t, tk.C(), "after Reset")
+		c.Advance(time.Minute)
+		select {
+		case <-tk.C():
+		default:
+			t.Fatal("reset ticker did not tick")
+		}
+	})
+}
+
 func TestFakeTickerFiresEveryPeriodAndDropsUnread(t *testing.T) {
 	t.Parallel()
 	c := clock.NewFake(epoch)
@@ -119,9 +181,63 @@ func TestWithTimeoutUsesTheClock(t *testing.T) {
 	if ctx.Err() != nil {
 		t.Fatal("context done too early")
 	}
+	if dl, ok := ctx.Deadline(); !ok || !dl.Equal(epoch.Add(30*time.Second)) {
+		t.Fatalf("Deadline = %v, %v", dl, ok)
+	}
 	c.Advance(time.Second)
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		t.Fatalf("Err = %v, want DeadlineExceeded", ctx.Err())
+	}
 	if !errors.Is(context.Cause(ctx), context.DeadlineExceeded) {
 		t.Fatalf("cause = %v", context.Cause(ctx))
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("Done not closed at the deadline")
+	}
+	child, stop := context.WithCancel(ctx)
+	defer stop()
+	if !errors.Is(child.Err(), context.DeadlineExceeded) {
+		t.Fatalf("derived context Err = %v", child.Err())
+	}
+}
+
+func TestWithTimeoutCancelAndParent(t *testing.T) {
+	t.Parallel()
+	c := clock.NewFake(epoch)
+	ctx, cancel := clock.WithTimeout(context.Background(), c, time.Minute)
+	child, stop := context.WithCancel(ctx)
+	defer stop()
+	cancel()
+	if ctx.Err() != context.Canceled || context.Cause(ctx) != context.Canceled {
+		t.Fatalf("after cancel: Err = %v, cause = %v", ctx.Err(), context.Cause(ctx))
+	}
+	<-ctx.Done()
+	<-child.Done()
+	if c.Armed() != 0 {
+		t.Fatalf("armed = %d after cancel", c.Armed())
+	}
+
+	// A parent with an earlier deadline wins, as in context.WithTimeout.
+	early, cancelEarly := clock.WithTimeout(context.Background(), c, time.Second)
+	defer cancelEarly()
+	late, cancelLate := clock.WithTimeout(early, c, time.Hour)
+	defer cancelLate()
+	if dl, _ := late.Deadline(); !dl.Equal(epoch.Add(time.Second)) {
+		t.Fatalf("Deadline = %v, want the parent's", dl)
+	}
+	c.Advance(time.Second)
+	<-late.Done()
+	if !errors.Is(late.Err(), context.DeadlineExceeded) {
+		t.Fatalf("Err = %v", late.Err())
+	}
+
+	// A non-positive timeout is already expired.
+	zero, cancelZero := clock.WithTimeout(context.Background(), c, 0)
+	defer cancelZero()
+	if !errors.Is(zero.Err(), context.DeadlineExceeded) {
+		t.Fatalf("zero timeout Err = %v", zero.Err())
 	}
 }
 
