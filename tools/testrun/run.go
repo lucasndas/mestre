@@ -144,7 +144,6 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	var b bytes.Buffer
 	goCode, goErr := r.Exec.Run(ctx, goCmd, &b)
 	lintFailed := r.reportLint(<-lintDone)
-	testsWall := clock.Since(r.Clock, start)
 
 	rep := parseEvents(b.Bytes())
 	code := 0
@@ -158,8 +157,11 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	// The slow-test timing runs the tests again, alone: it is part of what
 	// the suite costs, so the budget below counts it.
 	// With -count > 1 the elapsed times mix runs, so nothing is flagged.
+	var slowWall time.Duration
 	if s.FlagSlow && count == 1 {
+		t0 := r.Clock.Now()
 		r.flagSlow(ctx, s, rep)
+		slowWall = clock.Since(r.Clock, t0)
 	}
 	wall := clock.Since(r.Clock, start)
 	budget := s.Budget * time.Duration(count)
@@ -186,8 +188,8 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 		limit = "budget " + budget.String()
 	}
 	timing := ""
-	if extra := wall - testsWall; extra > 0 {
-		timing = fmt.Sprintf(", %v of it timing slow tests alone", extra.Round(time.Millisecond))
+	if slowWall.Round(time.Millisecond) > 0 {
+		timing = fmt.Sprintf(", %v of it timing slow tests alone", slowWall.Round(time.Millisecond))
 	}
 	r.printf("%s %s: %d tests in %v (%s%s)\n", status, s.Name, tests, wall.Round(time.Millisecond), limit, timing)
 	return code
