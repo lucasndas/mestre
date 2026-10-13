@@ -175,3 +175,14 @@ func TestLookupAgent(t *testing.T) {
 		t.Error("root accepted as the agent account")
 	}
 }
+
+// CA-TESTES-05 (launcher): in the fast suite the Linux backend starts no
+// process, even before it looks at the request.
+func TestLinuxBackendRefusesInTheFastSuite(t *testing.T) {
+	t.Parallel()
+	be := &launcher.LinuxBackend{Suite: "fast"}
+	started, err := be.Start(t.Context(), launcher.StartRequest{ID: "t1", Binary: "/nonexistent/mestre-pty"})
+	if !errors.Is(err, terminal.ErrExternalProcessInFastSuite) || started.PID != 0 {
+		t.Fatalf("Start = %+v, %v; want ErrExternalProcessInFastSuite", started, err)
+	}
+}
