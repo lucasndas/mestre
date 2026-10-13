@@ -409,7 +409,11 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 			e.mu.Lock()
 			current := e.cit == run && e.role == RoleCitadel
 			e.mu.Unlock()
-			return current && run.fence.State() != guild.FenceDemoted && e.epochs.Citadel() == e.id.MachineID
+			// a planned handover demotes the fence but keeps serving the
+			// Towers (the chosen machine confirms the last lsn) until the lock
+			// shows the new epoch
+			serving := run.fence.State() != guild.FenceDemoted || run.gate.isDraining()
+			return current && serving && e.epochs.Citadel() == e.id.MachineID
 		},
 	}
 	var srv *protocol.Server

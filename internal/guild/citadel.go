@@ -418,7 +418,13 @@ func (c *Citadel) askOnce(ctx context.Context, j joinRow) error {
 				return ctx.Err()
 			}
 		}
-		err = c.ask(ctx, j)
+		// read again holding the place: another reveal may have put the
+		// question between the first read and now
+		if cur, err = loadJoin(ctx, c.db.Reader(), j.ID); err == nil && (cur.ApprovalID != "" || cur.State != JoinPending) {
+			err = nil
+		} else if err == nil {
+			err = c.ask(ctx, j)
+		}
 		c.mu.Lock()
 		close(c.asking[j.ID])
 		delete(c.asking, j.ID)
