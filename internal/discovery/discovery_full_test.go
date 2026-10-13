@@ -210,8 +210,8 @@ func TestThreeInstancesOfOneMachineAnswerOnTheSamePort(t *testing.T) {
 
 // The query of the binary against a real DNS-SD announcement. It needs
 // multicast on the machine; without it the test says so and skips. The
-// announcement of the Guardian itself (Avahi, DnsServiceRegister) is
-// CA-DESC-07, in the heavy suite.
+// announcement of the Guardian itself (Avahi, DnsServiceRegister) is covered
+// in the heavy suite, by the criterion CA-DESC-07.
 func TestTheSystemBrowserHearsARealAnnouncement(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())

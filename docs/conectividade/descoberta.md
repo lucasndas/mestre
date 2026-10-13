@@ -24,7 +24,8 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
   - o certificado do servidor precisa ter cadeia até a CA da Guilda guardada na entrada;
   - precisa trazer o SAN de URI `mestre://machine/<machine_id>` de uma máquina da Guilda;
   - e essa máquina precisa ser a nomeada na certidão de época mais alta (a que a máquina conhece, ou uma mais alta e válida que a máquina nesse endereço apresenta no `welcome`; [certidão de época](../guilda/replicacao.md#certidão-de-época)).
-- **Como se divide:** a sonda TLS (`transport.Client.Probe`: cadeia até a CA, SAN de máquina, revogação) diz **qual** máquina está no endereço; ela passa se for a nomeada na certidão conhecida. Um endereço apontado como Cidadela de época **maior** que a conhecida também passa, só como dica: a prova é a certidão do `welcome`, e o protocolo recusa a conexão se a máquina que respondeu não for a nomeada nela ou se a certidão não valer.
+- **Como se divide:** a sonda TLS (`transport.Client.Probe`: cadeia até a CA, SAN de máquina, revogação) diz **qual** máquina está no endereço; ela passa se for a nomeada na certidão conhecida. Um endereço apontado como Cidadela de época **maior** que a conhecida também passa, só como dica e só se a máquina ali for a que a resposta nomeou: a prova é a certidão do `welcome`, e o protocolo recusa a conexão se a máquina que respondeu não for a nomeada nela ou se a certidão não valer.
+- **Dica que não se prova:** se a dica leva a uma máquina que responde `4007` sem certidão mais nova (uma resposta forjada com época enorme), ou a outra máquina que não a nomeada, ela é pulada sem abrir TLS por 30 s, dobrando a cada vez até 30 min, e a passada segue para o próximo endereço; assim uma resposta forjada não prende a máquina longe da Cidadela.
 - O IP e o nome não entram na checagem. Por isso uma mudança de IP não exige certificado novo para ninguém.
 - Um endereço que falha na checagem é descartado e registrado em log. A máquina tenta o próximo. Uma máquina que é da Guilda mas não é a Cidadela responde `4007` com a certidão atual; a Torre segue a certidão (se válida e mais nova), refaz a descoberta na hora, e as entradas do cache de outra máquina que não a nomeada nela são puladas sem abrir TLS.
 - **Perguntar a outra máquina:** uma passada que não acha a Cidadela conhecida (ela parou e outra foi promovida, sem broadcast que a mostre) termina dando, em rodízio, um endereço configurado ou do cache de outra máquina da Guilda que passa na sonda TLS. A dica só escolhe a quem discar: quem é a Cidadela continua decidido pela CA da Guilda e pela certidão de época, a do `welcome` (a Cidadela de época maior se prova com ela, e a Torre recusa uma que não a nomeie) ou a que vem com o `4007` de qualquer outra máquina. Uma Cidadela rebaixada que ainda não tem a certidão nova procura assim, sem Cidadela conhecida.
@@ -50,7 +51,8 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
   - Uma máquina só responde se o `guild_id` do pedido for o dela ou vier vazio (vazio só serve à [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)).
   - A máquina só aceita respostas com o `nonce` que enviou.
   - Com `guild_id` vazio, o instalador agrupa as respostas por `guild_id` para saber quantas Guildas existem e se a Cidadela de cada uma respondeu.
-  - As mensagens têm menos de 512 bytes, e cada máquina responde a no máximo 10 pedidos por segundo.
+  - As mensagens têm menos de 512 bytes, e cada máquina responde a no máximo 10 pedidos por segundo no total e 3 por segundo de cada endereço de origem; um pedido recusado pelo limite da origem não gasta o total, e uma origem barulhenta não cala as outras.
+  - Quem procura guarda até 64 respostas por busca e testa até 16 endereços, só IPs literais discáveis (um nome numa resposta é ignorado: levaria a máquina a uma consulta DNS escolhida por quem respondeu).
   - Campos desconhecidos são ignorados. Com `v` diferente, o pedido é ignorado.
 
 ### mDNS
@@ -77,7 +79,7 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
 
 - A máquina usa o endereço configurado à mão (`guild.endereco`, nome ou IP e porta), informado no instalador (`mestre install --join <endereço>`) ou na configuração.
 - Broadcast e mDNS não atravessam redes; valem só o endereço configurado, o cache e os endereços de `guild.config`. Depois de uma troca de Cidadela, a máquina tenta os endereços das máquinas recebidos em `guild.config`.
-- A checagem de identidade é a mesma. Para o navegador abrir o painel por esse endereço, o nome entra nos nomes extras do certificado das máquinas não excluídas ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)).
+- A checagem de identidade é a mesma. Para o navegador abrir o painel por um nome nesse caminho, o Dono o configura como nome extra da Guilda (sob `home.arpa` ou `.internal`), que vai só no certificado da Cidadela em exercício, junto de `mestre.local` ([nomes dos certificados](../arquitetura/seguranca.md#nomes-dos-certificados)); pelo IP privado, nada a configurar.
 - Uma máquina fora da rede local não é alcançada por nenhuma outra, então **não pode ser promovida** a Cidadela ([promoção](../guilda/cidadela-e-torres.md#promoção)).
 - Nenhuma porta é exposta diretamente na internet: o caminho até a Cidadela é responsabilidade da rede do usuário.
 

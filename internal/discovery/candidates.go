@@ -27,37 +27,43 @@ type Candidate struct {
 	Epoch uint64
 }
 
+// MaxCandidates bounds the addresses one search hands to the identity check:
+// forged answers cannot make a pass open TLS without end.
+const MaxCandidates = 16
+
 // CandidatesFrom turns what answered into the addresses to check, best
 // first: the higher the epoch, the better, then a Citadel that answered for
 // itself before a Tower that pointed to one. An address whose epoch is lower
 // than the one this machine follows is dropped: that Citadel is a stale one.
 // A Tower's own address is never a candidate, only the Citadel it names.
+// Every address is an IP literal that can be dialed (never a name, which
+// would send the machine to a DNS lookup of the sender's choice), and at
+// most MaxCandidates are kept.
 func CandidatesFrom(seen []Seen, known Known) []Candidate {
 	type scored struct {
 		c      Candidate
 		direct bool
 	}
 	var out []scored
+	add := func(addrs []string, port int, s Seen, machineID string, direct bool) {
+		for _, a := range addrs {
+			if usableAddr(a) {
+				out = append(out, scored{Candidate{Addr: hostPort(a, port), Source: s.Source, MachineID: machineID, Epoch: s.Epoch}, direct})
+			}
+		}
+	}
 	for _, s := range seen {
 		switch s.Role {
 		case RoleCitadel:
-			for _, a := range s.Addrs {
-				out = append(out, scored{Candidate{Addr: hostPort(a, s.Port), Source: s.Source, MachineID: s.MachineID, Epoch: s.Epoch}, true})
-			}
+			add(s.Addrs, s.Port, s, s.MachineID, true)
 			if s.Citadel != nil && s.Citadel.MachineID == s.MachineID {
-				for _, a := range s.Citadel.Addrs {
-					out = append(out, scored{Candidate{Addr: hostPort(a, s.Citadel.Port), Source: s.Source, MachineID: s.MachineID, Epoch: s.Epoch}, false})
-				}
+				add(s.Citadel.Addrs, s.Citadel.Port, s, s.MachineID, false)
 			}
 		case RoleTower:
 			if s.Citadel == nil || s.Citadel.MachineID == "" {
 				continue
 			}
-			for _, a := range s.Citadel.Addrs {
-				if usableAddr(a) {
-					out = append(out, scored{Candidate{Addr: hostPort(a, s.Citadel.Port), Source: s.Source, MachineID: s.Citadel.MachineID, Epoch: s.Epoch}, false})
-				}
-			}
+			add(s.Citadel.Addrs, s.Citadel.Port, s, s.Citadel.MachineID, false)
 		}
 	}
 	kept := out[:0]
@@ -84,6 +90,9 @@ func CandidatesFrom(seen []Seen, known Known) []Candidate {
 		}
 		seenAddr[k.c.Addr] = true
 		res = append(res, k.c)
+		if len(res) == MaxCandidates {
+			break
+		}
 	}
 	return res
 }

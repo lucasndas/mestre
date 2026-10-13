@@ -21,6 +21,9 @@ const (
 	DefaultInterval = time.Second
 )
 
+// MaxSeen bounds the answers one search keeps; the rest are ignored.
+const MaxSeen = 64
+
 // MDNSService is the DNS-SD type the machines announce.
 const MDNSService = "_mestre._tcp"
 
@@ -122,6 +125,9 @@ func Search(ctx context.Context, cfg SearchConfig) ([]Seen, error) {
 	add := func(s Seen) {
 		mu.Lock()
 		defer mu.Unlock()
+		if len(seen) >= MaxSeen {
+			return
+		}
 		for _, o := range seen {
 			if o.Source == s.Source && o.MachineID == s.MachineID && o.Port == s.Port {
 				return
