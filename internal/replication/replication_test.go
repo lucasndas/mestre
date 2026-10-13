@@ -170,7 +170,7 @@ func TestARecordIsAckedAtOnceWhen256AreWaitingAndOtherwiseEverySecond(t *testing
 func TestATowerThatComesBackGetsOnlyWhatIsMissingOrAFullCopyAfterTheRetention(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, rigOpts{})
+		r := newRig(t, rigOpts{lagThreshold: 24 * time.Hour})
 		for i := range 10 {
 			r.insertMachine(i)
 		}
