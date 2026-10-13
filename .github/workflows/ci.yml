@@ -72,6 +72,19 @@ jobs:
       - name: golangci-lint version
         run: golangci-lint version
 
+      # The first lint of a dependency is slow (modernc.org/sqlite alone takes
+      # seconds); keep the analysis cache between runs, keyed by OS, linter
+      # version, go.sum and the lint config.
+      - name: Point golangci-lint at a cached folder
+        run: echo "GOLANGCI_LINT_CACHE=$RUNNER_TEMP/golangci-lint" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-
+
       - name: go vet
         run: go vet ./...
 
