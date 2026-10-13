@@ -27,7 +27,7 @@ const maxSweeps = 50
 type sysAgent struct{}
 
 // prepare sets how the child is born.
-func prepare(cmd *pty.Cmd) (*sysAgent, error) {
+func prepare(cmd *pty.Cmd, _ bool) (*sysAgent, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	return &sysAgent{}, nil
 }

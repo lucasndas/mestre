@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
 )
 
 // Session is the logon of the agent account for one terminal: what the
@@ -21,6 +23,11 @@ type Session struct {
 	Token windows.Token
 	// Env is the environment block of the account (profile variables).
 	Env []string
+	// Logon is the logon session of the token, when the launcher made it for
+	// this terminal alone (a batch logon). Zero for a session that shares the
+	// logon session of the launcher: logonsweep.Allowed refuses it, and the
+	// mestre-pty is not told it owns the session.
+	Logon logonsweep.Session
 	// Release unloads the profile, takes back what was granted on the window
 	// station and desktop, and closes the token, so the logon session ends.
 	// It is safe to call more than once.
@@ -193,5 +200,9 @@ func (a *AgentAccount) prepare(t windows.Token, id string) (*Session, error) {
 	if err = setObjectACE(desktop, logon, desktopAllAccess, true); err != nil {
 		return fail(err)
 	}
-	return &Session{Token: t, Env: env, Release: release}, nil
+	logonSession, err := logonsweep.SessionOfToken(t)
+	if err != nil {
+		return fail(err)
+	}
+	return &Session{Token: t, Env: env, Logon: logonSession, Release: release}, nil
 }

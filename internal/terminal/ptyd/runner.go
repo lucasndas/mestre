@@ -20,6 +20,11 @@ type PTYRunner struct {
 	// Suite is the value of MESTRE_TEST_SUITE ("" in production); the fast
 	// suite never starts a process.
 	Suite string
+	// SweepLogonSession (Windows) makes the forced stop also end what is left
+	// of the logon session of this process, which the launcher made for this
+	// terminal alone (--own-logon). It is still refused unless the session
+	// is a batch logon (internal/winsvc/logonsweep).
+	SweepLogonSession bool
 }
 
 var _ Runner = (*PTYRunner)(nil)
@@ -45,7 +50,7 @@ func (r *PTYRunner) Start(ctx context.Context, spec StartSpec) (Agent, error) {
 	cmd := p.Command(spec.Path, spec.Args...)
 	cmd.Env = withTerm(spec.Env)
 	cmd.Dir = spec.Dir
-	sys, err := prepare(cmd)
+	sys, err := prepare(cmd, r.SweepLogonSession)
 	if err != nil {
 		_ = p.Close()
 		return nil, fmt.Errorf("start %s: %w", spec.Path, err)
