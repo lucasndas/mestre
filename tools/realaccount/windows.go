@@ -244,7 +244,7 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 	var sessions []uint64
 	var hive bool
 	polls := 0
-	for range 240 {
+	for range 1920 { // EXPERIMENT: 8 minutes
 		if sessions, err = sessionsOf(realaccount.WindowsAgentUser); err != nil {
 			return err
 		}
@@ -257,6 +257,10 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 			return nil
 		}
 		polls++
+		if polls == 240 { // EXPERIMENT
+			fmt.Fprintf(out, "EXPERIMENT: a minute passed with the sessions %#x: restarting winmgmt\n", sessions)
+			_ = runCmd(ctx, out, nil, "powershell.exe", "-NoProfile", "-Command", "Restart-Service winmgmt -Force")
+		}
 		if err := clock.Sleep(ctx, clock.Real{}, 250*time.Millisecond); err != nil {
 			return err
 		}
