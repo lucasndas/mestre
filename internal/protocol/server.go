@@ -176,9 +176,13 @@ func (srv *Server) open(ctx context.Context, conn Conn) (*Session, error) {
 		_ = json.Unmarshal(env.Payload, &hello)
 		if err := h(ctx, peer, &hello); err != nil {
 			var ce *CloseError
-			if errors.As(err, &ce) {
+			var pe *Error
+			switch {
+			case errors.As(err, &ce):
 				_ = conn.Close(ce.Code, ce.Reason)
-			} else {
+			case errors.As(err, &pe):
+				cfg.refuse(hctx, conn, gen, env.ID, pe, 1002, "refused")
+			default:
 				cfg.refuse(hctx, conn, gen, env.ID, NewError(CodeForbidden, "%v", err), 1008, "refused")
 			}
 			return nil, fmt.Errorf("%w: refused: %v", ErrOpening, err)
