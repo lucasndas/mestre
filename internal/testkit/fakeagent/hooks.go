@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -64,8 +65,39 @@ type hookGroup struct {
 	Hooks   []hookEntry `json:"hooks"`
 }
 
-// loadHooks reads the hook files of the provider.
+// NotImplementedError is a configuration the fake agent does not model: a
+// hook event it never fires, a hook type it cannot run, a recording it does
+// not have. It ends the agent instead of being skipped
+// (docs/qualidade/dubles.md#regras-e-erros); MemLauncher also fails the test
+// with it.
+type NotImplementedError struct{ What string }
+
+func (e *NotImplementedError) Error() string { return testkit.NotImplementedPrefix + e.What }
+
+func notImplemented(format string, args ...any) error {
+	return &NotImplementedError{What: fmt.Sprintf(format, args...)}
+}
+
+// loadHooks reads the hook files of the provider and refuses what the fake
+// does not model.
 func (a *agent) loadHooks() ([]handler, error) {
+	hs, err := a.readHookFiles()
+	if err != nil {
+		return nil, err
+	}
+	pr := profiles[a.p]
+	for _, h := range hs {
+		if !slices.Contains(pr.events, h.event) {
+			return nil, notImplemented("%s hook event %s (the fake fires %s)", a.p, h.event, strings.Join(pr.events, ", "))
+		}
+		if _, ok := a.recording(h.event); !ok {
+			return nil, notImplemented("%s hook event %s has no recording (version %q)", a.p, h.event, a.cfg.RecordingVersion)
+		}
+	}
+	return hs, nil
+}
+
+func (a *agent) readHookFiles() ([]handler, error) {
 	switch a.p {
 	case Claude:
 		files := []string{
@@ -83,7 +115,11 @@ func (a *agent) loadHooks() ([]handler, error) {
 			if err != nil {
 				return nil, err
 			}
-			for _, h := range groupedHandlers(m["hooks"], a.dir) {
+			layer, err := a.groupedHandlers(m["hooks"], f, a.dir, "")
+			if err != nil {
+				return nil, err
+			}
+			for _, h := range layer {
 				id := h.event + "\x00" + h.matcher + "\x00" + h.command
 				if !seen[id] { // identical handler runs once
 					seen[id] = true
@@ -93,17 +129,32 @@ func (a *agent) loadHooks() ([]handler, error) {
 		}
 		return hs, nil
 	case Codex:
-		m, err := readJSONMap(filepath.Join(a.accountDir(), "hooks.json"))
-		if err != nil {
-			return nil, err
-		}
 		cfg, err := readCodexConfig(filepath.Join(a.accountDir(), "config.toml"))
 		if err != nil {
 			return nil, err
 		}
-		hs := groupedHandlers(m["hooks"], a.dir)
-		for i := range hs {
-			hs[i].trusted = cfg.hookTrust[hs[i].key] == hs[i].hash
+		// The layers add up: the profile's hooks.json and the project's own
+		// .codex/hooks.json (the folder is trusted by now, so the project
+		// layer counts).
+		layers := []struct{ file, keyPrefix string }{{filepath.Join(a.accountDir(), "hooks.json"), "user"}}
+		for _, root := range trustCandidates(a.dir) {
+			f := filepath.Join(root, ".codex", "hooks.json")
+			layers = append(layers, struct{ file, keyPrefix string }{f, "project:" + f})
+		}
+		var hs []handler
+		for _, l := range layers {
+			m, err := readJSONMap(l.file)
+			if err != nil {
+				return nil, err
+			}
+			layer, err := a.groupedHandlers(m["hooks"], l.file, a.dir, l.keyPrefix)
+			if err != nil {
+				return nil, err
+			}
+			for i := range layer {
+				layer[i].trusted = cfg.hookTrust[layer[i].key] == layer[i].hash
+			}
+			hs = append(hs, layer...)
 		}
 		return hs, nil
 	default:
@@ -113,38 +164,53 @@ func (a *agent) loadHooks() ([]handler, error) {
 			return nil, err
 		}
 		var hs []handler
-		for _, v := range m { // top-level keys are free names
-			group, _ := v.(map[string]any)
-			if group == nil || group["enabled"] == false {
+		for name, v := range m { // top-level keys are free names
+			group, ok := v.(map[string]any)
+			if !ok {
+				return nil, notImplemented("antigravity hooks.json: %q is not a hook group", name)
+			}
+			if group["enabled"] == false {
 				continue
 			}
-			hs = append(hs, agyHandlers(group, filepath.Dir(path))...)
+			layer, err := agyHandlers(group, filepath.Dir(path))
+			if err != nil {
+				return nil, fmt.Errorf("%s: %q: %w", path, name, err)
+			}
+			hs = append(hs, layer...)
 		}
 		return hs, nil
 	}
 }
 
 // groupedHandlers reads {"Event": [{"matcher", "hooks": [...]}]} (Claude
-// and Codex format).
-func groupedHandlers(v any, dir string) []handler {
+// and Codex format). keyPrefix names the Codex layer in the trust key. Only
+// Claude honours onFailure: Codex fails open with no option
+// (docs/provedores/codex.md#hooks).
+func (a *agent) groupedHandlers(v any, file, dir, keyPrefix string) ([]handler, error) {
+	if v == nil {
+		return nil, nil
+	}
 	b, _ := json.Marshal(v)
 	var events map[string][]hookGroup
-	if json.Unmarshal(b, &events) != nil {
-		return nil
+	if err := json.Unmarshal(b, &events); err != nil {
+		return nil, fmt.Errorf("%s: hooks: %w", file, err)
+	}
+	if keyPrefix == "" {
+		keyPrefix = "user"
 	}
 	var hs []handler
 	for ev, groups := range events {
 		for gi, g := range groups {
 			for hi, e := range g.Hooks {
 				if e.Type != "" && e.Type != "command" {
-					continue
+					return nil, notImplemented("%s hook type %q in %s", a.p, e.Type, file)
 				}
 				canon, _ := json.Marshal(e)
 				sum := sha256.Sum256(canon)
 				hs = append(hs, handler{
 					event: ev, matcher: g.Matcher, command: e.Command, dir: dir,
-					timeout: seconds(e.Timeout, 60), block: e.OnFailure == "block",
-					key: fmt.Sprintf("user:%s:%d:%d", snake(ev), gi, hi),
+					timeout: seconds(e.Timeout, 60), block: a.p == Claude && e.OnFailure == "block",
+					key: fmt.Sprintf("%s:%s:%d:%d", keyPrefix, snake(ev), gi, hi),
 					// The fake hashes the handler JSON; the real Codex
 					// algorithm is checked by the conformance test (M3).
 					hash:    "sha256:" + hex.EncodeToString(sum[:]),
@@ -153,35 +219,47 @@ func groupedHandlers(v any, dir string) []handler {
 			}
 		}
 	}
-	return hs
+	return hs, nil
 }
 
 // agyHandlers reads one Antigravity group: PreToolUse/PostToolUse are
-// {matcher, hooks} groups, the other events plain handler lists.
-func agyHandlers(group map[string]any, dir string) []handler {
+// {matcher, hooks} groups, the other events plain handler lists. A key that
+// is neither "enabled" nor an event of the provider is an error.
+func agyHandlers(group map[string]any, dir string) ([]handler, error) {
 	var hs []handler
 	for ev, v := range group {
 		b, _ := json.Marshal(v)
 		switch ev {
+		case "enabled":
 		case "PreToolUse", "PostToolUse":
 			var gs []hookGroup
-			if json.Unmarshal(b, &gs) == nil {
-				for _, g := range gs {
-					for _, e := range g.Hooks {
-						hs = append(hs, handler{event: ev, matcher: g.Matcher, command: e.Command, timeout: seconds(e.Timeout, 30), dir: dir, trusted: true})
+			if err := json.Unmarshal(b, &gs); err != nil {
+				return nil, fmt.Errorf("%s: %w", ev, err)
+			}
+			for _, g := range gs {
+				for _, e := range g.Hooks {
+					if e.Type != "" && e.Type != "command" {
+						return nil, notImplemented("antigravity hook type %q", e.Type)
 					}
+					hs = append(hs, handler{event: ev, matcher: g.Matcher, command: e.Command, timeout: seconds(e.Timeout, 30), dir: dir, trusted: true})
 				}
 			}
 		case "PreInvocation", "PostInvocation", "Stop":
 			var es []hookEntry
-			if json.Unmarshal(b, &es) == nil {
-				for _, e := range es {
-					hs = append(hs, handler{event: ev, command: e.Command, timeout: seconds(e.Timeout, 30), dir: dir, trusted: true})
-				}
+			if err := json.Unmarshal(b, &es); err != nil {
+				return nil, fmt.Errorf("%s: %w", ev, err)
 			}
+			for _, e := range es {
+				if e.Type != "" && e.Type != "command" {
+					return nil, notImplemented("antigravity hook type %q", e.Type)
+				}
+				hs = append(hs, handler{event: ev, command: e.Command, timeout: seconds(e.Timeout, 30), dir: dir, trusted: true})
+			}
+		default:
+			return nil, notImplemented("antigravity hook event %s", ev)
 		}
 	}
-	return hs
+	return hs, nil
 }
 
 func seconds(v, def float64) time.Duration {
@@ -253,7 +331,7 @@ func (a *agent) decide(h handler, res HookResult, err error) (bool, string) {
 		return false, ""
 	default: // Claude and Codex: exit 2 or an explicit deny blocks, failure lets it run
 		if err != nil || (res.ExitCode != 0 && res.ExitCode != 2) {
-			if h.block {
+			if h.block && a.p == Claude { // Codex fails open, with no option
 				return true, "hook failed and onFailure is block"
 			}
 			return false, ""

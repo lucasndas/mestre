@@ -3,6 +3,7 @@ package faketelegram_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
@@ -151,4 +152,53 @@ func TestInjectedFailures(t *testing.T) {
 	if len(s.Sent()) != 0 {
 		t.Fatalf("failed calls were recorded as sent: %v", s.Sent())
 	}
+}
+
+// CA-DUBLES-09: the method is checked before the token, and a parameter the
+// double does not honour would be silently dropped, so it fails too.
+func TestUnknownMethodOrParameterFailsTheTest(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, token, method string
+		form                url.Values
+		want                string
+	}{
+		{"unknown method", token, "sendPhoto", url.Values{"chat_id": {"1"}}, "telegram sendPhoto"},
+		{"unknown method with a wrong token", "wrong", "getFile", nil, "telegram getFile"},
+		{"unknown parameter", token, "sendMessage", url.Values{"chat_id": {"1"}, "text": {"x"}, "reply_markup": {"{}"}}, "telegram sendMessage parameter reply_markup"},
+		{"unknown getUpdates parameter", token, "getUpdates", url.Values{"allowed_updates": {"[]"}}, "telegram getUpdates parameter allowed_updates"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rep := &reporter{}
+			s, err := faketelegram.New(clock.NewFake(time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)), rep, token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := &http.Client{Transport: fakenet.HandlerTransport(s)}
+
+			resp, err := c.PostForm("https://api.telegram.org/bot"+tc.token+"/"+tc.method, tc.form)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = resp.Body.Close()
+
+			if resp.StatusCode != http.StatusNotImplemented {
+				t.Fatalf("status = %d, want 501", resp.StatusCode)
+			}
+			if want := testkit.NotImplementedPrefix + tc.want; len(rep.msgs) != 1 || rep.msgs[0] != want {
+				t.Fatalf("test failures = %q, want [%q]", rep.msgs, want)
+			}
+			if len(s.Sent()) != 0 {
+				t.Fatalf("a rejected call was recorded as sent: %v", s.Sent())
+			}
+		})
+	}
+}
+
+type reporter struct{ msgs []string }
+
+func (r *reporter) Errorf(format string, args ...any) {
+	r.msgs = append(r.msgs, fmt.Sprintf(format, args...))
 }

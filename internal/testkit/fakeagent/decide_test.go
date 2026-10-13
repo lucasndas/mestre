@@ -1,6 +1,7 @@
 package fakeagent
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -25,6 +26,7 @@ func TestHookSemanticsPerProvider(t *testing.T) {
 		{"claude non-JSON output", Claude, handler{}, HookResult{Stdout: []byte("hi")}, nil, false},
 		{"codex deny", Codex, handler{}, HookResult{Stdout: deny}, nil, true},
 		{"codex failure lets it run", Codex, handler{}, HookResult{ExitCode: 3}, nil, false},
+		{"codex timeout with onFailure block still lets it run", Codex, handler{block: true}, HookResult{}, failed, false},
 		{"agy allow", Antigravity, handler{}, HookResult{Stdout: []byte(`{"decision":"allow"}`)}, nil, false},
 		{"agy empty object", Antigravity, handler{}, HookResult{Stdout: []byte(`{}`)}, nil, true},
 		{"agy exit 1", Antigravity, handler{}, HookResult{ExitCode: 1, Stdout: []byte(`{"decision":"allow"}`)}, nil, true},
@@ -47,9 +49,30 @@ func TestParseScriptRejectsBadSteps(t *testing.T) {
 		"prompts:\n  - match: x\n    steps:\n      - {say: a, run: b}\n",
 		"prompts:\n  - match: x\n    steps:\n      - wait: soon\n",
 		"prompts:\n  - match: '('\n",
+		"prompts:\n  - match: x\n    typo: y\n    steps:\n      - say: a\n",
+		"prompts:\n  - match: x\n    steps:\n      - {say: a, sya: b}\n",
+		"promtps: []\n",
 	} {
 		if _, err := ParseScript([]byte(src)); err == nil {
 			t.Fatalf("accepted %q", src)
+		}
+	}
+}
+
+func TestOnFailureBlockIsHonouredOnlyForClaude(t *testing.T) {
+	t.Parallel()
+	const file = `{"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "gate", "onFailure": "block"}]}]}`
+	var v any
+	if err := json.Unmarshal([]byte(file), &v); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[Provider]bool{Claude: true, Codex: false} {
+		hs, err := (&agent{p: p}).groupedHandlers(v, "hooks.json", "/w", "")
+		if err != nil || len(hs) != 1 {
+			t.Fatalf("%s: handlers = %v, err = %v", p, hs, err)
+		}
+		if hs[0].block != want {
+			t.Fatalf("%s: block = %v, want %v", p, hs[0].block, want)
 		}
 	}
 }

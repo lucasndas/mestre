@@ -65,6 +65,7 @@ type profile struct {
 	credFile    string // relative to the account dir; "" = no login check yet
 	startEvent  string // "" when the provider has none
 	promptEvent string
+	events      []string // hook events the fake fires; any other fails loudly
 }
 
 var profiles = map[Provider]profile{
@@ -75,6 +76,7 @@ var profiles = map[Provider]profile{
 		loginTitle: "Select login method:",
 		loginOpts:  []string{"Claude account with subscription", "Anthropic Console account"},
 		credFile:   ".credentials.json", startEvent: "SessionStart", promptEvent: "UserPromptSubmit",
+		events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
 	},
 	Codex: {
 		title: "Codex (fake)", recordings: "codex",
@@ -83,12 +85,17 @@ var profiles = map[Provider]profile{
 		loginTitle: "Sign in with ChatGPT to use Codex",
 		loginOpts:  []string{"Sign in with ChatGPT", "Sign in with Device Code", "Provide your own API key"},
 		credFile:   "auth.json", startEvent: "SessionStart", promptEvent: "UserPromptSubmit",
+		events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
 	},
 	Antigravity: {
 		title: "Antigravity (fake)", recordings: "antigravity",
 		shellTool: "run_command", editTool: "write_to_file", shellArg: "CommandLine",
 		trustQ: "Do you trust the contents of this project?", trustYes: "Yes, I trust this folder", trustNo: "No, exit",
+		loginTitle:  "Sign in with Google to use Antigravity",
+		loginOpts:   []string{"Sign in with Google (URL and code)"},
+		credFile:    "antigravity-oauth-token",
 		promptEvent: "PreInvocation",
+		events:      []string{"PreInvocation", "PreToolUse", "PostToolUse", "Stop"},
 	},
 }
 

@@ -16,7 +16,10 @@ import (
 	"strings"
 )
 
-//go:embed testdata/recordings
+// all: so a file starting with "." or "_" is embedded too, and the secret scan
+// of the recordings (CA-DUBLES-10) sees it.
+//
+//go:embed all:testdata/recordings
 var recordingsFS embed.FS
 
 // Recordings returns the recordings tree (origin/version/file.json).
@@ -38,7 +41,10 @@ type Recording struct {
 }
 
 // LatestVersion returns the newest version directory of origin. Versions are
-// compared part by part, numerically when both parts are numbers.
+// compared part by part: numerically when both parts are numbers, a number
+// before a name otherwise (a numbered release is newer than a version known
+// only by its commit, like the Codex recording "b3c3bad"), and by text when
+// both are names.
 func LatestVersion(fsys fs.FS, origin string) (string, error) {
 	entries, err := fs.ReadDir(fsys, origin)
 	if err != nil {
@@ -93,8 +99,13 @@ func versionLess(a, b string) bool {
 		}
 		na, ea := strconv.Atoi(pa[i])
 		nb, eb := strconv.Atoi(pb[i])
-		if ea == nil && eb == nil {
+		switch {
+		case ea == nil && eb == nil:
 			return na < nb
+		case ea == nil: // a number beats a name: "0.1.0" is newer than a commit id
+			return false
+		case eb == nil:
+			return true
 		}
 		return pa[i] < pb[i]
 	}
