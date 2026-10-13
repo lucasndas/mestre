@@ -109,6 +109,11 @@ func IssueCitadelCertificate(ctx context.Context, db *store.DB, ca *transport.CA
 // CitadelCertificate is IssueCitadelCertificate for the machine this
 // Citadel serves as, with its database, CA and clock.
 func (c *Citadel) CitadelCertificate(ctx context.Context, machineID string, key crypto.Signer) (*x509.Certificate, error) {
+	leave, ok := c.enter()
+	if !ok {
+		return nil, ErrSuspended
+	}
+	defer leave()
 	return IssueCitadelCertificate(ctx, c.db, c.cfg.CA, machineID, key, c.clk)
 }
 

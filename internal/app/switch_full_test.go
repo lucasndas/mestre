@@ -547,8 +547,9 @@ func TestAPlannedHandoverPassesTheCommandWithTheData(t *testing.T) {
 }
 
 // A promoted machine whose process stops during the wait of 60 s waits, when
-// it starts again, what was left of it, counted from when it took the
-// command (docs/guilda/trava-no-github.md#espera-do-promovido): never less.
+// it starts again, the whole wait (a wall clock that stepped forward while it
+// was down must not shorten it): never less than 60 s after it took the
+// command, nor than 60 s after the restart.
 func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -594,17 +595,19 @@ func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 	}
 	took := time.UnixMilli(int64(r.Rows[0][0].(float64)))
 
-	// 30 s into the wait the process stops and starts again
+	// 30 s into the wait the process stops; the clock steps forward 2 minutes
+	// while it is down, and it starts again
 	w.clk.Advance(30 * time.Second)
 	w.kill(b)
+	w.clk.Advance(2 * time.Minute)
 	w.start(b)
 	w.waitFor("b to come back as the Citadel of the epoch 2", 0, func() bool {
 		st, ok := w.status(b)
 		return ok && st.Role == app.RoleCitadel && st.Epoch == 2
 	})
-	w.clk.Advance(29 * time.Second)
+	w.clk.Advance(59 * time.Second)
 	if st, _ := w.status(b); st.Acting || st.Fence != "waiting" {
-		t.Fatalf("59 s after taking the command the restarted Citadel is %s (acting %v); want it waiting", st.Fence, st.Acting)
+		t.Fatalf("59 s after the restart the Citadel is %s (acting %v); want it waiting the whole wait again", st.Fence, st.Acting)
 	}
 	w.clk.Advance(time.Second)
 	w.waitFor("b to act after the wait and the check of the lock", 0, func() bool {

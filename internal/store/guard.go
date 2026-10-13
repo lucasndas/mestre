@@ -78,16 +78,25 @@ func (g *guardConn) QueryContext(ctx context.Context, q string, args []driver.Na
 }
 
 // check lets through, outside the replication, the statements that read:
-// SELECT, VALUES, EXPLAIN, WITH (a write behind it still meets query_only)
-// and the pragmas that only report.
+// SELECT, VALUES, WITH (a write behind it still meets query_only), EXPLAIN
+// [QUERY PLAN] of one of those and the pragmas that only report. EXPLAIN is
+// judged by what it explains: SQLite runs a PRAGMA at compile time, even
+// behind EXPLAIN.
 func (g *guardConn) check(q string) error {
 	if g.open.Load() {
 		return nil
 	}
 	for _, s := range splitStatements(q) {
 		w, rest := firstWord(s)
+		if w == "EXPLAIN" {
+			w, rest = firstWord(rest)
+			if w == "QUERY" {
+				_, rest = firstWord(rest) // PLAN
+				w, rest = firstWord(rest)
+			}
+		}
 		switch w {
-		case "SELECT", "VALUES", "EXPLAIN", "WITH":
+		case "SELECT", "VALUES", "WITH":
 		case "PRAGMA":
 			if _, sets := pragmaOf(rest); sets {
 				return ErrReplicaWrite

@@ -365,11 +365,13 @@ func (l *Link) waitConnected(ctx context.Context) (*Session, error) {
 }
 
 // ackArrived is the answer of the handler of the peer to a message of ours.
-// Whatever its status the message leaves the outbox: with a retryable error
-// it is the sender that decides whether to send it again, with the same id
+// The message leaves the outbox, except for an error that is retryable (the
+// receiver forgot the id, so the same message can work later, as with the
+// Citadel that hands over): it stays for the next connection, in its place
 // (docs/conectividade/protocolo.md#ack-e-idempotência).
 func (l *Link) ackArrived(ctx context.Context, id string, a *Ack) {
-	l.finish(ctx, id, AckResult{Status: a.Status, Error: a.Error}, true)
+	retryable := a.Status == AckError && a.Error != nil && a.Error.Retryable
+	l.finish(ctx, id, AckResult{Status: a.Status, Error: a.Error}, !retryable)
 }
 
 // errorArrived is a refusal in place of the ack: the message did not reach a

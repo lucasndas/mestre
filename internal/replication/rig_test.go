@@ -195,6 +195,13 @@ type rigOpts struct {
 	// hours pass and is not about the lag sets it high, or the Citadel would
 	// look at the lag every 5 s of them.
 	lagThreshold time.Duration
+	// busy, when set, is how long the replicas wait for a lock: a test that
+	// keeps a reader on the WAL does not wait the default five seconds, three
+	// times over, for each attempt to truncate it.
+	busy time.Duration
+	// paused, when set, is PrimaryConfig.Paused: a Citadel that does not act
+	// yet prunes nothing.
+	paused func() bool
 }
 
 // rig is a Citadel and the Towers that connect to it, on the fake network.
@@ -312,6 +319,7 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	pc := replication.PrimaryConfig{
 		DB: r.cdb, Clock: r.clk, Roster: r.roster, Dir: filepath.Join(r.dir, "snapshots"),
 		LagThreshold: o.lagThreshold,
+		Paused:       o.paused,
 		OnDropped:    func(id string) { r.dropMu.Lock(); r.dropped = append(r.dropped, id); r.dropMu.Unlock() },
 		GuildConfig: func(context.Context) (protocol.GuildConfig, error) {
 			return protocol.GuildConfig{Timezone: "UTC"}, nil
@@ -407,7 +415,7 @@ func (tw *tower) start(startReplica bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	tw.cancel = cancel
 	var err error
-	tw.db, err = guilddb.Open(ctx, tw.dbPath, store.Options{Replica: true, Synchronous: "OFF", Clock: r.clk})
+	tw.db, err = guilddb.Open(ctx, tw.dbPath, store.Options{Replica: true, Synchronous: "OFF", Clock: r.clk, BusyTimeout: r.opts.busy})
 	if err != nil {
 		t.Fatal(err)
 	}

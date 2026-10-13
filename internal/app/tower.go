@@ -395,7 +395,7 @@ func (e *Engine) handleGuildConfig(db *store.DB, locator *discovery.Locator, kic
 		if err := e.creds.Reload(ctx, db); err != nil {
 			e.log.Warn("app: the refused credentials of the replica", "err", err)
 		}
-		e.creds.Add(cfg.Revoked...)
+		e.creds.Learn(cfg.Revoked, cfg.Retired)
 		e.tls.CloseRevoked()
 		var ms []discovery.MachineAddrs
 		for _, mc := range cfg.Machines {
@@ -592,6 +592,27 @@ func (e *Engine) reportDiscarded(ctx context.Context, db *store.DB, link *protoc
 	}
 }
 
+// discardedID is the id of the message that reports the epoch: the same on
+// every try of this process, so the outbox holds it once (a new process sends
+// it again with a new id, and the Citadel records each transaction once).
+func (e *Engine) discardedID(epoch uint64) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.discardIDs == nil {
+		e.discardIDs = map[uint64]string{}
+	}
+	if id, ok := e.discardIDs[epoch]; ok {
+		return id
+	}
+	id := protocol.NewIDGen(e.clk).NewString()
+	e.discardIDs[epoch] = id
+	return id
+}
+
+// discardedAckWait is how long the report of the discarded transactions waits
+// for the ack before the next try.
+const discardedAckWait = 30 * time.Second
+
 func (e *Engine) listDiscarded(ctx context.Context, path string, epoch, from uint64, link *protocol.Link) (discardReport, error) {
 	old, err := guilddb.Open(ctx, path, store.Options{Clock: e.clk, Replica: true})
 	if err != nil {
@@ -607,10 +628,20 @@ func (e *Engine) listDiscarded(ctx context.Context, path string, epoch, from uin
 		r.LSNs = append(r.LSNs, t.LSN)
 	}
 	if total > 0 || len(r.Dropped) > 0 {
-		if _, err := link.Send(ctx, protocol.Outgoing{Type: protocol.TypeGuildDiscarded, Payload: protocol.GuildDiscarded{
+		// The record of what was reported is written only once the Citadel
+		// acknowledged: a refusal (retryable, as while it hands over) leaves
+		// the message in the outbox and the next try sends the same id, which
+		// the Citadel runs once.
+		cctx, cancel := clock.WithTimeout(ctx, e.clk, discardedAckWait)
+		res, err := link.Call(cctx, protocol.Outgoing{Type: protocol.TypeGuildDiscarded, ID: e.discardedID(epoch), Payload: protocol.GuildDiscarded{
 			Epoch: epoch, FromLSN: from, Total: total, Transactions: txs, Dropped: r.Dropped,
-		}}); err != nil {
+		}})
+		cancel()
+		if err != nil {
 			return discardReport{}, err
+		}
+		if res.Status == protocol.AckError {
+			return discardReport{}, fmt.Errorf("app: the Citadel refused guild.discarded: %v", res.Error)
 		}
 	}
 	b, _ := json.MarshalIndent(r, "", "  ")

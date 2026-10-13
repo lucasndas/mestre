@@ -305,7 +305,13 @@ func (e *Engine) startCitadel(ctx context.Context, run *citadelRun) (*guild.Cita
 		return run.citadel, nil
 	}
 	if run.ca == nil {
+		// opening the key of the CA writes its use in the audit: not once the
+		// handover read its last lsn (it would be lost with this Citadel)
+		if !run.gate.enter() {
+			return nil, errHandingOver()
+		}
 		ca, err := guild.LoadCA(ctx, run.db, run.vault, caPurpose, e.clk)
+		run.gate.leave()
 		if err != nil {
 			return nil, err
 		}
@@ -319,7 +325,13 @@ func (e *Engine) startCitadel(ctx context.Context, run *citadelRun) (*guild.Cita
 			Removed:          func(guild.Machine, string) { e.sendConfig(context.WithoutCancel(ctx), run) },
 		},
 		Suspended: func() bool { return !run.fence.Acting() || run.gate.isDraining() },
-		Logger:    e.log,
+		Admit: func() (func(), bool) {
+			if !run.gate.enter() {
+				return nil, false
+			}
+			return run.gate.leave, true
+		},
+		Logger: e.log,
 	})
 	if err != nil {
 		return nil, err
@@ -379,12 +391,12 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 
 	promoted, wait := take.promoted, guild.PromotedWait
 	if !promoted {
-		// A Citadel that restarts during the wait of its promotion waits
-		// what was left of it, counted from when it took the command.
+		// A Citadel that restarts during the wait of its promotion (or soon after,
+		// as a clock that stepped forward may hide) waits it whole again.
 		if rec, err := guild.EpochStart(ctx, db, run.epoch); err == nil && rec.Epoch > 1 && rec.CitadelMachineID == e.id.MachineID {
 			if left := guild.WaitLeft(e.clk, rec.StartedAt, guild.PromotedWait); left > 0 {
 				promoted, wait = true, left
-				e.log.Warn("app: the wait of the promotion was not over; waiting what is left", "left", left)
+				e.log.Warn("app: the wait of the promotion was not over; waiting it again", "wait", left)
 			}
 		}
 	}
@@ -426,6 +438,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		Vault:       &vault.Copier{Keys: vault.NewFileKeyStore(e.paths.vaultKey()), EnvelopePath: e.paths.envelope()},
 		GuildConfig: func(ctx context.Context) (protocol.GuildConfig, error) { return guild.ConfigOf(ctx, db, e.creds) },
 		Paused:      func() bool { return !run.fence.Acting() },
+		Gate:        run.gated,
 	})
 	if err != nil {
 		return transition{err: err}
@@ -438,7 +451,16 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		return transition{err: err}
 	}
 	pcfg.Hooks = primary.Hooks(protocol.Hooks{
-		OnHello: registry.OnHello,
+		OnHello: func(ctx context.Context, peer protocol.Peer, h *protocol.Hello) error {
+			// the sheet of the hello is a write: during the handover the
+			// opening is refused (retryable) and the Tower sends it again to
+			// the new Citadel
+			if !run.gate.enter() {
+				return errHandingOver()
+			}
+			defer run.gate.leave()
+			return registry.OnHello(ctx, peer, h)
+		},
 		// every Tower that connects learns the machines and the refusals
 		OnReady: func(s *protocol.Session) { go e.sendConfig(pctx, run, s.Peer().ID) },
 	})
@@ -505,8 +527,9 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 			return
 		}
 		agent.Attach(actingSender{fence: run.fence, to: registry.Local(e.id.MachineID)})
-		if sheet, err := agent.Hello(pctx); err == nil {
+		if sheet, err := agent.Hello(pctx); err == nil && run.gate.enter() {
 			_ = registry.Replace(pctx, e.id.MachineID, sheet)
+			run.gate.leave()
 		}
 		_ = agent.Run(pctx)
 	}
@@ -572,6 +595,12 @@ func (e *Engine) renewOwn(ctx context.Context, run *citadelRun) {
 		if !byTime && (!byNames || e.clk.Now().Before(hold)) {
 			return
 		}
+		// the renewal is a write of the Guild: not once the handover read its
+		// last lsn (the certificate would not reach the new Citadel)
+		if !run.gate.enter() {
+			return
+		}
+		defer run.gate.leave()
 		key, err := transport.GenerateKey()
 		if err != nil {
 			return

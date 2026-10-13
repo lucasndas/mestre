@@ -153,6 +153,8 @@ type Engine struct {
 	cit       *citadelRun
 	tow       *towerRun
 	discarded int
+	// discardIDs are the ids of the reports of the discarded transactions, by epoch.
+	discardIDs map[uint64]string
 }
 
 // New returns the engine of an instance; Run starts it.

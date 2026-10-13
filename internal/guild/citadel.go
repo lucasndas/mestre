@@ -88,8 +88,13 @@ type CitadelConfig struct {
 	// Suspended, when set and true, makes /join answer 503 (a suspended
 	// Citadel takes no entries, docs/guilda/cidadela-e-torres.md#cidadela-suspensa).
 	Suspended func() bool
-	Rand      io.Reader    // nil means crypto/rand
-	Logger    *slog.Logger // nil discards
+	// Admit, when set, is asked before a write that must not reach a Citadel
+	// that hands over (the decision on an entry, its own certificate): it
+	// returns the function that ends the write, or false to refuse it with
+	// ErrSuspended.
+	Admit  func() (leave func(), ok bool)
+	Rand   io.Reader    // nil means crypto/rand
+	Logger *slog.Logger // nil discards
 }
 
 // Citadel is the side of the Guild that admits and removes machines: it
@@ -206,6 +211,14 @@ func loadJoin(ctx context.Context, q querier, id string) (joinRow, error) {
 		return joinRow{}, ErrJoinNotFound
 	}
 	return j, err
+}
+
+// enter asks Admit; without one every write is admitted.
+func (c *Citadel) enter() (func(), bool) {
+	if c.cfg.Admit == nil {
+		return func() {}, true
+	}
+	return c.cfg.Admit()
 }
 
 // Begin takes the first step of an entry: the request of a new machine,
@@ -338,6 +351,11 @@ func cleanName(s string) string {
 // A call repeated after the Owner was asked changes nothing; one repeated
 // after the question failed asks again.
 func (c *Citadel) Reveal(ctx context.Context, joinID string, nonceN []byte) error {
+	// not once the Citadel hands over; a reveal that slips between the check
+	// and the handover is lost with the request, and the machine asks again
+	if c.cfg.Suspended != nil && c.cfg.Suspended() {
+		return ErrSuspended
+	}
 	now := c.clk.Now()
 	tx, err := c.db.Writer().BeginTx(ctx, nil)
 	if err != nil {
@@ -520,6 +538,11 @@ func (c *Citadel) finish(ctx context.Context, j joinRow) {
 // bundle for the machine; refusing, or answering after the hour, issues
 // nothing and registers nothing.
 func (c *Citadel) Decide(ctx context.Context, joinID string, d Decision) error {
+	leave, ok := c.enter()
+	if !ok {
+		return ErrSuspended
+	}
+	defer leave()
 	now := c.clk.Now()
 	tx, err := c.db.Writer().BeginTx(ctx, nil)
 	if err != nil {

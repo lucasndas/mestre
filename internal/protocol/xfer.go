@@ -65,6 +65,40 @@ type XferConfig struct {
 	// system's answer). A transfer that would leave less than
 	// XferDiskReserve is refused as `unavailable` at xfer.begin.
 	FreeSpace func(dir string) (uint64, error)
+
+	// reserved is what the transfers in progress still need on the disk, by
+	// xfer_id: two transfers that begin at once cannot both take the same
+	// free space.
+	rmu      sync.Mutex
+	reserved map[string]uint64
+}
+
+// reserve takes need bytes for a transfer if avail covers them, the others
+// already reserved and the reserve of the disk; it says whether it did.
+func (c *XferConfig) reserve(id string, need, avail uint64) bool {
+	c.rmu.Lock()
+	defer c.rmu.Unlock()
+	var others uint64
+	for k, v := range c.reserved {
+		if k != id {
+			others += v
+		}
+	}
+	if avail < need+others+XferDiskReserve {
+		return false
+	}
+	if c.reserved == nil {
+		c.reserved = map[string]uint64{}
+	}
+	c.reserved[id] = need
+	return true
+}
+
+// unreserve gives the space of a transfer back.
+func (c *XferConfig) unreserve(id string) {
+	c.rmu.Lock()
+	delete(c.reserved, id)
+	c.rmu.Unlock()
 }
 
 // XferDiskReserve is what a transfer must leave free on the disk.
@@ -223,6 +257,7 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 	}
 	r, err := h.openRecv(cfg, *b)
 	if err != nil {
+		cfg.unreserve(b.XferID)
 		return nil, err
 	}
 	h.mu.Lock()
@@ -251,7 +286,7 @@ func (h *xferHub) checkSpace(cfg *XferConfig, b XferBegin) error {
 	if st, err := os.Stat(filepath.Join(cfg.Dir, b.XferID+".part")); err == nil {
 		need -= min(need, uint64(st.Size()))
 	}
-	if avail < need+XferDiskReserve {
+	if !cfg.reserve(b.XferID, need, avail) {
 		return NewError(CodeUnavailable, "the disk has %d bytes free; transfer %s needs %d more and %d to spare", avail, b.XferID, need, XferDiskReserve)
 	}
 	return nil
@@ -421,6 +456,9 @@ func (h *xferHub) fail(ctx context.Context, r *recvXfer, endID string, e *Error)
 func (h *xferHub) conclude(ctx context.Context, r *recvXfer, endID string, d XferDone) {
 	_ = os.Remove(r.path)
 	_ = os.Remove(r.meta)
+	if cfg := h.l.cfg.Xfer; cfg != nil {
+		cfg.unreserve(d.XferID)
+	}
 	h.mu.Lock()
 	delete(h.recv, d.XferID)
 	h.finished[d.XferID] = finishedXfer{done: d, at: h.l.cfg.Clock.Now()}
@@ -478,26 +516,25 @@ func pruneTransfers(c *Config, links []*Link, ttl time.Duration) int {
 		name := e.Name()
 		id, isMeta := strings.CutSuffix(name, ".json")
 		if !isMeta {
+			// a data file whose description is gone (a crash between the
+			// two) will never be resumed: it goes when it is as old as ttl
+			if part, ok := strings.CutSuffix(name, ".part"); ok {
+				if _, err := os.Stat(filepath.Join(cfg.Dir, part+".json")); errors.Is(err, os.ErrNotExist) {
+					if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > ttl {
+						forgetRecv(cfg, links, part)
+						if os.Remove(filepath.Join(cfg.Dir, name)) == nil {
+							n++
+						}
+					}
+				}
+			}
 			continue
 		}
 		info, err := e.Info()
 		if err != nil || now.Sub(info.ModTime()) <= ttl {
 			continue
 		}
-		for _, l := range links {
-			h := l.xfer
-			h.mu.Lock()
-			if r := h.recv[id]; r != nil {
-				r.mu.Lock()
-				if r.f != nil {
-					_ = r.f.Close()
-					r.f = nil
-				}
-				r.mu.Unlock()
-				delete(h.recv, id)
-			}
-			h.mu.Unlock()
-		}
+		forgetRecv(cfg, links, id)
 		for _, f := range []string{id + ".part", name} {
 			if os.Remove(filepath.Join(cfg.Dir, f)) == nil {
 				n++
@@ -505,6 +542,27 @@ func pruneTransfers(c *Config, links []*Link, ttl time.Duration) int {
 		}
 	}
 	return n
+}
+
+// forgetRecv closes the temporary file of a transfer that is going away (a
+// file open cannot be removed on Windows), forgets it and gives back its
+// space.
+func forgetRecv(cfg *XferConfig, links []*Link, id string) {
+	cfg.unreserve(id)
+	for _, l := range links {
+		h := l.xfer
+		h.mu.Lock()
+		if r := h.recv[id]; r != nil {
+			r.mu.Lock()
+			if r.f != nil {
+				_ = r.f.Close()
+				r.f = nil
+			}
+			r.mu.Unlock()
+			delete(h.recv, id)
+		}
+		h.mu.Unlock()
+	}
 }
 
 // releaseFiles closes the temporary files of the transfers in progress when
@@ -519,11 +577,16 @@ func (h *xferHub) releaseFiles() {
 	h.mu.Unlock()
 	for _, r := range rs {
 		r.mu.Lock()
-		if r.f != nil && !r.finalizing {
+		release := r.f != nil && !r.finalizing
+		if release {
 			_ = r.f.Close()
 			r.f = nil
 		}
 		r.mu.Unlock()
+		// the space comes back; the next xfer.begin reserves it again
+		if cfg := h.l.cfg.Xfer; release && cfg != nil {
+			cfg.unreserve(r.begin.XferID)
+		}
 	}
 }
 

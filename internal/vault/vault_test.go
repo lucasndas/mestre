@@ -886,7 +886,8 @@ func TestEnvelopeRefusesAWrongRecoveryKey(t *testing.T) {
 }
 
 // Vault-level part of CA-COFRE-21: the release decision from metadata
-// alone. The Tower request over the protocol and its audit come in M2.
+// alone. The Tower request over the protocol and its audit come in M4,
+// with the characters (the agent identity and the class decide the release).
 func TestSiteCredentialReleasedOnlyToListedClasses(t *testing.T) {
 	t.Parallel()
 	cred := Info{Name: "site_loja", Type: TypeSiteCredential, Site: sampleSite}
