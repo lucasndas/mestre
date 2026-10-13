@@ -154,17 +154,18 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 		code = 1
 	}
 	r.reportMixed(rep, count)
-	// The slow-test timing runs the tests again, alone: it is part of what
-	// the suite costs, so the budget below counts it.
-	// With -count > 1 the elapsed times mix runs, so nothing is flagged.
+	budget := s.Budget * time.Duration(count)
+	// The slow-test timing runs the tests again, alone. That time is part of
+	// the wall time the budget checks, but only what the budget has left
+	// (less a margin) may be spent on it: the measuring never makes a suite
+	// fail. With -count > 1 the elapsed times mix runs, so nothing is flagged.
 	var slowWall time.Duration
 	if s.FlagSlow && count == 1 {
 		t0 := r.Clock.Now()
-		r.flagSlow(ctx, s, rep)
+		r.flagSlow(ctx, s, rep, rerunAllowance(budget, clock.Since(r.Clock, start)))
 		slowWall = clock.Since(r.Clock, t0)
 	}
 	wall := clock.Since(r.Clock, start)
-	budget := s.Budget * time.Duration(count)
 	tests := len(rep.leaves())
 	if budget > 0 && wall > budget {
 		r.printf("FAIL %s suite took %v, budget %v. The %d slowest tests:\n", s.Name, wall.Round(time.Millisecond), budget, slowestShown)
@@ -193,6 +194,16 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	}
 	r.printf("%s %s: %d tests in %v (%s%s)\n", status, s.Name, tests, wall.Round(time.Millisecond), limit, timing)
 	return code
+}
+
+// rerunAllowance is the time the solo re-runs may take: what is left of the
+// budget minus a tenth of it, so the process teardown cannot push the suite
+// over. A suite without budget has no limit (-1).
+func rerunAllowance(budget, used time.Duration) time.Duration {
+	if budget <= 0 {
+		return -1
+	}
+	return max(budget-used-budget/10, 0)
 }
 
 // reportMixed names every test that passed in some runs and failed in others

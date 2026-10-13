@@ -28,14 +28,18 @@ type fakeExec struct {
 	missing string // a command name that is not installed
 }
 
-func (f *fakeExec) Run(_ context.Context, c Cmd, out io.Writer) (int, error) {
+func (f *fakeExec) Run(ctx context.Context, c Cmd, out io.Writer) (int, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, c)
 	f.mu.Unlock()
 	if c.Name == f.missing {
 		return -1, fmt.Errorf("run %s: exec: %q: executable file not found in $PATH", c, c.Name)
 	}
-	return f.handle(c, out), nil
+	code := f.handle(c, out)
+	if err := ctx.Err(); err != nil {
+		return -1, err // killed: the output is partial
+	}
+	return code, nil
 }
 
 func (f *fakeExec) callsMatching(sub string) []Cmd {

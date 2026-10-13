@@ -9,82 +9,120 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // summaryEnv is the file GitHub Actions gives a step for its job summary.
 const summaryEnv = "GITHUB_STEP_SUMMARY"
 
 type slowTestEntry struct {
-	alone time.Duration
-	r     *result
+	time     time.Duration
+	r        *result
+	measured bool // timed alone; otherwise the time of the suite run
 }
 
 // flagSlow warns about every passing fast-suite test above 100 ms, after
 // timing the candidates alone to discount CPU contention: one `go test` per
-// package for all its candidates, not one per test. It only measures; a
-// failure here does not change the suite result. In CI the list also goes to
-// the job summary and to a ::warning annotation.
-func (r *Runner) flagSlow(ctx context.Context, s Suite, rep *report) {
+// package for all its candidates, not one per test, the packages with the
+// most slow time first. allowance bounds the time spent (-1: no bound); a
+// package that does not fit keeps the time of the suite run and is marked
+// "(not re-run)". It only measures; a failure here does not change the suite
+// result. In CI the list also goes to the job summary and to a ::warning.
+func (r *Runner) flagSlow(ctx context.Context, s Suite, rep *report, allowance time.Duration) {
 	byPkg := map[string][]*result{}
+	total := map[string]time.Duration{}
 	for _, t := range rep.leaves() {
 		if t.Action == "pass" && t.Elapsed > slowTest {
 			byPkg[t.Package] = append(byPkg[t.Package], t)
+			total[t.Package] += t.Elapsed
 		}
 	}
 	pkgs := make([]string, 0, len(byPkg))
 	for p := range byPkg {
 		pkgs = append(pkgs, p)
 	}
-	sort.Strings(pkgs)
+	sort.Slice(pkgs, func(i, j int) bool {
+		if total[pkgs[i]] != total[pkgs[j]] {
+			return total[pkgs[i]] > total[pkgs[j]]
+		}
+		return pkgs[i] < pkgs[j]
+	})
 	var flagged []slowTestEntry
 	for _, p := range pkgs {
-		alone := r.timeAlone(ctx, s, p, byPkg[p])
+		alone, ok := r.timeAlone(ctx, s, p, byPkg[p], allowance)
+		if allowance >= 0 {
+			allowance = max(allowance-alone.spent, 0)
+		}
 		for _, t := range byPkg[p] {
-			if d := alone[t.id()]; d > slowTest {
-				flagged = append(flagged, slowTestEntry{d, t})
+			if d := alone.times[t.id()]; d > slowTest {
+				flagged = append(flagged, slowTestEntry{d, t, ok})
 			}
 		}
 	}
 	if len(flagged) == 0 {
 		return
 	}
+	sort.Slice(flagged, func(i, j int) bool { return flagged[i].r.id() < flagged[j].r.id() })
 	lines := make([]string, len(flagged))
 	var md strings.Builder
 	fmt.Fprintf(&md, "### Slow tests\n\n%d fast-suite test(s) above %v when run alone:\n\n| Time | Package | Test |\n|---|---|---|\n", len(flagged), slowTest)
 	names := make([]string, len(flagged))
 	for i, f := range flagged {
-		lines[i] = fmt.Sprintf("  %8v  %s  %s", f.alone.Round(time.Millisecond), f.r.Package, f.r.Test)
-		fmt.Fprintf(&md, "| %v | %s | %s |\n", f.alone.Round(time.Millisecond), f.r.Package, f.r.Test)
+		note := ""
+		if !f.measured {
+			note = " (not re-run: no budget left)"
+		}
+		lines[i] = fmt.Sprintf("  %8v  %s  %s%s", f.time.Round(time.Millisecond), f.r.Package, f.r.Test, note)
+		fmt.Fprintf(&md, "| %v | %s | %s%s |\n", f.time.Round(time.Millisecond), f.r.Package, f.r.Test, note)
 		names[i] = f.r.Test
 	}
 	r.printf("warning: %d fast-suite test(s) above %v when run alone:\n%s\n", len(flagged), slowTest, strings.Join(lines, "\n"))
 	r.ciReport("warning", "Slow tests", fmt.Sprintf("%d fast-suite test(s) above %v when run alone: %s", len(flagged), slowTest, strings.Join(names, ", ")), md.String())
 }
 
+// aloneTimes is the outcome of timing the candidates of one package.
+type aloneTimes struct {
+	times map[string]time.Duration // by result id
+	spent time.Duration
+}
+
 // timeAlone runs the candidates of one package once more, in a single go
-// test, and returns their times by result id. A candidate whose run fails or
-// does not show up keeps its time from the suite run.
-func (r *Runner) timeAlone(ctx context.Context, s Suite, pkg string, ts []*result) map[string]time.Duration {
+// test, and returns their times and whether the run completed. A candidate
+// whose run fails, does not show up or does not fit in the allowance (-1:
+// unbounded) keeps its time from the suite run.
+func (r *Runner) timeAlone(ctx context.Context, s Suite, pkg string, ts []*result, allowance time.Duration) (aloneTimes, bool) {
+	out := aloneTimes{times: make(map[string]time.Duration, len(ts))}
+	for _, t := range ts {
+		out.times[t.id()] = t.Elapsed
+	}
+	if allowance == 0 {
+		return out, false
+	}
 	args := []string{"test", "-json", "-count=1", "-run", runPattern(ts)}
 	if s.Tags != "" {
 		args = append(args, "-tags", s.Tags)
 	}
 	args = append(args, pkg)
-	times := make(map[string]time.Duration, len(ts))
-	for _, t := range ts {
-		times[t.id()] = t.Elapsed
+	rctx, cancel := ctx, context.CancelFunc(func() {})
+	if allowance > 0 {
+		rctx, cancel = clock.WithTimeout(ctx, r.Clock, allowance)
 	}
+	defer cancel()
+	start := r.Clock.Now()
 	var b bytes.Buffer
-	if _, err := r.Exec.Run(ctx, Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}, &b); err != nil {
-		return times
+	_, err := r.Exec.Run(rctx, Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}, &b)
+	out.spent = clock.Since(r.Clock, start)
+	if err != nil || rctx.Err() != nil {
+		return out, false
 	}
 	again := parseEvents(b.Bytes())
 	for _, t := range ts {
 		if a, ok := again.tests[t.id()]; ok && a.Action == "pass" {
-			times[t.id()] = a.Elapsed
+			out.times[t.id()] = a.Elapsed
 		}
 	}
-	return times
+	return out, true
 }
 
 // runPattern is the -run value that selects the tests: one anchored

@@ -72,31 +72,52 @@ func TestRunPatternKeepsSubtestLevels(t *testing.T) {
 }
 
 // CA-TESTES-10
-// The wall time that the budget checks includes the solo re-runs.
-func TestBudgetCountsTheSoloReruns(t *testing.T) {
+// The wall time that the budget checks includes the solo re-runs, but they
+// only get what the budget has left (less a tenth): the measuring never makes
+// a suite fail, and a failing suite is not made worse by it.
+func TestSoloRerunsCountInTheWallTimeWithinTheBudgetLeft(t *testing.T) {
 	t.Parallel()
-	clk := clock.NewFake(today)
-	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
-		switch {
-		case isMainRun(c):
-			_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.5))
-			clk.Advance(20 * time.Second)
-		case strings.Contains(c.String(), "-run"):
-			_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.5))
-			clk.Advance(15 * time.Second) // a long re-run: 20s + 15s > 30s
-		}
-		return 0
-	}}
-	r, out := newRunner(nil, clk, ex)
-
-	code := r.RunSuite(context.Background(), Suites["fast"])
-
-	text := out.String()
-	if code == 0 || !strings.Contains(text, "FAIL fast suite took 35s, budget 30s") {
-		t.Fatalf("exit %d:\n%s", code, text)
+	cases := map[string]struct {
+		suite, rerun time.Duration // time of the suite run and of the re-run if allowed to finish
+		wantExit     bool
+		wantRerun    bool
+		wantLine     string
+	}{
+		"fits":         {20 * time.Second, 5 * time.Second, false, true, "PASS fast: 1 tests in 25s (budget 30s, 5s of it timing slow tests alone)"},
+		"cut off":      {20 * time.Second, 15 * time.Second, false, true, "PASS fast: 1 tests in 27s (budget 30s, 7s of it timing slow tests alone)"},
+		"no time left": {28 * time.Second, 5 * time.Second, false, false, "PASS fast: 1 tests in 28s (budget 30s)"},
+		"over budget":  {31 * time.Second, 5 * time.Second, true, false, "FAIL fast: 1 tests in 31s (budget 30s)"},
 	}
-	if !strings.Contains(text, "FAIL fast: 1 tests in 35s (budget 30s, 15s of it timing slow tests alone)") {
-		t.Fatalf("total wall time not printed:\n%s", text)
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			clk := clock.NewFake(today)
+			ex := &fakeExec{handle: func(cmd Cmd, out io.Writer) int {
+				switch {
+				case isMainRun(cmd):
+					_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.5))
+					clk.Advance(c.suite)
+				case strings.Contains(cmd.String(), "-run"):
+					_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.5))
+					clk.Advance(min(c.rerun, 7*time.Second)) // killed at the allowance, 30s - 20s - 3s
+				}
+				return 0
+			}}
+			r, out := newRunner(nil, clk, ex)
+
+			code := r.RunSuite(context.Background(), Suites["fast"])
+
+			text := out.String()
+			if (code != 0) != c.wantExit || !strings.Contains(text, c.wantLine) {
+				t.Fatalf("exit %d, want line %q:\n%s", code, c.wantLine, text)
+			}
+			if got := len(ex.callsMatching("-run")) > 0; got != c.wantRerun {
+				t.Fatalf("re-run = %v, want %v", got, c.wantRerun)
+			}
+			if name != "fits" && !strings.Contains(text, "TestSlow (not re-run: no budget left)") && name != "over budget" {
+				t.Fatalf("an unmeasured test must say so:\n%s", text)
+			}
+		})
 	}
 }
 
