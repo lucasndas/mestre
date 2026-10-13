@@ -40,6 +40,7 @@ type Session struct {
 	side    Side
 	version int
 	caps    Capabilities
+	order   uint64 // the order of acceptance on the link: the highest is the newest
 
 	lanes *lanes
 	disp  chan dispatchItem
@@ -53,9 +54,9 @@ type Session struct {
 	hb     clock.Timer
 }
 
-func newSession(cfg *Config, link *Link, conn Conn, side Side, version int, caps Capabilities) *Session {
+func newSession(cfg *Config, link *Link, conn Conn, order uint64, side Side, version int, caps Capabilities) *Session {
 	return &Session{
-		cfg: cfg, link: link, conn: conn, peer: conn.Peer(), side: side, version: version, caps: caps,
+		cfg: cfg, link: link, conn: conn, order: order, peer: conn.Peer(), side: side, version: version, caps: caps,
 		lanes: newLanes(), disp: make(chan dispatchItem, dispatchQueue), done: make(chan struct{}),
 		certs: map[string]chan Certificate{},
 	}
@@ -122,6 +123,16 @@ func (s *Session) serve(ctx context.Context) error {
 		h(s)
 	}
 	if err := s.link.attach(ctx, s); err != nil {
+		if errors.Is(err, errSuperseded) {
+			// A newer connection of this machine got here first: this
+			// is the one that goes, and the link stays as it is.
+			ce := &CloseError{Code: CloseReplaced, Reason: "replaced by a newer connection"}
+			_ = s.conn.Close(ce.Code, ce.Reason)
+			if h := s.cfg.Hooks.OnDisconnect; h != nil {
+				h(s, ce)
+			}
+			return ce
+		}
 		_ = s.conn.Close(1011, "outbox")
 		s.link.detach(s)
 		return err
