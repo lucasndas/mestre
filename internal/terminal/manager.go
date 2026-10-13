@@ -72,6 +72,11 @@ type ManagerConfig struct {
 	// failed to start after OnStarting.
 	OnStarting  func(Starting)
 	OnDiscarded func(id string)
+	// OnEnded is called with the id of a terminal whose agent ended on its
+	// own, after the engine swept what the agent left behind and marked the
+	// row interrupted; the local channel forgets the terminal here
+	// (Directory.Remove). It must not block.
+	OnEnded func(id string)
 	// HandshakeTimeout (default 5 s) bounds connecting to a mestre-pty.
 	HandshakeTimeout time.Duration
 	// AckDelay (default 200 ms): see DefaultAckDelay.

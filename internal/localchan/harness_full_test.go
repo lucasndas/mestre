@@ -284,7 +284,7 @@ func newFullEngine(t *testing.T, o engineOptions) *fullEngine {
 		PTYVersion: ptyVersion,
 		// The terminal is known to the local channel before its agent
 		// starts: an agent can call in its first instant.
-		OnStarting: dir.Starting, OnDiscarded: dir.Remove,
+		OnStarting: dir.Starting, OnDiscarded: dir.Remove, OnEnded: dir.Remove,
 	})
 	if err != nil {
 		t.Fatal(err)

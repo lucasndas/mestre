@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/terminal/ptywire"
@@ -34,6 +35,9 @@ type Terminal struct {
 	logf   io.Closer
 
 	agentPID int
+	// stopping is set when the engine itself ends the terminal (Stop): the
+	// exit of the agent is then expected, and Stop does the cleaning.
+	stopping atomic.Bool
 
 	mu         sync.Mutex
 	next       uint64 // offset after the last byte given to the log
@@ -186,6 +190,9 @@ func (t *Terminal) supervise() {
 	select {
 	case <-t.client.Exited():
 		t.finishLog(ctx)
+		if !t.stopping.Load() {
+			t.agentEnded(ctx)
+		}
 	case <-t.client.Done():
 		select {
 		case <-t.closed:
@@ -193,6 +200,32 @@ func (t *Terminal) supervise() {
 			t.m.connectionLost(t)
 		}
 	case <-t.closed:
+	}
+}
+
+// agentEnded cleans up a terminal whose agent ended on its own (nobody asked
+// it to): whatever the agent left behind, such as a `nohup` job or a process
+// that left the session, would go on running and, in the cgroup or the
+// session of the terminal, would still identify as the character on the local
+// channel. So the tree is swept as in the forced step of Stop (the cgroup of
+// the terminal, then the mestre-pty and the sessions of the agent), the
+// socket goes away, the row says "interrupted" (the terminal cannot be
+// reconnected) and OnEnded lets whoever knows the terminal by id forget it.
+// The state of the character is the business of the layer above, which hears
+// the exit event.
+func (t *Terminal) agentEnded(ctx context.Context) {
+	if err := t.m.cfg.Spawner.KillCgroup(ctx, t.id); err != nil {
+		t.m.log.Warn("cgroup of a terminal whose agent ended", "terminal", t.id, "error", err)
+	}
+	if err := t.m.killTree(ctx, t.id, t.proc, []int{t.agentPID}); err != nil {
+		t.m.log.Warn("what the agent left behind was not all ended", "terminal", t.id, "error", err)
+	}
+	_ = os.Remove(t.rec.SocketPath)
+	if err := t.m.reg.setStatus(ctx, t.id, StatusInterrupted, t.m.clk.Now()); err != nil {
+		t.m.log.Warn("agent ended but the row of its terminal was not updated", "terminal", t.id, "error", err)
+	}
+	if f := t.m.cfg.OnEnded; f != nil {
+		f(t.id)
 	}
 }
 

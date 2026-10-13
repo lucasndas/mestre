@@ -59,6 +59,7 @@ type StopPlan struct {
 // is left, not even the mestre-pty. Afterwards the socket is removed and
 // the registry row says "stopped". The waits use the engine's clock.
 func (t *Terminal) Stop(ctx context.Context, plan StopPlan) (StopStep, error) {
+	t.stopping.Store(true)
 	gw, tw := plan.GracefulWait, plan.TerminateWait
 	if gw == 0 {
 		gw = DefaultGracefulWait

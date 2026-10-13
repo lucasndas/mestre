@@ -109,6 +109,41 @@ func TestStopLeavesNothingOfTheTree(t *testing.T) {
 	}
 }
 
+// The agent ends on its own and leaves a process behind (nohup, a job in the
+// background): the engine sweeps the terminal, marks its row interrupted,
+// removes the socket and tells whoever keeps the terminal by id (OnEnded). The
+// process left behind would otherwise go on in the session or the cgroup of
+// the terminal and still identify as the character on the local channel.
+//
+// CA-TERM-13
+func TestWhatTheAgentLeavesBehindEndsWithIt(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t, harnessOptions{})
+	const id = "t5c"
+	ended := make(chan struct{})
+	endedSignals.Store(id, ended)
+	pidsFile := filepath.Join(h.cfg.Root, "pids")
+	term := h.create(h.selfSpec(id, helperLeaver, pidsFile))
+	rec := h.record(id)
+	ptyPID := term.PTY().PID
+
+	select {
+	case <-ended:
+	case <-h.ctx.Done():
+		t.Fatal("the engine never reported the end of the agent")
+	}
+	for _, pid := range readPIDs(t, pidsFile) {
+		h.gone(pid, "the process the agent left behind")
+	}
+	h.gone(ptyPID, "mestre-pty")
+	if got := h.record(id).Status; got != terminal.StatusInterrupted {
+		t.Errorf("status = %q, want interrupted", got)
+	}
+	if _, err := os.Stat(rec.SocketPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the socket is still there: %v", err)
+	}
+}
+
 // CA-TERM-06
 func TestLogMasksTheTokenAndTheBufferKeepsTheBytes(t *testing.T) {
 	t.Parallel()

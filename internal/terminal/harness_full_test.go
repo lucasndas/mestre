@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -35,6 +36,7 @@ const (
 	helperSleeper = "helper-sleeper" // ignores SIGTERM and waits
 	helperPrinter = "helper-printer" // <text>: prints it, then waits
 	helperEngine  = "helper-engine"  // <config>: creates a terminal and waits to be killed
+	helperLeaver  = "helper-leaver"  // <pids file>: leaves a process behind and exits on its own
 )
 
 // builds holds the binaries TestMain built.
@@ -65,6 +67,8 @@ func TestMain(m *testing.M) {
 			block()
 		case helperEngine:
 			os.Exit(runEngine(os.Args[2]))
+		case helperLeaver:
+			os.Exit(runLeaver(os.Args[2]))
 		}
 	}
 	if dir := os.Getenv(envBuilds); dir != "" {
@@ -140,6 +144,29 @@ func runTree(args []string) int {
 	return 0
 }
 
+// runLeaver is an agent that ends on its own and leaves a process behind (what
+// `nohup cmd &` does): the sleeper stays in the session of the agent, and in
+// its cgroup or Job Object, when the agent exits.
+func runLeaver(pidsFile string) int {
+	self, err := os.Executable()
+	if err != nil {
+		return 1
+	}
+	c := exec.Command(self, helperSleeper)
+	if c.Start() != nil {
+		return 1
+	}
+	if err := os.WriteFile(pidsFile, []byte(strconv.Itoa(c.Process.Pid)), 0o600); err != nil {
+		return 1
+	}
+	fmt.Print("READY\r\n")
+	return 0
+}
+
+// endedSignals maps a terminal id to the channel closed when the Manager
+// reports that its agent ended on its own (OnEnded).
+var endedSignals sync.Map
+
 // block waits for ever. It is not a bare select{}: on Windows a program with
 // nothing else running dies of "all goroutines are asleep", and the helpers
 // must stay alive until their terminal ends them. A pending timer keeps the
@@ -167,6 +194,11 @@ func buildManager(ctx context.Context, cfg harnessConfig) (*terminal.Manager, *s
 		Spawner:    &terminal.DirectSpawner{Suite: "full", System: sys, CgroupBase: cfg.CgroupBase},
 		PTYBinary:  func(v string) (string, error) { return cfg.PTYBins[v], nil },
 		PTYVersion: cfg.Version,
+		OnEnded: func(id string) {
+			if c, ok := endedSignals.Load(id); ok {
+				close(c.(chan struct{}))
+			}
+		},
 	})
 	if err != nil {
 		_ = db.Close()
