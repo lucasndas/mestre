@@ -37,6 +37,7 @@ const (
 	helperPrinter = "helper-printer" // <text>: prints it, then waits
 	helperEngine  = "helper-engine"  // <config>: creates a terminal and waits to be killed
 	helperLeaver  = "helper-leaver"  // <pids file>: leaves a process behind and exits on its own
+	helperBreak   = "helper-break"   // <result file>: tries to create a process outside its Job Object (Windows)
 )
 
 // builds holds the binaries TestMain built.
@@ -69,6 +70,8 @@ func TestMain(m *testing.M) {
 			os.Exit(runEngine(os.Args[2]))
 		case helperLeaver:
 			os.Exit(runLeaver(os.Args[2]))
+		case helperBreak:
+			os.Exit(runBreak(os.Args[2]))
 		}
 	}
 	if dir := os.Getenv(envBuilds); dir != "" {

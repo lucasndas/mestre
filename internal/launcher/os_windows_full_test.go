@@ -193,6 +193,41 @@ func (e *env) needStart(t *testing.T) {
 // test process is in.
 func (e *env) checkStarted(t *testing.T, _ context.Context, _ terminal.SpawnSpec, sp terminal.Spawned, _ *terminal.Client) {
 	t.Helper()
+	// The descriptor the launcher creates the mestre-pty with: the engine (the
+	// account of the test here) may query and wait, and the owner (the agent
+	// account) only query, so another agent can neither read its memory,
+	// duplicate its handles, inject a thread nor change who may
+	// (docs/arquitetura/terminal.md#socket-e-aperto-de-mão).
+	t.Run("protected from the agents", func(t *testing.T) {
+		t.Parallel()
+		for _, tc := range []struct {
+			name    string
+			access  uint32
+			allowed bool
+		}{
+			{"query", windows.PROCESS_QUERY_LIMITED_INFORMATION, true},
+			{"wait", windows.SYNCHRONIZE, true},
+			{"read its memory", windows.PROCESS_VM_READ, false},
+			{"write its memory", windows.PROCESS_VM_WRITE | windows.PROCESS_VM_OPERATION, false},
+			{"duplicate its handles", windows.PROCESS_DUP_HANDLE, false},
+			{"inject a thread", windows.PROCESS_CREATE_THREAD, false},
+			{"suspend it", windows.PROCESS_SUSPEND_RESUME, false},
+			{"change its DACL", windows.WRITE_DAC, false},
+			{"take its ownership", windows.WRITE_OWNER, false},
+		} {
+			h, err := windows.OpenProcess(tc.access, false, uint32(sp.PID))
+			if err == nil {
+				_ = windows.CloseHandle(h)
+			}
+			if tc.allowed && err != nil {
+				t.Errorf("%s: %v, want it allowed", tc.name, err)
+			}
+			if !tc.allowed && !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+				t.Errorf("%s: %v, want access denied", tc.name, err)
+			}
+		}
+	})
+
 	t.Run("outside the Job of the test", func(t *testing.T) {
 		t.Parallel()
 		job, _ := testJob()

@@ -489,7 +489,8 @@ func TestOnlyTheEngineWithTheSecretGetsIn(t *testing.T) {
 
 	// Linux: another process of the same account (this one) cannot read the
 	// mestre-pty's environment, attach to it or take its descriptors.
-	// Windows has the process security descriptor of the launcher instead
-	// (internal/winsvc, spike 5), which does not exist yet.
+	// Windows has the process security descriptor of the launcher instead,
+	// which only a mestre-pty started by it has: that is checked in
+	// internal/launcher (CA-TERM-07).
 	checkHardened(t, term.PTY().PID)
 }
