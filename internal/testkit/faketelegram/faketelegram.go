@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -157,6 +158,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		testkit.NotImplemented(s.rep, w, r.Method+" "+r.URL.Path)
 		return
 	}
+	// The method comes before the token: a method the double does not know
+	// fails the test instead of looking like a 401.
+	allowed, known := knownParams[method]
+	if !known {
+		testkit.NotImplemented(s.rep, w, "telegram "+method)
+		return
+	}
 	if tok != s.token {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"ok": false, "error_code": 401, "description": "Unauthorized"})
 		return
@@ -169,6 +177,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error_code": 400, "description": "Bad Request: " + err.Error()})
 		return
 	}
+	for _, name := range sortedKeys(params) {
+		if !allowed[name] {
+			testkit.NotImplemented(s.rep, w, "telegram "+method+" parameter "+name)
+			return
+		}
+	}
 	switch method {
 	case "getUpdates":
 		s.getUpdates(w, r, params)
@@ -176,9 +190,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.sendMessage(w, method, params)
 	case "answerCallbackQuery":
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": true})
-	default:
-		testkit.NotImplemented(s.rep, w, "telegram "+method)
 	}
+}
+
+// knownParams are the methods the double serves and the parameters of each
+// that it honours. Anything else fails the test as not implemented (buttons,
+// replies, parse modes and files arrive with the bot in M5).
+var knownParams = map[string]map[string]bool{
+	"getUpdates":          {"offset": true, "timeout": true},
+	"sendMessage":         {"chat_id": true, "text": true},
+	"editMessageText":     {"chat_id": true, "message_id": true, "text": true},
+	"answerCallbackQuery": {"callback_query_id": true},
+}
+
+func sortedKeys(m map[string]any) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
 }
 
 func (s *Server) injectFailure(w http.ResponseWriter, method string) bool {

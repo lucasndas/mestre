@@ -2,6 +2,7 @@ package fakeagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,9 @@ type MemLauncher struct {
 	Hooks    HookRunner
 	Commands CommandRunner
 	Reporter testkit.Reporter
+	// RecordingVersion pins the recordings of every agent it starts; ""
+	// means the newest.
+	RecordingVersion string
 }
 
 var _ terminal.Launcher = (*MemLauncher)(nil)
@@ -51,7 +55,12 @@ func (l *MemLauncher) Start(ctx context.Context, spec terminal.Spec) (terminal.P
 			Provider: p, Args: args, Env: spec.Env, Dir: spec.Dir,
 			In: pair.Process(), Out: pair.Process(),
 			Clock: l.Clock, Hooks: l.Hooks, Commands: l.Commands,
+			RecordingVersion: l.RecordingVersion,
 		})
+		var ni *NotImplementedError
+		if errors.As(mp.err, &ni) { // a double asked for what it does not model fails the test
+			l.Reporter.Errorf("%s", ni)
+		}
 		_ = pair.Process().Close()
 		close(mp.done)
 	}()

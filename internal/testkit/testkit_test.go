@@ -41,6 +41,27 @@ func TestScanFindsGitHubTokenAndPEM(t *testing.T) {
 	}
 }
 
+// scanCanary is a dot file the embed must carry: without the "all:" prefix
+// the embed directive skips files starting with "." or "_", and a leaked token in one
+// of them would never be scanned.
+const scanCanary = ".scan-canary"
+
+// CA-DUBLES-10
+func TestRecordingsEmbedDotFilesSoTheScanSeesThem(t *testing.T) {
+	t.Parallel()
+	if _, err := fs.Stat(testkit.Recordings(), scanCanary); err != nil {
+		t.Fatalf("dot file not embedded (go:embed needs the all: prefix): %v", err)
+	}
+	var seen bool
+	_ = fs.WalkDir(testkit.Recordings(), ".", func(p string, _ fs.DirEntry, _ error) error {
+		seen = seen || p == scanCanary
+		return nil
+	})
+	if !seen {
+		t.Fatal("the walk the secret scan does skips dot files")
+	}
+}
+
 // The guard itself: the real recordings never hold secrets.
 func TestRecordingsHaveNoSecrets(t *testing.T) {
 	t.Parallel()
@@ -59,6 +80,9 @@ func TestEveryRecordingHasVersionAndDate(t *testing.T) {
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		if p == scanCanary {
+			return nil
 		}
 		parts := strings.Split(p, "/")
 		if len(parts) != 3 || path.Ext(p) != ".json" {
@@ -90,6 +114,31 @@ func TestLatestVersionComparesNumerically(t *testing.T) {
 	v, err := testkit.LatestVersion(fsys, "x")
 	if err != nil || v != "2.1.296" {
 		t.Fatalf("LatestVersion = %q, %v", v, err)
+	}
+}
+
+func TestLatestVersionPrefersANumberedReleaseOverACommitId(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		versions []string
+		want     string
+	}{
+		{"commit id first", []string{"b3c3bad", "0.9.0", "0.10.0"}, "0.10.0"},
+		{"commit id last", []string{"0.10.0", "0.9.0", "b3c3bad"}, "0.10.0"},
+		{"names compare by text", []string{"zzz9999", "abc1234"}, "zzz9999"},
+		{"only a commit id", []string{"b3c3bad"}, "b3c3bad"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fsys := fstest.MapFS{}
+			for _, v := range tc.versions {
+				fsys["codex/"+v+"/a.json"] = &fstest.MapFile{Data: []byte("{}")}
+			}
+			if v, err := testkit.LatestVersion(fsys, "codex"); err != nil || v != tc.want {
+				t.Fatalf("LatestVersion = %q, %v, want %q", v, err, tc.want)
+			}
+		})
 	}
 }
 

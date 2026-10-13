@@ -1,8 +1,9 @@
 // Package fakepty is the in-memory pseudo-terminal of the fast suite
 // (docs/qualidade/dubles.md#outros-dublês). The terminal side implements
 // terminal.PTY; the process side is what the fake agent reads and writes.
-// Screen rendering arrives with the terminal emulator in M1; until then
-// tests read the raw output transcript.
+// The pair only carries bytes: the screen is rendered by the terminal
+// emulator of internal/terminal/ptyd (docs/arquitetura/terminal.md), and
+// tests that need no screen read the raw output transcript with Output.
 package fakepty
 
 import (

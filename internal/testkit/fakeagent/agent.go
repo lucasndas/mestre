@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,7 +38,8 @@ type Config struct {
 	Hooks    HookRunner
 	Commands CommandRunner
 	// Recordings defaults to the testkit recordings; RecordingVersion ""
-	// means the newest version.
+	// means the newest version. The --fake-recording-version flag and
+	// FAKEAGENT_RECORDING_VERSION pin it for the binary of the full suite.
 	Recordings       fs.FS
 	RecordingVersion string
 	// SessionID overrides the generated session id.
@@ -156,6 +158,8 @@ func (a *agent) parseArgs() error {
 			a.sessionID = next()
 		case "--settings":
 			a.settingsArg = next()
+		case "--fake-recording-version":
+			a.cfg.RecordingVersion = next()
 		case "--fake-script":
 			s, err := LoadScript(a.resolve(next()))
 			if err != nil {
@@ -164,6 +168,9 @@ func (a *agent) parseArgs() error {
 			a.script = s
 		}
 	}
+	if v := a.env["FAKEAGENT_RECORDING_VERSION"]; v != "" && a.cfg.RecordingVersion == "" {
+		a.cfg.RecordingVersion = v
+	}
 	if a.script == nil {
 		if p := a.env["FAKEAGENT_SCRIPT"]; p != "" {
 			s, err := LoadScript(a.resolve(p))
@@ -171,6 +178,11 @@ func (a *agent) parseArgs() error {
 				return err
 			}
 			a.script = s
+		}
+	}
+	if v := a.cfg.RecordingVersion; v != "" {
+		if _, err := fs.Stat(a.recs, path.Join(profiles[a.p].recordings, v)); err != nil {
+			return notImplemented("%s recording version %q: %v", a.p, v, err)
 		}
 	}
 	if a.cfg.SessionID != "" {
