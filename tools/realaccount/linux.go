@@ -154,22 +154,27 @@ func platformRun(ctx context.Context, out io.Writer, o options) (err error) {
 		}
 	}
 
-	args := []string{"-n", "systemd-run", "--unit=" + strings.TrimSuffix(realaccount.LinuxEngineUnit, ".service"),
-		"--uid=" + realaccount.LinuxEngineUser, "--gid=" + realaccount.LinuxEngineUser,
-		"--wait", "--pipe", "--collect", "--quiet",
-		"-E", realaccount.EnvDisposable + "=1", "-E", realaccount.EnvRole + "=engine",
-		"-p", "WorkingDirectory=/var/lib/mestre-ci",
-		filepath.Join(stage, "realaccount.test"), "-test.v", "-test.count=1", "-test.timeout=" + o.timeout.String()}
-	cmd := "sudo"
-	if os.Geteuid() == 0 {
-		cmd, args = args[1], args[2:]
-	}
-	tctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	err = runCmd(tctx, out, nil, cmd, args...)
-	if err != nil {
-		dumpJournal(out)
-		return fmt.Errorf("the tests failed: %w", err)
+	// The tests run twice: as the engine, in the unit the launchers accept, and
+	// as the same account in another unit, which they must refuse.
+	const outsider = "TestLinuxTheLauncherRefusesTheEngineAccountOutsideItsUnit"
+	for _, r := range []struct{ unit, flag, value string }{
+		{strings.TrimSuffix(realaccount.LinuxEngineUnit, ".service"), "-test.skip", "^" + outsider + "$"},
+		{"mestre-ci-outsider", "-test.run", "^" + outsider + "$"},
+	} {
+		args := []string{"-n", "systemd-run", "--unit=" + r.unit,
+			"--uid=" + realaccount.LinuxEngineUser, "--gid=" + realaccount.LinuxEngineUser,
+			"--wait", "--pipe", "--collect", "--quiet",
+			"-E", realaccount.EnvDisposable + "=1", "-E", realaccount.EnvRole + "=engine",
+			"-p", "WorkingDirectory=/var/lib/mestre-ci",
+			filepath.Join(stage, "realaccount.test"), "-test.v", "-test.count=1", "-test.timeout=" + o.timeout.String(), r.flag, r.value}
+		cmd := "sudo"
+		if os.Geteuid() == 0 {
+			cmd, args = args[1], args[2:]
+		}
+		if err := runCmd(ctx, out, nil, cmd, args...); err != nil {
+			dumpJournal(out)
+			return fmt.Errorf("the tests failed: %w", err)
+		}
 	}
 	return nil
 }

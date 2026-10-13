@@ -445,17 +445,20 @@ func TestWindowsTheEndOfATerminalEndsWhatWMIStartedInIt(t *testing.T) {
 	}
 }
 
-// sessionExists says whether LSA still knows the logon session.
+// sessionExists says whether LSA still knows the logon session. The agent
+// account's session is not the caller's, so LSA answers "access denied" for
+// one that exists and "no such logon session" for one that does not.
 func sessionExists(id logonsweep.LUID) bool {
+	const statusNoSuchLogonSession = 0xC000022B
 	proc := windows.NewLazySystemDLL("secur32.dll").NewProc("LsaGetLogonSessionData")
 	free := windows.NewLazySystemDLL("secur32.dll").NewProc("LsaFreeReturnBuffer")
 	luid := windows.LUID{LowPart: uint32(id), HighPart: int32(id >> 32)}
 	var data uintptr
-	if r, _, _ := proc.Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&data))); r != 0 {
-		return false
+	r, _, _ := proc.Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&data)))
+	if r == 0 {
+		_, _, _ = free.Call(data)
 	}
-	_, _, _ = free.Call(data)
-	return true
+	return r != statusNoSuchLogonSession
 }
 
 // CA-TERM-07 (real accounts, the release): when the mestre-pty ends, the
@@ -467,11 +470,13 @@ func sessionExists(id logonsweep.LUID) bool {
 func TestWindowsTheProfileAndTheLogonSessionEndWithTheMestrePTY(t *testing.T) {
 	sid := agentSID(t).String()
 	loaded := func() bool {
+		// The hive is the agent account's: the engine is refused it while it is
+		// loaded, and does not find it once it is not.
 		k, err := registry.OpenKey(registry.USERS, sid, registry.QUERY_VALUE)
 		if err == nil {
 			_ = k.Close()
 		}
-		return err == nil
+		return !errors.Is(err, registry.ErrNotExist)
 	}
 	if loaded() {
 		t.Fatal("the profile of the agent account is loaded before any terminal: something else is running")

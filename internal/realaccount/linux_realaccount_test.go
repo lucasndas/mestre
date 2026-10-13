@@ -3,6 +3,7 @@
 package realaccount_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -624,5 +625,41 @@ func TestLinuxAnotherAgentProcessCannotTouchTheMestrePTY(t *testing.T) {
 	// And the mestre-pty went on, untouched.
 	if !terminal.Alive(terminal.NewSystem(), victim.PTY()) {
 		t.Error("the mestre-pty is gone")
+	}
+}
+
+// CA-TERM-07 (real accounts): the launcher accepts the engine by its account
+// and by its cgroup. This run is of the same account in another unit (the tool
+// runs it apart): the request is refused, recorded, and no mestre-pty, socket
+// or cgroup is made.
+func TestLinuxTheLauncherRefusesTheEngineAccountOutsideItsUnit(t *testing.T) {
+	t.Parallel()
+	own, err := terminal.ProcCgroup(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.HasSuffix(own, "/"+realaccount.LinuxEngineUnit) {
+		t.Skip("this is the run as the engine; the refusal is tried by the run in another unit")
+	}
+	if err := os.MkdirAll(ptySocketDir(realaccount.Instance), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	id := newID("lo")
+	sock, err := terminal.SocketPath(ptySocketDir(realaccount.Instance), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := launcher.NewClient(launcherSocket(realaccount.Instance))
+	_, err = client.Spawn(ctxFor(t), terminal.SpawnSpec{ID: id, Version: realaccount.PTYVersion, SocketPath: sock, Secret: bytes.Repeat([]byte{7}, 32)})
+	var refused *launcher.Error
+	if !errors.As(err, &refused) || refused.Code != launcher.CodeRefused {
+		t.Fatalf("Spawn from %s = %v, want the launcher to refuse it", own, err)
+	}
+	if _, err := os.Stat(sock); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the socket of a terminal that was refused is there: %v", err)
+	}
+	// And its kill, by id or by identity.
+	if err := client.KillCgroup(ctxFor(t), id); !errors.As(err, &refused) {
+		t.Errorf("kill from %s = %v, want a refusal", own, err)
 	}
 }
