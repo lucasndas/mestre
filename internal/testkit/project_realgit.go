@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/lucasndas/mestre/internal/logging"
 )
 
 // initRepo initializes the copy and makes one commit with a fixed author and
@@ -22,7 +23,11 @@ func initRepo(t testing.TB, p *Project, _ map[string]string) {
 	if err != nil {
 		t.Fatalf("ProjectCommitDate: %v", err)
 	}
-	repo, err := gitx.New(gitx.Options{}).Init(ctx, p.Dir, gitx.InitOptions{InitialBranch: ProjectBranch})
+	g, err := gitx.New(gitx.Options{Masker: logging.NewMasker()}) // a training project holds no secret
+	if err != nil {
+		t.Fatalf("git: %v", err)
+	}
+	repo, err := g.Init(ctx, p.Dir, gitx.InitOptions{InitialBranch: ProjectBranch})
 	if err != nil {
 		t.Fatalf("init training project: %v", err)
 	}
