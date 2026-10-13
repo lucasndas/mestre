@@ -67,7 +67,8 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 ### Perda na troca
 
 - O que a Cidadela antiga gravou e a máquina promovida não recebeu se perde: a nova Cidadela parte do último `lsn` que aplicou. A lista das transações descartadas sai das linhas do `replication_log` da antiga com `lsn` maior que esse. Alvo: perda máxima de **5 s** de dados.
-- Quando a antiga volta e vira Torre, ela grava na auditoria da Guilda a lista das transações descartadas (tabela, chave e horário, sem valores do cofre) e guarda o banco antigo em `banco/descartado-<época>.db` por 30 dias (padrão) ([volta da antiga](cidadela-e-torres.md#volta-da-antiga-cidadela)). Os commits que só ela tinha voltam por bundle ([worktrees na troca](cidadela-e-torres.md#worktrees-e-espelho-na-troca)).
+- O `lsn` de onde a nova parte fica na tabela `epochs` (`from_lsn` da época dela), que se replica para todas.
+- Quando a antiga volta e vira Torre, ela guarda o banco antigo em `banco/descartado-<época>.db` por 30 dias (padrão) e, com a réplica nova em dia, manda à nova Cidadela a lista das transações descartadas (`guild.discarded`: `lsn`, horário, tabela, operação e chave, sem valores; ficam de fora as tabelas de controle do protocolo, `outbox` e `processed_commands`, que a fila de saída de cada máquina refaz, e uma transação só delas não entra, então uma troca planejada não lista nada), que a grava uma vez na auditoria da Guilda (`audit_log`, ação `citadel.discarded`) ([volta da antiga](cidadela-e-torres.md#volta-da-antiga-cidadela)). Os commits que só ela tinha voltam por bundle ([worktrees na troca](cidadela-e-torres.md#worktrees-e-espelho-na-troca)).
 
 ## Regras e erros
 

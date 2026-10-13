@@ -1,0 +1,40 @@
+// Package app assembles the engine of one instance (docs/arquitetura/componentes.md):
+// what every machine of the Guild runs, and the functions the Citadel turns
+// on and off as the epoch says (docs/guilda/cidadela-e-torres.md).
+//
+// # Every machine
+//
+// The machine database and the place in the Guild (guild.Member, Epochs),
+// the engine port with the mTLS of the transport (the route of the Towers,
+// /join, /healthz), the local channel of the CLI and the answer to the
+// broadcast of the discovery.
+//
+// # The roles
+//
+// The certificate of epoch names the Citadel; the engine runs one period of
+// a role at a time and changes when the epoch says so.
+//
+//   - Citadel: the Guild database as the main one, the vault opened, the CA,
+//     the entries (guild.Citadel), the Towers (protocol.Server), the
+//     replication (replication.Primary), the machine sheets, the cli.call of
+//     the Towers, and the external functions, which the fence (guild.Fence)
+//     turns on only with the epoch confirmed by the lock.
+//   - Tower: the replica, the connection to the Citadel with its outbox
+//     (protocol.Client, found by the discovery.Locator), the machine sheet,
+//     the forwarding of the CLI as cli.call, and 4007 to whoever takes it for
+//     the Citadel.
+//
+// A Citadel that sees a higher epoch stops every external action at once,
+// closes the Towers with 4007, keeps its database as descartado-<época>.db
+// and becomes a Tower, which reports the transactions the change lost. A
+// Tower that the Owner promotes stops the replication, opens the replica as
+// the main database, wins the next epoch in the lock, signs the certificate
+// and becomes the Citadel, which waits 60 s before acting outside.
+//
+// # What stays out
+//
+// The real lock, the bot, the panel, the characters and the missions arrive
+// in their milestones: here they are interfaces (guild.Lock, the Approvers,
+// ExternalFunc). Main is `mestre run`; the hooks of the full suite exist only
+// with the tag full (testhooks_full.go).
+package app

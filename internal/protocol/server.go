@@ -68,7 +68,11 @@ func (srv *Server) Serve(ctx context.Context, l Listener) error {
 }
 
 // Shutdown closes every connection with 4005, so the Towers reconnect soon.
-func (srv *Server) Shutdown() {
+func (srv *Server) Shutdown() { srv.CloseAll(CloseShuttingDown, "the Citadel is shutting down") }
+
+// CloseAll closes every connection with code: 4007 when this machine stops
+// being the Citadel (docs/conectividade/protocolo.md#época).
+func (srv *Server) CloseAll(code int, reason string) {
 	srv.mu.Lock()
 	sessions := make([]*Session, 0, len(srv.sessions))
 	for s := range srv.sessions {
@@ -76,7 +80,7 @@ func (srv *Server) Shutdown() {
 	}
 	srv.mu.Unlock()
 	for _, s := range sessions {
-		s.Close(CloseShuttingDown, "the Citadel is shutting down")
+		s.Close(code, reason)
 	}
 }
 

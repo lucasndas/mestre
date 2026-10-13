@@ -26,7 +26,7 @@ Três binários por plataforma (Linux amd64 e Windows amd64), compilados com `CG
 
 | Subcomando | Plataforma | Papel |
 |---|---|---|
-| `mestre run` | Linux, Windows | o motor (serviço `mestre`); Cidadela ou Torre conforme o estado da Guilda |
+| `mestre run [--instance <inst>] [--dir <pasta>]` | Linux, Windows | o motor (serviço `mestre`); Cidadela ou Torre conforme o estado da Guilda, lido de `config.json` na pasta de configuração da instância; `--dir` põe todas as pastas da instância sob uma só (suíte completa e desenvolvimento) |
 | `mestre install [--join <endereço>] [--new-guild] [--instance <nome>]` | Linux, Windows | registra os serviços e as contas, descobre a Guilda e entra nela ou a cria ([Guilda](../guilda/guilda.md#formação)); `--join` usa só o endereço dado; `--new-guild` cria uma Guilda mesmo que outra responda; `--restore <pasta do backup>` cria a Guilda a partir de um backup, com a chave de recuperação ([cofre](../plataforma/cofre.md#backup-e-chave-de-recuperação)); `--operator-user <usuário>` habilita o Operador do PC no Windows; `--instance` escolhe a [instância](#instâncias); comportamento em [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | `mestre join <endereço>` | Linux, Windows | pede de novo a entrada numa Guilda, numa máquina já instalada que está fora de uma ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
 | `mestre uninstall` | Linux, Windows | pede a saída da Guilda e remove os serviços ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
