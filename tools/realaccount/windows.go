@@ -237,7 +237,8 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 	}
 	var sessions []uint64
 	var hive bool
-	for range 240 {
+	polls := 0
+	for range 1920 { // EXPERIMENT: 8 minutes
 		if sessions, err = sessionsOf(realaccount.WindowsAgentUser); err != nil {
 			return err
 		}
@@ -246,9 +247,10 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 			_ = k.Close()
 		}
 		if len(sessions) == 0 && !hive {
-			fmt.Fprintln(out, "the launcher released the profile and every logon session of the agent account")
+			fmt.Fprintf(out, "the launcher released the profile and every logon session of the agent account (after %d polls)\n", polls)
 			return nil
 		}
+		polls++
 		if err := clock.Sleep(ctx, clock.Real{}, 250*time.Millisecond); err != nil {
 			return err
 		}
