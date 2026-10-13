@@ -38,11 +38,13 @@ func noT(names []string) {
 }
 `
 	fsys := fstest.MapFS{
-		"x/x_test.go":          {Data: []byte(src)},
-		"x/testdata/y_test.go": {Data: []byte("not go")},
-		"x/x.go":               {Data: []byte("package x\n\nfunc f(t interface{ Run(string, func()) }) { t.Run(\"a\", func() {}) }\n")},
-		"x/other_test.go":      {Data: []byte("package x\n")},
-		"web/node/x_test.go":   {Data: []byte("not go")},
+		"x/x_test.go":                   {Data: []byte(src)},
+		"x/testdata/y_test.go":          {Data: []byte("not go")},
+		"x/x.go":                        {Data: []byte("package x\n\nfunc f(t interface{ Run(string, func()) }) { t.Run(\"a\", func() {}) }\n")},
+		"x/other_test.go":               {Data: []byte("package x\n")},
+		"web/node/x_test.go":            {Data: []byte("not go")},
+		".claude/worktrees/a/x_test.go": {Data: []byte("not go")},
+		"_old/x_test.go":                {Data: []byte("not go")},
 	}
 	issues, err := Check(fsys)
 	if err != nil {

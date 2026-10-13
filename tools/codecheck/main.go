@@ -52,8 +52,13 @@ func Check(fsys fs.FS) ([]Issue, error) {
 			return err
 		}
 		if d.IsDir() {
+			// Like the go tool: folders starting with "." or "_" (.git,
+			// .claude/worktrees, ...) are not part of the module.
+			if p != "." && (strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_")) {
+				return fs.SkipDir
+			}
 			switch d.Name() {
-			case ".git", "node_modules", "testdata", "web":
+			case "node_modules", "testdata", "web":
 				return fs.SkipDir
 			}
 			return nil
