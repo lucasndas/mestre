@@ -36,16 +36,19 @@ func newSession(t *testing.T) *sessionEnv {
 // print makes the fake agent print s and waits until the emulator took it.
 func (e *sessionEnv) print(t *testing.T, s string) {
 	t.Helper()
+	// Take the target before writing: the pump moves the bytes into the
+	// buffer asynchronously, so reading End after the write could overshoot.
+	want := e.sess.Buffer().End() + uint64(len(s))
 	if _, err := e.runner.Last().Process().Write([]byte(s)); err != nil {
 		t.Fatal(err)
 	}
-	// The pump moves the bytes into the buffer asynchronously: wait for
-	// them, then for the emulator.
-	want := e.sess.Buffer().End() + uint64(len(s))
+	// Wait for the bytes, then for the emulator. End is read once per round:
+	// waiting from a second, later reading of it could wait for bytes past
+	// want that never come.
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	for e.sess.Buffer().End() < want {
-		if _, err := e.sess.Buffer().Next(ctx, e.sess.Buffer().End(), 1); err != nil {
+	for end := e.sess.Buffer().End(); end < want; end = e.sess.Buffer().End() {
+		if _, err := e.sess.Buffer().Next(ctx, end, 1); err != nil {
 			t.Fatal(err)
 		}
 	}
