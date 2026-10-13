@@ -1,7 +1,12 @@
-// Package terminal is the single layer that starts processes
-// (docs/arquitetura/terminal.md). M0 delivers only the launcher contract and
-// the fast-suite guard; the PTY/ConPTY implementation and the emulator arrive
-// in M1, behind the same interfaces.
+// Package terminal is the engine side of the terminals
+// (docs/arquitetura/terminal.md): it creates each terminal's mestre-pty,
+// talks to it over its socket, writes the log, ends the tree and, when the
+// engine comes back, reconciles the registry with the mestre-pty processes
+// that survived. The mestre-pty itself is in ptyd; the protocol, in ptywire.
+//
+// launcher.go keeps the contract of "start a process on a PTY" that the
+// in-memory launcher of the fast suite implements (internal/testkit); the
+// real thing is the mestre-pty, started through a Spawner.
 package terminal
 
 import (
@@ -11,14 +16,16 @@ import (
 	"io"
 	"os"
 	"os/exec"
+
+	"github.com/lucasndas/mestre/internal/terminal/ptywire"
 )
 
 // EnvTestSuite names the suite being run; set by tools/testrun.
-const EnvTestSuite = "MESTRE_TEST_SUITE"
+const EnvTestSuite = ptywire.EnvTestSuite
 
 // ErrExternalProcessInFastSuite is returned when the fast suite asks for a
 // real process (docs/qualidade/testes.md#regras-e-erros).
-var ErrExternalProcessInFastSuite = errors.New("external process in fast suite: use the fake PTY")
+var ErrExternalProcessInFastSuite = ptywire.ErrExternalProcessInFastSuite
 
 // PTY is the terminal side of a pseudo-terminal: it reads what the process
 // prints and writes what the user types.
@@ -52,12 +59,7 @@ type Launcher interface {
 }
 
 // GuardSuite returns ErrExternalProcessInFastSuite when suite is "fast".
-func GuardSuite(suite string) error {
-	if suite == "fast" {
-		return ErrExternalProcessInFastSuite
-	}
-	return nil
-}
+func GuardSuite(suite string) error { return ptywire.GuardSuite(suite) }
 
 // ExecLauncher starts real processes. Until M1 it connects them by pipes
 // instead of a PTY; Resize is a no-op.
