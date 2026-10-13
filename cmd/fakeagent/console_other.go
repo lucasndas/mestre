@@ -1,7 +1,7 @@
-//go:build !windows
+//go:build !windows && !linux
 
 package main
 
-// rawConsole does nothing outside Windows: until the PTY of M1 the launcher
-// connects the fake agent by pipes, which have no line discipline.
+// rawConsole does nothing on systems other than Linux and Windows, the only
+// ones with a PTY in the terminal (docs/arquitetura/terminal.md).
 func rawConsole() (restore func()) { return func() {} }

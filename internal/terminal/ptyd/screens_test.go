@@ -1,0 +1,102 @@
+package ptyd_test
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+	"testing"
+	"testing/synctest"
+
+	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/terminal/ptyd"
+	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
+	"github.com/lucasndas/mestre/pkg/clock"
+)
+
+// startScreen runs the fake agent of a provider until it stops printing
+// and returns what it printed, as raw bytes with their escape sequences.
+// The recordings of the real CLIs' start screens come with the conformance
+// test (docs/provedores/conformidade.md); until then the fake agent, which
+// prints the start screens of the provider it imitates, is the source.
+func startScreen(t *testing.T, program string, trusted bool) string {
+	t.Helper()
+	root := t.TempDir()
+	work, home, cfg := filepath.Join(root, "work"), filepath.Join(root, "home"), filepath.Join(root, "cfg")
+	files := map[string]string{"work/.git/HEAD": "ref: refs/heads/main\n", "home/.keep": ""}
+	if trusted {
+		files["cfg/.credentials.json"] = "{}"
+		files["cfg/.claude.json"] = fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, work)
+	}
+	testkit.WriteFiles(t, root, files)
+	var out string
+	synctest.Test(t, func(t *testing.T) {
+		l := &fakeagent.MemLauncher{Clock: clock.Real{}, Reporter: t}
+		p, err := l.Start(t.Context(), terminal.Spec{
+			Path: program, Dir: work,
+			Env: []string{"HOME=" + home, "MESTRE_AGENT_ID=a1", "CLAUDE_CONFIG_DIR=" + cfg},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		out = p.(*fakeagent.MemProcess).Output()
+		_ = p.Kill()
+	})
+	return out
+}
+
+// CA-TERM-02
+func TestEmulatorShowsTheStartScreenOfEachProvider(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, program string
+		trusted       bool
+		// promptRow is the row of the input line, or -1 when the start
+		// screen is a question (trust, login) instead.
+		wantPrompt bool
+	}{
+		{"claude, folder trusted", "claude", true, true},
+		{"claude, folder not trusted", "claude", false, false},
+		{"codex", "codex", false, false},
+		{"antigravity", "agy", false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			raw := startScreen(t, tt.program, tt.trusted)
+			if raw == "" {
+				t.Fatal("the agent printed nothing")
+			}
+			em := ptyd.NewVTEmulator(100, 40, 100, nil)
+			defer em.Close()
+
+			em.Write([]byte(raw))
+			screen := em.Screen()
+
+			if strings.ContainsAny(screen, "\x1b\x07") {
+				t.Fatalf("control sequence on the screen:\n%q", screen)
+			}
+			// The screen holds the text the agent printed, line by line.
+			var want []string
+			for _, l := range strings.Split(logging.StripANSI(raw), "\r\n") {
+				want = append(want, strings.TrimRight(l, " "))
+			}
+			if got, w := screen, strings.TrimRight(strings.Join(want, "\n"), "\n"); got != w {
+				t.Fatalf("screen:\n%q\nwant the printed text:\n%q", got, w)
+			}
+			if tt.wantPrompt {
+				// The prompt marker is the last line: "\r\n> " after k line breaks.
+				row := strings.Count(raw, "\r\n")
+				lines := strings.Split(screen, "\n")
+				if row >= len(lines) || lines[row] != ">" {
+					t.Fatalf("prompt not on row %d of:\n%q", row, screen)
+				}
+				if col, r := em.Cursor(); r != row || col != 2 {
+					t.Fatalf("cursor at %d,%d, want 2,%d", col, r, row)
+				}
+			}
+		})
+	}
+}
