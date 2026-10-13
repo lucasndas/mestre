@@ -14,7 +14,7 @@ func TestEmbeddedMigrationsBuildTheMachineSchema(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	// Replica is meaningless here: the machine database always migrates.
-	db, err := machine.Open(ctx, filepath.Join(t.TempDir(), "maquina.db"), store.Options{Replica: true})
+	db, err := machine.Open(ctx, filepath.Join(t.TempDir(), "maquina.db"), store.Options{Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

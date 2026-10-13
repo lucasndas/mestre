@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sistema, por um wrapper interno, e emulador de terminal na máquina do terminal (abaixo). **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda. **Revista em 2026-10-13** pelo [ADR 0023](0023-terminais-fora-do-motor.md): PTY e ConPTY pela `aymanbagabas/go-pty`, dentro do `mestre-pty` (o wrapper próprio vira plano B).
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sistema, por um wrapper interno, e emulador de terminal na máquina do terminal (abaixo). **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda. **Revista em 2026-10-13** pelo [ADR 0023](0023-terminais-fora-do-motor.md): PTY e ConPTY pela `aymanbagabas/go-pty`, dentro do `mestre-pty` (o wrapper próprio vira plano B). **Revista em 2026-10-13** (auditoria de segurança): a versão mínima do git deixa de ser a das funções usadas (2.32, `GIT_CONFIG_GLOBAL`) e passa a ser um piso de segurança, abaixo.
 
 ## Contexto
 
@@ -72,8 +72,9 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço do Windows e de ConPTY 
   | UI | `embed` para servir o build do painel ([ADR 0017](0017-canvas-react-flow.md)) |
   | Testes | `testing/synctest` + interface de relógio injetável |
   | Emulador de terminal na máquina (tela para `check` e reconhecimento de telas) | `github.com/charmbracelet/x/vt` ou equivalente; escolha e plano B em [terminal](../arquitetura/terminal.md) |
-  | Git | **binário `git` do sistema** (2.32 ou maior) chamado por um wrapper interno único, `internal/gitx`; nunca uma biblioteca Go de git |
+  | Git | **binário `git` do sistema**, na versão mínima de segurança (abaixo), chamado por um wrapper interno único, `internal/gitx`; nunca uma biblioteca Go de git |
 
+- **Versão mínima do git, um piso de segurança:** **2.43.0 no Linux**, a do Ubuntu 24.04 LTS, a distribuição de referência (as distribuições corrigem falhas por backport sem mudar o número, então o piso é o pacote dela, que recebe essas correções; o Ubuntu 22.04 traz 2.34.1 e precisa do PPA `git-core`); **2.50.1 no Windows**, porque o Git for Windows não faz backport e essa versão fecha as falhas de clone e de ajudante de credencial (CVE-2024-32002, CVE-2025-48384, CVE-2025-48386). As duas passam da correção do `safe.directory` (CVE-2022-24765, 2.35.2) e têm tudo o que o `gitx` usa (`GIT_CONFIG_GLOBAL`, 2.32; `GIT_CONFIG_COUNT`, 2.31). O `gitx` recusa versão menor (`ErrGitTooOld`) e o [checklist](../plataforma/checklist.md) confere (ALL-06). Rever o piso quando sair uma LTS ou uma correção crítica.
 - **Por que o binário `git`:** worktrees, `git bundle`, `info/exclude`, `skip-worktree` e `merge --ff-only` precisam se comportar exatamente como o git que a pessoa usa; bibliotecas Go de git não cobrem tudo isso com fidelidade. O `testkit` tem um **git falso** atrás da mesma interface do `gitx`, para a suíte rápida; critérios que precisam de git real ficam na completa ([dublês](../qualidade/dubles.md)).
 - **Fora do processo Go:**
   - Whisper roda como processo auxiliar ([ADR 0016](0016-whisper-cpp-local.md)).

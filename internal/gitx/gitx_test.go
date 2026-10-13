@@ -42,25 +42,65 @@ func TestParseVersion(t *testing.T) {
 
 func TestCheckVersionNamesBothVersions(t *testing.T) {
 	t.Parallel()
-	if err := gitx.CheckVersion(gitx.Version{Major: 2, Minor: 32}, gitx.MinVersion); err != nil {
-		t.Fatalf("2.32 refused: %v", err)
+	linux := gitx.MinVersionFor("linux")
+	if err := gitx.CheckVersion(gitx.Version{Major: 2, Minor: 43}, linux); err != nil {
+		t.Fatalf("2.43.0 refused: %v", err)
 	}
-	if err := gitx.CheckVersion(gitx.Version{Major: 3}, gitx.MinVersion); err != nil {
+	if err := gitx.CheckVersion(gitx.Version{Major: 3}, linux); err != nil {
 		t.Fatalf("3.0 refused: %v", err)
 	}
-	err := gitx.CheckVersion(gitx.Version{Major: 2, Minor: 31, Patch: 9}, gitx.MinVersion)
+	err := gitx.CheckVersion(gitx.Version{Major: 2, Minor: 42, Patch: 9}, linux)
 	if !errors.Is(err, gitx.ErrGitTooOld) {
 		t.Fatalf("err = %v", err)
 	}
-	if msg := err.Error(); !strings.Contains(msg, "2.31.9") || !strings.Contains(msg, "2.32.0") {
+	if msg := err.Error(); !strings.Contains(msg, "2.42.9") || !strings.Contains(msg, "2.43.0") {
 		t.Fatalf("message %q should name the found and the required version", msg)
+	}
+}
+
+// The floor is past the safe.directory fix (CVE-2022-24765, 2.35.2) on
+// every system; Git for Windows, which never backports, has a higher one.
+func TestMinVersionIsASecurityFloor(t *testing.T) {
+	t.Parallel()
+	safeDirectoryFix := gitx.Version{Major: 2, Minor: 35, Patch: 2}
+	for _, goos := range []string{"linux", "windows", "darwin"} {
+		if v := gitx.MinVersionFor(goos); v.Less(safeDirectoryFix) {
+			t.Errorf("%s floor %s predates 2.35.2", goos, v)
+		}
+	}
+	if w := gitx.MinVersionFor("windows"); w != (gitx.Version{Major: 2, Minor: 50, Patch: 1}) {
+		t.Errorf("windows floor = %s, want 2.50.1", w)
+	}
+	if err := gitx.CheckVersion(gitx.Version{Major: 2, Minor: 50}, gitx.MinVersionFor("windows")); !errors.Is(err, gitx.ErrGitTooOld) {
+		t.Errorf("2.50.0 on Windows: %v, want ErrGitTooOld", err)
+	}
+}
+
+func newGit(t *testing.T, opts gitx.Options) *gitx.Real {
+	t.Helper()
+	if opts.Masker == nil {
+		opts.Masker = logging.NewMasker()
+	}
+	g, err := gitx.New(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+
+// The masker is the engine's shared one: a Real without it would not hide
+// the values the vault registered.
+func TestNewRequiresTheSharedMasker(t *testing.T) {
+	t.Parallel()
+	if _, err := gitx.New(gitx.Options{Suite: "fast"}); err == nil {
+		t.Fatal("New without a masker succeeded")
 	}
 }
 
 // CA-TESTES-05 (git layer): in the fast suite no git process starts.
 func TestFastSuiteStartsNoProcess(t *testing.T) {
 	t.Parallel()
-	g := gitx.New(gitx.Options{Suite: "fast"})
+	g := newGit(t, gitx.Options{Suite: "fast"})
 	_, err := g.Version(context.Background())
 	if !errors.Is(err, gitx.ErrExternalProcessInFastSuite) {
 		t.Fatalf("err = %v, want ErrExternalProcessInFastSuite", err)
@@ -73,7 +113,7 @@ func TestFastSuiteStartsNoProcess(t *testing.T) {
 
 func TestEnvironmentIsControlled(t *testing.T) {
 	t.Parallel()
-	g := gitx.New(gitx.Options{Env: []string{"GIT_CONFIG_GLOBAL=/custom/gitconfig"}})
+	g := newGit(t, gitx.Options{Env: []string{"GIT_CONFIG_GLOBAL=/custom/gitconfig"}})
 	base := []string{
 		"PATH=/usr/bin", "HOME=/home/x", "LANG=pt_BR.UTF-8", "LC_ALL=pt_BR.UTF-8",
 		"GIT_DIR=/elsewhere/.git", "GIT_AUTHOR_NAME=Leak", "git_work_tree=/lowercase", "GIT_CONFIG_GLOBAL=/home/x/.gitconfig",
@@ -112,8 +152,8 @@ func TestErrorsNeverCarryCredentials(t *testing.T) {
 	t.Parallel()
 	m := logging.NewMasker()
 	m.Register("hunter2-secret")
-	g := gitx.New(gitx.Options{Masker: m})
-	e := gitx.MaskedError(g, []string{"clone", "https://bot:ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r.git"},
+	g := newGit(t, gitx.Options{Masker: m})
+	e := gitx.MaskedError(g, []string{"clone", "https://bot:ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r.git", "refs/heads/hunter2-secret"},
 		128, "fatal: unable to access 'https://bot:ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r.git/': hunter2-secret")
 	msg := e.Error()
 	for _, leak := range []string{"ghp_", "bot:", "hunter2"} {
@@ -123,6 +163,16 @@ func TestErrorsNeverCarryCredentials(t *testing.T) {
 	}
 	if !strings.Contains(msg, "github.com/o/r.git") || !strings.Contains(msg, "exit status 128") {
 		t.Errorf("error %q lost the useful part", msg)
+	}
+	// Known values are masked in the arguments too, piece by piece, so a
+	// long path is not blanked as one high-entropy word.
+	path := "/var/lib/mestre/Principal2026/workspaces/Loja99/mesas/42-login"
+	e = gitx.MaskedError(g, []string{"worktree", "add", path, "--token=hunter2-secret"}, 128, "")
+	if strings.Contains(strings.Join(e.Args, " "), "hunter2") {
+		t.Errorf("Args = %q leak a registered value", e.Args)
+	}
+	if e.Args[2] != path {
+		t.Errorf("path argument = %q, want it untouched", e.Args[2])
 	}
 	if got := gitx.RedactURL("see https://u:p@h/x and ssh://git@h/y"); strings.Contains(got, "u:p") || strings.Contains(got, "git@") {
 		t.Errorf("RedactURL = %q", got)

@@ -50,6 +50,7 @@ func Run(t *testing.T, h Harness) {
 		{"merge fast-forward only", mergeFastForwardOnly},
 		{"bundles", bundles},
 		{"fetch and config", fetchAndConfig},
+		{"credentials only through auth", credentialsOnlyThroughAuth},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -526,6 +527,39 @@ func bundles(t *testing.T, h Harness) {
 		t.Fatalf("forced fetch = %s, want %s", got, want)
 	}
 	isErr(t, b.FetchBundle(ctx, div, "refs/heads/nope:refs/heads/x"), gitx.ErrRefNotFound)
+}
+
+// credentialsOnlyThroughAuth: a URL with credentials is refused everywhere
+// (they would sit in the arguments of git and in remote.origin.url); an Auth
+// is checked and does not change what a local clone or fetch does.
+func credentialsOnlyThroughAuth(t *testing.T, h Harness) {
+	ctx := context.Background()
+	g := h.New(t)
+	root := t.TempDir()
+	origin := seed(t, h, g, filepath.Join(root, "origin"), map[string]string{"a.txt": "1\n"})
+	const secret = "ghs_suiteSecretToken0123456789abcdef"
+	withCreds := "https://x-access-token:" + secret + "@github.com/o/r.git"
+
+	_, err := g.Clone(ctx, withCreds, filepath.Join(root, "creds.git"), gitx.CloneOptions{Bare: true})
+	isErr(t, err, gitx.ErrCredentialsInURL)
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("error carries the token: %v", err)
+	}
+
+	auth := gitx.BasicAuth("https://github.com/", "x-access-token", secret)
+	mirror := must(g.Clone(ctx, origin.Dir(), filepath.Join(root, "espelho.git"), gitx.CloneOptions{Bare: true, Auth: &auth}))
+	if got := must(mirror.GetConfig(ctx, "remote.origin.url")); strings.Contains(got, secret) || canon(got) != canon(origin.Dir()) {
+		t.Fatalf("remote.origin.url = %q, want the plain origin", got)
+	}
+	isErr(t, mirror.Fetch(ctx, withCreds, "refs/heads/main:refs/remotes/x/main"), gitx.ErrCredentialsInURL)
+	isErr(t, mirror.SetConfig(ctx, "remote.evil.url", withCreds), gitx.ErrCredentialsInURL)
+	isErr(t, mirror.FetchWithAuth(ctx, gitx.Auth{URL: "https://u:p@github.com/", Header: "Authorization: Basic eA=="}, origin.Dir(), "refs/heads/main:refs/remotes/x/main"), gitx.ErrInvalidArgument)
+
+	c2 := commitFile(t, h, origin, "a.txt", "2\n", "feat: two")
+	ok(mirror.FetchWithAuth(ctx, auth, origin.Dir(), "refs/heads/main:refs/remotes/origin/main"))
+	if got := must(mirror.ResolveRef(ctx, "refs/remotes/origin/main")); got != c2 {
+		t.Fatalf("origin/main = %s, want %s", got, c2)
+	}
 }
 
 func fetchAndConfig(t *testing.T, h Harness) {

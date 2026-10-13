@@ -70,7 +70,7 @@ func (g *Git) newHandle(r *Repo, dir, branch string) *Handle {
 
 // Version implements gitx.Git.
 func (g *Git) Version(context.Context) (gitx.Version, error) {
-	return gitx.Version{Major: 2, Minor: 50, Raw: "git version 2.50.0 (fake)"}, nil
+	return gitx.Version{Major: 2, Minor: 51, Raw: "git version 2.51.0 (fake)"}, nil
 }
 
 // Init implements gitx.Git.
@@ -100,6 +100,14 @@ func (g *Git) Init(_ context.Context, dir string, opts gitx.InitOptions) (gitx.R
 // Clone implements gitx.Git. url must be the directory of a repository of
 // this Git.
 func (g *Git) Clone(_ context.Context, url, dir string, opts gitx.CloneOptions) (gitx.Repo, error) {
+	if err := gitx.CheckURL(url); err != nil {
+		return nil, fmt.Errorf("clone: %w", err)
+	}
+	if opts.Auth != nil {
+		if err := opts.Auth.Validate(); err != nil {
+			return nil, fmt.Errorf("clone %s: %w", url, err)
+		}
+	}
 	abs := absDir(dir)
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -235,6 +243,9 @@ func (h *Handle) GetConfig(_ context.Context, key string) (string, error) {
 func (h *Handle) SetConfig(_ context.Context, key, value string) error {
 	if err := gitx.ValidateRef(key); err != nil {
 		return err
+	}
+	if err := gitx.CheckConfig(key, value); err != nil {
+		return fmt.Errorf("set config %s: %w", key, err)
 	}
 	defer h.lock()()
 	h.r.config[key] = value
@@ -445,11 +456,26 @@ func (r *Repo) applyRefspecsLocked(src []gitx.Ref, specs []string) error {
 	return nil
 }
 
+// FetchWithAuth implements gitx.Repo: auth is checked like the real one
+// does and otherwise ignored (the fake has no network).
+func (h *Handle) FetchWithAuth(ctx context.Context, auth gitx.Auth, remote string, refspecs ...string) error {
+	if err := gitx.ValidateRef(remote); err != nil {
+		return err
+	}
+	if err := auth.Validate(); err != nil {
+		return fmt.Errorf("fetch %s: %w", remote, err)
+	}
+	return h.Fetch(ctx, remote, refspecs...)
+}
+
 // Fetch implements gitx.Repo. remote is a name with remote.<name>.url set,
 // or the directory of another repository of this Git.
 func (h *Handle) Fetch(_ context.Context, remote string, refspecs ...string) error {
 	if err := gitx.ValidateRef(remote); err != nil {
 		return err
+	}
+	if err := gitx.CheckURL(remote); err != nil {
+		return fmt.Errorf("fetch: %w", err)
 	}
 	h.g.mu.Lock()
 	url := remote

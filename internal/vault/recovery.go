@@ -86,10 +86,13 @@ func (k *RecoveryKey) PublicKey() []byte { return k.priv.PublicKey().Bytes() }
 // Destroy overwrites the seed held by k.
 func (k *RecoveryKey) Destroy() { zero(k.seed) }
 
-func (k *RecoveryKey) String() string             { return logging.Redacted }
-func (k *RecoveryKey) GoString() string           { return logging.Redacted }
-func (k *RecoveryKey) Format(f fmt.State, _ rune) { _, _ = f.Write([]byte(logging.Redacted)) }
-func (k *RecoveryKey) LogValue() slog.Value       { return slog.StringValue(logging.Redacted) }
+// The printing methods have value receivers so that a dereferenced key
+// (fmt.Sprint(*rk)) is redacted too, not only the pointer.
+
+func (RecoveryKey) String() string             { return logging.Redacted }
+func (RecoveryKey) GoString() string           { return logging.Redacted }
+func (RecoveryKey) Format(f fmt.State, _ rune) { _, _ = f.Write([]byte(logging.Redacted)) }
+func (RecoveryKey) LogValue() slog.Value       { return slog.StringValue(logging.Redacted) }
 
 // Envelope format (cofre-envelope.bin): the keyring encrypted to the
 // recovery public key with an ephemeral X25519 key, HKDF-SHA256 and

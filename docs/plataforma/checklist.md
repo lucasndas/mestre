@@ -91,7 +91,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 | ALL-03 | todas | certificados TLS válidos e com mais de 30 dias até vencer; a renovação automática acontece aos 30 dias, então chegar abaixo disso indica que ela falhou ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)) | aviso; grave com menos de 7 dias | renovar (sozinho) |
 | ALL-04 | Torre | relógio da máquina a menos de 5 s do relógio da Cidadela ([protocolo](../conectividade/protocolo.md)) | aviso | manual |
 | ALL-05 | todas | CLI `mestre` no PATH, `MESTRE_CLI` definido e `mestre debug` passa | grave | manual |
-| ALL-06 | todas | git instalado, versão 2.32 ou maior ([identidades e Apps](../github/identidades-e-apps.md)) | grave | manual |
+| ALL-06 | todas | git instalado, na versão mínima de segurança do [ADR 0001](../decisoes/0001-stack-go.md) (piso por sistema; [identidades e Apps](../github/identidades-e-apps.md)) | grave | manual |
 | ALL-07 | Cidadela | último backup diário íntegro ([persistência](../arquitetura/persistencia.md#backup)) | grave | rodar backup (sozinho) |
 | ALL-08 | todas | disco livre acima dos limites da autocura ([camadas](../autocura/camadas.md#valores-padrão)) | aviso / grave | `cleanup` (sozinho) |
 | ALL-09 | não excluída e máquina de transcrição | modelo Whisper baixado com o hash certo e transcrição de teste (5 s de áudio) em até 10 s (padrão); nas não excluídas, também o `ffmpeg` convertendo o áudio de teste ([anexos e transcrição](../telegram/anexos-e-transcricao.md)) | grave | baixar de novo (sozinho) |

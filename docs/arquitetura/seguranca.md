@@ -1,6 +1,6 @@
 # Segurança
 
-> **Assunto:** modelo de ameaças, TLS e CA da Guilda, certificados com `mestre.local`, credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** modelo de ameaças, TLS e CA da Guilda, certificados com `mestre.local`, credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, git do motor, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-13
 
 ## O que proteger
 
@@ -28,6 +28,7 @@
 | Agente gasta sem controle | limites por missão, mesa, workspace e dia | [limites de uso](../plataforma/limites-de-uso.md) |
 | Usuário age acima do seu nível | níveis por workspace; ninguém revoga decreto de nível acima | [usuários e níveis](../telegram/usuarios-e-niveis.md), [decretos](../telegram/decretos.md) |
 | Cura vira acesso remoto | sem SSH, lista fechada de ações; script de diagnóstico mostrado inteiro e aprovado por Dono ou Administrador, executado uma vez | [Guardião](../autocura/guardiao.md), [diagnóstico com IA](../autocura/diagnostico-com-ia.md) |
+| Agente faz o git do motor rodar comandos ou lê o token do git | configuração do repositório neutralizada na linha de comando; `config`, `info/` e `hooks/` do espelho fora do alcance do agente; token só no ambiente do processo | abaixo |
 | Segredo vaza por log | mascaramento (abaixo) | este documento |
 | Segredo vaza pelo Telegram (sem criptografia ponta a ponta) | o Mestre nunca envia segredos pelo Telegram; credenciais só se cadastram pelo painel, e as mandadas por mensagem são tiradas, apagadas e geram recomendação de troca | [segurança do canal](../telegram/seguranca-do-canal.md) |
 | Arquivos gerados atrapalham quem clona o repositório | arquivos locais e `.git/info/exclude`; `mestre hook` só age com `MESTRE_AGENT_ID` | [sessão zero da mesa](../sessao-zero/mesa.md), [adaptador](../provedores/adaptador.md) |
@@ -93,10 +94,19 @@ A única exceção ao princípio de contas, só numa máquina Windows com o Oper
 - **Clicar "Sim" num UAC:** o pedido de elevação aparece na área de trabalho segura, que cliques e teclas sintéticos não alcançam (UIPI). O [checklist](../plataforma/checklist.md) exige UAC ligado, `PromptOnSecureDesktop = 1` e `ConsentPromptBehaviorAdmin` com pedido (nunca "elevar sem perguntar"); se falhar, a ficha da máquina não anuncia `operador`.
 - **Risco residual aceito:** ações de mouse e teclado não são filtráveis pelo hook (ele vê "clicar em (x, y)", não o efeito). A proteção é prazo curto, aprovação explícita do Dono, aviso visível no PC, no Telegram e no painel, `/travar` e auditoria completa com capturas de tela.
 
+## Git do motor
+
+O motor roda o git (só por `internal/gitx`, [convenções](../desenvolvimento/convencoes.md#estilo)) sobre o espelho e os worktrees, em que os agentes também trabalham. Regras:
+
+- **Credencial nunca na URL nem nos argumentos:** os argumentos de um processo são legíveis por toda conta da máquina (`/proc/<pid>/cmdline`), inclusive `mestre-agente`, e o `clone` guardaria a URL em `remote.origin.url`. URL com usuário ou senha é recusada (`ErrCredentialsInURL`); o token vai como cabeçalho `http.<url>.extraHeader`, passado pelo ambiente do processo (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0`, `GIT_CONFIG_VALUE_0`), que só a própria conta lê, e é registrado no mascarador.
+- **A configuração do repositório não roda comandos:** toda chamada sobrepõe na linha de comando, que vence qualquer arquivo de configuração, o que poderia rodar um programa como o motor: ganchos (`core.hooksPath`), `core.fsmonitor`, `core.sshCommand`, `core.askPass`, ajudantes de credencial, verificação de assinatura (`log.showSignature`, `merge.verifySignatures`), `upload-pack` do remoto, os transportes `ext::` e `git://`, submódulos; `http.sslVerify` fica ligado. Os filtros (`filter.<nome>.*`) têm nome livre: antes de cada comando que mexe na árvore de trabalho, o motor lista os definidos e os esvazia na mesma linha de comando. Nenhum comando do motor gera diff, então `diff.external` e `textconv` nunca rodam.
+- **Fora do alcance do agente:** `config`, `info/` e `hooks/` do espelho e do clone principal não são alteráveis nem trocáveis por `mestre-agente` ([persistência](persistencia.md#arquivos)). **Risco residual aceito:** opções por URL que não dá para listar antes (`credential.<url>.helper`) e um filtro criado entre a listagem e o comando dependem dessa regra.
+- **Versão mínima de segurança** do git no [ADR 0001](../decisoes/0001-stack-go.md), conferida pelo [checklist](../plataforma/checklist.md) (ALL-06).
+
 ## Mascaramento em logs
 
 Aplicado a tudo o que vai para log (motor, Guardião, histórico de terminais, auditoria), antes de gravar:
-1. **Valores conhecidos:** todo segredo carregado do cofre é registrado no mascarador na hora em que é lido; ocorrências exatas viram `[segredo]`.
+1. **Valores conhecidos:** todo segredo carregado do cofre é registrado no mascarador na hora em que é lido (inteiro, cada parte sensível e cada linha, [cofre](../plataforma/cofre.md#uso)); ocorrências exatas viram `[segredo]`.
 2. **Formatos conhecidos:** tokens do GitHub (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), tokens de bot do Telegram (`<números>:<35 caracteres>`, inclusive terminado em `-` ou `_`), tokens do Slack (`xoxb-`, `xoxp-`), JWT (três partes base64url começando por `eyJ`), blocos `-----BEGIN … PRIVATE KEY-----`, cabeçalhos `Authorization:`, chaves `sk-…` e pares `chave=valor` cuja chave termina em `password`, `token` ou `secret` (`password=`, `db_password=`, `GITHUB_TOKEN=`, `access_token=`), com o valor puro ou entre aspas simples ou duplas; só o valor vira `[segredo]`, a chave fica.
 3. **Palavras de alta entropia:** 20 caracteres ou mais, com maiúsculas, minúsculas, ao menos dois dígitos e entropia de 3,5 bits por caractere ou mais, para UUIDs e hashes continuarem legíveis. Uma palavra é feita de letras, dígitos, `+`, `_` e `-`: `/` e `=` a separam, então caminhos, nomes de branch e pares `CHAVE=valor` são julgados por partes, e a chave de um par nunca se perde. Nomes de teste Go (`TestMVP13_FourCompositions`) e nomes em kebab-case com duas ou mais palavras minúsculas de quatro letras ou mais (`table-lifecycle-v2Beta10`) não são mascarados. O tamanho mínimo de 20 é fixo (`DefaultEntropyMinLen` em `internal/logging`), não configurável. Contrapartida aceita: um segredo base64 com `/` no meio é julgado em pedaços, e um pedaço de menos de 20 caracteres escapa, por isso todo segredo do cofre também é registrado (regra 1).
 4. **Registro de valores:** `Register` ignora valores de menos de 4 bytes, para não mascarar palavras comuns.

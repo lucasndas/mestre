@@ -1,10 +1,15 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -37,7 +42,85 @@ func load(t *testing.T, sql ...string) store.Set {
 	return set
 }
 
+// templates holds, per list of migrations, a database file already migrated
+// with it. TestMain builds them once, outside the time of every test:
+// creating and migrating a database file costs tens of milliseconds on a
+// Windows runner. Tests about creating or migrating a database never use
+// them.
+var templates = map[string][]byte{}
+
+func templateKey(sqls []string) string { return strings.Join(sqls, "\x00") }
+
+func TestMain(m *testing.M) {
+	if err := buildTemplates(); err != nil {
+		fmt.Fprintln(os.Stderr, "store templates:", err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+func buildTemplates() error {
+	dir, err := os.MkdirTemp("", "store-templates")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	for i, sqls := range [][]string{{createItems}, {createItems, createNotes}, {createItems, createNotes, createTags}} {
+		set, err := store.Load(files(sqls...), "migrations")
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(dir, fmt.Sprintf("t%d.db", i))
+		db, err := store.Open(context.Background(), path, set, fast)
+		if err != nil {
+			return err
+		}
+		if err := db.Close(); err != nil {
+			return err
+		}
+		if templates[templateKey(sqls)], err = os.ReadFile(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seed writes at path a database already migrated with sqls.
+func seed(t *testing.T, path string, sqls ...string) {
+	t.Helper()
+	b, ok := templates[templateKey(sqls)]
+	if !ok {
+		t.Fatalf("no template for %d migrations", len(sqls))
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// seeded is a new x.db already migrated with sqls.
+func seeded(t *testing.T, sqls ...string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "x.db")
+	seed(t, path, sqls...)
+	return path
+}
+
+// fast are the options of the tests that are not about durability: no fsync,
+// which costs tens of milliseconds each on a Windows runner. The tests of
+// the shipped settings and of WriteDurable use openAsShipped.
+var fast = store.Options{Synchronous: "OFF"}
+
+// open opens with synchronous=OFF unless opts sets a level.
 func open(t *testing.T, path string, set store.Set, opts store.Options) *store.DB {
+	t.Helper()
+	if opts.Synchronous == "" {
+		opts.Synchronous = fast.Synchronous
+	}
+	return openAsShipped(t, path, set, opts)
+}
+
+// openAsShipped opens with opts as given: synchronous=NORMAL by default.
+func openAsShipped(t *testing.T, path string, set store.Set, opts store.Options) *store.DB {
 	t.Helper()
 	db, err := store.Open(context.Background(), path, set, opts)
 	if err != nil {
@@ -59,7 +142,7 @@ func scan[T any](t *testing.T, db *sql.DB, query string, args ...any) T {
 // CA-PERSIST-01
 func TestOpenConfiguresEveryConnection(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
+	db := openAsShipped(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
 
 	for name, pool := range map[string]*sql.DB{"writer": db.Writer(), "reader": db.Reader()} {
 		t.Run(name, func(t *testing.T) {
@@ -78,6 +161,9 @@ func TestOpenConfiguresEveryConnection(t *testing.T) {
 	if got := scan[int](t, db.Writer(), `PRAGMA synchronous`); got != 1 {
 		t.Errorf("writer synchronous = %d, want 1 (NORMAL)", got)
 	}
+	if _, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "y.db"), load(t, createItems), store.Options{Synchronous: "sometimes"}); err == nil {
+		t.Error("Open accepted an unknown synchronous level")
+	}
 
 	// The reader pool cannot write; the writer is a single connection.
 	if _, err := db.Reader().Exec(`INSERT INTO items (name) VALUES ('x')`); err == nil {
@@ -90,7 +176,7 @@ func TestOpenConfiguresEveryConnection(t *testing.T) {
 
 func TestOpenHonoursBusyTimeoutOption(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{BusyTimeout: 1500 * time.Millisecond})
+	db := open(t, seeded(t, createItems), load(t, createItems), store.Options{BusyTimeout: 1500 * time.Millisecond})
 	if got := scan[int](t, db.Writer(), `PRAGMA busy_timeout`); got != 1500 {
 		t.Errorf("busy_timeout = %d, want 1500", got)
 	}
@@ -139,7 +225,7 @@ func TestFailedMigrationIsRolledBackWhole(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x.db")
 	broken := load(t, createItems, `CREATE TABLE half (id INTEGER); INSERT INTO missing_table VALUES (1);`)
 
-	if _, err := store.Open(context.Background(), path, broken, store.Options{}); err == nil {
+	if _, err := store.Open(context.Background(), path, broken, fast); err == nil {
 		t.Fatal("Open succeeded with a failing migration")
 	}
 
@@ -157,9 +243,10 @@ func TestOpenRefusesSchemaNewerThanBinary(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "x.db")
 	newer := load(t, createItems, createNotes, createTags)
-	open(t, path, newer, store.Options{}).Close()
+	seed(t, path, createItems, createNotes, createTags)
+	before := fileSum(t, path)
 
-	_, err := store.Open(context.Background(), path, load(t, createItems, createNotes), store.Options{})
+	_, err := store.Open(context.Background(), path, load(t, createItems, createNotes), fast)
 	if !errors.Is(err, store.ErrNewerSchema) {
 		t.Fatalf("err = %v, want ErrNewerSchema", err)
 	}
@@ -169,13 +256,37 @@ func TestOpenRefusesSchemaNewerThanBinary(t *testing.T) {
 	}
 
 	// The refused database is untouched, and the replica mode refuses it too.
-	if _, err := store.Open(context.Background(), path, load(t, createItems), store.Options{Replica: true}); !errors.Is(err, store.ErrNewerSchema) {
+	if _, err := store.Open(context.Background(), path, load(t, createItems), store.Options{Replica: true, Synchronous: "OFF"}); !errors.Is(err, store.ErrNewerSchema) {
 		t.Errorf("replica err = %v, want ErrNewerSchema", err)
+	}
+	if after := fileSum(t, path); after != before {
+		t.Errorf("the refused database changed: SHA-256 %x before, %x after", before, after)
 	}
 	db := open(t, path, newer, store.Options{})
 	if v, _ := db.Version(context.Background()); v != 3 {
 		t.Errorf("Version = %d, want 3", v)
 	}
+}
+
+// readOnly opens a database file to inspect it as it is: no WAL switch, no
+// migration, no write.
+func readOnly(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", path+"?_pragma=query_only(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func fileSum(t *testing.T, path string) [sha256.Size]byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sha256.Sum256(b)
 }
 
 // CA-PERSIST-05
@@ -195,19 +306,20 @@ func TestPreMigrationBackup(t *testing.T) {
 		t.Fatalf("backup written for a new database: %v", matches)
 	}
 
-	// Pending migrations on an existing database write pre-migracao-<version>.db first.
+	// Pending migrations on an existing database write
+	// pre-migracao-<name>-<version>.db first.
 	db = open(t, path, load(t, createItems, createNotes), store.Options{BackupDir: backups})
 	if v, _ := db.Version(context.Background()); v != 2 {
 		t.Fatalf("Version = %d, want 2", v)
 	}
-	bak := open(t, filepath.Join(backups, "pre-migracao-1.db"), load(t, createItems), store.Options{})
-	if v, _ := bak.Version(context.Background()); v != 1 {
+	bak := readOnly(t, filepath.Join(backups, "pre-migracao-x-1.db"))
+	if v := scan[int](t, bak, `SELECT max(version) FROM schema_migrations`); v != 1 {
 		t.Errorf("backup version = %d, want 1 (the schema before migrating)", v)
 	}
-	if got := scan[string](t, bak.Reader(), `SELECT name FROM items`); got != "keep" {
+	if got := scan[string](t, bak, `SELECT name FROM items`); got != "keep" {
 		t.Errorf("backup row = %q, want keep", got)
 	}
-	if got := scan[string](t, bak.Reader(), `PRAGMA quick_check`); got != "ok" {
+	if got := scan[string](t, bak, `PRAGMA quick_check`); got != "ok" {
 		t.Errorf("quick_check = %q", got)
 	}
 	db.Close()
@@ -216,7 +328,69 @@ func TestPreMigrationBackup(t *testing.T) {
 	db = open(t, path, load(t, createItems, createNotes), store.Options{BackupDir: backups})
 	db.Close()
 	if matches, _ := filepath.Glob(filepath.Join(backups, "*.db")); len(matches) != 1 {
-		t.Errorf("backups = %v, want only pre-migracao-1.db", matches)
+		t.Errorf("backups = %v, want only pre-migracao-x-1.db", matches)
+	}
+}
+
+// The Guild and the machine databases share the backups folder: their
+// pre-migration copies at the same version must not overwrite each other.
+func TestPreMigrationBackupsOfTwoDatabasesDoNotCollide(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	backups := filepath.Join(dir, "backups")
+	for _, name := range []string{"mestre", "maquina"} {
+		path := filepath.Join(dir, name+".db")
+		seed(t, path, createItems)
+		db := open(t, path, load(t, createItems), store.Options{})
+		if _, err := db.Writer().Exec(`INSERT INTO items (name) VALUES (?)`, name); err != nil {
+			t.Fatal(err)
+		}
+		db.Close()
+		open(t, path, load(t, createItems, createNotes), store.Options{BackupDir: backups}).Close()
+	}
+	for _, name := range []string{"mestre", "maquina"} {
+		bak := readOnly(t, filepath.Join(backups, store.BackupName(name+".db", 1)))
+		if got := scan[string](t, bak, `SELECT name FROM items`); got != name {
+			t.Errorf("backup of %s holds %q", name, got)
+		}
+	}
+	if got := store.BackupName(filepath.Join("x", "maquina.db"), 3); got != "pre-migracao-maquina-3.db" {
+		t.Errorf("BackupName = %q", got)
+	}
+}
+
+// A copy that fails PRAGMA quick_check stops the migration.
+func TestQuickCheckRefusesADamagedCopy(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.db")
+	seed(t, path, createItems)
+	db := open(t, path, load(t, createItems), store.Options{})
+	for i := range 200 {
+		if _, err := db.Writer().Exec(`INSERT INTO items (name) VALUES (?)`, strings.Repeat("x", 100)+string(rune('a'+i%26))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	good := filepath.Join(dir, "good.db")
+	if _, err := db.Writer().Exec(`VACUUM INTO ?`, good); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if err := store.QuickCheck(context.Background(), good); err != nil {
+		t.Fatalf("sound copy refused: %v", err)
+	}
+	raw, err := os.ReadFile(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Overwrite the second page (a b-tree page of items) with garbage.
+	copy(raw[4096:], bytes.Repeat([]byte{0xA5}, 512))
+	bad := filepath.Join(dir, "bad.db")
+	if err := os.WriteFile(bad, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.QuickCheck(context.Background(), bad); err == nil {
+		t.Fatal("damaged copy passed quick_check")
 	}
 }
 
@@ -238,7 +412,7 @@ func TestReplicaNeverMigrates(t *testing.T) {
 
 	// An older replica is not migrated either.
 	main := filepath.Join(t.TempDir(), "main.db")
-	open(t, main, load(t, createItems), store.Options{}).Close()
+	seed(t, main, createItems)
 	db = open(t, main, set, store.Options{Replica: true})
 	if v, _ := db.Version(context.Background()); v != 1 {
 		t.Errorf("Version = %d, want 1: a replica must not migrate", v)
@@ -248,31 +422,112 @@ func TestReplicaNeverMigrates(t *testing.T) {
 // CA-PERSIST-07
 func TestReaderSeesOnlyCommittedWhileWriterWorks(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems), store.Options{})
+	path := seeded(t, createItems)
+	// A 1 ms busy timeout: a read that had to wait for the writer would fail
+	// with SQLITE_BUSY instead of waiting.
+	db := open(t, path, load(t, createItems), store.Options{BusyTimeout: time.Millisecond})
 	ctx := context.Background()
 
+	// A tiny page cache makes the open transaction spill its pages to disk
+	// before the commit. In rollback-journal mode a spill takes the exclusive
+	// lock and readers get SQLITE_BUSY; in WAL the pages go to the WAL and
+	// readers keep reading the last commit.
+	if _, err := db.Writer().ExecContext(ctx, `PRAGMA cache_size = 5`); err != nil {
+		t.Fatal(err)
+	}
+	onDisk := func() int64 { return fileSize(t, path) + fileSize(t, path+"-wal") }
+	before := onDisk()
 	tx, err := db.Writer().BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO items (name) VALUES ('a')`); err != nil {
-		t.Fatal(err)
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	for range 300 {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO items (name) VALUES (?)`, strings.Repeat("a", 1000)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	// WAL: the read does not wait for the open write transaction.
-	if got := scan[int](t, db.Reader(), `SELECT count(*) FROM items`); got != 0 {
-		t.Errorf("reader saw %d uncommitted rows", got)
+	if onDisk() <= before {
+		t.Fatal("the open transaction did not spill to disk; the test proves nothing")
+	}
+
+	readCtx, cancel := clock.WithTimeout(ctx, clock.Real{}, 2*time.Second)
+	defer cancel()
+	var n int
+	if err := db.Reader().QueryRowContext(readCtx, `SELECT count(*) FROM items`).Scan(&n); err != nil {
+		t.Fatalf("read during the write transaction waited or failed: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("reader saw %d uncommitted rows", n)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if got := scan[int](t, db.Reader(), `SELECT count(*) FROM items`); got != 1 {
-		t.Errorf("reader saw %d rows after commit, want 1", got)
+	if got := scan[int](t, db.Reader(), `SELECT count(*) FROM items`); got != 300 {
+		t.Errorf("reader saw %d rows after commit, want 300", got)
+	}
+}
+
+func fileSize(t *testing.T, path string) int64 {
+	t.Helper()
+	fi, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fi.Size()
+}
+
+// The vault drops an old key only after a durable commit: the writer runs
+// that transaction with synchronous=FULL and goes back to NORMAL.
+func TestWriteDurableCommitsWithFullSync(t *testing.T) {
+	t.Parallel()
+	db := openAsShipped(t, seeded(t, createItems), load(t, createItems), store.Options{})
+	ctx := context.Background()
+	err := db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		var level int
+		if err := tx.QueryRowContext(ctx, `PRAGMA synchronous`).Scan(&level); err != nil {
+			return err
+		}
+		if level != 2 {
+			t.Errorf("synchronous inside the durable transaction = %d, want 2 (FULL)", level)
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO items (name) VALUES ('durable')`)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := scan[int](t, db.Reader(), `SELECT count(*) FROM items WHERE name = 'durable'`); got != 1 {
+		t.Errorf("committed rows = %d, want 1", got)
+	}
+	if got := scan[int](t, db.Writer(), `PRAGMA synchronous`); got != 1 {
+		t.Errorf("writer synchronous after the durable write = %d, want 1 (NORMAL)", got)
+	}
+
+	boom := errors.New("boom")
+	err = db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO items (name) VALUES ('lost')`); err != nil {
+			return err
+		}
+		return boom
+	})
+	if !errors.Is(err, boom) {
+		t.Fatalf("err = %v, want the error of fn", err)
+	}
+	if got := scan[int](t, db.Reader(), `SELECT count(*) FROM items WHERE name = 'lost'`); got != 0 {
+		t.Error("a failed durable write was committed")
+	}
+	if got := scan[int](t, db.Writer(), `PRAGMA synchronous`); got != 1 {
+		t.Errorf("writer synchronous after a failed durable write = %d, want 1", got)
 	}
 }
 
 func TestForeignKeysAreEnforced(t *testing.T) {
 	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "x.db"), load(t, createItems, createNotes), store.Options{})
+	db := open(t, seeded(t, createItems, createNotes), load(t, createItems, createNotes), store.Options{})
 	if _, err := db.Writer().Exec(`INSERT INTO notes (item_id) VALUES (42)`); err == nil {
 		t.Error("insert violating a foreign key succeeded")
 	}
@@ -307,14 +562,14 @@ func TestLoadValidatesTheMigrationFiles(t *testing.T) {
 
 func TestOpenRejectsAnInconsistentVersionTable(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "x.db")
+	path := seeded(t, createItems, createNotes)
 	set := load(t, createItems, createNotes)
 	db := open(t, path, set, store.Options{})
 	if _, err := db.Writer().Exec(`DELETE FROM schema_migrations WHERE version = 1`); err != nil {
 		t.Fatal(err)
 	}
 	db.Close()
-	if _, err := store.Open(context.Background(), path, set, store.Options{}); err == nil {
+	if _, err := store.Open(context.Background(), path, set, fast); err == nil {
 		t.Error("Open accepted schema_migrations with a missing version")
 	}
 }
@@ -322,7 +577,7 @@ func TestOpenRejectsAnInconsistentVersionTable(t *testing.T) {
 func TestOpenRejectsUnusablePaths(t *testing.T) {
 	t.Parallel()
 	for _, p := range []string{"", "a?b.db", "a#b.db", filepath.Join(t.TempDir(), "missing-dir", "x.db")} {
-		if _, err := store.Open(context.Background(), p, load(t, createItems), store.Options{}); err == nil {
+		if _, err := store.Open(context.Background(), p, load(t, createItems), fast); err == nil {
 			t.Errorf("Open(%q) succeeded", p)
 		}
 	}

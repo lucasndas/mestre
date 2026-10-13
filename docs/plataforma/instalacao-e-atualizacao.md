@@ -70,7 +70,7 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 ### Volta de versão
 
 - **Só binário (padrão):** troca `atual` com `anterior` e reinicia. Funciona porque as migrações do banco são só aditivas dentro de uma versão maior ([persistência](../arquitetura/persistencia.md)). É a ação `rollback` do [Guardião](../autocura/guardiao.md#lista-fechada-de-ações).
-- **Com restauração do banco:** antes de migrar, o motor grava `pre-migracao-<versão>.db`. Restaurar essa cópia é raro e nunca automático: exige Dono ou Administrador com PIN e perde tudo o que aconteceu entre a atualização e a volta ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
+- **Com restauração do banco:** antes de migrar, o motor grava uma cópia do banco ([persistência](../arquitetura/persistencia.md#banco-configuração)). Restaurar essa cópia é raro e nunca automático: exige Dono ou Administrador com PIN e perde tudo o que aconteceu entre a atualização e a volta ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
 - Depois de uma volta, `anterior` passa a apontar para a versão que falhou, marcada como "não usar"; ela só volta a ser aplicada por uma atualização aprovada de novo ([atualização automática](autoatualizacao.md)).
 
 ### Remoção (`mestre uninstall`)

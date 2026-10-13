@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/testkit/gitxsuite"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -25,7 +26,14 @@ func newReal(opts gitx.Options) *gitx.Real {
 	if opts.Clock == nil {
 		opts.Clock = clock.NewFake(gitxsuite.Now)
 	}
-	return gitx.New(opts)
+	if opts.Masker == nil {
+		opts.Masker = logging.NewMasker()
+	}
+	g, err := gitx.New(opts)
+	if err != nil {
+		panic(err)
+	}
+	return g
 }
 
 func writeFile(t testing.TB, r gitx.Repo, rel, content string) {
@@ -184,15 +192,20 @@ func TestRealFilesKeepTheirBytes(t *testing.T) {
 	}
 }
 
-func TestRealErrorsMaskCredentialsInURLs(t *testing.T) {
+func TestRealErrorsNeverCarryTheAuth(t *testing.T) {
 	t.Parallel()
 	g := newReal(gitx.Options{})
-	url := "https://bot:ghp_abcdefghijklmnopqrstuvwxyz0123456789@127.0.0.1:1/o/r.git"
-	_, err := g.Clone(context.Background(), url, filepath.Join(t.TempDir(), "r.git"), gitx.CloneOptions{Bare: true})
+	const secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+	_, err := g.Clone(context.Background(), "https://bot:"+secret+"@127.0.0.1:1/o/r.git", filepath.Join(t.TempDir(), "r.git"), gitx.CloneOptions{Bare: true})
+	if !errors.Is(err, gitx.ErrCredentialsInURL) {
+		t.Fatalf("clone of a URL with credentials: %v, want ErrCredentialsInURL", err)
+	}
+	auth := gitx.BasicAuth("https://127.0.0.1:1/", "bot", secret)
+	_, err = g.Clone(context.Background(), "https://127.0.0.1:1/o/r.git", filepath.Join(t.TempDir(), "r.git"), gitx.CloneOptions{Bare: true, Auth: &auth})
 	if err == nil {
 		t.Fatal("clone of an unreachable URL succeeded")
 	}
-	for _, leak := range []string{"ghp_", "bot:"} {
+	for _, leak := range []string{"ghp_", "bot:", auth.Header} {
 		if strings.Contains(err.Error(), leak) {
 			t.Fatalf("error leaks %q: %v", leak, err)
 		}

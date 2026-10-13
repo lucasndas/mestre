@@ -3,6 +3,7 @@ package vault
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,8 +25,9 @@ import (
 // memKeys is an in-memory KeyStore: the OS protection is tested on its own
 // (keyfile tests), the vault logic everywhere.
 type memKeys struct {
-	mu   sync.Mutex
-	data []byte
+	mu     sync.Mutex
+	data   []byte
+	onSave func(data []byte) // optional, called with each saved keyring
 }
 
 func (m *memKeys) Load(context.Context) ([]byte, error) {
@@ -41,6 +43,9 @@ func (m *memKeys) Save(_ context.Context, d []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.data = slices.Clone(d)
+	if m.onSave != nil {
+		m.onSave(slices.Clone(d))
+	}
 	return nil
 }
 
@@ -58,12 +63,65 @@ type fixture struct {
 	uses   []UseEvent
 }
 
+// newFixture skips the flushes to disk (synchronous=OFF, envelope not
+// flushed): the vault logic does not depend on them, and each costs tens of
+// milliseconds on a Windows runner. The durability tests use
+// newDurableFixture, with the shipped settings.
 func newFixture(t *testing.T, keys KeyStore) *fixture {
+	t.Helper()
+	return newFixtureWith(t, keys, false)
+}
+
+func newDurableFixture(t *testing.T, keys KeyStore) *fixture {
+	t.Helper()
+	return newFixtureWith(t, keys, true)
+}
+
+// guildTemplate is a Guild database already migrated, built once by TestMain
+// outside the time of every test (creating and migrating a database file
+// costs tens of milliseconds on a Windows runner); each fixture starts from
+// a copy. The migrations themselves are tested in internal/store/guild.
+var guildTemplate []byte
+
+func TestMain(m *testing.M) {
+	if err := buildGuildTemplate(); err != nil {
+		fmt.Fprintln(os.Stderr, "vault: guild template:", err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+func buildGuildTemplate() error {
+	dir, err := os.MkdirTemp("", "vault-template")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "mestre.db")
+	db, err := guild.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		return err
+	}
+	if err := db.Close(); err != nil {
+		return err
+	}
+	guildTemplate, err = os.ReadFile(path)
+	return err
+}
+
+func newFixtureWith(t *testing.T, keys KeyStore, durable bool) *fixture {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mestre.db"), guildTemplate, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
-	db, err := guild.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Clock: clk})
+	opts := store.Options{Clock: clk, Synchronous: "OFF"}
+	if durable {
+		opts.Synchronous = ""
+	}
+	db, err := guild.Open(ctx, filepath.Join(dir, "mestre.db"), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,6 +143,7 @@ func newFixture(t *testing.T, keys KeyStore) *fixture {
 		Clock:             clk,
 		OnAlert:           func(a Alert) { f.mu.Lock(); f.alerts = append(f.alerts, a); f.mu.Unlock() },
 		OnUse:             func(u UseEvent) { f.mu.Lock(); f.uses = append(f.uses, u); f.mu.Unlock() },
+		fastEnvelope:      !durable,
 	}
 	return f
 }
@@ -148,7 +207,7 @@ var samples = []struct {
 }{
 	{BotTokenSecret, TypeTelegramBotToken, "7012345678:AAH9xk2Lq0ZpW8vYtR3uNc5mBj7eDf1gKo4", nil},
 	{"github_app_qa", TypeGitHubAppKey, "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAz9Qe\n-----END RSA PRIVATE KEY-----", nil},
-	{"github_user_ana", TypeGitHubUserToken, "ghu_R8tY2pQ9wE4rT6yU1iO3pA5sD7fG9hJ0kL", nil},
+	{"github_user_ana", TypeGitHubUserToken, `{"access_token":"ghu_R8tY2pQ9wE4rT6yU1iO3pA5sD7fG9hJ0kL","refresh_token":"ghr_Q1w2E3r4T5y6U7i8O9p0AsDfGhJkLzXcVb"}`, nil},
 	{"provider_claude_api", TypeProviderAPIKey, "sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1", nil},
 	{"site_loja", TypeSiteCredential, `{"url":"https://loja.example/login","user":"qa@x","password":"Abc123!senha-longa"}`, sampleSite},
 	{"operator_capture", TypeOperatorCaptureKey, "c2VjcmV0LWNhcHR1cmUta2V5LTMyLWJ5dGVzLWxvbmc=", nil},
@@ -442,6 +501,85 @@ func TestRotationReencryptsWithANewKey(t *testing.T) {
 	}
 }
 
+// The rows move to the new key in a durable commit (synchronous=FULL) that
+// happens before the key store and the envelope drop the old key: a power
+// loss after the drop cannot bring back rows that need it.
+func TestRotationCommitIsDurableBeforeTheOldKeyIsDropped(t *testing.T) {
+	t.Parallel()
+	keys := &memKeys{}
+	f := newDurableFixture(t, keys)
+	v := f.create(t)
+	putSamples(t, v)
+
+	var (
+		mu     sync.Mutex
+		events []string
+	)
+	record := func(e string) { mu.Lock(); events = append(events, e); mu.Unlock() }
+	keys.onSave = func(data []byte) {
+		ring, err := parseKeyring(data)
+		if err != nil {
+			t.Errorf("saved keyring: %v", err)
+			return
+		}
+		record(fmt.Sprintf("keys %v", ring.versions()))
+		ring.destroy()
+	}
+	v.durableHook = func(ctx context.Context, fn func(*sql.Tx) error) error {
+		err := f.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+			var level int
+			if err := tx.QueryRowContext(ctx, `PRAGMA synchronous`).Scan(&level); err != nil {
+				return err
+			}
+			record(fmt.Sprintf("transaction synchronous=%d", level))
+			return fn(tx)
+		})
+		if err == nil {
+			record("durable commit")
+		}
+		return err
+	}
+	if err := v.Rotate(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"keys [1 2]", "transaction synchronous=2", "durable commit", "keys [2]"}
+	if !slices.Equal(events, want) {
+		t.Fatalf("events = %q, want %q", events, want)
+	}
+	for _, s := range samples {
+		mustRead(t, v, s.name, s.value)
+	}
+}
+
+// A commit that would not be synced is refused, and nothing changes.
+func TestRotationRefusesACommitThatIsNotDurable(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, nil)
+	v := f.create(t)
+	putSamples(t, v)
+	v.durableHook = func(ctx context.Context, fn func(*sql.Tx) error) error {
+		tx, err := f.db.Writer().BeginTx(ctx, nil) // synchronous=NORMAL
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback() //nolint:errcheck // no-op after Commit
+		if err := fn(tx); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	if err := v.Rotate(f.ctx); err == nil || !strings.Contains(err.Error(), "durable") {
+		t.Fatalf("Rotate = %v, want a refusal of the non-durable commit", err)
+	}
+	if got, _ := v.versionsInUse(f.ctx); !slices.Equal(got, []uint32{1}) {
+		t.Fatalf("key versions in use = %v, want [1]", got)
+	}
+	v2 := f.open(t)
+	for _, s := range samples {
+		mustRead(t, v2, s.name, s.value)
+	}
+}
+
 func TestWrongOrMissingKeyClosesTheVaultWithAGraveAlert(t *testing.T) {
 	t.Parallel()
 	t.Run("wrong key", func(t *testing.T) {
@@ -552,6 +690,75 @@ func TestUseRegistersTheValueAndRecordsThePurpose(t *testing.T) {
 	}
 }
 
+// Each sensitive part of a value is masked alone: the password of a site
+// credential, the access and refresh tokens of a GitHub user token and each
+// line of a PEM key, logged apart from the rest.
+func TestUseMasksEachPartOfCompositeValues(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, nil)
+	v := f.create(t)
+	putSamples(t, v)
+	pem := "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAz9Qe\nq8Rt7Ys3Lp0Wd5Xc2Vb\n-----END RSA PRIVATE KEY-----\n"
+	put(t, v, "app_dev", TypeGitHubAppKey, pem, nil)
+	for _, name := range []string{"site_loja", "github_user_ana", "app_dev"} {
+		if _, err := read(v, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, part := range []string{
+		"Abc123!senha-longa",                     // site_credential password
+		"ghu_R8tY2pQ9wE4rT6yU1iO3pA5sD7fG9hJ0kL", // access token
+		"ghr_Q1w2E3r4T5y6U7i8O9p0AsDfGhJkLzXcVb", // refresh token
+		"MIIEowIBAAKCAQEAz9Qe",                   // PEM lines
+		"q8Rt7Ys3Lp0Wd5Xc2Vb",
+	} {
+		line := "login with " + part + " failed"
+		if got := f.masker.Mask(line); strings.Contains(got, part) || !strings.Contains(got, logging.Redacted) {
+			t.Errorf("%q is not masked alone: %q", part, got)
+		}
+	}
+	// The armor lines (BEGIN is a known format of the masker anyway), the URL
+	// and the user are not secret.
+	for _, plain := range []string{"-----END RSA PRIVATE KEY-----", "https://loja.example/login", "qa@x"} {
+		if got := f.masker.Mask("see " + plain); !strings.Contains(got, plain) {
+			t.Errorf("%q was masked: %q", plain, got)
+		}
+	}
+}
+
+func TestPutValidatesCompositeValues(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, nil)
+	v := f.create(t)
+	const secret = "Zx9-never-in-errors"
+	bad := []struct {
+		typ   Type
+		value string
+	}{
+		{TypeSiteCredential, secret},
+		{TypeSiteCredential, `{"url":"https://a.example","user":"u"}`},
+		{TypeSiteCredential, `{"url":"https://a.example","password":"` + secret + `","pin":"1234"}`},
+		{TypeSiteCredential, `{"password":"` + secret + `"}`},
+		{TypeGitHubUserToken, "ghu_" + secret},
+		{TypeGitHubUserToken, `{"refresh_token":"` + secret + `"}`},
+		{TypeGitHubUserToken, `{"access_token":"` + secret + `"} {}`},
+	}
+	for _, b := range bad {
+		var site *SiteMeta
+		if b.typ == TypeSiteCredential {
+			site = sampleSite
+		}
+		err := v.Put(f.ctx, "x", b.typ, []byte(b.value), site)
+		if err == nil {
+			t.Errorf("Put(%s, %q) succeeded", b.typ, b.value)
+		} else if strings.Contains(err.Error(), secret) {
+			t.Errorf("error carries the value: %v", err)
+		}
+	}
+	put(t, v, "only_access", TypeGitHubUserToken, `{"access_token":"ghu_only-access-token-0000"}`, nil)
+	put(t, v, "no_user", TypeSiteCredential, `{"url":"https://api.example","password":"k-123456"}`, sampleSite)
+}
+
 func TestPutValidatesTypeAndSiteMetadata(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, nil)
@@ -588,6 +795,23 @@ func TestCreateRefusesToReplaceAnExistingKey(t *testing.T) {
 	}
 }
 
+// A lost key with secrets still stored is not a new vault: a new key would
+// never open them.
+func TestCreateRefusesWhenSecretsRemainWithoutAKey(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, nil)
+	v := f.create(t)
+	put(t, v, "a", TypeProviderAPIKey, "sk-value-aaaaaaaaaaaaaaaa", nil)
+	cfg := f.cfg
+	cfg.Keys = &memKeys{} // the key file is gone
+	if _, err := Create(f.ctx, cfg); err == nil || !strings.Contains(err.Error(), "restore") {
+		t.Fatalf("Create with stored secrets and no key = %v, want a refusal pointing to the restore", err)
+	}
+	if b, _ := cfg.Keys.Load(f.ctx); b != nil {
+		t.Error("Create saved a key although it refused")
+	}
+}
+
 func TestRecoveryKeyRoundTripAndRedaction(t *testing.T) {
 	t.Parallel()
 	rk, err := NewRecoveryKey()
@@ -603,7 +827,10 @@ func TestRecoveryKeyRoundTripAndRedaction(t *testing.T) {
 	if err != nil || !bytes.Equal(back.PublicKey(), rk.PublicKey()) {
 		t.Fatalf("ParseRecoveryKey: %v", err)
 	}
-	for _, s := range []string{fmt.Sprint(rk), fmt.Sprintf("%v %+v %#v %s", rk, rk, rk, rk)} {
+	for _, s := range []string{
+		fmt.Sprint(rk), fmt.Sprintf("%v %+v %#v %s", rk, rk, rk, rk),
+		fmt.Sprint(*rk), fmt.Sprintf("%v %+v %#v %s", *rk, *rk, *rk, *rk),
+	} {
 		if strings.Contains(s, groups[0]+groups[1]) || strings.Contains(s, groups[0]+"-") {
 			t.Errorf("printing the recovery key shows it: %q", s)
 		}
@@ -652,5 +879,26 @@ func TestSiteCredentialReleasedOnlyToListedClasses(t *testing.T) {
 		if (err == nil) != c.wantAllowed || (err != nil && !errors.Is(err, ErrNotReleased)) {
 			t.Errorf("class %s, creds %v, %s: err = %v, want allowed %v", c.class, c.classCreds, c.cred.Name, err, c.wantAllowed)
 		}
+	}
+}
+
+// The envelope is replaced in place, atomically and durably (MoveFileEx with
+// write-through on Windows), leaving no temporary file behind.
+func TestWriteFileAtomicReplacesTheFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cofre-envelope.bin")
+	for _, content := range []string{"first", "second, longer than the first"} {
+		if err := writeFileAtomic(path, []byte(content)); err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != content {
+			t.Fatalf("content = %q, %v; want %q", got, err, content)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("folder holds %d entries, %v; want only the envelope", len(entries), err)
 	}
 }

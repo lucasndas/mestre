@@ -49,8 +49,15 @@ type Alert struct {
 }
 
 // writeFileAtomic replaces path with data: a 0600 temporary file in the same
-// directory, synced, then renamed over path, then the directory synced.
-func writeFileAtomic(path string, data []byte) (err error) {
+// directory, synced, then moved over path and the move made durable (the
+// directory synced on Linux; MoveFileEx with MOVEFILE_WRITE_THROUGH on
+// Windows, where a directory cannot be synced).
+func writeFileAtomic(path string, data []byte) error { return writeFile(path, data, true) }
+
+// writeFile is writeFileAtomic; durable false skips the flushes (tests that
+// are not about durability: each flush costs tens of milliseconds on a
+// Windows runner). The replacement stays atomic.
+func writeFile(path string, data []byte, durable bool) (err error) {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
@@ -69,14 +76,19 @@ func writeFileAtomic(path string, data []byte) (err error) {
 	if _, err = f.Write(data); err != nil {
 		return err
 	}
-	if err = f.Sync(); err != nil {
-		return err
+	if durable {
+		if err = f.Sync(); err != nil {
+			return err
+		}
 	}
 	if err = f.Close(); err != nil {
 		return err
 	}
-	if err = os.Rename(tmp, path); err != nil {
+	if err = replaceFile(tmp, path, durable); err != nil {
 		return err
+	}
+	if !durable {
+		return nil
 	}
 	return syncDir(dir)
 }

@@ -14,10 +14,23 @@ import (
 	"testing"
 )
 
+// keyDir is a 0700 folder for a key file, like /etc/mestre/<inst>.
+func keyDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "inst")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil { // whatever the umask
+		t.Fatal(err)
+	}
+	return dir
+}
+
 // CA-COFRE-02
 func TestKeyFileWiderThan0600IsRefused(t *testing.T) {
 	t.Parallel()
-	keyPath := filepath.Join(t.TempDir(), "cofre.key")
+	keyPath := filepath.Join(keyDir(t), "cofre.key")
 	f := newFixture(t, NewFileKeyStore(keyPath))
 	v := f.create(t)
 	put(t, v, "a", TypeProviderAPIKey, "sk-value-aaaaaaaaaaaaaaaa", nil)
@@ -44,7 +57,7 @@ func TestKeyFileWiderThan0600IsRefused(t *testing.T) {
 
 func TestKeyFileSymlinkIsRefused(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
+	dir := keyDir(t)
 	target := NewFileKeyStore(filepath.Join(dir, "real.key"))
 	if err := target.Save(t.Context(), []byte("x")); err != nil {
 		t.Fatal(err)
@@ -64,13 +77,55 @@ func TestKeyFileSymlinkIsRefused(t *testing.T) {
 
 func TestKeyFileOfAnotherOwnerIsRefused(t *testing.T) {
 	t.Parallel()
-	s := NewFileKeyStore(filepath.Join(t.TempDir(), "cofre.key"))
+	s := NewFileKeyStore(filepath.Join(keyDir(t), "cofre.key"))
 	if err := s.Save(t.Context(), []byte("x")); err != nil {
 		t.Fatal(err)
 	}
-	s.uid++ // the engine runs as another account than the file owner
+	s.uid++ // the engine runs as another account than the folder and file owner
 	var unsafe *UnsafeKeyFileError
 	if _, err := s.Load(t.Context()); !errors.As(err, &unsafe) || !strings.Contains(err.Error(), "owned by") {
 		t.Errorf("Load = %v, want refusal for another owner", err)
 	}
+}
+
+// The folder of the key file is 0700, owned by the engine account and not a
+// symbolic link (docs/plataforma/cofre.md#chave-do-cofre).
+func TestKeyFileFolderMustBePrivate(t *testing.T) {
+	t.Parallel()
+	t.Run("folder open to the group", func(t *testing.T) {
+		t.Parallel()
+		dir := keyDir(t)
+		s := NewFileKeyStore(filepath.Join(dir, "cofre.key"))
+		if err := s.Save(t.Context(), []byte("x")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		var unsafe *UnsafeKeyFileError
+		if _, err := s.Load(t.Context()); !errors.As(err, &unsafe) || !strings.Contains(err.Error(), "0750") || unsafe.Check != "LIN-05" {
+			t.Errorf("Load = %v, want refusal naming the folder mode 0750", err)
+		}
+	})
+	t.Run("symlinked folder", func(t *testing.T) {
+		t.Parallel()
+		real := keyDir(t)
+		if err := NewFileKeyStore(filepath.Join(real, "cofre.key")).Save(t.Context(), []byte("x")); err != nil {
+			t.Fatal(err)
+		}
+		link := filepath.Join(t.TempDir(), "inst")
+		if err := os.Symlink(real, link); err != nil {
+			t.Fatal(err)
+		}
+		var unsafe *UnsafeKeyFileError
+		if _, err := NewFileKeyStore(filepath.Join(link, "cofre.key")).Load(t.Context()); !errors.As(err, &unsafe) || !strings.Contains(err.Error(), "symbolic link") {
+			t.Errorf("Load through a symlinked folder = %v, want refusal", err)
+		}
+	})
+	t.Run("missing folder", func(t *testing.T) {
+		t.Parallel()
+		if _, err := NewFileKeyStore(filepath.Join(t.TempDir(), "none", "cofre.key")).Load(t.Context()); !errors.Is(err, ErrNoKey) {
+			t.Errorf("Load in a missing folder = %v, want ErrNoKey", err)
+		}
+	})
 }
