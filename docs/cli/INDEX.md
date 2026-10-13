@@ -10,4 +10,5 @@
 | [coordenacao-classes-e-rituais.md](coordenacao-classes-e-rituais.md) | `class` e `ritual` | ao mexer em classes ou rituais pela CLI |
 | [coordenacao-github.md](coordenacao-github.md) | `issue` e `pr` da mesa e os erros do GitHub | ao mexer nas operações da mesa no GitHub |
 | [grao-mestre.md](grao-mestre.md) | `table`, `gh`, `app`, `approval`, `decree`, `notify` | ao mexer nos comandos exclusivos do Grão-Mestre |
+| [attach.md](attach.md) | `attach`: o comando das pessoas para ver, e com nível digitar, o terminal de um personagem | ao mexer no `mestre attach` |
 | [skills-geradas.md](skills-geradas.md) | quais SKILL.md existem, quem recebe, frontmatter e esboço do conteúdo | ao mexer nos modelos de skill ou no que cada nível aprende |

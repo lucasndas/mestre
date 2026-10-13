@@ -18,7 +18,7 @@ Descobrir cedo o que impede o Mestre de funcionar em cada máquina, explicar o p
 
 ### Verificação de início (Windows)
 
-Roda quando o serviço `mestre` sobe. Confere, nesta ordem, os itens WIN-19 (`mestre` na conta virtual, com os privilégios), WIN-17 (conta `mestre-agente`), WIN-14 (não excluída: chave do cofre), ALL-01 (Torre: motor e Guardião conectados à Cidadela) e WIN-05 (serviços e Guardião ativos). O resultado vai para o painel (Guilda e saúde das máquinas) e, se grave, para o Telegram, como qualquer item. Não há aviso na área de trabalho: o Mestre não tem interface gráfica ([Windows](../arquitetura/windows.md)).
+Roda quando o serviço `mestre` sobe. Confere, nesta ordem, os itens WIN-19 (`mestre` na conta virtual), WIN-17 (conta `mestre-agente`), WIN-14 (não excluída: chave do cofre), ALL-01 (Torre: motor e Guardião conectados à Cidadela) e WIN-05 (serviços e Guardião ativos). O resultado vai para o painel (Guilda e saúde das máquinas) e, se grave, para o Telegram, como qualquer item. Não há aviso na área de trabalho: o Mestre não tem interface gráfica ([Windows](../arquitetura/windows.md)).
 
 ### Gravidade e alertas
 
@@ -55,11 +55,13 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 | WIN-16 | todas | anúncio mDNS do Guardião respondendo (`_mestre._tcp` da máquina); na Cidadela, também `mestre.local`, publicado só com a [concessão do motor](../autocura/guardiao.md#concessão-do-motor); numa Torre, sem `mestre.local` ([descoberta](../conectividade/descoberta.md#mdns)) | grave | manual |
 | WIN-17 | todas | conta local `mestre-agente` existe, ativa, só no grupo `Users` (fora de `Administradores`), oculta da tela de login, e o logon em lote com a senha guardada funciona ([Windows](../arquitetura/windows.md#conta-dos-agentes-mestre-agente)) | grave | recriar a conta ou gerar e guardar senha nova (aprovação) |
 | WIN-18 | todas | `mestre-agente` tem "Negar logon local" e "Negar logon pelos Serviços de Área de Trabalho Remota" e não está em `Remote Desktop Users` | grave | reaplicar os direitos (aprovação) |
-| WIN-19 | todas | `mestre` roda como `NT SERVICE\Mestre` (nunca com a conta de um usuário) e o token dele tem `SeAssignPrimaryTokenPrivilege` e `SeIncreaseQuotaPrivilege` | grave | reconfigurar o serviço e conceder os privilégios (aprovação) |
+| WIN-19 | todas | `mestre` roda como `NT SERVICE\Mestre` (nunca com a conta de um usuário), com a lista de privilégios exigidos declarada ([Windows](../arquitetura/windows.md#serviços-no-windows)) | grave | reconfigurar o serviço (aprovação) |
 | WIN-20 | todas | cada provedor usado pelas bases da máquina (`claude`, `codex`, `agy`) roda como `mestre-agente`, com o `HOME` do perfil de conta, onde o próprio CLI se instala e se atualiza ([CLIs dos provedores](instalacao-e-atualizacao.md#clis-dos-provedores)): `--version` e a verificação de login do ALL-11 feitas com essa conta. O `agy` guarda o login no Gerenciador de Credenciais do `mestre-agente`, comum a todos os perfis: **um só perfil Antigravity por máquina Windows**; um segundo é recusado com essa explicação ([Antigravity](../provedores/antigravity.md#contas-múltiplas)) | grave | manual (o alerta explica o passo) |
 | WIN-21 | com Operador do PC | UAC para o [Operador do PC](../arquitetura/windows.md#operador-do-pc): `EnableLUA = 1`, `PromptOnSecureDesktop = 1` e `ConsentPromptBehaviorAdmin` com pedido (1 a 5; nunca 0, "elevar sem perguntar"), em `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System`; falhou → a ficha da máquina não anuncia o Operador | grave | manual (o alerta explica o passo; o Mestre não muda o UAC) |
 | WIN-22 | com Operador do PC | tarefa `\Mestre\Operador` existe para o usuário configurado (logon dele, privilégios normais, sem limite de tempo, reiniciar em falha) e, com ele logado, o processo da sessão está ligado ao `mestre`; falhou → a ficha da máquina não anuncia o Operador | aviso | recriar a tarefa (aprovação de Dono) |
-| WIN-23 | todas | serviço `mestre-launcher` roda como LocalSystem, o pipe dele só aceita a conta `NT SERVICE\Mestre` e o arquivo da senha do `mestre-agente` tem ACL só de SYSTEM ([Windows](../arquitetura/windows.md#iniciador-mestre-launcher)) | grave | reaplicar as ACLs (sozinho) |
+| WIN-23 | todas | serviço `mestre-launcher` roda como LocalSystem, o pipe dele só aceita a conta `NT SERVICE\Mestre`, o arquivo da senha do `mestre-agente` tem ACL só de SYSTEM e a pasta `pty` tem a ACL do [terminal](../arquitetura/terminal.md#socket-e-aperto-de-mão) ([Windows](../arquitetura/windows.md#iniciador-mestre-launcher)) | grave | reaplicar as ACLs (sozinho) |
+| WIN-24 | todas | horário ativo do Windows Update configurado pelo Mestre no maior intervalo que o Windows aceita (18 h; padrão 06:00 às 24:00) e, onde a edição aceita a política (Pro ou maior), atualizações só baixadas e instaladas quando alguém manda ("baixar e avisar"); assim o Windows não reinicia sozinho no meio do trabalho dos agentes | aviso | reaplicar (sozinho) |
+| WIN-25 | todas | sem reinício pendente do Windows Update (`RebootRequired`); pendente → avisa o Dono com os terminais vivos da máquina, para ele escolher a hora; o reinício da máquina leva à [retomada](../orquestracao/personagens.md#retomada-após-reinício) | aviso | manual (o Dono reinicia ou agenda no Windows) |
 
 ### Itens: Linux
 
@@ -78,6 +80,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 | LIN-12 | todas | `kernel.yama.ptrace_scope` 1 ou maior (um personagem não depura processos de outro terminal) | grave | gravar o `sysctl` (aprovação) |
 | LIN-13 | todas | `/proc` legível pela conta `mestre`: sem `hidepid`, ou com `mestre` no grupo `gid=` da montagem | grave | manual |
 | LIN-14 | todas | `mestre-agente` sem gerenciador de usuário (`user@<uid>.service` parado, `Linger=no`): com ele, tmux e D-Bus tiram processos do cgroup do terminal | aviso | `loginctl disable-linger` e parar o gerenciador (aprovação) |
+| LIN-15 | todas | unidade `mestre` com `KillMode=process` ([componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)): sem isso, reiniciar o motor mata os terminais | grave | reconfigurar a unidade (aprovação) |
 
 ### Itens: os dois sistemas
 
@@ -127,6 +130,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 - **CA-CHK-16** · *rápida* — **Dado** um Linux falso com cgroup v1 (ou um `mestre` sem cgroup delegado), **quando** LIN-11 roda, **então** abre alerta grave e o motor passa a criar os terminais novos sem cgroup e a identificar pela subida pela árvore; corrigido, o alerta fecha e os terminais novos voltam a nascer no cgroup próprio.
 - **CA-CHK-17** · *rápida* — **Dado** um Linux falso com `kernel.yama.ptrace_scope = 0`, `/proc` montado com `hidepid=2` sem o grupo de `mestre` e linger ligado para `mestre-agente`, **quando** o checklist roda, **então** LIN-12 e LIN-13 abrem alertas graves e LIN-14 um aviso, e nenhuma correção é aplicada sem aprovação.
 - **CA-CHK-14** · *rápida* — **Dado** um Windows falso em que `mestre-agente` está em `Administradores` e o `mestre` roda com a conta de um usuário, **quando** o checklist roda, **então** WIN-17 e WIN-19 abrem alertas graves, e nenhuma correção é aplicada sem aprovação.
+- **CA-CHK-18** · *rápida* — **Dado** um Windows falso com o horário ativo de 08:00 às 17:00 e um reinício pendente, e um Linux falso com a unidade `mestre` em `KillMode=control-group`, **quando** o checklist roda, **então** WIN-24 reaplica o horário de 18 h sozinho, WIN-25 avisa o Dono com os terminais vivos da máquina sem reiniciar nada, e LIN-15 abre alerta grave cuja correção só é aplicada com aprovação.
 
 ## Depende de
 

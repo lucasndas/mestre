@@ -13,9 +13,10 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 | Sistema | Endereço | Acesso |
 |---|---|---|
 | Linux | socket Unix `/run/mestre/<inst>/cli.sock` | dono `mestre`, grupo `mestre-agente`, modo 0660 |
-| Windows | named pipe `\\.\pipe\mestre-<inst>-cli` | ACL só para `NT SERVICE\Mestre` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
+| Windows | socket Unix `%ProgramData%\Mestre\<inst>\run\cli.sock` | ACL do arquivo só para `NT SERVICE\Mestre` (dono), `mestre-agente` (ler e escrever) e SYSTEM |
 
-- `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/<inst>/cli.sock` ou `npipe:////./pipe/mestre-<inst>-cli`, sempre da [instância](componentes.md#instâncias) do personagem. Sem a variável, a CLI usa o endereço da instância `principal`.
+- **Socket Unix nos dois sistemas** (`AF_UNIX`; no Windows 10 1803 ou maior), com o mesmo código Go; o mesmo vale para o socket de cada [`mestre-pty`](terminal.md#socket-e-aperto-de-mão). Se o spike 5 mostrar que a ACL do arquivo do socket não basta no Windows, o plano B é o named pipe `\\.\pipe\mestre-<inst>-cli` com a mesma ACL ([Windows](windows.md#verificar-na-implementação)).
+- `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/<inst>/cli.sock` ou `unix://C:/ProgramData/Mestre/<inst>/run/cli.sock`, sempre da [instância](componentes.md#instâncias) do personagem. Sem a variável, a CLI usa o endereço da instância `principal`.
 - Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo.
 
 ### Enquadramento
@@ -63,9 +64,15 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 ### Identificação e versão
 
-- Antes de ler o pedido, o motor identifica o processo do outro lado e o terminal dele, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli): no Linux, `SO_PEERCRED` e `SO_PEERPIDFD` e o cgroup do terminal em `/proc/<pid>/cgroup` (sem cgroup delegado, a subida pela árvore de processos); no Windows, `GetNamedPipeClientProcessId` e a subida pela árvore. O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`.
+- Antes de ler o pedido, o motor identifica o processo do outro lado e o terminal dele, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli): no Linux, `SO_PEERCRED` e `SO_PEERPIDFD` e o cgroup do terminal em `/proc/<pid>/cgroup` (sem cgroup delegado, a subida pela árvore de processos); no Windows, o PID do outro lado do socket (`SIO_AF_UNIX_GETPEERPID`) e a subida pela árvore. O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`.
 - Também é `not_identified`: chamador sem pidfd (já colhido antes de o motor aceitar a conexão), pidfd que deixou de apontar para o mesmo PID depois da leitura do `/proc`, e subida pela árvore que encontrou pai mais novo que o filho em 3 tentativas seguidas.
 - `v` desconhecido: resposta `protocol_mismatch` (exit 5). O motor aceita a versão atual e a anterior, como no [protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades).
+
+### Motor reiniciando
+
+O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os terminais continuam ([terminal](terminal.md#volta-do-motor)), e a CLI cobre a janela.
+- Conexão recusada: a CLI tenta de novo por até 60 s (padrão), com espera crescente, antes de `engine_unreachable`.
+- Conexão que cai no meio de um pedido: a CLI reconecta e reenvia o mesmo pedido, com o mesmo `id`; o motor devolve a resposta guardada ou continua o pedido em andamento, sem executar de novo (idempotência, abaixo). Conta para o tempo limite do comando.
 
 ### Encaminhamento à Cidadela
 
@@ -97,6 +104,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 - **CA-LOCAL-09** · *rápida* — **Dado** um chamador sem pidfd, e outro cujo pidfd deixa de apontar para o PID depois da leitura do `/proc` falso, **quando** o motor identifica, **então** os dois recebem `not_identified`, mesmo com o cgroup certo.
 - **CA-LOCAL-10** · *rápida* — **Dado** um `/proc` falso em que o pai lido começou depois do filho, **quando** o motor sobe a árvore, **então** recomeça do chamador; se a corrida continua em 3 tentativas, responde `not_identified`; se some na segunda, identifica o terminal.
 - **CA-LOCAL-11** · *completa* — **Dado** um cgroup delegado real (`systemd-run --user --scope -p Delegate=yes`) e um terminal real cujo processo dispara `nohup mestre list &`, `( mestre list & )` e `setsid -f mestre list` e sai, **quando** os órfãos chamam, **então** os três são aceitos com o terminal certo, e sem o cgroup (só a subida pela árvore) os três recebem `not_identified`; sem gerenciador systemd de usuário, o teste é pulado com o motivo.
+- **CA-LOCAL-12** · *rápida* — **Dado** um motor falso que recusa conexões por 20 s de relógio falso e outro que fecha a conexão no meio de um `ask`, **quando** a CLI chama, **então** a primeira chamada termina com sucesso depois que o motor volta, e o `ask` é reenviado com o mesmo `id` e executado uma vez só; com o motor fora por mais de 60 s, a CLI sai com 5 (`engine_unreachable`).
 
 ## Depende de
 

@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sistema, por um wrapper interno, e emulador de terminal na máquina do terminal (abaixo). **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: git pelo binário do sistema, por um wrapper interno, e emulador de terminal na máquina do terminal (abaixo). **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda. **Revista em 2026-10-13** pelo [ADR 0023](0023-terminais-fora-do-motor.md): PTY e ConPTY pela `aymanbagabas/go-pty`, dentro do `mestre-pty` (o wrapper próprio vira plano B).
 
 ## Contexto
 

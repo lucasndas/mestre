@@ -4,7 +4,7 @@
 
 ## Status
 
-Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assinatura fica só no computador do autor, e cada versão é uma release única com os dois binários. **Revista em 2026-10-13:** (1) pelo [ADR 0022](0022-guilda-cidadela-e-torres.md), Core e nó viram Cidadela e Torre: quem consulta as Releases e distribui é a Cidadela atual, e a ordem passou a ser definida no item (3); (2) **os CLIs dos provedores saem desta decisão:** eles se atualizam sozinhos, o Mestre não desliga a autoatualização deles e não controla mais a versão deles (não aprova, não instala, não volta versão); só detecta a versão nova e roda a conformidade depois ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)); (3) também pelo ADR 0022, a ordem passa a ser **Torres primeiro, Cidadela por último**: uma Torre que falha custa pouco, e a máquina no comando só muda de versão depois de a versão nova ter rodado nas outras; toda máquina aceita a versão de protocolo atual e a anterior ([protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades)).
+Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assinatura fica só no computador do autor, e cada versão é uma release única com os binários. **Revista em 2026-10-13:** (1) pelo [ADR 0022](0022-guilda-cidadela-e-torres.md), Core e nó viram Cidadela e Torre: quem consulta as Releases e distribui é a Cidadela atual, e a ordem passou a ser definida no item (3); (2) **os CLIs dos provedores saem desta decisão:** eles se atualizam sozinhos, o Mestre não desliga a autoatualização deles e não controla mais a versão deles (não aprova, não instala, não volta versão); só detecta a versão nova e roda a conformidade depois ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)); (3) também pelo ADR 0022, a ordem passa a ser **Torres primeiro, Cidadela por último**: uma Torre que falha custa pouco, e a máquina no comando só muda de versão depois de a versão nova ter rodado nas outras; toda máquina aceita a versão de protocolo atual e a anterior ([protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades)). (4) pelo [ADR 0023](0023-terminais-fora-do-motor.md), a troca do motor não espera mais os terminais: eles seguem no `mestre-pty`, e a release leva também o `mestre-pty`, instalado ao lado das versões em uso.
 
 ## Contexto
 
@@ -74,7 +74,7 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assina
   - a verificação acontece na Cidadela, na máquina de destino e no ajudante de troca;
   - versão menor que a instalada é recusada;
   - a chave privada fica **só no computador do autor**, num arquivo cifrado com senha (formato nativo do minisign), fora do repositório e do GitHub Actions; as versões são assinadas na máquina do autor antes de publicar.
-- **Release única:** cada versão é uma release com tag `vX.Y.Z` e os dois binários (`mestre` e `mestre-guardiao`); a versão do Guardião vai só no manifesto, sem tags próprias.
+- **Release única:** cada versão é uma release com tag `vX.Y.Z` e os binários (`mestre`, `mestre-guardiao` e, desde o [ADR 0023](0023-terminais-fora-do-motor.md), `mestre-pty`); as versões do Guardião e do `mestre-pty` vão só no manifesto, sem tags próprias.
 - **Aprovação:** o fluxo normal de aprovação, com Dono ou Administrador. O Grão-Mestre não aprova sozinho. Depois da aprovação, o Mestre aplica e reinicia sozinho.
 - **Ordem:**
   - primeiro as Torres, uma por vez, da menor para a maior prioridade (a Torre condutora por último); por fim, a Cidadela;
@@ -94,7 +94,7 @@ Aceita, 2026-10-12. Decisão completada em 2026-10-12: a chave privada de assina
   - É preciso guardar e girar uma chave privada de assinatura fora do repositório.
   - É preciso um ajudante de troca com privilégio (root/LocalSystem) que só a conta do motor pode iniciar.
   - As migrações do banco precisam ser aditivas para a volta funcionar sem restaurar o banco; restaurar o banco é ação rara, nunca automática, com Dono ou Administrador e PIN ([Guardião](../autocura/guardiao.md#rollback-com-restauração-do-banco)).
-  - Uma atualização completa leva tempo: um passo por vez, com janela de confirmação e espera de ponto seguro dos terminais.
+  - Uma atualização completa leva tempo: um passo por vez, com janela de confirmação (os terminais não esperam: seguem no `mestre-pty`, [terminal](../arquitetura/terminal.md#volta-do-motor)).
 - **Riscos:**
   - **Perder as duas chaves privadas** (a atual e a próxima, ambas no computador do autor) obriga a uma atualização manual para trocar as chaves embutidas; perder só a atual não, porque a próxima assume.
   - **Máquina desligada por muito tempo** pode sair da faixa de protocolo e precisar de atualização manual.
