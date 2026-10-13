@@ -21,7 +21,9 @@ $GitSha256  = '52188f917b378f00c70ec136bcf090005f30d44fbc4eba0bce759cc6592d60f6'
 $GoFile     = 'go1.27.2.windows-amd64.msi'
 $GoSha256   = 'dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9'
 $Repo       = 'https://github.com/lucasndas/mestre.git'
-$Branch     = 'spike/m1-windows'
+# Each spike round gets its own branch, created from main.
+$Branch     = 'spike/m1-windows-2'
+$Prompt     = 'tools/winsandbox/rodada-2-prompt.md'
 
 function Get-Checked([string]$Url, [string]$Path, [string]$Sha256) {
     Write-Host "Baixando $Url"
@@ -80,5 +82,5 @@ claude --version
 Write-Host ''
 Write-Host 'Preparo pronto. Agora:'
 Write-Host '  1. claude            (faça o login no navegador e saia com /exit)'
-Write-Host '  2. cd C:\mestre; claude --model opus --effort high "Leia e execute o arquivo tools/winsandbox/spikes-prompt.md"'
+Write-Host "  2. cd C:\mestre; claude --model opus --effort high `"Leia e execute o arquivo $Prompt`""
 Stop-Transcript | Out-Null

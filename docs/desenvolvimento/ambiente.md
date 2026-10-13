@@ -109,8 +109,8 @@ Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) continuam rodando
 1. No Windows do Dono, clone o repositório em `C:\mestre` (ou atualize com `git pull`).
 2. Abra `C:\mestre\tools\winsandbox\mestre-spikes.wsb` (duplo clique) e espere a janela do preparo terminar.
 3. Nessa janela, rode `claude` uma vez e faça o login no navegador do Sandbox; saia com `/exit`.
-4. Comece os spikes: `cd C:\mestre; claude --model opus --effort high "Leia e execute o arquivo tools/winsandbox/spikes-prompt.md"`.
-5. No fim, a sessão faz commit e `git push` da branch `spike/m1-windows` (o Git pede login do GitHub no navegador do Sandbox) e copia o relatório e os logs para `C:\winsandbox\resultados\`, que no Windows do Dono é `C:\mestre\tools\winsandbox\resultados\` (fora do git). Feche o Sandbox só depois disso.
+4. Comece a rodada: `cd C:\mestre; claude --model opus --effort high "Leia e execute o arquivo <prompt da rodada>"` — a janela do preparo mostra o comando exato. Cada rodada tem o seu prompt e a sua branch, definidos no início do `setup.ps1` (`$Prompt` e `$Branch`): 1ª rodada `spikes-prompt.md` em `spike/m1-windows`; 2ª rodada (Antigravity e identificação do chamador) `rodada-2-prompt.md` em `spike/m1-windows-2`.
+5. No fim, a sessão faz commit e `git push` da branch da rodada (o Git pede login do GitHub no navegador do Sandbox) e copia o relatório e os logs para `C:\winsandbox\resultados\`, que no Windows do Dono é `C:\mestre\tools\winsandbox\resultados\` (fora do git). Feche o Sandbox só depois disso.
 
 ## O que não precisa
 
