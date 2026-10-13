@@ -2,6 +2,8 @@ package protocol_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"testing/synctest"
@@ -15,18 +17,72 @@ import (
 
 type opener func(ctx context.Context, path string) (*store.DB, error)
 
+// The databases are migrated once, by TestMain, outside the time of every
+// test (creating and migrating a file costs tens of milliseconds on a Windows
+// runner); a test starts from a copy. The schema itself is tested in
+// internal/store.
+var guildTemplate, machineTemplate []byte
+
+func TestMain(m *testing.M) {
+	var err error
+	if guildTemplate, machineTemplate, err = buildTemplates(); err != nil {
+		fmt.Fprintln(os.Stderr, "protocol: templates:", err)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+func buildTemplates() (g, m []byte, err error) {
+	dir, err := os.MkdirTemp("", "protocol-template")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer os.RemoveAll(dir)
+	ctx := context.Background()
+	gdb, err := guild.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := gdb.Close(); err != nil {
+		return nil, nil, err
+	}
+	mdb, err := machine.Open(ctx, filepath.Join(dir, "maquina.db"), store.Options{Synchronous: "OFF"})
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := mdb.Close(); err != nil {
+		return nil, nil, err
+	}
+	if g, err = os.ReadFile(filepath.Join(dir, "mestre.db")); err != nil {
+		return nil, nil, err
+	}
+	m, err = os.ReadFile(filepath.Join(dir, "maquina.db"))
+	return g, m, err
+}
+
+// seedDB writes a migrated database at path, if there is none, and opens it
+// without flushes: nothing here is about durability.
+func seedDB(ctx context.Context, path string, template []byte, open func(context.Context, string, store.Options) (*store.DB, error)) (*store.DB, error) {
+	if _, err := os.Stat(path); err != nil {
+		if err := os.WriteFile(path, template, 0o600); err != nil {
+			return nil, err
+		}
+	}
+	return open(ctx, path, store.Options{Synchronous: "OFF"})
+}
+
 // The behavior is tested on the machine database; the Guild database has the
 // same tables from its own migration, which a smoke test checks.
 var databases = map[string]opener{
 	"machine database": func(ctx context.Context, path string) (*store.DB, error) {
-		return machine.Open(ctx, path, store.Options{Synchronous: "OFF"})
+		return seedDB(ctx, path, machineTemplate, machine.Open)
 	},
 }
 
 func TestTheGuildDatabaseHasTheSameProtocolTables(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF"})
+	db, err := seedDB(ctx, filepath.Join(t.TempDir(), "mestre.db"), guildTemplate, guild.Open)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +225,7 @@ func TestTheOutboxOfATowerSurvivesARestartAndGoesOutOnTheNextConnection(t *testi
 		w := newWorld(t, opts{})
 
 		// first life of the Tower: it queues an event while the Citadel is away
-		db, err := machine.Open(ctx, path, store.Options{Synchronous: "OFF"})
+		db, err := seedDB(ctx, path, machineTemplate, machine.Open)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,7 +244,7 @@ func TestTheOutboxOfATowerSurvivesARestartAndGoesOutOnTheNextConnection(t *testi
 		}
 
 		// second life: a new process over the same database
-		db, err = machine.Open(ctx, path, store.Options{Synchronous: "OFF"})
+		db, err = seedDB(ctx, path, machineTemplate, machine.Open)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -225,7 +281,7 @@ func TestTheProcessedCommandsOfACitadelSurviveItsRestart(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()
 		path := filepath.Join(t.TempDir(), "mestre.db")
-		db, err := guild.Open(ctx, path, store.Options{Synchronous: "OFF"})
+		db, err := seedDB(ctx, path, guildTemplate, guild.Open)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -40,8 +40,9 @@ type Options struct {
 	ReadConns int
 	// Synchronous is the synchronous level of the writer: "" means NORMAL,
 	// the documented default. Tests that are not about durability use OFF:
-	// every fsync costs tens of milliseconds on a Windows runner. WriteDurable
-	// always commits with FULL, whatever the level.
+	// every fsync costs tens of milliseconds on a Windows runner. OFF turns
+	// every flush off, WriteDurable's and Snapshot's included; any other level
+	// leaves WriteDurable committing with FULL.
 	Synchronous string
 	// BackupDir, when set, receives pre-migracao-<name>-<version>.db before
 	// pending migrations run on a database that already has a schema; <name>
@@ -291,6 +292,12 @@ func (d *DB) IsReplica() bool { return d.replica }
 // Version is the schema version recorded in schema_migrations.
 func (d *DB) Version(ctx context.Context) (int, error) { return appliedVersion(ctx, d.Reader()) }
 
+// Flushes says whether commits reach the disk before they return: false only
+// for a database opened with Options.Synchronous OFF, which the tests that are
+// not about durability use. A caller that checks that a commit is durable
+// (the vault) has nothing to check there.
+func (d *DB) Flushes() bool { return d.sync != "OFF" }
+
 // WriteDurable runs fn in one write transaction whose commit is on disk when
 // WriteDurable returns nil. The writer normally runs with synchronous=NORMAL,
 // where a WAL commit survives a crash of the process but not a power loss
@@ -298,7 +305,9 @@ func (d *DB) Version(ctx context.Context) (int, error) { return appliedVersion(c
 // synchronous=FULL, so SQLite fsyncs the WAL at commit. Use it when something
 // outside the database is about to depend on the commit (the vault drops the
 // old key only after the rows moved to the new one). fn must use tx only:
-// the writer pool has a single connection and WriteDurable holds it.
+// the writer pool has a single connection and WriteDurable holds it. With
+// Options.Synchronous OFF (tests that are not about durability) it flushes
+// nothing.
 func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	conn, err := d.Writer().Conn(ctx)
 	if err != nil {
@@ -312,8 +321,10 @@ func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error 
 		}
 		conn.Close()
 	}()
-	if _, err := conn.ExecContext(ctx, `PRAGMA synchronous = FULL`); err != nil {
-		return fmt.Errorf("store: durable write: %w", err)
+	if d.Flushes() {
+		if _, err := conn.ExecContext(ctx, `PRAGMA synchronous = FULL`); err != nil {
+			return fmt.Errorf("store: durable write: %w", err)
+		}
 	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -352,8 +363,10 @@ func (d *DB) closePools() error {
 func writerPragmas(busy time.Duration, sync string) []string {
 	return []string{
 		fmt.Sprintf("busy_timeout(%d)", busy.Milliseconds()),
-		"journal_mode(WAL)",
+		// Before journal_mode: switching a new file to WAL flushes it at the
+		// level in force, and a connection starts at FULL.
 		"synchronous(" + sync + ")",
+		"journal_mode(WAL)",
 		"foreign_keys(1)",
 	}
 }

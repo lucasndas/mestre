@@ -342,7 +342,7 @@ func (d *DB) Snapshot(ctx context.Context, dst string, opts SnapshotOptions) (ui
 		first = full
 	}
 	// A read of its own: the writer keeps writing meanwhile.
-	src, err := sql.Open("sqlite", dsn(d.path, []string{fmt.Sprintf("busy_timeout(%d)", d.opts.BusyTimeout.Milliseconds())}, ""))
+	src, err := sql.Open("sqlite", dsn(d.path, d.sidePragmas(fmt.Sprintf("busy_timeout(%d)", d.opts.BusyTimeout.Milliseconds())), ""))
 	if err != nil {
 		return 0, fmt.Errorf("store: snapshot: %w", err)
 	}
@@ -356,7 +356,7 @@ func (d *DB) Snapshot(ctx context.Context, dst string, opts SnapshotOptions) (ui
 		return copyLSN(ctx, dst)
 	}
 	// Trim the copy, then rewrite it so what was dropped is not in the file.
-	cp, err := sql.Open("sqlite", dsn(full, []string{"busy_timeout(5000)", "journal_mode(DELETE)", "foreign_keys(0)"}, ""))
+	cp, err := sql.Open("sqlite", dsn(full, d.sidePragmas("busy_timeout(5000)", "journal_mode(DELETE)", "foreign_keys(0)"), ""))
 	if err != nil {
 		return 0, fmt.Errorf("store: snapshot: %w", err)
 	}
@@ -403,6 +403,17 @@ func (d *DB) Snapshot(ctx context.Context, dst string, opts SnapshotOptions) (ui
 		return 0, fmt.Errorf("store: snapshot: %w", err)
 	}
 	return lsn, nil
+}
+
+// sidePragmas are the pragmas of a connection the DB opens besides its pools:
+// a database that runs without flushes (Options.Synchronous OFF) keeps the
+// copies it writes without them too, and the level goes first, because the
+// default one (FULL) would flush the switch of journal mode.
+func (d *DB) sidePragmas(pragmas ...string) []string {
+	if d.sync == "OFF" {
+		return append([]string{"synchronous(OFF)"}, pragmas...)
+	}
+	return pragmas
 }
 
 // copyLSN is the highest lsn of the copy at path.

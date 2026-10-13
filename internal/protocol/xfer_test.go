@@ -292,6 +292,10 @@ func TestTemporaryFilesNobodyTouchedFor24HoursAreRemoved(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		w, _, dir := xferWorld(t)
+		// A day passes below: the pings and heartbeats of every 15 and 30 s
+		// would be thousands of wake-ups that this test is not about.
+		quiet := protocol.Timing{Ping: 48 * time.Hour, PongTimeout: 48 * time.Hour, Heartbeat: 48 * time.Hour, HeartbeatLost: 72 * time.Hour}
+		w.cfgC.Timing, w.cfgT.Timing = quiet, quiet
 		w.start()
 		defer w.stop()
 		settle()

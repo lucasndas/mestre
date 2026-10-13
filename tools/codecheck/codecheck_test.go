@@ -293,7 +293,8 @@ func TestExceptionsNeedAReasonAndExcuseSomething(t *testing.T) {
 
 // CA-CODIGO-08
 // The rules hold for the whole repository, and the check is fast: the best
-// of three runs takes under a second.
+// of up to three runs takes under a second (the first within the budget ends
+// the measuring).
 func TestCodeRules(t *testing.T) {
 	t.Parallel()
 	root := os.DirFS("../..")
@@ -310,6 +311,9 @@ func TestCodeRules(t *testing.T) {
 		}
 		if d := clock.Since(clk, start); i == 0 || d < best {
 			best = d
+		}
+		if best <= time.Second {
+			break // within the budget: no need to measure again
 		}
 	}
 	if best > time.Second {

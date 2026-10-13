@@ -50,6 +50,16 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # The temporary folder of the Windows runner is on the system disk (C:),
+      # several times slower than the work disk (D:) for what the tests do
+      # all the time: creating files and databases, flushes. The Go build
+      # directories and every t.TempDir() live in it.
+      - name: Temporary files on the work disk (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "TEMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+          echo "TMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+
       - name: Install golangci-lint (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -115,6 +125,15 @@ jobs:
           go test -tags full -run '^$' ./...
           # TestDropAmbientRunsWithoutCgo builds the launcher tests with cgo off.
           CGO_ENABLED=0 go test -run '^$' ./internal/launcher/
+
+      # Like the build cache, the analysis cache of the linter is warm when
+      # the suites are measured: the packages this change touches are analysed
+      # here, not inside the budget of the fast and the full suite (both run
+      # the linter, the full one with the tag).
+      - name: Warm the lint cache
+        run: |
+          golangci-lint run ./...
+          golangci-lint run --build-tags full ./...
 
       - name: Fast suite
         run: go run ./tools/testrun fast

@@ -166,6 +166,10 @@ type rigOpts struct {
 	mirrors      replication.MirrorSource
 	git          gitx.Git
 	citesMirrors func(store.Change) []string
+	// lagThreshold, when set, is PrimaryConfig.LagThreshold: a test that lets
+	// hours pass and is not about the lag sets it high, or the Citadel would
+	// look at the lag every 5 s of them.
+	lagThreshold time.Duration
 }
 
 // rig is a Citadel and the Towers that connect to it, on the fake network.
@@ -263,7 +267,8 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	r.exec(`UPDATE replication_log SET at = ?`, r.clk.Now().UnixMilli())
 	pc := replication.PrimaryConfig{
 		DB: r.cdb, Clock: r.clk, Roster: r.roster, Dir: filepath.Join(r.dir, "snapshots"),
-		OnDropped: func(id string) { r.dropMu.Lock(); r.dropped = append(r.dropped, id); r.dropMu.Unlock() },
+		LagThreshold: o.lagThreshold,
+		OnDropped:    func(id string) { r.dropMu.Lock(); r.dropped = append(r.dropped, id); r.dropMu.Unlock() },
 		GuildConfig: func(context.Context) (protocol.GuildConfig, error) {
 			return protocol.GuildConfig{Timezone: "UTC"}, nil
 		},
