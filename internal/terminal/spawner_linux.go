@@ -26,7 +26,7 @@ func (d *DirectSpawner) Spawn(ctx context.Context, spec SpawnSpec) (Spawned, err
 	var cgFile *os.File
 	if d.CgroupBase != "" {
 		var err error
-		if cgDir, cgFile, err = createCgroup(d.CgroupBase, spec.ID); err != nil {
+		if cgDir, cgFile, err = CreateCgroup(d.CgroupBase, spec.ID); err != nil {
 			return Spawned{}, err
 		}
 		defer cgFile.Close()
@@ -38,12 +38,12 @@ func (d *DirectSpawner) Spawn(ctx context.Context, spec SpawnSpec) (Spawned, err
 		return Spawned{}, err
 	}
 
-	lf, err := listenSocket(spec.SocketPath)
+	lf, err := ListenSocket(spec.SocketPath)
 	if err != nil {
 		return fail(err)
 	}
 	defer lf.Close()
-	sr, err := secretPipe(spec.Secret)
+	sr, err := SecretPipe(spec.Secret)
 	if err != nil {
 		return fail(err)
 	}
@@ -81,7 +81,7 @@ func (d *DirectSpawner) Spawn(ctx context.Context, spec SpawnSpec) (Spawned, err
 	go func() { _ = cmd.Wait() }() // reaps it; it normally outlives us
 	pid := cmd.Process.Pid
 	_ = rw.Close()
-	if err := waitReady(ctx, rr); err != nil {
+	if err := WaitReady(ctx, rr); err != nil {
 		_ = os.Remove(spec.SocketPath)
 		return fail(fmt.Errorf("mestre-pty %d did not become ready: %w", pid, err))
 	}
@@ -92,10 +92,10 @@ func (d *DirectSpawner) Spawn(ctx context.Context, spec SpawnSpec) (Spawned, err
 	return Spawned{ProcID: ProcID{PID: pid, Start: start}, CgroupDir: cgDir}, nil
 }
 
-// waitReady waits for the byte the mestre-pty writes once it listens on the
+// WaitReady waits for the byte the mestre-pty writes once it listens on the
 // inherited socket (see signalReady in cmd/mestre-pty). It ends early if
 // the process dies (end of file) or ctx ends.
-func waitReady(ctx context.Context, r *os.File) error {
+func WaitReady(ctx context.Context, r *os.File) error {
 	done := make(chan error, 1)
 	go func() {
 		var b [1]byte
@@ -111,9 +111,9 @@ func waitReady(ctx context.Context, r *os.File) error {
 	}
 }
 
-// listenSocket binds the socket and returns a file for the listening
+// ListenSocket binds the socket and returns a file for the listening
 // descriptor; the socket file stays when this process lets go of it.
-func listenSocket(path string) (*os.File, error) {
+func ListenSocket(path string) (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("socket folder: %w", err)
 	}
@@ -145,5 +145,5 @@ func (d *DirectSpawner) KillCgroup(ctx context.Context, id string) error {
 	if err := ValidateID(id); err != nil {
 		return err
 	}
-	return killCgroup(ctx, filepath.Join(d.CgroupBase, "term-"+id))
+	return KillCgroupDir(ctx, filepath.Join(d.CgroupBase, "term-"+id))
 }

@@ -35,7 +35,7 @@ internal/
   transport/         WSS, TLS, CA da Guilda, mTLS
   discovery/         descoberta da Guilda (broadcast e mDNS)
   terminal/          mestre-pty e o lado do motor: PTY/ConPTY (go-pty), emulador, buffer, protocolo, aperto de mão, reconciliação
-  winsvc/            partes só do Windows: serviço, contas virtuais e `mestre-agente`, `mestre-launcher`, ACLs, DPAPI
+  launcher/ winsvc/  `mestre-launcher` (protocolo, servidor, cliente de `terminal.Spawner` e a parte Linux) e as partes só do Windows: serviço, contas virtuais e `mestre-agente`, parte Windows do launcher, ACLs, DPAPI
   store/             SQLite e migrações (guild/: banco da Guilda; machine/: banco local de máquina)
   vault/ logging/    cofre; slog + mascaramento de segredos
   glossary/          textos de ajuda gerados do glossário

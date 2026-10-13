@@ -171,7 +171,7 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) (*Terminal, error
 		return nil, err
 	}
 	sp, err := m.cfg.Spawner.Spawn(ctx, SpawnSpec{ // 2
-		ID: spec.ID, Binary: bin, SocketPath: sock, Secret: secret,
+		ID: spec.ID, Version: m.cfg.PTYVersion, Binary: bin, SocketPath: sock, Secret: secret,
 		LogPath: filepath.Join(m.cfg.LogDir, spec.ID+".pty.log"),
 	})
 	if err != nil {

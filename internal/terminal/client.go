@@ -60,8 +60,9 @@ type Client struct {
 	exit    *Exit
 	onEvent func(ptywire.Msg)
 
-	done   chan struct{}
-	exited chan struct{}
+	done     chan struct{}
+	doneOnce sync.Once // fail runs from the reader and from a failed write
+	exited   chan struct{}
 }
 
 type call struct {
@@ -197,7 +198,7 @@ func (c *Client) fail(err error) {
 	for _, cl := range calls {
 		cl.reply <- reply{err: failure}
 	}
-	close(c.done)
+	c.doneOnce.Do(func() { close(c.done) })
 }
 
 func (c *Client) onMsg(m *ptywire.Msg) {

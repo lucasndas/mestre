@@ -10,10 +10,10 @@ import (
 
 // KeyStore keeps the vault data key protected by the operating system
 // (docs/plataforma/cofre.md#chave-do-cofre): on Linux a 0600 file owned by
-// the service account (FileKeyStore); on Windows a DPAPI machine-scope blob
-// with an ACL for NT SERVICE\Mestre only (internal/winsvc, not yet
-// implemented). Save must replace the stored bytes atomically: a crash
-// leaves either the old or the new content.
+// the service account; on Windows a DPAPI machine-scope blob with an ACL for
+// NT SERVICE\Mestre only (internal/winsvc/dpapi). Both are FileKeyStore.
+// Save must replace the stored bytes atomically: a crash leaves either the
+// old or the new content.
 type KeyStore interface {
 	Load(ctx context.Context) ([]byte, error)
 	Save(ctx context.Context, data []byte) error
@@ -22,17 +22,13 @@ type KeyStore interface {
 // ErrNoKey is returned by KeyStore.Load when no key was ever saved.
 var ErrNoKey = errors.New("vault: no key stored")
 
-// ErrProtectorNotImplemented is returned by the Windows key store until the
-// DPAPI protector exists in internal/winsvc.
-var ErrProtectorNotImplemented = errors.New("vault: DPAPI key protection is not implemented yet (internal/winsvc)")
-
 // UnsafeKeyFileError is returned when the key file is readable by more than
 // the service account. The vault refuses to open; the checklist item is
 // Check.
 type UnsafeKeyFileError struct {
 	Path   string
 	Reason string
-	Check  string // checklist item, e.g. LIN-05
+	Check  string // checklist item: LIN-05 on Linux, WIN-14 on Windows
 }
 
 func (e *UnsafeKeyFileError) Error() string {
@@ -48,7 +44,7 @@ const SeverityGrave Severity = "grave"
 // Alert is raised when the vault cannot open. Err never carries a secret.
 type Alert struct {
 	Severity Severity
-	Check    string // checklist item when known (LIN-05), else empty
+	Check    string // checklist item when known (LIN-05, WIN-14), else empty
 	Err      error
 }
 
