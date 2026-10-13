@@ -84,9 +84,8 @@ linters:
       - path: pkg/clock/
         linters:
           - forbidigo
-      # Dialing and listening: the layers that own connections (transport/
-      # joins them in M2).
-      - path: ^(internal/(terminal|launcher|winsvc|localchan|testkit|realaccount)|cmd|tools)/
+      # Dialing and listening: the layers that own connections.
+      - path: ^(internal/(terminal|launcher|winsvc|localchan|transport|testkit|realaccount)|cmd|tools)/
         text: designated layers
         linters:
           - forbidigo
