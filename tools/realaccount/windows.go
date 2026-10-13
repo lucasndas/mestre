@@ -235,10 +235,16 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// The WMI provider host keeps the token of whoever called
+	// Win32_Process.Create for up to a minute after the last call, and a
+	// logon session lives as long as a token of it does. That is not the
+	// launcher's to release: end the host (it starts again on demand), so what
+	// is left is the launcher's.
+	_ = runCmd(ctx, io.Discard, nil, "taskkill", "/F", "/IM", "WmiPrvSE.exe")
 	var sessions []uint64
 	var hive bool
 	polls := 0
-	for range 1920 { // EXPERIMENT: 8 minutes
+	for range 240 {
 		if sessions, err = sessionsOf(realaccount.WindowsAgentUser); err != nil {
 			return err
 		}

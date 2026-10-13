@@ -45,6 +45,7 @@ Partes de CA-TERM-05, CA-TERM-07, CA-TERM-11, CA-TERM-12 e CA-COFRE-08 exigem o 
 
 - Estes testes só rodam por `tools/realaccount`, nunca na rápida, na completa nem em máquina de uso. Quem precisa de conta real num critério novo acrescenta o teste aqui, com o marcador `// CA-…` do critério, e tira a parte da lista do laboratório.
 - Sem `sleep`: espera por eventos (saída do terminal, conexão que cai, processo que sai). A única consulta repetida é a do perfil e da sessão de logon, que o Windows libera depois que o `mestre-pty` termina, sem evento que o motor possa esperar.
+- No Windows, a ferramenta confere no fim que o launcher soltou o perfil e todas as sessões de logon da conta dos agentes (só um administrador lista as sessões de outra conta). Antes, encerra o `WmiPrvSE.exe`: o host de provedores do WMI guarda por até um minuto o token de quem chamou `Win32_Process.Create`, e a sessão de logon vive enquanto houver um token dela; isso não é do launcher soltar.
 - Falha de limpeza é aviso, não falha de teste; a máquina é descartável.
 
 ## Critérios de aceite
