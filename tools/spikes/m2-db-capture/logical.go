@@ -202,6 +202,24 @@ type LogReplica struct {
 	LSN   uint64
 	Skip  map[string]bool // tables the replica never receives (excluded machine)
 	infos map[string]tableInfo
+	// BeforeCommit is a crash point for the failure tests.
+	BeforeCommit func()
+}
+
+// OpenLogReplica opens a replica; its lsn is the last log row it applied,
+// committed in the same transaction as the changes.
+func OpenLogReplica(ctx context.Context, path string, set store.Set, opts store.Options) (*LogReplica, error) {
+	opts.Replica = true
+	db, err := store.Open(ctx, path, set, opts)
+	if err != nil {
+		return nil, err
+	}
+	r := &LogReplica{DB: db}
+	if err := db.Reader().QueryRowContext(ctx, `SELECT coalesce(max(lsn), 0) FROM replication_log`).Scan(&r.LSN); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return r, nil
 }
 
 type tableInfo struct {
@@ -298,6 +316,9 @@ func (r *LogReplica) Apply(ctx context.Context, rec *LogRecord) error {
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO replication_log(lsn, at, body) VALUES(?, ?, ?)`, rec.LSN, rec.At, EncodeLog(rec)); err != nil {
 		return err
+	}
+	if r.BeforeCommit != nil {
+		r.BeforeCommit()
 	}
 	if err := tx.Commit(); err != nil {
 		return err

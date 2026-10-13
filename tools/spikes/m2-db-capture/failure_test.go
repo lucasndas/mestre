@@ -33,6 +33,9 @@ func TestHelperProcess(t *testing.T) {
 		io.Copy(io.Discard, os.Stdin) // until killed
 		os.Exit(3)
 	}
+	if planBHelper(t, mode, block) {
+		return
+	}
 	switch mode {
 	case "primary-crash":
 		p, err := OpenPrimary(ctx, path, migrations(t, 1), store0())
