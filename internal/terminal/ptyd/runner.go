@@ -120,6 +120,9 @@ func (a *ptyAgent) closePTY() error {
 	return a.closeErr
 }
 
+// InTree is TreeMember: the Job Object lives in the Windows part.
+func (a *ptyAgent) InTree(pid int, start string) (bool, error) { return a.sys.inTree(pid, start) }
+
 func (a *ptyAgent) Close() error {
 	_ = a.closePTY()
 	a.sys.release()

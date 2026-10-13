@@ -19,12 +19,16 @@ import (
 // the version that brought it.
 const (
 	// ProtoVersion is the version this code speaks.
-	ProtoVersion = 2
+	ProtoVersion = 3
 	// MinProtoVersion is the oldest mestre-pty the engine still serves.
 	MinProtoVersion = 1
 	// ProtoPing is the version that added the "ping" message and the
 	// "lines" field of "screen" (history on request).
 	ProtoPing = 2
+	// ProtoInJob is the version that added the "injob" message: whether a
+	// process is in the Job Object of the terminal (Windows), for the
+	// caller identification of the local channel.
+	ProtoInJob = 3
 )
 
 // Terminal defaults (docs/arquitetura/terminal.md#criação).
@@ -62,6 +66,7 @@ const (
 	TypeAck      = "ack"
 	TypeStop     = "stop"
 	TypePing     = "ping"
+	TypeInJob    = "injob"
 	TypeOK       = "ok"
 	TypeError    = "error"
 	// Events, sent without a request.
@@ -92,6 +97,9 @@ const (
 	CodeAlreadyStarted = "already_started"
 	CodeNotRunning     = "not_running"
 	CodeStartFailed    = "start_failed"
+	// CodeNotSupported: the message is known but this terminal cannot
+	// answer it (e.g. "injob" on Linux, where the cgroup groups the tree).
+	CodeNotSupported = "not_supported"
 )
 
 // Msg is one control message. A single flat struct keeps the protocol
@@ -146,6 +154,12 @@ type Msg struct {
 
 	// stop
 	Mode string `json:"mode,omitempty"`
+
+	// injob: PID is the process asked about and Start its start identity
+	// (on Windows the creation time, as System.Identify returns it); the
+	// reply carries InJob. A pointer, so that false is not omitted.
+	Start string `json:"start,omitempty"`
+	InJob *bool  `json:"in_job,omitempty"`
 }
 
 // Frame is a run of terminal bytes. Stream is the id of the request it

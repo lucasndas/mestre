@@ -67,6 +67,7 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 
 - **PTY falso:** par de terminal em memória com a mesma interface do PTY real; a tela vem do mesmo emulador do [terminal](../arquitetura/terminal.md).
 - **Git falso:** `internal/testkit/fakegit` implementa em memória as interfaces `gitx.Git` e `gitx.Repo` (refs, commits com autor e committer, arquivos preparados, bundles, worktrees, `info/exclude` e `skip-worktree` como dados), para a rápida. Os arquivos de um worktree são os que o teste põe com `SetFile`; o falso não cria pastas, só grava e lê os arquivos de bundle. Uma suíte de conformidade (`internal/testkit/gitxsuite`) roda os mesmos cenários no falso, na rápida, e no git real, na completa, para o falso não se afastar do real. Critério que precisa do comportamento real do git vai para a completa ([testes](testes.md#regras-e-erros)).
+- **Canal local falso:** `internal/testkit/localrig` liga o lado do motor do [canal local](../arquitetura/canal-local.md) (o servidor real, `internal/localchan`) à rede falsa, com um `/proc` falso (cgroup, pai e horário de início de cada processo), terminais falsos, pares do socket e pidfds que o teste "colhe" quando quer, e Jobs falsos para a identificação do Windows. Quem chama é o nome do processo que disca; a CLI roda em memória por cima disso. O que depende de `SO_PEERPIDFD`, do cgroup ou do Job Object de verdade é da completa.
 - **whisper-server falso:** devolve o texto configurado, erro ou demora.
 
 ### Quando cada dublê cresce

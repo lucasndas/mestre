@@ -299,6 +299,12 @@ func (t *Terminal) Ping(ctx context.Context) error {
 	return err
 }
 
+// InJob asks the mestre-pty whether the process is in the Job Object of the
+// terminal (Windows): see Client.InJob.
+func (t *Terminal) InJob(ctx context.Context, p ProcID) (bool, error) {
+	return t.client.InJob(ctx, p.PID, p.Start)
+}
+
 // Exited is closed when the agent ended.
 func (t *Terminal) Exited() <-chan struct{} { return t.client.Exited() }
 

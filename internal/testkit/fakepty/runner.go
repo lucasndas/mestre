@@ -15,6 +15,9 @@ type Runner struct {
 	Clock clock.Clock
 	// StartErr, when set, is returned by Start.
 	StartErr error
+	// NoJob makes the agents answer like a Linux terminal, which has no Job
+	// Object to ask about (ptyd.TreeMember is not implemented).
+	NoJob bool
 
 	mu     sync.Mutex
 	agents []*Agent
@@ -31,6 +34,9 @@ func (r *Runner) Start(_ context.Context, spec ptyd.StartSpec) (ptyd.Agent, erro
 	r.mu.Lock()
 	r.agents = append(r.agents, a)
 	r.mu.Unlock()
+	if r.NoJob {
+		return struct{ ptyd.Agent }{a}, nil
+	}
 	return a, nil
 }
 
@@ -57,6 +63,30 @@ type Agent struct {
 	mu       sync.Mutex
 	signaled int
 	killed   int
+	job      map[jobKey]bool
+}
+
+type jobKey struct {
+	pid   int
+	start string
+}
+
+// AddToJob puts a process in the fake Job Object of the terminal, as seen by
+// InTree.
+func (a *Agent) AddToJob(pid int, start string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.job == nil {
+		a.job = map[jobKey]bool{}
+	}
+	a.job[jobKey{pid, start}] = true
+}
+
+// InTree implements ptyd.TreeMember.
+func (a *Agent) InTree(pid int, start string) (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.job[jobKey{pid, start}], nil
 }
 
 var _ ptyd.Agent = (*Agent)(nil)

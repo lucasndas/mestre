@@ -33,6 +33,7 @@ type rig struct {
 type rigOptions struct {
 	bufferSize, unackedMax int
 	proto                  int
+	noJob                  bool
 }
 
 type syncBuffer struct {
@@ -86,7 +87,7 @@ func (s *syncBuffer) String() string {
 func newRig(t *testing.T, o rigOptions) *rig {
 	t.Helper()
 	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
-	r := &rig{clk: clk, net: fakenet.New(clk), runner: &fakepty.Runner{Clock: clk}, log: &syncBuffer{}, secret: bytes.Repeat([]byte{7}, ptywire.SecretSize)}
+	r := &rig{clk: clk, net: fakenet.New(clk), runner: &fakepty.Runner{Clock: clk, NoJob: o.noJob}, log: &syncBuffer{}, secret: bytes.Repeat([]byte{7}, ptywire.SecretSize)}
 	log := slog.New(slog.NewTextHandler(r.log, nil))
 	r.sess = ptyd.NewSession(ptyd.SessionConfig{
 		Runner: r.runner, Clock: clk, BufferSize: o.bufferSize, UnackedMax: o.unackedMax,
@@ -431,6 +432,65 @@ func TestAnOlderMestrePtyLacksPingAndHistory(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The "injob" message is how the engine identifies the caller of the CLI on
+// Windows (docs/arquitetura/canal-local.md#identificação-e-versão): the
+// mestre-pty says whether a process, with its start identity, is in the Job
+// Object of the terminal.
+func TestInJobSaysWhoIsInTheJobObject(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	c := r.dial(t)
+	a := r.start(t, c)
+	a.AddToJob(100, "133000000000000001")
+
+	for _, tt := range []struct {
+		name  string
+		pid   int
+		start string
+		want  bool
+	}{
+		{"a process in the Job", 100, "133000000000000001", true},
+		{"the same PID with another start identity (a reused PID)", 100, "133000000000000002", false},
+		{"a process that is not in it", 101, "133000000000000001", false},
+	} {
+		in, err := c.InJob(t.Context(), tt.pid, tt.start)
+		if err != nil || in != tt.want {
+			t.Errorf("%s: InJob = %v, %v, want %v", tt.name, in, err, tt.want)
+		}
+	}
+}
+
+func TestInJobNeedsAMestrePtyThatCanAnswer(t *testing.T) {
+	t.Parallel()
+	t.Run("a terminal with no Job Object (Linux)", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, rigOptions{noJob: true})
+		c := r.dial(t)
+		r.start(t, c)
+		if _, err := c.InJob(t.Context(), 100, "x"); !errors.Is(err, terminal.ErrUnsupported) {
+			t.Fatalf("InJob = %v, want ErrUnsupported", err)
+		}
+	})
+	t.Run("a mestre-pty of protocol 2", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, rigOptions{proto: 2})
+		c := r.dial(t)
+		r.start(t, c)
+		if _, err := c.InJob(t.Context(), 100, "x"); !errors.Is(err, terminal.ErrUnsupported) {
+			t.Fatalf("InJob = %v, want ErrUnsupported", err)
+		}
+	})
+	t.Run("before the agent started", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, rigOptions{})
+		c := r.dial(t)
+		var re *terminal.RemoteError
+		if _, err := c.InJob(t.Context(), 100, "x"); !errors.As(err, &re) || re.Code != ptywire.CodeNotRunning {
+			t.Fatalf("InJob = %v, want not_running", err)
+		}
+	})
 }
 
 func TestTheMestrePtyLeavesOnlyAfterTheEngineConfirmedTheWholeOutput(t *testing.T) {

@@ -70,6 +70,19 @@ type Agent interface {
 	Close() error
 }
 
+// TreeMember is implemented by an Agent that can say whether a process is in
+// its tree. Only Windows has such a boundary (the Job Object of the
+// terminal); on Linux the engine reads the cgroup of the caller itself.
+type TreeMember interface {
+	// InTree reports whether the process pid, whose start identity is
+	// start, is in the Job Object of the terminal. A process that is gone,
+	// or whose start identity differs (a reused PID), is not in it.
+	InTree(pid int, start string) (bool, error)
+}
+
+// ErrNoJob means this terminal has no Job Object to ask about.
+var ErrNoJob = errors.New("this terminal has no Job Object")
+
 // Runner starts the agent. ctx only governs the start.
 type Runner interface {
 	Start(ctx context.Context, spec StartSpec) (Agent, error)
@@ -324,6 +337,22 @@ func (s *Session) Kill() error {
 		return nil
 	}
 	return agent.Kill()
+}
+
+// InTree is the "injob" message: whether the process pid (with start
+// identity start) is in the Job Object of the terminal.
+func (s *Session) InTree(pid int, start string) (bool, error) {
+	s.mu.Lock()
+	agent := s.agent
+	s.mu.Unlock()
+	if agent == nil {
+		return false, ErrNotRunning
+	}
+	m, ok := agent.(TreeMember)
+	if !ok {
+		return false, ErrNoJob
+	}
+	return m.InTree(pid, start)
 }
 
 // State is a snapshot for the "status" message.
