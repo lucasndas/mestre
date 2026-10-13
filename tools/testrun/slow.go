@@ -22,10 +22,10 @@ type slowTestEntry struct {
 	measured bool // timed alone; otherwise the time of the suite run
 }
 
-// flagSlow warns about every passing fast-suite test above 100 ms, after
-// timing the candidates alone to discount CPU contention: one `go test` per
-// package for all its candidates, not one per test, the packages with the
-// most slow time first. allowance bounds the time spent (-1: no bound); a
+// flagSlow warns about every passing fast-suite test above 100 ms when run
+// alone. The candidates are the tests above 200 ms in the suite run, timed
+// alone to discount CPU contention: one `go test` per package for all its
+// candidates, not one per test, the packages with the most slow time first. allowance bounds the time spent (-1: no bound); a
 // package that does not fit keeps the time of the suite run and is marked
 // "(not re-run)". It only measures; a failure here does not change the suite
 // result. In CI the list also goes to the job summary and to a ::warning.
@@ -33,7 +33,7 @@ func (r *Runner) flagSlow(ctx context.Context, s Suite, rep *report, allowance t
 	byPkg := map[string][]*result{}
 	total := map[string]time.Duration{}
 	for _, t := range rep.leaves() {
-		if t.Action == "pass" && t.Elapsed > slowTest {
+		if t.Action == "pass" && t.Elapsed > rerunTest {
 			byPkg[t.Package] = append(byPkg[t.Package], t)
 			total[t.Package] += t.Elapsed
 		}

@@ -18,7 +18,7 @@ func TestSlowTestsAreTimedAloneInOneRunPerPackage(t *testing.T) {
 	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
 		switch {
 		case isMainRun(c):
-			_, _ = io.WriteString(out, ev("TestA", "pass", 0.2)+ev("TestB", "pass", 0.3)+ev("TestC", "pass", 0.4)+ev("TestQuick", "pass", 0.01))
+			_, _ = io.WriteString(out, ev("TestA", "pass", 0.25)+ev("TestB", "pass", 0.3)+ev("TestC", "pass", 0.4)+ev("TestQuick", "pass", 0.01))
 		case strings.Contains(c.String(), "-run"):
 			_, _ = io.WriteString(out, ev("TestA", "pass", 0.15)+ev("TestB", "pass", 0.02)+ev("TestC", "pass", 0.3))
 		}
