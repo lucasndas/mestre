@@ -28,7 +28,8 @@
 // and Administrators only). The plan B service (-service launcher) is the
 // same code running as LocalSystem; open/test -launchertoken try the variant
 // where the launcher only logs on and loads the profile and hands the token
-// to the mestre service.
+// to the mestre service. Spike 5 adds the launcher's start-pty op
+// (startpty.go), used by tools/winsandbox/spikes/03-mestre-pty.
 //
 // Spike 3 helpers, copied to C:\ProgramData\MestreSpike\bin\: login.ps1
 // (login terminal of each CLI), estado-credenciais.cmd (where logins went)

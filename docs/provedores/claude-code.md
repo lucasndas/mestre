@@ -93,7 +93,7 @@ Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](ad
 | menu de opções do limite de uso | responder com a opção de esperar o reinício do limite |
 | espera parada após o computador dormir (`quota_auto_resume_stale`) | responder Enter quando o motor confirmar que o limite reiniciou |
 | pedido de permissão nativo | responder com a decisão registrada; sem decisão, negar |
-| primeiro uso e login | escalar como alerta do checklist |
+| primeiro uso e login (num `CLAUDE_CONFIG_DIR` novo: seletor de tema e depois a confiança, com o cursor em "No, exit") | resolvidos na configuração inicial do perfil de conta, no terminal de login; num personagem, escalar como alerta do checklist |
 
 Quem chama estas operações na criação de mesas e personagens é a sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)); os perfis de conta estão em [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta).
 
