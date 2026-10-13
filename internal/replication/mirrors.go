@@ -240,16 +240,45 @@ func newMirrorReceiver(s MirrorStore) *mirrorReceiver {
 				}
 				return s.open(ctx, m.Mirror)
 			},
-			Apply: func(ctx context.Context, repo protocol.BundleRepo, _ protocol.Object, file string) error {
+			Apply: func(ctx context.Context, repo protocol.BundleRepo, meta protocol.Object, file string) error {
 				// "+": the mirror follows the Citadel, whatever it did to its refs.
-				return repo.(gitx.Repo).FetchBundle(ctx, file, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*")
+				if err := repo.(gitx.Repo).FetchBundle(ctx, file, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"); err != nil {
+					return err
+				}
+				return pruneMirror(ctx, repo.(gitx.Repo), meta)
 			},
 		},
 	}
 }
 
-// Have says whether the mirror already has the refs the Citadel announces; then
-// no bundle is sent.
+// pruneMirror deletes the refs the Citadel no longer has: the meta of a bundle
+// lists all the refs of the mirror, not only the ones the bundle carries. A
+// mirror left with no ref at all sends no bundle, so its refs stay.
+func pruneMirror(ctx context.Context, repo gitx.Repo, meta protocol.Object) error {
+	m, err := mirrorMetaOf(meta)
+	if err != nil {
+		return err
+	}
+	if len(m.Refs) == 0 {
+		return nil
+	}
+	have, err := repo.ListRefs(ctx, mirrorRefs...)
+	if err != nil {
+		return err
+	}
+	for _, ref := range have {
+		if _, kept := m.Refs[ref.Name]; kept {
+			continue
+		}
+		if err := repo.DeleteRef(ctx, ref.Name); err != nil {
+			return fmt.Errorf("replication: pruning %s from the mirror: %w", ref.Name, err)
+		}
+	}
+	return nil
+}
+
+// Have says whether the mirror already has the refs the Citadel announces, and
+// no others; then no bundle is sent.
 func (r *mirrorReceiver) Have(ctx context.Context, b protocol.XferBegin) bool {
 	m, err := mirrorMetaOf(b.Meta)
 	if err != nil || len(m.Refs) == 0 {
@@ -260,7 +289,7 @@ func (r *mirrorReceiver) Have(ctx context.Context, b protocol.XferBegin) bool {
 		return false
 	}
 	refs, err := repo.ListRefs(ctx, mirrorRefs...)
-	if err != nil || len(refs) < len(m.Refs) {
+	if err != nil || len(refs) != len(m.Refs) {
 		return false
 	}
 	have := make(map[string]string, len(refs))

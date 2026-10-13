@@ -140,6 +140,26 @@ func (c *citadelTap) Write(ctx context.Context, kind protocol.FrameKind, data []
 	return c.Conn.Write(ctx, kind, data)
 }
 
+// towerTap sits on the Tower's side of its connection and can lose the next
+// replica.resync it sends.
+type towerTap struct {
+	protocol.Conn
+	r *rig
+}
+
+func (c *towerTap) Ping(ctx context.Context) error { return c.Conn.(protocol.Pinger).Ping(ctx) }
+
+func (c *towerTap) Write(ctx context.Context, kind protocol.FrameKind, data []byte) error {
+	if kind == protocol.FrameText && bytes.Contains(data, []byte(`"replica.resync"`)) {
+		c.r.resyncs.Add(1)
+		if n := c.r.dropResyncs.Load(); n > 0 && c.r.dropResyncs.CompareAndSwap(n, n-1) {
+			return nil
+		}
+		c.r.resyncsDelivered.Add(1)
+	}
+	return c.Conn.Write(ctx, kind, data)
+}
+
 type tapListener struct {
 	protocol.Listener
 	r *rig
@@ -199,12 +219,17 @@ type rig struct {
 	ckeys    *memKeys
 	envelope string
 
-	filesDir string
+	filesDir    string
+	capturesDir string
 
 	frameMu sync.Mutex
 	frames  []frame
 	// dropTarget is the Tower whose next frame of records is lost on the way.
 	dropTarget atomic.Value
+	// dropResyncs is how many of the next replica.resync of the Towers are lost
+	// on the way; resyncs counts all that were sent (the protocol sends again
+	// the ones not acknowledged), resyncsDelivered the ones that were not lost.
+	dropResyncs, resyncs, resyncsDelivered atomic.Int32
 	// ackEvery sets the interval of the confirmations of a Tower (default 1 s).
 	ackEvery map[string]time.Duration
 
@@ -215,20 +240,21 @@ type rig struct {
 }
 
 type tower struct {
-	r       *rig
-	id      string
-	dbPath  string
-	db      *store.DB
-	rep     *replication.Replica
-	client  *protocol.Client
-	parts   protorig.Parts
-	keys    *memKeys
-	env     string
-	files   string
-	mirrors string
-	xfer    string
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	r        *rig
+	id       string
+	dbPath   string
+	db       *store.DB
+	rep      *replication.Replica
+	client   *protocol.Client
+	parts    protorig.Parts
+	keys     *memKeys
+	env      string
+	files    string
+	captures string
+	mirrors  string
+	xfer     string
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
 
 	snapshots atomic.Int32
 	// events is what the Tower saw, in order: "file <path>", "snapshot".
@@ -308,7 +334,10 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	}
 	if o.files {
 		r.filesDir = filepath.Join(r.dir, "citadel-files")
-		pc.Files, err = replication.NewFiles(replication.FileRoot{Name: "classes", Dir: r.filesDir, Walk: true})
+		r.capturesDir = filepath.Join(r.dir, "citadel-captures")
+		pc.Files, err = replication.NewFiles(
+			replication.FileRoot{Name: "classes", Dir: r.filesDir, Walk: true},
+			replication.FileRoot{Name: "captures", Dir: r.capturesDir, Walk: true, NotForExcluded: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -363,7 +392,7 @@ func (r *rig) addTower(id string, startReplica bool) *tower {
 	}
 	tw := &tower{
 		r: r, id: id, dbPath: filepath.Join(dir, "mestre.db"), keys: &memKeys{}, env: filepath.Join(dir, "cofre-envelope.bin"),
-		files: filepath.Join(dir, "files"), xfer: filepath.Join(dir, "xfer"), mirrors: filepath.Join(dir, "mirrors"),
+		files: filepath.Join(dir, "files"), captures: filepath.Join(dir, "captures"), xfer: filepath.Join(dir, "xfer"), mirrors: filepath.Join(dir, "mirrors"),
 	}
 	_, tw.parts = protorig.Config(r.clk, id, 1, citadelID)
 	r.towers[id] = tw
@@ -382,13 +411,15 @@ func (tw *tower) start(startReplica bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rc := replication.ReplicaConfig{DB: tw.db, Clock: r.clk, GuildID: guildULID, AckEvery: r.ackEvery[tw.id],
+	rc := replication.ReplicaConfig{DB: tw.db, Clock: r.clk, GuildID: guildULID, AckEvery: r.ackEvery[tw.id], TransferDir: tw.xfer,
 		OnApplied: func(first, last uint64) { tw.event(fmt.Sprintf("applied %d-%d", first, last)) }}
 	if r.opts.vault {
 		rc.Vault = &vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}
 	}
 	if r.opts.files {
-		rc.Files, err = replication.NewFiles(replication.FileRoot{Name: "classes", Dir: tw.files})
+		rc.Files, err = replication.NewFiles(
+			replication.FileRoot{Name: "classes", Dir: tw.files},
+			replication.FileRoot{Name: "captures", Dir: tw.captures, NotForExcluded: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -427,7 +458,14 @@ func (tw *tower) start(startReplica bool) {
 		fins[protocol.KindGitBundle] = &eventBundle{Finalizer: bundle, tw: tw}
 	}
 	cfg.Xfer = &protocol.XferConfig{Dir: tw.xfer, Finalizers: fins}
-	tw.client, err = protocol.NewClient(cfg, r.nw.Dialer(tw.id, citadelAdr, protocol.Peer{Role: protocol.RoleMachine, ID: tw.id}))
+	dial := r.nw.Dialer(tw.id, citadelAdr, protocol.Peer{Role: protocol.RoleMachine, ID: tw.id})
+	tw.client, err = protocol.NewClient(cfg, protocol.DialerFunc(func(ctx context.Context) (protocol.Conn, error) {
+		c, err := dial.Dial(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &towerTap{Conn: c, r: r}, nil
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}

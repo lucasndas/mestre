@@ -172,6 +172,37 @@ func mirrorScenario(t *testing.T, g gitx.Git, write func(testing.TB, gitx.Repo, 
 		if bi < 0 || ai < 0 || bi > ai {
 			t.Fatalf("the bundle was at event %d and the record that cites the mirror was applied at %d; events = %v", bi, ai, ev)
 		}
+
+		// A branch that the Citadel deletes is deleted from the mirror too.
+		hasRef := func(name string) bool {
+			repo, err := g.Open(ctx, filepath.Join(tw.mirrors, "ws1"))
+			if err != nil {
+				return false
+			}
+			list, err := repo.ListRefs(ctx, "refs/heads/")
+			if err != nil {
+				return false
+			}
+			for _, ref := range list {
+				if ref.Name == name {
+					return true
+				}
+			}
+			return false
+		}
+		if err := ws.CreateBranch(ctx, "feature", string(c5)); err != nil {
+			t.Fatal(err)
+		}
+		r.primary.MirrorChanged("ws1")
+		eventually(t, "the new branch on the mirror", func() bool { return hasRef("refs/heads/feature") })
+		if err := ws.DeleteBranch(ctx, "feature"); err != nil {
+			t.Fatal(err)
+		}
+		r.primary.MirrorChanged("ws1")
+		eventually(t, "the branch to leave the mirror", func() bool { return !hasRef("refs/heads/feature") })
+		if !hasRef("refs/heads/main") {
+			t.Error("the prune took main with it")
+		}
 	})
 }
 

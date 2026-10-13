@@ -28,6 +28,9 @@ const (
 	// DefaultMaxQueueBytes is how much a Tower holds of records it did not
 	// apply yet; over it the frames are dropped and asked for again.
 	DefaultMaxQueueBytes = 64 << 20
+	// DefaultResyncRetry is how long a Tower waits for the answer to its
+	// request for records or a full copy before it asks again.
+	DefaultResyncRetry = 30 * time.Second
 	// PruneEvery is how often the retention runs.
 	PruneEvery = time.Minute
 )

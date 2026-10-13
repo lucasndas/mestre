@@ -74,7 +74,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	}
 	e.pruneDiscarded()
 
-	replica, err := replication.NewReplica(ctx, replication.ReplicaConfig{DB: db, Clock: e.clk, GuildID: e.id.GuildID, Vault: e.vaultCopy(), Logger: e.log})
+	replica, err := replication.NewReplica(ctx, replication.ReplicaConfig{DB: db, Clock: e.clk, GuildID: e.id.GuildID, Vault: e.vaultCopy(), TransferDir: e.paths.transfers(), Logger: e.log})
 	if err != nil {
 		return transition{err: err}
 	}
