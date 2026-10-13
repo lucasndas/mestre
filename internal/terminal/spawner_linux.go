@@ -114,7 +114,7 @@ func WaitReady(ctx context.Context, r *os.File) error {
 // ListenSocket binds the socket and returns a file for the listening
 // descriptor; the socket file stays when this process lets go of it.
 func ListenSocket(path string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := EnsurePrivateDir(filepath.Dir(path)); err != nil {
 		return nil, fmt.Errorf("socket folder: %w", err)
 	}
 	_ = os.Remove(path) // a stale socket of a dead terminal

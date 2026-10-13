@@ -15,6 +15,16 @@ Delegate=yes
 DelegateSubgroup=launcher
 # Restarting the launcher ends its own process only: the terminals go on.
 KillMode=process
+# /run/mestre/<inst>, where launcher.sock lives (and, for the engine, cli.sock
+# and the pty folder). Preserved: stopping the launcher must not remove the
+# sockets of terminals that are still running. The mode is the one the
+# launcher gives the folder; the pty folder inside it is 0700 (the engine
+# checks and sets it). The rest of the hardening of the unit (ProtectSystem,
+# NoNewPrivileges, the group that lets mestre-agente reach cli.sock, ...) is
+# the installer's, M7.
+RuntimeDirectory=mestre/%i
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
 # CAP_SETUID and CAP_SETGID only to switch to mestre-agente in the child; the
 # launcher empties the ambient set at start, so what it starts has none.
 AmbientCapabilities=CAP_SETUID CAP_SETGID

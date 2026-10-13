@@ -124,8 +124,8 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	for _, d := range []string{cfg.SocketDir, cfg.LogDir} {
-		if err := os.MkdirAll(d, 0o700); err != nil {
-			return nil, fmt.Errorf("create %s: %w", d, err)
+		if err := EnsurePrivateDir(d); err != nil {
+			return nil, err
 		}
 	}
 	return &Manager{cfg: cfg, clk: cfg.Clock, reg: registry{cfg.DB}, log: log}, nil
