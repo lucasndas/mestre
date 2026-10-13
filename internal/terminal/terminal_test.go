@@ -135,8 +135,10 @@ func (r *rig) printed(t *testing.T, a *fakepty.Agent, p []byte) {
 	if _, err := a.Process().Write(p); err != nil {
 		t.Fatal(err)
 	}
-	for r.sess.Buffer().End() < want {
-		if _, err := r.sess.Buffer().Next(t.Context(), r.sess.Buffer().End(), 1); err != nil {
+	// Read End once per round: waiting from a second, later reading of it
+	// could wait for bytes past want that never come.
+	for end := r.sess.Buffer().End(); end < want; end = r.sess.Buffer().End() {
+		if _, err := r.sess.Buffer().Next(t.Context(), end, 1); err != nil {
 			t.Fatal(err)
 		}
 	}
