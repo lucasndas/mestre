@@ -86,6 +86,19 @@ try {
     }
 } catch { Write-Host "Windows Terminal nao instalado ($_); siga no console classico." }
 
+# golangci-lint, the pinned release binary (the fast suite runs it).
+$LintVersion = '2.14.0'
+$LintFile    = "golangci-lint-$LintVersion-windows-amd64.zip"
+$LintSha256  = 'b15f903d1649283a2ab6e8d2f0c317eaf1f9f6b3763950e7e8b7e72a43dd724f'
+$LintDir     = 'C:\tools\golangci-lint'
+if (-not (Test-Path (Join-Path $LintDir "golangci-lint-$LintVersion-windows-amd64\golangci-lint.exe"))) {
+    $lintZip = Join-Path $Downloads $LintFile
+    Get-Checked "https://github.com/golangci/golangci-lint/releases/download/v$LintVersion/$LintFile" $lintZip $LintSha256
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($lintZip, $LintDir)
+}
+Add-ToPath (Join-Path $LintDir "golangci-lint-$LintVersion-windows-amd64")
+
 # Repository, on the spike branch.
 git config --global user.name 'Lucas Novais'
 git config --global user.email 'lucasndas@gmail.com'

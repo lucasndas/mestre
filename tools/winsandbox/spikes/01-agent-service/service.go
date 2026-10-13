@@ -74,6 +74,11 @@ type request struct {
 	// logged-on token with the profile loaded, then create the process here.
 	TokenFromLauncher bool   `json:"token_from_launcher"`
 	Ticket            string `json:"ticket"` // op release
+	// op start-pty (spike 5, startpty.go): terminal id, its secret and
+	// whether the ptyhost hardens its threads.
+	ID     string `json:"id,omitempty"`
+	Secret []byte `json:"secret,omitempty"`
+	Harden bool   `json:"harden,omitempty"`
 }
 
 type response struct {
@@ -86,6 +91,10 @@ type response struct {
 	Token  uint64   `json:"token,omitempty"`
 	Env    []string `json:"env,omitempty"`
 	Ticket string   `json:"ticket,omitempty"`
+	// op start-pty: the ptyhost process and its logon session.
+	PID          uint32 `json:"pid,omitempty"`
+	Created      int64  `json:"created,omitempty"`
+	LogonSession string `json:"logon_session,omitempty"`
 }
 
 type selfInfo struct {
@@ -216,7 +225,11 @@ func handleControl(name string, f *os.File) {
 	if err := json.Unmarshal(line, &req); err != nil {
 		resp.Error = err.Error()
 	} else {
-		log.Printf("request: %s", strings.TrimSpace(string(line)))
+		if req.Secret != nil {
+			log.Printf("request: op %s id %s harden %v (secret, %d bytes, not logged)", req.Op, req.ID, req.Harden, len(req.Secret))
+		} else {
+			log.Printf("request: %s", strings.TrimSpace(string(line)))
+		}
 		switch req.Op {
 		case "info":
 			resp.Info = describeSelf(name)
@@ -234,6 +247,8 @@ func handleControl(name string, f *os.File) {
 			}
 		case "release":
 			releaseLogon(req.Ticket)
+		case "start-pty":
+			resp = startPTY(windows.Handle(f.Fd()), req)
 		default:
 			resp.Error = "unknown op " + req.Op
 		}
