@@ -30,7 +30,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 | `ack` | não | `true` quando o remetente exige confirmação |
 
 - **Erro:** `type: "error"`, com `payload` `{code, message, retryable}` e `reply_to`.
-- **Tamanho:** o máximo é 1 MiB por mensagem JSON. Conteúdo maior usa a [transferência em partes](#transferência-em-partes).
+- **Tamanho:** o máximo é 1 MiB por mensagem, JSON ou frame binário (cabeçalho incluído). Conteúdo maior usa a [transferência em partes](#transferência-em-partes). Quem recebe uma maior a descarta sem derrubar a conexão e responde `too_large`; acima de 16 MiB, fecha com `1009`.
 - **Campos e tipos desconhecidos:** campos são ignorados. Um `type` desconhecido recebe `error` com `code: "unknown_type"`, sem derrubar a conexão.
 
 ### Época
@@ -69,7 +69,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 
 ### Heartbeat e reconexão
 
-- **Ping:** ping do WebSocket a cada 15 s. Sem pong em 45 s, a conexão é dada como morta.
+- **Ping:** ping do WebSocket a cada 15 s, pelos dois lados. Sem pong em 45 s, a conexão é dada como morta e fechada sem o aperto de fechamento.
 - **Heartbeat:** `machine.heartbeat` a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
 - **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%. Depois de 3 falhas seguidas, a Torre refaz a [descoberta](descoberta.md).
 - **Uma conexão por `machine_id`:** uma conexão nova substitui a antiga.
@@ -132,6 +132,14 @@ Descoberta, entrada na Guilda, ficha da máquina e replicação usam este protoc
 - **CA-PROTO-08** · *rápida* — **Dado** um `inbox.deliver` para um terminal que ficou ocupado, **quando** a máquina responde, **então** o ack é `ok`, o resultado é `inbox.result` com `busy` e o item volta para a fila da Cidadela.
 - **CA-PROTO-09** · *rápida* — **Dado** um navegador que abre um terminal cuja máquina já mandou 300 KiB de saída, **quando** a Cidadela atende, **então** pede `terminal.replay` à máquina a partir do deslocamento 0 e o navegador recebe os 300 KiB.
 - **CA-PROTO-10** · *rápida* — **Dado** uma máquina (Torre ou Cidadela) na época 2, **quando** chega uma mensagem da época 1, **então** ela responde `stale_epoch`, fecha com `4006` e nada é executado ([época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)); **dado** um `welcome` com certidão da época 3 válida, **então** a Torre passa a seguir a época 3.
+- **CA-PROTO-11** · *rápida* — **Dado** a Cidadela na rede falsa, **quando** chegam a `/ws/tower` um motor com certificado de outra CA, um vencido (relógio falso), um Guardião, um cliente só com TLS 1.2, e a `/ws/guardian` um motor, **então** nenhum chega à rota; **dado** o motor válido, **então** a Cidadela vê o `machine_id` do SAN, e a Torre recusa um servidor de outra CA.
+- **CA-PROTO-12** · *rápida* — **Dado** o motor e o Guardião de uma Torre conectados, **quando** a credencial da máquina é revogada, **então** as duas conexões caem com `4002`, as de outras máquinas continuam e uma nova conexão dela é recusada no handshake.
+- **CA-PROTO-13** · *rápida* — **Dado** um cliente sem certificado, **quando** pede `/ca.crt`, **então** recebe a CA em DER, com o SHA-256 igual à impressão digital dela; `/healthz` responde `200` e `/ws/tower` responde `401`.
+- **CA-PROTO-14** · *rápida* — **Dado** uma conexão parada por 10 min com os pongs chegando, **então** ela continua; **dado** a rede falsa meio aberta, **quando** passam de 45 s a 60 s (tempo falso), **então** os dois lados dão a conexão como morta.
+- **CA-PROTO-15** · *rápida* — **Dado** a CA criada (relógio falso), **quando** ela emite o certificado do motor de uma máquina, **então** a CA é ECDSA P-256 por 10 anos, o certificado tem os SANs da [tabela](../arquitetura/seguranca.md#tls-e-ca-interna), `mestre.local` só fora da máquina excluída, 1 ano de validade, e pede renovação a 30 dias do fim; a renovação mantém a identidade, troca a chave e segue os IPs novos.
+- **CA-PROTO-16** · *rápida* — **Dado** a CA guardada no cofre, **quando** a Cidadela a carrega, **então** a chave é o segredo `ca_key`, a leitura vai à auditoria com a finalidade, e os certificados emitidos são da mesma CA; a chave não abre a CA de outra Guilda.
+- **CA-PROTO-17** · *rápida* — **Dado** uma mensagem de 1 MiB + 1 byte, **quando** chega, **então** é descartada com `too_large` e a conexão segue com a mensagem seguinte; uma de 1 MiB passa.
+- **CA-PROTO-18** · *completa* — **Dado** Cidadela e Torre com sockets reais em `127.0.0.1`, no Linux e no Windows, **quando** o motor e o Guardião conectam por mTLS, **então** trocam frames de texto e binários, a revogação os derruba com `4002` e um cliente TLS comum que confia na CA baixa `/ca.crt`.
 
 ## Depende de
 
