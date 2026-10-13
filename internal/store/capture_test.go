@@ -430,6 +430,17 @@ func dump(t *testing.T, db *store.DB, tables ...string) string {
 
 var allTables = []string{"parents", "children", "named", "seq", "secrets", "schema_migrations"}
 
+// scanFile runs a query on a database file that no DB has open.
+func scanFile[T any](t *testing.T, path, query string, args ...any) T {
+	t.Helper()
+	db, err := sql.Open("sqlite", path+"?_pragma=query_only(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	return scan[T](t, db, query, args...)
+}
+
 func readAll(t *testing.T, path string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(path)
@@ -594,6 +605,21 @@ func TestAReplicaAppliesTheRecordsInOrderAndTakesNoOtherWrite(t *testing.T) {
 		t.Fatal("setup: the replica should hold the secret before the purge")
 	}
 	excluded := replicate(t, p, "secrets")
+	// A small log goes in the copy as it is; with tables emptied, or a big log,
+	// the copy keeps only the last row (the record may carry what was emptied).
+	if lo, hi, _ := r.LogBounds(ctx); lo >= hi {
+		t.Errorf("the log of a small copy is %d..%d, want it whole", lo, hi)
+	}
+	if lo, hi, _ := excluded.LogBounds(ctx); lo != hi {
+		t.Errorf("the log of the excluded copy is %d..%d, want only the last row", lo, hi)
+	}
+	forced := filepath.Join(t.TempDir(), "forced.db")
+	if _, err := p.Snapshot(ctx, forced, store.SnapshotOptions{KeepLogBytes: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if n := scanFile[int](t, forced, `SELECT count(*) FROM replication_log`); n != 1 {
+		t.Errorf("a copy of a log over the limit keeps %d rows, want 1", n)
+	}
 	if n := scan[int](t, excluded.Reader(), `SELECT count(*) FROM secrets`); n != 0 {
 		t.Errorf("the excluded replica has %d secrets", n)
 	}

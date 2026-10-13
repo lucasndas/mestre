@@ -305,13 +305,21 @@ type SnapshotOptions struct {
 	// excluded machine); their schema stays, and so does nothing of theirs on
 	// disk.
 	EmptyTables []string
+	// KeepLogBytes: a log with more than this many bytes of bodies (default
+	// 1 MiB) is trimmed to its last row in the copy, which costs a second pass;
+	// a smaller one goes as it is, because it is not worth the pass.
+	KeepLogBytes int64
 }
+
+// DefaultKeepLogBytes is SnapshotOptions.KeepLogBytes when it is zero.
+const DefaultKeepLogBytes = 1 << 20
 
 // Snapshot writes at dst a consistent full copy of the database (VACUUM INTO)
 // and returns the lsn it holds. The log in the copy is trimmed to its last
-// row: the machine that receives the copy continues from there and needs no
-// history. dst must not exist. The writes of the primary go on while the copy
-// is made.
+// row when it is big (or when tables are emptied, because the last record may
+// carry changes of them): the machine that receives the copy continues from
+// there and needs no history. dst must not exist. The writes of the primary go
+// on while the copy is made.
 func (d *DB) Snapshot(ctx context.Context, dst string, opts SnapshotOptions) (uint64, error) {
 	full := dst + ".full"
 	for _, p := range []string{dst, full} {
@@ -320,16 +328,32 @@ func (d *DB) Snapshot(ctx context.Context, dst string, opts SnapshotOptions) (ui
 		}
 	}
 	defer removeDB(full)
+	keep := opts.KeepLogBytes
+	if keep <= 0 {
+		keep = DefaultKeepLogBytes
+	}
+	var logBytes int64
+	if err := d.Reader().QueryRowContext(ctx, `SELECT coalesce(sum(length(body)), 0) FROM replication_log`).Scan(&logBytes); err != nil {
+		return 0, fmt.Errorf("store: snapshot: %w", err)
+	}
+	trim := len(opts.EmptyTables) > 0 || logBytes > keep
+	first := dst
+	if trim {
+		first = full
+	}
 	// A read of its own: the writer keeps writing meanwhile.
 	src, err := sql.Open("sqlite", dsn(d.path, []string{fmt.Sprintf("busy_timeout(%d)", d.opts.BusyTimeout.Milliseconds())}, ""))
 	if err != nil {
 		return 0, fmt.Errorf("store: snapshot: %w", err)
 	}
 	src.SetMaxOpenConns(1)
-	_, err = src.ExecContext(ctx, `VACUUM INTO ?`, full)
+	_, err = src.ExecContext(ctx, `VACUUM INTO ?`, first)
 	_ = src.Close()
 	if err != nil {
 		return 0, fmt.Errorf("store: snapshot: %w", err)
+	}
+	if !trim {
+		return copyLSN(ctx, dst)
 	}
 	// Trim the copy, then rewrite it so what was dropped is not in the file.
 	cp, err := sql.Open("sqlite", dsn(full, []string{"busy_timeout(5000)", "journal_mode(DELETE)", "foreign_keys(0)"}, ""))
@@ -381,6 +405,20 @@ func (d *DB) Snapshot(ctx context.Context, dst string, opts SnapshotOptions) (ui
 	return lsn, nil
 }
 
+// copyLSN is the highest lsn of the copy at path.
+func copyLSN(ctx context.Context, path string) (uint64, error) {
+	db, err := sql.Open("sqlite", dsn(path, []string{"query_only(1)"}, ""))
+	if err != nil {
+		return 0, fmt.Errorf("store: snapshot: %w", err)
+	}
+	defer db.Close()
+	var lsn uint64
+	if err := db.QueryRowContext(ctx, `SELECT coalesce(max(lsn), 0) FROM replication_log`).Scan(&lsn); err != nil {
+		return 0, fmt.Errorf("store: snapshot: %w", err)
+	}
+	return lsn, nil
+}
+
 func removeDB(path string) {
 	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
 		_ = os.Remove(path + suffix)
@@ -391,7 +429,7 @@ func removeDB(path string) {
 // out: SQLite's quick_check passes, the schema is not newer than this binary
 // and the highest lsn in it is wantLSN. The replica is closed and opened again
 // on the new file; Writer and Reader return the new pools afterwards (a caller
-// that kept an old one gets "database is closed"). src is copied, not moved: removing it is up to the caller.
+// that kept an old one gets "database is closed"). src is moved (or copied, from another volume); what is left of it is up to the caller.
 func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 	if !d.replica {
 		return ErrNotReplica
@@ -404,8 +442,10 @@ func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 	// The copy is flushed to disk unless the database runs without flushes (the
 	// tests that are not about durability: a flush costs tens of milliseconds
 	// on a Windows runner).
-	if err := copyFile(src, incoming, d.opts.Synchronous != "OFF"); err != nil {
-		return fmt.Errorf("store: replace: %w", err)
+	if err := os.Rename(src, incoming); err != nil { // not on the same volume: copy it
+		if err := copyFile(src, incoming, d.opts.Synchronous != "OFF"); err != nil {
+			return fmt.Errorf("store: replace: %w", err)
+		}
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
