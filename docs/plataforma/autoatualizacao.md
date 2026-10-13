@@ -20,7 +20,7 @@ Uma release por versão, com tag única `vX.Y.Z` (a versão do motor), traz os b
 
 | Arquivo | Conteúdo |
 |---|---|
-| `mestre-release.json` (manifesto) | `format` (1), `tag`, data, notas; `motor`: versão, faixa do [protocolo](../conectividade/protocolo.md) (`min`, `max`), faixa do canal local com o Guardião, versão do esquema do banco; `guardiao`: versão e faixa do protocolo dele; `pty`: versão; `artifacts[]`: nome, componente (`motor`/`guardiao`/`pty`), `os`, `arch`, tamanho, SHA-256 |
+| `mestre-release.json` (manifesto) | `format` (1), `tag`, data, notas; `motor`: versão, faixa do [protocolo](../conectividade/protocolo.md) (`min`, `max`), faixa do canal local com o Guardião, versão do esquema do banco; `guardiao`: versão e faixa do protocolo dele; `pty`: versão; `launcher`: versão; `artifacts[]`: nome, componente (`motor`/`guardiao`/`pty`), `os`, `arch`, tamanho, SHA-256 |
 | `mestre-release.json.minisig` | assinatura Ed25519 do manifesto no formato minisign; o comentário confiável repete a `tag` |
 
 - **Chaves:** as chaves públicas aceitas (a atual e a próxima, para troca de chave) ficam **embutidas** nos binários `mestre` e `mestre-guardiao`. A privada fica só no computador do autor, num arquivo cifrado com senha, e as versões são assinadas lá antes de publicar ([ADR 0019](../decisoes/0019-autoatualizacao-por-releases.md)); nunca fica no repositório nem no GitHub Actions. Se a chave atual for perdida, a próxima chave embutida assume.
@@ -85,6 +85,7 @@ sequenceDiagram
 
 - **O motor não espera os agentes:** os terminais rodam cada um no seu `mestre-pty`, que não é trocado pelo passo do motor; o motor novo reconecta a eles e os personagens seguem no estado em que estavam ([volta do motor](../arquitetura/terminal.md#volta-do-motor)). Durante a troca, entregas esperam na caixa de entrada e as chamadas da CLI esperam o motor voltar ([canal local](../arquitetura/canal-local.md#motor-reiniciando)).
 - **Versão nova do `mestre-pty`:** a release instala a versão nova numa pasta própria, ao lado das que ainda têm terminal vivo; terminais novos usam a nova, e os antigos seguem na versão em que nasceram até serem encerrados. A versão sem terminal vivo é apagada na atualização seguinte ([versão do `mestre-pty`](../arquitetura/terminal.md#protocolo-motor--mestre-pty)).
+- **`mestre-launcher`:** é o mesmo binário `mestre`, mas o passo do motor só o reinicia quando a versão dele no manifesto (`launcher.versao`) muda; reiniciá-lo não encerra os terminais ([iniciador](../arquitetura/componentes.md#iniciador-mestre-launcher)). A pasta da versão que ele está usando não é apagada enquanto ele roda nela.
 - O que interrompe os agentes é o reinício da máquina, e esse a atualização do Mestre não faz.
 
 ### Estados
