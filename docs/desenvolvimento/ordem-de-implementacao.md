@@ -92,7 +92,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 |---|---|---|
 | M0 | 1 | [testes](../qualidade/testes.md) |
 | M0 | 2 | [dublês](../qualidade/dubles.md) |
-| M0 | 3 | [verificação de docs](../qualidade/verificacao-de-docs.md) · [projetos de treino](../qualidade/projetos-de-treino.md) |
+| M0 | 3 | [verificação de docs](../qualidade/verificacao-de-docs.md) · [projetos de treino](../qualidade/projetos-de-treino.md) · [regras de código](../qualidade/regras-de-codigo.md) |
 | M1 | 1 | [terminal](../arquitetura/terminal.md) · [cofre](../plataforma/cofre.md) |
 | M1 | 2 | [canal local](../arquitetura/canal-local.md) |
 | M2 | 1 | [protocolo](../conectividade/protocolo.md) |

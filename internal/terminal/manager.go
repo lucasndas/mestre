@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/logging"
+	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/terminal/ptywire"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -124,7 +125,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	for _, d := range []string{cfg.SocketDir, cfg.LogDir} {
-		if err := EnsurePrivateDir(d); err != nil {
+		if err := privdir.Ensure(d); err != nil {
 			return nil, err
 		}
 	}

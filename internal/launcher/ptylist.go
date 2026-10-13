@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+
+	"github.com/lucasndas/mestre/internal/privdir"
 )
 
 // PTYEntry is a mestre-pty the launcher started, by PID and start identity
@@ -103,7 +105,7 @@ func (l *PTYList) save() error {
 		return err
 	}
 	dir := filepath.Dir(l.path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := privdir.Ensure(dir); err != nil {
 		return fmt.Errorf("folder of the list of mestre-pty: %w", err)
 	}
 	tmp, err := os.CreateTemp(dir, filepath.Base(l.path)+".*")
