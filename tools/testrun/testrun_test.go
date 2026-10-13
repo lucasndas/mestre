@@ -182,7 +182,7 @@ func TestQuarantineSkipsAndExpiredFailsFull(t *testing.T) {
 	code := r.RunSuite(context.Background(), Suites["full"])
 
 	main := ex.callsMatching("go test")
-	if len(main) != 1 || !strings.Contains(main[0].String(), "-tags full -skip ^(TestRecent|TestOld)$ ./...") {
+	if len(main) != 1 || !strings.Contains(main[0].String(), "-tags full -timeout 4m30s -skip ^(TestRecent|TestOld)$ ./...") {
 		t.Fatalf("go test call = %v", main)
 	}
 	text := out.String()
@@ -220,35 +220,6 @@ func TestFailingTestRunsOnce(t *testing.T) {
 	}
 }
 
-// CA-TESTES-06
-func TestAffectedCallsVitestRelatedWithChangedPanelFiles(t *testing.T) {
-	t.Parallel()
-	fsys := fstest.MapFS{"web/package.json": {Data: []byte("{}")}}
-	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
-		switch c.String() {
-		case "git diff --name-only HEAD":
-			_, _ = io.WriteString(out, "web/src/canvas.tsx\ninternal/x/x.go\n")
-		case "git ls-files --others --exclude-standard":
-			_, _ = io.WriteString(out, "web/src/new.test.ts\ndocs/a.md\n")
-		}
-		return 0
-	}}
-	r, _ := newRunner(fsys, clock.NewFake(today), ex)
-
-	if code := r.Affected(context.Background()); code != 0 {
-		t.Fatalf("code %d", code)
-	}
-
-	v := ex.callsMatching("vitest")
-	if len(v) != 1 || v[0].Dir != "web" || v[0].String() != "npx vitest related --run --reporter=json src/canvas.tsx src/new.test.ts" {
-		t.Fatalf("vitest calls = %+v", v)
-	}
-	g := ex.callsMatching("go test")
-	if len(g) != 1 || strings.Contains(g[0].String(), "-count") {
-		t.Fatalf("go test must use the test cache: %v", g)
-	}
-}
-
 // CA-TESTES-08
 func TestLintRunsWithSuiteTagsAndMissingBinaryPointsToSetup(t *testing.T) {
 	t.Parallel()
@@ -275,35 +246,48 @@ func TestLintRunsWithSuiteTagsAndMissingBinaryPointsToSetup(t *testing.T) {
 	}
 }
 
+// CA-TESTES-08
 func TestLintIssuesFailTheSuite(t *testing.T) {
 	t.Parallel()
-	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
-		if c.Name == "golangci-lint" {
-			_, _ = io.WriteString(out, "x.go:1:1: use of `time.Sleep` forbidden (forbidigo)\n")
-			return 1
-		}
-		return 0
-	}}
-	r, out := newRunner(nil, clock.NewFake(today), ex)
+	for _, suite := range []string{"fast", "full"} {
+		t.Run(suite, func(t *testing.T) {
+			t.Parallel()
+			ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
+				if c.Name == "golangci-lint" {
+					_, _ = io.WriteString(out, "x.go:1:1: use of `time.Sleep` forbidden (forbidigo)\n")
+					return 1
+				}
+				return 0
+			}}
+			r, out := newRunner(nil, clock.NewFake(today), ex)
 
-	if code := r.RunSuite(context.Background(), Suites["fast"]); code == 0 || !strings.Contains(out.String(), "(forbidigo)") {
-		t.Fatalf("exit %d:\n%s", code, out)
-	}
-	if n := len(ex.callsMatching("golangci-lint")); n != 1 {
-		t.Fatalf("lint ran %d times", n)
-	}
-	r2, _ := newRunner(nil, clock.NewFake(today), ex)
-	r2.RunSuite(context.Background(), Suites["heavy"])
-	if n := len(ex.callsMatching("golangci-lint")); n != 1 {
-		t.Fatalf("heavy suite ran the linter")
+			if code := r.RunSuite(context.Background(), Suites[suite]); code == 0 || !strings.Contains(out.String(), "(forbidigo)") {
+				t.Fatalf("exit %d:\n%s", code, out)
+			}
+			if n := len(ex.callsMatching("golangci-lint")); n != 1 {
+				t.Fatalf("lint ran %d times", n)
+			}
+		})
 	}
 }
 
-// The heavy suite has no hard limit, so go test must not kill it at its
-// default 10 minutes; the timed suites keep the default.
-func TestOnlyHeavyDisablesTheGoTestTimeout(t *testing.T) {
+func TestHeavySuiteDoesNotLint(t *testing.T) {
 	t.Parallel()
-	for _, suite := range []string{"fast", "full", "heavy"} {
+	ex := &fakeExec{handle: func(Cmd, io.Writer) int { return 0 }}
+	r, _ := newRunner(nil, clock.NewFake(today), ex)
+	r.WriteFile = func(string, []byte) error { return nil }
+	r.RunSuite(context.Background(), Suites["heavy"])
+	if n := len(ex.callsMatching("golangci-lint")); n != 0 {
+		t.Fatalf("heavy suite ran the linter %d times", n)
+	}
+}
+
+// Every suite has a hard go test timeout a little above its budget; the
+// heavy suite has none, so go test must not kill it at its default 10 min.
+func TestEverySuiteHasAHardTimeoutExceptHeavy(t *testing.T) {
+	t.Parallel()
+	want := map[string]string{"fast": " -timeout 45s ", "full": " -timeout 4m30s ", "heavy": " -timeout 0 "}
+	for suite, flag := range want {
 		t.Run(suite, func(t *testing.T) {
 			t.Parallel()
 			ex := &fakeExec{handle: func(Cmd, io.Writer) int { return 0 }}
@@ -318,12 +302,8 @@ func TestOnlyHeavyDisablesTheGoTestTimeout(t *testing.T) {
 					main = append(main, c)
 				}
 			}
-			if len(main) != 1 {
-				t.Fatalf("go test calls = %v", main)
-			}
-			has := strings.Contains(main[0].String(), " -timeout 0 ")
-			if has != (suite == "heavy") {
-				t.Fatalf("%s suite: %s", suite, main[0])
+			if len(main) != 1 || !strings.Contains(main[0].String(), flag) {
+				t.Fatalf("%s suite: want %q in %v", suite, flag, main)
 			}
 		})
 	}

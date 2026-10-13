@@ -21,6 +21,7 @@ const QuarantineDays = 14
 // name, as used by `go test -skip`.
 type QuarantineEntry struct {
 	Test   string `yaml:"test"`
+	Suite  string `yaml:"suite"` // fast, full (default) or heavy: the build tags `testrun quarantine` runs it with
 	Issue  string `yaml:"issue"`
 	Added  string `yaml:"added"` // AAAA-MM-DD
 	Reason string `yaml:"reason"`
@@ -49,6 +50,8 @@ func loadQuarantine(fsys fs.FS) ([]QuarantineEntry, error) {
 		switch {
 		case !topLevelTestRe.MatchString(e.Test):
 			return nil, fmt.Errorf("%s: entry %d: test %q is not a top-level Go test name", QuarantinePath, i+1, e.Test)
+		case e.Suite != "" && Suites[e.Suite].Name == "":
+			return nil, fmt.Errorf("%s: entry %d (%s): suite %q is not fast, full or heavy", QuarantinePath, i+1, e.Test, e.Suite)
 		case e.Issue == "" || e.Reason == "":
 			return nil, fmt.Errorf("%s: entry %d (%s): issue and reason are required", QuarantinePath, i+1, e.Test)
 		}
@@ -59,6 +62,15 @@ func loadQuarantine(fsys fs.FS) ([]QuarantineEntry, error) {
 	return f.Tests, nil
 }
 
+// suiteName is the suite whose build tags run the entry: full unless the
+// file says otherwise (full compiles the fast tests too).
+func (e QuarantineEntry) suiteName() string {
+	if e.Suite == "" {
+		return "full"
+	}
+	return e.Suite
+}
+
 // expired reports whether the entry is past its deadline on today.
 func (e QuarantineEntry) expired(today time.Time) bool {
 	added, _ := time.Parse(time.DateOnly, e.Added)
@@ -66,14 +78,18 @@ func (e QuarantineEntry) expired(today time.Time) bool {
 	return today.Format(time.DateOnly) > deadline
 }
 
+func quarantineNames(es []QuarantineEntry) []string {
+	names := make([]string, len(es))
+	for i, e := range es {
+		names[i] = e.Test
+	}
+	return names
+}
+
 // skipPattern is the -skip value for the entries.
 func skipPattern(es []QuarantineEntry) string {
 	if len(es) == 0 {
 		return ""
 	}
-	names := make([]string, len(es))
-	for i, e := range es {
-		names[i] = e.Test
-	}
-	return "^(" + strings.Join(names, "|") + ")$"
+	return "^(" + strings.Join(quarantineNames(es), "|") + ")$"
 }

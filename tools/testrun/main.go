@@ -44,7 +44,7 @@ func run(args []string, out io.Writer) int {
 	}
 	r := &Runner{
 		Exec: osExec{root: root}, Clock: clock.Real{}, FS: os.DirFS(root), Out: out,
-		Count: *count, Shuffle: *shuffle,
+		Count: *count, Shuffle: *shuffle, Getenv: os.Getenv, AppendFile: appendFile,
 		WriteFile: func(p string, data []byte) error {
 			full := filepath.Join(root, filepath.FromSlash(p))
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -83,4 +83,18 @@ func (e osExec) Run(ctx context.Context, c Cmd, stdout io.Writer) (int, error) {
 		return -1, fmt.Errorf("run %s: %w", c, err)
 	}
 	return 0, nil
+}
+
+// appendFile appends data to the file at path, creating it if needed (the
+// GitHub Actions job summary).
+func appendFile(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
