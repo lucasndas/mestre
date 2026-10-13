@@ -23,7 +23,7 @@ var version = "dev"
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	if len(os.Args) > 1 && os.Args[1] == "run" {
-		code := app.Main(ctx, os.Args[2:], os.Stderr, os.Getenv, version)
+		code := app.Main(ctx, os.Args[2:], os.Stderr, os.LookupEnv, version)
 		stop()
 		os.Exit(code)
 	}

@@ -116,8 +116,10 @@ type GuildConfigMachine struct {
 	Name      string   `json:"name"`
 	Instance  string   `json:"instance,omitempty"`
 	Addresses []string `json:"addresses,omitempty"`
-	Priority  int      `json:"priority"`
-	Excluded  bool     `json:"excluded"`
+	// Port is the engine port of the machine (0 when unknown).
+	Port     int  `json:"port,omitempty"`
+	Priority int  `json:"priority"`
+	Excluded bool `json:"excluded"`
 }
 
 // GuildConfig is `guild.config`.
@@ -174,6 +176,9 @@ type GuildDiscarded struct {
 	FromLSN      uint64        `json:"from_lsn"`
 	Total        int           `json:"total" proto:"req"`
 	Transactions []DiscardedTx `json:"transactions"`
+	// Dropped names the external actions that waited in the queue of the
+	// fence when the old Citadel stepped down, and never went out.
+	Dropped []string `json:"dropped,omitempty"`
 }
 
 // DiscardedTx is one discarded transaction: its lsn, when it committed and
@@ -196,6 +201,9 @@ type CitadelHandover struct {
 	TargetMachineID string `json:"target_machine_id" proto:"req"`
 	LastLSN         uint64 `json:"last_lsn" proto:"req"`
 	ApprovalID      string `json:"approval_id" proto:"req"`
+	// ApprovedBy is the user that approved the handover with the PIN, which
+	// the certificate of the new epoch carries.
+	ApprovedBy string `json:"approved_by,omitempty"`
 }
 
 // TerminalAdopt is `terminal.adopt`.

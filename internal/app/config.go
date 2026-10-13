@@ -89,6 +89,7 @@ func DirPaths(dir string) Paths {
 // The files of an instance.
 func (p Paths) configFile() string { return filepath.Join(p.Config, "config.json") }
 func (p Paths) engineKey() string  { return filepath.Join(p.Config, "motor.key") }
+func (p Paths) pendingKey() string { return filepath.Join(p.Config, "motor.key.nova") }
 func (p Paths) vaultKey() string   { return filepath.Join(p.Config, "cofre.key") }
 func (p Paths) guildDB() string    { return filepath.Join(p.Banco, "mestre.db") }
 func (p Paths) envelope() string   { return filepath.Join(p.Banco, "cofre-envelope.bin") }
@@ -97,6 +98,12 @@ func (p Paths) transfers() string  { return filepath.Join(p.Banco, "transferenci
 func (p Paths) machineDB() string  { return filepath.Join(p.Maquina, "maquina.db") }
 func (p Paths) discarded(e uint64) string {
 	return filepath.Join(p.Banco, fmt.Sprintf("descartado-%d.db", e))
+}
+
+// droppedActions keeps the external actions the demotion of epoch e dropped,
+// until the report of what was discarded carries them.
+func (p Paths) droppedActions(e uint64) string {
+	return filepath.Join(p.Banco, fmt.Sprintf("descartado-%d-acoes.json", e))
 }
 
 // ensure makes the folders, private.

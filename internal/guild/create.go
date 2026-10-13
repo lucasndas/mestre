@@ -34,6 +34,8 @@ type CreateConfig struct {
 	Hostname string
 	Instance string
 	IPs      []net.IP
+	// EnginePort is the engine port of this instance (guild.config).
+	EnginePort int
 	// Timezone is the Guild time zone, the one of this machine's system.
 	Timezone string
 	// RecoveryPublicKey is the public part of the recovery key, which the
@@ -133,8 +135,8 @@ func Create(ctx context.Context, cfg CreateConfig) (*Founded, error) {
 		return nil, fmt.Errorf("guild: record the first epoch: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES (?, ?, ?, 0, 0, 'active', ?, ?)`,
-		m.ID, m.Name, m.Instance, encodeNames(m.Hostname, m.IPs), now); err != nil {
+		`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES (?, ?, ?, 0, 0, 'active', `+withPort+`, ?)`,
+		m.ID, m.Name, m.Instance, encodeNames(m.Hostname, m.IPs), cfg.EnginePort, now); err != nil {
 		return nil, fmt.Errorf("guild: register this machine: %w", err)
 	}
 	for _, c := range []struct {

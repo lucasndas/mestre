@@ -10,26 +10,33 @@ import (
 	"github.com/lucasndas/mestre/internal/transport"
 )
 
-// Credentials is the transport.CredentialChecker of the Guild: the list of
-// the revoked certificates, by serial, consulted on every handshake. The
-// Citadel loads it from machine_credentials and revokes through it; a Tower
-// receives the same list in guild.config (Replace), so the revocation holds
-// after a change of Citadel as well (docs/arquitetura/seguranca.md#tls-e-ca-interna).
+// Credentials is the transport.CredentialChecker of the Guild, consulted on
+// every handshake: it refuses the revoked certificates, by serial, and every
+// certificate of a machine that is no longer active (removed by the Owner or
+// left), by machine_id, so a certificate the registry never knew (a renewal
+// lost in a change of Citadel) falls with its machine. It is a list of
+// refusals, not of permissions: a Tower whose replica is behind must still
+// accept the renewed certificate of the Citadel it replicates from
+// (docs/arquitetura/seguranca.md#tls-e-ca-interna). The Citadel loads it from
+// the Guild database and revokes through it; a Tower loads it from its
+// replica and adds the list of guild.config, so the revocation holds after a
+// change of Citadel as well.
 type Credentials struct {
-	mu      sync.RWMutex
-	revoked map[string]struct{}
+	mu       sync.RWMutex
+	revoked  map[string]struct{}
+	machines map[string]struct{} // machines that are not active
 }
 
 var _ transport.CredentialChecker = (*Credentials)(nil)
 
 // NewCredentials returns a list that revokes the given serials.
 func NewCredentials(revoked ...string) *Credentials {
-	c := &Credentials{}
+	c := &Credentials{machines: map[string]struct{}{}}
 	c.Replace(revoked)
 	return c
 }
 
-// LoadCredentials reads the revoked serials of the Guild database.
+// LoadCredentials reads the refusals of the Guild database.
 func LoadCredentials(ctx context.Context, db *store.DB) (*Credentials, error) {
 	c := NewCredentials()
 	if err := c.Reload(ctx, db); err != nil {
@@ -38,30 +45,56 @@ func LoadCredentials(ctx context.Context, db *store.DB) (*Credentials, error) {
 	return c, nil
 }
 
-// Reload replaces the list with the revoked serials of the database, for a
-// machine that has just become the Citadel and replicated the table.
+// Reload replaces the list with the refusals of the database: the revoked
+// serials and the machines that are not active. A replica without the schema
+// yet (a Tower that just entered, before its full copy) refuses nothing more
+// than the list held: it learns the rest from guild.config.
 func (c *Credentials) Reload(ctx context.Context, db *store.DB) error {
-	rows, err := db.Reader().QueryContext(ctx, `SELECT serial FROM machine_credentials WHERE revoked_at IS NOT NULL`)
+	if db.IsReplica() {
+		if v, err := db.Version(ctx); err != nil {
+			return fmt.Errorf("guild: read the revoked credentials: %w", err)
+		} else if v == 0 {
+			return nil
+		}
+	}
+	serials, err := column(ctx, db, `SELECT serial FROM machine_credentials WHERE revoked_at IS NOT NULL`)
 	if err != nil {
 		return fmt.Errorf("guild: read the revoked credentials: %w", err)
 	}
-	defer rows.Close()
-	var serials []string
-	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
-			return fmt.Errorf("guild: read the revoked credentials: %w", err)
-		}
-		serials = append(serials, s)
+	retired, err := column(ctx, db, `SELECT machine_id FROM machines WHERE state <> 'active'`)
+	if err != nil {
+		return fmt.Errorf("guild: read the retired machines: %w", err)
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("guild: read the revoked credentials: %w", err)
+	m := make(map[string]struct{}, len(retired))
+	for _, id := range retired {
+		m[id] = struct{}{}
 	}
 	c.Replace(serials)
+	c.mu.Lock()
+	c.machines = m
+	c.mu.Unlock()
 	return nil
 }
 
-// Replace sets the list to exactly serials.
+func column(ctx context.Context, db *store.DB, q string) ([]string, error) {
+	rows, err := db.Reader().QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// Replace sets the revoked serials to exactly serials; the retired machines
+// stay.
 func (c *Credentials) Replace(serials []string) {
 	m := make(map[string]struct{}, len(serials))
 	for _, s := range serials {
@@ -77,6 +110,15 @@ func (c *Credentials) Add(serials ...string) {
 	c.mu.Lock()
 	for _, s := range serials {
 		c.revoked[s] = struct{}{}
+	}
+	c.mu.Unlock()
+}
+
+// Retire refuses every certificate of these machines from now on.
+func (c *Credentials) Retire(machineIDs ...string) {
+	c.mu.Lock()
+	for _, id := range machineIDs {
+		c.machines[id] = struct{}{}
 	}
 	c.mu.Unlock()
 }
@@ -97,9 +139,13 @@ func (c *Credentials) Revoked() []string {
 func (c *Credentials) CheckCredential(id transport.Identity, serial string) error {
 	c.mu.RLock()
 	_, bad := c.revoked[serial]
+	_, gone := c.machines[id.MachineID]
 	c.mu.RUnlock()
-	if bad {
+	switch {
+	case bad:
 		return fmt.Errorf("%w: %s (serial %s)", transport.ErrRevoked, id, serial)
+	case gone:
+		return fmt.Errorf("%w: %s (the machine left the Guild)", transport.ErrRevoked, id)
 	}
 	return nil
 }

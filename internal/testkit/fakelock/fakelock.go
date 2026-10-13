@@ -18,19 +18,20 @@ var ErrDown = errors.New("fakelock: the lock cannot be reached")
 
 // Lock is the shared state; For gives the lock as one machine sees it.
 type Lock struct {
-	mu      sync.Mutex
-	refs    map[uint64]string // epoch → the machine that created it
-	down    map[string]bool
-	allDown bool
-	held    chan struct{} // while not nil, Check waits for it to close
-	checks  map[string]int
-	claims  map[string]int
+	mu       sync.Mutex
+	refs     map[uint64]string // epoch → the machine that created it
+	down     map[string]bool
+	allDown  bool
+	held     chan struct{} // while not nil, Check waits for it to close
+	checks   map[string]int
+	answered map[string]int
+	claims   map[string]int
 }
 
 // New returns a lock with the ref of epoch, created by machineID (the first
 // ref, created with the repository of the lock).
 func New(epoch uint64, machineID string) *Lock {
-	l := &Lock{refs: map[uint64]string{}, down: map[string]bool{}, checks: map[string]int{}, claims: map[string]int{}}
+	l := &Lock{refs: map[uint64]string{}, down: map[string]bool{}, checks: map[string]int{}, answered: map[string]int{}, claims: map[string]int{}}
 	if epoch > 0 {
 		l.refs[epoch] = machineID
 	}
@@ -110,6 +111,14 @@ func (l *Lock) Checks(machineID string) int {
 	return l.checks[machineID]
 }
 
+// Answered counts the checks of one machine that returned: a check counts
+// in Checks when it starts, and here once a Hold let it go.
+func (l *Lock) Answered(machineID string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.answered[machineID]
+}
+
 // Claims counts the claims of one machine.
 func (l *Lock) Claims(machineID string) int {
 	l.mu.Lock()
@@ -135,6 +144,11 @@ func (v view) Check(ctx context.Context) (uint64, error) {
 	v.l.checks[v.id]++
 	held := v.l.held
 	v.l.mu.Unlock()
+	defer func() {
+		v.l.mu.Lock()
+		v.l.answered[v.id]++
+		v.l.mu.Unlock()
+	}()
 	if held != nil {
 		select {
 		case <-held:

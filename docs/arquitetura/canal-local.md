@@ -78,7 +78,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 ### Encaminhamento à Cidadela
 
 - O motor local resolve sozinho `help`, `debug` e `hook`; todo o resto vai à Cidadela na mensagem `cli.call` (na própria Cidadela, a chamada é atendida no mesmo processo, pelo mesmo código), cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. A Cidadela devolve `cli.result` com **a mesma resposta** (inclusive as parciais), que o motor repassa linha a linha ([mensagens](../conectividade/mensagens.md)).
-- Cidadela fora ou suspensa: `citadel_unavailable`; durante uma promoção, `citadel_in_failover`; exceto `done`, que vai para a fila de saída e é aplicado uma vez quando a Cidadela volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
+- Cidadela fora ou suspensa: `citadel_unavailable`; durante uma promoção ou uma troca planejada, `citadel_in_failover`. A Cidadela aplica a mesma regra ao `cli.call` que recebe de uma Torre e ao pedido feito nela mesma; exceto `done`, que vai para a fila de saída e é aplicado uma vez quando a Cidadela volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
 
 ## Regras e erros
 

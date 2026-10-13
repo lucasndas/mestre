@@ -27,9 +27,12 @@
 // A Citadel that sees a higher epoch stops every external action at once,
 // closes the Towers with 4007, keeps its database as descartado-<época>.db
 // and becomes a Tower, which reports the transactions the change lost. A
-// Tower that the Owner promotes stops the replication, opens the replica as
-// the main database, wins the next epoch in the lock, signs the certificate
-// and becomes the Citadel, which waits 60 s before acting outside.
+// Tower that the Owner promotes stops the replication, reads its last lsn,
+// wins the next epoch in the lock, and only then opens the replica as the
+// main database, signs the certificate and becomes the Citadel, which waits
+// 60 s before acting outside (what is left of them after a restart). The
+// acting Citadel presents the certificate with mestre.local and keeps its
+// machine certificate aside; both renew in mestre run, as do the Towers'.
 //
 // # What stays out
 //

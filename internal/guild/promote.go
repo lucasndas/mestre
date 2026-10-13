@@ -61,7 +61,13 @@ type Promoter struct {
 	mu      sync.Mutex
 	pending string
 	answer  chan Decision
+	// early are the answers given while AskPromotion ran, before its id was
+	// known, by id: only the one of that id counts.
+	early map[string]Decision
 }
+
+// maxEarlyAnswers bounds the answers kept while a question is being put.
+const maxEarlyAnswers = 8
 
 // NewPromoter returns the promoter over the Owner's channel.
 func NewPromoter(a PromotionApprover) *Promoter { return &Promoter{approver: a} }
@@ -83,10 +89,15 @@ func (p *Promoter) Ask(ctx context.Context, r PromotionRequest) (approvalID, app
 		p.mu.Lock()
 	}
 	answer := make(chan Decision, 1)
-	p.answer = answer
+	p.answer, p.early = answer, map[string]Decision{}
 	p.mu.Unlock()
 	id, err := p.approver.AskPromotion(ctx, r)
 	if err != nil {
+		p.mu.Lock()
+		if p.answer == answer {
+			p.answer, p.early = nil, nil
+		}
+		p.mu.Unlock()
 		return "", "", err
 	}
 	p.mu.Lock()
@@ -95,6 +106,10 @@ func (p *Promoter) Ask(ctx context.Context, r PromotionRequest) (approvalID, app
 		return "", "", fmt.Errorf("%w: replaced by a newer request", ErrRefusedByOwner)
 	}
 	p.pending = id
+	if d, ok := p.early[id]; ok {
+		answer <- d
+	}
+	p.early = nil
 	p.mu.Unlock()
 	// An answer given while AskPromotion ran is already in the channel.
 	select {
@@ -120,11 +135,21 @@ func (p *Promoter) clear(id string) {
 }
 
 // Decide is the Owner's answer, given by the bot or the fallback page after
-// the PIN.
+// the PIN. It counts only for the exact id of the question that waits; an
+// answer given while the question is still being put is kept by id and
+// counts only if the question gets that id.
 func (p *Promoter) Decide(approvalID string, d Decision) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.answer == nil || (p.pending != "" && p.pending != approvalID) {
+	switch {
+	case p.answer == nil || approvalID == "":
+		return ErrNotPending
+	case p.pending == "":
+		if len(p.early) < maxEarlyAnswers {
+			p.early[approvalID] = d
+		}
+		return nil
+	case p.pending != approvalID:
 		return ErrNotPending
 	}
 	select {

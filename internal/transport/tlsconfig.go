@@ -35,6 +35,13 @@ func (s *CertSource) Set(leaf *x509.Certificate, key crypto.Signer) {
 // Leaf is the current certificate.
 func (s *CertSource) Leaf() *x509.Certificate { return s.v.Load().Leaf }
 
+// Key is the private key of the current certificate: the engine of the
+// Citadel issues its certificate of mestre.local for the same key.
+func (s *CertSource) Key() crypto.Signer {
+	k, _ := s.v.Load().PrivateKey.(crypto.Signer)
+	return k
+}
+
 func (s *CertSource) get() (*tls.Certificate, error) {
 	if c := s.v.Load(); c != nil {
 		return c, nil

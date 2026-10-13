@@ -50,6 +50,36 @@ type Member struct {
 	db  *store.DB
 	key vault.KeyStore
 	clk clock.Clock
+	// pending holds the key of a renewal before the certificate is kept, so
+	// a stop between the two never leaves a key without its certificate.
+	pending vault.KeyStore
+}
+
+// UsePendingKey sets where a renewal keeps the new engine key before its
+// certificate (SaveRenewal): a file protected like the key file.
+func (m *Member) UsePendingKey(ks vault.KeyStore) { m.pending = ks }
+
+// SaveRenewal keeps a renewed engine certificate and its new key: the key
+// first where TLS finds it if the stop comes before the end, then the
+// certificate, then the key in its own file.
+func (m *Member) SaveRenewal(ctx context.Context, cert *x509.Certificate, key *ecdsa.PrivateKey) error {
+	if m.key == nil {
+		return errors.New("guild: no key store for the engine key")
+	}
+	pemKey, err := encodeKey(key)
+	if err != nil {
+		return err
+	}
+	defer clear(pemKey)
+	if m.pending != nil {
+		if err := m.pending.Save(ctx, pemKey); err != nil {
+			return fmt.Errorf("guild: keep the renewed key: %w", err)
+		}
+	}
+	if err := m.SaveCertificate(ctx, transport.KindMachine, cert); err != nil {
+		return err
+	}
+	return m.key.Save(ctx, pemKey)
 }
 
 // NewMember returns the record over an open machine database. key keeps the
@@ -123,11 +153,14 @@ func (m *Member) SaveEpoch(ctx context.Context, c protocol.Certificate) error {
 	if c.Epoch <= cur.Epoch.Epoch {
 		return fmt.Errorf("%w: epoch %d, kept %d", ErrStaleCertificate, c.Epoch, cur.Epoch.Epoch)
 	}
-	_, err = m.db.Writer().ExecContext(ctx,
+	res, err := m.db.Writer().ExecContext(ctx,
 		`UPDATE machine_identity SET epoch_cert = ?, updated_at = ? WHERE id = 1 AND guild_id = ?`,
 		encodeCert(c), m.clk.Now().UnixMilli(), c.GuildID)
 	if err != nil {
 		return fmt.Errorf("guild: keep the certificate of epoch: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return fmt.Errorf("%w: the certificate of epoch %d was not kept (Guild %s)", ErrWrongGuild, c.Epoch, c.GuildID)
 	}
 	return nil
 }
@@ -182,19 +215,38 @@ func (m *Member) TLS(ctx context.Context) (Identity, *transport.CertSource, erro
 	if m.key == nil {
 		return Identity{}, nil, errors.New("guild: no key store for the engine key")
 	}
-	data, err := m.key.Load(ctx)
-	if err != nil {
-		return Identity{}, nil, fmt.Errorf("guild: load the engine key: %w", err)
-	}
-	defer clear(data)
-	key, err := decodeKey(data)
+	key, err := m.loadKey(ctx, m.key)
 	if err != nil {
 		return Identity{}, nil, err
 	}
-	if pub, ok := id.Motor.PublicKey.(*ecdsa.PublicKey); !ok || !pub.Equal(&key.PublicKey) {
+	if !matches(id.Motor, key) && m.pending != nil {
+		// A renewal stopped after it kept the certificate: its key waits in
+		// the pending file and goes to the key file now.
+		if next, err := m.loadKey(ctx, m.pending); err == nil && matches(id.Motor, next) {
+			if err := m.SaveEngineKey(ctx, next); err != nil {
+				return Identity{}, nil, err
+			}
+			key = next
+		}
+	}
+	if !matches(id.Motor, key) {
 		return Identity{}, nil, errors.New("guild: the engine key does not match the engine certificate")
 	}
 	return id, transport.NewCertSource(id.Motor, key), nil
+}
+
+func (m *Member) loadKey(ctx context.Context, ks vault.KeyStore) (*ecdsa.PrivateKey, error) {
+	data, err := ks.Load(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("guild: load the engine key: %w", err)
+	}
+	defer clear(data)
+	return decodeKey(data)
+}
+
+func matches(cert *x509.Certificate, key *ecdsa.PrivateKey) bool {
+	pub, ok := cert.PublicKey.(*ecdsa.PublicKey)
+	return ok && pub.Equal(&key.PublicKey)
 }
 
 func encodeKey(key *ecdsa.PrivateKey) ([]byte, error) {

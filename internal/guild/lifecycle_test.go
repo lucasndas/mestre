@@ -70,6 +70,58 @@ func TestACertificateInsideItsLastThirtyDaysRenewsOverTheOpenConnection(t *testi
 	})
 }
 
+// A renewal that stops after the certificate was kept and before the key
+// file was written leaves the machine able to start: the key waits in the
+// pending file.
+func TestARenewalStoppedBetweenTheCertificateAndTheKeyIsTakenAtTheNextStart(t *testing.T) {
+	t.Parallel()
+	bubble(t, func(t *testing.T, r *rig, w *pworld) {
+		n := r.newNode("tower1")
+		j := r.enroll(n)
+		pending := &memKeys{}
+		n.member.UsePendingKey(pending)
+		key, _ := transport.GenerateKey()
+		csr, _ := transport.NewCSR(key)
+		cert, err := r.citadel.Renew(t.Context(), j.MachineID, transport.KindMachine, csr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// what SaveRenewal does before the stop: the pending key, then the
+		// certificate
+		pem, _ := guild.KeyPEM(key)
+		if err := pending.Save(t.Context(), pem); err != nil {
+			t.Fatal(err)
+		}
+		if err := n.member.SaveCertificate(t.Context(), transport.KindMachine, cert); err != nil {
+			t.Fatal(err)
+		}
+		_, src, err := n.member.TLS(t.Context())
+		if err != nil {
+			t.Fatalf("the start after the stop: %v", err)
+		}
+		if transport.Serial(src.Leaf()) != transport.Serial(cert) {
+			t.Error("the machine does not present the renewed certificate")
+		}
+		// and the key file has the new key now
+		if _, _, err := guild.NewMember(n.mach, n.keys, r.clk).TLS(t.Context()); err != nil {
+			t.Errorf("the key file after the start: %v", err)
+		}
+		// a whole SaveRenewal needs no pending file at the next start
+		key2, _ := transport.GenerateKey()
+		csr2, _ := transport.NewCSR(key2)
+		cert2, err := r.citadel.Renew(t.Context(), j.MachineID, transport.KindMachine, csr2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := n.member.SaveRenewal(t.Context(), cert2, key2); err != nil {
+			t.Fatal(err)
+		}
+		if _, src, err := guild.NewMember(n.mach, n.keys, r.clk).TLS(t.Context()); err != nil || transport.Serial(src.Leaf()) != transport.Serial(cert2) {
+			t.Errorf("after SaveRenewal: %v", err)
+		}
+	})
+}
+
 // CA-GUILDA-07
 func TestWhenTheIPsOfAMachineChangeItsCertificateFollowsAtOnce(t *testing.T) {
 	t.Parallel()
@@ -183,7 +235,7 @@ func firstError(c transport.Conn) <-chan error {
 	return out
 }
 
-// CA-GUILDA-06, on the Guild's side: the Guardian's own binary and its
+// Part of CA-GUILDA-06 (it closes with the Guardian), on the Guild's side: the Guardian's own binary and its
 // connection belong to the Guardian's stage, but its certificate and its route
 // are the Guild's and are checked here.
 func TestRemovingAnOnlineMachineTellsItToLeaveThenRevokesAndRefusesItsHandshakes(t *testing.T) {
@@ -296,7 +348,7 @@ func TestRemovingAnOnlineMachineTellsItToLeaveThenRevokesAndRefusesItsHandshakes
 	})
 }
 
-// CA-GUILDA-06
+// Part of CA-GUILDA-06, which closes with the Guardian.
 func TestAMachineRemovedWhileOfflineIsRevokedAndNotNotified(t *testing.T) {
 	t.Parallel()
 	bubble(t, func(t *testing.T, r *rig, w *pworld) {
@@ -319,7 +371,7 @@ func TestAMachineRemovedWhileOfflineIsRevokedAndNotNotified(t *testing.T) {
 	})
 }
 
-// CA-GUILDA-08, on the Guild's side: the installer that refuses is milestone 7.
+// Part of CA-GUILDA-08 (it closes in M7), on the Guild's side: the installer that refuses is milestone 7.
 func TestTheCitadelCannotBeUninstalledWhileTowersAreInTheGuild(t *testing.T) {
 	t.Parallel()
 	bubble(t, func(t *testing.T, r *rig, w *pworld) {

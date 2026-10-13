@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/transport"
 )
 
@@ -31,10 +32,14 @@ type Machine struct {
 	// Priority orders the machines for the choice of the leading Tower.
 	Priority int
 	// Excluded machines keep no secrets and are never promoted.
-	Excluded  bool
-	State     MachineState
-	Hostname  string
-	IPs       []net.IP
+	Excluded bool
+	State    MachineState
+	Hostname string
+	IPs      []net.IP
+	// Port is the engine port of the machine's instance (0 when it never
+	// said), which guild.config carries for the machines outside the local
+	// network to reach the others.
+	Port      int
 	JoinedAt  time.Time
 	RemovedAt time.Time
 }
@@ -47,7 +52,12 @@ func (m Machine) Names() transport.Names {
 type namesDoc struct {
 	Hostname string   `json:"hostname"`
 	IPs      []string `json:"ips,omitempty"`
+	Port     int      `json:"port,omitempty"`
 }
+
+// withPort is the column names with the engine port of the machine, which
+// the names a machine reports later (UpdateNames) keep.
+const withPort = `json_set(?, '$.port', ?)`
 
 func encodeNames(hostname string, ips []net.IP) string {
 	d := namesDoc{Hostname: hostname}
@@ -78,7 +88,7 @@ func scanMachine(r scanner) (Machine, error) {
 	if err := json.Unmarshal([]byte(names), &d); err != nil {
 		return Machine{}, fmt.Errorf("guild: names of machine %s: %w", m.ID, err)
 	}
-	m.Excluded, m.State, m.Hostname = excluded != 0, MachineState(state), d.Hostname
+	m.Excluded, m.State, m.Hostname, m.Port = excluded != 0, MachineState(state), d.Hostname, d.Port
 	for _, s := range d.IPs {
 		if ip := net.ParseIP(s); ip != nil {
 			m.IPs = append(m.IPs, ip)
@@ -106,6 +116,17 @@ func loadMachine(ctx context.Context, q querier, id string) (Machine, error) {
 		return Machine{}, fmt.Errorf("%w: %s", errNoMachine, id)
 	}
 	return m, err
+}
+
+// MachineOf reads one machine of the registry in db, the main database or a
+// replica: a Tower reads its own names there, the ones its next certificate
+// will carry.
+func MachineOf(ctx context.Context, db *store.DB, id string) (Machine, error) {
+	r := db.Reader()
+	if r == nil { // a replica whose copy failed to open: it is closed
+		return Machine{}, errors.New("guild: the Guild database is closed")
+	}
+	return loadMachine(ctx, r, id)
 }
 
 func listMachines(ctx context.Context, q querier) ([]Machine, error) {
@@ -156,6 +177,21 @@ func readGuild(ctx context.Context, q querier) (guildRow, error) {
 		return guildRow{}, fmt.Errorf("guild: the extra names: %w", err)
 	}
 	return g, nil
+}
+
+// GuildCertificate is the certificate of epoch the Guild database holds, the
+// last one a Citadel wrote there; ErrNoGuild when it holds no Guild yet (a
+// replica before its copy).
+func GuildCertificate(ctx context.Context, db *store.DB) (protocol.Certificate, error) {
+	v, err := db.Version(ctx)
+	if err != nil {
+		return protocol.Certificate{}, fmt.Errorf("guild: read the Guild: %w", err)
+	}
+	if v == 0 {
+		return protocol.Certificate{}, ErrNoGuild
+	}
+	g, err := readGuild(ctx, db.Reader())
+	return g.Epoch, err
 }
 
 // insertCredential records a certificate the CA issued.

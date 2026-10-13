@@ -176,6 +176,23 @@ func TestACitadelOfAnOldEpochStepsDownForATowerOfTheNewOneWithoutActingOutside(t
 		t.Errorf("a did not keep the database of its epoch: %v", err)
 	}
 	lock.Release() // the check that waited finds nobody left to act
+	waitFor := func(what string, ok func() bool) {
+		t.Helper()
+		deadline := clk.NewTimer(20 * time.Second)
+		defer deadline.Stop()
+		tick := clk.NewTicker(5 * time.Millisecond)
+		defer tick.Stop()
+		for !ok() {
+			select {
+			case <-tick.C():
+			case <-deadline.C():
+				t.Fatalf("timed out waiting for %s", what)
+			}
+		}
+	}
+	waitFor("the released check to return", func() bool {
+		return lock.Answered(founded.MachineID) >= lock.Checks(founded.MachineID)
+	})
 	if n, m := tg.n.Load(), gh.n.Load(); n != 0 || m != 0 {
 		t.Errorf("the fake Telegram got %d calls and the GitHub %d from the old Citadel; want none", n, m)
 	}

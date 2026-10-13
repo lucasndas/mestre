@@ -159,6 +159,10 @@ func TestTheIdentityOfAMachineSurvivesReopeningItsDatabaseAndIsNeverReplacedByAL
 	if err := n.member.SaveEpoch(ctx, signedEpoch(t, r.founded.CA, r.founded.GuildID, 4, "m4")); !errors.Is(err, guild.ErrStaleCertificate) {
 		t.Fatalf("saving a lower epoch = %v", err)
 	}
+	// a certificate of another Guild writes nothing, and says so
+	if err := n.member.SaveEpoch(ctx, signedEpoch(t, r.founded.CA, "another-guild", 9, "m9")); !errors.Is(err, guild.ErrWrongGuild) {
+		t.Fatalf("saving the certificate of another Guild = %v, want ErrWrongGuild", err)
+	}
 	path := n.mach.Path()
 	if err := n.mach.Close(); err != nil {
 		t.Fatal(err)
