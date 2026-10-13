@@ -20,8 +20,8 @@ type Peer struct {
 	// StartedAt is the start time of the process, when the system tells it
 	// (Windows); zero otherwise.
 	StartedAt time.Time
-	// AcceptedAt is when the connection was accepted, by the clock of the
-	// identifier.
+	// AcceptedAt is when the connection was accepted, taken by the server
+	// right after Accept returned, before the peer was read.
 	AcceptedAt time.Time
 	// Pidfd is a handle on the very process that connected (Linux,
 	// SO_PEERPIDFD). Nil means the system gave none: the process was
@@ -66,10 +66,12 @@ type Identity struct {
 // Identifier decides who calls (docs/arquitetura/seguranca.md#identidade-de-quem-chama-a-cli).
 type Identifier interface {
 	// Accept is called right after a connection is accepted, before
-	// anything is read from it. An error means the peer cannot be
+	// anything is read from it. acceptedAt is the time of the accept, taken
+	// by the server before the peer is read: a process that started after it
+	// cannot be the one that connected. An error means the peer cannot be
 	// identified, and every command that needs an identity then fails with
 	// not_identified; Peer.Close must still be called on the result.
-	Accept(c net.Conn) (Peer, error)
+	Accept(c net.Conn, acceptedAt time.Time) (Peer, error)
 	// Identify checks that the process is in a live terminal of the
 	// character agentID. A failure is an *IdentifyError.
 	Identify(ctx context.Context, p Peer, agentID string) (Identity, error)

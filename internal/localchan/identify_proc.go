@@ -6,8 +6,7 @@ import (
 	"net"
 	pathpkg "path"
 	"strings"
-
-	"github.com/lucasndas/mestre/pkg/clock"
+	"time"
 )
 
 // ProcStat is what the identification reads of a process from /proc.
@@ -55,7 +54,6 @@ type ProcIdentifier struct {
 	Peers     PeerSource
 	Proc      Proc
 	Terminals Terminals
-	Clock     clock.Clock
 	Mode      Mode
 	// CgroupBase is the cgroup that holds the terminals, as /proc shows it.
 	// Empty accepts a term-<id> cgroup anywhere.
@@ -67,11 +65,9 @@ type ProcIdentifier struct {
 var _ Identifier = (*ProcIdentifier)(nil)
 
 // Accept reads the peer before anything else happens to the connection.
-func (i *ProcIdentifier) Accept(c net.Conn) (Peer, error) {
+func (i *ProcIdentifier) Accept(c net.Conn, acceptedAt time.Time) (Peer, error) {
 	p, err := i.Peers.Peer(c)
-	if i.Clock != nil {
-		p.AcceptedAt = i.Clock.Now()
-	}
+	p.AcceptedAt = acceptedAt
 	return p, err
 }
 

@@ -294,7 +294,7 @@ func newFullEngine(t *testing.T, o engineOptions) *fullEngine {
 	srv := localchan.NewServer(localchan.Config{
 		Clock: clock.Real{},
 		Identifier: localchan.NewSystemIdentifier(localchan.SystemConfig{
-			Clock: clock.Real{}, Terminals: e.dir, Jobs: e.dir, System: sys, Mode: o.mode, CgroupBase: o.cgroup,
+			Terminals: e.dir, Jobs: e.dir, System: sys, Mode: o.mode, CgroupBase: o.cgroup,
 		}),
 		Forwarder: fwd, Instance: "test", EngineVersion: "test",
 		OnAudit: func(a localchan.Audit) {
