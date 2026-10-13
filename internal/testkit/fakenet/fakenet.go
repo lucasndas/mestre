@@ -10,9 +10,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/testkit/memio"
@@ -218,6 +220,7 @@ type Conn struct {
 	local, remote Addr
 	r, w          *memio.Pipe
 	peer          *Conn
+	reset         atomic.Bool // a write after the peer closed was lost
 }
 
 var _ net.Conn = (*Conn)(nil)
@@ -227,7 +230,20 @@ func (c *Conn) Read(b []byte) (int, error) {
 	return n, wrapTimeout(err)
 }
 
-func (c *Conn) Write(b []byte) (int, error) { return c.w.Write(b) }
+// Write mirrors TCP after the peer closed: the first write is accepted and
+// lost (the peer answers it with a reset), the next ones fail with
+// ErrConnectionReset. So a TLS alert or a request already on its way is
+// read by the side that is still open, as on a real socket.
+func (c *Conn) Write(b []byte) (int, error) {
+	n, err := c.w.Write(b)
+	if errors.Is(err, io.ErrClosedPipe) {
+		if c.reset.CompareAndSwap(false, true) {
+			return len(b), nil
+		}
+		return 0, &net.OpError{Op: "write", Net: "fakenet", Addr: c.remote, Err: ErrConnectionReset}
+	}
+	return n, err
+}
 
 // Close sends end-of-stream to the peer and stops local reads.
 func (c *Conn) Close() error {
@@ -254,4 +270,22 @@ func wrapTimeout(err error) error {
 		return &net.OpError{Op: "read", Net: "fakenet", Err: err}
 	}
 	return err
+}
+
+// Host is the network seen from one machine: Listen, and DialContext with
+// that machine as the origin (the shape of transport.Network).
+type Host struct {
+	n    *Network
+	name string
+}
+
+// Host returns the view of the network from host name.
+func (n *Network) Host(name string) Host { return Host{n: n, name: name} }
+
+// Listen listens on addr ("host:port").
+func (h Host) Listen(addr string) (net.Listener, error) { return h.n.Listen(addr) }
+
+// DialContext connects this host to addr.
+func (h Host) DialContext(ctx context.Context, addr string) (net.Conn, error) {
+	return h.n.Dial(ctx, h.name, addr)
 }

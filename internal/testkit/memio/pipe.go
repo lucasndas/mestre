@@ -56,10 +56,12 @@ func (p *Pipe) Write(b []byte) (int, error) {
 		return 0, p.brokenErr
 	case p.eof:
 		return 0, ErrClosedPipe
+	case p.blackhole:
+		// Over a half-open link the writer learns nothing, not even that
+		// the reader closed.
+		return len(b), nil
 	case p.readerOff:
 		return 0, io.ErrClosedPipe
-	case p.blackhole:
-		return len(b), nil
 	}
 	c := chunk{data: append([]byte(nil), b...), at: p.clk.Now().Add(p.latency)}
 	p.chunks = append(p.chunks, c)
@@ -109,9 +111,14 @@ func (p *Pipe) wake() {
 	p.mu.Unlock()
 }
 
-// CloseWrite ends the stream: the reader gets io.EOF after the data.
+// CloseWrite ends the stream: the reader gets io.EOF after the data. With
+// the blackhole on, the end of stream is lost like the data (half-open).
 func (p *Pipe) CloseWrite() {
 	p.mu.Lock()
+	if p.blackhole {
+		p.mu.Unlock()
+		return
+	}
 	p.eof = true
 	p.cond.Broadcast()
 	p.mu.Unlock()

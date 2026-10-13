@@ -284,3 +284,61 @@ func TestMutualTLSOverFakeNetwork(t *testing.T) {
 		}
 	})
 }
+
+func TestWriteAfterThePeerClosedIsLikeTCP(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		n := fakenet.New(clock.Real{})
+		l, _ := n.Listen("citadel:1")
+		defer l.Close()
+		go func() {
+			if s, err := l.Accept(); err == nil {
+				_, _ = s.Write([]byte("alert"))
+				_ = s.Close()
+			}
+		}()
+		c, err := n.Host("tower").DialContext(t.Context(), "citadel:1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		if _, err := c.Write([]byte("request")); err != nil {
+			t.Fatalf("first write after the peer closed = %v, want it accepted and lost", err)
+		}
+		if _, err := c.Write([]byte("more")); !errors.Is(err, fakenet.ErrConnectionReset) {
+			t.Fatalf("second write = %v, want a reset", err)
+		}
+		if b, err := io.ReadAll(c); string(b) != "alert" || err != nil {
+			t.Fatalf("what the peer sent before closing: %q, %v", b, err)
+		}
+	})
+}
+
+func TestHalfOpenLosesTheEndOfStream(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		n := fakenet.New(clock.Real{})
+		l, _ := n.Listen("citadel:1")
+		defer l.Close()
+		accepted := make(chan net.Conn, 1)
+		go func() {
+			s, _ := l.Accept()
+			accepted <- s
+		}()
+		c, err := n.Host("tower").DialContext(t.Context(), "citadel:1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		s := <-accepted
+		n.HalfOpen("tower", "citadel")
+		_ = s.Close()
+		if _, err := c.Write([]byte("x")); err != nil {
+			t.Fatalf("write over a half-open link = %v", err)
+		}
+		_ = c.SetReadDeadline(clock.Real{}.Now().Add(time.Minute))
+		if _, err := c.Read(make([]byte, 1)); !errors.Is(err, os.ErrDeadlineExceeded) {
+			t.Fatalf("read = %v, want a timeout: no FIN crosses a half-open link", err)
+		}
+	})
+}
