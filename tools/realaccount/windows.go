@@ -264,6 +264,7 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 		}
 	}
 	describeLeft(out, sessions)
+	describeTokenHolders(out, sessions)
 	return fmt.Errorf("a minute after the last terminal ended, the agent account still has the logon sessions %#x (profile loaded: %v)", sessions, hive)
 }
 
