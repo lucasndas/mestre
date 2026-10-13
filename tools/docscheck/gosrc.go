@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"go/scanner"
 	"go/token"
 	"io/fs"
@@ -51,30 +50,6 @@ var (
 	// staleGateRe keeps only the comments the stale-comment check may match.
 	staleGateRe = regexp.MustCompile(`\bM[0-9]\b|(?i:spike)\s+[0-9]`)
 )
-
-// mayHitStaleGate is a cheap test that is false for most text: it can only be
-// true where staleGateRe could match (an M and a number, or the word spike in
-// any case). The scan asks it of a whole file before reading the comments,
-// and of a comment before the regexp, which is what costs.
-func mayHitStaleGate[T ~string | ~[]byte](s T) bool {
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case 'M':
-			if i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9' {
-				return true
-			}
-		case 's', 'S':
-			if i+5 <= len(s) && s[i+1]|0x20 == 'p' && s[i+2]|0x20 == 'i' && s[i+3]|0x20 == 'k' && s[i+4]|0x20 == 'e' {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (g *commentGroup) matchesStaleGate() bool {
-	return mayHitStaleGate(g.Text) && staleGateRe.MatchString(g.Text)
-}
 
 // skipGoDir says whether the walk leaves the folder: like the go tool, the
 // ones starting with "." or "_" (VCS data, agent checkouts, ...), plus
@@ -143,9 +118,6 @@ func scanGo(fsys fs.FS) *goScan {
 }
 
 func (s *goScan) scanFile(fset *token.FileSet, p string, src []byte) {
-	if !bytes.Contains(src, []byte("CA-")) && !mayHitStaleGate(src) {
-		return // no comment of this file can be a marker or hit the stale gate
-	}
 	file := fset.AddFile(p, -1, len(src))
 	var sc scanner.Scanner
 	sc.Init(file, src, func(token.Position, string) {}, scanner.ScanComments)
@@ -155,7 +127,7 @@ func (s *goScan) scanFile(fset *token.FileSet, p string, src []byte) {
 	var cur *commentGroup
 	prev := -10
 	flush := func() {
-		if cur != nil && cur.matchesStaleGate() {
+		if cur != nil && staleGateRe.MatchString(cur.Text) {
 			s.comments = append(s.comments, *cur)
 		}
 		cur = nil
@@ -171,10 +143,8 @@ func (s *goScan) scanFile(fset *token.FileSet, p string, src []byte) {
 		line := file.Line(pos)
 		if strings.HasPrefix(lit, "//") {
 			text := strings.TrimPrefix(lit, "//")
-			if t := strings.TrimSpace(text); strings.HasPrefix(t, "CA-") {
-				if m := markerRe.FindStringSubmatch(t); m != nil {
-					s.markers = append(s.markers, codeMarker{ID: m[1], File: p, Line: line, Test: isTest})
-				}
+			if m := markerRe.FindStringSubmatch(strings.TrimSpace(text)); m != nil {
+				s.markers = append(s.markers, codeMarker{ID: m[1], File: p, Line: line, Test: isTest})
 			}
 			if !track {
 				continue
@@ -198,7 +168,7 @@ func (s *goScan) scanFile(fset *token.FileSet, p string, src []byte) {
 				g.lines = append(g.lines, line+i)
 				g.Text += strings.TrimSpace(l) + " "
 			}
-			if g.matchesStaleGate() {
+			if staleGateRe.MatchString(g.Text) {
 				s.comments = append(s.comments, *g)
 			}
 		}
