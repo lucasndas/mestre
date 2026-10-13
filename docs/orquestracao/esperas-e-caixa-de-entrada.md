@@ -10,7 +10,7 @@ Esperar é responsabilidade do **motor**, nunca de um agente parado em loop cons
 
 ### Caixa de entrada
 
-Uma fila por personagem, no banco da Cidadela. Cada item tem: `id`, destino, tipo (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`), remetente, texto, anexos, origem (só para `user`: canal, usuário, nível, conversa e mensagem respondida), referências (ask, espera, mesa, missão), criado em e estado (`queued` → `delivered`, ou `expired`/`cancelled`).
+Uma fila por personagem, no banco da Cidadela. Cada item tem: `id`, destino, tipo (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`), remetente, texto, anexos, origem (só para `user`: canal, usuário, nível, conversa e mensagem respondida), referências (ask, espera, mesa, missão), criado em e estado (`queued` → `delivered`, ou `expired`/`cancelled`). O resultado de um pedido que ficou enfileirado (`queued: true`, [convenções da CLI](../cli/convencoes.md#saída---json)) chega como item `system` com o `op_id` do pedido.
 
 **Prioridade** (dentro de cada nível, ordem de chegada): 1) mensagens do Dono; 2) mensagens dos demais usuários; 3) todo o resto. Usuários só escrevem ao Grão-Mestre ([roteamento](../telegram/roteamento.md)).
 

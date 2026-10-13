@@ -28,6 +28,7 @@ Um único objeto JSON em stdout, stderr vazio e o mesmo código de saída do mod
 - `data` tem a forma documentada em cada comando. Campos podem ser acrescentados; um campo existente nunca muda de sentido.
 - Chaves em `snake_case`, datas em ISO 8601 com fuso, durações em segundos (inteiro).
 - `error.code` é um nome estável, mais específico que o código de saída (ex.: `no_capable_machine`).
+- **Pedido enfileirado:** `{"ok": true, "data": {"queued": true, "op_id": "<id>", …}}` quer dizer **aceito e pendente, não feito** (Cidadela fora ou GitHub fora). No modo texto a saída começa com `PENDING:` e diz o que ficou na fila e que o resultado chega na caixa de entrada (ex.: `PENDING: pr open queued (op 7f3…); the result will arrive in your inbox`); nunca a frase de sucesso do comando (ex.: nunca "PR opened"). Quando o pedido sai da fila, o resultado (sucesso ou erro, com o `op_id`) entra na [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) de quem pediu. Como o personagem deve tratar isso: [sessão zero do personagem](../sessao-zero/personagem.md#estrutura-do-mestremd).
 
 ### Códigos de saída
 | Código | Família de `error.code` | Quando |
@@ -121,6 +122,7 @@ As variáveis de ambiente vêm da sessão zero do personagem (M4); decretos e ap
 - **CA-CLI-CONV-07** · *rápida* — **Dado** um alvo no estado "aguardando permissão", **quando** alguém roda `mestre ask "<alvo>" --raw "y\n"`, **então** sai com 3 e `permission_prompt`, e nada é digitado.
 - **CA-CLI-CONV-08** · *rápida* — **Dado** um personagem comum, **quando** roda `mestre help`, **então** não aparecem `table`, `gh`, `app`, `notify` nem `recruit`.
 - **CA-CLI-CONV-09** · *rápida* — **Dado** o motor local parado, **quando** roda `mestre debug`, **então** o item 3 aparece como `fail` com dica e o código de saída é 5.
+- **CA-CLI-CONV-11** · *rápida* — **Dado** o aluguel da trava vencido, **quando** um personagem roda `mestre pr open`, **então** sai com 0, o `--json` tem `queued: true` e `op_id`, e o modo texto começa com `PENDING:` e não contém "opened"; **e quando** a fila é enviada, **então** o personagem recebe na caixa de entrada um item com o mesmo `op_id` e o resultado.
 - **CA-CLI-CONV-10** · *rápida* — **Dado** um texto com um token no formato `ghp_…`, **quando** o Grão-Mestre roda `mestre reply` com ele, **então** sai com 3 e `secret_detected`, e nada é enviado.
 
 ## Depende de

@@ -47,10 +47,11 @@ description: >-
 2. Pedir algo: `ask` só para pergunta rápida; trabalho longo com `--no-wait` e o padrão "ask back" (pedir que o outro responda com `mestre ask "<meu nome>" "<resultado>"`).
 3. Tempo estourado (exit 6): nunca reenviar; usar `check` e esperar.
 4. Pergaminhos (só dentro das mesas): `note create|read|write|edit|stack`; usar `--expect-rev` ao gravar; `delete` só a pedido de usuário.
-5. Terminar: toda tarefa ou etapa termina com `mestre done "<resumo>"` (ou `--return "<motivo>"` para devolver à etapa anterior); sem isso a etapa é dada como travada.
-6. Esperar sem gastar: `mestre wait …` e encerrar o turno; `inbox` e `waits` para ver a fila e as esperas.
-7. Etiqueta: não interromper quem trabalha; `--raw` só para menus; não editar arquivo que outro está mexendo (perguntar ao Mestre da mesa).
-8. O que cada código de saída pede (3 pedir a quem pode, 5 tentar depois, 7 olhar o estado, 9 esperar a caixa de entrada).
+5. Pendente não é feito: um comando que responde `queued: true` (texto `PENDING:`) só foi aceito; o resultado chega na caixa de entrada com o `op_id`. Até lá, dizer que está pendente, nunca que aconteceu.
+6. Terminar: toda tarefa ou etapa termina com `mestre done "<resumo>"` (ou `--return "<motivo>"` para devolver à etapa anterior); sem isso a etapa é dada como travada.
+7. Esperar sem gastar: `mestre wait …` e encerrar o turno; `inbox` e `waits` para ver a fila e as esperas.
+8. Etiqueta: não interromper quem trabalha; `--raw` só para menus; não editar arquivo que outro está mexendo (perguntar ao Mestre da mesa).
+9. O que cada código de saída pede (3 pedir a quem pode, 5 tentar depois, 7 olhar o estado, 9 esperar a caixa de entrada).
 
 **`mestre-coordenacao-mesa`** (Mestres de mesa)
 1. Planejar: transformar o pedido em missão (etapas, fichas e classes, paralelo, devoluções com limite, aprovações) e escrever o arquivo de `quest create`.
