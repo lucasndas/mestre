@@ -1,0 +1,71 @@
+# The real-account tests (docs/qualidade/testes.md#contas-reais): the parts of
+# the criteria of the terminal, the launcher and the vault that need real
+# accounts (CAP_SETUID and a second user on Linux, the batch logon of the agent
+# account, a virtual service account and DPAPI on Windows). The runners of
+# GitHub are thrown away after each job and give the job root (Linux) and
+# administrator (Windows) without a password, so tools/realaccount creates the
+# accounts, the unit or services, runs the tests as the engine and removes
+# everything; it refuses to start unless MESTRE_REAL_ACCOUNT=1, which only this
+# file sets. Its own workflow, not a job of nightly.yml: it also runs on the
+# pull requests that touch what it tests, and a failure here must not look
+# like a failure of the nightly checks. The ruleset of main does not require it
+# (docs/desenvolvimento/ambiente.md#ci-e-proteção-da-main).
+# Third-party actions are pinned by commit SHA, like ci.yml.
+name: Real accounts
+
+on:
+  schedule:
+    - cron: "47 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "internal/launcher/**"
+      - "internal/winsvc/**"
+      - "internal/terminal/**"
+      - "internal/vault/**"
+      - "internal/localchan/**"
+      - "internal/realaccount/**"
+      - "tools/realaccount/**"
+      - "cmd/**"
+      - "packaging/systemd/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/real-accounts.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-accounts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-accounts:
+    name: real accounts (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # The budget of the run (build, accounts, tests, cleanup) is the 15 minutes
+    # given to the tool below; the rest is the margin of the machine.
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Real-account tests
+        env:
+          MESTRE_REAL_ACCOUNT: "1"
+        run: go run ./tools/realaccount run -budget 15m
