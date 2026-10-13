@@ -237,6 +237,13 @@ func (r *reader) row() []any {
 	return row
 }
 
+// maxPrealloc bounds what the decoder reserves up front for the number of
+// changes it read from the record: that count is checked against the bytes
+// left, which still allowed 88 times the size of the record (a row is
+// bounded the same way but costs 16 bytes a value, which the record must
+// really carry).
+const maxPrealloc = 64
+
 // DecodeChanges is the inverse of EncodeChanges.
 func DecodeChanges(body []byte) ([]Change, error) {
 	r := &reader{b: body}
@@ -250,7 +257,7 @@ func DecodeChanges(body []byte) ([]Change, error) {
 	if r.err != nil {
 		return nil, r.err
 	}
-	cs := make([]Change, 0, n)
+	cs := make([]Change, 0, min(n, maxPrealloc))
 	for range n {
 		var c Change
 		c.Op = Op(r.byte())

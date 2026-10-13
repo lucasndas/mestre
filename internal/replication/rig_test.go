@@ -3,6 +3,7 @@ package replication_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -258,13 +259,22 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	if err := os.WriteFile(path, template, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var err error
+	// The rows of the template are stamped with the real time; the test lives in the bubble's.
+	// Nothing but the store writes to the log, so this goes around the store.
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.ExecContext(ctx, `UPDATE replication_log SET at = ?`, r.clk.Now().UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
 	r.cdb, err = guilddb.Open(ctx, path, store.Options{Synchronous: "OFF", Clock: r.clk})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The rows of the template are stamped with the real time; the test lives in the bubble's.
-	r.exec(`UPDATE replication_log SET at = ?`, r.clk.Now().UnixMilli())
 	pc := replication.PrimaryConfig{
 		DB: r.cdb, Clock: r.clk, Roster: r.roster, Dir: filepath.Join(r.dir, "snapshots"),
 		LagThreshold: o.lagThreshold,
