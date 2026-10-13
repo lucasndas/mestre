@@ -97,10 +97,11 @@ func TestTheSweepEndsTheProcessesOfTheSession(t *testing.T) {
 }
 
 // CA-TERM-05 (the sweep after the Job Object): TerminateProcess answers
-// "access denied" for a process that has already ended and whose handle
-// somebody holds, which is what a process the Job Object of the terminal is
-// just ending looks like to the sweep that follows it. That is not a failure
-// of the sweep: the process is waited for like the others.
+// "access denied" for a process that is already ending, which is what a
+// process the Job Object of the terminal is just ending looks like to the sweep
+// that follows it (the real-account tests met it). That is not a failure of the
+// sweep: the process is waited for like the others. The test makes the answer
+// real: the process ends meanwhile and the system call says "denied".
 func TestTheSweepDoesNotFailOnAProcessThatIsAlreadyEnding(t *testing.T) {
 	t.Parallel()
 	self, err := SessionOfSelf()
@@ -109,23 +110,19 @@ func TestTheSweepDoesNotFailOnAProcessThatIsAlreadyEnding(t *testing.T) {
 	}
 	child := startHelper(t)
 	pid := uint32(child.Process.Pid)
-	// The handle of os/exec stays open until Wait, so the ended process is
-	// still there for the sweep to find.
-	if err := child.Process.Kill(); err != nil {
-		t.Fatal(err)
+	opts := Options{
+		Only: func(p uint32) bool { return p == pid },
+		terminate: func(h uintptr) error {
+			_ = windows.TerminateProcess(windows.Handle(h), 1)
+			return windows.ERROR_ACCESS_DENIED
+		},
 	}
-	h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, pid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = windows.CloseHandle(h) }()
-	if ev, err := windows.WaitForSingleObject(h, windows.INFINITE); err != nil || ev != windows.WAIT_OBJECT_0 {
-		t.Fatalf("the helper did not end: %d, %v", ev, err)
-	}
-
-	n, err := sweep(self.ID, Options{Only: func(p uint32) bool { return p == pid }})
+	n, err := sweep(self.ID, opts)
 	if err != nil || n != 1 {
-		t.Fatalf("sweep = %d, %v; want the ended helper taken as done, without an error", n, err)
+		t.Fatalf("sweep = %d, %v; want the ending helper taken as done, without an error", n, err)
+	}
+	if alive(t, child.Process.Pid) {
+		t.Fatal("the helper is still running")
 	}
 }
 
