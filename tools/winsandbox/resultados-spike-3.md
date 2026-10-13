@@ -4,7 +4,7 @@
 - **Windows:** Windows 11 Enterprise 24H2, build 10.0.26100.9457 (Windows Sandbox, usuário WDAGUtilityAccount, administrador). Mesma sessão do Sandbox da rodada 2 (conta `mestre-agente` e login do `agy` reaproveitados; `spikesvc install` **não** foi rodado de novo, porque redefine a senha do `mestre-agente` e faria a DPAPI perder o Gerenciador de Credenciais).
 - **Ferramentas:** Go 1.27.2; `golang.org/x/sys` v0.47.0 (sem mudar); `github.com/aymanbagabas/go-pty` v0.2.3 e `github.com/charmbracelet/x/vt` v0.1.0 no `go.mod` só desta branch (diretiva `go 1.25.0` mantida). CLIs como `mestre-agente`: Claude Code 2.1.296, Codex 0.162.1, agy 1.3.3.
 - **Código:** `tools/winsandbox/spikes/03-mestre-pty/` (`mestrepty.exe`, também copiado como `bin\ptyhost.exe`: papéis `ptyhost`, `service` = motor, `run`/`ctl` = condutor, `helper`); `01-agent-service/startpty.go` (pedido `start-pty` do launcher) e ajustes em `service.go` (campos do pedido; o log do launcher não grava mais o corpo de pedidos com segredo) e `login.ps1` (caminhos reais dos três CLIs e modos `*-install`).
-- **Evidências:** `C:\winsandbox\resultados\rodada-3\` (`clis.md`, `clis-claude.md`, `survive.md`, `hkcu.md`, `isolate.md`, `kill.md`, `ident.md`, `wmi.md`, `logs\`). Nenhum segredo nem token nos arquivos (conferido; o segredo dos terminais fica só em `C:\ProgramData\MestreSpike\no\terminals.json`, ACL do serviço e SYSTEM).
+- **Evidências:** `C:\winsandbox\resultados\rodada-3\` (`clis.md`, `clis-claude.md`, `survive.md`, `hkcu.md`, `isolate.md`, `procaccess.md`, `kill.md`, `ident.md`, `wmi.md`, `logs\`). Nenhum segredo nem token nos arquivos (conferido; o segredo dos terminais fica só em `C:\ProgramData\MestreSpike\no\terminals.json`, ACL do serviço e SYSTEM).
 
 ## Resumo
 
@@ -15,7 +15,7 @@
 | 3. Motor: `start-pty`, PID do par, aperto de mão; `cli.sock` | **Passou** | `SIO_AF_UNIX_GETPEERPID` deu o PID certo nos dois sentidos (motor→ptyhost e 11/11 chamadores do `cli.sock`) |
 | 4. Agente falso, `claude`, `codex`, `agy` pelo ptyhost | **Passou** | entrada, saída e modo cru (`\x03` como byte) nos quatro |
 | 5. Sobrevivência (motor e launcher reiniciados) | **Passou** | mesmos PIDs, mesma tela, digitação depois da volta; `agy -p /usage` num ptyhost novo achou o login; HKCU e Gerenciador de Credenciais em ordem |
-| 6. Isolamento | **Parcial: socket e segredo passaram; acesso ao processo do ptyhost não executado** | conectar, mudar a ACL e apagar o socket recusados (fora e dentro de outro terminal); segredo errado recusado |
+| 6. Isolamento | **Passou** | conectar, mudar a ACL e apagar o socket recusados (fora e dentro de outro terminal); segredo errado recusado; `OpenProcess` no ptyhost com `PROCESS_VM_READ` e `PROCESS_DUP_HANDLE` negado (item (d) no padrão, sem o plano B) |
 | 7. Encerramento | **Passou** | `TerminateJobObject` e `TerminateProcess` do ptyhost deixam zero processos da árvore |
 | 8. Identificação pelo Job do ptyhost | **Passou** | todos os casos de dentro acertados, os de fora e o WMI recusados; nenhum atribuído ao terminal errado |
 | 9. WMI | **Passou no padrão** | o processo do WMI leva a sessão de logon do terminal; a varredura dela no fim do terminal o encerra; plano B desnecessário |
@@ -63,7 +63,7 @@
 - **`MestreSpikeLauncher` parado e iniciado:** agentes vivos. No `cmd` antigo, `reg query HKCU\Environment` e `cmdkey /list` (com `gemini:antigravity`) funcionaram antes e depois. Num ptyhost novo, iniciado depois do reinício, `agy -p "/usage" --output-format json` saiu com 0 e `"status":"SUCCESS"` (cotas na saída).
 - **Achado D:** o launcher reiniciado perde o registro dos ptyhosts que criou (o handle do perfil e a espera pelo fim de cada um morrem com o processo). O perfil continua carregado (bom para os terminais vivos), mas ninguém mais o descarrega nem fecha aquelas sessões de logon quando esses ptyhosts terminam. Plano (e) não foi preciso para o terminal funcionar; a implementação precisa que o launcher, ao subir, readote os `mestre-pty` vivos (ex.: lista persistida ou enumeração por sessão de logon) para a limpeza.
 
-## 6. Isolamento — PARCIAL
+## 6. Isolamento — PASSOU
 
 `isolate.md`, `logs\sockcheck-*.json`. Dois processos `mestre-agente`: um **fora do terminal** (iniciado pelo launcher) e um **dentro de outro terminal**:
 
@@ -75,7 +75,18 @@
 | ler o descritor do socket | permitido (`OW:RC`, esperado) | permitido |
 
 - **Segredo errado:** um motor falso com outro segredo não recebeu `ready`; o ptyhost registrou "proof does not match the secret" e fechou a conexão; o pedido seguinte não teve resposta. O motor real seguiu usando o terminal.
-- **Não executado nesta rodada:** `OpenProcess` no ptyhost com `PROCESS_VM_READ` e `PROCESS_DUP_HANDLE` (item (d)). Fica para a próxima rodada, a confirmar pelo Dono. O ptyhost tem a opção `-harden` (plano (d): restringe a DACL das threads e a DACL padrão do token, e dá ao agente um token filho com a DACL original), escrita mas não exercitada.
+- **Acesso ao processo do ptyhost (item (d)),** rodado depois, a pedido do Dono (`procaccess.md`, `logs\procaccess-*.json`): o mesmo par de processos `mestre-agente` (fora do terminal e dentro de outro terminal) tentou `OpenProcess` no ptyhost de um terminal comum, um direito por vez, fechando o handle na hora (nada foi lido nem duplicado):
+
+| Direito pedido | Fora | Dentro de outro terminal |
+|---|---|---|
+| `PROCESS_QUERY_LIMITED_INFORMATION` | concedido (esperado: `OWNER RIGHTS` consulta) | concedido |
+| `PROCESS_VM_READ` | **negado** | **negado** |
+| `PROCESS_DUP_HANDLE` | **negado** | **negado** |
+| `PROCESS_TERMINATE` | negado | negado |
+| `WRITE_DAC` | negado (o `OWNER RIGHTS` tira o `WRITE_DAC` implícito do dono) | negado |
+| `PROCESS_ALL_ACCESS` | negado | negado |
+
+  O descritor que o launcher dá ao processo basta: **o padrão do item (d) passou e o plano B não foi necessário**, então o ptyhost com `-harden` não foi exercitado. O código do plano B fica no spike sem resultado: com `-harden`, o ptyhost aplica ao próprio processo a mesma DACL, restringe a DACL das threads e a DACL padrão do token e dá ao agente um token filho com a DACL original. O teste foi de um terminal contra o ptyhost de outro; de dentro do próprio terminal o resultado é o mesmo, porque o descritor não depende do terminal (mesma conta).
 
 ## 7. Encerramento — PASSOU
 
@@ -109,8 +120,8 @@ Custo por identificação, de ponta a ponta no motor, com 2 terminais: 0,5–1,6
 
 ## O que precisa mudar nos documentos
 
-1. `docs/desenvolvimento/ordem-de-implementacao.md`, tabela "Spikes do M1", linha do spike 5: **feito (2026-10-13)** para (a), (b), (c), (e), (f) e o WMI; (d) pendente (acesso ao processo do ptyhost).
-2. `docs/arquitetura/windows.md`, "Verificar na implementação", 1.º item (spike 5): (a), (b), (c), (e), (f) passaram (§1–§5, §7); (d) continua aberto. 2.º item (WMI): o padrão se confirmou (§9); pode fechar, mantendo a conferência do checklist.
+1. `docs/desenvolvimento/ordem-de-implementacao.md`, tabela "Spikes do M1", linha do spike 5: **feito (2026-10-13)**: (a) a (f) e o WMI passaram no padrão, sem os planos B.
+2. `docs/arquitetura/windows.md`, "Verificar na implementação", 1.º item (spike 5): (a) a (f) passaram (§1–§7); o item pode fechar, ficando CA-TERM-07, CA-TERM-08 e CA-TERM-11 no CI Windows. O plano (d) não foi preciso: o descritor que o launcher dá ao processo já nega `PROCESS_VM_READ`, `PROCESS_DUP_HANDLE` e `WRITE_DAC` a outro `mestre-agente` (§6). 2.º item (WMI): o padrão se confirmou (§9); pode fechar, mantendo a conferência do checklist.
 3. `docs/arquitetura/windows.md`, "Resultado dos spikes do M1": acrescentar a rodada 3 (resumo acima) e os achados A–D.
 4. `docs/arquitetura/windows.md`, "ConPTY" (sequência): com o `go-pty`, o processo é retomado por `NtResumeProcess` depois de entrar no Job (achado A); e o `conhost.exe` do ConPTY fica fora do Job, na sessão de logon do terminal (achado C).
 5. `docs/arquitetura/windows.md`, "Iniciador": (i) o launcher nunca registra o corpo dos pedidos (o segredo vai neles); (ii) ao subir, ele readota os `mestre-pty` vivos, para descarregar o perfil e fechar a sessão de logon de cada um quando terminar (achado D).

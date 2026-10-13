@@ -28,6 +28,8 @@ func cmdHelper(args []string) error {
 		return helperStay(args[1:])
 	case "sockcheck":
 		return helperSockCheck(args[1:])
+	case "procaccess":
+		return helperProcAccess(args[1:])
 	}
 	return fmt.Errorf("unknown helper %q", args[0])
 }
@@ -139,6 +141,45 @@ func helperSockCheck(args []string) error {
 		res["delete"] = "refused: " + err.Error()
 	} else {
 		res["delete"] = "DELETED"
+	}
+	b, _ := json.MarshalIndent(res, "", "  ")
+	fmt.Println(string(b))
+	if *out != "" {
+		return os.WriteFile(*out, b, 0o644)
+	}
+	return nil
+}
+
+// helperProcAccess runs, as mestre-agente, the process checks of item (d):
+// which access rights OpenProcess grants on the ptyhost. Each handle is
+// closed at once; nothing is read or duplicated.
+func helperProcAccess(args []string) error {
+	fs := flag.NewFlagSet("procaccess", flag.ExitOnError)
+	pid := fs.Uint("pid", 0, "ptyhost pid")
+	out := fs.String("out", "", "JSON results file")
+	_ = fs.Parse(args)
+	res := map[string]string{}
+	if u, err := windows.GetCurrentProcessToken().GetTokenUser(); err == nil {
+		res["user"] = accountName(u.User.Sid)
+	}
+	for _, a := range []struct {
+		name string
+		mask uint32
+	}{
+		{"PROCESS_QUERY_LIMITED_INFORMATION (expected: granted)", windows.PROCESS_QUERY_LIMITED_INFORMATION},
+		{"PROCESS_VM_READ", windows.PROCESS_VM_READ},
+		{"PROCESS_DUP_HANDLE", windows.PROCESS_DUP_HANDLE},
+		{"PROCESS_TERMINATE", windows.PROCESS_TERMINATE},
+		{"WRITE_DAC", windows.WRITE_DAC},
+		{"PROCESS_ALL_ACCESS", windows.PROCESS_ALL_ACCESS},
+	} {
+		h, err := windows.OpenProcess(a.mask, false, uint32(*pid))
+		if err != nil {
+			res[a.name] = "denied: " + err.Error()
+			continue
+		}
+		windows.CloseHandle(h)
+		res[a.name] = "GRANTED"
 	}
 	b, _ := json.MarshalIndent(res, "", "  ")
 	fmt.Println(string(b))

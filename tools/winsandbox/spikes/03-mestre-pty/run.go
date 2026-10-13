@@ -82,6 +82,8 @@ func cmdRun(args []string) error {
 		err = d.hkcu()
 	case "isolate":
 		err = d.isolate()
+	case "procaccess":
+		err = d.procAccess()
 	case "kill":
 		err = d.kill()
 	case "ident":
@@ -569,6 +571,64 @@ func (d *drv) isolate() error {
 	for _, id := range []string{"is-a", "is-b"} {
 		d.stop(id, "kill", true)
 	}
+	return nil
+}
+
+// Item 6 (d): which rights a mestre-agente process gets on the ptyhost
+// process, from outside any terminal and from inside another terminal. If
+// PROCESS_VM_READ or PROCESS_DUP_HANDLE is granted, plan B: the same checks
+// against a ptyhost started with -harden.
+func (d *drv) procAccess() error {
+	if _, err := d.open("pa-b", cmdExe, []string{"/q", "/k"}, []string{"PROMPT=$G$S"}, false); err != nil {
+		return err
+	}
+	waitFor("pa-b", `>`, 10*time.Second)
+	targets := []struct {
+		id     string
+		harden bool
+	}{{"pa-a", false}, {"pa-h", true}}
+	for _, tg := range targets {
+		d.say("\n## Alvo %s (harden=%v)\n", tg.id, tg.harden)
+		rec, err := d.open(tg.id, cmdExe, []string{"/q", "/k"}, []string{"PROMPT=$G$S"}, tg.harden)
+		if err != nil {
+			return err
+		}
+		st, _ := status(tg.id)
+		if st.Harden != "" {
+			d.say("- harden: %s", st.Harden)
+		}
+		granted := false
+		for _, where := range []string{"fora", "dentro"} {
+			out := filepath.Join(workDir, fmt.Sprintf("procaccess-%s-%s.json", tg.id, where))
+			_ = os.Remove(out)
+			args := []string{exePath, "helper", "procaccess", "-pid", fmt.Sprint(rec.HostPID), "-out", out}
+			start := time.Now()
+			if where == "fora" {
+				_, _ = exec.Command(filepath.Join(binDir, "spikesvc.exe"), append([]string{"open", "-svc", "launcher", "-deadline", "60s", "--"}, args...)...).CombinedOutput()
+			} else {
+				_ = typ("pa-b", windows.ComposeCommandLine(args)+"\r")
+				for time.Since(start) < 30*time.Second {
+					if _, err := os.Stat(out); err == nil {
+						break
+					}
+					time.Sleep(200 * time.Millisecond)
+				}
+			}
+			res := readOr(out, clean(screen("pa-b")))
+			d.say("\n### mestre-agente %s do terminal (ptyhost pid %d, esperou %v, prazo 30-60s)\n\n```\n%s\n```", where, rec.HostPID, time.Since(start).Round(time.Millisecond), res)
+			var m map[string]string
+			if json.Unmarshal([]byte(res), &m) == nil {
+				granted = granted || m["PROCESS_VM_READ"] == "GRANTED" || m["PROCESS_DUP_HANDLE"] == "GRANTED"
+			}
+		}
+		d.say("\n- **%s: PROCESS_VM_READ ou PROCESS_DUP_HANDLE concedido a mestre-agente: %v**", tg.id, granted)
+		d.stop(tg.id, "kill", true)
+		if !granted {
+			d.say("- padrão bastou; plano B (-harden) não é necessário para este item")
+			break
+		}
+	}
+	d.stop("pa-b", "kill", true)
 	return nil
 }
 

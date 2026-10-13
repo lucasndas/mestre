@@ -203,8 +203,18 @@ func (h *host) hardenSelf() string {
 		}
 		fixed++
 	}
+	// The process DACL too (plan (d) of docs/arquitetura/windows.md), the
+	// same one the launcher gives: engine terminate and query, owner query.
+	perr := errors.New("engine SID not found")
+	if engine, _, _, err := windows.LookupSID("", `NT SERVICE\`+serviceName); err == nil {
+		var pacl *windows.ACL
+		if pacl, perr = daclFromSDDL("D:P(A;;GA;;;SY)(A;;0x101001;;;" + engine.String() + ")(A;;0x101000;;;OW)"); perr == nil {
+			perr = windows.SetSecurityInfo(windows.CurrentProcess(), windows.SE_KERNEL_OBJECT,
+				windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, pacl, nil)
+		}
+	}
 	d, _, _ := defaultDACL(t)
-	return fmt.Sprintf("default DACL now %s; %d/%d threads restricted %v; agent gets a child token", aclSDDL(d), fixed, len(tids), errs)
+	return fmt.Sprintf("default DACL now %s; %d/%d threads restricted %v; process DACL set: err=%v; agent gets a child token", aclSDDL(d), fixed, len(tids), errs, perr)
 }
 
 func (h *host) pumpOutput() {
