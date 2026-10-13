@@ -22,6 +22,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 ### Enquadramento
 
 - **JSON Lines:** cada mensagem é um objeto JSON em uma linha UTF-8 terminada por `\n`. Máximo de 1 MiB por linha (padrão).
+- O motor espera a linha do pedido por até 10 s (padrão); a CLI recusa na origem um pedido acima do limite (`too_large`, 8).
 - Conteúdo maior (`--file`, `--attach`) vai como **caminho absoluto**; o motor lê o arquivo no disco da máquina e confere que o chamador pode lê-lo pelas regras da classe ([permissões](../classes/permissoes.md)).
 
 ### Pedido
@@ -33,7 +34,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 | Campo | Conteúdo |
 |---|---|
 | `v` | versão do canal (1) |
-| `id` | ULID gerado pela CLI; é o `request_id` e a chave de idempotência |
+| `id` | ULID gerado pela CLI; é o `request_id` e a chave de idempotência (até 128 caracteres) |
 | `agent_id` | valor de `MESTRE_AGENT_ID` (vazio se não houver) |
 | `cmd` | comando e subcomando, separados por espaço (ex.: `note write`); `hook` para o despachante |
 | `args` | argumentos posicionais, como texto; no `hook`, um único objeto: o evento normalizado ([adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento)) |
@@ -53,20 +54,20 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 ### Respostas parciais
 
-- Comandos longos (o `ask` que espera a resposta) mandam linhas `{"v":1,"id":"01J…","partial":true,"data":{"status":"queued"}}` antes da resposta final: `queued`, `delivered`, `answering` e um sinal de vida a cada 15 s (padrão).
-- A CLI não imprime as parciais (só com `--debug`); usa o sinal de vida para saber que o motor está vivo.
+- Comandos longos (o `ask` que espera a resposta) mandam linhas `{"v":1,"id":"01J…","partial":true,"data":{"status":"queued"}}` antes da resposta final: `queued`, `delivered`, `answering` e um sinal de vida a cada 15 s (padrão), `{"status":"alive"}`, mandado por conexão enquanto o pedido roda (as demais parciais são guardadas com o pedido).
+- A CLI não imprime as parciais (só com `--debug`); usa o sinal de vida para saber que o motor está vivo: sem nenhuma linha por 45 s (3 sinais), dá a conexão por morta e reenvia o pedido ([motor reiniciando](#motor-reiniciando)).
 
 ### Tempo limite
 
-- O tempo limite do lado da CLI é o do próprio comando (`--timeout` ou o padrão dele) mais 5 s de folga; comandos sem tempo limite próprio usam 30 s (padrão).
+- O tempo limite do lado da CLI é o do próprio comando (`--timeout` ou o padrão dele) mais 5 s de folga; comandos sem tempo limite próprio usam 30 s (padrão). Conta a partir da primeira conexão aceita: a espera por um motor que recusa tem janela própria ([motor reiniciando](#motor-reiniciando)).
 - Estourou: a CLI fecha a conexão e sai com 6. O pedido **continua** no motor: a resposta tardia vai para a caixa de entrada de quem pediu ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)).
 - O mesmo vale quando o processo da CLI morre (ex.: tempo limite da ferramenta de shell do provedor): conexão fechada não cancela pedido.
 
 ### Identificação e versão
 
-- Antes de ler o pedido, o motor identifica o processo do outro lado e o terminal dele, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli): no Linux, `SO_PEERCRED` e `SO_PEERPIDFD` e o cgroup do terminal em `/proc/<pid>/cgroup` (sem cgroup delegado, a subida pela árvore de processos); no Windows, o PID do outro lado do socket (`SIO_AF_UNIX_GETPEERPID`) e o Job Object do terminal, perguntado ao `mestre-pty`. O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`.
+- Antes de ler o pedido, o motor identifica o processo do outro lado e o terminal dele, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli): no Linux, `SO_PEERCRED` e `SO_PEERPIDFD` e o cgroup do terminal em `/proc/<pid>/cgroup` (sem cgroup delegado, a subida pela árvore de processos); no Windows, o PID do outro lado do socket (`SIO_AF_UNIX_GETPEERPID`) e o Job Object do terminal, perguntado ao `mestre-pty`. O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`. Sem `agent_id`, só `help`, `debug` e `hook` rodam; com `agent_id` que não confere, `help` e `debug` rodam mesmo assim e dizem que o chamador não foi identificado (é o item 4 do `mestre debug`), e todo o resto é recusado. O cgroup só vale sob a pasta de cgroup do `mestre-launcher` (a do `Delegate=yes`).
 - Também é `not_identified`: chamador sem pidfd (já colhido antes de o motor aceitar a conexão), pidfd que deixou de apontar para o mesmo PID depois da leitura do `/proc`, subida pela árvore (Linux sem cgroup) que encontrou pai mais novo que o filho em 3 tentativas seguidas e, no Windows, processo que começou depois de a conexão ser aceita.
-- `v` desconhecido: resposta `protocol_mismatch` (exit 5). O motor aceita a versão atual e a anterior, como no [protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades).
+- `v` desconhecido: resposta `protocol_mismatch` (exit 5), dada na versão atual. O motor aceita a versão atual e a anterior, como no [protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades); enquanto só existe a 1, só ela é aceita.
 
 ### Motor reiniciando
 
@@ -89,7 +90,8 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 | motor não aceita a conexão | `engine_unreachable` (gerado pela CLI) | 5 |
 | versão do canal não suportada | `protocol_mismatch` | 5 |
 
-- Um pedido com `id` já recebido nunca executa de novo: o motor devolve a resposta guardada.
+- Um pedido com `id` já recebido nunca executa de novo: o motor devolve a resposta guardada, ou liga a nova conexão ao pedido em andamento (com as parciais já mandadas). A chave é o personagem verificado mais o `id`, e a conferência da identidade vem antes de devolver qualquer resposta guardada; o mesmo `id` com outro `cmd` é `bad_request`. As respostas ficam na memória do motor por 10 min (padrão, até 4096): um reenvio depois de o motor reiniciar chega à Cidadela, que guarda o `request_id` ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
+- Recusas de identidade (`not_identified`) não são guardadas, vão para a trilha de auditoria com o motivo, e o motivo não volta à CLI.
 
 ## Critérios de aceite
 
