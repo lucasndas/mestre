@@ -235,16 +235,18 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// The WMI provider host keeps the token of whoever called
-	// Win32_Process.Create for up to a minute after the last call, and a
-	// logon session lives as long as a token of it does. That is not the
-	// launcher's to release: end the host (it starts again on demand), so what
-	// is left is the launcher's.
-	_ = runCmd(ctx, io.Discard, nil, "taskkill", "/F", "/IM", "WmiPrvSE.exe")
+	// The WMI service keeps the token of whoever called Win32_Process.Create
+	// (the tests do, from inside a terminal) for a minute or more, and a logon
+	// session lives as long as a token of it does. That is not the launcher's
+	// to release: restart the service (it is on demand, and the machine is
+	// disposable), so what is left is the launcher's.
+	if err := runCmd(ctx, io.Discard, nil, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Restart-Service winmgmt -Force"); err != nil {
+		fmt.Fprintf(out, "realaccount: the WMI service was not restarted (%v): a session it holds can look like a leak\n", err)
+	}
 	var sessions []uint64
 	var hive bool
 	polls := 0
-	for range 1920 { // EXPERIMENT: 8 minutes
+	for range 240 {
 		if sessions, err = sessionsOf(realaccount.WindowsAgentUser); err != nil {
 			return err
 		}
@@ -257,10 +259,6 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 			return nil
 		}
 		polls++
-		if polls == 240 { // EXPERIMENT
-			fmt.Fprintf(out, "EXPERIMENT: a minute passed with the sessions %#x: restarting winmgmt\n", sessions)
-			_ = runCmd(ctx, out, nil, "powershell.exe", "-NoProfile", "-Command", "Restart-Service winmgmt -Force")
-		}
 		if err := clock.Sleep(ctx, clock.Real{}, 250*time.Millisecond); err != nil {
 			return err
 		}
