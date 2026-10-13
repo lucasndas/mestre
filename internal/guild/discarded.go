@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/protocol"
@@ -15,12 +16,20 @@ import (
 // message has 1 MiB); Total still counts them all.
 const MaxDiscardedListed = 500
 
+// BookkeepingTables are the tables of the protocol's own bookkeeping (the
+// messages waiting for an ack, the ids already processed): what they lose in
+// a change of Citadel is no data of the Guild, and the outbox of each machine
+// resends it, so they stay out of the discarded transactions.
+var BookkeepingTables = []string{"outbox", "processed_commands"}
+
 // ListDiscarded reads the transactions the old Citadel committed after fromLSN,
 // the last lsn the promoted machine applied: what the change of Citadel lost
 // (docs/guilda/replicacao.md#perda-na-troca). old is the database the old
 // Citadel kept as descartado-<época>.db. Each transaction names the rows it
 // changed by table and key, never by value, so nothing of the vault leaves
-// with it. At most limit are listed; total counts them all.
+// with it; the changes of BookkeepingTables are left out, and a transaction
+// with nothing else is not listed. At most limit are listed; total counts
+// them all.
 func ListDiscarded(ctx context.Context, old *store.DB, fromLSN uint64, limit int) (total int, txs []protocol.DiscardedTx, err error) {
 	if limit <= 0 {
 		limit = MaxDiscardedListed
@@ -36,16 +45,15 @@ func ListDiscarded(ctx context.Context, old *store.DB, fromLSN uint64, limit int
 		}
 		for _, r := range rows {
 			after = r.LSN
-			total++
-			if len(txs) >= limit {
-				continue
-			}
 			changes, err := store.DecodeChanges(r.Body)
 			if err != nil {
 				return 0, nil, fmt.Errorf("guild: discarded transaction %d: %w", r.LSN, err)
 			}
 			tx := protocol.DiscardedTx{LSN: r.LSN, At: protocol.Timestamp{Time: time.UnixMilli(r.At).UTC()}}
 			for _, c := range changes {
+				if slices.Contains(BookkeepingTables, c.Table) {
+					continue
+				}
 				dc := protocol.DiscardedChange{Table: c.Table, Op: c.Op.String()}
 				if c.Op != store.OpSQL {
 					_, key, err := old.RowKey(ctx, c)
@@ -56,7 +64,13 @@ func ListDiscarded(ctx context.Context, old *store.DB, fromLSN uint64, limit int
 				}
 				tx.Changes = append(tx.Changes, dc)
 			}
-			txs = append(txs, tx)
+			if len(tx.Changes) == 0 {
+				continue
+			}
+			total++
+			if len(txs) < limit {
+				txs = append(txs, tx)
+			}
 		}
 	}
 }

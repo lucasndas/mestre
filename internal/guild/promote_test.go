@@ -52,6 +52,12 @@ func TestTheNewEpochRecordsWhereItStartsAndTheLostTransactionsAreAuditedOnce(t *
 		t.Fatalf("a second epoch 2 = %v, want ErrStaleCertificate", err)
 	}
 
+	// The bookkeeping of the protocol is no data of the Guild: left out.
+	if _, err := gdb.Writer().ExecContext(ctx,
+		`INSERT INTO processed_commands (sender, id, type, processed_at) VALUES ('m', 'x', 'machine.sheet', 0)`); err != nil {
+		t.Fatal(err)
+	}
+
 	// The taking of the command is the one transaction after from: the
 	// guild row, the epoch and the audit, by key.
 	total, txs, err := guild.ListDiscarded(ctx, gdb, from, 0)

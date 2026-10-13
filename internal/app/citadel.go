@@ -62,6 +62,8 @@ type citadelRun struct {
 
 	base      context.Context
 	external  []ExternalFunc
+	firstAct  func()
+	once      sync.Once
 	extMu     sync.Mutex
 	extCancel context.CancelFunc
 	extWG     sync.WaitGroup
@@ -75,6 +77,9 @@ func (r *citadelRun) setActing(on bool) {
 	case on && r.extCancel == nil:
 		ctx, cancel := context.WithCancel(r.base)
 		r.extCancel = cancel
+		if r.firstAct != nil {
+			r.once.Do(func() { r.extWG.Go(r.firstAct) })
+		}
 		for _, fn := range r.external {
 			r.extWG.Go(func() { _ = fn(ctx, r.fence) })
 		}
@@ -241,16 +246,20 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	e.mu.Lock()
 	e.role, e.cit, e.tow, e.unknown, e.failover = RoleCitadel, run, nil, false, false
 	e.mu.Unlock()
-	run.setActing(run.fence.Acting())
 	citadel.Mount(e.joins)
-	if b, err := e.sheetBuilder(); err == nil {
-		if sheet, err := b.Build(ctx, machinesheet.Sheet{}); err == nil {
-			_ = registry.Replace(ctx, e.id.MachineID, sheet.Object())
+	// The Citadel's own sheet is written once it acts: a Citadel that only
+	// starts, suspended, and steps down writes nothing of the Guild.
+	run.firstAct = func() {
+		if b, err := e.sheetBuilder(); err == nil {
+			if sheet, err := b.Build(pctx, machinesheet.Sheet{}); err == nil {
+				_ = registry.Replace(pctx, e.id.MachineID, sheet.Object())
+			}
 		}
 	}
 	wg.Go(func() { _ = srv.Serve(pctx, e.towers) })
 	wg.Go(func() { _ = primary.Run(pctx) })
 	wg.Go(func() { _ = run.fence.Run(pctx) })
+	run.setActing(run.fence.Acting())
 	e.changed()
 	e.log.Info("app: serving as the Citadel", "epoch", run.epoch, "fence", run.fence.State())
 
@@ -327,14 +336,18 @@ func (e *Engine) Handover(ctx context.Context, target, approvalID string, wait t
 			return restore(fmt.Errorf("app: %s did not confirm the lsn %d: %w", target, last, wctx.Err()))
 		}
 	}
-	res, err := run.srv.Link(target).Call(wctx, protocol.Outgoing{
-		Type: protocol.TypeCitadelHandover, Payload: protocol.CitadelHandover{TargetMachineID: target, LastLSN: last, ApprovalID: approvalID},
-	})
-	if err != nil || res.Status == protocol.AckError {
-		return restore(fmt.Errorf("app: citadel.handover to %s: %v %v", target, err, res.Error))
-	}
-	// The target promotes itself through the lock; the old Citadel steps
-	// down when the lock shows the new epoch.
+	// The target promotes itself through the lock and the old Citadel steps
+	// down when the lock shows the new epoch, whether or not the ack made it
+	// before the target closed its connection as a Tower.
+	refused := make(chan error, 1)
+	go func() {
+		res, err := run.srv.Link(target).Call(wctx, protocol.Outgoing{
+			Type: protocol.TypeCitadelHandover, Payload: protocol.CitadelHandover{TargetMachineID: target, LastLSN: last, ApprovalID: approvalID},
+		})
+		if err == nil && res.Status == protocol.AckError {
+			refused <- fmt.Errorf("app: %s refused citadel.handover: %v", target, res.Error)
+		}
+	}()
 	for {
 		if e.deps.Lock != nil {
 			if n, err := e.deps.Lock.Check(wctx); err == nil && n > run.epoch {
@@ -344,6 +357,8 @@ func (e *Engine) Handover(ctx context.Context, target, approvalID string, wait t
 		}
 		select {
 		case <-tick.C():
+		case err := <-refused:
+			return restore(err)
 		case <-wctx.Done():
 			return restore(fmt.Errorf("app: %s did not take the command: %w", target, wctx.Err()))
 		}

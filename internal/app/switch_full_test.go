@@ -498,6 +498,23 @@ func TestAPlannedHandoverPassesTheCommandWithTheData(t *testing.T) {
 	if st, _ := w.status(a); st.Acting {
 		t.Error("the old Citadel acts outside after the handover")
 	}
+	// Nothing of the Guild was lost: the old Citadel reports no discarded
+	// transaction (the bookkeeping of the protocol does not count).
+	report := filepath.Join(a.dir, "banco", "descartado-1.json")
+	var r struct {
+		Total int      `json:"total"`
+		LSNs  []uint64 `json:"lsns"`
+	}
+	w.waitFor("a to report what it discarded", 500*time.Millisecond, func() bool {
+		b, err := os.ReadFile(report)
+		return err == nil && json.Unmarshal(b, &r) == nil
+	})
+	if r.Total != 0 || len(r.LSNs) != 0 {
+		t.Errorf("the planned handover discarded %d transactions %v, want none", r.Total, r.LSNs)
+	}
+	if got := w.must(b, map[string]string{"op": "query", "sql": `SELECT id FROM audit_log WHERE action = 'citadel.discarded'`}); len(got.Rows) != 0 {
+		t.Errorf("the audit of the new Citadel lists discarded transactions after a planned handover: %v", got.Rows)
+	}
 	ra := w.externalRuns(a)
 	if len(ra) != 1 || len(ra[0]) == 0 || !strings.HasPrefix(ra[0][0], "on 1 ") {
 		t.Fatalf("the external function of a: %q", ra)

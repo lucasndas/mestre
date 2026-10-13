@@ -75,7 +75,7 @@ O Dono pode passar a Cidadela a outra máquina pelo painel, com PIN: a Cidadela 
 ### Volta da antiga Cidadela
 
 - Ao subir, a antiga se acha Cidadela da época antiga e fica suspensa. Uma Torre, a descoberta ou a trava mostram a época maior: ela se **rebaixa a Torre antes de qualquer ação externa** e fecha as Torres com `4007`, guarda o banco como `descartado-<época>.db`, recebe cópia completa do banco numa réplica nova e conecta na nova Cidadela. Ela nunca disputa o comando.
-- **O que descartou:** quando a réplica conhece a época seguinte (`epochs.from_lsn`), a antiga lista as transações do banco guardado com `lsn` maior e as manda à nova Cidadela em `guild.discarded`, pela fila de saída; a nova grava cada uma uma vez na auditoria (`citadel.discarded`), e o resumo fica em `descartado-<época>.json` ([perda na troca](replicacao.md#perda-na-troca)).
+- **O que descartou:** quando a réplica conhece a época seguinte (`epochs.from_lsn`), a antiga lista as transações do banco guardado com `lsn` maior, sem as tabelas de controle do protocolo (`outbox`, `processed_commands`), e as manda à nova Cidadela em `guild.discarded`, pela fila de saída; a nova grava cada uma uma vez na auditoria (`citadel.discarded`), e o resumo fica em `descartado-<época>.json` ([perda na troca](replicacao.md#perda-na-troca)).
 - **Personagens:** encerra tudo o que a nova Cidadela já retomou; os terminais dela que não foram retomados são informados à nova, que os adota.
 
 ### Personagens, missões e mesas na troca
