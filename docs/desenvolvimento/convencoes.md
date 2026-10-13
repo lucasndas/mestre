@@ -46,7 +46,7 @@ pkg/clock/           relógio injetável: único pacote que usa time.Now e tempo
 web/                 painel: React + TypeScript + Vite
   src/gen/           tipos TypeScript gerados a partir do Go
 tools/
-  testrun/ docscheck/ codecheck/   executor das suítes (testes.md), verificação de docs, regras fora do linter (Estilo, regras-de-codigo.md)
+  testrun/ docscheck/ codecheck/ rulesetcheck/   executor das suítes (testes.md), verificação de docs, regras fora do linter (regras-de-codigo.md), conferência do ruleset (ambiente.md)
   githooks/          ganchos de pré-commit e de pré-push versionados (ver ambiente.md)
   spikes/ winsandbox/   spikes de Linux; Windows Sandbox e spikes/ de Windows (ver Estilo e ambiente.md)
 .github/workflows/   CI: rápida e completa em Linux e Windows (ver ambiente.md)
