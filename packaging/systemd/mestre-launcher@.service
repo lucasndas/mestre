@@ -1,0 +1,25 @@
+# The unit of the mestre-launcher of an instance (docs/arquitetura/componentes.md,
+# "Iniciador"). The installer (M7) installs it; this is the text it carries.
+# Not exercised by any suite: Delegate and the capabilities need the real systemd.
+[Unit]
+Description=Mestre launcher (%i)
+
+[Service]
+# The account of the engine, with nothing but the two capabilities below.
+User=mestre
+ExecStart=/usr/local/bin/mestre launcher --instance %i
+# The cgroup it creates term-<id> in, one per terminal; systemd 254 or later
+# also puts the process in the leaf "launcher" (an older one: the launcher
+# moves itself there).
+Delegate=yes
+DelegateSubgroup=launcher
+# Restarting the launcher ends its own process only: the terminals go on.
+KillMode=process
+# CAP_SETUID and CAP_SETGID only to switch to mestre-agente in the child; the
+# launcher empties the ambient set at start, so what it starts has none.
+AmbientCapabilities=CAP_SETUID CAP_SETGID
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

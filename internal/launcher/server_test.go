@@ -74,7 +74,7 @@ func ptyName() string {
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	r := &rig{be: &fakeBackend{}, bin: t.TempDir(), sockets: t.TempDir(), logs: &bytes.Buffer{}, allow: true}
+	r := &rig{be: &fakeBackend{}, bin: t.TempDir(), sockets: filepath.Join(string(filepath.Separator)+"run", "mestre", "pty"), logs: &bytes.Buffer{}, allow: true}
 	if err := os.MkdirAll(filepath.Join(r.bin, "1.0.0"), 0o755); err != nil {
 		t.Fatal(err)
 	}
