@@ -12,23 +12,29 @@ Cada máquina da Guilda se apresenta com uma **ficha** atualizada sozinha, e cad
 
 | Campo | Conteúdo | Quem preenche |
 |---|---|---|
-| `machine_id`, `name`, `host`, `instance` | identificador e nome da máquina na Guilda, nome do computador e nome da [instância](../arquitetura/componentes.md#instâncias) | entrada na [Guilda](guilda.md) e motor |
+| `rev` | número da revisão da ficha, sempre crescente ([atualização](#atualização-sozinha)) | motor |
+| `machine_id`, `name`, `host`, `instance` | identificador e nome da máquina na Guilda, nome do computador e nome da [instância](../arquitetura/componentes.md#instâncias); `machine_id` e `name` são da Guilda, o motor manda `host` e `instance` | entrada na [Guilda](guilda.md) e motor |
 | `os`, `os_version`, `arch` | `linux` \| `windows`, versão (ex.: Ubuntu 26.04, Windows 11 24H2), `amd64` | motor |
-| `gui` | `true` quando há uma sessão de usuário com área de trabalho na máquina; `false` quando roda sem tela | motor |
-| `providers[]` | `{provider, profiles: [{name, version, logged_in, conformant}]}` para `claude-code`, `codex` e `antigravity` instalados; versão e conformidade são por máquina e [perfil de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta) ([conformidade](../provedores/conformidade.md)) | motor, com o resultado do [checklist](../plataforma/checklist.md) e da conformidade |
-| `browser` | navegador usado pelos MCPs de navegador dos personagens e a versão, ou ausente | motor |
+| `gui` | `true` quando há uma sessão de usuário com área de trabalho na máquina (Windows: usuário com sessão ativa ou desconectada; Linux: servidor gráfico escutando, X11 ou Wayland); `false` quando roda sem tela | motor |
+| `ips[]` | endereços IPv4 da máquina na rede local (sem loopback nem link-local); a Cidadela os passa ao registro de nomes e o certificado os acompanha ([credenciais](guilda.md#credenciais)) | motor |
+| `providers[]` | `{provider, profiles: [{name, version, logged_in, conformant, default}]}` (`default` marca o perfil que uma ficha sem `account` usa) para `claude-code`, `codex` e `antigravity` instalados; versão e conformidade são por máquina e [perfil de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta) ([conformidade](../provedores/conformidade.md)) | motor, com o resultado do [checklist](../plataforma/checklist.md) e da conformidade |
+| `browser` | `{name, version}` do navegador dos MCPs de navegador dos personagens (Chrome; senão, no Windows, o Edge, e no Linux, o Chromium), ou ausente | motor |
 | `operador` | `{enabled, ready, reason}`: **habilitado** (`enabled`) quando o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) está instalado e ligado pelo Dono nesta máquina; **pronto** (`ready`) quando, além disso, o processo da sessão está ativo, a tela desbloqueada e os itens de UAC em dia; senão `reason` (`sem_usuario`, `tela_bloqueada`, `uac`, `tarefa`) | motor, pelo processo da sessão |
-| `resources` | `cpu_cores`, `mem_bytes`, `disk_free_bytes`, `gpus[]` (modelo e memória) | motor |
+| `resources` | `cpu_cores`, `mem_bytes`, `disk_free_bytes` (do volume dos dados da máquina), `gpus[]` (modelo e, quando o sistema informa, memória); adaptador virtual (Hyper-V, VMware, VirtIO, QXL, "Basic Display") não conta como GPU | motor |
 | `transcricao` | `true` com o `whisper-server` verificado ([anexos e transcrição](../telegram/anexos-e-transcricao.md)) | motor |
-| `tools` | ferramentas com versão (`git`, `ffmpeg`) | motor |
+| `tools` | ferramentas instaladas, com versão (`git`, `ffmpeg`); a que falta fica de fora | motor |
 | `excluded` | se o Dono excluiu a máquina (sem segredos, fora da troca de Cidadela; [máquina excluída](guilda.md#máquina-excluída)) | o Dono, no painel; a ficha só mostra |
 | `online` | se a máquina está conectada, com heartbeat em dia | a Cidadela, pela conexão ([protocolo](../conectividade/protocolo.md#heartbeat-e-reconexão)) |
 
 ### Atualização sozinha
 
-- A ficha vai inteira no `hello` de cada conexão da máquina com a Cidadela ([mensagens](../conectividade/mensagens.md)).
-- Depois, a máquina manda `machine.sheet` só com os campos que mudaram, quando percebe a mudança: login de um perfil feito ou perdido, CLI de provedor atualizado ou conformidade refeita, Operador habilitado ou pronto, `whisper-server` que falhou, IPs ou disco. O motor confere os campos a cada 5 min (padrão) e logo depois de cada rodada do checklist.
-- A Cidadela guarda a última ficha de cada máquina no banco principal (`machines`) e a mostra no painel ([administração](../painel/administracao.md)). Uma máquina offline mantém a última ficha, com `online: false`.
+- A ficha vai inteira no `hello` de cada conexão da máquina com a Cidadela ([mensagens](../conectividade/mensagens.md)) e **substitui** a guardada.
+- Depois, a máquina manda `machine.sheet` só com os campos que mudaram (um campo que sumiu vai como `null`), quando percebe a mudança: login de um perfil feito ou perdido, CLI de provedor atualizado ou conformidade refeita, Operador habilitado ou pronto, `whisper-server` que falhou, IPs ou disco. O motor confere os campos a cada 5 min (padrão) e logo depois de cada rodada do checklist ou de qualquer um desses eventos. Nada mudou, nada é enviado.
+- **Disco:** `disk_free_bytes` só conta como mudado quando passa de 10% do último valor enviado (padrão); senão cada conferência geraria uma mensagem.
+- **Leitura que falha** (o monitor de login reiniciando, por exemplo) mantém o valor anterior daquela parte: a falha não vira "perdi todos os logins".
+- **`rev`:** o `hello` e cada `machine.sheet` levam um `rev` acima de todos os anteriores (acompanha o relógio). A Cidadela descarta, confirmando, um `machine.sheet` cujo `rev` não passa do guardado, e assim uma mensagem que esperou na fila de saída não desfaz a ficha mais nova de um `hello` posterior; sem `rev`, é `invalid_payload`.
+- A Cidadela guarda a última ficha de cada máquina no banco principal (`machines.sheet`, uma linha por máquina) e a mostra no painel ([administração](../painel/administracao.md)). Ao entregá-la, acrescenta o que é dela: `machine_id`, `name`, `excluded` e `online` (o que a máquina mandar nesses campos é ignorado). O nome do computador e os IPs da ficha vão ao registro de nomes, e o certificado acompanha. Uma máquina offline mantém a última ficha, com `online: false`.
+- A máquina que é a Cidadela não tem conexão consigo mesma: o motor dela grava a própria ficha direto no registro, e ela aparece sempre online.
 
 ### Requisitos
 
@@ -45,21 +51,26 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 | `operador: true` | `operador.enabled: true` (a ativação espera `ready`, [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) |
 | `gui: true` | `gui: true` **e** o personagem é da base `operador` (abaixo) |
 
-- O provedor da ficha (`agent`) vira sozinho o requisito `provider`; não é preciso repeti-lo.
-- Requisito desconhecido é recusado ao salvar a base, a ficha ou a classe, com a lista dos aceitos.
+- O provedor da ficha (`agent`) vira sozinho o requisito `provider`; não é preciso repeti-lo. Dois valores que não podem valer juntos (`os: linux` numa base e `os: windows` na classe, ou `provider` contra `agent`) são recusados ao salvar; `mem_min` soma pelo maior.
+- **Perfil padrão:** sem `account`, vale o perfil com `default: true` do provedor, ou o único que a máquina tem; com vários e nenhum padrão, a máquina não atende ("sem perfil de conta padrão").
+- Requisito desconhecido, valor de tipo errado (`mem_min` é um inteiro de bytes) e `provider` fora de `claude-code`, `codex` e `antigravity` são recusados ao salvar a base, a ficha ou a classe, com a lista dos aceitos.
 
 ### Casamento e escolha da máquina
 
-- **Casamento:** uma máquina atende a um personagem quando está online e atende a **todos** os requisitos dele. O resultado, para cada máquina, é "atende" ou o **primeiro requisito não atendido**, em texto curto (ex.: "windows-pc: perfil de conta `claude-trabalho` não está logado").
+- **Casamento:** uma máquina atende a um personagem quando está online e atende a **todos** os requisitos dele. O resultado, para cada máquina, é "atende" ou o **primeiro requisito não atendido**, em texto curto (ex.: "windows-pc: perfil de conta `claude-trabalho` não está logado"). A ordem da conferência é a da tabela acima, com "offline" na frente, e a primeira que falha é a dita.
 - **Quem escolhe:** a Cidadela, ao criar o personagem, entre as máquinas que atendem; a ordem de preferência e a espera por vaga (`waiting_slot`) são de [personagens](../orquestracao/personagens.md#escolha-da-máquina).
 - **Nenhuma atende:** o personagem **não roda em outra máquina**. A criação falha com o motivo de cada máquina, e o Dono é avisado pelo Telegram e pelo painel, com o que falta em cada uma; quem pediu (o Mestre da mesa, por exemplo) recebe o mesmo motivo ([coordenação](../cli/coordenacao.md)).
 - **Durante a vida do personagem:** se a máquina deixa de atender (o login do perfil caiu, por exemplo), o personagem continua até o próximo reinício; ao reiniciar, a escolha é feita de novo, e o aviso ao Dono vale do mesmo jeito.
 - O Grão-Mestre roda sempre na Cidadela ([Cidadela e Torres](cidadela-e-torres.md)); o checklist avisa quando uma máquina não excluída não atende aos requisitos da ficha dele.
 
+### No código
+
+`internal/machinesheet`. A máquina monta a ficha a partir de sondas pequenas atrás de interfaces (sistema, provedores, Operador, navegador, ferramentas, transcrição): a sonda do sistema é real e por sistema (Linux: `/etc/os-release`, `/proc/meminfo`, `/sys/bus/pci`; Windows: registro e API do sistema), e as de provedores, Operador e transcrição são entregues pelos marcos que as criam. A versão de um programa (o navegador no Linux, `git`, `ffmpeg`) vem de um `Runner` que o motor liga às camadas que iniciam processos; o pacote não inicia nenhum. A Cidadela registra o tratador de `machine.sheet` e o gancho do `hello`, e responde "quem atende" com o casamento acima. Ler os `requires` de bases, fichas e classes ao salvá-las (CA-FMAQ-04) é do M3 e do M4 (CA-FMAQ-03, com fichas e perfis de conta).
+
 ## Regras e erros
 
 - **"Precisa de interface"** (`gui: true`) é atendido **só** pela base do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc): só é aceito numa base `operador` e nas fichas dela; em qualquer outra base, ficha ou classe, é recusado ao salvar. Fora do Operador não há agentes com tela ([ADR 0020](../decisoes/0020-linux-e-windows-em-qualquer-papel.md)).
-- Uma ficha recebida com campo desconhecido é aceita (o campo é ignorado); sem os campos obrigatórios (`os`, `arch`, `providers`), a conexão recebe `invalid_payload`.
+- Uma ficha recebida com campo desconhecido é aceita (o campo é ignorado); sem os campos obrigatórios (`os`, `arch`, `providers`), a conexão recebe `invalid_payload`, e um `machine.sheet` que deixaria a ficha assim também. Máquina fora da Guilda (removida, ou que nunca entrou) recebe `forbidden`.
 - A ficha nunca leva segredos: perfis de conta aparecem só pelo nome e pelo estado do login.
 
 ## Critérios de aceite

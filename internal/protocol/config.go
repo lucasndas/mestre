@@ -99,7 +99,8 @@ type HelloInfo struct {
 type Hooks struct {
 	// OnHello lets the Citadel refuse an opening (a revoked machine, a
 	// sheet it does not accept). Returning a *CloseError closes with that
-	// code; any other error closes with `forbidden`.
+	// code; a *Error answers with its code (`invalid_payload` for a sheet
+	// without the required fields); any other error closes with `forbidden`.
 	OnHello func(ctx context.Context, peer Peer, h *Hello) error
 	// OnConnect is called when a connection is established, before the
 	// outbox is resent; OnDisconnect when it ends, with the cause.

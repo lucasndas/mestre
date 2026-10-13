@@ -8,9 +8,9 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 
 | `type` | Sentido | Ack | Campos principais do `payload` | Resposta |
 |---|---|---|---|---|
-| `hello` | T→C | — | `protocol {min, max}`, `capabilities[]` (opcional), `version`, `sheet` (a [ficha da máquina](../guilda/ficha-da-maquina.md) inteira), `certificate` (certidão de época que segue), `replica_lsn`, `terminals[]` (estado atual) | `welcome {protocol, capabilities[], citadel_version, citadel_time, certificate}`, ou fechamento `4003`, `4006` ou `4007` |
+| `hello` | T→C | — | `protocol {min, max}`, `capabilities[]` (opcional), `version`, `sheet` (a [ficha da máquina](../guilda/ficha-da-maquina.md) inteira, que substitui a guardada; sem `os`, `arch` ou `providers`, `invalid_payload`), `certificate` (certidão de época que segue), `replica_lsn`, `terminals[]` (estado atual) | `welcome {protocol, capabilities[], citadel_version, citadel_time, certificate}`, ou fechamento `4003`, `4006` ou `4007` |
 | `machine.heartbeat` | T→C | não | `cpu_pct`, `mem_pct`, `disk_free_bytes`, `terminals`, `replica_lag_s` | — |
-| `machine.sheet` | T→C | sim | os campos da ficha da máquina que mudaram | — |
+| `machine.sheet` | T→C | sim | os campos da ficha da máquina que mudaram (`null` para o que sumiu) e o `rev`, que tem de passar do guardado; senão a Cidadela confirma e descarta ([atualização](../guilda/ficha-da-maquina.md#atualização-sozinha)) | — |
 | `guild.epoch` | ambos | sim | pedido sem campos; resposta com a certidão de época atual (`guild_id`, `epoch`, `citadel_machine_id`, `approved_by`, `approval_id`, `issued_at`, `signature`) | ([certidão](../guilda/replicacao.md#certidão-de-época)) |
 | `guild.config` | C→T | sim | máquinas da Guilda (`machine_id`, nome, instância, endereços, prioridade, `excluded`), lista de revogados (números de série dos certificados), fuso da Guilda | — |
 | `guild.leave` | ambos | sim | C→T: a máquina foi removida (apagar réplica, arquivos, cofre e configuração); T→C: pedido de saída, `reason` (`uninstall`) | ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
