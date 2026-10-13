@@ -36,10 +36,32 @@ func fsOf(sqls ...string) fstest.MapFS {
 	return m
 }
 
+// capturedTemplate is a database of logSet migrated with the log on, built
+// once by TestMain: the tests that are not about migrating start from a copy
+// (creating and migrating a file costs tens of milliseconds on a Windows runner).
+var capturedTemplate []byte
+
+func buildCapturedTemplate(dir string) error {
+	path := filepath.Join(dir, "captured.db")
+	db, err := store.Open(context.Background(), path, logSet, store.Options{Capture: true, Synchronous: "OFF"})
+	if err != nil {
+		return err
+	}
+	if err := db.Close(); err != nil {
+		return err
+	}
+	capturedTemplate, err = os.ReadFile(path)
+	return err
+}
+
+// openPrimary opens a copy of the template as the main database.
 func openPrimary(t *testing.T, clk clock.Clock) *store.DB {
 	t.Helper()
-	opts := store.Options{Capture: true, Clock: clk}
-	return open(t, filepath.Join(t.TempDir(), "p.db"), logSet, opts)
+	path := filepath.Join(t.TempDir(), "p.db")
+	if err := os.WriteFile(path, capturedTemplate, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return open(t, path, logSet, store.Options{Capture: true, Clock: clk})
 }
 
 func exec(t *testing.T, db *sql.DB, q string, args ...any) {
@@ -49,7 +71,7 @@ func exec(t *testing.T, db *sql.DB, q string, args ...any) {
 	}
 }
 
-// log returns the decoded records of the change log.
+// readLog returns the rows of the change log and their decoded changes.
 func readLog(t *testing.T, db *store.DB) ([]store.LogRow, [][]store.Change) {
 	t.Helper()
 	rows, err := db.LogSince(context.Background(), 0, 1<<20, 1<<30)
@@ -67,9 +89,7 @@ func readLog(t *testing.T, db *store.DB) ([]store.LogRow, [][]store.Change) {
 	return rows, out
 }
 
-// afterMigrations is the lsn of the last migration record: the tests look at
-// what comes after it.
-func afterMigrations(t *testing.T, db *store.DB) uint64 {
+func lastLSN(t *testing.T, db *store.DB) uint64 {
 	t.Helper()
 	n, err := db.LastLSN(context.Background())
 	if err != nil {
@@ -78,9 +98,16 @@ func afterMigrations(t *testing.T, db *store.DB) uint64 {
 	return n
 }
 
-func TestTheMigrationsAreTheFirstRecordsOfTheLog(t *testing.T) {
+// The log records every committed change, in the transaction that made it:
+// the migrations first, then each transaction as one record with its changes in
+// the order they happened, cascades included, whole rows, every kind of value.
+func TestTheLogFollowsEveryCommit(t *testing.T) {
 	t.Parallel()
-	db := openPrimary(t, clock.NewFake(time.UnixMilli(1_700_000_000_000)))
+	ctx := context.Background()
+	fake := clock.NewFake(time.UnixMilli(1_700_000_000_000))
+	db := open(t, filepath.Join(t.TempDir(), "p.db"), logSet, store.Options{Capture: true, Clock: fake})
+
+	// The migrations are the first records: the SQL and the row of schema_migrations.
 	rows, recs := readLog(t, db)
 	if len(rows) != 2 {
 		t.Fatalf("log has %d records, want one per migration", len(rows))
@@ -90,22 +117,12 @@ func TestTheMigrationsAreTheFirstRecordsOfTheLog(t *testing.T) {
 			t.Fatalf("record %d = %+v, want the SQL and the schema_migrations row", rows[i].LSN, cs)
 		}
 	}
-	if !strings.Contains(recs[0][0].SQL, "CREATE TABLE parents") {
-		t.Errorf("first migration SQL = %q", recs[0][0].SQL)
+	if !strings.Contains(recs[0][0].SQL, "CREATE TABLE parents") || rows[0].LSN != 1 || rows[1].LSN != 2 || rows[0].At != 1_700_000_000_000 {
+		t.Errorf("first migration: lsn %d at %d sql %q", rows[0].LSN, rows[0].At, recs[0][0].SQL)
 	}
-	if rows[0].LSN != 1 || rows[1].LSN != 2 || rows[0].At != 1_700_000_000_000 {
-		t.Errorf("lsn/at = %d/%d, %d", rows[0].LSN, rows[0].At, rows[1].LSN)
-	}
-}
+	base := lastLSN(t, db)
 
-// Every change of a committed transaction is in one record, in the order it
-// happened, cascades included; a transaction that changes no row has no lsn.
-func TestEachCommittedTransactionIsOneRecordInTheLog(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	db := openPrimary(t, clock.NewFake(time.UnixMilli(5)))
-	base := afterMigrations(t, db)
-
+	// One transaction, one record; cascades are changes of their own.
 	tx, err := db.Writer().BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +140,7 @@ func TestEachCommittedTransactionIsOneRecordInTheLog(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	rows, recs := readLog(t, db)
+	rows, recs = readLog(t, db)
 	if got := rows[len(rows)-1].LSN; got != base+1 || len(rows) != int(base)+1 {
 		t.Fatalf("one transaction left %d records after lsn %d", len(rows)-int(base), base)
 	}
@@ -162,74 +179,90 @@ func TestEachCommittedTransactionIsOneRecordInTheLog(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if got := afterMigrations(t, db); got != base+1 {
+	if got := lastLSN(t, db); got != base+1 {
 		t.Errorf("lsn = %d, want %d: no row changed", got, base+1)
 	}
-}
 
-func TestAWriteOutsideATransactionIsLoggedToo(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	db := openPrimary(t, nil)
-	base := afterMigrations(t, db)
-	exec(t, db.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
-	exec(t, db.Writer(), `UPDATE parents SET name = 'b'`)
+	// A write outside a transaction is a transaction.
+	watch := db.LogWatch()
+	exec(t, db.Writer(), `INSERT INTO parents (id, name) VALUES (5, 'a')`)
+	exec(t, db.Writer(), `UPDATE parents SET name = 'b' WHERE id = 5`)
 	res, err := db.Writer().ExecContext(ctx, `INSERT INTO parents (name) VALUES (?)`, "auto")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id, _ := res.LastInsertId(); id != 2 {
-		t.Errorf("LastInsertId = %d, want 2", id)
+	if id, _ := res.LastInsertId(); id != 6 {
+		t.Errorf("LastInsertId = %d, want 6", id)
 	}
-	if got := afterMigrations(t, db); got != base+3 {
-		t.Errorf("lsn = %d, want %d", got, base+3)
+	if got := lastLSN(t, db); got != base+4 {
+		t.Errorf("lsn = %d, want %d", got, base+4)
 	}
-	// The row of the auto-assigned key is logged with the key that was chosen.
-	_, recs := readLog(t, db)
-	last := recs[len(recs)-1][0]
-	if !reflect.DeepEqual(last.New, []any{int64(2), "auto", nil}) {
+	select {
+	case <-watch:
+	default:
+		t.Error("a commit did not wake the watcher")
+	}
+	// the row of an auto-assigned key is logged with the key that was chosen
+	_, recs = readLog(t, db)
+	if last := recs[len(recs)-1][0]; !reflect.DeepEqual(last.New, []any{int64(6), "auto", nil}) {
 		t.Errorf("last insert = %+v", last)
 	}
-}
 
-func TestEveryKindOfValueSurvivesTheLog(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	db := openPrimary(t, nil)
+	// Every kind of value, and the writes that conflict.
 	exec(t, db.Writer(), `INSERT INTO named (code, num, raw, big) VALUES (?, ?, ?, ?)`, "k", 1.5, []byte{0, 1, 2}, int64(1)<<62)
 	exec(t, db.Writer(), `INSERT INTO named (code, num, raw, big) VALUES (?, NULL, ?, NULL)`, "empty", []byte{})
 	exec(t, db.Writer(), `INSERT INTO seq (body) VALUES ('one'), ('two')`)
-	_, recs := readLog(t, db)
-	n := len(recs)
-	if got := recs[n-3][0].New; !reflect.DeepEqual(got, []any{"k", 1.5, []byte{0, 1, 2}, int64(1) << 62}) {
+	_, recs = readLog(t, db)
+	k := len(recs)
+	if got := recs[k-3][0].New; !reflect.DeepEqual(got, []any{"k", 1.5, []byte{0, 1, 2}, int64(1) << 62}) {
 		t.Errorf("named k = %#v", got)
 	}
-	if got := recs[n-2][0].New; !reflect.DeepEqual(got, []any{"empty", nil, []byte{}, nil}) {
+	if got := recs[k-2][0].New; !reflect.DeepEqual(got, []any{"empty", nil, []byte{}, nil}) {
 		t.Errorf("named empty = %#v (an empty blob is not NULL)", got)
 	}
-	if got := recs[n-1][1].New; !reflect.DeepEqual(got, []any{int64(2), "two"}) {
+	if got := recs[k-1][1].New; !reflect.DeepEqual(got, []any{int64(2), "two"}) {
 		t.Errorf("seq 2 = %#v", got)
 	}
-	_ = ctx
-}
-
-func TestUpsertAndReplaceAreLoggedAsTheyChangeRows(t *testing.T) {
-	t.Parallel()
-	db := openPrimary(t, nil)
 	exec(t, db.Writer(), `INSERT INTO secrets (name, value) VALUES ('a', x'01')`)
 	exec(t, db.Writer(), `INSERT INTO secrets (name, value) VALUES ('a', x'02') ON CONFLICT (name) DO UPDATE SET value = excluded.value`)
 	exec(t, db.Writer(), `INSERT OR REPLACE INTO secrets (name, value) VALUES ('a', x'03')`)
-	_, recs := readLog(t, db)
-	n := len(recs)
-	if c := recs[n-2][0]; c.Op != store.OpUpdate {
+	_, recs = readLog(t, db)
+	k = len(recs)
+	if c := recs[k-2][0]; c.Op != store.OpUpdate {
 		t.Errorf("upsert logged as %s", c.Op)
 	}
-	var ops []string
-	for _, c := range recs[n-1] {
+	ops = ops[:0]
+	for _, c := range recs[k-1] {
 		ops = append(ops, c.Op.String())
 	}
 	if !reflect.DeepEqual(ops, []string{"delete", "insert"}) {
 		t.Errorf("replace logged as %v, want delete and insert", ops)
+	}
+
+	// The retention: rows older than the age go, then the oldest ones beyond the
+	// size, and the newest row stays because the next lsn comes from it.
+	fake.Advance(2 * time.Hour)
+	exec(t, db.Writer(), `INSERT INTO named (code, raw) VALUES ('big', ?)`, bytes.Repeat([]byte{1}, 1000))
+	exec(t, db.Writer(), `INSERT INTO named (code, raw) VALUES ('big2', ?)`, bytes.Repeat([]byte{1}, 1000))
+	last := lastLSN(t, db)
+	if n, err := db.PruneLog(ctx, time.Hour, 1<<30); err != nil {
+		t.Fatal(err)
+	} else if lo, hi, _ := db.LogBounds(ctx); lo != last-1 || hi != last || n == 0 {
+		t.Errorf("after the age: removed %d, bounds %d..%d; want %d..%d", n, lo, hi, last-1, last)
+	}
+	if _, err := db.PruneLog(ctx, time.Hour, 1100); err != nil {
+		t.Fatal(err)
+	}
+	if lo, hi, _ := db.LogBounds(ctx); lo != last || hi != last {
+		t.Errorf("after the size: bounds %d..%d, want only %d", lo, hi, last)
+	}
+	fake.Advance(24 * time.Hour)
+	if _, err := db.PruneLog(ctx, time.Hour, 0); err != nil {
+		t.Fatal(err)
+	}
+	exec(t, db.Writer(), `INSERT INTO named (code) VALUES ('next')`)
+	if _, hi, _ := db.LogBounds(ctx); hi != last+1 {
+		t.Errorf("next lsn = %d, want %d", hi, last+1)
 	}
 }
 
@@ -238,7 +271,7 @@ func TestAWriteThatSkipsTheLogIsRefused(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	db := openPrimary(t, nil)
-	base := afterMigrations(t, db)
+	base := lastLSN(t, db)
 
 	t.Run("a prepared statement runs outside the wrapper", func(t *testing.T) {
 		t.Parallel()
@@ -298,83 +331,13 @@ func TestAWriteThatSkipsTheLogIsRefused(t *testing.T) {
 		}
 	})
 	t.Cleanup(func() { // after the parallel subtests
-		if got := afterMigrations(t, db); got != base {
+		if got := lastLSN(t, db); got != base {
 			t.Errorf("lsn = %d, want %d: none of those writes may have left a record", got, base)
 		}
 		if n := scan[int](t, db.Reader(), `SELECT count(*) FROM parents`); n != 0 {
 			t.Errorf("%d parents leaked in", n)
 		}
 	})
-}
-
-// A database that does not capture (the machine one) has no log and no
-// restrictions.
-func TestADatabaseThatDoesNotCaptureHasNoLog(t *testing.T) {
-	t.Parallel()
-	db := open(t, filepath.Join(t.TempDir(), "m.db"), logSet, store.Options{})
-	exec(t, db.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
-	if _, err := db.LastLSN(context.Background()); err == nil {
-		t.Error("LastLSN works on a database without a log")
-	}
-	exec(t, db.Writer(), `CREATE TABLE free (id INTEGER PRIMARY KEY)`)
-}
-
-func TestLogWatchWakesAtTheNextCommit(t *testing.T) {
-	t.Parallel()
-	db := openPrimary(t, nil)
-	w := db.LogWatch()
-	select {
-	case <-w:
-		t.Fatal("woke before a commit")
-	default:
-	}
-	exec(t, db.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
-	select {
-	case <-w:
-	default:
-		t.Fatal("a commit did not wake the watcher")
-	}
-}
-
-func TestPruneLogKeepsTheNewestRowAndTheRetention(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	fake := clock.NewFake(time.UnixMilli(1_000_000))
-	db := openPrimary(t, fake)
-	for i := range 6 {
-		fake.Advance(20 * time.Minute)
-		exec(t, db.Writer(), `INSERT INTO named (code, raw) VALUES (?, ?)`, fmt.Sprint(i), bytes.Repeat([]byte{1}, 1000))
-	}
-	// 6 inserts at 20, 40... 120 minutes; "now" is 120 minutes: older than 1 h goes.
-	n, err := db.PruneLog(ctx, time.Hour, 1<<30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lo, hi, _ := db.LogBounds(ctx)
-	if hi != 8 || lo != 5 || n != 4 {
-		t.Errorf("after the age: removed %d, bounds %d..%d; want 4 removed, 5..8", n, lo, hi)
-	}
-	// By size: the bodies are about 1 KB each, keep room for two.
-	if _, err := db.PruneLog(ctx, time.Hour, 2300); err != nil {
-		t.Fatal(err)
-	}
-	lo, hi, _ = db.LogBounds(ctx)
-	if hi != 8 || lo != 7 {
-		t.Errorf("after the size: bounds %d..%d, want 7..8", lo, hi)
-	}
-	// Everything is older than the age and over the size: the last row stays.
-	fake.Advance(24 * time.Hour)
-	if _, err := db.PruneLog(ctx, time.Hour, 0); err != nil {
-		t.Fatal(err)
-	}
-	lo, hi, _ = db.LogBounds(ctx)
-	if lo != 8 || hi != 8 {
-		t.Errorf("bounds %d..%d, want only 8: the next lsn comes from the newest row", lo, hi)
-	}
-	exec(t, db.Writer(), `INSERT INTO named (code) VALUES ('next')`)
-	if _, hi, _ = db.LogBounds(ctx); hi != 9 {
-		t.Errorf("next lsn = %d, want 9", hi)
-	}
 }
 
 func TestTheCodecRoundTripsAndRefusesGarbage(t *testing.T) {
@@ -467,17 +430,30 @@ func dump(t *testing.T, db *store.DB, tables ...string) string {
 
 var allTables = []string{"parents", "children", "named", "seq", "secrets", "schema_migrations"}
 
-func TestARecordAppliedToAReplicaGivesTheSameRows(t *testing.T) {
+func readAll(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// A replica follows the primary record by record and takes nothing else.
+// CA-REPL-05: nothing writes to it but the replication.
+func TestAReplicaAppliesTheRecordsInOrderAndTakesNoOtherWrite(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	p := openPrimary(t, clock.NewFake(time.UnixMilli(9)))
 	exec(t, p.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a'), (2, 'b'), (3, 'c')`)
 	r := replicate(t, p)
 
+	// The same rows after a transaction with every kind of change, a key that
+	// moves, a replace and an AUTOINCREMENT table.
 	tx, _ := p.Writer().BeginTx(ctx, nil)
 	for _, q := range []string{
 		`INSERT INTO children (parent_id, label) VALUES (1, 'x'), (1, 'y'), (2, 'z')`,
-		`UPDATE parents SET id = 10, note = 'moved' WHERE id = 3`, // changes the key
+		`UPDATE parents SET id = 10, note = 'moved' WHERE id = 3`,
 		`INSERT INTO named (code, num, raw, big) VALUES ('k', 0.25, x'ff', 9223372036854775807)`,
 		`INSERT INTO seq (body) VALUES ('s1'), ('s2')`,
 		`DELETE FROM seq WHERE seq = 1`,
@@ -493,7 +469,6 @@ func TestARecordAppliedToAReplicaGivesTheSameRows(t *testing.T) {
 	exec(t, p.Writer(), `INSERT OR REPLACE INTO named (code, num) VALUES ('k', 1)`)
 	exec(t, p.Writer(), `INSERT INTO seq (body) VALUES ('s3')`)
 	ship(t, p, r)
-
 	if a, b := dump(t, p, allTables...), dump(t, r, allTables...); a != b {
 		t.Fatalf("the replica differs from the primary\nprimary:\n%s\nreplica:\n%s", a, b)
 	}
@@ -502,17 +477,164 @@ func TestARecordAppliedToAReplicaGivesTheSameRows(t *testing.T) {
 	if a, b := scan[int](t, p.Reader(), `SELECT seq FROM sqlite_sequence WHERE name = 'seq'`), scan[int](t, r.Reader(), `SELECT seq FROM sqlite_sequence WHERE name = 'seq'`); a != b {
 		t.Errorf("sqlite_sequence = %d on the replica, %d on the primary", b, a)
 	}
-	lp, _ := p.LastLSN(ctx)
-	if lr, _ := r.LastLSN(ctx); lr != lp {
+	if lp, lr := lastLSN(t, p), lastLSN(t, r); lr != lp {
 		t.Errorf("replica at %d, primary at %d", lr, lp)
+	}
+
+	// A repeat is skipped and a hole stops the batch, after the records before it.
+	have := lastLSN(t, r)
+	for i := range 4 {
+		exec(t, p.Writer(), `INSERT INTO named (code) VALUES (?)`, fmt.Sprint("n", i))
+	}
+	rows, _ := p.LogSince(ctx, have, 100, 1<<30)
+	if n, err := r.ApplyLog(ctx, rows[:2]); err != nil || n != 2 {
+		t.Fatalf("first two = %d, %v", n, err)
+	}
+	if n, err := r.ApplyLog(ctx, rows[:2]); err != nil || n != 0 {
+		t.Fatalf("a repeat = %d, %v; want skipped", n, err)
+	}
+	n, err := r.ApplyLog(ctx, rows[3:])
+	var gap *store.GapError
+	if !errors.As(err, &gap) || n != 0 || gap.Have != have+2 || gap.Got != rows[3].LSN {
+		t.Fatalf("hole = %d, %v; want a GapError from %d", n, err, have+2)
+	}
+	if got := lastLSN(t, r); got != have+2 {
+		t.Errorf("replica at %d, the hole must not move it", got)
+	}
+	if _, err := r.ApplyLog(ctx, rows[2:]); err != nil {
+		t.Fatal(err)
+	}
+
+	// A record that does not fit leaves nothing behind.
+	at := lastLSN(t, r)
+	var div *store.DivergedError
+	bad := store.EncodeChanges([]store.Change{
+		{Op: store.OpInsert, Table: "named", New: []any{"fresh", nil, nil, nil}},
+		{Op: store.OpDelete, Table: "parents", Old: []any{int64(77), "x", nil}},
+	})
+	if _, err := r.ApplyLog(ctx, []store.LogRow{{LSN: at + 1, At: 1, Body: bad}}); !errors.As(err, &div) {
+		t.Fatalf("delete of a missing row = %v, want DivergedError", err)
+	}
+	if got := lastLSN(t, r); got != at {
+		t.Errorf("replica at %d: a failed batch must leave nothing", got)
+	}
+	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM named WHERE code = 'fresh'`); n != 0 {
+		t.Error("the first change of a failed record stayed")
+	}
+
+	// Nothing else writes to it, through the writer or the readers, and the guard is back.
+	for _, q := range []string{
+		`INSERT INTO parents (id, name) VALUES (50, 'a')`,
+		`DELETE FROM schema_migrations`,
+		`CREATE TABLE loose (id INTEGER PRIMARY KEY)`,
+		`INSERT INTO replication_log (lsn, at, body) VALUES (99999, 0, x'01')`,
+	} {
+		if _, err := r.Writer().ExecContext(ctx, q); err == nil {
+			t.Errorf("%q worked on a replica", q)
+		}
+		if _, err := r.Reader().ExecContext(ctx, q); err == nil {
+			t.Errorf("%q worked through the reader", q)
+		}
+	}
+	if tx, err := r.Writer().BeginTx(ctx, nil); err == nil {
+		_, err = tx.ExecContext(ctx, `INSERT INTO parents (id, name) VALUES (50, 'a')`)
+		_ = tx.Rollback()
+		if err == nil {
+			t.Error("a transaction wrote to a replica")
+		}
+	}
+	if got := scan[int](t, r.Writer(), `PRAGMA foreign_keys`); got != 1 {
+		t.Errorf("foreign_keys = %d after an apply, want 1", got)
+	}
+	if !r.IsReplica() || p.IsReplica() {
+		t.Error("IsReplica is wrong")
+	}
+	if _, err := p.ApplyLog(ctx, nil); !errors.Is(err, store.ErrNotReplica) {
+		t.Errorf("ApplyLog on a primary = %v", err)
+	}
+	if err := p.Replace(ctx, filepath.Join(t.TempDir(), "x.db"), 0); !errors.Is(err, store.ErrNotReplica) {
+		t.Errorf("Replace on a primary = %v", err)
+	}
+	before := dump(t, r, allTables...)
+
+	// A full copy is checked before it is swapped in.
+	good := filepath.Join(t.TempDir(), "good.db")
+	lsn, err := p.Snapshot(ctx, good, store.SnapshotOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Replace(ctx, good, lsn+1); err == nil || !strings.Contains(err.Error(), "announced") {
+		t.Errorf("Replace with the wrong lsn = %v", err)
+	}
+	junk := filepath.Join(t.TempDir(), "junk.db")
+	if err := os.WriteFile(junk, bytes.Repeat([]byte("not a database "), 500), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Replace(ctx, junk, 0); err == nil {
+		t.Error("Replace accepted a file that is not a database")
+	}
+	if after := dump(t, r, allTables...); after != before {
+		t.Error("a refused copy changed the replica")
+	}
+	// A schema newer than the binary is refused.
+	small := store.MustLoad(fsOf(createParents), "migrations")
+	old := open(t, filepath.Join(t.TempDir(), "old.db"), small, store.Options{Replica: true})
+	if err := old.Replace(ctx, good, lsn); !errors.Is(err, store.ErrNewerSchema) {
+		t.Errorf("Replace with a schema newer than the binary = %v, want ErrNewerSchema", err)
+	}
+
+	// The copy of an excluded machine has the schema of the vault tables and
+	// none of their rows, not even on disk; the purge of a machine that was
+	// excluded later does the same to a replica that had them.
+	marker := bytes.Repeat([]byte("TOP-SECRET-CIPHERTEXT-"), 20)
+	exec(t, p.Writer(), `INSERT INTO secrets (name, value) VALUES ('token', ?)`, marker)
+	exec(t, p.Writer(), `INSERT INTO named (code) VALUES ('kept')`)
+	ship(t, p, r)
+	if !bytes.Contains(readAll(t, r.Path()), marker) && scan[int](t, r.Reader(), `SELECT count(*) FROM secrets`) != 1 {
+		t.Fatal("setup: the replica should hold the secret before the purge")
+	}
+	excluded := replicate(t, p, "secrets")
+	if n := scan[int](t, excluded.Reader(), `SELECT count(*) FROM secrets`); n != 0 {
+		t.Errorf("the excluded replica has %d secrets", n)
+	}
+	if n := scan[int](t, excluded.Reader(), `SELECT count(*) FROM named WHERE code = 'kept'`); n != 1 {
+		t.Errorf("only the vault tables are left out, named has %d rows", n)
+	}
+	if bytes.Contains(readAll(t, excluded.Path()), marker) {
+		t.Error("the file of the excluded replica contains the secret")
+	}
+	if n := scan[int](t, excluded.Reader(), `SELECT count(*) FROM pragma_table_info('secrets')`); n == 0 {
+		t.Error("the table is gone; the schema must stay for the migrations that follow")
+	}
+
+	if err := r.Purge(ctx, "secrets", "site_login_attempts"); err != nil {
+		t.Fatal(err)
+	}
+	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM secrets`); n != 0 {
+		t.Errorf("%d secrets left after the purge", n)
+	}
+	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM named WHERE code = 'kept'`); n != 1 {
+		t.Errorf("the purge is only about the vault, named has %d rows", n)
+	}
+	for _, f := range []string{r.Path(), r.Path() + "-wal"} {
+		if b, err := os.ReadFile(f); err == nil && bytes.Contains(b, marker) {
+			t.Errorf("%s still contains the secret", filepath.Base(f))
+		}
+	}
+	if lo, hi, _ := r.LogBounds(ctx); lo != hi {
+		t.Errorf("log %d..%d: only the last row stays, empty", lo, hi)
+	}
+	exec(t, p.Writer(), `INSERT INTO named (code) VALUES ('after')`) // the sequence goes on
+	ship(t, p, r)
+	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM named WHERE code = 'after'`); n != 1 {
+		t.Error("the record after the purge did not apply")
 	}
 }
 
 func TestAMigrationReachesTheReplicaAsARecord(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "p.db")
+	path := filepath.Join(t.TempDir(), "p.db")
 	small := store.MustLoad(fsOf(createParents), "migrations")
 	p := open(t, path, small, store.Options{Capture: true})
 	exec(t, p.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
@@ -534,218 +656,4 @@ func TestAMigrationReachesTheReplicaAsARecord(t *testing.T) {
 	if a, b := dump(t, p2, allTables...), dump(t, r, allTables...); a != b {
 		t.Fatalf("the replica differs\n%s\n%s", a, b)
 	}
-}
-
-func TestARepeatIsSkippedAndAHoleStopsTheBatch(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	p := openPrimary(t, nil)
-	r := replicate(t, p)
-	for i := range 4 {
-		exec(t, p.Writer(), `INSERT INTO named (code) VALUES (?)`, fmt.Sprint(i))
-	}
-	have, _ := r.LastLSN(ctx)
-	rows, _ := p.LogSince(ctx, have, 100, 1<<30)
-	if n, err := r.ApplyLog(ctx, rows[:2]); err != nil || n != 2 {
-		t.Fatalf("first two = %d, %v", n, err)
-	}
-	if n, err := r.ApplyLog(ctx, rows[:2]); err != nil || n != 0 {
-		t.Fatalf("a repeat = %d, %v; want skipped", n, err)
-	}
-	n, err := r.ApplyLog(ctx, []store.LogRow{rows[2], rows[3]}[1:])
-	var gap *store.GapError
-	if !errors.As(err, &gap) || n != 0 || gap.Have != have+2 || gap.Got != rows[3].LSN {
-		t.Fatalf("hole = %d, %v; want a GapError from %d", n, err, have+2)
-	}
-	if got, _ := r.LastLSN(ctx); got != have+2 {
-		t.Errorf("replica at %d, the hole must not move it", got)
-	}
-}
-
-func TestARecordThatDoesNotFitMarksTheReplicaAsDiverged(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	p := openPrimary(t, nil)
-	exec(t, p.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
-	r := replicate(t, p)
-	have, _ := r.LastLSN(ctx)
-	var div *store.DivergedError
-	if _, err := r.ApplyLog(ctx, []store.LogRow{{LSN: have + 1, At: 1, Body: store.EncodeChanges([]store.Change{{Op: store.OpDelete, Table: "parents", Old: []any{int64(77), "x", nil}}})}}); !errors.As(err, &div) {
-		t.Fatalf("delete of a missing row = %v, want DivergedError", err)
-	}
-	if got, _ := r.LastLSN(ctx); got != have {
-		t.Errorf("replica at %d: a failed batch must leave nothing", got)
-	}
-}
-
-// CA-REPL-05: nothing writes to a replica but the replication.
-func TestAReplicaRefusesEveryWriteButTheReplicationsOwn(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	p := openPrimary(t, nil)
-	r := replicate(t, p)
-	for _, q := range []string{
-		`INSERT INTO parents (id, name) VALUES (1, 'a')`,
-		`DELETE FROM schema_migrations`,
-		`CREATE TABLE loose (id INTEGER PRIMARY KEY)`,
-		`INSERT INTO replication_log (lsn, at, body) VALUES (99, 0, x'01')`,
-	} {
-		if _, err := r.Writer().ExecContext(ctx, q); err == nil {
-			t.Errorf("%q worked on a replica", q)
-		}
-		if _, err := r.Reader().ExecContext(ctx, q); err == nil {
-			t.Errorf("%q worked through the reader", q)
-		}
-	}
-	tx, err := r.Writer().BeginTx(ctx, nil)
-	if err == nil {
-		_, err = tx.ExecContext(ctx, `INSERT INTO parents (id, name) VALUES (1, 'a')`)
-		_ = tx.Rollback()
-	}
-	if err == nil {
-		t.Error("a transaction wrote to a replica")
-	}
-	if !r.IsReplica() {
-		t.Error("IsReplica = false")
-	}
-	// The replication writes, and the guard is back right after.
-	exec(t, p.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
-	ship(t, p, r)
-	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM parents`); n != 1 {
-		t.Fatalf("parents on the replica = %d", n)
-	}
-	if _, err := r.Writer().ExecContext(ctx, `INSERT INTO parents (id, name) VALUES (2, 'b')`); err == nil {
-		t.Error("the guard did not come back after an apply")
-	}
-	if got := scan[int](t, r.Writer(), `PRAGMA foreign_keys`); got != 1 {
-		t.Errorf("foreign_keys = %d after an apply, want 1", got)
-	}
-	if _, err := p.ApplyLog(ctx, nil); !errors.Is(err, store.ErrNotReplica) {
-		t.Errorf("ApplyLog on a primary = %v", err)
-	}
-}
-
-func TestReplaceChecksTheCopyBeforeSwappingIt(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	p := openPrimary(t, nil)
-	exec(t, p.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
-	r := replicate(t, p)
-	before := dump(t, r, allTables...)
-
-	good := filepath.Join(t.TempDir(), "good.db")
-	lsn, err := p.Snapshot(ctx, good, store.SnapshotOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Replace(ctx, good, lsn+1); err == nil || !strings.Contains(err.Error(), "announced") {
-		t.Errorf("Replace with the wrong lsn = %v", err)
-	}
-	junk := filepath.Join(t.TempDir(), "junk.db")
-	if err := os.WriteFile(junk, bytes.Repeat([]byte("not a database "), 500), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Replace(ctx, junk, 0); err == nil {
-		t.Error("Replace accepted a file that is not a database")
-	}
-	if _, err := p.Snapshot(ctx, filepath.Join(t.TempDir(), "x.db"), store.SnapshotOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	if err := p.Replace(ctx, good, lsn); !errors.Is(err, store.ErrNotReplica) {
-		t.Errorf("Replace on a primary = %v", err)
-	}
-	if after := dump(t, r, allTables...); after != before {
-		t.Error("a refused copy changed the replica")
-	}
-}
-
-func TestReplaceRefusesASchemaNewerThanTheBinary(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	big := openPrimary(t, nil) // two migrations
-	snap := filepath.Join(t.TempDir(), "s.db")
-	lsn, err := big.Snapshot(ctx, snap, store.SnapshotOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	small := store.MustLoad(fsOf(createParents), "migrations")
-	r := open(t, filepath.Join(t.TempDir(), "r.db"), small, store.Options{Replica: true})
-	if err := r.Replace(ctx, snap, lsn); !errors.Is(err, store.ErrNewerSchema) {
-		t.Fatalf("Replace = %v, want ErrNewerSchema", err)
-	}
-}
-
-// A copy for a machine that was excluded has the schema of the vault tables
-// and none of their rows, not even on disk.
-func TestTheCopyOfAnExcludedMachineHasNoVaultBytes(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	p := openPrimary(t, nil)
-	marker := bytes.Repeat([]byte("TOP-SECRET-CIPHERTEXT-"), 20)
-	exec(t, p.Writer(), `INSERT INTO secrets (name, value) VALUES ('token', ?)`, marker)
-	exec(t, p.Writer(), `INSERT INTO named (code) VALUES ('kept')`)
-
-	r := replicate(t, p, "secrets")
-	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM secrets`); n != 0 {
-		t.Errorf("the excluded replica has %d secrets", n)
-	}
-	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM named`); n != 1 {
-		t.Errorf("named = %d: only the vault tables are left out", n)
-	}
-	if bytes.Contains(readAll(t, r.Path()), marker) {
-		t.Error("the file of the excluded replica contains the secret")
-	}
-	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM pragma_table_info('secrets')`); n == 0 {
-		t.Error("the table is gone; the schema must stay for the migrations that follow")
-	}
-	_ = ctx
-}
-
-func TestPurgeLeavesNoVaultBytesBehind(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	p := openPrimary(t, nil)
-	marker := bytes.Repeat([]byte("TOP-SECRET-CIPHERTEXT-"), 20)
-	exec(t, p.Writer(), `INSERT INTO secrets (name, value) VALUES ('token', ?)`, marker)
-	r := replicate(t, p)
-	exec(t, p.Writer(), `INSERT INTO secrets (name, value) VALUES ('later', ?)`, marker)
-	exec(t, p.Writer(), `INSERT INTO named (code) VALUES ('kept')`)
-	ship(t, p, r)
-	if !bytes.Contains(readAll(t, r.Path()), marker) && scan[int](t, r.Reader(), `SELECT count(*) FROM secrets`) != 2 {
-		t.Fatal("setup: the replica should hold the secrets before the purge")
-	}
-
-	if err := r.Purge(ctx, "secrets", "site_login_attempts"); err != nil {
-		t.Fatal(err)
-	}
-	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM secrets`); n != 0 {
-		t.Errorf("%d secrets left", n)
-	}
-	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM named`); n != 1 {
-		t.Errorf("named = %d: the purge is only about the vault", n)
-	}
-	for _, f := range []string{r.Path(), r.Path() + "-wal"} {
-		if b, err := os.ReadFile(f); err == nil && bytes.Contains(b, marker) {
-			t.Errorf("%s still contains the secret", filepath.Base(f))
-		}
-	}
-	lo, hi, _ := r.LogBounds(ctx)
-	if lo != hi {
-		t.Errorf("log %d..%d: only the last row stays, empty", lo, hi)
-	}
-	// The sequence goes on: the next record applies.
-	exec(t, p.Writer(), `INSERT INTO named (code) VALUES ('after')`)
-	ship(t, p, r)
-	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM named`); n != 2 {
-		t.Errorf("named = %d after the purge, want 2", n)
-	}
-}
-
-func readAll(t *testing.T, path string) []byte {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
 }

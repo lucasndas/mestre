@@ -82,7 +82,7 @@ func buildTemplates() error {
 			return err
 		}
 	}
-	return nil
+	return buildCapturedTemplate(dir)
 }
 
 // seed writes at path a database already migrated with sqls.

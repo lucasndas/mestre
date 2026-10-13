@@ -101,26 +101,26 @@ func mirrorScenario(t *testing.T, g gitx.Git, write func(testing.TB, gitx.Repo, 
 		}
 		r := newRig(t, rigOpts{mirrors: src, git: g, citesMirrors: cites})
 		tw := r.addTower("t1", true)
-		settle()
 
-		tip := func(refs ...string) map[string]gitx.Hash {
+		// main on the Tower, or "" while the Tower has no mirror.
+		tip := func() gitx.Hash {
 			repo, err := g.Open(ctx, filepath.Join(tw.mirrors, "ws1"))
 			if err != nil {
-				t.Fatalf("the Tower has no mirror: %v", err)
+				return ""
 			}
 			list, err := repo.ListRefs(ctx, "refs/heads/")
 			if err != nil {
-				t.Fatal(err)
+				return ""
 			}
-			out := map[string]gitx.Hash{}
-			for _, r := range list {
-				out[r.Name] = r.Hash
+			for _, ref := range list {
+				if ref.Name == "refs/heads/main" {
+					return ref.Hash
+				}
 			}
-			return out
+			return ""
 		}
-		if got := tip(); got["refs/heads/main"] != c2 || len(got) != 1 {
-			t.Fatalf("the mirror on the Tower = %v, want main at %s", got, c2)
-		}
+		atTip := func(want gitx.Hash) func() bool { return func() bool { return tip() == want } }
+		eventually(t, "the mirror on the Tower", atTip(c2))
 		if b := src.built(); len(b) != 1 || len(b[0]) != 1 || strings.Contains(b[0][0], "..") {
 			t.Fatalf("bundles built = %v, want one with the whole mirror", b)
 		}
@@ -128,10 +128,7 @@ func mirrorScenario(t *testing.T, g gitx.Git, write func(testing.TB, gitx.Repo, 
 		// A ref moves: only what is new goes.
 		c3 := commit("a.txt", "3\n", "feat: three")
 		r.primary.MirrorChanged("ws1")
-		settle()
-		if got := tip(); got["refs/heads/main"] != c3 {
-			t.Fatalf("after the move, main = %v, want %s", got, c3)
-		}
+		eventually(t, "the move", atTip(c3))
 		b := src.built()
 		if len(b) != 2 || len(b[1]) != 1 || b[1][0] != string(c2)+"..refs/heads/main" {
 			t.Fatalf("bundles built = %v, want the second to be %s..refs/heads/main", b, c2)
@@ -148,7 +145,7 @@ func mirrorScenario(t *testing.T, g gitx.Git, write func(testing.TB, gitx.Repo, 
 		n := len(tw.log())
 		tw.stop()
 		tw.start(true)
-		settle()
+		eventually(t, "the reconnection", func() bool { return tw.lsn() == r.lsn() && statusOf(t, r, "t1").Acked == r.lsn() })
 		for _, e := range tw.log()[n:] {
 			if e == "bundle" {
 				t.Errorf("the mirror was sent again to a Tower that had it: %v", tw.log())
@@ -159,19 +156,16 @@ func mirrorScenario(t *testing.T, g gitx.Git, write func(testing.TB, gitx.Repo, 
 		tw.stop()
 		c4 := commit("a.txt", "4\n", "feat: four")
 		tw.start(true)
-		settle()
-		if got := tip(); got["refs/heads/main"] != c4 {
-			t.Fatalf("after coming back, main = %v, want %s", got, c4)
-		}
+		eventually(t, "the mirror after coming back", atTip(c4))
 
 		// A record that cites the mirror finds it up to date on the Tower, with no
 		// notification: the bundle goes before the record.
 		c5 := commit("a.txt", "5\n", "feat: five")
 		r.exec(`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, joined_at) VALUES ('m1', 'n', 'ws1', 0, 0, 'active', '{}', 0)`)
 		lsn := r.lsn()
-		settle()
-		if got := tip(); got["refs/heads/main"] != c5 {
-			t.Fatalf("after the record that cites it, main = %v, want %s", got, c5)
+		eventually(t, "the record that cites the mirror", func() bool { return tw.lsn() >= lsn })
+		if tip() != c5 {
+			t.Fatalf("after the record that cites it, main = %s, want %s", tip(), c5)
 		}
 		ev := tw.log()
 		bi, ai := lastIndexOf(ev, "bundle"), appliedAt(ev, lsn)

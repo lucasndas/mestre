@@ -132,7 +132,7 @@ func (c *citadelTap) Write(ctx context.Context, kind protocol.FrameKind, data []
 		c.r.frameMu.Lock()
 		c.r.frames = append(c.r.frames, frame{to: c.Conn.Peer().ID, pos: pos})
 		c.r.frameMu.Unlock()
-		if c.r.dropNext.CompareAndSwap(true, false) {
+		if target, _ := c.r.dropTarget.Load().(string); target != "" && target == c.Conn.Peer().ID && c.r.dropTarget.CompareAndSwap(target, "") {
 			return nil
 		}
 	}
@@ -192,9 +192,12 @@ type rig struct {
 
 	filesDir string
 
-	frameMu  sync.Mutex
-	frames   []frame
-	dropNext atomic.Bool
+	frameMu sync.Mutex
+	frames  []frame
+	// dropTarget is the Tower whose next frame of records is lost on the way.
+	dropTarget atomic.Value
+	// ackEvery sets the interval of the confirmations of a Tower (default 1 s).
+	ackEvery map[string]time.Duration
 
 	dropMu  sync.Mutex
 	dropped []string
@@ -242,8 +245,9 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &rig{
 		t: t, clk: clock.Real{}, dir: t.TempDir(), opts: o, cancel: cancel,
-		roster: &roster{excluded: map[string]bool{}}, towers: map[string]*tower{},
+		roster: &roster{excluded: map[string]bool{}}, towers: map[string]*tower{}, ackEvery: map[string]time.Duration{},
 	}
+	r.dropTarget.Store("")
 	r.net = fakenet.New(r.clk)
 	r.nw = protorig.Network{Net: r.net}
 	path := filepath.Join(r.dir, "citadel.db")
@@ -355,7 +359,7 @@ func (tw *tower) start(startReplica bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rc := replication.ReplicaConfig{DB: tw.db, Clock: r.clk, GuildID: guildULID,
+	rc := replication.ReplicaConfig{DB: tw.db, Clock: r.clk, GuildID: guildULID, AckEvery: r.ackEvery[tw.id],
 		OnApplied: func(first, last uint64) { tw.event(fmt.Sprintf("applied %d-%d", first, last)) }}
 	if r.opts.vault {
 		rc.Vault = &vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}
@@ -461,6 +465,28 @@ func (tw *tower) stop() {
 // settle lets everything that can happen without time passing happen.
 func settle() { synctest.Wait() }
 
+// eventually waits for cond. A pause for the file system makes SQLite sleep (on
+// Windows its retry of a locked file is a time.Sleep, which in the bubble is a
+// sleep of the fake clock), and then the bubble looks idle with the work not done:
+// settle alone is not a promise there. So between tries the clock moves a little.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	eventuallyFor(t, what, 2*time.Millisecond, 600, cond)
+}
+
+// eventuallyFor is eventually with the step of the clock and the number of tries.
+func eventuallyFor(t *testing.T, what string, step time.Duration, tries int, cond func() bool) {
+	t.Helper()
+	for range tries {
+		settle()
+		if cond() {
+			return
+		}
+		advance(step)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
 // advance moves the bubble's clock by d and settles.
 func advance(d time.Duration) {
 	_ = clock.Sleep(context.Background(), clock.Real{}, d)
@@ -542,13 +568,26 @@ func (r *rig) lsn() uint64 {
 	return n
 }
 
+// lsn is the last record the Tower applied (0 before it has a replica).
 func (tw *tower) lsn() uint64 {
-	tw.r.t.Helper()
 	n, err := tw.db.LastLSN(context.Background())
 	if err != nil {
-		tw.r.t.Fatal(err)
+		return 0
 	}
 	return n
+}
+
+// dropNextFor loses the next frame of records the Citadel sends to the Tower.
+func (r *rig) dropNextFor(id string) { r.dropTarget.Store(id) }
+
+// dropping says whether the frame to lose is still to come.
+func (r *rig) dropping() bool { return r.dropTarget.Load().(string) != "" }
+
+// receipts are the machines that gave a receipt of vault.drop, in order.
+func (r *rig) receipts() []string {
+	r.dropMu.Lock()
+	defer r.dropMu.Unlock()
+	return slices.Clone(r.dropped)
 }
 
 func (r *rig) framesTo(id string) []uint64 {
