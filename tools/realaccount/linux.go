@@ -176,6 +176,21 @@ func platformRun(ctx context.Context, out io.Writer, o options) (err error) {
 			return fmt.Errorf("the tests failed: %w", err)
 		}
 	}
+	// The refusal of the engine account in the wrong unit is recorded by the
+	// launcher, which the tests cannot read: the journal can.
+	jname, jargs := "sudo", []string{"-n", "journalctl", "--no-pager", "-u", "mestre-launcher@" + realaccount.Instance + ".service"}
+	if os.Geteuid() == 0 {
+		jname, jargs = jargs[1], jargs[2:]
+	}
+	j, err := output(ctx, jname, jargs...)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(j, "cgroup=/system.slice/mestre-ci-outsider.service Outcome:refused") {
+		dumpJournal(out)
+		return errors.New("the launcher did not record the refusal of the engine account in another unit")
+	}
+	fmt.Fprintln(out, "the launcher recorded the refusal of the engine account in another unit")
 	return nil
 }
 
