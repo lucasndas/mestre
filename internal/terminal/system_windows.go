@@ -55,7 +55,7 @@ func (windowsSystem) Identify(pid int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	start, running, err := creationTime(h)
 	if err != nil {
 		return "", err
@@ -98,7 +98,7 @@ func (windowsSystem) WaitExit(ctx context.Context, pid int) error {
 		}
 		return err
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	for {
 		ev, err := windows.WaitForSingleObject(h, waitSliceMs)
 		if err != nil {
@@ -124,7 +124,7 @@ func (s windowsSystem) KillTree(ctx context.Context, p ProcID, _ []int) error {
 		}
 		return err
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	start, running, err := creationTime(h)
 	if err != nil {
 		return err

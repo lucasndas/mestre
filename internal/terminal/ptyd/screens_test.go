@@ -69,7 +69,9 @@ func TestEmulatorShowsTheStartScreenOfEachProvider(t *testing.T) {
 			if raw == "" {
 				t.Fatal("the agent printed nothing")
 			}
-			em := ptyd.NewVTEmulator(100, 40, 100, nil)
+			// Wide enough that no line wraps: the agent prints its work folder, which
+			// is long on Windows.
+			em := ptyd.NewVTEmulator(400, 40, 100, nil)
 			defer em.Close()
 
 			em.Write([]byte(raw))

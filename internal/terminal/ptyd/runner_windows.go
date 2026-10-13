@@ -49,7 +49,7 @@ func (s *sysAgent) started(cmd *pty.Cmd, _ pty.Pty) error {
 	if err != nil {
 		return fmt.Errorf("open agent: %w", err)
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	if err := windows.AssignProcessToJobObject(s.job, h); err != nil {
 		return fmt.Errorf("assign agent to the job: %w", err)
 	}
