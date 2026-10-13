@@ -23,8 +23,16 @@ func TestEmbeddedMigrationsBuildTheMachineSchema(t *testing.T) {
 	if v, err := db.Version(ctx); err != nil || v != machine.Migrations.Latest() || v < 1 {
 		t.Fatalf("Version = %d, %v; want %d", v, err, machine.Migrations.Latest())
 	}
-	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO terminals (id, character_id, machine_id, dir, status, started_at, last_seen_at)
-		VALUES ('t1', 'c1', 'm1', '/work', 'starting', 1, 1)`); err != nil {
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO terminals (id, character_id, machine_id, dir, status,
+		socket_path, handshake_secret, pty_version, started_at, last_seen_at)
+		VALUES ('t1', 'c1', 'm1', '/work', 'starting', '/run/t1.sock', x'00', '1', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	// The PID and its start identity are written together, never one alone.
+	if _, err := db.Writer().ExecContext(ctx, `UPDATE terminals SET pty_pid = 42 WHERE id = 't1'`); err == nil {
+		t.Error("pty_pid without pty_started was accepted")
+	}
+	if _, err := db.Writer().ExecContext(ctx, `UPDATE terminals SET pty_pid = 42, pty_started = 'boot:123' WHERE id = 't1'`); err != nil {
 		t.Fatal(err)
 	}
 	var status string

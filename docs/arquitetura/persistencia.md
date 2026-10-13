@@ -67,7 +67,7 @@ Ao reconectar: a máquina envia o `outbox` e o estado dos `terminals`; a Cidadel
 
 ## Registro de terminais
 
-Campos: id, personagem (agente), máquina, PID, pasta, classe, status, id da sessão do provedor (para a [retomada](../provedores/adaptador.md#retomada-de-sessão)), início e último sinal de vida. O terminal em si (PTY, buffer, log) está em [terminal](terminal.md). Fica em `terminals` no banco local da máquina que roda o terminal e é espelhado no banco da Guilda. É com ele que o motor sabe o que reabrir depois de um reinício. Os valores de status e as transições estão em [personagens](../orquestracao/personagens.md).
+Campos: id, personagem (agente), máquina, pasta, classe, status, id da sessão do provedor (para a [retomada](../provedores/adaptador.md#retomada-de-sessão)), caminho do socket, segredo do aperto de mão e versão do `mestre-pty`, PID do `mestre-pty` com a identidade do início do processo (contra PID reaproveitado), início e último sinal de vida. A linha é gravada **antes** de o `mestre-pty` iniciar, e o PID logo depois; o agente só começa depois disso. O `mestre-pty`, o aperto de mão e a reconciliação na volta do motor estão em [terminal](terminal.md#mestre-pty). Fica em `terminals` no banco local da máquina que roda o terminal e é espelhado no banco da Guilda sem o segredo. Os valores de status e as transições estão em [personagens](../orquestracao/personagens.md).
 
 ## Arquivos
 
