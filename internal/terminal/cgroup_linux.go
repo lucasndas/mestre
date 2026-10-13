@@ -20,7 +20,7 @@ const cgroupRoot = "/sys/fs/cgroup"
 // create child cgroups in it: a delegated subtree (Delegate=yes on the
 // service, or `systemd-run --user --scope -p Delegate=yes`).
 func DelegatedCgroup() (string, error) {
-	rel, err := procCgroup(os.Getpid())
+	rel, err := ProcCgroup(os.Getpid())
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrNoCgroup, err)
 	}
@@ -35,9 +35,9 @@ func DelegatedCgroup() (string, error) {
 	return base, nil
 }
 
-// procCgroup returns the cgroup v2 path of pid ("0::<path>" in
+// ProcCgroup returns the cgroup v2 path of pid ("0::<path>" in
 // /proc/<pid>/cgroup).
-func procCgroup(pid int) (string, error) {
+func ProcCgroup(pid int) (string, error) {
 	f, err := os.Open("/proc/" + strconv.Itoa(pid) + "/cgroup")
 	if err != nil {
 		return "", err
@@ -52,8 +52,8 @@ func procCgroup(pid int) (string, error) {
 	return "", errors.New("no cgroup v2 entry")
 }
 
-// createCgroup makes base/term-<id> and opens it for CgroupFD.
-func createCgroup(base, id string) (string, *os.File, error) {
+// CreateCgroup makes base/term-<id> and opens it for CgroupFD.
+func CreateCgroup(base, id string) (string, *os.File, error) {
 	dir := filepath.Join(base, "term-"+id)
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		return "", nil, fmt.Errorf("create cgroup: %w", err)
@@ -66,11 +66,11 @@ func createCgroup(base, id string) (string, *os.File, error) {
 	return dir, f, nil
 }
 
-// killCgroup ends every process of the cgroup with cgroup.kill (Linux
+// KillCgroupDir ends every process of the cgroup with cgroup.kill (Linux
 // 5.14+), waits for "populated 0" in cgroup.events through inotify, with no
 // polling, and removes the directory. A directory that is already gone is
 // success.
-func killCgroup(ctx context.Context, dir string) error {
+func KillCgroupDir(ctx context.Context, dir string) error {
 	if err := os.WriteFile(filepath.Join(dir, "cgroup.kill"), []byte("1"), 0); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
