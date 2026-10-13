@@ -21,7 +21,13 @@ func hdr(title string) string {
 }
 
 // tree is a small valid documentation tree in memory.
-type tree struct{ fs fstest.MapFS }
+type tree struct {
+	fs fstest.MapFS
+	// audit is the date column of the table of milestones, by milestone;
+	// extra is text added after that table (the lists of criteria).
+	audit map[int]string
+	extra string
+}
 
 func newTree() *tree {
 	return &tree{fs: fstest.MapFS{
@@ -80,11 +86,21 @@ func (t *tree) withOrder(rows ...string) *tree {
 	if _, ok := t.fs["docs/desenvolvimento/INDEX.md"]; !ok {
 		t.area("desenvolvimento")
 	}
-	body := hdr("Ordem") + "## Mapa de documentos por marco e etapa\n\n| Marco | Etapa | Documentos |\n|---|---|---|\n" + strings.Join(rows, "\n") + "\n"
+	body := hdr("Ordem") + t.milestones() + "## Mapa de documentos por marco e etapa\n\n| Marco | Etapa | Documentos |\n|---|---|---|\n" + strings.Join(rows, "\n") + "\n"
 	if _, ok := t.fs[orderPath]; ok {
 		return t.set(orderPath, body)
 	}
 	return t.add(orderPath, body)
+}
+
+// milestones is the table of milestones M0 to M7 with the audit column.
+func (t *tree) milestones() string {
+	var b strings.Builder
+	b.WriteString("## Marcos\n\n| Marco | Nome | Auditoria | O que fica pronto ao final |\n|---|---|---|---|\n")
+	for n := 0; n <= 7; n++ {
+		fmt.Fprintf(&b, "| M%d | nome | %s | x |\n", n, t.audit[n])
+	}
+	return b.String() + "\n" + t.extra + "\n"
 }
 
 func run1(t *testing.T, tr *tree) Result {

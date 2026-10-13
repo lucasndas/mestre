@@ -41,6 +41,16 @@ tar -xzf $f.tar.gz && install -m 0755 $f/golangci-lint ~/.local/bin/
 
 `~/.local/bin` precisa estar no `PATH`. Sem o binário, as suítes rápida e completa falham apontando para este documento. Trocar a versão é mudar esta tabela e conferir o `.golangci.yml` na mesma alteração.
 
+## Pinos do `go.mod`
+
+Valores que o `go.mod` mantém, escritos só aqui: a [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) lê esta tabela e falha, apontando para cá, se o arquivo divergir. Mudar um pino é uma decisão: edite a tabela e o `go.mod` na mesma alteração e rode a completa nos dois sistemas. Um `go get` ou `go mod tidy` pode subir a diretiva `go` por conta própria, e o `x/sys` sustenta o que é específico do Windows (ConPTY, ACLs, DPAPI).
+
+| Pino | Valor |
+|---|---|
+| `go` | `1.25.0` |
+| `toolchain` | `go1.27.2` |
+| `golang.org/x/sys` | `v0.47.0` |
+
 ## Rodar as suítes e a verificação
 
 Na raiz do repositório (o que cada suíte contém e quando roda está em [testes](../qualidade/testes.md)):

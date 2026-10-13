@@ -61,8 +61,9 @@ type Launcher interface {
 // GuardSuite returns ErrExternalProcessInFastSuite when suite is "fast".
 func GuardSuite(suite string) error { return ptywire.GuardSuite(suite) }
 
-// ExecLauncher starts real processes. Until M1 it connects them by pipes
-// instead of a PTY; Resize is a no-op.
+// ExecLauncher starts real processes for the tests of the full suite. It
+// connects them by pipes instead of a PTY (the PTY of production is the
+// mestre-pty's); Resize is a no-op.
 type ExecLauncher struct {
 	// Suite is the value of MESTRE_TEST_SUITE ("" in production).
 	Suite string

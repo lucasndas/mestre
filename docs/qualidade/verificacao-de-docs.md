@@ -1,10 +1,10 @@
 # Verificação de docs
 
-> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite e grafo de "Depende de") na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite, grafo de "Depende de", auditoria dos marcos, cobertura dos critérios pelos testes, comentários de marco velhos e pinos do `go.mod`) na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
-Garantir por máquina as regras de estrutura da documentação: nenhum documento perdido fora dos índices, nenhum link quebrado, nenhum documento grande demais, todo documento com cabeçalho e critérios de aceite num formato que se pode ler por programa, e uma ordem de implementação sem ciclos. Roda na suíte rápida ([testes.md](testes.md)), então quebra antes do commit.
+Garantir por máquina as regras de estrutura da documentação: nenhum documento perdido fora dos índices, nenhum link quebrado, nenhum documento grande demais, todo documento com cabeçalho e critérios de aceite num formato que se pode ler por programa, uma ordem de implementação sem ciclos, e os documentos de acordo com o código (critérios com teste, marcos auditados, comentários e versões em dia). Roda na suíte rápida ([testes.md](testes.md)), então quebra antes do commit.
 
 ## Comportamento
 
@@ -12,7 +12,7 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
 
 - Ferramenta Go `tools/docscheck`. O teste `TestDocs` (sem build tag, portanto da rápida) roda a verificação sobre `docs/`, `AGENTS.md` e `README.md` do repositório.
 - Também roda sozinha: `go run ./tools/docscheck`.
-- Lê os arquivos por `fs.FS`: no teste real, a pasta do repositório; nos testes da própria ferramenta, árvores pequenas em memória (`fstest.MapFS`), sem disco.
+- Lê os arquivos por `fs.FS` (documentos, comentários dos `.go` e o `go.mod`): no teste real, a pasta do repositório; nos testes da própria ferramenta, árvores pequenas em memória (`fstest.MapFS`), sem disco.
 - Mostra **todos** os erros de uma vez, um por linha: `<arquivo>:<linha>: <checagem>: <mensagem>`. Avisos vêm com o prefixo `aviso:` e não falham.
 - Orçamento padrão: a árvore inteira em menos de 1 s.
 
@@ -54,6 +54,15 @@ Garantir por máquina as regras de estrutura da documentação: nenhum documento
     - o grafo formado por esses links **não tem ciclos**; num ciclo, o erro mostra o caminho inteiro (`a.md → b.md → a.md`);
     - **a ordem registrada é coerente com as dependências:** para cada link de "Depende de" entre documentos do mesmo marco, a etapa de quem depende é maior que a da dependência; o erro mostra os dois documentos, com o caminho relativo a `docs/`, e as etapas (`orquestracao/missoes.md (M4, etapa 9) depende de orquestracao/mesas.md (M4, etapa 9)`). Assim, mudar uma dependência sem ajustar a etapa faz a verificação falhar.
 
+### Checagens de código e de marcos
+
+Leem, além dos documentos, os **comentários** dos arquivos `.go` (`go/scanner`; ficam de fora as pastas que o `go` ignora, `testdata`, `web` e `node_modules`). **Marcador** é um comentário que começa com `// CA-<SIGLA>-<NN>`; só o marcador num `_test.go` cobre um critério.
+
+11. **Auditoria dos marcos.** A tabela de [marcos](../desenvolvimento/ordem-de-implementacao.md#marcos) tem a coluna `Auditoria`: data `AAAA-MM-DD` válida e não futura, ou vazia ([regra](../desenvolvimento/ordem-de-implementacao.md#como-usar-no-dia-a-dia)). Falha se um marco tem data e um anterior não, ou se há marcador de critério do marco *n* e algum marco anterior a *n* está sem data. Os marcadores dos critérios de "Critérios antecipados" da ordem não contam para o marco do documento.
+12. **Cobertura dos critérios.** *Marco fechado* é o que tem data de auditoria (um marco em andamento não quebra a suíte, e a data só entra com a cobertura completa). Todo critério de documento de funcionalidade de marco fechado precisa de um marcador em `_test.go`, salvo se for *pesada* ou se a ordem o listar em "Critérios em marcos posteriores" ou "Operador do PC no M7" (um intervalo, "CA-COFRE-10 a CA-COFRE-17", vale para todos). E todo marcador no código precisa nomear um critério que existe em algum documento.
+13. **Comentários de marco velhos.** Comentário que diz que algo chega, espera ou fica para um marco já auditado, ou que espera um spike que a tabela de spikes dá por **feito**, falha. Os padrões, estreitos de propósito (`<n>` é o número e `M` é maiúsculo): `arrives|comes|lands` e, em até 40 caracteres da mesma frase, `in|at|with [the] M<n>`; `until|till M<n>`; `waits for|waiting for|pending|deferred to|postponed to|left for M<n>`; `chega|vem|fica|espera|aguarda` (singular ou plural) e, em até 40 caracteres, `no|com o|para o|até o|do M<n>`; `até [o] M<n>`; `waits for|waiting for|until|pending|espera|aguarda [the|o] spike <n>`. Frases quebradas em duas linhas de comentário valem como uma. Código de spike (`tools/spikes/`, `tools/winsandbox/spikes/`) fica de fora. Para dizer que algo foi feito, escreva sem esses padrões ("done in M1").
+14. **Pinos do `go.mod`.** A seção "Pinos do `go.mod`" do [ambiente](../desenvolvimento/ambiente.md#pinos-do-gomod) é a única fonte da diretiva `go`, da `toolchain` e de módulos fixados; o `go.mod` precisa ter os mesmos valores, e o erro aponta para o ambiente.
+
 O formato conferido vem dos documentos de referência [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md), [glossário](../produto/glossario.md) e [convenções](../desenvolvimento/convencoes.md).
 
 ## Regras e erros
@@ -78,6 +87,11 @@ O formato conferido vem dos documentos de referência [ordem de implementação]
 - **CA-VERDOCS-11** · *rápida* — **Dado** uma árvore em que `a.md` depende de `b.md` e `b.md` depende de `a.md`, ambos no M3, **quando** a verificação roda, **então** ela falha mostrando o ciclo `a.md → b.md → a.md`.
 - **CA-VERDOCS-12** · *rápida* — **Dado** um documento do M3 cujo "Depende de" aponta para um documento do M5, e um documento de funcionalidade fora do mapa, **quando** a verificação roda, **então** ela aponta os dois erros; **dado** o mesmo documento apontando para `../arquitetura/seguranca.md` (referência), **então** não há erro.
 - **CA-VERDOCS-13** · *rápida* — **Dado** um documento na etapa 3 do M4 que passa a depender de outro na etapa 5 do mesmo marco, **quando** a verificação roda, **então** ela falha com os dois nomes e as etapas; ajustando a etapa do primeiro para 6, passa.
+- **CA-VERDOCS-14** · *rápida* — **Dado** código com marcador de um critério do M2 e a tabela de marcos com o M1 sem data de auditoria, **quando** a verificação roda, **então** ela falha na linha do M1 citando o marcador; **dado** a data no M1, **então** passa; **dado** o M2 com data e o M1 sem, ou uma data futura ou mal formada, **então** falha.
+- **CA-VERDOCS-15** · *rápida* — **Dado** um marco auditado com um critério sem marcador em `_test.go`, **quando** a verificação roda, **então** ela falha na linha do critério; **dado** o marcador num teste, o critério *pesada*, o critério listado em "Critérios em marcos posteriores" (inclusive num intervalo) ou o marco sem data, **então** passa.
+- **CA-VERDOCS-16** · *rápida* — **Dado** um comentário `// CA-ZZZ-99` em código e nenhum documento com esse critério, **quando** a verificação roda, **então** ela falha com o arquivo e a linha do marcador.
+- **CA-VERDOCS-17** · *rápida* — **Dado** um comentário "arrives in M1" (ou "chega no M1", "until M1", "waits for spike 5") e o M1 auditado (ou o spike 5 feito), **quando** a verificação roda, **então** ela falha na linha do comentário, inclusive quando a frase quebra em duas linhas; **dado** o mesmo texto para um marco sem data, uma frase sem o padrão ou código de spike, **então** passa.
+- **CA-VERDOCS-18** · *rápida* — **Dado** um `go.mod` com `go 1.26.0` e o ambiente fixando `1.25.0`, ou o `golang.org/x/sys` numa versão diferente da fixada, **quando** a verificação roda, **então** ela falha na linha do `go.mod` apontando para o ambiente; **dado** os valores iguais, **então** passa.
 
 ## Depende de
 

@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco-e-etapa). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
@@ -14,16 +14,16 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 
 ## Marcos
 
-| Marco | Nome | O que fica pronto ao final |
-|---|---|---|
-| M0 | Fundação | executor das suítes (`tools/testrun`), verificação de docs (`tools/docscheck`), dublês e `testkit` (relógio injetável, rede, PTY, git, Telegram e GitHub falsos, agente falso), projetos de treino (`testkit.NewProject`), `logging` com [mascaramento](../arquitetura/seguranca.md#mascaramento-em-logs) |
-| M1 | Base local | CI com matriz Linux e Windows e a `main` protegida ([testes](../qualidade/testes.md#como-as-suítes-são-selecionadas)), banco e migrações ([persistência](../arquitetura/persistencia.md)), cofre (DPAPI no Windows e arquivo `0600` no Linux), terminal (`mestre-pty` com PTY/ConPTY, emulador e buffer, volta do motor sem parar os agentes, e o `mestre-launcher`), `internal/gitx` (wrapper do binário `git`), canal local CLI ↔ motor |
-| M2 | Transporte e Guilda | TLS e CA da Guilda ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)), protocolo WSS com época, descoberta da Guilda, entrada e exclusão de máquinas, instâncias múltiplas, ficha da máquina, replicação do banco, dos arquivos e do cofre, e época, fencing e troca de Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md)) atrás da interface da trava |
-| M3 | CLI e provedores | CLI (convenções), adaptador e `mestre hook`, [precedência](../arquitetura/precedencia.md), permissões, reforço nativo, classes, teto, os três provedores e o teste de conformidade |
-| M4 | Orquestração | workspaces, sessão zero, mesas, personagens, conexões, esperas e caixa de entrada, missões, pergaminhos, rituais, grimórios, bases e fichas, comandos de comunicação e coordenação, skills geradas |
-| M5 | Integrações | GitHub e a [trava no GitHub](../guilda/trava-no-github.md) (primeiro marco com ação externa; antes dele não há promoção), Telegram, usuários e níveis, decretos, aprovações, Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
-| M6 | Painel | login, canvas, visão do workspace, conversa e aprovações, administração |
-| M7 | Plataforma, autocura e Operador do PC | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
+| Marco | Nome | Auditoria | O que fica pronto ao final |
+|---|---|---|---|
+| M0 | Fundação | 2026-10-13 | executor das suítes (`tools/testrun`), verificação de docs (`tools/docscheck`), dublês e `testkit` (relógio injetável, rede, PTY, git, Telegram e GitHub falsos, agente falso), projetos de treino (`testkit.NewProject`), `logging` com [mascaramento](../arquitetura/seguranca.md#mascaramento-em-logs) |
+| M1 | Base local | 2026-10-13 | CI com matriz Linux e Windows e a `main` protegida ([testes](../qualidade/testes.md#como-as-suítes-são-selecionadas)), banco e migrações ([persistência](../arquitetura/persistencia.md)), cofre (DPAPI no Windows e arquivo `0600` no Linux), terminal (`mestre-pty` com PTY/ConPTY, emulador e buffer, volta do motor sem parar os agentes, e o `mestre-launcher`), `internal/gitx` (wrapper do binário `git`), canal local CLI ↔ motor |
+| M2 | Transporte e Guilda |  | TLS e CA da Guilda ([segurança](../arquitetura/seguranca.md#tls-e-ca-interna)), protocolo WSS com época, descoberta da Guilda, entrada e exclusão de máquinas, instâncias múltiplas, ficha da máquina, replicação do banco, dos arquivos e do cofre, e época, fencing e troca de Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md)) atrás da interface da trava |
+| M3 | CLI e provedores |  | CLI (convenções), adaptador e `mestre hook`, [precedência](../arquitetura/precedencia.md), permissões, reforço nativo, classes, teto, os três provedores e o teste de conformidade |
+| M4 | Orquestração |  | workspaces, sessão zero, mesas, personagens, conexões, esperas e caixa de entrada, missões, pergaminhos, rituais, grimórios, bases e fichas, comandos de comunicação e coordenação, skills geradas |
+| M5 | Integrações |  | GitHub e a [trava no GitHub](../guilda/trava-no-github.md) (primeiro marco com ação externa; antes dele não há promoção), Telegram, usuários e níveis, decretos, aprovações, Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
+| M6 | Painel |  | login, canvas, visão do workspace, conversa e aprovações, administração |
+| M7 | Plataforma, autocura e Operador do PC |  | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
 
 - **Guardião em paralelo:** [guardiao.md](../autocura/guardiao.md) depende só de documentos até o M2 e pode começar logo depois do M2, em paralelo com M3 a M6.
 - **Escolhas já feitas:** a biblioteca de mDNS e o gerador de tipos TypeScript ([convenções](convencoes.md#código-gerado)). O modo de captura das mudanças do banco sai do spike do começo do M2 ([regras de execução](#regras-de-execução-da-ordem)).
@@ -65,6 +65,10 @@ Critérios de documentos de um marco que usam peças de marcos seguintes; cada u
 | [ficha da máquina](../guilda/ficha-da-maquina.md) (M2) | CA-FMAQ-04 → M3 (classes); CA-FMAQ-03 → M4 (fichas e perfis de conta) |
 | [replicação](../guilda/replicacao.md) (M2) | CA-REPL-08 → M4 (espelho do workspace); CA-REPL-06 → M7 (checklist) |
 | [Cidadela e Torres](../guilda/cidadela-e-torres.md) (M2) | CA-CIDADELA-10, CA-CIDADELA-11 e CA-CIDADELA-13 → M4 (personagens, missões, esperas); CA-CIDADELA-03 e CA-CIDADELA-12 → M5 (ações no GitHub e trava); CA-CIDADELA-08 → M6 (painel); CA-CIDADELA-05, CA-CIDADELA-06 e CA-CIDADELA-07 → M7 (Torre condutora, Telegram em modo reduzido, página reserva) |
+
+### Critérios antecipados
+
+O inverso da tabela acima: critérios de documento de marco posterior que um marco anterior já testa, por causa da "casca" dos comandos ([regras de execução](#regras-de-execução-da-ordem)). O teste leva o marcador `// CA-…` desde já, e a [regra de auditoria](#como-usar-no-dia-a-dia) não conta esse marcador como código do marco do documento. Hoje: das [convenções da CLI](../cli/convencoes.md) (M3), CA-CLI-CONV-01 a CA-CLI-CONV-03 e CA-CLI-CONV-09 (o canal local do M1).
 
 ### Spikes do M1
 
@@ -138,6 +142,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 
 ## Como usar no dia a dia
 
-- Comece um marco só com o anterior pronto (critérios de aceite das suítes rápida e completa passando), salvo o Guardião, acima.
+- Comece um marco só com o anterior pronto, salvo o Guardião, acima. **Pronto** quer dizer: critérios de aceite das suítes rápida e completa passando **e auditado**.
+- **Auditoria do marco:** antes de o marco seguinte começar, revisores conferem que o teste de cada critério afirma o que o critério diz (não só que existe um teste marcado), olhando primeiro a segurança e os dois sistemas; os achados são corrigidos antes de o marco seguinte começar. A **data** da auditoria (`AAAA-MM-DD`) entra na coluna "Auditoria" da tabela de [marcos](#marcos); é só a data, o relatório não vai para o repositório (histórico fica no controle de versão). A [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) exige a cobertura dos critérios de um marco auditado e recusa código de um marco cujo anterior ficou sem data.
 - Dentro do marco, implemente na ordem do grafo de "Depende de"; documentos sem dependência entre si podem andar em paralelo.
 - Os critérios *pesada* (MVP-1 a MVP-15) fecham no M7, quando instalação, autocura e laboratório existem ([testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada)).

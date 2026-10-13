@@ -37,3 +37,4 @@ Convenções em [docs/desenvolvimento/convencoes.md](docs/desenvolvimento/conven
 - A suíte rápida passa dentro do orçamento, e a completa também antes do merge.
 - A documentação afetada foi atualizada e a verificação de docs passa.
 - Nada fora do escopo do MVP ([escopo](docs/produto/escopo-mvp.md)) foi acrescentado.
+- Um marco só está pronto depois da auditoria, cuja data fica na [tabela de marcos](docs/desenvolvimento/ordem-de-implementacao.md#como-usar-no-dia-a-dia).
