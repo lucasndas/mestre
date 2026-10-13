@@ -1,7 +1,8 @@
 // Command testrun runs the test suites and measures them
 // (docs/qualidade/testes.md#executor-testrun):
 //
-//	go run ./tools/testrun fast|full|heavy|affected|quarantine [-count n] [-shuffle]
+//	go run ./tools/testrun fast|full|heavy|affected|quarantine [-count n] [-shuffle] [-race]
+//	go run ./tools/testrun prepush < changed-files.txt
 package main
 
 import (
@@ -24,7 +25,7 @@ func main() {
 
 func run(args []string, out io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(out, "usage: go run ./tools/testrun fast|full|heavy|affected|quarantine [-count n] [-shuffle]")
+		fmt.Fprintln(out, "usage: go run ./tools/testrun fast|full|heavy|affected|quarantine|prepush [-count n] [-shuffle] [-race]")
 		return 2
 	}
 	mode := args[0]
@@ -32,6 +33,7 @@ func run(args []string, out io.Writer) int {
 	fl.SetOutput(out)
 	count := fl.Int("count", 1, "go test -count (the nightly flaky hunt uses 5)")
 	shuffle := fl.Bool("shuffle", false, "go test -shuffle=on")
+	race := fl.Bool("race", false, "go test -race, with the budget times 3 (fast, full and heavy)")
 	if err := fl.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -44,7 +46,7 @@ func run(args []string, out io.Writer) int {
 	}
 	r := &Runner{
 		Exec: osExec{root: root}, Clock: clock.Real{}, FS: os.DirFS(root), Out: out,
-		Count: *count, Shuffle: *shuffle, Getenv: os.Getenv, AppendFile: appendFile,
+		Count: *count, Shuffle: *shuffle, Race: *race, Stdin: os.Stdin, Getenv: os.Getenv, AppendFile: appendFile,
 		WriteFile: func(p string, data []byte) error {
 			full := filepath.Join(root, filepath.FromSlash(p))
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -60,6 +62,8 @@ func run(args []string, out io.Writer) int {
 		return r.Affected(ctx)
 	case "quarantine":
 		return r.Quarantine(ctx)
+	case "prepush":
+		return r.Prepush(ctx)
 	}
 	fmt.Fprintf(out, "testrun: unknown mode %q\n", mode)
 	return 2

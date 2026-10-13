@@ -60,11 +60,17 @@ Na raiz do repositório (o que cada suíte contém e quando roda está em [teste
 | `go run ./tools/testrun affected` | durante o trabalho |
 | `go run ./tools/testrun fast` | antes de cada commit (inclui o golangci-lint e a verificação de docs) |
 | `go run ./tools/testrun full` | antes do merge |
+| `go run ./tools/testrun fast -race` (ou `full -race`) | o que o CI Linux roda a mais: o detector de corridas, com orçamento 3 vezes maior (precisa de cgo e de `gcc`) |
 | `go run ./tools/docscheck` | só a [verificação de docs](../qualidade/verificacao-de-docs.md) |
 | `go run ./tools/codecheck` | só as regras de código fora do linter ([estilo](convencoes.md#estilo)) |
 | `golangci-lint run ./...` | só o linter |
 
-**Gancho de pré-commit:** versionado em `tools/githooks/pre-commit` (roda a rápida). Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks`. Ele testa **o que vai no commit**, não a pasta de trabalho: grava o índice (`git checkout-index`, que vale também para `commit -a` e `commit <caminhos>`) em `<pasta do git>/precommit-snapshot` e roda a rápida lá. Nada da pasta de trabalho é guardado, trocado ou restaurado (sem `stash`), então edições não adicionadas e arquivos novos não entram no teste e nenhum trabalho se perde; a pasta tem sempre o mesmo caminho, para o cache de compilação do Go e do lint continuar quente. No Windows, o Git for Windows roda o gancho com o `sh` dele.
+### Ganchos de git
+
+Versionados em `tools/githooks/`. Ligue uma vez em cada clone, na raiz: `git config core.hooksPath tools/githooks` (no Windows, o Git for Windows roda os ganchos com o `sh` dele). Os dois testam **o que vai ser gravado ou enviado**, não a pasta de trabalho: escrevem esse conteúdo numa pasta dentro da pasta do git, sempre com o mesmo caminho, para o cache de compilação do Go e do lint continuar quente. Nada da pasta de trabalho é guardado, trocado ou restaurado (sem `stash`): edições não adicionadas e arquivos novos não entram no teste.
+
+- **`pre-commit`** roda a rápida sobre o índice (`git checkout-index`, que vale também para `commit -a` e `commit <caminhos>`), em `precommit-snapshot`.
+- **`pre-push`** roda o [`testrun prepush`](../qualidade/testes.md#antes-do-push) sobre o commit enviado (`git read-tree` num índice próprio, em `prepush-snapshot`): a completa com `-race` só nos pacotes mudados em relação à branch remota (numa branch nova, em relação a `origin/main`) e nos que os importam. Se só documentos mudaram, sai na hora, sem montar nada. Imprime os segundos gastos. Mexer em `pkg/clock` leva a completa inteira com `-race`. Em emergência, `git push --no-verify` (o CI roda tudo de qualquer jeito).
 
 ## CI e proteção da `main`
 

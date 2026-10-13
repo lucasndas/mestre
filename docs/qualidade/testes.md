@@ -36,7 +36,7 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 
 ### Executor `testrun`
 
-Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tools/testrun fast|full|heavy|affected|quarantine`.
+Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tools/testrun fast|full|heavy|affected|quarantine|prepush [-count n] [-shuffle] [-race]`.
 
 1. Roda `go test -json -count=1` (sem cache de resultado, para medir de verdade), com `-timeout` um pouco acima do orçamento (1,5 vez: 45 s na rápida, 4 min 30 s na completa; a pesada usa `-timeout 0`), para um teste travado morrer logo depois do orçamento. **Vitest fica para o M6:** se existir `web/package.json`, o executor não roda nada e sai com 2 e uma mensagem clara, porque ainda faltam ao Vitest a exclusão da quarentena, a ordem embaralhada e `-count`, a sinalização de lentos e `retry: 0`.
 2. Mede o **tempo de parede** total, do início ao fim, com o cache de compilação já aquecido, **inclusive a reexecução isolada do passo 4**, e imprime esse total e quanto dele foi essa reexecução.
@@ -46,6 +46,11 @@ Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tool
 6. Define `MESTRE_TEST_SUITE=fast|full|heavy` no ambiente dos testes (uso em [Regras e erros](#regras-e-erros)).
 7. Na rápida e na completa, roda também o `golangci-lint run ./...` em paralelo (na completa com `--build-tags full`), dentro do orçamento; problema do linter falha a suíte, e o binário ausente falha apontando para o [ambiente](../desenvolvimento/ambiente.md).
 8. **`-count n` e `-shuffle`** (caçada de instáveis): o orçamento e o `-timeout` valem `n` vezes; o linter e a sinalização de lentos não rodam (as execuções normais já cobrem). Falha em qualquer das `n` execuções falha o teste, e o que passa em umas e falha em outras sai numa linha `mixed: <pacote> <Teste> passed N failed M` (e no resumo do CI).
+9. **`-race`**: roda `go test -race` (com `CGO_ENABLED=1`: o detector precisa de cgo) e multiplica por **3** o orçamento e o `-timeout` (rápida 90 s, completa 9 min; com `-count n`, `3n` vezes). O linter e a sinalização de lentos não rodam, porque o detector distorce os tempos. Roda no CI Linux (abaixo) e no gancho de pré-push.
+
+### Antes do push
+
+`testrun prepush` roda a completa (tags `full`) com `-race` só nos pacotes que o push mudou e nos que os importam, direto ou não (também pelos testes). Recebe no stdin os arquivos mudados em relação à branch remota; quem monta a lista é o gancho `tools/githooks/pre-push` ([ambiente](../desenvolvimento/ambiente.md#ganchos-de-git)). Só documentos, arquivos do CI e ganchos: não roda nada. `go.mod`, `go.sum` ou arquivo fora de qualquer pacote: todos os pacotes. Pacote que este sistema não compila (só Windows) fica para o CI. Respeita a quarentena, não tem orçamento (o `-timeout` é o da completa com o fator do `-race`) e imprime o tempo.
 
 ### Testes afetados
 
@@ -129,6 +134,8 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 - **CA-TESTES-08** · *rápida* — **Dado** o `golangci-lint` fora do `PATH`, **quando** o `testrun fast` ou o `full` roda, **então** a suíte falha com a mensagem que aponta para `docs/desenvolvimento/ambiente.md`; **dado** o linter com problemas, **então** a suíte falha mostrando a saída dele (nos dois casos, na rápida e na completa).
 - **CA-TESTES-09** · *rápida* — **Dado** `testrun fast -count 5 -shuffle` e um teste que passa em 3 execuções e falha em 2, **quando** o `testrun` termina, **então** ele falha, nomeia o teste numa linha `mixed:` e o orçamento vale 5 vezes o da rápida.
 - **CA-TESTES-10** · *rápida* — **Dado** uma execução da rápida de 20 s e um teste lento, **quando** o `testrun` o reexecuta sozinho, **então** o total impresso inclui a reexecução, que só usa o orçamento que sobra menos 10% (o resto vira `not re-run`) e não reprova a suíte; **dado** uma execução de 31 s, **então** falha, sem reexecutar nada.
+- **CA-TESTES-11** · *rápida* — **Dado** o `testrun fast -race` e uma execução de 80 s, **quando** ele termina, **então** passa com orçamento de 90 s (3 vezes 30 s), chama `go test -race` com `CGO_ENABLED=1` e `-timeout 2m15s`, não roda o linter nem a reexecução dos lentos; **dado** 100 s, **então** falha; **dado** os mesmos 80 s sem `-race`, **então** falha pelo orçamento de 30 s (na completa, 9 min com `-race`).
+- **CA-TESTES-12** · *rápida* — **Dado** a lista de arquivos mudados com `internal/a/a.go` e `docs/x.md`, **quando** roda o `testrun prepush`, **então** ele chama `go test -race -tags full` só em `internal/a` e nos pacotes que o importam; **dado** só documentos e arquivos do CI, **então** não roda nada e diz isso; **dado** `go.mod` ou um arquivo fora de qualquer pacote, **então** roda todos; **dado** um teste que falha, **então** sai com 1 e imprime o tempo.
 
 ## Depende de
 

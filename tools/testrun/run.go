@@ -47,6 +47,11 @@ var Suites = map[string]Suite{
 	"heavy": {Name: "heavy", Tags: "full,heavy", Timeout: "0"}, // measured, no hard limit
 }
 
+// RaceFactor multiplies the budget (and the go test timeout) of a suite run
+// with -race: the detector slows tests down by several times
+// (docs/qualidade/testes.md#executor-testrun).
+const RaceFactor = 3
+
 // Limits of the runner.
 const (
 	slowTest     = 100 * time.Millisecond
@@ -74,6 +79,8 @@ type Runner struct {
 	WriteFile func(path string, data []byte) error // relative to the root
 	Count     int                                  // -count for go test (default 1)
 	Shuffle   bool
+	Race      bool      // go test -race, with the budget times RaceFactor
+	Stdin     io.Reader // the changed files of `prepush`, one per line
 
 	// Getenv reads the CI variables (GITHUB_STEP_SUMMARY); nil reads none.
 	Getenv func(string) string
@@ -93,6 +100,25 @@ func (r *Runner) count() int {
 		return 1
 	}
 	return r.Count
+}
+
+// runs is how many suite runs the budget covers: -count times the race
+// factor.
+func (r *Runner) runs() int {
+	if r.Race {
+		return r.count() * RaceFactor
+	}
+	return r.count()
+}
+
+// goEnv is the environment added to go test. The race detector needs cgo,
+// which a developer may have turned off for the release builds.
+func (r *Runner) goEnv(suite string) []string {
+	env := []string{envSuite + "=" + suite}
+	if r.Race {
+		env = append(env, "CGO_ENABLED=1")
+	}
+	return env
 }
 
 // goTimeout is the -timeout for runs of the suite: none for the heavy one, a
@@ -126,19 +152,22 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	if s.Tags != "" {
 		args = append(args, "-tags", s.Tags)
 	}
-	if to := goTimeout(s, count); to != "" {
+	if r.Race {
+		args = append(args, "-race")
+	}
+	if to := goTimeout(s, r.runs()); to != "" {
 		args = append(args, "-timeout", to)
 	}
 	if p := skipPattern(quarantine); p != "" {
 		args = append(args, "-skip", p)
 	}
 	args = append(args, "./...")
-	goCmd := Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}
+	goCmd := Cmd{Name: "go", Args: args, Env: r.goEnv(s.Name)}
 
 	start := r.Clock.Now()
 	lintSuite := s
-	if count > 1 {
-		lintSuite.Lint = false // the linter result does not change from run to run
+	if count > 1 || r.Race {
+		lintSuite.Lint = false // the linter result does not change from run to run, or with -race
 	}
 	lintDone := r.startLint(ctx, lintSuite)
 	var b bytes.Buffer
@@ -154,13 +183,13 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 		code = 1
 	}
 	r.reportMixed(rep, count)
-	budget := s.Budget * time.Duration(count)
+	budget := s.Budget * time.Duration(r.runs())
 	// The slow-test timing runs the tests again, alone. That time is part of
 	// the wall time the budget checks, but only what the budget has left
 	// (less a margin) may be spent on it: the measuring never makes a suite
 	// fail. With -count > 1 the elapsed times mix runs, so nothing is flagged.
 	var slowWall time.Duration
-	if s.FlagSlow && count == 1 {
+	if s.FlagSlow && count == 1 && !r.Race { // with -race the times are inflated
 		t0 := r.Clock.Now()
 		r.flagSlow(ctx, s, rep, rerunAllowance(budget, clock.Since(r.Clock, start)))
 		slowWall = clock.Since(r.Clock, t0)
@@ -187,6 +216,9 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	limit := "no limit, measured"
 	if budget > 0 {
 		limit = "budget " + budget.String()
+		if r.Race {
+			limit += fmt.Sprintf(", race x%d", RaceFactor)
+		}
 	}
 	timing := ""
 	if slowWall.Round(time.Millisecond) > 0 {
