@@ -221,7 +221,7 @@ func TestATowerThatComesBackGetsOnlyWhatIsMissingOrAFullCopyAfterTheRetention(t 
 func TestTheVaultReachesOnlyTheMachinesThatAreNotExcludedAndThePromotedTowerChangesTheKeyWithoutThePrivateRecoveryKey(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, rigOpts{vault: true})
+		r := newRig(t, rigOpts{vault: true, durable: true})
 		ctx := context.Background()
 		put := func(name, value string) {
 			t.Helper()
@@ -331,7 +331,7 @@ func TestTheVaultReachesOnlyTheMachinesThatAreNotExcludedAndThePromotedTowerChan
 		envelopeBefore, _ := os.ReadFile(common.env)
 		common.stop()
 		r.stop()
-		promoted, err := guilddb.Open(ctx, common.dbPath, store.Options{Synchronous: "OFF", Clock: r.clk})
+		promoted, err := guilddb.Open(ctx, common.dbPath, store.Options{Clock: r.clk}) // flushes: the key rotates
 		if err != nil {
 			t.Fatal(err)
 		}

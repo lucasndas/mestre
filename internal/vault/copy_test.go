@@ -103,7 +103,7 @@ func TestImportRefusesACopyThatDoesNotAddUp(t *testing.T) {
 		}
 	}
 	// An envelope that was made for other key versions than the ring.
-	f2 := newFixture(t, &memKeys{})
+	f2 := newDurableFixture(t, &memKeys{})
 	v2 := f2.create(t)
 	if err := v2.Rotate(f2.ctx); err != nil {
 		t.Fatal(err)

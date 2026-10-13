@@ -160,8 +160,12 @@ type frame struct {
 
 type rigOpts struct {
 	vault bool
-	files bool
-	cites replication.Cites
+	// durable opens the database of the Citadel with flushes: a test that
+	// rotates the key of the vault needs it (everything else does without, a
+	// flush costs tens of milliseconds on a Windows runner).
+	durable bool
+	files   bool
+	cites   replication.Cites
 	// mirrors, when set, are the mirrors of the Citadel; git is the one both
 	// sides use.
 	mirrors      replication.MirrorSource
@@ -271,7 +275,11 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	if err := raw.Close(); err != nil {
 		t.Fatal(err)
 	}
-	r.cdb, err = guilddb.Open(ctx, path, store.Options{Synchronous: "OFF", Clock: r.clk})
+	sync := "OFF"
+	if o.durable {
+		sync = ""
+	}
+	r.cdb, err = guilddb.Open(ctx, path, store.Options{Synchronous: sync, Clock: r.clk})
 	if err != nil {
 		t.Fatal(err)
 	}
