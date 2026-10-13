@@ -410,7 +410,7 @@ func TestInterruptedKeyRotationKeepsEverySecretReadable(t *testing.T) {
 	for _, tc := range steps {
 		t.Run(tc.step, func(t *testing.T) {
 			t.Parallel()
-			f := newFixture(t, nil)
+			f := newDurableFixture(t, nil) // a rotation needs a database that flushes
 			v := f.create(t)
 			putSamples(t, v)
 			crash := errors.New("simulated crash")
@@ -478,7 +478,7 @@ func assertEnvelopeOpens(t *testing.T, f *fixture) {
 
 func TestRotationReencryptsWithANewKey(t *testing.T) {
 	t.Parallel()
-	f := newFixture(t, nil)
+	f := newDurableFixture(t, nil)
 	v := f.create(t)
 	putSamples(t, v)
 	var before []byte
@@ -545,6 +545,33 @@ func TestRotationCommitIsDurableBeforeTheOldKeyIsDropped(t *testing.T) {
 	want := []string{"keys [1 2]", "transaction synchronous=2", "durable commit", "keys [2]"}
 	if !slices.Equal(events, want) {
 		t.Fatalf("events = %q, want %q", events, want)
+	}
+	for _, s := range samples {
+		mustRead(t, v, s.name, s.value)
+	}
+}
+
+// CA-COFRE-06
+// A database opened without flushes (Synchronous OFF) is refused before any key
+// is touched: the guard of durability is not skipped there.
+func TestRotationRefusesADatabaseThatDoesNotFlush(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, nil)
+	v := f.create(t)
+	putSamples(t, v)
+	before, err := f.cfg.Keys.Load(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Rotate(f.ctx); !errors.Is(err, ErrNotDurable) {
+		t.Fatalf("Rotate on a database without flushes = %v, want ErrNotDurable", err)
+	}
+	after, _ := f.cfg.Keys.Load(f.ctx)
+	if !bytes.Equal(before, after) {
+		t.Error("the key store changed")
+	}
+	if got, _ := v.versionsInUse(f.ctx); !slices.Equal(got, []uint32{1}) {
+		t.Fatalf("key versions in use = %v, want [1]", got)
 	}
 	for _, s := range samples {
 		mustRead(t, v, s.name, s.value)

@@ -280,16 +280,16 @@ func TestAWriteThatSkipsTheLogIsRefused(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer st.Close()
-		if _, err := st.ExecContext(ctx); err == nil || !strings.Contains(err.Error(), "constraint") {
-			t.Fatalf("Exec = %v, want the commit refused", err)
+		if _, err := st.ExecContext(ctx); !errors.Is(err, store.ErrUnloggedWrite) {
+			t.Fatalf("Exec = %v, want the commit refused (ErrUnloggedWrite)", err)
 		}
 	})
 	t.Run("a write that comes back in a query", func(t *testing.T) {
 		t.Parallel()
 		var id int
 		err := db.Writer().QueryRowContext(ctx, `INSERT INTO parents (id, name) VALUES (101, 'sneaky') RETURNING id`).Scan(&id)
-		if err == nil {
-			t.Fatal("RETURNING write went through the writer without a log")
+		if !errors.Is(err, store.ErrUnloggedWrite) {
+			t.Fatalf("RETURNING write outside a transaction = %v, want ErrUnloggedWrite", err)
 		}
 	})
 	t.Run("a schema change outside a migration", func(t *testing.T) {
@@ -601,8 +601,11 @@ func TestAReplicaAppliesTheRecordsInOrderAndTakesNoOtherWrite(t *testing.T) {
 	exec(t, p.Writer(), `INSERT INTO secrets (name, value) VALUES ('token', ?)`, marker)
 	exec(t, p.Writer(), `INSERT INTO named (code) VALUES ('kept')`)
 	ship(t, p, r)
-	if !bytes.Contains(readAll(t, r.Path()), marker) && scan[int](t, r.Reader(), `SELECT count(*) FROM secrets`) != 1 {
-		t.Fatal("setup: the replica should hold the secret before the purge")
+	if n := scan[int](t, r.Reader(), `SELECT count(*) FROM secrets`); n != 1 {
+		t.Fatalf("setup: the replica holds %d secrets before the purge, want 1", n)
+	}
+	if !bytes.Contains(readAll(t, r.Path()), marker) && !bytes.Contains(readAll(t, r.Path()+"-wal"), marker) {
+		t.Fatal("setup: the secret should be on the disk of the replica before the purge")
 	}
 	excluded := replicate(t, p, "secrets")
 	// A small log goes in the copy as it is; with tables emptied, or a big log,

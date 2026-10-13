@@ -118,6 +118,12 @@ type Sheet struct {
 	Online   bool `json:"online"`
 }
 
+// MaxBytes is the most a sheet takes, as the Citadel keeps it. A sheet is a few
+// kilobytes; the limit keeps the row of the machine, which goes in the change
+// log, far from the 1 MiB of a frame, over which a record can only go by full
+// copy.
+const MaxBytes = 64 << 10
+
 // ErrInvalid: the sheet lacks a required field or one has a wrong type.
 var ErrInvalid = errors.New("machinesheet: invalid sheet")
 
@@ -263,6 +269,9 @@ func Merge(kept Sheet, patch protocol.Object, replace bool) (Sheet, error) {
 	b, err := json.Marshal(base)
 	if err != nil {
 		return Sheet{}, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	if len(b) > MaxBytes {
+		return Sheet{}, fmt.Errorf("%w: the sheet has %d bytes, the limit is %d", ErrInvalid, len(b), MaxBytes)
 	}
 	var out Sheet
 	if err := json.Unmarshal(b, &out); err != nil {

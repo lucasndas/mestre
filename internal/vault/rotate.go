@@ -31,15 +31,24 @@ func (v *Vault) step(name string) error {
 	return nil
 }
 
+// ErrNotDurable is returned by Rotate when the database is opened without
+// flushes (store.Options.Synchronous OFF): the rows would move to the new key
+// in a commit that a power loss can take back after the old key is gone.
+var ErrNotDurable = errors.New("vault: the database does not flush its commits; the key is not rotated")
+
 // Rotate replaces the data key: it generates a new version, re-encrypts
 // every secret with it in one transaction, envelopes it to the recovery
 // public key and drops the old key. Sending the new vault to the Towers is
-// the replication's job (M2).
+// the replication's job (M2). It refuses a database opened without flushes
+// (ErrNotDurable), before it touches anything.
 func (v *Vault) Rotate(ctx context.Context) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if err := v.errLocked(); err != nil {
 		return fmt.Errorf("rotate key: %w", err)
+	}
+	if !v.cfg.DB.Flushes() {
+		return fmt.Errorf("rotate key: %w", ErrNotDurable)
 	}
 	old := v.ring
 	nk, err := newRandomKey(old.current().version + 1)
@@ -95,14 +104,12 @@ func (v *Vault) Rotate(ctx context.Context) error {
 func (v *Vault) reencrypt(ctx context.Context, old *keyring, nk *dataKey) error {
 	return v.writeDurable(ctx, func(tx *sql.Tx) error {
 		// The rows move to the new key only in a commit that is on disk when
-		// it returns; check it rather than trust the connection settings. A
-		// database opened without flushes (tests that are not about
-		// durability) has nothing to check.
+		// it returns; check it rather than trust the connection settings.
 		var sync int
 		if err := tx.QueryRowContext(ctx, `PRAGMA synchronous`).Scan(&sync); err != nil {
 			return fmt.Errorf("vault: rotate key: %w", err)
 		}
-		if sync < 2 && v.cfg.DB.Flushes() {
+		if sync < 2 {
 			return fmt.Errorf("vault: rotate key: the commit would not be durable (synchronous=%d); nothing was changed", sync)
 		}
 		return v.reencryptRows(ctx, tx, old, nk)

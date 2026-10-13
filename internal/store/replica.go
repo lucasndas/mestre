@@ -53,14 +53,29 @@ func (d *DB) privileged(ctx context.Context, fn func(conn *sql.Conn) error) erro
 		return err
 	}
 	defer conn.Close()
+	gate := func(open bool) error {
+		return conn.Raw(func(dc any) error {
+			g, ok := dc.(*guardConn)
+			if !ok {
+				return fmt.Errorf("store: the writer of a replica is a %T, not the guarded connection", dc)
+			}
+			g.open.Store(open)
+			return nil
+		})
+	}
+	if err := gate(true); err != nil {
+		return err
+	}
 	if _, err := conn.ExecContext(ctx, `PRAGMA query_only = 0`); err != nil {
+		_ = gate(false)
 		return err
 	}
 	defer func() {
 		bg := context.WithoutCancel(ctx)
 		_, e1 := conn.ExecContext(bg, `PRAGMA query_only = 1`)
 		_, e2 := conn.ExecContext(bg, `PRAGMA foreign_keys = ON`)
-		if e1 != nil || e2 != nil {
+		e3 := gate(false)
+		if e1 != nil || e2 != nil || e3 != nil {
 			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 		}
 	}()
@@ -287,17 +302,37 @@ func (d *DB) Purge(ctx context.Context, tables ...string) error {
 	if err != nil {
 		return fmt.Errorf("store: purge: %w", err)
 	}
-	// Deleted pages keep their content until the file is rewritten.
+	// Deleted pages keep their content until the file is rewritten, and the
+	// WAL keeps the pages it had before until it is truncated, which it is
+	// not while a reader still holds a snapshot of them: say so, and let the
+	// caller try again, rather than report a purge that left the secrets in
+	// the -wal file.
 	return d.privileged(ctx, func(conn *sql.Conn) error {
 		if _, err := conn.ExecContext(ctx, `VACUUM`); err != nil {
 			return fmt.Errorf("store: purge: %w", err)
 		}
-		if _, err := conn.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-			return fmt.Errorf("store: purge: %w", err)
+		for range purgeAttempts {
+			var busy, logFrames, checkpointed int
+			if err := conn.QueryRowContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logFrames, &checkpointed); err != nil {
+				return fmt.Errorf("store: purge: %w", err)
+			}
+			if busy == 0 {
+				return nil
+			}
 		}
-		return nil
+		return ErrPurgeIncomplete
 	})
 }
+
+// purgeAttempts is how many times Purge asks for the WAL to be truncated
+// before it gives up (each ask waits for the busy timeout).
+const purgeAttempts = 3
+
+// ErrPurgeIncomplete is returned by Purge when the rows are gone and the file
+// is rewritten, but the WAL could not be truncated because a reader held it:
+// what was deleted may still be in the -wal file. Try again when the readers
+// are done.
+var ErrPurgeIncomplete = errors.New("store: purge: the WAL could not be truncated, a reader is still using it")
 
 // SnapshotOptions shapes a full copy.
 type SnapshotOptions struct {
@@ -342,7 +377,7 @@ func (d *DB) Snapshot(ctx context.Context, dst string, opts SnapshotOptions) (ui
 		first = full
 	}
 	// A read of its own: the writer keeps writing meanwhile.
-	src, err := sql.Open("sqlite", dsn(d.path, d.sidePragmas(fmt.Sprintf("busy_timeout(%d)", d.opts.BusyTimeout.Milliseconds())), ""))
+	src, err := sql.Open("sqlite", roDSN(d.path, d.sidePragmas(fmt.Sprintf("busy_timeout(%d)", d.opts.BusyTimeout.Milliseconds()))))
 	if err != nil {
 		return 0, fmt.Errorf("store: snapshot: %w", err)
 	}

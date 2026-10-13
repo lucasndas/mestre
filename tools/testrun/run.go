@@ -54,7 +54,12 @@ const RaceFactor = 3
 
 // Limits of the runner.
 const (
-	slowTest     = 100 * time.Millisecond
+	slowTest = 100 * time.Millisecond
+	// rerunTest is the time in the suite run above which a test is run again
+	// alone to see whether it is slow: contention rarely more than doubles a
+	// time, so a test under 200 ms in the suite is not over 100 ms alone, and
+	// the re-run is kept for the few that could be.
+	rerunTest    = 200 * time.Millisecond
 	slowestShown = 10
 	quarantineN  = 20
 	envSuite     = "MESTRE_TEST_SUITE"

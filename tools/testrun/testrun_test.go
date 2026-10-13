@@ -123,7 +123,7 @@ func TestSlowFastSuiteTestIsFlaggedOnly(t *testing.T) {
 	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
 		switch {
 		case isMainRun(c):
-			_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.15)+ev("TestQuick", "pass", 0.05)+ev("", "pass", 0.2))
+			_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.25)+ev("TestQuick", "pass", 0.05)+ev("", "pass", 0.3))
 		case strings.Contains(c.String(), "^TestSlow$"):
 			_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.15))
 		}
@@ -142,6 +142,26 @@ func TestSlowFastSuiteTestIsFlaggedOnly(t *testing.T) {
 	}
 	if n := len(ex.callsMatching("-run ^TestSlow$")); n != 1 {
 		t.Fatalf("TestSlow timed alone %d times, want 1", n)
+	}
+}
+
+// A test between 100 and 200 ms in the suite run is not run again: contention
+// does not double a time that often, and the re-run is for the few that might be
+// slow. It is not flagged either.
+func TestATestUnder200msInTheSuiteIsNotRunAgainNorFlagged(t *testing.T) {
+	t.Parallel()
+	ex := &fakeExec{handle: func(c Cmd, out io.Writer) int {
+		if isMainRun(c) {
+			_, _ = io.WriteString(out, ev("TestMiddling", "pass", 0.15)+ev("TestEdge", "pass", 0.2)+ev("TestQuick", "pass", 0.05))
+		}
+		return 0
+	}}
+	r, out := newRunner(nil, clock.NewFake(today), ex)
+	if code := r.RunSuite(context.Background(), Suites["fast"]); code != 0 || strings.Contains(out.String(), "warning") {
+		t.Fatalf("code %d:\n%s", code, out)
+	}
+	if c := ex.callsMatching("-run"); len(c) != 0 {
+		t.Fatalf("tests under 200 ms were run again: %v", c)
 	}
 }
 

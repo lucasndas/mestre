@@ -40,6 +40,20 @@ func (n lazyNames) UpdateNames(ctx context.Context, id, hostname string, ips []n
 	return (*n.c).UpdateNames(ctx, id, hostname, ips)
 }
 
+// actingSender sends the sheet of the Citadel itself only while the Citadel
+// acts (the fence allows it), like every other write of the Guild.
+type actingSender struct {
+	fence *guild.Fence
+	to    machinesheet.Sender
+}
+
+func (a actingSender) Send(ctx context.Context, o protocol.Outgoing) (string, error) {
+	if !a.fence.Acting() {
+		return "", errors.New("app: the Citadel is not acting")
+	}
+	return a.to.Send(ctx, o)
+}
+
 // takeover is what a promotion already opened for the Citadel it becomes.
 type takeover struct {
 	db *store.DB
@@ -247,14 +261,24 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	e.role, e.cit, e.tow, e.unknown, e.failover = RoleCitadel, run, nil, false, false
 	e.mu.Unlock()
 	citadel.Mount(e.joins)
-	// The Citadel's own sheet is written once it acts: a Citadel that only
-	// starts, suspended, and steps down writes nothing of the Guild.
+	// The Citadel's own sheet is written once it acts, and kept up to date every
+	// five minutes like the others (an agent whose link is the registry itself):
+	// a Citadel that only starts, suspended, and steps down writes nothing of
+	// the Guild.
 	run.firstAct = func() {
-		if b, err := e.sheetBuilder(); err == nil {
-			if sheet, err := b.Build(pctx, machinesheet.Sheet{}); err == nil {
-				_ = registry.Replace(pctx, e.id.MachineID, sheet.Object())
-			}
+		builder, err := e.sheetBuilder()
+		if err != nil {
+			return
 		}
+		agent, err := machinesheet.NewAgent(machinesheet.AgentConfig{Builder: builder, Clock: e.clk, Store: e.sheetStore(), Logger: e.log})
+		if err != nil {
+			return
+		}
+		agent.Attach(actingSender{fence: run.fence, to: registry.Local(e.id.MachineID)})
+		if sheet, err := agent.Hello(pctx); err == nil {
+			_ = registry.Replace(pctx, e.id.MachineID, sheet)
+		}
+		_ = agent.Run(pctx)
 	}
 	wg.Go(func() { _ = srv.Serve(pctx, e.towers) })
 	wg.Go(func() { _ = primary.Run(pctx) })

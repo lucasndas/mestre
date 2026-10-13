@@ -129,7 +129,7 @@ func (d *DB) openPools(ctx context.Context) error {
 		d.writer = nil
 		return err
 	}
-	reader, err := sql.Open("sqlite", dsn(d.path, readerPragmas(d.opts.BusyTimeout), ""))
+	reader, err := sql.Open("sqlite", roDSN(d.path, readerPragmas(d.opts.BusyTimeout)))
 	if err != nil {
 		writer.Close()
 		d.writer = nil
@@ -151,17 +151,27 @@ func (d *DB) openPools(ctx context.Context) error {
 func (d *DB) openWriter() (*sql.DB, error) {
 	pragmas := writerPragmas(d.opts.BusyTimeout, d.opts.Synchronous)
 	if d.replica {
-		pragmas = append(pragmas, "query_only(1)") // last: it must not block the others
+		// A deleted page is zeroed, so what a purge deletes is not left in
+		// the pages the file reuses; query_only goes last, so it does not
+		// block the others.
+		pragmas = append(pragmas, "secure_delete(1)", "query_only(1)")
 	}
 	conn := dsn(d.path, pragmas, "immediate")
 	var w *sql.DB
-	if d.capture != nil {
+	switch {
+	case d.capture != nil:
 		base, err := sqlite.NewConnector(conn)
 		if err != nil {
 			return nil, err
 		}
 		w = sql.OpenDB(logConnector{Connector: base, cap: d.capture})
-	} else {
+	case d.replica:
+		base, err := sqlite.NewConnector(conn)
+		if err != nil {
+			return nil, err
+		}
+		w = sql.OpenDB(guardConnector{Connector: base})
+	default:
 		var err error
 		if w, err = sql.Open("sqlite", conn); err != nil {
 			return nil, err
@@ -380,14 +390,34 @@ func readerPragmas(busy time.Duration) []string {
 }
 
 // dsn is the plain path followed by the driver's query: the driver only
-// understands paths this way, on Windows too.
+// understands paths this way, on Windows too. Every connection is opened
+// defensive: PRAGMA writable_schema and schema_version become no-ops and the
+// shadow tables cannot be written.
 func dsn(path string, pragmas []string, txlock string) string {
-	q := url.Values{}
+	return path + "?" + query(pragmas, txlock, nil).Encode()
+}
+
+// roDSN is the DSN of a connection that cannot write whatever it is told: the
+// file is opened read-only, so PRAGMA query_only = 0 gets it nowhere. Only a
+// URI carries that option; a Windows path C:\x\y.db becomes file:/C:/x/y.db.
+func roDSN(path string, pragmas []string) string {
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	if len(path) >= 2 && path[1] == ':' {
+		u.Path = "/" + u.Path
+	}
+	return u.String() + "?" + query(pragmas, "", map[string]string{"mode": "ro"}).Encode()
+}
+
+func query(pragmas []string, txlock string, extra map[string]string) url.Values {
+	q := url.Values{"_defensive": {"1"}}
 	for _, p := range pragmas {
 		q.Add("_pragma", p)
 	}
 	if txlock != "" {
 		q.Set("_txlock", txlock)
 	}
-	return path + "?" + q.Encode()
+	for k, v := range extra {
+		q.Set(k, v)
+	}
+	return q
 }

@@ -98,6 +98,7 @@ func (d *DB) LogTime(ctx context.Context, lsn uint64) (at int64, ok bool, err er
 // does.
 func (d *DB) PruneLog(ctx context.Context, maxAge time.Duration, maxBytes int64) (int, error) {
 	removed := 0
+	ctx = withMaintenance(ctx)
 	err := d.maintenance(ctx, func(tx *sql.Tx) error {
 		cutoff := d.clock.Now().Add(-maxAge).UnixMilli()
 		res, err := tx.ExecContext(ctx, `DELETE FROM replication_log WHERE at < ? AND lsn < (SELECT max(lsn) FROM replication_log)`, cutoff)

@@ -2,6 +2,7 @@ package replication
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -91,7 +92,8 @@ type PrimaryConfig struct {
 	// GuildConfig, when set, is sent to every connected Tower when an
 	// exclusion changes, so the machine renews its certificates.
 	GuildConfig func(ctx context.Context) (protocol.GuildConfig, error)
-	// OnDropped receives the receipt of a vault.drop (the audit trail).
+	// OnDropped, when set, is told of the receipt of a vault.drop after it was
+	// written to the audit (action vault.dropped).
 	OnDropped func(machineID string)
 	Logger    *slog.Logger
 }
@@ -106,6 +108,9 @@ type Primary struct {
 	base   context.Context
 	hellos map[string]helloInfo
 	peers  map[string]*peer
+	// early holds a replica.resync that came before the stream of its Tower
+	// existed; the stream takes it up when it starts.
+	early map[string]resyncRequest
 }
 
 type helloInfo struct{ lsn, epoch uint64 }
@@ -171,7 +176,7 @@ func NewPrimary(ctx context.Context, cfg PrimaryConfig) (*Primary, error) {
 	if err := privdir.Ensure(cfg.Dir); err != nil {
 		return nil, fmt.Errorf("replication: %w", err)
 	}
-	return &Primary{cfg: cfg, guildID: gid, hellos: map[string]helloInfo{}, peers: map[string]*peer{}}, nil
+	return &Primary{cfg: cfg, guildID: gid, hellos: map[string]helloInfo{}, peers: map[string]*peer{}, early: map[string]resyncRequest{}}, nil
 }
 
 // readGuild reads the guild_id and the epoch from the one row of the Guild.
@@ -179,6 +184,20 @@ func readGuild(ctx context.Context, db *store.DB) (id string, epoch uint64, err 
 	err = db.Reader().QueryRowContext(ctx, `SELECT guild_id, epoch FROM guild WHERE id = 1`).Scan(&id, &epoch)
 	if err != nil {
 		return "", 0, fmt.Errorf("replication: reading the guild: %w", err)
+	}
+	return id, epoch, nil
+}
+
+// readCopyGuild reads the guild_id and the epoch from the Guild row of a
+// database file that nobody has open.
+func readCopyGuild(ctx context.Context, path string) (id string, epoch uint64, err error) {
+	db, err := sql.Open("sqlite", path+"?_pragma=query_only(1)")
+	if err != nil {
+		return "", 0, fmt.Errorf("replication: reading the copy: %w", err)
+	}
+	defer db.Close()
+	if err := db.QueryRowContext(ctx, `SELECT guild_id, epoch FROM guild WHERE id = 1`).Scan(&id, &epoch); err != nil {
+		return "", 0, fmt.Errorf("replication: reading the Guild in the copy: %w", err)
 	}
 	return id, epoch, nil
 }
@@ -283,9 +302,13 @@ func (p *Primary) onReady(s *protocol.Session) {
 		state: "starting", ackedAt: p.cfg.Clock.Now(),
 	}
 	if p.cfg.Files != nil {
-		pe.files = newFileSender(p.cfg.Files)
+		pe.files = newFileSender(p.cfg.Files, p.cfg.Logger)
 	}
 	p.peers[id] = pe
+	if req, ok := p.early[id]; ok {
+		delete(p.early, id)
+		pe.resync <- req
+	}
 	p.mu.Unlock()
 	go func() {
 		select {
@@ -310,6 +333,7 @@ func (p *Primary) onDisconnect(s *protocol.Session) {
 	if pe := p.peers[id]; pe != nil && pe.sess == s {
 		pe.cancel()
 		delete(p.peers, id)
+		delete(p.early, id)
 	}
 }
 
@@ -340,11 +364,20 @@ func (p *Primary) handleAck(ctx context.Context, m *protocol.Message) (*protocol
 
 func (p *Primary) handleResync(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
 	r := m.Payload.(*protocol.ReplicaResync)
-	pe := p.peer(m.Peer.ID)
+	req := resyncRequest{from: r.FromLSN}
+	p.mu.Lock()
+	pe := p.peers[m.Peer.ID]
 	if pe == nil {
+		// Not started yet (or already gone): kept for the stream that starts, and
+		// the Tower asks again if it never comes.
+		p.early[m.Peer.ID] = req
+		p.mu.Unlock()
 		return nil, nil
 	}
-	req := resyncRequest{from: r.FromLSN}
+	p.mu.Unlock()
+	if req.from == nil && pe.currentState() == "snapshot" {
+		return nil, nil // a full copy is on its way already
+	}
 	select { // the newest request wins
 	case <-pe.resync:
 	default:
@@ -353,12 +386,31 @@ func (p *Primary) handleResync(_ context.Context, m *protocol.Message) (*protoco
 	return nil, nil
 }
 
-func (p *Primary) handleDropped(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+// handleDropped takes the receipt of vault.drop: from a machine that is
+// excluded, it goes in the audit of the Guild (action vault.dropped, no value
+// of the vault anywhere in it) and to OnDropped. A receipt from any other
+// machine is ignored.
+func (p *Primary) handleDropped(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
+	id := m.Peer.ID
+	if excluded, err := p.cfg.Roster.IsExcluded(ctx, id); err != nil || !excluded {
+		p.cfg.Logger.Warn("replication: a receipt of vault.drop from a machine that is not excluded", "machine", id, "err", err)
+		return nil, nil
+	}
+	_, err := p.cfg.DB.Writer().ExecContext(ctx,
+		`INSERT INTO audit_log (id, at, machine_id, action, detail) VALUES (?, ?, ?, ?, '{}')`,
+		protocol.NewIDGen(p.cfg.Clock).NewString(), p.cfg.Clock.Now().UnixMilli(), id, AuditVaultDropped)
+	if err != nil {
+		p.cfg.Logger.Error("replication: auditing the receipt of vault.drop", "machine", id, "err", err)
+	}
 	if p.cfg.OnDropped != nil {
-		p.cfg.OnDropped(m.Peer.ID)
+		p.cfg.OnDropped(id)
 	}
 	return nil, nil
 }
+
+// AuditVaultDropped is the action of the audit row written when an excluded
+// machine confirms it erased the vault.
+const AuditVaultDropped = "vault.dropped"
 
 // ---- one Tower ----
 
@@ -366,6 +418,12 @@ func (pe *peer) isExcluded() bool {
 	pe.mu.Lock()
 	defer pe.mu.Unlock()
 	return pe.excluded
+}
+
+func (pe *peer) currentState() string {
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+	return pe.state
 }
 
 func (pe *peer) setState(s string) {
@@ -437,10 +495,6 @@ func (p *Primary) start(ctx context.Context, link *protocol.Link, pe *peer, hell
 func (p *Primary) snapshot(ctx context.Context, link *protocol.Link, pe *peer) (uint64, error) {
 	pe.setState("snapshot")
 	excluded := pe.isExcluded()
-	_, epoch, err := readGuild(ctx, p.cfg.DB)
-	if err != nil {
-		return 0, err
-	}
 	path := filepath.Join(p.cfg.Dir, "snapshot-"+protocol.NewIDGen(p.cfg.Clock).NewString()+".db")
 	var tables []string
 	if excluded {
@@ -451,6 +505,12 @@ func (p *Primary) snapshot(ctx context.Context, link *protocol.Link, pe *peer) (
 		return 0, err
 	}
 	defer removeAll(path)
+	// The epoch announced is the one the copy holds, not the one read before it
+	// was made: a promotion in between would announce the wrong one.
+	_, epoch, err := readCopyGuild(ctx, path)
+	if err != nil {
+		return 0, err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return 0, fmt.Errorf("replication: %w", err)

@@ -39,6 +39,13 @@ type ReplicaConfig struct {
 	// MaxQueueBytes bounds the records waiting to be applied.
 	MaxQueueBytes int
 	Retention     Retention
+	// TransferDir is where the transfers in progress are kept
+	// (protocol.XferConfig.Dir). vault.drop removes from it the full copies
+	// that were still arriving, which carry the vault tables. Optional.
+	TransferDir string
+	// ResyncRetry is how long a request for a full copy, or for the records
+	// again, waits for the answer before it is made again (default 30 s).
+	ResyncRetry time.Duration
 	// OnApplied, when set, is told after each batch of records is committed
 	// to the replica: the first and the last lsn of it.
 	OnApplied func(first, last uint64)
@@ -69,6 +76,7 @@ type Replica struct {
 	state       string
 	lastErr     string
 	oldest      time.Time // when the oldest record waiting in the queue was received
+	askedAt     time.Time // when the last request to the Citadel for records or a copy was made
 }
 
 // NewReplica checks the configuration.
@@ -92,7 +100,15 @@ func NewReplica(ctx context.Context, cfg ReplicaConfig) (*Replica, error) {
 		cfg.MaxQueueBytes = DefaultMaxQueueBytes
 	}
 	cfg.Retention = cfg.Retention.withDefaults()
+	if cfg.ResyncRetry <= 0 {
+		cfg.ResyncRetry = DefaultResyncRetry
+	}
 	r := &Replica{cfg: cfg, kick: make(chan struct{}, 1), state: "ok"}
+	// A machine that was told to erase the vault stays that way across a
+	// restart, until the vault comes back.
+	if _, err := os.Stat(r.droppedMarker()); err == nil {
+		r.excluded = true
+	}
 	if cfg.GuildID != "" {
 		g, err := protocol.ParseULID(cfg.GuildID)
 		if err != nil {
@@ -116,9 +132,21 @@ func (r *Replica) Attach(l *protocol.Link) {
 	r.mu.Unlock()
 }
 
+// droppedMarker is the file that remembers, across restarts, that the vault
+// was erased on an order of the Citadel: this machine is excluded.
+func (r *Replica) droppedMarker() string { return r.cfg.DB.Path() + ".excluded" }
+
 // Hello fills what the hello says of the replica: the last lsn applied and the
-// epoch it belongs to.
+// epoch it belongs to. A replica that waits for a full copy says it has
+// nothing (lsn 0), so the Citadel starts with one however the request for it
+// went.
 func (r *Replica) Hello(ctx context.Context, info *protocol.HelloInfo) {
+	r.mu.Lock()
+	waiting := r.needCopy
+	r.mu.Unlock()
+	if waiting {
+		return
+	}
 	lsn, err := r.cfg.DB.LastLSN(ctx)
 	if err != nil {
 		lsn = 0
@@ -241,9 +269,6 @@ func (r *Replica) askFrom(full bool) {
 }
 
 func (r *Replica) askFromLocked(full bool) {
-	if r.link == nil {
-		return
-	}
 	var from *uint64
 	if !full {
 		if r.resyncAsked {
@@ -253,16 +278,48 @@ func (r *Replica) askFromLocked(full bool) {
 		v := r.lastQueued
 		from = &v
 	} else {
+		// Remembered even when there is nobody to ask now: the hello of the
+		// next connection and the retry take it from here.
 		r.needCopy = true
 		r.state = "waiting-copy"
 		r.queue, r.queueBytes = nil, 0
 	}
+	r.sendResyncLocked(from)
+}
+
+// sendResyncLocked makes the request, in the background.
+func (r *Replica) sendResyncLocked(from *uint64) {
 	link := r.link
+	if link == nil {
+		return
+	}
+	r.askedAt = r.cfg.Clock.Now()
 	go func() {
 		if _, err := link.Send(context.Background(), protocol.Outgoing{Type: protocol.TypeReplicaResync, Payload: protocol.ReplicaResync{FromLSN: from}}); err != nil {
 			r.cfg.Logger.Warn("replication: replica.resync", "err", err)
+			r.mu.Lock()
+			r.askedAt = time.Time{} // not made: the next tick makes it again
+			r.mu.Unlock()
 		}
 	}()
+}
+
+// retryAsk makes again a request the Citadel did not answer in ResyncRetry:
+// the request may have been lost on the way, or arrived before the Citadel had
+// the connection ready.
+func (r *Replica) retryAsk() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.link == nil || (!r.needCopy && !r.resyncAsked) || r.cfg.Clock.Now().Sub(r.askedAt) < r.cfg.ResyncRetry {
+		return
+	}
+	if r.needCopy {
+		r.cfg.Logger.Warn("replication: the full copy did not come; asking again")
+		r.sendResyncLocked(nil)
+		return
+	}
+	r.resyncAsked = false
+	r.askFromLocked(false)
 }
 
 // Run applies the records as they come and confirms them, and applies the
@@ -272,6 +329,8 @@ func (r *Replica) Run(ctx context.Context) error {
 	defer ack.Stop()
 	prune := r.cfg.Clock.NewTicker(PruneEvery)
 	defer prune.Stop()
+	retry := r.cfg.Clock.NewTicker(max(r.cfg.ResyncRetry/4, time.Second))
+	defer retry.Stop()
 	for {
 		r.drain(ctx)
 		r.sendAck(false)
@@ -279,6 +338,8 @@ func (r *Replica) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-r.kick:
+		case <-retry.C():
+			r.retryAsk()
 		case <-ack.C():
 			r.sendAck(true)
 		case <-prune.C():
@@ -318,6 +379,12 @@ func (r *Replica) drain(ctx context.Context) {
 		}
 		r.applyMu.Lock()
 		_, err := r.cfg.DB.ApplyLog(ctx, batch)
+		if err == nil && excluded && hasSchemaChange(batch) {
+			// A migration runs as SQL, and what it does to the vault tables
+			// (seed them, copy from them) is not in the records that were
+			// stripped: empty them again.
+			err = r.purgeVault(ctx)
+		}
 		r.applyMu.Unlock()
 		if err != nil {
 			r.failed(err)
@@ -342,6 +409,22 @@ func (r *Replica) drain(ctx context.Context) {
 			cb(batch[0].LSN, batch[len(batch)-1].LSN)
 		}
 	}
+}
+
+// hasSchemaChange says whether a batch carries a migration.
+func hasSchemaChange(rows []store.LogRow) bool {
+	for _, row := range rows {
+		cs, err := store.DecodeChanges(row.Body)
+		if err != nil {
+			return true
+		}
+		for _, c := range cs {
+			if c.Op == store.OpSQL {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // failed decides what an error of the apply means.
@@ -406,6 +489,19 @@ func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, fi
 	if err := json.Unmarshal(raw, &meta); err != nil {
 		return protocol.NewError(protocol.CodeInvalidPayload, "db-snapshot meta: %v", err)
 	}
+	// The copy is of this Guild and of the epoch the Citadel says: a copy of
+	// another Guild, or of an epoch that is not the one announced (a stale
+	// transfer, a confusion of files), is not a replica of anything we follow.
+	id, epoch, err := readCopyGuild(ctx, file)
+	if err != nil {
+		return protocol.NewError(protocol.CodeHashMismatch, "%v", err)
+	}
+	if r.hasG && id != r.gid.String() {
+		return protocol.NewError(protocol.CodeForbidden, "the copy is of the Guild %s, not %s", id, r.gid)
+	}
+	if epoch != meta.Epoch {
+		return protocol.NewError(protocol.CodeHashMismatch, "the copy is of epoch %d, not the %d announced", epoch, meta.Epoch)
+	}
 	r.applyMu.Lock()
 	defer r.applyMu.Unlock()
 	if err := r.cfg.DB.Replace(ctx, file, meta.LSN); err != nil {
@@ -416,6 +512,17 @@ func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, fi
 		return protocol.NewError(protocol.CodeHashMismatch, "%v", err)
 	}
 	r.mu.Lock()
+	excluded := r.excluded
+	r.mu.Unlock()
+	if excluded {
+		// The copy was made before the Citadel knew this machine is excluded
+		// (or the order overtook it): it carries the vault tables, and the
+		// order to erase them was given already.
+		if err := r.purgeVault(ctx); err != nil {
+			return protocol.NewError(protocol.CodeUnavailable, "erasing the vault tables of the copy: %v", err)
+		}
+	}
+	r.mu.Lock()
 	r.queue, r.queueBytes = nil, 0
 	r.lastQueued, r.applied, r.lastAcked = meta.LSN, meta.LSN, 0
 	r.needCopy, r.resyncAsked = false, false
@@ -424,6 +531,22 @@ func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, fi
 	r.sendAck(true)
 	return nil
 }
+
+// purgeVault empties the vault tables of the replica and scrubs the log of
+// what they held, trying again a few times if a reader keeps the WAL.
+func (r *Replica) purgeVault(ctx context.Context) error {
+	var err error
+	for range purgeTries {
+		if err = r.cfg.DB.Purge(ctx, VaultTables...); !errors.Is(err, store.ErrPurgeIncomplete) {
+			return err
+		}
+	}
+	return err
+}
+
+// purgeTries is how many times Purge is repeated when it reports a WAL it could
+// not truncate (each already tries more than once).
+const purgeTries = 3
 
 // ---- the vault ----
 
@@ -445,6 +568,9 @@ func (r *Replica) handleVaultReplica(ctx context.Context, m *protocol.Message) (
 	r.excluded = false
 	have := r.applied
 	r.mu.Unlock()
+	if err := os.Remove(r.droppedMarker()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		r.cfg.Logger.Warn("replication: forgetting the order to erase the vault", "err", err)
+	}
 	if !held && have > 0 {
 		// The machine had no vault and has a replica: the exclusion was undone,
 		// and the replica lacks the vault tables. A full copy has them.
@@ -454,6 +580,11 @@ func (r *Replica) handleVaultReplica(ctx context.Context, m *protocol.Message) (
 }
 
 func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+	// Remembered on disk before anything else, so a restart in the middle of the
+	// erasing, or before the next connection, still filters what comes.
+	if err := os.WriteFile(r.droppedMarker(), []byte("vault.drop\n"), 0o600); err != nil {
+		r.cfg.Logger.Error("replication: remembering the order to erase the vault", "err", err)
+	}
 	r.mu.Lock()
 	r.excluded = true
 	link := r.link
@@ -480,8 +611,9 @@ func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*prot
 	return nil, nil
 }
 
-// dropVault erases the key, the envelope and the vault tables, and the log of
-// what they held. It says whether there was anything to erase.
+// dropVault erases the key, the envelope, the vault tables, the log of what
+// they held, the folders that are not for an excluded machine and the full
+// copies still arriving. It says whether there was anything to erase.
 func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 	held := r.cfg.Vault != nil && r.cfg.Vault.Holds(ctx)
 	if r.cfg.Vault != nil {
@@ -489,7 +621,14 @@ func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 			return false, err
 		}
 	}
-	if !held {
+	erased := held
+	if r.dropPendingCopies() {
+		erased = true
+	}
+	if r.dropRestrictedFolders() {
+		erased = true
+	}
+	if !erased {
 		var rows int
 		for _, t := range VaultTables {
 			var n int
@@ -508,7 +647,70 @@ func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 			return false, nil
 		}
 	}
-	return true, r.cfg.DB.Purge(ctx, VaultTables...)
+	return true, r.purgeVault(ctx)
+}
+
+// dropPendingCopies removes the full copies still arriving: they hold the
+// vault tables, and a copy that was made before the exclusion would put them
+// back. It says whether there was one.
+func (r *Replica) dropPendingCopies() bool {
+	if r.cfg.TransferDir == "" {
+		return false
+	}
+	entries, err := os.ReadDir(r.cfg.TransferDir)
+	if err != nil {
+		return false
+	}
+	found := false
+	for _, e := range entries {
+		id, ok := strings.CutSuffix(e.Name(), ".json")
+		if !ok {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(r.cfg.TransferDir, e.Name()))
+		if err != nil {
+			continue
+		}
+		var b protocol.XferBegin
+		if json.Unmarshal(raw, &b) != nil || b.Kind != protocol.KindDBSnapshot {
+			continue
+		}
+		found = true
+		for _, f := range []string{id + ".part", e.Name()} {
+			if err := os.Remove(filepath.Join(r.cfg.TransferDir, f)); err != nil && !errors.Is(err, os.ErrNotExist) {
+				r.cfg.Logger.Warn("replication: removing a full copy that was arriving", "file", f, "err", err)
+			}
+		}
+	}
+	return found
+}
+
+// dropRestrictedFolders empties the folders that an excluded machine does not
+// get (the captures of the Operator): what the machine had before the
+// exclusion goes with the vault. It says whether it removed anything.
+func (r *Replica) dropRestrictedFolders() bool {
+	if r.cfg.Files == nil {
+		return false
+	}
+	removed := false
+	for _, name := range r.cfg.Files.order {
+		root := r.cfg.Files.roots[name]
+		if !root.NotForExcluded {
+			continue
+		}
+		entries, err := os.ReadDir(root.Dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if err := os.RemoveAll(filepath.Join(root.Dir, e.Name())); err != nil {
+				r.cfg.Logger.Warn("replication: removing a folder that an excluded machine does not get", "folder", name, "err", err)
+				continue
+			}
+			removed = true
+		}
+	}
+	return removed
 }
 
 // ---- leaving the Guild ----
@@ -525,7 +727,7 @@ func (r *Replica) Wipe(ctx context.Context, _ string) error {
 	}
 	path := r.cfg.DB.Path()
 	errs = append(errs, r.cfg.DB.Close())
-	for _, suffix := range []string{"", "-wal", "-shm", "-journal", ".incoming"} {
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal", ".incoming", ".excluded"} {
 		if err := os.Remove(path + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
 			errs = append(errs, err)
 		}

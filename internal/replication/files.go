@@ -2,6 +2,7 @@ package replication
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,8 +10,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -79,43 +80,75 @@ type FileRef struct {
 // cites none.
 type Cites func(c store.Change) []FileRef
 
-// resolve turns a reference into a path on this machine, refusing anything
-// that leaves the folder: absolute paths, "..", names the system reserves, and
-// a link at the end (an agent that can write there could aim it elsewhere).
-func (f *Files) resolve(ref FileRef) (FileRoot, string, error) {
+// ErrPathEscapes is wrapped by the errors for a path that leaves its folder,
+// by a name or by a link in the middle of it.
+var ErrPathEscapes = errors.New("replication: the path leaves the folder")
+
+// checkRef validates a reference as a name: relative, clean, with no "..", no
+// names the system reserves.
+func (f *Files) checkRef(ref FileRef) (FileRoot, string, error) {
 	root, ok := f.roots[ref.Root]
 	if !ok {
 		return FileRoot{}, "", fmt.Errorf("replication: no folder %q", ref.Root)
 	}
 	if !fs.ValidPath(ref.Path) || ref.Path == "." || !filepath.IsLocal(filepath.FromSlash(ref.Path)) {
-		return FileRoot{}, "", fmt.Errorf("replication: %q is not a path inside %s", ref.Path, ref.Root)
+		return FileRoot{}, "", fmt.Errorf("%w: %q is not a path inside %s", ErrPathEscapes, ref.Path, ref.Root)
 	}
-	full := filepath.Join(root.Dir, filepath.FromSlash(ref.Path))
-	if fi, err := os.Lstat(full); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		return FileRoot{}, "", fmt.Errorf("replication: %s/%s is a link", ref.Root, ref.Path)
-	}
-	return root, full, nil
+	return root, filepath.FromSlash(ref.Path), nil
 }
 
-// walk lists the files of a folder, in order.
+// openRoot opens the folder as a root: every access through it resolves each
+// component inside the folder, so a link in the middle of the path (a folder
+// an agent could write to turned into a link, or on Windows a junction) cannot
+// take the access elsewhere. It does not create the folder.
+func (f *Files) openRoot(ref FileRef) (*os.Root, FileRoot, string, error) {
+	fr, rel, err := f.checkRef(ref)
+	if err != nil {
+		return nil, FileRoot{}, "", err
+	}
+	root, err := os.OpenRoot(fr.Dir)
+	if err != nil {
+		return nil, FileRoot{}, "", err
+	}
+	return root, fr, rel, nil
+}
+
+// lstat looks at the file without following a link at the end. A link in the
+// middle that leaves the folder is an error, a missing file is
+// fs.ErrNotExist.
+func lstat(root *os.Root, rel string, ref FileRef) (fs.FileInfo, error) {
+	fi, err := root.Lstat(rel)
+	switch {
+	case err == nil && fi.Mode()&fs.ModeSymlink != 0:
+		return nil, fmt.Errorf("%w: %s/%s is a link", ErrPathEscapes, ref.Root, ref.Path)
+	case err == nil, errors.Is(err, fs.ErrNotExist):
+		return fi, err
+	case isEscape(err):
+		return nil, fmt.Errorf("%w: %s/%s: %v", ErrPathEscapes, ref.Root, ref.Path, err)
+	}
+	return nil, fmt.Errorf("replication: %s/%s: %w", ref.Root, ref.Path, err)
+}
+
+// walk lists the files of a folder, in order. Links are not followed and not
+// listed.
 func (f *Files) walk(name string) ([]FileRef, error) {
-	root := f.roots[name]
+	dir := f.roots[name].Dir
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
 	var out []FileRef
-	err := filepath.WalkDir(root.Dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) && p == root.Dir {
-				return fs.SkipAll
-			}
-			return err
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		rel, err := filepath.Rel(root.Dir, p)
+	err = fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		out = append(out, FileRef{Root: name, Path: filepath.ToSlash(rel)})
+		if d.Type().IsRegular() {
+			out = append(out, FileRef{Root: name, Path: p})
+		}
 		return nil
 	})
 	return out, err
@@ -156,29 +189,51 @@ type stamp struct {
 // fileSender is the memory of what one Tower was sent on one connection.
 type fileSender struct {
 	files *Files
+	log   *slog.Logger
 	mu    sync.Mutex
 	sent  map[string]stamp
 }
 
-func newFileSender(f *Files) *fileSender { return &fileSender{files: f, sent: map[string]stamp{}} }
+func newFileSender(f *Files, log *slog.Logger) *fileSender {
+	return &fileSender{files: f, log: log, sent: map[string]stamp{}}
+}
 
 // ensure makes sure the Tower has the file: it sends it unless this
 // connection already did with the same size and time. A file that is not on the
 // Citadel is not an error here (the record that cites it may be a deletion).
+//
+// A file that leaves its folder (a link in the middle of the path) is not sent,
+// and one that the Tower refuses for the same reason is not sent again: both
+// are logged and skipped, because a path an agent could plant must not stop the
+// replication of everything else.
 func (s *fileSender) ensure(ctx context.Context, link *protocol.Link, excluded bool, ref FileRef) error {
-	root, full, err := s.files.resolve(ref)
+	err := s.send(ctx, link, excluded, ref)
+	var pe *protocol.Error
+	if errors.Is(err, ErrPathEscapes) || (errors.As(err, &pe) && pe.Code == protocol.CodeForbidden) {
+		s.log.Warn("replication: a file was not sent, its path leaves the folder", "file", ref.Root+"/"+ref.Path, "err", err)
+		return nil
+	}
+	return err
+}
+
+func (s *fileSender) send(ctx context.Context, link *protocol.Link, excluded bool, ref FileRef) error {
+	root, fr, rel, err := s.files.openRoot(ref)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil // the folder is not there: neither is the file
+	}
 	if err != nil {
 		return err
 	}
-	if excluded && root.NotForExcluded {
+	defer root.Close()
+	if excluded && fr.NotForExcluded {
 		return nil
 	}
-	fi, err := os.Stat(full)
+	fi, err := lstat(root, rel, ref)
 	if errors.Is(err, fs.ErrNotExist) || (err == nil && !fi.Mode().IsRegular()) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("replication: %s/%s: %w", ref.Root, ref.Path, err)
+		return err
 	}
 	key := ref.Root + "/" + ref.Path
 	st := stamp{size: fi.Size(), mod: fi.ModTime()}
@@ -190,7 +245,7 @@ func (s *fileSender) ensure(ctx context.Context, link *protocol.Link, excluded b
 	}
 	var lastErr error
 	for range 3 { // the file may change under the transfer: hash mismatch, try again
-		f, err := os.Open(full)
+		f, err := root.Open(rel)
 		if err != nil {
 			return fmt.Errorf("replication: %s/%s: %w", ref.Root, ref.Path, err)
 		}
@@ -198,6 +253,10 @@ func (s *fileSender) ensure(ctx context.Context, link *protocol.Link, excluded b
 		if err != nil {
 			_ = f.Close()
 			return err
+		}
+		if !info.Mode().IsRegular() {
+			_ = f.Close()
+			return nil
 		}
 		st = stamp{size: info.Size(), mod: info.ModTime()}
 		lastErr = link.Transfer(ctx, protocol.Transfer{
@@ -234,47 +293,73 @@ func (r *fileReceiver) Have(_ context.Context, b protocol.XferBegin) bool {
 	if err != nil {
 		return false
 	}
-	_, full, err := r.files.resolve(FileRef{Root: m.Root, Path: m.Path})
+	ref := FileRef{Root: m.Root, Path: m.Path}
+	root, _, rel, err := r.files.openRoot(ref)
 	if err != nil {
 		return false
 	}
-	fi, err := os.Stat(full)
+	defer root.Close()
+	fi, err := lstat(root, rel, ref)
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() != b.Size {
 		return false
 	}
-	sum, err := sha256File(full)
+	f, err := root.Open(rel)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	sum, err := sha256Reader(f)
 	return err == nil && sum == b.SHA256
 }
 
 // Finalize puts the file in place: written next to its destination and moved
-// over it, so a reader sees the old file or the new one.
+// over it, so a reader sees the old file or the new one. Every step goes
+// through the root of the folder, so no link on the way can take the file out
+// of it.
 func (r *fileReceiver) Finalize(_ context.Context, b protocol.XferBegin, tmp string) error {
 	m, err := metaOf(b.Meta)
 	if err != nil {
 		return protocol.NewError(protocol.CodeInvalidPayload, "file meta: %v", err)
 	}
-	_, full, err := r.files.resolve(FileRef{Root: m.Root, Path: m.Path})
+	ref := FileRef{Root: m.Root, Path: m.Path}
+	fr, rel, err := r.files.checkRef(ref)
 	if err != nil {
 		return protocol.NewError(protocol.CodeForbidden, "%v", err)
 	}
 	// The folders and their modes are the installer's (some are shared with the
 	// agents' group); only what is missing is made, never more open than 0750.
-	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+	if err := os.MkdirAll(fr.Dir, 0o750); err != nil {
 		return protocol.NewError(protocol.CodeUnavailable, "%v", err)
+	}
+	root, err := os.OpenRoot(fr.Dir)
+	if err != nil {
+		return protocol.NewError(protocol.CodeUnavailable, "%v", err)
+	}
+	defer root.Close()
+	dir := filepath.Dir(rel)
+	if dir != "." {
+		if err := root.MkdirAll(dir, 0o750); err != nil {
+			return forbiddenOrUnavailable(err)
+		}
+	}
+	if _, err := lstat(root, rel, ref); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return protocol.NewError(protocol.CodeForbidden, "%v", err)
 	}
 	in, err := os.Open(tmp)
 	if err != nil {
 		return protocol.NewError(protocol.CodeUnavailable, "%v", err)
 	}
 	defer in.Close()
-	out, err := os.CreateTemp(filepath.Dir(full), "."+path.Base(m.Path)+".incoming-*")
+	var nonce [8]byte
+	_, _ = rand.Read(nonce[:])
+	name := filepath.Join(dir, "."+filepath.Base(rel)+".incoming-"+hex.EncodeToString(nonce[:]))
+	out, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return protocol.NewError(protocol.CodeUnavailable, "%v", err)
+		return forbiddenOrUnavailable(err)
 	}
-	name := out.Name()
 	fail := func(err error) error {
 		_ = out.Close()
-		_ = os.Remove(name)
+		_ = root.Remove(name)
 		return protocol.NewError(protocol.CodeUnavailable, "%v", err)
 	}
 	if _, err := io.Copy(out, in); err != nil {
@@ -291,24 +376,34 @@ func (r *fileReceiver) Finalize(_ context.Context, b protocol.XferBegin, tmp str
 		return fail(err)
 	}
 	if err := out.Close(); err != nil {
-		_ = os.Remove(name)
+		_ = root.Remove(name)
 		return protocol.NewError(protocol.CodeUnavailable, "%v", err)
 	}
-	if err := os.Rename(name, full); err != nil {
-		_ = os.Remove(name)
-		return protocol.NewError(protocol.CodeUnavailable, "%v", err)
+	if err := root.Rename(name, rel); err != nil {
+		_ = root.Remove(name)
+		return forbiddenOrUnavailable(err)
 	}
 	return nil
 }
 
-func sha256File(p string) (string, error) {
-	f, err := os.Open(p)
-	if err != nil {
-		return "", err
+// isEscape says whether os.Root refused the path because it leaves the folder
+// (a ".." or a link that points out; Go does not export that error).
+func isEscape(err error) bool {
+	return err != nil && (strings.Contains(err.Error(), "escapes from parent") || strings.Contains(err.Error(), "symlink"))
+}
+
+// forbiddenOrUnavailable tells a refusal of the root (a path that leaves the
+// folder) from a failure of the disk.
+func forbiddenOrUnavailable(err error) error {
+	if isEscape(err) {
+		return protocol.NewError(protocol.CodeForbidden, "%v: %v", ErrPathEscapes, err)
 	}
-	defer f.Close()
+	return protocol.NewError(protocol.CodeUnavailable, "%v", err)
+}
+
+func sha256Reader(r io.Reader) (string, error) {
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	if _, err := io.Copy(h, r); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
