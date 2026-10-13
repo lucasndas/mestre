@@ -63,24 +63,27 @@ func inDelegatedScope(t *testing.T, name string) (cgroup string, inside bool) {
 
 // orphansScript is the agent of CA-LOCAL-11: a shell that calls `mestre list`
 // once the plain way and then leaves three orphans (nohup, a double fork,
-// setsid -f), each from its own folder. An orphan ignores SIGHUP, which the
-// terminal sends when the shell exits, and says so through a FIFO, which the
-// shell reads (holding it open for reading and writing, so that it never reads an end of file) before it exits: so the orphans are ready when it goes. Then
-// each waits until the shell is gone before it calls, so it is an orphan for
-// sure (no sleep: it spins on kill -0 for the few milliseconds the shell
-// takes to exit).
+// setsid -f), each from its own folder. An orphan ignores SIGHUP, says it is
+// ready through a FIFO and then waits, with no sleep (it spins on kill -0),
+// until its parent is gone, so it is an orphan for sure when it calls. The
+// shell stays alive until all three have called and said so through a second
+// FIFO: when the agent of a terminal ends on its own, the engine ends whatever
+// it left behind (docs/arquitetura/terminal.md#encerramento), so an orphan
+// that called after the shell was gone would be killed before it could.
+// Both FIFOs are held open for reading and writing, so reads never see an end
+// of file.
 func orphansScript(mestre, base string) string {
-	fifo := base + "/ready"
+	ready, done := base+"/ready", base+"/done"
 	orphan := func(dir string) string {
-		return `sh -c "trap '' HUP; echo ready > '` + fifo + `'; while kill -0 $$ 2>/dev/null; do :; done; ` +
-			`cd '` + base + `/` + dir + `' && exec '` + mestre + `' list" >/dev/null 2>&1`
+		return `sh -c "p=\$PPID; trap '' HUP; echo ready > '` + ready + `'; while kill -0 \$p 2>/dev/null; do :; done; ` +
+			`cd '` + base + `/` + dir + `' && '` + mestre + `' list; echo done > '` + done + `'" >/dev/null 2>&1`
 	}
 	return strings.Join([]string{
 		`cd '` + base + `/direct' && '` + mestre + `' list >/dev/null 2>&1`,
-		`nohup ` + orphan("nohup") + ` &`,
+		`( nohup ` + orphan("nohup") + ` & )`,
 		`( ` + orphan("subshell") + ` & )`,
 		`setsid -f ` + orphan("setsid"),
-		`exec 3<> '` + fifo + `'; read a <&3; read b <&3; read c <&3`,
+		`exec 3<> '` + ready + `' 4<> '` + done + `'; read a <&3; read b <&3; read c <&3; read d <&4; read e <&4; read f <&4`,
 	}, "\n")
 }
 
@@ -92,8 +95,10 @@ func orphansBase(t *testing.T, e *fullEngine) string {
 			t.Fatal(err)
 		}
 	}
-	if err := syscall.Mkfifo(filepath.Join(base, "ready"), 0o600); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"ready", "done"} {
+		if err := syscall.Mkfifo(filepath.Join(base, name), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return base
 }
