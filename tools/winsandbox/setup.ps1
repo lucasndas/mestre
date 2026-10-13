@@ -24,8 +24,8 @@ $GoFile     = 'go1.27.2.windows-amd64.msi'
 $GoSha256   = 'dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9'
 $Repo       = 'https://github.com/lucasndas/mestre.git'
 # Each spike round gets its own branch, created from main.
-$Branch     = 'spike/m1-windows-2'
-$Prompt     = 'tools/winsandbox/rodada-2-prompt.md'
+$Branch     = 'spike/m1-windows-3'
+$Prompt     = 'tools/winsandbox/rodada-3-prompt.md'
 
 function Get-Checked([string]$Url, [string]$Path, [string]$Sha256) {
     if ((Test-Path $Path) -and ((Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant() -eq $Sha256)) {

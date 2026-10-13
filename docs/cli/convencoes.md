@@ -46,7 +46,7 @@ Um único objeto JSON em stdout, stderr vazio e o mesmo código de saída do mod
 
 ### Identificação do chamador
 - Ao iniciar um personagem, o motor põe no ambiente dele `MESTRE_AGENT_ID` (id do personagem) e `MESTRE_ENDPOINT` (endereço do motor local). Lista completa: seção "Variáveis de ambiente" de [personagem](../sessao-zero/personagem.md).
-- A CLI fala só com o **motor local** (serviço `mestre`), sem porta TCP, pelo [canal local](../arquitetura/canal-local.md): endpoint, formato do pedido e da resposta, respostas parciais, tempo limite e a verificação de que o processo que chama pertence ao terminal daquele `MESTRE_AGENT_ID` (cgroup do terminal no Linux, árvore de processos no Windows; [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli)). Falhou a verificação: exit 3, `not_identified`.
+- A CLI fala só com o **motor local** (serviço `mestre`), sem porta TCP, pelo [canal local](../arquitetura/canal-local.md): endpoint, formato do pedido e da resposta, respostas parciais, tempo limite e a verificação de que o processo que chama pertence ao terminal daquele `MESTRE_AGENT_ID` (cgroup do terminal no Linux, Job Object do terminal no Windows; [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli)). Falhou a verificação: exit 3, `not_identified`.
 - Nível, classe e mesa vêm do registro do personagem no motor, nunca de argumentos. Não existe "chamar em nome de outro".
 - Sem `MESTRE_AGENT_ID` (ex.: uma pessoa num shell) ou num terminal criado por `spawn` (não recebe o id): só `help`, `debug`, `hook` e os subcomandos de serviço ([componentes](../arquitetura/componentes.md#mestre)) funcionam; o resto sai com exit 3, `not_identified`. As pessoas usam o painel e o Telegram.
 
@@ -115,7 +115,7 @@ As variáveis de ambiente vêm da sessão zero do personagem (M4); decretos e ap
 
 - **CA-CLI-CONV-01** · *rápida* — **Dado** qualquer comando com `--json`, **quando** ele falha, **então** stdout tem um único objeto com `ok: false` e `error.code`, stderr fica vazio e o código de saída é o da tabela.
 - **CA-CLI-CONV-02** · *rápida* — **Dado** um processo sem `MESTRE_AGENT_ID`, **quando** roda `mestre list`, **então** sai com 3 e `not_identified`, e `mestre help` funciona.
-- **CA-CLI-CONV-03** · *completa* — **Dado** o `MESTRE_AGENT_ID` de um personagem usado por um processo fora do terminal dele (fora do cgroup no Linux, da árvore no Windows), **quando** chama `mestre list`, **então** sai com 3 e `not_identified`.
+- **CA-CLI-CONV-03** · *completa* — **Dado** o `MESTRE_AGENT_ID` de um personagem usado por um processo fora do terminal dele (fora do cgroup no Linux, do Job Object no Windows), **quando** chama `mestre list`, **então** sai com 3 e `not_identified`.
 - **CA-CLI-CONV-04** · *completa* — **Dado** um agente numa Torre e outro na Cidadela, conectados, **quando** um faz `mestre ask` ao outro, **então** recebe a resposta sem informar a máquina (MVP-4).
 - **CA-CLI-CONV-05** · *completa* — **Dado** a Cidadela fora, **quando** um agente de uma Torre roda `mestre done`, **então** sai com 0 e `queued: true`, e a Cidadela registra o `done` uma única vez ao voltar.
 - **CA-CLI-CONV-06** · *rápida* — **Dado** que não há exceção pontual para apagar o pergaminho "Plano", **quando** um personagem roda `mestre note delete "Plano"`, **então** sai com 9, um pedido de aprovação é criado e nada é apagado.

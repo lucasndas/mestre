@@ -64,8 +64,8 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 ### Identificação e versão
 
-- Antes de ler o pedido, o motor identifica o processo do outro lado e o terminal dele, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli): no Linux, `SO_PEERCRED` e `SO_PEERPIDFD` e o cgroup do terminal em `/proc/<pid>/cgroup` (sem cgroup delegado, a subida pela árvore de processos); no Windows, o PID do outro lado do socket (`SIO_AF_UNIX_GETPEERPID`) e a subida pela árvore. O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`.
-- Também é `not_identified`: chamador sem pidfd (já colhido antes de o motor aceitar a conexão), pidfd que deixou de apontar para o mesmo PID depois da leitura do `/proc`, e subida pela árvore que encontrou pai mais novo que o filho em 3 tentativas seguidas.
+- Antes de ler o pedido, o motor identifica o processo do outro lado e o terminal dele, como em [segurança](seguranca.md#identidade-de-quem-chama-a-cli): no Linux, `SO_PEERCRED` e `SO_PEERPIDFD` e o cgroup do terminal em `/proc/<pid>/cgroup` (sem cgroup delegado, a subida pela árvore de processos); no Windows, o PID do outro lado do socket (`SIO_AF_UNIX_GETPEERPID`) e o Job Object do terminal, perguntado ao `mestre-pty`. O terminal precisa ser do personagem de `agent_id`; senão, `not_identified`.
+- Também é `not_identified`: chamador sem pidfd (já colhido antes de o motor aceitar a conexão), pidfd que deixou de apontar para o mesmo PID depois da leitura do `/proc`, subida pela árvore (Linux sem cgroup) que encontrou pai mais novo que o filho em 3 tentativas seguidas e, no Windows, processo que começou depois de a conexão ser aceita.
 - `v` desconhecido: resposta `protocol_mismatch` (exit 5). O motor aceita a versão atual e a anterior, como no [protocolo](../conectividade/protocolo.md#abertura-versão-e-capacidades).
 
 ### Motor reiniciando
@@ -85,7 +85,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 |---|---|---|
 | linha maior que o limite | `too_large` | 8 |
 | JSON inválido ou campo obrigatório faltando | `bad_request` | 1 (é bug da CLI) |
-| processo fora do terminal de `agent_id` (cgroup no Linux, árvore no Windows), chamador já encerrado ou árvore que mudou em 3 tentativas | `not_identified` | 3 |
+| processo fora do terminal de `agent_id` (cgroup no Linux, Job Object no Windows), chamador já encerrado, PID reaproveitado ou árvore que mudou em 3 tentativas | `not_identified` | 3 |
 | motor não aceita a conexão | `engine_unreachable` (gerado pela CLI) | 5 |
 | versão do canal não suportada | `protocol_mismatch` | 5 |
 
@@ -105,6 +105,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 - **CA-LOCAL-10** · *rápida* — **Dado** um `/proc` falso em que o pai lido começou depois do filho, **quando** o motor sobe a árvore, **então** recomeça do chamador; se a corrida continua em 3 tentativas, responde `not_identified`; se some na segunda, identifica o terminal.
 - **CA-LOCAL-11** · *completa* — **Dado** um cgroup delegado real (`systemd-run --user --scope -p Delegate=yes`) e um terminal real cujo processo dispara `nohup mestre list &`, `( mestre list & )` e `setsid -f mestre list` e sai, **quando** os órfãos chamam, **então** os três são aceitos com o terminal certo, e sem o cgroup (só a subida pela árvore) os três recebem `not_identified`; sem gerenciador systemd de usuário, o teste é pulado com o motivo.
 - **CA-LOCAL-12** · *rápida* — **Dado** um motor falso que recusa conexões por 20 s de relógio falso e outro que fecha a conexão no meio de um `ask`, **quando** a CLI chama, **então** a primeira chamada termina com sucesso depois que o motor volta, e o `ask` é reenviado com o mesmo `id` e executado uma vez só; com o motor fora por mais de 60 s, a CLI sai com 5 (`engine_unreachable`).
+- **CA-LOCAL-13** · *completa* — **Dado** um terminal real no Windows cujo processo chama `mestre list` direto, por `cmd /c`, por `powershell -c` e por um órfão de `cmd /c start "" /b` cujo `cmd` já saiu, e um processo da mesma conta fora do terminal, **quando** o motor identifica, **então** os quatro primeiros são aceitos com o terminal certo pelo Job Object e o de fora recebe `not_identified`.
 
 ## Depende de
 
