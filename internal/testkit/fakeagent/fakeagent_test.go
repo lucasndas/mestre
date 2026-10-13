@@ -181,7 +181,8 @@ func TestAntigravityBlocksToolWhenHookAnswersNonJSON(t *testing.T) {
 		l := &fakeagent.MemLauncher{Clock: clock.Real{}, Hooks: h, Reporter: t}
 		e := newEnv(t)
 		testkit.WriteFiles(t, e.home, map[string]string{
-			".gemini/antigravity-cli/settings.json": fmt.Sprintf(`{"trustedWorkspaces": [%q]}`, e.dir),
+			".gemini/antigravity-cli/settings.json":           fmt.Sprintf(`{"trustedWorkspaces": [%q]}`, e.dir),
+			".gemini/antigravity-cli/antigravity-oauth-token": "{}",
 		})
 		testkit.WriteFiles(t, e.dir, map[string]string{
 			".agents/hooks.json": `{"mestre": {"enabled": true, "PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "gate", "timeout": 30}]}]}}`,
@@ -325,7 +326,8 @@ func TestWithoutScriptEchoesAndCallsDone(t *testing.T) {
 		l := &fakeagent.MemLauncher{Clock: clock.Real{}, Hooks: &hooks{}, Commands: cmds, Reporter: t}
 		e := newEnv(t)
 		testkit.WriteFiles(t, e.home, map[string]string{
-			".gemini/antigravity-cli/settings.json": fmt.Sprintf(`{"trustedWorkspaces": [%q]}`, e.dir),
+			".gemini/antigravity-cli/settings.json":           fmt.Sprintf(`{"trustedWorkspaces": [%q]}`, e.dir),
+			".gemini/antigravity-cli/antigravity-oauth-token": "{}",
 		})
 		p := start(t, l, "fakeagent", e, "--provider", "antigravity")
 		synctest.Wait()
