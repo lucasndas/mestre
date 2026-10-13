@@ -86,7 +86,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeGuildLeave, Dir: Both, Ack: true, Payload: GuildLeave{}},
 		Spec{Type: TypeReplicaAck, Dir: TowerToCitadel, Payload: ReplicaAck{}},
 		Spec{Type: TypeReplicaResync, Dir: TowerToCitadel, Ack: true, Payload: ReplicaResync{}},
-		Spec{Type: TypeVaultReplica, Dir: CitadelToTower, Ack: true, Payload: Object{}},
+		Spec{Type: TypeVaultReplica, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: VaultReplica{}},
 		Spec{Type: TypeVaultRequest, Dir: TowerToCitadel, Ack: true, Payload: VaultRequest{}},
 		Spec{Type: TypeVaultCredential, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: VaultCredential{}},
 		Spec{Type: TypeVaultDrop, Dir: CitadelToTower, Ack: true, Payload: Empty{}},

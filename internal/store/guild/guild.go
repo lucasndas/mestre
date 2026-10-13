@@ -17,8 +17,11 @@ var migrationFiles embed.FS
 var Migrations = store.MustLoad(migrationFiles, "migrations")
 
 // Open opens the Guild database at path. On the Citadel it migrates to the
-// latest version; with opts.Replica (a Tower) the schema comes from the
-// replication and nothing is applied locally.
+// latest version and records every change in replication_log, in the same
+// transaction (docs/guilda/replicacao.md); with opts.Replica (a Tower) the
+// schema and the rows come from the replication, and nothing is applied or
+// written locally.
 func Open(ctx context.Context, path string, opts store.Options) (*store.DB, error) {
+	opts.Capture = !opts.Replica
 	return store.Open(ctx, path, Migrations, opts)
 }

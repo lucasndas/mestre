@@ -198,6 +198,8 @@ func (c *Config) validate() error {
 	switch {
 	case c.DB == nil:
 		return errors.New("vault: Config.DB is required")
+	case c.DB.IsReplica():
+		return ErrReplica
 	case c.Keys == nil:
 		return errors.New("vault: Config.Keys is required")
 	case c.EnvelopePath == "":

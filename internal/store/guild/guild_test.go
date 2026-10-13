@@ -71,6 +71,22 @@ func TestEveryGuildTableHasAPrimaryKeyAndThereAreNoTriggers(t *testing.T) {
 		if err := db.Reader().QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info(?) WHERE pk > 0`, name).Scan(&pk); err != nil || pk == 0 {
 			t.Errorf("table %s has no declared primary key (%d, %v)", name, pk, err)
 		}
+		// The preupdate hook does not see WITHOUT ROWID tables, and so the log
+		// would miss their changes; generated columns are not in the row it
+		// hands over.
+		var rowid, generated int
+		if err := db.Reader().QueryRowContext(ctx, `SELECT wr FROM pragma_table_list WHERE name = ? AND schema = 'main'`, name).Scan(&rowid); err != nil || rowid != 0 {
+			t.Errorf("table %s is WITHOUT ROWID (%d, %v): the change log cannot follow it", name, rowid, err)
+		}
+		if err := db.Reader().QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_xinfo(?) WHERE hidden <> 0`, name).Scan(&generated); err != nil || generated != 0 {
+			t.Errorf("table %s has generated columns (%d, %v)", name, generated, err)
+		}
+	}
+	for _, want := range []string{"replication_log", "schema_migrations"} {
+		var n int
+		if err := db.Reader().QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, want).Scan(&n); err != nil || n != 1 {
+			t.Errorf("the table %s is missing (%d, %v)", want, n, err)
+		}
 	}
 }
 

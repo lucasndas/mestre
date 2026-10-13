@@ -72,6 +72,24 @@ func TestKeyFileReadableByOthersIsRefused(t *testing.T) {
 	}
 }
 
+// vault.drop: the key store forgets the key, and forgetting it again is fine.
+func TestDeletingTheKeyFileMakesTheKeyGoAway(t *testing.T) {
+	t.Parallel()
+	s := NewFileKeyStore(filepath.Join(t.TempDir(), "cofre.key"))
+	if err := s.Save(t.Context(), []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Load(t.Context()); !errors.Is(err, ErrNoKey) {
+		t.Errorf("Load after Delete = %v, want ErrNoKey", err)
+	}
+	if err := s.Delete(t.Context()); err != nil {
+		t.Errorf("second Delete = %v", err)
+	}
+}
+
 func TestKeyFileWithInheritedACLIsRefused(t *testing.T) {
 	t.Parallel()
 	s := NewFileKeyStore(filepath.Join(t.TempDir(), "cofre.key"))

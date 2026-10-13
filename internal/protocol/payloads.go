@@ -63,12 +63,16 @@ type TerminalState struct {
 
 // Hello is `hello`, Tower to Citadel (mensagens.md, row hello).
 type Hello struct {
-	Protocol     Range           `json:"protocol" proto:"req"`
-	Capabilities Capabilities    `json:"capabilities,omitempty"`
-	Version      string          `json:"version" proto:"req"`
-	Sheet        Object          `json:"sheet" proto:"req"`
-	Certificate  *Certificate    `json:"certificate" proto:"req"`
-	ReplicaLSN   uint64          `json:"replica_lsn" proto:"req"`
+	Protocol     Range        `json:"protocol" proto:"req"`
+	Capabilities Capabilities `json:"capabilities,omitempty"`
+	Version      string       `json:"version" proto:"req"`
+	Sheet        Object       `json:"sheet" proto:"req"`
+	Certificate  *Certificate `json:"certificate" proto:"req"`
+	ReplicaLSN   uint64       `json:"replica_lsn" proto:"req"`
+	// ReplicaEpoch is the epoch of the replica: the one of the Citadel that
+	// wrote the last record the Tower applied. The Citadel resumes the stream
+	// only if it is its own epoch (docs/guilda/replicacao.md#banco-cópia-completa-e-envio-contínuo).
+	ReplicaEpoch uint64          `json:"replica_epoch,omitempty"`
 	Terminals    []TerminalState `json:"terminals,omitempty"`
 }
 
@@ -136,6 +140,16 @@ type ReplicaAck struct {
 // ReplicaResync is `replica.resync`; without FromLSN it asks for a full copy.
 type ReplicaResync struct {
 	FromLSN *uint64 `json:"from_lsn,omitempty"`
+}
+
+// VaultReplica is `vault.replica`, for every machine that is not excluded:
+// the key ring of the vault data key (base64 of the ring, a secret that
+// never reaches a log or the outbox: the type is volatile) and the recovery
+// envelope. The secrets themselves travel in the database replica, already
+// encrypted.
+type VaultReplica struct {
+	Keyring  Secret `json:"keyring" proto:"req"`
+	Envelope []byte `json:"envelope" proto:"req"`
 }
 
 // VaultRequest is `vault.request`.

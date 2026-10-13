@@ -91,7 +91,9 @@ type HelloInfo struct {
 	Version    string
 	Sheet      Object
 	ReplicaLSN uint64
-	Terminals  []TerminalState
+	// ReplicaEpoch is the epoch of the replica (see Hello.ReplicaEpoch).
+	ReplicaEpoch uint64
+	Terminals    []TerminalState
 }
 
 // Hooks are the points where the stages that come after the protocol plug
@@ -106,6 +108,10 @@ type Hooks struct {
 	// outbox is resent; OnDisconnect when it ends, with the cause.
 	OnConnect    func(s *Session)
 	OnDisconnect func(s *Session, cause error)
+	// OnReady is called once the connection is the current one of its link and
+	// the outbox was queued on it: from here the application may send on the
+	// link (the replication starts its stream here).
+	OnReady func(s *Session)
 	// HeartbeatLost is called when the Citadel hears no machine.heartbeat
 	// from a Tower for Timing.HeartbeatLost.
 	HeartbeatLost func(peer Peer)

@@ -8,7 +8,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 
 | `type` | Sentido | Ack | Campos principais do `payload` | Resposta |
 |---|---|---|---|---|
-| `hello` | T→C | — | `protocol {min, max}`, `capabilities[]` (opcional), `version`, `sheet` (a [ficha da máquina](../guilda/ficha-da-maquina.md) inteira, que substitui a guardada; sem `os`, `arch` ou `providers`, `invalid_payload`), `certificate` (certidão de época que segue), `replica_lsn`, `terminals[]` (estado atual) | `welcome {protocol, capabilities[], citadel_version, citadel_time, certificate}`, ou fechamento `4003`, `4006` ou `4007` |
+| `hello` | T→C | — | `protocol {min, max}`, `capabilities[]` (opcional), `version`, `sheet` (a [ficha da máquina](../guilda/ficha-da-maquina.md) inteira, que substitui a guardada; sem `os`, `arch` ou `providers`, `invalid_payload`), `certificate` (certidão de época que segue), `replica_lsn`, `replica_epoch` (opcional: a época da Cidadela que escreveu o último registro aplicado), `terminals[]` (estado atual) | `welcome {protocol, capabilities[], citadel_version, citadel_time, certificate}`, ou fechamento `4003`, `4006` ou `4007` |
 | `machine.heartbeat` | T→C | não | `cpu_pct`, `mem_pct`, `disk_free_bytes`, `terminals`, `replica_lag_s` | — |
 | `machine.sheet` | T→C | sim | os campos da ficha da máquina que mudaram (`null` para o que sumiu) e o `rev`, que tem de passar do guardado; senão a Cidadela confirma e descarta ([atualização](../guilda/ficha-da-maquina.md#atualização-sozinha)) | — |
 | `guild.epoch` | ambos | sim | pedido sem campos; resposta com a certidão de época atual (`guild_id`, `epoch`, `citadel_machine_id`, `approved_by`, `approval_id`, `issued_at`, `signature`) | ([certidão](../guilda/replicacao.md#certidão-de-época)) |
@@ -16,9 +16,9 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `guild.leave` | ambos | sim | C→T: a máquina foi removida (apagar réplica, arquivos, cofre e configuração); T→C: pedido de saída, `reason` (`uninstall`) | ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
 | `replica.ack` | T→C | não | `lsn` aplicado | — (os registros vão em frames `0x03`; [replicação](../guilda/replicacao.md)) |
 | `replica.resync` | T→C | sim | `from_lsn`; pede de novo a partir dali, ou cópia completa sem `from_lsn` | `xfer.begin` com `kind: db-snapshot` ou frames `0x03` |
-| `vault.replica` | C→T | sim | para toda máquina não excluída: a chave de dados do cofre, cifrada para a máquina, e o envelope | — ([cofre em toda máquina](../guilda/replicacao.md#cofre-em-toda-máquina)) |
+| `vault.replica` | C→T | sim | para toda máquina não excluída: `keyring` (o chaveiro da chave de dados, em base64; vai pelo mTLS dessa máquina, que o guarda protegido pela chave dela) e `envelope`; tipo volátil | — ([cofre em toda máquina](../guilda/replicacao.md#cofre-em-toda-máquina)) |
 | `vault.request` | T→C | sim | `agent_id`, `secret`, `purpose`: credencial pedida no momento do uso; a Cidadela confere a classe e registra | `vault.credential {value}`, só em memória (tipo volátil), ou `error` `forbidden` |
-| `vault.drop` | C→T | sim | máquina excluída: apagar a chave, o envelope e as tabelas do cofre da réplica | recibo `vault.dropped` |
+| `vault.drop` | C→T | sim | máquina excluída: apagar a chave, o envelope e as tabelas do cofre da réplica (a cada conexão dela também, sem efeito se não há o que apagar) | recibo `vault.dropped`, só se apagou algo |
 | `citadel.handover` | C→T | sim | troca planejada: `target_machine_id`, `last_lsn`, `approval_id` | a máquina escolhida promove-se pela trava e responde com a certidão nova ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)) |
 | `terminal.adopt` | T→C | sim | a antiga Cidadela, rebaixada: terminais dela que a nova não retomou | a nova Cidadela os adota ou manda encerrar ([volta da antiga](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)) |
 | `ack` | ambos | — | `status`: `ok` \| `duplicate` \| `error`; com `error`, o `error` (`code`, `message`, `retryable`); num `duplicate`, o mesmo `error` da primeira vez | — |
@@ -45,7 +45,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `cert.renew` | T→C | sim | `role` (`motor`), `csr` (PEM) | `cert.issued {cert}`, o certificado em PEM ([credenciais](../guilda/guilda.md#credenciais)) |
 | `update.apply` | C→T | sim | `release_tag`, `component` (`motor` \| `guardiao`), `xfer_id` | resultado no passo da [autoatualização](../plataforma/autoatualizacao.md) |
 
-**Tipos voláteis:** os que levam segredo (`vault.credential`, `agent.site_login`, `agent.site_login_input`) têm ack, mas esperam por ele só em memória: um reinício do processo os perde, e a Cidadela recomeça o pedido.
+**Tipos voláteis:** os que levam segredo (`vault.replica`, `vault.credential`, `agent.site_login`, `agent.site_login_input`) têm ack, mas esperam por ele só em memória: um reinício do processo os perde, e a Cidadela recomeça o pedido.
 
 ## Guardião da Torre ↔ Cidadela
 

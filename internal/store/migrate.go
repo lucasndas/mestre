@@ -131,7 +131,7 @@ func appliedVersion(ctx context.Context, db *sql.DB) (int, error) {
 // transactions, so a second process migrating the same file waits and then
 // sees the versions already applied.
 func (d *DB) migrate(ctx context.Context, set Set, from int) error {
-	if _, err := d.writer.ExecContext(ctx, createMigrationsTable); err != nil {
+	if _, err := d.writer.ExecContext(withDDL(ctx, ddlSilent), createMigrationsTable); err != nil {
 		return fmt.Errorf("store: create schema_migrations: %w", err)
 	}
 	for _, m := range set.migrations[from:] {
@@ -156,7 +156,7 @@ func (d *DB) apply(ctx context.Context, m Migration) error {
 	if done > 0 { // applied meanwhile by another process
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx, m.SQL); err != nil {
+	if _, err := tx.ExecContext(withDDL(ctx, ddlLogged), m.SQL); err != nil {
 		return fmt.Errorf("store: migration %04d_%s: %w", m.Version, m.Name, err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`,

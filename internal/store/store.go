@@ -14,9 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
-	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
+	"modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
 	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -49,17 +50,32 @@ type Options struct {
 	BackupDir string
 	// Replica opens a database whose schema arrives by replication (a Tower's
 	// copy of the Guild database): migrations are never applied locally,
-	// though a schema newer than the binary is still refused.
+	// though a schema newer than the binary is still refused. Nothing writes
+	// to it but the replication (Apply, Replace, Purge): the writer is
+	// query_only.
 	Replica bool
+	// Capture makes the database record every change in replication_log, in
+	// the same transaction, for the replication to ship (the Guild database
+	// on the Citadel). See capture.go.
+	Capture bool
 }
 
 // DB is an open database: one writer connection and a read-only pool.
 type DB struct {
-	path   string
+	path    string
+	clock   clock.Clock
+	sync    string // synchronous level of the writer
+	set     Set
+	opts    Options
+	replica bool
+	capture *capture
+
+	mu     sync.RWMutex // guards the pools, which Replace swaps
 	writer *sql.DB
 	reader *sql.DB
-	clock  clock.Clock
-	sync   string // synchronous level of the writer
+
+	infoMu sync.Mutex
+	infos  map[string]tableInfo // primary keys of the tables, for Apply
 }
 
 // Open opens (creating it if needed) the database at path, refuses it when
@@ -86,34 +102,74 @@ func Open(ctx context.Context, path string, set Set, opts Options) (*DB, error) 
 		return nil, fmt.Errorf("store: invalid synchronous level %q (OFF, NORMAL or FULL)", opts.Synchronous)
 	}
 
-	writer, err := sql.Open("sqlite", dsn(path, writerPragmas(opts.BusyTimeout, opts.Synchronous), "immediate"))
-	if err != nil {
-		return nil, fmt.Errorf("store: open %s: %w", path, err)
+	d := &DB{
+		path: path, clock: opts.Clock, sync: opts.Synchronous, set: set, opts: opts,
+		replica: opts.Replica, infos: map[string]tableInfo{},
 	}
-	writer.SetMaxOpenConns(1)
-	writer.SetMaxIdleConns(1)
-	writer.SetConnMaxLifetime(0)
-	d := &DB{path: path, writer: writer, clock: opts.Clock, sync: opts.Synchronous}
-
-	if err := d.prepare(ctx, set, opts); err != nil {
-		writer.Close()
+	if opts.Capture && !opts.Replica {
+		d.capture = newCapture(opts.Clock)
+	}
+	if err := d.openPools(ctx); err != nil {
 		return nil, err
 	}
+	return d, nil
+}
 
-	reader, err := sql.Open("sqlite", dsn(path, readerPragmas(opts.BusyTimeout), ""))
+// openPools opens the writer, prepares the schema (unless it is a replica)
+// and opens the read-only pool. It is also how Replace brings a new file up.
+func (d *DB) openPools(ctx context.Context) error {
+	writer, err := d.openWriter()
+	if err != nil {
+		return fmt.Errorf("store: open %s: %w", d.path, err)
+	}
+	d.writer = writer
+	if err := d.prepare(ctx, d.set, d.opts); err != nil {
+		writer.Close()
+		d.writer = nil
+		return err
+	}
+	reader, err := sql.Open("sqlite", dsn(d.path, readerPragmas(d.opts.BusyTimeout), ""))
 	if err != nil {
 		writer.Close()
-		return nil, fmt.Errorf("store: open %s for reading: %w", path, err)
+		d.writer = nil
+		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
 	}
-	reader.SetMaxOpenConns(opts.ReadConns)
-	reader.SetMaxIdleConns(opts.ReadConns)
+	reader.SetMaxOpenConns(d.opts.ReadConns)
+	reader.SetMaxIdleConns(d.opts.ReadConns)
 	reader.SetConnMaxLifetime(0)
-	d.reader = reader
 	if err := reader.PingContext(ctx); err != nil {
-		d.Close()
-		return nil, fmt.Errorf("store: open %s for reading: %w", path, err)
+		reader.Close()
+		writer.Close()
+		d.writer = nil
+		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
 	}
-	return d, nil
+	d.reader = reader
+	return nil
+}
+
+func (d *DB) openWriter() (*sql.DB, error) {
+	pragmas := writerPragmas(d.opts.BusyTimeout, d.opts.Synchronous)
+	if d.replica {
+		pragmas = append(pragmas, "query_only(1)") // last: it must not block the others
+	}
+	conn := dsn(d.path, pragmas, "immediate")
+	var w *sql.DB
+	if d.capture != nil {
+		base, err := sqlite.NewConnector(conn)
+		if err != nil {
+			return nil, err
+		}
+		w = sql.OpenDB(logConnector{Connector: base, cap: d.capture})
+	} else {
+		var err error
+		if w, err = sql.Open("sqlite", conn); err != nil {
+			return nil, err
+		}
+	}
+	w.SetMaxOpenConns(1)
+	w.SetMaxIdleConns(1)
+	w.SetConnMaxLifetime(0)
+	return w, nil
 }
 
 func (d *DB) prepare(ctx context.Context, set Set, opts Options) error {
@@ -126,6 +182,12 @@ func (d *DB) prepare(ctx context.Context, set Set, opts Options) error {
 	}
 	if have > set.Latest() {
 		return &NewerSchemaError{Path: d.path, Have: have, Supported: set.Latest()}
+	}
+	if d.capture != nil {
+		// The log exists before the first migration, so the migrations are in it.
+		if _, err := d.writer.ExecContext(withDDL(ctx, ddlSilent), createLogTable); err != nil {
+			return fmt.Errorf("store: create %s: %w", LogTable, err)
+		}
 	}
 	if opts.Replica || have == set.Latest() {
 		return nil
@@ -175,6 +237,11 @@ func quickCheck(ctx context.Context, path string) error {
 		return err
 	}
 	defer db.Close()
+	return quickCheckDB(ctx, db)
+}
+
+// quickCheckDB runs PRAGMA quick_check through db.
+func quickCheckDB(ctx context.Context, db *sql.DB) error {
 	rows, err := db.QueryContext(ctx, `PRAGMA quick_check`)
 	if err != nil {
 		return fmt.Errorf("quick_check: %w", err)
@@ -202,15 +269,27 @@ func quickCheck(ctx context.Context, path string) error {
 // Path is the database file.
 func (d *DB) Path() string { return d.path }
 
-// Writer is the single write connection. On a replica only the replication
-// uses it.
-func (d *DB) Writer() *sql.DB { return d.writer }
+// Writer is the single write connection. On a replica it refuses every write:
+// only the replication changes it, through Apply, Replace and Purge.
+func (d *DB) Writer() *sql.DB {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.writer
+}
 
 // Reader is the pool of read-only connections.
-func (d *DB) Reader() *sql.DB { return d.reader }
+func (d *DB) Reader() *sql.DB {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.reader
+}
+
+// IsReplica says whether the database was opened as a replica (a Tower's
+// copy): the vault does not open on it.
+func (d *DB) IsReplica() bool { return d.replica }
 
 // Version is the schema version recorded in schema_migrations.
-func (d *DB) Version(ctx context.Context) (int, error) { return appliedVersion(ctx, d.reader) }
+func (d *DB) Version(ctx context.Context) (int, error) { return appliedVersion(ctx, d.Reader()) }
 
 // WriteDurable runs fn in one write transaction whose commit is on disk when
 // WriteDurable returns nil. The writer normally runs with synchronous=NORMAL,
@@ -221,7 +300,7 @@ func (d *DB) Version(ctx context.Context) (int, error) { return appliedVersion(c
 // old key only after the rows moved to the new one). fn must use tx only:
 // the writer pool has a single connection and WriteDurable holds it.
 func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error {
-	conn, err := d.writer.Conn(ctx)
+	conn, err := d.Writer().Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("store: durable write: %w", err)
 	}
@@ -252,11 +331,22 @@ func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error 
 
 // Close closes both pools.
 func (d *DB) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.closePools()
+}
+
+func (d *DB) closePools() error {
 	var rerr error
 	if d.reader != nil {
 		rerr = d.reader.Close()
 	}
-	return errors.Join(rerr, d.writer.Close())
+	var werr error
+	if d.writer != nil {
+		werr = d.writer.Close()
+	}
+	d.reader, d.writer = nil, nil
+	return errors.Join(rerr, werr)
 }
 
 func writerPragmas(busy time.Duration, sync string) []string {

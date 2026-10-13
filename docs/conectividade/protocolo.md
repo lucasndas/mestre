@@ -90,7 +90,7 @@ O catálogo de tipos, com os campos principais e as respostas, e a tabela de có
   2. O destinatário responde `xfer.ready` com `next_index`: 0, ou o ponto de retomada se já tiver partes num arquivo temporário. Uma recusa (tipo sem receptor, disco) vem no ack.
   3. As partes vão em frames binários `0x02`, com até 16 partes em trânsito. O destinatário envia `xfer.progress` com o próximo índice esperado a cada 8 partes e ao fim, e isso libera a janela.
   4. O remetente só envia `xfer.end` depois de o destinatário confirmar todas as partes (a fila de controle passaria na frente das partes). O destinatário confere o SHA-256 total e roda o fim do `kind`; para bundle, `git bundle verify` no repositório de destino.
-  5. O destinatário responde `xfer.done` com `ok` ou o erro.
+  5. O destinatário responde `xfer.done` com `ok` ou o erro. Um `kind` pode responder já no `xfer.begin` que tem o conteúdo (mesmo SHA-256): o `xfer.ready` dá todas as partes como recebidas e nenhuma é enviada (arquivo que não mudou, espelho em dia).
 - **Bundles:**
   - São incrementais. O pré-requisito é o último commit que os dois lados têm daquela mesa.
   - Se faltar o pré-requisito, o erro `missing_prerequisite` faz o remetente mandar um bundle da branch inteira.

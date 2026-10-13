@@ -166,6 +166,9 @@ func (s *Session) serve(ctx context.Context) error {
 	if s.cfg.Profile.Heartbeats && s.side == SideTower && s.cfg.Heartbeat != nil {
 		start(s.heartbeatLoop)
 	}
+	if h := s.cfg.Hooks.OnReady; h != nil {
+		h(s)
+	}
 	<-ctx.Done()
 	s.lanes.stop(ErrSessionClosed)
 	_ = s.conn.Close(1000, "")
