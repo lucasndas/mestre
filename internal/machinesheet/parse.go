@@ -35,6 +35,26 @@ func parseOSRelease(text string) string {
 	return name
 }
 
+// parseLogindSession says whether a session file of systemd-logind
+// (/run/systemd/sessions/<id>, readable by everyone) describes a user's
+// session with a graphical desktop: class user, type x11, wayland or mir, and
+// not closing. A console (tty) or an ssh login is not one.
+func parseLogindSession(text string) bool {
+	kv := map[string]string{}
+	sc := bufio.NewScanner(strings.NewReader(text))
+	for sc.Scan() {
+		if k, v, ok := strings.Cut(strings.TrimSpace(sc.Text()), "="); ok {
+			kv[k] = v
+		}
+	}
+	switch kv["TYPE"] {
+	case "x11", "wayland", "mir":
+	default:
+		return false
+	}
+	return kv["CLASS"] == "user" && kv["STATE"] != "closing"
+}
+
 // parseMemTotal reads the MemTotal line of /proc/meminfo, in kB, as bytes.
 func parseMemTotal(meminfo string) (uint64, error) {
 	for _, line := range strings.Split(meminfo, "\n") {

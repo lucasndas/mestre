@@ -36,7 +36,9 @@ type AgentConfig struct {
 	// is not reported (DefaultDiskChange). The disk changes all the time;
 	// the sheet only needs to tell the order of magnitude.
 	DiskChange float64
-	Logger     *slog.Logger
+	// Store, when set, keeps the last sheet across restarts (see SheetStore).
+	Store  SheetStore
+	Logger *slog.Logger
 }
 
 // Agent keeps the sheet of this machine and tells the Citadel what changes.
@@ -64,7 +66,29 @@ func NewAgent(cfg AgentConfig) (*Agent, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
-	return &Agent{cfg: cfg, poke: make(chan struct{}, 1)}, nil
+	a := &Agent{cfg: cfg, poke: make(chan struct{}, 1)}
+	if cfg.Store != nil {
+		switch s, ok, err := cfg.Store.Load(context.Background()); {
+		case err != nil:
+			cfg.Logger.Warn("machinesheet: reading the sheet of the last run", "err", err)
+		case ok:
+			// Not primed: this process has told the Citadel nothing yet. The
+			// sheet is where the probes that fail start from, and the revision
+			// goes on from its.
+			a.last = s
+		}
+	}
+	return a, nil
+}
+
+// remember keeps the sheet for the next run. Called with the lock held.
+func (a *Agent) remember(s Sheet) {
+	if a.cfg.Store == nil {
+		return
+	}
+	if err := a.cfg.Store.Save(context.Background(), s); err != nil {
+		a.cfg.Logger.Warn("machinesheet: keeping the sheet for the next run", "err", err)
+	}
 }
 
 // Attach sets the link machine.sheet goes through. The link exists only after
@@ -94,6 +118,7 @@ func (a *Agent) Hello(ctx context.Context) (protocol.Object, error) {
 	}
 	cur.Rev = a.nextRev()
 	a.last, a.primed = cur, true
+	a.remember(cur)
 	return withoutGuildFields(cur.Object()), nil
 }
 
@@ -152,6 +177,7 @@ func (a *Agent) Refresh(ctx context.Context) error {
 		return fmt.Errorf("machinesheet: send the sheet: %w", err)
 	}
 	a.last, a.primed = cur, true
+	a.remember(cur)
 	return nil
 }
 
@@ -175,8 +201,10 @@ func (a *Agent) build(ctx context.Context) (Sheet, error) {
 	return cur, nil
 }
 
-// nextRev is above the last revision and follows the clock, so a restarted
-// machine does not go back.
+// nextRev is above the last revision and follows the clock. The last revision
+// comes first, and survives a restart in the Store: a clock that went back (a
+// correction of the time, a machine restored) does not make the patches look
+// older than the sheet the Citadel holds.
 func (a *Agent) nextRev() int64 {
 	return max(a.last.Rev+1, a.cfg.Clock.Now().UnixMilli())
 }

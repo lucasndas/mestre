@@ -45,6 +45,11 @@ func (e *Engine) sheetBuilder() (*machinesheet.Builder, error) {
 	return machinesheet.NewBuilder(src, e.id.MachineID, e.cfg.Instance)
 }
 
+// sheetStore keeps the last sheet of this machine across restarts.
+func (e *Engine) sheetStore() machinesheet.SheetStore {
+	return machinesheet.FileStore(filepath.Join(e.paths.Maquina, "ficha.json"))
+}
+
 func (e *Engine) vaultCopy() *vault.Copier {
 	return &vault.Copier{Keys: vault.NewFileKeyStore(e.paths.vaultKey()), EnvelopePath: e.paths.envelope()}
 }
@@ -82,7 +87,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	agent, err := machinesheet.NewAgent(machinesheet.AgentConfig{Builder: builder, Clock: e.clk, Logger: e.log})
+	agent, err := machinesheet.NewAgent(machinesheet.AgentConfig{Builder: builder, Clock: e.clk, Store: e.sheetStore(), Logger: e.log})
 	if err != nil {
 		return transition{err: err}
 	}

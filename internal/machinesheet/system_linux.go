@@ -98,9 +98,22 @@ func readTrim(path string) string {
 	return strings.TrimSpace(string(b))
 }
 
-// desktopSession is true when a display server of a user is listening: an X11
-// socket or a Wayland socket in the runtime folder of a user.
+// desktopSession is true when a user has a graphical session. The service
+// runs as its own user, in a private /tmp and with no access to the runtime
+// folders of other users (/run/user/<uid> is 0700), so neither the X11 socket
+// nor the Wayland one can be counted on to be visible: the sessions that
+// systemd-logind keeps, which everyone can read, come first; the sockets are
+// for a machine where the service sees them.
 func desktopSession() (bool, error) {
+	sessions, _ := filepath.Glob("/run/systemd/sessions/*")
+	for _, p := range sessions {
+		if strings.HasSuffix(p, ".ref") {
+			continue
+		}
+		if b, err := os.ReadFile(p); err == nil && parseLogindSession(string(b)) {
+			return true, nil
+		}
+	}
 	if x, _ := filepath.Glob("/tmp/.X11-unix/X*"); len(x) > 0 {
 		return true, nil
 	}

@@ -139,12 +139,37 @@ func sessionUser(id uint32) string {
 	return windows.UTF16PtrToString(buf)
 }
 
+// browserVersionKey is where a browser keeps its version: the registry key
+// and the value. The service runs as its own account, which has no browser
+// of its own, so the machine's hive comes first (a browser installed for all
+// users writes there, in the 64-bit view or in the 32-bit one); the hive of
+// the account is the last resort.
+type browserVersionKey struct {
+	root        registry.Key
+	path, value string
+	accessFlags uint32
+}
+
 // browsers are the browsers that can serve the browser MCPs, in order: the
 // program that is registered (App Paths) and where the browser keeps its
 // version.
-var browsers = []struct{ name, exe, versionKey string }{
-	{"Chrome", "chrome.exe", `Software\Google\Chrome\BLBeacon`},
-	{"Edge", "msedge.exe", `Software\Microsoft\Edge\BLBeacon`},
+var browsers = []struct {
+	name, exe string
+	versions  []browserVersionKey
+}{
+	{"Chrome", "chrome.exe", []browserVersionKey{
+		{registry.LOCAL_MACHINE, `SOFTWARE\Google\Chrome\BLBeacon`, "version", registry.WOW64_64KEY},
+		{registry.LOCAL_MACHINE, `SOFTWARE\Google\Chrome\BLBeacon`, "version", registry.WOW64_32KEY},
+		{registry.LOCAL_MACHINE, `SOFTWARE\Google\Update\Clients\{8A69D345-D564-463C-AFF1-A69D9E530F96}`, "pv", registry.WOW64_64KEY},
+		{registry.LOCAL_MACHINE, `SOFTWARE\Google\Update\Clients\{8A69D345-D564-463C-AFF1-A69D9E530F96}`, "pv", registry.WOW64_32KEY},
+		{registry.CURRENT_USER, `Software\Google\Chrome\BLBeacon`, "version", 0},
+	}},
+	{"Edge", "msedge.exe", []browserVersionKey{
+		{registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Edge\BLBeacon`, "version", registry.WOW64_64KEY},
+		{registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\EdgeUpdate\Clients\{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}`, "pv", registry.WOW64_32KEY},
+		{registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\EdgeUpdate\Clients\{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}`, "pv", registry.WOW64_64KEY},
+		{registry.CURRENT_USER, `Software\Microsoft\Edge\BLBeacon`, "version", 0},
+	}},
 }
 
 func detectBrowser(context.Context, Runner) (*Browser, error) {
@@ -153,9 +178,17 @@ func detectBrowser(context.Context, Runner) (*Browser, error) {
 			continue
 		}
 		out := &Browser{Name: b.name}
-		if k, err := registry.OpenKey(registry.CURRENT_USER, b.versionKey, registry.QUERY_VALUE); err == nil {
-			out.Version, _, _ = k.GetStringValue("version")
+		for _, v := range b.versions {
+			k, err := registry.OpenKey(v.root, v.path, registry.QUERY_VALUE|v.accessFlags)
+			if err != nil {
+				continue
+			}
+			version, _, err := k.GetStringValue(v.value)
 			k.Close()
+			if err == nil && version != "" {
+				out.Version = version
+				break
+			}
 		}
 		return out, nil
 	}
