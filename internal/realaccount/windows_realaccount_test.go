@@ -18,7 +18,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unsafe"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -445,26 +444,11 @@ func TestWindowsTheEndOfATerminalEndsWhatWMIStartedInIt(t *testing.T) {
 	}
 }
 
-// sessionExists says whether LSA still knows the logon session. The agent
-// account's session is not the caller's, so LSA answers "access denied" for
-// one that exists and "no such logon session" for one that does not.
-func sessionExists(id logonsweep.LUID) bool {
-	const statusNoSuchLogonSession = 0xC000022B
-	proc := windows.NewLazySystemDLL("secur32.dll").NewProc("LsaGetLogonSessionData")
-	free := windows.NewLazySystemDLL("secur32.dll").NewProc("LsaFreeReturnBuffer")
-	luid := windows.LUID{LowPart: uint32(id), HighPart: int32(id >> 32)}
-	var data uintptr
-	r, _, _ := proc.Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&data)))
-	if r == 0 {
-		_, _, _ = free.Call(data)
-	}
-	return r != statusNoSuchLogonSession
-}
-
 // CA-TERM-07 (real accounts, the release): when the mestre-pty ends, the
-// launcher unloads the profile and closes the logon session of the terminal.
-// It runs alone (a serial test), because the user hive stays loaded while any
-// terminal of the account lives.
+// launcher unloads the profile. It runs alone (a serial test), because the user
+// hive stays loaded while any terminal of the account lives. That the logon
+// sessions are closed too is for tools/realaccount to check at the end: only an
+// administrator can list the sessions of another account.
 //
 //nolint:paralleltest // the profile is shared by every terminal of the account: nothing else may be running
 func TestWindowsTheProfileAndTheLogonSessionEndWithTheMestrePTY(t *testing.T) {
@@ -487,18 +471,16 @@ func TestWindowsTheProfileAndTheLogonSessionEndWithTheMestrePTY(t *testing.T) {
 	if err != nil {
 		t.Fatalf("logon session %q: %v", rep["logon session"], err)
 	}
-	session := logonsweep.LUID(id)
+	if rep["logon session"] == "" || id == 0 {
+		t.Fatal("the terminal did not say its logon session")
+	}
 	if !loaded() {
 		t.Error("the profile is not loaded while the terminal runs")
-	}
-	if !sessionExists(session) {
-		t.Fatalf("logon session %#x unknown to LSA while the terminal runs", id)
 	}
 
 	terminatePTY(term)
 	ctx := ctxFor(t)
 	until(ctx, t, "the profile unloaded", func() bool { return !loaded() })
-	until(ctx, t, "the logon session closed", func() bool { return !sessionExists(session) })
 }
 
 // CA-COFRE-08 (the part that runs in the CI): under the virtual service

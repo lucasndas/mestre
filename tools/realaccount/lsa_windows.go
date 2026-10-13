@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -113,4 +114,49 @@ func enableRestore() error {
 	tp := windows.Tokenprivileges{PrivilegeCount: 1}
 	tp.Privileges[0] = windows.LUIDAndAttributes{Luid: luid, Attributes: windows.SE_PRIVILEGE_ENABLED}
 	return windows.AdjustTokenPrivileges(tok, false, &tp, 0, nil, nil)
+}
+
+var (
+	secur32                    = windows.NewLazySystemDLL("secur32.dll")
+	procLsaEnumerateSessions   = secur32.NewProc("LsaEnumerateLogonSessions")
+	procLsaGetLogonSessionData = secur32.NewProc("LsaGetLogonSessionData")
+	procLsaFreeReturnBuffer    = secur32.NewProc("LsaFreeReturnBuffer")
+)
+
+// logonSessionData is the head of SECURITY_LOGON_SESSION_DATA, up to the
+// field that is read.
+type logonSessionData struct {
+	Size                  uint32
+	LogonID               windows.LUID
+	UserName              lsaUnicodeString
+	LogonDomain           lsaUnicodeString
+	AuthenticationPackage lsaUnicodeString
+	LogonType             uint32
+}
+
+// sessionsOf lists the logon sessions of the local account user, as LSA
+// describes them: only an administrator can read the sessions of others.
+func sessionsOf(user string) ([]uint64, error) {
+	var count uint32
+	var luids *windows.LUID
+	if r, _, _ := procLsaEnumerateSessions.Call(uintptr(unsafe.Pointer(&count)), uintptr(unsafe.Pointer(&luids))); r != 0 {
+		return nil, fmt.Errorf("LsaEnumerateLogonSessions: %w", ntStatus(r))
+	}
+	defer func() { _, _, _ = procLsaFreeReturnBuffer.Call(uintptr(unsafe.Pointer(luids))) }()
+	var found []uint64
+	for _, l := range unsafe.Slice(luids, count) {
+		var data *logonSessionData
+		if r, _, _ := procLsaGetLogonSessionData.Call(uintptr(unsafe.Pointer(&l)), uintptr(unsafe.Pointer(&data))); r != 0 {
+			continue // ended meanwhile
+		}
+		name := ""
+		if n := int(data.UserName.Length) / 2; n > 0 && data.UserName.Buffer != nil {
+			name = windows.UTF16ToString(unsafe.Slice(data.UserName.Buffer, n))
+		}
+		_, _, _ = procLsaFreeReturnBuffer.Call(uintptr(unsafe.Pointer(data)))
+		if strings.EqualFold(name, user) {
+			found = append(found, uint64(l.HighPart)<<32|uint64(l.LowPart))
+		}
+	}
+	return found, nil
 }

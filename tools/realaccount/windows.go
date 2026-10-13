@@ -214,10 +214,45 @@ func platformRun(ctx context.Context, out io.Writer, o options) (err error) {
 			err = fmt.Errorf("the tests failed (exit %q, %v)", strings.TrimSpace(string(code)), rerr)
 		}
 	}
+	// Every terminal has ended: the launcher must have unloaded the profile and
+	// closed every logon session of the agent account (CA-TERM-07). Only an
+	// administrator can list the sessions of another account, so it is
+	// checked here and not by the tests, which run as the engine.
+	if rerr := waitReleased(ctx, out); rerr != nil {
+		err = errors.Join(err, rerr)
+	}
 	if err != nil {
 		dumpLogs(out, stage)
 	}
 	return err
+}
+
+// waitReleased waits for the launcher to release the profile and every logon
+// session of the agent account, which it does when each mestre-pty ends.
+func waitReleased(ctx context.Context, out io.Writer) error {
+	sid, _, _, err := windows.LookupSID("", realaccount.WindowsAgentUser)
+	if err != nil {
+		return err
+	}
+	var sessions []uint64
+	var hive bool
+	for range 240 {
+		if sessions, err = sessionsOf(realaccount.WindowsAgentUser); err != nil {
+			return err
+		}
+		k, kerr := registry.OpenKey(registry.USERS, sid.String(), registry.QUERY_VALUE)
+		if hive = kerr == nil; hive {
+			_ = k.Close()
+		}
+		if len(sessions) == 0 && !hive {
+			fmt.Fprintln(out, "the launcher released the profile and every logon session of the agent account")
+			return nil
+		}
+		if err := clock.Sleep(ctx, clock.Real{}, 250*time.Millisecond); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("a minute after the last terminal ended, the agent account still has the logon sessions %#x (profile loaded: %v)", sessions, hive)
 }
 
 func createService(m *mgr.Mgr, name, account, exe string, args ...string) error {

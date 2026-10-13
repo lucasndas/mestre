@@ -18,8 +18,16 @@ const sioAFUnixGetPeerPID = 0x58000100
 // looked at again.
 const waitSliceMs = 100
 
+// denialWaitMs is how long KillTree waits for a process to end after
+// TerminateProcess said "access denied".
+const denialWaitMs = 5000
+
 // windowsSystem is the System of Windows.
-type windowsSystem struct{}
+type windowsSystem struct {
+	// terminate replaces TerminateProcess (the tests of a process that is
+	// already ending, which no test can arrange for real).
+	terminate func(windows.Handle) error
+}
 
 // NewSystem returns the System of this operating system.
 func NewSystem() System { return windowsSystem{} }
@@ -132,7 +140,19 @@ func (s windowsSystem) KillTree(ctx context.Context, p ProcID, _ []int) error {
 	if !running || (p.Start != "" && start != p.Start) {
 		return nil
 	}
-	if err := windows.TerminateProcess(h, 1); err != nil {
+	terminate := s.terminate
+	if terminate == nil {
+		terminate = func(h windows.Handle) error { return windows.TerminateProcess(h, 1) }
+	}
+	if err := terminate(h); err != nil {
+		// "Access denied" is also what Windows answers for a process that is
+		// already ending (the mestre-pty leaving after the stop, or the end of
+		// its agent): it is not a refusal if the process does end.
+		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			if ev, werr := windows.WaitForSingleObject(h, denialWaitMs); werr == nil && ev == windows.WAIT_OBJECT_0 {
+				return nil
+			}
+		}
 		return fmt.Errorf("terminate mestre-pty %d: %w", p.PID, err)
 	}
 	return s.WaitExit(ctx, p.PID)
