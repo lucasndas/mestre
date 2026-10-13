@@ -3,6 +3,7 @@ package machinesheet_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/machinesheet"
@@ -103,11 +104,13 @@ func TestProgramsAreFoundOnThePathWithoutStartingAnything(t *testing.T) {
 	writeFile(t, dir, "ffmpeg.EXE", 0o644)
 	other := t.TempDir()
 	path := other + string(os.PathListSeparator) + dir
-	if got := machinesheet.LookPath("git", path, machinesheet.OSLinux, ""); got != filepath.Join(dir, "git") {
-		t.Errorf("git = %q", got)
-	}
-	if got := machinesheet.LookPath("notexec", path, machinesheet.OSLinux, ""); got != "" {
-		t.Errorf("a file without the execute bit was found: %q", got)
+	if runtime.GOOS != "windows" { // a file has no execute bit on Windows
+		if got := machinesheet.LookPath("git", path, machinesheet.OSLinux, ""); got != filepath.Join(dir, "git") {
+			t.Errorf("git = %q", got)
+		}
+		if got := machinesheet.LookPath("notexec", path, machinesheet.OSLinux, ""); got != "" {
+			t.Errorf("a file without the execute bit was found: %q", got)
+		}
 	}
 	if got := machinesheet.LookPath("missing", path, machinesheet.OSLinux, ""); got != "" {
 		t.Errorf("missing = %q", got)

@@ -7,6 +7,7 @@ package sheetfake
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/lucasndas/mestre/internal/machinesheet"
@@ -225,7 +226,12 @@ func (r *Runner) Run(_ context.Context, exe string, _ ...string) (string, error)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.runs = append(r.runs, exe)
-	return r.out[exe], nil
+	for k, v := range r.out {
+		if strings.EqualFold(k, exe) { // Windows paths do not care about case
+			return v, nil
+		}
+	}
+	return "", nil
 }
 
 // Runs lists the programs run.
