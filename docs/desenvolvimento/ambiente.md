@@ -9,7 +9,7 @@ Referência para quem vai desenvolver (pessoa ou agente) numa máquina Linux. In
 | Desde | Ferramenta | Versão | Conferir com |
 |---|---|---|---|
 | M0 | Go, em `~/.local/go` | 1.27.2 (a `toolchain` do `go.mod`) | `go version` |
-| M0 | git | 2.32 ou maior ([ADR 0001](../decisoes/0001-stack-go.md)) | `git --version` |
+| M0 | git | a versão mínima de segurança do [ADR 0001](../decisoes/0001-stack-go.md) (por sistema) | `git --version` |
 | M0 | golangci-lint, binário em `~/.local/bin` | **2.14.0** (a que valida o `.golangci.yml`) | `golangci-lint version` |
 | M3 | `claude`, `codex` e `agy` | a mínima de cada documento: [Claude Code](../provedores/claude-code.md), [Codex](../provedores/codex.md), [Antigravity](../provedores/antigravity.md) | `claude --version`, `codex --version`, `agy --version` |
 | M5 | ffmpeg | a do sistema ([anexos e transcrição](../telegram/anexos-e-transcricao.md)) | `ffmpeg -version` |

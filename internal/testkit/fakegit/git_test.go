@@ -81,11 +81,11 @@ func TestFakeReportsUncommittedFileInWorktree(t *testing.T) {
 	}
 }
 
-func TestFakeNeverEchoesCredentials(t *testing.T) {
+func TestFakeRefusesCredentialsInURLsWithoutEchoingThem(t *testing.T) {
 	t.Parallel()
 	g := fakegit.NewGit(nil)
 	_, err := g.Clone(context.Background(), "https://user:ghp_secretsecretsecretsecret1234@example.invalid/o/r.git", filepath.Join(t.TempDir(), "x"), gitx.CloneOptions{Bare: true})
-	if !errors.Is(err, gitx.ErrNotARepo) {
+	if !errors.Is(err, gitx.ErrCredentialsInURL) {
 		t.Fatalf("err = %v", err)
 	}
 	if got := err.Error(); containsAny(got, "user:", "ghp_") {

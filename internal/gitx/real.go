@@ -36,7 +36,8 @@ type Options struct {
 	// Clock supplies the date of commits whose Signature has no When;
 	// default clock.Real.
 	Clock clock.Clock
-	// Masker hides secrets in errors; default logging.NewMasker().
+	// Masker hides secrets in errors. Required: the engine's shared masker,
+	// so the values the vault registered are hidden here too.
 	Masker *logging.Masker
 	// Env is KEY=VALUE pairs added last to the controlled environment of
 	// every git process (for example a different GIT_CONFIG_GLOBAL).
@@ -48,9 +49,11 @@ type Options struct {
 // Real implements Git over the system git binary. Every process runs with a
 // controlled environment: no GIT_* variable of the caller, no user or system
 // configuration, no hooks, no credential helpers, no prompts, English
-// messages. Operations that change refs, config or info/exclude run one at a
-// time per repository (all worktrees of a repository count as one); that
-// holds inside one Real, so a process builds a single Real and shares it.
+// messages, and the repository's own configuration cannot make git run a
+// command (globalArgs, noFilters). Operations that change refs, config or
+// info/exclude run one at a time per repository (all worktrees of a
+// repository count as one); reads run concurrently. That holds inside one
+// Real, so a process builds a single Real and shares it.
 type Real struct {
 	opts   Options
 	clk    clock.Clock
@@ -66,7 +69,10 @@ type Real struct {
 var _ Git = (*Real)(nil)
 
 // New returns a Real git. It starts no process until the first call.
-func New(opts Options) *Real {
+func New(opts Options) (*Real, error) {
+	if opts.Masker == nil {
+		return nil, errors.New("gitx: Options.Masker is required (the engine's shared masker)")
+	}
 	if opts.Binary == "" {
 		opts.Binary = "git"
 	}
@@ -77,14 +83,17 @@ func New(opts Options) *Real {
 	if g.clk == nil {
 		g.clk = clock.Real{}
 	}
-	if g.masker == nil {
-		g.masker = logging.NewMasker()
-	}
-	return g
+	return g, nil
 }
 
-// globalArgs are the -c settings of every call: nothing from the repository
-// or the user may run code (hooks, helpers) or change the output.
+// globalArgs are the -c settings of every call. The command line wins over
+// every configuration file, so nothing from the repository (whose config a
+// worktree user may be able to write) or the user may run a command (hooks,
+// fsmonitor, ssh, signature programs, upload-pack, credential and askpass
+// helpers, the ext:: transport), recurse into submodules, turn TLS checks
+// off or change the output. Filter drivers have per-driver names and are
+// neutralized per call (noFilters). No command gitx runs produces a diff,
+// so diff.external and textconv are never invoked.
 func globalArgs() []string {
 	null := os.DevNull
 	return []string{
@@ -92,7 +101,18 @@ func globalArgs() []string {
 		"-c", "core.excludesFile=" + null,
 		"-c", "core.attributesFile=" + null,
 		"-c", "core.fsmonitor=false",
+		"-c", "core.sshCommand=ssh",
+		"-c", "core.askPass=",
 		"-c", "credential.helper=",
+		"-c", "log.showSignature=false",
+		"-c", "merge.verifySignatures=false",
+		"-c", "commit.gpgSign=false",
+		"-c", "tag.gpgSign=false",
+		"-c", "protocol.ext.allow=never",
+		"-c", "protocol.git.allow=never",
+		"-c", "submodule.recurse=false",
+		"-c", "fetch.recurseSubmodules=false",
+		"-c", "http.sslVerify=true",
 		"-c", "gc.auto=0",
 		"-c", "maintenance.auto=false",
 		"-c", "advice.detachedHead=false",
@@ -126,7 +146,8 @@ func (g *Real) environFrom(base []string) []string {
 	return append(env, g.opts.Env...)
 }
 
-// Error is a failed git call. Args and Stderr are masked.
+// Error is a failed git call. Args and Stderr are masked: credentials in
+// URLs and every value the shared masker knows.
 type Error struct {
 	Args     []string
 	ExitCode int // -1 when git did not run to the end (killed, not started)
@@ -183,10 +204,29 @@ func (g *Real) mask(s string) string {
 	return g.masker.Mask(s)
 }
 
+// maskArg masks one argument piece by piece between path separators: a
+// known value or format inside a piece is hidden, while a long path is not
+// blanked as one high-entropy word.
+func (g *Real) maskArg(a string) string {
+	a = RedactURL(a)
+	var b strings.Builder
+	for {
+		i := strings.IndexAny(a, `/\`)
+		if i < 0 {
+			b.WriteString(g.masker.Mask(a))
+			return b.String()
+		}
+		b.WriteString(g.masker.Mask(a[:i]))
+		b.WriteByte(a[i])
+		a = a[i+1:]
+	}
+}
+
 type runOpts struct {
-	dir   string
-	stdin []byte
-	env   []string
+	dir    string
+	stdin  []byte
+	env    []string
+	config []string // extra -c settings, after globalArgs
 }
 
 // exec starts git once. It does not check the version.
@@ -197,7 +237,11 @@ func (g *Real) exec(ctx context.Context, ro runOpts, args ...string) ([]byte, er
 	if err := context.Cause(ctx); err != nil {
 		return nil, g.newError(args, -1, err, "")
 	}
-	cmd := exec.CommandContext(ctx, g.opts.Binary, append(globalArgs(), args...)...)
+	full := globalArgs()
+	for _, c := range ro.config {
+		full = append(full, "-c", c)
+	}
+	cmd := exec.CommandContext(ctx, g.opts.Binary, append(full, args...)...)
 	cmd.Dir = ro.dir
 	cmd.Env = append(g.environ(), ro.env...)
 	cmd.WaitDelay = waitDelay
@@ -232,7 +276,7 @@ func (g *Real) exec(ctx context.Context, ro runOpts, args ...string) ([]byte, er
 func (g *Real) newError(args []string, code int, cause error, output string) *Error {
 	e := &Error{Args: make([]string, len(args)), ExitCode: code, Err: cause}
 	for i, a := range args {
-		e.Args[i] = RedactURL(a) // not mask: entropy masking would blank the paths
+		e.Args[i] = g.maskArg(a)
 	}
 	if len(output) > maxStderr {
 		output = "..." + output[len(output)-maxStderr:]
@@ -273,13 +317,16 @@ func (g *Real) Version(ctx context.Context) (Version, error) {
 }
 
 // lock serializes the operations that change refs of one repository, shared
-// by all its worktrees (ADR 0004). It gives up when ctx is done.
+// by all its worktrees (ADR 0004). It gives up when ctx is done. The key is
+// the common dir in a canonical form (lockKey), so two spellings of the
+// same folder share one lock.
 func (g *Real) lock(ctx context.Context, common string) (unlock func(), err error) {
+	key := lockKey(common)
 	g.lockMu.Lock()
-	ch, ok := g.locks[common]
+	ch, ok := g.locks[key]
 	if !ok {
 		ch = make(chan struct{}, 1)
-		g.locks[common] = ch
+		g.locks[key] = ch
 	}
 	g.lockMu.Unlock()
 	select {
@@ -316,21 +363,43 @@ func (g *Real) Init(ctx context.Context, dir string, opts InitOptions) (Repo, er
 // Clone implements Git. A relative local url is resolved from the working
 // directory of the process.
 func (g *Real) Clone(ctx context.Context, url, dir string, opts CloneOptions) (Repo, error) {
+	if err := CheckURL(url); err != nil {
+		return nil, fmt.Errorf("clone: %w", err)
+	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("clone into %s: %w", dir, err)
 	}
-	args := []string{"clone", "-q"}
+	ro, err := g.authOpts(opts.Auth)
+	if err != nil {
+		return nil, fmt.Errorf("clone %s: %w", url, err)
+	}
+	args := []string{"clone", "-q", "--no-recurse-submodules", "--upload-pack=git-upload-pack"}
 	if opts.Bare {
 		args = append(args, "--bare")
 	}
-	if _, err := g.run(ctx, runOpts{}, append(args, "--", url, abs)...); err != nil {
+	if _, err := g.run(ctx, ro, append(args, "--", url, abs)...); err != nil {
 		if has(err, "already exists and is not an empty directory") {
 			err = as(ErrPathExists, err)
 		}
 		return nil, fmt.Errorf("clone %s: %w", RedactURL(url), err)
 	}
 	return g.Open(ctx, abs)
+}
+
+// authOpts puts auth in the environment of the call and registers its
+// secrets in the masker.
+func (g *Real) authOpts(auth *Auth) (runOpts, error) {
+	if auth == nil {
+		return runOpts{}, nil
+	}
+	if err := auth.Validate(); err != nil {
+		return runOpts{}, err
+	}
+	for _, s := range auth.secrets() {
+		g.masker.Register(s)
+	}
+	return runOpts{env: auth.env()}, nil
 }
 
 // Open implements Git.

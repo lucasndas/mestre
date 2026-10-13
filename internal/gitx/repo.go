@@ -26,6 +26,51 @@ func (r *repo) git(ctx context.Context, args ...string) ([]byte, error) {
 	return r.g.run(ctx, runOpts{dir: r.dir}, args...)
 }
 
+// noFilters returns the options of a call that may read or write files of a
+// working tree (add, commit, status, checkout): every filter driver defined
+// in the configuration the repository sees is emptied on the command line,
+// so a driver set in a config file the engine does not control never runs
+// as the engine. A driver added between this listing and the call is the
+// residual risk; the configuration of the mirror is not writable by
+// mestre-agente (docs/arquitetura/seguranca.md#git-do-motor).
+func (r *repo) noFilters(ctx context.Context) (runOpts, error) {
+	ro := runOpts{dir: r.dir}
+	out, err := r.git(ctx, "config", "--null", "--name-only", "--get-regexp", `^filter\.`)
+	if err != nil {
+		if exitedWithoutMessage(err, 1) {
+			return ro, nil // no filter configured
+		}
+		return ro, fmt.Errorf("list filter drivers: %w", err)
+	}
+	seen := map[string]bool{}
+	for key := range strings.SplitSeq(string(out), "\x00") {
+		key = strings.TrimSpace(key)
+		dot := strings.LastIndexByte(key, '.')
+		if !strings.HasPrefix(strings.ToLower(key), "filter.") || dot <= len("filter.") {
+			continue
+		}
+		driver := key[len("filter."):dot]
+		if seen[driver] {
+			continue
+		}
+		seen[driver] = true
+		ro.config = append(ro.config,
+			"filter."+driver+".clean=", "filter."+driver+".smudge=",
+			"filter."+driver+".process=", "filter."+driver+".required=false")
+	}
+	return ro, nil
+}
+
+// treeGit runs a command that touches the working tree with noFilters.
+func (r *repo) treeGit(ctx context.Context, ro runOpts, args ...string) ([]byte, error) {
+	safe, err := r.noFilters(ctx)
+	if err != nil {
+		return nil, err
+	}
+	safe.stdin, safe.env = ro.stdin, ro.env
+	return r.g.run(ctx, safe, args...)
+}
+
 // mutate runs fn holding the lock of the repository.
 func (r *repo) mutate(ctx context.Context, fn func() error) error {
 	unlock, err := r.g.lock(ctx, r.common)
@@ -60,6 +105,9 @@ func (r *repo) GetConfig(ctx context.Context, key string) (string, error) {
 func (r *repo) SetConfig(ctx context.Context, key, value string) error {
 	if err := ValidateRef(key); err != nil {
 		return err
+	}
+	if err := CheckConfig(key, value); err != nil {
+		return fmt.Errorf("set config %s: %w", key, err)
 	}
 	return r.mutate(ctx, func() error {
 		if _, err := r.git(ctx, "config", "--", key, value); err != nil {
@@ -220,10 +268,28 @@ func (r *repo) ReadFile(ctx context.Context, ref, path string) ([]byte, error) {
 }
 
 func (r *repo) Fetch(ctx context.Context, remote string, refspecs ...string) error {
+	return r.fetch(ctx, nil, remote, refspecs...)
+}
+
+func (r *repo) FetchWithAuth(ctx context.Context, auth Auth, remote string, refspecs ...string) error {
+	return r.fetch(ctx, &auth, remote, refspecs...)
+}
+
+func (r *repo) fetch(ctx context.Context, auth *Auth, remote string, refspecs ...string) error {
 	if err := ValidateRef(remote); err != nil {
 		return err
 	}
-	args := []string{"fetch", "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--", remote}
+	if err := CheckURL(remote); err != nil {
+		return fmt.Errorf("fetch: %w", err)
+	}
+	ro, err := r.g.authOpts(auth)
+	if err != nil {
+		return fmt.Errorf("fetch %s: %w", remote, err)
+	}
+	ro.dir = r.dir
+	// --upload-pack: the command run for a local or ssh remote comes from
+	// here, never from remote.<name>.uploadpack in the repository config.
+	args := []string{"fetch", "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--upload-pack=git-upload-pack", "--", remote}
 	for _, s := range refspecs {
 		if err := ValidateRef(s); err != nil {
 			return err
@@ -231,7 +297,7 @@ func (r *repo) Fetch(ctx context.Context, remote string, refspecs ...string) err
 		args = append(args, s)
 	}
 	return r.mutate(ctx, func() error {
-		_, err := r.git(ctx, args...)
+		_, err := r.g.run(ctx, ro, args...)
 		switch {
 		case err == nil:
 			return nil
@@ -331,7 +397,7 @@ func (r *repo) AddWorktree(ctx context.Context, path string, opts WorktreeOption
 		args = append(args, "--", abs, opts.Branch)
 	}
 	err = r.mutate(ctx, func() error {
-		_, err := r.git(ctx, args...)
+		_, err := r.treeGit(ctx, runOpts{}, args...)
 		switch {
 		case err == nil:
 			return nil
@@ -363,7 +429,7 @@ func (r *repo) RemoveWorktree(ctx context.Context, path string, force bool) erro
 	}
 	args = append(args, "--", abs)
 	return r.mutate(ctx, func() error {
-		_, err := r.git(ctx, args...)
+		_, err := r.treeGit(ctx, runOpts{}, args...)
 		switch {
 		case err == nil:
 			return nil
@@ -388,7 +454,7 @@ func (r *repo) Status(ctx context.Context) ([]StatusEntry, error) {
 	if err := r.needTree(); err != nil {
 		return nil, err
 	}
-	out, err := r.git(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
+	out, err := r.treeGit(ctx, runOpts{}, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
 	if err != nil {
 		return nil, fmt.Errorf("status: %w", err)
 	}
@@ -405,7 +471,7 @@ func (r *repo) Stage(ctx context.Context, paths ...string) error {
 		args = append(args, paths...)
 	}
 	return r.mutate(ctx, func() error {
-		if _, err := r.git(ctx, args...); err != nil {
+		if _, err := r.treeGit(ctx, runOpts{}, args...); err != nil {
 			return fmt.Errorf("stage: %w", err)
 		}
 		return nil
@@ -442,7 +508,7 @@ func (r *repo) Commit(ctx context.Context, opts CommitOptions) (Hash, error) {
 	}
 	var head Hash
 	err := r.mutate(ctx, func() error {
-		_, err := r.g.run(ctx, runOpts{dir: r.dir, stdin: []byte(opts.Message), env: env}, args...)
+		_, err := r.treeGit(ctx, runOpts{stdin: []byte(opts.Message), env: env}, args...)
 		if err != nil {
 			if has(err, "nothing to commit", "no changes added to commit", "nothing added to commit") {
 				err = as(ErrNothingToCommit, err)
@@ -464,7 +530,7 @@ func (r *repo) MergeFFOnly(ctx context.Context, ref string) (Hash, error) {
 	}
 	var head Hash
 	err := r.mutate(ctx, func() error {
-		_, err := r.git(ctx, "merge", "--ff-only", "--no-edit", "--quiet", ref)
+		_, err := r.treeGit(ctx, runOpts{}, "merge", "--ff-only", "--no-edit", "--no-stat", "--quiet", ref)
 		switch {
 		case err == nil:
 		case has(err, "not possible to fast-forward"):

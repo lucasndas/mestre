@@ -1,5 +1,5 @@
-// Package gitx is the single wrapper around the system git binary (2.32 or
-// newer; docs/decisoes/0001-stack-go.md). Nothing else in the Mestre starts
+// Package gitx is the single wrapper around the system git binary (MinVersion
+// or newer; docs/decisoes/0001-stack-go.md). Nothing else in the Mestre starts
 // git or links a Go git library. The package declares the operations the
 // engine needs (mirror, worktrees, bundles, info/exclude, skip-worktree,
 // fast-forward merges, commits with explicit identities) as two small
@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"time"
 )
 
@@ -42,9 +43,24 @@ var (
 	ErrConfigNotSet               = errors.New("gitx: config key not set")
 )
 
-// MinVersion is the oldest supported git (GIT_CONFIG_GLOBAL, used for the
-// per-character identity, exists from 2.32).
-var MinVersion = Version{Major: 2, Minor: 32}
+// MinVersion is the oldest supported git on this system, a security floor
+// (docs/decisoes/0001-stack-go.md): it is past the safe.directory fix
+// (CVE-2022-24765, 2.35.2) and every feature gitx uses (GIT_CONFIG_GLOBAL
+// 2.32, GIT_CONFIG_COUNT 2.31).
+var MinVersion = MinVersionFor(runtime.GOOS)
+
+// MinVersionFor is the floor for a GOOS. Linux: 2.43.0, the git of Ubuntu
+// 24.04 LTS, the reference distribution; distributions backport security
+// fixes without changing the version, so the floor is its package. Windows:
+// 2.50.1, because Git for Windows never backports and that release closes
+// the last clone and credential-helper CVEs (CVE-2024-32002, CVE-2025-48384,
+// CVE-2025-48386).
+func MinVersionFor(goos string) Version {
+	if goos == "windows" {
+		return Version{Major: 2, Minor: 50, Patch: 1}
+	}
+	return Version{Major: 2, Minor: 43}
+}
 
 // Version is a git version; Raw is the output of `git version`.
 type Version struct {
@@ -148,6 +164,9 @@ type CloneOptions struct {
 	// Bare clones without a working tree: the workspace mirror
 	// (docs/orquestracao/workspaces.md#espelho-e-clone-principal-na-cidadela).
 	Bare bool
+	// Auth authenticates an HTTP(S) url through the environment of git; it
+	// is not kept in the clone.
+	Auth *Auth
 }
 
 // WorktreeOptions configures Repo.AddWorktree.
@@ -175,8 +194,8 @@ type Git interface {
 	Version(ctx context.Context) (Version, error)
 	// Init creates a repository in dir (created if missing).
 	Init(ctx context.Context, dir string, opts InitOptions) (Repo, error)
-	// Clone copies url (a URL or a local path) into dir. Credentials may
-	// be part of url; errors never include them.
+	// Clone copies url (a URL or a local path) into dir. A url with
+	// credentials is refused (ErrCredentialsInURL): they go in opts.Auth.
 	Clone(ctx context.Context, url, dir string, opts CloneOptions) (Repo, error)
 	// Open returns the repository or worktree rooted at dir, or ErrNotARepo.
 	Open(ctx context.Context, dir string) (Repo, error)
@@ -184,7 +203,8 @@ type Git interface {
 
 // Repo is one repository or one of its worktrees. Worktrees of a repository
 // share refs and objects; implementations serialize the operations that
-// change them (docs/decisoes/0004-mesa-igual-worktree.md).
+// change them, while reads run concurrently
+// (docs/decisoes/0004-mesa-igual-worktree.md).
 type Repo interface {
 	// Dir is the path the repository was opened with.
 	Dir() string
@@ -214,8 +234,11 @@ type Repo interface {
 	// ErrFileNotFound).
 	ReadFile(ctx context.Context, ref, path string) ([]byte, error)
 
-	// Fetch fetches refspecs from a remote name or URL.
+	// Fetch fetches refspecs from a remote name, URL or path. A URL with
+	// credentials is refused (ErrCredentialsInURL).
 	Fetch(ctx context.Context, remote string, refspecs ...string) error
+	// FetchWithAuth is Fetch with auth handed to git in its environment.
+	FetchWithAuth(ctx context.Context, auth Auth, remote string, refspecs ...string) error
 	// CreateBundle writes a bundle of revs (a ref such as "main" or an
 	// incremental range such as "<hash>..main"). ErrEmptyBundle when the
 	// range holds no commit.
