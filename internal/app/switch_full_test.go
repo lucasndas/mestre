@@ -338,7 +338,7 @@ func TestTheCitadelFallsATowerIsPromotedTheOtherFollowsAndTheOldOneReturnsAsATow
 
 	// b stops; two more reach only c; then the Citadel stops for good
 	w.kill(b)
-	lsn4 := w.mark(a, "t4")
+	lsn4 := w.mark(a, "t4") // at least the lsn of t4: other writes may come between
 	lsn5 := w.mark(a, "t5")
 	w.waitFor("c to apply t4-t5", 0, connected(c, 1, lsn5))
 	w.kill(a)
@@ -393,18 +393,38 @@ func TestTheCitadelFallsATowerIsPromotedTheOtherFollowsAndTheOldOneReturnsAsATow
 	if _, err := os.Stat(filepath.Join(a.dir, "banco", "descartado-1.db")); err != nil {
 		t.Errorf("the old Citadel did not keep its database: %v", err)
 	}
-	var discarded []uint64
+	// The audit names each lost row by table and key: t4 and t5, which only
+	// the old Citadel (and c, before the full copy) had.
+	var (
+		discarded []uint64
+		lostKeys  []string
+	)
 	w.waitFor("the audit of the new Citadel to list the discarded transactions", 500*time.Millisecond, func() bool {
-		r := w.must(b, map[string]string{"op": "query", "sql": `SELECT json_extract(detail, '$.lsn') FROM audit_log WHERE action = 'citadel.discarded' AND json_extract(detail, '$.lsn') IS NOT NULL ORDER BY 1`})
-		discarded = discarded[:0]
+		r := w.must(b, map[string]string{"op": "query", "sql": `SELECT json_extract(detail, '$.lsn'), json_extract(detail, '$.changes') FROM audit_log WHERE action = 'citadel.discarded' AND json_extract(detail, '$.lsn') IS NOT NULL ORDER BY 1`})
+		discarded, lostKeys = discarded[:0], lostKeys[:0]
 		for _, row := range r.Rows {
 			discarded = append(discarded, uint64(row[0].(float64)))
+			var changes []struct {
+				Table string `json:"table"`
+				Key   []any  `json:"key"`
+			}
+			_ = json.Unmarshal([]byte(fmt.Sprint(row[1])), &changes)
+			for _, c := range changes {
+				if c.Table == "audit_log" && len(c.Key) == 1 {
+					lostKeys = append(lostKeys, fmt.Sprint(c.Key[0]))
+				}
+			}
 		}
 		return len(discarded) > 0
 	})
-	for _, want := range []uint64{lsn4, lsn5} {
-		if !slices.Contains(discarded, want) {
-			t.Errorf("the discarded transactions %v do not list the lsn %d (t4, t5)", discarded, want)
+	for _, want := range []string{"t4", "t5"} {
+		if !slices.Contains(lostKeys, want) {
+			t.Errorf("the discarded transactions %v (rows %v) do not list %s", discarded, lostKeys, want)
+		}
+	}
+	for _, k := range lostKeys {
+		if k == "t1" || k == "t2" || k == "t3" {
+			t.Errorf("%s is listed as discarded, but the new Citadel has it", k)
 		}
 	}
 	for _, l := range discarded {
