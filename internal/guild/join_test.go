@@ -56,7 +56,7 @@ func (r *rig) ask(t *testing.T, name, ip string) (guild.JoinTicket, guild.Approv
 	return ticket, <-r.approver.asked
 }
 
-// CA-GUILDA-02
+// Part of CA-GUILDA-02, which closes in M5 with the button and the PIN of the bot.
 func TestBothSidesComputeTheSameCodeAndTheOwnerAcceptingIssuesTheCertificates(t *testing.T) {
 	t.Parallel()
 	clk := clock.NewFake(day0)
@@ -133,7 +133,7 @@ func TestBothSidesComputeTheSameCodeAndTheOwnerAcceptingIssuesTheCertificates(t 
 	}
 }
 
-// CA-GUILDA-02
+// Part of CA-GUILDA-02, which closes in M5 with the button and the PIN of the bot.
 func TestAnOwnerWhoRefusesIssuesNothingAndTheMachineKeepsNoCA(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, clock.NewFake(day0))
@@ -502,6 +502,89 @@ func TestTheCommitmentBindsTheNonceAndARepeatedRevealAsksOnce(t *testing.T) {
 	}
 	if r.countWhere("join_requests", "remote_ip = ?", "10.0.0.3") != 0 {
 		t.Error("a malformed request was stored")
+	}
+}
+
+// A request that does not reveal its nonce in 90 s is over: it holds none of
+// the five places, its reveal is refused, and it counts toward the alert of
+// the refusals, so codes cannot be tried at leisure behind the Owner's back.
+func TestARequestThatDoesNotRevealItsNonceExpiresSoonAndCountsAsARefusal(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(day0)
+	r := newRig(t, clk)
+	ctx := t.Context()
+	var nonces [][]byte
+	var tickets []guild.JoinTicket
+	for i := range 5 {
+		req, nonce := rawRequest(t, fmt.Sprintf("u%d", i))
+		tk, err := r.citadel.Begin(ctx, req, fmt.Sprintf("10.0.2.%d", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		tickets, nonces = append(tickets, tk), append(nonces, nonce)
+	}
+	req, _ := rawRequest(t, "u5")
+	if _, err := r.citadel.Begin(ctx, req, "10.0.2.50"); !errors.Is(err, guild.ErrTooManyPending) {
+		t.Fatalf("a sixth request with five unrevealed = %v, want ErrTooManyPending", err)
+	}
+	clk.Advance(guild.RevealWithin)
+	if _, err := r.citadel.Begin(ctx, req, "10.0.2.50"); err != nil {
+		t.Fatalf("after the time to reveal, the unrevealed still hold the places: %v", err)
+	}
+	if err := r.citadel.Reveal(ctx, tickets[0].JoinID, nonces[0]); !errors.Is(err, guild.ErrExpired) {
+		t.Fatalf("a reveal after the time = %v, want ErrExpired", err)
+	}
+	if st, _ := r.citadel.Status(ctx, tickets[1].JoinID, 0); st.State != guild.JoinExpired {
+		t.Errorf("an unrevealed request after the time is %s", st.State)
+	}
+	if n, err := r.citadel.Sweep(ctx); err != nil || n != 3 {
+		t.Errorf("Sweep = %d, %v; want the other three", n, err)
+	}
+	if r.approver.questions() != 0 {
+		t.Errorf("the Owner was asked %d times about requests without a code", r.approver.questions())
+	}
+	// fifteen refusals and the five unrevealed make the twenty of the alert
+	for i := range 15 {
+		_, q := r.ask(t, fmt.Sprintf("r%d", i), fmt.Sprintf("10.0.3.%d", i))
+		if err := r.owner.answer(q.JoinID, "1234", guild.Decision{Accept: false}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.hooks.mu.Lock()
+	got := slices.Clone(r.hooks.alerts)
+	r.hooks.mu.Unlock()
+	if !slices.Equal(got, []int{20}) {
+		t.Errorf("the alerts are %v, want one at 20", got)
+	}
+}
+
+// Reveals of the same request at once ask the Owner one time.
+func TestConcurrentRevealsOfOneRequestAskTheOwnerOnce(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, clock.NewFake(day0))
+	ctx := t.Context()
+	release := make(chan struct{})
+	r.approver.mu.Lock()
+	r.approver.auto = func(guild.ApprovalRequest) { <-release }
+	r.approver.mu.Unlock()
+	req, nonce := rawRequest(t, "twice")
+	tk, err := r.citadel.Begin(ctx, req, "10.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	errs := make(chan error, 3)
+	for range 3 {
+		go func() { errs <- r.citadel.Reveal(ctx, tk.JoinID, nonce) }()
+	}
+	<-r.approver.asked
+	close(release)
+	for range 3 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := r.approver.questions(); n != 1 {
+		t.Errorf("the Owner was asked %d times for one request", n)
 	}
 }
 

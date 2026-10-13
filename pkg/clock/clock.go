@@ -37,6 +37,52 @@ type Ticker interface {
 // Since returns the time elapsed since t according to c.
 func Since(c Clock, t time.Time) time.Duration { return c.Now().Sub(t) }
 
+// Monotonic is a Clock that reads its monotonic clock apart from the wall
+// one (the Fake). The Real clock needs none: its Now carries the monotonic
+// reading of the system.
+type Monotonic interface {
+	// Monotonic is the reading of the monotonic clock: only its differences
+	// mean anything.
+	Monotonic() time.Duration
+}
+
+// Stamp is one instant as the two clocks read it: the wall clock, and the
+// monotonic one, which the wall clock does not move (a change of the date)
+// and which, on Linux, does not count the time the machine slept.
+type Stamp struct {
+	wall time.Time
+	mono time.Duration
+}
+
+// StampOf reads both clocks of c now.
+func StampOf(c Clock) Stamp {
+	s := Stamp{wall: c.Now()}
+	if m, ok := c.(Monotonic); ok {
+		s.mono = m.Monotonic()
+	}
+	return s
+}
+
+// IsZero says whether s was never read.
+func (s Stamp) IsZero() bool { return s.wall.IsZero() }
+
+// Wall is the wall time of s.
+func (s Stamp) Wall() time.Time { return s.wall }
+
+// Since says how much time passed after s, by the wall clock and by the
+// monotonic one. A rule that must hold by both clocks (the lease of the
+// lock, docs/guilda/trava-no-github.md#aluguel) takes the larger.
+func (s Stamp) Since(c Clock) (wall, mono time.Duration) {
+	now := c.Now()
+	wall = now.Round(0).Sub(s.wall.Round(0))
+	if m, ok := c.(Monotonic); ok {
+		return wall, m.Monotonic() - s.mono
+	}
+	// Times of the Real clock carry the monotonic reading of the system, and
+	// Sub uses it when both have one.
+	return wall, now.Sub(s.wall)
+}
+
 // Sleep blocks for d according to c, or until ctx is done.
 func Sleep(ctx context.Context, c Clock, d time.Duration) error {
 	t := c.NewTimer(d)

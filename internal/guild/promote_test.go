@@ -5,10 +5,12 @@ import (
 	"errors"
 	"net"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -80,13 +82,70 @@ func TestTheNewEpochRecordsWhereItStartsAndTheLostTransactionsAreAuditedOnce(t *
 	}
 
 	p := &protocol.GuildDiscarded{Epoch: 1, FromLSN: from, Total: total, Transactions: txs}
+	// Only the Citadel of the epoch 1 reports what it lost, and from where
+	// the epoch 2 started: another machine, or another lsn, is refused.
+	handle := guild.DiscardedHandler(func() *store.DB { return gdb }, clk)
+	for _, bad := range []struct {
+		peer protocol.Peer
+		p    *protocol.GuildDiscarded
+	}{
+		{protocol.Peer{Role: protocol.RoleMachine, ID: "b"}, p},
+		{protocol.Peer{Role: protocol.RoleGuardian, ID: f.MachineID}, p},
+		{protocol.Peer{Role: protocol.RoleMachine, ID: f.MachineID}, &protocol.GuildDiscarded{Epoch: 1, FromLSN: from + 1, Total: total, Transactions: txs}},
+		{protocol.Peer{Role: protocol.RoleMachine, ID: "b"}, &protocol.GuildDiscarded{Epoch: 2, FromLSN: from, Total: total, Transactions: txs}},
+	} {
+		if _, err := handle(ctx, &protocol.Message{Payload: bad.p, Peer: bad.peer}); err == nil {
+			t.Errorf("guild.discarded of epoch %d from %v (from %d) was taken", bad.p.Epoch, bad.peer, bad.p.FromLSN)
+		}
+	}
+	if got, err := guild.Discarded(ctx, gdb); err != nil || len(got) != 0 {
+		t.Fatalf("a refused report entered the audit: %+v, %v", got, err)
+	}
 	for range 2 {
-		if err := guild.RecordDiscarded(ctx, gdb, clk, "a", p); err != nil {
+		if _, err := handle(ctx, &protocol.Message{Payload: p, Peer: protocol.Peer{Role: protocol.RoleMachine, ID: f.MachineID}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	got, err := guild.Discarded(ctx, gdb)
-	if err != nil || len(got) != 1 || got[0].LSN != txs[0].LSN || got[0].Epoch != 1 || got[0].MachineID != "a" {
+	if err != nil || len(got) != 1 || got[0].LSN != txs[0].LSN || got[0].Epoch != 1 || got[0].MachineID != f.MachineID {
 		t.Fatalf("the audit lists %+v, %v; want the one transaction, once", got, err)
+	}
+
+	// the external actions the fence of the old Citadel dropped enter the
+	// audit too, once
+	p.Dropped = []string{"github.comment", "telegram.send"}
+	for range 2 {
+		if _, err := handle(ctx, &protocol.Message{Payload: p, Peer: protocol.Peer{Role: protocol.RoleMachine, ID: f.MachineID}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var dropped []string
+	rows, err := gdb.Reader().QueryContext(ctx, `SELECT detail FROM audit_log WHERE action = ?`, guild.DroppedAction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		dropped = append(dropped, d)
+	}
+	if len(dropped) != 1 || !strings.Contains(dropped[0], "github.comment") || !strings.Contains(dropped[0], "telegram.send") {
+		t.Errorf("the audit of the dropped actions: %v", dropped)
+	}
+
+	// a refused certificate of epoch enters the audit once per epoch,
+	// Citadel and reason
+	bad := protocol.Certificate{GuildID: f.GuildID, Epoch: 9, CitadelMachineID: "x"}
+	for range 3 {
+		if err := guild.RecordRefused(ctx, gdb, clk, f.MachineID, bad, guild.ErrWrongGuild); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var refused int
+	if err := gdb.Reader().QueryRowContext(ctx, `SELECT count(*) FROM audit_log WHERE action = ?`, guild.RefusedAction).Scan(&refused); err != nil || refused != 1 {
+		t.Errorf("the audit has %d refused certificates (%v), want 1", refused, err)
 	}
 }

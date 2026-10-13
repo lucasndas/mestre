@@ -98,8 +98,9 @@ type FenceConfig struct {
 	// Interval, Validity and Wait default to LeaseInterval, LeaseValidity
 	// and PromotedWait.
 	Interval, Validity, Wait time.Duration
-	// Promoted starts the fence in FenceWaiting: the machine just won the
-	// epoch, and the wait counts from Run.
+	// Promoted starts the fence in FenceWaiting: the machine won the epoch,
+	// and the wait counts from Run. A Citadel that restarts during the wait
+	// sets Wait to what was left of it (WaitLeft).
 	Promoted bool
 	// OnHigher is told the epoch the lock shows when it is higher than this
 	// one: the engine demotes itself to a Tower.
@@ -125,12 +126,13 @@ type held struct {
 // demotion when the lock shows a higher epoch. What would go out meanwhile
 // waits in a queue, in order.
 type Fence struct {
-	cfg  FenceConfig
-	kick chan struct{}
+	cfg   FenceConfig
+	kick  chan struct{}
+	flush chan struct{} // wakes the flusher
 
 	mu     sync.Mutex
 	state  FenceState
-	sent   time.Time // the last check that confirmed the epoch was sent then
+	sent   clock.Stamp // the last check that confirmed the epoch was sent then
 	leased bool
 	queue  []held
 	err    error // the last failure of a check
@@ -161,7 +163,7 @@ func NewFence(cfg FenceConfig) *Fence {
 	case cfg.Promoted:
 		st = FenceWaiting
 	}
-	return &Fence{cfg: cfg, kick: make(chan struct{}, 1), state: st}
+	return &Fence{cfg: cfg, kick: make(chan struct{}, 1), flush: make(chan struct{}, 1), state: st}
 }
 
 // State is the state of the fence now.
@@ -188,37 +190,39 @@ func acting(s FenceState) bool {
 
 // leaseValid: the lease runs out by the first of the two clocks to pass the
 // validity, the monotonic one and the wall one, because the monotonic clock of
-// Linux does not count the time the machine slept.
-func (f *Fence) leaseValidLocked(now time.Time) bool {
+// Linux does not count the time the machine slept. A clock that went back
+// does not lengthen it either.
+func (f *Fence) leaseValidLocked() bool {
 	if !f.leased {
 		return false
 	}
+	wall, mono := f.sent.Since(f.cfg.Clock)
 	v := f.cfg.Validity
-	return now.Sub(f.sent) < v && now.Round(0).Sub(f.sent.Round(0)) < v
+	return wall < v && mono < v && wall >= 0 && mono >= 0
 }
 
 // LeaseValid says whether a GitHub call may start now.
 func (f *Fence) LeaseValid() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.leaseValidLocked(f.cfg.Clock.Now())
+	return f.leaseValidLocked()
 }
 
 // Allow says whether an external action of this kind may go now.
 func (f *Fence) Allow(kind External) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.allowLocked(kind, f.cfg.Clock.Now())
+	return f.allowLocked(kind)
 }
 
-func (f *Fence) allowLocked(kind External, now time.Time) error {
+func (f *Fence) allowLocked(kind External) error {
 	if f.state == FenceDemoted {
 		return ErrDemoted
 	}
 	if !acting(f.state) {
 		return &FencedError{State: f.state, Kind: kind}
 	}
-	if kind == ExternalGitHub && !f.leaseValidLocked(now) {
+	if kind == ExternalGitHub && !f.leaseValidLocked() {
 		st := f.state
 		if st == FenceConfirmed {
 			st = FenceLockDown
@@ -229,11 +233,12 @@ func (f *Fence) allowLocked(kind External, now time.Time) error {
 }
 
 // Do runs an external action now, if the fence allows it, or keeps it in the
-// queue, in order, for when it does. queued says which. A demoted Citadel
-// runs and keeps nothing (ErrDemoted).
+// queue, in order, for when it does. queued says which: a queued action runs
+// later on the flusher of Run, with the context of Run, never on the caller.
+// A demoted Citadel runs and keeps nothing (ErrDemoted).
 func (f *Fence) Do(ctx context.Context, kind External, name string, fn func(ctx context.Context) error) (queued bool, err error) {
 	f.mu.Lock()
-	err = f.allowLocked(kind, f.cfg.Clock.Now())
+	err = f.allowLocked(kind)
 	if errors.Is(err, ErrDemoted) {
 		f.mu.Unlock()
 		return false, err
@@ -241,11 +246,18 @@ func (f *Fence) Do(ctx context.Context, kind External, name string, fn func(ctx 
 	if err != nil || f.waitingLocked(kind) { // the order of each kind holds
 		f.queue = append(f.queue, held{kind: kind, name: name, fn: fn})
 		f.mu.Unlock()
-		f.flush(ctx)
+		f.wakeFlusher()
 		return true, nil
 	}
 	f.mu.Unlock()
 	return false, fn(ctx)
+}
+
+func (f *Fence) wakeFlusher() {
+	select {
+	case f.flush <- struct{}{}:
+	default:
+	}
 }
 
 // Queued is how many actions wait.
@@ -290,8 +302,16 @@ func (f *Fence) CheckNow() {
 }
 
 // Run checks the lock: after the wait of a promoted machine, at once, and
-// then every Interval, until ctx ends or a higher epoch is seen.
+// then every Interval, until ctx ends or a higher epoch is seen. The queued
+// actions go out on a flusher of their own, so a slow action never holds a
+// check of the lock back.
 func (f *Fence) Run(ctx context.Context) error {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	fctx, stop := context.WithCancel(ctx)
+	defer stop()
+	wg.Go(func() { f.flusher(fctx) })
+	f.wakeFlusher()
 	if f.cfg.Lock == nil {
 		<-ctx.Done()
 		return ctx.Err()
@@ -316,10 +336,22 @@ func (f *Fence) Run(ctx context.Context) error {
 	}
 }
 
+// WaitLeft is what is left of the wait of a promoted machine that won the
+// epoch at claimed, for a Citadel that restarts during it: at most the whole
+// wait, so a clock that went back never lengthens it past that, and nothing
+// once it passed.
+func WaitLeft(clk clock.Clock, claimed time.Time, wait time.Duration) time.Duration {
+	if wait <= 0 {
+		wait = PromotedWait
+	}
+	left := claimed.Add(wait).Sub(clk.Now())
+	return min(max(left, 0), wait)
+}
+
 // check makes one check of the lock and reports whether the fence is done
 // (demoted).
 func (f *Fence) check(ctx context.Context) bool {
-	sent := f.cfg.Clock.Now()
+	sent := clock.StampOf(f.cfg.Clock)
 	n, err := f.cfg.Lock.Check(ctx)
 	if ctx.Err() != nil {
 		return false
@@ -348,7 +380,10 @@ func (f *Fence) check(ctx context.Context) bool {
 			err = fmt.Errorf("guild: the lock shows epoch %d, not %d", n, epoch)
 		}
 		f.err = err
-		if !f.leaseValidLocked(f.cfg.Clock.Now()) {
+		// A promoted machine acts only after a check confirmed its epoch
+		// (docs/guilda/trava-no-github.md#espera-do-promovido): a failure
+		// keeps it waiting. A Citadel that starts goes on as "GitHub fora".
+		if f.state != FenceWaiting && !f.leaseValidLocked() {
 			f.state = FenceLockDown
 		}
 		f.cfg.Logger.Warn("guild: the check of the lock failed", "err", err, "state", f.state)
@@ -358,7 +393,7 @@ func (f *Fence) check(ctx context.Context) bool {
 	if after != before {
 		f.changed(after)
 	}
-	f.flush(ctx)
+	f.wakeFlusher()
 	return false
 }
 
@@ -371,19 +406,32 @@ func (f *Fence) waitingLocked(kind External) bool {
 	return false
 }
 
-// flush runs, in order, the queued actions the fence allows now. Each kind
+// flusher is the one goroutine that runs the queue: it wakes when an action
+// is queued and after every check.
+func (f *Fence) flusher(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-f.flush:
+			f.flushNow(ctx)
+		}
+	}
+}
+
+// flushNow runs, in order, the queued actions the fence allows now. Each kind
 // keeps its order: an action that must wait for the lease holds the actions
 // of its kind behind it, not those of the other kind.
-func (f *Fence) flush(ctx context.Context) {
-	for {
+func (f *Fence) flushNow(ctx context.Context) {
+	for ctx.Err() == nil {
 		f.mu.Lock()
-		now, next := f.cfg.Clock.Now(), -1
+		next := -1
 		blocked := map[External]bool{}
 		for i, h := range f.queue {
 			if blocked[h.kind] {
 				continue
 			}
-			if f.allowLocked(h.kind, now) == nil {
+			if f.allowLocked(h.kind) == nil {
 				next = i
 				break
 			}

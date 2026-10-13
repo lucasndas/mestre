@@ -57,7 +57,9 @@ type JoinConfig struct {
 	OS       string
 	Instance string
 	IPs      []net.IP
-	Sheet    json.RawMessage
+	// EnginePort is the engine port of this instance.
+	EnginePort int
+	Sheet      json.RawMessage
 
 	// OnCode is called with the code to show: "Código de entrada: 123 456".
 	OnCode func(code string)
@@ -128,7 +130,7 @@ func Join(ctx context.Context, cfg JoinConfig) (*Joined, error) {
 	var ticket JoinTicket
 	req := JoinRequest{
 		Name: cfg.Name, OS: cfg.OS, Hostname: transport.HostLabel(cfg.Hostname), Instance: cfg.Instance,
-		Sheet: cfg.Sheet, CSRMotor: csrMotor, CSRGuardian: csrGuard, Commitment: commitment(nonceN),
+		EnginePort: cfg.EnginePort, Sheet: cfg.Sheet, CSRMotor: csrMotor, CSRGuardian: csrGuard, Commitment: commitment(nonceN),
 	}
 	for _, ip := range transport.CertificateIPs(cfg.IPs) {
 		req.IPs = append(req.IPs, ip.String())

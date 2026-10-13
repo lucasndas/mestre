@@ -3,6 +3,7 @@ package guild_test
 import (
 	"crypto/x509"
 	"errors"
+	"net"
 	"slices"
 	"testing"
 
@@ -31,7 +32,7 @@ func renewMotor(t *testing.T, r *rig, id string) *x509.Certificate {
 
 func hasPanelName(c *x509.Certificate) bool { return slices.Contains(c.DNSNames, transport.PanelName) }
 
-// CA-GUILDA-12, on the Guild's side: the erasure of the vault copy on the
+// Part of CA-GUILDA-12 (it closes in M5), on the Guild's side: the erasure of the vault copy on the
 // excluded machine (vault.drop) and sending the vault again are the
 // replication's, and the Owner's PIN is the bot's; what the Guild does is the
 // flag, the hook those two plug into, the certificates and the promotion rule.
@@ -146,5 +147,89 @@ func TestTheRevokedListSurvivesARestartAndAMachineThatIsNotTheCitadelReceivesIt(
 	csr, _ := transport.NewCSR(key)
 	if _, err := r.citadel.Renew(ctx, j.MachineID, transport.KindMachine, csr); !errors.Is(err, guild.ErrNotActive) {
 		t.Errorf("renewing a removed machine = %v", err)
+	}
+}
+
+// guild.config tells every machine the engine port of the others, which the
+// machine gave at the entry and keeps when it reports new names.
+func TestGuildConfigCarriesTheEnginePortOfEachMachine(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, clock.NewFake(day0))
+	ctx := t.Context()
+	req, nonce := rawRequest(t, "porta")
+	req.EnginePort = 7453
+	tk, err := r.citadel.Begin(ctx, req, "10.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.citadel.Reveal(ctx, tk.JoinID, nonce); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.owner.answer((<-r.approver.asked).JoinID, "1234", guild.Decision{Accept: true}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := r.citadel.Status(ctx, tk.JoinID, 0)
+	if err != nil || st.Bundle == nil {
+		t.Fatalf("status = %+v, %v", st, err)
+	}
+	port := func() int {
+		cfg, err := r.citadel.Config(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range cfg.Machines {
+			if m.MachineID == st.Bundle.MachineID {
+				return m.Port
+			}
+		}
+		t.Fatal("the machine is not in guild.config")
+		return 0
+	}
+	if got := port(); got != 7453 {
+		t.Fatalf("the port in guild.config = %d, want 7453", got)
+	}
+	if err := r.citadel.UpdateNames(ctx, st.Bundle.MachineID, "porta", []net.IP{net.ParseIP("192.168.0.9")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := port(); got != 7453 {
+		t.Errorf("after new names, the port in guild.config = %d, want 7453", got)
+	}
+	bad, _ := rawRequest(t, "porta2")
+	bad.EnginePort = 70000
+	if _, err := r.citadel.Begin(ctx, bad, "10.0.0.2"); !errors.Is(err, guild.ErrBadRequest) {
+		t.Errorf("a request with the port 70000 = %v, want ErrBadRequest", err)
+	}
+}
+
+// A certificate of a removed machine that the registry never recorded (a
+// renewal lost in a change of Citadel) is refused with its machine, on the
+// Citadel and on every machine that reads the list from its database.
+func TestEveryCertificateOfARemovedMachineIsRefusedEvenOneTheRegistryNeverKnew(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, clock.NewFake(day0))
+	ctx := t.Context()
+	j := r.enroll(r.newNode("tower1"))
+	key, _ := transport.GenerateKey()
+	csr, _ := transport.NewCSR(key)
+	unknown, err := r.founded.CA.IssueMachine(csr, transport.Names{MachineID: j.MachineID, Hostname: "tower1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := transport.IdentityOf(unknown)
+	if err := r.citadel.Credentials().CheckCredential(id, transport.Serial(unknown)); err != nil {
+		t.Fatalf("a certificate of an active machine: %v", err)
+	}
+	if _, err := r.citadel.Remove(ctx, j.MachineID, "dono"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.citadel.Credentials().CheckCredential(id, transport.Serial(unknown)); !errors.Is(err, transport.ErrRevoked) {
+		t.Errorf("an unrecorded certificate of the removed machine = %v, want ErrRevoked", err)
+	}
+	again, err := guild.LoadCredentials(ctx, r.gdb)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := again.CheckCredential(id, transport.Serial(unknown)); !errors.Is(err, transport.ErrRevoked) {
+		t.Errorf("after a restart, the unrecorded certificate = %v, want ErrRevoked", err)
 	}
 }

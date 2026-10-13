@@ -95,7 +95,11 @@ type PrimaryConfig struct {
 	// OnDropped, when set, is told of the receipt of a vault.drop after it was
 	// written to the audit (action vault.dropped).
 	OnDropped func(machineID string)
-	Logger    *slog.Logger
+	// Paused, when set and true, holds the retention of the log back: a
+	// Citadel that does not act yet (suspended at the start) prunes nothing
+	// of what a demotion would report as discarded.
+	Paused func() bool
+	Logger *slog.Logger
 }
 
 // Primary is the replication on the Citadel.
@@ -276,6 +280,9 @@ func (p *Primary) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-prune.C():
+			if p.cfg.Paused != nil && p.cfg.Paused() {
+				continue
+			}
 			if _, err := p.cfg.DB.PruneLog(ctx, p.cfg.Retention.MaxAge, p.cfg.Retention.MaxBytes); err != nil && ctx.Err() == nil {
 				p.cfg.Logger.Warn("replication: pruning the log", "err", err)
 			}

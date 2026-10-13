@@ -2,6 +2,7 @@ package guild
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
@@ -12,7 +13,9 @@ import (
 	"sync"
 
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/transport"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // epochDomain separates the signature of the certificate of epoch from every
@@ -221,6 +224,38 @@ func (e *Epochs) refused(c protocol.Certificate, err error) {
 	if e.cfg.OnRefused != nil {
 		e.cfg.OnRefused(c, err)
 	}
+}
+
+// RefusedAction is the action of the audit rows of the certificates of epoch
+// a Citadel refused.
+const RefusedAction = "epoch.refused"
+
+// RecordRefused writes in the audit of the Guild (db, the main database)
+// that machineID refused a certificate of epoch: once per epoch, Citadel and
+// reason, so a peer that repeats a false certificate does not fill the
+// audit. What came from outside is cut short.
+func RecordRefused(ctx context.Context, db *store.DB, clk clock.Clock, machineID string, c protocol.Certificate, reason error) error {
+	if clk == nil {
+		clk = clock.Real{}
+	}
+	short := func(s string) string {
+		if r := []rune(s); len(r) > 200 {
+			return string(r[:200])
+		}
+		return s
+	}
+	why := ""
+	if reason != nil {
+		why = reason.Error()
+	}
+	detail, err := json.Marshal(map[string]any{
+		"epoch": c.Epoch, "citadel": short(c.CitadelMachineID), "guild_id": short(c.GuildID), "reason": short(why),
+	})
+	if err != nil {
+		return fmt.Errorf("guild: record a refused certificate: %w", err)
+	}
+	sum := sha256.Sum256(detail)
+	return audit(ctx, db.Writer(), fmt.Sprintf("epoch-refused-%x", sum[:12]), clk.Now(), machineID, RefusedAction, detail)
 }
 
 // encodeCert and decodeCert are the JSON of the certificate in the databases.

@@ -10,6 +10,7 @@ import (
 	"net"
 
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/transport"
 )
 
@@ -46,24 +47,34 @@ func (c *Citadel) Machine(ctx context.Context, id string) (Machine, error) {
 // Config is the configuration of the Guild as guild.config carries it: the
 // active machines, the revoked certificates and the time zone.
 func (c *Citadel) Config(ctx context.Context) (protocol.GuildConfig, error) {
-	g, err := readGuild(ctx, c.db.Reader())
+	return ConfigOf(ctx, c.db, c.creds)
+}
+
+// ConfigOf is the configuration of the Guild in db with the revoked list of
+// creds, for a Citadel that does not run its Citadel (the CA) yet.
+func ConfigOf(ctx context.Context, db *store.DB, creds *Credentials) (protocol.GuildConfig, error) {
+	g, err := readGuild(ctx, db.Reader())
 	if err != nil {
 		return protocol.GuildConfig{}, err
 	}
-	return c.configFrom(ctx, c.db.Reader(), g)
+	return configFrom(ctx, db.Reader(), g, creds)
 }
 
 func (c *Citadel) configFrom(ctx context.Context, q querier, g guildRow) (protocol.GuildConfig, error) {
+	return configFrom(ctx, q, g, c.creds)
+}
+
+func configFrom(ctx context.Context, q querier, g guildRow, creds *Credentials) (protocol.GuildConfig, error) {
 	ms, err := listMachines(ctx, q)
 	if err != nil {
 		return protocol.GuildConfig{}, err
 	}
-	cfg := protocol.GuildConfig{Machines: []protocol.GuildConfigMachine{}, Revoked: c.creds.Revoked(), Timezone: g.Timezone}
+	cfg := protocol.GuildConfig{Machines: []protocol.GuildConfigMachine{}, Revoked: creds.Revoked(), Timezone: g.Timezone}
 	for _, m := range ms {
 		if m.State != MachineActive {
 			continue
 		}
-		e := protocol.GuildConfigMachine{MachineID: m.ID, Name: m.Name, Instance: m.Instance, Priority: m.Priority, Excluded: m.Excluded}
+		e := protocol.GuildConfigMachine{MachineID: m.ID, Name: m.Name, Instance: m.Instance, Port: m.Port, Priority: m.Priority, Excluded: m.Excluded}
 		for _, ip := range m.IPs {
 			e.Addresses = append(e.Addresses, ip.String())
 		}
@@ -146,7 +157,7 @@ func (c *Citadel) Promotable(ctx context.Context, machineID string) error {
 // most transport.MaxIPs; an error wraps transport.ErrBadName. The extra names
 // are the Owner's, for the Guild (SetExtraNames), never a machine's. The
 // certificates follow when the machine next renews; Renewer asks at once
-// when they change.
+// when they change. The engine port the machine gave at the entry stays.
 func (c *Citadel) UpdateNames(ctx context.Context, machineID, hostname string, ips []net.IP) error {
 	host, err := transport.CheckHostname(hostname)
 	if err == nil {
@@ -155,7 +166,8 @@ func (c *Citadel) UpdateNames(ctx context.Context, machineID, hostname string, i
 	if err != nil {
 		return fmt.Errorf("guild: the names of %s: %w", machineID, err)
 	}
-	res, err := c.db.Writer().ExecContext(ctx, `UPDATE machines SET names = ? WHERE machine_id = ? AND state = 'active'`,
+	res, err := c.db.Writer().ExecContext(ctx,
+		`UPDATE machines SET names = json_set(?, '$.port', coalesce(json_extract(names, '$.port'), 0)) WHERE machine_id = ? AND state = 'active'`,
 		encodeNames(host, ips), machineID)
 	if err != nil {
 		return fmt.Errorf("guild: update the names of a machine: %w", err)
@@ -243,6 +255,7 @@ func (c *Citadel) retire(ctx context.Context, m Machine, state MachineState) err
 		return fmt.Errorf("guild: retire a machine: %w", err)
 	}
 	c.creds.Add(serials...)
+	c.creds.Retire(m.ID)
 	return nil
 }
 

@@ -29,6 +29,11 @@ const (
 	// JoinValidity is how long a request lives and how long the bundle of an
 	// accepted one can be fetched again.
 	JoinValidity = time.Hour
+	// RevealWithin is how long a request may wait for its nonce: the machine
+	// reveals it right after the request, so one that does not was not made
+	// to be answered. It expires then, frees its place among the pending
+	// ones and counts toward the alert of the refusals.
+	RevealWithin = 90 * time.Second
 	// DefaultMaxPending is how many requests may wait for the Owner at once.
 	DefaultMaxPending = 5
 	// DefaultMaxPerIP is how many requests one address may make per hour.
@@ -43,7 +48,8 @@ const (
 type Limits struct {
 	MaxPending   int
 	MaxPerIPHour int
-	// RefusalAlert is the number of refusals in 24 hours that warns the Owner.
+	// RefusalAlert is the number of refusals in 24 hours that warns the Owner;
+	// the requests that never revealed their nonce count as refusals.
 	RefusalAlert int
 }
 
@@ -99,7 +105,8 @@ type Citadel struct {
 	creds   *Credentials
 
 	mu      sync.Mutex
-	changed map[string]*watcher // closed when a request changes
+	changed map[string]*watcher      // closed when a request changes
+	asking  map[string]chan struct{} // the reveals asking the Owner now, by request
 }
 
 // NewCitadel checks cfg against the Guild database.
@@ -132,7 +139,7 @@ func NewCitadel(ctx context.Context, cfg CitadelConfig) (*Citadel, error) {
 	}
 	return &Citadel{
 		cfg: cfg, db: cfg.DB, clk: cfg.Clock, ids: protocol.NewIDGen(cfg.Clock), guildID: g.GuildID, creds: creds,
-		changed: map[string]*watcher{},
+		changed: map[string]*watcher{}, asking: map[string]chan struct{}{},
 	}, nil
 }
 
@@ -237,8 +244,10 @@ func (c *Citadel) Begin(ctx context.Context, req JoinRequest, remoteIP string) (
 	if perIP >= c.cfg.Limits.MaxPerIPHour {
 		return JoinTicket{}, ErrRateLimited
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM join_requests WHERE state = 'pending' AND expires_at > ?`,
-		now.UnixMilli()).Scan(&pending); err != nil {
+	// a request that did not reveal its nonce in time holds no place
+	if err := tx.QueryRowContext(ctx,
+		`SELECT count(*) FROM join_requests WHERE state = 'pending' AND expires_at > ? AND (code IS NOT NULL OR created_at > ?)`,
+		now.UnixMilli(), now.Add(-RevealWithin).UnixMilli()).Scan(&pending); err != nil {
 		return JoinTicket{}, fmt.Errorf("guild: count the requests: %w", err)
 	}
 	if pending >= c.cfg.Limits.MaxPending {
@@ -292,6 +301,9 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	if err := transport.CheckIPs(ips); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrBadRequest, err)
 	}
+	if req.EnginePort < 0 || req.EnginePort > 65535 {
+		return "", fmt.Errorf("%w: %d is not a port", ErrBadRequest, req.EnginePort)
+	}
 	if len(req.Sheet) > 0 && !json.Valid(req.Sheet) {
 		return "", fmt.Errorf("%w: the sheet is not JSON", ErrBadRequest)
 	}
@@ -336,14 +348,17 @@ func (c *Citadel) Reveal(ctx context.Context, joinID string, nonceN []byte) erro
 	if err != nil {
 		return err
 	}
-	if j.State == JoinPending && !now.Before(j.ExpiresAt) {
-		if _, err := markExpired(ctx, tx, j.ID); err != nil {
+	if overdue(j, now) {
+		changed, err := markExpired(ctx, tx, j.ID, now)
+		if err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("guild: reveal: %w", err)
 		}
-		c.finish(ctx, j)
+		if changed {
+			c.expired(ctx, j)
+		}
 		return ErrExpired
 	}
 	if j.State != JoinPending {
@@ -357,6 +372,7 @@ func (c *Citadel) Reveal(ctx context.Context, joinID string, nonceN []byte) erro
 			return fmt.Errorf("guild: reveal: %w", err)
 		}
 		c.notify(j.ID)
+		c.refusalAlert(ctx)
 		return ErrBadReveal
 	}
 	if len(j.NonceN) > 0 {
@@ -373,9 +389,45 @@ func (c *Citadel) Reveal(ctx context.Context, joinID string, nonceN []byte) erro
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("guild: reveal: %w", err)
 	}
-	if j.ApprovalID != "" {
-		return nil
+	return c.askOnce(ctx, j)
+}
+
+// askOnce asks the Owner about a revealed request, unless the question was
+// already put. Reveals of the same request at once ask one time: the others
+// wait for that question and only ask if it failed.
+func (c *Citadel) askOnce(ctx context.Context, j joinRow) error {
+	for {
+		cur, err := loadJoin(ctx, c.db.Reader(), j.ID)
+		if err != nil {
+			return err
+		}
+		if cur.ApprovalID != "" || cur.State != JoinPending {
+			return nil
+		}
+		c.mu.Lock()
+		wait, busy := c.asking[j.ID]
+		if !busy {
+			c.asking[j.ID] = make(chan struct{})
+		}
+		c.mu.Unlock()
+		if busy {
+			select {
+			case <-wait:
+				continue // the question was put, or failed: read again
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		err = c.ask(ctx, j)
+		c.mu.Lock()
+		close(c.asking[j.ID])
+		delete(c.asking, j.ID)
+		c.mu.Unlock()
+		return err
 	}
+}
+
+func (c *Citadel) ask(ctx context.Context, j joinRow) error {
 	approval, err := c.cfg.Approver.Ask(ctx, ApprovalRequest{
 		JoinID: j.ID, Name: j.Name, OS: j.Req.OS, Hostname: j.Req.Hostname, Instance: j.Req.Instance,
 		Code: j.Code, RemoteIP: j.RemoteIP, CreatedAt: j.CreatedAt, ExpiresAt: j.ExpiresAt,
@@ -387,6 +439,42 @@ func (c *Citadel) Reveal(ctx context.Context, joinID string, nonceN []byte) erro
 		return fmt.Errorf("guild: reveal: %w", err)
 	}
 	return nil
+}
+
+// overdue says whether a pending request is over: past its hour, or past
+// RevealWithin without its nonce.
+func overdue(j joinRow, now time.Time) bool {
+	return j.State == JoinPending && (!now.Before(j.ExpiresAt) || j.Code == "" && !now.Before(j.CreatedAt.Add(RevealWithin)))
+}
+
+// expired ends what an expiry leaves: the question, the machine that waits,
+// and, for a request that never revealed its nonce, the count of the
+// refusals.
+func (c *Citadel) expired(ctx context.Context, j joinRow) {
+	c.finish(ctx, j)
+	if j.Code == "" {
+		c.refusalAlert(ctx)
+	}
+}
+
+// refusalAlert warns the Owner when the refusals of the last 24 hours (the
+// requests refused and those that never revealed their nonce) reach a
+// multiple of Limits.RefusalAlert.
+func (c *Citadel) refusalAlert(ctx context.Context) {
+	h := c.cfg.Hooks.RefusalAlert
+	if h == nil {
+		return
+	}
+	var n int
+	if err := c.db.Reader().QueryRowContext(ctx,
+		`SELECT count(*) FROM join_requests WHERE decided_at > ? AND (state = 'refused' OR state = 'expired' AND code IS NULL)`,
+		c.clk.Now().Add(-24*time.Hour).UnixMilli()).Scan(&n); err != nil {
+		c.cfg.Logger.Warn("guild: counting the refused requests", "err", err)
+		return
+	}
+	if n > 0 && n%c.cfg.Limits.RefusalAlert == 0 {
+		h(n)
+	}
 }
 
 // Code is the code of a request that was revealed, as the Owner sees it.
@@ -402,8 +490,8 @@ func (c *Citadel) Code(ctx context.Context, joinID string) (string, error) {
 }
 
 // markExpired ends a pending request; changed says whether it was pending.
-func markExpired(ctx context.Context, q querier, id string) (changed bool, err error) {
-	res, err := q.ExecContext(ctx, `UPDATE join_requests SET state = 'expired' WHERE join_id = ? AND state = 'pending'`, id)
+func markExpired(ctx context.Context, q querier, id string, now time.Time) (changed bool, err error) {
+	res, err := q.ExecContext(ctx, `UPDATE join_requests SET state = 'expired', decided_at = ? WHERE join_id = ? AND state = 'pending'`, now.UnixMilli(), id)
 	if err != nil {
 		return false, fmt.Errorf("guild: expire a request: %w", err)
 	}
@@ -437,8 +525,8 @@ func (c *Citadel) Decide(ctx context.Context, joinID string, d Decision) error {
 		return err
 	}
 	switch {
-	case j.State == JoinExpired || (j.State == JoinPending && !now.Before(j.ExpiresAt)):
-		changed, err := markExpired(ctx, tx, j.ID)
+	case j.State == JoinExpired || overdue(j, now):
+		changed, err := markExpired(ctx, tx, j.ID, now)
 		if err != nil {
 			return err
 		}
@@ -446,7 +534,7 @@ func (c *Citadel) Decide(ctx context.Context, joinID string, d Decision) error {
 			return fmt.Errorf("guild: decide: %w", err)
 		}
 		if changed {
-			c.finish(ctx, j)
+			c.expired(ctx, j)
 		}
 		return ErrExpired
 	case j.State != JoinPending:
@@ -459,18 +547,11 @@ func (c *Citadel) Decide(ctx context.Context, joinID string, d Decision) error {
 			`UPDATE join_requests SET state = 'refused', decided_by = ?, decided_at = ? WHERE join_id = ?`, d.ApprovedBy, now.UnixMilli(), j.ID); err != nil {
 			return fmt.Errorf("guild: decide: %w", err)
 		}
-		var refused int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM join_requests WHERE state = 'refused' AND decided_at > ?`,
-			now.Add(-24*time.Hour).UnixMilli()).Scan(&refused); err != nil {
-			return fmt.Errorf("guild: decide: %w", err)
-		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("guild: decide: %w", err)
 		}
 		c.notify(j.ID)
-		if h := c.cfg.Hooks.RefusalAlert; h != nil && refused > 0 && refused%c.cfg.Limits.RefusalAlert == 0 {
-			h(refused)
-		}
+		c.refusalAlert(ctx)
 		return nil
 	}
 	m, err := c.admit(ctx, tx, j, d, now)
@@ -516,8 +597,8 @@ func (c *Citadel) admit(ctx context.Context, tx *sql.Tx, j joinRow, d Decision, 
 		sheet = string(j.Req.Sheet)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, sheet, joined_at) VALUES (?, ?, ?, 0, ?, 'active', ?, ?, ?)`,
-		m.ID, m.Name, m.Instance, boolInt(m.Excluded), encodeNames(m.Hostname, m.IPs), sheet, now.UnixMilli()); err != nil {
+		`INSERT INTO machines (machine_id, name, instance, priority, excluded, state, names, sheet, joined_at) VALUES (?, ?, ?, 0, ?, 'active', `+withPort+`, ?, ?)`,
+		m.ID, m.Name, m.Instance, boolInt(m.Excluded), encodeNames(m.Hostname, m.IPs), j.Req.EnginePort, sheet, now.UnixMilli()); err != nil {
 		return Machine{}, fmt.Errorf("guild: register the machine: %w", err)
 	}
 	for _, cred := range []struct {
@@ -609,13 +690,13 @@ func (c *Citadel) poll(ctx context.Context, joinID string, deadline time.Time) (
 		return JoinStatus{}, false, err
 	}
 	now := c.clk.Now()
-	if j.State == JoinPending && !now.Before(j.ExpiresAt) {
-		changed, err := markExpired(ctx, c.db.Writer(), j.ID)
+	if overdue(j, now) {
+		changed, err := markExpired(ctx, c.db.Writer(), j.ID, now)
 		if err != nil {
 			return JoinStatus{}, false, err
 		}
 		if changed {
-			c.finish(ctx, j)
+			c.expired(ctx, j)
 		}
 		return JoinStatus{State: JoinExpired}, false, nil
 	}
@@ -637,8 +718,13 @@ func (c *Citadel) poll(ctx context.Context, joinID string, deadline time.Time) (
 	if remaining <= 0 {
 		return JoinStatus{State: JoinPending}, false, nil
 	}
-	// wake at the end of the wait, or when the hour of the request ends
-	wctx, cancel := clock.WithTimeout(ctx, c.clk, min(remaining, j.ExpiresAt.Sub(now)))
+	// wake at the end of the wait, or when the request ends: its hour, or
+	// the time it has to reveal its nonce
+	end := j.ExpiresAt
+	if j.Code == "" {
+		end = j.CreatedAt.Add(RevealWithin)
+	}
+	wctx, cancel := clock.WithTimeout(ctx, c.clk, min(remaining, end.Sub(now)))
 	defer cancel()
 	select {
 	case <-ch:
@@ -688,11 +774,14 @@ func (c *Citadel) notify(id string) {
 	c.mu.Unlock()
 }
 
-// Sweep ends the requests that outlived their hour, taking their question
-// down, and returns how many. Run calls it every minute.
+// Sweep ends the requests that outlived their hour, or their time to reveal
+// the nonce, taking their question down, and returns how many. Run calls it
+// every 30 s.
 func (c *Citadel) Sweep(ctx context.Context) (int, error) {
 	now := c.clk.Now()
-	rows, err := c.db.Reader().QueryContext(ctx, `SELECT `+joinColumns+` FROM join_requests WHERE state = 'pending' AND expires_at <= ?`, now.UnixMilli())
+	rows, err := c.db.Reader().QueryContext(ctx,
+		`SELECT `+joinColumns+` FROM join_requests WHERE state = 'pending' AND (expires_at <= ? OR code IS NULL AND created_at <= ?)`,
+		now.UnixMilli(), now.Add(-RevealWithin).UnixMilli())
 	if err != nil {
 		return 0, fmt.Errorf("guild: sweep: %w", err)
 	}
@@ -708,21 +797,21 @@ func (c *Citadel) Sweep(ctx context.Context) (int, error) {
 	rows.Close()
 	n := 0
 	for _, j := range due {
-		changed, err := markExpired(ctx, c.db.Writer(), j.ID)
+		changed, err := markExpired(ctx, c.db.Writer(), j.ID, now)
 		if err != nil {
 			return n, err
 		}
 		if changed {
 			n++
-			c.finish(ctx, j)
+			c.expired(ctx, j)
 		}
 	}
 	return n, nil
 }
 
-// Run sweeps the expired requests every minute until ctx ends.
+// Run sweeps the expired requests every 30 s until ctx ends.
 func (c *Citadel) Run(ctx context.Context) {
-	t := c.clk.NewTicker(time.Minute)
+	t := c.clk.NewTicker(30 * time.Second)
 	defer t.Stop()
 	for {
 		select {

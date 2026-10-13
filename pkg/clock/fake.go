@@ -7,18 +7,29 @@ import (
 )
 
 // Fake is a manually driven Clock for tests that need calendar dates
-// (docs/qualidade/dubles.md). Time only moves with Advance or Set. Timers
-// fire in deadline order; AfterFunc callbacks run synchronously inside
-// Advance/Set, without the clock lock held, so they may use the clock.
+// (docs/qualidade/dubles.md). Time only moves with Advance, Set and
+// SkipWall. Timers fire in deadline order; AfterFunc callbacks run
+// synchronously inside Advance/Set, without the clock lock held, so they may
+// use the clock.
+//
+// It reads a monotonic clock apart from the wall one (Monotonic): Advance and
+// a Set forward move both, a Set backward moves only the wall clock, and
+// SkipWall moves the wall clock forward as a machine that slept, without the
+// monotonic one, which is how the two-clock rules (the lease of the lock) are
+// tested.
 type Fake struct {
 	mu      sync.Mutex
 	cond    *sync.Cond
 	now     time.Time
+	mono    time.Duration
 	waiters []*fakeWaiter
 	seq     uint64
 }
 
-var _ Clock = (*Fake)(nil)
+var (
+	_ Clock     = (*Fake)(nil)
+	_ Monotonic = (*Fake)(nil)
+)
 
 // NewFake returns a Fake clock set to t.
 func NewFake(t time.Time) *Fake {
@@ -42,6 +53,30 @@ func (f *Fake) Now() time.Time {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.now
+}
+
+// Monotonic implements Monotonic: the time the clock moved forward with
+// Advance and Set, which SkipWall and a Set backward do not change.
+func (f *Fake) Monotonic() time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.mono
+}
+
+// SkipWall moves the wall clock forward by d without the monotonic clock and
+// without firing anything: the machine slept, and the monotonic clock of
+// Linux, which the timers follow, does not count that time. Every armed timer
+// keeps the time it had left.
+func (f *Fake) SkipWall(d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.now = f.now.Add(d)
+	for _, w := range f.waiters {
+		w.deadline = w.deadline.Add(d)
+	}
 }
 
 // NewTimer arms a one-shot timer.
@@ -123,17 +158,22 @@ func (f *Fake) Advance(d time.Duration) {
 }
 
 // Set moves the clock to t. Moving forward fires due timers in deadline
-// order; moving backward fires nothing.
+// order and moves the monotonic clock as much; moving backward fires nothing
+// and leaves the monotonic clock where it was.
 func (f *Fake) Set(t time.Time) {
 	for {
 		f.mu.Lock()
 		w := f.nextDueLocked(t)
 		if w == nil {
+			if t.After(f.now) {
+				f.mono += t.Sub(f.now)
+			}
 			f.now = t
 			f.mu.Unlock()
 			return
 		}
 		if w.deadline.After(f.now) {
+			f.mono += w.deadline.Sub(f.now)
 			f.now = w.deadline
 		}
 		now := f.now

@@ -3,6 +3,7 @@ package guild
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -76,8 +77,12 @@ func ListDiscarded(ctx context.Context, old *store.DB, fromLSN uint64, limit int
 }
 
 // DiscardedAction is the action of the audit rows of the discarded
-// transactions.
-const DiscardedAction = "citadel.discarded"
+// transactions; DroppedAction of the row that names the external actions the
+// old Citadel's fence dropped when it stepped down.
+const (
+	DiscardedAction = "citadel.discarded"
+	DroppedAction   = "citadel.dropped_actions"
+)
 
 // RecordDiscarded writes, in the audit of the Guild, one row per transaction
 // that the old Citadel machineID lost in the change (the handler of
@@ -108,10 +113,34 @@ func RecordDiscarded(ctx context.Context, db *store.DB, clk clock.Clock, machine
 			return err
 		}
 	}
+	if len(p.Dropped) > 0 {
+		names := p.Dropped
+		if len(names) > MaxDiscardedListed {
+			names = names[:MaxDiscardedListed]
+		}
+		detail, _ := json.Marshal(map[string]any{"epoch": p.Epoch, "dropped": names, "total": len(p.Dropped)})
+		if err := audit(ctx, tx, fmt.Sprintf("dropped-%d-%s", p.Epoch, machineID), now, machineID, DroppedAction, detail); err != nil {
+			return err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("guild: record the discarded transactions: %w", err)
 	}
 	return nil
+}
+
+// UseAction is the action of the audit rows of the reads of the vault.
+const UseAction = "vault.use"
+
+// RecordUse writes in the audit of the Guild (db, the main database) that
+// machineID read the secret name for purpose (docs/plataforma/cofre.md): the
+// vault's OnUse.
+func RecordUse(ctx context.Context, db *store.DB, clk clock.Clock, machineID, name, purpose string) error {
+	if clk == nil {
+		clk = clock.Real{}
+	}
+	detail, _ := json.Marshal(map[string]string{"name": name, "purpose": purpose})
+	return audit(ctx, db.Writer(), protocol.NewIDGen(clk).NewString(), clk.Now(), machineID, UseAction, detail)
 }
 
 // DiscardedEntry is a row of the audit of the discarded transactions.
@@ -151,7 +180,10 @@ func Discarded(ctx context.Context, db *store.DB) ([]DiscardedEntry, error) {
 }
 
 // DiscardedHandler is the handler of guild.discarded on the Citadel: db is
-// the main Guild database of the Citadel of now.
+// the main Guild database of the Citadel of now. Only the engine of the
+// machine that was the Citadel of that epoch reports what it lost, and from
+// the lsn the next epoch started at: anything else is refused, and nothing
+// enters the audit.
 func DiscardedHandler(db func() *store.DB, clk clock.Clock) protocol.HandlerFunc {
 	return func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
 		d := db()
@@ -161,6 +193,25 @@ func DiscardedHandler(db func() *store.DB, clk clock.Clock) protocol.HandlerFunc
 		p, ok := m.Payload.(*protocol.GuildDiscarded)
 		if !ok {
 			return nil, protocol.NewError(protocol.CodeInvalidPayload, "guild.discarded payload is %T", m.Payload)
+		}
+		if m.Peer.Role != protocol.RoleMachine {
+			return nil, protocol.NewError(protocol.CodeForbidden, "only the engine of a machine reports what it discarded")
+		}
+		was, err := EpochStart(ctx, d, p.Epoch)
+		if err == nil && was.CitadelMachineID != m.Peer.ID {
+			return nil, protocol.NewError(protocol.CodeForbidden, "%s was not the Citadel of the epoch %d", m.Peer.ID, p.Epoch)
+		}
+		var next EpochRecord
+		if err == nil {
+			next, err = EpochStart(ctx, d, p.Epoch+1)
+		}
+		switch {
+		case errors.Is(err, ErrNoEpoch):
+			return nil, protocol.NewError(protocol.CodeForbidden, "the epoch %d did not end on this Guild", p.Epoch)
+		case err != nil:
+			return nil, err
+		case next.FromLSN != p.FromLSN:
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "the epoch %d started from the lsn %d, not %d", p.Epoch+1, next.FromLSN, p.FromLSN)
 		}
 		return nil, RecordDiscarded(ctx, d, clk, m.Peer.ID, p)
 	}

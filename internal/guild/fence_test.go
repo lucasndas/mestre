@@ -166,6 +166,124 @@ func TestThePromotedMachineWaitsSixtySecondsAndChecksTheLockBeforeActing(t *test
 	})
 }
 
+// The promoted machine acts only after a check confirmed its epoch: a first
+// check that fails keeps it waiting, never in "GitHub fora"
+// (docs/guilda/trava-no-github.md#espera-do-promovido).
+func TestThePromotedMachineDoesNotActUntilACheckConfirmsItsEpoch(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		lock := fakelock.New(4, "b")
+		lock.SetDown("b", true)
+		f := guild.NewFence(guild.FenceConfig{Lock: lock.For("b"), Clock: clock.Real{}, Epoch: func() uint64 { return 4 }, Promoted: true})
+		go func() { _ = f.Run(ctx) }()
+		r := &record{}
+		_, _ = f.Do(ctx, guild.ExternalTelegram, "t1", r.action("t1"))
+		advance(60 * time.Second)
+		advance(30 * time.Second)
+		if got := r.list(); len(got) != 0 || f.State() != guild.FenceWaiting || f.Acting() || lock.Checks("b") != 2 {
+			t.Fatalf("with the lock out of reach after the wait: %v out, state %s, %d checks", got, f.State(), lock.Checks("b"))
+		}
+		lock.SetDown("b", false)
+		advance(30 * time.Second)
+		if got := r.list(); !slices.Equal(got, []string{"t1"}) || f.State() != guild.FenceConfirmed {
+			t.Fatalf("after the check confirmed: %v out, state %s", got, f.State())
+		}
+	})
+}
+
+// A Citadel that restarts during the wait of the promoted machine waits what
+// was left of it, counted from the claim; never more than the wait, and
+// nothing once it passed.
+func TestARestartDuringThePromotedWaitWaitsWhatWasLeft(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
+	claimed := clk.Now()
+	clk.Advance(20 * time.Second)
+	if got := guild.WaitLeft(clk, claimed, 0); got != 40*time.Second {
+		t.Errorf("20 s after the claim: %v left, want 40 s", got)
+	}
+	if got := guild.WaitLeft(clk, claimed.Add(time.Hour), 0); got != guild.PromotedWait {
+		t.Errorf("a claim in the future (the clock went back): %v left, want the whole wait", got)
+	}
+	clk.Advance(time.Minute)
+	if got := guild.WaitLeft(clk, claimed, 0); got != 0 {
+		t.Errorf("after the wait: %v left", got)
+	}
+}
+
+// The lease runs out by the first of the two clocks to pass 60 s: the wall
+// clock that jumped (the machine slept, which the monotonic clock does not
+// count) or the monotonic one (the date set back).
+func TestTheLeaseRunsOutByTheFirstOfTheTwoClocks(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		move func(c *clock.Fake)
+	}{
+		{"the machine slept 10 min", func(c *clock.Fake) { c.SkipWall(10 * time.Minute) }},
+		{"the date went back 10 min and 61 s passed", func(c *clock.Fake) {
+			c.Set(c.Now().Add(-10 * time.Minute))
+			c.Advance(61 * time.Second)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
+			lock := fakelock.New(3, "a")
+			changed := make(chan guild.FenceState, 8)
+			f := guild.NewFence(guild.FenceConfig{Lock: lock.For("a"), Clock: clk, Epoch: func() uint64 { return 3 },
+				OnChange: func(s guild.FenceState) { changed <- s }})
+			done := make(chan struct{})
+			go func() { defer close(done); _ = f.Run(ctx) }()
+			if s := <-changed; s != guild.FenceConfirmed {
+				t.Fatalf("the first check: %s", s)
+			}
+			clk.Advance(20 * time.Second)
+			if !f.LeaseValid() {
+				t.Fatal("the lease is gone 20 s after the check")
+			}
+			tc.move(clk)
+			if f.LeaseValid() || f.Allow(guild.ExternalGitHub) == nil {
+				t.Fatal("the lease still holds")
+			}
+			cancel()
+			<-done
+		})
+	}
+}
+
+// A slow queued action never holds the checks of the lock back: the queue
+// has a goroutine of its own.
+func TestASlowQueuedActionDoesNotHoldTheChecksOfTheLock(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		lock := fakelock.New(3, "a")
+		lock.Hold()
+		f := guild.NewFence(guild.FenceConfig{Lock: lock.For("a"), Clock: clock.Real{}, Epoch: func() uint64 { return 3 }})
+		release := make(chan struct{})
+		_, _ = f.Do(ctx, guild.ExternalTelegram, "slow", func(context.Context) error { <-release; return nil })
+		go func() { _ = f.Run(ctx) }()
+		synctest.Wait()
+		lock.Release()
+		synctest.Wait() // the first check confirms; the slow action starts and blocks
+		advance(30 * time.Second)
+		advance(30 * time.Second)
+		if n := lock.Checks("a"); n != 3 {
+			t.Errorf("%d checks of the lock while a queued action ran, want 3", n)
+		}
+		if !f.LeaseValid() {
+			t.Error("the lease ran out while a queued action ran")
+		}
+		close(release)
+	})
+}
+
 // Without a lock (no GitHub in the Guild) the Citadel acts on the Telegram,
 // never on the GitHub, and there is no promotion.
 func TestWithoutALockTheCitadelActsOnTheTelegramOnlyAndNobodyIsPromoted(t *testing.T) {
@@ -283,6 +401,39 @@ func TestAPromotionWaitsForTheOwnerAndASecondRequestCancelsTheFirst(t *testing.T
 	defer a.mu.Unlock()
 	if !slices.Contains(a.withdrawn, "p3") {
 		t.Errorf("the first question was not withdrawn: %v", a.withdrawn)
+	}
+}
+
+// Only the answer to the exact question counts: another id, given while the
+// question waits or while it is being put, changes nothing.
+func TestOnlyTheAnswerOfTheExactQuestionPromotes(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	a := &promoApprover{asked: make(chan string, 8)}
+	p := guild.NewPromoter(a)
+	// while the question is put, a wrong id and then a no for it
+	a.set(func(id string) {
+		_ = p.Decide("other", guild.Decision{Accept: true, ApprovedBy: "x"})
+	})
+	res := make(chan error, 1)
+	go func() {
+		_, _, err := p.Ask(ctx, guild.PromotionRequest{MachineID: "b"})
+		res <- err
+	}()
+	id := <-a.asked
+	if err := p.Decide(id+"x", guild.Decision{Accept: true}); !errors.Is(err, guild.ErrNotPending) {
+		t.Fatalf("an answer for another id: %v, want ErrNotPending", err)
+	}
+	select {
+	case err := <-res:
+		t.Fatalf("the request ended with an answer for another id: %v", err)
+	default:
+	}
+	if err := p.Decide(id, guild.Decision{Accept: true, ApprovedBy: "dono"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-res; err != nil {
+		t.Fatalf("the exact answer: %v", err)
 	}
 }
 

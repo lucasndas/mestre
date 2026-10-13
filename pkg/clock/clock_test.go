@@ -241,6 +241,39 @@ func TestWithTimeoutCancelAndParent(t *testing.T) {
 	}
 }
 
+// The fake reads a monotonic clock apart from the wall one: a machine that
+// slept moves only the wall clock, and a date set back moves only the wall
+// clock as well, so a rule over both clocks can be tested either way.
+func TestFakeKeepsAMonotonicReadingApartFromTheWallClock(t *testing.T) {
+	t.Parallel()
+	c := clock.NewFake(epoch)
+	tm := c.NewTimer(time.Minute)
+	s := clock.StampOf(c)
+	c.Advance(10 * time.Second)
+	if wall, mono := s.Since(c); wall != 10*time.Second || mono != 10*time.Second {
+		t.Fatalf("after Advance: wall %v, mono %v", wall, mono)
+	}
+	c.SkipWall(10 * time.Minute)
+	if wall, mono := s.Since(c); wall != 10*time.Minute+10*time.Second || mono != 10*time.Second {
+		t.Fatalf("after the machine slept: wall %v, mono %v", wall, mono)
+	}
+	select {
+	case <-tm.C():
+		t.Fatal("a timer fired for the time the machine slept")
+	default:
+	}
+	c.Advance(50 * time.Second)
+	select {
+	case <-tm.C():
+	default:
+		t.Fatal("the timer did not fire after its minute of monotonic time")
+	}
+	c.Set(c.Now().Add(-time.Hour))
+	if wall, mono := s.Since(c); wall >= 0 || mono != time.Minute {
+		t.Fatalf("after the date went back: wall %v, mono %v", wall, mono)
+	}
+}
+
 func TestRealClockInsideSynctestBubble(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

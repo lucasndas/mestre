@@ -54,6 +54,9 @@ type JoinRequest struct {
 	// of the panel are the Owner's, for the Guild; a machine never asks for
 	// a name.
 	IPs []string `json:"ips,omitempty"`
+	// EnginePort is the engine port of the machine's instance, which
+	// guild.config tells the others.
+	EnginePort int `json:"engine_port,omitempty"`
 	// Sheet is the machine sheet (docs/guilda/ficha-da-maquina.md).
 	Sheet json.RawMessage `json:"sheet,omitempty"`
 	// CSRMotor and CSRGuardian are the DER certificate requests of the
