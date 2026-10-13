@@ -327,10 +327,13 @@ func TestNamesSkipDotAndUnderscoreFolders(t *testing.T) {
 //
 // The budget is on the check itself, not on the machine's load: the test runs
 // in parallel with the rest of the suite, so it times up to three runs and
-// takes the fastest. A check that is really slow is slow in all three.
+// takes the fastest. A check that is really slow is slow in all three. Under
+// the race detector the budget is multiplied by raceFactor, as testrun does
+// with the suite budgets.
 func TestDocs(t *testing.T) {
 	t.Parallel()
 	const runs = 3
+	budget := time.Second * raceFactor
 	wall := clock.Real{}
 	best := time.Duration(math.MaxInt64)
 	var out bytes.Buffer
@@ -342,12 +345,12 @@ func TestDocs(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("documentation check failed:\n%s", out.String())
 		}
-		if best < time.Second {
+		if best < budget {
 			break // within the budget: no need to measure again
 		}
 	}
-	if best >= time.Second {
-		t.Fatalf("documentation check took %v at its fastest of %d runs, budget 1s", best, runs)
+	if best >= budget {
+		t.Fatalf("documentation check took %v at its fastest of %d runs, budget %v", best, runs, budget)
 	}
 	t.Log(strings.TrimSpace(out.String()))
 }
