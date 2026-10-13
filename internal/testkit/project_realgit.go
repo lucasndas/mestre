@@ -7,17 +7,36 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/lucasndas/mestre/internal/gitx"
 )
 
-// initRepo runs git init and one commit with a fixed author and date, so the
-// hash is the same on every run. Until internal/gitx exists (M1) the test
-// kit calls the git binary directly; only the full and heavy suites get here.
+// initRepo initializes the copy and makes one commit with a fixed author and
+// date through internal/gitx, so the hash is the same on every run. Only the
+// full and heavy suites get here.
 func initRepo(t testing.TB, p *Project, _ map[string]string) {
 	t.Helper()
-	ProjectGit(t, p.Dir, "init", "-q", "-b", ProjectBranch)
-	ProjectGit(t, p.Dir, "add", "-A")
-	ProjectGit(t, p.Dir, "commit", "-q", "-m", ProjectCommitMessage)
-	p.Head = strings.TrimSpace(ProjectGit(t, p.Dir, "rev-parse", "HEAD"))
+	ctx := t.Context()
+	when, err := time.Parse(time.RFC3339, ProjectCommitDate)
+	if err != nil {
+		t.Fatalf("ProjectCommitDate: %v", err)
+	}
+	repo, err := gitx.New(gitx.Options{}).Init(ctx, p.Dir, gitx.InitOptions{InitialBranch: ProjectBranch})
+	if err != nil {
+		t.Fatalf("init training project: %v", err)
+	}
+	if err := repo.Stage(ctx); err != nil {
+		t.Fatalf("stage training project: %v", err)
+	}
+	head, err := repo.Commit(ctx, gitx.CommitOptions{
+		Message: ProjectCommitMessage,
+		Author:  gitx.Signature{Name: ProjectAuthorName, Email: ProjectAuthorEmail, When: when},
+	})
+	if err != nil {
+		t.Fatalf("commit training project: %v", err)
+	}
+	p.Head = string(head)
 }
 
 // ProjectGit runs the real git in dir, isolated from the user and system

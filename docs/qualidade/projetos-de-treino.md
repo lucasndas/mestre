@@ -1,6 +1,6 @@
 # Projetos de treino
 
-> **Assunto:** projetos pequenos e conhecidos que os testes copiam para fazer o papel do repositório do usuário: modelos-base, variações, tarefas com teste oculto, `testkit.NewProject` e o repositório sandbox do GitHub · **Componente:** Projeto · **Atualizado:** 2026-10-12
+> **Assunto:** projetos pequenos e conhecidos que os testes copiam para fazer o papel do repositório do usuário: modelos-base, variações, tarefas com teste oculto, `testkit.NewProject` e o repositório sandbox do GitHub · **Componente:** Projeto · **Atualizado:** 2026-10-13
 
 ## Objetivo
 
@@ -44,7 +44,7 @@ Cada variação nasce com um critério de aceite no documento do marco que a usa
 | T3 | atualizar o README (só documentação) | teste oculto que lê o README; a classe QA não edita código | M3 |
 | T4 | mudar o workflow de CI | regra `git.workflows` ([workflows](../github/identidades-e-apps.md#workflows)) | M5, com `com-workflows` |
 
-O `tarefas.yaml` do M0 traz T1 a T3 (dados e testes ocultos); T4 entra no M5, junto da variação de que precisa.
+O `tarefas.yaml` do M0 traz T1 a T3 como **dados** (pedido, arquivos permitidos, comando e testes ocultos, conferidos pela completa, CA-TREINO-06); a coluna "Em uso a partir de" diz quando algum teste ou suíte passa a **cumprir** a tarefa (T3 no M3, T2 no M4). T4 entra no M5, junto da variação de que precisa.
 
 ### `testkit.NewProject`
 
@@ -70,9 +70,9 @@ O `tarefas.yaml` do M0 traz T1 a T3 (dados e testes ocultos); T4 entra no M5, ju
 
 | Marco | O que entra |
 |---|---|
-| M0 | `NewProject`, modelo `go-basico`, variação padrão, T1 e o formato do `tarefas.yaml` |
-| M3 | `com-sensiveis`, T3 e a primeira [conformidade](../provedores/conformidade.md) real com T1 |
-| M4 | `sem-agents-md`, `com-claude-md`, `com-hooks-claude` e T2 |
+| M0 | `NewProject`, modelo `go-basico`, variação padrão, o formato do `tarefas.yaml` e T1 a T3 como dados (T1 já em uso pela completa) |
+| M3 | `com-sensiveis`, T3 em uso e a primeira [conformidade](../provedores/conformidade.md) real com T1 |
+| M4 | `sem-agents-md`, `com-claude-md`, `com-hooks-claude` e T2 em uso |
 | M5 | `com-workflows`, T4, git por HTTP no GitHub falso e o sandbox |
 | M6 | segundo modelo-base mínimo, `node-basico` (TypeScript/Node) |
 | M7 | suíte pesada com T1 e T3 nos provedores reais |

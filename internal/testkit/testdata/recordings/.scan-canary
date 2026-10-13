@@ -1,0 +1,1 @@
+canary: a dot file in the recordings tree must be embedded and scanned for secrets (CA-DUBLES-10)
