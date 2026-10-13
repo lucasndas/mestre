@@ -1,9 +1,10 @@
 // Package fakenet is the in-memory network of the fast suite
 // (docs/qualidade/dubles.md#rede-falsa): Listen and Dial by name, no
 // sockets, usable inside testing/synctest, with injected failures. Real TLS
-// runs on top of its net.Conn. UDP broadcast, fake mDNS and the Citadel IP
-// change and isolating a whole machine arrive with discovery and the Citadel
-// and Towers in M2.
+// runs on top of its net.Conn. UDP (datagrams, broadcast, ports shared by
+// several sockets), fake mDNS and the change of the IP of a machine are in
+// udp.go, mdns.go and SetIP; isolating a whole machine arrives with the
+// Citadel and Towers.
 package fakenet
 
 import (
@@ -39,6 +40,11 @@ type Network struct {
 	halfOpen   map[[2]string]bool
 	latency    time.Duration
 	nextPort   int
+
+	ips  map[string]string // host name -> IP
+	byIP map[string]string // IP -> host name
+	udp  udpState
+	mdns mdnsState
 }
 
 // New returns an empty network driven by clk.
@@ -49,6 +55,59 @@ func New(clk clock.Clock) *Network {
 		partitions: map[[2]string]bool{},
 		halfOpen:   map[[2]string]bool{},
 		nextPort:   40000,
+		ips:        map[string]string{},
+		byIP:       map[string]string{},
+	}
+}
+
+// resolve maps an IP given to SetIP to the name of its host; any other name
+// is returned as it is. The caller holds n.mu.
+func (n *Network) resolve(host string) string {
+	if h, ok := n.byIP[host]; ok {
+		return h
+	}
+	return host
+}
+
+// resolveAddr rewrites "ip:port" as "host:port". The caller holds n.mu.
+func (n *Network) resolveAddr(addr string) string {
+	h, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return net.JoinHostPort(n.resolve(h), port)
+}
+
+// addrOf is how a host appears on the wire: its IP if it has one.
+// The caller holds n.mu.
+func (n *Network) addrOf(host string) string {
+	if ip, ok := n.ips[host]; ok {
+		return ip
+	}
+	return host
+}
+
+// SetIP gives host an IP address, replacing the previous one: a dial to the
+// old address is refused from now on, and the open connections of the host
+// are reset, as when a machine changes network. The IP answers to Dial like
+// the host name does.
+func (n *Network) SetIP(host, ip string) {
+	n.mu.Lock()
+	var cut []*Conn
+	for _, c := range n.conns { // before the old address stops resolving
+		if n.resolve(hostOf(c.local.String())) == host || n.resolve(hostOf(c.remote.String())) == host {
+			cut = append(cut, c)
+		}
+	}
+	if old, ok := n.ips[host]; ok {
+		delete(n.byIP, old)
+	}
+	n.ips[host] = ip
+	n.byIP[ip] = host
+	n.mu.Unlock()
+	for _, c := range cut {
+		c.r.Break(ErrConnectionReset)
+		c.w.Break(ErrConnectionReset)
 	}
 }
 
@@ -87,11 +146,12 @@ func (n *Network) Listen(addr string) (net.Listener, error) {
 // Dial connects host from to addr.
 func (n *Network) Dial(ctx context.Context, from, addr string) (net.Conn, error) {
 	n.mu.Lock()
-	if n.partitions[pair(from, hostOf(addr))] {
+	key := n.resolveAddr(addr)
+	if n.partitions[pair(from, hostOf(key))] {
 		n.mu.Unlock()
 		return nil, &net.OpError{Op: "dial", Net: "fakenet", Addr: Addr(addr), Err: ErrUnreachable}
 	}
-	l, ok := n.listeners[addr]
+	l, ok := n.listeners[key]
 	if !ok {
 		n.mu.Unlock()
 		return nil, &net.OpError{Op: "dial", Net: "fakenet", Addr: Addr(addr), Err: ErrConnectionRefused}
@@ -101,7 +161,7 @@ func (n *Network) Dial(ctx context.Context, from, addr string) (net.Conn, error)
 	c2s, s2c := memio.New(n.clk, false), memio.New(n.clk, false)
 	c2s.SetLatency(n.latency)
 	s2c.SetLatency(n.latency)
-	if n.halfOpen[pair(from, hostOf(addr))] {
+	if n.halfOpen[pair(from, hostOf(key))] {
 		c2s.SetBlackhole(true)
 		s2c.SetBlackhole(true)
 	}
@@ -177,7 +237,7 @@ func (n *Network) between(a, b string) []*Conn {
 	defer n.mu.Unlock()
 	var out []*Conn
 	for _, c := range n.conns {
-		h1, h2 := hostOf(c.local.String()), hostOf(c.remote.String())
+		h1, h2 := n.resolve(hostOf(c.local.String())), n.resolve(hostOf(c.remote.String()))
 		if pair(h1, h2) == pair(a, b) {
 			out = append(out, c)
 		}

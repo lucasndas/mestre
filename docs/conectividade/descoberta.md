@@ -12,11 +12,11 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
 
 1. **Endereço configurado** (`guild.endereco` na configuração da máquina), se houver.
 2. **Cache:** os últimos endereços da Cidadela que funcionaram, do mais recente para o mais antigo, e os endereços das máquinas da Guilda recebidos em `guild.config`.
-3. **Broadcast UDP e mDNS, em paralelo,** por até 3 s. Os endereços achados vão para uma lista; a resposta de uma Torre aponta para a Cidadela que ela segue.
+3. **Broadcast UDP e mDNS, em paralelo,** por até 3 s (a janela inteira, mesmo com uma resposta antes). Os endereços achados vão para uma lista, da época mais alta para a mais baixa e, na mesma época, quem respondeu por si antes de quem foi apontado; a resposta de uma Torre aponta para a Cidadela que ela segue, e o endereço da própria Torre nunca entra. Um endereço de época **menor** que a que a máquina segue é descartado sem abrir TLS: é uma Cidadela antiga.
 4. Para cada endereço achado, a máquina abre TLS e faz a **checagem de identidade**. O primeiro que passa é usado e entra no cache.
 
-- A descoberta roda no início, quando não há endereço que funcione e depois de 3 falhas seguidas de conexão ([reconexão](protocolo.md#heartbeat-e-reconexão)).
-- Sem nenhum endereço, a máquina tenta de novo com o mesmo backoff da reconexão e mostra "Cidadela não encontrada" no [checklist](../plataforma/checklist.md).
+- A descoberta roda no início, quando não há endereço que funcione e depois de 3 falhas seguidas de conexão ([reconexão](protocolo.md#heartbeat-e-reconexão)), ou na hora, quando uma máquina da Guilda que não é a Cidadela responde `4007` (abaixo). No motor, é o gancho `Rediscover` do cliente do protocolo; cada conexão aberta atualiza o cache.
+- Sem nenhum endereço, a máquina tenta de novo com o mesmo backoff da reconexão (1 s, dobrando até 60 s, ±20%) e mostra "Cidadela não encontrada" no [checklist](../plataforma/checklist.md).
 
 ### Checagem de identidade
 
@@ -24,13 +24,14 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
   - o certificado do servidor precisa ter cadeia até a CA da Guilda guardada na entrada;
   - precisa trazer o SAN de URI `mestre://machine/<machine_id>` de uma máquina da Guilda;
   - e essa máquina precisa ser a nomeada na certidão de época mais alta (a que a máquina conhece, ou uma mais alta e válida que a máquina nesse endereço apresenta no `welcome`; [certidão de época](../guilda/replicacao.md#certidão-de-época)).
+- **Como se divide:** a sonda TLS (`transport.Client.Probe`: cadeia até a CA, SAN de máquina, revogação) diz **qual** máquina está no endereço; ela passa se for a nomeada na certidão conhecida. Um endereço apontado como Cidadela de época **maior** que a conhecida também passa, só como dica: a prova é a certidão do `welcome`, e o protocolo recusa a conexão se a máquina que respondeu não for a nomeada nela ou se a certidão não valer.
 - O IP e o nome não entram na checagem. Por isso uma mudança de IP não exige certificado novo para ninguém.
-- Um endereço que falha na checagem é descartado e registrado em log. A máquina tenta o próximo. Uma máquina que é da Guilda mas não é a Cidadela responde `4007` com a certidão atual, e a máquina segue para a Cidadela nomeada nela.
+- Um endereço que falha na checagem é descartado e registrado em log. A máquina tenta o próximo. Uma máquina que é da Guilda mas não é a Cidadela responde `4007` com a certidão atual; a Torre segue a certidão (se válida e mais nova), refaz a descoberta na hora, e as entradas do cache de outra máquina que não a nomeada nela são puladas sem abrir TLS.
 
 ### Broadcast UDP
 
 - **Porta:** `7445/udp` (padrão, configurável). O motor de toda máquina da Guilda escuta em `0.0.0.0:7445`. As [instâncias](../arquitetura/componentes.md#instâncias) da mesma máquina compartilham a porta (`SO_REUSEADDR`, e `SO_REUSEPORT` no Linux): cada uma recebe o broadcast e responde com o próprio `machine_id`, como uma máquina separada.
-- **Pedido:** a máquina envia 3 pedidos, com 1 s de intervalo, para `255.255.255.255` e para o broadcast de cada interface ativa (ex.: `192.168.1.255`):
+- **Pedido:** a máquina envia de um soquete próprio, de porta livre (a resposta volta nele; a 7445 é só de escuta, porque um unicast para uma porta compartilhada chegaria a uma instância só), 3 pedidos, com 1 s de intervalo, para `255.255.255.255` e para o broadcast de cada interface ativa (ex.: `192.168.1.255`):
 
 ```json
 {"mestre":"discover","v":1,"nonce":"9f2c…(32 hex)","guild_id":"<guild_id ou vazio>"}
@@ -59,15 +60,15 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
   - o serviço `_mestre-guardiao._tcp`, na porta do Guardião.
 - **Só o Guardião da Cidadela** publica também o nome **`mestre.local`**, o endereço do painel, e só enquanto tem a concessão do motor, que não depende do GitHub; sem ela, ou com certidão mais nova, retira o nome em até 60 s ([concessão do motor](../autocura/guardiao.md#concessão-do-motor)). Uma Cidadela suspensa e uma Torre nunca o publicam ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)).
 - **Quem publica, por sistema:**
-  - Linux: o **Avahi**, com o arquivo de serviço `/etc/avahi/services/mestre.service` e a entrada de `mestre.local` em `/etc/avahi/hosts`, reescritos pelo Guardião quando o papel muda;
+  - Linux: o **Avahi**, com o arquivo de serviço `/etc/avahi/services/mestre.service` (`mestre-<instância>.service` nas outras instâncias) e a entrada de `mestre.local` em `/etc/avahi/hosts`, reescritos pelo Guardião quando o papel muda; o conteúdo é gerado por `discovery.AvahiServiceFile` e `AvahiHostsLine`, e a instalação é do [instalador](../plataforma/instalacao-e-atualizacao.md);
   - Windows: o **Guardião**, pelo mDNS nativo do Windows (`DnsServiceRegister`; o próprio Windows já responde pelo nome `<host>.local`).
 - Nos dois casos, quem publica não é o motor: o anúncio continua com o motor fora do ar. Isso ajuda a [recuperação](../autocura/camadas.md).
-- **Na consulta,** a biblioteca de mDNS do binário faz a consulta DNS-SD de `_mestre._tcp.local` e lê o TXT.
+- **Na consulta,** a biblioteca de mDNS do binário faz a consulta DNS-SD de `_mestre._tcp.local` e lê o TXT. Só um registro com `v=1`, `machine_id`, `guild_id` da Guilda, `role` e `epoch` válidos conta, e só um com `role=cidadela` dá endereço (o TXT de uma Torre não diz onde está a Cidadela); IPv6 de link local fica de fora.
 - Máquinas Windows precisam do perfil de rede "Privada" e das regras de firewall para broadcast e mDNS; as Linux, das regras do firewall delas. O [checklist](../plataforma/checklist.md) confere isso.
 
 ### Cache
 
-- **Motor:** guarda no banco local de máquina o `guild_id`, a certidão de época mais alta vista e uma lista de endereços (IP ou nome e porta) da Cidadela e das outras máquinas, cada um com a origem (configurado, broadcast, mDNS ou `guild.config`) e o último sucesso.
+- **Motor:** guarda no banco local de máquina o `guild_id`, a certidão de época mais alta vista e uma lista de endereços (IP ou nome e porta) da Cidadela e das outras máquinas, cada um com a origem (configurado, broadcast, mDNS ou `guild.config`), a máquina que respondeu ali e o último sucesso; a lista fica na tabela `known_addresses`, e o `guild_id` e a certidão ficam na identidade da máquina ([Guilda](../guilda/guilda.md)).
 - **Guardião:** faz a mesma descoberta e mantém o próprio cache num arquivo pequeno, porque não usa o banco do motor ([Guardião](../autocura/guardiao.md)).
 - Cada conexão bem-sucedida atualiza o cache. Endereços sem sucesso há 30 dias (padrão) saem da lista.
 

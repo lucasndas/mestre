@@ -36,7 +36,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 ### Época
 
 - Quem recebe uma mensagem com `epoch` **menor** que a sua responde `error` `stale_epoch` sem executar nada e fecha a conexão com `4006`; o remetente atualiza a época (pede a certidão) e se reconecta na Cidadela certa. O `hello` é a exceção: de época menor, ele não é recusado, e o `welcome` leva a certidão atual, que a Torre segue.
-- Quem recebe `epoch` **maior** pede a certidão (`guild.epoch`), confere a assinatura e passa a seguir a nova época **antes** de tratar a mensagem; no `hello` a certidão já vem junto. Uma Cidadela que vê época maior se rebaixa a Torre antes de qualquer ação externa e fecha com `4007` ([volta da antiga Cidadela](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)). Uma Torre que recebe um `welcome` de época menor que a sua não fala com aquela Cidadela.
+- Quem recebe `epoch` **maior** pede a certidão (`guild.epoch`), confere a assinatura e passa a seguir a nova época **antes** de tratar a mensagem; no `hello` a certidão já vem junto. Uma Cidadela que vê época maior se rebaixa a Torre antes de qualquer ação externa e fecha com `4007` ([volta da antiga Cidadela](../guilda/cidadela-e-torres.md#volta-da-antiga-cidadela)). Uma Torre que recebe um `welcome` de época menor que a sua não fala com aquela Cidadela, nem com uma máquina que o TLS identificou como outra que não a nomeada na certidão do `welcome`.
 
 ### Abertura, versão e capacidades
 
@@ -73,7 +73,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 - **Heartbeat:** `machine.heartbeat` logo depois do `welcome` e a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
 - **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%. Depois de 3 falhas seguidas, a Torre refaz a [descoberta](descoberta.md).
 - **Uma conexão por `machine_id`:** uma conexão nova substitui a antiga.
-- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual, assinada pela CA; vale também para o Guardião de uma Cidadela antiga, que se retira na hora ao receber certidão mais nova, [concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
+- **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual, assinada pela CA, que a Torre segue se for mais nova antes de refazer a [descoberta](descoberta.md) na hora; vale também para o Guardião de uma Cidadela antiga, que se retira na hora ao receber certidão mais nova, [concessão do motor](../autocura/guardiao.md#concessão-do-motor)).
 
 ### Tipos de mensagem
 

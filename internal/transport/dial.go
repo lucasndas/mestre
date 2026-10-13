@@ -105,3 +105,37 @@ func (c *Client) Dial(ctx context.Context, addr, route string) (Conn, error) {
 	}
 	return newWSConn(ws, peer, c.cfg.MaxMessageSize, c.cfg.Keepalive, c.cfg.Clock), nil
 }
+
+// Prober checks who answers at an address without opening a route.
+type Prober interface {
+	// Probe opens TLS to addr ("host:port"), verifies the server and closes.
+	Probe(ctx context.Context, addr string) (Peer, error)
+}
+
+var _ Prober = (*Client)(nil)
+
+// Probe opens TLS to addr, verifies the server exactly as Dial does (chain to
+// the Guild CA, the mestre:// identity of an allowed kind, the revocation
+// hook) and closes the connection: it answers "which machine of the Guild is
+// there?" for the discovery, which treats addresses as hints and trusts only
+// this check (docs/conectividade/descoberta.md#checagem-de-identidade).
+func (c *Client) Probe(ctx context.Context, addr string) (Peer, error) {
+	var peer Peer
+	tcfg := clientTLS(c.cfg.CA, c.cfg.Cert, c.cfg.ServerKinds, c.cfg.Credentials, c.cfg.Clock, &peer)
+	if host, _, err := net.SplitHostPort(addr); err == nil && net.ParseIP(host) == nil {
+		tcfg.ServerName = host
+	}
+	raw, err := c.cfg.Network.DialContext(ctx, addr)
+	if err != nil {
+		return Peer{}, fmt.Errorf("transport: probe %s: %w", addr, err)
+	}
+	defer raw.Close()
+	stop := context.AfterFunc(ctx, func() { _ = raw.Close() })
+	defer stop()
+	tc := tls.Client(raw, tcfg)
+	if err := tc.HandshakeContext(ctx); err != nil {
+		return Peer{}, fmt.Errorf("transport: probe %s: %w", addr, err)
+	}
+	peer.RemoteAddr = raw.RemoteAddr().String()
+	return peer, nil
+}

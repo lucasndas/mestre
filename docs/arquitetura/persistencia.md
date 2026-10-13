@@ -55,6 +55,7 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 |---|---|
 | `schema_migrations` | migrações aplicadas |
 | `machine_identity` | `machine_id`, `guild_id`, papel, maior certidão de época vista, endereços conhecidos da Cidadela, versão de protocolo negociada |
+| `known_addresses` | endereços da Cidadela e das outras máquinas da Guilda, com a origem, a máquina que respondeu e o último sucesso; saem após 30 dias sem uso ([descoberta](../conectividade/descoberta.md#cache)) |
 | `terminals` | terminais que esta máquina roda (registro abaixo) |
 | `local_worktrees` | worktrees de mesa nesta máquina: caminho, branch, último commit sincronizado |
 | `account_profiles` | perfis de conta locais (pastas de configuração por provedor) |
