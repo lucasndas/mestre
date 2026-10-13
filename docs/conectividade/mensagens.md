@@ -12,7 +12,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `machine.heartbeat` | T→C | não | `cpu_pct`, `mem_pct`, `disk_free_bytes`, `terminals`, `replica_lag_s` | — |
 | `machine.sheet` | T→C | sim | os campos da ficha da máquina que mudaram | — |
 | `guild.epoch` | ambos | sim | pedido sem campos; resposta com a certidão de época atual (`guild_id`, `epoch`, `citadel_machine_id`, `approved_by`, `approval_id`, `issued_at`, `signature`) | ([certidão](../guilda/replicacao.md#certidão-de-época)) |
-| `guild.config` | C→T | sim | máquinas da Guilda (`machine_id`, nome, instância, endereços, prioridade, `excluded`), lista de revogados, fuso da Guilda | — |
+| `guild.config` | C→T | sim | máquinas da Guilda (`machine_id`, nome, instância, endereços, prioridade, `excluded`), lista de revogados (números de série dos certificados), fuso da Guilda | — |
 | `guild.leave` | ambos | sim | C→T: a máquina foi removida (apagar réplica, arquivos, cofre e configuração); T→C: pedido de saída, `reason` (`uninstall`) | ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
 | `replica.ack` | T→C | não | `lsn` aplicado | — (os registros vão em frames `0x03`; [replicação](../guilda/replicacao.md)) |
 | `replica.resync` | T→C | sim | `from_lsn`; pede de novo a partir dali, ou cópia completa sem `from_lsn` | `xfer.begin` com `kind: db-snapshot` ou frames `0x03` |
@@ -42,7 +42,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `sync.request` / `sync.applied` | ambos | sim | `table_id`, `branch`, `base_commit`, `tip_commit` | ([mesas](../orquestracao/mesas.md)) |
 | `xfer.*` | ambos | sim (menos `xfer.progress`) | `xfer.begin {xfer_id, kind, size, sha256, chunk_size, meta}` → `xfer.ready {xfer_id, next_index}`; `xfer.progress {xfer_id, next_index}`; `xfer.end {xfer_id}` → `xfer.done {xfer_id, ok, error}` ([transferência em partes](protocolo.md#transferência-em-partes)); nenhum passa pelo `outbox` | — |
 | `transcribe.request` | C→T | sim | `audio_xfer_id` (WAV já transferido), `language` | `transcribe.result {text, duration_s}` ou `error` ([transcrição](../telegram/anexos-e-transcricao.md)) |
-| `cert.renew` | T→C | sim | `role` (`motor`), `csr` | `cert.issued {cert}` ([credenciais](../guilda/guilda.md#credenciais)) |
+| `cert.renew` | T→C | sim | `role` (`motor`), `csr` (PEM) | `cert.issued {cert}`, o certificado em PEM ([credenciais](../guilda/guilda.md#credenciais)) |
 | `update.apply` | C→T | sim | `release_tag`, `component` (`motor` \| `guardiao`), `xfer_id` | resultado no passo da [autoatualização](../plataforma/autoatualizacao.md) |
 
 **Tipos voláteis:** os que levam segredo (`vault.credential`, `agent.site_login`, `agent.site_login_input`) têm ack, mas esperam por ele só em memória: um reinício do processo os perde, e a Cidadela recomeça o pedido.
