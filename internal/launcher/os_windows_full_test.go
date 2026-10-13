@@ -200,6 +200,11 @@ func (e *env) checkStarted(t *testing.T, _ context.Context, _ terminal.SpawnSpec
 	// (docs/arquitetura/terminal.md#socket-e-aperto-de-mão).
 	t.Run("protected from the agents", func(t *testing.T) {
 		t.Parallel()
+		// The runner of the CI is an administrator with SeDebugPrivilege,
+		// which opens any process whatever its DACL says; the agents have
+		// no such privilege. Taking it off the token of the test process
+		// (it is not used by any other test) makes the test one of them.
+		removeDebugPrivilege(t)
 		for _, tc := range []struct {
 			name    string
 			access  uint32
@@ -250,6 +255,25 @@ func (e *env) checkStarted(t *testing.T, _ context.Context, _ terminal.SpawnSpec
 			t.Error("the mestre-pty is in the Job of the process that asked for it: the engine could end it, and its Job would hold it")
 		}
 	})
+}
+
+// removeDebugPrivilege takes SeDebugPrivilege off the token of this process.
+func removeDebugPrivilege(t *testing.T) {
+	t.Helper()
+	var tok windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_ADJUST_PRIVILEGES|windows.TOKEN_QUERY, &tok); err != nil {
+		t.Fatal(err)
+	}
+	defer tok.Close()
+	var luid windows.LUID
+	if err := windows.LookupPrivilegeValue(nil, windows.StringToUTF16Ptr("SeDebugPrivilege"), &luid); err != nil {
+		t.Fatal(err)
+	}
+	tp := windows.Tokenprivileges{PrivilegeCount: 1}
+	tp.Privileges[0] = windows.LUIDAndAttributes{Luid: luid, Attributes: windows.SE_PRIVILEGE_REMOVED}
+	if err := windows.AdjustTokenPrivileges(tok, false, &tp, 0, nil, nil); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // wait for the launcher to release the session of terminal id.
