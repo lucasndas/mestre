@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -282,6 +283,24 @@ func (c *Client) notCitadel(ctx context.Context, peer Peer, env Envelope) error 
 	return &NotCitadelError{Peer: peer, Certificate: cert}
 }
 
+// citadelSeen remembers, on a Tower, which machine was the Citadel at the
+// last prune. After the Citadel changes (or this process starts and sees one
+// for the first time) nothing is forgotten for ProcessedTTL: a Citadel
+// promoted over a replica that lags sends again an outbox older than the one
+// the Tower heard the floor of, and a command it forgot would run twice.
+type citadelSeen struct {
+	id    string
+	until time.Time
+}
+
+// holds says whether the pruning waits, given the Citadel connected now.
+func (c *citadelSeen) holds(id string, now time.Time, ttl time.Duration) bool {
+	if c.id != id {
+		c.id, c.until = id, now.Add(ttl)
+	}
+	return now.Before(c.until)
+}
+
 // pruneLoop, every Timing.ProcessedPrune: sends each connected peer the
 // floor of our outbox; forgets, of each peer connected now, the ids older
 // than the TTL below the floor it sent (a peer that is away keeps all its
@@ -290,6 +309,7 @@ func (c *Client) notCitadel(ctx context.Context, peer Peer, env Envelope) error 
 func pruneLoop(ctx context.Context, cfg *Config, links func() []*Link) {
 	t := cfg.Clock.NewTicker(cfg.Timing.ProcessedPrune)
 	defer t.Stop()
+	seen := map[string]*citadelSeen{}
 	for {
 		cutoff := cfg.Clock.Now().Add(-cfg.Timing.ProcessedTTL)
 		ls := links()
@@ -302,6 +322,16 @@ func pruneLoop(ctx context.Context, cfg *Config, links func() []*Link) {
 			floor := s.peerFloor()
 			if floor == "" {
 				continue
+			}
+			if s.side == SideTower {
+				w := seen[l.key]
+				if w == nil {
+					w = &citadelSeen{}
+					seen[l.key] = w
+				}
+				if w.holds(s.peer.ID, cfg.Clock.Now(), cfg.Timing.ProcessedTTL) {
+					continue
+				}
 			}
 			if _, err := cfg.Processed.Prune(ctx, l.key, cutoff, floor); err != nil && ctx.Err() == nil {
 				cfg.Logger.Error("protocol: prune processed commands", "peer", l.key, "err", err)

@@ -21,6 +21,7 @@ import (
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit/fakelock"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
@@ -368,27 +369,40 @@ func (e *Engine) towerNow() *towerRun {
 // the Tower sends it again to the new Citadel; here a renewal of the
 // certificate of c, which the new Citadel registers. The old Citadel stops
 // presenting mestre.local, and a removal on the new one reaches it in
-// guild.config.
+// guild.config. Besides the renewal, the receipt vault.dropped of an excluded
+// machine is audited by the new Citadel, and neither the decision on an entry
+// nor a new entry is taken by the old one.
 func TestAPlannedHandoverRefusesTheChangesItWouldLose(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	a := r.node("a")
 	b := r.node("b", a)
 	c := r.node("c", a, b)
-	a.cfg.Addresses = []string{"b:7443", "c:7443"}
-	b.cfg.Addresses = []string{"a:7443", "c:7443"}
+	d := r.node("d", a, b)
+	a.cfg.Addresses = []string{"b:7443", "c:7443", "d:7443"}
+	b.cfg.Addresses = []string{"a:7443", "c:7443", "d:7443"}
 	r.found(a, clock.Real{})
 	r.start(a, clock.Real{})
 	r.waitFor("a to act", a.acting)
 	r.join(b, a, clock.Real{})
 	r.join(c, a, clock.Real{})
+	r.join(d, a, clock.Real{})
 	r.start(b, clock.Real{})
 	r.start(c, clock.Real{})
+	r.start(d, clock.Real{})
 	lsn := a.mark("t1")
-	r.waitFor("b and c to apply t1", func() bool {
-		return b.connected(1) && c.connected(1) && b.e.Status().LSN >= lsn && c.e.Status().LSN >= lsn
+	r.waitFor("b, c and d to apply t1", func() bool {
+		return b.connected(1) && c.connected(1) && d.connected(1) &&
+			b.e.Status().LSN >= lsn && c.e.Status().LSN >= lsn && d.e.Status().LSN >= lsn
 	})
 	r.waitFor("a to present mestre.local", func() bool { return hasName(a.e.cert.Leaf(), "mestre.local") })
+	// d is excluded: it erases its vault and the receipt is audited by a
+	if err := a.e.citadelNow().SetExcluded(t.Context(), d.id, true); err != nil {
+		t.Fatal(err)
+	}
+	const droppedRows = `SELECT id FROM audit_log WHERE action = 'vault.dropped' AND machine_id = ?`
+	r.waitFor("a to audit the receipt of d", func() bool { return len(a.query(droppedRows, d.id)) == 1 })
+	oldSerial := transport.Serial(c.e.cert.Leaf())
 
 	// the lock waits: the handover drains and stays there
 	r.lock.Hold()
@@ -401,6 +415,25 @@ func TestAPlannedHandoverRefusesTheChangesItWouldLose(t *testing.T) {
 	if err := c.e.towerNow().renewer.Renew(t.Context()); err == nil {
 		t.Error("the old Citadel renewed a certificate after the handover read its last lsn")
 	}
+	// the receipt of an excluded machine, the decision on an entry and a new
+	// entry are refused too (the receipt is sent again to the new Citadel)
+	res, err := d.e.towerNow().client.Link().Call(t.Context(), protocol.Outgoing{Type: protocol.TypeVaultDropped, Payload: protocol.Empty{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != protocol.AckError || res.Error == nil || !res.Error.Retryable {
+		t.Errorf("the old Citadel answered the receipt of d with %+v, want a retryable error", res)
+	}
+	if got := len(a.query(droppedRows, d.id)); got != 1 {
+		t.Errorf("the old Citadel audited %d receipts of d, want the one before the handover", got)
+	}
+	if err := a.e.DecideEntry(t.Context(), "entrada", guild.Decision{Accept: true, ApprovedBy: "dono"}); !errors.Is(err, guild.ErrSuspended) {
+		t.Errorf("the old Citadel decided an entry while it hands over: %v", err)
+	}
+	e := r.node("e", a, b)
+	if _, err := Enroll(t.Context(), e.cfg, e.paths, net.JoinHostPort(a.name, "7443"), r.net.Host(e.name), clock.Real{}, nil); err == nil {
+		t.Error("the old Citadel took an entry while it hands over")
+	}
 	r.lock.Release()
 	if err := <-handed; err != nil {
 		t.Fatal(err)
@@ -412,9 +445,12 @@ func TestAPlannedHandoverRefusesTheChangesItWouldLose(t *testing.T) {
 	})
 	r.waitFor("c to follow b", func() bool { return c.connected(2) && c.e.Status().Citadel == b.id })
 	r.waitFor("a to follow b", func() bool { return a.connected(2) })
+	// the renewal refused by the old Citadel went again to b, which issued it
+	r.waitFor("c to present the certificate b issued", func() bool { return transport.Serial(c.e.cert.Leaf()) != oldSerial })
 	r.waitFor("the certificate c presents to be in the registry of b", func() bool {
 		return len(b.query(`SELECT serial FROM machine_credentials WHERE serial = ?`, transport.Serial(c.e.cert.Leaf()))) == 1
 	})
+	r.waitFor("b to audit the receipt of d sent during the handover", func() bool { return len(b.query(droppedRows, d.id)) == 2 })
 	if hasName(a.e.cert.Leaf(), "mestre.local") {
 		t.Error("the old Citadel still presents mestre.local")
 	}

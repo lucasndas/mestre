@@ -25,6 +25,10 @@ type Credentials struct {
 	mu       sync.RWMutex
 	revoked  map[string]struct{}
 	machines map[string]struct{} // machines that are not active
+	// what the last guild.config said (a Tower): kept across Reload, so a
+	// replica that is behind does not forget it
+	learnedRevoked  map[string]struct{}
+	learnedMachines map[string]struct{}
 }
 
 var _ transport.CredentialChecker = (*Credentials)(nil)
@@ -69,11 +73,39 @@ func (c *Credentials) Reload(ctx context.Context, db *store.DB) error {
 	for _, id := range retired {
 		m[id] = struct{}{}
 	}
-	c.Replace(serials)
+	r := make(map[string]struct{}, len(serials))
+	for _, s := range serials {
+		r[s] = struct{}{}
+	}
+	// the union with the last guild.config: the replica may not have caught
+	// up with a removal the Citadel announced
 	c.mu.Lock()
-	c.machines = m
+	for s := range c.learnedRevoked {
+		r[s] = struct{}{}
+	}
+	for id := range c.learnedMachines {
+		m[id] = struct{}{}
+	}
+	c.revoked, c.machines = r, m
 	c.mu.Unlock()
 	return nil
+}
+
+// Learn takes the refusals of a guild.config: the revoked serials and the
+// machines that left. They hold until a later guild.config, across Reload.
+func (c *Credentials) Learn(serials, machineIDs []string) {
+	c.mu.Lock()
+	c.learnedRevoked = make(map[string]struct{}, len(serials))
+	for _, s := range serials {
+		c.learnedRevoked[s] = struct{}{}
+		c.revoked[s] = struct{}{}
+	}
+	c.learnedMachines = make(map[string]struct{}, len(machineIDs))
+	for _, id := range machineIDs {
+		c.learnedMachines[id] = struct{}{}
+		c.machines[id] = struct{}{}
+	}
+	c.mu.Unlock()
 }
 
 func column(ctx context.Context, db *store.DB, q string) ([]string, error) {
@@ -121,6 +153,19 @@ func (c *Credentials) Retire(machineIDs ...string) {
 		c.machines[id] = struct{}{}
 	}
 	c.mu.Unlock()
+}
+
+// Retired lists the machines that are not active, sorted: what guild.config
+// carries so a Tower refuses their certificates too.
+func (c *Credentials) Retired() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]string, 0, len(c.machines))
+	for id := range c.machines {
+		out = append(out, id)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Revoked lists the revoked serials, sorted: what guild.config carries.

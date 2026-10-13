@@ -367,7 +367,7 @@ func (c *logConn) ExecContext(ctx context.Context, q string, args []driver.Named
 		c.st.maint = true
 		defer func() { c.st.maint = false }()
 	}
-	if kind == stmtDML && !c.st.inTx {
+	if (kind == stmtDML || rewritesStats(q)) && !c.st.inTx {
 		return c.autocommit(ctx, q, args)
 	}
 	mark := len(c.st.pending)
@@ -377,6 +377,23 @@ func (c *logConn) ExecContext(ctx context.Context, q string, args []driver.Named
 		return nil, c.mapErr(err)
 	}
 	return res, nil
+}
+
+// rewritesStats says whether q is a statement that writes without being DML
+// (ANALYZE, REINDEX, PRAGMA optimize): outside a transaction SQLite would run
+// it on its own, with no check of the schema version. It goes through the
+// autocommit path, where the commit compares the version.
+func rewritesStats(q string) bool {
+	stmts := splitStatements(q)
+	if len(stmts) == 0 {
+		return false
+	}
+	w, rest := firstWord(stmts[0])
+	if w == "PRAGMA" {
+		name, _ := pragmaOf(rest)
+		return name == "optimize"
+	}
+	return w == "ANALYZE" || w == "REINDEX"
 }
 
 // script runs a migration. It travels in the log as its SQL, which the

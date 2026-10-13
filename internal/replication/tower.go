@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/protocol"
@@ -75,8 +76,17 @@ type Replica struct {
 	excluded    bool
 	state       string
 	lastErr     string
-	oldest      time.Time // when the oldest record waiting in the queue was received
-	askedAt     time.Time // when the last request to the Citadel for records or a copy was made
+	erasing     atomic.Bool // a retry of an incomplete erasing is under way
+
+	// bg are the erasings in the background: Run waits for them (after
+	// canceling bgCtx) before it returns, so none of them touches the files
+	// of the replica once the owner of the replica closes it.
+	bg      sync.WaitGroup
+	bgCtx   context.Context
+	bgStop  context.CancelFunc
+	stopped bool
+	oldest  time.Time // when the oldest record waiting in the queue was received
+	askedAt time.Time // when the last request to the Citadel for records or a copy was made
 }
 
 // NewReplica checks the configuration.
@@ -104,6 +114,7 @@ func NewReplica(ctx context.Context, cfg ReplicaConfig) (*Replica, error) {
 		cfg.ResyncRetry = DefaultResyncRetry
 	}
 	r := &Replica{cfg: cfg, kick: make(chan struct{}, 1), state: "ok"}
+	r.bgCtx, r.bgStop = context.WithCancel(context.Background())
 	// A machine that was told to erase the vault stays that way across a
 	// restart, until the vault comes back.
 	if _, err := os.Stat(r.droppedMarker()); err == nil {
@@ -135,6 +146,38 @@ func (r *Replica) Attach(l *protocol.Link) {
 // droppedMarker is the file that remembers, across restarts, that the vault
 // was erased on an order of the Citadel: this machine is excluded.
 func (r *Replica) droppedMarker() string { return r.cfg.DB.Path() + ".excluded" }
+
+// The marker holds the order (first line) and, while the receipt is owed
+// because the WAL could not be truncated, a second one.
+const (
+	markerDrop       = "vault.drop\n"
+	markerIncomplete = "purge incomplete\n"
+)
+
+// purgeOwed says whether an erasing ended with the WAL not truncated, so the
+// secrets may still be in the -wal file and the receipt was not sent.
+func (r *Replica) purgeOwed() bool {
+	b, err := os.ReadFile(r.droppedMarker())
+	return err == nil && strings.Contains(string(b), markerIncomplete)
+}
+
+// setPurgeOwed records, on disk, that the purge is incomplete (or that it is
+// done). It never makes a machine excluded that is not.
+func (r *Replica) setPurgeOwed(on bool) {
+	r.mu.Lock()
+	excluded := r.excluded
+	r.mu.Unlock()
+	if !excluded {
+		return
+	}
+	content := markerDrop
+	if on {
+		content += markerIncomplete
+	}
+	if err := os.WriteFile(r.droppedMarker(), []byte(content), 0o600); err != nil {
+		r.cfg.Logger.Error("replication: remembering the state of the erasing", "err", err)
+	}
+}
 
 // Hello fills what the hello says of the replica: the last lsn applied and the
 // epoch it belongs to. A replica that waits for a full copy says it has
@@ -325,6 +368,7 @@ func (r *Replica) retryAsk() {
 // Run applies the records as they come and confirms them, and applies the
 // retention of the log of the replica, until ctx ends.
 func (r *Replica) Run(ctx context.Context) error {
+	defer r.waitBackground()
 	ack := r.cfg.Clock.NewTicker(r.cfg.AckEvery)
 	defer ack.Stop()
 	prune := r.cfg.Clock.NewTicker(PruneEvery)
@@ -340,6 +384,7 @@ func (r *Replica) Run(ctx context.Context) error {
 		case <-r.kick:
 		case <-retry.C():
 			r.retryAsk()
+			r.retryErasing()
 		case <-ack.C():
 			r.sendAck(true)
 		case <-prune.C():
@@ -541,6 +586,9 @@ func (r *Replica) purgeVault(ctx context.Context) error {
 			return err
 		}
 	}
+	// Remembered on disk: the erasing is retried (the next vault.drop, or the
+	// retry of the replica) and the receipt waits for it.
+	r.setPurgeOwed(true)
 	return err
 }
 
@@ -581,34 +629,87 @@ func (r *Replica) handleVaultReplica(ctx context.Context, m *protocol.Message) (
 
 func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
 	// Remembered on disk before anything else, so a restart in the middle of the
-	// erasing, or before the next connection, still filters what comes.
-	if err := os.WriteFile(r.droppedMarker(), []byte("vault.drop\n"), 0o600); err != nil {
+	// erasing, or before the next connection, still filters what comes. An
+	// erasing that was left incomplete stays so until it is done.
+	content := markerDrop
+	if r.purgeOwed() {
+		content += markerIncomplete
+	}
+	if err := os.WriteFile(r.droppedMarker(), []byte(content), 0o600); err != nil {
 		r.cfg.Logger.Error("replication: remembering the order to erase the vault", "err", err)
 	}
 	r.mu.Lock()
 	r.excluded = true
+	r.mu.Unlock()
+	r.background(func(ctx context.Context) { r.eraseAndReceipt(ctx, m.Env.ID) })
+	return nil, nil
+}
+
+// background runs f in a goroutine that Run waits for when it ends.
+func (r *Replica) background(f func(ctx context.Context)) {
+	r.mu.Lock()
+	if r.stopped {
+		r.mu.Unlock()
+		return
+	}
+	r.bg.Add(1)
+	r.mu.Unlock()
+	go func() {
+		defer r.bg.Done()
+		f(r.bgCtx)
+	}()
+}
+
+// waitBackground cancels the erasings in the background and waits for them.
+func (r *Replica) waitBackground() {
+	r.mu.Lock()
+	r.stopped = true
+	r.mu.Unlock()
+	r.bgStop()
+	r.bg.Wait()
+}
+
+// eraseAndReceipt erases the vault and, when there was something to erase and
+// it is done, sends the receipt vault.dropped. A purge rewrites the file: the
+// receipt comes later. A machine that had nothing to erase (the order comes
+// again at every connection of an excluded machine) gives no receipt: there
+// is nothing to put in the audit. An erasing that failed on the WAL still held
+// by a reader leaves the state on disk: the next order, or the retry of the
+// replica, erases again and sends the receipt then.
+func (r *Replica) eraseAndReceipt(ctx context.Context, replyTo string) {
+	r.applyMu.Lock()
+	erased, err := r.dropVault(ctx)
+	r.applyMu.Unlock()
+	if err != nil {
+		r.cfg.Logger.Error("replication: erasing the vault", "err", err)
+		return
+	}
+	if !erased {
+		return
+	}
+	r.mu.Lock()
 	link := r.link
 	r.mu.Unlock()
-	// A purge rewrites the file: it answers later, with the receipt. A machine
-	// that had nothing to erase (the order comes again at every connection of
-	// an excluded machine) gives no receipt: there is nothing to put in the audit.
-	go func() {
-		ctx := context.Background()
-		r.applyMu.Lock()
-		erased, err := r.dropVault(ctx)
-		r.applyMu.Unlock()
-		if err != nil {
-			r.cfg.Logger.Error("replication: erasing the vault", "err", err)
-			return
-		}
-		if !erased || link == nil {
-			return
-		}
-		if _, err := link.Send(ctx, protocol.Outgoing{Type: protocol.TypeVaultDropped, Payload: protocol.Empty{}, ReplyTo: m.Env.ID}); err != nil {
-			r.cfg.Logger.Warn("replication: vault.dropped", "err", err)
-		}
-	}()
-	return nil, nil
+	if link == nil {
+		return // the state stays owed: the receipt goes with the next try
+	}
+	if _, err := link.Send(ctx, protocol.Outgoing{Type: protocol.TypeVaultDropped, Payload: protocol.Empty{}, ReplyTo: replyTo}); err != nil {
+		r.cfg.Logger.Warn("replication: vault.dropped", "err", err)
+		return
+	}
+	r.setPurgeOwed(false)
+}
+
+// retryErasing erases again, in the background, an erasing that was left
+// incomplete.
+func (r *Replica) retryErasing() {
+	if !r.purgeOwed() || !r.erasing.CompareAndSwap(false, true) {
+		return
+	}
+	r.background(func(ctx context.Context) {
+		defer r.erasing.Store(false)
+		r.eraseAndReceipt(ctx, "")
+	})
 }
 
 // dropVault erases the key, the envelope, the vault tables, the log of what
@@ -621,7 +722,7 @@ func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 			return false, err
 		}
 	}
-	erased := held
+	erased := held || r.purgeOwed()
 	if r.dropPendingCopies() {
 		erased = true
 	}

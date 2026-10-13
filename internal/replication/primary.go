@@ -95,6 +95,10 @@ type PrimaryConfig struct {
 	// OnDropped, when set, is told of the receipt of a vault.drop after it was
 	// written to the audit (action vault.dropped).
 	OnDropped func(machineID string)
+	// Gate, when set, wraps the handler of the receipt vault.dropped: the
+	// Citadel that hands over refuses it (retryable), so the Tower sends it
+	// to the next one, which audits it.
+	Gate func(protocol.HandlerFunc) protocol.HandlerFunc
 	// Paused, when set and true, holds the retention of the log back: a
 	// Citadel that does not act yet (suspended at the start) prunes nothing
 	// of what a demotion would report as discarded.
@@ -248,7 +252,11 @@ func (p *Primary) Hooks(base protocol.Hooks) protocol.Hooks {
 func (p *Primary) Register(r *protocol.Router) {
 	r.HandleFunc(protocol.TypeReplicaAck, p.handleAck)
 	r.HandleFunc(protocol.TypeReplicaResync, p.handleResync)
-	r.HandleFunc(protocol.TypeVaultDropped, p.handleDropped)
+	dropped := protocol.HandlerFunc(p.handleDropped)
+	if p.cfg.Gate != nil {
+		dropped = p.cfg.Gate(dropped)
+	}
+	r.Handle(protocol.TypeVaultDropped, dropped)
 }
 
 func (p *Primary) baseCtx() context.Context {

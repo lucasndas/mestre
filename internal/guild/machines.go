@@ -69,7 +69,7 @@ func configFrom(ctx context.Context, q querier, g guildRow, creds *Credentials) 
 	if err != nil {
 		return protocol.GuildConfig{}, err
 	}
-	cfg := protocol.GuildConfig{Machines: []protocol.GuildConfigMachine{}, Revoked: creds.Revoked(), Timezone: g.Timezone}
+	cfg := protocol.GuildConfig{Machines: []protocol.GuildConfigMachine{}, Revoked: creds.Revoked(), Retired: creds.Retired(), Timezone: g.Timezone}
 	for _, m := range ms {
 		if m.State != MachineActive {
 			continue

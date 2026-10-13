@@ -193,23 +193,29 @@ func TestThePromotedMachineDoesNotActUntilACheckConfirmsItsEpoch(t *testing.T) {
 	})
 }
 
-// A Citadel that restarts during the wait of the promoted machine waits what
-// was left of it, counted from the claim; never more than the wait, and
-// nothing once it passed.
-func TestARestartDuringThePromotedWaitWaitsWhatWasLeft(t *testing.T) {
+// A Citadel that restarts soon after the claim waits the whole wait again,
+// even if the wall clock stepped forward meanwhile; only one that restarts
+// long after the wait (and its margin) waits nothing.
+func TestARestartDuringThePromotedWaitWaitsTheWholeWaitAndNeverMore(t *testing.T) {
 	t.Parallel()
 	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
 	claimed := clk.Now()
 	clk.Advance(20 * time.Second)
-	if got := guild.WaitLeft(clk, claimed, 0); got != 40*time.Second {
-		t.Errorf("20 s after the claim: %v left, want 40 s", got)
+	if got := guild.WaitLeft(clk, claimed, 0); got != guild.PromotedWait {
+		t.Errorf("20 s after the claim: %v, want the whole wait", got)
+	}
+	// the clock stepped forward by 3 minutes while the Citadel was down: the
+	// restart still came inside the wait and its margin
+	clk.Advance(3 * time.Minute)
+	if got := guild.WaitLeft(clk, claimed, 0); got != guild.PromotedWait {
+		t.Errorf("after a forward step of the clock: %v, want the whole wait", got)
 	}
 	if got := guild.WaitLeft(clk, claimed.Add(time.Hour), 0); got != guild.PromotedWait {
-		t.Errorf("a claim in the future (the clock went back): %v left, want the whole wait", got)
+		t.Errorf("a claim in the future (the clock went back): %v, want the whole wait", got)
 	}
-	clk.Advance(time.Minute)
+	clk.Advance(time.Hour)
 	if got := guild.WaitLeft(clk, claimed, 0); got != 0 {
-		t.Errorf("after the wait: %v left", got)
+		t.Errorf("an hour after the claim: %v, want none", got)
 	}
 }
 

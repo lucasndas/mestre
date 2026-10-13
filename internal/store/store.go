@@ -126,13 +126,11 @@ func (d *DB) openPools(ctx context.Context) error {
 	d.writer = writer
 	if err := d.prepare(ctx, d.set, d.opts); err != nil {
 		writer.Close()
-		d.writer = nil
 		return err
 	}
 	reader, err := sql.Open("sqlite", roDSN(d.path, readerPragmas(d.opts.BusyTimeout)))
 	if err != nil {
 		writer.Close()
-		d.writer = nil
 		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
 	}
 	reader.SetMaxOpenConns(d.opts.ReadConns)
@@ -141,7 +139,6 @@ func (d *DB) openPools(ctx context.Context) error {
 	if err := reader.PingContext(ctx); err != nil {
 		reader.Close()
 		writer.Close()
-		d.writer = nil
 		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
 	}
 	d.reader = reader

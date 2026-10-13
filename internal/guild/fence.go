@@ -336,16 +336,25 @@ func (f *Fence) Run(ctx context.Context) error {
 	}
 }
 
-// WaitLeft is what is left of the wait of a promoted machine that won the
-// epoch at claimed, for a Citadel that restarts during it: at most the whole
-// wait, so a clock that went back never lengthens it past that, and nothing
-// once it passed.
+// WaitMargin is how long after the wait a restart still counts as inside it:
+// a wall clock that stepped forward between the claim and the restart makes
+// the time since the claim look longer than it was, and the wait must not
+// shrink because of that.
+const WaitMargin = 5 * time.Minute
+
+// WaitLeft is what a promoted machine that won the epoch at claimed waits
+// when its Citadel restarts: the whole wait if the restart came before the
+// wait and WaitMargin passed since the claim (or the clock went back, so the
+// time since the claim cannot be trusted), and nothing after that. It is
+// never more than the wait.
 func WaitLeft(clk clock.Clock, claimed time.Time, wait time.Duration) time.Duration {
 	if wait <= 0 {
 		wait = PromotedWait
 	}
-	left := claimed.Add(wait).Sub(clk.Now())
-	return min(max(left, 0), wait)
+	if clk.Now().Sub(claimed) < wait+WaitMargin {
+		return wait
+	}
+	return 0
 }
 
 // check makes one check of the lock and reports whether the fence is done

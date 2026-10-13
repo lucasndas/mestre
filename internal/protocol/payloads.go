@@ -126,7 +126,10 @@ type GuildConfigMachine struct {
 type GuildConfig struct {
 	Machines []GuildConfigMachine `json:"machines"`
 	Revoked  []string             `json:"revoked,omitempty"`
-	Timezone string               `json:"timezone" proto:"req"`
+	// Retired are the machines removed or gone: all their certificates are
+	// refused, even one the registry never knew.
+	Retired  []string `json:"retired,omitempty"`
+	Timezone string   `json:"timezone" proto:"req"`
 }
 
 // GuildLeave is `guild.leave`.

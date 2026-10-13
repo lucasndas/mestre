@@ -281,6 +281,11 @@ func TestNoPragmaLiftsTheGuardOfAReaderOrAReplica(t *testing.T) {
 			`;PRAGMA query_only = 0`,
 			`INSERT INTO named (code) VALUES ('sneaky')`,
 			`VACUUM`,
+			`EXPLAIN PRAGMA query_only = 0`,
+			`explain query plan pragma query_only=0`,
+			`EXPLAIN QUERY PLAN INSERT INTO named (code) VALUES ('sneaky')`,
+			`EXPLAIN EXPLAIN PRAGMA query_only = 0`,
+			`EXPLAIN`,
 		} {
 			if _, err := r.Writer().ExecContext(ctx, q); !errors.Is(err, store.ErrReplicaWrite) {
 				t.Errorf("%q = %v, want ErrReplicaWrite", q, err)
@@ -288,6 +293,20 @@ func TestNoPragmaLiftsTheGuardOfAReaderOrAReplica(t *testing.T) {
 		}
 		if _, err := r.Writer().PrepareContext(ctx, `PRAGMA query_only = 0`); !errors.Is(err, store.ErrReplicaWrite) {
 			t.Errorf("a prepared PRAGMA = %v", err)
+		}
+		// A write behind WITH gets past the guard of the statement and meets
+		// query_only; and what EXPLAIN reads still reads.
+		if _, err := r.Writer().ExecContext(ctx, `WITH x AS (SELECT 'sneaky') INSERT INTO named (code) SELECT * FROM x`); err == nil {
+			t.Error("a WITH ... INSERT wrote on the replica")
+		}
+		if n := scan[int](t, r.Reader(), `SELECT count(*) FROM named WHERE code = 'sneaky'`); n != 0 {
+			t.Errorf("%d rows were written behind the guard", n)
+		}
+		if _, err := r.Writer().ExecContext(ctx, `EXPLAIN QUERY PLAN SELECT * FROM named`); err != nil {
+			t.Errorf("EXPLAIN QUERY PLAN SELECT = %v", err)
+		}
+		if got := scan[int](t, r.Writer(), `PRAGMA query_only`); got != 1 {
+			t.Errorf("query_only = %d after the refused statements", got)
 		}
 		// Reads still work, and the guard is on.
 		if got := scan[int](t, r.Writer(), `PRAGMA query_only`); got != 1 {
