@@ -24,6 +24,7 @@ import (
 	"github.com/lucasndas/mestre/internal/realaccount"
 	"github.com/lucasndas/mestre/internal/winsvc"
 	"github.com/lucasndas/mestre/internal/winsvc/dpapi"
+	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -252,7 +253,34 @@ func waitReleased(ctx context.Context, out io.Writer) error {
 			return err
 		}
 	}
+	describeLeft(out, sessions)
 	return fmt.Errorf("a minute after the last terminal ended, the agent account still has the logon sessions %#x (profile loaded: %v)", sessions, hive)
+}
+
+// describeLeft prints the processes still in the logon sessions: a session
+// lives as long as any process has a token of it.
+func describeLeft(out io.Writer, sessions []uint64) {
+	procs, err := logonsweep.Enumerate()
+	if err != nil {
+		fmt.Fprintf(out, "processes of the sessions: %v\n", err)
+		return
+	}
+	for _, p := range procs {
+		for _, s := range sessions {
+			if p.Known && uint64(p.LUID) == s {
+				name := "?"
+				if h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, p.PID); err == nil {
+					buf := make([]uint16, windows.MAX_PATH)
+					n := uint32(len(buf))
+					if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) == nil {
+						name = windows.UTF16ToString(buf[:n])
+					}
+					_ = windows.CloseHandle(h)
+				}
+				fmt.Fprintf(out, "still in session %#x: PID %d %s\n", s, p.PID, name)
+			}
+		}
+	}
 }
 
 func createService(m *mgr.Mgr, name, account, exe string, args ...string) error {

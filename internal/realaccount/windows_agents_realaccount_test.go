@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -173,7 +174,8 @@ func runLauncher(ctx context.Context, path string) int {
 				return string(pw), err
 			},
 		},
-		Audit: func(e launcher.Event) { fmt.Fprintf(os.Stderr, "audit: %+v\n", e) },
+		Audit:  func(e launcher.Event) { fmt.Fprintf(os.Stderr, "audit: %+v\n", e) },
+		Logger: slog.New(slog.NewTextHandler(os.Stderr, nil)),
 	})
 	if err != nil {
 		return fail(err)
