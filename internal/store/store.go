@@ -350,7 +350,9 @@ func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error 
 	return nil
 }
 
-// Close closes both pools.
+// Close closes both pools. The database stays usable as a value: a goroutine
+// that is still using it (a handler that was running when the process shut
+// down) gets "sql: database is closed" from the pools, not a nil pointer.
 func (d *DB) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -366,7 +368,6 @@ func (d *DB) closePools() error {
 	if d.writer != nil {
 		werr = d.writer.Close()
 	}
-	d.reader, d.writer = nil, nil
 	return errors.Join(rerr, werr)
 }
 

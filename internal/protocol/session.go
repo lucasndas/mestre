@@ -59,6 +59,9 @@ type Session struct {
 	epoch  atomic.Uint64          // the highest epoch the peer has shown on this connection
 	done   chan struct{}
 
+	overload     atomic.Bool // the peer sent more than the queues hold: the close waits for them to empty
+	overloadOnce sync.Once
+
 	mu      sync.Mutex
 	cancel  context.CancelCauseFunc
 	cause   error // why a graceful close happened
@@ -76,6 +79,7 @@ func newSession(cfg *Config, link *Link, conn Conn, order uint64, side Side, ver
 	s.disp = newInbound[dispatchItem](&s.budget, cfg.InboundLimit)
 	s.acks = newInbound[ackItem](&s.budget, cfg.InboundLimit)
 	s.parts = newInbound[DataFrame](&s.budget, cfg.InboundLimit)
+	s.disp.onEmpty, s.acks.onEmpty, s.parts.onEmpty = s.queuesEmptied, s.queuesEmptied, s.queuesEmptied
 	// Both ends agreed on this epoch in the opening.
 	s.epoch.Store(cfg.Epoch.Epoch())
 	return s
@@ -236,13 +240,37 @@ func (s *Session) readLoop(ctx context.Context) error {
 	}
 }
 
-// overloaded closes a peer that sends faster than its messages run: the read
-// loop never waits for them, so it keeps seeing the pongs, and the peer
-// sends again, after reconnecting, what still waits for an ack.
+// overloaded stops reading a peer that sends faster than its messages run,
+// and closes it with 4008 as soon as what the queues already hold has run
+// and been answered (at most closeGrace later): the peer sends again, after
+// reconnecting, what still waits for an ack. Closing at once would let a
+// round end before the first of its messages ran, or run them without the
+// peer hearing of it, and a peer that sends the same flood after every
+// reconnection would never get past the first of them: each round must move
+// the receiver forward. The read loop does not wait for the queues; the
+// close does.
 func (s *Session) overloaded() error {
 	s.cfg.Logger.Warn("protocol: the peer sends faster than its messages run", "peer", s.peer.ID, "limit", s.cfg.InboundLimit)
-	s.closeWith(CloseOverloaded, "too far behind", fmt.Errorf("%w: %s", ErrOverloaded, s.peer.ID))
+	s.overload.Store(true)
+	if s.budget.Load() == 0 {
+		s.closeOverloaded()
+		return errGraceful
+	}
+	s.cfg.Clock.AfterFunc(closeGrace, s.closeOverloaded)
 	return errGraceful
+}
+
+// queuesEmptied is told by the queues that nothing waits any more.
+func (s *Session) queuesEmptied() {
+	if s.overload.Load() {
+		s.closeOverloaded()
+	}
+}
+
+func (s *Session) closeOverloaded() {
+	s.overloadOnce.Do(func() {
+		s.closeWith(CloseOverloaded, "too far behind", fmt.Errorf("%w: %s", ErrOverloaded, s.peer.ID))
+	})
 }
 
 // refuseStale is the answer to a message of an older epoch: stale_epoch,

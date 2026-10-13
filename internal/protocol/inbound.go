@@ -30,6 +30,9 @@ var ErrOverloaded = errors.New("protocol: the peer is sending faster than the me
 type inbound[T any] struct {
 	budget *atomic.Int64
 	limit  int64
+	// onEmpty is called when an item has run and the budget of the session
+	// is back to zero: nothing waits any more, in any of its queues.
+	onEmpty func()
 
 	mu    sync.Mutex
 	items []inboundItem[T]
@@ -86,7 +89,14 @@ func (q *inbound[T]) run(ctx context.Context, f func(T)) error {
 		q.items = q.items[1:]
 		q.mu.Unlock()
 		f(it.v)
-		q.budget.Add(-it.n)
+		q.done(it.n)
+	}
+}
+
+// done gives back the budget of an item that ran.
+func (q *inbound[T]) done(n int64) {
+	if q.budget.Add(-n) == 0 && q.onEmpty != nil {
+		q.onEmpty()
 	}
 }
 
@@ -99,6 +109,6 @@ func (q *inbound[T]) drain(f func(T)) {
 	q.mu.Unlock()
 	for _, it := range items {
 		f(it.v)
-		q.budget.Add(-it.n)
+		q.done(it.n)
 	}
 }

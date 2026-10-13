@@ -139,7 +139,11 @@ func (r *report) leaves() []*result {
 func (r *report) failed() []*result {
 	var out []*result
 	for _, t := range r.tests {
-		if t.Action == "fail" {
+		// A test that never finished in a package that failed is where the
+		// binary was when it crashed (a panic of a goroutine that outlived its
+		// test, a timeout): `go test -json` attributes the panic text to the
+		// test that was running, which has no result of its own.
+		if t.Action == "fail" || (t.Action == "" && r.packageFailed(t.Package)) {
 			out = append(out, t)
 		}
 	}
@@ -164,9 +168,14 @@ func (r *report) mixedTests() []*result {
 	return out
 }
 
+func (r *report) packageFailed(pkg string) bool {
+	p := r.packages[pkg+"."]
+	return p != nil && p.Action == "fail"
+}
+
 func (r *report) hasFailedTest(pkg string) bool {
 	for _, t := range r.tests {
-		if t.Package == pkg && t.Action == "fail" {
+		if t.Package == pkg && (t.Action == "fail" || t.Action == "") {
 			return true
 		}
 	}

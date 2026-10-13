@@ -324,7 +324,11 @@ func (r *Runner) printFailures(rep *report, code int, err error) bool {
 		if name == "" {
 			name = "(package)"
 		}
-		r.printf("--- FAIL: %s %s (%v)\n", t.Package, name, t.Elapsed.Round(time.Millisecond))
+		note := ""
+		if t.Action == "" {
+			note = " did not finish: the test binary crashed or timed out while it ran"
+		}
+		r.printf("--- FAIL: %s %s (%v)%s\n", t.Package, name, t.Elapsed.Round(time.Millisecond), note)
 		for _, l := range t.Output {
 			r.printf("    %s\n", l)
 		}

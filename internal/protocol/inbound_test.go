@@ -101,6 +101,9 @@ func TestAPeerThatSendsMoreThanTheReceiverHoldsIsClosedAndNothingRunsTwice(t *te
 			}
 		}
 		settle()
+		// the handler is stuck, so the Citadel waits (up to 5 s) for what it
+		// accepted to run before it closes
+		advance(5 * time.Second)
 		if dropped.Load() == 0 {
 			t.Fatal("the Citadel held more than its limit")
 		}
@@ -117,6 +120,63 @@ func TestAPeerThatSendsMoreThanTheReceiverHoldsIsClosedAndNothingRunsTwice(t *te
 		}
 		if left := w.partsT.Store.Waiting(protocol.CitadelKey); left != 0 {
 			t.Fatalf("the outbox of the Tower still has %d", left)
+		}
+	})
+}
+
+// A receiver that closes a peer for sending too much first runs what it had
+// accepted and answers it, however the goroutines are scheduled: a peer that
+// sends the same flood after every reconnection moves forward on each round,
+// instead of finding the receiver closed before the first message ran (and
+// getting, on the next round, the same messages first, as duplicates).
+func TestAnOverloadedRoundRunsAndAnswersWhatItAccepted(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := newWorld(t, opts{})
+		w.cfgC.InboundLimit = 64 << 10
+		release := make(chan struct{})
+		var ran, overloaded atomic.Int32
+		w.cfgC.Router.HandleFunc(protocol.TypeTerminalStatus, func(context.Context, *protocol.Message) (*protocol.Reply, error) {
+			<-release
+			ran.Add(1)
+			return nil, nil
+		})
+		w.cfgC.Hooks.OnDisconnect = func(_ *protocol.Session, cause error) {
+			if errors.Is(cause, protocol.ErrOverloaded) {
+				overloaded.Add(1)
+			}
+		}
+		w.start()
+		defer w.stop()
+		released := false
+		defer func() {
+			if !released {
+				close(release)
+			}
+		}()
+		settle()
+		const n = 1000
+		for range n {
+			if _, err := w.client.Link().Send(t.Context(), statusMsg("t1")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		settle() // the queues are full and the handler holds the first message
+		if overloaded.Load() != 0 {
+			t.Fatal("the connection closed before what it accepted ran")
+		}
+		released = true
+		close(release)
+		settle() // the first round only: the Tower has not reconnected yet
+		if overloaded.Load() != 1 {
+			t.Fatalf("%d connections closed for holding too much, want 1", overloaded.Load())
+		}
+		// the 64 KiB hold at least 64 messages of at most 1 KiB
+		if ran.Load() < 64 || int(ran.Load()) != w.partsC.Store.Claims() {
+			t.Fatalf("ran %d, claimed %d: the round did not run what it accepted", ran.Load(), w.partsC.Store.Claims())
+		}
+		if left := w.partsT.Store.Waiting(protocol.CitadelKey); left != n-int(ran.Load()) {
+			t.Fatalf("the outbox of the Tower has %d, want %d: what ran was not answered before the close", left, n-int(ran.Load()))
 		}
 	})
 }
