@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"testing"
@@ -87,8 +88,17 @@ func TestTheLauncherEndsATerminalWithoutACgroupByIdentity(t *testing.T) {
 		t.Parallel()
 		pty := spawn(t, "sleep", "600")
 		// The agent started after the mestre-pty, in a session of its own,
-		// with a child that keeps the session when the leader goes.
-		agent := spawn(t, "sh", "-c", "sleep 600 & exec sleep 600")
+		// with a child that keeps the session when the leader goes. The
+		// shell writes to a FIFO once the child is forked, so the session
+		// has both before the count (opening the FIFO blocks until then).
+		fifo := filepath.Join(t.TempDir(), "forked")
+		if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		agent := spawn(t, "sh", "-c", `sleep 600 & echo > "$1"; exec sleep 600`, "sh", fifo)
+		if b, err := os.ReadFile(fifo); err != nil || len(b) == 0 {
+			t.Fatalf("the agent did not report its child: %q, %v", b, err)
+		}
 		bystander := spawn(t, "sleep", "600")
 		if n := sessionMembers(t, agent.id.PID); n < 2 {
 			t.Fatalf("the session of the agent has %d processes, want the leader and its child", n)
