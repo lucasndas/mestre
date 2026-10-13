@@ -104,7 +104,7 @@ func (m *Manager) reconcileOne(ctx context.Context, rec Record) (*Terminal, erro
 		// Alive (or not yet recorded) but the handshake did not complete, or
 		// the socket is held by someone else: it is not a usable terminal.
 		if rec.PTY.PID != 0 {
-			_ = sys.KillTree(ctx, rec.PTY, nil)
+			_ = m.killTree(ctx, rec.ID, rec.PTY, nil)
 		}
 		return nil, m.markDead(ctx, rec)
 	}
@@ -171,7 +171,11 @@ func (m *Manager) killOrphan(ctx context.Context, id, path string) (bool, error)
 	if err := m.cfg.Spawner.KillCgroup(ctx, id); err != nil {
 		errs = append(errs, err)
 	}
-	if err := m.cfg.System.KillTree(ctx, ProcID{PID: pid}, nil); err != nil {
+	p := ProcID{PID: pid}
+	if start, err := m.cfg.System.Identify(pid); err == nil {
+		p.Start = start // the PID just came from the socket: this is its process
+	}
+	if err := m.killTree(ctx, id, p, nil); err != nil {
 		errs = append(errs, err)
 	}
 	_ = os.Remove(path)

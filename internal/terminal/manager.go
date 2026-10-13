@@ -222,7 +222,7 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) (*Terminal, error
 func (m *Manager) discard(rec Record, p ProcID) {
 	ctx := context.Background()
 	if p.PID != 0 {
-		_ = m.cfg.System.KillTree(ctx, p, nil)
+		_ = m.killTree(ctx, rec.ID, p, nil)
 	}
 	_ = m.cfg.Spawner.KillCgroup(ctx, rec.ID)
 	_ = os.Remove(rec.SocketPath)

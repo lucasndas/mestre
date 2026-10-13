@@ -110,6 +110,16 @@ func (c *countingBackend) Start(ctx context.Context, r launcher.StartRequest) (l
 	return c.Backend.Start(ctx, r)
 }
 
+// KillProcs passes on what the backend underneath can do, so the tests of
+// the kill by identity can go through the counting wrapper.
+func (c *countingBackend) KillProcs(ctx context.Context, id string, p terminal.ProcID, sessions []int) error {
+	pk, ok := c.Backend.(launcher.ProcKiller)
+	if !ok {
+		return launcher.Refused("this launcher does not end processes by identity")
+	}
+	return pk.KillProcs(ctx, id, p, sessions)
+}
+
 // env is one launcher under test and the engine side that talks to it.
 type env struct {
 	root    string // short folder: socket paths are limited

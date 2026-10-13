@@ -27,7 +27,22 @@ type fakeBackend struct {
 	mu     sync.Mutex
 	starts []launcher.StartRequest
 	kills  []string
+	procs  []procKill
 	err    error
+}
+
+// procKill is a kill by process identity as the backend got it.
+type procKill struct {
+	id       string
+	p        terminal.ProcID
+	sessions []int
+}
+
+func (f *fakeBackend) KillProcs(_ context.Context, id string, p terminal.ProcID, sessions []int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.procs = append(f.procs, procKill{id, p, sessions})
+	return f.err
 }
 
 func (f *fakeBackend) Start(_ context.Context, r launcher.StartRequest) (launcher.Started, error) {
@@ -50,7 +65,7 @@ func (f *fakeBackend) Kill(_ context.Context, id string) error {
 func (f *fakeBackend) calls() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return len(f.starts) + len(f.kills)
+	return len(f.starts) + len(f.kills) + len(f.procs)
 }
 
 // rig is a server over in-memory connections, with fakes for everything.
