@@ -87,18 +87,19 @@ func TestTasksFileAndHiddenTests(t *testing.T) {
 
 func TestParseTasksRejectsBadEntries(t *testing.T) {
 	t.Parallel()
-	for name, src := range map[string]string{
-		"unknown field": "tasks:\n  - id: T1\n    prompt: x\n    may_change: [a]\n    verify: {command: [go]}\n    owner: me\n",
-		"repeated id":   "tasks:\n  - {id: T1, prompt: x, may_change: [a], verify: {command: [go]}}\n  - {id: T1, prompt: y, may_change: [a], verify: {command: [go]}}\n",
-		"no command":    "tasks:\n  - {id: T1, prompt: x, may_change: [a], verify: {hidden: ocultos/T1}}\n",
-		"bad id":        "tasks:\n  - {id: tarefa1, prompt: x, may_change: [a], verify: {command: [go]}}\n",
-		"zero limits":   "tasks:\n  - {id: T1, prompt: x, may_change: [a], verify: {command: [go]}, heavy: {max_minutes: 0, max_turns: 3}}\n",
-		"empty":         "tasks: []\n",
+	for _, tc := range []struct{ name, src, reason string }{
+		{"unknown field", "tasks:\n  - id: T1\n    prompt: x\n    may_change: [a]\n    verify: {command: [go]}\n    owner: me\n", "field owner not found"},
+		{"repeated id", "tasks:\n  - {id: T1, prompt: x, may_change: [a], verify: {command: [go]}}\n  - {id: T1, prompt: y, may_change: [a], verify: {command: [go]}}\n", "id T1 repeated"},
+		{"no command", "tasks:\n  - {id: T1, prompt: x, may_change: [a], verify: {hidden: ocultos/T1}}\n", "T1: prompt, may_change and verify.command are required"},
+		{"bad id", "tasks:\n  - {id: tarefa1, prompt: x, may_change: [a], verify: {command: [go]}}\n", `id "tarefa1": want T<n>`},
+		{"zero limits", "tasks:\n  - {id: T1, prompt: x, may_change: [a], verify: {command: [go]}, heavy: {max_minutes: 0, max_turns: 3}}\n", "T1: heavy needs max_minutes and max_turns above zero"},
+		{"empty", "tasks: []\n", "no tasks"},
 	} {
-		t.Run(name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := testkit.ParseTasks([]byte(src)); err == nil {
-				t.Fatal("accepted")
+			_, err := testkit.ParseTasks([]byte(tc.src))
+			if err == nil || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("err = %v, want it to say %q", err, tc.reason)
 			}
 		})
 	}

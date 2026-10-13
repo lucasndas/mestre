@@ -20,14 +20,21 @@ type event struct {
 	Output     string
 }
 
-// result is the outcome of one test.
+// result is the outcome of one test. With -count > 1 the test finishes once
+// per run: Pass, Fail and Skip count the runs, Action is "fail" when any run
+// failed (a later pass does not hide it) and Elapsed is the slowest run.
 type result struct {
 	Package string
 	Test    string // "" for the package itself
 	Action  string // pass, fail or skip
 	Elapsed time.Duration
 	Output  []string
+
+	Pass, Fail, Skip int
 }
+
+// mixed reports a test that passed in some runs and failed in others.
+func (r result) mixed() bool { return r.Pass > 0 && r.Fail > 0 }
 
 func (r result) id() string { return r.Package + "." + r.Test }
 
@@ -73,8 +80,18 @@ func parseEvents(out []byte) *report {
 		case "output":
 			res.Output = append(res.Output, strings.TrimRight(ev.Output, "\n"))
 		case "pass", "fail", "skip":
-			res.Action = ev.Action
-			res.Elapsed = time.Duration(ev.Elapsed * float64(time.Second))
+			switch ev.Action {
+			case "pass":
+				res.Pass++
+			case "fail":
+				res.Fail++
+			default:
+				res.Skip++
+			}
+			if res.Action != "fail" {
+				res.Action = ev.Action
+			}
+			res.Elapsed = max(res.Elapsed, time.Duration(ev.Elapsed*float64(time.Second)))
 		}
 	}
 	return r
@@ -132,6 +149,18 @@ func (r *report) failed() []*result {
 		}
 	}
 	sortResults(out)
+	return out
+}
+
+// mixedTests returns the tests (without subtests) that passed in some runs
+// and failed in others, which is what -count > 1 is for.
+func (r *report) mixedTests() []*result {
+	var out []*result
+	for _, t := range r.leaves() {
+		if t.mixed() {
+			out = append(out, t)
+		}
+	}
 	return out
 }
 

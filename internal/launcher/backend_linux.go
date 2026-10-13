@@ -30,6 +30,9 @@ type LinuxBackend struct {
 	Env []string
 	// System tells the start identity of the process.
 	System terminal.System
+	// Suite is the value of MESTRE_TEST_SUITE ("" in production); in the
+	// fast suite Start refuses with terminal.ErrExternalProcessInFastSuite.
+	Suite string
 }
 
 var _ Backend = (*LinuxBackend)(nil)
@@ -42,6 +45,9 @@ var DefaultEnv = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8"}
 // on descriptor 3, the secret on 4 and the readiness pipe on 5, and waits
 // for it to say the socket is its own.
 func (b *LinuxBackend) Start(ctx context.Context, r StartRequest) (Started, error) {
+	if err := terminal.GuardSuite(b.Suite); err != nil {
+		return Started{}, err
+	}
 	if err := checkFiles(r); err != nil {
 		return Started{}, Refused("%v", err)
 	}

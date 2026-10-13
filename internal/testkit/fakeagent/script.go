@@ -1,8 +1,10 @@
 package fakeagent
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"time"
@@ -65,7 +67,9 @@ type EditStep struct {
 // ParseScript reads and validates a script.
 func ParseScript(b []byte) (*Script, error) {
 	var s Script
-	if err := yaml.Unmarshal(b, &s); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true) // an unknown key is an error, as in tarefas.yaml
+	if err := dec.Decode(&s); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parse script: %w", err)
 	}
 	for i := range s.Prompts {

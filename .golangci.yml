@@ -13,6 +13,10 @@ linters:
     - paralleltest
     - depguard
   settings:
+    paralleltest:
+      # Subtests are tools/codecheck's rule alone ("each rule in one tool"):
+      # it also covers helpers with a *testing.T parameter.
+      ignore-missing-subtests: true
     forbidigo:
       analyze-types: true # also catches an aliased time import
       forbid:
@@ -20,8 +24,29 @@ linters:
           msg: use the injectable clock in pkg/clock (docs/qualidade/testes.md)
         - pattern: ^context\.(WithTimeout|WithTimeoutCause|WithDeadline|WithDeadlineCause)$
           msg: use clock.WithTimeout from pkg/clock, driven by the injectable clock (docs/qualidade/testes.md)
+        # Backstop of the fast-suite guard: dialing, listening and starting
+        # processes belong to the designated layers (see exclusions below).
+        - pattern: ^net\.(Dial|DialTimeout|DialTCP|DialUDP|DialIP|DialUnix|Listen|ListenPacket|ListenTCP|ListenUDP|ListenIP|ListenUnix|ListenUnixgram|ListenMulticastUDP|Dialer|ListenConfig)$
+          msg: network dialing and listening belong to the designated layers (docs/qualidade/testes.md#regras-e-erros)
+        - pattern: ^os\.StartProcess$
+          msg: starting processes belongs to the designated layers (docs/qualidade/testes.md#regras-e-erros)
     depguard:
       rules:
+        no-processes-outside-designated-layers:
+          files:
+            - $all
+            - "!**/internal/terminal/**"
+            - "!**/internal/gitx/**"
+            - "!**/internal/launcher/**"
+            - "!**/internal/winsvc/**"
+            - "!**/internal/testkit/**"
+            - "!**/cmd/**"
+            - "!**/tools/**"
+            - "!**/*_full_test.go"
+            - "!**/*_heavy_test.go"
+          deny:
+            - pkg: os/exec
+              desc: processes start only in the designated layers, which carry the fast-suite guard (docs/qualidade/testes.md#regras-e-erros)
         no-testkit-in-production:
           files:
             - $all
@@ -56,6 +81,12 @@ linters:
       - std-error-handling # unchecked Close, Flush and fmt.Fprint*
     rules:
       - path: pkg/clock/
+        linters:
+          - forbidigo
+      # Dialing and listening: the layers that own connections (transport/
+      # joins them in M2).
+      - path: ^(internal/(terminal|launcher|winsvc|localchan|testkit)|cmd|tools)/
+        text: designated layers
         linters:
           - forbidigo
 

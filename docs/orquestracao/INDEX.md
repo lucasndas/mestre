@@ -8,7 +8,7 @@
 | [mesas.md](mesas.md) | abertura, estados, pausa, worktree por máquina e sincronização por bundle, encerramento e cancelamento | ao mexer no ciclo de vida da mesa ou na sincronização de worktrees |
 | [grao-mestre.md](grao-mestre.md) | papel, proteção, retomada, instruções do sistema e instruções extras do Grão-Mestre | ao mexer no orquestrador do workspace ou no modelo de instruções dele |
 | [mestre-da-mesa.md](mestre-da-mesa.md) | papel, liberdade dentro do teto, proteção, instruções do sistema e extras do Mestre da mesa | ao mexer no orquestrador da mesa ou no modelo de instruções dele |
-| [personagens.md](personagens.md) | criação sob demanda, escolha da máquina, limites, ciclo de vida, encerramento seguro, fixar, estados, registro de terminais, retomada | ao mexer em criação, estados ou encerramento de terminais |
+| [personagens.md](personagens.md) | criação sob demanda, escolha da máquina, limites, ciclo de vida, encerramento seguro, fixar, estados e histórico de estados, registro de terminais, retomada | ao mexer em criação, estados ou encerramento de terminais |
 | [bases-e-fichas.md](bases-e-fichas.md) | campos de bases e fichas, exemplos, exportação/importação, perfis de conta | ao mexer em presets ou em várias contas por provedor |
 | [conexoes.md](conexoes.md) | conexões automáticas e manuais, visibilidade | ao mexer em quem fala com quem ou no `mestre list` |
 | [esperas-e-caixa-de-entrada.md](esperas-e-caixa-de-entrada.md) | fila e prioridade, entrega só quando livre, resposta pelo mesmo canal, ask e ask back, esperas, tempos limite, impasse | ao mexer em entrega de mensagens ou esperas |

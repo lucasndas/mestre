@@ -38,7 +38,10 @@ type RunConfig struct {
 	// ResolveCgroupBase. Empty runs without cgroups.
 	CgroupBase string
 	// Env overrides DefaultEnv for the mestre-pty.
-	Env    []string
+	Env []string
+	// Suite is the value of MESTRE_TEST_SUITE (os.Getenv in main; "" in
+	// production): in the fast suite the launcher starts nothing.
+	Suite  string
 	Audit  func(Event)
 	Logger *slog.Logger
 	Clock  clock.Clock
@@ -52,7 +55,7 @@ func Prepare(cfg RunConfig) (*Server, net.Listener, error) {
 		return nil, nil, err
 	}
 	srv, err := NewServer(Config{
-		Backend: &LinuxBackend{CgroupBase: cfg.CgroupBase, Credential: cred, Env: cfg.Env, System: terminal.NewSystem()},
+		Backend: &LinuxBackend{CgroupBase: cfg.CgroupBase, Credential: cred, Env: cfg.Env, System: terminal.NewSystem(), Suite: cfg.Suite},
 		Check:   cfg.Engine.Check,
 		BinDir:  cfg.BinDir, SocketDir: cfg.SocketDir,
 		Audit: cfg.Audit, Logger: cfg.Logger, Clock: cfg.Clock,

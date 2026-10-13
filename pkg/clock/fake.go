@@ -85,6 +85,21 @@ func (f *Fake) armLocked(w *fakeWaiter, d time.Duration) {
 	f.cond.Broadcast()
 }
 
+// drainLocked discards a tick nobody received, like the real clock since Go
+// 1.23: after Stop or Reset returns, no stale value is delivered. It reports
+// whether there was one, which counts as a timer that had not fired yet.
+func (f *Fake) drainLocked(w *fakeWaiter) bool {
+	if w.ch == nil {
+		return false
+	}
+	select {
+	case <-w.ch:
+		return true
+	default:
+		return false
+	}
+}
+
 func (f *Fake) disarmLocked(w *fakeWaiter) bool {
 	if !w.active {
 		return false
@@ -185,7 +200,8 @@ func (t fakeTimer) Stop() bool {
 	f := t.w.clock
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.disarmLocked(t.w)
+	was := f.disarmLocked(t.w)
+	return f.drainLocked(t.w) || was
 }
 
 func (t fakeTimer) Reset(d time.Duration) bool {
@@ -193,6 +209,9 @@ func (t fakeTimer) Reset(d time.Duration) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	was := t.w.active
+	if f.drainLocked(t.w) {
+		was = true
+	}
 	f.armLocked(t.w, d)
 	return was
 }
@@ -206,6 +225,7 @@ func (t fakeTicker) Stop() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.disarmLocked(t.w)
+	f.drainLocked(t.w)
 }
 
 func (t fakeTicker) Reset(d time.Duration) {
@@ -216,5 +236,6 @@ func (t fakeTicker) Reset(d time.Duration) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t.w.period = d
+	f.drainLocked(t.w)
 	f.armLocked(t.w, d)
 }

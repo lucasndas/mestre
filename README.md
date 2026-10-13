@@ -6,7 +6,7 @@ Diferente de um orquestrador local, o Mestre é distribuído e se cura sozinho: 
 
 Repositório: https://github.com/lucasndas/mestre
 
-> Estado: especificação. Ainda não há código; a documentação em [`docs/`](docs/INDEX.md) é a base do desenvolvimento.
+> Estado: em desenvolvimento, na ordem dos [marcos](docs/desenvolvimento/ordem-de-implementacao.md). M0 (fundação: executor das suítes, verificação de docs, dublês, relógio, logs) e M1 (base local: CI, banco, cofre, terminal, `mestre-launcher`, canal local) estão prontos; o transporte e a Guilda (M2) são os próximos. Ainda não há instalador nem painel. A documentação em [`docs/`](docs/INDEX.md) é a base do desenvolvimento.
 
 ## Instalar em 3 passos
 

@@ -43,11 +43,11 @@ func Patterns() []Pattern {
 		{Name: PatternPrivateKey, Re: regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?s:.*?)(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)`)},
 		{Name: PatternAuthorization, Re: regexp.MustCompile(`(?i)(authorization:[ \t]*)([^\r\n]+)`), Group: 2},
 		{Name: PatternGitHubToken, Re: regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b`)},
-		{Name: PatternTelegramToken, Re: regexp.MustCompile(`\b[0-9]{5,}:[A-Za-z0-9_-]{35}\b`)},
+		{Name: PatternTelegramToken, Re: regexp.MustCompile(`(\b[0-9]{5,}:[A-Za-z0-9_-]{35})(?:[^A-Za-z0-9_-]|$)`), Group: 1},
 		{Name: PatternSlackToken, Re: regexp.MustCompile(`\bxox[bp]-[A-Za-z0-9-]{10,}`)},
 		{Name: PatternJWT, Re: regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)},
 		{Name: PatternSKKey, Re: regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}`)},
-		{Name: PatternKeyValue, Re: regexp.MustCompile(`(?i)\b((?:password|token|secret)=)([^\s&"',;]+)`), Group: 2},
+		{Name: PatternKeyValue, Re: regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9])([A-Za-z0-9_]*(?:password|token|secret)=)("[^"\r\n]*"?|'[^'\r\n]*'?|[^\s&"',;]+)`), Group: 2},
 	}
 }
 
@@ -57,7 +57,10 @@ const (
 	minEntropyBits       = 3.5
 )
 
-var wordRe = regexp.MustCompile(`[A-Za-z0-9+/=_-]+`)
+// wordRe delimits the candidates of the entropy rule. "/" and "=" are not
+// part of a word, so paths, branch names and KEY=value pairs are judged by
+// their pieces, not as one long string.
+var wordRe = regexp.MustCompile(`[A-Za-z0-9+_-]+`)
 
 // Masker removes secrets from text. The zero value is not usable; use
 // NewMasker. It is safe for concurrent use.
@@ -116,7 +119,7 @@ func (m *Masker) Mask(s string) string {
 		s = maskPattern(p, s)
 	}
 	return wordRe.ReplaceAllStringFunc(s, func(w string) string {
-		if highEntropy(w, m.minLen) {
+		if highEntropy(w, m.minLen) && !identifierLike(w) {
 			return Redacted
 		}
 		return w
@@ -173,8 +176,30 @@ func highEntropy(w string, minLen int) bool {
 	return bits >= minEntropyBits
 }
 
-var ansiRe = regexp.MustCompile(`\x1b(?:\[[0-9;?<>=!]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[PX^_][^\x1b]*\x1b\\|[@-Z\\-_])`)
+var ansiRe = regexp.MustCompile(`\x1b(?:\[[0-9;?<>=!]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[PX^_][^\x1b]*\x1b\\|[()*+][ -~]|[0-9=>]|[@-Z\\-_]|)`)
 
-// StripANSI removes terminal escape sequences (CSI, OSC, DCS and two-byte
-// sequences) from s.
+// StripANSI removes terminal escape sequences from s: CSI, OSC, DCS, charset
+// designations (ESC ( B, as in the output of `tput sgr0`), the one-character
+// forms (ESC 7, ESC 8, ESC =, ESC >) and any stray ESC.
 func StripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
+
+var testNameRe = regexp.MustCompile(`^(?:Test|Benchmark|Fuzz|Example)[A-Z0-9][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$`)
+
+var kebabWordRe = regexp.MustCompile(`^[a-z]{4,}$`)
+
+// identifierLike reports whether w has the shape of a code identifier that a
+// random token practically never has: a Go test name (TestMVP13_FourCompositions)
+// or a kebab-case name with two or more lower-case words of four letters or
+// more (table-lifecycle-v2Beta10, the tail of a branch name).
+func identifierLike(w string) bool {
+	if testNameRe.MatchString(w) {
+		return true
+	}
+	words := 0
+	for _, part := range strings.Split(w, "-") {
+		if kebabWordRe.MatchString(part) {
+			words++
+		}
+	}
+	return words >= 2
+}

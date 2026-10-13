@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -102,13 +103,24 @@ func (s *Server) Actions() []Action {
 // ServeHTTP serves the REST API.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := r.Method + " " + r.URL.Path
-	inst, ok := s.auth(w, r)
-	if !ok {
+	// The route comes before the credentials: a route the double does not
+	// know fails the test instead of looking like a 401.
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	known := len(parts) >= 4 && len(parts) <= 5 && parts[0] == "repos" && parts[3] == "issues" &&
+		(r.Method == http.MethodGet || (len(parts) == 4 && r.Method == http.MethodPost))
+	if !known {
+		testkit.NotImplemented(s.rep, w, route)
 		return
 	}
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 4 || parts[0] != "repos" || parts[3] != "issues" || len(parts) > 5 {
-		testkit.NotImplemented(s.rep, w, route)
+	// No query parameter is implemented yet (state, labels, per_page and
+	// the like arrive with the poller in M5); ignoring one would answer a
+	// different question than the caller asked.
+	if len(r.URL.Query()) > 0 {
+		testkit.NotImplemented(s.rep, w, route+"?"+firstParam(r))
+		return
+	}
+	inst, ok := s.auth(w, r)
+	if !ok {
 		return
 	}
 	s.mu.Lock()
@@ -144,6 +156,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// firstParam names the first query parameter in sorted order, for the failure
+// message.
+func firstParam(r *http.Request) string {
+	q := r.URL.Query()
+	names := make([]string, 0, len(q))
+	for k := range q {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names[0]
+}
+
 func (s *Server) auth(w http.ResponseWriter, r *http.Request) (*installation, bool) {
 	h := r.Header.Get("Authorization")
 	tok := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(h, "Bearer "), "token "))
@@ -163,7 +187,14 @@ func (s *Server) createIssue(w http.ResponseWriter, r *http.Request, inst *insta
 		Body   string   `json:"body"`
 		Labels []string `json:"labels"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Title == "" {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	err := dec.Decode(&in)
+	if err != nil && strings.HasPrefix(err.Error(), "json: unknown field ") {
+		testkit.NotImplemented(s.rep, w, "POST /repos/"+full+"/issues field "+strings.TrimPrefix(err.Error(), "json: unknown field "))
+		return
+	}
+	if err != nil || in.Title == "" {
 		s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
 		return
 	}
