@@ -220,6 +220,7 @@ func (l *Link) detach(s *Session) {
 		l.up = make(chan struct{})
 	}
 	l.mu.Unlock()
+	l.xfer.releaseFiles()
 }
 
 // waitConnected returns the current connection, waiting for one if there is

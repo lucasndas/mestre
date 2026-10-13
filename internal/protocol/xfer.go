@@ -413,6 +413,26 @@ func (l *Link) PruneTransfers(ttl time.Duration) int {
 	return n
 }
 
+// releaseFiles closes the temporary files of the transfers in progress when
+// the connection ends: the content stays on disk and the next xfer.begin of
+// the sender opens it again and goes on.
+func (h *xferHub) releaseFiles() {
+	h.mu.Lock()
+	rs := make([]*recvXfer, 0, len(h.recv))
+	for _, r := range h.recv {
+		rs = append(rs, r)
+	}
+	h.mu.Unlock()
+	for _, r := range rs {
+		r.mu.Lock()
+		if r.f != nil && !r.finalizing {
+			_ = r.f.Close()
+			r.f = nil
+		}
+		r.mu.Unlock()
+	}
+}
+
 // ---- sender ----
 
 // Transfer sends the content in parts and returns when the receiver reported
