@@ -28,18 +28,19 @@ git: { commit: false, request_push: false, workflows: never }  # o pr open do Me
 
 - As regras efetivas de um orquestrador são `orquestrador` cortada pelo [teto do workspace](teto-do-workspace.md) e pela ficha dele, com os decretos de pessoas por cima ([precedência](../arquitetura/precedencia.md)). O teto e a ficha só restringem; nada amplia a classe.
 - Não aparece em `mestre class list` como classe editável, não tem escopo de pasta nem proposta: nenhum agente nem usuário a edita. O painel a mostra só para leitura.
-- Mesmo nome reservado em todos os escopos: uma classe nova chamada `orquestrador` é recusada.
+- Mesmo nome reservado em todos os escopos: uma classe nova chamada `orquestrador` é recusada. Pedir para editá-la (`class edit`) é recusado com `built_in`; uma pasta com esse nome (vinda do repositório) não vira proposta nem aparece na listagem, e os usuários são avisados uma vez de que ela é ignorada.
+- Quem pede a classe `orquestrador` à biblioteca recebe sempre a embutida: não há versão aprovada, pasta nem proposta a conferir.
 
 ### Na atenuação
 
-- O motor confere a decisão de um orquestrador contra as regras efetivas dele no worktree de quem pediu: aprova só o que elas não negam ([salvaguardas](../orquestracao/cadeia-de-aprovacao.md#salvaguardas)).
+- O motor confere a decisão de um orquestrador contra as regras efetivas dele no worktree de quem pediu: aprova só o que elas não negam ([salvaguardas](../orquestracao/cadeia-de-aprovacao.md#salvaguardas)). A conferência é a decisão das regras do aprovador sobre a ação do pedido, sem contar exceções pontuais dele: `allow` e `ask` passam, `deny` não (`Attenuates`, em `internal/classes`; a cadeia a chama na etapa 10). Conferir um padrão ("nada do que ele casa é negado") é da cadeia.
 - Como `write: []`, nenhum orquestrador aprova escrita fora do worktree: esse pedido vai às pessoas.
 - A ficha do orquestrador conta: o Mestre da mesa cuja ficha nega `npm install *` não aprova um `npm install x` da party, que sobe ao Grão-Mestre.
 
 ## Regras e erros
 
 - Classe criada com o nome `orquestrador`, em qualquer escopo: recusada como nome em uso (`name_taken`).
-- Decreto de pessoa que libera algo a um orquestrador vale como para qualquer personagem; um que tenta mudar a classe em si é recusado: o que muda é a regra efetiva, não a classe.
+- Decreto de pessoa que libera algo a um orquestrador vale como para qualquer personagem; um que tenta mudar a classe em si é recusado: o que muda é a regra efetiva, não a classe (a recusa chega com os decretos, no M5).
 
 ## Critérios de aceite
 

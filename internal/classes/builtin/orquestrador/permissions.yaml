@@ -1,0 +1,8 @@
+# The built-in class of the orchestrators (docs/classes/classe-orquestrador.md).
+# It changes with the version of the binary, never by a file of the workspace.
+version: 1
+files: { read: ["**"], write: [] }   # they do not edit the project: scrolls and classes only through the CLI
+commands: { default: ask }           # low risk without a rule runs directly; the rest becomes a request
+tools: { default: ask }
+git: { commit: false, request_push: false, workflows: never }  # the pr open of the Mestre da mesa comes from its level
+# network absent: any domain, which the ceiling restricts

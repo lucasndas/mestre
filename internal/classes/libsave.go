@@ -90,6 +90,9 @@ func (l *Library) Save(ctx context.Context, req SaveRequest) (SaveResult, error)
 	if !req.Edit && strings.TrimSpace(req.App) == "" {
 		return SaveResult{}, ErrAppRequired
 	}
+	if req.Name == ReservedOrchestrator && req.Edit {
+		return SaveResult{}, ErrBuiltIn
+	}
 	if !req.Edit && req.Name == ReservedOrchestrator {
 		return SaveResult{}, fmt.Errorf("%w: %q é a classe embutida dos orquestradores", ErrNameTaken, req.Name)
 	}
@@ -191,6 +194,9 @@ func (l *Library) Approve(ctx context.Context, id int64, hash string, by Author)
 	}
 	if !ok || p.State != ProposalPending {
 		return fmt.Errorf("%w: a proposta %d não está pendente", ErrClassChanged, id)
+	}
+	if p.Key.Name == ReservedOrchestrator {
+		return fmt.Errorf("%w: %q é a classe embutida dos orquestradores", ErrNameTaken, p.Key.Name)
 	}
 	if !canApplyAlone(p.Key.Scope, p.Key.Table, by) {
 		if p.Key.Scope == ClassWorkspace {

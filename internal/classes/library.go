@@ -201,6 +201,9 @@ func (l *Library) approved(ctx context.Context, name, table string) (ClassRecord
 // that is a proposal that waits for the approval of the scope, the users are
 // told once, and the last approved version keeps holding.
 func (l *Library) Use(ctx context.Context, name, table string) (*Class, error) {
+	if name == ReservedOrchestrator {
+		return Orchestrator() // built into the binary: no files to look at, no approval
+	}
 	rec, ok, err := l.approved(ctx, name, table)
 	if err != nil {
 		return nil, err
@@ -225,6 +228,9 @@ func (l *Library) Use(ctx context.Context, name, table string) (*Class, error) {
 // use it: reading a folder at each tool call would cost what it does not
 // need to.
 func (l *Library) Approved(ctx context.Context, name, table string) (*Class, error) {
+	if name == ReservedOrchestrator {
+		return Orchestrator()
+	}
 	rec, ok, err := l.approved(ctx, name, table)
 	if err != nil {
 		return nil, err
@@ -301,6 +307,14 @@ func (l *Library) Scan(ctx context.Context, table string) ([]Entry, error) {
 		slices.Sort(names)
 		for _, n := range names {
 			k := ClassKey{Scope: s.Scope, Table: s.Table, Name: n}
+			if n == ReservedOrchestrator {
+				// Not an editable class: a folder with its name is not read
+				// as a proposal, and the users are told once.
+				if err := l.alert(ctx, ClassAlert{Key: k, Kind: ClassInvalid, Problems: []string{ErrNameTaken.Error()}}, "reserved"); err != nil {
+					return nil, err
+				}
+				continue
+			}
 			var rec *ClassRecord
 			if r, ok := byName[n]; ok {
 				rec = &r
@@ -339,6 +353,9 @@ func folders(dir string) ([]string, error) {
 // never approved) and records the difference as a proposal, alerting once.
 func (l *Library) reconcile(ctx context.Context, k ClassKey, rec *ClassRecord) (Entry, error) {
 	e := Entry{Key: k}
+	if k.Name == ReservedOrchestrator {
+		return Entry{}, nil // built in: never a proposal (docs/classes/classe-orquestrador.md)
+	}
 	if rec != nil {
 		e.Hash, e.Approved, e.Version, e.App = rec.Hash, rec.Hash, rec.Version, rec.App
 	}
