@@ -100,7 +100,7 @@ func run(ctx context.Context, args []string, out io.Writer, getenv func(string) 
 	fl.StringVar(&o.machine, "machine", "", "machine name of the result (default: the host name)")
 	fl.DurationVar(&o.limit, "limit", conformance.DefaultLimit, "time limit of the provider")
 	fl.BoolVar(&o.restore, "restore", false, "put back the files of the profile the run writes")
-	fl.StringVar(&o.fallbacks, "fallbacks", "", "comma list of fallbacks to switch on (ClaudeMultilineViaFile, CodexMultilineViaFile, AntigravityNoPaste, CodexHookTrust, ClaudeStatusLineInLocal, AntigravityNoDeny, LayerHook, LayerFirstMessage, ReadRootAgents)")
+	fl.StringVar(&o.fallbacks, "fallbacks", "", "comma list of fallbacks to switch on (ClaudeMultilineViaFile, CodexMultilineViaFile, AntigravityNoPaste, CodexHookTrust, ClaudeStatusLineInLocal, AntigravityNoDeny, AntigravityNoSandbox, LayerHook, LayerFirstMessage, ReadRootAgents)")
 	if err := fl.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -213,6 +213,8 @@ func parseFallbacks(list string) (conformance.Fallbacks, providers.Options, erro
 			fb.Native.ClaudeStatusLineInLocal = true
 		case "AntigravityNoDeny":
 			fb.Native.AntigravityNoDeny = true
+		case "AntigravityNoSandbox":
+			fb.Native.AntigravityNoSandbox = true
 		case "LayerHook":
 			fb.Layer.Channel = providers.LayerHook
 		case "LayerFirstMessage":

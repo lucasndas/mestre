@@ -64,13 +64,14 @@ const (
 	LayerCeiling   Layer = "ceiling"
 	LayerClass     Layer = "class"
 	LayerSheet     Layer = "sheet"
+	LayerMachine   Layer = "machine"
 	LayerLocked    Layer = "locked"
 	LayerDegraded  Layer = "degraded"
 )
 
 func (l Layer) origin() bool {
 	switch l {
-	case LayerFixed, LayerDecree, LayerCeiling, LayerClass, LayerSheet:
+	case LayerFixed, LayerDecree, LayerCeiling, LayerClass, LayerSheet, LayerMachine:
 		return true
 	}
 	return false
@@ -89,6 +90,8 @@ func (l Layer) label(class string) string {
 		return "teto do workspace"
 	case LayerSheet:
 		return "ficha do personagem"
+	case LayerMachine:
+		return "conformidade desta máquina"
 	case LayerLocked:
 		return "sistema travado"
 	case LayerDegraded:

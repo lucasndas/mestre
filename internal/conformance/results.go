@@ -128,6 +128,19 @@ func (r Result) Step(n int) StepResult {
 	return StepResult{Step: n}
 }
 
+// DenyTools are the native tools the effective rules of the characters of
+// this provider deny on this machine, because of the result: the subagent
+// tools when step 12 failed (Flags.DenySubagent), and nothing otherwise. The
+// plan B holds for the machine, profile and version of the result, until the
+// run of a new version replaces it (the CLI update asks for it); it goes to
+// classes.Layers.DenyTools.
+func (r Result) DenyTools() []string {
+	if !r.Flags.DenySubagent {
+		return nil
+	}
+	return providers.SubagentTools(r.Provider)
+}
+
 // decide fills Conformant, Reason and Flags from the steps and the events.
 func (r *Result) decide() {
 	var why []string

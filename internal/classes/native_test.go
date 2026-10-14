@@ -100,8 +100,12 @@ func TestTheQAClassBecomesTheNativeControlsOfTheThreeProviders(t *testing.T) {
 		!slices.Contains(codex, network) || slices.Contains(codex, "--search") {
 		t.Fatalf("codex args %v; want -s workspace-write, %s and no hosted search", codex, network)
 	}
-	if !slices.Contains(n[providers.Antigravity].args, "--sandbox") {
-		t.Fatalf("antigravity args %v lack --sandbox", n[providers.Antigravity].args)
+	// Antigravity without internet: --sandbox only on Windows; on Linux the
+	// namespaces it needs are restricted for mestre-agente, so it runs
+	// without it and the internet is blocked only by the dispatcher
+	// (docs/provedores/antigravity.md#flags).
+	if got, wantSandbox := slices.Contains(n[providers.Antigravity].args, "--sandbox"), runtime.GOOS == "windows"; got != wantSandbox {
+		t.Fatalf("antigravity args %v; --sandbox = %v, want %v", n[providers.Antigravity].args, got, wantSandbox)
 	}
 }
 

@@ -51,7 +51,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - No modo interativo, sem confiança na pasta, **nenhum hook de arquivo de configuração e nenhuma statusLine rodam**, nem os do usuário.
 - A confiança fica em `$CLAUDE_CONFIG_DIR/.claude.json` (confirmado no spike do Linux). A pasta pessoal (home) nunca fica confiada.
 - **Pré-confiar:** gravar `projects["<caminho absoluto do worktree>"].hasTrustDialogAccepted = true` nesse arquivo, com escrita atômica (o Claude reescreve esse arquivo e guarda cópias em `backups/`). **Só a chave do worktree basta** (confirmado). Quando acontece: [mesa](../sessao-zero/mesa.md). Depois de gravar, o motor relê e confere; se o Claude reescreveu o arquivo no meio, repete (até 3 vezes). No Windows, a chave é a que já existe para a pasta (barras e maiúsculas podem diferir), senão o caminho como o motor o tem. Ao remover o worktree, `Untrust` retira a entrada.
-- A 2.1.299 guarda as estatísticas da sessão em `projects["<espelho>"]` (sem `hasTrustDialogAccepted`) e a memória automática em `projects/<espelho>/memory/` do perfil: a memória é comum a todos os worktrees de um espelho, portanto a todos os personagens daquele perfil num workspace.
+- A 2.1.299 guarda as estatísticas da sessão em `projects["<espelho>"]` (sem `hasTrustDialogAccepted`) e a memória automática em `projects/<espelho>/memory/` do perfil: a memória é comum a todos os worktrees de um espelho, portanto a todos os personagens daquele perfil num workspace. **Por decisão do Dono (2026-10-14)** a memória automática fica desligada para os personagens, porque o Mestre tem a própria memória (pergaminhos e fichas) e a do Claude misturaria o que um personagem aprende com os outros: o arquivo `--settings` do personagem leva `autoMemoryEnabled: false` (chave de qualquer arquivo de configuração, documentada em "Enable or disable auto memory"). A variável `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` faz o mesmo e é o reserva se a chave não valer no `--settings` (não verificado numa rodada real); as estatísticas da sessão em `projects["<espelho>"]` continuam, pois não são memória.
 - **A chave do espelho nunca é gravada:** respondendo "confiar" na tela, o Claude grava a chave do **espelho `--bare`** de onde o worktree saiu, o que confia **todos** os worktrees daquele espelho. Por isso o motor nunca grava essa chave e, ao pré-confiar, remove `hasTrustDialogAccepted` dela se a encontrar (no clone principal da Cidadela, em que o worktree é a própria raiz, a chave é uma só e fica confiada).
 
 ### Flags
@@ -134,6 +134,7 @@ Todos são conferidos pelo [teste de conformidade](conformidade.md).
 
 - https://code.claude.com/docs/en/cli-reference
 - https://code.claude.com/docs/en/memory#agents-md
+- https://code.claude.com/docs/en/memory#enable-or-disable-auto-memory
 - https://code.claude.com/docs/en/skills
 - https://code.claude.com/docs/en/hooks
 - https://code.claude.com/docs/en/hooks#workspace-trust

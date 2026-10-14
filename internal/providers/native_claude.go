@@ -121,6 +121,10 @@ func (c *claudeCode) Native(p NativePolicy) (NativeControls, error) {
 				return nil, err
 			}
 			obj["permissions"] = perms
+			// The auto memory of Claude Code is kept per mirror and profile,
+			// so every character of a workspace would share and contaminate
+			// it; the Mestre has its own memory (scrolls and sheets).
+			obj["autoMemoryEnabled"] = false
 			setClaudeStatusLine(obj, statusLine)
 			return marshalObject(obj)
 		},
