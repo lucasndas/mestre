@@ -124,3 +124,43 @@ func (r *Registry) ids() []string {
 	sort.Strings(out)
 	return out
 }
+
+// HookSeconds is the time limit, in seconds, the hook files the Mestre
+// generates give `mestre hook` for one native event of a provider (the same
+// tables that write them): past it the provider gives up on the call, and
+// Codex then goes on as if allowed. An event the Mestre does not bind, or an
+// unknown provider, gets the shortest limit of the provider's table.
+func HookSeconds(p ID, native string) int {
+	type limit struct {
+		event   string
+		seconds int
+	}
+	var table []limit
+	switch p {
+	case ClaudeCode:
+		for _, e := range claudeHookEvents {
+			table = append(table, limit{e.name, e.timeout})
+		}
+	case Codex:
+		for _, h := range codexHooks {
+			table = append(table, limit{h.event, h.timeout})
+		}
+	case Antigravity:
+		for _, h := range agyHooks {
+			table = append(table, limit{h.event, h.timeout})
+		}
+	}
+	shortest := 0
+	for _, l := range table {
+		if l.event == native {
+			return l.seconds
+		}
+		if shortest == 0 || l.seconds < shortest {
+			shortest = l.seconds
+		}
+	}
+	if shortest == 0 {
+		return 3 // the shortest any provider gives (Codex SessionEnd)
+	}
+	return shortest
+}

@@ -43,6 +43,10 @@ type Env struct {
 	ClassHooks Runner
 	// GOOS is the system ("" is this one).
 	GOOS string
+	// DecideDegraded is the decision with the engine down; nil is
+	// classes.DecideDegraded. The dispatcher runs it within the deadline of
+	// the call, whatever it takes (the tests give a slow one).
+	DecideDegraded func(ctx context.Context, env classes.Env, snapshot *classes.Rules, ev providers.Event) classes.Decision
 }
 
 // Runner runs one synchronous hook of the class with the event on stdin,
@@ -94,8 +98,8 @@ func Run(ctx context.Context, env Env, args []string) int {
 		return 2
 	}
 	d := newDispatcher(env, adapter, provider, native, agent)
-	out := d.run(ctx)
-	if out.Exit == 0 {
+	out, finished := d.within(ctx)
+	if finished && out.Exit == 0 {
 		for _, n := range d.notes {
 			out.Stderr = append(out.Stderr, n...)
 		}
@@ -155,8 +159,9 @@ type dispatcher struct {
 	goos     string
 	machine  *Machine
 	// start is when the call began: the budget of the hooks of the class
-	// counts from it.
-	start time.Time
+	// counts from it. deadline is when the whole call must have answered
+	// (callLimit after start).
+	start, deadline time.Time
 	// notes are the failures of the hooks of the class that did not block:
 	// "registra o erro e segue" (docs/classes/classes.md#hooks-extras-da-classe),
 	// on the stderr of the call.
@@ -192,6 +197,47 @@ func newDispatcher(env Env, a providers.Adapter, p providers.ID, native, agent s
 	return d
 }
 
+// guardGrace is how long past the deadline of the call the dispatcher
+// still waits for its own answer before it gives the answer of a call out
+// of time: within the margin below the provider's limit.
+const guardGrace = 500 * time.Millisecond
+
+// callLimit is the time the whole call has, from the start of `mestre hook`:
+// the provider's limit for the native event less the margin
+// (classes.ProviderMargin), never less than a second. The wait for the
+// engine, the degraded decision and the hooks of the class all fit in it.
+func (d *dispatcher) callLimit() time.Duration {
+	limit := time.Duration(providers.HookSeconds(d.provider, d.native)-classes.ProviderMargin) * time.Second
+	return max(limit, time.Second)
+}
+
+// within runs the call under its deadline. Past the deadline, and the grace
+// after it, the answer is the one of an internal error: it blocks in
+// pre_tool and permission_request (exit 2 in Claude Code and Codex, deny in
+// Antigravity), because past its limit Codex goes on as if allowed.
+// finished is false then: the call goes on in the background until the
+// process exits, and nothing of it (the notes) may be read.
+func (d *dispatcher) within(ctx context.Context) (providers.HookOutput, bool) {
+	d.start = d.clk.Now()
+	limit := d.callLimit()
+	d.deadline = d.start.Add(limit)
+	rctx, cancel := clock.WithTimeout(ctx, d.clk, limit)
+	defer cancel()
+	done := make(chan providers.HookOutput, 1)
+	go func() { done <- d.run(rctx) }()
+	guard := d.clk.NewTimer(limit + guardGrace)
+	defer guard.Stop()
+	select {
+	case out := <-done:
+		return out, true
+	case <-guard.C():
+		return d.fail(errOutOfTime), false
+	}
+}
+
+// errOutOfTime is a call that did not answer within its deadline.
+var errOutOfTime = errors.New("a chamada passou do prazo do provedor")
+
 // run answers the call; a panic is an internal error.
 func (d *dispatcher) run(ctx context.Context) (out providers.HookOutput) {
 	defer func() {
@@ -199,7 +245,6 @@ func (d *dispatcher) run(ctx context.Context) (out providers.HookOutput) {
 			out = d.fail(fmt.Errorf("panic: %v", r))
 		}
 	}()
-	d.start = d.clk.Now()
 	payload, err := readStdin(d.env.Stdin)
 	if err != nil {
 		return d.fail(err)
@@ -259,11 +304,24 @@ func deny(reason string) providers.Reply {
 }
 
 // decide is pre_tool and permission_request: the engine's decision, or the
-// degraded one when the engine does not answer in time.
+// degraded one when the engine does not answer in time. A command longer
+// than MaxCommand is denied before any analysis, by the engine or here.
 func (d *dispatcher) decide(ctx context.Context, ev providers.Event) providers.Reply {
+	if ev.Tool != nil && len(ev.Tool.Command) > MaxCommand {
+		dec := classes.Decision{Verdict: classes.Deny, Layer: classes.LayerFixed, Reason: fmt.Sprintf(
+			"regra fixa de segurança: o comando tem mais de %d KiB, grande demais para analisar; divida-o ou grave o conteúdo num arquivo", MaxCommand>>10)}
+		_ = enqueue(d.files, d.queueDir(), d.clk, ev, &dec)
+		return deny(dec.Reason)
+	}
 	ans, reached, err := d.ask(ctx, ev, DecisionDeadline)
 	if !reached {
-		dec := d.degraded(ctx, ev)
+		dec, ok := d.degradedWithin(ctx, ev)
+		if !ok {
+			dec = classes.Decision{Verdict: classes.Deny, Layer: classes.LayerDegraded,
+				Reason: classes.DegradedReason + " (a análise local passou do prazo do provedor)"}
+			_ = enqueue(d.files, d.queueDir(), d.clk, ev, &dec)
+			return providers.Reply{Kind: providers.ReplyError, Reason: "mestre hook: " + dec.Reason + "; a ação foi bloqueada"}
+		}
 		_ = enqueue(d.files, d.queueDir(), d.clk, ev, &dec)
 		if dec.Verdict == classes.Allow {
 			return providers.Reply{Kind: providers.ReplyAllow, Tool: ev.Tool}
@@ -386,7 +444,12 @@ func (d *dispatcher) classHooks(ctx context.Context, ev providers.Event, hooks [
 	if err != nil {
 		return "hook da classe: " + err.Error(), decision
 	}
+	// The budget of the class hooks and the deadline of the call: the
+	// earlier of the two.
 	deadline := d.start.Add(budgetOf(hooks))
+	if !d.deadline.IsZero() && d.deadline.Before(deadline) {
+		deadline = d.deadline
+	}
 	for _, h := range hooks {
 		if h.Refused != "" {
 			if decision && h.Blocking {
@@ -478,6 +541,31 @@ func (d *dispatcher) machineOf() *Machine {
 
 func (d *dispatcher) queueDir() string { return d.machineOf().Queue }
 
+// degradedWithin runs the degraded decision until the context of the call
+// ends: ok is false when it did not decide in time (or panicked), and the
+// call is then denied, not left to the provider's limit.
+func (d *dispatcher) degradedWithin(ctx context.Context, ev providers.Event) (classes.Decision, bool) {
+	type result struct {
+		dec classes.Decision
+		ok  bool
+	}
+	ch := make(chan result, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- result{}
+			}
+		}()
+		ch <- result{d.degraded(ctx, ev), true}
+	}()
+	select {
+	case r := <-ch:
+		return r.dec, r.ok
+	case <-ctx.Done():
+		return classes.Decision{}, false
+	}
+}
+
 // degraded is the decision with the engine down: the fixed rules and the
 // snapshot of the character, with its environment from env.json.
 func (d *dispatcher) degraded(ctx context.Context, ev providers.Event) classes.Decision {
@@ -500,12 +588,16 @@ func (d *dispatcher) degraded(ctx context.Context, ev providers.Event) classes.D
 			}
 		}
 	}
-	dec := classes.DecideDegraded(ctx, env, snap, ev)
+	decide := d.env.DecideDegraded
+	if decide == nil {
+		decide = classes.DecideDegraded
+	}
+	dec := decide(ctx, env, snap, ev)
 	if dec.Verdict == classes.Allow && snap != nil && blocking {
 		// The blocking hooks of the class do not run without the engine,
 		// and they exist to deny: what the snapshot allows beyond reading
 		// waits for the engine.
-		if ro := classes.DecideDegraded(ctx, env, nil, ev); ro.Verdict != classes.Allow {
+		if ro := decide(ctx, env, nil, ev); ro.Verdict != classes.Allow {
 			return classes.Decision{Verdict: classes.Deny, Layer: classes.LayerDegraded, Action: dec.Action,
 				Reason: classes.DegradedReason + " (a classe tem hooks bloqueantes, que só rodam com o motor: só leitura)"}
 		}
