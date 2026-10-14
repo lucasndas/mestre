@@ -11,13 +11,14 @@ package providers
 // the socket and its folder never go in sandbox_workspace_write.writable_roots,
 // which would let an agent unlink or replace the socket every character
 // shares. With the network off, Codex on Linux denies every connect() by
-// seccomp, Unix sockets included, whatever the folder; there is no rule
-// that frees one socket. So, by default, a class without internet keeps the
-// native network barrier and the CLI called by the shell tool does not
-// reach the engine (the hooks run outside the sandbox and still do); the
-// conformance test checks it, and its fallback (CodexOfflineNetwork) turns
-// the network of the sandbox on, leaving the network of that class to the
-// dispatcher alone.
+// seccomp, Unix sockets included, and has no rule that frees one socket. So,
+// on Linux, a class without internet runs with the network of the sandbox
+// on, for the `mestre` CLI to reach the engine, and its internet is blocked
+// only by the rules of the dispatcher, without the native barrier
+// (CodexNoNativeNetwork, which the panel shows). On Windows the sandbox
+// blocks only IP traffic, so the network stays off; the conformance test
+// checks that the socket is reached, and its fallback (CodexOfflineNetwork)
+// turns the network on there too.
 func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 	if err := p.check(); err != nil {
 		return NativeControls{}, err
@@ -26,7 +27,7 @@ func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 	if p.NoWrite {
 		sandbox = "read-only"
 	}
-	if p.Offline && !p.Fallbacks.CodexOfflineNetwork {
+	if p.Offline && !CodexNoNativeNetwork(p) {
 		network = "false"
 	}
 	args := []string{"-s", sandbox, "-c", "sandbox_workspace_write.network_access=" + network}
@@ -38,8 +39,9 @@ func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 
 // CodexNoNativeNetwork reports whether a Codex character of this policy
 // runs without the native network barrier its class asks for: no internet,
-// and the fallback that turns the network of the sandbox on. The panel shows
-// it on the sheet (docs/classes/reforco-nativo.md).
+// and the network of the sandbox on for the local channel (always on Linux;
+// on Windows, with the fallback). The panel shows it on the sheet and the
+// class check warns (docs/classes/reforco-nativo.md).
 func CodexNoNativeNetwork(p NativePolicy) bool {
-	return p.Offline && p.Fallbacks.CodexOfflineNetwork
+	return p.Offline && (machineOS(p.OS) != "windows" || p.Fallbacks.CodexOfflineNetwork)
 }

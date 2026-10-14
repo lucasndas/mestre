@@ -70,10 +70,11 @@ type NativeFallbacks struct {
 	// AntigravityNoDeny leaves the fixed rules of Antigravity to the hook
 	// alone: no permissions.deny of the Mestre in the profile's settings.json.
 	AntigravityNoDeny bool
-	// CodexOfflineNetwork runs Codex with the network of the sandbox on
-	// also for a class without internet, so the `mestre` CLI reaches the
-	// local channel (docs/provedores/codex.md#verificar-na-implementação):
-	// that combination has no native network barrier (CodexNoNativeNetwork).
+	// CodexOfflineNetwork runs Codex on Windows with the network of the
+	// sandbox on also for a class without internet, so the `mestre` CLI
+	// reaches the local channel, as on Linux, where it is the default
+	// (docs/provedores/codex.md#verificar-na-implementação): that
+	// combination has no native network barrier (CodexNoNativeNetwork).
 	CodexOfflineNetwork bool
 	// CodexHookTrust makes HookFiles of Codex also write, in the profile's
 	// config.toml, the trust entries (trusted_hash) of the Mestre hooks: the

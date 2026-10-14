@@ -2,6 +2,7 @@ package providers_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -42,25 +43,45 @@ func TestMultilineFallbackSendsByTheFile(t *testing.T) {
 	}
 }
 
+// A class without internet: on Linux the network of the sandbox is on, for
+// the `mestre` CLI to reach the local channel, and the gap of the native
+// barrier is reported; on Windows it stays off unless the conformance
+// switched its fallback on. The socket folder is never freed for writing,
+// and the hosted search never runs.
 func TestCodexNetworkOfAClassWithoutInternet(t *testing.T) {
 	t.Parallel()
-	p := providers.NativePolicy{AgentID: "a1", Worktree: "/srv/w", Offline: true}
-	nc, err := providers.NewCodex(providers.Options{}).(providers.NativeTranslator).Native(p)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		os       string
+		fallback bool
+		network  string
+		gap      bool
+	}{
+		{"linux", false, "true", true},
+		{"windows", false, "false", false},
+		{"windows", true, "true", true},
 	}
-	for _, a := range nc.Args {
-		if a == "sandbox_workspace_write.network_access=true" || strings.HasPrefix(a, "sandbox_workspace_write.writable_roots") {
-			t.Fatalf("args = %q: the default keeps the network off and never frees the socket folder for writing", nc.Args)
+	for _, tt := range tests {
+		p := providers.NativePolicy{AgentID: "a1", OS: tt.os, Worktree: "/srv/w", Offline: true}
+		p.Fallbacks.CodexOfflineNetwork = tt.fallback
+		nc, err := providers.NewCodex(providers.Options{}).(providers.NativeTranslator).Native(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=" + tt.network}
+		if !slices.Equal(nc.Args, want) {
+			t.Errorf("%s (fallback %v): args = %q, want %q", tt.os, tt.fallback, nc.Args, want)
+		}
+		for _, a := range nc.Args {
+			if strings.Contains(a, "writable_roots") {
+				t.Errorf("%s: args = %q free a folder for writing", tt.os, nc.Args)
+			}
+		}
+		if providers.CodexNoNativeNetwork(p) != tt.gap {
+			t.Errorf("%s (fallback %v): no native network barrier = %v, want %v", tt.os, tt.fallback, !tt.gap, tt.gap)
 		}
 	}
-	if providers.CodexNoNativeNetwork(p) {
-		t.Fatal("the default has the native network barrier")
-	}
-	p.Fallbacks.CodexOfflineNetwork = true
-	nc, _ = providers.NewCodex(providers.Options{}).(providers.NativeTranslator).Native(p)
-	want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"}
-	if len(nc.Args) != len(want) || nc.Args[3] != want[3] || !providers.CodexNoNativeNetwork(p) {
-		t.Fatalf("fallback args = %q; want the network on, no --search, and the gap reported", nc.Args)
+	// With internet there is no gap to report.
+	if providers.CodexNoNativeNetwork(providers.NativePolicy{AgentID: "a1", OS: "linux", Worktree: "/srv/w"}) {
+		t.Error("a class with internet reported without the native network barrier")
 	}
 }
