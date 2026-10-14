@@ -1,0 +1,13 @@
+{
+  "origin": "antigravity",
+  "version": "1.3.5",
+  "captured_at": "2026-10-14",
+  "source": "capture: antigravity 1.3.5 native permission screen, masked, by the conformance test",
+  "body": {
+    "screen": "\nRequesting permission for:\n   echo ok \u003e permitido/y.txt\n\nRun this command?\n\u003e 1. Yes, run command\n  2. Yes, and always allow in this conversation for commands that start with 'echo ok \u003e permitido/y.txt'\n  3. Yes, and always allow for commands that start with 'echo ok \u003e permitido/y.txt' (Persist to settings.json)\n  4. No, cancel\n\n  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command\nesc to cancel                                                                                                                                      mestre-conf-ae4cp8 (Gemini 3.8 Flash · high)  /agents",
+    "calls": [
+      "allow run_command: echo ok \u003e permitido/y.txt (cwd /mconf/mesa)"
+    ],
+    "answer": "deny"
+  }
+}

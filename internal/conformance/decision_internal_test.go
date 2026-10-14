@@ -1,6 +1,10 @@
 package conformance
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +48,34 @@ func TestNativePermissionScreenTakesTheDecisionOfItsCall(t *testing.T) {
 	c.hook(call(providers.EventPermissionRequest, "rm -rf x", hook.VerdictDeny))
 	if got, _ := ru.Decision(t.Context(), "a1", "approval", dialog("rm -rf x")); got != "deny" {
 		t.Errorf("a denied call: %q", got)
+	}
+}
+
+// Each native permission screen of a run is kept as a recording, masked,
+// with the calls it was matched against and the answer: the layout a
+// stricter matcher is checked against.
+func TestNativePermissionScreenIsRecorded(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	ru := &run{r: &Runner{Recorder: &Recorder{Dir: dir, Clock: clock.NewFake(time.Unix(0, 0))}}, res: &Result{},
+		req: Request{Provider: providers.Antigravity, Version: "1.3.5", Profile: Profile{Dir: "/home/conta"}}}
+	ru.calls = []providers.CallDecision{{Tool: &providers.Tool{NativeName: "run_command", Command: "cat /home/conta/x"}, Choice: "allow", Cwd: "/w"}}
+	screen := "Requesting permission for:\n   cat /home/conta/x\n\nRun this command?\n> 1. Yes, run command\n  2. No, cancel"
+	if got, _ := ru.Decision(t.Context(), "a1", "permission", screen); got != "allow" {
+		t.Fatalf("answer %q", got)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "antigravity", "1.3.5", "screen-dialog01.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec struct {
+		Body DialogBody `json:"body"`
+	}
+	if err := json.Unmarshal(b, &rec); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Body.Answer != "allow" || len(rec.Body.Calls) != 1 || strings.Contains(string(b), "/home/conta") || !strings.Contains(rec.Body.Screen, "cat /perfil/x") {
+		t.Fatalf("recording = %s", b)
 	}
 }
 

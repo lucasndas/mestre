@@ -153,6 +153,36 @@ func (r *Recorder) StepScreen(req Request, step int, text string) {
 	r.write(req, name, fmt.Sprintf("capture: %s %s screen at the end of step %d, masked", req.Provider, req.Version, step), text)
 }
 
+// DialogBody is the body of the recording of a native permission screen:
+// the screen, the calls of the engine it was matched against and the
+// answer.
+type DialogBody struct {
+	Screen string   `json:"screen"`
+	Calls  []string `json:"calls"`
+	Answer string   `json:"answer"`
+}
+
+// maxDialogs bounds the dialog recordings of a run.
+const maxDialogs = 8
+
+// Dialog keeps a native permission screen of the run, masked, with what it
+// was matched against: the layout the matcher of each CLI must read.
+func (r *Recorder) Dialog(req Request, screen string, calls []string, answer string, paths map[string]string) {
+	for n := 1; n <= maxDialogs; n++ {
+		name := fmt.Sprintf("screen-dialog%02d", n)
+		if !r.first(req, name) {
+			continue
+		}
+		masked := make([]string, len(calls))
+		for i, c := range calls {
+			masked[i] = maskText(c, paths)
+		}
+		r.write(req, name, fmt.Sprintf("capture: %s %s native permission screen, masked, by the conformance test", req.Provider, req.Version),
+			DialogBody{Screen: maskText(screen, paths), Calls: masked, Answer: answer})
+		return
+	}
+}
+
 // Result keeps the result of the run (already masked).
 func (r *Recorder) Result(res Result) {
 	r.write(Request{Provider: res.Provider, Version: res.Version}, "result", "conformance result", res)
