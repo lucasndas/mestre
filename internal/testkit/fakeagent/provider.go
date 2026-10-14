@@ -77,7 +77,8 @@ var profiles = map[Provider]profile{
 		loginTitle: "Select login method:",
 		loginOpts:  []string{"Claude account with subscription", "Anthropic Console account"},
 		credFile:   ".credentials.json", startEvent: "SessionStart", promptEvent: "UserPromptSubmit",
-		events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+		events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure",
+			"Stop", "StopFailure", "Notification", "PreCompact", "SessionEnd"},
 	},
 	Codex: {
 		title: "Codex (fake)", recordings: "codex",

@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/testkit"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -73,6 +74,15 @@ type agent struct {
 	turn    int
 	toolSeq int
 	lastMsg string
+
+	// Claude Code (claude.go).
+	layerFile  string     // --append-system-prompt-file
+	addDirs    []string   // --add-dir
+	statusLine string     // the statusLine command of the settings
+	ask        bool       // the next tool asks for permission
+	toolFailed bool       // the tool that ran failed
+	turnFailed bool       // the turn ended in a failure (the usage limit)
+	keys       chan event // what is typed during a turn, for its menus
 }
 
 // Run runs the agent until the input ends, the user exits or a crash step.
@@ -88,7 +98,8 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	events := make(chan event, 64)
-	go readInput(cfg.In, events)
+	a.keys = make(chan event, 16)
+	go readInput(cfg.In, events, a.clk)
 
 	a.print(profiles[a.p].title + "\r\n" + a.dir + "\r\n")
 	if s := a.env["FAKEAGENT_START_SCREEN"]; s != "" {
@@ -129,6 +140,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if a.hooks, err = a.loadHooks(); err != nil {
 		return err
 	}
+	a.statusLine = a.claudeStatusLine()
 	if a.p == Codex {
 		if pending := a.untrustedHooks(); len(pending) > 0 {
 			a.print(fmt.Sprintf("%s: %d new or modified hook(s) will not run until trusted\r\n", HookReviewTitle, len(pending)))
@@ -166,6 +178,10 @@ func (a *agent) parseArgs() error {
 			a.sessionID = next()
 		case "--settings":
 			a.settingsArg = next()
+		case "--append-system-prompt-file":
+			a.layerFile = next()
+		case "--add-dir":
+			a.addDirs = append(a.addDirs, next())
 		case "--fake-recording-version":
 			a.cfg.RecordingVersion = next()
 		case "--fake-script":
@@ -248,6 +264,8 @@ func (a *agent) menu(ctx context.Context, events <-chan event, opts []string) (i
 				draw()
 			case evEnter:
 				return sel, nil
+			case evEscape: // the last option: "No, exit", "No"
+				return len(opts) - 1, nil
 			case evInterrupt:
 				return 0, context.Canceled
 			}
@@ -282,6 +300,7 @@ func (a *agent) loop(ctx context.Context, events <-chan event) error {
 			case evInterrupt:
 				line.Reset()
 				if interrupts++; interrupts == 2 {
+					a.endSession(ctx)
 					return nil
 				}
 				a.print("\r\nPress Ctrl-C again to exit" + PromptMarker)
@@ -291,6 +310,10 @@ func (a *agent) loop(ctx context.Context, events <-chan event) error {
 				line.Reset()
 				if prompt == "" {
 					continue
+				}
+				if prompt == "/exit" && a.p == Claude {
+					a.endSession(ctx)
+					return nil
 				}
 				if err := a.runTurn(ctx, events, prompt); err != nil {
 					return err
@@ -306,6 +329,11 @@ func (a *agent) runTurn(ctx context.Context, events <-chan event, prompt string)
 	a.print("\r\n" + BusyMarker + "\r\n")
 	if prompt == "/fake-dump" {
 		a.print(a.dump() + "\r\n")
+		return nil
+	}
+	if prompt == "/compact" && a.p == Claude {
+		a.fireClaude(ctx, "PreCompact", map[string]any{"trigger": "manual"})
+		a.print("Compacted\r\n")
 		return nil
 	}
 	tctx, cancel := context.WithCancel(ctx)
@@ -328,6 +356,10 @@ func (a *agent) runTurn(ctx context.Context, events <-chan event, prompt string)
 				a.print("Interrupted\r\n")
 				return nil
 			}
+			select { // the menus of the turn read the other keys
+			case a.keys <- ev:
+			default:
+			}
 		}
 	}
 }
@@ -346,8 +378,8 @@ func (a *agent) turnBody(ctx context.Context, prompt string) error {
 		steps = []Step{{Say: &say}, {Run: &run}}
 	}
 	for _, s := range steps {
-		if ctx.Err() != nil {
-			return nil
+		if ctx.Err() != nil || a.turnFailed {
+			break
 		}
 		if err := a.step(ctx, s); err != nil {
 			return err
@@ -356,9 +388,15 @@ func (a *agent) turnBody(ctx context.Context, prompt string) error {
 	if ctx.Err() != nil {
 		return nil
 	}
+	if a.turnFailed { // StopFailure ended the turn: no Stop
+		a.turnFailed = false
+		a.runStatusLine(ctx)
+		return nil
+	}
 	if pl, ok := a.payload("Stop", a.common(map[string]any{"last_assistant_message": a.lastMsg})); ok {
 		a.fire(ctx, "Stop", "", pl)
 	}
+	a.runStatusLine(ctx)
 	return nil
 }
 
@@ -368,15 +406,25 @@ func (a *agent) step(ctx context.Context, s Step) error {
 		a.lastMsg = *s.Say
 		a.print(*s.Say + "\r\n")
 	case s.Tool != nil:
+		if s.Tool.Ask {
+			if a.p != Claude {
+				return notImplemented("%s: a tool that asks for permission is emulated for claude only", a.p)
+			}
+			a.ask = true
+		}
 		a.useTool(ctx, s.Tool.Name, s.Tool.Input, func() string { return "" })
+	case s.Limit != nil:
+		return a.claudeLimit(ctx, *s.Limit)
 	case s.Edit != nil:
 		path := a.resolve(s.Edit.Path)
 		in := map[string]any{"file_path": path, "content": s.Edit.Content}
 		a.useTool(ctx, profiles[a.p].editTool, in, func() string {
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				a.toolFailed = true
 				return err.Error()
 			}
 			if err := os.WriteFile(path, []byte(s.Edit.Content), 0o644); err != nil {
+				a.toolFailed = true
 				return err.Error()
 			}
 			return "wrote " + s.Edit.Path
@@ -389,8 +437,10 @@ func (a *agent) step(ctx context.Context, s Step) error {
 			}
 			out, code, err := a.cfg.Commands.RunCommand(ctx, *s.Run, a.dir, a.cfg.Env)
 			if err != nil {
+				a.toolFailed = true
 				return err.Error()
 			}
+			a.toolFailed = code != 0
 			return fmt.Sprintf("%s(exit %d)", out, code)
 		})
 	case s.Wait != nil:
@@ -410,14 +460,27 @@ func (a *agent) useTool(ctx context.Context, name string, input map[string]any, 
 	vals := a.toolVals(name, input)
 	if pl, ok := a.payload("PreToolUse", vals); ok {
 		if blocked, reason := a.fire(ctx, "PreToolUse", name, pl); blocked {
+			a.ask = false
 			a.print(fmt.Sprintf("Tool %s blocked by hook: %s\r\n", name, reason))
 			return
 		}
 	}
+	if a.ask {
+		a.ask = false
+		if !a.claudePermission(ctx, name, vals) {
+			a.print(fmt.Sprintf("Tool %s denied\r\n", name))
+			return
+		}
+	}
+	a.toolFailed = false
 	out := exec()
 	a.print(fmt.Sprintf("Tool %s ran %s\r\n", name, strings.TrimSpace(out)))
-	if pl, ok := a.payload("PostToolUse", vals); ok {
-		a.fire(ctx, "PostToolUse", name, pl)
+	post := "PostToolUse"
+	if a.p == Claude && a.toolFailed {
+		post, vals["error"] = "PostToolUseFailure", strings.TrimSpace(out)
+	}
+	if pl, ok := a.payload(post, vals); ok {
+		a.fire(ctx, post, name, pl)
 	}
 }
 
@@ -485,6 +548,7 @@ func (a *agent) dump() string {
 	b, _ := json.Marshal(map[string]any{
 		"provider": a.p, "cwd": a.dir, "args": a.cfg.Args, "session_id": a.sessionID,
 		"trusted": a.trusted, "hooks": hs, "hooks_fired": fired, "env": mestreEnv,
+		"append_system_prompt": a.layerText(), "add_dirs": a.addDirs, "status_line": a.statusLine,
 	})
 	return string(b)
 }
@@ -499,6 +563,7 @@ const (
 	evDown
 	evInterrupt
 	evBackspace
+	evEscape
 )
 
 type event struct {
@@ -508,9 +573,10 @@ type event struct {
 
 // readInput turns raw terminal bytes into events: bracketed paste, arrows,
 // Ctrl-C, backspace and Enter (\r). The channel closes when in ends.
-func readInput(in io.Reader, out chan<- event) {
+func readInput(in io.Reader, out chan<- event, clk clock.Clock) {
 	defer close(out)
-	r := bufio.NewReader(in)
+	src := newSource(in, clk)
+	r := bufio.NewReader(src)
 	for {
 		b, err := r.ReadByte()
 		if err != nil {
@@ -524,6 +590,10 @@ func readInput(in io.Reader, out chan<- event) {
 		case 0x7f, 0x08:
 			out <- event{kind: evBackspace}
 		case 0x1b:
+			if r.Buffered() == 0 && !src.more(escapeWait) { // Esc alone, not the start of a sequence
+				out <- event{kind: evEscape}
+				continue
+			}
 			seq := readEscape(r)
 			switch seq {
 			case "[A":
@@ -540,6 +610,66 @@ func readInput(in io.Reader, out chan<- event) {
 		default:
 			out <- event{kind: evText, text: string([]byte{b})}
 		}
+	}
+}
+
+// escapeWait is how long after an Esc the rest of an escape sequence may
+// take to arrive; none by then, and it was the Esc key.
+const escapeWait = 100 * time.Millisecond
+
+// source is the input of the agent read by a goroutine of its own, so that
+// readInput can tell whether more input comes soon.
+type source struct {
+	clk  clock.Clock
+	ch   chan []byte
+	rest []byte
+}
+
+func newSource(in io.Reader, clk clock.Clock) *source {
+	s := &source{clk: clk, ch: make(chan []byte, 8)}
+	go func() {
+		defer close(s.ch)
+		buf := make([]byte, 4096)
+		for {
+			n, err := in.Read(buf)
+			if n > 0 {
+				s.ch <- append([]byte(nil), buf[:n]...)
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return s
+}
+
+func (s *source) Read(p []byte) (int, error) {
+	if len(s.rest) == 0 {
+		chunk, ok := <-s.ch
+		if !ok {
+			return 0, io.EOF
+		}
+		s.rest = chunk
+	}
+	n := copy(p, s.rest)
+	s.rest = s.rest[n:]
+	return n, nil
+}
+
+// more reports whether input arrives within d of the clock of the agent: a
+// test with a fake clock advances it to tell that the Esc was alone.
+func (s *source) more(d time.Duration) bool {
+	if len(s.rest) > 0 {
+		return true
+	}
+	t := s.clk.NewTimer(d)
+	defer t.Stop()
+	select {
+	case chunk, ok := <-s.ch:
+		s.rest = chunk
+		return ok
+	case <-t.C():
+		return false
 	}
 }
 
