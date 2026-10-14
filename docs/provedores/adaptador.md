@@ -1,6 +1,6 @@
 # Adaptador de provedor
 
-> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -35,17 +35,17 @@ Regras do contrato: nenhuma operação escreve no `AGENTS.md`; toda geração é
 | `event` | evento do Mestre (tabela seguinte) |
 | `agent_id`, `table_id` | de `MESTRE_AGENT_ID` e `MESTRE_MESA` (identificador da mesa, `<número>-<slug>`; [mesas](../orquestracao/mesas.md)) |
 | `session_id` | `session_id` (Claude, Codex) ou `conversationId` (Antigravity) |
-| `turn_id` | `prompt_id` (Claude), `turn_id` (Codex), `executionNum` (Antigravity) |
+| `turn_id` | `prompt_id` (Claude), `turn_id` (Codex), `executionNum` (Antigravity); o evento que não traz o campo (statusLine, Notification, PreCompact e SessionEnd do Claude; no Antigravity, todos menos o Stop) recebe do motor o turno em curso, e o PreInvocation abre o seguinte ao último `executionNum`; vazio só em `session_start` |
 | `cwd` | `cwd` (Claude, Codex); no Antigravity, `toolCall.args.Cwd` ou o primeiro de `workspacePaths` |
 | `transcript_path`, `model` | quando o provedor informa |
 | `tool` | `native_name`, `kind`, `command`, `paths[]` (absolutos, normalizados), `url`, `raw_input` |
 | `tool_result` | só em `post_tool`: `ok`, `error`, `output` (truncado em 16 KiB, padrão) |
-| `prompt`, `last_message` | texto do turno e última resposta, quando existem (truncados) |
+| `prompt`, `last_message` | texto do turno e última resposta, quando existem (truncados em 16 KiB, como o `output`) |
 | `stop_reason`, `error` | `normal`, `interrupted`, `max_steps`, `rate_limit`, `auth`, `error` e o detalhe nativo |
 | `usage` | só em `usage`: tokens, custo estimado, % de contexto, janelas de limite (`window`, `used_pct`, `resets_at`) |
 | `received_at` | instante pelo relógio da máquina |
 
-Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos; sem diferença de maiúsculas no Windows) antes de qualquer decisão.
+Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos, inclusive os da pasta de um arquivo que ainda não existe; sem diferença de maiúsculas no Windows) antes de qualquer decisão.
 
 ### Mapa de eventos
 
@@ -64,7 +64,7 @@ Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos; sem di
 | `notification` | Notification | — | — |
 | `usage` | statusLine (pseudo-evento) | `token_count` no transcript | `agy -p "/usage"` |
 
-Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos: PreToolUse, PostToolUse, PreInvocation, PostInvocation e Stop.
+Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos: PreToolUse, PostToolUse, PreInvocation, PostInvocation e Stop; o primeiro PreInvocation de uma conversa que o terminal vê vira dois eventos, `session_start` e `turn_start`, nessa ordem.
 
 ### Ferramentas: nome nativo → tipo (`tool.kind`)
 
@@ -81,7 +81,7 @@ Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos
 | `internal` | `TodoWrite` | `update_plan` | `manage_task`, `ask_question`, `list_permissions`, `ask_permission` |
 | `other` | qualquer nome não mapeado | idem | `generate_image`, `schedule`, não mapeados |
 
-Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
+Ferramenta de tipo `shell` sem comando, ou `read`, `write`, `edit` ou `search` sem caminho lido de um campo do mapa, vira `other`: nenhuma regra de caminho decide sem ver o caminho. Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
 
 ### Prontidão e telas interativas
 
@@ -89,7 +89,7 @@ Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela 
 
 ### Digitação de mensagens
 
-`TypeMessage` monta os bytes de uma entrega: o texto vai entre os marcadores de colagem (*bracketed paste*, `ESC[200~` … `ESC[201~`), para que quebras de linha não enviem a mensagem no meio, e depois vem a **tecla de envio** do provedor. Cada documento de provedor registra a tecla e as peculiaridades dele, conferidas na conformidade.
+`TypeMessage` monta os bytes de uma entrega: o texto vai entre os marcadores de colagem (*bracketed paste*, `ESC[200~` … `ESC[201~`), para que quebras de linha não enviem a mensagem no meio, e depois vem a **tecla de envio** do provedor. O texto perde os caracteres de controle, menos a quebra de linha e a tabulação, para nada fechar a colagem antes da hora. Cada documento de provedor registra a tecla e as peculiaridades dele, conferidas na conformidade.
 
 | Adaptador | Colagem | Tecla de envio |
 |---|---|---|
