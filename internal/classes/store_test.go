@@ -13,13 +13,14 @@ import (
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
+	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	machinedb "github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// The machine database is migrated once, by TestMain, outside the time of
-// every test; a test starts from a copy (docs/qualidade/testes.md).
-var machineTemplate []byte
+// The machine and the Guild databases are migrated once, by TestMain, outside
+// the time of every test; a test starts from a copy (docs/qualidade/testes.md).
+var machineTemplate, guildTemplate []byte
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "classes-template")
@@ -29,6 +30,14 @@ func TestMain(m *testing.M) {
 		if db, err = machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"}); err == nil {
 			if err = db.Close(); err == nil {
 				machineTemplate, err = os.ReadFile(path)
+			}
+		}
+		if err == nil {
+			path = filepath.Join(dir, "mestre.db")
+			if db, err = guilddb.Open(context.Background(), path, store.Options{Synchronous: "OFF"}); err == nil {
+				if err = db.Close(); err == nil {
+					guildTemplate, err = os.ReadFile(path)
+				}
 			}
 		}
 		os.RemoveAll(dir)

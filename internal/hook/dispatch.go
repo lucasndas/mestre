@@ -81,7 +81,13 @@ func Run(ctx context.Context, env Env, args []string) int {
 		return 2
 	}
 	d := newDispatcher(env, adapter, provider, native, agent)
-	return write(env, d.run(ctx))
+	out := d.run(ctx)
+	if out.Exit == 0 {
+		for _, n := range d.notes {
+			out.Stderr = append(out.Stderr, n...)
+		}
+	}
+	return write(env, out)
 }
 
 func parseArgs(args []string) (providers.ID, string, error) {
@@ -135,6 +141,22 @@ type dispatcher struct {
 	agent    string
 	goos     string
 	machine  *Machine
+	// notes are the failures of the hooks of the class that did not block:
+	// "registra o erro e segue" (docs/classes/classes.md#hooks-extras-da-classe),
+	// on the stderr of the call.
+	notes []string
+}
+
+// note registers the failure of a hook of the class that goes on.
+func (d *dispatcher) note(h ClassHook, exit int, stderr string, err error) {
+	why := stderr
+	switch {
+	case err != nil:
+		why = err.Error()
+	case why == "":
+		why = fmt.Sprintf("saiu com %d", exit)
+	}
+	d.notes = append(d.notes, mask(fmt.Sprintf("mestre hook: o hook da classe %s falhou e a execução seguiu: %s\n", h.Name, why)))
 }
 
 func newDispatcher(env Env, a providers.Adapter, p providers.ID, native, agent string) *dispatcher {
@@ -340,6 +362,12 @@ func (d *dispatcher) classHooks(ctx context.Context, ev providers.Event, hooks [
 		return "hook da classe: " + err.Error(), decision
 	}
 	for _, h := range hooks {
+		if h.Refused != "" {
+			if decision && h.Blocking {
+				return fmt.Sprintf("hook da classe %s recusado e é bloqueante: %s", h.Name, mask(h.Refused)), true
+			}
+			continue
+		}
 		if d.env.ClassHooks == nil {
 			if decision && h.Blocking {
 				return fmt.Sprintf("hook da classe %s não pôde rodar", h.Name), true
@@ -349,19 +377,18 @@ func (d *dispatcher) classHooks(ctx context.Context, ev providers.Event, hooks [
 		hctx, cancel := clock.WithTimeout(ctx, d.clk, h.Timeout())
 		exit, stderr, err := d.env.ClassHooks.Run(hctx, h, ev.Event, stdin)
 		cancel()
-		if !decision {
-			continue
-		}
+		failed := err != nil || exit != 0
 		switch {
-		case err == nil && exit == 0:
-		case err == nil && exit == 2:
+		case decision && err == nil && exit == 2:
 			reason := stderr
 			if reason == "" {
 				reason = "sem motivo"
 			}
 			return fmt.Sprintf("hook da classe %s negou: %s", h.Name, mask(reason)), true
-		case h.Blocking:
+		case decision && failed && h.Blocking:
 			return fmt.Sprintf("hook da classe %s falhou e é bloqueante", h.Name), true
+		case failed:
+			d.note(h, exit, stderr, err)
 		}
 	}
 	return "", false

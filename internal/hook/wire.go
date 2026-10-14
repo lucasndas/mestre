@@ -54,6 +54,10 @@ type ClassHook struct {
 	TimeoutMS int64  `json:"timeout_ms"`
 	// Blocking makes a failure or a timeout deny, in pre_tool.
 	Blocking bool `json:"blocking,omitempty"`
+	// Refused is why the hook must not run: its `run` does not pass the
+	// permission pipeline of the class, like a command of the character.
+	// It counts as a failure of the hook (it denies when it is blocking).
+	Refused string `json:"refused,omitempty"`
 }
 
 // Timeout is the time limit of the hook.

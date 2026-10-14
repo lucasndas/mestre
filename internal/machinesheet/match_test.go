@@ -173,8 +173,8 @@ func TestAProviderInstalledButNotLoggedInOrNotConformantDoesNotMeet(t *testing.T
 	})
 }
 
-// CA-FMAQ-04: the refusal when a requirement is saved; the class that calls
-// it when it is saved is milestone 3.
+// Part of CA-FMAQ-04: the refusal itself; the criterion closes in
+// internal/classes, where a class with such a requirement is not saved.
 func TestARequirementThatCannotBeMetIsRefusedWithTheReason(t *testing.T) {
 	t.Parallel()
 	t.Run("an interface outside the Operator base", func(t *testing.T) {
