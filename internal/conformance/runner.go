@@ -400,7 +400,7 @@ func (ru *run) provision(ctx context.Context) error {
 	var native providers.NativeControls
 	if t, ok := providers.NativeOf(a); ok {
 		pol := classes.NativePolicy(ws.Rules, classes.NativeCharacter{AgentID: ws.AgentID, Provider: req.Provider, OS: req.OS,
-			Worktree: ws.Worktree, ProfileHome: req.Profile.Dir}, req.Fallbacks.Native)
+			Worktree: ws.Worktree, ProfileHome: req.Profile.Dir, GitDir: ws.GitDir, Mirror: ws.Mirror}, req.Fallbacks.Native)
 		pol.HookEnv = hookEnv
 		if native, err = t.Native(pol); err != nil {
 			return err

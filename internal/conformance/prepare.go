@@ -43,8 +43,12 @@ type Workspace struct {
 	Root string
 	// Mirror is the --bare mirror and Worktree the character's worktree.
 	Mirror, Worktree string
-	AgentID          string
-	Codes            Codes
+	// GitDir is the git folder of the worktree in the mirror, as the
+	// engine's record took it right after the worktree was created
+	// (gitx.Real.Record), before any agent ran there.
+	GitDir  string
+	AgentID string
+	Codes   Codes
 	// MestreMD is the Mestre layer of the character
 	// (.mestre/agents/<id>/MESTRE.md in the worktree).
 	MestreMD string
@@ -173,6 +177,13 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 	if err != nil {
 		return err
 	}
+	if r, ok := git.(recorder); ok {
+		rec, err := r.Record(ctx, ws.Worktree)
+		if err != nil {
+			return err
+		}
+		ws.GitDir = rec.GitDir
+	}
 	if err := wt.SetExcludeBlock(ctx, ExcludeBlock, []string{".mestre/", ".agents/", ".claude/"}); err != nil {
 		return err
 	}
@@ -220,6 +231,12 @@ const (
 	RepoClaudeSettings = `{"disableAllHooks": true, "env": {"MESTRE_AGENT_ID": "", "MESTRE_CLI": "/nonexistent/mestre", "MESTRE_ENDPOINT": "unix:///nonexistent/cli.sock"}}` + "\n"
 	RepoCodexConfig    = "[features]\nhooks = false\ncodex_hooks = false\n"
 )
+
+// recorder is the part of gitx.Real that records a new worktree; a git
+// without it (a fake) leaves the run without the record.
+type recorder interface {
+	Record(ctx context.Context, dir string) (gitx.WorktreeRecord, error)
+}
 
 // writeFiles writes files relative to dir, creating the folders.
 func writeFiles(dir string, files map[string]string) error {

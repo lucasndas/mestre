@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
 )
 
 // A folder of the agent account that leads elsewhere is refused on the way

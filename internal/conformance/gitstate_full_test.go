@@ -25,6 +25,11 @@ func TestTheGitStateOfARunKnowsTheMainBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The engine's record of the worktree, taken right after it was
+	// created: the git folder in the mirror that the Codex sandbox opens.
+	if rel, err := filepath.Rel(filepath.Join(ws.Mirror, "worktrees"), ws.GitDir); err != nil || rel == "." || filepath.IsAbs(rel) || rel[0] == '.' {
+		t.Errorf("GitDir %q is not a worktree folder of the mirror %q", ws.GitDir, ws.Mirror)
+	}
 	st := classes.GitxState{Git: git, Main: MainBranch}
 	changed, err := st.Changed(t.Context(), ws.Worktree, filepath.Join(ws.Worktree, "README.md"))
 	if err != nil || changed {
