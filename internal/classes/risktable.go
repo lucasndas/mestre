@@ -368,6 +368,20 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	for _, v := range valuePaths(args) {
 		out.raise(w.wordRisk(v, st))
 	}
+	// awk and sed programs that execute a command or write a file: a
+	// literal command is classified as a command line, a write takes the
+	// floor of its path, and anything dynamic is the code signal (awksed.go).
+	if pc, ok := e.progCodeOf(cn, args); ok {
+		for _, cmd := range pc.cmds {
+			out.raise(w.line(cmd, st.cwds[0], dialectPOSIX, depth+1))
+		}
+		for _, wd := range pc.writes {
+			out.raise(w.wordRisk(wd, st))
+		}
+		if pc.forcesCode() {
+			out.raise(riskOut{risk: RiskMedium, rule: "sinal de interpretador com código: " + pc.why})
+		}
+	}
 	// A script of the worktree is the project's only if it came from the
 	// repository; over the rows and the adjustments, like the paths.
 	if out.risk.rank() < RiskMedium.rank() {
