@@ -10,9 +10,11 @@ import (
 // rule of docs/classes/formato-das-permissoes.md): at &&, ||, ;, |, &, line
 // breaks and the grouping parentheses and braces. Quotes and escapes are
 // removed from the words. What the dispatcher cannot evaluate (command
-// substitution, variables, here-documents, loops, eval and nested shells)
-// is recorded so the part ends at least in ask; the text of a substitution
-// is still analysed on its own, so a fixed rule inside it denies.
+// substitution, variables, loops, eval and nested shells) is recorded so
+// the part ends at least in ask; the text of a substitution is still
+// analysed on its own, so a fixed rule inside it denies. The body of a
+// here-document is data (heredoc.go), unless a shell or an interpreter
+// reads it.
 
 // dialect is the shell grammar: POSIX sh/bash, or PowerShell. On Windows a
 // command is analysed in both and the most restrictive result holds.
@@ -39,7 +41,7 @@ type redirect struct {
 }
 
 // writes reports whether the redirection writes its target.
-func (r redirect) writes() bool { return r.op != "<" && r.op != "<<<" }
+func (r redirect) writes() bool { return r.op != "<" && r.op != "<<" && r.op != "<<<" }
 
 // simple is one simple command.
 type simple struct {
@@ -48,12 +50,14 @@ type simple struct {
 	redirs  []redirect
 	opaque  []string // why it cannot be analysed (it ends in ask at least)
 	subs    []string // texts of $(…), `…`, <(…), analysed on their own
+	stdin   []string // bodies of its here-documents and here-strings
 	next    string   // the separator after it
 }
 
 type token struct {
-	op string // an operator; "" for a word
-	w  word
+	op  string // an operator; "" for a word
+	w   word
+	doc *hereDoc // the here-document of a << operator, when it was read
 }
 
 type lexer struct {
@@ -73,6 +77,9 @@ type lexer struct {
 	braces []int
 	quotes []quoteSpan
 	opens  bool // braces holds an unquoted {
+	// pending are the here-documents of the current line, whose bodies
+	// start after its newline.
+	pending []*hereDoc
 }
 
 // quoted records that the text of the current word from offset from on
@@ -192,6 +199,7 @@ func (lx *lexer) stepPOSIX() {
 	case c == '\n':
 		lx.op("\n")
 		lx.i++
+		lx.readBodies()
 	case c == '#' && !lx.inWord:
 		for lx.i < len(lx.s) && lx.s[lx.i] != '\n' {
 			lx.i++
@@ -318,8 +326,7 @@ func (lx *lexer) redirPOSIX(c byte) {
 			lx.i += len(o)
 			switch o {
 			case "<<", "<<-":
-				lx.opaque = append(lx.opaque, "here-document")
-				lx.op("<<")
+				lx.hereDoc(lx.i-len(o), o == "<<-")
 			case "<&", ">&":
 				// fd duplication (2>&1, >&-) has no file; >&file writes it.
 				j := lx.i
@@ -717,12 +724,24 @@ func group(toks []token, d dialect) (parts []simple, grouped bool) {
 			}
 			end(t.op)
 		default: // a redirection
+			if t.doc != nil && t.doc.read {
+				cur.stdin = append(cur.stdin, t.doc.body)
+				if !t.doc.quoted {
+					// The shell expands $(…) and `…` in the body.
+					subs, why := bodyExpansions(t.doc.body)
+					cur.subs = append(cur.subs, subs...)
+					cur.opaque = append(cur.opaque, why...)
+				}
+			}
 			// Substitutions inside the target belong to this part.
 			for i+1 < len(toks) && toks[i+1].op == "sub" {
 				cur.subs = append(cur.subs, toks[i+1].w.text)
 				i++
 			}
 			if i+1 < len(toks) && toks[i+1].op == "" {
+				if t.op == "<<<" {
+					cur.stdin = append(cur.stdin, toks[i+1].w.text)
+				}
 				cur.redirs = append(cur.redirs, redirect{op: t.op, target: toks[i+1].w})
 				i++
 				for i+1 < len(toks) && toks[i+1].op == "sub" {

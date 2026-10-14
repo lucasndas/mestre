@@ -67,8 +67,11 @@ func TestSplitIntoSimpleCommands(t *testing.T) {
 
 func TestOpaqueConstructsAndSubstitutions(t *testing.T) {
 	t.Parallel()
-	for _, line := range []string{"npm test $(curl x)", "echo `id`", "echo $HOME", "cat <<EOF\nx\nEOF", "diff <(ls) b", "for f in a; do rm $f; done", "echo ${X}", "echo $((1+2))", "echo 'a"} {
-		_, opaque, _ := parseLine(line, dialectPOSIX)
+	for _, line := range []string{"npm test $(curl x)", "echo `id`", "echo $HOME", "cat <<EOF\n$(id)\nEOF", "cat <<$(x)\ny\n$(x)", "diff <(ls) b", "for f in a; do rm $f; done", "echo ${X}", "echo $((1+2))", "echo 'a"} {
+		parts, opaque, _ := parseLine(line, dialectPOSIX)
+		for _, p := range parts {
+			opaque = append(opaque, p.opaque...)
+		}
 		if len(opaque) == 0 {
 			t.Errorf("%q is not opaque", line)
 		}
@@ -80,6 +83,26 @@ func TestOpaqueConstructsAndSubstitutions(t *testing.T) {
 	_, opaque, _ := parseLine("npm test 2>&1 >/dev/null", dialectPOSIX)
 	if len(opaque) != 0 {
 		t.Fatalf("plain redirections are opaque: %v", opaque)
+	}
+}
+
+// The body of a here-document is data of its part; the lines after it are
+// commands again.
+func TestHeredocBodyIsReadAsData(t *testing.T) {
+	t.Parallel()
+	parts, opaque, _ := parseLine("cat <<'EOF' > f.json\n{\"a\":[1,2]}\n$(x)\nEOF\necho done", dialectPOSIX)
+	if len(opaque) != 0 || len(parts) != 2 {
+		t.Fatalf("parts = %+v, opaque = %q", parts, opaque)
+	}
+	if got := parts[0].stdin; !slices.Equal(got, []string{"{\"a\":[1,2]}\n$(x)\n"}) || len(parts[0].subs) != 0 {
+		t.Fatalf("stdin = %q, subs = %q", got, parts[0].subs)
+	}
+	if got := strings.Join(parts[1].texts(), " "); got != "echo done" {
+		t.Fatalf("after the body: %q", got)
+	}
+	parts, _, _ = parseLine("cat <<EOF\na $(b) `c`\nEOF", dialectPOSIX)
+	if !slices.Equal(parts[0].subs, []string{"b", "c"}) {
+		t.Fatalf("subs of an unquoted body = %q", parts[0].subs)
 	}
 }
 
