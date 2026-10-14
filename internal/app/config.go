@@ -60,6 +60,19 @@ type Paths struct {
 	// HookQueue is where `mestre hook` leaves the events while the engine
 	// is away; empty reads none.
 	HookQueue string
+	// CLIAccess is who may connect to CLISocket: on an installed instance
+	// the access of docs/arquitetura/canal-local.md#endpoint (0660 and the
+	// group mestre-agente on Linux, the ACL on Windows); nil leaves the
+	// socket as the system created it (`mestre run --dir`, the tests).
+	CLIAccess localchan.Access
+}
+
+// cliAccess is CLIAccess, or none.
+func (p Paths) cliAccess() localchan.Access {
+	if p.CLIAccess == nil {
+		return localchan.NoAccess{}
+	}
+	return p.CLIAccess
 }
 
 // DefaultPaths are the folders of an installed instance.
@@ -72,17 +85,21 @@ func DefaultPaths(instance string) (Paths, error) {
 		return Paths{}, err
 	}
 	if runtime.GOOS == "windows" {
-		root := filepath.Join(os.Getenv("ProgramData"), "Mestre", instance)
+		// The root of the socket (%ProgramData%, or C:\ProgramData when it
+		// is not set): <root>\Mestre\<inst>\run\cli.sock. The dispatcher
+		// finds the folders from the socket the same way.
+		programData := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(sock))))
+		root := filepath.Join(programData, "Mestre", instance)
 		return Paths{
 			Config: filepath.Join(root, "config"), Banco: filepath.Join(root, "banco"),
 			Maquina: filepath.Join(root, "maquina"), Agentes: filepath.Join(root, "maquina", "agentes"), CLISocket: sock,
-			HookQueue: hook.QueueDir("windows", os.Getenv("ProgramData"), instance),
+			HookQueue: hook.QueueDir("windows", programData, instance), CLIAccess: localchan.DefaultAccess(),
 		}, nil
 	}
 	return Paths{
 		Config: filepath.Join("/etc/mestre", instance), Banco: filepath.Join("/var/lib/mestre", instance, "banco"),
 		Maquina: filepath.Join("/var/lib/mestre", instance, "maquina"), Agentes: filepath.Join("/var/lib/mestre", instance, "agentes"),
-		CLISocket: sock, HookQueue: hook.QueueDir("linux", "", instance),
+		CLISocket: sock, HookQueue: hook.QueueDir("linux", "", instance), CLIAccess: localchan.DefaultAccess(),
 	}, nil
 }
 
