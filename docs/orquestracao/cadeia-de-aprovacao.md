@@ -35,6 +35,8 @@ Cada parte `medio` tem uma origem, a linha da tabela ou o [sinal](../classes/cla
 | `conteineres_e_vms` | `docker *`, `podman *`, `docker-compose *` e o sinal de contêiner ou VM | sim | só as comuns; volume ou `-f` fora do worktree é outra origem |
 | `pacotes_e_executores` | `npx`, `npm exec`, `npm x`, `pnpm dlx`, `yarn dlx`, `bunx`, `bun x`, `pip install`, `pip3 install` | sim | só as comuns; URL ou host no comando é a origem `rede` |
 | `interpretador_com_codigo` | o sinal de interpretador com código (`python -c`, `node -e`, `python -m`, `deno eval`) | sim | só as comuns; o motor não lê o código |
+| `script_alterado` | o sinal de script alterado na mesa (criado ou mudado em relação à base da branch da mesa) | sim | só as comuns; o motor não lê o script |
+| `escrita_sem_caminho` | o sinal de escrita sem caminho visível (extrair arquivo compactado, `patch`, `git apply`, `git am`) | não | só as comuns, se o Dono a incluir |
 | `instalacao_e_sistema` | `-g`, `--global`, `go install`, `cargo install`, `brew`, `apt` e afins, `npm config`, serviços (`systemctl`) | não | só as comuns, se o Dono a incluir |
 | `fora_do_worktree` | o sinal de caminho literal fora do worktree (não o de segredo ou do Mestre, `alto`) | não | só as comuns, se o Dono a incluir |
 

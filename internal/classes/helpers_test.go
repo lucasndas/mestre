@@ -154,11 +154,24 @@ func (l *ledger) Use(_ context.Context, _ string, id int64) (bool, error) {
 	return true, nil
 }
 
-// fakeGit is a GitState with a fixed branch and commit set.
+// fakeGit is a GitState with a fixed branch and commit set; the scripts
+// whose path ends in one of changed differ from the base of the branch
+// (classes.TableScripts), the others came from the repository.
 type fakeGit struct {
-	branch string
-	staged []string
-	all    []string
+	branch  string
+	staged  []string
+	all     []string
+	changed []string
+}
+
+func (g fakeGit) Changed(_ context.Context, _ string, p string) (bool, error) {
+	k := strings.ToLower(filepath.ToSlash(p))
+	for _, c := range g.changed {
+		if strings.HasSuffix(k, "/"+strings.ToLower(c)) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (g fakeGit) Branch(context.Context, string) (string, error) { return g.branch, nil }

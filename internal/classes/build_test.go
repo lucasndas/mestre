@@ -94,8 +94,10 @@ operator: false
 	check("commands.allow", r.Commands.Allow, []string{"npm test", "npm run *"})
 	check("commands.ask", r.Commands.Ask, []string{"npm publish *"})
 	check("cli.allow", r.CLI.Allow, []string{"issue comment"})
-	if r.Commands.Default != classes.Ask || r.Origin["commands.default"] != classes.LayerSheet {
-		t.Fatalf("commands.default %s (%s); want ask from the sheet", r.Commands.Default, r.Origin["commands.default"])
+	// The ceiling's commands.allow gives nothing outside it: the default,
+	// ask by the sheet, is deny.
+	if r.Commands.Default != classes.Deny || r.Origin["commands.default"] != classes.LayerCeiling {
+		t.Fatalf("commands.default %s (%s); want deny from the ceiling's allow list", r.Commands.Default, r.Origin["commands.default"])
 	}
 	if r.Git.RequestPush != classes.Deny || r.Git.Workflows != classes.WorkflowsNever || r.Operator {
 		t.Fatalf("git %+v operator %v; the ceiling turns them off", r.Git, r.Operator)

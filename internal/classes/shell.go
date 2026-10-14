@@ -66,6 +66,9 @@ type lexer struct {
 	buf    strings.Builder
 	cur    word
 	inWord bool
+	// braces are the offsets in buf of the unquoted {, } and , of the
+	// current word (POSIX): what a brace expansion is made of.
+	braces []int
 }
 
 // parseLine splits a command line into simple commands. opaque holds the
@@ -82,6 +85,7 @@ func (lx *lexer) startWord() {
 		lx.inWord = true
 		lx.cur = word{assign: -1}
 		lx.buf.Reset()
+		lx.braces = lx.braces[:0]
 	}
 }
 
@@ -89,9 +93,35 @@ func (lx *lexer) flush() {
 	if !lx.inWord {
 		return
 	}
-	lx.cur.text = lx.buf.String()
-	lx.toks = append(lx.toks, token{w: lx.cur})
 	lx.inWord = false
+	lx.cur.text = lx.buf.String()
+	if len(lx.braces) > 0 {
+		words, ok := braceExpand(lx.cur.text, lx.braces)
+		switch {
+		case !ok:
+			// Too many words to analyse: the line is denied.
+			lx.mark(braceTooLarge)
+		case len(words) > 1 || words[0] != lx.cur.text:
+			// The shell runs the words of the expansion: they are analysed
+			// as words of the line, which is at least ask.
+			lx.opaque = append(lx.opaque, "expansão de chaves")
+			first := lx.braces[0]
+			for _, t := range words {
+				if t == "" && !lx.cur.quoted {
+					continue // an empty word of the expansion is dropped
+				}
+				w := lx.cur
+				w.text = t
+				if w.assign > first {
+					w.assign = -1
+				}
+				w.tilde = w.tilde || first == 0 && strings.HasPrefix(t, "~")
+				lx.toks = append(lx.toks, token{w: w})
+			}
+			return
+		}
+	}
+	lx.toks = append(lx.toks, token{w: lx.cur})
 }
 
 func (lx *lexer) op(o string) {
@@ -234,6 +264,9 @@ func (lx *lexer) stepPOSIX() {
 		}
 		if c == '=' && lx.cur.assign < 0 && !lx.cur.quoted && !lx.cur.expand && nameRe.MatchString(lx.buf.String()) {
 			lx.cur.assign = lx.buf.Len()
+		}
+		if c == '{' || c == '}' || c == ',' {
+			lx.braces = append(lx.braces, lx.buf.Len())
 		}
 		lx.buf.WriteByte(c)
 		lx.i++

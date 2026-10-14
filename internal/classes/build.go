@@ -86,6 +86,7 @@ func Build(l Layers) (*Rules, error) {
 		}
 		return nil
 	})
+	r.Commands.Default = b.onlyListed("commands.default", r.Commands.Default, caps, func(p *Permissions) *[]string { return ptrOf(cmd(p), "allow") })
 
 	// tools
 	tl := func(p *Permissions) *ToolsSpec {
@@ -111,6 +112,7 @@ func Build(l Layers) (*Rules, error) {
 		}
 		return nil
 	})
+	r.Tools.Default = b.onlyListed("tools.default", r.Tools.Default, caps, func(p *Permissions) *[]string { return toolsPtr(p, "allow") })
 
 	// git
 	gitOf := func(p *Permissions) *GitSpec {
@@ -128,9 +130,13 @@ func Build(l Layers) (*Rules, error) {
 		}
 		return out
 	}
+	// An absent git.branches is the table's branch (the provider CLIs
+	// commit on the branch checked out); without a table, none.
 	var branches []string
-	if g != nil {
-		branches = resolve(deref(g.Branches))
+	if g != nil && g.Branches != nil {
+		branches = resolve(*g.Branches)
+	} else if v := l.Placeholders["mesa.branch"]; v != "" && !strings.ContainsAny(v, "{}") {
+		branches = []string{v}
 	}
 	resolvedCaps := make([]layered, 0, len(caps))
 	for _, c := range caps {
@@ -358,6 +364,19 @@ func (b *builder) verdict(name string, class Verdict, caps []layered, get func(*
 		}
 		if m := get(c.p); m != nil && m.rank() > v.rank() {
 			v = *m
+			b.origin[name] = c.layer
+		}
+	}
+	return v
+}
+
+// onlyListed is a default under the maximums: one with an allow list gives
+// nothing outside it, so what no pattern covers is denied, with that layer
+// as the origin.
+func (b *builder) onlyListed(name string, v Verdict, caps []layered, allow func(*Permissions) *[]string) Verdict {
+	for _, c := range caps {
+		if c.p != nil && allow(c.p) != nil && v != Deny {
+			v = Deny
 			b.origin[name] = c.layer
 		}
 	}

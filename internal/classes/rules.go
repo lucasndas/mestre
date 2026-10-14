@@ -186,8 +186,10 @@ type CLIRules struct {
 }
 
 // Level is the level of the author of a decree; the higher one wins
-// (docs/arquitetura/precedencia.md#a-ordem). The Grand Master's exceptions,
-// as delegated approver, are below every decree of a person.
+// (docs/arquitetura/precedencia.md#a-ordem). The decisions of the agents of
+// the approval chain (the Grand Master and the Mestre da mesa) are below
+// every decree of a person and only turn an ask into allow: they never beat
+// a deny.
 type Level string
 
 // The levels, from the strongest.
@@ -206,9 +208,18 @@ func (l Level) rank() int {
 		return 2
 	case LevelApprover:
 		return 1
+	case LevelGrandMaster, LevelTableMaster:
+		return 0
 	}
-	return 0 // the Grand Master, and anything unknown
+	return -1 // unknown: no decree of it counts
 }
+
+// person reports a level of a person: owner, admin or approver.
+func (l Level) person() bool { return l.rank() > 0 }
+
+// agent reports a level of an agent of the approval chain: grand_master or
+// table_master.
+func (l Level) agent() bool { return l == LevelGrandMaster || l == LevelTableMaster }
 
 // DecreeKind tells a permanent rule from a one-time exception.
 type DecreeKind string
@@ -380,6 +391,9 @@ func (r *Rules) Validate() error {
 	for _, d := range r.Decrees {
 		if d.Kind != "" && d.Kind != DecreeRule && d.Kind != DecreeException {
 			return fmt.Errorf("effective rules: decree %d: kind %q", d.ID, d.Kind)
+		}
+		if !d.Level.person() && !d.Level.agent() {
+			return fmt.Errorf("effective rules: decree %d: level %q", d.ID, d.Level)
 		}
 	}
 	return nil

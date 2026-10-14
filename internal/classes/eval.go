@@ -174,6 +174,11 @@ func (e *evaluator) fixedPath(k string, u use) string {
 	if within(k, e.tmp) {
 		return "" // the character's own MESTRE_TMP: the only exception
 	}
+	if e.windows {
+		if why := windowsShare(k); why != "" {
+			return why
+		}
+	}
 	// A recursive use (a search, a removal) takes the whole tree under k.
 	under := func(dir string) bool {
 		d := e.key(dir)
@@ -227,9 +232,12 @@ func (e *evaluator) filePerm(k string, write bool) outcome {
 		return allowed
 	}
 	rel, inside := e.rel(k)
-	if o, ok := e.decreeFor(func(g *Grant) []string { return g.Files }, func(p string) bool { return e.fileMatch(p, rel, k, inside) }); ok {
-		return o
-	}
+	return e.decreeFor(func(g *Grant) []string { return g.Files }, func(p string) bool { return e.fileMatch(p, rel, k, inside) },
+		func() outcome { return e.fileRules(k, rel, inside, write) })
+}
+
+// fileRules is the decision of the files block alone.
+func (e *evaluator) fileRules(k, rel string, inside, write bool) outcome {
 	shown := e.display(k)
 	for _, p := range e.r.Files.Deny {
 		if e.fileMatch(p, rel, k, inside) {
@@ -309,10 +317,8 @@ func (e *evaluator) computerControl(res *result, name string) {
 
 // tool decides a tool by its native name with the tools block.
 func (e *evaluator) tool(name string) outcome {
-	if o, ok := e.decreeFor(func(g *Grant) []string { return g.Tools }, func(p string) bool { return matchText(p, name) }); ok {
-		return o
-	}
-	return e.patterns("tools", e.r.Tools, []string{name}, name, false)
+	return e.decreeFor(func(g *Grant) []string { return g.Tools }, func(p string) bool { return matchText(p, name) },
+		func() outcome { return e.patterns("tools", e.r.Tools, []string{name}, name, false) })
 }
 
 // patterns applies a block of text patterns: the most restrictive of deny,
@@ -358,11 +364,15 @@ func (e *evaluator) web(t *providers.Tool) outcome {
 	if u, err := url.Parse(t.URL); err == nil {
 		host = strings.ToLower(u.Hostname())
 	}
-	if host != "" {
-		if o, ok := e.decreeFor(func(g *Grant) []string { return g.Domains }, func(p string) bool { return matchDomain(p, host) }); ok {
-			return o
-		}
+	if host == "" {
+		return e.network(t, host)
 	}
+	return e.decreeFor(func(g *Grant) []string { return g.Domains }, func(p string) bool { return matchDomain(p, host) },
+		func() outcome { return e.network(t, host) })
+}
+
+// network is the decision of the network block alone.
+func (e *evaluator) network(t *providers.Tool, host string) outcome {
 	n := e.r.Network
 	if !n.Internet {
 		return e.deny(e.r.originField("network.internet"), "a classe não tem acesso à internet")
@@ -381,18 +391,23 @@ func (e *evaluator) web(t *providers.Tool) outcome {
 	return e.deny(e.r.originField("network.domains"), fmt.Sprintf("%s fora de network.domains %v", host, n.Domains))
 }
 
-// decreeFor finds the permission decrees (not the exceptions) that take the
-// call: the one of the highest level decides; allow and deny at the same
-// level suspend each other and the next level down is looked at
+// decreeFor applies the permission decrees (not the exceptions) that take
+// the call over base, the decision of the effective rules alone
 // (docs/arquitetura/precedencia.md#combinação-na-decisão-de-permissão).
-func (e *evaluator) decreeFor(list func(*Grant) []string, match func(string) bool) (outcome, bool) {
-	return e.decreeSplit(list, match, match)
+// Among the decrees of persons, the one of the highest level decides; allow
+// and deny at the same level suspend each other and the next level down is
+// looked at. Without one, base holds, and the decrees of the agents of the
+// approval chain (grand_master, table_master) only turn an ask of it into
+// allow, never a deny; a deny of theirs only hardens. A decree of an
+// unknown level does not count.
+func (e *evaluator) decreeFor(list func(*Grant) []string, match func(string) bool, base func() outcome) outcome {
+	return e.decreeSplit(list, match, match, base)
 }
 
 // decreeSplit is decreeFor with one match for the deny decrees and another
 // for the allow ones (a command: deny sees every form, allow the text as
 // written).
-func (e *evaluator) decreeSplit(list func(*Grant) []string, matchDeny, matchAllow func(string) bool) (outcome, bool) {
+func (e *evaluator) decreeSplit(list func(*Grant) []string, matchDeny, matchAllow func(string) bool, base func() outcome) outcome {
 	takes := func(g *Grant, match func(string) bool) bool {
 		if g == nil {
 			return false
@@ -404,8 +419,7 @@ func (e *evaluator) decreeSplit(list func(*Grant) []string, matchDeny, matchAllo
 		}
 		return false
 	}
-	for rank := 3; rank >= 0; rank-- {
-		var allow, deny *Decree
+	at := func(rank int) (allow, deny *Decree) {
 		for i := range e.r.Decrees {
 			d := &e.r.Decrees[i]
 			if d.Kind == DecreeException || d.Effect.Kind != EffectPermission || d.Level.rank() != rank || !d.active(e.now) {
@@ -418,14 +432,29 @@ func (e *evaluator) decreeSplit(list func(*Grant) []string, matchDeny, matchAllo
 				allow = d
 			}
 		}
-		switch {
+		return allow, deny
+	}
+	denied := func(d *Decree) outcome {
+		return outcome{v: Deny, reason: fmt.Sprintf("proibido pelo decreto %d", d.ID), layer: LayerDecree, decree: d.ID, level: d.Level}
+	}
+	for rank := LevelOwner.rank(); rank > LevelGrandMaster.rank(); rank-- {
+		switch allow, deny := at(rank); {
 		case allow != nil && deny != nil:
 			continue // suspended by the conflict
 		case deny != nil:
-			return outcome{v: Deny, reason: fmt.Sprintf("proibido pelo decreto %d", deny.ID), layer: LayerDecree, decree: deny.ID, level: deny.Level}, true
+			return denied(deny)
 		case allow != nil:
-			return outcome{v: Allow, layer: LayerDecree, decree: allow.ID, level: allow.Level}, true
+			return outcome{v: Allow, layer: LayerDecree, decree: allow.ID, level: allow.Level}
 		}
 	}
-	return outcome{}, false
+	o := base()
+	switch allow, deny := at(LevelGrandMaster.rank()); {
+	case allow != nil && deny != nil:
+		// suspended by the conflict
+	case deny != nil:
+		o.worse(denied(deny))
+	case allow != nil && o.v == Ask:
+		o = outcome{v: Allow, layer: LayerDecree, decree: allow.ID, level: allow.Level}
+	}
+	return o
 }

@@ -6,6 +6,35 @@ import (
 	"testing"
 )
 
+func TestBraceExpansionMakesTheWordsOfBash(t *testing.T) {
+	t.Parallel()
+	for line, want := range map[string]string{
+		"echo a{b,c}d":         "echo abd acd",
+		"echo {a,b{c,d}}e":     "echo ae bce bde",
+		"echo {a}{b,c}":        "echo {a}b {a}c",
+		"echo {1..3} {3..1}":   "echo 1 2 3 3 2 1",
+		"echo {a..c} {01..03}": "echo a b c 01 02 03",
+		"echo {1..10..4}":      "echo 1 5 9",
+		"echo {-2..2..2}":      "echo -2 0 2",
+		"{gi,}t pu{,}sh":       "git t push push",
+		`echo {a,"b,c"}`:       "echo a b,c",
+		"echo {a,b":            "echo {a,b",
+		"FOO={a,b} x":          "x",
+	} {
+		parts, _, _ := parseLine(line, dialectPOSIX)
+		var got []string
+		for _, p := range parts {
+			got = append(got, strings.Join(p.texts(), " "))
+		}
+		if g := strings.Join(got, "; "); g != want {
+			t.Errorf("%q → %q; want %q", line, g, want)
+		}
+	}
+	if _, ok := braceExpand("{1..999}", []int{0, 7}); ok {
+		t.Error("a sequence of 999 words was expanded")
+	}
+}
+
 func TestSplitIntoSimpleCommands(t *testing.T) {
 	t.Parallel()
 	for line, want := range map[string][]string{

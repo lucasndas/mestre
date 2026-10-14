@@ -3,6 +3,7 @@ package classes
 import (
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 )
 
@@ -248,6 +249,7 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	c.forms = []string{c.text, strings.Join(append([]string{cn}, texts[1:]...), " ")}
 	c.forms = append(c.forms, outer...)
 
+	unread := ""
 	if inner, extra, ok := e.unwrap(cn, args, &result{}); ok {
 		if len(inner) > 0 {
 			out := w.command(inner, d, st, depth, append(outer, c.text))
@@ -257,6 +259,7 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 			return out
 		}
 		c.bareEnv = cn == "env"
+		unread = extra
 	}
 	if cn == "eval" || cn == "invoke-expression" || cn == "iex" {
 		return riskOut{risk: RiskHigh, rule: "shell aninhado: " + cn}
@@ -301,6 +304,9 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	} else {
 		out = riskOut{risk: RiskLow, rule: fmt.Sprintf("%q sem linha na tabela e sem sinal de risco", c.text)}
 	}
+	if unread != "" {
+		out.raise(riskOut{risk: RiskMedium, rule: "trecho que o motor não analisa: " + unread})
+	}
 
 	// The literal paths the command touches, and the program itself when
 	// given by a path.
@@ -322,6 +328,13 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	}
 	for _, v := range valuePaths(args) {
 		out.raise(w.wordRisk(v, st))
+	}
+	// A script of the worktree is the project's only if it came from the
+	// repository; over the rows and the adjustments, like the paths.
+	if out.risk.rank() < RiskMedium.rank() {
+		if s, ok := w.script(cn, ws, st); ok {
+			out.raise(w.scriptRisk(s, st))
+		}
 	}
 	return out
 }
@@ -395,6 +408,46 @@ func (w *riskWalker) scan(c *riskCmd, ws []word, st *shellState) {
 			c.scriptInWorktree = true
 		}
 	}
+}
+
+// groupChangedScript is the signal of a script of the worktree that is not
+// the repository's: created or changed at the table, it is not a "script of
+// the project" and is medio (ADR 0025).
+const groupChangedScript = "script alterado na mesa"
+
+// script is the file of the worktree a command runs as a script: the
+// program given by a path, or the first argument of an interpreter.
+func (w *riskWalker) script(cn string, ws []word, st *shellState) (word, bool) {
+	if p := ws[0]; !p.expand && (strings.ContainsAny(p.text, `/\`) || strings.HasPrefix(p.text, ".") && cn != ".") {
+		return p, w.inWorktree(p, st)
+	}
+	if scriptInterpreters[cn] || inlineInterpreters[cn] || shells[cn] {
+		if args := ws[1:]; len(args) > 0 && !strings.HasPrefix(args[0].text, "-") && !args[0].glob && w.inWorktree(args[0], st) {
+			return args[0], true
+		}
+	}
+	return word{}, false
+}
+
+// scriptRisk is medio for a script that differs from the base of the table
+// branch, or that the motor cannot check (no git state that tells it).
+func (w *riskWalker) scriptRisk(a word, st *shellState) riskOut {
+	e := w.e
+	changed := riskOut{risk: RiskMedium, rule: "sinal de " + groupChangedScript + ": " + a.text}
+	ts, ok := e.env.Git.(TableScripts)
+	if !ok {
+		return changed
+	}
+	ks, ok := w.resolve(a, st)
+	if !ok {
+		return changed
+	}
+	for _, k := range ks {
+		if c, err := ts.Changed(e.ctx, e.env.Worktree, filepath.FromSlash(k)); err != nil || c {
+			return changed
+		}
+	}
+	return riskOut{}
 }
 
 // inWorktree reports whether a literal path argument surely lies in the

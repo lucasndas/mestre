@@ -251,12 +251,19 @@ func riskEnv() *evaluator {
 }
 
 // fixedRoots are the commands the fixed rules deny, whole or in part: a
-// pattern that reaches one of them matches an action of a fixed rule.
-var fixedRoots = []string{
-	"git push", "git remote", "git update-ref", "git tag", "git worktree", "git gc", "git prune", "git fetch", "git pull",
-	"git stash", "git config", "git branch", "git clean", "claude", "codex", "agy",
-	"sudo", "su", "doas", "pkexec", "runas", "gsudo", "start-process",
-}
+// pattern that reaches one of them matches an action of a fixed rule. They
+// come from the sets the fixed rules use: the git subcommands, the agent
+// CLIs, the elevation commands and Start-Process.
+var fixedRoots = func() []string {
+	var out []string
+	for _, s := range gitFixed {
+		out = append(out, "git "+s)
+	}
+	for _, m := range []map[string]bool{agentCLIs, elevation} {
+		out = append(out, slices.Sorted(maps.Keys(m))...)
+	}
+	return append(out, "start-process")
+}()
 
 // reachesFixed is the fixed rule a command pattern reaches, or "".
 func reachesFixed(p string) string {
@@ -362,6 +369,9 @@ func commandReach(p string) riskOut {
 		if coversText(r.pattern, p) || extends(p, r.pattern) {
 			out.raise(riskOut{risk: r.risk, rule: "sinal de " + r.group + ": " + r.pattern})
 		}
+	}
+	if unseenWriters[prog] {
+		out.raise(riskOut{risk: RiskMedium, rule: "sinal de " + groupUnseenWrite + ": " + prog})
 	}
 	return out
 }
