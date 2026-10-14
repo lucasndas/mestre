@@ -199,7 +199,9 @@ func TestRound2DanglingSymlink(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	env := classes.Env{AgentID: agentID, Worktree: wt, OS: "linux", Exceptions: newLedger(), Normalize: providers.Options{}.NormalizePath}
+	// The system of this machine: the real normalizer folds case on Windows,
+	// and so must the decision.
+	env := classes.Env{AgentID: agentID, Worktree: wt, Exceptions: newLedger(), Normalize: providers.Options{}.NormalizePath}
 	dev := rules(t, "version: 1\nfiles: {read: [\"**\"], write: [\"src/**\"]}\n")
 	m := machine{wt: wt}
 	// Creating a link whose target is protected is a fixed deny.

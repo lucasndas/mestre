@@ -3,6 +3,8 @@ package providers_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/providers"
@@ -35,16 +37,27 @@ func TestRound2NormalizeFollowsDanglingLink(t *testing.T) {
 	mk(filepath.Join(root, "secret", "nodir", "f"), "permitido/dangling2") // target dir missing too
 	mk("dangling", "permitido/chain")                                      // link to a dangling link
 	mk("../.git/hooks/pre-commit", "permitido/rel")                        // relative target
+	windows := runtime.GOOS == "windows"
 	o := providers.Options{}
+	// Windows takes the ".." out of the text before it opens the path, and
+	// folds case; elsewhere a ".." after a link is next to its target.
+	dotdot := filepath.Join(root, "secret", "z")
+	if windows {
+		dotdot = filepath.Join(wt, "permitido", "z")
+	}
 	for _, c := range []struct{ in, want string }{
 		{"permitido/dangling", filepath.Join(root, "secret", "new.txt")},
-		{"permitido/dangling/../z", filepath.Join(root, "secret", "z")},
+		{filepath.FromSlash("permitido/dangling/../z"), dotdot},
 		{"permitido/dangling2", filepath.Join(root, "secret", "nodir", "f")},
 		{"permitido/chain", filepath.Join(root, "secret", "new.txt")},
 		{"permitido/rel", filepath.Join(wt, ".git", "hooks", "pre-commit")},
 	} {
-		if got := o.NormalizePath(c.in, wt); got != c.want {
-			t.Errorf("NormalizePath(%s) = %s; want %s", c.in, got, c.want)
+		want := c.want
+		if windows {
+			want = strings.ToLower(want)
+		}
+		if got := o.NormalizePath(filepath.FromSlash(c.in), wt); got != want {
+			t.Errorf("NormalizePath(%s) = %s; want %s", c.in, got, want)
 		}
 	}
 }
