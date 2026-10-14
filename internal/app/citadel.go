@@ -108,6 +108,9 @@ type citadelRun struct {
 	primary *replication.Primary
 	vault   *vault.Vault
 	gate    gate
+	// ran keeps the results of the calls that may come back from the
+	// outbox of a Tower (ranCalls).
+	ran *ranCalls
 
 	mu      sync.Mutex
 	ca      *transport.CA
@@ -353,7 +356,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	db := take.db
 	pctx, cancel := context.WithCancel(ctx)
 	var wg sync.WaitGroup
-	run := &citadelRun{db: db, epoch: e.epochs.Epoch(), base: pctx, external: e.deps.External, vault: take.vault, ca: take.ca}
+	run := &citadelRun{db: db, epoch: e.epochs.Epoch(), base: pctx, external: e.deps.External, vault: take.vault, ca: take.ca,
+		ran: newRanCalls(e.clk, e.queuedResult)}
 	defer func() {
 		e.joins.clear()
 		run.setActing(false)
@@ -415,7 +419,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	router := protocol.NewRouter()
 	sqls := protocol.NewSQLStore(db)
 	pcfg := protocol.Config{
-		MachineID: e.id.MachineID, Clock: e.clk, Router: router, Epoch: e.epochs, Certs: e.epochs, Outbox: sqls, Processed: sqls,
+		MachineID: e.id.MachineID, Clock: e.clk, Router: router, Epoch: e.epochs, Certs: e.epochs, Outbox: sqls,
+		Processed:     dupWatch{Processed: sqls, onDup: run.ran.duplicate},
 		BinaryVersion: e.deps.Version, Logger: e.log,
 		IsCitadel: func() bool {
 			e.mu.Lock()

@@ -154,6 +154,9 @@ type dispatcher struct {
 	agent    string
 	goos     string
 	machine  *Machine
+	// start is when the call began: the budget of the hooks of the class
+	// counts from it.
+	start time.Time
 	// notes are the failures of the hooks of the class that did not block:
 	// "registra o erro e segue" (docs/classes/classes.md#hooks-extras-da-classe),
 	// on the stderr of the call.
@@ -196,6 +199,7 @@ func (d *dispatcher) run(ctx context.Context) (out providers.HookOutput) {
 			out = d.fail(fmt.Errorf("panic: %v", r))
 		}
 	}()
+	d.start = d.clk.Now()
 	payload, err := readStdin(d.env.Stdin)
 	if err != nil {
 		return d.fail(err)
@@ -382,6 +386,7 @@ func (d *dispatcher) classHooks(ctx context.Context, ev providers.Event, hooks [
 	if err != nil {
 		return "hook da classe: " + err.Error(), decision
 	}
+	deadline := d.start.Add(budgetOf(hooks))
 	for _, h := range hooks {
 		if h.Refused != "" {
 			if decision && h.Blocking {
@@ -395,7 +400,17 @@ func (d *dispatcher) classHooks(ctx context.Context, ev providers.Event, hooks [
 			}
 			continue
 		}
-		hctx, cancel := clock.WithTimeout(ctx, d.clk, h.Timeout())
+		// The hooks of the call share one budget: what is left of it, not
+		// the hook's own limit, when that is less.
+		left := deadline.Sub(d.clk.Now())
+		if left <= 0 {
+			if decision && h.Blocking {
+				return fmt.Sprintf("hook da classe %s é bloqueante e não rodou: o tempo dos hooks da classe nesta chamada acabou", h.Name), true
+			}
+			d.note(h, 0, "", errors.New("não rodou: o tempo dos hooks da classe nesta chamada acabou"))
+			continue
+		}
+		hctx, cancel := clock.WithTimeout(ctx, d.clk, min(h.Timeout(), left))
 		exit, stderr, err := d.env.ClassHooks.Run(hctx, h, ev.Event, stdin)
 		cancel()
 		failed := err != nil || exit != 0
@@ -415,6 +430,24 @@ func (d *dispatcher) classHooks(ctx context.Context, ev providers.Event, hooks [
 	return "", false
 }
 
+// budgetOf is the time the hooks of one call share, from the start of the
+// call: the smallest BudgetMS the engine sent, or, from an engine that sent
+// none, the largest time limit among them (each is already cut below the
+// provider's).
+func budgetOf(hooks []ClassHook) time.Duration {
+	var budget, longest int64
+	for _, h := range hooks {
+		if h.BudgetMS > 0 && (budget == 0 || h.BudgetMS < budget) {
+			budget = h.BudgetMS
+		}
+		longest = max(longest, h.TimeoutMS)
+	}
+	if budget == 0 {
+		budget = longest
+	}
+	return time.Duration(budget) * time.Millisecond
+}
+
 // machineOf finds the folders of the instance from the endpoint.
 func (d *dispatcher) machineOf() *Machine {
 	if d.machine != nil {
@@ -428,7 +461,17 @@ func (d *dispatcher) machineOf() *Machine {
 	if !ok {
 		return &Machine{}
 	}
-	m := MachineOf(d.goos, d.env.Getenv("ProgramData"), inst)
+	// On Windows the root is the one of the socket InstanceOf validated,
+	// <root>\Mestre\<inst>\run\cli.sock, never a %ProgramData% of the
+	// caller (empty, or another one).
+	programData := ""
+	if d.goos == "windows" {
+		programData = filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(socket))))
+	}
+	m := MachineOf(d.goos, programData, inst)
+	if !absolute(d.goos, m.Agents) || !absolute(d.goos, m.Queue) {
+		m = Machine{} // no snapshot and no queue: never folders relative to the worktree
+	}
 	d.machine = &m
 	return d.machine
 }
@@ -441,6 +484,9 @@ func (d *dispatcher) degraded(ctx context.Context, ev providers.Event) classes.D
 	m := d.machineOf()
 	env := classes.Env{AgentID: d.agent, TableID: ev.TableID, Layout: m.Layout, OS: d.goos, Normalize: d.opts.NormalizePath}
 	var snap *classes.Rules
+	// Without env.json the engine never said the class has no blocking
+	// hooks: as with them, only reading.
+	blocking := true
 	if m.Agents != "" && classes.ValidAgentID(d.agent) {
 		dir := filepath.Join(m.Agents, d.agent)
 		if b, err := d.files.ReadFile(filepath.Join(dir, classes.SnapshotName)); err == nil {
@@ -450,8 +496,19 @@ func (d *dispatcher) degraded(ctx context.Context, ev providers.Event) classes.D
 			if ce, err := parseEnv(b, d.agent); err == nil {
 				env.TableID, env.Worktree, env.Tmp, env.Home = ce.TableID, ce.Worktree, ce.Tmp, ce.Home
 				env.OperatorBase, env.ComputerControl = ce.OperatorBase, ce.ComputerControl
+				blocking = ce.BlockingHooks
 			}
 		}
 	}
-	return classes.DecideDegraded(ctx, env, snap, ev)
+	dec := classes.DecideDegraded(ctx, env, snap, ev)
+	if dec.Verdict == classes.Allow && snap != nil && blocking {
+		// The blocking hooks of the class do not run without the engine,
+		// and they exist to deny: what the snapshot allows beyond reading
+		// waits for the engine.
+		if ro := classes.DecideDegraded(ctx, env, nil, ev); ro.Verdict != classes.Allow {
+			return classes.Decision{Verdict: classes.Deny, Layer: classes.LayerDegraded, Action: dec.Action,
+				Reason: classes.DegradedReason + " (a classe tem hooks bloqueantes, que só rodam com o motor: só leitura)"}
+		}
+	}
+	return dec
 }

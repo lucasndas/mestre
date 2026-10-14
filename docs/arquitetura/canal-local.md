@@ -1,6 +1,6 @@
 # Canal local
 
-> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -17,7 +17,8 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 - **Socket Unix nos dois sistemas** (`AF_UNIX`; no Windows 10 1803 ou maior), com o mesmo código Go; o mesmo vale para o socket de cada [`mestre-pty`](terminal.md#socket-e-aperto-de-mão). Se o spike 5 mostrar que a ACL do arquivo do socket não basta no Windows, o plano B é o named pipe `\\.\pipe\mestre-<inst>-cli` com a mesma ACL ([Windows](windows.md#verificar-na-implementação)).
 - `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/<inst>/cli.sock` ou `unix://C:/ProgramData/Mestre/<inst>/run/cli.sock`, sempre da [instância](componentes.md#instâncias) do personagem. Sem a variável, a CLI usa o endereço da instância `principal`.
-- Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo.
+- Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo, com limites: até 16 conexões abertas de um mesmo processo (padrão; a excedente recebe `limit`, exit 8, antes de o motor ler o pedido) e até 512 no total (padrão; a excedente é fechada na hora). Um processo que inunda o canal não tira o motor dos outros.
+- O motor aplica o acesso da tabela ao socket da instância instalada; só a instância de `mestre run --dir` (desenvolvimento e testes) deixa o socket como o sistema o criou.
 
 ### Enquadramento
 
@@ -77,7 +78,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 
 ### Encaminhamento à Cidadela
 
-- O motor local resolve sozinho `help`, `debug` e `hook`; todo o resto vai à Cidadela na mensagem `cli.call` (na própria Cidadela, a chamada é atendida no mesmo processo, pelo mesmo código), cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. A Cidadela devolve `cli.result` com **a mesma resposta** (inclusive as parciais), que o motor repassa linha a linha ([mensagens](../conectividade/mensagens.md)).
+- O motor local resolve sozinho `help`, `debug` e `hook`; todo o resto vai à Cidadela na mensagem `cli.call` (na própria Cidadela, a chamada é atendida no mesmo processo, pelo mesmo código), cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. A Cidadela devolve `cli.result` com **a mesma resposta**, que o motor repassa ([mensagens](../conectividade/mensagens.md)). As parciais de um comando longo também vão em `cli.result`, repassadas linha a linha a partir do M4, com os comandos que as mandam (`ask`); no M3 a Torre as ignora e repassa só a resposta final.
 - Cidadela fora ou suspensa: `citadel_unavailable`; durante uma promoção ou uma troca planejada, `citadel_in_failover`. A Cidadela aplica a mesma regra ao `cli.call` que recebe de uma Torre e ao pedido feito nela mesma; exceto `done`, que vai para a fila de saída e é aplicado uma vez quando a Cidadela volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
 
 ## Regras e erros
@@ -85,6 +86,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 | Situação | `error.code` | Exit |
 |---|---|---|
 | linha maior que o limite | `too_large` | 8 |
+| processo com 16 conexões já abertas | `limit` | 8 |
 | JSON inválido ou campo obrigatório faltando | `bad_request` | 1 (é bug da CLI) |
 | processo fora do terminal de `agent_id` (cgroup no Linux, Job Object no Windows), chamador já encerrado, PID reaproveitado ou árvore que mudou em 3 tentativas | `not_identified` | 3 |
 | motor não aceita a conexão | `engine_unreachable` (gerado pela CLI) | 5 |

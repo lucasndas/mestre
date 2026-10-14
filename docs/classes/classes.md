@@ -100,12 +100,12 @@ pre_tool:
 ```
 
 - **Entrada:** o evento no formato interno ([adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento)) no stdin; ambiente do personagem mais `MESTRE_HOOK_EVENT`; pasta atual = worktree; mesmo usuário e permissões do personagem.
-- **Quem roda:** `sync` (o padrão) roda dentro da chamada do `mestre hook`, com tempo limite cortado para 2 s abaixo do tempo limite do provedor; `async` roda no motor da máquina depois da resposta, sem segurar o agente, no máximo um por personagem de cada vez (os outros esperam em fila).
+- **Quem roda:** `sync` (o padrão) roda dentro da chamada do `mestre hook`, com tempo limite cortado para 2 s abaixo do tempo limite do provedor, e os `sync` de uma chamada dividem esse mesmo tempo ([despachante](../provedores/despachante-de-hooks.md#uma-chamada)); `async` roda no motor da máquina depois da resposta, sem segurar o agente, no máximo um por personagem de cada vez (os outros esperam em fila).
 - **`pre_tool`:** é sempre `sync` e só roda se o [pipeline de permissões](permissoes.md) já liberou. Exit 0 = sem objeção; exit 2 = negar (motivo no stderr). Um hook só pode restringir, nunca liberar o que o pipeline negou. `blocking` só existe aqui; `when` só em `pre_tool` e `post_tool`.
 - **Falha ou tempo esgotado:** registra o erro (no stderr da chamada do `mestre hook`) e segue, a não ser com `blocking: true`, que nega.
 - **Saída** (padrão `log`): `log` vai para o log do personagem; `scroll` é anexada ao pergaminho da missão ([pergaminhos](../orquestracao/pergaminhos-e-tomos.md)); `agent` é entregue pela [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md). `scroll` e `agent` só valem em `async`.
 - Em provedor sem o evento (ex.: Antigravity não tem `pre_compact`), o hook não roda; `session_end` vem do fim do processo no PTY. O `class check` mostra isso por provedor.
-- O `run` de cada hook passa pelo mesmo pipeline de permissões da classe, como um comando do personagem. O que o pipeline não libera não roda: o hook `blocking` então nega e o `class check` avisa. Classes da mesa não podem ter scripts no pacote: só linhas de comando checadas; scripts ficam para classes globais e do workspace, que passam por aprovação de um usuário.
+- O `run` de cada hook passa pelo mesmo pipeline de permissões da classe, como um comando do personagem. O que o pipeline não libera não roda: o hook `blocking` então nega e o `class check` avisa. Classes da mesa não podem ter scripts no pacote: só linhas de comando checadas; scripts ficam para classes globais e do workspace, que passam por aprovação de um usuário. Um script do pacote (`hooks/…` em qualquer palavra do `run`) só roda da cópia aprovada, que o motor materializa do banco no M4 ([mesa](../sessao-zero/mesa.md#arquivos-gerados-no-worktree)) e que o agente não pode alterar; a do worktree ele pode trocar. Até lá o hook com script não roda: conta como recusado, e o `blocking` nega.
 
 ### Skills da classe
 

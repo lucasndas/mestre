@@ -122,13 +122,28 @@ func (e *Engine) Handle(ctx context.Context, c *localchan.Call) localchan.Respon
 		// the engine's, not one a caller wrote.
 		ev.ReceivedAt = e.Clock.Now()
 	}
+	identified := c.Caller.Identified && c.Caller.AgentID != "" && c.Caller.AgentID == ev.AgentID
+	if identified {
+		// The table is the registry's, never the MESTRE_MESA the caller
+		// wrote: approval requests and the class of a table go by it.
+		ev.TableID = ""
+		if env, err := e.registryEnv(ctx, ev.AgentID); err == nil {
+			ev.TableID = env.TableID
+		}
+	}
 	var ans Answer
 	switch {
-	case !c.Caller.Identified || c.Caller.AgentID == "" || c.Caller.AgentID != ev.AgentID:
+	case !identified:
 		ans = Answer{Verdict: VerdictDeny, Reason: "o chamador não foi identificado como processo de um terminal deste personagem"}
 		e.log().Warn("hook: a call not identified as the character's", "agent", ev.AgentID, "pid", c.Caller.PID)
 	case ev.Event == providers.EventPreTool || ev.Event == providers.EventPermissionRequest:
-		ans = e.decide(ctx, ev)
+		// The dispatcher waits DecisionDeadline and then decides alone (the
+		// degraded mode): past it, or with the dispatcher gone, the engine
+		// opens no approval and keeps no waiting state for an answer nobody
+		// reads.
+		dctx, cancel := e.callContext(ctx, c, DecisionDeadline)
+		ans = e.decide(dctx, ev)
+		cancel()
 	case ev.Event == providers.EventNone && ev.Error != "":
 		e.log().Warn("hook: unknown native event, answered neutral", "agent", ev.AgentID, "provider", ev.Provider, "native_event", ev.NativeEvent)
 		ans = Answer{Verdict: VerdictNeutral}
@@ -139,6 +154,32 @@ func (e *Engine) Handle(ctx context.Context, c *localchan.Call) localchan.Respon
 		e.OnEvent(ev, ans)
 	}
 	return localchan.OK(ans)
+}
+
+// callContext is ctx ended at the deadline of the dispatcher, counted from
+// now, or when the connection of the call is gone, whichever comes first.
+func (e *Engine) callContext(ctx context.Context, c *localchan.Call, deadline time.Duration) (context.Context, context.CancelFunc) {
+	clk := e.Clock
+	if clk == nil {
+		clk = clock.Real{}
+	}
+	ctx, cancelTime := clock.WithTimeout(ctx, clk, deadline)
+	ctx, cancel := context.WithCancel(ctx)
+	if c.Gone != nil {
+		select {
+		case <-c.Gone:
+			cancel()
+		default:
+		}
+		go func() {
+			select {
+			case <-c.Gone:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+	return ctx, func() { cancel(); cancelTime() }
 }
 
 func (e *Engine) log() *slog.Logger {
@@ -189,12 +230,18 @@ func (e *Engine) ask(ctx context.Context, ev providers.Event, d classes.Decision
 	if e.Approvals == nil {
 		return Answer{Verdict: VerdictDeny, Reason: fmt.Sprintf("%s pede aprovação, e esta máquina ainda não abre pedidos de aprovação", d.Action)}
 	}
+	if ctx.Err() != nil {
+		// The dispatcher already answered on its own (degraded): the
+		// character was told to try again, not to wait for an approval.
+		e.log().Info("hook: no approval request, the dispatcher no longer waits", "agent", ev.AgentID)
+		return Answer{Verdict: VerdictDeny, Reason: classes.DegradedReason}
+	}
 	n, err := e.Approvals.Open(ctx, ApprovalRequest{AgentID: ev.AgentID, TableID: ev.TableID, Action: d.Action, About: d.Reason, Risk: d.Risk, Event: ev})
 	if err != nil || n <= 0 {
 		e.log().Warn("hook: the approval request was not opened", "agent", ev.AgentID, "err", err)
 		return Answer{Verdict: VerdictDeny, Reason: "não foi possível abrir o pedido de aprovação; tente de novo"}
 	}
-	if e.States != nil {
+	if e.States != nil && ctx.Err() == nil {
 		if err := e.States.WaitingApproval(ctx, ev.AgentID, n); err != nil {
 			e.log().Warn("hook: the state of the character was not kept", "agent", ev.AgentID, "request", n, "err", err)
 		}
@@ -247,27 +294,51 @@ func (noRules) Rules(context.Context, string) (*classes.Rules, error) {
 // env is the environment of the character, with the record of the
 // exceptions; it also keeps env.json up to date for the degraded mode.
 func (e *Engine) env(ctx context.Context, agentID string) (classes.Env, error) {
-	if e.Characters == nil {
-		return classes.Env{}, errNoRegistry
-	}
-	env, err := e.Characters.Env(ctx, agentID)
+	env, err := e.registryEnv(ctx, agentID)
 	if err != nil {
 		return env, err
 	}
 	env.Exceptions = e.Ledger
-	if err := e.saveEnv(agentID, env); err != nil {
+	if err := e.saveEnv(ctx, agentID, env); err != nil {
 		e.log().Warn("hook: env.json of the character not written", "agent", agentID, "err", err)
 	}
 	return env, nil
 }
 
+// registryEnv is the environment of the character in the terminal registry.
+func (e *Engine) registryEnv(ctx context.Context, agentID string) (classes.Env, error) {
+	if e.Characters == nil {
+		return classes.Env{}, errNoRegistry
+	}
+	return e.Characters.Env(ctx, agentID)
+}
+
+// BlockingSource says whether the class of a character has blocking
+// pre_tool hooks (ClassHookSource does): they do not run in the degraded
+// mode, so env.json carries it and the dispatcher then allows only reading.
+type BlockingSource interface {
+	HasBlocking(ctx context.Context, agentID string) (bool, error)
+}
+
+// hasBlocking is whether the class of the character has blocking hooks;
+// on any doubt, yes.
+func (e *Engine) hasBlocking(ctx context.Context, agentID string) bool {
+	src, ok := e.ClassHooks.(BlockingSource)
+	if !ok {
+		return e.ClassHooks != nil
+	}
+	has, err := src.HasBlocking(ctx, agentID)
+	return err != nil || has
+}
+
 // saveEnv writes env.json when the environment changed since the last
 // time: a whole file (a temporary renamed over it), 0640 like policy.json.
-func (e *Engine) saveEnv(agentID string, env classes.Env) error {
+func (e *Engine) saveEnv(ctx context.Context, agentID string, env classes.Env) error {
 	if e.Agents == "" || !classes.ValidAgentID(agentID) {
 		return nil
 	}
 	ce := envOf(agentID, env)
+	ce.BlockingHooks = e.hasBlocking(ctx, agentID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if old, ok := e.envs[agentID]; ok && reflect.DeepEqual(old, ce) {
@@ -304,9 +375,28 @@ func (e *Engine) saveEnv(agentID string, env classes.Env) error {
 // the dispatcher also leaves events there when the engine is slow.
 const DrainEvery = time.Minute
 
+// logQueued puts a queued record in the log, the trail of the machine: each
+// degraded decision the dispatcher took alone, at Info, with what it
+// decided; the informative events at Debug. The character is the one the
+// record claims (`claimed_agent`), not one the engine verified.
+func (e *Engine) logQueued(r QueueRecord) {
+	ev := r.Event
+	l := e.log().With("claimed_agent", ev.AgentID, "event", ev.Event, "provider", ev.Provider, "received_at", ev.ReceivedAt)
+	if ev.Tool != nil {
+		l = l.With("tool", ev.Tool.NativeName, "kind", ev.Tool.Kind)
+	}
+	if r.Kind != QueuedDecision || r.Decision == nil {
+		l.Debug("hook: a queued event of the time the engine was away")
+		return
+	}
+	l.Info("hook: a decision the dispatcher took without the engine", "verdict", r.Decision.Verdict,
+		"layer", r.Decision.Layer, "reason", mask(r.Decision.Reason), "truncated", r.Truncated)
+}
+
 // DrainLoop reads the hook queue now and every DrainEvery until ctx ends,
-// giving each record to handle (nil: they are only logged). A queued record
-// names a character it claims, not one the engine verified.
+// logging each record (logQueued) and giving it to handle (nil: only the
+// log). A queued record names a character it claims, not one the engine
+// verified.
 func (e *Engine) DrainLoop(ctx context.Context, dir string, handle func(QueueRecord)) {
 	clk := e.Clock
 	if clk == nil {
@@ -316,6 +406,7 @@ func (e *Engine) DrainLoop(ctx context.Context, dir string, handle func(QueueRec
 	defer tick.Stop()
 	for {
 		n, err := Drain(dir, MaxQueued, clk, e.log(), func(r QueueRecord) {
+			e.logQueued(r)
 			if handle != nil {
 				handle(r)
 			}

@@ -52,6 +52,11 @@ type ClassHook struct {
 	Run       string `json:"run"`
 	Dir       string `json:"dir"`
 	TimeoutMS int64  `json:"timeout_ms"`
+	// BudgetMS is the time all the synchronous hooks of one call share: the
+	// provider's time limit less the 2 s margin, counted from the start of
+	// `mestre hook`. Zero (an older engine) is the largest TimeoutMS of the
+	// call, which is never above it.
+	BudgetMS int64 `json:"budget_ms,omitempty"`
 	// Blocking makes a failure or a timeout deny, in pre_tool.
 	Blocking bool `json:"blocking,omitempty"`
 	// Refused is why the hook must not run: its `run` does not pass the
@@ -76,6 +81,10 @@ type CharacterEnv struct {
 	Home            string   `json:"home,omitempty"`
 	OperatorBase    bool     `json:"operator_base,omitempty"`
 	ComputerControl []string `json:"computer_control,omitempty"`
+	// BlockingHooks says the class of the character has blocking pre_tool
+	// hooks. They do not run without the engine, so the degraded mode then
+	// allows only what reading allows.
+	BlockingHooks bool `json:"blocking_hooks,omitempty"`
 }
 
 // EnvName is the file of the environment snapshot of a character.

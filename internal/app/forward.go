@@ -66,7 +66,7 @@ func (f forwarder) forward(ctx context.Context, c *localchan.Call, queue bool) l
 	case tow != nil:
 		link := tow.client.Link()
 		if !queue {
-			resp, _ := e.callCitadel(ctx, link, c, "")
+			resp, _ := e.callCitadel(ctx, link, c, "", false)
 			return resp
 		}
 		// The id of the request is the id of the message, so a call that
@@ -76,7 +76,7 @@ func (f forwarder) forward(ctx context.Context, c *localchan.Call, queue bool) l
 		if _, err := protocol.ParseULID(id); err != nil {
 			id = ""
 		}
-		resp, answered := e.callCitadel(ctx, link, c, id)
+		resp, answered := e.callCitadel(ctx, link, c, id, true)
 		if resp.OK || resp.Error == nil || !awayCode(resp.Error.Code) {
 			return resp
 		}
@@ -99,7 +99,7 @@ func awayCode(code string) bool {
 // queueCall puts the call in the outbox of the Tower and answers Queued. If
 // the outbox cannot take it, the answer stays the refusal of the Citadel.
 func (e *Engine) queueCall(ctx context.Context, link *protocol.Link, c *localchan.Call, id string, refusal localchan.Response) localchan.Response {
-	obj, err := e.cliCallObject(c, true)
+	obj, err := e.cliCallObject(c, true, false)
 	if err != nil {
 		return refusal
 	}
@@ -112,9 +112,9 @@ func (e *Engine) queueCall(ctx context.Context, link *protocol.Link, c *localcha
 }
 
 // cliCallObject is the payload of a cli.call for the call c.
-func (e *Engine) cliCallObject(c *localchan.Call, queued bool) (protocol.CLICall, error) {
+func (e *Engine) cliCallObject(c *localchan.Call, queued, mayQueue bool) (protocol.CLICall, error) {
 	raw, err := json.Marshal(cliCall{
-		Request: c.Request, Queued: queued,
+		Request: c.Request, Queued: queued, MayQueue: mayQueue,
 		Caller: cliCaller{AgentID: c.Caller.AgentID, TerminalID: c.Caller.TerminalID, MachineID: e.id.MachineID},
 	})
 	if err != nil {
@@ -134,6 +134,10 @@ type cliCall struct {
 	// Queued is set on a call that waited in the outbox of the Tower: the
 	// CLI was told "queued", so the result goes to the inbox of the caller.
 	Queued bool `json:"queued,omitempty"`
+	// MayQueue is set on the first, direct send of a call that goes to the
+	// outbox if its answer does not come back: the Citadel keeps the result
+	// of the run for the duplicate that may follow (ranCalls).
+	MayQueue bool `json:"may_queue,omitempty"`
 }
 
 type cliCaller struct {
@@ -147,12 +151,12 @@ type cliCaller struct {
 // must never run later, after the CLI was told the Citadel is away. id is the
 // id of the message (empty: a new one). answered says that the response is the
 // Citadel's cli.result, not a failure to reach it.
-func (e *Engine) callCitadel(ctx context.Context, link *protocol.Link, c *localchan.Call, id string) (resp localchan.Response, answered bool) {
+func (e *Engine) callCitadel(ctx context.Context, link *protocol.Link, c *localchan.Call, id string, mayQueue bool) (resp localchan.Response, answered bool) {
 	sess := link.Session()
 	if sess == nil {
 		return errUnavailable, false
 	}
-	obj, err := e.cliCallObject(c, false)
+	obj, err := e.cliCallObject(c, false, mayQueue)
 	if err != nil {
 		return localchan.Fail(localchan.CodeInternal, err.Error(), ""), false
 	}
@@ -245,24 +249,40 @@ func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
 			answer(errFailover)
 			return nil, nil
 		}
+		peer := m.Peer.ID
+		if call.MayQueue && !call.Queued {
+			run.ran.started(peer, id)
+		}
 		go func() {
 			defer run.gate.leave()
 			resp := e.local.Forward(bg, &localchan.Call{Request: call.Request, Caller: localchan.Caller{
 				Identified: true, AgentID: call.Caller.AgentID, TerminalID: call.Caller.TerminalID,
 			}})
-			if call.Queued {
-				resp.V, resp.ID = call.V, call.ID
-				qr := QueuedResult{OpID: id, AgentID: call.Caller.AgentID, Cmd: call.Cmd, Response: resp}
-				if e.deps.OnQueuedResult != nil {
-					e.deps.OnQueuedResult(qr)
-				} else {
-					e.log.Info("app: a queued call of the CLI ran", "op_id", id, "cmd", call.Cmd, "agent_id", call.Caller.AgentID, "exit", resp.ExitCode())
-				}
+			qresp := resp
+			qresp.V, qresp.ID = call.V, call.ID
+			qr := QueuedResult{OpID: id, AgentID: call.Caller.AgentID, Cmd: call.Cmd, Response: qresp}
+			switch {
+			case call.Queued:
+				e.queuedResult(qr)
+			case call.MayQueue:
+				// the answer below may be lost: the same message from the
+				// outbox then takes this result
+				run.ran.finished(peer, id, qr)
 			}
 			answer(resp)
 		}()
 		return nil, nil
 	}
+}
+
+// queuedResult hands the result of a call the CLI was told "queued" to the
+// inbox of the caller (OnQueuedResult), or to the log.
+func (e *Engine) queuedResult(qr QueuedResult) {
+	if e.deps.OnQueuedResult != nil {
+		e.deps.OnQueuedResult(qr)
+		return
+	}
+	e.log.Info("app: a queued call of the CLI ran", "op_id", qr.OpID, "cmd", qr.Cmd, "agent_id", qr.AgentID, "exit", qr.Response.ExitCode())
 }
 
 // results are the cli.call waiting for their cli.result on a Tower.

@@ -607,7 +607,7 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 		DebugExtra: func() map[string]any { return map[string]any{"citadel": e.citadelDebug()} },
 		OnAudit:    e.auditCall,
 	})
-	ln, err := localchan.Listen(e.paths.CLISocket, localchan.NoAccess{})
+	ln, err := localchan.Listen(e.paths.CLISocket, e.paths.cliAccess())
 	if err != nil {
 		return err
 	}

@@ -25,6 +25,13 @@ const (
 	DefaultRetain = 10 * time.Minute
 	// DefaultMaxRetained bounds the finished requests kept.
 	DefaultMaxRetained = 4096
+	// DefaultMaxConnsPerPeer is how many connections one process may hold
+	// open at once: a CLI or a `mestre hook` holds one, so a process that
+	// opens more is flooding the engine.
+	DefaultMaxConnsPerPeer = 16
+	// DefaultMaxConns bounds the connections open at once, of every
+	// process; past it a new one is closed at once.
+	DefaultMaxConns = 512
 )
 
 // Commands the engine resolves itself (docs/arquitetura/canal-local.md#encaminhamento-à-cidadela).
@@ -72,6 +79,9 @@ type Config struct {
 	// Retain (10 min) and MaxRetained (4096): see DefaultRetain.
 	Retain      time.Duration
 	MaxRetained int
+	// MaxConnsPerPeer (16) and MaxConns (512): see DefaultMaxConnsPerPeer.
+	MaxConnsPerPeer int
+	MaxConns        int
 
 	// Instance and EngineVersion are what `debug` reports.
 	Instance      string
@@ -95,6 +105,7 @@ type Server struct {
 	mu     sync.Mutex
 	ctx    context.Context
 	conns  map[net.Conn]struct{}
+	peers  map[int]int // open connections by PID of the peer
 	closed bool
 	wg     sync.WaitGroup
 }
@@ -116,6 +127,12 @@ func NewServer(cfg Config) *Server {
 	if cfg.MaxRetained == 0 {
 		cfg.MaxRetained = DefaultMaxRetained
 	}
+	if cfg.MaxConnsPerPeer == 0 {
+		cfg.MaxConnsPerPeer = DefaultMaxConnsPerPeer
+	}
+	if cfg.MaxConns == 0 {
+		cfg.MaxConns = DefaultMaxConns
+	}
 	if cfg.Forwarder == nil {
 		cfg.Forwarder = UnavailableForwarder{}
 	}
@@ -126,7 +143,7 @@ func NewServer(cfg Config) *Server {
 	return &Server{
 		cfg: cfg, clk: cfg.Clock, log: log,
 		table: newFlights(cfg.Clock, cfg.Retain, cfg.MaxRetained),
-		conns: map[net.Conn]struct{}{},
+		conns: map[net.Conn]struct{}{}, peers: map[int]int{},
 	}
 }
 
@@ -156,7 +173,13 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		// to the connection: the identifier compares it with the start of
 		// the caller.
 		acceptedAt := s.clk.Now()
-		if !s.track(c) {
+		tracked, full := s.track(c)
+		if full {
+			_ = c.Close()
+			s.log.Warn("local channel: a connection over the limit was closed", "limit", s.cfg.MaxConns)
+			continue
+		}
+		if !tracked {
 			_ = c.Close()
 			return nil
 		}
@@ -169,14 +192,38 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	}
 }
 
-func (s *Server) track(c net.Conn) bool {
+// track registers the connection; full is a server already at MaxConns.
+func (s *Server) track(c net.Conn) (tracked, full bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return false
+	switch {
+	case s.closed:
+		return false, false
+	case len(s.conns) >= s.cfg.MaxConns:
+		return false, true
 	}
 	s.conns[c] = struct{}{}
+	return true, false
+}
+
+// enterPeer counts one more connection of the process; false is one over
+// MaxConnsPerPeer, not counted.
+func (s *Server) enterPeer(pid int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.peers[pid] >= s.cfg.MaxConnsPerPeer {
+		return false
+	}
+	s.peers[pid]++
 	return true
+}
+
+func (s *Server) leavePeer(pid int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.peers[pid]--; s.peers[pid] <= 0 {
+		delete(s.peers, pid)
+	}
 }
 
 func (s *Server) untrack(c net.Conn) {
@@ -205,6 +252,17 @@ func (s *Server) serveConn(ctx context.Context, c net.Conn, acceptedAt time.Time
 	// PID be reused, at any moment after the accept.
 	peer, peerErr := s.cfg.Identifier.Accept(c, acceptedAt)
 	defer func() { peer.Close() }() // a peer that failed to be read may still hold a pidfd
+	// One process holds one connection per call: one that holds more than
+	// MaxConnsPerPeer is flooding the engine, and the extra ones are
+	// refused before anything is read (a peer that could not be read counts
+	// as PID 0).
+	if !s.enterPeer(peer.PID) {
+		s.log.Warn("local channel: too many connections from one process", "pid", peer.PID, "limit", s.cfg.MaxConnsPerPeer)
+		s.refuse(c, Version, "", Fail(CodeLimit, fmt.Sprintf("this process holds %d connections to the engine already", s.cfg.MaxConnsPerPeer),
+			"one call at a time per process"))
+		return
+	}
+	defer s.leavePeer(peer.PID)
 
 	br := bufio.NewReaderSize(c, 64<<10)
 	timer := s.clk.AfterFunc(s.cfg.ReadTimeout, func() { _ = c.Close() })
