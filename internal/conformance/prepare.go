@@ -51,7 +51,10 @@ type Workspace struct {
 	// (gitx.Real.OpenWorktree), never by its folder. Zero with a git that
 	// does not record (a fake), and then every git check of the run fails
 	// closed.
-	Record  gitx.WorktreeRecord
+	Record gitx.WorktreeRecord
+	// Base is the table branch's base commit, resolved right after the
+	// worktree was created (classes.GitxState.Base).
+	Base    string
 	AgentID string
 	Codes   Codes
 	// MestreMD is the Mestre layer of the character
@@ -188,6 +191,13 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 			return err
 		}
 		ws.GitDir, ws.Record = rec.GitDir, rec
+	}
+	// The table branch's base, resolved here before any agent runs: an
+	// immutable commit the agent cannot move, so the "changed script" signal
+	// cannot be laundered through a moved refs/heads/main
+	// (classes.GitxState.Base).
+	if base, err := mirror.ResolveRef(ctx, MainBranch); err == nil {
+		ws.Base = string(base)
 	}
 	if err := wt.SetExcludeBlock(ctx, ExcludeBlock, []string{".mestre/", ".agents/", ".claude/"}); err != nil {
 		return err

@@ -458,7 +458,7 @@ func (ru *run) provision(ctx context.Context) error {
 // record, with an alert in the log when it points elsewhere.
 func (ru *run) gitState() classes.GitxState {
 	opener, _ := ru.r.Git.(gitx.WorktreeOpener)
-	return classes.GitxState{Git: opener, Worktree: ru.ws.Record, Main: MainBranch, Moved: func(err error) {
+	return classes.GitxState{Git: opener, Worktree: ru.ws.Record, Main: MainBranch, Base: ru.ws.Base, Moved: func(err error) {
 		ru.r.log().Error("conformance: the worktree of the run no longer points at its record", "worktree", ru.ws.Worktree, "err", err)
 	}}
 }

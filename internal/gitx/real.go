@@ -159,7 +159,8 @@ func (g *Real) environFrom(base []string) []string {
 		"GIT_ASKPASS=",
 		"GIT_OPTIONAL_LOCKS=0",
 		"GIT_MERGE_AUTOEDIT=no",
-		"GIT_NO_LAZY_FETCH=1", // no fetch from a promisor remote (git 2.44+; repo.guard before)
+		"GIT_NO_LAZY_FETCH=1",      // no fetch from a promisor remote (git 2.44+; repo.guard before)
+		"GIT_NO_REPLACE_OBJECTS=1", // refs/replace (agent-writable in the mirror) never rewrites an object the engine reads
 		"LC_ALL=C",
 		"LANGUAGE=C",
 	)

@@ -525,7 +525,10 @@ func (r *repo) Status(ctx context.Context) ([]StatusEntry, error) {
 	if err := r.needTree(); err != nil {
 		return nil, err
 	}
-	out, err := r.treeGit(ctx, runOpts{}, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
+	// --ignore-submodules=all: git status does not recurse into a submodule
+	// a worktree user may have planted, so none of its clean filters run
+	// (docs/arquitetura/seguranca.md#git-do-motor).
+	out, err := r.treeGit(ctx, runOpts{}, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames", "--ignore-submodules=all")
 	if err != nil {
 		return nil, fmt.Errorf("status: %w", err)
 	}
