@@ -1,6 +1,6 @@
 # Sessão zero do workspace
 
-> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -41,7 +41,7 @@ flowchart TD
 .mestre/
 ├── regras/
 │   ├── teto.yaml                    teto de permissões e custo   → teto-do-workspace
-│   ├── politica-de-aprovacao.yaml   quando o Grão-Mestre aprova  → aprovacoes/politica
+│   ├── politica-de-aprovacao.yaml   política de aprovação        → arquivo-de-politica
 │   └── instrucoes/                  instruções extras dos usuários
 │       ├── grao-mestre.md                                         → orquestracao/grao-mestre
 │       └── mestre-da-mesa.md                                      → orquestracao/mestre-da-mesa

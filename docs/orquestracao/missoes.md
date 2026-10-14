@@ -1,6 +1,6 @@
 # Missões
 
-> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -56,7 +56,7 @@ A etapa com `can_return_to` pode terminar devolvendo (opção do `done`, ver [co
 
 ### Pontos de aprovação
 
-Quem aprova é o Grão-Mestre, dentro da política, ou os usuários, quando a política exige ou ele está em dúvida ([política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md)); enquanto isso a etapa fica numa espera de aprovação ([esperas](esperas-e-caixa-de-entrada.md#esperas)). `before` negado: missão `paused`, Mestre da mesa avisado. `after` negado: a etapa volta a `preparing` com o motivo (conta como volta).
+O pedido é do tipo `ponto_de_missao`, de risco `medio`: quem aprova é o Grão-Mestre, dentro da política, ou os usuários, quando a política exige ou ele está em dúvida; o Mestre da mesa, que desenhou o ponto, nunca o decide ([cadeia de aprovação](cadeia-de-aprovacao.md#salvaguardas), [política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md)); enquanto isso a etapa fica numa espera de aprovação ([esperas](esperas-e-caixa-de-entrada.md#esperas)). `before` negado: missão `paused`, Mestre da mesa avisado. `after` negado: a etapa volta a `preparing` com o motivo (conta como volta).
 
 ### Etapa travada
 

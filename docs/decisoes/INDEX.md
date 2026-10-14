@@ -1,6 +1,6 @@
 # Decisões (ADRs)
 
-> **Assunto:** índice dos registros de decisão de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** índice dos registros de decisão de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
@@ -11,7 +11,7 @@
 | [0005-motor-executa-github-grao-mestre-porteiro.md](0005-motor-executa-github-grao-mestre-porteiro.md) | Por que nenhum agente tem credencial do GitHub e o motor executa tudo | Ao adicionar qualquer ação no GitHub |
 | [0006-app-por-classe-criado-pelo-navegador.md](0006-app-por-classe-criado-pelo-navegador.md) | Um GitHub App por classe, preparado pelo Grão-Mestre e criado pelo usuário com um clique, pelo fluxo de manifesto no navegador dele | Ao mexer em classes, identidades ou criação de Apps |
 | [0007-apps-fixos-grao-mestre-e-mestre.md](0007-apps-fixos-grao-mestre-e-mestre.md) | Os Apps fixos "Grão-Mestre" e "Mestre" e as credenciais do motor (chaves privadas, tokens de instalação) | Ao mexer em PRs, aprovação ou autenticação no GitHub |
-| [0008-grao-mestre-aprovador-delegado.md](0008-grao-mestre-aprovador-delegado.md) | Grão-Mestre como aprovador delegado, plano B por ruleset e credencial pessoal por device flow | Ao mexer em aprovações ou na política |
+| [0008-grao-mestre-aprovador-delegado.md](0008-grao-mestre-aprovador-delegado.md) | **Substituída por 0024.** Histórico: Grão-Mestre como aprovador delegado de tudo, plano B por ruleset e credencial pessoal por device flow | Só para o histórico; a decisão em vigor é o 0024 |
 | [0009-github-por-consulta-periodica.md](0009-github-por-consulta-periodica.md) | Eventos do GitHub por consulta periódica condicional, sem webhooks | Ao mexer na coleta de eventos do GitHub |
 | [0010-instrucoes-em-duas-camadas.md](0010-instrucoes-em-duas-camadas.md) | Camada do Mestre separada do `AGENTS.md` e o canal de entrega por provedor | Ao mexer na montagem de instruções ou num adaptador de provedor |
 | [0011-agents-skills-pasta-oficial.md](0011-agents-skills-pasta-oficial.md) | `.agents/skills/` como fonte das skills, com cópia gerenciada em `.claude/skills/` | Ao mexer na geração de skills |
@@ -27,3 +27,4 @@
 | [0021-operador-do-pc.md](0021-operador-do-pc.md) | Operador do PC: base especial em máquina Windows que roda com a conta do usuário, só com aprovação do Dono, prazo curto, aviso visível e auditoria com capturas; a única exceção ao princípio de contas | Ao mexer no Operador, em contas do Windows, em MCPs de controle do computador ou do navegador do usuário |
 | [0023-terminais-fora-do-motor.md](0023-terminais-fora-do-motor.md) | Cada terminal num processo próprio, o `mestre-pty`, que sobrevive ao reinício e à atualização do motor; sem tmux nem screen; `mestre attach` | Ao mexer em terminais, na atualização do motor ou na retomada dos agentes |
 | [0022-guilda-cidadela-e-torres.md](0022-guilda-cidadela-e-torres.md) | Guilda de instalações iguais com uma Cidadela por vez e Torres com réplica de tudo; época e fencing pela trava no GitHub; máquina excluída; troca de Cidadela sempre manual, pelo Dono; comparação com Core + nós fixo e multi-mestre | Ao mexer em papéis das máquinas, replicação, instalação ou queda da máquina no comando |
+| [0024-cadeia-de-aprovacao-por-risco.md](0024-cadeia-de-aprovacao-por-risco.md) | Risco de cada pedido dado pelo motor (baixo, médio, alto, fixo), cadeia do superior de quem pediu até as pessoas com teto de risco por nível, salvaguardas, respostas, regras temporárias de mesa, delegação, `default` ausente vale `ask`; mantém a parte do GitHub do 0008 | Ao mexer em aprovações, na política, em delegação ou nos padrões das permissões |

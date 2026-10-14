@@ -44,7 +44,7 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
 ```
 
 - Os blocos têm o mesmo sentido do `permissions.yaml`, já cortados pelo teto e endurecidos pela ficha; marcadores como `{mesa.branch}` já vêm resolvidos.
-- `decrees`: decretos e exceções pontuais ativos que valem para o personagem ([decretos](../telegram/decretos.md)), cada um com `id`, `kind` (`rule` ou `exception`), `level` do autor (`owner`, `admin`, `approver`, `grand_master`), `effect` (só `permission` chega à decisão, com `allow`/`deny` de `files`, `commands`, `tools` e `domains`), `until` e, na exceção, `action`: a ação exata (`kind`, `command`, `paths` relativos ao worktree, `tool`, `url`). Exceção pontual consumida sai da lista na versão seguinte; até lá, a máquina guarda que ela foi usada e não a usa de novo.
+- `decrees`: decretos e exceções pontuais ativos que valem para o personagem ([decretos](../telegram/decretos.md)), cada um com `id`, `kind` (`rule`, `exception` ou, no M4, `table_rule`: as [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md)), `level` do autor (`owner`, `admin`, `approver`, `grand_master` ou, no M4, `table_master`), `effect` (só `permission` chega à decisão, com `allow`/`deny` de `files`, `commands`, `tools` e `domains`), `until` e, na exceção, `action`: a ação exata (`kind`, `command`, `paths` relativos ao worktree, `tool`, `url`). Exceção pontual consumida sai da lista na versão seguinte; até lá, a máquina guarda que ela foi usada e não a usa de novo.
 - `origin`: camada de origem (`fixed`, `decree`, `ceiling`, `class`, `sheet`) de cada padrão que não vem da classe, para o motivo da negação citar, por exemplo, "teto do workspace".
 - `locked`: sistema travado ([segurança do canal](../telegram/seguranca-do-canal.md)); com `true`, toda ferramenta é negada.
 - `version` muda só quando um campo muda de sentido; campos novos são acrescentados sem mudar a versão.
@@ -76,8 +76,8 @@ flowchart LR
 ```
 
 1. **Regras fixas de segurança** (acima), e o sistema travado: negam e param.
-2. **Exceção pontual** ([decretos](../telegram/decretos.md)): uma exceção que casa exatamente com a ação libera e é consumida (fica registrada como executada); não conta se um decreto que proíbe, de nível igual ou maior, pega parte da ação.
-3. **Decretos e regras efetivas** do personagem: entre os decretos que pegam a ação, decide o de nível mais alto (libera e proíbe no mesmo nível se anulam); sem decreto, as regras efetivas dão `allow`, `ask` ou `deny`, e comando ou ferramenta sem regra cai no `default` da classe.
+2. **Exceção pontual** ([decretos](../telegram/decretos.md)): uma exceção que casa exatamente com a ação libera e é consumida (fica registrada como executada); não conta se um decreto que proíbe, de nível igual ou maior, pega parte da ação. Exceções e regras dadas por agentes da cadeia (`grand_master`, `table_master`) só valem sobre uma ação que as regras efetivas deixam em `ask` ([cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md), M4).
+3. **Decretos e regras efetivas** do personagem: entre os decretos que pegam a ação, decide o de nível mais alto (libera e proíbe no mesmo nível se anulam); sem decreto, as regras efetivas dão `allow`, `ask` ou `deny`, e comando ou ferramenta sem regra cai no `commands.default` ou no `tools.default` (ausentes, `ask`; [formato](formato-das-permissoes.md#o-arquivo)).
 4. Se liberou (também por decreto; a exceção pontual não), rodam os hooks `pre_tool` síncronos da classe, que só podem negar ([classes](classes.md#hooks-extras-da-classe)).
 5. `ask` segue o fluxo da seção seguinte.
 
@@ -85,7 +85,7 @@ flowchart LR
 
 ### Quando a decisão é "pedir aprovação"
 
-O despachante responde **negar**, com o motivo "pedido de aprovação #N aberto para <ação>; encerre o turno, você será avisado", igual nos três provedores (o Codex não aceita `ask` no hook). O motor abre o pedido ([fluxo](../aprovacoes/fluxo.md); aprovador padrão é o Grão-Mestre, conforme a [política](../aprovacoes/politica.md)) e o personagem fica "aguardando permissão" ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). Aprovado, vira exceção pontual presa àquela ação exata (personagem, tipo de ferramenta, comando ou caminhos) e o personagem recebe a mensagem na caixa de entrada para repetir; negado, recebe o motivo. Repetir a mesma ação com o pedido aberto não cria outro pedido.
+O despachante responde **negar**, com o motivo "pedido de aprovação #N aberto para <ação>; encerre o turno, você será avisado", igual nos três provedores (o Codex não aceita `ask` no hook). O motor abre o pedido com o risco dado pela [classificação de risco](classificacao-de-risco.md); o pedido sobe pela [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) (M4) a partir do superior de quem pediu ([fluxo](../aprovacoes/fluxo.md), M5), e o personagem fica numa espera de aprovação, "aguardando aprovação" ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md#status-aguardando)); "aguardando permissão" é só o pedido nativo do provedor (`blocked` por `permission`). Aprovado, vira exceção pontual presa àquela ação exata (personagem, tipo de ferramenta, comando ou caminhos) e o personagem recebe a mensagem na caixa de entrada para repetir; negado, recebe o motivo. Repetir a mesma ação com o pedido aberto não cria outro pedido.
 
 ### Modo degradado
 
@@ -95,12 +95,12 @@ O motor da máquina grava o retrato das regras efetivas de cada personagem em `p
 
 A tradução das regras efetivas para os controles nativos de cada provedor está em [reforço nativo](reforco-nativo.md).
 
-Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o [reforço nativo](reforco-nativo.md), [classes](classes.md) e o [teto](teto-do-workspace.md) (M3); fichas, esperas e aprovações chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
+Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o [reforço nativo](reforco-nativo.md), [classes](classes.md), o [teto](teto-do-workspace.md) e a [classificação de risco](classificacao-de-risco.md) (M3); fichas, esperas e aprovações chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
 - `permissions.yaml` inválido: a classe não é salva; numa classe já salva que fica inválida (edição manual), o motor mantém a última versão válida e avisa.
-- Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `default`.
+- Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `tools.default`.
 - Nome em `network.credentials` que não existe no cofre, ou cujo domínio não está em `network.domains`: a classe não é salva.
 - Limite conhecido: comandos de shell que escrevem arquivos sem caminho literal escapam da regra de arquivos; por isso classes restritas devem usar lista de comandos permitidos, e o `git commit` confere os arquivos preparados.
 
@@ -112,15 +112,17 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 - **CA-PERM-08** · *rápida* — **Dado** um personagem da mesa A, **quando** roda `git branch -f epico/7-outra HEAD` ou lê o `auth.json` de um perfil de conta, **então** os dois são negados pelas regras fixas.
 - **CA-PERM-16** · *rápida* — **Dado** um personagem, **quando** pede para escrever ou apagar um arquivo dentro de `contas/<perfil>/` (ex.: o executável do `claude` em `.local/share/claude/`), **então** a ação é negada pelas regras fixas, também em outro perfil que não o dele.
 - **CA-PERM-04** · *completa* — **Dado** um worktree com git real, `files.write: ["tests/**"]` e `src/a.ts` preparado, **quando** chega `git commit -m x`, **então** é negado com a lista dos arquivos fora do permitido.
-- **CA-PERM-05** · *completa* — **Dado** `npm install *` em `ask`, **quando** o agente falso roda `npm install x`, **então** recebe negação com o pedido #N, fica "aguardando permissão"; aprovado, recebe a mensagem, a repetição passa uma vez e a seguinte volta a pedir.
+- **CA-PERM-05** · *completa* — **Dado** `npm install *` em `ask`, **quando** o agente falso roda `npm install x`, **então** recebe negação com o pedido #N, fica em espera de aprovação ("aguardando aprovação", não o "aguardando permissão" do pedido nativo); aprovado, recebe a mensagem, a repetição passa uma vez e a seguinte volta a pedir.
 - **CA-PERM-07** · *rápida* — **Dado** o motor fora do ar e um retrato que nega `src/**`, **quando** chega uma edição em `src/a.ts` e um comando em `ask`, **então** os dois são negados, o segundo com "motor indisponível".
-- **CA-PERM-09** · *rápida* — **Dado** `tools.allow: ["mcp__playwright__*"]`, `tools.deny: ["mcp__*__delete_*"]` e `default: deny`, **quando** chegam `mcp__playwright__browser_navigate`, `mcp__playwright__delete_cookies` e `mcp__github__create_issue`, **então** o primeiro é liberado e os outros dois negados, igual para os provedores que expõem esses nomes.
+- **CA-PERM-09** · *rápida* — **Dado** `tools.allow: ["mcp__playwright__*"]`, `tools.deny: ["mcp__*__delete_*"]` e `tools.default: deny`, **quando** chegam `mcp__playwright__browser_navigate`, `mcp__playwright__delete_cookies` e `mcp__github__create_issue`, **então** o primeiro é liberado e os outros dois negados, igual para os provedores que expõem esses nomes.
 - **CA-PERM-10** · *rápida* — **Dado** uma classe que libera `curl *`, um teto que nega `curl *` e uma ficha que nega `git commit *`, **quando** a Cidadela monta as regras efetivas, **então** o documento tem `curl *` em `commands.deny` com `origin` `ceiling`, `git.commit` falso e nenhum marcador sem resolver.
 - **CA-PERM-11** · *rápida* — **Dado** qualquer classe, **quando** o agente pede `chmod +x .mestre/anexos/x.sh` ou `sh .mestre/anexos/x.sh`, **então** os dois são negados pela regra fixa de anexos.
 - **CA-PERM-12** · *rápida* — **Dado** uma classe com `tools.deny: ["Agent"]`, **quando** chega um `pre_tool` de tipo `subagent` com esse nome, **então** é negado; e, com a ferramenta liberada, um `pre_tool` de escrita vindo de dentro do subagente (mesmo `MESTRE_AGENT_ID`) passa pelas regras do personagem.
 - **CA-PERM-13** · *rápida* — **Dado** um personagem qualquer, **quando** chega um `pre_tool` de shell com `cp x.md .mestre/classes/qa/CLASS.md` ou `echo y > .claude/agents/a.md`, **então** os dois são negados; e uma escrita na pasta `MESTRE_TMP` do próprio personagem é liberada, enquanto na de outro personagem é negada.
 - **CA-PERM-14** · *rápida* — **Dado** um personagem comum com `tools.allow: ["mcp__*"]` e o servidor `claude-in-chrome` configurado por HTTP remoto, **quando** chega `mcp__claude-in-chrome__navigate` ou `mcp__computer-use__left_click`, **então** os dois são negados pela regra fixa; **dado** o mesmo nome num terminal do Operador com classe `operator: true` e teto permitindo, **então** segue as regras efetivas.
 - **CA-PERM-15** · *rápida* — **Dado** qualquer personagem, inclusive o Operador, **quando** chega `Start-Process pwsh -Verb RunAs`, `runas /user:Administrador cmd` ou `gsudo x`, **então** os três são negados pela regra fixa; **dado** um perfil de conta de base comum com o servidor `claude-in-chrome` na configuração MCP, **quando** o Dono salva, **então** o motor recusa.
+- **CA-PERM-17** · *rápida* — **Dado** uma classe sem `commands.default` e sem `tools.default`, **quando** a Cidadela monta as regras efetivas, **então** os dois saem `ask`, um comando sem regra (`foo --bar`) e um `mcp__x__y` sem padrão viram pedido de aprovação, e salvar essa classe sob um teto com `commands.default: deny` não é recusado; **dado** esse teto, **então** o documento traz `commands.default: deny` com `origin` `ceiling`; **dado** o motor fora do ar, **então** o comando sem regra é negado com "motor indisponível".
+- **CA-PERM-18** · *rápida* — **Dado** um `permissions.yaml` com `default: ask` no topo (fora de `tools`), **quando** é lido, **então** é inválido por campo desconhecido; **dado** `tools: {default: deny}`, **então** é lido e uma ferramenta `other` sem padrão é negada.
 
 ## Depende de
 

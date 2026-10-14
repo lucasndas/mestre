@@ -1,6 +1,6 @@
 # Esperas e caixa de entrada
 
-> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Esperar é responsabilidade do **motor**, nunca de um agente parado em loop cons
 
 ### Caixa de entrada
 
-Uma fila por personagem, no banco da Cidadela. Cada item tem: `id`, destino, tipo (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`), remetente, texto, anexos, origem (só para `user`: canal, usuário, nível, conversa e mensagem respondida), referências (ask, espera, mesa, missão), criado em e estado (`queued` → `delivered`, ou `expired`/`cancelled`). O resultado de um pedido que ficou enfileirado (`queued: true`, [convenções da CLI](../cli/convencoes.md#saída---json)) chega como item `system` com o `op_id` do pedido.
+Uma fila por personagem, no banco da Cidadela. Cada item tem: `id`, destino, tipo (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`, `approval`: um pedido de aprovação para o agente decidir como nível da [cadeia](cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê)), remetente, texto, anexos, origem (só para `user`: canal, usuário, nível, conversa e mensagem respondida), referências (ask, espera, mesa, missão), criado em e estado (`queued` → `delivered`, ou `expired`/`cancelled`). O resultado de um pedido que ficou enfileirado (`queued: true`, [convenções da CLI](../cli/convencoes.md#saída---json)) chega como item `system` com o `op_id` do pedido.
 
 **Prioridade** (dentro de cada nível, ordem de chegada): 1) mensagens do Dono; 2) mensagens dos demais usuários; 3) todo o resto. Usuários só escrevem ao Grão-Mestre ([roteamento](../telegram/roteamento.md)).
 
@@ -45,7 +45,7 @@ Usuários com nível para isso ainda podem digitar direto num terminal pelo canv
 |---|---|---|
 | Personagem | o alvo dá `done` ou faz ask back para quem espera | `mestre wait "Nome"` |
 | Etapas (`todas` \| `primeira`) | todas / a primeira das etapas indicadas concluem | motor ([missões](missoes.md)) ou `mestre wait --quest` |
-| Aprovação | a aprovação é decidida ([fluxo](../aprovacoes/fluxo.md)) | motor |
+| Aprovação | o pedido é decidido, em qualquer nível da [cadeia](cadeia-de-aprovacao.md) ([fluxo](../aprovacoes/fluxo.md)) | motor |
 | Horário | chega o horário | `mestre wait --until` |
 | Vaga (`waiting_slot`) | abre vaga ([limites](personagens.md#limites)) | motor, para etapas e para `recruit`/`spawn` diretos |
 | Sincronização | sincronização concluída ([mesas](mesas.md#worktree-por-máquina-e-sincronização)) | motor, só para etapas |
@@ -72,7 +72,7 @@ stateDiagram-v2
 
 ### Status "aguardando"
 
-Quem tem espera ativa (ou está `blocked`) aparece no canvas e no `mestre list` com o motivo e uma linha tracejada até o que espera ([canvas](../painel/canvas.md)). Textos: "aguardando Revisor", "aguardando QA e Revisor (todas)", "aguardando aprovação do Lucas", "aguardando 14:00", "aguardando vaga", "aguardando sincronização", e, para `blocked`, conforme o motivo ([estados](personagens.md#estados)): "aguardando permissão" (`permission`), "aguardando cota" (`quota`), "aguardando entrada" (`input`). Aguardar não conta como ocioso ([ciclo de vida](personagens.md#ciclo-de-vida-definido-na-ficha)).
+Quem tem espera ativa (ou está `blocked`) aparece no canvas e no `mestre list` com o motivo e uma linha tracejada até o que espera ([canvas](../painel/canvas.md)). Textos: "aguardando Revisor", "aguardando QA e Revisor (todas)", "aguardando aprovação do Mestre" (o texto acompanha a [subida](cadeia-de-aprovacao.md#subida): do Grão-Mestre, das pessoas, do Lucas), "aguardando 14:00", "aguardando vaga", "aguardando sincronização", e, para `blocked`, conforme o motivo ([estados](personagens.md#estados)): "aguardando permissão" (`permission`), "aguardando cota" (`quota`), "aguardando entrada" (`input`). Os dois não se confundem: "aguardando aprovação" é a espera de um pedido aberto pelo despachante (`ask` das regras) ou por outro tipo de ação, com o personagem `waiting` e livre para receber entregas; "aguardando permissão" é só o pedido de permissão nativo do provedor na tela (`blocked` por `permission`), que nunca se responde por teclas. Aguardar não conta como ocioso ([ciclo de vida](personagens.md#ciclo-de-vida-definido-na-ficha)).
 
 ### Tempos limite
 
@@ -81,11 +81,11 @@ Quem tem espera ativa (ou está `blocked`) aparece no canvas e no `mestre list` 
 | `ask` bloqueante | 90 s; máximo 9 min (o `ask` segura a ferramenta de shell do agente, cujo tempo limite padrão no Claude Code é 2 min) |
 | Personagem | 60 min |
 | Etapas | 120 min |
-| Aprovação | o prazo de expiração da aprovação ([fluxo](../aprovacoes/fluxo.md)) |
+| Aprovação | a soma dos prazos dos níveis da [cadeia](cadeia-de-aprovacao.md#subida) e, nas pessoas, o da política ([fluxo](../aprovacoes/fluxo.md)) |
 | Horário | sem tempo limite |
 | Vaga, sincronização | 30 min (vaga: ao estourar, o pedido de criação falha com aviso) |
 
-Ao estourar, o motor avisa quem espera (em geral o Mestre da mesa; o Grão-Mestre nas esperas dele) com as opções: consultar com `check`, reenviar com mais contexto, trocar o personagem ou avisar os usuários. **O motor nunca reenvia automaticamente o mesmo pedido.**
+Ao estourar, o motor avisa quem espera (em geral o Mestre da mesa; o Grão-Mestre nas esperas dele) com as opções: consultar com `check`, reenviar com mais contexto, trocar o personagem ou avisar os usuários. **O motor nunca reenvia automaticamente o mesmo pedido.** A subida de um pedido de aprovação na cadeia não é reenvio: é o mesmo pedido mudando de nível ([subida](cadeia-de-aprovacao.md#subida)).
 
 ### Detecção de impasse
 

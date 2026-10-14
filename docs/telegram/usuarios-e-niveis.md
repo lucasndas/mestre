@@ -1,6 +1,6 @@
 # Usuários e níveis
 
-> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -30,11 +30,12 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Receber alertas e notificações ([roteamento](roteamento.md)) | sim | sim | sim | sim |
 | Consultar status: `/status`, `/missoes`, `/aprovacoes`, `/decretos`, `/guilda` (os pedidos e botões da Guilda só ao Dono), painel em leitura | sim | sim | sim | sim |
 | Conversar com o Grão-Mestre (pedidos e perguntas) | sim | sim | sim | não |
-| Aprovar ou negar pedidos de aprovação | sim | sim | sim | não |
+| Aprovar ou negar pedidos de aprovação (as [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) que criam regra seguem as linhas de decreto) | sim | sim | sim | não |
 | Criar exceção pontual por iniciativa própria ([decretos](decretos.md)) | sim | sim | sim | não |
 | Criar regra permanente (decreto) | sim | sim | não | não |
 | Revogar decretos | qualquer um | de Administrador e de Aprovador | só as próprias exceções ainda não usadas | não |
-| `/pausar` e `/retomar` | sim | sim | não | não |
+| `/pausar` e `/retomar` (também retomar um personagem pausado pelo disjuntor da [cadeia](../orquestracao/cadeia-de-aprovacao.md#salvaguardas)) | sim | sim | não | não |
+| Revogar [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) e subdelegações | sim | sim | não | não |
 | `/travar` ([segurança do canal](seguranca-do-canal.md)) | sim | sim | não | não |
 | `/destravar` (com PIN) | sim | não | não | não |
 | Encerrar uma sessão do Operador do PC: `/operador encerrar` e botão **Encerrar agora** ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) | sim | sim | não | não |
@@ -51,11 +52,12 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Criar e instalar GitHub Apps pelo link ([criação de Apps](../github/criacao-de-apps.md)) | sim | não | não | não |
 | Configurar perfis de conta: login e, no Codex, confiança dos hooks ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)) | sim | não | não | não |
 | Aprovar a ativação do Operador do PC (`ativacao_operador`), ligar `operator` no teto, delegar essa aprovação ao Grão-Mestre e ver as capturas de tela das sessões ([política](../aprovacoes/politica.md#tipos-de-ação)) | sim | não | não | não |
+| Delegar ao Grão-Mestre a decisão de um tipo `alto` e revogar de uma vez todas as delegações e regras temporárias (`/revogar_tudo`) ([delegação](../aprovacoes/delegacao.md)) | sim | não | não | não |
 | Transferir o posto de Dono | sim | não | não | não |
 
 - **Observador:** se escrever texto livre, a mensagem não vai ao Grão-Mestre. O bot responde, uma vez por dia no máximo, com os comandos que ele pode usar.
 - **Grão-Mestre não é usuário.** Ele é o aprovador delegado, com as regras de [política](../aprovacoes/politica.md).
-- **Aprovar pedidos:** a linha "aprovar ou negar" é o máximo; cada tipo de pedido tem o seu nível mínimo na [política](../aprovacoes/politica.md#tipos-de-ação) (ex.: `acao_destrutiva` e `proposta_agents_md` exigem Administrador ou acima).
+- **Aprovar pedidos:** a linha "aprovar ou negar" é o máximo; cada tipo de pedido tem o seu nível mínimo na [política](../aprovacoes/politica.md#tipos-de-ação), e o risco `alto` exige pelo menos Administrador (ex.: `acao_destrutiva` e `proposta_agents_md` exigem Administrador ou acima).
 - **Ações sensíveis com PIN:** a lista única está em [PIN pessoal](#pin-pessoal).
 
 ### Pareamento por código

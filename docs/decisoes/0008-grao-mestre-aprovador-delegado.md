@@ -1,10 +1,10 @@
 # ADR 0008: Grão-Mestre como aprovador delegado
 
-> **Assunto:** por que o Grão-Mestre aprova em nome dos usuários, com política, e como isso chega ao GitHub · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** por que o Grão-Mestre aprova em nome dos usuários, com política, e como isso chega ao GitHub · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Status
 
-Aceita, 2026-10-12.
+Aceita, 2026-10-12. **Substituída por [0024](0024-cadeia-de-aprovacao-por-risco.md) em 2026-10-14:** o Grão-Mestre deixa de ser o aprovador padrão de tudo e vira um nível da cadeia de aprovação por risco; a parte do GitHub (App "Grão-Mestre", plano B só por ruleset, credencial pessoal por device flow) segue valendo e passa a ser registrada no 0024. O texto abaixo é o histórico da decisão original.
 
 ## Contexto
 
