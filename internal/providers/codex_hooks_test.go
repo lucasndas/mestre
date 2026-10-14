@@ -91,13 +91,17 @@ func TestHookFilesAreTheSameForEveryProfileAndNoneInTheWorktree(t *testing.T) {
 	if len(file.Hooks) != len(want) {
 		t.Fatalf("events = %v", file.Hooks)
 	}
+	line := bin
+	if strings.ContainsAny(bin, ` \`) { // a temporary folder of Windows in a Linux line: quoted
+		line = "'" + bin + "'"
+	}
 	for ev, timeout := range want {
 		g := file.Hooks[ev]
 		if len(g) != 1 || len(g[0].Hooks) != 1 {
 			t.Fatalf("%s: %+v", ev, g)
 		}
 		h := g[0].Hooks[0]
-		if h.Type != "command" || h.Command != bin+" hook --provider codex --event "+ev || h.Timeout != timeout {
+		if h.Type != "command" || h.Command != line+" hook --provider codex --event "+ev || h.Timeout != timeout {
 			t.Errorf("%s: %+v", ev, h)
 		}
 		if tools := ev != "UserPromptSubmit" && ev != "Stop" && ev != "Interrupt"; tools != (g[0].Matcher == "*") {
