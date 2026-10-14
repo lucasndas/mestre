@@ -77,7 +77,7 @@ var claudeTools = toolTable{
 // BuildLaunch: `claude <base args> --session-id <uuid> <provider args>`, or
 // `--resume <uuid>` with the saved id. The provider args must bring the
 // Mestre layer and the --settings file of the character, the environment the
-// account profile, and no forbidden flag may be there
+// account profile, and only the options the document allows may be there
 // (checkClaudeLaunch); --permission-mode default is added when missing, so
 // no mode of the settings of the person applies.
 func (c *claudeCode) BuildLaunch(req LaunchRequest) (Launch, error) {
@@ -102,8 +102,11 @@ func (c *claudeCode) BuildLaunch(req LaunchRequest) (Launch, error) {
 	default:
 		return Launch{}, fmt.Errorf("claude-code: the engine generates the session id (--session-id); none given")
 	}
+	// The engine's arguments come last and whole: the base has only the
+	// options of claudeOptions, none of which takes what follows it.
 	l.Args = append(l.Args, req.ProviderArgs...)
-	if !slices.ContainsFunc(parseClaudeFlags(l.Args), func(f claudeFlag) bool { return f.name == "--permission-mode" }) {
+	hasMode := func(a string) bool { return a == "--permission-mode" || strings.HasPrefix(a, "--permission-mode=") }
+	if !slices.ContainsFunc(l.Args, hasMode) {
 		l.Args = append(l.Args, "--permission-mode", "default")
 	}
 	return l, nil

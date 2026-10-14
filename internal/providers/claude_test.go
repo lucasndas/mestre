@@ -365,7 +365,7 @@ func TestBuildLaunchHasTheLayerTheSettingsAndTheProfileAndNoForbiddenFlag(t *tes
 		{Name: "claude", Command: "claude", Dir: "/work/mesa"},
 		{Name: "claude-opus", Command: "/usr/local/bin/claude", Args: []string{"--model", "opus", "--verbose"}, Env: []string{"FOO=1"}, Dir: "/work/mesa"},
 		{Name: "claude-win", Command: `C:\Users\mestre-agente\claude.exe`, Args: []string{"--model=sonnet"}, Dir: `C:\Mestre\wt`},
-		{Name: "claude-allowed", Command: "claude", Args: []string{"--allowedTools", "Read", "Grep", "--permission-mode", "default"}},
+		{Name: "claude-debug", Command: "claude", Args: []string{"--debug", "--fallback-model", "sonnet", "-d", "--debug=api", "--permission-mode", "default"}},
 	}
 	for _, goos := range []string{"linux", "windows"} {
 		for _, base := range bases {
@@ -501,10 +501,67 @@ func TestBuildLaunchRefusesWhatTheDocumentForbids(t *testing.T) {
 	}
 	// What is allowed stays allowed: the folder of the character itself.
 	req := claudeRequest("u1")
+	req.ProviderArgs = slices.Clone(req.ProviderArgs)
 	req.ProviderArgs = append(req.ProviderArgs, "--add-dir", ".mestre/agents/a1")
 	req.ProviderArgs[1] = ".mestre/agents/a1/MESTRE.md"
 	if _, err := claude.BuildLaunch(req); err != nil {
 		t.Errorf("add-dir of the own folder: %v", err)
+	}
+}
+
+// CA-CLAUDE-02: the check of the start is a list of what is allowed, not of
+// what is forbidden. A base "--" would turn the engine's --session-id,
+// --settings and --permission-mode into text of the prompt; a positional is
+// a prompt or a subcommand (mcp, update); and every option the list does
+// not have is refused, also the ones nobody named (M3 audit, round 2). What
+// the base may give keeps the engine's arguments last and whole.
+func TestClaudeStartIsAnAllowList(t *testing.T) {
+	t.Parallel()
+	claude := providers.NewClaudeCode(providers.Options{})
+	refused := [][]string{
+		{"--"}, {"--", "hi"}, {"-"}, {"hello"}, {"a prompt"}, {"mcp"}, {"update"}, {"--model", "opus", "pos"},
+		{"--safe-mode"}, {"--restricted"}, {"--managed-settings", "{}"}, {`--managed-settings={"disableAllHooks":true}`},
+		{"--project-config-root", "/tmp/x"}, {"-w"}, {"--worktree"}, {"--worktree=x"}, {"--remote-control"}, {"--rc"},
+		{"--inherit-permission-mode", "bypassPermissions"}, {"--enable-auto-mode"}, {"--dangerously-load-development-channels", "x"},
+		{"--tools", "default"}, {"--plugin-url", "http://x"}, {"--sdk-url", "ws://x"}, {"--teleport"}, {"--remote"}, {"--bg"},
+		{"--mcp-config", "/tmp/x.json"}, {"--strict-mcp-config"}, {"--plugin-dir", "/tmp/p"}, {"--allowedTools", "Bash"},
+		{"--allowed-tools", "Bash"}, {"--disallowedTools", "x"}, {"--agents", `{"x":{}}`}, {"--permission-prompt-tool", "mcp__x"},
+		{"--fork-session"}, {"--append-system-prompt", "x"}, {"--ide"}, {"--debug-file", "/x"}, {"--agent", "x"},
+		{"-dc"}, {"-r1234"}, {"-cd"}, {"-pd"}, {"-d=x"}, {"--dangerously-skip-permissions"}, {"--permission-mode", "bypassPermissions"},
+		{"--permission-mode=acceptEdits"}, {"--permission-mode"}, {"--settings", "/x.json"}, {"--settings=/x.json"},
+		{"--setting-sources", "user"}, {"--add-dir", "/"}, {"--add-dir=/"}, {"-p"}, {"--print"}, {"--continue"}, {"-c"},
+		{"--resume=x"}, {"--resume", "x"}, {"-r", "x"}, {"--system-prompt", "x"}, {"--session-id=x"}, {"--bare"},
+		{"--allow-dangerously-skip-permissions"}, {"--verbose=1"}, {"--model"}, {"--model", "--verbose"}, {"--model="},
+	}
+	for _, b := range refused {
+		req := claudeRequest("u1")
+		req.Base.Args = b
+		if l, err := claude.BuildLaunch(req); err == nil {
+			t.Errorf("base %q accepted: %q", b, l.Args)
+		}
+	}
+	// The engine gives only its own options.
+	for _, e := range [][]string{{"--"}, {"--model", "opus"}, {"--verbose"}, {"x"}, {"--disallowedTools"}, {"--mcp-config", "x"}} {
+		req := claudeRequest("u1")
+		req.ProviderArgs = append(slices.Clone(req.ProviderArgs), e...)
+		if l, err := claude.BuildLaunch(req); err == nil {
+			t.Errorf("engine %q accepted: %q", e, l.Args)
+		}
+	}
+	for _, b := range [][]string{{"--model", "opus"}, {"--model=opus"}, {"-d"}, {"--debug"}, {"--debug=api,hooks"}, {"--verbose"},
+		{"--permission-mode", "default"}, {"--fallback-model", "sonnet"}, {"--chrome"}} {
+		req := claudeRequest("u1")
+		req.Base.Args = b
+		req.ProviderArgs = append(slices.Clone(req.ProviderArgs), "--disallowedTools", "Edit", "Write")
+		l, err := claude.BuildLaunch(req)
+		if err != nil {
+			t.Errorf("base %q refused: %v", b, err)
+			continue
+		}
+		tail := slices.Concat([]string{"--session-id", "u1"}, req.ProviderArgs)
+		if !slices.Equal(l.Args[:len(b)], b) || !slices.Equal(l.Args[len(b):len(b)+len(tail)], tail) {
+			t.Errorf("base %q: %q; want the base, then %q whole", b, l.Args, tail)
+		}
 	}
 }
 

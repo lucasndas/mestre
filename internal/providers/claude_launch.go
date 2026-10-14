@@ -14,43 +14,44 @@ type claudeFlag struct {
 	values []string
 }
 
-// claudeValueFlags take exactly one value; every other flag with a value
-// takes the arguments up to the next flag (--add-dir, --disallowedTools…).
-var claudeValueFlags = []string{"--append-system-prompt-file", "--settings", "--permission-mode", "--session-id", "--resume", "-r", "--model", "--system-prompt", "--system-prompt-file", "--setting-sources"}
-
-// parseClaudeFlags splits arguments into flags and their values; `--flag=v`
-// is the flag with the value v.
-func parseClaudeFlags(args []string) []claudeFlag {
-	var out []claudeFlag
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if !strings.HasPrefix(a, "-") {
-			continue // a value that no flag of ours owns
-		}
-		f := claudeFlag{name: a}
-		if name, v, ok := strings.Cut(a, "="); ok && strings.HasPrefix(a, "--") {
-			f.name, f.values = name, []string{v}
-			out = append(out, f)
-			continue
-		}
-		if slices.Contains(claudeValueFlags, a) {
-			if i+1 < len(args) {
-				i++
-				f.values = []string{args[i]}
-			}
-		} else {
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				i++
-				f.values = append(f.values, args[i])
-			}
-		}
-		out = append(out, f)
-	}
-	return out
+// claudeOption is one option a start of Claude Code may have
+// (docs/provedores/claude-code.md#flags). The check is a list of what is
+// allowed, as for Codex and Antigravity: any other option, a positional (a
+// prompt, a subcommand such as mcp or update) and "--" are refused, since
+// Commander would read them in a way the check does not (after "--" every
+// argument, the engine's --settings included, is text of the prompt).
+type claudeOption struct {
+	// value: exactly one value (--name v or --name=v); list: one or more,
+	// up to the next option (--disallowedTools); optional: a value only
+	// with "=" (--debug=api), none alone.
+	value, list, optional bool
+	// base: the base may give it; engine: the engine's arguments may.
+	base, engine bool
 }
 
-// claudeForbidden are the flags the base and the engine never pass
-// (docs/provedores/claude-code.md#flags), and why.
+var claudeOptions = map[string]claudeOption{
+	// The model and how the CLI shows things: the base's.
+	"--model":          {value: true, base: true},
+	"--fallback-model": {value: true, base: true},
+	"--verbose":        {base: true},
+	"--debug":          {optional: true, base: true},
+	"-d":               {base: true},
+	// Only on the base of the Operador do PC, which the bases check when
+	// saved (docs/orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
+	"--chrome": {base: true},
+	// default is the only mode, from either.
+	"--permission-mode": {value: true, base: true, engine: true},
+	// The Mestre layer, the native rules and the skills of the character:
+	// the engine's (DeliverMestreLayer, Native).
+	"--append-system-prompt-file": {value: true, engine: true},
+	"--settings":                  {value: true, engine: true},
+	"--add-dir":                   {value: true, engine: true},
+	"--disallowedTools":           {list: true, engine: true},
+}
+
+// claudeForbidden are flags the documents name as forbidden
+// (docs/provedores/claude-code.md#flags), and why, for the error; any
+// option out of claudeOptions is refused anyway.
 var claudeForbidden = map[string]string{
 	"--dangerously-skip-permissions":       "it skips the permissions",
 	"--allow-dangerously-skip-permissions": "it allows to skip the permissions",
@@ -64,51 +65,101 @@ var claudeForbidden = map[string]string{
 	"--session-id":                         "the engine generates the session id",
 	"--resume":                             "the engine resumes by id",
 	"-r":                                   "the engine resumes by id",
+	"--continue":                           "it resumes the most recent session of the folder; the Mestre resumes by id",
+	"-c":                                   "it resumes the most recent session of the folder; the Mestre resumes by id",
+}
+
+// parseClaudeFlags reads arguments with the grammar of claudeOptions. An
+// argument that is not an option of the list, a short flag joined to more
+// text (Commander reads -dc as -d -c and -r1234 as --resume 1234), a
+// positional or "--" is an error. engine tells whose arguments they are.
+func parseClaudeFlags(args []string, engine bool) ([]claudeFlag, error) {
+	who := "the base"
+	if engine {
+		who = "the engine"
+	}
+	var out []claudeFlag
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--" || a == "-":
+			return nil, fmt.Errorf("claude-code: %s passes %q: every argument after it, the engine's included, would be text of the prompt", who, a)
+		case !strings.HasPrefix(a, "-"):
+			return nil, fmt.Errorf("claude-code: %s passes %q, which is not an option; a start has no prompt and no subcommand", who, a)
+		case len(a) > 2 && a[1] != '-':
+			return nil, fmt.Errorf("claude-code: %q joins a short flag to more text; a start gives each short flag alone", a)
+		}
+		name, v, inline := strings.Cut(a, "=")
+		opt, ok := claudeOptions[name]
+		switch {
+		case !ok:
+			if why, bad := claudeForbidden[name]; bad {
+				return nil, fmt.Errorf("claude-code: %s is forbidden: %s", name, why)
+			}
+			return nil, fmt.Errorf("claude-code: %s passes %s, an option a start may not have (docs/provedores/claude-code.md#flags)", who, name)
+		case engine && !opt.engine:
+			return nil, fmt.Errorf("claude-code: %s is an option of the base, not of the engine", name)
+		case !engine && !opt.base:
+			return nil, fmt.Errorf("claude-code: the base passes %s; the engine does, for the character only", name)
+		}
+		f := claudeFlag{name: name}
+		switch {
+		case inline && !opt.value && !opt.optional:
+			return nil, fmt.Errorf("claude-code: %s takes no value", name)
+		case inline:
+			f.values = []string{v}
+		case opt.value:
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				i++
+				f.values = []string{args[i]}
+			}
+		case opt.list:
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				i++
+				f.values = append(f.values, args[i])
+			}
+		}
+		if (opt.value || opt.list) && (len(f.values) == 0 || f.values[0] == "") {
+			return nil, fmt.Errorf("claude-code: %s without a value", name)
+		}
+		out = append(out, f)
+	}
+	return out, nil
 }
 
 // checkClaudeLaunch checks what the command of a Claude Code character must
-// have and must not have: the Mestre layer, the --settings file of the
-// character, the account profile and the only permission mode allowed.
+// have and must not have: only the options of claudeOptions, the Mestre
+// layer, the --settings file of the character, the account profile and the
+// only permission mode allowed.
 func checkClaudeLaunch(req LaunchRequest, env []string) error {
 	if req.AgentID == "" {
 		return fmt.Errorf("claude-code: no agent id (MESTRE_AGENT_ID)")
 	}
-	// Commander reads a short flag with more after it as a cluster or a
-	// flag with its value (-dc is -d -c, -r1234 is --resume 1234), which
-	// the check by name would not see: a start has only short flags alone.
-	for _, a := range slices.Concat(req.Base.Args, req.ProviderArgs) {
-		if len(a) > 2 && a[0] == '-' && a[1] != '-' {
-			return fmt.Errorf("claude-code: %q joins a short flag to more text; a start gives each short flag alone", a)
-		}
+	base, err := parseClaudeFlags(req.Base.Args, false)
+	if err != nil {
+		return err
 	}
-	for _, f := range parseClaudeFlags(req.Base.Args) {
-		switch f.name {
-		case "--append-system-prompt-file", "--settings", "--add-dir":
-			return fmt.Errorf("claude-code: the base passes %s; the engine does, for the character only", f.name)
-		}
+	eng, err := parseClaudeFlags(req.ProviderArgs, true)
+	if err != nil {
+		return err
 	}
 	var layer, settings string
-	for _, src := range [][]string{req.Base.Args, req.ProviderArgs} {
-		for _, f := range parseClaudeFlags(src) {
-			if why, bad := claudeForbidden[f.name]; bad {
-				return fmt.Errorf("claude-code: %s is forbidden: %s", f.name, why)
+	for _, f := range slices.Concat(base, eng) {
+		switch f.name {
+		case "--permission-mode":
+			if f.values[0] != "default" {
+				return fmt.Errorf("claude-code: --permission-mode %v is forbidden: default is the only mode allowed", f.values)
 			}
-			switch f.name {
-			case "--permission-mode":
-				if len(f.values) != 1 || f.values[0] != "default" {
-					return fmt.Errorf("claude-code: --permission-mode %v is forbidden: default is the only mode allowed", f.values)
-				}
-			case "--append-system-prompt-file":
-				if layer != "" || len(f.values) != 1 {
-					return fmt.Errorf("claude-code: --append-system-prompt-file given twice or without a file")
-				}
-				layer = f.values[0]
-			case "--settings":
-				if settings != "" || len(f.values) != 1 {
-					return fmt.Errorf("claude-code: --settings given twice or without a file")
-				}
-				settings = f.values[0]
+		case "--append-system-prompt-file":
+			if layer != "" {
+				return fmt.Errorf("claude-code: --append-system-prompt-file given twice")
 			}
+			layer = f.values[0]
+		case "--settings":
+			if settings != "" {
+				return fmt.Errorf("claude-code: --settings given twice")
+			}
+			settings = f.values[0]
 		}
 	}
 	if !pathEndsIn(layer, ".mestre", "agents", req.AgentID, "MESTRE.md") {
@@ -117,11 +168,8 @@ func checkClaudeLaunch(req LaunchRequest, env []string) error {
 	if !pathEndsIn(settings, ".mestre", "agents", req.AgentID, "claude-settings.json") {
 		return fmt.Errorf("claude-code: the native rules of %s are --settings .mestre/agents/%s/claude-settings.json; got %q", req.AgentID, req.AgentID, settings)
 	}
-	for _, f := range parseClaudeFlags(req.ProviderArgs) {
-		if f.name != "--add-dir" {
-			continue
-		}
-		if len(f.values) != 1 || filepath.Clean(filepath.FromSlash(f.values[0])) != filepath.Clean(filepath.FromSlash(slashDir(layer))) {
+	for _, f := range eng {
+		if f.name == "--add-dir" && filepath.Clean(filepath.FromSlash(f.values[0])) != filepath.Clean(filepath.FromSlash(slashDir(layer))) {
 			return fmt.Errorf("claude-code: --add-dir %v: the only folder allowed is .mestre/agents/%s of the character", f.values, req.AgentID)
 		}
 	}
