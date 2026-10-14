@@ -17,13 +17,13 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 - **Socket Unix nos dois sistemas** (`AF_UNIX`; no Windows 10 1803 ou maior), com o mesmo código Go; o mesmo vale para o socket de cada [`mestre-pty`](terminal.md#socket-e-aperto-de-mão). Se o spike 5 mostrar que a ACL do arquivo do socket não basta no Windows, o plano B é o named pipe `\\.\pipe\mestre-<inst>-cli` com a mesma ACL ([Windows](windows.md#verificar-na-implementação)).
 - `MESTRE_ENDPOINT`, posto pelo motor no ambiente de cada personagem, tem a forma `unix:///run/mestre/<inst>/cli.sock` ou `unix://C:/ProgramData/Mestre/<inst>/run/cli.sock`, sempre da [instância](componentes.md#instâncias) do personagem. Sem a variável, a CLI usa o endereço da instância `principal`.
-- Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo, com limites: até 16 conexões abertas de um mesmo processo (padrão; a excedente recebe `limit`, exit 8, antes de o motor ler o pedido) e até 512 no total (padrão; a excedente é fechada na hora). Um processo que inunda o canal não tira o motor dos outros.
+- Nenhuma porta TCP. Uma conexão por chamada; o motor atende muitas ao mesmo tempo, com limites (padrões): até 16 conexões abertas de um mesmo processo, 64 dos processos de um mesmo terminal (o cgroup `term-<id>`, lido ao aceitar; no Windows o Job Object só se sabe depois do pedido, e o limite do terminal não vale) e 256 de um mesmo usuário do sistema; a excedente recebe `limit`, exit 8, antes de o motor ler o pedido. No total, 512; as últimas 64 são só para chamadas `hook` (a conexão que as encontra é mantida só se o pedido for `hook`, e recebe `limit` se não for) e, esgotadas as 512, a excedente é fechada na hora. Quem inunda o canal, por processo, por terminal ou por usuário, não tira o motor dos outros, e o terminal de um personagem não deixa os `pre_tool` de outro em modo degradado.
 - O motor aplica o acesso da tabela ao socket da instância instalada; só a instância de `mestre run --dir` (desenvolvimento e testes) deixa o socket como o sistema o criou.
 
 ### Enquadramento
 
 - **JSON Lines:** cada mensagem é um objeto JSON em uma linha UTF-8 terminada por `\n`. Máximo de 1 MiB por linha (padrão).
-- O motor espera a linha do pedido por até 10 s (padrão); a CLI recusa na origem um pedido acima do limite (`too_large`, 8).
+- O motor espera a linha do pedido por até 3 s (padrão), curto de propósito: a CLI e o `mestre hook` mandam o pedido assim que conectam, e uma conexão parada não segura vaga; a CLI recusa na origem um pedido acima do limite (`too_large`, 8).
 - Conteúdo maior (`--file`, `--attach`) vai como **caminho absoluto**; o motor lê o arquivo no disco da máquina e confere que o chamador pode lê-lo pelas regras da classe ([permissões](../classes/permissoes.md)).
 
 ### Pedido
@@ -74,7 +74,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os terminais continuam ([terminal](terminal.md#volta-do-motor)), e a CLI cobre a janela.
 - Conexão recusada: a CLI tenta de novo por até 60 s (padrão), com espera crescente, antes de `engine_unreachable`.
-- Conexão que cai no meio de um pedido: a CLI reconecta e reenvia o mesmo pedido, com o mesmo `id`; o motor devolve a resposta guardada ou continua o pedido em andamento, sem executar de novo (idempotência, abaixo). Conta para o tempo limite do comando.
+- Conexão que cai no meio de um pedido: a CLI reconecta e reenvia o mesmo pedido, com o mesmo `id`; o motor devolve a resposta guardada ou continua o pedido em andamento, sem executar de novo (idempotência, abaixo). Conta para o tempo limite do comando. Entre uma queda e a reconexão a CLI espera 100 ms, o dobro a cada queda seguida até 2 s, com sorteio da metade de cima da espera (jitter): um motor cheio, que fecha a conexão na hora, não recebe um laço de reconexões.
 
 ### Encaminhamento à Cidadela
 
@@ -86,7 +86,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 | Situação | `error.code` | Exit |
 |---|---|---|
 | linha maior que o limite | `too_large` | 8 |
-| processo com 16 conexões já abertas | `limit` | 8 |
+| processo, terminal ou usuário com as conexões do limite já abertas; motor quase cheio para quem não é `hook` | `limit` | 8 |
 | JSON inválido ou campo obrigatório faltando | `bad_request` | 1 (é bug da CLI) |
 | processo fora do terminal de `agent_id` (cgroup no Linux, Job Object no Windows), chamador já encerrado, PID reaproveitado ou árvore que mudou em 3 tentativas | `not_identified` | 3 |
 | motor não aceita a conexão | `engine_unreachable` (gerado pela CLI) | 5 |
@@ -110,6 +110,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 - **CA-LOCAL-11** · *completa* — **Dado** um cgroup delegado real (`systemd-run --user --scope -p Delegate=yes`) e um terminal real cujo processo dispara `nohup mestre list &`, `( mestre list & )` e `setsid -f mestre list` e sai, **quando** os órfãos chamam, **então** os três são aceitos com o terminal certo, e sem o cgroup (só a subida pela árvore) os três recebem `not_identified`; o teste se reexecuta em um escopo delegado e, sem gerenciador systemd de usuário, é pulado com o motivo ([testes](../qualidade/testes.md#cgroup-delegado-na-completa)).
 - **CA-LOCAL-12** · *rápida* — **Dado** um motor falso que recusa conexões por 20 s de relógio falso e outro que fecha a conexão no meio de um `ask`, **quando** a CLI chama, **então** a primeira chamada termina com sucesso depois que o motor volta, e o `ask` é reenviado com o mesmo `id` e executado uma vez só; com o motor fora por mais de 60 s, a CLI sai com 5 (`engine_unreachable`).
 - **CA-LOCAL-13** · *completa* — **Dado** um terminal real no Windows cujo processo chama `mestre list` direto, por `cmd /c`, por `powershell -c` e por um órfão de `cmd /c start "" /b` cujo `cmd` já saiu, e um processo da mesma conta fora do terminal, **quando** o motor identifica, **então** os quatro primeiros são aceitos com o terminal certo pelo Job Object e o de fora recebe `not_identified`.
+- **CA-LOCAL-14** · *rápida* — **Dado** 32 processos de um terminal com 16 conexões paradas cada um, e um processo de outro terminal, **quando** este manda um `hook`, **então** é atendido; as conexões do primeiro terminal acima de 64 recebem `limit`, as paradas fecham em 3 s, e uma CLI cuja conexão o motor cheio fecha na hora tenta de novo com espera crescente e jitter, não em laço.
 
 ## Depende de
 

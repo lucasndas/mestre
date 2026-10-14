@@ -12,6 +12,57 @@ import (
 	"github.com/lucasndas/mestre/internal/providers"
 )
 
+// Part of CA-HOOK-08:
+// env.json follows the class of the character when the class changes, not
+// at the next decision: RefreshEnv (told by whoever changes the class or the
+// rules) and the periodic RefreshEnvs both rewrite `blocking_hooks`, so the
+// degraded mode does not keep allowing what the new class's blocking hooks
+// exist to deny.
+func TestEnvJSONFollowsTheClassWhenItChanges(t *testing.T) {
+	t.Parallel()
+	const none = "pre_tool:\n  - {name: checar, run: \"npm test\", timeout: 5}\n"
+	const blocking = "pre_tool:\n  - {name: checar, run: \"npm test\", timeout: 5, blocking: true}\n"
+	agents := t.TempDir()
+	e, mc := engineWith(t, classWith(t, none))
+	e.Agents = agents
+	blockingFlag := func() bool {
+		b, err := os.ReadFile(filepath.Join(agents, agent, hook.EnvName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ce hook.CharacterEnv
+		if err := json.Unmarshal(b, &ce); err != nil {
+			t.Fatal(err)
+		}
+		return ce.BlockingHooks
+	}
+	synctest.Test(t, func(t *testing.T) {
+		up := call{provider: providers.ClaudeCode, event: "PreToolUse", stdin: claudeShell("npm test"), dial: engine(t, e),
+			files: hook.OSFiles{}, machine: &hook.Machine{Instance: "principal", Agents: agents, Queue: t.TempDir(), Layout: machine().Layout}, runner: &runner{}}
+		if v, why := decision(t, providers.ClaudeCode, up.run(t.Context())); v != "allow" {
+			t.Fatalf("with the engine up: %s (%q)", v, why)
+		}
+		if blockingFlag() {
+			t.Fatal("env.json says blocking hooks for a class with none")
+		}
+		mc.class = classWith(t, blocking)
+		if blockingFlag() {
+			t.Fatal("env.json changed before anything refreshed it")
+		}
+		if err := e.RefreshEnv(t.Context(), agent); err != nil {
+			t.Fatal(err)
+		}
+		if !blockingFlag() {
+			t.Fatal("env.json still says the class has no blocking hooks after the class changed")
+		}
+		mc.class = classWith(t, none)
+		e.RefreshEnvs(t.Context())
+		if blockingFlag() {
+			t.Fatal("RefreshEnvs did not take the blocking hooks off")
+		}
+	})
+}
+
 // The blocking pre_tool hooks of a class exist to deny, and they do not run
 // without the engine: the engine says so in env.json, and with the engine
 // down the dispatcher then allows only what reading allows, even what the

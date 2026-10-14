@@ -331,6 +331,36 @@ func (e *Engine) hasBlocking(ctx context.Context, agentID string) bool {
 	return err != nil || has
 }
 
+// RefreshEnv brings env.json of one character up to date without waiting for
+// its next decision: call it when the class or the effective rules of the
+// character change, so `blocking_hooks` (and with it the degraded mode of
+// the dispatcher) follows the class the character has now. A character the
+// registry does not know keeps the file it has.
+func (e *Engine) RefreshEnv(ctx context.Context, agentID string) error {
+	env, err := e.registryEnv(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	return e.saveEnv(ctx, agentID, env)
+}
+
+// RefreshEnvs is RefreshEnv for every character the engine wrote an env.json
+// of. DrainLoop does it every DrainEvery, so a change of class that nothing
+// told the engine about is at most that late in env.json.
+func (e *Engine) RefreshEnvs(ctx context.Context) {
+	e.mu.Lock()
+	agents := make([]string, 0, len(e.envs))
+	for id := range e.envs {
+		agents = append(agents, id)
+	}
+	e.mu.Unlock()
+	for _, id := range agents {
+		if err := e.RefreshEnv(ctx, id); err != nil {
+			e.log().Warn("hook: env.json of the character not refreshed", "agent", id, "err", err)
+		}
+	}
+}
+
 // saveEnv writes env.json when the environment changed since the last
 // time: a whole file (a temporary renamed over it), 0640 like policy.json.
 func (e *Engine) saveEnv(ctx context.Context, agentID string, env classes.Env) error {
@@ -416,6 +446,7 @@ func (e *Engine) DrainLoop(ctx context.Context, dir string, handle func(QueueRec
 		} else if n > 0 {
 			e.log().Info("hook: events read from the hook queue", "count", n)
 		}
+		e.RefreshEnvs(ctx)
 		select {
 		case <-ctx.Done():
 			return

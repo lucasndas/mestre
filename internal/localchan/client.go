@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math/rand/v2"
 	"net"
 	"time"
 
@@ -19,8 +20,10 @@ const (
 	// before it takes the connection for dead: three signs of life.
 	DefaultLiveness = 3 * DefaultHeartbeat
 	// InitialBackoff and MaxBackoff are the waits between two attempts to
-	// connect to an engine that is restarting; the wait doubles up to the
-	// maximum.
+	// connect to an engine that is restarting, or to reconnect after a
+	// connection that dropped; the wait doubles up to the maximum, and each
+	// one is spread at random over its upper half (jitter), so callers that
+	// were refused together do not come back together.
 	InitialBackoff = 100 * time.Millisecond
 	MaxBackoff     = 2 * time.Second
 )
@@ -110,6 +113,7 @@ func (c *Client) Call(ctx context.Context, req Request, opt CallOptions) (Respon
 	// refused connection has its own window. A reconnection after a drop
 	// counts for the limit.
 	var tctx context.Context
+	backoff := InitialBackoff
 	for {
 		cctx := ctx
 		if tctx != nil {
@@ -124,13 +128,23 @@ func (c *Client) Call(ctx context.Context, req Request, opt CallOptions) (Respon
 			tctx, cancel = clock.WithTimeout(ctx, c.clk, limit+TimeoutGrace)
 			defer cancel()
 		}
-		resp, dropped := c.exchange(tctx, conn, req, line, opt)
+		resp, dropped, heard := c.exchange(tctx, conn, req, line, opt)
 		if !dropped {
 			return resp, nil
 		}
 		if tctx.Err() != nil {
 			return c.connectFailure(ctx, tctx, req, tctx.Err())
 		}
+		// A connection the engine closes at once (it is full) must not be
+		// retried in a tight loop: wait, longer each time in a row. One
+		// that the engine served for a while and then lost starts over.
+		if heard {
+			backoff = InitialBackoff
+		}
+		if err := clock.Sleep(tctx, c.clk, jitter(backoff)); err != nil {
+			return c.connectFailure(ctx, tctx, req, err)
+		}
+		backoff = min(backoff*2, MaxBackoff)
 	}
 }
 
@@ -172,17 +186,26 @@ func (c *Client) connect(ctx context.Context) (net.Conn, error) {
 		if window < 0 || errors.Is(err, fs.ErrPermission) || wctx.Err() != nil {
 			return nil, err
 		}
-		if clock.Sleep(wctx, c.clk, wait) != nil {
+		if clock.Sleep(wctx, c.clk, jitter(wait)) != nil {
 			return nil, err
 		}
 		wait = min(wait*2, MaxBackoff)
 	}
 }
 
+// jitter spreads a wait over its upper half: d/2 to d.
+func jitter(d time.Duration) time.Duration {
+	half := d / 2
+	if half <= 0 {
+		return d
+	}
+	return half + rand.N(half+1)
+}
+
 // exchange sends the request on conn and reads until the final response.
 // dropped is true when the connection ended first (or was taken for dead):
 // the caller connects again and resends.
-func (c *Client) exchange(ctx context.Context, conn net.Conn, req Request, line []byte, opt CallOptions) (resp Response, dropped bool) {
+func (c *Client) exchange(ctx context.Context, conn net.Conn, req Request, line []byte, opt CallOptions) (resp Response, dropped, heard bool) {
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
@@ -190,21 +213,22 @@ func (c *Client) exchange(ctx context.Context, conn net.Conn, req Request, line 
 	defer alive.Stop()
 
 	if _, err := conn.Write(line); err != nil {
-		return Response{}, true
+		return Response{}, true, false
 	}
 	br := bufio.NewReaderSize(conn, 64<<10)
 	for {
 		b, err := readLine(br)
 		if err != nil {
 			if errors.Is(err, ErrTooLarge) {
-				return c.fail(req, CodeInternal, "the engine sent a line over the limit", ""), false
+				return c.fail(req, CodeInternal, "the engine sent a line over the limit", ""), false, heard
 			}
-			return Response{}, true
+			return Response{}, true, heard
 		}
+		heard = true
 		alive.Reset(c.cfg.Liveness)
 		var r Response
 		if err := json.Unmarshal(b, &r); err != nil {
-			return c.fail(req, CodeInternal, "the engine sent a line that is not JSON: "+err.Error(), ""), false
+			return c.fail(req, CodeInternal, "the engine sent a line that is not JSON: "+err.Error(), ""), false, heard
 		}
 		if r.ID != "" && r.ID != req.ID {
 			continue // not ours
@@ -215,6 +239,6 @@ func (c *Client) exchange(ctx context.Context, conn net.Conn, req Request, line 
 			}
 			continue
 		}
-		return r, false
+		return r, false, heard
 	}
 }

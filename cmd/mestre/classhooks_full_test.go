@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,19 @@ const (
 
 func TestMain(m *testing.M) {
 	switch os.Getenv(envHookHelper) {
+	case "spawn-exit":
+		// Like "spawn", but the hook itself ends with exit 0, leaving the
+		// child that holds its stderr.
+		self, _ := os.Executable()
+		c := exec.Command(self)
+		c.Env = append(os.Environ(), envHookHelper+"=hold")
+		// mestre:allow child-stdio: this is the hook itself, and its child must hold the stderr the runner reads
+		c.Stderr = os.Stderr
+		if err := c.Start(); err != nil {
+			os.Exit(3)
+		}
+		_ = os.WriteFile(os.Getenv(envHookPIDFile), []byte(strconv.Itoa(c.Process.Pid)), 0o600)
+		os.Exit(0)
 	case "spawn":
 		self, _ := os.Executable()
 		c := exec.Command(self)
@@ -93,5 +107,35 @@ func TestTheRealRunnerEndsTheHookAndItsChildrenAtTheTimeLimit(t *testing.T) {
 	}
 	if alive := waitGone(t, pid, 10*time.Second); alive {
 		t.Fatalf("the child %d of the hook is still alive after the time limit", pid)
+	}
+}
+
+// A hook that exits with 0 and leaves a child holding its stderr is not a
+// clean exit 0: the runner reports it as a failure (ErrWaitDelay), so a
+// blocking hook denies, and the child goes with the hook's tree.
+func TestAHookThatExitsZeroLeavingAChildHoldingItsOutputIsAFailure(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "child.pid")
+	t.Setenv(envHookHelper, "spawn-exit")
+	t.Setenv(envHookPIDFile, pidFile)
+	exit, _, err := classHookRunner{}.Run(t.Context(), hook.ClassHook{Name: "deixa", Run: `"` + self + `"`, Dir: dir, TimeoutMS: 20_000, Blocking: true},
+		providers.EventPreTool, []byte(`{}`))
+	if err == nil || !errors.Is(err, exec.ErrWaitDelay) {
+		t.Fatalf("exit %d, err %v; want a failure (the hook left a process holding its output)", exit, err)
+	}
+	b, rerr := os.ReadFile(pidFile)
+	if rerr != nil {
+		t.Fatalf("the hook did not start its child: %v", rerr)
+	}
+	pid, perr := strconv.Atoi(string(b))
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	if alive := waitGone(t, pid, 10*time.Second); alive {
+		t.Fatalf("the child %d of the hook is still alive after the runner returned", pid)
 	}
 }

@@ -113,6 +113,12 @@ func (r *Rig) Character(terminalID, characterID string) {
 // outside any, with an empty terminalID), with a pidfd and a start
 // identity, and returns its pidfd and PID.
 func (r *Rig) Process(host, terminalID string) (pid int, pidfd *FakePidfd) {
+	return r.ProcessOf(host, terminalID, "")
+}
+
+// ProcessOf is Process for a process of the user uid ("" is not told), as
+// SO_PEERCRED tells it.
+func (r *Rig) ProcessOf(host, terminalID, uid string) (pid int, pidfd *FakePidfd) {
 	r.mu.Lock()
 	r.nextPID++
 	pid = r.nextPID
@@ -125,6 +131,6 @@ func (r *Rig) Process(host, terminalID string) (pid int, pidfd *FakePidfd) {
 	r.Proc.SetCgroup(pid, cg)
 	r.Proc.SetIdentity(pid, start)
 	pidfd = NewPidfd(pid)
-	r.Peers.Set(host, localchan.Peer{PID: pid, Start: start, Pidfd: pidfd})
+	r.Peers.Set(host, localchan.Peer{PID: pid, Start: start, Pidfd: pidfd, Group: localchan.TerminalGroup(cg), UID: uid})
 	return pid, pidfd
 }

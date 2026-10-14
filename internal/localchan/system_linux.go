@@ -41,6 +41,14 @@ func (s systemPeers) Peer(c net.Conn) (Peer, error) {
 	if start, err := s.sys.Identify(pid); err == nil {
 		p.Start = start
 	}
+	// What the caps of the server count by, read now because the request
+	// has not come: the terminal (cgroup) and the user of the peer.
+	if cg, err := systemProc(s).Cgroup(pid); err == nil {
+		p.Group = TerminalGroup(cg)
+	}
+	if uid, err := peerUID(c); err == nil {
+		p.UID = strconv.FormatUint(uint64(uid), 10)
+	}
 	fd, err := peerPidfd(c)
 	switch {
 	case err == nil:
@@ -49,6 +57,29 @@ func (s systemPeers) Peer(c net.Conn) (Peer, error) {
 		p.PidfdUnsupported = true
 	}
 	return p, nil
+}
+
+// peerUID is the user of the process that connected (SO_PEERCRED).
+func peerUID(c net.Conn) (uint32, error) {
+	uc, ok := c.(*net.UnixConn)
+	if !ok {
+		return 0, fmt.Errorf("%T is not a Unix socket", c)
+	}
+	rc, err := uc.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	var cred *unix.Ucred
+	var sockErr error
+	if err := rc.Control(func(s uintptr) {
+		cred, sockErr = unix.GetsockoptUcred(int(s), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}); err != nil {
+		return 0, err
+	}
+	if sockErr != nil {
+		return 0, fmt.Errorf("SO_PEERCRED: %w", sockErr)
+	}
+	return cred.Uid, nil
 }
 
 // peerPidfd asks for the pidfd of the process that connected.

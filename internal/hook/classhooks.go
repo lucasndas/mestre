@@ -3,9 +3,9 @@ package hook
 import (
 	"context"
 	"fmt"
-	"path"
 	"runtime"
 	"strings"
+	"unicode"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/providers"
@@ -34,6 +34,12 @@ type ClassHookSource struct {
 	// ProviderSeconds is the time limit the hook files give `mestre hook` for
 	// a provider; nil is classes.DefaultProviderHookSeconds for all.
 	ProviderSeconds func(providers.ID) int
+	// EventSeconds is the same limit for one event, where the provider gives
+	// some events less than the rest (Codex gives SessionEnd and Interrupt
+	// 3 s, not 30); a result of zero or less falls back to ProviderSeconds.
+	// The adapters do not expose their per-event limits yet: the wiring of
+	// M4 gives them here, from the same table that writes the hook files.
+	EventSeconds func(providers.ID, providers.EventKind) int
 }
 
 var _ ClassHooks = (*ClassHookSource)(nil)
@@ -148,6 +154,11 @@ func (s *ClassHookSource) Sync(ctx context.Context, ev providers.Event) ([]Class
 	if s.ProviderSeconds != nil {
 		limit = s.ProviderSeconds(ev.Provider)
 	}
+	if s.EventSeconds != nil {
+		if n := s.EventSeconds(ev.Provider, ev.Event); n > 0 {
+			limit = n
+		}
+	}
 	// One budget for all the hooks of the call: the provider gives up on
 	// `mestre hook` at its limit (and Codex then goes on as if allowed).
 	budget := classes.SyncTimeout(classes.MaxHookTimeout, limit).Milliseconds()
@@ -183,31 +194,83 @@ func (s *ClassHookSource) Async(ctx context.Context, ev providers.Event) (run []
 	return run, refused, nil
 }
 
-// packageScript finds a script of the package in a command line: a word
-// under hooks/ ("./hooks/checar.sh", "sh hooks\checar.sh"), the first one as
-// `class check` reads it (classes.scriptOf) or any other. Run from the
-// worktree it would be the copy the agent can write, not the approved one,
-// so until the engine runs the approved copy
-// (docs/classes/classes.md#hooks-extras-da-classe) a hook with a script does
-// not run: a blocking one denies.
-func packageScript(line string) (string, bool) {
-	for _, f := range strings.Fields(line) {
-		word := strings.ReplaceAll(strings.Trim(f, `"'`), `\`, "/")
-		for strings.HasPrefix(word, "./") {
-			word = strings.TrimPrefix(word, "./")
-		}
-		if strings.HasPrefix(strings.ToLower(word), classes.HooksDir+"/") {
-			return path.Clean(word), true
+// unquote removes what a shell drops from a word before it looks for a file:
+// quotes, backslashes, backticks (the PowerShell escape) and the caret of
+// cmd. `h""ooks`, `h\ooks` and `h^ooks` all name hooks.
+var unquote = strings.NewReplacer(`"`, "", `'`, "", `\`, "", "`", "", "^", "")
+
+// dynamicChars are what a shell expands into a name before it opens the
+// file: variables and substitutions (`$`, `%`, `!`), the home (`~`), globs
+// and brace lists (`*?[]{}`).
+const dynamicChars = "$%!~*?[]{}`"
+
+// dirChangers are the words that change the folder the rest of the line
+// runs in: `cd hooks && ./x` has no path with hooks/ in one word.
+var dirChangers = map[string]bool{"cd": true, "chdir": true, "pushd": true, "popd": true, "sl": true, "set-location": true}
+
+// dirChangeFlags are the options that do the same (`make -C hooks`).
+var dirChangeFlags = map[string]bool{"-C": true, "--directory": true, "--chdir": true, "--cwd": true}
+
+// packageScript says why a command line may run a script of the package
+// (hooks/…), or "" when it cannot. Run from the worktree it would be the
+// copy the agent can write, not the approved one, so until the engine runs
+// the approved copy (docs/classes/classes.md#hooks-extras-da-classe) a hook
+// that can reach one does not run: a blocking one denies.
+//
+// The line is not parsed as a shell would (that is the permission
+// pipeline's job, which does not know the folder is the package's): the rule
+// is conservative, refusing every line that
+//   - mentions hooks in any form once quotes, backslashes, backticks and
+//     carets are removed, in any case: `./hooks/x`, `sh hooks\x`,
+//     `cd hooks && ./x`, `true;hooks/x`, `(hooks/x)`, `$PWD/hooks/x`,
+//     `.//hooks/x`, `/the/worktree/hooks/x`, `h""ooks/x`; or
+//   - holds a word that is built at run time (`$x`, `%x%`, `~`, a glob, a
+//     brace list or a substitution) and is a path, or sits in a line that
+//     changes folder: `$d/x`, `?ooks/x`, `{h,}ooks/x`, `$(echo ho)oks/x`,
+//     `cd h$e*`.
+//
+// The cost is a hook of a class that names a path like that, which the
+// `class check` of M4 will make rare; the benefit is that no spelling of the
+// folder slips through.
+func packageScript(line string) string {
+	if strings.Contains(strings.ToLower(unquote.Replace(line)), classes.HooksDir) {
+		return "a linha cita " + classes.HooksDir + "/ (em qualquer forma)"
+	}
+	words := strings.Fields(line)
+	changesDir := false
+	for _, w := range words {
+		if dirChangeFlags[w] {
+			changesDir = true
 		}
 	}
-	return "", false
+	for _, t := range strings.FieldsFunc(strings.ToLower(line), func(r rune) bool { return !unicode.IsLetter(r) && r != '-' }) {
+		if dirChangers[t] {
+			changesDir = true
+		}
+	}
+	// A substitution can end in the middle of a word ($(echo ho)oks/x), so
+	// the words around it count too.
+	substitutes := strings.Contains(line, "$(") || strings.Contains(line, "`") || strings.Contains(line, "<(") || strings.Contains(line, ">(")
+	for _, w := range words {
+		if strings.Contains(w, "://") {
+			continue
+		}
+		isPath := strings.ContainsAny(w, `/\`)
+		if !strings.ContainsAny(w, dynamicChars) && (!substitutes || !isPath) {
+			continue
+		}
+		if changesDir || isPath {
+			return "a linha monta um caminho em tempo de execução (" + w + ")"
+		}
+	}
+	return ""
 }
 
 // refusal is why the pipeline does not let the character run the line: ""
 // when it does.
 func (sel selected) refusal(ctx context.Context, ev providers.Event, line string) string {
-	if script, ok := packageScript(line); ok {
-		return fmt.Sprintf("o script %s do pacote só roda da cópia aprovada da classe, que o motor ainda não materializa (M4): o do worktree o agente pode trocar", script)
+	if why := packageScript(line); why != "" {
+		return "um script do pacote só roda da cópia aprovada da classe, que o motor ainda não materializa (M4), e o do worktree o agente pode trocar: " + why
 	}
 	d := classes.Decide(ctx, sel.env, sel.rules, providers.Event{
 		Version: providers.EventVersion, Provider: ev.Provider, Event: providers.EventPreTool,

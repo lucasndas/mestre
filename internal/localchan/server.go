@@ -18,8 +18,10 @@ import (
 // Defaults of the server.
 const (
 	// DefaultReadTimeout is how long a connection may take to send its
-	// request line.
-	DefaultReadTimeout = 10 * time.Second
+	// request line: a CLI or a `mestre hook` sends it as soon as it
+	// connects, so an idle connection is held for a few seconds only, not
+	// long enough for one process to keep the slots of the engine.
+	DefaultReadTimeout = 3 * time.Second
 	// DefaultRetain is how long the response of a finished request is kept
 	// for a resend with the same id.
 	DefaultRetain = 10 * time.Minute
@@ -29,9 +31,20 @@ const (
 	// open at once: a CLI or a `mestre hook` holds one, so a process that
 	// opens more is flooding the engine.
 	DefaultMaxConnsPerPeer = 16
+	// DefaultMaxConnsPerGroup is how many connections the processes of one
+	// terminal (one cgroup) may hold at once, and DefaultMaxConnsPerUID how
+	// many those of one user: past them the extra ones are refused with
+	// `limit`, so one agent cannot fill the engine for the others.
+	DefaultMaxConnsPerGroup = 64
+	DefaultMaxConnsPerUID   = 256
 	// DefaultMaxConns bounds the connections open at once, of every
 	// process; past it a new one is closed at once.
 	DefaultMaxConns = 512
+	// DefaultReservedForHook is how many of the DefaultMaxConns only a
+	// `hook` call may use: a connection that finds the engine this full is
+	// kept only if its request is a hook (a tool call waits on it), and is
+	// refused with `limit` otherwise.
+	DefaultReservedForHook = 64
 )
 
 // Commands the engine resolves itself (docs/arquitetura/canal-local.md#encaminhamento-à-cidadela).
@@ -74,14 +87,21 @@ type Config struct {
 	// Heartbeat (15 s) is the interval of the sign of life sent while a
 	// request runs.
 	Heartbeat time.Duration
-	// ReadTimeout (10 s) bounds the wait for the request line.
+	// ReadTimeout (3 s) bounds the wait for the request line.
 	ReadTimeout time.Duration
 	// Retain (10 min) and MaxRetained (4096): see DefaultRetain.
 	Retain      time.Duration
 	MaxRetained int
-	// MaxConnsPerPeer (16) and MaxConns (512): see DefaultMaxConnsPerPeer.
-	MaxConnsPerPeer int
-	MaxConns        int
+	// MaxConnsPerPeer (16), MaxConnsPerGroup (64), MaxConnsPerUID (256),
+	// MaxConns (512) and ReservedForHook (64, or an eighth of MaxConns when
+	// that is less; negative: none): see DefaultMaxConnsPerPeer. The caps
+	// of the group and of the user count the connections whose Peer says
+	// the group or the user.
+	MaxConnsPerPeer  int
+	MaxConnsPerGroup int
+	MaxConnsPerUID   int
+	MaxConns         int
+	ReservedForHook  int
 
 	// Instance and EngineVersion are what `debug` reports.
 	Instance      string
@@ -105,7 +125,9 @@ type Server struct {
 	mu     sync.Mutex
 	ctx    context.Context
 	conns  map[net.Conn]struct{}
-	peers  map[int]int // open connections by PID of the peer
+	peers  map[int]int    // open connections by PID of the peer
+	groups map[string]int // ... by terminal group of the peer
+	uids   map[string]int // ... by user of the peer
 	closed bool
 	wg     sync.WaitGroup
 }
@@ -130,9 +152,22 @@ func NewServer(cfg Config) *Server {
 	if cfg.MaxConnsPerPeer == 0 {
 		cfg.MaxConnsPerPeer = DefaultMaxConnsPerPeer
 	}
+	if cfg.MaxConnsPerGroup == 0 {
+		cfg.MaxConnsPerGroup = DefaultMaxConnsPerGroup
+	}
+	if cfg.MaxConnsPerUID == 0 {
+		cfg.MaxConnsPerUID = DefaultMaxConnsPerUID
+	}
 	if cfg.MaxConns == 0 {
 		cfg.MaxConns = DefaultMaxConns
 	}
+	switch {
+	case cfg.ReservedForHook == 0:
+		cfg.ReservedForHook = min(DefaultReservedForHook, cfg.MaxConns/8)
+	case cfg.ReservedForHook < 0:
+		cfg.ReservedForHook = 0
+	}
+	cfg.ReservedForHook = min(cfg.ReservedForHook, cfg.MaxConns-1)
 	if cfg.Forwarder == nil {
 		cfg.Forwarder = UnavailableForwarder{}
 	}
@@ -143,7 +178,7 @@ func NewServer(cfg Config) *Server {
 	return &Server{
 		cfg: cfg, clk: cfg.Clock, log: log,
 		table: newFlights(cfg.Clock, cfg.Retain, cfg.MaxRetained),
-		conns: map[net.Conn]struct{}{}, peers: map[int]int{},
+		conns: map[net.Conn]struct{}{}, peers: map[int]int{}, groups: map[string]int{}, uids: map[string]int{},
 	}
 }
 
@@ -173,7 +208,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		// to the connection: the identifier compares it with the start of
 		// the caller.
 		acceptedAt := s.clk.Now()
-		tracked, full := s.track(c)
+		tracked, full, reserve := s.track(c)
 		if full {
 			_ = c.Close()
 			s.log.Warn("local channel: a connection over the limit was closed", "limit", s.cfg.MaxConns)
@@ -187,42 +222,76 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		go func() {
 			defer s.wg.Done()
 			defer s.untrack(c)
-			s.serveConn(ctx, c, acceptedAt)
+			s.serveConn(ctx, c, acceptedAt, reserve)
 		}()
 	}
 }
 
 // track registers the connection; full is a server already at MaxConns.
-func (s *Server) track(c net.Conn) (tracked, full bool) {
+// reserve is a connection that found the server within ReservedForHook of
+// MaxConns: it is kept only if its request turns out to be a hook call.
+func (s *Server) track(c net.Conn) (tracked, full, reserve bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
 	case s.closed:
-		return false, false
+		return false, false, false
 	case len(s.conns) >= s.cfg.MaxConns:
-		return false, true
+		return false, true, false
 	}
 	s.conns[c] = struct{}{}
-	return true, false
+	return true, false, len(s.conns) > s.cfg.MaxConns-s.cfg.ReservedForHook
 }
 
-// enterPeer counts one more connection of the process; false is one over
-// MaxConnsPerPeer, not counted.
-func (s *Server) enterPeer(pid int) bool {
+// held is what a connection counts against: the process, the terminal
+// group and the user of the peer (the last two empty when unknown).
+type held struct {
+	pid   int
+	group string
+	uid   string
+}
+
+func heldBy(p Peer) held { return held{pid: p.PID, group: p.Group, uid: p.UID} }
+
+// enterPeer counts one more connection of the peer; the scope that is over
+// its cap ("process", "terminal" or "user") is returned, and nothing is
+// counted.
+func (s *Server) enterPeer(h held) (over string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.peers[pid] >= s.cfg.MaxConnsPerPeer {
-		return false
+	switch {
+	case s.peers[h.pid] >= s.cfg.MaxConnsPerPeer:
+		return "process"
+	case h.group != "" && s.groups[h.group] >= s.cfg.MaxConnsPerGroup:
+		return "terminal"
+	case h.uid != "" && s.uids[h.uid] >= s.cfg.MaxConnsPerUID:
+		return "user"
 	}
-	s.peers[pid]++
-	return true
+	s.peers[h.pid]++
+	if h.group != "" {
+		s.groups[h.group]++
+	}
+	if h.uid != "" {
+		s.uids[h.uid]++
+	}
+	return ""
 }
 
-func (s *Server) leavePeer(pid int) {
+func (s *Server) leavePeer(h held) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.peers[pid]--; s.peers[pid] <= 0 {
-		delete(s.peers, pid)
+	if s.peers[h.pid]--; s.peers[h.pid] <= 0 {
+		delete(s.peers, h.pid)
+	}
+	if h.group != "" {
+		if s.groups[h.group]--; s.groups[h.group] <= 0 {
+			delete(s.groups, h.group)
+		}
+	}
+	if h.uid != "" {
+		if s.uids[h.uid]--; s.uids[h.uid] <= 0 {
+			delete(s.uids, h.uid)
+		}
 	}
 }
 
@@ -247,22 +316,24 @@ func (s *Server) closeConns() {
 }
 
 // serveConn serves one connection: one request, and its response.
-func (s *Server) serveConn(ctx context.Context, c net.Conn, acceptedAt time.Time) {
+func (s *Server) serveConn(ctx context.Context, c net.Conn, acceptedAt time.Time, reserve bool) {
 	// The peer is read before anything else: the caller can die, and its
 	// PID be reused, at any moment after the accept.
 	peer, peerErr := s.cfg.Identifier.Accept(c, acceptedAt)
 	defer func() { peer.Close() }() // a peer that failed to be read may still hold a pidfd
 	// One process holds one connection per call: one that holds more than
-	// MaxConnsPerPeer is flooding the engine, and the extra ones are
-	// refused before anything is read (a peer that could not be read counts
-	// as PID 0).
-	if !s.enterPeer(peer.PID) {
-		s.log.Warn("local channel: too many connections from one process", "pid", peer.PID, "limit", s.cfg.MaxConnsPerPeer)
-		s.refuse(c, Version, "", Fail(CodeLimit, fmt.Sprintf("this process holds %d connections to the engine already", s.cfg.MaxConnsPerPeer),
-			"one call at a time per process"))
+	// MaxConnsPerPeer is flooding the engine, and so is a terminal (every
+	// process of a cgroup) or a user that holds more than its cap; the
+	// extra connections are refused before anything is read (a peer that
+	// could not be read counts as PID 0).
+	h := heldBy(peer)
+	if over := s.enterPeer(h); over != "" {
+		s.log.Warn("local channel: too many connections from one "+over, "pid", peer.PID, "group", peer.Group, "uid", peer.UID)
+		s.refuse(c, Version, "", Fail(CodeLimit, "this "+over+" holds too many connections to the engine already",
+			"one call at a time"))
 		return
 	}
-	defer s.leavePeer(peer.PID)
+	defer s.leavePeer(h)
 
 	br := bufio.NewReaderSize(c, 64<<10)
 	timer := s.clk.AfterFunc(s.cfg.ReadTimeout, func() { _ = c.Close() })
@@ -279,6 +350,12 @@ func (s *Server) serveConn(ctx context.Context, c net.Conn, acceptedAt time.Time
 	req, resp, ok := s.parse(line)
 	if !ok {
 		s.refuse(c, resp.V, req.ID, resp)
+		return
+	}
+	// The engine is nearly full: what is left is for the hook calls, which
+	// a tool call of an agent waits on.
+	if reserve && req.Cmd != CmdHook {
+		s.refuse(c, req.V, req.ID, Fail(CodeLimit, "the engine is busy with other calls", "try again in a moment"))
 		return
 	}
 
