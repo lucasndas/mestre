@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -157,12 +158,14 @@ func touches(t *providers.Tool, file string) bool {
 		return false
 	}
 	for _, p := range t.Paths {
-		if p == file {
+		// The paths of the events are normalized: without case on Windows.
+		if p == file || runtime.GOOS == "windows" && strings.EqualFold(p, file) {
 			return true
 		}
 	}
 	rel := filepath.ToSlash(filepath.Join(filepath.Base(filepath.Dir(file)), filepath.Base(file)))
-	return strings.Contains(t.Command, rel) || strings.Contains(string(t.RawInput), rel)
+	text := filepath.ToSlash(strings.ReplaceAll(t.Command+" "+string(t.RawInput), `\\`, `/`))
+	return strings.Contains(text, rel)
 }
 
 func isSubagent(c Call) bool {
