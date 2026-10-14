@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -63,6 +65,17 @@ type Status struct {
 	Discarded int `json:"discarded"`
 }
 
+// QueuedResult is the outcome of a call of the CLI that was accepted as
+// pending (`"queued": true`) and ran when the Citadel acted: the success or
+// the error, with the op_id the caller was given
+// (docs/cli/convencoes.md#saída---json).
+type QueuedResult struct {
+	OpID     string
+	AgentID  string
+	Cmd      string
+	Response localchan.Response
+}
+
 // ExternalFunc is one of the functions the Citadel runs outside the Guild
 // (the bot of the Telegram, the GitHub: milestone 5). It runs while the
 // fence lets the Citadel act and its context ends when it stops; every
@@ -93,6 +106,16 @@ type Deps struct {
 	// Identifier identifies the callers of the local channel; nil identifies
 	// nobody (no terminal runs before milestone 4).
 	Identifier localchan.Identifier
+	// Commands is the definition of the commands of the CLI the engine
+	// checks every call against (nil: cli.Default). Profiles gives the level
+	// and the class of a character (nil: an ordinary character, with the
+	// cli.allow of the effective rules kept on this machine).
+	Commands *cli.Registry
+	Profiles cli.Profiles
+	// OnQueuedResult is told, on the Citadel, the result of a call that
+	// waited in the outbox of a Tower; it goes to the inbox of whoever asked
+	// (milestone 4 delivers it; until then it is only logged).
+	OnQueuedResult func(QueuedResult)
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources
@@ -545,8 +568,20 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 	if id == nil {
 		id = nobody{}
 	}
+	commands := e.deps.Commands
+	if commands == nil {
+		commands = cli.Default()
+	}
+	profiles := e.deps.Profiles
+	if profiles == nil {
+		profiles = rulesProfiles{src: &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}}
+	}
+	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker})
 	srv := localchan.NewServer(localchan.Config{
-		Clock: e.clk, Identifier: id, Forwarder: forwarder{e}, Instance: e.cfg.Instance, EngineVersion: e.deps.Version, Logger: e.log,
+		Clock: e.clk, Identifier: id, Forwarder: gate, Instance: e.cfg.Instance, EngineVersion: e.deps.Version, Logger: e.log,
+		Local:      map[string]localchan.Handler{localchan.CmdHelp: gate.Help()},
+		DebugExtra: func() map[string]any { return map[string]any{"citadel": e.citadelDebug()} },
+		OnAudit:    e.auditCall,
 	})
 	ln, err := localchan.Listen(e.paths.CLISocket, localchan.NoAccess{})
 	if err != nil {

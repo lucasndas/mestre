@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/protocol"
 )
@@ -27,8 +28,25 @@ var (
 		"repeat in a few minutes")
 )
 
+var _ cli.QueueingForwarder = forwarder{}
+
 // Forward implements localchan.Forwarder.
 func (f forwarder) Forward(ctx context.Context, c *localchan.Call) localchan.Response {
+	return f.forward(ctx, c, false)
+}
+
+// ForwardOrQueue implements cli.QueueingForwarder, for the commands that need
+// no answer now (`done`): with the Citadel away, suspended or handing over,
+// the call goes to the outbox of this Tower and the answer is Queued, with
+// the id of the request as the op_id. The Citadel applies it once when it
+// acts (the id is the idempotency key of the message) and hands the result
+// to OnQueuedResult. The call of a Citadel that is itself suspended is not
+// queued: it has no outbox for its own calls, and answers citadel_unavailable.
+func (f forwarder) ForwardOrQueue(ctx context.Context, c *localchan.Call) localchan.Response {
+	return f.forward(ctx, c, true)
+}
+
+func (f forwarder) forward(ctx context.Context, c *localchan.Call, queue bool) localchan.Response {
 	e := f.e
 	e.mu.Lock()
 	failover, cit, tow := e.failover, e.cit, e.tow
@@ -46,15 +64,76 @@ func (f forwarder) Forward(ctx context.Context, c *localchan.Call) localchan.Res
 		defer cit.gate.leave()
 		return e.local.Forward(ctx, c)
 	case tow != nil:
-		return e.callCitadel(ctx, tow.client.Link(), c)
+		link := tow.client.Link()
+		if !queue {
+			resp, _ := e.callCitadel(ctx, link, c, "")
+			return resp
+		}
+		// The id of the request is the id of the message, so a call that
+		// went and lost its answer, and the same call waiting in the outbox,
+		// are one message for the Citadel, which runs it once.
+		id := c.Request.ID
+		if _, err := protocol.ParseULID(id); err != nil {
+			id = ""
+		}
+		resp, answered := e.callCitadel(ctx, link, c, id)
+		if resp.OK || resp.Error == nil || !awayCode(resp.Error.Code) {
+			return resp
+		}
+		if answered {
+			// The Citadel refused it, so it did not run it, but it kept the id
+			// of the message: the one that waits needs another.
+			id = ""
+		}
+		return e.queueCall(ctx, link, c, id, resp)
 	}
 	return errUnavailable
+}
+
+// awayCode says whether a refusal means the Citadel did not run the call and
+// will take it later.
+func awayCode(code string) bool {
+	return code == localchan.CodeCitadelUnavailable || code == localchan.CodeCitadelInFailover
+}
+
+// queueCall puts the call in the outbox of the Tower and answers Queued. If
+// the outbox cannot take it, the answer stays the refusal of the Citadel.
+func (e *Engine) queueCall(ctx context.Context, link *protocol.Link, c *localchan.Call, id string, refusal localchan.Response) localchan.Response {
+	obj, err := e.cliCallObject(c, true)
+	if err != nil {
+		return refusal
+	}
+	id, err = link.Send(ctx, protocol.Outgoing{Type: protocol.TypeCLICall, Payload: obj, ID: id})
+	if err != nil {
+		e.log.Warn("app: queue a call of the CLI", "cmd", c.Request.Cmd, "err", err)
+		return refusal
+	}
+	return cli.Queued(id)
+}
+
+// cliCallObject is the payload of a cli.call for the call c.
+func (e *Engine) cliCallObject(c *localchan.Call, queued bool) (protocol.CLICall, error) {
+	raw, err := json.Marshal(cliCall{
+		Request: c.Request, Queued: queued,
+		Caller: cliCaller{AgentID: c.Caller.AgentID, TerminalID: c.Caller.TerminalID, MachineID: e.id.MachineID},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var obj protocol.CLICall
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
 }
 
 // cliCall is the payload of cli.call: the request, plus the verified caller.
 type cliCall struct {
 	localchan.Request
 	Caller cliCaller `json:"caller"`
+	// Queued is set on a call that waited in the outbox of the Tower: the
+	// CLI was told "queued", so the result goes to the inbox of the caller.
+	Queued bool `json:"queued,omitempty"`
 }
 
 type cliCaller struct {
@@ -65,33 +144,33 @@ type cliCaller struct {
 
 // callCitadel sends the call to the Citadel and waits for its cli.result. It
 // goes only on the connection open now: a request that needs an answer now
-// must never run later, after the CLI was told the Citadel is away.
-func (e *Engine) callCitadel(ctx context.Context, link *protocol.Link, c *localchan.Call) localchan.Response {
+// must never run later, after the CLI was told the Citadel is away. id is the
+// id of the message (empty: a new one). answered says that the response is the
+// Citadel's cli.result, not a failure to reach it.
+func (e *Engine) callCitadel(ctx context.Context, link *protocol.Link, c *localchan.Call, id string) (resp localchan.Response, answered bool) {
 	sess := link.Session()
 	if sess == nil {
-		return errUnavailable
+		return errUnavailable, false
 	}
-	raw, err := json.Marshal(cliCall{Request: c.Request, Caller: cliCaller{AgentID: c.Caller.AgentID, TerminalID: c.Caller.TerminalID, MachineID: e.id.MachineID}})
+	obj, err := e.cliCallObject(c, false)
 	if err != nil {
-		return localchan.Fail(localchan.CodeInternal, err.Error(), "")
+		return localchan.Fail(localchan.CodeInternal, err.Error(), ""), false
 	}
-	var obj protocol.CLICall
-	if err := json.Unmarshal(raw, &obj); err != nil {
-		return localchan.Fail(localchan.CodeInternal, err.Error(), "")
+	if id == "" {
+		id = protocol.NewIDGen(e.clk).NewString()
 	}
-	id := protocol.NewIDGen(e.clk).NewString()
 	ch, release := e.results.wait(id)
 	defer release()
 	if _, err := link.Send(ctx, protocol.Outgoing{Type: protocol.TypeCLICall, Payload: obj, ID: id, Transient: true}); err != nil {
-		return errUnavailable
+		return errUnavailable, false
 	}
 	select {
 	case r := <-ch:
-		return r
+		return r, true
 	case <-sess.Done():
-		return errUnavailable
+		return errUnavailable, false
 	case <-ctx.Done():
-		return localchan.Fail(localchan.CodeTimeout, "the Citadel did not answer in time", "")
+		return localchan.Fail(localchan.CodeTimeout, "the Citadel did not answer in time", ""), false
 	}
 }
 
@@ -145,20 +224,38 @@ func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
 			}
 		}
 		if refusal, ok := run.cliRefusal(); !ok {
+			if call.Queued {
+				// retryable: the call waited in the outbox of its Tower for
+				// this moment, and stays there for the Citadel that acts
+				return nil, protocol.NewError(protocol.CodeUnavailable, "the Citadel does not act now: %s", refusal.Error.Code)
+			}
 			answer(refusal)
 			return nil, nil
 		}
 		// the gate of the message is left when the handler returns: the
 		// command holds one of its own until it ends
 		if !run.gate.enter() {
+			if call.Queued {
+				return nil, errHandingOver()
+			}
 			answer(errFailover)
 			return nil, nil
 		}
 		go func() {
 			defer run.gate.leave()
-			answer(e.local.Forward(bg, &localchan.Call{Request: call.Request, Caller: localchan.Caller{
+			resp := e.local.Forward(bg, &localchan.Call{Request: call.Request, Caller: localchan.Caller{
 				Identified: true, AgentID: call.Caller.AgentID, TerminalID: call.Caller.TerminalID,
-			}}))
+			}})
+			if call.Queued {
+				resp.V, resp.ID = call.V, call.ID
+				qr := QueuedResult{OpID: id, AgentID: call.Caller.AgentID, Cmd: call.Cmd, Response: resp}
+				if e.deps.OnQueuedResult != nil {
+					e.deps.OnQueuedResult(qr)
+				} else {
+					e.log.Info("app: a queued call of the CLI ran", "op_id", id, "cmd", call.Cmd, "agent_id", call.Caller.AgentID, "exit", resp.ExitCode())
+				}
+			}
+			answer(resp)
 		}()
 		return nil, nil
 	}

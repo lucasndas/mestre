@@ -57,6 +57,10 @@ type inproc struct {
 	stop   func()
 	joined *x509.Certificate // the engine certificate of the entry
 	log    syncBuffer
+	// setup runs on the engine before it starts (the commands of the CLI the
+	// Citadel serves); onQueued is Deps.OnQueuedResult.
+	setup    func(*Engine)
+	onQueued func(QueuedResult)
 }
 
 // syncBuffer is the log of an instance, shown when the test fails.
@@ -139,13 +143,16 @@ func (r *rig) start(n *inproc, clk clock.Clock) {
 	owner := &testOwner{e: &atomic.Pointer[Engine]{}}
 	e, err := New(n.cfg, n.paths, Deps{
 		Clock: clk, Network: r.net.Host(n.name), Lock: n.lock, Approver: owner, Promotions: owner,
-		Sheet: n.sheet.Sources(), RenewEvery: 20 * time.Millisecond,
+		Sheet: n.sheet.Sources(), RenewEvery: 20 * time.Millisecond, OnQueuedResult: n.onQueued,
 		Logger: slog.New(slog.NewTextHandler(&n.log, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})
 	if err != nil {
 		r.t.Fatal(err)
 	}
 	owner.e.Store(e)
+	if n.setup != nil {
+		n.setup(e)
+	}
 	ctx, cancel := context.WithCancel(r.t.Context())
 	done := make(chan error, 1)
 	go func() { done <- e.Run(ctx) }()

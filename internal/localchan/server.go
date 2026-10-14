@@ -76,6 +76,10 @@ type Config struct {
 	// Instance and EngineVersion are what `debug` reports.
 	Instance      string
 	EngineVersion string
+	// DebugExtra adds sections to the answer of `debug`: the engine says
+	// whether it reaches the Citadel under "citadel" (item 5 of `mestre
+	// debug`). Nil adds nothing.
+	DebugExtra func() map[string]any
 
 	OnAudit func(Audit)
 	Logger  *slog.Logger
@@ -383,7 +387,7 @@ func (s *Server) dispatch(ctx context.Context, call *Call) (resp Response) {
 // debug is the engine's part of `mestre debug`: its versions and whether it
 // accepts the identification of the caller (items 1, 3 and 4).
 func (s *Server) debug(call *Call) Response {
-	return OK(map[string]any{
+	data := map[string]any{
 		"engine": map[string]any{
 			"version":      s.cfg.EngineVersion,
 			"instance":     s.cfg.Instance,
@@ -395,7 +399,15 @@ func (s *Server) debug(call *Call) Response {
 			"identified": call.Caller.Identified,
 			"terminal":   call.Caller.TerminalID,
 		},
-	})
+	}
+	if s.cfg.DebugExtra != nil {
+		for k, v := range s.cfg.DebugExtra() {
+			if _, taken := data[k]; !taken {
+				data[k] = v
+			}
+		}
+	}
+	return OK(data)
 }
 
 func (s *Server) audit(a Audit) {
