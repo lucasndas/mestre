@@ -40,7 +40,7 @@ func (r Risk) valid() bool { return r.rank() >= 0 }
 
 // RiskTableVersion is the version of the default risk table embedded in the
 // binary; it goes with every classification to the request and the audit.
-const RiskTableVersion = 3
+const RiskTableVersion = 4
 
 // RequestType is a type of approval request
 // (docs/aprovacoes/politica.md#tipos-de-ação).

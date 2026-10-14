@@ -160,11 +160,23 @@ var protectedWrite = []string{
 	"**/.agents/hooks.json",
 	"**/.agents/agents", "**/.agents/agents/**",
 	"**/.claude/agents", "**/.claude/agents/**",
+	// MCP servers and provider configuration the project owns, and the
+	// slash commands the agent must not create or change.
+	"**/.mcp.json",
+	"**/.gemini", "**/.gemini/**",
+	"**/.claude/commands", "**/.claude/commands/**",
+	// The skills the Mestre generates (mestre-*): the shared one and the
+	// managed copy. Other skills, owned by the project, are not protected.
+	"**/.agents/skills/mestre-*", "**/.agents/skills/mestre-*/**",
+	"**/.claude/skills/mestre-*", "**/.claude/skills/mestre-*/**",
 }
 
 // holdsProtected are the folders whose recursive removal takes protected
 // files with it.
-var holdsProtected = map[string]bool{"": true, ".claude": true, ".agents": true}
+var holdsProtected = map[string]bool{
+	"": true, ".claude": true, ".agents": true,
+	".claude/skills": true, ".claude/commands": true, ".agents/skills": true,
+}
 
 // fixedPath is the reason a fixed rule denies the path, or "".
 func (e *evaluator) fixedPath(k string, u use) string {

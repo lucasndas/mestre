@@ -58,6 +58,10 @@ var signalPatterns = []riskRow{
 	{risk: RiskMedium, group: "interpretador com código", pattern: "deno repl*"},
 	{risk: RiskMedium, group: groupUnseenWrite, pattern: "git apply*"},
 	{risk: RiskMedium, group: groupUnseenWrite, pattern: "git am*"},
+	{risk: RiskMedium, group: groupUnseenWrite, pattern: "quilt push*"},
+	{risk: RiskMedium, group: groupUnseenWrite, pattern: "dpkg -x*"},
+	{risk: RiskMedium, group: groupUnseenWrite, pattern: "dpkg --extract*"},
+	{risk: RiskMedium, group: groupUnseenWrite, pattern: "rpm2cpio*"},
 }
 
 // groupUnseenWrite is the signal of the programs that write files the
@@ -70,7 +74,8 @@ const groupUnseenWrite = "escrita sem caminho visível"
 // not name when unseenWrite says so (an extraction, not a listing).
 var unseenWriters = map[string]bool{
 	"tar": true, "bsdtar": true, "gtar": true, "unzip": true, "7z": true, "7za": true, "7zr": true, "7zz": true,
-	"unrar": true, "rar": true, "cpio": true, "pax": true, "ar": true, "jar": true, "expand-archive": true, "patch": true,
+	"unrar": true, "rar": true, "unar": true, "cpio": true, "pax": true, "ar": true, "jar": true, "expand-archive": true,
+	"patch": true, "zstd": true, "unzstd": true,
 }
 
 // unseenWrite reports a command of unseenWriters that writes: tar -x, an
@@ -112,8 +117,10 @@ func unseenWrite(name string, args []string) bool {
 		return short("r")
 	case "ar", "jar":
 		return len(args) > 0 && strings.Contains(strings.TrimPrefix(args[0], "-"), "x")
+	case "zstd", "unzstd":
+		return !hasText(args, "-l", "--list", "-t", "--test")
 	}
-	return true // expand-archive, patch
+	return true // unar, expand-archive, patch
 }
 
 func hasText(args []string, flags ...string) bool {

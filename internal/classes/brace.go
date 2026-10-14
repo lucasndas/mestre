@@ -2,6 +2,7 @@ package classes
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -14,79 +15,141 @@ import (
 // maxBraceWords bounds the words one word expands to; more is denied.
 const maxBraceWords = 256
 
-// braceTooLarge is the reason of a line whose expansion passes the bound.
+// maxBraceMarks bounds the unquoted braces and commas of one word that has
+// a brace; maxBraceWork bounds the bytes the expansion of one word goes
+// through. Past either, the word is too large to analyse and the line is
+// denied: the scan is linear in the word and the expansion is bounded.
+const (
+	maxBraceMarks = 4096
+	maxBraceWork  = 1 << 20
+)
+
+// braceTooLarge is the reason of a line whose expansion passes the bounds.
 const braceTooLarge = "expansão de chaves grande demais para ser analisada"
 
 type braceItem struct {
 	c       byte
 	special bool // an unquoted {, } or ,
+	quoted  bool // from a quoted part of the word
+	gap     bool // an empty quoted part ("" or ''): no byte, but quoted
 }
 
+// braceWord is one word an expansion makes; quoted is true when a quoted
+// part of the word (even an empty one) went into it: the shell keeps such
+// a word when it is empty, and drops an empty one that is not.
+type braceWord struct {
+	text   string
+	quoted bool
+}
+
+// quoteSpan is a part of a word, by offsets of its text, that was quoted.
+type quoteSpan struct{ from, to int }
+
 // braceExpand expands the words of text, whose unquoted braces and commas
-// are at the offsets marks. ok is false when it makes more than
-// maxBraceWords words.
-func braceExpand(text string, marks []int) (words []string, ok bool) {
-	items := make([]braceItem, len(text))
-	for i := range len(text) {
-		items[i] = braceItem{c: text[i]}
-	}
-	for _, m := range marks {
-		items[m].special = true
-	}
-	var out [][]braceItem
-	if !expandBraces(items, &out) {
+// are at the offsets marks (in order) and whose quoted parts are spans. ok
+// is false when it passes the bounds (maxBraceMarks, maxBraceWords,
+// maxBraceWork).
+func braceExpand(text string, marks []int, spans []quoteSpan) (words []braceWord, ok bool) {
+	if len(marks) > maxBraceMarks {
 		return nil, false
 	}
-	for _, w := range out {
-		b := make([]byte, len(w))
-		for i, it := range w {
-			b[i] = it.c
+	gaps := map[int]int{}
+	quoted := make([]bool, len(text))
+	for _, s := range spans {
+		if s.from == s.to {
+			gaps[s.from]++
 		}
-		words = append(words, string(b))
+		for i := s.from; i < s.to && i < len(text); i++ {
+			quoted[i] = true
+		}
+	}
+	special := make([]bool, len(text))
+	for _, m := range marks {
+		special[m] = true
+	}
+	items := make([]braceItem, 0, len(text)+len(gaps))
+	for i := range len(text) + 1 {
+		for range gaps[i] {
+			items = append(items, braceItem{gap: true, quoted: true})
+		}
+		if i < len(text) {
+			items = append(items, braceItem{c: text[i], special: special[i], quoted: quoted[i]})
+		}
+	}
+	x := &braceExpander{}
+	if !x.expand(items) {
+		return nil, false
+	}
+	for _, w := range x.out {
+		b := make([]byte, 0, len(w))
+		q := false
+		for _, it := range w {
+			q = q || it.quoted
+			if !it.gap {
+				b = append(b, it.c)
+			}
+		}
+		words = append(words, braceWord{text: string(b), quoted: q})
 	}
 	return words, true
 }
 
-// expandBraces appends to out the words of items, expanding the first brace
-// that is an expansion (a list with a comma at its level, or a sequence);
-// a brace that is neither is literal, as in bash.
-func expandBraces(items []braceItem, out *[][]braceItem) bool {
-	if len(*out) > maxBraceWords {
+// braceExpander holds the words made so far and the work done.
+type braceExpander struct {
+	out  [][]braceItem
+	work int
+}
+
+// bracePair is a brace with its match: the offsets of the {, of the } and
+// of the commas at its level.
+type bracePair struct {
+	open, close int
+	commas      []int
+}
+
+// bracePairs matches the special braces of items in one pass, with a
+// stack, sorted by their opening brace. An unmatched { is literal, as in
+// bash.
+func bracePairs(items []braceItem) []bracePair {
+	var stack, pairs []bracePair
+	for k, it := range items {
+		if !it.special {
+			continue
+		}
+		switch it.c {
+		case '{':
+			stack = append(stack, bracePair{open: k})
+		case ',':
+			if n := len(stack); n > 0 {
+				stack[n-1].commas = append(stack[n-1].commas, k)
+			}
+		case '}':
+			if n := len(stack); n > 0 {
+				p := stack[n-1]
+				stack = stack[:n-1]
+				p.close = k
+				pairs = append(pairs, p)
+			}
+		}
+	}
+	slices.SortFunc(pairs, func(a, b bracePair) int { return a.open - b.open })
+	return pairs
+}
+
+// expand appends to out the words of items, expanding the first brace that
+// is an expansion (a list with a comma at its level, or a sequence); a
+// brace that is neither is literal, as in bash.
+func (x *braceExpander) expand(items []braceItem) bool {
+	x.work += len(items) + 1
+	if x.work > maxBraceWork || len(x.out) > maxBraceWords {
 		return false
 	}
-	for i, it := range items {
-		if !it.special || it.c != '{' {
-			continue
-		}
-		depth, end := 0, -1
-		var commas []int
-	scan:
-		for k := i + 1; k < len(items); k++ {
-			if !items[k].special {
-				continue
-			}
-			switch items[k].c {
-			case '{':
-				depth++
-			case '}':
-				if depth == 0 {
-					end = k
-					break scan
-				}
-				depth--
-			case ',':
-				if depth == 0 {
-					commas = append(commas, k)
-				}
-			}
-		}
-		if end < 0 {
-			continue
-		}
+	for _, p := range bracePairs(items) {
+		i, end := p.open, p.close
 		var alts [][]braceItem
-		if len(commas) > 0 {
+		if len(p.commas) > 0 {
 			start := i + 1
-			for _, c := range append(commas, end) {
+			for _, c := range append(p.commas, end) {
 				alts = append(alts, items[start:c])
 				start = c + 1
 			}
@@ -99,9 +162,9 @@ func expandBraces(items []braceItem, out *[][]braceItem) bool {
 				return false
 			}
 			for _, s := range seq {
-				var alt []braceItem
+				alt := make([]braceItem, len(s))
 				for j := range len(s) {
-					alt = append(alt, braceItem{c: s[j]})
+					alt[j] = braceItem{c: s[j]}
 				}
 				alts = append(alts, alt)
 			}
@@ -109,14 +172,14 @@ func expandBraces(items []braceItem, out *[][]braceItem) bool {
 		for _, a := range alts {
 			w := make([]braceItem, 0, len(items))
 			w = append(append(append(w, items[:i]...), a...), items[end+1:]...)
-			if !expandBraces(w, out) {
+			if !x.expand(w) {
 				return false
 			}
 		}
 		return true
 	}
-	*out = append(*out, items)
-	return len(*out) <= maxBraceWords
+	x.out = append(x.out, items)
+	return len(x.out) <= maxBraceWords
 }
 
 var (
@@ -125,14 +188,15 @@ var (
 )
 
 // braceSequence is the words of a sequence {x..y[..step]}: isSeq is false
-// when the text is not one, fits false when it makes too many words.
+// when the text is not one (a quoted part makes it literal, as in bash),
+// fits false when it makes too many words.
 func braceSequence(inner []braceItem) (seq []string, isSeq, fits bool) {
-	b := make([]byte, len(inner))
-	for i, it := range inner {
-		if it.special {
+	b := make([]byte, 0, len(inner))
+	for _, it := range inner {
+		if it.special || it.quoted {
 			return nil, false, false
 		}
-		b[i] = it.c
+		b = append(b, it.c)
 	}
 	s := string(b)
 	step := func(t string) (int, bool) {
