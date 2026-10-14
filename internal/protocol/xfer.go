@@ -167,10 +167,53 @@ type xferHub struct {
 	recv     map[string]*recvXfer
 	send     map[string]*sendXfer
 	finished map[string]finishedXfer
+
+	// bg are the goroutines that finish a received transfer (the check of the
+	// content, the Finalizer, the end with an error): they outlive the session
+	// that started them, so the Client and the Server wait for them in drain,
+	// after the last session ended and before the owner closes what they write.
+	bg      sync.WaitGroup
+	cancels map[uint64]context.CancelFunc // of the goroutines in bg, by number
+	nbg     uint64
 }
 
 func newXferHub(l *Link) *xferHub {
-	return &xferHub{l: l, recv: map[string]*recvXfer{}, send: map[string]*sendXfer{}, finished: map[string]finishedXfer{}}
+	return &xferHub{l: l, recv: map[string]*recvXfer{}, send: map[string]*sendXfer{}, finished: map[string]finishedXfer{}, cancels: map[uint64]context.CancelFunc{}}
+}
+
+// background runs f in a goroutine that drain waits for. Its context outlives
+// the session of ctx (a transfer whose end arrived is finished even if the
+// connection drops) but ends at drain.
+func (h *xferHub) background(ctx context.Context, f func(ctx context.Context)) {
+	bctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	h.mu.Lock()
+	h.nbg++
+	n := h.nbg
+	h.cancels[n] = cancel
+	h.bg.Add(1)
+	h.mu.Unlock()
+	go func() {
+		defer h.bg.Done()
+		defer cancel()
+		defer func() {
+			h.mu.Lock()
+			delete(h.cancels, n)
+			h.mu.Unlock()
+		}()
+		f(bctx)
+	}()
+}
+
+// drain cancels the goroutines that finish transfers and waits for them. The
+// Client and the Server call it when they stop, once no session is left to
+// start another.
+func (h *xferHub) drain() {
+	h.mu.Lock()
+	for _, cancel := range h.cancels {
+		cancel()
+	}
+	h.mu.Unlock()
+	h.bg.Wait()
 }
 
 // Handle runs the five messages of the transfer.
@@ -337,7 +380,7 @@ func (h *xferHub) touch(r *recvXfer) {
 
 // onPart writes a part. It runs on the goroutine of the parts of the
 // connection, never on its read loop: a slow disk does not stop the pongs.
-func (h *xferHub) onPart(_ context.Context, s *Session, f DataFrame) {
+func (h *xferHub) onPart(ctx context.Context, s *Session, f DataFrame) {
 	id := f.ID.String()
 	h.mu.Lock()
 	r := h.recv[id]
@@ -374,12 +417,16 @@ func (h *xferHub) onPart(_ context.Context, s *Session, f DataFrame) {
 		// a part of another size is not a loss on the way, and sending it
 		// again would not mend it. The transfer ends with the error.
 		r.failed = true
-		go h.fail(context.Background(), r, "", NewError(CodeInvalidPayload, "part %d of transfer %s has %d bytes, not %d", f.Pos, id, len(f.Data), want))
+		h.background(ctx, func(ctx context.Context) {
+			h.fail(ctx, r, "", NewError(CodeInvalidPayload, "part %d of transfer %s has %d bytes, not %d", f.Pos, id, len(f.Data), want))
+		})
 		return
 	}
 	if _, err := r.f.WriteAt(f.Data, int64(f.Pos)*chunk); err != nil {
 		r.failed = true
-		go h.fail(context.Background(), r, "", NewError(CodeUnavailable, "writing the transfer: %v", err))
+		h.background(ctx, func(ctx context.Context) {
+			h.fail(ctx, r, "", NewError(CodeUnavailable, "writing the transfer: %v", err))
+		})
 		return
 	}
 	r.asked = false
@@ -409,7 +456,7 @@ func (h *xferHub) onEnd(ctx context.Context, m *Message, e *XferEnd) (*Reply, er
 	r.finalizing = true
 	r.mu.Unlock()
 	endID := m.Env.ID
-	go h.finalize(context.WithoutCancel(ctx), r, endID)
+	h.background(ctx, func(ctx context.Context) { h.finalize(ctx, r, endID) })
 	return nil, nil
 }
 
@@ -463,7 +510,7 @@ func (h *xferHub) conclude(ctx context.Context, r *recvXfer, endID string, d Xfe
 	delete(h.recv, d.XferID)
 	h.finished[d.XferID] = finishedXfer{done: d, at: h.l.cfg.Clock.Now()}
 	h.mu.Unlock()
-	if _, err := h.l.Send(ctx, Outgoing{Type: TypeXferDone, Payload: d, ReplyTo: endID, Transient: true}); err != nil && !errors.Is(err, ErrNotConnected) {
+	if _, err := h.l.Send(ctx, Outgoing{Type: TypeXferDone, Payload: d, ReplyTo: endID, Transient: true}); err != nil && !errors.Is(err, ErrNotConnected) && ctx.Err() == nil {
 		h.l.cfg.Logger.Warn("protocol: xfer.done", "xfer", d.XferID, "err", err)
 	}
 }

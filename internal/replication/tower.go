@@ -551,7 +551,7 @@ func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, fi
 	defer r.applyMu.Unlock()
 	if err := r.cfg.DB.Replace(ctx, file, meta.LSN); err != nil {
 		var ns *store.NewerSchemaError
-		if errors.As(err, &ns) {
+		if errors.As(err, &ns) || errors.Is(err, store.ErrClosed) {
 			return protocol.NewError(protocol.CodeUnavailable, "%v", err)
 		}
 		return protocol.NewError(protocol.CodeHashMismatch, "%v", err)

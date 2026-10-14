@@ -19,6 +19,11 @@ import (
 // replica.
 var ErrNotReplica = errors.New("store: the database is not a replica")
 
+// ErrClosed is returned by Replace on a database that was closed: it would
+// open the pools again, and with them the file and its WAL, after the owner
+// closed the database and let go of the folder.
+var ErrClosed = errors.New("store: the database is closed")
+
 // GapError is returned by ApplyLog when a record does not follow the last one
 // applied: the replica asks again from Have.
 type GapError struct{ Have, Got uint64 }
@@ -476,9 +481,14 @@ func removeDB(path string) {
 // and the highest lsn in it is wantLSN. The replica is closed and opened again
 // on the new file; Writer and Reader return the new pools afterwards (a caller
 // that kept an old one gets "database is closed"). src is moved (or copied, from another volume); what is left of it is up to the caller.
+// A database that was closed stays closed: Replace returns ErrClosed and
+// touches no file.
 func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 	if !d.replica {
 		return ErrNotReplica
+	}
+	if d.isClosed() {
+		return ErrClosed
 	}
 	if err := d.checkCopy(ctx, src, wantLSN); err != nil {
 		return err
@@ -495,6 +505,10 @@ func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.closed { // closed while the copy was being checked and moved
+		removeDB(incoming)
+		return ErrClosed
+	}
 	if err := d.closePools(); err != nil {
 		removeDB(incoming)
 		return fmt.Errorf("store: replace: %w", err)
@@ -514,6 +528,12 @@ func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 		return fmt.Errorf("store: replace: %w", err)
 	}
 	return nil
+}
+
+func (d *DB) isClosed() bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.closed
 }
 
 func (d *DB) checkCopy(ctx context.Context, path string, wantLSN uint64) error {

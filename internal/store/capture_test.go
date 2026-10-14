@@ -686,3 +686,48 @@ func TestAMigrationReachesTheReplicaAsARecord(t *testing.T) {
 		t.Fatalf("the replica differs\n%s\n%s", a, b)
 	}
 }
+
+// A full copy that arrives after the owner closed the replica (a transfer that
+// was finishing while the engine stopped) does not bring the file up again:
+// no pool is opened, no WAL is created, and the copy is left where it was.
+func TestAFullCopyThatArrivesAfterCloseTouchesNoFile(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	p := openPrimary(t, clock.NewFake(time.UnixMilli(9)))
+	exec(t, p.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
+	r := replicate(t, p)
+	dir := filepath.Dir(r.Path())
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	listing := func() string {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		return strings.Join(names, " ")
+	}
+	before := listing()
+
+	snap := filepath.Join(t.TempDir(), "snap.db")
+	lsn, err := p.Snapshot(ctx, snap, store.SnapshotOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Replace(ctx, snap, lsn); !errors.Is(err, store.ErrClosed) {
+		t.Fatalf("Replace after Close = %v, want ErrClosed", err)
+	}
+	if after := listing(); after != before {
+		t.Errorf("the folder of the replica went from [%s] to [%s]", before, after)
+	}
+	if _, err := os.Stat(snap); err != nil {
+		t.Errorf("the copy was moved although the replica is closed: %v", err)
+	}
+	if _, err := r.Writer().ExecContext(ctx, `SELECT 1`); err == nil {
+		t.Error("the pools of a closed replica work")
+	}
+}

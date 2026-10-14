@@ -119,6 +119,13 @@ type Primary struct {
 	// early holds a replica.resync that came before the stream of its Tower
 	// existed; the stream takes it up when it starts.
 	early map[string]resyncRequest
+
+	// bg are the goroutines of the Towers (the stream, the files, the
+	// mirrors): Run waits for them (after canceling the peers) before it
+	// returns, so none of them reads the database or writes a copy once the
+	// owner of the Primary closes the database and lets go of the folder.
+	bg      sync.WaitGroup
+	stopped bool
 }
 
 type helloInfo struct{ lsn, epoch uint64 }
@@ -276,6 +283,7 @@ func (p *Primary) server() *protocol.Server {
 
 // Run applies the retention of the log and watches the lag until ctx ends.
 func (p *Primary) Run(ctx context.Context) error {
+	defer p.waitBackground()
 	p.mu.Lock()
 	p.base = ctx
 	p.mu.Unlock()
@@ -298,6 +306,34 @@ func (p *Primary) Run(ctx context.Context) error {
 			_, _ = p.LagAlerts(ctx)
 		}
 	}
+}
+
+// background runs f in a goroutine that Run waits for when it ends; after that
+// it runs nothing.
+func (p *Primary) background(f func()) {
+	p.mu.Lock()
+	if p.stopped {
+		p.mu.Unlock()
+		return
+	}
+	p.bg.Add(1)
+	p.mu.Unlock()
+	go func() {
+		defer p.bg.Done()
+		f()
+	}()
+}
+
+// waitBackground cancels the streams of the Towers and waits for the
+// goroutines of the Primary.
+func (p *Primary) waitBackground() {
+	p.mu.Lock()
+	p.stopped = true
+	for _, pe := range p.peers {
+		pe.cancel()
+	}
+	p.mu.Unlock()
+	p.bg.Wait()
 }
 
 func (p *Primary) onReady(s *protocol.Session) {
@@ -325,20 +361,20 @@ func (p *Primary) onReady(s *protocol.Session) {
 		pe.resync <- req
 	}
 	p.mu.Unlock()
-	go func() {
+	p.background(func() {
 		select {
 		case <-s.Done():
 		case <-ctx.Done():
 		}
 		cancel()
-	}()
-	go func() {
+	})
+	p.background(func() {
 		err := p.serve(ctx, pe, hello)
 		if err != nil && ctx.Err() == nil {
 			p.cfg.Logger.Error("replication: the stream to a Tower failed; closing the connection", "machine", id, "err", err)
 			s.Close(1011, "replication failed")
 		}
-	}()
+	})
 }
 
 func (p *Primary) onDisconnect(s *protocol.Session) {
@@ -780,11 +816,11 @@ func (p *Primary) FileChanged(root, rel string) {
 		if pe.files == nil {
 			continue
 		}
-		go func() {
+		p.background(func() {
 			if err := pe.files.ensure(ctx, srv.Link(pe.id), pe.isExcluded(), FileRef{Root: root, Path: rel}); err != nil && ctx.Err() == nil {
 				p.cfg.Logger.Warn("replication: sending a file", "machine", pe.id, "file", root+"/"+rel, "err", err)
 			}
-		}()
+		})
 	}
 }
 
@@ -810,11 +846,11 @@ func (p *Primary) MirrorChanged(id string) {
 	p.mu.Unlock()
 	ctx := p.baseCtx()
 	for _, pe := range peers {
-		go func() {
+		p.background(func() {
 			if err := p.cfg.Mirrors.sync(ctx, srv.Link(pe.id), pe, id); err != nil && ctx.Err() == nil {
 				p.cfg.Logger.Warn("replication: sending a mirror", "machine", pe.id, "mirror", id, "err", err)
 			}
-		}()
+		})
 	}
 }
 
