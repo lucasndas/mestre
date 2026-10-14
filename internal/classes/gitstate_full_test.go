@@ -25,11 +25,24 @@ func TestCommitWithStagedFilesOutsideFilesWriteIsDenied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir, err := filepath.EvalSymlinks(t.TempDir())
+	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo, err := g.Init(ctx, dir, gitx.InitOptions{InitialBranch: "epico/42-login"})
+	// The table's worktree, out of the repository, with its record.
+	main, err := g.Init(ctx, filepath.Join(root, "main"), gitx.InitOptions{InitialBranch: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := main.Commit(ctx, gitx.CommitOptions{Message: "base", AllowEmpty: true, Author: gitx.Signature{Name: "Dev", Email: "dev@example.invalid", When: now}}); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "mesa")
+	repo, err := main.AddWorktree(ctx, dir, gitx.WorktreeOptions{Branch: "epico/42-login", Create: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := g.Record(ctx, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +68,7 @@ func TestCommitWithStagedFilesOutsideFilesWriteIsDenied(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env := classes.Env{AgentID: agentID, Worktree: dir, Git: classes.GitxState{Git: g}, Exceptions: newLedger()}
+	env := classes.Env{AgentID: agentID, Worktree: dir, Git: classes.GitxState{Git: g, Worktree: rec}, Exceptions: newLedger()}
 	r := rules(t, `version: 1
 files: {write: ["tests/**"]}
 commands: {allow: ["git commit *"], default: deny}

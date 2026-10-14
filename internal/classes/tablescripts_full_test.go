@@ -18,7 +18,7 @@ import (
 // worktree on its own branch.
 type tableRepo struct {
 	ctx        context.Context
-	g          gitx.Git
+	g          *gitx.Real
 	main, wt   gitx.Repo
 	mainDir    string
 	wtDir      string
@@ -47,7 +47,11 @@ func newTableRepo(t *testing.T) *tableRepo {
 	if tr.wt, err = tr.main.AddWorktree(ctx, tr.wtDir, gitx.WorktreeOptions{Branch: "epico/42-login", Create: true}); err != nil {
 		t.Fatal(err)
 	}
-	tr.scripts = classes.GitxState{Git: g, Main: "main"}
+	rec, err := g.Record(ctx, tr.wtDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr.scripts = classes.GitxState{Git: g, Worktree: rec, Main: "main"}
 	return tr
 }
 
@@ -117,7 +121,7 @@ func TestTableScriptsAgainstTheBaseOfTheBranch(t *testing.T) {
 	check("scripts", true)
 	check("scripts/none.sh", true)
 	// Without the main branch there is no base.
-	if c, err := (classes.GitxState{Git: tr.g}).Changed(tr.ctx, tr.wtDir, filepath.Join(tr.wtDir, "scripts", "build.sh")); !c || err == nil {
+	if c, err := (classes.GitxState{Git: tr.g, Worktree: tr.scripts.Worktree}).Changed(tr.ctx, tr.wtDir, filepath.Join(tr.wtDir, "scripts", "build.sh")); !c || err == nil {
 		t.Fatalf("without Main: %v, %v; want changed with an error", c, err)
 	}
 }

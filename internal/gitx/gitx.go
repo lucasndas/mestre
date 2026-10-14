@@ -41,7 +41,14 @@ var (
 	ErrInvalidBundle              = errors.New("gitx: invalid bundle")
 	ErrMissingPrerequisite        = errors.New("gitx: repository lacks the bundle prerequisite commits")
 	ErrConfigNotSet               = errors.New("gitx: config key not set")
+	ErrUnsafeRepo                 = errors.New("gitx: the repository configuration could make git run a command")
 )
+
+// NoLazyFetchVersion is the first git that honours GIT_NO_LAZY_FETCH, which
+// every call sets: from it on, git never fetches a missing object from a
+// promisor remote on its own. Before it the engine refuses a repository
+// with a promisor remote (ErrUnsafeRepo).
+var NoLazyFetchVersion = Version{Major: 2, Minor: 44}
 
 // MinVersion is the oldest supported git on this system, a security floor
 // (docs/decisoes/0001-stack-go.md): it is past the safe.directory fix
@@ -198,7 +205,18 @@ type Git interface {
 	// credentials is refused (ErrCredentialsInURL): they go in opts.Auth.
 	Clone(ctx context.Context, url, dir string, opts CloneOptions) (Repo, error)
 	// Open returns the repository or worktree rooted at dir, or ErrNotARepo.
+	// It follows the .git file and the commondir of a worktree, so a table
+	// worktree an agent ran in is opened by its record (WorktreeOpener).
 	Open(ctx context.Context, dir string) (Repo, error)
+}
+
+// WorktreeOpener opens a worktree only by the engine's record of it
+// (Real.OpenWorktree): every engine git call on a table worktree goes
+// through it, never through Open, which follows the .git file and the
+// commondir an agent can rewrite (docs/arquitetura/seguranca.md#git-do-motor).
+// A worktree that no longer points at its record is ErrWorktreeMoved.
+type WorktreeOpener interface {
+	OpenWorktree(ctx context.Context, rec WorktreeRecord) (Repo, error)
 }
 
 // Repo is one repository or one of its worktrees. Worktrees of a repository

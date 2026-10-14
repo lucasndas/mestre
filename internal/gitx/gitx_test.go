@@ -138,6 +138,7 @@ func TestEnvironmentIsControlled(t *testing.T) {
 	}
 	for k, want := range map[string]string{
 		"LC_ALL": "C", "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_GLOBAL": "/custom/gitconfig",
+		"GIT_NO_LAZY_FETCH": "1",
 	} {
 		if got := last(k); got != want {
 			t.Errorf("%s = %q, want %q", k, got, want)
@@ -145,6 +146,28 @@ func TestEnvironmentIsControlled(t *testing.T) {
 	}
 	if slices.Contains(env, "LANG=pt_BR.UTF-8") {
 		t.Error("LANG leaked: messages must be in English for the error matching")
+	}
+	// safe.directory is reset last on the command line: git's ownership
+	// check holds whatever a custom global configuration says.
+	if args := gitx.GlobalArgs(); args[len(args)-1] != "safe.directory=" {
+		t.Errorf("globalArgs end with %q, want the safe.directory reset", args[len(args)-1])
+	}
+}
+
+// Options.Env cannot move the repository, add configuration above the
+// command line or turn GIT_NO_LAZY_FETCH off (N-A of the M3 audit).
+func TestOptionsEnvCannotWeakenTheControlledEnvironment(t *testing.T) {
+	t.Parallel()
+	for _, kv := range []string{
+		"GIT_DIR=/x", "GIT_COMMON_DIR=/x", "GIT_WORK_TREE=/x", "GIT_NO_LAZY_FETCH=0", "git_no_lazy_fetch=0",
+		"GIT_CONFIG_PARAMETERS='safe.directory'='*'", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=safe.directory",
+	} {
+		if _, err := gitx.New(gitx.Options{Masker: logging.NewMasker(), Env: []string{kv}}); !errors.Is(err, gitx.ErrInvalidArgument) {
+			t.Errorf("Options.Env %q: %v, want ErrInvalidArgument", kv, err)
+		}
+	}
+	if _, err := gitx.New(gitx.Options{Masker: logging.NewMasker(), Env: []string{"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/x", "OTHER=1"}}); err != nil {
+		t.Errorf("the accepted variables: %v", err)
 	}
 }
 

@@ -450,8 +450,26 @@ func (ru *run) provision(ctx context.Context) error {
 		return err
 	}
 	ru.env = classes.Env{AgentID: ws.AgentID, TableID: ru.lreq.TableID, Worktree: ws.Worktree, Tmp: ws.Tmp, OS: req.OS,
-		Layout: ru.r.Host.cfg.Layout, Normalize: ru.r.Options.NormalizePath, Git: classes.GitxState{Git: ru.r.Git, Main: MainBranch}}
+		Layout: ru.r.Host.cfg.Layout, Normalize: ru.r.Options.NormalizePath, Git: ru.gitState()}
 	return nil
+}
+
+// gitState is the git state of the run: the worktree opened only by its
+// record, with an alert in the log when it points elsewhere.
+func (ru *run) gitState() classes.GitxState {
+	opener, _ := ru.r.Git.(gitx.WorktreeOpener)
+	return classes.GitxState{Git: opener, Worktree: ru.ws.Record, Main: MainBranch, Moved: func(err error) {
+		ru.r.log().Error("conformance: the worktree of the run no longer points at its record", "worktree", ru.ws.Worktree, "err", err)
+	}}
+}
+
+// openWorktree opens the worktree of the run by its record.
+func (ru *run) openWorktree(ctx context.Context) (gitx.Repo, error) {
+	opener, ok := ru.r.Git.(gitx.WorktreeOpener)
+	if !ok {
+		return nil, errors.New("conformance: the git of the runner cannot open a worktree by its record")
+	}
+	return opener.OpenWorktree(ctx, ru.ws.Record)
 }
 
 // pathWith is PATH of env with dir first.

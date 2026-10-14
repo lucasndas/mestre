@@ -46,7 +46,12 @@ type Workspace struct {
 	// GitDir is the git folder of the worktree in the mirror, as the
 	// engine's record took it right after the worktree was created
 	// (gitx.Real.Record), before any agent ran there.
-	GitDir  string
+	GitDir string
+	// Record is that whole record: the engine opens the worktree only by it
+	// (gitx.Real.OpenWorktree), never by its folder. Zero with a git that
+	// does not record (a fake), and then every git check of the run fails
+	// closed.
+	Record  gitx.WorktreeRecord
 	AgentID string
 	Codes   Codes
 	// MestreMD is the Mestre layer of the character
@@ -182,7 +187,7 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 		if err != nil {
 			return err
 		}
-		ws.GitDir = rec.GitDir
+		ws.GitDir, ws.Record = rec.GitDir, rec
 	}
 	if err := wt.SetExcludeBlock(ctx, ExcludeBlock, []string{".mestre/", ".agents/", ".claude/"}); err != nil {
 		return err
