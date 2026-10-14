@@ -28,10 +28,7 @@ type Permissions struct {
 	Network  *NetworkSpec  `yaml:"network"`
 	CLI      *CLISpec      `yaml:"cli"`
 	Tools    *ToolsSpec    `yaml:"tools"`
-	// Default is what a tool of kind mcp or other that matches no pattern of
-	// Tools gets.
-	Default  *Verdict `yaml:"default"`
-	Operator *bool    `yaml:"operator"`
+	Operator *bool         `yaml:"operator"`
 }
 
 // FilesSpec is the files block.
@@ -41,7 +38,8 @@ type FilesSpec struct {
 	Deny  *[]string `yaml:"deny"`
 }
 
-// CommandsSpec is the commands block.
+// CommandsSpec is the commands block. Default is what a command that
+// matches no pattern gets; absent in a class, ask.
 type CommandsSpec struct {
 	Allow   *[]string `yaml:"allow"`
 	Ask     *[]string `yaml:"ask"`
@@ -69,11 +67,15 @@ type CLISpec struct {
 	Allow *[]string `yaml:"allow"`
 }
 
-// ToolsSpec is the tools block.
+// ToolsSpec is the tools block. Default is what a tool of kind mcp,
+// subagent or other that matches no pattern gets; absent in a class, ask. A
+// default at the top of the file is an unknown field
+// (docs/classes/formato-das-permissoes.md#o-arquivo).
 type ToolsSpec struct {
-	Allow *[]string `yaml:"allow"`
-	Ask   *[]string `yaml:"ask"`
-	Deny  *[]string `yaml:"deny"`
+	Allow   *[]string `yaml:"allow"`
+	Ask     *[]string `yaml:"ask"`
+	Deny    *[]string `yaml:"deny"`
+	Default *Verdict  `yaml:"default"`
 }
 
 // ErrInvalid wraps every error of an invalid permissions.yaml: the class is
@@ -142,9 +144,9 @@ func (p *Permissions) validate() error {
 		if err := checkTexts("tools", t.Allow, t.Ask, t.Deny); err != nil {
 			return err
 		}
-	}
-	if p.Default != nil && !p.Default.valid() {
-		return fmt.Errorf("default: %q is not allow, ask or deny", *p.Default)
+		if t.Default != nil && !t.Default.valid() {
+			return fmt.Errorf("tools.default: %q is not allow, ask or deny", *t.Default)
+		}
 	}
 	if g := p.Git; g != nil {
 		for _, b := range deref(g.Branches) {

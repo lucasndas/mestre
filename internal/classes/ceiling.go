@@ -266,8 +266,8 @@ func (c *Ceiling) Excess(class *Permissions) []Excess {
 		allowed("tools.allow", deref(t.Allow), mt.Allow, coversText)
 		takenWhole("tools.allow", deref(t.Allow), mt.Deny, "nega", coversText)
 		takenWhole("tools.allow", deref(t.Allow), mt.Ask, "pede aprovação para", coversText)
+		verdict("tools.default", t.Default, mt.Default)
 	}
-	verdict("default", class.Default, m.Default)
 	if g := class.Git; g != nil {
 		var mg GitSpec
 		if m.Git != nil {

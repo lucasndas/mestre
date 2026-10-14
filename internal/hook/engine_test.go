@@ -82,7 +82,7 @@ type states struct {
 	waiting map[string]int64
 }
 
-func (s *states) WaitingPermission(_ context.Context, id string, n int64) error {
+func (s *states) WaitingApproval(_ context.Context, id string, n int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.waiting == nil {
@@ -109,9 +109,10 @@ func askEngine(t *testing.T, e *hook.Engine, command string) (string, string) {
 	return decision(t, providers.ClaudeCode, r)
 }
 
-// A command in ask opens the approval request, the character waits for
-// permission and the agent gets the denial with the number; without the
-// approvals, or when the request cannot be opened, it is denied as well.
+// A command in ask opens the approval request with its risk, the character
+// waits for the approval and the agent gets the denial with the number;
+// without the approvals, or when the request cannot be opened, it is denied
+// as well.
 func TestAskOpensTheApprovalRequest(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
@@ -124,6 +125,9 @@ func TestAskOpensTheApprovalRequest(t *testing.T) {
 		}
 		if len(ap.reqs) != 1 || ap.reqs[0].Action.Command != "npm install x" || ap.reqs[0].AgentID != agent || st.waiting[agent] != 1 {
 			t.Fatalf("requests %+v, waiting %v", ap.reqs, st.waiting)
+		}
+		if r := ap.reqs[0].Risk; r.Risk != classes.RiskLow || r.TableVersion != classes.RiskTableVersion || r.Rule == "" {
+			t.Fatalf("the request has risk %+v; want baixo, with the table version and the row", r)
 		}
 
 		ap.err = errors.New("the approvals are down")
@@ -143,7 +147,7 @@ func TestAskOpensTheApprovalRequest(t *testing.T) {
 func TestTheEngineDecidesForTheVerifiedCharacterOnly(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		e := newEngine(t, `{version: 1, commands: {allow: ["*"], default: allow}, default: allow}`)
+		e := newEngine(t, `{version: 1, commands: {allow: ["*"], default: allow}, tools: {default: allow}}`)
 		r := localrig.New(clock.Real{}, localrig.Options{Config: localchan.Config{Local: map[string]localchan.Handler{localchan.CmdHook: e}}})
 		r.Start(t)
 		r.Character("t2", "bob")
@@ -154,7 +158,7 @@ func TestTheEngineDecidesForTheVerifiedCharacterOnly(t *testing.T) {
 			t.Fatalf("%s (%q)", v, why)
 		}
 	})
-	e := newEngine(t, `{version: 1, commands: {allow: ["*"], default: allow}, default: allow}`)
+	e := newEngine(t, `{version: 1, commands: {allow: ["*"], default: allow}, tools: {default: allow}}`)
 	ev, _ := json.Marshal(providers.Event{Version: 1, Provider: providers.ClaudeCode, NativeEvent: "PreToolUse", Event: providers.EventPreTool,
 		AgentID: agent, Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: "npm test"}})
 	resp := e.Handle(t.Context(), &localchan.Call{

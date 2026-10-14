@@ -108,7 +108,7 @@ func TestASilentEngineStillDeniesGitPush(t *testing.T) {
 	for _, p := range allProviders {
 		synctest.Test(t, func(t *testing.T) {
 			files, mc := newFiles(t), machine()
-			files.snapshot(mc, rules(t, `{version: 1, commands: {allow: ["*"], default: allow}, default: allow}`))
+			files.snapshot(mc, rules(t, `{version: 1, commands: {allow: ["*"], default: allow}, tools: {default: allow}}`))
 			r := call{provider: p, event: "PreToolUse", stdin: payload(p, "git push origin main"),
 				dial: engine(t, &silent{}), files: files, machine: mc}.run(t.Context())
 			v, why := decision(t, p, r)

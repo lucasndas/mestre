@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/providers"
 )
 
 func TestParseThePermissionsOfTheFormatDocument(t *testing.T) {
@@ -14,7 +15,7 @@ func TestParseThePermissionsOfTheFormatDocument(t *testing.T) {
   allow: ["issue comment"]
 operator: false
 `)
-	if p.Files == nil || len(*p.Files.Write) != 2 || *p.Commands.Default != classes.Ask || !*p.Git.Commit || *p.Default != classes.Ask {
+	if p.Files == nil || len(*p.Files.Write) != 2 || *p.Commands.Default != classes.Ask || !*p.Git.Commit || *p.Tools.Default != classes.Ask {
 		t.Fatalf("parsed %+v", p)
 	}
 }
@@ -29,7 +30,7 @@ func TestInvalidPermissionsAreRefused(t *testing.T) {
 		"unknown nested":      "version: 1\nfiles: {writes: []}\n",
 		"two documents":       "version: 1\n---\nversion: 1\n",
 		"bad default":         "version: 1\ncommands: {default: maybe}\n",
-		"bad tools default":   "version: 1\ndefault: sometimes\n",
+		"bad tools default":   "version: 1\ntools: {default: sometimes}\n",
 		"bad workflows":       "version: 1\ngit: {workflows: always}\n",
 		"absolute write":      "version: 1\nfiles: {write: [\"/etc/**\"]}\n",
 		"dot dot":             "version: 1\nfiles: {read: [\"../x/**\"]}\n",
@@ -47,6 +48,22 @@ func TestInvalidPermissionsAreRefused(t *testing.T) {
 	}
 	// Absolute paths are allowed where the format says.
 	parse(t, "version: 1\nfiles: {read: [\"/usr/share/dict/**\"], deny: [\"/etc/**\"]}\n")
+}
+
+// CA-PERM-18
+func TestTheToolsDefaultLivesInTheToolsBlock(t *testing.T) {
+	t.Parallel()
+	_, err := classes.ParsePermissions([]byte("version: 1\ndefault: ask\n"))
+	if !errors.Is(err, classes.ErrInvalid) || !strings.Contains(err.Error(), "field default not found") {
+		t.Fatalf("default at the top: err = %v; want invalid by an unknown field", err)
+	}
+	p := parse(t, "version: 1\ntools: {default: deny}\n")
+	if p.Tools == nil || p.Tools.Default == nil || *p.Tools.Default != classes.Deny {
+		t.Fatalf("tools %+v; want default deny", p.Tools)
+	}
+	m := newMachine()
+	r := rules(t, "version: 1\ntools: {default: deny}\n")
+	want(t, decide(m.env(), r, toolEvent(providers.KindOther, "generate_image")), classes.Deny, classes.LayerClass, "generate_image", "negar")
 }
 
 type vault map[string][2][]string

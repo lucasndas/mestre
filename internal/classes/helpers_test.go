@@ -86,15 +86,14 @@ network:
 tools:
   allow: ["mcp__playwright__*"]
   deny: ["mcp__*__delete_*"]
-default: ask
+  default: ask
 `
 
 // anyYAML is a class that frees everything the class layer can free.
 const anyYAML = `version: 1
 files: {read: ["**"], write: ["**"]}
 commands: {allow: ["*"], default: allow}
-tools: {allow: ["*"]}
-default: allow
+tools: {allow: ["*"], default: allow}
 git: {commit: true, branches: ["**"], request_push: true, workflows: allow}
 network: {internet: true}
 operator: true

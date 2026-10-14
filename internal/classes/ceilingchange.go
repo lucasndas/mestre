@@ -99,7 +99,7 @@ func DiffCeilings(approved, next *Ceiling) CeilingDiff {
 	allowList("tools.allow", of.tallow, nf.tallow, coversText, false)
 	limitList("tools.deny", of.tdeny, nf.tdeny, nil, coversText)
 	limitList("tools.ask", of.task, nf.task, nf.tdeny, coversText)
-	verdict("default", o.Default, n.Default)
+	verdict("tools.default", of.tdefault, nf.tdefault)
 	flag("git.commit", of.commit, nf.commit)
 	allowList("git.branches", of.branches, nf.branches, coversGlob, false)
 	flag("git.request_push", of.push, nf.push)
@@ -151,7 +151,7 @@ func DiffCeilings(approved, next *Ceiling) CeilingDiff {
 
 type fields struct {
 	read, write, fdeny, callow, cdeny, cask, tallow, tdeny, task, branches, domains, creds, cli *[]string
-	cdefault                                                                                    *Verdict
+	cdefault, tdefault                                                                          *Verdict
 	commit, push, internet                                                                      *bool
 	workflows                                                                                   *Workflows
 }
@@ -165,7 +165,7 @@ func ceilingFields(p *Permissions) fields {
 		f.callow, f.cdeny, f.cask, f.cdefault = c.Allow, c.Deny, c.Ask, c.Default
 	}
 	if t := p.Tools; t != nil {
-		f.tallow, f.tdeny, f.task = t.Allow, t.Deny, t.Ask
+		f.tallow, f.tdeny, f.task, f.tdefault = t.Allow, t.Deny, t.Ask, t.Default
 	}
 	if g := p.Git; g != nil {
 		f.commit, f.branches, f.push, f.workflows = g.Commit, g.Branches, g.RequestPush, g.Workflows

@@ -204,6 +204,32 @@ func TestTheAntigravityAgentFileOffersNoWriteOrWebToolsToAClassWithout(t *testin
 	}
 }
 
+// CA-NATIVO-05
+func TestAnAskToolStaysInTheAntigravityAgentFile(t *testing.T) {
+	t.Parallel()
+	path := providers.AntigravityAgentPath(newMachine().wt, agentID)
+	tools := func(class string) []string {
+		t.Helper()
+		var out []string
+		for _, l := range strings.Split(translate(t, rules(t, class))[providers.Antigravity].files[path], "\n") {
+			if v, ok := strings.CutPrefix(l, "tools: "); ok {
+				if err := json.Unmarshal([]byte(v), &out); err != nil {
+					t.Fatalf("tools %q: %v", v, err)
+				}
+			}
+		}
+		return out
+	}
+	// generate_image is a native tool of kind other that matches no pattern.
+	const class = "version: 1\ntools: {allow: [\"mcp__playwright__*\"]}\n"
+	if got := tools(class); !slices.Contains(got, "generate_image") {
+		t.Fatalf("without tools.default: tools %v; want generate_image, which asks", got)
+	}
+	if got := tools("version: 1\ntools: {allow: [\"mcp__playwright__*\"], default: deny}\n"); slices.Contains(got, "generate_image") {
+		t.Fatalf("with tools.default deny: tools %v still offer generate_image", got)
+	}
+}
+
 func TestANativeBlockADecreeOrExceptionFreesIsLifted(t *testing.T) {
 	t.Parallel()
 	m := newMachine()

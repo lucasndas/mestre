@@ -94,11 +94,11 @@ func Build(l Layers) (*Rules, error) {
 	r.Tools.Ask = b.union("tools.ask", deref(toolsPtr(cls, "ask")), caps, func(p *Permissions) *[]string { return toolsPtr(p, "ask") })
 	r.Tools.Allow = b.capped("tools.allow", deref(toolsPtr(cls, "allow")), caps, func(p *Permissions) *[]string { return toolsPtr(p, "allow") }, coversText)
 	r.Tools.Allow = b.dropDenied("tools.allow", r.Tools.Allow, r.Tools.Deny, coversText)
-	r.Tools.Default = b.verdict("tools.default", valueOr(cls.Default, Deny), caps, func(p *Permissions) *Verdict {
-		if p == nil {
-			return nil
+	r.Tools.Default = b.verdict("tools.default", toolsDefault(cls), caps, func(p *Permissions) *Verdict {
+		if t := tl(p); t != nil {
+			return t.Default
 		}
-		return p.Default
+		return nil
 	})
 
 	// git
@@ -427,12 +427,22 @@ func ptrOf(c *CommandsSpec, which string) *[]string {
 }
 
 // commandsDefault is the class default for unmatched commands: absent is
-// deny.
+// ask (ADR 0024). It is the system's default, not a grant of the class: the
+// cut by the ceiling and the sheet keeps the most restrictive.
 func commandsDefault(p *Permissions) Verdict {
 	if p.Commands != nil && p.Commands.Default != nil {
 		return *p.Commands.Default
 	}
-	return Deny
+	return Ask
+}
+
+// toolsDefault is commandsDefault for the tools of kind mcp, subagent and
+// other.
+func toolsDefault(p *Permissions) Verdict {
+	if p.Tools != nil && p.Tools.Default != nil {
+		return *p.Tools.Default
+	}
+	return Ask
 }
 
 func or(l, def []string) []string {

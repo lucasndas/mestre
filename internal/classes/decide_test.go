@@ -82,7 +82,7 @@ func TestMCPToolsByNativeNameInEveryProvider(t *testing.T) {
 tools:
   allow: ["mcp__playwright__*"]
   deny: ["mcp__*__delete_*"]
-default: deny
+  default: deny
 `)
 	same := func(p string) (string, error) { return p, nil }
 	adapters := map[string]providers.Adapter{
@@ -130,10 +130,10 @@ func TestAttachmentsAreNeverExecuted(t *testing.T) {
 func TestNativeSubagentsByNameAndTheirToolsByTheCharactersRules(t *testing.T) {
 	t.Parallel()
 	m := newMachine()
-	denied := rules(t, "version: 1\ntools: {deny: [\"Agent\"]}\ndefault: allow\n")
+	denied := rules(t, "version: 1\ntools: {deny: [\"Agent\"], default: allow}\n")
 	want(t, decide(m.env(), denied, toolEvent(providers.KindSubagent, "Agent")), classes.Deny, classes.LayerClass, "Agent")
 
-	freed := rules(t, "version: 1\nfiles: {write: [\"tests/**\"]}\ntools: {allow: [\"Agent\"]}\ndefault: deny\n")
+	freed := rules(t, "version: 1\nfiles: {write: [\"tests/**\"]}\ntools: {allow: [\"Agent\"], default: deny}\n")
 	p := &classes.Policy{
 		Source: sourceOf{agentID: freed},
 		Env: func(_ context.Context, id string) (classes.Env, error) {
@@ -255,7 +255,7 @@ func TestDegradedWithoutSnapshotOnlyReads(t *testing.T) {
 func TestComputerControlMCPOnlyInTheOperatorBase(t *testing.T) {
 	t.Parallel()
 	m := newMachine()
-	r := rules(t, "version: 1\ntools: {allow: [\"mcp__*\"]}\ndefault: deny\noperator: true\n")
+	r := rules(t, "version: 1\ntools: {allow: [\"mcp__*\"], default: deny}\noperator: true\n")
 	for _, name := range []string{"mcp__claude-in-chrome__navigate", "mcp__computer-use__left_click"} {
 		want(t, decide(m.env(), r, toolEvent(providers.KindMCP, name)), classes.Deny, classes.LayerFixed, "Operador do PC")
 		op := m.env()
