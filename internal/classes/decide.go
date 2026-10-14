@@ -130,8 +130,9 @@ type Decision struct {
 	// Action is the call as an exception would bind it.
 	Action Action
 	// Risk is the risk of the approval request an ask opens
-	// (docs/classes/classificacao-de-risco.md); zero for the other verdicts
-	// and in the degraded mode.
+	// (docs/classes/classificacao-de-risco.md), or of the default baixo
+	// that let the call through; zero for the other verdicts and in the
+	// degraded mode.
 	Risk RiskResult
 }
 
@@ -214,8 +215,16 @@ func decide(ctx context.Context, env Env, rules *Rules, ev providers.Event, degr
 		if o.reason != "" {
 			d.Reason += " (" + o.reason + ")"
 		}
-		if !e.degraded {
-			d.Risk = e.classify(ev.Tool, false)
+		if e.degraded {
+			// The fail-safe: what asks is denied with the engine down, the
+			// default baixo too (the owner's adjustments are not here).
+			break
+		}
+		d.Risk = e.classify(ev.Tool, false)
+		if o.byDefault && d.Risk.Risk == RiskLow {
+			// No rule covers it and it is baixo: it runs directly, the
+			// deterministic counterpart of the providers' auto mode (ADR 0025).
+			d.Verdict, d.Reason, d.ClassHooks = Allow, "padrão: risco baixo ("+d.Risk.Rule+")", true
 		}
 	}
 	return d

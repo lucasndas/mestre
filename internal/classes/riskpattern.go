@@ -100,3 +100,21 @@ func fingerprint(v any) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
+
+// PatternCovers reports whether an approved pattern, or a temporary table
+// rule made of one, lets an action through
+// (docs/classes/classificacao-de-risco.md#padrões-aprováveis): the action is
+// of the pattern's kind, the pattern matches it, and the action's own
+// classification (own: ClassifyRisk, or the Decision.Risk of the ask) fits
+// the risk the pattern was approved at. npm install * approved as baixo
+// never lets npm install -g x through: that command is medio.
+func PatternCovers(p ApprovablePattern, a Action, own RiskResult) bool {
+	if a.Kind != p.Kind || !own.Risk.valid() || own.Risk == RiskFixed || own.Risk.rank() > p.Risk.Risk.rank() {
+		return false
+	}
+	target := a.Tool
+	if a.Kind == providers.KindShell {
+		target = a.Command
+	}
+	return matchText(p.Pattern, target)
+}

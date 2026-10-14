@@ -55,7 +55,8 @@ func Build(l Layers) (*Rules, error) {
 
 	// files
 	r.Files.Read = b.capped("files.read", or(filesList(cls, "read"), []string{"**"}), caps, func(p *Permissions) *[]string { return filesPtr(p, "read") }, coversGlob)
-	r.Files.Write = b.capped("files.write", filesList(cls, "write"), caps, func(p *Permissions) *[]string { return filesPtr(p, "write") }, coversGlob)
+	// An absent files.write is the whole worktree (ADR 0025).
+	r.Files.Write = b.capped("files.write", or(filesList(cls, "write"), []string{"**"}), caps, func(p *Permissions) *[]string { return filesPtr(p, "write") }, coversGlob)
 	r.Files.Deny = b.union("files.deny", filesList(cls, "deny"), caps, func(p *Permissions) *[]string { return filesPtr(p, "deny") })
 
 	// commands
@@ -142,17 +143,17 @@ func Build(l Layers) (*Rules, error) {
 		}
 		return nil
 	}, coversGlob)
-	r.Git.Commit = b.flag("git.commit", g != nil && valueOr(g.Commit, false), caps, func(p *Permissions) *bool {
+	r.Git.Commit = b.gitFlag("git.commit", gitPtr(g, true), caps, func(p *Permissions) *bool {
 		if gc := gitOf(p); gc != nil {
 			return gc.Commit
 		}
 		return nil
 	})
-	if r.Git.Commit {
+	if r.Git.Commit != Deny {
 		// A deny pattern of any layer that takes git commit turns the flag off.
 		for _, d := range r.Commands.Deny {
 			if matchText(d, "git commit") {
-				r.Git.Commit = false
+				r.Git.Commit = Deny
 				if layer := b.layerOf("commands.deny", d); layer != LayerClass {
 					b.origin["git.commit"] = layer
 				}
@@ -160,7 +161,7 @@ func Build(l Layers) (*Rules, error) {
 			}
 		}
 	}
-	r.Git.RequestPush = b.flag("git.request_push", g != nil && valueOr(g.RequestPush, false), caps, func(p *Permissions) *bool {
+	r.Git.RequestPush = b.gitFlag("git.request_push", gitPtr(g, false), caps, func(p *Permissions) *bool {
 		if gc := gitOf(p); gc != nil {
 			return gc.RequestPush
 		}
@@ -185,7 +186,9 @@ func Build(l Layers) (*Rules, error) {
 		return p.Network
 	}
 	n := netOf(cls)
-	r.Network.Internet = b.flag("network.internet", n != nil && valueOr(n.Internet, false), caps, func(p *Permissions) *bool {
+	// An absent block or field is internet on, any domain: the default of
+	// the provider CLIs in a plain terminal (ADR 0025).
+	r.Network.Internet = b.flag("network.internet", n == nil || valueOr(n.Internet, true), caps, func(p *Permissions) *bool {
 		if nc := netOf(p); nc != nil {
 			return nc.Internet
 		}
@@ -345,6 +348,40 @@ func (b *builder) verdict(name string, class Verdict, caps []layered, get func(*
 		}
 		if m := get(c.p); m != nil && m.rank() > v.rank() {
 			v = *m
+			b.origin[name] = c.layer
+		}
+	}
+	return v
+}
+
+// gitPtr is git.commit (commit) or git.request_push of the class block.
+func gitPtr(g *GitSpec, commit bool) *bool {
+	switch {
+	case g == nil:
+		return nil
+	case commit:
+		return g.Commit
+	}
+	return g.RequestPush
+}
+
+// gitFlag is a git flag as a verdict: true in the class is allow, false
+// deny, absent ask (a request, ADR 0025); a maximum present that takes it
+// away makes it deny.
+func (b *builder) gitFlag(name string, class *bool, caps []layered, get func(*Permissions) *bool) Verdict {
+	v := Ask
+	if class != nil {
+		v = Deny
+		if *class {
+			v = Allow
+		}
+	}
+	for _, c := range caps {
+		if c.p == nil {
+			continue
+		}
+		if m := get(c.p); m != nil && !*m && v != Deny {
+			v = Deny
 			b.origin[name] = c.layer
 		}
 	}

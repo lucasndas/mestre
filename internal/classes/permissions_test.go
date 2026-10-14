@@ -87,12 +87,16 @@ func TestCredentialsMustExistListTheClassAndBeReachable(t *testing.T) {
 		"missing":       {"version: 1\nnetwork: {internet: true, credentials: [\"nope\"]}\n", "qa"},
 		"other class":   {"version: 1\nnetwork: {internet: true, credentials: [\"admin\"]}\n", "qa"},
 		"domain absent": {"version: 1\nnetwork: {internet: true, domains: [\"github.com\"], credentials: [\"jira\"]}\n", "qa"},
-		"no internet":   {"version: 1\nnetwork: {credentials: [\"jira\"]}\n", "qa"},
+		"no internet":   {"version: 1\nnetwork: {internet: false, credentials: [\"jira\"]}\n", "qa"},
 	} {
 		err := parse(t, c.yaml).CheckCredentials(c.class, v)
 		if !errors.Is(err, classes.ErrInvalid) {
 			t.Errorf("%s: err = %v; want ErrInvalid", name, err)
 		}
+	}
+	// An absent internet is on, any domain (ADR 0025): the credential is reachable.
+	if err := parse(t, "version: 1\nnetwork: {credentials: [\"jira\"]}\n").CheckCredentials("qa", v); err != nil {
+		t.Fatalf("absent internet: %v", err)
 	}
 	if err := ok.CheckCredentials("qa", nil); err == nil || !strings.Contains(err.Error(), "vault") {
 		t.Fatalf("without the vault: %v", err)
