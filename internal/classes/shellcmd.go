@@ -26,6 +26,9 @@ type shellState struct {
 	// (docs/classes/classificacao-de-risco.md). Nil outside the decision
 	// (the risk walker keeps its own).
 	facts *lineFacts
+	// feed is the legible literal a pipe feeds the current part, which a
+	// shell reading its input runs (pipefeed.go); nil otherwise.
+	feed *string
 }
 
 // shell analyses a command line. On Windows it is analysed as POSIX and as
@@ -59,6 +62,7 @@ func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 	for i := range parts {
 		res.merge(e.part(&parts[i], d, st, depth))
 		res.merge(e.stdinBodies(parts, i, st, depth))
+		res.merge(e.pipeDecision(parts, i, d, st, depth))
 		e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
 			// cd x && …, in a line without subshells or pipes: the rest
@@ -390,7 +394,7 @@ func (e *evaluator) unwrap(cn string, args []word, res *result) (inner []word, e
 			}
 			i++
 		}
-		return args[i:]
+		return args[min(i, len(args)):] // an option's value may be missing (xargs -I)
 	}
 	switch cn {
 	case "nohup", "builtin", "setsid":

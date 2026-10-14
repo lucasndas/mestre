@@ -412,6 +412,7 @@ func (lx *lexer) dollar() {
 		if !ok {
 			lx.opaque = append(lx.opaque, "expansão sem fechar")
 		}
+		lx.innerSubs(inner)
 	case n == '(':
 		lx.i++
 		inner, ok := lx.balanced('(', ')')
@@ -424,6 +425,7 @@ func (lx *lexer) dollar() {
 		if !ok {
 			lx.opaque = append(lx.opaque, "expansão sem fechar")
 		}
+		lx.innerSubs(inner)
 	case n == '\'':
 		// $'…': ANSI-C quoting; its escapes can spell anything.
 		lx.mark("aspas $'…'")
@@ -470,6 +472,18 @@ func (lx *lexer) backtick() {
 	inner := lx.s[lx.i:min(j, len(lx.s))]
 	lx.i = min(j+1, len(lx.s))
 	lx.sub(inner, ok, "substituição de comando com crases")
+}
+
+// innerSubs records the command substitutions inside the text of a ${…} or
+// $((…)) (${x:-$(cmd)}, ${x:=`cmd`}, $((1 + $(cmd)))): the shell runs them,
+// so they are analysed like a $(…) of the line and a fixed rule in them
+// denies. The text is read as an unquoted here-document body is, which
+// finds $(…) and `…` also inside nested ${…} and $((…)) and inside quotes.
+func (lx *lexer) innerSubs(inner string) {
+	subs, _ := bodyExpansions(inner)
+	for _, s := range subs {
+		lx.toks = append(lx.toks, token{op: "sub", w: word{text: s}})
+	}
 }
 
 func (lx *lexer) mark(reason string) {

@@ -186,7 +186,11 @@ func (w *riskWalker) line(cmd, cwd string, d dialect, depth int) riskOut {
 	var out riskOut
 	st := &shellState{cwds: []string{cwd}, facts: newLineFacts()}
 	for i := range parts {
+		piped, feed := w.pipeRisk(parts, i, d, st, depth)
+		st.feed = feed
 		out.raise(w.part(&parts[i], d, st, depth))
+		st.feed = nil
+		out.raise(piped)
 		out.raise(w.stdinRisk(parts, i, st, depth))
 		w.e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
@@ -283,8 +287,25 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 		return riskOut{risk: RiskHigh, rule: "shell aninhado: " + cn}
 	}
 	w.scan(c, ws, st)
+	if stdinScriptShell(cn, args) {
+		// bash -, pwsh -File -, source /dev/stdin: the script is the input,
+		// like a shell without one.
+		c.scriptInWorktree = false
+	}
 	if !c.scriptInWorktree {
-		if nested, nd, why, ok := nestedShell(cn, args); ok {
+		nested, nd, why, ok := nestedShell(cn, args)
+		if !ok && stdinScriptShell(cn, args) {
+			nested, nd, why, ok = "", dialectPOSIX, cn+" lendo o script da entrada", true
+			if pwshNames[normalizeInterpreter(cn)] {
+				nd = dialectPwsh
+			}
+		}
+		if ok && nested == "" && st.feed != nil {
+			// The legible literal of the pipe is the script; the pipe's own
+			// classification (pipeRisk) holds it.
+			return riskOut{risk: RiskMedium, rule: "trecho que o motor não analisa: " + why}
+		}
+		if ok {
 			if nested == "" || illegible(nested, nd) {
 				return riskOut{risk: RiskHigh, rule: "shell aninhado de texto ilegível: " + why}
 			}

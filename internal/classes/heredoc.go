@@ -283,7 +283,8 @@ type stdinUse struct {
 	name  string
 	shell bool // as commands of a shell, in d
 	d     dialect
-	code  bool // as a program the motor cannot read
+	code  bool   // as a program the motor cannot read
+	rep   string // the replace string of xargs -I, for a pipe into xargs
 }
 
 // stdinReader says how the simple command ws reads its standard input.
