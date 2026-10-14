@@ -5,7 +5,8 @@
 // suite).
 //
 // M0 delivers the skeleton: minimal TUI, start screens (login, folder
-// trust, Codex hook review), hooks read from the provider files and run
+// trust, Codex hook review, and FAKEAGENT_START_SCREEN, a screen no adapter
+// knows), hooks read from the provider files and run
 // with each provider's semantics, recorded payloads, scripts and
 // /fake-dump. Usage and limit emulation and the full instruction dump
 // arrive with the adapter and conformance in M3.
