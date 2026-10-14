@@ -61,7 +61,7 @@ func (c *codex) HookFiles(req HookFilesRequest) ([]ManagedFile, error) {
 	if req.Root == "" || !absolute(req.Root) {
 		return nil, fmt.Errorf("codex hooks: the profile folder %q is not absolute", req.Root)
 	}
-	content, err := codexHooksJSON(req.Binary)
+	content, err := codexHooksJSON(machineOS(req.OS), req.Binary)
 	if err != nil {
 		return nil, err
 	}
@@ -69,17 +69,17 @@ func (c *codex) HookFiles(req HookFilesRequest) ([]ManagedFile, error) {
 	files := []ManagedFile{{Path: hooksPath, Merge: func([]byte) ([]byte, error) { return content, nil }}}
 	if req.Fallbacks.CodexHookTrust {
 		files = append(files, ManagedFile{Path: codexConfig(req.Root), Merge: func(cur []byte) ([]byte, error) {
-			return codexTrustHooks(cur, hooksPath, req.Binary)
+			return codexTrustHooks(cur, hooksPath, machineOS(req.OS), req.Binary)
 		}})
 	}
 	return files, nil
 }
 
 // codexHooksJSON is the content of hooks.json.
-func codexHooksJSON(bin string) ([]byte, error) {
+func codexHooksJSON(goos, bin string) ([]byte, error) {
 	hooks := map[string][]codexGroup{}
 	for _, h := range codexHooks {
-		cmd, err := codexHookCommand(bin, h.event)
+		cmd, err := codexHookCommand(goos, bin, h.event)
 		if err != nil {
 			return nil, err
 		}
@@ -97,29 +97,38 @@ func codexHooksJSON(bin string) ([]byte, error) {
 }
 
 // codexHookCommand is the line of one hook: the stable path of `mestre` and
-// the arguments, with no other shell syntax (Codex runs it through the
-// user's shell: sh -c, cmd /c or PowerShell -Command). A path with a blank
-// goes between double quotes; a path with a character any of those shells
-// would read is refused.
-func codexHookCommand(bin, event string) (string, error) {
+// the arguments. Codex runs it with the shell it detects for the user
+// (codex-rs, commit 2f05c0a: core/src/session/mod.rs, build_hooks_config):
+// on Linux `$SHELL -c` (sh, bash or zsh), where the line is the path and
+// the arguments, between double quotes when the path has a blank; on
+// Windows PowerShell (`-NoProfile -Command`), where a quoted path is a
+// string, not a command: there the line calls it with & and ends with the
+// exit code of the call, which PowerShell 5.1 would otherwise turn into 1
+// (and 2, the block, would be lost: Codex fails open). A path with a
+// character any of those shells would read is refused.
+func codexHookCommand(goos, bin, event string) (string, error) {
 	if bin == "" || !absolute(bin) { // the content is fixed: no variable of the shell
 		return "", fmt.Errorf("codex hooks: the mestre binary %q is not an absolute path", bin)
 	}
 	if strings.ContainsAny(bin, "\"'`$%!&|;<>()^*?[]{}\n\r\t") {
 		return "", fmt.Errorf("codex hooks: the mestre binary %q has a character the shell would read", bin)
 	}
+	args := " hook --provider codex --event " + event
+	if goos == "windows" {
+		return `& "` + bin + `"` + args + "; exit $LASTEXITCODE", nil
+	}
 	if strings.Contains(bin, " ") {
 		bin = `"` + bin + `"`
 	}
-	return bin + " hook --provider codex --event " + event, nil
+	return bin + args, nil
 }
 
 // codexTrustHooks sets [hooks.state."<file>:<event>:0:0"] trusted_hash for
 // each Mestre hook, keeping the rest of config.toml.
-func codexTrustHooks(cur []byte, hooksPath, bin string) ([]byte, error) {
+func codexTrustHooks(cur []byte, hooksPath, goos, bin string) ([]byte, error) {
 	out := cur
 	for _, h := range codexHooks {
-		hash, err := codexHookHash(h, bin)
+		hash, err := codexHookHash(h, goos, bin)
 		if err != nil {
 			return nil, err
 		}
@@ -141,8 +150,8 @@ func codexHookKey(hooksPath string, h codexHook) string {
 // discovery.rs, hook_hash): SHA-256 of the compact JSON, keys sorted, of
 // the event label, the effective matcher and the normalized handler (async
 // false, the timeout). The conformance test checks it at each version.
-func codexHookHash(h codexHook, bin string) (string, error) {
-	cmd, err := codexHookCommand(bin, h.event)
+func codexHookHash(h codexHook, goos, bin string) (string, error) {
+	cmd, err := codexHookCommand(goos, bin, h.event)
 	if err != nil {
 		return "", err
 	}

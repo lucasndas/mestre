@@ -69,7 +69,12 @@ func TestClaudeSettingsAreGeneratedFromScratchAndUseThePOSIXFormOfWindowsPaths(t
 			t.Fatalf("settings lack %s:\n%s", want, out)
 		}
 	}
-	for _, gone := range []string{"Bash(x)", `"hooks"`, `"env"`, "apiKeyHelper"} {
+	// The env is the Mestre's pin of the variables of the hooks, never the
+	// planted one (ClaudeHookEnv).
+	if env, _ := s["env"].(map[string]any); len(env) != 1 || env["MESTRE_AGENT_ID"] != "a1" {
+		t.Fatalf("env %v: want only the pinned MESTRE_AGENT_ID", s["env"])
+	}
+	for _, gone := range []string{"Bash(x)", `"hooks"`, "apiKeyHelper"} {
 		if strings.Contains(out, gone) {
 			t.Fatalf("the planted %s survived:\n%s", gone, out)
 		}

@@ -55,8 +55,10 @@ func (a *antigravity) ReadUsage(req UsageRequest) (Usage, error) {
 	}
 	env := make([]string, 0, len(req.Env)+1)
 	for _, kv := range req.Env {
-		// The command must not look like a character: no hook answers for it.
-		if !strings.HasPrefix(kv, "MESTRE_AGENT_ID=") {
+		// The command must not look like a character: no variable of the
+		// Mestre (on Windows the names have no case), so no hook answers
+		// for it and no hook reaches the engine.
+		if !strings.HasPrefix(strings.ToUpper(kv), "MESTRE_") {
 			env = append(env, kv)
 		}
 	}

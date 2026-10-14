@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -125,7 +126,11 @@ prompts:
 		var stop []byte
 		for _, c := range h.snapshot() {
 			events = append(events, c.Event)
-			if c.Command != bin+" hook --provider codex --event "+c.Event {
+			want := bin + " hook --provider codex --event " + c.Event
+			if runtime.GOOS == "windows" { // the line PowerShell runs
+				want = `& "` + bin + `" hook --provider codex --event ` + c.Event + "; exit $LASTEXITCODE"
+			}
+			if c.Command != want {
 				t.Errorf("hook command %q", c.Command)
 			}
 			if c.Event == "Stop" && stop == nil {

@@ -235,14 +235,49 @@ func TestHookLineIsGuardedAndNamesTheStableBinary(t *testing.T) {
 	if got, want := command("linux", ""), `[ -n "$MESTRE_AGENT_ID" ] && command -v "${MESTRE_CLI:-mestre}" >/dev/null 2>&1 && exec "${MESTRE_CLI:-mestre}" hook --provider claude-code --event PreToolUse; exit 0`; got != want {
 		t.Errorf("linux = %s", got)
 	}
-	if got := command("linux", "/opt/mestre/bin/mestre"); !strings.Contains(got, `"${MESTRE_CLI:-/opt/mestre/bin/mestre}"`) {
+	// With the stable path, no variable (which a repository could set in its
+	// settings) replaces the binary.
+	if got, want := command("linux", "/opt/mestre/bin/mestre"), `[ -n "$MESTRE_AGENT_ID" ] && command -v "/opt/mestre/bin/mestre" >/dev/null 2>&1 && exec "/opt/mestre/bin/mestre" hook --provider claude-code --event PreToolUse; exit 0`; got != want {
 		t.Errorf("linux with the stable binary = %s", got)
 	}
-	if got, want := command("windows", ""), `if defined MESTRE_AGENT_ID if exist "%MESTRE_CLI%" "%MESTRE_CLI%" hook --provider claude-code --event PreToolUse`; got != want {
+	// Windows: Git Bash, the shell of the hooks of Claude Code there, with
+	// the path in forward slashes.
+	if got, want := command("windows", ""), `m="${MESTRE_CLI:-mestre}"; m="${m//\\//}"; [ -n "$MESTRE_AGENT_ID" ] && command -v "$m" >/dev/null 2>&1 && exec "$m" hook --provider claude-code --event PreToolUse; exit 0`; got != want {
 		t.Errorf("windows = %s", got)
 	}
-	if got := command("windows", `C:\Program Files\Mestre\mestre.exe`); !strings.Contains(got, `if exist "C:\Program Files\Mestre\mestre.exe" "C:\Program Files\Mestre\mestre.exe" hook`) {
+	if got, want := command("windows", `C:\Program Files\Mestre\mestre.exe`), `[ -n "$MESTRE_AGENT_ID" ] && command -v "C:/Program Files/Mestre/mestre.exe" >/dev/null 2>&1 && exec "C:/Program Files/Mestre/mestre.exe" hook --provider claude-code --event PreToolUse; exit 0`; got != want {
 		t.Errorf("windows with the stable binary = %s", got)
+	}
+	for _, bad := range []string{`C:\Mestre\$x\mestre.exe`, "C:\\Mestre\\`x`.exe", `C:\"x".exe`} {
+		if _, err := claude.HookFiles(providers.HookFilesRequest{OS: "windows", Root: `C:\w`, Binary: bad}); err == nil {
+			t.Errorf("windows binary %q was accepted in the bash line", bad)
+		}
+	}
+}
+
+// The --settings file of a character pins the variables the hook line
+// reads, above the env of the settings of the repository (M3 audit).
+func TestClaudeHookEnvPinsTheVariablesOfTheHooks(t *testing.T) {
+	t.Parallel()
+	got := providers.ClaudeHookEnv("a1", []string{"MESTRE_CLI=/opt/mestre", "MESTRE_ENDPOINT=unix:///run/mestre/p/cli.sock", "OTHER=1", "MESTRE_CLI_X=y", "MESTRE_ENDPOINT="})
+	want := map[string]any{"MESTRE_AGENT_ID": "a1", "MESTRE_CLI": "/opt/mestre", "MESTRE_ENDPOINT": "unix:///run/mestre/p/cli.sock"}
+	if len(got) != len(want) {
+		t.Fatalf("env = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("env[%s] = %v, want %v", k, got[k], v)
+		}
+	}
+	// The --settings file carries it, whatever env the file had.
+	nc, err := providers.NewClaudeCode(providers.Options{}).(providers.NativeTranslator).Native(providers.NativePolicy{
+		AgentID: "a1", OS: "linux", Worktree: "/w", HookEnv: []string{"MESTRE_CLI=/opt/mestre"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := mapOf(object(t, apply(t, providers.ManagedFile(nc.Files[0]), []byte(`{"env":{"MESTRE_AGENT_ID":"","MESTRE_CLI":"/bin/true","X":"1"}}`)))["env"])
+	if env["MESTRE_AGENT_ID"] != "a1" || env["MESTRE_CLI"] != "/opt/mestre" || len(env) != 2 {
+		t.Errorf("env of the --settings file = %v", env)
 	}
 }
 
@@ -382,6 +417,25 @@ func TestBuildLaunchHasTheLayerTheSettingsAndTheProfileAndNoForbiddenFlag(t *tes
 						t.Errorf("%s/%s: resume %q gave %v", goos, base.Name, resume, l.Args)
 					}
 				}
+			}
+		}
+	}
+	// Commander reads joined short flags as a cluster or a flag with its
+	// value: -dc is -d -c, -pd is -p -d, -r1234 is --resume 1234. No such
+	// form gets to the command, from the base or the engine (M3 audit).
+	layer, _ := claude.DeliverMestreLayer(providers.LayerRequest{Path: "/work/mesa/.mestre/agents/a1/MESTRE.md"})
+	nc, _ := claude.(providers.NativeTranslator).Native(providers.NativePolicy{AgentID: "a1", OS: "linux", Worktree: "/work/mesa", NoWrite: true, Offline: true})
+	for _, joined := range [][]string{{"-dc"}, {"-cd"}, {"-pd"}, {"-dp", "hi"}, {"-r1234"}, {"-r=1234"}, {"-c1"}, {"-p=x"}} {
+		for _, inEngine := range []bool{false, true} {
+			req := providers.LaunchRequest{Base: providers.Base{Command: "claude"}, OS: "linux", AgentID: "a1", NewSessionID: "u1",
+				ProviderArgs: slices.Concat(layer.Args, nc.Args), Env: []string{"CLAUDE_CONFIG_DIR=/profiles/p"}}
+			if inEngine {
+				req.ProviderArgs = append(req.ProviderArgs, joined...)
+			} else {
+				req.Base.Args = joined
+			}
+			if l, err := claude.BuildLaunch(req); err == nil {
+				t.Errorf("%q (engine %v) was accepted: %q", joined, inEngine, l.Args)
 			}
 		}
 	}

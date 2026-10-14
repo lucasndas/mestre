@@ -269,7 +269,7 @@ func TestCodexStartFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=false", "--no-daemon", "-a", "on-request", "-m", "gpt-5.5-codex"}
+	want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=false", "--no-daemon", "-a", "on-request", "-m", "gpt-5.5-codex", "-c", "features.hooks=true"}
 	if !slices.Equal(l.Args, want) {
 		t.Fatalf("args = %q, want %q", l.Args, want)
 	}
@@ -278,7 +278,7 @@ func TestCodexStartFlags(t *testing.T) {
 	}
 	// What the base already has is not added twice.
 	req.Base.Args = []string{"--no-daemon", "--ask-for-approval=on-request", "--model", "o4"}
-	if l, _ = a.BuildLaunch(req); !slices.Equal(l.Args, slices.Concat(req.Base.Args, req.ProviderArgs)) {
+	if l, _ = a.BuildLaunch(req); !slices.Equal(l.Args, slices.Concat(req.Base.Args, req.ProviderArgs, []string{"-c", "features.hooks=true"})) {
 		t.Fatalf("args = %q", l.Args)
 	}
 	sandbox := []string{"-s", "read-only"}
@@ -288,6 +288,24 @@ func TestCodexStartFlags(t *testing.T) {
 		{"-c", "features.hooks=false"}, {"-c", `model_instructions_file="/x"`}, {"-c", "project_doc_max_bytes=0"},
 		{"-c", `sandbox_mode="danger-full-access"`}, {"-s", "danger-full-access"}, {"--sandbox=danger-full-access"},
 		{"-a", "never"}, {"-c", "approval_policy=never"}, {"-c", "instructions=x"}, {"--last"},
+		// The bypasses of the M3 audit, in the grammar of clap: attached
+		// short values, "=", inline tables, the keys of the engine and of
+		// the hooks, other folders and profiles, subcommands and prompts.
+		{"-sdanger-full-access"}, {"-s=danger-full-access"}, {"--sandbox", "danger-full-access"},
+		{"-cfeatures.hooks=false"}, {"-c", "features={hooks=false}"}, {"-c", "features = { hooks = false }"},
+		{"-c", "codex_hooks=false"}, {"-c", "use_legacy_landlock=true"}, {"--config=features.hooks=false"},
+		{"-c", `hooks.state."/p/hooks.json:pre_tool_use:0:0".enabled=false`}, {"-c", "hooks={}"},
+		{"-c", `sandbox_workspace_write.writable_roots=["/"]`}, {"-c", `sandbox_workspace_write={writable_roots=["/"]}`},
+		{"-c", "sandbox_workspace_write.network_access=true"}, {"-c", `developer_instructions="other"`},
+		{"-c", "tui={features={hooks=false}}"}, {"-c", "tui=[{hooks=1}]"}, {"-c", "tui={x=[1,"},
+		{"-c", `projects."/".trust_level="trusted"`}, {"-c", "permissions={}"}, {"-c", `web_search="live"`},
+		{"-cmodel_instructions_file=/tmp/x"}, {"-c", "approval_policy = never"}, {"-c", `approval_policy="never"`},
+		{"-c", "approvals_reviewer=auto_review"}, {"-c", "profile=yolo"}, {"-c", "project_doc_max_bytes=1"},
+		{"-c", "model"}, {"-c", "=x"}, {"-c"}, {"-c", "-sdanger-full-access"},
+		{"-anever"}, {"-a=never"}, {"--ask-for-approval", "never"}, {"--enable", "x"}, {"--disable", "x"},
+		{"-C", "/"}, {"-C/"}, {"--cd=/"}, {"--worktree"}, {"--profile", "yolo"}, {"-pyolo"}, {"--profile=yolo"},
+		{"--approve-for-me"}, {"--not-so-yolo"}, {"--image", "/x.png"}, {"-i/x.png"}, {"--search"},
+		{"exec"}, {"resume", "x"}, {"a prompt"}, {"--", "--yolo"}, {"-"}, {"-x"}, {"--unknown"}, {"-h"}, {"--no-daemon=false"},
 	} {
 		r := req
 		r.Base.Args, r.ProviderArgs = bad, sandbox
@@ -295,7 +313,22 @@ func TestCodexStartFlags(t *testing.T) {
 			t.Errorf("%q was accepted", bad)
 		}
 	}
+	// The engine's arguments are checked the same way, with the keys of the
+	// layer and of the native controls besides.
+	for _, bad := range [][]string{{"exec"}, {"-c", "features.hooks=false"}, {"--yolo"}, {"-sdanger-full-access"}} {
+		r := req
+		r.Base.Args, r.ProviderArgs = nil, append(slices.Clone(sandbox), bad...)
+		if _, err := a.BuildLaunch(r); err == nil {
+			t.Errorf("engine args %q were accepted", bad)
+		}
+	}
 	r := req
+	r.Base.Args = []string{"-mo4", "-c", `model_reasoning_effort="high"`, "-c", "tui={animations=false}", "--no-alt-screen"}
+	r.ProviderArgs = []string{"-sworkspace-write", "-c", `developer_instructions="x"`, "-c", `sandbox_workspace_write.writable_roots=["/m"]`, "--search"}
+	if l, err := a.BuildLaunch(r); err != nil || l.Args[len(l.Args)-1] != "features.hooks=true" || slices.Contains(l.Args, "gpt-5.5-codex") {
+		t.Errorf("a base with the model and the display, and the engine's keys: %q, %v", l.Args, err)
+	}
+	r = req
 	r.Base.Args, r.ProviderArgs = nil, nil
 	if _, err := a.BuildLaunch(r); err == nil {
 		t.Error("a start without the sandbox was accepted")

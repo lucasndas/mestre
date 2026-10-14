@@ -1,6 +1,6 @@
 # Sessão zero da mesa
 
-> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -109,4 +109,4 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** a forma Windows da linha de hook em cada provedor (`cmd /c` no Antigravity, `command_windows` no Codex, shell usado pelo Claude Code). **Padrão:** a linha é só o executável e os argumentos (`mestre hook --provider … --event …`), sem sintaxe própria de shell, e só o teste de existência do binário muda por sistema. **Se falhar:** a linha passa a usar o caminho absoluto estável do `mestre.exe` e, no Codex, o campo `command_windows`. **Onde:** etapas 4 a 6 do [teste de conformidade](../provedores/conformidade.md) na máquina Windows.
+- **Verificar na implementação:** a forma Windows da linha de hook em cada provedor (`cmd /c` no Antigravity, `command_windows` no Codex, shell usado pelo Claude Code). **Padrão:** a linha é só o executável e os argumentos (`mestre hook --provider … --event …`), sem sintaxe própria de shell, e só o teste de existência do binário muda por sistema. **Se falhar:** a linha passa a usar o caminho absoluto estável do `mestre.exe` e, no Codex, o campo `command_windows`. **Onde:** etapas 4 a 6 do [teste de conformidade](../provedores/conformidade.md) na máquina Windows. **Decisão pelo código dos CLIs (2026-10-14), antes da rodada:** o Codex roda o hook pelo shell que detecta, o PowerShell no Windows, e a linha é `& "<caminho>" …; exit $LASTEXITCODE`; o Claude Code roda com bash (o do Git for Windows), e a linha é a mesma do Linux, com o caminho em barras normais; o Antigravity segue com `cmd /c`. Os itens de cada um estão no [Codex](../provedores/codex.md#verificar-na-implementação) e no [Claude Code](../provedores/claude-code.md#verificar-na-implementação).

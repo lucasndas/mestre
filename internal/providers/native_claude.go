@@ -55,9 +55,9 @@ func (c *claudeCode) Native(p NativePolicy) (NativeControls, error) {
 
 	if !p.NoWrite {
 		for _, g := range p.Write {
+			// Edit(...) covers every tool that writes files; Claude Code
+			// warns that it ignores a Write(...) path rule.
 			r, ok := path("Edit", g)
-			add(&allow, r, ok)
-			r, ok = path("Write", g)
 			add(&allow, r, ok)
 		}
 	}
@@ -132,6 +132,9 @@ func (c *claudeCode) Native(p NativePolicy) (NativeControls, error) {
 				// contaminate it; the Mestre has its own memory (scrolls and
 				// sheets).
 				"autoMemoryEnabled": false,
+				// The variables of the hooks, above the env of the settings
+				// of the repository (claude_hooks.go).
+				"env": ClaudeHookEnv(p.AgentID, p.HookEnv),
 			}
 			setClaudeStatusLine(obj, statusLine)
 			return marshalObject(obj)

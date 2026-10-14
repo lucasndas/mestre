@@ -6,8 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -113,9 +115,82 @@ type Inbox interface {
 
 // Decisions are the answers the engine already took for a screen: trust in
 // a worktree the Mestre created, the recorded decision of a native
-// permission request.
+// permission request. screen is the text on display: a permission screen
+// is answered with the decision of the call it shows (ScreenCall), never
+// with the last decision of the character; with no such call, ok is false
+// and the screen is denied.
 type Decisions interface {
-	Decision(ctx context.Context, agentID, screenID string) (choice string, ok bool)
+	Decision(ctx context.Context, agentID, screenID, screen string) (choice string, ok bool)
+}
+
+// CallDecision is the decision the engine took on one tool call of a
+// character (pre_tool or permission_request), kept while the call can
+// still ask on a native screen.
+type CallDecision struct {
+	Tool   *Tool
+	Choice string // "allow" or "deny"
+}
+
+// ScreenCall finds the call a native permission screen asks about: the most
+// recent of calls (oldest first) whose command is, whole, on lines of its
+// own in the dialog at the bottom of the screen (blanks ignored, since the
+// screen wraps a long command; a frame or a $ in front is not part of it),
+// or, for a call without a command, whose first path or URL is on a line.
+// A line of the model that only mentions the command is not it. -1 when no
+// call is there: the screen is denied. The caller drops a call once it ends
+// or its decision answered a screen, so a stale decision never answers the
+// screen of another call.
+func ScreenCall(screen string, calls []CallDecision) int {
+	lines := strings.Split(bottom(screen, dialogLines), "\n")
+	for i := len(calls) - 1; i >= 0; i-- {
+		t := calls[i].Tool
+		switch {
+		case t == nil:
+		case t.Command != "":
+			if onOwnLines(lines, squeeze(t.Command)) {
+				return i
+			}
+		case len(t.Paths) > 0 || t.URL != "":
+			e := t.URL
+			if len(t.Paths) > 0 {
+				e = t.Paths[0]
+			}
+			for _, l := range lines {
+				if strings.Contains(squeeze(l), squeeze(e)) {
+					return i
+				}
+			}
+		}
+	}
+	return -1
+}
+
+// onOwnLines reports whether consecutive lines, each without blanks and
+// without the frame of the dialog, make up e exactly.
+func onOwnLines(lines []string, e string) bool {
+	if e == "" {
+		return false
+	}
+	for i := range lines {
+		acc := ""
+		for j := i; j < len(lines) && len(acc) < len(e); j++ {
+			acc += squeeze(strings.Trim(lines[j], " \t│|$>›❯"))
+			if acc == e {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// squeeze is s without blanks.
+func squeeze(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // TrustRecovery restarts a character whose start showed the folder trust
@@ -316,7 +391,7 @@ func (s *Supervisor) act(k *KnownScreen, screen string) {
 	case ActionAnswer:
 		choice, ok := "", false
 		if s.cfg.Decisions != nil {
-			choice, ok = s.cfg.Decisions.Decision(ctx, s.cfg.AgentID, k.ID)
+			choice, ok = s.cfg.Decisions.Decision(ctx, s.cfg.AgentID, k.ID, screen)
 		}
 		if !ok {
 			choice = k.Default

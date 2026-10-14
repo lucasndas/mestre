@@ -85,7 +85,7 @@ Ferramenta de tipo `shell` sem comando, ou `read`, `write`, `edit` ou `search` s
 
 ### Prontidão e telas interativas
 
-Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela renderizada e ação. **Evitar:** pré-configurar para a tela não aparecer. **Responder:** o adaptador digita a resposta, só quando ela vem de uma decisão já tomada pelo motor (ex.: confiar num worktree criado pelo Mestre; responder a um pedido de permissão nativo com a decisão já registrada para aquela chamada; sem decisão registrada, nega). **Escalar:** o personagem fica `blocked` com motivo `input` ([personagens](../orquestracao/personagens.md)) e o Mestre da mesa é avisado (pode responder com `mestre ask --raw`); login vira alerta do checklist. Tela parada sem hook e sem padrão conhecido por 30 s (padrão) durante o início também escala. "Pronto" é: prompt de entrada visível (na última linha, ou a área de entrada que o CLI desenha acima do rodapé, descrita na tabela de telas de cada provedor) e tela estável ([terminal](../arquitetura/terminal.md#emulador-de-terminal)), ou `session_start` recebido e prompt visível.
+Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela renderizada e ação. **Evitar:** pré-configurar para a tela não aparecer. **Responder:** o adaptador digita a resposta, só quando ela vem de uma decisão já tomada pelo motor (ex.: confiar num worktree criado pelo Mestre; responder a um pedido de permissão nativo com a decisão já registrada para a chamada que a tela mostra, achada pelo comando, inteiro em linhas próprias do diálogo, ou pelo caminho, e usada uma vez; nunca a última decisão do personagem; sem decisão para aquela chamada, nega). Uma tela conhecida só é reconhecida nas últimas 24 linhas e sem a área de entrada na tela (o diálogo toma o lugar dela): o modelo citando o texto de um diálogo não é o diálogo. **Escalar:** o personagem fica `blocked` com motivo `input` ([personagens](../orquestracao/personagens.md)) e o Mestre da mesa é avisado (pode responder com `mestre ask --raw`); login vira alerta do checklist. Tela parada sem hook e sem padrão conhecido por 30 s (padrão) durante o início também escala. "Pronto" é: prompt de entrada visível (na última linha, ou a área de entrada que o CLI desenha acima do rodapé, descrita na tabela de telas de cada provedor) e tela estável ([terminal](../arquitetura/terminal.md#emulador-de-terminal)), ou `session_start` recebido e prompt visível.
 
 ### Digitação de mensagens
 
@@ -117,7 +117,7 @@ O personagem fica marcado com monitoramento reduzido, com o motivo, quando o pro
 
 ## Regras e erros
 
-- Versão do provedor abaixo da mínima do documento dele: a base é recusada naquela máquina com a explicação, e o checklist avisa.
+- Versão do provedor abaixo da mínima do documento dele: a base é recusada naquela máquina com a explicação, e o checklist avisa. Chega no M7, com a detecção da versão instalada ([ordem](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem)).
 - Evento nativo desconhecido: registrado no log e respondido com a resposta neutra ([despachante](despachante-de-hooks.md)).
 - Ferramenta não mapeada: tipo `other`, decidida pelo padrão da classe ([permissões](../classes/permissoes.md)).
 

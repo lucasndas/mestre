@@ -73,6 +73,14 @@ func checkClaudeLaunch(req LaunchRequest, env []string) error {
 	if req.AgentID == "" {
 		return fmt.Errorf("claude-code: no agent id (MESTRE_AGENT_ID)")
 	}
+	// Commander reads a short flag with more after it as a cluster or a
+	// flag with its value (-dc is -d -c, -r1234 is --resume 1234), which
+	// the check by name would not see: a start has only short flags alone.
+	for _, a := range slices.Concat(req.Base.Args, req.ProviderArgs) {
+		if len(a) > 2 && a[0] == '-' && a[1] != '-' {
+			return fmt.Errorf("claude-code: %q joins a short flag to more text; a start gives each short flag alone", a)
+		}
+	}
 	for _, f := range parseClaudeFlags(req.Base.Args) {
 		switch f.name {
 		case "--append-system-prompt-file", "--settings", "--add-dir":

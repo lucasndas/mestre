@@ -141,6 +141,18 @@ func TestReadUsageReadsOnlyTheTranscriptsOfTheProfile(t *testing.T) {
 			t.Error("a link to auth.json was read")
 		}
 	}
+	// A folder on the way that leads elsewhere (M3 audit; the junction of
+	// Windows is refused by internal/safefile, which has its own test of it).
+	if runtime.GOOS != "windows" {
+		testkit.WriteFiles(t, profile, map[string]string{"elsewhere/rollout-z.jsonl": ""})
+		dir := filepath.Join(profile, "sessions", "2026")
+		if err := os.Symlink(filepath.Join(profile, "elsewhere"), dir); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.ReadUsage(providers.UsageRequest{Profile: profile, Last: providers.Event{TranscriptPath: filepath.Join(dir, "rollout-z.jsonl")}}); err == nil || errors.Is(err, providers.ErrNoUsage) {
+			t.Error("a transcript through a linked folder was read")
+		}
+	}
 }
 
 func TestCodexTurnFailureReadsTheTurnOfTheStop(t *testing.T) {

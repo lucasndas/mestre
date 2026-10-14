@@ -36,32 +36,52 @@ const claudeHookMarker = "hook --provider " + string(ClaudeCode) + " --event "
 // claudeHookCommand is the line of a hook file
 // (docs/sessao-zero/mesa.md#não-atrapalhar-quem-clona): it calls `mestre
 // hook` only when MESTRE_AGENT_ID exists and the binary is there, and
-// otherwise answers neutrally (nothing, exit 0) for Claude Code. On Linux the
-// shell of the hooks is sh; on Windows the command line interpreter. The
-// binary is the stable path when given, else the MESTRE_CLI of the character.
+// otherwise answers neutrally (nothing, exit 0) for Claude Code. Claude Code
+// runs a command hook with bash on both systems (sh on Linux; on Windows Git
+// Bash, which it requires for a hook without "shell": "powershell"), so the
+// line is the same, with the Windows path in forward slashes. The binary is
+// the stable path when given, which no variable overrides (a repository
+// could set one in its settings); else the MESTRE_CLI of the character,
+// pinned in the --settings file of the character (ClaudeHookEnv).
 func claudeHookCommand(goos, binary, event string) (string, error) {
 	tail := claudeHookMarker + event
 	switch goos {
-	case "linux":
-		if strings.ContainsAny(binary, "\"$`\\\n") {
-			return "", fmt.Errorf("claude-code hook: binary path %q has characters the shell line cannot carry", binary)
-		}
-		bin := `"${MESTRE_CLI:-mestre}"`
-		if binary != "" {
-			bin = `"${MESTRE_CLI:-` + binary + `}"`
-		}
-		return `[ -n "$MESTRE_AGENT_ID" ] && command -v ` + bin + ` >/dev/null 2>&1 && exec ` + bin + ` ` + tail + `; exit 0`, nil
-	case "windows":
-		if strings.ContainsAny(binary, "\"%^&|<>\r\n") {
-			return "", fmt.Errorf("claude-code hook: binary path %q has characters the command line cannot carry", binary)
-		}
-		bin := `"%MESTRE_CLI%"`
-		if binary != "" {
-			bin = `"` + binary + `"`
-		}
-		return `if defined MESTRE_AGENT_ID if exist ` + bin + ` ` + bin + ` ` + tail, nil
+	case "linux", "windows":
+	default:
+		return "", fmt.Errorf("claude-code hook: system %q is not linux or windows", goos)
 	}
-	return "", fmt.Errorf("claude-code hook: system %q is not linux or windows", goos)
+	bad := "\"$`\\\n\r"
+	if goos == "windows" {
+		bad = "\"$`\n\r" // the backslashes become slashes
+	}
+	if strings.ContainsAny(binary, bad) {
+		return "", fmt.Errorf("claude-code hook: binary path %q has characters the shell line cannot carry", binary)
+	}
+	prefix, bin := "", `"${MESTRE_CLI:-mestre}"`
+	switch {
+	case binary != "":
+		bin = `"` + strings.ReplaceAll(binary, `\`, "/") + `"` // no backslash on Linux (above)
+	case goos == "windows": // MESTRE_CLI has backslashes, which command -v does not read as a path
+		prefix, bin = `m="${MESTRE_CLI:-mestre}"; m="${m//\\//}"; `, `"$m"`
+	}
+	return prefix + `[ -n "$MESTRE_AGENT_ID" ] && command -v ` + bin + ` >/dev/null 2>&1 && exec ` + bin + ` ` + tail + `; exit 0`, nil
+}
+
+// ClaudeHookEnv is the env key of the --settings file of a character: the
+// variables the hook line and `mestre hook` read (MESTRE_AGENT_ID, and
+// MESTRE_CLI and MESTRE_ENDPOINT when given, as KEY=VALUE), pinned there.
+// The --settings file is above the settings of the repository, whose env
+// could otherwise empty MESTRE_AGENT_ID (the line answers neutrally) or
+// point the CLI or the endpoint elsewhere.
+func ClaudeHookEnv(agentID string, hookEnv []string) map[string]any {
+	env := map[string]any{"MESTRE_AGENT_ID": agentID}
+	for _, kv := range hookEnv {
+		k, v, ok := strings.Cut(kv, "=")
+		if ok && (k == "MESTRE_CLI" || k == "MESTRE_ENDPOINT") && v != "" {
+			env[k] = v
+		}
+	}
+	return env
 }
 
 func isMestreCommand(v any) bool {

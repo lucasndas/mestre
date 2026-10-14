@@ -21,10 +21,10 @@ import (
 )
 
 // This test binary is also the stand-in for the `mestre` binary at the stable
-// path and for `agy` (MESTRE_TEST_AGY_STUB): the hook commands and the usage
+// path and for `agy` (AGYSTUB_STUB): the hook commands and the usage
 // command are run as real processes, by the shell of the system.
 func init() {
-	mode := os.Getenv("MESTRE_TEST_AGY_STUB")
+	mode := os.Getenv("AGYSTUB_STUB")
 	if mode == "" {
 		return
 	}
@@ -33,16 +33,16 @@ func init() {
 		in, _ := io.ReadAll(os.Stdin)
 		out, _ := json.Marshal(map[string]any{"args": os.Args[1:], "stdin": string(in)})
 		fmt.Println(string(out))
-		if os.Getenv("MESTRE_TEST_AGY_FAIL") != "" {
+		if os.Getenv("AGYSTUB_FAIL") != "" {
 			os.Exit(3)
 		}
 		os.Exit(0)
 	case "usage":
 		if !slices.Equal(os.Args[1:], []string{"-p", "/usage", "--output-format", "json"}) ||
-			os.Getenv("HOME") != os.Getenv("MESTRE_TEST_EXPECT_HOME") || os.Getenv("MESTRE_AGENT_ID") != "" {
+			os.Getenv("HOME") != os.Getenv("AGYSTUB_EXPECT_HOME") || slices.ContainsFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(strings.ToUpper(kv), "MESTRE_") }) {
 			os.Exit(9)
 		}
-		fmt.Println(os.Getenv("MESTRE_TEST_AGY_OUT"))
+		fmt.Println(os.Getenv("AGYSTUB_OUT"))
 		os.Exit(0)
 	}
 	os.Exit(8)
@@ -154,7 +154,7 @@ func TestTheGeneratedHookRunsTheMestreBinaryAndKeepsItsExit(t *testing.T) {
 	cmds := hookCommands(t, worktree, binary)
 	payload := string(recorded(t, "antigravity", "PreToolUse"))
 
-	out, exit := runHook(t, cmds["PreToolUse"], dir, payload, "MESTRE_TEST_AGY_STUB=hook")
+	out, exit := runHook(t, cmds["PreToolUse"], dir, payload, "AGYSTUB_STUB=hook")
 	var got struct {
 		Args  []string `json:"args"`
 		Stdin string   `json:"stdin"`
@@ -166,7 +166,7 @@ func TestTheGeneratedHookRunsTheMestreBinaryAndKeepsItsExit(t *testing.T) {
 		t.Errorf("the binary got %q and stdin %q", got.Args, got.Stdin)
 	}
 
-	out, exit = runHook(t, cmds["PreToolUse"], dir, payload, "MESTRE_TEST_AGY_STUB=hook", "MESTRE_TEST_AGY_FAIL=1")
+	out, exit = runHook(t, cmds["PreToolUse"], dir, payload, "AGYSTUB_STUB=hook", "AGYSTUB_FAIL=1")
 	if exit != 3 || strings.Contains(out, `"decision":"allow"`) {
 		t.Errorf("a failing binary: exit %d, stdout %q; want its exit 3 and no allow", exit, out)
 	}
@@ -181,8 +181,8 @@ func TestReadUsageRunsTheCommandWithTheProfileHOME(t *testing.T) {
 	prov := agy(t, providers.Options{Exec: runProcess})
 	u, err := prov.ReadUsage(providers.UsageRequest{
 		AgentID: "a1", Command: bin, OS: runtime.GOOS,
-		Env: append(os.Environ(), "HOME="+home, "MESTRE_AGENT_ID=a1", "MESTRE_TEST_AGY_STUB=usage", "MESTRE_TEST_EXPECT_HOME="+home,
-			"MESTRE_TEST_AGY_OUT="+compact(t, recorded(t, "antigravity", "Usage"))),
+		Env: append(os.Environ(), "HOME="+home, "MESTRE_AGENT_ID=a1", "MESTRE_ENDPOINT=unix:///x", "AGYSTUB_STUB=usage", "AGYSTUB_EXPECT_HOME="+home,
+			"AGYSTUB_OUT="+compact(t, recorded(t, "antigravity", "Usage"))),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +190,7 @@ func TestReadUsageRunsTheCommandWithTheProfileHOME(t *testing.T) {
 	if len(u.LimitWindows) != 4 || u.LimitWindows[0].UsedPct != 38 {
 		t.Errorf("windows = %+v", u.LimitWindows)
 	}
-	_, err = prov.ReadUsage(providers.UsageRequest{Command: bin, Env: []string{"HOME=" + home, "MESTRE_TEST_AGY_STUB=usage", "MESTRE_TEST_EXPECT_HOME=" + home + "x"}})
+	_, err = prov.ReadUsage(providers.UsageRequest{Command: bin, Env: []string{"HOME=" + home, "AGYSTUB_STUB=usage", "AGYSTUB_EXPECT_HOME=" + home + "x"}})
 	if err == nil {
 		t.Error("a failing agy was read as usage")
 	}

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -189,7 +190,7 @@ func (r *Runner) Run(ctx context.Context, req Request) (Result, error) {
 	res := Result{Machine: req.Machine, Profile: req.Profile.Name, Provider: req.Provider, Version: req.Version,
 		Origin: req.Origin, StartedAt: r.clk().Now().UTC()}
 	rctx, cancel := clock.WithTimeout(ctx, r.clk(), or(r.Limit, DefaultLimit))
-	ru := &run{r: r, req: req, res: &res, decisions: map[string]string{}}
+	ru := &run{r: r, req: req, res: &res}
 	ru.do(rctx)
 	cancel()
 	ru.cleanup(context.WithoutCancel(ctx))
@@ -276,9 +277,9 @@ type run struct {
 	files     classes.OSNativeFiles
 	tmpBefore []string
 
-	mu        sync.Mutex
-	decisions map[string]string // screen id → choice, from the engine's last decision
-	events    []providers.Event // every event of the run, completed by Turns
+	mu     sync.Mutex
+	calls  []providers.CallDecision // the decided calls of the turn that may still ask on a native screen
+	events []providers.Event        // every event of the run, completed by Turns
 }
 
 func (ru *run) now() time.Time { return ru.r.clk().Now() }
@@ -395,10 +396,12 @@ func (ru *run) provision(ctx context.Context) error {
 		return err
 	}
 	files := slices.Concat(hooks, ru.layer.Files)
+	hookEnv := []string{localchan.EnvEndpoint + "=" + ru.r.Host.Endpoint(), localchan.EnvCLI + "=" + req.Mestre}
 	var native providers.NativeControls
 	if t, ok := providers.NativeOf(a); ok {
 		pol := classes.NativePolicy(ws.Rules, classes.NativeCharacter{AgentID: ws.AgentID, Provider: req.Provider, OS: req.OS,
-			Worktree: ws.Worktree, ProfileHome: req.Profile.Dir}, req.Fallbacks.Native)
+			Worktree: ws.Worktree, ProfileHome: req.Profile.Dir, GitDir: ws.GitDir, Mirror: ws.Mirror}, req.Fallbacks.Native)
+		pol.HookEnv = hookEnv
 		if native, err = t.Native(pol); err != nil {
 			return err
 		}
@@ -418,7 +421,7 @@ func (ru *run) provision(ctx context.Context) error {
 		ru.r.Host.SetContext(ws.AgentID, ru.layer.HookContext)
 	}
 	env := []string{
-		localchan.EnvEndpoint + "=" + ru.r.Host.Endpoint(), localchan.EnvCLI + "=" + req.Mestre, hook.EnvRecord + "=1",
+		hookEnv[0], hookEnv[1], hook.EnvRecord + "=1",
 		"MESTRE_WORKSPACE=conformidade", "MESTRE_TMP=" + ws.Tmp, "TMPDIR=" + ws.Tmp, "GIT_CONFIG_GLOBAL=" + ws.GitConfig,
 	}
 	if p := pathWith(req.Base.Env, filepath.Dir(req.Mestre)); p != "" {
@@ -447,7 +450,7 @@ func (ru *run) provision(ctx context.Context) error {
 		return err
 	}
 	ru.env = classes.Env{AgentID: ws.AgentID, TableID: ru.lreq.TableID, Worktree: ws.Worktree, Tmp: ws.Tmp, OS: req.OS,
-		Layout: ru.r.Host.cfg.Layout, Normalize: ru.r.Options.NormalizePath, Git: classes.GitxState{Git: ru.r.Git}}
+		Layout: ru.r.Host.cfg.Layout, Normalize: ru.r.Options.NormalizePath, Git: classes.GitxState{Git: ru.r.Git, Main: MainBranch}}
 	return nil
 }
 
@@ -502,46 +505,54 @@ func (ru *run) cleanup(ctx context.Context) {
 	}
 }
 
-// sessionFiles are the files of the test sessions inside the profile: the
-// transcripts the hooks named, and the folder of the conversation of
-// Antigravity. Nothing outside the profile is touched.
+// sessionFiles are the files of the test sessions inside the profile, as
+// the run builds them from what it knows (the worktree, the mirror) and
+// from the session ids of the hooks that have the shape of a UUID; never a
+// path of a payload, which the agent account could write. Every one is
+// reached through no link (noLinkPath), so a link planted in the
+// profile sends no removal elsewhere.
 func (ru *run) sessionFiles() []string {
 	ru.mu.Lock()
 	defer ru.mu.Unlock()
-	inside := func(p string) bool {
-		rel, err := filepath.Rel(ru.req.Profile.Dir, p)
-		return err == nil && rel != "." && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel)
+	profile := ru.req.Profile.Dir
+	var cands [][]string // parts under the profile
+	if ru.req.Provider == providers.ClaudeCode && ru.ws != nil {
+		// The folder of the project of the worktree (transcripts, tool
+		// results, subagents) and the mirror's: Claude Code 2.1.299 keeps
+		// the memory of a project under the git root, which for a worktree
+		// of the mirror is the mirror.
+		cands = append(cands, []string{"projects", claudeProject(ru.ws.Worktree)}, []string{"projects", claudeProject(ru.ws.Mirror)})
+	}
+	seenID := map[string]bool{}
+	for _, ev := range ru.events {
+		id := ev.SessionID
+		if !sessionUUID.MatchString(id) || seenID[id] {
+			continue
+		}
+		seenID[id] = true
+		switch ru.req.Provider {
+		case providers.Antigravity:
+			cands = append(cands, []string{".gemini", "antigravity-cli", "brain", id})
+		case providers.Codex: // sessions/AAAA/MM/DD/rollout-<time>-<id>.jsonl
+			matches, _ := filepath.Glob(filepath.Join(profile, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
+			for _, m := range matches {
+				if rel, err := filepath.Rel(profile, m); err == nil {
+					cands = append(cands, strings.Split(rel, string(filepath.Separator)))
+				}
+			}
+		}
 	}
 	var out []string
-	seen := map[string]bool{}
-	if ru.req.Provider == providers.ClaudeCode && ru.ws != nil {
-		// Claude Code 2.1.299 keeps the memory of a project under the git
-		// root, which for a worktree of the mirror is the mirror.
-		out = append(out, filepath.Join(ru.req.Profile.Dir, "projects", claudeProject(ru.ws.Mirror)))
-	}
-	for _, ev := range ru.events {
-		var cands []string
-		if ev.TranscriptPath != "" {
-			cands = append(cands, ev.TranscriptPath)
-			if ru.req.Provider == providers.ClaudeCode {
-				// The folder of the project of the worktree, with the
-				// transcripts, the tool results and the subagents.
-				cands = append(cands, filepath.Dir(ev.TranscriptPath))
-			}
-		}
-		if ru.req.Provider == providers.Antigravity && ev.SessionID != "" {
-			cands = append(cands, filepath.Join(ru.req.Profile.Dir, ".gemini", "antigravity-cli", "brain", ev.SessionID))
-		}
-		for _, c := range cands {
-			c = filepath.Clean(c)
-			if !seen[c] && inside(c) {
-				seen[c] = true
-				out = append(out, c)
-			}
+	for _, parts := range cands {
+		if p, err := noLinkPath(profile, parts...); err == nil && !slices.Contains(out, p) {
+			out = append(out, p)
 		}
 	}
 	return out
 }
+
+// sessionUUID is the shape of a session id the cleanup takes.
+var sessionUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // tmpPatterns are the temporary files the spike saw the CLIs leave in /tmp
 // (docs/sessao-zero/personagem.md#verificar-na-implementação).

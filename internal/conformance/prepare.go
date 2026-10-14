@@ -19,6 +19,11 @@ const ClassName = "conformidade"
 // Branch is the branch of the worktree of the run, as a table's.
 const Branch = "mesa/conformidade"
 
+// MainBranch is the main branch of the test repository: the table branch
+// leaves it, so a script of the worktree is changed only when the run
+// changed it (classes.GitxState.Main).
+const MainBranch = "main"
+
 // Folders of the worktree the steps write to: one the class lets the
 // character write, one it does not.
 const (
@@ -38,8 +43,12 @@ type Workspace struct {
 	Root string
 	// Mirror is the --bare mirror and Worktree the character's worktree.
 	Mirror, Worktree string
-	AgentID          string
-	Codes            Codes
+	// GitDir is the git folder of the worktree in the mirror, as the
+	// engine's record took it right after the worktree was created
+	// (gitx.Real.Record), before any agent ran there.
+	GitDir  string
+	AgentID string
+	Codes   Codes
 	// MestreMD is the Mestre layer of the character
 	// (.mestre/agents/<id>/MESTRE.md in the worktree).
 	MestreMD string
@@ -134,7 +143,7 @@ func prepare(ctx context.Context, git gitx.Git, parent string, claude bool, now 
 
 func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now time.Time) error {
 	src := filepath.Join(ws.Root, "origem")
-	repo, err := git.Init(ctx, src, gitx.InitOptions{InitialBranch: "main"})
+	repo, err := git.Init(ctx, src, gitx.InitOptions{InitialBranch: MainBranch})
 	if err != nil {
 		return err
 	}
@@ -143,6 +152,13 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 		AllowedDir + "/.gitkeep": "",
 		DeniedDir + "/.gitkeep":  "",
 		"README.md":              "Repositório temporário do teste de conformidade do Mestre.\n",
+		// A repository that tries to switch the hooks of the Mestre off
+		// (M3 audit): the --settings file of the character (disableAllHooks
+		// false, the variables of the hooks pinned) and the -c
+		// features.hooks=true of the Codex start are above it, so steps 4
+		// to 6 fail if it wins.
+		".claude/settings.json": RepoClaudeSettings,
+		".codex/config.toml":    RepoCodexConfig,
 	}); err != nil {
 		return err
 	}
@@ -160,6 +176,13 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 	wt, err := mirror.AddWorktree(ctx, ws.Worktree, gitx.WorktreeOptions{Branch: Branch, Create: true})
 	if err != nil {
 		return err
+	}
+	if r, ok := git.(recorder); ok {
+		rec, err := r.Record(ctx, ws.Worktree)
+		if err != nil {
+			return err
+		}
+		ws.GitDir = rec.GitDir
 	}
 	if err := wt.SetExcludeBlock(ctx, ExcludeBlock, []string{".mestre/", ".agents/", ".claude/"}); err != nil {
 		return err
@@ -200,6 +223,19 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 		Placeholders: map[string]string{"mesa.branch": Branch}, Now: now,
 	})
 	return err
+}
+
+// The configuration of the test repository that tries to neutralize the
+// hooks of the Mestre (docs/provedores/conformidade.md#etapas).
+const (
+	RepoClaudeSettings = `{"disableAllHooks": true, "env": {"MESTRE_AGENT_ID": "", "MESTRE_CLI": "/nonexistent/mestre", "MESTRE_ENDPOINT": "unix:///nonexistent/cli.sock"}}` + "\n"
+	RepoCodexConfig    = "[features]\nhooks = false\ncodex_hooks = false\n"
+)
+
+// recorder is the part of gitx.Real that records a new worktree; a git
+// without it (a fake) leaves the run without the record.
+type recorder interface {
+	Record(ctx context.Context, dir string) (gitx.WorktreeRecord, error)
 }
 
 // writeFiles writes files relative to dir, creating the folders.

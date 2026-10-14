@@ -1,9 +1,11 @@
 package conformance
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -108,7 +110,8 @@ func (c *character) hook(call Call) {
 		c.ru.events = append(c.ru.events, ev)
 		c.ru.mu.Unlock()
 	}
-	if call.Event.Event == providers.EventPreTool || call.Event.Event == providers.EventPermissionRequest {
+	switch call.Event.Event {
+	case providers.EventPreTool, providers.EventPermissionRequest:
 		choice := "deny"
 		if call.Answered && call.Answer.Verdict == hook.VerdictAllow || !call.Answered {
 			// A paused call was decided by the degraded mode of the
@@ -116,7 +119,11 @@ func (c *character) hook(call Call) {
 			choice = "allow"
 		}
 		c.ru.mu.Lock()
-		c.ru.decisions["permission"] = choice
+		c.ru.calls = append(c.ru.calls, providers.CallDecision{Tool: call.Event.Tool, Choice: choice})
+		c.ru.mu.Unlock()
+	case providers.EventPostTool: // the call ended: it asks no more
+		c.ru.mu.Lock()
+		c.ru.calls = slices.DeleteFunc(c.ru.calls, func(d providers.CallDecision) bool { return sameCall(d.Tool, call.Event.Tool) })
 		c.ru.mu.Unlock()
 	}
 	if c.ru.r.Recorder != nil && len(call.Event.Raw) > 0 {
@@ -130,20 +137,34 @@ func (c *character) hook(call Call) {
 
 // Decision implements providers.Decisions: the trust of the worktree the
 // run created, and the native permission screen answered with the engine's
-// last decision for the character.
-func (ru *run) Decision(_ context.Context, _ string, screen string) (string, bool) {
-	switch screen {
+// decision for the call the screen shows (providers.ScreenCall), used once;
+// without one, denied.
+func (ru *run) Decision(_ context.Context, _, screenID, screen string) (string, bool) {
+	switch screenID {
 	case "trust":
 		ru.res.Notes = append(ru.res.Notes, "a tela de confiança da pasta apareceu mesmo com a pré-confiança")
 		return "trust", true
-	case "permission":
+	case "permission", "approval":
 		ru.mu.Lock()
 		defer ru.mu.Unlock()
-		ch, ok := ru.decisions["permission"]
-		ru.res.Notes = append(ru.res.Notes, "a tela de permissão nativa apareceu e foi respondida: "+ch)
-		return ch, ok
+		i := providers.ScreenCall(screen, ru.calls)
+		if i < 0 {
+			ru.res.Notes = append(ru.res.Notes, "a tela de permissão nativa apareceu sem decisão do motor para a chamada que ela mostra: negada")
+			return "deny", true
+		}
+		ch := ru.calls[i].Choice
+		ru.calls = slices.Delete(ru.calls, i, i+1)
+		ru.res.Notes = append(ru.res.Notes, "a tela de permissão nativa apareceu e foi respondida com a decisão da chamada: "+ch)
+		return ch, true
 	}
 	return "", false
+}
+
+// sameCall reports whether two tool events are the same call: the same tool
+// with the same input.
+func sameCall(a, b *providers.Tool) bool {
+	return a != nil && b != nil && a.NativeName == b.NativeName && a.Command == b.Command &&
+		slices.Equal(a.Paths, b.Paths) && a.URL == b.URL && bytes.Equal(a.RawInput, b.RawInput)
 }
 
 // The parts of the supervision: the character state, the Mestre da mesa,
@@ -230,10 +251,10 @@ func (c *character) turn(ctx context.Context, text string) (string, []Call, erro
 	id := fmt.Sprintf("d%d", c.delivered)
 	c.ready = false
 	c.mu.Unlock()
-	// A native permission screen is answered with a decision of this turn
-	// only; without one, it is denied.
+	// A native permission screen is answered with the decision of a call of
+	// this turn only; without one, it is denied.
 	c.ru.mu.Lock()
-	delete(c.ru.decisions, "permission")
+	c.ru.calls = nil
 	c.ru.mu.Unlock()
 	tctx, cancel := clock.WithTimeout(ctx, c.ru.r.clk(), or(c.ru.r.TurnLimit, DefaultTurnLimit))
 	defer cancel()
