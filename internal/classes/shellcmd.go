@@ -270,6 +270,21 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		}
 	}
 
+	// awk and sed programs that execute a command or write a file: a fixed
+	// rule in a literal command denies, a write follows the path rules, and
+	// anything dynamic is at least ask (awksed.go).
+	if pc, ok := e.progCodeOf(cn, args); ok {
+		for _, cmd := range pc.cmds {
+			res.merge(e.shell(cmd, st.cwds[0], depth+1))
+		}
+		for _, wd := range pc.writes {
+			res.merge(e.argPath(wd, use{write: true}, st))
+		}
+		if pc.forcesCode() {
+			res.atLeastAsk(pc.why)
+		}
+	}
+
 	readOnly := false
 	switch {
 	case cn == "git":

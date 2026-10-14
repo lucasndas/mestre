@@ -68,6 +68,10 @@ func (e *evaluator) pipeReader(ws []word, depth int) (u stdinUse, xargs []word) 
 	case stdinRunners[cn]:
 		return e.stdinReader(ws, depth), nil
 	}
+	// awk 'BEGIN{system($0)}', sed 'e' and the like run what they read.
+	if pc, ok := e.progCodeOf(cn, args); ok && pc.execInput {
+		return stdinUse{name: cn, code: true}, nil
+	}
 	return stdinUse{}, nil
 }
 
