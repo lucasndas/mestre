@@ -3,6 +3,7 @@
 package classes_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,12 +13,19 @@ import (
 
 // The bound of the analysis, measured on the inputs built to take long, up
 // to the 4 MiB the hook reads: each decision ends well under a second (the
-// slowest measured, the expansion of braces read on Windows, about 0.35 s).
+// slowest measured, on the Windows reading, about 0.3 s). The suites run in
+// parallel on shared runners, so a decision is timed up to three times and
+// the best counts: the first within the bound ends the measuring, as in the
+// code rules and in the docs check.
 func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 	t.Parallel()
 	free := rules(t, anyYAML)
 	def := rules(t, "version: 1\n")
 	w := "echo " + strings.Repeat("x", 1900) + strings.Repeat("{b,c}", 8)
+	var distinct strings.Builder
+	for i := range 3800 {
+		fmt.Fprintf(&distinct, "print > \"a%d\"; ", i)
+	}
 	cases := map[string]string{
 		"nested ${…} 80k":       "git push; " + strings.Repeat("${x:-", 80000) + "x" + strings.Repeat("}", 80000),
 		"nested ${…} 12k":       strings.Repeat("${x:-", 12000) + "x" + strings.Repeat("}", 12000),
@@ -38,20 +46,33 @@ func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 		"find -exec":            "find " + strings.Repeat("-exec echo ; ", 5000),
 		"tmux commands":         "tmux " + strings.Repeat("new 'echo a' ; ", 4000),
 		"awk writes":            "awk '" + strings.Repeat("print > \"a\"; ", 5000) + "'",
+		"awk distinct writes":   "awk '" + distinct.String() + "'",
 		"a 1 MiB body":          "cat <<'EOF' > d\n" + strings.Repeat("{a,b} $(x) ${y:-z}\n", 50000) + "EOF\necho ok",
 		"4 MiB":                 strings.Repeat("echo a; ", 500000),
 	}
 	var slowest time.Duration
+	var slowName string
 	for goos, env := range tableEnvs() {
 		for name, cmd := range cases {
 			for _, r := range []struct {
 				name string
 				r    *classes.Rules
 			}{{"allow *", free}, {"default", def}} {
-				start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
-				d := decideOn(t, env, r.r, cmd)
-				took := time.Since(start) //nolint:forbidigo // same
-				slowest = max(slowest, took)
+				var d classes.Decision
+				var took time.Duration
+				for try := range 3 {
+					start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
+					d = decideOn(t, env, r.r, cmd)
+					if run := time.Since(start); try == 0 || run < took { //nolint:forbidigo // same
+						took = run
+					}
+					if took <= raceFactor*time.Second {
+						break // within the bound: no need to measure again
+					}
+				}
+				if took > slowest {
+					slowest, slowName = took, goos+", "+r.name+", "+name
+				}
 				if took > raceFactor*time.Second {
 					t.Errorf("%s, %s, %s: %v (%s); want well under a second", goos, r.name, name, took, d.Verdict)
 				}
@@ -61,5 +82,5 @@ func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 			}
 		}
 	}
-	t.Logf("slowest decision: %v", slowest)
+	t.Logf("slowest decision: %v (%s)", slowest, slowName)
 }

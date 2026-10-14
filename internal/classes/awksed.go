@@ -288,31 +288,67 @@ func scanAwk(cn, prog string) (progCode, bool) {
 			}
 		}
 	}
-	hasSystem := awkSystemAny.MatchString(prog)
-	hasPipe := awkPipeLiteral.MatchString(prog) || awkGetlinePipe.MatchString(prog) || awkGetlineLiteral.MatchString(prog)
-	hasLoad := awkLoad.MatchString(prog)
+	// Each construct has a word or a character it cannot do without, so the
+	// regular expressions run only over a program that holds it: the scans of
+	// a long program that has none cost nothing (the bound of the analysis).
+	var sysLits, pipeLits, getLits [][]string
+	hasSystem, hasGetPipe, hasGetLit := false, false, false
+	if strings.Contains(prog, "system") {
+		hasSystem = awkSystemAny.MatchString(prog)
+		if hasSystem {
+			sysLits = awkSystemLiteral.FindAllStringSubmatch(prog, -1)
+		}
+	}
+	if strings.Contains(prog, "|") {
+		pipeLits = awkPipeLiteral.FindAllStringSubmatch(prog, -1)
+	}
+	if strings.Contains(prog, "getline") {
+		getLits = awkGetlineLiteral.FindAllStringSubmatch(prog, -1)
+		hasGetLit = len(getLits) > 0
+		hasGetPipe = awkGetlinePipe.MatchString(prog)
+	}
+	hasLoad := strings.Contains(prog, "@") && awkLoad.MatchString(prog)
+	hasPipe := len(pipeLits) > 0 || hasGetPipe || hasGetLit
 	writes, dynamic := awkWrites(prog)
 	if !hasSystem && !hasPipe && !hasLoad && len(writes) == 0 && dynamic == "" {
 		return progCode{}, false
 	}
-	add(awkSystemLiteral.FindAllStringSubmatch(prog, -1))
-	add(awkPipeLiteral.FindAllStringSubmatch(prog, -1))
-	add(awkGetlineLiteral.FindAllStringSubmatch(prog, -1))
-	p.writes = writes
+	add(sysLits)
+	add(pipeLits)
+	add(getLits)
+	p.writes = distinctWrites(writes)
 	// A system() or getline command whose text is not a plain literal is
 	// dynamic: the motor cannot read it.
-	if hasSystem && len(awkSystemLiteral.FindAllString(prog, -1)) == 0 {
+	if hasSystem && len(sysLits) == 0 {
 		p.code = true
 	}
-	if awkGetlinePipe.MatchString(prog) || hasLoad || dynamic != "" {
+	if hasGetPipe || hasLoad || dynamic != "" {
 		p.code = true
 	}
-	p.execInput = hasSystem || awkGetlinePipe.MatchString(prog) || awkGetlineLiteral.MatchString(prog) || dynamic != ""
+	p.execInput = hasSystem || hasGetPipe || hasGetLit || dynamic != ""
 	p.why = cn + " executa comando (system/pipe/getline)"
 	if dynamic != "" {
 		p.why = cn + " " + dynamic
 	}
 	return p, true
+}
+
+// distinctWrites drops the repeated targets: the path rules decide the same
+// for the same text, so a program that writes one file ten thousand times
+// costs one check, not ten thousand (the bound of the analysis).
+func distinctWrites(ws []word) []word {
+	if len(ws) < 2 {
+		return ws
+	}
+	seen := make(map[string]bool, len(ws))
+	out := ws[:0]
+	for _, w := range ws {
+		if !seen[w.text] {
+			seen[w.text] = true
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // awkWrites reads an awk program with its strings and regular expressions
@@ -539,6 +575,7 @@ func scanSed(cn, prog string) (progCode, bool) {
 			}
 		}
 	}
+	p.writes = distinctWrites(p.writes)
 	if !p.ok() {
 		return progCode{}, false
 	}
