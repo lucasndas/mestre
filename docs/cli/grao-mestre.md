@@ -1,6 +1,6 @@
 # CLI: comandos do Grão-Mestre
 
-> **Assunto:** sintaxe de `table`, `gh`, `app`, `approval`, `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa) · **Componente:** CLI · **Atualizado:** 2026-10-14
+> **Assunto:** sintaxe de `table`, `gh`, `app`, `approval` (com a pausa de autonomia de uma mesa), `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa) · **Componente:** CLI · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ Referência de sintaxe dos comandos que só o Grão-Mestre do workspace usa: abr
 | `table open\|list\|status\|close` | [mesas](../orquestracao/mesas.md), [grao-mestre](../orquestracao/grao-mestre.md) |
 | `gh epic\|review\|approve\|merge\|settings` | [acoes-por-nivel](../github/acoes-por-nivel.md), [aprovacao-no-github](../github/aprovacao-no-github.md), [politica](../aprovacoes/politica.md) |
 | `app list\|status\|create` | [identidades-e-apps](../github/identidades-e-apps.md), [criacao-de-apps](../github/criacao-de-apps.md) |
-| `approval ask\|decide\|list\|delegate` | [cadeia](../orquestracao/cadeia-de-aprovacao.md), [fluxo](../aprovacoes/fluxo.md), [politica](../aprovacoes/politica.md), [delegacao](../aprovacoes/delegacao.md) |
+| `approval ask\|decide\|list\|delegate\|autonomy` | [cadeia](../orquestracao/cadeia-de-aprovacao.md), [fluxo](../aprovacoes/fluxo.md), [politica](../aprovacoes/politica.md), [delegacao](../aprovacoes/delegacao.md) |
 | `decree propose\|list` | [decretos](../telegram/decretos.md) |
 | `notify` | [bot](../telegram/bot.md), [roteamento](../telegram/roteamento.md) |
 
@@ -63,9 +63,11 @@ mestre approval ask --action "<ação>" --summary "<resumo>" (--details "<texto>
 mestre approval decide <id> <resposta> --reason "<motivo>" [--for <duração> | --until-quest] [--pattern "<padrão>"] [--text "<texto>"]
 mestre approval list [--state pending|decided|all] [--table "<mesa>"] [--mine]
 mestre approval delegate --table "<mesa>" --type <tipo> [--pattern "<padrão>"] --until "<ISO 8601>" --reason "<motivo>"
+mestre approval autonomy pause|resume --table "<mesa>" --reason "<motivo>"
 ```
 - `ask`: encaminha aos usuários um pedido de aprovação (o que é, onde, por quê, detalhes ou diff, motivo da dúvida e recomendação), com os botões do Telegram e do painel. `<ação>` referencia o pedido que está esperando (o id do pedido pendente, visto em `approval list`) ou descreve a ação nova; o motor amarra a aprovação ao estado atual dela. Volta com 9 e o id; a decisão chega pela caixa de entrada.
 - `decide`: o agente do nível atual decide um pedido pendente; o motivo vai para a auditoria. `<resposta>` é uma das [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) de agente: `approve` (aprovar agora), `approve-for` (por um tempo: `--for 2h` ou `--until-quest`), `approve-pattern` (com `--pattern`, vira regra temporária: exige `--for` ou `--until-quest`), `always` e `never` (viram sugestão ao Dono: saem com 0 e `suggested: true`), `deny`, `deny-with` (com `--text`, a instrução que chega a quem pediu), `ask-back` (com `--text`, a pergunta) e `escalate` (subir agora). Erros: fora da política, acima do teto do nível ou em causa própria → 3 `human_required` (o Grão-Mestre usa `approval ask`); pedido que não está no nível de quem chama → 3 `not_at_level`; padrão inválido → 2 `pattern_too_broad` ou 2 `pattern_mismatch`; validade acima do máximo → 2 `too_long`; pedido já decidido ou expirado → 7 `already_decided`.
+- `autonomy`: pausa ou retoma a decisão `medio` do Mestre da mesa numa mesa ([pausa de autonomia](../orquestracao/supervisao-da-cadeia.md#pausa-de-autonomia)); só o Grão-Mestre (outros → 3 `level_denied`); retomar a pausa feita por uma pessoa → 3 `level_denied`; mesa inexistente ou encerrada → 4.
 - `list`: pedidos com id, ação, mesa, quem pediu, risco, nível atual, estado, quem decidiu e prazo; `--mine` mostra só os que estão no nível de quem chama. `--json` → `{items: [{id, action, table, requested_by, risk, level, state, decided_by, expires_at}]}`.
 - `delegate`: só o Grão-Mestre; cria uma [subdelegação](../aprovacoes/delegacao.md#subdelegação) ao Mestre da mesa `--table`, mais estreita que o que ele pode decidir. Mais larga que a origem, outra mesa que não a do Mestre, ou validade além da origem → 3 `delegation_too_wide`.
 

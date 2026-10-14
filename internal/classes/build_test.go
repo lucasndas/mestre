@@ -39,8 +39,8 @@ git: {commit: true, branches: ["{mesa.branch}"]}
 	if !slices.Contains(r.Commands.Deny, "curl *") || r.Origin["commands.deny:curl *"] != classes.LayerCeiling {
 		t.Fatalf("commands.deny %v, origin %v; want curl * from the ceiling", r.Commands.Deny, r.Origin)
 	}
-	if r.Git.Commit {
-		t.Fatal("git.commit is true; the sheet denies git commit *")
+	if r.Git.Commit != classes.Deny {
+		t.Fatal("git.commit is not deny; the sheet denies git commit *")
 	}
 	if r.Origin["git.commit"] != classes.LayerSheet || r.Origin["commands.deny:git commit *"] != classes.LayerSheet {
 		t.Fatalf("origin %v; want git.commit and git commit * from the sheet", r.Origin)
@@ -97,7 +97,7 @@ operator: false
 	if r.Commands.Default != classes.Ask || r.Origin["commands.default"] != classes.LayerSheet {
 		t.Fatalf("commands.default %s (%s); want ask from the sheet", r.Commands.Default, r.Origin["commands.default"])
 	}
-	if r.Git.RequestPush || r.Git.Workflows != classes.WorkflowsNever || r.Operator {
+	if r.Git.RequestPush != classes.Deny || r.Git.Workflows != classes.WorkflowsNever || r.Operator {
 		t.Fatalf("git %+v operator %v; the ceiling turns them off", r.Git, r.Operator)
 	}
 	if r.Origin["operator"] != classes.LayerCeiling || r.Origin["files.write:src/**"] != classes.LayerCeiling {
@@ -126,8 +126,10 @@ func TestClassDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(r.Files.Read, []string{"**"}) || len(r.Files.Write) != 0 || r.Commands.Default != classes.Ask || r.Tools.Default != classes.Ask ||
-		r.Git.Commit || r.Git.Workflows != classes.WorkflowsNever || r.Network.Internet || r.Operator {
+	// The defaults of ADR 0025: the worktree to write, commit and push
+	// requests, internet to any domain.
+	if !slices.Equal(r.Files.Read, []string{"**"}) || !slices.Equal(r.Files.Write, []string{"**"}) || r.Commands.Default != classes.Ask || r.Tools.Default != classes.Ask ||
+		r.Git.Commit != classes.Ask || r.Git.RequestPush != classes.Ask || r.Git.Workflows != classes.WorkflowsNever || !r.Network.Internet || len(r.Network.Domains) != 0 || r.Operator {
 		t.Fatalf("defaults %+v", r)
 	}
 }
@@ -144,12 +146,18 @@ func TestAnAbsentDefaultAsksAndTheCeilingStillCloses(t *testing.T) {
 	if r.Commands.Default != classes.Ask || r.Tools.Default != classes.Ask {
 		t.Fatalf("commands.default %s, tools.default %s; want both ask", r.Commands.Default, r.Tools.Default)
 	}
-	for _, ev := range []providers.Event{m.shell("foo --bar"), toolEvent(providers.KindMCP, "mcp__x__y")} {
+	// Without a rule, medio and above ask: a command with a network signal
+	// and a tool without a row.
+	for _, ev := range []providers.Event{m.shell("foo https://exemplo.io"), toolEvent(providers.KindMCP, "mcp__x__y")} {
 		d := decide(m.env(), r, ev)
 		want(t, d, classes.Ask, classes.LayerClass)
 		if d.Risk.Risk != classes.RiskMedium {
 			t.Fatalf("%s: the approval request has risk %+v; want medio", ev.Tool.NativeName, d.Risk)
 		}
+	}
+	// Without a rule and baixo, it runs directly, saying why.
+	if d := decide(m.env(), r, m.shell("foo --bar")); d.Verdict != classes.Allow || !strings.Contains(d.Reason, "padrão: risco baixo") || d.Risk.Risk != classes.RiskLow {
+		t.Fatalf("foo --bar: %+v; want allow by the default baixo", d)
 	}
 
 	closed := ceiling(t, "version: 1\npermissions: {commands: {default: deny}}\n")

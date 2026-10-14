@@ -401,7 +401,7 @@ func TestDecreesByLevel(t *testing.T) {
 	}
 	r := rules(t, qaYAML, permit(1, classes.LevelAdmin, true, "make deploy-teste"))
 	want(t, decide(env, r, m.shell("make deploy-teste")), classes.Allow, classes.LayerDecree)
-	want(t, decide(env, r, m.shell("make deploy-teste && make prod")), classes.Ask, classes.LayerClass)
+	want(t, decide(env, r, m.shell("make deploy-teste && npm install x")), classes.Ask, classes.LayerClass)
 	r = rules(t, qaYAML, permit(1, classes.LevelAdmin, true, "npm test"), permit(2, classes.LevelOwner, false, "npm test"))
 	want(t, decide(env, r, m.shell("npm test")), classes.Deny, classes.LayerDecree, "decreto 2")
 	// Same level, opposite effects: both suspended, the class decides.

@@ -40,7 +40,7 @@ func (r Risk) valid() bool { return r.rank() >= 0 }
 
 // RiskTableVersion is the version of the default risk table embedded in the
 // binary; it goes with every classification to the request and the audit.
-const RiskTableVersion = 1
+const RiskTableVersion = 2
 
 // RequestType is a type of approval request
 // (docs/aprovacoes/politica.md#tipos-de-ação).
@@ -284,7 +284,8 @@ func defaultToolRisk(name string, kind providers.ToolKind) riskOut {
 		}
 	}
 	if kind == providers.KindSubagent {
-		return riskOut{risk: RiskMedium, rule: "subagente"}
+		// the character itself, with its own rules (ADR 0025)
+		return riskOut{risk: RiskLow, rule: "subagente: o próprio personagem"}
 	}
 	return riskOut{risk: RiskMedium, rule: "ferramenta sem linha na tabela"}
 }

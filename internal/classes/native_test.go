@@ -188,7 +188,7 @@ func TestADecreeRegeneratesTheSettingsOfABusyClaudeAndRestartsItWhenFree(t *test
 // CA-NATIVO-04
 func TestTheAntigravityAgentFileOffersNoWriteOrWebToolsToAClassWithout(t *testing.T) {
 	t.Parallel()
-	r := rules(t, "version: 1\nnetwork: {internet: false}\n")
+	r := rules(t, "version: 1\nfiles: {write: []}\nnetwork: {internet: false}\n")
 	path := providers.AntigravityAgentPath(newMachine().wt, agentID)
 	file := translate(t, r)[providers.Antigravity].files[path]
 	var tools []string
@@ -240,7 +240,7 @@ func TestAnAskToolStaysInTheAntigravityAgentFile(t *testing.T) {
 func TestANativeBlockADecreeOrExceptionFreesIsLifted(t *testing.T) {
 	t.Parallel()
 	m := newMachine()
-	const class = "version: 1\nfiles: {deny: [\"secrets/**\"]}\ncommands: {deny: [\"curl *\", \"git push *\"]}\n"
+	const class = "version: 1\nfiles: {write: [], deny: [\"secrets/**\"]}\ncommands: {deny: [\"curl *\", \"git push *\"]}\nnetwork: {internet: false}\n"
 	ch := classes.NativeCharacter{AgentID: agentID, Worktree: m.wt}
 	p := classes.NativePolicy(rules(t, class), ch, providers.NativeFallbacks{})
 	if !p.NoWrite || !p.Offline || len(p.DenyFiles) != 1 || len(p.DenyCommands) != 2 {
@@ -324,3 +324,29 @@ func (r *restarter) RestartResume(_ context.Context, id string) error {
 }
 
 func (r *restarter) count() int { r.mu.Lock(); defer r.mu.Unlock(); return len(r.ids) }
+
+// CA-NATIVO-06
+func TestTheDefaultClassBecomesTheNativeControlsOfAPlainTerminal(t *testing.T) {
+	t.Parallel()
+	n := translate(t, rules(t, "version: 1\n"))
+	allow, _ := n[providers.ClaudeCode].claudeRules(t)
+	if e := "Edit(" + claudePath(newMachine().wt) + "/**)"; !slices.Contains(allow, e) {
+		t.Fatalf("claude allow %v lacks %s", allow, e)
+	}
+	if args := strings.Join(n[providers.ClaudeCode].args, " "); strings.Contains(args, "WebFetch") || strings.Contains(args, "WebSearch") {
+		t.Fatalf("claude args %q take the web tools away", args)
+	}
+	codex := n[providers.Codex].args
+	if !slices.Contains(codex, "workspace-write") || !slices.Contains(codex, "sandbox_workspace_write.network_access=true") || !slices.Contains(codex, "--search") {
+		t.Fatalf("codex args %v; want -s workspace-write, the network on and the hosted search", codex)
+	}
+	if slices.Contains(n[providers.Antigravity].args, "--sandbox") {
+		t.Fatalf("antigravity args %v: --sandbox cuts the network of the default class", n[providers.Antigravity].args)
+	}
+	file := n[providers.Antigravity].files[providers.AntigravityAgentPath(newMachine().wt, agentID)]
+	for _, tool := range []string{"write_to_file", "read_url_content"} {
+		if !strings.Contains(file, tool) {
+			t.Fatalf("antigravity tools lack %s:\n%s", tool, file)
+		}
+	}
+}

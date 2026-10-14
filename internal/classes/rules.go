@@ -14,7 +14,7 @@ import (
 
 // RulesVersion is the version of the effective-rules document. It changes
 // only when a field changes meaning; new fields are added without changing it.
-const RulesVersion = 1
+const RulesVersion = 2
 
 // FixedRulesVersion is the version of the fixed security rules this binary
 // enforces (fixed_rules_version of the effective rules).
@@ -161,10 +161,12 @@ type PatternRules struct {
 }
 
 // GitRules is the git block.
+// Commit and RequestPush are allow (true in the class), deny (false) or
+// ask (absent: a request, ADR 0025).
 type GitRules struct {
-	Commit      bool      `json:"commit"`
+	Commit      Verdict   `json:"commit"`
 	Branches    []string  `json:"branches"`
-	RequestPush bool      `json:"request_push"`
+	RequestPush Verdict   `json:"request_push"`
 	Workflows   Workflows `json:"workflows"`
 }
 
@@ -341,6 +343,10 @@ func (r *Rules) Validate() error {
 		return fmt.Errorf("effective rules: commands.default %q", r.Commands.Default)
 	case !r.Tools.Default.valid():
 		return fmt.Errorf("effective rules: tools.default %q", r.Tools.Default)
+	case !r.Git.Commit.valid():
+		return fmt.Errorf("effective rules: git.commit %q", r.Git.Commit)
+	case !r.Git.RequestPush.valid():
+		return fmt.Errorf("effective rules: git.request_push %q", r.Git.RequestPush)
 	}
 	switch r.Git.Workflows {
 	case WorkflowsNever, WorkflowsAsk, WorkflowsAllow:

@@ -244,7 +244,7 @@ func (p *Permissions) CheckCredentials(class string, vault CredentialLookup) err
 	if vault == nil {
 		return fmt.Errorf("%w: network.credentials: the vault is not available to check them", ErrInvalid)
 	}
-	internet := p.Network.Internet != nil && *p.Network.Internet
+	internet := p.Network.Internet == nil || *p.Network.Internet
 	allowed := deref(p.Network.Domains)
 	for _, name := range deref(p.Network.Credentials) {
 		domains, classes, ok := vault.SiteCredential(name)

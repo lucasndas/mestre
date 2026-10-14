@@ -65,7 +65,7 @@ Critérios de documentos de um marco que usam peças de marcos seguintes; cada u
 | [ficha da máquina](../guilda/ficha-da-maquina.md) (M2) | CA-FMAQ-03 → M4 (fichas e perfis de conta) |
 | [replicação](../guilda/replicacao.md) (M2) | CA-REPL-08 → M4 (espelho do workspace); CA-REPL-06 → M7 (checklist) |
 | [Cidadela e Torres](../guilda/cidadela-e-torres.md) (M2) | CA-CIDADELA-10, CA-CIDADELA-11 e CA-CIDADELA-13 → M4 (personagens, missões, esperas); CA-CIDADELA-03 e CA-CIDADELA-12 → M5 (ações no GitHub e trava); CA-CIDADELA-08 → M6 (painel); CA-CIDADELA-05, CA-CIDADELA-06 e CA-CIDADELA-07 → M7 (Torre condutora, Telegram em modo reduzido, página reserva) |
-| [convenções da CLI](../cli/convencoes.md) (M3) | CA-CLI-CONV-04, CA-CLI-CONV-05 e CA-CLI-CONV-07 → M4 (`ask`, `done` e `ask --raw` com personagens, terminais e duas máquinas; o M3 testa a fila de saída, a recusa do `--raw` e o `PENDING:` com `// Part of …`); CA-CLI-CONV-06, CA-CLI-CONV-08, CA-CLI-CONV-10 e CA-CLI-CONV-11 → M5 (aprovação `acao_destrutiva`, `table`/`gh`/`app`/`notify`, `reply` do Grão-Mestre e `pr open` com a trava; o M3 testa o filtro do `help`, a recusa de segredo e o `queued` com `// Part of …`); [classes](../classes/classes.md) (M3): CA-CLASSES-04 → M4 (pergaminho da missão e o agente falso numa missão; o M3 testa o hook assíncrono, um por personagem de cada vez, e a saída entregue, com `// Part of …`); CA-CLASSES-06 → M5 (o fluxo de aprovação e o Grão-Mestre; o M3 testa a regra de quem propõe e quem aprova) |
+| [convenções da CLI](../cli/convencoes.md) (M3) | CA-CLI-CONV-04, CA-CLI-CONV-05 e CA-CLI-CONV-07 → M4 (`ask`, `done` e `ask --raw` com personagens, terminais e duas máquinas; o M3 testa a fila de saída, a recusa do `--raw` e o `PENDING:` com `// Part of …`); CA-CLI-CONV-06, CA-CLI-CONV-08, CA-CLI-CONV-10 e CA-CLI-CONV-11 → M5 (aprovação `acao_destrutiva`, `table`/`gh`/`app`/`notify`, `reply` do Grão-Mestre e `pr open` com a trava; o M3 testa o filtro do `help`, a recusa de segredo e o `queued` com `// Part of …`); [classes](../classes/classes.md) (M3): CA-CLASSES-04 → M4 (pergaminho da missão e o agente falso numa missão; o M3 testa o hook assíncrono, um por personagem de cada vez, e a saída entregue, com `// Part of …`); CA-CLASSES-06 → M5 (o fluxo de aprovação e o Grão-Mestre; o M3 testa a regra de quem propõe e quem aprova); [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md) (M4): CA-SUPCAD-05 → M5 (o comando do Grão-Mestre e o botão do Telegram; o M4 testa a pausa pelo motor, CA-SUPCAD-02) |
 
 ### Critérios antecipados
 
@@ -106,7 +106,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M3 | 3 | [reforço nativo](../classes/reforco-nativo.md) · [teto do workspace](../classes/teto-do-workspace.md) · [convenções da CLI](../cli/convencoes.md) · [despachante de hooks](../provedores/despachante-de-hooks.md) |
 | M3 | 4 | [classes](../classes/classes.md) · [Claude Code](../provedores/claude-code.md) · [Codex](../provedores/codex.md) · [Antigravity](../provedores/antigravity.md) |
 | M3 | 5 | [conformidade](../provedores/conformidade.md) |
-| M4 | 1 | [workspaces](../orquestracao/workspaces.md) · [bases e fichas](../orquestracao/bases-e-fichas.md) |
+| M4 | 1 | [workspaces](../orquestracao/workspaces.md) · [bases e fichas](../orquestracao/bases-e-fichas.md) · [classe `orquestrador`](../classes/classe-orquestrador.md) |
 | M4 | 2 | [sessão zero do workspace](../sessao-zero/workspace.md) |
 | M4 | 3 | [sessão zero da mesa](../sessao-zero/mesa.md) |
 | M4 | 4 | [sessão zero do personagem](../sessao-zero/personagem.md) |
@@ -117,7 +117,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M4 | 9 | [missões](../orquestracao/missoes.md) |
 | M4 | 10 | [CLI de comunicação](../cli/comunicacao.md) · [CLI de coordenação](../cli/coordenacao.md) · [grimórios](../orquestracao/grimorios.md) · [rituais](../orquestracao/rituais.md) · [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) |
 | M4 | 11 | [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) · [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) |
-| M4 | 12 | [skills geradas](../cli/skills-geradas.md) |
+| M4 | 12 | [skills geradas](../cli/skills-geradas.md) · [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md) |
 | M5 | 1 | [identidades e Apps](../github/identidades-e-apps.md) · [usuários e níveis](../telegram/usuarios-e-niveis.md) |
 | M5 | 2 | [política de aprovação](../aprovacoes/politica.md) · [ações por nível](../github/acoes-por-nivel.md) · [bot](../telegram/bot.md) · [trava no GitHub](../guilda/trava-no-github.md) |
 | M5 | 3 | [fluxo de aprovação](../aprovacoes/fluxo.md) · [CLI de issues e PRs](../cli/coordenacao-github.md) · [criação de Apps](../github/criacao-de-apps.md) · [eventos do GitHub](../github/eventos.md) · [segurança do canal](../telegram/seguranca-do-canal.md) |

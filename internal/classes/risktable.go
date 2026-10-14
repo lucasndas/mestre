@@ -64,7 +64,8 @@ var riskTable = join(
 		{risk: RiskHigh, group: "segredos e acesso remoto", label: "set sem argumentos", program: "set", cond: func(c *riskCmd) bool { return c.name == "set" && len(c.args) == 0 }},
 	},
 	rows(RiskHigh, "segredos e acesso remoto", "ssh*", "scp*", "sftp*", "rsync *:*", "gpg*", "aws *", "gcloud *", "az *",
-		"kubectl *", "helm *", "terraform *", "pulumi *"),
+		"kubectl *", "helm *", "terraform *", "pulumi *", "git credential*", "npm login*", "npm adduser*", "npm token*",
+		"secret-tool *", "cmdkey*", "vault *"),
 	rows(RiskHigh, "apagar dados", "*DROP *", "*TRUNCATE*", "*DELETE FROM*", "dropdb*", "redis-cli flushall*",
 		"docker volume rm*", "docker system prune*"),
 	[]riskRow{{risk: RiskHigh, group: "apagar dados", label: "rm com caminho fora do worktree", program: "rm", cond: func(c *riskCmd) bool { return c.removes && c.rmOutside }}},
@@ -75,7 +76,9 @@ var riskTable = join(
 	rows(RiskMedium, "apagar em massa", "git clean*", "git reset --hard*", "git checkout -- *", "git restore *", "find * -delete*"),
 	rows(RiskMedium, "fora do worktree e configuração", "npm install -g*", "npm i -g*", "* --global*", "pip install*", "pip3 install*",
 		"go install*", "cargo install*", "npx *", "pnpm dlx *", "bunx *", "brew *", "winget *", "choco *", "scoop *",
-		"npm config *", "npm pkg set*"),
+		"npm config *", "npm pkg set*", "npm exec*", "npm x *", "npm link*", "yarn dlx *", "yarn global *", "bun x *",
+		"deno install*"),
+	rows(RiskMedium, "envio da branch da mesa", "mestre pr open*", "mestre pr update*"),
 	rows(RiskMedium, "contêineres e serviços", "docker *", "podman *", "docker-compose *", "systemctl *", "service *",
 		"launchctl *", "sc *", "Stop-Service*", "Start-Service*"),
 
@@ -229,7 +232,7 @@ func (w *riskWalker) part(p *simple, d dialect, st *shellState, depth int) riskO
 		out.raise(riskOut{risk: RiskMedium, rule: "trecho que o motor não analisa: " + p.opaque[0]})
 	}
 	if !out.set() {
-		out = riskOut{risk: RiskMedium, rule: "parte sem linha na tabela"}
+		out = riskOut{risk: RiskLow, rule: "parte sem comando e sem sinal de risco"}
 	}
 	return out
 }
@@ -288,12 +291,15 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 		out = a
 	} else if r, ok := c.match(); ok {
 		out = riskOut{risk: r.risk, rule: r.rule()}
+		out.raise(w.floors(c))
 	} else if readOnly {
 		// cd, and the commands the format frees as read-only: they act on
 		// nothing but the paths they read, which the rule below sees.
 		out = riskOut{risk: RiskLow, rule: "comando só de leitura: " + cn}
+	} else if s, ok := w.signal(c, ws, st); ok {
+		out = s
 	} else {
-		out = riskOut{risk: RiskMedium, rule: fmt.Sprintf("%q sem linha na tabela", c.text)}
+		out = riskOut{risk: RiskLow, rule: fmt.Sprintf("%q sem linha na tabela e sem sinal de risco", c.text)}
 	}
 
 	// The literal paths the command touches, and the program itself when
@@ -313,6 +319,9 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	}
 	for _, u := range uses {
 		out.raise(w.wordRisk(u.w, st))
+	}
+	for _, v := range valuePaths(args) {
+		out.raise(w.wordRisk(v, st))
 	}
 	return out
 }

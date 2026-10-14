@@ -325,11 +325,13 @@ func extends(p, row string) bool {
 }
 
 // commandReach is the highest risk a command matched by the pattern can
-// have by the default table: the classification of its literal part, the
-// row that covers the whole pattern (none: a command without a row, medio),
-// the rows it reaches by its program and subcommands (npm * reaches npm
-// publish) and the conditions of its program (rm * reaches rm with a path
-// outside the worktree).
+// have by its program and subcommands, under the default table: the
+// classification of its literal part (with the signals of its program), the
+// row that covers the whole pattern, the rows and the signal subcommands it
+// reaches (npm * reaches npm publish, git * reaches git rm) and the
+// conditions of its program (rm * reaches rm with a path outside the
+// worktree). The content of the arguments is not the reach: each command
+// still has its own classification, and PatternCovers asks it to fit.
 func commandReach(p string) riskOut {
 	e := riskEnv()
 	w := e.riskWalker()
@@ -356,8 +358,10 @@ func commandReach(p string) riskOut {
 			out.raise(riskOut{risk: r.risk, rule: r.rule()})
 		}
 	}
-	if !covered {
-		out.raise(riskOut{risk: RiskMedium, rule: fmt.Sprintf("%q pode casar um comando sem linha na tabela", p)})
+	for _, r := range signalPatterns {
+		if coversText(r.pattern, p) || extends(p, r.pattern) {
+			out.raise(riskOut{risk: r.risk, rule: "sinal de " + r.group + ": " + r.pattern})
+		}
 	}
 	return out
 }

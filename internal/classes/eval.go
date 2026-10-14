@@ -3,6 +3,7 @@ package classes
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/lucasndas/mestre/internal/providers"
@@ -15,15 +16,27 @@ type outcome struct {
 	layer  Layer
 	decree int64
 	level  Level // of the decree that decided
+	// byDefault is an ask only because no rule covers the call (the
+	// default of commands, tools or git.commit): classified baixo, it runs
+	// directly (docs/classes/permissoes.md#pipeline-de-decisão).
+	byDefault bool
 }
 
 var allowed = outcome{v: Allow}
 
 // worse keeps the more restrictive outcome; on a tie, the first that names
 // a layer.
+// An ask is by default only if every part that asks is.
 func (o *outcome) worse(n outcome) {
-	if n.v.rank() > o.v.rank() || (n.v == o.v && o.layer == "" && n.layer != "") {
+	switch {
+	case n.v.rank() > o.v.rank():
 		*o = n
+	case n.v == o.v:
+		def := o.byDefault && n.byDefault
+		if o.layer == "" && n.layer != "" {
+			*o = n
+		}
+		o.byDefault = def
 	}
 }
 
@@ -225,6 +238,11 @@ func (e *evaluator) filePerm(k string, write bool) outcome {
 	}
 	if write {
 		if !inside {
+			// Who writes the whole worktree (**, the default) asks to write
+			// outside it; a narrower list denies (ADR 0025).
+			if slices.Contains(e.r.Files.Write, "**") {
+				return outcome{v: Ask, reason: fmt.Sprintf("escrita fora do worktree: %s", shown), layer: e.r.originField("files.write")}
+			}
 			return e.deny(LayerClass, fmt.Sprintf("escrita fora do worktree: %s", shown))
 		}
 		for _, p := range e.r.Files.Write {
@@ -329,7 +347,7 @@ func (e *evaluator) patterns(block string, pr PatternRules, forms []string, allo
 	case Allow:
 		return allowed
 	case Ask:
-		return outcome{v: Ask, reason: fmt.Sprintf("sem regra em %s, padrão ask (%s)", block, l.label(e.r.Class)), layer: l}
+		return outcome{v: Ask, reason: fmt.Sprintf("sem regra em %s, padrão ask (%s)", block, l.label(e.r.Class)), layer: l, byDefault: true}
 	}
 	return e.deny(l, fmt.Sprintf("%q não casa com nenhuma regra de %s e o padrão é negar", shown, block))
 }

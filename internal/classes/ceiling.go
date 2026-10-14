@@ -285,11 +285,13 @@ func (c *Ceiling) Excess(class *Permissions) []Excess {
 		if m.Network != nil {
 			mn = *m.Network
 		}
-		internet := n.Internet != nil && *n.Internet
+		// Absent internet is on, but the default of the system is not a
+		// widening: only the domains the class writes are checked.
+		internet := n.Internet == nil || *n.Internet
 		flag("network.internet", n.Internet, mn.Internet)
 		maxDomains := deref(mn.Domains)
 		if internet && len(maxDomains) > 0 {
-			if len(deref(n.Domains)) == 0 {
+			if len(deref(n.Domains)) == 0 && n.Internet != nil {
 				add("network.domains", "", "qualquer domínio; o teto só dá "+list(maxDomains))
 			}
 			allowed("network.domains", deref(n.Domains), mn.Domains, coversDomain)

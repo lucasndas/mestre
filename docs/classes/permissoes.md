@@ -30,11 +30,11 @@ Aplicação das [invariantes arquiteturais](../arquitetura/precedencia.md#invari
 A **ordem de precedência** e a **regra de combinação** entre decretos, regras do Mestre, teto, classe e ficha são donas de [precedência](../arquitetura/precedencia.md). A Cidadela aplica essa combinação e envia à máquina, para cada personagem, **um documento JSON já combinado**: as regras efetivas (mensagem `agent.rules`, [mensagens](../conectividade/mensagens.md)), de novo sempre que uma camada muda. A máquina guarda a última versão no banco e o retrato `policy.json` para o [modo degradado](#modo-degradado). Assim a decisão acontece na própria máquina, em menos de 1 s, sem ida à Cidadela.
 
 ```json
-{"version": 1, "agent_id": "01J…", "class": "qa", "generated_at": "2026-10-12T14:00:00Z",
+{"version": 2, "agent_id": "01J…", "class": "qa", "generated_at": "2026-10-12T14:00:00Z",
  "fixed_rules_version": 1,
  "files": {"read": ["**"], "write": ["tests/**"], "deny": ["**/.env"]},
  "commands": {"allow": ["npm test"], "ask": ["npm install *"], "deny": ["curl *"], "default": "ask"},
- "git": {"commit": true, "branches": ["epico/42-login"], "request_push": false, "workflows": "never"},
+ "git": {"commit": "allow", "branches": ["epico/42-login"], "request_push": "deny", "workflows": "never"},
  "network": {"internet": false, "domains": [], "credentials": []},
  "tools": {"allow": ["mcp__playwright__*"], "ask": [], "deny": [], "default": "ask"},
  "cli": {"allow": ["issue comment"]}, "operator": false,
@@ -43,7 +43,7 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
  "locked": false}
 ```
 
-- Os blocos têm o mesmo sentido do `permissions.yaml`, já cortados pelo teto e endurecidos pela ficha; marcadores como `{mesa.branch}` já vêm resolvidos.
+- Os blocos têm o mesmo sentido do `permissions.yaml`, já cortados pelo teto e endurecidos pela ficha, com os padrões dos campos ausentes já aplicados ([formato](formato-das-permissoes.md#o-arquivo)); marcadores como `{mesa.branch}` já vêm resolvidos. `git.commit` e `git.request_push` são `allow` (`true` na classe), `deny` (`false`, ou cortado pelo teto ou pela ficha) ou `ask` (ausentes: pedido; versão 2 do documento).
 - `decrees`: decretos e exceções pontuais ativos que valem para o personagem ([decretos](../telegram/decretos.md)), cada um com `id`, `kind` (`rule`, `exception` ou, no M4, `table_rule`: as [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md)), `level` do autor (`owner`, `admin`, `approver`, `grand_master` ou, no M4, `table_master`), `effect` (só `permission` chega à decisão, com `allow`/`deny` de `files`, `commands`, `tools` e `domains`), `until` e, na exceção, `action`: a ação exata (`kind`, `command`, `paths` relativos ao worktree, `tool`, `url`). Exceção pontual consumida sai da lista na versão seguinte; até lá, a máquina guarda que ela foi usada e não a usa de novo.
 - `origin`: camada de origem (`fixed`, `decree`, `ceiling`, `class`, `sheet`) de cada padrão que não vem da classe, para o motivo da negação citar, por exemplo, "teto do workspace".
 - `locked`: sistema travado ([segurança do canal](../telegram/seguranca-do-canal.md)); com `true`, toda ferramenta é negada.
@@ -53,7 +53,7 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
 
 ### Subagentes nativos
 
-- Um personagem pode usar os subagentes nativos do provedor (ex.: a ferramenta `Agent` do Claude) como ferramenta de tipo `subagent` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), liberada ou negada pela classe em `tools` pelo nome nativo, como qualquer ferramenta.
+- Um personagem pode usar os subagentes nativos do provedor (ex.: a ferramenta `Agent` do Claude) como ferramenta de tipo `subagent` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), negada ou posta em pedido pela classe em `tools` pelo nome nativo, como qualquer ferramenta. Sem regra, roda direto: é `baixo` ([ADR 0025](../decisoes/0025-padroes-seguem-os-provedores.md)); o [teste de conformidade](../provedores/conformidade.md) confere que os hooks disparam dentro dele.
 - O subagente é trabalho do personagem: herda as regras efetivas dele (os hooks rodam com o mesmo `MESTRE_AGENT_ID`), e o consumo entra no registro do personagem ([limites de uso](../plataforma/limites-de-uso.md#registro-de-uso)).
 - A classe **não** vira arquivo de subagente; o Mestre não gera definições de subagente. Definições que o próprio projeto já tenha podem ser usadas, sujeitas às mesmas regras.
 
@@ -69,7 +69,9 @@ flowchart LR
   E -- sim --> L[liberar e consumir]
   E -- não --> R{regras efetivas}
   R -- deny --> N
-  R -- ask --> P[pedir aprovação]
+  R -- ask --> B{só o padrão e risco baixo?}
+  B -- sim --> H
+  B -- não --> P[pedir aprovação]
   R -- allow --> H{hooks pre_tool da classe}
   H -- negam --> N
   H --> L2[liberar]
@@ -78,8 +80,9 @@ flowchart LR
 1. **Regras fixas de segurança** (acima), e o sistema travado: negam e param.
 2. **Exceção pontual** ([decretos](../telegram/decretos.md)): uma exceção que casa exatamente com a ação libera e é consumida (fica registrada como executada); não conta se um decreto que proíbe, de nível igual ou maior, pega parte da ação. Exceções e regras dadas por agentes da cadeia (`grand_master`, `table_master`) só valem sobre uma ação que as regras efetivas deixam em `ask` ([cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md), M4).
 3. **Decretos e regras efetivas** do personagem: entre os decretos que pegam a ação, decide o de nível mais alto (libera e proíbe no mesmo nível se anulam); sem decreto, as regras efetivas dão `allow`, `ask` ou `deny`, e comando ou ferramenta sem regra cai no `commands.default` ou no `tools.default` (ausentes, `ask`; [formato](formato-das-permissoes.md#o-arquivo)).
-4. Se liberou (também por decreto; a exceção pontual não), rodam os hooks `pre_tool` síncronos da classe, que só podem negar ([classes](classes.md#hooks-extras-da-classe)).
-5. `ask` segue o fluxo da seção seguinte.
+4. **`baixo` por padrão roda direto:** um `ask` que vem só de nenhuma regra cobrir a ação (o `default` em `ask`, ou `git.commit` ausente) é classificado ([risco](classificacao-de-risco.md)); `baixo` vira `allow`, com o motivo "padrão: risco baixo" e a linha que o deu; `medio` e acima seguem como pedido. É o equivalente determinístico do modo automático dos provedores ([ADR 0025](../decisoes/0025-padroes-seguem-os-provedores.md)). Um `ask` escrito (`commands.ask`, `tools.ask`, do teto ou da ficha) e o mínimo `ask` do que não se analisa sempre pedem, mesmo `baixo`.
+5. Se liberou (também por decreto ou pelo `baixo` por padrão; a exceção pontual não), rodam os hooks `pre_tool` síncronos da classe, que só podem negar ([classes](classes.md#hooks-extras-da-classe)).
+6. `ask` segue o fluxo da seção seguinte.
 
 **A ficha só restringe:** o campo `restrictions` da ficha ([bases e fichas](../orquestracao/bases-e-fichas.md)) usa o mesmo formato; um `allow` da ficha que a classe não dá é ignorado, e salvar a ficha avisa isso.
 
@@ -89,7 +92,7 @@ O despachante responde **negar**, com o motivo "pedido de aprovação #N aberto 
 
 ### Modo degradado
 
-O motor da máquina grava o retrato das regras efetivas de cada personagem em `policy.json`, fora do worktree: `/var/lib/mestre/<inst>/agentes/<id>/` no Linux (dono `mestre`, grupo `mestre-agente`, modo 0640, pasta 0750: o hook, que roda como `mestre-agente`, lê e não altera) e `%ProgramData%\Mestre\<inst>\maquina\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Com o motor fora do ar, o `mestre hook` aplica as regras fixas e esse retrato: `deny` nega, `ask` nega com "motor indisponível, tente depois", o resto libera ([despachante](../provedores/despachante-de-hooks.md#modo-degradado)); nenhuma exceção pontual é usada, e sem o retrato só a leitura passa. O hook em si não passa pelo pipeline; as regras fixas negam às ferramentas do agente qualquer acesso a essas pastas.
+O motor da máquina grava o retrato das regras efetivas de cada personagem em `policy.json`, fora do worktree: `/var/lib/mestre/<inst>/agentes/<id>/` no Linux (dono `mestre`, grupo `mestre-agente`, modo 0640, pasta 0750: o hook, que roda como `mestre-agente`, lê e não altera) e `%ProgramData%\Mestre\<inst>\maquina\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Com o motor fora do ar, o `mestre hook` aplica as regras fixas e esse retrato: `deny` nega, `ask` nega com "motor indisponível, tente depois" (também o `baixo` por padrão, que não roda sem o motor: os ajustes do Dono à tabela de risco não estão no retrato), o resto libera ([despachante](../provedores/despachante-de-hooks.md#modo-degradado)); nenhuma exceção pontual é usada, e sem o retrato só a leitura passa. O hook em si não passa pelo pipeline; as regras fixas negam às ferramentas do agente qualquer acesso a essas pastas.
 
 ### Reforço nativo
 
@@ -115,14 +118,19 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 - **CA-PERM-05** · *completa* — **Dado** `npm install *` em `ask`, **quando** o agente falso roda `npm install x`, **então** recebe negação com o pedido #N, fica em espera de aprovação ("aguardando aprovação", não o "aguardando permissão" do pedido nativo); aprovado, recebe a mensagem, a repetição passa uma vez e a seguinte volta a pedir.
 - **CA-PERM-07** · *rápida* — **Dado** o motor fora do ar e um retrato que nega `src/**`, **quando** chega uma edição em `src/a.ts` e um comando em `ask`, **então** os dois são negados, o segundo com "motor indisponível".
 - **CA-PERM-09** · *rápida* — **Dado** `tools.allow: ["mcp__playwright__*"]`, `tools.deny: ["mcp__*__delete_*"]` e `tools.default: deny`, **quando** chegam `mcp__playwright__browser_navigate`, `mcp__playwright__delete_cookies` e `mcp__github__create_issue`, **então** o primeiro é liberado e os outros dois negados, igual para os provedores que expõem esses nomes.
-- **CA-PERM-10** · *rápida* — **Dado** uma classe que libera `curl *`, um teto que nega `curl *` e uma ficha que nega `git commit *`, **quando** a Cidadela monta as regras efetivas, **então** o documento tem `curl *` em `commands.deny` com `origin` `ceiling`, `git.commit` falso e nenhum marcador sem resolver.
+- **CA-PERM-10** · *rápida* — **Dado** uma classe que libera `curl *`, um teto que nega `curl *` e uma ficha que nega `git commit *`, **quando** a Cidadela monta as regras efetivas, **então** o documento tem `curl *` em `commands.deny` com `origin` `ceiling`, `git.commit` em `deny` e nenhum marcador sem resolver.
 - **CA-PERM-11** · *rápida* — **Dado** qualquer classe, **quando** o agente pede `chmod +x .mestre/anexos/x.sh` ou `sh .mestre/anexos/x.sh`, **então** os dois são negados pela regra fixa de anexos.
 - **CA-PERM-12** · *rápida* — **Dado** uma classe com `tools.deny: ["Agent"]`, **quando** chega um `pre_tool` de tipo `subagent` com esse nome, **então** é negado; e, com a ferramenta liberada, um `pre_tool` de escrita vindo de dentro do subagente (mesmo `MESTRE_AGENT_ID`) passa pelas regras do personagem.
 - **CA-PERM-13** · *rápida* — **Dado** um personagem qualquer, **quando** chega um `pre_tool` de shell com `cp x.md .mestre/classes/qa/CLASS.md` ou `echo y > .claude/agents/a.md`, **então** os dois são negados; e uma escrita na pasta `MESTRE_TMP` do próprio personagem é liberada, enquanto na de outro personagem é negada.
 - **CA-PERM-14** · *rápida* — **Dado** um personagem comum com `tools.allow: ["mcp__*"]` e o servidor `claude-in-chrome` configurado por HTTP remoto, **quando** chega `mcp__claude-in-chrome__navigate` ou `mcp__computer-use__left_click`, **então** os dois são negados pela regra fixa; **dado** o mesmo nome num terminal do Operador com classe `operator: true` e teto permitindo, **então** segue as regras efetivas.
 - **CA-PERM-15** · *rápida* — **Dado** qualquer personagem, inclusive o Operador, **quando** chega `Start-Process pwsh -Verb RunAs`, `runas /user:Administrador cmd` ou `gsudo x`, **então** os três são negados pela regra fixa; **dado** um perfil de conta de base comum com o servidor `claude-in-chrome` na configuração MCP, **quando** o Dono salva, **então** o motor recusa.
-- **CA-PERM-17** · *rápida* — **Dado** uma classe sem `commands.default` e sem `tools.default`, **quando** a Cidadela monta as regras efetivas, **então** os dois saem `ask`, um comando sem regra (`foo --bar`) e um `mcp__x__y` sem padrão viram pedido de aprovação, e salvar essa classe sob um teto com `commands.default: deny` não é recusado; **dado** esse teto, **então** o documento traz `commands.default: deny` com `origin` `ceiling`; **dado** o motor fora do ar, **então** o comando sem regra é negado com "motor indisponível".
+- **CA-PERM-17** · *rápida* — **Dado** uma classe sem `commands.default` e sem `tools.default`, **quando** a Cidadela monta as regras efetivas, **então** os dois saem `ask`, um comando `medio` sem regra (`foo https://exemplo.io`) e um `mcp__x__y` sem padrão viram pedido de aprovação, um comando `baixo` sem regra (`foo --bar`) roda direto, e salvar essa classe sob um teto com `commands.default: deny` não é recusado; **dado** esse teto, **então** o documento traz `commands.default: deny` com `origin` `ceiling`; **dado** o motor fora do ar, **então** o comando sem regra é negado com "motor indisponível".
 - **CA-PERM-18** · *rápida* — **Dado** um `permissions.yaml` com `default: ask` no topo (fora de `tools`), **quando** é lido, **então** é inválido por campo desconhecido; **dado** `tools: {default: deny}`, **então** é lido e uma ferramenta `other` sem padrão é negada.
+- **CA-PERM-19** · *rápida* — **Dado** uma classe só com `version: 1`, **quando** chega `echo hello`, **então** é liberado com o motivo "padrão: risco baixo" e passa pelos hooks da classe; `./scripts/x.sh https://evil.example` (`medio`) vira pedido; **dado** `commands.ask: ["echo *"]`, **então** `echo hello` vira pedido; **dado** o motor fora do ar, **então** `echo hello` é negado com "motor indisponível".
+- **CA-PERM-20** · *rápida* — **Dado** uma classe sem `files.write`, **quando** chegam escritas em `src/a.ts`, em `.git/config` e num arquivo fora do worktree, **então** a primeira passa, a segunda é negada pela regra fixa e a terceira vira pedido, não `baixo`; **dado** `files.write: ["tests/**"]`, **então** a escrita fora do worktree é negada.
+- **CA-PERM-21** · *rápida* — **Dado** uma classe sem regra para `Agent`, **quando** chega um `pre_tool` de tipo `subagent` com esse nome, **então** é liberado com "padrão: risco baixo"; **dado** `tools.deny: ["Agent"]`, **então** é negado.
+- **CA-PERM-22** · *rápida* — **Dado** uma classe sem `git.commit`, com `files.write: ["tests/**"]` e a branch da mesa em `git.branches`, **quando** chega `git commit -m x` com `tests/a.test.ts` preparado na branch da mesa, **então** as regras efetivas têm `git.commit: ask` e o commit passa com "padrão: risco baixo"; **dado** `src/b.ts` preparado ou a branch `main`, **então** é negado citando o arquivo ou a branch; **dado** `git.commit: false`, **então** é negado.
+- **CA-PERM-23** · *rápida* — **Dado** classes sem `git.request_push`, com `true` e com `false`, **quando** a Cidadela monta as regras efetivas, **então** saem `ask`, `allow` e `deny`; **dado** um teto com `request_push: false`, **então** a classe sem o campo sai `deny` com `origin` `ceiling`.
 
 ## Depende de
 

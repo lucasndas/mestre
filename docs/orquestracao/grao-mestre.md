@@ -1,6 +1,6 @@
 # Grão-Mestre
 
-> **Assunto:** papel do Grão-Mestre, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** papel do Grão-Mestre, supervisor das aprovações das mesas, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ O Grão-Mestre é o agente orquestrador **único de cada [workspace](workspaces.
 - **Conversa:** recebe na [caixa de entrada](esperas-e-caixa-de-entrada.md) as mensagens de usuários (com prioridade) e os eventos das mesas e do GitHub; responde com `mestre reply` e avisa com `mestre notify` (sintaxe em [comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md)). Quais mensagens o motor envia por conta própria e quais são do Grão-Mestre: [bot](../telegram/bot.md).
 - **Mesas:** para cada pedido, decide se cabe numa mesa existente (repassa ao Mestre dela) ou se precisa de uma nova (cria o épico e abre: [mesas.md](mesas.md#abertura)). Quando o motor avisa que o PR de uma mesa foi mesclado, encerra a mesa (`mestre table close`, [encerramento](mesas.md#encerramento)). Recruta **somente Mestres de mesa** e, quando preciso, o [Operador do PC](bases-e-fichas.md#base-especial-operador-do-pc) numa mesa; não monta parties.
 - **GitHub:** porteiro do GitHub, sem token nem `gh` ([ações por nível](../github/acoes-por-nivel.md)). Cria os épicos (`mestre gh epic create`, sempre antes de abrir a mesa), revisa, aprova, conduz merges e cuida das configurações com aprovação ([aprovação no GitHub](../github/aprovacao-no-github.md)); prepara os Apps de classes, que o Dono cria e instala pelo link ([criação de Apps](../github/criacao-de-apps.md)).
-- **Aprovações:** é o nível da [cadeia de aprovação](cadeia-de-aprovacao.md) acima dos Mestres de mesa: decide até o risco `medio`, só o que a [política](../aprovacoes/politica.md#o-grão-mestre-como-aprovador-delegado) deixa, e `alto` só com [delegação](../aprovacoes/delegacao.md) do Dono; fora disso o motor recusa e ele leva o pedido aos usuários. Pode criar [regras temporárias de mesa](regras-temporarias-de-mesa.md) e subdelegar a um Mestre da mesa algo mais estreito. Não cria decretos permanentes nem amplia o teto.
+- **Aprovações, como supervisor:** é o nível da [cadeia de aprovação](cadeia-de-aprovacao.md) acima dos Mestres de mesa, que decidem o `baixo` e o `medio` das próprias mesas. Ele decide, até `medio` e só o que a [política](../aprovacoes/politica.md#o-grão-mestre-como-aprovador-delegado) deixa, os pedidos dos próprios Mestres de mesa, os que cruzam mesas, os de mesa com o Mestre parado, sem resposta ou em pausa e os `medio` cujas condições da mesa falham; `alto` só com [delegação](../aprovacoes/delegacao.md) do Dono; fora disso o motor recusa e ele leva o pedido aos usuários. Recebe um resumo não bloqueante das decisões das mesas, pode pausar a autonomia de uma mesa e acompanha as filas ([supervisão](supervisao-da-cadeia.md)). Pode criar e revogar [regras temporárias de mesa](regras-temporarias-de-mesa.md) e subdelegar a um Mestre da mesa algo mais estreito. Não cria decretos permanentes nem amplia o teto. As regras efetivas dele vêm da classe embutida [`orquestrador`](../classes/classe-orquestrador.md).
 - **Acompanhamento:** dependências entre mesas (registradas como dependência entre épicos no GitHub e respeitadas por ele: não manda a mesa dependente entregar antes da outra), conflitos entre branches, ordem de entrega e consumo ([limites de uso](../plataforma/limites-de-uso.md)).
 
 ### Onde roda
@@ -77,7 +77,8 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - **CA-GM-06** · *pesada* — **Dado** um pedido de funcionalidade pelo Telegram (dublê), **quando** o Grão-Mestre o trata, **então** cria o épico no GitHub (dublê), abre a mesa e repassa o pedido ao Mestre da mesa sem reescrever (MVP-4).
 - **CA-GM-07** · *rápida* — **Dado** uma política que não deixa o Grão-Mestre aprovar merges sozinho, **quando** ele chama `mestre approval decide` num pedido de merge, **então** recebe `human_required` e nada é aprovado; **quando** chama `mestre approval ask`, **então** o pedido chega aos usuários.
 
-- **CA-GM-08** · *rápida* — **Dado** um pedido `alto` de um personagem e nenhum decreto de delegação, **quando** ele nasce, **então** o Grão-Mestre recebe só um evento informativo e um `mestre approval decide` dele recebe `human_required`; **dado** um pedido `medio` com tudo verde na política, **então** a decisão dele é aceita e registrada com nível e risco.
+- **CA-GM-08** · *rápida* — **Dado** um pedido `alto` de um personagem e nenhum decreto de delegação, **quando** ele nasce, **então** o Grão-Mestre recebe só um evento informativo e um `mestre approval decide` dele recebe `human_required`; **dado** um pedido `medio` do próprio Mestre da mesa com tudo verde na política, **então** ele nasce no Grão-Mestre e a decisão dele é aceita e registrada com nível e risco; **dado** um `medio` de personagem que passa nas condições da mesa, **então** um `approval decide` do Grão-Mestre nele recebe `not_at_level`.
+- **CA-GM-09** · *rápida* — **Dado** o resumo das decisões das mesas na caixa de entrada do Grão-Mestre com uma regra temporária da mesa `42-login`, **quando** ele revoga a regra e roda `mestre approval autonomy pause --table 42-login --reason "revisar"`, **então** a regra fica `revogada`, a mesa fica em pausa e o `medio` seguinte da mesa nasce nele.
 
 ## Depende de
 
@@ -88,5 +89,5 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - [Precedência](../arquitetura/precedencia.md)
 - [Sessão zero do personagem](../sessao-zero/personagem.md)
 - [Ações por nível no GitHub](../github/acoes-por-nivel.md)
-- [Política de aprovação](../aprovacoes/politica.md) · [Cadeia de aprovação](cadeia-de-aprovacao.md)
+- [Política de aprovação](../aprovacoes/politica.md) · [Cadeia de aprovação](cadeia-de-aprovacao.md) · [Supervisão da cadeia](supervisao-da-cadeia.md) · [Classe `orquestrador`](../classes/classe-orquestrador.md)
 - [Roteamento do Telegram](../telegram/roteamento.md)

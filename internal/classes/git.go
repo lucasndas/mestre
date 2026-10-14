@@ -226,7 +226,11 @@ func (e *evaluator) git(args []word, st *shellState) result {
 		if hasAny(rest, "--abort", "--quit") {
 			break
 		}
-		if !e.r.Git.Commit {
+		switch e.r.Git.Commit {
+		case Allow:
+		case Ask:
+			res.rule(e.commitAsk())
+		default:
 			res.rule(e.deny(e.r.originField("git.commit"), fmt.Sprintf("git %s cria commits e a classe não commita (git.commit)", g.sub)))
 		}
 		if g.sub == "rebase" {
@@ -359,9 +363,12 @@ func (e *evaluator) gitSwitch(res *result, sub string, rest []word, st *shellSta
 // gitCommit: commit only with git.commit, on a branch of git.branches and
 // with every file it takes inside files.write.
 func (e *evaluator) gitCommit(res *result, rest []word, st *shellState) {
-	if !e.r.Git.Commit {
+	if e.r.Git.Commit != Allow && e.r.Git.Commit != Ask {
 		res.rule(e.deny(e.r.originField("git.commit"), "a classe não commita (git.commit)"))
 		return
+	}
+	if e.r.Git.Commit == Ask {
+		res.rule(e.commitAsk())
 	}
 	for _, f := range []string{"-F", "--file"} {
 		if w := flagValue(rest, f); w != nil && w.text != "-" {
@@ -402,6 +409,13 @@ func (e *evaluator) gitCommit(res *result, rest []word, st *shellState) {
 	if len(outside) > 0 {
 		res.rule(e.deny(e.r.originField("files.write"), fmt.Sprintf("o commit leva arquivos fora de files.write %v: %s", e.r.Files.Write, strings.Join(outside, ", "))))
 	}
+}
+
+// commitAsk is the request of a commit when the class does not say
+// git.commit: the default, so a baixo one runs directly (ADR 0025); the
+// branch and the files are still checked.
+func (e *evaluator) commitAsk() outcome {
+	return outcome{v: Ask, reason: "sem git.commit na classe, padrão ask", layer: e.r.originField("git.commit"), byDefault: true}
 }
 
 // unverifiable is the outcome of a check that cannot be made: deny, the

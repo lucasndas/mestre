@@ -19,7 +19,7 @@ Deixar as pessoas passarem ao Grão-Mestre, de forma explícita, com escopo e pr
 
 ### Delegação de decisão
 
-- **Quem cria:** só o Dono, com PIN, para tipos `alto` ([risco dos tipos](../classes/classificacao-de-risco.md#risco-dos-tipos-de-pedido)). Para tipos `medio`, que o Grão-Mestre já decide dentro da política, quem quer afrouxar usa um decreto `policy` ([política](politica.md#decretos-ajustam-a-política)); a resposta **Delegar** num pedido `medio` monta essa proposta, para um Administrador ou acima. Tipos `fixo` e `custo_extra` acima do teto nunca são delegáveis.
+- **Quem cria:** só o Dono, com PIN, para tipos `alto` ([risco dos tipos](../classes/classificacao-de-risco.md#risco-dos-tipos-de-pedido)), inclusive `acao_destrutiva` (decisão do Dono, 2026-10-14: continua delegável, com escopo e prazo). Para tipos `medio`, que o Grão-Mestre já decide dentro da política, quem quer afrouxar usa um decreto `policy` ([política](politica.md#decretos-ajustam-a-política)); a resposta **Delegar** num pedido `medio` monta essa proposta, para um Administrador ou acima. Tipos `fixo` e `custo_extra` acima do teto nunca são delegáveis.
 - **Como nasce:** pela resposta **Delegar** a um pedido ([respostas](../orquestracao/cadeia-de-aprovacao.md#respostas)), que já traz o tipo e o escopo do pedido, ou por uma ordem ao Grão-Mestre (`mestre decree propose --effect delegation`, [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-decree)). O motor mostra o que vai valer e pede Confirmar e o PIN, como em todo decreto ([criação](../telegram/decretos.md#criação)).
 - **Escopo obrigatório:** o tipo e pelo menos um entre mesa, classe ou [padrão aprovável](../classes/classificacao-de-risco.md#padrões-aprováveis) (para `permissao_de_classe`); sem escopo, recusada.
 - **Validade:** "até mudar ou 30 dias": vale até ser revogada ou trocada, por no máximo 30 dias (padrão e máximo, `delegacao.validade_padrao` no [arquivo de política](arquivo-de-politica.md)). 3 dias antes do fim (`delegacao.aviso_antes`), o autor recebe um lembrete com **Renovar** (mais 30 dias, com PIN) e **Deixar vencer**.
@@ -28,7 +28,7 @@ Deixar as pessoas passarem ao Grão-Mestre, de forma explícita, com escopo e pr
 
 ### Subdelegação
 
-- O Grão-Mestre pode passar a um Mestre da mesa, só na mesa dele, uma parte **mais estreita** do que ele mesmo pode decidir: o teto dele (`medio`, dentro da política) ou uma delegação de decisão que ele tem. Mais estreita quer dizer: o mesmo tipo ou menos, o escopo dentro do da origem, a validade até a da origem e nunca depois do encerramento da mesa.
+- O Grão-Mestre pode passar a um Mestre da mesa, só na mesa dele, uma parte **mais estreita** do que ele mesmo pode decidir: o teto dele (`medio`, dentro da política, inclusive o que falha nas [condições da mesa](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa)) ou uma delegação de decisão que ele tem. Mais estreita quer dizer: o mesmo tipo ou menos, o escopo dentro do da origem, a validade até a da origem e nunca depois do encerramento da mesa.
 - **Profundidade 1:** o Mestre da mesa não subdelega. A subdelegação estende o teto dele só no escopo dela, com as mesmas salvaguardas.
 - Sintaxe: `mestre approval delegate` ([CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)). Fica no banco com os decretos, `level: grand_master` e a origem; não é decreto de pessoa nem permanente.
 - Acaba com a origem, com o encerramento da mesa, revogada pelo Grão-Mestre ou por um Administrador ou acima.

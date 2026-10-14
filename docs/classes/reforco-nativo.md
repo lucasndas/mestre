@@ -21,7 +21,8 @@ Fazer cada provedor segurar o essencial das [permissões](permissoes.md) mesmo s
 | ferramentas disponíveis | — | — | campo `tools` do arquivo de agente `mestre-<id>.md`: só as ferramentas nativas que as regras efetivas não negam por inteiro (sem escrita: sem as de escrita; sem internet: sem as de web) |
 | falha do despachante | `onFailure: block` | sandbox | falha fechada nativa |
 
-- `ask` nunca vira regra nativa: o despachante cuida.
+- `ask` nunca vira regra nativa: o despachante cuida, inclusive do `baixo` por padrão que roda direto ([pipeline](permissoes.md#pipeline-de-decisão)).
+- **Classe padrão** (campos ausentes, [ADR 0025](../decisoes/0025-padroes-seguem-os-provedores.md)): o Claude recebe `Edit(//<worktree>/**)` em `allow` e fica com `WebFetch` e `WebSearch`; o Codex, `-s workspace-write` com a rede do sandbox ligada e `--search`; o Antigravity não recebe `--sandbox` (cortaria a rede) e tem as ferramentas de escrita e de web no campo `tools`. A classe que escreve `internet: false` volta a ter a barreira nativa de rede (linha acima).
 - `tools` (ferramentas `mcp` e `other`) não tem regra nativa; fica só no despachante.
 - No Claude, os globs de caminho saem sempre absolutos (`Edit(//<worktree>/tests/**)`), para não depender de a regra relativa ser lida a partir da pasta do arquivo `--settings`; no Windows, na forma POSIX que o Claude compara (`C:\x` vira `//c/x`).
 - Também no Claude: o arquivo `--settings` leva `disableBypassPermissionsMode: "disable"`; um padrão de `deny` terminado em ` *` sai também sem o curinga (`Bash(curl *)` e `Bash(curl)`), como o despachante casa; os caminhos que as regras fixas fecham à escrita viram `Edit(//<worktree>/**/.git/**)` e afins; com lista de domínios, `--disallowedTools WebSearch` (ferramenta web sem URL é negada).
@@ -50,6 +51,7 @@ Quando um decreto ou uma mudança de classe libera algo bloqueado no nível nati
 - **CA-NATIVO-03** · *rápida* — **Dado** um personagem Claude ocupado e um decreto que libera `Bash(make deploy *)`, **quando** as regras efetivas chegam, **então** o arquivo `--settings` é regenerado e o reinício com retomada fica agendado para quando ele estiver livre.
 - **CA-NATIVO-04** · *rápida* — **Dado** uma classe sem escrita e sem internet, **quando** o adaptador do Antigravity gera o arquivo de agente, **então** o campo `tools` não lista ferramentas de escrita nem de web.
 - **CA-NATIVO-05** · *rápida* — **Dado** uma classe sem `tools.default` e uma ferramenta nativa de tipo `other` que não casa nenhum padrão de `tools`, **quando** o adaptador do Antigravity gera o arquivo de agente, **então** a ferramenta continua no campo `tools`; **dado** `tools.default: deny`, **então** ela sai da lista.
+- **CA-NATIVO-06** · *rápida* — **Dado** uma classe só com `version: 1`, **quando** o adaptador traduz, **então** o Claude recebe `Edit(//<worktree>/**)` em `allow` sem tirar `WebFetch` e `WebSearch`, o Codex `-s workspace-write` com `network_access=true` e `--search`, e o Antigravity sai sem `--sandbox` e com `write_to_file` e `read_url_content` no campo `tools`.
 
 ## Depende de
 
