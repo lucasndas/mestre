@@ -81,7 +81,7 @@ var claudeTools = toolTable{
 // (checkClaudeLaunch); --permission-mode default is added when missing, so
 // no mode of the settings of the person applies.
 func (c *claudeCode) BuildLaunch(req LaunchRequest) (Launch, error) {
-	l, err := newLaunch(req)
+	l, err := newLaunch(ClaudeCode, req)
 	if err != nil {
 		return Launch{}, err
 	}

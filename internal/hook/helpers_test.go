@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"net"
 	"path/filepath"
@@ -175,6 +176,10 @@ type call struct {
 	files    hook.Files
 	machine  *hook.Machine
 	runner   hook.Runner
+	// decide is the degraded decision (nil: the real one); reader, when
+	// set, is the stdin instead of stdin.
+	decide func(context.Context, classes.Env, *classes.Rules, providers.Event) classes.Decision
+	reader io.Reader
 }
 
 func (c call) run(ctx context.Context) run {
@@ -183,10 +188,14 @@ func (c call) run(ctx context.Context) run {
 	if env == nil {
 		env = map[string]string{localchan.EnvAgentID: agent, localchan.EnvEndpoint: "unix:///run/mestre/principal/cli.sock"}
 	}
+	var stdin io.Reader = bytes.NewReader(c.stdin)
+	if c.reader != nil {
+		stdin = c.reader
+	}
 	code := hook.Run(ctx, hook.Env{
-		Getenv: func(k string) string { return env[k] }, Stdin: bytes.NewReader(c.stdin), Stdout: &out, Stderr: &errb,
+		Getenv: func(k string) string { return env[k] }, Stdin: stdin, Stdout: &out, Stderr: &errb,
 		Clock: clock.Real{}, Dial: c.dial, Files: c.files, Machine: c.machine, ClassHooks: c.runner,
-		Resolve: func(p string) (string, error) { return p, nil },
+		Resolve: func(p string) (string, error) { return p, nil }, DecideDegraded: c.decide,
 	}, []string{"--provider", string(c.provider), "--event", c.event})
 	return run{code, out.String(), errb.String()}
 }

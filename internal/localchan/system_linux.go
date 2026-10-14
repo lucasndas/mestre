@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"strconv"
@@ -38,13 +39,19 @@ func (s systemPeers) Peer(c net.Conn) (Peer, error) {
 		return Peer{}, err
 	}
 	p := Peer{PID: pid}
-	if start, err := s.sys.Identify(pid); err == nil {
+	start, err := s.sys.Identify(pid)
+	switch {
+	case err == nil:
 		p.Start = start
+	case errors.Is(err, terminal.ErrNoProcess):
+		p.Gone = true
 	}
 	// What the caps of the server count by, read now because the request
 	// has not come: the terminal (cgroup) and the user of the peer.
 	if cg, err := systemProc(s).Cgroup(pid); err == nil {
 		p.Group = TerminalGroup(cg)
+	} else if errors.Is(err, fs.ErrNotExist) {
+		p.Gone = true
 	}
 	if uid, err := peerUID(c); err == nil {
 		p.UID = strconv.FormatUint(uint64(uid), 10)
@@ -55,6 +62,8 @@ func (s systemPeers) Peer(c net.Conn) (Peer, error) {
 		p.Pidfd = fd
 	case errors.Is(err, unix.ENOPROTOOPT):
 		p.PidfdUnsupported = true
+	default:
+		p.Gone = true // the kernel gives no pidfd of a reaped process
 	}
 	return p, nil
 }

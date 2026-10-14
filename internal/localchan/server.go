@@ -326,6 +326,14 @@ func (s *Server) serveConn(ctx context.Context, c net.Conn, acceptedAt time.Time
 	// process of a cgroup) or a user that holds more than its cap; the
 	// extra connections are refused before anything is read (a peer that
 	// could not be read counts as PID 0).
+	// A caller that had exited before the engine read it holds no
+	// connection of its own: it is refused before it counts, not left to
+	// the cap of its user alone.
+	if peer.Gone {
+		s.log.Warn("local channel: the caller had exited when the connection was accepted", "pid", peer.PID, "uid", peer.UID)
+		s.refuse(c, Version, "", Fail(CodeNotIdentified, "the process that connected had already exited", ""))
+		return
+	}
 	h := heldBy(peer)
 	if over := s.enterPeer(h); over != "" {
 		s.log.Warn("local channel: too many connections from one "+over, "pid", peer.PID, "group", peer.Group, "uid", peer.UID)

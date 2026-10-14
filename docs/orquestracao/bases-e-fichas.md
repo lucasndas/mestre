@@ -1,6 +1,6 @@
 # Bases e fichas
 
-> **Assunto:** campos de bases e fichas, exemplos, exportação/importação YAML/JSON e perfis de conta · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** campos de bases e fichas, exemplos, exportação/importação YAML/JSON e perfis de conta · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -115,6 +115,7 @@ Agente que age na área de trabalho do usuário, com a conta dele, por tempo cur
 ## Regras e erros
 
 - `env` não pode definir variáveis `MESTRE_*` nem conter segredos; valores que parecem segredo são recusados ao salvar ([segurança](../arquitetura/seguranca.md)).
+- **A cada início**, não só ao salvar, o adaptador recusa o `env` da base que define (sem diferença de maiúsculas) `MESTRE_*` e, numa base de agente, o que roda código antes dos hooks ou muda o git que o motor fixa (`LD_PRELOAD`, `LD_AUDIT`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `BASH_ENV`, `ENV`, `GIT_CONFIG*`, `GIT_EXEC_PATH`) e o que desliga ou desvia hooks, permissões, configuração ou sandbox do provedor: no Claude Code, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_SIMPLE`, `CLAUDE_CODE_SAFE_MODE`, `CLAUDE_CODE_RESTRICTED`, o shell e o que embrulha os comandos (`SHELL`, `CLAUDE_CODE_SHELL`, `CLAUDE_CODE_SHELL_PREFIX`, `CLAUDE_ENV_FILE`, `CLAUDE_CODE_PROCESS_WRAPPER`, `CLAUDE_CODE_GIT_BASH_PATH`, `CLAUDE_CODE_USE_POWERSHELL_TOOL`), plugins, pastas e mensagens de fora (`CLAUDE_CODE_PLUGIN_*`, `CLAUDE_CODE_PROJECT_DIR_NAME`, `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD`, `CLAUDE_CODE_MESSAGING_*`, `CLAUDE_CODE_TMPDIR`), o modo automático e os limites de hooks (`CLAUDE_CODE_AUTO_MODE_SERVER`, `CLAUDE_CODE_ENABLE_AUTO_MODE`, `CLAUDE_AFK_TIMEOUT_MS`, `CLAUDE_CODE_ENABLE_CFC`, `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`, `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) e todo `CLAUDE_CODE_DISABLE_*` fora dos de tela e de modelo (`TERMINAL_TITLE`, `MOUSE`, `MOUSE_CLICKS`, `ALTERNATE_SCREEN`, `VIRTUAL_SCROLL`, `FEEDBACK_SURVEY`, `NONESSENTIAL_TRAFFIC`, `EXPERIMENTAL_BETAS`, `1M_CONTEXT`, `ADAPTIVE_THINKING`, `THINKING`, `FAST_MODE`, `LEGACY_MODEL_REMAP`, `STRUCTURED_OUTPUTS`, `NONSTREAMING_FALLBACK`); no Codex, todo `CODEX_*`; no Antigravity, `HOME` e `USERPROFILE`. O perfil de conta e as `MESTRE_*` vêm do motor. O resto passa: a lista não tenta prever as variáveis de rede, idioma ou modelo que uma base usa.
 - Apagar base usada por ficha, ou ficha usada por personagem vivo, é recusado com a lista de quem usa. Missões e grimórios que citam uma ficha apagada falham ao rodar/restaurar, dizendo qual ficha falta.
 - Base sem nenhuma plataforma, ou `cwd` de agente fora de `{mesa}` (exceto a base `operador`): recusada ao salvar.
 - Base ou ficha, fora a base `operador` e as fichas dela, que exige interface gráfica: recusada ao salvar ([requisitos](../guilda/ficha-da-maquina.md#requisitos)).

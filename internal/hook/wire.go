@@ -18,6 +18,10 @@ const (
 	InfoDeadline = 300 * time.Millisecond
 	// MaxStdin is the most of the payload the dispatcher reads.
 	MaxStdin = 4 << 20
+	// MaxCommand is the longest command line the dispatcher has analysed:
+	// a longer one is denied before the engine or the degraded mode reads
+	// it, so the analysis always fits the provider's limit.
+	MaxCommand = 64 << 10
 )
 
 // Verdicts of an Answer.

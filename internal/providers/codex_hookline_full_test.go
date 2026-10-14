@@ -25,7 +25,12 @@ func TestCodexHookLineInTheShellOfCodex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spaced := filepath.Join(t.TempDir(), "with space")
+	// On Linux the folder has a backslash too, which sh drops unquoted.
+	name := "with space"
+	if runtime.GOOS != "windows" {
+		name = `with space and \back\\slash`
+	}
+	spaced := filepath.Join(t.TempDir(), name)
 	if err := os.MkdirAll(spaced, 0o755); err != nil {
 		t.Fatal(err)
 	}

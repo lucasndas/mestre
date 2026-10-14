@@ -65,9 +65,18 @@ type ProcIdentifier struct {
 var _ Identifier = (*ProcIdentifier)(nil)
 
 // Accept reads the peer before anything else happens to the connection.
+// Without delegated cgroups (ModeTree) every terminal shares the cgroup of
+// the engine's service, so the group the caps count by is the terminal the
+// climb finds now; a caller outside every terminal keeps its cgroup, which
+// it shares with the other callers outside.
 func (i *ProcIdentifier) Accept(c net.Conn, acceptedAt time.Time) (Peer, error) {
 	p, err := i.Peers.Peer(c)
 	p.AcceptedAt = acceptedAt
+	if err == nil && i.Mode == ModeTree && !p.Gone && p.PID > 0 {
+		if t, terr := i.byTree(p.PID); terr == nil {
+			p.Group = "tree/term-" + t.ID
+		}
+	}
 	return p, err
 }
 

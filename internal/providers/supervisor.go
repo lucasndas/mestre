@@ -126,7 +126,7 @@ type Decisions interface {
 // still ask on a native screen.
 type CallDecision struct {
 	Tool   *Tool
-	Choice string // "allow" or "deny"
+	Choice string // "allow" or "deny"; anything else is unknown, answered as "deny"
 	// Cwd is the folder of the call (Event.Cwd): a relative path on the
 	// dialog is read from it. Without it only an absolute path matches.
 	Cwd string

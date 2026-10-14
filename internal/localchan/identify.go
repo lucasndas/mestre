@@ -37,13 +37,19 @@ type Peer struct {
 	// before the request is read: its cgroup up to the term-<id> element
 	// (Linux; TerminalGroup). The server caps the connections per group, so
 	// the idle connections of one terminal cannot fill the engine for the
-	// others. Empty when the system does not tell (Windows asks the
-	// mestre-pty for the Job Object only after the request, and the PID
-	// cap and the reserve for hook calls then hold alone).
+	// others. Without delegated cgroups (ModeTree) it is the terminal the
+	// climb finds at accept time. Empty when the system does not tell
+	// (Windows asks the mestre-pty for the Job Object only after the
+	// request, and the caps of the PID and of the user and the reserve for
+	// hook calls then hold alone).
 	Group string
-	// UID is the user of the process, in decimal (SO_PEERCRED); empty when
-	// the system does not tell.
+	// UID is the user of the process: in decimal on Linux (SO_PEERCRED),
+	// the SID of its token on Windows; empty when the system does not tell.
 	UID string
+	// Gone is a process that had already exited when the engine read the
+	// peer: no live caller holds the connection (the socket was handed to
+	// another process), so the server refuses it before it counts the caps.
+	Gone bool
 }
 
 // Close releases what the peer holds (the pidfd).

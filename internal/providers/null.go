@@ -21,7 +21,7 @@ func (n *null) Info() Info { return Info{ID: Null} }
 
 // BuildLaunch is the base command as is; a shell has no session to resume.
 func (n *null) BuildLaunch(req LaunchRequest) (Launch, error) {
-	l, err := newLaunch(req)
+	l, err := newLaunch(Null, req)
 	if err != nil {
 		return Launch{}, err
 	}

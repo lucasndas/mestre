@@ -532,6 +532,7 @@ func TestClaudeStartIsAnAllowList(t *testing.T) {
 		{"--setting-sources", "user"}, {"--add-dir", "/"}, {"--add-dir=/"}, {"-p"}, {"--print"}, {"--continue"}, {"-c"},
 		{"--resume=x"}, {"--resume", "x"}, {"-r", "x"}, {"--system-prompt", "x"}, {"--session-id=x"}, {"--bare"},
 		{"--allow-dangerously-skip-permissions"}, {"--verbose=1"}, {"--model"}, {"--model", "--verbose"}, {"--model="},
+		{"--effort"}, {"--effort", "turbo"}, {"--effort=extreme"}, {"-nx"}, {"-n"}, {"--no-chrome=1"},
 	}
 	for _, b := range refused {
 		req := claudeRequest("u1")
@@ -549,7 +550,11 @@ func TestClaudeStartIsAnAllowList(t *testing.T) {
 		}
 	}
 	for _, b := range [][]string{{"--model", "opus"}, {"--model=opus"}, {"-d"}, {"--debug"}, {"--debug=api,hooks"}, {"--verbose"},
-		{"--permission-mode", "default"}, {"--fallback-model", "sonnet"}, {"--chrome"}} {
+		{"--permission-mode", "default"}, {"--fallback-model", "sonnet"}, {"--chrome"},
+		// The model and display options of the Claude Code reference (M3
+		// audit, round 3: --effort was refused).
+		{"--effort", "high"}, {"--effort=xhigh"}, {"--effort", "max"}, {"--autocompact", "500k"}, {"--name", "qa"}, {"-n", "qa"},
+		{"--no-chrome"}} {
 		req := claudeRequest("u1")
 		req.Base.Args = b
 		req.ProviderArgs = append(slices.Clone(req.ProviderArgs), "--disallowedTools", "Edit", "Write")

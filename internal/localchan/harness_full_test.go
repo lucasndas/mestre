@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +36,7 @@ const (
 	helperCaller = "helper-caller" // <mestre> <base dir> <modes>: calls `mestre list` the ways of the modes, then waits
 	helperOrphan = "helper-orphan" // <mestre>: calls `mestre list` and ends (started by `cmd /c start /b`)
 	helperScope  = "helper-scope"  // prints READY and its cgroup, then waits (run under systemd-run --scope)
+	helperDial   = "helper-dial"   // <socket>: connects to the socket, prints CONNECTED and exits when its stdin closes
 )
 
 var builds struct {
@@ -52,6 +55,16 @@ func TestMain(m *testing.M) {
 			os.Exit(runCaller(os.Args[2:]))
 		case helperOrphan:
 			os.Exit(runOrphan(os.Args[2:]))
+		case helperDial:
+			c, err := net.Dial("unix", os.Args[2])
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			fmt.Println("CONNECTED")
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			_ = c // exits holding it: the system closes it with the process
+			os.Exit(0)
 		case helperScope:
 			fmt.Printf("READY %s\n", ownCgroup())
 			block()

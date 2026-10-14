@@ -100,7 +100,8 @@ func codexHooksJSON(goos, bin string) ([]byte, error) {
 // the arguments. Codex runs it with the shell it detects for the user
 // (codex-rs, commit 2f05c0a: core/src/session/mod.rs, build_hooks_config):
 // on Linux `$SHELL -c` (sh, bash or zsh), where the line is the path and
-// the arguments, between double quotes when the path has a blank; on
+// the arguments, between single quotes when the path has a blank or a
+// backslash; on
 // Windows PowerShell (`-NoProfile -Command`), where a quoted path is a
 // string, not a command: there the line calls it with & and ends with the
 // exit code of the call, which PowerShell 5.1 would otherwise turn into 1
@@ -122,8 +123,11 @@ func codexHookCommand(goos, bin, event string) (string, error) {
 	if goos == "windows" {
 		return `& "` + bin + `"` + args + "; exit $LASTEXITCODE", nil
 	}
-	if strings.Contains(bin, " ") {
-		bin = `"` + bin + `"`
+	// Between single quotes the shell reads nothing, not even a backslash,
+	// which unquoted (or between double quotes, before another backslash)
+	// it would drop; a single quote in the path was refused above.
+	if strings.ContainsAny(bin, ` \`) {
+		bin = `'` + bin + `'`
 	}
 	return bin + args, nil
 }

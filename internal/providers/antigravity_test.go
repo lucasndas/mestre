@@ -305,7 +305,6 @@ func TestBuildLaunchHasTheAgentAndTheHOMEOfTheProfileAndNeverTheSkipFlag(t *test
 		{"windows", launchRequest(func(r *providers.LaunchRequest) {
 			r.OS, r.Env, r.Worktree = "windows", []string{`HOME=C:\Mestre\contas\agy`}, `C:\Mestre\wt`
 		})},
-		{"the base sets another HOME", launchRequest(func(r *providers.LaunchRequest) { r.Base.Env = []string{"HOME=/home/x"} })},
 		{"one dash and =", launchRequest(func(r *providers.LaunchRequest) {
 			r.Base.Args = []string{"-model=gemini-3.8", "-mode", "default", "--effort=high", "-disable-slash-commands"}
 		})},
