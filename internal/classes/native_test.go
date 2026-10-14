@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -88,10 +89,16 @@ func TestTheQAClassBecomesTheNativeControlsOfTheThreeProviders(t *testing.T) {
 	if !slices.Contains(deny, "Bash(git push *)") {
 		t.Fatalf("claude deny %v lacks Bash(git push *)", deny)
 	}
-	codex := n[providers.Codex].args
+	// Codex without internet: on Linux the network of the sandbox stays on
+	// for the local channel and only the hook blocks the internet; on
+	// Windows it is off (docs/provedores/codex.md#canal-local-dentro-do-sandbox).
+	codex, network := n[providers.Codex].args, "sandbox_workspace_write.network_access=true"
+	if runtime.GOOS == "windows" {
+		network = "sandbox_workspace_write.network_access=false"
+	}
 	if !slices.Contains(codex, "workspace-write") || codex[slices.Index(codex, "workspace-write")-1] != "-s" ||
-		!slices.Contains(codex, "sandbox_workspace_write.network_access=false") || slices.Contains(codex, "--search") {
-		t.Fatalf("codex args %v; want -s workspace-write without network", codex)
+		!slices.Contains(codex, network) || slices.Contains(codex, "--search") {
+		t.Fatalf("codex args %v; want -s workspace-write, %s and no hosted search", codex, network)
 	}
 	if !slices.Contains(n[providers.Antigravity].args, "--sandbox") {
 		t.Fatalf("antigravity args %v lack --sandbox", n[providers.Antigravity].args)

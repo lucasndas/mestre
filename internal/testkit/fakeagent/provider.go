@@ -8,8 +8,11 @@
 // trust, Codex hook review, and FAKEAGENT_START_SCREEN, a screen no adapter
 // knows), hooks read from the provider files and run
 // with each provider's semantics, recorded payloads, scripts and
-// /fake-dump. Usage and limit emulation and the full instruction dump
-// arrive with the adapter and conformance in M3.
+// /fake-dump. The fake Codex fires the nine events the Mestre binds and
+// writes its session transcript with the use (token_count), and simulates
+// the usage limit with FAKEAGENT_CODEX_USAGE_LIMIT=1 (codex.go). The rest of
+// the usage and limit emulation and the full instruction dump arrive with
+// the other adapters and the conformance in M3.
 package fakeagent
 
 import (
@@ -83,11 +86,13 @@ var profiles = map[Provider]profile{
 	Codex: {
 		title: "Codex (fake)", recordings: "codex",
 		shellTool: "Bash", editTool: "apply_patch", shellArg: "command",
-		trustQ: "Do you trust the contents of this directory?", trustYes: "Yes, continue", trustNo: "No, quit",
-		loginTitle: "Sign in with ChatGPT to use Codex",
-		loginOpts:  []string{"Sign in with ChatGPT", "Sign in with Device Code", "Provide your own API key"},
+		trustQ: "Trust this folder? Codex can read, edit, and run files here.", trustYes: "Trust and continue", trustNo: "Quit",
+		loginTitle: "Choose how you want to use Codex.",
+		loginOpts:  []string{"Sign in with ChatGPT", "Sign in with Device Code", "Use an OpenAI API key"},
 		credFile:   "auth.json", startEvent: "SessionStart", promptEvent: "UserPromptSubmit",
-		events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+		// The nine events the Mestre binds (docs/provedores/codex.md#hooks).
+		events: []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse",
+			"Stop", "PreCompact", "SessionEnd", "Interrupt"},
 	},
 	Antigravity: {
 		title: "Antigravity (fake)", recordings: "antigravity",

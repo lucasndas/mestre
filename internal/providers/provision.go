@@ -81,6 +81,9 @@ type LayerRequest struct {
 	// CharacterSkills is true when the character has skills of its own
 	// (docs/sessao-zero/personagem.md#skills-por-personagem).
 	CharacterSkills bool
+	// OS is the system of the machine ("" is this one); Codex bounds the
+	// layer by the Windows command line.
+	OS string
 }
 
 // Layer is what DeliverMestreLayer gives BuildLaunch: arguments for
@@ -99,6 +102,12 @@ type UsageRequest struct {
 	// Payload is the raw JSON of the usage source, when the engine kept it.
 	// It wins over Last.
 	Payload []byte
+	// Profile is the folder of the account profile (Codex: CODEX_HOME, the
+	// only place a transcript is read from).
+	Profile string
+	// Cursor is where the previous reading of the session stopped, as the
+	// previous Usage.Cursor gave it; "" is the start (Codex).
+	Cursor string
 }
 
 // ErrNoUsage is a usage source with nothing to read.

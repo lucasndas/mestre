@@ -326,10 +326,18 @@ func TestKnownScreens(t *testing.T) {
 		blocked  bool
 		alert    string
 	}{
-		{"codex trust with the decision", providers.NewCodex(providers.Options{}), "Do you trust the contents of this directory?\n❯ 1. Yes, continue",
+		{"codex trust with the decision", providers.NewCodex(providers.Options{}), "Folder access\nTrust this folder? Codex can read, edit, and run files here.\n❯ 1. Trust and continue",
 			map[string]string{"trust": "trust"}, []string{"\r"}, false, ""},
-		{"codex trust without a decision", providers.NewCodex(providers.Options{}), "Do you trust the contents of this directory?", nil, nil, true, ""},
-		{"codex hook review", providers.NewCodex(providers.Options{}), "Hooks need review: 1 new hook", nil, nil, true, ""},
+		{"codex trust without a decision", providers.NewCodex(providers.Options{}), "Trust this folder? Codex can read, edit, and run files here.", nil, nil, true, ""},
+		{"codex hook review", providers.NewCodex(providers.Options{}), "Hooks need review\n1 hooks are new or changed.\n❯ 1. Review hooks\n  2. Trust all and continue", nil, nil, true, "ALL-11"},
+		{"codex update", providers.NewCodex(providers.Options{}), "Update available · 0.162.1 → 0.163.0\n❯ 1. Update now\n  2. Skip\n  3. Skip until next version",
+			nil, []string{"\r"}, false, ""},
+		{"codex windows sandbox", providers.NewCodex(providers.Options{}), "Set up the Codex agent sandbox to protect your files and control network access.", nil, nil, true, ""},
+		{"codex approval with the decision", providers.NewCodex(providers.Options{}), "Would you like to run the following command?\n$ curl https://example.com\n❯ 1. Yes, proceed (y)",
+			map[string]string{"approval": "allow"}, []string{"y"}, false, ""},
+		{"codex approval without a decision", providers.NewCodex(providers.Options{}), "Do you want to approve network access to \"example.com\"?",
+			nil, []string{"\x1b"}, false, ""},
+		{"codex login", providers.NewCodex(providers.Options{}), "Choose how you want to use Codex.\n❯ 1. Sign in with ChatGPT", nil, nil, true, "ALL-11"},
 		{"antigravity trust with the decision", providers.NewAntigravity(providers.Options{}), "Do you trust the contents of this project?",
 			map[string]string{"trust": "trust"}, []string{"\r"}, false, ""},
 		{"claude login", providers.NewClaudeCode(providers.Options{}), "Select login method:", nil, nil, true, "ALL-11"},

@@ -102,9 +102,9 @@ func (a *agent) fireClaude(ctx context.Context, event string, extra map[string]a
 }
 
 // endSession fires SessionEnd, when the user leaves with /exit or Ctrl-C
-// twice.
+// twice (Claude Code and Codex).
 func (a *agent) endSession(ctx context.Context) {
-	if a.p == Claude {
+	if a.p == Claude || a.p == Codex {
 		a.fireClaude(ctx, "SessionEnd", map[string]any{"reason": "exit"})
 	}
 }

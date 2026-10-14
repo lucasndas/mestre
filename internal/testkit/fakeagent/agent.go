@@ -83,6 +83,10 @@ type agent struct {
 	toolFailed bool       // the tool that ran failed
 	turnFailed bool       // the turn ended in a failure (the usage limit)
 	keys       chan event // what is typed during a turn, for its menus
+
+	// Codex (codex.go).
+	transcript string  // the session transcript the fake writes
+	queued     []event // typed during a turn and read by no menu: the prompt reads it after the turn
 }
 
 // Run runs the agent until the input ends, the user exits or a crash step.
@@ -96,6 +100,9 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if err := a.parseArgs(); err != nil {
 		return err
+	}
+	if a.p == Codex {
+		a.transcript = a.codexTranscript()
 	}
 	events := make(chan event, 64)
 	a.keys = make(chan event, 16)
@@ -273,53 +280,61 @@ func (a *agent) menu(ctx context.Context, events <-chan event, opts []string) (i
 	}
 }
 
-// loop reads prompts and runs turns until the input ends.
+// loop reads prompts and runs turns until the input ends. What was typed
+// during a turn, and no menu of the turn read, comes first after it, as in
+// the real CLIs.
 func (a *agent) loop(ctx context.Context, events <-chan event) error {
 	var line strings.Builder
 	interrupts := 0
 	a.print(PromptMarker)
 	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case ev, ok := <-events:
+		var ev event
+		if len(a.queued) > 0 {
+			ev, a.queued = a.queued[0], a.queued[1:]
+		} else {
+			ok := false
+			select {
+			case <-ctx.Done():
+				return nil
+			case ev, ok = <-events:
+			}
 			if !ok {
 				return nil
 			}
-			switch ev.kind {
-			case evText:
-				interrupts = 0
-				line.WriteString(ev.text)
-				a.print(ev.text)
-			case evBackspace:
-				s := []rune(line.String())
-				if len(s) > 0 {
-					line.Reset()
-					line.WriteString(string(s[:len(s)-1]))
-				}
-			case evInterrupt:
+		}
+		switch ev.kind {
+		case evText:
+			interrupts = 0
+			line.WriteString(ev.text)
+			a.print(ev.text)
+		case evBackspace:
+			s := []rune(line.String())
+			if len(s) > 0 {
 				line.Reset()
-				if interrupts++; interrupts == 2 {
-					a.endSession(ctx)
-					return nil
-				}
-				a.print("\r\nPress Ctrl-C again to exit" + PromptMarker)
-			case evEnter:
-				interrupts = 0
-				prompt := strings.TrimSpace(line.String())
-				line.Reset()
-				if prompt == "" {
-					continue
-				}
-				if prompt == "/exit" && a.p == Claude {
-					a.endSession(ctx)
-					return nil
-				}
-				if err := a.runTurn(ctx, events, prompt); err != nil {
-					return err
-				}
-				a.print(PromptMarker)
+				line.WriteString(string(s[:len(s)-1]))
 			}
+		case evInterrupt:
+			line.Reset()
+			if interrupts++; interrupts == 2 {
+				a.endSession(ctx)
+				return nil
+			}
+			a.print("\r\nPress Ctrl-C again to exit" + PromptMarker)
+		case evEnter:
+			interrupts = 0
+			prompt := strings.TrimSpace(line.String())
+			line.Reset()
+			if prompt == "" {
+				continue
+			}
+			if prompt == "/exit" && (a.p == Claude || a.p == Codex) {
+				a.endSession(ctx)
+				return nil
+			}
+			if err := a.runTurn(ctx, events, prompt); err != nil {
+				return err
+			}
+			a.print(PromptMarker)
 		}
 	}
 }
@@ -331,7 +346,7 @@ func (a *agent) runTurn(ctx context.Context, events <-chan event, prompt string)
 		a.print(a.dump() + "\r\n")
 		return nil
 	}
-	if prompt == "/compact" && a.p == Claude {
+	if prompt == "/compact" && (a.p == Claude || a.p == Codex) {
 		a.fireClaude(ctx, "PreCompact", map[string]any{"trigger": "manual"})
 		a.print("Compacted\r\n")
 		return nil
@@ -343,6 +358,7 @@ func (a *agent) runTurn(ctx context.Context, events <-chan event, prompt string)
 	for {
 		select {
 		case err := <-done:
+			a.queueKeys()
 			return err
 		case ev, ok := <-events:
 			if !ok {
@@ -354,6 +370,9 @@ func (a *agent) runTurn(ctx context.Context, events <-chan event, prompt string)
 				cancel()
 				<-done
 				a.print("Interrupted\r\n")
+				if a.p == Codex {
+					a.fireClaude(ctx, "Interrupt", nil)
+				}
 				return nil
 			}
 			select { // the menus of the turn read the other keys
@@ -364,10 +383,27 @@ func (a *agent) runTurn(ctx context.Context, events <-chan event, prompt string)
 	}
 }
 
+// queueKeys gives the prompt the keys typed during the turn that no menu
+// of the turn read.
+func (a *agent) queueKeys() {
+	for {
+		select {
+		case ev := <-a.keys:
+			a.queued = append(a.queued, ev)
+		default:
+			return
+		}
+	}
+}
+
 func (a *agent) turnBody(ctx context.Context, prompt string) error {
 	a.mu.Lock()
 	a.turn++
+	turnID := fmt.Sprintf("t%d", a.turn)
 	a.mu.Unlock()
+	if a.p == Codex {
+		a.codexTurnStart(turnID)
+	}
 	pr := profiles[a.p]
 	if pl, ok := a.payload(pr.promptEvent, a.common(map[string]any{"prompt": prompt})); ok {
 		a.fire(ctx, pr.promptEvent, "", pl)
@@ -393,8 +429,14 @@ func (a *agent) turnBody(ctx context.Context, prompt string) error {
 		a.runStatusLine(ctx)
 		return nil
 	}
+	if a.p == Codex && a.codexTurnEnd(turnID) {
+		return nil // a failed turn runs no Stop hook
+	}
 	if pl, ok := a.payload("Stop", a.common(map[string]any{"last_assistant_message": a.lastMsg})); ok {
 		a.fire(ctx, "Stop", "", pl)
+	}
+	if a.p == Codex {
+		a.codexTurnComplete(turnID)
 	}
 	a.runStatusLine(ctx)
 	return nil
@@ -465,6 +507,9 @@ func (a *agent) useTool(ctx context.Context, name string, input map[string]any, 
 			return
 		}
 	}
+	if !a.codexEscalation(ctx, name, input, vals) {
+		return
+	}
 	if a.ask {
 		a.ask = false
 		if !a.claudePermission(ctx, name, vals) {
@@ -489,9 +534,13 @@ func (a *agent) common(extra map[string]any) map[string]any {
 	a.mu.Lock()
 	turn := a.turn
 	a.mu.Unlock()
+	transcript := filepath.Join(a.accountDir(), "projects", a.sessionID+".jsonl")
+	if a.transcript != "" {
+		transcript = a.transcript
+	}
 	v := map[string]any{
 		"session_id": a.sessionID, "cwd": a.dir,
-		"transcript_path": filepath.Join(a.accountDir(), "projects", a.sessionID+".jsonl"),
+		"transcript_path": transcript,
 		"prompt_id":       fmt.Sprintf("p%d", turn), "turn_id": fmt.Sprintf("t%d", turn),
 		"conversationId": a.sessionID, "workspacePaths": []string{a.dir},
 		"invocationNum": turn, "executionNum": turn, "stepIdx": turn,

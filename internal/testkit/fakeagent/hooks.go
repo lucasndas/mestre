@@ -198,6 +198,14 @@ func (a *agent) groupedHandlers(v any, file, dir, keyPrefix string) ([]handler, 
 	if keyPrefix == "" {
 		keyPrefix = "user"
 	}
+	var trust map[string][2]string // Codex: the key and the hash Codex gives each handler
+	if a.p == Codex {
+		whole, _ := json.Marshal(map[string]any{"hooks": v})
+		var err error
+		if trust, err = codexTrust(file, whole); err != nil {
+			return nil, err
+		}
+	}
 	var hs []handler
 	for ev, groups := range events {
 		for gi, g := range groups {
@@ -207,15 +215,17 @@ func (a *agent) groupedHandlers(v any, file, dir, keyPrefix string) ([]handler, 
 				}
 				canon, _ := json.Marshal(e)
 				sum := sha256.Sum256(canon)
-				hs = append(hs, handler{
+				h := handler{
 					event: ev, matcher: g.Matcher, command: e.Command, dir: dir,
 					timeout: seconds(e.Timeout, 60), block: a.p == Claude && e.OnFailure == "block",
-					key: fmt.Sprintf("%s:%s:%d:%d", keyPrefix, snake(ev), gi, hi),
-					// The fake hashes the handler JSON; the real Codex
-					// algorithm is checked by the conformance test (M3).
+					key:     fmt.Sprintf("%s:%s:%d:%d", keyPrefix, snake(ev), gi, hi),
 					hash:    "sha256:" + hex.EncodeToString(sum[:]),
 					trusted: true, // Codex overrides with its hook trust
-				})
+				}
+				if kh, ok := trust[fmt.Sprintf("%s\x00%d\x00%d", ev, gi, hi)]; ok {
+					h.key, h.hash = kh[0], kh[1] // as Codex keys and hashes it (codex.go)
+				}
+				hs = append(hs, h)
 			}
 		}
 	}
@@ -300,11 +310,15 @@ func (a *agent) fire(ctx context.Context, event, tool string, payload []byte) (b
 		a.mu.Lock()
 		a.hookLog = append(a.hookLog, event)
 		a.mu.Unlock()
-		if event != "PreToolUse" {
-			continue
-		}
-		if b, why := a.decide(h, res, err); b {
-			blocked, reason = true, why
+		switch event {
+		case "PreToolUse":
+			if b, why := a.decide(h, res, err); b {
+				blocked, reason = true, why
+			}
+		case "PermissionRequest":
+			if b, why := decidePermission(res, err); b {
+				blocked, reason = true, why
+			}
 		}
 	}
 	return blocked, reason
@@ -345,6 +359,28 @@ func (a *agent) decide(h handler, res HookResult, err error) (bool, string) {
 		}
 		return false, ""
 	}
+}
+
+// decidePermission is the answer to a PermissionRequest: only an explicit
+// decision.behavior "allow" lets the command leave the sandbox; anything
+// else is denied (the fake has no native approval screen, and the adapter
+// answers that screen with deny when no decision was recorded).
+func decidePermission(res HookResult, err error) (bool, string) {
+	if err != nil || res.ExitCode != 0 {
+		return true, strings.TrimSpace(string(res.Stderr))
+	}
+	var out struct {
+		HookSpecificOutput struct {
+			Decision struct {
+				Behavior string `json:"behavior"`
+				Message  string `json:"message"`
+			} `json:"decision"`
+		} `json:"hookSpecificOutput"`
+	}
+	if json.Unmarshal(bytes.TrimSpace(res.Stdout), &out) != nil || out.HookSpecificOutput.Decision.Behavior != "allow" {
+		return true, out.HookSpecificOutput.Decision.Message
+	}
+	return false, ""
 }
 
 // untrustedHooks lists the Codex handlers that need review.

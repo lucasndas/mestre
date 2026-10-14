@@ -62,8 +62,8 @@ func TestBuildLaunchResumesWithTheBaseFlags(t *testing.T) {
 	}{
 		{providers.ClaudeCode, "claude", "2f1c7c1e-55d1-4b8f-9a51-0c1b7f3f5e10", claudeLayerArgs("a1"),
 			append([]string{"--model", "the-model", "--resume", "2f1c7c1e-55d1-4b8f-9a51-0c1b7f3f5e10"}, append(claudeLayerArgs("a1"), "--permission-mode", "default")...)},
-		{providers.Codex, "codex", "019a0000-0000-7000-8000-000000000001", []string{"-c", `developer_instructions="x"`},
-			[]string{"resume", "019a0000-0000-7000-8000-000000000001", "--model", "the-model", "-c", `developer_instructions="x"`}},
+		{providers.Codex, "codex", "019a0000-0000-7000-8000-000000000001", []string{"-c", `developer_instructions="x"`, "-s", "read-only"},
+			[]string{"resume", "019a0000-0000-7000-8000-000000000001", "--model", "the-model", "-c", `developer_instructions="x"`, "-s", "read-only", "--no-daemon", "-a", "on-request"}},
 		{providers.Antigravity, "agy", "b38a07d5-f7a3-4e27-b4d0-43e9110f60bb", nil,
 			[]string{"--model", "the-model", "--conversation", "b38a07d5-f7a3-4e27-b4d0-43e9110f60bb", "--agent", "mestre-a1"}},
 	}
@@ -74,7 +74,7 @@ func TestBuildLaunchResumesWithTheBaseFlags(t *testing.T) {
 			OS:      "linux",
 			AgentID: "a1", TableID: "3-login",
 			ResumeSessionID: tt.session, NewSessionID: "not-used-on-resume",
-			ProviderArgs: tt.providerArgs, Env: []string{"CLAUDE_CONFIG_DIR=/profiles/p"},
+			ProviderArgs: tt.providerArgs, Env: []string{"CLAUDE_CONFIG_DIR=/profiles/p"}, Profile: "/profiles/p",
 		}
 		l, err := a.BuildLaunch(req)
 		if err != nil {

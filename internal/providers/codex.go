@@ -9,23 +9,49 @@ import (
 
 // codex is the Codex adapter (docs/provedores/codex.md).
 type codex struct {
-	paths   pathNormalizer
-	failure func(Event) (StopReason, string, bool)
-	screens screenSet
+	paths     pathNormalizer
+	failure   func(Event) (StopReason, string, bool)
+	multiline bool // CodexMultilineViaFile
+	screens   screenSet
 }
 
 // NewCodex returns the Codex adapter.
 func NewCodex(opts Options) Adapter {
-	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, screens: screenSet{
+	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, screens: screenSet{
 		prompt: agentPrompt,
 		busy:   regexp.MustCompile(`(?i)esc to interrupt|Working…`),
-		known: []KnownScreen{
-			{ID: "trust", Pattern: regexp.MustCompile(`Do you trust the contents of this directory\?`), Action: ActionAnswer,
-				Answers: map[string][]byte{"trust": menuFirst}},
-			{ID: "hook-review", Pattern: regexp.MustCompile(`Hooks need review|Trust all and continue`), Action: ActionEscalate},
-			{ID: "login", Pattern: regexp.MustCompile(`Sign in with ChatGPT`), Action: ActionAlert, Checklist: "ALL-11"},
-		},
+		known:  codexScreens(),
 	}}
+}
+
+// codexScreens is the table of
+// docs/provedores/codex.md#telas-que-o-pty-precisa-tratar, with the texts of
+// the Codex TUI.
+func codexScreens() []KnownScreen {
+	return []KnownScreen{
+		// The login lists the ways in: a checklist alert.
+		{ID: "login", Pattern: regexp.MustCompile(`Sign in with ChatGPT`), Action: ActionAlert, Checklist: "ALL-11"},
+		// Pre-trust avoids it; in a worktree of the Mestre the engine's
+		// decision answers "Trust and continue", the first option.
+		{ID: "trust", Pattern: regexp.MustCompile(`Trust this folder\?`), Action: ActionAnswer,
+			Answers: map[string][]byte{"trust": menuFirst}},
+		// Trusting all could approve hooks of third parties that came with
+		// the repository: escalate, and the checklist asks for the trust
+		// of the profile (ALL-11).
+		{ID: "hook-review", Pattern: regexp.MustCompile(`Hooks need review|Trust all and continue`), Action: ActionEscalate, Checklist: "ALL-11"},
+		// The Mestre lets the CLI update itself: "Update now", the first
+		// option.
+		{ID: "update", Pattern: regexp.MustCompile(`(?s)Update now.*Skip until next version`), Action: ActionAnswer,
+			Answers: map[string][]byte{"update": menuFirst}, Default: "update"},
+		// The setup of the Windows sandbox: escalated the first time of a
+		// profile.
+		{ID: "windows-sandbox", Pattern: regexp.MustCompile(`Set up the Codex agent sandbox`), Action: ActionEscalate},
+		// A native approval (the PermissionRequest hook failed): the
+		// decision recorded for the call, or deny. y approves; Esc is
+		// "No, and tell Codex what to do differently".
+		{ID: "approval", Pattern: regexp.MustCompile(`Would you like to run the following command\?|Do you want to approve network access to`), Action: ActionAnswer,
+			Answers: map[string][]byte{"allow": []byte("y"), "deny": []byte("\x1b")}, Default: "deny"},
+	}
 }
 
 func (c *codex) Info() Info { return Info{ID: Codex, Hooks: true} }
@@ -54,8 +80,9 @@ var codexTools = toolTable{
 	}{{"mcp__", KindMCP}},
 }
 
-// BuildLaunch: `codex <base args>`, or `codex resume <SESSION_ID> <base
-// args>` with the same provider flags (-c) as the start.
+// BuildLaunch: `codex <base args> <provider args>`, or `codex resume
+// <SESSION_ID>` with the same flags, plus the ones the base always has
+// (codex_launch.go), and CODEX_HOME of the account profile.
 func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
 	l, err := newLaunch(req)
 	if err != nil {
@@ -64,11 +91,18 @@ func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
 	if err := refuseLatest(Codex, slices.Concat(req.Base.Args, req.ProviderArgs), "--last"); err != nil {
 		return Launch{}, err
 	}
+	flags, err := codexStartArgs(slices.Concat(req.Base.Args, req.ProviderArgs), req.Model)
+	if err != nil {
+		return Launch{}, err
+	}
+	if l.Env, err = codexEnv(l.Env, req.Profile); err != nil {
+		return Launch{}, err
+	}
 	if req.ResumeSessionID != "" {
 		l.Args = []string{"resume", req.ResumeSessionID}
 		l.SessionID, l.Resumed = req.ResumeSessionID, true
 	}
-	l.Args = slices.Concat(l.Args, req.Base.Args, req.ProviderArgs)
+	l.Args = slices.Concat(l.Args, flags)
 	return l, nil
 }
 
@@ -162,4 +196,11 @@ func patchPaths(patch string) (paths []string, onlyAdds bool) {
 func (c *codex) Screens(in ScreenInput) ScreenResult { return c.screens.evaluate(in) }
 
 // TypeMessage: bracketed paste and \r (docs/provedores/codex.md#digitação).
-func (c *codex) TypeMessage(text string) ([]byte, error) { return pasteAndSend(text, "\r") }
+// With the fallback of the multi-line item, a text of several lines goes by
+// the long-message file instead (ErrTooLong, as a long text).
+func (c *codex) TypeMessage(text string) ([]byte, error) {
+	if c.multiline && strings.Contains(strings.TrimRight(text, "\r\n"), "\n") {
+		return nil, fmt.Errorf("%w: several lines go by the long-message file in this Codex version", ErrTooLong)
+	}
+	return pasteAndSend(text, "\r")
+}
