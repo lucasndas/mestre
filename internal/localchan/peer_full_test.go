@@ -3,6 +3,7 @@
 package localchan_test
 
 import (
+	"bufio"
 	"net"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -65,14 +67,34 @@ func TestThePeerHasItsUserAndAnExitedOneIsGone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command(self, helperDial, sock).CombinedOutput(); err != nil {
-		t.Fatalf("helper: %v\n%s", err, out)
+	// The helper connects and the engine accepts while it lives (Windows
+	// drops a pending connection whose client is gone); it then exits and
+	// is reaped before the engine reads the peer.
+	cmd := exec.Command(self, helperDial, sock)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if line, err := bufio.NewReader(stdout).ReadString('\n'); err != nil || strings.TrimSpace(line) != "CONNECTED" {
+		_ = cmd.Process.Kill()
+		t.Fatalf("helper: %q, %v", line, err)
 	}
 	gone, err := l.Accept()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = gone.Close() }()
+	_ = stdin.Close()
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("helper: %v", err)
+	}
 	g, err := peers.Peer(gone)
 	t.Cleanup(g.Close)
 	if !g.Gone {
