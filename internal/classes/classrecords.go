@@ -12,8 +12,10 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// LevelTableMaster is the Mestre da mesa as the author of a change of a
-// class of its table. It is not a level of decrees (it ranks below all).
+// LevelTableMaster is the Mestre da mesa: the author of a change of a class
+// of its table and, as an agent of the approval chain, of the temporary
+// table rules (M4), which like the Grand Master's decisions only turn an ask
+// into allow.
 const LevelTableMaster Level = "table_master"
 
 // Author is who asks for a change of a class, or approves one.

@@ -56,6 +56,75 @@ var signalPatterns = []riskRow{
 	{risk: RiskMedium, group: "apagar", pattern: "git rm*"},
 	{risk: RiskMedium, group: "interpretador com código", pattern: "deno eval*"},
 	{risk: RiskMedium, group: "interpretador com código", pattern: "deno repl*"},
+	{risk: RiskMedium, group: groupUnseenWrite, pattern: "git apply*"},
+	{risk: RiskMedium, group: groupUnseenWrite, pattern: "git am*"},
+}
+
+// groupUnseenWrite is the signal of the programs that write files the
+// command does not name: the archive an extraction unpacks, the patch an
+// application applies. The fixed rules and the files block only see the
+// paths of the line, so these are never baixo.
+const groupUnseenWrite = "escrita sem caminho visível"
+
+// unseenWriters are the programs of the signal: each writes what it does
+// not name when unseenWrite says so (an extraction, not a listing).
+var unseenWriters = map[string]bool{
+	"tar": true, "bsdtar": true, "gtar": true, "unzip": true, "7z": true, "7za": true, "7zr": true, "7zz": true,
+	"unrar": true, "rar": true, "cpio": true, "pax": true, "ar": true, "jar": true, "expand-archive": true, "patch": true,
+}
+
+// unseenWrite reports a command of unseenWriters that writes: tar -x, an
+// unzip that does not only list or test, 7z x, cpio -i, patch…
+func unseenWrite(name string, args []string) bool {
+	if !unseenWriters[name] {
+		return false
+	}
+	first := ""
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			first = a
+			break
+		}
+	}
+	short := func(letters string) bool {
+		for i, a := range args {
+			if strings.HasPrefix(a, "--") {
+				continue
+			}
+			if strings.HasPrefix(a, "-") || i == 0 {
+				if strings.ContainsAny(strings.TrimPrefix(a, "-"), letters) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	switch name {
+	case "tar", "bsdtar", "gtar":
+		return hasText(args, "--extract", "--get") || short("x")
+	case "unzip":
+		return !hasText(args, "-l", "-v", "-t", "-Z", "-p", "-z")
+	case "7z", "7za", "7zr", "7zz", "unrar", "rar":
+		return first == "x" || first == "e"
+	case "cpio":
+		return hasText(args, "--extract", "--pass-through") || short("ip")
+	case "pax":
+		return short("r")
+	case "ar", "jar":
+		return len(args) > 0 && strings.Contains(strings.TrimPrefix(args[0], "-"), "x")
+	}
+	return true // expand-archive, patch
+}
+
+func hasText(args []string, flags ...string) bool {
+	for _, a := range args {
+		for _, f := range flags {
+			if a == f || strings.HasPrefix(f, "--") && strings.HasPrefix(a, f+"=") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // inlineInterpreters run code given to them; they are a signal unless their
@@ -163,6 +232,9 @@ func (w *riskWalker) signal(c *riskCmd, ws []word, st *shellState) (riskOut, boo
 		if c.matches(r.pattern, true) {
 			return sig(r.group, r.pattern)
 		}
+	}
+	if unseenWrite(c.name, c.args) {
+		return sig(groupUnseenWrite, c.text)
 	}
 	for _, a := range c.args {
 		if a == "--delete" || strings.HasPrefix(a, "--delete-") || strings.HasPrefix(a, "--delete=") {

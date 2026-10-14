@@ -157,6 +157,15 @@ func (e *evaluator) ownBranch(b string) bool {
 	return false
 }
 
+// gitFixed are the subcommands git denies by a fixed rule, whole or with
+// some options (below): the reach of a command pattern (reachesFixed) is
+// derived from them, and a test keeps the two in step.
+var gitFixed = []string{
+	"push", "send-pack", "http-push", "fetch", "pull", "fetch-pack", "remote",
+	"update-ref", "filter-branch", "filter-repo", "gc", "prune", "repack", "pack-refs", "maintenance", "prune-packed", "replace", "fast-import",
+	"worktree", "tag", "reflog", "notes", "stash", "symbolic-ref", "config", "submodule", "clean", "branch", "checkout", "switch",
+}
+
 func (e *evaluator) git(args []word, st *shellState) result {
 	res := newResult()
 	g, gst := e.parseGit(args, st, &res)

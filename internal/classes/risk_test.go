@@ -21,8 +21,10 @@ func riskWorktree() string {
 	return "/w"
 }
 
+// riskEnv is the environment of the criteria: the scripts of the worktree
+// came from the repository.
 func riskEnv(policy *classes.RiskPolicy) classes.Env {
-	return classes.Env{AgentID: agentID, Worktree: riskWorktree(), Risk: policy}
+	return classes.Env{AgentID: agentID, Worktree: riskWorktree(), Risk: policy, Git: fakeGit{}}
 }
 
 // riskRules are effective rules with these domains.

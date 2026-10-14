@@ -102,6 +102,20 @@ type GitState interface {
 	Committed(ctx context.Context, worktree string, all bool) ([]string, error)
 }
 
+// TableScripts is the part of a GitState that tells a script of the
+// repository from one created or changed at the table, for the risk of
+// running it (docs/classes/classificacao-de-risco.md#sinais-de-risco). With
+// a GitState that does not implement it, or none, every script of the
+// worktree counts as changed.
+type TableScripts interface {
+	// Changed reports whether the file at path (absolute, in the worktree)
+	// differs from the base of the table branch: its content, up to the
+	// line endings, is not the one of the merge-base of the branch with the
+	// main branch, or it is not there. A file that is not a regular file of
+	// the worktree is changed; so is one it cannot check (err).
+	Changed(ctx context.Context, worktree, path string) (bool, error)
+}
+
 // TurnEdits answers who else edited a file in a turn still in progress.
 type TurnEdits interface {
 	OtherEditor(tableID, agentID, path string) (who string, ok bool)
@@ -230,9 +244,13 @@ func decide(ctx context.Context, env Env, rules *Rules, ev providers.Event, degr
 	return d
 }
 
-// exception looks for an exception bound to exactly this action. It does
-// not count when a deny decree of a higher level takes a part of it, nor
-// when it is suspended by a deny decree of the same level.
+// exception looks for an exception bound to exactly this action. One of a
+// person does not count when a deny decree of a higher level takes a part
+// of it, nor when it is suspended by a deny decree of the same level. One
+// of an agent of the approval chain (grand_master, table_master) only turns
+// an ask into allow: it does not count over any deny
+// (docs/arquitetura/precedencia.md#combinação-na-decisão-de-permissão). One
+// of an unknown level never counts.
 func (e *evaluator) exception(act Action, res result) (Decision, bool) {
 	if e.env.Exceptions == nil {
 		return Decision{}, false
@@ -241,7 +259,16 @@ func (e *evaluator) exception(act Action, res result) (Decision, bool) {
 		if d.Kind != DecreeException || d.Action == nil || !d.active(e.now) || !d.Action.same(act) {
 			continue
 		}
-		if res.denyRank >= d.Level.rank() {
+		switch {
+		case d.Level.person():
+			if res.denyRank >= d.Level.rank() {
+				continue
+			}
+		case d.Level.agent():
+			if res.rules.v != Ask {
+				continue
+			}
+		default:
 			continue
 		}
 		used, err := e.env.Exceptions.Use(e.ctx, e.r.AgentID, d.ID)
@@ -335,7 +362,11 @@ func (e *evaluator) key(p string) string {
 	if e.windows {
 		k = windowsKey(strings.ReplaceAll(k, `\`, "/"))
 	}
-	k = path.Clean(k)
+	if e.windows && strings.HasPrefix(k, "//") {
+		k = "/" + path.Clean(k[1:]) // a UNC path keeps its two slashes
+	} else {
+		k = path.Clean(k)
+	}
 	if e.fold {
 		k = strings.ToLower(k)
 	}
@@ -343,16 +374,29 @@ func (e *evaluator) key(p string) string {
 }
 
 // windowsKey undoes the spellings Windows takes for the same file: the
-// \\?\ and \\.\ prefixes, the trailing dots and spaces it drops from a
-// name, and an alternate data stream (.git::$INDEX_ALLOCATION is .git).
+// \\?\ and \\.\ prefixes, the administrative share of a drive of this
+// machine (\\localhost\C$\x is C:\x), the trailing dots and spaces it drops
+// from a name, and an alternate data stream (.git::$INDEX_ALLOCATION is
+// .git). A device path that is not a drive (\\?\GLOBALROOT\…,
+// \\?\Volume{…}\…, \\.\pipe\…) becomes a UNC path of the host "?", which
+// the fixed rules deny with the shares of this machine (windowsShare).
 func windowsKey(k string) string {
 	for _, prefix := range []string{"//?/", "//./", "/??/"} {
 		if rest, ok := strings.CutPrefix(k, prefix); ok {
 			k = rest
 			if u, ok := strings.CutPrefix(strings.ToLower(k), "unc/"); ok {
 				k = "//" + k[len(k)-len(u):]
+			} else if len(k) < 2 || k[1] != ':' || !isDriveLetter(k[0]) {
+				return "//?/" + k
 			}
 			break
+		}
+	}
+	if rest, ok := strings.CutPrefix(k, "//"); ok {
+		host, after, _ := strings.Cut(rest, "/")
+		share, tail, _ := strings.Cut(after, "/")
+		if len(share) == 2 && share[1] == '$' && isDriveLetter(share[0]) && localHost(host) {
+			k = share[:1] + ":/" + tail
 		}
 	}
 	segs := strings.Split(k, "/")

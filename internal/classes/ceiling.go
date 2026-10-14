@@ -243,6 +243,13 @@ func (c *Ceiling) Excess(class *Permissions) []Excess {
 			add(field, "true", "o teto põe false")
 		}
 	}
+	// A ceiling with an allow list gives nothing outside it: a default that
+	// the class writes as allow or ask passes it.
+	listed := func(field string, class *Verdict, max *[]string) {
+		if class != nil && *class != Deny && max != nil {
+			add(field, string(*class), "o teto só dá "+list(*max))
+		}
+	}
 
 	if f := class.Files; f != nil {
 		allowed("files.read", deref(f.Read), filesPtr(m, "read"), coversGlob)
@@ -256,6 +263,7 @@ func (c *Ceiling) Excess(class *Permissions) []Excess {
 		takenWhole("commands.allow", deref(cm.Allow), ptrOf(m.Commands, "ask"), "pede aprovação para", coversText)
 		if m.Commands != nil {
 			verdict("commands.default", cm.Default, m.Commands.Default)
+			listed("commands.default", cm.Default, m.Commands.Allow)
 		}
 	}
 	if t := class.Tools; t != nil {
@@ -267,6 +275,7 @@ func (c *Ceiling) Excess(class *Permissions) []Excess {
 		takenWhole("tools.allow", deref(t.Allow), mt.Deny, "nega", coversText)
 		takenWhole("tools.allow", deref(t.Allow), mt.Ask, "pede aprovação para", coversText)
 		verdict("tools.default", t.Default, mt.Default)
+		listed("tools.default", t.Default, mt.Allow)
 	}
 	if g := class.Git; g != nil {
 		var mg GitSpec

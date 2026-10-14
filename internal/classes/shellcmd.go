@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf16"
 )
@@ -40,6 +41,9 @@ func (e *evaluator) shell(cmd, cwd string, depth int) result {
 func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 	res := newResult()
 	parts, opaque, grouped := parseLine(cmd, d)
+	if slices.Contains(opaque, braceTooLarge) {
+		res.fixedDeny(braceTooLarge)
+	}
 	if len(parts) == 0 {
 		if strings.TrimSpace(cmd) != "" {
 			res.atLeastAsk("nenhum comando reconhecido")
@@ -208,6 +212,9 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	if inner, extra, ok := e.unwrap(cn, args, &res); ok {
 		if len(inner) == 0 {
 			res.rule(e.commandRule(ws, outer, false))
+			if extra != "" {
+				res.atLeastAsk(extra)
+			}
 			return res
 		}
 		res.merge(e.command(inner, d, st, depth, append(outer, strings.Join(wordsText(ws), " "))))
@@ -290,10 +297,8 @@ func (e *evaluator) commandRule(ws []word, outer []string, readOnly bool) outcom
 		}
 		return false
 	}
-	if o, ok := e.decreeSplit(func(g *Grant) []string { return g.Commands }, matchAny, func(p string) bool { return matchText(p, text) }); ok {
-		return o
-	}
-	return e.patterns("commands", e.r.Commands, forms, text, readOnly)
+	return e.decreeSplit(func(g *Grant) []string { return g.Commands }, matchAny, func(p string) bool { return matchText(p, text) },
+		func() outcome { return e.patterns("commands", e.r.Commands, forms, text, readOnly) })
 }
 
 func hasRunAs(args []string) bool {
@@ -431,8 +436,26 @@ func (e *evaluator) unwrap(cn string, args []word, res *result) (inner []word, e
 		}
 		return rest, "argumentos vindos do xargs", true
 	}
+	if multiCall[cn] {
+		// The applet named by the first argument is the program.
+		switch {
+		case len(args) == 0:
+			return nil, cn + " sem o programa", true
+		case strings.HasPrefix(args[0].text, "--coreutils-prog="):
+			applet := args[0]
+			applet.text = strings.TrimPrefix(applet.text, "--coreutils-prog=")
+			return append([]word{applet}, args[1:]...), "", true
+		case strings.HasPrefix(args[0].text, "-"):
+			return nil, "opção de " + cn, true
+		}
+		return args, "", true
+	}
 	return nil, "", false
 }
+
+// multiCall are the binaries that hold many programs and run the one their
+// first argument names (busybox rm, toybox sh).
+var multiCall = map[string]bool{"busybox": true, "toybox": true, "coreutils": true, "sbase-box": true, "ubase-box": true}
 
 // nestedShell returns the command text a shell, eval or cmd runs, its
 // dialect and why it is at least ask; nested is "" when the text is not
@@ -581,7 +604,9 @@ func (e *evaluator) resolve(text string, st *shellState) ([]string, bool) {
 	}
 	out := make([]string, 0, len(st.cwds))
 	for _, c := range st.cwds {
-		out = append(out, norm(filepath.Join(c, text)))
+		// Not filepath.Join: it would clean "link/.." away before Normalize
+		// resolves the link.
+		out = append(out, norm(strings.TrimRight(c, `/\`)+string(filepath.Separator)+text))
 	}
 	return out, true
 }

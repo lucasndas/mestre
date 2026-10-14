@@ -25,6 +25,11 @@ type SaveRequest struct {
 	By    Author
 }
 
+// ReservedOrchestrator is the name of the built-in class of the Grand
+// Master and the Masters of table (docs/classes/classe-orquestrador.md):
+// no class of any scope is created with it.
+const ReservedOrchestrator = "orquestrador"
+
 // SaveResult is what came of a SaveRequest.
 type SaveResult struct {
 	Key  ClassKey
@@ -85,6 +90,9 @@ func (l *Library) Save(ctx context.Context, req SaveRequest) (SaveResult, error)
 	if !req.Edit && strings.TrimSpace(req.App) == "" {
 		return SaveResult{}, ErrAppRequired
 	}
+	if !req.Edit && req.Name == ReservedOrchestrator {
+		return SaveResult{}, fmt.Errorf("%w: %q é a classe embutida dos orquestradores", ErrNameTaken, req.Name)
+	}
 
 	cur, exists, err := l.Records.Approved(ctx, l.ws(k.Scope), k)
 	if err != nil {
@@ -108,7 +116,15 @@ func (l *Library) Save(ctx context.Context, req SaveRequest) (SaveResult, error)
 	if req.Edit && files == nil {
 		files = cur.Files
 	}
+	// The package as the caller built it is not trusted: sorted, its paths
+	// and its sizes are checked here, before and after the App line.
+	if files, err = NewFiles(files); err != nil {
+		return SaveResult{}, err
+	}
 	files, err = withApp(files, req.App, req.Edit)
+	if err == nil {
+		files, err = NewFiles(files)
+	}
 	if err != nil {
 		return SaveResult{}, err
 	}

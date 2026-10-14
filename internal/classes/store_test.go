@@ -107,7 +107,7 @@ func TestStoreUsesAnExceptionOnceUntilItLeavesTheDocument(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	ctx := context.Background()
-	ex := classes.Decree{ID: 3, Kind: classes.DecreeException, Effect: classes.Effect{Kind: classes.EffectPermission},
+	ex := classes.Decree{ID: 3, Kind: classes.DecreeException, Level: classes.LevelApprover, Effect: classes.Effect{Kind: classes.EffectPermission},
 		Action: &classes.Action{Kind: providers.KindShell, Command: "npm install x"}}
 	if err := s.Save(ctx, rules(t, qaYAML, ex)); err != nil {
 		t.Fatal(err)

@@ -245,7 +245,7 @@ func TestDegradedWithoutSnapshotOnlyReads(t *testing.T) {
 	want(t, classes.DecideDegraded(ctx, env, nil, m.shell("npm test")), classes.Deny, classes.LayerDegraded, classes.DegradedReason)
 	want(t, classes.DecideDegraded(ctx, env, nil, m.shell("sudo x")), classes.Deny, classes.LayerFixed)
 	// An exception is never used with the engine down.
-	r := rules(t, qaYAML, classes.Decree{ID: 9, Kind: classes.DecreeException, Effect: classes.Effect{Kind: classes.EffectPermission},
+	r := rules(t, qaYAML, classes.Decree{ID: 9, Kind: classes.DecreeException, Level: classes.LevelApprover, Effect: classes.Effect{Kind: classes.EffectPermission},
 		Action: &classes.Action{Kind: providers.KindShell, Command: "npm install x"}})
 	want(t, classes.DecideDegraded(ctx, env, r, m.shell("npm install x")), classes.Deny, classes.LayerDegraded)
 }

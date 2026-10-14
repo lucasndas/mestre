@@ -35,7 +35,7 @@ cost:                       # máximo por unidade de limites-de-uso.md: usd | to
   hours: {per_table: 20}
 ```
 
-- Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existir, `commands.allow` dizem o que **pode** ser dado; o que fica fora é negado. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada, menos `operator`: ausente vale `false`, porque uma classe só vai à base Operador do PC com `operator: true` no teto ([formato](formato-das-permissoes.md)).
+- Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existirem, `commands.allow` e `tools.allow` dizem o que **pode** ser dado; o que fica fora é negado: com `commands.allow` ou `tools.allow` no teto, o `default` do bloco nas regras efetivas é `deny` (origem `ceiling`), e uma classe que escreve `default: allow` ou `ask` nesse bloco passa do teto. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada, menos `operator`: ausente vale `false`, porque uma classe só vai à base Operador do PC com `operator: true` no teto ([formato](formato-das-permissoes.md)).
 - Leitura estrita, como a do `permissions.yaml`: `version: 1` só no topo (o bloco `permissions` não tem `version` próprio); campo desconhecido, mais de um documento, unidade fora de `usd | tokens | hours` e custo negativo, infinito ou (em `tokens`) fracionário tornam o arquivo inválido. O código é `internal/classes` (`ParseCeiling`, `CeilingKeeper`).
 - **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas (não restringe a internet), com `git.request_push: false`, `git.workflows: never`, `operator: false` e sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)).
 

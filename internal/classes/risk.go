@@ -40,7 +40,7 @@ func (r Risk) valid() bool { return r.rank() >= 0 }
 
 // RiskTableVersion is the version of the default risk table embedded in the
 // binary; it goes with every classification to the request and the audit.
-const RiskTableVersion = 2
+const RiskTableVersion = 3
 
 // RequestType is a type of approval request
 // (docs/aprovacoes/politica.md#tipos-de-ação).
@@ -128,9 +128,10 @@ var (
 // of the action and its target (docs/classes/classificacao-de-risco.md):
 // the same request, table version and adjustments always give the same
 // risk. env is the character's (worktree, home, system, the folders the
-// fixed rules close and env.Risk, the owner's part); rules are its
-// effective rules, for the domains (nil: none). What it does not recognize
-// or cannot analyse goes up, never down.
+// fixed rules close, env.Git, which tells the scripts of the repository
+// from the ones of the table, and env.Risk, the owner's part); rules are
+// its effective rules, for the domains (nil: none). What it does not
+// recognize or cannot analyse goes up, never down.
 func ClassifyRisk(env Env, rules *Rules, req RiskRequest) RiskResult {
 	res := func(r Risk, rule string) RiskResult {
 		return RiskResult{Risk: r, TableVersion: RiskTableVersion, Rule: rule}
@@ -157,7 +158,7 @@ func ClassifyRisk(env Env, rules *Rules, req RiskRequest) RiskResult {
 		rules = &Rules{}
 	}
 	ev := providers.Event{Event: providers.EventPreTool, Cwd: req.Cwd, Tool: req.Tool}
-	env.Exceptions, env.Edits, env.Git = nil, nil, nil
+	env.Exceptions, env.Edits = nil, nil
 	e := newEvaluator(context.Background(), env, rules, ev, false)
 	return e.classify(req.Tool, true)
 }
