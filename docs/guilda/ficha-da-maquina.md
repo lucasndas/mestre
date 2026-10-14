@@ -66,7 +66,7 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 
 ### No código
 
-`internal/machinesheet`. A máquina monta a ficha a partir de sondas pequenas atrás de interfaces (sistema, provedores, Operador, navegador, ferramentas, transcrição): a sonda do sistema é real e por sistema (Linux: `/etc/os-release`, `/proc/meminfo`, `/sys/bus/pci`; Windows: registro e API do sistema), e as de provedores, Operador e transcrição são entregues pelos marcos que as criam. A versão de um programa (o navegador no Linux, `git`, `ffmpeg`) vem de um `Runner` que o motor liga às camadas que iniciam processos; o pacote não inicia nenhum. A Cidadela registra o tratador de `machine.sheet` e o gancho do `hello`, e responde "quem atende" com o casamento acima. Ler os `requires` de bases, fichas e classes ao salvá-las (CA-FMAQ-04) é do M3 e do M4 (CA-FMAQ-03, com fichas e perfis de conta).
+`internal/machinesheet`. A máquina monta a ficha a partir de sondas pequenas atrás de interfaces (sistema, provedores, Operador, navegador, ferramentas, transcrição): a sonda do sistema é real e por sistema (Linux: `/etc/os-release`, `/proc/meminfo`, `/sys/bus/pci`; Windows: registro e API do sistema), e as de provedores, Operador e transcrição são entregues pelos marcos que as criam. A versão de um programa (o navegador no Linux, `git`, `ffmpeg`) vem de um `Runner` que o motor liga às camadas que iniciam processos; o pacote não inicia nenhum. A Cidadela registra o tratador de `machine.sheet` e o gancho do `hello`, e responde "quem atende" com o casamento acima. As classes leem os `requires` ao salvar (CA-FMAQ-04, `internal/classes`); bases e fichas, com as fichas e os perfis de conta no M4 (CA-FMAQ-03).
 
 ## Regras e erros
 

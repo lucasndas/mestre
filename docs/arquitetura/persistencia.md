@@ -26,7 +26,7 @@
 
 ## Tabelas principais do banco da Guilda (proposta)
 
-Cada marco cria só as tabelas de que precisa, em migração nova ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). Existem hoje: `secrets` no banco da Guilda e `terminals` no banco local de máquina (M1); no M2, `replication_log` (fora das migrações numeradas), `outbox`, `processed_commands`, `guild`, `machines`, `machine_credentials`, `join_requests`, `epochs` e `audit_log` no banco da Guilda e `outbox`, `processed_commands`, `known_addresses` e `machine_identity` no banco local; no M3, `workspace_ceilings` no banco da Guilda e `agent_rules` e `used_exceptions` no banco local; as demais abaixo são proposta.
+Cada marco cria só as tabelas de que precisa, em migração nova ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). Existem hoje: `secrets` no banco da Guilda e `terminals` no banco local de máquina (M1); no M2, `replication_log` (fora das migrações numeradas), `outbox`, `processed_commands`, `guild`, `machines`, `machine_credentials`, `join_requests`, `epochs` e `audit_log` no banco da Guilda e `outbox`, `processed_commands`, `known_addresses` e `machine_identity` no banco local; no M3, `workspace_ceilings`, `classes` e `class_proposals` no banco da Guilda e `agent_rules` e `used_exceptions` no banco local; as demais abaixo são proposta.
 
 Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas ficam nas migrações; o significado de cada dado, no documento da funcionalidade.
 
@@ -35,7 +35,7 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 | Guilda e máquinas | `replication_log` (`lsn`, horário, mudanças; [replicação](../guilda/replicacao.md)), `guild` (uma linha: `guild_id`, certificado da CA, época atual e certidão, fuso da Guilda, chave pública de recuperação do cofre), `epochs` (uma linha por época: a máquina, o `lsn` de onde partiu e a aprovação; [perda na troca](../guilda/replicacao.md#perda-na-troca)), `machines` (nome, nomes dos certificados, ficha da máquina, prioridade, se é excluída, versão, estado `active`, `removed` ou `left`), `machine_heartbeats`, `join_requests`, `machine_credentials` (série, certificado público e revogação de cada certificado, nunca a chave), `account_profiles`, `outbox` (mensagens com ack ainda sem confirmação, por máquina), `replication_state` (último `lsn` confirmado por Torre; no M2 fica só em memória, porque gravá-lo geraria um registro, que geraria outra confirmação) | [Guilda](../guilda/guilda.md), [ficha da máquina](../guilda/ficha-da-maquina.md), [replicação](../guilda/replicacao.md), [protocolo](../conectividade/protocolo.md), [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Usuários | `users`, `user_workspaces`, `panel_sessions`, `telegram_pairing_codes` | [usuários e níveis](../telegram/usuarios-e-niveis.md), [login](../painel/login.md) |
 | Workspaces e mesas | `workspaces`, `tables` (mesas: épico, branch, estado), `table_worktrees` (máquina, caminho, último commit sincronizado), `bundle_transfers` | [workspaces](../orquestracao/workspaces.md), [mesas](../orquestracao/mesas.md) |
-| Presets e classes | `bases`, `sheets`, `classes` (índice: nome, escopo, caminho, App), `templates` (versões dos modelos), `workspace_ceilings` (versão aprovada do `teto.yaml` de cada workspace: hash e arquivo, quem aprovou e como) | [bases e fichas](../orquestracao/bases-e-fichas.md), [classes](../classes/classes.md), [teto](../classes/teto-do-workspace.md), [sessão zero do personagem](../sessao-zero/personagem.md) |
+| Presets e classes | `bases`, `sheets`, `classes` (a versão aprovada de cada classe: escopo, mesa, nome, hash, pacote inteiro, App e versão) e `class_proposals` (mudanças que esperam aprovação), `templates` (versões dos modelos), `workspace_ceilings` (versão aprovada do `teto.yaml` de cada workspace: hash e arquivo, quem aprovou e como) | [bases e fichas](../orquestracao/bases-e-fichas.md), [classes](../classes/classes.md), [teto](../classes/teto-do-workspace.md), [sessão zero do personagem](../sessao-zero/personagem.md) |
 | Personagens e canvas | `characters`, `terminals`, `character_state_log` (transições de estado, com motivo e horário), `connections`, `notes` (índice de pergaminhos), `tomes`, `canvas_layout`, `grimoires` | [personagens](../orquestracao/personagens.md), [conexões](../orquestracao/conexoes.md), [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md), [grimórios](../orquestracao/grimorios.md) |
 | Missões | `quests`, `quest_steps` (com issue/sub-issue), `step_runs` | [missões](../orquestracao/missoes.md) |
 | Esperas e mensagens | `waits`, `inbox_messages` (com a origem da mensagem de usuário), `outbound_messages` (respostas guardadas para canal indisponível) | [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) |
@@ -75,8 +75,8 @@ Campos: id, personagem (agente), máquina, pasta, classe, status, id da sessão 
 
 | O quê | Onde | Banco guarda |
 |---|---|---|
-| Classes do workspace e da mesa | `.mestre/classes/`, `.mestre/mesas/<mesa>/classes/` | índice e App vinculado |
-| Classes globais | pasta da Cidadela (abaixo), copiada às Torres | índice |
+| Classes do workspace e da mesa | `.mestre/classes/`, `.mestre/mesas/<mesa>/classes/` | versão aprovada (pacote e hash), App vinculado e propostas |
+| Classes globais | pasta da Cidadela (abaixo), copiada às Torres | versão aprovada (pacote e hash) |
 | Pergaminhos | Markdown no disco ([pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md)) | índice e conexões |
 | Anexos | `.mestre/anexos/` do workspace (fora do git) | registro |
 | Histórico dos terminais | arquivos de log com rotação | nada |

@@ -22,6 +22,7 @@ import (
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/store/machine"
@@ -123,6 +124,13 @@ type Deps struct {
 	Characters hook.Characters
 	Approvals  hook.Approvals
 	States     hook.States
+	// ClassHooks gives the dispatcher the synchronous hooks of the class of
+	// a character (hook.ClassHookSource, over the classes of the workspace,
+	// when the registry of characters exists, M4); OnHookEvent is told every
+	// event after it is answered (the asynchronous hooks of the classes,
+	// hook.AsyncRunner). nil: none.
+	ClassHooks  hook.ClassHooks
+	OnHookEvent func(providers.Event, hook.Answer)
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources
@@ -590,6 +598,7 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 	hk := &hook.Engine{
 		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
 		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States,
+		ClassHooks: e.deps.ClassHooks, OnEvent: e.deps.OnHookEvent,
 	}
 	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker})
 	srv := localchan.NewServer(localchan.Config{

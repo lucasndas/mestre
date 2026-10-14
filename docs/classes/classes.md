@@ -1,6 +1,6 @@
 # Classes
 
-> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -18,13 +18,13 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
 
 - As classes são arquivos, para poderem ser versionadas; o banco da Cidadela guarda o índice ([persistência](../arquitetura/persistencia.md)). As Torres recebem cópias materializadas pelo motor ([mesa](../sessao-zero/mesa.md)).
 - O nome (slug `[a-z0-9-]`) é único entre os escopos visíveis numa mesa (global + workspace + mesa). Variações têm nome próprio (ex.: `qa-api`).
-- Criar, editar e excluir têm a sintaxe em [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) e também podem ser feitos no [painel](../painel/administracao.md).
+- Criar, editar e excluir têm a sintaxe em [CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md) e também podem ser feitos no [painel](../painel/administracao.md). Quem não tem o direito no escopo recebe `forbidden`: o Grão-Mestre só cria classe do workspace (como proposta) e o Mestre da mesa só a da própria mesa.
 
 ### Onde a classe é alterada
 
 - A **única** forma de criar, alterar ou excluir uma classe é `mestre class create|edit|delete` ([CLI de classes e rituais](../cli/coordenacao-classes-e-rituais.md)) ou o [painel](../painel/administracao.md). Quem grava os arquivos é o motor, depois de validar o pacote, conferir o teto e obter as aprovações do escopo; a regra fixa que proíbe o agente de escrever em `.mestre/**` não atinge esse caminho ([permissões](permissoes.md#regras-fixas-de-segurança)).
-- A cada versão aprovada, o motor registra no banco o hash do pacote. **O motor só usa uma classe cujos arquivos batem com o hash registrado.**
-- Qualquer mudança feita por fora (edição manual, `git pull`, PR mesclado que altere `.mestre/classes/` ou `.mestre/mesas/<mesa>/classes/`), válida ou não, vira uma **proposta**: passa pelas mesmas validações e aprovações do escopo. Até ser aprovada (ou se for inválida), vale a última versão aprovada, e o painel e o Grão-Mestre avisam os usuários. É a mesma regra do [teto](teto-do-workspace.md).
+- A cada versão aprovada, o motor registra no banco o hash e o pacote inteiro (`classes`). **O motor só usa uma classe cujos arquivos batem com o hash registrado**, e usa a versão guardada, diga a pasta o que disser.
+- Qualquer mudança feita por fora (edição manual, `git pull`, PR mesclado que altere `.mestre/classes/` ou `.mestre/mesas/<mesa>/classes/`), válida ou não, vira uma **proposta** (`class_proposals`): passa pelas mesmas validações e aprovações do escopo. Até ser aprovada (ou se for inválida), vale a última versão aprovada, e o painel e o Grão-Mestre avisam os usuários, uma vez por mudança. O motor percebe quando um personagem começa um turno e no `class check`. Aprova-se o hash que o aprovador viu; a proposta inválida não se aprova. É a mesma regra do [teto](teto-do-workspace.md).
 
 ### Estrutura do pacote
 
@@ -36,6 +36,7 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
   hooks/…             scripts usados pelos hooks (só classes globais e do workspace)
   skills/<nome>/      skills próprias da classe (opcional)
 ```
+O pacote tem até 64 arquivos, 512 KiB e 256 KiB por arquivo, porque viaja inteiro na replicação; links e arquivos que não são comuns são recusados.
 
 Frontmatter do `CLASS.md`:
 
@@ -48,7 +49,7 @@ provider: codex          # opcional: preferência para escolher a ficha
 model: ""                # opcional
 requires: {gpu: true}    # opcional: requisitos sobre a máquina
 ```
-`requires` soma aos requisitos da base e da ficha; os requisitos aceitos e como a máquina é escolhida estão em [ficha da máquina](../guilda/ficha-da-maquina.md#requisitos).
+`name` é o da pasta; `description` e `app` são obrigatórios. `requires` soma aos requisitos da base e da ficha; os aceitos e como a máquina é escolhida estão em [ficha da máquina](../guilda/ficha-da-maquina.md#requisitos), e um requisito desconhecido ou `gui: true` recusa a classe ao salvar.
 
 O corpo do `CLASS.md` traz as instruções: o que fazer, como entregar, critérios de pronto e quando sinalizar `mestre done`.
 
@@ -99,12 +100,12 @@ pre_tool:
 ```
 
 - **Entrada:** o evento no formato interno ([adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento)) no stdin; ambiente do personagem mais `MESTRE_HOOK_EVENT`; pasta atual = worktree; mesmo usuário e permissões do personagem.
-- **Quem roda:** `sync` roda dentro da chamada do `mestre hook`, com tempo limite cortado para 2 s abaixo do tempo limite do provedor; `async` roda no motor da máquina depois da resposta, sem segurar o agente, no máximo um por personagem de cada vez (os outros esperam em fila).
-- **`pre_tool`:** só roda se o [pipeline de permissões](permissoes.md) já liberou. Exit 0 = sem objeção; exit 2 = negar (motivo no stderr). Um hook só pode restringir, nunca liberar o que o pipeline negou.
-- **Falha ou tempo esgotado:** registra o erro e segue, a não ser com `blocking: true`, que nega.
-- **Saída:** `log` vai para o log do personagem; `scroll` é anexada ao pergaminho da missão ([pergaminhos](../orquestracao/pergaminhos-e-tomos.md)); `agent` é entregue ao personagem pela [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md).
+- **Quem roda:** `sync` (o padrão) roda dentro da chamada do `mestre hook`, com tempo limite cortado para 2 s abaixo do tempo limite do provedor; `async` roda no motor da máquina depois da resposta, sem segurar o agente, no máximo um por personagem de cada vez (os outros esperam em fila).
+- **`pre_tool`:** é sempre `sync` e só roda se o [pipeline de permissões](permissoes.md) já liberou. Exit 0 = sem objeção; exit 2 = negar (motivo no stderr). Um hook só pode restringir, nunca liberar o que o pipeline negou. `blocking` só existe aqui; `when` só em `pre_tool` e `post_tool`.
+- **Falha ou tempo esgotado:** registra o erro (no stderr da chamada do `mestre hook`) e segue, a não ser com `blocking: true`, que nega.
+- **Saída** (padrão `log`): `log` vai para o log do personagem; `scroll` é anexada ao pergaminho da missão ([pergaminhos](../orquestracao/pergaminhos-e-tomos.md)); `agent` é entregue pela [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md). `scroll` e `agent` só valem em `async`.
 - Em provedor sem o evento (ex.: Antigravity não tem `pre_compact`), o hook não roda; `session_end` vem do fim do processo no PTY. O `class check` mostra isso por provedor.
-- O `run` de cada hook passa pelo mesmo pipeline de permissões da classe, como um comando do personagem. Classes da mesa não podem ter scripts no pacote: só linhas de comando checadas; scripts ficam para classes globais e do workspace, que passam por aprovação de um usuário.
+- O `run` de cada hook passa pelo mesmo pipeline de permissões da classe, como um comando do personagem. O que o pipeline não libera não roda: o hook `blocking` então nega e o `class check` avisa. Classes da mesa não podem ter scripts no pacote: só linhas de comando checadas; scripts ficam para classes globais e do workspace, que passam por aprovação de um usuário.
 
 ### Skills da classe
 
@@ -112,16 +113,14 @@ pre_tool:
 
 ### Como a classe chega ao personagem
 
-- `CLASS.md` → camada do Mestre ([personagem](../sessao-zero/personagem.md)).
-- `permissions.yaml` → pipeline do despachante e controles nativos ([permissões](permissoes.md)).
-- `hooks/` → despachante único ([adaptador](../provedores/adaptador.md)).
-- Mudanças em permissões e hooks valem na próxima chamada de hook (a Cidadela recombina e reenvia as regras efetivas à máquina). Mudanças no texto do `CLASS.md` entram no contexto do próximo turno e por inteiro nos personagens novos. O banco guarda o hash de cada versão e qual versão cada personagem usa.
+- `CLASS.md` → camada do Mestre ([personagem](../sessao-zero/personagem.md)); `permissions.yaml` → pipeline do despachante e controles nativos ([permissões](permissoes.md)); `hooks/` → despachante único ([adaptador](../provedores/adaptador.md)).
+- Mudanças em permissões e hooks valem na próxima chamada de hook (a Cidadela recombina e reenvia as regras efetivas); as do `CLASS.md`, no contexto do próximo turno e por inteiro nos personagens novos. O banco guarda o hash de cada versão e qual versão cada personagem usa (M4).
 
 ### Validação (`mestre class check`)
 
-Confere: frontmatter e nome único; esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali.
+Confere: frontmatter e nome único; esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali. Pacote inválido sai com `invalid_class` e a lista de problemas; "acima do teto" é só um estado (nada é apagado), e o `run` que o pipeline recusa é um aviso.
 
-A entrega aos personagens (sessão zero), o vínculo com Apps (GitHub) e a aprovação de classes do workspace chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
+O código é `internal/classes` (`Library`, `Examine`) e `internal/hook` (`ClassHookSource`, `AsyncRunner`). A entrega aos personagens (M4), o estado dos Apps e a aprovação pelo fluxo (M5) entram por interfaces e chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 
 ## Regras e erros
 
