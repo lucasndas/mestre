@@ -191,12 +191,20 @@ func readFileStat(path string) ([]byte, fileState, error) {
 // place, with the mode the file had (0600 for a new one). If the file is not
 // what the caller read any more, it does not write.
 func replaceFile(path string, data []byte, was fileState) error {
+	return replaceFileWith(path, data, was, 0)
+}
+
+// replaceFileWith is replaceFile with the permission bits in extra added to
+// the mode: Antigravity's settings.json is read by the account of the agents,
+// not the engine's.
+func replaceFileWith(path string, data []byte, was fileState, extra os.FileMode) error {
 	mode := os.FileMode(0o600)
 	if was.exists {
 		if st, err := os.Stat(path); err == nil {
 			mode = st.Mode().Perm()
 		}
 	}
+	mode |= extra
 	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".mestre-*")
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 # Antigravity CLI (`agy`)
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -23,7 +23,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 - **Frontmatter gerado:** `name` (igual ao do `--agent`), `description`, `mainAgent: true`, `subagent: false` e `tools` (reforço nativo, [reforço nativo](../classes/reforco-nativo.md)). Nunca `excludeDefaultComponents` (tiraria as seções de fábrica do prompt). `permissionMode` não existe na 1.3.3 (não aparece no binário) e não é usado.
 - **Nome inexistente cai no agente padrão sem erro** (issue #1213). Defesa: antes de iniciar, o motor confere que o arquivo existe e que o `name` é igual ao do `--agent`; depois, a falta do código `M-…` na etapa 2 do [teste de conformidade](conformidade.md) acusa o problema.
 - **Atualização a cada turno e início de sessão:** PreInvocation devolvendo `injectSteps: [{"ephemeralMessage": "…"}]`. Não existe `additionalContext`. O primeiro PreInvocation de uma conversa conta como início de sessão.
-- Reserva final: primeira mensagem ([personagem](../sessao-zero/personagem.md)).
+- Reserva final: primeira mensagem ([personagem](../sessao-zero/personagem.md)). Os caminhos "Se falhar" de [Verificar](#verificar-na-implementação) são chaves que a conformidade liga (`LayerFallbacks`, `AntigravityNoPaste`): camada por `injectSteps` ou pela primeira mensagem (o arquivo de agente fica só com o frontmatter e um corpo curto), ordem de ler o `AGENTS.md` da raiz, e digitação sem colagem.
 
 ### Skills
 
@@ -39,11 +39,9 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 - Os comandos rodam com a pasta do `hooks.json` como pasta atual, por `sh -c` (Linux) ou `cmd /c` (Windows), de forma síncrona: o agente espera.
 - **Entrada:** JSON no stdin, `camelCase`, **sem o nome do evento** (o despachante usa o `--event` da linha de comando): `conversationId`, `modelName`, `stepIdx`, `toolCall {name, args}` (argumentos em PascalCase, ex.: `CommandLine`, `Cwd`), `transcriptPath`, `workspacePaths`. PostToolUse acrescenta `error`; Pre/PostInvocation trazem `invocationNum`; Stop traz `executionNum`, `terminationReason` (`model_stop`, `max_steps_exceeded`, `error`), `error`, `fullyIdle`.
 - **Saída:** PreToolUse `{"decision": "allow"|"deny"|"ask"|"force_ask"|"deny_unless_prior_grant", "reason", "permissionOverrides", "overwrite"}`; PostToolUse `{}`; PreInvocation `{"injectSteps": […]}`; PostInvocation `{"injectSteps": [], "terminationBehavior": ""}`; Stop `{}` (só `"decision":"continue"` impediria a parada).
-- **Falha fechada (testado no PreToolUse):** exit diferente de 0, saída que não é JSON, tempo esgotado e `{}` sem decisão **bloqueiam** a ferramenta. O despachante sempre imprime a decisão explícita ([despachante](despachante-de-hooks.md#respostas-por-provedor)).
-- Um `allow` do hook **não** passa por cima do sistema de permissões nativo.
-- Para PostToolUse, PreInvocation, PostInvocation e Stop, o despachante supõe a mesma falha fechada do PreToolUse: sempre devolve JSON válido e nunca sai com erro de propósito, então não depende do comportamento de falha desses eventos.
-- **Tempos limite gerados:** 30 s em PreToolUse, PreInvocation e PostInvocation; 60 s em PostToolUse e Stop.
-- **Binário ausente:** um hook cujo comando não existe bloqueia o agente. O comando gerado testa se o `mestre` existe no caminho estável e, se não existir, imprime a resposta neutra (`{"decision":"allow"}` ou `{}`). A forma exata por sistema (sh ou cmd) fica no gerador.
+- **Falha fechada (testado no PreToolUse):** exit diferente de 0, saída que não é JSON, tempo esgotado e `{}` sem decisão **bloqueiam** a ferramenta. O despachante sempre imprime a decisão explícita ([despachante](despachante-de-hooks.md#respostas-por-provedor)). Um `allow` do hook **não** passa por cima do sistema de permissões nativo.
+- Para PostToolUse, PreInvocation, PostInvocation e Stop, o despachante supõe a mesma falha fechada do PreToolUse: sempre devolve JSON válido e nunca sai com erro de propósito, então não depende do comportamento de falha desses eventos. **Tempos limite gerados:** 30 s em PreToolUse, PreInvocation e PostInvocation; 60 s em PostToolUse e Stop.
+- **Binário ausente:** um hook cujo comando não existe bloqueia o agente. O comando gerado testa se o `mestre` existe no caminho estável e, se não existir, imprime a resposta neutra (`{"decision":"allow"}` ou `{}`); se existir, executa-o e devolve o exit dele (uma falha do binário nunca vira `allow`). Em `sh`: `if [ -e '<mestre>' ]; then exec '<mestre>' hook …; else printf '%s\n' '<neutra>'; fi`; em `cmd`: `if exist "<mestre>" ("<mestre>" hook …) else (echo <neutra>)`, e o caminho não pode ter `"` nem `%`.
 
 ```json
 {"mestre": {"enabled": true,
@@ -66,9 +64,9 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 | `--model <modelo>` | modelo preferido da classe, se houver |
 | `--conversation <id>` | retomada da conversa do personagem |
 
-**Proibidas:** `--dangerously-skip-permissions`. Ela **não** desliga os hooks (testado: o PreToolUse continuou bloqueando), o que corrige a especificação; segue proibida porque aprova sozinha todo pedido de permissão nativo e anula o `--sandbox` (issue #36), tirando a defesa em profundidade. Também proibidas: `-p` (a base é interativa) e `--add-dir`.
+**Proibidas:** `--dangerously-skip-permissions`. Ela **não** desliga os hooks (testado: o PreToolUse continuou bloqueando), o que corrige a especificação; segue proibida porque aprova sozinha todo pedido de permissão nativo e anula o `--sandbox` (issue #36), tirando a defesa em profundidade. Também proibidas: `-p` (a base é interativa; apelidos `--print` e `--prompt`), `--add-dir`, e o que o Mestre mesmo define ou que retoma "a mais recente": `--agent`, `--conversation`, `--continue` e `-c`. O `BuildLaunch` recusa todas, também na forma `--opção=valor`.
 
-No `settings.json` do perfil: `toolPermission` fica em `request-review` (nunca `always-proceed`), com as regras nativas descritas em [reforço nativo](../classes/reforco-nativo.md).
+No `settings.json` do perfil: `toolPermission` fica em `request-review` (nunca `always-proceed`), com as regras nativas descritas em [reforço nativo](../classes/reforco-nativo.md). Quem grava o arquivo é o motor; o `agy` só o regrava na escolha "always allow … (Persist to settings.json)" e na tela de confiança, que o Mestre nunca escolhe. O arquivo regravado fica legível pelo `mestre-agente` ([modo dos arquivos](../classes/reforco-nativo.md#quando-as-regras-mudam)).
 
 ### Contas múltiplas
 
@@ -79,10 +77,9 @@ No `settings.json` do perfil: `toolPermission` fica em `request-review` (nunca `
 
 ### Uso, custo e rate limit
 
-- `agy -p "/usage" --output-format json`, com o `HOME` do perfil: `command.data.groups[].buckets[]` com `id`, `window` (`weekly` ou `5h`), `remaining_fraction` e `reset_time`. Não chama modelo nem gasta tokens. O motor roda no fim de cada turno (no máximo uma vez por minuto por perfil, padrão) e a cada 10 minutos com personagem ativo. Uso da janela = 1 − `remaining_fraction`.
-- Há um limite semanal e um de 5 horas por grupo de modelos (Gemini; Claude e GPT), consumidos conforme o custo dos tokens.
+- `agy -p "/usage" --output-format json`, com o `HOME` do perfil: `command.data.groups[].buckets[]` com `id`, `window` (`weekly` ou `5h`), `remaining_fraction` e `reset_time`. Não chama modelo nem gasta tokens. O motor roda no fim de cada turno (no máximo uma vez por minuto por perfil, padrão) e a cada 10 minutos com personagem ativo. Uso da janela, em %, = (1 − `remaining_fraction`) × 100.
+- Há um limite semanal e um de 5 horas por grupo de modelos (Gemini; Claude e GPT), consumidos conforme o custo dos tokens. Tokens por turno no modo interativo não são lidos (nem da linha de status nem do `transcript_full.jsonl`): o uso vem do `/usage`, com tempo ativo e turnos.
 - Desde a 1.3.3, cota esgotada é avisada na hora: o turno termina com Stop `terminationReason = error`, e o personagem fica `blocked` com motivo `quota` ([limites](../plataforma/limites-de-uso.md)). O adaptador não depende do texto do erro: Stop com `error` seguido de `/usage` com `remaining_fraction` 0 numa janela basta.
-- Tokens por turno no modo interativo não são lidos (nem da linha de status nem do `transcript_full.jsonl`): o uso vem do `/usage`, com tempo ativo e turnos.
 
 ### Digitação
 
@@ -94,8 +91,8 @@ Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](ad
 |---|---|
 | confiar na pasta | evitar (pré-confiança); se aparecer num worktree do Mestre, responder "Yes, I trust this folder" |
 | login (URL e código) | escalar como alerta do checklist |
-| pedido de permissão nativo | responder com a decisão registrada; sem decisão, negar |
-| revisão de artefato ou plano | escalar |
+| pedido de permissão nativo ("Yes, allow tool call" / "No, deny tool call") | responder com a decisão registrada (Enter permite, Esc nega); sem decisão, negar |
+| revisão de artefato ou plano ("Review artifact", "Review plan") | escalar |
 
 Quem chama estas operações na criação de mesas e personagens é a sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)); os perfis de conta estão em [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta).
 
@@ -111,7 +108,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 - **CA-AGY-02** · *rápida* — **Dado** um payload gravado em `camelCase` sem nome de evento, **quando** `NormalizeHook` roda com `--event PreToolUse`, **então** o evento interno sai como `pre_tool`, com `tool.kind = shell` e o comando de `CommandLine`.
 - **CA-AGY-03** · *rápida* — **Dado** um `settings.json` com outras chaves, **quando** `PreTrust` roda duas vezes, **então** o worktree aparece uma vez em `trustedWorkspaces` e o JSON continua válido.
 - **CA-AGY-04** · *rápida* — **Dado** qualquer base e ficha válidas, **quando** `BuildLaunch` monta o comando, **então** ele tem `--agent mestre-<id>` e o `HOME` do perfil, e nunca `--dangerously-skip-permissions`.
-- **CA-AGY-05** · *rápida* — **Dado** a saída gravada de `/usage` em JSON, **quando** `ReadUsage` lê, **então** cada janela tem `used_pct = 1 − remaining_fraction` e `resets_at`.
+- **CA-AGY-05** · *rápida* — **Dado** a saída gravada de `/usage` em JSON, **quando** `ReadUsage` lê, **então** cada janela tem `used_pct = 1 − remaining_fraction` (em %, de 0 a 100) e `resets_at`.
 - **CA-AGY-07** · *rápida* — **Dado** um personagem Antigravity, **quando** `BuildLaunch` gera o arquivo de agente, **então** o `name` do frontmatter é igual ao do `--agent`, há `mainAgent: true` e nunca `excludeDefaultComponents` nem `permissionMode`; e, se o arquivo não existir no disco na hora de iniciar, o início falha com erro em vez de abrir o agente padrão.
 - **CA-AGY-06** · *completa* — **Dado** uma máquina sem o binário `mestre` no caminho estável, **quando** o comando gerado do PreToolUse roda, **então** imprime `{"decision":"allow"}` e sai com 0.
 
@@ -127,7 +124,7 @@ Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 - **Verificar na implementação:** `--agent mestre-<id>` no modo interativo (existe desde a 1.1.1), e se o corpo **soma** às seções de fábrica do prompt. **Padrão:** soma — o changelog 1.2.1 só tira as seções de fábrica com `excludeDefaultComponents: true`, que o Mestre nunca usa; ainda assim o corpo é escrito para valer sozinho. **Se falhar:** a camada do Mestre vai pelo primeiro `PreInvocation` (`injectSteps`) e, por último, pela primeira mensagem ([personagem](../sessao-zero/personagem.md)). **Onde:** etapas 2 e 5.
 - **Verificar na implementação:** o `AGENTS.md` da raiz carrega já no primeiro turno (e não só quando o agente toca um arquivo), e o que acontece com `AGENTS.md` e `GEMINI.md` na mesma pasta. **Padrão:** carrega no primeiro turno, e os dois somam. **Se falhar:** a camada do Mestre do Antigravity manda ler o `AGENTS.md` da raiz antes de começar; com só um dos dois lido, a sessão zero avisa como faz com o `CLAUDE.md` ([sessão zero do workspace](../sessao-zero/workspace.md)). **Onde:** etapa 2 (código `P-…`); a pasta com os dois arquivos, à mão.
 - **Verificar na implementação:** o `agy` aceita colagem entre colchetes no modo interativo e envia com `\r`. **Padrão:** como em Digitação. **Se falhar:** mensagens de várias linhas vão pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e só a linha que pede para lê-lo é digitada. **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
-- **Verificar na implementação:** `permissionOverrides` no `allow` evita a tela de permissão nativa. **Padrão:** o despachante devolve no `allow` a ação já permitida em `permissionOverrides`. **Se falhar:** o adaptador responde a tela nativa com a decisão registrada (tabela de telas). **Onde:** etapa 5.
+- **Verificar na implementação:** `permissionOverrides` no `allow` evita a tela de permissão nativa. **Padrão:** o despachante devolve, no `allow` de um comando de shell, o comando já permitido em `permissionOverrides` (lista de textos `command(<comando>)`; comando com `*`, parênteses ou quebra de linha não é repetido). **Se falhar:** o adaptador responde a tela nativa com a decisão registrada (tabela de telas; textos do binário 1.3.3 e teclas a confirmar). **Onde:** etapa 5.
 - **Verificar na implementação:** no Linux, `HOME` separado isola o login com duas contas reais (o spike confirmou o login só em arquivo sob `HOME`, sem chaveiro). **Padrão:** isola. **Se falhar:** só um perfil de conta Antigravity por máquina Linux também; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis de contas diferentes na VM Linux.
 - **Verificar na implementação:** no Windows, o `agy` mantém a credencial do Gerenciador de Credenciais rodando no `mestre-pty` iniciado pelo `mestre-launcher` ([Windows](../arquitetura/windows.md#iniciador-mestre-launcher)). Na rodada 2 do Sandbox, manteve em todas as execuções, cada uma numa sessão de logon nova, também pelo token entregue a outro processo; a hipótese da rodada 1 (o `agy` apagou a credencial ao falhar uma renovação) ficou para o item seguinte. **Padrão:** mantém. **Se falhar:** o `mestre-launcher` mantém a sessão de logon do `mestre-agente` aberta enquanto a máquina roda, e o checklist mostra o perfil deslogado até lá. **Onde:** spike 5 no Windows Sandbox ([Windows](../arquitetura/windows.md#verificar-na-implementação)); depois, a suíte pesada.
 - **Verificar na implementação:** o `agy` renova sozinho o token de login, que vale 1 h, gravando o arquivo do perfil. **Padrão:** renova. **Se falhar:** o perfil aparece deslogado no ALL-11 do [checklist](../plataforma/checklist.md), o personagem fica `blocked` e o alerta pede novo login. **Onde:** suíte pesada, com um personagem ativo por mais de 1 h, no Linux e no Windows (no Windows, no `mestre-pty` iniciado pelo `mestre-launcher`).

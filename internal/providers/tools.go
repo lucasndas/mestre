@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // ToolKind is the provider-independent type of a tool (tool.kind).
@@ -89,6 +91,15 @@ type Options struct {
 	// CodexMultilineViaFile is the same for Codex
 	// (docs/provedores/codex.md#verificar-na-implementação).
 	CodexMultilineViaFile bool
+	// Exec runs the commands of ReadUsage (the usage of Antigravity).
+	Exec ExecFunc
+	// Clock times the commands of ReadUsage; nil is the real clock.
+	Clock clock.Clock
+	// AntigravityNoPaste is the "Se falhar" of the bracketed paste of
+	// Antigravity (docs/provedores/antigravity.md#verificar-na-implementação):
+	// a text with line breaks is not typed (ErrTooLong), it goes through the
+	// file of the long messages.
+	AntigravityNoPaste bool
 }
 
 // NormalizePath normalizes a path the way the adapters do with the paths of
