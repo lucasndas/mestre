@@ -65,6 +65,7 @@ Critérios de documentos de um marco que usam peças de marcos seguintes; cada u
 | [ficha da máquina](../guilda/ficha-da-maquina.md) (M2) | CA-FMAQ-04 → M3 (classes); CA-FMAQ-03 → M4 (fichas e perfis de conta) |
 | [replicação](../guilda/replicacao.md) (M2) | CA-REPL-08 → M4 (espelho do workspace); CA-REPL-06 → M7 (checklist) |
 | [Cidadela e Torres](../guilda/cidadela-e-torres.md) (M2) | CA-CIDADELA-10, CA-CIDADELA-11 e CA-CIDADELA-13 → M4 (personagens, missões, esperas); CA-CIDADELA-03 e CA-CIDADELA-12 → M5 (ações no GitHub e trava); CA-CIDADELA-08 → M6 (painel); CA-CIDADELA-05, CA-CIDADELA-06 e CA-CIDADELA-07 → M7 (Torre condutora, Telegram em modo reduzido, página reserva) |
+| [convenções da CLI](../cli/convencoes.md) (M3) | CA-CLI-CONV-04, CA-CLI-CONV-05 e CA-CLI-CONV-07 → M4 (`ask`, `done` e `ask --raw` com personagens, terminais e duas máquinas; o M3 testa a fila de saída, a recusa do `--raw` e o `PENDING:` com `// Part of …`); CA-CLI-CONV-06, CA-CLI-CONV-08, CA-CLI-CONV-10 e CA-CLI-CONV-11 → M5 (aprovação `acao_destrutiva`, `table`/`gh`/`app`/`notify`, `reply` do Grão-Mestre e `pr open` com a trava; o M3 testa o filtro do `help`, a recusa de segredo e o `queued` com `// Part of …`) |
 
 ### Critérios antecipados
 
