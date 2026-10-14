@@ -122,7 +122,10 @@ type Usage struct {
 
 // LimitWindow is one rate-limit window.
 type LimitWindow struct {
-	Window   string    `json:"window"`
+	Window string `json:"window"`
+	// Bucket tells apart windows of the same name that belong to different
+	// model groups (Antigravity); empty where the provider has one of each.
+	Bucket   string    `json:"bucket,omitempty"`
 	UsedPct  float64   `json:"used_pct"`
 	ResetsAt time.Time `json:"resets_at"`
 }

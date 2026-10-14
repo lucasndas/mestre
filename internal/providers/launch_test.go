@@ -72,9 +72,9 @@ func TestBuildLaunchResumesWithTheBaseFlags(t *testing.T) {
 		req := providers.LaunchRequest{
 			Base:    providers.Base{Name: string(tt.id), Command: tt.command, Args: baseArgs, Env: []string{"BASE=1"}, Dir: "/work/mesa"},
 			OS:      "linux",
-			AgentID: "a1", TableID: "3-login",
+			AgentID: "a1", TableID: "3-login", Worktree: "/work/mesa",
 			ResumeSessionID: tt.session, NewSessionID: "not-used-on-resume",
-			ProviderArgs: tt.providerArgs, Env: []string{"CLAUDE_CONFIG_DIR=/profiles/p"}, Profile: "/profiles/p",
+			ProviderArgs: tt.providerArgs, Env: []string{"CLAUDE_CONFIG_DIR=/profiles/p", "HOME=/profiles/agy"}, Profile: "/profiles/p",
 		}
 		l, err := a.BuildLaunch(req)
 		if err != nil {

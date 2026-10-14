@@ -2,6 +2,7 @@ package providers
 
 import (
 	"encoding/json"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -33,6 +34,10 @@ type Reply struct {
 	Reason string
 	// Context goes with ReplyContext.
 	Context string
+	// Tool is the tool of the call a ReplyAllow lets run: Antigravity
+	// repeats the allowed action in permissionOverrides, so its own
+	// permission screen does not ask again.
+	Tool *Tool
 }
 
 // HookOutput is what `mestre hook` prints and the code it exits with: only
@@ -96,15 +101,24 @@ func (c *codex) FormatResponse(nativeEvent string, r Reply) HookOutput {
 // FormatResponse formats a reply for Antigravity: always exit 0 and valid
 // JSON, because `{}`, invalid output, an exit other than 0 or a timeout
 // block. PreToolUse always carries an explicit decision: an internal error
-// is a deny; PreInvocation carries the context in injectSteps; the other
-// events answer `{}`.
+// is a deny; an allow of a shell command also repeats the action in
+// permissionOverrides, so the native permission screen does not ask again
+// (the "Padrão" of docs/provedores/antigravity.md#verificar-na-implementação);
+// PreInvocation carries the context in injectSteps; the other events answer
+// `{}`.
 func (a *antigravity) FormatResponse(nativeEvent string, r Reply) HookOutput {
 	switch antigravityEvents[nativeEvent] {
 	case EventPreTool:
 		if r.Kind == ReplyDeny || r.Kind == ReplyError {
 			return jsonOutput(map[string]any{"decision": "deny", "reason": r.Reason})
 		}
-		return jsonOutput(map[string]any{"decision": "allow"})
+		out := map[string]any{"decision": "allow"}
+		if r.Kind == ReplyAllow {
+			if o := permissionOverrides(r.Tool); len(o) > 0 {
+				out["permissionOverrides"] = o
+			}
+		}
+		return jsonOutput(out)
 	case EventTurnStart:
 		if r.Kind == ReplyContext && r.Context != "" {
 			return jsonOutput(map[string]any{"injectSteps": []any{map[string]any{"ephemeralMessage": r.Context}}})
@@ -148,4 +162,16 @@ func cutRunes(s string, n int) string {
 		i++
 	}
 	return s
+}
+
+// permissionOverrides are the temporary grants an allow carries: the exact
+// command that was decided, as `command(<command line>)`. A command with a
+// wildcard, a parenthesis or a line break is not repeated, because the grant
+// would cover more than the call or would not parse; the native screen then
+// asks and is answered with the recorded decision.
+func permissionOverrides(t *Tool) []string {
+	if t == nil || t.Kind != KindShell || t.Command == "" || strings.ContainsAny(t.Command, "*()\r\n") {
+		return nil
+	}
+	return []string{"command(" + t.Command + ")"}
 }

@@ -432,6 +432,11 @@ func (a *agent) turnBody(ctx context.Context, prompt string) error {
 	if a.p == Codex && a.codexTurnEnd(turnID) {
 		return nil // a failed turn runs no Stop hook
 	}
+	if a.p == Antigravity { // after the tool calls of the invocation finish
+		if pl, ok := a.payload("PostInvocation", a.common(nil)); ok {
+			a.fire(ctx, "PostInvocation", "", pl)
+		}
+	}
 	if pl, ok := a.payload("Stop", a.common(map[string]any{"last_assistant_message": a.lastMsg})); ok {
 		a.fire(ctx, "Stop", "", pl)
 	}

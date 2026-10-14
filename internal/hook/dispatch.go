@@ -253,7 +253,7 @@ func (d *dispatcher) decide(ctx context.Context, ev providers.Event) providers.R
 		dec := d.degraded(ctx, ev)
 		_ = enqueue(d.files, d.queueDir(), d.clk, ev, &dec)
 		if dec.Verdict == classes.Allow {
-			return providers.Reply{Kind: providers.ReplyAllow}
+			return providers.Reply{Kind: providers.ReplyAllow, Tool: ev.Tool}
 		}
 		return deny(dec.Reason)
 	}
@@ -265,7 +265,7 @@ func (d *dispatcher) decide(ctx context.Context, ev providers.Event) providers.R
 		if why, denied := d.classHooks(ctx, ev, ans.ClassHooks, true); denied {
 			return deny(why)
 		}
-		return providers.Reply{Kind: providers.ReplyAllow}
+		return providers.Reply{Kind: providers.ReplyAllow, Tool: ev.Tool}
 	case VerdictDeny:
 		if ans.Reason == "" {
 			ans.Reason = "negado pelo motor"

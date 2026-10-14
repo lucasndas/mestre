@@ -21,7 +21,8 @@ type NativeFiles interface {
 }
 
 // OSNativeFiles writes the native files on disk: a temporary file renamed
-// over the old one, which keeps its mode; one update at a time, as the
+// over the old one, which keeps its mode (and is always readable by the
+// agents' account, see Update); one update at a time, as the
 // settings.json of an Antigravity profile is shared by its characters.
 type OSNativeFiles struct{ mu sync.Mutex }
 
@@ -38,7 +39,11 @@ func (o *OSNativeFiles) Update(_ context.Context, path string, merge func([]byte
 		return false, err
 	default:
 		if st, err := os.Stat(path); err == nil {
-			mode = st.Mode().Perm()
+			// The renamed file belongs to the account of the engine, and the
+			// agents run as another one: whatever mode the old file had
+			// (agy writes its settings.json 0600), the new one stays readable
+			// by the group and the others. Nothing native is a secret.
+			mode = st.Mode().Perm() | 0o044
 		}
 	}
 	next, err := merge(cur)
@@ -46,6 +51,11 @@ func (o *OSNativeFiles) Update(_ context.Context, path string, merge func([]byte
 		return false, err
 	}
 	if cur != nil && bytes.Equal(cur, next) {
+		if st, err := os.Stat(path); err == nil && st.Mode().Perm() != mode {
+			if err := os.Chmod(path, mode); err != nil {
+				return false, fmt.Errorf("%s is not readable by the agents and cannot be fixed: %w", path, err)
+			}
+		}
 		return false, nil
 	}
 	if err := writeAtomic(path, next, mode); err != nil {

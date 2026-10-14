@@ -102,7 +102,7 @@ var profiles = map[Provider]profile{
 		loginOpts:   []string{"Sign in with Google (URL and code)"},
 		credFile:    "antigravity-oauth-token",
 		promptEvent: "PreInvocation",
-		events:      []string{"PreInvocation", "PreToolUse", "PostToolUse", "Stop"},
+		events:      []string{"PreInvocation", "PreToolUse", "PostToolUse", "PostInvocation", "Stop"},
 	},
 }
 

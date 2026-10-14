@@ -82,7 +82,7 @@ O que este documento descreve e ainda não existe entra assim:
 
 | Comportamento | Marco | Com quê |
 |---|---|---|
-| Eventos de hook além dos cinco que o agente falso dispara (`PermissionRequest`, `PreCompact`, `PostInvocation`…) e o uso e os limites de assinatura (prontos para o Claude Code; os outros dois com o adaptador de cada um) | M3 | [adaptador](../provedores/adaptador.md) e [conformidade](../provedores/conformidade.md) |
+| Eventos de hook além dos cinco que o agente falso dispara (`PermissionRequest`, `PreCompact`…; o `PostInvocation` do Antigravity já é disparado) e o uso e os limites de assinatura (prontos para o Claude Code; os outros dois com o adaptador de cada um) | M3 | [adaptador](../provedores/adaptador.md) e [conformidade](../provedores/conformidade.md) |
 | Parâmetros, campos e rotas do Telegram e do GitHub falsos além do mínimo do M0 (botões, `parse_mode`, `state` e `labels` nas issues…) | M5 | [bot](../telegram/bot.md) e [eventos](../github/eventos.md) |
 | whisper-server falso | M5 | [anexos e transcrição](../telegram/anexos-e-transcricao.md) |
 | Refs da trava no GitHub falso, máquina isolada da rede falsa e `409 Conflict` do Telegram falso | M5 | [trava no GitHub](../guilda/trava-no-github.md) |

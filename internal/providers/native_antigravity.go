@@ -89,13 +89,7 @@ func agentTools(cur []byte, agentID string, tools []string) ([]byte, error) {
 	text := strings.ReplaceAll(string(cur), "\r\n", "\n")
 	front, body, ok := frontmatter(text)
 	if !ok {
-		front = []string{
-			"name: mestre-" + agentID,
-			"description: " + strconv.Quote("Personagem "+agentID+" do Mestre"),
-			"mainAgent: true",
-			"subagent: false",
-		}
-		body = text
+		front, body = agentFront(agentID), text
 	}
 	var out []string
 	set := false

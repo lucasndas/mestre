@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
+
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // antigravity is the Antigravity CLI (`agy`) adapter
@@ -12,17 +15,33 @@ import (
 type antigravity struct {
 	paths   pathNormalizer
 	screens screenSet
+	exec    ExecFunc
+	clk     clock.Clock
+	noPaste bool
 }
+
+var _ NativeTranslator = (*antigravity)(nil)
 
 // NewAntigravity returns the Antigravity adapter.
 func NewAntigravity(opts Options) Adapter {
-	return &antigravity{paths: opts.paths(), screens: screenSet{
+	clk := opts.Clock
+	if clk == nil {
+		clk = clock.Real{}
+	}
+	return &antigravity{paths: opts.paths(), exec: opts.Exec, clk: clk, noPaste: opts.AntigravityNoPaste, screens: screenSet{
 		prompt: agentPrompt,
 		busy:   regexp.MustCompile(`(?i)esc to (interrupt|cancel)|Working…`),
 		known: []KnownScreen{
 			{ID: "trust", Pattern: regexp.MustCompile(`Do you trust the contents of this project\?`), Action: ActionAnswer,
 				Answers: map[string][]byte{"trust": menuFirst}},
 			{ID: "login", Pattern: regexp.MustCompile(`Sign in with Google`), Action: ActionAlert, Checklist: "ALL-11"},
+			// Antigravity has no permission_request hook: its own screen asks
+			// (a tool the hook allowed that the native rules still ask about,
+			// or one the permissionOverrides did not cover). The answer is the
+			// decision recorded for that call; without one, deny.
+			{ID: "permission", Pattern: regexp.MustCompile(`Yes, allow tool call`), Action: ActionAnswer,
+				Answers: map[string][]byte{"allow": menuFirst, "deny": escape}, Default: "deny"},
+			{ID: "review", Pattern: regexp.MustCompile(`(?i)review artifact|review plan`), Action: ActionEscalate},
 		},
 	}}
 }
@@ -67,23 +86,93 @@ var antigravityTools = toolTable{
 // tool. None yet (only run_command was captured).
 var antigravityPathArgs = map[string][]string{}
 
+// escape is the Esc key: it cancels the native permission screen, which is a
+// denial.
+var escape = []byte("\x1b")
+
+// agyRefused are the flags the Mestre never lets a base or a sheet give
+// (docs/provedores/antigravity.md#flags), with why.
+var agyRefused = map[string]string{
+	"--dangerously-skip-permissions": "it approves every native permission request by itself, and voids --sandbox",
+	"-p":                             "the base is interactive",
+	"--print":                        "the base is interactive",
+	"--prompt":                       "the base is interactive",
+	"--add-dir":                      "the workspace is the worktree of the table",
+	"--agent":                        "the Mestre sets the agent of the character",
+	"--conversation":                 "the Mestre resumes by the id saved for the character",
+	"--continue":                     "it resumes the most recent conversation of the folder; the Mestre resumes by id",
+	"-c":                             "it resumes the most recent conversation of the folder; the Mestre resumes by id",
+}
+
+func refuseAgyFlags(args []string) error {
+	for _, arg := range args {
+		name := arg
+		if i := strings.IndexByte(arg, '='); i > 0 && strings.HasPrefix(arg, "-") {
+			name = arg[:i]
+		}
+		if why, bad := agyRefused[name]; bad {
+			return fmt.Errorf("antigravity: option %s is not allowed: %s", name, why)
+		}
+	}
+	return nil
+}
+
+// validAgentID reports whether id can name the agent file: letters, digits,
+// "_" and "-", so it is also safe in the frontmatter.
+func validAgentID(id string) bool {
+	if id == "" || id[0] == '-' || id[0] == '_' {
+		return false
+	}
+	for _, r := range id {
+		if !idChar(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func idChar(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_'
+}
+
 // BuildLaunch: `agy <base args> --agent mestre-<id>`, with `--conversation
-// <id>` before it on a resume.
+// <id>` before it on a resume, the HOME of the account profile (and, on
+// Windows, the USERPROFILE that follows it) and the check of the agent file
+// that the engine runs before the start (Launch.Verify): a name that does
+// not exist falls to the default agent without an error.
 func (a *antigravity) BuildLaunch(req LaunchRequest) (Launch, error) {
 	l, err := newLaunch(req)
 	if err != nil {
 		return Launch{}, err
 	}
-	if req.AgentID == "" {
-		return Launch{}, fmt.Errorf("antigravity: no character id for --agent mestre-<id>")
+	if !validAgentID(req.AgentID) {
+		return Launch{}, fmt.Errorf("antigravity: invalid character id %q for --agent mestre-<id>", req.AgentID)
 	}
+	if req.Worktree == "" || !absolute(req.Worktree) {
+		return Launch{}, fmt.Errorf("antigravity: the worktree %q is not absolute: the agent file lives there", req.Worktree)
+	}
+	for _, args := range [][]string{req.Base.Args, req.ProviderArgs} {
+		if err := refuseAgyFlags(args); err != nil {
+			return Launch{}, err
+		}
+	}
+	home, _ := envValue(l.Env, "HOME")
+	if home == "" || !absolute(home) {
+		return Launch{}, fmt.Errorf("antigravity: the HOME of the account profile is required (got %q): without a writable HOME agy does not start", home)
+	}
+	if req.OS == "windows" {
+		l.Env = append(l.Env, "USERPROFILE="+home)
+	}
+	agent := "mestre-" + req.AgentID
 	l.Args = slices.Clone(req.Base.Args)
 	if req.ResumeSessionID != "" {
 		l.Args = append(l.Args, "--conversation", req.ResumeSessionID)
 		l.SessionID, l.Resumed = req.ResumeSessionID, true
 	}
-	l.Args = append(l.Args, "--agent", "mestre-"+req.AgentID)
+	l.Args = append(l.Args, "--agent", agent)
 	l.Args = append(l.Args, req.ProviderArgs...)
+	file := AntigravityAgentPath(req.Worktree, req.AgentID)
+	l.Verify = func() error { return CheckAntigravityAgentFile(file, agent) }
 	return l, nil
 }
 
@@ -145,4 +234,9 @@ func (a *antigravity) Screens(in ScreenInput) ScreenResult { return a.screens.ev
 
 // TypeMessage: bracketed paste and \r
 // (docs/provedores/antigravity.md#digitação).
-func (a *antigravity) TypeMessage(text string) ([]byte, error) { return pasteAndSend(text, "\r") }
+func (a *antigravity) TypeMessage(text string) ([]byte, error) {
+	if a.noPaste && strings.Contains(clean(text), "\n") {
+		return nil, fmt.Errorf("%w: antigravity does not take a bracketed paste, the text goes through the file of the long messages", ErrTooLong)
+	}
+	return pasteAndSend(text, "\r")
+}

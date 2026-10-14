@@ -84,6 +84,13 @@ type LayerRequest struct {
 	// OS is the system of the machine ("" is this one); Codex bounds the
 	// layer by the Windows command line.
 	OS string
+	// AgentID and Worktree name the character and its worktree, for the
+	// provider whose layer lives in a file named by the character
+	// (Antigravity: .agents/agents/mestre-<id>.md).
+	AgentID, Worktree string
+	// Fallbacks are the "Se falhar" paths of the layer the conformance test
+	// switched on.
+	Fallbacks LayerFallbacks
 }
 
 // Layer is what DeliverMestreLayer gives BuildLaunch: arguments for
@@ -91,6 +98,10 @@ type LayerRequest struct {
 type Layer struct {
 	Args  []string
 	Files []ManagedFile
+	// HookContext is the text the dispatcher gives at the first turn_start
+	// of the conversation (LayerHook); FirstMessage the text the engine
+	// delivers as the first message, before any task (LayerFirstMessage).
+	HookContext, FirstMessage string
 }
 
 // UsageRequest is what ReadUsage receives.
@@ -108,6 +119,14 @@ type UsageRequest struct {
 	// Cursor is where the previous reading of the session stopped, as the
 	// previous Usage.Cursor gave it; "" is the start (Codex).
 	Cursor string
+	// Command, Env, Dir and OS run the usage command of a provider that has
+	// no source to keep (Antigravity: agy -p "/usage"): the provider's
+	// executable ("" is the default name), its complete environment with the
+	// variables of the account profile, its start folder ("" is the
+	// profile's home) and the system of the machine.
+	Command string
+	Env     []string
+	Dir, OS string
 }
 
 // ErrNoUsage is a usage source with nothing to read.

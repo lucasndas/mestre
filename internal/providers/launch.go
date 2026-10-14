@@ -24,6 +24,10 @@ type LaunchRequest struct {
 	// AgentID is the character (MESTRE_AGENT_ID); TableID its table
 	// (MESTRE_MESA).
 	AgentID, TableID string
+	// Worktree is the character's worktree, absolute: where the provider
+	// files of the character live (Antigravity: the agent file the start
+	// checks).
+	Worktree string
 	// ResumeSessionID is the saved session to resume; "" starts a new one.
 	ResumeSessionID string
 	// NewSessionID is the id the engine generated for a new Claude Code
@@ -56,6 +60,10 @@ type Launch struct {
 	// Resumed is true for the resume command of the table of
 	// docs/provedores/adaptador.md#retomada-de-sessão.
 	Resumed bool
+	// Verify, when set, is the check the engine runs right before it starts
+	// the command, after the provider files are written: an error means
+	// the start fails instead of opening a different agent.
+	Verify func() error
 }
 
 // newLaunch fills what every adapter does the same way: base command, the
