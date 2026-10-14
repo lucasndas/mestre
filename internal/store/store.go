@@ -71,9 +71,10 @@ type DB struct {
 	replica bool
 	capture *capture
 
-	mu     sync.RWMutex // guards the pools, which Replace swaps
+	mu     sync.RWMutex // guards the pools, which Replace swaps, and closed
 	writer *sql.DB
 	reader *sql.DB
+	closed bool // Close was called: Replace does not bring the file up again
 
 	infoMu sync.Mutex
 	infos  map[string]tableInfo // primary keys of the tables, for Apply
@@ -353,6 +354,7 @@ func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error 
 func (d *DB) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.closed = true
 	return d.closePools()
 }
 

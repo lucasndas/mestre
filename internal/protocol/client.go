@@ -47,6 +47,9 @@ func (c *Client) Link() *Link { return c.link }
 // After 3 failures in a row to open a connection it asks Hooks.Rediscover to
 // find the Guild again.
 func (c *Client) Run(ctx context.Context) error {
+	// the transfers the sessions began to finish are done (or canceled) before
+	// Run returns: the owner closes the databases and folders they write
+	defer c.link.xfer.drain()
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	pctx, stop := context.WithCancel(ctx)

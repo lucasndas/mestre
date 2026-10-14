@@ -1,6 +1,6 @@
 # Protocolo entre as máquinas da Guilda e o navegador
 
-> **Assunto:** conexão WSS iniciada pela Torre até a Cidadela atual: endpoints, envelope com época, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** conexão WSS iniciada pela Torre até a Cidadela atual: endpoints, envelope com época, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -92,7 +92,7 @@ O catálogo de tipos, com os campos principais e as respostas, e a tabela de có
   1. O remetente envia `xfer.begin`, com `xfer_id`; `kind` (`git-bundle`, `file`, `db-snapshot` ou `release`); `size` (até 64 GiB) e `sha256` do total; `chunk_size` (padrão 256 KiB); e `meta` (para bundle, mesa, branch, commits pré-requisito e ponta; para arquivo, o caminho de destino).
   2. O destinatário responde `xfer.ready` com `next_index`: 0, ou o ponto de retomada se já tiver partes num arquivo temporário. Uma recusa (tipo sem receptor; disco sem espaço para o que falta, mais o que as outras transferências em andamento ainda precisam, com 64 MiB de folga: `unavailable`) vem no ack.
   3. As partes vão em frames binários `0x02`, com até 16 partes em trânsito. O destinatário envia `xfer.progress` com o próximo índice esperado a cada 8 partes e ao fim, e isso libera a janela. Se falta uma parte, ele pede uma vez (`resend`) que o remetente volte a ela; uma parte de tamanho errado encerra a transferência com `invalid_payload`. Sem sinal do destinatário (`xfer.ready`, `xfer.progress`, `xfer.done` ou ack) por 2 min, o remetente repete o `xfer.begin`, com o mesmo `xfer_id`, na mesma conexão.
-  4. O remetente só envia `xfer.end` depois de o destinatário confirmar todas as partes (a fila de controle passaria na frente das partes). O destinatário confere o SHA-256 total e roda o fim do `kind`; para bundle, `git bundle verify` no repositório de destino.
+  4. O remetente só envia `xfer.end` depois de o destinatário confirmar todas as partes (a fila de controle passaria na frente das partes). O destinatário confere o SHA-256 total e roda o fim do `kind`; para bundle, `git bundle verify` no repositório de destino. O fim do `kind` continua mesmo que a conexão caia, mas o Cliente e o Servidor só terminam depois dele (ou o cancelam ao parar), para que o dono feche o banco e as pastas só depois.
   5. O destinatário responde `xfer.done` com `ok` ou o erro. Um `kind` pode responder já no `xfer.begin` que tem o conteúdo (mesmo SHA-256): o `xfer.ready` dá todas as partes como recebidas e nenhuma é enviada (arquivo que não mudou, espelho em dia).
 - **Bundles:**
   - São incrementais. O pré-requisito é o último commit que os dois lados têm daquela mesa.

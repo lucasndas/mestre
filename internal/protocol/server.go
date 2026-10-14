@@ -47,6 +47,9 @@ func (srv *Server) Link(machineID string) *Link {
 // keeps the processed ids and the temporary files of the transfers in check
 // (pruneLoop).
 func (srv *Server) Serve(ctx context.Context, l Listener) error {
+	// the transfers the sessions began to finish are done (or canceled) before
+	// Serve returns: the owner closes the databases and folders they write
+	defer srv.drainTransfers()
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	ctx, cancel := context.WithCancel(ctx)
@@ -65,6 +68,12 @@ func (srv *Server) Serve(ctx context.Context, l Listener) error {
 			return fmt.Errorf("protocol: accept: %w", err)
 		}
 		wg.Go(func() { srv.handle(ctx, conn) })
+	}
+}
+
+func (srv *Server) drainTransfers() {
+	for _, l := range srv.allLinks() {
+		l.xfer.drain()
 	}
 }
 
