@@ -1,0 +1,82 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.299",
+  "captured_at": "2026-10-14",
+  "source": "capture: claude-code 2.1.299 StatusLine stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "context_window": {
+      "context_window_size": 1000000,
+      "current_usage": {
+        "cache_creation_input_tokens": 648,
+        "cache_read_input_tokens": 45396,
+        "input_tokens": 2,
+        "output_tokens": 49
+      },
+      "remaining_percentage": 95,
+      "total_input_tokens": 46046,
+      "total_output_tokens": 49,
+      "used_percentage": 5
+    },
+    "cost": {
+      "total_api_duration_ms": 63206,
+      "total_cost_usd": 0.568399,
+      "total_duration_ms": 61889,
+      "total_lines_added": 0,
+      "total_lines_removed": 0
+    },
+    "cwd": "/mconf/mesa",
+    "effort": {
+      "level": "medium"
+    },
+    "exceeds_200k_tokens": false,
+    "fast_mode": false,
+    "model": {
+      "display_name": "Opus 5.5",
+      "id": "claude-opus-5-5"
+    },
+    "output_style": {
+      "name": "default"
+    },
+    "prompt_cache": {
+      "cache_write_tokens": 18574,
+      "caching_observed": true,
+      "expected_rebuilds": 0,
+      "expires_at": 1791979832,
+      "hit_ratio": 0.8620259462510118,
+      "last_miss_at": null,
+      "last_miss_cause": null,
+      "miss_causes": {},
+      "miss_recache_tokens": 0,
+      "misses": 0,
+      "recache_tokens_if_cold": 46046,
+      "requests": 3,
+      "ttl": "1h",
+      "warm": true
+    },
+    "prompt_id": "b48961bd-7002-4494-9e22-d4f050d705d8",
+    "rate_limits": {
+      "five_hour": {
+        "resets_at": 1791986400,
+        "used_percentage": 11
+      },
+      "seven_day": {
+        "resets_at": 1792314000,
+        "used_percentage": 74
+      }
+    },
+    "scratchpad_dir": "/mconf/tmp/conf-sa27kx/claude-995/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56/scratchpad",
+    "session_id": "8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56",
+    "session_name": "Teste de conformidade do Mestre",
+    "thinking": {
+      "enabled": true
+    },
+    "transcript_path": "/perfil/projects/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56.jsonl",
+    "version": "2.1.299",
+    "workspace": {
+      "added_dirs": [],
+      "current_dir": "/mconf/mesa",
+      "git_worktree": "mesa",
+      "project_dir": "/mconf/mesa"
+    }
+  }
+}

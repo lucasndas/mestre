@@ -23,11 +23,18 @@ type claudeCode struct {
 // NewClaudeCode returns the Claude Code adapter.
 func NewClaudeCode(opts Options) Adapter {
 	return &claudeCode{paths: opts.paths(), multilineViaFile: opts.ClaudeMultilineViaFile, screens: screenSet{
-		prompt: agentPrompt,
-		busy:   regexp.MustCompile(`(?i)esc to interrupt|Working…`),
-		known:  claudeScreens,
+		prompt:   agentPrompt,
+		busy:     regexp.MustCompile(`(?i)esc to interrupt|Working…`),
+		known:    claudeScreens,
+		box:      claudeBox,
+		busyNear: regexp.MustCompile(`(?i)esc to interrupt`),
 	}}
 }
+
+// claudeBox is the input area of Claude Code (2.1.296, seen in the
+// conformance test): the prompt ❯ between two rules, with the footer below.
+// A menu option (❯ 1. Yes) is not the prompt.
+var claudeBox = regexp.MustCompile(`(?m)^\s*─{10,}\s*\n\s*❯(?:[ \x{a0}]+(?:[^\d\s][^\n]*)?)?\s*\n\s*─{10,}`)
 
 // agentPrompt is the input line of the agent CLIs (not the ❯ that marks the
 // selected option of a menu).

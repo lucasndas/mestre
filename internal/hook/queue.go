@@ -73,6 +73,7 @@ func enqueue(files Files, dir string, clk clock.Clock, ev providers.Event, d *cl
 	if dir == "" {
 		return errors.New("no hook queue")
 	}
+	ev.Raw = nil // the recorded payload is for the conformance, not the queue
 	rec := QueueRecord{V: QueueVersion, Kind: QueuedInfo, Event: ev}
 	if d != nil {
 		rec.Kind = QueuedDecision

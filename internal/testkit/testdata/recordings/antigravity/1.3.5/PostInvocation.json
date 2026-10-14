@@ -1,0 +1,17 @@
+{
+  "origin": "antigravity",
+  "version": "1.3.5",
+  "captured_at": "2026-10-14",
+  "source": "capture: antigravity 1.3.5 PostInvocation stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "artifactDirectoryPath": "/perfil/.gemini/antigravity-cli/brain/ec6fe5e6-d0bd-4127-b1c3-94aaf50f88c2",
+    "conversationId": "ec6fe5e6-d0bd-4127-b1c3-94aaf50f88c2",
+    "initialNumSteps": 1,
+    "invocationNum": 0,
+    "modelName": "gemini-3.8-flash-high",
+    "transcriptPath": "/perfil/.gemini/antigravity-cli/brain/ec6fe5e6-d0bd-4127-b1c3-94aaf50f88c2/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+      "/mconf/mesa"
+    ]
+  }
+}

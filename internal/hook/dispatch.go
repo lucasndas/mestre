@@ -53,6 +53,12 @@ type Runner interface {
 	Run(ctx context.Context, h ClassHook, event providers.EventKind, stdin []byte) (exit int, stderr string, err error)
 }
 
+// EnvRecord, set to 1 in the environment of a character, makes the
+// dispatcher send the engine the payload of each hook as it got it
+// (providers.Event.Raw): the conformance test records them
+// (docs/provedores/conformidade.md#resultado).
+const EnvRecord = "MESTRE_HOOK_RECORD"
+
 // Run is `mestre hook --provider <id> --event <native event>`: it answers
 // one hook call of a provider and returns the exit code, only 0 or 2. args
 // are the arguments after "hook".
@@ -198,6 +204,9 @@ func (d *dispatcher) run(ctx context.Context) (out providers.HookOutput) {
 		NativeEvent: d.native, Stdin: payload, AgentID: d.agent, TableID: d.env.Getenv("MESTRE_MESA"), ReceivedAt: d.clk.Now(),
 	}
 	ev, err := d.adapter.NormalizeHook(in)
+	if err == nil && d.env.Getenv(EnvRecord) == "1" && json.Valid(payload) {
+		ev.Raw = payload
+	}
 	switch {
 	case errors.Is(err, providers.ErrUnknownEvent):
 		// Logged by the engine (or left in the queue) and answered neutral.
@@ -309,6 +318,11 @@ func (d *dispatcher) ask(ctx context.Context, ev providers.Event, deadline time.
 		return Answer{}, false, nil
 	}
 	arg, err := json.Marshal(ev)
+	if err == nil && len(arg) > localchan.MaxLine-4096 && ev.Raw != nil {
+		// The recorded payload goes first: nothing decides on it.
+		ev.Raw = nil
+		arg, err = json.Marshal(ev)
+	}
 	if err == nil && len(arg) > localchan.MaxLine-4096 && ev.Tool != nil {
 		// The raw input is not decided on: what does not fit goes without it.
 		t := *ev.Tool

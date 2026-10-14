@@ -22,6 +22,10 @@ type antigravity struct {
 
 var _ NativeTranslator = (*antigravity)(nil)
 
+// agyBox is the input area of Antigravity (1.3.5, seen in the conformance
+// test): the prompt > between two rules, above the footer with the agent.
+var agyBox = regexp.MustCompile(`(?m)^\s*─{10,}\s*\n\s*>(?:[ \x{a0}]+(?:[^\d\s][^\n]*)?)?\s*\n\s*─{10,}`)
+
 // NewAntigravity returns the Antigravity adapter.
 func NewAntigravity(opts Options) Adapter {
 	clk := opts.Clock
@@ -29,8 +33,10 @@ func NewAntigravity(opts Options) Adapter {
 		clk = clock.Real{}
 	}
 	return &antigravity{paths: opts.paths(), exec: opts.Exec, clk: clk, noPaste: opts.AntigravityNoPaste, screens: screenSet{
-		prompt: agentPrompt,
-		busy:   regexp.MustCompile(`(?i)esc to (interrupt|cancel)|Working…`),
+		prompt:   agentPrompt,
+		busy:     regexp.MustCompile(`(?i)esc to (interrupt|cancel)|Working…`),
+		box:      agyBox,
+		busyNear: regexp.MustCompile(`(?i)esc to (interrupt|cancel)`),
 		known: []KnownScreen{
 			{ID: "trust", Pattern: regexp.MustCompile(`Do you trust the contents of this project\?`), Action: ActionAnswer,
 				Answers: map[string][]byte{"trust": menuFirst}},
@@ -39,8 +45,17 @@ func NewAntigravity(opts Options) Adapter {
 			// (a tool the hook allowed that the native rules still ask about,
 			// or one the permissionOverrides did not cover). The answer is the
 			// decision recorded for that call; without one, deny.
-			{ID: "permission", Pattern: regexp.MustCompile(`Yes, allow tool call`), Action: ActionAnswer,
+			// 1.3.5 asks per action, even after an allow of the hook with
+			// permissionOverrides: "Allow creation of this file?" (1. Yes,
+			// allow creation / 2. No, deny creation) and "Run this command?"
+			// (1. Yes, run command / … / 4. No, cancel). Enter takes the first,
+			// once; Esc cancels, which interrupts the turn.
+			{ID: "permission", Pattern: regexp.MustCompile(`Yes, allow tool call|(?s)(?:Allow [^\n]*|Run this command)\?\s*\n\s*>\s*1\.\s*Yes, (?:allow|run)`), Action: ActionAnswer,
 				Answers: map[string][]byte{"allow": menuFirst, "deny": escape}, Default: "deny"},
+			// A native subagent that asks to use a tool (1.3.5: "<name> needs
+			// approval for Create", ctrl+k approves): no key denies it, so it
+			// escalates.
+			{ID: "subagent-approval", Pattern: regexp.MustCompile(`needs approval for`), Action: ActionEscalate},
 			{ID: "review", Pattern: regexp.MustCompile(`(?i)review artifact|review plan`), Action: ActionEscalate},
 		},
 	}}
@@ -61,9 +76,8 @@ var antigravityEvents = map[string]EventKind{
 	"PostInvocation": EventNone, // only records the invocation
 }
 
-// antigravityTools is the tool table. The path arguments of the file tools
-// are not in the recorded payloads yet, so those tools come out as `other`
-// (finishTool) until the conformance test records them.
+// antigravityTools is the tool table. A file tool whose path argument the
+// conformance test has not recorded comes out as `other` (finishTool).
 var antigravityTools = toolTable{
 	names: map[string]ToolKind{
 		"run_command":          KindShell,
@@ -82,9 +96,16 @@ var antigravityTools = toolTable{
 	}{{"browser_", KindWeb}},
 }
 
+// AntigravityBypassSandbox is the name a run_command with BypassSandbox
+// gets: the tools rules of the class decide it.
+const AntigravityBypassSandbox = "run_command:BypassSandbox"
+
 // antigravityPathArgs are the path arguments seen in recorded payloads, by
-// tool. None yet (only run_command was captured).
-var antigravityPathArgs = map[string][]string{}
+// tool (agy 1.3.5, conformance test of 2026-10-14).
+var antigravityPathArgs = map[string][]string{
+	"write_to_file": {"TargetFile"},
+	"view_file":     {"AbsolutePath"},
+}
 
 // escape is the Esc key: it cancels the native permission screen, which is a
 // denial.
@@ -223,6 +244,13 @@ func (a *antigravity) tool(call map[string]any, cwd string) *Tool {
 	var f toolFields
 	if kind == KindShell {
 		f.command = str(args, "CommandLine")
+	}
+	if kind == KindShell && args["BypassSandbox"] == true {
+		// A command that asks to leave the --sandbox (1.3.5 does it by itself
+		// when the sandbox fails, conformance test of 2026-10-14) is not a
+		// plain shell command: it is decided by the tools rules of the class,
+		// under its own name, like a tool the map does not know.
+		return finishTool(AntigravityBypassSandbox, KindOther, toolFields{}, call["args"])
 	}
 	for _, k := range antigravityPathArgs[name] {
 		f.paths = append(f.paths, a.paths.all(cwd, str(args, k))...)

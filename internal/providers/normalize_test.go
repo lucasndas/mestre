@@ -39,21 +39,58 @@ func recorded(t *testing.T, origin, name string) []byte {
 }
 
 // step is one recorded payload of the map and what the internal event must
-// carry. turn is the expected turn_id: the payload's (prompt_id, turn_id,
-// executionNum) or, where the payload has none, the turn in progress that
-// Turns completes; session_start has none.
+// carry. The session, the turn, the folder and the command come from the
+// payload itself, in the field the provider document names (the recordings
+// are the real captures of the conformance test, from several turns): turn
+// is the payload's prompt_id, turn_id or executionNum or, where the payload
+// has none, the turn in progress that Turns completes; session_start has
+// none.
 type step struct {
 	recording, native string
 	want              []providers.EventKind // more than one: Antigravity's derived session_start
-	turn              string
 	toolKind          providers.ToolKind
-	command           string
 	ok                *bool // post_tool result
 	stop              providers.StopReason
 }
 
 func yes() *bool { b := true; return &b }
 func no() *bool  { b := false; return &b }
+
+// fields are what a payload says, in the fields of each provider.
+type fields struct{ session, turn, cwd, command string }
+
+func payloadFields(t *testing.T, p providers.ID, body []byte) fields {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatal(err)
+	}
+	s := func(v any) string {
+		switch x := v.(type) {
+		case string:
+			return x
+		case float64:
+			return strings.TrimSuffix(strings.TrimSuffix(json.Number(fmtNum(x)).String(), ".0"), ".")
+		}
+		return ""
+	}
+	in, _ := m["tool_input"].(map[string]any)
+	switch p {
+	case providers.ClaudeCode:
+		return fields{session: s(m["session_id"]), turn: s(m["prompt_id"]), cwd: s(m["cwd"]), command: s(in["command"])}
+	case providers.Codex:
+		return fields{session: s(m["session_id"]), turn: s(m["turn_id"]), cwd: s(m["cwd"]), command: s(in["command"])}
+	}
+	call, _ := m["toolCall"].(map[string]any)
+	args, _ := call["args"].(map[string]any)
+	f := fields{session: s(m["conversationId"]), turn: s(m["executionNum"]), cwd: s(args["Cwd"]), command: s(args["CommandLine"])}
+	if ws, _ := m["workspacePaths"].([]any); f.cwd == "" && len(ws) > 0 {
+		f.cwd = s(ws[0])
+	}
+	return f
+}
+
+func fmtNum(x float64) string { b, _ := json.Marshal(x); return string(b) }
 
 // CA-ADAPT-01
 func TestNormalizeHookFillsTheMapFromRecordedPayloads(t *testing.T) {
@@ -62,41 +99,40 @@ func TestNormalizeHookFillsTheMapFromRecordedPayloads(t *testing.T) {
 	tests := []struct {
 		provider providers.ID
 		origin   string
-		session  string
 		steps    []step
 	}{
-		{providers.ClaudeCode, "claude-code", "abc123", []step{
+		{providers.ClaudeCode, "claude-code", []step{
 			{recording: "SessionStart", want: ev(providers.EventSessionStart)},
-			{recording: "UserPromptSubmit", want: ev(providers.EventTurnStart), turn: "p1"},
-			{recording: "PreToolUse", want: ev(providers.EventPreTool), turn: "p1", toolKind: providers.KindShell, command: "npm test"},
-			{recording: "PermissionRequest", want: ev(providers.EventPermissionRequest), turn: "p1", toolKind: providers.KindShell, command: "rm -rf build"},
-			{recording: "PostToolUse", want: ev(providers.EventPostTool), turn: "p1", toolKind: providers.KindShell, command: "npm test", ok: yes()},
-			{recording: "PostToolUseFailure", want: ev(providers.EventPostTool), turn: "p1", toolKind: providers.KindShell, command: "npm test", ok: no()},
-			{recording: "Notification", want: ev(providers.EventNotification), turn: "p1"},
-			{recording: "PreCompact", want: ev(providers.EventPreCompact), turn: "p1"},
-			{recording: "StatusLine", want: ev(providers.EventUsage), turn: "p1"},
-			{recording: "Stop", want: ev(providers.EventTurnEnd), turn: "p1", stop: providers.StopNormal},
-			{recording: "StopFailure", want: ev(providers.EventTurnFailure), turn: "p1", stop: providers.StopRateLimit},
-			{recording: "SessionEnd", want: ev(providers.EventSessionEnd), turn: "p1"},
+			{recording: "UserPromptSubmit", want: ev(providers.EventTurnStart)},
+			{recording: "PreToolUse", want: ev(providers.EventPreTool), toolKind: providers.KindShell},
+			{recording: "PermissionRequest", want: ev(providers.EventPermissionRequest), toolKind: providers.KindShell},
+			{recording: "PostToolUse", want: ev(providers.EventPostTool), toolKind: providers.KindShell, ok: yes()},
+			{recording: "PostToolUseFailure", want: ev(providers.EventPostTool), toolKind: providers.KindShell, ok: no()},
+			{recording: "Notification", want: ev(providers.EventNotification)},
+			{recording: "PreCompact", want: ev(providers.EventPreCompact)},
+			{recording: "StatusLine", want: ev(providers.EventUsage)},
+			{recording: "Stop", want: ev(providers.EventTurnEnd), stop: providers.StopNormal},
+			{recording: "StopFailure", want: ev(providers.EventTurnFailure), stop: providers.StopRateLimit},
+			{recording: "SessionEnd", want: ev(providers.EventSessionEnd)},
 		}},
-		{providers.Codex, "codex", "019a0000-0000-7000-8000-000000000001", []step{
+		{providers.Codex, "codex", []step{
 			{recording: "SessionStart", want: ev(providers.EventSessionStart)},
-			{recording: "UserPromptSubmit", want: ev(providers.EventTurnStart), turn: "t1"},
-			{recording: "PreToolUse", want: ev(providers.EventPreTool), turn: "t1", toolKind: providers.KindShell, command: "ls"},
-			{recording: "PermissionRequest", want: ev(providers.EventPermissionRequest), turn: "t1", toolKind: providers.KindShell, command: "curl https://example.com"},
-			{recording: "PostToolUse", want: ev(providers.EventPostTool), turn: "t1", toolKind: providers.KindShell, command: "ls", ok: yes()},
-			{recording: "PreCompact", want: ev(providers.EventPreCompact), turn: "t1"},
-			{recording: "Interrupt", want: ev(providers.EventInterrupt), turn: "t1", stop: providers.StopInterrupted},
-			{recording: "Stop", want: ev(providers.EventTurnEnd), turn: "t1", stop: providers.StopNormal},
-			{recording: "SessionEnd", want: ev(providers.EventSessionEnd), turn: "t1"},
+			{recording: "UserPromptSubmit", want: ev(providers.EventTurnStart)},
+			{recording: "PreToolUse", want: ev(providers.EventPreTool), toolKind: providers.KindShell},
+			{recording: "PermissionRequest", want: ev(providers.EventPermissionRequest), toolKind: providers.KindShell},
+			{recording: "PostToolUse", want: ev(providers.EventPostTool), toolKind: providers.KindShell, ok: yes()},
+			{recording: "PreCompact", want: ev(providers.EventPreCompact)},
+			{recording: "Interrupt", want: ev(providers.EventInterrupt), stop: providers.StopInterrupted},
+			{recording: "Stop", want: ev(providers.EventTurnEnd), stop: providers.StopNormal},
+			{recording: "SessionEnd", want: ev(providers.EventSessionEnd)},
 		}},
-		{providers.Antigravity, "antigravity", "b38a07d5-f7a3-4e27-b4d0-43e9110f60bb", []step{
+		{providers.Antigravity, "antigravity", []step{
 			// The first PreInvocation of the conversation is session_start and turn_start.
-			{recording: "PreInvocation", want: ev(providers.EventSessionStart, providers.EventTurnStart), turn: "1"},
-			{recording: "PreToolUse", want: ev(providers.EventPreTool), turn: "1", toolKind: providers.KindShell, command: "echo hello > out.txt"},
-			{recording: "PostToolUse", want: ev(providers.EventPostTool), turn: "1", toolKind: providers.KindShell, command: "echo hello > out.txt", ok: yes()},
-			{recording: "Stop", want: ev(providers.EventTurnEnd), turn: "1", stop: providers.StopNormal},
-			{recording: "Stop-error", native: "Stop", want: ev(providers.EventTurnFailure), turn: "1", stop: providers.StopError},
+			{recording: "PreInvocation", want: ev(providers.EventSessionStart, providers.EventTurnStart)},
+			{recording: "PreToolUse", want: ev(providers.EventPreTool), toolKind: providers.KindShell},
+			{recording: "PostToolUse", want: ev(providers.EventPostTool), toolKind: providers.KindShell, ok: yes()},
+			{recording: "Stop", want: ev(providers.EventTurnEnd), stop: providers.StopNormal},
+			{recording: "Stop-error", native: "Stop", want: ev(providers.EventTurnFailure), stop: providers.StopError},
 		}},
 	}
 	reg := providers.NewRegistry(providers.Options{Resolve: noLinks})
@@ -108,40 +144,51 @@ func TestNormalizeHookFillsTheMapFromRecordedPayloads(t *testing.T) {
 				t.Fatal(err)
 			}
 			turns := providers.NewTurns(a.Info())
+			inProgress := ""
 			for _, s := range tt.steps {
 				native := s.native
 				if native == "" {
 					native = s.recording
 				}
+				body := recorded(t, tt.origin, s.recording)
 				got, err := a.NormalizeHook(providers.HookInput{
-					NativeEvent: native, Stdin: recorded(t, tt.origin, s.recording),
-					AgentID: "a1", TableID: "3-login", ReceivedAt: at,
+					NativeEvent: native, Stdin: body, AgentID: "a1", TableID: "3-login", ReceivedAt: at,
 				})
 				if err != nil {
 					t.Fatalf("%s: %v", s.recording, err)
+				}
+				f := payloadFields(t, tt.provider, body)
+				if f.turn == "" {
+					f.turn = inProgress
+					if tt.provider == providers.Antigravity && s.want[len(s.want)-1] == providers.EventTurnStart {
+						f.turn = "0" // the first invocation of the conversation: executionNum counts from 0
+					}
 				}
 				evs := turns.Apply(got)
 				if len(evs) != len(s.want) {
 					t.Fatalf("%s: %d events, want %v", s.recording, len(evs), s.want)
 				}
 				for i, e := range evs {
-					checkEvent(t, s, tt.provider, tt.session, native, s.want[i], e, i < len(evs)-1)
+					checkEvent(t, s, tt.provider, f, native, s.want[i], e, i < len(evs)-1)
+				}
+				if e := evs[len(evs)-1]; e.TurnID != "" {
+					inProgress = e.TurnID
 				}
 			}
 		})
 	}
 }
 
-func checkEvent(t *testing.T, s step, p providers.ID, session, native string, want providers.EventKind, e providers.Event, derived bool) {
+func checkEvent(t *testing.T, s step, p providers.ID, f fields, native string, want providers.EventKind, e providers.Event, derived bool) {
 	t.Helper()
 	name := s.recording + "/" + string(want)
 	if e.Event != want || e.Version != 1 || e.Provider != p || e.NativeEvent != native {
 		t.Errorf("%s: event %q version %d provider %q native %q", name, e.Event, e.Version, e.Provider, e.NativeEvent)
 	}
-	if e.SessionID != session {
-		t.Errorf("%s: session_id = %q, want %q", name, e.SessionID, session)
+	if e.SessionID != f.session || f.session == "" {
+		t.Errorf("%s: session_id = %q, want %q", name, e.SessionID, f.session)
 	}
-	wantTurn := s.turn
+	wantTurn := f.turn
 	if want == providers.EventSessionStart {
 		wantTurn = "" // no turn before the first prompt
 	}
@@ -151,15 +198,15 @@ func checkEvent(t *testing.T, s step, p providers.ID, session, native string, wa
 	if e.AgentID != "a1" || e.TableID != "3-login" || !e.ReceivedAt.Equal(at) {
 		t.Errorf("%s: agent %q table %q received_at %v", name, e.AgentID, e.TableID, e.ReceivedAt)
 	}
-	if e.Cwd != wantPath("/home/user/p") {
-		t.Errorf("%s: cwd = %q", name, e.Cwd)
+	if e.Cwd != wantPath(f.cwd) || f.cwd == "" {
+		t.Errorf("%s: cwd = %q, want %q", name, e.Cwd, wantPath(f.cwd))
 	}
 	if want.ToolEvent() {
 		if e.Tool == nil {
 			t.Fatalf("%s: no tool", name)
 		}
-		if e.Tool.Kind != s.toolKind || e.Tool.Command != s.command || len(e.Tool.RawInput) == 0 {
-			t.Errorf("%s: tool = %+v, want kind %q command %q", name, *e.Tool, s.toolKind, s.command)
+		if e.Tool.Kind != s.toolKind || e.Tool.Command != f.command || f.command == "" || len(e.Tool.RawInput) == 0 {
+			t.Errorf("%s: tool = %+v, want kind %q command %q", name, *e.Tool, s.toolKind, f.command)
 		}
 	} else if e.Tool != nil {
 		t.Errorf("%s: tool %+v on a non-tool event", name, *e.Tool)
@@ -185,10 +232,15 @@ func TestCodexStopIsAFailureWhenTheTranscriptSaysSo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Event != providers.EventTurnFailure || e.StopReason != providers.StopRateLimit || e.Error != "usage limit reached" || e.TurnID != "t1" {
+	f := payloadFields(t, providers.Codex, recorded(t, "codex", "Stop"))
+	if e.Event != providers.EventTurnFailure || e.StopReason != providers.StopRateLimit || e.Error != "usage limit reached" || e.TurnID != f.turn || f.turn == "" {
 		t.Errorf("event = %+v", e)
 	}
-	if seen != "/home/user/.codex/sessions/rollout.jsonl" {
+	var m struct {
+		Transcript string `json:"transcript_path"`
+	}
+	_ = json.Unmarshal(recorded(t, "codex", "Stop"), &m)
+	if seen != m.Transcript || seen == "" {
 		t.Errorf("transcript given to the reader = %q", seen)
 	}
 }
@@ -265,8 +317,12 @@ func TestToolKindsAndTheOtherFallback(t *testing.T) {
 		{"antigravity subagent", providers.Antigravity, agyPre("invoke_subagent", map[string]any{}), providers.KindSubagent, "", nil, ""},
 		{"antigravity internal", providers.Antigravity, agyPre("ask_permission", map[string]any{}), providers.KindInternal, "", nil, ""},
 		{"antigravity generate_image", providers.Antigravity, agyPre("generate_image", map[string]any{}), providers.KindOther, "", nil, ""},
-		// The path arguments of the file tools are not recorded yet: other.
-		{"antigravity write_to_file, path field not in the map", providers.Antigravity, agyPre("write_to_file", map[string]any{"TargetFile": in("a")}), providers.KindOther, "", nil, ""},
+		// TargetFile was recorded by the conformance test (agy 1.3.5); a file
+		// tool whose path argument is not in the map is other.
+		{"antigravity write_to_file", providers.Antigravity, agyPre("write_to_file", map[string]any{"TargetFile": in("a")}), providers.KindWrite, "", []string{in("a")}, ""},
+		// Leaving the --sandbox is decided by the tools rules, under its own name.
+		{"antigravity run_command with BypassSandbox", providers.Antigravity, agyPre("run_command", map[string]any{"CommandLine": "ls", "BypassSandbox": true}), providers.KindOther, "", nil, ""},
+		{"antigravity replace_file_content, path field not in the map", providers.Antigravity, agyPre("replace_file_content", map[string]any{"TargetFile": in("a")}), providers.KindOther, "", nil, ""},
 	}
 	reg := providers.NewRegistry(providers.Options{Resolve: func(p string) (string, error) {
 		if p == root || len(p) < len(root) { // the temporary folder and its parents exist; nothing under it does

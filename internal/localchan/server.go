@@ -240,18 +240,18 @@ func (s *Server) serveConn(ctx context.Context, c net.Conn, acceptedAt time.Time
 		s.refuse(c, req.V, req.ID, Fail(CodeBadRequest, err.Error(), ""))
 		return
 	}
+	// The CLI sends nothing more: whatever arrives, or the end of the
+	// stream, says the connection is gone. Closing it does not cancel the
+	// request; the handler of the connection that started it can see it
+	// (Call.Gone).
+	gone := make(chan struct{})
 	if owner {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.execute(ctx, f, req, caller)
+			s.execute(ctx, f, req, caller, gone)
 		}()
 	}
-
-	// The CLI sends nothing more: whatever arrives, or the end of the
-	// stream, says the connection is gone. Closing it does not cancel the
-	// request.
-	gone := make(chan struct{})
 	go func() {
 		_, _ = io.Copy(io.Discard, br)
 		close(gone)
@@ -342,8 +342,8 @@ func (s *Server) refuse(c net.Conn, v int, id string, resp Response) {
 }
 
 // execute runs the request and stores its response.
-func (s *Server) execute(ctx context.Context, f *flight, req Request, caller Caller) {
-	call := &Call{Request: req, Caller: caller, publish: f.publish}
+func (s *Server) execute(ctx context.Context, f *flight, req Request, caller Caller, gone <-chan struct{}) {
+	call := &Call{Request: req, Caller: caller, Gone: gone, publish: f.publish}
 	resp := s.dispatch(ctx, call)
 	resp.V, resp.ID, resp.Partial = req.V, req.ID, false
 	if resp.Error != nil {

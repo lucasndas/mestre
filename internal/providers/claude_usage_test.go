@@ -13,12 +13,14 @@ import (
 func TestReadUsageGivesCostContextAndTheTwoWindows(t *testing.T) {
 	t.Parallel()
 	claude := providers.NewClaudeCode(providers.Options{})
-	payload := recorded(t, "claude-code", "StatusLine") // the JSON of the statusLine, with rate_limits
+	// The JSON of the statusLine of Claude Code 2.1.299, captured by the
+	// conformance test after the first answer, with rate_limits.
+	payload := recorded(t, "claude-code", "StatusLine")
 	want := providers.Usage{
-		InputTokens: 15234, OutputTokens: 4521, CostUSD: 0.01234, ContextPct: 8,
+		InputTokens: 46046, OutputTokens: 49, CostUSD: 0.568399, ContextPct: 5,
 		LimitWindows: []providers.LimitWindow{
-			{Window: providers.WindowFiveHour, UsedPct: 23.5, ResetsAt: time.Unix(1791828000, 0).UTC()},
-			{Window: providers.WindowSevenDay, UsedPct: 41.2, ResetsAt: time.Unix(1792195200, 0).UTC()},
+			{Window: providers.WindowFiveHour, UsedPct: 11, ResetsAt: time.Unix(1791986400, 0).UTC()},
+			{Window: providers.WindowSevenDay, UsedPct: 74, ResetsAt: time.Unix(1792314000, 0).UTC()},
 		},
 	}
 
@@ -38,7 +40,7 @@ func TestReadUsageGivesCostContextAndTheTwoWindows(t *testing.T) {
 	}
 	// The record is a copy: changing it does not change the event.
 	got.LimitWindows[0].UsedPct = 99
-	if ev.Usage.LimitWindows[0].UsedPct != 23.5 {
+	if ev.Usage.LimitWindows[0].UsedPct != 11 {
 		t.Error("ReadUsage shares the windows of the event")
 	}
 }

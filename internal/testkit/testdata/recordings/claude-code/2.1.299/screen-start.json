@@ -1,0 +1,11 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.299",
+  "captured_at": "2026-10-14",
+  "source": "capture: claude-code 2.1.299 start screen, raw terminal output, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cols": 200,
+    "rows": 50,
+    "raw": "\u001b[33mPermission allow rule (.mestre/agents/conf-sa27kx/claude-settings.json): Write(//mconf/mesa/permitido/**) is not matched by file permission checks — only Edit(path) rules are. Use Edit(//mconf/mesa/permitido/**) instead (Edit rules cover all file-editing tools).\u001b[39m\r\n\u001b7\u001b[r\u001b8\u001b[?25h\u001b[?25l\u001b[?2004h\u001b[?2031h\u001b[?1004h\u001b[>0q\u001b[?u\u001b]7501;?\u0007\u001b[c\u001b[>4m\u001b[?1004l\u001b[?2031l\u001b[?2004l\u001b[?2004h\u001b[?2031h\u001b[?1004h\u001b]0;✳ Claude Code\u0007\u001b[?1049h\u001b[2J\u001b[H\u001b[?1000h\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[?25l\u001b[H\r\u001b[1B\u001b[38;5;174m ▐\u001b[48;5;16m▛███▛█\u001b[12G\u001b[39m\u001b[49m\u001b[1mClaude Code\u001b[24G\u001b[22m\u001b[38;5;246mv2.1.299\r\u001b[1B\u001b[38;5;174m▝▜\u001b[48;5;16m█████\u001b[49m█▀\u001b[12G\u001b[38;5;246mOpus 5.5 · Claude Max\r\u001b[1B\u001b[38;5;174m ▝▝   ▝▝ \u001b[12G\u001b[38;5;246m/mconf/mesa\r\u001b[180C\u001b[41B◐ medium · /effort\r\u001b[1B\u001b[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[1B\u001b[39m❯ \u001b[2mTry \"edit <filepath> to...\"\r\u001b[1B\u001b[22m\u001b[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\r\u001b[2C\u001b[2B\u001b[38;5;246m⏸ manual mode on · ← for agents\u001b[39m\u001b[50;1H\u001b[47;3H\u001b[?25h\u001b[>0q\u001b[c"
+  }
+}

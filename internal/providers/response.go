@@ -56,9 +56,13 @@ const ClaudeMaxContext = 10_000
 // hookSpecificOutput, exit 2 with the reason on stderr for an internal
 // error of a decision. Nothing at all in the other events: Codex takes
 // plain text in Stop and Interrupt as invalid.
-func formatHookSpecific(native string, kind EventKind, r Reply, maxContext int) HookOutput {
+func formatHookSpecific(native string, kind EventKind, r Reply, maxContext int, silentAllow bool) HookOutput {
 	decision := kind == EventPreTool || kind == EventPermissionRequest
 	switch {
+	case silentAllow && r.Kind == ReplyAllow && kind == EventPreTool:
+		// Codex 0.162.1 takes permissionDecision "allow" as unsupported and
+		// marks the hook failed: nothing on stdout lets the tool run.
+		return HookOutput{}
 	case r.Kind == ReplyError && decision:
 		return HookOutput{Stderr: []byte(oneLine(r.Reason) + "\n"), Exit: 2}
 	case r.Kind == ReplyAllow || r.Kind == ReplyDeny:
@@ -90,12 +94,12 @@ func formatHookSpecific(native string, kind EventKind, r Reply, maxContext int) 
 
 // FormatResponse formats a reply for Claude Code.
 func (c *claudeCode) FormatResponse(nativeEvent string, r Reply) HookOutput {
-	return formatHookSpecific(nativeEvent, claudeEvents[nativeEvent], r, ClaudeMaxContext)
+	return formatHookSpecific(nativeEvent, claudeEvents[nativeEvent], r, ClaudeMaxContext, false)
 }
 
 // FormatResponse formats a reply for Codex.
 func (c *codex) FormatResponse(nativeEvent string, r Reply) HookOutput {
-	return formatHookSpecific(nativeEvent, codexEvents[nativeEvent], r, 0)
+	return formatHookSpecific(nativeEvent, codexEvents[nativeEvent], r, 0, true)
 }
 
 // FormatResponse formats a reply for Antigravity: always exit 0 and valid

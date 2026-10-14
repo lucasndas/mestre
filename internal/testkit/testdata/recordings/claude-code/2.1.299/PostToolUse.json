@@ -1,0 +1,32 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.299",
+  "captured_at": "2026-10-14",
+  "source": "capture: claude-code 2.1.299 PostToolUse stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "duration_ms": 36,
+    "effort": {
+      "level": "medium"
+    },
+    "hook_event_name": "PostToolUse",
+    "permission_mode": "default",
+    "prompt_id": "581e11bd-f0bb-4c12-bc22-a43ae75ae132",
+    "scratchpad_dir": "/mconf/tmp/conf-sa27kx/claude-995/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56/scratchpad",
+    "session_id": "8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56",
+    "tool_input": {
+      "command": "echo ok > permitido/y.txt",
+      "description": "Write ok to permitido/y.txt"
+    },
+    "tool_name": "Bash",
+    "tool_response": {
+      "interrupted": false,
+      "isImage": false,
+      "noOutputExpected": false,
+      "stderr": "",
+      "stdout": ""
+    },
+    "tool_use_id": "toolu_01JousmZXtQsXBoQAVnsHY67",
+    "transcript_path": "/perfil/projects/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56.jsonl"
+  }
+}

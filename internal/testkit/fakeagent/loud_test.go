@@ -127,7 +127,7 @@ func TestPinnedRecordingVersion(t *testing.T) {
 		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			h := &hooks{}
-			l := &fakeagent.MemLauncher{Clock: clock.Real{}, Hooks: h, Reporter: t, RecordingVersion: "2.1.296"}
+			l := &fakeagent.MemLauncher{Clock: clock.Real{}, Hooks: h, Reporter: t, RecordingVersion: "2.1.299"}
 			e := claudeEnv(t)
 			testkit.WriteFiles(t, e.dir, map[string]string{".claude/settings.local.json": claudeHooks})
 

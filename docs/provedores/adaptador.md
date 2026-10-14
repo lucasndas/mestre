@@ -70,13 +70,13 @@ Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos
 
 | Tipo | Claude Code | Codex | Antigravity |
 |---|---|---|---|
-| `shell` | `Bash`, `PowerShell` no Windows | `Bash` | `run_command` |
+| `shell` | `Bash`, `PowerShell` no Windows | `Bash` (o modelo a chama `exec_command`) | `run_command` (com `BypassSandbox: true`, vira `run_command:BypassSandbox`, de tipo `other`) |
 | `read` | `Read` | — | `view_file` |
 | `write` | `Write` | `apply_patch` (arquivo novo) | `write_to_file` |
 | `edit` | `Edit`, `NotebookEdit` | `apply_patch` | `replace_file_content`, `multi_replace_file_content` |
 | `search` | `Glob`, `Grep` | — | `list_dir`, `find_by_name`, `grep_search` |
 | `web` | `WebFetch`, `WebSearch` | (busca hospedada não dispara hook) | `search_web`, `read_url_content`, `browser_*` |
-| `subagent` | `Agent` | — | `invoke_subagent`, `define_subagent`, `send_message`, `manage_subagents` |
+| `subagent` | `Agent` | `collaborationspawn_agent`, `collaborationwait_agent` | `invoke_subagent`, `define_subagent`, `send_message`, `manage_subagents` |
 | `mcp` | `mcp__<servidor>__<ferramenta>` | `mcp__…` | o nome visto no hook ([verificar](#verificar-na-implementação)) |
 | `internal` | `TodoWrite` | `update_plan` | `manage_task`, `ask_question`, `list_permissions`, `ask_permission` |
 | `other` | qualquer nome não mapeado | idem | `generate_image`, `schedule`, não mapeados |
@@ -85,7 +85,7 @@ Ferramenta de tipo `shell` sem comando, ou `read`, `write`, `edit` ou `search` s
 
 ### Prontidão e telas interativas
 
-Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela renderizada e ação. **Evitar:** pré-configurar para a tela não aparecer. **Responder:** o adaptador digita a resposta, só quando ela vem de uma decisão já tomada pelo motor (ex.: confiar num worktree criado pelo Mestre; responder a um pedido de permissão nativo com a decisão já registrada para aquela chamada; sem decisão registrada, nega). **Escalar:** o personagem fica `blocked` com motivo `input` ([personagens](../orquestracao/personagens.md)) e o Mestre da mesa é avisado (pode responder com `mestre ask --raw`); login vira alerta do checklist. Tela parada sem hook e sem padrão conhecido por 30 s (padrão) durante o início também escala. "Pronto" é: prompt de entrada visível e tela estável ([terminal](../arquitetura/terminal.md#emulador-de-terminal)), ou `session_start` recebido e prompt visível.
+Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela renderizada e ação. **Evitar:** pré-configurar para a tela não aparecer. **Responder:** o adaptador digita a resposta, só quando ela vem de uma decisão já tomada pelo motor (ex.: confiar num worktree criado pelo Mestre; responder a um pedido de permissão nativo com a decisão já registrada para aquela chamada; sem decisão registrada, nega). **Escalar:** o personagem fica `blocked` com motivo `input` ([personagens](../orquestracao/personagens.md)) e o Mestre da mesa é avisado (pode responder com `mestre ask --raw`); login vira alerta do checklist. Tela parada sem hook e sem padrão conhecido por 30 s (padrão) durante o início também escala. "Pronto" é: prompt de entrada visível (na última linha, ou a área de entrada que o CLI desenha acima do rodapé, descrita na tabela de telas de cada provedor) e tela estável ([terminal](../arquitetura/terminal.md#emulador-de-terminal)), ou `session_start` recebido e prompt visível.
 
 ### Digitação de mensagens
 
@@ -137,7 +137,7 @@ O personagem fica marcado com monitoramento reduzido, com o motivo, quando o pro
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** nomes dos campos de caminho nos argumentos do Antigravity, nome da ferramenta de shell do Codex e do Claude no Windows, e o nome com que o Antigravity entrega ferramentas MCP ao hook. **Padrão:** o mapa usa os nomes vistos nos payloads gravados (no Antigravity, `CommandLine` e `Cwd` já são conhecidos). **Se falhar:** campo ou ferramenta fora do mapa vira tipo `other`, decidido pelo padrão da classe (regra acima), e o reforço nativo segue valendo. **Onde:** etapas 4 a 6 do [teste de conformidade](conformidade.md), que gravam os payloads.
+- **Verificar na implementação:** nomes dos campos de caminho nos argumentos do Antigravity, nome da ferramenta de shell do Codex e do Claude no Windows, e o nome com que o Antigravity entrega ferramentas MCP ao hook. **Padrão:** o mapa usa os nomes vistos nos payloads gravados (no Antigravity, `CommandLine` e `Cwd` já são conhecidos). **Se falhar:** campo ou ferramenta fora do mapa vira tipo `other`, decidido pelo padrão da classe (regra acima), e o reforço nativo segue valendo. **Onde:** etapas 4 a 6 do [teste de conformidade](conformidade.md), que gravam os payloads. **Resultado da primeira rodada (Linux, 2026-10-14):** o Antigravity 1.3.5 usa `TargetFile` (`write_to_file`) e `AbsolutePath` (`view_file`), que entraram no mapa; os demais campos de caminho e o nome das ferramentas MCP (nenhum MCP no perfil) continuam abertos; o shell do Codex 0.162.1 chega ao hook como `Bash`. O shell do Claude e do Codex no Windows fica para a rodada do Windows.
 
 ## Fontes
 

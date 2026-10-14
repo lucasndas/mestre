@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -221,3 +222,57 @@ func trustWorktree(cur []byte, path, wt, goos string) ([]byte, bool, error) {
 	next, err := obj.bytes()
 	return next, err == nil, err
 }
+
+// Untrust takes the worktree out of trustedWorkspaces of the profile's
+// settings.json (when the worktree is removed, and at the end of the
+// conformance test); the other keys stay.
+func (a *antigravity) Untrust(req PreTrustRequest) (Trust, error) {
+	if req.Profile == "" || !absolute(req.Profile) || req.Worktree == "" || !absolute(req.Worktree) {
+		return Trust{}, fmt.Errorf("antigravity untrust: the HOME %q or the worktree %q is not absolute", req.Profile, req.Worktree)
+	}
+	goos := machineOS(req.OS)
+	wt := filepath.Clean(req.Worktree)
+	path := AntigravitySettingsPath(req.Profile)
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	for range trustAttempts {
+		cur, before, err := readFileStat(path)
+		if err != nil {
+			return Trust{}, fmt.Errorf("antigravity untrust: %w", err)
+		}
+		if !before.exists {
+			return Trust{Path: path}, nil
+		}
+		obj, err := parseJSONObject(cur)
+		if err != nil {
+			return Trust{}, fmt.Errorf("%w: %s: %v", ErrNativeFile, path, err)
+		}
+		var list []string
+		if raw, ok := obj.get("trustedWorkspaces"); ok && string(raw) != "null" {
+			if err := json.Unmarshal(raw, &list); err != nil {
+				return Trust{}, fmt.Errorf("%w: %s: trustedWorkspaces is not a list of paths", ErrNativeFile, path)
+			}
+		}
+		kept := slices.DeleteFunc(slices.Clone(list), func(x string) bool { return sameFolder(goos, x, wt) })
+		if len(kept) == len(list) {
+			return Trust{Path: path}, nil
+		}
+		if err := obj.set("trustedWorkspaces", kept); err != nil {
+			return Trust{}, err
+		}
+		next, err := obj.bytes()
+		if err != nil {
+			return Trust{}, err
+		}
+		if err := replaceFileWith(path, next, before, 0o044); err != nil {
+			if errors.Is(err, errRewritten) {
+				continue
+			}
+			return Trust{}, fmt.Errorf("antigravity untrust: %w", err)
+		}
+		return Trust{Path: path, Cleared: []string{wt}, Changed: true}, nil
+	}
+	return Trust{}, fmt.Errorf("antigravity untrust: %s was rewritten while the trust was being removed, %d times", path, trustAttempts)
+}
+
+var _ TrustRemover = (*antigravity)(nil)

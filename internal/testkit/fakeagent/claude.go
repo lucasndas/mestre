@@ -70,6 +70,9 @@ func (a *agent) runStatusLine(ctx context.Context) {
 		"context_window": map[string]any{
 			"total_input_tokens": 1000 * turn, "total_output_tokens": 300 * turn, "context_window_size": 200000,
 			"used_percentage": 2 * turn, "remaining_percentage": 100 - 2*turn,
+			"current_usage": map[string]any{ // Claude Code 2.1.299 has it (conformance test)
+				"input_tokens": 1000, "output_tokens": 300, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+			},
 		},
 	}))
 	if !ok {

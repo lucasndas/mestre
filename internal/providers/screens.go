@@ -85,7 +85,17 @@ type screenSet struct {
 	prompt *regexp.Regexp
 	busy   *regexp.Regexp
 	known  []KnownScreen
+	// box is the input area of a CLI that draws it above a footer (Claude
+	// Code: the prompt between two rules; Codex: the prompt over the line of
+	// the model and the shortcuts), matched on the last lines of the screen;
+	// busyNear, in those lines, is a turn in progress (the spinner line sits
+	// right above the input area).
+	box, busyNear *regexp.Regexp
 }
+
+// bottomLines is how many of the last non-empty lines hold the input box,
+// the footer and the spinner of a CLI that draws a box.
+const bottomLines = 8
 
 // evaluate: a known screen first, then ready, then busy. "Ready" is the
 // input prompt visible on the last line and the screen stable, or
@@ -97,6 +107,15 @@ func (s screenSet) evaluate(in ScreenInput) ScreenResult {
 		if s.known[i].Pattern.MatchString(in.Text) {
 			return ScreenResult{State: StateStarting, Known: &s.known[i]}
 		}
+	}
+	if b := bottom(in.Text, bottomLines); in.ReadyPattern == nil && s.box != nil && s.box.MatchString(b) {
+		switch {
+		case s.busyNear != nil && s.busyNear.MatchString(b):
+			return ScreenResult{State: StateBusy}
+		case in.Stable || in.SessionStarted:
+			return ScreenResult{State: StateReady}
+		}
+		return ScreenResult{State: StateStarting}
 	}
 	prompt := s.prompt
 	if in.ReadyPattern != nil {
@@ -114,8 +133,20 @@ func (s screenSet) evaluate(in ScreenInput) ScreenResult {
 	return ScreenResult{State: StateStarting}
 }
 
+// bottom is the text of the last n non-empty lines of the screen.
+func bottom(screen string, n int) string {
+	var keep []string
+	lines := strings.Split(screen, "\n")
+	for i := len(lines) - 1; i >= 0 && len(keep) < n; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			keep = append([]string{lines[i]}, keep...)
+		}
+	}
+	return strings.Join(keep, "\n")
+}
+
 // lastLine is the last non-empty line of the screen, where the input
-// prompt of every adapter sits.
+// prompt of a CLI without a box sits.
 func lastLine(screen string) string {
 	lines := strings.Split(strings.TrimRight(screen, "\n "), "\n")
 	return lines[len(lines)-1]

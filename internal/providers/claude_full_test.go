@@ -53,6 +53,9 @@ type screen struct {
 	mu      sync.Mutex
 	em      ptyd.Emulator
 	changed chan struct{}
+	// shown are the screens since the start: a screen the supervision
+	// answers at once may be gone before the waiter looks.
+	shown []string
 }
 
 func (s *screen) feed(p []byte) string {
@@ -61,7 +64,9 @@ func (s *screen) feed(p []byte) string {
 	s.em.Write(p)
 	close(s.changed)
 	s.changed = make(chan struct{})
-	return s.em.Screen()
+	text := s.em.Screen()
+	s.shown = append(s.shown, text)
+	return text
 }
 
 func (s *screen) current() (string, <-chan struct{}) {
@@ -70,14 +75,21 @@ func (s *screen) current() (string, <-chan struct{}) {
 	return s.em.Screen(), s.changed
 }
 
-// waitFor waits until the screen satisfies ok, without polling.
+func (s *screen) wasShown(ok func(string) bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.ContainsFunc(s.shown, ok)
+}
+
+// waitFor waits until a screen since the start satisfies ok, without
+// polling.
 func (s *screen) waitFor(t *testing.T, what string, ok func(string) bool) {
 	t.Helper()
 	limit := clock.Real{}.NewTimer(90 * time.Second)
 	defer limit.Stop()
 	for {
 		text, changed := s.current()
-		if ok(text) {
+		if ok(text) || s.wasShown(ok) {
 			return
 		}
 		select {

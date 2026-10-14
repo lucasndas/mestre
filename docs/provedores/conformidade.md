@@ -1,6 +1,6 @@
 # Teste de conformidade dos provedores
 
-> **Assunto:** teste automático que confirma, com o provedor real, que instruções, skills, hooks e permissões funcionam · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** teste automático que confirma, com o provedor real, que instruções, skills, hooks e permissões funcionam · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -55,7 +55,17 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 - **Falha na etapa 11:** o diagnóstico com IA não usa aquele provedor na máquina; aviso no checklist.
 - A etapa 9 nunca falha; o resultado aparece no checklist.
 
-No M3 a preparação monta o worktree, a camada do Mestre e os hooks direto pelas operações do adaptador; a sessão zero (M4) reaproveita o mesmo caminho. Quem pede a conformidade depois da configuração do perfil: [checklist](../plataforma/checklist.md) e [atualização dos CLIs](atualizacao-dos-clis.md) (M7).
+### Como roda (M3)
+
+- O executor é `internal/conformance`: o `Runner` faz a preparação e as etapas, e o `Host` é o lado do motor de uma rodada (terminais do `mestre-pty`, canal local com a identificação real do chamador e o motor de hooks sobre as regras efetivas da classe, num banco de máquina na pasta da rodada). A preparação monta o worktree, a camada do Mestre e os hooks pelas operações do adaptador; a sessão zero (M4) reaproveita o caminho. Quem pede a conformidade depois da configuração do perfil: [checklist](../plataforma/checklist.md) e [atualização dos CLIs](atualizacao-dos-clis.md) (M7).
+- A classe temporária escreve todos os campos de que depende (só `permitido/**`, comandos com `default: deny`, sem internet, commit na branch da mesa, `tools` só com a ferramenta de skill e as de subagente nativo e `default: deny`): os padrões do formato mudam.
+- **Gravações:** o personagem de teste tem `MESTRE_HOOK_RECORD=1`, e o despachante manda ao motor também o payload cru de cada hook ([despachante](despachante-de-hooks.md)); a tela de início vai como os bytes crus do terminal, que o CA-TERM-02 renderiza ([terminal](../arquitetura/terminal.md)).
+- **Ordem:** a etapa 9 roda na primeira sessão, antes da 8; a 12, na sessão retomada da 10. Turno que não termina em 3 min (padrão) é cancelado com Esc antes da etapa seguinte.
+- **Etapa 5:** `mestre list` só existe no M4; o comando pedido é `mestre debug`, cujo item "identity" diz se o motor reconheceu o terminal certo, junto com um `curl` para fora.
+- **Etapa 6:** o endpoint da rodada não é o de uma instância instalada, então o modo degradado não tem retrato e só leitura vale: o comando é `git status`. O tempo é o da chamada até o despachante desistir da conexão.
+- **Eventos exigidos:** os que as etapas causam: `session_start`, `turn_start`, `pre_tool`, `post_tool` e `turn_end` nos três; `pre_compact` e `session_end` no Claude e no Codex; `usage` (statusLine) no Claude.
+- **Peças de marcos seguintes**, por interfaces: o checklist (M7), o registro de uso como "sistema" (M5) e o modo do diagnóstico com IA (M7; sem ele, a etapa 11 é "não se aplica"). O requisito `provider` da [ficha](../guilda/ficha-da-maquina.md#requisitos) lê os resultados (`Probe`).
+- **Rodada manual:** `tools/conformance` (comentário do arquivo), como `mestre-agente`, com `MESTRE_REAL_CLI=1`; `setup-codex` é a confiança dos hooks na configuração do perfil Codex. A primeira rodada está na [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem).
 
 ## Regras e erros
 

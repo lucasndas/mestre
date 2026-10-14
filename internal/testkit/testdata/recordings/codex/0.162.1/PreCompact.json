@@ -1,0 +1,15 @@
+{
+  "origin": "codex",
+  "version": "0.162.1",
+  "captured_at": "2026-10-14",
+  "source": "capture: codex 0.162.1 PreCompact stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "hook_event_name": "PreCompact",
+    "model": "gpt-6.1-sol",
+    "session_id": "01a13a17-ae4f-7120-a41f-fc37d1046bf9",
+    "transcript_path": "/perfil/sessions/2026/10/14/rollout-2026-10-14T11-06-32-01a13a17-ae4f-7120-a41f-fc37d1046bf9.jsonl",
+    "trigger": "manual",
+    "turn_id": "01a13a18-3770-78f3-b3f6-ff99113cdbc1"
+  }
+}

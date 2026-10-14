@@ -1,6 +1,6 @@
 # Terminal
 
-> **Assunto:** terminal de cada agente na máquina onde roda: o processo `mestre-pty` (PTY/ConPTY, emulador, buffer), socket e aperto de mão com o motor, volta do motor sem parar os agentes, tamanho fixo, log, digitação e encerramento da árvore de processos · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** terminal de cada agente na máquina onde roda: o processo `mestre-pty` (PTY/ConPTY, emulador, buffer), socket e aperto de mão com o motor, volta do motor sem parar os agentes, tamanho fixo, log, digitação e encerramento da árvore de processos · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -118,5 +118,5 @@ Enquanto o motor está fora, o agente continua, a saída vai para o buffer, nada
 
 ## Verificar na implementação
 
-- **Verificar na implementação:** `github.com/charmbracelet/x/vt` renderiza fielmente as telas de Claude Code, Codex e Antigravity (modo alternativo de tela, regiões de rolagem, caracteres largos). **Padrão:** essa biblioteca. **Se falhar:** `github.com/hinshun/vt10x`, atrás da mesma interface interna do emulador. **Onde:** CA-TERM-02 com as gravações de tela capturadas pelo [teste de conformidade](../provedores/conformidade.md) (M3).
+- **Verificar na implementação:** `github.com/charmbracelet/x/vt` renderiza fielmente as telas de Claude Code, Codex e Antigravity (modo alternativo de tela, regiões de rolagem, caracteres largos). **Padrão:** essa biblioteca. **Se falhar:** `github.com/hinshun/vt10x`, atrás da mesma interface interna do emulador. **Onde:** CA-TERM-02 com as gravações de tela capturadas pelo [teste de conformidade](../provedores/conformidade.md) (M3). **Resultado (2026-10-14):** Padrão confirmado: as telas de início reais do Claude Code 2.1.299, do Codex 0.162.1 e do Antigravity 1.3.5 (bytes crus, 200×50) renderizam sem sequência de controle e com a área de entrada que o adaptador lê.
 - **Verificar na implementação:** `github.com/aymanbagabas/go-pty` cobre PTY e ConPTY com o agente falso e os três CLIs (entrada, saída, modo cru, encerramento). **Padrão:** essa biblioteca. **Se falhar:** wrapper próprio do ConPTY sobre `golang.org/x/sys/windows` (e `creack/pty` no Linux), atrás da mesma interface. **Onde:** CA-TERM-05 e CA-TERM-08 no CI dos dois sistemas. No spike 5 ([Windows](windows.md#resultado-dos-spikes-do-m1)), passou no Windows com o agente falso e os três CLIs.

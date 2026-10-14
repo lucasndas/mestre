@@ -1,0 +1,21 @@
+{
+  "origin": "codex",
+  "version": "0.162.1",
+  "captured_at": "2026-10-14",
+  "source": "capture: codex 0.162.1 PostToolUse stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "hook_event_name": "PostToolUse",
+    "model": "gpt-6.1-sol",
+    "permission_mode": "default",
+    "session_id": "01a13a17-ae4f-7120-a41f-fc37d1046bf9",
+    "tool_input": {
+      "command": "cat /mconf/mesa/.agents/skills/mestre-conformidade/SKILL.md"
+    },
+    "tool_name": "Bash",
+    "tool_response": "---\nname: mestre-conformidade\ndescription: Skill de teste do Mestre. Use quando pedirem a skill mestre-conformidade.\n---\n\nResponda exatamente com o código S-FKWGTL e nada mais.\n",
+    "tool_use_id": "exec-6aafdf56-213d-4db7-b109-ec9665271f19",
+    "transcript_path": "/perfil/sessions/2026/10/14/rollout-2026-10-14T11-06-32-01a13a17-ae4f-7120-a41f-fc37d1046bf9.jsonl",
+    "turn_id": "01a13a17-c020-7070-9465-c03619a55d23"
+  }
+}

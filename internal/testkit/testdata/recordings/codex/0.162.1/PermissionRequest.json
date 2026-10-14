@@ -1,0 +1,20 @@
+{
+  "origin": "codex",
+  "version": "0.162.1",
+  "captured_at": "2026-10-14",
+  "source": "documentation: https://learn.chatgpt.com/docs/hooks and openai/codex source at b3c3bad (copied from b3c3bad: the conformance round of 0.162.1 did not cause this event)",
+  "body": {
+    "session_id": "019a0000-0000-7000-8000-000000000001",
+    "transcript_path": "/home/user/.codex/sessions/rollout.jsonl",
+    "cwd": "/home/user/p",
+    "hook_event_name": "PermissionRequest",
+    "model": "gpt-5.5-codex",
+    "permission_mode": "default",
+    "turn_id": "t1",
+    "tool_name": "Bash",
+    "tool_use_id": "call_2",
+    "tool_input": {
+      "command": "curl https://example.com"
+    }
+  }
+}

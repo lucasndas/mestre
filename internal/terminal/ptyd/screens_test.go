@@ -17,9 +17,7 @@ import (
 
 // startScreen runs the fake agent of a provider until it stops printing
 // and returns what it printed, as raw bytes with their escape sequences.
-// The recordings of the real CLIs' start screens come with the conformance
-// test (docs/provedores/conformidade.md); until then the fake agent, which
-// prints the start screens of the provider it imitates, is the source.
+// The fake agent prints the start screens of the provider it imitates.
 func startScreen(t *testing.T, program string, trusted bool) string {
 	t.Helper()
 	root := t.TempDir()
@@ -47,7 +45,9 @@ func startScreen(t *testing.T, program string, trusted bool) string {
 	return out
 }
 
-// CA-TERM-02
+// The start screens of the fake agent, including the ones the real round
+// does not show (the trust and the login); the real CLIs' are in
+// realscreens_test.go (CA-TERM-02).
 func TestEmulatorShowsTheStartScreenOfEachProvider(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

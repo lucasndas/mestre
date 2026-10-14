@@ -1,0 +1,20 @@
+{
+  "origin": "codex",
+  "version": "0.162.1",
+  "captured_at": "2026-10-14",
+  "source": "capture: codex 0.162.1 PreToolUse stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "hook_event_name": "PreToolUse",
+    "model": "gpt-6.1-sol",
+    "permission_mode": "default",
+    "session_id": "01a13a17-ae4f-7120-a41f-fc37d1046bf9",
+    "tool_input": {
+      "command": "*** Begin Patch\n*** Add File: /mconf/mesa/proibido/x.txt\n+x\n*** End Patch"
+    },
+    "tool_name": "apply_patch",
+    "tool_use_id": "exec-deae1b3e-e083-4139-828c-125fcc3e8852",
+    "transcript_path": "/perfil/sessions/2026/10/14/rollout-2026-10-14T11-06-32-01a13a17-ae4f-7120-a41f-fc37d1046bf9.jsonl",
+    "turn_id": "01a13a17-d881-7c61-8b9a-bc9559fb1d3c"
+  }
+}
