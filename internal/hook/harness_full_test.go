@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	machinedb "github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/terminal/ptyd"
 	"github.com/lucasndas/mestre/internal/terminal/ptywire"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -102,11 +104,22 @@ func runTimer(times, program string, args []string) int {
 }
 
 // outbuf collects the output of a terminal and lets a test wait for a text
-// without polling.
+// without polling. It keeps the raw bytes, and the screen they draw: a
+// pseudo-terminal passes the program's bytes through, but ConPTY repaints
+// with cursor positioning ("Tool Bash ran ESC[12;1H> "), so what marks the
+// agent as free is a line on the screen, not a byte sequence.
 type outbuf struct {
 	mu      sync.Mutex
 	b       bytes.Buffer
+	em      ptyd.Emulator
 	changed chan struct{}
+}
+
+func newOutbuf(t *testing.T) *outbuf {
+	t.Helper()
+	o := &outbuf{em: ptyd.NewVTEmulator(ptywire.DefaultCols, ptywire.DefaultRows, ptyd.DefaultHistoryLines, nil)}
+	t.Cleanup(o.em.Close)
+	return o
 }
 
 func (o *outbuf) Write(p []byte) (int, error) {
@@ -116,6 +129,7 @@ func (o *outbuf) Write(p []byte) (int, error) {
 		close(o.changed)
 		o.changed = nil
 	}
+	o.em.Write(p)
 	return o.b.Write(p)
 }
 
@@ -127,37 +141,53 @@ func (o *outbuf) String() string {
 
 func (o *outbuf) waitFor(t *testing.T, sub string) {
 	t.Helper()
-	o.waitAfter(t, "", sub)
+	o.wait(t, fmt.Sprintf("%q", sub), func(raw, _ string) bool { return strings.Contains(raw, sub) })
 }
 
-// waitAfter waits until the output holds sub after the first after: the
-// prompt after a line ("Tool Bash ran", then "\n> ") is the agent free for
-// the next message, which a message typed during the turn would not find.
-func (o *outbuf) waitAfter(t *testing.T, after, sub string) {
+// waitPrompt waits until the screen shows the prompt, a line of just ">",
+// below the first line that holds after: the prompt after a line ("Tool Bash
+// ran") is the agent free for the next message, which a message typed during
+// the turn would not find.
+func (o *outbuf) waitPrompt(t *testing.T, after string) {
 	t.Helper()
-	holds := func(text string) bool {
-		i := strings.Index(text, after)
-		return i >= 0 && strings.Contains(text[i+len(after):], sub)
+	o.wait(t, fmt.Sprintf("the prompt after %q", after), func(_, screen string) bool { return promptAfter(screen, after) })
+}
+
+// promptAfter is whether the screen holds a line of just ">" below the first
+// line that holds after.
+func promptAfter(screen, after string) bool {
+	lines := strings.Split(screen, "\n")
+	for i, l := range lines {
+		if strings.Contains(l, after) {
+			return slices.Contains(lines[i+1:], ">")
+		}
 	}
+	return false
+}
+
+// wait waits until holds says so of the raw output and of the screen (the
+// scrollback and the visible rows, one line per row, trailing blanks off).
+func (o *outbuf) wait(t *testing.T, what string, holds func(raw, screen string) bool) {
+	t.Helper()
 	limit := clock.Real{}.NewTimer(90 * time.Second)
 	defer limit.Stop()
 	for {
 		o.mu.Lock()
-		text := o.b.String()
+		raw, screen := o.b.String(), o.em.History(-1)
 		if o.changed == nil {
 			o.changed = make(chan struct{})
 		}
 		ch := o.changed
 		o.mu.Unlock()
-		if holds(text) {
+		if holds(raw, screen) {
 			return
 		}
 		select {
 		case <-ch:
 		case <-t.Context().Done():
-			t.Fatalf("output never held %q after %q:\n%s", sub, after, text)
+			t.Fatalf("output never held %s:\n%s\nscreen:\n%s", what, raw, screen)
 		case <-limit.C():
-			t.Fatalf("output did not hold %q after %q in 90 s:\n%s", sub, after, text)
+			t.Fatalf("output did not hold %s in 90 s:\n%s\nscreen:\n%s", what, raw, screen)
 		}
 	}
 }
@@ -303,7 +333,7 @@ func (e *fullEngine) claude(id, agent, hookCommand, script string) (*terminal.Te
 		e.t.Fatal(err)
 	}
 	e.t.Cleanup(func() { _ = c.Close() })
-	out := &outbuf{}
+	out := newOutbuf(e.t)
 	if _, err := c.Follow(e.ctx, 0, func(f ptywire.Frame) { _, _ = out.Write(f.Data) }); err != nil {
 		e.t.Fatal(err)
 	}
