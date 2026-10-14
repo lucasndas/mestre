@@ -19,14 +19,12 @@ import (
 // A descendant that leaves the process group of the hook (`setsid cmd &`, the
 // audit's probe) is still ended with the hook: the dispatcher adopts the
 // orphans (subreaper) and the runner sweeps them, both when the hook ends by
-// itself with 0 and when its time limit kills it. (Two tests, not parallel
-// subtests: the sweep ends every new descendant of the process, which in the
-// test binary would be the other test's too.)
-func TestAHookDescendantThatLeftItsSessionEndsWithTheHookWhenItExits(t *testing.T) {
+// itself with 0 and when its time limit kills it. (The two cases run one after
+// the other: the sweep ends every new descendant of the process, which in the
+// test binary would be the other case's too.)
+func TestAHookDescendantThatLeftItsSessionEndsWithTheHook(t *testing.T) {
+	t.Parallel()
 	escapedDescendantEnds(t, "; exit 0", 20*time.Second)
-}
-
-func TestAHookDescendantThatLeftItsSessionEndsWithTheHookAtTheTimeLimit(t *testing.T) {
 	escapedDescendantEnds(t, "; sleep 120", 2*time.Second)
 }
 
