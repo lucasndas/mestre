@@ -8,7 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
+
+	"github.com/lucasndas/mestre/internal/safefile"
 )
 
 // trustAttempts is how many times PreTrust reads, merges and writes the
@@ -161,92 +162,51 @@ func (c *claudeCode) editTrust(req PreTrustRequest, edit func(projects map[strin
 
 // fileState is what tells that a file was rewritten between a reading and a
 // write.
-type fileState struct {
-	exists bool
-	size   int64
-	mod    time.Time
-}
+type fileState = safefile.Info
 
 var errRewritten = errors.New("file rewritten meanwhile")
 
+// readFileStat reads a file of the account profile, which the account of the
+// agents writes: through internal/safefile, so a link or a junction on the
+// path and a file that is not regular are refused, never followed (an agent
+// could otherwise point .claude.json at an engine file and have it copied
+// into a file it reads). A missing file is nil and no error.
 func readFileStat(path string) ([]byte, fileState, error) {
-	st, err := os.Stat(path)
+	b, st, err := safefile.Read(path, safefile.DefaultLimit)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fileState{}, nil
 	}
 	if err != nil {
 		return nil, fileState{}, err
 	}
-	b, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, fileState{}, nil
-	}
-	if err != nil {
-		return nil, fileState{}, err
-	}
-	return b, fileState{exists: true, size: st.Size(), mod: st.ModTime()}, nil
+	return b, st, nil
+}
+
+// maxSharedFile bounds the files of the Mestre the engine reads back from a
+// folder the agents write (MESTRE.md, the agent file of Antigravity).
+const maxSharedFile = 1 << 20
+
+// readShared reads such a file through safefile: an agent could put a link
+// to an engine file in place of MESTRE.md, and the engine would copy that
+// file into the agent file or the command line of the character.
+func readShared(path string) ([]byte, error) {
+	b, _, err := safefile.Read(path, maxSharedFile)
+	return b, err
 }
 
 // replaceFile writes data over path through a temporary file renamed in
-// place, with the mode the file had (0600 for a new one). If the file is not
-// what the caller read any more, it does not write.
+// place (safefile), with the mode of every native file (safefile.Mode and
+// the group of the folder: the CLI, running as the account of the agents,
+// reads and rewrites it; never the mode the old file had, which agy and
+// Claude Code create 0600). If the file is not what the caller read any
+// more, it does not write (errRewritten).
 func replaceFile(path string, data []byte, was fileState) error {
-	return replaceFileWith(path, data, was, 0)
-}
-
-// replaceFileWith is replaceFile with the permission bits in extra added to
-// the mode: Antigravity's settings.json is read by the account of the agents,
-// not the engine's.
-func replaceFileWith(path string, data []byte, was fileState, extra os.FileMode) error {
-	mode := os.FileMode(0o600)
-	if was.exists {
-		if st, err := os.Stat(path); err == nil {
-			mode = st.Mode().Perm()
-		}
-	}
-	mode |= extra
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".mestre-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	fail := func(err error) error {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return fail(err)
-	}
-	if err := tmp.Chmod(mode); err != nil && !errors.Is(err, errors.ErrUnsupported) {
-		return fail(err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return fail(err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	now, err := os.Stat(path)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		if was.exists {
-			_ = os.Remove(name)
+	return safefile.Write(path, data, safefile.Options{Sync: true, Guard: func(now safefile.Info) error {
+		if !now.Same(was) {
 			return errRewritten
 		}
-	case err != nil:
-		_ = os.Remove(name)
-		return err
-	case !was.exists || now.Size() != was.size || !now.ModTime().Equal(was.mod):
-		_ = os.Remove(name)
-		return errRewritten
-	}
-	if err := os.Rename(name, path); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	return nil
+		return nil
+	}})
 }
 
 // entryKey is the key of projects that stands for folder: the one already

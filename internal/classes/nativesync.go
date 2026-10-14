@@ -6,11 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
+	"runtime"
 	"slices"
 	"sync"
 
 	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/lucasndas/mestre/internal/safefile"
 )
 
 // NativeFiles writes the native control files. Update reads the file (nil
@@ -20,48 +21,60 @@ type NativeFiles interface {
 	Update(ctx context.Context, path string, merge func(cur []byte) ([]byte, error)) (changed bool, err error)
 }
 
-// OSNativeFiles writes the native files on disk: a temporary file renamed
-// over the old one, which keeps its mode (and is always readable by the
-// agents' account, see Update); one update at a time, as the
+// OSNativeFiles writes the native files on disk, through internal/safefile:
+// they are in folders the account of the agents writes (the worktree, the
+// account profile), so a link or a junction anywhere on the path, or a file
+// that is not a regular one, is refused instead of followed
+// (docs/arquitetura/seguranca.md: the engine validates what it reads from
+// the shared folders), and the new file is a temporary one renamed over the
+// old. Its mode is always safefile.Mode with the group of the folder,
+// readable by the agents' account and never a copy of the mode of what was
+// there: an old file with another mode is written again even when its
+// content is the same (no chmod by path). One update at a time, as the
 // settings.json of an Antigravity profile is shared by its characters.
 type OSNativeFiles struct{ mu sync.Mutex }
+
+// nativeAttempts is how many times Update reads, merges and writes again a
+// file the CLI rewrote between the reading and the rename.
+const nativeAttempts = 3
+
+var errNativeRewritten = errors.New("rewritten while it was being written")
 
 // Update implements NativeFiles.
 func (o *OSNativeFiles) Update(_ context.Context, path string, merge func([]byte) ([]byte, error)) (bool, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	mode := os.FileMode(0o644)
-	cur, err := os.ReadFile(path)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		cur = nil
-	case err != nil:
-		return false, err
-	default:
-		if st, err := os.Stat(path); err == nil {
-			// The renamed file belongs to the account of the engine, and the
-			// agents run as another one: whatever mode the old file had
-			// (agy writes its settings.json 0600), the new one stays readable
-			// by the group and the others. Nothing native is a secret.
-			mode = st.Mode().Perm() | 0o044
+	for range nativeAttempts {
+		cur, info, err := safefile.Read(path, safefile.DefaultLimit)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			cur = nil
+		case err != nil:
+			return false, err
 		}
-	}
-	next, err := merge(cur)
-	if err != nil {
-		return false, err
-	}
-	if cur != nil && bytes.Equal(cur, next) {
-		if st, err := os.Stat(path); err == nil && st.Mode().Perm() != mode {
-			if err := os.Chmod(path, mode); err != nil {
-				return false, fmt.Errorf("%s is not readable by the agents and cannot be fixed: %w", path, err)
+		next, err := merge(cur)
+		if err != nil {
+			return false, err
+		}
+		same := cur != nil && bytes.Equal(cur, next)
+		if same && (runtime.GOOS == "windows" || info.Perm == safefile.Mode) {
+			return false, nil
+		}
+		err = safefile.Write(path, next, safefile.Options{Guard: func(now safefile.Info) error {
+			if !now.Same(info) {
+				return errNativeRewritten
 			}
+			return nil
+		}})
+		switch {
+		case errors.Is(err, errNativeRewritten):
+			continue
+		case err != nil:
+			return false, err
 		}
-		return false, nil
+		return !same, nil
 	}
-	if err := writeAtomic(path, next, mode); err != nil {
-		return false, err
-	}
-	return true, nil
+	return false, fmt.Errorf("%s: %w, %d times", path, errNativeRewritten, nativeAttempts)
 }
 
 // Restarter restarts a character with the resume of its session

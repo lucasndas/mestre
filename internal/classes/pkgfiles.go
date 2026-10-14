@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/lucasndas/mestre/internal/safefile"
 )
 
 // Limits of a class package. A package travels whole in the Guild database,
@@ -140,6 +142,10 @@ func checkPackagePath(p string) error {
 // outside it), and so are the limits of a package. A folder that does not
 // exist is fs.ErrNotExist.
 func ReadDir(dir string) (Files, error) {
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
 	st, err := os.Lstat(dir)
 	if err != nil {
 		return nil, err
@@ -174,7 +180,14 @@ func ReadDir(dir string) (Files, error) {
 		if info.Size() > MaxFileBytes || int64(total)+info.Size() > MaxPackageBytes {
 			return fmt.Errorf("%w: %s passes the size limit of a package (%d bytes in all, %d per file)", ErrPackage, rel, MaxPackageBytes, MaxFileBytes)
 		}
-		data, err := os.ReadFile(p)
+		// The entry was a regular file when the folder was listed; it may be
+		// a link by now. safefile refuses a link on the whole path and a
+		// file that is not regular at the moment of the reading, and reads
+		// no more than the limit.
+		data, _, err := safefile.Read(p, MaxFileBytes)
+		if safefile.Refused(err) {
+			return fmt.Errorf("%w: %s: %w", ErrPackage, rel, err)
+		}
 		if err != nil {
 			return err
 		}

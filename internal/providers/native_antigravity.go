@@ -99,41 +99,58 @@ func AntigravityTools(p NativePolicy) []string {
 	return out
 }
 
-// agentTools sets the tools field in the frontmatter of the agent file and
-// keeps the rest; a file that does not exist yet gets the frontmatter the
-// Mestre layer then completes.
+// agentTools writes the frontmatter of the agent file from scratch: the one
+// the Mestre generates (agentFront) and the tools field. The file is in the
+// worktree, which the agent writes, so no key it planted there (mcpServers,
+// permissionMode, another model, a wider tools list) is ever kept; only the
+// body, which is the Mestre layer's, stays for the layer to rewrite.
 func agentTools(cur []byte, agentID string, tools []string) ([]byte, error) {
+	_, body, ok := frontmatter(strings.ReplaceAll(string(cur), "\r\n", "\n"))
+	if !ok {
+		body = ""
+	}
+	front := append(agentFront(agentID), toolsLine(tools))
+	return []byte("---\n" + strings.Join(front, "\n") + "\n---\n" + body), nil
+}
+
+// toolsLine is the tools field as the native controls write it.
+func toolsLine(tools []string) string {
 	quoted := make([]string, len(tools))
 	for i, t := range tools {
 		quoted[i] = strconv.Quote(t)
 	}
-	line := "tools: [" + strings.Join(quoted, ", ") + "]"
-	text := strings.ReplaceAll(string(cur), "\r\n", "\n")
-	front, body, ok := frontmatter(text)
-	if !ok {
-		front, body = agentFront(agentID), text
-	}
-	var out []string
-	set := false
-	for i := 0; i < len(front); i++ {
-		l := front[i]
-		if strings.HasPrefix(l, "tools:") {
-			// A block list goes on the next lines; drop them with the key.
-			for i+1 < len(front) && (strings.HasPrefix(front[i+1], " ") || strings.HasPrefix(front[i+1], "-")) {
-				i++
-			}
-			if !set {
-				out = append(out, line)
-				set = true
-			}
+	return "tools: [" + strings.Join(quoted, ", ") + "]"
+}
+
+// keptToolsLine is the tools field of an old frontmatter as the layer keeps
+// it: the line the native controls wrote (one flow list of known native
+// tools), or, for anything else (a block list, an unknown name, a line the
+// agent edited), an empty list, which lets no tool run until the native
+// controls write the field again. ok is false when there was no field.
+func keptToolsLine(front []string) (line string, ok bool) {
+	for _, l := range front {
+		if !strings.HasPrefix(l, "tools:") {
 			continue
 		}
-		out = append(out, l)
+		inner, flow := strings.CutPrefix(strings.TrimSpace(strings.TrimPrefix(l, "tools:")), "[")
+		inner, closed := strings.CutSuffix(inner, "]")
+		var names []string
+		good := flow && closed
+		for item := range strings.SplitSeq(inner, ",") {
+			if !good || strings.TrimSpace(item) == "" {
+				continue
+			}
+			name, err := strconv.Unquote(strings.TrimSpace(item))
+			_, known := antigravityTools.names[name]
+			good = err == nil && known
+			names = append(names, name)
+		}
+		if !good || toolsLine(names) != l {
+			return toolsLine(nil), true
+		}
+		return l, true
 	}
-	if !set {
-		out = append(out, line)
-	}
-	return []byte("---\n" + strings.Join(out, "\n") + "\n---\n" + body), nil
+	return "", false
 }
 
 // frontmatter splits a "---" frontmatter from the body.
@@ -157,48 +174,80 @@ func frontmatter(text string) (front []string, body string, ok bool) {
 	return strings.Split(rest[:end], "\n"), body, true
 }
 
-// profileSettings puts the fixed rules of the Mestre in permissions.deny
-// (or takes them out, with the fallback) and toolPermission in
-// request-review, keeping everything else of the profile's settings.json.
+// agyKeptSettings are the top-level keys of the profile's settings.json the
+// person or agy may keep: the trust of the worktrees (PreTrust) and what only
+// changes how the CLI looks. Every other key is dropped at each write: the
+// profile folder is written by the account of the agents, and a key planted
+// there (permissions.allow, allowNonWorkspaceAccess, enableTerminalSandbox,
+// agentMode, artifactReviewPolicy, autoExecPolicy, hooks, mcpServers,
+// statusLine) would widen what every character of the profile may do
+// (docs/classes/reforco-nativo.md#tradução-por-provedor).
+var agyKeptSettings = []string{"trustedWorkspaces", "theme", "vimInsertFirst", "pickerGrouping", "editorMode", "model", "releaseChannel", "telemetryEnabled"}
+
+// profileSettings writes the profile's settings.json from a whitelist:
+// agyKeptSettings as they are, of permissions only deny and ask (they only
+// restrict), the fixed rules of the Mestre in permissions.deny (or none, with
+// the fallback) and toolPermission in request-review.
 func profileSettings(cur []byte, path string, ours []string, deny bool) ([]byte, error) {
-	obj := map[string]any{}
+	old := map[string]any{}
 	if len(bytes.TrimSpace(cur)) > 0 {
-		if err := json.Unmarshal(cur, &obj); err != nil || obj == nil {
+		dec := json.NewDecoder(bytes.NewReader(cur))
+		dec.UseNumber()
+		if err := dec.Decode(&old); err != nil || old == nil {
 			return nil, fmt.Errorf("%w: %s is not a JSON object: %v", ErrNativeFile, path, err)
 		}
 	}
+	obj := map[string]any{}
+	for _, k := range agyKeptSettings {
+		if v, ok := old[k]; ok {
+			obj[k] = v
+		}
+	}
 	perms := map[string]any{}
-	if v, ok := obj["permissions"]; ok {
+	if v, ok := old["permissions"]; ok {
 		m, isObj := v.(map[string]any)
 		if !isObj {
 			return nil, fmt.Errorf("%w: %s: permissions is not an object", ErrNativeFile, path)
 		}
 		perms = m
 	}
-	var list []string
-	if v, ok := perms["deny"]; ok {
+	texts := func(key string) ([]string, error) {
+		v, ok := perms[key]
+		if !ok {
+			return nil, nil
+		}
 		arr, isArr := v.([]any)
 		if !isArr {
-			return nil, fmt.Errorf("%w: %s: permissions.deny is not a list", ErrNativeFile, path)
+			return nil, fmt.Errorf("%w: %s: permissions.%s is not a list", ErrNativeFile, path, key)
 		}
+		var out []string
 		for _, e := range arr {
 			s, isStr := e.(string)
 			if !isStr {
-				return nil, fmt.Errorf("%w: %s: permissions.deny has a non-text entry", ErrNativeFile, path)
+				return nil, fmt.Errorf("%w: %s: permissions.%s has a non-text entry", ErrNativeFile, path, key)
 			}
-			if !slices.Contains(ours, s) {
-				list = append(list, s)
-			}
+			out = append(out, s)
+		}
+		return out, nil
+	}
+	theirs, err := texts("deny")
+	if err != nil {
+		return nil, err
+	}
+	list := []string{}
+	for _, s := range theirs {
+		if !slices.Contains(ours, s) {
+			list = append(list, s)
 		}
 	}
 	if deny {
 		list = append(list, ours...)
 	}
-	if list == nil {
-		list = []string{}
+	kept := map[string]any{"deny": list}
+	if ask, err := texts("ask"); err == nil && ask != nil {
+		kept["ask"] = ask
 	}
-	perms["deny"] = list
-	obj["permissions"] = perms
+	obj["permissions"] = kept
 	obj["toolPermission"] = "request-review"
 	out, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {

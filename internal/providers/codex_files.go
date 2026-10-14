@@ -46,7 +46,7 @@ func (c *codex) PreTrust(req PreTrustRequest) (Trust, error) {
 		if err != nil {
 			return Trust{}, fmt.Errorf("%w: %s: %v", ErrNativeFile, path, err)
 		}
-		if before.exists && bytes.Equal(cur, next) {
+		if before.Exists && bytes.Equal(cur, next) {
 			return Trust{Path: path}, nil
 		}
 		if err := replaceFile(path, next, before); err != nil {
@@ -76,7 +76,7 @@ func (c *codex) DeliverMestreLayer(req LayerRequest) (Layer, error) {
 	if !absolute(req.Path) {
 		return Layer{}, fmt.Errorf("codex mestre layer: %q is not an absolute path", req.Path)
 	}
-	b, err := os.ReadFile(req.Path)
+	b, err := readShared(req.Path)
 	if err != nil {
 		return Layer{}, fmt.Errorf("codex mestre layer: %w", err)
 	}
@@ -136,7 +136,7 @@ func (c *codex) Untrust(req PreTrustRequest) (Trust, error) {
 		if err != nil {
 			return Trust{}, fmt.Errorf("codex untrust: %w", err)
 		}
-		if !before.exists {
+		if !before.Exists {
 			return Trust{Path: path}, nil
 		}
 		next, err := removeTOMLTable(cur, []string{"projects", worktree})

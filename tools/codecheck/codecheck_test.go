@@ -220,6 +220,32 @@ func TestPrivateFoldersGoThroughTheHelper(t *testing.T) {
 	}
 }
 
+// CA-CODIGO-09
+func TestAgentFilesGoThroughSafefile(t *testing.T) {
+	t.Parallel()
+	mk := func(call string) string {
+		return "package x\n\nimport \"os\"\n\nfunc f(p string) error {\n\t" + call + "\n\treturn nil\n}\n"
+	}
+	cases := map[string]struct {
+		path, src string
+		want      []string
+	}{
+		"ReadFile in providers": {"internal/providers/a.go", mk("_, _ = os.ReadFile(p)"), []string{"internal/providers/a.go:6: agent-files:"}},
+		"Rename in providers":   {"internal/providers/a.go", mk("_ = os.Rename(p, p)"), []string{"internal/providers/a.go:6: agent-files:"}},
+		"Chmod in classes":      {"internal/classes/a.go", mk("_ = os.Chmod(p, 0o644)"), []string{"internal/classes/a.go:6: agent-files:"}},
+		"ReadFile in classes":   {"internal/classes/a.go", mk("_, _ = os.ReadFile(p)"), nil},
+		"elsewhere":             {"internal/store/a.go", mk("_ = os.Chmod(p, 0o644)"), nil},
+		"test code":             {"internal/providers/a_test.go", mk("_, _ = os.ReadFile(p)"), nil},
+		"excused":               {"internal/providers/a.go", mk("// mestre:allow agent-files: a file of the engine only\n\t_, _ = os.ReadFile(p)"), nil},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			expect(t, run(t, map[string]string{c.path: c.src}), c.want...)
+		})
+	}
+}
+
 // CA-CODIGO-06
 func TestSecretsPrintThroughValueReceivers(t *testing.T) {
 	t.Parallel()

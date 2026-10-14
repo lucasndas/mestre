@@ -1,14 +1,16 @@
 package providers
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 // Native translates the policy into the start flags of Codex: the sandbox
-// (read-only with no write, workspace-write otherwise, with no rule per
-// path, and .git out of its write reach by the sandbox itself), the network
+// (always workspace-write, with no rule per path, and .git out of its write
+// reach by the sandbox itself but for the git folders of the engine's record
+// of the worktree), the network
 // of the sandbox, which is only on or off, and the hosted search only with
 // internet and no list of domains (it does not go through a hook). The
 // commands are contained by the sandbox; nothing else is native in Codex.
@@ -29,15 +31,20 @@ func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 	if err := p.check(); err != nil {
 		return NativeControls{}, err
 	}
-	sandbox, network := "workspace-write", "true"
-	if p.NoWrite {
-		sandbox = "read-only"
-	}
+	// Never -s read-only, also for a class without write: read-only has no
+	// network, and the `mestre` CLI would not reach the local channel. The
+	// class without write runs in workspace-write with no extra writable
+	// root, and the dispatcher denies its writes (CodexNoNativeWrite).
+	network := "true"
 	if p.Offline && !CodexNoNativeNetwork(p) {
 		network = "false"
 	}
-	args := []string{"-s", sandbox, "-c", "sandbox_workspace_write.network_access=" + network}
-	if roots := codexGitRoots(p.Worktree); sandbox == "workspace-write" && len(roots) > 0 {
+	args := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=" + network}
+	roots, err := codexGitRoots(p)
+	if err != nil {
+		return NativeControls{}, err
+	}
+	if !p.NoWrite && len(roots) > 0 {
 		vals := make([]string, 0, len(roots))
 		for _, r := range roots {
 			v, err := tomlString(r)
@@ -54,6 +61,14 @@ func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 	return NativeControls{Args: args}, nil
 }
 
+// CodexNoNativeWrite reports whether a Codex character of this policy runs
+// without the native write barrier its class asks for: a class that writes
+// nothing runs in workspace-write like the others (read-only would cut the
+// local channel), so only the dispatcher, which fails open in Codex, stops
+// its writes. The panel shows it on the sheet and the class check warns, as
+// with the network (docs/classes/reforco-nativo.md).
+func CodexNoNativeWrite(p NativePolicy) bool { return p.NoWrite }
+
 // CodexNoNativeNetwork reports whether a Codex character of this policy
 // runs without the native network barrier its class asks for: no internet,
 // and the network of the sandbox on for the local channel (always on Linux;
@@ -69,33 +84,29 @@ func CodexNoNativeNetwork(p NativePolicy) bool {
 // workspace-write and does not ask to escalate a git commit that fails
 // there (conformance test, 2026-10-14), so they go in writable_roots; the
 // other branches stay protected by the fixed rules of the dispatcher
-// (docs/provedores/codex.md#verificar-na-implementação). A worktree whose
-// .git is a folder (the main clone) needs nothing.
-func codexGitRoots(worktree string) []string {
-	raw, err := os.ReadFile(filepath.Join(worktree, ".git"))
-	if err != nil {
-		return nil
+// (docs/provedores/codex.md#verificar-na-implementação).
+//
+// They come from the engine's record of the worktree (GitDir, GitCommon),
+// never from the .git file or the commondir of the worktree: the agent
+// writes both, and could point them at any folder it wants opened. The git
+// folder must be a folder of <mirror>/worktrees/, and no root may be a link.
+// No record (the main clone, whose .git is a folder) opens nothing.
+func codexGitRoots(p NativePolicy) ([]string, error) {
+	if p.GitDir == "" && p.GitCommon == "" {
+		return nil, nil
 	}
-	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir:")
-	if !ok {
-		return nil
+	gitdir, common := filepath.Clean(p.GitDir), filepath.Clean(p.GitCommon)
+	if !filepath.IsAbs(gitdir) || !filepath.IsAbs(common) || filepath.Dir(gitdir) != filepath.Join(common, "worktrees") {
+		return nil, fmt.Errorf("native controls of %s: the git folder %q is not a worktree of the mirror %q", p.AgentID, p.GitDir, p.GitCommon)
 	}
-	gitdir = strings.TrimSpace(gitdir)
-	if !filepath.IsAbs(gitdir) {
-		gitdir = filepath.Join(worktree, gitdir)
+	out := []string{gitdir}
+	if st, err := os.Lstat(gitdir); err != nil || !st.IsDir() {
+		return nil, fmt.Errorf("native controls of %s: the git folder %s of the worktree is not a folder", p.AgentID, gitdir)
 	}
-	common := filepath.Dir(filepath.Dir(gitdir)) // <mirror>/worktrees/<name>
-	if c, err := os.ReadFile(filepath.Join(gitdir, "commondir")); err == nil {
-		common = strings.TrimSpace(string(c))
-		if !filepath.IsAbs(common) {
-			common = filepath.Join(gitdir, common)
-		}
-	}
-	out := []string{filepath.Clean(gitdir)}
 	for _, d := range []string{"objects", "refs", "logs"} {
-		if st, err := os.Stat(filepath.Join(common, d)); err == nil && st.IsDir() {
-			out = append(out, filepath.Clean(filepath.Join(common, d)))
+		if st, err := os.Lstat(filepath.Join(common, d)); err == nil && st.IsDir() {
+			out = append(out, filepath.Join(common, d))
 		}
 	}
-	return out
+	return out, nil
 }

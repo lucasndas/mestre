@@ -10,7 +10,9 @@
 //   - nil-sa: no nil security attributes where a descriptor matters, in
 //     _windows.go files;
 //   - private-dir: os.MkdirAll and os.Mkdir with 0o700 only in internal/privdir;
-//   - secret-receiver: the printing methods of a secret use value receivers.
+//   - secret-receiver: the printing methods of a secret use value receivers;
+//   - agent-files: no file IO by path in internal/providers, and no os.Chmod
+//     in internal/classes: internal/safefile.
 //
 // A violation is excused by `// mestre:allow <rule>: <reason>` on its line or
 // the line above. The command runs as TestCodeRules and alone as
@@ -39,6 +41,7 @@ const (
 	ruleNilSA      = "nil-sa"
 	rulePrivateDir = "private-dir"
 	ruleSecret     = "secret-receiver"
+	ruleAgentFiles = "agent-files"
 )
 
 // Issue is one violation.
@@ -138,6 +141,7 @@ func Check(fsys fs.FS) ([]Issue, error) {
 		}
 		if !s.isTest() && !s.isWindows() {
 			checkPrivateDirs(s, add)
+			checkAgentFiles(s, add)
 		}
 	}
 	checkSecretReceivers(srcs, add)

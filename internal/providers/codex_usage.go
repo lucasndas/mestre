@@ -7,12 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lucasndas/mestre/internal/safefile"
 )
 
 // The session transcript of Codex ($CODEX_HOME/sessions/AAAA/MM/DD/
@@ -329,7 +330,8 @@ func CodexTurnFailure(codexHome string) func(Event) (StopReason, string, bool) {
 }
 
 // openCodexTranscript opens a transcript only inside <profile>/sessions,
-// named rollout-*.jsonl, a regular file reached through no link. The path
+// named rollout-*.jsonl, a regular file reached through no link nor
+// junction (internal/safefile). The path
 // comes from a hook payload, which a process of the agent account could
 // write: nothing else of the disk (auth.json of the profile included) is
 // ever read through it.
@@ -346,26 +348,11 @@ func openCodexTranscript(profile, path string) (*os.File, error) {
 	if !strings.HasPrefix(base, "rollout-") || !strings.HasSuffix(base, ".jsonl") {
 		return nil, fmt.Errorf("codex transcript %q: not a rollout-*.jsonl", path)
 	}
-	// No link on the way: the folders under sessions are the agent
-	// account's.
-	at := sessions
-	for _, part := range strings.Split(rel, string(filepath.Separator)) {
-		at = filepath.Join(at, part)
-		st, err := os.Lstat(at)
-		if err != nil {
-			return nil, fmt.Errorf("codex transcript: %w", err)
-		}
-		if st.Mode()&fs.ModeSymlink != 0 {
-			return nil, fmt.Errorf("codex transcript %q: %s is a link", path, at)
-		}
-	}
-	f, err := os.OpenFile(at, os.O_RDONLY|transcriptNoFollow, 0)
+	// No link or junction on the way, and a regular file, checked on the
+	// open file: the folders under sessions are the agent account's.
+	f, _, err := safefile.Open(filepath.Join(sessions, rel))
 	if err != nil {
-		return nil, fmt.Errorf("codex transcript: %w", err)
-	}
-	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
-		_ = f.Close()
-		return nil, fmt.Errorf("codex transcript %q: not a regular file", path)
+		return nil, fmt.Errorf("codex transcript %q: %w", path, err)
 	}
 	return f, nil
 }

@@ -115,16 +115,24 @@ func (c *claudeCode) Native(p NativePolicy) (NativeControls, error) {
 	}
 	return NativeControls{Args: args, Files: []NativeFile{{
 		Path: settings,
-		Merge: func(cur []byte) ([]byte, error) {
-			obj, err := parseObject(cur, settings)
-			if err != nil {
-				return nil, err
+		// The file is the Mestre's whole and is generated from scratch: it
+		// is in the worktree, which the agent writes, and a key it planted
+		// there (disableAllHooks, hooks, env, apiKeyHelper, a wider
+		// permissions block) would ride on the highest layer after the
+		// managed one. What was there is never kept.
+		Merge: func([]byte) ([]byte, error) {
+			obj := map[string]any{
+				"permissions": perms,
+				// --settings wins over the local, project and user files, so
+				// a disableAllHooks planted in one of them does not turn the
+				// dispatcher off.
+				"disableAllHooks": false,
+				// The auto memory of Claude Code is kept per mirror and
+				// profile, so every character of a workspace would share and
+				// contaminate it; the Mestre has its own memory (scrolls and
+				// sheets).
+				"autoMemoryEnabled": false,
 			}
-			obj["permissions"] = perms
-			// The auto memory of Claude Code is kept per mirror and profile,
-			// so every character of a workspace would share and contaminate
-			// it; the Mestre has its own memory (scrolls and sheets).
-			obj["autoMemoryEnabled"] = false
 			setClaudeStatusLine(obj, statusLine)
 			return marshalObject(obj)
 		},

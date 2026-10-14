@@ -278,8 +278,10 @@ func TestStatusLineFallbackMovesItToTheHookFile(t *testing.T) {
 	if c := statusLine(apply(t, files[0], []byte(personsSettings))); c != "echo my status" {
 		t.Errorf("fallback replaced the statusLine of the person: %q", c)
 	}
-	if c := statusLine(apply(t, providers.ManagedFile(native(providers.NativeFallbacks{})), []byte(personsSettings))); c != "echo my status" {
-		t.Errorf("default replaced the statusLine of the person: %q", c)
+	// The --settings file is the Mestre's whole, generated from scratch: a
+	// statusLine found there (planted in the worktree) is not kept.
+	if c := statusLine(apply(t, providers.ManagedFile(native(providers.NativeFallbacks{})), []byte(personsSettings))); !strings.Contains(c, "--event StatusLine") {
+		t.Errorf("default kept a statusLine planted in the --settings file: %q", c)
 	}
 }
 

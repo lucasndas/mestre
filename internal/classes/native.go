@@ -20,6 +20,10 @@ type NativeCharacter struct {
 	// Worktree is its worktree, absolute; ProfileHome the HOME of its account
 	// profile.
 	Worktree, ProfileHome string
+	// GitDir and Mirror are the engine's record of the worktree, as
+	// gitx.Real.Record gave them when the worktree was created: its git
+	// folder in the mirror and the mirror. Empty for the main clone.
+	GitDir, Mirror string
 }
 
 // NativePolicy is the part of the effective rules the native controls can
@@ -34,6 +38,7 @@ func NativePolicy(r *Rules, ch NativeCharacter, fb providers.NativeFallbacks) pr
 	lf := liftsOf(r, ch.Worktree)
 	p := providers.NativePolicy{
 		AgentID: ch.AgentID, OS: ch.OS, Worktree: ch.Worktree, ProfileHome: ch.ProfileHome,
+		GitDir: ch.GitDir, GitCommon: ch.Mirror,
 		Write:             slices.Clone(r.Files.Write),
 		NoWrite:           len(r.Files.Write) == 0 && !lf.write,
 		ProtectedWrite:    slices.Clone(protectedWrite),
