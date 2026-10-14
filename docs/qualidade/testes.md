@@ -1,6 +1,6 @@
 # Testes
 
-> **Assunto:** política de testes: suítes, orçamentos de tempo, executor, testes afetados, quarentena e mapa do MVP · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** política de testes: suítes, orçamentos de tempo, executor, testes afetados, quarentena e mapa do MVP · **Componente:** Projeto · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -119,6 +119,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 - **Um comportamento, um teste, no nível mais baixo possível.** Nada de testar a mesma regra em unitário, integração e ponta a ponta. Ponta a ponta só para os critérios MVP-1..15; a [verificação de docs](verificacao-de-docs.md) recusa critério *pesada* que não cite um MVP.
 - **Rastreabilidade:** o teste que cobre um critério de aceite traz o identificador num comentário logo acima (ex.: `// CA-MESAS-03`), para ser achado com `grep`. Teste que cobre só a parte de hoje de um critério de [marco posterior](../desenvolvimento/ordem-de-implementacao.md#critérios-em-marcos-posteriores) começa com `// Part of CA-…` e diz onde fecha: não é marcador, e o critério continua aberto até o marco dele.
 - **Sem nova tentativa:** o executor nunca roda de novo um teste que falhou; Vitest com `retry: 0`; o CI não tem "rerun" automático. Instável vai para a quarentena. Teste que ainda rodava quando o binário caiu (pânico de goroutine que sobreviveu ao teste, tempo esgotado) entra na lista de falhas com a saída do pânico, que o `go test -json` põe no teste em curso.
+- **Tela, não bytes:** teste da completa que espera algo que o agente mostra (o prompt, uma linha) lê a **tela** do emulador (`ptyd.NewVTEmulator`), não a sequência de bytes. O PTY repassa os bytes do agente; o ConPTY do Windows redesenha com posicionamento de cursor (`ESC[12;1H> `), sem a quebra de linha que o agente imprimiu.
 - Orçamento estourado não é resolvido aumentando o orçamento: muda-se o teste de suíte, ou ele é acelerado.
 
 ## Critérios de aceite
