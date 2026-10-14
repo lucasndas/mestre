@@ -121,7 +121,7 @@ func (c *character) hook(call Call) {
 			choice = "allow"
 		}
 		c.ru.mu.Lock()
-		c.ru.calls = append(c.ru.calls, providers.CallDecision{Tool: call.Event.Tool, Choice: choice})
+		c.ru.calls = append(c.ru.calls, providers.CallDecision{Tool: call.Event.Tool, Choice: choice, Cwd: call.Event.Cwd})
 		c.ru.mu.Unlock()
 	case providers.EventPostTool: // the call ended: it asks no more
 		c.ru.mu.Lock()

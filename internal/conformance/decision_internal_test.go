@@ -46,3 +46,31 @@ func TestNativePermissionScreenTakesTheDecisionOfItsCall(t *testing.T) {
 		t.Errorf("a denied call: %q", got)
 	}
 }
+
+// The run records the folder of each call (CallDecision.Cwd), so a dialog
+// that shows the path relative to it answers that call.
+func TestNativeFileScreenMatchesARelativePathFromTheCallFolder(t *testing.T) {
+	t.Parallel()
+	ru := &run{r: &Runner{}, res: &Result{}}
+	claude := providers.NewClaudeCode(providers.Options{})
+	c := &character{ru: ru, turns: providers.NewTurns(claude.Info())}
+	c.sup = providers.NewSupervisor(providers.SupervisorConfig{Clock: clock.NewFake(time.Unix(0, 0)), Adapter: claude,
+		Characters: c, TableMaster: c, Checklist: c, Inbox: c})
+	write := func(p, cwd string) Call {
+		return Call{Event: providers.Event{Event: providers.EventPreTool, Cwd: cwd,
+			Tool: &providers.Tool{NativeName: "Write", Kind: providers.KindWrite, Paths: []string{p}}},
+			Answered: true, Answer: hook.Answer{Verdict: hook.VerdictAllow}}
+	}
+	dialog := "Write(permitido/y.txt)\nDo you want to create y.txt?\n❯ 1. Yes\n  2. No"
+	c.hook(write("/w/permitido/y.txt", "/w"))
+	if got := ru.calls[0].Cwd; got != "/w" {
+		t.Fatalf("the call's folder was not recorded: %q", got)
+	}
+	if got, _ := ru.Decision(t.Context(), "a1", "permission", dialog); got != "allow" {
+		t.Errorf("a relative path from the folder of the allowed call: %q, want allow", got)
+	}
+	c.hook(write("/w/permitido/y.txt", "/outra"))
+	if got, _ := ru.Decision(t.Context(), "a1", "permission", dialog); got != "deny" {
+		t.Errorf("a relative path from another folder: %q, want deny", got)
+	}
+}
