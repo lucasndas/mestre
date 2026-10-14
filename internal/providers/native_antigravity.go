@@ -21,8 +21,8 @@ func AntigravitySettingsPath(profileHome string) string {
 	return join(profileHome, ".gemini", "antigravity-cli", "settings.json")
 }
 
-// Native translates the policy for Antigravity: --sandbox with no internet;
-// the tools field of the agent file with only the native tools the rules do
+// Native translates the policy for Antigravity: --sandbox with no internet,
+// on Windows only (AntigravityNoNativeNetwork); the tools field of the agent file with only the native tools the rules do
 // not deny whole; and, in the settings.json of the profile, which every
 // character of the profile shares, only the fixed rules in
 // permissions.deny (action(target) with a wildcard) and toolPermission in
@@ -35,7 +35,7 @@ func (a *antigravity) Native(p NativePolicy) (NativeControls, error) {
 		return NativeControls{}, fmt.Errorf("native controls of %s: antigravity needs the HOME of the account profile", p.AgentID)
 	}
 	var args []string
-	if p.Offline {
+	if p.Offline && !AntigravityNoNativeNetwork(p) {
 		args = append(args, "--sandbox")
 	}
 	tools := AntigravityTools(p)
@@ -51,6 +51,20 @@ func (a *antigravity) Native(p NativePolicy) (NativeControls, error) {
 			return profileSettings(cur, settings, ours, !p.Fallbacks.AntigravityNoDeny)
 		}},
 	}}, nil
+}
+
+// AntigravityNoNativeNetwork reports whether an Antigravity character of
+// this policy runs without the native network barrier its class asks for: no
+// internet, and no --sandbox. On Linux the --sandbox of agy 1.3.5 needs
+// unprivileged user namespaces, which Ubuntu restricts for mestre-agente:
+// it runs no command at all (conformance test, 2026-10-14). By decision of
+// the Owner, as with Codex on Linux, the network stays on and the internet
+// is blocked only by the rules of the dispatcher, which fail closed in agy.
+// On Windows the --sandbox (AppContainer) stays, unless the conformance
+// test turns it off (AntigravityNoSandbox). The panel shows it on the sheet
+// and the class check warns (docs/classes/reforco-nativo.md).
+func AntigravityNoNativeNetwork(p NativePolicy) bool {
+	return p.Offline && (machineOS(p.OS) != "windows" || p.Fallbacks.AntigravityNoSandbox)
 }
 
 // agyNotInRegistry are names the hooks may carry that the tools field of an

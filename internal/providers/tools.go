@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -46,6 +47,29 @@ func (t toolTable) kind(name string) ToolKind {
 		}
 	}
 	return KindOther
+}
+
+// SubagentTools are the native names of the tools of kind subagent of a
+// provider, sorted: what the plan B of the conformance test denies in the
+// character when the hooks do not hold inside a subagent.
+func SubagentTools(id ID) []string {
+	var table toolTable
+	switch id {
+	case ClaudeCode:
+		table = claudeTools
+	case Codex:
+		table = codexTools
+	case Antigravity:
+		table = antigravityTools
+	}
+	var out []string
+	for name, kind := range table.names {
+		if kind == KindSubagent {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // toolFields is what an adapter read from the tool input.

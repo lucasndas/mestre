@@ -44,18 +44,19 @@ func merged(t testing.TB, f providers.NativeFile, cur string) string {
 	return string(out)
 }
 
+// CA-NATIVO-08
 func TestClaudeSettingsKeepOtherKeysAndUseThePOSIXFormOfWindowsPaths(t *testing.T) {
 	t.Parallel()
 	nc, err := nativeOf(t, providers.ClaudeCode).Native(policy())
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := merged(t, nc.Files[0], `{"statusLine": {"type": "command", "command": "mestre hook"}, "permissions": {"allow": ["Bash(x)"]}}`)
+	out := merged(t, nc.Files[0], `{"statusLine": {"type": "command", "command": "mestre hook"}, "autoMemoryEnabled": true, "permissions": {"allow": ["Bash(x)"]}}`)
 	var s map[string]any
 	if err := json.Unmarshal([]byte(out), &s); err != nil || s["statusLine"] == nil {
 		t.Fatalf("settings %s: %v", out, err)
 	}
-	for _, want := range []string{`"Edit(//c/Mestre/wt/src/**)"`, `"Read(//etc/**)"`, `"disableBypassPermissionsMode": "disable"`} {
+	for _, want := range []string{`"Edit(//c/Mestre/wt/src/**)"`, `"Read(//etc/**)"`, `"disableBypassPermissionsMode": "disable"`, `"autoMemoryEnabled": false`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("settings lack %s:\n%s", want, out)
 		}

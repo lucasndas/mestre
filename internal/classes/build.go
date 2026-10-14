@@ -18,6 +18,12 @@ type Layers struct {
 	Ceiling *Permissions
 	// Sheet is the restrictions of the character's sheet: it only hardens.
 	Sheet *Permissions
+	// DenyTools are the native tools the conformance test of the machine
+	// denies in the character itself, by native name: the plan B of the
+	// subagent tools when the hooks did not hold inside them
+	// (docs/provedores/despachante-de-hooks.md#verificar-na-implementação).
+	// Like the sheet, it only hardens.
+	DenyTools []string
 	// Decrees are the active decrees and exceptions that apply to the
 	// character; the expired ones are dropped.
 	Decrees []Decree
@@ -46,6 +52,10 @@ func Build(l Layers) (*Rules, error) {
 	}
 	b := builder{origin: map[string]Layer{}}
 	caps := []layered{{LayerCeiling, l.Ceiling}, {LayerSheet, l.Sheet}}
+	if len(l.DenyTools) > 0 {
+		deny := slices.Clone(l.DenyTools)
+		caps = append(caps, layered{LayerMachine, &Permissions{Tools: &ToolsSpec{Deny: &deny}}})
+	}
 	cls := l.Permissions
 
 	r := &Rules{

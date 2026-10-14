@@ -70,6 +70,11 @@ type NativeFallbacks struct {
 	// AntigravityNoDeny leaves the fixed rules of Antigravity to the hook
 	// alone: no permissions.deny of the Mestre in the profile's settings.json.
 	AntigravityNoDeny bool
+	// AntigravityNoSandbox runs Antigravity on Windows without --sandbox
+	// (AppContainer) also for a class without internet, as on Linux, where
+	// it is the default (docs/provedores/antigravity.md#flags): that
+	// combination has no native network barrier (AntigravityNoNativeNetwork).
+	AntigravityNoSandbox bool
 	// CodexOfflineNetwork runs Codex on Windows with the network of the
 	// sandbox on also for a class without internet, so the `mestre` CLI
 	// reaches the local channel, as on Linux, where it is the default

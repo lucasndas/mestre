@@ -347,6 +347,9 @@ func nativeLines(ad providers.Adapter, r *Rules, id providers.ID, goos, wt, home
 	if n := len(r.Tools.Ask) + len(r.Tools.Allow) + len(r.Tools.Deny); n > 0 || r.Tools.Default != Deny {
 		dispatcher = append(dispatcher, fmt.Sprintf("ferramentas mcp e outras: %d padrão(ões), restante em %s", n, r.Tools.Default))
 	}
+	if codexGap, agyGap := providers.CodexNoNativeNetwork(pol), providers.AntigravityNoNativeNetwork(pol); (id == providers.Codex && codexGap) || (id == providers.Antigravity && agyGap) {
+		dispatcher = append(dispatcher, "internet: sem reforço nativo de rede neste sistema (a rede do provedor fica ligada; só o despachante a barra)")
+	}
 	dispatcher = append(dispatcher, "git, rede por comando de shell, CLI e decretos")
 	slices.Sort(dispatcher)
 	return native, dispatcher
