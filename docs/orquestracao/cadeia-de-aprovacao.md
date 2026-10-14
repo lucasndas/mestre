@@ -17,8 +17,8 @@ Decidir cada pedido o mais perto possível de quem pediu, sem que um agente apro
 | Nível | Decide | Prazo para responder (padrão) |
 |---|---|---|
 | superior agente | `baixo` | 2 min |
-| Mestre da mesa | `baixo` e `medio` dos personagens da própria mesa; o `medio` só com as [condições da mesa](#condições-da-mesa) | 2 min |
-| Grão-Mestre, supervisor | `baixo` e `medio`, dentro da [política](../aprovacoes/politica.md), dos pedidos dos próprios Mestres de mesa, dos que cruzam mesas (outra branch, outro worktree, o espelho, issue ou PR de outra mesa), dos que o Mestre da mesa não decide (parado, sem resposta no prazo, em [pausa de autonomia](supervisao-da-cadeia.md#pausa-de-autonomia)) e dos `medio` cujas condições da mesa falham; `alto` só com delegação do Dono | 10 min |
+| Mestre da mesa | `baixo` e `medio` dos personagens da própria mesa; o `medio` só nos grupos de `cadeia.mesa_decide` e com as [condições da mesa](#condições-da-mesa) | 2 min |
+| Grão-Mestre, supervisor | `baixo` e `medio`, dentro da [política](../aprovacoes/politica.md), dos pedidos dos próprios Mestres de mesa, dos que cruzam mesas (outra branch, outro worktree, o espelho, issue ou PR de outra mesa), dos que o Mestre da mesa não decide (parado, sem resposta no prazo, em [pausa de autonomia](supervisao-da-cadeia.md#pausa-de-autonomia)) e dos `medio` de grupo fora da lista ou cujas condições da mesa falham; `alto` só com delegação do Dono | 10 min |
 | pessoas | qualquer risco não `fixo`, pelo nível mínimo do tipo e do risco, com quórum | o do tipo na política |
 
 - O teto de cada nível de agente é fixo; nenhum arquivo o muda. Só uma **delegação** das pessoas (M5) o estende, no escopo dela ([delegação](../aprovacoes/delegacao.md)).
@@ -26,16 +26,22 @@ Decidir cada pedido o mais perto possível de quem pediu, sem que um agente apro
 
 ### Condições da mesa
 
-O Mestre da mesa decide um `medio` só se o motor confere, em cada parte `medio` do pedido, a condição da linha ou do [sinal](../classes/classificacao-de-risco.md#sinais-de-risco) que a deu; basta uma falhar para o pedido nascer no Grão-Mestre, com a condição que falhou:
+Cada parte `medio` tem uma origem, a linha da tabela ou o [sinal](../classes/classificacao-de-risco.md#sinais-de-risco) que a deu, e cada origem pertence a um **grupo**. O Mestre da mesa decide um `medio` só se **todo** grupo de origem de **toda** parte `medio` está em `cadeia.mesa_decide` e o motor confere a condição do grupo; uma parte com várias origens (`npx x https://exemplo.io` é pacotes e rede) precisa de todas. Se uma falha, o pedido nasce no Grão-Mestre, com o grupo ou a condição que falhou.
 
-| Origem do `medio` | Condição |
-|---|---|
-| rede (linha ou sinal) | todo domínio está no `network.domains` da classe de quem pediu ou do teto (qualquer domínio não conta) |
-| apagar (linha `apagar em massa` ou sinal) | todo alvo é resolvido dentro do worktree da mesa |
-| qualquer outra (instalação global ou do sistema, contêineres e serviços, VM, interpretador com código, caminho fora do worktree, o que não se analisa, ajuste do Dono) e os tipos que não são `permissao_de_classe` | nunca: Grão-Mestre |
+| Grupo | Origens | Padrão | Condição que o motor confere |
+|---|---|---|---|
+| `rede` | linha e sinal de rede | sim | todo domínio está no `network.domains` da classe de quem pediu ou do teto (qualquer domínio não conta) |
+| `apagar` | apagar em massa (linha) e sinal de apagar | sim | todo alvo é resolvido dentro do worktree da mesa |
+| `conteineres_e_vms` | `docker *`, `podman *`, `docker-compose *` e o sinal de contêiner ou VM | sim | só as comuns; volume ou `-f` fora do worktree é outra origem |
+| `pacotes_e_executores` | `npx`, `npm exec`, `npm x`, `pnpm dlx`, `yarn dlx`, `bunx`, `bun x`, `pip install`, `pip3 install` | sim | só as comuns; URL ou host no comando é a origem `rede` |
+| `interpretador_com_codigo` | o sinal de interpretador com código (`python -c`, `node -e`, `python -m`, `deno eval`) | sim | só as comuns; o motor não lê o código |
+| `instalacao_e_sistema` | `-g`, `--global`, `go install`, `cargo install`, `brew`, `apt` e afins, `npm config`, serviços (`systemctl`) | não | só as comuns, se o Dono a incluir |
+| `fora_do_worktree` | o sinal de caminho literal fora do worktree (não o de segredo ou do Mestre, `alto`) | não | só as comuns, se o Dono a incluir |
 
-- Sempre, além disso: nada que cruze mesas; nunca o pedido dele mesmo nem os `ponto_de_missao` das missões que ele desenhou ([salvaguardas](#salvaguardas)).
-- Para conferir, a classificação dá, além da linha que decidiu, a origem de cada parte `medio` (M4).
+- **Comuns, a todo grupo:** nada que cruze mesas; nunca o pedido dele mesmo nem os `ponto_de_missao` das missões que ele desenhou ([salvaguardas](#salvaguardas)). O motor não confere o que o contêiner ou o código faz por dentro; os freios são a atenuação, a auditoria, o resumo, a amostra e a pausa de autonomia ([supervisão](supervisao-da-cadeia.md)).
+- **Sem grupo, sempre Grão-Mestre:** o que não se analisa, a leitura do shell, o envio da branch da mesa, o ajuste do Dono e os tipos que não são `permissao_de_classe`. `alto` e `fixo` não são grupos.
+- **Configurável pelo Dono:** o padrão é, no mínimo, o que os provedores já tratam sem perguntar num terminal fora do Mestre ([ADR 0025](../decisoes/0025-padroes-seguem-os-provedores.md)); `cadeia.mesa_decide` ([arquivo de política](../aprovacoes/arquivo-de-politica.md)) acrescenta ou tira grupos. Ela só muda quais `medio` o Mestre da mesa decide, nunca o teto dele (`medio`) nem as condições.
+- Para conferir, a classificação dá, além da linha que decidiu, o grupo de cada origem (M4).
 
 ### Superior
 
@@ -100,7 +106,7 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 | Perguntar de volta | pede contexto a quem pediu; o pedido espera; o prazo do nível recomeça quando a resposta chega | sim | sim |
 | Subir agora | leva o pedido ao nível seguinte (o `approval ask` do Grão-Mestre) | sim | — |
 
-- O padrão e a regra temporária precisam caber no teto do nível de quem aprova, com o risco do padrão, e só cobrem os comandos cuja classificação própria cabe nele ([o que um padrão cobre](../classes/classificacao-de-risco.md#padrões-aprováveis)).
+- O padrão e a regra temporária precisam caber no teto do nível de quem aprova, com o risco do padrão, e só cobrem os comandos cuja classificação própria cabe nele ([o que um padrão cobre](../classes/classificacao-de-risco.md#padrões-aprováveis)); no `medio` do Mestre da mesa, também os grupos e as condições da mesa, conferidos de novo a cada uso ([regras temporárias](regras-temporarias-de-mesa.md#lugar-na-precedência)).
 - "Perguntar de volta" vira um item `answer` na caixa de entrada de quem pediu; a resposta dele (texto livre, também marcada como não verificada) volta ao mesmo nível. O prazo final do pedido nas pessoas continua correndo.
 
 ## Regras e erros
@@ -126,8 +132,9 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 - **CA-CADEIA-12** · *rápida* — **Dado** um personagem que usa a ferramenta `Agent` e um `pre_tool` em `ask` vindo de dentro do subagente, **quando** o pedido nasce, **então** o solicitante é o personagem e o pedido vai ao superior dele.
 
 - **CA-CADEIA-13** · *rápida* — **Dado** um personagem com um pedido `baixo` aberto e o relógio falso, **quando** consulto `mestre list`, **então** ele aparece `waiting`, "aguardando aprovação do Mestre"; **quando** o pedido sobe, **então** passa a "aguardando aprovação do Grão-Mestre"; **dado** outro personagem `blocked` por `permission` (pedido nativo na tela), **então** ele aparece "aguardando permissão".
-- **CA-CADEIA-14** · *rápida* — **Dado** os pedidos `medio` `rm -r build`, `docker compose up` e `pip install x` de personagens da mesa, **quando** nascem, **então** o primeiro chega ao Mestre da mesa e uma aprovação dele é aceita; os outros dois nascem no Grão-Mestre com a condição que falhou, e um `approval decide` do Mestre da mesa neles recebe `not_at_level`.
+- **CA-CADEIA-14** · *rápida* — **Dado** a política padrão e os pedidos `medio` `rm -r build`, `docker compose up`, `pip install x`, `npx create-x` e `python -c "print(1)"` de personagens da mesa, **quando** nascem, **então** todos chegam ao Mestre da mesa e uma aprovação dele é aceita em cada um; **dado** `npm install -g x`, `docker compose -f ../fora/c.yml up` e `curl https://exemplo.io` (domínio não listado), **então** nascem no Grão-Mestre com o grupo ou a condição que falhou (`instalacao_e_sistema`, `fora_do_worktree`, `rede`), e um `approval decide` do Mestre da mesa neles recebe `not_at_level`.
 - **CA-CADEIA-15** · *rápida* — **Dado** o Mestre da mesa reiniciando e o relógio falso, **quando** nasce um pedido `baixo` de um personagem da mesa, **então** ele nasce no Grão-Mestre na hora e um pedido aberto no Mestre da mesa sobe com o mesmo id; **quando** o Mestre da mesa volta a `idle`, **então** o pedido seguinte nasce nele.
+- **CA-CADEIA-16** · *rápida* — **Dado** `cadeia.mesa_decide: [rede, apagar, instalacao_e_sistema]`, **quando** o arquivo é carregado e chegam `docker compose up` e `npm install -g x`, **então** o primeiro nasce no Grão-Mestre (grupo fora da lista) e o segundo no Mestre da mesa; **dado** a lista `[]`, **então** o Mestre da mesa só recebe `baixo`; **dado** uma lista com `alto`, `fixo` ou `git_push`, **quando** o arquivo é carregado, **então** é inválido com o item citado, vale a versão anterior e o Dono recebe alerta.
 
 ## Depende de
 
