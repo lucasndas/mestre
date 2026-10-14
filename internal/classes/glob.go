@@ -3,6 +3,7 @@ package classes
 import (
 	"path"
 	"strings"
+	"sync"
 )
 
 // Path globs (files, git.branches): slash-separated; ** matches zero or more
@@ -11,16 +12,46 @@ import (
 
 // matchGlob reports whether the slash path p matches pattern. Both are
 // relative (to the worktree root) or both absolute; the root itself is "".
+//
+// The analysis asks it thousands of times for the same few patterns (a long
+// command that writes many files), so the segments of a pattern are split
+// once, and those of the path go in a buffer on the stack.
 func matchGlob(pattern, p string) bool {
-	return matchSegs(splitSegs(pattern), splitSegs(p))
+	var buf [16]string
+	return matchSegs(patternSegs(pattern), appendSegs(buf[:0], p))
 }
 
+// patternSegs is splitSegs of a pattern, kept: the patterns come from the
+// rules and the code, a short fixed set.
+func patternSegs(pattern string) []string {
+	if v, ok := segCache.Load(pattern); ok {
+		return v.([]string)
+	}
+	segs := splitSegs(pattern)
+	segCache.Store(pattern, segs)
+	return segs
+}
+
+var segCache sync.Map // string -> []string
+
 func splitSegs(p string) []string {
+	return appendSegs(nil, p)
+}
+
+// appendSegs appends the segments of the slash path p to dst.
+func appendSegs(dst []string, p string) []string {
 	p = strings.Trim(p, "/")
 	if p == "" || p == "." {
-		return nil
+		return dst
 	}
-	return strings.Split(p, "/")
+	for {
+		i := strings.IndexByte(p, '/')
+		if i < 0 {
+			return append(dst, p)
+		}
+		dst = append(dst, p[:i])
+		p = p[i+1:]
+	}
 }
 
 func matchSegs(pat, segs []string) bool {
