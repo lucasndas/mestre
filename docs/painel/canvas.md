@@ -1,6 +1,6 @@
 # Canvas da mesa
 
-> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-13
+> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -85,7 +85,7 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 - **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** a Cidadela pede à máquina o `terminal.replay` e a tela do navegador fica igual à do emulador da máquina.
 - **CA-CANVAS-05** · *rápida* — **Dado** uma conexão arrastada que o motor recusa, **quando** a resposta chega, **então** a aresta some e o motivo aparece.
 - **CA-CANVAS-06** · *rápida* — **Dado** elementos movidos, **quando** recarrego a página, **então** as posições e grupos são os mesmos (MVP-12).
-- **CA-CANVAS-08** · *rápida* — **Dado** uma sessão do Operador ativa e o relógio falso, **quando** um Aprovador e o Dono abrem o painel, **então** os dois veem a faixa com a contagem, o botão **Encerrar agora** aparece só para o Dono (e a API recusa o encerramento vindo do Aprovador), e um toque nele manda encerrar a sessão na hora; ao fim, a faixa some.
+- **CA-CANVAS-08** · *rápida* — **Dado** uma sessão do Operador ativa e o relógio falso, **quando** um Aprovador e o Dono abrem o painel, **então** os dois veem a faixa com a contagem, o botão **Encerrar agora** aparece só para o Dono (e para um Administrador, que também pode encerrar, [níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), não para o Aprovador (e a API recusa o encerramento vindo dele), e um toque nele manda encerrar a sessão na hora; ao fim, a faixa some.
 - **CA-CANVAS-07** · *rápida* — **Dado** 12 terminais visíveis, **quando** o canvas renderiza, **então** no máximo 8 usam WebGL e os demais mostram retrato.
 
 ## Depende de

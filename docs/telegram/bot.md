@@ -1,6 +1,6 @@
 # Bot do Telegram
 
-> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -67,9 +67,10 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 | `/aprovacoes` | pedidos esperando por este usuário, cada um com os botões de decisão ([fluxo](../aprovacoes/fluxo.md)) |
 | `/decretos` | decretos ativos e suspensos, com autor e validade ([decretos](decretos.md)) |
 | `/pausar [workspace\|mesa]` | pausa o escopo (efeito em [pausa](../orquestracao/mesas.md#pausa)) |
-| `/retomar [workspace\|mesa]` | desfaz o `/pausar` |
+| `/retomar [workspace\|mesa\|personagem]` | desfaz o `/pausar`; com um personagem, retoma o que o disjuntor da [cadeia](../orquestracao/cadeia-de-aprovacao.md#salvaguardas) pausou |
 | `/travar`, `/destravar` | emergência ([segurança do canal](seguranca-do-canal.md)) |
 | `/guilda` | máquinas da Guilda com papel (Cidadela ou Torre), online/offline, excluída ou não e a época; ao Dono, também os pedidos de entrada na Guilda e de promoção pendentes e os botões **Passar a Cidadela** e **Excluir**, todos com PIN ([Guilda](../guilda/guilda.md)) |
+| `/revogar_tudo` | só o Dono: revoga todas as delegações e regras temporárias de mesa, depois de um botão de confirmação ([revogar tudo](../aprovacoes/delegacao.md#revogar-tudo)) |
 | `/operador encerrar` | encerra na hora as sessões ativas do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) nos workspaces do usuário, sem a espera de 60 s |
 
 - **`/pausar` e `/retomar`:**
@@ -81,7 +82,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Mensagens de saída
 
 - **Quem envia:**
-  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)) os pedidos "Sistema" de atualização do Mestre, de entrada de máquina na Guilda, de promoção a Cidadela, de passar a Cidadela e de excluir máquina, todos com botão e PIN, só ao Dono ([política](../aprovacoes/politica.md#tipos-de-ação); a entrada em [Guilda](../guilda/guilda.md#entrada-na-guilda)), os pedidos de segundo fator e o aviso do Operador do PC (abaixo).
+  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)), o pedido "Sistema" de atualização do Mestre (ao Dono e aos Administradores, com botão e sem PIN, [autoatualização](../plataforma/autoatualizacao.md#aprovação)), os pedidos da Guilda de entrada de máquina e de promoção a Cidadela (só ao Dono, com botão e PIN a cada vez; a entrada em [Guilda](../guilda/guilda.md#entrada-na-guilda)), as perguntas da cadeia de aprovação que chegam às pessoas sem o Grão-Mestre ([fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários)), as sugestões e a amostra do [resumo](../aprovacoes/resumo-e-sugestoes.md), os pedidos de segundo fator e o aviso do Operador do PC (abaixo). Passar a Cidadela e excluir máquina não são pedidos: são ações diretas do Dono pelo `/guilda`, com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); quem aprova cada tipo de pedido está na [política](../aprovacoes/politica.md#tipos-de-ação).
   - **Grão-Mestre:** conversa, ou seja, respostas (`mestre reply`), resumos de épico, missões concluídas, notificações (`mestre notify`) e pedidos de aprovação. A sintaxe está em [CLI de comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md).
 - **Para quem:**
   - Uma resposta vai ao usuário e à conversa de origem ([resposta pelo mesmo canal](../orquestracao/esperas-e-caixa-de-entrada.md)).
@@ -91,7 +92,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **Formato:**
   - O motor converte o Markdown do agente para o HTML aceito pelo Telegram (`parse_mode=HTML`). Se a conversão falhar, envia texto puro.
   - O limite é de 4.096 caracteres por mensagem. Até 3 partes, o motor divide; acima disso, envia um resumo e o texto completo como arquivo `.md`.
-- **Botões** (Aprovar, Negar, Ver detalhes, Confirmar, workspaces):
+- **Botões** (as [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) que aquele destinatário pode dar, Ver detalhes, Confirmar, workspaces):
   - `callback_data` leva só uma chave curta, de até 64 bytes. A ação, o destinatário e a validade ficam no banco.
   - No clique, o motor confere se quem clicou é o destinatário e se ele ainda tem o nível exigido.
   - O motor sempre responde com `answerCallbackQuery`. Depois da decisão, edita a mensagem para mostrar o resultado.
@@ -129,6 +130,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **CA-BOT-08** · *rápida* — **Dado** um usuário autorizado, **quando** ele manda uma figurinha, **então** o bot recusa e lista os tipos aceitos, sem enfileirar nada.
 - **CA-BOT-11** · *rápida* — **Dado** o Telegram falso respondendo `409 Conflict` ao `getUpdates`, uma mensagem na fila de saída, o aluguel da trava válido e a trava falsa com uma época maior que a da Cidadela, **quando** o laço recebe o erro, **então** o motor confere a trava, para de ler e de enviar, entra em "Cidadela suspensa" e a mensagem fica na fila; **dado** a trava com a época dela, **então** ela segue lendo e só registra o alerta.
 - **CA-BOT-12** · *rápida* — **Dado** uma Cidadela com época 3 cuja conferência leu `refs/mestre/epoca-4` na trava falsa, **quando** ela tentaria chamar `getUpdates`, enviar a fila de saída ou executar o clique de um botão, **então** o Telegram falso não recebe nada e o clique não é executado.
+
+- **CA-BOT-13** · *rápida* — **Dado** um pedido `atualizacao_mestre` e um `entrada_na_guilda` abertos, **quando** o motor envia as mensagens, **então** a primeira vai ao Dono e aos Administradores e é aprovada pelo botão sem PIN, e a segunda vai só ao Dono e pede o PIN depois do botão.
 
 ## Depende de
 

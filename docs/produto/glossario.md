@@ -1,6 +1,6 @@
 # Glossário
 
-> **Assunto:** vocabulário do Mestre e textos de ajuda da interface e do Telegram · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** vocabulário do Mestre e textos de ajuda da interface e do Telegram · **Componente:** Projeto · **Atualizado:** 2026-10-14
 
 Este glossário é a **fonte única** dos textos de ajuda: o "?" dos termos no painel ([canvas](../painel/canvas.md)) e a explicação entre parênteses na primeira vez que um termo aparece numa conversa do Telegram ([bot](../telegram/bot.md)). O `go generate ./internal/glossary` lê a tabela abaixo e gera os textos que o Mestre embute; a suíte rápida falha se o arquivo gerado estiver desatualizado ([código gerado](../desenvolvimento/convencoes.md#código-gerado)).
 
@@ -66,7 +66,12 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Decreto | Ordem de um usuário autorizado que vale acima das regras: exceção pontual ou regra permanente. | [decretos](../telegram/decretos.md) |
 | Exceção pontual | Decreto que libera uma ação exata uma única vez; toda aprovação é uma. | [decretos](../telegram/decretos.md#tipos) |
 | Regra permanente | Decreto que vale daqui pra frente, até ser revogado ou expirar. | [decretos](../telegram/decretos.md#tipos) |
-| Aprovação | Pedido para liberar uma ação; o Grão-Mestre decide ou pergunta aos usuários. | [fluxo de aprovação](../aprovacoes/fluxo.md) |
+| Aprovação | Pedido para liberar uma ação; sobe do superior de quem pediu até o Grão-Mestre e as pessoas. | [fluxo de aprovação](../aprovacoes/fluxo.md) |
+| Cadeia de aprovação | O caminho de um pedido: do superior de quem pediu ao Grão-Mestre e às pessoas, cada um decidindo até um risco. | [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) |
+| Superior | Quem criou o personagem; é o primeiro a decidir os pedidos de aprovação dele. | [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md#superior) |
+| Risco | Quanto um pedido pode estragar: baixo, médio, alto ou fixo. O sistema decide e isso diz quem pode aprovar. | [classificação de risco](../classes/classificacao-de-risco.md) |
+| Regra temporária de mesa | Liberação curta, numa mesa, dada por um agente ao aprovar; nunca vence uma regra de pessoa. | [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) |
+| Delegação | Autorização de uma pessoa para o Grão-Mestre decidir certos pedidos acima do que ele pode, por até 30 dias. | [delegação](../aprovacoes/delegacao.md) |
 | Nível | O que um usuário pode fazer no Mestre: Dono, Administrador, Aprovador ou Observador. | [usuários e níveis](../telegram/usuarios-e-niveis.md) |
 | Cofre | Lugar criptografado onde ficam os segredos; só a Cidadela o abre, e os agentes nunca o leem. | [cofre](../plataforma/cofre.md) |
 | Em criação | O GitHub App desta classe ainda não foi criado e instalado; as ações saem com o App "Mestre". | [criação de Apps](../github/criacao-de-apps.md#estados-de-um-app) |

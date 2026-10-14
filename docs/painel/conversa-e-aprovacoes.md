@@ -1,6 +1,6 @@
 # Conversa e aprovações no painel
 
-> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-13
+> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -24,11 +24,12 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 ### Central de aprovações
 
 - Lista os pedidos `aguardando_usuarios` que o usuário pode responder, em todos os workspaces dele, mais recentes primeiro, com filtro por workspace, mesa e tipo ([fluxo](../aprovacoes/fluxo.md)).
-- Cada item mostra o mesmo conteúdo do Telegram (o que é, onde, por quê, arquivos, motivo da dúvida, recomendação) e os botões **Aprovar**, **Negar** e **Ver detalhes**. No painel, **Ver detalhes** mostra o diff inteiro.
+- Cada item mostra o mesmo conteúdo do Telegram (o que é, onde, por quê, risco, arquivos, motivo da dúvida, recomendação, os níveis da [cadeia](../orquestracao/cadeia-de-aprovacao.md) por onde já passou) e os botões das [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) que aquele usuário pode dar, filtrados pelo nível e pelo tipo como no [fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários), mais **Ver detalhes**. As respostas que pedem dado mostram o campo antes de confirmar: a duração em "por um tempo", o padrão (já sugerido pelo motor, editável) em "o padrão", o texto em "negar com instrução" e "perguntar de volta", o escopo em "delegar". No painel, **Ver detalhes** mostra o diff inteiro.
+- Pedidos parecidos agrupados aparecem como um item com a lista das ações ([fluxo](../aprovacoes/fluxo.md#quórum-e-já-respondido-por)).
 - Tipos que pedem PIN abrem o campo de PIN depois do botão ([login](login.md#pin-em-ações-sensíveis)).
 - Resposta dada em outro canal ou por outro usuário atualiza o item na hora: "Já respondido por <nome>: Aprovado às 14:32", sem botões.
 - Aprovações de cura (scripts de diagnóstico, volta de versão com restauração do banco) aparecem aqui, numa seção "Autocura", só para Dono e Administradores ([diagnóstico com IA](../autocura/diagnostico-com-ia.md#proposta-e-aprovação)).
-- Aba **Histórico:** pedidos encerrados com filtros (estado, quem decidiu, período), lidos da auditoria do fluxo.
+- Aba **Histórico:** pedidos encerrados com filtros (estado, quem decidiu, nível da cadeia, risco, período), lidos da auditoria do fluxo; inclui o que os agentes decidiram sozinhos.
 - Contador de pendentes no topo de todas as telas.
 
 ### Avisos
@@ -52,6 +53,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **CA-CONV-04** · *rápida* — **Dado** um Observador, **quando** chama a rota de aprovar, **então** o servidor recusa com o nível exigido.
 - **CA-CONV-05** · *completa* — **Dado** um PDF enviado pela conversa do painel, **quando** chega, **então** é salvo como anexo do workspace com origem "painel" e entregue ao Grão-Mestre com o caminho (MVP-10).
 - **CA-CONV-06** · *pesada* — **Dado** um PR numa área sensível, **quando** o Grão-Mestre pergunta e eu aprovo pela central do painel, **então** a decisão é aplicada no GitHub (dublê) (MVP-7).
+- **CA-CONV-07** · *rápida* — **Dado** um pedido `alto` aberto nas pessoas, **quando** um Administrador e o Dono abrem a central, **então** os dois veem **Aprovar o padrão** e **Aprovar sempre para a classe**, só o Dono vê **Delegar**, e a rota de delegar chamada pelo Administrador é recusada com o nível exigido; **quando** o Administrador escolhe **Aprovar o padrão**, **então** o campo traz o padrão sugerido pelo motor e o PIN é pedido antes de valer.
 
 ## Depende de
 
@@ -60,4 +62,4 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - [Roteamento](../telegram/roteamento.md)
 - [Anexos e transcrição](../telegram/anexos-e-transcricao.md)
 - [Usuários e níveis](../telegram/usuarios-e-niveis.md)
-- [Login](login.md)
+- [Login](login.md) · [Cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) · [Delegação](../aprovacoes/delegacao.md)

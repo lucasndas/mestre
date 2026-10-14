@@ -1,0 +1,55 @@
+# Regras temporárias de mesa
+
+> **Assunto:** as regras que agentes da cadeia de aprovação criam ao aprovar por um tempo ou um padrão: o que são, quem cria, alcance, validade máxima, lugar na precedência, como chegam ao personagem e como acabam · **Componente:** Motor · **Atualizado:** 2026-10-14
+
+## Objetivo
+
+Deixar um agente da [cadeia de aprovação](cadeia-de-aprovacao.md) liberar por algum tempo, numa mesa, o que ele pode aprovar, sem perguntar de novo a cada repetição e sem criar um decreto: o Grão-Mestre e os Mestres de mesa continuam sem decretos permanentes ([ADR 0024](../decisoes/0024-cadeia-de-aprovacao-por-risco.md)). É um tipo próprio, distinto de [decreto](../telegram/decretos.md).
+
+## Comportamento
+
+### O que é e quem cria
+
+- Nasce de uma resposta de agente a um pedido: **Aprovar por um tempo** (a ação exata) ou **Aprovar o padrão** (um [padrão aprovável](../classes/classificacao-de-risco.md#padrões-aprováveis)) ([respostas](cadeia-de-aprovacao.md#respostas)).
+- Quem cria: o Mestre da mesa, só na própria mesa; o Grão-Mestre, na mesa do pedido. Só o que o nível dele pode decidir: o risco da ação ou do padrão cabe no teto dele (com as delegações que tiver) e passa pelas [salvaguardas](cadeia-de-aprovacao.md#salvaguardas).
+- **Conteúdo:** o alvo (ação ou padrão, com a impressão), o tipo de ferramenta, a classe de quem pediu e a mesa (vale para os personagens dessa classe naquela mesa), o autor e o nível, o pedido de origem, o risco, a criação e a validade.
+- Fica no banco da Cidadela (tabela `table_rules`, [persistência](../arquitetura/persistencia.md)), com histórico de estados (`ativa` → `expirada` | `revogada` | `suspensa`) e a lista do que foi liberado com base nela.
+
+### Validade
+
+- Até o fim da missão do pedido, ou por N horas; sem missão, só por horas.
+- Máximo: 24 h (padrão, `cadeia.regra_temporaria_max` no [arquivo de política](../aprovacoes/arquivo-de-politica.md)); pedido de validade maior é recusado.
+- Nunca passa do encerramento ou cancelamento da mesa, nem da delegação em que se apoiou.
+
+### Lugar na precedência
+
+- Abaixo das regras fixas e dos decretos de pessoas; acima das regras da classe naquela mesa ([precedência](../arquitetura/precedencia.md#a-ordem)).
+- **Só transforma `ask` em `allow`:** uma ação que alguma camada (classe, teto, ficha) nega continua negada; um decreto de pessoa que proíbe a ação vence. Exceções pontuais e decretos de pessoas que liberam não precisam dela.
+- Chega ao personagem nas [regras efetivas](../classes/permissoes.md#regras-efetivas), na lista `decrees`, com `kind: "table_rule"`, `level` do autor (`table_master` ou `grand_master`), o efeito `permission` (`allow` de `commands` ou `tools`) e `until`; a decisão a aplica na própria máquina, como os decretos. Não vira regra nativa e, como as exceções pontuais, não vale em [modo degradado](../classes/permissoes.md#modo-degradado).
+- Ao liberar uma ação, o motor registra a execução na regra (ação, quando, quem).
+
+### Como acaba
+
+- **Sozinha:** no fim da validade, no fim da missão, no encerramento ou cancelamento da mesa, quando acaba a delegação em que se apoiou e quando o autor deixa de ser o Mestre daquela mesa.
+- **Revogada:** pelo autor; pelo Grão-Mestre, qualquer uma do workspace; por um Administrador ou acima, no painel ou na lista de `/decretos` ([administração](../painel/administracao.md), M6; [bot](../telegram/bot.md), M5); e todas de uma vez pelo botão de emergência do Dono ([delegação](../aprovacoes/delegacao.md#revogar-tudo)).
+- **Suspensa** com `/travar`, como os decretos, e reativada ao destravar.
+- O que já foi executado continua no histórico. Cada fim avisa o autor pela caixa de entrada.
+
+## Regras e erros
+
+- Regra temporária pedida por quem não está no nível do pedido, fora da mesa dele, acima do teto dele ou com validade acima do máximo: recusada, e o pedido segue onde estava.
+- Um decreto de pessoa nunca é sobreposto por uma regra temporária; conflito entre duas regras temporárias não existe, porque elas só liberam.
+- O Grão-Mestre e os Mestres de mesa nunca transformam uma regra temporária em decreto; o "sempre" deles vira sugestão no resumo do Dono ([respostas](cadeia-de-aprovacao.md#respostas)).
+
+## Critérios de aceite
+
+- **CA-RTM-01** · *rápida* — **Dado** o Mestre da mesa `42-login` e um pedido `npm install x` de um Dev, **quando** ele aprova o padrão `npm install *` por 2 h, **então** um `npm install y` de outro Dev da mesma mesa passa sem pedido, um Dev de outra mesa ainda pede, e, com o relógio falso 2 h depois, o mesmo comando volta a pedir.
+- **CA-RTM-02** · *rápida* — **Dado** uma regra temporária para `npm install *` e a classe com `npm install evil` em `commands.deny`, **quando** chega `npm install evil`, **então** é negado; **dado** um decreto de um Aprovador que proíbe `npm install *` na mesa, **então** a regra temporária não libera nada.
+- **CA-RTM-03** · *rápida* — **Dado** o Mestre da mesa, **quando** pede uma regra temporária de 48 h, uma em outra mesa ou uma para um padrão `medio`, **então** as três são recusadas e o pedido segue no nível dele.
+- **CA-RTM-04** · *rápida* — **Dado** uma regra temporária "até o fim da missão", **quando** a missão termina ou a mesa é encerrada, **então** ela fica `expirada` e o autor é avisado; **quando** o Grão-Mestre revoga outra, **então** ela fica `revogada` e a próxima ação volta a pedir.
+- **CA-RTM-05** · *rápida* — **Dado** uma regra temporária ativa, **quando** a Cidadela monta as regras efetivas do personagem, **então** o documento traz em `decrees` um item `kind: "table_rule"`, `level: "table_master"`, `until` e o padrão em `allow.commands`, e o retrato `policy.json` do modo degradado não o usa para liberar nada.
+
+## Depende de
+
+- [Cadeia de aprovação](cadeia-de-aprovacao.md) · [Mesas](mesas.md) · [Missões](missoes.md)
+- [Permissões](../classes/permissoes.md) (regras efetivas) · [Precedência](../arquitetura/precedencia.md)

@@ -1,6 +1,6 @@
 # Personagens
 
-> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados, histórico de estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados, histórico de estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -14,8 +14,8 @@ Todo personagem nasce de uma **ficha** (agente) e todo terminal simples de uma *
 
 | Quem | Pode criar | Onde |
 |---|---|---|
-| Motor | Grão-Mestre, Mestre da mesa, personagens de etapas de missão | conforme o caso |
-| Grão-Mestre | só Mestres de mesa ([grao-mestre.md](grao-mestre.md#regras-e-erros)) | — |
+| Motor | Grão-Mestre (na criação do workspace), Mestre da mesa (dentro do `table open` do Grão-Mestre, que fica como "criado por"), personagens de etapas de missão | conforme o caso |
+| Grão-Mestre | só Mestres de mesa (pelo `table open` e na troca de ficha de um Mestre de mesa) e o Operador do PC (por pedido de ativação) ([grao-mestre.md](grao-mestre.md#regras-e-erros)) | numa mesa |
 | Mestre da mesa | personagens e terminais simples | só na própria mesa |
 | Usuário Administrador ou acima | personagens e terminais simples, pelo canvas | qualquer mesa permitida |
 
@@ -112,7 +112,7 @@ stateDiagram-v2
 
 ### Registro de terminais
 
-Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). `mestre-pty`, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID do `mestre-pty` com o horário de início, versão do `mestre-pty`, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por, missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
+Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). `mestre-pty`, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID do `mestre-pty` com o horário de início, versão do `mestre-pty`, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por (de onde sai o superior na [cadeia de aprovação](cadeia-de-aprovacao.md#superior)), missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
 
 ### Retomada após reinício
 

@@ -1,6 +1,6 @@
 # Decretos
 
-> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -15,13 +15,14 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 | **Exceção pontual** | uma ação exata, uma única vez | "aprovo o merge do PR #42" | Aprovador ou acima |
 | **Regra permanente** | daqui pra frente, até ser revogada ou expirar | "o Dev pode fazer push na develop" | Administrador ou acima |
 
-- **Aprovação vira exceção pontual:** responder "Aprovar" a um pedido de aprovação cria uma exceção pontual. O fluxo do pedido está em [fluxo de aprovação](../aprovacoes/fluxo.md).
+- **Respostas viram decretos:** "Aprovar agora" a um pedido de aprovação cria uma exceção pontual; "por um tempo", "o padrão", "sempre para a classe" e "negar sempre", dadas por uma pessoa, criam uma regra (com validade, ou permanente), com as regras de nível e PIN desta página ([respostas](../orquestracao/cadeia-de-aprovacao.md#respostas)). O fluxo do pedido está em [fluxo de aprovação](../aprovacoes/fluxo.md).
+- **Não são decretos:** as [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md), que agentes da cadeia criam, e as subdelegações do Grão-Mestre ([delegação](../aprovacoes/delegacao.md#subdelegação)); ficam abaixo de todo decreto de pessoa.
 - **Efeitos possíveis** de um decreto (identificador entre parênteses, usado pelo `--effect` da CLI). Cada decreto tem um efeito, um alvo (classe, personagem, workspace ou mesa) e um escopo (workspace e, se houver, mesa):
   - **permissão** (`permission`): libera ou proíbe arquivos, comandos, git, rede ou comandos da CLI, com o mesmo vocabulário do [permissions.yaml](../classes/permissoes.md);
   - **comportamento** (`behavior`): uma instrução curta, que entra na camada do Mestre dos personagens afetados;
   - **política** (`policy`): ajusta a [política de aprovação](../aprovacoes/politica.md) (ex.: "me pergunte tudo esta semana");
   - **teto** (`ceiling`): amplia o [teto do workspace](../classes/teto-do-workspace.md);
-  - **delegação** (`delegation`): autoriza o Grão-Mestre a aprovar no GitHub em nome do autor ([aprovação no GitHub](../github/aprovacao-no-github.md)) ou, com alvo `ativacao_operador`, a aprovar ativações do Operador do PC (abaixo).
+  - **delegação** (`delegation`): autoriza o Grão-Mestre a decidir pedidos de um tipo `alto` num escopo ([delegação de decisão](../aprovacoes/delegacao.md#delegação-de-decisão), inclusive `configuracao_repositorio`), a aprovar no GitHub em nome do autor ([aprovação no GitHub](../github/aprovacao-no-github.md)) ou, com alvo `ativacao_operador`, a aprovar ativações do Operador do PC (abaixo).
 
 ### Criação
 
@@ -43,7 +44,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
   - liberar push ou merge em branch protegida;
   - liberar comandos destrutivos ou proibidos pela classe;
   - ampliar o teto;
-  - delegação (aprovação no GitHub ou ativação do Operador do PC);
+  - delegação (de decisão, aprovação no GitHub ou ativação do Operador do PC);
   - revogar um decreto que restringia algo.
 - Uma aprovação comum, dentro do que a política já prevê, não pede PIN.
 - PIN errado ou expirado deixa a proposta como **cancelada**.
@@ -84,6 +85,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 - **Pelo Telegram:** em texto ("revogo o decreto 7"), a ordem passa pelo Grão-Mestre e pelo motor. Pela lista de `/decretos`, cada decreto tem um botão.
 - **Pelo painel:** em [administração](../painel/administracao.md).
+- **Tudo de uma vez:** o Dono revoga todas as delegações e regras temporárias de mesa pelo botão de emergência ([revogar tudo](../aprovacoes/delegacao.md#revogar-tudo)).
 - **Quem pode revogar** está na [tabela de níveis](usuarios-e-niveis.md#níveis-e-capacidades). Ninguém revoga decreto de nível acima do seu.
 - A revogação vale para as próximas decisões. O que já foi executado continua no histórico.
 

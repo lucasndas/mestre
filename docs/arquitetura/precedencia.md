@@ -1,6 +1,6 @@
 # Precedência das regras
 
-> **Assunto:** ordem decretos > regras do Mestre > classe > ficha > AGENTS.md e como cada camada é aplicada · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** ordem decretos > regras do Mestre > decisões de agentes > classe > ficha > AGENTS.md, delegação e como cada camada é aplicada · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 Este documento é a **fonte única** da ordem de precedência. Os outros documentos fazem link para cá.
 
@@ -8,16 +8,18 @@ Este documento é a **fonte única** da ordem de precedência. Os outros documen
 
 Do mais forte para o mais fraco:
 
-1. **Decretos ativos**, por nível do autor: **Dono > Administrador > Aprovador**. Abaixo deles, as exceções pontuais dadas pelo **Grão-Mestre** como aprovador delegado (proposta: ele nunca vence um decreto de pessoa; [ADR 0008](../decisoes/0008-grao-mestre-aprovador-delegado.md)).
+1. **Decretos ativos de pessoas**, por nível do autor: **Dono > Administrador > Aprovador** (inclusive as exceções pontuais que as aprovações delas criam).
 2. **Regras fixas do Mestre** (CLI, `done`, segurança, comportamento em missão), seguidas das instruções extras que o usuário acrescentou para o Grão-Mestre ou os Mestres de mesa do workspace, que somam e nunca substituem as fixas ([Grão-Mestre](../orquestracao/grao-mestre.md), [Mestre da mesa](../orquestracao/mestre-da-mesa.md)).
-3. **Classe** do personagem (`CLASS.md` e `permissions.yaml`), sempre dentro do **teto do workspace**.
-4. **Ficha** do personagem: só **restringe** o que a classe permite, nunca libera.
-5. **Instruções do projeto:** `AGENTS.md` (ou `CLAUDE.md`, que o Claude Code lê no lugar dele; [Claude Code](../provedores/claude-code.md)).
+3. **Decisões de agentes da cadeia de aprovação:** exceções pontuais e [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) dadas pelo Grão-Mestre ou por um Mestre da mesa. Só transformam em `allow` uma ação que as outras camadas deixam em `ask`; nunca vencem um `deny` nem um decreto de pessoa ([cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md), [ADR 0024](../decisoes/0024-cadeia-de-aprovacao-por-risco.md)).
+4. **Classe** do personagem (`CLASS.md` e `permissions.yaml`), sempre dentro do **teto do workspace**.
+5. **Ficha** do personagem: só **restringe** o que a classe permite, nunca libera.
+6. **Instruções do projeto:** `AGENTS.md` (ou `CLAUDE.md`, que o Claude Code lê no lugar dele; [Claude Code](../provedores/claude-code.md)).
 
 Fora da ordem, valendo sempre:
 - **Proteções do GitHub** (branch protegida, revisões obrigatórias, CI): nenhum nível as contorna; quando não dá para cumprir, o motor explica ([ações por nível](../github/acoes-por-nivel.md)).
 - **Sistema travado** (`/travar`): todos os decretos ficam suspensos e os agentes congelados até o Dono destravar ([segurança do canal](../telegram/seguranca-do-canal.md)).
-- **Teto do workspace:** não é uma camada a mais; é o limite das camadas 3 e 4. Só um decreto o amplia ([teto do workspace](../classes/teto-do-workspace.md)).
+- **Teto do workspace:** não é uma camada a mais; é o limite das camadas 4 e 5. Só um decreto o amplia ([teto do workspace](../classes/teto-do-workspace.md)).
+- **Delegação** (decreto `delegation` e subdelegação): não libera ação nenhuma; muda só **quem** pode decidir um pedido na cadeia, e o que esse nível aprova entra na camada 3 ([delegação](../aprovacoes/delegacao.md)).
 
 ## Invariantes arquiteturais
 
@@ -37,6 +39,7 @@ Cada camada atua por até três canais: **texto** de instruções (o que o agent
 |---|---|---|---|---|
 | Decretos | banco da Guilda ([decretos](../telegram/decretos.md)) | os que mudam comportamento entram no topo da camada do Mestre dos personagens afetados, atualizada a cada início de turno | todos os ativos, em toda decisão | não (mudam a qualquer momento) |
 | Regras fixas do Mestre | modelos versionados na Cidadela ([sessão zero do personagem](../sessao-zero/personagem.md)) | camada do Mestre (`MESTRE.md`) | sim | sim, o que for expressável |
+| Decisões de agentes | banco da Guilda ([regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md)) | — | as ativas, só sobre `ask` | não |
 | Classe | pacote da classe ([classes](../classes/classes.md)) | `CLASS.md` entra na camada do Mestre | `permissions.yaml` e hooks extras da classe ([permissões](../classes/permissoes.md)) | sim, traduzido pelo adaptador |
 | Ficha | banco da Guilda ([bases e fichas](../orquestracao/bases-e-fichas.md)) | — | restrições da ficha | sim |
 | Projeto | `AGENTS.md` do repositório | lido nativamente pelo provedor | não participa | não |
@@ -61,16 +64,18 @@ Cada decisão do `mestre hook` termina em **permitir**, **negar** ou **pedir apr
 2. **Regras fixas do Mestre:** se negam ou pedem aprovação, isso vale (salvo decreto no passo 1).
 3. **Classe:** o resultado das regras da classe, já cortado pelo teto.
 4. **Ficha:** pode endurecer o resultado (permitir → pedir aprovação ou negar; pedir aprovação → negar), nunca afrouxar.
+5. **Decisões de agentes:** se o resultado é "pedir aprovação", uma exceção pontual ou regra temporária de mesa dada por um agente da cadeia que casa a ação o transforma em "permitir"; sobre "negar", não vale.
 
-Resultado "pedir aprovação" abre um pedido ([fluxo de aprovação](../aprovacoes/fluxo.md)); quem aprova primeiro é o Grão-Mestre, conforme a [política](../aprovacoes/politica.md). Uma aprovação vira **exceção pontual** (passo 1), presa àquela ação exata, e a decisão é refeita.
+Resultado "pedir aprovação" abre um pedido, com o risco da [classificação de risco](../classes/classificacao-de-risco.md), que sobe pela [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) a partir do superior de quem pediu ([fluxo de aprovação](../aprovacoes/fluxo.md)). Uma aprovação vira **exceção pontual**, presa àquela ação exata (passo 1 se veio de uma pessoa, passo 5 se veio de um agente), e a decisão é refeita.
 
 ## Exemplos
 
 - A classe QA só escreve em `tests/**`. Um QA tenta editar `src/app.go`: passo 3 nega → negado (MVP-6).
+- A classe Dev deixa `npm install *` em `ask`. O Mestre da mesa aprova o padrão por 2 h: no passo 5, a regra temporária transforma o `ask` em permitir; um `npm install evil` que a ficha nega continua negado.
 - O Administrador decreta "a classe Dev pode rodar `make deploy-teste` esta semana": no passo 1 o decreto permite, mesmo que a classe exija aprovação; ao vencer a validade, volta a valer a classe.
 - A ficha "Dev Júnior" proíbe `git commit` em `main`, que a classe Dev permite: passo 4 endurece → negado.
 - O `AGENTS.md` diz "rode `npm run lint` antes de commitar" e a classe não fala nisso: vale o `AGENTS.md`, porque não há conflito.
 
 ## Onde cada camada é implementada
 
-Este documento é de referência e não pertence a um marco ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). A combinação é implementada nas [regras efetivas](../classes/permissoes.md#regras-efetivas) (M3); cada camada chega no seu marco: [classes](../classes/classes.md), [teto](../classes/teto-do-workspace.md) e o [despachante](../provedores/despachante-de-hooks.md) no M3, [fichas](../orquestracao/bases-e-fichas.md) e a [camada do Mestre](../sessao-zero/personagem.md) no M4, [decretos](../telegram/decretos.md) no M5.
+Este documento é de referência e não pertence a um marco ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). A combinação é implementada nas [regras efetivas](../classes/permissoes.md#regras-efetivas) (M3); cada camada chega no seu marco: [classes](../classes/classes.md), [teto](../classes/teto-do-workspace.md) e o [despachante](../provedores/despachante-de-hooks.md) no M3, [fichas](../orquestracao/bases-e-fichas.md) e a [camada do Mestre](../sessao-zero/personagem.md) no M4, [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) e [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) no M4, [decretos](../telegram/decretos.md) e [delegação](../aprovacoes/delegacao.md) no M5.

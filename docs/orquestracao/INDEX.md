@@ -1,6 +1,6 @@
 # Orquestração
 
-> **Assunto:** índice da orquestração: workspaces, mesas, orquestradores, personagens, presets, conexões, esperas, missões, rituais, pergaminhos e grimórios · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** índice da orquestração: workspaces, mesas, orquestradores, personagens, presets, conexões, esperas, cadeia de aprovação, regras temporárias de mesa, missões, rituais, pergaminhos e grimórios · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
@@ -12,6 +12,8 @@
 | [bases-e-fichas.md](bases-e-fichas.md) | campos de bases e fichas, exemplos, exportação/importação, perfis de conta | ao mexer em presets ou em várias contas por provedor |
 | [conexoes.md](conexoes.md) | conexões automáticas e manuais, visibilidade | ao mexer em quem fala com quem ou no `mestre list` |
 | [esperas-e-caixa-de-entrada.md](esperas-e-caixa-de-entrada.md) | fila e prioridade, entrega só quando livre, resposta pelo mesmo canal, ask e ask back, esperas, tempos limite, impasse | ao mexer em entrega de mensagens ou esperas |
+| [cadeia-de-aprovacao.md](cadeia-de-aprovacao.md) | superior de cada personagem, níveis da cadeia e o risco até onde cada um decide, subida por teto ou prazo, salvaguardas, pedido montado pelo motor, catálogo de respostas | ao mexer em quem decide um pedido de aprovação |
+| [regras-temporarias-de-mesa.md](regras-temporarias-de-mesa.md) | regras que agentes da cadeia criam ao aprovar por um tempo ou um padrão: alcance, validade, precedência, como acabam | ao mexer no que agentes liberam por um tempo numa mesa |
 | [missoes.md](missoes.md) | definição, execução pelo motor, devolução, aprovação, estados, retomada, espelho no GitHub | ao mexer em fluxos de etapas |
 | [rituais.md](rituais.md) | agenda, pré-execução, alvo ocupado enfileira e volta ao dono, disparos perdidos | ao mexer em rotinas agendadas |
 | [pergaminhos-e-tomos.md](pergaminhos-e-tomos.md) | arquivo e índice, nome, operações, concorrência, tomos, pergaminho da missão | ao mexer em notas do canvas |
