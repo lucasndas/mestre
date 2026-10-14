@@ -30,11 +30,11 @@ const (
 // Adapter is the contract of docs/provedores/adaptador.md#contrato.
 //
 // The operations here are the ones the adapter document specifies in full:
-// BuildLaunch, NormalizeHook, Screens and TypeMessage. The rest of the
-// contract joins this interface with the documents that specify it:
-// HookFiles, PreTrust and DeliverMestreLayer with the provider documents
-// (claude-code.md, codex.md, antigravity.md), FormatResponse with the hook
-// dispatcher (despachante-de-hooks.md) and ReadUsage with the provider
+// BuildLaunch, NormalizeHook, Screens and TypeMessage, and FormatResponse,
+// whose formats are the hook dispatcher's (despachante-de-hooks.md). The
+// rest of the contract joins this interface with the documents that specify
+// it: HookFiles, PreTrust and DeliverMestreLayer with the provider documents
+// (claude-code.md, codex.md, antigravity.md) and ReadUsage with the provider
 // documents and the usage limits (limites-de-uso.md). The contract rules hold
 // for all of them: nothing writes AGENTS.md, every generation is idempotent
 // and merges only the managed part, and no secret goes in a command-line
@@ -48,6 +48,11 @@ type Adapter interface {
 	// internal format. A native event the map does not use (PostInvocation)
 	// comes back with Event == EventNone; an unknown one is ErrUnknownEvent.
 	NormalizeHook(in HookInput) (Event, error)
+	// FormatResponse turns the reply to one call of a native event into
+	// the stdout and the exit code the provider expects. It is pure: the
+	// dispatcher calls it also without MESTRE_AGENT_ID, for the neutral
+	// answer, and with a native event the adapter does not know.
+	FormatResponse(nativeEvent string, r Reply) HookOutput
 	// Screens reads the rendered screen: readiness and known screens.
 	Screens(in ScreenInput) ScreenResult
 	// TypeMessage builds the bytes that deliver text to the agent.
