@@ -44,8 +44,11 @@ func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 	if err != nil {
 		return NativeControls{}, err
 	}
-	if !p.NoWrite && len(roots) > 0 {
-		vals := make([]string, 0, len(roots))
+	// The list is always given, empty included: a -c is above every
+	// config.toml, so a .codex/config.toml of the repository (which the
+	// agent writes) cannot add a root such as "/".
+	vals := []string{}
+	if !p.NoWrite {
 		for _, r := range roots {
 			v, err := tomlString(r)
 			if err != nil {
@@ -53,8 +56,8 @@ func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 			}
 			vals = append(vals, v)
 		}
-		args = append(args, "-c", "sandbox_workspace_write.writable_roots=["+strings.Join(vals, ",")+"]")
 	}
+	args = append(args, "-c", "sandbox_workspace_write.writable_roots=["+strings.Join(vals, ",")+"]")
 	if !p.Offline && p.AnyDomain {
 		args = append(args, "--search")
 	}

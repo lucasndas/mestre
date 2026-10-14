@@ -113,6 +113,11 @@ func codexHookCommand(goos, bin, event string) (string, error) {
 	if strings.ContainsAny(bin, "\"'`$%!&|;<>()^*?[]{}\n\r\t") {
 		return "", fmt.Errorf("codex hooks: the mestre binary %q has a character the shell would read", bin)
 	}
+	// PowerShell reads the typographic quotes as quotes (one would close
+	// the "…" of the path) and the dashes as the - of a parameter.
+	if strings.ContainsAny(bin, powerShellQuotesAndDashes) {
+		return "", fmt.Errorf("codex hooks: the mestre binary %q has a typographic quote or dash, which PowerShell reads", bin)
+	}
 	args := " hook --provider codex --event " + event
 	if goos == "windows" {
 		return `& "` + bin + `"` + args + "; exit $LASTEXITCODE", nil
@@ -122,6 +127,10 @@ func codexHookCommand(goos, bin, event string) (string, error) {
 	}
 	return bin + args, nil
 }
+
+// powerShellQuotesAndDashes are the characters PowerShell takes as ' and "
+// (‘ ’ ‚ ‛ “ ” „) and as the - of a parameter (– — ―).
+const powerShellQuotesAndDashes = "‘’‚‛“”„–—―"
 
 // codexTrustHooks sets [hooks.state."<file>:<event>:0:0"] trusted_hash for
 // each Mestre hook, keeping the rest of config.toml.

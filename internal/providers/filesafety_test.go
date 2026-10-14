@@ -136,8 +136,9 @@ func TestCodexGitRootsComeFromTheRecord(t *testing.T) {
 		return "", err
 	}
 	p := providers.NativePolicy{AgentID: "a1", OS: runtime.GOOS, Worktree: wt, Write: []string{"**"}}
-	if got, err := roots(p); err != nil || got != "" {
-		t.Fatalf("without a record = %q, %v; want no git root (the .git file is not read)", got, err)
+	const none = "sandbox_workspace_write.writable_roots=[]"
+	if got, err := roots(p); err != nil || got != none {
+		t.Fatalf("without a record = %q, %v; want the empty list (the .git file is not read)", got, err)
 	}
 	p.GitDir, p.GitCommon = gitdir, mirror
 	got, err := roots(p)
@@ -153,7 +154,7 @@ func TestCodexGitRootsComeFromTheRecord(t *testing.T) {
 		t.Errorf("roots %s have a folder that is not in the record or does not exist", got)
 	}
 	p.NoWrite = true
-	if got, _ := roots(p); got != "" {
+	if got, _ := roots(p); got != none {
 		t.Errorf("a class without write opens %s", got)
 	}
 	p.NoWrite = false

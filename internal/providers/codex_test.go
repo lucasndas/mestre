@@ -306,6 +306,9 @@ func TestCodexStartFlags(t *testing.T) {
 		{"-C", "/"}, {"-C/"}, {"--cd=/"}, {"--worktree"}, {"--profile", "yolo"}, {"-pyolo"}, {"--profile=yolo"},
 		{"--approve-for-me"}, {"--not-so-yolo"}, {"--image", "/x.png"}, {"-i/x.png"}, {"--search"},
 		{"exec"}, {"resume", "x"}, {"a prompt"}, {"--", "--yolo"}, {"-"}, {"-x"}, {"--unknown"}, {"-h"}, {"--no-daemon=false"},
+		// The sandbox is the native controls': a base -s, even a safe one,
+		// would be given twice, which clap refuses (no start at all).
+		{"-s", "read-only"}, {"-s", "workspace-write"}, {"-sread-only"}, {"--sandbox=workspace-write"},
 	} {
 		r := req
 		r.Base.Args, r.ProviderArgs = bad, sandbox
@@ -313,9 +316,14 @@ func TestCodexStartFlags(t *testing.T) {
 			t.Errorf("%q was accepted", bad)
 		}
 	}
+	r0 := req
+	r0.Base.Args = []string{"-s", "workspace-write"}
+	if _, err := a.BuildLaunch(r0); err == nil || !strings.Contains(err.Error(), "native controls of the class only") {
+		t.Errorf("a base -s: %v; want the error that names the native controls", err)
+	}
 	// The engine's arguments are checked the same way, with the keys of the
 	// layer and of the native controls besides.
-	for _, bad := range [][]string{{"exec"}, {"-c", "features.hooks=false"}, {"--yolo"}, {"-sdanger-full-access"}} {
+	for _, bad := range [][]string{{"exec"}, {"-c", "features.hooks=false"}, {"--yolo"}, {"-sdanger-full-access"}, {"-s", "read-only"}} {
 		r := req
 		r.Base.Args, r.ProviderArgs = nil, append(slices.Clone(sandbox), bad...)
 		if _, err := a.BuildLaunch(r); err == nil {
