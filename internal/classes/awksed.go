@@ -33,9 +33,11 @@ type progCode struct {
 
 func (p progCode) ok() bool { return p.code || len(p.cmds) > 0 || len(p.writes) > 0 }
 
-// forcesCode reports a construct that executes a command, so the part is at
-// least medio (a bare write only applies the path rules).
-func (p progCode) forcesCode() bool { return p.code || len(p.cmds) > 0 }
+// forcesCode reports a construct that executes what the motor cannot read,
+// so the part is at least medio (ask); a literal command is classified, and
+// decided, as the command line it is, and a write only applies the path
+// rules.
+func (p progCode) forcesCode() bool { return p.code }
 
 // progCodeOf analyses the program an awk or sed command runs. ok is false
 // for any other program, and for an awk or sed program that shows none of
@@ -48,9 +50,10 @@ func (e *evaluator) progCodeOf(cn string, args []word) (progCode, bool) {
 			return progCode{}, false
 		}
 		if fromFile {
-			// The program is a file the motor does not read as a command:
-			// it may use system(), so it is inline code.
-			return progCode{code: true, execInput: true, why: cn + " -f (programa que o motor não lê)"}, true
+			// The program is a file the motor does not read as a command
+			// (-f, an -i include or an -l extension): it may use system(),
+			// so it is inline code. gawk -i inplace writes its files.
+			return progCode{code: true, execInput: true, writes: awkInplace(args), why: cn + " -f (programa que o motor não lê)"}, true
 		}
 		return scanAwk(cn, prog)
 	case sedNames[cn]:
@@ -101,6 +104,14 @@ func awkProgram(args []word) (prog string, fromFile, ok bool) {
 		case strings.HasPrefix(t, "-f"):
 			fromFile = true
 			i++
+		case awkFileOpts[t]:
+			// gawk -i lib (an include, or the inplace extension), -l ext, -E
+			// file and mawk -W exec file: code the motor does not read.
+			fromFile = true
+			i += 2
+		case awkFileOptPrefix(t):
+			fromFile = true
+			i++
 		case expectValue[t]:
 			i += 2
 		case strings.HasPrefix(t, "-") && t != "-":
@@ -120,6 +131,46 @@ operand:
 		return "", fromFile, fromFile // -f without inline text still counts
 	}
 	return strings.Join(progs, "\n"), fromFile, true
+}
+
+// awkFiles are the files an awk command reads: the program files of -f and
+// the operands after the program, without the assignments (var=value).
+func awkFiles(args []word) []word {
+	var out []word
+	inline := true
+	i := 0
+	for ; i < len(args); i++ {
+		t := args[i].text
+		switch {
+		case t == "--":
+			i++
+			goto operands
+		case t == "-f" || t == "--file" || t == "-E" || t == "--exec":
+			inline = false
+			if i+1 < len(args) {
+				out = append(out, args[i+1])
+			}
+			i++
+		case t == "-e" || t == "--source":
+			inline = false
+			i++
+		case t == "-F" || t == "-v" || t == "--field-separator" || t == "--assign" || awkFileOpts[t]:
+			i++
+		case strings.HasPrefix(t, "-") && t != "-":
+		default:
+			goto operands
+		}
+	}
+operands:
+	if inline && i < len(args) {
+		i++ // the program text
+	}
+	for ; i < len(args); i++ {
+		if args[i].assign < 0 && !strings.Contains(args[i].text, "=") || strings.ContainsAny(args[i].text, `/\`) {
+			out = append(out, args[i])
+		}
+	}
+	return out
 }
 
 // sedProgram joins the inline and -e scripts of a sed command; fromFile is
@@ -180,10 +231,46 @@ operand:
 	return strings.Join(scripts, "\n"), fromFile, haveScript
 }
 
+// awkFileOpts are the options of awk that load code from elsewhere: an
+// include (-i, which with inplace makes gawk write its files), an
+// extension (-l), a program file (-E) and mawk's -W.
+var awkFileOpts = map[string]bool{"-i": true, "--include": true, "-l": true, "--load": true, "-E": true, "--exec": true, "-W": true}
+
+func awkFileOptPrefix(t string) bool {
+	for _, p := range []string{"--include=", "--load=", "--exec=", "-i", "-l", "-E", "-W"} {
+		if strings.HasPrefix(t, p) && t != p {
+			return true
+		}
+	}
+	return false
+}
+
+// awkInplace are the files gawk -i inplace writes: the operands after the
+// program (or after -f/-e), the assignments apart.
+func awkInplace(args []word) []word {
+	inplace := false
+	for i, a := range args {
+		t := a.text
+		if (t == "-i" || t == "--include") && i+1 < len(args) && args[i+1].text == "inplace" || t == "-iinplace" || t == "--include=inplace" {
+			inplace = true
+		}
+	}
+	if !inplace {
+		return nil
+	}
+	var out []word
+	for _, a := range args {
+		if !strings.HasPrefix(a.text, "-") && a.text != "inplace" && !strings.Contains(a.text, "{") && !strings.Contains(a.text, "=") {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 var (
 	awkSystemLiteral  = regexp.MustCompile(`system\s*\(\s*"((?:\\.|[^"\\])*)"\s*\)`)
 	awkSystemAny      = regexp.MustCompile(`\bsystem\s*\(`)
-	awkPipeLiteral    = regexp.MustCompile(`\|\s*"((?:\\.|[^"\\])*)"`)
+	awkPipeLiteral    = regexp.MustCompile(`\|&?\s*"((?:\\.|[^"\\])*)"`)
 	awkGetlineLiteral = regexp.MustCompile(`"((?:\\.|[^"\\])*)"\s*\|\s*&?\s*getline`)
 	awkGetlinePipe    = regexp.MustCompile(`\|\s*&?\s*getline|getline\s*<\s*"`)
 	awkLoad           = regexp.MustCompile(`@(load|include)\b`)
@@ -204,26 +291,152 @@ func scanAwk(cn, prog string) (progCode, bool) {
 	hasSystem := awkSystemAny.MatchString(prog)
 	hasPipe := awkPipeLiteral.MatchString(prog) || awkGetlinePipe.MatchString(prog) || awkGetlineLiteral.MatchString(prog)
 	hasLoad := awkLoad.MatchString(prog)
-	if !hasSystem && !hasPipe && !hasLoad {
+	writes, dynamic := awkWrites(prog)
+	if !hasSystem && !hasPipe && !hasLoad && len(writes) == 0 && dynamic == "" {
 		return progCode{}, false
 	}
 	add(awkSystemLiteral.FindAllStringSubmatch(prog, -1))
 	add(awkPipeLiteral.FindAllStringSubmatch(prog, -1))
 	add(awkGetlineLiteral.FindAllStringSubmatch(prog, -1))
+	p.writes = writes
 	// A system() or getline command whose text is not a plain literal is
 	// dynamic: the motor cannot read it.
 	if hasSystem && len(awkSystemLiteral.FindAllString(prog, -1)) == 0 {
 		p.code = true
 	}
-	if awkGetlinePipe.MatchString(prog) {
+	if awkGetlinePipe.MatchString(prog) || hasLoad || dynamic != "" {
 		p.code = true
 	}
-	if hasLoad {
-		p.code = true
-	}
-	p.execInput = hasSystem || awkGetlinePipe.MatchString(prog) || awkGetlineLiteral.MatchString(prog)
+	p.execInput = hasSystem || awkGetlinePipe.MatchString(prog) || awkGetlineLiteral.MatchString(prog) || dynamic != ""
 	p.why = cn + " executa comando (system/pipe/getline)"
+	if dynamic != "" {
+		p.why = cn + " " + dynamic
+	}
 	return p, true
+}
+
+// awkWrites reads an awk program with its strings and regular expressions
+// blanked: the literal files its print and printf write (> "f", >> "f"),
+// and what it does that the motor cannot read: a pipe or a write to a
+// computed target (print | cmd, print > $1), a coprocess, an indirect call
+// (@f(), which can call system).
+func awkWrites(prog string) (writes []word, dynamic string) {
+	code := awkBlank(prog)
+	stmt, depth := 0, 0
+	for i := 0; i < len(code); i++ {
+		switch c := code[i]; c {
+		case ';', '{', '}', '\n':
+			stmt, depth = i+1, 0
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '@':
+			j := i + 1
+			for j < len(code) && (isNameByte(code[j]) || code[j] == ':') {
+				j++
+			}
+			name := code[i+1 : j]
+			for j < len(code) && code[j] == ' ' {
+				j++
+			}
+			if name != "" && name != "load" && name != "include" && name != "namespace" && j < len(code) && code[j] == '(' {
+				dynamic = "chamada indireta @" + name + "()"
+			}
+		case '|':
+			if i+1 < len(code) && code[i+1] == '|' || i > 0 && code[i-1] == '|' {
+				continue
+			}
+			j := i + 1
+			if j < len(code) && code[j] == '&' {
+				j++
+			}
+			for j < len(code) && (code[j] == ' ' || code[j] == '\t') {
+				j++
+			}
+			if j < len(code) && code[j] != '"' && !strings.HasPrefix(code[j:], "getline") {
+				dynamic = "pipe para comando calculado"
+			}
+		case '>':
+			st := strings.TrimSpace(code[stmt:i])
+			if depth > 0 || !strings.HasPrefix(st, "print") || i+1 < len(code) && code[i+1] == '=' {
+				continue // a comparison
+			}
+			j := i + 1
+			if j < len(code) && code[j] == '>' {
+				j++
+			}
+			for j < len(code) && (code[j] == ' ' || code[j] == '\t') {
+				j++
+			}
+			if j < len(code) && code[j] == '"' {
+				if m := awkStringAt(prog, j); m != "" {
+					if lit, ok := awkUnescape(m); ok && lit != "" && !isDevice(lit) {
+						writes = append(writes, word{text: lit, assign: -1})
+						i = j
+						continue
+					}
+					if lit, _ := awkUnescape(m); isDevice(lit) {
+						i = j
+						continue
+					}
+				}
+			}
+			dynamic = "escrita em arquivo calculado"
+			i = j
+		}
+	}
+	return writes, dynamic
+}
+
+// awkBlank is the program with the text of its strings and of its regular
+// expressions replaced by spaces, so the operators inside them do not count.
+func awkBlank(prog string) string {
+	b := []byte(prog)
+	last := byte(0) // the last character that is not a space
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case c == '"':
+			for i++; i < len(b) && b[i] != '"'; i++ {
+				if b[i] == '\\' && i+1 < len(b) {
+					b[i] = ' '
+					i++
+				}
+				b[i] = ' '
+			}
+			last = '"'
+		case c == '/' && (last == 0 || strings.IndexByte("(,{};!~&|\n=", last) >= 0):
+			for i++; i < len(b) && b[i] != '/' && b[i] != '\n'; i++ {
+				if b[i] == '\\' && i+1 < len(b) {
+					b[i] = ' '
+					i++
+				}
+				b[i] = ' '
+			}
+			last = '/'
+		case c == '#':
+			for ; i < len(b) && b[i] != '\n'; i++ {
+				b[i] = ' '
+			}
+		case c != ' ' && c != '\t':
+			last = c
+		}
+	}
+	return string(b)
+}
+
+// awkStringAt is the text of the string literal that opens at prog[i].
+func awkStringAt(prog string, i int) string {
+	for j := i + 1; j < len(prog); j++ {
+		switch prog[j] {
+		case '\\':
+			j++
+		case '"':
+			return prog[i+1 : j]
+		}
+	}
+	return ""
 }
 
 // awkUnescape turns an awk string literal into its text, for the common

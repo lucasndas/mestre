@@ -39,6 +39,10 @@ func (e *evaluator) shell(cmd, cwd string, depth int) result {
 		res.fixedDeny("comando aninhado demais para ser analisado")
 		return res
 	}
+	if depth == 0 && !analysable(cmd) {
+		res.fixedDeny(reasonTooLong)
+		return res
+	}
 	res.merge(e.shellIn(cmd, cwd, dialectPOSIX, depth))
 	if e.windows {
 		res.merge(e.shellIn(cmd, cwd, dialectPwsh, depth))
@@ -48,9 +52,15 @@ func (e *evaluator) shell(cmd, cwd string, depth int) result {
 
 func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 	res := newResult()
+	if e.spend(len(cmd) + costLine) {
+		res.fixedDeny(reasonTooMuch)
+		return res
+	}
 	parts, opaque, grouped := parseLine(cmd, d)
-	if slices.Contains(opaque, braceTooLarge) {
-		res.fixedDeny(braceTooLarge)
+	for _, bound := range []string{braceTooLarge, reasonTooDeep} {
+		if slices.Contains(opaque, bound) || partsHold(parts, bound) {
+			res.fixedDeny(bound)
+		}
 	}
 	if len(parts) == 0 {
 		if strings.TrimSpace(cmd) != "" {
@@ -60,6 +70,10 @@ func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 	}
 	st := &shellState{cwds: []string{cwd}, facts: newLineFacts()}
 	for i := range parts {
+		if e.spend(costPart) {
+			res.fixedDeny(reasonTooMuch)
+			return res
+		}
 		res.merge(e.part(&parts[i], d, st, depth))
 		res.merge(e.stdinBodies(parts, i, st, depth))
 		res.merge(e.pipeDecision(parts, i, d, st, depth))
@@ -151,11 +165,11 @@ var (
 	startProc  = map[string]bool{"start-process": true, "saps": true, "start": true}
 	agentCLIs  = map[string]bool{"claude": true, "codex": true, "agy": true}
 	pkgRunners = map[string]bool{"npx": true, "bunx": true, "pnpx": true}
-	shells     = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "mksh": true, "csh": true, "tcsh": true}
+	shells     = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "mksh": true, "csh": true, "tcsh": true, "rbash": true, "yash": true, "nu": true, "elvish": true, "xonsh": true, "posh": true, "oksh": true, "loksh": true, "pdksh": true, "lksh": true}
 	pwshNames  = map[string]bool{"pwsh": true, "powershell": true}
 	// interpreters run a file given as an argument.
 	interpreters = map[string]bool{
-		"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "csh": true, "tcsh": true,
+		"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "csh": true, "tcsh": true, "mksh": true, "rbash": true, "yash": true, "nu": true, "elvish": true, "xonsh": true, "posh": true, "oksh": true, "loksh": true, "pdksh": true, "lksh": true,
 		"source": true, ".": true, "python": true, "python2": true, "python3": true, "py": true, "node": true, "nodejs": true,
 		"deno": true, "bun": true, "ruby": true, "perl": true, "php": true, "lua": true, "rscript": true, "java": true,
 		"pwsh": true, "powershell": true, "cmd": true, "wscript": true, "cscript": true, "mshta": true, "rundll32": true,
@@ -258,9 +272,13 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		if extra != "" {
 			res.atLeastAsk(extra)
 		}
+		if strings.ContainsAny(name.text, `/\`) || strings.HasPrefix(name.text, ".") || name.quoted || name.expand {
+			// ./nohup may be any file: the program itself decides too.
+			res.rule(e.commandRule(ws, outer, false))
+		}
 		return res
 	}
-	if nested, nd, why, ok := nestedShell(cn, args); ok {
+	if nested, nd, why, ok := nestedShell(cn, args); ok && !pwshScript(name) {
 		if nested == "" {
 			res.atLeastAsk(why)
 		} else {
@@ -293,6 +311,13 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		if pc.forcesCode() {
 			res.atLeastAsk(pc.why)
 		}
+	}
+	// A command given in an argument (tmux new 'cmd', gdb -ex 'shell cmd',
+	// tar -I cmd, python -c 'os.system("cmd")'…): the literal is analysed,
+	// so a fixed rule in it denies (codeargs.go).
+	for _, ac := range argCommands(cn, argText) {
+		res.merge(e.shell(ac, st.cwds[0], depth+1))
+		res.atLeastAsk("comando dentro de um argumento de " + cn)
 	}
 
 	readOnly := false
@@ -439,16 +464,16 @@ func (e *evaluator) unwrap(cn string, args []word, res *result) (inner []word, e
 	case "exec":
 		return skip(map[string]bool{"-a": true}), "", true
 	case "nice":
-		return skip(map[string]bool{"-n": true}), "", true
+		return skip(map[string]bool{"-n": true, "--adjustment": true}), "", true
 	case "time":
-		rest := skip(map[string]bool{"-f": true, "-o": true})
+		rest := skip(map[string]bool{"-f": true, "-o": true, "--format": true, "--output": true})
 		return rest, "", true
 	case "ionice":
-		return skip(map[string]bool{"-c": true, "-n": true}), "", true
+		return skip(map[string]bool{"-c": true, "-n": true, "-p": true, "-P": true, "-u": true, "--class": true, "--classdata": true}), "", true
 	case "stdbuf":
-		return skip(map[string]bool{"-i": true, "-o": true, "-e": true}), "", true
+		return skip(map[string]bool{"-i": true, "-o": true, "-e": true, "--input": true, "--output": true, "--error": true}), "", true
 	case "timeout":
-		rest := skip(map[string]bool{"-s": true, "-k": true})
+		rest := skip(map[string]bool{"-s": true, "-k": true, "--signal": true, "--kill-after": true})
 		if len(rest) > 0 {
 			rest = rest[1:] // the duration
 		}
@@ -544,23 +569,7 @@ func nestedShell(cn string, args []word) (nested string, d dialect, why string, 
 	texts := wordsText(args)
 	switch {
 	case shells[cn]:
-		for i, a := range texts {
-			if a == "--" || !strings.HasPrefix(a, "-") {
-				break
-			}
-			if !strings.HasPrefix(a, "--") && strings.Contains(a, "c") {
-				if i+1 < len(texts) {
-					return texts[i+1], dialectPOSIX, cn + " -c", true
-				}
-				return "", dialectPOSIX, cn + " -c", true
-			}
-			if a == "-s" {
-				return "", dialectPOSIX, cn + " lendo o script da entrada", true
-			}
-		}
-		if len(operands(texts)) == 0 {
-			return "", dialectPOSIX, cn + " lendo o script da entrada", true
-		}
+		return shellText(cn, texts)
 	case cn == "eval":
 		return strings.Join(texts, " "), dialectPOSIX, "eval", true
 	case cn == "invoke-expression" || cn == "iex":
@@ -617,6 +626,9 @@ func nestedShell(cn string, args []word) (nested string, d dialect, why string, 
 				continue
 			}
 			rest = append(rest, texts[i])
+		}
+		if cn == "parallel" {
+			return parallelText(rest), dialectPOSIX, cn, true
 		}
 		return strings.Join(rest, " "), dialectPOSIX, cn, true
 	}
@@ -940,6 +952,8 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 			o = o[1:]
 		}
 		all(o, use{write: true, recursive: hasFlag(args, "-R", "--recursive")})
+	case "awk", "gawk", "mawk", "nawk", "goawk":
+		all(awkFiles(args), use{})
 	case "sed":
 		inPlace := false
 		script := true
@@ -1223,7 +1237,9 @@ func (e *evaluator) find(args []word, d dialect, st *shellState, depth int) resu
 			for j < len(args) && args[j].text != ";" && args[j].text != "+" {
 				j++
 			}
-			if j > i+1 {
+			if j > i+1 && j < len(args) {
+				// Without its ; or +, find refuses the whole expression
+				// and runs nothing (the PowerShell reading of \;).
 				res.merge(e.command(args[i+1:j], d, st, depth+1, nil))
 			}
 			res.atLeastAsk("find " + args[i].text)

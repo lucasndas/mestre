@@ -255,7 +255,7 @@ func TestTheJustificationNeverChangesTheRisk(t *testing.T) {
 		t.Fatalf("with the justification %+v, without %+v; want the same", a, b)
 	}
 	for _, r := range []classes.RiskResult{a, b} {
-		if r.TableVersion != classes.RiskTableVersion || r.Rule != "pacotes do projeto: npm install*" {
+		if r.TableVersion != classes.RiskTableVersion || r.Rule != "seguro (pacotes do projeto): npm install" {
 			t.Fatalf("result %+v; want risk_table_version %d and the row that decided", r, classes.RiskTableVersion)
 		}
 	}
@@ -267,12 +267,17 @@ func TestTheJustificationNeverChangesTheRisk(t *testing.T) {
 }
 
 // CA-RISCO-10
-func TestAPartWithoutARowIsLowUnlessItShowsASignal(t *testing.T) {
+func TestAPartWithoutARowIsLowOnlyByTheListOfSafePrograms(t *testing.T) {
 	t.Parallel()
 	env, r := riskEnv(nil), riskRules("registry.npmjs.org")
-	for _, cmd := range []string{"echo hello", "printf '%s' x", "test -f a.txt", "which go", "jq . a.json", "./scripts/build.sh", "foo --bar"} {
-		if got := shellRisk(env, r, cmd); got.Risk != classes.RiskLow || !strings.Contains(got.Rule, "sem sinal de risco") && !strings.Contains(got.Rule, "só de leitura") {
-			t.Errorf("%q = %s (%s); want baixo, no row and no signal", cmd, got.Risk, got.Rule)
+	for _, cmd := range []string{"echo hello", "printf '%s' x", "test -f a.txt", "which go", "jq . a.json", "./scripts/build.sh"} {
+		if got := shellRisk(env, r, cmd); got.Risk != classes.RiskLow || !strings.HasPrefix(got.Rule, "seguro (") {
+			t.Errorf("%q = %s (%s); want baixo by the list of known-safe programs", cmd, got.Risk, got.Rule)
+		}
+	}
+	for _, cmd := range []string{"foo --bar", "flock f x", "tmux new x"} {
+		if got := shellRisk(env, r, cmd); got.Risk != classes.RiskMedium || !strings.Contains(got.Rule, "fora da lista de programas seguros") {
+			t.Errorf("%q = %s (%s); want medio, outside the list", cmd, got.Risk, got.Rule)
 		}
 	}
 	for cmd, sig := range map[string]string{

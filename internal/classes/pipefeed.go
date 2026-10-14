@@ -59,8 +59,8 @@ func (e *evaluator) pipeReader(ws []word, depth int) (u stdinUse, xargs []word) 
 		}
 		return stdinUse{}, nil
 	case stdinCode[base] || stdinCode[cn]:
-		if s, ok := interpreterScript(base, args); ok && !stdinPaths[s.text] && !inlineCode(base, args) {
-			return stdinUse{}, nil // a script file: the pipe is its data
+		if stdinData(cn, args) {
+			return stdinUse{}, nil // a script file or a data module: the pipe is its data
 		}
 		return stdinUse{name: cn, code: true}, nil
 	case stdinFileCode[cn] && readsProgramFile(wordsText(args)):

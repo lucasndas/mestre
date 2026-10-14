@@ -27,10 +27,16 @@ func TestWritersWithoutAVisiblePathAreMedio(t *testing.T) {
 			t.Errorf("%q: risk %s (%s); want medio by the signal", cmd, d.Risk.Risk, d.Risk.Rule)
 		}
 	}
-	// Listing, testing or making an archive names what it writes, or writes
-	// nothing: baixo, it runs.
-	for _, cmd := range []string{"tar tzf a.tgz", "tar czf out.tgz src", "unzip -l a.zip", "7z l a.7z", "ar t lib.a", "cpio -o"} {
+	// Listing or testing an archive writes nothing: baixo, it runs. Making
+	// one writes a file the write rules do not see as a write: outside the
+	// list of known-safe programs, medio.
+	for _, cmd := range []string{"tar tzf a.tgz", "tar -tvf a.tar", "unzip -l a.zip", "7z l a.7z", "ar t lib.a", "cpio -o"} {
 		want(t, decide(env, def, m.shell(cmd)), classes.Allow, "")
+	}
+	for _, cmd := range []string{"tar czf out.tgz src", "tar -cf .claude.tar x", "zip -r out.zip src"} {
+		if d := decide(env, def, m.shell(cmd)); d.Verdict != classes.Ask || d.Risk.Risk != classes.RiskMedium {
+			t.Errorf("%q: %s/%s (%s); want ask, medio", cmd, d.Verdict, d.Risk.Risk, d.Risk.Rule)
+		}
 	}
 	// The reach of a pattern sees them.
 	for _, p := range []string{"tar *", "unzip *", "patch *", "git a*"} {

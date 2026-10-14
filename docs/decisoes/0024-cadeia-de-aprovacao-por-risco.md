@@ -14,6 +14,8 @@ Aceita, 2026-10-14, por decisão do Dono. **Substitui** o [ADR 0008](0008-grao-m
 - **o `medio` da mesa e as regras `medio` (Dono, 2026-10-14, M4, M5):** além de rede para domínio conhecido e apagar no worktree, o Mestre da mesa decide por padrão contêineres e VMs, `npx` e parecidos (com `pip install`) e interpretador com código, como os provedores tratam num terminal comum ([ADR 0025](0025-padroes-seguem-os-provedores.md)); os grupos são configuráveis em `cadeia.mesa_decide`, só de `medio`, e instalação global e caminho fora do worktree ficam de fora por padrão; e o Mestre da mesa pode criar regras temporárias `medio`, reconferidas pelo motor a cada comando ([condições](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa), [regras](../orquestracao/regras-temporarias-de-mesa.md));
 - **respostas do Dono:** `acao_destrutiva` continua delegável pelo Dono (decreto com PIN, escopo e prazo); `make *` e `npm run *` continuam `baixo`.
 
+**Revisão 2026-10-14** (Dono, auditoria do M3, terceira rodada): a regra da classificação acima se inverte. Parte sem linha na tabela é `baixo` só se o programa e a forma estão na [lista de programas seguros](../classes/lista-de-seguros.md); o resto é `medio` (grupo `fora_da_lista`, decidido pelo Mestre da mesa), com as linhas e os sinais por cima ([ADR 0025](0025-padroes-seguem-os-provedores.md)).
+
 ## Contexto
 
 - Pelo ADR 0008, todo pedido ia primeiro ao Grão-Mestre, que decidia dentro da [política](../aprovacoes/politica.md) ou perguntava às pessoas. Na prática:
@@ -64,7 +66,7 @@ Opção 4.
   - Aprovações repetidas viram regras explícitas, revistas pelo Dono, em vez de perguntas sem fim.
 - **Negativas:**
   - **Erro dentro do teto:** um Mestre da mesa pode aprovar um `baixo` ou um `medio` ruim da própria mesa. Mitigações: as condições da mesa, conferidas pelo motor; atenuação; auditoria; resumo ao Grão-Mestre e amostra ao Dono; pausa de autonomia; disjuntor.
-  - **Classificação por sinais:** o que não tem linha e não mostra sinal é `baixo`; um comando novo e arriscado sem sinal reconhecido passa como `baixo`. A lista de sinais erra para cima, e o Dono pode subir qualquer padrão; descer, só de `medio` para `baixo`.
+  - **Classificação por lista (revisão acima):** o que não está na lista de seguros é `medio`, então um comando novo pede ao Mestre da mesa em vez de passar como `baixo`; o custo é mais pedidos `medio` para o que é seguro e não está na lista, que o Dono acrescenta nos ajustes. Antes, por sinais: o que não tinha linha e não mostrava sinal era `baixo`. A lista de sinais erra para cima, e o Dono pode subir qualquer padrão; descer, só de `medio` para `baixo`.
   - **`default` ausente mais aberto:** uma classe sem `default` passa a pedir aprovação onde antes negava. Classes que querem negar o resto precisam escrever `default: deny`; o teto continua podendo fechar.
   - **Mais estados e mais tipos de regra** (níveis da cadeia, regras temporárias, subdelegação), todos com auditoria e prazo.
 - **Pontos do 0008 que seguem abertos** (review do App próprio conta, `actor_type: Integration` em repositório pessoal, token de usuário conta como dele): [aprovação no GitHub](../github/aprovacao-no-github.md#verificar-na-implementação).

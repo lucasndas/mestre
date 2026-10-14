@@ -339,6 +339,7 @@ type evaluator struct {
 	degraded bool
 	wt, tmp  string // keys
 	evCwd    string
+	work     int // the units the analysis spent (budget.go)
 }
 
 func newEvaluator(ctx context.Context, env Env, r *Rules, ev providers.Event, degraded bool) *evaluator {
