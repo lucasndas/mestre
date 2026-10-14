@@ -3,6 +3,7 @@ package localchan_test
 import (
 	"context"
 	"errors"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -256,5 +257,40 @@ func TestFiletimeToTime(t *testing.T) {
 		if _, err := localchan.FiletimeToTime(bad); err == nil {
 			t.Errorf("%q was accepted", bad)
 		}
+	}
+}
+
+// peerFunc is a PeerSource from a function.
+type peerFunc func() localchan.Peer
+
+func (f peerFunc) Peer(net.Conn) (localchan.Peer, error) { return f(), nil }
+
+// The residual M3/M4 of the M3 audit, round 3: without delegated cgroups
+// every terminal is in the cgroup of the engine's service, so the group
+// the caps count by is the terminal the climb finds at accept time, not
+// that shared cgroup; a caller outside every terminal keeps its cgroup.
+func TestWithoutCgroupsTheCapsCountByTheTerminalOfTheTree(t *testing.T) {
+	t.Parallel()
+	r := newIDRig(localchan.ModeTree)
+	r.terms.Add("B", "bob", 300)
+	r.terms.Add("C", "carol", 600)
+	r.proc.SetStat(500, localchan.ProcStat{PPID: 300, Start: 1000})
+	r.proc.SetStat(300, localchan.ProcStat{PPID: 1, Start: 800})
+	r.proc.SetStat(700, localchan.ProcStat{PPID: 600, Start: 1000})
+	r.proc.SetStat(600, localchan.ProcStat{PPID: 1, Start: 800})
+	r.proc.SetStat(900, localchan.ProcStat{PPID: 1, Start: 1000}) // an orphan
+	group := func(pid int) string {
+		r.id.Peers = peerFunc(func() localchan.Peer { return localchan.Peer{PID: pid, Group: "/mestre.service"} })
+		p, err := r.id.Accept(nil, time.Time{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Group
+	}
+	if b, c := group(500), group(700); b != "tree/term-B" || c != "tree/term-C" {
+		t.Fatalf("groups = %q, %q; want the terminal of each", b, c)
+	}
+	if o := group(900); o != "/mestre.service" {
+		t.Fatalf("the orphan's group = %q; want its cgroup", o)
 	}
 }

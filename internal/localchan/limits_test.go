@@ -265,3 +265,23 @@ func TestTheGroupOfAPeerIsItsTerminal(t *testing.T) {
 		}
 	}
 }
+
+// The residual M3/M4 of the M3 audit, round 3: a caller that had already
+// exited when the engine read it (a socket handed to another process) is
+// refused before the caps count it, instead of being held against the cap
+// of its user alone; a live process of the same user is served.
+func TestAGoneCallerIsRefusedBeforeTheCaps(t *testing.T) {
+	t.Parallel()
+	bubble(t, localrig.Options{}, func(t *testing.T, r *localrig.Rig) {
+		pid, _ := r.ProcessOf("ghost", "", "1001")
+		r.Peers.Set("ghost", localchan.Peer{PID: pid, UID: "1001", Gone: true})
+		r.ProcessOf("alive", "", "1001")
+		debug := `{"v":1,"id":"%s","agent_id":"","cmd":"debug","args":[],"flags":{},"cwd":""}`
+		if got := final(t, rawCall(t, r, "ghost", fmt.Sprintf(debug, "g1"))); got.OK || got.Error.Code != localchan.CodeNotIdentified {
+			t.Fatalf("a caller that had exited: %+v; want not_identified", got)
+		}
+		if got := final(t, rawCall(t, r, "alive", fmt.Sprintf(debug, "a1"))); !got.OK {
+			t.Fatalf("a live process of the same user: %+v", got)
+		}
+	})
+}
