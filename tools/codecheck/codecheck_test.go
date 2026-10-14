@@ -298,6 +298,7 @@ func TestExceptionsNeedAReasonAndExcuseSomething(t *testing.T) {
 func TestCodeRules(t *testing.T) {
 	t.Parallel()
 	root := os.DirFS("../..")
+	budget := time.Second * raceFactor
 	var best time.Duration
 	for i := 0; i < 3; i++ {
 		clk := clock.Real{}
@@ -312,11 +313,11 @@ func TestCodeRules(t *testing.T) {
 		if d := clock.Since(clk, start); i == 0 || d < best {
 			best = d
 		}
-		if best <= time.Second {
+		if best <= budget {
 			break // within the budget: no need to measure again
 		}
 	}
-	if best > time.Second {
-		t.Errorf("the code rules took %v, budget 1s", best)
+	if best > budget {
+		t.Errorf("the code rules took %v, budget %v", best, budget)
 	}
 }

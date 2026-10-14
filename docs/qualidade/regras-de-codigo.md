@@ -1,6 +1,6 @@
 # Regras de código verificadas por máquina
 
-> **Assunto:** as regras de código que o golangci-lint não cobre e que o `tools/codecheck` confere na suíte rápida (subtestes paralelos, `select {}`, entrada e saída dos processos filhos de teste, descritores de segurança no Windows, pastas privadas, segredos que se imprimem mascarados) e a marca de exceção `mestre:allow` · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** as regras de código que o golangci-lint não cobre e que o `tools/codecheck` confere na suíte rápida (subtestes paralelos, `select {}`, entrada e saída dos processos filhos de teste, descritores de segurança no Windows, pastas privadas, segredos que se imprimem mascarados) e a marca de exceção `mestre:allow` · **Componente:** Projeto · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -44,7 +44,7 @@ Um único mecanismo, para todas as regras acima: um comentário `// mestre:allow
 - **CA-CODIGO-05** · *rápida* — **Dado** `os.MkdirAll(d, 0o700)` ou `os.Mkdir` fora de `internal/privdir`, **quando** o `codecheck` roda, **então** falha com a regra `private-dir`; **dado** o mesmo código em `internal/privdir`, em teste, em `_windows.go` ou com outro modo, **então** passa.
 - **CA-CODIGO-06** · *rápida* — **Dado** um tipo com `Reveal` e `String` em receptor ponteiro, ou um `String`/`LogValue`/`Format` em ponteiro que devolve `logging.Redacted`, **quando** o `codecheck` roda, **então** falha com a regra `secret-receiver`; **dado** receptores por valor, um `Reveal` em outro pacote ou um `MarshalJSON` que revela, **então** passa.
 - **CA-CODIGO-07** · *rápida* — **Dado** `// mestre:allow bare-select: <motivo>` na linha da violação ou na de cima, **quando** o `codecheck` roda, **então** a violação é desculpada; **dado** a exceção sem motivo, com regra desconhecida, de outra regra, duas linhas acima ou sem nada a desculpar, **então** o `codecheck` falha na linha do comentário.
-- **CA-CODIGO-08** · *rápida* — **Dado** o repositório real, **quando** o `codecheck` roda, **então** não há problema, em menos de 1 s (a mais rápida de até três execuções).
+- **CA-CODIGO-08** · *rápida* — **Dado** o repositório real, **quando** o `codecheck` roda, **então** não há problema, em menos de 1 s (a mais rápida de até três execuções); com o detector de corridas (`-race`), o limite é multiplicado pelo mesmo fator que o `testrun` aplica aos orçamentos ([testes](testes.md)).
 
 ## Depende de
 
