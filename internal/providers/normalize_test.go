@@ -324,4 +324,18 @@ func TestPathsResolveLinksOfTheExistingPrefix(t *testing.T) {
 	if want := fold(filepath.Join(target, "new.txt")); len(e.Tool.Paths) != 1 || e.Tool.Paths[0] != want {
 		t.Errorf("paths = %v, want [%s]", e.Tool.Paths, want)
 	}
+	// NormalizePath is the same normalization, for the paths the permission
+	// decision reads from command arguments.
+	o := providers.Options{Resolve: func(p string) (string, error) {
+		switch {
+		case p == link:
+			return target, nil
+		case len(p) <= len(root):
+			return p, nil
+		}
+		return "", fs.ErrNotExist
+	}}
+	if got, want := o.NormalizePath(filepath.Join("link", "x", "..", "new.txt"), root), fold(filepath.Join(target, "new.txt")); got != want {
+		t.Errorf("NormalizePath = %s, want %s", got, want)
+	}
 }
