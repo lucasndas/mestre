@@ -3,14 +3,15 @@ package classes_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/providers"
 )
 
-// A command argument link/../x is where the system writes it: next to the
-// link's target, here outside the worktree.
+// A command argument link/../x is where the system writes it: on Linux next
+// to the link's target, here outside the worktree.
 func TestCommandArgumentThroughALinkAndDotDot(t *testing.T) {
 	t.Parallel()
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -30,7 +31,12 @@ func TestCommandArgumentThroughALinkAndDotDot(t *testing.T) {
 	env := classes.Env{AgentID: agentID, Worktree: wt, Exceptions: newLedger(), Normalize: providers.Options{}.NormalizePath}
 	r := rules(t, "version: 1\nfiles: {write: [\"permitido/**\"]}\ncommands: {default: allow}\n")
 	ev := event(&providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: "touch permitido/lnk/../x.txt"}, wt)
-	want(t, decide(env, r, ev), classes.Deny, classes.LayerClass, "fora do worktree")
+	if runtime.GOOS == "windows" {
+		// Windows takes the ".." out of the text: x.txt is in permitido.
+		want(t, decide(env, r, ev), classes.Allow, "")
+	} else {
+		want(t, decide(env, r, ev), classes.Deny, classes.LayerClass, "fora do worktree")
+	}
 	ev.Tool.Command = "touch permitido/novo/../x.txt"
 	want(t, decide(env, r, ev), classes.Allow, "")
 }

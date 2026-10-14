@@ -37,7 +37,10 @@ func TestBraceExpansionIsExpandedBeforeTheRules(t *testing.T) {
 			t.Errorf("%q: risk %s (%s); want medio", cmd, d.Risk.Risk, d.Risk.Rule)
 		}
 	}
-	// Quoted, escaped or without a comma or a range, a brace is literal.
+	// Quoted, escaped or without a comma or a range, a brace is literal
+	// (POSIX: PowerShell has no brace expansion, and its own reading of a
+	// brace is apart).
+	env.OS = "linux"
 	for _, cmd := range []string{`echo "{a,b}"`, `echo '{a,b}'`, `echo \{a,b\}`, "echo {a}", "echo {}", "echo a,b", "echo {a\\,b}", "echo {a..}"} {
 		d := decide(env, def, m.shell(cmd))
 		if d.Verdict != classes.Allow || strings.Contains(d.Reason, "chaves") {

@@ -45,7 +45,7 @@ Regras do contrato: nenhuma operação escreve no `AGENTS.md`; toda geração é
 | `usage` | só em `usage`: tokens, custo estimado, % de contexto, janelas de limite (`window`, `used_pct`, `resets_at`) |
 | `received_at` | instante pelo relógio da máquina |
 
-Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos, inclusive os da pasta de um arquivo que ainda não existe; sem diferença de maiúsculas no Windows) antes de qualquer decisão. O `..` vale como no sistema: depois do link à esquerda dele, logo `link/../x` é o `x` ao lado do alvo do link, não ao lado do link (`NormalizePath`, também para os argumentos dos comandos).
+Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos, inclusive os da pasta de um arquivo que ainda não existe; sem diferença de maiúsculas no Windows) antes de qualquer decisão. O `..` vale onde o sistema o aplica (`NormalizePath`, também para os argumentos dos comandos): no Linux, depois do link à esquerda dele, logo `link/../x` é o `x` ao lado do alvo do link, não ao lado do link; no Windows, que tira o `..` do texto antes de abrir o caminho, antes dos links.
 
 ### Mapa de eventos
 

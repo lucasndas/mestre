@@ -128,8 +128,9 @@ type Options struct {
 }
 
 // NormalizePath normalizes a path the way the adapters do with the paths of
-// a tool before any decision: absolute against cwd, without "..", links
-// resolved and, on Windows, without case differences. The permission
+// a tool before any decision: absolute against cwd, without ".." (where the
+// system takes it: after the links on Linux and macOS, from the text on
+// Windows), links resolved and, on Windows, without case differences. The permission
 // decision uses it for the paths of command arguments (Env.Normalize of
 // internal/classes).
 func (o Options) NormalizePath(p, cwd string) string { return o.paths().normalize(p, cwd) }
@@ -139,7 +140,8 @@ func (o Options) paths() pathNormalizer {
 	if r == nil {
 		r = filepath.EvalSymlinks
 	}
-	return pathNormalizer{resolve: r, fold: runtime.GOOS == "windows"}
+	windows := runtime.GOOS == "windows"
+	return pathNormalizer{resolve: r, fold: windows, lexical: windows}
 }
 
 // pathNormalizer makes paths absolute, without "..", with links resolved
@@ -147,6 +149,10 @@ func (o Options) paths() pathNormalizer {
 type pathNormalizer struct {
 	resolve func(string) (string, error)
 	fold    bool
+	// lexical takes ".." out of the text before the links are resolved, as
+	// Windows does with a path before it opens it; elsewhere a ".." after a
+	// link is the parent of the link's target.
+	lexical bool
 }
 
 func (n pathNormalizer) normalize(p, cwd string) string {
@@ -158,7 +164,7 @@ func (n pathNormalizer) normalize(p, cwd string) string {
 		// is resolved.
 		p = cwd + string(filepath.Separator) + p
 	}
-	if filepath.IsAbs(p) {
+	if filepath.IsAbs(p) && !n.lexical {
 		p = n.resolvePhysical(p)
 	} else {
 		p = n.resolveExisting(filepath.Clean(p))
