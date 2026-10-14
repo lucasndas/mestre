@@ -41,15 +41,21 @@ type ApprovalRequest struct {
 	Action classes.Action
 	// About is the action and the rule that asked.
 	About string
+	// Risk is the risk the engine gave the request
+	// (docs/classes/classificacao-de-risco.md): it goes with the request,
+	// and climbing the chain does not change it.
+	Risk  classes.RiskResult
 	Event providers.Event
 }
 
 // States records the state of a character
 // (docs/orquestracao/esperas-e-caixa-de-entrada.md, M4).
 type States interface {
-	// WaitingPermission puts the character in "aguardando permissão" for
-	// the request.
-	WaitingPermission(ctx context.Context, agentID string, request int64) error
+	// WaitingApproval puts the character in the approval wait, "aguardando
+	// aprovação", for the request. It is not "aguardando permissão", which
+	// is only the provider's native permission prompt (blocked by
+	// permission).
+	WaitingApproval(ctx context.Context, agentID string, request int64) error
 }
 
 // Contexts gives the context of a session or of a turn (the Mestre layer
@@ -177,19 +183,19 @@ func (e *Engine) decide(ctx context.Context, ev providers.Event) Answer {
 	return ans
 }
 
-// ask opens the approval request and answers deny with its number; the
-// character is waiting for permission.
+// ask opens the approval request, with its risk, and answers deny with its
+// number; the character waits for the approval.
 func (e *Engine) ask(ctx context.Context, ev providers.Event, d classes.Decision) Answer {
 	if e.Approvals == nil {
 		return Answer{Verdict: VerdictDeny, Reason: fmt.Sprintf("%s pede aprovação, e esta máquina ainda não abre pedidos de aprovação", d.Action)}
 	}
-	n, err := e.Approvals.Open(ctx, ApprovalRequest{AgentID: ev.AgentID, TableID: ev.TableID, Action: d.Action, About: d.Reason, Event: ev})
+	n, err := e.Approvals.Open(ctx, ApprovalRequest{AgentID: ev.AgentID, TableID: ev.TableID, Action: d.Action, About: d.Reason, Risk: d.Risk, Event: ev})
 	if err != nil || n <= 0 {
 		e.log().Warn("hook: the approval request was not opened", "agent", ev.AgentID, "err", err)
 		return Answer{Verdict: VerdictDeny, Reason: "não foi possível abrir o pedido de aprovação; tente de novo"}
 	}
 	if e.States != nil {
-		if err := e.States.WaitingPermission(ctx, ev.AgentID, n); err != nil {
+		if err := e.States.WaitingApproval(ctx, ev.AgentID, n); err != nil {
 			e.log().Warn("hook: the state of the character was not kept", "agent", ev.AgentID, "request", n, "err", err)
 		}
 	}

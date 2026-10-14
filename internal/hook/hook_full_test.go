@@ -31,7 +31,7 @@ func TestTwoHundredPreToolCallsAreUnderASecondAtP95(t *testing.T) {
 			decided.Add(1)
 		}
 	}
-	if err := e.Rules.Save(e.ctx, rules(t, `{version: 1, commands: {allow: ["npm test"], default: deny}, default: deny}`)); err != nil {
+	if err := e.Rules.Save(e.ctx, rules(t, `{version: 1, commands: {allow: ["npm test"], default: deny}, tools: {default: deny}}`)); err != nil {
 		t.Fatal(err)
 	}
 	const calls = 200
@@ -81,7 +81,8 @@ func TestTwoHundredPreToolCallsAreUnderASecondAtP95(t *testing.T) {
 
 // CA-PERM-05: with npm install * in ask, the fake agent that runs
 // `npm install x` gets the denial with request #1 from the real `mestre
-// hook`, and the character is waiting for permission; approved (the
+// hook`, and the character is in the approval wait ("aguardando
+// aprovação", not the native prompt's "aguardando permissão"); approved (the
 // exception bound to the action arrives in the effective rules and the
 // message is typed to the agent, as the inbox does), the agent repeats it
 // and it runs once; the next one asks again, with request #2.
@@ -104,7 +105,7 @@ func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	waiting := st.waiting[agent]
 	st.mu.Unlock()
 	if waiting != 1 {
-		t.Fatalf("the character is not waiting for permission on #1: %v", waiting)
+		t.Fatalf("the character is not waiting for the approval of #1: %v", waiting)
 	}
 
 	// Approved: the Citadel resends the effective rules with the exception

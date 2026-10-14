@@ -44,6 +44,9 @@ type Env struct {
 	Edits TurnEdits
 	// Exceptions records the exceptions used; nil uses none (degraded).
 	Exceptions ExceptionLedger
+	// Risk is the owner's part of the risk classification of what asks
+	// (the policy file, M5); nil is the default table.
+	Risk *RiskPolicy
 }
 
 // Layout are the folders of the Mestre on the machine
@@ -126,6 +129,10 @@ type Decision struct {
 	ClassHooks bool
 	// Action is the call as an exception would bind it.
 	Action Action
+	// Risk is the risk of the approval request an ask opens
+	// (docs/classes/classificacao-de-risco.md); zero for the other verdicts
+	// and in the degraded mode.
+	Risk RiskResult
 }
 
 // Decide runs the decision pipeline of docs/classes/permissoes.md#pipeline-de-decisão
@@ -206,6 +213,9 @@ func decide(ctx context.Context, env Env, rules *Rules, ev providers.Event, degr
 		d.Reason = act.String()
 		if o.reason != "" {
 			d.Reason += " (" + o.reason + ")"
+		}
+		if !e.degraded {
+			d.Risk = e.classify(ev.Tool, false)
 		}
 	}
 	return d

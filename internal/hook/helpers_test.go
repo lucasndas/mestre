@@ -140,7 +140,7 @@ func rules(t testing.TB, yaml string) *classes.Rules {
 const qaYAML = `version: 1
 files: {read: ["**"], write: ["**"], deny: ["src/**"]}
 commands: {allow: ["npm test"], ask: ["npm install *"], deny: ["curl *"], default: deny}
-default: deny
+tools: {default: deny}
 `
 
 // payload is the stdin of a pre_tool of a shell command, per provider.

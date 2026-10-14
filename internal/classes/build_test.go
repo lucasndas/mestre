@@ -1,12 +1,14 @@
 package classes_test
 
 import (
+	"context"
 	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/providers"
 )
 
 func parse(t testing.TB, yaml string) *classes.Permissions {
@@ -124,8 +126,47 @@ func TestClassDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(r.Files.Read, []string{"**"}) || len(r.Files.Write) != 0 || r.Commands.Default != classes.Deny || r.Tools.Default != classes.Deny ||
+	if !slices.Equal(r.Files.Read, []string{"**"}) || len(r.Files.Write) != 0 || r.Commands.Default != classes.Ask || r.Tools.Default != classes.Ask ||
 		r.Git.Commit || r.Git.Workflows != classes.WorkflowsNever || r.Network.Internet || r.Operator {
 		t.Fatalf("defaults %+v", r)
+	}
+}
+
+// CA-PERM-17
+func TestAnAbsentDefaultAsksAndTheCeilingStillCloses(t *testing.T) {
+	t.Parallel()
+	m := newMachine()
+	class := parse(t, "version: 1\nfiles: {write: [\"**\"]}\ncommands: {allow: [\"npm test\"]}\n")
+	r, err := classes.Build(classes.Layers{AgentID: agentID, Class: "dev", Permissions: class, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Commands.Default != classes.Ask || r.Tools.Default != classes.Ask {
+		t.Fatalf("commands.default %s, tools.default %s; want both ask", r.Commands.Default, r.Tools.Default)
+	}
+	for _, ev := range []providers.Event{m.shell("foo --bar"), toolEvent(providers.KindMCP, "mcp__x__y")} {
+		d := decide(m.env(), r, ev)
+		want(t, d, classes.Ask, classes.LayerClass)
+		if d.Risk.Risk != classes.RiskMedium {
+			t.Fatalf("%s: the approval request has risk %+v; want medio", ev.Tool.NativeName, d.Risk)
+		}
+	}
+
+	closed := ceiling(t, "version: 1\npermissions: {commands: {default: deny}}\n")
+	if err := closed.Fits(class); err != nil {
+		t.Fatalf("the class without defaults under a ceiling with commands.default deny: %v; want it saved", err)
+	}
+	cut, err := classes.Build(classes.Layers{AgentID: agentID, Class: "dev", Permissions: class, Ceiling: closed.Maximum(), Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cut.Commands.Default != classes.Deny || cut.Origin["commands.default"] != classes.LayerCeiling {
+		t.Fatalf("commands.default %s (origin %q); want deny from the ceiling", cut.Commands.Default, cut.Origin["commands.default"])
+	}
+
+	d := classes.DecideDegraded(context.Background(), m.env(), r, m.shell("foo --bar"))
+	want(t, d, classes.Deny, classes.LayerDegraded)
+	if d.Reason != classes.DegradedReason {
+		t.Fatalf("degraded: reason %q; want %q", d.Reason, classes.DegradedReason)
 	}
 }

@@ -15,7 +15,7 @@ Dar a cada pedido de aprovação um **risco**, que diz até onde ele pode ser de
 - **Entradas:** o tipo do pedido; para `permissao_de_classe`, a ação normalizada do [adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento) (tipo de ferramenta, comando, caminhos, URL, nome nativo), a raiz do worktree e os domínios das regras efetivas; os ajustes do Dono. A justificativa do agente não entra.
 - **Saída:** o risco, a versão da tabela padrão (`risk_table_version`, embutida no binário) e a linha ou o ajuste que decidiu; os três vão para o pedido e para a auditoria.
 - Quem decide cada risco, e como o pedido sobe, está na [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) (M4).
-- O código é `internal/classes` (`ClassifyRisk`, `ParseRiskAdjustments`, `CheckApprovablePattern`). No M3 os ajustes entram como dado; o arquivo de política que os carrega chega no M5.
+- O código é `internal/classes` (`ClassifyRisk`, `ParseRiskAdjustments`, `CheckApprovablePattern`). No M3 os ajustes entram como dado; o arquivo de política que os carrega chega no M5 e usa `LoadRiskAdjustments` (inválido: fica a versão anterior). O `ask` do pipeline sai já classificado (`Decision.Risk`), e o despachante abre o pedido com ele (`ApprovalRequest.Risk`); em modo degradado não há pedido nem classificação.
 
 ### Os quatro riscos
 
@@ -30,7 +30,9 @@ Dar a cada pedido de aprovação um **risco**, que diz até onde ele pode ser de
 
 - A linha é dividida em comandos simples como no [formato das permissões](formato-das-permissoes.md#comandos) (mesmos separadores, invólucros e prefixos); cada parte é classificada e o pedido fica com o **maior** risco entre as partes.
 - Cada parte é comparada com a tabela abaixo na ordem `alto` → `medio` → `baixo`, com o casamento de `deny` (nome do programa sem pasta e extensão, com e sem invólucros, sem diferença de maiúsculas no SQL); vale a primeira linha que casa. **Parte que não casa nada é `medio`.**
-- Trecho que não dá para analisar (`$(…)`, crases, variáveis, laços, here-documents, `sh -c` e afins) é no mínimo `medio`; o texto interno, quando legível, é classificado também e vale o maior. `eval` e shell aninhado de texto ilegível são `alto`.
+- Trecho que não dá para analisar (`$(…)`, crases, variáveis, laços, here-documents, `sh -c` e afins) é no mínimo `medio`; o texto interno, quando legível, é classificado também e vale o maior. `eval` e shell aninhado de texto ilegível são `alto`: `eval` e `Invoke-Expression` sempre; o shell aninhado quando lê o script da entrada (`curl … | sh`) ou quando o texto começa por uma expansão (`sh -c "$CMD"`).
+- `cd` e os comandos só de leitura do [formato](formato-das-permissoes.md#comandos) chamados pelo nome, sem linha na tabela, são `baixo`: valem pelos caminhos que leem (`cat config/.env.local` é `alto`).
+- `rm` com operando que o motor não resolve (variável, pasta desconhecida) conta como fora do worktree; as linhas `alto` e `medio` de `rm` valem também para os equivalentes do PowerShell (`Remove-Item`, `del`, `rd`…). "Toda URL literal" pede ao menos uma URL; as do GitHub incluem os subdomínios de `github.com` e a forma `git@github.com:`.
 - **Caminhos literais**, já normalizados (inclusive `..` e links resolvidos pelo adaptador): fora do worktree, a parte sobe a no mínimo `medio`; um caminho de segredo (`areas_sensiveis.permissoes_e_segredos`) ou do Mestre (`areas_sensiveis.mestre`), com os globs do [arquivo de política](../aprovacoes/arquivo-de-politica.md) (até o M5, os do conteúdo padrão), sobe a `alto`.
 
 | Risco | Tabela padrão (padrões de comando) |
@@ -63,6 +65,7 @@ Só `shell`, `web`, `mcp`, `subagent` e `other` chegam a `ask` (arquivos não t�
 | `custo_extra` | `medio` dentro do teto de custo; acima dele, `alto` sem delegação possível: só um Administrador ou acima ([teto](teto-do-workspace.md#onde-o-teto-age)) |
 | `envio_workflows`, `configuracao_repositorio`, `classe_workspace`, `acao_destrutiva`, `proposta_agents_md` | `alto` |
 | `ativacao_operador`, `atualizacao_mestre`, `entrada_na_guilda`, `promocao_cidadela` | `fixo`: fora da cadeia, com a regra própria do tipo na política |
+| tipo desconhecido | `alto` |
 
 ### Ajustes do Dono
 
@@ -77,7 +80,8 @@ risco:
   nivel_minimo: { alto: administrador }   # nível mínimo das pessoas por risco
 ```
 
-- `comando` casa como os padrões de `commands`; `ferramenta`, como os de `tools`. O primeiro ajuste que casa decide a parte; sem ajuste, vale a tabela padrão.
+- `comando` casa como os padrões de `commands`; `ferramenta`, como os de `tools`. O primeiro ajuste que casa decide a parte; sem ajuste, vale a tabela padrão. O ajuste toma o lugar da linha: a regra de caminhos e o mínimo `medio` do que não se analisa continuam valendo por cima.
+- Cada item tem `risco` e só um de `comando` e `ferramenta`; qualquer outra chave (inclusive `tipo`: o risco dos tipos não se ajusta) é inválida.
 - **Válidos:** subir qualquer padrão; descer só de `medio` para `baixo` (e voltar).
 - **Inválidos** (o conjunto inteiro é recusado com o item e o motivo; com o arquivo, vale a versão anterior, como na [política](../aprovacoes/politica.md)):
   1. `risco: fixo`, ou um padrão que casa ação de regra fixa (`git push*`) ou um tipo `fixo`: o `fixo` nunca muda;
@@ -85,6 +89,7 @@ risco:
   3. `*` sozinho ou um padrão de interpretador com curinga (abaixo);
   4. qualquer chave que mude até onde cada nível decide: o formato não a tem, e o teto de risco dos agentes é fixo.
 - `nivel_minimo`: o nível mínimo das pessoas para cada risco (padrão: `alto: administrador`); vale o maior entre o do tipo e o do risco, e só sobe: abaixo do padrão é inválido.
+- As conferências 1 e 2 usam o **alcance** do padrão (abaixo). Casa ação de regra fixa o padrão cujo texto literal a regra fixa nega ou que alcança `git push`, `git remote`, `git branch`, `git config`, `git tag`, `git clean`, `git stash`, `git fetch`, `git pull`, `git worktree`, `git gc`, `git prune`, `git update-ref`, `claude`, `codex`, `agy` ou um comando de elevação; para `ferramenta`, os MCPs de controle do computador. Um padrão de `ferramenta` com curinga alcança `alto` (pode nomear `mcp__github__*` ou uma ferramenta com `delete`): só sobe.
 
 ### Padrões aprováveis
 
@@ -92,7 +97,9 @@ As respostas que aprovam um padrão (ex.: `npm install *`) e as sugestões de re
 - é um alvo próprio, com impressão própria: SHA-256 do JSON canônico com padrão, tipo de ferramenta, classe e mesa;
 - precisa casar a ação do pedido de origem e começar por um programa literal;
 - o risco do padrão é o **maior** que um comando casado por ele pode ter (`npm install *` é `baixo`; `npm *` alcança `npm publish`, logo `alto`);
-- nunca um interpretador com curinga: `sh *`, `bash *`, `zsh *`, `pwsh *`, `powershell *`, `cmd *`, `python *`, `python3 *`, `node *`, `deno *`, `bun *`, `ruby *`, `perl *`, `php *`, `env *`, `xargs *`, `npx *`, nem `*`: recusados com `pattern_too_broad`.
+- nunca um interpretador com curinga: `sh *`, `bash *`, `zsh *`, `pwsh *`, `powershell *`, `cmd *`, `python *`, `python3 *`, `node *`, `deno *`, `bun *`, `ruby *`, `perl *`, `php *`, `env *`, `xargs *`, `npx *`, nem `*`: recusados com `pattern_too_broad`. Recusado é o curinga que pode ocupar o lugar do código ou do script (`python *`, `python -c *`, `node*`); depois de um script ou subcomando literal (`node scripts/build.js *`, `bun install *`), aceito; em `env`, `xargs`, `cmd`, `pwsh` e `powershell`, qualquer curinga. Padrão que não casa o pedido: `pattern_no_match`.
+- **Alcance**, para o risco do padrão: o maior entre a classificação do texto antes do primeiro curinga; a primeira linha da tabela que cobre o padrão inteiro (`npm install *` está em `npm install*`), ou `medio` se nenhuma cobre; as linhas que o curinga alcança pelo programa e pelos subcomandos, não pelas opções (`npm *` alcança `npm publish*`; `npm install *` não alcança `npm install -g*`); e as condições do programa (`rm *` alcança `rm` fora do worktree). As linhas sobre o conteúdo dos argumentos (`*DROP *`, `* --global*`, URL, caminhos) não entram no alcance; cada comando continua classificado inteiro.
+- A impressão da ação exata do pedido é `ClassPermissionFingerprint` (personagem, ação, pasta).
 
 ## Regras e erros
 
