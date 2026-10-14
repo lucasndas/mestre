@@ -12,12 +12,12 @@ func shellCommand(ctx context.Context, line string) *exec.Cmd {
 	return exec.CommandContext(ctx, "sh", "-c", line)
 }
 
-// hookTree is the process group of the hook: the shell leads it, and the
-// time limit kills the group.
-type hookTree struct{ pgid int }
+// hookTree is the process group of the hook: the shell leads it from the
+// fork on (Setpgid), and the time limit kills the group.
+type hookTree struct{ c *exec.Cmd }
 
 func newHookTree(c *exec.Cmd) (*hookTree, error) {
-	t := &hookTree{}
+	t := &hookTree{c: c}
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Cancel = func() error {
 		t.kill()
@@ -26,16 +26,14 @@ func newHookTree(c *exec.Cmd) (*hookTree, error) {
 	return t, nil
 }
 
-func (t *hookTree) started(c *exec.Cmd) error {
-	t.pgid = c.Process.Pid
-	return nil
-}
+func (*hookTree) started(*exec.Cmd) error { return nil }
 
 // kill ends every process of the group; a group already gone (ESRCH) is
-// what the call wants anyway.
+// what the call wants anyway. Start sets Process before the context can
+// call Cancel.
 func (t *hookTree) kill() {
-	if t.pgid > 0 {
-		_ = syscall.Kill(-t.pgid, syscall.SIGKILL)
+	if p := t.c.Process; p != nil && p.Pid > 0 {
+		_ = syscall.Kill(-p.Pid, syscall.SIGKILL)
 	}
 }
 

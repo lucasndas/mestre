@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -24,7 +26,12 @@ var ntResumeProcess = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtResumePro
 // the Job and only then runs, so no descendant is born outside it. The time
 // limit terminates the Job, and closing it (KILL_ON_JOB_CLOSE) ends what the
 // hook left behind.
-type hookTree struct{ job windows.Handle }
+type hookTree struct {
+	job windows.Handle
+
+	mu     sync.Mutex
+	killed bool // the time limit came before cmd was in the Job
+}
 
 func newHookTree(c *exec.Cmd) (*hookTree, error) {
 	// mestre:allow nil-sa: an anonymous Job held only by this call; it bounds the tree of the hook and nobody else opens it
@@ -48,7 +55,8 @@ func newHookTree(c *exec.Cmd) (*hookTree, error) {
 	return t, nil
 }
 
-// started puts the suspended cmd in the Job and resumes it.
+// started puts the suspended cmd in the Job and resumes it; a time limit
+// that came first leaves it suspended, to be killed.
 func (t *hookTree) started(c *exec.Cmd) error {
 	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE|windows.PROCESS_SUSPEND_RESUME,
 		false, uint32(c.Process.Pid))
@@ -56,6 +64,11 @@ func (t *hookTree) started(c *exec.Cmd) error {
 		return fmt.Errorf("open the hook: %w", err)
 	}
 	defer func() { _ = windows.CloseHandle(h) }()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.killed {
+		return errors.New("the time limit of the hook ended before it ran")
+	}
 	if err := windows.AssignProcessToJobObject(t.job, h); err != nil {
 		return fmt.Errorf("put the hook in its job: %w", err)
 	}
@@ -65,6 +78,11 @@ func (t *hookTree) started(c *exec.Cmd) error {
 	return nil
 }
 
-func (t *hookTree) kill() { _ = windows.TerminateJobObject(t.job, 1) }
+func (t *hookTree) kill() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.killed = true
+	_ = windows.TerminateJobObject(t.job, 1)
+}
 
 func (t *hookTree) close() { _ = windows.CloseHandle(t.job) }
