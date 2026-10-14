@@ -25,6 +25,7 @@ import (
 //	      - wait: 5s
 //	      - hang: true
 //	      - crash: "boom"
+//	      - limit: session   # claude: the usage limit menu
 //
 // The first matching entry wins. Without a match the agent echoes the
 // prompt and runs `mestre done`.
@@ -48,6 +49,8 @@ type Step struct {
 	Wait  *string   `yaml:"wait"`
 	Hang  bool      `yaml:"hang"`
 	Crash *string   `yaml:"crash"`
+	// Limit (claude only) hits the usage limit: "session" or "weekly".
+	Limit *string `yaml:"limit"`
 	wait  time.Duration
 }
 
@@ -55,6 +58,10 @@ type Step struct {
 type ToolStep struct {
 	Name  string         `yaml:"name"`
 	Input map[string]any `yaml:"input"`
+	// Ask (claude only) makes the tool ask for permission: the
+	// PermissionRequest hook decides, and without a decision the agent
+	// shows the permission screen and waits for the answer.
+	Ask bool `yaml:"ask"`
 }
 
 // EditStep writes a file (relative to the working folder) through the
@@ -99,13 +106,13 @@ func LoadScript(path string) (*Script, error) {
 
 func (s *Step) validate() error {
 	n := 0
-	for _, set := range []bool{s.Say != nil, s.Tool != nil, s.Edit != nil, s.Run != nil, s.Wait != nil, s.Hang, s.Crash != nil} {
+	for _, set := range []bool{s.Say != nil, s.Tool != nil, s.Edit != nil, s.Run != nil, s.Wait != nil, s.Hang, s.Crash != nil, s.Limit != nil} {
 		if set {
 			n++
 		}
 	}
 	if n != 1 {
-		return errors.New("a step has exactly one of say, tool, edit, run, wait, hang, crash")
+		return errors.New("a step has exactly one of say, tool, edit, run, wait, hang, crash, limit")
 	}
 	if s.Wait != nil {
 		d, err := time.ParseDuration(*s.Wait)

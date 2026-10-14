@@ -40,8 +40,8 @@ func TestUnknownHookEventOrTypeFailsTheTest(t *testing.T) {
 		name, program, file, content, want string
 	}{
 		{"claude event the fake does not fire", "claude", claudeFile,
-			`{"hooks": {"PreCompact": [{"matcher": "*", "hooks": [{"type": "command", "command": "x"}]}]}}`,
-			"claude hook event PreCompact"},
+			`{"hooks": {"SubagentStop": [{"hooks": [{"type": "command", "command": "x"}]}]}}`,
+			"claude hook event SubagentStop"},
 		{"claude misspelled event", "claude", claudeFile,
 			`{"hooks": {"SessionStrat": [{"hooks": [{"type": "command", "command": "x"}]}]}}`,
 			"claude hook event SessionStrat"},

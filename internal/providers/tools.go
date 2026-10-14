@@ -81,6 +81,11 @@ type Options struct {
 	// transcript belongs to docs/provedores/codex.md). Nil: every Stop is
 	// turn_end.
 	CodexTurnFailure func(stop Event) (reason StopReason, detail string, failed bool)
+	// ClaudeMultilineViaFile makes the Claude Code adapter refuse a text of
+	// several lines (ErrTooLong, so the engine sends it through the file of
+	// the long messages): the "Se falhar" of the multi-line paste, switched
+	// on by the conformance test (docs/provedores/claude-code.md).
+	ClaudeMultilineViaFile bool
 }
 
 // NormalizePath normalizes a path the way the adapters do with the paths of

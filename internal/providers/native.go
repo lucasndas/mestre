@@ -62,6 +62,11 @@ type NativePolicy struct {
 type NativeFallbacks struct {
 	// ClaudePaths is how the path rules of Claude Code are written.
 	ClaudePaths ClaudePathForm
+	// ClaudeStatusLineInLocal puts the statusLine of Claude Code in the
+	// hook file (.claude/settings.local.json) instead of the --settings
+	// file of the character, if the one declared there does not run
+	// (docs/provedores/claude-code.md#verificar-na-implementação).
+	ClaudeStatusLineInLocal bool
 	// AntigravityNoDeny leaves the fixed rules of Antigravity to the hook
 	// alone: no permissions.deny of the Mestre in the profile's settings.json.
 	AntigravityNoDeny bool

@@ -27,6 +27,11 @@ const (
 	// ActionAnswer types the answer of a decision the engine already
 	// took; without a decision the screen falls back to Default.
 	ActionAnswer Action = "answer"
+	// ActionRetrust is the folder trust screen of Claude Code: the
+	// pre-trust failed or was undone. The character leaves it without
+	// trusting, the trust of the worktree is written again and it restarts,
+	// once (TrustRecovery); if the screen comes back, it escalates.
+	ActionRetrust Action = "retrust"
 	// ActionEscalate blocks the character (reason input) and tells the
 	// Mestre da mesa.
 	ActionEscalate Action = "escalate"
@@ -45,7 +50,12 @@ type KnownScreen struct {
 	// Default is the choice without a recorded decision ("deny" on a
 	// native permission request); "" escalates instead.
 	Default string
-	// Checklist is the item of an ActionAlert or ActionAvoid screen.
+	// Block, when set on an ActionAnswer screen, blocks the character with
+	// this reason after the answer is typed (the usage limit menu: the
+	// character waits for the quota).
+	Block BlockReason
+	// Checklist is the item of an ActionAlert, ActionAvoid or ActionRetrust
+	// screen.
 	Checklist string
 }
 
