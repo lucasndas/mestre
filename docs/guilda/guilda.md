@@ -80,7 +80,7 @@ sequenceDiagram
 - **Limites:** até 5 pedidos pendentes ao mesmo tempo (do pedido à resposta) e 10 pedidos por IP por hora (padrão); acima disso, recusa sem perguntar ao Dono (`429`) e sem guardar o pedido. Com 20 pedidos recusados em 24 horas (os que não revelaram o `nonce_n` contam), o Dono recebe um alerta.
 - **Nome repetido:** a Cidadela acrescenta um sufixo; quem identifica a máquina é o `machine_id`.
 - **Entrada interrompida** depois dos certificados e antes da primeira conexão: a máquina tenta conectar com o que recebeu.
-- Só a Cidadela da época atual aceita entradas; uma Cidadela suspensa responde `503` em `/join` ([Cidadela suspensa](cidadela-e-torres.md#cidadela-suspensa)).
+- Só a Cidadela da época atual aceita entradas; uma Cidadela suspensa, uma Torre e uma Cidadela que ainda não abriu a CA respondem `503` em `/join` (as rotas existem desde a subida do motor; rota ausente daria `404`, que o instalador leria como entrada recusada) ([Cidadela suspensa](cidadela-e-torres.md#cidadela-suspensa)).
 
 ## Critérios de aceite
 

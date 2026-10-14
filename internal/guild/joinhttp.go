@@ -28,9 +28,24 @@ type Mounter interface {
 //	POST /join/{id}/reveal  its nonce
 //	GET  /join/{id}         the answer, long poll with ?wait=<seconds>
 func (c *Citadel) Mount(m Mounter) {
-	m.Handle("POST "+RouteJoin, http.HandlerFunc(c.serveBegin))
-	m.Handle("POST "+routeJoinReveal, http.HandlerFunc(c.serveReveal))
-	m.Handle("GET "+routeJoinStatus, http.HandlerFunc(c.serveStatus))
+	m.Handle(patternJoinBegin, http.HandlerFunc(c.serveBegin))
+	m.Handle(patternJoinReveal, http.HandlerFunc(c.serveReveal))
+	m.Handle(patternJoinStatus, http.HandlerFunc(c.serveStatus))
+}
+
+const (
+	patternJoinBegin  = "POST " + RouteJoin
+	patternJoinReveal = "POST " + routeJoinReveal
+	patternJoinStatus = "GET " + routeJoinStatus
+)
+
+// JoinPatterns are the patterns Mount puts on the server. A server that
+// registers them before it has a Citadel to serve them can answer 503 in the
+// meantime: a route that is not there answers 404, which the machine that
+// enters reads as a request that was refused or expired, not as a Citadel
+// that is not ready yet.
+func JoinPatterns() []string {
+	return []string{patternJoinBegin, patternJoinReveal, patternJoinStatus}
 }
 
 func (c *Citadel) serveBegin(w http.ResponseWriter, r *http.Request) {

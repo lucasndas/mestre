@@ -191,7 +191,7 @@ func (r *rig) waitFor(what string, ok func() bool) {
 
 func (n *inproc) acting() bool {
 	st := n.e.Status()
-	return st.Role == RoleCitadel && st.Acting && n.e.citadelNow() != nil
+	return st.Role == RoleCitadel && st.Acting && n.e.citadelNow() != nil && n.e.joins.open()
 }
 
 func (n *inproc) connected(epoch uint64) bool {
@@ -516,5 +516,34 @@ func TestASuspendedCitadelAnswersTheCLIOfATowerCitadelUnavailable(t *testing.T) 
 	}
 	if !strings.Contains(resp.Error.Message, "not available") {
 		t.Errorf("message %q", resp.Error.Message)
+	}
+}
+
+// A machine that asks a Tower, or a Citadel that has not opened its entries yet,
+// to take it in gets "unavailable", which the installer tries again, not
+// "refused or expired": the routes of the entry exist from the start and answer
+// 503 until a Citadel that acts mounts its own (a missing route answered 404).
+func TestTheEntryOfAGuildIsUnavailableWhereThereIsNoCitadelToTakeIt(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	a := r.node("a")
+	b := r.node("b", a)
+	c := r.node("c", b)
+	r.found(a, clock.Real{})
+	r.start(a, clock.Real{})
+	r.waitFor("a to act", a.acting)
+	r.join(b, a, clock.Real{})
+	r.start(b, clock.Real{})
+	r.waitFor("b to connect", func() bool { return b.connected(1) })
+
+	_, err := Enroll(t.Context(), c.cfg, c.paths, net.JoinHostPort(b.name, "7443"), r.net.Host(c.name), clock.Real{}, nil)
+	if !errors.Is(err, guild.ErrCitadelUnavailable) || errors.Is(err, guild.ErrJoinRefused) {
+		t.Fatalf("the entry through a Tower: %v; want the Citadel unavailable (retryable), not a refusal", err)
+	}
+	if b.e.joins.open() {
+		t.Error("a Tower has the routes of the entry open")
+	}
+	if !a.e.joins.open() {
+		t.Error("the acting Citadel has not opened the routes of the entry")
 	}
 }

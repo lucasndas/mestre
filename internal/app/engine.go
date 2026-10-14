@@ -335,6 +335,13 @@ func (e *Engine) Run(ctx context.Context) error {
 	}
 	e.towers = keepOpen{protocol.FromTransportListener(e.tls.Route(transport.RouteTower, transport.KindMachine))}
 	e.joins = &joinMux{m: e.tls, h: map[string]http.Handler{}}
+	// The routes of the entry exist from the start and answer 503 until a
+	// Citadel that acts mounts its own: a Tower, or a Citadel that has not
+	// opened its CA yet, is "not the Citadel now" (retryable), not a 404, which
+	// the machine that enters reads as "refused or expired".
+	for _, p := range guild.JoinPatterns() {
+		e.joins.Handle(p, nil)
+	}
 	ln, err := e.deps.Network.Listen(net.JoinHostPort(e.cfg.Bind, strconv.Itoa(e.cfg.EnginePort)))
 	if err != nil {
 		return err
