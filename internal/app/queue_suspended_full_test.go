@@ -65,6 +65,10 @@ func TestACommandThatNeedsNoAnswerWaitsForASuspendedCitadelToAct(t *testing.T) {
 	r.waitFor("the Citadel to act", a.acting)
 	r.waitFor("the Citadel to run the queued done", func() bool { return done.count(id) >= 1 })
 	r.waitFor("the result delivered", func() bool { mu.Lock(); defer mu.Unlock(); return len(delivered) == 1 })
+	r.waitFor("the outbox of b to be empty", func() bool {
+		rows, err := protocolPending(t, b)
+		return err == nil && rows == 0
+	})
 	mu.Lock()
 	defer mu.Unlock()
 	if q := delivered[0]; q.OpID != op || !q.Response.OK || q.AgentID != "alice" {

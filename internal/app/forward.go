@@ -226,7 +226,11 @@ func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
 		if refusal, ok := run.cliRefusal(); !ok {
 			if call.Queued {
 				// retryable: the call waited in the outbox of its Tower for
-				// this moment, and stays there for the Citadel that acts
+				// this moment, and stays there for the Citadel that acts; when
+				// this one acts it closes the Tower, which sends it again
+				if !run.fence.Acting() {
+					run.waiting(m.Peer.ID)
+				}
 				return nil, protocol.NewError(protocol.CodeUnavailable, "the Citadel does not act now: %s", refusal.Error.Code)
 			}
 			answer(refusal)
