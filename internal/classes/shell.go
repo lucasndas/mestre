@@ -80,6 +80,9 @@ type lexer struct {
 	// pending are the here-documents of the current line, whose bodies
 	// start after its newline.
 	pending []*hereDoc
+	// parens are the open parentheses (POSIX), true for one glued to a
+	// word.
+	parens []bool
 }
 
 // quoted records that the text of the current word from offset from on
@@ -285,6 +288,13 @@ func (lx *lexer) stepPOSIX() {
 			lx.i++
 		}
 	case c == '(' || c == ')':
+		if c == '(' {
+			// A ( glued to a word opens an array (a=( … )) or a pattern
+			// (@( … )), where bash does not read << as a here-document.
+			lx.parens = append(lx.parens, lx.inWord)
+		} else if len(lx.parens) > 0 {
+			lx.parens = lx.parens[:len(lx.parens)-1]
+		}
 		lx.op(string(c))
 		lx.i++
 	case c == '<' || c == '>':

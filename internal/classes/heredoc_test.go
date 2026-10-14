@@ -68,6 +68,8 @@ func TestHeredocReadByAShellIsCommands(t *testing.T) {
 		"busybox sh <<EOF\ngit push\nEOF",
 		"bash <<< 'git push'",
 		"cat <<A; bash <<B\nx\nA\ngit push\nB",
+		"{ bash; } <<EOF\ngit push\nEOF",
+		"(bash) <<'EOF'\ngit push\nEOF",
 	} {
 		want(t, decide(env, free, m.shell(cmd)), classes.Deny, classes.LayerFixed, "git push")
 	}
@@ -136,6 +138,11 @@ func TestHeredocEndsWhereBashEndsIt(t *testing.T) {
 		"cat <<EOF\r\nx\r\nEOF\r\ngit push\r\n", // CR is part of the delimiter and of the line
 		"echo $(cat <<EOF\nx\nEOF); git push",   // inside $(…), EOF) ends the body
 		"cat <<EOF \"a\nb\"\nx\nEOF\ngit push",  // quotes span lines before the body: read as commands
+		"(( x = 1 << 2 ))\ngit push",            // a shift, not a here-document
+		"echo $[1<<2]\ngit push",                // idem
+		"a=(x <<y)\ngit push",                   // in an array bash recovers on the next line
+		"x=1 a=(1\n<<y)\ngit push",              // idem, the array open on an earlier line
+		"echo @(x<<y)\ngit push",                // an extended pattern is one word
 	} {
 		want(t, decide(env, free, m.shell(cmd)), classes.Deny, classes.LayerFixed, "git push")
 	}

@@ -2,6 +2,7 @@ package classes
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -30,7 +31,10 @@ type hereDoc struct {
 // hereDoc records the << at pos, whose delimiter starts at lx.i.
 func (lx *lexer) hereDoc(pos int, strip bool) {
 	delim, quoted, ok := heredocDelim(lx.s[lx.i:])
-	if !ok {
+	if !ok || arithmeticBefore(lx.s[:pos]) || slices.Contains(lx.parens, true) {
+		// In (( )) and $[ ] bash reads << as a shift, and in an array or
+		// an extended pattern as a syntax error it recovers from on the
+		// next line: the lines after it stay commands.
 		lx.opaque = append(lx.opaque, "here-document")
 		lx.op("<<")
 		return
@@ -39,6 +43,25 @@ func (lx *lexer) hereDoc(pos int, strip bool) {
 	lx.pending = append(lx.pending, hd)
 	lx.op("<<")
 	lx.toks[len(lx.toks)-1].doc = hd
+}
+
+// arithmeticBefore reports an arithmetic command or expansion ((( or $[)
+// opened before a <<, where it may be a shift; $(( is read apart.
+func arithmeticBefore(s string) bool {
+	if strings.Contains(s, "$[") {
+		return true
+	}
+	for i := strings.Index(s, "(("); i >= 0; {
+		if i == 0 || s[i-1] != '$' {
+			return true
+		}
+		j := strings.Index(s[i+2:], "((")
+		if j < 0 {
+			break
+		}
+		i += 2 + j
+	}
+	return false
 }
 
 // heredocDelim reads the delimiter word at the start of s as bash does:
@@ -330,8 +353,17 @@ func readsProgramFile(args []string) bool {
 
 // stdinReaders are the parts that read the input of part i: itself and the
 // parts after it in its pipeline. A grouping is followed through, which
-// may take in more parts than the pipeline: that only analyses more.
+// may take in more parts than the pipeline: that only analyses more. A
+// part without a command redirects a compound command ({ bash; } <<EOF):
+// any part of the line may read it.
 func stdinReaders(parts []simple, i int) []int {
+	if len(parts[i].words) == 0 {
+		out := make([]int, len(parts))
+		for j := range parts {
+			out[j] = j
+		}
+		return out
+	}
 	out := []int{i}
 	for j := i; j+1 < len(parts); j++ {
 		switch parts[j].next {
