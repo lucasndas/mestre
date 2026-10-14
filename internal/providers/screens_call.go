@@ -131,10 +131,12 @@ func dialogBody(lines []string) []dline {
 
 // The texts a dialog draws around the command: the question above the menu
 // (Claude Code, Antigravity), the title above the command (Claude Code and
-// its fake), the header of the Codex approval and its reason.
+// its fake; Antigravity 1.3.5: "Requesting permission for:", recording
+// screen-permission-command), the header of the Codex approval and its
+// reason.
 var (
 	dialogQuestions = []string{"Do you want to proceed?", "Run this command?"}
-	dialogTitles    = []string{"Bash command", "PowerShell command", "Bash", "PowerShell"}
+	dialogTitles    = []string{"Bash command", "PowerShell command", "Bash", "PowerShell", "Requesting permission for:"}
 	fileTitles      = []string{"Create file", "Edit file", "Write file", "Overwrite file"}
 	codexHeader     = "Would you like to run the following command?"
 	// commandDialog and fileDialog tell what a dialog asks about, by its

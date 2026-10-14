@@ -58,6 +58,7 @@ func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 	st := &shellState{cwds: []string{cwd}, facts: newLineFacts()}
 	for i := range parts {
 		res.merge(e.part(&parts[i], d, st, depth))
+		res.merge(e.stdinBodies(parts, i, st, depth))
 		e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
 			// cd x && …, in a line without subshells or pipes: the rest

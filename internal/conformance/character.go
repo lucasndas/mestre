@@ -121,7 +121,7 @@ func (c *character) hook(call Call) {
 			choice = "allow"
 		}
 		c.ru.mu.Lock()
-		c.ru.calls = append(c.ru.calls, providers.CallDecision{Tool: call.Event.Tool, Choice: choice})
+		c.ru.calls = append(c.ru.calls, providers.CallDecision{Tool: call.Event.Tool, Choice: choice, Cwd: call.Event.Cwd})
 		c.ru.mu.Unlock()
 	case providers.EventPostTool: // the call ended: it asks no more
 		c.ru.mu.Lock()
@@ -150,6 +150,19 @@ func (ru *run) Decision(_ context.Context, _, screenID, screen string) (string, 
 		ru.mu.Lock()
 		defer ru.mu.Unlock()
 		i := providers.ScreenCall(screen, ru.calls)
+		if ru.r.Recorder != nil {
+			var calls []string
+			for _, d := range ru.calls {
+				if d.Tool != nil {
+					calls = append(calls, fmt.Sprintf("%s %s: %s%s%s (cwd %s)", d.Choice, d.Tool.NativeName, d.Tool.Command, strings.Join(d.Tool.Paths, " "), d.Tool.URL, d.Cwd))
+				}
+			}
+			answer := "deny"
+			if i >= 0 {
+				answer = ru.calls[i].Choice
+			}
+			ru.r.Recorder.Dialog(ru.req, screen, calls, answer, ru.pathMasks())
+		}
 		if i < 0 {
 			ru.res.Notes = append(ru.res.Notes, "a tela de permissão nativa apareceu sem decisão do motor para a chamada que ela mostra: negada")
 			return "deny", true

@@ -187,6 +187,7 @@ func (w *riskWalker) line(cmd, cwd string, d dialect, depth int) riskOut {
 	st := &shellState{cwds: []string{cwd}, facts: newLineFacts()}
 	for i := range parts {
 		out.raise(w.part(&parts[i], d, st, depth))
+		out.raise(w.stdinRisk(parts, i, st, depth))
 		w.e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
 			if parts[i].next == "&&" && !grouped {

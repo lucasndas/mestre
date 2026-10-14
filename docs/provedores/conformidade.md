@@ -49,7 +49,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 ### Resultado
 
 - Fica registrado por máquina, perfil, provedor e versão (versão e conformidade são sempre por máquina e perfil) (tabela `conformance_results`, [persistência](../arquitetura/persistencia.md)): cada etapa com passou ou falhou, a duração e a transcrição do terminal.
-- Os payloads de hook e as telas capturadas ficam guardados como gravações; depois de revisadas, atualizam o agente falso do provedor ([dublês](../qualidade/dubles.md)).
+- Os payloads de hook e as telas capturadas (a do fim de cada etapa e cada tela de permissão nativa, com as chamadas do motor comparadas a ela e a resposta) ficam guardados como gravações; depois de revisadas, atualizam o agente falso do provedor ([dublês](../qualidade/dubles.md)).
 - **Falha nas etapas 1, 2, 4 ou 6, ou evento obrigatório ausente:** o provedor fica **não conforme** naquela máquina e perfil. O requisito `provider` deixa de ser atendido ali ([requisitos](../guilda/ficha-da-maquina.md#requisitos)): o recrutamento escolhe outra máquina ou falha com a explicação ([escolha da máquina](../orquestracao/personagens.md#escolha-da-máquina)). Os personagens que já rodam continuam, marcados, e os usuários recebem o alerta do checklist.
 - **Falha nas etapas 3, 5, 7, 8 ou 10:** só aviso no checklist; o provedor continua utilizável (na etapa 10, a retomada daquele provedor passa a renascer o personagem).
 - **Falha na etapa 12:** aviso no checklist e, naquela máquina, as classes passam a negar a ferramenta de subagente do provedor no próprio personagem, só daquele provedor (`deny_subagent`; plano B em [despachante de hooks](despachante-de-hooks.md#verificar-na-implementação)).
