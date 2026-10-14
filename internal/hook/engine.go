@@ -111,6 +111,11 @@ func (e *Engine) Handle(ctx context.Context, c *localchan.Call) localchan.Respon
 	if ev.Version != providers.EventVersion {
 		return localchan.Fail(localchan.CodeBadRequest, fmt.Sprintf("event version %d", ev.Version), "update mestre")
 	}
+	if e.Clock != nil {
+		// The instant the decision goes by (the validity of a decree) is
+		// the engine's, not one a caller wrote.
+		ev.ReceivedAt = e.Clock.Now()
+	}
 	var ans Answer
 	switch {
 	case !c.Caller.Identified || c.Caller.AgentID == "" || c.Caller.AgentID != ev.AgentID:

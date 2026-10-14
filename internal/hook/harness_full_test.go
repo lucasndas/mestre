@@ -167,7 +167,7 @@ type fullEngine struct {
 }
 
 // character is the terminal registry of the test: the one character, in
-// its worktree.
+// its worktree (the work folder of the engine's root).
 type character struct{ id, worktree string }
 
 func (c character) Env(_ context.Context, id string) (classes.Env, error) {
@@ -177,7 +177,7 @@ func (c character) Env(_ context.Context, id string) (classes.Env, error) {
 	return classes.Env{AgentID: id, Worktree: c.worktree, OS: runtime.GOOS, Normalize: providers.Options{}.NormalizePath}, nil
 }
 
-func newFullEngine(t *testing.T, ch character) *fullEngine {
+func newFullEngine(t *testing.T, agent string) *fullEngine {
 	t.Helper()
 	// Unix socket paths are short (about 100 bytes): a folder of its own.
 	root, err := os.MkdirTemp("", "mh")
@@ -210,7 +210,8 @@ func newFullEngine(t *testing.T, ch character) *fullEngine {
 	}
 	rules := &classes.Store{DB: db, Clock: clock.Real{}, Agents: filepath.Join(root, "agentes")}
 	e := &fullEngine{t: t, ctx: ctx, root: root, sock: filepath.Join(root, "cli.sock"), mgr: mgr, db: db, sys: sys, Rules: rules}
-	e.Hook = &hook.Engine{Clock: clock.Real{}, Rules: rules, Ledger: rules, Characters: ch, Agents: rules.Agents}
+	e.Hook = &hook.Engine{Clock: clock.Real{}, Rules: rules, Ledger: rules, Agents: rules.Agents,
+		Characters: character{id: agent, worktree: filepath.Join(root, "work")}}
 	srv := localchan.NewServer(localchan.Config{
 		Clock: clock.Real{},
 		Identifier: localchan.NewSystemIdentifier(localchan.SystemConfig{

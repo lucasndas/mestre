@@ -24,8 +24,7 @@ import (
 // its exit, measured by the helper that starts it, has a p95 under 1 s.
 func TestTwoHundredPreToolCallsAreUnderASecondAtP95(t *testing.T) {
 	t.Parallel()
-	e := newFullEngine(t, character{})
-	e.Hook.Characters = character{id: agent, worktree: filepath.Join(e.root, "work")}
+	e := newFullEngine(t, agent)
 	var decided atomic.Int32
 	e.Hook.OnEvent = func(ev providers.Event, a hook.Answer) {
 		if ev.Event == providers.EventPreTool && a.Verdict == hook.VerdictAllow {
@@ -88,8 +87,7 @@ func TestTwoHundredPreToolCallsAreUnderASecondAtP95(t *testing.T) {
 // and it runs once; the next one asks again, with request #2.
 func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	t.Parallel()
-	e := newFullEngine(t, character{})
-	e.Hook.Characters = character{id: agent, worktree: filepath.Join(e.root, "work")}
+	e := newFullEngine(t, agent)
 	ap, st := &approvals{}, &states{}
 	e.Hook.Approvals, e.Hook.States = ap, st
 	r := rules(t, qaYAML)

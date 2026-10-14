@@ -212,13 +212,17 @@ func readRecord(path string, now time.Time) (rec QueueRecord, young bool, err er
 	}
 	defer f.Close()
 	st, err := f.Stat()
+	var age time.Duration
+	if err == nil {
+		age = now.Sub(st.ModTime())
+	}
 	switch {
 	case err != nil:
 		return rec, false, err
 	case !st.Mode().IsRegular():
 		return rec, false, errors.New("not a regular file")
-	case now.Sub(st.ModTime()) < QueueSettle:
-		return rec, true, nil
+	case age >= 0 && age < QueueSettle:
+		return rec, true, nil // a time in the future does not keep a file for ever
 	case st.Size() > MaxRecord:
 		return rec, false, fmt.Errorf("%d bytes", st.Size())
 	}
