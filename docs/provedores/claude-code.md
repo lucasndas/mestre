@@ -59,7 +59,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 | Usadas pela base | Para quê |
 |---|---|
 | `--append-system-prompt-file <MESTRE.md>` | camada do Mestre |
-| `--settings .mestre/agents/<id>/claude-settings.json` | regras nativas do personagem e statusLine ([reforço nativo](../classes/reforco-nativo.md)) |
+| `--settings .mestre/agents/<id>/claude-settings.json` | regras nativas do personagem, statusLine e `disableAllHooks: false`, num arquivo gerado do zero ([reforço nativo](../classes/reforco-nativo.md)) |
 | `--session-id <uuid>` / `--resume <uuid>` | id gerado pelo motor, liga hooks ao PTY; retomada |
 | `--permission-mode default` | único modo permitido |
 

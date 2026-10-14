@@ -16,6 +16,10 @@ type repo struct {
 	dir    string
 	common string // absolute git common dir: the key of the lock
 	bare   bool
+	// rec is the record of a worktree opened by it (OpenWorktree): every
+	// call checks the worktree against it and runs pinned to it. nil for a
+	// repository opened by its folder.
+	rec *WorktreeRecord
 }
 
 var _ Repo = (*repo)(nil)
@@ -23,7 +27,20 @@ var _ Repo = (*repo)(nil)
 func (r *repo) Dir() string { return r.dir }
 
 func (r *repo) git(ctx context.Context, args ...string) ([]byte, error) {
-	return r.g.run(ctx, runOpts{dir: r.dir}, args...)
+	return r.run(ctx, runOpts{}, args...)
+}
+
+// run runs git in the folder of the repository. A worktree opened by its
+// record is checked against it first (verify) and runs pinned to it.
+func (r *repo) run(ctx context.Context, ro runOpts, args ...string) ([]byte, error) {
+	ro.dir = r.dir
+	if r.rec != nil {
+		if err := r.rec.verify(); err != nil {
+			return nil, err
+		}
+		ro.env = append(r.rec.pin(), ro.env...)
+	}
+	return r.g.run(ctx, ro, args...)
 }
 
 // noFilters returns the options of a call that may read or write files of a
@@ -34,7 +51,7 @@ func (r *repo) git(ctx context.Context, args ...string) ([]byte, error) {
 // residual risk; the configuration of the mirror is not writable by
 // mestre-agente (docs/arquitetura/seguranca.md#git-do-motor).
 func (r *repo) noFilters(ctx context.Context) (runOpts, error) {
-	ro := runOpts{dir: r.dir}
+	var ro runOpts
 	out, err := r.git(ctx, "config", "--null", "--name-only", "--get-regexp", `^filter\.`)
 	if err != nil {
 		if exitedWithoutMessage(err, 1) {
@@ -68,7 +85,7 @@ func (r *repo) treeGit(ctx context.Context, ro runOpts, args ...string) ([]byte,
 		return nil, err
 	}
 	safe.stdin, safe.env = ro.stdin, ro.env
-	return r.g.run(ctx, safe, args...)
+	return r.run(ctx, safe, args...)
 }
 
 // mutate runs fn holding the lock of the repository.
@@ -286,7 +303,6 @@ func (r *repo) fetch(ctx context.Context, auth *Auth, remote string, refspecs ..
 	if err != nil {
 		return fmt.Errorf("fetch %s: %w", remote, err)
 	}
-	ro.dir = r.dir
 	// --upload-pack: the command run for a local or ssh remote comes from
 	// here, never from remote.<name>.uploadpack in the repository config.
 	args := []string{"fetch", "--no-tags", "--no-write-fetch-head", "--recurse-submodules=no", "--upload-pack=git-upload-pack", "--", remote}
@@ -297,7 +313,7 @@ func (r *repo) fetch(ctx context.Context, auth *Auth, remote string, refspecs ..
 		args = append(args, s)
 	}
 	return r.mutate(ctx, func() error {
-		_, err := r.g.run(ctx, ro, args...)
+		_, err := r.run(ctx, ro, args...)
 		switch {
 		case err == nil:
 			return nil

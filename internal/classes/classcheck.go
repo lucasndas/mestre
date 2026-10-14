@@ -350,6 +350,9 @@ func nativeLines(ad providers.Adapter, r *Rules, id providers.ID, goos, wt, home
 	if codexGap, agyGap := providers.CodexNoNativeNetwork(pol), providers.AntigravityNoNativeNetwork(pol); (id == providers.Codex && codexGap) || (id == providers.Antigravity && agyGap) {
 		dispatcher = append(dispatcher, "internet: sem reforço nativo de rede neste sistema (a rede do provedor fica ligada; só o despachante a barra)")
 	}
+	if id == providers.Codex && providers.CodexNoNativeWrite(pol) {
+		dispatcher = append(dispatcher, "escrita: sem barreira nativa de escrita (o sandbox do Codex fica em workspace-write para a CLI alcançar o motor; só o despachante barra a escrita)")
+	}
 	dispatcher = append(dispatcher, "git, rede por comando de shell, CLI e decretos")
 	slices.Sort(dispatcher)
 	return native, dispatcher

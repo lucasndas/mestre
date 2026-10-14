@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -140,8 +139,9 @@ func mergeKey(cur []byte, path, key string, value *jsonObject) ([]byte, error) {
 // settings.json of the account profile, once, keeping every other key. The
 // Mestre does not rely on the trust of a folder covering its subfolders, so
 // the repository root is not added (docs/provedores/antigravity.md#confiança-de-pasta).
-// The file is read by the account of the agents, so it is written readable by
-// the group and the others. Idempotent; if agy rewrote the file meanwhile
+// The file is read and rewritten by the account of the agents, so it is
+// written with the mode of every native file (replaceFile), never through a
+// link on its path. Idempotent; if agy rewrote the file meanwhile
 // the edit is done again, up to three times.
 func (a *antigravity) PreTrust(req PreTrustRequest) (Trust, error) {
 	if req.Profile == "" || !absolute(req.Profile) {
@@ -168,10 +168,7 @@ func (a *antigravity) PreTrust(req PreTrustRequest) (Trust, error) {
 		if !changed {
 			return out, nil
 		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return Trust{}, fmt.Errorf("antigravity pre-trust: %w", err)
-		}
-		if err := replaceFileWith(path, next, before, 0o044); err != nil {
+		if err := replaceFile(path, next, before); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}
@@ -240,7 +237,7 @@ func (a *antigravity) Untrust(req PreTrustRequest) (Trust, error) {
 		if err != nil {
 			return Trust{}, fmt.Errorf("antigravity untrust: %w", err)
 		}
-		if !before.exists {
+		if !before.Exists {
 			return Trust{Path: path}, nil
 		}
 		obj, err := parseJSONObject(cur)
@@ -264,7 +261,7 @@ func (a *antigravity) Untrust(req PreTrustRequest) (Trust, error) {
 		if err != nil {
 			return Trust{}, err
 		}
-		if err := replaceFileWith(path, next, before, 0o044); err != nil {
+		if err := replaceFile(path, next, before); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}

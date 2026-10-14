@@ -45,33 +45,44 @@ func merged(t testing.TB, f providers.NativeFile, cur string) string {
 }
 
 // CA-NATIVO-08
-func TestClaudeSettingsKeepOtherKeysAndUseThePOSIXFormOfWindowsPaths(t *testing.T) {
+// CA-NATIVO-11
+//
+// The --settings file is in the worktree, which the agent writes: it is
+// generated from scratch, so nothing planted there survives (disableAllHooks,
+// hooks, env, a wider permissions block), and disableAllHooks is false,
+// which wins over the local, project and user files.
+func TestClaudeSettingsAreGeneratedFromScratchAndUseThePOSIXFormOfWindowsPaths(t *testing.T) {
 	t.Parallel()
 	nc, err := nativeOf(t, providers.ClaudeCode).Native(policy())
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := merged(t, nc.Files[0], `{"statusLine": {"type": "command", "command": "mestre hook"}, "autoMemoryEnabled": true, "permissions": {"allow": ["Bash(x)"]}}`)
+	planted := `{"statusLine": {"type": "command", "command": "mestre hook"}, "autoMemoryEnabled": true, "permissions": {"allow": ["Bash(x)"]},
+		"disableAllHooks": true, "hooks": {"PreToolUse": []}, "env": {"MESTRE_AGENT_ID": ""}, "apiKeyHelper": "cat /x"}`
+	out := merged(t, nc.Files[0], planted)
 	var s map[string]any
 	if err := json.Unmarshal([]byte(out), &s); err != nil || s["statusLine"] == nil {
 		t.Fatalf("settings %s: %v", out, err)
 	}
-	for _, want := range []string{`"Edit(//c/Mestre/wt/src/**)"`, `"Read(//etc/**)"`, `"disableBypassPermissionsMode": "disable"`, `"autoMemoryEnabled": false`} {
+	for _, want := range []string{`"Edit(//c/Mestre/wt/src/**)"`, `"Read(//etc/**)"`, `"disableBypassPermissionsMode": "disable"`, `"autoMemoryEnabled": false`, `"disableAllHooks": false`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("settings lack %s:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Bash(x)") {
-		t.Fatalf("the old permissions survived:\n%s", out)
+	for _, gone := range []string{"Bash(x)", `"hooks"`, `"env"`, "apiKeyHelper"} {
+		if strings.Contains(out, gone) {
+			t.Fatalf("the planted %s survived:\n%s", gone, out)
+		}
 	}
-	if _, err := nc.Files[0].Merge([]byte("[1]")); !errors.Is(err, providers.ErrNativeFile) {
-		t.Fatalf("a settings file that is not an object: %v", err)
+	if again := merged(t, nc.Files[0], "[1]"); again != merged(t, nc.Files[0], "") {
+		t.Fatalf("a file that is not an object does not give the same file:\n%s", again)
 	}
 	if slices.Contains(nc.Args, "WebSearch") {
 		t.Fatalf("args %v: any domain keeps the search", nc.Args)
 	}
 }
 
+// CA-NATIVO-11 (the settings.json of the profile and the agent file below)
 func TestTheFallbacksTakeTheirRulesToTheDispatcher(t *testing.T) {
 	t.Parallel()
 	p := policy()
@@ -94,10 +105,20 @@ func TestTheFallbacksTakeTheirRulesToTheDispatcher(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := ag.Files[1]
-	before := `{"trustedWorkspaces": ["/w"], "permissions": {"deny": ["command(rm*)", "command(git push*)"]}, "toolPermission": "always-proceed"}`
+	before := `{"trustedWorkspaces": ["/w"], "theme": "dark", "permissions": {"deny": ["command(rm*)", "command(git push*)"], "ask": ["command(make*)"], "allow": ["command(*)"]},
+		"toolPermission": "always-proceed", "allowNonWorkspaceAccess": true, "enableTerminalSandbox": false, "agentMode": "accept-edits", "mcpServers": {"x": {}}}`
 	out := merged(t, settings, before)
 	if strings.Contains(out, "git push") || !strings.Contains(out, "command(rm*)") || !strings.Contains(out, "trustedWorkspaces") || !strings.Contains(out, `"request-review"`) {
 		t.Fatalf("settings with the deny fallback:\n%s", out)
+	}
+	// C10: only the whitelist survives; permissions keeps deny and ask.
+	if !strings.Contains(out, `"theme": "dark"`) || !strings.Contains(out, "command(make*)") {
+		t.Fatalf("a kept key was dropped:\n%s", out)
+	}
+	for _, gone := range []string{"command(*)", "allowNonWorkspaceAccess", "enableTerminalSandbox", "agentMode", "mcpServers", "always-proceed"} {
+		if strings.Contains(out, gone) {
+			t.Fatalf("the planted %s survived:\n%s", gone, out)
+		}
 	}
 	p.Fallbacks.AntigravityNoDeny = false
 	ag, _ = nativeOf(t, providers.Antigravity).Native(p)
@@ -117,11 +138,17 @@ func TestTheAntigravityAgentFileKeepsItsBodyAndFrontmatter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cur := "---\nname: mestre-a1\ndescription: x\nmainAgent: true\ntools:\n  - write_to_file\n  - view_file\n---\nCorpo da camada do Mestre.\n"
+	cur := "---\nname: mestre-a1\ndescription: x\nmainAgent: true\npermissionMode: always-proceed\nmcpServers:\n  evil: {}\nmodel: other\ntools:\n  - write_to_file\n  - view_file\n---\nCorpo da camada do Mestre.\n"
 	out := merged(t, nc.Files[0], cur)
 	if !strings.HasSuffix(out, "---\nCorpo da camada do Mestre.\n") || !strings.Contains(out, "name: mestre-a1\n") ||
 		strings.Count(out, "tools:") != 1 || strings.Contains(out, "write_to_file") || !strings.Contains(out, `"view_file"`) {
 		t.Fatalf("agent file:\n%s", out)
+	}
+	// The frontmatter is generated from scratch: nothing planted survives.
+	for _, gone := range []string{"permissionMode", "mcpServers", "evil", "model: other", "description: x"} {
+		if strings.Contains(out, gone) {
+			t.Fatalf("the planted %q survived:\n%s", gone, out)
+		}
 	}
 	if again := merged(t, nc.Files[0], out); again != out {
 		t.Fatalf("a second merge changed the file:\n%s", again)
@@ -131,14 +158,27 @@ func TestTheAntigravityAgentFileKeepsItsBodyAndFrontmatter(t *testing.T) {
 	}
 }
 
+// CA-NATIVO-09
+//
+// C7: a class without write never runs in -s read-only, which has no
+// network and would cut the `mestre` CLI from the local channel: it runs in
+// workspace-write with no extra writable root, and the gap is flagged.
 func TestCodexFlagsFollowWriteAndNetwork(t *testing.T) {
 	t.Parallel()
 	p := policy()
 	p.NoWrite = true
 	nc, _ := nativeOf(t, providers.Codex).Native(p)
-	if !slices.Equal(nc.Args, []string{"-s", "read-only", "-c", "sandbox_workspace_write.network_access=true", "--search"}) {
+	if !slices.Equal(nc.Args, []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true", "--search"}) {
 		t.Fatalf("args = %q", nc.Args)
 	}
+	if !providers.CodexNoNativeWrite(p) {
+		t.Fatal("a Codex class without write is not flagged without the native write barrier")
+	}
+	p.NoWrite = false
+	if providers.CodexNoNativeWrite(p) {
+		t.Fatal("a Codex class that writes is flagged")
+	}
+	p.NoWrite = true
 	p.AnyDomain, p.Domains = false, []string{"github.com"}
 	nc, _ = nativeOf(t, providers.Codex).Native(p)
 	if slices.Contains(nc.Args, "--search") {

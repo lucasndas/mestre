@@ -1,6 +1,6 @@
 # Mesas
 
-> **Assunto:** ciclo de vida da mesa, worktree por máquina e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** ciclo de vida da mesa, worktree por máquina e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -76,6 +76,7 @@ Regras de integração (sempre só *fast-forward*; o motor nunca faz merge sozin
 - Só commits viajam. Se houver alterações não commitadas no `done`, o motor anexa ao resultado o aviso "alterações não commitadas não foram sincronizadas" e lista os arquivos.
 - Cada transferência é idempotente pelo hash do bundle. Torre desconectada: o envio fica pendente e é refeito ao reconectar; a etapa que depende dele fica `aguardando sincronização` ([esperas](esperas-e-caixa-de-entrada.md)).
 - Evitar edição simultânea dos mesmos arquivos em máquinas diferentes é tarefa do [Mestre da mesa](mestre-da-mesa.md#instruções-do-sistema).
+- **Refs alheias não são confiáveis:** um personagem Codex alcança a escrita das refs de todo o espelho ([reforço nativo](../classes/reforco-nativo.md), risco aceito). Antes de sincronizar ou enviar, o motor confere no espelho a branch da mesa e as das outras mesas contra o último commit que ele mesmo registrou (`table_worktrees`); uma ref que andou sem passar pelo motor vira alerta ao Mestre da mesa e aos Administradores e não é enviada nem sincronizada. Fica para o M4, com a sincronização e o registro dos worktrees, que o M3 não tem; no M3 o `gitx` já abre um worktree só pelo registro (`OpenWorktree`).
 - Só o motor envia a branch da mesa do espelho para o GitHub ([ações por nível](../github/acoes-por-nivel.md)). Se uma Torre da mesa estiver desconectada no envio, a resposta do `mestre pr` inclui o aviso.
 - **Troca de Cidadela:** o espelho e os worktrees continuam válidos (nada muda de caminho), e os commits que só a Cidadela antiga tinha voltam em `refs/mestre/recuperados/…`, com aviso ao Mestre da mesa; o procedimento está nas [regras da troca](../guilda/cidadela-e-torres.md).
 

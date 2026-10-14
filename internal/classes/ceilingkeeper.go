@@ -7,11 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/safefile"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -26,16 +25,26 @@ type CeilingSource interface {
 	Write(ctx context.Context, data []byte) error
 }
 
+// MaxCeilingBytes bounds teto.yaml: the approved version travels whole in
+// the Guild database and its replication log.
+const MaxCeilingBytes = 256 << 10
+
 // CeilingPath is the teto.yaml under the main clone of a workspace, on
-// disk.
+// disk. The main clone is in a folder the account of the agents writes, so
+// the file is read and written through internal/safefile: a link or a
+// junction on the path, a file that is not a regular one (a FIFO, a device)
+// and one over MaxCeilingBytes are refused, never followed nor read.
 type CeilingPath string
 
 // Read reads the file.
-func (p CeilingPath) Read(context.Context) ([]byte, error) { return os.ReadFile(string(p)) }
+func (p CeilingPath) Read(context.Context) ([]byte, error) {
+	data, _, err := safefile.Read(string(p), MaxCeilingBytes)
+	return data, err
+}
 
 // Write replaces the file whole: a temporary file renamed over it.
 func (p CeilingPath) Write(_ context.Context, data []byte) error {
-	return writeAtomic(string(p), data, 0o644)
+	return safefile.Write(string(p), data, safefile.Options{Mode: 0o644, Sync: true})
 }
 
 // CeilingRecord is the approved version of the ceiling of a workspace, as the
@@ -150,6 +159,10 @@ func (k *CeilingKeeper) Check(ctx context.Context) (CeilingState, error) {
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		a = &CeilingAlert{Kind: CeilingMissing, Detail: CeilingFile + " não existe; vale a última versão aprovada"}
+	case safefile.Refused(err):
+		// A link, a special file or a huge one: nothing of it is read, so
+		// nothing of what it points to reaches the alert.
+		a = &CeilingAlert{Kind: CeilingInvalid, Detail: CeilingFile + " não é um arquivo comum dentro do workspace (link, junção, arquivo especial ou maior que o limite); não foi lido e vale a última versão aprovada"}
 	case err != nil:
 		return st, fmt.Errorf("ceiling of %s: %w", k.Workspace, err)
 	default:
@@ -282,30 +295,4 @@ func (k *CeilingKeeper) Run(ctx context.Context, report func(error)) {
 func hashOf(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
-}
-
-// writeAtomic writes path whole: a temporary file in the same folder,
-// renamed over it, so a reader never sees half a file.
-func writeAtomic(path string, data []byte, mode os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
 }

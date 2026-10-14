@@ -20,6 +20,13 @@ type NativePolicy struct {
 	Worktree string
 	// ProfileHome is the HOME of the account profile (Antigravity).
 	ProfileHome string
+	// GitDir and GitCommon are the engine's record of a worktree that came
+	// out of the mirror: its git folder (<mirror>/worktrees/<name>) and the
+	// mirror. They are never read from the .git file or the commondir of the
+	// worktree, which the agent writes. Empty for the main clone (its .git
+	// is a folder) or a worktree without a record: then Codex opens no git
+	// folder to writing (docs/classes/reforco-nativo.md).
+	GitDir, GitCommon string
 
 	// Write are the globs, relative to the worktree, the character may write.
 	Write []string

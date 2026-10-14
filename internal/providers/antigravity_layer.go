@@ -3,7 +3,6 @@ package providers
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,15 +12,11 @@ import (
 // the character's: missing, or with another name.
 var ErrAgentFile = errors.New("antigravity agent file")
 
-// agyManaged are the frontmatter keys the Mestre layer owns. `tools` belongs
-// to the native controls and is kept; excludeDefaultComponents would take the
-// factory sections out of the prompt and permissionMode does not exist in
-// 1.3.3, so the Mestre never writes them and removes them if they appear.
-var agyManaged = []string{"name", "description", "mainAgent", "subagent", "excludeDefaultComponents", "permissionMode"}
-
 // agentFront is the frontmatter the Mestre generates for a character, shared
 // by the native controls (the tools field) and the layer, so both converge on
-// the same file in any order.
+// the same file in any order. It never has excludeDefaultComponents (it would
+// take the factory sections out of the prompt) nor permissionMode (not in
+// 1.3.3), and as both writers start from it, no such key survives a write.
 func agentFront(agentID string) []string {
 	return []string{
 		"name: mestre-" + agentID,
@@ -58,7 +53,7 @@ func (a *antigravity) DeliverMestreLayer(req LayerRequest) (Layer, error) {
 	if req.Worktree == "" || !absolute(req.Worktree) {
 		return Layer{}, fmt.Errorf("antigravity layer of %s: the worktree %q is not absolute", req.AgentID, req.Worktree)
 	}
-	raw, err := os.ReadFile(mestreMD)
+	raw, err := readShared(mestreMD)
 	if err != nil {
 		return Layer{}, fmt.Errorf("antigravity layer of %s: %w", req.AgentID, err)
 	}
@@ -88,37 +83,20 @@ func (a *antigravity) DeliverMestreLayer(req LayerRequest) (Layer, error) {
 	return l, nil
 }
 
-// agentFile sets the frontmatter and the body of the agent file and keeps
-// the other frontmatter lines (the tools field of the native controls).
+// agentFile writes the agent file from scratch: the generated frontmatter,
+// the body, and, of the old file, only the tools field of the native
+// controls (keptToolsLine: the exact line they write, or an empty list). The
+// file is in the worktree, which the agent writes, so nothing else it put
+// there is kept.
 func agentFile(cur []byte, agentID, body string) []byte {
 	text := strings.ReplaceAll(string(cur), "\r\n", "\n")
 	front := agentFront(agentID)
 	if old, _, ok := frontmatter(text); ok {
-		front = append(front, unmanaged(old)...)
+		if line, has := keptToolsLine(old); has {
+			front = append(front, line)
+		}
 	}
 	return []byte("---\n" + strings.Join(front, "\n") + "\n---\n" + body)
-}
-
-// unmanaged drops the managed keys and their continuation lines.
-func unmanaged(front []string) []string {
-	var out []string
-	skip := false
-	for _, l := range front {
-		if skip && (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t") || strings.HasPrefix(l, "-")) {
-			continue
-		}
-		skip = false
-		key, _, _ := strings.Cut(l, ":")
-		for _, m := range agyManaged {
-			if key == m {
-				skip = true
-			}
-		}
-		if !skip {
-			out = append(out, l)
-		}
-	}
-	return out
 }
 
 // frontValue is the value of a top-level key of the frontmatter, unquoted.
@@ -142,7 +120,7 @@ func frontValue(front []string, key string) (string, bool) {
 // the one of --agent, it is the main agent, and it does not carry a key the
 // Mestre never writes. It is the Verify of the launch command.
 func CheckAntigravityAgentFile(path, agent string) error {
-	raw, err := os.ReadFile(path)
+	raw, err := readShared(path)
 	if err != nil {
 		return fmt.Errorf("%w: %s cannot be read (%v): agy would open the default agent, not %s", ErrAgentFile, path, err, agent)
 	}

@@ -76,6 +76,7 @@ Quem usa o teto: [classes](classes.md) (M3); a sessão zero cria o arquivo (M4);
 ## Regras e erros
 
 - `teto.yaml` inválido: vale a última versão aprovada, com alerta aos Administradores.
+- `teto.yaml` que não é um arquivo comum dentro do workspace (link, junção, FIFO, dispositivo) ou maior que 256 KiB: não é lido nem seguido (`internal/safefile`, [reforço nativo](reforco-nativo.md#quando-as-regras-mudam)); vale como inválido, e o alerta diz o que ele é, sem nada do conteúdo.
 - Decreto que amplia o teto afrouxa a segurança: pede a confirmação reforçada com PIN ([segurança do canal](../telegram/seguranca-do-canal.md)).
 - Mestre da mesa nunca libera para uma classe algo que o teto proíbe, nem por herança de App ou cópia de grimório.
 

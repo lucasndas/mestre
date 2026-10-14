@@ -96,7 +96,11 @@ func TestPreTrustTrustsTheWorktreeAndTakesTheTrustOffTheMirror(t *testing.T) {
 	}
 }
 
-func TestPreTrustCreatesTheFileKeepsTheModeAndRefusesWhatItCannotRead(t *testing.T) {
+// P11: with separate accounts, the file the engine renames belongs to the
+// engine, and Claude Code reads and rewrites it as mestre-agente: the mode is
+// the rule of every native file (0664, the group of the folder), never the
+// 0600 Claude Code creates it with.
+func TestPreTrustCreatesTheFileWithTheNativeModeAndRefusesWhatItCannotRead(t *testing.T) {
 	t.Parallel()
 	claude := providers.NewClaudeCode(providers.Options{})
 
@@ -108,20 +112,20 @@ func TestPreTrustCreatesTheFileKeepsTheModeAndRefusesWhatItCannotRead(t *testing
 		t.Errorf("created file = %v", got)
 	}
 	if runtime.GOOS != "windows" {
-		if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
-			t.Errorf("new file mode = %v, want 0600", st.Mode().Perm())
+		if st, _ := os.Stat(path); st.Mode().Perm() != 0o664 {
+			t.Errorf("new file mode = %v, want 0664", st.Mode().Perm())
 		}
-		if err := os.Chmod(path, 0o640); err != nil {
+		if err := os.Chmod(path, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := claude.PreTrust(providers.PreTrustRequest{OS: "linux", Profile: profile, Worktree: "/srv/mestre/mesas/4-outra"}); err != nil {
 			t.Fatal(err)
 		}
-		if st, _ := os.Stat(path); st.Mode().Perm() != 0o640 {
-			t.Errorf("rewritten file mode = %v, want 0640 kept", st.Mode().Perm())
+		if st, _ := os.Stat(path); st.Mode().Perm() != 0o664 {
+			t.Errorf("rewritten file mode = %v, want 0664, not the 0600 it had", st.Mode().Perm())
 		}
 	}
-	if entries, _ := filepath.Glob(filepath.Join(profile, ".claude.json.mestre-*")); len(entries) != 0 {
+	if entries, _ := filepath.Glob(filepath.Join(profile, ".*.mestre-*")); len(entries) != 0 {
 		t.Errorf("temporary files left: %v", entries)
 	}
 
