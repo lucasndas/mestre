@@ -63,7 +63,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 
 **Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits` (e `plan`: só `default` vale); `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir` com qualquer pasta que não seja `.mestre/agents/<id>` do próprio personagem (essa única é passada pelo motor para as skills por personagem, ver [personagem](../sessao-zero/personagem.md)); `-p` (a base é interativa). Um flag curto junto de mais texto também é recusado (`-dc`, `-r1234`): o Commander o lê como vários flags (`-d -c`) ou como flag e valor (`--resume 1234`), que a conferência por nome não veria; cada flag curto vai sozinho.
 
-`BuildLaunch` recusa o comando sem a camada do Mestre, sem o `--settings` do próprio personagem ou sem `CLAUDE_CONFIG_DIR`, e confere as proibidas na base e no motor (também `--system-prompt-snapshot`, `--session-id`, `--resume` e `--settings`/`--append-system-prompt-file` vindos da base). Acrescenta `--permission-mode default` se faltar, para nenhum modo da configuração do usuário valer.
+`BuildLaunch` confere por **lista do que é permitido**, como no Codex e no Antigravity: a base só pode ter `--model`, `--fallback-model`, `--verbose`, `-d`/`--debug[=filtro]`, `--chrome` (só na base do Operador, conferida ao salvar) e `--permission-mode default`; o motor, só `--append-system-prompt-file`, `--settings`, `--add-dir` e `--disallowedTools`. Qualquer outra opção (também as que ninguém nomeou: `--safe-mode`, `--managed-settings`, `--worktree`, `--rc`, `--mcp-config`, `--allowedTools`…), um argumento que não é opção (prompt, subcomando como `mcp`) e `--` são recusados: depois de `--` o `--session-id`, o `--settings` e o `--permission-mode` do motor virariam texto do prompt. Os argumentos do motor vêm por último e inteiros. Recusa também o comando sem a camada do Mestre, sem o `--settings` do próprio personagem ou sem `CLAUDE_CONFIG_DIR`, e acrescenta `--permission-mode default` se faltar, para nenhum modo da configuração do usuário valer.
 
 ### Contas múltiplas
 
@@ -88,7 +88,7 @@ Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](ad
 
 | Tela | Ação |
 |---|---|
-| confiar na pasta | evitar (pré-confiança); **nunca responder "confiar"** (gravaria a chave do espelho). Se aparecer: encerrar o processo sem responder a tela, regravar a chave do worktree, remover a do espelho e reiniciar o personagem uma vez; se aparecer de novo, escalar (`blocked`, motivo `input`, alerta ALL-12) |
+| confiar na pasta | evitar (pré-confiança); **nunca responder "confiar"** (gravaria a chave do espelho). Se aparecer antes de a sessão começar (depois, o texto só pode ser do modelo): encerrar o processo sem responder a tela, regravar a chave do worktree, remover a do espelho e reiniciar o personagem uma vez; se aparecer de novo, escalar (`blocked`, motivo `input`, alerta ALL-12) |
 | aprovação de import externo | escalar |
 | aprovação de servidores do `.mcp.json` | escalar |
 | "usar esta `ANTHROPIC_API_KEY`?" | escalar (uma vez por perfil) |

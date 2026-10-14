@@ -130,6 +130,17 @@ func TestHookCommandQuotesABlankAndRefusesShellSyntax(t *testing.T) {
 			t.Errorf("binary %q was accepted", bin)
 		}
 	}
+	// PowerShell reads typographic quotes as quotes and dashes as the - of
+	// a parameter: a ” would close the "…" of the path (M3 audit, round 2).
+	for _, bin := range []string{`C:\Mestre\a”; calc; “\mestre.exe`, `C:\Mestre\a’b\mestre.exe`, `C:\Mestre\a‘b\mestre.exe`,
+		`C:\Mestre\a„b\mestre.exe`, `C:\Mestre\a—b\mestre.exe`, `C:\Mestre\a–b\mestre.exe`, `C:\Mestre\a―b\mestre.exe`} {
+		if _, err := a.HookFiles(providers.HookFilesRequest{OS: "windows", Root: `C:\p`, Binary: bin}); err == nil {
+			t.Errorf("binary %q was accepted", bin)
+		}
+	}
+	if _, err := a.HookFiles(providers.HookFilesRequest{OS: "windows", Root: `C:\p`, Binary: `C:\Mestre\a-b\mestre.exe`}); err != nil {
+		t.Errorf("a plain - in the path: %v", err)
+	}
 	if _, err := a.HookFiles(providers.HookFilesRequest{Binary: "/usr/local/bin/mestre"}); err == nil {
 		t.Error("hooks without the profile")
 	}

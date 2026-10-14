@@ -133,6 +133,14 @@ func checkCodexArgs(args []string, engine bool, found *codexArgs) error {
 		case "no-daemon":
 			found.noDaemon = true
 		case "sandbox":
+			// clap refuses an option given twice, so a base -s would make
+			// every start fail: the sandbox is the native controls' only.
+			if !engine {
+				return fmt.Errorf("codex: the base passes %s; the sandbox (-s) is given by the native controls of the class only", a)
+			}
+			if found.sandbox {
+				return errors.New("codex: the sandbox (-s) given twice")
+			}
 			if err := codexSandbox(value); err != nil {
 				return err
 			}

@@ -3,7 +3,6 @@ package providers_test
 import (
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/providers"
@@ -67,14 +66,10 @@ func TestCodexNetworkOfAClassWithoutInternet(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=" + tt.network}
+		// No folder is freed for writing, and the empty list is pinned.
+		want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=" + tt.network, "-c", "sandbox_workspace_write.writable_roots=[]"}
 		if !slices.Equal(nc.Args, want) {
 			t.Errorf("%s (fallback %v): args = %q, want %q", tt.os, tt.fallback, nc.Args, want)
-		}
-		for _, a := range nc.Args {
-			if strings.Contains(a, "writable_roots") {
-				t.Errorf("%s: args = %q free a folder for writing", tt.os, nc.Args)
-			}
 		}
 		if providers.CodexNoNativeNetwork(p) != tt.gap {
 			t.Errorf("%s (fallback %v): no native network barrier = %v, want %v", tt.os, tt.fallback, !tt.gap, tt.gap)

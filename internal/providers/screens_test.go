@@ -31,7 +31,7 @@ var dialogSamples = map[providers.ID]map[string]string{
 	providers.Antigravity: {
 		"trust":             "Do you trust the contents of this project?\n> 1. Yes, trust\n  2. No",
 		"login":             "Sign in with Google to continue",
-		"permission":        "rm -rf build\nRun this command?\n> 1. Yes, run command\n  4. No, cancel",
+		"permission":        "rm -rf build\nRun this command?\n> 1. Yes, run command\n  2. Yes, and always allow\n  3. No\n  4. No, cancel",
 		"subagent-approval": "helper needs approval for Create (ctrl+k to approve)",
 		"review":            "Review plan\n> 1. Approve",
 	},

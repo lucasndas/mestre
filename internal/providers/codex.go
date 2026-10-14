@@ -40,7 +40,7 @@ func codexScreens() []KnownScreen {
 		{ID: "login", Pattern: regexp.MustCompile(`Sign in with ChatGPT`), Action: ActionAlert, Checklist: "ALL-11"},
 		// Pre-trust avoids it; in a worktree of the Mestre the engine's
 		// decision answers "Trust and continue", the first option.
-		{ID: "trust", Pattern: regexp.MustCompile(`Trust this folder\?`), Action: ActionAnswer,
+		{ID: "trust", Pattern: regexp.MustCompile(`Trust this folder\?`), Action: ActionAnswer, StartOnly: true,
 			Answers: map[string][]byte{"trust": menuFirst}},
 		// Trusting all could approve hooks of third parties that came with
 		// the repository: escalate, and the checklist asks for the trust
@@ -48,7 +48,7 @@ func codexScreens() []KnownScreen {
 		{ID: "hook-review", Pattern: regexp.MustCompile(`Hooks need review|Trust all and continue`), Action: ActionEscalate, Checklist: "ALL-11"},
 		// The Mestre lets the CLI update itself: "Update now", the first
 		// option.
-		{ID: "update", Pattern: regexp.MustCompile(`(?s)Update now.*Skip until next version`), Action: ActionAnswer,
+		{ID: "update", Pattern: regexp.MustCompile(`(?s)Update now.*Skip until next version`), Action: ActionAnswer, StartOnly: true,
 			Answers: map[string][]byte{"update": menuFirst}, Default: "update"},
 		// The setup of the Windows sandbox: escalated the first time of a
 		// profile.
@@ -57,6 +57,7 @@ func codexScreens() []KnownScreen {
 		// decision recorded for the call, or deny. y approves; Esc is
 		// "No, and tell Codex what to do differently".
 		{ID: "approval", Pattern: regexp.MustCompile(`Would you like to run the following command\?|Do you want to approve network access to`), Action: ActionAnswer,
+			Option:  regexp.MustCompile(`^Yes\b`),
 			Answers: map[string][]byte{"allow": []byte("y"), "deny": []byte("\x1b")}, Default: "deny"},
 	}
 }
