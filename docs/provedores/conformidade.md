@@ -20,7 +20,8 @@ O motor da máquina cria, numa pasta temporária própria:
 - um repositório git de teste, com espelho `--bare` e um worktree para o personagem, como numa [mesa](../sessao-zero/mesa.md), e com um `AGENTS.md` contendo um código `P-<aleatório>` e a regra "a palavra-teste é AZUL";
 - uma classe temporária `conformidade`, invisível aos usuários, cujo `CLASS.md` tem um código `M-<aleatório>` e a regra "a palavra-teste é VERDE", e cujo `permissions.yaml` só deixa escrever em `permitido/**`;
 - uma skill de teste `mestre-conformidade` cujo corpo (não a descrição) manda responder `S-<aleatório>`;
-- para o Claude Code, uma segunda skill `mestre-sonda` só em `.agents/skills/` (sem a cópia em `.claude/skills/`).
+- para o Claude Code, uma segunda skill `mestre-sonda` só em `.agents/skills/` (sem a cópia em `.claude/skills/`);
+- no repositório, a configuração que tentaria desligar os hooks do Mestre: um `.claude/settings.json` com `disableAllHooks: true` e um `env` que esvazia `MESTRE_AGENT_ID` e desvia `MESTRE_CLI` e `MESTRE_ENDPOINT`, e um `.codex/config.toml` com `[features] hooks = false` (e `codex_hooks`, o nome antigo); as etapas 4 a 6 falham se ela vencer ([Claude Code](claude-code.md#verificar-na-implementação), [Codex](codex.md#verificar-na-implementação)).
 
 Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks, camada do Mestre e início pela base do provedor, com o perfil de conta que está sendo testado.
 
@@ -72,7 +73,8 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 - Tempo limite total por provedor: 10 minutos (padrão). Estourou: falha, com a transcrição.
 - Sem login no perfil: não roda; o checklist já mostra o login pendente.
 - Nada de nova tentativa automática: falha é registrada e investigada (regra de testes instáveis em [testes](../qualidade/testes.md)).
-- A pasta temporária, a classe e a sessão de teste são apagadas no fim, inclusive as entradas de confiança gravadas para ela.
+- A pasta temporária, a classe e a sessão de teste são apagadas no fim, inclusive as entradas de confiança gravadas para ela. Os arquivos de sessão no perfil são os que a rodada monta (a pasta do projeto do worktree e a do espelho no Claude, os arquivos de um id de sessão com forma de UUID no Codex e no Antigravity), alcançados sem passar por link ou junção; nunca um caminho de payload nem a pasta dele, que a conta dos agentes pode escrever.
+- A tela de permissão nativa que aparece numa rodada é respondida com a decisão do motor para a chamada que ela mostra, uma vez; sem ela, é negada ([adaptador](adaptador.md#prontidão-e-telas-interativas)).
 - O teste gasta poucos turnos curtos de cota real; o consumo entra no registro de uso como "sistema".
 
 ## Critérios de aceite

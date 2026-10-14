@@ -32,7 +32,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 ### Hooks
 
 - **Arquivo:** `.claude/settings.local.json`, chave `hooks`, parte gerenciada mesclada: os handlers do Mestre saem e entram de novo no fim de cada lista, os do usuário ficam ([mesa](../sessao-zero/mesa.md)). Hooks de várias fontes somam; handler idêntico roda uma vez; edições recarregam sem reiniciar.
-- **Comando gravado:** a linha de guarda da [mesa](../sessao-zero/mesa.md#não-atrapalhar-quem-clona), não a chamada pura do exemplo abaixo: só chama `mestre hook` se `MESTRE_AGENT_ID` existe e o binário é achado (`${MESTRE_CLI:-<caminho estável>}`); senão sai com 0 sem saída. É `sh` no Linux e `cmd` (`if defined … if exist …`) no Windows, forma que a conformidade confere lá.
+- **Comando gravado:** a linha de guarda da [mesa](../sessao-zero/mesa.md#não-atrapalhar-quem-clona), não a chamada pura do exemplo abaixo: só chama `mestre hook` se `MESTRE_AGENT_ID` existe e o binário é achado; senão sai com 0 sem saída. O binário é o caminho estável, que nenhuma variável troca (o repositório poderia defini-la); só sem ele vale `${MESTRE_CLI:-mestre}`. O Claude Code roda o hook de comando com bash nos dois sistemas (`sh` no Linux; no Windows o Git Bash, que ele exige para um hook sem `"shell": "powershell"`), então a linha é a mesma, com o caminho do Windows em barras normais ([Verificar](#verificar-na-implementação)). **Configuração do repositório:** o arquivo `--settings` do personagem fica acima do `.claude/settings.json` do repositório e leva `env` com `MESTRE_AGENT_ID`, `MESTRE_CLI` e `MESTRE_ENDPOINT` do personagem, para o repositório não esvaziar nem desviar as variáveis dos hooks, e `disableAllHooks: false`.
 - **Eventos ligados:** SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, PostToolUseFailure, Stop, StopFailure, Notification, PreCompact, SessionEnd. Matcher `*` nos eventos de ferramenta.
 - **Entrada:** JSON no stdin, `snake_case`: `session_id`, `prompt_id`, `transcript_path`, `cwd`, `hook_event_name`, `permission_mode`; PreToolUse traz `tool_name`, `tool_input`, `tool_use_id`; Stop traz `last_assistant_message`; StopFailure traz `error` e `error_details`.
 - **Saída:** exit 0 com JSON. PreToolUse: `hookSpecificOutput.permissionDecision` (`allow|deny|ask|defer`) e `permissionDecisionReason`; `allow` não passa por cima de regras nativas `deny`/`ask`. PermissionRequest: `hookSpecificOutput.decision.behavior`.
@@ -41,9 +41,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - Hooks rodam sem TTY e herdam o ambiente do agente (inclusive `MESTRE_AGENT_ID`), menos `OTEL_*`.
 
 ```json
-{"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command",
-  "command": "mestre hook --provider claude-code --event PreToolUse",
-  "timeout": 30, "onFailure": "block"}]}]}}
+{"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "mestre hook --provider claude-code --event PreToolUse", "timeout": 30, "onFailure": "block"}]}]}}
 ```
 
 ### Confiança de pasta
@@ -63,7 +61,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 | `--session-id <uuid>` / `--resume <uuid>` | id gerado pelo motor, liga hooks ao PTY; retomada |
 | `--permission-mode default` | único modo permitido |
 
-**Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits` (e `plan`: só `default` vale); `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir` com qualquer pasta que não seja `.mestre/agents/<id>` do próprio personagem (essa única é passada pelo motor para as skills por personagem, ver [personagem](../sessao-zero/personagem.md)); `-p` (a base é interativa).
+**Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits` (e `plan`: só `default` vale); `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir` com qualquer pasta que não seja `.mestre/agents/<id>` do próprio personagem (essa única é passada pelo motor para as skills por personagem, ver [personagem](../sessao-zero/personagem.md)); `-p` (a base é interativa). Um flag curto junto de mais texto também é recusado (`-dc`, `-r1234`): o Commander o lê como vários flags (`-d -c`) ou como flag e valor (`--resume 1234`), que a conferência por nome não veria; cada flag curto vai sozinho.
 
 `BuildLaunch` recusa o comando sem a camada do Mestre, sem o `--settings` do próprio personagem ou sem `CLAUDE_CONFIG_DIR`, e confere as proibidas na base e no motor (também `--system-prompt-snapshot`, `--session-id`, `--resume` e `--settings`/`--append-system-prompt-file` vindos da base). Acrescenta `--permission-mode default` se faltar, para nenhum modo da configuração do usuário valer.
 
@@ -104,7 +102,7 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 ## Regras e erros
 
-- Versão abaixo de 2.1.295: base recusada na máquina (sem `onFailure`, o despachante falharia aberto).
+- Versão abaixo de 2.1.295: base recusada na máquina (sem `onFailure`, o despachante falharia aberto); a recusa chega no M7, com a detecção da versão instalada ([ordem](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem)).
 - Pasta sem confiança detectada (tela de confiança ou ausência de hooks): ver monitoramento reduzido no [adaptador](adaptador.md#monitoramento-reduzido).
 - Se o `.claude.json` estiver sendo reescrito pelo Claude, a pré-confiança relê, mescla e grava de novo (até 3 tentativas) e confere o resultado.
 
@@ -127,6 +125,8 @@ Todos são conferidos pelo [teste de conformidade](conformidade.md).
 
 - **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição. **Resultado (2026-10-14, 2.1.299):** nenhuma das duas apareceu na primeira rodada (os hooks decidiram tudo); o item continua aberto.
 - **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 na máquina Windows (rodada do Windows).
+- **Verificar na implementação:** no Windows, o Claude Code roda a linha dos hooks e da statusLine com o Git Bash, e ela chama o `mestre.exe` pelo caminho estável em barras normais (ou pelo `MESTRE_CLI` com as barras invertidas trocadas) e passa o código de saída (2 bloqueia). **Padrão:** como em Hooks; a suíte completa do CI Windows roda a linha no Git Bash. **Se falhar:** cada handler leva `"shell": "powershell"` e a linha vira a do PowerShell (`if ($env:MESTRE_AGENT_ID -and (Test-Path -LiteralPath '<caminho>')) { & '<caminho>' hook …; exit $LASTEXITCODE }`). **Onde:** etapas 4 a 7 na rodada do Windows.
+- **Verificar na implementação:** um `.claude/settings.json` do repositório com `disableAllHooks: true` e `env` que esvazia `MESTRE_AGENT_ID` e desvia `MESTRE_CLI` e `MESTRE_ENDPOINT` não desliga os hooks do Mestre. **Padrão:** não desliga: o `--settings` do personagem está acima e fixa essas chaves. **Se falhar:** o personagem não inicia num repositório que tenha essas chaves (o motor confere o arquivo antes do início) e o checklist avisa. **Onde:** o repositório de teste da conformidade traz esse arquivo, e as etapas 4 a 6 falham se ele vencer (rodadas do Linux e do Windows).
 - **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`); a chave é `ClaudeStatusLineInLocal` dos `NativeFallbacks`, e uma statusLine do usuário nunca é trocada. **Onde:** etapa 7. **Resultado (2026-10-14, 2.1.299):** Padrão confirmado; o `rate_limits` só vem depois da primeira resposta.
 - **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** o motor manda mensagens de várias linhas pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e digita só a linha que pede para lê-lo (opção `ClaudeMultilineViaFile` do adaptador: `TypeMessage` recusa o texto de várias linhas como o de texto longo). **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas. **Resultado (2026-10-14, 2.1.299):** Padrão confirmado.
 

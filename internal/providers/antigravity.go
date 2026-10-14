@@ -111,28 +111,79 @@ var antigravityPathArgs = map[string][]string{
 // denial.
 var escape = []byte("\x1b")
 
-// agyRefused are the flags the Mestre never lets a base or a sheet give
-// (docs/provedores/antigravity.md#flags), with why.
-var agyRefused = map[string]string{
-	"--dangerously-skip-permissions": "it approves every native permission request by itself, and voids --sandbox",
-	"-p":                             "the base is interactive",
-	"--print":                        "the base is interactive",
-	"--prompt":                       "the base is interactive",
-	"--add-dir":                      "the workspace is the worktree of the table",
-	"--agent":                        "the Mestre sets the agent of the character",
-	"--conversation":                 "the Mestre resumes by the id saved for the character",
-	"--continue":                     "it resumes the most recent conversation of the folder; the Mestre resumes by id",
-	"-c":                             "it resumes the most recent conversation of the folder; the Mestre resumes by id",
+// agyOption is one flag of `agy` (1.3.5, `agy --help`), read the way the
+// Go flag package of agy reads it: -name and --name are the same flag, the
+// value goes after "=" or, for a flag that is not a switch, in the next
+// argument (whatever it is); the first argument that is not a flag, or
+// "--", ends the flags, and everything after it, the --agent of the Mestre
+// included, is not read as a flag. refused, when set, is why no start has
+// it (docs/provedores/antigravity.md#flags).
+type agyOption struct {
+	value   bool
+	refused string
 }
 
+const agyResumes = "it resumes the most recent conversation of the folder; the Mestre resumes by id"
+
+var agyFlags = map[string]agyOption{
+	"model":                        {value: true},
+	"effort":                       {value: true},
+	"mode":                         {value: true}, // only default (below)
+	"sandbox":                      {},            // only on (below)
+	"disable-slash-commands":       {},
+	"log-file":                     {value: true},
+	"dangerously-skip-permissions": {refused: "it approves every native permission request by itself, and voids --sandbox"},
+	"remote-control":               {refused: "it lets the conversation be driven from outside the Mestre"},
+	"p":                            {value: true, refused: "the base is interactive"},
+	"print":                        {value: true, refused: "the base is interactive"},
+	"prompt":                       {value: true, refused: "the base is interactive"},
+	"print-timeout":                {value: true, refused: "the base is interactive"},
+	"input-format":                 {value: true, refused: "the base is interactive"},
+	"output-format":                {value: true, refused: "the base is interactive"},
+	"json-schema":                  {value: true, refused: "the base is interactive"},
+	"i":                            {value: true, refused: "the first message is the engine's"},
+	"prompt-interactive":           {value: true, refused: "the first message is the engine's"},
+	"add-dir":                      {value: true, refused: "the workspace is the worktree of the table"},
+	"project":                      {value: true, refused: "the workspace is the worktree of the table"},
+	"new-project":                  {refused: "the workspace is the worktree of the table"},
+	"agent":                        {value: true, refused: "the Mestre sets the agent of the character"},
+	"conversation":                 {value: true, refused: "the Mestre resumes by the id saved for the character"},
+	"continue":                     {refused: agyResumes},
+	"c":                            {refused: agyResumes},
+}
+
+// refuseAgyFlags refuses what a start never has: a refused or unknown flag,
+// --mode other than default, --sandbox switched off, and any argument that
+// is not a flag (a subcommand or a prompt, which would also drop the
+// --agent that follows).
 func refuseAgyFlags(args []string) error {
-	for _, arg := range args {
-		name := arg
-		if i := strings.IndexByte(arg, '='); i > 0 && strings.HasPrefix(arg, "-") {
-			name = arg[:i]
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		name, value, inline := "", "", false
+		switch {
+		case a == "--" || len(a) < 2 || a[0] != '-':
+			return fmt.Errorf("antigravity: argument %q is not a flag: agy would stop reading flags there and drop --agent", a)
+		default:
+			name, value, inline = strings.Cut(strings.TrimPrefix(a[1:], "-"), "=")
 		}
-		if why, bad := agyRefused[name]; bad {
-			return fmt.Errorf("antigravity: option %s is not allowed: %s", name, why)
+		opt, ok := agyFlags[name]
+		switch {
+		case !ok:
+			return fmt.Errorf("antigravity: flag %q is unknown to the check of the start", a)
+		case opt.refused != "":
+			return fmt.Errorf("antigravity: option --%s is not allowed: %s", name, opt.refused)
+		case opt.value && !inline:
+			if i+1 >= len(args) {
+				return fmt.Errorf("antigravity: --%s without a value", name)
+			}
+			i++
+			value = args[i]
+		}
+		switch {
+		case name == "mode" && value != "default":
+			return fmt.Errorf("antigravity: --mode %q is not allowed: only default asks for what the rules ask", value)
+		case name == "sandbox" && inline && value != "true":
+			return fmt.Errorf("antigravity: --sandbox=%s is not allowed: the native controls decide the sandbox", value)
 		}
 	}
 	return nil

@@ -12,7 +12,7 @@ Fazer cada provedor segurar o essencial das [permissões](permissoes.md) mesmo s
 
 | Política | Claude Code (`--settings` do personagem) | Codex (flags de início) | Antigravity |
 |---|---|---|---|
-| `files.write` | `allow`: `Edit(<glob>)`, `Write(<glob>)`; sem escrita: `--disallowedTools Edit Write NotebookEdit` | sempre `-s workspace-write` (sem regra por caminho); sem escrita, sem raízes extras e sem barreira nativa (abaixo) | sem regra por caminho |
+| `files.write` | `allow`: `Edit(<glob>)`, que vale para todas as ferramentas que gravam (o Claude Code ignora uma regra de caminho `Write(…)`, e avisa); sem escrita: `--disallowedTools Edit Write NotebookEdit` | sempre `-s workspace-write` (sem regra por caminho); sem escrita, sem raízes extras e sem barreira nativa (abaixo) | sem regra por caminho |
 | `files.deny` | `deny`: `Read(<glob>)`, `Edit(<glob>)` | — | — |
 | `commands.allow` / `deny` | `allow` / `deny`: `Bash(<padrão>)` | — (contido pelo sandbox) | — |
 | regras fixas | `deny`: `Bash(git push *)`, `Bash(git remote *)` | `.git` fora do alcance de escrita, menos a pasta git do worktree e `objects`, `refs` e `logs` do espelho, para o commit (abaixo) | `permissions.deny` no `settings.json` do perfil (só regras fixas, pois o arquivo é compartilhado) |

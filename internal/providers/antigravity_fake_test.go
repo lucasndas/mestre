@@ -67,7 +67,7 @@ func TestTheFilesOfTheAdapterAreTheOnesTheFakeAgentReads(t *testing.T) {
 		profileFiles(t, hooksFiles, layer.Files)
 
 		l, err := a.BuildLaunch(providers.LaunchRequest{
-			Base:    providers.Base{Command: "agy", Args: []string{"--fake-script", "script.yaml"}, Dir: wt},
+			Base:    providers.Base{Command: "agy", Env: []string{"FAKEAGENT_SCRIPT=script.yaml"}, Dir: wt},
 			OS:      runtime.GOOS,
 			AgentID: "a1", TableID: "3-login", Worktree: wt,
 			Env: []string{"HOME=" + home},

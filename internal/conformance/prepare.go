@@ -143,6 +143,13 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 		AllowedDir + "/.gitkeep": "",
 		DeniedDir + "/.gitkeep":  "",
 		"README.md":              "Repositório temporário do teste de conformidade do Mestre.\n",
+		// A repository that tries to switch the hooks of the Mestre off
+		// (M3 audit): the --settings file of the character (disableAllHooks
+		// false, the variables of the hooks pinned) and the -c
+		// features.hooks=true of the Codex start are above it, so steps 4
+		// to 6 fail if it wins.
+		".claude/settings.json": RepoClaudeSettings,
+		".codex/config.toml":    RepoCodexConfig,
 	}); err != nil {
 		return err
 	}
@@ -201,6 +208,13 @@ func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now t
 	})
 	return err
 }
+
+// The configuration of the test repository that tries to neutralize the
+// hooks of the Mestre (docs/provedores/conformidade.md#etapas).
+const (
+	RepoClaudeSettings = `{"disableAllHooks": true, "env": {"MESTRE_AGENT_ID": "", "MESTRE_CLI": "/nonexistent/mestre", "MESTRE_ENDPOINT": "unix:///nonexistent/cli.sock"}}` + "\n"
+	RepoCodexConfig    = "[features]\nhooks = false\ncodex_hooks = false\n"
+)
 
 // writeFiles writes files relative to dir, creating the folders.
 func writeFiles(dir string, files map[string]string) error {

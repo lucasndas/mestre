@@ -59,6 +59,11 @@ type NativePolicy struct {
 	// tool of kind subagent or other, by its native name (nil: none).
 	ToolDenied func(name string) bool
 
+	// HookEnv are the MESTRE_CLI and MESTRE_ENDPOINT of the character
+	// (KEY=VALUE), pinned with MESTRE_AGENT_ID in the --settings file of
+	// Claude Code (ClaudeHookEnv); nil pins MESTRE_AGENT_ID alone.
+	HookEnv []string
+
 	Fallbacks NativeFallbacks
 }
 

@@ -34,8 +34,13 @@ func TestMain(m *testing.M) {
 // hookLine is the command of event in the hook file HookFiles gives.
 func hookLine(t *testing.T, binary, event string) string {
 	t.Helper()
+	return hookLineOf(t, runtime.GOOS, binary, event)
+}
+
+func hookLineOf(t *testing.T, goos, binary, event string) string {
+	t.Helper()
 	root := t.TempDir()
-	files, err := providers.NewClaudeCode(providers.Options{}).HookFiles(providers.HookFilesRequest{OS: runtime.GOOS, Root: root, Binary: binary})
+	files, err := providers.NewClaudeCode(providers.Options{}).HookFiles(providers.HookFilesRequest{OS: goos, Root: root, Binary: binary})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,10 +52,15 @@ func hookLine(t *testing.T, binary, event string) string {
 // of the process without the variables of the Mestre, plus extra).
 func run(t *testing.T, line string, extra ...string) (stdout string, exit int) {
 	t.Helper()
+	return runIn(t, shellCommand(t, line), extra...)
+}
+
+// runIn runs c with the environment of run.
+func runIn(t *testing.T, c *exec.Cmd, extra ...string) (stdout string, exit int) {
+	t.Helper()
 	env := slices.DeleteFunc(os.Environ(), func(kv string) bool {
 		return strings.HasPrefix(kv, "MESTRE_") || strings.HasPrefix(kv, "HELPER_")
 	})
-	c := shellCommand(line)
 	var out bytes.Buffer
 	c.Stdout, c.Stderr, c.Stdin, c.Env = &out, io.Discard, strings.NewReader(`{}`), append(env, extra...)
 	err := c.Run()
@@ -59,9 +69,32 @@ func run(t *testing.T, line string, extra ...string) (stdout string, exit int) {
 	case errors.As(err, &ee):
 		return out.String(), ee.ExitCode()
 	case err != nil:
-		t.Fatalf("running %q: %v", line, err)
+		t.Fatalf("running %q: %v", c.Args, err)
 	}
 	return out.String(), 0
+}
+
+// The Windows line runs in Git Bash, where MESTRE_CLI has backslashes: the
+// line turns them into slashes. On Linux, bash runs the same line with a
+// MESTRE_CLI whose slashes were written as backslashes.
+func TestWindowsHookLineTakesABackslashMestreCLI(t *testing.T) {
+	t.Parallel()
+	bash, err := exec.LookPath("bash")
+	if runtime.GOOS == "windows" || err != nil {
+		t.Skip("the Windows line itself runs on Windows in TestHookLineInTheShellOfTheSystem")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := hookLineOf(t, "windows", "", "PreToolUse")
+	out, exit := runIn(t, exec.Command(bash, "-c", line), "MESTRE_AGENT_ID=a1", "MESTRE_CLI="+strings.ReplaceAll(self, "/", `\`))
+	if got := strings.TrimSpace(out); got != "ARGS hook --provider claude-code --event PreToolUse" || exit != 0 {
+		t.Errorf("stdout %q, exit %d", got, exit)
+	}
+	if out, exit := runIn(t, exec.Command(bash, "-c", line), "MESTRE_CLI="+self); out != "" || exit != 0 {
+		t.Errorf("without the character: stdout %q, exit %d", out, exit)
+	}
 }
 
 // The line of a hook file, run by the shell of the system: it calls `mestre
@@ -105,6 +138,8 @@ func TestHookLineInTheShellOfTheSystem(t *testing.T) {
 		{"the stable binary", self, []string{"MESTRE_AGENT_ID=a1"}, args, 0, false},
 		{"the stable binary with a space", copied, []string{"MESTRE_AGENT_ID=a1"}, args, 0, false},
 		{"the stable binary is missing", missing, []string{"MESTRE_AGENT_ID=a1"}, "", 0, false},
+		// No variable replaces the stable path (a repository could set one).
+		{"the stable binary over MESTRE_CLI", self, []string{"MESTRE_AGENT_ID=a1", "MESTRE_CLI=" + missing}, args, 0, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

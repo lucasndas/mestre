@@ -97,18 +97,31 @@ type screenSet struct {
 // the footer and the spinner of a CLI that draws a box.
 const bottomLines = 8
 
-// evaluate: a known screen first, then ready, then busy. "Ready" is the
-// input prompt visible on the last line and the screen stable, or
-// session_start received and the prompt visible. The patterns are the ones
-// of the screens known today (the fake agent imitates each provider's
-// texts); the conformance test checks them against the real CLIs.
+// dialogLines is how many of the last non-empty lines a known screen (a
+// dialog or a menu, drawn at the bottom where the input box was) is
+// matched in: text above them is output of the model or of a tool, which
+// may quote the text of any dialog.
+const dialogLines = 24
+
+// evaluate: a known screen first, then ready, then busy. A known screen is
+// matched only in the last dialogLines lines and only when the input box
+// is not there (a dialog takes its place), so the model quoting the text of
+// a dialog is not the dialog. "Ready" is the input prompt visible on the
+// last line and the screen stable, or session_start received and the prompt
+// visible. The patterns are the ones of the screens known today (the fake
+// agent imitates each provider's texts); the conformance test checks them
+// against the real CLIs.
 func (s screenSet) evaluate(in ScreenInput) ScreenResult {
-	for i := range s.known {
-		if s.known[i].Pattern.MatchString(in.Text) {
-			return ScreenResult{State: StateStarting, Known: &s.known[i]}
+	b := bottom(in.Text, bottomLines)
+	if boxed := s.box != nil && s.box.MatchString(b); !boxed {
+		region := bottom(in.Text, dialogLines)
+		for i := range s.known {
+			if s.known[i].Pattern.MatchString(region) {
+				return ScreenResult{State: StateStarting, Known: &s.known[i]}
+			}
 		}
 	}
-	if b := bottom(in.Text, bottomLines); in.ReadyPattern == nil && s.box != nil && s.box.MatchString(b) {
+	if in.ReadyPattern == nil && s.box != nil && s.box.MatchString(b) {
 		switch {
 		case s.busyNear != nil && s.busyNear.MatchString(b):
 			return ScreenResult{State: StateBusy}

@@ -113,7 +113,16 @@ func TestHookCommandQuotesABlankAndRefusesShellSyntax(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b := mergeFile(t, files[0], nil); !strings.Contains(string(b), `"\"C:\\Program Files\\Mestre\\atual\\mestre.exe\" hook --provider codex --event Stop"`) {
+	// Windows: PowerShell, the shell Codex runs hooks with there; & calls
+	// the quoted path and the exit code of the call is passed on.
+	if b := mergeFile(t, files[0], nil); !strings.Contains(string(b), `"\u0026 \"C:\\Program Files\\Mestre\\atual\\mestre.exe\" hook --provider codex --event Stop; exit $LASTEXITCODE"`) {
+		t.Fatalf("hooks.json = %s", b)
+	}
+	files, err = a.HookFiles(providers.HookFilesRequest{OS: "linux", Root: "/p", Binary: "/opt/me stre/mestre"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := mergeFile(t, files[0], nil); !strings.Contains(string(b), `"\"/opt/me stre/mestre\" hook --provider codex --event Stop"`) {
 		t.Fatalf("hooks.json = %s", b)
 	}
 	for _, bin := range []string{"mestre", "/opt/$HOME/mestre", "/opt/a;b/mestre", `/opt/"q"/mestre`, "/opt/%x%/mestre"} {

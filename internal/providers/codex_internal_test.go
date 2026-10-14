@@ -20,7 +20,7 @@ func TestCodexHookHashIsTheHashOfTheCanonicalIdentity(t *testing.T) {
 			pre = h
 		}
 	}
-	got, err := codexHookHash(pre, "/usr/bin/mestre")
+	got, err := codexHookHash(pre, "linux", "/usr/bin/mestre")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestCodexHookHashIsTheHashOfTheCanonicalIdentity(t *testing.T) {
 	}
 	stopInput := `{"event_name":"stop","hooks":[{"async":false,"command":"/usr/bin/mestre hook --provider codex --event Stop","timeout":60,"type":"command"}]}`
 	sum = sha256.Sum256([]byte(stopInput))
-	if got, _ := codexHookHash(stop, "/usr/bin/mestre"); got != "sha256:"+hex.EncodeToString(sum[:]) {
+	if got, _ := codexHookHash(stop, "linux", "/usr/bin/mestre"); got != "sha256:"+hex.EncodeToString(sum[:]) {
 		t.Fatalf("stop hash = %s", got)
 	}
 	if k := codexHookKey("/p/hooks.json", pre); k != "/p/hooks.json:pre_tool_use:0:0" {

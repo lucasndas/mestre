@@ -93,7 +93,8 @@ var codexTools = toolTable{
 
 // BuildLaunch: `codex <base args> <provider args>`, or `codex resume
 // <SESSION_ID>` with the same flags, plus the ones the base always has
-// (codex_launch.go), and CODEX_HOME of the account profile.
+// (codex_launch.go: the hooks switched on last), and CODEX_HOME of the
+// account profile.
 func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
 	l, err := newLaunch(req)
 	if err != nil {
@@ -102,7 +103,7 @@ func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
 	if err := refuseLatest(Codex, slices.Concat(req.Base.Args, req.ProviderArgs), "--last"); err != nil {
 		return Launch{}, err
 	}
-	flags, err := codexStartArgs(slices.Concat(req.Base.Args, req.ProviderArgs), req.Model)
+	flags, err := codexStartArgs(req.Base.Args, req.ProviderArgs, req.Model)
 	if err != nil {
 		return Launch{}, err
 	}

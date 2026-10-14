@@ -306,6 +306,24 @@ func TestBuildLaunchHasTheAgentAndTheHOMEOfTheProfileAndNeverTheSkipFlag(t *test
 			r.OS, r.Env, r.Worktree = "windows", []string{`HOME=C:\Mestre\contas\agy`}, `C:\Mestre\wt`
 		})},
 		{"the base sets another HOME", launchRequest(func(r *providers.LaunchRequest) { r.Base.Env = []string{"HOME=/home/x"} })},
+		{"one dash and =", launchRequest(func(r *providers.LaunchRequest) {
+			r.Base.Args = []string{"-model=gemini-3.8", "-mode", "default", "--effort=high", "-disable-slash-commands"}
+		})},
+	}
+	// No form of the skip flag reaches the command: one dash or two, with "="
+	// or a value, or behind a positional that would end the flags.
+	for _, skip := range [][]string{
+		{"--dangerously-skip-permissions"}, {"-dangerously-skip-permissions"}, {"--dangerously-skip-permissions=true"},
+		{"-dangerously-skip-permissions=true"}, {"x", "--dangerously-skip-permissions"}, {"--model", "m", "y"},
+	} {
+		for _, set := range []func(*providers.LaunchRequest){
+			func(r *providers.LaunchRequest) { r.Base.Args = skip },
+			func(r *providers.LaunchRequest) { r.ProviderArgs = skip },
+		} {
+			if l, err := a.BuildLaunch(launchRequest(set)); err == nil {
+				t.Errorf("%q was accepted: %q", skip, l.Args)
+			}
+		}
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -355,6 +373,16 @@ func TestBuildLaunchRefusesWhatTheDocForbids(t *testing.T) {
 	for _, bad := range [][]string{
 		{"--dangerously-skip-permissions"}, {"-p", "hi"}, {"--print"}, {"--prompt=hi"}, {"--add-dir", "/etc"}, {"--add-dir=/etc"},
 		{"--agent", "other"}, {"--conversation", "x"}, {"--continue"}, {"-c"},
+		// The forms of the M3 audit: one dash (Go flag reads -x as --x), "="
+		// and the flags the first list missed, and a positional, after which
+		// agy reads nothing as a flag, not even the --agent of the Mestre.
+		{"-dangerously-skip-permissions"}, {"-dangerously-skip-permissions=true"}, {"--dangerously-skip-permissions=1"},
+		{"-print", "x"}, {"-prompt=x"}, {"-add-dir", "/"}, {"-add-dir=/"}, {"-agent", "other"}, {"-agent=other"},
+		{"-conversation", "x"}, {"-continue"}, {"--c"}, {"-c=true"},
+		{"--remote-control"}, {"-remote-control"}, {"--remote-control=true"},
+		{"--mode", "accept-edits"}, {"--mode=accept-edits"}, {"-mode", "plan"}, {"-mode=plan"}, {"--mode"},
+		{"--sandbox=false"}, {"-sandbox=0"}, {"-i", "x"}, {"--output-format", "json"}, {"--new-project"},
+		{"positional", "--dangerously-skip-permissions"}, {"--", "x"}, {"-"}, {"--model"}, {"--unknown"}, {"-h"}, {"---x"},
 	} {
 		for where, set := range map[string]func(*providers.LaunchRequest){
 			"base":     func(r *providers.LaunchRequest) { r.Base.Args = bad },
@@ -397,7 +425,7 @@ func TestReadUsageWindowsAreTheUseAndTheResetOfTheRecordedUsage(t *testing.T) {
 	fx := &fakeExec{out: recorded(t, "antigravity", "Usage")}
 	prov := agy(t, providers.Options{Exec: fx.Run})
 	u, err := prov.ReadUsage(providers.UsageRequest{
-		AgentID: "a1", Command: "agy", OS: "windows", Env: []string{"HOME=" + filepath.FromSlash("/profiles/agy"), "MESTRE_AGENT_ID=a1", "PATH=/bin"},
+		AgentID: "a1", Command: "agy", OS: "windows", Env: []string{"HOME=" + filepath.FromSlash("/profiles/agy"), "MESTRE_AGENT_ID=a1", "MESTRE_ENDPOINT=unix:///x", "Mestre_Cli=/m", "PATH=/bin"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -432,7 +460,7 @@ func TestReadUsageWindowsAreTheUseAndTheResetOfTheRecordedUsage(t *testing.T) {
 	if up, _ := lastEnv(c.Env, "USERPROFILE"); up != filepath.FromSlash("/profiles/agy") {
 		t.Errorf("env %q lacks the USERPROFILE of the profile", c.Env)
 	}
-	if _, has := lastEnv(c.Env, "MESTRE_AGENT_ID"); has || c.Dir != filepath.FromSlash("/profiles/agy") {
+	if i := slices.IndexFunc(c.Env, func(kv string) bool { return strings.HasPrefix(strings.ToUpper(kv), "MESTRE_") }); i >= 0 || c.Dir != filepath.FromSlash("/profiles/agy") {
 		t.Errorf("the command ran as a character: dir %q, env %q", c.Dir, c.Env)
 	}
 
