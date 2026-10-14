@@ -271,6 +271,9 @@ func (e *fullEngine) claude(id, agent, hookCommand, script string) (*terminal.Te
 		localchan.EnvEndpoint+"="+localchan.EndpointURL(e.sock),
 		localchan.EnvCLI+"="+builds.mestre,
 		"HOME="+e.root, "CLAUDE_CONFIG_DIR="+cfg, "FAKEAGENT_SCRIPT="+filepath.Join(e.root, "script.yaml"),
+		// The helper of CA-HOOK-07 is this test binary: built with -race it
+		// would wait a second at each exit.
+		"GORACE=atexit_sleep_ms=0",
 	)
 	term, err := e.mgr.Create(e.ctx, terminal.CreateSpec{
 		ID: id, CharacterID: agent, Dir: work, Path: builds.fakeagent, Args: []string{"--provider", "claude"}, Env: env, WorkDir: work,
