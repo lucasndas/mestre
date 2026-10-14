@@ -35,14 +35,15 @@ cost:                       # máximo por unidade de limites-de-uso.md: usd | to
   hours: {per_table: 20}
 ```
 
-- Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existir, `commands.allow` dizem o que **pode** ser dado; o que fica fora é negado. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada.
+- Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existir, `commands.allow` dizem o que **pode** ser dado; o que fica fora é negado. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada, menos `operator`: ausente vale `false`, porque uma classe só vai à base Operador do PC com `operator: true` no teto ([formato](formato-das-permissoes.md)).
+- Leitura estrita, como a do `permissions.yaml`: `version: 1` só no topo (o bloco `permissions` não tem `version` próprio); campo desconhecido, mais de um documento, unidade fora de `usd | tokens | hours` e custo negativo, infinito ou (em `tokens`) fracionário tornam o arquivo inválido. O código é `internal/classes` (`ParseCeiling`, `CeilingKeeper`).
 - **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas, com `git.request_push: false`, `git.workflows: never`, `operator: false` e sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)).
 
 ### Onde o teto age
 
-- **Ao criar ou editar uma classe** (de workspace ou de mesa): o motor confere se ela cabe no teto e recusa mostrando o que passa. A conferência de padrões é conservadora; serve para avisar cedo.
+- **Ao criar ou editar uma classe** (de workspace ou de mesa): o motor confere se ela cabe no teto e recusa mostrando o que passa (`ceiling_denied`), seja quem for o autor. A conferência de padrões é conservadora; serve para avisar cedo. Passa do teto: um padrão que o máximo não contém com certeza; uma concessão que um `deny` ou `ask` do teto pega inteira (`src/**` com o teto negando `src/**`); `default`, flags e `workflows` mais livres que os do teto; qualquer domínio quando o teto lista domínios. Uma concessão que só se sobrepõe a um `deny` do teto (`**` com o teto negando `infra/**`) cabe: o pipeline corta a sobreposição a cada decisão. Contam só os campos escritos na classe; o padrão do formato que ela deixa implícito é cortado ao montar as regras efetivas.
 - **A cada decisão:** o teto entra nas regras efetivas de cada personagem, combinado com as outras camadas como diz [precedência](../arquitetura/precedencia.md), e é aplicado pelo [pipeline de permissões](permissoes.md). Por isso vale mesmo para uma classe antiga ou editada à mão. Cada regra efetiva guarda a camada de origem, e a negação diz "teto do workspace".
-- **Custo:** em cada unidade presente (`usd`, `tokens`, `hours`), `per_table` e `per_day` (do workspace) são o máximo que os limites configurados naquela unidade podem ter; unidade ausente não tem teto. O comportamento de aviso e pausa está em [limites de uso](../plataforma/limites-de-uso.md). Passar do teto de custo exige a aprovação de um usuário Administrador ou acima; o Grão-Mestre, aprovador delegado, não aprova isso ([política](../aprovacoes/politica.md)).
+- **Custo:** em cada unidade presente (`usd`, `tokens`, `hours`), `per_table` e `per_day` (do workspace) são o máximo que os limites configurados naquela unidade podem ter; unidade ausente não tem teto. `per_table` vale também para os limites de missão (a missão é parte da mesa); o limite total do workspace não tem teto próprio. Sem limite configurado, o próprio teto vale como limite da mesa ou do dia. O comportamento de aviso e pausa está em [limites de uso](../plataforma/limites-de-uso.md). Passar do teto de custo exige a aprovação de um usuário Administrador ou acima; o Grão-Mestre, aprovador delegado, não aprova isso ([política](../aprovacoes/politica.md)): a aprovação dele é recusada com `human_required` e o pedido vai aos Administradores e ao Dono; a de um Aprovador também é recusada.
 
 ### Quem muda o teto
 
@@ -53,11 +54,18 @@ cost:                       # máximo por unidade de limites-de-uso.md: usd | to
 | ligar `operator` ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) | só o Dono | decreto `ceiling` do Dono, com PIN; ligar pelo painel cria esse decreto |
 | propor | Grão-Mestre ou Mestre da mesa | pedem ao usuário; nunca ampliam sozinhos |
 
+Quem muda é conferido antes de qualquer confirmação: um decreto `ceiling` de um Administrador que liga `operator` é recusado sem chegar ao PIN; ampliar pelo painel devolve a necessidade do decreto, que o painel cria.
+
 Níveis: [usuários e níveis](../telegram/usuarios-e-niveis.md).
 
 ### Arquivo mudado por fora
 
 Se `teto.yaml` mudar sem passar pelo painel ou por decreto (edição manual, ou PR integrado quando `.mestre/` é versionado), o motor continua aplicando a última versão aprovada (o hash fica no banco) e avisa os Administradores. Se a nova versão só restringe, um Administrador aprova pelo painel; se amplia, só vale com decreto.
+
+- **Como o motor percebe:** relê o arquivo a cada 30 s (padrão) e compara o hash com o aprovado. Um aviso por mudança (o mesmo arquivo não avisa de novo); arquivo apagado também avisa e mantém a versão aprovada.
+- **O banco guarda a versão aprovada inteira** (hash e arquivo, tabela `workspace_ceilings`), e é ela que vale, diga o arquivo o que disser. Antes de qualquer versão aprovada vale o teto padrão, e um arquivo presente conta como mudança a aprovar.
+- **Restringe ou amplia:** a comparação é conservadora. Amplia tudo o que a nova versão não mantém limitado com certeza: um padrão novo fora dos antigos nas listas do que pode ser dado; um campo que deixa de limitar; um `deny` que sai ou vira `ask`; `default`, flags ou `workflows` mais livres; custo maior ou que deixa de existir; `operator` ligado. Mudança que amplia e restringe ao mesmo tempo amplia. Só comentários ou formatação não restringem nem ampliam, e passam pela aprovação no painel.
+- A aprovação cita o hash que o Administrador viu; se o arquivo mudou de novo, é recusada.
 
 ### Teto reduzido com classes que já existem
 
