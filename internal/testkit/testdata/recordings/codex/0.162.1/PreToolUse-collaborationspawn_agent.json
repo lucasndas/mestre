@@ -1,0 +1,21 @@
+{
+  "origin": "codex",
+  "version": "0.162.1",
+  "captured_at": "2026-10-14",
+  "source": "capture: codex 0.162.1 PreToolUse stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "hook_event_name": "PreToolUse",
+    "model": "gpt-6.1-sol",
+    "permission_mode": "default",
+    "session_id": "01a13a17-ae4f-7120-a41f-fc37d1046bf9",
+    "tool_input": {
+      "message": "gAAAAABqz2KAjDuTBVY6yLL3dj7K5q70oleZeXWtKuMHD4UDKHleRWoBs_OmFgwWXmhmH2e2rBANomd3cq-t9iWx0t_ZZbhP1ca3dQ82tylY-e20VChRxiqZt57RPSgn-4GnLcuLC9FaCzM9WGCx0cWZ0goK8D5uGhsbXf2VBwgwqrvTXDkYtiUo2Re1VnVW9HW5oV93pTOvACuW7jemAKzxDmul82hkqvkQbt30GaRt5PrD96ExVZss2W8tAcRl_WN4Jyap-GC2SnwibSjsJ91L5syg8lw4FV730qyiUMMIdegSsZ75pgW1ouXeNXd6wYT5W_6V9WGdZSq3uToNAVWUZzfY8-VmqlvwVSByfTscAduiOzZ3D9HD0B5jGPFG3YCtvgB5M25reo-dvlUnsAicUW1x3IwgjiPPNmePecFdT7YvV-YHGeo=",
+      "task_name": "criar_z"
+    },
+    "tool_name": "collaborationspawn_agent",
+    "tool_use_id": "call_bbc68a20469d45a7b7dbb4a8f96b45ad",
+    "transcript_path": "/perfil/sessions/2026/10/14/rollout-2026-10-14T11-06-32-01a13a17-ae4f-7120-a41f-fc37d1046bf9.jsonl",
+    "turn_id": "01a13a18-b483-7160-9961-eb8e8ec1822a"
+  }
+}

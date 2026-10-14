@@ -53,6 +53,11 @@ func (a *antigravity) Native(p NativePolicy) (NativeControls, error) {
 	}}, nil
 }
 
+// agyNotInRegistry are names the hooks may carry that the tools field of an
+// agent file must not list: agy 1.3.5 refuses to start any turn with "tool
+// not found in registry" (conformance test, 2026-10-14).
+var agyNotInRegistry = []string{"list_permissions"}
+
 // AntigravityTools are the native tools of Antigravity the policy does not
 // deny whole, sorted: no write tools without write, no web tools without
 // internet, no search without a URL when the domains are listed, and no
@@ -60,6 +65,9 @@ func (a *antigravity) Native(p NativePolicy) (NativeControls, error) {
 func AntigravityTools(p NativePolicy) []string {
 	var out []string
 	for name, kind := range antigravityTools.names {
+		if slices.Contains(agyNotInRegistry, name) {
+			continue
+		}
 		denied := false
 		switch kind {
 		case KindWrite, KindEdit:

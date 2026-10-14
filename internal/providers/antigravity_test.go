@@ -177,10 +177,12 @@ func TestNormalizeHookReadsTheRecordedCamelCasePayloadByTheEventOfTheCommandLine
 	if ev.Event != providers.EventPreTool || ev.NativeEvent != "PreToolUse" || ev.Provider != providers.Antigravity {
 		t.Fatalf("event = %s/%s of %s", ev.Event, ev.NativeEvent, ev.Provider)
 	}
-	if ev.Tool == nil || ev.Tool.Kind != providers.KindShell || ev.Tool.Command != "echo hello > out.txt" || ev.Tool.NativeName != "run_command" {
+	// The PreToolUse of a run_command of agy 1.3.5, captured by the
+	// conformance test.
+	if ev.Tool == nil || ev.Tool.Kind != providers.KindShell || ev.Tool.Command != "echo ok > permitido/y.txt" || ev.Tool.NativeName != "run_command" {
 		t.Fatalf("tool = %+v", ev.Tool)
 	}
-	if ev.SessionID != "b38a07d5-f7a3-4e27-b4d0-43e9110f60bb" || ev.Cwd != wantPath("/home/user/p") {
+	if ev.SessionID != "ec6fe5e6-d0bd-4127-b1c3-94aaf50f88c2" || ev.Cwd != wantPath("/mconf/mesa") {
 		t.Fatalf("session %q, cwd %q", ev.SessionID, ev.Cwd)
 	}
 }

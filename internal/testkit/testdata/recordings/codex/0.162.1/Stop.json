@@ -1,0 +1,17 @@
+{
+  "origin": "codex",
+  "version": "0.162.1",
+  "captured_at": "2026-10-14",
+  "source": "capture: codex 0.162.1 Stop stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "hook_event_name": "Stop",
+    "last_assistant_message": "CODIGOS: M-B5ZY8C P-4K72CF\nPALAVRA: VERDE SHELL: exec_command",
+    "model": "gpt-6.1-sol",
+    "permission_mode": "default",
+    "session_id": "01a13a17-ae4f-7120-a41f-fc37d1046bf9",
+    "stop_hook_active": false,
+    "transcript_path": "/perfil/sessions/2026/10/14/rollout-2026-10-14T11-06-32-01a13a17-ae4f-7120-a41f-fc37d1046bf9.jsonl",
+    "turn_id": "01a13a17-aea0-7101-af43-6ebef7cef0a4"
+  }
+}

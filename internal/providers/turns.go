@@ -25,7 +25,9 @@ type Turns struct {
 }
 
 // NewTurns returns the tracker of a terminal of the provider.
-func NewTurns(info Info) *Turns { return &Turns{derive: info.DerivedSessionStart} }
+// The executionNum of Antigravity counts from 0 (1.3.5, conformance test of
+// 2026-10-14): before any Stop the next turn is 0.
+func NewTurns(info Info) *Turns { return &Turns{derive: info.DerivedSessionStart, lastExec: -1} }
 
 // ResumeAfter sets the last turn of a resumed session, so the numbering of
 // an Antigravity conversation goes on from it.

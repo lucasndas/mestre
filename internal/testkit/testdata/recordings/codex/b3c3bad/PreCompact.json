@@ -1,7 +1,0 @@
-{
-  "origin": "codex",
-  "version": "b3c3bad",
-  "captured_at": "2026-10-14",
-  "source": "documentation: https://learn.chatgpt.com/docs/hooks and openai/codex source at b3c3bad",
-  "body": {"session_id": "019a0000-0000-7000-8000-000000000001", "transcript_path": "/home/user/.codex/sessions/rollout.jsonl", "cwd": "/home/user/p", "hook_event_name": "PreCompact", "model": "gpt-5.5-codex", "permission_mode": "default", "trigger": "auto"}
-}

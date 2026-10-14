@@ -97,7 +97,13 @@ func TestClaudeAndCodexReplies(t *testing.T) {
 			}
 			return h
 		}
-		if h := hso("PreToolUse", providers.Reply{Kind: providers.ReplyAllow}); h["permissionDecision"] != "allow" {
+		if id == providers.Codex {
+			// Codex 0.162.1 takes permissionDecision "allow" as unsupported
+			// (the hook fails): the allow is no output at all.
+			if out := a.FormatResponse("PreToolUse", providers.Reply{Kind: providers.ReplyAllow}); out.Exit != 0 || len(out.Stdout)+len(out.Stderr) != 0 {
+				t.Fatalf("codex allow = %+v", out)
+			}
+		} else if h := hso("PreToolUse", providers.Reply{Kind: providers.ReplyAllow}); h["permissionDecision"] != "allow" {
 			t.Fatalf("%s allow = %v", id, h)
 		}
 		if h := hso("PreToolUse", providers.Reply{Kind: providers.ReplyDeny, Reason: "não"}); h["permissionDecision"] != "deny" || h["permissionDecisionReason"] != "não" {

@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquivos lidos, canal da camada do Mestre, hooks, confiança, flags, contas, uso e telas. Pesquisado na versão **2.1.296** (instalada) e na documentação oficial de 2026-10-12. **Versão mínima: 2.1.295** (por causa de `onFailure`).
+Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquivos lidos, canal da camada do Mestre, hooks, confiança, flags, contas, uso e telas. Pesquisado na versão **2.1.296** e na documentação oficial de 2026-10-12; a primeira rodada da [conformidade](conformidade.md) (2026-10-14) passou nas etapas 1 a 10 e 12 com a **2.1.299**, para a qual o CLI se atualizou sozinho no perfil durante a rodada. **Versão mínima: 2.1.295** (por causa de `onFailure`).
 
 ## Comportamento
 
@@ -24,7 +24,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 
 ### Skills
 
-- Só lê `.claude/skills/<nome>/SKILL.md` (e `~/.claude/skills/`, não usada pelo Mestre). `.agents/skills/` não aparece na documentação: tratar como não lida. Por isso o Mestre mantém a cópia gerenciada ([mesa](../sessao-zero/mesa.md), [ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)).
+- Só lê `.claude/skills/<nome>/SKILL.md` (e `~/.claude/skills/`, não usada pelo Mestre). `.agents/skills/` não é lida (etapa 9 da conformidade, 2.1.299). Por isso o Mestre mantém a cópia gerenciada ([mesa](../sessao-zero/mesa.md), [ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)).
 - Num worktree, a busca para na raiz do worktree: a cópia precisa existir em cada worktree, **antes** de o agente iniciar (pasta criada depois exige `/reload-skills`; edições em pasta existente recarregam sozinhas).
 - `description` (com `when_to_use`) é cortada em 1.536 caracteres.
 - **Skills por personagem** (nível e classe): ficam em `.mestre/agents/<id>/.claude/skills/`, e o motor passa `--add-dir .mestre/agents/<id>`; o worktree compartilhado só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
@@ -51,6 +51,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - No modo interativo, sem confiança na pasta, **nenhum hook de arquivo de configuração e nenhuma statusLine rodam**, nem os do usuário.
 - A confiança fica em `$CLAUDE_CONFIG_DIR/.claude.json` (confirmado no spike do Linux). A pasta pessoal (home) nunca fica confiada.
 - **Pré-confiar:** gravar `projects["<caminho absoluto do worktree>"].hasTrustDialogAccepted = true` nesse arquivo, com escrita atômica (o Claude reescreve esse arquivo e guarda cópias em `backups/`). **Só a chave do worktree basta** (confirmado). Quando acontece: [mesa](../sessao-zero/mesa.md). Depois de gravar, o motor relê e confere; se o Claude reescreveu o arquivo no meio, repete (até 3 vezes). No Windows, a chave é a que já existe para a pasta (barras e maiúsculas podem diferir), senão o caminho como o motor o tem. Ao remover o worktree, `Untrust` retira a entrada.
+- A 2.1.299 guarda as estatísticas da sessão em `projects["<espelho>"]` (sem `hasTrustDialogAccepted`) e a memória automática em `projects/<espelho>/memory/` do perfil: a memória é comum a todos os worktrees de um espelho, portanto a todos os personagens daquele perfil num workspace.
 - **A chave do espelho nunca é gravada:** respondendo "confiar" na tela, o Claude grava a chave do **espelho `--bare`** de onde o worktree saiu, o que confia **todos** os worktrees daquele espelho. Por isso o motor nunca grava essa chave e, ao pré-confiar, remove `hasTrustDialogAccepted` dela se a encontrar (no clone principal da Cidadela, em que o worktree é a própria raiz, a chave é uma só e fica confiada).
 
 ### Flags
@@ -95,6 +96,7 @@ Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](ad
 | "usar esta `ANTHROPIC_API_KEY`?" | escalar (uma vez por perfil) |
 | menu de opções do limite de uso | Enter na opção 1, só se ela for a de esperar ("Stop and wait for limit to reset"); depois o personagem fica `blocked`, motivo `quota` |
 | espera parada após o computador dormir (`quota_auto_resume_stale`) | responder Enter quando o motor confirmar que o limite reiniciou |
+| área de entrada (pronto): `❯` entre duas linhas `─`, com o rodapé abaixo; com `esc to interrupt` nas últimas linhas, ocupado | lida pelo adaptador (2.1.299) |
 | pedido de permissão nativo | decisão registrada: Enter ("Yes", uma vez) ou Esc (nega); sem decisão, negar; nunca a opção "don't ask again" |
 | primeiro uso e login (num `CLAUDE_CONFIG_DIR` novo: seletor de tema e depois a confiança, com o cursor em "No, exit") | resolvidos na configuração inicial do perfil de conta, no terminal de login; num personagem, escalar como alerta do checklist |
 
@@ -123,10 +125,10 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 
 Todos são conferidos pelo [teste de conformidade](conformidade.md).
 
-- **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição.
-- **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 na máquina Windows.
-- **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`); a chave é `ClaudeStatusLineInLocal` dos `NativeFallbacks`, e uma statusLine do usuário nunca é trocada. **Onde:** etapa 7.
-- **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** o motor manda mensagens de várias linhas pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e digita só a linha que pede para lê-lo (opção `ClaudeMultilineViaFile` do adaptador: `TypeMessage` recusa o texto de várias linhas como o de texto longo). **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
+- **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição. **Resultado (2026-10-14, 2.1.299):** nenhuma das duas apareceu na primeira rodada (os hooks decidiram tudo); o item continua aberto.
+- **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 na máquina Windows (rodada do Windows).
+- **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`); a chave é `ClaudeStatusLineInLocal` dos `NativeFallbacks`, e uma statusLine do usuário nunca é trocada. **Onde:** etapa 7. **Resultado (2026-10-14, 2.1.299):** Padrão confirmado; o `rate_limits` só vem depois da primeira resposta.
+- **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** o motor manda mensagens de várias linhas pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e digita só a linha que pede para lê-lo (opção `ClaudeMultilineViaFile` do adaptador: `TypeMessage` recusa o texto de várias linhas como o de texto longo). **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas. **Resultado (2026-10-14, 2.1.299):** Padrão confirmado.
 
 ## Fontes
 

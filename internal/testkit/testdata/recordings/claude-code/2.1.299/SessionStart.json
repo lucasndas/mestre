@@ -1,0 +1,15 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.299",
+  "captured_at": "2026-10-14",
+  "source": "capture: claude-code 2.1.299 SessionStart stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "hook_event_name": "SessionStart",
+    "model": "claude-opus-5-5",
+    "scratchpad_dir": "/mconf/tmp/conf-sa27kx/claude-995/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56/scratchpad",
+    "session_id": "8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56",
+    "source": "startup",
+    "transcript_path": "/perfil/projects/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56.jsonl"
+  }
+}

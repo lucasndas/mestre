@@ -1,0 +1,21 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.299",
+  "captured_at": "2026-10-14",
+  "source": "documentation: https://code.claude.com/docs/en/hooks#posttoolusefailure (copied from 2.1.296: the conformance round of 2.1.299 did not cause this event)",
+  "body": {
+    "session_id": "abc123",
+    "transcript_path": "/home/user/.claude/projects/p/abc123.jsonl",
+    "cwd": "/home/user/p",
+    "prompt_id": "p1",
+    "permission_mode": "default",
+    "hook_event_name": "PostToolUseFailure",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "npm test"
+    },
+    "tool_use_id": "toolu_01",
+    "error": "Command exited with non-zero status code 1",
+    "is_interrupt": false
+  }
+}

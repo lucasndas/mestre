@@ -295,6 +295,9 @@ func (h handler) matches(tool string) bool {
 // block the action, with the reason.
 func (a *agent) fire(ctx context.Context, event, tool string, payload []byte) (bool, string) {
 	blocked, reason := false, ""
+	if a.skipped(event) {
+		return false, ""
+	}
 	for _, h := range a.hooks {
 		if h.event != event || !h.matches(tool) || !h.trusted {
 			continue
@@ -353,9 +356,15 @@ func (a *agent) decide(h handler, res HookResult, err error) (bool, string) {
 		if res.ExitCode == 2 {
 			return true, strings.TrimSpace(string(res.Stderr))
 		}
-		if hso, ok := obj["hookSpecificOutput"].(map[string]any); ok && hso["permissionDecision"] == "deny" {
+		hso, _ := obj["hookSpecificOutput"].(map[string]any)
+		if hso["permissionDecision"] == "deny" {
 			r, _ := hso["permissionDecisionReason"].(string)
 			return true, r
+		}
+		if a.p == Codex && hso["permissionDecision"] != nil {
+			// Codex 0.162.1 accepts only deny: any other decision marks the
+			// hook failed, which lets the tool run.
+			a.print(fmt.Sprintf("Hook failed: PreToolUse hook returned unsupported permissionDecision:%v\r\n", hso["permissionDecision"]))
 		}
 		return false, ""
 	}

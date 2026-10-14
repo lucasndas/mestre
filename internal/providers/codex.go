@@ -18,11 +18,18 @@ type codex struct {
 // NewCodex returns the Codex adapter.
 func NewCodex(opts Options) Adapter {
 	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, screens: screenSet{
-		prompt: agentPrompt,
-		busy:   regexp.MustCompile(`(?i)esc to interrupt|Working…`),
-		known:  codexScreens(),
+		prompt:   agentPrompt,
+		busy:     regexp.MustCompile(`(?i)esc to interrupt|Working…`),
+		known:    codexScreens(),
+		box:      codexBox,
+		busyNear: regexp.MustCompile(`(?i)esc to interrupt`),
 	}}
 }
+
+// codexBox is the input line of Codex (0.162.1, seen in the conformance
+// test): › with the placeholder or the text typed, above the line of the
+// model and the "? for shortcuts" footer. A menu option (› 1. …) is not it.
+var codexBox = regexp.MustCompile(`(?m)^\s*›(?:[ \x{a0}]+(?:[^\d\s][^\n]*)?)?\s*$`)
 
 // codexScreens is the table of
 // docs/provedores/codex.md#telas-que-o-pty-precisa-tratar, with the texts of
@@ -73,6 +80,10 @@ var codexTools = toolTable{
 		"Bash":        KindShell,
 		"apply_patch": KindEdit, // KindWrite when it only adds files
 		"update_plan": KindInternal,
+		// The native subagents of Codex 0.162.1, named this way in the hook
+		// (conformance test, 2026-10-14).
+		"collaborationspawn_agent": KindSubagent,
+		"collaborationwait_agent":  KindSubagent,
 	},
 	prefixes: []struct {
 		prefix string

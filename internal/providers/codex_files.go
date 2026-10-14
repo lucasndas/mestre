@@ -119,3 +119,42 @@ func windowsArgLen(arg string) int {
 	}
 	return n
 }
+
+// Untrust takes the worktree out of the config.toml of the profile (when the
+// worktree is removed, and at the end of the conformance test); the rest of
+// the file stays as it was.
+func (c *codex) Untrust(req PreTrustRequest) (Trust, error) {
+	if !absolute(req.Worktree) || req.Profile == "" {
+		return Trust{}, fmt.Errorf("codex untrust: the worktree %q or the profile %q is missing", req.Worktree, req.Profile)
+	}
+	worktree := filepath.Clean(req.Worktree)
+	path := codexConfig(req.Profile)
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	for range trustAttempts {
+		cur, before, err := readFileStat(path)
+		if err != nil {
+			return Trust{}, fmt.Errorf("codex untrust: %w", err)
+		}
+		if !before.exists {
+			return Trust{Path: path}, nil
+		}
+		next, err := removeTOMLTable(cur, []string{"projects", worktree})
+		if err != nil {
+			return Trust{}, fmt.Errorf("%w: %s: %v", ErrNativeFile, path, err)
+		}
+		if bytes.Equal(cur, next) {
+			return Trust{Path: path}, nil
+		}
+		if err := replaceFile(path, next, before); err != nil {
+			if errors.Is(err, errRewritten) {
+				continue
+			}
+			return Trust{}, fmt.Errorf("codex untrust: %w", err)
+		}
+		return Trust{Path: path, Cleared: []string{worktree}, Changed: true}, nil
+	}
+	return Trust{}, fmt.Errorf("codex untrust: %s was rewritten while the trust was being removed, %d times", path, trustAttempts)
+}
+
+var _ TrustRemover = (*codex)(nil)

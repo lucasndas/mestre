@@ -1,0 +1,25 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.299",
+  "captured_at": "2026-10-14",
+  "source": "capture: claude-code 2.1.299 PreToolUse stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "effort": {
+      "level": "medium"
+    },
+    "hook_event_name": "PreToolUse",
+    "permission_mode": "default",
+    "prompt_id": "b48961bd-7002-4494-9e22-d4f050d705d8",
+    "scratchpad_dir": "/mconf/tmp/conf-sa27kx/claude-995/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56/scratchpad",
+    "session_id": "8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56",
+    "tool_input": {
+      "description": "Criar proibido/z.txt",
+      "prompt": "No diretório /mconf/mesa, crie o arquivo proibido/z.txt com o conteúdo \"z\", usando a ferramenta Write (não use o shell). Se a escrita for negada, NÃO tente de outro jeito: apenas informe que foi negada. Responda em uma linha dizendo se criou ou se foi negado.",
+      "subagent_type": "general-purpose"
+    },
+    "tool_name": "Agent",
+    "tool_use_id": "toolu_01JrjbFcjMLnmePpVfoRkLdY",
+    "transcript_path": "/perfil/projects/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56.jsonl"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.299",
+  "captured_at": "2026-10-14",
+  "source": "capture: claude-code 2.1.299 PreToolUse stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "cwd": "/mconf/mesa",
+    "effort": {
+      "level": "medium"
+    },
+    "hook_event_name": "PreToolUse",
+    "permission_mode": "default",
+    "prompt_id": "7a6baaa2-94eb-46e7-b77e-57e26b02a437",
+    "scratchpad_dir": "/mconf/tmp/conf-sa27kx/claude-995/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56/scratchpad",
+    "session_id": "8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56",
+    "tool_input": {
+      "content": "x",
+      "file_path": "/mconf/mesa/proibido/x.txt"
+    },
+    "tool_name": "Write",
+    "tool_use_id": "toolu_019AndNzgmGpteNozwKF2bWb",
+    "transcript_path": "/perfil/projects/-tmp-mconf-363468271-mesa/8b606fcc-e8ad-4eec-aaaa-1d14a06bbb56.jsonl"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "origin": "antigravity",
+  "version": "1.3.5",
+  "captured_at": "2026-10-14",
+  "source": "capture: antigravity 1.3.5 PreToolUse stdin, masked, by the conformance test of 2026-10-14",
+  "body": {
+    "artifactDirectoryPath": "/perfil/.gemini/antigravity-cli/brain/ec6fe5e6-d0bd-4127-b1c3-94aaf50f88c2",
+    "conversationId": "ec6fe5e6-d0bd-4127-b1c3-94aaf50f88c2",
+    "modelName": "gemini-3.8-flash-high",
+    "stepIdx": 4,
+    "toolCall": {
+      "args": {
+        "AbsolutePath": "/mconf/mesa/.agents/skills/mestre-conformidade/SKILL.md",
+        "toolAction": "Lendo arquivo da skill",
+        "toolSummary": "Leitura do SKILL.md"
+      },
+      "name": "view_file"
+    },
+    "transcriptPath": "/perfil/.gemini/antigravity-cli/brain/ec6fe5e6-d0bd-4127-b1c3-94aaf50f88c2/.system_generated/logs/transcript_full.jsonl",
+    "workspacePaths": [
+      "/mconf/mesa"
+    ]
+  }
+}

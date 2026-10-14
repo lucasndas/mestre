@@ -462,3 +462,38 @@ func setTOMLKey(doc []byte, table []string, key, value string) ([]byte, error) {
 func hasPrefix(p, prefix []string) bool {
 	return len(p) >= len(prefix) && slices.Equal(p[:len(prefix)], prefix)
 }
+
+// removeTOMLTable takes out the table of the given path, with its keys and
+// its sub-tables, and the blank line before its header; the rest of the
+// file stays byte for byte. A file without the table comes back as it was.
+func removeTOMLTable(doc []byte, table []string) ([]byte, error) {
+	text := string(doc)
+	items, err := scanTOML(text)
+	if err != nil {
+		return nil, fmt.Errorf("config.toml: %w", err)
+	}
+	var kept []tomlItem
+	removing, changed := false, false
+	for _, it := range items {
+		if it.kind == tomlHeader {
+			removing = !it.array && hasPrefix(it.path, table)
+			if removing {
+				changed = true
+				if n := len(kept); n > 0 && kept[n-1].kind == tomlOther && strings.TrimSpace(text[kept[n-1].start:kept[n-1].end]) == "" {
+					kept = kept[:n-1] // the blank line the header came with
+				}
+			}
+		}
+		if !removing {
+			kept = append(kept, it)
+		}
+	}
+	if !changed {
+		return doc, nil
+	}
+	var b strings.Builder
+	for _, it := range kept {
+		b.WriteString(text[it.start:it.end])
+	}
+	return []byte(b.String()), nil
+}

@@ -63,6 +63,8 @@ type agent struct {
 	dir  string
 
 	settingsArg string
+	agentName   string   // --agent (Antigravity)
+	configArgs  []string // the values of -c (Codex)
 	script      *Script
 	sessionID   string
 	hooks       []handler
@@ -189,6 +191,10 @@ func (a *agent) parseArgs() error {
 			a.layerFile = next()
 		case "--add-dir":
 			a.addDirs = append(a.addDirs, next())
+		case "--agent":
+			a.agentName = next()
+		case "-c", "--config":
+			a.configArgs = append(a.configArgs, next())
 		case "--fake-recording-version":
 			a.cfg.RecordingVersion = next()
 		case "--fake-script":
@@ -450,8 +456,9 @@ func (a *agent) turnBody(ctx context.Context, prompt string) error {
 func (a *agent) step(ctx context.Context, s Step) error {
 	switch {
 	case s.Say != nil:
-		a.lastMsg = *s.Say
-		a.print(*s.Say + "\r\n")
+		say := a.expand(*s.Say)
+		a.lastMsg = say
+		a.print(strings.ReplaceAll(say, "\n", "\r\n") + "\r\n")
 	case s.Tool != nil:
 		if s.Tool.Ask {
 			if a.p != Claude {
@@ -548,7 +555,7 @@ func (a *agent) common(extra map[string]any) map[string]any {
 		"transcript_path": transcript,
 		"prompt_id":       fmt.Sprintf("p%d", turn), "turn_id": fmt.Sprintf("t%d", turn),
 		"conversationId": a.sessionID, "workspacePaths": []string{a.dir},
-		"invocationNum": turn, "executionNum": turn, "stepIdx": turn,
+		"invocationNum": turn - 1, "executionNum": turn - 1, "stepIdx": turn, // Antigravity counts from 0
 		"transcriptPath":        filepath.Join(a.accountDir(), "brain", a.sessionID, "transcript_full.jsonl"),
 		"artifactDirectoryPath": filepath.Join(a.accountDir(), "brain", a.sessionID),
 	}
