@@ -138,7 +138,7 @@ func TestEnvironmentIsControlled(t *testing.T) {
 	}
 	for k, want := range map[string]string{
 		"LC_ALL": "C", "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_GLOBAL": "/custom/gitconfig",
-		"GIT_NO_LAZY_FETCH": "1",
+		"GIT_NO_LAZY_FETCH": "1", "GIT_NO_REPLACE_OBJECTS": "1",
 	} {
 		if got := last(k); got != want {
 			t.Errorf("%s = %q, want %q", k, got, want)
@@ -160,6 +160,7 @@ func TestOptionsEnvCannotWeakenTheControlledEnvironment(t *testing.T) {
 	t.Parallel()
 	for _, kv := range []string{
 		"GIT_DIR=/x", "GIT_COMMON_DIR=/x", "GIT_WORK_TREE=/x", "GIT_NO_LAZY_FETCH=0", "git_no_lazy_fetch=0",
+		"GIT_NO_REPLACE_OBJECTS=0",
 		"GIT_CONFIG_PARAMETERS='safe.directory'='*'", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=safe.directory",
 	} {
 		if _, err := gitx.New(gitx.Options{Masker: logging.NewMasker(), Env: []string{kv}}); !errors.Is(err, gitx.ErrInvalidArgument) {

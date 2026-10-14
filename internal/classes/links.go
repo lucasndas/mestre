@@ -76,8 +76,11 @@ func linkPairs(cn string, args []word) []linkPair {
 	relative := hasShortFlag(args, 'r') || hasFlag(args, "--relative")
 	from := symbolic && !relative
 	o := operandWords(args, map[string]bool{"-t": true, "-S": true, "--suffix": true, "--target-directory": true})
-	if t := flagValue(args, "-t", "--target-directory"); t != nil {
+	if t := targetDirWord(args); t != nil {
 		for _, s := range o {
+			if sameWordText(*t, s) {
+				continue // the directory itself, swept into o by a combined flag
+			}
 			out = append(out, linkPair{link: baseIn(*t, s), target: s, fromLink: from})
 		}
 		return out
@@ -98,6 +101,9 @@ func linkPairs(cn string, args []word) []linkPair {
 	}
 	return out
 }
+
+// sameWordText reports whether two words carry the same literal text.
+func sameWordText(a, b word) bool { return a.text == b.text }
 
 // operandWords are the words that are not options; the options of valued
 // consume the next word.

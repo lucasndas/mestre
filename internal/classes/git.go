@@ -192,13 +192,53 @@ var gitFixed = []string{
 	"worktree", "tag", "reflog", "notes", "stash", "symbolic-ref", "config", "submodule", "clean", "branch", "checkout", "switch",
 }
 
-func (e *evaluator) git(args []word, st *shellState) result {
+// gitServer are the git subcommands that serve or transport a repository,
+// open a shell, or run as a remote daemon: a fixed deny, since they move
+// refs of the mirror (the tables share them) or run programs. Their dashed
+// forms (git-receive-pack) and the remote helpers (git remote-ext,
+// git-remote-https) are denied too (gitDashedFixed, the remote- prefix).
+var gitServer = []string{
+	"receive-pack", "upload-pack", "upload-archive", "shell", "daemon", "http-backend", "instaweb",
+}
+
+// gitFixedSet is gitFixed and gitServer by name: an alias on the command
+// line that runs one of them (git -c alias.x=push) is a fixed deny.
+var gitFixedSet = func() map[string]bool {
+	m := make(map[string]bool, len(gitFixed)+len(gitServer))
+	for _, s := range gitFixed {
+		m[s] = true
+	}
+	for _, s := range gitServer {
+		m[s] = true
+	}
+	return m
+}()
+
+// gitDashedFixed reports a dashed git form (git-push, git-receive-pack,
+// git-remote-ext) whose subcommand is a fixed deny.
+func gitDashedFixed(sub string) bool {
+	return gitFixedSet[sub] || strings.HasPrefix(sub, "remote-")
+}
+
+// isGitProgram reports a program that is git or a dashed git form.
+func isGitProgram(cn string) bool {
+	return cn == "git" || strings.HasPrefix(cn, "git-")
+}
+
+func (e *evaluator) git(args []word, st *shellState, depth int) result {
 	res := newResult()
 	g, gst := e.parseGit(args, st, &res)
+	e.gitExec(args, gst, depth, &res)
 	rest := g.rest
 	texts := wordsText(rest)
 	deny := func(why string) { res.fixedDeny(why) }
+	if strings.HasPrefix(g.sub, "remote-") && g.sub != "remote" {
+		deny("git " + g.sub + " é um ajudante de transporte do git e pode rodar um programa")
+		return res
+	}
 	switch g.sub {
+	case "receive-pack", "upload-pack", "upload-archive", "shell", "daemon", "http-backend", "instaweb":
+		deny("git " + g.sub + " serve ou transporta o repositório: pode mover refs do espelho (compartilhadas) ou rodar um programa")
 	case "push", "send-pack", "http-push":
 		deny("git push é sempre feito pelo motor: peça o envio com mestre pr open ou mestre pr update")
 	case "fetch", "pull", "fetch-pack":
@@ -277,6 +317,37 @@ func (e *evaluator) git(args []word, st *shellState) result {
 		for _, p := range positionals(rest, map[string]bool{"-s": true, "--source": true, "--pathspec-from-file": true}) {
 			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true, recursive: g.sub != "restore"}, gst))
 		}
+		if g.sub == "restore" && (flagValue(rest, "-s", "--source") != nil || hasAny(rest, "-s")) {
+			// restore --source <ref> -- <paths>: brings paths from another
+			// tree; a pathspec that includes a protected path is a fixed deny.
+			for _, p := range positionals(rest, map[string]bool{"-s": true, "--source": true, "--pathspec-from-file": true}) {
+				res.merge(e.argPath(word{text: p, assign: -1}, use{write: true, recursive: true}, gst))
+			}
+		}
+	case "checkout-index":
+		// Plumbing that writes tracked paths to the worktree; -a all, or the
+		// pathspecs after -- / as positionals. A protected path is denied.
+		for _, p := range gitPathspecs(rest) {
+			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true, recursive: true}, gst))
+		}
+		if len(gitPathspecs(rest)) == 0 && hasAny(rest, "-a", "--all") {
+			res.atLeastAsk("git checkout-index -a escreve todos os arquivos preparados na árvore")
+		}
+	case "read-tree":
+		// read-tree --prefix=<dir> -u writes <dir> from a tree; a prefix
+		// into a protected path is a fixed deny.
+		if w := flagValue(rest, "--prefix"); w != nil {
+			res.merge(e.argPath(*w, use{write: true, recursive: true}, gst))
+		}
+	case "update-index":
+		// --cacheinfo <mode,sha,path> and --index-info stage arbitrary
+		// paths into the shared index; a protected path is a fixed deny.
+		if hasAny(rest, "--index-info", "--stdin") {
+			res.atLeastAsk("git update-index --index-info lê as entradas da entrada")
+		}
+		for _, p := range cacheInfoPaths(rest) {
+			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true}, gst))
+		}
 	default:
 		for _, w := range rest {
 			if looksLikePath(w.text) && !strings.HasPrefix(w.text, "-") {
@@ -354,8 +425,11 @@ func (e *evaluator) gitBranch(res *result, rest []word) {
 // switching goes by git.branches; checkout -- writes the paths after it.
 func (e *evaluator) gitSwitch(res *result, sub string, rest []word, st *shellState) {
 	if i := slices.IndexFunc(rest, func(w word) bool { return w.text == "--" }); i >= 0 {
+		// git checkout [<ref>] -- <paths>: a pathspec restores a tree, so it
+		// is a recursive write; one that includes a protected path (-- .,
+		// -- .claude) is a fixed deny (holdsProtected, protectedWrite).
 		for _, w := range rest[i+1:] {
-			res.merge(e.argPath(w, use{write: true}, st))
+			res.merge(e.argPath(w, use{write: true, recursive: true}, st))
 		}
 		rest = rest[:i]
 		if len(positionals(rest, nil)) <= 1 {
@@ -386,7 +460,7 @@ func (e *evaluator) gitSwitch(res *result, sub string, rest []word, st *shellSta
 	target := ps[0]
 	if sub == "checkout" && (target == "." || strings.HasPrefix(target, "./") || strings.HasPrefix(target, "../")) {
 		for _, p := range ps {
-			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true}, st))
+			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true, recursive: true}, st))
 		}
 		return
 	}
@@ -451,6 +525,258 @@ func (e *evaluator) gitCommit(res *result, rest []word, st *shellState) {
 // branch and the files are still checked.
 func (e *evaluator) commitAsk() outcome {
 	return outcome{v: Ask, reason: "sem git.commit na classe, padrão ask", layer: e.r.originField("git.commit"), byDefault: true}
+}
+
+// gitExec scans a git command line for the features that run a program:
+// aliases on the command line, config keys that run a program (-c,
+// --config-env) and the subcommand options that run an external command
+// (rebase -x, bisect run, difftool -x, grep -O). Each is at least alto
+// (atLeastAsk, so it never runs on its own), and a literal command with a
+// fixed rule inside (git -c core.pager='git push') is a fixed deny.
+func (e *evaluator) gitExec(args []word, st *shellState, depth int, res *result) {
+	i := 0
+	for i < len(args) {
+		a := args[i].text
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			break
+		}
+		switch {
+		case a == "-c":
+			if i+1 < len(args) {
+				i++
+				e.gitConfig(args[i].text, args[i], st, depth, res)
+			}
+		case strings.HasPrefix(a, "-c") && !strings.HasPrefix(a, "--"):
+			e.gitConfig(a[2:], args[i], st, depth, res)
+		case a == "--config-env":
+			if i+1 < len(args) {
+				i++
+				e.gitConfigEnv(args[i].text, res)
+			}
+		case strings.HasPrefix(a, "--config-env="):
+			e.gitConfigEnv(strings.TrimPrefix(a, "--config-env="), res)
+		default:
+			if name, _, hasVal := strings.Cut(a, "="); gitGlobalValue[name] && !hasVal {
+				i++
+			}
+		}
+		i++
+	}
+	if i >= len(args) {
+		return
+	}
+	e.gitSubExec(args[i].text, args[i+1:], st, depth, res)
+}
+
+// gitConfig analyses one -c key=value: an alias (alias.*) on the command
+// line, with ! or naming a fixed subcommand, is a fixed deny; any alias is
+// at least alto. A key that runs a program is at least alto, and its
+// literal value is analysed as a command line (a fixed rule inside denies).
+func (e *evaluator) gitConfig(raw string, w word, st *shellState, depth int, res *result) {
+	key, val, _ := strings.Cut(raw, "=")
+	if a, ok := strings.CutPrefix(strings.ToLower(key), "alias."); ok {
+		_ = a
+		res.atLeastAsk("git -c alias.* define um alias na linha de comando")
+		cv := strings.TrimSpace(val)
+		switch {
+		case strings.HasPrefix(cv, "!"):
+			res.fixedDeny("um alias com ! roda um comando de shell quando o alias é usado")
+			if !w.expand {
+				res.merge(e.shell(strings.TrimPrefix(cv, "!"), st.cwds[0], depth+1))
+			}
+		default:
+			if f := firstField(cv); gitDashedFixed(f) {
+				res.fixedDeny("o alias roda git " + f + ", uma regra fixa")
+			}
+		}
+		return
+	}
+	if configRunsProgram(key) {
+		res.atLeastAsk("git -c " + key + " define uma configuração que roda um programa")
+		if val != "" && !w.expand && configValueIsCommand(key) {
+			res.merge(e.shell(val, st.cwds[0], depth+1))
+		}
+	}
+}
+
+// configValueIsCommand reports a config key whose value is a command line
+// (so a fixed rule inside it is analysed), as opposed to a directory
+// (core.hooksPath) or a mode (protocol.*, uploadpack.* booleans).
+func configValueIsCommand(key string) bool {
+	k := strings.ToLower(key)
+	switch k {
+	case "core.pager", "core.fsmonitor", "core.editor", "core.sshcommand", "core.askpass",
+		"core.alternaterefscommand", "sequence.editor", "diff.external", "credential.helper",
+		"gpg.program", "gpg.ssh.program":
+		return true
+	}
+	switch {
+	case strings.HasPrefix(k, "pager."):
+		return true
+	case strings.HasPrefix(k, "filter.") && (strings.HasSuffix(k, ".clean") || strings.HasSuffix(k, ".smudge") || strings.HasSuffix(k, ".process")):
+		return true
+	case strings.HasPrefix(k, "diff.") && (strings.HasSuffix(k, ".textconv") || strings.HasSuffix(k, ".command")):
+		return true
+	case strings.HasPrefix(k, "merge.") && strings.HasSuffix(k, ".driver"):
+		return true
+	case strings.HasPrefix(k, "credential.") && strings.HasSuffix(k, ".helper"):
+		return true
+	case strings.HasPrefix(k, "uploadpack.") && strings.HasSuffix(k, "hook"):
+		return true
+	}
+	return false
+}
+
+// gitConfigEnv analyses --config-env=key=ENVVAR: the value comes from the
+// environment, so it cannot be read, but a key that runs a program (or an
+// alias) is at least alto.
+func (e *evaluator) gitConfigEnv(raw string, res *result) {
+	key, _, _ := strings.Cut(raw, "=")
+	if strings.HasPrefix(strings.ToLower(key), "alias.") {
+		res.atLeastAsk("git --config-env define um alias na linha de comando")
+		return
+	}
+	if configRunsProgram(key) {
+		res.atLeastAsk("git --config-env " + key + " define uma configuração que roda um programa")
+	}
+}
+
+// gitSubExec handles the subcommand options that run an external command.
+func (e *evaluator) gitSubExec(sub string, rest []word, st *shellState, depth int, res *result) {
+	analyse := func(cmd string) {
+		res.atLeastAsk("git " + sub + " roda um comando externo")
+		if strings.TrimSpace(cmd) != "" {
+			res.merge(e.shell(cmd, st.cwds[0], depth+1))
+		}
+	}
+	switch sub {
+	case "rebase", "am", "sequence":
+		if w := flagValue(rest, "-x", "--exec"); w != nil {
+			analyse(w.text)
+		}
+	case "bisect":
+		if ps := positionals(rest, nil); len(ps) > 0 && ps[0] == "run" {
+			analyse(afterWord(rest, "run"))
+		}
+	case "difftool":
+		if w := flagValue(rest, "-x", "--extcmd"); w != nil {
+			analyse(w.text)
+		}
+	case "grep":
+		if v, ok := grepOpenPager(rest); ok {
+			analyse(v)
+		}
+	}
+}
+
+// configRunsProgram reports a git config key whose value runs a program.
+func configRunsProgram(key string) bool {
+	k := strings.ToLower(key)
+	switch k {
+	case "core.pager", "core.fsmonitor", "core.editor", "core.sshcommand", "core.hookspath",
+		"core.askpass", "core.alternaterefscommand", "sequence.editor", "diff.external",
+		"credential.helper", "gpg.program", "gpg.ssh.program":
+		return true
+	}
+	switch {
+	case strings.HasPrefix(k, "pager."), strings.HasPrefix(k, "filter."),
+		strings.HasPrefix(k, "uploadpack."), strings.HasPrefix(k, "protocol."):
+		return true
+	case strings.HasPrefix(k, "diff.") && (strings.HasSuffix(k, ".textconv") || strings.HasSuffix(k, ".command")):
+		return true
+	case strings.HasPrefix(k, "merge.") && strings.HasSuffix(k, ".driver"):
+		return true
+	case strings.HasPrefix(k, "credential.") && strings.HasSuffix(k, ".helper"):
+		return true
+	}
+	return false
+}
+
+// firstField is the first whitespace-separated token of s.
+func firstField(s string) string {
+	if f := strings.Fields(s); len(f) > 0 {
+		return f[0]
+	}
+	return ""
+}
+
+// afterWord joins the words after the first one equal to kw.
+func afterWord(rest []word, kw string) string {
+	for i, w := range rest {
+		if w.text == kw {
+			return strings.Join(wordsText(rest[i+1:]), " ")
+		}
+	}
+	return ""
+}
+
+// grepOpenPager is the command of git grep -O/--open-files-in-pager.
+func grepOpenPager(rest []word) (string, bool) {
+	for i, w := range rest {
+		t := w.text
+		if v, ok := strings.CutPrefix(t, "--open-files-in-pager="); ok {
+			return v, true
+		}
+		if t == "--open-files-in-pager" {
+			if i+1 < len(rest) {
+				return rest[i+1].text, true
+			}
+			return "", true
+		}
+		if v, ok := strings.CutPrefix(t, "-O"); ok {
+			if v != "" {
+				return v, true
+			}
+			if i+1 < len(rest) && !strings.HasPrefix(rest[i+1].text, "-") {
+				return rest[i+1].text, true
+			}
+			return "", true
+		}
+	}
+	return "", false
+}
+
+// gitPathspecs are the pathspecs of a plumbing command: the words after --,
+// or the positionals that are not a flag's value when there is no --.
+func gitPathspecs(rest []word) []string {
+	if i := slices.IndexFunc(rest, func(w word) bool { return w.text == "--" }); i >= 0 {
+		return wordsText(rest[i+1:])
+	}
+	var out []string
+	for _, w := range rest {
+		if !strings.HasPrefix(w.text, "-") {
+			out = append(out, w.text)
+		}
+	}
+	return out
+}
+
+// cacheInfoPaths are the paths of git update-index --cacheinfo: the form
+// --cacheinfo <mode>,<sha>,<path> (one argument) or --cacheinfo <mode>
+// <sha> <path> (three).
+func cacheInfoPaths(rest []word) []string {
+	var out []string
+	for i := 0; i < len(rest); i++ {
+		t := rest[i].text
+		val, has := "", false
+		if v, ok := strings.CutPrefix(t, "--cacheinfo="); ok {
+			val, has = v, true
+		} else if t == "--cacheinfo" {
+			if i+1 < len(rest) && strings.Count(rest[i+1].text, ",") == 2 {
+				val, has = rest[i+1].text, true
+			} else if i+3 < len(rest) {
+				out = append(out, rest[i+3].text)
+				i += 3
+				continue
+			}
+		}
+		if has {
+			if parts := strings.SplitN(val, ",", 3); len(parts) == 3 {
+				out = append(out, parts[2])
+			}
+		}
+	}
+	return out
 }
 
 // unverifiable is the outcome of a check that cannot be made: deny, the

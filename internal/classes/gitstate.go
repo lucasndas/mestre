@@ -35,6 +35,14 @@ type GitxState struct {
 	// its merge-base with it. Empty: no base, and every script of the
 	// worktree counts as changed (TableScripts).
 	Main string
+	// Base is the commit the engine recorded as the table branch's base when
+	// it created the worktree, before any agent ran there (a content-address
+	// an agent cannot move, unlike the shared refs/heads/main of the mirror,
+	// which is agent-writable). When set, the "changed script" signal
+	// compares against it, so a moved main ref cannot launder a changed
+	// script (docs/arquitetura/seguranca.md#git-do-motor). Empty: Main is
+	// resolved instead (its merge-base with HEAD).
+	Base string
 	// Moved hears every gitx.ErrWorktreeMoved, the alert of a worktree an
 	// agent pointed elsewhere; nil drops it (the check still fails closed).
 	Moved func(error)
@@ -82,7 +90,7 @@ const maxScriptBytes = 1 << 20
 // parents, outside the branch, of its commits since Main; HEAD when it has
 // none), at each base when a merge brought Main in.
 func (g GitxState) Changed(ctx context.Context, worktree, path string) (bool, error) {
-	if g.Main == "" {
+	if g.Main == "" && g.Base == "" {
 		return true, errNoMain
 	}
 	root := resolved(worktree)
@@ -121,9 +129,14 @@ func (g GitxState) Changed(ctx context.Context, worktree, path string) (bool, er
 	return false, nil
 }
 
-// bases are the merge-bases of HEAD with Main: the parents of the
-// branch's own commits that are not its own.
+// bases are the commits a worktree file is compared against: the engine's
+// recorded base when it has one (an immutable commit hash the agent cannot
+// move), otherwise the merge-bases of HEAD with Main (the parents of the
+// branch's own commits that are not its own).
 func (g GitxState) bases(ctx context.Context, r gitx.Repo) ([]string, error) {
+	if g.Base != "" {
+		return []string{g.Base}, nil
+	}
 	own, err := r.Log(ctx, g.Main+"..HEAD")
 	if err != nil {
 		return nil, err

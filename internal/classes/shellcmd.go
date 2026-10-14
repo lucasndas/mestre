@@ -87,8 +87,18 @@ func (e *evaluator) part(p *simple, d dialect, st *shellState, depth int) result
 		res.merge(e.shell(s, st.cwds[0], depth+1))
 		res.atLeastAsk("substituição de comando")
 	}
+	gitCmd := len(p.words) > 0 && isGitProgram(canonical(p.words[0].text))
 	for _, a := range p.assigns {
-		e.gitEnv(&res, a.text[:a.assign])
+		name := a.text[:a.assign]
+		e.gitEnv(&res, name)
+		if gitCmd {
+			switch strings.ToUpper(name) {
+			case "HOME", "XDG_CONFIG_HOME":
+				// Before git, these point git at another ~/.gitconfig, like
+				// GIT_CONFIG_GLOBAL: a fixed deny.
+				res.fixedDeny(name + " antes do git aponta a configuração global do git para fora")
+			}
+		}
 	}
 	for _, r := range p.redirs {
 		if r.op == "<<" || r.op == "<<<" || isDevice(r.target.text) {
@@ -288,8 +298,13 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	readOnly := false
 	switch {
 	case cn == "git":
-		res.merge(e.git(args, st))
+		res.merge(e.git(args, st, depth))
 		readOnly = gitReadOnly(args)
+	case strings.HasPrefix(cn, "git-") && gitDashedFixed(cn[len("git-"):]):
+		// A dashed git form (git-push, git-receive-pack, git-remote-ext):
+		// analyse it as "git <sub> <rest>" so the fixed rules deny it.
+		inner := append([]word{{text: cn[len("git-"):], assign: -1}}, args...)
+		res.merge(e.git(inner, st, depth))
 	case cn == "find":
 		res.merge(e.find(args, d, st, depth))
 		readOnly = !findActs(argText)
@@ -874,7 +889,7 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 			uses = append(uses, pathUse{w, u})
 		}
 	}
-	recursive := hasFlag(args, "-r", "-R", "--recursive", "-rf", "-fr", "-Rf", "-fR", "-a", "--archive")
+	recursive := hasFlag(args, "-r", "-R", "--recursive", "-rf", "-fr", "-Rf", "-fR", "-a", "--archive") || hasShortFlag(args, 'r', 'R', 'a')
 	if d == dialectPwsh {
 		if u, ok := pwshUses(cn, args); ok {
 			return u, false
@@ -898,7 +913,7 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 	case "cp", "mv", "install", "rsync":
 		o := ops(map[string]bool{"-t": true, "-S": true, "-m": true, "-o": true, "-g": true, "--suffix": true, "--target-directory": true})
 		var dest []word
-		if t := flagValue(args, "-t", "--target-directory"); t != nil {
+		if t := targetDirWord(args); t != nil {
 			dest = []word{*t}
 		} else if len(o) > 0 {
 			dest, o = o[len(o)-1:], o[:len(o)-1]
@@ -954,6 +969,20 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 				uses = append(uses, pathUse{w, use{}})
 			}
 		}
+	case "gunzip", "gzip", "zcat", "bunzip2", "bzip2", "bzcat", "unxz", "xz", "xzcat",
+		"unlzma", "lzma", "unzstd", "zstd", "zstdcat", "unlz4", "lz4", "lzop", "brotli", "uncompress", "compress":
+		// A decompressor writes an implicit output: gunzip X.gz writes X. The
+		// output is checked against the fixed rules (a protected output is
+		// denied). -c/stdout and the *cat forms write nothing.
+		for _, w := range decompressorOutputs(cn, args) {
+			uses = append(uses, pathUse{w, use{write: true}})
+		}
+	case "tar", "bsdtar", "gtar", "star", "unzip", "7z", "7za", "7zr", "7zz",
+		"dpkg-deb", "unsquashfs", "cabextract", "xcopy", "robocopy", "fsutil":
+		// Archive extraction and Windows copy tools write a tree under a
+		// destination directory (or a link); a destination that includes a
+		// protected path is denied.
+		uses = append(uses, extractDest(cn, args)...)
 	default:
 		if readOnlyNames[cn] {
 			o := ops(valueOptions)
