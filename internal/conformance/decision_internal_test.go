@@ -49,6 +49,18 @@ func TestNativePermissionScreenTakesTheDecisionOfItsCall(t *testing.T) {
 	if got, _ := ru.Decision(t.Context(), "a1", "approval", dialog("rm -rf x")); got != "deny" {
 		t.Errorf("a denied call: %q", got)
 	}
+	// A paused call was decided by the degraded mode, which the run does
+	// not see: it is recorded as unknown, never as an allow, and its screen
+	// is denied (M3 audit, round 3).
+	paused := call(providers.EventPreTool, "npm install x", "")
+	paused.Answered = false
+	c.hook(paused)
+	if n := len(ru.calls); n == 0 || ru.calls[n-1].Choice != "unknown" {
+		t.Fatalf("the paused call was recorded as %+v; want unknown", ru.calls)
+	}
+	if got, _ := ru.Decision(t.Context(), "a1", "permission", dialog("npm install x")); got != "deny" {
+		t.Errorf("the screen of a paused call: %q, want deny", got)
+	}
 }
 
 // Each native permission screen of a run is kept as a recording, masked,

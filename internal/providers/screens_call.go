@@ -29,9 +29,10 @@ import (
 //   - A call with a URL, likewise with the URL.
 //
 // When several calls are on the dialog the most recent one is taken,
-// unless one of them was denied: then the most recent denied. The caller
-// drops a call once it ends or its decision answered a screen, so a stale
-// decision never answers the screen of another call.
+// unless one of them was not allowed (denied, or of a decision unknown):
+// then the most recent of those. The caller drops a call once it ends or
+// its decision answered a screen, so a stale decision never answers the
+// screen of another call.
 func ScreenCall(dialog string, calls []CallDecision) int {
 	lines := strings.Split(dialog, "\n")
 	m, ok := bottomMenu(lines)
@@ -45,7 +46,7 @@ func ScreenCall(dialog string, calls []CallDecision) int {
 	body := dialogBody(lines[top:m.top])
 	found, choice := -1, ""
 	for i := len(calls) - 1; i >= 0; i-- {
-		if callOnDialog(calls[i], body) && (found < 0 || calls[i].Choice == "deny" && choice != "deny") {
+		if callOnDialog(calls[i], body) && (found < 0 || calls[i].Choice != "allow" && choice == "allow") {
 			found, choice = i, calls[i].Choice
 		}
 	}

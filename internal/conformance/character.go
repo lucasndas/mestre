@@ -115,9 +115,13 @@ func (c *character) hook(call Call) {
 	switch call.Event.Event {
 	case providers.EventPreTool, providers.EventPermissionRequest:
 		choice := "deny"
-		if call.Answered && call.Answer.Verdict == hook.VerdictAllow || !call.Answered {
+		switch {
+		case !call.Answered:
 			// A paused call was decided by the degraded mode of the
-			// dispatcher, which only allows what reads.
+			// dispatcher, whose decision the run does not see: a screen
+			// for it is answered with a denial.
+			choice = "unknown"
+		case call.Answer.Verdict == hook.VerdictAllow:
 			choice = "allow"
 		}
 		c.ru.mu.Lock()
@@ -158,8 +162,8 @@ func (ru *run) Decision(_ context.Context, _, screenID, screen string) (string, 
 				}
 			}
 			answer := "deny"
-			if i >= 0 {
-				answer = ru.calls[i].Choice
+			if i >= 0 && ru.calls[i].Choice == "allow" {
+				answer = "allow"
 			}
 			ru.r.Recorder.Dialog(ru.req, screen, calls, answer, ru.pathMasks())
 		}
@@ -168,6 +172,9 @@ func (ru *run) Decision(_ context.Context, _, screenID, screen string) (string, 
 			return "deny", true
 		}
 		ch := ru.calls[i].Choice
+		if ch != "allow" {
+			ch = "deny" // a denial, or a call whose decision the run does not know
+		}
 		ru.calls = slices.Delete(ru.calls, i, i+1)
 		ru.res.Notes = append(ru.res.Notes, "a tela de permissão nativa apareceu e foi respondida com a decisão da chamada: "+ch)
 		return ch, true
