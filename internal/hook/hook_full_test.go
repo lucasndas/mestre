@@ -100,7 +100,7 @@ func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	action := classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: "npm install x"}
 
 	say(t, e.ctx, term, "instale")
-	out.waitAfter(t, "Tool Bash blocked by hook: "+classes.AskReason(1, action), "\n> ")
+	out.waitPrompt(t, "Tool Bash blocked by hook: "+classes.AskReason(1, action))
 	st.mu.Lock()
 	waiting := st.waiting[agent]
 	st.mu.Unlock()
@@ -124,11 +124,40 @@ func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	}
 	say(t, e.ctx, term, "pedido #1 aprovado: repita")
 	out.waitFor(t, "pedido #1 aprovado: repita")
-	out.waitAfter(t, "Tool Bash ran", "\n> ") // the turn ended: the agent takes the next message
+	out.waitPrompt(t, "Tool Bash ran") // the turn ended: the agent takes the next message
 
 	say(t, e.ctx, term, "instale de novo")
 	out.waitFor(t, "Tool Bash blocked by hook: "+classes.AskReason(2, action))
 	if ran := strings.Count(out.String(), "Tool Bash ran"); ran != 1 {
 		t.Fatalf("the approved action ran %d times:\n%s", ran, out.String())
+	}
+}
+
+// The prompt is read from the screen, not from the bytes: ConPTY repaints
+// the prompt with cursor positioning and no line break before it (the
+// capture of the Windows runner), where a PTY passes "\r\n> " on.
+func TestThePromptIsReadFromTheScreenNotFromTheBytes(t *testing.T) {
+	t.Parallel()
+	const start = "\x1b[?9001h\x1b[?1004h\x1b[?25l\x1b[2J\x1b[m\x1b[H\r\n\r\n\r\n> go\r\n* Working…\r\n"
+	for name, tt := range map[string]struct {
+		tail string
+		want bool
+	}{
+		"PTY":                   {"Tool Bash ran \r\n\r\n> ", true},
+		"ConPTY":                {"\x1b[?25lTool Bash ran \x1b[7;1H> \x1b[?25h", true},
+		"the turn not over yet": {"Tool Bash ran \r\n", false},
+		"the typed line only":   {"Tool Bash ran \r\n> next", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			o := newOutbuf(t)
+			_, _ = o.Write([]byte(start + tt.tail))
+			o.mu.Lock()
+			screen := o.em.History(-1)
+			o.mu.Unlock()
+			if got := promptAfter(screen, "Tool Bash ran"); got != tt.want {
+				t.Fatalf("prompt seen = %v, want %v on the screen:\n%s", got, tt.want, screen)
+			}
+		})
 	}
 }

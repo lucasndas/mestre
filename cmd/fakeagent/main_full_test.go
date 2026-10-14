@@ -12,14 +12,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/terminal/ptyd"
+	"github.com/lucasndas/mestre/internal/terminal/ptywire"
 	"github.com/lucasndas/mestre/internal/testkit"
-	"github.com/lucasndas/mestre/internal/testkit/fakeagent"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -93,9 +95,10 @@ func TestFakeAgentBinaryAsClaudeRunsRealHooks(t *testing.T) {
 	}
 	defer func() { _ = p.Kill() }()
 
-	out := &syncBuffer{}
+	out := &syncBuffer{em: ptyd.NewVTEmulator(ptywire.DefaultCols, ptywire.DefaultRows, ptyd.DefaultHistoryLines, nil)}
+	defer out.em.Close()
 	go func() { _, _ = io.Copy(out, p.PTY()) }()
-	waitFor(t, out, fakeagent.PromptMarker)
+	waitPrompt(t, out)
 	if _, err := p.PTY().Write([]byte("/fake-dump\r")); err != nil {
 		t.Fatal(err)
 	}
@@ -111,10 +114,14 @@ func TestFakeAgentBinaryAsClaudeRunsRealHooks(t *testing.T) {
 }
 
 // syncBuffer collects output and signals every write, so the test waits
-// for text without polling.
+// for text without polling. It keeps the raw bytes and the screen they
+// draw: a PTY passes the agent's bytes through, but ConPTY repaints with
+// cursor positioning, so the prompt is a line on the screen, not a byte
+// sequence.
 type syncBuffer struct {
 	mu      sync.Mutex
 	b       bytes.Buffer
+	em      ptyd.Emulator
 	changed chan struct{}
 }
 
@@ -125,37 +132,51 @@ func (s *syncBuffer) Write(p []byte) (int, error) {
 		close(s.changed)
 		s.changed = nil
 	}
+	s.em.Write(p)
 	return s.b.Write(p)
 }
 
-// snapshot returns the text and a channel closed on the next write.
-func (s *syncBuffer) snapshot() (string, <-chan struct{}) {
+// snapshot returns the raw text, the screen (scrollback included) and a
+// channel closed on the next write.
+func (s *syncBuffer) snapshot() (raw, screen string, changed <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.changed == nil {
 		s.changed = make(chan struct{})
 	}
-	return s.b.String(), s.changed
+	return s.b.String(), s.em.History(-1), s.changed
 }
 
 func (s *syncBuffer) String() string {
-	str, _ := s.snapshot()
-	return str
+	raw, _, _ := s.snapshot()
+	return raw
 }
 
 func waitFor(t *testing.T, out *syncBuffer, s string) {
 	t.Helper()
+	out.wait(t, fmt.Sprintf("%q", s), func(raw, _ string) bool { return strings.Contains(raw, s) })
+}
+
+// waitPrompt waits for the agent to be ready for input: the screen shows a
+// line of just ">".
+func waitPrompt(t *testing.T, out *syncBuffer) {
+	t.Helper()
+	out.wait(t, "the prompt", func(_, screen string) bool { return slices.Contains(strings.Split(screen, "\n"), ">") })
+}
+
+func (s *syncBuffer) wait(t *testing.T, what string, holds func(raw, screen string) bool) {
+	t.Helper()
 	timer := clock.Real{}.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	for {
-		text, changed := out.snapshot()
-		if strings.Contains(text, s) {
+		raw, screen, changed := s.snapshot()
+		if holds(raw, screen) {
 			return
 		}
 		select {
 		case <-changed:
 		case <-timer.C():
-			t.Fatalf("timed out waiting for %q in:\n%s", s, text)
+			t.Fatalf("timed out waiting for %s in:\n%s\nscreen:\n%s", what, raw, screen)
 		}
 	}
 }
