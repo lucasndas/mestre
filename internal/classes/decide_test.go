@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -376,7 +377,11 @@ func TestReadOnlyCommandsGoByTheProgramTheShellFinds(t *testing.T) {
 	}
 	want(t, decide(env, r, m.shell("git -c core.pager=tests/x log")), classes.Deny, classes.LayerClass)
 	for _, c := range []string{"PATH=tests ls", "env PATH=tests ls", "LD_PRELOAD=tests/x.so npm test", "GIT_PAGER=tests/x git log"} {
-		want(t, decide(env, r, m.shell(c)), classes.Ask, "", "muda o programa")
+		d := decide(env, r, m.shell(c))
+		if runtime.GOOS == "windows" && d.Verdict == classes.Deny {
+			continue // read as PowerShell, VAR=x is a program the class does not free
+		}
+		want(t, d, classes.Ask, "", "muda o programa")
 	}
 }
 

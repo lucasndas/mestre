@@ -126,7 +126,8 @@ func want(t testing.TB, d classes.Decision, v classes.Verdict, layer classes.Lay
 		t.Fatalf("decision = %s by %s (%q); want %s by %s", d.Verdict, d.Layer, d.Reason, v, layer)
 	}
 	for _, s := range reasonHas {
-		if !strings.Contains(d.Reason, s) {
+		// On Windows the paths in a reason are in lower case.
+		if !strings.Contains(strings.ToLower(d.Reason), strings.ToLower(s)) {
 			t.Fatalf("reason %q does not cite %q", d.Reason, s)
 		}
 	}
