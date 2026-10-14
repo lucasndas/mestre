@@ -38,6 +38,20 @@ func QueueDir(goos, programData, instance string) string {
 	return filepath.Join("/var/spool/mestre", instance, "hook")
 }
 
+// absolute reports whether p is an absolute path of goos: on Windows with a
+// drive (C:\…) or a UNC share (\\host\…), whatever the system the code runs
+// on.
+func absolute(goos, p string) bool {
+	if goos != "windows" {
+		return strings.HasPrefix(p, "/")
+	}
+	if len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/') {
+		c := p[0] | 0x20
+		return c >= 'a' && c <= 'z'
+	}
+	return strings.HasPrefix(p, `\\`) || strings.HasPrefix(p, "//")
+}
+
 // InstanceOf is the instance whose socket of the local channel is socket,
 // for the dispatcher that knows only MESTRE_ENDPOINT. An endpoint that is
 // not the socket of an installed instance (`mestre run --dir`) names none:

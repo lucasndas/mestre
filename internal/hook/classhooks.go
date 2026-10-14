@@ -3,7 +3,9 @@ package hook
 import (
 	"context"
 	"fmt"
+	"path"
 	"runtime"
+	"strings"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/providers"
@@ -73,11 +75,13 @@ func (s *ClassHookSource) pick(ctx context.Context, ev providers.Event, mode cla
 	if ev.Event == providers.EventTurnStart || ev.Event == providers.EventSessionStart {
 		get = s.Classes.Use
 	}
-	class, err := get(ctx, rules.Class, ev.TableID)
+	env, err := s.Characters.Env(ctx, ev.AgentID)
 	if err != nil {
 		return sel, err
 	}
-	env, err := s.Characters.Env(ctx, ev.AgentID)
+	// The table of the class is the registry's, not the one the event
+	// claims (the MESTRE_MESA of the caller).
+	class, err := get(ctx, rules.Class, env.TableID)
 	if err != nil {
 		return sel, err
 	}
@@ -91,6 +95,37 @@ func (s *ClassHookSource) pick(ctx context.Context, ev providers.Event, mode cla
 		}
 	}
 	return sel, nil
+}
+
+var _ BlockingSource = (*ClassHookSource)(nil)
+
+// HasBlocking implements BlockingSource: whether the approved class of the
+// character has a blocking pre_tool hook, whatever its `when`.
+func (s *ClassHookSource) HasBlocking(ctx context.Context, agentID string) (bool, error) {
+	if s.Classes == nil || s.Rules == nil || s.Characters == nil {
+		return false, nil
+	}
+	rules, err := s.Rules.Rules(ctx, agentID)
+	if err != nil {
+		return true, err
+	}
+	if rules.Class == "" {
+		return false, nil
+	}
+	env, err := s.Characters.Env(ctx, agentID)
+	if err != nil {
+		return true, err
+	}
+	class, err := s.Classes.Approved(ctx, rules.Class, env.TableID)
+	if err != nil {
+		return true, err
+	}
+	for _, h := range class.Hooks[providers.EventPreTool] {
+		if h.Blocking {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (sel selected) goos() string {
@@ -113,12 +148,15 @@ func (s *ClassHookSource) Sync(ctx context.Context, ev providers.Event) ([]Class
 	if s.ProviderSeconds != nil {
 		limit = s.ProviderSeconds(ev.Provider)
 	}
+	// One budget for all the hooks of the call: the provider gives up on
+	// `mestre hook` at its limit (and Codex then goes on as if allowed).
+	budget := classes.SyncTimeout(classes.MaxHookTimeout, limit).Milliseconds()
 	out := make([]ClassHook, 0, len(sel.hooks))
 	for _, h := range sel.hooks {
 		run := h.Command(sel.goos())
 		ch := ClassHook{
 			Name: h.Name, Run: run, Dir: sel.env.Worktree, Blocking: h.Blocking,
-			TimeoutMS: classes.SyncTimeout(h.Timeout, limit).Milliseconds(),
+			TimeoutMS: classes.SyncTimeout(h.Timeout, limit).Milliseconds(), BudgetMS: budget,
 		}
 		ch.Refused = sel.refusal(ctx, ev, run)
 		out = append(out, ch)
@@ -145,9 +183,32 @@ func (s *ClassHookSource) Async(ctx context.Context, ev providers.Event) (run []
 	return run, refused, nil
 }
 
+// packageScript finds a script of the package in a command line: a word
+// under hooks/ ("./hooks/checar.sh", "sh hooks\checar.sh"), the first one as
+// `class check` reads it (classes.scriptOf) or any other. Run from the
+// worktree it would be the copy the agent can write, not the approved one,
+// so until the engine runs the approved copy
+// (docs/classes/classes.md#hooks-extras-da-classe) a hook with a script does
+// not run: a blocking one denies.
+func packageScript(line string) (string, bool) {
+	for _, f := range strings.Fields(line) {
+		word := strings.ReplaceAll(strings.Trim(f, `"'`), `\`, "/")
+		for strings.HasPrefix(word, "./") {
+			word = strings.TrimPrefix(word, "./")
+		}
+		if strings.HasPrefix(strings.ToLower(word), classes.HooksDir+"/") {
+			return path.Clean(word), true
+		}
+	}
+	return "", false
+}
+
 // refusal is why the pipeline does not let the character run the line: ""
 // when it does.
 func (sel selected) refusal(ctx context.Context, ev providers.Event, line string) string {
+	if script, ok := packageScript(line); ok {
+		return fmt.Sprintf("o script %s do pacote só roda da cópia aprovada da classe, que o motor ainda não materializa (M4): o do worktree o agente pode trocar", script)
+	}
 	d := classes.Decide(ctx, sel.env, sel.rules, providers.Event{
 		Version: providers.EventVersion, Provider: ev.Provider, Event: providers.EventPreTool,
 		AgentID: ev.AgentID, TableID: ev.TableID, Cwd: sel.env.Worktree, ReceivedAt: ev.ReceivedAt,

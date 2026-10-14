@@ -32,6 +32,9 @@ func (OSFiles) CreateNew(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	// The umask of the agent's shell (077, say) must not leave the file
+	// unreadable to the engine: the mode is set on the open file.
+	cerr := f.Chmod(0o640)
 	_, werr := f.Write(data)
-	return errors.Join(werr, f.Close())
+	return errors.Join(cerr, werr, f.Close())
 }

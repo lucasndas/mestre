@@ -155,9 +155,9 @@ func Drain(dir string, max int, clk clock.Clock, log *slog.Logger, handle func(Q
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if !queueName.MatchString(e.Name()) {
-			log.Warn("hook queue: a file the dispatcher did not write", "file", e.Name())
-			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+		if !queueName.MatchString(e.Name()) || !e.Type().IsRegular() {
+			log.Warn("hook queue: a file the dispatcher did not write", "file", e.Name(), "type", e.Type().String())
+			removeEntry(dir, e.Name(), log)
 			continue
 		}
 		names = append(names, e.Name())
@@ -178,15 +178,34 @@ func Drain(dir string, max int, clk clock.Clock, log *slog.Logger, handle func(Q
 			handle(rec)
 			n++
 		}
-		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return n, fmt.Errorf("hook queue: %w", err)
-		}
+		// One entry that cannot go never stops the others.
+		removeEntry(dir, name, log)
 	}
 	return n, nil
 }
 
+// removeEntry removes an entry of the queue without following it: a link
+// goes as the link, a folder an agent made goes with what it holds (the
+// removal does not follow the links inside it). A failure is logged.
+func removeEntry(dir, name string, log *slog.Logger) {
+	path := filepath.Join(dir, name)
+	st, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return
+	case err == nil && st.IsDir():
+		err = os.RemoveAll(path)
+	default:
+		err = os.Remove(path)
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		log.Warn("hook queue: an entry could not be removed", "file", name, "err", err)
+	}
+}
+
 // dropOldestInfo applies the limit: the oldest informative files go first;
-// decisions always stay.
+// decisions stay while they fit, and only a queue of more decisions than the
+// limit loses its oldest decisions too (logged, with the count).
 func dropOldestInfo(dir string, names []string, max int, log *slog.Logger) []string {
 	over := len(names) - max
 	if over <= 0 {
@@ -196,18 +215,25 @@ func dropOldestInfo(dir string, names []string, max int, log *slog.Logger) []str
 	dropped := 0
 	for _, name := range names {
 		if dropped < over && queueName.FindStringSubmatch(name)[1] == QueuedInfo {
-			_ = os.Remove(filepath.Join(dir, name))
+			removeEntry(dir, name, log)
 			dropped++
 			continue
 		}
 		kept = append(kept, name)
 	}
 	log.Warn("hook queue: over the limit, the oldest informative events were dropped", "dropped", dropped, "limit", max)
+	if extra := len(kept) - max; extra > 0 {
+		for _, name := range kept[:extra] {
+			removeEntry(dir, name, log)
+		}
+		kept = kept[extra:]
+		log.Warn("hook queue: more decisions than the limit, the oldest decisions were dropped", "dropped", extra, "limit", max)
+	}
 	return kept
 }
 
 func readRecord(path string, now time.Time) (rec QueueRecord, young bool, err error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|noFollow, 0)
+	f, err := openQueued(path)
 	if err != nil {
 		return rec, false, err
 	}
