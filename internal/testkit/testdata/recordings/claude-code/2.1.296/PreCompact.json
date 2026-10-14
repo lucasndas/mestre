@@ -1,0 +1,7 @@
+{
+  "origin": "claude-code",
+  "version": "2.1.296",
+  "captured_at": "2026-10-14",
+  "source": "documentation: https://code.claude.com/docs/en/hooks#precompact",
+  "body": {"session_id": "abc123", "transcript_path": "/home/user/.claude/projects/p/abc123.jsonl", "cwd": "/home/user/p", "permission_mode": "default", "hook_event_name": "PreCompact", "trigger": "auto", "custom_instructions": ""}
+}

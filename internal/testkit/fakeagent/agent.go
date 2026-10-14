@@ -91,6 +91,14 @@ func Run(ctx context.Context, cfg Config) error {
 	go readInput(cfg.In, events)
 
 	a.print(profiles[a.p].title + "\r\n" + a.dir + "\r\n")
+	if s := a.env["FAKEAGENT_START_SCREEN"]; s != "" {
+		// A start screen no adapter knows: it waits for Enter (the
+		// escalation, answered with `mestre ask --raw`) and goes on.
+		a.print(s + "\r\n")
+		if _, err := a.menu(ctx, events, []string{"Continue"}); err != nil {
+			return err
+		}
+	}
 	if !a.loggedIn() {
 		pr := profiles[a.p]
 		a.print(pr.loginTitle + "\r\n")
