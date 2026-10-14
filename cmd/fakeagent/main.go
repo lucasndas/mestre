@@ -50,16 +50,17 @@ func run(ctx context.Context, argv []string) error {
 	return fakeagent.Run(ctx, fakeagent.Config{
 		Provider: p, Args: args, Env: os.Environ(), Dir: dir,
 		In: os.Stdin, Out: os.Stdout, Clock: clock.Real{},
-		Hooks: shell{}, Commands: shell{},
+		Hooks: shell{p}, Commands: shell{p},
 	})
 }
 
-// shell runs hooks and commands the way the providers do: sh -c on Linux,
-// cmd /c on Windows (command, in command_*.go).
-type shell struct{}
+// shell runs hooks and commands the way the providers do: sh -c on Linux;
+// on Windows each provider runs its hooks with its own shell (hookCommand,
+// in command_*.go) and the commands with cmd /c.
+type shell struct{ p fakeagent.Provider }
 
-func (shell) RunHook(ctx context.Context, call fakeagent.HookCall) (fakeagent.HookResult, error) {
-	c := command(ctx, call.Command, call.Dir, call.Env)
+func (s shell) RunHook(ctx context.Context, call fakeagent.HookCall) (fakeagent.HookResult, error) {
+	c := hookCommand(ctx, s.p, call.Command, call.Dir, call.Env)
 	var out, errb bytes.Buffer
 	c.Stdin, c.Stdout, c.Stderr = bytes.NewReader(call.Stdin), &out, &errb
 	err := c.Run()
