@@ -100,7 +100,7 @@ func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	action := classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: "npm install x"}
 
 	say(t, e.ctx, term, "instale")
-	out.waitFor(t, "Tool Bash blocked by hook: "+classes.AskReason(1, action))
+	out.waitAfter(t, "Tool Bash blocked by hook: "+classes.AskReason(1, action), "\n> ")
 	st.mu.Lock()
 	waiting := st.waiting[agent]
 	st.mu.Unlock()
@@ -124,7 +124,7 @@ func TestAnApprovedActionPassesOnceAndTheNextAsksAgain(t *testing.T) {
 	}
 	say(t, e.ctx, term, "pedido #1 aprovado: repita")
 	out.waitFor(t, "pedido #1 aprovado: repita")
-	out.waitFor(t, "Tool Bash ran")
+	out.waitAfter(t, "Tool Bash ran", "\n> ") // the turn ended: the agent takes the next message
 
 	say(t, e.ctx, term, "instale de novo")
 	out.waitFor(t, "Tool Bash blocked by hook: "+classes.AskReason(2, action))

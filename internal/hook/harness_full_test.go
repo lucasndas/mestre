@@ -127,6 +127,18 @@ func (o *outbuf) String() string {
 
 func (o *outbuf) waitFor(t *testing.T, sub string) {
 	t.Helper()
+	o.waitAfter(t, "", sub)
+}
+
+// waitAfter waits until the output holds sub after the first after: the
+// prompt after a line ("Tool Bash ran", then "\n> ") is the agent free for
+// the next message, which a message typed during the turn would not find.
+func (o *outbuf) waitAfter(t *testing.T, after, sub string) {
+	t.Helper()
+	holds := func(text string) bool {
+		i := strings.Index(text, after)
+		return i >= 0 && strings.Contains(text[i+len(after):], sub)
+	}
 	limit := clock.Real{}.NewTimer(90 * time.Second)
 	defer limit.Stop()
 	for {
@@ -137,15 +149,15 @@ func (o *outbuf) waitFor(t *testing.T, sub string) {
 		}
 		ch := o.changed
 		o.mu.Unlock()
-		if strings.Contains(text, sub) {
+		if holds(text) {
 			return
 		}
 		select {
 		case <-ch:
 		case <-t.Context().Done():
-			t.Fatalf("output never held %q:\n%s", sub, text)
+			t.Fatalf("output never held %q after %q:\n%s", sub, after, text)
 		case <-limit.C():
-			t.Fatalf("output did not hold %q in 90 s:\n%s", sub, text)
+			t.Fatalf("output did not hold %q after %q in 90 s:\n%s", sub, after, text)
 		}
 	}
 }
