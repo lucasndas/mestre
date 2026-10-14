@@ -450,7 +450,7 @@ func (ru *run) provision(ctx context.Context) error {
 		return err
 	}
 	ru.env = classes.Env{AgentID: ws.AgentID, TableID: ru.lreq.TableID, Worktree: ws.Worktree, Tmp: ws.Tmp, OS: req.OS,
-		Layout: ru.r.Host.cfg.Layout, Normalize: ru.r.Options.NormalizePath, Git: classes.GitxState{Git: ru.r.Git}}
+		Layout: ru.r.Host.cfg.Layout, Normalize: ru.r.Options.NormalizePath, Git: classes.GitxState{Git: ru.r.Git, Main: MainBranch}}
 	return nil
 }
 

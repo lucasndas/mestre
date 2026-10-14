@@ -19,6 +19,11 @@ const ClassName = "conformidade"
 // Branch is the branch of the worktree of the run, as a table's.
 const Branch = "mesa/conformidade"
 
+// MainBranch is the main branch of the test repository: the table branch
+// leaves it, so a script of the worktree is changed only when the run
+// changed it (classes.GitxState.Main).
+const MainBranch = "main"
+
 // Folders of the worktree the steps write to: one the class lets the
 // character write, one it does not.
 const (
@@ -134,7 +139,7 @@ func prepare(ctx context.Context, git gitx.Git, parent string, claude bool, now 
 
 func (ws *Workspace) build(ctx context.Context, git gitx.Git, claude bool, now time.Time) error {
 	src := filepath.Join(ws.Root, "origem")
-	repo, err := git.Init(ctx, src, gitx.InitOptions{InitialBranch: "main"})
+	repo, err := git.Init(ctx, src, gitx.InitOptions{InitialBranch: MainBranch})
 	if err != nil {
 		return err
 	}
