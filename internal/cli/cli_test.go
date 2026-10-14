@@ -32,6 +32,8 @@ type proc struct {
 	env  map[string]string
 	// dials counts the connections the CLI opened.
 	dials atomic.Int32
+	// commands is the definition of the commands (nil: the default).
+	commands *cli.Registry
 }
 
 // newProc registers a process in the terminal of a character (or none) and
@@ -58,6 +60,7 @@ func (p *proc) run(ctx context.Context, args ...string) result {
 			}
 		},
 		FileExists: func(string) bool { return true },
+		Commands:   p.commands,
 	}, args)
 	return result{code, stdout.String(), stderr.String()}
 }

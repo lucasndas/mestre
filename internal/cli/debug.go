@@ -21,24 +21,24 @@ type Check struct {
 	Status string `json:"status"`
 	Detail string `json:"detail"`
 	Hint   string `json:"hint,omitempty"`
-	// exit is the exit code a failure gives.
+	// exit is the exit code a failure gives, code its error code.
 	exit int
+	code string
 }
 
 // runDebug is `mestre debug` (docs/cli/convencoes.md#ajuda-e-diagnóstico):
 // the items in order, each ok or fail with a hint; exit 0 when all pass,
 // otherwise the code of the first failure. Item 5, whether the engine
-// reaches the current Citadel, needs the protocol of M2 and is skipped.
+// reaches the current Citadel with a compatible protocol and epoch, is the
+// answer of the engine itself.
 func runDebug(ctx context.Context, env Env, p *parsed) int {
 	var checks []Check
 	checks = append(checks, checkVersion(env))
 	checks = append(checks, checkEnv(env))
 
 	agent := env.Getenv(localchan.EnvAgentID)
-	c3, c4 := checkEngine(ctx, env, agent)
-	checks = append(checks, c3, c4)
-	checks = append(checks, Check{Name: "citadel", Status: StatusSkipped,
-		Detail: "needs the Citadel connection, which arrives with the protocol between machines (M2)"})
+	c3, c4, c5 := checkEngine(ctx, env, agent)
+	checks = append(checks, c3, c4, c5)
 
 	code := localchan.ExitOK
 	var first *Check
@@ -71,6 +71,9 @@ func runDebug(ctx context.Context, env Env, p *parsed) int {
 
 // failCode is the error code of a failed check.
 func failCode(c *Check) string {
+	if c.code != "" {
+		return c.code
+	}
 	switch c.Name {
 	case "engine":
 		return localchan.CodeEngineUnreachable
@@ -115,35 +118,41 @@ func checkEnv(env Env) Check {
 	return c
 }
 
-// checkEngine is items 3 and 4: the engine answers on the endpoint (with
-// the time it took) and accepts the identification (skipped without an id).
-func checkEngine(ctx context.Context, env Env, agent string) (c3, c4 Check) {
+// checkEngine is items 3, 4 and 5: the engine answers on the endpoint (with
+// the time it took), accepts the identification (skipped without an id) and
+// reaches the current Citadel.
+func checkEngine(ctx context.Context, env Env, agent string) (c3, c4, c5 Check) {
 	c3 = Check{Name: "engine"}
 	c4 = Check{Name: "identity"}
+	c5 = Check{Name: "citadel"}
+	skip := func(why string) {
+		c4.Status, c4.Detail = StatusSkipped, why
+		c5.Status, c5.Detail = StatusSkipped, why
+	}
 	cl, err := client(env, -1)
 	if err != nil {
 		c3.Status, c3.Detail, c3.exit = StatusFail, err.Error(), localchan.ExitUnavailable
-		c3.Hint = "run mestre debug after fixing MESTRE_ENDPOINT"
-		c4.Status, c4.Detail = StatusSkipped, "needs the engine"
-		return c3, c4
+		c3.Hint = "fix MESTRE_ENDPOINT and run mestre debug again"
+		skip("needs the engine")
+		return c3, c4, c5
 	}
 	start := env.Clock.Now()
 	resp, err := cl.Call(ctx, localchan.Request{AgentID: agent, Cmd: localchan.CmdDebug, Cwd: env.Cwd}, localchan.CallOptions{})
 	took := env.Clock.Now().Sub(start)
 	if err != nil {
 		c3.Status, c3.Detail, c3.exit = StatusFail, "interrupted: "+err.Error(), localchan.ExitInternal
-		c4.Status, c4.Detail = StatusSkipped, "needs the engine"
-		return c3, c4
+		skip("needs the engine")
+		return c3, c4, c5
 	}
 	if !resp.OK {
-		c3.Status, c3.exit = StatusFail, resp.ExitCode()
+		c3.Status, c3.exit, c3.code = StatusFail, resp.ExitCode(), resp.Error.Code
 		c3.Detail = resp.Error.Message
 		c3.Hint = resp.Error.Hint
 		if c3.Hint == "" {
 			c3.Hint = "the Guardian restarts the engine"
 		}
-		c4.Status, c4.Detail = StatusSkipped, "needs the engine"
-		return c3, c4
+		skip("needs the engine")
+		return c3, c4, c5
 	}
 	var data struct {
 		Engine struct {
@@ -153,11 +162,19 @@ func checkEngine(ctx context.Context, env Env, agent string) (c3, c4 Check) {
 		Caller struct {
 			Identified bool `json:"identified"`
 		} `json:"caller"`
+		Citadel *struct {
+			Reachable bool   `json:"reachable"`
+			Detail    string `json:"detail"`
+			Code      string `json:"code"`
+			Protocol  int    `json:"protocol"`
+			Epoch     uint64 `json:"epoch"`
+		} `json:"citadel"`
 	}
 	if err := resp.DecodeData(&data); err != nil {
 		c3.Status, c3.Detail, c3.exit = StatusFail, "the engine answered with data this mestre cannot read: "+err.Error(), localchan.ExitInternal
-		c4.Status, c4.Detail = StatusSkipped, "needs the engine"
-		return c3, c4
+		c3.Hint = "this mestre and the engine are of different versions; update mestre"
+		skip("needs the engine")
+		return c3, c4, c5
 	}
 	c3.Status = StatusOK
 	c3.Detail = fmt.Sprintf("answered in %s (engine %s, protocol v%d)", took, data.Engine.Version, data.Engine.Protocol)
@@ -167,9 +184,26 @@ func checkEngine(ctx context.Context, env Env, agent string) (c3, c4 Check) {
 	case data.Caller.Identified:
 		c4.Status, c4.Detail = StatusOK, "the engine accepts this process as a process of the terminal of "+agent
 	default:
-		c4.Status, c4.exit = StatusFail, localchan.ExitDenied
+		c4.Status, c4.exit, c4.code = StatusFail, localchan.ExitDenied, localchan.CodeNotIdentified
 		c4.Detail = "the engine does not accept this process as a process of the terminal of " + agent
 		c4.Hint = "run mestre inside the terminal of that character; another terminal or a shell is refused"
 	}
-	return c3, c4
+	switch c := data.Citadel; {
+	case c == nil:
+		c5.Status, c5.Detail = StatusSkipped, "the engine did not say whether it reaches the Citadel"
+	case c.Reachable:
+		c5.Status = StatusOK
+		c5.Detail = fmt.Sprintf("the Citadel answers (protocol v%d, epoch %d)", c.Protocol, c.Epoch)
+		if c.Detail != "" {
+			c5.Detail = c.Detail
+		}
+	default:
+		c5.Status, c5.exit, c5.code = StatusFail, localchan.ExitUnavailable, firstNonEmpty(c.Code, localchan.CodeCitadelUnavailable)
+		c5.Detail = firstNonEmpty(c.Detail, "the engine does not reach the Citadel")
+		c5.Hint = "the Owner is warned when the Citadel stays away; calls that need an answer now fail until it is back"
+		if c.Code == localchan.CodeCitadelInFailover {
+			c5.Hint = "another machine is taking the place of the Citadel; try again in a few minutes"
+		}
+	}
+	return c3, c4, c5
 }

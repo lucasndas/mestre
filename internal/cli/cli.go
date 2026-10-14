@@ -1,13 +1,17 @@
-// Package cli is the `mestre` command line: parsing, calling the engine
-// through the local channel (internal/localchan), and printing the result
-// with the exit codes of docs/cli/convencoes.md.
+// Package cli is the `mestre` command line: the single definition of the
+// commands (commands.go), parsing, calling the engine through the local
+// channel (internal/localchan) and printing the result with the conventions
+// of docs/cli/convencoes.md: text or --json, the exit codes, the identity
+// of the caller, the help and `mestre debug`. The engine side of the
+// conventions (the level of the caller, the class, the secrets, the request
+// that waits in the outbox) is the Gate in gate.go.
 //
-// Until the CLI documents arrive (M4, docs/cli/comunicacao.md), the
-// commands here are the "casca" that the channel needs to be exercised
-// ("casca" rule of docs/desenvolvimento/ordem-de-implementacao.md): the
-// syntax of `list` and `ask` and the happy path through the channel, plus
-// `help` and `debug`, which this stage owns. Their errors, `--json` shapes
-// and full definition close in the stage of the CLI of communication.
+// The commands of the documents of the CLI that belong to later milestones
+// are not here: they are added to Default with their own Spec and use this
+// package's shared code. Until then, `list` and `ask` are the "casca" that
+// the channel needs to be exercised ("casca" rule of
+// docs/desenvolvimento/ordem-de-implementacao.md): the syntax and the happy
+// path through the channel.
 package cli
 
 import (
@@ -17,10 +21,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -40,6 +44,8 @@ type Env struct {
 	Version string
 	// FileExists tells whether a path exists (nil: os.Stat).
 	FileExists func(path string) bool
+	// Commands is the definition of the commands (nil: Default).
+	Commands *Registry
 }
 
 func (e *Env) defaults() {
@@ -58,62 +64,9 @@ func (e *Env) defaults() {
 	if e.Version == "" {
 		e.Version = "dev"
 	}
-}
-
-// FlagKind is how a flag's value is read.
-type FlagKind int
-
-// Kinds of flags.
-const (
-	FlagString FlagKind = iota
-	FlagDuration
-	FlagBool
-)
-
-// Spec is the definition of one command.
-type Spec struct {
-	Name string
-	// MinArgs and MaxArgs bound the positional arguments (MaxArgs < 0: any).
-	MinArgs, MaxArgs int
-	Flags            map[string]FlagKind
-	// DefaultTimeout is the time limit of the command when it has no
-	// --timeout; zero means the channel's default of 30 s.
-	DefaultTimeout time.Duration
-	// Local commands are answered by the CLI itself, calling the engine
-	// only for what they need.
-	Local bool
-	Usage string
-}
-
-// AskDefaultTimeout is the default time limit of `mestre ask` until the
-// waits document fixes it (docs/orquestracao/esperas-e-caixa-de-entrada.md).
-const AskDefaultTimeout = 10 * time.Minute
-
-// commands is the table of the casca.
-var commands = []Spec{
-	{Name: "help", MaxArgs: 1, Local: true, Usage: "mestre help [command]"},
-	{Name: "debug", MaxArgs: 0, Local: true, Usage: "mestre debug"},
-	{Name: "list", MaxArgs: 0, Usage: "mestre list"},
-	{Name: "ask", MinArgs: 2, MaxArgs: 2, Flags: map[string]FlagKind{"timeout": FlagDuration},
-		DefaultTimeout: AskDefaultTimeout, Usage: `mestre ask "<name>" "<prompt>" [--timeout <dur>]`},
-}
-
-// resolve finds the command at the start of toks and returns how many
-// words its name has.
-func resolve(toks []string) (Spec, int, bool) {
-	if len(toks) >= 2 {
-		for _, s := range commands {
-			if s.Name == toks[0]+" "+toks[1] {
-				return s, 2, true
-			}
-		}
+	if e.Commands == nil {
+		e.Commands = Default()
 	}
-	for _, s := range commands {
-		if s.Name == toks[0] {
-			return s, 1, true
-		}
-	}
-	return Spec{}, 0, false
 }
 
 // parsed is a command line after the flags were read.
@@ -132,17 +85,24 @@ type usageError struct{ msg, hint string }
 func (e *usageError) Error() string { return e.msg }
 
 // parse reads the command line. The global flags (--json, --help, --debug)
-// may come anywhere; a flag of a command is `--name value` or `--name=value`.
-func parse(argv []string) (*parsed, error) {
+// may come anywhere; a flag of a command is `--name value` or `--name=value`;
+// everything after a lone `--` is positional.
+func parse(reg *Registry, argv []string) (*parsed, error) {
 	p := &parsed{flags: map[string]any{}}
 	var toks []string
+	literal := false
 	for _, a := range argv {
-		switch a {
-		case "--json":
+		switch {
+		case literal:
+			toks = append(toks, a)
+		case a == "--":
+			literal = true
+			toks = append(toks, a)
+		case a == "--json":
 			p.json = true
-		case "--help", "-h":
+		case a == "--help" || a == "-h":
 			p.help = true
-		case "--debug":
+		case a == "--debug":
 			p.debugFlag = true
 		default:
 			toks = append(toks, a)
@@ -150,30 +110,35 @@ func parse(argv []string) (*parsed, error) {
 	}
 	if len(toks) == 0 {
 		if p.help {
-			p.spec = Spec{Name: "help", Local: true, MaxArgs: 1, Usage: "mestre help [command]"}
+			p.spec, _ = reg.Get("help")
 			return p, nil
 		}
 		return nil, &usageError{"no command given", "mestre help lists the commands"}
 	}
-	spec, n, ok := resolve(toks)
+	spec, n, ok := reg.Resolve(toks)
 	if !ok {
 		return nil, &usageError{fmt.Sprintf("unknown command %q", toks[0]), "mestre help lists the commands"}
 	}
 	p.spec = spec
 	toks = toks[n:]
+	literal = false
 	for i := 0; i < len(toks); i++ {
 		a := toks[i]
-		if !strings.HasPrefix(a, "--") || a == "--" {
+		if a == "--" && !literal {
+			literal = true
+			continue
+		}
+		if literal || len(a) < 3 || a[:2] != "--" {
 			p.args = append(p.args, a)
 			continue
 		}
-		name, val, hasVal := strings.Cut(strings.TrimPrefix(a, "--"), "=")
-		kind, known := spec.Flags[name]
+		name, val, hasVal := cutFlag(a)
+		f, known := spec.flag(name)
 		if !known {
-			return nil, &usageError{fmt.Sprintf("unknown flag --%s", name), "usage: " + spec.Usage}
+			return nil, &usageError{fmt.Sprintf("unknown flag --%s", name), "mestre " + spec.Name + " --help"}
 		}
 		if !hasVal {
-			if kind == FlagBool {
+			if f.Kind == FlagBool {
 				p.flags[name] = true
 				continue
 			}
@@ -183,7 +148,7 @@ func parse(argv []string) (*parsed, error) {
 			i++
 			val = toks[i]
 		}
-		if err := p.setFlag(name, val); err != nil {
+		if err := p.setFlag(f, val); err != nil {
 			return nil, err
 		}
 	}
@@ -193,22 +158,30 @@ func parse(argv []string) (*parsed, error) {
 	return p, nil
 }
 
-func (p *parsed) setFlag(name, val string) error {
-	kind, known := p.spec.Flags[name]
-	if !known {
-		return &usageError{fmt.Sprintf("unknown flag --%s", name), "mestre " + p.spec.Name + " --help"}
+func cutFlag(a string) (name, val string, hasVal bool) {
+	for i := 2; i < len(a); i++ {
+		if a[i] == '=' {
+			return a[2:i], a[i+1:], true
+		}
 	}
-	switch kind {
+	return a[2:], "", false
+}
+
+func (p *parsed) setFlag(f Flag, val string) error {
+	switch f.Kind {
 	case FlagDuration:
 		d, err := time.ParseDuration(val)
 		if err != nil || d <= 0 {
-			return &usageError{fmt.Sprintf("--%s %q is not a duration", name, val), "use 90s, 10m or 2h"}
+			return &usageError{fmt.Sprintf("--%s %q is not a duration", f.Name, val), "use 90s, 10m or 2h"}
 		}
-		p.flags[name] = val
+		p.flags[f.Name] = val
 	case FlagBool:
-		p.flags[name] = val == "true"
+		if val != "true" && val != "false" {
+			return &usageError{fmt.Sprintf("--%s %q is not true or false", f.Name, val), "use --" + f.Name}
+		}
+		p.flags[f.Name] = val == "true"
 	default:
-		p.flags[name] = val
+		p.flags[f.Name] = val
 	}
 	return nil
 }
@@ -227,7 +200,7 @@ func (p *parsed) timeout() time.Duration {
 // exit code.
 func Run(ctx context.Context, env Env, argv []string) int {
 	env.defaults()
-	p, err := parse(argv)
+	p, err := parse(env.Commands, argv)
 	if err != nil {
 		var ue *usageError
 		errors.As(err, &ue)
@@ -236,8 +209,7 @@ func Run(ctx context.Context, env Env, argv []string) int {
 	}
 	o := out{env: env, json: p.json}
 	if p.help && p.spec.Name != "help" {
-		fmt.Fprintf(env.Stdout, "usage: %s\n", p.spec.Usage)
-		return localchan.ExitOK
+		return o.commandHelp(p.spec)
 	}
 	switch p.spec.Name {
 	case "debug":
@@ -245,7 +217,17 @@ func Run(ctx context.Context, env Env, argv []string) int {
 	case "help":
 		return runHelp(ctx, env, p)
 	}
+	if env.Getenv(localchan.EnvAgentID) == "" {
+		// A person in a shell, or a terminal made by `spawn`: only help,
+		// debug and hook work. The engine refuses the same way, but there
+		// is no reason to wait for an engine that may be restarting.
+		return o.fail(notIdentified(localchan.EnvAgentID + " is not set: only help and debug work outside a character"))
+	}
 	return runRemote(ctx, env, p, o)
+}
+
+func notIdentified(msg string) localchan.Response {
+	return localchan.Fail(localchan.CodeNotIdentified, msg, "run mestre debug")
 }
 
 func slicesContains(s []string, v string) bool {
@@ -284,95 +266,12 @@ func runRemote(ctx context.Context, env Env, p *parsed, o out) int {
 	}
 	opt := localchan.CallOptions{Timeout: p.timeout()}
 	if p.debugFlag {
-		opt.OnPartial = func(d json.RawMessage) { fmt.Fprintf(env.Stderr, "partial: %s\n", d) }
+		masker := logging.NewMasker()
+		opt.OnPartial = func(d json.RawMessage) { fmt.Fprintf(env.Stderr, "partial: %s\n", masker.Mask(string(d))) }
 	}
 	resp, err := c.Call(ctx, request(env, p), opt)
 	if err != nil {
-		return o.fail(localchan.Fail(localchan.CodeInternal, "interrupted: "+err.Error(), ""))
+		return o.fail(localchan.Fail(localchan.CodeInternal, "interrupted: "+err.Error(), "repeat the command; mestre debug checks the engine"))
 	}
 	return o.response(p.spec.Name, resp)
-}
-
-// out prints results and errors in text or --json.
-type out struct {
-	env  Env
-	json bool
-}
-
-// response prints a final response and returns its exit code.
-func (o out) response(cmd string, r localchan.Response) int {
-	code := r.ExitCode()
-	switch {
-	case o.json:
-		o.printJSON(r)
-	case r.OK:
-		fmt.Fprintln(o.env.Stdout, renderText(cmd, r.Data))
-	default:
-		o.textError(r.Error)
-	}
-	return code
-}
-
-// fail prints an error response of the CLI itself.
-func (o out) fail(r localchan.Response) int {
-	code := localchan.ExitFor(r.Error.Code)
-	if o.json {
-		o.printJSON(r)
-	} else {
-		o.textError(r.Error)
-	}
-	return code
-}
-
-func (o out) textError(e *localchan.Error) {
-	if e == nil {
-		fmt.Fprintln(o.env.Stderr, "error: the engine answered with no result")
-		return
-	}
-	fmt.Fprintf(o.env.Stderr, "error: %s\n", e.Message)
-	if e.Hint != "" {
-		fmt.Fprintf(o.env.Stderr, "hint: %s\n", e.Hint)
-	}
-}
-
-// printJSON writes the single object of --json: {"ok", "data"} or
-// {"ok": false, "error"}, and nothing on stderr.
-func (o out) printJSON(r localchan.Response) {
-	v := map[string]any{"ok": r.OK}
-	if len(r.Data) > 0 || r.OK {
-		var data any
-		if len(r.Data) > 0 {
-			_ = json.Unmarshal(r.Data, &data)
-		}
-		v["data"] = data
-	}
-	if !r.OK {
-		v["error"] = r.Error
-	}
-	b, _ := json.Marshal(v)
-	fmt.Fprintln(o.env.Stdout, string(b))
-}
-
-// renderText is the text mode of the casca: the answer of `ask`, the text
-// of a result that has one, otherwise the data as JSON. The tables of each
-// command arrive with the documents of the CLI.
-func renderText(cmd string, data json.RawMessage) string {
-	if len(data) == 0 {
-		return ""
-	}
-	var obj map[string]any
-	if json.Unmarshal(data, &obj) == nil {
-		key := "text"
-		if cmd == "ask" {
-			key = "response"
-		}
-		if s, ok := obj[key].(string); ok {
-			return s
-		}
-	}
-	var s string
-	if json.Unmarshal(data, &s) == nil {
-		return s
-	}
-	return string(data)
 }

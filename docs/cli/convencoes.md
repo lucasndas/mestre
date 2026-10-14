@@ -1,6 +1,6 @@
 # Convenções da CLI `mestre`
 
-> **Assunto:** regras comuns a todos os comandos: forma, saída, códigos de saída, identificação do chamador, encaminhamento, segurança, ajuda e diagnóstico · **Componente:** CLI · **Atualizado:** 2026-10-13
+> **Assunto:** regras comuns a todos os comandos: forma, saída, códigos de saída, identificação do chamador, encaminhamento, segurança, ajuda e diagnóstico · **Componente:** CLI · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -11,12 +11,12 @@ Dar a todos os comandos da CLI `mestre` a mesma forma de uso, de saída e de err
 ### Forma geral
 - O binário `mestre` está no PATH de toda máquina da Guilda ([componentes](../arquitetura/componentes.md)). `MESTRE_CLI` guarda o caminho absoluto dele: skills e arquivos de hook usam `mestre` e, se não acharem, `$MESTRE_CLI` (PowerShell: `& $env:MESTRE_CLI`).
 - Uso: `mestre <comando> [subcomando] [argumentos] [flags]`. Nomes com espaço vão entre aspas. Comandos, flags e textos de saída ficam em inglês.
-- Flags globais: `--json` (saída em JSON), `--help` e `--debug` (mostra no stderr as respostas parciais, que a CLI não imprime; [canal local](../arquitetura/canal-local.md#respostas-parciais)). Durações: `90s`, `10m`, `2h`. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
+- Flags globais: `--json` (saída em JSON), `--help` e `--debug` (mostra no stderr as respostas parciais, que a CLI não imprime; [canal local](../arquitetura/canal-local.md#respostas-parciais)). Durações: `90s`, `10m`, `2h`. `-h` vale `--help`; um `--` sozinho encerra as flags (o que vem depois é argumento, mesmo começando com `--`). Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
 - `mestre hook` é interno (só os arquivos de hook o chamam) e **não** segue as regras de saída abaixo: ver [adaptador](../provedores/adaptador.md). Subcomandos de serviço (`mestre run`, `mestre install`, `mestre join`…) são de [componentes](../arquitetura/componentes.md).
 
 ### Saída em texto (padrão)
 - stdout: só o resultado, curto, pensado para um agente ler: tabelas alinhadas por espaço, sem cores nem sequências de terminal.
-- stderr: erros, sempre em duas linhas: o que houve e o que fazer (`hint: …`).
+- stderr: erros, sempre em duas linhas, `error: …` (o que houve, numa linha só) e `hint: …` (o que fazer; sem dica do comando, vale a da família do código).
 - Texto vindo de usuários ou de outros agentes (respostas, pergaminhos, telas) sai como está, sem resumo.
 
 ### Saída `--json`
@@ -25,10 +25,10 @@ Um único objeto JSON em stdout, stderr vazio e o mesmo código de saída do mod
 {"ok": true, "data": {}}
 {"ok": false, "error": {"code": "not_connected", "message": "…", "hint": "…", "details": {}}}
 ```
-- `data` tem a forma documentada em cada comando. Campos podem ser acrescentados; um campo existente nunca muda de sentido.
+- `data` tem a forma documentada em cada comando (`{}` se não tem nada). Campos podem ser acrescentados; um campo existente nunca muda de sentido.
 - Chaves em `snake_case`, datas em ISO 8601 com fuso, durações em segundos (inteiro).
 - `error.code` é um nome estável, mais específico que o código de saída (ex.: `no_capable_machine`).
-- **Pedido enfileirado:** `{"ok": true, "data": {"queued": true, "op_id": "<id>", …}}` quer dizer **aceito e pendente, não feito** (Cidadela fora ou GitHub fora). No modo texto a saída começa com `PENDING:` e diz o que ficou na fila e que o resultado chega na caixa de entrada (ex.: `PENDING: pr open queued (op 7f3…); the result will arrive in your inbox`); nunca a frase de sucesso do comando (ex.: nunca "PR opened"). Quando o pedido sai da fila, o resultado (sucesso ou erro, com o `op_id`) entra na [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) de quem pediu. Como o personagem deve tratar isso: [sessão zero do personagem](../sessao-zero/personagem.md#estrutura-do-mestremd).
+- **Pedido enfileirado:** `{"ok": true, "data": {"queued": true, "op_id": "<id>", …}}` (o `op_id` é o id da mensagem na fila) quer dizer **aceito e pendente, não feito** (Cidadela fora ou GitHub fora). No modo texto a saída começa com `PENDING:` e diz o que ficou na fila e que o resultado chega na caixa de entrada (ex.: `PENDING: pr open queued (op 7f3…); the result will arrive in your inbox`); nunca a frase de sucesso do comando (ex.: nunca "PR opened"). Quando o pedido sai da fila, o resultado (sucesso ou erro, com o `op_id`) entra na [caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) de quem pediu. Como o personagem deve tratar isso: [sessão zero do personagem](../sessao-zero/personagem.md#estrutura-do-mestremd).
 
 ### Códigos de saída
 | Código | Família de `error.code` | Quando |
@@ -48,7 +48,7 @@ Um único objeto JSON em stdout, stderr vazio e o mesmo código de saída do mod
 - Ao iniciar um personagem, o motor põe no ambiente dele `MESTRE_AGENT_ID` (id do personagem) e `MESTRE_ENDPOINT` (endereço do motor local). Lista completa: seção "Variáveis de ambiente" de [personagem](../sessao-zero/personagem.md).
 - A CLI fala só com o **motor local** (serviço `mestre`), sem porta TCP, pelo [canal local](../arquitetura/canal-local.md): endpoint, formato do pedido e da resposta, respostas parciais, tempo limite e a verificação de que o processo que chama pertence ao terminal daquele `MESTRE_AGENT_ID` (cgroup do terminal no Linux, Job Object do terminal no Windows; [segurança](../arquitetura/seguranca.md#identidade-de-quem-chama-a-cli)). Falhou a verificação: exit 3, `not_identified`.
 - Nível, classe e mesa vêm do registro do personagem no motor, nunca de argumentos. Não existe "chamar em nome de outro".
-- Sem `MESTRE_AGENT_ID` (ex.: uma pessoa num shell) ou num terminal criado por `spawn` (não recebe o id): só `help`, `debug`, `hook` e os subcomandos de serviço ([componentes](../arquitetura/componentes.md#mestre)) funcionam; o resto sai com exit 3, `not_identified`. As pessoas usam o painel e o Telegram.
+- Sem `MESTRE_AGENT_ID` (ex.: uma pessoa num shell) ou num terminal criado por `spawn` (não recebe o id): a CLI nem chama o motor e só `help`, `debug`, `hook` e os subcomandos de serviço ([componentes](../arquitetura/componentes.md#mestre)) funcionam; o resto sai com exit 3, `not_identified`. As pessoas usam o painel e o Telegram.
 
 ### Quem pode usar (nível)
 Cada comando declara o nível máximo que pode usá-lo:
@@ -57,7 +57,7 @@ Cada comando declara o nível máximo que pode usá-lo:
 - **Grão-Mestre**: só o do workspace;
 - **classes autorizadas**: personagens cuja classe libera o comando no bloco "CLI mestre" de [permissoes](../classes/permissoes.md).
 
-A classe só restringe dentro desse nível. Decretos ([decretos](../telegram/decretos.md)) valem acima, na ordem de [precedencia](../arquitetura/precedencia.md). O motor confere o nível em toda chamada; a skill só ensina.
+A classe só restringe dentro desse nível: `cli.allow` libera apenas os comandos que a definição marca como liberáveis por classe (os de "classes autorizadas"), para quem não está no nível deles; os outros seguem só o nível. Comando acima do nível sem essa marca: `level_denied`; com a marca e a classe sem listá-lo: `class_denied`. Decretos ([decretos](../telegram/decretos.md)) valem acima, na ordem de [precedencia](../arquitetura/precedencia.md). O motor confere o nível em toda chamada; a skill só ensina.
 
 ### Encaminhamento à Cidadela
 ```mermaid
@@ -76,24 +76,24 @@ sequenceDiagram
 ```
 - A Cidadela é a fonte da verdade: o motor local encaminha à Cidadela toda chamada (menos `help`, `debug` e `hook`), mesmo com o alvo na mesma máquina; na própria Cidadela, o encaminhamento é interno. O agente nunca precisa saber em que máquina o outro roda. Transporte: [protocolo](../conectividade/protocolo.md).
 - A CLI gera um `request_id` (o `id` do pedido no [canal local](../arquitetura/canal-local.md)) por chamada; um reenvio da mesma chamada após reconexão não executa duas vezes.
-- Cidadela fora (ou suspensa): exit 5, `citadel_unavailable`; durante uma promoção, `citadel_in_failover`. Exceção: `mestre done`, que não precisa de resposta imediata, vai para a [fila de saída](../guilda/cidadela-e-torres.md#cidadela-fora-e-fila-de-saída) da máquina e é aplicado uma única vez pela Cidadela atual quando ela volta (exit 0, `"queued": true`).
+- Cidadela fora (ou suspensa): exit 5, `citadel_unavailable`; durante uma promoção, `citadel_in_failover`. Exceção: o comando que não precisa de resposta imediata (`mestre done`; definido como "enfileirável") vai para a [fila de saída](../guilda/cidadela-e-torres.md#cidadela-fora-e-fila-de-saída) da Torre e é aplicado uma única vez pela Cidadela atual quando ela volta (exit 0, `"queued": true`, `op_id`). Vale para `citadel_unavailable` e `citadel_in_failover`; se a chamada foi e não voltou resposta, a da fila leva o mesmo id (a mesma mensagem, uma execução só), e se a Cidadela a recusou, um id novo; o resultado, sucesso ou erro, vai ao gancho da caixa de entrada de quem pediu, com o `op_id`. Uma Cidadela suspensa não tem fila para as próprias chamadas: responde `citadel_unavailable`.
 - Máquina do alvo fora: comandos que precisam do terminal do alvo (`check`, `ask --raw`) saem com exit 5, `machine_unreachable`; mensagens normais ficam na caixa de entrada do alvo.
 
 ### Regras de segurança da CLI
 1. **Ações destrutivas** (`note delete`, `ritual delete`, `class delete`, e `table close --cancel`) só rodam se um usuário autorizado pediu explicitamente: o motor procura uma exceção pontual ([decretos](../telegram/decretos.md)) para exatamente aquela ação; sem ela, abre um pedido de aprovação do tipo `acao_destrutiva` aos usuários ([política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md)) e sai com exit 9. O Grão-Mestre nunca aprova esse tipo sozinho.
 2. **`dismiss`** só por Mestre da mesa (na própria mesa), Grão-Mestre (ao encerrar uma mesa) e motor. Personagem fixado: exit 3, `pinned`. Alvo ocupado ou sem `done` entregue: o encerramento fica **agendado** para o próximo ponto seguro e a CLI sai com exit 9, `scheduled` (o mesmo vale para `recruit --replace`). Ciclo de vida: [personagens](../orquestracao/personagens.md).
-3. **Ninguém interrompe quem trabalha.** Mensagens só são digitadas com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). `ask --raw` para alvo ocupado: exit 7, `busy`; para alvo "aguardando permissão": exit 3, `permission_prompt` (permissão se decide pelo `mestre hook` e pelo fluxo de aprovação, nunca por teclas). Alvo `blocked` com motivo `input` (tela não reconhecida) recebe o `--raw`: é assim que o Mestre da mesa responde a ela.
+3. **Ninguém interrompe quem trabalha.** Mensagens só são digitadas com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). `ask --raw` para alvo ocupado: exit 7, `busy`; para alvo "aguardando permissão": exit 3, `permission_prompt` (permissão se decide pelo `mestre hook` e pelo fluxo de aprovação, nunca por teclas). Alvo `blocked` com motivo `input` (tela não reconhecida) recebe o `--raw`: é assim que o Mestre da mesa responde a ela; qualquer outro estado não livre (`blocked` por cota, `stuck`, `stopped`…) sai com `busy`.
 4. **Arquivos de outro agente:** não editar o que outro está modificando é regra da camada do Mestre ([personagem](../sessao-zero/personagem.md)) e coordenação do Mestre da mesa ([mesas](../orquestracao/mesas.md)).
 5. **Sem comando livre:** `recruit` e `spawn` só aceitam fichas e bases existentes.
-6. **Sem segredos:** nenhum comando mostra segredos; `reply` e `notify` recusam texto que pareça segredo (exit 3, `secret_detected`), com o mesmo detector do mascaramento de logs ([seguranca](../arquitetura/seguranca.md)).
+6. **Sem segredos:** nenhum comando mostra segredos; `reply` e `notify` recusam texto que pareça segredo (exit 3, `secret_detected`), com o mesmo detector do mascaramento de logs ([seguranca](../arquitetura/seguranca.md)), em cada argumento e flag de texto; a mensagem diz onde (`argument 1`, `--table`), nunca o quê.
 7. Toda chamada que muda estado entra na trilha de auditoria (chamador, comando, resultado).
 
 ### Ajuda e diagnóstico
 - `mestre help` lista, agrupados, só os comandos que o chamador pode usar. `mestre help <comando>` e `mestre <comando> --help` mostram uso, argumentos, flags, nível, exemplo e códigos de saída. Sem motor alcançável, a ajuda mostra tudo e avisa que não filtrou.
 - Ajuda, validação de argumentos e a parte de sintaxe das [skills geradas](skills-geradas.md) saem de **uma única definição de comandos** no código.
-- `mestre debug` roda, em ordem, e mostra `ok`/`fail` + dica de cada item: (1) versão do binário e do protocolo; (2) `MESTRE_AGENT_ID`, `MESTRE_ENDPOINT`, `MESTRE_CLI` presentes e coerentes (variável ausente é só informada, porque uma pessoa num shell não tem nenhuma; variável posta que não pode estar certa, como um endereço malformado, é `fail`); (3) motor local responde no endpoint (com tempo; uma tentativa só, sem a espera de 60 s do motor reiniciando); (4) motor aceita a identificação (pulado sem id); (5) motor local alcança a Cidadela atual com protocolo e época compatíveis. Exit 0 se tudo passa; senão o código da primeira falha. O [checklist](../plataforma/checklist.md) roda `mestre debug` em cada máquina.
+- `mestre debug` roda, em ordem, e mostra `ok`/`fail` + dica de cada item: (1) versão do binário e do protocolo; (2) `MESTRE_AGENT_ID`, `MESTRE_ENDPOINT`, `MESTRE_CLI` presentes e coerentes (variável ausente é só informada, porque uma pessoa num shell não tem nenhuma; variável posta que não pode estar certa, como um endereço malformado, é `fail`); (3) motor local responde no endpoint (com tempo; uma tentativa só, sem a espera de 60 s do motor reiniciando); (4) motor aceita a identificação (pulado sem id); (5) motor local alcança a Cidadela atual com protocolo e época compatíveis (o motor responde: Torre com a conexão aberta, que já conferiu os dois no aperto de mão; Cidadela agindo; senão `fail` com `citadel_unavailable` ou `citadel_in_failover`). Exit 0 se tudo passa; senão o código da primeira falha. O [checklist](../plataforma/checklist.md) roda `mestre debug` em cada máquina.
 
-As variáveis de ambiente vêm da sessão zero do personagem (M4); decretos e aprovações das regras de segurança chegam no M5 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
+As variáveis de ambiente vêm da sessão zero do personagem (M4); decretos e aprovações das regras de segurança chegam no M5. No M3 ficam prontos o código comum (definição única, nível e classe, segredos, fila, `--json`, `help`, `debug`) e CA-CLI-CONV-01 a 03 e 09; os demais critérios fecham com os comandos que os usam ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#critérios-em-marcos-posteriores)).
 
 ## Regras e erros
 
