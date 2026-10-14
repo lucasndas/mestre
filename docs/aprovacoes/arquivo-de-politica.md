@@ -2,7 +2,7 @@
 
 > **Assunto:** o arquivo `politica-de-aprovacao.yaml` de cada workspace: onde fica, quem edita, conteúdo padrão (condições, áreas e comandos sensíveis, tipos, quórum, prazos da cadeia, ajustes de risco, delegação e resumo) e regras de leitura · **Componente:** Motor · **Atualizado:** 2026-10-14
 
-Documento de referência da [política de aprovação](politica.md), que é dona do comportamento e dos critérios de aceite. O sentido de cada seção nova está no documento dono dela: `cadeia` na [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md), `risco` na [classificação de risco](../classes/classificacao-de-risco.md#ajustes-do-dono), `delegacao` na [delegação](delegacao.md) e `resumo` em [resumo e sugestões](resumo-e-sugestoes.md).
+Documento de referência da [política de aprovação](politica.md), que é dona do comportamento e dos critérios de aceite. O sentido de cada seção nova está no documento dono dela: `cadeia` na [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) e na [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md), `risco` na [classificação de risco](../classes/classificacao-de-risco.md#ajustes-do-dono), `delegacao` na [delegação](delegacao.md) e `resumo` em [resumo e sugestões](resumo-e-sugestoes.md).
 
 ## Onde fica e quem edita
 
@@ -62,6 +62,8 @@ cadeia:                        # níveis de agentes (ver cadeia-de-aprovacao.md)
   prazo_grao_mestre: 10m
   regra_temporaria_max: 24h    # validade máxima de uma regra temporária de mesa
   negacoes_para_pausar: 3      # negações seguidas que pausam o personagem
+  resumo_mesas: 30m            # resumo das decisões das mesas ao Grão-Mestre (ver supervisao-da-cadeia.md)
+  alerta_fila: { abertos: 10, fator: 2 }   # fila que acumula: abertos, ou o mais antigo acima de fator × prazo
 
 risco:                         # ajustes do Dono à tabela de risco (ver classificacao-de-risco.md)
   ajustes: []                  # ex.: { comando: "make deploy-teste", risco: alto }
@@ -75,7 +77,7 @@ resumo:                        # resumo do que os agentes decidiram (ver resumo-
   frequencia: diario           # diario | semanal | desligado
   horario: "18:00"
   para: [dono]
-  amostra: 5                   # ações aprovadas por agentes sorteadas para revisão
+  amostra: 5                   # ações aprovadas por agentes sorteadas para revisão, de cada nível (Mestres de mesa, Grão-Mestre)
   sugerir_apos: 3              # aprovações do mesmo padrão em 7 dias viram sugestão de regra
 ```
 
@@ -84,6 +86,6 @@ resumo:                        # resumo do que os agentes decidiram (ver resumo-
 - `quorum.regras`: cada regra casa por `tipo` e/ou `mesa` (aceita `*`). Uma regra que casa com o pedido **obriga a perguntar** às pessoas, mesmo que as condições passem e mesmo com delegação. Se várias casam, vale a mais exigente.
 - `exigir_usuarios` lista usuários do cadastro ([usuários e níveis](../telegram/usuarios-e-niveis.md)) cuja aprovação é obrigatória.
 - `sozinho` vale só para tipos de risco `medio`, o teto do Grão-Mestre; num tipo `alto`, `se_condicoes` torna o arquivo inválido: o `alto` só se abre ao Grão-Mestre por [delegação](delegacao.md).
-- Prazos (`expiracao`, `cadeia.*`, `delegacao.*`) são durações positivas (`30s`, `10m`, `2h`, `30d`); `regra_temporaria_max` vai até 7 dias e `delegacao.validade_padrao` até 30 dias; `negacoes_para_pausar` vai de 1 a 10.
+- Prazos (`expiracao`, `cadeia.*`, `delegacao.*`) são durações positivas (`30s`, `10m`, `2h`, `30d`); `regra_temporaria_max` vai até 7 dias e `delegacao.validade_padrao` até 30 dias; `negacoes_para_pausar` vai de 1 a 10; `alerta_fila.abertos`, de 1 a 1000, e `alerta_fila.fator`, de 1 a 10. Nenhuma chave muda até onde cada nível decide: as condições da mesa são do motor.
 - Campos ausentes assumem o valor do conteúdo padrão. Um `tipo` desconhecido, um dos tipos de regra fixa (`ativacao_operador`, `entrada_na_guilda`, `promocao_cidadela`, `atualizacao_mestre`) ou um ajuste de risco inválido ([ajustes](../classes/classificacao-de-risco.md#ajustes-do-dono)) torna o arquivo inválido.
 - O comportamento de quórum e expiração está em [fluxo](fluxo.md); o do resumo, em [resumo e sugestões](resumo-e-sugestoes.md).

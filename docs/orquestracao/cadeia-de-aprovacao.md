@@ -1,6 +1,6 @@
 # Cadeia de aprovação
 
-> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, as condições da mesa para o `medio`, o Grão-Mestre como supervisor, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -14,14 +14,28 @@ Decidir cada pedido o mais perto possível de quem pediu, sem que um agente apro
 - **Ordem:** quem pediu → o superior → … → Mestre da mesa → Grão-Mestre → pessoas. O pedido nasce no primeiro nível que pode decidi-lo; os de baixo, que não podem (teto ou salvaguarda), são pulados sem receber nada.
 - Pedido sem personagem que pediu (um PR, um custo extra, a proposta de `AGENTS.md`) nasce no Grão-Mestre ou acima, conforme o risco.
 
-| Nível | Decide até | Prazo para responder (padrão) |
+| Nível | Decide | Prazo para responder (padrão) |
 |---|---|---|
-| superior agente e Mestre da mesa | `baixo` | 2 min |
-| Grão-Mestre | `medio`, dentro da [política](../aprovacoes/politica.md); `alto` só com delegação do Dono | 10 min |
+| superior agente | `baixo` | 2 min |
+| Mestre da mesa | `baixo` e `medio` dos personagens da própria mesa; o `medio` só com as [condições da mesa](#condições-da-mesa) | 2 min |
+| Grão-Mestre, supervisor | `baixo` e `medio`, dentro da [política](../aprovacoes/politica.md), dos pedidos dos próprios Mestres de mesa, dos que cruzam mesas (outra branch, outro worktree, o espelho, issue ou PR de outra mesa), dos que o Mestre da mesa não decide (parado, sem resposta no prazo, em [pausa de autonomia](supervisao-da-cadeia.md#pausa-de-autonomia)) e dos `medio` cujas condições da mesa falham; `alto` só com delegação do Dono | 10 min |
 | pessoas | qualquer risco não `fixo`, pelo nível mínimo do tipo e do risco, com quórum | o do tipo na política |
 
 - O teto de cada nível de agente é fixo; nenhum arquivo o muda. Só uma **delegação** das pessoas (M5) o estende, no escopo dela ([delegação](../aprovacoes/delegacao.md)).
-- O Grão-Mestre recebe um evento informativo dos pedidos do workspace que sobem por cima dele, para responder dúvidas dos usuários.
+- As decisões ficam perto do trabalho: o Grão-Mestre, um por workspace, não espera nas decisões das mesas; recebe delas um resumo não bloqueante e pode frear uma mesa ([supervisão da cadeia](supervisao-da-cadeia.md)). Recebe também um evento informativo dos pedidos do workspace que sobem por cima dele, para responder dúvidas dos usuários.
+
+### Condições da mesa
+
+O Mestre da mesa decide um `medio` só se o motor confere, em cada parte `medio` do pedido, a condição da linha ou do [sinal](../classes/classificacao-de-risco.md#sinais-de-risco) que a deu; basta uma falhar para o pedido nascer no Grão-Mestre, com a condição que falhou:
+
+| Origem do `medio` | Condição |
+|---|---|
+| rede (linha ou sinal) | todo domínio está no `network.domains` da classe de quem pediu ou do teto (qualquer domínio não conta) |
+| apagar (linha `apagar em massa` ou sinal) | todo alvo é resolvido dentro do worktree da mesa |
+| qualquer outra (instalação global ou do sistema, contêineres e serviços, VM, interpretador com código, caminho fora do worktree, o que não se analisa, ajuste do Dono) e os tipos que não são `permissao_de_classe` | nunca: Grão-Mestre |
+
+- Sempre, além disso: nada que cruze mesas; nunca o pedido dele mesmo nem os `ponto_de_missao` das missões que ele desenhou ([salvaguardas](#salvaguardas)).
+- Para conferir, a classificação dá, além da linha que decidiu, a origem de cada parte `medio` (M4).
 
 ### Superior
 
@@ -41,7 +55,8 @@ O superior sai do campo "criado por" do [registro de terminais](personagens.md#r
 
 ### Subida
 
-- O pedido sobe sozinho quando o risco passa do teto do nível, quando uma salvaguarda impede o nível, quando o prazo do nível acaba ou quando o nível responde **Subir agora**.
+- O pedido sobe sozinho quando o risco passa do teto do nível, quando uma condição ou uma salvaguarda impede o nível, quando o prazo do nível acaba ou quando o nível responde **Subir agora**.
+- Mestre da mesa parado (encerrado, reiniciando ou `stuck`, [estados](personagens.md#estados)): o que ele decidiria nasce no Grão-Mestre, e os pedidos abertos nele sobem na hora; quando ele volta, os pedidos novos voltam a ele.
 - O prazo de cada nível conta de quando o pedido chega a ele; os valores ficam na seção `cadeia` do [arquivo de política](../aprovacoes/arquivo-de-politica.md).
 - **Subir não é reenviar:** é o mesmo pedido, com o mesmo id, alvo e impressão, mudando só o nível. A regra "o motor nunca reenvia sozinho" ([esperas](esperas-e-caixa-de-entrada.md#tempos-limite), [fluxo](../aprovacoes/fluxo.md#expiração)) trata de pedidos que expiram ou falham, não da subida.
 - **No último nível**, o prazo esgotado é **negar**: o pedido vira `expirado` e nunca é aprovado sozinho.
@@ -62,7 +77,7 @@ A justificativa escrita pelo agente que pediu vem por último, num bloco marcado
 ### Salvaguardas
 
 Conferidas pelo motor em toda decisão de agente; uma decisão que fura uma delas é recusada e o pedido sobe na hora:
-1. **Atenuação:** um agente só aprova uma ação que as regras efetivas dele mesmo dariam `allow` (sem contar exceções pontuais dele), no worktree de quem pediu; um padrão, só se as regras dele liberam tudo o que o padrão casa.
+1. **Atenuação:** um agente só aprova uma ação que as regras efetivas dele mesmo não negariam (dariam `allow` ou `ask`, sem contar exceções pontuais dele), no worktree de quem pediu; um padrão, só se as regras dele não negam nada do que o padrão casa. As regras dos orquestradores vêm da classe embutida [`orquestrador`](../classes/classe-orquestrador.md).
 2. **Nada em causa própria:** nenhum nível decide um pedido de que é o solicitante, nem um que serve a uma proposta dele (classe que criou, `AGENTS.md` que propôs, PR que abriu): o pedido pula esse nível. O Mestre da mesa nunca decide os `ponto_de_missao` das missões que criou.
 3. **Disjuntor:** 3 negações seguidas (padrão) dos pedidos de um mesmo personagem pausam o personagem (o motor não lhe entrega mais nada, como na [pausa](mesas.md#pausa), mas só para ele) e avisam as pessoas; uma aprovação no meio zera a contagem. Um Administrador ou acima retoma.
 4. **Auditoria:** toda decisão registra aprovador, nível na cadeia, risco, versão da tabela de risco, das regras efetivas e da política, a resposta e o motivo, obrigatório para agentes.
@@ -85,7 +100,7 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 | Perguntar de volta | pede contexto a quem pediu; o pedido espera; o prazo do nível recomeça quando a resposta chega | sim | sim |
 | Subir agora | leva o pedido ao nível seguinte (o `approval ask` do Grão-Mestre) | sim | — |
 
-- O padrão e a regra temporária precisam caber no teto do nível de quem aprova, com o risco do padrão.
+- O padrão e a regra temporária precisam caber no teto do nível de quem aprova, com o risco do padrão, e só cobrem os comandos cuja classificação própria cabe nele ([o que um padrão cobre](../classes/classificacao-de-risco.md#padrões-aprováveis)).
 - "Perguntar de volta" vira um item `answer` na caixa de entrada de quem pediu; a resposta dele (texto livre, também marcada como não verificada) volta ao mesmo nível. O prazo final do pedido nas pessoas continua correndo.
 
 ## Regras e erros
@@ -99,7 +114,7 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 
 - **CA-CADEIA-01** · *rápida* — **Dado** um personagem recrutado pelo Mestre da mesa, outro de etapa de missão, outro criado por um Administrador no canvas, o Mestre da mesa e o Grão-Mestre, **quando** o motor resolve o superior de cada um, **então** saem o Mestre da mesa (três primeiros), o Grão-Mestre e as pessoas; **quando** o criador é encerrado, **então** o superior passa a ser o dele, também num pedido já aberto.
 - **CA-CADEIA-02** · *rápida* — **Dado** um pedido `baixo` (`npm install lodash`) de um personagem, **quando** ele nasce, **então** chega ao Mestre da mesa como item `approval` com ferramenta, comando, classe, risco e tarefa original; **quando** o Mestre da mesa aprova agora, **então** vira exceção pontual, a repetição passa uma vez e a seguinte volta a pedir.
-- **CA-CADEIA-03** · *rápida* — **Dado** um pedido `medio` e outro `alto` de um personagem, sem delegação, **quando** nascem, **então** o primeiro nasce no Grão-Mestre e o segundo nas pessoas (dublê), sem item para o Mestre da mesa, e o Grão-Mestre recebe só um evento informativo do segundo.
+- **CA-CADEIA-03** · *rápida* — **Dado** uma classe com `network.domains: ["registry.npmjs.org"]`, um teto com `["registry.npmjs.org", "pypi.org"]` e, de um personagem da mesa, os pedidos `curl https://pypi.org/x` (`medio`), `curl https://exemplo.io` (`medio`) e um `alto`, sem delegação, **quando** nascem, **então** o primeiro nasce no Mestre da mesa, o segundo no Grão-Mestre citando a condição de rede e o terceiro nas pessoas (dublê), sem item para o Mestre da mesa, e o Grão-Mestre recebe só um evento informativo do terceiro.
 - **CA-CADEIA-04** · *rápida* — **Dado** o relógio falso e um pedido `baixo` sem resposta, **quando** passam 2 min, **então** ele sobe ao Grão-Mestre com o mesmo id e a mesma impressão e nenhum pedido novo é criado; **quando** passam mais 10 min, **então** vai às pessoas; **quando** acaba o prazo delas, **então** vira `expirado`, quem pediu recebe a negação e nada é aprovado.
 - **CA-CADEIA-05** · *rápida* — **Dado** um Mestre da mesa cujas regras efetivas negam `npm install *`, **quando** ele aprova um pedido `npm install x` da party, **então** a decisão é recusada pela atenuação e o pedido sobe ao Grão-Mestre na hora.
 - **CA-CADEIA-06** · *rápida* — **Dado** um pedido `baixo` do próprio Mestre da mesa, um `ponto_de_missao` de missão criada por ele e um pedido do Grão-Mestre, **quando** nascem, **então** o primeiro e o segundo vão ao Grão-Mestre e o terceiro às pessoas.
@@ -111,8 +126,10 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 - **CA-CADEIA-12** · *rápida* — **Dado** um personagem que usa a ferramenta `Agent` e um `pre_tool` em `ask` vindo de dentro do subagente, **quando** o pedido nasce, **então** o solicitante é o personagem e o pedido vai ao superior dele.
 
 - **CA-CADEIA-13** · *rápida* — **Dado** um personagem com um pedido `baixo` aberto e o relógio falso, **quando** consulto `mestre list`, **então** ele aparece `waiting`, "aguardando aprovação do Mestre"; **quando** o pedido sobe, **então** passa a "aguardando aprovação do Grão-Mestre"; **dado** outro personagem `blocked` por `permission` (pedido nativo na tela), **então** ele aparece "aguardando permissão".
+- **CA-CADEIA-14** · *rápida* — **Dado** os pedidos `medio` `rm -r build`, `docker compose up` e `pip install x` de personagens da mesa, **quando** nascem, **então** o primeiro chega ao Mestre da mesa e uma aprovação dele é aceita; os outros dois nascem no Grão-Mestre com a condição que falhou, e um `approval decide` do Mestre da mesa neles recebe `not_at_level`.
+- **CA-CADEIA-15** · *rápida* — **Dado** o Mestre da mesa reiniciando e o relógio falso, **quando** nasce um pedido `baixo` de um personagem da mesa, **então** ele nasce no Grão-Mestre na hora e um pedido aberto no Mestre da mesa sobe com o mesmo id; **quando** o Mestre da mesa volta a `idle`, **então** o pedido seguinte nasce nele.
 
 ## Depende de
 
 - [Personagens](personagens.md) (registro de terminais) · [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md) · [Mesas](mesas.md) · [Missões](missoes.md)
-- [Classificação de risco](../classes/classificacao-de-risco.md) · [Permissões](../classes/permissoes.md) · [Precedência](../arquitetura/precedencia.md)
+- [Classificação de risco](../classes/classificacao-de-risco.md) · [Permissões](../classes/permissoes.md) · [Classe `orquestrador`](../classes/classe-orquestrador.md) · [Precedência](../arquitetura/precedencia.md)

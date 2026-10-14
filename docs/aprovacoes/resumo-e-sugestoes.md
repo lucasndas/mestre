@@ -24,7 +24,7 @@ Deixar as pessoas verem depois o que os agentes da [cadeia de aprovação](../or
 
 ### Amostra para revisão
 
-- Cada resumo traz uma amostra sorteada de `resumo.amostra` (padrão: 5) ações aprovadas por agentes no período (todas, se forem menos), com o pedido montado pelo motor, quem aprovou, o nível e o motivo. O sorteio usa uma fonte aleatória injetada no motor, para o teste fixar a semente.
+- Cada resumo traz uma amostra sorteada de `resumo.amostra` (padrão: 5) ações aprovadas por agentes no período **de cada nível** (todas, se forem menos): uma das decisões dos Mestres de mesa, que agora decidem o `medio` das mesas ([cadeia](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa)), e outra das do Grão-Mestre; cada ação vem com o pedido montado pelo motor, quem aprovou, o nível, o risco e o motivo. O sorteio usa uma fonte aleatória injetada no motor, para o teste fixar a semente.
 - Botão **Foi um erro**: registra a marcação na auditoria da decisão e revoga a regra temporária que tenha nascido dela; a pessoa pode então criar um decreto que proíbe pelo caminho normal.
 
 ## Regras e erros
@@ -38,8 +38,9 @@ Deixar as pessoas verem depois o que os agentes da [cadeia de aprovação](../or
 - **CA-APROV-RES-01** · *rápida* — **Dado** três aprovações do Grão-Mestre e duas do Mestre da mesa no dia e o horário do resumo, **quando** o relógio falso chega a 18:00, **então** a caixa de entrada do Grão-Mestre recebe a lista das cinco, com nível e risco; **dado** um dia sem decisões de agentes, **então** nada é enviado.
 - **CA-APROV-RES-02** · *rápida* — **Dado** três aprovações de `npm install <pacote>` para a classe Dev em 7 dias no relógio falso, **quando** sai o resumo, **então** o Dono recebe a sugestão `npm install *` com as três ações e os exemplos; **quando** toca **Aceitar** e confirma o PIN, **então** nasce um decreto do Dono na classe Dev; **dado** **Recusar**, **então** o padrão não volta por 30 dias.
 - **CA-APROV-RES-03** · *rápida* — **Dado** aprovações repetidas de `python script.py` e de `sh -c x`, **quando** o motor procura sugestões, **então** nenhuma é feita para `python *` nem `sh *`.
-- **CA-APROV-RES-04** · *rápida* — **Dado** doze ações aprovadas por agentes no período e a fonte aleatória falsa com semente fixa, **quando** sai o resumo, **então** a amostra tem cinco ações, as mesmas a cada execução com a mesma semente, enviadas pelo motor mesmo que o texto do Grão-Mestre não as cite; **quando** alguém toca **Foi um erro** numa que criou uma regra temporária, **então** a regra fica `revogada` e a marcação vai à auditoria.
+- **CA-APROV-RES-04** · *rápida* — **Dado** doze ações aprovadas por agentes no período e a fonte aleatória falsa com semente fixa, **quando** sai o resumo, **então** a amostra de cada nível com mais de cinco tem cinco ações, as mesmas a cada execução com a mesma semente, enviadas pelo motor mesmo que o texto do Grão-Mestre não as cite; **quando** alguém toca **Foi um erro** numa que criou uma regra temporária, **então** a regra fica `revogada` e a marcação vai à auditoria.
 - **CA-APROV-RES-05** · *rápida* — **Dado** um "aprovar sempre" do Mestre da mesa, **quando** sai o resumo, **então** o Dono recebe a sugestão com o motivo do agente, e nenhum decreto existe antes do **Aceitar** com PIN.
+- **CA-APROV-RES-06** · *rápida* — **Dado** oito ações aprovadas por Mestres de mesa (três `medio`) e duas pelo Grão-Mestre no período e a fonte aleatória falsa, **quando** sai o resumo, **então** o Dono recebe cinco ações dos Mestres de mesa, sorteadas entre as oito, e as duas do Grão-Mestre, em partes separadas, cada uma com nível e risco.
 
 ## Depende de
 

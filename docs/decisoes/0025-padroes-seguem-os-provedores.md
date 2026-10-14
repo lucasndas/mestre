@@ -27,7 +27,7 @@ Opção 3. O campo ausente numa classe vale o comportamento da maioria dos prove
 | `commands.default` / `tools.default` sem regra que cubra | pedido | `baixo` roda direto; `medio` e acima, pedido | automático · sem perguntar no sandbox · pergunta |
 | `files.write` | nada | o worktree (`**`); fora dele, pedido | edita na pasta · escreve no workspace · pergunta |
 | `network.internet` | sem internet | qualquer domínio | rede · sem rede · rede |
-| subagentes nativos | pedido `medio` | `baixo`: rodam direto | têm · têm · têm |
+| subagentes nativos | pedido `medio` | `baixo`: rodam direto | parte do agente, sem pedido próprio |
 | `git.commit` | negado | pedido; `baixo` no próprio branch e dentro de `files.write`, logo roda direto | — |
 | `git.request_push` | negado | pedido (o envio continua do motor) | — |
 
