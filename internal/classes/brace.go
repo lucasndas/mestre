@@ -22,6 +22,8 @@ const maxBraceWords = 256
 const (
 	maxBraceMarks = 4096
 	maxBraceWork  = 1 << 20
+	// maxBraceLine bounds the bytes all the expansions of one line make.
+	maxBraceLine = 1 << 20
 )
 
 // braceTooLarge is the reason of a line whose expansion passes the bounds.

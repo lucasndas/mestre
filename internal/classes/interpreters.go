@@ -73,6 +73,9 @@ func interpreterScript(cn string, args []word) (word, bool) {
 	if !isShell && !interpreters[base] && !inlineInterpreters[base] {
 		return word{}, false
 	}
+	if sub, ok := subcommandScript(base, args); ok {
+		return sub, sub.text != ""
+	}
 	valued := interpreterValueOpts[base]
 	if isShell {
 		valued = interpreterValueOpts["_shell"]
@@ -126,18 +129,173 @@ func interpreterScript(cn string, args []word) (word, bool) {
 	return word{}, false
 }
 
+// pwshScript reports a program word that names a PowerShell script
+// (.\build.ps1): canonical drops the extension, so it is never the program
+// of the same name (script, nice, bash).
+func pwshScript(w word) bool {
+	return !w.expand && strings.HasSuffix(strings.ToLower(w.text), ".ps1")
+}
+
+// parallelText is the command line of GNU parallel: the command before
+// ::: with each input appended, or each input as a command when no command
+// is given (parallel ::: 'git push').
+func parallelText(rest []string) string {
+	cmd, inputs := rest, []string(nil)
+	for i, t := range rest {
+		if t == ":::" || t == "::::" || t == ":::+" {
+			cmd, inputs = rest[:i], rest[i+1:]
+			break
+		}
+	}
+	if inputs == nil {
+		return strings.Join(cmd, " ")
+	}
+	lines := make([]string, 0, len(inputs))
+	for _, in := range inputs {
+		if strings.HasPrefix(in, ":::") {
+			continue
+		}
+		lines = append(lines, strings.TrimSpace(strings.Join(cmd, " ")+" "+in))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// shellText is nestedShell for a POSIX-like shell: its options are skipped
+// with their values (-o posix, +O extglob, --rcfile x), -c takes the first
+// operand after them as the command text, and a shell without a script (or
+// with -s) reads it from the input. ok is false for a shell that runs a
+// script file.
+func shellText(cn string, texts []string) (nested string, d dialect, why string, ok bool) {
+	command, stdin, rc := false, false, ""
+	i := 0
+	for ; i < len(texts); i++ {
+		a := texts[i]
+		if a == "-" {
+			return "", dialectPOSIX, cn + " lendo o script da entrada" + rc, true
+		}
+		if a == "--" {
+			i++
+			break
+		}
+		if !strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "+") {
+			break
+		}
+		switch name, _, hasVal := strings.Cut(a, "="); {
+		case a == "-o" || a == "+o" || a == "-O" || a == "+O":
+			i++ // the option's name
+		case name == "--rcfile" || name == "--init-file":
+			rc = " " + name
+			if !hasVal {
+				i++
+			}
+		case name == "--command" || name == "--commands":
+			command = true
+			if hasVal {
+				return a[len(name)+1:], dialectPOSIX, cn + " " + name + rc, true
+			}
+		case strings.HasPrefix(a, "--") || strings.HasPrefix(a, "+"):
+		default:
+			command = command || strings.Contains(a[1:], "c")
+			stdin = stdin || strings.Contains(a[1:], "s")
+		}
+	}
+	switch {
+	case command && i < len(texts):
+		return texts[i], dialectPOSIX, cn + " -c" + rc, true
+	case command:
+		return "", dialectPOSIX, cn + " -c" + rc, true
+	case stdin || i >= len(texts):
+		return "", dialectPOSIX, cn + " lendo o script da entrada" + rc, true
+	}
+	return "", 0, "", false
+}
+
+// subcommandPrograms are the interpreters whose first operand may be a
+// subcommand of their own (go test, bun install, deno fmt) instead of a
+// script: only go run <file>, bun <file>, bun run <file>, deno run <file>
+// and deno <file> run a file.
+var subcommandPrograms = map[string]map[string]bool{
+	"go":   nil,
+	"bun":  set("install i add a remove rm update outdated test build x pm create init link unlink upgrade publish patch"),
+	"deno": set("test fmt lint check task bench doc info eval repl install uninstall cache compile serve upgrade jupyter add remove outdated publish init coverage types vendor"),
+}
+
+// subcommandScript is the script of an interpreter of subcommandPrograms:
+// ok is true when the program is one of them, and the word is empty when
+// no file is run (go test ./..., bun install).
+func subcommandScript(base string, args []word) (word, bool) {
+	subs, ok := subcommandPrograms[base]
+	if !ok {
+		return word{}, false
+	}
+	i := 0
+	for i < len(args) && strings.HasPrefix(args[i].text, "-") {
+		i++
+	}
+	if i >= len(args) {
+		return word{}, true
+	}
+	switch sub := args[i].text; {
+	case sub == "run":
+		rest := skipDashOpts(args[i+1:], nil)
+		if len(rest) > 0 && (base == "go" && strings.HasSuffix(strings.ToLower(rest[0].text), ".go") || base != "go" && looksLikeScriptFile(rest[0].text)) {
+			return rest[0], true
+		}
+		return word{}, true
+	case base == "go" || subs[sub]:
+		return word{}, true
+	}
+	return args[i], true // bun x.ts, deno x.ts
+}
+
+// tracerSpec is how a transparent runner takes its command: after its
+// options (valued take the next word) and its required positionals (the
+// priority of chrt, the mask of taskset, the time of faketime, the lock of
+// flock).
+type tracerSpec struct {
+	valued      map[string]bool
+	positionals int
+}
+
+var tracers = map[string]tracerSpec{
+	"strace":   {valued: set("-o -e -p -E -u -s -S -P -a -b -I -O -X -U --output --trace --signal --status")},
+	"ltrace":   {valued: set("-o -e -p -u -s -a -n -A -D -F -l -L -x --output --library")},
+	"valgrind": {}, "catchsegv": {}, "eatmydata": {}, "unbuffer": {}, "nocache": {}, "proxychains": {valued: set("-f")},
+	"proxychains4": {valued: set("-f")}, "torsocks": {valued: set("-u -p -a -P --user --pass --address --port")},
+	"chrt":     {valued: set("-T -P -D --sched-runtime --sched-period --sched-deadline"), positionals: 1},
+	"taskset":  {positionals: 1},
+	"faketime": {valued: set("-p --date-prog"), positionals: 1},
+	"numactl":  {valued: set("-N -C -m -i -p -P --interleave --membind --cpunodebind --physcpubind --preferred --cpubind")},
+	"flock":    {valued: set("-w -E --timeout --conflict-exit-code"), positionals: 1},
+}
+
 // runnerUnwrap returns the command a runner runs: a tracer (strace, ltrace)
 // is transparent; a project runner (uv run, poetry run, deno run, bun run,
 // npx tsx) runs the program named after its subcommand and options; awk -f
 // and sed -f run a script file. ok is false for anything else.
 func runnerUnwrap(cn string, args []word) (inner []word, ok bool) {
+	if cn == "flock" {
+		// flock [opts] lock cmd…, or flock [opts] lock -c 'cmd' (getopt
+		// takes -c anywhere): the text of -c is a shell's.
+		for i, a := range args {
+			if (a.text == "-c" || a.text == "--command") && i+1 < len(args) {
+				return []word{{text: "sh", assign: -1}, {text: "-c", assign: -1}, args[i+1]}, true
+			}
+			if strings.HasPrefix(a.text, "--command=") {
+				t := a
+				t.text = strings.TrimPrefix(a.text, "--command=")
+				return []word{{text: "sh", assign: -1}, {text: "-c", assign: -1}, t}, true
+			}
+		}
+	}
+	if spec, ok := tracers[cn]; ok {
+		rest := skipDashOpts(args, spec.valued)
+		if len(rest) <= spec.positionals {
+			return nil, false
+		}
+		return rest[spec.positionals:], true
+	}
 	switch cn {
-	case "strace", "ltrace", "catchsegv", "valgrind", "faketime", "chrt", "taskset", "numactl", "eatmydata":
-		rest := skipDashOpts(args, map[string]bool{
-			"-o": true, "-e": true, "-p": true, "-E": true, "-u": true, "-s": true, "-S": true, "-P": true,
-			"--output": true, "-c": true, "-n": true,
-		})
-		return rest, len(rest) > 0
 	case "uv", "poetry", "pipenv", "pdm", "rye", "hatch", "pixi":
 		return afterRun(args)
 	case "deno", "bun":

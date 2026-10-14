@@ -2,6 +2,7 @@ package classes
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -58,6 +59,7 @@ type token struct {
 	op  string // an operator; "" for a word
 	w   word
 	doc *hereDoc // the here-document of a << operator, when it was read
+	pos int      // offset of an operator in the line
 }
 
 type lexer struct {
@@ -83,6 +85,9 @@ type lexer struct {
 	// parens are the open parentheses (POSIX), true for one glued to a
 	// word.
 	parens []bool
+	// expanded are the bytes the brace expansions of the line made: past
+	// maxBraceLine the line is too large to analyse.
+	expanded int
 }
 
 // quoted records that the text of the current word from offset from on
@@ -119,8 +124,11 @@ func (lx *lexer) flush() {
 	lx.cur.text = lx.buf.String()
 	if lx.opens {
 		words, ok := braceExpand(lx.cur.text, lx.braces, lx.quotes)
+		for _, bw := range words {
+			lx.expanded += len(bw.text) + 1
+		}
 		switch {
-		case !ok:
+		case !ok || lx.expanded > maxBraceLine:
 			// Too many words to analyse: the line is denied.
 			lx.mark(braceTooLarge)
 		case len(words) > 1 || words[0].text != lx.cur.text:
@@ -152,7 +160,7 @@ func (lx *lexer) flush() {
 
 func (lx *lexer) op(o string) {
 	lx.flush()
-	lx.toks = append(lx.toks, token{op: o})
+	lx.toks = append(lx.toks, token{op: o, pos: lx.i})
 }
 
 func (lx *lexer) peek(k int) byte {
@@ -480,7 +488,10 @@ func (lx *lexer) backtick() {
 // denies. The text is read as an unquoted here-document body is, which
 // finds $(…) and `…` also inside nested ${…} and $((…)) and inside quotes.
 func (lx *lexer) innerSubs(inner string) {
-	subs, _ := bodyExpansions(inner)
+	subs, why := bodyExpansions(inner)
+	if slices.Contains(why, reasonTooDeep) {
+		lx.opaque = append(lx.opaque, reasonTooDeep)
+	}
 	for _, s := range subs {
 		lx.toks = append(lx.toks, token{op: "sub", w: word{text: s}})
 	}
@@ -541,6 +552,18 @@ func (lx *lexer) stepPwsh() {
 	case c == '\n':
 		lx.op("\n")
 		lx.i++
+		lx.readBodies()
+	case lx.has("<<") && !lx.has("<<<"):
+		// PowerShell has no <<: the line is a POSIX here-document, whose
+		// body is data by the POSIX rule (heredoc.go), not PowerShell
+		// commands.
+		lx.fdPrefix()
+		pos, strip := lx.i, lx.has("<<-")
+		lx.i += 2
+		if strip {
+			lx.i++
+		}
+		lx.hereDoc(pos, strip)
 	case lx.has("<#"):
 		end := strings.Index(lx.s[lx.i:], "#>")
 		if end < 0 {
@@ -721,8 +744,22 @@ var (
 // surely hold for the next part.
 func group(toks []token, d dialect) (parts []simple, grouped bool) {
 	var cur simple
+	// resume is the part a PowerShell script block in braces is an
+	// argument of (ForEach-Object { … } -x, find . {} \), whose words go on
+	// after the }: the block's commands are parts of their own, after it,
+	// and the command keeps its place before them (and its next, "{", so
+	// no pipe seems to feed the block). -1 is none.
+	resume := -1
+	var outer []int
 	end := func(op string) {
-		if len(cur.words) > 0 || len(cur.redirs) > 0 || len(cur.subs) > 0 {
+		switch {
+		case resume >= 0:
+			o := &parts[resume]
+			o.words, o.redirs = append(o.words, cur.words...), append(o.redirs, cur.redirs...)
+			o.subs, o.opaque = append(o.subs, cur.subs...), append(o.opaque, cur.opaque...)
+			o.stdin = append(o.stdin, cur.stdin...)
+			resume = -1
+		case len(cur.words) > 0 || len(cur.redirs) > 0 || len(cur.subs) > 0:
 			cur.next = op
 			parts = append(parts, cur)
 		}
@@ -730,6 +767,27 @@ func group(toks []token, d dialect) (parts []simple, grouped bool) {
 	}
 	for i := 0; i < len(toks); i++ {
 		t := toks[i]
+		if d == dialectPwsh && (t.op == "{" || t.op == "}") {
+			grouped = true
+			switch {
+			case t.op == "{" && (len(cur.words) > 0 || resume >= 0):
+				k := resume
+				if k < 0 {
+					k = len(parts)
+				}
+				end("{")
+				outer = append(outer, k)
+			case t.op == "{":
+				end("{")
+				outer = append(outer, -1)
+			default:
+				end("}")
+				if n := len(outer); n > 0 {
+					resume, outer = outer[n-1], outer[:n-1]
+				}
+			}
+			continue
+		}
 		switch t.op {
 		case "":
 			w := t.w
@@ -841,6 +899,34 @@ func (p *simple) scan(d dialect) {
 			p.opaque = append(p.opaque, "redirecionamento para expansão")
 		}
 	}
+}
+
+// posixLive is the part of a line that a POSIX shell runs: a control
+// operator where a command must start (& .\x.ps1, ; x, | x) is a syntax
+// error, and bash runs nothing from the start of that line on. The lines
+// before it run.
+func posixLive(s string) string {
+	lx := &lexer{s: s}
+	lx.run()
+	lineStart, atStart := 0, true
+	for _, t := range lx.toks {
+		switch t.op {
+		case "", "sub", ")":
+			atStart = false
+		case "\n":
+			lineStart, atStart = t.pos+1, true
+		case ";", ";;", "&", "&&", "||", "|", "|&":
+			if atStart {
+				return s[:min(lineStart, len(s))]
+			}
+			atStart = true
+		case "(":
+			atStart = true
+		default: // a redirection may start a command
+			atStart = false
+		}
+	}
+	return s
 }
 
 // texts returns the words as text.

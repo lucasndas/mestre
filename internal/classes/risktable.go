@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -52,9 +53,10 @@ func join(parts ...[]riskRow) []riskRow {
 	return out
 }
 
-// riskTable is the default table, in the order it is matched: alto, medio,
-// baixo; the first row that matches decides the part. RiskTableVersion
-// changes when a row changes.
+// riskTable is the default table, in the order it is matched: alto, then
+// medio; the first row that matches decides the part. What no row matches
+// is baixo only by the list of known-safe programs (risksafe.go), medio
+// otherwise. RiskTableVersion changes when a row changes.
 var riskTable = join(
 	rows(RiskHigh, "GitHub e publicação", "gh *", "hub *", "npm publish*", "pnpm publish*", "yarn publish*", "yarn npm publish*",
 		"cargo publish*", "twine upload*", "gem push*", "docker push*", "podman push*"),
@@ -77,23 +79,11 @@ var riskTable = join(
 	rows(RiskMedium, "apagar em massa", "git clean*", "git reset --hard*", "git checkout -- *", "git restore *", "find * -delete*"),
 	rows(RiskMedium, "fora do worktree e configuração", "npm install -g*", "npm i -g*", "* --global*", "pip install*", "pip3 install*",
 		"go install*", "cargo install*", "npx *", "pnpm dlx *", "bunx *", "brew *", "winget *", "choco *", "scoop *",
-		"npm config *", "npm pkg set*", "npm exec*", "npm x *", "npm link*", "yarn dlx *", "yarn global *", "bun x *",
+		"npm config *", "npm pkg set*", "npm exec*", "npm x *", "npm link*", "pnpm exec*", "yarn exec*", "yarn dlx *", "yarn global *", "bun x *",
 		"deno install*"),
 	rows(RiskMedium, "envio da branch da mesa", "mestre pr open*", "mestre pr update*"),
 	rows(RiskMedium, "contêineres e serviços", "docker *", "podman *", "docker-compose *", "systemctl *", "service *",
 		"launchctl *", "sc *", "Stop-Service*", "Start-Service*"),
-
-	rows(RiskLow, "pacotes do projeto", "npm install*", "npm i *", "npm ci*", "npm uninstall*", "npm update*", "pnpm install*",
-		"pnpm add*", "pnpm remove*", "yarn", "yarn install*", "yarn add*", "yarn remove*", "bun install*", "bun add*",
-		"bun remove*", "uv pip install*", "poetry install*", "poetry add*", "uv sync*", "uv add*", "go mod *", "go get *",
-		"cargo add*", "cargo fetch*", "bundle install*", "composer install*", "composer require*"),
-	rows(RiskLow, "scripts e ferramentas do projeto", "npm run *", "npm test*", "pnpm run *", "pnpm test*", "yarn run *",
-		"yarn test*", "bun run *", "make *", "just *", "go build*", "go test*", "go vet*", "go run *", "go generate*",
-		"cargo build*", "cargo test*", "cargo check*", "cargo run*", "cargo clippy*", "cargo fmt*", "pytest*", "tsc*",
-		"eslint*", "prettier*", "./gradlew *", "gradle *", "mvn *", "dotnet build*", "dotnet test*"),
-	[]riskRow{{risk: RiskLow, group: "scripts e ferramentas do projeto", label: "interpretador com um arquivo do worktree", cond: func(c *riskCmd) bool { return c.scriptInWorktree }}},
-	rows(RiskLow, "arquivos dentro do worktree", "mkdir *", "touch *", "cp *", "mv *", "ln -s *", "chmod *"),
-	[]riskRow{{risk: RiskLow, group: "arquivos dentro do worktree", label: "rm sem -r, sem curinga e com até 20 caminhos", program: "rm", cond: func(c *riskCmd) bool { return c.name == "rm" }}},
 )
 
 func networkRows(patterns ...string) []riskRow {
@@ -127,6 +117,10 @@ type riskCmd struct {
 	rmMass           bool
 	scriptInWorktree bool
 }
+
+// groupNotListed is the rule of a part that no row, no signal and no entry
+// of the list of known-safe programs covers: medio.
+const groupNotListed = "fora da lista de programas seguros"
 
 // match is the first row of the table the command matches.
 func (c *riskCmd) match() (riskRow, bool) {
@@ -179,6 +173,12 @@ func (w *riskWalker) line(cmd, cwd string, d dialect, depth int) riskOut {
 	if depth > maxDepth {
 		return riskOut{risk: RiskHigh, rule: "comando aninhado demais para ser analisado"}
 	}
+	if depth == 0 && !analysable(cmd) {
+		return riskOut{risk: RiskHigh, rule: reasonTooLong}
+	}
+	if w.e.spend(len(cmd) + costLine) {
+		return riskOut{risk: RiskHigh, rule: reasonTooMuch}
+	}
 	parts, opaque, grouped := parseLine(cmd, d)
 	if len(parts) == 0 {
 		return riskOut{risk: RiskMedium, rule: "nenhum comando reconhecido"}
@@ -186,6 +186,9 @@ func (w *riskWalker) line(cmd, cwd string, d dialect, depth int) riskOut {
 	var out riskOut
 	st := &shellState{cwds: []string{cwd}, facts: newLineFacts()}
 	for i := range parts {
+		if w.e.spend(costPart) {
+			return riskOut{risk: RiskHigh, rule: reasonTooMuch}
+		}
 		piped, feed := w.pipeRisk(parts, i, d, st, depth)
 		st.feed = feed
 		out.raise(w.part(&parts[i], d, st, depth))
@@ -210,8 +213,19 @@ func (w *riskWalker) line(cmd, cwd string, d dialect, depth int) riskOut {
 
 func (w *riskWalker) part(p *simple, d dialect, st *shellState, depth int) riskOut {
 	var out riskOut
-	if len(p.words) > 0 {
-		out = w.command(p.words, d, st, depth, nil)
+	words := p.words
+	if d == dialectPwsh {
+		// NAME=value cmd: PowerShell finds no command of that name, POSIX
+		// sets the variable; read as POSIX, the assignment is checked.
+		for len(words) > 1 && !words[0].quoted && !words[0].expand && assignWord.MatchString(words[0].text) {
+			if n, _, _ := strings.Cut(words[0].text, "="); programEnv[strings.ToUpper(n)] {
+				out.raise(riskOut{risk: RiskMedium, rule: n + " muda o programa que roda"})
+			}
+			words = words[1:]
+		}
+	}
+	if len(words) > 0 {
+		out.raise(w.command(words, d, st, depth, nil))
 	}
 	for _, s := range p.subs {
 		out.raise(w.line(s, st.cwds[0], dialectPOSIX, depth+1))
@@ -271,8 +285,12 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 		return out
 	}
 
+	// A program of the worktree given by its path is that file, whatever
+	// its name (./nohup, .\script.ps1): no wrapper nor shell of the same
+	// name is unwrapped, and the script signal sees it.
+	ownFile := pwshScript(ws[0]) || (strings.ContainsAny(ws[0].text, `/\`) || strings.HasPrefix(ws[0].text, ".") && cn != ".") && w.inWorktree(ws[0], st)
 	unread := ""
-	if inner, extra, ok := e.unwrap(cn, args, &result{}); ok {
+	if inner, extra, ok := e.unwrap(cn, args, &result{}); ok && !ownFile {
 		if len(inner) > 0 {
 			out := w.command(inner, d, st, depth, append(outer, c.text))
 			if extra != "" {
@@ -292,7 +310,7 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 		// like a shell without one.
 		c.scriptInWorktree = false
 	}
-	if !c.scriptInWorktree {
+	if !c.scriptInWorktree && !ownFile {
 		nested, nd, why, ok := nestedShell(cn, args)
 		if !ok && stdinScriptShell(cn, args) {
 			nested, nd, why, ok = "", dialectPOSIX, cn+" lendo o script da entrada", true
@@ -315,17 +333,9 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 		}
 	}
 
-	uses, readOnly := pathUses(cn, args, d)
-	switch {
-	case cn == "git":
-		readOnly = gitReadOnly(args)
-	case cn == "find":
-		readOnly = !findActs(c.args)
-	case cdNames[cn]:
-		readOnly, uses = true, nil
-	}
-	if strings.ContainsAny(ws[0].text, `/\`) || ws[0].quoted || ws[0].expand {
-		readOnly = false // only the program the shell finds by its name is the read-only one
+	uses, _ := pathUses(cn, args, d)
+	if cdNames[cn] {
+		uses = nil
 	}
 
 	var out riskOut
@@ -334,14 +344,20 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	} else if r, ok := c.match(); ok {
 		out = riskOut{risk: r.risk, rule: r.rule()}
 		out.raise(w.floors(c))
-	} else if readOnly {
-		// cd, and the commands the format frees as read-only: they act on
-		// nothing but the paths they read, which the rule below sees.
-		out = riskOut{risk: RiskLow, rule: "comando só de leitura: " + cn}
+	} else if rule, ok := w.safe(c, ws, st); ok {
+		// A known-safe program and shape; the signals that hold over the
+		// rows hold over it too.
+		out = riskOut{risk: RiskLow, rule: rule}
+		out.raise(w.floors(c))
+		out.raise(w.deleteArg(c))
 	} else if s, ok := w.signal(c, ws, st); ok {
 		out = s
 	} else {
-		out = riskOut{risk: RiskLow, rule: fmt.Sprintf("%q sem linha na tabela e sem sinal de risco", c.text)}
+		out = riskOut{risk: RiskMedium, rule: fmt.Sprintf("%s: %q", groupNotListed, c.text)}
+	}
+	if why, ok := w.codeShape(c); ok {
+		// Over the owner's adjustments too: no adjustment makes code baixo.
+		out.raise(riskOut{risk: RiskMedium, rule: "sinal de interpretador com código: " + why})
 	}
 	if unread != "" {
 		out.raise(riskOut{risk: RiskMedium, rule: "trecho que o motor não analisa: " + unread})
@@ -382,6 +398,27 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 			out.raise(riskOut{risk: RiskMedium, rule: "sinal de interpretador com código: " + pc.why})
 		}
 	}
+	// The command given in an argument, and the one of find -exec, is
+	// classified as the command line it is (codeargs.go).
+	for _, ac := range argCommands(cn, c.args) {
+		out.raise(w.line(ac, st.cwds[0], dialectPOSIX, depth+1))
+		out.raise(riskOut{risk: RiskMedium, rule: "sinal de interpretador com código: comando dentro de um argumento de " + cn})
+	}
+	if cn == "git" {
+		// The git features that run a program: alto, and the literal
+		// command they run is classified too (codeargs.go).
+		if why, cmds := gitRunsProgram(args); why != "" {
+			for _, gc := range cmds {
+				out.raise(w.line(gc, st.cwds[0], dialectPOSIX, depth+1))
+			}
+			out.raise(riskOut{risk: RiskHigh, rule: "git que roda um programa: " + why})
+		}
+	}
+	if cn == "find" {
+		for _, inner := range findExecs(args) {
+			out.raise(w.command(inner, d, st, depth+1, nil))
+		}
+	}
 	// A script of the worktree is the project's only if it came from the
 	// repository; over the rows and the adjustments, like the paths.
 	if out.risk.rank() < RiskMedium.rank() {
@@ -391,6 +428,9 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	}
 	return out
 }
+
+// assignWord is a POSIX assignment before a command (NAME=value).
+var assignWord = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
 // adjusted is the first of the owner's command adjustments that matches.
 func (w *riskWalker) adjusted(c *riskCmd) (riskOut, bool) {

@@ -1,0 +1,64 @@
+package classes
+
+// The analysis of a command line has a bound (docs/classes/formato-das-permissoes.md#comandos):
+// a line longer than maxAnalysedCommand, or one whose analysis (the line,
+// its nested shells, substitutions, here-documents and pipes, for the
+// decision and for the risk) passes maxAnalysisWork units, is denied by a
+// fixed rule instead of being analysed, and so are the expansions nested
+// deeper than maxExpansionDepth. The hook then answers well within its
+// deadline for any input it reads, and an input built to take long is
+// never allowed by running out of time.
+
+const (
+	// maxAnalysedCommand is the longest command line analysed (64 KiB),
+	// without the bodies of its here-documents, which are data; the
+	// whole line is never longer than maxCommandWithData (1 MiB). A body a
+	// shell reads is a command line, and has the same bound.
+	maxAnalysedCommand = 64 << 10
+	maxCommandWithData = 1 << 20
+	// maxAnalysisWork bounds the units of one decision: a unit is about
+	// what lexing a byte costs; a line read (a nested shell, a
+	// substitution, a body) costs costLine more, a part costPart and each
+	// reader of a here-document costReader.
+	maxAnalysisWork = 4 << 20
+	costLine        = 1024
+	costPart        = 32
+	costReader      = 8
+	// maxExpansionDepth bounds the nesting of ${…} and $((…)) read for
+	// the substitutions inside them.
+	maxExpansionDepth = 32
+)
+
+// The reasons of the denials of the bound.
+const (
+	reasonTooLong = "comando longo demais para ser analisado"
+	reasonTooMuch = "comando trabalhoso demais para ser analisado"
+	reasonTooDeep = "expansões aninhadas demais para serem analisadas"
+)
+
+// spend adds n units of work to the analysis; true is over the bound.
+func (e *evaluator) spend(n int) bool {
+	e.work += n
+	return e.work > maxAnalysisWork
+}
+
+// analysable reports a line within the bound of length: up to
+// maxAnalysedCommand, or up to maxCommandWithData when the bodies of its
+// here-documents (cat <<'EOF' > data.json) take the rest.
+func analysable(cmd string) bool {
+	switch {
+	case len(cmd) <= maxAnalysedCommand:
+		return true
+	case len(cmd) > maxCommandWithData:
+		return false
+	}
+	lx := &lexer{s: cmd}
+	lx.run()
+	data := 0
+	for _, t := range lx.toks {
+		if t.doc != nil && t.doc.read {
+			data += len(t.doc.body)
+		}
+	}
+	return len(cmd)-data <= maxAnalysedCommand
+}

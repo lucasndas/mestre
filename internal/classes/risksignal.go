@@ -243,10 +243,8 @@ func (w *riskWalker) signal(c *riskCmd, ws []word, st *shellState) (riskOut, boo
 	if unseenWrite(c.name, c.args) {
 		return sig(groupUnseenWrite, c.text)
 	}
-	for _, a := range c.args {
-		if a == "--delete" || strings.HasPrefix(a, "--delete-") || strings.HasPrefix(a, "--delete=") {
-			return sig("apagar", c.name+" "+a)
-		}
+	if d := w.deleteArg(c); d.set() {
+		return d, true
 	}
 	if inlineInterpreters[c.name] {
 		args := ws[1:]
@@ -267,6 +265,16 @@ func (w *riskWalker) signal(c *riskCmd, ws []word, st *shellState) (riskOut, boo
 		}
 	}
 	return riskOut{}, false
+}
+
+// deleteArg is the removal signal of the --delete options.
+func (w *riskWalker) deleteArg(c *riskCmd) riskOut {
+	for _, a := range c.args {
+		if a == "--delete" || strings.HasPrefix(a, "--delete-") || strings.HasPrefix(a, "--delete=") {
+			return riskOut{risk: RiskMedium, rule: "sinal de apagar: " + c.name + " " + a}
+		}
+	}
+	return riskOut{}
 }
 
 // valuePaths are the paths after the = of the arguments name=value (an

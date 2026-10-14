@@ -210,6 +210,11 @@ func checkAdjustment(a RiskAdjustment) string {
 	case base.risk == RiskHigh:
 		return fmt.Sprintf("lowers to %s what can be alto (%s): alto only opens by the owner's delegation", a.Risk, base.rule)
 	case base.risk == RiskMedium && a.Risk == RiskLow:
+		if a.Command != "" {
+			if why := literalRunsCode(literal(p)); why != "" {
+				return "lowers to baixo a command that runs code (" + why + "): code is never baixo"
+			}
+		}
 		return ""
 	}
 	return fmt.Sprintf("lowers %s to %s: only medio goes down, to baixo", base.risk, a.Risk)
@@ -222,8 +227,72 @@ var broadInterpreters = map[string]bool{
 	"node": true, "deno": true, "bun": true, "ruby": true, "perl": true, "php": true, "env": true, "xargs": true, "npx": true,
 }
 
-// anyCode are the broad interpreters whose every argument can be code.
+// anyCode are the broad interpreters whose every argument can be code, and
+// the wrappers whose every argument can be the command they run.
 var anyCode = map[string]bool{"env": true, "xargs": true, "cmd": true, "pwsh": true, "powershell": true}
+
+// wrapperPrograms run the command their arguments name (nice git push,
+// flock f git push, tmux new 'git push'): a wildcard in them can be any
+// command, so it is never approvable nor an adjustment.
+var wrapperPrograms = set("nice nohup timeout stdbuf ionice chrt taskset time command builtin exec setsid strace ltrace " +
+	"valgrind faketime numactl eatmydata catchsegv flock unbuffer nocache proxychains proxychains4 torsocks watch script " +
+	"parallel tmux screen expect busybox toybox coreutils wsl")
+
+// runnerSubs are the subcommands that run the command after them (uv run x,
+// npm exec x, pnpm dlx x).
+var runnerSubs = map[string]map[string]bool{
+	"uv": set("run tool"), "poetry": set("run"), "pipenv": set("run"), "pdm": set("run"), "rye": set("run"),
+	"hatch": set("run"), "pixi": set("run exec"), "npm": set("exec x"), "pnpm": set("exec dlx"), "yarn": set("exec dlx"),
+	"bun": set("run x"), "deno": set("run"),
+}
+
+// literalRunsCode is why the literal part of a pattern runs code the motor
+// does not read (python -c, sh -c, make --eval, find -exec, awk with
+// system), or "".
+func literalRunsCode(lit string) string {
+	e := riskEnv()
+	w := e.riskWalker()
+	parts, _, _ := parseLine(lit, dialectPOSIX)
+	for _, p := range parts {
+		if len(p.words) == 0 {
+			continue
+		}
+		ws := p.words
+		cn := canonical(ws[0].text)
+		args := ws[1:]
+		for depth := 0; depth < maxDepth; depth++ {
+			inner, _, ok := e.unwrap(cn, args, &result{})
+			if !ok || len(inner) == 0 {
+				break
+			}
+			ws, cn, args = inner, canonical(inner[0].text), inner[1:]
+		}
+		base := normalizeInterpreter(cn)
+		texts := wordsText(args)
+		c := &riskCmd{name: cn, args: texts}
+		switch {
+		case cn == "eval" || cn == "invoke-expression" || cn == "iex":
+			return cn
+		case len(argCommands(cn, texts)) > 0:
+			return cn + " com um comando no argumento"
+		}
+		if _, _, why, ok := nestedShell(base, args); ok {
+			return why
+		}
+		if why, ok := w.codeShape(c); ok {
+			return why
+		}
+		if pc, ok := e.progCodeOf(cn, args); ok && (pc.code || len(pc.cmds) > 0) {
+			return pc.why
+		}
+		if inlineInterpreters[base] || shells[base] || pwshNames[base] {
+			if s, ok := interpreterScript(base, args); !ok || strings.HasPrefix(s.text, "-") || stdinPaths[s.text] {
+				return cn + " sem um script"
+			}
+		}
+	}
+	return ""
+}
 
 // tooBroad is why a command pattern is too broad (pattern_too_broad), or
 // "": * alone, a pattern that does not start with a literal program, or an
@@ -234,6 +303,12 @@ func tooBroad(p string) string {
 	f := strings.Fields(p)
 	if len(f) == 0 || strings.Contains(f[0], "*") {
 		return "does not start with a literal program (* alone, or a wildcard in the program)"
+	}
+	if strings.Contains(p, "*") && wrapperPrograms[canonical(f[0])] {
+		return fmt.Sprintf("a wrapper with a wildcard (%s): it can run any command", f[0])
+	}
+	if strings.Contains(p, "*") && len(f) > 1 && runnerSubs[canonical(f[0])][f[1]] {
+		return fmt.Sprintf("a runner with a wildcard (%s %s): it can run any command", f[0], f[1])
 	}
 	if !strings.Contains(p, "*") || !broadInterpreters[canonical(f[0])] {
 		return ""

@@ -157,9 +157,13 @@ func TestAnAbsentDefaultAsksAndTheCeilingStillCloses(t *testing.T) {
 			t.Fatalf("%s: the approval request has risk %+v; want medio", ev.Tool.NativeName, d.Risk)
 		}
 	}
-	// Without a rule and baixo, it runs directly, saying why.
-	if d := decide(m.env(), r, m.shell("foo --bar")); d.Verdict != classes.Allow || !strings.Contains(d.Reason, "padrão: risco baixo") || d.Risk.Risk != classes.RiskLow {
-		t.Fatalf("foo --bar: %+v; want allow by the default baixo", d)
+	// Without a rule and baixo (a program of the list of known-safe ones),
+	// it runs directly, saying why; a program outside the list is medio.
+	if d := decide(m.env(), r, m.shell("jq . a.json")); d.Verdict != classes.Allow || !strings.Contains(d.Reason, "padrão: risco baixo") || d.Risk.Risk != classes.RiskLow {
+		t.Fatalf("jq . a.json: %+v; want allow by the default baixo", d)
+	}
+	if d := decide(m.env(), r, m.shell("foo --bar")); d.Verdict != classes.Ask || d.Risk.Risk != classes.RiskMedium {
+		t.Fatalf("foo --bar: %+v; want ask, medio (outside the list)", d)
 	}
 
 	closed := ceiling(t, "version: 1\npermissions: {commands: {default: deny}}\n")

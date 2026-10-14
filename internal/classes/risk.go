@@ -40,7 +40,7 @@ func (r Risk) valid() bool { return r.rank() >= 0 }
 
 // RiskTableVersion is the version of the default risk table embedded in the
 // binary; it goes with every classification to the request and the audit.
-const RiskTableVersion = 6
+const RiskTableVersion = 7
 
 // RequestType is a type of approval request
 // (docs/aprovacoes/politica.md#tipos-de-ação).
@@ -176,10 +176,17 @@ func (e *evaluator) classify(t *providers.Tool, checkFixed bool) RiskResult {
 	w := e.riskWalker()
 	switch t.Kind {
 	case providers.KindShell:
-		out = w.line(t.Command, e.cwd(), dialectPOSIX, 0)
-		if e.windows {
-			out.raise(w.line(t.Command, e.cwd(), dialectPwsh, 0))
+		if !e.windows {
+			out = w.line(t.Command, e.cwd(), dialectPOSIX, 0)
+			break
 		}
+		// On Windows the line is read as POSIX and as PowerShell; what a
+		// POSIX shell refuses as a syntax error (& .\x.ps1) runs nothing
+		// there, so only the part before it is read as POSIX.
+		if live := posixLive(t.Command); strings.TrimSpace(live) != "" {
+			out = w.line(live, e.cwd(), dialectPOSIX, 0)
+		}
+		out.raise(w.line(t.Command, e.cwd(), dialectPwsh, 0))
 	case providers.KindWeb:
 		out = w.web(t.URL)
 	case providers.KindMCP, providers.KindOther, providers.KindSubagent:

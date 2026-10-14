@@ -36,11 +36,14 @@ func TestAwkAndSedLiteralCommandsAreAFixedDeny(t *testing.T) {
 		want(t, decide(env, free, m.shell(cmd)), classes.Deny, classes.LayerFixed)
 		wantRisk(t, env, free, cmd, classes.RiskFixed)
 	}
-	// A literal command without a fixed rule is classified as the command,
-	// at least medio (the code signal): never baixo.
+	// A literal command without a fixed rule is classified as the command
+	// line it is: a known-safe one stays baixo (awk '{print $1 | "sort"}'),
+	// anything else takes its own risk.
 	wantRisk(t, env, free, `awk 'BEGIN{system("npm publish")}'`, classes.RiskHigh)
-	wantRisk(t, env, free, `awk 'BEGIN{system("echo hi")}'`, classes.RiskMedium)
-	wantRisk(t, env, free, `sed '1e echo hi' f`, classes.RiskMedium)
+	wantRisk(t, env, free, `awk 'BEGIN{system("foo --bar")}'`, classes.RiskMedium)
+	wantRisk(t, env, free, `awk 'BEGIN{system("echo hi")}'`, classes.RiskLow)
+	wantRisk(t, env, free, `awk '{print $1 | "sort"}' f`, classes.RiskLow)
+	wantRisk(t, env, free, `sed '1e echo hi' f`, classes.RiskLow)
 }
 
 // CA-RISCO-13

@@ -61,7 +61,7 @@ cadeia:                        # níveis de agentes (ver cadeia-de-aprovacao.md)
   prazo_agente: 2m             # superior agente e Mestre da mesa
   prazo_grao_mestre: 10m
   regra_temporaria_max: 24h    # validade máxima de uma regra temporária de mesa
-  mesa_decide: [rede, apagar, conteineres_e_vms, pacotes_e_executores, interpretador_com_codigo, script_alterado]   # grupos de medio que o Mestre da mesa decide (ver cadeia-de-aprovacao.md#condições-da-mesa)
+  mesa_decide: [rede, apagar, conteineres_e_vms, pacotes_e_executores, interpretador_com_codigo, script_alterado, fora_da_lista]   # grupos de medio que o Mestre da mesa decide (ver cadeia-de-aprovacao.md#condições-da-mesa)
   negacoes_para_pausar: 3      # negações seguidas que pausam o personagem
   resumo_mesas: 30m            # resumo das decisões das mesas ao Grão-Mestre (ver supervisao-da-cadeia.md)
   alerta_fila: { abertos: 10, fator: 2 }   # fila que acumula: abertos, ou o mais antigo acima de fator × prazo

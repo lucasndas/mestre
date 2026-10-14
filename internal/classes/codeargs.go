@@ -1,0 +1,376 @@
+package classes
+
+import (
+	"regexp"
+	"strings"
+)
+
+// Programs that run a command given in an argument
+// (docs/classes/lista-de-seguros.md#o-que-fica-fora): tmux new 'cmd',
+// screen -dm cmd, expect -c 'spawn cmd', vim -c '!cmd', less +!cmd,
+// man -P cmd, gdb -ex 'shell cmd', tar -I cmd, sort --compress-program=cmd,
+// make --eval='t:;cmd', zip -TT cmd, rsync -e cmd, ssh -o ProxyCommand=cmd,
+// and the inline code of an interpreter that calls system("cmd"). None of
+// them is in the list of known-safe programs, so the part is medio; when the
+// command is a literal the motor reads, it is analysed as a command line
+// too, so a fixed rule in it denies.
+
+// argCommands are the literal command lines a program runs from its
+// arguments.
+func argCommands(cn string, args []string) []string {
+	base := normalizeInterpreter(cn)
+	switch {
+	case cn == "tmux":
+		return tmuxCommands(args)
+	case cn == "screen":
+		return screenCommands(args)
+	case cn == "expect":
+		return scriptCalls(optValues(args, "-c"), expectCall)
+	case vimNames[cn]:
+		var out []string
+		for _, v := range append(optValues(args, "-c", "--cmd"), plusArgs(args)...) {
+			if _, after, ok := strings.Cut(v, "!"); ok && strings.TrimSpace(after) != "" {
+				out = append(out, after)
+			}
+		}
+		return out
+	case cn == "emacs" || cn == "emacsclient":
+		return scriptCalls(optValues(args, "--eval", "-eval", "--execute"), emacsCall)
+	case cn == "less" || cn == "more":
+		var out []string
+		for _, v := range plusArgs(args) {
+			if after, ok := strings.CutPrefix(strings.TrimLeft(v, "+"), "!"); ok && strings.TrimSpace(after) != "" {
+				out = append(out, after)
+			}
+		}
+		return out
+	case cn == "man":
+		return optValues(args, "-P", "--pager", "-H", "--html")
+	case cn == "gdb":
+		var out []string
+		for _, v := range optValues(args, "-ex", "--ex", "-iex", "--iex", "--eval-command", "--init-eval-command") {
+			v = strings.TrimSpace(v)
+			if after, ok := strings.CutPrefix(v, "shell "); ok {
+				out = append(out, after)
+			} else if after, ok := strings.CutPrefix(v, "!"); ok {
+				out = append(out, after)
+			}
+		}
+		return out
+	case cn == "tar" || cn == "bsdtar" || cn == "gtar":
+		out := optValues(args, "-I", "--use-compress-program", "--to-command", "--rsh-command", "--rmt-command")
+		for _, v := range optValues(args, "--checkpoint-action") {
+			if after, ok := strings.CutPrefix(v, "exec="); ok {
+				out = append(out, after)
+			}
+		}
+		return out
+	case cn == "sort":
+		return optValues(args, "--compress-program")
+	case cn == "make" || cn == "gmake":
+		var out []string
+		for _, v := range optValues(args, "--eval", "-E") {
+			out = append(out, makeRecipes(v)...)
+		}
+		return out
+	case cn == "zip":
+		return optValues(args, "-TT", "--unzip-command")
+	case cn == "rsync":
+		return optValues(args, "-e", "--rsh", "--rsync-path")
+	case cn == "ssh" || cn == "scp" || cn == "sftp":
+		var out []string
+		for _, v := range optValues(args, "-o") {
+			k, val, ok := strings.Cut(v, "=")
+			if !ok {
+				k, val, ok = strings.Cut(v, " ")
+			}
+			if l := strings.ToLower(k); ok && (l == "proxycommand" || l == "localcommand" || l == "knownhostscommand") {
+				out = append(out, val)
+			}
+		}
+		return out
+	case inlineInterpreters[base] || stdinCode[base] || base == "r" || base == "julia":
+		return scriptCalls(args, codeCall)
+	}
+	return nil
+}
+
+var vimNames = set("vim vi nvim view ex gvim vimdiff rvim evim gview nvi elvis")
+
+// optValues are the values of the options: -x v, -xv, --long v and
+// --long=v.
+func optValues(args []string, names ...string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		for _, n := range names {
+			switch {
+			case a == n && i+1 < len(args):
+				out = append(out, args[i+1])
+				i++
+			case strings.HasPrefix(n, "--") && strings.HasPrefix(a, n+"="):
+				out = append(out, a[len(n)+1:])
+			case !strings.HasPrefix(n, "--") && len(a) > len(n) && strings.HasPrefix(a, n) && !strings.HasPrefix(a, "--"):
+				out = append(out, strings.TrimPrefix(a[len(n):], "="))
+			default:
+				continue
+			}
+			break
+		}
+	}
+	return out
+}
+
+// plusArgs are the +cmd arguments of an editor or a pager.
+func plusArgs(args []string) []string {
+	var out []string
+	for _, a := range args {
+		if strings.HasPrefix(a, "+") && len(a) > 1 {
+			out = append(out, a[1:])
+		}
+	}
+	return out
+}
+
+// tmuxShellSubs are the tmux commands whose operands are a shell command;
+// tmuxKeys type keys into a shell.
+var (
+	tmuxShellSubs = set("new-session new new-window neww split-window splitw respawn-pane respawnp respawn-window respawnw " +
+		"run-shell run display-popup popup pipe-pane pipep if-shell if")
+	tmuxKeys   = set("send-keys send")
+	tmuxValued = set("-c -e -F -n -s -t -x -y -f -l -p -T -b -h -w -S -L -E -B -I -M -O -R -X")
+)
+
+func tmuxCommands(args []string) []string {
+	// global options of tmux, then the commands, split at ;
+	i := 0
+	for i < len(args) && strings.HasPrefix(args[i], "-") {
+		if args[i] == "-L" || args[i] == "-S" || args[i] == "-f" || args[i] == "-c" || args[i] == "-T" {
+			if args[i] == "-c" && i+1 < len(args) {
+				return []string{args[i+1]} // tmux -c 'cmd': a shell command
+			}
+			i++
+		}
+		i++
+	}
+	var out []string
+	cmd := []string{}
+	flush := func() {
+		if len(cmd) == 0 {
+			return
+		}
+		sub, rest := cmd[0], cmd[1:]
+		var ops []string
+		for j := 0; j < len(rest); j++ {
+			if strings.HasPrefix(rest[j], "-") && len(ops) == 0 {
+				if tmuxValued[rest[j]] {
+					j++
+				}
+				continue
+			}
+			ops = append(ops, rest[j])
+		}
+		switch {
+		case tmuxShellSubs[sub] && len(ops) > 0:
+			out = append(out, strings.Join(ops, " "))
+		case tmuxKeys[sub] && len(ops) > 0:
+			out = append(out, strings.Join(ops, " "))
+		}
+		cmd = cmd[:0]
+	}
+	for ; i < len(args); i++ {
+		if args[i] == ";" || args[i] == `\;` {
+			flush()
+			continue
+		}
+		cmd = append(cmd, args[i])
+	}
+	flush()
+	return out
+}
+
+func screenCommands(args []string) []string {
+	valued := set("-S -c -e -h -p -T -t -L -Logfile -s -x -r -R -D -d")
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-X":
+			rest := args[i+1:]
+			if len(rest) > 1 && (rest[0] == "stuff" || rest[0] == "exec" || rest[0] == "screen") {
+				t := strings.Join(rest[1:], " ")
+				for _, esc := range []string{`\n`, `\r`, "^M", "^J"} {
+					t = strings.ReplaceAll(t, esc, "\n")
+				}
+				return []string{t}
+			}
+			return nil
+		case strings.HasPrefix(a, "-"):
+			if valued[a] && a != "-d" && a != "-r" && a != "-R" && a != "-D" && a != "-x" {
+				i++
+			}
+		default:
+			return []string{strings.Join(args[i:], " ")}
+		}
+	}
+	return nil
+}
+
+// makeRecipes are the commands of a makefile text given to --eval: the
+// recipe after the ; of a rule, the lines that start with a tab, and the
+// text of $(shell …).
+func makeRecipes(text string) []string {
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		switch {
+		case strings.HasPrefix(line, "\t"):
+			out = append(out, strings.TrimSpace(line))
+		case strings.Contains(line, ":"):
+			_, after, _ := strings.Cut(line, ":")
+			if _, recipe, ok := strings.Cut(after, ";"); ok {
+				out = append(out, recipe)
+			}
+		}
+		for _, m := range makeShell.FindAllStringSubmatch(line, -1) {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+var makeShell = regexp.MustCompile(`\$[({]shell\s+([^)}]*)[)}]`)
+
+var (
+	// codeCall finds the literal command an interpreter's inline code runs:
+	// system("cmd"), os.system('cmd'), subprocess.run("cmd", shell=True),
+	// execSync('cmd'), exec("cmd"), shell_exec, popen, os.execute, run(`cmd`)
+	// and the backtick strings of ruby, perl and julia.
+	codeCall   = regexp.MustCompile("(?:system|popen|exec|execSync|spawnSync|spawn|shell_exec|passthru|run|call|check_call|check_output|getoutput|getstatusoutput|Popen|execute|qx)\\s*\\(?\\s*(?:\"((?:\\\\.|[^\"\\\\])*)\"|'((?:\\\\.|[^'\\\\])*)'|`([^`]*)`|\\[([^\\]]*)\\])|`([^`]*)`|do shell script\\s+\"([^\"]*)\"")
+	expectCall = regexp.MustCompile(`(?:spawn|exec|system)\s+([^;\n\]]+)`)
+	emacsCall  = regexp.MustCompile(`(?:shell-command|async-shell-command|call-process-shell-command|shell-command-to-string)\s+"((?:\\.|[^"\\])*)"`)
+	listItem   = regexp.MustCompile(`"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'`)
+)
+
+// scriptCalls are the literal commands the code texts run, by re: the
+// first group that matched; a list (["git", "push"]) is joined by spaces.
+func scriptCalls(texts []string, re *regexp.Regexp) []string {
+	var out []string
+	for _, t := range texts {
+		for _, m := range re.FindAllStringSubmatch(t, -1) {
+			for g := 1; g < len(m); g++ {
+				if m[g] == "" {
+					continue
+				}
+				if re == codeCall && g == 4 {
+					// the list form of subprocess and spawn
+					var words []string
+					for _, it := range listItem.FindAllStringSubmatch(m[g], -1) {
+						words = append(words, it[1]+it[2])
+					}
+					if len(words) > 0 {
+						out = append(out, strings.Join(words, " "))
+					}
+					break
+				}
+				out = append(out, m[g])
+				break
+			}
+		}
+	}
+	return out
+}
+
+// findExecs are the commands of the -exec, -execdir, -ok and -okdir of a
+// find, each up to its ; or + (without one, find runs nothing).
+func findExecs(args []word) [][]word {
+	var out [][]word
+	for i := 0; i < len(args); i++ {
+		switch args[i].text {
+		case "-exec", "-execdir", "-ok", "-okdir":
+			j := i + 1
+			for j < len(args) && args[j].text != ";" && args[j].text != "+" {
+				j++
+			}
+			if j > i+1 && j < len(args) {
+				out = append(out, args[i+1:j])
+			}
+			i = j
+		}
+	}
+	return out
+}
+
+// gitRunsProgram is why a git command line uses a feature that runs a
+// program (an alias or a config key that runs one, given by -c or
+// --config-env; rebase -x, bisect run, difftool -x, grep -O), with the
+// literal commands it runs: alto in the risk, and never run on its own by
+// the decision (git.go).
+func gitRunsProgram(args []word) (why string, cmds []string) {
+	config := func(raw string, unread bool) {
+		key, val, _ := strings.Cut(raw, "=")
+		switch {
+		case strings.HasPrefix(strings.ToLower(key), "alias."):
+			why = "git define um alias na linha de comando"
+			if cv := strings.TrimSpace(val); !unread && strings.HasPrefix(cv, "!") {
+				cmds = append(cmds, strings.TrimPrefix(cv, "!"))
+			}
+		case configRunsProgram(key):
+			why = "git " + key + " roda um programa"
+			if !unread && val != "" && configValueIsCommand(key) {
+				cmds = append(cmds, val)
+			}
+		}
+	}
+	i := 0
+	for i < len(args) {
+		a := args[i].text
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			break
+		}
+		switch {
+		case a == "-c" && i+1 < len(args):
+			i++
+			config(args[i].text, args[i].expand)
+		case strings.HasPrefix(a, "-c") && !strings.HasPrefix(a, "--"):
+			config(a[2:], args[i].expand)
+		case a == "--config-env" && i+1 < len(args):
+			i++
+			config(args[i].text, true)
+		case strings.HasPrefix(a, "--config-env="):
+			config(strings.TrimPrefix(a, "--config-env="), true)
+		default:
+			if name, _, hasVal := strings.Cut(a, "="); gitGlobalValue[name] && !hasVal {
+				i++
+			}
+		}
+		i++
+	}
+	if i >= len(args) {
+		return why, cmds
+	}
+	sub, rest := args[i].text, args[i+1:]
+	ext := func(cmd string) {
+		why = "git " + sub + " roda um comando externo"
+		if strings.TrimSpace(cmd) != "" {
+			cmds = append(cmds, cmd)
+		}
+	}
+	switch sub {
+	case "rebase", "am", "sequence":
+		if w := flagValue(rest, "-x", "--exec"); w != nil {
+			ext(w.text)
+		}
+	case "bisect":
+		if ps := positionals(rest, nil); len(ps) > 0 && ps[0] == "run" {
+			ext(afterWord(rest, "run"))
+		}
+	case "difftool":
+		if w := flagValue(rest, "-x", "--extcmd"); w != nil {
+			ext(w.text)
+		}
+	case "grep":
+		if v, ok := grepOpenPager(rest); ok {
+			ext(v)
+		}
+	}
+	return why, cmds
+}

@@ -213,6 +213,16 @@ func heredocBody(s string, start int, hd *hereDoc) (body string, next int) {
 // texts of $(…) and `…`, also inside ${…} and $((…)), and why it is
 // opaque. Quotes are not special in a body; variables are data.
 func bodyExpansions(body string) (subs, why []string) {
+	return bodyExpansionsAt(body, 0)
+}
+
+// bodyExpansionsAt is bodyExpansions at a nesting depth: past
+// maxExpansionDepth the text is not read, and the line is denied
+// (reasonTooDeep), so the scan stays linear in the length of the line.
+func bodyExpansionsAt(body string, depth int) (subs, why []string) {
+	if depth > maxExpansionDepth {
+		return nil, []string{reasonTooDeep}
+	}
 	lx := &lexer{s: body}
 	for lx.i < len(lx.s) {
 		c := lx.s[lx.i]
@@ -228,7 +238,7 @@ func bodyExpansions(body string) (subs, why []string) {
 				lx.i++
 			}
 			lx.opaque = append(lx.opaque, "expansão aritmética")
-			s, w := bodyExpansions(inner)
+			s, w := bodyExpansionsAt(inner, depth+1)
 			subs, why = append(subs, s...), append(why, w...)
 		case c == '$' && lx.peek(1) == '(':
 			lx.i++
@@ -237,7 +247,7 @@ func bodyExpansions(body string) (subs, why []string) {
 		case c == '$' && lx.peek(1) == '{':
 			lx.i++
 			inner, _ := lx.balanced('{', '}')
-			s, w := bodyExpansions(inner)
+			s, w := bodyExpansionsAt(inner, depth+1)
 			subs, why = append(subs, s...), append(why, w...)
 		default:
 			lx.i++
@@ -249,6 +259,19 @@ func bodyExpansions(body string) (subs, why []string) {
 		}
 	}
 	return subs, append(why, lx.opaque...)
+}
+
+// partsHold reports a part opaque for the reason (a here-document body
+// whose expansions are nested too deep).
+func partsHold(parts []simple, reason string) bool {
+	for _, p := range parts {
+		for _, o := range p.opaque {
+			if o == reason {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // stdinPaths name the standard input as a file.
@@ -298,6 +321,9 @@ func (e *evaluator) stdinReader(ws []word, depth int) stdinUse {
 	}
 	cn := canonical(ws[0].text)
 	args := ws[1:]
+	if stdinData(cn, args) {
+		return stdinUse{} // a script file or a module that reads data
+	}
 	if stdinCode[cn] {
 		return stdinUse{name: cn, code: true}
 	}
@@ -332,6 +358,27 @@ func (e *evaluator) stdinReader(ws []word, depth int) stdinUse {
 		return stdinUse{name: cn, code: true}
 	}
 	return stdinUse{}
+}
+
+// stdinData reports an interpreter or a shell whose standard input is the
+// data of what it runs, not its code: a script file (python x.py <<EOF,
+// bash x.sh <<EOF), or a python module of the list of known-safe programs
+// that reads data (… | python -m json.tool).
+func stdinData(cn string, args []word) bool {
+	base := normalizeInterpreter(cn)
+	if !stdinCode[base] && !stdinCode[cn] && !shells[base] && !pwshNames[base] {
+		return false
+	}
+	if pythonDataModule(base, args) {
+		return true
+	}
+	if shells[base] || pwshNames[base] {
+		if _, _, _, nested := nestedShell(base, args); nested {
+			return false
+		}
+	}
+	s, ok := interpreterScript(base, args)
+	return ok && !s.expand && !stdinPaths[s.text] && !inlineCode(base, args)
 }
 
 // readsProgramFile reports an option that reads the program from the
@@ -384,12 +431,21 @@ func (e *evaluator) stdinBodies(parts []simple, i int, st *shellState, depth int
 	if len(parts[i].stdin) == 0 {
 		return res
 	}
-	for _, j := range stdinReaders(parts, i) {
+	readers := stdinReaders(parts, i)
+	if e.spend(len(readers) * costReader) {
+		res.fixedDeny(reasonTooMuch)
+		return res
+	}
+	for _, j := range readers {
 		u := e.stdinReader(parts[j].words, 0)
 		why := fmt.Sprintf("here-document lido por %s", u.name)
 		switch {
 		case u.shell:
 			for _, b := range parts[i].stdin {
+				if len(b) > maxAnalysedCommand {
+					res.fixedDeny(reasonTooLong)
+					continue
+				}
 				if depth+1 > maxDepth {
 					res.fixedDeny("comando aninhado demais para ser analisado")
 					continue
@@ -411,13 +467,21 @@ func (w *riskWalker) stdinRisk(parts []simple, i int, st *shellState, depth int)
 	if len(parts[i].stdin) == 0 {
 		return out
 	}
-	for _, j := range stdinReaders(parts, i) {
+	readers := stdinReaders(parts, i)
+	if w.e.spend(len(readers) * costReader) {
+		return riskOut{risk: RiskHigh, rule: reasonTooMuch}
+	}
+	for _, j := range readers {
 		u := w.e.stdinReader(parts[j].words, 0)
 		if !u.shell && !u.code {
 			continue
 		}
 		if u.shell {
 			for _, b := range parts[i].stdin {
+				if len(b) > maxAnalysedCommand {
+					out.raise(riskOut{risk: RiskHigh, rule: reasonTooLong})
+					continue
+				}
 				out.raise(w.line(b, st.cwds[0], u.d, depth+1))
 			}
 		}
