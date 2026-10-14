@@ -264,6 +264,21 @@ func (w *world) waitFor(what string, step time.Duration, ok func() bool) {
 	}
 }
 
+// waitForCitadel waits until p acts as the Citadel and takes entries: the
+// routes of the entry are mounted after the Citadel opens its CA, which is a
+// moment after the fence says it acts.
+func (w *world) waitForCitadel(p *proc) {
+	w.t.Helper()
+	w.waitFor(p.name+" to act as the Citadel and open the entries", 0, func() bool {
+		st, ok := w.status(p)
+		if !ok || st.Role != app.RoleCitadel || !st.Acting {
+			return false
+		}
+		_, err := w.ask(p, map[string]string{"op": "joinable"})
+		return err == nil
+	})
+}
+
 // externalRuns splits the lines of the fake external function by process run.
 func (w *world) externalRuns(p *proc) [][]string {
 	b, _ := os.ReadFile(filepath.Join(w.ext, p.name+".external"))
@@ -307,10 +322,7 @@ func TestTheCitadelFallsATowerIsPromotedTheOtherFollowsAndTheOldOneReturnsAsATow
 		t.Fatal(err)
 	}
 	w.start(a)
-	w.waitFor("a to act as the Citadel", 0, func() bool {
-		st, ok := w.status(a)
-		return ok && st.Role == app.RoleCitadel && st.Acting
-	})
+	w.waitForCitadel(a)
 
 	// b and c enter, approved by the fake Owner, and connect as Towers
 	ids := map[string]string{"a": founded.MachineID}
@@ -488,10 +500,7 @@ func TestAPlannedHandoverPassesTheCommandWithTheData(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.start(a)
-	w.waitFor("a to act as the Citadel", 0, func() bool {
-		st, ok := w.status(a)
-		return ok && st.Role == app.RoleCitadel && st.Acting
-	})
+	w.waitForCitadel(a)
 	j, err := app.Enroll(ctx, b.cfg, app.DirPaths(b.dir), a.addr(), transport.SystemNetwork{Suite: suite()}, clock.Real{}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -568,10 +577,7 @@ func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.start(a)
-	w.waitFor("a to act as the Citadel", 0, func() bool {
-		st, ok := w.status(a)
-		return ok && st.Role == app.RoleCitadel && st.Acting
-	})
+	w.waitForCitadel(a)
 	if _, err := app.Enroll(ctx, b.cfg, app.DirPaths(b.dir), a.addr(), transport.SystemNetwork{Suite: suite()}, clock.Real{}, nil); err != nil {
 		t.Fatal(err)
 	}

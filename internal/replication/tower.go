@@ -641,7 +641,14 @@ func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*prot
 	r.mu.Lock()
 	r.excluded = true
 	r.mu.Unlock()
-	r.background(func(ctx context.Context) { r.eraseAndReceipt(ctx, m.Env.ID) })
+	// The full copies that were arriving go now, in the order of the link: the
+	// messages of a link run one at a time, so a copy whose xfer.begin comes
+	// after this order is not one of them. The Citadel sends the order at every
+	// connection of an excluded machine, just before the full copy it makes
+	// without the vault tables, and erasing later, in the background, would
+	// sometimes remove that copy while it arrives.
+	pending := r.dropPendingCopies()
+	r.background(func(ctx context.Context) { r.eraseAndReceipt(ctx, m.Env.ID, pending) })
 	return nil, nil
 }
 
@@ -675,15 +682,21 @@ func (r *Replica) waitBackground() {
 // again at every connection of an excluded machine) gives no receipt: there
 // is nothing to put in the audit. An erasing that failed on the WAL still held
 // by a reader leaves the state on disk: the next order, or the retry of the
-// replica, erases again and sends the receipt then.
-func (r *Replica) eraseAndReceipt(ctx context.Context, replyTo string) {
+// replica, erases again and sends the receipt then. pending says that the
+// order already removed full copies that were arriving (dropPendingCopies):
+// that is something erased, so it counts for the receipt.
+func (r *Replica) eraseAndReceipt(ctx context.Context, replyTo string, pending bool) {
 	r.applyMu.Lock()
 	erased, err := r.dropVault(ctx)
 	r.applyMu.Unlock()
 	if err != nil {
 		r.cfg.Logger.Error("replication: erasing the vault", "err", err)
+		if pending {
+			r.setPurgeOwed(true) // the copies are gone, the receipt is owed
+		}
 		return
 	}
+	erased = erased || pending
 	if !erased {
 		return
 	}
@@ -708,13 +721,14 @@ func (r *Replica) retryErasing() {
 	}
 	r.background(func(ctx context.Context) {
 		defer r.erasing.Store(false)
-		r.eraseAndReceipt(ctx, "")
+		r.eraseAndReceipt(ctx, "", false)
 	})
 }
 
 // dropVault erases the key, the envelope, the vault tables, the log of what
-// they held, the folders that are not for an excluded machine and the full
-// copies still arriving. It says whether there was anything to erase.
+// they held and the folders that are not for an excluded machine. It says
+// whether there was anything to erase. The full copies still arriving are
+// removed by handleVaultDrop, not here, which runs later and in the background.
 func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 	held := r.cfg.Vault != nil && r.cfg.Vault.Holds(ctx)
 	if r.cfg.Vault != nil {
@@ -723,9 +737,6 @@ func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 		}
 	}
 	erased := held || r.purgeOwed()
-	if r.dropPendingCopies() {
-		erased = true
-	}
 	if r.dropRestrictedFolders() {
 		erased = true
 	}
