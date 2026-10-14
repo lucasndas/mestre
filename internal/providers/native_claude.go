@@ -1,10 +1,9 @@
 package providers
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -105,12 +104,35 @@ func (c *claudeCode) Native(p NativePolicy) (NativeControls, error) {
 		args = append(args, off...)
 	}
 	perms := map[string]any{"allow": allow, "deny": deny, "disableBypassPermissionsMode": "disable"}
+	// The statusLine (the usage of the character) lives in the same file,
+	// unless the fallback moved it to the hook file.
+	statusLine := ""
+	if !p.Fallbacks.ClaudeStatusLineInLocal {
+		var err error
+		if statusLine, err = claudeHookCommand(machineOS(p.OS), "", "StatusLine"); err != nil {
+			return NativeControls{}, fmt.Errorf("native controls of %s: %w", p.AgentID, err)
+		}
+	}
 	return NativeControls{Args: args, Files: []NativeFile{{
 		Path: settings,
 		Merge: func(cur []byte) ([]byte, error) {
-			return mergeJSON(cur, settings, map[string]any{"permissions": perms})
+			obj, err := parseObject(cur, settings)
+			if err != nil {
+				return nil, err
+			}
+			obj["permissions"] = perms
+			setClaudeStatusLine(obj, statusLine)
+			return marshalObject(obj)
 		},
 	}}}, nil
+}
+
+// machineOS is the system of the machine; empty means the one running.
+func machineOS(goos string) string {
+	if goos == "" {
+		return runtime.GOOS
+	}
+	return goos
 }
 
 // claudeAbs is an absolute path in the form of the path rules of Claude
@@ -121,24 +143,4 @@ func claudeAbs(p string) string {
 		s = "/" + strings.ToLower(s[:1]) + s[2:]
 	}
 	return "/" + s
-}
-
-// mergeJSON sets the keys of the Mestre in a JSON object file and keeps the
-// others. A file that is not a JSON object is an error: it is never
-// overwritten blindly.
-func mergeJSON(cur []byte, path string, set map[string]any) ([]byte, error) {
-	obj := map[string]any{}
-	if len(bytes.TrimSpace(cur)) > 0 {
-		if err := json.Unmarshal(cur, &obj); err != nil || obj == nil {
-			return nil, fmt.Errorf("%w: %s is not a JSON object: %v", ErrNativeFile, path, err)
-		}
-	}
-	for k, v := range set {
-		obj[k] = v
-	}
-	out, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append(out, '\n'), nil
 }

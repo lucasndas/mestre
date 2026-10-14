@@ -4,23 +4,28 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 )
 
 // claudeCode is the Claude Code adapter (docs/provedores/claude-code.md).
 type claudeCode struct {
 	paths   pathNormalizer
 	screens screenSet
+	// multilineViaFile makes TypeMessage refuse a text of several lines, so
+	// the engine sends it through the long-message file
+	// (docs/provedores/claude-code.md#verificar-na-implementação).
+	multilineViaFile bool
+	// afterTrustWrite runs after PreTrust wrote the trust file: tests rewrite
+	// the file as Claude Code does.
+	afterTrustWrite func(path string)
 }
 
 // NewClaudeCode returns the Claude Code adapter.
 func NewClaudeCode(opts Options) Adapter {
-	return &claudeCode{paths: opts.paths(), screens: screenSet{
+	return &claudeCode{paths: opts.paths(), multilineViaFile: opts.ClaudeMultilineViaFile, screens: screenSet{
 		prompt: agentPrompt,
 		busy:   regexp.MustCompile(`(?i)esc to interrupt|Working…`),
-		known: []KnownScreen{
-			{ID: "trust", Pattern: regexp.MustCompile(`Do you trust the files in this folder\?`), Action: ActionAvoid, Checklist: "ALL-12"},
-			{ID: "login", Pattern: regexp.MustCompile(`Select login method:`), Action: ActionAlert, Checklist: "ALL-11"},
-		},
+		known:  claudeScreens,
 	}}
 }
 
@@ -62,14 +67,21 @@ var claudeTools = toolTable{
 	}{{"mcp__", KindMCP}},
 }
 
-// BuildLaunch: `claude <base args> --session-id <uuid>`, or `--resume
-// <uuid>` with the saved id.
+// BuildLaunch: `claude <base args> --session-id <uuid> <provider args>`, or
+// `--resume <uuid>` with the saved id. The provider args must bring the
+// Mestre layer and the --settings file of the character, the environment the
+// account profile, and no forbidden flag may be there
+// (checkClaudeLaunch); --permission-mode default is added when missing, so
+// no mode of the settings of the person applies.
 func (c *claudeCode) BuildLaunch(req LaunchRequest) (Launch, error) {
 	l, err := newLaunch(req)
 	if err != nil {
 		return Launch{}, err
 	}
 	if err := refuseLatest(ClaudeCode, slices.Concat(req.Base.Args, req.ProviderArgs), "--continue", "-c"); err != nil {
+		return Launch{}, err
+	}
+	if err := checkClaudeLaunch(req, l.Env); err != nil {
 		return Launch{}, err
 	}
 	l.Args = slices.Clone(req.Base.Args)
@@ -84,6 +96,9 @@ func (c *claudeCode) BuildLaunch(req LaunchRequest) (Launch, error) {
 		return Launch{}, fmt.Errorf("claude-code: the engine generates the session id (--session-id); none given")
 	}
 	l.Args = append(l.Args, req.ProviderArgs...)
+	if !slices.ContainsFunc(parseClaudeFlags(l.Args), func(f claudeFlag) bool { return f.name == "--permission-mode" }) {
+		l.Args = append(l.Args, "--permission-mode", "default")
+	}
 	return l, nil
 }
 
@@ -108,6 +123,10 @@ func (c *claudeCode) NormalizeHook(in HookInput) (Event, error) {
 		ev.Tool = c.tool(m, ev.Cwd)
 	}
 	switch in.NativeEvent {
+	case "StatusLine": // before the first answer there may be nothing to read yet
+		if u, uerr := claudeUsage(m); uerr == nil {
+			ev.Usage = u
+		}
 	case "UserPromptSubmit":
 		ev.Prompt = truncate(str(m, "prompt"))
 	case "PostToolUse":
@@ -161,7 +180,12 @@ func (c *claudeCode) Screens(in ScreenInput) ScreenResult { return c.screens.eva
 
 // TypeMessage: bracketed paste and \r
 // (docs/provedores/claude-code.md#digitação).
-func (c *claudeCode) TypeMessage(text string) ([]byte, error) { return pasteAndSend(text, "\r") }
+func (c *claudeCode) TypeMessage(text string) ([]byte, error) {
+	if c.multilineViaFile && strings.Contains(clean(text), "\n") {
+		return nil, fmt.Errorf("%w: this version of Claude Code does not take a pasted text of several lines as one message; it goes through the message file", ErrTooLong)
+	}
+	return pasteAndSend(text, "\r")
+}
 
 func joinNonEmpty(parts ...string) string {
 	var out string

@@ -38,3 +38,15 @@ func (n *null) Screens(in ScreenInput) ScreenResult { return n.screens.evaluate(
 
 // TypeMessage: no paste; each line typed and followed by \r.
 func (n *null) TypeMessage(text string) ([]byte, error) { return linesAndSend(text, "\r") }
+
+// DeliverMestreLayer: a terminal without an agent has no Mestre layer.
+func (n *null) DeliverMestreLayer(LayerRequest) (Layer, error) { return Layer{}, nil }
+
+// HookFiles: no hook ever arrives.
+func (n *null) HookFiles(HookFilesRequest) ([]ManagedFile, error) { return nil, nil }
+
+// PreTrust: nothing to trust.
+func (n *null) PreTrust(PreTrustRequest) (Trust, error) { return Trust{}, nil }
+
+// ReadUsage: a shell spends nothing the Mestre reads.
+func (n *null) ReadUsage(UsageRequest) (Usage, error) { return Usage{}, ErrNoUsage }

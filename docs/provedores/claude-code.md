@@ -1,6 +1,6 @@
 # Claude Code
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -31,7 +31,8 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 
 ### Hooks
 
-- **Arquivo:** `.claude/settings.local.json`, chave `hooks`, parte gerenciada mesclada ([mesa](../sessao-zero/mesa.md)). Hooks de várias fontes somam; handler idêntico roda uma vez; edições recarregam sem reiniciar.
+- **Arquivo:** `.claude/settings.local.json`, chave `hooks`, parte gerenciada mesclada: os handlers do Mestre saem e entram de novo no fim de cada lista, os do usuário ficam ([mesa](../sessao-zero/mesa.md)). Hooks de várias fontes somam; handler idêntico roda uma vez; edições recarregam sem reiniciar.
+- **Comando gravado:** a linha de guarda da [mesa](../sessao-zero/mesa.md#não-atrapalhar-quem-clona), não a chamada pura do exemplo abaixo: só chama `mestre hook` se `MESTRE_AGENT_ID` existe e o binário é achado (`${MESTRE_CLI:-<caminho estável>}`); senão sai com 0 sem saída. É `sh` no Linux e `cmd` (`if defined … if exist …`) no Windows, forma que a conformidade confere lá.
 - **Eventos ligados:** SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, PostToolUseFailure, Stop, StopFailure, Notification, PreCompact, SessionEnd. Matcher `*` nos eventos de ferramenta.
 - **Entrada:** JSON no stdin, `snake_case`: `session_id`, `prompt_id`, `transcript_path`, `cwd`, `hook_event_name`, `permission_mode`; PreToolUse traz `tool_name`, `tool_input`, `tool_use_id`; Stop traz `last_assistant_message`; StopFailure traz `error` e `error_details`.
 - **Saída:** exit 0 com JSON. PreToolUse: `hookSpecificOutput.permissionDecision` (`allow|deny|ask|defer`) e `permissionDecisionReason`; `allow` não passa por cima de regras nativas `deny`/`ask`. PermissionRequest: `hookSpecificOutput.decision.behavior`.
@@ -49,8 +50,8 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 
 - No modo interativo, sem confiança na pasta, **nenhum hook de arquivo de configuração e nenhuma statusLine rodam**, nem os do usuário.
 - A confiança fica em `$CLAUDE_CONFIG_DIR/.claude.json` (confirmado no spike do Linux). A pasta pessoal (home) nunca fica confiada.
-- **Pré-confiar:** gravar `projects["<caminho absoluto do worktree>"].hasTrustDialogAccepted = true` nesse arquivo, com escrita atômica (o Claude reescreve esse arquivo e guarda cópias em `backups/`). **Só a chave do worktree basta** (confirmado). Quando acontece: [mesa](../sessao-zero/mesa.md).
-- **A chave do espelho nunca é gravada:** respondendo "confiar" na tela, o Claude grava a chave do **espelho `--bare`** de onde o worktree saiu, o que confia **todos** os worktrees daquele espelho. Por isso o motor nunca grava essa chave e, ao pré-confiar, remove `hasTrustDialogAccepted` dela se a encontrar.
+- **Pré-confiar:** gravar `projects["<caminho absoluto do worktree>"].hasTrustDialogAccepted = true` nesse arquivo, com escrita atômica (o Claude reescreve esse arquivo e guarda cópias em `backups/`). **Só a chave do worktree basta** (confirmado). Quando acontece: [mesa](../sessao-zero/mesa.md). Depois de gravar, o motor relê e confere; se o Claude reescreveu o arquivo no meio, repete (até 3 vezes). No Windows, a chave é a que já existe para a pasta (barras e maiúsculas podem diferir), senão o caminho como o motor o tem. Ao remover o worktree, `Untrust` retira a entrada.
+- **A chave do espelho nunca é gravada:** respondendo "confiar" na tela, o Claude grava a chave do **espelho `--bare`** de onde o worktree saiu, o que confia **todos** os worktrees daquele espelho. Por isso o motor nunca grava essa chave e, ao pré-confiar, remove `hasTrustDialogAccepted` dela se a encontrar (no clone principal da Cidadela, em que o worktree é a própria raiz, a chave é uma só e fica confiada).
 
 ### Flags
 
@@ -61,7 +62,9 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 | `--session-id <uuid>` / `--resume <uuid>` | id gerado pelo motor, liga hooks ao PTY; retomada |
 | `--permission-mode default` | único modo permitido |
 
-**Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits`; `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir` com qualquer pasta que não seja `.mestre/agents/<id>` do próprio personagem (essa única é passada pelo motor para as skills por personagem, ver [personagem](../sessao-zero/personagem.md)); `-p` (a base é interativa).
+**Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits` (e `plan`: só `default` vale); `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir` com qualquer pasta que não seja `.mestre/agents/<id>` do próprio personagem (essa única é passada pelo motor para as skills por personagem, ver [personagem](../sessao-zero/personagem.md)); `-p` (a base é interativa).
+
+`BuildLaunch` recusa o comando sem a camada do Mestre, sem o `--settings` do próprio personagem ou sem `CLAUDE_CONFIG_DIR`, e confere as proibidas na base e no motor (também `--system-prompt-snapshot`, `--session-id`, `--resume` e `--settings`/`--append-system-prompt-file` vindos da base). Acrescenta `--permission-mode default` se faltar, para nenhum modo da configuração do usuário valer.
 
 ### Contas múltiplas
 
@@ -72,7 +75,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 
 ### Uso, custo e rate limit
 
-- **statusLine** (no arquivo `--settings` do personagem, chamando `mestre hook --provider claude-code --event StatusLine`): recebe `cost.total_cost_usd` (estimativa pelo preço de lista, zera no `/clear`), `context_window.*` (tokens, `used_percentage`) e `rate_limits.five_hour` / `seven_day` (`used_percentage`, `resets_at`; só planos Pro/Max, depois da primeira resposta). Roda a cada mensagem, com intervalo mínimo de 300 ms.
+- **statusLine** (no arquivo `--settings` do personagem, chamando `mestre hook --provider claude-code --event StatusLine`): recebe `cost.total_cost_usd` (estimativa pelo preço de lista, zera no `/clear`), `context_window.*` (tokens, `used_percentage`) e `rate_limits.five_hour` / `seven_day` (`used_percentage`, `resets_at`; só planos Pro/Max, depois da primeira resposta). Roda a cada mensagem, com intervalo mínimo de 300 ms. O adaptador normaliza as janelas como `5h` e `7d` (`used_pct`, `resets_at`); `ReadUsage` lê o JSON ou o evento já normalizado.
 - **StopFailure** com `error = rate_limit` (também `overloaded`, `billing_error`, `authentication_failed`): sinal estruturado de limite.
 - **Notification** `quota_auto_resume_fired`, `quota_auto_resume_stale`, `quota_auto_resume_disabled`: a espera pelo limite continuou, parou esperando Enter ou terminou.
 - Reserva pela tela: `You've hit your session limit · resets …`, `Usage limit reached`, `API Error: Request rejected (429)`.
@@ -86,13 +89,13 @@ Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](ad
 
 | Tela | Ação |
 |---|---|
-| confiar na pasta | evitar (pré-confiança); **nunca responder "confiar"** (gravaria a chave do espelho). Se aparecer: sair sem confiar, regravar a chave do worktree, remover a do espelho e reiniciar o personagem uma vez; se aparecer de novo, escalar (`blocked`, motivo `input`, alerta ALL-12) |
+| confiar na pasta | evitar (pré-confiança); **nunca responder "confiar"** (gravaria a chave do espelho). Se aparecer: encerrar o processo sem responder a tela, regravar a chave do worktree, remover a do espelho e reiniciar o personagem uma vez; se aparecer de novo, escalar (`blocked`, motivo `input`, alerta ALL-12) |
 | aprovação de import externo | escalar |
 | aprovação de servidores do `.mcp.json` | escalar |
 | "usar esta `ANTHROPIC_API_KEY`?" | escalar (uma vez por perfil) |
-| menu de opções do limite de uso | responder com a opção de esperar o reinício do limite |
+| menu de opções do limite de uso | Enter na opção 1, só se ela for a de esperar ("Stop and wait for limit to reset"); depois o personagem fica `blocked`, motivo `quota` |
 | espera parada após o computador dormir (`quota_auto_resume_stale`) | responder Enter quando o motor confirmar que o limite reiniciou |
-| pedido de permissão nativo | responder com a decisão registrada; sem decisão, negar |
+| pedido de permissão nativo | decisão registrada: Enter ("Yes", uma vez) ou Esc (nega); sem decisão, negar; nunca a opção "don't ask again" |
 | primeiro uso e login (num `CLAUDE_CONFIG_DIR` novo: seletor de tema e depois a confiança, com o cursor em "No, exit") | resolvidos na configuração inicial do perfil de conta, no terminal de login; num personagem, escalar como alerta do checklist |
 
 Quem chama estas operações na criação de mesas e personagens é a sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)); os perfis de conta estão em [bases e fichas](../orquestracao/bases-e-fichas.md#perfis-de-conta).
@@ -122,8 +125,8 @@ Todos são conferidos pelo [teste de conformidade](conformidade.md).
 
 - **Verificar na implementação:** textos exatos das opções do menu de limite de uso e da tela de permissão nativa. **Padrão:** os textos de "Uso, custo e rate limit" e a posição das opções. **Se falhar:** a tela não é reconhecida e escala ao Mestre da mesa ([telas](adaptador.md#prontidão-e-telas-interativas)); a transcrição da escalada vira o padrão novo. **Onde:** tela de permissão nas etapas 4 e 5; menu de limite no primeiro limite real, pela transcrição.
 - **Verificar na implementação:** nome da ferramenta de shell no Windows. **Padrão:** `PowerShell`, tratado como `shell`. **Se falhar:** o nome capturado entra no mapa; até lá vale a regra de ferramenta não mapeada do [adaptador](adaptador.md#regras-e-erros). **Onde:** etapa 5 na máquina Windows.
-- **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`). **Onde:** etapa 7.
-- **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** o motor manda mensagens de várias linhas pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e digita só a linha que pede para lê-lo. **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
+- **Verificar na implementação:** a statusLine declarada no arquivo `--settings` do personagem roda. **Padrão:** como descrito em Uso. **Se falhar:** a statusLine vai para a parte gerenciada de `.claude/settings.local.json` (o comando é o mesmo para todos; o personagem é identificado pelo `MESTRE_AGENT_ID`); a chave é `ClaudeStatusLineInLocal` dos `NativeFallbacks`, e uma statusLine do usuário nunca é trocada. **Onde:** etapa 7.
+- **Verificar na implementação:** texto de várias linhas colado entre colchetes e seguido de `\r` é enviado inteiro como uma mensagem. **Padrão:** como em Digitação. **Se falhar:** o motor manda mensagens de várias linhas pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e digita só a linha que pede para lê-lo (opção `ClaudeMultilineViaFile` do adaptador: `TypeMessage` recusa o texto de várias linhas como o de texto longo). **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas.
 
 ## Fontes
 

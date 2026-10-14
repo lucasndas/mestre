@@ -7,7 +7,9 @@
 // Besides the adapters, the package has the engine-side pieces the contract
 // describes: Turns completes the normalized events with what the payload
 // does not carry, and Supervisor runs the timeouts of the adapter document
-// (start screen, hooks after the first prompt, delivery confirmation).
+// (start screen, hooks after the first prompt, delivery confirmation). The
+// files of one provider are claude*.go, codex.go and antigravity.go with their
+// native_*.go (the second barrier of the permissions).
 package providers
 
 import (
@@ -29,16 +31,16 @@ const (
 
 // Adapter is the contract of docs/provedores/adaptador.md#contrato.
 //
-// The operations here are the ones the adapter document specifies in full:
-// BuildLaunch, NormalizeHook, Screens and TypeMessage, and FormatResponse,
-// whose formats are the hook dispatcher's (despachante-de-hooks.md). The
-// rest of the contract joins this interface with the documents that specify
-// it: HookFiles, PreTrust and DeliverMestreLayer with the provider documents
-// (claude-code.md, codex.md, antigravity.md) and ReadUsage with the provider
-// documents and the usage limits (limites-de-uso.md). The contract rules hold
-// for all of them: nothing writes AGENTS.md, every generation is idempotent
-// and merges only the managed part, and no secret goes in a command-line
-// argument.
+// The operations of the first group are the ones the adapter document
+// specifies in full: BuildLaunch, NormalizeHook, Screens and TypeMessage,
+// and FormatResponse, whose formats are the hook dispatcher's
+// (despachante-de-hooks.md). The second group joins this interface with the
+// documents that specify it: HookFiles, PreTrust and DeliverMestreLayer with
+// the provider documents (claude-code.md, codex.md, antigravity.md) and
+// ReadUsage with the provider documents and the usage limits
+// (limites-de-uso.md). The contract rules hold for all of them: nothing
+// writes AGENTS.md, every generation is idempotent and merges only the
+// managed part, and no secret goes in a command-line argument.
 type Adapter interface {
 	// Info describes the provider: id and what its hooks do not cover.
 	Info() Info
@@ -57,6 +59,19 @@ type Adapter interface {
 	Screens(in ScreenInput) ScreenResult
 	// TypeMessage builds the bytes that deliver text to the agent.
 	TypeMessage(text string) ([]byte, error)
+
+	// DeliverMestreLayer gives the arguments and files that deliver the
+	// MESTRE.md of a character; the arguments go in
+	// LaunchRequest.ProviderArgs.
+	DeliverMestreLayer(req LayerRequest) (Layer, error)
+	// HookFiles gives the hook files of a worktree or account profile and
+	// the managed part of each.
+	HookFiles(req HookFilesRequest) ([]ManagedFile, error)
+	// PreTrust trusts a worktree in the account profile; idempotent.
+	PreTrust(req PreTrustRequest) (Trust, error)
+	// ReadUsage turns the last usage source of a character into the
+	// normalized usage record.
+	ReadUsage(req UsageRequest) (Usage, error)
 }
 
 // Info is what the engine needs to know about a provider beyond the

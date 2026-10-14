@@ -60,8 +60,8 @@ func TestBuildLaunchResumesWithTheBaseFlags(t *testing.T) {
 		providerArgs []string
 		want         []string
 	}{
-		{providers.ClaudeCode, "claude", "2f1c7c1e-55d1-4b8f-9a51-0c1b7f3f5e10", []string{"--permission-mode", "default"},
-			[]string{"--model", "the-model", "--resume", "2f1c7c1e-55d1-4b8f-9a51-0c1b7f3f5e10", "--permission-mode", "default"}},
+		{providers.ClaudeCode, "claude", "2f1c7c1e-55d1-4b8f-9a51-0c1b7f3f5e10", claudeLayerArgs("a1"),
+			append([]string{"--model", "the-model", "--resume", "2f1c7c1e-55d1-4b8f-9a51-0c1b7f3f5e10"}, append(claudeLayerArgs("a1"), "--permission-mode", "default")...)},
 		{providers.Codex, "codex", "019a0000-0000-7000-8000-000000000001", []string{"-c", `developer_instructions="x"`},
 			[]string{"resume", "019a0000-0000-7000-8000-000000000001", "--model", "the-model", "-c", `developer_instructions="x"`}},
 		{providers.Antigravity, "agy", "b38a07d5-f7a3-4e27-b4d0-43e9110f60bb", nil,
@@ -103,12 +103,11 @@ func TestBuildLaunchResumesWithTheBaseFlags(t *testing.T) {
 func TestBuildLaunchStartsAndRefusesTheMostRecentSession(t *testing.T) {
 	t.Parallel()
 	claude := providers.NewClaudeCode(providers.Options{})
-	base := providers.Base{Command: "claude"}
-	l, err := claude.BuildLaunch(providers.LaunchRequest{Base: base, NewSessionID: "u1"})
-	if err != nil || !slices.Equal(l.Args, []string{"--session-id", "u1"}) || l.SessionID != "u1" {
-		t.Errorf("claude start = %+v, %v", l, err)
+	l, err := claude.BuildLaunch(claudeRequest("u1"))
+	if want := append([]string{"--session-id", "u1"}, append(claudeLayerArgs("a1"), "--permission-mode", "default")...); err != nil || !slices.Equal(l.Args, want) || l.SessionID != "u1" {
+		t.Errorf("claude start = %+v, %v; want %v", l, err, want)
 	}
-	if _, err := claude.BuildLaunch(providers.LaunchRequest{Base: base}); err == nil {
+	if _, err := claude.BuildLaunch(claudeRequest("")); err == nil {
 		t.Error("claude start without the session id the engine generates")
 	}
 	for _, c := range []struct {
@@ -119,7 +118,12 @@ func TestBuildLaunchStartsAndRefusesTheMostRecentSession(t *testing.T) {
 		{claude, []string{"-c"}},
 		{providers.NewCodex(providers.Options{}), []string{"--last"}},
 	} {
-		if _, err := c.a.BuildLaunch(providers.LaunchRequest{Base: providers.Base{Command: "x", Args: c.args}, NewSessionID: "u1", ResumeSessionID: "s1"}); err == nil {
+		req := providers.LaunchRequest{Base: providers.Base{Command: "x", Args: c.args}, NewSessionID: "u1", ResumeSessionID: "s1"}
+		if c.a == claude {
+			req = claudeRequest("u1")
+			req.Base.Args, req.ResumeSessionID = c.args, "s1"
+		}
+		if _, err := c.a.BuildLaunch(req); err == nil {
 			t.Errorf("%s %v was accepted", c.a.Info().ID, c.args)
 		}
 	}

@@ -44,8 +44,14 @@ type Characters interface {
 // BlockReason is the reason of the `blocked` state.
 type BlockReason string
 
-// BlockInput is a screen that waits for an answer the adapter does not give.
-const BlockInput BlockReason = "input"
+// Reasons of the `blocked` state the supervision sets. BlockInput is a
+// screen that waits for an answer the adapter does not give; BlockQuota is
+// the wait for the quota after the menu of the usage limit
+// (docs/plataforma/limites-de-uso.md#aguardando-cota).
+const (
+	BlockInput BlockReason = "input"
+	BlockQuota BlockReason = "quota"
+)
 
 // ReducedReason is why monitoring is reduced.
 type ReducedReason string
@@ -112,6 +118,16 @@ type Decisions interface {
 	Decision(ctx context.Context, agentID, screenID string) (choice string, ok bool)
 }
 
+// TrustRecovery restarts a character whose start showed the folder trust
+// screen (ActionRetrust). RecoverTrust ends the process without answering
+// the screen (answering "trust" would trust the mirror of the repository),
+// writes the trust of the worktree again (PreTrust, which also clears the
+// mirror's) and starts the character again with the same session. The
+// characters implement it (milestone 4).
+type TrustRecovery interface {
+	RecoverTrust(ctx context.Context, agentID string) error
+}
+
 // SupervisorConfig configures the supervision of one character.
 type SupervisorConfig struct {
 	Clock   clock.Clock
@@ -127,6 +143,11 @@ type SupervisorConfig struct {
 	Checklist   Checklist
 	Inbox       Inbox
 	Decisions   Decisions // nil: no decision is ever recorded
+	// Trust recovers the trust screen once; nil: the screen escalates at
+	// once. TrustRetried is true when the character already restarted for
+	// it (a new Supervisor after the restart).
+	Trust        TrustRecovery
+	TrustRetried bool
 
 	// Zero means the default.
 	StartTimeout, HookTimeout, ConfirmTimeout time.Duration
@@ -151,6 +172,7 @@ type Supervisor struct {
 	noHooks        bool
 	lastScreen     string
 	handled        string // the known screen already acted on
+	trustRetried   bool
 	startTimer     clock.Timer
 	startGen       int
 	hookTimer      clock.Timer
@@ -171,7 +193,8 @@ func NewSupervisor(cfg SupervisorConfig) *Supervisor {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Supervisor{cfg: cfg, info: cfg.Adapter.Info(), ctx: context.Background(), pending: map[string]clock.Timer{}}
+	return &Supervisor{cfg: cfg, info: cfg.Adapter.Info(), ctx: context.Background(), pending: map[string]clock.Timer{},
+		trustRetried: cfg.TrustRetried}
 }
 
 // Start begins the supervision of a character whose terminal just started.
@@ -299,10 +322,36 @@ func (s *Supervisor) act(k *KnownScreen, screen string) {
 			choice = k.Default
 		}
 		if b, found := k.Answers[choice]; found && choice != "" {
-			s.report(s.cfg.Keyboard.Input(ctx, b))
+			if err := s.cfg.Keyboard.Input(ctx, b); err != nil {
+				s.report(err)
+				return
+			}
+			if k.Block != "" {
+				s.report(s.cfg.Characters.Block(ctx, s.cfg.AgentID, k.Block, "screen "+k.ID+": "+choice))
+			}
 			return
 		}
 		s.escalate(screen, "screen "+k.ID+" without a decision")
+	case ActionRetrust:
+		s.mu.Lock()
+		retry := s.cfg.Trust != nil && !s.trustRetried
+		s.trustRetried = true
+		s.mu.Unlock()
+		if retry {
+			err := s.cfg.Trust.RecoverTrust(ctx, s.cfg.AgentID)
+			if err == nil {
+				s.mu.Lock() // a new process starts: the same screen is news again
+				s.handled, s.starting = "", true
+				s.armStartLocked()
+				s.mu.Unlock()
+				return
+			}
+			s.report(err)
+		}
+		s.escalate(screen, "screen "+k.ID)
+		if k.Checklist != "" {
+			s.report(s.cfg.Checklist.Alert(ctx, Alert{Item: k.Checklist, AgentID: s.cfg.AgentID, Detail: "screen " + k.ID}))
+		}
 	case ActionAlert:
 		s.report(s.cfg.Characters.Block(ctx, s.cfg.AgentID, BlockInput, "screen "+k.ID))
 		s.report(s.cfg.Checklist.Alert(ctx, Alert{Item: k.Checklist, AgentID: s.cfg.AgentID, Detail: "screen " + k.ID}))
