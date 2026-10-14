@@ -51,6 +51,9 @@ type Paths struct {
 	// Config holds config.json, the key of the vault and the key of the
 	// engine; Banco the Guild database; Maquina the machine database.
 	Config, Banco, Maquina string
+	// Agentes holds the folder of each character: the snapshot policy.json
+	// of its effective rules and its MESTRE_TMP.
+	Agentes string
 	// CLISocket is the socket of the local channel; empty serves none.
 	CLISocket string
 }
@@ -68,12 +71,13 @@ func DefaultPaths(instance string) (Paths, error) {
 		root := filepath.Join(os.Getenv("ProgramData"), "Mestre", instance)
 		return Paths{
 			Config: filepath.Join(root, "config"), Banco: filepath.Join(root, "banco"),
-			Maquina: filepath.Join(root, "maquina"), CLISocket: sock,
+			Maquina: filepath.Join(root, "maquina"), Agentes: filepath.Join(root, "maquina", "agentes"), CLISocket: sock,
 		}, nil
 	}
 	return Paths{
 		Config: filepath.Join("/etc/mestre", instance), Banco: filepath.Join("/var/lib/mestre", instance, "banco"),
-		Maquina: filepath.Join("/var/lib/mestre", instance, "maquina"), CLISocket: sock,
+		Maquina: filepath.Join("/var/lib/mestre", instance, "maquina"), Agentes: filepath.Join("/var/lib/mestre", instance, "agentes"),
+		CLISocket: sock,
 	}, nil
 }
 
@@ -82,7 +86,7 @@ func DefaultPaths(instance string) (Paths, error) {
 func DirPaths(dir string) Paths {
 	return Paths{
 		Config: filepath.Join(dir, "config"), Banco: filepath.Join(dir, "banco"),
-		Maquina: filepath.Join(dir, "maquina"), CLISocket: filepath.Join(dir, "run", "cli.sock"),
+		Maquina: filepath.Join(dir, "maquina"), Agentes: filepath.Join(dir, "agentes"), CLISocket: filepath.Join(dir, "run", "cli.sock"),
 	}
 }
 

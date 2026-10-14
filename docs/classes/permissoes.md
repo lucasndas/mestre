@@ -1,6 +1,6 @@
 # Permissões das classes
 
-> **Assunto:** formato do `permissions.yaml`, regras fixas, regras efetivas por personagem, pipeline de decisão do despachante, modo degradado e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** o `permissions.yaml`, regras fixas, regras efetivas por personagem, pipeline de decisão do despachante, modo degradado e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -10,56 +10,20 @@ Um formato só, do Mestre, para dizer o que uma [classe](classes.md) pode fazer,
 
 ### Formato do `permissions.yaml`
 
-```yaml
-version: 1
-files:                      # globs relativos à raiz do worktree
-  read: ["**"]              # padrão: todo o worktree
-  write: ["tests/**", "reports/**"]
-  deny: ["**/.env", "secrets/**"]     # nem ler nem escrever
-commands:                   # padrões sobre cada comando simples; * casa qualquer texto
-  allow: ["npm test", "npm run test:*", "git add *", "git commit *"]
-  ask: ["npm install *"]    # exige aprovação
-  deny: ["curl *", "rm -rf *"]
-  default: ask              # comando que não casa com nada: allow | ask | deny
-git:
-  commit: true
-  branches: ["{mesa.branch}"]         # onde pode commitar
-  request_push: false       # pode pedir `mestre pr open|update` (o envio é do motor)
-  workflows: never          # enviar mudanças em .github/workflows/: never | ask | allow
-network:
-  internet: false
-  domains: []               # internet: true e lista vazia = qualquer domínio
-  credentials: []           # credenciais de site do cofre (nome); o domínio precisa estar em domains, e a classe, na lista da credencial
-cli:
-  allow: ["issue comment"]  # comandos de GitHub e coordenação que o nível permite
-tools:                      # ferramentas de tipo mcp e other, pelo nome nativo; * casa qualquer texto
-  allow: ["mcp__playwright__*"]       # ex.: o MCP de navegador do personagem
-  ask: []
-  deny: ["mcp__*__delete_*"]
-default: ask                # ferramenta de tipo mcp ou other que não casa com `tools`
-operator: false             # pode ser usada na base Operador do PC
-```
-
-- **Arquivos:** valem para as ferramentas de ler, escrever e editar, para caminhos literais em argumentos de comandos e para redirecionamentos (`>`, `>>`). Leitura fora do worktree é negada, a não ser por caminho absoluto listado em `read`.
-- **Comandos:** a linha é dividida em comandos simples (`&&`, `||`, `;`, `|`, `&`, quebra de linha); prefixos `VAR=valor` são ignorados; cada parte é avaliada e vale a mais restritiva. Trechos que não dá para analisar (`$(…)`, crases, `eval`, `sh -c`, `bash -c`, `powershell -Command`) ficam no mínimo em `ask`. Comandos só de leitura (`cd`, `pwd`, `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `find`, `wc`, `git status|diff|log|show` e equivalentes do PowerShell) são liberados por padrão, ainda sujeitos a `files.deny` e a `commands.deny`.
-- **Git:** `git commit` só com `commit: true`, na branch que casa com `branches` e com todos os arquivos preparados (`git diff --cached --name-only`) dentro de `files.write`. Trocar de branch só para uma que casa com `branches`.
-- **Rede:** vale para as ferramentas web (domínio da URL) e é reforçada pelo sandbox nativo; comandos de shell só são contidos pelo controle nativo.
-- **Ferramentas (`tools`):** padrões sobre o nome nativo das ferramentas de tipo `mcp` e `other` ([mapa de ferramentas](../provedores/adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), com a mesma regra de casamento de `commands`; vale a mais restritiva entre `deny`, `ask` e `allow`, e o que não casa cai em `default`. **Navegação web:** cada personagem que navega tem o **próprio** MCP de navegador (ex.: Playwright MCP com `--headless --isolated`), configurado no perfil de conta ([bases e fichas](../orquestracao/bases-e-fichas.md)) e iniciado pelo CLI do personagem, portanto como `mestre-agente`, com navegador limpo: perfil de navegador só em memória, sem acesso às sessões, cookies e perfis de navegador do usuário ([segurança](../arquitetura/seguranca.md#navegação-web-e-login-em-sites)). A classe libera ou nega as ferramentas dele aqui (ex.: `mcp__playwright__*`, ou `mcp__*` para todas). Ferramentas MCP não passam por `network`: classe sem internet não deve liberar um MCP de navegador. **Login em sites:** só com credencial do cofre listada em `network.credentials` e que liste a classe nos metadados dela; o personagem recebe o estado de sessão, nunca a senha ([cofre](../plataforma/cofre.md#login-em-sites)).
-- **Operador do PC (`operator`):** `true` deixa a classe ser usada na base especial Operador do PC, que roda com a conta do usuário ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)); só vale se o [teto](teto-do-workspace.md) também tiver `operator: true`. Padrão `false`.
-- **CLI `mestre`:** comandos de comunicação são de todos; os demais seguem o nível de quem chama ([convenções da CLI](../cli/convencoes.md)) e `cli.allow`; `git.request_push` cobre `mestre pr open|update`. `git.workflows` decide o envio de branches que alteram `.github/workflows/` (o CI do repositório): `never` (padrão) o motor recusa; `ask` cada envio vira pedido de aprovação `envio_workflows` a um usuário ([política](../aprovacoes/politica.md)); `allow` envia sem perguntar. Classes `ask` e `allow` precisam de um App com a permissão "Workflows" ([workflows](../github/identidades-e-apps.md#workflows)). A checagem acontece no motor, na hora da chamada. O que cada nível pode fazer no GitHub está em [ações por nível](../github/acoes-por-nivel.md).
+O arquivo, os padrões de arquivos, comandos e ferramentas e como o despachante os casa (comandos compostos, substituições, curingas, git, rede, `tools`, `operator` e a CLI `mestre`) estão em [formato das permissões](formato-das-permissoes.md). O mesmo formato serve ao [teto](teto-do-workspace.md), lido como máximo, e às restrições da ficha.
 
 ### Regras fixas de segurança
 
 Aplicação das [invariantes arquiteturais](../arquitetura/precedencia.md#invariantes-arquiteturais), embutidas no binário: nenhuma camada as entrega ao agente, e um decreto nessa área é cumprido pelo motor (regra e exemplo no documento dono). Negam sempre:
 - ler ou escrever o cofre, as pastas de dados do Mestre (inclusive a do retrato `policy.json` e a fila do `mestre hook`; a única exceção é a pasta temporária do próprio personagem, `MESTRE_TMP` ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)), e nunca a de outro personagem; [persistência](../arquitetura/persistencia.md#arquivos)) e as pastas dos perfis de conta inteiras (`contas/`): as credenciais (`.credentials.json`, `auth.json`, token do Antigravity, chaves SSH) e os próprios CLIs dos provedores, que se instalam e se atualizam ali ([CLIs dos provedores](../plataforma/instalacao-e-atualizacao.md#clis-dos-provedores)); escrever nelas permitiria trocar o binário de um CLI. Quem grava ali é só o processo do CLI (login e autoatualização), nunca uma ferramenta do agente;
-- `git push` e mudar remotos (`git remote add|set-url|remove`);
-- comandos git que alteram refs de outras branches, outros worktrees ou o espelho, já que os worktrees das mesas compartilham as refs do espelho (ex.: `git branch -D|-f|-m` de outra branch, `git update-ref`, `git tag`, `git worktree`, `git gc`/`prune`, `git fetch` para refs locais, `git --git-dir`/`-C` apontando para fora do worktree); na própria branch da mesa valem as regras de `git`;
+- `git push` e mudar remotos (`git remote add|set-url|remove`), inclusive dentro de `sh -c`, `$(…)` ou de um invólucro como `env` e `nohup`;
+- comandos git que alteram refs de outras branches, outros worktrees ou o espelho, já que os worktrees das mesas compartilham as refs do espelho (ex.: `git branch -D|-f|-m` de outra branch, criar outra branch, `git update-ref`, `git tag`, `git worktree`, `git gc`/`prune`, `git fetch`/`pull`, `git stash` (a `refs/stash` é compartilhada), `git config` que grava, `git clean -x` (levaria `.mestre/`), `git --git-dir`/`-C` ou `GIT_DIR=` apontando para fora do worktree; listar continua livre); na própria branch da mesa valem as regras de `git`;
 - escrever, pela ferramenta de escrita **ou por comando de shell** (redirecionamento `>`/`>>`, `cp`, `mv`, `tee`, `sed -i`, `rm` e equivalentes reconhecidos pelo despachante), em `.git/**`, `.mestre/**` (pergaminhos e classes só pela CLI), `.claude/settings*.json`, `.codex/`, `.agents/hooks.json`, `.agents/agents/` e `.claude/agents/` (o agente não cria nem altera definições de agente ou subagente). O reconhecimento de comandos de shell é a primeira barreira; a garantia final é que o motor nunca usa uma classe alterada por fora sem aprovação ([classes](classes.md#onde-a-classe-é-alterada));
-- iniciar `claude`, `codex` ou `agy` pelo shell (personagens nascem só pelo motor);
+- iniciar `claude`, `codex` ou `agy` pelo shell, também por `npx` e equivalentes (personagens nascem só pelo motor);
 - executar arquivos de `.mestre/anexos/` ou dar permissão de execução a eles: **anexos nunca são executados** ([anexos](../telegram/anexos-e-transcricao.md));
 - editar um arquivo que outro personagem da mesa editou no turno ainda em andamento (o motivo cita quem);
 - fora da base Operador do PC, usar MCPs de controle do computador e do navegador do usuário, pelo nome da ferramenta e **qualquer que seja o transporte** do servidor (stdio, HTTP/SSE, servidor remoto pela rede). A lista de padrões é configurável pelo Dono ([administração](../painel/administracao.md#operador-do-pc)); padrão: `mcp__claude-in-chrome__*`, `mcp__computer-use__*` e o MCP de controle do computador cadastrado no Operador. O motor também recusa configurar esses servidores em perfis de conta e fichas de outra base, e aceita `--chrome` só na base Operador ([bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc));
-- comandos de elevação no Windows (`runas`, `Start-Process -Verb RunAs`, `gsudo`, `sudo` do Windows), em qualquer personagem; no Operador, junto com a negação das pastas de dados acima, é a defesa contra pedir privilégio de administrador ([segurança](../arquitetura/seguranca.md#operador-do-pc)).
+- comandos de elevação no Windows (`runas`, `Start-Process -Verb RunAs`, `gsudo`, `sudo` do Windows), e no Linux `sudo`, `su`, `doas` e `pkexec`, em qualquer personagem; no Operador, junto com a negação das pastas de dados acima, é a defesa contra pedir privilégio de administrador ([segurança](../arquitetura/seguranca.md#operador-do-pc)).
 
 ### Regras efetivas
 
@@ -67,7 +31,7 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
 
 ```json
 {"version": 1, "agent_id": "01J…", "class": "qa", "generated_at": "2026-10-12T14:00:00Z",
- "fixed_rules_version": 3,
+ "fixed_rules_version": 1,
  "files": {"read": ["**"], "write": ["tests/**"], "deny": ["**/.env"]},
  "commands": {"allow": ["npm test"], "ask": ["npm install *"], "deny": ["curl *"], "default": "ask"},
  "git": {"commit": true, "branches": ["epico/42-login"], "request_push": false, "workflows": "never"},
@@ -80,10 +44,12 @@ A **ordem de precedência** e a **regra de combinação** entre decretos, regras
 ```
 
 - Os blocos têm o mesmo sentido do `permissions.yaml`, já cortados pelo teto e endurecidos pela ficha; marcadores como `{mesa.branch}` já vêm resolvidos.
-- `decrees`: decretos e exceções pontuais ativos que valem para o personagem ([decretos](../telegram/decretos.md)); exceção pontual consumida sai da lista na versão seguinte.
+- `decrees`: decretos e exceções pontuais ativos que valem para o personagem ([decretos](../telegram/decretos.md)), cada um com `id`, `kind` (`rule` ou `exception`), `level` do autor (`owner`, `admin`, `approver`, `grand_master`), `effect` (só `permission` chega à decisão, com `allow`/`deny` de `files`, `commands`, `tools` e `domains`), `until` e, na exceção, `action`: a ação exata (`kind`, `command`, `paths` relativos ao worktree, `tool`, `url`). Exceção pontual consumida sai da lista na versão seguinte; até lá, a máquina guarda que ela foi usada e não a usa de novo.
 - `origin`: camada de origem (`fixed`, `decree`, `ceiling`, `class`, `sheet`) de cada padrão que não vem da classe, para o motivo da negação citar, por exemplo, "teto do workspace".
 - `locked`: sistema travado ([segurança do canal](../telegram/seguranca-do-canal.md)); com `true`, toda ferramenta é negada.
 - `version` muda só quando um campo muda de sentido; campos novos são acrescentados sem mudar a versão.
+- Na máquina, `agent.rules` só é aceito da Cidadela; documento inválido é recusado (`invalid_payload`) e fica a versão anterior; vale a versão mais nova por `generated_at`, e uma mais velha que chega depois é confirmada e descartada.
+- **Corte pelo teto, conservador:** um padrão da classe que o máximo não contém com certeza vira o padrão do máximo que ele contém, ou sai; `deny` e `ask` de todas as camadas se somam; `default`, flags e `workflows` ficam com o valor mais restritivo; um `deny` que pega `git commit` desliga `git.commit`; domínios que se anulam viram "sem internet", nunca "qualquer domínio".
 
 ### Subagentes nativos
 
@@ -109,10 +75,10 @@ flowchart LR
   H --> L2[liberar]
 ```
 
-1. **Regras fixas de segurança** (acima): negam e param.
-2. **Exceção pontual** ([decretos](../telegram/decretos.md)): uma exceção que casa exatamente com a ação libera e é consumida (fica registrada como executada).
-3. **Regras efetivas** do personagem: dão `allow`, `ask` ou `deny`; comando ou ferramenta sem regra cai no `default` da classe.
-4. Se liberou, rodam os hooks `pre_tool` síncronos da classe, que só podem negar ([classes](classes.md#hooks-extras-da-classe)).
+1. **Regras fixas de segurança** (acima), e o sistema travado: negam e param.
+2. **Exceção pontual** ([decretos](../telegram/decretos.md)): uma exceção que casa exatamente com a ação libera e é consumida (fica registrada como executada); não conta se um decreto que proíbe, de nível igual ou maior, pega parte da ação.
+3. **Decretos e regras efetivas** do personagem: entre os decretos que pegam a ação, decide o de nível mais alto (libera e proíbe no mesmo nível se anulam); sem decreto, as regras efetivas dão `allow`, `ask` ou `deny`, e comando ou ferramenta sem regra cai no `default` da classe.
+4. Se liberou (também por decreto; a exceção pontual não), rodam os hooks `pre_tool` síncronos da classe, que só podem negar ([classes](classes.md#hooks-extras-da-classe)).
 5. `ask` segue o fluxo da seção seguinte.
 
 **A ficha só restringe:** o campo `restrictions` da ficha ([bases e fichas](../orquestracao/bases-e-fichas.md)) usa o mesmo formato; um `allow` da ficha que a classe não dá é ignorado, e salvar a ficha avisa isso.
@@ -123,7 +89,7 @@ O despachante responde **negar**, com o motivo "pedido de aprovação #N aberto 
 
 ### Modo degradado
 
-O motor da máquina grava o retrato das regras efetivas de cada personagem em `policy.json`, fora do worktree: `/var/lib/mestre/agentes/<id>/` no Linux (dono `mestre`, grupo `mestre-agente`, modo 0640, pasta 0750: o hook, que roda como `mestre-agente`, lê e não altera) e `%ProgramData%\Mestre\maquina\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Com o motor fora do ar, o `mestre hook` aplica as regras fixas e esse retrato: `deny` nega, `ask` nega com "motor indisponível, tente depois", o resto libera ([despachante](../provedores/despachante-de-hooks.md#modo-degradado)). O hook em si não passa pelo pipeline; as regras fixas negam às ferramentas do agente qualquer acesso a essas pastas.
+O motor da máquina grava o retrato das regras efetivas de cada personagem em `policy.json`, fora do worktree: `/var/lib/mestre/<inst>/agentes/<id>/` no Linux (dono `mestre`, grupo `mestre-agente`, modo 0640, pasta 0750: o hook, que roda como `mestre-agente`, lê e não altera) e `%ProgramData%\Mestre\<inst>\maquina\agentes\<id>\` no Windows ([persistência](../arquitetura/persistencia.md#arquivos)). Com o motor fora do ar, o `mestre hook` aplica as regras fixas e esse retrato: `deny` nega, `ask` nega com "motor indisponível, tente depois", o resto libera ([despachante](../provedores/despachante-de-hooks.md#modo-degradado)); nenhuma exceção pontual é usada, e sem o retrato só a leitura passa. O hook em si não passa pelo pipeline; as regras fixas negam às ferramentas do agente qualquer acesso a essas pastas.
 
 ### Reforço nativo
 

@@ -1,6 +1,6 @@
 # Mensagens do protocolo
 
-> **Assunto:** catálogo dos tipos de mensagem entre a Cidadela, as Torres e os Guardiões, com os campos principais, e os códigos de erro · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** catálogo dos tipos de mensagem entre a Cidadela, as Torres e os Guardiões, com os campos principais, e os códigos de erro · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 Documento de referência do [protocolo](protocolo.md), que define envelope, versão, ack e transporte. A **fonte dos campos** é a struct Go de cada tipo em `internal/protocol` (o protocolo do Guardião, em `guardian/protocol`); o comentário de cada struct nomeia a linha desta tabela (o `type`), o cabeçalho de `payloads.go` aponta para esta tabela, e os tipos do painel são gerados delas ([convenções](../desenvolvimento/convencoes.md#código-gerado)). Campos opcionais novos não mudam a versão ([regras](protocolo.md#abertura-versão-e-capacidades)). Todo envelope entre máquinas leva `machine_id` e `epoch` ([época](protocolo.md#época)). Sentido: T = Torre (motor), C = Cidadela (motor).
 
@@ -32,7 +32,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `terminal.replay` | C→T | não | `terminal_id`, `from` (deslocamento) | frames `0x01` e `terminal.replayed {from, to, lost}` |
 | `terminal.screen` | C→T | não | `terminal_id`, `lines` (histórico) | `terminal.screen_result {text, cursor, captured_at}` ([terminal](../arquitetura/terminal.md)) |
 | `inbox.deliver` | C→T | sim | `terminal_id`, `item_id`, `text`, `header` | `inbox.result {item_id, status: delivered \| busy}`; `busy` devolve o item à fila na Cidadela ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) |
-| `agent.rules` | C→T | sim | o documento de [regras efetivas](../classes/permissoes.md#regras-efetivas) de um personagem | — |
+| `agent.rules` | C→T | sim | o documento de [regras efetivas](../classes/permissoes.md#regras-efetivas) de um personagem; só da Cidadela | — (inválido: `invalid_payload`; mais velho que o guardado: confirmado e descartado) |
 | `agent.site_login` | C→T | sim | `attempt_id`, `agent_id`, `domains[]`, `login_url`, `username`, `secret`, seletores e verificação de sucesso; a máquina guarda só em memória, registrado no mascarador | `agent.site_login_status` ([login em sites](../plataforma/cofre.md#login-em-sites)) |
 | `agent.site_login_status` | T→C | sim | `attempt_id`, `state` (`needs_code` \| `needs_push` \| `needs_captcha` com `xfer_id` da imagem \| `ok` \| `requires_human` \| `failed` com `reason`) | a Cidadela conduz o [segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha); com `ok`, a máquina já gravou o estado na `MESTRE_TMP` |
 | `agent.site_login_input` | C→T | sim | `attempt_id`, `value` (código ou resposta do captcha; nunca vai para log) | — |
