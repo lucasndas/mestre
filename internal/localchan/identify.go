@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	pathpkg "path"
+	"strings"
 	"time"
 )
 
@@ -31,6 +33,17 @@ type Peer struct {
 	// SO_PEERPIDFD: the start identity is then the only protection against
 	// a reused PID.
 	PidfdUnsupported bool
+	// Group is the terminal the peer belongs to, as far as it can be told
+	// before the request is read: its cgroup up to the term-<id> element
+	// (Linux; TerminalGroup). The server caps the connections per group, so
+	// the idle connections of one terminal cannot fill the engine for the
+	// others. Empty when the system does not tell (Windows asks the
+	// mestre-pty for the Job Object only after the request, and the PID
+	// cap and the reserve for hook calls then hold alone).
+	Group string
+	// UID is the user of the process, in decimal (SO_PEERCRED); empty when
+	// the system does not tell.
+	UID string
 }
 
 // Close releases what the peer holds (the pidfd).
@@ -156,4 +169,18 @@ func checkPidfd(p Peer, pid int, sameStart func() (bool, error)) error {
 		return refuse(fmt.Sprintf("the pidfd points to PID %d, not %d", got, pid))
 	}
 	return nil
+}
+
+// TerminalGroup is the group of a cgroup v2 path for the connection caps:
+// the path up to the term-<id> element, so a process that makes a child
+// cgroup of its terminal still counts there; a path with no such element is
+// its own group.
+func TerminalGroup(cgroup string) string {
+	parts := strings.Split(pathpkg.Clean(cgroup), "/")
+	for i, p := range parts {
+		if strings.HasPrefix(p, "term-") {
+			return strings.Join(parts[:i+1], "/")
+		}
+	}
+	return pathpkg.Clean(cgroup)
 }

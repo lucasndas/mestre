@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"time"
@@ -26,7 +27,11 @@ const hookWaitDelay = 500 * time.Millisecond
 // The hook runs in a tree of its own (a process group on Unix, a Job Object
 // on Windows): the time limit kills the whole tree, not only the shell, and
 // whatever the hook left running when it ended goes with it, so no
-// descendant holds stderr past the limit (docs/provedores/despachante-de-hooks.md#uma-chamada).
+// descendant holds stderr past the limit. On Linux that includes a
+// descendant that left the group with setsid: the dispatcher adopts the
+// orphans (subreaper) and sweeps them (orphans_linux.go). A hook that ends
+// with 0 while a descendant still holds its stderr is a failure, not a
+// success (docs/provedores/despachante-de-hooks.md#uma-chamada).
 type classHookRunner struct{}
 
 func (classHookRunner) Run(ctx context.Context, h hook.ClassHook, event providers.EventKind, stdin []byte) (int, string, error) {
@@ -57,6 +62,12 @@ func (classHookRunner) Run(ctx context.Context, h hook.ClassHook, event provider
 	}
 	if ctx.Err() != nil {
 		err = ctx.Err()
+	}
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// The hook exited with 0 but a descendant kept its stderr open, so
+		// what the hook said is cut and its outcome is not known: a failure,
+		// never a clean exit 0 (a blocking hook then denies).
+		err = fmt.Errorf("the hook ended but left a process holding its output: %w", err)
 	}
 	return 0, stderr.String(), err
 }

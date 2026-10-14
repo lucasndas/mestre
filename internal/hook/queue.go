@@ -153,18 +153,32 @@ func Drain(dir string, max int, clk clock.Clock, log *slog.Logger, handle func(Q
 	if err != nil {
 		return 0, fmt.Errorf("hook queue: %w", err)
 	}
-	names := make([]string, 0, len(entries))
+	now := clk.Now()
+	queued := make([]queuedFile, 0, len(entries))
 	for _, e := range entries {
 		if !queueName.MatchString(e.Name()) || !e.Type().IsRegular() {
 			log.Warn("hook queue: a file the dispatcher did not write", "file", e.Name(), "type", e.Type().String())
 			removeEntry(dir, e.Name(), log)
 			continue
 		}
-		names = append(names, e.Name())
+		queued = append(queued, queuedFile{name: e.Name(), at: arrival(e, now)})
 	}
-	sort.Strings(names) // the names start with the time
+	// Oldest first by when the file reached the queue, as the system of the
+	// engine saw it, never by the time in the name: any agent of the machine
+	// can create a file there with the name it likes, and one stamped in the
+	// future would otherwise sort last (and so outlive the real decisions)
+	// when the limit drops the oldest. The name only breaks a tie.
+	sort.Slice(queued, func(i, j int) bool {
+		if !queued[i].at.Equal(queued[j].at) {
+			return queued[i].at.Before(queued[j].at)
+		}
+		return queued[i].name < queued[j].name
+	})
+	names := make([]string, len(queued))
+	for i, q := range queued {
+		names[i] = q.name
+	}
 	names = dropOldestInfo(dir, names, max, log)
-	now := clk.Now()
 	n := 0
 	for _, name := range names {
 		path := filepath.Join(dir, name)
@@ -182,6 +196,25 @@ func Drain(dir string, max int, clk clock.Clock, log *slog.Logger, handle func(Q
 		removeEntry(dir, name, log)
 	}
 	return n, nil
+}
+
+// queuedFile is a file of the queue and when it arrived.
+type queuedFile struct {
+	name string
+	at   time.Time
+}
+
+// arrival is when the entry reached the queue (arrivalOf), never later than
+// now: a time in the future is the read's own.
+func arrival(e fs.DirEntry, now time.Time) time.Time {
+	info, err := e.Info()
+	if err != nil {
+		return now
+	}
+	if at := arrivalOf(info); at.Before(now) {
+		return at
+	}
+	return now
 }
 
 // removeEntry removes an entry of the queue without following it: a link

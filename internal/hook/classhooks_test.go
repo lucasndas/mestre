@@ -97,6 +97,9 @@ pre_tool:
 		{"blocking, exit 2", "true", &runner{exit: 2}, "deny", "checar.sh recusou", ""},
 		{"blocking, failure", "true", &runner{err: errors.New("não rodou")}, "deny", "bloqueante", ""},
 		{"blocking, time out", "true", &hangs{}, "deny", "bloqueante", ""},
+		// Exit 0 with a descendant still holding the output (ErrWaitDelay in
+		// the real runner) is a failure, not a clean exit 0.
+		{"blocking, exit 0 but output held", "true", &runner{err: errors.New("the hook ended but left a process holding its output: exec: WaitDelay expired before I/O complete")}, "deny", "bloqueante", ""},
 		{"not blocking, exit 2", "false", &runner{exit: 2}, "deny", "checar.sh recusou", ""},
 		{"not blocking, failure", "false", &runner{err: errors.New("não rodou")}, "allow", "", "não rodou"},
 		{"not blocking, time out", "false", &hangs{}, "allow", "", "deadline exceeded"},
@@ -349,5 +352,61 @@ func TestACharacterWithNoClassHasNoClassHooks(t *testing.T) {
 		Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: "npm test"}})
 	if err != nil || len(got) != 0 || mc.uses+mc.approve != 0 {
 		t.Errorf("hooks = %+v, %v (class asked %d times)", got, err, mc.uses+mc.approve)
+	}
+}
+
+// An event the provider gives less time than the rest (Codex SessionEnd, 3 s)
+// cuts the limit and the budget of its hooks to that event's, not to the
+// provider's general one.
+func TestTheTimeLimitOfAnEventCanBeShorterThanTheProviders(t *testing.T) {
+	t.Parallel()
+	c := classWith(t, "session_end:\n  - {name: fim, run: \"npm test\", timeout: 20}\nturn_end:\n  - {name: turno, run: \"npm test\", timeout: 20}\n")
+	e, mc := engineWith(t, c)
+	src := &hook.ClassHookSource{Classes: mc, Rules: e.Rules, Characters: e.Characters,
+		EventSeconds: func(p providers.ID, ev providers.EventKind) int {
+			if p == providers.Codex && ev == providers.EventSessionEnd {
+				return 3
+			}
+			return 0
+		}}
+	for _, tc := range []struct {
+		provider   providers.ID
+		event      providers.EventKind
+		ms, budget int64
+	}{
+		{providers.Codex, providers.EventSessionEnd, 1000, 1000}, // 3 s less the 2 s margin
+		{providers.Codex, providers.EventTurnEnd, 20000, 28000},  // the rest of Codex keeps the general limit
+		{providers.ClaudeCode, providers.EventSessionEnd, 20000, 28000},
+	} {
+		got, err := src.Sync(t.Context(), providers.Event{Version: 1, Provider: tc.provider, Event: tc.event, AgentID: agent})
+		if err != nil || len(got) != 1 || got[0].TimeoutMS != tc.ms || got[0].BudgetMS != tc.budget {
+			t.Errorf("%s %s: %+v, %v; want a limit of %d ms in a budget of %d ms", tc.provider, tc.event, got, err, tc.ms, tc.budget)
+		}
+	}
+}
+
+// A hook whose `run` can reach a script of the package, however it is spelled,
+// goes as refused (a blocking one then denies) and an asynchronous one does
+// not run: the copy in the worktree is the agent's to change.
+func TestAHookThatCanReachAScriptOfThePackageIsRefused(t *testing.T) {
+	t.Parallel()
+	for _, run := range []string{"cd hooks && ./checar.sh", "true;hooks/checar.sh", "(hooks/checar.sh)", "$PWD/hooks/checar.sh",
+		".//hooks/checar.sh", `h""ooks/checar.sh`, "cd h* && ./checar.sh"} {
+		c := classWith(t, "pre_tool:\n  - {name: sync, run: '"+run+"', timeout: 5, blocking: true}\n"+
+			"post_tool:\n  - {name: async, run: '"+run+"', mode: async, timeout: 5}\n")
+		e, _ := engineWith(t, c)
+		src := e.ClassHooks.(*hook.ClassHookSource)
+		ev := func(kind providers.EventKind) providers.Event {
+			return providers.Event{Version: 1, Provider: providers.ClaudeCode, Event: kind, AgentID: agent, TableID: "1-login",
+				Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: "npm test"}}
+		}
+		got, err := src.Sync(t.Context(), ev(providers.EventPreTool))
+		if err != nil || len(got) != 1 || !has(got[0].Refused, "script do pacote") {
+			t.Errorf("%q: sync = %+v, %v; want it refused as a script of the package", run, got, err)
+		}
+		runs, refused, err := src.Async(t.Context(), ev(providers.EventPostTool))
+		if err != nil || len(runs) != 0 || len(refused) != 1 {
+			t.Errorf("%q: async = %+v, %v, %v; want it refused and not run", run, runs, refused, err)
+		}
 	}
 }
