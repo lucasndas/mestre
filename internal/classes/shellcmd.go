@@ -21,6 +21,11 @@ type shellState struct {
 	cwds    []string
 	unknown bool
 	pending []string // where the cd of the current part goes
+	// facts are what earlier parts of the line wrote, linked and copied: a
+	// program made earlier in the line is unanalysable for the rest of it
+	// (docs/classes/classificacao-de-risco.md). Nil outside the decision
+	// (the risk walker keeps its own).
+	facts *lineFacts
 }
 
 // shell analyses a command line. On Windows it is analysed as POSIX and as
@@ -50,9 +55,10 @@ func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 		}
 		return res
 	}
-	st := &shellState{cwds: []string{cwd}}
+	st := &shellState{cwds: []string{cwd}, facts: newLineFacts()}
 	for i := range parts {
 		res.merge(e.part(&parts[i], d, st, depth))
+		e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
 			// cd x && …, in a line without subshells or pipes: the rest
 			// surely runs in x. Otherwise in either folder.
@@ -185,6 +191,22 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		if e.inAnexos(name, st) {
 			res.fixedDeny("anexos nunca são executados")
 		}
+	}
+
+	// A program made earlier in the same line, or a link or copy of one, is
+	// not the program the text shows: a link or copy of a program is
+	// analysed as that program; a program written earlier in the line is
+	// unanalysable for the rest of it
+	// (docs/classes/classificacao-de-risco.md).
+	if written, targets := e.madeProgram(cn, ws, st); written || len(targets) > 0 {
+		for _, k := range targets {
+			res.merge(e.command(asProgram(k, ws), d, st, depth+1, append(outer, strings.Join(wordsText(ws), " "))))
+		}
+		if written {
+			res.atLeastAsk("programa criado antes na mesma linha")
+		}
+		res.rule(e.commandRule(ws, outer, false))
+		return res
 	}
 
 	switch {
@@ -436,7 +458,10 @@ func (e *evaluator) unwrap(cn string, args []word, res *result) (inner []word, e
 		}
 		return rest, "argumentos vindos do xargs", true
 	}
-	if multiCall[cn] {
+	if inner, ok := runnerUnwrap(cn, args); ok {
+		return inner, "", true
+	}
+	if multiCall(cn) {
 		// The applet named by the first argument is the program.
 		switch {
 		case len(args) == 0:
@@ -453,9 +478,29 @@ func (e *evaluator) unwrap(cn string, args []word, res *result) (inner []word, e
 	return nil, "", false
 }
 
-// multiCall are the binaries that hold many programs and run the one their
-// first argument names (busybox rm, toybox sh).
-var multiCall = map[string]bool{"busybox": true, "toybox": true, "coreutils": true, "sbase-box": true, "ubase-box": true}
+// multiCallBases are the binaries that hold many programs and run the one
+// their first argument names (busybox rm, toybox sh), by exact name.
+var multiCallBases = map[string]bool{"busybox": true, "toybox": true, "coreutils": true, "sbase-box": true, "ubase-box": true}
+
+// multiCall reports a multi-call binary, by exact name or by the name
+// variants a packager gives busybox and toybox: a suffix after a separator
+// or a version (busybox.static, busybox-static, busybox_1_36, toybox-x).
+func multiCall(cn string) bool {
+	if multiCallBases[cn] {
+		return true
+	}
+	for _, base := range []string{"busybox", "toybox"} {
+		if rest, ok := strings.CutPrefix(cn, base); ok && rest != "" {
+			if c := rest[0]; c == '.' || c == '-' || c == '_' {
+				return true
+			}
+			if c := rest[0]; c >= '0' && c <= '9' {
+				return true // a version suffix (busybox1, busybox136)
+			}
+		}
+	}
+	return false
+}
 
 // nestedShell returns the command text a shell, eval or cmd runs, its
 // dialect and why it is at least ask; nested is "" when the text is not
@@ -641,7 +686,7 @@ func (e *evaluator) argPath(w word, u use, st *shellState) result {
 }
 
 // globNames are the protected names a wildcard in the worktree can reach.
-var globNames = []string{".git", ".mestre", ".claude", ".codex", ".agents", "settings.json", "settings.local.json", "hooks.json", "agents"}
+var globNames = []string{".git", ".mestre", ".claude", ".codex", ".agents", ".gemini", ".mcp.json", "settings.json", "settings.local.json", "hooks.json", "agents", "commands", "skills"}
 
 // globPath checks a path with wildcards. What the wildcard reaches lies in
 // the folder before it, so a file there (named *) stands for it before the
@@ -824,7 +869,13 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 		all(ops(map[string]bool{"-m": true, "-s": true, "-r": true, "-d": true, "-t": true}), use{write: true})
 	case "tee":
 		all(ops(nil), use{write: true})
-	case "cp", "mv", "ln", "install", "rsync":
+	case "ln", "link", "mklink":
+		// Making a link writes the link and, through it, its target: both
+		// are writes, the target read from the link's folder.
+		for _, lp := range linkPairs(cn, args) {
+			uses = append(uses, pathUse{lp.link, use{write: true}}, pathUse{lp.targetWord(), use{write: true}})
+		}
+	case "cp", "mv", "install", "rsync":
 		o := ops(map[string]bool{"-t": true, "-S": true, "-m": true, "-o": true, "-g": true, "--suffix": true, "--target-directory": true})
 		var dest []word
 		if t := flagValue(args, "-t", "--target-directory"); t != nil {
@@ -833,11 +884,10 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 			dest, o = o[len(o)-1:], o[:len(o)-1]
 		}
 		move := cn == "mv"
+		// cp -s and cp -l make links to the sources instead of copies.
+		linked := cn == "cp" && (hasShortFlag(args, 's', 'l') || hasFlag(args, "--symbolic-link", "--link"))
 		for _, s := range o {
-			if cn == "ln" {
-				continue // the target of a link is not touched
-			}
-			uses = append(uses, pathUse{s, use{write: move, recursive: move}})
+			uses = append(uses, pathUse{s, use{write: move || linked, recursive: move}})
 		}
 		for _, dw := range dest {
 			uses = append(uses, pathUse{dw, use{write: true, recursive: move || recursive}})
@@ -937,8 +987,9 @@ func pwshUses(cn string, args []word) ([]pathUse, bool) {
 	if kind == "" {
 		return nil, false
 	}
-	var named, dest []word
+	var named, dest, values, names []word
 	var pos []word
+	itemType := ""
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		l := strings.ToLower(a.text)
@@ -966,6 +1017,18 @@ func pwshUses(cn string, args []word) ([]pathUse, bool) {
 				if w, ok := next(); ok {
 					dest = append(dest, w)
 				}
+			case name == "-itemtype" || name == "-type":
+				if w, ok := next(); ok {
+					itemType = strings.ToLower(w.text)
+				}
+			case name == "-value":
+				if w, ok := next(); ok {
+					values = append(values, w)
+				}
+			case name == "-name":
+				if w, ok := next(); ok {
+					names = append(names, w)
+				}
 			case pwshValueParams[name]:
 				_, _ = next()
 			}
@@ -982,8 +1045,35 @@ func pwshUses(cn string, args []word) ([]pathUse, bool) {
 	recurse := hasFlagFold(args, "-recurse", "-r")
 	switch kind {
 	case "write":
+		if len(names) > 0 {
+			// New-Item -Path dir -Name x makes dir\x (the current folder
+			// without -Path).
+			dirs := append(append([]word{}, named...), pos...)
+			if len(dirs) == 0 {
+				dirs = []word{{text: ".", assign: -1}}
+			}
+			for _, dw := range dirs {
+				for _, nm := range names {
+					nw := dw
+					nw.text = strings.TrimRight(dw.text, `/\`) + "/" + nm.text
+					nw.glob = dw.glob || nm.glob
+					nw.expand = dw.expand || nm.expand
+					named = append(named, nw)
+				}
+			}
+		}
 		add(named, use{write: true})
 		add(pos, use{write: true})
+		if strings.Contains(itemType, "link") || itemType == "junction" || strings.HasPrefix(itemType, "sym") || strings.HasPrefix(itemType, "hard") || strings.HasPrefix(itemType, "junc") {
+			// A link is a write of its target too, read both from the
+			// current folder and from the link's.
+			for _, t := range append(dest, values...) {
+				add([]word{t}, use{write: true})
+				for _, l := range append(append([]word{}, named...), pos...) {
+					add([]word{linkPair{link: l, target: t, fromLink: true}.targetWord()}, use{write: true})
+				}
+			}
+		}
 	case "remove":
 		add(named, use{write: true, recursive: true})
 		add(pos, use{write: true, recursive: true})

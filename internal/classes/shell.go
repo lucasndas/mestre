@@ -67,8 +67,18 @@ type lexer struct {
 	cur    word
 	inWord bool
 	// braces are the offsets in buf of the unquoted {, } and , of the
-	// current word (POSIX): what a brace expansion is made of.
+	// current word (POSIX): what a brace expansion is made of. quotes are
+	// the quoted parts of the word, which decide whether an empty word of
+	// the expansion is kept.
 	braces []int
+	quotes []quoteSpan
+	opens  bool // braces holds an unquoted {
+}
+
+// quoted records that the text of the current word from offset from on
+// came from quotes (POSIX); an empty part still counts.
+func (lx *lexer) quoted(from int) {
+	lx.quotes = append(lx.quotes, quoteSpan{from, lx.buf.Len()})
 }
 
 // parseLine splits a command line into simple commands. opaque holds the
@@ -86,6 +96,8 @@ func (lx *lexer) startWord() {
 		lx.cur = word{assign: -1}
 		lx.buf.Reset()
 		lx.braces = lx.braces[:0]
+		lx.quotes = lx.quotes[:0]
+		lx.opens = false
 	}
 }
 
@@ -95,20 +107,24 @@ func (lx *lexer) flush() {
 	}
 	lx.inWord = false
 	lx.cur.text = lx.buf.String()
-	if len(lx.braces) > 0 {
-		words, ok := braceExpand(lx.cur.text, lx.braces)
+	if lx.opens {
+		words, ok := braceExpand(lx.cur.text, lx.braces, lx.quotes)
 		switch {
 		case !ok:
 			// Too many words to analyse: the line is denied.
 			lx.mark(braceTooLarge)
-		case len(words) > 1 || words[0] != lx.cur.text:
+		case len(words) > 1 || words[0].text != lx.cur.text:
 			// The shell runs the words of the expansion: they are analysed
 			// as words of the line, which is at least ask.
 			lx.opaque = append(lx.opaque, "expansão de chaves")
 			first := lx.braces[0]
-			for _, t := range words {
-				if t == "" && !lx.cur.quoted {
-					continue // an empty word of the expansion is dropped
+			for _, bw := range words {
+				t := bw.text
+				if t == "" && !bw.quoted {
+					// An empty word of the expansion is dropped, unless a
+					// quoted part ("" or '') went into it: {"git",} push is
+					// git push.
+					continue
 				}
 				w := lx.cur
 				w.text = t
@@ -187,13 +203,17 @@ func (lx *lexer) stepPOSIX() {
 		}
 		lx.startWord()
 		lx.cur.quoted = true
+		from := lx.buf.Len()
 		if lx.i+1 < len(lx.s) {
 			lx.buf.WriteByte(lx.s[lx.i+1])
 		}
+		lx.quoted(from)
 		lx.i += 2
 	case c == '\'':
 		lx.startWord()
 		lx.cur.quoted = true
+		from := lx.buf.Len()
+		defer lx.quoted(from)
 		end := strings.IndexByte(lx.s[lx.i+1:], '\'')
 		if end < 0 {
 			lx.opaque = append(lx.opaque, "aspas sem fechar")
@@ -206,11 +226,18 @@ func (lx *lexer) stepPOSIX() {
 	case c == '"':
 		lx.startWord()
 		lx.cur.quoted = true
+		from := lx.buf.Len()
 		lx.i++
 		lx.doubleQuoted()
+		lx.quoted(from)
 	case c == '$':
 		lx.startWord()
+		from := lx.buf.Len()
+		ansi := lx.peek(1) == '\''
 		lx.dollar()
+		if ansi {
+			lx.quoted(from)
+		}
 	case c == '`':
 		lx.startWord()
 		lx.backtick()
@@ -267,6 +294,7 @@ func (lx *lexer) stepPOSIX() {
 		}
 		if c == '{' || c == '}' || c == ',' {
 			lx.braces = append(lx.braces, lx.buf.Len())
+			lx.opens = lx.opens || c == '{'
 		}
 		lx.buf.WriteByte(c)
 		lx.i++

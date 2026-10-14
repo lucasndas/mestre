@@ -130,7 +130,8 @@ type Options struct {
 // NormalizePath normalizes a path the way the adapters do with the paths of
 // a tool before any decision: absolute against cwd, without ".." (where the
 // system takes it: after the links on Linux and macOS, from the text on
-// Windows), links resolved and, on Windows, without case differences. The permission
+// Windows), links resolved (a dangling link to its target, which a write
+// through it creates) and, on Windows, without case differences. The permission
 // decision uses it for the paths of command arguments (Env.Normalize of
 // internal/classes).
 func (o Options) NormalizePath(p, cwd string) string { return o.paths().normalize(p, cwd) }
@@ -141,14 +142,22 @@ func (o Options) paths() pathNormalizer {
 		r = filepath.EvalSymlinks
 	}
 	windows := runtime.GOOS == "windows"
-	return pathNormalizer{resolve: r, fold: windows, lexical: windows}
+	return pathNormalizer{resolve: r, readlink: os.Readlink, fold: windows, lexical: windows}
 }
+
+// maxLinkHops bounds the chain of dangling links the normalization follows,
+// as the system does (Linux stops at 40).
+const maxLinkHops = 40
 
 // pathNormalizer makes paths absolute, without "..", with links resolved
 // and, on Windows, without case differences, before any decision.
 type pathNormalizer struct {
 	resolve func(string) (string, error)
-	fold    bool
+	// readlink reads the target of a link that resolve cannot resolve
+	// because the target does not exist (a dangling link): a write through
+	// it creates the target, so the decision must see the target.
+	readlink func(string) (string, error)
+	fold     bool
 	// lexical takes ".." out of the text before the links are resolved, as
 	// Windows does with a path before it opens it; elsewhere a ".." after a
 	// link is the parent of the link's target.
@@ -175,19 +184,45 @@ func (n pathNormalizer) normalize(p, cwd string) string {
 	return p
 }
 
+// dangling is the target of a dangling link at p, made absolute against
+// the link's folder: what a write through p creates. ok is false when p is
+// not a link.
+func (n pathNormalizer) dangling(p string) (string, bool) {
+	if n.readlink == nil {
+		return "", false
+	}
+	t, err := n.readlink(p)
+	if err != nil || t == "" {
+		return "", false
+	}
+	if filepath.IsAbs(t) {
+		return t, true
+	}
+	if vol := filepath.VolumeName(p); filepath.VolumeName(t) == "" && (strings.HasPrefix(t, `\`) || strings.HasPrefix(t, "/")) {
+		return vol + t, true // rooted on the drive of the link (Windows)
+	}
+	// Relative to the folder of the link; not filepath.Join, which would
+	// clean "../" away before the links of the folder are resolved.
+	return filepath.Dir(p) + string(filepath.Separator) + t, true
+}
+
 // resolvePhysical resolves an absolute path the way the system walks it:
 // the links of each existing component before the ".." after it, so that
 // link/../x is x next to the folder the link points to, not next to the
-// link. What does not exist yet (the file a write creates) is kept as
-// written.
-func (n pathNormalizer) resolvePhysical(p string) string {
+// link. A dangling link is followed to its target (the file a write
+// through it creates); what does not exist yet (the file a write creates)
+// is kept as written.
+func (n pathNormalizer) resolvePhysical(p string) string { return n.physical(p, 0) }
+
+func (n pathNormalizer) physical(p string, hops int) string {
 	if r, err := n.resolve(p); err == nil {
 		return filepath.Clean(r)
 	}
 	vol := filepath.VolumeName(p)
 	cur := vol + string(filepath.Separator)
 	missing := false
-	for _, c := range strings.FieldsFunc(p[len(vol):], func(r rune) bool { return r < 0x80 && os.IsPathSeparator(uint8(r)) }) {
+	comps := strings.FieldsFunc(p[len(vol):], func(r rune) bool { return r < 0x80 && os.IsPathSeparator(uint8(r)) })
+	for i, c := range comps {
 		switch c {
 		case ".":
 			continue
@@ -206,6 +241,11 @@ func (n pathNormalizer) resolvePhysical(p string) string {
 		case err == nil:
 			cur = filepath.Clean(r)
 		case errors.Is(err, fs.ErrNotExist):
+			if t, ok := n.dangling(next); ok && hops < maxLinkHops {
+				// cur has no link left in it: the target, relative to it,
+				// and the rest of the path are walked again.
+				return n.physical(t+string(filepath.Separator)+strings.Join(comps[i+1:], string(filepath.Separator)), hops+1)
+			}
 			cur, missing = next, true
 		default:
 			cur = next
@@ -215,8 +255,11 @@ func (n pathNormalizer) resolvePhysical(p string) string {
 }
 
 // resolveExisting resolves the links of the longest existing prefix: the
-// file a write creates does not exist yet, its folder may be a link.
-func (n pathNormalizer) resolveExisting(p string) string {
+// file a write creates does not exist yet, its folder may be a link; a
+// dangling link is followed to its target.
+func (n pathNormalizer) resolveExisting(p string) string { return n.existing(p, 0) }
+
+func (n pathNormalizer) existing(p string, hops int) string {
 	r, err := n.resolve(p)
 	if err == nil {
 		return filepath.Clean(r)
@@ -225,7 +268,10 @@ func (n pathNormalizer) resolveExisting(p string) string {
 	if parent == p || !errors.Is(err, fs.ErrNotExist) {
 		return p
 	}
-	return filepath.Join(n.resolveExisting(parent), filepath.Base(p))
+	if t, ok := n.dangling(p); ok && hops < maxLinkHops {
+		return n.existing(filepath.Clean(t), hops+1)
+	}
+	return filepath.Join(n.existing(parent, hops), filepath.Base(p))
 }
 
 func (n pathNormalizer) all(cwd string, ps ...string) []string {

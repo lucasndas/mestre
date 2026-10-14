@@ -111,10 +111,6 @@ const maxRmPaths = 20
 // medio rows of rm hold for them as well (only rm itself has the baixo).
 var rmFamily = map[string]bool{"rm": true, "del": true, "erase": true, "remove-item": true, "ri": true, "rd": true, "rmdir": true}
 
-// scriptInterpreters run a file of the worktree given as their first
-// argument as a script of the project.
-var scriptInterpreters = map[string]bool{"python": true, "python3": true, "node": true, "bash": true, "sh": true, "pwsh": true, "ruby": true}
-
 // riskCmd is one simple command as the table sees it.
 type riskCmd struct {
 	name  string   // canonical program name
@@ -188,9 +184,10 @@ func (w *riskWalker) line(cmd, cwd string, d dialect, depth int) riskOut {
 		return riskOut{risk: RiskMedium, rule: "nenhum comando reconhecido"}
 	}
 	var out riskOut
-	st := &shellState{cwds: []string{cwd}}
+	st := &shellState{cwds: []string{cwd}, facts: newLineFacts()}
 	for i := range parts {
 		out.raise(w.part(&parts[i], d, st, depth))
+		w.e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
 			if parts[i].next == "&&" && !grouped {
 				st.cwds = st.pending
@@ -247,7 +244,27 @@ func (w *riskWalker) command(ws []word, d dialect, st *shellState, depth int, ou
 	texts := wordsText(ws)
 	c := &riskCmd{name: cn, args: texts[1:], text: strings.Join(texts, " ")}
 	c.forms = []string{c.text, strings.Join(append([]string{cn}, texts[1:]...), " ")}
+	if cn == "git" {
+		// git clean, git apply, git am… after global options (git -C .
+		// apply, git -c k=v am): the table and the signals see git <sub>.
+		if sub := gitSubText(args); sub != "" {
+			c.forms = append(c.forms, sub)
+		}
+	}
 	c.forms = append(c.forms, outer...)
+
+	// A program made earlier in the same line is unanalysable; a link or
+	// copy of one is classified as that program.
+	if written, targets := e.madeProgram(cn, ws, st); written || len(targets) > 0 {
+		var out riskOut
+		for _, k := range targets {
+			out.raise(w.command(asProgram(k, ws), d, st, depth+1, append(outer, c.text)))
+		}
+		if written {
+			out.raise(riskOut{risk: RiskMedium, rule: "programa criado antes na mesma linha: " + c.text})
+		}
+		return out
+	}
 
 	unread := ""
 	if inner, extra, ok := e.unwrap(cn, args, &result{}); ok {
@@ -402,11 +419,8 @@ func (w *riskWalker) scan(c *riskCmd, ws []word, st *shellState) {
 			}
 		}
 	}
-	if scriptInterpreters[c.name] && len(args) > 0 {
-		a := args[0]
-		if !strings.HasPrefix(a.text, "-") && !a.glob && w.inWorktree(a, st) {
-			c.scriptInWorktree = true
-		}
+	if a, ok := interpreterScript(c.name, args); ok && !a.glob && w.inWorktree(a, st) {
+		c.scriptInWorktree = true
 	}
 }
 
@@ -421,10 +435,13 @@ func (w *riskWalker) script(cn string, ws []word, st *shellState) (word, bool) {
 	if p := ws[0]; !p.expand && (strings.ContainsAny(p.text, `/\`) || strings.HasPrefix(p.text, ".") && cn != ".") {
 		return p, w.inWorktree(p, st)
 	}
-	if scriptInterpreters[cn] || inlineInterpreters[cn] || shells[cn] {
-		if args := ws[1:]; len(args) > 0 && !strings.HasPrefix(args[0].text, "-") && !args[0].glob && w.inWorktree(args[0], st) {
-			return args[0], true
-		}
+	if p := ws[0]; !p.expand && looksLikeScriptFile(p.text) && w.inWorktree(p, st) {
+		// A bare script file run as a program (uv run x.py unwrapped to
+		// x.py): the launcher does not launder a changed script.
+		return p, true
+	}
+	if a, ok := interpreterScript(cn, ws[1:]); ok && !a.glob && w.inWorktree(a, st) {
+		return a, true
 	}
 	return word{}, false
 }

@@ -20,6 +20,14 @@ func TestBraceExpansionMakesTheWordsOfBash(t *testing.T) {
 		`echo {a,"b,c"}`:       "echo a b,c",
 		"echo {a,b":            "echo {a,b",
 		"FOO={a,b} x":          "x",
+		// An empty word of the expansion is dropped unless a quoted part
+		// went into it; a quoted part of a sequence makes it literal.
+		`{"git",} push`:          "git push",
+		`{'git',} push x`:        "git push x",
+		`echo {"",x}y`:           "echo y xy",
+		`echo {"",x}`:            "echo  x",
+		`echo {a,""}`:            "echo a ",
+		`echo {"a".."c"} {a..c}`: "echo {a..c} a b c",
 	} {
 		parts, _, _ := parseLine(line, dialectPOSIX)
 		var got []string
@@ -30,7 +38,7 @@ func TestBraceExpansionMakesTheWordsOfBash(t *testing.T) {
 			t.Errorf("%q → %q; want %q", line, g, want)
 		}
 	}
-	if _, ok := braceExpand("{1..999}", []int{0, 7}); ok {
+	if _, ok := braceExpand("{1..999}", []int{0, 7}, nil); ok {
 		t.Error("a sequence of 999 words was expanded")
 	}
 }

@@ -80,6 +80,32 @@ func (e *evaluator) parseGit(args []word, st *shellState, res *result) (gitArgs,
 	return g, cur
 }
 
+// gitGlobalValue are the git global options that take a value: skipping
+// them reaches the subcommand.
+var gitGlobalValue = map[string]bool{"-C": true, "--git-dir": true, "--work-tree": true, "--namespace": true, "-c": true, "--config-env": true, "--super-prefix": true}
+
+// gitSubText is "git <subcommand> <rest…>" after the global options, or ""
+// when there is no subcommand: so the risk table and the signals match a
+// writer whatever the global options before it (git -C . apply, git
+// --no-pager am).
+func gitSubText(args []word) string {
+	i := 0
+	for i < len(args) {
+		a := args[i].text
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		if name, _, hasVal := strings.Cut(a, "="); gitGlobalValue[name] && !hasVal {
+			i++
+		}
+		i++
+	}
+	if i >= len(args) {
+		return ""
+	}
+	return "git " + strings.Join(wordsText(args[i:]), " ")
+}
+
 // gitReadOnly reports git status|diff|log|show without a way to run
 // something else: -c and --exec-path can name a pager, a hook or a program.
 func gitReadOnly(args []word) bool {
