@@ -15,6 +15,8 @@ import (
 // folders the account of the agents writes). It is an alert, never trusted.
 var ErrWorktreeMoved = errors.New("gitx: the worktree does not point at its record")
 
+var _ WorktreeOpener = (*Real)(nil)
+
 // WorktreeRecord is the engine's own record of a worktree that came out of a
 // repository (the mirror): the worktree, its git folder in the repository
 // (<common>/worktrees/<name>) and the repository's common dir. The engine

@@ -20,6 +20,10 @@ type repo struct {
 	// call checks the worktree against it and runs pinned to it. nil for a
 	// repository opened by its folder.
 	rec *WorktreeRecord
+	// gitDir is the folder of a bare repository opened by its folder: every
+	// call runs with GIT_DIR on it, so a .git entry created inside it is
+	// never followed. Empty otherwise.
+	gitDir string
 }
 
 var _ Repo = (*repo)(nil)
@@ -31,61 +35,112 @@ func (r *repo) git(ctx context.Context, args ...string) ([]byte, error) {
 }
 
 // run runs git in the folder of the repository. A worktree opened by its
-// record is checked against it first (verify) and runs pinned to it.
+// record is checked against it first (verify) and runs pinned to it; a bare
+// repository opened by its folder runs with GIT_DIR. Every call passes the
+// guard first.
 func (r *repo) run(ctx context.Context, ro runOpts, args ...string) ([]byte, error) {
 	ro.dir = r.dir
-	if r.rec != nil {
+	switch {
+	case r.rec != nil:
 		if err := r.rec.verify(); err != nil {
 			return nil, err
 		}
 		ro.env = append(r.rec.pin(), ro.env...)
+	case r.gitDir != "":
+		ro.env = append([]string{"GIT_DIR=" + r.gitDir}, ro.env...)
 	}
-	return r.g.run(ctx, ro, args...)
-}
-
-// noFilters returns the options of a call that may read or write files of a
-// working tree (add, commit, status, checkout): every filter driver defined
-// in the configuration the repository sees is emptied on the command line,
-// so a driver set in a config file the engine does not control never runs
-// as the engine. A driver added between this listing and the call is the
-// residual risk; the configuration of the mirror is not writable by
-// mestre-agente (docs/arquitetura/seguranca.md#git-do-motor).
-func (r *repo) noFilters(ctx context.Context) (runOpts, error) {
-	var ro runOpts
-	out, err := r.git(ctx, "config", "--null", "--name-only", "--get-regexp", `^filter\.`)
-	if err != nil {
-		if exitedWithoutMessage(err, 1) {
-			return ro, nil // no filter configured
-		}
-		return ro, fmt.Errorf("list filter drivers: %w", err)
-	}
-	seen := map[string]bool{}
-	for key := range strings.SplitSeq(string(out), "\x00") {
-		key = strings.TrimSpace(key)
-		dot := strings.LastIndexByte(key, '.')
-		if !strings.HasPrefix(strings.ToLower(key), "filter.") || dot <= len("filter.") {
-			continue
-		}
-		driver := key[len("filter."):dot]
-		if seen[driver] {
-			continue
-		}
-		seen[driver] = true
-		ro.config = append(ro.config,
-			"filter."+driver+".clean=", "filter."+driver+".smudge=",
-			"filter."+driver+".process=", "filter."+driver+".required=false")
-	}
-	return ro, nil
-}
-
-// treeGit runs a command that touches the working tree with noFilters.
-func (r *repo) treeGit(ctx context.Context, ro runOpts, args ...string) ([]byte, error) {
-	safe, err := r.noFilters(ctx)
+	safe, err := r.guard(ctx, ro)
 	if err != nil {
 		return nil, err
 	}
-	safe.stdin, safe.env = ro.stdin, ro.env
-	return r.run(ctx, safe, args...)
+	ro.config = append(safe, ro.config...)
+	return r.g.run(ctx, ro, args...)
+}
+
+// guard lists, in one git config call, what of the configuration the
+// repository sees could make git run a command that globalArgs cannot name
+// in advance (docs/arquitetura/seguranca.md#git-do-motor), and returns the
+// -c settings of the call:
+//
+//   - for a call that touches the working tree (ro.tree: add, commit,
+//     status, checkout, merge), every filter driver is emptied, so a driver
+//     set in a config file the engine does not control never runs as the
+//     engine;
+//   - a promisor remote (extensions.partialClone, remote.<name>.promisor)
+//     makes git fetch a missing object on its own, running the upload-pack
+//     of that remote. GIT_NO_LAZY_FETCH turns that off from git 2.44
+//     (NoLazyFetchVersion); before it, every call lists, and a repository
+//     with a promisor remote is refused (ErrUnsafeRepo), as it is on every
+//     call that lists. The engine never makes a partial clone.
+//
+// A driver or remote added between this listing and the call is the
+// residual risk; the configuration of the mirror is not writable by
+// mestre-agente, and a worktree runs pinned to it.
+func (r *repo) guard(ctx context.Context, ro runOpts) ([]string, error) {
+	v, err := r.g.Version(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !ro.tree && !v.Less(NoLazyFetchVersion) {
+		return nil, nil
+	}
+	re := `^(extensions\.partialclone|remote\..+\.promisor)$`
+	if ro.tree {
+		re = `^(filter\..+|extensions\.partialclone|remote\..+\.promisor)$`
+	}
+	out, err := r.g.run(ctx, runOpts{dir: ro.dir, env: ro.env}, "config", "--null", "--get-regexp", re)
+	if err != nil {
+		if exitedWithoutMessage(err, 1) {
+			return nil, nil // none configured
+		}
+		return nil, fmt.Errorf("list the configuration of %s: %w", r.dir, err)
+	}
+	var config []string
+	seen := map[string]bool{}
+	for entry := range strings.SplitSeq(string(out), "\x00") {
+		key, value, hasValue := strings.Cut(entry, "\n")
+		key = strings.TrimSpace(key)
+		lower := strings.ToLower(key)
+		switch {
+		case lower == "extensions.partialclone":
+			return nil, fmt.Errorf("%w: %s has a promisor remote (extensions.partialClone)", ErrUnsafeRepo, r.dir)
+		case strings.HasPrefix(lower, "remote.") && strings.HasSuffix(lower, ".promisor"):
+			if !hasValue || configTrue(value) {
+				return nil, fmt.Errorf("%w: %s has a promisor remote (%s)", ErrUnsafeRepo, r.dir, key)
+			}
+		case strings.HasPrefix(lower, "filter."):
+			dot := strings.LastIndexByte(key, '.')
+			if dot <= len("filter.") {
+				continue
+			}
+			driver := key[len("filter."):dot]
+			if seen[driver] {
+				continue
+			}
+			seen[driver] = true
+			config = append(config,
+				"filter."+driver+".clean=", "filter."+driver+".smudge=",
+				"filter."+driver+".process=", "filter."+driver+".required=false")
+		}
+	}
+	return config, nil
+}
+
+// configTrue reads a git boolean: anything git would not call false counts
+// as true, so a value git might accept is never let through.
+func configTrue(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "false", "no", "off", "0", "":
+		return false
+	}
+	return true
+}
+
+// treeGit runs a command that touches the working tree: its guard also
+// empties the filter drivers.
+func (r *repo) treeGit(ctx context.Context, ro runOpts, args ...string) ([]byte, error) {
+	ro.tree = true
+	return r.run(ctx, ro, args...)
 }
 
 // mutate runs fn holding the lock of the repository.

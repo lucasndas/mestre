@@ -293,7 +293,7 @@ func (ru *run) commandCommit(ctx context.Context, c *character) StepResult {
 // committed reports whether the branch of the worktree has a commit that
 // takes permitido/y.txt.
 func (ru *run) committed(ctx context.Context) (bool, error) {
-	repo, err := ru.r.Git.Open(ctx, ru.ws.Worktree)
+	repo, err := ru.openWorktree(ctx)
 	if err != nil {
 		return false, err
 	}

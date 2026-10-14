@@ -40,7 +40,11 @@ type Options struct {
 	// so the values the vault registered are hidden here too.
 	Masker *logging.Masker
 	// Env is KEY=VALUE pairs added last to the controlled environment of
-	// every git process (for example a different GIT_CONFIG_GLOBAL).
+	// every git process (for example a different GIT_CONFIG_GLOBAL). Of the
+	// GIT_* variables only GIT_CONFIG_GLOBAL and GIT_CONFIG_NOSYSTEM are
+	// accepted (New): the others could move the repository (GIT_DIR,
+	// GIT_COMMON_DIR), add configuration above the command line of every
+	// call or turn GIT_NO_LAZY_FETCH off.
 	Env []string
 	// MinVersion overrides gitx.MinVersion (tests).
 	MinVersion Version
@@ -50,10 +54,11 @@ type Options struct {
 // controlled environment: no GIT_* variable of the caller, no user or system
 // configuration, no hooks, no credential helpers, no prompts, English
 // messages, and the repository's own configuration cannot make git run a
-// command (globalArgs, noFilters). Operations that change refs, config or
-// info/exclude run one at a time per repository (all worktrees of a
-// repository count as one); reads run concurrently. That holds inside one
-// Real, so a process builds a single Real and shares it.
+// command (globalArgs, repo.guard, GIT_NO_LAZY_FETCH). A table worktree is
+// opened only by its record (OpenWorktree), never by Open. Operations that
+// change refs, config or info/exclude run one at a time per repository (all
+// worktrees of a repository count as one); reads run concurrently. That
+// holds inside one Real, so a process builds a single Real and shares it.
 type Real struct {
 	opts   Options
 	clk    clock.Clock
@@ -72,6 +77,14 @@ var _ Git = (*Real)(nil)
 func New(opts Options) (*Real, error) {
 	if opts.Masker == nil {
 		return nil, errors.New("gitx: Options.Masker is required (the engine's shared masker)")
+	}
+	for _, kv := range opts.Env {
+		k, _, _ := strings.Cut(kv, "=")
+		switch k = strings.ToUpper(k); {
+		case k == "GIT_CONFIG_GLOBAL", k == "GIT_CONFIG_NOSYSTEM":
+		case strings.HasPrefix(k, "GIT_"):
+			return nil, fmt.Errorf("%w: Options.Env may not set %s", ErrInvalidArgument, k)
+		}
 	}
 	if opts.Binary == "" {
 		opts.Binary = "git"
@@ -92,8 +105,13 @@ func New(opts Options) (*Real, error) {
 // fsmonitor, ssh, signature programs, upload-pack, credential and askpass
 // helpers, the ext:: transport), recurse into submodules, turn TLS checks
 // off or change the output. Filter drivers have per-driver names and are
-// neutralized per call (noFilters). No command gitx runs produces a diff,
-// so diff.external and textconv are never invoked.
+// neutralized per call, and a promisor remote, whose upload-pack a lazy
+// fetch would run, is refused or never fetched from (repo.guard,
+// GIT_NO_LAZY_FETCH). No command gitx runs produces a diff, so
+// diff.external and textconv are never invoked. safe.directory is reset to
+// empty last, so git's ownership check (a repository, .git file or work
+// tree owned by another account is refused) stays on whatever a custom
+// GIT_CONFIG_GLOBAL says.
 func globalArgs() []string {
 	null := os.DevNull
 	return []string{
@@ -116,6 +134,7 @@ func globalArgs() []string {
 		"-c", "gc.auto=0",
 		"-c", "maintenance.auto=false",
 		"-c", "advice.detachedHead=false",
+		"-c", "safe.directory=",
 	}
 }
 
@@ -140,6 +159,7 @@ func (g *Real) environFrom(base []string) []string {
 		"GIT_ASKPASS=",
 		"GIT_OPTIONAL_LOCKS=0",
 		"GIT_MERGE_AUTOEDIT=no",
+		"GIT_NO_LAZY_FETCH=1", // no fetch from a promisor remote (git 2.44+; repo.guard before)
 		"LC_ALL=C",
 		"LANGUAGE=C",
 	)
@@ -227,6 +247,7 @@ type runOpts struct {
 	stdin  []byte
 	env    []string
 	config []string // extra -c settings, after globalArgs
+	tree   bool     // the call touches the working tree (repo.guard)
 }
 
 // exec starts git once. It does not check the version.
@@ -414,6 +435,17 @@ func (g *Real) Open(ctx context.Context, dir string) (Repo, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", dir, as(ErrNotARepo, err))
+	}
+	// A bare repository (a mirror) is opened as one, by GIT_DIR: git looks
+	// for a .git entry inside a folder before taking it as a bare
+	// repository, and the folder of a mirror is writable by mestre-agente.
+	pin := []string{"GIT_DIR=" + abs}
+	if out, err := g.run(ctx, runOpts{dir: abs, env: pin}, "rev-parse", "--path-format=absolute", "--git-common-dir", "--is-bare-repository"); err == nil {
+		if lines := strings.Split(strings.TrimSpace(string(out)), "\n"); len(lines) == 2 && strings.TrimSpace(lines[1]) == "true" {
+			return &repo{g: g, dir: abs, common: filepath.Clean(filepath.FromSlash(strings.TrimSpace(lines[0]))), bare: true, gitDir: abs}, nil
+		}
+	} else if errors.Is(err, ErrGitNotFound) || errors.Is(err, ErrGitTooOld) || errors.Is(err, ErrExternalProcessInFastSuite) {
+		return nil, fmt.Errorf("open %s: %w", dir, err)
 	}
 	out, err := g.run(ctx, runOpts{dir: abs}, "rev-parse", "--path-format=absolute", "--git-common-dir", "--is-bare-repository")
 	if err != nil {

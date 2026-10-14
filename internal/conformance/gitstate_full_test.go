@@ -30,9 +30,21 @@ func TestTheGitStateOfARunKnowsTheMainBranch(t *testing.T) {
 	if rel, err := filepath.Rel(filepath.Join(ws.Mirror, "worktrees"), ws.GitDir); err != nil || rel == "." || filepath.IsAbs(rel) || rel[0] == '.' {
 		t.Errorf("GitDir %q is not a worktree folder of the mirror %q", ws.GitDir, ws.Mirror)
 	}
-	st := classes.GitxState{Git: git, Main: MainBranch}
+	if ws.Record.GitDir != ws.GitDir || ws.Record.Dir == "" {
+		t.Fatalf("record %+v, GitDir %q", ws.Record, ws.GitDir)
+	}
+	// The git state of the run opens the worktree by that record.
+	ru := &run{r: &Runner{Git: git}, ws: ws}
+	st := ru.gitState()
 	changed, err := st.Changed(t.Context(), ws.Worktree, filepath.Join(ws.Worktree, "README.md"))
 	if err != nil || changed {
 		t.Errorf("README.md of the main branch, untouched: changed %v, %v", changed, err)
+	}
+	if _, err := ru.openWorktree(t.Context()); err != nil {
+		t.Errorf("open the worktree of the run by its record: %v", err)
+	}
+	// Without the record (a git that does not record), it fails closed.
+	if c, err := (classes.GitxState{Git: git, Main: MainBranch}).Changed(t.Context(), ws.Worktree, filepath.Join(ws.Worktree, "README.md")); !c || err == nil {
+		t.Errorf("without the record: changed %v, %v; want changed with an error", c, err)
 	}
 }

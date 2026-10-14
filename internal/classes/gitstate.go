@@ -3,7 +3,9 @@ package classes
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,14 +13,64 @@ import (
 	"github.com/lucasndas/mestre/internal/gitx"
 )
 
-// GitxState is the GitState of the engine, over internal/gitx.
+// GitxState is the GitState of the engine, over internal/gitx, for one
+// table worktree. It opens the worktree only by the engine's record of it
+// (gitx.Real.OpenWorktree), never by its folder: the .git file of the
+// worktree and the commondir of its git folder are written by the account
+// of the agents, and following them would let an agent hand the engine a
+// repository of its own (docs/arquitetura/seguranca.md#git-do-motor). A
+// worktree that no longer points at its record is gitx.ErrWorktreeMoved:
+// Moved hears it, and the decision that needed the git state fails closed
+// (the script counts as changed, the commit is denied).
 type GitxState struct {
-	Git gitx.Git
+	// Git opens the worktree by its record (gitx.Real); nil answers
+	// nothing, so every check fails closed.
+	Git gitx.WorktreeOpener
+	// Worktree is the record of the table's worktree, taken right after it
+	// was created, before any agent ran there (gitx.Real.Record). A call for
+	// any other folder fails closed.
+	Worktree gitx.WorktreeRecord
 	// Main is the main branch as a ref of the worktree's repository
 	// ("main", "refs/remotes/origin/main"): the base of the table branch is
 	// its merge-base with it. Empty: no base, and every script of the
 	// worktree counts as changed (TableScripts).
 	Main string
+	// Moved hears every gitx.ErrWorktreeMoved, the alert of a worktree an
+	// agent pointed elsewhere; nil drops it (the check still fails closed).
+	Moved func(error)
+}
+
+// open opens the worktree of the record, which must be the worktree asked.
+func (g GitxState) open(ctx context.Context, worktree string) (gitx.Repo, error) {
+	if g.Git == nil {
+		return nil, errNoGit
+	}
+	if !sameDir(worktree, g.Worktree.Dir) {
+		return nil, errOtherWorktree
+	}
+	r, err := g.Git.OpenWorktree(ctx, g.Worktree)
+	return r, g.alert(err)
+}
+
+// alert passes err to Moved when it is gitx.ErrWorktreeMoved, and returns it.
+func (g GitxState) alert(err error) error {
+	if err != nil && g.Moved != nil && errors.Is(err, gitx.ErrWorktreeMoved) {
+		g.Moved(err)
+	}
+	return err
+}
+
+// sameDir reports whether a and b are the same existing folder.
+func sameDir(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	sa, err := os.Stat(a)
+	if err != nil || !sa.IsDir() {
+		return false
+	}
+	sb, err := os.Stat(b)
+	return err == nil && os.SameFile(sa, sb)
 }
 
 // maxScriptBytes is the largest script Changed compares; a larger one
@@ -46,19 +98,22 @@ func (g GitxState) Changed(ctx context.Context, worktree, path string) (bool, er
 	if err != nil {
 		return true, err
 	}
-	r, err := g.Git.Open(ctx, worktree)
+	r, err := g.open(ctx, worktree)
 	if err != nil {
 		return true, err
 	}
 	bases, err := g.bases(ctx, r)
 	if err != nil {
-		return true, err
+		return true, g.alert(err)
 	}
 	if len(bases) == 0 {
 		return true, nil // a branch with no commit in common with Main
 	}
 	for _, b := range bases {
 		at, err := r.ReadFile(ctx, b, filepath.ToSlash(rel))
+		if err != nil && !errors.Is(err, gitx.ErrFileNotFound) {
+			return true, g.alert(err)
+		}
 		if err != nil || !sameText(at, data) {
 			return true, nil // created at the table, or changed
 		}
@@ -126,13 +181,13 @@ func sameText(a, b []byte) bool {
 // Branch implements GitState: the branch of the worktree in git worktree
 // list.
 func (g GitxState) Branch(ctx context.Context, worktree string) (string, error) {
-	r, err := g.Git.Open(ctx, worktree)
+	r, err := g.open(ctx, worktree)
 	if err != nil {
 		return "", err
 	}
 	wts, err := r.ListWorktrees(ctx)
 	if err != nil {
-		return "", err
+		return "", g.alert(err)
 	}
 	want := pathKey(resolved(worktree))
 	for _, w := range wts {
@@ -149,13 +204,13 @@ func (g GitxState) Branch(ctx context.Context, worktree string) (string, error) 
 // Committed implements GitState from git status: the staged entries and,
 // with all, every changed tracked file.
 func (g GitxState) Committed(ctx context.Context, worktree string, all bool) ([]string, error) {
-	r, err := g.Git.Open(ctx, worktree)
+	r, err := g.open(ctx, worktree)
 	if err != nil {
 		return nil, err
 	}
 	st, err := r.Status(ctx)
 	if err != nil {
-		return nil, err
+		return nil, g.alert(err)
 	}
 	var out []string
 	for _, e := range st {
@@ -181,6 +236,10 @@ const (
 	errNoWorktree gitStateError = "the worktree is not in git worktree list"
 	errNoMain     gitStateError = "the main branch of the repository is not known"
 	errNotScript  gitStateError = "not a regular file of at most 1 MiB"
+	errNoGit      gitStateError = "no git to open the worktree by its record"
+	// errOtherWorktree is a call for a folder that is not the recorded
+	// worktree of the table.
+	errOtherWorktree gitStateError = "the folder is not the recorded worktree of the table"
 )
 
 func resolved(p string) string {
