@@ -495,7 +495,7 @@ func (w *riskWalker) scan(c *riskCmd, ws []word, st *shellState) {
 			}
 		}
 	}
-	if a, ok := interpreterScript(c.name, args); ok && !a.glob && w.inWorktree(a, st) {
+	if a, ok := interpreterScript(c.name, args); ok && !a.glob && !stdinPaths[a.text] && w.inWorktree(a, st) {
 		c.scriptInWorktree = true
 	}
 }
@@ -516,7 +516,7 @@ func (w *riskWalker) script(cn string, ws []word, st *shellState) (word, bool) {
 		// x.py): the launcher does not launder a changed script.
 		return p, true
 	}
-	if a, ok := interpreterScript(cn, ws[1:]); ok && !a.glob && w.inWorktree(a, st) {
+	if a, ok := interpreterScript(cn, ws[1:]); ok && !a.glob && !stdinPaths[a.text] && w.inWorktree(a, st) {
 		return a, true
 	}
 	return word{}, false

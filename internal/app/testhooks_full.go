@@ -33,7 +33,7 @@ import (
 //	MESTRE_TEST_EXTERNAL=<folder>  a fake external function: <folder>/<instance>.external
 //	                               gets a line when the Citadel acts outside and when it stops
 //	MESTRE_TEST_CONTROL=<socket>   the control of the test, one JSON line per request:
-//	                               status, promote, handover, exec and query
+//	                               status, joinable, promote, handover, exec and query
 func testHooks(ctx context.Context, d *Deps, cfg Config, getenv func(string) string) (after func(*Engine) error, cleanup func(), err error) {
 	var (
 		closers []func()
@@ -79,6 +79,19 @@ func testHooks(ctx context.Context, d *Deps, cfg Config, getenv func(string) str
 		return nil
 	}
 	return after, cleanup, nil
+}
+
+// open says whether a Citadel has mounted the routes of the entry (they exist
+// from the start and answer 503 until then).
+func (j *joinMux) open() bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for _, h := range j.h {
+		if h != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // dirLock is the fake lock of the instances of a test: a file per epoch,
@@ -253,6 +266,13 @@ func control(ctx context.Context, e *Engine, req controlRequest) controlAnswer {
 	case "status":
 		st := e.Status()
 		return controlAnswer{OK: true, Status: &st}
+	case "joinable":
+		// The entry is open: the Citadel acts and has mounted its routes. Acting
+		// alone is not that, the routes come after the CA is opened.
+		if !e.joins.open() {
+			return fail(errors.New("the routes of the entry are not mounted"))
+		}
+		return controlAnswer{OK: true}
 	case "promote":
 		go func() {
 			if err := e.Promote(context.WithoutCancel(ctx), "test"); err != nil {

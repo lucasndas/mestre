@@ -326,9 +326,18 @@ func (e *evaluator) git(args []word, st *shellState, depth int) result {
 		}
 	case "checkout-index":
 		// Plumbing that writes tracked paths to the worktree; -a all, or the
-		// pathspecs after -- / as positionals. A protected path is denied.
+		// pathspecs after -- / as positionals. A protected path is denied, and
+		// so is --prefix=<dir>, which moves every write under <dir> (checked
+		// like read-tree --prefix). --stdin names the paths in an input the
+		// line does not show: they may be protected, so it is a fixed deny.
 		for _, p := range gitPathspecs(rest) {
 			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true, recursive: true}, gst))
+		}
+		if w := flagValue(rest, "--prefix"); w != nil {
+			res.merge(e.argPath(*w, use{write: true, recursive: true}, gst))
+		}
+		if hasAny(rest, "--stdin") {
+			deny("git checkout-index --stdin escreve caminhos que a linha não mostra e que podem ser protegidos")
 		}
 		if len(gitPathspecs(rest)) == 0 && hasAny(rest, "-a", "--all") {
 			res.atLeastAsk("git checkout-index -a escreve todos os arquivos preparados na árvore")
@@ -340,10 +349,12 @@ func (e *evaluator) git(args []word, st *shellState, depth int) result {
 			res.merge(e.argPath(*w, use{write: true, recursive: true}, gst))
 		}
 	case "update-index":
-		// --cacheinfo <mode,sha,path> and --index-info stage arbitrary
-		// paths into the shared index; a protected path is a fixed deny.
+		// --cacheinfo <mode,sha,path> stages a path into the shared index; a
+		// protected path is a fixed deny. --index-info and --stdin read the
+		// entries or paths from an input the line does not show, so the paths
+		// are unknown and may be protected: also a fixed deny.
 		if hasAny(rest, "--index-info", "--stdin") {
-			res.atLeastAsk("git update-index --index-info lê as entradas da entrada")
+			deny("git update-index --index-info/--stdin grava no índice compartilhado caminhos que a linha não mostra e que podem ser protegidos")
 		}
 		for _, p := range cacheInfoPaths(rest) {
 			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true}, gst))

@@ -2,6 +2,8 @@ package replication
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -80,5 +82,69 @@ func TestAResyncThatComesBeforeTheStreamIsKept(t *testing.T) {
 	req, ok := p.early["t1"]
 	if !ok || req.from == nil || *req.from != 7 {
 		t.Fatalf("the request was not kept: %+v", p.early)
+	}
+}
+
+// CA-REPL-04
+// The order to erase removes the full copies that were arriving when it came,
+// and only those: the Citadel sends the order at every connection of an excluded
+// machine and then makes a full copy without the vault tables, whose xfer.begin
+// comes after the order. Erasing in the background used to remove that copy as
+// well, whenever it ran after the begin, and the connection was closed
+// (CA-REPL-04).
+func TestTheOrderToEraseDoesNotRemoveTheFullCopyThatBeginsAfterIt(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mestre.db")
+	primary, err := guilddb.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	xfer := filepath.Join(dir, "xfer")
+	if err := os.MkdirAll(xfer, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewReplica(ctx, ReplicaConfig{DB: db, TransferDir: xfer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyOf := func(id string) {
+		t.Helper()
+		raw, _ := json.Marshal(protocol.XferBegin{XferID: id, Kind: protocol.KindDBSnapshot, Size: 10, SHA256: "00"})
+		for name, body := range map[string][]byte{id + ".json": raw, id + ".part": []byte("half of a copy")} {
+			if err := os.WriteFile(filepath.Join(xfer, name), body, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	exists := func(name string) bool { _, err := os.Stat(filepath.Join(xfer, name)); return err == nil }
+
+	copyOf("before")
+	if _, err := r.handleVaultDrop(ctx, &protocol.Message{}); err != nil {
+		t.Fatal(err)
+	}
+	// The order has been handled; the copy begins after it, and only then does
+	// the erasing in the background get to run.
+	copyOf("after")
+	r.bg.Wait()
+
+	for _, name := range []string{"before.json", "before.part"} {
+		if exists(name) {
+			t.Errorf("%s: the copy that was arriving when the order came is still on the disk", name)
+		}
+	}
+	for _, name := range []string{"after.json", "after.part"} {
+		if !exists(name) {
+			t.Errorf("%s: the copy that began after the order was removed", name)
+		}
 	}
 }
