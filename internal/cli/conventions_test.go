@@ -457,6 +457,61 @@ func TestATextThatLooksLikeASecretIsRefusedAndNothingIsSent(t *testing.T) {
 	})
 }
 
+// countingForwarder counts what passed the Gate.
+type countingForwarder struct{ n atomic.Int32 }
+
+func (f *countingForwarder) Forward(context.Context, *localchan.Call) localchan.Response {
+	f.n.Add(1)
+	return localchan.OK(nil)
+}
+
+// Part of CA-CLI-CONV-10: a process of the character can write the request
+// itself, past the CLI. The engine then refuses, as a usage error and
+// sending nothing, what the CLI would never send: an argument of a Secret
+// command that is not text (a number, a list holding the token), a flag the
+// command does not have, a flag with a value of another kind; a token in a
+// flag of the command is still a secret.
+func TestARequestWrittenPastTheCLIDoesNotSlipASecretThrough(t *testing.T) {
+	t.Parallel()
+	fakeToken := "ghp_" + "0123456789abcdefghijklmnopqrstuvwxyz"
+	tok, _ := json.Marshal(fakeToken)
+	list, _ := json.Marshal([]string{fakeToken})
+	obj, _ := json.Marshal(map[string]string{"t": fakeToken})
+	next := &countingForwarder{}
+	g := cli.NewGate(cli.GateConfig{Commands: extendedRegistry(), Next: next,
+		Profiles: cli.ProfilesFunc(func(context.Context, string) cli.Profile { return allowing(cli.RoleGrandMaster) })})
+	ok := json.RawMessage(`"ok"`)
+	for name, c := range map[string]struct {
+		req  localchan.Request
+		code string
+	}{
+		"a number among the arguments": {localchan.Request{Cmd: "reply", Args: []json.RawMessage{tok, json.RawMessage(`1`)}}, localchan.CodeUsage},
+		"a list holding the token":     {localchan.Request{Cmd: "reply", Args: []json.RawMessage{list}}, localchan.CodeUsage},
+		"an object holding the token":  {localchan.Request{Cmd: "notify", Args: []json.RawMessage{obj}}, localchan.CodeUsage},
+		"a flag of another command":    {localchan.Request{Cmd: "notify", Args: []json.RawMessage{ok}, Flags: map[string]any{"secret": fakeToken}}, localchan.CodeUsage},
+		"a flag as a list":             {localchan.Request{Cmd: "notify", Args: []json.RawMessage{ok}, Flags: map[string]any{"table": []any{fakeToken}}}, localchan.CodeUsage},
+		"a flag as an object":          {localchan.Request{Cmd: "notify", Args: []json.RawMessage{ok}, Flags: map[string]any{"table": map[string]any{"x": fakeToken}}}, localchan.CodeUsage},
+		"the token in the flag":        {localchan.Request{Cmd: "notify", Args: []json.RawMessage{ok}, Flags: map[string]any{"table": fakeToken}}, "secret_detected"},
+		"an unknown flag of ask":       {localchan.Request{Cmd: "ask", Args: []json.RawMessage{ok, ok}, Flags: map[string]any{"wait": "1m"}}, localchan.CodeUsage},
+		"a timeout that is not text":   {localchan.Request{Cmd: "ask", Args: []json.RawMessage{ok, ok}, Flags: map[string]any{"timeout": 60}}, localchan.CodeUsage},
+	} {
+		resp := g.Forward(t.Context(), &localchan.Call{Request: c.req, Caller: localchan.Caller{Identified: true, AgentID: "gm"}})
+		if resp.OK || resp.Error == nil || resp.Error.Code != c.code {
+			t.Errorf("%s: %+v; want %s", name, resp, c.code)
+		} else if strings.Contains(resp.Error.Message, fakeToken) {
+			t.Errorf("%s: the refusal repeats the token", name)
+		}
+	}
+	if n := next.n.Load(); n != 0 {
+		t.Fatalf("%d requests passed the Gate", n)
+	}
+	// What the CLI sends still passes.
+	if resp := g.Forward(t.Context(), &localchan.Call{Request: localchan.Request{Cmd: "notify", Args: []json.RawMessage{ok}, Flags: map[string]any{"table": "1-login"}},
+		Caller: localchan.Caller{Identified: true, AgentID: "gm"}}); !resp.OK || next.n.Load() != 1 {
+		t.Fatalf("an ordinary notify: %+v", resp)
+	}
+}
+
 // Part of CA-CLI-CONV-07 (it closes in milestone 4, with `ask --raw` and the
 // state of the terminals): the rule that decides it. A target waiting for a
 // permission is `permission_prompt` with exit 3, a busy one `busy` with exit

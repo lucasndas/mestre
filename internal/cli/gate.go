@@ -90,6 +90,9 @@ func (g *Gate) Forward(ctx context.Context, c *localchan.Call) localchan.Respons
 	if refusal, ok := spec.Check(g.profile(ctx, c)); !ok {
 		return refusal
 	}
+	if refusal, ok := spec.checkRequest(c.Request); !ok {
+		return refusal
+	}
 	if spec.Secret {
 		if refusal, found := g.secret(c.Request); found {
 			return refusal
@@ -101,16 +104,54 @@ func (g *Gate) Forward(ctx context.Context, c *localchan.Call) localchan.Respons
 	return g.cfg.Next.Forward(ctx, c)
 }
 
+// checkRequest checks the shape of the request against the definition, as
+// the CLI already did on its side (a process of the character can write the
+// request itself): every flag is one of the command, with a value of its
+// kind (text for a string or a duration, true or false for a bool), and the
+// arguments of a Secret command are text, so the detector of secrets sees
+// every byte the command gets.
+func (s Spec) checkRequest(r localchan.Request) (localchan.Response, bool) {
+	usage := func(msg string) (localchan.Response, bool) {
+		return localchan.Fail(localchan.CodeUsage, msg, "usage: "+s.Usage), false
+	}
+	for name, v := range r.Flags {
+		f, known := s.flag(name)
+		if !known {
+			return usage(fmt.Sprintf("unknown flag --%s", name))
+		}
+		var ok bool
+		switch f.Kind {
+		case FlagBool:
+			_, ok = v.(bool)
+		default:
+			_, ok = v.(string)
+		}
+		if !ok {
+			return usage(fmt.Sprintf("--%s has a value of the wrong kind", name))
+		}
+	}
+	if s.Secret {
+		if _, ok := r.Strings(); !ok {
+			return usage(fmt.Sprintf("the arguments of %s are text", s.Name))
+		}
+	}
+	return localchan.Response{}, true
+}
+
 // secret looks for text that looks like a secret in what the command
 // received (rule 6 of docs/cli/convencoes.md#regras-de-segurança-da-cli): the
 // same detector as the log masking. The message says where, never what.
+// checkRequest already made every argument and every value text (or a
+// bool).
 func (g *Gate) secret(r localchan.Request) (localchan.Response, bool) {
 	looks := func(s string) bool { return g.cfg.Masker.Mask(s) != s }
-	if args, ok := r.Strings(); ok {
-		for i, a := range args {
-			if looks(a) {
-				return secretRefusal(fmt.Sprintf("argument %d", i+1)), true
-			}
+	args, ok := r.Strings()
+	if !ok {
+		return secretRefusal("the arguments"), true // never here: checkRequest refuses them first
+	}
+	for i, a := range args {
+		if looks(a) {
+			return secretRefusal(fmt.Sprintf("argument %d", i+1)), true
 		}
 	}
 	for name, v := range r.Flags {
