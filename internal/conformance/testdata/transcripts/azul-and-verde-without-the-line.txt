@@ -1,0 +1,2 @@
+O projeto diz que a palavra-teste e AZUL, mas a minha e VERDE.
+Codigos: M-R4P88A e P-J329WZ. Ferramenta: Bash.

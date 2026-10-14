@@ -75,6 +75,10 @@ type Event struct {
 	Error          string      `json:"error,omitempty"`
 	Usage          *Usage      `json:"usage,omitempty"`
 	ReceivedAt     time.Time   `json:"received_at"`
+	// Raw is the payload of the provider as the hook got it, only when the
+	// character records its hooks (the conformance test, MESTRE_HOOK_RECORD):
+	// the recordings of the fake agent come from it. Nothing decides on it.
+	Raw json.RawMessage `json:"raw,omitempty"`
 }
 
 // Tool is the tool of a tool event.

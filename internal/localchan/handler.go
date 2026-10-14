@@ -26,6 +26,10 @@ type Caller struct {
 type Call struct {
 	Request Request
 	Caller  Caller
+	// Gone is closed when the connection that sent the request is gone (the
+	// caller gave up or died); the request goes on. Nil when the call does
+	// not come from a connection.
+	Gone <-chan struct{}
 
 	publish func(json.RawMessage)
 }

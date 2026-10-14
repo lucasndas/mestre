@@ -26,7 +26,7 @@
 
 ## Tabelas principais do banco da Guilda (proposta)
 
-Cada marco cria só as tabelas de que precisa, em migração nova ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). Existem hoje: `secrets` no banco da Guilda e `terminals` no banco local de máquina (M1); no M2, `replication_log` (fora das migrações numeradas), `outbox`, `processed_commands`, `guild`, `machines`, `machine_credentials`, `join_requests`, `epochs` e `audit_log` no banco da Guilda e `outbox`, `processed_commands`, `known_addresses` e `machine_identity` no banco local; no M3, `workspace_ceilings`, `classes` e `class_proposals` no banco da Guilda e `agent_rules` e `used_exceptions` no banco local; as demais abaixo são proposta.
+Cada marco cria só as tabelas de que precisa, em migração nova ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). Existem hoje: `secrets` no banco da Guilda e `terminals` no banco local de máquina (M1); no M2, `replication_log` (fora das migrações numeradas), `outbox`, `processed_commands`, `guild`, `machines`, `machine_credentials`, `join_requests`, `epochs` e `audit_log` no banco da Guilda e `outbox`, `processed_commands`, `known_addresses` e `machine_identity` no banco local; no M3, `workspace_ceilings`, `classes`, `class_proposals` e `conformance_results` no banco da Guilda e `agent_rules` e `used_exceptions` no banco local; as demais abaixo são proposta.
 
 Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas ficam nas migrações; o significado de cada dado, no documento da funcionalidade.
 
