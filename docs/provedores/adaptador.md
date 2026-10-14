@@ -81,7 +81,7 @@ Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos
 | `internal` | `TodoWrite` | `update_plan` | `manage_task`, `ask_question`, `list_permissions`, `ask_permission` |
 | `other` | qualquer nome não mapeado | idem | `generate_image`, `schedule`, não mapeados |
 
-Ferramenta de tipo `shell` sem comando, ou `read`, `write`, `edit` ou `search` sem caminho lido de um campo do mapa, vira `other`: nenhuma regra de caminho decide sem ver o caminho. Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
+Ferramenta de tipo `shell` sem comando, ou `read`, `write`, `edit` ou `search` sem caminho lido de um campo do mapa, vira `other`: nenhuma regra de caminho decide sem ver o caminho. Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/formato-das-permissoes.md)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
 
 ### Prontidão e telas interativas
 
@@ -113,7 +113,7 @@ Se o comando falhar ou não houver id salvo, o personagem renasce com a mensagem
 
 ### Monitoramento reduzido
 
-O personagem fica marcado com monitoramento reduzido, com o motivo, quando o provedor não tem algum evento do mapa (o Antigravity sempre) ou quando nenhum hook chega em 60 s (padrão) depois do primeiro prompt entregue (hooks não carregados, pasta sem confiança). No segundo caso o motor também gera um alerta do [checklist](../plataforma/checklist.md). O canvas mostra a marca ([canvas](../painel/canvas.md)). O plano B (contexto na primeira mensagem, resumo do estado salvo a cada `turn_end`) está em [personagem](../sessao-zero/personagem.md) e [personagens](../orquestracao/personagens.md).
+O personagem fica marcado com monitoramento reduzido, com o motivo, quando o provedor é o Antigravity, que não tem os eventos de permissão, interrupção, compactação, fim de sessão e notificação (a falta de `notification` no Codex e de `interrupt` no Claude Code, que é uma tela, não marca), ou quando nenhum hook chega em 60 s (padrão) depois do primeiro prompt entregue (hooks não carregados, pasta sem confiança). No segundo caso o motor também gera um alerta do [checklist](../plataforma/checklist.md). O canvas mostra a marca ([canvas](../painel/canvas.md)). O plano B (contexto na primeira mensagem, resumo do estado salvo a cada `turn_end`) está em [personagem](../sessao-zero/personagem.md) e [personagens](../orquestracao/personagens.md).
 
 ## Regras e erros
 

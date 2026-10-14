@@ -1,6 +1,6 @@
 # Cofre de segredos
 
-> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -63,7 +63,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
   Nos três casos, o motor apaga a mensagem original (`deleteMessage` no Telegram; no painel, ela não é gravada), ela não entra em histórico, caixa de entrada nem log, a auditoria guarda só "tentativa de envio de segredo bloqueada" (usuário, canal, horário), e o Grão-Mestre recusa, pede o cadastro pelo painel e **recomenda trocar a senha**, que já passou por um canal sem criptografia ponta a ponta e, no caso 3, pela IA ([segurança do canal](../telegram/seguranca-do-canal.md#segredos)).
 - **Só de escrita:** depois de salva, a credencial nunca é mostrada de novo, nem ao Dono; só substituir ou apagar, com PIN. Nenhuma API do painel nem comando da CLI a devolve: só os metadados.
 - **Metadados obrigatórios**, fora da parte cifrada: `owner_user` (quem responde ao segundo fator e recebe avisos; padrão: o Dono), `classes` que podem usá-la, `domains`, `kind` (`senha_principal` \| `senha_de_app` \| `token` \| `chave_api`) e `expires_at` (opcional). No cadastro, o painel sugere usar senha de app, token ou chave de API em vez da senha principal.
-- **Quem usa:** só personagem cuja classe libera a credencial em `network.credentials` ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)) **e** está em `classes` da credencial. Cada uso vai para a auditoria (usuário dono, classe, personagem, site, horário), nunca o valor.
+- **Quem usa:** só personagem cuja classe libera a credencial em `network.credentials` ([permissões](../classes/formato-das-permissoes.md)) **e** está em `classes` da credencial. Cada uso vai para a auditoria (usuário dono, classe, personagem, site, horário), nunca o valor.
 - **Validade:** o motor avisa o `owner_user` e o Dono (Telegram e painel) 7 dias antes de `expires_at` (padrão) e, nas credenciais sem validade, lembra de trocá-las a cada 90 dias (padrão) desde a última substituição.
 
 ### Login em sites

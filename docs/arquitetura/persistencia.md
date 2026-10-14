@@ -1,6 +1,6 @@
 # Persistência
 
-> **Assunto:** banco principal na Cidadela, réplica nas Torres e banco local de máquina, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** banco principal na Cidadela, réplica nas Torres e banco local de máquina, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## Princípios
 
@@ -62,7 +62,7 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 | `account_profiles` | perfis de conta locais (pastas de configuração por provedor) |
 | `outbox` | a **fila de saída**: eventos, `done`, resultados e o mais que espera ack da Cidadela (os pedidos da CLI, não: vão só na conexão aberta), cada um com id idempotente; reenviados ao reconectar, na ordem e sem prazo ([Cidadela fora](../guilda/cidadela-e-torres.md#cidadela-fora-e-fila-de-saída)) |
 | `processed_commands` | comandos da Cidadela já executados (idempotência), sob a chave "a Cidadela", qualquer que seja a máquina; um id sai só depois de 24 h e abaixo do piso (`outbox.floor`) que a Cidadela conectada mandou ([ack e idempotência](../conectividade/protocolo.md#ack-e-idempotência)) |
-| `agent_rules` | regras efetivas de cada personagem desta máquina ([permissões](../classes/permissoes.md#regras-efetivas)) |
+| `agent_rules`, `used_exceptions` | regras efetivas de cada personagem desta máquina (a mais nova por `generated_at`) e as exceções pontuais já usadas, até saírem do documento ([permissões](../classes/permissoes.md#regras-efetivas)) |
 | `checklist_results` | último resultado local do [checklist](../plataforma/checklist.md) |
 
 Ao reconectar: a máquina envia o `outbox` e o estado dos `terminals`; a Cidadela decide e a replicação traz o que mudou. Em conflito, vale a Cidadela, exceto o estado real dos processos, que só a máquina conhece ([protocolo](../conectividade/protocolo.md)). Na Cidadela, o banco local de máquina guarda o mesmo que numa Torre, para os personagens que rodam nela.

@@ -83,6 +83,13 @@ type Options struct {
 	CodexTurnFailure func(stop Event) (reason StopReason, detail string, failed bool)
 }
 
+// NormalizePath normalizes a path the way the adapters do with the paths of
+// a tool before any decision: absolute against cwd, without "..", links
+// resolved and, on Windows, without case differences. The permission
+// decision uses it for the paths of command arguments (Env.Normalize of
+// internal/classes).
+func (o Options) NormalizePath(p, cwd string) string { return o.paths().normalize(p, cwd) }
+
 func (o Options) paths() pathNormalizer {
 	r := o.Resolve
 	if r == nil {

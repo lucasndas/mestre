@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/machinesheet"
@@ -117,6 +118,13 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		}
 	}
 	router.HandleFunc(protocol.TypeGuildConfig, e.handleGuildConfig(db, locator, kickRenew))
+	// The effective rules of the characters of this machine: kept in the
+	// machine database, with the snapshot for the degraded hook
+	// (docs/classes/permissoes.md#regras-efetivas).
+	rulesStore := &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
+	router.HandleFunc(protocol.TypeAgentRules, rulesStore.Handler(func(p protocol.Peer) bool {
+		return p.Role == protocol.RoleMachine && p.ID == e.epochs.Citadel()
+	}))
 	msql := protocol.NewSQLStore(e.mdb)
 	client, err := protocol.NewClient(protocol.Config{
 		MachineID: e.id.MachineID, Clock: e.clk, Router: router, Epoch: e.epochs, Certs: e.epochs, Outbox: msql, Processed: msql,

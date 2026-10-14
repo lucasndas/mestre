@@ -1,6 +1,6 @@
 # Teto do workspace
 
-> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Motor · **Atualizado:** 2026-10-14
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Dar liberdade aos Mestres de mesa sem perder o controle: eles criam classes da m
 
 ### Arquivo
 
-Fica em `.mestre/regras/teto.yaml` ([estrutura de `.mestre/`](../sessao-zero/workspace.md#estrutura-de-mestre)), no clone principal do workspace na Cidadela. Usa o mesmo formato do [`permissions.yaml`](permissoes.md#formato-do-permissionsyaml), lido como **máximo**, mais o bloco de custo:
+Fica em `.mestre/regras/teto.yaml` ([estrutura de `.mestre/`](../sessao-zero/workspace.md#estrutura-de-mestre)), no clone principal do workspace na Cidadela. Usa o mesmo formato do [`permissions.yaml`](formato-das-permissoes.md), lido como **máximo**, mais o bloco de custo:
 
 ```yaml
 version: 1

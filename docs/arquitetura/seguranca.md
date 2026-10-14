@@ -1,6 +1,6 @@
 # Segurança
 
-> **Assunto:** modelo de ameaças, TLS e CA da Guilda, nomes dos certificados (`mestre.local` só na Cidadela), credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, git do motor, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** modelo de ameaças, TLS e CA da Guilda, nomes dos certificados (`mestre.local` só na Cidadela), credenciais de máquina, uma Cidadela por vez, risco de máquina roubada, isolamento dos agentes, git do motor, mascaramento em logs e quem vê o quê · **Componente:** Todos · **Atualizado:** 2026-10-14
 
 ## O que proteger
 
@@ -91,7 +91,7 @@ O `MESTRE_AGENT_ID` está no ambiente de cada agente, mas qualquer processo pode
 
 ## Navegação web e login em sites
 
-- Cada personagem que navega usa o **próprio** MCP de navegador (ex.: Playwright MCP headless), iniciado pelo CLI dele e, portanto, como `mestre-agente`, com navegador limpo: sem acesso às sessões, aos cookies e aos perfis de navegador do usuário ([permissões](../classes/permissoes.md#formato-do-permissionsyaml)).
+- Cada personagem que navega usa o **próprio** MCP de navegador (ex.: Playwright MCP headless), iniciado pelo CLI dele e, portanto, como `mestre-agente`, com navegador limpo: sem acesso às sessões, aos cookies e aos perfis de navegador do usuário ([permissões](../classes/formato-das-permissoes.md)).
 - **Login em sites só pelo cofre:** credenciais de site ficam no cofre, por domínio, e a classe libera quais o personagem pode usar. O motor da máquina do personagem faz o login num navegador que ele controla, com o mesmo navegador e versão do MCP do personagem, e entrega a ele só o estado de sessão resultante, apagado no fim; a senha nunca chega ao personagem ([cofre](../plataforma/cofre.md#login-em-sites)). Segundo fator e captcha de imagem o motor resolve com o dono da credencial pelo Telegram, sem passar por agente; captcha interativo vira `login_requires_human` e proposta de Operador do PC ([segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha)).
 - **Navegador e computador do usuário:** MCPs que controlam o computador ou o navegador do usuário só funcionam na base Operador do PC; em qualquer outra, uma regra fixa os nega, qualquer que seja o transporte ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
 
