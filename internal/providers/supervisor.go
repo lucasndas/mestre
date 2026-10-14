@@ -6,10 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -115,12 +113,12 @@ type Inbox interface {
 
 // Decisions are the answers the engine already took for a screen: trust in
 // a worktree the Mestre created, the recorded decision of a native
-// permission request. screen is the text on display: a permission screen
-// is answered with the decision of the call it shows (ScreenCall), never
-// with the last decision of the character; with no such call, ok is false
-// and the screen is denied.
+// permission request. dialog is the dialog on display (ScreenResult.Dialog):
+// a permission screen is answered with the decision of the call it shows
+// (ScreenCall), never with the last decision of the character; with no
+// such call, ok is false and the screen is denied.
 type Decisions interface {
-	Decision(ctx context.Context, agentID, screenID, screen string) (choice string, ok bool)
+	Decision(ctx context.Context, agentID, screenID, dialog string) (choice string, ok bool)
 }
 
 // CallDecision is the decision the engine took on one tool call of a
@@ -129,68 +127,9 @@ type Decisions interface {
 type CallDecision struct {
 	Tool   *Tool
 	Choice string // "allow" or "deny"
-}
-
-// ScreenCall finds the call a native permission screen asks about: the most
-// recent of calls (oldest first) whose command is, whole, on lines of its
-// own in the dialog at the bottom of the screen (blanks ignored, since the
-// screen wraps a long command; a frame or a $ in front is not part of it),
-// or, for a call without a command, whose first path or URL is on a line.
-// A line of the model that only mentions the command is not it. -1 when no
-// call is there: the screen is denied. The caller drops a call once it ends
-// or its decision answered a screen, so a stale decision never answers the
-// screen of another call.
-func ScreenCall(screen string, calls []CallDecision) int {
-	lines := strings.Split(bottom(screen, dialogLines), "\n")
-	for i := len(calls) - 1; i >= 0; i-- {
-		t := calls[i].Tool
-		switch {
-		case t == nil:
-		case t.Command != "":
-			if onOwnLines(lines, squeeze(t.Command)) {
-				return i
-			}
-		case len(t.Paths) > 0 || t.URL != "":
-			e := t.URL
-			if len(t.Paths) > 0 {
-				e = t.Paths[0]
-			}
-			for _, l := range lines {
-				if strings.Contains(squeeze(l), squeeze(e)) {
-					return i
-				}
-			}
-		}
-	}
-	return -1
-}
-
-// onOwnLines reports whether consecutive lines, each without blanks and
-// without the frame of the dialog, make up e exactly.
-func onOwnLines(lines []string, e string) bool {
-	if e == "" {
-		return false
-	}
-	for i := range lines {
-		acc := ""
-		for j := i; j < len(lines) && len(acc) < len(e); j++ {
-			acc += squeeze(strings.Trim(lines[j], " \t│|$>›❯"))
-			if acc == e {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// squeeze is s without blanks.
-func squeeze(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) {
-			return -1
-		}
-		return r
-	}, s)
+	// Cwd is the folder of the call (Event.Cwd): a relative path on the
+	// dialog is read from it. Without it only an absolute path matches.
+	Cwd string
 }
 
 // TrustRecovery restarts a character whose start showed the folder trust
@@ -242,6 +181,7 @@ type Supervisor struct {
 	mu             sync.Mutex
 	starting       bool
 	sessionStarted bool
+	begun          bool // a hook came or the screen was ready once (ScreenInput.Begun)
 	hooksSeen      bool // a hook after the first delivery
 	delivered      bool
 	noHooks        bool
@@ -340,12 +280,27 @@ func (s *Supervisor) escalate(screen, detail string) {
 	}))
 }
 
-// Screen takes the current screen of the terminal (on every stable event).
-func (s *Supervisor) Screen(text string, stable bool) {
+// Screen takes the current screen of the terminal (on every stable event),
+// when the emulator does not give the cursor.
+func (s *Supervisor) Screen(text string, stable bool) { s.screen(text, stable, 0, false) }
+
+// ScreenAt takes the current screen with the row of the cursor in it (0
+// is the first line of text): the input box counts only with the cursor
+// in it.
+func (s *Supervisor) ScreenAt(text string, stable bool, cursorRow int) {
+	s.screen(text, stable, cursorRow, true)
+}
+
+func (s *Supervisor) screen(text string, stable bool, row int, cursor bool) {
 	s.mu.Lock()
 	res := s.cfg.Adapter.Screens(ScreenInput{
-		Text: text, Stable: stable, SessionStarted: s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
+		Text: text, Stable: stable, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted,
+		CursorRow: row, CursorKnown: cursor, ReadyPattern: s.cfg.ReadyPattern,
 	})
+	dialog := res.Dialog
+	if dialog == "" {
+		dialog = text
+	}
 	changed := text != s.lastScreen
 	s.lastScreen = text
 	var act *KnownScreen
@@ -359,7 +314,7 @@ func (s *Supervisor) Screen(text string, stable bool) {
 			s.handled, act = key, res.Known
 		}
 	case res.State == StateReady:
-		s.handled = ""
+		s.handled, s.begun = "", true
 		if s.starting {
 			s.starting = false
 			s.stopStartLocked()
@@ -380,18 +335,19 @@ func (s *Supervisor) Screen(text string, stable bool) {
 	s.mu.Unlock()
 	s.confirmed(confirmed)
 	if act != nil {
-		s.act(act, text)
+		s.act(act, text, dialog)
 	}
 }
 
-// act does the action of a known screen.
-func (s *Supervisor) act(k *KnownScreen, screen string) {
+// act does the action of a known screen; the decision is looked for in its
+// dialog.
+func (s *Supervisor) act(k *KnownScreen, screen, dialog string) {
 	ctx := s.ctx
 	switch k.Action {
 	case ActionAnswer:
 		choice, ok := "", false
 		if s.cfg.Decisions != nil {
-			choice, ok = s.cfg.Decisions.Decision(ctx, s.cfg.AgentID, k.ID, screen)
+			choice, ok = s.cfg.Decisions.Decision(ctx, s.cfg.AgentID, k.ID, dialog)
 		}
 		if !ok {
 			choice = k.Default
@@ -416,7 +372,7 @@ func (s *Supervisor) act(k *KnownScreen, screen string) {
 			err := s.cfg.Trust.RecoverTrust(ctx, s.cfg.AgentID)
 			if err == nil {
 				s.mu.Lock() // a new process starts: the same screen is news again
-				s.handled, s.starting = "", true
+				s.handled, s.starting, s.begun = "", true, false
 				s.armStartLocked()
 				s.mu.Unlock()
 				return
@@ -445,6 +401,7 @@ func (s *Supervisor) Hook(ev Event) {
 		s.starting = false
 		s.stopStartLocked()
 	}
+	s.begun = true
 	if ev.Event == EventSessionStart {
 		s.sessionStarted = true
 	}

@@ -38,7 +38,7 @@ func NewAntigravity(opts Options) Adapter {
 		box:      agyBox,
 		busyNear: regexp.MustCompile(`(?i)esc to (interrupt|cancel)`),
 		known: []KnownScreen{
-			{ID: "trust", Pattern: regexp.MustCompile(`Do you trust the contents of this project\?`), Action: ActionAnswer,
+			{ID: "trust", Pattern: regexp.MustCompile(`Do you trust the contents of this project\?`), Action: ActionAnswer, StartOnly: true,
 				Answers: map[string][]byte{"trust": menuFirst}},
 			{ID: "login", Pattern: regexp.MustCompile(`Sign in with Google`), Action: ActionAlert, Checklist: "ALL-11"},
 			// Antigravity has no permission_request hook: its own screen asks
@@ -50,7 +50,8 @@ func NewAntigravity(opts Options) Adapter {
 			// allow creation / 2. No, deny creation) and "Run this command?"
 			// (1. Yes, run command / … / 4. No, cancel). Enter takes the first,
 			// once; Esc cancels, which interrupts the turn.
-			{ID: "permission", Pattern: regexp.MustCompile(`Yes, allow tool call|(?s)(?:Allow [^\n]*|Run this command)\?\s*\n\s*>\s*1\.\s*Yes, (?:allow|run)`), Action: ActionAnswer,
+			{ID: "permission", Pattern: regexp.MustCompile(`Yes, allow tool call|(?:Allow [^\n]*|Run this command)\?`), Action: ActionAnswer,
+				Option:  regexp.MustCompile(`^Yes, (?:allow|run)`),
 				Answers: map[string][]byte{"allow": menuFirst, "deny": escape}, Default: "deny"},
 			// A native subagent that asks to use a tool (1.3.5: "<name> needs
 			// approval for Create", ctrl+k approves): no key denies it, so it

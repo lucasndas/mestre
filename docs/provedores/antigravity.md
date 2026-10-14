@@ -89,7 +89,7 @@ Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](ad
 
 | Tela | Ação |
 |---|---|
-| confiar na pasta | evitar (pré-confiança); se aparecer num worktree do Mestre, responder "Yes, I trust this folder" |
+| confiar na pasta | evitar (pré-confiança); se aparecer num worktree do Mestre antes de a sessão começar, responder "Yes, I trust this folder" |
 | login (URL e código) | escalar como alerta do checklist |
 | área de entrada (pronto): `>` entre duas linhas `─`, com o rodapé do agente abaixo; com `esc to cancel` nas últimas linhas, ocupado | lida pelo adaptador (1.3.5) |
 | pedido de permissão nativo ("Run this command?" com "1. Yes, run command" … "4. No, cancel"; "Allow creation of this file?" com "1. Yes, allow creation" / "2. No, deny creation"; na 1.3.3, "Yes, allow tool call") | responder com a decisão registrada: Enter na opção 1, uma vez (nunca "always allow"); Esc cancela, o que interrompe o turno; sem decisão, Esc |
