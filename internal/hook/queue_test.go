@@ -139,7 +139,7 @@ func TestTheLinuxPlanOfTheFolders(t *testing.T) {
 	check("/var/spool/mestre/principal/hook", true, fs.ModeSticky|0o730)
 	// What the dispatcher reads is where the plan puts it.
 	m := hook.MachineOf("linux", "", "principal")
-	if m.Agents != "/var/lib/mestre/principal/agentes" || m.Queue != "/var/spool/mestre/principal/hook" {
+	if filepath.ToSlash(m.Agents) != "/var/lib/mestre/principal/agentes" || filepath.ToSlash(m.Queue) != "/var/spool/mestre/principal/hook" {
 		t.Fatalf("machine = %+v", m)
 	}
 }

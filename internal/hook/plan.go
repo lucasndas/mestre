@@ -2,6 +2,7 @@ package hook
 
 import (
 	"io/fs"
+	"path"
 	"path/filepath"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -37,17 +38,18 @@ type PlanEntry struct {
 // creates files. The installer (M7) applies it; the engine makes the
 // entries of each character.
 func LinuxPlan(instance string) []PlanEntry {
-	l := classes.DefaultLayout("linux", "", instance)
-	char := filepath.Join(l.Agents, CharacterID)
-	entry := func(path string, dir bool, mode fs.FileMode, per bool, why string) PlanEntry {
-		return PlanEntry{Path: path, Dir: dir, Owner: OwnerEngine, Group: GroupAgents, Mode: mode, PerCharacter: per, Why: why}
+	// Paths of Linux, in slash form wherever the plan is generated.
+	agents := filepath.ToSlash(classes.DefaultLayout("linux", "", instance).Agents)
+	char := path.Join(agents, CharacterID)
+	entry := func(p string, dir bool, mode fs.FileMode, per bool, why string) PlanEntry {
+		return PlanEntry{Path: filepath.ToSlash(p), Dir: dir, Owner: OwnerEngine, Group: GroupAgents, Mode: mode, PerCharacter: per, Why: why}
 	}
 	return []PlanEntry{
-		entry(l.Agents, true, 0o750, false, "the folders of the characters: the agents' group goes in, does not write"),
+		entry(agents, true, 0o750, false, "the folders of the characters: the agents' group goes in, does not write"),
 		entry(char, true, 0o750, true, "the folder of one character"),
-		entry(filepath.Join(char, classes.SnapshotName), false, 0o640, true, "the snapshot of the effective rules: the hook reads it, cannot change it"),
-		entry(filepath.Join(char, EnvName), false, 0o640, true, "the environment of the character for the degraded decision"),
-		entry(filepath.Join(char, "tmp"), true, fs.ModeSetgid|0o770, true, "MESTRE_TMP: written by the character"),
+		entry(path.Join(char, classes.SnapshotName), false, 0o640, true, "the snapshot of the effective rules: the hook reads it, cannot change it"),
+		entry(path.Join(char, EnvName), false, 0o640, true, "the environment of the character for the degraded decision"),
+		entry(path.Join(char, "tmp"), true, fs.ModeSetgid|0o770, true, "MESTRE_TMP: written by the character"),
 		entry(QueueDir("linux", "", instance), true, fs.ModeSticky|0o730, false, "the hook queue: the agents' group only creates files"),
 	}
 }
