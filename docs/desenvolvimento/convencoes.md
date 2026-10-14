@@ -26,8 +26,7 @@ internal/
   gitx/              wrapper único do binário git (worktrees, bundles, info/exclude)
   sync/              sincronização de worktrees Torre ↔ Cidadela por bundle
   telegram/          bot, roteamento, cliente do whisper-server
-  usage/             coleta de uso e limites
-  checklist/         itens do checklist e alertas
+  usage/ checklist/  coleta de uso e limites; itens do checklist e alertas
   update/            autoatualização do Mestre e detecção de versão nova dos CLIs dos provedores
   healing/           lado do motor da autocura (supervisão cruzada, runbook)
   protocol/          envelope (com época) e mensagens entre máquinas, versões
