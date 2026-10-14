@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/privdir"
 )
@@ -56,6 +57,9 @@ type Paths struct {
 	Agentes string
 	// CLISocket is the socket of the local channel; empty serves none.
 	CLISocket string
+	// HookQueue is where `mestre hook` leaves the events while the engine
+	// is away; empty reads none.
+	HookQueue string
 }
 
 // DefaultPaths are the folders of an installed instance.
@@ -72,12 +76,13 @@ func DefaultPaths(instance string) (Paths, error) {
 		return Paths{
 			Config: filepath.Join(root, "config"), Banco: filepath.Join(root, "banco"),
 			Maquina: filepath.Join(root, "maquina"), Agentes: filepath.Join(root, "maquina", "agentes"), CLISocket: sock,
+			HookQueue: hook.QueueDir("windows", os.Getenv("ProgramData"), instance),
 		}, nil
 	}
 	return Paths{
 		Config: filepath.Join("/etc/mestre", instance), Banco: filepath.Join("/var/lib/mestre", instance, "banco"),
 		Maquina: filepath.Join("/var/lib/mestre", instance, "maquina"), Agentes: filepath.Join("/var/lib/mestre", instance, "agentes"),
-		CLISocket: sock,
+		CLISocket: sock, HookQueue: hook.QueueDir("linux", "", instance),
 	}, nil
 }
 
@@ -87,6 +92,7 @@ func DirPaths(dir string) Paths {
 	return Paths{
 		Config: filepath.Join(dir, "config"), Banco: filepath.Join(dir, "banco"),
 		Maquina: filepath.Join(dir, "maquina"), Agentes: filepath.Join(dir, "agentes"), CLISocket: filepath.Join(dir, "run", "cli.sock"),
+		HookQueue: filepath.Join(dir, "fila-hook"),
 	}
 }
 
