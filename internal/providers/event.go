@@ -103,6 +103,21 @@ type Usage struct {
 	ContextPct    float64       `json:"context_pct,omitempty"`
 	LimitWindows  []LimitWindow `json:"limit_windows,omitempty"`
 	LimitsReached bool          `json:"limits_reached,omitempty"`
+	// The rest of the tokens of limites-de-uso.md: cache read and written,
+	// and reasoning.
+	CacheReadTokens  int64 `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
+	ReasoningTokens  int64 `json:"reasoning_tokens,omitempty"`
+	// LimitsResetAt is when the quota comes back, with LimitsReached, when
+	// the provider says.
+	LimitsResetAt time.Time `json:"limits_reset_at,omitzero"`
+
+	// Of a reading of a transcript (Codex), not of the record: Cursor goes
+	// in the next UsageRequest of the session, and Failures are the
+	// turn_failure events the reading found and no hook brought (Codex runs
+	// no Stop hook on a turn that ends in error).
+	Cursor   string  `json:"-"`
+	Failures []Event `json:"-"`
 }
 
 // LimitWindow is one rate-limit window.

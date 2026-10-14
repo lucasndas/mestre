@@ -8,7 +8,7 @@
 // describes: Turns completes the normalized events with what the payload
 // does not carry, and Supervisor runs the timeouts of the adapter document
 // (start screen, hooks after the first prompt, delivery confirmation). The
-// files of one provider are claude*.go, codex.go and antigravity.go with their
+// files of one provider are claude*.go, codex*.go and antigravity.go with their
 // native_*.go (the second barrier of the permissions).
 package providers
 

@@ -57,7 +57,7 @@ Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos, inclus
 | `post_tool` | PostToolUse, PostToolUseFailure | PostToolUse | PostToolUse |
 | `permission_request` | PermissionRequest | PermissionRequest | — (tela nativa, ver [antigravity](antigravity.md)) |
 | `turn_end` | Stop | Stop | Stop (PostInvocation só registra a invocação) |
-| `turn_failure` | StopFailure | — (lido do transcript no Stop) | Stop com `terminationReason = error` |
+| `turn_failure` | StopFailure | — (lido do transcript, [Codex](codex.md#uso-custo-e-rate-limit)) | Stop com `terminationReason = error` |
 | `interrupt` | — (tela) | Interrupt | — |
 | `pre_compact` | PreCompact | PreCompact | — |
 | `session_end` | SessionEnd | SessionEnd | — (fim do processo no PTY) |

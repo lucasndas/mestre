@@ -86,6 +86,9 @@ type Options struct {
 	// the long messages): the "Se falhar" of the multi-line paste, switched
 	// on by the conformance test (docs/provedores/claude-code.md).
 	ClaudeMultilineViaFile bool
+	// CodexMultilineViaFile is the same for Codex
+	// (docs/provedores/codex.md#verificar-na-implementação).
+	CodexMultilineViaFile bool
 }
 
 // NormalizePath normalizes a path the way the adapters do with the paths of

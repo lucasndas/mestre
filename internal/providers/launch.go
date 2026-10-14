@@ -37,6 +37,11 @@ type LaunchRequest struct {
 	// Env are the variables the engine adds: the account profile's and the
 	// rest of MESTRE_*.
 	Env []string
+	// Profile is the provider folder of the account profile; the
+	// adapter puts it in the provider's variable (CODEX_HOME).
+	Profile string
+	// Model is the class's preferred model, if it has one.
+	Model string
 }
 
 // Launch is the command of a character's terminal.

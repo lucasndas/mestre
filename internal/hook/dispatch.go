@@ -60,7 +60,14 @@ func Run(ctx context.Context, env Env, args []string) int {
 	provider, native, perr := parseArgs(args)
 	var adapter providers.Adapter
 	if perr == nil {
-		adapter, perr = providers.NewRegistry(providers.Options{Resolve: env.Resolve}).For(provider)
+		adapter, perr = providers.NewRegistry(providers.Options{
+			Resolve: env.Resolve,
+			// CODEX_HOME and the transcript are read only at a Codex Stop
+			// of a character, never before.
+			CodexTurnFailure: func(stop providers.Event) (providers.StopReason, string, bool) {
+				return providers.CodexTurnFailure(env.Getenv("CODEX_HOME"))(stop)
+			},
+		}).For(provider)
 	}
 	if perr == nil && provider == providers.Null {
 		perr = errors.New("--provider is empty")
