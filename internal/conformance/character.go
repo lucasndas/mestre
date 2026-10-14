@@ -32,6 +32,7 @@ type character struct {
 	blocked   string // why the supervision blocked it
 	delivered int
 	ready     bool
+	stables   int    // stable screens taken so far
 	readyAt   []byte // the raw output up to the first ready screen
 	cancel    context.CancelFunc
 	done      chan struct{}
@@ -85,6 +86,7 @@ func (c *character) pump(ctx context.Context) {
 			c.sup.Screen(text, true)
 			c.mu.Lock()
 			c.screen = text
+			c.stables++
 			if !c.ready && c.ru.adapter.Screens(providers.ScreenInput{Text: text, Stable: true}).State == providers.StateReady {
 				c.ready, c.readyAt = true, c.sess.Raw()
 			}
@@ -303,6 +305,10 @@ func (c *character) turn(ctx context.Context, text string) (string, []Call, erro
 		}
 		return screen, calls, fmt.Errorf("o turno não terminou em %s", or(c.ru.r.TurnLimit, DefaultTurnLimit))
 	}
+	// The screen of the answer is the one after the end of the turn: a
+	// ready screen from before it (the message echoed while the hooks are
+	// not there yet) has no answer.
+	c.settle(ctx, c.sess)
 	// The prompt again before the next delivery: typed during a turn, it
 	// would wait for the turn's end.
 	_ = c.waitReady(ctx, 30*time.Second)
@@ -312,6 +318,52 @@ func (c *character) turn(ctx context.Context, text string) (string, []Call, erro
 		answer = after(screen, lastLine(text))
 	}
 	return answer, log.Since(from, c.ru.ws.AgentID), nil
+}
+
+// liveScreen is the terminal as settle sees it.
+type liveScreen interface {
+	Screen(context.Context) (string, error)
+	Ended() <-chan struct{}
+}
+
+// settleLimit is how long the screen of the answer is waited for after the
+// end of a turn.
+const settleLimit = 2 * time.Second
+
+// settle makes c.screen a screen taken after the end of the turn: the next
+// stable screen, or, when the screen did not change in settleLimit (it was
+// already final), the live one. Antigravity draws the answer at the Stop
+// hook, and the stable screen before it is the echoed message with an empty
+// input box, which is ready too (conformance round 3).
+func (c *character) settle(ctx context.Context, live liveScreen) {
+	c.mu.Lock()
+	n, changed := c.stables, c.changed
+	c.mu.Unlock()
+	t := c.ru.r.clk().NewTimer(settleLimit)
+	defer t.Stop()
+	for {
+		select {
+		case <-changed:
+			c.mu.Lock()
+			done := c.stables > n
+			changed = c.changed
+			c.mu.Unlock()
+			if done {
+				return
+			}
+		case <-t.C():
+			if text, err := live.Screen(ctx); err == nil {
+				c.mu.Lock()
+				c.screen = text
+				c.mu.Unlock()
+			}
+			return
+		case <-live.Ended():
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // command types a command of the provider (/compact, /exit) the way a

@@ -30,7 +30,9 @@ func TestCleanupRemovesOnlyWhatTheRunBuilds(t *testing.T) {
 	}{
 		{providers.Codex, []string{"sessions/2026/10/14/rollout-2026-10-14T10-00-00-" + id + ".jsonl", "sessions/2026/10/14/rollout-x-other.jsonl", "auth.json"},
 			[]string{"sessions/2026/10/14/rollout-2026-10-14T10-00-00-" + id + ".jsonl"}},
-		{providers.Antigravity, []string{".gemini/antigravity-cli/brain/" + id + "/x.pb"}, []string{".gemini/antigravity-cli/brain/" + id}},
+		{providers.Antigravity, []string{".gemini/antigravity-cli/brain/" + id + "/x.pb", ".gemini/antigravity-cli/conversations/" + id + ".db",
+			".gemini/antigravity-cli/conversations/other.db", ".gemini/antigravity-cli/annotations/" + id + ".pbtxt", ".gemini/antigravity-cli/antigravity-oauth-token"},
+			[]string{".gemini/antigravity-cli/brain/" + id, ".gemini/antigravity-cli/conversations/" + id + ".db", ".gemini/antigravity-cli/annotations/" + id + ".pbtxt"}},
 		{providers.ClaudeCode, []string{"projects/" + claudeProject("/w/wt") + "/" + id + ".jsonl", "projects/other/x.jsonl"},
 			[]string{"projects/" + claudeProject("/w/wt")}},
 	} {

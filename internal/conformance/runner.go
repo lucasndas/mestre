@@ -532,7 +532,10 @@ func (ru *run) sessionFiles() []string {
 		seenID[id] = true
 		switch ru.req.Provider {
 		case providers.Antigravity:
-			cands = append(cands, []string{".gemini", "antigravity-cli", "brain", id})
+			// The folder of the session, its conversation and its annotation.
+			cli := []string{".gemini", "antigravity-cli"}
+			cands = append(cands, append(slices.Clone(cli), "brain", id), append(slices.Clone(cli), "conversations", id+".db"),
+				append(slices.Clone(cli), "annotations", id+".pbtxt"))
 		case providers.Codex: // sessions/AAAA/MM/DD/rollout-<time>-<id>.jsonl
 			matches, _ := filepath.Glob(filepath.Join(profile, "sessions", "*", "*", "*", "rollout-*-"+id+".jsonl"))
 			for _, m := range matches {
