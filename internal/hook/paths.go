@@ -1,0 +1,60 @@
+package hook
+
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/localchan"
+)
+
+// Machine are the folders of an instance that the dispatcher reads (the
+// snapshots of agentes/) and writes (the hook queue), and the folders of the
+// Mestre the fixed rules close.
+type Machine struct {
+	Instance string
+	// Agents is agentes/: policy.json and env.json of each character.
+	Agents string
+	// Queue is the hook queue, where the dispatcher only creates files.
+	Queue  string
+	Layout classes.Layout
+}
+
+// MachineOf is the Machine of an installed instance
+// (docs/arquitetura/persistencia.md#arquivos). programData is %ProgramData%
+// on Windows.
+func MachineOf(goos, programData, instance string) Machine {
+	l := classes.DefaultLayout(goos, programData, instance)
+	return Machine{Instance: instance, Agents: l.Agents, Queue: QueueDir(goos, programData, instance), Layout: l}
+}
+
+// QueueDir is the hook queue of an installed instance:
+// /var/spool/mestre/<inst>/hook/ on Linux,
+// %ProgramData%\Mestre\<inst>\maquina\fila-hook\ on Windows.
+func QueueDir(goos, programData, instance string) string {
+	if goos == "windows" {
+		return filepath.Join(programData, "Mestre", instance, "maquina", "fila-hook")
+	}
+	return filepath.Join("/var/spool/mestre", instance, "hook")
+}
+
+// InstanceOf is the instance whose socket of the local channel is socket,
+// for the dispatcher that knows only MESTRE_ENDPOINT. An endpoint that is
+// not the socket of an installed instance (`mestre run --dir`) names none:
+// the dispatcher then has no snapshot and no queue, and with the engine
+// down only the fixed rules and reading hold.
+func InstanceOf(goos, socket string) (string, bool) {
+	dir := filepath.Dir(socket)
+	if goos == "windows" {
+		dir = filepath.Dir(dir) // <inst>\run\cli.sock
+	}
+	inst := filepath.Base(dir)
+	want, err := localchan.SocketPath(inst)
+	if err != nil {
+		return "", false
+	}
+	if goos == "windows" {
+		return inst, strings.EqualFold(want, socket)
+	}
+	return inst, want == socket
+}

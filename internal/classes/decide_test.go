@@ -193,9 +193,9 @@ func TestAccountProfilesAreClosedToEveryProfile(t *testing.T) {
 	}
 }
 
-// Part of CA-PERM-05: the decision of a command in ask, and the exception
-// its approval becomes; stage 3 of M3 closes it with the dispatcher, the
-// approval request #N and the fake agent waiting for permission.
+// The decision under CA-PERM-05: a command in ask, and the exception its
+// approval becomes, bound to that action. The whole criterion, with the
+// request #N and the fake agent, is internal/hook's.
 func TestAskThenTheApprovedActionPassesOnce(t *testing.T) {
 	t.Parallel()
 	m := newMachine()
@@ -215,8 +215,8 @@ func TestAskThenTheApprovedActionPassesOnce(t *testing.T) {
 	want(t, decide(env, r, m.shell("npm install y")), classes.Ask, classes.LayerClass)
 }
 
-// Part of CA-PERM-07: the decision over the snapshot; stage 3 of M3 closes it
-// with the dispatcher that falls back to it when the engine does not answer.
+// The decision under CA-PERM-07: over the snapshot. The whole criterion, the
+// dispatcher that falls back to it with the engine down, is internal/hook's.
 func TestDegradedDecisionOverTheSnapshot(t *testing.T) {
 	t.Parallel()
 	m := newMachine()

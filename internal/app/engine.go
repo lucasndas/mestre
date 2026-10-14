@@ -17,6 +17,7 @@ import (
 	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
@@ -116,6 +117,12 @@ type Deps struct {
 	// waited in the outbox of a Tower; it goes to the inbox of whoever asked
 	// (milestone 4 delivers it; until then it is only logged).
 	OnQueuedResult func(QueuedResult)
+	// Characters, Approvals and States are what the hook dispatcher needs
+	// from the terminal registry (M4) and the approvals (M5); nil: no
+	// character is known, so every tool call is denied.
+	Characters hook.Characters
+	Approvals  hook.Approvals
+	States     hook.States
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources
@@ -572,14 +579,22 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 	if commands == nil {
 		commands = cli.Default()
 	}
+	// The effective rules kept on this machine: the cli.allow of the
+	// characters, and the decision of every tool call of the hook
+	// dispatcher (docs/provedores/despachante-de-hooks.md).
+	rules := &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
 	profiles := e.deps.Profiles
 	if profiles == nil {
-		profiles = rulesProfiles{src: &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}}
+		profiles = rulesProfiles{src: rules}
+	}
+	hk := &hook.Engine{
+		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
+		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States,
 	}
 	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker})
 	srv := localchan.NewServer(localchan.Config{
 		Clock: e.clk, Identifier: id, Forwarder: gate, Instance: e.cfg.Instance, EngineVersion: e.deps.Version, Logger: e.log,
-		Local:      map[string]localchan.Handler{localchan.CmdHelp: gate.Help()},
+		Local:      map[string]localchan.Handler{localchan.CmdHelp: gate.Help(), localchan.CmdHook: hk},
 		DebugExtra: func() map[string]any { return map[string]any{"citadel": e.citadelDebug()} },
 		OnAudit:    e.auditCall,
 	})
@@ -588,6 +603,10 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 		return err
 	}
 	wg.Go(func() { _ = srv.Serve(ctx, ln) })
+	if e.paths.HookQueue != "" {
+		// What the dispatcher left while the engine was away.
+		wg.Go(func() { hk.DrainLoop(ctx, e.paths.HookQueue, nil) })
+	}
 	return nil
 }
 
