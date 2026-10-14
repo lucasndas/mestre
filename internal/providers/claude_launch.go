@@ -27,15 +27,26 @@ type claudeOption struct {
 	value, list, optional bool
 	// base: the base may give it; engine: the engine's arguments may.
 	base, engine bool
+	// values, when set, are the only values the option takes.
+	values []string
 }
+
+// claudeEfforts are the levels of --effort in the Claude Code reference
+// (https://code.claude.com/docs/en/cli-reference).
+var claudeEfforts = []string{"low", "medium", "high", "xhigh", "max", "ultracode"}
 
 var claudeOptions = map[string]claudeOption{
 	// The model and how the CLI shows things: the base's.
 	"--model":          {value: true, base: true},
 	"--fallback-model": {value: true, base: true},
+	"--effort":         {value: true, base: true, values: claudeEfforts},
+	"--autocompact":    {value: true, base: true},
+	"--name":           {value: true, base: true},
+	"-n":               {value: true, base: true},
 	"--verbose":        {base: true},
 	"--debug":          {optional: true, base: true},
 	"-d":               {base: true},
+	"--no-chrome":      {base: true},
 	// Only on the base of the Operador do PC, which the bases check when
 	// saved (docs/orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
 	"--chrome": {base: true},
@@ -121,6 +132,9 @@ func parseClaudeFlags(args []string, engine bool) ([]claudeFlag, error) {
 		}
 		if (opt.value || opt.list) && (len(f.values) == 0 || f.values[0] == "") {
 			return nil, fmt.Errorf("claude-code: %s without a value", name)
+		}
+		if opt.values != nil && !slices.Contains(opt.values, f.values[0]) {
+			return nil, fmt.Errorf("claude-code: %s %s: the values are %s", name, f.values[0], strings.Join(opt.values, ", "))
 		}
 		out = append(out, f)
 	}

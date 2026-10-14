@@ -97,7 +97,7 @@ var codexTools = toolTable{
 // (codex_launch.go: the hooks switched on last), and CODEX_HOME of the
 // account profile.
 func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
-	l, err := newLaunch(req)
+	l, err := newLaunch(Codex, req)
 	if err != nil {
 		return Launch{}, err
 	}

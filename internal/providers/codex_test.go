@@ -261,7 +261,8 @@ func TestCodexStartFlags(t *testing.T) {
 	t.Parallel()
 	a := codexAdapter(providers.Options{})
 	req := providers.LaunchRequest{
-		Base:    providers.Base{Command: "codex", Env: []string{"CODEX_HOME=/elsewhere"}},
+		Base:    providers.Base{Command: "codex"},
+		Env:     []string{"CODEX_HOME=/elsewhere"}, // a base may not set it at all (TestABaseMayNotSetTheVariablesOfTheSafety)
 		Profile: "/profiles/codex-1", Model: "gpt-5.5-codex",
 		ProviderArgs: []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=false"},
 	}
@@ -341,7 +342,7 @@ func TestCodexStartFlags(t *testing.T) {
 	if _, err := a.BuildLaunch(r); err == nil {
 		t.Error("a start without the sandbox was accepted")
 	}
-	r.ProviderArgs, r.Profile, r.Base.Env = sandbox, "", nil
+	r.ProviderArgs, r.Profile, r.Env = sandbox, "", nil
 	if _, err := a.BuildLaunch(r); err == nil {
 		t.Error("a start without the account profile was accepted")
 	}

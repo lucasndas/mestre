@@ -214,7 +214,7 @@ func idChar(r rune) bool {
 // that the engine runs before the start (Launch.Verify): a name that does
 // not exist falls to the default agent without an error.
 func (a *antigravity) BuildLaunch(req LaunchRequest) (Launch, error) {
-	l, err := newLaunch(req)
+	l, err := newLaunch(Antigravity, req)
 	if err != nil {
 		return Launch{}, err
 	}

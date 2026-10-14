@@ -165,9 +165,23 @@ func newRig(t *testing.T) *rig {
 	return r
 }
 
+// inheritedEnv is the environment of the test, which the base of the run
+// carries, without what a base may not set (bases-e-fichas.md#regras-e-erros):
+// the suite may itself run inside an agent, whose variables would refuse
+// the start.
+func inheritedEnv() []string {
+	return slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		k, _, _ := strings.Cut(strings.ToUpper(kv), "=")
+		return slices.Contains([]string{"SHELL", "NODE_OPTIONS", "BASH_ENV", "ENV", "GIT_EXEC_PATH"}, k) ||
+			slices.ContainsFunc([]string{"CLAUDE", "MESTRE_", "CODEX_", "LD_", "DYLD_", "GIT_CONFIG"}, func(p string) bool {
+				return strings.HasPrefix(k, p)
+			})
+	})
+}
+
 // request is a run of the fake Claude Code on the profile of the rig.
 func (r *rig) request(extraEnv ...string) conformance.Request {
-	env := append(os.Environ(), "HOME="+r.profile, "FAKEAGENT_SCRIPT="+filepath.Join(r.root, "script.yaml"),
+	env := append(inheritedEnv(), "HOME="+r.profile, "FAKEAGENT_SCRIPT="+filepath.Join(r.root, "script.yaml"),
 		// A fake built with -race would wait a second at each exit.
 		"GORACE=atexit_sleep_ms=0")
 	return conformance.Request{

@@ -131,7 +131,14 @@ func run(ctx context.Context, args []string, out io.Writer, getenv func(string) 
 // baseEnv is the environment of the CLI: nothing of this process is
 // inherited but what a terminal needs.
 func baseEnv(o options) []string {
-	return []string{"PATH=" + filepath.Dir(o.cli) + ":/usr/local/bin:/usr/bin:/bin", "HOME=" + o.home, "TERM=xterm-256color", "LANG=C.UTF-8"}
+	env := []string{"PATH=" + filepath.Dir(o.cli) + ":/usr/local/bin:/usr/bin:/bin", "TERM=xterm-256color", "LANG=C.UTF-8"}
+	// The HOME of Antigravity is its account profile, which the run gives
+	// as the engine does; a base may not set it
+	// (docs/orquestracao/bases-e-fichas.md#regras-e-erros).
+	if providers.ID(o.provider) != providers.Antigravity {
+		env = append(env, "HOME="+o.home)
+	}
+	return env
 }
 
 func cliVersion(ctx context.Context, o options) string {
@@ -139,7 +146,7 @@ func cliVersion(ctx context.Context, o options) string {
 		return o.version
 	}
 	c := exec.CommandContext(ctx, o.cli, "--version")
-	c.Env = append(baseEnv(o), "CLAUDE_CONFIG_DIR="+o.profileDir, "CODEX_HOME="+o.profileDir)
+	c.Env = append(baseEnv(o), "HOME="+o.home, "CLAUDE_CONFIG_DIR="+o.profileDir, "CODEX_HOME="+o.profileDir)
 	b, err := c.Output()
 	if err != nil {
 		return "unknown"

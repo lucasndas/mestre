@@ -132,3 +132,67 @@ func TestBuildLaunchStartsAndRefusesTheMostRecentSession(t *testing.T) {
 		t.Errorf("null = %+v, %v", shell, err)
 	}
 }
+
+// M1 of the M3 audit: the variables of a base are checked at every start,
+// not only when the base is saved. The ones that skip or move the
+// provider's hooks, permissions, configuration or sandbox, that run code
+// before the hooks, and the Mestre's own are refused (also in lower case:
+// Windows does not tell case apart); the harmless ones go through.
+func TestABaseMayNotSetTheVariablesOfTheSafety(t *testing.T) {
+	t.Parallel()
+	requests := map[providers.ID]func() (providers.Adapter, providers.LaunchRequest){
+		providers.ClaudeCode: func() (providers.Adapter, providers.LaunchRequest) {
+			return providers.NewClaudeCode(providers.Options{}), claudeRequest("u1")
+		},
+		providers.Codex: func() (providers.Adapter, providers.LaunchRequest) {
+			return providers.NewCodex(providers.Options{}), providers.LaunchRequest{Base: providers.Base{Command: "codex"}, Profile: "/profiles/c", AgentID: "a1", ProviderArgs: []string{"-s", "read-only"}}
+		},
+		providers.Antigravity: func() (providers.Adapter, providers.LaunchRequest) {
+			return providers.NewAntigravity(providers.Options{}), launchRequest(nil)
+		},
+		providers.Null: func() (providers.Adapter, providers.LaunchRequest) {
+			return providers.NewNull(), providers.LaunchRequest{Base: providers.Base{Command: "bash"}}
+		},
+	}
+	every := []string{"MESTRE_AGENT_ID=x", "mestre_endpoint=unix:///tmp/x", "MESTRE_CLI=/tmp/x"}
+	agents := []string{"LD_PRELOAD=/tmp/x.so", "NODE_OPTIONS=--require /tmp/x.js", "BASH_ENV=/tmp/x", "ENV=/tmp/x",
+		"GIT_CONFIG_GLOBAL=/tmp/g", "GIT_CONFIG_PARAMETERS='alias.st=!sh'", "GIT_CONFIG_COUNT=1", "DYLD_INSERT_LIBRARIES=/x"}
+	refused := map[providers.ID][]string{
+		providers.ClaudeCode: slices.Concat(every, agents, []string{
+			"CLAUDE_CODE_SIMPLE=1", "CLAUDE_CODE_SAFE_MODE=1", "CLAUDE_CONFIG_DIR=/elsewhere", "claude_config_dir=/elsewhere",
+			"CLAUDE_CODE_SHELL_PREFIX=/tmp/w", "CLAUDE_ENV_FILE=/tmp/e", "CLAUDE_CODE_PROCESS_WRAPPER=/tmp/w",
+			"CLAUDE_CODE_GIT_BASH_PATH=/tmp/bash", "CLAUDE_CODE_SHELL=/tmp/bash", "SHELL=/tmp/bash",
+			"CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY=1", "CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT=1",
+			"CLAUDE_CODE_DISABLE_PERMISSION_PROMPT_NOTIFY_HOOKS=1", "CLAUDE_CODE_DISABLE_ANYTHING_NEW=1",
+			"CLAUDE_CODE_PLUGIN_DIRS=/tmp/p", "CLAUDE_AFK_TIMEOUT_MS=1",
+		}),
+		providers.Codex:       slices.Concat(every, agents, []string{"CODEX_HOME=/elsewhere", "CODEX_SANDBOX=seatbelt", "CODEX_UNSAFE_ALLOW_NO_SANDBOX=1"}),
+		providers.Antigravity: slices.Concat(every, agents, []string{"HOME=/home/x", `USERPROFILE=C:\x`, "home=/x"}),
+		providers.Null:        every,
+	}
+	allowed := map[providers.ID][]string{
+		providers.ClaudeCode: {"FOO=1", "ANTHROPIC_MODEL=opus", "CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1",
+			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "HTTPS_PROXY=http://p:3128", "LANG=pt_BR.UTF-8"},
+		providers.Codex:       {"FOO=1", "HTTPS_PROXY=http://p:3128", "RUST_LOG=info"},
+		providers.Antigravity: {"FOO=1", "LANG=pt_BR.UTF-8"},
+		providers.Null:        {"FOO=1", "LD_PRELOAD=/usr/lib/x.so", "HOME=/home/x"},
+	}
+	for id, mk := range requests {
+		for _, kv := range refused[id] {
+			a, req := mk()
+			req.Base.Env = []string{"OK=1", kv}
+			if l, err := a.BuildLaunch(req); err == nil {
+				t.Errorf("%q: base env %s was accepted: %q", id, kv, l.Env)
+			} else if key, _, _ := strings.Cut(kv, "="); !strings.Contains(err.Error(), key) {
+				t.Errorf("%q: %s: error %q does not name the variable", id, kv, err)
+			}
+		}
+		for _, kv := range allowed[id] {
+			a, req := mk()
+			req.Base.Env = []string{kv}
+			if l, err := a.BuildLaunch(req); err != nil || !slices.Contains(l.Env, kv) {
+				t.Errorf("%q: base env %s: %v (env %q); want it kept", id, kv, err, l.Env)
+			}
+		}
+	}
+}

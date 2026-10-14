@@ -122,7 +122,16 @@ func TestHookCommandQuotesABlankAndRefusesShellSyntax(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b := mergeFile(t, files[0], nil); !strings.Contains(string(b), `"\"/opt/me stre/mestre\" hook --provider codex --event Stop"`) {
+	if b := mergeFile(t, files[0], nil); !strings.Contains(string(b), `"'/opt/me stre/mestre' hook --provider codex --event Stop"`) {
+		t.Fatalf("hooks.json = %s", b)
+	}
+	// A backslash, which sh drops unquoted, goes between single quotes too
+	// (M3 audit, round 3).
+	files, err = a.HookFiles(providers.HookFilesRequest{OS: "linux", Root: "/p", Binary: `/opt/a\b/mestre`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := mergeFile(t, files[0], nil); !strings.Contains(string(b), `"'/opt/a\\b/mestre' hook --provider codex --event Stop"`) {
 		t.Fatalf("hooks.json = %s", b)
 	}
 	for _, bin := range []string{"mestre", "/opt/$HOME/mestre", "/opt/a;b/mestre", `/opt/"q"/mestre`, "/opt/%x%/mestre"} {
