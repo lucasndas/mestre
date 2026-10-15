@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -111,5 +112,40 @@ func TestRealSocketsCarryTheMTLSRoutes(t *testing.T) {
 	der, _ := io.ReadAll(resp.Body)
 	if !bytes.Equal(der, g.ca.DER()) {
 		t.Fatalf("/ca.crt over TCP: %d bytes", len(der))
+	}
+}
+
+// The deadline of a context made by clock.WithTimeout is a time of the
+// injected clock: the real dial must not read it as wall time, or a test clock
+// that is behind makes every dial fail with an i/o timeout.
+func TestDialIgnoresTheDeadlineOfAnInjectedClockButHonoursItsCancellation(t *testing.T) {
+	t.Parallel()
+	sys := transport.SystemNetwork{Suite: os.Getenv("MESTRE_TEST_SUITE")}
+	ln, err := sys.Listen("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+	behind := clock.NewFake(time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC))
+	ctx, cancel := clock.WithTimeout(context.Background(), behind, time.Second)
+	defer cancel()
+	conn, err := sys.DialContext(ctx, ln.Addr().String())
+	if err != nil {
+		t.Fatalf("dial with a deadline that is long past in wall time: %v", err)
+	}
+	_ = conn.Close()
+	// The timeout of the injected clock still ends a dial.
+	behind.Advance(2 * time.Second)
+	if _, err := sys.DialContext(ctx, ln.Addr().String()); err == nil {
+		t.Error("a dial with an expired context succeeded")
 	}
 }
