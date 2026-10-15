@@ -29,6 +29,16 @@
 // (CheckStart), and wraps the update of the branch so that the Mestre's part
 // of a hook file the project versions is out of the way (Sync).
 //
+// Character is the session zero of a character
+// (docs/sessao-zero/personagem.md): Prepare composes the Mestre layer from the
+// models, the class, the decrees and the quest (RenderLayer), writes it and
+// what leaves it in .mestre/agents/<id>/, delivers it by the channel of the
+// provider, makes the skills of the character, the identity file, the native
+// controls, MESTRE_TMP and the environment, and returns the plan the terminal
+// starts from. Refresh and Contexts keep the layer up to date turn by turn;
+// End deletes what the character left when it ends for good; BirthsDB keeps
+// the version of the models and the copy of the sheet and base it was born with.
+//
 // The engine writes in the main clone, a folder the agents write too, so
 // every file goes through internal/safefile, git only through the record of
 // the clone (workspaces.Service.OpenPrincipal), and the .gitignore and the

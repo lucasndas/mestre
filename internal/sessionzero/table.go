@@ -331,6 +331,15 @@ func (t *Table) copyAttachments(ctx context.Context, req TableRequest, rep *Tabl
 // not in files. Everything goes through safefile; a path that would leave
 // the folder is a problem.
 func (t *Table) sync(dir, rel string, files []File, prune bool, rep *TableReport) {
+	w, r, p := syncFolder(dir, rel, files, prune)
+	rep.Written, rep.Removed = append(rep.Written, w...), append(rep.Removed, r...)
+	rep.Problems = append(rep.Problems, p...)
+}
+
+// syncFolder is sync for any folder of a worktree: what it wrote, what it
+// removed and what it could not do.
+func syncFolder(dir, rel string, files []File, prune bool) (written, removed []string, problems []Problem) {
+	rep := &TableReport{}
 	want := map[string]bool{}
 	for _, f := range files {
 		if err := checkRel(f.Path); err != nil {
@@ -363,7 +372,7 @@ func (t *Table) sync(dir, rel string, files []File, prune bool, rep *TableReport
 		rep.Written = append(rep.Written, path.Join(rel, f.Path))
 	}
 	if !prune {
-		return
+		return rep.Written, rep.Removed, rep.Problems
 	}
 	base := filepath.Join(dir, filepath.FromSlash(rel))
 	for _, old := range listFiles(base) {
@@ -376,6 +385,7 @@ func (t *Table) sync(dir, rel string, files []File, prune bool, rep *TableReport
 		}
 		rep.Removed = append(rep.Removed, path.Join(rel, old))
 	}
+	return rep.Written, rep.Removed, rep.Problems
 }
 
 // checkRel refuses a path of a copy that is not plainly inside its folder.

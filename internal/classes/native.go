@@ -24,6 +24,9 @@ type NativeCharacter struct {
 	// gitx.Real.Record gave them when the worktree was created: its git
 	// folder in the mirror and the mirror. Empty for the main clone.
 	GitDir, Mirror string
+	// HookEnv are the MESTRE_CLI and MESTRE_ENDPOINT of the character, pinned
+	// in the settings file of Claude Code (providers.NativePolicy.HookEnv).
+	HookEnv []string
 }
 
 // NativePolicy is the part of the effective rules the native controls can
@@ -38,7 +41,7 @@ func NativePolicy(r *Rules, ch NativeCharacter, fb providers.NativeFallbacks) pr
 	lf := liftsOf(r, ch.Worktree)
 	p := providers.NativePolicy{
 		AgentID: ch.AgentID, OS: ch.OS, Worktree: ch.Worktree, ProfileHome: ch.ProfileHome,
-		GitDir: ch.GitDir, GitCommon: ch.Mirror,
+		GitDir: ch.GitDir, GitCommon: ch.Mirror, HookEnv: slices.Clone(ch.HookEnv),
 		Write:             slices.Clone(r.Files.Write),
 		NoWrite:           len(r.Files.Write) == 0 && !lf.write,
 		ProtectedWrite:    slices.Clone(protectedWrite),

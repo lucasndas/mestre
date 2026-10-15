@@ -76,6 +76,9 @@ func (a *agent) skillDirs() []string {
 	switch a.p {
 	case Claude:
 		dirs := []string{filepath.Join(a.dir, ".claude", "skills")}
+		for _, d := range a.addDirs { // the skills of an --add-dir folder
+			dirs = append(dirs, filepath.Join(a.resolve(d), ".claude", "skills"))
+		}
 		if a.env["FAKEAGENT_CLAUDE_AGENTS_SKILLS"] == "1" {
 			dirs = append(dirs, filepath.Join(a.dir, ".agents", "skills"))
 		}
@@ -107,4 +110,22 @@ func (a *agent) skillBody(name string) string {
 // event does not run.
 func (a *agent) skipped(event string) bool {
 	return slices.Contains(strings.Split(a.env["FAKEAGENT_SKIP_HOOKS"], ","), event)
+}
+
+// skillNames are the skills the provider finds, by folder name, sorted.
+func (a *agent) skillNames() []string {
+	var names []string
+	for _, d := range a.skillDirs() {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if _, err := os.Stat(filepath.Join(d, e.Name(), "SKILL.md")); err == nil && !slices.Contains(names, e.Name()) {
+				names = append(names, e.Name())
+			}
+		}
+	}
+	slices.Sort(names)
+	return names
 }

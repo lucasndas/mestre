@@ -1,6 +1,6 @@
 # Sessão zero do personagem
 
-> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -74,6 +74,17 @@ A identidade git vem **só** do `gitconfig` do personagem: o motor nunca põe `G
 
 ### Ao encerrar
 Quando o personagem é encerrado de vez (estado final em [personagens](../orquestracao/personagens.md#estados), não um reinício com retomada), o motor da máquina apaga `.mestre/agents/<id>/`, a pasta `MESTRE_TMP` do personagem e, no Antigravity, `.agents/agents/mestre-<id>.md`. Esses arquivos estão na exclusão local do git desde a abertura da mesa ([mesa](mesa.md#gitinfoexclude)). Um reinício com retomada mantém os arquivos e a `MESTRE_TMP` (e regenera os arquivos, se a classe ou os decretos mudaram).
+
+### No código
+
+`internal/sessionzero` (`Character`, `RenderLayer`, `BirthsDB`): `Prepare` faz tudo o que está acima antes do processo e devolve o plano de início (comando de `BuildLaunch`, primeira mensagem, texto do hook, caminhos); quem inicia o processo é o terminal do personagem ([personagens](../orquestracao/personagens.md)). Escolhas que o código fecha:
+- **Idioma da regra de prioridade:** em inglês, como o resto do texto fixo (`PriorityRule`); o título "Instruções dos usuários…" das instruções extras fica em português, como nos documentos do [Grão-Mestre](../orquestracao/grao-mestre.md#instruções-extras-do-usuário) e do [Mestre da mesa](../orquestracao/mestre-da-mesa.md#instruções-extras-do-usuário).
+- **Fora do texto:** os arquivos são `CLASS.md`, `SKILLS.md` e `DECREES.md` em `.mestre/agents/<id>/`, e o lugar deles no texto vira a ordem de lê-los antes de tudo. Passando do limite duro mesmo assim, o personagem não inicia (`ErrLayerTooLarge`); a meta de 6.000 só gera um aviso no plano.
+- **Nascimento:** `character_births` no banco local de máquina guarda a versão dos modelos e a cópia da ficha e da base de cada personagem. Um reinício com retomada usa a versão em que nasceu; se a Cidadela não tem mais aquela versão, usa a atual e diz (`Upgraded`). **Regenerar** é pedir o plano com `Regenerate`.
+- **Canais de reserva:** o Claude Code exige `--append-system-prompt-file` em todo início, então a primeira mensagem vem **além** do arquivo; o Codex deixa o argumento de lado quando o canal é o hook ou a primeira mensagem.
+- **Ambiente:** só os valores da base passam pelo detector de segredos (os outros são caminhos e ids do motor, que um slug longo faria parecer segredo); a chave de API do provedor entra à parte, só sob os nomes do provedor. Um terminal de `spawn` ou uma ficha `shell` não é um personagem: não recebe `MESTRE_AGENT_ID`, camada nem pastas.
+- **Atualização:** `Refresh` regrava o `MESTRE.md` e guarda em memória as seções que mudaram; `Contexts()` (o `hook.Contexts` do despachante) as entrega no início do próximo turno, e `TakeUpdate` para o provedor sem esse hook. Depois de um reinício do motor o arquivo em disco é o novo, e o que estava pendente não se repete.
+- **Pastas da máquina:** `agentes/<id>/` sai 0750 e `tmp/` 2770 (setgid); o grupo `mestre-agente` herdar a pasta é do instalador ([persistência](../arquitetura/persistencia.md#arquivos)).
 
 ## Regras e erros
 
