@@ -4,6 +4,7 @@ package classes_test
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -11,14 +12,28 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 )
 
+// decisionBound is the bound of one decision on this host: 1 s, and 3 s on
+// Windows, whose shared CI runners are several times slower than the rest
+// (the same input takes about 0.3 s locally, and up to 1.1 s on a loaded
+// runner). Under the race detector it is multiplied by raceFactor, as the
+// other bounds of this package are.
+func decisionBound() time.Duration {
+	base := time.Second
+	if runtime.GOOS == "windows" {
+		base = 3 * time.Second
+	}
+	return base * raceFactor
+}
+
 // The bound of the analysis, measured on the inputs built to take long, up
-// to the 4 MiB the hook reads: each decision ends well under a second (the
-// slowest measured, on the Windows reading, about 0.3 s). The suites run in
-// parallel on shared runners, so a decision is timed up to three times and
-// the best counts: the first within the bound ends the measuring, as in the
-// code rules and in the docs check.
+// to the 4 MiB the hook reads: each decision ends well under the bound (1 s,
+// or 3 s on Windows; see decisionBound). The suites run in parallel on shared
+// runners, so a decision is timed up to three times and the best counts: the
+// first within the bound ends the measuring, as in the code rules and in the
+// docs check. The best time of every decision is logged.
 func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 	t.Parallel()
+	bound := decisionBound()
 	free := rules(t, anyYAML)
 	def := rules(t, "version: 1\n")
 	w := "echo " + strings.Repeat("x", 1900) + strings.Repeat("{b,c}", 8)
@@ -66,15 +81,16 @@ func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 					if run := time.Since(start); try == 0 || run < took { //nolint:forbidigo // same
 						took = run
 					}
-					if took <= raceFactor*time.Second {
+					if took <= bound {
 						break // within the bound: no need to measure again
 					}
 				}
+				t.Logf("%s, %s, %s: best %v (%s)", goos, r.name, name, took, d.Verdict)
 				if took > slowest {
 					slowest, slowName = took, goos+", "+r.name+", "+name
 				}
-				if took > raceFactor*time.Second {
-					t.Errorf("%s, %s, %s: %v (%s); want well under a second", goos, r.name, name, took, d.Verdict)
+				if took > bound {
+					t.Errorf("%s, %s, %s: %v (%s); want under %v", goos, r.name, name, took, d.Verdict, bound)
 				}
 				if strings.Contains(cmd, "git push") && d.Verdict == classes.Allow {
 					t.Errorf("%s, %s, %s: allowed; want a denial", goos, r.name, name)
@@ -82,5 +98,5 @@ func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 			}
 		}
 	}
-	t.Logf("slowest decision: %v (%s)", slowest, slowName)
+	t.Logf("bound per decision: %v (host %s); slowest decision: %v (%s)", bound, runtime.GOOS, slowest, slowName)
 }
