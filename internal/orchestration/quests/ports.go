@@ -28,6 +28,9 @@ type Characters interface {
 // Inbox is the inbox of the characters (*inbox.Service).
 type Inbox interface {
 	Enqueue(ctx context.Context, n inbox.NewItem) (inbox.Item, error)
+	// ForRun finds the item `quest` of a run in the inbox of a character: a
+	// step that runs without one was handed over just before a restart.
+	ForRun(ctx context.Context, run int64, target string) (inbox.Item, bool, error)
 }
 
 // Scrolls is the scroll of the quest (*scrolls.Service): made when the quest

@@ -38,6 +38,10 @@ type FiringState string
 const (
 	Queued     FiringState = "queued"
 	PreRunning FiringState = "pre_running"
+	// Delivering is the intent recorded before the side effect (the command
+	// typed, the prompt queued): a firing found in it after a restart is never
+	// repeated.
+	Delivering FiringState = "delivering"
 	Delivered  FiringState = "delivered"
 	Expired    FiringState = "expired"
 	Failed     FiringState = "failed"
@@ -45,7 +49,7 @@ const (
 )
 
 // Open says whether the firing still waits to be delivered.
-func (s FiringState) Open() bool { return s == Queued || s == PreRunning }
+func (s FiringState) Open() bool { return s == Queued || s == PreRunning || s == Delivering }
 
 // Defaults of the document.
 const (

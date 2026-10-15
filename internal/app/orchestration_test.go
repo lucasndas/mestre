@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
@@ -342,5 +344,16 @@ func TestTheOrchestrationOfTheCitadelRunsATableThroughTheForwarder(t *testing.T)
 	defer machines.mu.Unlock()
 	if len(machines.stopped) != 1 || machines.stopped[0].Character != master.ID || !machines.stopped[0].Final {
 		t.Errorf("stopped = %+v", machines.stopped)
+	}
+}
+
+// Without a source of the workspaces a user may use, the grimoires let in the
+// Owner only: an Administrator is refused (fails closed).
+func TestTheGrimoiresRefuseAnAdministratorWhileTheAccessIsNotWired(t *testing.T) {
+	t.Parallel()
+	w := newOrcWorld(t)
+	_, err := w.orc.Grimoires.Save(t.Context(), grimoires.SaveRequest{Workspace: "meu-app", Name: "g", By: grimoires.Actor{ID: "u1", Level: characters.LevelAdministrator}})
+	if !errors.Is(err, grimoires.ErrNoAccess) {
+		t.Fatalf("Save by an Administrator = %v; want no access", err)
 	}
 }

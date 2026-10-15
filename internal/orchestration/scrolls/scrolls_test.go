@@ -266,6 +266,29 @@ func TestAScrollStackedInATomeThatIsConnectedToACharacterBecomesReadableByIt(t *
 	}
 }
 
+// Stacking into a tome the author cannot see would put the scroll in front of
+// everyone connected to that tome: a channel between characters that are not
+// connected.
+func TestStackingIntoATomeTheCharacterCannotSeeIsRefused(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOptions{})
+	dev := w.dev("Dev")
+	qa := w.dev("QA")
+	mine := w.create(dev, "# Segredo")
+	w.create(qa, "# Casos de teste", stacked("Qualidade"))
+	_, _, err := w.svc.Stack(w.ctx, scrolls.StackRequest{Workspace: workspace, Table: table, Actor: by(dev), Tome: "Qualidade", Names: []string{mine.Name}})
+	if !errors.Is(err, scrolls.ErrNotVisible) {
+		t.Fatalf("Dev stacks into the tome of QA: %v", err)
+	}
+	if _, _, err := w.read(by(qa), "Segredo"); !errors.Is(err, scrolls.ErrNotVisible) {
+		t.Errorf("QA reads the scroll of Dev: %v", err)
+	}
+	// a tome that does not exist yet is made by whoever stacks into it
+	if _, _, err := w.svc.Stack(w.ctx, scrolls.StackRequest{Workspace: workspace, Table: table, Actor: by(dev), Tome: "Novo", Names: []string{mine.Name}}); err != nil {
+		t.Errorf("a new tome: %v", err)
+	}
+}
+
 func TestATomeLeftEmptyIsRemovedWithItsConnectionsAndAScrollOfAnotherTableIsRefused(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOptions{})

@@ -166,7 +166,7 @@ func (s *Store) Firings(ctx context.Context, ritual string) ([]Firing, error) {
 
 // Open lists the firings that wait to be delivered, oldest first.
 func (s *Store) Open(ctx context.Context) ([]Firing, error) {
-	return listFirings(ctx, s.DB.Reader(), `state IN ('queued', 'pre_running')`)
+	return listFirings(ctx, s.DB.Reader(), `state IN ('queued', 'pre_running', 'delivering')`)
 }
 
 // Tx is a transaction on the rituals.
@@ -253,7 +253,7 @@ func (t *Tx) Delete(id string) error {
 func (t *Tx) AddFiring(f Firing) (Firing, error) {
 	if f.State == Queued {
 		var open int
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM ritual_firings WHERE ritual = ? AND state IN ('queued', 'pre_running')`, f.Ritual).Scan(&open); err != nil {
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM ritual_firings WHERE ritual = ? AND state IN ('queued', 'pre_running', 'delivering')`, f.Ritual).Scan(&open); err != nil {
 			return Firing{}, err
 		}
 		if open > 0 {
@@ -281,7 +281,7 @@ func (s *Store) SetFiring(ctx context.Context, id int64, to FiringState, reason,
 			delivered = ms(at)
 		}
 		res, err := t.tx.ExecContext(ctx, `UPDATE ritual_firings SET state = ?, reason = ?, output = ?, delivered_at = ?, updated_at = ?
-			WHERE id = ? AND state IN ('queued', 'pre_running')`, string(to), reason, output, delivered, ms(at), id)
+			WHERE id = ? AND state IN ('queued', 'pre_running', 'delivering')`, string(to), reason, output, delivered, ms(at), id)
 		if err != nil {
 			return err
 		}
@@ -320,12 +320,31 @@ func (s *Store) Fire(ctx context.Context, id string, expected, next time.Time, s
 	return done, recorded, err
 }
 
-// markPreRunning marks a queued firing as running its pre-run.
-func (s *Store) markPreRunning(ctx context.Context, id int64, at time.Time) error {
-	return s.Do(ctx, func(t *Tx) error {
-		_, err := t.tx.ExecContext(ctx, `UPDATE ritual_firings SET state = 'pre_running', updated_at = ? WHERE id = ? AND state = 'queued'`, ms(at), id)
+// markPreRunning marks a queued firing as running its pre-run. It says whether
+// the firing was queued: the state is written before the side effect, so that
+// a firing found in it after a restart is not run again.
+func (s *Store) markPreRunning(ctx context.Context, id int64, at time.Time) (bool, error) {
+	return s.mark(ctx, id, PreRunning, at, "'queued'")
+}
+
+// markDelivering records the intent to deliver (the command typed, the prompt
+// queued) before it happens.
+func (s *Store) markDelivering(ctx context.Context, id int64, at time.Time) (bool, error) {
+	return s.mark(ctx, id, Delivering, at, "'queued', 'pre_running'")
+}
+
+func (s *Store) mark(ctx context.Context, id int64, to FiringState, at time.Time, from string) (bool, error) {
+	var changed bool
+	err := s.Do(ctx, func(t *Tx) error {
+		res, err := t.tx.ExecContext(ctx, `UPDATE ritual_firings SET state = ?, updated_at = ? WHERE id = ? AND state IN (`+from+`)`, string(to), ms(at), id)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		changed = n > 0
 		return err
 	})
+	return changed, err
 }
 
 // Disable puts the enabled rituals of a scope in disabled, and skips the
@@ -350,7 +369,7 @@ func (s *Store) Disable(ctx context.Context, workspace, table string, now time.T
 			return err
 		}
 		for _, r := range all {
-			if _, err := t.tx.ExecContext(ctx, `UPDATE ritual_firings SET state = 'skipped', reason = ?, updated_at = ? WHERE ritual = ? AND state IN ('queued', 'pre_running')`,
+			if _, err := t.tx.ExecContext(ctx, `UPDATE ritual_firings SET state = 'skipped', reason = ?, updated_at = ? WHERE ritual = ? AND state IN ('queued', 'pre_running', 'delivering')`,
 				reason, ms(now), r.ID); err != nil {
 				return err
 			}

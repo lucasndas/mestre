@@ -423,7 +423,7 @@ func (s *Service) SetEnabled(ctx context.Context, id string, by Actor, enabled b
 			if err := t.Update(r); err != nil {
 				return err
 			}
-			_, err := t.tx.ExecContext(ctx, `UPDATE ritual_firings SET state = 'skipped', reason = 'ritual desativado', updated_at = ? WHERE ritual = ? AND state IN ('queued', 'pre_running')`,
+			_, err := t.tx.ExecContext(ctx, `UPDATE ritual_firings SET state = 'skipped', reason = 'ritual desativado', updated_at = ? WHERE ritual = ? AND state IN ('queued', 'pre_running', 'delivering')`,
 				ms(now), r.ID)
 			return err
 		})

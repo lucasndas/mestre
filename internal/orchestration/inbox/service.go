@@ -113,6 +113,17 @@ func NewService(o Options) (*Service, error) {
 	return &Service{o: o, st: o.DB, clk: o.Clock, log: o.Logger, pumps: map[string]*pumpState{}, warned: map[string]bool{}}, nil
 }
 
+// ByKey finds the item that was queued with the idempotency key (Refs.Key).
+func (s *Service) ByKey(ctx context.Context, key string) (Item, bool, error) {
+	return s.st.ByKey(ctx, key)
+}
+
+// ForRun finds the item `quest` of a run of a step that is in the inbox of the
+// target.
+func (s *Service) ForRun(ctx context.Context, run int64, target string) (Item, bool, error) {
+	return s.st.ForRun(ctx, run, target)
+}
+
 // Store gives access to the tables.
 func (s *Service) Store() *Store { return s.st }
 
@@ -138,6 +149,14 @@ func (s *Service) Enqueue(ctx context.Context, n NewItem) (Item, error) {
 	}
 	if c.State == characters.Stopped {
 		return Item{}, fmt.Errorf("%w: %s ended", ErrBadItem, c.Name)
+	}
+	if n.Refs.Key != "" {
+		// A repeat of an item that was queued: it is not queued twice.
+		if it, ok, err := s.st.ByKey(ctx, n.Refs.Key); err != nil {
+			return Item{}, err
+		} else if ok {
+			return it, nil
+		}
 	}
 	it, err := s.st.Insert(ctx, n, s.clk.Now())
 	if err != nil {
