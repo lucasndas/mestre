@@ -21,7 +21,7 @@ Todo personagem nasce de uma **ficha** (agente) e todo terminal simples de uma *
 
 O personagem nasce já conectado a quem o criou e ao Mestre da mesa ([conexões](conexoes.md)), e inicia no worktree da mesa na máquina escolhida.
 
-**Nomes:** 1 a 32 caracteres (letras, dígitos, espaço, `-`, `_`), únicos na mesa sem diferenciar maiúsculas. `Grão-Mestre` e `Mestre` são reservados. Sem nome, o motor usa `<ficha> <n>` (ex.: "Dev Claude 2").
+**Nomes:** 1 a 32 caracteres (letras, dígitos, espaço, `-`, `_`, `(` e `)`; os parênteses vêm do sufixo " (2)" que a [restauração de grimório](grimorios.md#restaurar) acrescenta), únicos na mesa sem diferenciar maiúsculas. `Grão-Mestre` e `Mestre` são reservados. Sem nome, o motor usa `<ficha> <n>` (ex.: "Dev Claude 2").
 
 ### Escolha da máquina
 

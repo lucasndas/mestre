@@ -123,6 +123,10 @@ func NewService(o ServiceOptions) (*Service, error) {
 		seq: map[string]uint64{}, satisfied: map[string]string{}, summarized: map[string]bool{}, refused: map[string]bool{}, replacing: map[string]bool{}}, nil
 }
 
+// Limits are the limits in force (the defaults filled in), for the grimoires to
+// see how many characters still fit before they restore a team.
+func (s *Service) Limits() Limits { return s.o.Limits }
+
 // CreateRequest asks for a character (`recruit`) or a simple terminal
 // (`spawn`), or is the step of a quest that needs one.
 type CreateRequest struct {
