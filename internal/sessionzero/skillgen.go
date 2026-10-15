@@ -64,7 +64,7 @@ func skillDefs() []skillDef {
 		{
 			name:        skillCoordination,
 			title:       "Coordinating a table",
-			description: "Plan a mission, build the party, run the GitHub work of the table and report to the Grand Master, using the `mestre` CLI. Use whenever you coordinate the characters of a table.",
+			description: "Plan a mission, build the party, coordinate the characters of the table and report to the Grand Master, using the `mestre` CLI. Use whenever you coordinate the characters of a table.",
 			tips: []tip{
 				{"Plan: turn the request into a mission (steps, sheet and class of each step, parallel work, returns with a limit of rounds, approvals) and write the file for `mestre quest create`.", []string{"quest create"}},
 				{"Build the party: look at `mestre class list`, `mestre sheet list` and `mestre list` first; reuse free persistent characters and respect the limits; then `recruit`, `spawn`, `connect`; `dismiss` only an idle character that sent `done`.", []string{"class list", "sheet list", "list", "recruit", "spawn", "connect", "dismiss"}},

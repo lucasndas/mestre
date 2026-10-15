@@ -44,7 +44,8 @@ Alvo inexistente, pré-execução negada, com erro ou estourando o tempo: o disp
 |---|---|---|---|---|
 | Ativo | `enabled` | | Na fila | `queued` |
 | Desativado | `disabled` | | Pré-execução rodando | `pre_running` |
-| Concluído (`--once` já disparado) | `finished` | | Entregue | `delivered` |
+| Concluído (`--once` já disparado) | `finished` | | Entregando (a intenção, gravada antes do efeito) | `delivering` |
+| | | | Entregue | `delivered` |
 | | | | Devolvido por tempo limite | `expired` |
 | | | | Falhou | `failed` |
 | | | | Pulado | `skipped` |
@@ -54,8 +55,10 @@ stateDiagram-v2
     [*] --> queued : horário chegou
     [*] --> skipped : disparo anterior ainda na fila
     queued --> pre_running : alvo livre e há pre-run
-    queued --> delivered : alvo livre, sem pre-run
-    pre_running --> delivered : saída ok
+    queued --> delivering : alvo livre, sem pre-run
+    pre_running --> delivering : saída ok
+    delivering --> delivered : efeito feito
+    delivering --> failed : queda no meio do efeito
     pre_running --> failed : erro, negado ou 60 s
     queued --> expired : tempo limite na fila (devolvido ao dono)
     queued --> failed : alvo inexistente
@@ -72,9 +75,11 @@ stateDiagram-v2
 
 - **Alvo livre:** o personagem em `idle` ou `waiting` com a mesa (e o workspace) sem pausa; uma missão em `draft` ou `completed` (uma `completed` começa nova rodada); `running` e `paused` são ocupadas; cancelada falha.
 - **Relógio:** o motor olha a cada 30 s e também quando um personagem fica livre; um ritual é disparado até 2 min depois do horário sem contar como atrasado. A regra do disparo perdido vale para qualquer olhada, então não há rotina à parte para "o motor voltou"; guarda-se no máximo os 200 horários perdidos mais recentes. Ritual `--once` já disparado fica `finished`.
-- **Conteúdo:** `--prompt` só vai a agente e `--command` só a terminal simples (uma linha, sem quebra); se a saída da pré-execução trouxer quebra de linha ou caractere de controle, o comando não é digitado e o disparo falha. Missão não aceita `--pre-run`, e ritual do workspace só mira o Grão-Mestre ou um Mestre de mesa.
+- **Conteúdo:** `--prompt` só vai a agente e `--command` só a terminal simples (uma linha, sem quebra); se a saída da pré-execução, num `--command`, trouxer quebra de linha, caractere de controle (inclusive os C1) ou metacaractere do shell (`` ` $ & | ; < > ( ) [ ] { } \ " ' * ? ! ~ # ^ % ``), o comando não é digitado e o disparo falha; num `--prompt`, o item chega com o remetente marcado "saída da pré-execução: texto não verificado" (a saída é dado, não ordem), e o texto entregue é o conteúdo com a saída no lugar de `{{output}}`. Missão não aceita `--pre-run`, e ritual do workspace só mira o Grão-Mestre ou um Mestre de mesa.
 - **Tempo limite:** o padrão é o menor entre 30 min e o intervalo; um valor maior que o intervalo é recusado.
 - **Pré-execução:** roda pela máquina do alvo (as Torres, no M5) depois da decisão de permissões do próprio alvo; só `allow` passa, `ask` e qualquer dúvida recusam, e sem as regras do alvo, sem decisão ou sem máquina o disparo falha. A saída perde as quebras do fim.
+- **No máximo uma vez:** antes do efeito (a pré-execução, o comando digitado, o item na caixa) o motor grava a intenção no disparo (`pre_running`, depois `delivering`); um disparo achado nesses estados depois de uma queda nunca repete o efeito. Um `prompt` sem pré-execução entra na caixa uma vez só (o item leva a chave do disparo, e um segundo `Enqueue` com a mesma chave devolve o primeiro); um `prompt` já entregue é marcado `delivered`; um `command` ou uma pré-execução que pode ter rodado vira `failed`, com o motivo, devolvido ao dono. Se gravar o fim do disparo falhar, ele não é entregue de novo.
+- **Alvo no disparo:** o papel e o tipo do alvo (agente para `prompt`, terminal simples para `command`) são conferidos de novo a cada disparo; se mudaram, o disparo falha sem enviar nada.
 - **Desativar** (comando ou fim da mesa) marca como `skipped` o que estava na fila. `ritual run` segue a mesma regra de pular e recusa ritual desativado. `delete` por um personagem fica pendente do pedido do usuário.
 
 ## Regras e erros

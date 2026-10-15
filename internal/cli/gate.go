@@ -159,11 +159,49 @@ func (g *Gate) secret(r localchan.Request) (localchan.Response, bool) {
 		}
 	}
 	for name, v := range r.Flags {
-		if s, ok := v.(string); ok && looks(s) {
-			return secretRefusal("--" + name), true
+		for _, s := range flagTexts(v) {
+			if looks(s) {
+				return secretRefusal("--" + name), true
+			}
 		}
 	}
 	return localchan.Response{}, false
+}
+
+// flagTexts are all the texts a flag value carries: the text itself, the items
+// of a list (`--attach` repeated) and the names and contents of a map (the
+// files of a class package), since a secret may be in any of them.
+func flagTexts(v any) []string {
+	switch x := v.(type) {
+	case string:
+		return []string{x}
+	case []string:
+		return x
+	case []any:
+		var out []string
+		for _, e := range x {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case map[string]string:
+		var out []string
+		for k, e := range x {
+			out = append(out, k, e)
+		}
+		return out
+	case map[string]any:
+		var out []string
+		for k, e := range x {
+			out = append(out, k)
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func secretRefusal(where string) localchan.Response {

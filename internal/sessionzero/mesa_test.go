@@ -234,9 +234,10 @@ func TestMergeTwiceKeepsThePersonsContentAndTheMestreHandlersOnceAfterTheirs(t *
 
 // --- CA-SZ-MESA-03 ---
 
-// Part of CA-SZ-MESA-03: the start of a character (stage 5 of M4, personagens)
-// calls CheckStart before it starts; the test of the refusal at the real start
-// closes the criterion there.
+// CA-SZ-MESA-03: the invalid hook file is not touched, an alert is raised and
+// the Antigravity start is refused by CheckStart (the call every start of a
+// character makes first: internal/orchestration/characters, TestTheFilesOfTheTable…
+// and TestOnlyTheProviderThatIsHeldBackIsRefusedAtTheStart).
 func TestInvalidHookFileIsKeptAnAlertIsRaisedAndNoAntigravityCharacterStarts(t *testing.T) {
 	t.Parallel()
 	e := newTableEnv(t, nil, nil)

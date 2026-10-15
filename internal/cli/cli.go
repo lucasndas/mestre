@@ -156,7 +156,7 @@ func parse(reg *Registry, argv []string) (*parsed, error) {
 			literal = true
 			continue
 		}
-		if literal || len(a) < 3 || a[:2] != "--" {
+		if literal || !isFlag(a) {
 			p.args = append(p.args, a)
 			continue
 		}
@@ -184,6 +184,26 @@ func parse(reg *Registry, argv []string) (*parsed, error) {
 		return nil, &usageError{fmt.Sprintf("wrong number of arguments for %s", spec.Name), "usage: " + spec.Usage}
 	}
 	return p, nil
+}
+
+// isFlag says whether a token is a flag: `--name` or `--name=value`, with the
+// name in lowercase letters and hyphens, starting with a letter. Anything else
+// that starts with `--` (a markdown rule `---`, `-- resumo`, `--- Mensagem ---`)
+// is text for the command, not a flag.
+func isFlag(a string) bool {
+	if len(a) < 3 || a[:2] != "--" {
+		return false
+	}
+	name, _, _ := cutFlag(a)
+	if name == "" || name[0] < 'a' || name[0] > 'z' {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		if c := name[i]; (c < 'a' || c > 'z') && c != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func cutFlag(a string) (name, val string, hasVal bool) {

@@ -682,3 +682,31 @@ func TestDebugItemFiveIsWhatTheEngineSaysOfTheCitadel(t *testing.T) {
 		})
 	}
 }
+
+// Part of CA-CLI-CONV-10: the detector also looks inside the flags that hold a
+// list (a repeated flag) and a map (the files of a package), not only the flags
+// that hold one text.
+func TestTheSecretDetectorLooksInsideListAndMapFlags(t *testing.T) {
+	t.Parallel()
+	fakeToken := "ghp_" + "0123456789abcdefghijklmnopqrstuvwxyz"
+	spec := cli.Spec{Name: "pack", Group: cli.GroupGrandMaster, Summary: "test", Usage: "mestre pack", Who: cli.WhoGrandMaster, MaxArgs: -1, Secret: true,
+		Flags:    []cli.Flag{{Name: "tag", Kind: cli.FlagList, Desc: "tags"}},
+		Internal: []cli.Flag{{Name: "package", Kind: cli.FlagFiles, Desc: "the files"}}}
+	next := &countingForwarder{}
+	g := cli.NewGate(cli.GateConfig{Commands: cli.MustRegistry(append(cli.Default().Specs(), spec)...), Next: next,
+		Profiles: cli.ProfilesFunc(func(context.Context, string) cli.Profile { return allowing(cli.RoleGrandMaster) })})
+	ok := json.RawMessage(`"ok"`)
+	for name, flags := range map[string]map[string]any{
+		"a token in a list":             {"tag": []any{"bom", fakeToken}},
+		"a token in the file of a map":  {"package": map[string]any{"CLASS.md": "key " + fakeToken}},
+		"a token as the name of a file": {"package": map[string]any{fakeToken: "x"}},
+	} {
+		resp := g.Forward(t.Context(), &localchan.Call{Request: localchan.Request{Cmd: "pack", Args: []json.RawMessage{ok}, Flags: flags}, Caller: localchan.Caller{Identified: true, AgentID: "gm"}})
+		if resp.OK || resp.Error == nil || resp.Error.Code != "secret_detected" {
+			t.Errorf("%s: %+v; want secret_detected", name, resp)
+		}
+	}
+	if n := next.n.Load(); n != 0 {
+		t.Errorf("%d calls passed the Gate", n)
+	}
+}
