@@ -610,6 +610,7 @@ func (a *agent) dump() string {
 		"provider": a.p, "cwd": a.dir, "args": a.cfg.Args, "session_id": a.sessionID,
 		"trusted": a.trusted, "hooks": hs, "hooks_fired": fired, "env": mestreEnv,
 		"append_system_prompt": a.layerText(), "add_dirs": a.addDirs, "status_line": a.statusLine,
+		"instructions": a.instructions(), "skills": a.skillNames(),
 	})
 	return string(b)
 }

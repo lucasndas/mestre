@@ -58,3 +58,35 @@ func TestRemoveRefusesLinks(t *testing.T) {
 	}
 	checkSecret(t, secret, content)
 }
+
+func TestRemoveDir(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := safefile.MkdirAll(filepath.Join(dir, "a", "b")); err != nil {
+		t.Fatal(err)
+	}
+	if err := safefile.Write(filepath.Join(dir, "a", "f"), []byte("x"), safefile.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := safefile.RemoveDir(filepath.Join(dir, "a")); err == nil {
+		t.Fatal("a folder with something in it was removed")
+	}
+	if err := safefile.RemoveDir(filepath.Join(dir, "a", "f")); !errors.Is(err, safefile.ErrNotFolder) {
+		t.Fatalf("RemoveDir of a file = %v, want ErrNotFolder", err)
+	}
+	if err := safefile.RemoveDir(filepath.Join(dir, "a", "b")); err != nil {
+		t.Fatal(err)
+	}
+	if err := safefile.Remove(filepath.Join(dir, "a", "f"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := safefile.RemoveDir(filepath.Join(dir, "a")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the folder is still there: %v", err)
+	}
+	if err := safefile.RemoveDir(filepath.Join(dir, "a")); err != nil {
+		t.Fatalf("RemoveDir of a missing folder = %v", err)
+	}
+}

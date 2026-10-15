@@ -191,6 +191,34 @@ func remove(dir, base string, guard func(Info) error) error {
 	return nil
 }
 
+func removeDir(dir, base string) error {
+	d, err := openDir(dir, false)
+	if notFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer d.close()
+	full := filepath.Join(d.path, base)
+	st, err := os.Lstat(full)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if st.Mode().IsRegular() {
+		return fmt.Errorf("%w: %s", ErrNotFolder, base)
+	}
+	// The folders of the path are held; os.Remove takes a junction or a
+	// link itself, not its target.
+	if err := os.Remove(full); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 func write(dir, base string, data []byte, o Options) error {
 	d, err := openDir(dir, true)
 	if err != nil {

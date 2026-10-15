@@ -56,6 +56,8 @@ var (
 	ErrNotRegular = errors.New("not a regular file")
 	// ErrTooLarge is a file over the limit of the read.
 	ErrTooLarge = errors.New("file over the size limit")
+	// ErrNotFolder is a path that RemoveDir found to be a file.
+	ErrNotFolder = errors.New("not a folder")
 	// ErrPath is a path that is not absolute.
 	ErrPath = errors.New("the path is not absolute")
 )
@@ -63,7 +65,7 @@ var (
 // Refused reports whether err is one of the refusals of this package (a
 // file the engine will not touch), as opposed to an ordinary error.
 func Refused(err error) bool {
-	return errors.Is(err, ErrLink) || errors.Is(err, ErrNotRegular) || errors.Is(err, ErrTooLarge) || errors.Is(err, ErrPath)
+	return errors.Is(err, ErrLink) || errors.Is(err, ErrNotRegular) || errors.Is(err, ErrNotFolder) || errors.Is(err, ErrTooLarge) || errors.Is(err, ErrPath)
 }
 
 // Info is the state of a file at a moment.
@@ -176,6 +178,22 @@ func Remove(path string, guard func(Info) error) error {
 		return err
 	}
 	if err := remove(dir, base, guard); err != nil {
+		return wrap(path, err)
+	}
+	return nil
+}
+
+// RemoveDir deletes the empty folder at path, or the link or junction that
+// stands in the place of one (the link itself, never what it points at),
+// walking the path as Write does. A missing one is not an error; a folder
+// with something in it is an error and stays; a file is ErrNotFolder
+// (Remove deletes files).
+func RemoveDir(path string) error {
+	dir, base, err := split(path)
+	if err != nil {
+		return err
+	}
+	if err := removeDir(dir, base); err != nil {
 		return wrap(path, err)
 	}
 	return nil
