@@ -47,7 +47,31 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 		return nil
 	}
 	c.State, c.Reason = r.State, r.Reason
-	return s.after(ctx, c, from)
+	err = s.after(ctx, c, from)
+	s.observe(func(o Observer) error { return o.StateChanged(ctx, c, from) })
+	return err
+}
+
+// observe calls the Observer, if there is one; what it returns is logged.
+func (s *Service) observe(f func(Observer) error) {
+	if s.o.Observer == nil {
+		return
+	}
+	if err := f(s.o.Observer); err != nil {
+		s.log.Warn("characters: the observer failed", "err", err)
+	}
+}
+
+// TurnEnded passes the end of a turn on to the Observer (the Runtime of the
+// Citadel's machine calls it through the TurnObserver; a Tower sends it over
+// the protocol).
+func (s *Service) TurnEnded(ctx context.Context, id, lastMessage string) error {
+	c, err := s.o.Registry.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	s.observe(func(o Observer) error { return o.TurnEnded(ctx, c, lastMessage) })
+	return nil
 }
 
 func hasEdge(from, to State) bool {
@@ -114,11 +138,15 @@ func (s *Service) Done(ctx context.Context, id, text string) error {
 	if err := s.o.Registry.AddDone(ctx, id, Done{At: s.clk.Now(), Text: text}); err != nil {
 		return err
 	}
+	c, err := s.o.Registry.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	s.observe(func(o Observer) error { return o.Done(ctx, c, text) })
 	// A character that is already idle (the done came late) may have been
 	// waiting for it to be ended.
-	c, err := s.o.Registry.Get(ctx, id)
-	if err != nil || c.State != Idle {
-		return err
+	if c.State != Idle {
+		return nil
 	}
 	return s.runScheduled(ctx, c)
 }

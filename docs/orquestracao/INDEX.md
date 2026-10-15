@@ -12,11 +12,11 @@
 | [personagens-no-codigo.md](personagens-no-codigo.md) | como o código implementa os personagens: Service e Runtime, registro, limites, prontidão, encerramento, retomada e a ligação com as conexões | ao mexer em `internal/orchestration/characters` |
 | [bases-e-fichas.md](bases-e-fichas.md) | campos de bases e fichas, exemplos, exportação/importação, perfis de conta | ao mexer em presets ou em várias contas por provedor |
 | [conexoes.md](conexoes.md) | conexões automáticas e manuais, remoção, visibilidade e como o código as guarda | ao mexer em quem fala com quem, no `mestre list` ou no `connect` |
-| [esperas-e-caixa-de-entrada.md](esperas-e-caixa-de-entrada.md) | fila e prioridade, entrega só quando livre, resposta pelo mesmo canal, ask e ask back, esperas, tempos limite, impasse | ao mexer em entrega de mensagens ou esperas |
+| [esperas-e-caixa-de-entrada.md](esperas-e-caixa-de-entrada.md) | fila e prioridade, entrega só quando livre, resposta pelo mesmo canal, ask e ask back, esperas, tempos limite, impasse, persistência e como o código as guarda | ao mexer em entrega de mensagens ou esperas |
 | [cadeia-de-aprovacao.md](cadeia-de-aprovacao.md) | superior de cada personagem, níveis da cadeia e o risco até onde cada um decide, condições da mesa para o `medio`, subida por teto ou prazo, salvaguardas, pedido montado pelo motor, catálogo de respostas | ao mexer em quem decide um pedido de aprovação |
 | [supervisao-da-cadeia.md](supervisao-da-cadeia.md) | o Grão-Mestre como supervisor: resumo não bloqueante das decisões das mesas, pausa de autonomia por mesa, métricas de fila por nível e alertas | ao mexer na visibilidade e nos freios das decisões de agentes ou nas filas de aprovação |
 | [regras-temporarias-de-mesa.md](regras-temporarias-de-mesa.md) | regras que agentes da cadeia criam ao aprovar por um tempo ou um padrão: alcance, validade, precedência, como acabam | ao mexer no que agentes liberam por um tempo numa mesa |
 | [missoes.md](missoes.md) | definição, execução pelo motor, devolução, aprovação, estados, retomada, espelho no GitHub | ao mexer em fluxos de etapas |
 | [rituais.md](rituais.md) | agenda, pré-execução, alvo ocupado enfileira e volta ao dono, disparos perdidos | ao mexer em rotinas agendadas |
-| [pergaminhos-e-tomos.md](pergaminhos-e-tomos.md) | arquivo e índice, nome, operações, concorrência, tomos, pergaminho da missão | ao mexer em notas do canvas |
+| [pergaminhos-e-tomos.md](pergaminhos-e-tomos.md) | arquivo e índice, nome, operações, concorrência, tomos, pergaminho da missão e como o código os guarda | ao mexer em notas do canvas |
 | [grimorios.md](grimorios.md) | salvar e restaurar times entre mesas e workspaces | ao mexer em grimórios |

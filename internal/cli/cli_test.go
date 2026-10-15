@@ -280,7 +280,7 @@ func TestUsageErrorsAreExit2(t *testing.T) {
 		r := localrig.New(clock.Real{}, localrig.Options{})
 		p := newProc(r, "alice-proc", "", "alice")
 		for _, args := range [][]string{
-			{}, {"nonsense"}, {"list", "extra"}, {"ask", "OnlyOne"}, {"ask", "A", "B", "--timeout", "soon"}, {"ask", "A", "B", "--nope"},
+			{}, {"nonsense"}, {"list", "extra"}, {"ask", "A", "B", "C"}, {"ask", "A", "B", "--timeout", "soon"}, {"ask", "A", "B", "--nope"},
 			{"ask", "A", "B", "--timeout"},
 		} {
 			if got := p.run(t.Context(), args...); got.code != 2 || got.stdout != "" || !strings.HasPrefix(got.stderr, "error: ") {

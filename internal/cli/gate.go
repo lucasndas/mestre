@@ -185,6 +185,7 @@ const (
 	StateIdle    = "idle"
 	StateBusy    = "busy"
 	StateBlocked = "blocked"
+	StateStuck   = "stuck"
 
 	ReasonPermission = "permission"
 	ReasonInput      = "input"
@@ -197,10 +198,11 @@ const (
 // Master of the table answers it. A busy target is `busy` (exit 7); one
 // waiting for a permission is `permission_prompt` (exit 3), because
 // permissions are decided by `mestre hook` and the approval flow, never by
-// keys. Any other state (starting, stuck, stopped…) is refused as `busy`.
+// keys. A stuck target takes keys too (docs/orquestracao/esperas-e-caixa-de-entrada.md);
+// any other state (starting, waiting, stopped…) is refused as `busy`.
 func CheckRaw(state, reason string) (localchan.Response, bool) {
 	switch {
-	case state == StateIdle, state == StateBlocked && reason == ReasonInput:
+	case state == StateIdle, state == StateStuck, state == StateBlocked && reason == ReasonInput:
 		return localchan.Response{}, true
 	case state == StateBlocked && reason == ReasonPermission:
 		return localchan.Fail("permission_prompt", "the target is waiting for a permission, so nothing was typed",

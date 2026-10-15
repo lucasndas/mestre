@@ -41,6 +41,14 @@ type RuntimeOptions struct {
 	Checklist providers.Checklist
 	Decisions providers.Decisions
 	Retrust   Retruster
+	// Turns, when set, is told when a turn ends with the last message of the
+	// agent (the Citadel's Service, or the protocol to it); nil: nothing is.
+	Turns TurnObserver
+	// LongText is the size above which a delivery goes to a file (2000
+	// characters by default) and StallAfter how long a delivery may wait for
+	// the start of its turn before Enter is sent (30 s).
+	LongText   int
+	StallAfter time.Duration
 
 	// Layout, Home and OS fill the environment the permission pipeline
 	// decides with; EnvExtra adds what only the machine knows (the git state,
@@ -97,6 +105,9 @@ func NewRuntime(o RuntimeOptions) (*Runtime, error) {
 	}
 	if o.GracefulWait <= 0 {
 		o.GracefulWait = DefaultGracefulWait
+	}
+	if o.StallAfter <= 0 {
+		o.StallAfter = DefaultStallAfter
 	}
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -400,21 +411,43 @@ func (rt *Runtime) Deliver(ctx context.Context, agentID, deliveryID, text string
 	if s == nil {
 		return fmt.Errorf("characters: %s does not run on this machine", agentID)
 	}
-	st := s.status().State
-	if !st.Receives() {
+	if st := s.status().State; !st.Receives() {
 		return fmt.Errorf("%w: %s is %s", ErrBusy, agentID, st)
 	}
+	if upd := rt.update(s); upd != "" {
+		text = upd + "\n" + text
+	}
+	return rt.deliverRaw(ctx, s, deliveryID, text)
+}
+
+// update takes the sections of the layer that changed, for a character that
+// has no hook of the start of the turn to bring them (nothing for the others).
+func (rt *Runtime) update(s *session) string {
 	s.mu.Lock()
-	sup, noHook := s.sup, !s.info.Hooks || s.reduced == string(providers.ReducedNoHooks)
+	noHook := !s.info.Hooks || s.reduced == string(providers.ReducedNoHooks)
 	s.mu.Unlock()
-	if noHook {
-		if upd := rt.o.Prep.TakeUpdate(agentID); upd != "" {
-			text = upd + "\n" + text
-		}
+	if !noHook {
+		return ""
+	}
+	return rt.o.Prep.TakeUpdate(s.id)
+}
+
+// deliverRaw types the text as it is. The adapter must be able to type it
+// before the state moves: a text it refuses (too long, or several lines for a
+// version that does not take them) leaves the character as it was.
+func (rt *Runtime) deliverRaw(ctx context.Context, s *session, deliveryID, text string) error {
+	if _, err := s.adapter.TypeMessage(text); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	sup := s.sup
+	s.mu.Unlock()
+	if sup == nil {
+		return noProcess(s.id)
 	}
 	s.do(ctx, TrigDeliver, "delivery "+deliveryID)
 	if err := sup.Deliver(ctx, deliveryID, text); err != nil {
-		s.do(ctx, TrigTurnEnd, "delivery failed")
+		s.do(ctx, TrigTurnEnd, ReasonDeliveryFailed)
 		return err
 	}
 	return nil

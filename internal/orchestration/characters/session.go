@@ -85,6 +85,9 @@ type session struct {
 
 	stuckTimer, startTimer, delayTimer clock.Timer
 	gen                                int
+	// stallTimer watches a delivery that must start a turn (deliver.go).
+	stallTimer clock.Timer
+	stallGen   int
 }
 
 func (s *session) now() time.Time { return s.rt.clk.Now() }
@@ -306,6 +309,14 @@ func (s *session) onEvent(ctx context.Context, ev providers.Event) {
 		s.mu.Lock()
 		s.wait = "" // the decision that woke the character came with this turn
 		s.mu.Unlock()
+		s.turnBegan()
+	}
+	if ev.Event == providers.EventTurnEnd && s.rt.o.Turns != nil {
+		// Before the state changes: the ask this turn answered is resolved
+		// before the next item of the inbox is delivered.
+		if err := s.rt.o.Turns.TurnEnded(ctx, s.id, ev.LastMessage); err != nil {
+			s.rt.log.Warn("characters: the end of a turn was not reported", "id", s.id, "err", err)
+		}
 	}
 	wait := ""
 	if ev.Event == providers.EventTurnEnd || ev.Event == providers.EventInterrupt || ev.Event == providers.EventTurnFailure {
@@ -416,7 +427,7 @@ func (s *session) close() {
 	s.mu.Lock()
 	s.gone = true
 	s.gen++
-	stop(s.stuckTimer, s.startTimer, s.delayTimer)
+	stop(s.stuckTimer, s.startTimer, s.delayTimer, s.stallTimer)
 	sup := s.sup
 	s.mu.Unlock()
 	if sup != nil {

@@ -1,6 +1,6 @@
 # Esperas e caixa de entrada
 
-> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -94,6 +94,18 @@ O motor mantém um grafo "quem espera quem" (esperas de personagem, `ask` aberto
 ### Persistência e retomada
 
 Filas, esperas, `ask` abertos e o grafo ficam no banco. Depois de uma queda, o motor recarrega tudo: esperas de horário vencidas durante a queda são satisfeitas, prazos vencidos viram `expired` (com aviso), e um item que estava sendo entregue volta para `queued` se nenhum início de turno foi registrado depois dele.
+
+### No código
+
+`internal/orchestration/inbox` (fila, entrega, resposta aos usuários, avisos do motor) e `internal/orchestration/waits` (esperas, `ask`, grafo e impasse). Escolhas que o código fecha:
+- **Guardado:** `inbox_messages`, `outbound_messages`, `waits`, `asks` e `wait_cycles`. A espera por vaga continua em `character_slot_waits` ([personagens](personagens-no-codigo.md)): o `mestre waits` e a sonda de espera (`WaitProbe`, que põe o personagem em `waiting` com o motivo "vaga") a leem de lá, sem cópia em `waits`.
+- **Item:** o id é `m<n>` (`m81`). Além dos estados do documento há `delivering`: digitado, sem início de turno ainda; vira `delivered` no `turn_start` (ou aos 10 s sem ele, marcado como não confirmado e nunca digitado de novo) e volta a `queued` se o personagem é interrompido ou o motor cai. Dentro da prioridade 3, o pedido `approval` vai depois dos outros itens.
+- **Entrega:** o `Service` da caixa chama a interface `Deliverer` (`inbox.deliver` do [protocolo](../conectividade/protocolo.md); `characters.MachineSet` no processo) quando o personagem passa a `idle` ou `waiting` (`Observer` do `Service` dos personagens), ao enfileirar, e ao reiniciar. A máquina (`Runtime.DeliverInbox`) responde `busy` se o terminal já trabalha, e o item volta à fila. Texto acima de 2.000 caracteres, ou que o adaptador não digita como está (mais de 8 KiB; várias linhas numa versão que não aceita colagem), vai ao arquivo, e no último caso cabeçalho e pedido ficam numa linha só. Sem início de turno em 30 s, a tecla Enter uma vez; em mais 30 s, `stuck`.
+- **Pausa e filas longas:** a interface `Pauses` diz se a mesa (ou o workspace) está pausada; com mais de 50 itens o Mestre da mesa recebe um aviso, uma vez.
+- **`ask`:** a resposta é o `done` do turno que tratou o pedido, ou a última mensagem do agente (`Observer.TurnEnded`, antes de o estado mudar). Um `ask` da pessoa para quem espera, ou que a espera dela esperava, é o ask back: resolve o pedido aberto ou satisfaz a espera por personagem, e não cria item. O limite é de 90 s, e no máximo 9 min. Sem quem espere (CLI morta, prazo estourado), a resposta vai ao asker como `answer`.
+- **`ask --raw`:** `Runtime.Input` é a palavra final: a recusa vem do estado real na máquina; antes dela, a do registro (`cli.CheckRaw`, que aceita também `stuck`). `\n`, `\t`, `\xNN`, `\e` e `\\` viram bytes.
+- **Impasse:** busca em largura a cada aresta nova; o anel é escrito começando pelo primeiro nome em ordem alfabética. Aviso ao Mestre da mesa (Grão-Mestre se há mais de uma mesa) e aos usuários, registrado em `wait_cycles` até o anel desfazer.
+- **Retomada:** `inbox.Recover` e `waits.Recover` (horário vencido satisfeito, prazo vencido expirado com aviso, timers de volta, `ask` sem quem espere). Peças de marcos seguintes: canais (`Channels`), usuários (`Users`), missões (`Quests`), aprovação (`WaitApproval`, `ApprovalDecided`) e sincronização (`WaitSync`).
 
 ## Regras e erros
 
