@@ -58,6 +58,8 @@ var (
 	ErrTooLarge = errors.New("file over the size limit")
 	// ErrNotFolder is a path that RemoveDir found to be a file.
 	ErrNotFolder = errors.New("not a folder")
+	// ErrIsFolder is a path that RemoveEntry found to be a folder.
+	ErrIsFolder = errors.New("is a folder")
 	// ErrPath is a path that is not absolute.
 	ErrPath = errors.New("the path is not absolute")
 )
@@ -65,7 +67,7 @@ var (
 // Refused reports whether err is one of the refusals of this package (a
 // file the engine will not touch), as opposed to an ordinary error.
 func Refused(err error) bool {
-	return errors.Is(err, ErrLink) || errors.Is(err, ErrNotRegular) || errors.Is(err, ErrNotFolder) || errors.Is(err, ErrTooLarge) || errors.Is(err, ErrPath)
+	return errors.Is(err, ErrLink) || errors.Is(err, ErrNotRegular) || errors.Is(err, ErrNotFolder) || errors.Is(err, ErrIsFolder) || errors.Is(err, ErrTooLarge) || errors.Is(err, ErrPath)
 }
 
 // Info is the state of a file at a moment.
@@ -178,6 +180,22 @@ func Remove(path string, guard func(Info) error) error {
 		return err
 	}
 	if err := remove(dir, base, guard); err != nil {
+		return wrap(path, err)
+	}
+	return nil
+}
+
+// RemoveEntry deletes the entry at path that is not a folder, whatever it is:
+// a file, a link (never followed), a fifo, a socket. It is what removes the
+// odd things an agent can leave in a folder the engine has to empty, which
+// Remove refuses. The path is walked as Write does; a missing entry is not an
+// error; a folder is ErrIsFolder and stays.
+func RemoveEntry(path string) error {
+	dir, base, err := split(path)
+	if err != nil {
+		return err
+	}
+	if err := removeEntry(dir, base); err != nil {
 		return wrap(path, err)
 	}
 	return nil

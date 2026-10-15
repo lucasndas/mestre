@@ -191,6 +191,33 @@ func remove(dir, base string, guard func(Info) error) error {
 	return nil
 }
 
+func removeEntry(dir, base string) error {
+	d, err := openDir(dir, false)
+	if notFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer d.close()
+	full := filepath.Join(d.path, base)
+	st, err := os.Lstat(full)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// A junction or a link to a folder is taken itself; a real folder stays.
+	if st.IsDir() && st.Mode()&os.ModeSymlink == 0 && st.Mode()&os.ModeIrregular == 0 {
+		return fmt.Errorf("%w: %s", ErrIsFolder, base)
+	}
+	if err := os.Remove(full); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 func removeDir(dir, base string) error {
 	d, err := openDir(dir, false)
 	if notFound(err) {

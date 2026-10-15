@@ -188,7 +188,7 @@ func TestTheEnvironmentHasNoSecretAndNoGitAuthor(t *testing.T) {
 		}
 		for k, want := range map[string]string{
 			"MESTRE_AGENT_ID": "dev-" + agent, "MESTRE_WORKSPACE": "meu-app", "MESTRE_MESA": "3-login", "MESTRE_CLI": r.mestre,
-			"MESTRE_ENDPOINT": "unix:///run/mestre/cli.sock", "MESTRE_TMP": plan.Tmp, "TMPDIR": plan.Tmp,
+			"MESTRE_ENDPOINT": "unix:///run/mestre/cli.sock", "MESTRE_TMP": plan.Tmp, "TMPDIR": plan.Tmp, "TEMP": plan.Tmp, "TMP": plan.Tmp,
 			"GIT_CONFIG_GLOBAL": filepath.Join(r.dir, ".mestre", "agents", "dev-"+agent, "gitconfig"), "LANG": "pt_BR.UTF-8", "FOO": "bar",
 		} {
 			if got, ok := envOf(env, k); !ok || got != want {

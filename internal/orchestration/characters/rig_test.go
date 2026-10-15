@@ -331,6 +331,7 @@ type fakePrep struct {
 	first    string
 	verify   func() error
 	prepared []sessionzero.CharacterRequest
+	restored []sessionzero.CharacterRequest
 	ended    []sessionzero.EndRequest
 	err      error
 	updates  string
@@ -356,6 +357,14 @@ func (p *fakePrep) Prepare(_ context.Context, req sessionzero.CharacterRequest) 
 		plan.Launch.SessionID, plan.Launch.Resumed = req.ResumeSessionID, true
 	}
 	return plan, nil
+}
+
+// Restore keeps the requests the runtime gave back after a restart.
+func (p *fakePrep) Restore(_ context.Context, req sessionzero.CharacterRequest) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.restored = append(p.restored, req)
+	return nil
 }
 
 func (p *fakePrep) End(_ context.Context, r sessionzero.EndRequest) error {

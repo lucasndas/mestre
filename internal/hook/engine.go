@@ -137,8 +137,11 @@ func (e *Engine) Handle(ctx context.Context, c *localchan.Call) localchan.Respon
 	var ans Answer
 	switch {
 	case !identified:
-		ans = Answer{Verdict: VerdictDeny, Reason: "o chamador não foi identificado como processo de um terminal deste personagem"}
+		ans = Answer{Verdict: VerdictDeny, Unidentified: true, Reason: "o chamador não foi identificado como processo de um terminal deste personagem"}
 		e.log().Warn("hook: a call not identified as the character's", "agent", ev.AgentID, "pid", c.Caller.PID)
+		// A forged event never reaches the sinks: it would move the state
+		// of another character.
+		return localchan.OK(ans)
 	case ev.Event == providers.EventPreTool || ev.Event == providers.EventPermissionRequest:
 		// The dispatcher waits DecisionDeadline and then decides alone (the
 		// degraded mode): past it, or with the dispatcher gone, the engine

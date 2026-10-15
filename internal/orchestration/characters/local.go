@@ -14,8 +14,13 @@ import (
 
 // Launch is what the engine of a machine keeps of how a character was
 // started, in the machine database (character_runtime.launch), to supervise
-// it again after a restart of the engine: not the secrets, not the layer.
+// it again after a restart of the engine: not the secrets (the request of the
+// session zero is kept without the key of the provider). PendingFirst is the
+// first message (the Mestre layer) that was not typed yet.
 type Launch struct {
+	Request      json.RawMessage `json:"request,omitempty"`
+	PendingFirst string          `json:"pending_first,omitempty"`
+
 	Workspace string `json:"workspace"`
 	Table     string `json:"table"`
 	Name      string `json:"name"`

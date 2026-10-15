@@ -98,6 +98,8 @@ func NewCharacter(o CharacterOptions) (*Character, error) {
 		return nil, errors.New("sessionzero: the character needs the provider adapters")
 	case o.Accounts == nil || o.Births == nil || o.Files == nil:
 		return nil, errors.New("sessionzero: the character needs the accounts, the births and the files")
+	case o.Masker == nil:
+		return nil, errors.New("sessionzero: the character needs the detector of secrets (Masker)")
 	case o.Agents == "" || !filepath.IsAbs(o.Agents) || o.Binary == "" || o.Endpoint == "":
 		return nil, errors.New("sessionzero: the character needs the agentes folder, the mestre binary and the endpoint")
 	}

@@ -111,6 +111,9 @@ func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
 	if l.Env, err = codexEnv(l.Env, req.Profile); err != nil {
 		return Launch{}, err
 	}
+	if err := checkResumeID(Codex, req.ResumeSessionID); err != nil {
+		return Launch{}, err
+	}
 	if req.ResumeSessionID != "" {
 		l.Args = []string{"resume", req.ResumeSessionID}
 		l.SessionID, l.Resumed = req.ResumeSessionID, true

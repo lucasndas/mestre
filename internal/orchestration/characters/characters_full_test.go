@@ -96,6 +96,9 @@ func TestAfterTheEngineIsKilledTheBusyAndTheWaitingKeepTheirStatesAndTheOneWhose
 		t.Fatal(err)
 	}
 	f.waitState(waiting, characters.Waiting)
+	// The one that will be interrupted has its own inbox and wait too.
+	f.waits.set(victim.ID, "Outro")
+	f.inbox.set(victim.ID, 3)
 	pids := map[string]int{}
 	for _, c := range []characters.Character{busy, waiting, victim} {
 		rec, err := f.eng.mgr.Record(f.ctx, c.ID)
@@ -168,6 +171,13 @@ func TestAfterTheEngineIsKilledTheBusyAndTheWaitingKeepTheirStatesAndTheOneWhose
 	}
 	if n, _ := f.inbox.Pending(f.ctx, waiting.ID); n != 2 {
 		t.Errorf("the inbox of the waiting character: %d, want 2 kept", n)
+	}
+	// The resumed character keeps its own inbox and waits.
+	if n, _ := f.inbox.Pending(f.ctx, victim.ID); n != 3 {
+		t.Errorf("the inbox of the resumed character: %d, want 3 kept", n)
+	}
+	if reason, ok, _ := f.waits.Active(f.ctx, victim.ID); !ok || reason != "Outro" {
+		t.Errorf("the wait of the resumed character = %q (%v), want kept", reason, ok)
 	}
 }
 

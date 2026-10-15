@@ -10,6 +10,7 @@ import (
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/sessionzero"
 )
 
 // CloseRequest is `mestre table close`.
@@ -380,10 +381,18 @@ func (s *Service) whyKept(ctx context.Context, mirror gitx.Repo, t Table, wt Wor
 func (s *Service) removeWorktree(ctx context.Context, mirror gitx.Repo, t Table, wt Worktree) error {
 	if wt.Machine == s.o.Machine {
 		tr, err := s.tableRequest(ctx, t, gitx.WorktreeRecord{Dir: wt.Dir, GitDir: wt.GitDir, Common: wt.Common})
-		if err == nil {
-			if rerr := s.o.Files.Release(tr); rerr != nil {
-				s.log.Warn("tables: the trust of the worktree was not taken back", "table", t.ID, "err", rerr)
+		if err != nil {
+			// The worktree cannot be opened (it is broken, or already gone),
+			// but the trust it was given must still be taken back: Release
+			// needs only where it was and the profiles.
+			s.log.Warn("tables: the worktree cannot be opened; its trust is released without it", "table", t.ID, "err", err)
+			tr = sessionzero.TableRequest{Workspace: t.Workspace, Table: t.ID, Dir: wt.Dir, RepoRoot: wt.Common}
+			if s.o.Profiles != nil {
+				tr.Profiles = s.o.Profiles.Profiles(ctx, s.o.Machine)
 			}
+		}
+		if rerr := s.o.Files.Release(tr); rerr != nil {
+			s.log.Warn("tables: the trust of the worktree was not taken back", "table", t.ID, "err", rerr)
 		}
 		if err := mirror.RemoveWorktree(ctx, wt.Dir, false); err != nil && !errors.Is(err, gitx.ErrNoSuchWorktree) {
 			return fmt.Errorf("remove the worktree of %s: %w", t.ID, err)

@@ -90,6 +90,25 @@ func TestACommitThatIsNotInThePullRequestKeepsTheWorktree(t *testing.T) {
 	}
 }
 
+// The trust of the folder is taken back even when the worktree can no longer
+// be opened by the time it is removed.
+func TestTheTrustIsReleasedEvenWhenTheWorktreeCannotBeOpened(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{})
+	w.activate()
+	tbl, _ := reviewed(t, w, 42, "Login")
+	dir := w.repoOf(tbl).Dir()
+	w.spy.mu.Lock()
+	w.spy.failOpen = w.spy.opens + 2 // the inspection opens it, the request to release does not
+	w.spy.mu.Unlock()
+	if _, err := w.svc.Close(w.ctx, tables.CloseRequest{By: w.gm, Table: tbl.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if rel := w.files.list(&w.files.released); !slices.Equal(rel, []string{dir}) {
+		t.Errorf("released = %v; want %s", rel, dir)
+	}
+}
+
 // A clean, integrated worktree goes with its branch; the characters end first
 // with the safe end, the table master last, the rituals are deactivated and the
 // trust of the folder is taken back.

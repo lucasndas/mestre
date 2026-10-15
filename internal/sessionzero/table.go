@@ -108,6 +108,9 @@ type Table struct {
 	o    TableOptions
 	mu   sync.Mutex
 	told map[string]string // worktree -> the text of the last notice
+	// trusted are the profiles that got the trust of a worktree, kept so
+	// that Release also reaches a profile the account list no longer has.
+	trusted map[string][]Profile
 }
 
 // NewTable returns the session zero of the tables.
@@ -115,7 +118,7 @@ func NewTable(o TableOptions) (*Table, error) {
 	if o.Worktree.Providers == nil {
 		return nil, errors.New("sessionzero: the table needs the provider adapters")
 	}
-	return &Table{o: o, told: map[string]string{}}, nil
+	return &Table{o: o, told: map[string]string{}, trusted: map[string][]Profile{}}, nil
 }
 
 // TableRequest says what to prepare.
@@ -205,7 +208,13 @@ func (t *Table) CheckStart(ctx context.Context, req TableRequest, provider provi
 // profile and returns what failed.
 func (t *Table) Release(req TableRequest) error {
 	var errs []error
-	for _, p := range req.Profiles {
+	// Every profile the table was trusted in goes, also the ones the list of
+	// accounts no longer has (when the path is known).
+	t.mu.Lock()
+	profiles := unionProfiles(t.trusted[req.Dir], req.Profiles)
+	delete(t.trusted, req.Dir)
+	t.mu.Unlock()
+	for _, p := range profiles {
 		ad, err := t.o.Worktree.Providers.For(p.Provider)
 		if err != nil {
 			errs = append(errs, err)
@@ -223,6 +232,17 @@ func (t *Table) Release(req TableRequest) error {
 	delete(t.told, req.Dir)
 	t.mu.Unlock()
 	return errors.Join(errs...)
+}
+
+// unionProfiles is a followed by the profiles of b that a does not have.
+func unionProfiles(a, b []Profile) []Profile {
+	out := slices.Clone(a)
+	for _, p := range b {
+		if !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // copyOff is whether the copy of the skill for Claude Code stops being
@@ -258,6 +278,9 @@ func affected(p Problem) []providers.ID {
 func trustPath(id providers.ID) string { return string(id) }
 
 func (t *Table) trust(req TableRequest, rep *TableReport) {
+	t.mu.Lock()
+	t.trusted[req.Dir] = unionProfiles(t.trusted[req.Dir], req.Profiles)
+	t.mu.Unlock()
 	for _, p := range req.Profiles {
 		ad, err := t.o.Worktree.Providers.For(p.Provider)
 		if err == nil {

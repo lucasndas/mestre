@@ -325,6 +325,24 @@ func TestAStuckOrInterruptedCharacterIsEndedByATableMasterWithAnAuditLine(t *tes
 	}
 }
 
+// The exception to the safe point is the table master's and the
+// Administrators': the Grand Master does not force a stop.
+func TestTheGrandMasterDoesNotForceTheStopOfAStuckCharacter(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	gm := r.makeGM()
+	r.makeTM("3-login")
+	stuck := reach(t, r, characters.Stuck, "Travado")
+	_, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: stuck.ID, By: byChar(gm)})
+	if !errors.Is(err, characters.ErrLevelDenied) || r.state(stuck) != characters.Stuck {
+		t.Fatalf("Dismiss by the Grand Master = %v, state %s; want level_denied and still stuck", err, r.state(stuck))
+	}
+	admin := characters.Creator{Kind: characters.CreatedByUser, ID: "ana", Level: characters.LevelAdministrator}
+	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: stuck.ID, By: admin}); err != nil || r.state(stuck) != characters.Stopped {
+		t.Fatalf("Dismiss by an Administrator = %v, state %s", err, r.state(stuck))
+	}
+}
+
 func TestReplaceKeepsTheNameAndTheCreatorAndStartsWhenTheOldOneEnds(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{machines: []machineSpec{linux("a"), linux("b")}})
