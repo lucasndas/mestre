@@ -50,6 +50,9 @@ const (
 	// AlertWorktreeMoved: the main clone no longer points at its record
 	// (an agent rewrote its .git file or commondir).
 	AlertWorktreeMoved AlertKind = "worktree_moved"
+	// AlertRefMoved: a ref of the mirror (the branch of a table, or the tip a
+	// Tower sent) moved without passing through the engine.
+	AlertRefMoved AlertKind = "ref_moved"
 )
 
 // Alert is an operational alert for the users of the workspace (Telegram and

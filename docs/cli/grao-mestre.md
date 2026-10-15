@@ -1,6 +1,6 @@
 # CLI: comandos do Grão-Mestre
 
-> **Assunto:** sintaxe de `table`, `gh`, `app`, `approval` (com a pausa de autonomia de uma mesa), `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa) · **Componente:** CLI · **Atualizado:** 2026-10-14
+> **Assunto:** sintaxe de `table`, `gh`, `app`, `approval` (com a pausa de autonomia de uma mesa), `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa) · **Componente:** CLI · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -19,15 +19,15 @@ Referência de sintaxe dos comandos que só o Grão-Mestre do workspace usa: abr
 
 ### `mestre table`
 ```
-mestre table open --epic <n> [--sheet "<Ficha do Mestre>"] [--base-branch <branch>] [--from-message <id>]
+mestre table open --epic <n> [--sheet "<Ficha do Mestre>"] [--base-branch <branch>] [--from-message <id>] [--notes "<observações>"]
 mestre table list [--state open|closed|all]
 mestre table status "<mesa>"
-mestre table close "<mesa>" [--cancel --reason "<texto>"]
+mestre table close "<mesa>" [--cancel --reason "<texto>"] [--keep]
 ```
-- `open`: abre a mesa de um épico **já criado** por `gh epic create`: branch `epico/<n>-<slug>`, com o slug gerado pelo motor a partir do título do épico ([mesas](../orquestracao/mesas.md)), a partir de `--base-branch` (padrão: a branch principal), worktree na Cidadela e Mestre da mesa recrutado com `--sheet` (padrão: a ficha de Mestres de mesa do workspace). `--from-message` indica a mensagem de usuário de origem: o motor copia o texto original e os anexos para a caixa de entrada do novo Mestre (sem reescrever). Volta quando o Mestre foi recrutado; não espera ele trabalhar. `--json` → `{name, branch, epic, worktree, master: {name, id, machine}}`. Épico inexistente ou sem rótulo `epico` → 4 `epic_not_found` (`table open` nunca cria épico); mesa já aberta para o épico → 7 `table_exists`; workspace fora do estado `active` → 7 `workspace_not_active` ([workspaces](../orquestracao/workspaces.md)).
+- `open`: abre a mesa de um épico **já criado** por `gh epic create`: branch `epico/<n>-<slug>`, com o slug gerado pelo motor a partir do título do épico ([mesas](../orquestracao/mesas.md)), a partir de `--base-branch` (padrão: a branch principal), worktree na Cidadela e Mestre da mesa recrutado com `--sheet` (padrão: a ficha de Mestres de mesa do workspace). `--from-message` indica a mensagem de usuário de origem: o motor copia o texto original e os anexos para a caixa de entrada do novo Mestre (sem reescrever). `--notes` são as observações do Grão-Mestre, que vão depois do original, em bloco separado. Volta quando o Mestre foi recrutado; não espera ele trabalhar. `--json` → `{name, branch, epic, worktree, master: {name, id, machine}}`. Épico inexistente ou sem rótulo `epico` → 4 `epic_not_found` (`table open` nunca cria épico); épico fechado → 7 `epic_closed`; mesa já aberta para o épico → 7 `table_exists`; workspace fora do estado `active` → 7 `workspace_not_active` ([workspaces](../orquestracao/workspaces.md)).
 - `list`: nome, estado com os identificadores de [mesas](../orquestracao/mesas.md) (`open`, `working`, `in_review`, `closing`, `closed`, `cancelling`, `cancelled`) e a marca de pausa, épico, branch, Mestre, máquinas em uso, PR e consumo. `--state open` mostra as não encerradas.
 - `status`: missões e etapa atual, esperas, PR (CI e revisões), personagens e consumo da mesa.
-- `close`: o Grão-Mestre chama quando o motor avisa (item `github` na caixa de entrada) que o PR da mesa foi mesclado; é o que leva a mesa a `closing`. Sem merge confirmado → 7 `not_merged`. O motor só remove um worktree se a branch foi integrada e não há alterações pendentes; senão a mesa fica `closing` e a CLI sai com 7 `unmerged_changes` listando o que falta (o Grão-Mestre pergunta aos usuários e chama `close` de novo com a decisão). `--cancel` fecha o PR sem merge e a issue como "não planejada"; é ação destrutiva: sem pedido explícito de usuário sai com 9 (regra 1 de [convencoes](convencoes.md)).
+- `close`: o Grão-Mestre chama quando o motor avisa (item `github` na caixa de entrada) que o PR da mesa foi mesclado; é o que leva a mesa a `closing`. Sem merge confirmado → 7 `not_merged`. O motor só remove um worktree se a branch foi integrada e não há alterações pendentes; senão a mesa fica `closing` e a CLI sai com 7 `unmerged_changes` listando o que falta (o Grão-Mestre pergunta aos usuários e chama `close` de novo com a decisão: resolvida a pendência, ou `--keep` para manter os worktrees). Enquanto só falta um personagem chegar ao ponto seguro, sai com 9 `scheduled`, e o motor segue sozinho e avisa ao terminar. `--cancel` fecha o PR sem merge e a issue como "não planejada"; é ação destrutiva: sem pedido explícito de usuário sai com 9 `pending` (regra 1 de [convencoes](convencoes.md)) e nada muda até a aprovação.
 
 ### `mestre gh`
 ```

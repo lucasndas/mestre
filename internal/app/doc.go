@@ -36,8 +36,20 @@
 //
 // # What stays out
 //
-// The real lock, the bot, the panel, the characters and the missions arrive
-// in their milestones: here they are interfaces (guild.Lock, the Approvers,
+// The real lock, the bot, the panel and the missions arrive in their
+// milestones: here they are interfaces (guild.Lock, the Approvers,
 // ExternalFunc). Main is `mestre run`; the hooks of the full suite exist only
 // with the tag full (testhooks_full.go).
+//
+// # The orchestration
+//
+// Orchestration (orchestration.go) is what milestone 4 can run on the
+// Citadel: the workspaces, the tables, the characters, the connections, the
+// inbox, the waits and the scrolls, built and joined (the loops between them
+// are broken with lazy references), their commands registered in
+// Engine.Commands and their loops run by External while the fence lets the
+// Citadel act. What it needs from milestones 5 and 6 (GitHub, the users and
+// the channels, the approvals, the builder of the requests of the characters)
+// and from the machines (the terminals) comes in through OrchestrationOptions
+// as small interfaces; whoever builds the Deps puts them there.
 package app
