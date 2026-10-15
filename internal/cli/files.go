@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/lucasndas/mestre/internal/localchan"
 )
@@ -66,9 +67,7 @@ func readInput(env Env, ff FileFlag, path string) ([]byte, *localchan.Response) 
 		}
 		data, err = io.ReadAll(io.LimitReader(env.Stdin, ff.Max+1))
 	} else {
-		if !filepath.IsAbs(path) && env.Cwd != "" {
-			path = filepath.Join(env.Cwd, path)
-		}
+		path = resolvePath(env.Cwd, path)
 		data, err = env.ReadFile(path, ff.Max+1)
 	}
 	switch {
@@ -82,6 +81,15 @@ func readInput(env Env, ff FileFlag, path string) ([]byte, *localchan.Response) 
 		return fail(localchan.CodeUsage, "the file is not text", "only text goes in the request")
 	}
 	return data, nil
+}
+
+// resolvePath makes a path relative to the folder of the caller; a rooted path
+// stays as it is.
+func resolvePath(cwd, path string) string {
+	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") || cwd == "" {
+		return path
+	}
+	return filepath.Join(cwd, path)
 }
 
 // defaultReadFile reads at most max bytes of a file.
@@ -163,10 +171,7 @@ func checkAttachments(env Env, p *parsed) *localchan.Response {
 	}
 	names := make([]string, 0, len(list))
 	for _, path := range list {
-		full := path
-		if !filepath.IsAbs(full) && env.Cwd != "" {
-			full = filepath.Join(env.Cwd, full)
-		}
+		full := resolvePath(env.Cwd, path)
 		size, err := env.FileSize(full)
 		switch {
 		case err != nil && errors.Is(err, fs.ErrNotExist):

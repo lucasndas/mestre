@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -68,14 +69,14 @@ func (p *proc) run(ctx context.Context, args ...string) result {
 		Commands:   p.commands,
 		Stdin:      strings.NewReader(p.stdin),
 		ReadFile: func(path string, max int64) ([]byte, error) {
-			b, ok := p.files[path]
+			b, ok := p.files[filepath.ToSlash(path)]
 			if !ok {
 				return nil, fmt.Errorf("open %s: %w", path, fs.ErrNotExist)
 			}
 			return b[:min(int64(len(b)), max)], nil
 		},
 		FileSize: func(path string) (int64, error) {
-			b, ok := p.files[path]
+			b, ok := p.files[filepath.ToSlash(path)]
 			if !ok {
 				return 0, fmt.Errorf("stat %s: %w", path, fs.ErrNotExist)
 			}

@@ -325,13 +325,14 @@ func (w *commWorld) run(c characters.Character, args ...string) result {
 		Dial:       func(string) localchan.Dialer { return w.rig.Dialer(host) },
 		FileExists: func(string) bool { return true },
 		ReadFile: func(path string, max int64) ([]byte, error) {
-			b, ok := w.files[path]
+			b, ok := w.files[filepath.ToSlash(path)]
 			if !ok {
 				return nil, fmt.Errorf("open %s: %w", path, os.ErrNotExist)
 			}
 			return b[:min(int64(len(b)), max)], nil
 		},
 		FileSize: func(path string) (int64, error) {
+			path = filepath.ToSlash(path)
 			if n, ok := w.sizes[path]; ok {
 				return n, nil
 			}
