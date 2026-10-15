@@ -230,7 +230,7 @@ func TestTheOrchestrationOfTheCitadelRunsATableThroughTheForwarder(t *testing.T)
 	orc, machines := w.orc, w.machines
 	fwd := localchan.NewLocalForwarder()
 	orc.Register(fwd, nil)
-	for _, cmd := range []string{"table open", "table list", "table status", "table close", "list", "connect", "ask", "wait", "inbox", "reply", "note create"} {
+	for _, cmd := range []string{"table open", "table list", "table status", "table close", "list", "connect", "ask", "wait", "inbox", "reply", "note create", "done", "quest create", "quest run", "quest pause", "quest resume", "quest cancel", "quest status"} {
 		if !slices.Contains(fwd.Commands(), cmd) {
 			t.Errorf("the command %q is not registered: %v", cmd, fwd.Commands())
 		}

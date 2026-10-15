@@ -547,7 +547,7 @@ func (s *Service) Replace(ctx context.Context, rq ReplaceRequest) (CreateResult,
 	}
 	creator := old.CreatedBy
 	req := CreateRequest{Name: old.Name, Sheet: rq.Sheet, Class: rq.Class, Workspace: old.Workspace, Table: old.Table, Role: old.Role,
-		Creator: rq.By, Quest: old.Quest, ReplaceOf: old.ID, Prefer: old.Machine, Inherit: &creator}
+		Creator: rq.By, Quest: old.Quest, Step: old.Step, ReplaceOf: old.ID, Prefer: old.Machine, Inherit: &creator}
 	if err := s.authorize(ctx, req); err != nil {
 		return CreateResult{}, err
 	}

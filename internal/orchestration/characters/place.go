@@ -166,7 +166,7 @@ func (s *Service) insert(ctx context.Context, p placement) (Character, error) {
 		ID: s.ids.NewString(), Name: p.name, Kind: p.kind, Role: p.req.Role, Workspace: p.req.Workspace, Table: p.req.Table,
 		Machine: p.machine, Sheet: snap.Sheet.Name, Base: snap.Base.Name, Class: p.class, Account: snap.Sheet.Account,
 		State: Starting, Reason: "created", Lifecycle: p.lifecyc, MaxIdle: p.maxIdle, CreatedBy: p.req.Creator,
-		Quest: p.req.Quest, CreatedAt: now, StartedAt: now, LastSignalAt: now,
+		Quest: p.req.Quest, Step: p.req.Step, CreatedAt: now, StartedAt: now, LastSignalAt: now,
 	}
 	if p.req.Inherit != nil {
 		c.CreatedBy = *p.req.Inherit

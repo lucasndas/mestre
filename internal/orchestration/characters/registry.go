@@ -18,7 +18,7 @@ import (
 type Registry struct{ DB *store.DB }
 
 const columns = `id, name, kind, role, workspace, table_id, machine_id, sheet, base, class, account, terminal_id, pty_pid, pty_started, pty_version, dir,
-	state, reason, reduced_monitoring, pinned, lifecycle, max_idle_ms, created_by, created_by_kind, quest,
+	state, reason, reduced_monitoring, pinned, lifecycle, max_idle_ms, created_by, created_by_kind, quest, quest_step,
 	provider_session_id, task_open, idle_since, stop_requested_at, stop_requested_by, stop_reason,
 	created_at, started_at, last_signal_at, stopped_at`
 
@@ -48,7 +48,7 @@ func scan(r scanner) (Character, error) {
 	)
 	if err := r.Scan(&c.ID, &c.Name, &kind, &role, &c.Workspace, &c.Table, &c.Machine, &c.Sheet, &c.Base, &c.Class,
 		&c.Account, &c.TerminalID, &ptyPID, &c.PTY.Started, &c.PTY.Version, &c.Dir, &state, &c.Reason, &c.Reduced, &pinned, &lifecycle, &maxIdle,
-		&c.CreatedBy.ID, &byKind, &c.Quest, &c.ProviderSessionID, &taskOpen, &idle, &stopAt, &c.StopRequestedBy,
+		&c.CreatedBy.ID, &byKind, &c.Quest, &c.Step, &c.ProviderSessionID, &taskOpen, &idle, &stopAt, &c.StopRequestedBy,
 		&c.StopReason, &created, &started, &signal, &stopped); err != nil {
 		return Character{}, err
 	}
@@ -162,10 +162,10 @@ func (r Registry) Insert(ctx context.Context, c Character) error {
 		if n > 0 {
 			return fmt.Errorf("%w: %s", ErrNameTaken, c.Name)
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO characters (`+columns+`, name_key) VALUES (`+placeholders(36)+`)`,
+		_, err := tx.ExecContext(ctx, `INSERT INTO characters (`+columns+`, name_key) VALUES (`+placeholders(37)+`)`,
 			c.ID, c.Name, string(c.Kind), string(c.Role), c.Workspace, c.Table, c.Machine, c.Sheet, c.Base, c.Class, c.Account,
 			c.TerminalID, c.PTY.PID, c.PTY.Started, c.PTY.Version, c.Dir, string(c.State), c.Reason, c.Reduced, b2i(c.Pinned), string(c.Lifecycle), c.MaxIdle.Milliseconds(),
-			c.CreatedBy.ID, string(c.CreatedBy.Kind), c.Quest, c.ProviderSessionID, b2i(c.TaskOpen), ms(c.IdleSince),
+			c.CreatedBy.ID, string(c.CreatedBy.Kind), c.Quest, c.Step, c.ProviderSessionID, b2i(c.TaskOpen), ms(c.IdleSince),
 			ms(c.StopRequestedAt), c.StopRequestedBy, c.StopReason, ms(c.CreatedAt), ms(c.StartedAt), ms(c.LastSignalAt),
 			ms(c.StoppedAt), nameKey(c.Name))
 		if err != nil {

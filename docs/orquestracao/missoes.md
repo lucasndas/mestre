@@ -1,6 +1,6 @@
 # Missões
 
-> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -115,6 +115,13 @@ Ao criar a missão, o motor cria a issue sob o épico, com a lista de etapas com
 ### Entrega
 
 A mesa acumula as missões na branch do épico; quando o épico está pronto, o Mestre da mesa abre o PR ([mesas](mesas.md#estados)). Se uma parte precisar ser entregue antes do resto (ex.: correção urgente), ela vira um épico próprio, numa mesa própria aberta pelo Grão-Mestre (o Mestre da mesa pede a ele). Missões são salvas em [grimórios](grimorios.md).
+
+### No código
+
+- **Guardado e execução:** `internal/orchestration/quests`. `quests`, `quest_steps` (id `<missão>/<etapa>`) e `step_runs` (uma linha por entrega, com os commits de início e de fim) guardam tudo; a retomada é o motor olhar o banco de novo. Um `advance` de cada missão por vez: o pedido que chega no meio faz o que roda repassar. A definição que o `quest create` recebe vai no texto (`--definition`); o motor nunca abre um caminho que um agente nomeia (a CLI de coordenação lê o `--file`).
+- **Etapa e commits:** a etapa vai a `running` quando o item `quest` entra na caixa de entrada, e o commit de início é a ponta da branch da mesa no espelho nesse momento. O resultado é o que mudou entre os dois commits no espelho (sem renomear e sem rodar driver de diff) mais os não commitados (o worktree, na Cidadela; o aviso da Torre, em outra máquina). `done` sem etapa nem tarefa: registrado e ignorado, com 7 `no_active_task`. Acima de 100 arquivos, o pergaminho conta o resto.
+- **O que segura uma etapa** em `preparing` fica nela (`blocker`: aprovação, vaga, personagem ocupado, sincronização, retomada); só a aprovação depois (`after`) cria uma espera de aprovação do personagem. O personagem de vaga nasce com a etapa (`characters.Step`) e a recebe quando nasce; `recruit --replace` leva a etapa ao novo. A volta conta por etapa que devolve e por rodada; uma negação de `after` conta como volta. Os pontos de aprovação abrem pela interface `Approvals` (M5) com o desenhista da missão, e `Decided` recusa a decisão dele; sem o fluxo, a missão pausa no ponto.
+- **GitHub e travada:** `Dirty` guarda que há o que espelhar (issue, sub-issues, checklist, comentário com o App da classe, fechamento); o espelho refaz só o que falta, e uma falha fica para a varredura de cada minuto sem parar a missão. Etapa travada: personagem `idle` por `stuck_after` ou `stuck`; o aviso ao Grão-Mestre e aos usuários sai 30 min depois, uma vez.
 
 ## Regras e erros
 

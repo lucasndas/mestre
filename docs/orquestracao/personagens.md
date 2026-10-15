@@ -112,7 +112,7 @@ stateDiagram-v2
 
 ### Registro de terminais
 
-Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). `mestre-pty`, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID do `mestre-pty` com o horário de início, versão do `mestre-pty`, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por (de onde sai o superior na [cadeia de aprovação](cadeia-de-aprovacao.md#superior)), missão de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
+Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no banco de máquina de cada uma, inclusive a Cidadela, ver [persistência](../arquitetura/persistencia.md)). `mestre-pty`, tamanho, buffer e log de cada terminal: [terminal](../arquitetura/terminal.md). Campos: `id` (ULID), nome, tipo (`character`|`terminal`), workspace, mesa, máquina, ficha, base, classe, perfil de conta, PID do `mestre-pty` com o horário de início, versão do `mestre-pty`, pasta, estado, motivo, fixado, ciclo (`ephemeral`|`persistent`), criado por (de onde sai o superior na [cadeia de aprovação](cadeia-de-aprovacao.md#superior)), missão e etapa de origem, id da sessão do provedor (para retomar), iniciado em, último sinal em, encerrado em. O histórico de saída do terminal vai para logs com rotação, não para o banco.
 
 ### Retomada após reinício
 
