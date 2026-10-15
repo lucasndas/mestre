@@ -293,5 +293,20 @@ func (m *Manager) Record(ctx context.Context, id string) (Record, error) {
 	return rec, err
 }
 
+// SetStatus keeps in the registry row the state the character of the
+// terminal is in (docs/orquestracao/personagens.md#estados): the registry
+// writes only starting, interrupted and stopped itself, the rest of the
+// states are the layer above's. A terminal that is not in the registry is
+// ErrNoTerminal.
+func (m *Manager) SetStatus(ctx context.Context, id, status string) error {
+	if _, err := m.reg.get(ctx, id); err != nil {
+		if errors.Is(err, ErrNoTerminal) {
+			return fmt.Errorf("terminal %s: %w", id, err)
+		}
+		return err
+	}
+	return m.reg.setStatus(ctx, id, status, m.clk.Now())
+}
+
 // Records lists the registry rows.
 func (m *Manager) Records(ctx context.Context) ([]Record, error) { return m.reg.list(ctx) }

@@ -149,7 +149,10 @@ func (s screenSet) evaluate(in ScreenInput) ScreenResult {
 	if in.ReadyPattern != nil {
 		prompt = in.ReadyPattern
 	}
-	if prompt != nil && prompt.MatchString(lastLine(in.Text)) {
+	// The rendered screen has the blanks at the end of each row trimmed, so a
+	// pattern that waits for the space after the prompt ('\$ $') is also
+	// tried with the space the terminal drew.
+	if line := lastLine(in.Text); prompt != nil && (prompt.MatchString(line) || prompt.MatchString(line+" ")) {
 		if in.Stable || in.SessionStarted {
 			return ScreenResult{State: StateReady}
 		}
