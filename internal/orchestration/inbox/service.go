@@ -256,6 +256,16 @@ func (s *Service) pumpOnce(ctx context.Context, target string) error {
 	}
 	res, err := s.o.Deliverer.Deliver(ctx, c.Machine, protocol.InboxDeliver{TerminalID: c.TerminalID, ItemID: it.ID, Text: it.Body(), Header: it.Header()})
 	if err == nil && res.Status == protocol.InboxDelivered {
+		// A message of another agent is a task: the `done` of the turn that
+		// handles it answers it, and it is the active task of the character
+		// until then (docs/cli/comunicacao.md#mestre-done). The steps of a
+		// quest mark themselves; what a user says, an answer, a wake-up or a
+		// notice is no task.
+		if it.Kind == KindAgent {
+			if terr := s.o.Registry.SetTaskOpen(ctx, c.ID, true); terr != nil {
+				s.log.Warn("inbox: a task was not marked", "item", it.ID, "err", terr)
+			}
+		}
 		return nil
 	}
 	if rerr := s.st.Requeue(ctx, it.ID); rerr != nil {

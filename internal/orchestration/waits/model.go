@@ -191,6 +191,8 @@ func (t Timeouts) filled() Timeouts {
 
 // Errors of the waits.
 var (
+	// ErrNoAttachments: the attachments of a message could not be passed on.
+	ErrNoAttachments = errors.New("the attachments cannot be passed on")
 	// ErrSelf: a character waits for, or asks, itself.
 	ErrSelf = errors.New("a character cannot wait for itself or ask itself")
 	// ErrPast: a wait for a time that already passed.

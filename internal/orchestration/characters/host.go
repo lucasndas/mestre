@@ -28,6 +28,8 @@ type HostSpec struct {
 type Screen struct {
 	Text string
 	Row  int
+	// History is the lines that scrolled off, when they were asked for.
+	History string
 }
 
 // Process is a terminal the engine holds: what the runtime does with the
@@ -266,6 +268,12 @@ func (p *terminalProcess) Input(ctx context.Context, data []byte) error {
 func (p *terminalProcess) Screen(ctx context.Context) (Screen, error) {
 	s, err := p.t.Screen(ctx, 0)
 	return Screen{Text: s.Text, Row: s.Row}, err
+}
+
+// ScreenLines is the screen with up to lines lines of the history.
+func (p *terminalProcess) ScreenLines(ctx context.Context, lines int) (Screen, error) {
+	s, err := p.t.Screen(ctx, lines)
+	return Screen{Text: s.Text, Row: s.Row, History: s.History}, err
 }
 func (p *terminalProcess) Exited() <-chan struct{} { return p.t.Exited() }
 func (p *terminalProcess) PTY() PTYInfo {

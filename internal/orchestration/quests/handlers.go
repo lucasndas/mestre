@@ -15,10 +15,8 @@ import (
 // Handlers are the commands of this document to register in the local
 // forwarder of the Citadel: `done` and `quest create|run|pause|resume|cancel|
 // status` (docs/cli/comunicacao.md and docs/cli/coordenacao.md have the syntax;
-// the CLI answers the syntax and the level, the engine does the rest). They
-// are the "casca" of stage 9: the happy path, the errors that the engine
-// decides; the exit codes and the --json of every case close with the CLI of
-// stage 10.
+// the CLI answers the syntax, the files and the level, the engine does the
+// rest).
 func (s *Service) Handlers() map[string]localchan.Handler {
 	return map[string]localchan.Handler{
 		"done":         localchan.HandlerFunc(s.handleDone),
@@ -80,16 +78,34 @@ func (s *Service) master(ctx context.Context, c *localchan.Call) (characters.Cha
 	return x, nil
 }
 
-// stepViews is the shape of the steps in the answers.
-func stepViews(v View) []map[string]any {
+// stepViews is the shape of the steps in the answers
+// (docs/cli/coordenacao.md#mestre-quest): the number, the sheet, the
+// character, the state, the returns used, what it waits for and its issue.
+func (s *Service) stepViews(ctx context.Context, v View) []map[string]any {
 	out := make([]map[string]any, len(v.Steps))
 	for i, st := range v.Steps {
-		out[i] = map[string]any{"id": st.ID, "name": st.Def.Title(), "status": st.State, "character": st.Character, "returns": st.Returns}
-		if st.Waiting != "" {
-			out[i]["waiting"] = st.Waiting
+		agent := ""
+		if st.Character != "" {
+			if c, err := s.o.Registry.Get(ctx, st.Character); err == nil {
+				agent = c.Name
+			}
 		}
+		out[i] = map[string]any{"n": st.Pos + 1, "id": st.ID, "name": st.Def.Title(), "sheet": st.Def.Sheet, "agent": agent,
+			"state": string(st.State), "loops": st.Returns, "waiting_for": st.Waiting, "issue": st.SubIssue}
 	}
 	return out
+}
+
+// currentStep is the number of the step under way (the first that is being
+// prepared, runs, is stuck or waits for an approval), or nil.
+func currentStep(v View) any {
+	for _, st := range v.Steps {
+		switch st.State {
+		case StepPreparing, StepRunning, StepStuck, StepApproving:
+			return st.Pos + 1
+		}
+	}
+	return nil
 }
 
 func (s *Service) questOf(ctx context.Context, x characters.Character, c *localchan.Call) (Quest, *localchan.Response) {
@@ -111,8 +127,8 @@ func (s *Service) handleCreate(ctx context.Context, c *localchan.Call) localchan
 	if refused != nil {
 		return *refused
 	}
-	// The CLI reads the file of the agent and sends its text (stage 10); the
-	// engine never opens a path an agent names.
+	// The CLI reads the file of the agent and sends its text; the engine never
+	// opens a path an agent names.
 	data := []byte(flagString(c, "definition"))
 	if len(data) == 0 {
 		return localchan.Fail(localchan.CodeUsage, `usage: mestre quest create "<quest>" --file <file | ->`, "the definition is YAML or JSON; the CLI reads the file and sends it, the engine never reads a path an agent names")
@@ -128,7 +144,8 @@ func (s *Service) handleCreate(ctx context.Context, c *localchan.Call) localchan
 	if err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(map[string]any{"name": v.Name, "id": v.ID, "issue": v.Issue, "status": v.State, "steps": stepViews(v)})
+	return localchan.OK(map[string]any{"name": v.Name, "id": v.ID, "issue": v.Issue, "state": v.State, "steps": s.stepViews(ctx, v),
+		"text": fmt.Sprintf("quest %s created with %d steps (issue #%d)", v.Name, len(v.Steps), v.Issue)})
 }
 
 func (s *Service) handleRun(ctx context.Context, c *localchan.Call) localchan.Response {
@@ -145,7 +162,8 @@ func (s *Service) handleRun(ctx context.Context, c *localchan.Call) localchan.Re
 	if err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(map[string]any{"name": got.Name, "id": got.ID, "status": got.State, "round": got.Round})
+	return localchan.OK(map[string]any{"name": got.Name, "id": got.ID, "status": got.State, "round": got.Round,
+		"text": fmt.Sprintf("quest %s is %s", got.Name, got.State)})
 }
 
 func (s *Service) handlePause(ctx context.Context, c *localchan.Call) localchan.Response {
@@ -173,7 +191,7 @@ func (s *Service) simple(ctx context.Context, c *localchan.Call, do func(Quest) 
 	if err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(map[string]any{"name": got.Name, "id": got.ID, "status": got.State})
+	return localchan.OK(map[string]any{"name": got.Name, "id": got.ID, "status": got.State, "text": fmt.Sprintf("quest %s is %s", got.Name, got.State)})
 }
 
 func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan.Response {
@@ -196,10 +214,15 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 			return Refusal(err)
 		}
 		out := make([]map[string]any, len(qs))
+		var text strings.Builder
 		for i, q := range qs {
-			out[i] = map[string]any{"name": q.Name, "id": q.ID, "status": q.State, "round": q.Round}
+			out[i] = map[string]any{"name": q.Name, "id": q.ID, "state": q.State, "round": q.Round}
+			fmt.Fprintf(&text, "%s  %s\n", q.Name, q.State)
 		}
-		return localchan.OK(map[string]any{"quests": out})
+		if len(out) == 0 {
+			text.WriteString("no quests\n")
+		}
+		return localchan.OK(map[string]any{"quests": out, "text": strings.TrimRight(text.String(), "\n")})
 	}
 	q, err := s.Get(ctx, x.Workspace, table, args[0])
 	if err != nil {
@@ -209,7 +232,20 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	if err != nil {
 		return Refusal(err)
 	}
-	return localchan.OK(map[string]any{"name": v.Name, "id": v.ID, "status": v.State, "paused_reason": v.PausedReason, "round": v.Round, "issue": v.Issue, "steps": stepViews(v)})
+	steps := s.stepViews(ctx, v)
+	var text strings.Builder
+	fmt.Fprintf(&text, "%s  %s", v.Name, v.State)
+	if v.PausedReason != "" {
+		fmt.Fprintf(&text, " (%s)", v.PausedReason)
+	}
+	for _, st := range steps {
+		fmt.Fprintf(&text, "\n%v. %v  %v  %v  loops %v", st["n"], st["name"], dash(st["agent"]), st["state"], st["loops"])
+		if w, _ := st["waiting_for"].(string); w != "" {
+			fmt.Fprintf(&text, "  waiting for %s", w)
+		}
+	}
+	return localchan.OK(map[string]any{"name": v.Name, "id": v.ID, "state": v.State, "paused_reason": v.PausedReason, "round": v.Round, "issue": v.Issue,
+		"current_step": currentStep(v), "steps": steps, "text": text.String()})
 }
 
 // handleDone is `mestre done`: the end of the step of the character, or of its
@@ -224,7 +260,12 @@ func (s *Service) handleDone(ctx context.Context, c *localchan.Call) localchan.R
 	if !ok || len(args) != 1 {
 		return localchan.Fail(localchan.CodeUsage, `usage: mestre done "<summary>" [--return "<reason>"]`, "")
 	}
-	res, err := s.Finish(ctx, DoneRequest{Character: x, Text: args[0], Return: flagString(c, "return")})
+	req := DoneRequest{Character: x, Text: args[0], Return: flagString(c, "return")}
+	req.FromFile, _ = c.Request.Flags["from-file"].(bool)
+	if tooLong(req) {
+		return Refusal(fmt.Errorf("%w: %d characters at most (--file takes up to %d KiB)", ErrTooLong, MaxSummary, MaxSummaryFile>>10))
+	}
+	res, err := s.Finish(ctx, req)
 	switch {
 	case err == nil:
 		return localchan.OK(res)
@@ -242,5 +283,12 @@ func (s *Service) handleDone(ctx context.Context, c *localchan.Call) localchan.R
 		return localchan.Fail("no_active_task", "you have no step or task under way; the done was registered and ignored",
 			"a done answers the task or the step you were given").WithExit(localchan.ExitConflict)
 	}
-	return localchan.OK(DoneResult{Task: "task", QuestState: ""})
+	return localchan.OK(DoneResult{Task: "task", Warnings: []string{}})
+}
+
+func dash(v any) any {
+	if s, _ := v.(string); s == "" {
+		return "-"
+	}
+	return v
 }

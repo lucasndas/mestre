@@ -163,3 +163,7 @@ var (
 
 // MaxSummary is the size of the summary of a done (docs/cli/comunicacao.md).
 const MaxSummary = 4000
+
+// MaxSummaryFile is the size, in bytes, of the summary of a done that came
+// from a file (`--file`).
+const MaxSummaryFile = 64 << 10

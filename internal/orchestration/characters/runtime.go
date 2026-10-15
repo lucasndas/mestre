@@ -501,6 +501,24 @@ func (rt *Runtime) Screen(ctx context.Context, agentID string) (Screen, error) {
 	return p.Screen(ctx)
 }
 
+// ScreenLines is Screen with up to lines lines of the history (`check
+// --lines`); a terminal that keeps none answers with the screen alone.
+func (rt *Runtime) ScreenLines(ctx context.Context, agentID string, lines int) (Screen, error) {
+	if lines > 0 {
+		if s := rt.session(agentID); s != nil {
+			s.mu.Lock()
+			p := s.proc
+			s.mu.Unlock()
+			if sl, ok := p.(interface {
+				ScreenLines(context.Context, int) (Screen, error)
+			}); ok {
+				return sl.ScreenLines(ctx, lines)
+			}
+		}
+	}
+	return rt.Screen(ctx, agentID)
+}
+
 // State is the state of a character on this machine.
 func (rt *Runtime) State(agentID string) (Status, bool) {
 	s := rt.session(agentID)

@@ -13,8 +13,12 @@ import (
 // the things that agent can see.
 type ScrollView struct {
 	ID, Name    string
+	Stack       string
 	Connections []string
 }
+
+// Edge is a connection the agent can see, by the names of its ends.
+type Edge struct{ From, To string }
 
 // View is what `mestre list` shows an agent: its own name, the characters
 // visible to it and the scrolls visible to it with their connections.
@@ -22,6 +26,9 @@ type View struct {
 	Self       characters.Character
 	Characters []characters.Character
 	Scrolls    []ScrollView
+	// Edges are the connections of the agent with characters and the ones of
+	// the scrolls it sees.
+	Edges []Edge
 }
 
 // Visible lists the characters an agent can talk to, by name
@@ -115,7 +122,7 @@ func (s *Service) View(ctx context.Context, agentID string) (View, error) {
 		if !ok {
 			continue
 		}
-		sv := ScrollView{ID: id, Name: sc.Name}
+		sv := ScrollView{ID: id, Name: sc.Name, Stack: sc.Stack}
 		for _, other := range g.adj[id] {
 			if o, ok, err := s.o.Scrolls.Get(ctx, Scroll(other)); err != nil {
 				return View{}, err
@@ -132,6 +139,31 @@ func (s *Service) View(ctx context.Context, agentID string) (View, error) {
 		v.Scrolls = append(v.Scrolls, sv)
 	}
 	slices.SortFunc(v.Scrolls, func(a, b ScrollView) int { return strings.Compare(nameKeyOf(a.Name), nameKeyOf(b.Name)) })
+	own, err := s.store.Of(ctx, Char(x.ID))
+	if err != nil {
+		return View{}, err
+	}
+	for _, c := range own {
+		if other := c.Other(Char(x.ID)); other.Kind == KindCharacter {
+			if n, ok := names[other.ID]; ok {
+				v.Edges = append(v.Edges, Edge{From: x.Name, To: n})
+			}
+		}
+	}
+	seen := map[[2]string]bool{}
+	for _, sc := range v.Scrolls {
+		for _, to := range sc.Connections {
+			k := [2]string{sc.Name, to}
+			if seen[[2]string{to, sc.Name}] || seen[k] {
+				continue
+			}
+			seen[k] = true
+			v.Edges = append(v.Edges, Edge{From: sc.Name, To: to})
+		}
+	}
+	slices.SortFunc(v.Edges, func(a, b Edge) int {
+		return strings.Compare(nameKeyOf(a.From)+"\x00"+nameKeyOf(a.To), nameKeyOf(b.From)+"\x00"+nameKeyOf(b.To))
+	})
 	return v, nil
 }
 

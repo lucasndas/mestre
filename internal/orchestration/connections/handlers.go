@@ -75,11 +75,18 @@ func flagString(c *localchan.Call, name string) string {
 	return v
 }
 
+// AllNames is the arg of Guard for a command whose every argument is a name
+// (`wait`).
+const AllNames = -1
+
 // Guard wraps the handler of a command that addresses a character by name
-// (`ask`, `check`, `wait`): when the name in the argument at index arg is not
-// connected to the caller the command is refused before anything happens, with
-// exit 3 and not_connected; one that does not exist for the caller is exit 4
-// and not_visible (docs/cli/convencoes.md#regras-e-erros).
+// (`ask`, `check`, `wait`): when the name in the argument at index arg (or,
+// for AllNames, every argument) is not connected to the caller the command is
+// refused before anything happens, with exit 3 and not_connected; one that
+// does not exist for the caller is exit 4 and not_visible
+// (docs/cli/convencoes.md#regras-e-erros). A call that names no target in its
+// arguments (`ask --batch`, `wait --quest`) goes on to its handler, which
+// checks the names it finds elsewhere.
 func (s *Service) Guard(next localchan.Handler, arg int) localchan.Handler {
 	return localchan.HandlerFunc(func(ctx context.Context, c *localchan.Call) localchan.Response {
 		x, refused := s.caller(ctx, c)
@@ -87,11 +94,23 @@ func (s *Service) Guard(next localchan.Handler, arg int) localchan.Handler {
 			return *refused
 		}
 		args, ok := c.Request.Strings()
-		if !ok || arg >= len(args) {
-			return localchan.Fail(localchan.CodeUsage, "the name of the target is missing", "")
+		if !ok {
+			return localchan.Fail(localchan.CodeUsage, "the arguments are text", "")
 		}
-		if _, err := s.Target(ctx, x.ID, flagString(c, "table"), args[arg]); err != nil {
-			return Refusal(err)
+		names := args
+		if arg != AllNames {
+			names = nil
+			if arg < len(args) {
+				names = args[arg : arg+1]
+			}
+		}
+		for _, name := range names {
+			if strings.EqualFold(name, x.Name) {
+				continue // the handler says it: asking oneself is a usage error
+			}
+			if _, err := s.Target(ctx, x.ID, flagString(c, "table"), name); err != nil {
+				return Refusal(err)
+			}
 		}
 		return next.Handle(ctx, c)
 	})
@@ -128,23 +147,8 @@ func (s *Service) machineName(ctx context.Context, id string) string {
 	return id
 }
 
-// statePT is the state as the people read it.
-var statePT = map[characters.State]string{
-	characters.Starting: "iniciando", characters.Idle: "ocioso", characters.Busy: "ocupado", characters.Waiting: "aguardando",
-	characters.Blocked: "aguardando", characters.Stuck: "travado", characters.Stopping: "encerrando",
-	characters.Stopped: "encerrado", characters.Interrupted: "interrompido",
-}
-
-func statusOf(c characters.Character) string {
-	st := statePT[c.State]
-	if (c.State == characters.Waiting || c.State == characters.Blocked) && c.Reason != "" {
-		return st + " " + c.Reason
-	}
-	return st
-}
-
 // handleList is `mestre list`: the name of the caller, the characters and the
-// scrolls it can see, and the connections of the scrolls.
+// scrolls it can see, and the connections among them.
 func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.Response {
 	x, refused := s.caller(ctx, c)
 	if refused != nil {
@@ -154,41 +158,65 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 	if err != nil {
 		return Refusal(err)
 	}
-	type charRow struct {
+	type self struct {
 		Name    string `json:"name"`
-		Kind    string `json:"kind"`
+		ID      string `json:"id"`
+		Table   string `json:"table"`
 		Machine string `json:"machine"`
-		Class   string `json:"class"`
-		State   string `json:"state"`
-		Reason  string `json:"reason,omitempty"`
-		Status  string `json:"status"`
 	}
-	type scrollRow struct {
-		Name        string   `json:"name"`
-		Connections []string `json:"connections"`
+	type agentRow struct {
+		Name       string `json:"name"`
+		ID         string `json:"id"`
+		Kind       string `json:"kind"`
+		Class      string `json:"class"`
+		Machine    string `json:"machine"`
+		Status     string `json:"status"`
+		State      string `json:"state"`
+		WaitingFor string `json:"waiting_for"`
+		Pinned     bool   `json:"pinned"`
 	}
+	type noteRow struct {
+		Name  string `json:"name"`
+		Stack string `json:"stack"`
+	}
+	type edgeRow struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	me := self{Name: v.Self.Name, ID: v.Self.ID, Table: v.Self.Table, Machine: s.machineName(ctx, v.Self.Machine)}
 	var text strings.Builder
-	fmt.Fprintf(&text, "Você é %s.\n", v.Self.Name)
-	chars := make([]charRow, 0, len(v.Characters))
-	text.WriteString("Personagens:\n")
+	fmt.Fprintf(&text, "you: %s (id %s, table %s, machine %s)\n", me.Name, me.ID, orDash(me.Table), me.Machine)
+	agents := make([]agentRow, 0, len(v.Characters))
+	text.WriteString("agents:\n")
 	for _, ch := range v.Characters {
-		r := charRow{Name: ch.Name, Kind: string(ch.Kind), Machine: s.machineName(ctx, ch.Machine), Class: ch.Class,
-			State: string(ch.State), Reason: ch.Reason, Status: statusOf(ch)}
-		chars = append(chars, r)
-		fmt.Fprintf(&text, "- %s (máquina %s, classe %s): %s\n", r.Name, r.Machine, orDash(r.Class), r.Status)
+		r := agentRow{Name: ch.Name, ID: ch.ID, Kind: string(ch.Kind), Class: ch.Class, Machine: s.machineName(ctx, ch.Machine), Status: ch.Status().Label(),
+			State: string(ch.State), Pinned: ch.Pinned}
+		if ch.State == characters.Waiting || ch.State == characters.Blocked {
+			r.WaitingFor = ch.Reason
+		}
+		agents = append(agents, r)
+		fmt.Fprintf(&text, "  %s  class %s  machine %s  %s\n", r.Name, orDash(r.Class), r.Machine, r.Status)
 	}
-	if len(chars) == 0 {
-		text.WriteString("- ninguém\n")
+	if len(agents) == 0 {
+		text.WriteString("  none\n")
 	}
-	scrolls := make([]scrollRow, 0, len(v.Scrolls))
+	notes := make([]noteRow, 0, len(v.Scrolls))
 	if len(v.Scrolls) > 0 {
-		text.WriteString("Pergaminhos:\n")
+		text.WriteString("notes:\n")
 	}
 	for _, sc := range v.Scrolls {
-		scrolls = append(scrolls, scrollRow{Name: sc.Name, Connections: orEmpty(sc.Connections)})
-		fmt.Fprintf(&text, "- %s (conectado a: %s)\n", sc.Name, orDash(strings.Join(sc.Connections, ", ")))
+		notes = append(notes, noteRow{Name: sc.Name, Stack: sc.Stack})
+		fmt.Fprintf(&text, "  %s  stack %s\n", sc.Name, orDash(sc.Stack))
 	}
-	return localchan.OK(map[string]any{"text": strings.TrimRight(text.String(), "\n"), "name": v.Self.Name, "characters": chars, "scrolls": scrolls})
+	edges := make([]edgeRow, 0, len(v.Edges))
+	if len(v.Edges) > 0 {
+		text.WriteString("connections:\n")
+	}
+	for _, e := range v.Edges {
+		edges = append(edges, edgeRow(e))
+		fmt.Fprintf(&text, "  %s <-> %s\n", e.From, e.To)
+	}
+	return localchan.OK(map[string]any{"text": strings.TrimRight(text.String(), "\n"), "self": me, "agents": agents, "notes": notes, "connections": edges})
 }
 
 func orDash(s string) string {

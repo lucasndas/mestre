@@ -258,6 +258,11 @@ func (s *Service) TurnEnded(ctx context.Context, c characters.Character, lastMes
 			answer = "(o personagem encerrou o turno sem texto de resposta)"
 		}
 		s.resolveAsk(ctx, a, answer)
+		// The turn that handled the ask answered it, with or without a done:
+		// the task is over.
+		if err := s.o.Registry.SetTaskOpen(ctx, c.ID, false); err != nil {
+			s.log.Warn("waits: a task was not closed", "character", c.ID, "err", err)
+		}
 		break // one item, one turn
 	}
 	return nil

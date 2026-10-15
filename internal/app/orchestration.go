@@ -86,6 +86,13 @@ type OrchestrationOptions struct {
 	Rituals tables.Rituals
 	// Waker: the waits' tie to the characters (the machines).
 	Waker waits.Waker
+	// MessageAttachments copies the attachments of `ask --from-message` into
+	// the table of the target (milestone 5).
+	MessageAttachments waits.Attachments
+	// Ceiling and Operator: `recruit` against the ceiling of the workspace and
+	// the request of the Operator of the PC (milestones 3 and 7).
+	Ceiling  characters.Ceiling
+	Operator characters.Operator
 
 	// The quests (stage 9). QuestTowers is the half of the tables of a Tower,
 	// for the done of a character there; QuestGitHub the issues of the quests;
@@ -375,13 +382,14 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	wt, err := waits.NewService(waits.Options{Store: &waits.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Inbox: ib, Notifier: ib, Connections: conns,
-		Quests: questsRef{&qs}, Waker: o.Waker, Terminals: o.Machines, Logger: o.Logger})
+		Quests: questsRef{&qs}, Waker: o.Waker, Terminals: o.Machines, Attachments: o.MessageAttachments, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
 	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}, ritualsRef{&rit}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
-		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits, Logger: o.Logger})
+		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
+		Ceiling: o.Ceiling, Operator: o.Operator, Settings: o.Settings, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +445,18 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scrolls.Approvals) {
 	o.Connections.Register(fwd)
 	o.Inbox.Register(fwd)
-	o.Waits.Register(fwd)
+	o.Characters.Register(fwd)
+	// The commands that address a character by name are refused before
+	// anything happens when the target is not connected to the caller.
+	for cmd, h := range o.Waits.Handlers() {
+		switch cmd {
+		case "ask", "check":
+			h = o.Connections.Guard(h, 0)
+		case "wait":
+			h = o.Connections.Guard(h, connections.AllNames)
+		}
+		fwd.Handle(cmd, h)
+	}
 	o.Scrolls.Register(fwd, o.Registry, approvals)
 	o.Tables.Register(fwd)
 	o.Quests.Register(fwd)

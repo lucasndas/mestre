@@ -115,7 +115,7 @@ func (s Spec) checkRequest(r localchan.Request) (localchan.Response, bool) {
 		return localchan.Fail(localchan.CodeUsage, msg, "usage: "+s.Usage), false
 	}
 	for name, v := range r.Flags {
-		f, known := s.flag(name)
+		f, known := s.engineFlag(name)
 		if !known {
 			return usage(fmt.Sprintf("unknown flag --%s", name))
 		}
@@ -123,6 +123,8 @@ func (s Spec) checkRequest(r localchan.Request) (localchan.Response, bool) {
 		switch f.Kind {
 		case FlagBool:
 			_, ok = v.(bool)
+		case FlagList:
+			ok = isTextList(v)
 		default:
 			_, ok = v.(string)
 		}
@@ -210,4 +212,21 @@ func CheckRaw(state, reason string) (localchan.Response, bool) {
 	}
 	return localchan.Fail("busy", fmt.Sprintf("the target is %s, so nothing was typed", state),
 		"send a normal message, which waits in its inbox"), false
+}
+
+// isTextList says whether a flag value is a list of text: a []string in
+// process, a []any of strings once it went through JSON.
+func isTextList(v any) bool {
+	switch l := v.(type) {
+	case []string:
+		return true
+	case []any:
+		for _, x := range l {
+			if _, ok := x.(string); !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }

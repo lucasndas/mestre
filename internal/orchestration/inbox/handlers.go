@@ -61,6 +61,23 @@ func flagString(c *localchan.Call, name string) string {
 	return v
 }
 
+// flagList reads a flag that may be repeated: a list of text once it crossed
+// the channel as JSON.
+func flagList(c *localchan.Call, name string) []string {
+	var out []string
+	switch v := c.Request.Flags[name].(type) {
+	case []string:
+		out = append(out, v...)
+	case []any:
+		for _, x := range v {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
 func flagBool(c *localchan.Call, name string) bool {
 	v, _ := c.Request.Flags[name].(bool)
 	return v
@@ -130,10 +147,7 @@ func (s *Service) handleReply(ctx context.Context, c *localchan.Call) localchan.
 	if !ok || len(args) != 1 {
 		return localchan.Fail(localchan.CodeUsage, `usage: mestre reply "<text>" [--to-message <id>]`, "")
 	}
-	var attach []string
-	if a := flagString(c, "attach"); a != "" {
-		attach = append(attach, a)
-	}
+	attach := flagList(c, "attach")
 	res, err := s.Reply(ctx, ReplyRequest{From: x, Text: args[0], Attachments: attach, ToMessage: flagString(c, "to-message")})
 	if err != nil {
 		return Refusal(err)

@@ -112,16 +112,16 @@ func TestListShowsTheDevOnlyTheMaster(t *testing.T) {
 			t.Fatalf("exit %d: %+v", got.code, got)
 		}
 		v := decode(t, got)
-		rows, _ := v.Data["characters"].([]any)
+		rows, _ := v.Data["agents"].([]any)
 		if len(rows) != 1 {
 			t.Fatalf("Dev sees %v, want only the Master", rows)
 		}
 		row := rows[0].(map[string]any)
-		if row["name"] != "Mestre" || row["machine"] != "linux" || row["class"] != "Dev" || row["status"] != "ocioso" {
+		if row["name"] != "Mestre" || row["machine"] != "linux" || row["class"] != "Dev" || row["status"] != "idle" {
 			t.Errorf("the Master as listed: %v", row)
 		}
-		if v.Data["name"] != "Dev" {
-			t.Errorf("own name = %v", v.Data["name"])
+		if self, _ := v.Data["self"].(map[string]any); self["name"] != "Dev" || self["table"] != "3-login" || self["machine"] != "linux" || self["id"] != dev.ID {
+			t.Errorf("self = %v", v.Data["self"])
 		}
 		text := cw.run(t, dev, "list")
 		for _, bad := range []string{"QA", "Grão-Mestre"} {
@@ -129,7 +129,7 @@ func TestListShowsTheDevOnlyTheMaster(t *testing.T) {
 				t.Errorf("the text of list shows %q:\n%s", bad, text.stdout)
 			}
 		}
-		if !strings.Contains(text.stdout, "Você é Dev") || !strings.Contains(text.stdout, "- Mestre") {
+		if !strings.HasPrefix(text.stdout, "you: Dev (id "+dev.ID+", table 3-login, machine linux)") || !strings.Contains(text.stdout, "  Mestre  class Dev") {
 			t.Errorf("the text of list:\n%s", text.stdout)
 		}
 	})
@@ -151,7 +151,7 @@ func TestListShowsTheReasonOfTheWait(t *testing.T) {
 	}
 	cliBubble(t, w, func(t *testing.T, cw *cliWorld) {
 		out := cw.run(t, dev, "list")
-		if !strings.Contains(out.stdout, "- Revisor (máquina linux, classe Dev): aguardando approval #3") {
+		if !strings.Contains(out.stdout, "  Revisor  class Dev  machine linux  aguardando aprovação") {
 			t.Errorf("list:\n%s", out.stdout)
 		}
 	})

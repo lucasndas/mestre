@@ -70,6 +70,25 @@ var exitByCode = map[string]int{
 	"machine_unreachable": ExitUnavailable,
 	"busy":                ExitConflict,
 	"scheduled":           ExitPending,
+
+	// The codes of the commands of communication and coordination.
+	"name_taken":           ExitConflict,
+	"no_active_task":       ExitConflict,
+	"nothing_to_reply":     ExitConflict,
+	"no_return_step":       ExitConflict,
+	"rev_conflict":         ExitConflict,
+	"edit_ambiguous":       ExitConflict,
+	"invalid_state":        ExitConflict,
+	"already_running":      ExitConflict,
+	"edit_not_found":       ExitNotFound,
+	"invalid_quest":        ExitUsage,
+	"table_required":       ExitUsage,
+	"different_tables":     ExitUsage,
+	"ceiling_denied":       ExitDenied,
+	"operator_denied":      ExitDenied,
+	"automatic_connection": ExitDenied,
+	"waiting_slot":         ExitPending,
+	"approval_pending":     ExitPending,
 }
 
 // ExitFor is the exit code of an error code: the code of the family it

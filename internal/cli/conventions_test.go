@@ -36,7 +36,6 @@ func futureCommands() []cli.Spec {
 		mk("gh", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		mk("app", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		notify,
-		mk("recruit", cli.GroupCoordination, cli.WhoTableMaster|cli.WhoGrandMaster),
 		mk("pr open", cli.GroupGitHub, cli.WhoAnyone),
 		issue,
 	}

@@ -55,6 +55,14 @@ type ServiceOptions struct {
 	// Observer may be nil: nobody acts on the changes of state (the inbox
 	// and the waits, stage 7).
 	Observer Observer
+	// Ceiling and Operator may be nil: the ceiling is not checked by
+	// `recruit`, and the Operator of the PC is not available (milestones 3
+	// and 7 have them).
+	Ceiling  Ceiling
+	Operator Operator
+	// Settings gives the sheet of the table masters, which the Grand Master
+	// recruits (nil: "Mestre da mesa").
+	Settings MasterSheets
 	// Limits default to DefaultLimits; the zero of a field is its default.
 	Limits Limits
 	// SlotTimeout and EphemeralGrace default to the constants above.

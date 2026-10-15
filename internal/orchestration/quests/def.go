@@ -236,6 +236,9 @@ func (d Definition) Validate() error {
 				add(s.ID, "after: %q is not before this step", a)
 			}
 		}
+		if s.CanReturnTo != "" && d.MaxReturns != nil && *d.MaxReturns < 0 {
+			add(s.ID, "it can hand the work back but max_returns is negative: a return needs a limit of returns (0 or more)")
+		}
 		if s.CanReturnTo != "" {
 			p, ok := pos[s.CanReturnTo]
 			switch {
