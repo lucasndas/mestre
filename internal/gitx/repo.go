@@ -322,8 +322,9 @@ func (r *repo) Log(ctx context.Context, revRange string) ([]CommitInfo, error) {
 }
 
 func (r *repo) ReadFile(ctx context.Context, ref, path string) ([]byte, error) {
-	if path == "" || strings.ContainsAny(path, "\x00\n") {
-		return nil, fmt.Errorf("%w: path %q", ErrInvalidArgument, path)
+	path, err := CleanRepoPath(path)
+	if err != nil {
+		return nil, err
 	}
 	h, err := r.ResolveRef(ctx, ref)
 	if err != nil {
@@ -331,7 +332,9 @@ func (r *repo) ReadFile(ctx context.Context, ref, path string) ([]byte, error) {
 	}
 	out, err := r.git(ctx, "cat-file", "blob", string(h)+":"+path)
 	if err != nil {
-		if has(err, "not a valid object name", "does not exist", "exists on disk, but not in") {
+		// "bad file" is a folder (a tree) or a submodule at the path: not a
+		// file either.
+		if has(err, "not a valid object name", "does not exist", "exists on disk, but not in", "bad file") {
 			err = as(ErrFileNotFound, err)
 		}
 		return nil, fmt.Errorf("read %s:%s: %w", ref, path, err)

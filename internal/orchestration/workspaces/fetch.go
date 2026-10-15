@@ -4,10 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/lucasndas/mestre/internal/safefile"
 )
+
+// mestreDir is the folder of the Mestre in the project. When the users
+// version it, the engine's own files in it must not hold the main clone back
+// (docs/sessao-zero/workspace.md#estrutura-de-mestre).
+const mestreDir = ".mestre/"
+
+// maxMestreFile bounds what is read of a file of .mestre/ to compare it.
+const maxMestreFile = 4 << 20
 
 // entry is what the scheduler keeps in memory about a workspace; what must
 // survive a restart (the outage, the alerts) is in the database.
@@ -175,8 +186,22 @@ func (s *Service) advance(ctx context.Context, w Workspace, now time.Time) {
 		hold("não foi possível ler o estado do clone principal: %v", err)
 		return
 	}
-	if len(changes) > 0 {
-		hold("o clone principal tem %d arquivo(s) com alterações locais", len(changes))
+	// The files of .mestre/ are the engine's: they do not make the clone
+	// dirty. Those the project now versions, with the very content the engine
+	// made, are removed so that the fast-forward can bring them (git refuses
+	// to overwrite an untracked file, identical or not); a different one
+	// stays and holds the merge back.
+	var dirty int
+	for _, c := range changes {
+		switch {
+		case !strings.HasPrefix(c.Path, mestreDir):
+			dirty++
+		case c.Untracked():
+			s.dropIdentical(ctx, wt, rec.Dir, target, c.Path)
+		}
+	}
+	if dirty > 0 {
+		hold("o clone principal tem %d arquivo(s) com alterações locais", dirty)
 		return
 	}
 	switch _, err := wt.MergeFFOnly(ctx, target); {
@@ -186,9 +211,35 @@ func (s *Service) advance(ctx context.Context, w Workspace, now time.Time) {
 	case errors.Is(err, gitx.ErrNotFastForward):
 		hold("o clone principal tem commits que origin/%s não tem: não é um avanço simples", w.DefaultBranch)
 	case errors.Is(err, gitx.ErrLocalChanges):
-		hold("alterações locais do clone principal seriam sobrescritas")
+		hold("alterações locais do clone principal (inclusive em .mestre/) seriam sobrescritas")
 	default:
 		hold("o avanço do clone principal falhou: %v", err)
+	}
+}
+
+// dropIdentical removes the untracked file rel of the main clone when the
+// commit the clone is advancing to has the file with the same content. A file
+// the commit does not have, or has with other content, stays. The clone is a
+// folder the agents write, so the file is read and removed through safefile,
+// and only if it is still the one that was read.
+func (s *Service) dropIdentical(ctx context.Context, wt gitx.Repo, dir, target, rel string) {
+	want, err := wt.ReadFile(ctx, target, rel)
+	if err != nil {
+		return // not in the commit (or unreadable): nothing to clear
+	}
+	file := filepath.Join(dir, filepath.FromSlash(rel))
+	have, info, err := safefile.Read(file, maxMestreFile)
+	if err != nil || string(have) != string(want) {
+		return
+	}
+	same := func(now safefile.Info) error {
+		if !now.Same(info) {
+			return errors.New("the file changed")
+		}
+		return nil
+	}
+	if err := safefile.Remove(file, same); err != nil {
+		s.log.Warn("workspace advance: remove the copy of a versioned file", "path", rel, "err", err)
 	}
 }
 

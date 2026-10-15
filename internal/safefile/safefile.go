@@ -165,6 +165,22 @@ func Write(path string, data []byte, o Options) error {
 	return nil
 }
 
+// Remove deletes the regular file at path, walking the path as Write does
+// (a link on the way is ErrLink, a final link or non-regular file is
+// refused and left alone). A missing file is not an error. guard, if not
+// nil, sees the state of the file right before it is deleted and stops the
+// removal with its error (the file is not the one that was checked).
+func Remove(path string, guard func(Info) error) error {
+	dir, base, err := split(path)
+	if err != nil {
+		return err
+	}
+	if err := remove(dir, base, guard); err != nil {
+		return wrap(path, err)
+	}
+	return nil
+}
+
 // split checks that path is absolute and splits it, clean. With no link on
 // the path, the lexical ".." of Clean is the real parent.
 func split(path string) (dir, base string, err error) {

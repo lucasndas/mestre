@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -269,6 +270,26 @@ func ValidateExcludeBlock(name string, patterns []string) error {
 		}
 	}
 	return nil
+}
+
+// CleanRepoPath checks and cleans a path given to Repo.ReadFile: it is
+// relative to the root of the repository and written with slashes. "./a",
+// "a//b" and "a/./b" are "a" and "a/b"; an absolute path, a ".." component,
+// the root itself, an empty path or a line break are ErrInvalidArgument (git
+// would read them relative to the folder it runs in, or fail oddly). A path
+// with a trailing slash names a folder, hence ErrFileNotFound.
+func CleanRepoPath(p string) (string, error) {
+	if p == "" || strings.ContainsAny(p, "\x00\n") || strings.HasPrefix(p, "/") {
+		return "", fmt.Errorf("%w: path %q", ErrInvalidArgument, p)
+	}
+	c := path.Clean(p)
+	if c == "." || c == ".." || strings.HasPrefix(c, "../") {
+		return "", fmt.Errorf("%w: path %q", ErrInvalidArgument, p)
+	}
+	if strings.HasSuffix(p, "/") {
+		return "", fmt.Errorf("%w: %q is a folder", ErrFileNotFound, p)
+	}
+	return c, nil
 }
 
 // ValidateRef rejects values that git could take for an option.

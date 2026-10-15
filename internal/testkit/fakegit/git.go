@@ -394,6 +394,10 @@ func (h *Handle) Log(_ context.Context, revRange string) ([]gitx.CommitInfo, err
 
 // ReadFile implements gitx.Repo.
 func (h *Handle) ReadFile(_ context.Context, ref, p string) ([]byte, error) {
+	p, err := gitx.CleanRepoPath(p)
+	if err != nil {
+		return nil, err
+	}
 	defer h.lock()()
 	c, err := h.resolveLocked(ref)
 	if err != nil {

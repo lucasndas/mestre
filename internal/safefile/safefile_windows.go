@@ -163,6 +163,34 @@ func stat(dir, base string) (Info, error) {
 	return statIn(d, base)
 }
 
+func remove(dir, base string, guard func(Info) error) error {
+	d, err := openDir(dir, false)
+	if notFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer d.close()
+	cur, err := statIn(d, base)
+	if err != nil {
+		return err
+	}
+	if !cur.Exists {
+		return nil
+	}
+	if guard != nil {
+		if err := guard(cur); err != nil {
+			return err
+		}
+	}
+	// The folders of the path are held, so the file is in the checked folder.
+	if err := os.Remove(filepath.Join(d.path, base)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 func write(dir, base string, data []byte, o Options) error {
 	d, err := openDir(dir, true)
 	if err != nil {

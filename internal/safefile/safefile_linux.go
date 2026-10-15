@@ -138,6 +138,33 @@ func stat(dir, base string) (Info, error) {
 	return statAt(dfd, base)
 }
 
+func remove(dir, base string, guard func(Info) error) error {
+	dfd, err := openDir(dir, false)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer unix.Close(dfd)
+	cur, err := statAt(dfd, base)
+	if err != nil {
+		return err
+	}
+	if !cur.Exists {
+		return nil
+	}
+	if guard != nil {
+		if err := guard(cur); err != nil {
+			return err
+		}
+	}
+	if err := unix.Unlinkat(dfd, base, 0); err != nil && !errors.Is(err, unix.ENOENT) {
+		return &os.PathError{Op: "remove", Path: base, Err: err}
+	}
+	return nil
+}
+
 func write(dir, base string, data []byte, o Options) error {
 	dfd, err := openDir(dir, true)
 	if err != nil {
