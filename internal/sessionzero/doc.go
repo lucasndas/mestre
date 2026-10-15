@@ -21,6 +21,14 @@
 // the Grand Master. The files the providers need in a worktree are made by
 // Worktree, which the session zero of the table reuses.
 //
+// Table is the session zero of a table (docs/sessao-zero/mesa.md): in each
+// worktree it generates the files of the providers (Worktree), copies the
+// classes and the attachments, writes the trust of the folder in the account
+// profiles of the machine and takes it out when the worktree is removed, holds
+// back the characters of a provider whose files were not generated
+// (CheckStart), and wraps the update of the branch so that the Mestre's part
+// of a hook file the project versions is out of the way (Sync).
+//
 // The engine writes in the main clone, a folder the agents write too, so
 // every file goes through internal/safefile, git only through the record of
 // the clone (workspaces.Service.OpenPrincipal), and the .gitignore and the
