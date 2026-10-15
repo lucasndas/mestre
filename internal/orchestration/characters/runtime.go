@@ -78,6 +78,7 @@ type Runtime struct {
 	sessions map[string]*session
 	byTerm   map[string]*session
 	lastSeq  uint64
+	starting map[string]bool // characters a Start is preparing: one Start at a time
 }
 
 var (
@@ -115,7 +116,7 @@ func NewRuntime(o RuntimeOptions) (*Runtime, error) {
 	if o.Checklist == nil {
 		o.Checklist = nopChecklist{}
 	}
-	rt := &Runtime{o: o, clk: o.Clock, local: LocalStore{DB: o.DB}, log: o.Logger, sessions: map[string]*session{}, byTerm: map[string]*session{}}
+	rt := &Runtime{o: o, clk: o.Clock, local: LocalStore{DB: o.DB}, log: o.Logger, sessions: map[string]*session{}, byTerm: map[string]*session{}, starting: map[string]bool{}}
 	o.Host.Events(rt.onHostEvent)
 	return rt, nil
 }
@@ -151,12 +152,26 @@ func (rt *Runtime) Start(ctx context.Context, cmd StartCommand) (StartResult, er
 	if cmd.Character == "" || cmd.Character != req.ID {
 		return StartResult{}, fmt.Errorf("characters: the command names %q and the request %q", cmd.Character, req.ID)
 	}
+	// The character is reserved before anything is prepared: two Starts of
+	// the same character never both run (the loser would undo the files of
+	// the winner).
 	rt.mu.Lock()
 	old := rt.sessions[cmd.Character]
-	rt.mu.Unlock()
+	if rt.starting[cmd.Character] {
+		rt.mu.Unlock()
+		return StartResult{}, fmt.Errorf("characters: %s is already starting on this machine", cmd.Character)
+	}
 	if old != nil && old.status().State.Alive() && old.status().State != Interrupted {
+		rt.mu.Unlock()
 		return StartResult{}, fmt.Errorf("characters: %s already runs on this machine", cmd.Character)
 	}
+	rt.starting[cmd.Character] = true
+	rt.mu.Unlock()
+	defer func() {
+		rt.mu.Lock()
+		delete(rt.starting, cmd.Character)
+		rt.mu.Unlock()
+	}()
 	provider := providerOfAgent(req.Snapshot.Sheet.Agent)
 	if cmd.Request.Role != RoleGrandMaster && req.Table.ID != "" && rt.o.Tables != nil {
 		if err := rt.o.Tables.CheckStart(ctx, req.Workspace, req.Table.ID, req.Dir, provider); err != nil {
@@ -192,7 +207,7 @@ func (rt *Runtime) Start(ctx context.Context, cmd StartCommand) (StartResult, er
 		s.turns.ResumeAfter(row.LastTurn)
 	}
 	if text := joinText(plan.FirstMessage, cmd.ResumeMessage); text != "" {
-		s.pendingFirst = text
+		s.pendingFirst, s.firstHeld = text, true
 	}
 	s.mu.Lock()
 	now := rt.clk.Now()
@@ -319,7 +334,12 @@ func (rt *Runtime) onHostEvent(e HostEvent) {
 
 // OnHook takes the events of the hook engine (hook.Engine.OnEvent): the state
 // of the character follows them.
-func (rt *Runtime) OnHook(ev providers.Event, _ hook.Answer) {
+func (rt *Runtime) OnHook(ev providers.Event, ans hook.Answer) {
+	if ans.Unidentified {
+		// The caller is not a process of ev.AgentID: nothing it wrote moves
+		// that character.
+		return
+	}
 	s := rt.session(ev.AgentID)
 	if s == nil {
 		return
@@ -411,7 +431,7 @@ func (rt *Runtime) Deliver(ctx context.Context, agentID, deliveryID, text string
 	if s == nil {
 		return fmt.Errorf("characters: %s does not run on this machine", agentID)
 	}
-	if st := s.status().State; !st.Receives() {
+	if st := s.status().State; !st.Receives() || s.holdsFirst() {
 		return fmt.Errorf("%w: %s is %s", ErrBusy, agentID, st)
 	}
 	if upd := rt.update(s); upd != "" {

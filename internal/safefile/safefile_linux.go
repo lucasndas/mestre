@@ -165,6 +165,31 @@ func remove(dir, base string, guard func(Info) error) error {
 	return nil
 }
 
+func removeEntry(dir, base string) error {
+	dfd, err := openDir(dir, false)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer unix.Close(dfd)
+	var st unix.Stat_t
+	if err := unix.Fstatat(dfd, base, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			return nil
+		}
+		return &os.PathError{Op: "stat", Path: base, Err: err}
+	}
+	if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+		return fmt.Errorf("%w: %s", ErrIsFolder, base)
+	}
+	if err := unix.Unlinkat(dfd, base, 0); err != nil && !errors.Is(err, unix.ENOENT) {
+		return &os.PathError{Op: "remove", Path: base, Err: err}
+	}
+	return nil
+}
+
 func removeDir(dir, base string) error {
 	dfd, err := openDir(dir, false)
 	if errors.Is(err, fs.ErrNotExist) {

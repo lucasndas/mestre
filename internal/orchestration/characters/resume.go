@@ -95,7 +95,17 @@ func (s *Service) resume(ctx context.Context, c Character) error {
 		}
 		p.table = t
 	}
-	if _, _, err := s.o.Registry.Transition(ctx, c.ID, Starting, Change{Reason: "resume", At: s.clk.Now()}); err != nil {
+	from, changed, err := s.o.Registry.Transition(ctx, c.ID, Starting, Change{Reason: "resume", At: s.clk.Now()})
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil // another resume got there first
+	}
+	if from != Interrupted {
+		// The character moved on since the list was read (stopped, or
+		// already running): put it back, it is not ours to start.
+		_, _, err := s.o.Registry.Transition(ctx, c.ID, from, Change{Reason: "resume skipped: it was " + string(from), At: s.clk.Now()})
 		return err
 	}
 	c.State = Starting

@@ -63,7 +63,7 @@ func (rt *Runtime) DeliverInbox(ctx context.Context, d protocol.InboxDeliver) (p
 		return protocol.InboxResult{}, fmt.Errorf("characters: %q is not an id of an item of the inbox", d.ItemID)
 	}
 	busy := protocol.InboxResult{ItemID: d.ItemID, Status: protocol.InboxBusy}
-	if !s.status().State.Receives() {
+	if !s.status().State.Receives() || s.holdsFirst() {
 		return busy, nil
 	}
 	long := rt.o.LongText

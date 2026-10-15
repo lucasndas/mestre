@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/internal/providers"
 )
 
 // Report applies a transition its machine saw. The machine is the truth about
@@ -35,6 +36,10 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 	at := r.At
 	if at.IsZero() {
 		at = s.clk.Now()
+	}
+	if r.Session != "" && !providers.ValidSessionID(r.Session) {
+		s.log.Warn("characters: a report with a session id that is not one, ignored", "id", c.ID)
+		r.Session = ""
 	}
 	if r.State != c.State && !hasEdge(c.State, r.State) {
 		s.log.Warn("characters: a report with no edge in the diagram, applied as the machine saw it", "id", c.ID, "from", c.State, "to", r.State, "reason", r.Reason)
@@ -220,6 +225,11 @@ func (s *Service) Dismiss(ctx context.Context, req DismissRequest) (DismissResul
 	case Stopping:
 		return DismissResult{Status: Dismissed, Character: c}, nil
 	case Stuck, Interrupted:
+		// The exception of the safe point belongs to the table master and the
+		// Administrators (the Grand Master does not force a stop).
+		if err := s.mayForceStop(ctx, req.By); err != nil {
+			return DismissResult{}, err
+		}
 		s.audit(ctx, c, "character.force_stopped", map[string]string{"by": string(req.By.Kind) + ":" + req.By.ID, "state": string(c.State), "reason": reason})
 		if err := s.executeStop(ctx, c, reason); err != nil {
 			return DismissResult{}, err
@@ -291,6 +301,21 @@ func (s *Service) mayDismiss(ctx context.Context, by Creator, c Character) error
 		}
 	}
 	return ErrLevelDenied
+}
+
+// mayForceStop says whether who asks may end a stuck or interrupted character
+// outside the safe point: the engine, the Owner and the Administrators, and a
+// table master (mayDismiss already limited it to its own table).
+func (s *Service) mayForceStop(ctx context.Context, by Creator) error {
+	switch by.Kind {
+	case CreatedByEngine, CreatedByUser:
+		return nil // mayDismiss let only the engine, the Owner and the Administrators through
+	case CreatedByCharacter:
+		if who, err := s.o.Registry.Get(ctx, by.ID); err == nil && who.Role == RoleTableMaster {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: só o Mestre da mesa e os Administradores encerram um personagem travado ou interrompido", ErrLevelDenied)
 }
 
 // executeStop ends a character: the summary first, then the machine ends the

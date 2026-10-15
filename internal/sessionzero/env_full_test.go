@@ -77,6 +77,7 @@ func newEnv(t *testing.T, files map[string]string) *env {
 		Workspaces: e.ws, DB: e.db, Clock: e.clk,
 		Installations: e.f, Users: e.f, Approvals: e.f, Checklist: e.f, GrandMaster: e.f, Analyst: e.f, PullRequests: e.f, AppReview: e.f,
 		Worktree: sessionzero.Worktree{Providers: providers.NewRegistry(providers.Options{}), Binary: filepath.Join(e.root, "bin", "mestre")},
+		Masker:   logging.NewMasker(),
 	})
 	if err != nil {
 		t.Fatal(err)

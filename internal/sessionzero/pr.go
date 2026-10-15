@@ -69,6 +69,11 @@ func (s *Service) openPR(ctx context.Context, w workspaces.Workspace) error {
 			if err != nil {
 				return fmt.Errorf("read %s: %w", rel, err)
 			}
+			// A secret in a file of .mestre/ never goes into a pull request
+			// (the content is not repeated, only the file is named).
+			if text := string(data); s.o.Masker.Mask(text) != text {
+				return fmt.Errorf("%s looks like it holds a secret; the pull request of the session zero was not sent", rel)
+			}
 			files[rel] = data
 		}
 	}

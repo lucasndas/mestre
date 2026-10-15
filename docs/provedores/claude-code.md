@@ -58,7 +58,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 |---|---|
 | `--append-system-prompt-file <MESTRE.md>` | camada do Mestre |
 | `--settings .mestre/agents/<id>/claude-settings.json` | regras nativas do personagem, statusLine e `disableAllHooks: false`, num arquivo gerado do zero ([reforço nativo](../classes/reforco-nativo.md)) |
-| `--session-id <uuid>` / `--resume <uuid>` | id gerado pelo motor, liga hooks ao PTY; retomada |
+| `--session-id <uuid>` / `--resume=<uuid>` | id gerado pelo motor, liga hooks ao PTY; retomada |
 | `--permission-mode default` | único modo permitido |
 
 **Proibidas:** `--dangerously-skip-permissions` e os modos `bypassPermissions`, `auto`, `dontAsk` e `acceptEdits` (e `plan`: só `default` vale); `--bare` (pula hooks, skills e instruções); `--system-prompt[-file]` (substitui o prompt padrão); `--setting-sources` (pode descartar os hooks locais); `--add-dir` com qualquer pasta que não seja `.mestre/agents/<id>` do próprio personagem (essa única é passada pelo motor para as skills por personagem, ver [personagem](../sessao-zero/personagem.md)); `-p` (a base é interativa). Um flag curto junto de mais texto também é recusado (`-dc`, `-r1234`): o Commander o lê como vários flags (`-d -c`) ou como flag e valor (`--resume 1234`), que a conferência por nome não veria; cada flag curto vai sozinho.

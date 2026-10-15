@@ -129,6 +129,9 @@ type spyGit struct {
 	// busy makes the removal of a worktree fail as it does on Windows with an
 	// open file.
 	busy bool
+	// failOpen is the number of the call of OpenWorktree that fails (1 is the
+	// first); zero fails none.
+	failOpen, opens int
 }
 
 func (g *spyGit) wrap(r gitx.Repo, err error) (gitx.Repo, error) {
@@ -147,6 +150,13 @@ func (g *spyGit) Clone(ctx context.Context, url, dir string, opts gitx.CloneOpti
 }
 
 func (g *spyGit) OpenWorktree(ctx context.Context, rec gitx.WorktreeRecord) (gitx.Repo, error) {
+	g.mu.Lock()
+	g.opens++
+	fail := g.failOpen != 0 && g.opens == g.failOpen
+	g.mu.Unlock()
+	if fail {
+		return nil, fmt.Errorf("the worktree cannot be opened")
+	}
 	return g.wrap(g.Git.OpenWorktree(ctx, rec))
 }
 

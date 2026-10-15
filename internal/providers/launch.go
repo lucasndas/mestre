@@ -89,6 +89,35 @@ func newLaunch(p ID, req LaunchRequest) (Launch, error) {
 	return Launch{Path: req.Base.Command, Env: env, Dir: req.Base.Dir}, nil
 }
 
+// ValidSessionID says whether id can be a provider session id: the UUIDs the
+// three providers use, or anything of the same shape (letters, digits, dot,
+// colon, underscore and dash, starting with a letter or digit, up to 128).
+// The id travels as an argument of the resume command, so a leading dash
+// (an option) or a space never passes.
+func ValidSessionID(id string) bool {
+	if id == "" || len(id) > 128 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case i > 0 && (c == '.' || c == ':' || c == '_' || c == '-'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// checkResumeID refuses a resume id that is not a session id.
+func checkResumeID(p ID, id string) error {
+	if id != "" && !ValidSessionID(id) {
+		return fmt.Errorf("%s: %q is not a session id; refusing to resume", p, id)
+	}
+	return nil
+}
+
 // refuseLatest refuses the "most recent session" options: several
 // characters share a folder, so only a resume by id is safe.
 func refuseLatest(p ID, args []string, latest ...string) error {

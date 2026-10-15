@@ -391,6 +391,25 @@ func TestRealVersionedMestreGoesIntoThePRWithoutTheExecutionFiles(t *testing.T) 
 	}
 }
 
+// A secret found in a file of .mestre/ stops the pull request: nothing is
+// published, and the error names the file, never the secret.
+func TestRealASecretInMestreStopsThePullRequest(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, nil)
+	w := e.active()
+	secret := "ghp_" + strings.Repeat("aB3dE5gH7j", 4)
+	if err := os.WriteFile(filepath.Join(e.principal(w.Slug), ".mestre", "regras", "nota.yaml"), []byte("token: "+secret+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := e.sz.AnswerVersioning(e.ctx, w.Slug, sessionzero.VersioningVersioned)
+	if err == nil || !strings.Contains(err.Error(), "nota.yaml") || strings.Contains(err.Error(), secret) {
+		t.Fatalf("AnswerVersioning = %v; want a refusal naming the file and not the secret", err)
+	}
+	if len(e.f.published) != 0 {
+		t.Fatalf("pull requests = %d; the secret was published", len(e.f.published))
+	}
+}
+
 // When the AGENTS.md and the versioned .mestre/ are both ready they go in a
 // single pull request.
 func TestRealAgentsMDAndMestreShareOnePullRequest(t *testing.T) {

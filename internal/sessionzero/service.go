@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -36,6 +37,9 @@ type Options struct {
 
 	// Worktree makes the files of the main clone.
 	Worktree Worktree
+	// Masker is the detector of secrets that looks at the .mestre/ files
+	// before they go into the pull request; required.
+	Masker *logging.Masker
 	// Log may be nil.
 	Log *slog.Logger
 }
@@ -54,8 +58,8 @@ type Service struct {
 func New(o Options) (*Service, error) {
 	switch {
 	case o.Workspaces == nil, o.DB == nil, o.Clock == nil, o.Installations == nil, o.Users == nil, o.Approvals == nil,
-		o.Checklist == nil, o.GrandMaster == nil, o.Analyst == nil, o.PullRequests == nil, o.AppReview == nil, o.Worktree.Providers == nil:
-		return nil, errors.New("sessionzero: Workspaces, DB, Clock, Installations, Users, Approvals, Checklist, GrandMaster, Analyst, PullRequests, AppReview and Worktree.Providers are required")
+		o.Checklist == nil, o.GrandMaster == nil, o.Analyst == nil, o.PullRequests == nil, o.AppReview == nil, o.Worktree.Providers == nil, o.Masker == nil:
+		return nil, errors.New("sessionzero: Workspaces, DB, Clock, Installations, Users, Approvals, Checklist, GrandMaster, Analyst, PullRequests, AppReview, Masker and Worktree.Providers are required")
 	}
 	log := o.Log
 	if log == nil {

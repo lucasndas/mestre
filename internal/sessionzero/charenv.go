@@ -1,6 +1,7 @@
 package sessionzero
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -19,6 +20,8 @@ const (
 	EnvTable     = "MESTRE_MESA"
 	EnvTmp       = "MESTRE_TMP"
 	EnvTmpDir    = "TMPDIR"
+	EnvTemp      = "TEMP" // Windows reads TEMP and TMP, not TMPDIR
+	EnvTmpWin    = "TMP"
 	EnvGitConfig = "GIT_CONFIG_GLOBAL"
 )
 
@@ -80,6 +83,8 @@ func engineEnv(e charEnv) ([]string, error) {
 		EnvTable + "=" + e.table, // empty for the Grand Master
 		EnvTmp + "=" + e.tmp,
 		EnvTmpDir + "=" + e.tmp,
+		EnvTemp + "=" + e.tmp,
+		EnvTmpWin + "=" + e.tmp,
 		EnvGitConfig + "=" + e.gitconfig,
 	}
 	env = append(env, providers.ProfileEnv(e.provider, e.profile)...)
@@ -99,7 +104,7 @@ func engineEnv(e charEnv) ([]string, error) {
 // added apart, under the names of providerKeys only.
 func checkSecrets(m *logging.Masker, env []string) error {
 	if m == nil {
-		return nil
+		return errors.New("no detector of secrets: the environment of a character is not checked, so it does not start")
 	}
 	for _, kv := range env {
 		name, value, _ := strings.Cut(kv, "=")

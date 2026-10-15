@@ -91,10 +91,13 @@ func (c *claudeCode) BuildLaunch(req LaunchRequest) (Launch, error) {
 	if err := checkClaudeLaunch(req, l.Env); err != nil {
 		return Launch{}, err
 	}
+	if err := checkResumeID(ClaudeCode, req.ResumeSessionID); err != nil {
+		return Launch{}, err
+	}
 	l.Args = slices.Clone(req.Base.Args)
 	switch {
 	case req.ResumeSessionID != "":
-		l.Args = append(l.Args, "--resume", req.ResumeSessionID)
+		l.Args = append(l.Args, "--resume="+req.ResumeSessionID)
 		l.SessionID, l.Resumed = req.ResumeSessionID, true
 	case req.NewSessionID != "":
 		l.Args = append(l.Args, "--session-id", req.NewSessionID)

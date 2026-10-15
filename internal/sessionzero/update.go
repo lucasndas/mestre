@@ -25,6 +25,58 @@ func (c *Character) remember(req CharacterRequest, p providers.ID, in LayerInput
 		provider: p, hookText: hookText}
 }
 
+// Restore brings back what a living character needs to be updated (Refresh,
+// UpdateIdentity, the layer of the hook) after the engine restarted while its
+// terminal survived: the request it was prepared with, kept by the runtime.
+// Nothing is written: the files are on disk already. The layer that travels
+// by the hook of the start is not brought back (the start is over, or the
+// runtime types it as the first message). A character that is not born, or
+// whose request no longer fits, is an error.
+func (c *Character) Restore(ctx context.Context, req CharacterRequest) error {
+	c.mu.Lock()
+	known := c.state[req.ID] != nil
+	c.mu.Unlock()
+	if known {
+		return nil
+	}
+	if err := c.check(req); err != nil {
+		return err
+	}
+	birth, born, err := c.o.Births.Get(ctx, req.ID)
+	if err != nil {
+		return err
+	}
+	if !born {
+		return fmt.Errorf("character %s: not born on this machine", req.ID)
+	}
+	snap := birth.Snapshot
+	provider, err := providerOf(snap.Sheet.Agent)
+	if err != nil {
+		return fmt.Errorf("character %s: %w", req.ID, err)
+	}
+	if provider == providers.Null {
+		return nil // a terminal has no layer to update
+	}
+	set, _, err := c.models(birth, born, false)
+	if err != nil {
+		return err
+	}
+	skills, _, _ := c.skills(set, snap.Sheet, req)
+	input := LayerInput{
+		AgentID: req.ID, Name: req.Name, Role: req.Role, Provider: provider, Workspace: req.Workspace, Table: req.Table,
+		Machine: req.Machine, Models: set, CLI: snap.Sheet.HasSkills(), Decrees: req.Decrees, Instructions: req.Instructions,
+		ClassBody: c.classBody(req), Skills: skills, Quest: req.Quest, Limits: c.o.Limits,
+	}
+	layer, err := RenderLayer(input)
+	if err != nil {
+		return err
+	}
+	agentDir := filepath.Join(req.Dir, MestreDir, "agents", req.ID)
+	plan := CharacterPlan{AgentDir: agentDir, GitConfig: filepath.Join(agentDir, "gitconfig")}
+	c.remember(req, provider, input, layer, plan, "")
+	return nil
+}
+
 // RefreshReport is what Refresh did.
 type RefreshReport struct {
 	// Changed are the sections of the layer that changed, by key.
@@ -206,7 +258,7 @@ func (c *Character) End(ctx context.Context, req EndRequest) error {
 	}
 	errs := []error{
 		removeTree(filepath.Join(req.Dir, MestreDir, "agents", req.ID)),
-		removeTree(filepath.Join(c.o.Agents, req.ID, "tmp")),
+		removeTree(filepath.Join(c.o.Agents, req.ID)), // its MESTRE_TMP and the folder itself
 	}
 	if req.Provider == providers.Antigravity {
 		errs = append(errs, safefile.Remove(providers.AntigravityAgentPath(req.Dir, req.ID), nil))
@@ -256,10 +308,8 @@ func removeTree(dir string) error {
 		switch {
 		case e.Type()&fs.ModeSymlink == 0 && e.IsDir():
 			errs = append(errs, removeTree(p))
-		case e.Type().IsRegular():
-			errs = append(errs, safefile.Remove(p, nil))
-		default: // a link, a junction or something that is not a file
-			errs = append(errs, safefile.RemoveDir(p))
+		default: // a file, a link, a junction, a fifo, a socket: unlinked, never followed
+			errs = append(errs, safefile.RemoveEntry(p))
 		}
 	}
 	errs = append(errs, safefile.RemoveDir(dir))
