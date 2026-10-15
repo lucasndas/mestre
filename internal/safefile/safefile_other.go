@@ -14,3 +14,5 @@ func open(string, string) (*os.File, Info, error) { return nil, Info{}, errors.E
 func stat(string, string) (Info, error) { return Info{}, errors.ErrUnsupported }
 
 func write(string, string, []byte, Options) error { return errors.ErrUnsupported }
+
+func mkdirAll(string) error { return errors.ErrUnsupported }

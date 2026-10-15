@@ -192,6 +192,20 @@ func TestRealFilesKeepTheirBytes(t *testing.T) {
 	}
 }
 
+// A file that is in the folder but not in the commit is a missing file, not
+// a failure of the tool: it says "exists on disk, but not in" for it.
+func TestRealReadFileOfAnUntrackedFileIsNotFound(t *testing.T) {
+	t.Parallel()
+	g := newReal(gitx.Options{})
+	r := initRepo(t, g)
+	writeFile(t, r, "a.txt", "a\n")
+	commitAll(t, r, "chore: a")
+	writeFile(t, r, "local.txt", "local\n")
+	if _, err := r.ReadFile(context.Background(), "HEAD", "local.txt"); !errors.Is(err, gitx.ErrFileNotFound) {
+		t.Fatalf("ReadFile of an untracked file = %v; want ErrFileNotFound", err)
+	}
+}
+
 func TestRealErrorsNeverCarryTheAuth(t *testing.T) {
 	t.Parallel()
 	g := newReal(gitx.Options{})

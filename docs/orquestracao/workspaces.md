@@ -1,6 +1,6 @@
 # Workspaces
 
-> **Assunto:** o que é um workspace, a árvore de níveis, o espelho e o clone principal, configuração e estados · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o que é um workspace, a árvore de níveis, o espelho e o clone principal, configuração e estados · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -74,7 +74,7 @@ Configuração fica no banco da Cidadela; quem altera cada item pelo painel ([ad
 | Ativo | `active` | funcionamento normal; **só aqui se abrem mesas** |
 | Pausado | `paused` | todas as mesas pausadas e o Grão-Mestre recebe só mensagens de usuários (ver [pausa](mesas.md#pausa)) |
 
-Enquanto está em `preparing`, o workspace registra a **etapa** da sessão zero em que está, nesta ordem: `apps` (Apps fixos instalados no repositório) → `mirror` (espelho e clone principal) → `files` (`.mestre/`, skills, hooks e exclusões; ao fim, o Grão-Mestre inicia) → `analysis` (análise do projeto e envio da proposta de `AGENTS.md`, se faltar) → `approval_test` (teste de aprovação de App). O que cada etapa faz está na sessão zero. Uma etapa que falha fica marcada com o código do erro (na etapa `mirror`: `clone_failed`, `fetch_failed`, `worktree_failed`, `layout_mismatch`…) e o motivo (visíveis no painel); o workspace continua `preparing` e a etapa é tentada de novo (pelo motor, com a espera do `fetch`: 30 s, 1 min, 2 min… até 15 min, ou na hora pelo botão "tentar de novo" do painel). Uma etapa que ninguém roda ainda só espera, sem erro. A etapa `mirror` pode ser repetida: o que já existe é reaproveitado. Concluída a `approval_test`, o workspace vai para `active`. Perguntas da sessão zero que dependem de resposta de usuário (aprovar o `AGENTS.md` proposto, versionar `.mestre/`) não seguram o workspace em `preparing`: ficam pendentes no painel.
+Enquanto está em `preparing`, o workspace registra a **etapa** da sessão zero em que está, nesta ordem: `apps` (Apps fixos instalados no repositório) → `mirror` (espelho e clone principal) → `files` (`.mestre/`, skills, hooks e exclusões; ao fim, o Grão-Mestre inicia) → `analysis` (análise do projeto e envio da proposta de `AGENTS.md`, se faltar) → `approval_test` (teste de aprovação de App). O que cada etapa faz está na sessão zero. Uma etapa que falha fica marcada com o código do erro (na etapa `mirror`: `clone_failed`, `fetch_failed`, `worktree_failed`, `layout_mismatch`…) e o motivo (visíveis no painel); o workspace continua `preparing` e a etapa é tentada de novo (pelo motor, com a espera do `fetch`: 30 s, 1 min, 2 min… até 15 min, ou na hora pelo botão "tentar de novo" do painel). Uma etapa que ninguém roda ainda só espera, sem erro; a `apps` também espera, sem erro, até os Apps serem instalados (o motor olha de novo sozinho). A etapa `mirror` pode ser repetida: o que já existe é reaproveitado. Concluída a `approval_test`, o workspace vai para `active`. Perguntas da sessão zero que dependem de resposta de usuário (aprovar o `AGENTS.md` proposto, versionar `.mestre/`) não seguram o workspace em `preparing`: ficam pendentes no painel.
 
 ```mermaid
 stateDiagram-v2

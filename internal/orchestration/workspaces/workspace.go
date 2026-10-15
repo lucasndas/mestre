@@ -131,3 +131,26 @@ func (e *NotActiveError) Error() string {
 
 // Is makes errors.Is(err, ErrNotActive) true.
 func (e *NotActiveError) Is(target error) bool { return target == ErrNotActive }
+
+// ErrWaiting is a stage that is not done and did not fail: it waits for
+// something outside the engine (the fixed Apps installed in the repository,
+// for one). A runner returns a *WaitError; the workspace stays at the stage,
+// no failure is recorded and the engine looks again after the wait
+// (docs/sessao-zero/workspace.md#início).
+var ErrWaiting = errors.New("workspaces: the stage is waiting")
+
+// DefaultWaitPoll is how long a waiting stage waits before it is run again
+// when the runner does not say.
+const DefaultWaitPoll = time.Minute
+
+// WaitError is what a stage returns to wait: Reason is the text for the
+// panel and Poll how long before the stage runs again (zero: DefaultWaitPoll).
+type WaitError struct {
+	Reason string
+	Poll   time.Duration
+}
+
+func (e *WaitError) Error() string { return "waiting: " + e.Reason }
+
+// Is makes errors.Is(err, ErrWaiting) true.
+func (e *WaitError) Is(target error) bool { return target == ErrWaiting }

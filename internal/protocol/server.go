@@ -55,6 +55,11 @@ func (srv *Server) Serve(ctx context.Context, l Listener) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	wg.Go(func() { pruneLoop(ctx, srv.cfg, srv.allLinks) })
+	// The listener is closed before Serve returns, not only by the goroutine
+	// that unblocks Accept: a caller that starts another Serve at the same
+	// address right after this one returned (a restart, a promoted Citadel)
+	// must not find it still taken.
+	defer func() { _ = l.Close() }()
 	go func() {
 		<-ctx.Done()
 		_ = l.Close()

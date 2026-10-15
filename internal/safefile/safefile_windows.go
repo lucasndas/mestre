@@ -221,3 +221,13 @@ func write(dir, base string, data []byte, o Options) error {
 	}
 	return nil
 }
+
+// mkdirAll makes dir and its missing parents, refusing a link on the way.
+func mkdirAll(dir string) error {
+	d, err := openDir(dir, true)
+	if err != nil {
+		return err
+	}
+	d.close()
+	return nil
+}

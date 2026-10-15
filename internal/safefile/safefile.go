@@ -204,3 +204,16 @@ func wrap(path string, err error) error {
 	}
 	return &pathError{path: path, err: err}
 }
+
+// MkdirAll makes the folder dir and its missing parents with DirMode,
+// walking the path as Write does: a link or a reparse point on the way is
+// ErrLink, and a final component that is not a folder is an error.
+func MkdirAll(dir string) error {
+	if !filepath.IsAbs(dir) {
+		return fmt.Errorf("%w: %s", ErrPath, dir)
+	}
+	if err := mkdirAll(filepath.Clean(dir)); err != nil {
+		return wrap(dir, err)
+	}
+	return nil
+}
