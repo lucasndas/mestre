@@ -1,6 +1,6 @@
 # Persistência
 
-> **Assunto:** banco principal na Cidadela, réplica nas Torres e banco local de máquina, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** banco principal na Cidadela, réplica nas Torres e banco local de máquina, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-15
 
 ## Princípios
 
@@ -26,7 +26,7 @@
 
 ## Tabelas principais do banco da Guilda (proposta)
 
-Cada marco cria só as tabelas de que precisa, em migração nova ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). Existem hoje: `secrets` no banco da Guilda e `terminals` no banco local de máquina (M1); no M2, `replication_log` (fora das migrações numeradas), `outbox`, `processed_commands`, `guild`, `machines`, `machine_credentials`, `join_requests`, `epochs` e `audit_log` no banco da Guilda e `outbox`, `processed_commands`, `known_addresses` e `machine_identity` no banco local; no M3, `workspace_ceilings`, `classes`, `class_proposals` e `conformance_results` no banco da Guilda e `agent_rules` e `used_exceptions` no banco local; no M4, `workspaces` no banco da Guilda (um workspace por linha: repositório, slug, estado, etapa da sessão zero e o estado do `fetch` do espelho); as demais abaixo são proposta.
+Cada marco cria só as tabelas de que precisa, em migração nova ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)). Existem hoje: `secrets` no banco da Guilda e `terminals` no banco local de máquina (M1); no M2, `replication_log` (fora das migrações numeradas), `outbox`, `processed_commands`, `guild`, `machines`, `machine_credentials`, `join_requests`, `epochs` e `audit_log` no banco da Guilda e `outbox`, `processed_commands`, `known_addresses` e `machine_identity` no banco local; no M3, `workspace_ceilings`, `classes`, `class_proposals` e `conformance_results` no banco da Guilda e `agent_rules` e `used_exceptions` no banco local; no M4, `workspaces` no banco da Guilda (um workspace por linha: repositório, slug, estado, etapa da sessão zero e o estado do `fetch` do espelho); também no M4, `bases` e `sheets` no banco da Guilda e `account_profiles` no banco local; as demais abaixo são proposta.
 
 Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas ficam nas migrações; o significado de cada dado, no documento da funcionalidade.
 

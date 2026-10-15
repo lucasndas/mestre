@@ -1,6 +1,6 @@
 # Permissões das classes
 
-> **Assunto:** o `permissions.yaml`, regras fixas, regras efetivas por personagem, pipeline de decisão do despachante, modo degradado e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** o `permissions.yaml`, regras fixas, regras efetivas por personagem, pipeline de decisão do despachante, modo degradado e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -86,7 +86,7 @@ flowchart LR
 5. Se liberou (também por decreto ou pelo `baixo` por padrão; a exceção pontual não), rodam os hooks `pre_tool` síncronos da classe, que só podem negar ([classes](classes.md#hooks-extras-da-classe)).
 6. `ask` segue o fluxo da seção seguinte.
 
-**A ficha só restringe:** o campo `restrictions` da ficha ([bases e fichas](../orquestracao/bases-e-fichas.md)) usa o mesmo formato; um `allow` da ficha que a classe não dá é ignorado, e salvar a ficha avisa isso.
+**A ficha só restringe:** o campo `restrictions` da ficha ([bases e fichas](../orquestracao/bases-e-fichas.md)) usa o mesmo formato; um `allow` da ficha que a classe não dá é ignorado, e salvar a ficha avisa isso; um `allow` que a classe proíbe (coberto por um `deny` dela) é recusado ao salvar.
 
 ### Quando a decisão é "pedir aprovação"
 
