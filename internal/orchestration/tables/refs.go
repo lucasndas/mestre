@@ -31,13 +31,19 @@ func (a RefAlert) String() string {
 
 func untrustedKey(workspace, table string) string { return workspace + "/" + table }
 
-// Untrusted says whether the branch of the table moved without the engine and
-// nobody trusted it again.
+// Untrusted says whether a ref of the table moved without the engine and
+// nobody trusted it again. The alerts are in the database (a restart or a
+// new Citadel does not forget them); when the database cannot be read the
+// table is not trusted.
 func (s *Service) Untrusted(workspace, table string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	_, ok := s.untrusted[untrustedKey(workspace, table)]
-	return ok
+	s.mu.Unlock()
+	if ok {
+		return true
+	}
+	has, err := s.store.HasAlert(context.Background(), workspace, table)
+	return err != nil || has
 }
 
 // CheckRefs checks the branches of the tables of the workspace, and the refs
@@ -57,13 +63,28 @@ func (s *Service) CheckRefs(ctx context.Context, workspace string) ([]RefAlert, 
 		if t.BranchDeleted {
 			continue
 		}
-		as, err := s.checkTable(ctx, t)
+		as, err := s.checkLocked(ctx, t)
 		if err != nil {
 			return out, err
 		}
 		out = append(out, as...)
 	}
 	return out, nil
+}
+
+// checkLocked checks one table under its lock: a check that runs while a
+// character commits or a bundle is applied would take the move in between for
+// a ref that moved without the engine.
+func (s *Service) checkLocked(ctx context.Context, t Table) ([]RefAlert, error) {
+	defer s.lock(t.Workspace, t.ID)()
+	cur, err := s.store.Get(ctx, t.Workspace, t.ID) // under the lock
+	if err != nil {
+		if errors.Is(err, ErrNoTable) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return s.checkTable(ctx, cur)
 }
 
 // checkTable checks the refs of one table.
@@ -109,10 +130,7 @@ func (s *Service) checkBranch(ctx context.Context, mirror gitx.Repo, t Table, wt
 		return nil, err
 	}
 	if string(cur) == wt.LastCommit {
-		s.mu.Lock()
-		delete(s.untrusted, untrustedKey(t.Workspace, t.ID)) // it came back to what the engine registered
-		s.mu.Unlock()
-		return nil, nil
+		return nil, nil // an alert, if there is one, stays until TrustRef
 	}
 	ahead, err := mirror.IsAncestor(ctx, wt.LastCommit, string(cur))
 	if err != nil {
@@ -164,17 +182,44 @@ func (s *Service) foreignCommits(ctx context.Context, mirror gitx.Repo, t Table,
 		if o.ID == t.ID || o.BranchDeleted || o.BaseCommit == "" {
 			continue
 		}
-		cs, err := mirror.Log(ctx, o.BaseCommit+"..refs/heads/"+o.Branch)
+		// The branch of the other table and what its Towers sent.
+		revs := []string{"refs/heads/" + o.Branch}
+		wts, err := s.store.Worktrees(ctx, o.Workspace, o.ID)
 		if err != nil {
-			continue // its branch is gone or unreadable: its own check says so
+			return "", err
 		}
-		for _, c := range cs {
-			if in[c.Hash] {
-				return o.ID, nil
+		for _, wt := range wts {
+			if wt.Machine != s.o.Machine {
+				revs = append(revs, TowerRef(wt.Machine, o.Branch))
+			}
+		}
+		for _, rev := range revs {
+			cs, err := mirror.Log(ctx, o.BaseCommit+".."+rev)
+			if err != nil {
+				continue // the ref is gone or unreadable: its own check says so
+			}
+			for _, c := range cs {
+				if in[c.Hash] {
+					return o.ID, nil
+				}
 			}
 		}
 	}
 	return "", nil
+}
+
+// hasLivingOn says whether a character of the table is alive on a machine.
+func (s *Service) hasLivingOn(ctx context.Context, t Table, machine string) (bool, error) {
+	cs, err := s.o.Registry.AliveOf(ctx, t.Workspace)
+	if err != nil {
+		return false, err
+	}
+	for _, c := range cs {
+		if c.Table == t.ID && c.Machine == machine {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // hasLiving says whether a character of the table is alive.
@@ -196,11 +241,21 @@ func (s *Service) hasLiving(ctx context.Context, t Table) (bool, error) {
 func (s *Service) alert(ctx context.Context, t Table, a RefAlert) RefAlert {
 	a.Workspace, a.Table = t.Workspace, t.ID
 	key := untrustedKey(t.Workspace, t.ID)
+	// The mark is in the database, per ref; the one in memory only holds the
+	// table untrusted if the database cannot be written.
 	s.mu.Lock()
-	seen := s.untrusted[key] == a.Current+"|"+a.Ref
 	s.untrusted[key] = a.Current + "|" + a.Ref
 	s.mu.Unlock()
-	if seen {
+	fresh, err := s.store.SetAlert(ctx, t.Workspace, t.ID, a.Ref, a.Current, s.clk.Now())
+	if err != nil {
+		s.log.Warn("tables: the alert of a ref was not recorded", "table", t.ID, "ref", a.Ref, "err", err)
+		fresh = true
+	} else {
+		s.mu.Lock()
+		delete(s.untrusted, key)
+		s.mu.Unlock()
+	}
+	if !fresh {
 		return a
 	}
 	text := "Alerta: a ref " + a.String() + ". Nada desta mesa é enviado nem sincronizado até um Administrador confiar de novo na ref."
@@ -243,6 +298,9 @@ func (s *Service) TrustRef(ctx context.Context, workspace, id string) error {
 				return err
 			}
 		}
+	}
+	if err := s.store.ClearAlerts(ctx, workspace, id); err != nil {
+		return err
 	}
 	s.mu.Lock()
 	delete(s.untrusted, untrustedKey(workspace, id))

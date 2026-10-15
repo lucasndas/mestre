@@ -155,7 +155,7 @@ func (s *Service) Done(ctx context.Context, c characters.Character, _ string) er
 	if err != nil {
 		return nil
 	}
-	_, err = s.checkTable(ctx, t)
+	_, err = s.checkLocked(ctx, t)
 	return err
 }
 

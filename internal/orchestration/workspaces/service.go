@@ -81,6 +81,11 @@ type Service struct {
 	locks  map[string]*sync.Mutex // "stage/<slug>" for the stages, "fetch/<slug>" for fetch and advance
 	waits  map[string]waiting     // stages waiting for something outside, by slug
 	wake   chan struct{}
+	// booted says the first pass of Tick is over: the workspaces seen in it
+	// are the ones this process found when it started.
+	booted bool
+	// withhold keeps refs of the mirrors out of the replication.
+	withhold RefFilter
 }
 
 // New builds the Service. The mirror stage is the Service's own; the others
@@ -479,9 +484,14 @@ func (s *Service) CreateMirror(ctx context.Context, w Workspace) error {
 	if err := s.fetch(ctx, repo, w); err != nil {
 		return code("fetch_failed", err)
 	}
-	if err := s.store.FetchOK(ctx, w.Slug, s.o.Clock.Now()); err != nil {
+	now := s.o.Clock.Now()
+	if err := s.store.FetchOK(ctx, w.Slug, now); err != nil {
 		return err
 	}
+	// Fetched just now, by this process: the next fetch is one interval away.
+	s.mu.Lock()
+	s.sched[w.Slug] = &entry{next: now.Add(s.o.FetchInterval)}
+	s.mu.Unlock()
 	if err := s.addPrincipal(ctx, repo, w, principalDir); err != nil {
 		return err
 	}

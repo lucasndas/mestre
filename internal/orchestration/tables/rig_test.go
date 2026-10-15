@@ -21,6 +21,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
@@ -125,6 +126,9 @@ type spyGit struct {
 	mu      sync.Mutex
 	removed []string
 	deleted []string
+	// busy makes the removal of a worktree fail as it does on Windows with an
+	// open file.
+	busy bool
 }
 
 func (g *spyGit) wrap(r gitx.Repo, err error) (gitx.Repo, error) {
@@ -160,7 +164,11 @@ type spyRepo struct {
 func (r spyRepo) RemoveWorktree(ctx context.Context, path string, force bool) error {
 	r.g.mu.Lock()
 	r.g.removed = append(r.g.removed, path)
+	busy := r.g.busy
 	r.g.mu.Unlock()
+	if busy {
+		return fmt.Errorf("remove worktree %s: %w", path, gitx.ErrWorktreeBusy)
+	}
 	return r.Repo.RemoveWorktree(ctx, path, force)
 }
 
@@ -538,6 +546,8 @@ type worldOpts struct {
 	be backend
 	// noPeers leaves the Service without a way to the Towers.
 	noPeers bool
+	// settings replaces the defaults of the workspace.
+	settings tables.Settings
 }
 
 func newWorld(t *testing.T, o worldOpts) *world {
@@ -592,6 +602,7 @@ func newWorld(t *testing.T, o worldOpts) *world {
 	if !o.noPeers {
 		opts.Peers = w.peers
 	}
+	opts.Settings = o.settings
 	w.svc, err = tables.New(opts)
 	if err != nil {
 		t.Fatal(err)
@@ -710,6 +721,7 @@ type tower struct {
 	root    string
 	half    *tables.Tower
 	files   *fakeFiles
+	mirrors replication.MirrorStore
 	told    []string
 	sendErr error
 	mu      sync.Mutex
@@ -866,15 +878,16 @@ func (w *world) addTower(id string) *tower {
 	tw := &tower{w: w, id: id, root: filepath.Join(w.root, "towers", id)}
 	tw.git = w.be.newGit(w.t, w.clk)
 	tw.db = openCopy(w.t, "maquina.db", machineTemplate, machinedb.Open, w.clk)
-	replica := filepath.Join(tw.root, "mirrors", w.slug())
-	if _, err := tw.git.Init(w.ctx, replica, gitx.InitOptions{Bare: true}); err != nil {
+	// The replica is where the replication puts it: <dados>/workspaces/<slug>/espelho.git.
+	tw.mirrors = replication.MirrorStore{Root: filepath.Join(tw.root, "workspaces"), Git: tw.git}
+	if _, err := tw.mirrors.Open(w.ctx, w.slug()); err != nil {
 		w.t.Fatal(err)
 	}
 	tw.files = &fakeFiles{}
 	var err error
 	tw.half, err = tables.NewTower(tables.TowerOptions{
 		DB: tw.db, Git: tw.git, Clock: w.clk,
-		Mirror:      func(ctx context.Context, _ string) (gitx.Repo, error) { return tw.git.Open(ctx, replica) },
+		Mirror:      func(ctx context.Context, ws string) (gitx.Repo, error) { return tw.mirrors.Open(ctx, ws) },
 		WorktreeDir: tw.dir,
 		Files:       tw.files,
 		Send: func(ctx context.Context, meta protocol.Object, src protocol.BundleSource) error {
@@ -904,7 +917,7 @@ func (w *world) addTower(id string) *tower {
 
 func (tw *tower) replica() gitx.Repo {
 	tw.w.t.Helper()
-	r, err := tw.git.Open(tw.w.ctx, filepath.Join(tw.root, "mirrors", tw.w.slug()))
+	r, err := tw.mirrors.Open(tw.w.ctx, tw.w.slug())
 	if err != nil {
 		tw.w.t.Fatal(err)
 	}

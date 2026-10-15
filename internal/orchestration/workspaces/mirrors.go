@@ -12,7 +12,35 @@ import (
 // slug of its workspace, and only workspaces whose mirror exists count.
 type Mirrors struct{ s *Service }
 
-var _ replication.MirrorSource = Mirrors{}
+var (
+	_ replication.MirrorSource = Mirrors{}
+	_ replication.RefFilter    = Mirrors{}
+)
+
+// RefFilter says, for a workspace, which refs of its mirror stay on the
+// Citadel and are not replicated to the Towers.
+type RefFilter func(ctx context.Context, workspace string) (func(ref string) bool, error)
+
+// WithholdRefs sets the filter of the refs of the mirrors the replication
+// does not send: the tables set it so that the branches of the tables, which
+// travel by the bundles of the tables after the check of their refs, do not
+// travel by the mirror.
+func (s *Service) WithholdRefs(f RefFilter) {
+	s.mu.Lock()
+	s.withhold = f
+	s.mu.Unlock()
+}
+
+// Withheld implements replication.RefFilter.
+func (m Mirrors) Withheld(ctx context.Context, id string) (func(ref string) bool, error) {
+	m.s.mu.Lock()
+	f := m.s.withhold
+	m.s.mu.Unlock()
+	if f == nil {
+		return nil, nil
+	}
+	return f(ctx, id)
+}
 
 // Mirrors returns the mirrors of the workspaces.
 func (s *Service) Mirrors() Mirrors { return Mirrors{s: s} }

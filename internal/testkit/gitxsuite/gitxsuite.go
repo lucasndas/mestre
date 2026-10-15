@@ -385,6 +385,14 @@ func mirrorAndWorktrees(t *testing.T, h Harness) {
 	_, err = mirror.AddWorktree(ctx, filepath.Join(root, "mesas", "none"), gitx.WorktreeOptions{Branch: "x", Create: true, StartPoint: "no-such-ref"})
 	isErr(t, err, gitx.ErrRefNotFound)
 
+	// The branch the worktree has checked out is the one HEAD points at; a
+	// bare mirror has no HEAD to ask.
+	if got := must(wt.HeadBranch(ctx)); got != "epico/42-login" {
+		t.Fatalf("HeadBranch = %q", got)
+	}
+	_, err = mirror.HeadBranch(ctx)
+	isErr(t, err, gitx.ErrBareRepo)
+
 	// Commits made in the worktree move the branch of the mirror.
 	c := commitFile(t, h, wt, "login.go", "package login\n", "feat(login): add login\n\nMestre-Mesa: epico/42-login")
 	if got := must(mirror.ResolveRef(ctx, "epico/42-login")); got != c {

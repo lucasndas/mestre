@@ -101,7 +101,33 @@ func New(o Options) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tables: %w", err)
 	}
-	return &Service{o: o, store: Store{DB: o.DB}, clk: o.Clock, log: log, tmp: tmp, locks: map[string]*sync.Mutex{}, untrusted: map[string]string{}}, nil
+	s := &Service{o: o, store: Store{DB: o.DB}, clk: o.Clock, log: log, tmp: tmp, locks: map[string]*sync.Mutex{}, untrusted: map[string]string{}}
+	// The branches of the tables do not go to the Towers with the mirror.
+	if w, ok := o.Workspaces.(interface{ WithholdRefs(workspaces.RefFilter) }); ok {
+		w.WithholdRefs(s.Withheld)
+	}
+	return s, nil
+}
+
+// Withheld says, for the replication of the mirror of a workspace, which refs
+// stay on the Citadel: the branches of the tables (the ones in the database
+// and anything under the prefix of the branches of the tables). They travel
+// to the Towers only as the bundles of the tables, which are not sent for a
+// table whose refs are not trusted, and which a Tower applies to its own
+// branch, checked out in a worktree where the mirror could not write.
+func (s *Service) Withheld(ctx context.Context, workspace string) (func(ref string) bool, error) {
+	ts, err := s.store.List(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	branches := make(map[string]bool, len(ts))
+	for _, t := range ts {
+		branches["refs/heads/"+t.Branch] = true
+	}
+	prefix := s.o.Settings.BranchPrefix(workspace)
+	return func(ref string) bool {
+		return branches[ref] || (prefix != "" && strings.HasPrefix(ref, "refs/heads/"+prefix))
+	}, nil
 }
 
 // Store gives access to the tables for the panel.
@@ -230,9 +256,9 @@ type OpenResult struct {
 // master and hands it the request. If a step fails the ones before it are
 // undone and the error goes to the Grand Master; the epic is not touched.
 func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, err error) {
-	gm := req.By
-	if gm.Role != characters.RoleGrandMaster || !gm.State.Alive() || gm.Workspace == "" {
-		return OpenResult{}, ErrNotGrandMaster
+	gm, err := s.grandMaster(ctx, req.By)
+	if err != nil {
+		return OpenResult{}, err
 	}
 	ws := gm.Workspace
 	if err := s.gate("table open"); err != nil {
@@ -293,8 +319,15 @@ func (s *Service) Open(ctx context.Context, req OpenRequest) (res OpenResult, er
 	}
 
 	now := s.clk.Now()
-	id := ID(epic.Number, epic.Title)
-	branch := s.o.Settings.BranchPrefix(ws) + id
+	id, err := s.freeID(ctx, ws, ID(epic.Number, epic.Title))
+	if err != nil {
+		return OpenResult{}, err
+	}
+	prefix := s.o.Settings.BranchPrefix(ws)
+	branch := prefix + id
+	if !validBranch(branch) || strings.HasPrefix(branch, "refs/") || strings.HasPrefix(branch, "mestre/") {
+		return OpenResult{}, fmt.Errorf("o prefixo de branch %q do workspace não gera um nome de branch válido (%q)", prefix, branch)
+	}
 	t := Table{Workspace: ws, ID: id, Epic: epic.Number, EpicTitle: epic.Title, Branch: branch, BaseBranch: base, BaseCommit: string(start),
 		State: StateOpen, OpenedBy: gm.ID, CreatedAt: now, UpdatedAt: now}
 	if err := s.store.Insert(ctx, t); err != nil {
@@ -442,6 +475,45 @@ func (s *Service) tableRequest(ctx context.Context, t Table, rec gitx.WorktreeRe
 // worktreeRepo opens the worktree of a table on this machine by its record.
 func (s *Service) worktreeRepo(ctx context.Context, w Worktree) (gitx.Repo, error) {
 	return s.o.Git.OpenWorktree(ctx, gitx.WorktreeRecord{Dir: w.Dir, GitDir: w.GitDir, Common: w.Common})
+}
+
+// grandMaster reads the Grand Master that asks from the registry: the one the
+// request carries may have stopped since it was read.
+func (s *Service) grandMaster(ctx context.Context, by characters.Character) (characters.Character, error) {
+	if by.Role != characters.RoleGrandMaster || by.ID == "" {
+		return characters.Character{}, ErrNotGrandMaster
+	}
+	cur, err := s.o.Registry.Get(ctx, by.ID)
+	if err != nil {
+		if errors.Is(err, characters.ErrNoCharacter) {
+			return characters.Character{}, ErrNotGrandMaster
+		}
+		return characters.Character{}, err
+	}
+	if cur.Role != characters.RoleGrandMaster || !cur.State.Alive() || cur.Workspace == "" {
+		return characters.Character{}, ErrNotGrandMaster
+	}
+	return cur, nil
+}
+
+// freeID is the id for the table of an epic: the one the epic and its title
+// make, or, when a table that is over already has it (the epic was reopened
+// after a cancellation or a closing), the same with a number after it
+// ("42-login-2"), so the old table and its branch are left as they are.
+func (s *Service) freeID(ctx context.Context, workspace, id string) (string, error) {
+	for n := 1; n < 1000; n++ {
+		cand := id
+		if n > 1 {
+			cand = fmt.Sprintf("%s-%d", id, n)
+		}
+		switch _, err := s.store.Get(ctx, workspace, cand); {
+		case errors.Is(err, ErrNoTable):
+			return cand, nil
+		case err != nil:
+			return "", err
+		}
+	}
+	return "", fmt.Errorf("%w: o épico já foi aberto vezes demais", ErrTableExists)
 }
 
 // validBranch is a conservative branch name: no option, no revision syntax.
