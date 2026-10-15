@@ -24,6 +24,8 @@ import (
 type fakeChars struct {
 	mu    sync.Mutex
 	chars map[string]characters.Character
+	// sups maps a character to its superior (the people when absent).
+	sups map[string]string
 }
 
 func (f *fakeChars) Get(_ context.Context, id string) (characters.Character, error) {
@@ -36,7 +38,12 @@ func (f *fakeChars) Get(_ context.Context, id string) (characters.Character, err
 	return c, nil
 }
 
-func (f *fakeChars) Superior(context.Context, string) (characters.Superior, error) {
+func (f *fakeChars) Superior(_ context.Context, id string) (characters.Superior, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if up, ok := f.sups[id]; ok {
+		return characters.Superior{ID: up}, nil
+	}
 	return characters.Superior{People: true}, nil
 }
 
@@ -124,11 +131,36 @@ func (i *fakeInbox) toldTo(id string) []string {
 	return out
 }
 
-type fakeClasses struct{}
+// fakeClasses gives each character the rules of its YAML (every command asks
+// when none was set).
+type fakeClasses struct {
+	mu   sync.Mutex
+	yaml map[string]string
+}
 
-func (fakeClasses) Rules(context.Context, string) (*classes.Rules, error) { return nil, nil }
-func (fakeClasses) Env(context.Context, string) (classes.Env, error)      { return classes.Env{}, nil }
-func (fakeClasses) Domains(context.Context, string) ([]string, error) {
+func (f *fakeClasses) setYAML(id, y string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.yaml[id] = y
+}
+
+func (f *fakeClasses) Rules(_ context.Context, id string) (*classes.Rules, error) {
+	f.mu.Lock()
+	y, ok := f.yaml[id]
+	f.mu.Unlock()
+	if !ok {
+		y = "version: 1\ncommands:\n  default: ask\n"
+	}
+	p, err := classes.ParsePermissions([]byte(y))
+	if err != nil {
+		return nil, err
+	}
+	return classes.Build(classes.Layers{AgentID: id, Class: "dev", Permissions: p, Now: time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)})
+}
+func (*fakeClasses) Env(_ context.Context, id string) (classes.Env, error) {
+	return classes.Env{AgentID: id, Worktree: "/work/42-login", OS: "linux"}, nil
+}
+func (*fakeClasses) Domains(context.Context, string) ([]string, error) {
 	return []string{"pypi.org"}, nil
 }
 
@@ -138,6 +170,7 @@ type rig struct {
 	clk      *clock.Fake
 	svc      *tablerules.Service
 	chars    *fakeChars
+	classes  *fakeClasses
 	missions *fakeMissions
 	tables   *fakeTables
 	inbox    *fakeInbox
@@ -155,7 +188,7 @@ func newRig(t *testing.T) *rig {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	r := &rig{t: t, ctx: ctx, clk: clk, chars: &fakeChars{chars: map[string]characters.Character{}}, missions: &fakeMissions{active: map[string]string{}, over: map[string]bool{}},
+	r := &rig{t: t, ctx: ctx, clk: clk, chars: &fakeChars{chars: map[string]characters.Character{}}, classes: &fakeClasses{yaml: map[string]string{}}, missions: &fakeMissions{active: map[string]string{}, over: map[string]bool{}},
 		tables: &fakeTables{over: map[string]bool{}}, inbox: &fakeInbox{}}
 	r.master = characters.Character{ID: "m1", Name: "Mestre", Role: characters.RoleTableMaster, Workspace: "meu-app", Table: "42-login", State: characters.Idle}
 	r.gm = characters.Character{ID: "g1", Name: "Grão-Mestre", Role: characters.RoleGrandMaster, Workspace: "meu-app", State: characters.Idle}
@@ -163,7 +196,7 @@ func newRig(t *testing.T) *rig {
 	for _, c := range []characters.Character{r.master, r.gm, r.dev} {
 		r.chars.set(c)
 	}
-	r.svc, err = tablerules.NewService(tablerules.Options{Store: &tablerules.Store{DB: db}, Clock: clk, Characters: r.chars, Policy: chain.StaticPolicy{}, Classes: fakeClasses{},
+	r.svc, err = tablerules.NewService(tablerules.Options{Store: &tablerules.Store{DB: db}, Clock: clk, Characters: r.chars, Policy: chain.StaticPolicy{}, Classes: r.classes,
 		Missions: r.missions, Tables: r.tables, Inbox: r.inbox})
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +227,7 @@ func (r *rig) make(p string, d time.Duration, mission bool) tablerules.Rule {
 func (r *rig) use(id int64, cmd string) bool {
 	r.t.Helper()
 	ok, err := r.svc.Use(r.ctx, classes.TableRuleUse{Rule: id, Level: classes.LevelTableMaster, Risk: classes.RiskLow, AgentID: r.dev.ID, TableID: "42-login",
-		Action: classes.Action{Kind: providers.KindShell, Command: cmd}, Own: classes.RiskResult{Risk: classes.RiskLow}})
+		Action: classes.Action{Kind: providers.KindShell, Command: cmd}, Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: cmd}, Own: classes.RiskResult{Risk: classes.RiskLow}})
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -382,7 +415,7 @@ func TestARuleServesOnlyTheClassAndTheTableItWasMadeForAndAMissionRuleNeedsAMiss
 		"another table": {ID: "d3", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "43-outra", Class: "Dev", State: characters.Idle},
 	} {
 		r.chars.set(c)
-		ok, err := r.svc.Use(r.ctx, classes.TableRuleUse{Rule: a.ID, AgentID: c.ID, Action: classes.Action{Kind: providers.KindShell, Command: "npm install y"}, Own: classes.RiskResult{Risk: classes.RiskLow}})
+		ok, err := r.svc.Use(r.ctx, classes.TableRuleUse{Rule: a.ID, AgentID: c.ID, Action: classes.Action{Kind: providers.KindShell, Command: "npm install y"}, Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: "npm install y"}, Own: classes.RiskResult{Risk: classes.RiskLow}})
 		if err != nil || ok {
 			t.Errorf("%s: use = %v, %v", name, ok, err)
 		}
@@ -394,5 +427,63 @@ func TestARuleServesOnlyTheClassAndTheTableItWasMadeForAndAMissionRuleNeedsAMiss
 	}
 	if err := r.svc.Create(r.ctx, chain.TempRule{Workspace: "meu-app", Table: "42-login", Class: "Dev", Risk: classes.RiskHigh, Until: r.clk.Now().Add(time.Hour), By: r.master.ID}); err == nil {
 		t.Error("a rule of alto was made")
+	}
+}
+
+// The author of a rule approves only what its own rules would not deny, and the
+// gate checks it on the call that uses the rule: a pattern reaches calls its
+// author never saw, and a call its author's rules deny is not freed by it.
+func TestAPatternRuleDoesNotFreeWhatTheRulesOfItsAuthorDeny(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	rule := r.make("npm install *", time.Hour, false)
+	if !r.use(rule.ID, "npm install lodash") {
+		t.Fatal("the rule does not free an action its author's rules allow")
+	}
+	r.classes.setYAML(r.master.ID, "version: 1\ncommands:\n  deny: [\"npm install evil*\"]\n  default: ask\n")
+	if r.use(rule.ID, "npm install evil-pkg") {
+		t.Error("the pattern freed an action that the rules of its author deny")
+	}
+	if !r.use(rule.ID, "npm install lodash") {
+		t.Error("the pattern stopped freeing what its author's rules allow")
+	}
+}
+
+// The baixo rule of a superior that is an agent covers its own subordinates,
+// not every character of the class in the table.
+func TestTheRuleOfASuperiorAgentCoversOnlyItsSubordinates(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	boss := characters.Character{ID: "a1", Name: "Chefe", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "Dev", State: characters.Idle}
+	mine := characters.Character{ID: "d2", Name: "Meu", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "Dev", State: characters.Idle}
+	r.chars.set(boss)
+	r.chars.set(mine)
+	r.chars.mu.Lock()
+	r.chars.sups = map[string]string{"d2": "a1", "d1": "m1"}
+	r.chars.mu.Unlock()
+	err := r.svc.Create(r.ctx, chain.TempRule{Request: 8, Workspace: "meu-app", Table: "42-login", Class: "Dev", Requester: mine.ID, Pattern: r.pattern("npm install *", classes.RiskLow),
+		Action: classes.Action{Kind: providers.KindShell, Command: "npm install x"}, Risk: classes.RiskLow, Until: r.clk.Now().Add(time.Hour), By: boss.ID,
+		Level: chain.Level{Kind: chain.LevelAgent, Agent: boss.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules, err := r.svc.List(r.ctx, "meu-app", "42-login")
+	if err != nil || len(rules) != 1 {
+		t.Fatalf("rules = %+v, %v", rules, err)
+	}
+	call := func(agent string) bool {
+		ok, err := r.svc.Use(r.ctx, classes.TableRuleUse{Rule: rules[0].ID, Level: classes.LevelTableMaster, Risk: classes.RiskLow, AgentID: agent, TableID: "42-login",
+			Action: classes.Action{Kind: providers.KindShell, Command: "npm install y"}, Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: "npm install y"},
+			Own: classes.RiskResult{Risk: classes.RiskLow}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	if !call(mine.ID) {
+		t.Error("the rule does not free a subordinate of its author")
+	}
+	if call(r.dev.ID) {
+		t.Error("the rule of a superior agent freed a character that does not answer to it")
 	}
 }

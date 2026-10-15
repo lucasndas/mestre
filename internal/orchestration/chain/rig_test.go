@@ -122,9 +122,23 @@ type fakeGrants struct {
 	f       *fakeClasses
 	mu      sync.Mutex
 	decrees []chain.DecreeGrant
+	// hook runs once, in the middle of the next exception (a timer firing, a
+	// crash); fail makes the next exception fail.
+	hook func()
+	fail error
 }
 
 func (g *fakeGrants) Exception(_ context.Context, e chain.ExceptionGrant) error {
+	if g.hook != nil {
+		h := g.hook
+		g.hook = nil
+		h()
+	}
+	if g.fail != nil {
+		err := g.fail
+		g.fail = nil
+		return err
+	}
 	g.f.mu.Lock()
 	defer g.f.mu.Unlock()
 	g.f.nextID++
@@ -263,14 +277,24 @@ type world struct {
 
 // policy is the policy file of the tests: the settings change under it.
 type policy struct {
-	mu sync.Mutex
-	s  chain.Settings
+	mu  sync.Mutex
+	s   chain.Settings
+	err error
 }
 
 func (p *policy) Chain(context.Context, string) (chain.Settings, string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.err != nil {
+		return chain.Settings{}, "", p.err
+	}
 	return p.s, "p1", nil
+}
+
+func (p *policy) fail(err error) {
+	p.mu.Lock()
+	p.err = err
+	p.mu.Unlock()
 }
 
 func (p *policy) set(s chain.Settings) {

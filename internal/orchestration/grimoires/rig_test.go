@@ -2,6 +2,7 @@ package grimoires_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -79,6 +80,31 @@ func (c *ceilingOf) set(y string, t testing.TB) {
 	c.mu.Unlock()
 }
 
+// ceilingGate is the check of the ceiling the characters make at each creation:
+// a test lists the classes the ceiling of a workspace does not allow.
+type ceilingGate struct {
+	mu   sync.Mutex
+	deny map[string]bool
+}
+
+func (g *ceilingGate) Allows(_ context.Context, workspace, sheet, class string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.deny[workspace+"/"+class] {
+		return fmt.Errorf("%w: %s (%s) in %s", characters.ErrCeiling, class, sheet, workspace)
+	}
+	return nil
+}
+
+func (g *ceilingGate) set(workspace, class string, deny bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.deny == nil {
+		g.deny = map[string]bool{}
+	}
+	g.deny[workspace+"/"+class] = deny
+}
+
 // side is a workspace of the Guild with a table and its masters.
 type side struct {
 	slug    string
@@ -98,6 +124,7 @@ type world struct {
 	orc      *app.Orchestration
 	machines *orcfakes.Machines
 	hub      *hub
+	gate     *ceilingGate
 	a, b     side
 }
 
@@ -128,7 +155,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &world{t: t, ctx: ctx, clk: clk, hub: &hub{}}
+	w := &world{t: t, ctx: ctx, clk: clk, hub: &hub{}, gate: &ceilingGate{}}
 	w.machines = orcfakes.NewMachines(clk)
 	w.machines.Chars = func() *characters.Service { return w.orc.Characters }
 	libs := map[string]*classes.Library{}
@@ -136,7 +163,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{Also: []int{77, 99}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
-		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, QuestGitHub: w.hub,
+		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, QuestGitHub: w.hub, Ceiling: w.gate,
 		Limits: characters.Limits{PerTable: opt.perTable, PerWorkspace: opt.perWorkspace},
 		Classes: grimoires.LibraryClasses{For: func(_ context.Context, ws string) (*classes.Library, error) {
 			mu.Lock()

@@ -185,6 +185,11 @@ type Request struct {
 	Mission *Mission `json:"mission,omitempty"`
 	// Decision is how it closed.
 	Decision *Closing `json:"decision,omitempty"`
+	// Deciding is the claim of a decision under way: the request stays open
+	// (at its level, with its deadline) but nothing else may close, climb or
+	// ask it until the effect of the decision is made and the claim becomes
+	// Decision, or is given back. After a crash, Recover finishes it.
+	Deciding *Closing `json:"deciding,omitempty"`
 
 	CreatedAt, ClosedAt time.Time
 }

@@ -158,6 +158,31 @@ func (s *Service) detect(ctx context.Context, from string) {
 	}
 }
 
+// Recheck looks again for a ring through a waiter whose arrows changed without
+// a new wait (a step that got its character): same warning, once per ring.
+func (s *Service) Recheck(ctx context.Context, waiter string) { s.detect(ctx, waiter) }
+
+// StepAssigned says a step got its character: the characters that wait for the
+// step now wait for that one, which may close a ring.
+func (s *Service) StepAssigned(ctx context.Context, stepID string) {
+	ws, err := s.st.ActiveWaits(ctx)
+	if err != nil {
+		s.log.Warn("waits: the waits for a step were not read", "step", stepID, "err", err)
+		return
+	}
+	for _, w := range ws {
+		if w.Kind != KindSteps {
+			continue
+		}
+		for _, t := range w.Pending() {
+			if t.ID == stepID {
+				s.Recheck(ctx, w.Waiter)
+				break
+			}
+		}
+	}
+}
+
 // refreshCycles ends the records of the rings that are gone, so a ring that
 // comes back is warned about again.
 func (s *Service) refreshCycles(ctx context.Context) {

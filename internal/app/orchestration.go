@@ -541,6 +541,12 @@ func (o *Orchestration) External() ExternalFunc {
 	return func(ctx context.Context, fence *guild.Fence) error {
 		o.fence.Store(fence)
 		defer o.fence.Store(nil)
+		// The timers of the waits and of the chain live as long as the
+		// Citadel acts: when this ends (fence lost, shutdown) none may fire.
+		defer o.Waits.StopTimers()
+		if o.Chain != nil {
+			defer o.Chain.StopTimers()
+		}
 		if err := o.Inbox.Recover(ctx); err != nil {
 			o.log.Warn("app: the inbox was not recovered", "err", err)
 		}

@@ -438,6 +438,14 @@ func (s *Service) check(ctx context.Context, req CreateRequest) (placement, erro
 	if err := s.snapshot(ctx, &p); err != nil {
 		return p, err
 	}
+	// The ceiling of the workspace holds for every character that is made, by
+	// whichever way (recruit, quest step, restore of a grimoire), not only for
+	// the one command that checked it first.
+	if s.o.Ceiling != nil && req.Role == RoleCharacter && req.Sheet != "" {
+		if err := s.o.Ceiling.Allows(ctx, req.Workspace, req.Sheet, p.class); err != nil {
+			return p, err
+		}
+	}
 	if err := s.choose(ctx, &p); err != nil {
 		return p, err
 	}

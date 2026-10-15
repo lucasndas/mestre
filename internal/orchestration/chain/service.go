@@ -65,7 +65,10 @@ type Service struct {
 
 	mu     sync.Mutex // short critical sections on a request; never held over a call out
 	tmu    sync.Mutex
+	omu    sync.Mutex // FindOpen and Insert of a request, as one step
+	bmu    sync.Mutex // the counter of the circuit breaker
 	timers map[int64]clock.Timer
+	pol    policyReader
 }
 
 var (
@@ -104,12 +107,7 @@ func (s *Service) Audit(ctx context.Context, id int64) ([]AuditEntry, error) {
 }
 
 func (s *Service) settings(ctx context.Context, workspace string) (Settings, string) {
-	st, version, err := s.o.Policy.Chain(ctx, workspace)
-	if err != nil {
-		s.log.Warn("chain: the policy was not read, the default holds", "workspace", workspace, "err", err)
-		return DefaultSettings(), "default"
-	}
-	return st.withDefaults(), version
+	return s.pol.read(ctx, s.o.Policy, s.log, workspace)
 }
 
 // OpenRequest is a request to put in the chain.
@@ -191,6 +189,16 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		return 0, fmt.Errorf("chain: request of unknown risk %q", r.Risk.Risk)
 	}
 	var who characters.Character
+	// FindOpen and Insert are one step for the same action: two asks at once
+	// open one request.
+	locked := false
+	unlock := func() {
+		if locked {
+			locked = false
+			s.omu.Unlock()
+		}
+	}
+	defer unlock()
 	if o.Requester != "" {
 		c, err := s.o.Characters.Get(ctx, o.Requester)
 		if err != nil {
@@ -209,6 +217,8 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 				dir = env.Worktree
 			}
 			r.Fingerprint = classes.ClassPermissionFingerprint(c.ID, *r.Action, dir)
+			s.omu.Lock()
+			locked = true
 			if found, ok, err := s.st.FindOpen(ctx, c.ID, r.Fingerprint); err != nil {
 				return 0, err
 			} else if ok {
@@ -226,6 +236,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	}
 	r.Level, r.Why = lvl, why
 	r, err = s.st.Insert(ctx, r)
+	unlock()
 	if err != nil {
 		return 0, err
 	}

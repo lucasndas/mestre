@@ -206,7 +206,7 @@ func (s *Service) hold(ctx context.Context, st *Step, blocker string) {
 func (s *Service) assign(ctx context.Context, st *Step, c characters.Character) error {
 	st.Character = c.ID
 	st.Blocker = keep(st.Blocker, blockResume)
-	return s.st.Do(ctx, func(tx *Tx) error {
+	err := s.st.Do(ctx, func(tx *Tx) error {
 		cur, err := tx.Step(st.UID)
 		if err != nil || cur.State != StepPreparing {
 			return err
@@ -214,6 +214,10 @@ func (s *Service) assign(ctx context.Context, st *Step, c characters.Character) 
 		cur.Character, cur.Blocker = c.ID, keep(cur.Blocker, blockResume)
 		return tx.SaveStep(cur, s.clk.Now())
 	})
+	if err == nil && s.o.Waits != nil {
+		s.o.Waits.StepAssigned(ctx, st.UID)
+	}
+	return err
 }
 
 // keep leaves the blocker as it is only if it is the one kept, else clears it.

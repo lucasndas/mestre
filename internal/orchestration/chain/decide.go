@@ -10,6 +10,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 func isPermission(t classes.RequestType) bool {
@@ -87,20 +88,26 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 		if err != nil {
 			return Outcome{}, err
 		}
+		found := false
 		for _, h := range p {
 			if h.level.same(level) {
+				found = true
 				if v := s.can(ctx, h, r, st); !v.ok {
 					return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, refuse(CodeAboveCeiling, "this level does not decide this request: %s", v.why))
 				}
 			}
 		}
+		if !found {
+			// The holder left the path (replaced, ended, moved): nobody
+			// approves from a place that is no longer in the chain.
+			ref := s.refused(ctx, r, d.By, d.Answer, refuse(CodeNotAtLevel, "you are no longer in the chain of the request #%d", r.ID))
+			s.reroute(ctx, r, "quem decidia saiu da cadeia do pedido")
+			ref.Climbed = true
+			return Outcome{}, ref
+		}
 		if ref := s.attenuation(ctx, r, d.By); ref != nil {
 			return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, ref)
 		}
-	}
-	applied, ref := s.effect(ctx, r, st, d.By, level, d.Answer, d.Pattern, d.For, d.UntilMissionEnd, true)
-	if ref != nil {
-		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, ref)
 	}
 	c := Closing{State: Denied, By: d.By, Answer: d.Answer, Reason: d.Reason}
 	if d.Answer.Approves() {
@@ -108,6 +115,16 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 	}
 	if d.Answer == AnswerDenyInstruction && d.Instruction != "" {
 		c.Reason = strings.TrimSpace(orDefault(d.Reason, "") + " " + d.Instruction)
+	}
+	// The request is claimed before anything is granted: a decision overtaken
+	// by a climb or an expiry grants nothing.
+	if _, ok := s.claim(ctx, d.Request, &level, c); !ok {
+		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
+	}
+	applied, ref := s.effect(ctx, r, st, d.By, level, d.Answer, d.Pattern, d.For, d.UntilMissionEnd, true)
+	if ref != nil {
+		s.unclaim(ctx, d.Request)
+		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, ref)
 	}
 	r, ok := s.closeRequest(ctx, d.Request, &level, c)
 	if !ok {
@@ -349,7 +366,7 @@ func (s *Service) askBack(ctx context.Context, r Request, by string, level Level
 	now := s.clk.Now()
 	s.mu.Lock()
 	cur, err := s.st.Get(ctx, r.ID)
-	if err != nil || cur.State != Open || !cur.Level.same(level) {
+	if err != nil || cur.State != Open || cur.Deciding != nil || !cur.Level.same(level) {
 		s.mu.Unlock()
 		return Outcome{}, refuse(CodeNoRequest, "the request #%d changed meanwhile", r.ID)
 	}
@@ -446,13 +463,17 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "unknown answer %q", d.Answer))
 	}
 	st, _ := s.settings(ctx, r.Workspace)
-	applied, ref := s.effect(ctx, r, st, who, level, d.Answer, d.Pattern, d.For, false, false)
-	if ref != nil {
-		return Outcome{}, s.refused(ctx, r, who, d.Answer, ref)
-	}
 	c := Closing{State: Denied, By: who, Answer: d.Answer, Reason: strings.TrimSpace(d.Reason + " " + d.Instruction)}
 	if d.Answer.Approves() || d.Answer == AnswerDelegate {
 		c.State = Approved
+	}
+	if _, ok := s.claim(ctx, d.Request, nil, c); !ok {
+		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
+	}
+	applied, ref := s.effect(ctx, r, st, who, level, d.Answer, d.Pattern, d.For, false, false)
+	if ref != nil {
+		s.unclaim(ctx, d.Request)
+		return Outcome{}, s.refused(ctx, r, who, d.Answer, ref)
 	}
 	r, ok := s.closeRequest(ctx, d.Request, nil, c)
 	if !ok {
@@ -464,18 +485,71 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	return Outcome{Request: r.ID, State: r.State, Applied: applied}, nil
 }
 
+// claim takes an open request for a decision, atomically, before the effect
+// of the decision is made: from, when set, is the level that must still hold
+// it. Only one decision claims it, and a climb, an expiry or a cancellation
+// that comes meanwhile finds it claimed and leaves it alone. The request
+// stays open, at its level, until closeRequest (or unclaim) ends the claim.
+func (s *Service) claim(ctx context.Context, id int64, from *Level, c Closing) (Request, bool) {
+	s.mu.Lock()
+	r, err := s.st.Get(ctx, id)
+	if err != nil || r.State != Open || r.Deciding != nil || (from != nil && !r.Level.same(*from)) {
+		s.mu.Unlock()
+		return r, false
+	}
+	c.Level = r.Level
+	r.Deciding = &c
+	err = s.st.Save(ctx, r)
+	s.mu.Unlock()
+	if err != nil {
+		s.log.Warn("chain: the claim of a decision was not saved", "request", id, "err", err)
+		return r, false
+	}
+	s.disarm(id)
+	return r, true
+}
+
+// unclaim gives the request back at the same level when the effect of the
+// decision was refused: its time starts again where it was.
+func (s *Service) unclaim(ctx context.Context, id int64) {
+	s.mu.Lock()
+	r, err := s.st.Get(ctx, id)
+	if err != nil || r.State != Open || r.Deciding == nil {
+		s.mu.Unlock()
+		return
+	}
+	r.Deciding = nil
+	err = s.st.Save(ctx, r)
+	s.mu.Unlock()
+	if err != nil {
+		s.log.Warn("chain: the claim of a decision was not given back", "request", id, "err", err)
+		return
+	}
+	s.arm(id, r.Level, r.Deadline)
+}
+
+// claimMatches: an unclaimed request is closed only by an expiry or a
+// cancellation; a claimed one only by the decision that claimed it.
+func claimMatches(claim *Closing, c Closing) bool {
+	if claim == nil {
+		return c.State == Expired || c.State == Cancelled
+	}
+	return claim.State == c.State && claim.By == c.By && claim.Answer == c.Answer
+}
+
 // closeRequest ends an open request, atomically: from, when set, is the level
-// that must still hold it.
+// that must still hold it. A request under a claim is closed only by the
+// decision that holds it.
 func (s *Service) closeRequest(ctx context.Context, id int64, from *Level, c Closing) (Request, bool) {
 	s.mu.Lock()
 	r, err := s.st.Get(ctx, id)
-	if err != nil || r.State != Open || (from != nil && !r.Level.same(*from)) {
+	if err != nil || r.State != Open || (from != nil && !r.Level.same(*from)) || !claimMatches(r.Deciding, c) {
 		s.mu.Unlock()
 		return r, false
 	}
 	item, wasAsked := r.Item, r.Level.Kind == LevelPeople || r.AskedBack
 	c.Level = r.Level
-	r.State, r.ClosedAt, r.Deadline, r.Item, r.AskedBack, r.Decision = c.State, s.clk.Now(), time.Time{}, "", false, &c
+	r.State, r.ClosedAt, r.Deadline, r.Item, r.AskedBack, r.Decision, r.Deciding = c.State, s.clk.Now(), time.Time{}, "", false, &c, nil
 	err = s.st.Save(ctx, r)
 	s.mu.Unlock()
 	if err != nil {
@@ -557,6 +631,8 @@ func (s *Service) resultText(r Request, byName, instruction string) string {
 // limit the character is paused (it gets nothing delivered) and the people are
 // told; an approval in the middle clears the count.
 func (s *Service) breaker(ctx context.Context, r Request, st Settings) {
+	s.bmu.Lock()
+	defer s.bmu.Unlock()
 	switch r.State {
 	case Approved:
 		b, err := s.st.Breaker(ctx, r.Requester)
@@ -598,7 +674,10 @@ func (s *Service) Held(ctx context.Context, characterID string) (bool, error) {
 
 // Resume lifts the pause of the circuit breaker (an Administrator or above).
 func (s *Service) Resume(ctx context.Context, characterID string) error {
-	if err := s.st.SaveBreaker(ctx, Breaker{Character: characterID}); err != nil {
+	s.bmu.Lock()
+	err := s.st.SaveBreaker(ctx, Breaker{Character: characterID})
+	s.bmu.Unlock()
+	if err != nil {
 		return err
 	}
 	return s.o.Inbox.Pump(ctx, characterID)
@@ -609,7 +688,7 @@ func (s *Service) Resume(ctx context.Context, characterID string) error {
 // stay; only the level, the time and the item change.
 func (s *Service) climb(ctx context.Context, id int64, from Level, cause Answer, why string) {
 	r, err := s.st.Get(ctx, id)
-	if err != nil || r.State != Open || !r.Level.same(from) || r.Level.Kind == LevelPeople {
+	if err != nil || r.State != Open || r.Deciding != nil || !r.Level.same(from) || r.Level.Kind == LevelPeople {
 		return
 	}
 	st, _ := s.settings(ctx, r.Workspace)
@@ -620,7 +699,7 @@ func (s *Service) climb(ctx context.Context, id int64, from Level, cause Answer,
 	}
 	s.mu.Lock()
 	cur, err := s.st.Get(ctx, id)
-	if err != nil || cur.State != Open || !cur.Level.same(from) {
+	if err != nil || cur.State != Open || cur.Deciding != nil || !cur.Level.same(from) {
 		s.mu.Unlock()
 		return
 	}
@@ -765,11 +844,32 @@ func (s *Service) Recover(ctx context.Context) error {
 		return err
 	}
 	for _, r := range rs {
+		if r.Deciding != nil {
+			// The engine went down between the claim and the end of a
+			// decision: the decision is finished as it was claimed. If the
+			// exception was not made, who asked is told to try again and the
+			// action is asked anew: nothing is granted without the claim.
+			s.finish(ctx, r)
+			continue
+		}
 		if !r.Deadline.IsZero() {
 			s.arm(r.ID, r.Level, r.Deadline)
 		}
 	}
 	return nil
+}
+
+// finish closes a claimed request whose decision was cut by a crash.
+func (s *Service) finish(ctx context.Context, r Request) {
+	c := *r.Deciding
+	level := r.Level
+	closed, ok := s.closeRequest(ctx, r.ID, &level, c)
+	if !ok {
+		return
+	}
+	st, _ := s.settings(ctx, closed.Workspace)
+	s.audit(ctx, closed, AuditEntry{Approver: c.By, Level: level.Kind, Answer: c.Answer, Outcome: "accepted", Reason: orDefault(c.Reason, "decisão concluída após reinício")})
+	s.settle(ctx, closed, st, "", "")
 }
 
 // arm sets the timer of the level of a request.
@@ -783,6 +883,19 @@ func (s *Service) arm(id int64, level Level, at time.Time) {
 	s.tmu.Lock()
 	s.timers[id] = t
 	s.tmu.Unlock()
+}
+
+// StopTimers stops the timer of every level: the Citadel stopped acting (it
+// lost the fence or is shutting down) and no request may climb or expire until
+// Recover brings the timers back.
+func (s *Service) StopTimers() {
+	s.tmu.Lock()
+	ts := s.timers
+	s.timers = map[int64]clock.Timer{}
+	s.tmu.Unlock()
+	for _, t := range ts {
+		t.Stop()
+	}
 }
 
 func (s *Service) disarm(id int64) {
@@ -799,7 +912,7 @@ func (s *Service) disarm(id int64) {
 func (s *Service) fire(id int64, level Level, at time.Time) {
 	ctx := context.Background()
 	r, err := s.st.Get(ctx, id)
-	if err != nil || r.State != Open || !r.Level.same(level) || ms(r.Deadline) != ms(at) {
+	if err != nil || r.State != Open || r.Deciding != nil || !r.Level.same(level) || ms(r.Deadline) != ms(at) {
 		return
 	}
 	if r.Level.Kind == LevelPeople {

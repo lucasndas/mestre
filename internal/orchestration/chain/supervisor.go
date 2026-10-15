@@ -175,6 +175,7 @@ type Supervisor struct {
 
 	mu   sync.Mutex // Tick, Pause and Resume one at a time
 	mask *logging.Masker
+	pol  policyReader
 }
 
 var (
@@ -200,12 +201,8 @@ func NewSupervisor(o SupervisorOptions) (*Supervisor, error) {
 }
 
 func (s *Supervisor) settings(ctx context.Context, workspace string) Settings {
-	st, _, err := s.o.Policy.Chain(ctx, workspace)
-	if err != nil {
-		s.log.Warn("supervision: the policy was not read, the default holds", "workspace", workspace, "err", err)
-		return DefaultSettings()
-	}
-	return st.withDefaults()
+	st, _ := s.pol.read(ctx, s.o.Policy, s.log, workspace)
+	return st
 }
 
 // --- pause ---

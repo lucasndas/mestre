@@ -2,7 +2,9 @@ package chain
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/lucasndas/mestre/internal/classes"
 )
@@ -53,21 +55,38 @@ var answerHelp = map[Answer]string{
 func describe(r Request) string {
 	var b strings.Builder
 	if t := r.Event; t != nil && t.Tool != nil {
-		fmt.Fprintf(&b, "Ferramenta: %s (%s)\n", t.Tool.NativeName, t.Tool.Kind)
+		fmt.Fprintf(&b, "Ferramenta: %s (%s)\n", oneLine(t.Tool.NativeName), t.Tool.Kind)
 		switch {
 		case t.Tool.Command != "":
-			fmt.Fprintf(&b, "Comando exato: %s\n", t.Tool.Command)
+			fmt.Fprintf(&b, "Comando exato: %s\n", oneLine(t.Tool.Command))
 		case t.Tool.URL != "":
-			fmt.Fprintf(&b, "URL: %s\n", t.Tool.URL)
+			fmt.Fprintf(&b, "URL: %s\n", oneLine(t.Tool.URL))
 		case len(t.Tool.Paths) > 0:
-			fmt.Fprintf(&b, "Caminhos: %s\n", strings.Join(t.Tool.Paths, ", "))
+			paths := make([]string, len(t.Tool.Paths))
+			for i, p := range t.Tool.Paths {
+				paths[i] = oneLine(p)
+			}
+			fmt.Fprintf(&b, "Caminhos: %s\n", strings.Join(paths, ", "))
 		}
 	} else if r.Action != nil {
-		fmt.Fprintf(&b, "Ação: %s\n", r.About)
+		fmt.Fprintf(&b, "Ação: %s\n", oneLine(r.About))
 	} else if r.About != "" {
-		fmt.Fprintf(&b, "Sobre: %s\n", r.About)
+		fmt.Fprintf(&b, "Sobre: %s\n", oneLine(r.About))
 	}
 	return b.String()
+}
+
+// oneLine keeps text of the agent (a command, a path, a URL) on its own line
+// in the fields of the engine: anything with a line break or another control
+// character is shown quoted and escaped, so it cannot open a line that looks
+// like a field of the engine or like the end of the block of the agent.
+func oneLine(s string) string {
+	for _, r := range s {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			return strconv.Quote(s)
+		}
+	}
+	return s
 }
 
 // Text is the item `approval` the engine builds for an agent of a level, or

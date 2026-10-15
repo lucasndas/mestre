@@ -89,7 +89,7 @@ Ao estourar, o motor avisa quem espera (em geral o Mestre da mesa; o Grão-Mestr
 
 ### Detecção de impasse
 
-O motor mantém um grafo "quem espera quem" (esperas de personagem, `ask` abertos e esperas de etapa, apontando para o personagem responsável). A cada aresta nova, procura ciclo. Achando (ex.: A → B → A), avisa uma vez por ciclo o Mestre da mesa (ou o Grão-Mestre, se o ciclo envolver mais de uma mesa) e os usuários, com o ciclo escrito e destacado no canvas. Nada é cancelado sozinho.
+O motor mantém um grafo "quem espera quem" (esperas de personagem, `ask` abertos e esperas de etapa, apontando para o personagem responsável). A cada aresta nova, procura ciclo; também procura quando uma etapa ganha o personagem responsável (a espera por ela passa a apontar para ele). Um `ask` que ninguém mais espera (`--no-wait`, chamada da CLI que morreu) não é aresta. Achando (ex.: A → B → A), avisa uma vez por ciclo o Mestre da mesa (ou o Grão-Mestre, se o ciclo envolver mais de uma mesa) e os usuários, com o ciclo escrito e destacado no canvas. Nada é cancelado sozinho.
 
 ### Persistência e retomada
 
