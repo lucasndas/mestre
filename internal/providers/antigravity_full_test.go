@@ -154,7 +154,7 @@ func TestTheGeneratedHookRunsTheMestreBinaryAndKeepsItsExit(t *testing.T) {
 	cmds := hookCommands(t, worktree, binary)
 	payload := string(recorded(t, "antigravity", "PreToolUse"))
 
-	out, exit := runHook(t, cmds["PreToolUse"], dir, payload, "AGYSTUB_STUB=hook")
+	out, exit := runHook(t, cmds["PreToolUse"], dir, payload, "MESTRE_AGENT_ID=agy-1", "AGYSTUB_STUB=hook")
 	var got struct {
 		Args  []string `json:"args"`
 		Stdin string   `json:"stdin"`
@@ -166,7 +166,7 @@ func TestTheGeneratedHookRunsTheMestreBinaryAndKeepsItsExit(t *testing.T) {
 		t.Errorf("the binary got %q and stdin %q", got.Args, got.Stdin)
 	}
 
-	out, exit = runHook(t, cmds["PreToolUse"], dir, payload, "AGYSTUB_STUB=hook", "AGYSTUB_FAIL=1")
+	out, exit = runHook(t, cmds["PreToolUse"], dir, payload, "MESTRE_AGENT_ID=agy-1", "AGYSTUB_STUB=hook", "AGYSTUB_FAIL=1")
 	if exit != 3 || strings.Contains(out, `"decision":"allow"`) {
 		t.Errorf("a failing binary: exit %d, stdout %q; want its exit 3 and no allow", exit, out)
 	}

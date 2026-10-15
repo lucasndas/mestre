@@ -28,6 +28,15 @@ type ManagedFile struct {
 	Merge func(current []byte) ([]byte, error)
 }
 
+// HookStripper is implemented by an adapter whose hook file lives in the
+// worktree: StripHooks takes out only the part the Mestre owns and keeps the
+// rest, returning current itself when there is none. The engine uses it to
+// give a file the project versions back to the project before the branch is
+// synced (docs/sessao-zero/mesa.md#mescla-gerenciada).
+type HookStripper interface {
+	StripHooks(path string, current []byte) ([]byte, error)
+}
+
 // HookFilesRequest is what HookFiles receives.
 type HookFilesRequest struct {
 	// OS is the system of the machine ("linux", "windows").
