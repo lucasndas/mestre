@@ -345,9 +345,10 @@ func TestHookLineWithoutTheAgentIDAnswersNeutrallyAndDoesNotRunTheMestre(t *test
 			continue
 		}
 		cmd.Env = envWithout("MESTRE_")
-		out, err := cmd.Output()
-		if err != nil || strings.TrimSpace(string(out)) != c.want {
-			t.Errorf("%s without MESTRE_AGENT_ID: stdout %q, %v; want the neutral %q and exit 0", c.name, out, err, c.want)
+		var out, errb bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &out, &errb
+		if err := cmd.Run(); err != nil || strings.TrimSpace(out.String()) != c.want {
+			t.Errorf("%s without MESTRE_AGENT_ID: stdout %q, stderr %q, %v; want the neutral %q and exit 0\nline: %s", c.name, out.String(), errb.String(), err, c.want, c.line)
 		}
 		if _, err := os.Stat(marker); err == nil {
 			t.Errorf("%s ran the mestre without MESTRE_AGENT_ID", c.name)

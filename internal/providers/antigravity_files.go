@@ -126,7 +126,7 @@ func (a *antigravity) hookCommand(goos, binary, event string) (string, error) {
 		if strings.ContainsAny(binary, `"%`) {
 			return "", fmt.Errorf("antigravity hook files: the path of the mestre binary %q has a character cmd cannot quote", binary)
 		}
-		return `if defined MESTRE_AGENT_ID (if exist "` + binary + `" ("` + binary + `"` + args + `) else (echo ` + neutral + `)) else (echo ` + neutral + `)`, nil
+		return `if not defined MESTRE_AGENT_ID (echo ` + neutral + `) else if exist "` + binary + `" ("` + binary + `"` + args + `) else (echo ` + neutral + `)`, nil
 	}
 	q := "'" + strings.ReplaceAll(binary, "'", `'\''`) + "'"
 	return `if [ -n "$MESTRE_AGENT_ID" ] && [ -e ` + q + ` ]; then exec ` + q + args + "; else printf '%s\\n' '" + neutral + "'; fi", nil
