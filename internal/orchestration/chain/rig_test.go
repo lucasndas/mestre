@@ -273,6 +273,8 @@ type world struct {
 	master     characters.Character
 	fwd        *localchan.LocalForwarder
 	sheets     int
+	// lib is the library of the real classes (worldOpts.realClasses).
+	lib *classes.Library
 }
 
 // policy is the policy file of the tests: the settings change under it.
@@ -303,7 +305,14 @@ func (p *policy) set(s chain.Settings) {
 	p.mu.Unlock()
 }
 
-type worldOpts struct{ noGrants, noTemp, realTemp, realSup bool }
+type worldOpts struct {
+	noGrants, noTemp, realTemp, realSup bool
+	// realClasses builds the rules of the approvers (and the domains) with
+	// the production builder of the Citadel (app.CitadelClasses) over a real
+	// library; restrictions are the restrictions of sheets, by name.
+	realClasses  bool
+	restrictions map[string]map[string]any
+}
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
 	t.Helper()
@@ -332,12 +341,22 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	w.machines = orcfakes.NewMachines(clk)
 	w.machines.Chars = func() *characters.Service { return w.orc.Characters }
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
-		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
+		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}, Restrictions: opt.restrictions}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg}
 	if opt.realSup {
 		oo.ChainSupervision = nil
+	}
+	if opt.realClasses {
+		w.lib = &classes.Library{Roots: classes.DefaultRoots(filepath.Join(root, "classes-globais"), filepath.Join(root, "clone")), Records: classes.ClassDB{DB: db, Clock: clk},
+			Clock: clk, OS: "linux", Skill: func(string) bool { return false }}
+		cc, err := app.NewCitadelClasses(app.CitadelClassesOptions{Registry: characters.Registry{DB: db}, Libraries: func(string) *classes.Library { return w.lib },
+			Presets: oo.Presets, Decrees: fakeDecrees{w.cls}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		oo.ChainClasses = cc
 	}
 	if !opt.noGrants {
 		oo.ChainGrants = w.grants
@@ -373,6 +392,9 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		t.Fatal(err)
 	}
 	w.slug = ws.Slug
+	if opt.realClasses {
+		w.approveClass("dev", devYAML)
+	}
 	res, err := w.orc.Characters.Create(ctx, characters.CreateRequest{Sheet: "Grão-Mestre", Workspace: ws.Slug, Role: characters.RoleGrandMaster, Creator: characters.Creator{Kind: characters.CreatedByEngine}})
 	if err != nil {
 		t.Fatal(err)

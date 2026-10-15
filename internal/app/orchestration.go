@@ -116,9 +116,12 @@ type OrchestrationOptions struct {
 	// to the people. The chain is the hook.Approvals of the engine
 	// (Orchestration.Chain) and, when QuestApprovals is nil, the quests' too.
 	ChainClasses chain.Classes
-	ChainPolicy  chain.Policy
-	ChainUsers   chain.UserAsker
-	ChainGrants  chain.Grants
+	// ChainRulesPublisher, when set, sends the effective rules of the
+	// characters whose temporary table rules changed (RulesPublisher).
+	ChainRulesPublisher *RulesPublisher
+	ChainPolicy         chain.Policy
+	ChainUsers          chain.UserAsker
+	ChainGrants         chain.Grants
 	// ChainTempRules, when set, replaces the temporary table rules of stage 11
 	// (a double for the tests of the chain); without it the chain makes them
 	// in Orchestration.TableRules.
@@ -427,7 +430,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		}
 		temp := o.ChainTempRules
 		if temp == nil {
-			temp = tempRulesRef{&trl}
+			temp = tempRulesRef{p: &trl, pub: o.ChainRulesPublisher, log: o.Logger}
 		}
 		supervision := o.ChainSupervision
 		if supervision == nil {
@@ -496,6 +499,9 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	orc.Rituals, orc.Grimoires = rit, grims
 	orc.ClassCommands = classCommands(o, reg, ib)
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
+	if a, ok := o.ChainClasses.(interface{ attach(*Orchestration) }); ok {
+		a.attach(orc)
+	}
 	return orc, nil
 }
 

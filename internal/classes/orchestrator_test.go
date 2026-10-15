@@ -31,7 +31,7 @@ func orchestrator(t *testing.T, lib *classes.Library, role classes.Level, id str
 	return r
 }
 
-// CA-ORQ-01
+// Part of CA-ORQ-01 (the Citadel builder, in internal/app, closes it)
 func TestTheOrchestratorsTakeTheirRulesFromTheBuiltInClassInEveryWorkspace(t *testing.T) {
 	t.Parallel()
 	a, b := newFixture(t), newFixture(t)

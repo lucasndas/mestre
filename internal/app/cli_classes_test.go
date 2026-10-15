@@ -224,6 +224,16 @@ func (w *commWorld) classListShowAssignAndDeleteFollowTheRulesOfTheDocument(t *t
 		t.Errorf("assign to a character that does not exist = %+v", r)
 	}
 
+	// the Master of the table does not change its own class, and an
+	// orchestrator is not a plain character
+	before := w.get(w.master).Class
+	if r := w.run(w.master, "class", "assign", w.master.Name, "lst", "--json"); r.code != 3 || decodeJSON(t, r).Error.Code != "forbidden" {
+		t.Errorf("assign to the caller itself = %+v", r)
+	}
+	if got := w.get(w.master); got.Class != before {
+		t.Errorf("the class of the Master changed from %q to %q", before, got.Class)
+	}
+
 	// delete: not while a character has it, and only at the explicit request of a user
 	if r := w.run(w.master, "class", "delete", "lst", "--json"); r.code != 7 || decodeJSON(t, r).Error.Code != "in_use" {
 		t.Fatalf("delete of a class in use = %+v", r)

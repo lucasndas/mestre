@@ -207,7 +207,7 @@ func TestTheTableMasterCannotMakeARuleLongerThanTheMaximumInAnotherTableOrAboveI
 	}
 }
 
-// CA-RTM-05
+// Part of CA-RTM-05 (the document built by the production builder is in internal/app)
 func TestTheEffectiveRulesCarryTheRuleAsATableRuleDecreeAndTheDegradedSnapshotDoesNotUseIt(t *testing.T) {
 	t.Parallel()
 	w := newRTM(t)

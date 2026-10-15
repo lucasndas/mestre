@@ -114,6 +114,11 @@ type Deps struct {
 	// cli.allow of the effective rules kept on this machine).
 	Commands *cli.Registry
 	Profiles cli.Profiles
+	// TableRules is the gate of the temporary table rules every decision of
+	// the hook asks at each use (CitadelClasses.TableRules on the Citadel; a
+	// Tower reaches it over the connection, milestone 5). nil: a rule of the
+	// table never lets a call through (the call asks, the safe side).
+	TableRules classes.TableRuleGate
 	// OnQueuedResult is told, on the Citadel, the result of a call that
 	// waited in the outbox of a Tower; it goes to the inbox of whoever asked
 	// (milestone 4 delivers it; until then it is only logged).
@@ -606,11 +611,7 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 	if profiles == nil {
 		profiles = rulesProfiles{src: rules}
 	}
-	hk := &hook.Engine{
-		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
-		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States, Contexts: e.deps.Contexts,
-		ClassHooks: e.deps.ClassHooks, OnEvent: e.deps.OnHookEvent,
-	}
+	hk := e.hookEngine(rules)
 	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker})
 	srv := localchan.NewServer(localchan.Config{
 		Clock: e.clk, Identifier: id, Forwarder: gate, Instance: e.cfg.Instance, EngineVersion: e.deps.Version, Logger: e.log,
@@ -628,6 +629,16 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 		wg.Go(func() { hk.DrainLoop(ctx, e.paths.HookQueue, nil) })
 	}
 	return nil
+}
+
+// hookEngine is the engine side of the hook dispatcher over the rules kept on
+// this machine, with the gate of the temporary table rules.
+func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
+	return &hook.Engine{
+		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
+		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States, Contexts: e.deps.Contexts,
+		ClassHooks: e.deps.ClassHooks, OnEvent: e.deps.OnHookEvent, TableRules: e.deps.TableRules,
+	}
 }
 
 // respond answers the broadcast of the discovery.
