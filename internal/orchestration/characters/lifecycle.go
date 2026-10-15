@@ -83,6 +83,7 @@ func (s *Service) after(ctx context.Context, c Character, from State) error {
 		s.mu.Lock()
 		delete(s.summarized, c.ID)
 		s.mu.Unlock()
+		s.disconnect(ctx, c)
 		return s.Pump(ctx)
 	}
 	return nil
@@ -522,10 +523,23 @@ func (s *Service) Replace(ctx context.Context, rq ReplaceRequest) (CreateResult,
 	if err := s.authorize(ctx, req); err != nil {
 		return CreateResult{}, err
 	}
+	s.mu.Lock()
+	s.replacing[old.ID] = true
+	s.mu.Unlock()
+	forget := func() {
+		s.mu.Lock()
+		delete(s.replacing, old.ID)
+		s.mu.Unlock()
+	}
 	if _, err := s.Dismiss(ctx, DismissRequest{ID: old.ID, By: rq.By, Reason: "replaced by sheet " + rq.Sheet}); err != nil {
+		forget()
 		return CreateResult{}, err
 	}
-	return s.Create(ctx, req)
+	res, err := s.Create(ctx, req)
+	if err != nil {
+		forget()
+	}
+	return res, err
 }
 
 // Superior is who decides the requests of a character in the chain of

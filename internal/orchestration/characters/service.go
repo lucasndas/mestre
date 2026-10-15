@@ -50,6 +50,8 @@ type ServiceOptions struct {
 	Scrolls Scrolls
 	Inbox   InboxProbe
 	Usage   UsageProbe
+	// Connections may be nil: no connection is made or removed.
+	Connections Connector
 	// Limits default to DefaultLimits; the zero of a field is its default.
 	Limits Limits
 	// SlotTimeout and EphemeralGrace default to the constants above.
@@ -74,7 +76,10 @@ type Service struct {
 	// summarized are the characters whose summary was already written.
 	summarized map[string]bool
 	// refused are the refusals already recorded, by character and cause.
-	refused    map[string]bool
+	refused map[string]bool
+	// replacing are the characters a `recruit --replace` is taking the place
+	// of: their connections wait for the new one.
+	replacing  map[string]bool
 	lastPruned time.Time
 }
 
@@ -112,7 +117,7 @@ func NewService(o ServiceOptions) (*Service, error) {
 		o.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Service{o: o, clk: o.Clock, ids: protocol.NewIDGen(o.Clock), log: o.Logger,
-		seq: map[string]uint64{}, satisfied: map[string]string{}, summarized: map[string]bool{}, refused: map[string]bool{}}, nil
+		seq: map[string]uint64{}, satisfied: map[string]string{}, summarized: map[string]bool{}, refused: map[string]bool{}, replacing: map[string]bool{}}, nil
 }
 
 // CreateRequest asks for a character (`recruit`) or a simple terminal
@@ -289,11 +294,69 @@ func (s *Service) attempt(ctx context.Context, req CreateRequest, waitID string)
 		}
 		s.mu.Unlock()
 	}
+	s.connect(ctx, ch, p.req.ReplaceOf)
 	if err := s.launch(ctx, ch, p, false); err != nil {
 		return Character{}, "", err
 	}
 	got, err := s.o.Registry.Get(ctx, ch.ID)
 	return got, "", err
+}
+
+// connect makes the connections of a character just registered: the ones of
+// the character it replaces, when it replaces one, and the automatic ones. A
+// failure is only logged: Born is safe to repeat, and the engine makes the
+// missing ones again.
+func (s *Service) connect(ctx context.Context, c Character, replaces string) {
+	if s.o.Connections == nil {
+		return
+	}
+	if replaces != "" {
+		s.mu.Lock()
+		delete(s.replacing, replaces)
+		s.mu.Unlock()
+		if old, err := s.o.Registry.Get(ctx, replaces); err == nil {
+			if err := s.o.Connections.Inherit(ctx, old, c); err != nil {
+				s.log.Warn("characters: the connections of the replaced character were not inherited", "id", c.ID, "err", err)
+			}
+			return
+		}
+	}
+	if err := s.o.Connections.Born(ctx, c); err != nil {
+		s.log.Warn("characters: the connections were not made", "id", c.ID, "err", err)
+	}
+}
+
+// disconnect removes the connections of a character that ended, unless a
+// replacement still waits for it: the new character inherits them.
+func (s *Service) disconnect(ctx context.Context, c Character) {
+	if s.o.Connections == nil || s.replacementWaits(ctx, c.ID) {
+		return
+	}
+	if err := s.o.Connections.Ended(ctx, c); err != nil {
+		s.log.Warn("characters: the connections were not removed", "id", c.ID, "err", err)
+	}
+}
+
+// replacementWaits says whether a request to take the place of a character is
+// still waiting for it to end.
+func (s *Service) replacementWaits(ctx context.Context, id string) bool {
+	s.mu.Lock()
+	r := s.replacing[id]
+	s.mu.Unlock()
+	if r {
+		return true
+	}
+	waits, err := s.o.Registry.ActiveSlotWaits(ctx)
+	if err != nil {
+		return false
+	}
+	for _, w := range waits {
+		var req CreateRequest
+		if json.Unmarshal(w.Request, &req) == nil && req.ReplaceOf == id {
+			return true
+		}
+	}
+	return false
 }
 
 // failed turns a failure of a request into what is told about it: the owner
@@ -306,6 +369,14 @@ func (s *Service) failed(ctx context.Context, req CreateRequest, waitID string, 
 	}
 	if waitID != "" {
 		_, _ = s.o.Registry.EndSlotWait(ctx, waitID, SlotCancelled, s.clk.Now())
+		if req.ReplaceOf != "" {
+			s.mu.Lock()
+			delete(s.replacing, req.ReplaceOf)
+			s.mu.Unlock()
+			if old, gerr := s.o.Registry.Get(ctx, req.ReplaceOf); gerr == nil && old.State == Stopped {
+				s.disconnect(ctx, old) // nothing takes its place: its connections go
+			}
+		}
 		_ = s.o.Notifier.Notify(ctx, Notice{Kind: NoticeStartFailed, To: Recipient{Kind: ToCreator}, Workspace: req.Workspace,
 			Table: req.Table, Creator: req.Creator, Text: "o pedido de personagem que esperava vaga falhou: " + err.Error()})
 	}

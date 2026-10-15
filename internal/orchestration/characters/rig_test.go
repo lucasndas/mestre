@@ -14,6 +14,7 @@ import (
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
@@ -222,6 +223,8 @@ func (f *fakeScrolls) all() []characters.Summary {
 type fakeTables struct {
 	mu     sync.Mutex
 	tables map[string]characters.TableInfo
+	// failWorktree makes the creation of the worktree fail.
+	failWorktree bool
 }
 
 func (f *fakeTables) Table(_ context.Context, ws, id string) (characters.TableInfo, error) {
@@ -235,6 +238,12 @@ func (f *fakeTables) Table(_ context.Context, ws, id string) (characters.TableIn
 }
 
 func (f *fakeTables) Worktree(_ context.Context, _, table, machine string) (string, error) {
+	f.mu.Lock()
+	fail := f.failWorktree
+	f.mu.Unlock()
+	if fail {
+		return "", fmt.Errorf("no worktree for %s", table)
+	}
 	return filepath.Join("/wt", machine, table), nil
 }
 
@@ -526,6 +535,8 @@ type rigOptions struct {
 	first string
 	// tables checks the files of the table before each start.
 	tables characters.TableChecker
+	// connect gives the Service the real connections of the Guild database.
+	connect bool
 }
 
 type machineRig struct {
@@ -571,6 +582,7 @@ type rig struct {
 	cat      *presets.Catalog
 	sheets   *fakeMachineSheets
 	svc      *characters.Service
+	conns    *connections.Service
 	notes    *noticeLog
 	scrolls  *fakeScrolls
 	tables   *fakeTables
@@ -620,10 +632,18 @@ func newRig(t *testing.T, o rigOptions) *rig {
 	for _, m := range o.machines {
 		r.sheets.set(sheetOf(t, m.fake, m.id, m.id, true))
 	}
-	svc, err := characters.NewService(characters.ServiceOptions{
+	so := characters.ServiceOptions{
 		Registry: r.reg, Clock: r.clk, Presets: characters.CatalogPresets{Catalog: r.cat}, Tables: r.tables, Machines: r.machines,
 		Builder: r.builder, Notifier: r.notes, Scrolls: r.scrolls, Inbox: r.inbox, Limits: o.limits,
-	})
+	}
+	if o.connect {
+		r.conns, err = connections.NewService(connections.Options{Registry: r.reg, Clock: r.clk})
+		if err != nil {
+			t.Fatal(err)
+		}
+		so.Connections = r.conns
+	}
+	svc, err := characters.NewService(so)
 	if err != nil {
 		t.Fatal(err)
 	}
