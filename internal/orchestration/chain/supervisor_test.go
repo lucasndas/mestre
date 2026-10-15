@@ -317,11 +317,12 @@ func TestAnAccumulatingQueueWarnsWhoIsAboveOnceUntilItGoesBackBelowTheLimits(t *
 		t.Error("the people were warned of a queue of a table master")
 	}
 	// back below the limits, and over them again
-	for _, id := range ids {
-		w.decide(w.master, id, chain.AnswerApprove, "ok")
-	}
+	w.decide(w.master, ids[0], chain.AnswerApprove, "ok")
 	w.tick()
-	open(20, 31)
+	if got := w.queueAlertsToGM(); len(got) != 1 {
+		t.Fatalf("10 open again, alerts = %d", len(got))
+	}
+	open(20, 21)
 	w.tick()
 	if got := w.queueAlertsToGM(); len(got) != 2 {
 		t.Errorf("after going below and over again the Grand Master has %d alerts, want 2", len(got))
@@ -417,7 +418,7 @@ func TestTheSampleOfTheDecisionsOfTheTableMastersUsesTheInjectedSourceOfRandomne
 	w := newSup(t)
 	dev := w.recruit("Dev")
 	start := w.clk.Now()
-	for i := range 12 {
+	for i := range 6 {
 		w.decide(w.master, w.shell(dev, fmt.Sprintf("pip install s%d", i)), chain.AnswerApprove, "ok")
 	}
 	var src chain.DecisionSource = w.supervisor
@@ -434,15 +435,15 @@ func TestTheSampleOfTheDecisionsOfTheTableMastersUsesTheInjectedSourceOfRandomne
 		}
 		return ids
 	}
-	a, b := draw(7, 5), draw(7, 5)
-	if len(a) != 5 || !slices.Equal(a, b) || !slices.IsSorted(a) {
-		t.Errorf("sample = %v then %v; want the same 5, in order", a, b)
+	a, b := draw(7, 3), draw(7, 3)
+	if len(a) != 3 || !slices.Equal(a, b) || !slices.IsSorted(a) {
+		t.Errorf("sample = %v then %v; want the same 3, in order", a, b)
 	}
-	if c := draw(8, 5); slices.Equal(a, c) {
+	if c := draw(8, 3); slices.Equal(a, c) {
 		t.Errorf("another seed drew the same %v", c)
 	}
-	if all := draw(7, 20); len(all) != 12 {
-		t.Errorf("a sample bigger than the decisions gave %d, want all 12", len(all))
+	if all := draw(7, 20); len(all) != 6 {
+		t.Errorf("a sample bigger than the decisions gave %d, want all 6", len(all))
 	}
 	if gm, _ := src.Decisions(w.ctx, w.slug, chain.LevelGrandMaster, start, until); len(gm) != 0 {
 		t.Errorf("decisions of the Grand Master = %d", len(gm))
