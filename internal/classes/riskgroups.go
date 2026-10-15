@@ -98,12 +98,7 @@ func groupsOf(o riskOut) []string {
 	if o.risk != RiskMedium {
 		return nil
 	}
-	var out []string
-	for _, r := range o.origins() {
-		if g := originGroup(r); !slices.Contains(out, g) {
-			out = append(out, g)
-		}
-	}
+	out := slices.Clone(o.groupList())
 	slices.Sort(out)
 	return out
 }

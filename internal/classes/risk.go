@@ -210,9 +210,11 @@ type riskOut struct {
 	risk Risk
 	rule string
 	adj  int
-	// all are the rules of every origin of a medio (the first is rule), for
-	// the groups of the chain; empty means rule alone.
-	all []string
+	// groups are the distinct groups of the chain of every origin of a medio
+	// (docs/orquestracao/cadeia-de-aprovacao.md#condições-da-mesa); empty
+	// means the group of rule alone. At most one per group, so raising a
+	// line of many parts stays linear.
+	groups []string
 }
 
 // raise keeps the higher risk; on a tie, the first rule (a medio also keeps
@@ -222,18 +224,24 @@ func (o *riskOut) raise(n riskOut) {
 	case o.risk == "" || n.risk.rank() > o.risk.rank():
 		*o = n
 		if n.risk == RiskMedium {
-			o.all = slices.Clone(n.origins())
+			o.groups = slices.Clone(n.groupList())
 		}
 	case n.risk == RiskMedium && o.risk == RiskMedium:
-		o.all = append(slices.Clone(o.origins()), n.origins()...)
+		have := o.groupList()
+		for _, g := range n.groupList() {
+			if !slices.Contains(have, g) {
+				have = append(slices.Clone(have), g)
+			}
+		}
+		o.groups = have
 	}
 }
 
-func (o riskOut) origins() []string {
-	if len(o.all) > 0 {
-		return o.all
+func (o riskOut) groupList() []string {
+	if len(o.groups) > 0 {
+		return o.groups
 	}
-	return []string{o.rule}
+	return []string{originGroup(o.rule)}
 }
 
 func (o riskOut) set() bool { return o.risk != "" }
