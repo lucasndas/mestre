@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +61,21 @@ func ParseStatus(out []byte) []StatusEntry {
 		entries = append(entries, e)
 	}
 	return entries
+}
+
+// ParseNameStatus parses the name-status listing of diff-tree -z without
+// renames: pairs of a status and a path, sorted by path.
+func ParseNameStatus(out []byte) []FileChange {
+	var changes []FileChange
+	fields := strings.Split(string(out), "\x00")
+	for i := 0; i+1 < len(fields); i += 2 {
+		if fields[i] == "" {
+			continue
+		}
+		changes = append(changes, FileChange{Status: fields[i][0], Path: fields[i+1]})
+	}
+	slices.SortFunc(changes, func(a, b FileChange) int { return strings.Compare(a.Path, b.Path) })
+	return changes
 }
 
 // ParseWorktrees parses `git worktree list --porcelain`.

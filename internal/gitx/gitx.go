@@ -154,6 +154,18 @@ type StatusEntry struct {
 // Untracked reports whether the file is new to git.
 func (e StatusEntry) Untracked() bool { return e.Index == '?' && e.Worktree == '?' }
 
+// FileChange is one file that differs between two commits: Status is the
+// letter of the name-status listing ('A' added, 'M' modified, 'D' deleted,
+// 'T' type changed; renames are not detected, so a rename is a deletion and an
+// addition).
+type FileChange struct {
+	Status byte
+	Path   string
+}
+
+// String is the line of the name-status listing ("M src/login.go").
+func (c FileChange) String() string { return string(c.Status) + " " + c.Path }
+
 // BundleInfo is what the header of a bundle file declares.
 type BundleInfo struct {
 	Refs          []Ref  // refs the bundle carries
@@ -248,6 +260,10 @@ type Repo interface {
 	// Log lists the commits of a revision or range ("main", "a..b"), newest
 	// first.
 	Log(ctx context.Context, revRange string) ([]CommitInfo, error)
+	// DiffNameStatus lists the files that differ between two commits (hashes,
+	// branches or refs), sorted by path (ErrRefNotFound). It never runs a
+	// diff driver or a text conversion.
+	DiffNameStatus(ctx context.Context, from, to string) ([]FileChange, error)
 	// ReadFile returns path as committed at ref (ErrRefNotFound,
 	// ErrFileNotFound).
 	ReadFile(ctx context.Context, ref, path string) ([]byte, error)

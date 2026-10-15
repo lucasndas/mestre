@@ -218,6 +218,29 @@ func commitIdentityAndHistory(t *testing.T, h Harness) {
 		isErr(t, err, gitx.ErrFileNotFound)
 	}
 
+	// The files that differ between two commits, by path, with the letter of
+	// the name-status listing; the other way round, additions and deletions swap.
+	if d := must(r.DiffNameStatus(ctx, string(c1), "main")); len(d) != 1 || d[0] != (gitx.FileChange{Status: 'M', Path: "a.txt"}) {
+		t.Fatalf("diff c1..main = %v", d)
+	}
+	h.Write(t, r, "b/new.txt", "n\n")
+	h.Remove(t, r, "a.txt")
+	ok(r.Stage(ctx))
+	c3 := must(r.Commit(ctx, gitx.CommitOptions{Message: "feat: third", Author: alice}))
+	if d := must(r.DiffNameStatus(ctx, string(c2), string(c3))); len(d) != 2 || d[0].String() != "D a.txt" || d[1].String() != "A b/new.txt" {
+		t.Fatalf("diff c2..c3 = %v", d)
+	}
+	if d := must(r.DiffNameStatus(ctx, string(c3), string(c2))); len(d) != 2 || d[0].String() != "A a.txt" || d[1].String() != "D b/new.txt" {
+		t.Fatalf("diff c3..c2 = %v", d)
+	}
+	if d := must(r.DiffNameStatus(ctx, "main", "HEAD")); len(d) != 0 {
+		t.Fatalf("diff main..HEAD = %v", d)
+	}
+	_, err = r.DiffNameStatus(ctx, "nope", "main")
+	isErr(t, err, gitx.ErrRefNotFound)
+	_, err = r.DiffNameStatus(ctx, "--stat", "main")
+	isErr(t, err, gitx.ErrInvalidArgument)
+
 	yes := must(r.IsAncestor(ctx, string(c1), "main"))
 	no := must(r.IsAncestor(ctx, "main", string(c1)))
 	if !yes || no {

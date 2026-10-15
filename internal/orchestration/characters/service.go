@@ -140,6 +140,9 @@ type CreateRequest struct {
 	// Quest is the quest the character is for (an ephemeral of a quest ends
 	// with it).
 	Quest string
+	// Step is the step of the quest (its uid) the character is for; the quest
+	// hands it its work when it is born, also after a vacancy opens.
+	Step string
 	// ReplaceOf is the character this one takes the place of
 	// (`recruit --replace`): it waits for the end of the old one, and
 	// Prefer is the machine of the old one, kept if it still fits.

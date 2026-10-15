@@ -114,7 +114,10 @@ type Character struct {
 	CreatedBy Creator
 	// Quest is the quest the character was created for ("" for a direct
 	// recruit).
-	Quest             string
+	Quest string
+	// Step is the step of the quest the character was created for (its uid,
+	// "<quest>/<step>"); "" for a character that was not made for a step.
+	Step              string
 	ProviderSessionID string
 	// TaskOpen is true from the task or step delivered to it until the done
 	// that answers it.

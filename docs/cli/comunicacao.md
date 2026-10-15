@@ -1,6 +1,6 @@
 # CLI: comandos de comunicação
 
-> **Assunto:** sintaxe de `list`, `ask`, `check`, `note`, `reply`, `done`, `wait`, `inbox` e `waits` · **Componente:** CLI · **Atualizado:** 2026-10-13
+> **Assunto:** sintaxe de `list`, `ask`, `check`, `note`, `reply`, `done`, `wait`, `inbox` e `waits` · **Componente:** CLI · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -61,7 +61,7 @@ mestre note delete "<nome>"
 `mestre reply "<texto>" [--attach <arq>]… [--to-message <id>] [--redact-source]` — responde à mensagem de usuário em tratamento (ou à indicada por `--to-message`, id visto em `mestre inbox`); o motor entrega pelo canal de origem. Só o Grão-Mestre: outros → 3 `level_denied`. Sem mensagem de usuário em tratamento → 7 `nothing_to_reply`. Canal de origem fora: exit 0 com `delivery: "queued"`. Anexo inexistente → 4; acima do limite → 8 ([anexos](../telegram/anexos-e-transcricao.md)). Texto com cara de segredo → 3 `secret_detected`. `--redact-source`: a mensagem respondida trazia uma senha que o motor não reconheceu; o motor a apaga do canal de origem, do histórico e da caixa de entrada e registra a tentativa bloqueada ([credenciais de site](../plataforma/cofre.md#credenciais-de-site)).
 
 ### `mestre done`
-`mestre done "<resumo>" [--file <arq>] [--return "<motivo>"]` — encerra a tarefa ou etapa atual e entrega o resultado. `--return` devolve o trabalho à etapa anterior prevista na missão (ex.: Revisor reprova), com o motivo; sem devolução prevista → 7 `no_return_step`; voltas esgotadas: o `done` é registrado, a missão fica `paused` e o Mestre da mesa recebe o evento `return_limit`, e a CLI sai com 0, `returned_to: null` e `quest_state: "paused"` (regras em [missoes](../orquestracao/missoes.md)). Resumo até 4.000 caracteres (padrão); maior, use `--file` (Markdown, até 64 KiB). Os arquivos alterados o motor tira do git, não do resumo. `--json` → `{task, quest, step, returned_to, quest_state, queued}`. Sem tarefa ativa → 7 `no_active_task`. Depois do `done` o motor sincroniza o worktree ([mesas](../orquestracao/mesas.md)).
+`mestre done "<resumo>" [--file <arq>] [--return "<motivo>"]` — encerra a tarefa ou etapa atual e entrega o resultado. `--return` devolve o trabalho à etapa anterior prevista na missão (ex.: Revisor reprova), com o motivo; sem devolução prevista → 7 `no_return_step`; voltas esgotadas: o `done` é registrado, a missão fica `paused` e o Mestre da mesa recebe o evento `return_limit`, e a CLI sai com 0, `returned_to: null` e `quest_state: "paused"` (regras em [missoes](../orquestracao/missoes.md)). Resumo até 4.000 caracteres (padrão); maior, use `--file` (Markdown, até 64 KiB). Os arquivos alterados o motor tira do git, não do resumo. `--json` → `{task, quest, step, returned_to, quest_state, queued, warnings}` (`warnings`: o que não foi sincronizado, como as alterações não commitadas). Sem tarefa nem etapa ativa → 7 `no_active_task`, com o `done` registrado e ignorado. Depois do `done` o motor sincroniza o worktree ([mesas](../orquestracao/mesas.md)).
 
 ### `mestre wait`
 ```

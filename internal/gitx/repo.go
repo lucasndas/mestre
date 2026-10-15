@@ -321,6 +321,23 @@ func (r *repo) Log(ctx context.Context, revRange string) ([]CommitInfo, error) {
 	return ParseLog(out)
 }
 
+func (r *repo) DiffNameStatus(ctx context.Context, from, to string) ([]FileChange, error) {
+	a, err := r.ResolveRef(ctx, from)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.ResolveRef(ctx, to)
+	if err != nil {
+		return nil, err
+	}
+	// diff-tree is plumbing: it runs no external diff and no text conversion.
+	out, err := r.git(ctx, "diff-tree", "-r", "-z", "--name-status", "--no-renames", string(a), string(b), "--")
+	if err != nil {
+		return nil, fmt.Errorf("diff %s..%s: %w", from, to, err)
+	}
+	return ParseNameStatus(out), nil
+}
+
 func (r *repo) ReadFile(ctx context.Context, ref, path string) ([]byte, error) {
 	path, err := CleanRepoPath(path)
 	if err != nil {

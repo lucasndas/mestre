@@ -29,8 +29,6 @@ func futureCommands() []cli.Spec {
 	notify := mk("notify", cli.GroupGrandMaster, cli.WhoGrandMaster)
 	notify.Secret = true
 	notify.Flags = []cli.Flag{{Name: "table", Kind: cli.FlagString, Desc: "the table of the notice"}}
-	done := mk("done", cli.GroupCommunication, cli.WhoAnyone)
-	done.Queueable = true
 	issue := mk("issue comment", cli.GroupGitHub, cli.WhoTableMaster|cli.WhoGrandMaster)
 	issue.ClassCanGrant = true
 	return []cli.Spec{
@@ -40,7 +38,7 @@ func futureCommands() []cli.Spec {
 		notify,
 		mk("recruit", cli.GroupCoordination, cli.WhoTableMaster|cli.WhoGrandMaster),
 		mk("pr open", cli.GroupGitHub, cli.WhoAnyone),
-		done, issue,
+		issue,
 	}
 }
 
@@ -555,12 +553,16 @@ func TestAQueuedRequestIsPendingNotDone(t *testing.T) {
 		reg := extendedRegistry()
 		for _, cmd := range []string{"pr open", "done"} {
 			respondWith(r, cmd, cli.Queued("01J0000000000000000000OP1"))
-			js := p.runWith(t.Context(), reg, append(strings.Fields(cmd), "--json")...)
+			words := strings.Fields(cmd)
+			if cmd == "done" {
+				words = append(words, "feito") // the summary the real command asks for
+			}
+			js := p.runWith(t.Context(), reg, append(slices.Clone(words), "--json")...)
 			v := decode(t, js)
 			if js.code != 0 || !v.OK || v.Data["queued"] != true || v.Data["op_id"] != "01J0000000000000000000OP1" || js.stderr != "" {
 				t.Fatalf("%s --json: %+v", cmd, js)
 			}
-			text := p.runWith(t.Context(), reg, strings.Fields(cmd)...)
+			text := p.runWith(t.Context(), reg, words...)
 			if text.code != 0 || !strings.HasPrefix(text.stdout, "PENDING: "+cmd+" queued (op 01J0000000000000000000OP1)") ||
 				!strings.Contains(text.stdout, "inbox") || strings.Contains(text.stdout, "opened") || text.stderr != "" {
 				t.Fatalf("%s in text: %+v", cmd, text)
