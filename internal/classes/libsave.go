@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -307,4 +308,51 @@ func withApp(files Files, app string, replace bool) (Files, error) {
 		}
 	}
 	return out, nil
+}
+
+// Delete removes a class: the approved version, the pending proposals and the
+// folder. The author needs the right to change the class in its scope (the
+// Grand Master only proposes in the workspace scope, so he cannot delete);
+// whether a character still uses it, and the explicit request of a user, are
+// the caller's to check first.
+func (l *Library) Delete(ctx context.Context, k ClassKey, by Author) error {
+	if !canApplyAlone(k.Scope, k.Table, by) {
+		return fmt.Errorf("%w (%s, escopo %s)", ErrNotAuthorized, by.Level, scopeLabel(k.Scope))
+	}
+	if k.Name == ReservedOrchestrator {
+		return ErrBuiltIn
+	}
+	if _, ok, err := l.Records.Approved(ctx, l.ws(k.Scope), k); err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("%w: %s", ErrNotVisible, k)
+	}
+	if err := l.Records.Delete(ctx, l.ws(k.Scope), k); err != nil {
+		return fmt.Errorf("class %s: %w", k, err)
+	}
+	l.mu.Lock()
+	delete(l.proposed, k)
+	delete(l.alerted, k)
+	l.mu.Unlock()
+	dir, err := l.Roots.Dir(k)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("class %s: %w", k, err)
+	}
+	return nil
+}
+
+// Record is the approved version of a class visible from a table, with its
+// package: what `class show` prints and `class show --export` copies.
+func (l *Library) Record(ctx context.Context, name, table string) (ClassRecord, error) {
+	rec, ok, err := l.approved(ctx, name, table)
+	if err != nil {
+		return ClassRecord{}, err
+	}
+	if !ok {
+		return ClassRecord{}, fmt.Errorf("%w: %q", ErrNotVisible, name)
+	}
+	return rec, nil
 }

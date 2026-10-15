@@ -69,6 +69,9 @@ const (
 	FlagBool
 	// FlagList is a flag that may be repeated (`--attach a --attach b`).
 	FlagList
+	// FlagFiles is a flag only the CLI sets: the files of a folder, as a map of
+	// the relative path to the text.
+	FlagFiles
 )
 
 // Flag is a flag of one command (the global ones, --json, --help and
@@ -126,6 +129,9 @@ type Spec struct {
 	// DefaultTimeout is the time limit of the command when it has no
 	// --timeout; zero means the channel's default of 30 s.
 	DefaultTimeout time.Duration
+	// OwnTimeout says the --timeout of the command is data for the engine (the
+	// timeout of a ritual), not the time limit of the call.
+	OwnTimeout bool
 	// Exits are the exit codes the command documents besides 0 and the ones
 	// every command has (1, 2 and 3).
 	Exits []int
@@ -441,6 +447,78 @@ func Default() *Registry {
 			Usage: `mestre class check "<class>"`, Example: `mestre class check "qa" --json`,
 			Args:    []Arg{{"<class>", "the class to validate"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true, Exits: []int{4}},
+		Spec{Name: "class list", Group: GroupCoordination, Summary: "list the classes you see, with their App and its state",
+			Usage: `mestre class list [--scope global|workspace|table]`, Example: "mestre class list --json",
+			Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true, MinArgs: 0, MaxArgs: 0,
+			Flags: []Flag{{"scope", FlagString, "only the classes of one scope"}}, Exits: []int{2}},
+		Spec{Name: "class show", Group: GroupCoordination, Summary: "show a class (CLASS.md, permissions, hooks, skills, App), or export its package",
+			Usage: `mestre class show "<class>" [--export]`, Example: `mestre class show "qa" --export`,
+			Args:    []Arg{{"<class>", "the class"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true,
+			Flags: []Flag{{"export", FlagBool, "copy the approved package to $MESTRE_TMP/classes/<class>/ and print the path"}}, Exits: []int{4}},
+		Spec{Name: "class create", Group: GroupCoordination, Summary: "make a class from a package in a folder of your $MESTRE_TMP",
+			Usage:   `mestre class create "<class>" --app <novo | herdar:<class> | <app>> --from <folder> [--scope table|workspace]`,
+			Example: `mestre class create "QA API" --app novo --from $MESTRE_TMP/qa-api`,
+			Args:    []Arg{{"<class>", "the name of the class"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster,
+			Flags: []Flag{{"app", FlagString, "the App of the class: novo, herdar:<class> or the name of an App (required)"},
+				{"from", FlagString, "a folder of $MESTRE_TMP with CLASS.md, permissions.yaml, hooks/ and skills"},
+				{"scope", FlagString, "table (the default) or workspace"}},
+			Files:    []FileFlag{{Flag: "from", Into: "package", As: FileAsTree, Max: 512 << 10}},
+			Internal: []Flag{{"package", FlagFiles, "the files of the folder the CLI read"}},
+			Exits:    []int{2, 3, 4, 7, 9}},
+		Spec{Name: "class edit", Group: GroupCoordination, Summary: "change the package and/or the App of a class",
+			Usage:   `mestre class edit "<class>" [--from <folder>] [--app <novo | herdar:<class> | <app>>]`,
+			Example: `mestre class edit "qa" --from $MESTRE_TMP/classes/qa`,
+			Args:    []Arg{{"<class>", "the class"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster,
+			Flags: []Flag{{"from", FlagString, "a folder of $MESTRE_TMP with the new package"},
+				{"app", FlagString, "the new App (it only holds for new actions)"}},
+			Files:    []FileFlag{{Flag: "from", Into: "package", As: FileAsTree, Max: 512 << 10}},
+			Internal: []Flag{{"package", FlagFiles, "the files of the folder the CLI read"}},
+			Exits:    []int{2, 3, 4, 9}},
+		Spec{Name: "class assign", Group: GroupCoordination, Summary: "give a character of your table another class, from its next turn",
+			Usage: `mestre class assign "<character>" "<class>"`, Example: `mestre class assign "Dev-2" "qa"`,
+			Args:    []Arg{{"<character>", "a character of your table"}, {"<class>", "the class"}},
+			MinArgs: 2, MaxArgs: 2, Who: WhoTableMaster | WhoGrandMaster, Exits: []int{2, 4}},
+		Spec{Name: "class delete", Group: GroupCoordination, Summary: "delete a class (needs the explicit request of an authorized user)",
+			Usage: `mestre class delete "<class>"`, Example: `mestre class delete "qa"`,
+			Args:    []Arg{{"<class>", "the class"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, Exits: []int{3, 4, 7, 9}},
+		Spec{Name: "ritual create", Group: GroupCoordination, Summary: "schedule a prompt or a command for a character, or a quest of the table",
+			Usage: `mestre ritual create "<name>" (--target "<character>" (--prompt "<text>" | --command "<line>") | --quest "<quest>") ` +
+				`(--every <dur> | --daily <HH:MM> | --weekly "<days> <HH:MM>" | --once "<ISO 8601>") [--table "<table>"] [--pre-run "<command>"] [--timeout <dur>]`,
+			Example: `mestre ritual create "limpa" --target "srv" --command "make clean" --every 1h`,
+			Args:    []Arg{{"<name>", "the name of the ritual"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, OwnTimeout: true,
+			Flags: ritualFlags(), Exits: []int{2, 3, 4, 7}},
+		Spec{Name: "ritual list", Group: GroupCoordination, Summary: "list the rituals of your scope",
+			Usage: "mestre ritual list", Example: "mestre ritual list --json", Who: WhoTableMaster | WhoGrandMaster, MinArgs: 0, MaxArgs: 0},
+		Spec{Name: "ritual show", Group: GroupCoordination, Summary: "show a ritual and its recent history",
+			Usage: `mestre ritual show "<name>"`, Example: `mestre ritual show "limpa"`,
+			Args:    []Arg{{"<name>", "the ritual"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, Exits: []int{4}},
+		Spec{Name: "ritual edit", Group: GroupCoordination, Summary: "change a ritual (the flags of create that you give replace the old ones)",
+			Usage: `mestre ritual edit "<name>" [the flags of create]`, Example: `mestre ritual edit "limpa" --every 2h`,
+			Args:    []Arg{{"<name>", "the ritual"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, OwnTimeout: true,
+			Flags: ritualFlags(), Exits: []int{2, 3, 4, 7}},
+		Spec{Name: "ritual enable", Group: GroupCoordination, Summary: "turn a ritual on",
+			Usage: `mestre ritual enable "<name>"`, Example: `mestre ritual enable "limpa"`,
+			Args:    []Arg{{"<name>", "the ritual"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, Exits: []int{3, 4}},
+		Spec{Name: "ritual disable", Group: GroupCoordination, Summary: "turn a ritual off without deleting it",
+			Usage: `mestre ritual disable "<name>"`, Example: `mestre ritual disable "limpa"`,
+			Args:    []Arg{{"<name>", "the ritual"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, Exits: []int{3, 4}},
+		Spec{Name: "ritual run", Group: GroupCoordination, Summary: "fire a ritual now, the way its schedule would",
+			Usage: `mestre ritual run "<name>"`, Example: `mestre ritual run "limpa"`,
+			Args:    []Arg{{"<name>", "the ritual"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, Exits: []int{3, 4}},
+		Spec{Name: "ritual delete", Group: GroupCoordination, Summary: "delete a ritual (needs the explicit request of an authorized user)",
+			Usage: `mestre ritual delete "<name>"`, Example: `mestre ritual delete "limpa"`,
+			Args:    []Arg{{"<name>", "the ritual"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, Exits: []int{3, 4, 9}},
 		Spec{Name: "help", Group: GroupDiagnostics, Summary: "list the commands you may use, or explain one",
 			Usage: "mestre help [command]", Example: "mestre help ask", Local: true, Who: WhoAnyone, MaxArgs: 1,
 			Args: []Arg{{"[command]", "the command to explain"}}},
@@ -547,4 +625,21 @@ func groups(specs []Spec) [][]Spec {
 		}
 	}
 	return out
+}
+
+// ritualFlags are the flags of `ritual create` and `ritual edit`.
+func ritualFlags() []Flag {
+	return []Flag{
+		{"target", FlagString, "the character the ritual aims at (never a sheet)"},
+		{"prompt", FlagString, "the text handed to an agent"},
+		{"command", FlagString, "the line typed, and Enter, in a terminal made by spawn"},
+		{"quest", FlagString, "a quest of the table to run"},
+		{"every", FlagString, "every <duration>, at least 5m (30m, 2h)"},
+		{"daily", FlagString, "every day at HH:MM"},
+		{"weekly", FlagString, `on days at HH:MM: "mon,thu 09:00"`},
+		{"once", FlagString, `once, at "2026-10-20T14:00"`},
+		{"table", FlagString, "the table, when the Grand Master makes the ritual for a Master or a quest"},
+		{"pre-run", FlagString, "a command run before the firing; its output replaces {{output}}"},
+		{"timeout", FlagDuration, "how long a firing waits for a busy target (30m by default)"},
+	}
 }

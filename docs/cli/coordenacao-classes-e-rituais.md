@@ -1,6 +1,6 @@
 # CLI: classes e rituais
 
-> **Assunto:** sintaxe de `class` e `ritual` · **Componente:** CLI · **Atualizado:** 2026-10-13
+> **Assunto:** sintaxe de `class` e `ritual` · **Componente:** CLI · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -61,6 +61,17 @@ mestre ritual delete "<nome>"
 - Erros: alvo fora da mesa do chamador → 4 `not_visible`; agenda inválida → 2 `invalid_schedule`; nome repetido → 7 `name_taken`.
 
 O estado do App das classes vem com o GitHub, no M5 ([criação de Apps](../github/criacao-de-apps.md)).
+
+### Como o motor decide o que o texto deixa em aberto
+
+- **Nome da classe:** é o *slug* (`[a-z0-9-]`); `"QA API"` vira `qa-api`, e `show`, `edit`, `check`, `assign` e `delete` aceitam o nome com ou sem o disfarce (`"Dev"` acha `dev`).
+- **`--from`:** a CLI, que roda como o agente, lê a pasta e manda os arquivos (só texto, sem links, até 512 KiB); o motor nunca abre o caminho. A pasta tem de estar em `$MESTRE_TMP` depois de resolvidos os links (`from_outside_tmp`, 2); sem `$MESTRE_TMP` no processo, também.
+- **`show --export`:** o motor grava em `$MESTRE_TMP/classes/<classe>/` só com `safefile` (um link no caminho recusa) e tira o que uma exportação anterior deixou e o pacote não tem. `--json` → `{name, scope, version, description, class_md, permissions, hooks, skills, app, text}` (e `path` com `--export`).
+- **`list`:** `--json` → `{classes: [{name, scope, table, state, app, inherited, app_state, provider}]}`; `state` é o da listagem do motor (`approved`, `pending`, `new`, `missing`, `unreadable`).
+- **`create`:** o Grão-Mestre sem `--scope` faz classe do workspace; o Mestre da mesa, da mesa. `--scope table` sem mesa (Grão-Mestre) → 2 `table_required`. Proposta (workspace pelo Grão-Mestre) sai com 9 `pending` e o número em `details.proposal`; só um Administrador ou acima aprova, nunca quem propôs. `--app novo` aplicado põe um item de sistema na caixa do Grão-Mestre pedindo o App.
+- **`assign`:** grava a classe no registro; o motor da máquina a lê no início do turno. O Grão-Mestre não tem mesa → 2. Personagem fora da mesa → 4 `not_visible`.
+- **`delete`:** confere o direito no escopo (3 `forbidden`), depois o uso (7 `in_use`, com os nomes), depois o pedido explícito do usuário; sem ele, 9 `approval_required` (o fluxo de aprovação é do M5).
+- **Ritual:** o escopo vem de quem chama (Mestre da mesa: a mesa; Grão-Mestre: o workspace). `--table` só existe em `create` e `edit` e, para o Grão-Mestre, nomeia a mesa do Mestre alvo (sem ele, alvo que não é ele mesmo → 2 `table_required`); `--quest` do Grão-Mestre → 2, porque missão é de mesa. `--timeout` do ritual é dado do ritual, não o limite da chamada. `delete` por personagem → 9 `approval_required` (o fluxo é do M5).
 
 ## Regras e erros
 

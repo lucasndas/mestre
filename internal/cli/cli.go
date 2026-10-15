@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -49,6 +50,11 @@ type Env struct {
 	ReadFile func(path string, max int64) ([]byte, error)
 	// FileSize is the size of a regular file, for `--attach` (nil: os.Stat).
 	FileSize func(path string) (int64, error)
+	// ReadTree reads the files of a folder as text, for `--from` (nil: the
+	// file system); RealPath resolves a path with its links (nil:
+	// filepath.EvalSymlinks).
+	ReadTree func(dir string, max int64) (map[string]string, error)
+	RealPath func(path string) (string, error)
 	// Stdin is the standard input, for `--file -` (nil: the process's).
 	Stdin io.Reader
 	// Commands is the definition of the commands (nil: Default).
@@ -73,6 +79,12 @@ func (e *Env) defaults() {
 	}
 	if e.FileSize == nil {
 		e.FileSize = defaultFileSize
+	}
+	if e.ReadTree == nil {
+		e.ReadTree = defaultReadTree
+	}
+	if e.RealPath == nil {
+		e.RealPath = filepath.EvalSymlinks
 	}
 	if e.Stdin == nil {
 		e.Stdin = os.Stdin
@@ -207,6 +219,9 @@ func (p *parsed) setFlag(f Flag, val string) error {
 
 // timeout is the time limit of the command.
 func (p *parsed) timeout() time.Duration {
+	if p.spec.OwnTimeout {
+		return p.spec.DefaultTimeout
+	}
 	if v, ok := p.flags["timeout"].(string); ok {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d

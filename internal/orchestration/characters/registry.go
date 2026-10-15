@@ -318,6 +318,13 @@ func (r Registry) SetPinned(ctx context.Context, id string, pinned bool) error {
 	return r.exec(ctx, id, `pinned = ?`, b2i(pinned))
 }
 
+// SetClass gives a character another class. The engine of its machine reads
+// the class of the registry at the start of each turn, so it holds from the next
+// turn, never in the middle of one.
+func (r Registry) SetClass(ctx context.Context, id, class string) error {
+	return r.exec(ctx, id, `class = ?`, class)
+}
+
 // SetTerminal records the terminal that runs the character.
 func (r Registry) SetTerminal(ctx context.Context, id, terminal string) error {
 	return r.exec(ctx, id, `terminal_id = ?`, terminal)

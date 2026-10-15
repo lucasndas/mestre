@@ -28,6 +28,10 @@ const (
 	// FileAsArg is the last positional argument of the command (the content
 	// of a scroll); giving it and the argument is a usage error.
 	FileAsArg
+	// FileAsTree reads a folder (the package of a class): the flag Into gets
+	// a map of the relative path to the text of each file. The folder must be
+	// inside the MESTRE_TMP of the character (from_outside_tmp otherwise).
+	FileAsTree
 	// FileJoinArg joins the text to the first positional argument after a
 	// blank line, or is that argument when the command has none (the summary
 	// of a `done`); Into (when set) is a flag set to "true" to tell the
@@ -122,6 +126,14 @@ func readFiles(env Env, p *parsed) *localchan.Response {
 			continue
 		}
 		delete(p.flags, ff.Flag)
+		if ff.As == FileAsTree {
+			tree, refused := readTree(env, ff, v)
+			if refused != nil {
+				return refused
+			}
+			p.flags[ff.Into] = tree
+			continue
+		}
 		usage := func(msg string) *localchan.Response {
 			r := localchan.Fail(localchan.CodeUsage, msg, "usage: "+p.spec.Usage)
 			return &r
@@ -188,4 +200,87 @@ func checkAttachments(env Env, p *parsed) *localchan.Response {
 	}
 	p.flags["attach"] = names
 	return nil
+}
+
+// readTree reads the folder of a flag that takes one: it must be inside the
+// MESTRE_TMP of the character, links followed (the engine does not open it; a
+// package someone else wrote is not sent as if it were the character's own),
+// and the whole is text up to the limit.
+func readTree(env Env, ff FileFlag, path string) (map[string]any, *localchan.Response) {
+	fail := func(code, msg, hint string) (map[string]any, *localchan.Response) {
+		r := localchan.Fail(code, msg, hint)
+		if code == "from_outside_tmp" {
+			r = r.WithExit(localchan.ExitUsage)
+		}
+		return nil, &r
+	}
+	path = resolvePath(env.Cwd, path)
+	tmp := env.Getenv("MESTRE_TMP")
+	if tmp == "" {
+		return fail("from_outside_tmp", "--"+ff.Flag+" takes a folder inside $MESTRE_TMP, which this process does not have", "run mestre debug")
+	}
+	real, err := env.RealPath(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fail(localchan.CodeNotFound, fmt.Sprintf("the folder %q does not exist", path), "check the path")
+		}
+		return fail(localchan.CodeDenied, fmt.Sprintf("the folder could not be read: %v", err), "check the path and its permissions")
+	}
+	root, err := env.RealPath(tmp)
+	if err != nil {
+		return fail("from_outside_tmp", "$MESTRE_TMP could not be resolved: "+err.Error(), "run mestre debug")
+	}
+	if rel, err := filepath.Rel(root, real); err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fail("from_outside_tmp", fmt.Sprintf("--%s takes a folder inside $MESTRE_TMP (%s)", ff.Flag, tmp),
+			"copy the package there: `mestre class show <class> --export` leaves it in $MESTRE_TMP/classes/<class>/")
+	}
+	files, err := env.ReadTree(real, ff.Max)
+	switch {
+	case errors.Is(err, errTreeTooLarge):
+		return fail(localchan.CodeTooLarge, fmt.Sprintf("the folder is over %d KiB", ff.Max>>10), "send a smaller package")
+	case err != nil:
+		return fail(localchan.CodeUsage, fmt.Sprintf("the folder %q is not a package: %v", path, err), "only text files, no links, go in a package")
+	}
+	out := make(map[string]any, len(files))
+	for p, text := range files {
+		out[p] = text
+	}
+	return out, nil
+}
+
+var errTreeTooLarge = errors.New("the folder is too large")
+
+// defaultReadTree reads the regular files under dir, at most max bytes in all;
+// a link or a file of another kind refuses the whole folder.
+func defaultReadTree(dir string, max int64) (map[string]string, error) {
+	out := map[string]string{}
+	var total int64
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("%s is not a regular file", p)
+		}
+		data, err := defaultReadFile(p, max-total+1)
+		if err != nil {
+			return err
+		}
+		if total += int64(len(data)); total > max {
+			return errTreeTooLarge
+		}
+		if bytes.IndexByte(data, 0) >= 0 {
+			return fmt.Errorf("%s is not text", p)
+		}
+		rel, err := filepath.Rel(dir, p)
+		if err != nil {
+			return err
+		}
+		out[filepath.ToSlash(rel)] = string(data)
+		return nil
+	})
+	return out, err
 }

@@ -1,6 +1,6 @@
 # Regras temporárias de mesa
 
-> **Assunto:** as regras que agentes da cadeia de aprovação criam ao aprovar por um tempo ou um padrão: o que são, quem cria, alcance, validade máxima, lugar na precedência, como chegam ao personagem e como acabam · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** as regras que agentes da cadeia de aprovação criam ao aprovar por um tempo ou um padrão: o que são, quem cria, alcance, validade máxima, lugar na precedência, como chegam ao personagem e como acabam · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -37,6 +37,14 @@ Deixar um agente da [cadeia de aprovação](cadeia-de-aprovacao.md) liberar por 
 - **Suspensa** com `/travar`, como os decretos, e reativada ao destravar.
 - O que já foi executado continua no histórico. Cada fim avisa o autor pela caixa de entrada.
 
+### Como o motor decide o que o texto deixa em aberto
+
+- **Quem cria:** o superior agente que não é Mestre decide `baixo`; o Mestre da mesa e o Grão-Mestre, até `medio` (o Grão-Mestre de qualquer grupo; `alto` por delegação do Dono é do M5). O nível do decreto nas regras efetivas é `table_master` para o agente comum e o Mestre da mesa, `grand_master` para o Grão-Mestre. O risco da regra é o do padrão (ou o da ação exata, em "aprovar por um tempo"); o padrão `medio` do Mestre só é aceito se todos os grupos que ele alcança estão em `cadeia.mesa_decide` e a autonomia da mesa não está em pausa.
+- **Validade:** `--for` até o máximo; "até o fim da missão" amarra a regra à missão em que o personagem que pediu está e ainda a limita ao máximo (personagem sem missão → `bad_answer`, "use `--for`"). A regra de "aprovar o padrão" sem `--for` vale o máximo.
+- **No documento:** `Rules.Decrees` ganha `kind: "table_rule"` com `risk`, `tool_kind`, `until` e o padrão em `effect.allow.commands` (shell) ou `tools`; a regra da ação exata leva `action` no lugar do padrão. A regra não entra na decisão dos decretos de pessoas nem nas exceções, e nunca levanta bloqueio nativo.
+- **A cada uso** (`Env.TableRules`, depois das regras fixas e das exceções): só vira `allow` um `ask` que o motor sabe analisar (nunca o trecho que ele não analisa); o comando não pode ter `;`, `&`, `|`, crase, `$(`, `<`, `>` nem quebra de linha; a classificação própria cabe no risco da regra (`PatternCovers`); e o *portão* confere de novo no banco: regra ativa e dentro da validade, personagem da classe e da mesa dela, autor ainda no lugar, missão e mesa em andamento e, no `medio` do Mestre da mesa, pausa de autonomia e `MesaGroupsHold` (os grupos em `cadeia.mesa_decide` e a rede só para domínios da classe e do teto, de agora). Qualquer erro do portão deixa o `ask`. Cada liberação grava uma linha em `table_rule_uses`.
+- **Banco:** `table_rules` (a regra), `table_rule_states` (o histórico dos estados, com o motivo e quem) e `table_rule_uses` (o que liberou). O `Sweep` do motor (1 min) expira o que acabou e avisa o autor pela caixa de entrada; `Revoke`, `RevokeAll`, `Suspend` e `Resume` são o que a lista de decretos, o painel e o `/travar` chamam no M5 e M6. A delegação em que uma regra se apoiou só existe no M5.
+
 ## Regras e erros
 
 - Regra temporária pedida por quem não está no nível do pedido, fora da mesa dele, acima do teto dele, `medio` de grupo fora de `cadeia.mesa_decide` ou com validade acima do máximo: recusada, e o pedido segue onde estava.
@@ -47,7 +55,7 @@ Deixar um agente da [cadeia de aprovação](cadeia-de-aprovacao.md) liberar por 
 
 - **CA-RTM-01** · *rápida* — **Dado** o Mestre da mesa `42-login` e um pedido `npm install x` de um Dev, **quando** ele aprova o padrão `npm install *` por 2 h, **então** um `npm install y` de outro Dev da mesma mesa passa sem pedido, um Dev de outra mesa ainda pede, e, com o relógio falso 2 h depois, o mesmo comando volta a pedir.
 - **CA-RTM-02** · *rápida* — **Dado** uma regra temporária para `npm install *` e a classe com `npm install evil` em `commands.deny`, **quando** chega `npm install evil`, **então** é negado; **dado** um decreto de um Aprovador que proíbe `npm install *` na mesa, **então** a regra temporária não libera nada.
-- **CA-RTM-03** · *rápida* — **Dado** o Mestre da mesa, **quando** pede uma regra temporária de 48 h, uma em outra mesa ou uma para `npm install -g *` (`medio` de `instalacao_e_sistema`, fora da lista padrão), **então** as três são recusadas e o pedido segue no nível dele.
+- **CA-RTM-03** · *rápida* — **Dado** o Mestre da mesa, **quando** pede uma regra temporária de 48 h, uma em outra mesa ou uma para `pip *` (num pedido `pip install x`, `medio` de `pacotes_e_executores`, o padrão alcança `instalacao_e_sistema`, fora da lista padrão), **então** as três são recusadas e o pedido segue no nível dele; e um pedido `npm install -g x` nem chega a ele (nasce no Grão-Mestre).
 - **CA-RTM-04** · *rápida* — **Dado** uma regra temporária "até o fim da missão", **quando** a missão termina ou a mesa é encerrada, **então** ela fica `expirada` e o autor é avisado; **quando** o Grão-Mestre revoga outra, **então** ela fica `revogada` e a próxima ação volta a pedir.
 - **CA-RTM-05** · *rápida* — **Dado** uma regra temporária ativa, **quando** a Cidadela monta as regras efetivas do personagem, **então** o documento traz em `decrees` um item `kind: "table_rule"`, `level: "table_master"`, `until` e o padrão em `allow.commands`, e o retrato `policy.json` do modo degradado não o usa para liberar nada.
 - **CA-RTM-06** · *rápida* — **Dado** uma regra temporária do Mestre da mesa para `npm install *` (`baixo`), **quando** chegam `npm install y`, `npm install -g x` e `npm install https://evil.example/x.tgz`, **então** o primeiro passa pela regra e os outros dois (`medio`) viram pedido que nasce no Grão-Mestre, sem registro de execução na regra.

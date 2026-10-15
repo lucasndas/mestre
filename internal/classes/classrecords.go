@@ -124,6 +124,9 @@ type ClassRecords interface {
 	Pending(ctx context.Context, workspace string) ([]Proposal, error)
 	// Supersede closes the pending proposals of a class from an origin.
 	Supersede(ctx context.Context, workspace string, k ClassKey, origin ProposalOrigin) error
+	// Delete forgets the approved version of a class and supersedes every
+	// pending proposal of it.
+	Delete(ctx context.Context, workspace string, k ClassKey) error
 }
 
 // ClassDB keeps the classes in the Guild database, on the Citadel.
@@ -321,6 +324,18 @@ func (c ClassDB) Supersede(ctx context.Context, ws string, k ClassKey, origin Pr
 	return c.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `UPDATE class_proposals SET state = ? WHERE workspace = ? AND scope = ? AND tbl = ? AND name = ? AND origin = ? AND state = ?`,
 			string(ProposalSuperseded), ws, string(k.Scope), k.Table, k.Name, string(origin), string(ProposalPending))
+		return err
+	})
+}
+
+// Delete implements ClassRecords.
+func (c ClassDB) Delete(ctx context.Context, ws string, k ClassKey) error {
+	return c.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM classes WHERE workspace = ? AND scope = ? AND tbl = ? AND name = ?`, ws, string(k.Scope), k.Table, k.Name); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE class_proposals SET state = ? WHERE workspace = ? AND scope = ? AND tbl = ? AND name = ? AND state = ?`,
+			string(ProposalSuperseded), ws, string(k.Scope), k.Table, k.Name, string(ProposalPending))
 		return err
 	})
 }
