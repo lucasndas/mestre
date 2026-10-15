@@ -121,6 +121,12 @@ func (e *tableEnv) profiles() []sessionzero.Profile {
 	return out
 }
 
+// holds says whether a native file names the folder, in whichever way the file
+// writes a path (JSON doubles the backslashes of Windows; TOML escapes them).
+func holds(content, dir string) bool {
+	return strings.Contains(content, dir) || strings.Contains(content, filepath.ToSlash(dir)) || strings.Contains(content, strings.ReplaceAll(dir, `\`, `\\`))
+}
+
 // trustFiles are the files of the three providers that hold the trust.
 func (e *tableEnv) trustFiles() []string {
 	return []string{
@@ -587,7 +593,7 @@ func TestTrustIsWrittenInEachProfileAndTakenOutOnRelease(t *testing.T) {
 		t.Fatalf("problems = %v", rep.Problems)
 	}
 	for _, f := range e.trustFiles() {
-		if !strings.Contains(read(t, f), filepath.ToSlash(e.dir)) && !strings.Contains(read(t, f), e.dir) {
+		if !holds(read(t, f), e.dir) {
 			t.Fatalf("%s does not trust %s:\n%s", f, e.dir, read(t, f))
 		}
 	}
@@ -595,14 +601,14 @@ func TestTrustIsWrittenInEachProfileAndTakenOutOnRelease(t *testing.T) {
 	claudeJSON := e.trustFiles()[0]
 	write(t, claudeJSON, `{}`)
 	e.prepare()
-	if !strings.Contains(read(t, claudeJSON), e.dir) {
+	if !holds(read(t, claudeJSON), e.dir) {
 		t.Fatalf("the entry that vanished was not written again:\n%s", read(t, claudeJSON))
 	}
 	if err := e.table.Release(e.req); err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range e.trustFiles() {
-		if strings.Contains(read(t, f), e.dir) {
+		if holds(read(t, f), e.dir) {
 			t.Fatalf("%s still trusts the worktree:\n%s", f, read(t, f))
 		}
 	}

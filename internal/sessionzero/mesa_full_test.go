@@ -434,8 +434,7 @@ func TestRealTrustOfTheThreeProvidersGoesWhenTheTableEndsAndTheWorktreeIsRemoved
 		if err != nil {
 			t.Fatalf("%s: %v", file, err)
 		}
-		s := string(b)
-		return strings.Contains(s, dir) || strings.Contains(s, filepath.ToSlash(dir)) || strings.Contains(s, strings.ReplaceAll(dir, `\`, `\\`))
+		return holds(string(b), dir)
 	}
 	for _, f := range trust {
 		if !has(f, m.dir) || !has(f, other.dir) {
