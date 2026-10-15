@@ -1,6 +1,6 @@
 # Personagens
 
-> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados, histórico de estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados, histórico de estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -124,6 +124,16 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 - Retoma com a sessão do provedor (id salvo) quando o adaptador permite; senão inicia do zero e entrega uma mensagem de retomada (etapa atual, último `done`, link do pergaminho da missão). Caixa de entrada e esperas são preservadas.
 - Efêmero sem tarefa pendente não é retomado: vai a `stopped` com o motivo registrado. Terminal simples fica `interrupted` e o criador é avisado (o motor não reexecuta comandos sozinho).
 - Se a máquina estiver fora, o personagem fica `interrupted` (visível) e o Mestre da mesa é avisado; tenta-se de novo quando a máquina voltar. **Nenhum personagem some em silêncio.** As camadas de cura que levam a isso: [camadas](../autocura/camadas.md).
+
+### No código
+
+`internal/orchestration/characters`: `Service` é a parte da Cidadela (registro, limites, escolha da máquina, ciclo de vida, `Report`) e `Runtime` a do motor de cada máquina (inicia, acompanha, encerra, reencontra); o `Runtime` é o `hook.Characters`, o `hook.States` e o `hook.Contexts` do motor (`app.Deps.UseCharacters`), e o que é de etapas ou marcos seguintes (caixa de entrada, esperas, pergaminho, mesas, avisos) entra por interfaces. O que o código fecha:
+- **Registro:** `characters` (banco da Guilda) é o registro de terminais; o PID do `mestre-pty` com a identidade do início e a versão vão para lá sem o segredo, que fica em `terminals` (banco da máquina), cujo `status` leva o estado do personagem. "Criado por" é `engine`, `character` ou `user`, e `Service.Superior` aplica a [tabela do superior](cadeia-de-aprovacao.md#superior) a partir dele (criador acabado, removido ou trocado: o superior do criador; sem Mestre da mesa, o Grão-Mestre; sem ele, as pessoas).
+- **Limites e vaga:** contam os personagens comuns e os terminais simples que não estão `stopped` (um `interrupted` guarda o lugar); as cópias da ficha, por workspace; `--machine` aceita o id ou o nome. A espera `waiting_slot` fica em `character_slot_waits`, 30 min, em ordem de chegada por workspace; a da troca de ficha (pelo fim do antigo, na máquina dele se ainda atende) não tem prazo. Ao estourar, quem pediu recebe o limite, o tamanho dele e quem o ocupa.
+- **Pronto, travado, sinal:** pronto é o `session_start` (`pattern` pela tela estável, `delay` pelo relógio); sem isso em 120 s, `interrupted`. A camada do Mestre digitada como primeira mensagem que não pode ser digitada, ou que não começa um turno em 10 s, deixa o personagem `stuck` e avisa o Mestre da mesa. Sinal é um evento de hook ou uma tela estável; ele tira `stuck` para `busy`. Terminal simples: `busy` ao receber entrada, `idle` quando o prompt da base volta, e só `dismiss` o encerra.
+- **Espera de aprovação:** o fim do turno leva a `waiting` com o motivo `approval #N`, nunca a `blocked` (só o pedido nativo do provedor).
+- **Encerramento:** `idle` → `stopping`: resumo no pergaminho, saída do provedor digitada (`/exit`; `/quit` no Antigravity; `exit` no shell), 30 s depois sinal e árvore (`stuck` e `interrupted` pulam a digitação). O agendado roda ao chegar o ponto seguro; a recusa de um fixado vai ao `audit_log` (`character.end_refused_pinned`).
+- **Retomada:** `Runtime.Recover` reconecta os terminais vivos com o estado guardado (os 15 min continuam do último sinal) e marca `interrupted` o que não tem terminal; `Service.ResumeMachine` retoma na ordem acima, e uma máquina fora deixa tudo `interrupted` e avisa o Mestre da mesa.
 
 ## Regras e erros
 

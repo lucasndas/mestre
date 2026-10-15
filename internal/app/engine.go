@@ -124,6 +124,10 @@ type Deps struct {
 	Characters hook.Characters
 	Approvals  hook.Approvals
 	States     hook.States
+	// Contexts gives the Mestre layer and the sections that changed to the
+	// start of a session and of a turn (sessionzero.Character.Contexts, or
+	// the runtime of the characters); nil: none.
+	Contexts hook.Contexts
 	// ClassHooks gives the dispatcher the synchronous hooks of the class of
 	// a character (hook.ClassHookSource, over the classes of the workspace,
 	// when the registry of characters exists, M4); OnHookEvent is told every
@@ -604,7 +608,7 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 	}
 	hk := &hook.Engine{
 		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
-		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States,
+		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States, Contexts: e.deps.Contexts,
 		ClassHooks: e.deps.ClassHooks, OnEvent: e.deps.OnHookEvent,
 	}
 	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker})
