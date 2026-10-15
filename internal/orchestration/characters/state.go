@@ -147,6 +147,10 @@ func (s Status) Label() string {
 	case s.State == Blocked:
 		return "aguardando entrada"
 	case s.State == Waiting && strings.HasPrefix(s.Reason, "approval"):
+		// "approval #3 · do Mestre": the chain says which level has the request.
+		if _, level, ok := strings.Cut(s.Reason, " · "); ok && level != "" {
+			return "aguardando aprovação " + level
+		}
 		return "aguardando aprovação"
 	case s.State == Waiting && s.Reason != "":
 		return "aguardando " + s.Reason

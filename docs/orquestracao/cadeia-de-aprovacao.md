@@ -1,6 +1,6 @@
 # Cadeia de aprovação
 
-> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, as condições da mesa para o `medio`, o Grão-Mestre como supervisor, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, as condições da mesa para o `medio`, o Grão-Mestre como supervisor, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -44,7 +44,7 @@ Cada parte `medio` tem uma origem, a linha da tabela ou o [sinal](../classes/cla
 - **Comuns, a todo grupo:** nada que cruze mesas; nunca o pedido dele mesmo nem os `ponto_de_missao` das missões que ele desenhou ([salvaguardas](#salvaguardas)). O motor não confere o que o contêiner ou o código faz por dentro; os freios são a atenuação, a auditoria, o resumo, a amostra e a pausa de autonomia ([supervisão](supervisao-da-cadeia.md)).
 - **Sem grupo, sempre Grão-Mestre:** o que não se analisa, a leitura do shell, o envio da branch da mesa, o ajuste do Dono e os tipos que não são `permissao_de_classe`. `alto` e `fixo` não são grupos.
 - **Configurável pelo Dono:** o padrão é, no mínimo, o que os provedores já tratam sem perguntar num terminal fora do Mestre ([ADR 0025](../decisoes/0025-padroes-seguem-os-provedores.md)); `cadeia.mesa_decide` ([arquivo de política](../aprovacoes/arquivo-de-politica.md)) acrescenta ou tira grupos. Ela só muda quais `medio` o Mestre da mesa decide, nunca o teto dele (`medio`) nem as condições.
-- Para conferir, a classificação dá, além da linha que decidiu, o grupo de cada origem (M4).
+- Para conferir, a classificação dá, além da linha que decidiu, o grupo de cada origem (`RiskResult.Groups`, M4); uma origem sem grupo vale `sem_grupo` e nunca é do Mestre da mesa. O domínio da condição `rede` é o do comando ou da URL; sem domínio legível, a condição falha.
 
 ### Superior
 
@@ -110,7 +110,8 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 | Subir agora | leva o pedido ao nível seguinte (o `approval ask` do Grão-Mestre) | sim | — |
 
 - O padrão e a regra temporária precisam caber no teto do nível de quem aprova, com o risco do padrão, e só cobrem os comandos cuja classificação própria cabe nele ([o que um padrão cobre](../classes/classificacao-de-risco.md#padrões-aprováveis)); no `medio` do Mestre da mesa, também os grupos e as condições da mesa, conferidos de novo a cada uso ([regras temporárias](regras-temporarias-de-mesa.md#lugar-na-precedência)).
-- "Perguntar de volta" vira um item `answer` na caixa de entrada de quem pediu; a resposta dele (texto livre, também marcada como não verificada) volta ao mesmo nível. O prazo final do pedido nas pessoas continua correndo.
+- "Perguntar de volta" vira um item `answer` na caixa de entrada de quem pediu; a resposta dele (texto livre, também marcada como não verificada) volta ao mesmo nível. O prazo final do pedido nas pessoas continua correndo; sem resposta de quem pediu, o pedido sobe quando passa o prazo das pessoas.
+- No M4 um agente aprova por um tempo ou por um padrão só pedidos `baixo` (regra temporária, [etapa seguinte](regras-temporarias-de-mesa.md)); "aprovar sempre" e "negar sempre" de um agente aprovam ou negam agora e deixam a sugestão; "delegar" recebe `human_required`.
 
 ## Regras e erros
 

@@ -93,6 +93,9 @@ type Refs struct {
 	Quest string `json:"quest,omitempty"`
 	// OpID is the operation a `system` item reports the result of.
 	OpID string `json:"op_id,omitempty"`
+	// Approval is the request of approval an `approval` item (or the answer to
+	// its question) is about.
+	Approval int64 `json:"approval,omitempty"`
 }
 
 // Item is one item of the inbox of a character.

@@ -9,8 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
@@ -92,6 +94,24 @@ type OrchestrationOptions struct {
 	QuestGitHub    quests.GitHub
 	QuestApprovals quests.Approvals
 	QuestCatalog   quests.Catalog
+
+	// The chain of approval (stage 10). ChainClasses gives the effective rules,
+	// the environment and the domains of the characters; without it the chain
+	// is not built and the approvals stay the interfaces of milestone 5
+	// (QuestApprovals, Approvals). The rest are the pieces of milestones 5 and
+	// stages 11 and 12, each nil-safe: the policy (the default content without
+	// one), the flow of the people, the exceptions and decrees, the temporary
+	// table rules, the delegations of the Owner, the supervision and the alerts
+	// to the people. The chain is the hook.Approvals of the engine
+	// (Orchestration.Chain) and, when QuestApprovals is nil, the quests' too.
+	ChainClasses     chain.Classes
+	ChainPolicy      chain.Policy
+	ChainUsers       chain.UserAsker
+	ChainGrants      chain.Grants
+	ChainTempRules   chain.TempRules
+	ChainDelegations chain.Delegations
+	ChainSupervision chain.Supervision
+	ChainAlerts      chain.Alerts
 }
 
 // Orchestration is the services of milestone 4 of the Citadel, assembled.
@@ -104,6 +124,8 @@ type Orchestration struct {
 	Waits       *waits.Service
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
+	// Chain is the chain of approval (nil unless ChainClasses was given).
+	Chain *chain.Service
 	// Registry is the registry of the characters of the Guild.
 	Registry characters.Registry
 	// Observers are told of every change of state of a character, in the
@@ -193,6 +215,40 @@ func (c presetsCatalog) Sheet(ctx context.Context, name string) (quests.SheetInf
 
 func (presetsCatalog) ClassAllowed(context.Context, string, string) error { return nil }
 
+// chainRef is the chain of approval seen by the pieces made before it: the
+// inbox asks it whether a character is held, and it follows the states of the
+// characters as an Observer.
+type chainRef struct{ p **chain.Service }
+
+func (r chainRef) Held(ctx context.Context, id string) (bool, error) {
+	if *r.p == nil {
+		return false, nil
+	}
+	return (*r.p).Held(ctx, id)
+}
+
+func (r chainRef) StateChanged(ctx context.Context, c characters.Character, from characters.State) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).StateChanged(ctx, c, from)
+}
+
+func (r chainRef) Done(context.Context, characters.Character, string) error { return nil }
+
+func (r chainRef) TurnEnded(context.Context, characters.Character, string) error { return nil }
+
+// questsSink tells the quests what became of a point of approval, which the
+// chain builds before them.
+type questsSink struct{ p **quests.Service }
+
+func (r questsSink) Decided(ctx context.Context, res chain.Result) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Decided(ctx, quests.Decision{Request: res.Request.ID, Approved: res.Approved, By: res.By, Reason: res.Reason})
+}
+
 // scrollsRef is the connections' view of the scrolls, which exist after them.
 type scrollsRef struct{ p **scrolls.Service }
 
@@ -240,6 +296,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		chars *characters.Service
 		scr   *scrolls.Service
 		qs    *quests.Service
+		ch    *chain.Service
 	)
 
 	conns, err := connections.NewService(connections.Options{Registry: reg, Clock: o.Clock, Scrolls: scrollsRef{&scr}, Tables: tablesRef{&tbl}})
@@ -247,7 +304,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	ib, err := inbox.NewService(inbox.Options{DB: &inbox.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Deliverer: o.Machines, Pauses: tablesRef{&tbl},
-		Channels: o.Channels, Users: o.Users, Logger: o.Logger})
+		Holds: chainRef{&ch}, Channels: o.Channels, Users: o.Users, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -272,11 +329,28 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}}
+	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits, Logger: o.Logger})
 	if err != nil {
 		return nil, err
+	}
+	questApprovals := o.QuestApprovals
+	if o.ChainClasses != nil {
+		policy := o.ChainPolicy
+		if policy == nil {
+			policy = chain.StaticPolicy{}
+		}
+		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
+			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: o.ChainTempRules, Delegations: o.ChainDelegations,
+			Supervision: o.ChainSupervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
+			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}}, Logger: o.Logger})
+		if err != nil {
+			return nil, err
+		}
+		if questApprovals == nil {
+			questApprovals = ch
+		}
 	}
 	catalog := o.QuestCatalog
 	if catalog == nil {
@@ -284,12 +358,13 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	qs, err = quests.NewService(quests.Options{Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: o.QuestApprovals, Gate: gate, Logger: o.Logger})
+		Approvals: questApprovals, Gate: gate, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
 	orc.Registry = reg
 	orc.Quests = qs
+	orc.Chain = ch
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
 	return orc, nil
 }
@@ -326,6 +401,11 @@ func (o *Orchestration) External() ExternalFunc {
 		}
 		if err := o.Waits.Recover(ctx); err != nil {
 			o.log.Warn("app: the waits were not recovered", "err", err)
+		}
+		if o.Chain != nil {
+			if err := o.Chain.Recover(ctx); err != nil {
+				o.log.Warn("app: the chain of approval was not recovered", "err", err)
+			}
 		}
 		var wg sync.WaitGroup
 		errs := make(chan error, 4)
