@@ -1,6 +1,7 @@
 package providers_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -83,5 +84,23 @@ func TestADialogQuotedByTheModelIsNotTheDialog(t *testing.T) {
 				t.Errorf("%s: screen %s has no sample", id, k.ID)
 			}
 		}
+	}
+}
+
+// The rendered screen has the blanks at the end of each row trimmed
+// (internal/terminal/ptyd), so the `ready: pattern` of a base that waits for
+// the space after the prompt ('\$ $', the example of the document) still
+// finds it.
+func TestAReadyPatternThatEndsInTheSpaceAfterThePromptMatchesATrimmedRow(t *testing.T) {
+	t.Parallel()
+	null := providers.NewNull()
+	re := regexp.MustCompile(`\$ $`)
+	for name, screen := range map[string]string{"trimmed": "user@host:~$", "with the space": "user@host:~$ "} {
+		if got := null.Screens(providers.ScreenInput{Text: screen, Stable: true, ReadyPattern: re}); got.State != providers.StateReady {
+			t.Errorf("%s: state = %s, want ready", name, got.State)
+		}
+	}
+	if got := null.Screens(providers.ScreenInput{Text: "running…", Stable: true, ReadyPattern: re}); got.State == providers.StateReady {
+		t.Error("a screen without the prompt is ready")
 	}
 }

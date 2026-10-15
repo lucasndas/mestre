@@ -29,7 +29,7 @@ Todo terminal nasce de uma **base** (o "como iniciar") e todo agente de uma **fi
 | `ready` | `hook` \| `pattern: <regex>` \| `delay: <segundos>` | sim | como saber que está pronto para receber entrada |
 
 - **Variáveis de `cwd`:** `{mesa}` = worktree da mesa na máquina (para o Grão-Mestre, o clone principal); `{workspace}` = clone principal na Cidadela, ou `<dados da máquina>/workspaces/<slug>` numa Torre; `{home}` = pasta pessoal da conta dos agentes (`mestre-agente`). Para personagens com agente, `cwd` precisa ficar dentro de `{mesa}`.
-- **`ready`:** `hook` espera o evento de início de sessão do `mestre hook` (padrão para agentes); `pattern` procura a regex na saída do terminal (padrão para shells, também usada para detectar o fim de cada comando); `delay` só como último recurso.
+- **`ready`:** `hook` espera o evento de início de sessão do `mestre hook` (padrão para agentes); `pattern` procura a regex na última linha da tela (padrão para shells, também usada para detectar o fim de cada comando); a tela vem sem os espaços do fim da linha, e o padrão `\$ $` casa com ou sem o espaço depois do prompt; `delay` só como último recurso.
 - O motor acrescenta sozinho as opções da camada do Mestre, as variáveis `MESTRE_*` e as do perfil de conta ([sessão zero do personagem](../sessao-zero/personagem.md)); a base não as define. Opções proibidas por provedor (ex.: em [Antigravity](../provedores/antigravity.md)) são recusadas ao salvar.
 
 ### Ficha
