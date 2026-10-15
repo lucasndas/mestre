@@ -66,7 +66,7 @@ O superior sai do campo "criado por" do [registro de terminais](personagens.md#r
 
 - O pedido sobe sozinho quando o risco passa do teto do nível, quando uma condição ou uma salvaguarda impede o nível, quando o prazo do nível acaba ou quando o nível responde **Subir agora**.
 - Mestre da mesa parado (encerrado, reiniciando ou `stuck`, [estados](personagens.md#estados)): o que ele decidiria nasce no Grão-Mestre, e os pedidos abertos nele sobem na hora; quando ele volta, os pedidos novos voltam a ele.
-- O prazo de cada nível conta de quando o pedido chega a ele; os valores ficam na seção `cadeia` do [arquivo de política](../aprovacoes/arquivo-de-politica.md).
+- O prazo de cada nível conta de quando o pedido chega a ele; os valores ficam na seção `cadeia` do [arquivo de política](../aprovacoes/arquivo-de-politica.md); com o arquivo ilegível, vale a última versão válida lida (os padrões só valem se nunca houve leitura). Os cronômetros dos níveis param quando a Cidadela deixa de agir e voltam no `Recover`.
 - **Subir não é reenviar:** é o mesmo pedido, com o mesmo id, alvo e impressão, mudando só o nível. A regra "o motor nunca reenvia sozinho" ([esperas](esperas-e-caixa-de-entrada.md#tempos-limite), [fluxo](../aprovacoes/fluxo.md#expiração)) trata de pedidos que expiram ou falham, não da subida.
 - **No último nível**, o prazo esgotado é **negar**: o pedido vira `expirado` e nunca é aprovado sozinho.
 - Quem pediu fica numa espera de aprovação, "aguardando aprovação do <nível atual>" ([status](esperas-e-caixa-de-entrada.md#status-aguardando)), que acompanha a subida.
@@ -86,11 +86,12 @@ A justificativa escrita pelo agente que pediu vem por último, num bloco marcado
 ### Salvaguardas
 
 Conferidas pelo motor em toda decisão de agente; uma decisão que fura uma delas é recusada e o pedido sobe na hora:
-1. **Atenuação:** um agente só aprova uma ação que as regras efetivas dele mesmo não negariam (dariam `allow` ou `ask`, sem contar exceções pontuais dele), no worktree de quem pediu; um padrão, só se as regras dele não negam nada do que o padrão casa. As regras dos orquestradores vêm da classe embutida [`orquestrador`](../classes/classe-orquestrador.md).
+1. **Atenuação:** um agente só aprova uma ação que as regras efetivas dele mesmo não negariam (dariam `allow` ou `ask`, sem contar exceções pontuais dele), no worktree de quem pediu; um padrão, só se as regras dele não negam nada do que o padrão casa, o que o motor confere de novo a cada chamada que usa a regra ([regras temporárias](regras-temporarias-de-mesa.md#como-o-motor-decide-o-que-o-texto-deixa-em-aberto)). Quem decide precisa estar no caminho do pedido; fora dele (substituído, encerrado), a decisão é recusada com `not_at_level` e o pedido é reencaminhado. As regras dos orquestradores vêm da classe embutida [`orquestrador`](../classes/classe-orquestrador.md).
 2. **Nada em causa própria:** nenhum nível decide um pedido de que é o solicitante, nem um que serve a uma proposta dele (classe que criou, `AGENTS.md` que propôs, PR que abriu): o pedido pula esse nível. O Mestre da mesa nunca decide os `ponto_de_missao` das missões que criou.
 3. **Disjuntor:** 3 negações seguidas (padrão) dos pedidos de um mesmo personagem pausam o personagem (o motor não lhe entrega mais nada, como na [pausa](mesas.md#pausa), mas só para ele) e avisam as pessoas; uma aprovação no meio zera a contagem. Um Administrador ou acima retoma.
 4. **Auditoria:** toda decisão registra aprovador, nível na cadeia, risco, versão da tabela de risco, das regras efetivas e da política, a resposta e o motivo, obrigatório para agentes.
-5. **Agentes só tornam `ask` em `allow`:** o que eles aprovam nunca vence um `deny` de camada nenhuma nem um decreto de pessoa que proíbe ([precedência](../arquitetura/precedencia.md#a-ordem)).
+5. **Decisão atômica:** a decisão toma o pedido (o *claim*, gravado no próprio pedido) antes de gerar a exceção ou a regra; subida, prazo e cancelamento não mexem num pedido tomado. Se o efeito falha, o pedido volta ao mesmo nível com o tempo recomeçando; se o motor cai no meio, o `Recover` conclui a decisão como foi tomada (uma aprovação sem exceção feita só faz quem pediu tentar de novo e pedir outra vez).
+6. **Agentes só tornam `ask` em `allow`:** o que eles aprovam nunca vence um `deny` de camada nenhuma nem um decreto de pessoa que proíbe ([precedência](../arquitetura/precedencia.md#a-ordem)).
 
 ### Respostas
 

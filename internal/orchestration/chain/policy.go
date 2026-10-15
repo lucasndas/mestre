@@ -2,10 +2,13 @@ package chain
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"slices"
+	"sync"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -46,7 +49,8 @@ func DefaultSettings() Settings {
 		SummaryEvery: 30 * time.Minute, QueueAlertOpen: 10, QueueAlertFactor: 2}
 }
 
-func (s Settings) withDefaults() Settings {
+// WithDefaults fills what the policy file leaves out with the defaults.
+func (s Settings) WithDefaults() Settings {
 	d := DefaultSettings()
 	if s.AgentDeadline <= 0 {
 		s.AgentDeadline = d.AgentDeadline
@@ -184,4 +188,37 @@ func ParseSection(data []byte, expiry time.Duration) (Settings, error) {
 		s.MesaDecides = groups
 	}
 	return s, nil
+}
+
+// policyReader reads the section of the policy and, when the file cannot be
+// read, keeps the last valid version it read for the workspace: an unreadable
+// file never loosens the chain back to the defaults.
+type policyReader struct {
+	mu   sync.Mutex
+	last map[string]readSettings
+}
+
+type readSettings struct {
+	st      Settings
+	version string
+}
+
+func (p *policyReader) read(ctx context.Context, pol Policy, log *slog.Logger, workspace string) (Settings, string) {
+	st, version, err := pol.Chain(ctx, workspace)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err != nil {
+		if prev, ok := p.last[workspace]; ok {
+			log.Warn("chain: the policy was not read, the last valid one holds", "workspace", workspace, "err", err)
+			return prev.st, prev.version
+		}
+		log.Warn("chain: the policy was not read, the default holds", "workspace", workspace, "err", err)
+		return DefaultSettings(), "default"
+	}
+	st = st.WithDefaults()
+	if p.last == nil {
+		p.last = map[string]readSettings{}
+	}
+	p.last[workspace] = readSettings{st, version}
+	return st, version
 }

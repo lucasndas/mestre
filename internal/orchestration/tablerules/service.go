@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -190,6 +191,23 @@ func (s *Service) Use(ctx context.Context, u classes.TableRuleUse) (bool, error)
 	if why, err := s.over(ctx, r); err != nil || why != "" {
 		return false, err
 	}
+	// The rule of a superior that is an agent (baixo) covers its own
+	// subordinates, not the whole class of the table.
+	if r.Level == chain.LevelAgent {
+		if ok, err := s.subordinateOf(ctx, c.ID, r.Author); err != nil || !ok {
+			return false, err
+		}
+	}
+	// A pattern never frees what the engine does not analyse, for any level.
+	if r.Action == nil && slices.Contains(u.Own.Groups, classes.GroupNone) {
+		return false, nil
+	}
+	// The author approves only what its own rules would not deny: checked on
+	// the call that uses the rule, since a pattern reaches calls its author
+	// never saw.
+	if ok, err := s.authorAttenuates(ctx, r, u); err != nil || !ok {
+		return false, err
+	}
 	if u.Own.Risk == classes.RiskMedium {
 		if r.Risk != classes.RiskMedium {
 			return false, nil
@@ -207,6 +225,45 @@ func (s *Service) Use(ctx context.Context, u classes.TableRuleUse) (bool, error)
 	return true, nil
 }
 
+// subordinateOf says whether the character answers to the author, directly or
+// through the superiors above it.
+func (s *Service) subordinateOf(ctx context.Context, character, author string) (bool, error) {
+	cur := character
+	for range 16 {
+		sup, err := s.o.Characters.Superior(ctx, cur)
+		if err != nil {
+			return false, err
+		}
+		if sup.People || sup.ID == "" {
+			return false, nil
+		}
+		if sup.ID == author {
+			return true, nil
+		}
+		cur = sup.ID
+	}
+	return false, nil
+}
+
+// authorAttenuates says the effective rules of the author do not deny this
+// call, in the environment of the character that makes it. Without the rules,
+// the environment or the call, nothing is freed.
+func (s *Service) authorAttenuates(ctx context.Context, r Rule, u classes.TableRuleUse) (bool, error) {
+	if u.Tool == nil {
+		return false, nil
+	}
+	rules, err := s.o.Classes.Rules(ctx, r.Author)
+	if err != nil || rules == nil {
+		return false, err
+	}
+	env, err := s.o.Classes.Env(ctx, u.AgentID)
+	if err != nil {
+		return false, err
+	}
+	ok, _ := classes.Attenuates(ctx, env, rules, providers.Event{Event: providers.EventPreTool, Tool: u.Tool})
+	return ok, nil
+}
+
 // mesaConditions are the conditions of the table the Mestre da mesa's medio
 // rule needs at each use (docs/orquestracao/cadeia-de-aprovacao.md#condições-da-mesa).
 func (s *Service) mesaConditions(ctx context.Context, r Rule, c characters.Character, u classes.TableRuleUse) (bool, error) {
@@ -220,7 +277,7 @@ func (s *Service) mesaConditions(ctx context.Context, r Rule, c characters.Chara
 	if err != nil {
 		return false, err
 	}
-	return chain.MesaGroupsHold(ctx, s.o.Classes, st, c.ID, u.Tool, u.Own.Groups) == "", nil
+	return chain.MesaGroupsHold(ctx, s.o.Classes, st.WithDefaults(), c.ID, u.Tool, u.Own.Groups) == "", nil
 }
 
 // over says why a rule that is active should be over now, "" if it should not:

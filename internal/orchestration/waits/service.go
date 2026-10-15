@@ -369,6 +369,19 @@ func (s *Service) arm(w Wait) {
 	s.mu.Unlock()
 }
 
+// StopTimers stops every timer of the waits: the Citadel stopped acting (it
+// lost the fence or is shutting down) and nothing here may fire until Recover
+// brings the timers back.
+func (s *Service) StopTimers() {
+	s.mu.Lock()
+	ts := s.timers
+	s.timers = map[string]clock.Timer{}
+	s.mu.Unlock()
+	for _, t := range ts {
+		t.Stop()
+	}
+}
+
 func (s *Service) disarm(id string) {
 	s.mu.Lock()
 	t := s.timers[id]

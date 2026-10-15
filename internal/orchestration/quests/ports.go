@@ -60,6 +60,9 @@ type Tables interface {
 type Waits interface {
 	// StepDone satisfies the waits for a step that ended.
 	StepDone(ctx context.Context, stepID, result string)
+	// StepAssigned tells a step got its character: the waits for the step now
+	// point to it (the deadlock detector looks again).
+	StepAssigned(ctx context.Context, stepID string)
 	// CancelQuest cancels the waits of a quest that was cancelled.
 	CancelQuest(ctx context.Context, quest string) error
 	// WaitApproval makes the character wait for a request of approval.

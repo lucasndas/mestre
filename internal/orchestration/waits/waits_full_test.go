@@ -13,6 +13,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/waits"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -48,9 +49,11 @@ func shot(t *testing.T, w *world, chars ...characters.Character) snapshot {
 	return s
 }
 
-// CA-ESP-07, and Part of CA-CIDADELA-13 (the character and the outbox of the
-// Tower close with their own stages): the waits, the asks and the queues are in
-// the database, and after a restart of the Citadel they come back equal; the
+// CA-ESP-07 and CA-CIDADELA-13 (the combined scenario: a character mid-work, a
+// wait and an outbox with items, all in the one database; the restart of the
+// real machine is the MVP-12 of the heavy suite): the waits, the asks and the
+// queues are in the database, and after a restart of the Citadel the character,
+// the waits and the outbox come back equal; the
 // wait for a time that came while it was down is satisfied, the ones whose
 // limit passed are expired (with the notice), and the item that was being
 // delivered goes back to the queue because no turn was recorded after it.
@@ -121,6 +124,24 @@ func TestWaitsAndQueuesComeBackEqualAfterTheCitadelRestartsAndAnOverdueTimeWaitI
 	if len(inflight) != 1 || inflight[0].State != inbox.Delivering {
 		t.Fatalf("the question of the ask should be being delivered: %+v", inflight)
 	}
+	// the outbox of the link, with items not yet acknowledged
+	sent := protocol.NewSQLStore(db)
+	var wantOut []string
+	for _, id := range []string{"01J0000000000000000000000A", "01J0000000000000000000000B"} {
+		env := protocol.Envelope{ID: id, Type: "terminal.open", MachineID: "m1", Epoch: 1, Payload: []byte(`{}`), Ack: true}
+		if err := sent.Put(ctx, "m1", env); err != nil {
+			t.Fatal(err)
+		}
+		wantOut = append(wantOut, id)
+	}
+	charsBefore := map[string]characters.Character{}
+	for _, c := range []characters.Character{master, dev, rev, qa} {
+		got, err := w.reg.Get(ctx, c.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		charsBefore[c.ID] = got
+	}
 	before := shot(t, w, master, dev, rev, qa)
 	if len(before.waits) != 6 {
 		t.Fatalf("active waits before = %d", len(before.waits))
@@ -158,6 +179,24 @@ func TestWaitsAndQueuesComeBackEqualAfterTheCitadelRestartsAndAnOverdueTimeWaitI
 	}
 	if wakes != 1 || expired != 1 {
 		t.Fatalf("the waiter got %d wakes of the time and %d notices of the limit, want 1 and 1: %+v", wakes, expired, w2.all(dev))
+	}
+	// the character mid-work is as it was, and the outbox keeps its items in order
+	for id, was := range charsBefore {
+		got, err := w2.reg.Get(ctx, id)
+		if err != nil || got.State != was.State || got.Reason != was.Reason || got.Name != was.Name || got.TerminalID != was.TerminalID {
+			t.Errorf("character %s after the restart = %+v, %v; was %+v", was.Name, got, err, was)
+		}
+	}
+	pending, err := protocol.NewSQLStore(db2).Pending(ctx, "m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotOut []string
+	for _, e := range pending {
+		gotOut = append(gotOut, e.ID)
+	}
+	if !slices.Equal(gotOut, wantOut) {
+		t.Errorf("the outbox after the restart = %q, want %q", gotOut, wantOut)
 	}
 	// what is left comes back equal: the same waits with the same limits, and the
 	// queues in the same order, nothing lost and nothing twice

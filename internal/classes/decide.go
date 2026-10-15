@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -359,10 +360,15 @@ func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
 	if d.Effect.Kind != EffectPermission || g == nil {
 		return false
 	}
+	// A pattern never frees a part the engine does not analyse (an origin with
+	// no group: an unclosed quote, a brace list, a .NET call), whoever made it.
+	if slices.Contains(own.Groups, GroupNone) {
+		return false
+	}
 	list := g.Tools
 	if d.ToolKind == providers.KindShell {
 		list = g.Commands
-		if strings.ContainsAny(act.Command, ";&|`<>\n\r") || strings.Contains(act.Command, "$(") {
+		if strings.ContainsAny(act.Command, ";&|`<>\n\r(){}") || strings.Contains(act.Command, "$(") {
 			return false
 		}
 	}
