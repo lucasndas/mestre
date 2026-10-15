@@ -38,27 +38,21 @@ func (w *commWorld) class(name string) (classes.ClassRecord, bool) {
 	return rec, err == nil
 }
 
-// CA-CLI-CLR-01
-func TestClassCreateWithoutAppIsAppRequiredAndNothingIsMade(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	dir := w.folder("qa", classTree("qa", classPerms))
-	r := w.run(w.master, "class", "create", "QA", "--from", dir, "--json")
+func (w *commWorld) classCreateWithoutAppIsAppRequiredAndNothingIsMade(t *testing.T) {
+	dir := w.folder("p1", classTree("p1", classPerms))
+	r := w.run(w.master, "class", "create", "P1", "--from", dir, "--json")
 	if v := decodeJSON(t, r); r.code != 2 || v.Error.Code != "app_required" {
 		t.Fatalf("class create without --app = %d %s", r.code, r.stdout)
 	}
-	if _, ok := w.class("qa"); ok {
+	if _, ok := w.class("p1"); ok {
 		t.Error("the class was made")
 	}
-	if _, err := classes.ReadDir(filepath.Join(w.lib.Roots.Tables, w.table.ID, "classes", "qa")); err == nil {
+	if _, err := classes.ReadDir(filepath.Join(w.lib.Roots.Tables, w.table.ID, "classes", "p1")); err == nil {
 		t.Error("the folder of the class was written")
 	}
 }
 
-// CA-CLI-CLR-02
-func TestClassCreateAboveTheCeilingIsCeilingDeniedAndCitesTheNetworkItem(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
+func (w *commWorld) classCreateAboveTheCeilingIsCeilingDeniedAndCitesTheNetworkItem(t *testing.T) {
 	c, err := classes.ParseCeiling([]byte("version: 1\npermissions: {network: {internet: false}}\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -73,23 +67,21 @@ func TestClassCreateAboveTheCeilingIsCeilingDeniedAndCitesTheNetworkItem(t *test
 	if _, ok := w.class("net"); ok {
 		t.Error("the class was made")
 	}
+	w.lib.Ceiling = commCeiling{classes.DefaultCeiling()}
 }
 
-// Part of CA-CLI-CLR-03: the proposal is made, goes to the Administrators and the Grand Master cannot approve it; its appearing in Telegram and the panel is milestones 5 and 6.
-func TestTheGrandMasterClassOfTheWorkspaceIsAProposalForTheAdministratorsNotForHimself(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	dir := w.folder("qa", classTree("qa", classPerms))
-	r := w.run(w.gm, "class", "create", "qa", "--scope", "workspace", "--app", "novo", "--from", dir, "--json")
+func (w *commWorld) theGrandMasterClassOfTheWorkspaceIsAProposalForTheAdministratorsNotForHimself(t *testing.T) {
+	dir := w.folder("p3", classTree("p3", classPerms))
+	r := w.run(w.gm, "class", "create", "p3", "--scope", "workspace", "--app", "novo", "--from", dir, "--json")
 	v := decodeJSON(t, r)
 	if r.code != 9 || v.Error.Code != "pending" || v.Error.Details["proposal"] == nil {
 		t.Fatalf("class create by the Grand Master = %d %s", r.code, r.stdout)
 	}
 	pend, err := w.lib.Records.Pending(w.ctx, w.slug)
-	if err != nil || len(pend) != 1 || pend[0].Key.Name != "qa" || pend[0].Key.Scope != classes.ClassWorkspace {
+	if err != nil || len(pend) != 1 || pend[0].Key.Name != "p3" || pend[0].Key.Scope != classes.ClassWorkspace {
 		t.Fatalf("pending proposals = %+v, %v", pend, err)
 	}
-	if _, ok := w.class("qa"); ok {
+	if _, ok := w.class("p3"); ok {
 		t.Error("the class is in use before it is approved")
 	}
 	// the Grand Master never approves what he proposed; an Administrator does
@@ -106,10 +98,7 @@ func TestTheGrandMasterClassOfTheWorkspaceIsAProposalForTheAdministratorsNotForH
 	}
 }
 
-// CA-CLI-CLR-04
-func TestClassCreateWithANewAppWorksAtOnceAndAsksTheGrandMasterForTheApp(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
+func (w *commWorld) classCreateWithANewAppWorksAtOnceAndAsksTheGrandMasterForTheApp(t *testing.T) {
 	w.mach.Report(w.ctx, w.gm.ID, characters.Idle)
 	dir := w.folder("qa-api", classTree("qa-api", classPerms))
 	r := w.run(w.master, "class", "create", "QA API", "--app", "novo", "--from", dir, "--json")
@@ -133,10 +122,7 @@ func TestClassCreateWithANewAppWorksAtOnceAndAsksTheGrandMasterForTheApp(t *test
 	}
 }
 
-// CA-CLI-CLR-07
-func TestClassCheckShowsASectionForEachProviderAndTheStateOfTheApp(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
+func (w *commWorld) classCheckShowsASectionForEachProviderAndTheStateOfTheApp(t *testing.T) {
 	dir := w.folder("dev", classTree("dev", classPerms))
 	if r := w.run(w.master, "class", "create", "Dev", "--app", "novo", "--from", dir); r.code != 0 {
 		t.Fatalf("class create = %+v", r)
@@ -152,28 +138,25 @@ func TestClassCheckShowsASectionForEachProviderAndTheStateOfTheApp(t *testing.T)
 	}
 }
 
-// CA-CLI-CLR-10
-func TestClassEditFromOutsideTmpIsRefusedAndTheExportLeavesTheApprovedPackage(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	dir := w.folder("qa", classTree("qa", classPerms))
-	if r := w.run(w.master, "class", "create", "qa", "--app", "novo", "--from", dir); r.code != 0 {
+func (w *commWorld) classEditFromOutsideTmpIsRefusedAndTheExportLeavesTheApprovedPackage(t *testing.T) {
+	dir := w.folder("p10", classTree("p10", classPerms))
+	if r := w.run(w.master, "class", "create", "p10", "--app", "novo", "--from", dir); r.code != 0 {
 		t.Fatalf("class create = %+v", r)
 	}
-	before, _ := w.class("qa")
+	before, _ := w.class("p10")
 	// a package in the worktree, outside $MESTRE_TMP
-	w.trees["/work/rascunho/qa"] = classTree("qa", classPerms+"network: {internet: false}\n")
-	r := w.run(w.master, "class", "edit", "qa", "--from", "./rascunho/qa", "--json")
+	w.trees["/work/rascunho/p10"] = classTree("p10", classPerms+"network: {internet: false}\n")
+	r := w.run(w.master, "class", "edit", "p10", "--from", "./rascunho/p10", "--json")
 	if v := decodeJSON(t, r); r.code != 2 || v.Error.Code != "from_outside_tmp" {
 		t.Fatalf("class edit from the worktree = %d %s", r.code, r.stdout)
 	}
-	if after, _ := w.class("qa"); after.Hash != before.Hash {
+	if after, _ := w.class("p10"); after.Hash != before.Hash {
 		t.Error("the class changed")
 	}
-	// the export leaves the approved package in $MESTRE_TMP/classes/qa/
-	r = w.run(w.master, "class", "show", "qa", "--export", "--json")
+	// the export leaves the approved package in $MESTRE_TMP/classes/p10/
+	r = w.run(w.master, "class", "show", "p10", "--export", "--json")
 	v := decodeJSON(t, r)
-	want := filepath.Join(w.tmp, "classes", "qa")
+	want := filepath.Join(w.tmp, "classes", "p10")
 	if r.code != 0 || v.Data["path"] != want {
 		t.Fatalf("class show --export = %d %s", r.code, r.stdout)
 	}
@@ -188,39 +171,39 @@ func TestClassEditFromOutsideTmpIsRefusedAndTheExportLeavesTheApprovedPackage(t 
 	}
 	edited["permissions.yaml"] = strings.Replace(classPerms, "default: ask", "default: deny", 1)
 	w.trees[filepath.ToSlash(want)] = edited
-	if r := w.run(w.master, "class", "edit", "qa", "--from", want, "--json"); r.code != 0 {
+	if r := w.run(w.master, "class", "edit", "p10", "--from", want, "--json"); r.code != 0 {
 		t.Fatalf("class edit from $MESTRE_TMP = %+v", r)
 	}
-	if after, _ := w.class("qa"); after.Hash == before.Hash || after.Version != before.Version+1 {
+	if after, _ := w.class("p10"); after.Hash == before.Hash || after.Version != before.Version+1 {
 		t.Errorf("the edit did not take: %+v", after)
 	}
 }
 
-// The listing, the assignment and the deletion of classes.
-func TestClassListShowAssignAndDeleteFollowTheRulesOfTheDocument(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	dev := w.recruit("Dev", "Dev Claude")
-	dir := w.folder("qa", classTree("qa", classPerms))
-	if r := w.run(w.master, "class", "create", "qa", "--app", "novo", "--from", dir); r.code != 0 {
+func (w *commWorld) classListShowAssignAndDeleteFollowTheRulesOfTheDocument(t *testing.T) {
+	dev := w.recruit("Dev-L", "Dev Claude")
+	dir := w.folder("lst", classTree("lst", classPerms))
+	if r := w.run(w.master, "class", "create", "lst", "--app", "novo", "--from", dir); r.code != 0 {
 		t.Fatalf("class create = %+v", r)
 	}
-	if r := w.run(w.master, "class", "create", "qa", "--app", "novo", "--from", dir, "--json"); r.code != 7 || decodeJSON(t, r).Error.Code != "name_taken" {
+	if r := w.run(w.master, "class", "create", "lst", "--app", "novo", "--from", dir, "--json"); r.code != 7 || decodeJSON(t, r).Error.Code != "name_taken" {
 		t.Errorf("a name in use = %+v", r)
 	}
 	v := decodeJSON(t, w.run(w.master, "class", "list", "--json"))
-	list, _ := v.Data["classes"].([]any)
-	if len(list) != 1 {
-		t.Fatalf("list = %v", v.Data)
+	var row map[string]any
+	for _, x := range v.Data["classes"].([]any) {
+		if m := x.(map[string]any); m["name"] == "lst" {
+			row = m
+		}
 	}
-	row := list[0].(map[string]any)
-	if row["name"] != "qa" || row["scope"] != "table" || row["app"] != "novo" || row["inherited"] != false || row["app_state"] != "solicitado" {
+	if row["name"] != "lst" || row["scope"] != "table" || row["app"] != "novo" || row["inherited"] != false || row["app_state"] != "solicitado" {
 		t.Errorf("row = %v", row)
 	}
-	if v := decodeJSON(t, w.run(w.master, "class", "list", "--scope", "workspace", "--json")); len(v.Data["classes"].([]any)) != 0 {
-		t.Errorf("list --scope workspace = %v", v.Data)
+	for _, x := range decodeJSON(t, w.run(w.master, "class", "list", "--scope", "workspace", "--json")).Data["classes"].([]any) {
+		if x.(map[string]any)["scope"] != "workspace" {
+			t.Errorf("list --scope workspace has %v", x)
+		}
 	}
-	if r := w.run(w.master, "class", "show", "qa"); r.code != 0 || !strings.Contains(r.stdout, "Teste a mesa") || !strings.Contains(r.stdout, "permissions.yaml") {
+	if r := w.run(w.master, "class", "show", "lst"); r.code != 0 || !strings.Contains(r.stdout, "Teste a mesa") || !strings.Contains(r.stdout, "permissions.yaml") {
 		t.Errorf("class show = %+v", r)
 	}
 	if r := w.run(w.master, "class", "show", "nada", "--json"); r.code != 4 || decodeJSON(t, r).Error.Code != "not_visible" {
@@ -228,37 +211,37 @@ func TestClassListShowAssignAndDeleteFollowTheRulesOfTheDocument(t *testing.T) {
 	}
 
 	// assign: from the next turn on, and only a class the table sees
-	if r := w.run(w.master, "class", "assign", "Dev", "qa", "--json"); r.code != 0 {
+	if r := w.run(w.master, "class", "assign", "Dev-L", "lst", "--json"); r.code != 0 {
 		t.Fatalf("class assign = %+v", r)
 	}
-	if got := w.get(dev); classes.Slug(got.Class) != "qa" {
+	if got := w.get(dev); classes.Slug(got.Class) != "lst" {
 		t.Errorf("the class of Dev is %q", got.Class)
 	}
-	if r := w.run(w.master, "class", "assign", "Dev", "outra", "--json"); r.code != 4 {
+	if r := w.run(w.master, "class", "assign", "Dev-L", "outra", "--json"); r.code != 4 {
 		t.Errorf("assign of a class that does not exist = %+v", r)
 	}
-	if r := w.run(w.master, "class", "assign", "Ninguem", "qa", "--json"); r.code != 4 {
+	if r := w.run(w.master, "class", "assign", "Ninguem", "lst", "--json"); r.code != 4 {
 		t.Errorf("assign to a character that does not exist = %+v", r)
 	}
 
 	// delete: not while a character has it, and only at the explicit request of a user
-	if r := w.run(w.master, "class", "delete", "qa", "--json"); r.code != 7 || decodeJSON(t, r).Error.Code != "in_use" {
+	if r := w.run(w.master, "class", "delete", "lst", "--json"); r.code != 7 || decodeJSON(t, r).Error.Code != "in_use" {
 		t.Fatalf("delete of a class in use = %+v", r)
 	}
 	if err := w.orc.Registry.SetClass(w.ctx, dev.ID, "dev"); err != nil {
 		t.Fatal(err)
 	}
-	if r := w.run(w.master, "class", "delete", "qa", "--json"); r.code != 9 || decodeJSON(t, r).Error.Code != "approval_required" {
+	if r := w.run(w.master, "class", "delete", "lst", "--json"); r.code != 9 || decodeJSON(t, r).Error.Code != "approval_required" {
 		t.Fatalf("delete with no explicit request = %+v", r)
 	}
-	if _, ok := w.class("qa"); !ok || len(w.deleted) != 1 || w.deleted[0].Key.Name != "qa" {
+	if _, ok := w.class("lst"); !ok || len(w.deleted) != 1 || w.deleted[0].Key.Name != "lst" {
 		t.Errorf("the class went (%v) or the request was not made: %+v", ok, w.deleted)
 	}
 	w.allowed = true
-	if r := w.run(w.master, "class", "delete", "qa", "--json"); r.code != 0 {
+	if r := w.run(w.master, "class", "delete", "lst", "--json"); r.code != 0 {
 		t.Fatalf("delete with the request of a user = %+v", r)
 	}
-	if _, ok := w.class("qa"); ok {
+	if _, ok := w.class("lst"); ok {
 		t.Error("the class is still there")
 	}
 	// a character is not the Master of the table
@@ -267,11 +250,7 @@ func TestClassListShowAssignAndDeleteFollowTheRulesOfTheDocument(t *testing.T) {
 	}
 }
 
-// CA-CLI-CLR-05
-func TestRitualCreateWithTwoSchedulesIsInvalidScheduleAndNothingIsMade(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	w.recruit("Dev", "Dev Claude")
+func (w *commWorld) ritualCreateWithTwoSchedulesIsInvalidScheduleAndNothingIsMade(t *testing.T) {
 	r := w.run(w.master, "ritual", "create", "x", "--target", "Dev", "--prompt", "oi", "--daily", "09:00", "--every", "1h", "--json")
 	if v := decodeJSON(t, r); r.code != 2 || v.Error.Code != "invalid_schedule" {
 		t.Fatalf("ritual create with two schedules = %d %s", r.code, r.stdout)
@@ -281,11 +260,7 @@ func TestRitualCreateWithTwoSchedulesIsInvalidScheduleAndNothingIsMade(t *testin
 	}
 }
 
-// CA-CLI-CLR-06
-func TestRitualWithAPreRunHandsTheTargetTheTextWithTheOutput(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	dev := w.recruit("Dev", "Dev Claude")
+func (w *commWorld) ritualWithAPreRunHandsTheTargetTheTextWithTheOutput(t *testing.T, dev characters.Character) {
 	w.mach.Report(w.ctx, dev.ID, characters.Idle)
 	w.pre.out = "quinta-feira"
 	if r := w.run(w.master, "ritual", "create", "hoje", "--target", "Dev", "--prompt", "Hoje é {{output}}", "--pre-run", "date", "--daily", "09:00", "--json"); r.code != 0 {
@@ -311,11 +286,7 @@ func TestRitualWithAPreRunHandsTheTargetTheTextWithTheOutput(t *testing.T) {
 	}
 }
 
-// CA-CLI-CLR-08
-func TestRitualAimedAtASheetIsNotVisibleAndNothingIsMade(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	w.recruit("Dev", "Dev Claude")
+func (w *commWorld) ritualAimedAtASheetIsNotVisibleAndNothingIsMade(t *testing.T) {
 	r := w.run(w.master, "ritual", "create", "x", "--target", "Dev Claude", "--prompt", "oi", "--daily", "09:00", "--json")
 	if v := decodeJSON(t, r); r.code != 4 || v.Error.Code != "not_visible" {
 		t.Fatalf("ritual create aimed at a sheet = %d %s", r.code, r.stdout)
@@ -325,10 +296,7 @@ func TestRitualAimedAtASheetIsNotVisibleAndNothingIsMade(t *testing.T) {
 	}
 }
 
-// CA-CLI-CLR-09
-func TestRitualCommandIsTypedWithEnterInTheTerminalWhenItIsFree(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
+func (w *commWorld) ritualCommandIsTypedWithEnterInTheTerminalWhenItIsFree(t *testing.T) {
 	if r := w.run(w.master, "spawn", "srv", "--base", "bash"); r.code != 0 {
 		t.Fatalf("spawn = %+v", r)
 	}
@@ -352,12 +320,7 @@ func TestRitualCommandIsTypedWithEnterInTheTerminalWhenItIsFree(t *testing.T) {
 	}
 }
 
-// The rest of the ritual commands: list, show, edit, disable, enable, delete,
-// and the scope of who asks.
-func TestRitualListShowEditDisableEnableAndDeleteWork(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	dev := w.recruit("Dev", "Dev Claude")
+func (w *commWorld) ritualListShowEditDisableEnableAndDeleteWork(t *testing.T, dev characters.Character) {
 	if r := w.run(w.master, "ritual", "create", "diario", "--target", "Dev", "--prompt", "bom dia", "--daily", "02:00", "--json"); r.code != 0 {
 		t.Fatalf("ritual create = %+v", r)
 	}
@@ -365,7 +328,12 @@ func TestRitualListShowEditDisableEnableAndDeleteWork(t *testing.T) {
 		t.Errorf("a name in use = %+v", r)
 	}
 	v := decodeJSON(t, w.run(w.master, "ritual", "list", "--json"))
-	row := v.Data["rituals"].([]any)[0].(map[string]any)
+	var row map[string]any
+	for _, x := range v.Data["rituals"].([]any) {
+		if m := x.(map[string]any); m["name"] == "diario" {
+			row = m
+		}
+	}
 	for _, k := range []string{"name", "target", "quest", "table", "action", "schedule", "pre_run", "timeout", "enabled", "next_run", "last_result"} {
 		if _, ok := row[k]; !ok {
 			t.Errorf("a ritual of the list has no %q: %v", k, row)
@@ -414,4 +382,41 @@ func TestRitualListShowEditDisableEnableAndDeleteWork(t *testing.T) {
 	if r := w.run(dev, "ritual", "list", "--json"); r.code != 3 {
 		t.Errorf("ritual list by a character = %+v", r)
 	}
+}
+
+// The CLI of classes in one world: a Citadel costs more than the commands.
+//
+// CA-CLI-CLR-01
+// CA-CLI-CLR-02
+// Part of CA-CLI-CLR-03: the proposal is made, goes to the Administrators and the Grand Master cannot approve it; its appearing in Telegram and the panel is milestones 5 and 6.
+// CA-CLI-CLR-04
+// CA-CLI-CLR-07
+// CA-CLI-CLR-10
+func TestTheCLIOfClassesCreatesChecksExportsEditsListsAssignsAndDeletes(t *testing.T) {
+	t.Parallel()
+	w := newCommWorld(t)
+	w.classCreateWithoutAppIsAppRequiredAndNothingIsMade(t)
+	w.classCreateAboveTheCeilingIsCeilingDeniedAndCitesTheNetworkItem(t)
+	w.theGrandMasterClassOfTheWorkspaceIsAProposalForTheAdministratorsNotForHimself(t)
+	w.classCreateWithANewAppWorksAtOnceAndAsksTheGrandMasterForTheApp(t)
+	w.classCheckShowsASectionForEachProviderAndTheStateOfTheApp(t)
+	w.classEditFromOutsideTmpIsRefusedAndTheExportLeavesTheApprovedPackage(t)
+	w.classListShowAssignAndDeleteFollowTheRulesOfTheDocument(t)
+}
+
+// The CLI of rituals in one world.
+//
+// CA-CLI-CLR-05
+// CA-CLI-CLR-06
+// CA-CLI-CLR-08
+// CA-CLI-CLR-09
+func TestTheCLIOfRitualsCreatesFiresAndManagesThem(t *testing.T) {
+	t.Parallel()
+	w := newCommWorld(t)
+	dev := w.recruit("Dev", "Dev Claude")
+	w.ritualCreateWithTwoSchedulesIsInvalidScheduleAndNothingIsMade(t)
+	w.ritualAimedAtASheetIsNotVisibleAndNothingIsMade(t)
+	w.ritualWithAPreRunHandsTheTargetTheTextWithTheOutput(t, dev)
+	w.ritualCommandIsTypedWithEnterInTheTerminalWhenItIsFree(t)
+	w.ritualListShowEditDisableEnableAndDeleteWork(t, dev)
 }
