@@ -139,6 +139,15 @@ type Rituals interface {
 	Deactivate(ctx context.Context, workspace, table string) error
 }
 
+// Oversight is what the supervision of the approval chain says about a table
+// for `mestre table status` (docs/orquestracao/supervisao-da-cadeia.md; nil:
+// nothing is said).
+type Oversight interface {
+	// Status says whether the autonomy of the table is paused (with the
+	// reason) and gives the line of its queue of approvals ("" for none).
+	Status(ctx context.Context, workspace, table string) (paused bool, reason, queue string, err error)
+}
+
 // Inspection is the state of a worktree on a machine.
 type Inspection struct {
 	// Tip is the commit at the head of the branch there.

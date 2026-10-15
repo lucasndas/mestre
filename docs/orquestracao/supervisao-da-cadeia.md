@@ -1,6 +1,6 @@
 # Supervisão da cadeia
 
-> **Assunto:** freios e visibilidade das decisões tomadas perto do trabalho: o resumo não bloqueante das decisões das mesas ao Grão-Mestre, a pausa de autonomia por mesa e as métricas de fila por nível com alerta · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** freios e visibilidade das decisões tomadas perto do trabalho: o resumo não bloqueante das decisões das mesas ao Grão-Mestre, a pausa de autonomia por mesa e as métricas de fila por nível com alerta · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -20,12 +20,13 @@ Com os Mestres de mesa decidindo o `medio` da própria mesa ([cadeia de aprovaç
 - **Quem pausa:** o Grão-Mestre (`mestre approval autonomy pause`, [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)) e um Aprovador ou acima, com um toque: o botão **Pausar autonomia** no aviso de fila e no resumo do Telegram ([bot](../telegram/bot.md), M5) e no painel ([administração](../painel/administracao.md), M6), sem PIN (só restringe).
 - **Quem retoma:** a pausa do Grão-Mestre, ele mesmo ou um Aprovador ou acima; a de uma pessoa, só um Aprovador ou acima.
 - Não tem prazo: vale até retomar ou até a mesa ser encerrada. Aparece no `mestre table status` e no canvas, e cada pausa e retomada vai à auditoria, com quem e o motivo.
-- No M4 a pausa entra pela interface do motor (`Autonomy`), com dublê nos testes; o comando do Grão-Mestre e o botão chegam no M5.
+- No M4 a pausa entra pelos tratadores do motor `approval autonomy pause|resume` (só o Grão-Mestre do workspace chama; um Mestre da mesa recebe `level_denied`) e pela interface `Actor`, com um Aprovador como dublê nos testes; a definição do comando na CLI e o botão chegam no M5.
+- **Como vale:** a pausa é uma linha por mesa no banco e o motor a lê a cada decisão, a cada pedido e a cada uso de uma regra temporária `medio` do Mestre da mesa; por isso nenhuma regra é suspensa nem apagada, e a retomada devolve tudo na hora. Os pedidos abertos sobem pelo mesmo caminho da subida (mesmo id). O `mestre table status` mostra a pausa e a fila da mesa.
 
 ### Métricas de fila
 
 - **Por aprovador:** cada Mestre da mesa, o Grão-Mestre e as pessoas (uma fila por nível mínimo). Para cada um: pedidos abertos no nível agora, a idade do mais antigo e o tempo médio de espera nas últimas 24 h, calculados do histórico de níveis dos pedidos ([fluxo](../aprovacoes/fluxo.md)) pelo relógio injetável.
-- Vão na mensagem de retomada e no resumo do Grão-Mestre, no `mestre table status` de cada mesa e no painel (M6).
+- Vão na mensagem de retomada e no resumo do Grão-Mestre, no `mestre table status` de cada mesa e no painel (M6). O nível de um pedido, e quando entrou e saiu dele, vem da auditoria da subida; a fila do Mestre da mesa é uma por mesa, e a espera média conta as passagens que terminaram nas últimas 24 h.
 - **Alerta:** um nível acumula quando tem mais de `cadeia.alerta_fila.abertos` pedidos abertos (padrão 10) ou o mais antigo passa de `cadeia.alerta_fila.fator` vezes o prazo do nível (padrão 2). O aviso vai a quem está acima: de um Mestre da mesa, ao Grão-Mestre; do Grão-Mestre, aos Administradores e ao Dono; das pessoas, ao Dono. Um aviso por vez, até o nível voltar abaixo dos dois limites.
 - O tempo que cada personagem passa ocioso, ocupado ou aguardando já se mede pelo histórico de estados ([estados](personagens.md#estados)); as métricas de fila são o lado das aprovações, e um painel de produtividade pode juntar as duas.
 
@@ -33,6 +34,7 @@ Com os Mestres de mesa decidindo o `medio` da própria mesa ([cadeia de aprovaç
 
 - Pausa pedida por quem não tem o nível, ou numa mesa encerrada: recusada, e nada muda.
 - Retomar uma pausa que não existe: sai com sucesso, sem efeito.
+- A amostra das decisões dos Mestres de mesa para o resumo do Dono (M5) é sorteada por uma fonte aleatória injetada sobre as decisões que o motor guarda (`DecisionSource`); o M4 entrega a fonte e o sorteio, e o M5, o resumo.
 - Limites de alerta fora do intervalo (`abertos` de 1 a 1000, `fator` de 1 a 10): o arquivo de política é inválido e vale a versão anterior.
 
 ## Critérios de aceite

@@ -1,6 +1,6 @@
 # Skills geradas da CLI
 
-> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-13
+> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -74,6 +74,8 @@ description: >-
 2. `--pre-run` e o marcador `{{output}}`.
 3. Alvo ocupado: o disparo entra na fila; passou do `--timeout`, volta para o dono com o motivo.
 4. `list|show|edit|enable|disable|run`; `delete` só a pedido de usuário.
+
+A orientação de cada skill é feita de linhas, cada uma com os comandos de que fala: a linha só entra quando todos eles existem na definição de comandos, e a lista de sintaxe traz só os que existem. Assim, até o M5 a skill do Grão-Mestre não ensina `gh`, `app`, `decree` nem `approval`, e a regeneração (que reescreve o arquivo quando o texto muda) acompanha qualquer comando que entre, saia ou mude.
 
 A entrega aos personagens é feita pela sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)), que depende deste documento. A skill `mestre-grao-mestre` ganha a sintaxe dos comandos do [Grão-Mestre](grao-mestre.md) quando eles existem (M5), pela mesma definição de comandos.
 

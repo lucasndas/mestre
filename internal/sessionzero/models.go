@@ -3,6 +3,8 @@ package sessionzero
 import (
 	"fmt"
 	"strings"
+
+	"github.com/lucasndas/mestre/internal/cli"
 )
 
 // Role is the level of a character: what the model of its Mestre layer
@@ -84,6 +86,7 @@ const (
 )
 
 func builtinSet() ModelSet {
+	_, levels := GenerateSkills(cli.Default())
 	return ModelSet{
 		Version: ModelVersion,
 		Rules: map[Role][]Rule{
@@ -91,11 +94,7 @@ func builtinSet() ModelSet {
 			RoleGrandMaster: grandMasterRules(),
 			RoleTableMaster: tableMasterRules(),
 		},
-		Skills: map[string]Skill{
-			skillCoordination: {Name: skillCoordination, Description: "Plan a mission, build the party, run the GitHub work of the table and report to the Grand Master, using the `mestre` CLI. Use whenever you coordinate the characters of a table.", Body: coordinationBody},
-			skillGrandMaster:  {Name: skillGrandMaster, Description: "Talk to the users, open and close tables, handle GitHub, Apps, decrees and approvals, using the `mestre` CLI. Use whenever you act as the Grand Master.", Body: grandMasterBody},
-			skillRituals:      {Name: skillRituals, Description: "Create and manage rituals, the scheduled prompts, commands and missions, using the `mestre` CLI. Use whenever something must run later or on a schedule.", Body: ritualsBody},
-		},
+		Skills: levels,
 		Levels: map[Role][]string{
 			RoleGrandMaster: {skillGrandMaster, skillRituals},
 			RoleTableMaster: {skillCoordination, skillRituals},
@@ -150,34 +149,6 @@ func tableMasterRules() []Rule {
 		{"Commits are local only. Never run `git push`; the engine does the GitHub actions. Never write secrets. Destructive actions only when a user asks.", false},
 	}
 }
-
-const coordinationBody = `# Coordinating a table
-
-1. Plan: turn the request into a mission (steps, class and sheet of each step, parallel work, returns with a limit, approvals) and write the file for ` + "`mestre quest create`" + `.
-2. Build the party: ` + "`mestre class list`" + `, ` + "`mestre sheet list`" + `, ` + "`mestre list`" + `; reuse free persistent characters; ` + "`mestre recruit`" + `, ` + "`mestre spawn`" + `, ` + "`mestre connect`" + `, ` + "`mestre dismiss`" + ` (only an idle character that sent ` + "`done`" + `).
-3. Table classes: create them inside the ceiling; every class has ` + "`--app`" + ` (new, inherit or an existing App).
-4. GitHub of the table: ` + "`mestre issue`" + ` inside the epic; ` + "`mestre pr open`" + `, ` + "`update`" + `, ` + "`status`" + `, ` + "`comment`" + `, ` + "`reply`" + `.
-5. Do not block: delegate, start the mission and end the turn.
-6. Report to the Grand Master: progress, blockers, decisions and the final result.
-`
-
-const grandMasterBody = `# Being the Grand Master
-
-1. Talk: identify who speaks and the level; ask when ambiguous; answer with ` + "`mestre reply`" + `; pass requests with ` + "`mestre ask --from-message`" + ` or ` + "`mestre table open --from-message`" + ` without rewriting; never send secrets.
-2. Tables: decide between a new and an existing table; create the epic with ` + "`mestre gh epic create`" + ` and then ` + "`mestre table open --epic <n>`" + `; ` + "`mestre table close`" + ` when the engine says the pull request was merged; ` + "`mestre table list`" + `, ` + "`mestre table status`" + `.
-3. GitHub: ` + "`mestre gh review`" + `, ` + "`approve`" + `, ` + "`merge`" + `; ` + "`approve`" + ` only with a standing approval.
-4. Apps: ` + "`mestre app list`" + `, ` + "`status`" + `, ` + "`create`" + `.
-5. Decrees and approvals: ` + "`mestre decree propose`" + ` only after showing exactly what will apply; ` + "`mestre approval decide`" + ` what the policy leaves to you; ` + "`mestre approval ask`" + ` in doubt.
-6. Do not block; send notices with ` + "`mestre notify`" + `; give a short summary at the end of each epic.
-`
-
-const ritualsBody = `# Rituals
-
-1. Create a ritual with a schedule (` + "`--every`" + `, ` + "`--daily`" + `, ` + "`--weekly`" + `, ` + "`--once`" + `) for an existing character (` + "`--target`" + ` with ` + "`--prompt`" + ` or ` + "`--command`" + `) or for a mission (` + "`--quest`" + `); never for a sheet.
-2. ` + "`--pre-run`" + ` and the marker ` + "`{{output}}`" + `.
-3. A busy target queues the firing; past ` + "`--timeout`" + ` it goes back to the owner with the reason.
-4. ` + "`mestre ritual list`" + `, ` + "`show`" + `, ` + "`edit`" + `, ` + "`enable`" + `, ` + "`disable`" + `, ` + "`run`" + `; ` + "`delete`" + ` only when a user asks.
-`
 
 // SkillFile renders the SKILL.md of a generated skill: only name and
 // description in the frontmatter, then the marker with the version of the

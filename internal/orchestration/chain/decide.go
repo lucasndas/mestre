@@ -653,6 +653,28 @@ func (s *Service) reroute(ctx context.Context, r Request, why string) {
 	s.climb(ctx, r.ID, r.Level, answerReroute, why)
 }
 
+// RerouteTable takes the open requests the Mestre da mesa of a table holds and
+// no longer may decide to the level above, with the same id. The autonomy of
+// the table was paused: the medio ones go up at once, the baixo ones stay
+// (docs/orquestracao/supervisao-da-cadeia.md#pausa-de-autonomia).
+func (s *Service) RerouteTable(ctx context.Context, workspace, table, why string) error {
+	rs, err := s.st.OpenOfTable(ctx, workspace, table)
+	if err != nil {
+		return err
+	}
+	for _, r := range rs {
+		if r.Level.Kind != LevelMesa {
+			continue
+		}
+		st, _ := s.settings(ctx, r.Workspace)
+		if ok, err := s.stillHere(ctx, r, st); err == nil && ok {
+			continue
+		}
+		s.reroute(ctx, r, why)
+	}
+	return nil
+}
+
 // expire ends a request whose last level ran out of time: negated, never
 // approved on its own.
 func (s *Service) expire(ctx context.Context, id int64) {

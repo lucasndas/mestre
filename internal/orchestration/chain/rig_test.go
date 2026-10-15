@@ -250,13 +250,15 @@ type world struct {
 	alerts   *fakeAlerts
 	sup      *fakeSupervision
 	deleg    *fakeDelegations
-	policy   *policy
-	slug     string
-	table    tables.Table
-	gm       characters.Character
-	master   characters.Character
-	fwd      *localchan.LocalForwarder
-	sheets   int
+	// supervisor is the real supervision, with worldOpts.realSup.
+	supervisor *chain.Supervisor
+	policy     *policy
+	slug       string
+	table      tables.Table
+	gm         characters.Character
+	master     characters.Character
+	fwd        *localchan.LocalForwarder
+	sheets     int
 }
 
 // policy is the policy file of the tests: the settings change under it.
@@ -277,7 +279,7 @@ func (p *policy) set(s chain.Settings) {
 	p.mu.Unlock()
 }
 
-type worldOpts struct{ noGrants, noTemp, realTemp bool }
+type worldOpts struct{ noGrants, noTemp, realTemp, realSup bool }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
 	t.Helper()
@@ -310,6 +312,9 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg}
+	if opt.realSup {
+		oo.ChainSupervision = nil
+	}
 	if !opt.noGrants {
 		oo.ChainGrants = w.grants
 	}
@@ -321,6 +326,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		t.Fatal(err)
 	}
 	w.ch = w.orc.Chain
+	w.supervisor = w.orc.Supervisor
 	if opt.realTemp {
 		w.cls.gate = w.orc.TableRules
 	}

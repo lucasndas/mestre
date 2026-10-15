@@ -62,7 +62,62 @@ func (t ruleTables) Over(ctx context.Context, workspace, table string) (bool, er
 }
 
 // newTableRules makes the temporary table rules over the pieces of the chain.
-func newTableRules(o OrchestrationOptions, chars *characters.Service, reg characters.Registry, ib chain.Inbox, policy chain.Policy, qs *quests.Service, tbl *tables.Service) (*tablerules.Service, error) {
+func newTableRules(o OrchestrationOptions, chars *characters.Service, reg characters.Registry, ib chain.Inbox, policy chain.Policy, qs *quests.Service, tbl *tables.Service, sup chain.Supervision) (*tablerules.Service, error) {
 	return tablerules.NewService(tablerules.Options{Store: &tablerules.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock),
-		Policy: policy, Classes: o.ChainClasses, Supervision: o.ChainSupervision, Missions: ruleMissions{qs}, Tables: ruleTables{tbl}, Inbox: ib, Logger: o.Logger})
+		Policy: policy, Classes: o.ChainClasses, Supervision: sup, Missions: ruleMissions{qs}, Tables: ruleTables{tbl}, Inbox: ib, Logger: o.Logger})
+}
+
+// supTables is the tables as the supervision sees them: whether one is over,
+// and no such table.
+type supTables struct{ p **tables.Service }
+
+func (t supTables) Over(ctx context.Context, workspace, table string) (bool, error) {
+	if *t.p == nil {
+		return false, nil
+	}
+	over, err := ruleTables{*t.p}.Over(ctx, workspace, table)
+	if errors.Is(err, tables.ErrNoTable) {
+		return false, chain.ErrNoTable
+	}
+	return over, err
+}
+
+// rerouteRef is the chain seen by the supervision, which is made before it.
+type rerouteRef struct{ p **chain.Service }
+
+func (r rerouteRef) RerouteTable(ctx context.Context, workspace, table, why string) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).RerouteTable(ctx, workspace, table, why)
+}
+
+// ruleListerRef gives the supervision the temporary rules a request made.
+type ruleListerRef struct{ p **tablerules.Service }
+
+func (r ruleListerRef) RulesOfRequest(ctx context.Context, workspace, table string, request int64) ([]int64, error) {
+	if *r.p == nil {
+		return nil, nil
+	}
+	rules, err := (*r.p).List(ctx, workspace, table)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for _, rule := range rules {
+		if rule.Request == request {
+			ids = append(ids, rule.ID)
+		}
+	}
+	return ids, nil
+}
+
+// oversightRef is the supervision seen by the tables, which are made before it.
+type oversightRef struct{ p **chain.Supervisor }
+
+func (r oversightRef) Status(ctx context.Context, workspace, table string) (bool, string, string, error) {
+	if *r.p == nil {
+		return false, "", "", nil
+	}
+	return (*r.p).Status(ctx, workspace, table)
 }

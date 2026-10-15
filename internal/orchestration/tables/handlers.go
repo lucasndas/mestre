@@ -254,9 +254,24 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	if len(chars) == 0 {
 		text.WriteString("- ninguém\n")
 	}
-	return localchan.OK(map[string]any{"text": strings.TrimRight(text.String(), "\n"), "name": t.ID, "state": string(t.State), "paused": t.Paused,
+	data := map[string]any{"name": t.ID, "state": string(t.State), "paused": t.Paused,
 		"pause_reason": t.PausedReason, "epic": t.Epic, "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "characters": chars,
-		"missions": []string{}, "waits": []string{}, "usage": "-"})
+		"missions": []string{}, "waits": []string{}, "usage": "-"}
+	if s.o.Oversight != nil {
+		paused, reason, queue, err := s.o.Oversight.Status(ctx, t.Workspace, t.ID)
+		if err != nil {
+			return Refusal(err)
+		}
+		data["autonomy_paused"], data["autonomy_reason"], data["approval_queue"] = paused, reason, queue
+		if paused {
+			fmt.Fprintf(&text, "\nAutonomia do Mestre da mesa pausada: %s", reason)
+		}
+		if queue != "" {
+			fmt.Fprintf(&text, "\n%s", queue)
+		}
+	}
+	data["text"] = strings.TrimRight(text.String(), "\n")
+	return localchan.OK(data)
 }
 
 func (s *Service) handleClose(ctx context.Context, c *localchan.Call) localchan.Response {

@@ -48,11 +48,23 @@ func (s SystemNetwork) Listen(addr string) (net.Listener, error) {
 	return ln, nil
 }
 
-// DialContext connects to TCP addr.
+// DialContext connects to TCP addr. The time limit comes from the
+// cancellation of ctx, not from its Deadline: the Deadline of a context made by
+// clock.WithTimeout is a time of the injected clock, which the operating system
+// would read as wall time (a clock that is behind makes every dial fail at
+// once with an i/o timeout, a clock that is ahead never times out).
 func (s SystemNetwork) DialContext(ctx context.Context, addr string) (net.Conn, error) {
 	if err := s.guard(); err != nil {
 		return nil, err
 	}
+	dctx, cancel := context.WithCancelCause(context.WithoutCancel(ctx))
+	defer cancel(nil)
+	stop := context.AfterFunc(ctx, func() { cancel(context.Cause(ctx)) })
+	defer stop()
 	var d net.Dialer
-	return d.DialContext(ctx, "tcp", addr)
+	conn, err := d.DialContext(dctx, "tcp", addr)
+	if err != nil && ctx.Err() != nil {
+		return nil, context.Cause(ctx)
+	}
+	return conn, err
 }
