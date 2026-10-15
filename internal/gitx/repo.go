@@ -331,7 +331,7 @@ func (r *repo) ReadFile(ctx context.Context, ref, path string) ([]byte, error) {
 	}
 	out, err := r.git(ctx, "cat-file", "blob", string(h)+":"+path)
 	if err != nil {
-		if has(err, "not a valid object name", "does not exist") {
+		if has(err, "not a valid object name", "does not exist", "exists on disk, but not in") {
 			err = as(ErrFileNotFound, err)
 		}
 		return nil, fmt.Errorf("read %s:%s: %w", ref, path, err)
