@@ -18,7 +18,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/store"
-	"github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -98,7 +98,7 @@ func buildGuildTemplate() error {
 	}
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "mestre.db")
-	db, err := guild.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func newFixtureWith(t *testing.T, keys KeyStore, durable bool) *fixture {
 	if durable {
 		opts.Synchronous = ""
 	}
-	db, err := guild.Open(ctx, filepath.Join(dir, "mestre.db"), opts)
+	db, err := guildtpl.Open(ctx, filepath.Join(dir, "mestre.db"), opts)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -22,7 +22,7 @@ import (
 func realKeeper(t *testing.T, alerts *alertLog) (*classes.CeilingKeeper, string, *clock.Fake) {
 	t.Helper()
 	dir := t.TempDir()
-	db, err := guilddb.Open(context.Background(), filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(context.Background(), filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

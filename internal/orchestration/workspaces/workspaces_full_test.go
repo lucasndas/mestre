@@ -15,8 +15,8 @@ import (
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -48,7 +48,7 @@ func newRealRig(t *testing.T) *realRig {
 	}
 	rr.remote = remote
 	rr.commit("chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
-	db, err := guilddb.Open(rr.ctx, filepath.Join(shared.root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: shared.clk})
+	db, err := guildtpl.Open(rr.ctx, filepath.Join(shared.root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: shared.clk})
 	if err != nil {
 		t.Fatal(err)
 	}

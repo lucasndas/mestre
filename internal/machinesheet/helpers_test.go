@@ -15,7 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -33,7 +33,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	path := filepath.Join(dir, "mestre.db")
-	db, err := guilddb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
 	if err == nil {
 		err = db.Close()
 	}
@@ -56,7 +56,7 @@ func newGuildDB(t *testing.T) *store.DB {
 	if err := os.WriteFile(path, guildTemplate, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

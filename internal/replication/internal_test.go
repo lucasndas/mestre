@@ -10,6 +10,7 @@ import (
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 )
 
 // CA-REPL-04
@@ -20,7 +21,7 @@ func TestAMigrationThatSeedsTheVaultTablesOfAnExcludedReplicaIsUndone(t *testing
 	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mestre.db")
-	primary, err := guilddb.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func TestAMigrationThatSeedsTheVaultTablesOfAnExcludedReplicaIsUndone(t *testing
 func TestAResyncThatComesBeforeTheStreamIsKept(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	db, err := guilddb.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func TestTheOrderToEraseDoesNotRemoveTheFullCopyThatBeginsAfterIt(t *testing.T) 
 	ctx := context.Background()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mestre.db")
-	primary, err := guilddb.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,8 +21,8 @@ import (
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -61,7 +61,7 @@ func newEnv(t *testing.T, files map[string]string) *env {
 	}
 	e.remote = remote
 	e.commit("chore: initial commit", mergeFiles(map[string]string{"README.md": "# Meu App\n"}, files))
-	e.db, err = guilddb.Open(e.ctx, filepath.Join(e.root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: e.clk})
+	e.db, err = guildtpl.Open(e.ctx, filepath.Join(e.root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: e.clk})
 	if err != nil {
 		t.Fatal(err)
 	}

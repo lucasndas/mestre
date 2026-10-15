@@ -23,6 +23,7 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/protorig"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -55,7 +56,7 @@ func buildTemplate() error {
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "mestre.db")
 	ctx := context.Background()
-	db, err := guilddb.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		return err
 	}
@@ -312,7 +313,7 @@ func newRig(t *testing.T, o rigOpts) *rig {
 	if o.durable {
 		sync = ""
 	}
-	r.cdb, err = guilddb.Open(ctx, path, store.Options{Synchronous: sync, Clock: r.clk})
+	r.cdb, err = guildtpl.Open(ctx, path, store.Options{Synchronous: sync, Clock: r.clk})
 	if err != nil {
 		t.Fatal(err)
 	}

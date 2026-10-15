@@ -91,7 +91,7 @@ func (r *Runner) Prepush(ctx context.Context) int {
 
 	full := Suites["full"]
 	r.Race = true
-	args := []string{"test", "-json", "-count=1", "-tags", full.Tags, "-race"}
+	args := []string{"test", "-json", "-count=1", "-tags", full.Tags, "-race", RaceGcflags}
 	if to := goTimeout(full, r.runs()); to != "" {
 		args = append(args, "-timeout", to)
 	}

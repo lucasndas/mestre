@@ -17,7 +17,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -240,7 +240,7 @@ func openVault(t *testing.T) (*vault.Vault, *[]vault.UseEvent) {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
-	db, err := guilddb.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
