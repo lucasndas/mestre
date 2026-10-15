@@ -52,12 +52,10 @@ func TestDoneWithReturnExitsZeroAndPointsToTheStepOfTheDev(t *testing.T) {
 func TestDoneWithReturnPastTheLimitExitsZeroAndPausesTheQuest(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
-	q := w.run(w.create(reviewDef)) // max_returns: 3
+	q := w.run(w.create(strings.Replace(reviewDef, "max_returns: 3", "max_returns: 1", 1)))
 	w.finish("Dev Claude 1", "v1", map[string]string{"a.go": "1"}, "")
-	for i := 0; i < 3; i++ {
-		w.finish("Revisor Codex 1", "não", nil, "motivo")
-		w.finish("Dev Claude 1", "de novo", map[string]string{"a.go": string(rune('2' + i))}, "")
-	}
+	w.finish("Revisor Codex 1", "não", nil, "motivo")
+	w.finish("Dev Claude 1", "de novo", map[string]string{"a.go": "2"}, "")
 	r := w.call(w.char("Revisor Codex 1").ID, "done", map[string]any{"return": "y"}, "x")
 	if !r.OK || r.ExitCode() != 0 {
 		t.Fatalf("done past the limit = %d %+v", r.ExitCode(), r.Error)
