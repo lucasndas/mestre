@@ -29,6 +29,7 @@ func towerWorld(t *testing.T, be backend) (*world, *tower, tables.Table) {
 	if dir != tw.dir(w.slug(), tbl.ID) {
 		t.Fatalf("the Tower's worktree is %q; want %q", dir, tw.dir(w.slug(), tbl.ID))
 	}
+	tw.character(tbl) // the character that works there
 	return w, tw, tbl
 }
 
@@ -358,7 +359,9 @@ func TestTheRefOfATowerThatMovedIsAnAlert(t *testing.T) {
 		t.Fatal(err)
 	}
 	as, err := w.svc.CheckRefs(w.ctx, w.slug())
-	if err != nil || len(as) != 1 || as[0].Ref != tables.TowerRef("torre-1", tbl.Branch) {
+	// The commit of table 43, not yet registered, is now also in a ref of
+	// table 42: both are suspect, and an Administrator looks (mesas.md).
+	if err != nil || len(as) != 2 || as[0].Ref != tables.TowerRef("torre-1", tbl.Branch) || as[1].Table != other.ID {
 		t.Fatalf("alerts = %+v, %v", as, err)
 	}
 }

@@ -183,10 +183,16 @@ func (t *Tower) apply(ctx context.Context, mirror gitx.Repo, m BundleMeta, file 
 			return err
 		}
 		err = t.o.Files.Sync(ctx, req, func(ctx context.Context) error {
+			// The checked-out branch is the one that moves: it must be the table's.
+			if err := checkHead(ctx, repo, l.Branch); err != nil {
+				return err
+			}
 			_, err := repo.MergeFFOnly(ctx, ref)
 			return err
 		})
-		if errors.Is(err, gitx.ErrLocalChanges) || errors.Is(err, gitx.ErrNotFastForward) {
+		if errors.Is(err, errWrongBranch) {
+			t.o.Tell(ctx, m.Workspace, m.Table, fmt.Sprintf("A Torre não pôde trazer a ponta da Cidadela: o worktree não está na branch %s (%v). Nada mudou.", l.Branch, err))
+		} else if errors.Is(err, gitx.ErrLocalChanges) || errors.Is(err, gitx.ErrNotFastForward) {
 			t.o.Tell(ctx, m.Workspace, m.Table, fmt.Sprintf("A Torre não pôde trazer a ponta da Cidadela para a branch %s: o worktree tem alterações que conflitam. Nada mudou.", l.Branch))
 		} else if err != nil {
 			return err
@@ -208,12 +214,24 @@ func (t *Tower) isAncestor(ctx context.Context, repo gitx.Repo, anc, desc gitx.H
 // firstWorktree makes the worktree of a table on this machine from the tip of
 // the Citadel, and runs the session zero of the table in it.
 func (t *Tower) firstWorktree(ctx context.Context, mirror gitx.Repo, m BundleMeta, tip gitx.Hash) error {
-	if _, err := mirror.ResolveRef(ctx, "refs/heads/"+m.Branch); errors.Is(err, gitx.ErrRefNotFound) {
+	cur, err := mirror.ResolveRef(ctx, "refs/heads/"+m.Branch)
+	switch {
+	case errors.Is(err, gitx.ErrRefNotFound):
 		if err := mirror.CreateBranch(ctx, m.Branch, string(tip)); err != nil {
 			return err
 		}
-	} else if err != nil {
+	case err != nil:
 		return err
+	case cur == tip:
+	default:
+		// The replica already has a branch with this name that is not the
+		// tip the Citadel sent (a ref planted by an agent, or what is left
+		// of an older table): the worktree of a table starts at the tip of
+		// the Citadel, never at what is there. Moving it forward loses
+		// nothing; anything else is refused.
+		if err := t.resetBranch(ctx, mirror, m, cur, tip); err != nil {
+			return err
+		}
 	}
 	dir := t.o.WorktreeDir(m.Workspace, m.Table)
 	if _, err := mirror.AddWorktree(ctx, dir, gitx.WorktreeOptions{Branch: m.Branch}); err != nil {
@@ -239,6 +257,30 @@ func (t *Tower) firstWorktree(ctx context.Context, mirror gitx.Repo, m BundleMet
 		return fmt.Errorf("the session zero of the table: %w", err)
 	}
 	return nil
+}
+
+// resetBranch takes a branch of the replica that is not at the tip of the
+// Citadel to that tip, when that only moves it forward and no worktree has it
+// checked out.
+func (t *Tower) resetBranch(ctx context.Context, mirror gitx.Repo, m BundleMeta, cur, tip gitx.Hash) error {
+	refuse := func(why string) error {
+		t.o.Tell(ctx, m.Workspace, m.Table, fmt.Sprintf("A réplica desta Torre já tem a branch %s em %s, que não é a ponta da Cidadela (%s): %s. O worktree da mesa não foi criado.",
+			m.Branch, cur.Short(), tip.Short(), why))
+		return fmt.Errorf("the replica has the branch %s at %s, not at the tip of the Citadel (%s): %s", m.Branch, cur.Short(), tip.Short(), why)
+	}
+	if !t.isAncestor(ctx, mirror, cur, tip) {
+		return refuse("ela tem commits que a Cidadela não tem")
+	}
+	wts, err := mirror.ListWorktrees(ctx)
+	if err != nil {
+		return err
+	}
+	for _, w := range wts {
+		if w.Branch == m.Branch {
+			return refuse("ela está em uso em " + w.Path)
+		}
+	}
+	return mirror.UpdateRef(ctx, "refs/heads/"+m.Branch, tip)
 }
 
 func (t *Tower) request(ctx context.Context, l local, repo gitx.Repo) (sessionzero.TableRequest, error) {
@@ -384,6 +426,10 @@ func (t *Tower) RemoveWorktree(ctx context.Context, workspace, table string) err
 	}
 	if err := mirror.RemoveWorktree(ctx, l.Rec.Dir, false); err != nil {
 		return err
+	}
+	// The tip of the Citadel the bundles brought is of no use any more.
+	if err := mirror.DeleteRef(ctx, CitadelRef(l.Branch)); err != nil {
+		t.log.Warn("tables: the ref of the Citadel was not removed from the replica", "table", table, "err", err)
 	}
 	return t.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `DELETE FROM local_worktrees WHERE workspace = ? AND table_id = ?`, workspace, table)

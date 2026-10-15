@@ -29,15 +29,16 @@ type entry struct {
 	movedAlerted bool      // the alert of a main clone that moved was sent
 }
 
-// entryLocked returns the entry of a workspace, made on first sight: a
-// workspace fetched less than FetchInterval ago waits for the rest of it; one
-// never fetched, or from before a restart long ago, is fetched at once (the
-// new Citadel fetches before anything else).
+// entryLocked returns the entry of a workspace, made on first sight. The
+// workspaces this process finds when it starts are fetched at once, whatever
+// the last fetch was (the new Citadel, or the restarted one, fetches before
+// anything else); one that appears later, fetched less than FetchInterval
+// ago, waits for the rest of it.
 func (s *Service) entryLocked(w Workspace, now time.Time) *entry {
 	e, ok := s.sched[w.Slug]
 	if !ok {
 		e = &entry{next: now}
-		if !w.Fetch.LastAt.IsZero() {
+		if !w.Fetch.LastAt.IsZero() && s.booted {
 			e.next = w.Fetch.LastAt.Add(s.o.FetchInterval)
 		}
 		s.sched[w.Slug] = e
@@ -202,6 +203,18 @@ func (s *Service) advance(ctx context.Context, w Workspace, now time.Time) {
 	}
 	if dirty > 0 {
 		hold("o clone principal tem %d arquivo(s) com alterações locais", dirty)
+		return
+	}
+	// MergeFFOnly moves whatever branch is checked out: only the main branch
+	// is advanced to origin's.
+	if head, err := wt.HeadBranch(ctx); err != nil {
+		hold("não foi possível ler a branch do clone principal: %v", err)
+		return
+	} else if head != w.DefaultBranch {
+		if head == "" {
+			head = "HEAD solto"
+		}
+		hold("o clone principal não está na branch %s (está em %s)", w.DefaultBranch, head)
 		return
 	}
 	switch _, err := wt.MergeFFOnly(ctx, target); {
@@ -404,6 +417,9 @@ func (s *Service) Tick(ctx context.Context) (next time.Time, ok bool, err error)
 			note(at)
 		}
 	}
+	s.mu.Lock()
+	s.booted = true
+	s.mu.Unlock()
 	if len(errs) > 0 {
 		note(now.Add(BackoffFirst))
 	}
