@@ -144,9 +144,12 @@ const (
 
 var groupOrder = []string{GroupCommunication, GroupCoordination, GroupGitHub, GroupGrandMaster, GroupDiagnostics}
 
-// AskDefaultTimeout is the default time limit of `mestre ask` until the
-// waits document fixes it (docs/orquestracao/esperas-e-caixa-de-entrada.md).
-const AskDefaultTimeout = 10 * time.Minute
+// AskDefaultTimeout is how long the CLI waits for the engine when `mestre ask`
+// has no --timeout: the largest time limit an ask may have
+// (docs/orquestracao/esperas-e-caixa-de-entrada.md#tempos-limite). The engine
+// times the ask itself (90 s by default, 9 min at most) and answers "pending"
+// when it runs out.
+const AskDefaultTimeout = 9 * time.Minute
 
 // Registry is the set of commands.
 type Registry struct {
@@ -184,8 +187,10 @@ func MustRegistry(specs ...Spec) *Registry {
 }
 
 // Default is the registry of this binary: the "casca" commands (list and ask,
-// to exercise the channel in milestone 3, and connect, which the connections
-// use before the CLI of coordination, stage 10 of milestone 4) and the
+// to exercise the channel in milestone 3; connect, which the connections use
+// before the CLI of coordination; check, wait, waits, inbox, reply and note,
+// which the waits and the scrolls of stage 7 use before the CLI of
+// communication, stage 10 of milestone 4) and the
 // commands the CLI answers by itself. The commands of each document of the CLI are added
 // here when their milestone arrives.
 func Default() *Registry {
@@ -193,12 +198,80 @@ func Default() *Registry {
 		Spec{Name: "list", Group: GroupCommunication, Summary: "list the characters you are connected to",
 			Usage: "mestre list", Example: "mestre list --json", Who: WhoAnyone, MaxArgs: 0, Exits: []int{5}},
 		Spec{Name: "ask", Group: GroupCommunication, Summary: "ask a character and wait for the answer",
-			Usage:   `mestre ask "<name>" "<prompt>" [--timeout <dur>]`,
+			Usage:   `mestre ask "<name>" "<prompt>" [--table "<table>"] [--timeout <dur>] [--no-wait]  |  mestre ask --batch '{"A": "<prompt>", …}'  |  mestre ask "<name>" --raw "<text>"`,
 			Example: `mestre ask "Reviewer" "review the PR" --timeout 15m`,
 			Args:    []Arg{{"<name>", "the character to ask"}, {"<prompt>", "what to ask"}},
-			MinArgs: 2, MaxArgs: 2, Who: WhoAnyone, DefaultTimeout: AskDefaultTimeout,
-			Flags: []Flag{{"timeout", FlagDuration, "how long to wait (90s, 10m, 2h); the request stays pending after it"}},
-			Exits: []int{4, 5, 6, 7}},
+			MinArgs: 0, MaxArgs: 2, Who: WhoAnyone, DefaultTimeout: AskDefaultTimeout,
+			Flags: []Flag{
+				{"timeout", FlagDuration, "how long to wait (90s, 10m; at most 9m); the request stays pending after it"},
+				{"table", FlagString, "the table of the target, for the Grand Master"},
+				{"no-wait", FlagBool, "deliver and return at once; the answer arrives in your inbox"},
+				{"batch", FlagString, `ask several in parallel: a JSON object {"Name": "prompt", …}`},
+				{"raw", FlagString, `type raw input (\n, \t, \xNN, \e) into a free target, with no queue and no answer`},
+			},
+			Exits: []int{3, 4, 5, 6, 7}},
+		Spec{Name: "check", Group: GroupCommunication, Summary: "read the current screen of a character, sending nothing",
+			Usage: `mestre check "<name>" [--table "<table>"] [--lines <n>]`, Example: `mestre check "Dev"`,
+			Args:    []Arg{{"<name>", "the character to look at"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoAnyone,
+			Flags: []Flag{{"table", FlagString, "the table of the target, for the Grand Master"}, {"lines", FlagString, "include up to n lines of history"}},
+			Exits: []int{3, 4, 5}},
+		Spec{Name: "wait", Group: GroupCommunication, Summary: "register a wait and return at once; the engine wakes you when it ends",
+			Usage:   `mestre wait "<name>" ["<name>" …] [--first] [--timeout <dur>]  |  mestre wait --quest "<quest>"  |  mestre wait --until "<HH:MM | ISO 8601>"`,
+			Example: `mestre wait "Reviewer" --timeout 30m`,
+			Args:    []Arg{{"<name>", "a character to wait for"}},
+			MinArgs: 0, MaxArgs: -1, Who: WhoAnyone,
+			Flags: []Flag{
+				{"first", FlagBool, "wake on the first of the names, not all"},
+				{"timeout", FlagDuration, "time limit of the wait (the workspace's by default)"},
+				{"quest", FlagString, "wait for all the steps of a quest"},
+				{"until", FlagString, "wait for a time"},
+				{"table", FlagString, "the table of the target, for the Grand Master"},
+			},
+			Exits: []int{3, 4}},
+		Spec{Name: "waits", Group: GroupCommunication, Summary: "the map of the waits of your table, and the deadlocks",
+			Usage: `mestre waits [--table "<table>" | --all]`, Example: "mestre waits --json", Who: WhoAnyone, MaxArgs: 0,
+			Flags: []Flag{{"table", FlagString, "another table (Grand Master only)"}, {"all", FlagBool, "every table (Grand Master only)"}},
+			Exits: []int{3}},
+		Spec{Name: "inbox", Group: GroupCommunication, Summary: "show your own queue, in the order of delivery",
+			Usage: "mestre inbox [--full]", Example: "mestre inbox --json", Who: WhoAnyone, MaxArgs: 0,
+			Flags: []Flag{{"full", FlagBool, "the whole text of each item"}}},
+		Spec{Name: "reply", Group: GroupCommunication, Summary: "answer the message of a user through the channel it came from",
+			Usage: `mestre reply "<text>" [--attach <file>] [--to-message <id>]`, Example: `mestre reply "Pronto, a mesa foi aberta"`,
+			Args:    []Arg{{"<text>", "the answer"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoGrandMaster, Secret: true,
+			Flags: []Flag{{"attach", FlagString, "a file to attach"}, {"to-message", FlagString, "the id of the message to answer (see mestre inbox)"}},
+			Exits: []int{7}},
+		Spec{Name: "note create", Group: GroupCommunication, Summary: "create a scroll (a Markdown note of your table), connected to you",
+			Usage: `mestre note create ["<content>"] [--name "<name>"] [--stack "<tome>"]`, Example: `mestre note create "# Plano do login" --stack "Login"`,
+			Args:    []Arg{{"[content]", "the Markdown; its first line is the name unless --name is given"}},
+			MinArgs: 0, MaxArgs: 1, Who: WhoCharacter | WhoTableMaster,
+			Flags: []Flag{{"name", FlagString, "a fixed name"}, {"stack", FlagString, "put it in a tome (made if new)"}},
+			Exits: []int{7, 8}},
+		Spec{Name: "note read", Group: GroupCommunication, Summary: "print a scroll and its revision",
+			Usage: `mestre note read "<name>"`, Example: `mestre note read "Plano do login"`,
+			Args:    []Arg{{"<name>", "the scroll, by name or id"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoCharacter | WhoTableMaster, Exits: []int{4}},
+		Spec{Name: "note write", Group: GroupCommunication, Summary: "replace the whole content of a scroll (or add to it)",
+			Usage: `mestre note write "<name>" "<content>" [--append] [--expect-rev <n>]`, Example: `mestre note write "Plano" "# Plano v2" --expect-rev 3`,
+			Args:    []Arg{{"<name>", "the scroll"}, {"<content>", "the new Markdown"}},
+			MinArgs: 2, MaxArgs: 2, Who: WhoCharacter | WhoTableMaster,
+			Flags: []Flag{{"append", FlagBool, "add to the end instead of replacing"}, {"expect-rev", FlagString, "write only if the scroll is still at this revision"}},
+			Exits: []int{4, 7, 8}},
+		Spec{Name: "note edit", Group: GroupCommunication, Summary: "swap an exact piece of a scroll for another",
+			Usage: `mestre note edit "<name>" --old "<piece>" --new "<piece>" [--expect-rev <n>]`, Example: `mestre note edit "Plano" --old "TODO" --new "feito"`,
+			Args:    []Arg{{"<name>", "the scroll"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoCharacter | WhoTableMaster,
+			Flags: []Flag{{"old", FlagString, "the piece, which must appear once"}, {"new", FlagString, "what takes its place"}, {"expect-rev", FlagString, "edit only if the scroll is still at this revision"}},
+			Exits: []int{4, 7, 8}},
+		Spec{Name: "note stack", Group: GroupCommunication, Summary: "put scrolls in a tome (made if new)",
+			Usage: `mestre note stack "<tome>" "<name>" ["<name>" …]`, Example: `mestre note stack "Login" "Plano" "Testes"`,
+			Args:    []Arg{{"<tome>", "the tome"}, {"<name>", "a scroll"}},
+			MinArgs: 2, MaxArgs: -1, Who: WhoCharacter | WhoTableMaster, Exits: []int{4}},
+		Spec{Name: "note delete", Group: GroupCommunication, Summary: "delete a scroll (needs the explicit request of an authorized user)",
+			Usage: `mestre note delete "<name>"`, Example: `mestre note delete "Plano"`,
+			Args:    []Arg{{"<name>", "the scroll"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoCharacter | WhoTableMaster, Exits: []int{4, 9}},
 		Spec{Name: "connect", Group: GroupCoordination, Summary: "connect two characters, a scroll and a character, or two scrolls of a table",
 			Usage:   `mestre connect "<A>" "<B>" [--table "<table>"]`,
 			Example: `mestre connect "Dev" "Reviewer"`,

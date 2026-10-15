@@ -1,6 +1,6 @@
 # Pergaminhos e tomos
 
-> **Assunto:** notas em Markdown no canvas (pergaminhos), grupos de notas (tomos), operações, concorrência e o pergaminho da missão · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** notas em Markdown no canvas (pergaminhos), grupos de notas (tomos), operações, concorrência e o pergaminho da missão · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -56,6 +56,16 @@ Criado pelo motor ao criar uma [missão](missoes.md), com nome fixo "Missão: <n
 Também recebe o resumo de encerramento de cada personagem da missão ([encerramento seguro](personagens.md#encerramento-seguro)) e as devoluções com o motivo. Agentes conectados podem ler e escrever nele como em qualquer pergaminho.
 
 Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
+
+### No código
+
+`internal/orchestration/scrolls`. Escolhas que o código fecha:
+- **Guardado:** `notes`, `tomes` e `note_counters` (o último número de cada mesa: um id nunca se repete). O `<id>` (`p0001`) repete de mesa em mesa; a identidade nas [conexões](conexoes.md) é a chave `<workspace>/<mesa>/<id>`, e a do tomo `<workspace>/<mesa>/t0001`. O arquivo fica em `<clone principal>/.mestre/mesas/<mesa>/pergaminhos/<id>.md`, escrito pelo `safefile` antes do índice (se o índice falha, o arquivo volta ao que era).
+- **Uma de cada vez:** um cadeado ordena as mudanças. A revisão sobe 1 a cada mudança de **conteúdo** (`write`, `edit`); empilhar não a muda. Cada mudança é dita ao canvas por `OnChange`, na ordem em que foi aplicada.
+- **Nome:** `--name` repetido na mesa é 7 `name_taken` (o sufixo " (2)" é só para o nome tirado da primeira linha). Pergaminho e tomo se resolvem pelo nome ou pelo id da mesa; o pergaminho vence um tomo de mesmo nome.
+- **Quem:** o personagem só opera o que `CanSeeScroll` deixa; inexistente e invisível dão o mesmo erro, com o nome pedido. `delete` por personagem sai com 9 e nada se apaga até o fluxo de aprovação do M5 (`Approvals`); Administrador ou acima apaga. O Grão-Mestre não tem mesa: `ErrNoTable`, antes de qualquer arquivo.
+- **Cópias:** `Targets` (os worktrees das máquinas que têm personagens da mesa) e `Copies` (`LocalCopies` escreve pelo `safefile`, modo só leitura; uma Torre chega com o protocolo, no M5). Uma cópia que falha não impede a mudança; `Sync` refaz as da mesa. `Cites` diz à [replicação](../guilda/replicacao.md#arquivos-e-espelhos) o arquivo que cada linha de `notes` cita.
+- **O motor escreve:** `Ensure` e `AppendSection` (só acrescenta) servem ao pergaminho da missão; `Record` escreve o resumo de encerramento em "Missão: <nome>" ou, sem missão, em "Histórico da mesa".
 
 ## Regras e erros
 

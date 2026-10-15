@@ -2,11 +2,13 @@ package characters
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 )
@@ -147,6 +149,36 @@ func (m MachineSet) Stop(ctx context.Context, machine string, cmd StopCommand) e
 	return rt.Stop(ctx, cmd)
 }
 
+// Deliver implements the delivery of the inbox to the engine of the machine
+// (docs/conectividade/protocolo.md, inbox.deliver).
+func (m MachineSet) Deliver(ctx context.Context, machine string, d protocol.InboxDeliver) (protocol.InboxResult, error) {
+	rt, ok := m[machine]
+	if !ok {
+		return protocol.InboxResult{}, &MachineUnreachableError{Machine: machine}
+	}
+	return rt.DeliverInbox(ctx, d)
+}
+
+// Input types raw input into the terminal of a character of the machine
+// (`ask --raw`).
+func (m MachineSet) Input(ctx context.Context, machine, character string, data []byte) error {
+	rt, ok := m[machine]
+	if !ok {
+		return &MachineUnreachableError{Machine: machine}
+	}
+	return rt.Input(ctx, character, data)
+}
+
+// Screen reads the screen of the terminal of a character of the machine
+// (`check`).
+func (m MachineSet) Screen(ctx context.Context, machine, character string) (Screen, error) {
+	rt, ok := m[machine]
+	if !ok {
+		return Screen{}, &MachineUnreachableError{Machine: machine}
+	}
+	return rt.Screen(ctx, character)
+}
+
 // MachineUnreachableError: the engine of the machine cannot be reached.
 type MachineUnreachableError struct{ Machine string }
 
@@ -214,6 +246,12 @@ const (
 	NoticeStartFailed      NoticeKind = "start_failed"
 	NoticeDismissed        NoticeKind = "dismissed"
 	NoticeNotResumed       NoticeKind = "not_resumed"
+	// NoticeDeadlock: a cycle of waits (docs/orquestracao/esperas-e-caixa-de-entrada.md#detecção-de-impasse).
+	NoticeDeadlock NoticeKind = "deadlock"
+	// NoticeQueueLong: more than 50 items wait in an inbox.
+	NoticeQueueLong NoticeKind = "queue_long"
+	// NoticeWaitTimeout: a wait or an ask ran out of time.
+	NoticeWaitTimeout NoticeKind = "wait_timeout"
 	// NoticeSystem is a system item for the recipient.
 	NoticeSystem NoticeKind = "system"
 )
@@ -290,6 +328,27 @@ type Connector interface {
 	Inherit(ctx context.Context, from, to Character) error
 }
 
+// Observer is told by the Service what the Citadel learns of a character, for
+// the parts that act on it: the inbox delivers when the character is free, the
+// waits are satisfied by a done (docs/orquestracao/esperas-e-caixa-de-entrada.md).
+// An error is logged; it never undoes the transition.
+type Observer interface {
+	// StateChanged is called after every change of state the Service applied.
+	StateChanged(ctx context.Context, c Character, from State) error
+	// Done is called after the done of a character was registered.
+	Done(ctx context.Context, c Character, text string) error
+	// TurnEnded is called when a turn of a character ended, with the last
+	// message of the agent in it (the answer of an ask that had no done).
+	TurnEnded(ctx context.Context, c Character, lastMessage string) error
+}
+
+// TurnObserver is how the Runtime of a machine tells the Citadel that a turn
+// ended: in process on the Citadel's own machine, over the protocol for a
+// Tower (milestone 5).
+type TurnObserver interface {
+	TurnEnded(ctx context.Context, agentID, lastMessage string) error
+}
+
 // Reporter is the way back to the Citadel: the transitions of the states of
 // the characters of a machine.
 type Reporter interface {
@@ -338,4 +397,37 @@ type TableChecker interface {
 // is what providers.TrustRecovery needs (Table.Prepare does it).
 type Retruster interface {
 	Retrust(ctx context.Context, workspace, table, dir string) error
+}
+
+// Observers is several Observers, called in the order they are listed (the
+// inbox first, then the waits); every one is called, and the errors are joined.
+type Observers []Observer
+
+var _ Observer = Observers(nil)
+
+// StateChanged implements Observer.
+func (os Observers) StateChanged(ctx context.Context, c Character, from State) error {
+	var errs []error
+	for _, o := range os {
+		errs = append(errs, o.StateChanged(ctx, c, from))
+	}
+	return errors.Join(errs...)
+}
+
+// Done implements Observer.
+func (os Observers) Done(ctx context.Context, c Character, text string) error {
+	var errs []error
+	for _, o := range os {
+		errs = append(errs, o.Done(ctx, c, text))
+	}
+	return errors.Join(errs...)
+}
+
+// TurnEnded implements Observer.
+func (os Observers) TurnEnded(ctx context.Context, c Character, lastMessage string) error {
+	var errs []error
+	for _, o := range os {
+		errs = append(errs, o.TurnEnded(ctx, c, lastMessage))
+	}
+	return errors.Join(errs...)
 }

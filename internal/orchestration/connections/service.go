@@ -355,3 +355,21 @@ func (s *Service) Disconnect(ctx context.Context, by User, a, b Ref) (Disconnect
 	}
 	return DisconnectResult{Removed: left.ID == "", Remaining: left.ReasonNames()}, nil
 }
+
+// Link connects two endpoints by hand on behalf of whoever made one of them: a
+// scroll is connected to the character that created it (reason manual, by that
+// character). Unlike Connect it asks nothing of the level of the caller: it is
+// the engine acting after the creation.
+func (s *Service) Link(ctx context.Context, workspace, table string, a, b Ref, by string) error {
+	if a == b {
+		return ErrSame
+	}
+	_, err := s.add(ctx, workspace, table, a, b, ReasonManual, by)
+	return err
+}
+
+// Forget removes every connection of a scroll or a tome that ceased to exist.
+func (s *Service) Forget(ctx context.Context, ref Ref) error {
+	_, err := s.store.RemoveNode(ctx, ref)
+	return err
+}

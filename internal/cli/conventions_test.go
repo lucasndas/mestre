@@ -26,8 +26,6 @@ func futureCommands() []cli.Spec {
 	mk := func(name, group string, who cli.Who) cli.Spec {
 		return cli.Spec{Name: name, Group: group, Summary: "test " + name, Usage: "mestre " + name, Who: who, MaxArgs: -1}
 	}
-	reply := mk("reply", cli.GroupCommunication, cli.WhoGrandMaster|cli.WhoTableMaster)
-	reply.Secret = true
 	notify := mk("notify", cli.GroupGrandMaster, cli.WhoGrandMaster)
 	notify.Secret = true
 	notify.Flags = []cli.Flag{{Name: "table", Kind: cli.FlagString, Desc: "the table of the notice"}}
@@ -42,7 +40,7 @@ func futureCommands() []cli.Spec {
 		notify,
 		mk("recruit", cli.GroupCoordination, cli.WhoTableMaster|cli.WhoGrandMaster),
 		mk("pr open", cli.GroupGitHub, cli.WhoAnyone),
-		reply, done, issue,
+		done, issue,
 	}
 }
 
@@ -349,7 +347,7 @@ func TestHelpListsOnlyWhatTheCallerMayUse(t *testing.T) {
 		if carol := listed(t, proc("carol")); !slices.Contains(carol, "issue comment") || slices.Contains(carol, "table") {
 			t.Errorf("the class that lists `issue comment` sees %v", carol)
 		}
-		if tm := listed(t, proc("tm")); !slices.Contains(tm, "recruit") || !slices.Contains(tm, "reply") || slices.Contains(tm, "table") || slices.Contains(tm, "notify") {
+		if tm := listed(t, proc("tm")); !slices.Contains(tm, "recruit") || slices.Contains(tm, "reply") || slices.Contains(tm, "table") || slices.Contains(tm, "notify") {
 			t.Errorf("the Master of the table sees %v", tm)
 		}
 		if gm := listed(t, proc("gm")); !slices.Contains(gm, "table") || !slices.Contains(gm, "notify") || !slices.Contains(gm, "gh") {
@@ -530,7 +528,7 @@ func TestRawIsNotTypedIntoATargetThatIsNotFree(t *testing.T) {
 		{cli.StateBlocked, cli.ReasonPermission, false, "permission_prompt", 3},
 		{cli.StateBusy, "", false, "busy", 7},
 		{cli.StateBlocked, "quota", false, "busy", 7},
-		{"stuck", "", false, "busy", 7},
+		{cli.StateStuck, "", true, "", 0},
 		{"stopped", "", false, "busy", 7},
 	}
 	for _, tt := range cases {
@@ -581,7 +579,7 @@ func TestCommandHelpShowsUsageLevelExampleAndExitCodes(t *testing.T) {
 		p := newProc(r, "a-person", "", "")
 		for _, args := range [][]string{{"help", "ask"}, {"ask", "--help"}, {"ask", "-h"}} {
 			got := p.run(t.Context(), args...)
-			for _, want := range []string{`usage: mestre ask "<name>" "<prompt>" [--timeout <dur>]`, "<name>", "--timeout", "--json", "who: any character", "example: mestre ask", "exit codes:", "  6  timeout"} {
+			for _, want := range []string{`usage: mestre ask "<name>" "<prompt>"`, "<name>", "--timeout", "--json", "who: any character", "example: mestre ask", "exit codes:", "  6  timeout"} {
 				if !strings.Contains(got.stdout, want) {
 					t.Errorf("mestre %v lacks %q:\n%s", args, want, got.stdout)
 				}
@@ -598,7 +596,7 @@ func TestCommandHelpShowsUsageLevelExampleAndExitCodes(t *testing.T) {
 				ExitCodes                   []int `json:"exit_codes"`
 			}
 		}
-		if err := json.Unmarshal([]byte(js.stdout), &v); err != nil || v.Data.Name != "ask" || len(v.Data.Flags) != 1 || v.Data.Flags[0].Kind != "duration" ||
+		if err := json.Unmarshal([]byte(js.stdout), &v); err != nil || v.Data.Name != "ask" || len(v.Data.Flags) == 0 || v.Data.Flags[0].Name != "timeout" || v.Data.Flags[0].Kind != "duration" ||
 			!slices.Contains(v.Data.ExitCodes, 6) || v.Data.Level != "any character" || v.Data.Example == "" {
 			t.Fatalf("help ask --json = %+v (%v)", js, err)
 		}

@@ -52,6 +52,9 @@ type ServiceOptions struct {
 	Usage   UsageProbe
 	// Connections may be nil: no connection is made or removed.
 	Connections Connector
+	// Observer may be nil: nobody acts on the changes of state (the inbox
+	// and the waits, stage 7).
+	Observer Observer
 	// Limits default to DefaultLimits; the zero of a field is its default.
 	Limits Limits
 	// SlotTimeout and EphemeralGrace default to the constants above.

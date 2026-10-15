@@ -15,7 +15,9 @@ import (
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/orchestration/waits"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
@@ -221,6 +223,7 @@ func (f *fakeScrolls) all() []characters.Summary {
 }
 
 type fakeTables struct {
+	root   string
 	mu     sync.Mutex
 	tables map[string]characters.TableInfo
 	// failWorktree makes the creation of the worktree fail.
@@ -243,6 +246,9 @@ func (f *fakeTables) Worktree(_ context.Context, _, table, machine string) (stri
 	f.mu.Unlock()
 	if fail {
 		return "", fmt.Errorf("no worktree for %s", table)
+	}
+	if f.root != "" { // a real folder, for the tests that write in it
+		return filepath.Join(f.root, machine, table), nil
 	}
 	return filepath.Join("/wt", machine, table), nil
 }
@@ -537,6 +543,13 @@ type rigOptions struct {
 	tables characters.TableChecker
 	// connect gives the Service the real connections of the Guild database.
 	connect bool
+	// stage7 puts the real inbox and waits of the Citadel in the rig: the
+	// deliveries are typed in the terminals by the Runtime, and the turns
+	// answer the asks. The worktrees are real folders.
+	stage7 bool
+	// longText is the size above which a delivery goes to a file (the
+	// default of the document when zero).
+	longText int
 }
 
 type machineRig struct {
@@ -590,6 +603,8 @@ type rig struct {
 	waits    *fakeWaits
 	builder  *fakeBuilder
 	tap      *reportTap
+	ib       *inbox.Service
+	wt       *waits.Service
 	mach     map[string]*machineRig
 	machines characters.MachineSet
 }
@@ -604,10 +619,15 @@ func newRig(t *testing.T, o rigOptions) *rig {
 	if len(o.machines) == 0 {
 		o.machines = []machineSpec{linux("linux")}
 	}
+	root := ""
+	if o.stage7 {
+		root = t.TempDir()
+		o.connect = true
+	}
 	r := &rig{t: t, ctx: context.Background(), clk: clock.NewFake(day0), sheets: &fakeMachineSheets{sheets: map[string]machinesheet.Sheet{}},
 		notes: &noticeLog{}, scrolls: &fakeScrolls{}, inbox: &fakeInbox{pending: map[string]int{}}, waits: &fakeWaits{by: map[string]string{}},
 		builder: &fakeBuilder{last: map[string]characters.BuildInput{}}, mach: map[string]*machineRig{}, machines: characters.MachineSet{}}
-	r.tables = &fakeTables{tables: map[string]characters.TableInfo{
+	r.tables = &fakeTables{root: root, tables: map[string]characters.TableInfo{
 		"3-login": {ID: "3-login", Workspace: workspace, State: characters.TableWorking, Worktrees: map[string]string{}},
 		"4-api":   {ID: "4-api", Workspace: workspace, State: characters.TableWorking, Worktrees: map[string]string{}},
 	}}
@@ -643,6 +663,21 @@ func newRig(t *testing.T, o rigOptions) *rig {
 		}
 		so.Connections = r.conns
 	}
+	var inboxProbe providers.Inbox
+	var waitProbe characters.WaitProbe = r.waits
+	if o.stage7 {
+		r.ib, err = inbox.NewService(inbox.Options{DB: &inbox.Store{DB: r.gdb}, Clock: r.clk, Registry: r.reg, Deliverer: r.machines})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.wt, err = waits.NewService(waits.Options{Store: &waits.Store{DB: r.gdb}, Clock: r.clk, Registry: r.reg, Inbox: r.ib, Notifier: r.notes,
+			Connections: r.conns, Terminals: r.machines})
+		if err != nil {
+			t.Fatal(err)
+		}
+		so.Observer, so.Inbox = characters.Observers{r.ib, r.wt}, r.ib
+		inboxProbe, waitProbe = r.ib, r.wt
+	}
 	svc, err := characters.NewService(so)
 	if err != nil {
 		t.Fatal(err)
@@ -654,7 +689,7 @@ func newRig(t *testing.T, o rigOptions) *rig {
 		mr.db = openCopy(t, "maquina.db", machineTemplate, machinedb.Open)
 		mr.rt, err = characters.NewRuntime(characters.RuntimeOptions{
 			Machine: m.id, Clock: r.clk, DB: mr.db, Host: mr.host, Prep: mr.prep, Providers: providers.NewRegistry(providers.Options{}),
-			Reporter: r.tap, Notifier: r.notes, Waits: r.waits, Tables: o.tables,
+			Reporter: r.tap, Notifier: r.notes, Waits: waitProbe, Tables: o.tables, Inbox: inboxProbe, Turns: r.turnObserver(o.stage7), LongText: o.longText,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -795,4 +830,13 @@ func mustSheet(t *testing.T, r *rig, name string, edit func(*sheetEdit)) presets
 	}
 	edit(&s)
 	return s
+}
+
+// turnObserver is the Citadel's end of the turns for the runtimes: the Service,
+// once it exists (the runtimes are made after it).
+func (r *rig) turnObserver(on bool) characters.TurnObserver {
+	if !on {
+		return nil
+	}
+	return r.svc
 }
