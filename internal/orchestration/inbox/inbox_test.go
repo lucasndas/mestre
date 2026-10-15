@@ -379,23 +379,23 @@ func TestWhatWaitsForACharacterThatEndsIsCancelled(t *testing.T) {
 	}
 }
 
-func TestMoreThanFiftyItemsWarnTheTableMasterOnceAndNothingIsDiscarded(t *testing.T) {
+func TestMoreItemsThanTheLimitWarnTheTableMasterOnceAndNothingIsDiscarded(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t)
+	w := newWorldMax(t, 5) // the limit of the document is 50; the rule is the same
 	master := w.add(characters.RoleTableMaster, "42-login", characters.NameTableMaster)
 	dev := w.dev("42-login", "Dev")
 	w.set(dev, characters.Busy)
 	w.set(master, characters.Busy)
-	for range 55 {
+	for range 8 {
 		w.enqueue(inbox.NewItem{Target: dev.ID, Kind: inbox.KindAgent, Sender: "Mestre", Text: "x"})
 	}
-	if n, _ := w.svc.Pending(w.ctx, dev.ID); n != 55 {
+	if n, _ := w.svc.Pending(w.ctx, dev.ID); n != 8 {
 		t.Fatalf("pending = %d: items are never discarded", n)
 	}
 	warnings := 0
 	pend, _ := w.svc.List(w.ctx, master.ID)
 	for _, it := range pend {
-		if it.Kind == inbox.KindSystem && strings.Contains(it.Text, "Dev") && strings.Contains(it.Text, "51 itens") {
+		if it.Kind == inbox.KindSystem && strings.Contains(it.Text, "Dev") && strings.Contains(it.Text, "6 itens") {
 			warnings++
 		}
 	}

@@ -168,7 +168,11 @@ type world struct {
 	n      int
 }
 
-func newWorld(t *testing.T) *world {
+func newWorld(t *testing.T) *world { return newWorldMax(t, 0) }
+
+// newWorldMax is a world whose inboxes warn above max items (the default of the
+// document when zero).
+func newWorldMax(t *testing.T, max int) *world {
 	t.Helper()
 	w := &world{t: t, ctx: context.Background(), clk: clock.NewFake(day0), chans: &fakeChannels{}, users: &fakeUsers{}, pauses: &fakePauses{paused: map[string]bool{}}}
 	path := filepath.Join(t.TempDir(), "mestre.db")
@@ -187,7 +191,7 @@ func newWorld(t *testing.T) *world {
 	}
 	w.reg = characters.Registry{DB: db}
 	w.deliv = &fakeDeliverer{w: w, busy: map[string]bool{}}
-	w.svc, err = inbox.NewService(inbox.Options{DB: &inbox.Store{DB: db}, Clock: w.clk, Registry: w.reg, Deliverer: w.deliv, Pauses: w.pauses, Channels: w.chans, Users: w.users})
+	w.svc, err = inbox.NewService(inbox.Options{DB: &inbox.Store{DB: db}, Clock: w.clk, Registry: w.reg, Deliverer: w.deliv, Pauses: w.pauses, Channels: w.chans, Users: w.users, MaxQueue: max})
 	if err != nil {
 		t.Fatal(err)
 	}
