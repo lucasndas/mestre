@@ -1,6 +1,6 @@
 # Orquestração
 
-> **Assunto:** índice da orquestração: workspaces, mesas, orquestradores, personagens, presets, conexões, esperas, cadeia de aprovação, regras temporárias de mesa, missões, rituais, pergaminhos e grimórios · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** índice da orquestração: workspaces, mesas, orquestradores, personagens, presets, conexões, esperas, cadeia de aprovação, regras temporárias de mesa, missões, rituais, pergaminhos e grimórios · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
@@ -9,8 +9,9 @@
 | [grao-mestre.md](grao-mestre.md) | papel, proteção, retomada, instruções do sistema e instruções extras do Grão-Mestre | ao mexer no orquestrador do workspace ou no modelo de instruções dele |
 | [mestre-da-mesa.md](mestre-da-mesa.md) | papel, liberdade dentro do teto, proteção, instruções do sistema e extras do Mestre da mesa | ao mexer no orquestrador da mesa ou no modelo de instruções dele |
 | [personagens.md](personagens.md) | criação sob demanda, escolha da máquina, limites, ciclo de vida, encerramento seguro, fixar, estados e histórico de estados, registro de terminais, retomada | ao mexer em criação, estados ou encerramento de terminais |
+| [personagens-no-codigo.md](personagens-no-codigo.md) | como o código implementa os personagens: Service e Runtime, registro, limites, prontidão, encerramento, retomada e a ligação com as conexões | ao mexer em `internal/orchestration/characters` |
 | [bases-e-fichas.md](bases-e-fichas.md) | campos de bases e fichas, exemplos, exportação/importação, perfis de conta | ao mexer em presets ou em várias contas por provedor |
-| [conexoes.md](conexoes.md) | conexões automáticas e manuais, visibilidade | ao mexer em quem fala com quem ou no `mestre list` |
+| [conexoes.md](conexoes.md) | conexões automáticas e manuais, remoção, visibilidade e como o código as guarda | ao mexer em quem fala com quem, no `mestre list` ou no `connect` |
 | [esperas-e-caixa-de-entrada.md](esperas-e-caixa-de-entrada.md) | fila e prioridade, entrega só quando livre, resposta pelo mesmo canal, ask e ask back, esperas, tempos limite, impasse | ao mexer em entrega de mensagens ou esperas |
 | [cadeia-de-aprovacao.md](cadeia-de-aprovacao.md) | superior de cada personagem, níveis da cadeia e o risco até onde cada um decide, condições da mesa para o `medio`, subida por teto ou prazo, salvaguardas, pedido montado pelo motor, catálogo de respostas | ao mexer em quem decide um pedido de aprovação |
 | [supervisao-da-cadeia.md](supervisao-da-cadeia.md) | o Grão-Mestre como supervisor: resumo não bloqueante das decisões das mesas, pausa de autonomia por mesa, métricas de fila por nível e alertas | ao mexer na visibilidade e nos freios das decisões de agentes ou nas filas de aprovação |

@@ -183,9 +183,10 @@ func MustRegistry(specs ...Spec) *Registry {
 	return r
 }
 
-// Default is the registry of this binary: the "casca" commands of
-// milestone 3 (list and ask, to exercise the channel) and the commands the
-// CLI answers by itself. The commands of each document of the CLI are added
+// Default is the registry of this binary: the "casca" commands (list and ask,
+// to exercise the channel in milestone 3, and connect, which the connections
+// use before the CLI of coordination, stage 10 of milestone 4) and the
+// commands the CLI answers by itself. The commands of each document of the CLI are added
 // here when their milestone arrives.
 func Default() *Registry {
 	return MustRegistry(
@@ -198,6 +199,13 @@ func Default() *Registry {
 			MinArgs: 2, MaxArgs: 2, Who: WhoAnyone, DefaultTimeout: AskDefaultTimeout,
 			Flags: []Flag{{"timeout", FlagDuration, "how long to wait (90s, 10m, 2h); the request stays pending after it"}},
 			Exits: []int{4, 5, 6, 7}},
+		Spec{Name: "connect", Group: GroupCoordination, Summary: "connect two characters, a scroll and a character, or two scrolls of a table",
+			Usage:   `mestre connect "<A>" "<B>" [--table "<table>"]`,
+			Example: `mestre connect "Dev" "Reviewer"`,
+			Args:    []Arg{{"<A>", "a character, scroll or tome"}, {"<B>", "a character, scroll or tome"}},
+			MinArgs: 2, MaxArgs: 2, Who: WhoTableMaster | WhoGrandMaster,
+			Flags: []Flag{{"table", FlagString, "the table, for the Grand Master (a table master connects in its own)"}},
+			Exits: []int{4}},
 		Spec{Name: "class check", Group: GroupCoordination, Summary: "validate a class and show how it applies to each provider",
 			Usage: `mestre class check "<class>"`, Example: `mestre class check "qa" --json`,
 			Args:    []Arg{{"<class>", "the class to validate"}},

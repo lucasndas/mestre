@@ -185,6 +185,9 @@ func (s *Service) insert(ctx context.Context, p placement) (Character, error) {
 func (s *Service) launch(ctx context.Context, c Character, p placement, resumed bool) error {
 	fail := func(err error) error {
 		if !resumed {
+			if s.o.Connections != nil {
+				_ = s.o.Connections.Ended(ctx, c)
+			}
 			if derr := s.o.Registry.Delete(ctx, c.ID); derr != nil {
 				s.log.Warn("characters: a character that did not start was not removed", "id", c.ID, "err", derr)
 			}

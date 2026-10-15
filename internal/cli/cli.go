@@ -8,8 +8,8 @@
 //
 // The commands of the documents of the CLI that belong to later milestones
 // are not here: they are added to Default with their own Spec and use this
-// package's shared code. Until then, `list` and `ask` are the "casca" that
-// the channel needs to be exercised ("casca" rule of
+// package's shared code. Until then, `list`, `ask` and `connect` are the
+// "casca" that the channel and the connections need to be exercised ("casca" rule of
 // docs/desenvolvimento/ordem-de-implementacao.md): the syntax and the happy
 // path through the channel.
 package cli

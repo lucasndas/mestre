@@ -276,6 +276,20 @@ type WaitProbe interface {
 	Active(ctx context.Context, characterID string) (reason string, ok bool, err error)
 }
 
+// Connector keeps the connections of the characters
+// (docs/orquestracao/conexoes.md, internal/orchestration/connections): the
+// automatic ones are made when a character is born and go away when it ends.
+type Connector interface {
+	// Born makes the automatic connections of a character just created. It is
+	// safe to call again.
+	Born(ctx context.Context, c Character) error
+	// Ended removes every connection of a character that ended.
+	Ended(ctx context.Context, c Character) error
+	// Inherit gives the connections of a character that was replaced to the
+	// one that takes its place.
+	Inherit(ctx context.Context, from, to Character) error
+}
+
 // Reporter is the way back to the Citadel: the transitions of the states of
 // the characters of a machine.
 type Reporter interface {

@@ -1,6 +1,6 @@
 # Conexões
 
-> **Assunto:** conexões automáticas e manuais entre personagens e pergaminhos, e o que cada agente enxerga · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** conexões automáticas e manuais entre personagens e pergaminhos, e o que cada agente enxerga · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -46,6 +46,15 @@ Para um agente X, o motor calcula na hora de cada comando:
 - Nada atravessa mesas, exceto a conexão Mestre da mesa ↔ Grão-Mestre.
 
 `mestre list` mostra exatamente isso: o próprio nome de X, os personagens visíveis (com máquina, classe e estado/motivo de espera) e os pergaminhos visíveis com suas conexões. Os comandos que miram um personagem não visível falham com "<Nome> não está conectado a você" (exit 3, `not_connected`; [convenções da CLI](../cli/convencoes.md)). O encaminhamento entre máquinas da Guilda é transparente ([convenções da CLI](../cli/convencoes.md)).
+
+### No código
+
+`internal/orchestration/connections`. Escolhas que o código fecha:
+- **Guardado:** `connections` (um par por linha, sem direção, na ordem em que o banco o guarda) e `connection_reasons` (os motivos); a ponta é `character`, `scroll` ou `tome`. Um tomo é guardado como tomo e expandido na hora de calcular a visibilidade, então os pergaminhos que entram depois já contam. Pergaminhos e tomos chegam com a etapa 7, pela interface `Scrolls`.
+- **Automáticas:** `Born` (chamado pelo `Service` dos personagens ao registrar), `Ended` (ao passar a `stopped`) e `Inherit` (a troca de ficha leva as conexões do antigo ao novo, motivos incluídos). `criador` só liga a um personagem vivo da mesma mesa que não seja o Grão-Mestre. `Reconcile` refaz as que faltam, na ordem Grão-Mestre, Mestres, resto; um Mestre novo liga toda a party da mesa. A missão chama `LinkQuest` (os pares são dela) e `EndQuest`.
+- **`connect`:** o nome vale na mesa (sem diferenciar maiúsculas): personagem primeiro, depois pergaminho ou tomo. Item que só existe em outra mesa: 2 `different_tables`; o Grão-Mestre como ponta: 3 `level_denied`; Mestre da mesa com `--table` de outra mesa: 3 `level_denied`; Grão-Mestre sem `--table`: 2 `table_required`; de algo consigo mesmo: 2 `same_item`; nome inexistente: 4 `not_visible`. Repetido responde `already_connected: true`.
+- **Remover:** `Disconnect` (Dono e Administrador) tira só o motivo `manual`; se há outro, a conexão fica. Sem `manual`, a recusa é 3 `automatic_connection` com os motivos.
+- **Alvo por nome:** `Target` e `Guard` (que a CLI de comunicação põe em volta de `ask`, `check` e `wait`): nome que existe na mesa do chamador e não é visível: 3 `not_connected`; de outra mesa ou inexistente: 4 `not_visible`. `CanSeeScroll` é o que `note` consulta.
 
 ## Regras e erros
 
