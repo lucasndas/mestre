@@ -30,12 +30,20 @@ type Settings struct {
 	// DenialsToPause is the number of denials in a row that pause a
 	// character.
 	DenialsToPause int
+	// SummaryEvery is how often the Grão-Mestre gets the summary of the
+	// decisions of the Mestres de mesa (cadeia.resumo_mesas).
+	SummaryEvery time.Duration
+	// QueueAlertOpen and QueueAlertFactor are the limits of the alert of a
+	// queue: more open requests than the first, or the oldest past the
+	// second times the deadline of the level (cadeia.alerta_fila).
+	QueueAlertOpen, QueueAlertFactor int
 }
 
 // DefaultSettings is the default content of the section.
 func DefaultSettings() Settings {
 	return Settings{AgentDeadline: 2 * time.Minute, GrandMasterDeadline: 10 * time.Minute, PeopleDeadline: 24 * time.Hour,
-		TempRuleMax: 24 * time.Hour, MesaDecides: slices.Clone(classes.DefaultMesaGroups), DenialsToPause: 3}
+		TempRuleMax: 24 * time.Hour, MesaDecides: slices.Clone(classes.DefaultMesaGroups), DenialsToPause: 3,
+		SummaryEvery: 30 * time.Minute, QueueAlertOpen: 10, QueueAlertFactor: 2}
 }
 
 func (s Settings) withDefaults() Settings {
@@ -57,6 +65,15 @@ func (s Settings) withDefaults() Settings {
 	}
 	if s.DenialsToPause <= 0 {
 		s.DenialsToPause = d.DenialsToPause
+	}
+	if s.SummaryEvery <= 0 {
+		s.SummaryEvery = d.SummaryEvery
+	}
+	if s.QueueAlertOpen <= 0 {
+		s.QueueAlertOpen = d.QueueAlertOpen
+	}
+	if s.QueueAlertFactor <= 0 {
+		s.QueueAlertFactor = d.QueueAlertFactor
 	}
 	return s
 }
@@ -85,7 +102,10 @@ type sectionYAML struct {
 	MesaDecide         []string `yaml:"mesa_decide"`
 	NegacoesParaPausar int      `yaml:"negacoes_para_pausar"`
 	ResumoMesas        string   `yaml:"resumo_mesas"`
-	AlertaFila         any      `yaml:"alerta_fila"`
+	AlertaFila         struct {
+		Abertos *int `yaml:"abertos"`
+		Fator   *int `yaml:"fator"`
+	} `yaml:"alerta_fila"`
 }
 
 // ParseSection reads and checks the cadeia section (the YAML of the section's
@@ -126,6 +146,21 @@ func ParseSection(data []byte, expiry time.Duration) (Settings, error) {
 	}
 	if err := dur("cadeia.regra_temporaria_max", y.RegraTemporariaMax, 7*24*time.Hour, &s.TempRuleMax); err != nil {
 		return Settings{}, err
+	}
+	if err := dur("cadeia.resumo_mesas", y.ResumoMesas, 0, &s.SummaryEvery); err != nil {
+		return Settings{}, err
+	}
+	if a := y.AlertaFila.Abertos; a != nil {
+		if *a < 1 || *a > 1000 {
+			return Settings{}, &SectionError{Item: "cadeia.alerta_fila.abertos", Reason: "goes from 1 to 1000"}
+		}
+		s.QueueAlertOpen = *a
+	}
+	if f := y.AlertaFila.Fator; f != nil {
+		if *f < 1 || *f > 10 {
+			return Settings{}, &SectionError{Item: "cadeia.alerta_fila.fator", Reason: "goes from 1 to 10"}
+		}
+		s.QueueAlertFactor = *f
 	}
 	if y.NegacoesParaPausar != 0 {
 		if y.NegacoesParaPausar < 1 || y.NegacoesParaPausar > 10 {

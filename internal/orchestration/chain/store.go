@@ -273,6 +273,38 @@ func (s *Store) AddSuggestion(ctx context.Context, x Suggestion) error {
 	})
 }
 
+// Window lists the requests that are open or closed since the time, with the
+// audit of each: what the queue metrics read the levels of a request from.
+func (s *Store) Window(ctx context.Context, since time.Time) ([]Request, map[int64][]AuditEntry, error) {
+	rs, err := s.list(ctx, `state = 'open' OR closed_at >= ?`, ms(since))
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT a.id, a.body FROM approval_audit a JOIN approval_requests r ON r.id = a.request
+		WHERE r.state = 'open' OR r.closed_at >= ? ORDER BY a.id`, ms(since))
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	audit := map[int64][]AuditEntry{}
+	for rows.Next() {
+		var (
+			id   int64
+			body string
+			e    AuditEntry
+		)
+		if err := rows.Scan(&id, &body); err != nil {
+			return nil, nil, err
+		}
+		if err := json.Unmarshal([]byte(body), &e); err != nil {
+			return nil, nil, err
+		}
+		e.ID = id
+		audit[e.Request] = append(audit[e.Request], e)
+	}
+	return rs, audit, rows.Err()
+}
+
 // Suggestions lists them, oldest first.
 func (s *Store) Suggestions(ctx context.Context) ([]Suggestion, error) {
 	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, body FROM approval_suggestions ORDER BY id`)

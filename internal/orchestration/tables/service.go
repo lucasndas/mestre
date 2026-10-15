@@ -49,6 +49,7 @@ type Options struct {
 	Profiles    Profiler
 	Destructive Destructive
 	Rituals     Rituals
+	Oversight   Oversight
 	Peers       Peers
 	// TempDir is a private folder for the bundles while they are sent
 	// (os.TempDir when empty).

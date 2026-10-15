@@ -166,6 +166,11 @@ type Orchestration struct {
 	Quests      *quests.Service
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
+	// Supervisor is the supervision of the chain: the summary of the
+	// decisions of the Mestres de mesa, the pause of the autonomy of a table
+	// and the queue metrics. Nil unless the chain was built without a
+	// ChainSupervision of its own.
+	Supervisor *chain.Supervisor
 	// TableRules are the temporary table rules (nil unless the chain was
 	// built): the source of their decrees for the effective rules and the
 	// classes.TableRuleGate of the engine.
@@ -370,6 +375,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		ch    *chain.Service
 		rit   *rituals.Service
 		trl   *tablerules.Service
+		sup   *chain.Supervisor
 	)
 	deactivate := o.Rituals
 	if deactivate == nil {
@@ -392,7 +398,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	tbl, err = tables.New(tables.Options{DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
 		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.Messages, Attachments: o.Attachments,
-		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
+		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Oversight: oversightRef{&sup}, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
 	if err != nil {
 		return nil, err
 	}
@@ -423,9 +429,18 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		if temp == nil {
 			temp = tempRulesRef{&trl}
 		}
+		supervision := o.ChainSupervision
+		if supervision == nil {
+			sup, err = chain.NewSupervisor(chain.SupervisorOptions{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock),
+				Inbox: ib, Policy: policy, Alerts: o.ChainAlerts, Tables: supTables{&tbl}, Reroute: rerouteRef{&ch}, Rules: ruleListerRef{&trl}, Logger: o.Logger})
+			if err != nil {
+				return nil, err
+			}
+			supervision = sup
+		}
 		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
 			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations,
-			Supervision: o.ChainSupervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
+			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}}, Logger: o.Logger})
 		if err != nil {
 			return nil, err
@@ -449,7 +464,11 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		if policy == nil {
 			policy = chain.StaticPolicy{}
 		}
-		if trl, err = newTableRules(o, chars, reg, ib, policy, qs, tbl); err != nil {
+		supervision := o.ChainSupervision
+		if sup != nil {
+			supervision = sup
+		}
+		if trl, err = newTableRules(o, chars, reg, ib, policy, qs, tbl, supervision); err != nil {
 			return nil, err
 		}
 		orc.TableRules = trl
@@ -467,6 +486,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	orc.Registry = reg
 	orc.Quests = qs
 	orc.Chain = ch
+	orc.Supervisor = sup
 	orc.Rituals, orc.Grimoires = rit, grims
 	orc.ClassCommands = classCommands(o, reg, ib)
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
@@ -498,6 +518,9 @@ func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scroll
 	o.Rituals.Register(fwd)
 	if o.ClassCommands != nil {
 		o.ClassCommands.Register(fwd)
+	}
+	if o.Supervisor != nil {
+		o.Supervisor.Register(fwd)
 	}
 }
 
@@ -545,6 +568,9 @@ func (o *Orchestration) External() ExternalFunc {
 		run("tables", func(ctx context.Context) error { return o.Tables.Run(ctx, sweepEvery) })
 		run("quests", func(ctx context.Context) error { return o.Quests.Loop(ctx, sweepEvery) })
 		run("rituals", func(ctx context.Context) error { return o.Rituals.Loop(ctx, ritualEvery) })
+		if o.Supervisor != nil {
+			run("supervision", func(ctx context.Context) error { return o.Supervisor.Loop(ctx, sweepEvery) })
+		}
 		if o.TableRules != nil {
 			run("table rules", func(ctx context.Context) error { return o.TableRules.Loop(ctx, sweepEvery) })
 		}
