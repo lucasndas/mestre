@@ -58,7 +58,7 @@ func (a *antigravity) HookFiles(req HookFilesRequest) ([]ManagedFile, error) {
 	if req.Root == "" || !absolute(req.Root) {
 		return nil, fmt.Errorf("antigravity hook files: the worktree %q is not absolute", req.Root)
 	}
-	group, err := a.hookGroup(req.OS, req.Binary)
+	group, err := a.hookGroup(machineOS(req.OS), req.Binary)
 	if err != nil {
 		return nil, err
 	}
