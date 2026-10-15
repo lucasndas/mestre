@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -60,6 +61,21 @@ func TestNativePermissionScreenTakesTheDecisionOfItsCall(t *testing.T) {
 	}
 	if got, _ := ru.Decision(t.Context(), "a1", "permission", dialog("npm install x")); got != "deny" {
 		t.Errorf("the screen of a paused call: %q, want deny", got)
+	}
+	// When the degraded decision of the dispatcher is known (it is computed
+	// from the snapshot), a provider that cannot allow by hook and asks
+	// natively (Antigravity) gets the same answer: an allowed read runs, so
+	// step 6 can finish; a denied call stays denied.
+	for _, tc := range []struct {
+		verdict classes.Verdict
+		want    string
+	}{{classes.Allow, "allow"}, {classes.Deny, "deny"}} {
+		paused := call(providers.EventPreTool, "git status", "")
+		paused.Answered, paused.Degraded = false, tc.verdict
+		c.hook(paused)
+		if got, _ := ru.Decision(t.Context(), "a1", "permission", dialog("git status")); got != tc.want {
+			t.Errorf("the screen of a paused call the dispatcher decided %q: %q, want %q", tc.verdict, got, tc.want)
+		}
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -118,9 +119,16 @@ func (c *character) hook(call Call) {
 		switch {
 		case !call.Answered:
 			// A paused call was decided by the degraded mode of the
-			// dispatcher, whose decision the run does not see: a screen
-			// for it is answered with a denial.
-			choice = "unknown"
+			// dispatcher, whose answer the run does not see but computes
+			// the same way: a screen for it (Antigravity asks natively
+			// what its hooks cannot allow) follows that decision, and
+			// without one it is denied.
+			switch call.Degraded {
+			case classes.Allow:
+				choice = "allow"
+			case "":
+				choice = "unknown"
+			}
 		case call.Answer.Verdict == hook.VerdictAllow:
 			choice = "allow"
 		}
