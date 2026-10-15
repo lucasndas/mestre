@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/orchestration/accounts"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/providers"
@@ -696,7 +697,8 @@ func TestTheBirthOfACharacterIsKeptInTheMachineDatabase(t *testing.T) {
 func TestEveryGeneratedSkillHasOnlyNameAndDescriptionAndTheMarker(t *testing.T) {
 	t.Parallel()
 	set := sessionzero.BuiltinModels{}.Current()
-	skills := []sessionzero.Skill{{Name: "mestre-comunicacao", Description: "Talk to other agents, read and write notes (pergaminhos), finish a task and wait without blocking, using the `mestre` CLI. Use whenever you need another agent, a shared note, or must report that your task is done.", Body: "x\n"}}
+	shared, _ := sessionzero.GenerateSkills(cli.Default())
+	skills := []sessionzero.Skill{shared}
 	for _, s := range set.Skills {
 		skills = append(skills, s)
 	}
