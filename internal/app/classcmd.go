@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -57,7 +58,23 @@ func classCommands(o OrchestrationOptions, reg characters.Registry, ib *inbox.Se
 			if err != nil {
 				return classes.ErrNotVisible
 			}
-			return reg.SetClass(ctx, c.ID, class)
+			// Only a plain character takes a class from the Master of the
+			// table: not an orchestrator, and never the caller itself (the
+			// orchestrators have the built-in class and the Master cannot
+			// widen its own rules).
+			if c.Role != characters.RoleCharacter || c.ID == who.Character {
+				return fmt.Errorf("%w: %s is not a plain character of the table; its class is not assigned", classes.ErrNotAuthorized, c.Name)
+			}
+			if err := reg.SetClass(ctx, c.ID, class); err != nil {
+				return err
+			}
+			if o.ChainRulesPublisher != nil {
+				if err := o.ChainRulesPublisher.Publish(ctx, c.ID); err != nil {
+					_ = reg.SetClass(ctx, c.ID, c.Class) // the rules of the new class could not be kept: it stays as it was
+					return err
+				}
+			}
+			return nil
 		},
 		NotifyGrandMaster: inbox.GrandMaster{S: ib}.NotifySystem,
 		Tmp: func(ctx context.Context, who classes.Caller) (string, error) {

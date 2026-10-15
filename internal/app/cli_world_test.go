@@ -227,6 +227,15 @@ type commWorld struct {
 	pre     *commPreRun
 	deleted []classes.DeleteRequest
 	allowed bool
+
+	// The Citadel side of the effective rules (withCitadelClasses): the
+	// builder, the publisher, the store of this machine and the profiles of
+	// the gate, when the world has them.
+	cc       *app.CitadelClasses
+	pub      *app.RulesPublisher
+	local    *classes.Store
+	agents   string
+	profiles cli.Profiles
 }
 
 // commPreRun is the machine running the pre-run of a ritual; its output is what
@@ -252,7 +261,7 @@ type commCeiling struct{ c *classes.Ceiling }
 
 func (c commCeiling) Current(context.Context) (*classes.Ceiling, error) { return c.c, nil }
 
-func newCommWorld(t *testing.T) *commWorld {
+func newCommWorld(t *testing.T, setup ...func(*commWorld, *app.OrchestrationOptions)) *commWorld {
 	t.Helper()
 	ctx := t.Context()
 	clk := clock.NewFake(time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC))
@@ -278,7 +287,7 @@ func newCommWorld(t *testing.T) *commWorld {
 		Ceiling: commCeiling{classes.DefaultCeiling()}, Clock: clk, OS: "linux", Skill: func(string) bool { return false }}
 	w.mach = &commMachines{Machines: orcfakes.NewMachines(clk), raw: map[string][]byte{}, screen: map[string]string{}}
 	w.mach.Chars = func() *characters.Service { return w.orc.Characters }
-	w.orc, err = app.NewOrchestration(app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"),
+	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"),
 		TempDir: filepath.Join(root, "tmp"), Git: git, Machines: w.mach, Presets: characters.Presets(commPresets{}), Builder: orcfakes.Builder{},
 		GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: commEpics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{},
 		Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")}, Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{},
@@ -288,7 +297,11 @@ func newCommWorld(t *testing.T) *commWorld {
 			w.deleted = append(w.deleted, d)
 			return w.allowed, nil
 		},
-		RitualPreRun: w.pre, RitualPermissions: commPermissions{}})
+		RitualPreRun: w.pre, RitualPermissions: commPermissions{}}
+	for _, f := range setup {
+		f(w, &oo)
+	}
+	w.orc, err = app.NewOrchestration(oo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,15 +332,19 @@ func newCommWorld(t *testing.T) *commWorld {
 
 	fwd := localchan.NewLocalForwarder()
 	w.orc.Register(fwd, nil)
-	gate := cli.NewGate(cli.GateConfig{Next: fwd, Profiles: cli.ProfilesFunc(func(ctx context.Context, id string) cli.Profile {
-		c, err := w.orc.Registry.Get(ctx, id)
-		if err != nil {
-			return cli.Profile{}
-		}
-		return cli.Profile{Role: map[characters.Role]cli.Role{
-			characters.RoleCharacter: cli.RoleCharacter, characters.RoleTableMaster: cli.RoleTableMaster, characters.RoleGrandMaster: cli.RoleGrandMaster,
-		}[c.Role]}
-	})})
+	profiles := w.profiles
+	if profiles == nil {
+		profiles = cli.ProfilesFunc(func(ctx context.Context, id string) cli.Profile {
+			c, err := w.orc.Registry.Get(ctx, id)
+			if err != nil {
+				return cli.Profile{}
+			}
+			return cli.Profile{Role: map[characters.Role]cli.Role{
+				characters.RoleCharacter: cli.RoleCharacter, characters.RoleTableMaster: cli.RoleTableMaster, characters.RoleGrandMaster: cli.RoleGrandMaster,
+			}[c.Role]}
+		})
+	}
+	gate := cli.NewGate(cli.GateConfig{Next: fwd, Profiles: profiles})
 	w.rig = localrig.New(clock.Real{}, localrig.Options{Config: localchan.Config{
 		Forwarder: gate, Local: map[string]localchan.Handler{localchan.CmdHelp: gate.Help()},
 	}})

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -13,13 +14,29 @@ import (
 
 // tempRulesRef is the temporary table rules seen by the chain, which is made
 // before the quests and the tables they depend on.
-type tempRulesRef struct{ p **tablerules.Service }
+type tempRulesRef struct {
+	p   **tablerules.Service
+	pub *RulesPublisher
+	log *slog.Logger
+}
 
+// Create makes the rule and sends the new effective rules of the characters
+// of the class. A failure to send leaves the rule made: the document the
+// machine keeps only lacks the pattern, which keeps asking (the safe side),
+// and the next publication carries it.
 func (r tempRulesRef) Create(ctx context.Context, t chain.TempRule) error {
 	if *r.p == nil {
 		return errors.New("the temporary table rules are not built")
 	}
-	return (*r.p).Create(ctx, t)
+	if err := (*r.p).Create(ctx, t); err != nil {
+		return err
+	}
+	if r.pub != nil {
+		if err := r.pub.PublishTable(ctx, t.Workspace, t.Table, t.Class); err != nil && r.log != nil {
+			r.log.Warn("app: the effective rules were not sent after a temporary table rule", "table", t.Table, "err", err)
+		}
+	}
+	return nil
 }
 
 // ruleMissions is the missions of the temporary table rules: the quest a

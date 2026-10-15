@@ -7,6 +7,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/protocol"
 )
 
@@ -23,6 +24,41 @@ func (p rulesProfiles) Profile(ctx context.Context, agentID string) cli.Profile 
 	}
 	allow := r.CLI.Allow
 	return cli.Profile{AllowsCLI: func(command string) bool { return classes.CLIAllows(allow, command) }}
+}
+
+// RegistryProfiles is the profile of a character as the Citadel knows it: the
+// level comes from the registry of the characters (never from the caller) and
+// the cli.allow from its effective rules. Whoever the registry does not know,
+// or any failure to read it, is an ordinary character that allows nothing; a
+// character whose rules cannot be read keeps its level and allows nothing of
+// the class. It is the value of Deps.Profiles of the Citadel.
+func RegistryProfiles(reg characters.Registry, rules classes.RulesSource) cli.Profiles {
+	return registryProfiles{reg: reg, rules: rules}
+}
+
+type registryProfiles struct {
+	reg   characters.Registry
+	rules classes.RulesSource
+}
+
+func (p registryProfiles) Profile(ctx context.Context, agentID string) cli.Profile {
+	c, err := p.reg.Get(ctx, agentID)
+	if err != nil {
+		return cli.Profile{}
+	}
+	out := cli.Profile{}
+	if p.rules != nil {
+		out = rulesProfiles{src: p.rules}.Profile(ctx, agentID)
+	}
+	switch c.Role {
+	case characters.RoleTableMaster:
+		out.Role = cli.RoleTableMaster
+	case characters.RoleGrandMaster:
+		out.Role = cli.RoleGrandMaster
+	default:
+		out.Role = cli.RoleCharacter
+	}
+	return out
 }
 
 // citadelDebug is item 5 of `mestre debug`: whether this engine reaches the

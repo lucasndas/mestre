@@ -210,9 +210,12 @@ func TestARequestWithoutAnAnswerClimbsWithTheSameIdAndExpiresAtThePeopleWithoutB
 // CA-CADEIA-05
 func TestADecisionThatBreaksTheAttenuationIsRefusedAndTheRequestClimbsAtOnce(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t)
+	// The rules of the Mestre da mesa are the ones the Citadel builds: the
+	// built-in class orquestrador hardened by the restrictions of its sheet.
+	w := newWorld(t, worldOpts{realClasses: true, restrictions: map[string]map[string]any{
+		"Mestre da mesa": {"commands": map[string]any{"deny": []string{"npm install *"}}},
+	}})
 	dev := w.recruit("Dev")
-	w.cls.yaml[w.master.ID] = "version: 1\ncommands:\n  deny: [\"npm install *\"]\n  default: ask\n"
 	id := w.shell(dev, "npm install x")
 	ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprove, Reason: "ok"})
 	if ref.Code != chain.CodeAttenuation || !ref.Climbed {

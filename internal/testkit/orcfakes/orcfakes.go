@@ -135,6 +135,8 @@ type Presets struct {
 	// Persistent are the sheets whose characters are persistent; the others are
 	// ephemeral.
 	Persistent map[string]bool
+	// Restrictions are the restrictions (permissions.yaml format) of a sheet.
+	Restrictions map[string]map[string]any
 }
 
 // Sheets are the sheets this double knows.
@@ -149,6 +151,7 @@ func (p Presets) Snapshot(_ context.Context, sheet string) (presets.Snapshot, er
 	if p.Persistent[sheet] {
 		s.Lifecycle = "persistent"
 	}
+	s.Restrictions = p.Restrictions[sheet]
 	return presets.Snapshot{Sheet: s, Base: presets.Base{Name: "claude-code", Command: "claude"}}, nil
 }
 
