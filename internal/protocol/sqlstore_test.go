@@ -13,6 +13,7 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 )
 
 type opener func(ctx context.Context, path string) (*store.DB, error)
@@ -39,7 +40,7 @@ func buildTemplates() (g, m []byte, err error) {
 	}
 	defer os.RemoveAll(dir)
 	ctx := context.Background()
-	gdb, err := guild.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
+	gdb, err := guildtpl.Open(ctx, filepath.Join(dir, "mestre.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		return nil, nil, err
 	}

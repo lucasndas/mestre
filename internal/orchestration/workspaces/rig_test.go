@@ -11,8 +11,8 @@ import (
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/fakegit"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -63,7 +63,7 @@ func newRig(t testing.TB) *rig {
 
 func (r *rig) openDB() *store.DB {
 	r.t.Helper()
-	db, err := guilddb.Open(r.ctx, filepath.Join(r.root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: r.clk})
+	db, err := guildtpl.Open(r.ctx, filepath.Join(r.root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: r.clk})
 	if err != nil {
 		r.t.Fatal(err)
 	}

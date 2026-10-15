@@ -19,8 +19,8 @@ import (
 	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/protorig"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
@@ -159,7 +159,7 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 	// instance A creates the Guild and is the Citadel
 	a := newInstance(t, "a")
 	a.guildDB = func() *store.DB {
-		db, err := guilddb.Open(ctx, filepath.Join(a.dir, "mestre.db"), store.Options{Synchronous: "OFF"})
+		db, err := guildtpl.Open(ctx, filepath.Join(a.dir, "mestre.db"), store.Options{Synchronous: "OFF"})
 		if err != nil {
 			t.Fatal(err)
 		}

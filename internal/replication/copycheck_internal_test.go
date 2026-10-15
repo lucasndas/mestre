@@ -10,6 +10,7 @@ import (
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 )
 
 // CA-REPL-01
@@ -19,7 +20,7 @@ func TestAFullCopyOfAnotherEpochOrGuildIsRefused(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	const guildID = "01J9Z0000000000000000000G1"
-	primary, err := guilddb.Open(ctx, filepath.Join(t.TempDir(), "p.db"), store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "p.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

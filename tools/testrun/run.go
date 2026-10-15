@@ -52,6 +52,13 @@ var Suites = map[string]Suite{
 // (docs/qualidade/testes.md#executor-testrun).
 const RaceFactor = 3
 
+// RaceGcflags turns off checkptr, the pointer-conversion check that -race
+// switches on, for the packages of modernc.org (the SQLite transpiled to Go):
+// it is a check of that library's own unsafe code, not of the data races, it
+// costs about half of the CPU of every SQL statement, and the repository's own
+// packages keep it (docs/qualidade/testes.md#executor-testrun).
+const RaceGcflags = "-gcflags=modernc.org/...=-d=checkptr=0"
+
 // Limits of the runner.
 const (
 	slowTest = 100 * time.Millisecond
@@ -158,7 +165,7 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 		args = append(args, "-tags", s.Tags)
 	}
 	if r.Race {
-		args = append(args, "-race")
+		args = append(args, "-race", RaceGcflags)
 	}
 	if to := goTimeout(s, r.runs()); to != "" {
 		args = append(args, "-timeout", to)

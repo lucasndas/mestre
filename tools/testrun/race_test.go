@@ -64,6 +64,9 @@ func TestRaceMultipliesTheBudget(t *testing.T) {
 			if got := strings.Contains(args, " -race"); got != c.race {
 				t.Fatalf("-race = %v, want %v: %s", got, c.race, args)
 			}
+			if got := strings.Contains(args, RaceGcflags); got != c.race {
+				t.Fatalf("checkptr off for modernc.org = %v, want %v: %s", got, c.race, args)
+			}
 			if !strings.Contains(args, "-timeout "+c.timeout+" ") {
 				t.Fatalf("want -timeout %s: %s", c.timeout, args)
 			}
