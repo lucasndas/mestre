@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/lucasndas/mestre/internal/providers"
@@ -102,6 +103,10 @@ type RiskResult struct {
 	// NoDelegation is an alto that no delegation opens: only an
 	// Administrator or above decides it (custo_extra above the ceiling).
 	NoDelegation bool `json:"no_delegation,omitempty"`
+	// Groups are the groups of the origins of a medio, sorted
+	// (docs/orquestracao/cadeia-de-aprovacao.md#condições-da-mesa);
+	// GroupNone is an origin that has none. Empty for the other risks.
+	Groups []string `json:"groups,omitempty"`
 }
 
 // RiskPolicy is the owner's part of the classification, from the approval
@@ -197,7 +202,7 @@ func (e *evaluator) classify(t *providers.Tool, checkFixed bool) RiskResult {
 			out.raise(w.pathRisk(e.key(p)))
 		}
 	}
-	return RiskResult{Risk: out.risk, TableVersion: RiskTableVersion, Rule: out.rule, Adjustment: out.adj}
+	return RiskResult{Risk: out.risk, TableVersion: RiskTableVersion, Rule: out.rule, Adjustment: out.adj, Groups: groupsOf(out)}
 }
 
 // riskOut is the risk of a part with the rule that gave it.
@@ -205,13 +210,30 @@ type riskOut struct {
 	risk Risk
 	rule string
 	adj  int
+	// all are the rules of every origin of a medio (the first is rule), for
+	// the groups of the chain; empty means rule alone.
+	all []string
 }
 
-// raise keeps the higher risk; on a tie, the first rule.
+// raise keeps the higher risk; on a tie, the first rule (a medio also keeps
+// the rules of the other origins).
 func (o *riskOut) raise(n riskOut) {
-	if o.risk == "" || n.risk.rank() > o.risk.rank() {
+	switch {
+	case o.risk == "" || n.risk.rank() > o.risk.rank():
 		*o = n
+		if n.risk == RiskMedium {
+			o.all = slices.Clone(n.origins())
+		}
+	case n.risk == RiskMedium && o.risk == RiskMedium:
+		o.all = append(slices.Clone(o.origins()), n.origins()...)
 	}
+}
+
+func (o riskOut) origins() []string {
+	if len(o.all) > 0 {
+		return o.all
+	}
+	return []string{o.rule}
 }
 
 func (o riskOut) set() bool { return o.risk != "" }

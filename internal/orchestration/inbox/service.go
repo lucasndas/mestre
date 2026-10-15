@@ -32,6 +32,13 @@ type Pauses interface {
 	Paused(ctx context.Context, workspace, table string) (bool, error)
 }
 
+// Holds says whether one character, and only it, gets nothing delivered: the
+// pause the circuit breaker of the chain of approval puts on a character
+// (docs/orquestracao/cadeia-de-aprovacao.md#salvaguardas).
+type Holds interface {
+	Held(ctx context.Context, characterID string) (bool, error)
+}
+
 // Channels takes an answer to a user to the channel it came from (Telegram,
 // the panel: milestones 5 and 6). It returns ErrChannelDown when the channel
 // cannot take it now; the answer is then kept and sent when ChannelUp is told.
@@ -55,6 +62,7 @@ type Options struct {
 	// Pauses, Channels and Users may be nil: nothing is paused, an answer to
 	// a user is kept until a channel is told, people are not told.
 	Pauses   Pauses
+	Holds    Holds
 	Channels Channels
 	Users    Users
 	// MaxQueue defaults to DefaultMaxQueue.
@@ -220,6 +228,11 @@ func (s *Service) pumpOnce(ctx context.Context, target string) error {
 	}
 	if _, busy, err := s.st.InFlight(ctx, target); err != nil || busy {
 		return err
+	}
+	if s.o.Holds != nil {
+		if held, err := s.o.Holds.Held(ctx, target); err != nil || held {
+			return err
+		}
 	}
 	onlyUsers := false
 	if s.o.Pauses != nil {
