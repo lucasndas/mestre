@@ -202,6 +202,21 @@ func commitIdentityAndHistory(t *testing.T, h Harness) {
 	isErr(t, err, gitx.ErrFileNotFound)
 	_, err = r.ReadFile(ctx, "nope", "a.txt")
 	isErr(t, err, gitx.ErrRefNotFound)
+	// The path is relative to the root of the repository, whatever the folder
+	// the tool runs in: spellings of the same file read it, the rest is refused.
+	for _, p := range []string{"./a.txt", "a.txt", "./././a.txt"} {
+		if b := string(must(r.ReadFile(ctx, "main", p))); b != "two\n" {
+			t.Fatalf("a.txt as %q = %q", p, b)
+		}
+	}
+	for _, p := range []string{"", "/a.txt", "../a.txt", "x/../../a.txt", ".", "..", "a.txt\n"} {
+		_, err = r.ReadFile(ctx, "main", p)
+		isErr(t, err, gitx.ErrInvalidArgument)
+	}
+	for _, p := range []string{"a.txt/", "nope/", "a.txt/x"} {
+		_, err = r.ReadFile(ctx, "main", p)
+		isErr(t, err, gitx.ErrFileNotFound)
+	}
 
 	yes := must(r.IsAncestor(ctx, string(c1), "main"))
 	no := must(r.IsAncestor(ctx, "main", string(c1)))

@@ -84,12 +84,19 @@ type WorktreeRequest struct {
 	// ExcludeMestre puts /.mestre/ whole in the exclusions: the workspace
 	// keeps .mestre/ local (the default until the users answer).
 	ExcludeMestre bool
+	// NoClaudeSkillCopy stops the copy of the skill in .claude/skills/ and
+	// removes the one that exists (the approved decision of the Owner or an
+	// Administrator, docs/sessao-zero/mesa.md#regras-e-erros).
+	NoClaudeSkillCopy bool
 }
 
 // WorktreeReport is what Ensure did.
 type WorktreeReport struct {
 	// Written are the files made or changed, relative to the worktree.
 	Written []string
+	// Removed are the generated files taken away (the copy of the skill for
+	// Claude Code once it is turned off).
+	Removed []string
 	// Problems are the files it did not touch, with the reason; the
 	// characters of the provider that depends on one do not start there
 	// (docs/sessao-zero/mesa.md#regras-e-erros).
@@ -142,6 +149,16 @@ func (w Worktree) Ensure(ctx context.Context, req WorktreeRequest) (WorktreeRepo
 		skill = CommunicationSkill()
 	}
 	for _, rel := range []string{agentsSkill, claudeSkill} {
+		if rel == claudeSkill && req.NoClaudeSkillCopy {
+			removed, err := removeSkill(filepath.Join(req.Dir, filepath.FromSlash(rel)))
+			switch {
+			case err != nil:
+				rep.Problems = append(rep.Problems, Problem{Path: rel, Reason: err.Error()})
+			case removed:
+				rep.Removed = append(rep.Removed, rel)
+			}
+			continue
+		}
 		changed, err := writeSkill(filepath.Join(req.Dir, filepath.FromSlash(rel)), skill)
 		switch {
 		case err != nil:
@@ -279,6 +296,30 @@ func writeSkill(file string, content []byte) (bool, error) {
 	}
 	if err := safefile.Write(file, content, safefile.Options{Guard: guard}); err != nil {
 		return false, fmt.Errorf("não foi gravado: %w", err)
+	}
+	return true, nil
+}
+
+// removeSkill removes a generated skill, leaving alone a file of the same name
+// that is not generated.
+func removeSkill(file string) (bool, error) {
+	cur, before, err := safefile.Read(file, maxManaged)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("não foi lido: %w", err)
+	case !bytes.Contains(cur, []byte(skillMarker)):
+		return false, errors.New("existe e não tem o marcador de arquivo gerado: nada foi removido")
+	}
+	guard := func(now safefile.Info) error {
+		if !now.Same(before) {
+			return errors.New("o arquivo mudou enquanto era removido")
+		}
+		return nil
+	}
+	if err := safefile.Remove(file, guard); err != nil {
+		return false, fmt.Errorf("não foi removido: %w", err)
 	}
 	return true, nil
 }

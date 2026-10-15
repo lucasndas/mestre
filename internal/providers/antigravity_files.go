@@ -58,7 +58,7 @@ func (a *antigravity) HookFiles(req HookFilesRequest) ([]ManagedFile, error) {
 	if req.Root == "" || !absolute(req.Root) {
 		return nil, fmt.Errorf("antigravity hook files: the worktree %q is not absolute", req.Root)
 	}
-	group, err := a.hookGroup(req.OS, req.Binary)
+	group, err := a.hookGroup(machineOS(req.OS), req.Binary)
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +66,24 @@ func (a *antigravity) HookFiles(req HookFilesRequest) ([]ManagedFile, error) {
 	return []ManagedFile{{Path: path, Merge: func(cur []byte) ([]byte, error) {
 		return mergeKey(cur, path, hooksKey, group)
 	}}}, nil
+}
+
+var _ HookStripper = (*antigravity)(nil)
+
+// StripHooks takes the `mestre` key out of the JSON object of cur and keeps
+// every other key; a file without it comes back as it is.
+func (a *antigravity) StripHooks(path string, cur []byte) ([]byte, error) {
+	obj, err := parseJSONObject(cur)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", ErrNativeFile, path, err)
+	}
+	if _, ok := obj.get(hooksKey); !ok {
+		return cur, nil
+	}
+	obj.keys = slices.DeleteFunc(obj.keys, func(k string) bool { return k == hooksKey })
+	delete(obj.vals, hooksKey)
+	delete(obj.dup, hooksKey)
+	return obj.bytes()
 }
 
 // hookGroup is the value of the `mestre` key.
@@ -108,10 +126,10 @@ func (a *antigravity) hookCommand(goos, binary, event string) (string, error) {
 		if strings.ContainsAny(binary, `"%`) {
 			return "", fmt.Errorf("antigravity hook files: the path of the mestre binary %q has a character cmd cannot quote", binary)
 		}
-		return `if exist "` + binary + `" ("` + binary + `"` + args + `) else (echo ` + neutral + `)`, nil
+		return `if not defined MESTRE_AGENT_ID (echo ` + neutral + `) else if exist "` + binary + `" ("` + binary + `"` + args + `) else (echo ` + neutral + `)`, nil
 	}
 	q := "'" + strings.ReplaceAll(binary, "'", `'\''`) + "'"
-	return "if [ -e " + q + " ]; then exec " + q + args + "; else printf '%s\\n' '" + neutral + "'; fi", nil
+	return `if [ -n "$MESTRE_AGENT_ID" ] && [ -e ` + q + ` ]; then exec ` + q + args + "; else printf '%s\\n' '" + neutral + "'; fi", nil
 }
 
 // mergeKey puts value under key in the JSON object of cur, keeping every

@@ -1,6 +1,6 @@
 # Sessão zero da mesa
 
-> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** os arquivos que o motor gera em cada worktree de mesa (e no clone principal), a exclusão local do git, a mescla gerenciada, a confiança de pasta por provedor e a regra de não atrapalhar quem clona · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -29,9 +29,9 @@ A geração é idempotente: rodar de novo sem mudança nos modelos não altera n
 Os hooks do Codex não ficam no worktree, e sim no perfil de conta ([codex](../provedores/codex.md)). Arquivos por personagem (`.mestre/agents/<id>/` e `.agents/agents/mestre-<id>.md`) são gerados ao criar o personagem: [personagem](personagem.md). Classes da mesa e pergaminhos têm a Cidadela como fonte; o motor de cada Torre atualiza as cópias quando a Cidadela avisa que mudaram. O conteúdo dos hooks (eventos, comandos e respostas) é do adaptador ([adaptador](../provedores/adaptador.md), [0012](../decisoes/0012-despachante-unico-de-hooks.md)).
 
 ### `.git/info/exclude`
-O motor mantém um bloco próprio no `info/exclude` do repositório de onde o worktree sai (o arquivo vale para todos os worktrees daquele repositório):
+O motor mantém um bloco próprio, de nome `managed`, no `info/exclude` do repositório de onde o worktree sai (o arquivo vale para todos os worktrees daquele repositório). Os marcadores são os do código que mexe no arquivo (`# >>> mestre:<nome> >>>` e `# <<< mestre:<nome> <<<`), e um teste confere que o bloco abaixo é o que o motor grava:
 ```
-# >>> mestre: managed block, do not edit >>>
+# >>> mestre:managed >>>
 /.mestre/agents/
 /.mestre/anexos/
 /.mestre/run/
@@ -41,7 +41,7 @@ O motor mantém um bloco próprio no `info/exclude` do repositório de onde o wo
 /.claude/settings.local.json
 /.agents/hooks.json
 /.mestre/
-# <<< mestre <<<
+# <<< mestre:managed <<<
 ```
 - `/.mestre/` só aparece quando o workspace escolheu "só local" ([workspace](workspace.md)).
 - `.agents/hooks.json` só entra se foi o Mestre que criou o arquivo (um arquivo da pessoa, ainda não versionado, continua aparecendo para ela no `git status`).
@@ -51,13 +51,13 @@ O motor mantém um bloco próprio no `info/exclude` do repositório de onde o wo
 Para arquivos que podem já existir com conteúdo da pessoa:
 1. Ler o arquivo. Se não for válido (JSON quebrado, por exemplo), **não tocar**: registrar o erro, alertar no checklist e não iniciar personagens daquele provedor ali até resolver.
 2. Retirar só a parte do Mestre, reconhecida pelo marcador do tipo de arquivo:
-   - texto (`info/exclude`): o bloco entre `# >>> mestre` e `# <<< mestre <<<`;
-   - hooks do Claude Code: os handlers cujo comando é a chamada do Mestre (abaixo); handlers da pessoa ficam onde estão, e os do Mestre entram **no fim** de cada lista;
+   - texto (`info/exclude`): o bloco entre `# >>> mestre:managed >>>` e `# <<< mestre:managed <<<`;
+   - hooks do Claude Code: os handlers cujo comando é a chamada do Mestre (abaixo) e a `statusLine` do Mestre; handlers da pessoa ficam onde estão, e os do Mestre entram **no fim** de cada lista;
    - hooks do Antigravity: a chave de topo `mestre`;
    - skills: pastas `mestre-*` com o marcador de gerado ([skills-geradas](../cli/skills-geradas.md)).
 3. Acrescentar a parte atual do Mestre e gravar de forma atômica (arquivo temporário + renomear), só se o conteúdo mudou.
 
-**Arquivo já versionado pelo projeto** (ex.: um `.agents/hooks.json` do repositório): a mescla é feita e o motor marca o arquivo com `git update-index --skip-worktree`, para que a parte do Mestre não apareça no `git status` nem entre em commits. Antes de sincronizar a branch ou atualizar da principal (inclusive por rebase), o motor tira o bloco e a marca, sincroniza e reaplica; assim o `skip-worktree` nunca está ligado durante um rebase. Se o projeto mudou o mesmo arquivo, vale a versão do projeto e a parte do Mestre é mesclada de novo por cima.
+**Arquivo já versionado pelo projeto** (ex.: um `.agents/hooks.json` do repositório): a mescla é feita e o motor marca o arquivo com `git update-index --skip-worktree`, para que a parte do Mestre não apareça no `git status` nem entre em commits. Antes de sincronizar a branch ou atualizar da principal (inclusive por rebase), o motor desliga a marca e tira a parte do Mestre do arquivo (devolvendo-o byte a byte ao que o projeto tem no HEAD, se só a parte do Mestre o diferia; mudanças da pessoa ficam), sincroniza e reaplica, mesmo se a sincronização falhar; assim o `skip-worktree` nunca está ligado durante um rebase. Quem tira a parte do Mestre é o adaptador de cada provedor (`HookStripper`). Se o projeto mudou o mesmo arquivo, vale a versão do projeto e a parte do Mestre é mesclada de novo por cima.
 
 ### Confiança de pasta por provedor
 Sem confiança, hooks e instruções do projeto não carregam. O motor grava a confiança antes de iniciar o personagem, em cada perfil de conta da máquina que vai rodar ali ([bases-e-fichas](../orquestracao/bases-e-fichas.md)):
@@ -65,7 +65,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 | Provedor | Onde | O quê |
 |---|---|---|
 | Claude Code | `.claude.json` do `CLAUDE_CONFIG_DIR` do perfil | `projects["<worktree>"].hasTrustDialogAccepted = true` (nunca a chave do espelho) |
-| Codex | `config.toml` do `CODEX_HOME` do perfil | `[projects."<raiz git>"] trust_level = "trusted"`; hooks: confiar uma vez (ver [codex](../provedores/codex.md)) |
+| Codex | `config.toml` do `CODEX_HOME` do perfil | `[projects."<worktree>"] trust_level = "trusted"` (nunca a raiz do espelho); hooks: confiar uma vez (ver [codex](../provedores/codex.md)) |
 | Antigravity | `settings.json` em `.gemini/antigravity-cli/` do `HOME` do perfil | caminho do worktree em `trustedWorkspaces` |
 
 - A chave exata (worktree ou raiz do checkout principal) e os detalhes de cada provedor estão nos documentos de provedor.
@@ -75,12 +75,15 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 
 ### Não atrapalhar quem clona
 - Os arquivos gerados ficam fora do git (acima). Se mesmo assim algum arquivo de hook do Mestre acabar no repositório, ele precisa funcionar numa máquina sem o Mestre, porque no Antigravity um hook que falha bloqueia o agente.
-- Por isso o comando gravado em todo arquivo de hook não chama o `mestre` direto: é uma linha que só chama o `mestre hook` se `MESTRE_AGENT_ID` existe e o binário é encontrado; senão imprime a resposta neutra do evento e sai com 0. Exemplo (Antigravity, PreToolUse, Linux):
+- Por isso o comando gravado em todo arquivo de hook não chama o `mestre` direto: é uma linha que só chama o `mestre hook` se `MESTRE_AGENT_ID` existe e o binário é encontrado (no Claude Code, pelo `command -v`; no Antigravity, no caminho estável, que não tem `MESTRE_CLI` de reserva); senão imprime a resposta neutra do evento e sai com 0. Exemplo (Antigravity, PreToolUse, Linux):
   ```sh
-  [ -n "$MESTRE_AGENT_ID" ] && command -v "${MESTRE_CLI:-mestre}" >/dev/null 2>&1 && exec "${MESTRE_CLI:-mestre}" hook --provider antigravity --event PreToolUse; echo '{"decision":"allow"}'
+  if [ -n "$MESTRE_AGENT_ID" ] && [ -e '/caminho/estavel/mestre' ]; then exec '/caminho/estavel/mestre' hook --provider antigravity --event PreToolUse; else printf '%s\n' '{"decision":"allow"}'; fi
   ```
 - Resposta neutra: `{"decision":"allow"}` no PreToolUse do Antigravity; `{}` nos outros eventos dele; saída vazia no Claude Code e no Codex.
 - A mesma linha é a forma definitiva (o conteúdo é fixo, para o Codex confiar uma vez). Dentro do `mestre hook` a regra se repete: sem `MESTRE_AGENT_ID`, libera e sai ([adaptador](../provedores/adaptador.md)).
+
+### Como o motor faz
+`sessionzero.Table` (`internal/sessionzero/table.go`) junta as peças. `Prepare` gera os arquivos do worktree (`Worktree.Ensure`), copia as classes e os anexos (pelo `safefile`; remove da cópia da classe o que saiu do pacote, nunca um anexo) e grava a confiança em cada perfil. `CheckStart` roda antes de cada personagem: é o `Prepare` mais a recusa (`BlockedError`) quando um arquivo do provedor do personagem não foi gerado; os outros provedores seguem, e o aviso aos usuários sai uma vez por conjunto de problemas. `Release` tira a confiança quando o worktree é removido; `Sync` envolve a atualização da branch. As fontes das classes, dos anexos, da conformidade e da aprovação da cópia são interfaces pequenas (o Telegram, o fluxo de aprovação e o checklist são dos marcos 5 e 7).
 
 ## Regras e erros
 
@@ -97,7 +100,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 - **CA-SZ-MESA-05** · *completa* — **Dado** uma mesa com worktree na Cidadela e numa Torre, **quando** os dois são gerados, **então** todos os arquivos da tabela existem nos dois e `git status --porcelain` fica vazio nos dois (MVP-3).
 - **CA-SZ-MESA-06** · *completa* — **Dado** um `.agents/hooks.json` versionado e mesclado, **quando** um agente faz commit de tudo, **então** o commit não contém o hook `mestre`; e, num clone novo sem o `mestre` no PATH, o agente Antigravity falso tem o PreToolUse liberado (MVP-3).
 - **CA-SZ-MESA-07** · *completa* — **Dado** um worktree com confiança gravada nos três provedores, **quando** a mesa é encerrada e o worktree removido, **então** as entradas de confiança daquele caminho deixam de existir.
-- **CA-SZ-MESA-08** · *rápida* — **Dado** o comando de hook gerado, **quando** roda sem `MESTRE_AGENT_ID`, **então** imprime a resposta neutra do evento, sai com 0 e não executa o `mestre`.
+- **CA-SZ-MESA-08** · *completa* — **Dado** o comando de hook gerado, **quando** roda sem `MESTRE_AGENT_ID`, **então** imprime a resposta neutra do evento, sai com 0 e não executa o `mestre`. A linha roda num shell de verdade, e a suíte rápida não inicia processos ([testes](../qualidade/testes.md#regras-e-erros)); a rápida confere só a forma da linha (o teste de `MESTRE_AGENT_ID` vem antes da chamada).
 - **CA-SZ-MESA-09** · *rápida* — **Dado** a conformidade marcando que o Claude Code lê `.agents/skills/`, **quando** a geração roda sem a aprovação de um Dono ou Administrador, **então** a cópia em `.claude/skills/` continua sendo gerada; **quando** a aprovação existe, **então** a cópia é removida e não volta.
 
 ## Depende de

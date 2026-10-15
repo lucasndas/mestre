@@ -118,6 +118,59 @@ func (c *claudeCode) HookFiles(req HookFilesRequest) ([]ManagedFile, error) {
 	}}}, nil
 }
 
+var _ HookStripper = (*claudeCode)(nil)
+
+// StripHooks takes the Mestre's handlers and statusLine out of the settings
+// and keeps the rest; a file without them comes back as it is.
+func (c *claudeCode) StripHooks(path string, cur []byte) ([]byte, error) {
+	obj, err := parseObject(cur, path)
+	if err != nil {
+		return nil, err
+	}
+	found := false
+	hooks, _ := obj["hooks"].(map[string]any)
+	for event, v := range hooks {
+		groups, ok := v.([]any)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s: hooks.%s is not a list", ErrNativeFile, path, event)
+		}
+		kept := stripMestre(groups)
+		if mestreHandlers(groups) {
+			found = true
+		}
+		if len(kept) == 0 {
+			delete(hooks, event)
+		} else {
+			hooks[event] = kept
+		}
+	}
+	if found && len(hooks) == 0 {
+		delete(obj, "hooks")
+	}
+	if sl, has := obj["statusLine"]; has && isMestreStatusLine(sl) {
+		found = true
+		delete(obj, "statusLine")
+	}
+	if !found {
+		return cur, nil
+	}
+	return marshalObject(obj)
+}
+
+// mestreHandlers reports whether any group has a handler of the Mestre.
+func mestreHandlers(groups []any) bool {
+	for _, g := range groups {
+		group, _ := g.(map[string]any)
+		list, _ := group["hooks"].([]any)
+		for _, h := range list {
+			if hm, ok := h.(map[string]any); ok && isMestreCommand(hm["command"]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // mergeClaudeHooks takes the Mestre's handlers out of every event and puts
 // the current ones at the end of each list, after the person's. The rest of
 // the file is kept; a hooks key of another shape is an error.

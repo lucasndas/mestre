@@ -1,6 +1,6 @@
 # Adaptador de provedor
 
-> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -15,7 +15,7 @@ Cada provedor tem um adaptador registrado pelo seu id (`claude-code`, `codex`, `
 | Operação | Recebe | Devolve | Quando |
 |---|---|---|---|
 | `BuildLaunch` (montar comando de início) | base, ficha, personagem, perfil de conta, SO da máquina, regras efetivas, id de sessão a retomar (opcional) | executável, argumentos, ambiente, pasta | ao criar ou [retomar](#retomada-de-sessão) um personagem |
-| `HookFiles` (gerar arquivos de hooks) | worktree ou perfil de conta, SO da máquina, caminho estável do binário `mestre` | lista de arquivos e a parte gerenciada de cada um | ao abrir a mesa ([mesa](../sessao-zero/mesa.md)), ao configurar o perfil e ao regenerar |
+| `HookFiles` (gerar arquivos de hooks) | worktree ou perfil de conta, SO da máquina, caminho estável do binário `mestre` | lista de arquivos e a parte gerenciada de cada um (nos do worktree, também como tirá-la: `HookStripper`) | ao abrir a mesa ([mesa](../sessao-zero/mesa.md)), ao configurar o perfil e ao regenerar |
 | `PreTrust` (pré-confiar pasta) | perfil de conta, caminho do worktree, raiz do repositório | entradas gravadas no arquivo de confiança do provedor | antes do primeiro personagem do worktree; idempotente |
 | `DeliverMestreLayer` (entregar camada do Mestre) | caminho de `MESTRE.md` do personagem | argumentos e/ou arquivos extras | junto com `BuildLaunch` ([personagem](../sessao-zero/personagem.md)) |
 | `NormalizeHook` (normalizar entrada de hook) | evento nativo, JSON do stdin | evento no formato interno | a cada chamada de `mestre hook` |

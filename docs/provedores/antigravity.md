@@ -1,6 +1,6 @@
 # Antigravity CLI (`agy`)
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -41,7 +41,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 - **Saída:** PreToolUse `{"decision": "allow"|"deny"|"ask"|"force_ask"|"deny_unless_prior_grant", "reason", "permissionOverrides", "overwrite"}`; PostToolUse `{}`; PreInvocation `{"injectSteps": […]}`; PostInvocation `{"injectSteps": [], "terminationBehavior": ""}`; Stop `{}` (só `"decision":"continue"` impediria a parada).
 - **Falha fechada (testado no PreToolUse):** exit diferente de 0, saída que não é JSON, tempo esgotado e `{}` sem decisão **bloqueiam** a ferramenta. O despachante sempre imprime a decisão explícita ([despachante](despachante-de-hooks.md#respostas-por-provedor)). Um `allow` do hook **não** passa por cima do sistema de permissões nativo.
 - Para PostToolUse, PreInvocation, PostInvocation e Stop, o despachante supõe a mesma falha fechada do PreToolUse: sempre devolve JSON válido e nunca sai com erro de propósito, então não depende do comportamento de falha desses eventos. **Tempos limite gerados:** 30 s em PreToolUse, PreInvocation e PostInvocation; 60 s em PostToolUse e Stop.
-- **Binário ausente:** um hook cujo comando não existe bloqueia o agente. O comando gerado testa se o `mestre` existe no caminho estável e, se não existir, imprime a resposta neutra (`{"decision":"allow"}` ou `{}`); se existir, executa-o e devolve o exit dele (uma falha do binário nunca vira `allow`). Em `sh`: `if [ -e '<mestre>' ]; then exec '<mestre>' hook …; else printf '%s\n' '<neutra>'; fi`; em `cmd`: `if exist "<mestre>" ("<mestre>" hook …) else (echo <neutra>)`, e o caminho não pode ter `"` nem `%`.
+- **Binário ausente:** um hook cujo comando não existe bloqueia o agente. O comando gerado testa se `MESTRE_AGENT_ID` existe e se o `mestre` existe no caminho estável e, se um dos dois faltar, imprime a resposta neutra (`{"decision":"allow"}` ou `{}`) sem executar o `mestre` ([guarda da mesa](../sessao-zero/mesa.md#não-atrapalhar-quem-clona)); se os dois existirem, executa-o e devolve o exit dele (uma falha do binário nunca vira `allow`). Em `sh`: `if [ -n "$MESTRE_AGENT_ID" ] && [ -e '<mestre>' ]; then exec '<mestre>' hook …; else printf '%s\n' '<neutra>'; fi`; em `cmd`: `if not defined MESTRE_AGENT_ID (echo <neutra>) else if exist "<mestre>" ("<mestre>" hook …) else (echo <neutra>)`, e o caminho não pode ter `"` nem `%`.
 
 ```json
 {"mestre": {"enabled": true,
