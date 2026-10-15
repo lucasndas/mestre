@@ -79,6 +79,7 @@ type Service struct {
 	stages map[Stage]StageFunc
 	sched  map[string]*entry
 	locks  map[string]*sync.Mutex // "stage/<slug>" for the stages, "fetch/<slug>" for fetch and advance
+	waits  map[string]waiting     // stages waiting for something outside, by slug
 	wake   chan struct{}
 }
 
@@ -117,7 +118,7 @@ func New(o Options) (*Service, error) {
 		log = slog.New(slog.DiscardHandler)
 	}
 	s := &Service{o: o, store: Store{DB: o.DB}, layout: o.Layout, log: log,
-		stages: map[Stage]StageFunc{}, sched: map[string]*entry{}, locks: map[string]*sync.Mutex{}, wake: make(chan struct{}, 1)}
+		stages: map[Stage]StageFunc{}, sched: map[string]*entry{}, locks: map[string]*sync.Mutex{}, waits: map[string]waiting{}, wake: make(chan struct{}, 1)}
 	s.stages[StageMirror] = s.CreateMirror
 	return s, nil
 }
@@ -363,13 +364,71 @@ func (s *Service) Prepare(ctx context.Context, slug string) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			var we *WaitError
+			if errors.As(err, &we) {
+				return s.stageWaits(ctx, w, we)
+			}
+			s.clearWait(slug)
 			return s.stageFailed(ctx, w, err)
 		}
+		s.clearWait(slug)
 		if err := s.store.StageDone(ctx, slug, s.o.Clock.Now(), w.Stage); err != nil {
 			return err
 		}
 		s.log.Info("workspace stage done", "workspace", slug, "stage", w.Stage)
 	}
+}
+
+// waiting is a stage that waits: why, and when the engine runs it again.
+type waiting struct {
+	stage  Stage
+	reason string
+	until  time.Time
+}
+
+// stageWaits records that the stage waits. A stage that failed before is no
+// longer failing: it got as far as waiting.
+func (s *Service) stageWaits(ctx context.Context, w Workspace, we *WaitError) error {
+	poll := we.Poll
+	if poll <= 0 {
+		poll = DefaultWaitPoll
+	}
+	s.mu.Lock()
+	s.waits[w.Slug] = waiting{stage: w.Stage, reason: we.Reason, until: s.o.Clock.Now().Add(poll)}
+	s.mu.Unlock()
+	if w.StageFailure != nil {
+		if err := s.store.ClearStageFailure(ctx, w.Slug, s.o.Clock.Now()); err != nil {
+			return err
+		}
+	}
+	s.log.Info("workspace stage waiting", "workspace", w.Slug, "stage", w.Stage, "reason", we.Reason)
+	return we
+}
+
+func (s *Service) clearWait(slug string) {
+	s.mu.Lock()
+	delete(s.waits, slug)
+	s.mu.Unlock()
+}
+
+// Waiting says what the stage of a preparing workspace is waiting for, if it
+// is (the panel shows it next to the stage). It is kept in memory: after a
+// restart the stage runs again at once and finds out.
+func (s *Service) Waiting(slug string) (reason string, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w, ok := s.waits[slug]
+	return w.reason, ok
+}
+
+// OpenPrincipal opens the main clone of the workspace by its record.
+func (s *Service) OpenPrincipal(ctx context.Context, slug string) (gitx.Repo, error) {
+	return s.o.Git.OpenWorktree(ctx, s.layout.record(slug))
+}
+
+// OpenMirror opens the mirror of the workspace.
+func (s *Service) OpenMirror(ctx context.Context, slug string) (gitx.Repo, error) {
+	return s.o.Git.Open(ctx, s.layout.Mirror(slug))
 }
 
 // stageFailed records the failure of the current stage and returns the error.

@@ -1,6 +1,6 @@
 # Sessão zero do workspace
 
-> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -25,9 +25,9 @@ flowchart TD
   I --> J[workspace active]
 ```
 
-1. **Apps fixos** (etapa `apps`)**:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, a etapa `apps` fica esperando: o motor acrescenta o repositório à instalação pela API, com a credencial pessoal do Dono, ou o Dono recebe o link para instalar (primeira instalação) ou marcar o repositório na instalação ([criacao-de-apps](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas), [identidades-e-apps](../github/identidades-e-apps.md)).
+1. **Apps fixos** (etapa `apps`)**:** o motor confere se "Grão-Mestre" e "Mestre" estão instalados no repositório. Se não estiverem, a etapa `apps` fica esperando: o motor acrescenta o repositório à instalação pela API, com a credencial pessoal do Dono, ou o Dono recebe o link para instalar (primeira instalação) ou marcar o repositório na instalação ([criacao-de-apps](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas), [identidades-e-apps](../github/identidades-e-apps.md)). A espera não é erro: o motor avisa o Dono uma única vez, olha de novo a cada 30 s e, enquanto faltar um App, não clona nada nem usa outra credencial.
 2. **Espelho** (etapa `mirror`)**:** o motor clona o repositório sem cópia de trabalho (`--bare`) na pasta de dados da Cidadela (padrão `workspaces/<slug>/espelho.git`; [persistencia](../arquitetura/persistencia.md)), com um token de instalação do App "Grão-Mestre". Daí sai o **clone principal** (padrão `workspaces/<slug>/principal/`), onde o Grão-Mestre trabalha. Como as mesas e as máquinas da Guilda usam o espelho: [mesas](../orquestracao/mesas.md).
-3. **`.mestre/` e arquivos gerados** (etapa `files`)**:** o motor cria a estrutura abaixo (sem apagar nada que já exista) e gera, no clone principal, os mesmos arquivos que gera em cada worktree de mesa ([mesa](mesa.md)). Até o usuário responder à pergunta de versionamento, `.mestre/` fica só local.
+3. **`.mestre/` e arquivos gerados** (etapa `files`)**:** o motor cria a estrutura abaixo (sem apagar nada que já exista) e gera, no clone principal, os mesmos arquivos que gera em cada worktree de mesa ([mesa](mesa.md)). Até o usuário responder à pergunta de versionamento, `.mestre/` fica só local. O que o motor encontra de inválido (um `teto.yaml` que não lê, um JSON de hook quebrado, uma skill `mestre-*` sem o marcador) fica como está e os usuários são avisados.
 4. **Grão-Mestre:** ao fim da etapa `files`, o motor inicia o Grão-Mestre (fixo e protegido); ele já conversa com os usuários, mas mesas só se abrem com o workspace `active`. As etapas seguintes (`analysis` e `approval_test`) são conduzidas pelo Grão-Mestre e pelo motor, cada uma visível no painel como pendente, feita ou com erro; concluída a `approval_test`, o workspace vai para `active`.
 
 ### Análise do projeto e `AGENTS.md` (etapa `analysis`)
@@ -63,13 +63,13 @@ flowchart TD
 - O Grão-Mestre pergunta aos usuários (Administrador ou acima) se `.mestre/`, menos os arquivos de execução, deve ser versionado no projeto ou ficar só local.
 - **Só local (padrão até a resposta):** `/.mestre/` entra no bloco do Mestre em `.git/info/exclude`; o `.gitignore` do projeto nunca é tocado.
 - **Versionar:** o bloco passa a excluir só os arquivos de execução, e o conteúdo entra pelo PR da sessão zero.
-- A escolha fica no banco e pode ser trocada depois pelo painel (trocar para "versionar" abre um novo PR; para "só local", o Mestre não apaga nada do repositório, só deixa de propor mudanças).
+- A pergunta (feita uma vez, ao fim da etapa `files`) e a escolha ficam no banco e a escolha pode ser trocada depois pelo painel (trocar para "versionar" abre um novo PR; para "só local", o Mestre não apaga nada do repositório, só deixa de propor mudanças).
 
 ### PR da sessão zero
-O que precisa entrar no repositório (o `AGENTS.md` aprovado e/ou `.mestre/` versionado) vai num único PR: o motor cria a branch `mestre/sessao-zero` a partir da principal, faz o commit com o App "Grão-Mestre" como autor, envia e abre o PR. O merge segue as regras do repositório ([acoes-por-nivel](../github/acoes-por-nivel.md)); como um App não aprova o próprio PR, se houver revisão obrigatória o Grão-Mestre pede a um usuário.
+O que precisa entrar no repositório (o `AGENTS.md` aprovado e/ou `.mestre/` versionado) vai num único PR: o motor cria a branch `mestre/sessao-zero` a partir da principal, faz o commit com o App "Grão-Mestre" como autor, envia e abre o PR. O merge segue as regras do repositório ([acoes-por-nivel](../github/acoes-por-nivel.md)); como um App não aprova o próprio PR, se houver revisão obrigatória o Grão-Mestre pede a um usuário. A branch é refeita pelo motor a cada vez, num worktree temporário do espelho, sobre a ponta da principal em `origin` e com um só commit: se o `AGENTS.md` aprovado e o `.mestre/` versionado ficam prontos em momentos diferentes, a segunda vez substitui a branch e o PR continua sendo um. Um `AGENTS.md` que apareça na principal antes disso nunca é sobrescrito: o arquivo aprovado não vai e os usuários são avisados.
 
 ### Teste de aprovação de App (etapa `approval_test`)
-O motor descobre se a aprovação do App "Grão-Mestre" conta para as revisões obrigatórias deste repositório. O passo a passo, os resultados (`sem_exigencia`, `conta`, `nao_conta`) e o plano B são de [aprovação no GitHub](../github/aprovacao-no-github.md#teste-na-sessão-zero-o-review-do-app-conta); o resultado aparece em `mestre gh settings show` e no painel. Registrado o resultado, a etapa termina.
+O motor descobre se a aprovação do App "Grão-Mestre" conta para as revisões obrigatórias deste repositório. O passo a passo, os resultados (`sem_exigencia`, `conta`, `nao_conta`) e o plano B são de [aprovação no GitHub](../github/aprovacao-no-github.md#teste-na-sessão-zero-o-review-do-app-conta); o resultado aparece em `mestre gh settings show` e no painel. O resultado, a data e o resumo das regras lidas ficam no banco; o teste roda de novo sob pedido. Se um passo falha, o PR de teste é fechado e a branch apagada mesmo assim, a etapa fica com erro e é tentada de novo. Registrado o resultado, a etapa termina.
 
 ## Regras e erros
 

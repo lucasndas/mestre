@@ -233,3 +233,9 @@ func (s Store) AdvanceClear(ctx context.Context, slug string, now time.Time) err
 func (s Store) AdvanceAlerted(ctx context.Context, slug string, now time.Time) error {
 	return s.exec(ctx, slug, now, `advance_alerted = 1`)
 }
+
+// ClearStageFailure forgets the failure of the current stage: it is waiting
+// for something outside, which is not an error.
+func (s Store) ClearStageFailure(ctx context.Context, slug string, now time.Time) error {
+	return s.exec(ctx, slug, now, `stage_error_code = '', stage_error_reason = '', stage_failures = 0, stage_failed_at = 0, stage_retry_at = 0`)
+}

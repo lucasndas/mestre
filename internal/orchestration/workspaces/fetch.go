@@ -323,6 +323,9 @@ func (s *Service) Tick(ctx context.Context) (next time.Time, ok bool, err error)
 			if w.StageFailure != nil && w.State == StatePreparing && s.hasRunner(w.Stage) {
 				note(w.StageFailure.RetryAt)
 			}
+			if at, ok := s.waitUntil(w); ok {
+				note(at)
+			}
 		}
 		if !w.MirrorReady() {
 			continue
@@ -356,6 +359,14 @@ func (s *Service) Tick(ctx context.Context) (next time.Time, ok bool, err error)
 	return next, ok, errors.Join(errs...)
 }
 
+// waitUntil is when a waiting stage of the workspace runs again.
+func (s *Service) waitUntil(w Workspace) (time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	wt, ok := s.waits[w.Slug]
+	return wt.until, ok && w.State == StatePreparing && wt.stage == w.Stage
+}
+
 func (s *Service) hasRunner(stage Stage) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -368,12 +379,15 @@ func (s *Service) driveStage(ctx context.Context, w Workspace, now time.Time) (W
 	if !s.hasRunner(w.Stage) || (w.StageFailure != nil && now.Before(w.StageFailure.RetryAt)) {
 		return w, nil
 	}
+	if at, ok := s.waitUntil(w); ok && now.Before(at) {
+		return w, nil
+	}
 	err := s.Prepare(ctx, w.Slug)
 	cur, gerr := s.store.Get(ctx, w.Slug)
 	if gerr != nil {
 		return w, gerr
 	}
-	if errors.Is(err, ErrNoRunner) || (cur.StageFailure != nil && err != nil) {
+	if errors.Is(err, ErrNoRunner) || errors.Is(err, ErrWaiting) || (cur.StageFailure != nil && err != nil) {
 		err = nil // the workspace waits, or the failure is recorded with its retry time
 	}
 	return cur, err
