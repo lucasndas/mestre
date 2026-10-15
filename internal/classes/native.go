@@ -91,6 +91,9 @@ type lifts struct {
 func liftsOf(r *Rules, worktree string) lifts {
 	var lf lifts
 	for _, d := range r.Decrees {
+		if d.Kind == DecreeTableRule {
+			continue // a table rule never lifts a native block
+		}
 		if d.Kind == DecreeException {
 			if a := d.Action; a != nil {
 				switch a.Kind {

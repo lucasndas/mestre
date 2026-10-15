@@ -8,6 +8,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/providers"
 )
 
 // hop is a level of the path of a request with the character that holds it.
@@ -167,39 +168,55 @@ func (s *Service) mesaCan(ctx context.Context, c characters.Character, r Request
 			return no(true, "a autonomia da mesa está em pausa")
 		}
 	}
-	groups := r.Risk.Groups
+	var tool *providers.Tool
+	if r.Event != nil {
+		tool = r.Event.Tool
+	}
+	if why := MesaGroupsHold(ctx, s.o.Classes, st, r.Requester, tool, r.Risk.Groups); why != "" {
+		return no(true, "%s", why)
+	}
+	return yes()
+}
+
+// MesaGroupsHold says whether the Mestre da mesa may decide a medio whose
+// origins belong to groups: every group is one of cadeia.mesa_decide now and
+// its condition passes for the call (a network call only to the domains of the
+// class and of the ceiling of whoever makes it). It returns why not, or "". The
+// temporary table rules of the Mestre da mesa use it again at each use
+// (docs/orquestracao/regras-temporarias-de-mesa.md).
+func MesaGroupsHold(ctx context.Context, cls Classes, st Settings, requester string, tool *providers.Tool, groups []string) string {
 	if len(groups) == 0 {
-		return no(true, "o motor não deu o grupo do medio: sobe")
+		return "o motor não deu o grupo do medio: sobe"
 	}
 	for _, g := range groups {
 		switch {
 		case g == classes.GroupNone:
-			return no(true, "uma parte do pedido não tem grupo (o motor não a analisa)")
+			return "uma parte do pedido não tem grupo (o motor não a analisa)"
 		case !st.MesaDecide(g):
-			return no(true, "o grupo %s não está em cadeia.mesa_decide", g)
+			return fmt.Sprintf("o grupo %s não está em cadeia.mesa_decide", g)
 		}
-		if why := s.groupCondition(ctx, g, r); why != "" {
-			return no(true, "%s", why)
+		if why := groupCondition(ctx, cls, g, requester, tool); why != "" {
+			return why
 		}
 	}
-	return yes()
+	return ""
 }
 
 // groupCondition is the condition of a group the engine checks; "" is met.
 // The common conditions (nothing that crosses tables, nothing of its own
 // request, no mission point it designed) are checked by mesaCan and can.
-func (s *Service) groupCondition(ctx context.Context, group string, r Request) string {
+func groupCondition(ctx context.Context, cls Classes, group, requester string, tool *providers.Tool) string {
 	if group != classes.GroupNetwork {
 		return ""
 	}
-	if r.Event == nil || r.Event.Tool == nil {
+	if tool == nil {
 		return "rede: sem a ação para conferir os domínios"
 	}
-	hosts, unreadable := classes.ActionHosts(r.Event.Tool)
+	hosts, unreadable := classes.ActionHosts(tool)
 	if unreadable || len(hosts) == 0 {
 		return "rede: o motor não lê o domínio do pedido"
 	}
-	domains, err := s.o.Classes.Domains(ctx, r.Requester)
+	domains, err := cls.Domains(ctx, requester)
 	if err != nil {
 		return "rede: os domínios da classe não foram lidos"
 	}

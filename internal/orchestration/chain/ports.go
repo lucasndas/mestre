@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -165,6 +166,10 @@ type ExceptionGrant struct {
 	Level     Level
 }
 
+// ErrNoMission is what TempRules.Create answers to a rule "until the mission
+// ends" when the requester works on no mission.
+var ErrNoMission = errors.New("chain: the requester has no mission")
+
 // TempRules creates the temporary table rules
 // (docs/orquestracao/regras-temporarias-de-mesa.md, stage 11).
 type TempRules interface {
@@ -177,6 +182,11 @@ type TempRule struct {
 	Workspace string
 	Table     string
 	Class     string
+	// Requester is the character whose request it came from: the mission of
+	// a rule "until the mission ends" is the one it is working on.
+	Requester string
+	// Risk is the highest risk the rule covers (baixo or medio).
+	Risk classes.Risk
 	// Pattern is the approved pattern (zero for an approval of the exact
 	// action).
 	Pattern *classes.ApprovablePattern

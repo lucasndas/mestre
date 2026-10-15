@@ -69,7 +69,7 @@ func CheckApprovablePattern(pattern string, action Action, class, table string) 
 	} else {
 		r = toolReach(pattern)
 	}
-	out.Risk = RiskResult{Risk: r.risk, TableVersion: RiskTableVersion, Rule: r.rule}
+	out.Risk = RiskResult{Risk: r.risk, TableVersion: RiskTableVersion, Rule: r.rule, Groups: groupsOf(r)}
 	out.Fingerprint = fingerprint(struct {
 		Class   string             `json:"class"`
 		Kind    providers.ToolKind `json:"kind"`

@@ -93,7 +93,7 @@ func (s *ClassHookSource) pick(ctx context.Context, ev providers.Event, mode cla
 	}
 	// The `run` of a hook is judged like a command of the character, but
 	// judging it never uses up an exception.
-	env.Exceptions, env.Edits = nil, nil
+	env.Exceptions, env.Edits, env.TableRules = nil, nil, nil
 	sel = selected{class: class, rules: rules, env: env}
 	for _, h := range class.Hooks[ev.Event] {
 		if h.Mode == mode && h.Matches(ev, env.Worktree) {

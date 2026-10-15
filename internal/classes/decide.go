@@ -44,6 +44,9 @@ type Env struct {
 	Edits TurnEdits
 	// Exceptions records the exceptions used; nil uses none (degraded).
 	Exceptions ExceptionLedger
+	// TableRules checks a temporary table rule at each use and records the
+	// use; nil uses none (degraded, the attenuation, the classification).
+	TableRules TableRuleGate
 	// Risk is the owner's part of the risk classification of what asks
 	// (the policy file, M5); nil is the default table.
 	Risk *RiskPolicy
@@ -127,6 +130,29 @@ type ExceptionLedger interface {
 	Use(ctx context.Context, agentID string, id int64) (bool, error)
 }
 
+// TableRuleGate is the engine side of the temporary table rules
+// (docs/orquestracao/regras-temporarias-de-mesa.md): the rules travel in the
+// effective rules, but the engine asks it again at each use. Use is true when
+// the rule still holds now (not revoked, not suspended, not expired, its author
+// still the Mestre da mesa) and, for a medio rule, the conditions of the table
+// pass for this call; it then records the use. An error leaves the call in ask.
+type TableRuleGate interface {
+	Use(ctx context.Context, u TableRuleUse) (bool, error)
+}
+
+// TableRuleUse is what the gate is asked about: the rule that covers the call,
+// the character that makes it and the call with its own classification.
+type TableRuleUse struct {
+	Rule             int64
+	Level            Level
+	Risk             Risk
+	AgentID, TableID string
+	Action           Action
+	Tool             *providers.Tool
+	// Own is the classification of this call alone, groups included.
+	Own RiskResult
+}
+
 // Decision is the outcome of the pipeline for one tool call.
 type Decision struct {
 	Verdict Verdict
@@ -165,7 +191,7 @@ func Decide(ctx context.Context, env Env, rules *Rules, ev providers.Event) Deci
 // Without a snapshot, only the fixed rules hold and everything that is not
 // read-only is denied as DegradedReason.
 func DecideDegraded(ctx context.Context, env Env, snapshot *Rules, ev providers.Event) Decision {
-	env.Exceptions = nil
+	env.Exceptions, env.TableRules = nil, nil
 	env.Edits = nil
 	r := snapshot
 	if r == nil {
@@ -220,6 +246,9 @@ func decide(ctx context.Context, env Env, rules *Rules, ev providers.Event, degr
 		return d
 	}
 	o := res.rules
+	if d, ok := e.tableRule(ev.Tool, act, res); ok {
+		return d
+	}
 	d := Decision{Verdict: o.v, Reason: o.reason, Layer: o.layer, Decree: o.decree, Action: act}
 	switch o.v {
 	case Allow:
@@ -281,6 +310,66 @@ func (e *evaluator) exception(act Action, res result) (Decision, bool) {
 		return Decision{Verdict: Allow, Reason: fmt.Sprintf("exceção pontual %d", d.ID), Layer: LayerException, Decree: d.ID, Action: act}, true
 	}
 	return Decision{}, false
+}
+
+// tableRule looks for a temporary table rule that lets an ask through. It only
+// turns an ask into allow: an allow needs no rule, a deny (of a person's decree,
+// the class, the ceiling, the sheet) stays, and so does an ask the engine could
+// not analyse. The rule must cover the call by its own classification
+// (PatternCovers: a pattern approved as baixo never frees a medio command) and
+// the gate checks it again, now, before the call goes through.
+func (e *evaluator) tableRule(t *providers.Tool, act Action, res result) (Decision, bool) {
+	if e.degraded || e.env.TableRules == nil || res.rules.v != Ask || res.rules.layer == LayerFixed {
+		return Decision{}, false
+	}
+	var own *RiskResult
+	for i := range e.r.Decrees {
+		d := &e.r.Decrees[i]
+		if d.Kind != DecreeTableRule || !d.Level.agent() || !d.active(e.now) {
+			continue
+		}
+		if own == nil {
+			r := e.classify(t, false)
+			own = &r
+		}
+		if !tableRuleCovers(*d, act, *own) {
+			continue
+		}
+		ok, err := e.env.TableRules.Use(e.ctx, TableRuleUse{Rule: d.ID, Level: d.Level, Risk: d.Risk, AgentID: e.r.AgentID, TableID: e.env.TableID, Action: act, Tool: t, Own: *own})
+		if err != nil || !ok {
+			continue
+		}
+		return Decision{Verdict: Allow, Reason: fmt.Sprintf("regra temporária de mesa %d", d.ID), Layer: LayerDecree, Decree: d.ID, Action: act, ClassHooks: true}, true
+	}
+	return Decision{}, false
+}
+
+// tableRuleCovers says whether a table rule covers the call: the exact action
+// it was made for, or a command (a tool) its pattern matches, in both cases only
+// if the classification of the call fits the risk of the rule. A command with a
+// shell operator, a substitution or a redirection is never covered by a pattern.
+func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
+	if !own.Risk.valid() || own.Risk == RiskFixed || own.Risk.rank() > d.Risk.rank() {
+		return false
+	}
+	if d.Action != nil {
+		return d.Action.same(act)
+	}
+	g := d.Effect.Allow
+	if d.Effect.Kind != EffectPermission || g == nil {
+		return false
+	}
+	list := g.Tools
+	if d.ToolKind == providers.KindShell {
+		list = g.Commands
+		if strings.ContainsAny(act.Command, ";&|`<>\n\r") || strings.Contains(act.Command, "$(") {
+			return false
+		}
+	}
+	if len(list) != 1 {
+		return false
+	}
+	return PatternCovers(ApprovablePattern{Pattern: list[0], Kind: d.ToolKind, Risk: RiskResult{Risk: d.Risk}}, act, own)
 }
 
 // action is the tool call as an exception binds it.

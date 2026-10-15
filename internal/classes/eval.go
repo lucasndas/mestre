@@ -434,7 +434,7 @@ func (e *evaluator) decreeSplit(list func(*Grant) []string, matchDeny, matchAllo
 	at := func(rank int) (allow, deny *Decree) {
 		for i := range e.r.Decrees {
 			d := &e.r.Decrees[i]
-			if d.Kind == DecreeException || d.Effect.Kind != EffectPermission || d.Level.rank() != rank || !d.active(e.now) {
+			if d.Kind == DecreeException || d.Kind == DecreeTableRule || d.Effect.Kind != EffectPermission || d.Level.rank() != rank || !d.active(e.now) {
 				continue
 			}
 			if takes(d.Effect.Deny, matchDeny) && deny == nil {
