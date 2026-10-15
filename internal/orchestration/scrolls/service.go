@@ -638,7 +638,7 @@ func (s *Service) Delete(ctx context.Context, r DeleteRequest) error {
 // else a tome.
 func (s *Service) Resolve(ctx context.Context, workspace, table, nameOrID string) (connections.ScrollRef, bool, error) {
 	if n, ok, err := s.st.Find(ctx, workspace, table, nameOrID); err != nil || ok {
-		return connections.ScrollRef{ID: n.Key, Name: n.Name, Table: n.Table}, ok, err
+		return connections.ScrollRef{ID: n.Key, Name: n.Name, Table: n.Table, Stack: n.TomeName}, ok, err
 	}
 	t, ok, err := s.st.FindTome(ctx, workspace, table, nameOrID)
 	if err != nil || !ok {
@@ -654,7 +654,7 @@ func (s *Service) Get(ctx context.Context, ref connections.Ref) (connections.Scr
 		return connections.ScrollRef{ID: t.Key, Name: t.Name, Table: t.Table, Tome: true}, ok, err
 	}
 	n, ok, err := s.st.Get(ctx, ref.ID)
-	return connections.ScrollRef{ID: n.Key, Name: n.Name, Table: n.Table}, ok, err
+	return connections.ScrollRef{ID: n.Key, Name: n.Name, Table: n.Table, Stack: n.TomeName}, ok, err
 }
 
 // Members implements connections.Scrolls: the scrolls a tome holds now, the

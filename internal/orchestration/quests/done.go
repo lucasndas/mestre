@@ -18,6 +18,24 @@ type DoneRequest struct {
 	// Text is the summary; Return, when set, hands the work back to the step
 	// the definition names, with that reason.
 	Text, Return string
+	// FromFile is true when the summary came from `--file`: it may be up to
+	// MaxSummaryFile bytes.
+	FromFile bool
+}
+
+// tooLong says whether the summary is over the limit of its kind.
+func tooLong(r DoneRequest) bool {
+	if r.FromFile {
+		return len(r.Text) > MaxSummaryFile
+	}
+	return utf8.RuneCountInString(r.Text) > MaxSummary
+}
+
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // DoneResult is what the done answers (docs/cli/comunicacao.md#mestre-done).
@@ -26,11 +44,14 @@ type DoneResult struct {
 	Task  string `json:"task"`
 	Quest string `json:"quest"`
 	Step  string `json:"step"`
+	// Queued is always false here: a done that waited in the outbox answers
+	// with the queued form instead (cli.Queued).
+	Queued bool `json:"queued"`
 	// ReturnedTo is the step the work went back to; nil when it did not.
 	ReturnedTo *string `json:"returned_to"`
 	// QuestState is the state of the quest after the done.
 	QuestState string   `json:"quest_state"`
-	Warnings   []string `json:"warnings,omitempty"`
+	Warnings   []string `json:"warnings"`
 }
 
 // maxKept is how many changed files a run keeps.
@@ -64,8 +85,8 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 	switch {
 	case r.Return != "" && sd.CanReturnTo == "":
 		return DoneResult{}, fmt.Errorf("%w: %s", ErrNoReturnStep, sd.Title())
-	case utf8.RuneCountInString(r.Text) > MaxSummary:
-		return DoneResult{}, fmt.Errorf("%w: %d characters at most", ErrTooLong, MaxSummary)
+	case tooLong(r):
+		return DoneResult{}, fmt.Errorf("%w: %d characters at most (--file takes up to %d KiB)", ErrTooLong, MaxSummary, MaxSummaryFile>>10)
 	}
 	if err := s.o.Characters.Done(ctx, c.ID, r.Text); err != nil {
 		return DoneResult{}, err
@@ -120,7 +141,7 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 		return DoneResult{}, err
 	}
 	s.afterDone(ctx, out)
-	res := DoneResult{Task: st.UID, Quest: q.Name, Step: st.ID, QuestState: string(out.questState), Warnings: warnings}
+	res := DoneResult{Task: st.UID, Quest: q.Name, Step: st.ID, QuestState: string(out.questState), Warnings: orEmpty(warnings)}
 	if out.returnedTo != "" {
 		res.ReturnedTo = &out.returnedTo
 	}

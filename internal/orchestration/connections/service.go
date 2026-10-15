@@ -15,6 +15,8 @@ import (
 type ScrollRef struct {
 	ID, Name, Table string
 	Tome            bool
+	// Stack is the name of the tome that holds a scroll ("" none).
+	Stack string
 }
 
 // Scrolls is what the connections need of the scrolls and tomes of the tables

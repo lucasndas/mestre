@@ -6,12 +6,11 @@
 // conventions (the level of the caller, the class, the secrets, the request
 // that waits in the outbox) is the Gate in gate.go.
 //
-// The commands of the documents of the CLI that belong to later milestones
-// are not here: they are added to Default with their own Spec and use this
-// package's shared code. Until then, `list`, `ask` and `connect` are the
-// "casca" that the channel and the connections need to be exercised ("casca" rule of
-// docs/desenvolvimento/ordem-de-implementacao.md): the syntax and the happy
-// path through the channel.
+// The commands of communication and coordination (docs/cli/comunicacao.md and
+// docs/cli/coordenacao.md) are all here; the ones of the Grand Master and of
+// GitHub belong to milestone 5 and are added to Default with their own Spec,
+// using this package's shared code. The commands that take a file read it
+// here (files.go): the engine never opens a path that an agent names.
 package cli
 
 import (
@@ -44,6 +43,14 @@ type Env struct {
 	Version string
 	// FileExists tells whether a path exists (nil: os.Stat).
 	FileExists func(path string) bool
+	// ReadFile reads at most max bytes of a file for `--file` and
+	// `--input-file` (nil: the file system); the error is os.ErrNotExist for
+	// a path that does not exist.
+	ReadFile func(path string, max int64) ([]byte, error)
+	// FileSize is the size of a regular file, for `--attach` (nil: os.Stat).
+	FileSize func(path string) (int64, error)
+	// Stdin is the standard input, for `--file -` (nil: the process's).
+	Stdin io.Reader
 	// Commands is the definition of the commands (nil: Default).
 	Commands *Registry
 }
@@ -60,6 +67,15 @@ func (e *Env) defaults() {
 	}
 	if e.FileExists == nil {
 		e.FileExists = func(p string) bool { _, err := os.Stat(p); return err == nil }
+	}
+	if e.ReadFile == nil {
+		e.ReadFile = defaultReadFile
+	}
+	if e.FileSize == nil {
+		e.FileSize = defaultFileSize
+	}
+	if e.Stdin == nil {
+		e.Stdin = os.Stdin
 	}
 	if e.Version == "" {
 		e.Version = "dev"
@@ -152,7 +168,7 @@ func parse(reg *Registry, argv []string) (*parsed, error) {
 			return nil, err
 		}
 	}
-	if n := len(p.args); !p.help && (n < spec.MinArgs || (spec.MaxArgs >= 0 && n > spec.MaxArgs)) {
+	if n := len(p.args); !p.help && (n < spec.minWithFiles(p.flags) || (spec.MaxArgs >= 0 && n > spec.MaxArgs)) {
 		return nil, &usageError{fmt.Sprintf("wrong number of arguments for %s", spec.Name), "usage: " + spec.Usage}
 	}
 	return p, nil
@@ -175,6 +191,9 @@ func (p *parsed) setFlag(f Flag, val string) error {
 			return &usageError{fmt.Sprintf("--%s %q is not a duration", f.Name, val), "use 90s, 10m or 2h"}
 		}
 		p.flags[f.Name] = val
+	case FlagList:
+		list, _ := p.flags[f.Name].([]string)
+		p.flags[f.Name] = append(list, val)
 	case FlagBool:
 		if val != "true" && val != "false" {
 			return &usageError{fmt.Sprintf("--%s %q is not true or false", f.Name, val), "use --" + f.Name}
@@ -222,6 +241,12 @@ func Run(ctx context.Context, env Env, argv []string) int {
 		// debug and hook work. The engine refuses the same way, but there
 		// is no reason to wait for an engine that may be restarting.
 		return o.fail(notIdentified(localchan.EnvAgentID + " is not set: only help and debug work outside a character"))
+	}
+	if refused := readFiles(env, p); refused != nil {
+		return o.fail(*refused)
+	}
+	if refused := checkAttachments(env, p); refused != nil {
+		return o.fail(*refused)
 	}
 	return runRemote(ctx, env, p, o)
 }

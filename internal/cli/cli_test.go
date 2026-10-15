@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io/fs"
 	"net"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,6 +37,9 @@ type proc struct {
 	dials atomic.Int32
 	// commands is the definition of the commands (nil: the default).
 	commands *cli.Registry
+	// files is the file system the CLI reads (nil: none), stdin its input.
+	files map[string][]byte
+	stdin string
 }
 
 // newProc registers a process in the terminal of a character (or none) and
@@ -61,6 +67,21 @@ func (p *proc) run(ctx context.Context, args ...string) result {
 		},
 		FileExists: func(string) bool { return true },
 		Commands:   p.commands,
+		Stdin:      strings.NewReader(p.stdin),
+		ReadFile: func(path string, max int64) ([]byte, error) {
+			b, ok := p.files[filepath.ToSlash(path)]
+			if !ok {
+				return nil, fmt.Errorf("open %s: %w", path, fs.ErrNotExist)
+			}
+			return b[:min(int64(len(b)), max)], nil
+		},
+		FileSize: func(path string) (int64, error) {
+			b, ok := p.files[filepath.ToSlash(path)]
+			if !ok {
+				return 0, fmt.Errorf("stat %s: %w", path, fs.ErrNotExist)
+			}
+			return int64(len(b)), nil
+		},
 	}, args)
 	return result{code, stdout.String(), stderr.String()}
 }

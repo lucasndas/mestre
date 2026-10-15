@@ -179,6 +179,16 @@ func (m MachineSet) Screen(ctx context.Context, machine, character string) (Scre
 	return rt.Screen(ctx, character)
 }
 
+// ScreenLines reads the screen with up to lines lines of the history
+// (`check --lines`).
+func (m MachineSet) ScreenLines(ctx context.Context, machine, character string, lines int) (Screen, error) {
+	rt, ok := m[machine]
+	if !ok {
+		return Screen{}, &MachineUnreachableError{Machine: machine}
+	}
+	return rt.ScreenLines(ctx, character, lines)
+}
+
 // MachineUnreachableError: the engine of the machine cannot be reached.
 type MachineUnreachableError struct{ Machine string }
 

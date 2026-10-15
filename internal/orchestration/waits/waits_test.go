@@ -801,9 +801,12 @@ func TestWaitRegistersAndReturnsAtOnceAndTheCallerShowsAsWaiting(t *testing.T) {
 	rev, _ := w.reg.ByName(w.ctx, workspace, "42-login", "Revisor")
 	lr := call(w, fwd, &rev, "list", nil)
 	var list struct {
-		Characters []struct{ Name, Status string }
+		Agents []struct {
+			Name, Status string
+			WaitingFor   string `json:"waiting_for"`
+		}
 	}
-	if err := lr.DecodeData(&list); err != nil || len(list.Characters) != 1 || list.Characters[0].Name != "Dev" || list.Characters[0].Status != "aguardando Revisor" {
+	if err := lr.DecodeData(&list); err != nil || len(list.Agents) != 1 || list.Agents[0].Name != "Dev" || list.Agents[0].Status != "aguardando Revisor" || list.Agents[0].WaitingFor != "Revisor" {
 		t.Fatalf("list = %+v (%v) %+v", lr, err, list)
 	}
 	// the errors

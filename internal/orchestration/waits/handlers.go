@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,8 +49,10 @@ func Refusal(err error) localchan.Response {
 		return localchan.Fail(localchan.CodeUsage, err.Error(), "use another name")
 	case errors.Is(err, ErrPast), errors.Is(err, ErrBadWait):
 		return localchan.Fail(localchan.CodeUsage, err.Error(), "")
-	case errors.Is(err, ErrNoQuest), errors.Is(err, ErrNoWait):
-		return localchan.Fail("not_found", err.Error(), "")
+	case errors.Is(err, ErrNoQuest), errors.Is(err, ErrNoWait), errors.Is(err, inbox.ErrNoItem):
+		return localchan.Fail("not_found", err.Error(), "`mestre inbox` shows the ids")
+	case errors.Is(err, ErrNoAttachments):
+		return localchan.Fail(localchan.CodeUnavailable, err.Error(), "send the text and say where the files are")
 	case errors.Is(err, characters.ErrBusy):
 		return localchan.Fail("busy", err.Error(), "send a normal message, which waits in its inbox")
 	case errors.Is(err, characters.ErrPermissionPrompt):
@@ -126,14 +129,24 @@ func (s *Service) handleAsk(ctx context.Context, c *localchan.Call) localchan.Re
 		}
 		return s.askRaw(ctx, x, c, args[0], text)
 	}
-	if len(args) != 2 {
-		return localchan.Fail(localchan.CodeUsage, `usage: mestre ask "<name>" "<prompt>" [--timeout <dur>]`, "")
+	from := flagString(c, "from-message")
+	if len(args) != 2 && (from == "" || len(args) < 1 || len(args) > 2) {
+		return localchan.Fail(localchan.CodeUsage, `usage: mestre ask "<name>" "<prompt>" [--timeout <dur>] [--from-message <id>]`, "")
 	}
 	t, err := s.target(ctx, x, c, args[0])
 	if err != nil {
 		return Refusal(err)
 	}
-	out, err := s.Ask(ctx, AskRequest{From: x, To: t, Prompt: args[1], Timeout: timeout, NoWait: flagBool(c, "no-wait"), Gone: c.Gone})
+	prompt := ""
+	if len(args) == 2 {
+		prompt = args[1]
+	}
+	if from != "" {
+		if prompt, err = s.passOn(ctx, x, t, from, prompt); err != nil {
+			return Refusal(err)
+		}
+	}
+	out, err := s.Ask(ctx, AskRequest{From: x, To: t, Prompt: prompt, Timeout: timeout, NoWait: flagBool(c, "no-wait"), Gone: c.Gone})
 	if err != nil {
 		return Refusal(err)
 	}
@@ -316,13 +329,30 @@ func (s *Service) handleCheck(ctx context.Context, c *localchan.Call) localchan.
 	if s.o.Terminals == nil {
 		return localchan.Fail("machine_unreachable", "the terminals are not reachable from this engine", "")
 	}
-	sc, err := s.o.Terminals.Screen(ctx, t.Machine, t.ID)
+	lines := 0
+	if v := flagString(c, "lines"); v != "" {
+		n, perr := strconv.Atoi(v)
+		if perr != nil || n < 0 {
+			return localchan.Fail(localchan.CodeUsage, fmt.Sprintf("--lines %q is not a number of lines", v), "")
+		}
+		lines = n
+	}
+	var sc characters.Screen
+	if ht, ok := s.o.Terminals.(HistoryTerminals); ok && lines > 0 {
+		sc, err = ht.ScreenLines(ctx, t.Machine, t.ID, lines)
+	} else {
+		sc, err = s.o.Terminals.Screen(ctx, t.Machine, t.ID)
+	}
 	if err != nil {
 		return Refusal(err)
 	}
 	waiting, _, _ := s.Active(ctx, t.ID)
 	status := t.Status().Label()
-	return localchan.OK(map[string]any{"text": sc.Text, "name": t.Name, "status": status, "waiting_for": waiting, "screen": sc.Text, "captured_at": s.clk.Now().Format(time.RFC3339)})
+	screen := sc.Text
+	if sc.History != "" {
+		screen = strings.TrimRight(sc.History, "\n") + "\n" + sc.Text
+	}
+	return localchan.OK(map[string]any{"text": screen, "name": t.Name, "status": status, "waiting_for": waiting, "screen": screen, "captured_at": s.clk.Now().Format(time.RFC3339)})
 }
 
 // handleWait is `mestre wait`: it registers the wait and returns at once.
@@ -415,4 +445,34 @@ func (s *Service) handleWaits(ctx context.Context, c *localchan.Call) localchan.
 		text.WriteString("nenhuma espera ativa\n")
 	}
 	return localchan.OK(map[string]any{"text": strings.TrimRight(text.String(), "\n"), "waits": rows, "cycles": cycles})
+}
+
+// passOn is the prompt of `ask --from-message`: a message of the inbox of the
+// caller, as it came (text and attachments, untouched), with the prompt, if
+// there is one, before it as a note. The attachments are copied into the table
+// of the target and the text says where.
+func (s *Service) passOn(ctx context.Context, x, target characters.Character, id, note string) (string, error) {
+	it, err := s.o.Inbox.Store().Get(ctx, id)
+	if err != nil || it.Target != x.ID {
+		return "", fmt.Errorf("%w: a mensagem %s não está na sua caixa de entrada", inbox.ErrNoItem, id)
+	}
+	var b strings.Builder
+	if strings.TrimSpace(note) != "" {
+		b.WriteString(note)
+		b.WriteString("\n\n--- Mensagem repassada ---\n")
+	}
+	b.WriteString(it.Text)
+	if len(it.Attachments) > 0 {
+		if s.o.Attachments == nil {
+			return "", fmt.Errorf("%w: os anexos da mensagem %s não podem ser repassados", ErrNoAttachments, id)
+		}
+		copies, err := s.o.Attachments.Forward(ctx, target.Workspace, target.Table, it.Attachments)
+		if err != nil {
+			return "", fmt.Errorf("%w: %v", ErrNoAttachments, err)
+		}
+		for _, p := range copies {
+			fmt.Fprintf(&b, "\n[anexo] %s", p)
+		}
+	}
+	return b.String(), nil
 }

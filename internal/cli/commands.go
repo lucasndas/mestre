@@ -67,6 +67,8 @@ const (
 	FlagString FlagKind = iota
 	FlagDuration
 	FlagBool
+	// FlagList is a flag that may be repeated (`--attach a --attach b`).
+	FlagList
 )
 
 // Flag is a flag of one command (the global ones, --json, --help and
@@ -99,6 +101,11 @@ type Spec struct {
 	// MinArgs and MaxArgs bound the positional arguments (MaxArgs < 0: any).
 	MinArgs, MaxArgs int
 	Flags            []Flag
+	// Files are the flags whose value is a path the CLI reads (the engine
+	// never opens a path an agent names); Internal are flags only the CLI
+	// sets, to hand the engine what it read.
+	Files    []FileFlag
+	Internal []Flag
 
 	// Who are the roles that may use the command. A class lists the commands
 	// it lets a character use in cli.allow; with ClassCanGrant a character of
@@ -133,6 +140,33 @@ func (s Spec) flag(name string) (Flag, bool) {
 	return Flag{}, false
 }
 
+// engineFlag is a flag the engine accepts: the ones a person writes, except
+// the paths (the CLI turns them into text), and the internal ones.
+func (s Spec) engineFlag(name string) (Flag, bool) {
+	for _, f := range s.Internal {
+		if f.Name == name {
+			return f, true
+		}
+	}
+	for _, ff := range s.Files {
+		if ff.Flag == name {
+			return Flag{}, false
+		}
+	}
+	return s.flag(name)
+}
+
+// minWithFiles is the least positional arguments when a file may stand for
+// one (the content of a scroll, the summary of a done).
+func (s Spec) minWithFiles(flags map[string]any) int {
+	for _, ff := range s.Files {
+		if _, ok := flags[ff.Flag]; ok && ff.As != FileToFlag {
+			return max(0, s.MinArgs-1)
+		}
+	}
+	return s.MinArgs
+}
+
 // Group names of the help, in the order it lists them.
 const (
 	GroupCommunication = "Communication"
@@ -143,6 +177,10 @@ const (
 )
 
 var groupOrder = []string{GroupCommunication, GroupCoordination, GroupGitHub, GroupGrandMaster, GroupDiagnostics}
+
+// noteMax is the largest file of `--file` and `--input-file` of a scroll or a
+// quest.
+const noteMax = 256 << 10
 
 // AskDefaultTimeout is how long the CLI waits for the engine when `mestre ask`
 // has no --timeout: the largest time limit an ask may have
@@ -186,19 +224,17 @@ func MustRegistry(specs ...Spec) *Registry {
 	return r
 }
 
-// Default is the registry of this binary: the "casca" commands (list and ask,
-// to exercise the channel in milestone 3; connect, which the connections use
-// before the CLI of coordination; check, wait, waits, inbox, reply and note,
-// which the waits and the scrolls of stage 7 use before the CLI of
-// communication, stage 10 of milestone 4) and the
-// commands the CLI answers by itself. The commands of each document of the CLI are added
-// here when their milestone arrives.
+// Default is the registry of this binary: the commands of communication and
+// coordination, the `table` commands the Grand Master uses before the CLI of
+// milestone 5 (the "casca" rule of docs/desenvolvimento/ordem-de-implementacao.md)
+// and the commands the CLI answers by itself. The commands of each document
+// of the CLI are added here when their milestone arrives.
 func Default() *Registry {
 	return MustRegistry(
 		Spec{Name: "list", Group: GroupCommunication, Summary: "list the characters you are connected to",
 			Usage: "mestre list", Example: "mestre list --json", Who: WhoAnyone, MaxArgs: 0, Exits: []int{5}},
 		Spec{Name: "ask", Group: GroupCommunication, Summary: "ask a character and wait for the answer",
-			Usage:   `mestre ask "<name>" "<prompt>" [--table "<table>"] [--timeout <dur>] [--no-wait]  |  mestre ask --batch '{"A": "<prompt>", …}'  |  mestre ask "<name>" --raw "<text>"`,
+			Usage:   `mestre ask "<name>" "<prompt>" [--table "<table>"] [--timeout <dur>] [--no-wait] [--from-message <id>]  |  mestre ask --batch '{"A": "<prompt>", …}'  |  mestre ask "<name>" --raw "<text>"`,
 			Example: `mestre ask "Reviewer" "review the PR" --timeout 15m`,
 			Args:    []Arg{{"<name>", "the character to ask"}, {"<prompt>", "what to ask"}},
 			MinArgs: 0, MaxArgs: 2, Who: WhoAnyone, DefaultTimeout: AskDefaultTimeout,
@@ -206,6 +242,7 @@ func Default() *Registry {
 				{"timeout", FlagDuration, "how long to wait (90s, 10m; at most 9m); the request stays pending after it"},
 				{"table", FlagString, "the table of the target, for the Grand Master"},
 				{"no-wait", FlagBool, "deliver and return at once; the answer arrives in your inbox"},
+				{"from-message", FlagString, "pass on a message of your inbox (its text and attachments, untouched); the prompt, if any, goes before it as a note"},
 				{"batch", FlagString, `ask several in parallel: a JSON object {"Name": "prompt", …}`},
 				{"raw", FlagString, `type raw input (\n, \t, \xNN, \e) into a free target, with no queue and no answer`},
 			},
@@ -237,33 +274,41 @@ func Default() *Registry {
 			Usage: "mestre inbox [--full]", Example: "mestre inbox --json", Who: WhoAnyone, MaxArgs: 0,
 			Flags: []Flag{{"full", FlagBool, "the whole text of each item"}}},
 		Spec{Name: "reply", Group: GroupCommunication, Summary: "answer the message of a user through the channel it came from",
-			Usage: `mestre reply "<text>" [--attach <file>] [--to-message <id>]`, Example: `mestre reply "Pronto, a mesa foi aberta"`,
+			Usage: `mestre reply "<text>" [--attach <file>]… [--to-message <id>]`, Example: `mestre reply "Pronto, a mesa foi aberta"`,
 			Args:    []Arg{{"<text>", "the answer"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoGrandMaster, Secret: true,
-			Flags: []Flag{{"attach", FlagString, "a file to attach"}, {"to-message", FlagString, "the id of the message to answer (see mestre inbox)"}},
-			Exits: []int{7}},
+			Flags: []Flag{{"attach", FlagList, "a file to attach (repeat the flag for more)"}, {"to-message", FlagString, "the id of the message to answer (see mestre inbox)"}},
+			Exits: []int{4, 7, 8}},
 		Spec{Name: "done", Group: GroupCommunication, Summary: "end your task or step and hand over the result",
-			Usage:   `mestre done "<summary>" [--return "<reason>"]`,
+			Usage:   `mestre done "<summary>" [--file <file | ->] [--return "<reason>"]`,
 			Example: `mestre done "Login implementado, testes passando"`,
 			Args:    []Arg{{"<summary>", "what you did, up to 4,000 characters; the engine takes the changed files from git"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoAnyone, Queueable: true,
-			Flags: []Flag{{"return", FlagString, "hand the work back to the earlier step the quest names, with the reason"}},
-			Exits: []int{7, 8}},
+			Flags: []Flag{
+				{"file", FlagString, "a Markdown file (up to 64 KiB) with the summary, for one over 4,000 characters; `-` is the standard input"},
+				{"return", FlagString, "hand the work back to the earlier step the quest names, with the reason"},
+			},
+			Files:    []FileFlag{{Flag: "file", Into: "from-file", As: FileJoinArg, Max: 64 << 10, Stdin: true}},
+			Internal: []Flag{{"from-file", FlagBool, "the summary came from a file"}},
+			Exits:    []int{4, 7, 8}},
 		Spec{Name: "note create", Group: GroupCommunication, Summary: "create a scroll (a Markdown note of your table), connected to you",
-			Usage: `mestre note create ["<content>"] [--name "<name>"] [--stack "<tome>"]`, Example: `mestre note create "# Plano do login" --stack "Login"`,
+			Usage: `mestre note create ["<content>"] [--name "<name>"] [--file <file | ->] [--stack "<tome>"]`, Example: `mestre note create "# Plano do login" --stack "Login"`,
 			Args:    []Arg{{"[content]", "the Markdown; its first line is the name unless --name is given"}},
 			MinArgs: 0, MaxArgs: 1, Who: WhoCharacter | WhoTableMaster,
-			Flags: []Flag{{"name", FlagString, "a fixed name"}, {"stack", FlagString, "put it in a tome (made if new)"}},
-			Exits: []int{7, 8}},
+			Flags: []Flag{{"name", FlagString, "a fixed name"}, {"file", FlagString, "read the content from a file (`-` is the standard input)"}, {"stack", FlagString, "put it in a tome (made if new)"}},
+			Files: []FileFlag{{Flag: "file", As: FileAsArg, Max: noteMax, Stdin: true}},
+			Exits: []int{4, 7, 8}},
 		Spec{Name: "note read", Group: GroupCommunication, Summary: "print a scroll and its revision",
 			Usage: `mestre note read "<name>"`, Example: `mestre note read "Plano do login"`,
 			Args:    []Arg{{"<name>", "the scroll, by name or id"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoCharacter | WhoTableMaster, Exits: []int{4}},
 		Spec{Name: "note write", Group: GroupCommunication, Summary: "replace the whole content of a scroll (or add to it)",
-			Usage: `mestre note write "<name>" "<content>" [--append] [--expect-rev <n>]`, Example: `mestre note write "Plano" "# Plano v2" --expect-rev 3`,
+			Usage: `mestre note write "<name>" ("<content>" | --file <file | ->) [--append] [--expect-rev <n>]`, Example: `mestre note write "Plano" "# Plano v2" --expect-rev 3`,
 			Args:    []Arg{{"<name>", "the scroll"}, {"<content>", "the new Markdown"}},
 			MinArgs: 2, MaxArgs: 2, Who: WhoCharacter | WhoTableMaster,
-			Flags: []Flag{{"append", FlagBool, "add to the end instead of replacing"}, {"expect-rev", FlagString, "write only if the scroll is still at this revision"}},
+			Flags: []Flag{{"append", FlagBool, "add to the end instead of replacing"}, {"expect-rev", FlagString, "write only if the scroll is still at this revision"},
+				{"file", FlagString, "read the content from a file (`-` is the standard input)"}},
+			Files: []FileFlag{{Flag: "file", As: FileAsArg, Max: noteMax, Stdin: true}},
 			Exits: []int{4, 7, 8}},
 		Spec{Name: "note edit", Group: GroupCommunication, Summary: "swap an exact piece of a scroll for another",
 			Usage: `mestre note edit "<name>" --old "<piece>" --new "<piece>" [--expect-rev <n>]`, Example: `mestre note edit "Plano" --old "TODO" --new "feito"`,
@@ -279,6 +324,45 @@ func Default() *Registry {
 			Usage: `mestre note delete "<name>"`, Example: `mestre note delete "Plano"`,
 			Args:    []Arg{{"<name>", "the scroll"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoCharacter | WhoTableMaster, Exits: []int{4, 9}},
+		Spec{Name: "recruit", Group: GroupCoordination, Summary: "make a character from a sheet, connected to you; or change the sheet of one",
+			Usage:   `mestre recruit "<name>" --sheet "<sheet>" [--class "<class>"] [--machine "<machine>"]  |  mestre recruit --replace "<name>" --sheet "<sheet>" [--class "<class>"]  |  mestre recruit "<name>" --sheet "<Operator sheet>" --task "<task>" [--for <dur>] [--table "<table>"]`,
+			Example: `mestre recruit "Dev-2" --sheet "Dev Claude"`,
+			Args:    []Arg{{"[name]", "the name of the new character (a numbered name of the sheet when omitted)"}},
+			MinArgs: 0, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster,
+			Flags: []Flag{
+				{"sheet", FlagString, "the sheet the character is made from"},
+				{"class", FlagString, "a class that replaces the default one of the sheet"},
+				{"machine", FlagString, "ask for a machine of the Guild (it must meet the requirements)"},
+				{"replace", FlagString, "the character whose sheet changes; it keeps name, connections and place"},
+				{"task", FlagString, "Operator of the PC: what it must do"},
+				{"for", FlagDuration, "Operator of the PC: for how long (30m by default)"},
+				{"table", FlagString, "the table, for the Grand Master"},
+			},
+			Exits: []int{4, 7, 9}},
+		Spec{Name: "spawn", Group: GroupCoordination, Summary: "make a simple terminal (no agent) from a base, connected to you",
+			Usage: `mestre spawn "<name>" --base "<base>" [--machine "<machine>"]`, Example: `mestre spawn "srv" --base "bash"`,
+			Args:    []Arg{{"<name>", "the name of the terminal"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster,
+			Flags: []Flag{{"base", FlagString, "the base the terminal starts from"}, {"machine", FlagString, "ask for a machine of the Guild"}},
+			Exits: []int{4, 7, 9}},
+		Spec{Name: "dismiss", Group: GroupCoordination, Summary: "end a character or a terminal at its next safe point",
+			Usage: `mestre dismiss "<name>" [--table "<table>"]`, Example: `mestre dismiss "Dev-2"`,
+			Args:    []Arg{{"<name>", "the character or terminal"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster,
+			Flags: []Flag{{"table", FlagString, "the table, for the Grand Master"}},
+			Exits: []int{4, 9}},
+		Spec{Name: "sheet list", Group: GroupCoordination, Summary: "list the sheets, with the machines that meet them now",
+			Usage: "mestre sheet list", Example: "mestre sheet list --json", Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true},
+		Spec{Name: "sheet show", Group: GroupCoordination, Summary: "show a sheet, without secrets",
+			Usage: `mestre sheet show "<sheet>"`, Example: `mestre sheet show "Dev Claude"`,
+			Args:    []Arg{{"<sheet>", "the sheet"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true, Exits: []int{4}},
+		Spec{Name: "base list", Group: GroupCoordination, Summary: "list the bases",
+			Usage: "mestre base list", Example: "mestre base list --json", Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true},
+		Spec{Name: "base show", Group: GroupCoordination, Summary: "show a base, without secrets",
+			Usage: `mestre base show "<base>"`, Example: `mestre base show "bash"`,
+			Args:    []Arg{{"<base>", "the base"}},
+			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true, Exits: []int{4}},
 		Spec{Name: "connect", Group: GroupCoordination, Summary: "connect two characters, a scroll and a character, or two scrolls of a table",
 			Usage:   `mestre connect "<A>" "<B>" [--table "<table>"]`,
 			Example: `mestre connect "Dev" "Reviewer"`,
@@ -287,18 +371,21 @@ func Default() *Registry {
 			Flags: []Flag{{"table", FlagString, "the table, for the Grand Master (a table master connects in its own)"}},
 			Exits: []int{4}},
 		Spec{Name: "quest create", Group: GroupCoordination, Summary: "make a quest of your table from its definition (YAML or JSON)",
-			Usage:   `mestre quest create "<quest>" --definition "<text>"`,
-			Example: `mestre quest create "Login com testes" --definition "$(cat login.yaml)"`,
+			Usage:   `mestre quest create "<quest>" --file <file | ->`,
+			Example: `mestre quest create "Login com testes" --file login.yaml`,
 			Args:    []Arg{{"<quest>", "the name of the quest"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster,
-			Flags: []Flag{{"definition", FlagString, "the definition itself (the --file of the CLI of coordination arrives with it)"}},
-			Exits: []int{2, 7}},
+			Flags:    []Flag{{"file", FlagString, "the definition, YAML or JSON (`-` is the standard input)"}},
+			Files:    []FileFlag{{Flag: "file", Into: "definition", As: FileToFlag, Max: noteMax, Stdin: true}},
+			Internal: []Flag{{"definition", FlagString, "the text of the definition the CLI read"}},
+			Exits:    []int{2, 4, 7, 8}},
 		Spec{Name: "quest run", Group: GroupCoordination, Summary: "run a quest of your table; it returns at once",
-			Usage: `mestre quest run "<quest>" [--input "<text>"]`, Example: `mestre quest run "Login com testes"`,
+			Usage: `mestre quest run "<quest>" [--input "<text>" | --input-file <file | ->]`, Example: `mestre quest run "Login com testes"`,
 			Args:    []Arg{{"<quest>", "the quest"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoTableMaster,
-			Flags: []Flag{{"input", FlagString, "what the quest is run with"}},
-			Exits: []int{4, 7}},
+			Flags: []Flag{{"input", FlagString, "what the quest is run with"}, {"input-file", FlagString, "read what the quest is run with from a file (`-` is the standard input)"}},
+			Files: []FileFlag{{Flag: "input-file", Into: "input", As: FileToFlag, Max: noteMax, Stdin: true}},
+			Exits: []int{4, 7, 8}},
 		Spec{Name: "quest pause", Group: GroupCoordination, Summary: "let the steps under way finish and start no other",
 			Usage: `mestre quest pause "<quest>"`, Example: `mestre quest pause "Login com testes"`,
 			Args:    []Arg{{"<quest>", "the quest"}},

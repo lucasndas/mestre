@@ -22,14 +22,14 @@ func TestTheQuestCommandsAnswerThroughTheForwarderAndOnlyTheMasterConducts(t *te
 		t.Fatalf("quest create = %+v", r.Error)
 	}
 	var made struct {
-		Name, ID, Status string
-		Issue            int
-		Steps            []struct{ ID, Status string }
+		Name, ID, State string
+		Issue           int
+		Steps           []struct{ ID, State string }
 	}
 	if err := json.Unmarshal(r.Data, &made); err != nil {
 		t.Fatal(err)
 	}
-	if made.Name != "Revisão" || made.Status != "draft" || len(made.Steps) != 2 || made.Steps[0].Status != "pending" || made.Issue == 0 {
+	if made.Name != "Revisão" || made.State != "draft" || len(made.Steps) != 2 || made.Steps[0].State != "pending" || made.Issue == 0 {
 		t.Errorf("created: %+v", made)
 	}
 	// the same name again, a definition with a mistake, a definition missing
@@ -71,12 +71,14 @@ func TestTheQuestCommandsAnswerThroughTheForwarderAndOnlyTheMasterConducts(t *te
 	// status: the Master by name; the Grand Master with --table.
 	r = w.call(w.master.ID, "quest status", nil, "Revisão")
 	var st struct {
-		Status string
-		Steps  []struct {
-			ID, Status, Character string
+		State       string
+		CurrentStep int `json:"current_step"`
+		Steps       []struct {
+			ID, State, Agent string
+			N, Loops         int
 		}
 	}
-	if !r.OK || json.Unmarshal(r.Data, &st) != nil || st.Status != "running" || len(st.Steps) != 2 || st.Steps[0].Status != "running" || st.Steps[0].Character != dev.ID {
+	if !r.OK || json.Unmarshal(r.Data, &st) != nil || st.State != "running" || st.CurrentStep != 1 || len(st.Steps) != 2 || st.Steps[0].State != "running" || st.Steps[0].Agent != dev.Name || st.Steps[1].N != 2 {
 		t.Fatalf("quest status = %+v %s", r.Error, r.Data)
 	}
 	if r := w.call(w.gm.ID, "quest status", nil, "Revisão"); r.OK || r.Error.Code != "table_required" {

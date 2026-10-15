@@ -51,6 +51,21 @@ type Terminals interface {
 	Screen(ctx context.Context, machine, character string) (characters.Screen, error)
 }
 
+// HistoryTerminals is a Terminals that can also read the history of the
+// screen (`check --lines`); characters.MachineSet is one.
+type HistoryTerminals interface {
+	Terminals
+	ScreenLines(ctx context.Context, machine, character string, lines int) (characters.Screen, error)
+}
+
+// Attachments copies the attachments of a message into the table of the
+// target of an `ask --from-message` (milestone 5 owns the attachments,
+// docs/telegram/anexos-e-transcricao.md) and returns the paths of the copies
+// in that table. Nil: a message with attachments cannot be passed on.
+type Attachments interface {
+	Forward(ctx context.Context, workspace, table string, paths []string) ([]string, error)
+}
+
 // Options are the pieces of the Service.
 type Options struct {
 	Store    *Store
@@ -65,6 +80,8 @@ type Options struct {
 	Quests    Quests
 	Waker     Waker
 	Terminals Terminals
+	// Attachments is the copy of the attachments of `ask --from-message`.
+	Attachments Attachments
 	// Timeouts gives the time limits of a workspace (nil: the defaults).
 	Timeouts func(ctx context.Context, workspace string) Timeouts
 	// Zone is the time zone of the Guild, for a wait until "HH:MM" (UTC by
