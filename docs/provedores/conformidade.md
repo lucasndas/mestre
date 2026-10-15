@@ -79,7 +79,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 
 ## Critérios de aceite
 
-- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados numa máquina, **quando** a conformidade roda, **então** as etapas 1 a 8 e 10 a 12 passam para os três, inclusive a negação da etapa 4, e o resultado fica registrado com a versão de cada um (MVP-6).
+- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados numa máquina, **quando** a conformidade roda, **então** as etapas 1 a 8 e 10 passam para os três, inclusive a negação da etapa 4, e a 12 passa no Claude Code e no Codex; no Antigravity (1.3.5) ela falha porque o subagente pede aprovação antes dos hooks, e o resultado esperado é o plano B (`deny_subagent` ligado, provedor ainda conforme), de modo que, se uma versão passar a 12, a rodada avisa que o plano B pode ser desligado; o resultado fica registrado com a versão de cada um (MVP-6).
 - **CA-CONF-02** · *completa* — **Dado** o agente falso de um provedor configurado para nunca disparar PreToolUse, **quando** a conformidade roda, **então** o provedor fica não conforme na máquina e um recrutamento com essa base naquela máquina falha com a explicação.
 - **CA-CONF-03** · *completa* — **Dado** um pedido de conformidade para um provedor numa máquina (vindo da [atualização dos CLIs](atualizacao-dos-clis.md)), **quando** a conformidade roda, **então** só aquele provedor naquele perfil e máquina é testado e o resultado substitui o anterior dessa combinação.
 - **CA-CONF-04** · *completa* — **Dado** um agente falso do Claude que enxerga `.agents/skills/`, **quando** a etapa 9 roda, **então** o checklist mostra que a cópia gerenciada pode ser desligada.
