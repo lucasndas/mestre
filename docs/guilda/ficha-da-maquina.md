@@ -1,6 +1,6 @@
 # Ficha da máquina
 
-> **Assunto:** o que cada máquina informa à Guilda (ficha da máquina), como a ficha se atualiza sozinha, os requisitos de bases, fichas e classes e o casamento requisito × ficha · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** o que cada máquina informa à Guilda (ficha da máquina), como a ficha se atualiza sozinha, os requisitos de bases, fichas e classes e o casamento requisito × ficha · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -66,7 +66,7 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 
 ### No código
 
-`internal/machinesheet`. A máquina monta a ficha a partir de sondas pequenas atrás de interfaces (sistema, provedores, Operador, navegador, ferramentas, transcrição): a sonda do sistema é real e por sistema (Linux: `/etc/os-release`, `/proc/meminfo`, `/sys/bus/pci`; Windows: registro e API do sistema), e as de provedores, Operador e transcrição são entregues pelos marcos que as criam. A versão de um programa (o navegador no Linux, `git`, `ffmpeg`) vem de um `Runner` que o motor liga às camadas que iniciam processos; o pacote não inicia nenhum. A Cidadela registra o tratador de `machine.sheet` e o gancho do `hello`, e responde "quem atende" com o casamento acima. As classes leem os `requires` ao salvar (CA-FMAQ-04, `internal/classes`); bases e fichas, com as fichas e os perfis de conta no M4 (CA-FMAQ-03).
+`internal/machinesheet`. A máquina monta a ficha a partir de sondas pequenas atrás de interfaces (sistema, provedores, Operador, navegador, ferramentas, transcrição): a sonda do sistema é real e por sistema (Linux: `/etc/os-release`, `/proc/meminfo`, `/sys/bus/pci`; Windows: registro e API do sistema), e as de provedores, Operador e transcrição são entregues pelos marcos que as criam. A versão de um programa (o navegador no Linux, `git`, `ffmpeg`) vem de um `Runner` que o motor liga às camadas que iniciam processos; o pacote não inicia nenhum. A Cidadela registra o tratador de `machine.sheet` e o gancho do `hello`, e responde "quem atende" com o casamento acima. As classes leem os `requires` ao salvar (CA-FMAQ-04, `internal/classes`); bases e fichas em `internal/orchestration/presets` e os perfis de conta em `internal/orchestration/accounts` (CA-FMAQ-03, fechado no M4).
 
 ## Regras e erros
 

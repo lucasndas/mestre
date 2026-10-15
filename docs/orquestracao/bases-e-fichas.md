@@ -1,6 +1,6 @@
 # Bases e fichas
 
-> **Assunto:** campos de bases e fichas, exemplos, exportação/importação YAML/JSON e perfis de conta · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** campos de bases e fichas, exemplos, exportação/importação YAML/JSON e perfis de conta · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -111,6 +111,12 @@ Agente que age na área de trabalho do usuário, com a conta dele, por tempo cur
 - **Fim:** no fim do prazo, o motor interrompe o agente, espera 60 s e encerra o processo e a árvore dele (Job Object). Encerra **na hora**: **Encerrar agora** (Telegram ou painel), `/operador encerrar`, **Parar** na área de trabalho, `/travar`, tela bloqueada (motivo "tela bloqueada") e queda do processo da sessão. Entregue o `done`, encerra como efêmero. Os avisos passam a "encerrado: <motivo>". O prazo e o encerramento por tela bloqueada são aplicados pelo motor da própria máquina do Operador, sem depender da Cidadela: valem mesmo com ela fora.
 - **Auditoria reforçada:** todo `pre_tool` e `post_tool` do Operador fica na auditoria completo (entrada e resultado, depois do mascaramento), com a sessão; o processo da sessão captura a tela a cada 30 s (padrão) e a cada ação do MCP de controle do computador, e as capturas vão cifradas para a Cidadela, vinculadas à missão e à mesa, visíveis só ao Dono ([persistência](../arquitetura/persistencia.md#operador-do-pc)).
 - **Login em sites:** o Operador é o recurso para os logins que o motor não conclui (`login_requires_human`, [segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha)): entra pelo Chrome do usuário, já logado.
+
+### No código
+
+`internal/orchestration/presets` (bases, fichas, exportar e importar, escolha da máquina) e `internal/orchestration/accounts` (perfis e configuração inicial); `bases` e `sheets` ficam no banco da Cidadela e `account_profiles` no da máquina. Ao salvar, a base passa pela mesma conferência que o adaptador roda a cada início (`providers.CheckBase`), com o provedor deduzido do comando (`claude`, `codex`, `agy`), e a ficha por ela com o `agent` dela.
+- **Ficha × classe:** `restrictions` que dá o que a classe proíbe (um `allow` coberto por um `deny` dela, um interruptor que ela desligou) é recusada; um `allow` que a classe só não dá é guardado com aviso e ignorado. A classe é achada pelo nome; não achada, a ficha é guardada com aviso (cada workspace resolve a sua), menos na base `operador`, que exige uma com `operator: true`.
+- **Perfis:** o primeiro perfil de um provedor é o padrão; `<provedor>-padrao` é o que o Mestre cria quando a máquina não tem nenhum (sempre no Codex). Remover um perfil guarda a pasta, com o login. Exportar "tudo" deixa de fora a base `operador` e as fichas dela.
 
 ## Regras e erros
 

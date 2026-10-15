@@ -110,8 +110,9 @@ func TestTheFirstRequirementNotMetIsTheOneReported(t *testing.T) {
 	}
 }
 
-// CA-FMAQ-03: the match half. The sheets of characters, with `agent` and
-// `account`, and the registration of the profiles come with milestone 4.
+// Part of CA-FMAQ-03: the match half. The criterion closes in
+// internal/orchestration/presets, with the sheets of characters (`agent` and
+// `account`) and the registry of account profiles.
 func TestAProviderInstalledButNotLoggedInOrNotConformantDoesNotMeet(t *testing.T) {
 	t.Parallel()
 	profile := func(logged, conformant bool) machinesheet.Sheet {

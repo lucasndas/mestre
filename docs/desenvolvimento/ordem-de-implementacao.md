@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-14
+> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-15
 
 Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco-e-etapa). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
@@ -44,7 +44,7 @@ O [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-p
 |---|---|
 | [permissões](../classes/permissoes.md) (M3) | CA-PERM-14, CA-PERM-15 |
 | [teto do workspace](../classes/teto-do-workspace.md) (M3) | CA-TETO-06 |
-| [bases e fichas](../orquestracao/bases-e-fichas.md) (M4) | CA-BF-06, CA-BF-07, CA-BF-08 |
+| [bases e fichas](../orquestracao/bases-e-fichas.md) (M4) | CA-BF-06, CA-BF-07, CA-BF-08, CA-BF-09 |
 | [política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md), [decretos](../telegram/decretos.md) (M5) | CA-APROV-POL-10, CA-APROV-FLUXO-11, CA-DEC-10 |
 | [bot](../telegram/bot.md), [segurança do canal](../telegram/seguranca-do-canal.md) (M5) | CA-BOT-10, CA-CANAL-08 |
 | [canvas](../painel/canvas.md), [administração](../painel/administracao.md) (M6) | CA-CANVAS-08, CA-ADM-09 |
@@ -62,7 +62,7 @@ Critérios de documentos de um marco que usam peças de marcos seguintes; cada u
 | [canal local](../arquitetura/canal-local.md) (M1) | CA-LOCAL-04 com a entrega na caixa de entrada real → M4 (esperas e caixa de entrada; no M1 o destino é um dublê) |
 | [protocolo](../conectividade/protocolo.md) (M2) | CA-PROTO-06 → M4 (precisa de uma etapa de missão e dos terminais ligados ao protocolo, que o M2 não tem); CA-PROTO-08 → M4 (esperas); CA-PROTO-09 → M6 (painel); CA-PROTO-07 → Guardião |
 | [Guilda](../guilda/guilda.md) (M2) | CA-GUILDA-02, CA-GUILDA-09 e CA-GUILDA-12 → M5 (aprovação e PIN do Dono pelo bot); CA-GUILDA-06 → Guardião; CA-GUILDA-08 → M7 (instalação) |
-| [ficha da máquina](../guilda/ficha-da-maquina.md) (M2) | CA-FMAQ-04 → M3 (classes; fechou na etapa 4); CA-FMAQ-03 → M4 (fichas e perfis de conta) |
+| [ficha da máquina](../guilda/ficha-da-maquina.md) (M2) | CA-FMAQ-04 → M3 (classes; fechou na etapa 4); CA-FMAQ-03 → M4 (fichas e perfis de conta; fechou na etapa 1) |
 | [replicação](../guilda/replicacao.md) (M2) | CA-REPL-08 → M4 (espelho do workspace); CA-REPL-06 → M7 (checklist) |
 | [Cidadela e Torres](../guilda/cidadela-e-torres.md) (M2) | CA-CIDADELA-10, CA-CIDADELA-11 e CA-CIDADELA-13 → M4 (personagens, missões, esperas); CA-CIDADELA-03 e CA-CIDADELA-12 → M5 (ações no GitHub e trava); CA-CIDADELA-08 → M6 (painel); CA-CIDADELA-05, CA-CIDADELA-06 e CA-CIDADELA-07 → M7 (Torre condutora, Telegram em modo reduzido, página reserva) |
 | [convenções da CLI](../cli/convencoes.md) (M3) | CA-CLI-CONV-04, CA-CLI-CONV-05 e CA-CLI-CONV-07 → M4 (`ask`, `done` e `ask --raw` com personagens, terminais e duas máquinas; o M3 testa a fila de saída, a recusa do `--raw` e o `PENDING:` com `// Part of …`); CA-CLI-CONV-06, CA-CLI-CONV-08, CA-CLI-CONV-10 e CA-CLI-CONV-11 → M5 (aprovação `acao_destrutiva`, `table`/`gh`/`app`/`notify`, `reply` do Grão-Mestre e `pr open` com a trava; o M3 testa o filtro do `help`, a recusa de segredo e o `queued` com `// Part of …`); [classes](../classes/classes.md) (M3): CA-CLASSES-04 → M4 (pergaminho da missão e o agente falso numa missão; o M3 testa o hook assíncrono, um por personagem de cada vez, e a saída entregue, com `// Part of …`); CA-CLASSES-06 → M5 (o fluxo de aprovação e o Grão-Mestre; o M3 testa a regra de quem propõe e quem aprova); [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md) (M4): CA-SUPCAD-05 → M5 (o comando do Grão-Mestre e o botão do Telegram; o M4 testa a pausa pelo motor, CA-SUPCAD-02) |
