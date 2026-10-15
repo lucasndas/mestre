@@ -58,7 +58,7 @@ Um personagem só é encerrado quando: está `idle` (aguardar não é ocioso), a
 1. grava no [pergaminho da missão](pergaminhos-e-tomos.md#pergaminho-da-missão) (ou, sem missão, no histórico da mesa) um resumo: nome, ficha, classe, os textos de `done` que ele entregou e o uso;
 2. pede a saída normal ao provedor ([adaptador](../provedores/adaptador.md)) e, após 30 s, encerra a árvore de processos.
 
-Exceção: personagem `stuck` ou `interrupted` pode ser encerrado pelo Mestre da mesa ou por Administrador, com registro na auditoria.
+Exceção: personagem `stuck` ou `interrupted` pode ser encerrado só pelo Mestre da mesa ou por Administrador (o Grão-Mestre não), com registro na auditoria.
 
 ### Troca de ficha
 
@@ -121,7 +121,7 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 - **Motor da Cidadela reinicia com Torres vivas:** os terminais das Torres continuam; ao reconectar, cada máquina informa os que estão vivos e a Cidadela reconcilia (a máquina é a verdade sobre o processo; a Cidadela, sobre o resto).
 - **Troca de Cidadela:** quem fica `interrupted`, quem segue e o que a antiga encerra ao voltar como Torre estão nas [regras da troca](../guilda/cidadela-e-torres.md); a retomada segue as regras abaixo.
 - **Ordem de retomada:** Grão-Mestre → Mestres de mesa → personagens com etapa ou tarefa em andamento → persistentes → demais.
-- Retoma com a sessão do provedor (id salvo) quando o adaptador permite; senão inicia do zero e entrega uma mensagem de retomada (etapa atual, último `done`, link do pergaminho da missão). Caixa de entrada e esperas são preservadas.
+- Retoma com a sessão do provedor (id salvo) quando o adaptador permite; senão inicia do zero e entrega uma mensagem de retomada (etapa atual, último `done`, link do pergaminho da missão). Caixa de entrada e esperas são preservadas; a caixa só entrega depois que a primeira mensagem (a camada do Mestre) foi digitada.
 - Efêmero sem tarefa pendente não é retomado: vai a `stopped` com o motivo registrado. Terminal simples fica `interrupted` e o criador é avisado (o motor não reexecuta comandos sozinho).
 - Se a máquina estiver fora, o personagem fica `interrupted` (visível) e o Mestre da mesa é avisado; tenta-se de novo quando a máquina voltar. **Nenhum personagem some em silêncio.** As camadas de cura que levam a isso: [camadas](../autocura/camadas.md). Como o código faz isso: [personagens no código](personagens-no-codigo.md).
 

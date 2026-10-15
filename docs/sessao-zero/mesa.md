@@ -71,7 +71,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 - A chave exata (worktree ou raiz do checkout principal) e os detalhes de cada provedor estão nos documentos de provedor.
 - Os provedores reescrevem esses arquivos: o motor grava de forma atômica, relê logo antes de iniciar o personagem e grava de novo se a entrada sumiu.
 - A confiança dos hooks do Codex não é da mesa nem da sessão zero: é dada uma vez, na [configuração inicial do perfil de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta); o checklist (ALL-11, [checklist](../plataforma/checklist.md)) detecta quando falta.
-- Ao remover o worktree, o motor retira as entradas de confiança que criou para ele.
+- Ao remover o worktree, o motor retira as entradas de confiança que criou para ele, em todo perfil em que as gravou (também o de uma conta removida depois) e mesmo que o worktree não abra mais.
 
 ### Não atrapalhar quem clona
 - Os arquivos gerados ficam fora do git (acima). Se mesmo assim algum arquivo de hook do Mestre acabar no repositório, ele precisa funcionar numa máquina sem o Mestre, porque no Antigravity um hook que falha bloqueia o agente.

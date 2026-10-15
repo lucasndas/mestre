@@ -2,6 +2,7 @@ package characters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -151,6 +152,7 @@ func (rt *Runtime) rebuild(row RuntimeRow, p Process) (*session, error) {
 	s := &session{rt: rt, id: row.Agent, launch: row.Launch, adapter: adapter, info: adapter.Info(), terminal: row.Terminal, sessionID: row.Session,
 		lastTurn: row.LastTurn, starts: row.Starts, reduced: row.Reduced, turns: providers.NewTurns(adapter.Info()), proc: p}
 	s.turns.ResumeAfter(row.LastTurn)
+	s.pendingFirst, s.firstHeld = row.Launch.PendingFirst, row.Launch.PendingFirst != ""
 	s.readyRe = readyRegexp(row.Launch)
 	s.st, s.since, s.lastSignal = row.Status, row.Since, row.LastSeen
 	return s, nil
@@ -191,11 +193,33 @@ func (rt *Runtime) adopt(ctx context.Context, row RuntimeRow, p Process) error {
 	}
 	s.send(ctx, rep)
 	go rt.watch(s, p)
+	rt.restoreZero(ctx, s)
+	s.becameReady(ctx) // the first message, if it was waiting for the terminal to be ready
 	if stopping {
 		// The engine fell while it was ending the character: finish it.
 		return rt.Stop(ctx, StopCommand{Character: s.id, Final: true, Reason: "stop finished after the restart of the engine"})
 	}
 	return nil
+}
+
+// restoreZero gives the session zero back what it keeps of a living character
+// (the request it was prepared with), so that the layer can be refreshed and
+// the identity updated after the restart of the engine.
+func (rt *Runtime) restoreZero(ctx context.Context, s *session) {
+	r, ok := rt.o.Prep.(interface {
+		Restore(context.Context, sessionzero.CharacterRequest) error
+	})
+	if !ok || len(s.launch.Request) == 0 {
+		return
+	}
+	var req sessionzero.CharacterRequest
+	if err := json.Unmarshal(s.launch.Request, &req); err != nil {
+		rt.log.Warn("characters: the request of a character does not decode", "id", s.id, "err", err)
+		return
+	}
+	if err := r.Restore(ctx, req); err != nil {
+		rt.log.Warn("characters: the session zero of a character was not brought back", "id", s.id, "err", err)
+	}
 }
 
 // rearm continues the timers of a state after a restart, from the last signal.

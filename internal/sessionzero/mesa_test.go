@@ -615,6 +615,27 @@ func TestTrustIsWrittenInEachProfileAndTakenOutOnRelease(t *testing.T) {
 	}
 }
 
+// The trust goes out of every profile it was written in, also the one whose
+// account is no longer in the list when the table ends.
+func TestReleaseTakesTheTrustOutOfAProfileThatWasRemoved(t *testing.T) {
+	t.Parallel()
+	e := newTableEnv(t, nil, nil)
+	all := e.profiles()
+	e.req.Profiles = all
+	e.prepare()
+	files := e.trustFiles()
+	rel := e.req
+	rel.Profiles = all[:1] // the other accounts were removed meanwhile
+	if err := e.table.Release(rel); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if holds(read(t, f), e.dir) {
+			t.Fatalf("%s still trusts the worktree:\n%s", f, read(t, f))
+		}
+	}
+}
+
 // A profile that cannot be written holds back only its provider.
 func TestTrustFailureBlocksOnlyThatProvider(t *testing.T) {
 	t.Parallel()

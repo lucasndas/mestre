@@ -46,6 +46,11 @@ type Answer struct {
 	// now (docs/classes/classes.md#hooks-extras-da-classe): in pre_tool,
 	// only after an allow, and they can only deny.
 	ClassHooks []ClassHook `json:"class_hooks,omitempty"`
+	// Unidentified marks the answer to a call whose caller was not
+	// identified as a process of the character the event names. It never
+	// travels; whoever takes the events (Engine.OnEvent consumers) must not
+	// apply such an event to any character.
+	Unidentified bool `json:"-"`
 }
 
 // ClassHook is one synchronous hook of the class, as the engine sends it:

@@ -237,6 +237,9 @@ func (a *antigravity) BuildLaunch(req LaunchRequest) (Launch, error) {
 		l.Env = append(l.Env, "USERPROFILE="+home)
 	}
 	agent := "mestre-" + req.AgentID
+	if err := checkResumeID(Antigravity, req.ResumeSessionID); err != nil {
+		return Launch{}, err
+	}
 	l.Args = slices.Clone(req.Base.Args)
 	if req.ResumeSessionID != "" {
 		l.Args = append(l.Args, "--conversation", req.ResumeSessionID)

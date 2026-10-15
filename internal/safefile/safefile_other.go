@@ -19,4 +19,6 @@ func mkdirAll(string) error { return errors.ErrUnsupported }
 
 func remove(string, string, func(Info) error) error { return errors.ErrUnsupported }
 
+func removeEntry(string, string) error { return errors.ErrUnsupported }
+
 func removeDir(string, string) error { return errors.ErrUnsupported }

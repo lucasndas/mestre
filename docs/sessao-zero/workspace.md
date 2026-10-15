@@ -62,7 +62,7 @@ flowchart TD
 ### Versionar ou não `.mestre/`
 - O Grão-Mestre pergunta aos usuários (Administrador ou acima) se `.mestre/`, menos os arquivos de execução, deve ser versionado no projeto ou ficar só local.
 - **Só local (padrão até a resposta):** `/.mestre/` entra no bloco do Mestre em `.git/info/exclude`; o `.gitignore` do projeto nunca é tocado.
-- **Versionar:** o bloco passa a excluir só os arquivos de execução, e o conteúdo entra pelo PR da sessão zero.
+- **Versionar:** o bloco passa a excluir só os arquivos de execução, e o conteúdo entra pelo PR da sessão zero, depois de passar pelo detector de segredos (um arquivo com segredo para o PR, e o erro nomeia o arquivo, nunca o valor).
 - A pergunta (feita uma vez, ao fim da etapa `files`) e a escolha ficam no banco e a escolha pode ser trocada depois pelo painel (trocar para "versionar" abre um novo PR; para "só local", o Mestre não apaga nada do repositório, só deixa de propor mudanças).
 
 ### PR da sessão zero

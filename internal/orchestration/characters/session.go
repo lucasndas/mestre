@@ -2,6 +2,7 @@ package characters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -76,6 +77,9 @@ type session struct {
 	// Mestre layer when it travels as the first message, and the resumption
 	// message.
 	pendingFirst string
+	// firstHeld keeps the inbox from delivering anything until the first
+	// message is typed: a task never comes before the Mestre layer.
+	firstHeld bool
 	// inputGiven says that raw input was typed in a blocked terminal: the
 	// next screen says whether it is back at the prompt.
 	inputGiven bool
@@ -91,6 +95,14 @@ type session struct {
 }
 
 func (s *session) now() time.Time { return s.rt.clk.Now() }
+
+// holdsFirst says the first message (the Mestre layer) was not typed yet: no
+// delivery of the inbox goes before it.
+func (s *session) holdsFirst() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.firstHeld
+}
 
 // status is the state with its reason.
 func (s *session) status() Status {
@@ -139,6 +151,7 @@ func (s *session) reportLocked(at time.Time) Report {
 func (s *session) persistLocked() {
 	row := RuntimeRow{Agent: s.id, Terminal: s.terminal, Status: s.st, Session: s.sessionID, LastTurn: s.lastTurn, Reduced: s.reduced,
 		Starts: s.starts, Launch: s.launch, Since: s.since, LastSeen: s.lastSignal}
+	row.Launch.PendingFirst = s.pendingFirst
 	if err := s.rt.local.put(context.Background(), row); err != nil {
 		s.rt.log.Warn("characters: the state of a character was not kept", "id", s.id, "err", err)
 	}
@@ -286,6 +299,10 @@ func (s *session) onEvent(ctx context.Context, ev providers.Event) {
 		return
 	}
 	var reps []Report
+	if ev.SessionID != "" && !providers.ValidSessionID(ev.SessionID) {
+		s.rt.log.Warn("characters: an event with a session id that is not one, ignored", "id", s.id)
+		ev.SessionID = ""
+	}
 	if ev.SessionID != "" && ev.SessionID != s.sessionID {
 		s.sessionID = ev.SessionID
 		s.persistLocked()
@@ -348,6 +365,9 @@ func (s *session) becameReady(ctx context.Context) {
 // get a task without the layer.
 func (s *session) typeFirst(ctx context.Context, sup *providers.Supervisor, text string) {
 	s.do(ctx, TrigDeliver, "first message")
+	s.mu.Lock()
+	s.firstHeld = false
+	s.mu.Unlock()
 	if err := sup.Deliver(ctx, firstPrefix+s.id, text); err != nil {
 		s.rt.log.Warn("characters: the first message was not typed", "id", s.id, "err", err)
 		if s.do(ctx, TrigNoSignal, "the Mestre layer could not be delivered: "+err.Error()) {
@@ -549,6 +569,12 @@ func launchOf(cmd StartCommand, plan sessionzero.CharacterPlan, provider provide
 		Dir: req.Dir, Tmp: plan.Tmp, Provider: provider, Ready: string(b.Ready.Mode), ReadyPattern: b.Ready.Pattern, ReadyDelay: b.Ready.Delay}
 	if req.Class != nil {
 		l.Class = req.Class.Name
+	}
+	// The request travels in the row so the session zero can be brought back
+	// after a restart of the engine; the key of the provider never does.
+	req.ProviderKey = nil
+	if raw, err := json.Marshal(req); err == nil {
+		l.Request = raw
 	}
 	return l
 }

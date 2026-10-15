@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/providers"
@@ -89,10 +90,23 @@ func TestAtTheLimitOfTheTableARequestWaitsForAVacancyInOrderAndTimesOutWithoutEn
 	if err != nil || step.Pending == "" {
 		t.Fatalf("the step: %v %+v, want pending", err, step)
 	}
-	direct, err := r.create(characters.CreateRequest{Name: "Direto", Sheet: "Dev Claude", Table: "3-login", Creator: byChar(tm)})
-	if err != nil || direct.Pending == "" {
-		t.Fatalf("the recruit: %v %+v, want pending", err, direct)
+	// The direct recruit is the CLI of the table master: the answer is
+	// "pending" (exit 9, waiting_slot), not a failure.
+	resp := r.svc.Handlers()["recruit"].Handle(r.ctx, &localchan.Call{
+		Request: localchan.Request{Cmd: "recruit", Args: localchan.TextArgs("Direto"), Flags: map[string]any{"sheet": "Dev Claude"}},
+		Caller:  localchan.Caller{Identified: true, AgentID: tm.ID},
+	})
+	if resp.OK || resp.Error == nil || resp.Error.Code != "waiting_slot" || resp.ExitCode() != localchan.ExitPending {
+		t.Fatalf("the recruit answered %+v (exit %d), want pending waiting_slot", resp, resp.ExitCode())
 	}
+	var pend struct {
+		Status string `json:"status"`
+		Wait   string `json:"wait"`
+	}
+	if err := resp.DecodeData(&pend); err != nil || pend.Status != "pending" || pend.Wait == "" {
+		t.Fatalf("the pending data = %+v (%v)", pend, err)
+	}
+	direct := characters.CreateResult{Pending: pend.Wait}
 	if cs, _ := r.reg.AliveOf(r.ctx, workspace); len(cs) != 3 { // tm, a, b
 		t.Fatalf("%d alive, nobody should have been created", len(cs))
 	}

@@ -413,7 +413,8 @@ func TestBuildLaunchHasTheLayerTheSettingsAndTheProfileAndNoForbiddenFlag(t *tes
 					if dirs := slices.Index(flags, "--add-dir"); (dirs >= 0) != skills {
 						t.Errorf("%s/%s: --add-dir present = %v, want %v (the skills of the character)", goos, base.Name, dirs >= 0, skills)
 					}
-					if resume != "" && (!l.Resumed || !slices.Contains(l.Args, "--resume")) || resume == "" && slices.Contains(l.Args, "--resume") {
+					resumed := slices.Contains(l.Args, "--resume="+resume)
+					if resume != "" && (!l.Resumed || !resumed) || resume == "" && slices.ContainsFunc(l.Args, func(a string) bool { return strings.HasPrefix(a, "--resume") }) {
 						t.Errorf("%s/%s: resume %q gave %v", goos, base.Name, resume, l.Args)
 					}
 				}
