@@ -321,11 +321,11 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 			t.Errorf("%s arrived at event %d and the record %d that cites it was applied at %d", c.what, f, c.lsn, a)
 		}
 	}
-	repo, err := g.Open(ctx, filepath.Join(mirrorsDir, "ws1"))
+	repo, err := g.Open(ctx, filepath.Join(mirrorsDir, "ws1", "espelho.git"))
 	if err != nil {
 		t.Fatalf("the Tower has no mirror: %v", err)
 	}
-	if h, err := repo.ResolveRef(ctx, "refs/heads/main"); err != nil || h != mirrorTip {
+	if h, err := repo.ResolveRef(ctx, replication.ReplicaRef("refs/heads/main")); err != nil || h != mirrorTip {
 		t.Errorf("the mirror on the Tower is at %s (%v), want %s", h, err, mirrorTip)
 	}
 	for _, c := range citations {

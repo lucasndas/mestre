@@ -228,3 +228,24 @@ func TestRealARefMovedByAnotherTableIsAnAlert(t *testing.T) {
 		t.Errorf("SyncTower = %v", err)
 	}
 }
+
+// With the real git, a bundle of a Tower with the commits of another table is
+// an alert and is not applied.
+func TestRealATowerBundleWithTheCommitsOfAnotherTableIsNotApplied(t *testing.T) {
+	t.Parallel()
+	towerBundleOfAnotherTable(t, realBackend{})
+}
+
+// With the real git, the first worktree of a table on a Tower starts at the
+// tip of the Citadel.
+func TestRealTheFirstWorktreeOnATowerStartsAtTheTipOfTheCitadel(t *testing.T) {
+	t.Parallel()
+	replicaBranchScenario(t, realBackend{})
+}
+
+// CA-REPL-08 (the mirror of the workspace) with the real git, real bundles and
+// a Tower with a table checked out in its replica.
+func TestRealTheMirrorOfAWorkspaceReachesATowerWithATableCheckedOut(t *testing.T) {
+	t.Parallel()
+	mirrorScenario(t, realBackend{})
+}

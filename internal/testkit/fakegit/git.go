@@ -961,6 +961,22 @@ func (h *Handle) Commit(_ context.Context, opts gitx.CommitOptions) (gitx.Hash, 
 	return c, nil
 }
 
+// SetHead makes the working tree have another branch checked out (what
+// `git checkout` does), for the tests of what the engine does when an agent
+// switched the branch of a worktree.
+func (h *Handle) SetHead(branch string) {
+	defer h.lock()()
+	h.branch = branch
+}
+
+// HeadBranch implements gitx.Repo.
+func (h *Handle) HeadBranch(_ context.Context) (string, error) {
+	if err := h.needTree(); err != nil {
+		return "", err
+	}
+	return h.branch, nil
+}
+
 // MergeFFOnly implements gitx.Repo.
 func (h *Handle) MergeFFOnly(_ context.Context, ref string) (gitx.Hash, error) {
 	if err := h.needTree(); err != nil {

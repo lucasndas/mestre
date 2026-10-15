@@ -127,6 +127,9 @@ func (s Store) Delete(ctx context.Context, workspace, id string) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM table_worktrees WHERE workspace = ? AND table_id = ?`, workspace, id); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM table_ref_alerts WHERE workspace = ? AND table_id = ?`, workspace, id); err != nil {
+			return err
+		}
 		_, err := tx.ExecContext(ctx, `DELETE FROM tables WHERE workspace = ? AND id = ?`, workspace, id)
 		return err
 	})

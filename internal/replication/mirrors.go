@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/protocol"
@@ -37,6 +39,26 @@ type MirrorSource interface {
 
 // mirrorRefs are the refs a mirror replicates.
 var mirrorRefs = []string{"refs/heads/", "refs/tags/"}
+
+// ReplicaPrefix is where the replica of a mirror keeps what the Citadel
+// sent: refs/heads/main arrives as refs/mestre/espelho/heads/main. The
+// branches of the replica itself (refs/heads/, the ones the worktrees of the
+// tables check out and the commits of the characters of the Tower are on) are
+// never written, fetched into or pruned by the replication.
+const ReplicaPrefix = "refs/mestre/espelho/"
+
+// ReplicaRef is the name, in the replica, of a ref of the mirror of the
+// Citadel.
+func ReplicaRef(ref string) string { return ReplicaPrefix + strings.TrimPrefix(ref, "refs/") }
+
+// RefFilter may be implemented by a MirrorSource that keeps refs out of the
+// replication: Withheld gives, for a mirror, the function that says whether a
+// ref stays on the Citadel. The branches of the tables travel by the bundles of
+// the tables (the engine's check of their refs comes first), never by the
+// mirror, so a branch that is not trusted does not reach a Tower this way.
+type RefFilter interface {
+	Withheld(ctx context.Context, id string) (func(ref string) bool, error)
+}
 
 var mirrorID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
 
@@ -99,16 +121,60 @@ func (m *Mirrors) syncAll(ctx context.Context, link *protocol.Link, pe *peer) er
 // Tower that lacks the base of an incremental bundle answers
 // missing_prerequisite and gets the whole mirror (protocol.Link.SendBundle).
 func (m *Mirrors) sync(ctx context.Context, link *protocol.Link, pe *peer, id string) error {
+	pe.mu.Lock()
+	prev := pe.tips[id]
+	pe.mu.Unlock()
+	tr, err := m.Bundle(ctx, id, prev)
+	if err != nil {
+		return err
+	}
+	if tr.Tips == nil {
+		return nil // nothing to send
+	}
+	if err := link.SendBundle(ctx, tr.Meta, tr.Source); err != nil {
+		return fmt.Errorf("replication: sending mirror %s: %w", id, err)
+	}
+	pe.mu.Lock()
+	if pe.tips == nil {
+		pe.tips = map[string]map[string]gitx.Hash{}
+	}
+	pe.tips[id] = tr.Tips
+	pe.mu.Unlock()
+	return nil
+}
+
+// Transfer is the bundle of a mirror for a Tower.
+type Transfer struct {
+	// Meta and Source are what protocol.Link.SendBundle takes.
+	Meta   protocol.Object
+	Source protocol.BundleSource
+	// Tips are the refs the Tower has once it applied the transfer; nil when
+	// there is nothing to send (no ref, or the Tower has them all).
+	Tips map[string]gitx.Hash
+}
+
+// Bundle builds the transfer of the mirror id for a Tower that has the refs
+// prev of it (nil for none): the refs withheld by the source (RefFilter) are
+// left out, and so is the whole transfer when the Tower already has what is
+// left.
+func (m *Mirrors) Bundle(ctx context.Context, id string, prev map[string]gitx.Hash) (Transfer, error) {
 	repo, err := m.src.Open(ctx, id)
 	if err != nil {
-		return fmt.Errorf("replication: opening mirror %s: %w", id, err)
+		return Transfer{}, fmt.Errorf("replication: opening mirror %s: %w", id, err)
 	}
 	refs, err := repo.ListRefs(ctx, mirrorRefs...)
 	if err != nil {
-		return fmt.Errorf("replication: mirror %s: %w", id, err)
+		return Transfer{}, fmt.Errorf("replication: mirror %s: %w", id, err)
+	}
+	if f, ok := m.src.(RefFilter); ok {
+		withheld, err := f.Withheld(ctx, id)
+		if err != nil {
+			return Transfer{}, fmt.Errorf("replication: mirror %s: %w", id, err)
+		}
+		refs = slices.DeleteFunc(refs, func(r gitx.Ref) bool { return withheld != nil && withheld(r.Name) })
 	}
 	if len(refs) == 0 {
-		return nil
+		return Transfer{}, nil
 	}
 	cur := make(map[string]gitx.Hash, len(refs))
 	names := make([]string, 0, len(refs))
@@ -119,11 +185,8 @@ func (m *Mirrors) sync(ctx context.Context, link *protocol.Link, pe *peer, id st
 		wire[r.Name] = string(r.Hash)
 	}
 	sort.Strings(names)
-	pe.mu.Lock()
-	prev := pe.tips[id]
-	pe.mu.Unlock()
 	if sameTips(prev, cur) {
-		return nil
+		return Transfer{}, nil
 	}
 
 	var incremental []string
@@ -171,16 +234,7 @@ func (m *Mirrors) sync(ctx context.Context, link *protocol.Link, pe *peer, id st
 		// Only the refs that moved; the rest the Tower has from before.
 		src.Incremental = open(incremental)
 	}
-	if err := link.SendBundle(ctx, mirrorMeta{Mirror: id, Refs: wire}.object(), src); err != nil {
-		return fmt.Errorf("replication: sending mirror %s: %w", id, err)
-	}
-	pe.mu.Lock()
-	if pe.tips == nil {
-		pe.tips = map[string]map[string]gitx.Hash{}
-	}
-	pe.tips[id] = cur
-	pe.mu.Unlock()
-	return nil
+	return Transfer{Meta: mirrorMeta{Mirror: id, Refs: wire}.object(), Source: src, Tips: cur}, nil
 }
 
 func sameTips(a, b map[string]gitx.Hash) bool {
@@ -196,17 +250,23 @@ func sameTips(a, b map[string]gitx.Hash) bool {
 }
 
 // MirrorStore is where a Tower keeps its copy of the mirrors: a bare
-// repository per mirror, at <Root>/<id>.
+// repository per mirror, at <Root>/<id>/espelho.git, the same layout as the
+// Citadel's (Root is <dados>/workspaces and id the slug of the workspace;
+// docs/orquestracao/workspaces.md), so the worktrees of the tables of the
+// Tower come out of it. What the Citadel sends is kept under ReplicaPrefix.
 type MirrorStore struct {
 	Root string
 	Git  gitx.Git
 }
 
+// Open opens the replica of a mirror, making it if the Tower has none yet.
+func (s MirrorStore) Open(ctx context.Context, id string) (gitx.Repo, error) { return s.open(ctx, id) }
+
 func (s MirrorStore) open(ctx context.Context, id string) (gitx.Repo, error) {
 	if !mirrorID.MatchString(id) {
 		return nil, fmt.Errorf("mirror id %q is not valid", id)
 	}
-	dir := filepath.Join(s.Root, id)
+	dir := filepath.Join(s.Root, id, "espelho.git")
 	repo, err := s.Git.Open(ctx, dir)
 	if err == nil {
 		return repo, nil
@@ -229,6 +289,11 @@ var (
 	_ protocol.Skipper   = (*mirrorReceiver)(nil)
 )
 
+// MirrorFinalizer is the Finalizer of the transfers of kind git-bundle of the
+// mirrors on a Tower (the replica uses it; the tests of the workspaces and
+// the tables call it to apply what Mirrors.Bundle builds).
+func MirrorFinalizer(s MirrorStore) protocol.Finalizer { return newMirrorReceiver(s) }
+
 func newMirrorReceiver(s MirrorStore) *mirrorReceiver {
 	return &mirrorReceiver{
 		store: s,
@@ -242,7 +307,10 @@ func newMirrorReceiver(s MirrorStore) *mirrorReceiver {
 			},
 			Apply: func(ctx context.Context, repo protocol.BundleRepo, meta protocol.Object, file string) error {
 				// "+": the mirror follows the Citadel, whatever it did to its refs.
-				if err := repo.(gitx.Repo).FetchBundle(ctx, file, "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"); err != nil {
+				// Into the namespace of the replica, never into refs/heads/: the
+				// branches of the tables are checked out there, and git refuses to
+				// fetch into a checked-out branch (the whole fetch would fail).
+				if err := repo.(gitx.Repo).FetchBundle(ctx, file, "+refs/heads/*:"+ReplicaPrefix+"heads/*", "+refs/tags/*:"+ReplicaPrefix+"tags/*"); err != nil {
 					return err
 				}
 				return pruneMirror(ctx, repo.(gitx.Repo), meta)
@@ -253,7 +321,9 @@ func newMirrorReceiver(s MirrorStore) *mirrorReceiver {
 
 // pruneMirror deletes the refs the Citadel no longer has: the meta of a bundle
 // lists all the refs of the mirror, not only the ones the bundle carries. A
-// mirror left with no ref at all sends no bundle, so its refs stay.
+// mirror left with no ref at all sends no bundle, so its refs stay. Only the
+// namespace of the replica is pruned: the branches of the Tower, and the
+// commits of its characters, are not touched.
 func pruneMirror(ctx context.Context, repo gitx.Repo, meta protocol.Object) error {
 	m, err := mirrorMetaOf(meta)
 	if err != nil {
@@ -262,12 +332,16 @@ func pruneMirror(ctx context.Context, repo gitx.Repo, meta protocol.Object) erro
 	if len(m.Refs) == 0 {
 		return nil
 	}
-	have, err := repo.ListRefs(ctx, mirrorRefs...)
+	kept := make(map[string]bool, len(m.Refs))
+	for name := range m.Refs {
+		kept[ReplicaRef(name)] = true
+	}
+	have, err := repo.ListRefs(ctx, ReplicaPrefix)
 	if err != nil {
 		return err
 	}
 	for _, ref := range have {
-		if _, kept := m.Refs[ref.Name]; kept {
+		if kept[ref.Name] {
 			continue
 		}
 		if err := repo.DeleteRef(ctx, ref.Name); err != nil {
@@ -288,7 +362,7 @@ func (r *mirrorReceiver) Have(ctx context.Context, b protocol.XferBegin) bool {
 	if err != nil {
 		return false
 	}
-	refs, err := repo.ListRefs(ctx, mirrorRefs...)
+	refs, err := repo.ListRefs(ctx, ReplicaPrefix)
 	if err != nil || len(refs) != len(m.Refs) {
 		return false
 	}
@@ -297,7 +371,7 @@ func (r *mirrorReceiver) Have(ctx context.Context, b protocol.XferBegin) bool {
 		have[ref.Name] = string(ref.Hash)
 	}
 	for name, hash := range m.Refs {
-		if have[name] != hash {
+		if have[ReplicaRef(name)] != hash {
 			return false
 		}
 	}

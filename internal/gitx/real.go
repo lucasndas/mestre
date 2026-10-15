@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -244,11 +245,14 @@ func (g *Real) maskArg(a string) string {
 }
 
 type runOpts struct {
-	dir    string
-	stdin  []byte
-	env    []string
-	config []string // extra -c settings, after globalArgs
-	tree   bool     // the call touches the working tree (repo.guard)
+	dir   string
+	stdin []byte
+	// stdinFrom is a stream for the standard input (a pack too big to hold
+	// in memory); stdin wins when both are set.
+	stdinFrom io.Reader
+	env       []string
+	config    []string // extra -c settings, after globalArgs
+	tree      bool     // the call touches the working tree (repo.guard)
 }
 
 // exec starts git once. It does not check the version.
@@ -269,6 +273,8 @@ func (g *Real) exec(ctx context.Context, ro runOpts, args ...string) ([]byte, er
 	cmd.WaitDelay = waitDelay
 	if ro.stdin != nil {
 		cmd.Stdin = bytes.NewReader(ro.stdin)
+	} else if ro.stdinFrom != nil {
+		cmd.Stdin = ro.stdinFrom
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

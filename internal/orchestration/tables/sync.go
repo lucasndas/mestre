@@ -220,6 +220,9 @@ func (s *Service) SyncTower(ctx context.Context, workspace, table, machine strin
 	if s.o.Peers == nil || !s.o.Peers.Connected(machine) {
 		return fmt.Errorf("%w: %s", ErrMachineUnreachable, machine)
 	}
+	if !t.State.Accepts() {
+		return fmt.Errorf("%w: a mesa %s está %s", ErrBadTransition, table, t.State)
+	}
 	if err := s.guard(ctx, t); err != nil {
 		return err
 	}
@@ -344,6 +347,10 @@ func (r *Receiver) apply(ctx context.Context, mirror gitx.Repo, b protocol.XferB
 	if _, err := s.checkTable(ctx, t); err != nil {
 		return err
 	}
+	registeredRef := ""
+	if prev, err := s.store.Worktree(ctx, t.Workspace, t.ID, r.machine); err == nil {
+		registeredRef = prev.RefCommit
+	}
 	record := func(outcome string, tip gitx.Hash) error {
 		return s.store.PutTransfer(ctx, Transfer{SHA256: b.SHA256, Workspace: t.Workspace, Table: t.ID, Machine: r.machine, Direction: ToCitadel,
 			Tip: string(tip), Outcome: outcome, At: s.clk.Now()})
@@ -363,7 +370,7 @@ func (r *Receiver) apply(ctx context.Context, mirror gitx.Repo, b protocol.XferB
 		return err
 	}
 	if s.Untrusted(t.Workspace, t.ID) {
-		return record("blocked", tower)
+		return nil // blocked: not recorded, so the same bundle is looked at again after TrustRef
 	}
 	local, err := mirror.ResolveRef(ctx, "refs/heads/"+t.Branch)
 	if err != nil {
@@ -381,11 +388,24 @@ func (r *Receiver) apply(ctx context.Context, mirror gitx.Repo, b protocol.XferB
 		s.tellMaster(ctx, t, s.divergence(ctx, mirror, t, r.machine, local, tower))
 		return record("diverged", tower)
 	}
+	// The same checks of a branch that moved ahead on the Citadel: a bundle
+	// is a move of the branch too, and it comes from a machine where agents
+	// write to the replica (docs/orquestracao/mesas.md).
+	if why, err := s.continuationProblem(ctx, mirror, t, r.machine, string(local), string(tower)); err != nil {
+		return err
+	} else if why != "" {
+		s.alert(ctx, t, RefAlert{Ref: ref, Registered: registeredRef, Current: string(tower), Reason: why})
+		return nil // blocked: nothing is applied and nothing is recorded
+	}
 	wt, err := s.store.Worktree(ctx, t.Workspace, t.ID, s.o.Machine)
 	if err != nil {
 		return err
 	}
 	if err := s.fastForward(ctx, t, wt, ref); err != nil {
+		if errors.Is(err, errWrongBranch) {
+			s.tellMaster(ctx, t, fmt.Sprintf("A Torre %s enviou commits para a branch %s, mas o worktree da Cidadela não está nessa branch (%v); nada mudou.", r.machine, t.Branch, err))
+			return record("conflict", tower)
+		}
 		if errors.Is(err, gitx.ErrLocalChanges) || errors.Is(err, gitx.ErrNotFastForward) {
 			s.tellMaster(ctx, t, fmt.Sprintf("A Torre %s enviou commits para a branch %s, mas o worktree da Cidadela tem alterações que conflitam com eles; nada mudou. "+
 				"Faça o commit ou desfaça essas alterações e peça a sincronização de novo.", r.machine, t.Branch))
@@ -412,9 +432,56 @@ func (s *Service) fastForward(ctx context.Context, t Table, wt Worktree, ref str
 	}
 	tr.Repo = repo
 	return s.o.Files.Sync(ctx, tr, func(ctx context.Context) error {
+		// MergeFFOnly moves whatever branch the worktree has checked out:
+		// an agent that switched it must not have the branch of the table
+		// merged onto the other one.
+		if err := checkHead(ctx, repo, t.Branch); err != nil {
+			return err
+		}
 		_, err := repo.MergeFFOnly(ctx, ref)
 		return err
 	})
+}
+
+// errWrongBranch is a worktree that has another branch checked out than the
+// one of its table.
+var errWrongBranch = errors.New("the worktree is not on the branch of its table")
+
+// checkHead refuses a worktree whose HEAD is not the branch of the table.
+func checkHead(ctx context.Context, repo gitx.Repo, branch string) error {
+	head, err := repo.HeadBranch(ctx)
+	if err != nil {
+		return err
+	}
+	if head != branch {
+		if head == "" {
+			head = "HEAD solto"
+		}
+		return fmt.Errorf("%w: está em %s, a branch é %s", errWrongBranch, head, branch)
+	}
+	return nil
+}
+
+// continuationProblem says why the commits from..to cannot be taken as a
+// continuation of the branch of the table that a character of the machine
+// made ("" when they can): nobody of the table is alive there to have made
+// them, or they are commits of another table (also the ones its Towers sent).
+func (s *Service) continuationProblem(ctx context.Context, mirror gitx.Repo, t Table, machine, from, to string) (string, error) {
+	alive, err := s.hasLivingOn(ctx, t, machine)
+	if err != nil {
+		return "", err
+	}
+	if !alive {
+		return "avançou, mas nenhum personagem da mesa está vivo na Torre " + machine + " para ter feito isso", nil
+	}
+	foreign, err := s.foreignCommits(ctx, mirror, t, from, to)
+	if err != nil {
+		return "", err
+	}
+	if foreign != "" {
+		return "recebeu commits que são da mesa " + foreign, nil
+	}
+	return "", nil
 }
 
 // divergence is the notice to the table master: the commits of each side that

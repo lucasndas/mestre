@@ -36,6 +36,7 @@ var (
 	ErrDirtyWorktree              = errors.New("gitx: worktree has uncommitted changes")
 	ErrNotFastForward             = errors.New("gitx: not a fast-forward")
 	ErrLocalChanges               = errors.New("gitx: local changes would be overwritten")
+	ErrWorktreeBusy               = errors.New("gitx: worktree files are in use; try again later")
 	ErrNothingToCommit            = errors.New("gitx: nothing to commit")
 	ErrEmptyBundle                = errors.New("gitx: bundle would be empty")
 	ErrInvalidBundle              = errors.New("gitx: invalid bundle")
@@ -307,6 +308,8 @@ type Repo interface {
 	// the new HEAD (ErrNotFastForward, ErrLocalChanges). Nothing changes on
 	// failure.
 	MergeFFOnly(ctx context.Context, ref string) (Hash, error)
+	// HeadBranch is the branch HEAD points at ("" when detached).
+	HeadBranch(ctx context.Context) (string, error)
 	// SetSkipWorktree turns the skip-worktree flag of tracked files on or off.
 	SetSkipWorktree(ctx context.Context, on bool, paths ...string) error
 	SkipWorktreePaths(ctx context.Context) ([]string, error)

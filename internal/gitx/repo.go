@@ -1,13 +1,17 @@
 package gitx
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/lucasndas/mestre/internal/privdir"
 )
 
 // repo is a repository or worktree opened by Real.
@@ -461,7 +465,72 @@ func (r *repo) FetchBundle(ctx context.Context, file string, refspecs ...string)
 	if err := r.VerifyBundle(ctx, abs); err != nil {
 		return err
 	}
+	// git does not check the objects of a bundle on fetch (fetch.fsckObjects
+	// is ignored for them): they are checked first, in a folder of their own.
+	if err := r.fsckBundle(ctx, abs); err != nil {
+		return err
+	}
 	return r.Fetch(ctx, abs, refspecs...)
+}
+
+// fsckBundle checks the objects of a bundle as git checks the ones it
+// receives from a remote with transfer.fsckObjects: `index-pack --strict`
+// indexes the pack in a folder that is thrown away (the objects the
+// repository already has serve the thin deltas and the links), so a malformed
+// object from another machine never enters the repository of the engine.
+func (r *repo) fsckBundle(ctx context.Context, file string) error {
+	off, err := bundlePackOffset(file)
+	if err != nil {
+		return fmt.Errorf("check bundle %s: %w", file, err)
+	}
+	out, err := r.git(ctx, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+	if err != nil {
+		return fmt.Errorf("check bundle %s: %w", file, err)
+	}
+	objects := strings.TrimSpace(string(out))
+	quarantine, err := os.MkdirTemp("", "mestre-bundle-")
+	if err != nil {
+		return fmt.Errorf("check bundle %s: %w", file, err)
+	}
+	defer func() { _ = os.RemoveAll(quarantine) }()
+	if err := privdir.Ensure(filepath.Join(quarantine, "pack")); err != nil {
+		return fmt.Errorf("check bundle %s: %w", file, err)
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		return fmt.Errorf("check bundle %s: %w", file, err)
+	}
+	defer func() { _ = f.Close() }()
+	ro := runOpts{
+		stdinFrom: io.NewSectionReader(f, off, 1<<62),
+		env:       []string{"GIT_OBJECT_DIRECTORY=" + quarantine, "GIT_ALTERNATE_OBJECT_DIRECTORIES=" + objects},
+	}
+	if _, err := r.run(ctx, ro, "index-pack", "--strict", "--fix-thin", "--stdin"); err != nil {
+		return fmt.Errorf("check bundle %s: %w", file, as(ErrInvalidBundle, err))
+	}
+	return nil
+}
+
+// bundlePackOffset is where the pack starts in a bundle file: after the empty
+// line that ends the header.
+func bundlePackOffset(file string) (int64, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = f.Close() }()
+	br := bufio.NewReader(f)
+	var off int64
+	for {
+		line, err := br.ReadString('\n')
+		off += int64(len(line))
+		if err != nil {
+			return 0, fmt.Errorf("%w: truncated header", ErrInvalidBundle)
+		}
+		if strings.TrimRight(line, "\r\n") == "" {
+			return off, nil
+		}
+	}
 }
 
 func (r *repo) AddWorktree(ctx context.Context, path string, opts WorktreeOptions) (Repo, error) {
@@ -528,6 +597,10 @@ func (r *repo) RemoveWorktree(ctx context.Context, path string, force bool) erro
 			err = as(ErrDirtyWorktree, err)
 		case has(err, "is not a working tree"):
 			err = as(ErrNoSuchWorktree, err)
+		case has(err, "used by another process", "Device or resource busy", "Permission denied", "Directory not empty", "Access is denied", "Failed to delete"):
+			// On Windows a file kept open (a terminal, an editor, the
+			// antivirus) stops the removal; it goes away when it is closed.
+			err = as(ErrWorktreeBusy, err)
 		}
 		return fmt.Errorf("remove worktree %s: %w", path, err)
 	})
@@ -640,6 +713,20 @@ func (r *repo) MergeFFOnly(ctx context.Context, ref string) (Hash, error) {
 		return err
 	})
 	return head, err
+}
+
+func (r *repo) HeadBranch(ctx context.Context) (string, error) {
+	if err := r.needTree(); err != nil {
+		return "", err
+	}
+	out, err := r.git(ctx, "symbolic-ref", "-q", "HEAD")
+	if err != nil {
+		if exitedWithoutMessage(err, 1) {
+			return "", nil // detached
+		}
+		return "", fmt.Errorf("head branch: %w", err)
+	}
+	return strings.TrimPrefix(strings.TrimSpace(string(out)), "refs/heads/"), nil
 }
 
 func (r *repo) SetSkipWorktree(ctx context.Context, on bool, paths ...string) error {

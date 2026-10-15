@@ -104,16 +104,16 @@ func mirrorScenario(t *testing.T, g gitx.Git, write func(testing.TB, gitx.Repo, 
 
 		// main on the Tower, or "" while the Tower has no mirror.
 		tip := func() gitx.Hash {
-			repo, err := g.Open(ctx, filepath.Join(tw.mirrors, "ws1"))
+			repo, err := g.Open(ctx, filepath.Join(tw.mirrors, "ws1", "espelho.git"))
 			if err != nil {
 				return ""
 			}
-			list, err := repo.ListRefs(ctx, "refs/heads/")
+			list, err := repo.ListRefs(ctx, replication.ReplicaPrefix)
 			if err != nil {
 				return ""
 			}
 			for _, ref := range list {
-				if ref.Name == "refs/heads/main" {
+				if ref.Name == replication.ReplicaRef("refs/heads/main") {
 					return ref.Hash
 				}
 			}
@@ -175,16 +175,16 @@ func mirrorScenario(t *testing.T, g gitx.Git, write func(testing.TB, gitx.Repo, 
 
 		// A branch that the Citadel deletes is deleted from the mirror too.
 		hasRef := func(name string) bool {
-			repo, err := g.Open(ctx, filepath.Join(tw.mirrors, "ws1"))
+			repo, err := g.Open(ctx, filepath.Join(tw.mirrors, "ws1", "espelho.git"))
 			if err != nil {
 				return false
 			}
-			list, err := repo.ListRefs(ctx, "refs/heads/")
+			list, err := repo.ListRefs(ctx, replication.ReplicaPrefix)
 			if err != nil {
 				return false
 			}
 			for _, ref := range list {
-				if ref.Name == name {
+				if ref.Name == replication.ReplicaRef(name) {
 					return true
 				}
 			}

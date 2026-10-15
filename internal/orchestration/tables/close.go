@@ -44,10 +44,11 @@ var engineCreator = characters.Creator{Kind: characters.CreatedByEngine}
 // *MissingError and the table stays `closing` until the decision: a new call
 // resumes the steps. With Cancel it is the cancellation.
 func (s *Service) Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
-	gm := req.By
-	if gm.Role != characters.RoleGrandMaster || !gm.State.Alive() {
-		return CloseResult{}, ErrNotGrandMaster
+	gm, err := s.grandMaster(ctx, req.By)
+	if err != nil {
+		return CloseResult{}, err
 	}
+	req.By = gm
 	t, err := s.Find(ctx, gm.Workspace, req.Table)
 	if err != nil {
 		return CloseResult{}, err
@@ -94,6 +95,10 @@ func (s *Service) cancel(ctx context.Context, t Table, req CloseRequest) (CloseR
 	switch t.State {
 	case StateCancelling:
 	case StateOpen, StateWorking, StateInReview:
+		retention := s.o.Settings.CancelRetention(t.Workspace)
+		if retention <= 0 {
+			return CloseResult{}, fmt.Errorf("a retenção da branch de uma mesa cancelada (%s) não é válida: precisa ser positiva", retention)
+		}
 		if s.o.Destructive == nil {
 			return CloseResult{}, ErrApprovalRequired
 		}
@@ -107,7 +112,7 @@ func (s *Service) cancel(ctx context.Context, t Table, req CloseRequest) (CloseR
 		if t, err = s.apply(ctx, t, EventCancel); err != nil {
 			return CloseResult{}, err
 		}
-		until := s.clk.Now().Add(s.o.Settings.CancelRetention(t.Workspace))
+		until := s.clk.Now().Add(retention)
 		if err := s.store.SetCancel(ctx, t.Workspace, t.ID, s.clk.Now(), req.Reason, until); err != nil {
 			return CloseResult{}, err
 		}
@@ -324,6 +329,13 @@ func (s *Service) endWorktrees(ctx context.Context, t Table, m *MissingError) (r
 			continue
 		}
 		if err := s.removeWorktree(ctx, mirror, t, wt); err != nil {
+			if errors.Is(err, gitx.ErrWorktreeBusy) {
+				// Files kept open (Windows: an editor, the antivirus) stop
+				// the removal; it is tried again at the next sweep.
+				m.Pending = append(m.Pending, fmt.Sprintf("%s: o worktree tem arquivos em uso; a remoção será tentada de novo", label))
+				removed = false
+				continue
+			}
 			return retained, false, err
 		}
 	}
@@ -337,10 +349,14 @@ func (s *Service) whyKept(ctx context.Context, mirror gitx.Repo, t Table, wt Wor
 		reasons = append(reasons, "alterações não commitadas em "+strings.Join(in.Dirty, ", "))
 	}
 	if t.State == StateCancelling {
-		// The commits of the Citadel's worktree are already in the mirror;
-		// a Tower's are only if the Citadel has them.
-		if wt.Machine != s.o.Machine && in.Tip != wt.LastCommit {
-			reasons = append(reasons, fmt.Sprintf("commits que a Cidadela não recebeu (ponta %s)", gitx.Hash(in.Tip).Short()))
+		// What the worktree has must be in the branch of the mirror, which
+		// stays for the retention: the HEAD of the Citadel's worktree (it may
+		// be detached), and what a Tower brought only if the Citadel has it
+		// and the branch contains it (a diverged, conflicting or blocked
+		// bundle is in refs/mestre/torres/, not in the branch).
+		ok, err := mirror.IsAncestor(ctx, in.Tip, "refs/heads/"+t.Branch)
+		if in.Tip == "" || err != nil || !ok {
+			reasons = append(reasons, fmt.Sprintf("commits que a branch %s do espelho não tem (ponta %s)", t.Branch, gitx.Hash(in.Tip).Short()))
 		}
 	} else {
 		head := t.MergedHead
@@ -376,7 +392,9 @@ func (s *Service) removeWorktree(ctx context.Context, mirror gitx.Repo, t Table,
 		if err := s.o.Peers.RemoveWorktree(ctx, wt.Machine, t.Workspace, t.ID); err != nil {
 			return fmt.Errorf("remove the worktree of %s on %s: %w", t.ID, wt.Machine, err)
 		}
-		_ = mirror.DeleteRef(ctx, TowerRef(wt.Machine, t.Branch))
+		if t.State != StateCancelling {
+			_ = mirror.DeleteRef(ctx, TowerRef(wt.Machine, t.Branch))
+		} // a cancelled table keeps what the Towers sent until the branch goes
 	}
 	return s.store.DropWorktree(ctx, t.Workspace, t.ID, wt.Machine)
 }
@@ -390,8 +408,27 @@ func (s *Service) deleteBranch(ctx context.Context, t Table) error {
 	if err := mirror.DeleteBranch(ctx, t.Branch); err != nil && !errors.Is(err, gitx.ErrRefNotFound) {
 		return fmt.Errorf("delete the branch %s: %w", t.Branch, err)
 	}
-	_ = mirror.DeleteRef(ctx, CitadelRef(t.Branch))
+	s.dropBundleRefs(ctx, mirror, t)
 	return s.store.SetBranchDeleted(ctx, t.Workspace, t.ID, s.clk.Now())
+}
+
+// dropBundleRefs takes out of the mirror the refs of the bundles of a table:
+// what the Towers sent and the tip meant for them.
+func (s *Service) dropBundleRefs(ctx context.Context, mirror gitx.Repo, t Table) {
+	_ = mirror.DeleteRef(ctx, CitadelRef(t.Branch))
+	refs, err := mirror.ListRefs(ctx, TowerRefPrefix)
+	if err != nil {
+		s.log.Warn("tables: the refs of the Towers were not listed", "table", t.ID, "err", err)
+		return
+	}
+	for _, r := range refs {
+		rest := strings.TrimPrefix(r.Name, TowerRefPrefix)
+		if _, branch, ok := strings.Cut(rest, "/"); ok && branch == t.Branch {
+			if err := mirror.DeleteRef(ctx, r.Name); err != nil {
+				s.log.Warn("tables: a ref of a Tower was not removed", "table", t.ID, "ref", r.Name, "err", err)
+			}
+		}
+	}
 }
 
 // Sweep is the periodic work of the tables: it takes the tables that are
@@ -478,7 +515,7 @@ func (s *Service) sweepBranch(ctx context.Context, t Table) error {
 			return fmt.Errorf("delete the branch %s: %w", t.Branch, err)
 		}
 	}
-	_ = mirror.DeleteRef(ctx, CitadelRef(t.Branch))
+	s.dropBundleRefs(ctx, mirror, t)
 	return s.store.SetBranchDeleted(ctx, t.Workspace, t.ID, s.clk.Now())
 }
 
