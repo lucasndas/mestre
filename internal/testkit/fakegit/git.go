@@ -392,6 +392,42 @@ func (h *Handle) Log(_ context.Context, revRange string) ([]gitx.CommitInfo, err
 	return out, nil
 }
 
+// DiffNameStatus implements gitx.Repo: the trees of the two commits compared.
+func (h *Handle) DiffNameStatus(_ context.Context, from, to string) ([]gitx.FileChange, error) {
+	if err := gitx.ValidateRef(from); err != nil {
+		return nil, err
+	}
+	if err := gitx.ValidateRef(to); err != nil {
+		return nil, err
+	}
+	defer h.lock()()
+	a, err := h.resolveLocked(from)
+	if err != nil {
+		return nil, err
+	}
+	b, err := h.resolveLocked(to)
+	if err != nil {
+		return nil, err
+	}
+	ta, tb := h.r.commits[a].Files, h.r.commits[b].Files
+	var out []gitx.FileChange
+	for _, p := range slices.Sorted(maps.Keys(ta)) {
+		switch cb, ok := tb[p]; {
+		case !ok:
+			out = append(out, gitx.FileChange{Status: 'D', Path: p})
+		case cb != ta[p]:
+			out = append(out, gitx.FileChange{Status: 'M', Path: p})
+		}
+	}
+	for _, p := range slices.Sorted(maps.Keys(tb)) {
+		if _, ok := ta[p]; !ok {
+			out = append(out, gitx.FileChange{Status: 'A', Path: p})
+		}
+	}
+	slices.SortFunc(out, func(x, y gitx.FileChange) int { return strings.Compare(x.Path, y.Path) })
+	return out, nil
+}
+
 // ReadFile implements gitx.Repo.
 func (h *Handle) ReadFile(_ context.Context, ref, p string) ([]byte, error) {
 	p, err := gitx.CleanRepoPath(p)
