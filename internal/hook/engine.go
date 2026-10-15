@@ -81,6 +81,9 @@ type Engine struct {
 	// Ledger the record of the exceptions used (the same Store).
 	Rules  classes.RulesSource
 	Ledger classes.ExceptionLedger
+	// TableRules is the gate of the temporary table rules in the effective
+	// rules (tablerules.Service on the Citadel); nil: they free nothing.
+	TableRules classes.TableRuleGate
 	// Characters, Approvals, States, Contexts and ClassHooks are the parts
 	// of later milestones; nil: no character is known (every tool is
 	// denied), every ask is denied, no state is kept, no context, no class
@@ -298,7 +301,7 @@ func (e *Engine) env(ctx context.Context, agentID string) (classes.Env, error) {
 	if err != nil {
 		return env, err
 	}
-	env.Exceptions = e.Ledger
+	env.Exceptions, env.TableRules = e.Ledger, e.TableRules
 	if err := e.saveEnv(ctx, agentID, env); err != nil {
 		e.log().Warn("hook: env.json of the character not written", "agent", agentID, "err", err)
 	}

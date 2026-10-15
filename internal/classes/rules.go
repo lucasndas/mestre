@@ -228,6 +228,11 @@ type DecreeKind string
 const (
 	DecreeRule      DecreeKind = "rule"
 	DecreeException DecreeKind = "exception"
+	// DecreeTableRule is a temporary table rule of an agent of the approval
+	// chain (docs/orquestracao/regras-temporarias-de-mesa.md): it only turns
+	// an ask into allow, the engine checks it again at each use (Env.TableRules)
+	// and it never reaches the degraded mode nor the native controls.
+	DecreeTableRule DecreeKind = "table_rule"
 )
 
 // Decree is an active decree or exception that applies to the character
@@ -241,6 +246,12 @@ type Decree struct {
 	Effect Effect     `json:"effect"`
 	Action *Action    `json:"action,omitempty"`
 	Until  *time.Time `json:"until,omitempty"`
+	// Risk and ToolKind are of a table rule: the highest risk it covers
+	// (baixo or medio) and the kind of tool its pattern is for. A table rule
+	// binds either Action (the exact action) or one pattern in Effect.Allow
+	// (commands for a shell, tools for the others).
+	Risk     Risk               `json:"risk,omitempty"`
+	ToolKind providers.ToolKind `json:"tool_kind,omitempty"`
 }
 
 // Effect is what a decree does; kind permission frees or forbids patterns.
@@ -389,8 +400,13 @@ func (r *Rules) Validate() error {
 		}
 	}
 	for _, d := range r.Decrees {
-		if d.Kind != "" && d.Kind != DecreeRule && d.Kind != DecreeException {
+		if d.Kind != "" && d.Kind != DecreeRule && d.Kind != DecreeException && d.Kind != DecreeTableRule {
 			return fmt.Errorf("effective rules: decree %d: kind %q", d.ID, d.Kind)
+		}
+		if d.Kind == DecreeTableRule {
+			if !d.Level.agent() || d.Until == nil || (d.Risk != RiskLow && d.Risk != RiskMedium) {
+				return fmt.Errorf("effective rules: decree %d: a table rule needs the level of an agent, a validity and the risk baixo or medio", d.ID)
+			}
 		}
 		if !d.Level.person() && !d.Level.agent() {
 			return fmt.Errorf("effective rules: decree %d: level %q", d.ID, d.Level)

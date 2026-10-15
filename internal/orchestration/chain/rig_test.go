@@ -54,6 +54,8 @@ type fakeClasses struct {
 	used    map[string]bool
 	nextID  int64
 	now     time.Time
+	// gate is the gate of the temporary table rules the environment carries.
+	gate classes.TableRuleGate
 }
 
 func newFakeClasses(now time.Time) *fakeClasses {
@@ -89,7 +91,7 @@ func (f *fakeClasses) Rules(_ context.Context, id string) (*classes.Rules, error
 }
 
 func (f *fakeClasses) Env(_ context.Context, id string) (classes.Env, error) {
-	return classes.Env{AgentID: id, Worktree: "/work/42-login", OS: "linux", Exceptions: ledger{f}}, nil
+	return classes.Env{AgentID: id, Worktree: "/work/42-login", OS: "linux", Exceptions: ledger{f}, TableRules: f.gate}, nil
 }
 
 func (f *fakeClasses) Domains(_ context.Context, id string) ([]string, error) {
@@ -275,7 +277,7 @@ func (p *policy) set(s chain.Settings) {
 	p.mu.Unlock()
 }
 
-type worldOpts struct{ noGrants, noTemp bool }
+type worldOpts struct{ noGrants, noTemp, realTemp bool }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
 	t.Helper()
@@ -305,13 +307,13 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	w.machines.Chars = func() *characters.Service { return w.orc.Characters }
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
-		Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
+		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg}
 	if !opt.noGrants {
 		oo.ChainGrants = w.grants
 	}
-	if !opt.noTemp {
+	if !opt.noTemp && !opt.realTemp {
 		oo.ChainTempRules = w.temp
 	}
 	w.orc, err = app.NewOrchestration(oo)
@@ -319,6 +321,9 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		t.Fatal(err)
 	}
 	w.ch = w.orc.Chain
+	if opt.realTemp {
+		w.cls.gate = w.orc.TableRules
+	}
 	w.machines.Confirm = w.orc.Inbox.Confirmed
 	w.fwd = localchan.NewLocalForwarder()
 	w.orc.Register(w.fwd, nil)

@@ -210,8 +210,10 @@ func (s *Service) effect(ctx context.Context, r Request, st Settings, by string,
 }
 
 // temp makes the temporary table rule of an agent's approval for a time or a
-// pattern: baixo only, inside the rule's longest validity; a person's
-// approval is a decree.
+// pattern: up to the risk the level decides (baixo for an agent superior, medio
+// for the Mestre da mesa, whose groups must be in cadeia.mesa_decide, and for
+// the Grão-Mestre), inside the longest validity of a rule; a person's approval
+// is a decree (docs/orquestracao/regras-temporarias-de-mesa.md).
 func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, level Level, ap *classes.ApprovablePattern, dur time.Duration, untilEnd, agent bool) (string, *Refusal) {
 	if !agent {
 		return "decree", s.decree(ctx, r, by, level, AnswerApproveFor, patternOf(ap), dur)
@@ -219,11 +221,22 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 	if !isPermission(r.Type) || r.Action == nil {
 		return "", refuse(CodeBadAnswer, "a temporary rule is for a request of an action")
 	}
-	if r.Risk.Risk != classes.RiskLow {
-		return "", refuse(CodeAboveCeiling, "a temporary rule of an agent covers only baixo; this request is %s", r.Risk.Risk)
+	ceiling := classes.RiskLow
+	if level.Kind == LevelMesa || level.Kind == LevelGrandMaster {
+		ceiling = classes.RiskMedium
 	}
-	if ap != nil && ap.Risk.Risk != classes.RiskLow {
-		return "", refuse(CodeAboveCeiling, "the pattern reaches risk %s (%s), above the ceiling of an agent (baixo)", ap.Risk.Risk, ap.Risk.Rule)
+	if !riskWithin(r.Risk.Risk, ceiling) {
+		return "", refuse(CodeAboveCeiling, "a temporary rule of this level covers up to %s; this request is %s", ceiling, r.Risk.Risk)
+	}
+	if ap != nil {
+		if !riskWithin(ap.Risk.Risk, ceiling) {
+			return "", refuse(CodeAboveCeiling, "the pattern reaches risk %s (%s), above the ceiling of this level (%s)", ap.Risk.Risk, ap.Risk.Rule, ceiling)
+		}
+		if ap.Risk.Risk == classes.RiskMedium && level.Kind == LevelMesa {
+			if why := s.mesaPatternCan(ctx, r, st, ap); why != "" {
+				return "", refuse(CodeAboveCeiling, "%s", why)
+			}
+		}
 	}
 	if ap == nil && dur <= 0 && !untilEnd {
 		return "", refuse(CodeBadAnswer, "approve_for needs --for <duration> or --until-mission-end")
@@ -234,16 +247,62 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 	if s.o.TempRules == nil {
 		return "", refuse(CodeUnavailable, "temporary table rules are not available in this engine")
 	}
-	rule := TempRule{Request: r.ID, Workspace: r.Workspace, Table: r.Table, Class: r.Class, Pattern: ap, Action: *r.Action, UntilMissionEnd: untilEnd, By: by, Level: level}
+	now := s.clk.Now()
+	rule := TempRule{Request: r.ID, Workspace: r.Workspace, Table: r.Table, Class: r.Class, Requester: r.Requester, Pattern: ap, Action: *r.Action,
+		Risk: ceilingOfRule(r, ap), UntilMissionEnd: untilEnd, By: by, Level: level, Until: now.Add(st.TempRuleMax)}
 	if dur > 0 {
-		rule.Until = s.clk.Now().Add(dur)
-	} else if ap != nil {
-		rule.Until = s.clk.Now().Add(st.TempRuleMax)
+		rule.Until = now.Add(dur)
 	}
 	if err := s.o.TempRules.Create(ctx, rule); err != nil {
+		if errors.Is(err, ErrNoMission) {
+			return "", refuse(CodeBadAnswer, "the request has no mission to end with: use --for <duration>")
+		}
 		return "", refuse(CodeUnavailable, "the temporary rule was not made: %v", err)
 	}
 	return "temporary_rule", nil
+}
+
+// ceilingOfRule is the risk a rule covers: the one of the pattern, or of the
+// exact action.
+func ceilingOfRule(r Request, ap *classes.ApprovablePattern) classes.Risk {
+	if ap != nil {
+		return ap.Risk.Risk
+	}
+	return r.Risk.Risk
+}
+
+// riskWithin says whether a risk fits under a ceiling that is baixo or medio.
+func riskWithin(r, ceiling classes.Risk) bool {
+	switch r {
+	case classes.RiskLow:
+		return true
+	case classes.RiskMedium:
+		return ceiling == classes.RiskMedium
+	}
+	return false
+}
+
+// mesaPatternCan says why the Mestre da mesa may not make a rule of a medio
+// pattern ("" when it may): the autonomy of the table is not paused and every
+// group the pattern reaches is one it decides.
+func (s *Service) mesaPatternCan(ctx context.Context, r Request, st Settings, ap *classes.ApprovablePattern) string {
+	if s.o.Supervision != nil {
+		if paused, err := s.o.Supervision.AutonomyPaused(ctx, r.Workspace, r.Table); err != nil || paused {
+			return "a autonomia da mesa está em pausa: o Mestre da mesa não cria regra de medio"
+		}
+	}
+	if len(ap.Risk.Groups) == 0 {
+		return "o motor não deu o grupo do padrão: o Mestre da mesa não cria regra dele"
+	}
+	for _, g := range ap.Risk.Groups {
+		switch {
+		case g == classes.GroupNone:
+			return "o padrão alcança algo sem grupo (o motor não o analisa): o Mestre da mesa não cria regra dele"
+		case !st.MesaDecide(g):
+			return fmt.Sprintf("o padrão alcança o grupo %s, que não está em cadeia.mesa_decide", g)
+		}
+	}
+	return ""
 }
 
 func patternOf(ap *classes.ApprovablePattern) string {

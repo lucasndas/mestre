@@ -47,7 +47,7 @@ func (cc CheckCommand) Handle(ctx context.Context, c *localchan.Call) localchan.
 	if err != nil {
 		return localchan.Fail(localchan.CodeDenied, err.Error(), "")
 	}
-	rep, err := lib.Check(ctx, args[0], table)
+	rep, err := lib.Check(ctx, Slug(args[0]), table)
 	switch {
 	case errors.Is(err, ErrNotVisible):
 		return localchan.Fail("not_visible", fmt.Sprintf("no class %q is visible to you", args[0]), "").WithExit(localchan.ExitNotFound)

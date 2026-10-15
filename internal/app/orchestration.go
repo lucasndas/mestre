@@ -20,6 +20,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/rituals"
 	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
+	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/waits"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
@@ -114,10 +115,13 @@ type OrchestrationOptions struct {
 	// table rules, the delegations of the Owner, the supervision and the alerts
 	// to the people. The chain is the hook.Approvals of the engine
 	// (Orchestration.Chain) and, when QuestApprovals is nil, the quests' too.
-	ChainClasses     chain.Classes
-	ChainPolicy      chain.Policy
-	ChainUsers       chain.UserAsker
-	ChainGrants      chain.Grants
+	ChainClasses chain.Classes
+	ChainPolicy  chain.Policy
+	ChainUsers   chain.UserAsker
+	ChainGrants  chain.Grants
+	// ChainTempRules, when set, replaces the temporary table rules of stage 11
+	// (a double for the tests of the chain); without it the chain makes them
+	// in Orchestration.TableRules.
 	ChainTempRules   chain.TempRules
 	ChainDelegations chain.Delegations
 	ChainSupervision chain.Supervision
@@ -139,6 +143,15 @@ type OrchestrationOptions struct {
 	// which workspaces a user may use (milestone 5; nil: all).
 	Classes        grimoires.Classes
 	GrimoireAccess grimoires.Access
+
+	// The commands of classes (stage 11). ClassLibraries gives the library of a
+	// workspace (nil: `mestre class …` is not registered); ClassTmp the
+	// MESTRE_TMP of a character on its machine, for `class show --export` (nil:
+	// the export is unavailable); ClassDestructive says whether a user
+	// explicitly asked for the deletion of a class (milestone 5; nil: pending).
+	ClassLibraries   func(workspace string) *classes.Library
+	ClassTmp         func(ctx context.Context, character string) (string, error)
+	ClassDestructive func(ctx context.Context, d classes.DeleteRequest) (bool, error)
 }
 
 // Orchestration is the services of milestone 4 of the Citadel, assembled.
@@ -152,9 +165,15 @@ type Orchestration struct {
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
 	// Chain is the chain of approval (nil unless ChainClasses was given).
-	Chain     *chain.Service
-	Rituals   *rituals.Service
-	Grimoires *grimoires.Service
+	Chain *chain.Service
+	// TableRules are the temporary table rules (nil unless the chain was
+	// built): the source of their decrees for the effective rules and the
+	// classes.TableRuleGate of the engine.
+	TableRules *tablerules.Service
+	// ClassCommands are the commands of classes (nil without libraries).
+	ClassCommands *classes.Commands
+	Rituals       *rituals.Service
+	Grimoires     *grimoires.Service
 	// Registry is the registry of the characters of the Guild.
 	Registry characters.Registry
 	// Observers are told of every change of state of a character, in the
@@ -350,6 +369,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		qs    *quests.Service
 		ch    *chain.Service
 		rit   *rituals.Service
+		trl   *tablerules.Service
 	)
 	deactivate := o.Rituals
 	if deactivate == nil {
@@ -399,8 +419,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		if policy == nil {
 			policy = chain.StaticPolicy{}
 		}
+		temp := o.ChainTempRules
+		if temp == nil {
+			temp = tempRulesRef{&trl}
+		}
 		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
-			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: o.ChainTempRules, Delegations: o.ChainDelegations,
+			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations,
 			Supervision: o.ChainSupervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}}, Logger: o.Logger})
 		if err != nil {
@@ -420,6 +444,16 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	if o.ChainClasses != nil {
+		policy := o.ChainPolicy
+		if policy == nil {
+			policy = chain.StaticPolicy{}
+		}
+		if trl, err = newTableRules(o, chars, reg, ib, policy, qs, tbl); err != nil {
+			return nil, err
+		}
+		orc.TableRules = trl
+	}
 	rit, err = rituals.NewService(rituals.Options{Store: &rituals.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Inbox: ib, Quests: qs, Pauses: tbl,
 		Terminals: o.Machines, PreRunner: o.RitualPreRun, Permissions: o.RitualPermissions, Zones: o.RitualZones, Approvals: o.RitualApprovals, Logger: o.Logger})
 	if err != nil {
@@ -434,6 +468,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	orc.Quests = qs
 	orc.Chain = ch
 	orc.Rituals, orc.Grimoires = rit, grims
+	orc.ClassCommands = classCommands(o, reg, ib)
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
 	return orc, nil
 }
@@ -460,6 +495,10 @@ func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scroll
 	o.Scrolls.Register(fwd, o.Registry, approvals)
 	o.Tables.Register(fwd)
 	o.Quests.Register(fwd)
+	o.Rituals.Register(fwd)
+	if o.ClassCommands != nil {
+		o.ClassCommands.Register(fwd)
+	}
 }
 
 // Intervals of the loops that External runs.
@@ -506,6 +545,9 @@ func (o *Orchestration) External() ExternalFunc {
 		run("tables", func(ctx context.Context) error { return o.Tables.Run(ctx, sweepEvery) })
 		run("quests", func(ctx context.Context) error { return o.Quests.Loop(ctx, sweepEvery) })
 		run("rituals", func(ctx context.Context) error { return o.Rituals.Loop(ctx, ritualEvery) })
+		if o.TableRules != nil {
+			run("table rules", func(ctx context.Context) error { return o.TableRules.Loop(ctx, sweepEvery) })
+		}
 		wg.Wait()
 		close(errs)
 		return errors.Join(drain(errs)...)

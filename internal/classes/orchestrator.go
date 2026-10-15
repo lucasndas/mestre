@@ -107,7 +107,7 @@ func (l *Library) OrchestratorRules(ctx context.Context, o OrchestratorLayers) (
 // in the worktree of whoever asked (env is the requester's), without
 // counting the agent's own exceptions. The Decision says why, when not.
 func Attenuates(ctx context.Context, env Env, approver *Rules, ev providers.Event) (bool, Decision) {
-	env.Exceptions = nil
+	env.Exceptions, env.TableRules = nil, nil
 	ev.AgentID = "" // the event is the requester's; the rules are the approver's
 	d := Decide(ctx, env, approver, ev)
 	return d.Verdict != Deny, d

@@ -125,6 +125,8 @@ func (s Spec) checkRequest(r localchan.Request) (localchan.Response, bool) {
 			_, ok = v.(bool)
 		case FlagList:
 			ok = isTextList(v)
+		case FlagFiles:
+			ok = isTextMap(v)
 		default:
 			_, ok = v.(string)
 		}
@@ -222,6 +224,23 @@ func isTextList(v any) bool {
 		return true
 	case []any:
 		for _, x := range l {
+			if _, ok := x.(string); !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// isTextMap says whether a flag value is a map of text to text, as the files of
+// a folder are once they went through JSON.
+func isTextMap(v any) bool {
+	switch m := v.(type) {
+	case map[string]string:
+		return true
+	case map[string]any:
+		for _, x := range m {
 			if _, ok := x.(string); !ok {
 				return false
 			}

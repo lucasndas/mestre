@@ -163,7 +163,7 @@ func ClassifyRisk(env Env, rules *Rules, req RiskRequest) RiskResult {
 		rules = &Rules{}
 	}
 	ev := providers.Event{Event: providers.EventPreTool, Cwd: req.Cwd, Tool: req.Tool}
-	env.Exceptions, env.Edits = nil, nil
+	env.Exceptions, env.Edits, env.TableRules = nil, nil, nil
 	e := newEvaluator(context.Background(), env, rules, ev, false)
 	return e.classify(req.Tool, true)
 }

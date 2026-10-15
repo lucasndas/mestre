@@ -111,7 +111,7 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 
 - O padrão e a regra temporária precisam caber no teto do nível de quem aprova, com o risco do padrão, e só cobrem os comandos cuja classificação própria cabe nele ([o que um padrão cobre](../classes/classificacao-de-risco.md#padrões-aprováveis)); no `medio` do Mestre da mesa, também os grupos e as condições da mesa, conferidos de novo a cada uso ([regras temporárias](regras-temporarias-de-mesa.md#lugar-na-precedência)).
 - "Perguntar de volta" vira um item `answer` na caixa de entrada de quem pediu; a resposta dele (texto livre, também marcada como não verificada) volta ao mesmo nível. O prazo final do pedido nas pessoas continua correndo; sem resposta de quem pediu, o pedido sobe quando passa o prazo das pessoas.
-- No M4 um agente aprova por um tempo ou por um padrão só pedidos `baixo` (regra temporária, [etapa seguinte](regras-temporarias-de-mesa.md)); "aprovar sempre" e "negar sempre" de um agente aprovam ou negam agora e deixam a sugestão; "delegar" recebe `human_required`.
+- Um agente aprova por um tempo ou por um padrão como [regra temporária](regras-temporarias-de-mesa.md): o superior agente comum, só `baixo`; o Mestre da mesa e o Grão-Mestre, até `medio`; "aprovar sempre" e "negar sempre" de um agente aprovam ou negam agora e deixam a sugestão; "delegar" recebe `human_required`.
 
 ## Regras e erros
 

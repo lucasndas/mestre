@@ -14,12 +14,14 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/app"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/orchestration/rituals"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
@@ -215,7 +217,40 @@ type commWorld struct {
 	stdin string
 	// sizes overrides the size of a file for --attach.
 	sizes map[string]int64
+
+	// The classes and the rituals (stage 11): the library of the workspace,
+	// the MESTRE_TMP of the callers (a real folder), the folders the CLI reads
+	// with --from, the pre-run of the rituals and the doubles around them.
+	lib     *classes.Library
+	tmp     string
+	trees   map[string]map[string]string
+	pre     *commPreRun
+	deleted []classes.DeleteRequest
+	allowed bool
 }
+
+// commPreRun is the machine running the pre-run of a ritual; its output is what
+// the test says.
+type commPreRun struct {
+	mu  sync.Mutex
+	out string
+}
+
+func (p *commPreRun) Run(_ context.Context, r rituals.PreRunRequest) (rituals.PreRunResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return rituals.PreRunResult{Output: p.out}, nil
+}
+
+type commPermissions struct{}
+
+func (commPermissions) Allow(context.Context, characters.Character, string) (rituals.Decision, error) {
+	return rituals.Decision{Allow: true}, nil
+}
+
+type commCeiling struct{ c *classes.Ceiling }
+
+func (c commCeiling) Current(context.Context) (*classes.Ceiling, error) { return c.c, nil }
 
 func newCommWorld(t *testing.T) *commWorld {
 	t.Helper()
@@ -237,14 +272,23 @@ func newCommWorld(t *testing.T) *commWorld {
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &commWorld{t: t, ctx: ctx, clk: clk, files: map[string][]byte{}, atts: &commAttachments{}, oper: &commOperator{}}
+	w := &commWorld{t: t, ctx: ctx, clk: clk, files: map[string][]byte{}, atts: &commAttachments{}, oper: &commOperator{}, tmp: t.TempDir(),
+		trees: map[string]map[string]string{}, pre: &commPreRun{}}
+	w.lib = &classes.Library{Roots: classes.DefaultRoots(filepath.Join(root, "classes-globais"), filepath.Join(root, "clone")), Records: classes.ClassDB{DB: db, Clock: clk},
+		Ceiling: commCeiling{classes.DefaultCeiling()}, Clock: clk, OS: "linux", Skill: func(string) bool { return false }}
 	w.mach = &commMachines{Machines: orcfakes.NewMachines(clk), raw: map[string][]byte{}, screen: map[string]string{}}
 	w.mach.Chars = func() *characters.Service { return w.orc.Characters }
 	w.orc, err = app.NewOrchestration(app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"),
 		TempDir: filepath.Join(root, "tmp"), Git: git, Machines: w.mach, Presets: characters.Presets(commPresets{}), Builder: orcfakes.Builder{},
 		GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: commEpics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{},
 		Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")}, Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{},
-		MessageAttachments: w.atts, Operator: w.oper})
+		MessageAttachments: w.atts, Operator: w.oper,
+		ClassLibraries: func(string) *classes.Library { return w.lib }, ClassTmp: func(context.Context, string) (string, error) { return w.tmp, nil },
+		ClassDestructive: func(_ context.Context, d classes.DeleteRequest) (bool, error) {
+			w.deleted = append(w.deleted, d)
+			return w.allowed, nil
+		},
+		RitualPreRun: w.pre, RitualPermissions: commPermissions{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,6 +308,7 @@ func newCommWorld(t *testing.T) *commWorld {
 		t.Fatal(err)
 	}
 	w.slug = ws.Slug
+	w.lib.Workspace = ws.Slug
 	res, err := w.orc.Characters.Create(ctx, characters.CreateRequest{Sheet: "Grão-Mestre", Workspace: ws.Slug, Role: characters.RoleGrandMaster,
 		Creator: characters.Creator{Kind: characters.CreatedByEngine}})
 	if err != nil {
@@ -316,10 +361,21 @@ func (w *commWorld) run(c characters.Character, args ...string) result {
 	var stdout, stderr bytes.Buffer
 	code := cli.Run(w.ctx, cli.Env{
 		Getenv: func(k string) string {
-			if k == localchan.EnvAgentID {
+			switch k {
+			case localchan.EnvAgentID:
 				return c.ID
+			case "MESTRE_TMP":
+				return w.tmp
 			}
 			return ""
+		},
+		RealPath: func(p string) (string, error) { return filepath.Clean(p), nil },
+		ReadTree: func(dir string, _ int64) (map[string]string, error) {
+			t, ok := w.trees[filepath.ToSlash(dir)]
+			if !ok {
+				return nil, fmt.Errorf("open %s: %w", dir, os.ErrNotExist)
+			}
+			return t, nil
 		},
 		Stdout: &stdout, Stderr: &stderr, Clock: w.rig.Clock, Cwd: "/work", Version: "1.0.0", Stdin: strings.NewReader(w.stdin),
 		Dial:       func(string) localchan.Dialer { return w.rig.Dialer(host) },
