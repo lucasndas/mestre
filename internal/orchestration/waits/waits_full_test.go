@@ -15,7 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/waits"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -66,7 +66,7 @@ func TestWaitsAndQueuesComeBackEqualAfterTheCitadelRestartsAndAnOverdueTimeWaitI
 	}
 	open := func() *store.DB {
 		t.Helper()
-		db, err := guilddb.Open(ctx, path, store.Options{Synchronous: "FULL"})
+		db, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "FULL"})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -104,6 +104,15 @@ func (s *Store) Insert(ctx context.Context, n NewItem, at time.Time) (Item, erro
 	}
 	var seq int64
 	err = s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		if k := n.Refs.Key; k != "" {
+			err := tx.QueryRowContext(ctx, `SELECT seq FROM inbox_messages WHERE json_valid(refs) AND json_extract(refs, '$.key') = ? LIMIT 1`, k).Scan(&seq)
+			if err == nil {
+				return nil // already queued: the same item
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
 		res, err := tx.ExecContext(ctx, `INSERT INTO inbox_messages (workspace, target, kind, sender, sender_id, body, attachments, origin, refs, priority, rank, state, created_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)`,
 			n.Workspace, n.Target, string(n.Kind), n.Sender, n.SenderID, n.Text, attach, origin, refs, int(prio), rank, ms(at))
@@ -117,6 +126,31 @@ func (s *Store) Insert(ctx context.Context, n NewItem, at time.Time) (Item, erro
 		return Item{}, fmt.Errorf("queue an item for %s: %w", n.Target, err)
 	}
 	return s.Get(ctx, ItemID(seq))
+}
+
+// ByKey finds the item queued with the idempotency key (Refs.Key).
+func (s *Store) ByKey(ctx context.Context, key string) (Item, bool, error) {
+	if key == "" {
+		return Item{}, false, nil
+	}
+	items, err := s.list(ctx, `json_valid(refs) AND json_extract(refs, '$.key') = ? LIMIT 1`, key)
+	if err != nil || len(items) == 0 {
+		return Item{}, false, err
+	}
+	return items[0], true, nil
+}
+
+// ForRun finds an item `quest` of the run (Refs.Run) put in the inbox of the
+// target, in whatever state.
+func (s *Store) ForRun(ctx context.Context, run int64, target string) (Item, bool, error) {
+	if run == 0 {
+		return Item{}, false, nil
+	}
+	items, err := s.list(ctx, `target = ? AND kind = 'quest' AND json_valid(refs) AND json_extract(refs, '$.run') = ? LIMIT 1`, target, run)
+	if err != nil || len(items) == 0 {
+		return Item{}, false, err
+	}
+	return items[0], true, nil
 }
 
 // Get returns the item with the id (ErrNoItem).

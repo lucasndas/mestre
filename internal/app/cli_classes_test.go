@@ -430,3 +430,20 @@ func TestTheCLIOfRitualsCreatesFiresAndManagesThem(t *testing.T) {
 	w.ritualCommandIsTypedWithEnterInTheTerminalWhenItIsFree(t)
 	w.ritualListShowEditDisableEnableAndDeleteWork(t, dev)
 }
+
+// A class package whose files carry something that looks like a secret is
+// refused before anything is made (the detector reads the map of files too).
+func TestAClassPackageWithASecretInItsFilesIsRefusedAndNothingIsMade(t *testing.T) {
+	t.Parallel()
+	w := newCommWorld(t)
+	tree := classTree("vaza", classPerms)
+	tree["CLASS.md"] += "Use a chave ghp_" + "0123456789abcdefghijklmnopqrstuvwxyz para publicar.\n"
+	dir := w.folder("vaza", tree)
+	r := w.run(w.master, "class", "create", "vaza", "--app", "novo", "--from", dir, "--json")
+	if v := decodeJSON(t, r); r.code != 3 || v.Error.Code != "secret_detected" {
+		t.Fatalf("class create with a secret = %d %s", r.code, r.stdout)
+	}
+	if _, ok := w.class("vaza"); ok {
+		t.Error("the class was made")
+	}
+}

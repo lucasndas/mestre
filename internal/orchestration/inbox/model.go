@@ -96,6 +96,13 @@ type Refs struct {
 	// Approval is the request of approval an `approval` item (or the answer to
 	// its question) is about.
 	Approval int64 `json:"approval,omitempty"`
+	// Run is the delivery of a quest step (step_runs.id) an item `quest` is
+	// about: the engine finds out whether a run got its item.
+	Run int64 `json:"run,omitempty"`
+	// Key makes the item idempotent: a second item with the same key is not
+	// queued, the first one is returned (a ritual firing that is delivered
+	// twice after a crash puts one item in the inbox).
+	Key string `json:"key,omitempty"`
 }
 
 // Item is one item of the inbox of a character.
@@ -212,11 +219,15 @@ func (it Item) Header() string {
 // Body is the text delivered after the header: the text and, when there are
 // attachments, their paths.
 func (it Item) Body() string {
+	text := it.Text
+	if it.Kind != KindUser {
+		text = escapeHeaders(text)
+	}
 	if len(it.Attachments) == 0 {
-		return it.Text
+		return text
 	}
 	var b strings.Builder
-	b.WriteString(it.Text)
+	b.WriteString(text)
 	if it.Text != "" {
 		b.WriteString("\n\n")
 	}
@@ -225,6 +236,26 @@ func (it Item) Body() string {
 		b.WriteString("\n- " + a)
 	}
 	return b.String()
+}
+
+// headerStart is how every header begins.
+const headerStart = "[Mestre ·"
+
+// escapeHeaders makes a line that imitates a header harmless: the text of an
+// item that is not from a user may carry words of an agent, and a line
+// `[Mestre · …]` in it must not read as the header of another item. The line
+// keeps its words, behind a backslash.
+func escapeHeaders(text string) string {
+	if !strings.Contains(text, headerStart) {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		if t := strings.TrimLeft(l, " \t"); strings.HasPrefix(t, headerStart) {
+			lines[i] = l[:len(l)-len(t)] + `\` + t
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func priorityOf(n NewItem) (Priority, int) {

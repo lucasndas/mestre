@@ -18,6 +18,7 @@ import (
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -48,7 +49,7 @@ func buildTemplates() (g, m []byte, err error) {
 	defer os.RemoveAll(dir)
 	ctx := context.Background()
 	opts := store.Options{Synchronous: "OFF"}
-	gdb, err := guilddb.Open(ctx, filepath.Join(dir, "mestre.db"), opts)
+	gdb, err := guildtpl.Open(ctx, filepath.Join(dir, "mestre.db"), opts)
 	if err != nil {
 		return nil, nil, err
 	}

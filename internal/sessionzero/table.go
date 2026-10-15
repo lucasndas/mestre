@@ -331,14 +331,29 @@ func (t *Table) copyAttachments(ctx context.Context, req TableRequest, rep *Tabl
 // not in files. Everything goes through safefile; a path that would leave
 // the folder is a problem.
 func (t *Table) sync(dir, rel string, files []File, prune bool, rep *TableReport) {
-	w, r, p := syncFolder(dir, rel, files, prune)
+	w, r, p := syncFolder(dir, rel, files, prune, false)
 	rep.Written, rep.Removed = append(rep.Written, w...), append(rep.Removed, r...)
 	rep.Problems = append(rep.Problems, p...)
 }
 
 // syncFolder is sync for any folder of a worktree: what it wrote, what it
-// removed and what it could not do.
-func syncFolder(dir, rel string, files []File, prune bool) (written, removed []string, problems []Problem) {
+// removed and what it could not do. With skills, a generated skill (one whose
+// new SKILL.md carries the marker) is never written over a SKILL.md that
+// exists without the marker: that one is the person's, and it is a conflict.
+// (The skills copied from a class have no marker and are the engine's: the
+// folder is one of the character, nobody else writes there.)
+func syncFolder(dir, rel string, files []File, prune, skills bool) (written, removed []string, problems []Problem) {
+	handmade := func(skill string) bool {
+		cur, _, err := safefile.Read(filepath.Join(dir, filepath.FromSlash(rel), skill, "SKILL.md"), maxManaged)
+		return err == nil && !hasSkillMarker(cur)
+	}
+	generated := map[string]bool{}
+	for _, f := range files {
+		if top, name, nested := strings.Cut(f.Path, "/"); skills && nested && name == "SKILL.md" && hasSkillMarker(f.Data) {
+			generated[top] = true
+		}
+	}
+	skipped := map[string]bool{}
 	rep := &TableReport{}
 	want := map[string]bool{}
 	for _, f := range files {
@@ -347,6 +362,15 @@ func syncFolder(dir, rel string, files []File, prune bool) (written, removed []s
 			continue
 		}
 		want[f.Path] = true
+		if skills {
+			if top, _, nested := strings.Cut(f.Path, "/"); nested && generated[top] && handmade(top) {
+				if !skipped[top] {
+					skipped[top] = true
+					rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, top, "SKILL.md"), Reason: "já existe e não tem o marcador de arquivo gerado: conflito, nada foi alterado"})
+				}
+				continue
+			}
+		}
 		file := filepath.Join(dir, filepath.FromSlash(rel), filepath.FromSlash(f.Path))
 		cur, before, err := safefile.Read(file, maxManaged)
 		switch {

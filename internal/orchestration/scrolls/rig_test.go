@@ -13,7 +13,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	path := filepath.Join(dir, "mestre.db")
-	db, err := guilddb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
 	if err == nil {
 		err = db.Close()
 	}
@@ -70,6 +70,10 @@ func (l *linker) Link(ctx context.Context, ws, tb string, a, b connections.Ref, 
 
 func (l *linker) Forget(ctx context.Context, ref connections.Ref) error {
 	return l.get().Forget(ctx, ref)
+}
+
+func (l *linker) CanSeeTome(ctx context.Context, agent, tome string) (bool, error) {
+	return l.get().CanSeeTome(ctx, agent, tome)
 }
 
 func (l *linker) CanSeeScroll(ctx context.Context, agent, scroll string) (bool, error) {
@@ -137,7 +141,7 @@ func newWorld(t *testing.T, o worldOptions) *world {
 	if err := os.WriteFile(path, guildTemplate, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(w.ctx, path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(w.ctx, path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

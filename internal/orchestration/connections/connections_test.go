@@ -160,7 +160,7 @@ func TestTheConnectionsOfAQuestGoAwayWhenItEndsUnlessAnotherReasonKeepsThem(t *t
 	}
 }
 
-// Part of CA-CONX-03 (`note read` is stage 7: it asks CanSeeScroll): scrolls P1 and P2 are connected, P1 is connected to Dev: Dev
+// Part of CA-CONX-03 (`note read` closes it in internal/app, over the CLI): scrolls P1 and P2 are connected, P1 is connected to Dev: Dev
 // reads P2, and a scroll with no path to Dev is refused. A tome stands for all
 // its scrolls, the ones that join it later too.
 func TestAnAgentSeesTheScrollsConnectedToItAndTheOnesReachedThroughScrolls(t *testing.T) {

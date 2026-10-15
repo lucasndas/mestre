@@ -1,6 +1,6 @@
 # Convenções da CLI `mestre`
 
-> **Assunto:** regras comuns a todos os comandos: forma, saída, códigos de saída, identificação do chamador, encaminhamento, segurança, ajuda e diagnóstico · **Componente:** CLI · **Atualizado:** 2026-10-14
+> **Assunto:** regras comuns a todos os comandos: forma, saída, códigos de saída, identificação do chamador, encaminhamento, segurança, ajuda e diagnóstico · **Componente:** CLI · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -11,7 +11,7 @@ Dar a todos os comandos da CLI `mestre` a mesma forma de uso, de saída e de err
 ### Forma geral
 - O binário `mestre` está no PATH de toda máquina da Guilda ([componentes](../arquitetura/componentes.md)). `MESTRE_CLI` guarda o caminho absoluto dele: skills e arquivos de hook usam `mestre` e, se não acharem, `$MESTRE_CLI` (PowerShell: `& $env:MESTRE_CLI`).
 - Uso: `mestre <comando> [subcomando] [argumentos] [flags]`. Nomes com espaço vão entre aspas. Comandos, flags e textos de saída ficam em inglês.
-- Flags globais: `--json` (saída em JSON), `--help` e `--debug` (mostra no stderr as respostas parciais, que a CLI não imprime; [canal local](../arquitetura/canal-local.md#respostas-parciais)). Durações: `90s`, `10m`, `2h`. `-h` vale `--help`; um `--` sozinho encerra as flags (o que vem depois é argumento, mesmo começando com `--`). Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
+- Flags globais: `--json` (saída em JSON), `--help` e `--debug` (mostra no stderr as respostas parciais, que a CLI não imprime; [canal local](../arquitetura/canal-local.md#respostas-parciais)). Durações: `90s`, `10m`, `2h`. `-h` vale `--help`; um `--` sozinho encerra as flags (o que vem depois é argumento, mesmo começando com `--`). Só é flag o que tem a forma `--[a-z][a-z-]*` com `=valor` opcional; qualquer outro texto que comece com `--` (um front matter `---`, `--- Mensagem ---`, `-- resumo`) é argumento. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
 - `mestre hook` é interno (só os arquivos de hook o chamam) e **não** segue as regras de saída abaixo: ver [adaptador](../provedores/adaptador.md). Subcomandos de serviço (`mestre run`, `mestre install`, `mestre join`…) são de [componentes](../arquitetura/componentes.md).
 
 ### Saída em texto (padrão)
@@ -85,7 +85,7 @@ sequenceDiagram
 3. **Ninguém interrompe quem trabalha.** Mensagens só são digitadas com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). `ask --raw` para alvo ocupado: exit 7, `busy`; para alvo "aguardando permissão": exit 3, `permission_prompt` (permissão se decide pelo `mestre hook` e pelo fluxo de aprovação, nunca por teclas). Alvo `blocked` com motivo `input` (tela não reconhecida) recebe o `--raw`: é assim que o Mestre da mesa responde a ela; qualquer outro estado não livre (`blocked` por cota, `stuck`, `stopped`…) sai com `busy`.
 4. **Arquivos de outro agente:** não editar o que outro está modificando é regra da camada do Mestre ([personagem](../sessao-zero/personagem.md)) e coordenação do Mestre da mesa ([mesas](../orquestracao/mesas.md)).
 5. **Sem comando livre:** `recruit` e `spawn` só aceitam fichas e bases existentes.
-6. **Sem segredos:** nenhum comando mostra segredos; `reply` e `notify` recusam texto que pareça segredo (exit 3, `secret_detected`), com o mesmo detector do mascaramento de logs ([seguranca](../arquitetura/seguranca.md)), em cada argumento e flag de texto; a mensagem diz onde (`argument 1`, `--table`), nunca o quê. Como um processo do personagem pode escrever o pedido sem a CLI, o motor confere de novo a forma dele pela definição de comandos: flag que o comando não tem, valor de outro tipo (texto para texto e duração, `true`/`false` para bool) e, nos comandos com detector, argumento que não é texto saem com exit 2, `usage`, e nada é enviado.
+6. **Sem segredos:** nenhum comando mostra segredos; `reply`, `notify`, `class create` e `class edit` recusam texto que pareça segredo (exit 3, `secret_detected`), com o mesmo detector do mascaramento de logs ([seguranca](../arquitetura/seguranca.md)), em cada argumento e flag de texto, inclusive cada item de uma flag repetida e o nome e o conteúdo de cada arquivo do pacote de uma classe; a mensagem diz onde (`argument 1`, `--table`), nunca o quê. Como um processo do personagem pode escrever o pedido sem a CLI, o motor confere de novo a forma dele pela definição de comandos: flag que o comando não tem, valor de outro tipo (texto para texto e duração, `true`/`false` para bool) e, nos comandos com detector, argumento que não é texto saem com exit 2, `usage`, e nada é enviado.
 7. Toda chamada que muda estado entra na trilha de auditoria (chamador, comando, resultado).
 
 ### Ajuda e diagnóstico

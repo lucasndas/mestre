@@ -25,8 +25,8 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/fakegit"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/localrig"
 	"github.com/lucasndas/mestre/internal/testkit/orcfakes"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -181,7 +181,7 @@ func commTemplate(t *testing.T) []byte {
 		}
 		defer os.RemoveAll(dir)
 		path := filepath.Join(dir, "mestre.db")
-		db, err := guilddb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+		db, err := guildtpl.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
 		if err != nil {
 			templateErr = err
 			return
@@ -269,7 +269,7 @@ func newCommWorld(t *testing.T, setup ...func(*commWorld, *app.OrchestrationOpti
 	if err := os.WriteFile(filepath.Join(root, "mestre.db"), commTemplate(t), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(ctx, filepath.Join(root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
+	db, err := guildtpl.Open(ctx, filepath.Join(root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
 	if err != nil {
 		t.Fatal(err)
 	}

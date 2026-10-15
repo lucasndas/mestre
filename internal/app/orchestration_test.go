@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -16,14 +17,15 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/fakegit"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -186,7 +188,7 @@ func newOrcWorld(t *testing.T) *orcWorld {
 	ctx := t.Context()
 	clk := clock.NewFake(time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC))
 	root := t.TempDir()
-	db, err := guilddb.Open(ctx, filepath.Join(root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
+	db, err := guildtpl.Open(ctx, filepath.Join(root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,5 +344,16 @@ func TestTheOrchestrationOfTheCitadelRunsATableThroughTheForwarder(t *testing.T)
 	defer machines.mu.Unlock()
 	if len(machines.stopped) != 1 || machines.stopped[0].Character != master.ID || !machines.stopped[0].Final {
 		t.Errorf("stopped = %+v", machines.stopped)
+	}
+}
+
+// Without a source of the workspaces a user may use, the grimoires let in the
+// Owner only: an Administrator is refused (fails closed).
+func TestTheGrimoiresRefuseAnAdministratorWhileTheAccessIsNotWired(t *testing.T) {
+	t.Parallel()
+	w := newOrcWorld(t)
+	_, err := w.orc.Grimoires.Save(t.Context(), grimoires.SaveRequest{Workspace: "meu-app", Name: "g", By: grimoires.Actor{ID: "u1", Level: characters.LevelAdministrator}})
+	if !errors.Is(err, grimoires.ErrNoAccess) {
+		t.Fatalf("Save by an Administrator = %v; want no access", err)
 	}
 }

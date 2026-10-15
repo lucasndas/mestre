@@ -20,8 +20,8 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/fakegit"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/orcfakes"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -143,7 +143,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	ctx := t.Context()
 	clk := clock.NewFake(time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC))
 	root := t.TempDir()
-	db, err := guilddb.Open(ctx, filepath.Join(root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
+	db, err := guildtpl.Open(ctx, filepath.Join(root, "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{Also: []int{77, 99}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
-		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, QuestGitHub: w.hub, Ceiling: w.gate,
+		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, QuestGitHub: w.hub, Ceiling: w.gate, GrimoireAccess: allowAll{},
 		Limits: characters.Limits{PerTable: opt.perTable, PerWorkspace: opt.perWorkspace},
 		Classes: grimoires.LibraryClasses{For: func(_ context.Context, ws string) (*classes.Library, error) {
 			mu.Lock()
@@ -332,3 +332,8 @@ func picks(ids ...string) []grimoires.Pick {
 	}
 	return out
 }
+
+// allowAll lets every user use every workspace (the real source comes with milestone 5).
+type allowAll struct{}
+
+func (allowAll) CanUse(context.Context, grimoires.Actor, string) bool { return true }

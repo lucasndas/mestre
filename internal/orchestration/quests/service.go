@@ -71,6 +71,9 @@ type Service struct {
 	// asked meanwhile runs again when the first ends.
 	mu      sync.Mutex
 	flights map[string]*flight
+	// finishing serializes the done of a character: two dones of the same
+	// character at once record one.
+	finishing map[string]*sync.Mutex
 
 	// work is the queue of the loop (Run); until it runs, an advance asked for
 	// is made at once, in the call that asked for it.
@@ -107,7 +110,7 @@ func NewService(o Options) (*Service, error) {
 	if o.EscalateAfter <= 0 {
 		o.EscalateAfter = DefaultEscalateAfter
 	}
-	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, work: make(chan string, 256)}, nil
+	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, finishing: map[string]*sync.Mutex{}, work: make(chan string, 256)}, nil
 }
 
 // Store gives access to the tables.
@@ -626,3 +629,16 @@ func (s *Service) process(ctx context.Context, id string) {
 
 // Advance has the steps of a quest move as far as they can now.
 func (s *Service) Advance(ctx context.Context, id string) { s.process(ctx, id) }
+
+// finishLock takes the lock of the done of a character; the caller unlocks.
+func (s *Service) finishLock(id string) *sync.Mutex {
+	s.mu.Lock()
+	m, ok := s.finishing[id]
+	if !ok {
+		m = new(sync.Mutex)
+		s.finishing[id] = m
+	}
+	s.mu.Unlock()
+	m.Lock()
+	return m
+}

@@ -24,7 +24,7 @@ Grão-Mestre e Mestre da mesa nunca entram num grimório (são da mesa/workspace
 
 ### Restaurar
 
-Pelo painel, numa mesa em `working` ou `in_review` ([estados](mesas.md#estados)), por Administrador ou acima com acesso ao workspace de destino.
+Pelo painel, numa mesa em `working` ou `in_review` ([estados](mesas.md#estados)), por Administrador ou acima com acesso ao workspace de destino. Enquanto os usuários e os workspaces que cada um usa não existem (M5), o motor só deixa entrar o Dono: sem a fonte de acesso, falha fechado, e Administrador é recusado.
 
 1. **Validação** (nada é criado ainda):
    - fichas citadas existem ([bases e fichas](bases-e-fichas.md)); se faltar alguma, a restauração é recusada listando quais;

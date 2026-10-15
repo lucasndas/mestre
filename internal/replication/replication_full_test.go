@@ -19,6 +19,7 @@ import (
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/protorig"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -129,7 +130,7 @@ func TestACitadelWritingAtASteadyPaceKeepsTheLagUnderFiveSecondsAndFilesAndMirro
 	if err := os.WriteFile(cpath, template, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cdb, err := guilddb.Open(ctx, cpath, store.Options{Synchronous: "OFF"})
+	cdb, err := guildtpl.Open(ctx, cpath, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

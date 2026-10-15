@@ -143,7 +143,7 @@ type OrchestrationOptions struct {
 	// The grimoires (stage 10). Classes reads and copies the classes of the
 	// workspaces (grimoires.LibraryClasses over their Libraries); nil: a
 	// grimoire with a class of its own cannot be saved. GrimoireAccess says
-	// which workspaces a user may use (milestone 5; nil: all).
+	// which workspaces a user may use (milestone 5; nil: only the Owner).
 	Classes        grimoires.Classes
 	GrimoireAccess grimoires.Access
 
@@ -481,8 +481,14 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	access := o.GrimoireAccess
+	if access == nil {
+		// The users and the workspaces they may use come with milestone 5;
+		// until then only the Owner, who may use every workspace, is let in.
+		access = ownerOnlyGrimoires{}
+	}
 	grims, err := grimoires.NewService(grimoires.Options{Store: &grimoires.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Characters: chars, Scrolls: scr,
-		Connections: conns, Quests: qs, Tables: tbl, Inbox: ib, Sheets: o.Presets, Classes: o.Classes, Access: o.GrimoireAccess, Logger: o.Logger})
+		Connections: conns, Quests: qs, Tables: tbl, Inbox: ib, Sheets: o.Presets, Classes: o.Classes, Access: access, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -598,4 +604,12 @@ func drain(c chan error) []error {
 		out = append(out, e)
 	}
 	return out
+}
+
+// ownerOnlyGrimoires is the access to the workspaces for the grimoires while
+// the users do not exist: it fails closed, and lets only the Owner in.
+type ownerOnlyGrimoires struct{}
+
+func (ownerOnlyGrimoires) CanUse(_ context.Context, user grimoires.Actor, _ string) bool {
+	return user.Level == characters.LevelOwner
 }

@@ -17,7 +17,7 @@ Referência de sintaxe dos comandos que qualquer personagem usa para falar com o
 | `done` | qualquer personagem | [missoes](../orquestracao/missoes.md) |
 | `wait`, `inbox`, `waits` | qualquer personagem | [esperas](../orquestracao/esperas-e-caixa-de-entrada.md) |
 
-A classe pode restringir qualquer um deles ([permissoes](../classes/permissoes.md)).
+Estes comandos valem para qualquer personagem pelo nível; a classe não os restringe: `cli.allow` só libera, para quem está abaixo do nível, os comandos marcados como liberáveis por classe ([convenções](convencoes.md#quem-pode-usar-nível)). Texto que começa com `--` e não tem a forma de uma flag é argumento ([forma geral](convencoes.md#forma-geral)).
 
 ### `mestre list`
 `mestre list` — sem argumentos. Mostra quem chamou (`you:` nome, id, mesa, máquina), os agentes, pergaminhos e conexões visíveis, com a **máquina** de cada personagem (nome da máquina da Guilda onde ele roda) e o status de cada agente, inclusive o motivo de espera (`aguardando Revisor`, o rótulo do [canvas](../painel/canvas.md); os outros estados saem em inglês: `idle`, `busy`…). Texto: a linha `you:` e, depois, `agents:`, `notes:` e `connections:` com um item por linha (`<A> <-> <B>`).

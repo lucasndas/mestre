@@ -16,7 +16,7 @@ import (
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/vault"
 )
 
@@ -331,7 +331,7 @@ func TestTheVaultReachesOnlyTheMachinesThatAreNotExcludedAndThePromotedTowerChan
 		envelopeBefore, _ := os.ReadFile(common.env)
 		common.stop()
 		r.stop()
-		promoted, err := guilddb.Open(ctx, common.dbPath, store.Options{Clock: r.clk}) // flushes: the key rotates
+		promoted, err := guildtpl.Open(ctx, common.dbPath, store.Options{Clock: r.clk}) // flushes: the key rotates
 		if err != nil {
 			t.Fatal(err)
 		}

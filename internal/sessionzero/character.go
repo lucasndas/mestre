@@ -599,7 +599,7 @@ func (c *Character) writeCharacterFiles(p *CharacterPlan, req CharacterRequest, 
 		}
 	}
 	skillsRel := path.Join(rel, ".claude", "skills")
-	w, r, probs := syncFolder(req.Dir, skillsRel, sk, true)
+	w, r, probs := syncFolder(req.Dir, skillsRel, sk, true, true)
 	p.Written, p.Removed = append(p.Written, w...), append(p.Removed, r...)
 	pruneEmptyDirs(filepath.Join(req.Dir, filepath.FromSlash(skillsRel)))
 	if len(probs) > 0 {

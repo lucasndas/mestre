@@ -215,7 +215,7 @@ func TestConnectOfAnItemOfAnotherTableIsRefused(t *testing.T) {
 	})
 }
 
-// Part of CA-CONX-07 (the real `ask` is stage 10 and wraps its handler in Guard): Dev, not connected to QA, asks QA and gets exit 3, not_connected
+// Part of CA-CONX-07 (the real `ask` closes it in internal/app, over the CLI): Dev, not connected to QA, asks QA and gets exit 3, not_connected
 // and the message of the document; the command never reaches the handler.
 func TestAskToACharacterNotConnectedIsRefusedWithNotConnected(t *testing.T) {
 	t.Parallel()

@@ -13,6 +13,9 @@ import (
 // prompt and the return of a firing to its owner.
 type Inbox interface {
 	Enqueue(ctx context.Context, n inbox.NewItem) (inbox.Item, error)
+	// ByKey finds the item queued with the idempotency key: a firing found in
+	// its delivery after a restart is delivered once.
+	ByKey(ctx context.Context, key string) (inbox.Item, bool, error)
 }
 
 // Quests is what the rituals need of the quests (*quests.Service).
