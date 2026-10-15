@@ -173,9 +173,17 @@ func (s *Service) deliver(ctx context.Context, f Firing, now time.Time) error {
 	if r.Action == ActionQuest {
 		return s.deliverQuest(ctx, r, f, now, loc)
 	}
+	if f.State == PreRunning || f.State == Delivering {
+		return s.resume(ctx, r, f)
+	}
 	c, err := s.target(ctx, r)
 	if err != nil || c.State == characters.Stopped || c.State == characters.Stopping {
 		return s.end(ctx, r, f, Failed, fmt.Sprintf("o alvo %q não existe mais", r.Target), "")
+	}
+	// The target was checked when the ritual was made; it may have changed
+	// since (a role, a kind): check again before anything is sent.
+	if err := s.checkTarget(ctx, &r); err != nil {
+		return s.end(ctx, r, f, Failed, fmt.Sprintf("o alvo %q deixou de servir a este ritual: %v", r.Target, err), "")
 	}
 	paused := false
 	if s.o.Pauses != nil {
@@ -194,15 +202,26 @@ func (s *Service) deliver(ctx context.Context, f Firing, now time.Time) error {
 		return nil
 	}
 	content := r.Content
+	sender := "ritual " + r.Name
 	if r.PreRun != "" {
-		if err := s.st.markPreRunning(ctx, f.ID, now); err != nil {
+		// The intent goes to the database before the command runs: a crash
+		// from here on never runs the pre-run (or the delivery) again.
+		if ok, err := s.st.markPreRunning(ctx, f.ID, now); err != nil || !ok {
 			return err
 		}
 		out, why, tail := s.preRun(ctx, c, r.PreRun)
 		if why != "" {
 			return s.end(ctx, r, f, Failed, why, tail)
 		}
+		if r.Action == ActionCommand {
+			if bad := unsafeInShell(out); bad != "" {
+				return s.end(ctx, r, f, Failed, "a saída da pré-execução tem "+bad+", que não vai para um comando; nada foi digitado", "")
+			}
+		}
 		content = strings.ReplaceAll(content, Placeholder, out)
+		if r.Action != ActionCommand && strings.Contains(r.Content, Placeholder) {
+			sender += " (" + UnverifiedOutput + ")"
+		}
 	}
 	switch r.Action {
 	case ActionCommand:
@@ -212,6 +231,9 @@ func (s *Service) deliver(ctx context.Context, f Firing, now time.Time) error {
 		if s.o.Terminals == nil {
 			return s.end(ctx, r, f, Failed, "os terminais não estão ao alcance deste motor", "")
 		}
+		if ok, err := s.st.markDelivering(ctx, f.ID, now); err != nil || !ok {
+			return err
+		}
 		if err := s.o.Terminals.Input(ctx, c.Machine, c.ID, []byte(content+"\r")); err != nil {
 			return s.end(ctx, r, f, Failed, "o terminal não recebeu o comando: "+err.Error(), "")
 		}
@@ -219,11 +241,77 @@ func (s *Service) deliver(ctx context.Context, f Firing, now time.Time) error {
 		if f.Late {
 			content = fmt.Sprintf("(disparo atrasado: previsto para %s)\n%s", f.ScheduledFor.In(loc).Format("2006-01-02 15:04"), content)
 		}
-		if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: c.ID, Kind: inbox.KindRitual, Sender: "ritual " + r.Name, Text: content}); err != nil {
+		if ok, err := s.st.markDelivering(ctx, f.ID, now); err != nil || !ok {
+			return err
+		}
+		if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: c.ID, Kind: inbox.KindRitual, Sender: sender, Text: content,
+			Refs: inbox.Refs{Key: firingKey(f)}}); err != nil {
 			return s.end(ctx, r, f, Failed, "a entrega falhou: "+err.Error(), "")
 		}
 	}
 	return s.end(ctx, r, f, Delivered, "", "")
+}
+
+// UnverifiedOutput labels (in the sender of the item) a prompt that carries the
+// output of a pre-run: that part came from a command, not from who wrote the
+// ritual, so it is data and not an order.
+const UnverifiedOutput = "saída da pré-execução: texto não verificado"
+
+// firingKey is the idempotency key of the inbox item of a firing.
+func firingKey(f Firing) string { return fmt.Sprintf("ritual-firing:%d", f.ID) }
+
+// resume handles a firing found in the middle of its side effect (the engine
+// stopped there). Nothing is run again: a prompt that reached the inbox is
+// delivered (the item is found by its key) and one that did not and has no
+// pre-run is queued once; a pre-run or a command that may have run is closed
+// as failed, and the owner is told.
+func (s *Service) resume(ctx context.Context, r Ritual, f Firing) error {
+	if f.State == Delivering && r.Action == ActionPrompt && s.o.Inbox != nil {
+		_, ok, err := s.o.Inbox.ByKey(ctx, firingKey(f))
+		if err != nil {
+			return err
+		}
+		if ok {
+			return s.end(ctx, r, f, Delivered, "", "")
+		}
+		if r.PreRun == "" {
+			c, err := s.target(ctx, r)
+			if err != nil || c.State == characters.Stopped || c.State == characters.Stopping {
+				return s.end(ctx, r, f, Failed, fmt.Sprintf("o alvo %q não existe mais", r.Target), "")
+			}
+			content := r.Content
+			if f.Late {
+				content = fmt.Sprintf("(disparo atrasado: previsto para %s)\n%s", f.ScheduledFor.In(s.zone(ctx, r.Workspace)).Format("2006-01-02 15:04"), content)
+			}
+			if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: c.ID, Kind: inbox.KindRitual, Sender: "ritual " + r.Name, Text: content,
+				Refs: inbox.Refs{Key: firingKey(f)}}); err != nil {
+				return s.end(ctx, r, f, Failed, "a entrega falhou: "+err.Error(), "")
+			}
+			return s.end(ctx, r, f, Delivered, "", "")
+		}
+	}
+	why := "o motor parou no meio da pré-execução; ela pode ter rodado e não é repetida. Rode `ritual run` se ainda for preciso"
+	if f.State == Delivering {
+		why = "o motor parou no meio da entrega; o efeito pode ter acontecido e não é repetido. Confira o resultado e rode `ritual run` se ainda for preciso"
+	}
+	return s.end(ctx, r, f, Failed, why, "")
+}
+
+// unsafeInShell says what in the output of a pre-run must not go into a
+// command line: a shell metacharacter or a C1 control (which some terminals
+// read as an escape sequence). It returns "" when the output is plain.
+func unsafeInShell(out string) string {
+	for _, c := range out {
+		switch {
+		case c >= 0x80 && c <= 0x9f:
+			return "um caractere de controle C1"
+		case c < 0x20 || c == 0x7f:
+			return "um caractere de controle"
+		case strings.ContainsRune("`$&|;<>()[]{}\\\"'*?!~#^%\u2028\u2029", c):
+			return fmt.Sprintf("o caractere %q (um metacaractere do shell)", c)
+		}
+	}
+	return ""
 }
 
 // preRun runs the pre-run for the target after the decision of permissions. It

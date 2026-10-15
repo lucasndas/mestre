@@ -70,6 +70,8 @@ const uncommittedPrefix = "alterações não commitadas não foram sincronizadas
 // ErrNoStep, and the caller treats its done as a task.
 func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error) {
 	c := r.Character
+	// Two dones of the same character at once: the second finds no step.
+	defer s.finishLock(c.ID).Unlock()
 	st, ok, err := s.st.ActiveOf(ctx, c.ID)
 	if err != nil {
 		return DoneResult{}, err

@@ -72,6 +72,10 @@ func (l *linker) Forget(ctx context.Context, ref connections.Ref) error {
 	return l.get().Forget(ctx, ref)
 }
 
+func (l *linker) CanSeeTome(ctx context.Context, agent, tome string) (bool, error) {
+	return l.get().CanSeeTome(ctx, agent, tome)
+}
+
 func (l *linker) CanSeeScroll(ctx context.Context, agent, scroll string) (bool, error) {
 	return l.get().CanSeeScroll(ctx, agent, scroll)
 }

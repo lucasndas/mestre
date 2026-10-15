@@ -22,7 +22,7 @@ func data(t *testing.T, r localchan.Response) map[string]any {
 	return m
 }
 
-// CA-CLI-COM-10: the Reviewer hands the work back to the Dev with a reason.
+// Part of CA-CLI-COM-10 (internal/app closes it over cli.Run): the Reviewer hands the work back to the Dev with a reason.
 func TestDoneWithReturnExitsZeroAndPointsToTheStepOfTheDev(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -46,7 +46,7 @@ func TestDoneWithReturnExitsZeroAndPointsToTheStepOfTheDev(t *testing.T) {
 	}
 }
 
-// CA-CLI-COM-12: the limit of returns used up: the done is registered, the
+// Part of CA-CLI-COM-12 (internal/app closes it over cli.Run): the limit of returns used up: the done is registered, the
 // exit is 0, returned_to is null, the quest is paused and the table master
 // gets return_limit.
 func TestDoneWithReturnPastTheLimitExitsZeroAndPausesTheQuest(t *testing.T) {

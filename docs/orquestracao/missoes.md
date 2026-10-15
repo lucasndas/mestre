@@ -106,7 +106,7 @@ Pausar: nenhuma etapa nova começa; as que rodam terminam e o resultado é guard
 
 ### Retomada
 
-Estado de missões e etapas fica no banco. Depois de queda de máquina, da Cidadela ou de uma troca de Cidadela, a missão continua da última etapa concluída: só as etapas `running`/`stuck` cujo personagem ficou `interrupted` voltam a `preparing` e são entregues de novo, com a nota "retomada após reinício", quando o personagem for retomado ([retomada](personagens.md#retomada-após-reinício)); etapas em personagens vivos seguem sem reentrega. Quem fica `interrupted` numa troca está nas [regras da troca](../guilda/cidadela-e-torres.md).
+Estado de missões e etapas fica no banco. Depois de queda de máquina, da Cidadela ou de uma troca de Cidadela, a missão continua da última etapa concluída: só as etapas `running`/`stuck` cujo personagem ficou `interrupted` voltam a `preparing` e são entregues de novo, com a nota "retomada após reinício", quando o personagem for retomado ([retomada](personagens.md#retomada-após-reinício)); etapas em personagens vivos seguem sem reentrega, exceto a etapa `running` cuja execução aberta não tem o item `quest` (o motor caiu entre gravar a etapa e enfileirar o item): a varredura de depois do reinício o enfileira, uma vez. Dois `done` do mesmo personagem ao mesmo tempo registram um só. Quem fica `interrupted` numa troca está nas [regras da troca](../guilda/cidadela-e-torres.md).
 
 ### Espelho no GitHub
 

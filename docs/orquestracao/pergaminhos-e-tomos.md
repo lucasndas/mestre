@@ -12,7 +12,7 @@ Pergaminhos são notas em Markdown que usuários e agentes conectados leem e esc
 
 - Pergaminhos existem **só dentro das mesas** (a visão do workspace não tem pergaminhos). Cada um é um arquivo Markdown na Cidadela, com o clone principal como fonte: `.mestre/mesas/<mesa>/pergaminhos/<id>.md`. O `<id>` é imutável (`p0001`, `p0002`… por mesa), para o arquivo não mudar de nome quando o título muda.
 - O banco guarda só o índice e as conexões: id, mesa, nome, se o nome é fixo, tomo, revisão, tamanho, autor e data da última alteração ([persistência](../arquitetura/persistencia.md)).
-- Nos worktrees onde há personagens (Cidadela e Torres), o motor mantém cópias somente leitura atualizadas a cada mudança ([materialização](../sessao-zero/mesa.md)). Alterações vão sempre pela CLI ou pelo canvas; editar a cópia direto não tem efeito e é sobrescrito.
+- Nos worktrees onde há personagens (Cidadela e Torres), o motor mantém cópias somente leitura atualizadas a cada mudança ([materialização](../sessao-zero/mesa.md)). Alterações vão sempre pela CLI ou pelo canvas; editar a cópia direto não tem efeito e é sobrescrito. **As cópias são uma conveniência de leitura, não uma fronteira de confidencialidade dentro da mesa:** o worktree é um só para todos os personagens da mesa, então quem lê arquivos lê também as cópias dos pergaminhos que a CLI não lhe mostraria. Quem faz valer a visibilidade é a CLI (e o canvas); o que precisa ficar fora do alcance de um personagem da mesa não vai num pergaminho.
 - Se `.mestre/` é versionado no projeto ou não é decidido na [sessão zero do workspace](../sessao-zero/workspace.md).
 
 ### Nome
@@ -30,7 +30,7 @@ Sintaxe de `mestre note create|read|write|edit|stack|delete` em [comunicação](
 | `read` | devolve o conteúdo atual e a revisão |
 | `write` | substitui o conteúdo inteiro; com revisão esperada informada, falha se outra pessoa alterou antes |
 | `edit` | troca um trecho exato por outro; falha se o trecho aparece 0 ou mais de 1 vez |
-| `stack` | coloca o pergaminho num tomo (cria o tomo se o nome é novo); um pergaminho está em no máximo um tomo |
+| `stack` | coloca o pergaminho num tomo (cria o tomo se o nome é novo); um pergaminho está em no máximo um tomo; quem empilha num tomo que já existe precisa vê-lo (um pergaminho que entra num tomo passa a ser visto por todos os conectados a ele, então empilhar num tomo que o personagem não vê abriria um canal) |
 | `delete` | apaga; só com pedido explícito de um usuário autorizado ([convenções da CLI](../cli/convencoes.md)) |
 
 - **Quem:** agentes só operam pergaminhos visíveis para eles ([conexões](conexoes.md#visibilidade)). Usuários Administrador ou acima editam no canvas; os demais níveis só leem.

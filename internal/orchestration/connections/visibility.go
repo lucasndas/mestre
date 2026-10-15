@@ -182,6 +182,34 @@ func (s *Service) CanSeeScroll(ctx context.Context, agentID, scroll string) (boo
 	return g.reached[scroll], nil
 }
 
+// CanSeeTome says whether an agent may see a tome: it reaches at least one of
+// the scrolls the tome holds (a tome connected to it counts as its scrolls). A
+// scroll put into a tome becomes visible to everyone who sees the tome, so
+// stacking into a tome the agent cannot see would open a channel.
+func (s *Service) CanSeeTome(ctx context.Context, agentID, tome string) (bool, error) {
+	x, err := s.o.Registry.Get(ctx, agentID)
+	if err != nil {
+		return false, err
+	}
+	g, err := s.scrollGraph(ctx, x)
+	if err != nil {
+		return false, err
+	}
+	if s.o.Scrolls == nil {
+		return false, nil
+	}
+	members, err := s.o.Scrolls.Members(ctx, tome)
+	if err != nil {
+		return false, err
+	}
+	for _, m := range members {
+		if g.reached[m] {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // scrollGraph is the scrolls of the table of an agent, with the connections
 // between them (a tome counted as its scrolls) and which of them the agent
 // reaches.

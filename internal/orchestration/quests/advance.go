@@ -56,6 +56,13 @@ func (s *Service) advanceOnce(ctx context.Context, id string) {
 		s.complete(ctx, q)
 		return
 	}
+	// A step that runs without its item (the engine went down between the
+	// commit and the item) gets it.
+	for _, st := range steps {
+		if st.State == StepRunning {
+			s.reenqueue(ctx, q, st)
+		}
+	}
 	// A paused table starts no step and recruits no character for a quest.
 	if paused, err := s.o.Tables.Paused(ctx, q.Workspace, q.Table); err != nil || paused {
 		return
@@ -353,8 +360,8 @@ func (s *Service) deliver(ctx context.Context, q Quest, st Step, sd StepDef, c c
 		if err != nil || cur.State != StepPreparing {
 			return err
 		}
-		cur.State, cur.Character, cur.Blocker, cur.ResumeNote, cur.StuckAt, cur.Escalated, cur.DiscardResult =
-			StepRunning, c.ID, "", "", time.Time{}, false, false
+		cur.State, cur.Character, cur.Blocker, cur.StuckAt, cur.Escalated, cur.DiscardResult =
+			StepRunning, c.ID, "", time.Time{}, false, false
 		st, won = cur, true
 		if err := tx.SaveStep(cur, now); err != nil {
 			return err
@@ -391,13 +398,9 @@ func (s *Service) deliver(ctx context.Context, q Quest, st Step, sd StepDef, c c
 		return
 	}
 	s.link(ctx, q)
-	text, err := s.itemText(ctx, q, st, sd, note)
-	if err != nil {
-		s.log.Warn("quests: the text of the step was not made", "step", st.UID, "err", err)
-	}
-	if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: q.Workspace, Target: c.ID, Kind: inbox.KindQuest, Sender: "missão " + q.Name, Text: text,
-		Refs: inbox.Refs{Quest: q.ID, Table: q.Table}}); err != nil {
-		s.log.Warn("quests: the step was not put in the inbox, it goes back to being prepared", "step", st.UID, "err", err)
+	run, _ := s.lastRun(ctx, st.UID)
+	if !s.enqueueStep(ctx, q, st, sd, c, run, note) {
+		s.log.Warn("quests: the step was not put in the inbox, it goes back to being prepared", "step", st.UID)
 		_ = s.st.Do(ctx, func(tx *Tx) error {
 			cur, err := tx.Step(st.UID)
 			if err != nil || cur.State != StepRunning {
@@ -408,8 +411,60 @@ func (s *Service) deliver(ctx context.Context, q Quest, st Step, sd StepDef, c c
 		})
 		return
 	}
+	// The note of a return is kept until the item is queued: a restart in
+	// between puts the item together again with it (Sweep).
+	_ = s.updateStep(ctx, st.UID, func(cur *Step) {
+		if cur.State == StepRunning {
+			cur.ResumeNote = ""
+		}
+	})
 	if err := s.o.Characters.TaskAssigned(ctx, c.ID); err != nil {
 		s.log.Warn("quests: the task was not marked", "character", c.ID, "err", err)
+	}
+}
+
+// enqueueStep puts the item `quest` of a run in the inbox of its character. It
+// says whether the item is there.
+func (s *Service) enqueueStep(ctx context.Context, q Quest, st Step, sd StepDef, c characters.Character, run Run, note string) bool {
+	text, err := s.itemText(ctx, q, st, sd, note)
+	if err != nil {
+		s.log.Warn("quests: the text of the step was not made", "step", st.UID, "err", err)
+	}
+	refs := inbox.Refs{Quest: q.ID, Table: q.Table}
+	refs.Run = run.ID
+	if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: q.Workspace, Target: c.ID, Kind: inbox.KindQuest, Sender: "missão " + q.Name, Text: text, Refs: refs}); err != nil {
+		s.log.Warn("quests: the item of the step was not queued", "step", st.UID, "err", err)
+		return false
+	}
+	return true
+}
+
+// reenqueue puts the item of a running step in the inbox when the engine went
+// down between the commit that made the step run and the item: a running step
+// with an open run and no item `quest` for that run and character gets it
+// again. It runs inside the advance of the quest, so never alongside a
+// delivery.
+func (s *Service) reenqueue(ctx context.Context, q Quest, st Step) {
+	run, ok := s.lastRun(ctx, st.UID)
+	if !ok || run.Outcome != "" || run.ID == 0 {
+		return
+	}
+	c, err := s.o.Characters.Get(ctx, st.Character)
+	if err != nil || c.State == characters.Stopped {
+		return
+	}
+	if _, found, err := s.o.Inbox.ForRun(ctx, run.ID, c.ID); err != nil || found {
+		return
+	}
+	if s.enqueueStep(ctx, q, st, q.Def.Steps[st.Pos], c, run, st.ResumeNote) {
+		_ = s.updateStep(ctx, st.UID, func(cur *Step) {
+			if cur.State == StepRunning {
+				cur.ResumeNote = ""
+			}
+		})
+		if err := s.o.Characters.TaskAssigned(ctx, c.ID); err != nil {
+			s.log.Warn("quests: the task was not marked", "character", c.ID, "err", err)
+		}
 	}
 }
 

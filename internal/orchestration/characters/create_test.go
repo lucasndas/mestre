@@ -353,8 +353,10 @@ func TestACharacterRecordsWhoCreatedItAndTheCreationThatFailsLeavesNothing(t *te
 
 // checkFake is the session zero of the table.
 type checkFake struct {
-	mu    sync.Mutex
-	err   error
+	mu  sync.Mutex
+	err error
+	// only: the error is for this provider alone ("" for all of them).
+	only  providers.ID
 	calls []string
 }
 
@@ -362,6 +364,9 @@ func (c *checkFake) CheckStart(_ context.Context, workspace, table, dir string, 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls = append(c.calls, workspace+"/"+table+" "+dir+" "+string(p))
+	if c.only != "" && c.only != p {
+		return nil
+	}
 	return c.err
 }
 
@@ -383,6 +388,25 @@ func TestTheFilesOfTheTableAreCheckedBeforeEachCharacterAndAProviderThatIsHeldBa
 	if prepared := r.mach["linux"].prep.prepared; len(prepared) != 2 {
 		t.Errorf("%d characters were prepared, the held back one must not be", len(prepared))
 	}
+	if _, err := r.reg.ByName(r.ctx, workspace, "3-login", "Barrado"); err == nil {
+		t.Error("the character that was held back is in the registry")
+	}
+}
+
+// Part of CA-SZ-MESA-03 (the file check and the alert are in internal/sessionzero):
+// the start refuses only the provider whose files are held back, and the
+// character of another provider starts in the same table.
+func TestOnlyTheProviderThatIsHeldBackIsRefusedAtTheStart(t *testing.T) {
+	t.Parallel()
+	check := &checkFake{only: providers.Codex}
+	r := newRig(t, rigOptions{tables: check, machines: []machineSpec{withCodex(linux("linux"))}})
+	tm := r.makeTM("3-login")
+	check.err = &sessionzero.BlockedError{Provider: providers.Codex, Problems: []sessionzero.Problem{{Path: ".codex/hooks.json", Reason: "invalid JSON"}}}
+	var blocked *sessionzero.BlockedError
+	if _, err := r.create(characters.CreateRequest{Name: "Barrado", Sheet: "Revisor Codex", Table: "3-login", Creator: byChar(tm)}); !errors.As(err, &blocked) {
+		t.Fatalf("the held back provider: %v", err)
+	}
+	r.make("Dev Claude", "Livre", "3-login")
 	if _, err := r.reg.ByName(r.ctx, workspace, "3-login", "Barrado"); err == nil {
 		t.Error("the character that was held back is in the registry")
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/providers"
 )
 
 // pair makes Dev and Revisor, connected to each other and to the master.
@@ -365,7 +366,18 @@ func TestWaitReturnsAtOnceWithTheIdOfTheWait(t *testing.T) {
 		t.Fatalf("Active = %q %v %v", reason, ok, err)
 	}
 	w.mach.Report(w.ctx, dev.ID, characters.Busy)
-	if _, _, err := w.orc.Registry.Transition(w.ctx, dev.ID, characters.Waiting, characters.Change{Reason: reason, At: w.clk.Now()}); err != nil {
+	// The end of the turn goes through the steps the Runtime takes (HookSteps):
+	// with an active wait, busy becomes waiting with the reason of the wait.
+	cur := w.get(dev)
+	steps := characters.HookSteps(characters.Status{State: cur.State, Reason: cur.Reason}, providers.Event{Event: providers.EventTurnEnd}, reason)
+	if len(steps) != 1 || steps[0].Trigger != characters.TrigTurnEndWaiting {
+		t.Fatalf("the end of the turn of a character with a wait = %+v; want turn_end_waiting", steps)
+	}
+	to, ok := characters.Next(cur.State, steps[0].Trigger)
+	if !ok || to != characters.Waiting {
+		t.Fatalf("Next = %s, %v", to, ok)
+	}
+	if _, _, err := w.orc.Registry.Transition(w.ctx, dev.ID, to, characters.Change{Reason: steps[0].Reason, At: w.clk.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	l := decodeJSON(t, w.run(rev, "list", "--json"))
@@ -401,25 +413,55 @@ func TestWaitReturnsAtOnceWithTheIdOfTheWait(t *testing.T) {
 	}
 }
 
-// A target that is not connected is refused before anything happens.
+// CA-CONX-07: a Dev that is not connected to QA, when it calls `mestre ask QA
+// oi`, exits 3 with `not_connected` and the message "QA não está conectado a
+// você"; the same guard stands before check, wait and ask --batch/--raw, and
+// nothing reaches the target.
 func TestTheGuardRefusesATargetThatIsNotConnected(t *testing.T) {
 	t.Parallel()
 	w := newCommWorld(t)
 	dev, _ := w.pair()
-	stranger := w.recruit("Estranho", "Dev Claude")
-	_ = stranger
+	qa := w.recruit("QA", "Dev Claude")
 	// Dev is connected to the master, to the Reviewer and to nobody else.
 	for _, args := range [][]string{
-		{"ask", "Estranho", "oi"}, {"check", "Estranho"}, {"wait", "Estranho"}, {"wait", "Revisor", "Estranho"},
-		{"ask", "--batch", `{"Estranho":"oi"}`}, {"ask", "Estranho", "--raw", "x"},
+		{"ask", "QA", "oi"}, {"check", "QA"}, {"wait", "QA"}, {"wait", "Revisor", "QA"},
+		{"ask", "--batch", `{"QA":"oi"}`}, {"ask", "QA", "--raw", "x"},
 	} {
 		r := w.run(dev, append(args, "--json")...)
-		if v := decodeJSON(t, r); r.code != 3 || v.Error.Code != "not_connected" {
+		if v := decodeJSON(t, r); r.code != 3 || v.Error.Code != "not_connected" || v.Error.Message != "QA não está conectado a você" {
 			t.Errorf("%v = %d %s", args, r.code, r.stdout)
 		}
 	}
-	if got := w.mach.Delivered(w.get(stranger)); len(got) != 0 {
-		t.Errorf("the stranger got %q", got)
+	if r := w.run(dev, "ask", "QA", "oi"); r.code != 3 || !strings.Contains(r.stderr, "QA não está conectado a você") {
+		t.Errorf("text mode = %+v", r)
+	}
+	if got := w.mach.Delivered(w.get(qa)); len(got) != 0 {
+		t.Errorf("QA got %q", got)
+	}
+}
+
+// CA-CONX-03: scrolls P1 and P2 connected, P1 connected to Dev: Dev reads P2
+// with `mestre note read`; a scroll with no path to Dev is refused (not_visible).
+func TestNoteReadFollowsTheConnectionsBetweenScrolls(t *testing.T) {
+	t.Parallel()
+	w := newCommWorld(t)
+	dev, _ := w.pair()
+	for _, n := range []string{"P1", "P2", "P3"} {
+		if r := w.run(w.master, "note", "create", "# "+n+"\ncorpo de "+n, "--json"); r.code != 0 {
+			t.Fatalf("note create %s = %+v", n, r)
+		}
+	}
+	for _, pair := range [][2]string{{"P1", "P2"}, {"Dev", "P1"}} {
+		if r := w.run(w.master, "connect", pair[0], pair[1]); r.code != 0 {
+			t.Fatalf("connect %v = %+v", pair, r)
+		}
+	}
+	if r := w.run(dev, "note", "read", "P2"); r.code != 0 || !strings.Contains(r.stdout, "corpo de P2") {
+		t.Errorf("Dev reads P2 = %+v", r)
+	}
+	r := w.run(dev, "note", "read", "P3", "--json")
+	if v := decodeJSON(t, r); r.code != 4 || v.Error.Code != "not_visible" {
+		t.Errorf("Dev reads P3 = %d %s", r.code, r.stdout)
 	}
 }
 
@@ -543,5 +585,34 @@ func TestInboxShowsTheQueueInTheOrderOfDelivery(t *testing.T) {
 	full := w.run(rev, "inbox", "--full")
 	if strings.Count(short.stdout, "x") >= 100 || strings.Count(full.stdout, "x") < 100 {
 		t.Errorf("--full: short has %d, full has %d", strings.Count(short.stdout, "x"), strings.Count(full.stdout, "x"))
+	}
+}
+
+// Text that starts with "--" is data unless it looks like a flag
+// (`--[a-z][a-z-]*` with an optional `=value`): a front matter, a message with
+// a rule, a summary that starts with two hyphens.
+func TestTextThatStartsWithTwoHyphensIsDataUnlessItIsAFlag(t *testing.T) {
+	t.Parallel()
+	w := newCommWorld(t)
+	dev, rev := w.pair()
+	body := "---\ntitle: x\n---\ncorpo"
+	if r := w.run(dev, "note", "create", body, "--name", "Com front matter", "--json"); r.code != 0 {
+		t.Fatalf("note create with a front matter = %+v", r)
+	}
+	if r := w.run(dev, "note", "read", "Com front matter"); r.code != 0 || !strings.Contains(r.stdout, "title: x") {
+		t.Errorf("note read = %+v", r)
+	}
+	if r := w.run(dev, "ask", "Revisor", "--- Mensagem ---", "--no-wait", "--json"); r.code != 0 {
+		t.Errorf("ask with a text that starts with --- = %+v", r)
+	}
+	if got := w.mach.Delivered(w.get(rev)); len(got) == 0 || !strings.Contains(strings.Join(got, "\n"), "--- Mensagem ---") {
+		t.Errorf("the target got %q", got)
+	}
+	if r := w.run(dev, "done", "-- resumo", "--json"); r.code != 7 || decodeJSON(t, r).Error.Code != "no_active_task" {
+		t.Errorf("done with a summary that starts with -- must reach the engine (no task: no_active_task) = %+v", r)
+	}
+	// a real flag that does not exist is still an error
+	if r := w.run(dev, "ask", "Revisor", "oi", "--nope"); r.code != 2 {
+		t.Errorf("an unknown flag = %+v", r)
 	}
 }

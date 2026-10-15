@@ -24,6 +24,7 @@ type Linker interface {
 	Link(ctx context.Context, workspace, table string, a, b connections.Ref, by string) error
 	Forget(ctx context.Context, ref connections.Ref) error
 	CanSeeScroll(ctx context.Context, agentID, scroll string) (bool, error)
+	CanSeeTome(ctx context.Context, agentID, tome string) (bool, error)
 }
 
 // QuestNames gives the name of a quest, for the scroll of its summaries
@@ -485,6 +486,21 @@ func (s *Service) Stack(ctx context.Context, r StackRequest) (Tome, []Note, erro
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A tome that exists is stacked into only by who sees it: a scroll put in
+	// it becomes visible to everyone connected to the tome.
+	if r.Actor.Kind == ByCharacter && s.o.Connections != nil {
+		if t, ok, err := s.st.FindTome(ctx, r.Workspace, r.Table, r.Tome); err != nil {
+			return Tome{}, nil, err
+		} else if ok {
+			seen, err := s.o.Connections.CanSeeTome(ctx, r.Actor.ID, t.Key)
+			if err != nil {
+				return Tome{}, nil, err
+			}
+			if !seen {
+				return Tome{}, nil, notVisible(r.Tome)
+			}
+		}
+	}
 	var notes []Note
 	for _, name := range r.Names {
 		if strings.Contains(name, "/") { // a key: only of this table
