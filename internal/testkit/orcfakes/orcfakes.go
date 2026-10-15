@@ -191,11 +191,15 @@ func (h Hub) Repository(_ context.Context, repo workspaces.Repo) (workspaces.Rep
 	return workspaces.RepoInfo{FullName: repo.String(), CloneURL: h.URL, DefaultBranch: "main"}, nil
 }
 
-// Epics is the GitHub of the epics: the epic #42, "Login de usuários", exists.
-type Epics struct{}
+// Epics is the GitHub of the epics: the epic #42, "Login de usuários", exists,
+// and so do the ones in Also, called "Épico <n>".
+type Epics struct{ Also []int }
 
 // Epic implements tables.GitHub.
-func (Epics) Epic(_ context.Context, _ string, n int) (tables.Epic, error) {
+func (e Epics) Epic(_ context.Context, _ string, n int) (tables.Epic, error) {
+	if slices.Contains(e.Also, n) {
+		return tables.Epic{Number: n, Title: fmt.Sprintf("Épico %d", n), Labels: []string{"epico"}, Open: true}, nil
+	}
 	if n != 42 {
 		return tables.Epic{}, fmt.Errorf("%w: #%d", tables.ErrEpicNotFound, n)
 	}

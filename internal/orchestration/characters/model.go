@@ -181,8 +181,8 @@ func ValidName(name string) error {
 		return fmt.Errorf("%w: use 1 to 32 characters", ErrInvalidName)
 	}
 	for _, r := range name {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != ' ' && r != '-' && r != '_' {
-			return fmt.Errorf("%w: only letters, digits, space, - and _", ErrInvalidName)
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != ' ' && r != '-' && r != '_' && r != '(' && r != ')' {
+			return fmt.Errorf("%w: only letters, digits, space, -, _ and parentheses", ErrInvalidName)
 		}
 	}
 	if strings.TrimSpace(name) != name || strings.TrimSpace(name) == "" {
@@ -218,7 +218,7 @@ func DefaultName(sheet string, taken func(key string) bool) string {
 	base := strings.TrimSpace(sheet)
 	var b strings.Builder
 	for _, r := range base {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || r == '-' || r == '_' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' || r == '-' || r == '_' || r == '(' || r == ')' {
 			b.WriteRune(r)
 		}
 	}

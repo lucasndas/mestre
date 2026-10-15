@@ -1,6 +1,6 @@
 # Grimórios
 
-> **Assunto:** salvar um pedaço do canvas (time, classes, pergaminhos, conexões e missões) e restaurá-lo em mesa de qualquer workspace · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** salvar um pedaço do canvas (time, classes, pergaminhos, conexões e missões) e restaurá-lo em mesa de qualquer workspace · **Componente:** Motor · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -42,6 +42,15 @@ Classe copiada mantém o App vinculado. Se o App não estiver instalado no repos
 ### Listar e apagar
 
 O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, conteúdo). Apagar exige pedido explícito de Administrador ou acima e não afeta mesas já restauradas.
+
+### Detalhes que o motor decide
+
+- **Seleção:** o painel manda os ids (personagens, pergaminhos, tomos e missões) e as posições no canvas, que ficam no documento e voltam no relatório da restauração para o painel posicionar. Um tomo leva os pergaminhos que guarda; um pergaminho do motor ("Missão: …", "Histórico da mesa") ou um id que não é da mesa recusa o salvamento, listando todos os problemas de uma vez. Grão-Mestre e Mestre da seleção ficam de fora e são avisados em `left`.
+- **Missão:** só entra se todo `character` das etapas está na seleção; as fichas são citadas pelo nome e conferidas na restauração.
+- **Restaurar em duas chamadas:** `Plan` valida e devolve o que será criado (nomes com sufixo, classes e a escolha pendente); `Restore` repete a validação e cria. Com escolha de classe pendente ele recusa antes de criar qualquer coisa.
+- **Classes:** a classe do destino com o mesmo nome, de qualquer escopo, é a usada; a de mesa de origem ausente no destino é copiada sem perguntar; a cópia é gravada pela biblioteca de classes (`Library.Save`), que confere pacote, teto e nome, e o pacote do documento é conferido de novo (vem do banco, que as Torres replicam).
+- **Nomes:** missões repetidas também recebem " (2)"; o nome é encurtado para caber nos 32 caracteres, e os nomes que ficam são reservados antes dos que mudam. A máquina salva é só preferência. A missão restaurada segue os novos nomes dos personagens.
+- **Falhas parciais:** o relatório lista personagens `interrupted`, personagens à espera de vaga (limite de máquina ou de cópias da ficha) e o que não pôde ser feito.
 
 ## Regras e erros
 

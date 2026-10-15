@@ -15,8 +15,10 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
+	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/lucasndas/mestre/internal/orchestration/rituals"
 	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/waits"
@@ -79,7 +81,8 @@ type OrchestrationOptions struct {
 	Settings tables.Settings
 	// Peers reaches the Towers for the branches of the tables.
 	Peers tables.Peers
-	// Rituals deactivates the rituals of a table that ends (stage 10).
+	// Rituals, when set, deactivates the rituals of a table that ends instead
+	// of the rituals service (a double for the tests of the tables).
 	Rituals tables.Rituals
 	// Waker: the waits' tie to the characters (the machines).
 	Waker waits.Waker
@@ -112,6 +115,23 @@ type OrchestrationOptions struct {
 	ChainDelegations chain.Delegations
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
+
+	// The rituals (stage 10). The pre-run on the machine of the target, the
+	// decision of permissions that holds it and the approval to delete a
+	// ritual belong to milestone 5 (the Towers, the flow); nil refuses a
+	// pre-run and a delete by a character. RitualZones gives the time zone of
+	// a workspace (the Guild's, UTC by default).
+	RitualPreRun      rituals.PreRunner
+	RitualPermissions rituals.Permissions
+	RitualApprovals   rituals.Approvals
+	RitualZones       rituals.Zones
+
+	// The grimoires (stage 10). Classes reads and copies the classes of the
+	// workspaces (grimoires.LibraryClasses over their Libraries); nil: a
+	// grimoire with a class of its own cannot be saved. GrimoireAccess says
+	// which workspaces a user may use (milestone 5; nil: all).
+	Classes        grimoires.Classes
+	GrimoireAccess grimoires.Access
 }
 
 // Orchestration is the services of milestone 4 of the Citadel, assembled.
@@ -125,7 +145,9 @@ type Orchestration struct {
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
 	// Chain is the chain of approval (nil unless ChainClasses was given).
-	Chain *chain.Service
+	Chain     *chain.Service
+	Rituals   *rituals.Service
+	Grimoires *grimoires.Service
 	// Registry is the registry of the characters of the Guild.
 	Registry characters.Registry
 	// Observers are told of every change of state of a character, in the
@@ -164,6 +186,29 @@ func (r charactersRef) Create(ctx context.Context, req characters.CreateRequest)
 func (r charactersRef) Dismiss(ctx context.Context, req characters.DismissRequest) (characters.DismissResult, error) {
 	return (*r.p).Dismiss(ctx, req)
 }
+
+// ritualsRef is the view of the rituals that the tables (when a table ends) and
+// the characters (when one becomes free) have of them, since the rituals are
+// made after both.
+type ritualsRef struct{ p **rituals.Service }
+
+func (r ritualsRef) Deactivate(ctx context.Context, ws, table string) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Deactivate(ctx, ws, table)
+}
+
+func (r ritualsRef) StateChanged(ctx context.Context, c characters.Character, from characters.State) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).StateChanged(ctx, c, from)
+}
+
+func (r ritualsRef) Done(context.Context, characters.Character, string) error { return nil }
+
+func (r ritualsRef) TurnEnded(context.Context, characters.Character, string) error { return nil }
 
 // questsRef is the view of the quests that the waits, the scrolls and the
 // characters have of them, since the quests are made after all of them.
@@ -297,7 +342,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		scr   *scrolls.Service
 		qs    *quests.Service
 		ch    *chain.Service
+		rit   *rituals.Service
 	)
+	deactivate := o.Rituals
+	if deactivate == nil {
+		deactivate = ritualsRef{&rit}
+	}
 
 	conns, err := connections.NewService(connections.Options{Registry: reg, Clock: o.Clock, Scrolls: scrollsRef{&scr}, Tables: tablesRef{&tbl}})
 	if err != nil {
@@ -315,7 +365,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	tbl, err = tables.New(tables.Options{DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
 		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.Messages, Attachments: o.Attachments,
-		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: o.Rituals, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
+		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +379,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}}
+	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}, ritualsRef{&rit}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits, Logger: o.Logger})
 	if err != nil {
@@ -362,9 +412,20 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	rit, err = rituals.NewService(rituals.Options{Store: &rituals.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Inbox: ib, Quests: qs, Pauses: tbl,
+		Terminals: o.Machines, PreRunner: o.RitualPreRun, Permissions: o.RitualPermissions, Zones: o.RitualZones, Approvals: o.RitualApprovals, Logger: o.Logger})
+	if err != nil {
+		return nil, err
+	}
+	grims, err := grimoires.NewService(grimoires.Options{Store: &grimoires.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Characters: chars, Scrolls: scr,
+		Connections: conns, Quests: qs, Tables: tbl, Inbox: ib, Sheets: o.Presets, Classes: o.Classes, Access: o.GrimoireAccess, Logger: o.Logger})
+	if err != nil {
+		return nil, err
+	}
 	orc.Registry = reg
 	orc.Quests = qs
 	orc.Chain = ch
+	orc.Rituals, orc.Grimoires = rit, grims
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
 	return orc, nil
 }
@@ -385,6 +446,9 @@ func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scroll
 // Intervals of the loops that External runs.
 const (
 	sweepEvery = time.Minute
+	// ritualEvery is how often the rituals look at the clock; well below the
+	// shortest --every (5 minutes), since a slot is on time within one look.
+	ritualEvery = 30 * time.Second
 )
 
 // External is the ExternalFunc that runs the work of the orchestration while
@@ -408,7 +472,7 @@ func (o *Orchestration) External() ExternalFunc {
 			}
 		}
 		var wg sync.WaitGroup
-		errs := make(chan error, 4)
+		errs := make(chan error, 8)
 		run := func(name string, f func(context.Context) error) {
 			wg.Add(1)
 			go func() {
@@ -422,6 +486,7 @@ func (o *Orchestration) External() ExternalFunc {
 		run("characters", func(ctx context.Context) error { return o.Characters.Run(ctx, sweepEvery) })
 		run("tables", func(ctx context.Context) error { return o.Tables.Run(ctx, sweepEvery) })
 		run("quests", func(ctx context.Context) error { return o.Quests.Loop(ctx, sweepEvery) })
+		run("rituals", func(ctx context.Context) error { return o.Rituals.Loop(ctx, ritualEvery) })
 		wg.Wait()
 		close(errs)
 		return errors.Join(drain(errs)...)
