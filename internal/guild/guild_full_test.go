@@ -242,7 +242,7 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 	res, err := guild.Install(ctx, guild.InstallConfig{
 		Plan: guild.PlanInput{Search: discovery.SearchConfig{Net: sysPackets(), Clock: clk, Port: port, Window: 1500 * time.Millisecond, Interval: 400 * time.Millisecond}},
 		Join: guild.JoinConfig{
-			Network: sys, Clock: clk, Name: "b", Hostname: "localhost", OS: "test", IPs: []net.IP{net.ParseIP("127.0.0.1")},
+			Network: sys, Clock: clk, Name: "b", Hostname: "localhost", OS: "linux", IPs: []net.IP{net.ParseIP("127.0.0.1")},
 			OnCode: func(c string) { codes <- c },
 		},
 		Member: b.member,

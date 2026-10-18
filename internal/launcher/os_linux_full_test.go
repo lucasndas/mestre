@@ -123,6 +123,7 @@ func newEnv(t *testing.T) *env {
 	e.os.cgBase = base
 	e.os.cfg = launcher.RunConfig{
 		SocketPath: filepath.Join(root, "launcher.sock"), BinDir: builds.bin, SocketDir: e.sockets,
+		AllowSelf:  true, // the agent account of the full suite is the user who runs it
 		Engine:     launcher.PeerPolicy{UID: uid, Cgroup: cg},
 		CgroupBase: base, Env: os.Environ(), Audit: e.audit.record,
 	}

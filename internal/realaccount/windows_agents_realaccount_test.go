@@ -148,6 +148,15 @@ func runLauncher(ctx context.Context, path string) int {
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return fail(err)
 	}
+	// CA-TERM-15: the refusal of the account of the launcher itself is checked
+	// where it matters, in a service as LocalSystem, which the tests of the
+	// package are not: the agents would run as SYSTEM.
+	if _, err := (winsvc.SelfAccount{}).Logon("probe"); !errors.Is(err, winsvc.ErrSelfAccountInService) {
+		return fail(fmt.Errorf("the account of the launcher itself logged on in a service: %v", err))
+	}
+	if _, err := winsvc.NewLauncher(winsvc.LauncherConfig{Account: winsvc.SelfAccount{}}); !errors.Is(err, winsvc.ErrSelfAccountInService) {
+		return fail(fmt.Errorf("a launcher was built over the account of the launcher itself in a service: %v", err))
+	}
 	if f, err := os.OpenFile(filepath.Join(cfg.LogDir, "launcher.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
 		defer f.Close()
 		os.Stderr = f
