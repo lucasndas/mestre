@@ -71,6 +71,20 @@ func (e *Engine) replicaConfig(db *store.DB) replication.ReplicaConfig {
 	}
 }
 
+// towerWiper is what a Tower runs when the Citadel tells it to leave the Guild
+// (guild.leave). The report of the databases it discarded stops first: it reads
+// those files, and a report that waits for the ack would write its record after
+// the Wipe took the files (docs/guilda/replicacao.md#sair-da-guilda).
+type towerWiper struct {
+	replica    guild.Wiper
+	stopReport func()
+}
+
+func (w towerWiper) Wipe(ctx context.Context, reason string) error {
+	w.stopReport()
+	return w.replica.Wipe(ctx, reason)
+}
+
 // runTower serves as a Tower until the role changes or ctx ends: the replica,
 // the connection to the Citadel with its outbox, the machine sheet, and the
 // answer 4007 to whoever takes this machine for the Citadel.
@@ -189,7 +203,11 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: replica}, Renewer: renewer})
+	reportCtx, stopReporting := context.WithCancel(pctx)
+	defer stopReporting()
+	reported := make(chan struct{}) // closed when the report of the discarded databases ends
+	wiper := towerWiper{replica: replica, stopReport: func() { stopReporting(); <-reported }}
+	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: wiper}, Renewer: renewer})
 	// Whoever takes this machine for the Citadel is told 4007, with the
 	// certificate this machine follows.
 	refuser, err := protocol.NewServer(protocol.Config{
@@ -215,7 +233,10 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	wg.Go(func() { _ = replica.Run(pctx) })
 	wg.Go(func() { _ = agent.Run(pctx) })
 	wg.Go(func() { e.renewTower(pctx, db, renewer, client.Link(), renewKick) })
-	wg.Go(func() { e.reportDiscarded(pctx, db, client.Link()) })
+	wg.Go(func() {
+		defer close(reported)
+		e.reportDiscarded(reportCtx, db, client.Link())
+	})
 	e.changed()
 	e.log.Info("app: serving as a Tower", "epoch", e.epochs.Epoch(), "citadel", e.known().CitadelMachineID)
 

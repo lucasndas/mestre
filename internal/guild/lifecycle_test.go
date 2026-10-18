@@ -348,6 +348,52 @@ func TestRemovingAnOnlineMachineTellsItToLeaveThenRevokesAndRefusesItsHandshakes
 	})
 }
 
+// slowWiper erases when it is let, not when the context ends.
+type slowWiper struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (w *slowWiper) Wipe(context.Context, string) error {
+	close(w.started)
+	<-w.release
+	return nil
+}
+
+// CA-GUILDA-14
+// The Citadel waits 10 s for the answer to guild.leave and revokes the machine
+// whatever it says; the connection falls with 4002, and the context of the handler
+// with it. A wipe that takes longer finishes all the same, and the machine
+// forgets its identity: one that outlived the wipe would be a machine with
+// nothing, that the Guild no longer takes and that cannot enter again.
+func TestAMachineThatErasesForLongerThanTheCitadelWaitsStillLeaves(t *testing.T) {
+	t.Parallel()
+	bubble(t, func(t *testing.T, r *rig, w *pworld) {
+		n := r.newNode("tower-a")
+		tw := w.addTower(t, n, r.enroll(n))
+		wiper := &slowWiper{started: make(chan struct{}), release: make(chan struct{})}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		done := make(chan error, 1)
+		go func() {
+			_, err := (&guild.TowerLeave{Member: n.member, Epochs: tw.epochs, Wiper: wiper}).Handle(ctx, &protocol.Message{
+				Peer: protocol.Peer{Role: protocol.RoleMachine, ID: tw.epochs.Citadel()}})
+			done <- err
+		}()
+		synctest.Wait()
+		<-wiper.started
+		cancel() // the Citadel gave up and closed the connection
+		synctest.Wait()
+		close(wiper.release)
+		if err := <-done; err != nil {
+			t.Errorf("guild.leave = %v, want the departure done", err)
+		}
+		if _, err := n.member.Identity(t.Context()); !errors.Is(err, guild.ErrNotMember) {
+			t.Errorf("the machine that erased still has an identity: %v", err)
+		}
+	})
+}
+
 // Part of CA-GUILDA-06, which closes with the Guardian.
 func TestAMachineRemovedWhileOfflineIsRevokedAndNotNotified(t *testing.T) {
 	t.Parallel()

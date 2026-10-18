@@ -167,6 +167,7 @@ type xferHub struct {
 	recv     map[string]*recvXfer
 	send     map[string]*sendXfer
 	finished map[string]finishedXfer
+	stopped  bool // StopTransfers ran: no transfer begins any more
 
 	// bg are the goroutines that finish a received transfer (the check of the
 	// content, the Finalizer, the end with an error): they outlive the session
@@ -256,6 +257,9 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 	if cfg == nil {
 		return nil, NewError(CodeUnavailable, "this machine does not receive transfers")
 	}
+	if h.isStopped() {
+		return nil, errStopped
+	}
 	finalizer, known := cfg.Finalizers[b.Kind]
 	if !known {
 		return nil, NewError(CodeUnavailable, "this machine has no receiver for transfers of kind %s", b.Kind)
@@ -304,6 +308,14 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 		return nil, err
 	}
 	h.mu.Lock()
+	if h.stopped { // StopTransfers ran while the file was being opened
+		h.mu.Unlock()
+		_ = r.f.Close()
+		_ = os.Remove(r.path)
+		_ = os.Remove(r.meta)
+		cfg.unreserve(b.XferID)
+		return nil, errStopped
+	}
 	h.recv[b.XferID] = r
 	h.mu.Unlock()
 	return &Reply{Type: TypeXferReady, Payload: XferReady{XferID: b.XferID, NextIndex: r.next}, Transient: true}, nil
@@ -589,6 +601,46 @@ func pruneTransfers(c *Config, links []*Link, ttl time.Duration) int {
 		}
 	}
 	return n
+}
+
+// errStopped is what a begin gets after StopTransfers.
+var errStopped = NewError(CodeForbidden, "this link takes no more transfers")
+
+func (h *xferHub) isStopped() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.stopped
+}
+
+// StopTransfers ends the transfers this link is receiving and refuses the ones
+// that begin from now on (forbidden): the files in progress are closed and
+// forgotten, and the goroutines that were finishing a transfer are canceled and
+// waited for. A machine that leaves the Guild calls it before it erases the
+// folder of the transfers: a file that is open cannot be removed on Windows,
+// and a transfer that finished after the erasing would put its content back.
+// The temporary files stay on disk, for the caller to erase.
+func (l *Link) StopTransfers() {
+	h := l.xfer
+	h.mu.Lock()
+	h.stopped = true
+	recv := h.recv
+	h.recv = map[string]*recvXfer{}
+	for _, cancel := range h.cancels {
+		cancel()
+	}
+	h.mu.Unlock()
+	for id, r := range recv {
+		r.mu.Lock()
+		if r.f != nil {
+			_ = r.f.Close()
+			r.f = nil
+		}
+		r.mu.Unlock()
+		if cfg := l.cfg.Xfer; cfg != nil {
+			cfg.unreserve(id)
+		}
+	}
+	h.bg.Wait()
 }
 
 // forgetRecv closes the temporary file of a transfer that is going away (a

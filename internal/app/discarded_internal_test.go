@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -138,5 +139,29 @@ func TestDiscardedDatabasesLeaveAfterTheRetentionTheRenamedOnesToo(t *testing.T)
 	}
 	if len(left) != 1 || left[0] != "descartado-4.db" {
 		t.Errorf("left after the retention: %v; want only descartado-4.db", left)
+	}
+}
+
+type wipeFunc func(ctx context.Context, reason string) error
+
+func (f wipeFunc) Wipe(ctx context.Context, reason string) error { return f(ctx, reason) }
+
+// CA-REPL-12
+// The report of the discarded databases reads the files the Wipe takes and
+// writes its record next to them once the Citadel acknowledged: it stops, and
+// is gone, before the Wipe erases, or it would write the record back
+// (docs/guilda/replicacao.md#sair-da-guilda).
+func TestATowerStopsReportingTheDiscardedDatabasesBeforeItErasesThem(t *testing.T) {
+	t.Parallel()
+	var order []string
+	w := towerWiper{
+		stopReport: func() { order = append(order, "stop the report") },
+		replica:    wipeFunc(func(context.Context, string) error { order = append(order, "wipe"); return nil }),
+	}
+	if err := w.Wipe(t.Context(), "removed"); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 2 || order[0] != "stop the report" || order[1] != "wipe" {
+		t.Errorf("the Tower did %v, want the report stopped and then the wipe", order)
 	}
 }

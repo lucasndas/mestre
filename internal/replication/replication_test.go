@@ -525,6 +525,56 @@ func TestFilesReachTheTowerBeforeTheRecordsThatCiteThemAndAMachineThatLeavesEras
 	})
 }
 
+// CA-REPL-14
+// A machine that left the Guild takes nothing more of it while its engine still
+// runs and the Citadel, which has not revoked it yet, goes on sending: the key
+// of the vault does not come back, nor a file, nor the replica. The Citadel
+// sends the key again after a rotation and files at every change.
+func TestACitadelThatStillSendsToAMachineThatLeftChangesNothingThere(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, rigOpts{files: true, vault: true})
+		ctx := context.Background()
+		if err := r.vault.Put(ctx, "k", vault.TypeProviderAPIKey, []byte("sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1"), nil); err != nil {
+			t.Fatal(err)
+		}
+		tw := r.addTower("t1", true)
+		copier := &vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}
+		eventually(t, "the Tower to have the replica and the vault", func() bool { return tw.lsn() == r.lsn() && copier.Holds(ctx) })
+
+		var w guild.Wiper = tw.rep
+		if err := w.Wipe(ctx, "removed"); err != nil {
+			t.Fatal(err)
+		}
+		if copier.Holds(ctx) {
+			t.Fatal("set-up: the Wipe left the key")
+		}
+
+		if err := os.MkdirAll(r.filesDir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(r.filesDir, "late.md"), []byte("late"), 0o640); err != nil {
+			t.Fatal(err)
+		}
+		r.primary.VaultChanged(ctx)
+		r.primary.FileChanged("classes", "late.md")
+		r.insertMachine(1)
+		advance(time.Minute)
+
+		for _, p := range []string{tw.env, tw.dbPath, filepath.Join(tw.files, "late.md")} {
+			if _, err := os.Stat(p); err == nil {
+				t.Errorf("%s is back after the Wipe", p)
+			}
+		}
+		if copier.Holds(ctx) {
+			t.Error("the key of the vault is back after the Wipe")
+		}
+		if entries, _ := os.ReadDir(tw.xfer); len(entries) != 0 {
+			t.Errorf("the transfers folder has %v after the Wipe", entries)
+		}
+	})
+}
+
 func indexOf(s []string, v string) int {
 	for i, x := range s {
 		if x == v {
