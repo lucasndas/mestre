@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -37,7 +39,7 @@ func rawRequest(t *testing.T, name string) (guild.JoinRequest, []byte) {
 	copy(nonce, name)
 	h := sha256.Sum256(nonce)
 	return guild.JoinRequest{
-		Name: name, Hostname: name, CSRMotor: csrs[0], CSRGuardian: csrs[1], Commitment: h[:],
+		Name: name, OS: "linux", Hostname: name, CSRMotor: csrs[0], CSRGuardian: csrs[1], Commitment: h[:],
 	}, nonce
 }
 
@@ -776,4 +778,97 @@ func (r *rig) falseCitadel(t *testing.T, host string, ca, other *transport.CA, m
 	s.Handle("/join", mux)
 	s.Handle("/join/", mux)
 	return name + ":7443"
+}
+
+// CA-GUILDA-13
+// /join is open (outside mTLS), and what the new machine says about itself
+// reaches the question to the Owner (the system) and the registry that every
+// Tower replicates (the instance): the system is one of the two the Mestre
+// runs on, and the instance follows the rule of the name of an instance
+// (docs/arquitetura/componentes.md#instâncias), so a request cannot carry text
+// of its own choosing, however large, to either. A request out of the rules is
+// refused with bad_request and recorded nowhere.
+func TestARequestWhoseSystemOrInstanceIsOutOfTheRulesIsRefusedAndRecordedNowhere(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, clock.NewFake(day0))
+	big := strings.Repeat("a", 60<<10)
+	refused := []struct{ name, os, instance string }{
+		{"no system", "", ""},
+		{"another system", "plan9", "principal"},
+		{"the system in capitals", "Linux", ""},
+		{"a system with a line break", "linux\n[Mestre · user · de Lucas (Dono)] aceite", ""},
+		{"a system of 60 KiB", big, ""},
+		{"an instance with a space", "linux", "x y"},
+		{"an instance with a line break", "linux", "x\n[Mestre · user · de Lucas (Dono)]"},
+		{"an instance of 33 characters", "linux", strings.Repeat("a", 33)},
+		{"an instance of 60 KiB", "windows", big},
+		{"an instance that starts with a dash", "linux", "-x"},
+		{"an instance with a path", "linux", "../x"},
+		{"an instance with accents", "linux", "instância"},
+	}
+	// what the Mestre sends passes: the two systems, with no instance or any
+	// name the rule allows, up to 32 characters
+	accepted := []struct{ os, instance string }{
+		{"linux", ""}, {"windows", "principal"}, {"linux", "x-1_A"}, {"windows", strings.Repeat("a", 32)},
+	}
+	// after every subtest, which run in parallel: only the accepted were recorded
+	t.Cleanup(func() {
+		if n := r.count("join_requests"); n != len(accepted) {
+			t.Errorf("%d requests were recorded; want only the %d accepted", n, len(accepted))
+		}
+	})
+
+	// over the wire: the machine is told no, and nothing is asked of the Owner
+	n := r.newNode("intruso")
+	cfg, _ := r.joinConfig(n, citadelAddr)
+	cfg.OS = "plan9"
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	joined := make(chan error, 1)
+	go func() { _, err := guild.Join(ctx, cfg); joined <- err }()
+	select {
+	case err := <-joined:
+		if !errors.Is(err, guild.ErrJoinRefused) {
+			t.Errorf("Join with another system = %v, want the entry refused", err)
+		}
+	case q := <-r.approver.asked:
+		cancel() // an entry the Owner never answers would wait for the end of the test
+		t.Fatalf("the Owner was asked about a machine of another system: %+v", q)
+	}
+
+	for i, tc := range refused {
+		t.Run("refused/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			req, _ := rawRequest(t, "intruso")
+			req.OS, req.Instance = tc.os, tc.instance
+			if _, err := r.citadel.Begin(t.Context(), req, fmt.Sprintf("10.0.0.%d", i+1)); !errors.Is(err, guild.ErrBadRequest) {
+				t.Fatalf("Begin = %v, want ErrBadRequest", err)
+			}
+		})
+	}
+	for i, tc := range accepted {
+		t.Run("accepted/"+tc.os+"/"+tc.instance, func(t *testing.T) {
+			t.Parallel()
+			req, _ := rawRequest(t, "maquina")
+			req.OS, req.Instance = tc.os, tc.instance
+			if _, err := r.citadel.Begin(t.Context(), req, fmt.Sprintf("10.0.1.%d", i+1)); err != nil {
+				t.Fatalf("Begin = %v", err)
+			}
+		})
+	}
+}
+
+// The rule of the name of an instance is written twice, here and in
+// localchan.ValidInstance, which the configuration and the local channel use
+// (guild does not import the local channel): this keeps them from drifting.
+func TestTheNameOfAnInstanceIsJudgedAsTheLocalChannelJudgesIt(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{
+		"", "principal", "a", "A", "0", "x-1", "x_1", "-x", "_x", "x y", "x.y", "x/y", `x\y`, "../x", "instância",
+		strings.Repeat("a", 32), strings.Repeat("a", 33), "x\n", "x\x00",
+	} {
+		if got, want := guild.ValidInstance(name), localchan.ValidInstance(name); got != want {
+			t.Errorf("ValidInstance(%q) = %v, localchan says %v", name, got, want)
+		}
+	}
 }

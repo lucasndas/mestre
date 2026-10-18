@@ -13,6 +13,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -279,10 +280,19 @@ func (c *Citadel) Begin(ctx context.Context, req JoinRequest, remoteIP string) (
 	return t, nil
 }
 
-// checkRequest validates the request and returns the clean name.
+// checkRequest validates the request and returns the clean name. The route is
+// open (outside mTLS), so nothing of the request goes on unchecked: the system
+// reaches the question to the Owner and the instance reaches the registry that
+// every Tower replicates, and neither may be text of the requester's choice.
 func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	if len(req.Commitment) != 32 {
 		return "", fmt.Errorf("%w: the commitment is a SHA-256", ErrBadRequest)
+	}
+	if req.OS != "linux" && req.OS != "windows" {
+		return "", fmt.Errorf("%w: the system is linux or windows", ErrBadRequest)
+	}
+	if req.Instance != "" && !ValidInstance(req.Instance) {
+		return "", fmt.Errorf("%w: the name of the instance is up to 32 letters, digits, '-' and '_', and starts with a letter or a digit", ErrBadRequest)
 	}
 	for _, csr := range [][]byte{req.CSRMotor, req.CSRGuardian} {
 		parsed, err := x509.ParseCertificateRequest(csr)
@@ -329,6 +339,16 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	}
 	return name, nil
 }
+
+// instanceRe is the rule of the name of an instance: letters, digits, "-" and
+// "_", from 1 to 32 characters, the first a letter or a digit
+// (docs/arquitetura/componentes.md#instâncias). localchan.ValidInstance, which
+// the configuration and the local channel use, is the same rule; guild does not
+// import the local channel, and a test keeps the two together.
+var instanceRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+
+// ValidInstance says whether name can name an instance.
+func ValidInstance(name string) bool { return instanceRe.MatchString(name) }
 
 // cleanName keeps printable characters and bounds the length: the name is
 // shown to the Owner in the question.
