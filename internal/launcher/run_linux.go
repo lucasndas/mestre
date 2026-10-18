@@ -30,9 +30,15 @@ type RunConfig struct {
 	// SocketDir is the folder of the sockets of the terminals
 	// (/run/mestre/<inst>/pty).
 	SocketDir string
-	// Agent is the account the mestre-pty runs as (mestre-agente).
-	// Empty means the user of this process, for the full suite.
+	// Agent is the account the mestre-pty runs as (mestre-agente, or
+	// mestre-agente-<inst>). It is required, and it is never the account of the
+	// launcher: that one owns the vault and the database
+	// (docs/arquitetura/componentes.md#iniciador-mestre-launcher).
 	Agent string
+	// AllowSelf lets the mestre-pty run as the user of this process: Agent may
+	// be empty or be that user. Only the tests set it (the full suite starts a
+	// launcher as the user who runs it); the service never does.
+	AllowSelf bool
 	// Engine is who may ask: its uid and the cgroup of its unit.
 	Engine PeerPolicy
 	// CgroupBase is the delegated cgroup term-<id> is created in; see
@@ -51,7 +57,7 @@ type RunConfig struct {
 // Prepare builds the server and opens its socket (0600). Its Backend can be
 // swapped by wrapping, which is what the tests do.
 func Prepare(cfg RunConfig) (*Server, net.Listener, error) {
-	cred, err := LookupAgent(cfg.Agent)
+	cred, err := LookupAgent(cfg.Agent, cfg.AllowSelf)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,9 +113,15 @@ func ListenUnix(path string) (net.Listener, error) {
 
 // LookupAgent returns the credential to start the mestre-pty with: the
 // account name, with no supplementary groups. It returns nil, meaning "do
-// not switch", for an empty name or for the account of this very process.
-func LookupAgent(name string) (*syscall.Credential, error) {
+// not switch", for an empty name or for the account of this very process, but
+// only when allowSelf says so (the tests): the launcher of a service runs as the
+// account that owns the vault, and a mestre-pty started as it would give the
+// agent that account, so there it is an error.
+func LookupAgent(name string, allowSelf bool) (*syscall.Credential, error) {
 	if name == "" {
+		if !allowSelf {
+			return nil, errors.New("launcher: no account for the agents: the mestre-pty would run as the account of the launcher")
+		}
 		return nil, nil
 	}
 	u, err := user.Lookup(name)
@@ -123,6 +135,9 @@ func LookupAgent(name string) (*syscall.Credential, error) {
 	}
 	if uid == 0 {
 		return nil, fmt.Errorf("agent account %s is root", name)
+	}
+	if !allowSelf && (int(uid) == os.Geteuid() || int(uid) == os.Getuid()) {
+		return nil, fmt.Errorf("agent account %s is the account of the launcher itself, which owns the vault", name)
 	}
 	if int(uid) == os.Geteuid() && int(gid) == os.Getegid() {
 		return nil, nil

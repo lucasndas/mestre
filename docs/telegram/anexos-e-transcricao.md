@@ -1,6 +1,6 @@
 # Anexos e transcrição
 
-> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -37,7 +37,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 
 ### Envio de arquivos (`mestre reply --attach`)
 
-- O arquivo precisa estar dentro do clone principal do workspace ou de um worktree de mesa. Qualquer outro caminho é recusado, para evitar vazar arquivos da máquina.
+- **Quem lê o arquivo é a CLI**, que roda como o próprio agente: o motor nunca abre um caminho que um agente nomeia, e o caminho não segue na chamada ([regras da CLI](../cli/comunicacao.md#regras-e-erros)). A CLI só aceita um arquivo dentro do clone principal do workspace ou de um worktree de mesa e recusa qualquer outro caminho, para não mandar por engano arquivos da máquina; ela não é uma barreira (quem monta o pedido à mão não passa por ela), e o que o agente não consegue ler, a CLI também não lê.
 - **Como sai:**
   - Imagens JPG, PNG ou WebP de até 10 MB saem com `sendPhoto`.
   - O resto sai com `sendDocument`, até **50 MB** (limite da Bot API).
@@ -109,7 +109,7 @@ sequenceDiagram
 - **CA-ANEXO-03** · *rápida* — **Dado** uma voz e um whisper falso, **quando** ela chega, **então** o Grão-Mestre recebe o texto marcado como transcrito e o anexo original.
 - **CA-ANEXO-04** · *rápida* — **Dado** o whisper falso que não responde, **quando** o relógio falso passa do tempo limite, **então** o Grão-Mestre recebe o áudio com o motivo da falha.
 - **CA-ANEXO-05** · *rápida* — **Dado** uma Torre com GPU e transcrição e a Cidadela com transcrição, **quando** a Torre está offline, **então** o áudio é transcrito pela própria Cidadela.
-- **CA-ANEXO-06** · *rápida* — **Dado** `mestre reply --attach /etc/passwd`, **quando** o motor processa, **então** recusa por caminho fora do workspace.
+- **CA-ANEXO-06** · *rápida* — **Dado** `mestre reply --attach /etc/passwd`, **quando** a CLI processa, **então** recusa por caminho fora do workspace e não manda nada ao motor.
 - **CA-ANEXO-07** · *rápida* — **Dado** uma mensagem do Grão-Mestre ao Mestre da mesa citando um anexo, **quando** ela é entregue, **então** o arquivo já existe nos worktrees da mesa.
 - **CA-ANEXO-08** · *pesada* — **Dado** o sistema instalado, **quando** mando um áudio e depois um PDF pelo Telegram (dublê), **então** o áudio é transcrito localmente pelo `whisper-server` real e respondido no Telegram, e o PDF chega à mesa certa e é usado na tarefa (MVP-10).
 

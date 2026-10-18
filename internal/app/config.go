@@ -63,7 +63,7 @@ type Paths struct {
 	HookQueue string
 	// CLIAccess is who may connect to CLISocket: on an installed instance
 	// the access of docs/arquitetura/canal-local.md#endpoint (0660 and the
-	// group mestre-agente on Linux, the ACL on Windows); nil leaves the
+	// group of the agents of the instance on Linux, the ACL on Windows); nil leaves the
 	// socket as the system created it (`mestre run --dir`, the tests).
 	CLIAccess localchan.Access
 }
@@ -94,13 +94,13 @@ func DefaultPaths(instance string) (Paths, error) {
 		return Paths{
 			Config: filepath.Join(root, "config"), Banco: filepath.Join(root, "banco"),
 			Maquina: filepath.Join(root, "maquina"), Agentes: filepath.Join(root, "maquina", "agentes"), CLISocket: sock,
-			HookQueue: hook.QueueDir("windows", programData, instance), CLIAccess: localchan.DefaultAccess(),
+			HookQueue: hook.QueueDir("windows", programData, instance), CLIAccess: localchan.DefaultAccess(instance),
 		}, nil
 	}
 	return Paths{
 		Config: filepath.Join("/etc/mestre", instance), Banco: filepath.Join("/var/lib/mestre", instance, "banco"),
 		Maquina: filepath.Join("/var/lib/mestre", instance, "maquina"), Agentes: filepath.Join("/var/lib/mestre", instance, "agentes"),
-		CLISocket: sock, HookQueue: hook.QueueDir("linux", "", instance), CLIAccess: localchan.DefaultAccess(),
+		CLISocket: sock, HookQueue: hook.QueueDir("linux", "", instance), CLIAccess: localchan.DefaultAccess(instance),
 	}, nil
 }
 
