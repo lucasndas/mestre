@@ -3,7 +3,6 @@
 package characters_test
 
 import (
-	"runtime"
 	"strings"
 	"testing"
 
@@ -46,14 +45,9 @@ func TestAnAskBetweenCharactersOfTwoMachinesIsAnsweredWithoutSayingAMachine(t *t
 		done <- fwd.Forward(r.ctx, &localchan.Call{Request: localchan.Request{Cmd: "ask", Args: localchan.TextArgs("Revisor", "revise o PR 12")},
 			Caller: localchan.Caller{Identified: true, AgentID: d.ID}})
 	}()
-	proc := r.mach[v.Machine].host.proc(v.ID)
-	for range 1_000_000 { // the question is typed on the other machine (no sleep: yield until it is)
-		if len(proc.typedAll()) > 0 {
-			break
-		}
-		runtime.Gosched()
-	}
-	typed := proc.typedAll()
+	// the question is typed on the other machine: wait for it, not for a
+	// number of yields, which a loaded runner can exhaust first
+	typed := r.mach[v.Machine].host.proc(v.ID).waitTyped(t, t.Context(), 1)
 	if len(typed) != 1 || !strings.Contains(plain(t, typed[0]), "revise o PR 12") {
 		t.Fatalf("typed on the Tower: %q", typed)
 	}
