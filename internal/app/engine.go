@@ -307,9 +307,11 @@ func (e *Engine) wait(ctx context.Context) (transition, bool) {
 // Run starts the instance and keeps it until ctx ends.
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	var wg sync.WaitGroup
+	// the deferred calls run backwards: cancel first, so that returning an
+	// error does not wait for goroutines that only end with ctx
 	defer wg.Wait()
+	defer cancel()
 	if err := e.paths.ensure(); err != nil {
 		return err
 	}
