@@ -384,7 +384,7 @@ func (s *Service) askBack(ctx context.Context, r Request, by string, level Level
 	}
 	s.arm(r.ID, level, cur.Deadline)
 	text := fmt.Sprintf("Quem decide o seu pedido de aprovação #%d (%s) pede contexto antes de decidir:\n%s\n\nResponda com `mestre approval reply %d \"<texto>\"`; o pedido espera a sua resposta.",
-		r.ID, orDefault(r.About, string(orPerm(r.Type))), question, r.ID)
+		r.ID, oneLine(orDefault(r.About, string(orPerm(r.Type)))), Unverified(question), r.ID)
 	if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: r.Requester, Kind: inbox.KindAnswer, Sender: "Motor", Text: text,
 		Refs: inbox.Refs{Approval: r.ID, Table: r.Table}}); err != nil {
 		s.log.Warn("chain: the question did not reach the requester", "request", r.ID, "err", err)
@@ -616,12 +616,20 @@ func (s *Service) resultText(r Request, byName, instruction string) string {
 	case Cancelled:
 		return fmt.Sprintf("O pedido de aprovação #%d foi cancelado.", r.ID)
 	}
+	// who decided wrote the reason and the instruction: with more than one line they
+	// come quoted, so they cannot imitate another line of the engine
 	text := fmt.Sprintf("O pedido de aprovação #%d foi negado%s.", r.ID, by)
+	quoted := false
 	if r.Decision != nil && r.Decision.Reason != "" {
-		text += " Motivo: " + r.Decision.Reason + "."
+		text += "\n" + inbox.Say("Motivo:", r.Decision.Reason, "|")
+		quoted = inbox.Multiline(r.Decision.Reason)
 	}
 	if instruction != "" {
-		text += " Instrução: " + instruction
+		text += "\n" + inbox.Say("Instrução:", instruction, "|")
+		quoted = quoted || inbox.Multiline(instruction)
+	}
+	if quoted {
+		text += "\n" + inbox.QuoteNote
 	}
 	return text
 }

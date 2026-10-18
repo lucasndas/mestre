@@ -53,7 +53,7 @@ Criado pelo motor ao criar uma [missão](missoes.md), com nome fixo "Missão: <n
 **Não commitados:** (nenhum)
 ```
 
-O resumo do `done`, o resumo de encerramento e o motivo de uma devolução são texto de agentes: de uma linha, seguem o rótulo (`**Resumo:** …`); de mais, vêm abaixo do rótulo com `> ` em cada linha, e nenhuma linha deles abre uma seção do motor. Também recebe o resumo de encerramento de cada personagem da missão ([encerramento seguro](personagens.md#encerramento-seguro)), as devoluções com o motivo e as provas por critério. Missão com etapa que devolve ganha também o pergaminho "Revisão: <nome>" ([prova e devolução](prova-e-devolucao.md#pergaminho-de-revisão)). Agentes conectados podem ler e escrever nele como em qualquer pergaminho.
+O resumo do `done`, o resumo de encerramento e o motivo de uma devolução são texto de agentes: de uma linha, seguem o rótulo (`**Resumo:** …`); de mais, vêm abaixo do rótulo com `> ` em cada linha, seguidos de uma linha em branco, e nenhuma linha deles abre uma seção do motor. Isso vale para o que o motor acrescenta; um personagem que escreve no pergaminho escreve o que quiser, e a marca não o protege disso. Também recebe o resumo de encerramento de cada personagem da missão ([encerramento seguro](personagens.md#encerramento-seguro)), as devoluções com o motivo e as provas por critério. Missão com etapa que devolve ganha também o pergaminho "Revisão: <nome>" ([prova e devolução](prova-e-devolucao.md#pergaminho-de-revisão)). Agentes conectados podem ler e escrever nele como em qualquer pergaminho.
 
 Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 

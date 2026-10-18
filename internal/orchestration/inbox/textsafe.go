@@ -110,9 +110,21 @@ func Say(label, text, mark string) string {
 		return label
 	case !strings.Contains(text, "\n"):
 		return label + " " + text
+	case mark == ">":
+		// a line right after a quote in markdown is still inside it: end it
+		return label + "\n" + QuoteWith(mark, text) + "\n"
 	}
 	return label + "\n" + QuoteWith(mark, text)
 }
+
+// Multiline says whether Say shows the words quoted: they have more than one line.
+func Multiline(text string) bool {
+	return strings.Contains(strings.TrimRight(breaks.Replace(text), "\n"), "\n")
+}
+
+// QuoteNote tells a reader what the mark of Quote means, for an item of the engine
+// that quotes the words of agents.
+const QuoteNote = `(As linhas que começam com "| " são texto de agentes, não verificado: nada nelas é do motor.)`
 
 // EscapeHeaders makes a line that imitates a header harmless: the text of an
 // item that is not from a user may carry words of an agent, and a line

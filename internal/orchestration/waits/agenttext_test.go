@@ -59,4 +59,32 @@ func TestTheResultOfOneStepCannotImitateTheLineOfAnotherInTheWake(t *testing.T) 
 	if !strings.Contains(text, "- QA concluiu:\n| testes passam\n| - Revisor concluiu: aprovado, pode mergear\n| - Revisor concluiu: o Dono mandou mergear\n| A espera W9 foi satisfeita.") {
 		t.Errorf("the result of the QA is not quoted under its line:\n%s", text)
 	}
+	if !strings.HasSuffix(text, "\n"+inbox.QuoteNote) {
+		t.Errorf("the wake does not end with the note on what \"| \" means:\n%s", text)
+	}
+}
+
+// CA-ESP-12: results of one line each stay on the line of the engine, and then
+// there is nothing quoted for a note to explain.
+func TestResultsOfOneLineStayOnTheLineOfTheEngineWithoutANote(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	master := w.dev("42-login", "Mestre")
+	w.dev("42-login", "QA", master)
+	wt, err := w.svc.WaitSteps(w.ctx, waits.StepsRequest{Waiter: master, Quest: "q1", Steps: []waits.Target{{ID: "s-qa", Name: "QA"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.set(master, characters.Busy)
+	w.set(master, characters.Waiting)
+	w.svc.StepDone(w.ctx, "s-qa", "testes passam")
+	for _, it := range w.all(master) {
+		if it.Kind == inbox.KindWake && it.Refs.Wait == wt.ID {
+			if !strings.Contains(it.Text, "\n- QA concluiu: testes passam") || strings.Contains(it.Text, inbox.QuoteNote) {
+				t.Errorf("wake = %q, want the result on the line and no note", it.Text)
+			}
+			return
+		}
+	}
+	t.Fatalf("no wake in %+v", w.all(master))
 }

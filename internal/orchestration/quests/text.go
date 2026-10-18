@@ -15,7 +15,7 @@ func (s *Service) roundSection(q Quest) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Rodada %d · iniciada — %s\n", q.Round, s.stamp())
 	if q.Input != "" {
-		fmt.Fprintf(&b, "**Entrada:** %s\n", q.Input)
+		b.WriteString(inbox.Say("**Entrada:**", q.Input, ">") + "\n")
 	}
 	return b.String()
 }

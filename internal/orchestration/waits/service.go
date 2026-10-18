@@ -432,6 +432,7 @@ func wakeText(w Wait, targets []Target) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "A espera %s (aguardando %s) foi satisfeita.", w.ID, w.Reason)
+	quoted := false
 	for _, t := range targets {
 		if !t.Done {
 			continue
@@ -440,9 +441,19 @@ func wakeText(w Wait, targets []Target) string {
 			fmt.Fprintf(&b, "\n- %s concluiu.", t.Name)
 			continue
 		}
+		if w.Kind == KindApproval {
+			// the result of a request of approval is written by the chain, which quotes
+			// the words of whoever decided: quoting it again would quote the engine
+			fmt.Fprintf(&b, "\n- %s concluiu: %s", t.Name, t.Result)
+			continue
+		}
 		// the result is text of an agent: one line stays on the line of the engine, more lines
 		// come quoted under it, so they cannot imitate the line of another step
 		b.WriteString("\n" + inbox.Say(fmt.Sprintf("- %s concluiu:", t.Name), t.Result, "|"))
+		quoted = quoted || inbox.Multiline(t.Result)
+	}
+	if quoted {
+		b.WriteString("\n" + inbox.QuoteNote)
 	}
 	return b.String()
 }

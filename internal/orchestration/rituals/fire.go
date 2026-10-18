@@ -127,7 +127,10 @@ func (s *Service) end(ctx context.Context, r Ritual, f Firing, to FiringState, r
 	text := fmt.Sprintf("O disparo do ritual %q (previsto para %s) %s: %s", r.Name, f.ScheduledFor.In(s.zone(ctx, r.Workspace)).Format("2006-01-02 15:04"),
 		map[FiringState]string{Failed: "falhou", Expired: "foi cancelado"}[to], reason)
 	if output != "" {
-		text += "\n\nFim da saída de erro:\n" + output
+		text += "\n\n" + inbox.Say("Fim da saída de erro (da pré-execução, não verificada):", output, "|")
+		if inbox.Multiline(output) {
+			text += "\n" + inbox.QuoteNote
+		}
 	}
 	if to == Expired {
 		text += "\nRode `ritual run` para disparar de novo, ajuste o ritual ou aja de outra forma."
@@ -218,9 +221,18 @@ func (s *Service) deliver(ctx context.Context, f Firing, now time.Time) error {
 				return s.end(ctx, r, f, Failed, "a saída da pré-execução tem "+bad+", que não vai para um comando; nada foi digitado", "")
 			}
 		}
-		content = strings.ReplaceAll(content, Placeholder, out)
+		shown := out
+		if r.Action != ActionCommand && inbox.Multiline(out) {
+			// the output is text from outside: with more than one line it is quoted, so
+			// it cannot pass for the words of the author of the ritual
+			shown = "\n" + inbox.Quote(out) + "\n"
+		}
+		content = strings.ReplaceAll(content, Placeholder, shown)
 		if r.Action != ActionCommand && strings.Contains(r.Content, Placeholder) {
 			sender += " (" + UnverifiedOutput + ")"
+			if shown != out {
+				content += "\n" + inbox.QuoteNote
+			}
 		}
 	}
 	switch r.Action {
