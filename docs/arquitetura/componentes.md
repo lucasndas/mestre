@@ -119,7 +119,7 @@ Uma máquina pode ter **várias instâncias** do Mestre, em qualquer sistema e m
 
 | O quê | Por instância (`<inst>`, padrão `principal`) |
 |---|---|
-| Nome | `--instance <inst>` nos subcomandos de serviço; gravado na configuração da instância. De 1 a 32 letras, dígitos, `-` e `_`, começando por letra ou dígito: a configuração, o canal local e o `/join` da [entrada](../guilda/guilda.md#entrada-na-guilda) recusam outro |
+| Nome | `--instance <inst>` nos subcomandos de serviço; gravado na configuração da instância. De 1 a 32 letras sem acento, dígitos, `-` e `_`, começando por letra ou dígito: a configuração, o canal local e o `/join` da [entrada](../guilda/guilda.md#entrada-na-guilda) recusam outro |
 | Pastas | `/etc/mestre/<inst>/`, `/var/lib/mestre/<inst>/`, `/var/log/mestre/<inst>/` e `/var/spool/mestre/<inst>/` no Linux; `%ProgramData%\Mestre\<inst>\` no Windows. A padrão também usa subpasta, para haver um formato só ([persistência](persistencia.md#arquivos)) |
 | Portas | um bloco livre, escolhido na instalação e gravado na configuração: a padrão usa 7443, 7444, 7446 e 7447; as outras, blocos de 10 acima (7453, 7454, 7456 e 7457; depois 7463…). A 7445/udp é compartilhada |
 | Serviços | systemd: `mestre@<inst>`, `mestre-launcher@<inst>`, `mestre-guardiao@<inst>`, `mestre-update@<inst>`; Windows: `Mestre$<inst>`, `MestreLauncher$<inst>`, `MestreGuardiao$<inst>`, `MestreUpdate$<inst>`, com as contas virtuais `NT SERVICE\Mestre$<inst>` (o `$` é aceito em nomes de serviço, como nas instâncias nomeadas do SQL Server) |
