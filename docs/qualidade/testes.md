@@ -86,7 +86,7 @@ O texto de cada critério está em [escopo-mvp.md](../produto/escopo-mvp.md); aq
 | MVP-11 | `TestMVP11_PanelOverview` | navegador real (Playwright) |
 | MVP-12 | `TestMVP12_RestartRestoresState` | reinício real das máquinas da Cidadela e das Torres, com os serviços subindo sozinhos |
 | MVP-13 | `TestMVP13_FourCompositions` | instalador real nas quatro composições (só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux, só Windows), cada uma montada do zero |
-| MVP-14 | `TestMVP14_PCOperator` | VM Windows com o Operador habilitado, o usuário de teste logado (logon automático) e a tela desbloqueada, Chrome com a extensão Claude in Chrome, Claude Code real, um site local de teste, painel em navegador real (Playwright) (Telegram falso) |
+| MVP-14 | `TestMVP14_PCOperator` | VM Windows com o Operador habilitado, o usuário de teste logado (logon automático) e a tela desbloqueada, Chrome com a extensão do Playwright MCP, Claude Code real, um site local de teste, painel em navegador real (Playwright) (Telegram falso) |
 | MVP-15 | `TestMVP15_CitadelTakeover` | as duas VMs com a Cidadela em cada sistema (Linux com Torre Windows, e o inverso): derrubar a VM da Cidadela no meio de gravações, autocura sem sucesso, aviso e promoção manual pelo Telegram falso, trava no GitHub falso, perda conferida na auditoria, volta da antiga como Torre |
 
 **Critério *pesada* vira subteste:** cada CA *pesada* é um subteste `TestMVPnn/CA-<SIGLA>-<NN>` do primeiro MVP que ele cita (ex.: `TestMVP13_FourCompositions/CA-GUILDA-11`), e o comentário `// CA-…` fica acima do subteste.

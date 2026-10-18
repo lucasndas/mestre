@@ -31,9 +31,9 @@ Aceita, 2026-10-18, por decisão do Dono. **Revista no mesmo dia:** a entrega pa
 ## Decisão
 
 - **Opção 4.** O workspace tem um **catálogo de servidores MCP**, a classe declara `mcp:` no frontmatter do `CLASS.md`, e o gateway do Mestre é o único servidor que cada CLI conhece. Detalhes em [MCP por classe](../classes/mcp-por-classe.md).
-- O nome `mestre` é reservado; repositório com servidores MCP próprios é ignorado no Claude (`--strict-mcp-config`) e impede o início do personagem no Codex e no Antigravity. Toda ferramenta MCP que não vem do gateway é negada pelo despachante, menos as do Operador do PC; ligar um servidor só passa se os `domains` dele cabem na rede da classe e do teto.
+- O nome `mestre` é reservado; repositório com servidores MCP próprios é ignorado no Claude (`--strict-mcp-config`) e impede o início do personagem no Codex e no Antigravity. Toda ferramenta MCP que não vem do gateway é negada pelo despachante; ligar um servidor só passa se os `domains` dele cabem na rede da classe e do teto.
 - Chave só em servidor remoto, como `mcp_key` do [cofre](../plataforma/cofre.md), usada pelo motor e só nos domínios dela. Servidor local com chave fica em "A confirmar" (conta própria `mestre-mcp`).
-- As regras fixas continuam valendo antes de tudo: MCP de controle do computador ou do navegador do usuário só na base Operador do PC ([ADR 0021](0021-operador-do-pc.md)); um servidor desses é recusado no catálogo pelo pacote ou endereço, não pelo nome.
+- As regras fixas continuam valendo antes de tudo: MCP de controle do computador ou do navegador do usuário só na base Operador do PC ([ADR 0021](0021-operador-do-pc.md)); só o Dono cadastra um servidor desses, e ele só serve à base Operador, julgado pelo pacote ou endereço e pela base, não pelo nome. O Operador não tem caminho próprio: os MCPs dele vêm do catálogo pelo gateway, e o `--chrome` sai.
 
 ## Consequências
 

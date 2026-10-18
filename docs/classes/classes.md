@@ -61,7 +61,7 @@ Só um exemplo, para o Dono criar pelo painel se quiser usar o [Operador do PC](
 # permissions.yaml (escopo global, criada pelo Dono)
 operator: true                     # só valida com o teto que tenha operator: true
 tools:
-  allow: ["mcp__claude-in-chrome__*", "mcp__<mcp-de-controle>__*"]
+  allow: ["mcp__navegador-do-usuario__*", "mcp__<mcp-de-controle>__*"]   # ligados no mcp: do CLASS.md
   default: ask
 files: { write: [] }               # o Operador age pela tela, não pelos arquivos da mesa
 git: { commit: false, request_push: false, workflows: never }

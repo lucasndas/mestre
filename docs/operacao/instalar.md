@@ -1,6 +1,6 @@
 # Instalar
 
-> **Assunto:** passo a passo para instalar o Mestre no Ubuntu ou no Windows com o instalador único: a primeira máquina cria a Guilda e as outras entram nela · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** passo a passo para instalar o Mestre no Ubuntu ou no Windows com o instalador único: a primeira máquina cria a Guilda e as outras entram nela · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 Guia para quem usa. O que cada passo cria por dentro (pastas, contas, serviços, CA, Whisper) está em [instalação e versões](../plataforma/instalacao-e-atualizacao.md); aqui fica só o que você faz e o que vai ver.
 
@@ -43,7 +43,7 @@ O instalador é o mesmo em toda máquina e não pergunta papel. Ele procura uma 
 1. Baixe `mestre-<versão>-x64.msi` da página de Releases, confira o SHA-256 publicado (`Get-FileHash .\mestre-<versão>-x64.msi`) e abra. O instalador não tem assinatura de código: se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações** → **Executar assim mesmo**, e aceite o pedido de administrador.
 2. Siga [O que aparece no fim](#o-que-aparece-no-fim).
 3. Confira: `Get-Service mestre, mestre-guardiao` mostra os dois `Running`, e `Get-LocalUser mestre-agente` mostra a conta ativa. O `mestre` roda numa conta própria do sistema e inicia os agentes com a conta `mestre-agente` ([Windows](../arquitetura/windows.md)); eles trabalham mesmo com você deslogado. Os serviços sobem sozinhos com o Windows e, depois de um reinício, o Mestre retoma o que estava fazendo.
-4. **Operador do PC (opcional):** o instalador pergunta se quer habilitar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), um agente que usa este PC com a sua conta, só quando o Dono aprova, por pouco tempo e com aviso na tela. Se quiser, responda **sim** e escolha o seu usuário do Windows. Antes, deixe o Controle de Conta de Usuário (UAC) ligado, com "Sempre notificar" ou o nível padrão, e o Chrome com a extensão Claude in Chrome instalada. Depois, faça a configuração inicial em **Administração → Operador do PC**. Para desligar, rode o instalador de novo e responda **não**.
+4. **Operador do PC (opcional):** o instalador pergunta se quer habilitar o [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), um agente que usa este PC com a sua conta, só quando o Dono aprova, por pouco tempo e com aviso na tela. Se quiser, responda **sim** e escolha o seu usuário do Windows. Antes, deixe o Controle de Conta de Usuário (UAC) ligado, com "Sempre notificar" ou o nível padrão, e o Chrome com a extensão do Playwright MCP instalada. Depois, faça a configuração inicial em **Administração → Operador do PC**. Para desligar, rode o instalador de novo e responda **não**.
 
 ## O que aparece no fim
 

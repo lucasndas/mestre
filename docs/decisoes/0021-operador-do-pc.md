@@ -1,10 +1,10 @@
 # ADR 0021: Operador do PC, a única exceção à conta do usuário
 
-> **Assunto:** por que existe uma base especial que roda, por tempo curto e com aprovação do Dono, um agente com a conta do usuário numa máquina Windows, e como o risco é contido · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** por que existe uma base especial que roda, por tempo curto e com aprovação do Dono, um agente com a conta do usuário numa máquina Windows, e como o risco é contido · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Status
 
-Aceita, 2026-10-12. Abre uma exceção ao princípio do [ADR 0020](0020-linux-e-windows-em-qualquer-papel.md) "nenhum processo do Mestre usa a conta do usuário". **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
+Aceita, 2026-10-12. Abre uma exceção ao princípio do [ADR 0020](0020-linux-e-windows-em-qualquer-papel.md) "nenhum processo do Mestre usa a conta do usuário". **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda. **Revista em 2026-10-18** pelo [ADR 0026](0026-mcp-por-classe.md): os MCPs do Operador vêm do catálogo pelo gateway, como os de toda classe, e o `--chrome` sai; o navegador do usuário vem de um servidor de controle do catálogo.
 
 ## Contexto
 
@@ -35,7 +35,7 @@ Opção 3, o **Operador do PC**. O comportamento detalhado está em [bases e fic
 - **Motivos típicos de ativação:** login em site que o motor não conclui sozinho: código de segundo fator, aprovação no celular e captcha de imagem o motor resolve com o usuário pelo Telegram; captcha interativo ou falha geral viram `login_requires_human`, e o Grão-Mestre propõe o Operador, que entra pelo Chrome do usuário já logado ([cofre](../plataforma/cofre.md#segundo-fator-e-captcha)); trabalho em programa com janela ou no Chrome do usuário.
 - **Enquanto ativo:** aviso fixo com contagem regressiva e botão **Encerrar agora** no Telegram e no painel, faixa "Mestre operando — até HH:MM" com botão **Parar** na área de trabalho, `/operador encerrar`, e `/travar` derruba na hora. No fim do prazo o motor interrompe, espera 60 s e encerra a árvore de processos.
 - **Auditoria reforçada:** ações completas pelos hooks e capturas de tela a cada 30 s e a cada ação de controle do computador, cifradas na Cidadela, vistas só pelo Dono, guardadas 30 dias ([persistência](../arquitetura/persistencia.md#operador-do-pc)).
-- **Fora da base Operador, nunca:** MCPs de controle do computador e do navegador do usuário são negados por regra fixa em qualquer outra base, por nome e qualquer que seja o transporte (stdio, HTTP/SSE, servidor remoto); o motor recusa configurá-los em outros perfis e fichas; `--chrome` só é aceito na base Operador ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
+- **Fora da base Operador, nunca:** servidores MCP de controle do computador e do navegador do usuário só servem à base Operador: o motor os julga pelo pacote ou endereço e pela base, qualquer que seja o nome ou o transporte; só o Dono os cadastra no catálogo, e eles chegam pelo gateway, como os de toda classe ([MCP por classe](../classes/mcp-por-classe.md)); `--chrome` é recusado em toda base ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
 - **Cofre e pastas do Mestre:** com UAC ligado o processo roda com token filtrado; `%ProgramData%\Mestre` não dá acesso à conta do usuário e a chave do cofre só a `NT SERVICE\MestreCore`. Contra o Operador clicar "Sim" num UAC, a área de trabalho segura (UIPI bloqueia cliques sintéticos), exigida pelo [checklist](../plataforma/checklist.md); comandos de elevação são negados por regra fixa ([segurança](../arquitetura/seguranca.md#operador-do-pc)).
 
 ## Consequências
@@ -51,6 +51,7 @@ Opção 3, o **Operador do PC**. O comportamento detalhado está em [bases e fic
 
 ## Fontes
 
-- Claude Code com Chrome (`--chrome`): https://code.claude.com/docs/en/chrome
+- Claude Code com Chrome (`--chrome`, substituído na revisão de 2026-10-18): https://code.claude.com/docs/en/chrome
+- Playwright MCP, modo `--extension` (Chrome do usuário já logado): https://github.com/microsoft/playwright-mcp
 - Controle de Conta de Usuário (área de trabalho segura, `PromptOnSecureDesktop`, `ConsentPromptBehaviorAdmin`): https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/settings-and-configuration
 - UIPI (isolamento de privilégio da interface): https://learn.microsoft.com/en-us/windows/security/application-security/application-control/user-account-control/how-it-works
