@@ -401,3 +401,48 @@ func TestApprovingForATimeMakesARuleOfTheExactActionAndTheGrandMasterMakesTheMed
 		t.Errorf("rules = %+v", rs)
 	}
 }
+
+// CA-RTM-09
+func TestApprovingForATimeIsRefusedForARequestTheEngineDoesNotAnalyseWholeAndForAChainedCommand(t *testing.T) {
+	t.Parallel()
+	w := newRTM(t)
+	dev1, dev2 := w.recruit("Dev1"), w.recruit("Dev2")
+
+	// a part with no group is the Grand Master's; a chained command whose last part
+	// runs a script of the worktree is a medio the table master decides
+	opaque, chained := w.shell(dev1, "alias ll=ls"), w.shell(dev1, "make build && ./run.sh")
+	if r := w.request(opaque); r.Level.Kind != chain.LevelGrandMaster || !slices.Contains(r.Risk.Groups, classes.GroupNone) {
+		t.Fatalf("alias ll=ls is %s at %+v with groups %v, want a medio with no group at the Grand Master", r.Risk.Risk, r.Level, r.Risk.Groups)
+	}
+	if r := w.request(chained); r.Level.Kind != chain.LevelMesa || r.Risk.Risk != classes.RiskMedium {
+		t.Fatalf("the chained command is %s at %+v, want a medio at the table master", r.Risk.Risk, r.Level)
+	}
+	for _, c := range []struct {
+		id int64
+		by characters.Character
+	}{{opaque, w.gm}, {chained, w.master}} {
+		for _, d := range []chain.Decision{
+			{Answer: chain.AnswerApproveFor, For: time.Hour},
+			{Answer: chain.AnswerApproveFor, UntilMissionEnd: true},
+		} {
+			d.Request, d.By, d.Reason = c.id, c.by.ID, "por um tempo"
+			ref := w.refusal(d)
+			if ref.Code != chain.CodeBadAnswer || ref.Climbed {
+				t.Errorf("#%d for a time %+v = %+v, want bad_answer and the request kept at its level", c.id, d, ref)
+			}
+			if r := w.request(c.id); r.State != chain.Open || r.Level.Agent != c.by.ID {
+				t.Errorf("#%d moved to %s at %+v", c.id, r.State, r.Level)
+			}
+		}
+	}
+	if n := len(w.rules()); n != 0 {
+		t.Errorf("%d rules were made", n)
+	}
+	// the one-time exception is the way, and it frees nothing for the others
+	if out := w.decide(w.master, chained, chain.AnswerApprove, "só desta vez"); out.Applied != "exception" {
+		t.Errorf("approve now = %+v, want an exception", out)
+	}
+	if d := w.engine(dev2, "make build && ./run.sh"); d.Verdict != classes.Ask {
+		t.Errorf("the same chain by another dev = %+v, want ask", d)
+	}
+}

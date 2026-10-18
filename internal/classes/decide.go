@@ -347,10 +347,13 @@ func (e *evaluator) tableRule(t *providers.Tool, act Action, res result) (Decisi
 
 // tableRuleCovers says whether a table rule covers the call: the exact action
 // it was made for, or a command (a tool) its pattern matches, in both cases only
-// if the classification of the call fits the risk of the rule. A command with a
-// shell operator, a substitution or a redirection is never covered by a pattern.
+// if the classification of the call fits the risk of the rule and the call has
+// nothing TableRuleBlocker names.
 func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
 	if !own.Risk.valid() || own.Risk == RiskFixed || own.Risk.rank() > d.Risk.rank() {
+		return false
+	}
+	if TableRuleBlocker(act, own) != "" {
 		return false
 	}
 	if d.Action != nil {
@@ -360,22 +363,33 @@ func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
 	if d.Effect.Kind != EffectPermission || g == nil {
 		return false
 	}
-	// A pattern never frees a part the engine does not analyse (an origin with
-	// no group: an unclosed quote, a brace list, a .NET call), whoever made it.
-	if slices.Contains(own.Groups, GroupNone) {
-		return false
-	}
 	list := g.Tools
 	if d.ToolKind == providers.KindShell {
 		list = g.Commands
-		if strings.ContainsAny(act.Command, ";&|`<>\n\r(){}") || strings.Contains(act.Command, "$(") {
-			return false
-		}
 	}
 	if len(list) != 1 {
 		return false
 	}
 	return PatternCovers(ApprovablePattern{Pattern: list[0], Kind: d.ToolKind, Risk: RiskResult{Risk: d.Risk}}, act, own)
+}
+
+// TableRuleBlocker says why no temporary table rule frees a call, "" when one
+// may. It holds for the rule of the exact action as for the rule of a pattern,
+// whoever made it, the Grão-Mestre included
+// (docs/orquestracao/regras-temporarias-de-mesa.md#como-o-motor-decide-o-que-o-texto-deixa-em-aberto):
+// the same text of a command does another thing at each use when the engine does
+// not read all of it, so a rule never frees a part with no group (an unclosed
+// quote, a brace list, a .NET call, the reading of the shell) nor a shell command
+// that chains, pipes, redirects or substitutes, or breaks the line. The chain
+// asks it again when it makes the rule of an exact action.
+func TableRuleBlocker(act Action, own RiskResult) string {
+	switch {
+	case slices.Contains(own.Groups, GroupNone):
+		return "the engine does not analyse a part of the call"
+	case act.Kind == providers.KindShell && (strings.ContainsAny(act.Command, ";&|`<>\n\r(){}") || strings.Contains(act.Command, "$(")):
+		return "the command chains, pipes, redirects or substitutes other commands"
+	}
+	return ""
 }
 
 // action is the tool call as an exception binds it.

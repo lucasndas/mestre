@@ -1,6 +1,6 @@
 # Cadeia de aprovação
 
-> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, as condições da mesa para o `medio`, o Grão-Mestre como supervisor, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, as condições da mesa para o `medio`, o Grão-Mestre como supervisor, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -79,7 +79,7 @@ O motor monta o pedido e o entrega ao agente do nível como item `approval` da [
 - quem pediu, a classe, a mesa e a máquina;
 - o risco, com a linha da classificação que o deu;
 - a tarefa original de quem pediu (o texto da etapa ou do pedido que ele recebeu, sem reescrever);
-- as respostas que este nível pode dar.
+- as respostas que este nível pode dar, pelos nomes da [CLI](../cli/grao-mestre.md#mestre-approval) (no M5, `mestre approval decide <id> <resposta> --reason "<motivo>"`) e com as opções de cada uma; as pessoas veem os botões, sem comando.
 
 A justificativa escrita pelo agente que pediu vem por último, num bloco marcado **"texto do agente, não verificado"**; nada dentro dela muda o resto do item (um cabeçalho `[Mestre · …]` imitado ali é só texto).
 
@@ -95,7 +95,7 @@ Conferidas pelo motor em toda decisão de agente; uma decisão que fura uma dela
 
 ### Respostas
 
-Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou pessoa, nível, PIN). Os agentes respondem pelo motor (no M5, por `mestre approval decide`, [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)); as pessoas, pelos botões do [fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários).
+Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou pessoa, nível, PIN). Os agentes respondem pelo motor (no M5, por `mestre approval decide`, com os nomes de resposta da [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)); as pessoas, pelos botões do [fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários).
 
 | Resposta | Efeito | Agente | Pessoa |
 |---|---|---|---|
@@ -111,7 +111,7 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 | Subir agora | leva o pedido ao nível seguinte (o `approval ask` do Grão-Mestre) | sim | — |
 
 - O padrão e a regra temporária precisam caber no teto do nível de quem aprova, com o risco do padrão, e só cobrem os comandos cuja classificação própria cabe nele ([o que um padrão cobre](../classes/classificacao-de-risco.md#padrões-aprováveis)); no `medio` do Mestre da mesa, também os grupos e as condições da mesa, conferidos de novo a cada uso ([regras temporárias](regras-temporarias-de-mesa.md#lugar-na-precedência)).
-- "Perguntar de volta" vira um item `answer` na caixa de entrada de quem pediu; a resposta dele (texto livre, também marcada como não verificada) volta ao mesmo nível. O prazo final do pedido nas pessoas continua correndo; sem resposta de quem pediu, o pedido sobe quando passa o prazo das pessoas.
+- "Perguntar de volta" vira um item `answer` na caixa de entrada de quem pediu, que responde com `mestre approval reply <id> "<texto>"` (M5, só ele); a resposta (texto livre, marcada como não verificada) volta ao mesmo nível. O prazo final do pedido nas pessoas continua correndo; sem resposta de quem pediu, o pedido sobe quando passa o prazo das pessoas.
 - Um agente aprova por um tempo ou por um padrão como [regra temporária](regras-temporarias-de-mesa.md): o superior agente comum, só `baixo`; o Mestre da mesa e o Grão-Mestre, até `medio`; "aprovar sempre" e "negar sempre" de um agente aprovam ou negam agora e deixam a sugestão; "delegar" recebe `human_required`.
 
 ## Regras e erros
@@ -140,6 +140,7 @@ Catálogo único; cada canal mostra só as que quem responde pode dar (agente ou
 - **CA-CADEIA-14** · *rápida* — **Dado** a política padrão e os pedidos `medio` `rm -r build`, `docker compose up`, `pip install x`, `npx create-x` e `python -c "print(1)"` de personagens da mesa, **quando** nascem, **então** todos chegam ao Mestre da mesa e uma aprovação dele é aceita em cada um; **dado** `npm install -g x`, `docker compose -f ../fora/c.yml up` e `curl https://exemplo.io` (domínio não listado), **então** nascem no Grão-Mestre com o grupo ou a condição que falhou (`instalacao_e_sistema`, `fora_do_worktree`, `rede`), e um `approval decide` do Mestre da mesa neles recebe `not_at_level`.
 - **CA-CADEIA-15** · *rápida* — **Dado** o Mestre da mesa reiniciando e o relógio falso, **quando** nasce um pedido `baixo` de um personagem da mesa, **então** ele nasce no Grão-Mestre na hora e um pedido aberto no Mestre da mesa sobe com o mesmo id; **quando** o Mestre da mesa volta a `idle`, **então** o pedido seguinte nasce nele.
 - **CA-CADEIA-16** · *rápida* — **Dado** `cadeia.mesa_decide: [rede, apagar, instalacao_e_sistema]`, **quando** o arquivo é carregado e chegam `docker compose up` e `npm install -g x`, **então** o primeiro nasce no Grão-Mestre (grupo fora da lista) e o segundo no Mestre da mesa; **dado** a lista `[]`, **então** o Mestre da mesa só recebe `baixo`; **dado** uma lista com `alto`, `fixo` ou `git_push`, **quando** o arquivo é carregado, **então** é inválido com o item citado, vale a versão anterior e o Dono recebe alerta.
+- **CA-CADEIA-17** · *rápida* — **Dado** um pedido `baixo` no Mestre da mesa e um `alto` nas pessoas, **quando** os textos são montados, **então** o item do agente traz `mestre approval decide <id> <resposta> --reason "<motivo>"` e só as respostas da [CLI](../cli/grao-mestre.md#mestre-approval), com as opções de cada uma; a recusa de uma resposta sem a opção cita a opção da CLI; a pergunta de "perguntar de volta" manda quem pediu usar `mestre approval reply <id> "<texto>"`; e a pergunta às pessoas lista os botões, sem mandar a comando algum.
 
 ## Depende de
 
