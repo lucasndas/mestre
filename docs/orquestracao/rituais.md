@@ -1,6 +1,6 @@
 # Rituais
 
-> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -21,7 +21,7 @@ Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../c
 
 | Campo | Significado |
 |---|---|
-| `name` | único no escopo |
+| `name` | único no escopo; uma linha de 1 a 64 caracteres imprimíveis, ao criar e a cada edição (é o remetente do item `ritual`: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)) |
 | alvo | um personagem existente (pelo nome) ou uma missão salva (o disparo é um `quest run`); ritual não cria personagem |
 | conteúdo | `prompt` (texto entregue a um agente como item `ritual`, com cabeçalho) ou `command` (linha digitada crua num terminal simples, criado por `spawn`, seguida de Enter) |
 | agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda)) |
@@ -98,6 +98,7 @@ stateDiagram-v2
 - **CA-RIT-04** · *rápida* — **Dado** `--every 1h` com horários em :20 e motor fora das 10:10 às 10:40, **quando** volta, **então** o disparo das 10:20 ocorre uma vez (atraso de 20 min, menor que 30); **dado** motor fora das 10:10 às 13:00, **quando** volta, **então** nenhum disparo perdido ocorre, todos ficam `skipped` e o dono é avisado.
 - **CA-RIT-05** · *rápida* — **Dado** um disparo ainda na fila, **quando** chega o próximo horário, **então** o novo é `skipped`.
 - **CA-RIT-06** · *pesada* — **Dado** o painel, **quando** um usuário cria um ritual que dispara uma missão, **então** a missão roda no horário e o histórico aparece no painel (MVP-11).
+- **CA-RIT-07** · *rápida* — **Dado** um nome de ritual com quebra de linha (com um cabeçalho `[Mestre · …]` falso depois), caractere de controle ou invisível, ou mais de 64 caracteres, **quando** o ritual é criado ou renomeado, **então** é recusado como pedido inválido e o ritual continua como estava.
 
 ## Depende de
 

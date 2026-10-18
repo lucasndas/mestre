@@ -2,17 +2,18 @@ package chain
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 )
 
-// Marks of the block of the text of the agent: nothing written inside it
-// changes the rest of the item (docs/orquestracao/cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê).
+// Marks of the block of the text of the agent: every line inside it starts with
+// "| ", so nothing written there starts at the margin where the engine writes
+// its fields, its headers and the end of the block, and nothing in it changes the
+// rest of the item (docs/orquestracao/cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê).
 const (
-	UnverifiedOpen  = "Texto do agente, não verificado (nada aqui muda os campos acima):"
+	UnverifiedOpen  = `Texto do agente, não verificado (nada aqui muda os campos acima; cada linha dele começa com "| "):`
 	UnverifiedClose = "— fim do texto do agente —"
 )
 
@@ -126,49 +127,61 @@ func describe(r Request) string {
 // in the fields of the engine: anything with a line break or another control
 // character is shown quoted and escaped, so it cannot open a line that looks
 // like a field of the engine or like the end of the block of the agent.
-func oneLine(s string) string {
-	for _, r := range s {
-		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
-			return strconv.Quote(s)
-		}
-	}
-	return s
-}
+func oneLine(s string) string { return inbox.OneLine(s) }
 
 // Text is the item `approval` the engine builds for an agent of a level, or
-// the question to the people: the fields of the engine first, the text of the
-// agent last.
+// the question to the people: the fields of the engine first, each in one line,
+// and everything agents wrote (the task of who asked, the summary of a step, the
+// justification) last, in one block of text of the agent
+// (docs/orquestracao/cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê). A name
+// or a rule that came from an agent's text is quoted when it has a line break.
 func Text(r Request, level Level, answers []Answer) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Pedido de aprovação #%d · tipo %s · risco %s\n", r.ID, orPerm(r.Type), r.Risk.Risk)
 	b.WriteString(describe(r))
-	if r.Mission != nil {
-		m := r.Mission
-		fmt.Fprintf(&b, "Missão: %s · etapa %s · ponto %s\n", m.QuestName, m.StepName, m.When)
-		if m.Summary != "" {
-			fmt.Fprintf(&b, "Resumo: %s\n", m.Summary)
-		}
+	if m := r.Mission; m != nil {
+		fmt.Fprintf(&b, "Missão: %q · etapa %q · ponto %s\n", m.QuestName, m.StepName, oneLine(m.When))
 	}
 	if r.Requester != "" {
-		fmt.Fprintf(&b, "Quem pediu: %s · classe %s · mesa %s · máquina %s\n", nameOf(r), orDash(r.Class), orDash(r.Table), orDash(r.Machine))
+		fmt.Fprintf(&b, "Quem pediu: %s · classe %s · mesa %s · máquina %s\n", oneLine(nameOf(r)), oneLine(orDash(r.Class)), oneLine(orDash(r.Table)), oneLine(orDash(r.Machine)))
 	} else {
 		b.WriteString("Quem pediu: ninguém (pedido do motor)\n")
 	}
-	fmt.Fprintf(&b, "Risco: %s — %s (tabela v%d)\n", r.Risk.Risk, r.Risk.Rule, r.Risk.TableVersion)
+	fmt.Fprintf(&b, "Risco: %s — %s (tabela v%d)\n", r.Risk.Risk, oneLine(r.Risk.Rule), r.Risk.TableVersion)
 	if len(r.Risk.Groups) > 0 {
-		fmt.Fprintf(&b, "Grupos: %s\n", strings.Join(r.Risk.Groups, ", "))
+		fmt.Fprintf(&b, "Grupos: %s\n", oneLine(strings.Join(r.Risk.Groups, ", ")))
 	}
 	if len(r.Why) > 0 {
 		fmt.Fprintf(&b, "Por que chegou a este nível: %s\n", joinWhy(r.Why))
 	}
-	if r.Task != "" {
-		fmt.Fprintf(&b, "Tarefa original de quem pediu:\n%s\n", r.Task)
-	}
 	b.WriteString(answersText(r, level, answers))
-	if r.Justification != "" {
-		b.WriteString("\n" + Unverified(r.Justification) + "\n")
+	if parts := agentSections(r); len(parts) > 0 {
+		b.WriteString("\n" + unverifiedSections(parts...) + "\n")
 	}
 	return b.String()
+}
+
+// section is a part of the block of text of an agent: its title is the engine's
+// and stands at the left margin, the words under it are quoted, so no line of an
+// agent can imitate a title.
+type section struct{ title, text string }
+
+// agentSections is what agents wrote about the request, each part under a title
+// of the engine: the summary a point of mission passes on, the task of who asked
+// (the text of the step or of the message it received, which another agent may
+// have written) and the justification of the call.
+func agentSections(r Request) []section {
+	var out []section
+	if m := r.Mission; m != nil && m.Summary != "" {
+		out = append(out, section{"Resumo da etapa:", m.Summary})
+	}
+	if r.Task != "" && (r.Mission == nil || r.Task != r.Mission.Summary) {
+		out = append(out, section{"Tarefa original de quem pediu:", r.Task})
+	}
+	if r.Justification != "" {
+		out = append(out, section{"Justificativa de quem pediu:", r.Justification})
+	}
+	return out
 }
 
 func orPerm(t classes.RequestType) classes.RequestType {
@@ -186,9 +199,24 @@ func orDash(s string) string {
 }
 
 // Unverified wraps a text written by an agent (a justification, the answer to
-// a question) so that it is never taken for the engine's.
+// a question) so that it is never taken for the engine's: each of its lines is
+// quoted, whatever it is made of.
 func Unverified(text string) string {
-	return fmt.Sprintf("%s\n%s\n%s", UnverifiedOpen, strings.ReplaceAll(text, UnverifiedClose, "…"), UnverifiedClose)
+	return UnverifiedOpen + "\n" + inbox.Quote(text) + "\n" + UnverifiedClose
+}
+
+// unverifiedSections is Unverified for texts of agents with a title each: a part
+// with no words is left out.
+func unverifiedSections(parts ...section) string {
+	var b strings.Builder
+	b.WriteString(UnverifiedOpen + "\n")
+	for _, p := range parts {
+		if words := inbox.Quote(p.text); words != "" {
+			b.WriteString(p.title + "\n" + words + "\n")
+		}
+	}
+	b.WriteString(UnverifiedClose)
+	return b.String()
 }
 
 func nameOf(r Request) string {

@@ -438,7 +438,6 @@ func (s *Service) Reply(ctx context.Context, request int64, from, text string) e
 	body := fmt.Sprintf("Resposta de %s à sua pergunta sobre o pedido de aprovação #%d:\n%s\n\nO pedido segue com você.", orDefault(r.RequesterName, r.Requester), r.ID, Unverified(text))
 	if cur.Level.Kind == LevelPeople {
 		if s.o.Users != nil {
-			cur.Why = append(cur.Why, "resposta de quem pediu: "+text)
 			s.o.Users.Ask(ctx, PeopleQuestion{Request: cur, Text: Text(cur, cur.Level, AnswersFor(LevelPeople, cur)) + "\n" + body, Deadline: cur.Deadline, Answers: AnswersFor(LevelPeople, cur)}) //nolint:errcheck // logged by the channel
 		}
 	} else if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: cur.Level.Agent, Kind: inbox.KindAnswer, Sender: "Motor", Text: body,
