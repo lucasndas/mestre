@@ -316,7 +316,11 @@ func (r *results) handle(_ context.Context, m *protocol.Message) (*protocol.Repl
 		return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
 	}
 	if resp.Partial {
-		return nil, nil // the partials of a long command arrive with the commands of milestone 4
+		// The Tower ignores the partials of a long command and forwards only
+		// the final answer; passing them on comes with the Tower side of the
+		// orchestration ("M5, antes da etapa 1" in
+		// docs/desenvolvimento/ordem-de-implementacao.md).
+		return nil, nil
 	}
 	r.mu.Lock()
 	ch := r.waiting[m.Env.ReplyTo]

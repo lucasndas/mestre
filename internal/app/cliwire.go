@@ -13,8 +13,10 @@ import (
 
 // rulesProfiles is the profile of a character as this machine knows it: the
 // cli.allow of the effective rules it keeps. The level (Master of the table,
-// Grand Master) arrives with the registry of characters (milestone 4, which
-// sets Deps.Profiles); until then everybody is an ordinary character.
+// Grand Master) arrives with the registry of characters, which the engine that
+// hosts the orchestration sets in Deps.Profiles ("M5, antes da etapa 1" in
+// docs/desenvolvimento/ordem-de-implementacao.md); until then everybody is an
+// ordinary character.
 type rulesProfiles struct{ src classes.RulesSource }
 
 func (p rulesProfiles) Profile(ctx context.Context, agentID string) cli.Profile {

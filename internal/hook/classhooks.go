@@ -37,8 +37,10 @@ type ClassHookSource struct {
 	// EventSeconds is the same limit for one event, where the provider gives
 	// some events less than the rest (Codex gives SessionEnd and Interrupt
 	// 3 s, not 30); a result of zero or less falls back to ProviderSeconds.
-	// The adapters do not expose their per-event limits yet: the wiring of
-	// M4 gives them here, from the same table that writes the hook files.
+	// The adapters do not expose their per-event limits yet: the engine that
+	// hosts the orchestration ("M5, antes da etapa 1" in docs/desenvolvimento/
+	// ordem-de-implementacao.md) gives them here, from the same table that
+	// writes the hook files.
 	EventSeconds func(providers.ID, providers.EventKind) int
 }
 

@@ -24,8 +24,10 @@ func hdr(title string) string {
 type tree struct {
 	fs fstest.MapFS
 	// audit is the date column of the table of milestones, by milestone;
+	// plus is the date of the row M4+ between M4 and M5 (nil: no such row);
 	// extra is text added after that table (the lists of criteria).
 	audit map[int]string
+	plus  *string
 	extra string
 }
 
@@ -93,12 +95,16 @@ func (t *tree) withOrder(rows ...string) *tree {
 	return t.add(orderPath, body)
 }
 
-// milestones is the table of milestones M0 to M7 with the audit column.
+// milestones is the table of milestones M0 to M7 (and the row M4+ when the
+// tree has one) with the audit column.
 func (t *tree) milestones() string {
 	var b strings.Builder
 	b.WriteString("## Marcos\n\n| Marco | Nome | Auditoria | O que fica pronto ao final |\n|---|---|---|---|\n")
 	for n := 0; n <= 7; n++ {
 		fmt.Fprintf(&b, "| M%d | nome | %s | x |\n", n, t.audit[n])
+		if n == 4 && t.plus != nil {
+			fmt.Fprintf(&b, "| M4+ | nome | %s | x |\n", *t.plus)
+		}
 	}
 	return b.String() + "\n" + t.extra + "\n"
 }
