@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"golang.org/x/sys/windows"
@@ -66,14 +67,39 @@ type SelfAccount struct {
 
 var _ Account = SelfAccount{}
 
-// inService says whether this process is a service. When the system cannot say,
-// it is taken as one: the account is refused.
+// inService says whether this process is a service or runs as an identity that
+// only a service has. svc.IsWindowsService looks at the parent of the process
+// (the service manager, in session 0), which a LocalSystem process that
+// something else started (psexec -s, a task as SYSTEM, a wrapper of services)
+// does not have, and the agents would run as SYSTEM all the same: the identity of
+// the token counts too. When the system cannot say, it is taken as one: the
+// account is refused.
 func (a SelfAccount) inService() bool {
+	is := false
 	if a.service != nil {
-		return a.service()
+		is = a.service()
+	} else {
+		var err error
+		if is, err = svc.IsWindowsService(); err != nil {
+			return true
+		}
 	}
-	is, err := svc.IsWindowsService()
-	return err != nil || is
+	if is {
+		return true
+	}
+	sid, err := currentUserSID()
+	return err != nil || isServiceSID(sid.String())
+}
+
+// isServiceSID says whether the SID (in its text form) is of an identity that
+// only a service runs as: LocalSystem, LocalService, NetworkService or a service
+// SID (NT SERVICE\...).
+func isServiceSID(sid string) bool {
+	switch sid {
+	case "S-1-5-18", "S-1-5-19", "S-1-5-20":
+		return true
+	}
+	return strings.HasPrefix(sid, "S-1-5-80-")
 }
 
 // selfInService says whether a is the SelfAccount, by value or by pointer, of a
