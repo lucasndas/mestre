@@ -44,3 +44,10 @@ Aceita, 2026-10-18, por decisão do Dono. **Revista no mesmo dia:** a entrega pa
   - A rede de um servidor local não é filtrada pela classe: ligar é aprovar o que o servidor acessa, e por isso os `domains` dele precisam caber na rede da classe e do teto.
   - O motor fora do ar deixa o personagem sem MCP (falha fechada), e uma chamada que pede aprovação pode passar do limite de tempo do CLI.
   - As regras de `files` não olham os argumentos de uma ferramenta MCP; um servidor local alcança o que o `mestre-agente` alcança.
+
+## Fontes
+
+- Claude Code, MCP (`--mcp-config`, `--strict-mcp-config`): https://code.claude.com/docs/en/mcp
+- Codex, MCP (`mcp_servers`, `-c`): https://developers.openai.com/codex/mcp
+- Antigravity, MCP (`mcp_config.json`): https://antigravity.google/docs/mcp
+- Playwright MCP (argumentos, modo `--extension`): https://github.com/microsoft/playwright-mcp

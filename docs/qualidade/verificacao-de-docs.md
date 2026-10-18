@@ -1,6 +1,6 @@
 # Verificação de docs
 
-> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite, grafo de "Depende de", auditoria dos marcos, cobertura dos critérios pelos testes, comentários de marco velhos e pinos do `go.mod`) na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite, grafo de "Depende de", auditoria dos marcos, cobertura dos critérios pelos testes, comentários de marco velhos e pinos do `go.mod`) na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 ## Objetivo
 

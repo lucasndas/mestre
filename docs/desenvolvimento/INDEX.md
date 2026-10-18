@@ -1,6 +1,6 @@
 # Desenvolvimento
 
-> **Assunto:** índice da área de desenvolvimento · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** índice da área de desenvolvimento · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|

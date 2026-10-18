@@ -1,6 +1,6 @@
 # Receitas de missão
 
-> **Assunto:** as missões sugeridas por tipo de pedido (bug, funcionalidade nova, ajuste, investigação) e o grimório "Refino de UI" · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** as missões sugeridas por tipo de pedido (bug, funcionalidade nova, ajuste, investigação) e a receita "Refino de UI" · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 Receitas do pacote [sugerido](../classes-sugeridas.md), usadas com `mestre quest create --recipe <nome> [--skip <id>]…` ([receitas e etapa opcional](../classes-sugeridas.md#receitas-e-etapa-opcional)). O `name` de cada uma é o nome da receita. Usam as fichas leves das [classes sugeridas](INDEX.md); o Mestre da mesa troca pela pesada nas etapas difíceis e tira as etapas opcionais que não cabem no pedido (`skip`). Revisor e QA rodam em paralelo depois do Dev, e os dois podem devolver ao Dev; o motor refaz o Dev e volta a pôr na fila o que dependia dele ([missões](../../orquestracao/missoes.md#devolução-com-limite)).
 

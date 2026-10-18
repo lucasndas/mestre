@@ -51,7 +51,7 @@ O PM e o PO não são classes: são o [Grão-Mestre](../orquestracao/grao-mestre
 ### Receitas e etapa opcional
 
 - O Administrador ativa as receitas junto com as classes; uma receita só fica disponível com todas as fichas que ela cita existindo. Ativadas, ficam no banco da Cidadela, por workspace.
-- O Mestre da mesa cria a missão com `mestre quest create "<Missão>" --recipe <nome> [--skip <id>]…` ([coordenação](../cli/coordenacao.md)): o motor parte da receita, tira as etapas de `--skip` e então valida o resultado como qualquer [definição de missão](../orquestracao/missoes.md#definição). Para ajustar mais (outra ficha, instruções), o Mestre da mesa usa a receita como modelo e cria com `--file`.
+- O Mestre da mesa cria a missão com `mestre quest create "<Missão>" --recipe <nome> [--skip <id>]…` ([coordenação](../cli/coordenacao.md); o nome casa sem diferenciar maiúsculas nem acentos, e `funcionalidade` acha `Funcionalidade`): o motor parte da receita, tira as etapas de `--skip` e então valida o resultado como qualquer [definição de missão](../orquestracao/missoes.md#definição). Para ajustar mais (outra ficha, instruções), o Mestre da mesa usa a receita como modelo e cria com `--file`.
 - Uma etapa de receita pode ter `optional: true`; só ela pode ir em `--skip`. Tirada a etapa, um `after` que apontava para ela deixa de contar. A etapa para onde alguma outra devolve (`can_return_to`) não pode ser opcional.
 - Erros: `--skip` de etapa que não é opcional ou não existe, 2 `invalid_quest`; receita inexistente ou com ficha faltando, 4 `not_found`, com as fichas.
 - O Mestre da mesa decide o que tirar pelo tipo e pelo tamanho do pedido: cada passagem de bastão custa cota e contexto.
@@ -81,19 +81,20 @@ O `class check` de qualquer classe, sugerida ou não, avisa quando o `CLASS.md` 
 - **CA-SUG-05** · *rápida* — **Dado** uma classe cuja skill cita `mestre deploy`, que a CLI não tem, **quando** o `class check` roda, **então** mostra o aviso com o arquivo e a linha, e a classe é salva.
 - **CA-SUG-06** · *rápida* — **Dado** uma missão concluída com a etapa `retro` e o Grão-Mestre que roda `mestre class edit "dev" --from <pasta>`, **quando** o motor recebe, **então** nasce uma proposta com o hash e a classe `dev` não muda até um Administrador aprovar.
 - **CA-SUG-07** · *pesada* — **Dado** as sete classes e as receitas ativadas num workspace real, **quando** chega um pedido de bug pelo Telegram (dublê), **então** a missão passa por Investigador, Dev, Revisor e QA (Revisor e QA em paralelo) nos três provedores, cada critério fica com prova e a mesa termina com o PR mesclado (MVP-16).
+- **CA-SUG-08** · *rápida* — **Dado** o pacote sugerido embutido no binário, **quando** o teste o lê, **então** cada classe, com todas as suas skills de apoio, cabe em 64 arquivos e 512 KiB, e cada skill de apoio tem o arquivo de licença.
 
 ## Depende de
 
 - [Classes](classes.md)
 - [Teto do workspace](teto-do-workspace.md)
 - [Bases e fichas](../orquestracao/bases-e-fichas.md)
-- [Grimórios](../orquestracao/grimorios.md)
 - [Missões](../orquestracao/missoes.md)
 - [Mestre da mesa](../orquestracao/mestre-da-mesa.md)
 - [Prova e devolução](../orquestracao/prova-e-devolucao.md)
 - [Criação de Apps](../github/criacao-de-apps.md)
 - [Administração](../painel/administracao.md)
-- [Teste de classe](../provedores/teste-de-classe.md)
+- [Skills de apoio](skills-de-apoio.md)
+- [MCP por classe](mcp-por-classe.md)
 
 ## A confirmar
 
