@@ -62,8 +62,8 @@ O fuso da Guilda (padrão: o do sistema da máquina que criou a Guilda) fica no 
 ### Operador do PC
 
 Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)); comportamento em [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc).
-- **Por máquina habilitada:** usuário do Windows configurado, estado (sem usuário logado, tela bloqueada, pronto, em sessão), duração máxima (padrão 2 h), a configuração inicial guiada (conferência do Chrome e da extensão e o terminal de login do Claude Code no perfil do Operador, aberto com a conta do usuário, sem agente).
-- **Lista de MCPs de controle** do computador e do navegador do usuário, usada pela regra fixa ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)): o padrão e o nome do MCP de controle do computador que o Dono instalou.
+- **Por máquina habilitada:** usuário do Windows configurado, estado (sem usuário logado, tela bloqueada, pronto, em sessão), duração máxima (padrão 2 h), a configuração inicial guiada (conferência do Chrome e da extensão do Playwright MCP e o terminal de login do Claude Code no perfil do Operador, aberto com a conta do usuário, sem agente).
+- **Servidores de controle** do computador e do navegador do usuário no [catálogo MCP](../classes/mcp-por-classe.md): só o Dono os cadastra, e marca `control: true` o que não está na lista de pacotes do binário; a regra fixa usa os dois ([permissões](../classes/permissoes.md#regras-fixas-de-segurança)).
 - **Sessões:** cada sessão de `operator_sessions` com tarefa, quem aprovou, início, fim e motivo, as ações completas da auditoria e as **capturas de tela** numa linha do tempo, decifradas só para o Dono, a cada abertura, com auditoria de quem viu ([persistência](../arquitetura/persistencia.md#operador-do-pc)).
 
 ### Contagem de Apps

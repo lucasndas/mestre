@@ -1,6 +1,6 @@
 # Cofre de segredos
 
-> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -17,6 +17,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 | Token de acesso e de renovação de usuário do GitHub (device flow do App "Grão-Mestre") | `github_user_token` | motor da Cidadela, só com delegação ou aprovação daquele usuário ([aprovação no GitHub](../github/aprovacao-no-github.md)) |
 | Chave de API de provedor, quando a conta usa chave em vez de login | `provider_api_key` | motor da máquina que inicia o personagem daquela conta, pedida à Cidadela no uso ([bases e fichas](../orquestracao/bases-e-fichas.md)) |
 | Credencial de site: endereço da página de login, usuário, senha (ou senha de app, token, chave de API) e, se preciso, os seletores dos campos e a verificação de sucesso; metadados em [credenciais de site](#credenciais-de-site) | `site_credential` | motor da Cidadela, para fazer o login e entregar ao personagem só o estado de sessão ([login em sites](#login-em-sites)) |
+| Chave de servidor MCP remoto, com os domínios a que pode ir nos metadados | `mcp_key` | motor da máquina do personagem, pedida à Cidadela no uso, guardada só na memória e mandada só a esses domínios ([MCP por classe](../classes/mcp-por-classe.md#o-gateway-do-mestre)) |
 | Chave das capturas de tela do Operador do PC (AES-256, gerada quando a primeira máquina habilita o Operador) | `operator_capture_key` | motor da Cidadela, ao gravar e ao mostrar ao Dono as capturas ([persistência](../arquitetura/persistencia.md#operador-do-pc)) |
 | Chave privada da CA da Guilda (só aqui, em nenhum outro lugar) | `ca_key` | motor da Cidadela, ao emitir e renovar certificados e assinar a certidão de época ([segurança](../arquitetura/seguranca.md)) |
 
@@ -24,7 +25,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 
 ### Formato
 
-- Tabela `secrets` no banco da Cidadela ([persistência](../arquitetura/persistencia.md)): `name`, `type`, `ciphertext`, `nonce`, `key_version`, `fingerprint`, os metadados de `site_credential` (`owner_user`, `classes`, `domains`, `kind`, `expires_at`, fora da parte cifrada, para o motor decidir sem decifrar), `created_at`, `updated_at`, `last_used_at`.
+- Tabela `secrets` no banco da Cidadela ([persistência](../arquitetura/persistencia.md)): `name`, `type`, `ciphertext`, `nonce`, `key_version`, `fingerprint`, os metadados de `site_credential` (`owner_user`, `classes`, `domains`, `kind`, `expires_at`, e os `domains` de `mcp_key`, fora da parte cifrada, para o motor decidir sem decifrar), `created_at`, `updated_at`, `last_used_at`.
 - **Valor:** o próprio segredo (token, chave, bloco PEM), menos dois tipos, que são objetos JSON conferidos ao gravar (campo desconhecido é recusado): `site_credential` com `url`, `password` (ou senha de app, token, chave de API) e, opcionais, `user`, `selectors` e `success`; `github_user_token` com `access_token` e, opcional, `refresh_token`.
 - **Criptografia:** AES-256-GCM, com nonce aleatório de 96 bits a cada gravação e dados associados (AAD) = rótulo de domínio `mestre/vault/secret/v1` + `name` + `type` + `key_version`, cada campo com o tamanho na frente. Assim um valor copiado para outra linha não decifra. A chave do GCM e a da impressão são derivadas da chave do cofre por HKDF-SHA256, com rótulos diferentes; a chave do cofre nunca cifra direto.
 - **Impressão (`fingerprint`):** HMAC-SHA256 do valor com a chave derivada, guardando e mostrando 8 caracteres hexadecimais. Serve para comparar sem revelar o valor; muda quando a chave do cofre é trocada.
@@ -72,7 +73,7 @@ Um personagem nunca usa as sessões de navegador do usuário nem vê a senha de 
 1. Ao iniciar ou retomar o personagem e a cada tarefa nova entregue a ele, o motor da Cidadela lê a credencial (com auditoria e finalidade) e a envia ao **motor da máquina do personagem**, só para aquele login, pela WSS (mensagem `agent.site_login`, [mensagens](../conectividade/mensagens.md)). A máquina a guarda só em memória, registrada no mascarador, e nunca em disco.
 2. O motor da máquina abre um navegador headless que ele controla, com a conta do motor (`mestre` ou `NT SERVICE\Mestre`; nunca `mestre-agente`) e um perfil temporário na pasta de dados da máquina: **o mesmo motor de navegador e a mesma versão** do MCP de navegador do personagem (ex.: o Chromium do Playwright MCP daquele perfil), pelo protocolo CDP.
 3. Faz o login na página da credencial e confere o sucesso. Exporta os cookies e o armazenamento local **só dos domínios da credencial**, no formato de estado de sessão do Playwright (`storageState`), fecha o navegador, apaga o perfil temporário e descarta a credencial.
-4. Grava o estado em `sessao-sites.json` na `MESTRE_TMP` do personagem ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)); o adaptador passa o caminho ao MCP de navegador dele (`--storage-state`). O arquivo é apagado quando o personagem termina a tarefa (`done`) ou é encerrado.
+4. Grava o estado em `sessao-sites.json` na `MESTRE_TMP` do personagem ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)); o [gateway](../classes/mcp-por-classe.md#o-gateway-do-mestre) passa o caminho ao MCP de navegador dele (`--storage-state`; até o M7, com o gateway, os testes usam um MCP de navegador falso). O arquivo é apagado quando o personagem termina a tarefa (`done`) ou é encerrado.
 
 - A senha nunca chega ao personagem: nem no ambiente, nem em argumentos, nem em arquivo, nem no terminal. Na máquina, existe só na memória do motor durante o login.
 - O estado de sessão dá acesso ao site enquanto a sessão valer; por isso vale só para os domínios da credencial e some no fim da tarefa.
