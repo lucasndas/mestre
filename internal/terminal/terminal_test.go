@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
+	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -570,4 +573,76 @@ func TestStartRefusesASecondAgentAndReportsFailures(t *testing.T) {
 	if !errors.As(err, &re) || re.Code != ptywire.CodeStartFailed || !strings.Contains(re.Text, "no such file") {
 		t.Fatalf("failing Start = %v", err)
 	}
+}
+
+// CA-TERM-14
+// The length that a replay announces comes from the mestre-pty, which the
+// agent of the terminal can take over: the engine never allocates more than the
+// protocol allows (ptywire.MaxReplay) for it. A mestre-pty that announces more
+// is a broken connection, and the call fails with a clear error instead of
+// bringing the engine down (a make with that capacity panics in the goroutine
+// that reads the connection).
+func TestAReplayThatAnnouncesMoreThanTheProtocolAllowsFailsTheConnectionAndAllocatesNothing(t *testing.T) {
+	t.Parallel()
+	secret := bytes.Repeat([]byte{7}, ptywire.SecretSize)
+	// peer is a mestre-pty that answers a replay with the length n and, if
+	// frames, with that many bytes in frames of 1 MiB.
+	peer := func(t *testing.T, n int, frames bool) *terminal.Client {
+		t.Helper()
+		server, client := net.Pipe()
+		go func() {
+			defer server.Close()
+			conn := ptywire.NewConn(server)
+			if _, err := ptywire.ServerHandshake(conn, secret, ptywire.Info{Proto: ptywire.ProtoVersion, Version: "1.0.0", PID: 1}); err != nil {
+				return
+			}
+			for {
+				it, err := conn.Read()
+				if err != nil {
+					return
+				}
+				if it.Msg == nil || it.Msg.T != ptywire.TypeReplay {
+					continue
+				}
+				if conn.WriteMsg(&ptywire.Msg{T: ptywire.TypeReplay, ID: it.Msg.ID, Len: n}) != nil || !frames {
+					continue
+				}
+				for sent := 0; sent < n; sent += ptywire.MaxFrame {
+					chunk := bytes.Repeat([]byte{'x'}, min(ptywire.MaxFrame, n-sent))
+					if conn.WriteFrame(&ptywire.Frame{Stream: it.Msg.ID, Offset: uint64(sent), Data: chunk}) != nil {
+						return
+					}
+				}
+			}
+		}()
+		c, err := terminal.NewClient(client, secret, clock.NewFake(time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = c.Close() })
+		return c
+	}
+
+	for name, n := range map[string]int{
+		"one byte over the maximum": ptywire.MaxReplay + 1,
+		"a terabyte":                1 << 40,
+		"the largest int":           math.MaxInt,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := peer(t, n, false).Replay(t.Context(), 0)
+			if !errors.Is(err, terminal.ErrClosed) || !strings.Contains(err.Error(), "replay") || !strings.Contains(err.Error(), strconv.Itoa(n)) {
+				t.Fatalf("Replay = %v; want the connection closed saying that the replay is too large (%d)", err, n)
+			}
+		})
+	}
+
+	// the maximum itself is a replay like any other
+	t.Run("exactly the maximum", func(t *testing.T) {
+		t.Parallel()
+		got, err := peer(t, ptywire.MaxReplay, true).Replay(t.Context(), 0)
+		if err != nil || len(got.Data) != ptywire.MaxReplay {
+			t.Fatalf("Replay of the maximum = %d bytes, %v", len(got.Data), err)
+		}
+	})
 }

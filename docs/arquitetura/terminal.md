@@ -1,6 +1,6 @@
 # Terminal
 
-> **Assunto:** terminal de cada agente na máquina onde roda: o processo `mestre-pty` (PTY/ConPTY, emulador, buffer), socket e aperto de mão com o motor, volta do motor sem parar os agentes, tamanho fixo, log, digitação e encerramento da árvore de processos · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** terminal de cada agente na máquina onde roda: o processo `mestre-pty` (PTY/ConPTY, emulador, buffer), socket e aperto de mão com o motor, volta do motor sem parar os agentes, tamanho fixo, log, digitação e encerramento da árvore de processos · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -92,6 +92,7 @@ Enquanto o motor está fora, o agente continua, a saída vai para o buffer, nada
 - Saída sem ninguém olhando continua indo para o buffer, o emulador e o log; nada depende de o painel estar aberto.
 - Falha ao criar o `mestre-pty`, o PTY ou o ConPTY: `error` na resposta ao `terminal.open`, com o motivo, e alerta no [checklist](../plataforma/checklist.md). Com cgroup delegado, falha ao criar o cgroup do terminal também: o terminal nunca nasce fora dele.
 - Pedido de tamanho vindo do navegador ou do `attach` é ignorado (não existe mensagem de redimensionar).
+- O motor não confia no tamanho que o `mestre-pty` anuncia, que o agente do terminal pode controlar: um `replay` de mais de 4 MiB (o máximo de uma resposta; o resto se pede de novo a partir do fim) é erro de protocolo, e o motor fecha a conexão com aquele terminal, sem alocar o tamanho dito.
 - O emulador nunca bloqueia a leitura do processo: se ficar para trás, a saída continua indo para o buffer, e a tela é refeita a partir dele.
 
 ## Critérios de aceite
@@ -110,6 +111,7 @@ Enquanto o motor está fora, o agente continua, a saída vai para o buffer, nada
 
 - **CA-TERM-12** · *completa* — **Dado** a DACL padrão que o launcher dá ao token de um terminal, **quando** é montada, **então** tem SYSTEM e a SID de logon do terminal com controle total, o motor só com consulta limitada e `SYNCHRONIZE`, `OWNER RIGHTS` sem direito e nenhuma entrada para o usuário `mestre-agente`; e o Job Object do `mestre-pty` só tem SYSTEM e a SID de logon dele (Windows). Que um processo de um terminal não abra os de outro, com dois logons reais da conta de agentes, roda nas [contas reais](../qualidade/contas-reais.md).
 - **CA-TERM-13** · *completa* — **Dado** um terminal real cujo agente deixa um processo para trás e termina sozinho, **quando** o motor recebe a saída, **então** o processo deixado, o `mestre-pty` e o socket somem, a linha fica `interrupted` e o gancho `OnEnded` é chamado.
+- **CA-TERM-14** · *rápida* — **Dado** um `mestre-pty` que responde a um `replay` anunciando mais de 4 MiB (um byte a mais, 1 TiB, o maior inteiro), **quando** o motor lê a resposta, **então** a chamada falha com o erro de conexão fechada que diz que o `replay` é grande demais, sem alocar o tamanho dito nem derrubar o motor; **dado** um `replay` de exatamente 4 MiB, **então** ele passa.
 
 ## Depende de
 

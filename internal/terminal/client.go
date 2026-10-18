@@ -213,6 +213,14 @@ func (c *Client) onMsg(m *ptywire.Msg) {
 		return
 	}
 	if m.T == ptywire.TypeReplay && m.Len > 0 {
+		if m.Len > ptywire.MaxReplay {
+			// The length comes from the mestre-pty, which the agent of the terminal
+			// may control: no allocation of it, and the frames that would follow
+			// cannot be trusted either. The call stays in c.calls, for fail.
+			c.mu.Unlock()
+			c.fail(fmt.Errorf("the mestre-pty announced a replay of %d bytes, the most is %d", m.Len, ptywire.MaxReplay))
+			return
+		}
 		cl.want, cl.head, cl.data = m.Len, m, make([]byte, 0, m.Len)
 		c.mu.Unlock()
 		return
