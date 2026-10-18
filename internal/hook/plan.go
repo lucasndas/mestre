@@ -48,8 +48,8 @@ func LinuxPlan(instance string) []PlanEntry {
 		return PlanEntry{Path: filepath.ToSlash(p), Dir: dir, Owner: OwnerEngine, Group: group, Mode: mode, PerCharacter: per, Why: why}
 	}
 	return []PlanEntry{
-		entry(agents, true, 0o750, false, "the folders of the characters: the agents' group goes in, does not write"),
-		entry(char, true, 0o750, true, "the folder of one character"),
+		entry(agents, true, fs.ModeSetgid|0o750, false, "the folders of the characters: the agents' group goes in, does not write; setgid, so what the engine makes inside keeps the group"),
+		entry(char, true, fs.ModeSetgid|0o750, true, "the folder of one character: setgid, as the engine (group mestre) makes it and the agent must read what is inside"),
 		entry(path.Join(char, classes.SnapshotName), false, 0o640, true, "the snapshot of the effective rules: the hook reads it, cannot change it"),
 		entry(path.Join(char, EnvName), false, 0o640, true, "the environment of the character for the degraded decision"),
 		entry(path.Join(char, "tmp"), true, fs.ModeSetgid|0o770, true, "MESTRE_TMP: written by the character"),
