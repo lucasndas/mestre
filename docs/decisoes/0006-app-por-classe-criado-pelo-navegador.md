@@ -1,6 +1,6 @@
 # ADR 0006: Um GitHub App por classe, criado pelo usuário com um clique
 
-> **Assunto:** por que cada classe tem o seu App e por que ele é preparado pelo Grão-Mestre e criado pelo usuário, por link, no próprio navegador · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** por que cada classe tem o seu App e por que ele é preparado pelo Grão-Mestre e criado pelo usuário, por link, no próprio navegador · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Status
 
@@ -15,7 +15,7 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** os Apps passam a ser cri
   - A primeira instalação também exige navegador.
   - Cada conta pode registrar **até 100 Apps**.
   - O nome tem **até 34 caracteres** e precisa ser **único no GitHub inteiro**.
-- As classes nascem sob demanda, criadas pelos usuários, pelo Grão-Mestre ou pelos Mestres de mesa.
+- As classes nascem sob demanda, criadas pelos usuários, pelo Grão-Mestre ou pelos Mestres de mesa. Desde o M8, também quando um Administrador ativa uma [classe sugerida](../classes/classes-sugeridas.md): ela nasce com `app: novo` e segue o mesmo caminho de App.
 - O Mestre não tem interface gráfica em nenhuma máquina ([ADR 0020](0020-linux-e-windows-em-qualquer-papel.md)).
 
 ## Opções consideradas

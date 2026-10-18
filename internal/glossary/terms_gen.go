@@ -37,6 +37,7 @@ var Terms = []Term{
 	{Name: "Perfil de conta", Help: "Qual assinatura do provedor (Claude, Codex, Antigravity) um personagem usa naquela máquina.", Detail: "../orquestracao/bases-e-fichas.md"},
 	{Name: "Operador do PC", Help: "Agente que usa o seu PC Windows com a sua conta, só com aprovação do Dono, por pouco tempo e com aviso na tela.", Detail: "../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc"},
 	{Name: "Classe", Help: "O papel de um personagem (ex.: Dev, QA): instruções, permissões, hooks e skills próprios.", Detail: "../classes/classes.md"},
+	{Name: "Classe sugerida", Help: "Classe de um time de desenvolvimento que vem com o Mestre desligada; um Administrador ativa a que quiser.", Detail: "../classes/classes-sugeridas.md"},
 	{Name: "Teto do workspace", Help: "O máximo de permissões e de custo que qualquer classe deste workspace pode ter.", Detail: "../classes/teto-do-workspace.md"},
 	{Name: "Pergaminho", Help: "Nota em Markdown no canvas que os agentes conectados leem e escrevem.", Detail: "../orquestracao/pergaminhos-e-tomos.md"},
 	{Name: "Tomo", Help: "Uma pilha de pergaminhos agrupados.", Detail: "../orquestracao/pergaminhos-e-tomos.md"},

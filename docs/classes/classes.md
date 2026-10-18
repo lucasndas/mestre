@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, Revisor; os nomes são só exemplos). As regras são escritas uma vez e valem igual em Claude Code, Codex e Antigravity. O Mestre não vem com classes prontas para personagens (a única embutida é a dos orquestradores, [`orquestrador`](classe-orquestrador.md)): elas são criadas pelos usuários, pelo Grão-Mestre ou pelo Mestre de uma mesa, conforme a necessidade. A partir do M8 existem também as classes sugeridas, que vêm desligadas e o usuário ativa quando quiser (sugerida não é padrão, e a regra acima não muda).
+A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, Revisor; os nomes são só exemplos). As regras são escritas uma vez e valem igual em Claude Code, Codex e Antigravity. O Mestre não vem com classes prontas para personagens (a única embutida é a dos orquestradores, [`orquestrador`](classe-orquestrador.md)): elas são criadas pelos usuários, pelo Grão-Mestre ou pelo Mestre de uma mesa, conforme a necessidade. A partir do M8 existem também as [classes sugeridas](classes-sugeridas.md), que vêm desligadas e um Administrador ativa quando quiser (sugerida não é padrão, e a regra acima não muda).
 
 ## Comportamento
 
@@ -119,7 +119,7 @@ pre_tool:
 
 ### Validação (`mestre class check`)
 
-Confere: frontmatter e nome único; os casos de `cases/` ([teste de classe](../provedores/teste-de-classe.md#os-casos)); esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali. Pacote inválido sai com `invalid_class` e a lista de problemas; "acima do teto" é só um estado (nada é apagado), e o `run` que o pipeline recusa é um aviso.
+Confere: frontmatter e nome único (e avisa de `mestre <comando>` inexistente citado no pacote, [classes sugeridas](classes-sugeridas.md#comando-inexistente-numa-skill)); os casos de `cases/` ([teste de classe](../provedores/teste-de-classe.md#os-casos)); esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali. Pacote inválido sai com `invalid_class` e a lista de problemas; "acima do teto" é só um estado (nada é apagado), e o `run` que o pipeline recusa é um aviso.
 
 O código é `internal/classes` (`Library`, `Examine`) e `internal/hook` (`ClassHookSource`, `AsyncRunner`). A entrega aos personagens (M4), o estado dos Apps e a aprovação pelo fluxo (M5) entram por interfaces e chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 

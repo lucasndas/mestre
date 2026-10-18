@@ -1,6 +1,6 @@
 # Glossário
 
-> **Assunto:** vocabulário do Mestre e textos de ajuda da interface e do Telegram · **Componente:** Projeto · **Atualizado:** 2026-10-14
+> **Assunto:** vocabulário do Mestre e textos de ajuda da interface e do Telegram · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 Este glossário é a **fonte única** dos textos de ajuda: o "?" dos termos no painel ([canvas](../painel/canvas.md)) e a explicação entre parênteses na primeira vez que um termo aparece numa conversa do Telegram ([bot](../telegram/bot.md)). O `go generate ./internal/glossary` lê a tabela abaixo e gera os textos que o Mestre embute; a suíte rápida falha se o arquivo gerado estiver desatualizado ([código gerado](../desenvolvimento/convencoes.md#código-gerado)).
 
@@ -51,6 +51,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Perfil de conta | Qual assinatura do provedor (Claude, Codex, Antigravity) um personagem usa naquela máquina. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Operador do PC | Agente que usa o seu PC Windows com a sua conta, só com aprovação do Dono, por pouco tempo e com aviso na tela. | [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) |
 | Classe | O papel de um personagem (ex.: Dev, QA): instruções, permissões, hooks e skills próprios. | [classes](../classes/classes.md) |
+| Classe sugerida | Classe de um time de desenvolvimento que vem com o Mestre desligada; um Administrador ativa a que quiser. | [classes sugeridas](../classes/classes-sugeridas.md) |
 | Teto do workspace | O máximo de permissões e de custo que qualquer classe deste workspace pode ter. | [teto do workspace](../classes/teto-do-workspace.md) |
 | Pergaminho | Nota em Markdown no canvas que os agentes conectados leem e escrevem. | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
 | Tomo | Uma pilha de pergaminhos agrupados. | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
