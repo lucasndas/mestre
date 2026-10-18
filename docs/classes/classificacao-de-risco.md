@@ -1,6 +1,6 @@
 # Classificação de risco
 
-> **Assunto:** o risco de cada pedido de aprovação (`baixo`, `medio`, `alto`, `fixo`), dado pelo motor a partir do tipo da ação e do alvo: tabela padrão, lista de programas seguros, sinais de risco, risco dos tipos de pedido, ajustes do Dono no arquivo de política, padrões aprováveis e o que eles cobrem · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o risco de cada pedido de aprovação (`baixo`, `medio`, `alto`, `fixo`), dado pelo motor a partir do tipo da ação e do alvo: tabela padrão, lista de programas seguros, sinais de risco, risco dos tipos de pedido, ajustes do Dono no arquivo de política, padrões aprováveis e o que eles cobrem · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -52,7 +52,7 @@ Sem linha `baixo`: os pacotes, scripts, ferramentas e arquivos do projeto (`npm 
 
 ### Sinais de risco
 
-O que leva a `medio` (ou mais) uma parte sem linha na tabela e dá a origem do `medio` (`RiskTableVersion` 7); sem sinal e fora da lista, a origem é `fora da lista de programas seguros`:
+O que leva a `medio` (ou mais) uma parte sem linha na tabela e dá a origem do `medio` (`RiskTableVersion` 8); sem sinal e fora da lista, a origem é `fora da lista de programas seguros`:
 - **rede:** uma URL ou um host (`usuário@host:`, IP, `localhost`) de domínio fora do `network.domains` das regras efetivas (qualquer domínio, o padrão, não lista nenhum), um programa de rede (`ping`, `dig`, `ftp`, `socat`, `nmap`, `Invoke-RestMethod`…) ou `git clone`, `git ls-remote`, `git submodule`, `git send-email`;
 - **apagar:** os equivalentes de `rm` (`unlink`, `shred`, `rmdir`, `Remove-Item`, `del`…), `git rm` e as opções `--delete`;
 - **instalação ou configuração do sistema:** gerenciadores do sistema e de versões (`apt`, `dnf`, `pacman`, `pip`, `gem`, `rustup`, `nvm`…), `-g`, `--global`, `--location=global` e `--system` de `npm`, `pnpm`, `yarn`, `bun` e `uv`, e o que mexe na máquina (`kill`, `crontab`, `reg`, `setx`, `mount`, `chown`, `mkfs*`…);
@@ -122,8 +122,7 @@ As respostas que aprovam um padrão (ex.: `npm install *`) e as sugestões de re
 ## Regras e erros
 
 - A classificação nunca falha para baixo: o que não se analisa sobe (`medio` ou `alto`); o que não tem linha só é `baixo` na lista de seguros e sem sinal de risco.
-- Mesma ação, mesma versão da tabela e mesmos ajustes dão sempre o mesmo risco.
-- Ajuste inválido nunca é aplicado em parte.
+- Mesma ação, mesma versão da tabela e mesmos ajustes dão sempre o mesmo risco; ajuste inválido nunca é aplicado em parte.
 
 ## Critérios de aceite
 
@@ -143,6 +142,7 @@ As respostas que aprovam um padrão (ex.: `npm install *`) e as sugestões de re
 - **CA-RISCO-14** · *rápida* — **Dado** o worktree com os scripts vindos do repositório, no Linux e no Windows (leituras POSIX e PowerShell), **quando** o motor decide `ls -la`, `grep -rn x .`, `git add . && git commit -m x`, `npm test`, `go test ./...`, `cargo build`, `python -m pytest`, `cat f.json | python -m json.tool`, `python x.py <<EOF … EOF`, `make test`, `NODE_ENV=test npm test`, `set -euo pipefail` e um `cat <<'EOF'` com `git push` no corpo, **então** todos rodam direto (`baixo`), e no Windows também `& .\script.ps1`; `foo --bar`, `make --eval='x:;echo hi' x`, `find . -exec rm {} \;` (também no Windows, sem negar), `node -r ./x.js y.js`, `vim -c ':wq' f`, `gdb -ex run ./a.out`, `R -e 1`, `yarn exec x`, `pnpm exec x`, `tar czf o.tgz src` e `git cherry-pick abc` viram pedido `medio`; `git -c core.pager=cat log`, `git rebase -x 'make test' HEAD~2`, `git bisect run make test` e `git grep -Ox y` viram pedido `alto`.
 - **CA-RISCO-15** · *rápida* — **Dado** uma classe que libera tudo, **quando** o motor decide `tmux new -d 'git push'`, `screen -dm git push`, `flock f -c 'git push'`, `chrt 1 git push`, `taskset -c 0 git push`, `timeout --signal KILL 5 git push`, `vim -c '!git push'`, `less +'!git push' f`, `gdb -ex 'shell git push'`, `tar -I 'git push' -cf x.tar .`, `sort --compress-program='git push' f`, `make --eval='x:;git push' x`, `parallel ::: 'git push'`, `python -c 'import os; os.system("git push")'`, `echo 'git push' | sh -o posix`, `rbash -c 'git push'`, `nu -c 'git push'`, `gawk -i inplace '{print}' .git/config` e `awk 'BEGIN{print "x" > ".git/config"}'`, **então** todos são negados pela regra fixa.
 - **CA-RISCO-16** · *rápida* — **Dado** os ajustes `{comando: "mytool *", risco: baixo}` e `{comando: "make *", risco: baixo}`, **quando** o motor classifica `mytool --x` e `make --eval='x:;echo hi' x`, **então** saem `baixo` pelo ajuste e `medio` (código em opção); **dado** cada ajuste `baixo` de `python -c 'print(1)'`, `make --eval*`, `find . -exec *`, `flock *`, `nice *`, `uv run *` e `tmux new *`, **então** o conjunto é recusado, e `nice *`, `flock *`, `uv run *` e `pnpm exec *` como padrão aprovável saem `pattern_too_broad`.
+- **CA-RISCO-17** · *rápida* — **Dado** o worktree `/w`, **quando** o motor classifica `cat .npmrc`, `cat id_rsa`, `cat keys/id_ed25519`, `cat credentials.json` e `cat infra/service-account-ci.json`, **então** saem `alto` (os onze globs de `permissoes_e_segredos` do conteúdo padrão do [arquivo de política](../aprovacoes/arquivo-de-politica.md)), e `cat credentials.go` e `cat service.json` saem `baixo`.
 
 ## Depende de
 
