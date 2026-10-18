@@ -23,6 +23,7 @@ var (
 	jwt      = "eyJ" + "hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"
 )
 
+// CA-SEG-01
 func TestMaskKnownFormats(t *testing.T) {
 	t.Parallel()
 	m := logging.NewMasker()
@@ -47,14 +48,20 @@ func TestMaskKnownFormats(t *testing.T) {
 		"word kept":       {"mypassword and tokenizer=1", "mypassword and tokenizer=1"},
 		"telegram dash":   {"bot " + tgDash + " next", "bot [segredo] next"},
 		"telegram at eol": {"bot " + tgDash, "bot [segredo]"},
-		"test name kept":  {"run TestMVP13_FourCompositions ok", "run TestMVP13_FourCompositions ok"},
-		"branch kept":     {"branch feat/table-lifecycle-v2Beta10 ok", "branch feat/table-lifecycle-v2Beta10 ok"},
-		"slash splits":    {"/x/Xk9qL2mN8pR4tV7wZ1yB3/y", "/x/[segredo]/y"},
-		"env key kept":    {"HOME=/home/Xk9qL2mN8pR4tV7wZ1yB3", "HOME=/home/[segredo]"},
-		"high entropy":    {"value Xk9qL2mN8pR4tV7wZ1yB3 end", "value [segredo] end"},
-		"uuid kept":       {"session 00893aaf-19fa-41d2-8238-13269b9b3ca0", "session 00893aaf-19fa-41d2-8238-13269b9b3ca0"},
-		"sha kept":        {"commit 3f786850e387550fdab836ed7e6dc881de23001b", "commit 3f786850e387550fdab836ed7e6dc881de23001b"},
-		"plain word kept": {"internacionalizacaoDoMestre", "internacionalizacaoDoMestre"},
+		// the form a net/http error shows: the token follows "bot" in the path
+		"telegram url":       {`Get "https://api.telegram.org/bot` + tgToken + `/getMe": EOF`, `Get "https://api.telegram.org/bot[segredo]/getMe": EOF`},
+		"telegram url query": {"https://api.telegram.org/bot" + tgDash + "/sendMessage?chat_id=1", "https://api.telegram.org/bot[segredo]/sendMessage?chat_id=1"},
+		"telegram url upper": {"https://api.telegram.org/Bot" + tgToken, "https://api.telegram.org/Bot[segredo]"},
+		"bot in a word":      {"mybot" + tgToken + " ok", "mybot" + tgToken + " ok"},
+		"bot id kept":        {"bot12345 and /bot/ and bot:" + strings.Repeat("a", 35), "bot12345 and /bot/ and bot:" + strings.Repeat("a", 35)},
+		"test name kept":     {"run TestMVP13_FourCompositions ok", "run TestMVP13_FourCompositions ok"},
+		"branch kept":        {"branch feat/table-lifecycle-v2Beta10 ok", "branch feat/table-lifecycle-v2Beta10 ok"},
+		"slash splits":       {"/x/Xk9qL2mN8pR4tV7wZ1yB3/y", "/x/[segredo]/y"},
+		"env key kept":       {"HOME=/home/Xk9qL2mN8pR4tV7wZ1yB3", "HOME=/home/[segredo]"},
+		"high entropy":       {"value Xk9qL2mN8pR4tV7wZ1yB3 end", "value [segredo] end"},
+		"uuid kept":          {"session 00893aaf-19fa-41d2-8238-13269b9b3ca0", "session 00893aaf-19fa-41d2-8238-13269b9b3ca0"},
+		"sha kept":           {"commit 3f786850e387550fdab836ed7e6dc881de23001b", "commit 3f786850e387550fdab836ed7e6dc881de23001b"},
+		"plain word kept":    {"internacionalizacaoDoMestre", "internacionalizacaoDoMestre"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

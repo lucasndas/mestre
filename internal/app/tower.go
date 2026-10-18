@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -60,6 +61,30 @@ func (e *Engine) vaultCopy() *vault.Copier {
 	return &vault.Copier{Keys: vault.NewFileKeyStore(e.paths.vaultKey()), EnvelopePath: e.paths.envelope()}
 }
 
+// replicaConfig is the replication of this Tower over its replica db: the copy
+// of the vault, the transfers, and what it erases if the machine leaves the
+// Guild, besides the replica (Paths.leftovers).
+func (e *Engine) replicaConfig(db *store.DB) replication.ReplicaConfig {
+	return replication.ReplicaConfig{
+		DB: db, Clock: e.clk, GuildID: e.id.GuildID, Vault: e.vaultCopy(),
+		TransferDir: e.paths.transfers(), Leftovers: e.paths.leftovers(), Logger: e.log,
+	}
+}
+
+// towerWiper is what a Tower runs when the Citadel tells it to leave the Guild
+// (guild.leave). The report of the databases it discarded stops first: it reads
+// those files, and a report that waits for the ack would write its record after
+// the Wipe took the files (docs/guilda/replicacao.md#sair-da-guilda).
+type towerWiper struct {
+	replica    guild.Wiper
+	stopReport func()
+}
+
+func (w towerWiper) Wipe(ctx context.Context, reason string) error {
+	w.stopReport()
+	return w.replica.Wipe(ctx, reason)
+}
+
 // runTower serves as a Tower until the role changes or ctx ends: the replica,
 // the connection to the Citadel with its outbox, the machine sheet, and the
 // answer 4007 to whoever takes this machine for the Citadel.
@@ -85,7 +110,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	}
 	e.pruneDiscarded()
 
-	replica, err := replication.NewReplica(ctx, replication.ReplicaConfig{DB: db, Clock: e.clk, GuildID: e.id.GuildID, Vault: e.vaultCopy(), TransferDir: e.paths.transfers(), Logger: e.log})
+	replica, err := replication.NewReplica(ctx, e.replicaConfig(db))
 	if err != nil {
 		return transition{err: err}
 	}
@@ -178,7 +203,11 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: replica}, Renewer: renewer})
+	reportCtx, stopReporting := context.WithCancel(pctx)
+	defer stopReporting()
+	reported := make(chan struct{}) // closed when the report of the discarded databases ends
+	wiper := towerWiper{replica: replica, stopReport: func() { stopReporting(); <-reported }}
+	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: wiper}, Renewer: renewer})
 	// Whoever takes this machine for the Citadel is told 4007, with the
 	// certificate this machine follows.
 	refuser, err := protocol.NewServer(protocol.Config{
@@ -204,7 +233,10 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	wg.Go(func() { _ = replica.Run(pctx) })
 	wg.Go(func() { _ = agent.Run(pctx) })
 	wg.Go(func() { e.renewTower(pctx, db, renewer, client.Link(), renewKick) })
-	wg.Go(func() { e.reportDiscarded(pctx, db, client.Link()) })
+	wg.Go(func() {
+		defer close(reported)
+		e.reportDiscarded(reportCtx, db, client.Link())
+	})
 	e.changed()
 	e.log.Info("app: serving as a Tower", "epoch", e.epochs.Epoch(), "citadel", e.known().CitadelMachineID)
 
@@ -262,6 +294,9 @@ func (e *Engine) DecideEntry(ctx context.Context, joinID string, d guild.Decisio
 	}
 	c := run.guild()
 	if c == nil {
+		if why := run.whyDown(); why != "" {
+			return fmt.Errorf("app: the Citadel cannot take entries, %s: %w", why, vault.ErrClosed)
+		}
 		return guild.ErrSuspended
 	}
 	return c.Decide(ctx, joinID, d)
@@ -302,17 +337,41 @@ func (e *Engine) promotable(ctx context.Context, db *store.DB) error {
 		return fmt.Errorf("%w: the machine is %s", guild.ErrNotPromotable, state)
 	case excluded:
 		return fmt.Errorf("%w: %w", guild.ErrNotPromotable, guild.ErrExcludedMachine)
-	case !e.vaultCopy().Holds(ctx):
+	}
+	// the key first: a key that is refused, or wrong, says why, where "no copy" would not
+	if err := vault.Check(ctx, e.vaultCopy().Keys, db, transport.CAKeySecret); err != nil {
+		return fmt.Errorf("%w: %w", guild.ErrNotPromotable, err)
+	}
+	if !e.vaultCopy().Holds(ctx) { // and the envelope
 		return fmt.Errorf("%w: the machine has no copy of the vault", guild.ErrNotPromotable)
 	}
 	return nil
 }
 
+// vaultOpens says whether the copy of the vault this Tower holds would open over
+// its replica and give it the key of the CA (vault.Check). The promotion asks
+// before it wins the epoch: after, the failure would leave the epoch in the lock
+// without a Citadel (and the old Citadel of a planned handover, which sees the
+// new epoch, steps down).
+func (e *Engine) vaultOpens(ctx context.Context) error {
+	db, err := guilddb.Open(ctx, e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: e.cfg.Synchronous, Replica: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := vault.Check(ctx, e.vaultCopy().Keys, db, transport.CAKeySecret); err != nil {
+		return fmt.Errorf("app: the promotion cannot go on, the vault of this machine does not serve: %w", err)
+	}
+	return nil
+}
+
 // promote takes the command, once the Tower period stopped applying the
-// replication: it reads the last lsn of the replica and wins the next epoch
-// in the lock before anything writes, so losing the lock, or not reaching it,
-// leaves the replica exactly as the Citadel sent it and the machine goes on
-// as its Tower. Winning, it opens the replica as the main database with the
+// replication: it reads the last lsn of the replica, checks that its copy of
+// the vault would open (without it there is no CA to sign with, and the epoch
+// would be lost) and wins the next epoch in the lock before anything writes,
+// so losing the lock, or not reaching it, leaves the replica exactly as the
+// Citadel sent it and the machine goes on as its Tower. Winning, it opens the
+// replica as the main database with the
 // vault and the CA, signs its certificate and becomes the Citadel, which
 // waits before acting outside. A failure after the lock was won leaves the
 // epoch in the lock without a certificate: the Owner is warned and promotes
@@ -333,6 +392,9 @@ func (e *Engine) promote(ctx context.Context, p *promotion) transition {
 	}
 	if from < p.wantLSN {
 		return fail(fmt.Errorf("app: the replica has the lsn %d, the handover %d", from, p.wantLSN))
+	}
+	if err := e.vaultOpens(ctx); err != nil {
+		return fail(err)
 	}
 	n, err := guild.ClaimEpoch(ctx, e.deps.Lock, e.epochs.Epoch(), e.id.MachineID)
 	if err != nil {
@@ -536,14 +598,35 @@ func loadDropped(path string) []string {
 	return names
 }
 
-// discardedFiles lists the databases this machine discarded, by epoch.
+// discardedRe matches the main file of a database this machine discarded:
+// descartado-<epoch>.db, or the same followed by .<ms> when the epoch had been
+// archived already (archive keeps the first and renames the second).
+var discardedRe = regexp.MustCompile(`^` + regexp.QuoteMeta(discardedPrefix) + `(\d+)\.db(\.\d+)?$`)
+
+// discardedAll lists the main file of every database this machine discarded,
+// the ones kept under another name included, with the epoch of each.
+func (e *Engine) discardedAll() map[string]uint64 {
+	out := map[string]uint64{}
+	entries, _ := os.ReadDir(e.paths.Banco)
+	for _, en := range entries {
+		m := discardedRe.FindStringSubmatch(en.Name())
+		if m == nil {
+			continue // its -wal and -shm, the report and the actions go with the database
+		}
+		if n, err := strconv.ParseUint(m[1], 10, 64); err == nil {
+			out[filepath.Join(e.paths.Banco, en.Name())] = n
+		}
+	}
+	return out
+}
+
+// discardedFiles lists the databases this machine discarded, by epoch, the ones
+// that were kept under another name left out: there is one report for each epoch.
 func (e *Engine) discardedFiles() map[uint64]string {
 	out := map[uint64]string{}
-	matches, _ := filepath.Glob(filepath.Join(e.paths.Banco, "descartado-*.db"))
-	for _, m := range matches {
-		s := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(m), "descartado-"), ".db")
-		if n, err := strconv.ParseUint(s, 10, 64); err == nil {
-			out[n] = m
+	for path, epoch := range e.discardedAll() {
+		if filepath.Base(path) == filepath.Base(e.paths.discarded(epoch)) {
+			out[epoch] = path
 		}
 	}
 	return out
@@ -660,19 +743,25 @@ func (e *Engine) listDiscarded(ctx context.Context, path string, epoch, from uin
 	return r, nil
 }
 
-// pruneDiscarded removes the discarded databases older than the retention.
+// pruneDiscarded removes the discarded databases older than the retention,
+// the ones kept under another name included, with what goes with each: its -wal
+// and -shm, and, for the one of the epoch, the report and the dropped actions.
 func (e *Engine) pruneDiscarded() {
 	cutoff := e.clk.Now().Add(-DiscardedRetention)
-	for _, path := range e.discardedFiles() {
+	for path, epoch := range e.discardedAll() {
 		fi, err := os.Stat(path)
 		if err != nil || !fi.ModTime().Before(cutoff) {
 			continue
 		}
-		for _, suffix := range []string{"", "-wal", "-shm"} {
-			_ = os.Remove(path + suffix)
+		if err := os.Remove(path); err != nil {
+			e.log.Warn("app: removing a discarded database after the retention", "file", path, "err", err)
+			continue
 		}
-		if n, err := strconv.ParseUint(strings.TrimSuffix(strings.TrimPrefix(filepath.Base(path), "descartado-"), ".db"), 10, 64); err == nil {
-			_ = os.Remove(e.paths.droppedActions(n))
+		_ = os.Remove(path + "-wal")
+		_ = os.Remove(path + "-shm")
+		if filepath.Base(path) == filepath.Base(e.paths.discarded(epoch)) {
+			_ = os.Remove(strings.TrimSuffix(path, ".db") + ".json")
+			_ = os.Remove(e.paths.droppedActions(epoch))
 		}
 		e.log.Info("app: a discarded database left after the retention", "file", path)
 	}
