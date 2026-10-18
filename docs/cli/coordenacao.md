@@ -1,6 +1,6 @@
 # CLI: coordenação da party
 
-> **Assunto:** sintaxe de `recruit`, `spawn`, `dismiss`, `connect`, `sheet`, `base` e `quest` · **Componente:** CLI · **Atualizado:** 2026-10-15
+> **Assunto:** sintaxe de `recruit`, `spawn`, `dismiss`, `connect`, `sheet`, `base` e `quest` · **Componente:** CLI · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -47,7 +47,7 @@ Somente leitura. `list` mostra nome, base/agente, classe padrão, ciclo de vida 
 
 ### `mestre quest`
 ```
-mestre quest create "<Missão>" --file <arq | ->
+mestre quest create "<Missão>" (--file <arq | -> | --recipe <nome> [--skip <id>]…)
 mestre quest run "<Missão>" [--input "<texto>" | --input-file <arq>]
 mestre quest status ["<Missão>"]
 mestre quest pause "<Missão>"      mestre quest resume "<Missão>"

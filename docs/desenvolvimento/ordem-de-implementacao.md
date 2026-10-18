@@ -24,7 +24,7 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 | M5 | Integrações |  | GitHub e a [trava no GitHub](../guilda/trava-no-github.md) (primeiro marco com ação externa; antes dele não há promoção), Telegram, usuários e níveis, decretos, aprovações (respostas, delegação, resumo e sugestões), Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
 | M6 | Painel |  | login, canvas, visão do workspace, conversa e aprovações, administração |
 | M7 | Plataforma, autocura e Operador do PC |  | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
-| M8 | Classes sugeridas |  | as [classes sugeridas](../classes/classes.md) (Pesquisador, Investigador, Designer, Dev, Revisor, QA e Documentador), que vêm desligadas e o usuário ativa; os grimórios sugeridos por tipo de pedido, o ritual Vigia, a calibração e o refino de UI; ativação e propostas no painel; suíte pesada (MVP-16) |
+| M8 | Classes sugeridas |  | as [classes sugeridas](../classes/classes-sugeridas.md) (Pesquisador, Investigador, Designer, Dev, Revisor, QA e Documentador), que vêm desligadas e o usuário ativa; as receitas de missão por tipo de pedido (com a de refino de UI), as fichas leve e pesada e a calibração; ativação e propostas no painel; suíte pesada (MVP-16) |
 
 - **Guardião em paralelo:** [guardiao.md](../autocura/guardiao.md) depende só de documentos até o M2 e pode começar logo depois do M2, em paralelo com M3 a M6. **Escolhas já feitas:** a biblioteca de mDNS e o gerador de tipos TypeScript ([convenções](convencoes.md#código-gerado)). O modo de captura das mudanças do banco saiu do spike do M2: registro lógico (`replication_log`) ([regras de execução](#regras-de-execução-da-ordem)).
 
@@ -33,8 +33,7 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 Qualquer máquina da Guilda pode virar Cidadela ([ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md)), então **nada do Mestre é "só Linux"**: painel, bot do Telegram, `whisper-server` e `ffmpeg`, banco, GitHub, cofre e replicação precisam funcionar também no Windows, desde o marco em que nascem.
 
 - **Pronto, em cada marco,** inclui a suíte completa passando no CI Windows, além do Linux, desde o M1 ([testes](../qualidade/testes.md)): o cofre com DPAPI, o banco e o `mestre-launcher` no M1; protocolo, descoberta, entrada na Guilda, replicação e troca de Cidadela (com instâncias múltiplas) no M2; GitHub, Telegram (falso) e transcrição no M5; o painel servido pelo motor no M6.
-- O que depende de serviço instalado ou de modelo real (Whisper com o modelo, mDNS do sistema) fecha na pesada, com a Cidadela em cada sistema ([laboratório](../qualidade/testes.md#laboratório)).
-- Um teste da completa que só roda num sistema precisa dizer por quê (ConPTY, systemd) e ter o par no outro sistema.
+- O que depende de serviço instalado ou de modelo real (Whisper com o modelo, mDNS do sistema) fecha na pesada, com a Cidadela em cada sistema ([laboratório](../qualidade/testes.md#laboratório)). Um teste da completa que só roda num sistema precisa dizer por quê (ConPTY, systemd) e ter o par no outro sistema.
 
 ### Operador do PC no M7
 
@@ -133,6 +132,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M7 | 2 | [camadas](../autocura/camadas.md) · [checklist](../plataforma/checklist.md) |
 | M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) · [teste de classe](../provedores/teste-de-classe.md) |
 | M7 | 4 | [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) |
+| M8 | 1 | [classes sugeridas](../classes/classes-sugeridas.md) |
 
 ### Regras de execução da ordem
 
