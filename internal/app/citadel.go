@@ -774,6 +774,12 @@ func (e *Engine) archive(db *store.DB, epoch uint64) error {
 			return err
 		}
 	}
+	// The retention counts from now: the rename keeps the time of the last
+	// write the database had as the main one, which can be weeks old.
+	now := e.clk.Now()
+	if err := os.Chtimes(dst, now, now); err != nil {
+		e.log.Warn("app: dating the database of the old epoch", "file", dst, "err", err)
+	}
 	e.log.Warn("app: the database of the old epoch is kept", "file", dst, "epoch", epoch)
 	return nil
 }

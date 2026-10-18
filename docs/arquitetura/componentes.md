@@ -1,6 +1,6 @@
 # Componentes
 
-> **Assunto:** motor, `mestre-pty`, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** motor, `mestre-pty`, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 Este documento é a **fonte única** dos nomes de binários, subcomandos de serviço, serviços do sistema, portas e rotas, e das instâncias. A escolha da stack está no [ADR 0001](../decisoes/0001-stack-go.md); a Guilda, no [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md).
 
@@ -119,7 +119,7 @@ Uma máquina pode ter **várias instâncias** do Mestre, em qualquer sistema e m
 
 | O quê | Por instância (`<inst>`, padrão `principal`) |
 |---|---|
-| Nome | `--instance <inst>` nos subcomandos de serviço; gravado na configuração da instância |
+| Nome | `--instance <inst>` nos subcomandos de serviço; gravado na configuração da instância. De 1 a 32 letras sem acento, dígitos, `-` e `_`, começando por letra ou dígito: a configuração, o canal local e o `/join` da [entrada](../guilda/guilda.md#entrada-na-guilda) recusam outro |
 | Pastas | `/etc/mestre/<inst>/`, `/var/lib/mestre/<inst>/`, `/var/log/mestre/<inst>/` e `/var/spool/mestre/<inst>/` no Linux; `%ProgramData%\Mestre\<inst>\` no Windows. A padrão também usa subpasta, para haver um formato só ([persistência](persistencia.md#arquivos)) |
 | Portas | um bloco livre, escolhido na instalação e gravado na configuração: a padrão usa 7443, 7444, 7446 e 7447; as outras, blocos de 10 acima (7453, 7454, 7456 e 7457; depois 7463…). A 7445/udp é compartilhada |
 | Serviços | systemd: `mestre@<inst>`, `mestre-launcher@<inst>`, `mestre-guardiao@<inst>`, `mestre-update@<inst>`; Windows: `Mestre$<inst>`, `MestreLauncher$<inst>`, `MestreGuardiao$<inst>`, `MestreUpdate$<inst>`, com as contas virtuais `NT SERVICE\Mestre$<inst>` (o `$` é aceito em nomes de serviço, como nas instâncias nomeadas do SQL Server) |

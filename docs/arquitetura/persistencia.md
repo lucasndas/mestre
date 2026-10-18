@@ -129,7 +129,7 @@ Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso
 
 - Diário, às 03:00 no [fuso da Guilda](../painel/administracao.md#fuso-da-guilda) (padrão), com `VACUUM INTO` (cópia consistente com o banco em uso), seguido de `PRAGMA quick_check` na cópia.
 - Mantém os **últimos 7**; o mais antigo é apagado só depois de um backup novo íntegro.
-- Vale para o banco principal na Cidadela e para o banco local de cada máquina; a réplica de uma Torre não tem backup próprio (a Cidadela é a fonte). Falha de backup vira alerta do [checklist](../plataforma/checklist.md).
+- Vale para o banco principal na Cidadela e para o banco local de cada máquina; a réplica de uma Torre não tem backup próprio (a Cidadela é a fonte). Falha de backup vira alerta do [checklist](../plataforma/checklist.md). A Torre que já foi Cidadela guarda os backups do banco principal que fez, cada um uma cópia inteira dele: sair da Guilda os apaga com o resto ([replicação](../guilda/replicacao.md#cofre-em-toda-máquina)).
 - **Cofre no backup da Cidadela:** os segredos vão no banco, já cifrados, e junto vai `cofre-envelope.bin`, a chave de dados cifrada para a chave pública de recuperação; o arquivo da chave protegido pelo sistema não vai. Sem a chave de recuperação, de que o Mestre guarda só a parte pública, o cofre do backup não abre ([cofre na troca](../guilda/replicacao.md#cofre-na-troca), [backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação)). As capturas do Operador do PC não vão no backup.
 
 ## Critérios de aceite
