@@ -1,10 +1,10 @@
 # Projetos de treino
 
-> **Assunto:** projetos pequenos e conhecidos que os testes copiam para fazer o papel do repositório do usuário: modelos-base, variações, tarefas com teste oculto, `testkit.NewProject` e o repositório sandbox do GitHub · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** projetos pequenos e conhecidos que os testes copiam para fazer o papel do repositório do usuário: modelos-base, variações, tarefas com teste oculto, `testkit.NewProject` e o repositório sandbox do GitHub · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
-Dar a todo teste que precisa de "um repositório de verdade" (sessão zero, mesas, missões, conformidade, ponta a ponta) o mesmo ponto de partida: um projeto pequeno, conhecido e reproduzível, copiado para uma pasta temporária, com tarefas de resultado conferível por máquina. Nenhum teste usa projeto real do usuário. Este documento é o **dono** do assunto; [testes](testes.md) e [dublês](dubles.md) só apontam para cá.
+Dar a todo teste que precisa de "um repositório de verdade" o mesmo ponto de partida: um projeto pequeno, conhecido e reproduzível, copiado para uma pasta temporária, com tarefas de resultado conferível por máquina. **Hoje só os testes do próprio `testkit` chamam `NewProject`, `LoadTasks` e `ApplyHiddenTests`:** os demais testes (a conformidade, em `internal/conformance/prepare.go`, entre eles) montam o repositório de que precisam, e nenhum marco da [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md) marca quando adotam este. Nenhum teste usa projeto real do usuário. Este documento é o **dono** do assunto; [testes](testes.md) e [dublês](dubles.md) só apontam para cá.
 
 ## Comportamento
 
@@ -22,14 +22,14 @@ Cada variação é uma **sobreposição**: uma pasta `testdata/projetos/variacoe
 
 | Variação | O que acrescenta | Marco |
 |---|---|---|
-| `com-agents-md` | `AGENTS.md` do projeto; **padrão**, aplicada a toda cópia | M0 |
-| `com-sensiveis` | `.env` e `secrets/` | M3 |
-| `sem-agents-md` | cópia sem o `AGENTS.md` padrão | M4 |
-| `com-claude-md` | `CLAUDE.md` junto do `AGENTS.md` | M4 |
-| `com-hooks-claude` | `.claude/settings.json` com hooks do próprio projeto | M4 |
+| `com-agents-md` | `AGENTS.md` do projeto; **padrão**, aplicada a toda cópia | M0 (existe) |
+| `com-sensiveis` | `.env` e `secrets/` | sem marco: não existe |
+| `sem-agents-md` | cópia sem o `AGENTS.md` padrão | sem marco: não existe |
+| `com-claude-md` | `CLAUDE.md` junto do `AGENTS.md` | sem marco: não existe |
+| `com-hooks-claude` | `.claude/settings.json` com hooks do próprio projeto | sem marco: não existe |
 | `com-workflows` | `.github/workflows/ci.yml` | M5 |
 
-Cada variação nasce com um critério de aceite no documento do marco que a usa.
+Cada variação nasce com um critério de aceite no documento do marco que a usa; as quatro sem marco esperam o primeiro critério que as peça (nenhum documento de marco as cita hoje).
 
 ### Tarefas (`tarefas.yaml`)
 
@@ -39,12 +39,12 @@ Cada variação nasce com um critério de aceite no documento do marco que a usa
 
 | Tarefa | Pedido | Verificação | Em uso a partir de |
 |---|---|---|---|
-| T1 | corrigir o bug de `Max` | teste oculto que hoje falha | M0 (dados); M3 na primeira conformidade real |
-| T2 | adicionar `Mean` (média) com teste | teste oculto de `Mean` | M4 |
-| T3 | atualizar o README (só documentação) | teste oculto que lê o README; a classe QA não edita código | M3 |
+| T1 | corrigir o bug de `Max` | teste oculto que hoje falha | M0 (dados); nenhum teste a cumpre ainda |
+| T2 | adicionar `Mean` (média) com teste | teste oculto de `Mean` | sem marco: nenhum teste a cumpre ainda |
+| T3 | atualizar o README (só documentação) | teste oculto que lê o README; a classe QA não edita código | sem marco: nenhum teste a cumpre ainda |
 | T4 | mudar o workflow de CI | regra `git.workflows` ([workflows](../github/identidades-e-apps.md#workflows)) | M5, com `com-workflows` |
 
-O `tarefas.yaml` do M0 traz T1 a T3 como **dados** (pedido, arquivos permitidos, comando e testes ocultos, conferidos pela completa, CA-TREINO-06); a coluna "Em uso a partir de" diz quando algum teste ou suíte passa a **cumprir** a tarefa (T3 no M3, T2 no M4). T4 entra no M5, junto da variação de que precisa.
+O `tarefas.yaml` do M0 traz T1 a T3 como **dados** (pedido, arquivos permitidos, comando e testes ocultos, conferidos pela completa, CA-TREINO-06); a coluna "Em uso a partir de" diz quando algum teste ou suíte passa a **cumprir** a tarefa: hoje nenhum (nem a primeira [conformidade](../provedores/conformidade.md) real, que monta o próprio repositório), e a ordem de implementação não marca a adoção (só a tabela de marcos abaixo prevê T1 e T3 na suíte pesada do M7). T4 entra no M5, junto da variação de que precisa.
 
 ### `testkit.NewProject`
 
@@ -71,8 +71,7 @@ O `tarefas.yaml` do M0 traz T1 a T3 como **dados** (pedido, arquivos permitidos,
 | Marco | O que entra |
 |---|---|
 | M0 | `NewProject`, modelo `go-basico`, variação padrão, o formato do `tarefas.yaml` e T1 a T3 como dados (T1 já em uso pela completa) |
-| M3 | `com-sensiveis`, T3 em uso e a primeira [conformidade](../provedores/conformidade.md) real com T1 |
-| M4 | `sem-agents-md`, `com-claude-md`, `com-hooks-claude` e T2 em uso |
+| M3 e M4 | nada deste documento entrou: `com-sensiveis`, `sem-agents-md`, `com-claude-md`, `com-hooks-claude`, T2, T3 e T1 na conformidade real esperam um critério que os peça |
 | M5 | `com-workflows`, T4, git por HTTP no GitHub falso e o sandbox |
 | M6 | segundo modelo-base mínimo, `node-basico` (TypeScript/Node) |
 | M7 | suíte pesada com T1 e T3 nos provedores reais |

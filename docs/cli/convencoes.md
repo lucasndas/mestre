@@ -1,6 +1,6 @@
 # Convenções da CLI `mestre`
 
-> **Assunto:** regras comuns a todos os comandos: forma, saída, códigos de saída, identificação do chamador, encaminhamento, segurança, ajuda e diagnóstico · **Componente:** CLI · **Atualizado:** 2026-10-15
+> **Assunto:** regras comuns a todos os comandos: forma, saída, códigos de saída, identificação do chamador, encaminhamento, segurança, ajuda e diagnóstico · **Componente:** CLI · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -9,7 +9,7 @@ Dar a todos os comandos da CLI `mestre` a mesma forma de uso, de saída e de err
 ## Comportamento
 
 ### Forma geral
-- O binário `mestre` está no PATH de toda máquina da Guilda ([componentes](../arquitetura/componentes.md)). `MESTRE_CLI` guarda o caminho absoluto dele: skills e arquivos de hook usam `mestre` e, se não acharem, `$MESTRE_CLI` (PowerShell: `& $env:MESTRE_CLI`).
+- O binário `mestre` está no PATH de toda máquina da Guilda ([componentes](../arquitetura/componentes.md)). `MESTRE_CLI` guarda o caminho absoluto dele. As **skills** usam `mestre` e, se não o acharem, `$MESTRE_CLI` (PowerShell: `& $env:MESTRE_CLI`). Os **arquivos de hook** não procuram: gravam o caminho estável absoluto do binário, que nenhuma variável troca (o repositório poderia defini-la); só o Claude Code, sem caminho estável, cai em `${MESTRE_CLI:-mestre}`, e Codex e Antigravity nunca ([Claude Code](../provedores/claude-code.md#hooks), [Codex](../provedores/codex.md#hooks), [Antigravity](../provedores/antigravity.md#hooks) e a [linha de guarda](../sessao-zero/mesa.md#não-atrapalhar-quem-clona)).
 - Uso: `mestre <comando> [subcomando] [argumentos] [flags]`. Nomes com espaço vão entre aspas. Comandos, flags e textos de saída ficam em inglês.
 - Flags globais: `--json` (saída em JSON), `--help` e `--debug` (mostra no stderr as respostas parciais, que a CLI não imprime; [canal local](../arquitetura/canal-local.md#respostas-parciais)). Durações: `90s`, `10m`, `2h`. `-h` vale `--help`; um `--` sozinho encerra as flags (o que vem depois é argumento, mesmo começando com `--`). Só é flag o que tem a forma `--[a-z][a-z-]*` com `=valor` opcional; qualquer outro texto que comece com `--` (um front matter `---`, `--- Mensagem ---`, `-- resumo`) é argumento. Horários: `HH:MM` ou ISO 8601, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [workspaces](../orquestracao/workspaces.md)).
 - `mestre hook` é interno (só os arquivos de hook o chamam) e **não** segue as regras de saída abaixo: ver [adaptador](../provedores/adaptador.md). Subcomandos de serviço (`mestre run`, `mestre install`, `mestre join`…) são de [componentes](../arquitetura/componentes.md).
