@@ -1,6 +1,6 @@
 # Documentação do Mestre
 
-> **Assunto:** ponto de entrada da documentação · **Componente:** Projeto · **Atualizado:** 2026-10-13
+> **Assunto:** ponto de entrada da documentação · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 Comece por aqui. Desça pelo índice da área até achar o documento de que precisa, abra só ele e siga links apenas se precisar de mais detalhe.
 
@@ -12,8 +12,8 @@ Comece por aqui. Desça pelo índice da área até achar o documento de que prec
 | [orquestracao](orquestracao/INDEX.md) | workspaces, mesas, Grão-Mestre, Mestre da mesa, personagens, missões, esperas, rituais, pergaminhos, grimórios | trabalho no núcleo de orquestração |
 | [cli](cli/INDEX.md) | referência de sintaxe da CLI `mestre` e skills geradas | implementar ou usar um comando |
 | [sessao-zero](sessao-zero/INDEX.md) | preparação de workspace, mesa e personagem | geração de arquivos, instruções e hooks |
-| [provedores](provedores/INDEX.md) | adaptador, Claude Code, Codex, Antigravity, conformidade | integração com um provedor de agente |
-| [classes](classes/INDEX.md) | classes, permissões e teto do workspace | regras do que cada agente pode fazer |
+| [provedores](provedores/INDEX.md) | adaptador, Claude Code, Codex, Antigravity, conformidade, teste de classe | integração com um provedor de agente |
+| [classes](classes/INDEX.md) | classes, permissões, teto do workspace, classes sugeridas, skills de apoio e MCP por classe | regras do que cada agente pode fazer |
 | [github](github/INDEX.md) | ações por nível, Apps, eventos, aprovação no GitHub | qualquer interação com o GitHub |
 | [telegram](telegram/INDEX.md) | bot, roteamento, usuários e níveis, decretos, segurança, anexos | canal com os usuários |
 | [aprovacoes](aprovacoes/INDEX.md) | política e fluxo de aprovação | pedidos de aprovação |

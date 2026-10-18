@@ -34,9 +34,9 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
   permissions.yaml    o que a classe pode fazer (ver permissoes.md)
   hooks/hooks.yaml    hooks extras, por evento do Mestre
   hooks/…             scripts usados pelos hooks (só classes globais e do workspace)
-  skills/<nome>/      skills próprias da classe (opcional); support/<nome>/: skills de apoio
+  skills/<nome>/      skills próprias da classe (opcional); support/<nome>/: skills de apoio (M8)
 ```
-O pacote tem até 64 arquivos (inclusive os casos de `cases/`, [teste de classe](../provedores/teste-de-classe.md)), 512 KiB e 256 KiB por arquivo, porque viaja inteiro na replicação; links e arquivos que não são comuns são recusados.
+O pacote tem até 64 arquivos (inclusive os casos de `cases/`, desde o M7, [teste de classe](../provedores/teste-de-classe.md)), 512 KiB e 256 KiB por arquivo, porque viaja inteiro na replicação; links e arquivos que não são comuns são recusados.
 
 Frontmatter do `CLASS.md`:
 
@@ -48,7 +48,7 @@ skills: [rodar-suite, mestre-relatorio]
 provider: codex          # opcional: preferência para escolher a ficha
 model: ""                # opcional
 requires: {gpu: true}    # opcional: requisitos sobre a máquina
-done_requires: {proof: all, verify: true}   # opcional: o que o done exige (prova-e-devolucao.md)
+done_requires: {proof: all, verify: true}   # opcional, desde o M5: o que o done exige (prova-e-devolucao.md)
 ```
 `name` é o da pasta; `description` e `app` são obrigatórios. `requires` soma aos requisitos da base e da ficha; os aceitos e como a máquina é escolhida estão em [ficha da máquina](../guilda/ficha-da-maquina.md#requisitos), e um requisito desconhecido ou `gui: true` recusa a classe ao salvar.
 
@@ -110,7 +110,7 @@ pre_tool:
 
 ### Skills da classe
 
-As [skills de apoio](skills-de-apoio.md) (`support_skills`) e os servidores MCP ([MCP por classe](mcp-por-classe.md), campo `mcp`) têm documentos próprios. `skills` lista nomes de skills do pacote (`skills/<nome>/`) ou já existentes no `.agents/skills/` do projeto. As do pacote chegam **só aos personagens da classe**, nunca à pasta compartilhada do worktree: no Claude Code, em `.mestre/agents/<id>/`, lida por `--add-dir`; no Codex e no Antigravity, como seção compacta na camada do Mestre do personagem (`MESTRE.md` ou arquivo de agente). A regra única de entrega por provedor está em [sessão zero do personagem](../sessao-zero/personagem.md); as skills da CLI `mestre`, em [skills geradas](../cli/skills-geradas.md).
+As [skills de apoio](skills-de-apoio.md) (`support_skills`, desde o M8) e os servidores MCP ([MCP por classe](mcp-por-classe.md), campo `mcp`, desde o M7) têm documentos próprios. `skills` lista nomes de skills do pacote (`skills/<nome>/`) ou já existentes no `.agents/skills/` do projeto. As do pacote chegam **só aos personagens da classe**, nunca à pasta compartilhada do worktree: no Claude Code, em `.mestre/agents/<id>/`, lida por `--add-dir`; no Codex e no Antigravity, como seção compacta na camada do Mestre do personagem (`MESTRE.md` ou arquivo de agente). A regra única de entrega por provedor está em [sessão zero do personagem](../sessao-zero/personagem.md); as skills da CLI `mestre`, em [skills geradas](../cli/skills-geradas.md).
 
 ### Como a classe chega ao personagem
 
@@ -119,7 +119,7 @@ As [skills de apoio](skills-de-apoio.md) (`support_skills`) e os servidores MCP 
 
 ### Validação (`mestre class check`)
 
-Confere: frontmatter e nome único (e avisa de `mestre <comando>` inexistente citado no pacote, [classes sugeridas](classes-sugeridas.md#comando-inexistente-numa-skill)); os casos de `cases/` ([teste de classe](../provedores/teste-de-classe.md#os-casos)); esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali. Pacote inválido sai com `invalid_class` e a lista de problemas; "acima do teto" é só um estado (nada é apagado), e o `run` que o pipeline recusa é um aviso.
+Confere: frontmatter e nome único (e, desde o M8, avisa de `mestre <comando>` inexistente citado no pacote, [classes sugeridas](classes-sugeridas.md#comando-inexistente-numa-skill)); desde o M7, os casos de `cases/` ([teste de classe](../provedores/teste-de-classe.md#os-casos)); esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali. Pacote inválido sai com `invalid_class` e a lista de problemas; "acima do teto" é só um estado (nada é apagado), e o `run` que o pipeline recusa é um aviso.
 
 O código é `internal/classes` (`Library`, `Examine`) e `internal/hook` (`ClassHookSource`, `AsyncRunner`). A entrega aos personagens (M4), o estado dos Apps e a aprovação pelo fluxo (M5) entram por interfaces e chegam nos marcos seguintes ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 

@@ -57,6 +57,7 @@ Uma versão nova pode entrar entre duas tarefas sem teste prévio: o CLI se atua
 - **CA-CLIUPD-05** · *rápida* — **Dado** uma conformidade em andamento para o Codex numa máquina, **quando** chega um recrutamento de ficha Codex, **então** ele espera ou vai para outra máquina que atenda.
 - **CA-CLIUPD-06** · *rápida* — **Dado** o agente falso do Codex mostrando a tela de atualização ao iniciar, **quando** o personagem começa, **então** o adaptador escolhe atualizar, o personagem chega a pronto e a versão nova é detectada.
 - **CA-CLIUPD-10** · *completa* — **Dado** uma Cidadela e uma Torre reais com o agente falso trocando sozinho da versão 1 para a 2 na Torre, **quando** o motor detecta, **então** a conformidade roda na Torre e passa, os personagens existentes seguem na versão 1 e o próximo criado nasce na 2.
+- **CA-CLIUPD-11** · *rápida* — **Dado** resultados de [teste de classe](teste-de-classe.md) no Claude Code 2.1.299 e a conformidade passando no 2.1.300, **quando** o motor registra a versão nova, **então** os resultados da classe nesse provedor ficam "testada em versão anterior" e o `class check` mostra a dica de testar de novo, sem rodar nada.
 
 ## Depende de
 

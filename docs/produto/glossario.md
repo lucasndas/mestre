@@ -46,7 +46,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Terminal | Onde cada agente roda na máquina; continua vivo quando o motor reinicia ou é atualizado. | [terminal](../arquitetura/terminal.md) |
 | Ponto seguro | Momento em que um personagem pode ser encerrado sem perder trabalho: livre e com a tarefa entregue. | [personagens](../orquestracao/personagens.md#encerramento-seguro) |
 | Party | O time de personagens conectados desta mesa. | [conexões](../orquestracao/conexoes.md) |
-| Base | A receita de como um terminal é iniciado: comando, pasta e em quais máquinas pode rodar. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
+| Base | A configuração de como um terminal é iniciado: comando, pasta e em quais máquinas pode rodar. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Ficha | Um tipo de personagem pronto: usa uma base e define agente, classe, conta e limites. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Perfil de conta | Qual assinatura do provedor (Claude, Codex, Antigravity) um personagem usa naquela máquina. | [bases e fichas](../orquestracao/bases-e-fichas.md) |
 | Operador do PC | Agente que usa o seu PC Windows com a sua conta, só com aprovação do Dono, por pouco tempo e com aviso na tela. | [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) |
@@ -56,6 +56,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Pergaminho | Nota em Markdown no canvas que os agentes conectados leem e escrevem. | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
 | Tomo | Uma pilha de pergaminhos agrupados. | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
 | Grimório | Um time salvo do canvas, com fluxo e notas, para restaurar em outra mesa. | [grimórios](../orquestracao/grimorios.md) |
+| Receita | Missão pronta por tipo de pedido (bug, funcionalidade, ajuste), das classes sugeridas, usada com `--recipe`. | [classes sugeridas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional) |
 | Ritual | Rotina agendada que envia um comando ou pedido a um agente em certo horário. | [rituais](../orquestracao/rituais.md) |
 | Missão | Sequência de etapas em que um agente passa o trabalho ao próximo (A → B → C). | [missões](../orquestracao/missoes.md) |
 | Etapa | Um passo de uma missão, feito por um personagem. | [missões](../orquestracao/missoes.md) |

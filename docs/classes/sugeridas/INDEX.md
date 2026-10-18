@@ -11,4 +11,4 @@
 | [revisor.md](revisor.md) | revisão independente: hipóteses próprias, achados com identificador estável, não escreve | ao ativar ou adaptar a classe Revisor |
 | [qa.md](qa.md) | prova cada critério e procura os testes que faltam | ao ativar ou adaptar a classe QA |
 | [documentador.md](documentador.md) | atualiza a documentação que a mudança afeta | ao ativar ou adaptar a classe Documentador |
-| [receitas.md](receitas.md) | missões por tipo de pedido (bug, funcionalidade nova, ajuste, investigação) e o grimório "Refino de UI" | ao montar uma missão a partir do time sugerido |
+| [receitas.md](receitas.md) | missões por tipo de pedido (bug, funcionalidade nova, ajuste, investigação) e a receita "Refino de UI" | ao montar uma missão a partir do time sugerido |

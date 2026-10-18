@@ -47,7 +47,7 @@ Somente leitura. `list` mostra nome, base/agente, classe padrão, ciclo de vida 
 
 ### `mestre quest`
 ```
-mestre quest create "<Missão>" (--file <arq | -> | --recipe <nome> [--skip <id>]…)
+mestre quest create "<Missão>" (--file <arq | -> | --recipe <nome> [--skip <id>]…)   # --recipe desde o M8: classes/classes-sugeridas.md
 mestre quest run "<Missão>" [--input "<texto>" | --input-file <arq>]
 mestre quest status ["<Missão>"]
 mestre quest pause "<Missão>"      mestre quest resume "<Missão>"

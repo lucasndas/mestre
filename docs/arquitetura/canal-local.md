@@ -37,7 +37,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 | `v` | versão do canal (1) |
 | `id` | ULID gerado pela CLI; é o `request_id` e a chave de idempotência (até 128 caracteres) |
 | `agent_id` | valor de `MESTRE_AGENT_ID` (vazio se não houver) |
-| `cmd` | comando e subcomando, separados por espaço (ex.: `note write`); `hook` para o despachante; `mcp` para o [gateway MCP](../classes/mcp-por-classe.md#o-gateway-do-mestre), identificado como o despachante |
+| `cmd` | comando e subcomando, separados por espaço (ex.: `note write`); `hook` para o despachante; `mcp` (desde o M7) para o [gateway MCP](../classes/mcp-por-classe.md#o-gateway-do-mestre), identificado como o despachante |
 | `args` | argumentos posicionais, como texto; no `hook`, um único objeto: o evento normalizado ([adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento)) |
 | `flags` | flags já validadas pela definição de comandos, com os nomes longos sem `--` |
 | `cwd` | pasta atual do processo chamador |
@@ -78,7 +78,7 @@ O motor pode reiniciar (atualização, cura) enquanto os agentes trabalham: os t
 
 ### Encaminhamento à Cidadela
 
-- O motor local resolve sozinho `help`, `debug`, `hook` e `mcp` (o [gateway MCP](../classes/mcp-por-classe.md#o-gateway-do-mestre): decisão local e chamada remota feita pela máquina); todo o resto vai à Cidadela na mensagem `cli.call` (na própria Cidadela, a chamada é atendida no mesmo processo, pelo mesmo código), cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. A Cidadela devolve `cli.result` com **a mesma resposta**, que o motor repassa ([mensagens](../conectividade/mensagens.md)). As parciais de um comando longo também vão em `cli.result`, repassadas linha a linha a partir do M4, com os comandos que as mandam (`ask`); no M3 a Torre as ignora e repassa só a resposta final.
+- O motor local resolve sozinho `help`, `debug`, `hook` e, desde o M7, `mcp` (o [gateway MCP](../classes/mcp-por-classe.md#o-gateway-do-mestre): decisão local e chamada remota feita pela máquina); todo o resto vai à Cidadela na mensagem `cli.call` (na própria Cidadela, a chamada é atendida no mesmo processo, pelo mesmo código), cujo corpo é **o mesmo pedido**, acrescido da identidade já verificada. A Cidadela devolve `cli.result` com **a mesma resposta**, que o motor repassa ([mensagens](../conectividade/mensagens.md)). As parciais de um comando longo também vão em `cli.result`, repassadas linha a linha a partir do M4, com os comandos que as mandam (`ask`); no M3 a Torre as ignora e repassa só a resposta final.
 - Cidadela fora ou suspensa: `citadel_unavailable`; durante uma promoção ou uma troca planejada, `citadel_in_failover`. A Cidadela aplica a mesma regra ao `cli.call` que recebe de uma Torre e ao pedido feito nela mesma; exceto `done`, que vai para a fila de saída e é aplicado uma vez quando a Cidadela volta ([convenções da CLI](../cli/convencoes.md#encaminhamento-à-cidadela)).
 
 ## Regras e erros
