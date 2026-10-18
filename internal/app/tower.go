@@ -294,6 +294,9 @@ func (e *Engine) DecideEntry(ctx context.Context, joinID string, d guild.Decisio
 	}
 	c := run.guild()
 	if c == nil {
+		if why := run.whyDown(); why != "" {
+			return fmt.Errorf("app: the Citadel cannot take entries, %s: %w", why, vault.ErrClosed)
+		}
 		return guild.ErrSuspended
 	}
 	return c.Decide(ctx, joinID, d)
@@ -334,17 +337,41 @@ func (e *Engine) promotable(ctx context.Context, db *store.DB) error {
 		return fmt.Errorf("%w: the machine is %s", guild.ErrNotPromotable, state)
 	case excluded:
 		return fmt.Errorf("%w: %w", guild.ErrNotPromotable, guild.ErrExcludedMachine)
-	case !e.vaultCopy().Holds(ctx):
+	}
+	// the key first: a key that is refused, or wrong, says why, where "no copy" would not
+	if err := vault.Check(ctx, e.vaultCopy().Keys, db, transport.CAKeySecret); err != nil {
+		return fmt.Errorf("%w: %w", guild.ErrNotPromotable, err)
+	}
+	if !e.vaultCopy().Holds(ctx) { // and the envelope
 		return fmt.Errorf("%w: the machine has no copy of the vault", guild.ErrNotPromotable)
 	}
 	return nil
 }
 
+// vaultOpens says whether the copy of the vault this Tower holds would open over
+// its replica and give it the key of the CA (vault.Check). The promotion asks
+// before it wins the epoch: after, the failure would leave the epoch in the lock
+// without a Citadel (and the old Citadel of a planned handover, which sees the
+// new epoch, steps down).
+func (e *Engine) vaultOpens(ctx context.Context) error {
+	db, err := guilddb.Open(ctx, e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: e.cfg.Synchronous, Replica: true})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := vault.Check(ctx, e.vaultCopy().Keys, db, transport.CAKeySecret); err != nil {
+		return fmt.Errorf("app: the promotion cannot go on, the vault of this machine does not serve: %w", err)
+	}
+	return nil
+}
+
 // promote takes the command, once the Tower period stopped applying the
-// replication: it reads the last lsn of the replica and wins the next epoch
-// in the lock before anything writes, so losing the lock, or not reaching it,
-// leaves the replica exactly as the Citadel sent it and the machine goes on
-// as its Tower. Winning, it opens the replica as the main database with the
+// replication: it reads the last lsn of the replica, checks that its copy of
+// the vault would open (without it there is no CA to sign with, and the epoch
+// would be lost) and wins the next epoch in the lock before anything writes,
+// so losing the lock, or not reaching it, leaves the replica exactly as the
+// Citadel sent it and the machine goes on as its Tower. Winning, it opens the
+// replica as the main database with the
 // vault and the CA, signs its certificate and becomes the Citadel, which
 // waits before acting outside. A failure after the lock was won leaves the
 // epoch in the lock without a certificate: the Owner is warned and promotes
@@ -365,6 +392,9 @@ func (e *Engine) promote(ctx context.Context, p *promotion) transition {
 	}
 	if from < p.wantLSN {
 		return fail(fmt.Errorf("app: the replica has the lsn %d, the handover %d", from, p.wantLSN))
+	}
+	if err := e.vaultOpens(ctx); err != nil {
+		return fail(err)
 	}
 	n, err := guild.ClaimEpoch(ctx, e.deps.Lock, e.epochs.Epoch(), e.id.MachineID)
 	if err != nil {
