@@ -98,3 +98,7 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 
 - [Protocolo](../conectividade/protocolo.md) · [Guilda](guilda.md) · [Cofre](../plataforma/cofre.md)
 - [Persistência](../arquitetura/persistencia.md) · [Segurança](../arquitetura/seguranca.md)
+
+## Verificar na implementação
+
+- **Verificar na implementação:** a troca da chave do cofre chega às Torres antes das linhas recifradas. O commit da recifragem passa pela conexão de escrita e vai às Torres na hora pelo `replication_log`; o chaveiro novo vai depois, em `Primary.VaultChanged` (tipo volátil, que se repete na próxima conexão). Se a Cidadela cai entre as duas coisas, as Torres têm as linhas da chave N+1 e só a chave N, e o cofre e a CA delas não abrem. **Padrão:** como está; a troca pelo painel, que a chama, só entra no M6. **Se falhar:** replicar com confirmação o chaveiro com as duas versões e o envelope antes do commit da recifragem, ou segurar a replicação das linhas de `secrets` até as Torres confirmarem o chaveiro. **Onde:** suíte completa, com a Cidadela e uma Torre: parar a Cidadela entre o commit e o envio do chaveiro (falha simulada) e abrir o cofre na Torre promovida.
