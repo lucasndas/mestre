@@ -452,7 +452,9 @@ func firstMessage(epic Epic, m Message, has bool, notes string) string {
 	}
 	if notes != "" {
 		b.WriteString("\n\n--- Observações do Grão-Mestre ---\n")
-		b.WriteString(notes)
+		// the message is delivered under the header of the user, so the notes, which
+		// the Grão-Mestre wrote, cannot carry a header of another message
+		b.WriteString(inbox.EscapeHeaders(notes))
 	}
 	return b.String()
 }

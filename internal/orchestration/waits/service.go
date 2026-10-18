@@ -440,7 +440,9 @@ func wakeText(w Wait, targets []Target) string {
 			fmt.Fprintf(&b, "\n- %s concluiu.", t.Name)
 			continue
 		}
-		fmt.Fprintf(&b, "\n- %s concluiu: %s", t.Name, t.Result)
+		// the result is text of an agent: one line stays on the line of the engine, more lines
+		// come quoted under it, so they cannot imitate the line of another step
+		b.WriteString("\n" + inbox.Say(fmt.Sprintf("- %s concluiu:", t.Name), t.Result, "|"))
 	}
 	return b.String()
 }

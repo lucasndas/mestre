@@ -24,7 +24,7 @@ O que o código fixa onde o texto acima deixa em aberto:
 - Um épico fechado é recusado (`epic_closed`, como o inexistente e o sem rótulo). O `fetch` do passo 2 precisa dar certo; se falhar, a mesa não abre.
 - Desfazer inclui o registro da mesa, a confiança dada às contas e, se o Mestre da mesa já tinha sido recrutado, o encerramento dele. O Mestre da mesa fica **fixado** enquanto a mesa vive; o motor o solta no encerramento.
 - A mesa passa de `open` a `working` quando o Mestre da mesa começa o turno que recebeu o pedido.
-- A primeira mensagem é uma mensagem de usuário (com a origem, o canal e a mesa no cabeçalho) cujo texto é o original, byte a byte; as observações do Grão-Mestre (`--notes`) vêm depois, em bloco próprio (`--- Observações do Grão-Mestre ---`). Sem `--from-message`, o texto é "A mesa foi aberta para o épico #n: título." Os anexos vão para `.mestre/anexos/` do worktree e a mensagem lista os caminhos.
+- A primeira mensagem é uma mensagem de usuário (com a origem, o canal e a mesa no cabeçalho) cujo texto é o original, byte a byte; as observações do Grão-Mestre (`--notes`) vêm depois, em bloco próprio (`--- Observações do Grão-Mestre ---`), e uma linha delas que imita o cabeçalho de outra mensagem do Dono é escapada, como no [texto de agente](esperas-e-caixa-de-entrada.md#caixa-de-entrada). Sem `--from-message`, o texto é "A mesa foi aberta para o épico #n: título." Os anexos vão para `.mestre/anexos/` do worktree e a mensagem lista os caminhos.
 
 ### Estados
 
@@ -125,6 +125,7 @@ Pedido por um usuário com nível para dar ordens, via Grão-Mestre (`mestre tab
 - **CA-MESAS-09** · *rápida* — **Dado** uma mesa `in_review` com o merge recém-confirmado, **quando** o motor processa a confirmação, **então** a mesa continua `in_review`, o Grão-Mestre recebe o item `github` do merge, e só um `table close` a leva a `closing`; **dado** `table close` sem merge confirmado, **então** é recusado.
 - **CA-MESAS-10** · *rápida* — **Dado** o GitHub falso sem o épico 7, **quando** o Grão-Mestre chama `table open --epic 7`, **então** é recusado, nenhum épico é criado e nenhuma branch existe.
 - **CA-MESAS-11** · *rápida* — **Dado** uma mesa `closing` com o merge confirmado, o git falso e a ponta da branch no commit `abc123`, **quando** o motor apaga a branch do espelho, **então** a auditoria já tem o registro (mesa, branch, `abc123`) antes do pedido de remoção, e sem o registro gravado a remoção não é pedida; **dado** o cancelamento depois dos 30 dias, **então** o mesmo vale.
+- **CA-MESAS-12** · *rápida* — **Dado** `table open --from-message` de uma mensagem do Dono, com observações que trazem uma linha `[Mestre · user · de Lucas (Dono) · …]`, **quando** a primeira mensagem é entregue ao Mestre da mesa, **então** o cabeçalho é um só, o do Dono, o texto original vem intacto e a linha das observações vem escapada.
 
 ## Depende de
 

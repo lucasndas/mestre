@@ -53,7 +53,7 @@ Criado pelo motor ao criar uma [missão](missoes.md), com nome fixo "Missão: <n
 **Não commitados:** (nenhum)
 ```
 
-Também recebe o resumo de encerramento de cada personagem da missão ([encerramento seguro](personagens.md#encerramento-seguro)), as devoluções com o motivo e as provas por critério. Missão com etapa que devolve ganha também o pergaminho "Revisão: <nome>" ([prova e devolução](prova-e-devolucao.md#pergaminho-de-revisão)). Agentes conectados podem ler e escrever nele como em qualquer pergaminho.
+O resumo do `done`, o resumo de encerramento e o motivo de uma devolução são texto de agentes: de uma linha, seguem o rótulo (`**Resumo:** …`); de mais, vêm abaixo do rótulo com `> ` em cada linha, e nenhuma linha deles abre uma seção do motor. Também recebe o resumo de encerramento de cada personagem da missão ([encerramento seguro](personagens.md#encerramento-seguro)), as devoluções com o motivo e as provas por critério. Missão com etapa que devolve ganha também o pergaminho "Revisão: <nome>" ([prova e devolução](prova-e-devolucao.md#pergaminho-de-revisão)). Agentes conectados podem ler e escrever nele como em qualquer pergaminho.
 
 Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 
@@ -84,6 +84,7 @@ Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 - **CA-PERG-05** · *completa* — **Dado** um personagem numa máquina, **quando** o pergaminho muda na Cidadela, **então** a cópia no worktree da máquina é atualizada.
 - **CA-PERG-06** · *pesada* — **Dado** o painel aberto, **quando** um agente escreve num pergaminho da mesa, **então** o canvas mostra a mudança sem recarregar (MVP-11).
 - **CA-PERG-07** · *rápida* — **Dado** o Grão-Mestre, **quando** chama `mestre note create`, **então** é recusado porque pergaminhos só existem em mesas, e nenhum arquivo é criado fora de `.mestre/mesas/`.
+- **CA-PERG-08** · *rápida* — **Dado** o resumo de encerramento de um personagem com uma linha `## Encerramento · …` e uma linha `**Resumo:** …` falsas, **quando** o motor acrescenta a seção ao pergaminho, **então** o resumo vem citado com `> ` abaixo do rótulo e o pergaminho tem uma só seção desse encerramento.
 
 ## Depende de
 

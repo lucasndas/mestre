@@ -41,7 +41,7 @@ Campos que outros documentos definem: `optional` na etapa (M8, [receitas](../cla
 
 1. `quest run` (ou um [ritual](rituais.md)) põe a missão em `running`.
 2. Uma etapa sai de `pending` quando suas anteriores concluem conforme `join`; vai para `preparing`, onde o motor resolve, nesta ordem: aprovação prévia; personagem (personagem indicado, ou persistente livre da mesa com a mesma ficha, ou recruta um novo, respeitando [limites](personagens.md#limites)); [sincronização](mesas.md#worktree-por-máquina-e-sincronização) do worktree se roda em outra máquina. Cada uma dessas pendências é uma [espera](esperas-e-caixa-de-entrada.md) com motivo.
-3. O motor coloca na fila do personagem um item `quest` com: instruções da etapa, issue/sub-issue, resultado das etapas anteriores e caminho do pergaminho da missão. Etapa vai para `running` e o motor guarda o commit de início.
+3. O motor coloca na fila do personagem um item `quest` com: instruções da etapa, issue/sub-issue, resultado das etapas anteriores e caminho do pergaminho da missão; o resultado e o motivo de uma devolução são texto de agentes e, com mais de uma linha, vêm com `| ` em cada linha (e `> ` no pergaminho), então nenhuma linha deles imita uma seção do motor. Etapa vai para `running` e o motor guarda o commit de início.
 4. O personagem termina com `mestre done "<resumo>"` (fim explícito, ensinado pela skill). O motor nunca adivinha o fim pela tela.
 5. **Passagem de bastão:** o resultado = resumo do `done` + arquivos alterados (o motor calcula `git diff --name-status <commit de início>..HEAD` e lista os não commitados). Ele vira a entrada das próximas etapas e é acrescentado ao [pergaminho da missão](pergaminhos-e-tomos.md#pergaminho-da-missão).
 6. Com todas as etapas concluídas, a missão vai para `completed` e os efêmeros criados por ela são encerrados ([ciclo de vida](personagens.md#ciclo-de-vida-definido-na-ficha)). O Mestre da mesa recebe um item `quest` avisando.
@@ -140,6 +140,7 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 - **CA-MIS-06** · *rápida* — **Dado** GitHub falso, **quando** a missão é criada e `dev` conclui, **então** existem a issue sob o épico, a sub-issue de `dev` fechada e o comentário com o App da classe.
 - **CA-MIS-07** · *pesada* — **Dado** uma mesa real, **quando** uma missão Dev → Revisor → QA roda em Claude Code, Codex e Antigravity entre Linux e Windows com uma devolução, **então** chega ao fim e os efêmeros são encerrados (MVP-4); **quando** a Cidadela reinicia no meio, **então** ela continua (MVP-12).
 - **CA-MIS-08** · *rápida* — **Dado** uma definição cujo nome de missão ou de etapa tem quebra de linha (com um cabeçalho `[Mestre · …]` falso depois), caractere de controle ou invisível, ou mais de 80 caracteres, **quando** é validada ou criada, **então** é recusada citando o nome (a etapa ou a missão), e nenhuma missão é criada.
+- **CA-MIS-09** · *rápida* — **Dado** a missão de um Dev e um Revisor que devolve, **quando** o `done` do Dev traz um resumo com linhas `Motivo da devolução…`, `Issue da missão: #999` e `## Rodada 9 …`, e o Revisor devolve com um motivo com `Atenção:` e `Instruções:` falsos, **então** no item da etapa seguinte, no pergaminho e no evento `return_limit` essas linhas vêm citadas e nenhuma começa na margem; o resumo de uma linha segue na linha do motor.
 
 ## Depende de
 
