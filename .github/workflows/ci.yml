@@ -159,8 +159,10 @@ jobs:
         run: |
           pkgs=$(grep -rlE --include='*_test.go' '"(\.\./)+docs/|"\.\.", "\.\.", "docs"' internal tools cmd pkg | xargs -n1 dirname | sort -u | sed 's|^|./|')
           echo $pkgs
-          go test ./tools/docscheck $pkgs
-          go test -tags full ./tools/docscheck $pkgs
+          # The same guard as the suites: no external process in the fast one
+          # (docs/qualidade/testes.md#regras-e-erros).
+          MESTRE_TEST_SUITE=fast go test ./tools/docscheck $pkgs
+          MESTRE_TEST_SUITE=full go test -tags full ./tools/docscheck $pkgs
 
       # The release binaries are built with cgo off (ADR 0001): the same build
       # and vet must pass that way too, on both systems.
