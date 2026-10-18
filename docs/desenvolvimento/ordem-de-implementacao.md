@@ -131,7 +131,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M6 | 3 | [visão do workspace](../painel/visao-do-workspace.md) · [`mestre attach`](../cli/attach.md) |
 | M7 | 1 | [Guardião](../autocura/guardiao.md) · [instalação e atualização](../plataforma/instalacao-e-atualizacao.md) |
 | M7 | 2 | [camadas](../autocura/camadas.md) · [checklist](../plataforma/checklist.md) |
-| M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) |
+| M7 | 3 | [página reserva](../autocura/pagina-reserva.md) · [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) · [autoatualização](../plataforma/autoatualizacao.md) · [teste de classe](../provedores/teste-de-classe.md) |
 | M7 | 4 | [diagnóstico com IA](../autocura/diagnostico-com-ia.md) · [atualização dos CLIs](../provedores/atualizacao-dos-clis.md) |
 
 ### Regras de execução da ordem

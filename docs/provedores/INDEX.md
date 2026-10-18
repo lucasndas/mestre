@@ -1,10 +1,11 @@
 # Provedores
 
-> **Assunto:** como o Mestre conversa com Claude Code, Codex e Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** como o Mestre conversa com Claude Code, Codex e Antigravity CLI, e como testa uma classe em cada um · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
 | [adaptador.md](adaptador.md) | contrato do adaptador, formato interno de evento, mapa de eventos e de ferramentas, telas interativas, digitação de mensagens (`TypeMessage`), retomada de sessão, monitoramento reduzido | antes de mexer em qualquer provedor ou na entrega de instruções e mensagens |
+| [teste-de-classe.md](teste-de-classe.md) | `mestre class test`: casos da classe com o provedor real, efeitos esperados e proibidos, limiar de execuções, resultado por versão, custo | ao testar se uma classe faz o que diz em cada provedor |
 | [despachante-de-hooks.md](despachante-de-hooks.md) | o comando `mestre hook`: fluxo, prazos, modo degradado, erro interno, respostas por provedor | ao mexer nos hooks ou nas decisões de permissão na máquina |
 | [claude-code.md](claude-code.md) | Claude Code: instruções, camada do Mestre, skills, hooks, confiança, flags, contas, uso e rate limit, telas | ao implementar ou atualizar o adaptador do Claude Code |
 | [codex.md](codex.md) | Codex: instruções, camada do Mestre, skills, hooks e confiança dos hooks, sandbox, flags, contas, uso e rate limit, telas | ao implementar ou atualizar o adaptador do Codex |

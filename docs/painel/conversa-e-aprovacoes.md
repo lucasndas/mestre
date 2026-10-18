@@ -1,6 +1,6 @@
 # Conversa e aprovações no painel
 
-> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-14
+> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -25,6 +25,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 
 - Lista os pedidos `aguardando_usuarios` que o usuário pode responder, em todos os workspaces dele, mais recentes primeiro, com filtro por workspace, mesa e tipo ([fluxo](../aprovacoes/fluxo.md)).
 - Cada item mostra o mesmo conteúdo do Telegram (o que é, onde, por quê, risco, arquivos, motivo da dúvida, recomendação, os níveis da [cadeia](../orquestracao/cadeia-de-aprovacao.md) por onde já passou) e os botões das [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) que aquele usuário pode dar, filtrados pelo nível e pelo tipo como no [fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários), mais **Ver detalhes**. As respostas que pedem dado mostram o campo antes de confirmar: a duração em "por um tempo", o padrão (já sugerido pelo motor, editável) em "o padrão", o texto em "negar com instrução" e "perguntar de volta", o escopo em "delegar". No painel, **Ver detalhes** mostra o diff inteiro.
+- **Pedido que bloqueia** ([os campos](../aprovacoes/pedido-que-bloqueia.md#os-campos)): os mesmos campos da mensagem do Telegram, com a evidência **inteira** (o Telegram a corta em 3 linhas), já passada pelo mascarador, e o texto do agente dentro do bloco "texto do agente, não verificado". Cada passo de **Para destravar** que o painel sabe fazer (cadastrar no cofre, abrir o PR) vira botão.
 - Pedidos parecidos agrupados aparecem como um item com a lista das ações ([fluxo](../aprovacoes/fluxo.md#quórum-e-já-respondido-por)).
 - Tipos que pedem PIN abrem o campo de PIN depois do botão ([login](login.md#pin-em-ações-sensíveis)).
 - Resposta dada em outro canal ou por outro usuário atualiza o item na hora: "Já respondido por <nome>: Aprovado às 14:32", sem botões.
@@ -54,11 +55,13 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **CA-CONV-05** · *completa* — **Dado** um PDF enviado pela conversa do painel, **quando** chega, **então** é salvo como anexo do workspace com origem "painel" e entregue ao Grão-Mestre com o caminho (MVP-10).
 - **CA-CONV-06** · *pesada* — **Dado** um PR numa área sensível, **quando** o Grão-Mestre pergunta e eu aprovo pela central do painel, **então** a decisão é aplicada no GitHub (dublê) (MVP-7).
 - **CA-CONV-07** · *rápida* — **Dado** um pedido `alto` aberto nas pessoas, **quando** um Administrador e o Dono abrem a central, **então** os dois veem **Aprovar o padrão** e **Aprovar sempre para a classe**, só o Dono vê **Delegar**, e a rota de delegar chamada pelo Administrador é recusada com o nível exigido; **quando** o Administrador escolhe **Aprovar o padrão**, **então** o campo traz o padrão sugerido pelo motor e o PIN é pedido antes de valer.
+- **CA-CONV-08** · *rápida* — **Dado** um pedido que bloqueia com evidência de 10 linhas contendo um token `ghp_…` e o campo "Por que não decido" vindo do agente, **quando** a central o mostra, **então** aparecem as 10 linhas com o token mascarado, o texto do agente dentro do bloco "não verificado" e o botão do passo "cadastrar no cofre".
 
 ## Depende de
 
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Fluxo de aprovação](../aprovacoes/fluxo.md)
+- [Pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md)
 - [Roteamento](../telegram/roteamento.md)
 - [Anexos e transcrição](../telegram/anexos-e-transcricao.md)
 - [Usuários e níveis](../telegram/usuarios-e-niveis.md)

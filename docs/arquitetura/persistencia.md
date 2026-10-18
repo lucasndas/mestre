@@ -1,6 +1,6 @@
 # Persistência
 
-> **Assunto:** banco principal na Cidadela, réplica nas Torres e banco local de máquina, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-15
+> **Assunto:** banco principal na Cidadela, réplica nas Torres e banco local de máquina, o que vai no banco e o que vai em arquivo, tabelas principais, terminais, logs e backup · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Princípios
 
@@ -47,7 +47,7 @@ Nomes de tabela em inglês (são identificadores de código). Colunas detalhadas
 | Anexos | `attachments` (autor, data, origem, caminho, tamanho) | [anexos e transcrição](../telegram/anexos-e-transcricao.md) |
 | Uso e custo | `usage_records`, `usage_limits` | [limites de uso](../plataforma/limites-de-uso.md) |
 | Cofre | `secrets` (segredos cifrados, inclusive a chave privada da CA da Guilda; em toda máquina menos a excluída; nas credenciais de site, os metadados `owner_user`, `classes`, `domains`, `kind` e `expires_at` fora da parte cifrada), `site_login_attempts` (estado de cada login, sem código nem senha) | [cofre](../plataforma/cofre.md) |
-| Atualizações | `releases` (versões do Mestre vistas, estado, aprovação), `update_steps` (passos por máquina e trava de atualização), `conformance_results` (por máquina, provedor, versão e perfil) | [autoatualização](../plataforma/autoatualizacao.md), [atualização dos CLIs](../provedores/atualizacao-dos-clis.md), [conformidade](../provedores/conformidade.md) |
+| Atualizações | `releases` (versões do Mestre vistas, estado, aprovação), `update_steps` (passos por máquina e trava de atualização), `conformance_results` (por máquina, provedor, versão e perfil), `class_test_results` (por classe, hash da versão, provedor, versão do CLI, máquina e perfil; M7, [teste de classe](../provedores/teste-de-classe.md)) | [autoatualização](../plataforma/autoatualizacao.md), [atualização dos CLIs](../provedores/atualizacao-dos-clis.md), [conformidade](../provedores/conformidade.md) |
 | Operador do PC | `operator_sessions`, `operator_captures` (abaixo) | [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) |
 | Operação | `checklist_alerts`, `healing_log`, `audit_log` (inclusive as transações descartadas numa troca de Cidadela), `processed_commands` (idempotência) | [checklist](../plataforma/checklist.md), [camadas](../autocura/camadas.md), [protocolo](../conectividade/protocolo.md), [Cidadela e Torres](../guilda/cidadela-e-torres.md) |
 
