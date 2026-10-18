@@ -48,6 +48,7 @@ skills: [rodar-suite, mestre-relatorio]
 provider: codex          # opcional: preferência para escolher a ficha
 model: ""                # opcional
 requires: {gpu: true}    # opcional: requisitos sobre a máquina
+done_requires: {proof: all, verify: true}   # opcional: o que o done exige (prova-e-devolucao.md)
 ```
 `name` é o da pasta; `description` e `app` são obrigatórios. `requires` soma aos requisitos da base e da ficha; os aceitos e como a máquina é escolhida estão em [ficha da máquina](../guilda/ficha-da-maquina.md#requisitos), e um requisito desconhecido ou `gui: true` recusa a classe ao salvar.
 

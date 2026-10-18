@@ -123,7 +123,7 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 | M5 | 1 | [identidades e Apps](../github/identidades-e-apps.md) · [usuários e níveis](../telegram/usuarios-e-niveis.md) |
 | M5 | 2 | [política de aprovação](../aprovacoes/politica.md) · [ações por nível](../github/acoes-por-nivel.md) · [bot](../telegram/bot.md) · [trava no GitHub](../guilda/trava-no-github.md) |
 | M5 | 3 | [fluxo de aprovação](../aprovacoes/fluxo.md) · [CLI de issues e PRs](../cli/coordenacao-github.md) · [criação de Apps](../github/criacao-de-apps.md) · [eventos do GitHub](../github/eventos.md) · [segurança do canal](../telegram/seguranca-do-canal.md) · [sincronia com a base](../orquestracao/sincronia-com-a-base.md) |
-| M5 | 4 | [limites de uso](../plataforma/limites-de-uso.md) · [decretos](../telegram/decretos.md) · [roteamento](../telegram/roteamento.md) · [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md) |
+| M5 | 4 | [limites de uso](../plataforma/limites-de-uso.md) · [decretos](../telegram/decretos.md) · [roteamento](../telegram/roteamento.md) · [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md) · [prova e devolução](../orquestracao/prova-e-devolucao.md) |
 | M5 | 5 | [aprovação no GitHub](../github/aprovacao-no-github.md) · [Grão-Mestre](../orquestracao/grao-mestre.md) · [dependência entre mesas](../orquestracao/dependencia-entre-mesas.md) · [anexos e transcrição](../telegram/anexos-e-transcricao.md) · [delegação](../aprovacoes/delegacao.md) · [resumo e sugestões](../aprovacoes/resumo-e-sugestoes.md) |
 | M5 | 6 | [CLI do Grão-Mestre](../cli/grao-mestre.md) · [Mestre da mesa](../orquestracao/mestre-da-mesa.md) |
 | M6 | 1 | [login](../painel/login.md) |

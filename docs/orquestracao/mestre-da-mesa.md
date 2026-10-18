@@ -36,7 +36,7 @@ O [Grão-Mestre](grao-mestre.md#triagem-e-roteamento-do-pedido) é o PM do works
 3. **Cria a issue** no épico, com os critérios Dado/Quando/Então e o texto original intacto (`mestre issue create`, [issues e PRs](../cli/coordenacao-github.md)); a issue é a missão ([missões](missoes.md)).
 4. **Monta o time** para ela, recrutando personagens efêmeros e dispensando-os ao fim da missão.
 5. **Devolve** o que não é da mesa: um pedido de outra área, fora do escopo do épico, não vira issue nem trabalho. Ele o devolve ao Grão-Mestre, com o motivo e a mensagem de origem (`mestre ask "Grão-Mestre" "<motivo>" --from-message <id> --no-wait`), e o Grão-Mestre reencaminha.
-6. **Aceita** antes de pedir o PR: confere cada critério do épico contra a evidência que as etapas deixaram (teste, comando ou captura, no `done` ou no pergaminho da missão) e o estado do worktree. Critério sem evidência devolve a missão ao time (uma volta, [devolução](missoes.md)) e o PR não é aberto. O resultado do aceite fica no pergaminho da missão, para o Grão-Mestre ler ao revisar o PR.
+6. **Aceita** antes de pedir o PR: confere cada critério do épico contra a evidência que as etapas deixaram (a [prova por critério](prova-e-devolucao.md#prova-por-critério) do `done`, "declarada" ou "verificada pelo motor", e o pergaminho da missão) e o estado do worktree. Critério sem evidência devolve a missão ao time (uma volta, [devolução](missoes.md)) e o PR não é aberto. O resultado do aceite fica no pergaminho da missão, para o Grão-Mestre ler ao revisar o PR.
 
 **Aceite não é aprovação.** A aprovação e o merge do PR continuam com o Grão-Mestre e a [política](../aprovacoes/politica.md); quem desenhou o trabalho não aprova o próprio ([salvaguardas](cadeia-de-aprovacao.md#salvaguardas)).
 
@@ -102,6 +102,7 @@ Recebe as skills de comunicação, de coordenação de mesa e de rituais ([skill
 - [Grão-Mestre](grao-mestre.md)
 - [Personagens](personagens.md)
 - [Missões](missoes.md)
+- [Prova e devolução](prova-e-devolucao.md)
 - [Teto do workspace](../classes/teto-do-workspace.md)
 - [Sessão zero do personagem](../sessao-zero/personagem.md)
 - [Conexões](conexoes.md) · [Cadeia de aprovação](cadeia-de-aprovacao.md) · [Regras temporárias de mesa](regras-temporarias-de-mesa.md) · [Supervisão da cadeia](supervisao-da-cadeia.md) · [Classe `orquestrador`](../classes/classe-orquestrador.md)
