@@ -11,9 +11,9 @@ import (
 // cmdlet that sets the environment, and the tools that create a process from a
 // command line they are given.
 
-// asked reports the lines that are not a request: the verdict must be ask,
-// not an allowance and not a fixed denial.
-func asked(t *testing.T, name string, env classes.Env, r *classes.Rules, cmds ...string) {
+// wantAsk reports the lines whose verdict is not ask: not an allowance, and not
+// a fixed denial.
+func wantAsk(t *testing.T, name string, env classes.Env, r *classes.Rules, cmds ...string) {
 	t.Helper()
 	for _, c := range cmds {
 		if d := judge(env, r, c); d.Verdict != classes.Ask {
@@ -74,7 +74,7 @@ func TestPowerShellEnvironmentFormsMoveTheGlobalConfigOfGit(t *testing.T) {
 	// A variable of PowerShell is a request on the line that has it, and so is
 	// the .NET call, whatever the variable: the denial is for those that move
 	// the configuration of git. Reading one is no assignment.
-	asked(t, win.name, win.env, r,
+	wantAsk(t, win.name, win.env, r,
 		"${env:FOO} = 'x'; git status", "$env:FOO += 'x'; git status", "$env:FOO+='x'; git status", "$env:FOO ??= 'x'; git status",
 		"[Environment]::SetEnvironmentVariable('FOO','1'); git status", "[Environment]::SetEnvironmentVariable($n,'x'); git status",
 		"[Environment]::GetEnvironmentVariable('HOME'); git status")
@@ -134,7 +134,7 @@ func TestWindowsToolsThatCreateAProcessRunTheCommandTheyAreGiven(t *testing.T) {
 		}
 		// What they run, when no fixed rule is in it, is a request: the tool
 		// that creates a process from a line is never run on its own.
-		asked(t, ee.name, ee.env, r, `schtasks -create -tn t -tr notepad.exe -sc once`, `wmic process call create notepad.exe`, `Invoke-WmiMethod Win32_Process Create notepad.exe`)
+		wantAsk(t, ee.name, ee.env, r, `schtasks -create -tn t -tr notepad.exe -sc once`, `wmic process call create notepad.exe`, `Invoke-WmiMethod Win32_Process Create notepad.exe`)
 	}
 	// A query, or a task that is not given a command, starts nothing.
 	win := evasionEnvs()[1]
