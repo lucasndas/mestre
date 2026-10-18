@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/protocol"
@@ -147,5 +148,70 @@ func TestTheOrderToEraseDoesNotRemoveTheFullCopyThatBeginsAfterIt(t *testing.T) 
 		if !exists(name) {
 			t.Errorf("%s: the copy that began after the order was removed", name)
 		}
+	}
+}
+
+// CA-REPL-12
+// A machine that leaves the Guild erases what it kept from the time it was the
+// Citadel, besides the replica: the databases it discarded when the epoch
+// changed (each is a whole copy of the main database, with the hashes of the
+// passwords and of the PINs, whatever its name or suffix), the full copies it
+// made and the transfers that were arriving. What is not in those places
+// stays (CA-REPL-12).
+func TestWipeErasesWhatTheMachineKeptFromWhenItWasTheCitadel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mestre.db")
+	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	xfer, copies := filepath.Join(dir, "transferencias"), filepath.Join(dir, "copias")
+	for _, d := range []string{xfer, copies} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	erased := []string{
+		"descartado-3.db", "descartado-3.db-wal", "descartado-3.db-shm", "descartado-3.json", "descartado-3-acoes.json",
+		"descartado-3.db.1760000000000", "descartado-3.db.1760000000000-wal", "descartado-3.db.1760000000000-shm",
+		"copias/snapshot-01J9Z0.db", "transferencias/01J9Z1.part", "transferencias/01J9Z1.json", "transferencias/01J9Z2.part",
+	}
+	kept := []string{"unrelated.txt", "descartar-nao.txt"}
+	for _, name := range append(slices.Clone(erased), kept...) {
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(name)), []byte("a copy of the main database"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err := NewReplica(ctx, ReplicaConfig{
+		DB: db, TransferDir: xfer, Leftovers: []Leftover{{Dir: dir, Prefix: "descartado-"}, {Dir: copies}, {Dir: filepath.Join(dir, "no-such-folder")}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Wipe(ctx, "removed"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range erased {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name))); err == nil {
+			t.Errorf("%s is still there", name)
+		}
+	}
+	for _, name := range kept {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("%s was erased: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Error("the replica is still there")
 	}
 }

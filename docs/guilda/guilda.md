@@ -1,6 +1,6 @@
 # Guilda
 
-> **Assunto:** formação da Guilda (instalar → descobrir → entrar ou criar), entrada de uma máquina com código e aprovação do Dono, credenciais da máquina, máquina excluída, saída e remoção · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** formação da Guilda (instalar → descobrir → entrar ou criar), entrada de uma máquina com código e aprovação do Dono, credenciais da máquina, máquina excluída, saída e remoção · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -67,8 +67,8 @@ sequenceDiagram
 
 ### Saída e remoção
 
-- **Remover pelo painel** (só o Dono, com PIN, [níveis](../telegram/usuarios-e-niveis.md)): os certificados da máquina entram na lista de revogados (números de série, guardados no banco; as Torres a recebem em `guild.config`), as conexões do motor e do Guardião caem com `4002`, toda conexão nova com eles é recusada e os personagens dela ficam interrompidos ([personagens](../orquestracao/personagens.md)). Se a máquina está online, a Cidadela manda antes `guild.leave`: ela apaga a réplica do banco e dos arquivos, a cópia do cofre e a configuração da Guilda e fica "fora da Guilda", com os serviços parados até nova entrada.
-- **`mestre uninstall` numa Torre:** pede a saída à Cidadela (`guild.leave` com `reason: uninstall`), apaga a réplica, os arquivos replicados e a cópia do cofre e remove os serviços; com a Cidadela fora, apaga do mesmo jeito, desinstala assim mesmo e o painel mostra a máquina como "sumida", para o Dono remover.
+- **Remover pelo painel** (só o Dono, com PIN, [níveis](../telegram/usuarios-e-niveis.md)): os certificados da máquina entram na lista de revogados (números de série, guardados no banco; as Torres a recebem em `guild.config`), as conexões do motor e do Guardião caem com `4002`, toda conexão nova com eles é recusada e os personagens dela ficam interrompidos ([personagens](../orquestracao/personagens.md)). Se a máquina está online, a Cidadela manda antes `guild.leave`: ela apaga a réplica do banco e dos arquivos, a cópia do cofre, o que guardou do tempo em que foi Cidadela (bancos descartados e cópias completas; a lista em [replicação](replicacao.md#cofre-em-toda-máquina)) e a configuração da Guilda e fica "fora da Guilda", com os serviços parados até nova entrada.
+- **`mestre uninstall` numa Torre:** pede a saída à Cidadela (`guild.leave` com `reason: uninstall`), apaga o mesmo (a réplica, os arquivos replicados, a cópia do cofre e o que guardou do tempo de Cidadela) e remove os serviços; com a Cidadela fora, apaga do mesmo jeito, desinstala assim mesmo e o painel mostra a máquina como "sumida", para o Dono remover.
 - **A Cidadela não se desinstala com Torres na Guilda:** o instalador recusa e explica que antes é preciso passar a Cidadela para outra máquina ([troca planejada](cidadela-e-torres.md#troca-planejada)). Sozinha, a Cidadela desinstala e a Guilda acaba.
 - **Máquina removida offline** (não excluída): a cópia cifrada do cofre fica no disco dela, e quem tem a máquina tem o mesmo risco da Cidadela ([segurança](../arquitetura/seguranca.md#ameaças-e-proteções)); o painel recomenda substituir os segredos do cofre ([cofre](../plataforma/cofre.md)).
 - **Voltar:** entrada nova, com `machine_id` novo; o histórico da antiga fica no banco.

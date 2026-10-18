@@ -1,10 +1,10 @@
 # Desinstalar
 
-> **Assunto:** passo a passo para remover uma Torre, a Cidadela e o que o Mestre deixou no GitHub, no Telegram e nos aparelhos · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** passo a passo para remover uma Torre, a Cidadela e o que o Mestre deixou no GitHub, no Telegram e nos aparelhos · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 Guia para quem usa. O que a remoção apaga por dentro está em [instalação e versões](../plataforma/instalacao-e-atualizacao.md#remoção-mestre-uninstall); onde ficam os dados, em [persistência](../arquitetura/persistencia.md#arquivos).
 
-**Regra geral:** `mestre uninstall` remove serviços, a conta dos agentes no Windows, regras de firewall e programas. Numa **Torre**, apaga também a réplica (banco, arquivos e espelhos) e a cópia do cofre, porque tudo isso está na Cidadela. Na **Cidadela sozinha**, mantém os dados (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo, para dar para reinstalar sem perder nada.
+**Regra geral:** `mestre uninstall` remove serviços, a conta dos agentes no Windows, regras de firewall e programas. Numa **Torre**, apaga também a réplica (banco, arquivos e espelhos), a cópia do cofre e, se a máquina já foi Cidadela, os bancos descartados e as cópias que ela guardou ([lista](../guilda/replicacao.md#cofre-em-toda-máquina)), porque tudo isso está na Cidadela. Na **Cidadela sozinha**, mantém os dados (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo, para dar para reinstalar sem perder nada.
 
 ## Antes de começar
 

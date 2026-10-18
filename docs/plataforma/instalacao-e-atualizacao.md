@@ -1,6 +1,6 @@
 # Instalação e versões
 
-> **Assunto:** visão técnica do instalador único no Ubuntu e no Windows (descobre a Guilda e entra, ou cria), pastas de versões, versão anterior guardada, volta de versão, CLIs dos provedores, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** visão técnica do instalador único no Ubuntu e no Windows (descobre a Guilda e entra, ou cria), pastas de versões, versão anterior guardada, volta de versão, CLIs dos provedores, modelo Whisper e remoção · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -75,7 +75,7 @@ Cada binário declara a faixa de versões de protocolo que entende (`mestre vers
 
 ### Remoção (`mestre uninstall`)
 
-Numa Torre, pede antes a saída da Guilda e **apaga a réplica** (banco, arquivos e espelhos) **e a cópia do cofre**, mesmo sem pedir para apagar tudo; a Cidadela com Torres na Guilda recusa e manda passar a Cidadela a outra máquina ([saída e remoção](../guilda/guilda.md#saída-e-remoção)). Antes de parar o `mestre`, encerra os terminais da máquina (o `mestre-pty` de cada um e a árvore dele), porque parar o serviço não os encerra ([componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)). Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela, o arquivo da senha e a tarefa `\Mestre\Operador`. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil. Na Cidadela sozinha, dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo.
+Numa Torre, pede antes a saída da Guilda e **apaga a réplica** (banco, arquivos e espelhos), **a cópia do cofre** e o que guardou do tempo de Cidadela (bancos descartados e cópias completas), mesmo sem pedir para apagar tudo; a Cidadela com Torres na Guilda recusa e manda passar a Cidadela a outra máquina ([saída e remoção](../guilda/guilda.md#saída-e-remoção)). Antes de parar o `mestre`, encerra os terminais da máquina (o `mestre-pty` de cada um e a árvore dele), porque parar o serviço não os encerra ([componentes](../arquitetura/componentes.md#serviços-e-contas-padrão)). Para e remove serviços, unidades, regras de firewall criadas pela instalação e as pastas de versões; no Windows, também apaga a conta `mestre-agente`, o perfil dela, o arquivo da senha e a tarefa `\Mestre\Operador`. Os logins dos perfis de conta feitos por essa conta podem depender do DPAPI dela, então uma reinstalação no Windows refaz o login de cada perfil. Na Cidadela sozinha, dados, banco, backups e chave do cofre ficam, a não ser que o usuário peça para apagar tudo.
 
 ## Regras e erros
 

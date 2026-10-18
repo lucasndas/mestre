@@ -44,6 +44,12 @@ type ReplicaConfig struct {
 	// (protocol.XferConfig.Dir). vault.drop removes from it the full copies
 	// that were still arriving, which carry the vault tables. Optional.
 	TransferDir string
+	// Leftovers are the files the machine kept from the time it was the
+	// Citadel and the Tower does not use: the databases it discarded when the
+	// epoch changed (docs/guilda/replicacao.md#perda-na-troca) and the full
+	// copies it made to send. Each is a whole copy of the main database, so
+	// Wipe erases them. Optional.
+	Leftovers []Leftover
 	// ResyncRetry is how long a request for a full copy, or for the records
 	// again, waits for the answer before it is made again (default 30 s).
 	ResyncRetry time.Duration
@@ -51,6 +57,12 @@ type ReplicaConfig struct {
 	// to the replica: the first and the last lsn of it.
 	OnApplied func(first, last uint64)
 	Logger    *slog.Logger
+}
+
+// Leftover names files of a folder: the entries whose name starts with Prefix,
+// or all of them when it is empty.
+type Leftover struct {
+	Dir, Prefix string
 }
 
 // Replica is the replication on a Tower.
@@ -828,8 +840,10 @@ func (r *Replica) dropRestrictedFolders() bool {
 // ---- leaving the Guild ----
 
 // Wipe erases this machine's share of the Guild when it leaves
-// (guild.Wiper): the copy of the vault, the replica and the replicated
-// files. The Replica is no good afterwards.
+// (guild.Wiper): the copy of the vault, the replica, the replicated files and
+// mirrors, and what the machine kept from the time it was the Citadel (the
+// databases it discarded, the full copies it made, the transfers under way:
+// whole copies of the main database). The Replica is no good afterwards.
 func (r *Replica) Wipe(ctx context.Context, _ string) error {
 	r.applyMu.Lock()
 	defer r.applyMu.Unlock()
@@ -866,6 +880,31 @@ func (r *Replica) Wipe(ctx context.Context, _ string) error {
 		}
 		for _, e := range entries {
 			errs = append(errs, os.RemoveAll(filepath.Join(r.cfg.Mirrors.Root, e.Name())))
+		}
+	}
+	if r.cfg.TransferDir != "" {
+		errs = append(errs, eraseEntries(r.cfg.TransferDir, ""))
+	}
+	for _, l := range r.cfg.Leftovers {
+		errs = append(errs, eraseEntries(l.Dir, l.Prefix))
+	}
+	return errors.Join(errs...)
+}
+
+// eraseEntries removes what is in dir whose name starts with prefix; a folder
+// that is not there has nothing to erase.
+func eraseEntries(dir, prefix string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	var errs []error
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), prefix) {
+			errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
 		}
 	}
 	return errors.Join(errs...)
