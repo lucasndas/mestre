@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // The command line of a shell tool is split into simple commands
@@ -545,6 +546,9 @@ func (lx *lexer) balanced(open, close byte) (string, bool) {
 
 func (lx *lexer) stepPwsh() {
 	c := lx.s[lx.i]
+	if c >= utf8.RuneSelf && lx.pwshWide() {
+		return
+	}
 	switch {
 	case c == ' ' || c == '\t' || c == '\r':
 		lx.flush()
@@ -590,20 +594,7 @@ func (lx *lexer) stepPwsh() {
 		lx.startWord()
 		lx.cur.quoted = true
 		lx.i++
-		for lx.i < len(lx.s) {
-			if lx.s[lx.i] == '\'' {
-				if lx.peek(1) == '\'' {
-					lx.buf.WriteByte('\'')
-					lx.i += 2
-					continue
-				}
-				lx.i++
-				return
-			}
-			lx.buf.WriteByte(lx.s[lx.i])
-			lx.i++
-		}
-		lx.opaque = append(lx.opaque, "aspas sem fechar")
+		lx.pwshSingle()
 	case c == '"':
 		lx.startWord()
 		lx.cur.quoted = true
@@ -673,11 +664,28 @@ func (lx *lexer) stepPwsh() {
 func (lx *lexer) pwshDouble() {
 	for lx.i < len(lx.s) {
 		c := lx.s[lx.i]
+		if c >= utf8.RuneSelf {
+			// a typographic double quotation mark closes the string as the
+			// plain one does; any other character is text
+			r, n := utf8.DecodeRuneInString(lx.s[lx.i:])
+			if !isPwshDoubleQuote(r) {
+				lx.buf.WriteString(lx.s[lx.i : lx.i+n])
+				lx.i += n
+				continue
+			}
+			if r2, n2 := utf8.DecodeRuneInString(lx.s[lx.i+n:]); lx.i+n < len(lx.s) && isPwshDoubleQuote(r2) {
+				lx.buf.WriteByte('"')
+				lx.i += n + n2
+				continue
+			}
+			lx.i += n
+			return
+		}
 		switch c {
 		case '"':
-			if lx.peek(1) == '"' {
+			if r2, n2 := utf8.DecodeRuneInString(lx.s[lx.i+1:]); lx.i+1 < len(lx.s) && isPwshDoubleQuote(r2) {
 				lx.buf.WriteByte('"')
-				lx.i += 2
+				lx.i += 1 + n2
 				continue
 			}
 			lx.i++
@@ -803,6 +811,11 @@ func group(toks []token, d dialect) (parts []simple, grouped bool) {
 			switch t.op {
 			case "|", "|&", "&", "(", ")", "{", "}":
 				grouped = true
+			}
+			if d == dialectPwsh && t.op == "(" && pwshArgPosition(cur.words) {
+				// git (echo push): the value of the expression is an
+				// argument that only PowerShell resolves.
+				cur.opaque = append(cur.opaque, "expressão entre parênteses")
 			}
 			end(t.op)
 		default: // a redirection

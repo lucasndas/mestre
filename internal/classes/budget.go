@@ -34,7 +34,24 @@ const (
 	reasonTooLong = "comando longo demais para ser analisado"
 	reasonTooMuch = "comando trabalhoso demais para ser analisado"
 	reasonTooDeep = "expansões aninhadas demais para serem analisadas"
+	// reasonControl is the denial of a line the analysis cannot be sure to
+	// read as the shell does.
+	reasonControl = "a linha traz NUL ou outro byte de controle, que o shell pode ler de outro modo que o analisador"
 )
+
+// hasControlByte reports NUL or a control character other than the tab, the
+// line feed and the carriage return that a line is made of. A shell may drop
+// it, keep it in the name of a program or take it for a space (PowerShell
+// does with the vertical tab and the form feed), so the analysis, which sees
+// one of them, may differ from what runs: the line is denied whole.
+func hasControlByte(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c < 0x20 && c != '\t' && c != '\n' && c != '\r' || c == 0x7f {
+			return true
+		}
+	}
+	return false
+}
 
 // spend adds n units of work to the analysis; true is over the bound.
 func (e *evaluator) spend(n int) bool {
