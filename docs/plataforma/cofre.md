@@ -1,6 +1,6 @@
 # Cofre de segredos
 
-> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -17,6 +17,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 | Token de acesso e de renovação de usuário do GitHub (device flow do App "Grão-Mestre") | `github_user_token` | motor da Cidadela, só com delegação ou aprovação daquele usuário ([aprovação no GitHub](../github/aprovacao-no-github.md)) |
 | Chave de API de provedor, quando a conta usa chave em vez de login | `provider_api_key` | motor da máquina que inicia o personagem daquela conta, pedida à Cidadela no uso ([bases e fichas](../orquestracao/bases-e-fichas.md)) |
 | Credencial de site: endereço da página de login, usuário, senha (ou senha de app, token, chave de API) e, se preciso, os seletores dos campos e a verificação de sucesso; metadados em [credenciais de site](#credenciais-de-site) | `site_credential` | motor da Cidadela, para fazer o login e entregar ao personagem só o estado de sessão ([login em sites](#login-em-sites)) |
+| Chave de servidor MCP remoto, com os domínios a que pode ir nos metadados | `mcp_key` | motor da máquina do personagem, pedida à Cidadela no uso, guardada só na memória e mandada só a esses domínios ([MCP por classe](../classes/mcp-por-classe.md#o-gateway-do-mestre)) |
 | Chave das capturas de tela do Operador do PC (AES-256, gerada quando a primeira máquina habilita o Operador) | `operator_capture_key` | motor da Cidadela, ao gravar e ao mostrar ao Dono as capturas ([persistência](../arquitetura/persistencia.md#operador-do-pc)) |
 | Chave privada da CA da Guilda (só aqui, em nenhum outro lugar) | `ca_key` | motor da Cidadela, ao emitir e renovar certificados e assinar a certidão de época ([segurança](../arquitetura/seguranca.md)) |
 
@@ -24,7 +25,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 
 ### Formato
 
-- Tabela `secrets` no banco da Cidadela ([persistência](../arquitetura/persistencia.md)): `name`, `type`, `ciphertext`, `nonce`, `key_version`, `fingerprint`, os metadados de `site_credential` (`owner_user`, `classes`, `domains`, `kind`, `expires_at`, fora da parte cifrada, para o motor decidir sem decifrar), `created_at`, `updated_at`, `last_used_at`.
+- Tabela `secrets` no banco da Cidadela ([persistência](../arquitetura/persistencia.md)): `name`, `type`, `ciphertext`, `nonce`, `key_version`, `fingerprint`, os metadados de `site_credential` (`owner_user`, `classes`, `domains`, `kind`, `expires_at`, e os `domains` de `mcp_key`, fora da parte cifrada, para o motor decidir sem decifrar), `created_at`, `updated_at`, `last_used_at`.
 - **Valor:** o próprio segredo (token, chave, bloco PEM), menos dois tipos, que são objetos JSON conferidos ao gravar (campo desconhecido é recusado): `site_credential` com `url`, `password` (ou senha de app, token, chave de API) e, opcionais, `user`, `selectors` e `success`; `github_user_token` com `access_token` e, opcional, `refresh_token`.
 - **Criptografia:** AES-256-GCM, com nonce aleatório de 96 bits a cada gravação e dados associados (AAD) = rótulo de domínio `mestre/vault/secret/v1` + `name` + `type` + `key_version`, cada campo com o tamanho na frente. Assim um valor copiado para outra linha não decifra. A chave do GCM e a da impressão são derivadas da chave do cofre por HKDF-SHA256, com rótulos diferentes; a chave do cofre nunca cifra direto.
 - **Impressão (`fingerprint`):** HMAC-SHA256 do valor com a chave derivada, guardando e mostrando 8 caracteres hexadecimais. Serve para comparar sem revelar o valor; muda quando a chave do cofre é trocada.

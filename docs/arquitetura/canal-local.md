@@ -1,6 +1,6 @@
 # Canal local
 
-> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -37,7 +37,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 | `v` | versão do canal (1) |
 | `id` | ULID gerado pela CLI; é o `request_id` e a chave de idempotência (até 128 caracteres) |
 | `agent_id` | valor de `MESTRE_AGENT_ID` (vazio se não houver) |
-| `cmd` | comando e subcomando, separados por espaço (ex.: `note write`); `hook` para o despachante |
+| `cmd` | comando e subcomando, separados por espaço (ex.: `note write`); `hook` para o despachante; `mcp` para o [gateway MCP](../classes/mcp-por-classe.md#o-gateway-do-mestre), identificado como o despachante |
 | `args` | argumentos posicionais, como texto; no `hook`, um único objeto: o evento normalizado ([adaptador](../provedores/adaptador.md#formato-interno-normalizado-de-evento)) |
 | `flags` | flags já validadas pela definição de comandos, com os nomes longos sem `--` |
 | `cwd` | pasta atual do processo chamador |

@@ -4,13 +4,14 @@
 
 ## Status
 
-Aceita, 2026-10-18, por decisão do Dono. Complementa o [ADR 0011](0011-agents-skills-pasta-oficial.md) (revisão das skills de apoio): os dois tratam do que uma classe traz além das próprias regras.
+Aceita, 2026-10-18, por decisão do Dono. **Revista no mesmo dia:** a entrega passa a ser pelo gateway do Mestre (opção 4), para valer igual nos três provedores e para servidores com chave. Complementa o [ADR 0011](0011-agents-skills-pasta-oficial.md) (revisão das skills de apoio): os dois tratam do que uma classe traz além das próprias regras.
 
 ## Contexto
 
 - Hoje a classe só **filtra** ferramentas MCP pelo nome (`tools` no [`permissions.yaml`](../classes/formato-das-permissoes.md)); de onde vem o servidor não está dito em lugar nenhum: cada personagem que navega usa "o próprio MCP de navegador, iniciado pelo CLI dele" ([segurança](../arquitetura/seguranca.md)), e o `.mcp.json` do repositório pede aprovação na tela do Claude Code, que o adaptador escala ([Claude Code](../provedores/claude-code.md)).
 - Papéis comuns precisam de servidores diferentes: um QA e um Designer precisam de navegador (Playwright) para capturar a tela; um Pesquisador e um Dev ganham com a documentação oficial das bibliotecas (context7). Sem a classe dizer isso, o usuário configura à mão em cada perfil de conta, e todo personagem do perfil herda tudo.
-- Um servidor MCP é um processo que roda como `mestre-agente` e fala com a rede por conta própria: o tráfego dele **não** passa pelo despachante nem pelas regras de rede da classe; só as chamadas às ferramentas dele passam.
+- Os três provedores configuram MCP de jeitos diferentes (documentação oficial, 2026-10-18): o Claude aceita servidores por início (`--mcp-config`, `--strict-mcp-config`); o Codex, por `-c` ou `CODEX_HOME`; o Antigravity só por arquivo do perfil ou do projeto, compartilhado, sem troca de variável nem configuração por início. Nenhum dos três guarda uma chave longe de um agente que roda na mesma conta.
+- Um servidor MCP local é um processo que roda como `mestre-agente` e fala com a rede por conta própria: o tráfego dele **não** passa pelo despachante nem pelas regras de rede da classe; só as chamadas às ferramentas dele passam.
 
 ## Opções consideradas
 
@@ -20,23 +21,25 @@ Aceita, 2026-10-18, por decisão do Dono. Complementa o [ADR 0011](0011-agents-s
 2. **A classe traz a definição do servidor** (comando, argumentos, segredos).
    - Prós: a classe é autossuficiente.
    - Contras: qualquer autor de classe da mesa faria o motor iniciar um programa novo; segredo dentro de pacote que viaja pela replicação.
-3. **Catálogo do workspace aprovado por Administrador, e a classe só cita nomes dele.**
-   - Prós: quem decide que programa roda é uma pessoa com nível para isso; a classe continua só texto e regras; o mesmo servidor serve a várias classes.
-   - Contras: um passo a mais para o Administrador.
+3. **Catálogo do workspace aprovado por Administrador, e a classe só cita nomes dele; o motor configura cada provedor.**
+   - Prós: quem decide que programa roda é uma pessoa com nível para isso; a classe continua só texto e regras.
+   - Contras: no Antigravity a configuração é do perfil, comum a todos os personagens dele, e não dá para separar; chave no ambiente do servidor fica ao alcance do agente; cada provedor tem um caminho e um conjunto de falhas.
+4. **O catálogo da opção 3, entregue por um gateway do Mestre:** cada CLI recebe só o servidor `mestre` (o próprio binário, por stdio), que o motor identifica pelo canal local e que mostra e atende só os servidores da classe; os remotos são chamados pelo motor, com a chave.
+   - Prós: a mesma configuração nos três provedores, inclusive num perfil compartilhado; a decisão de cada chamada é do motor, com ou sem hook do provedor para MCP; a chave de servidor remoto nunca chega à conta do agente.
+   - Contras: o Mestre passa a falar o protocolo MCP e fica no caminho de toda chamada; servidor local com chave ainda pede outra conta.
 
 ## Decisão
 
-- **Opção 3.** O workspace tem um **catálogo de servidores MCP** e a classe declara `mcp: [<nome>…]` no frontmatter do `CLASS.md`. Detalhes em [MCP por classe](../classes/mcp-por-classe.md).
-- O motor configura **só** os servidores da classe no CLI de cada personagem, por provedor, em todo início (nenhum, se a classe não liga nenhum); o despachante nega a ferramenta de qualquer servidor que a classe não liga, do catálogo ou não; e ligar um servidor só passa se os `domains` dele cabem na rede da classe e do teto.
-- **Fora do M8:** servidor que precisa de chave (o agente, na mesma conta, poderia lê-la) e servidores no Antigravity (lá a configuração é do perfil compartilhado, e o reforço nativo a apaga). Ficam em "A confirmar" no documento.
+- **Opção 4.** O workspace tem um **catálogo de servidores MCP**, a classe declara `mcp:` no frontmatter do `CLASS.md`, e o gateway do Mestre é o único servidor que cada CLI conhece. Detalhes em [MCP por classe](../classes/mcp-por-classe.md).
+- Toda ferramenta MCP que não vem do gateway é negada pelo despachante; ligar um servidor só passa se os `domains` dele cabem na rede da classe e do teto.
+- Chave só em servidor remoto, como `mcp_key` do [cofre](../plataforma/cofre.md), usada pelo motor e só nos domínios dela. Servidor local com chave fica em "A confirmar" (conta própria `mestre-mcp`).
 - As regras fixas continuam valendo antes de tudo: MCP de controle do computador ou do navegador do usuário só na base Operador do PC ([ADR 0021](0021-operador-do-pc.md)); um servidor desses é recusado no catálogo pelo pacote ou endereço, não pelo nome.
 
 ## Consequências
 
 - **Positivas:**
-  - Cada personagem tem só os servidores do papel dele; uma classe sugerida ativada já sai pronta (ex.: QA com navegador).
+  - Cada personagem tem só os servidores do papel dele, em qualquer provedor; uma classe sugerida ativada já sai pronta (ex.: QA com navegador).
   - O que roda numa máquina como servidor MCP é decisão de uma pessoa, registrada na auditoria.
 - **Negativas:**
-  - A rede do servidor não é filtrada pela classe: entrar no catálogo é aprovar o que o servidor acessa. O catálogo registra os domínios que ele usa, para quem aprova saber.
-  - Sem servidor com chave e sem MCP no Antigravity no M8: quem precisa de navegador nessas condições usa outro provedor.
-  - A configuração por personagem depende de cada provedor aceitar servidores fora da configuração do perfil; onde não aceitar, vale o plano B do documento de [MCP por classe](../classes/mcp-por-classe.md#verificar-na-implementação).
+  - A rede de um servidor local não é filtrada pela classe: ligar é aprovar o que o servidor acessa, e por isso os `domains` dele precisam caber na rede da classe e do teto.
+  - O motor fora do ar deixa o personagem sem MCP (falha fechada), e uma chamada que pede aprovação pode passar do limite de tempo do CLI.
