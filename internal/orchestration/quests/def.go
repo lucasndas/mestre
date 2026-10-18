@@ -229,6 +229,8 @@ func (d Definition) Validate() error {
 			continue
 		case strings.ContainsAny(s.ID, " /\t\n"):
 			add(s.ID, "the id has a space or a slash")
+		case !inbox.PrintableLine(s.ID):
+			add(s.ID, "the id is not made of printable characters")
 		}
 		if p := nameProblem(s.Title()); p != "" {
 			add(s.ID, "the name %s", p)

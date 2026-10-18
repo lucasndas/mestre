@@ -35,7 +35,7 @@ steps:
 | `sub_issue` | cria sub-issue para a etapa (o Mestre da mesa decide; ex.: etapas que geram código ou duram mais de um turno) |
 | `stuck_after` | tempo ocioso sem `done` até travar (padrão 20 min) |
 
-Campos que outros documentos definem: `optional` na etapa (M8, [receitas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional)), `issue` e `same_failure` na missão (M5, [prova e devolução](prova-e-devolucao.md)). Validação: ids únicos; `after` e `can_return_to` só apontam para etapas anteriores; sem ciclos em `after`; fichas e personagens existem; classes dentro do [teto](../classes/teto-do-workspace.md); o nome da missão e o de cada etapa (ou o id, se não tem nome) são uma linha de caracteres imprimíveis, de até 80 (o nome da missão é o remetente do item `quest` de cada etapa, e os nomes aparecem nos pedidos de aprovação: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)).
+Campos que outros documentos definem: `optional` na etapa (M8, [receitas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional)), `issue` e `same_failure` na missão (M5, [prova e devolução](prova-e-devolucao.md)). Validação: ids únicos; `after` e `can_return_to` só apontam para etapas anteriores; sem ciclos em `after`; fichas e personagens existem; classes dentro do [teto](../classes/teto-do-workspace.md); o nome da missão e o de cada etapa (ou o id, se não tem nome) são uma linha de caracteres imprimíveis, de até 80, e o id também é imprimível (o nome da missão é o remetente do item `quest` de cada etapa, e os nomes aparecem nos pedidos de aprovação: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)).
 
 ### Execução
 

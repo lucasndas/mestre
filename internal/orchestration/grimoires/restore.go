@@ -348,7 +348,7 @@ func (s *Service) planNames(ctx context.Context, p *prepared) error {
 			existing = append(existing, strings.ToLower(n))
 		}
 	}
-	p.plan.Quests = rename(names, 0, func(k string) bool { return slices.Contains(existing, k) })
+	p.plan.Quests = rename(names, quests.MaxName, func(k string) bool { return slices.Contains(existing, k) })
 	return nil
 }
 

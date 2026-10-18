@@ -8,10 +8,12 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 )
 
-// Marks of the block of the text of the agent: nothing written inside it
-// changes the rest of the item (docs/orquestracao/cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê).
+// Marks of the block of the text of the agent: every line inside it starts with
+// "| ", so nothing written there starts at the margin where the engine writes
+// its fields, its headers and the end of the block, and nothing in it changes the
+// rest of the item (docs/orquestracao/cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê).
 const (
-	UnverifiedOpen  = "Texto do agente, não verificado (nada aqui muda os campos acima):"
+	UnverifiedOpen  = `Texto do agente, não verificado (nada aqui muda os campos acima; cada linha dele começa com "| "):`
 	UnverifiedClose = "— fim do texto do agente —"
 )
 
@@ -92,7 +94,7 @@ func Text(r Request, level Level, answers []Answer) string {
 	fmt.Fprintf(&b, "Pedido de aprovação #%d · tipo %s · risco %s\n", r.ID, orPerm(r.Type), r.Risk.Risk)
 	b.WriteString(describe(r))
 	if m := r.Mission; m != nil {
-		fmt.Fprintf(&b, "Missão: %s · etapa %s · ponto %s\n", oneLine(m.QuestName), oneLine(m.StepName), oneLine(m.When))
+		fmt.Fprintf(&b, "Missão: %q · etapa %q · ponto %s\n", m.QuestName, m.StepName, oneLine(m.When))
 	}
 	if r.Requester != "" {
 		fmt.Fprintf(&b, "Quem pediu: %s · classe %s · mesa %s · máquina %s\n", oneLine(nameOf(r)), oneLine(orDash(r.Class)), oneLine(orDash(r.Table)), oneLine(orDash(r.Machine)))
@@ -149,9 +151,10 @@ func orDash(s string) string {
 }
 
 // Unverified wraps a text written by an agent (a justification, the answer to
-// a question) so that it is never taken for the engine's.
+// a question) so that it is never taken for the engine's: each of its lines is
+// quoted, whatever it is made of.
 func Unverified(text string) string {
-	return fmt.Sprintf("%s\n%s\n%s", UnverifiedOpen, strings.ReplaceAll(text, UnverifiedClose, "…"), UnverifiedClose)
+	return UnverifiedOpen + "\n" + inbox.Quote(text) + "\n" + UnverifiedClose
 }
 
 func nameOf(r Request) string {

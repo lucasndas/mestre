@@ -21,6 +21,9 @@ var badNames = map[string]string{
 	"a control of the C1 set":   "Lo\u009bgin",
 	"a no-break space":          "Login\U000000a0com testes",
 	"an invisible mark":         "Login\U0000200bcom testes",
+	"a Hangul filler":           "Login\U00003164com testes",
+	"a blank braille pattern":   "Login\U00002800com testes",
+	"a right-to-left override":  "Login\U0000202ecom testes",
 	"more than 80 characters":   strings.Repeat("x", quests.MaxName+1),
 }
 
@@ -40,6 +43,17 @@ func TestTheNameOfAMissionAndOfItsStepsIsOneLineOfPrintableCharacters(t *testing
 		def = quests.Definition{Name: "X", Steps: []quests.StepDef{{ID: "a", Name: bad, Sheet: "S"}}}
 		if err := def.Validate(); !errors.As(err, &ve) || !ve.Has("a") {
 			t.Errorf("%s: a step named %q = %v, want a problem with the step", name, bad, err)
+		}
+	}
+	// the id of a step is a name too: it is the title of a step with no name, and it is in the scroll
+	for name, bad := range badNames {
+		if strings.ContainsAny(bad, " \t\n") || name == "more than 80 characters" {
+			continue // an id with a space has its own rule, and the length is the limit of a name
+		}
+		def := quests.Definition{Name: "X", Steps: []quests.StepDef{{ID: bad, Name: "Etapa", Sheet: "S"}}}
+		var ve *quests.ValidationError
+		if err := def.Validate(); !errors.As(err, &ve) || !ve.Has(bad) {
+			t.Errorf("%s: a step with the id %q and a plain name = %v, want a problem with the step", name, bad, err)
 		}
 	}
 	for _, good := range []string{"Login com testes", "Revisão — v2 (rápida)", "Fix #12 [urgente]", "日本語のテスト", "a", strings.Repeat("é", quests.MaxName)} {

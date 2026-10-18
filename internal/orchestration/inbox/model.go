@@ -3,11 +3,8 @@ package inbox
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
@@ -221,62 +218,12 @@ func (it Item) Header() string {
 	return "[" + strings.Join(parts, " · ") + "]"
 }
 
-// headerText makes words that somebody chose safe inside the header: no line
-// break, control character or invisible mark (each run of them becomes a space),
-// and none of the three marks of the format, `[`, `]` and `·`, which become `(`,
-// `)` and `-`. Nothing written in a sender can end the header, break the line or
-// open another header on it (docs/orquestracao/esperas-e-caixa-de-entrada.md#caixa-de-entrada).
-func headerText(s string) string {
-	var b strings.Builder
-	gap := false
-	for _, r := range s {
-		switch {
-		case unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp):
-			gap = true
-			continue
-		case r == '[':
-			r = '('
-		case r == ']':
-			r = ')'
-		case r == '·':
-			r = '-'
-		}
-		if gap && b.Len() > 0 {
-			b.WriteByte(' ')
-		}
-		gap = false
-		b.WriteRune(r)
-	}
-	return b.String()
-}
-
-// PrintableLine says whether s is one line of printable characters, with no line
-// break, control character or invisible mark. A name that becomes the sender of
-// an item (of a quest, of a ritual) must be, so whoever names it does not get to
-// write a line of the engine; Header cleans what is already named otherwise.
-func PrintableLine(s string) bool {
-	return !strings.ContainsFunc(s, func(r rune) bool { return !unicode.IsPrint(r) })
-}
-
-// OneLine keeps words that somebody chose (a path, a command, a URL) on their
-// own line in a text of the engine: a text with a line break or another control
-// character is shown quoted and escaped, so it cannot open a line that looks
-// like a field of the engine, a header or the end of a block of text of an agent.
-func OneLine(s string) string {
-	for _, r := range s {
-		if unicode.IsControl(r) || r == '\U00002028' || r == '\U00002029' {
-			return strconv.Quote(s)
-		}
-	}
-	return s
-}
-
 // Body is the text delivered after the header: the text and, when there are
 // attachments, their paths, one per line.
 func (it Item) Body() string {
 	text := it.Text
 	if it.Kind != KindUser {
-		text = escapeHeaders(text)
+		text = EscapeHeaders(text)
 	}
 	if len(it.Attachments) == 0 {
 		return text
@@ -291,48 +238,6 @@ func (it Item) Body() string {
 		b.WriteString("\n- " + OneLine(a))
 	}
 	return b.String()
-}
-
-// headerStart is how every header begins.
-const headerStart = "[Mestre ·"
-
-// escapeHeaders makes a line that imitates a header harmless: the text of an
-// item that is not from a user may carry words of an agent, and a line
-// `[Mestre · …]` in it must not read as the header of another item. The line
-// keeps its words, behind a backslash. A line starts after any break a reader may
-// take for one, not only after a newline.
-func escapeHeaders(text string) string {
-	if !strings.Contains(text, headerStart) {
-		return text
-	}
-	var b strings.Builder
-	atLine := true // only spaces and tabs since the start of the line
-	for i := 0; i < len(text); {
-		r, n := utf8.DecodeRuneInString(text[i:])
-		switch {
-		case isLineBreak(r):
-			atLine = true
-		case r == ' ' || r == '\t':
-			// still at the start of the line
-		default:
-			if atLine && strings.HasPrefix(text[i:], headerStart) {
-				b.WriteByte('\\')
-			}
-			atLine = false
-		}
-		b.WriteString(text[i : i+n])
-		i += n
-	}
-	return b.String()
-}
-
-// isLineBreak says whether a reader may take r for the end of a line.
-func isLineBreak(r rune) bool {
-	switch r {
-	case '\n', '\r', '\v', '\f', '\u0085', '\U00002028', '\U00002029':
-		return true
-	}
-	return false
 }
 
 func priorityOf(n NewItem) (Priority, int) {

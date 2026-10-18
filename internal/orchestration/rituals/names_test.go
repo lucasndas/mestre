@@ -23,6 +23,9 @@ func TestTheNameOfARitualIsOneLineOfPrintableCharacters(t *testing.T) {
 		"an escape of the terminal": "Testes\x1b[2J",
 		"a null":                    "Tes\x00tes",
 		"a no-break space":          "Testes\U000000a0da noite",
+		"a zero-width space":        "Testes\U0000200bda noite",
+		"a right-to-left override":  "Testes\U0000202eda noite",
+		"a Hangul filler":           "Testes\U00003164da noite",
 		"more than 64 characters":   strings.Repeat("x", rituals.MaxName+1),
 	}
 	for name, n := range bad {
@@ -40,6 +43,9 @@ func TestTheNameOfARitualIsOneLineOfPrintableCharacters(t *testing.T) {
 		if _, err := w.orc.Rituals.Edit(w.ctx, r.ID, rituals.EditRequest{By: w.byMaster(), NewName: &n}); !errors.Is(err, rituals.ErrBadRequest) {
 			t.Errorf("%s: renaming into %q = %v, want a bad request", name, n, err)
 		}
+	}
+	if got, err := w.orc.Rituals.Get(w.ctx, w.byMaster(), w.slug, w.table.ID, r.ID); err != nil || got.Name != "Testes da noite" {
+		t.Errorf("after the refused renames the ritual is %q (%v), want it as it was", got.Name, err)
 	}
 	for _, good := range []string{"Testes da noite", "Revisão — v2 (rápida)", "Fix #12 [urgente]", "日本語", strings.Repeat("é", rituals.MaxName)} {
 		if _, err := w.orc.Rituals.Edit(w.ctx, r.ID, rituals.EditRequest{By: w.byMaster(), NewName: &good}); err != nil {
