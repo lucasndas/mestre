@@ -9,7 +9,8 @@ import (
 )
 
 // LinuxAccess is the access of the socket on Linux: mode 0660, owner
-// `mestre`, group `mestre-agente` (docs/arquitetura/canal-local.md#endpoint).
+// `mestre`, group `mestre-agente` or `mestre-agente-<inst>`
+// (docs/arquitetura/canal-local.md#endpoint).
 // An empty User or Group leaves that one as it is: the engine runs as
 // `mestre` already, and in tests nothing is changed but the mode.
 type LinuxAccess struct {
@@ -18,9 +19,10 @@ type LinuxAccess struct {
 	Group string
 }
 
-// DefaultAccess is the access the installer sets up.
-func DefaultAccess() Access {
-	return LinuxAccess{Mode: 0o660, Group: "mestre-agente"}
+// DefaultAccess is the access the installer sets up for the socket of an
+// instance: the group of the agents of that instance, and no other.
+func DefaultAccess(instance string) Access {
+	return LinuxAccess{Mode: 0o660, Group: AgentAccount(instance)}
 }
 
 // Apply sets the mode and the owner.

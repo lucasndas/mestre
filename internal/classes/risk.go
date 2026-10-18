@@ -41,7 +41,7 @@ func (r Risk) valid() bool { return r.rank() >= 0 }
 
 // RiskTableVersion is the version of the default risk table embedded in the
 // binary; it goes with every classification to the request and the audit.
-const RiskTableVersion = 7
+const RiskTableVersion = 8
 
 // RequestType is a type of approval request
 // (docs/aprovacoes/politica.md#tipos-de-ação).
@@ -125,7 +125,10 @@ type RiskPolicy struct {
 // default content of the policy file
 // (docs/aprovacoes/arquivo-de-politica.md#conteúdo-padrão).
 var (
-	DefaultSecretPaths = []string{"**/.env*", "**/secrets/**", "**/*permission*", "**/*.pem", "**/*.key"}
+	DefaultSecretPaths = []string{
+		"**/.env*", "**/secrets/**", "**/*permission*", "**/*.pem", "**/*.key",
+		"**/id_rsa*", "**/id_ed25519*", "**/id_ecdsa*", "**/.npmrc", "**/credentials*.json", "**/service-account*.json",
+	}
 	DefaultMestrePaths = []string{".mestre/**", "AGENTS.md", "CLAUDE.md"}
 )
 

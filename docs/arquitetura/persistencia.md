@@ -89,7 +89,7 @@ Pastas de dados (padrão). `<inst>` é o nome da [instância](componentes.md#ins
 | Linux | Windows | Conteúdo | Onde |
 |---|---|---|---|
 | `/etc/mestre/<inst>/` | `%ProgramData%\Mestre\<inst>\config\` | configuração (inclusive o bloco de portas da instância) | todas |
-| `/etc/mestre/<inst>/cofre.key` | `%ProgramData%\Mestre\<inst>\config\cofre.key` (DPAPI de máquina, ACL só de `NT SERVICE\Mestre`) | a chave de dados do [cofre](../plataforma/cofre.md#chave-do-cofre), protegida pela chave da máquina | Cidadela e Torres, menos a excluída |
+| `/etc/mestre/<inst>/cofre.key` | `%ProgramData%\Mestre\<inst>\config\cofre.key` (DPAPI de máquina, ACL só de `NT SERVICE\Mestre`) | a chave de dados do [cofre](../plataforma/cofre.md#chave-do-cofre): no Linux, em claro, protegida pelo dono e pelo modo; no Windows, cifrada pelo DPAPI | Cidadela e Torres, menos a excluída |
 | `/var/lib/mestre/<inst>/banco/` | `%ProgramData%\Mestre\<inst>\banco\` | `mestre.db`, o banco da Guilda: principal na Cidadela, réplica nas Torres; `cofre-envelope.bin`, a chave de dados cifrada para a chave pública de recuperação (menos na excluída); `descartado-<época>.db` (e o resumo `descartado-<época>.json`) depois de uma [troca de Cidadela](../guilda/replicacao.md#perda-na-troca) | todas |
 | `/var/lib/mestre/<inst>/maquina/` | `%ProgramData%\Mestre\<inst>\maquina\` | `maquina.db`, o banco local de máquina, e os dados locais do motor | todas |
 | `/var/lib/mestre/<inst>/agentes/<id>/` | `%ProgramData%\Mestre\<inst>\maquina\agentes\<id>\` | `policy.json`, retrato das regras efetivas para o modo degradado do `mestre hook` ([permissões](../classes/permissoes.md#modo-degradado)), e `env.json`, o ambiente do personagem para a mesma decisão ([despachante](../provedores/despachante-de-hooks.md#modo-degradado)); `tmp/`, a `MESTRE_TMP` do personagem ([personagem](../sessao-zero/personagem.md#variáveis-de-ambiente)), apagada no encerramento definitivo | todas |
@@ -129,7 +129,7 @@ Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso
 
 - Diário, às 03:00 no [fuso da Guilda](../painel/administracao.md#fuso-da-guilda) (padrão), com `VACUUM INTO` (cópia consistente com o banco em uso), seguido de `PRAGMA quick_check` na cópia.
 - Mantém os **últimos 7**; o mais antigo é apagado só depois de um backup novo íntegro.
-- Vale para o banco principal na Cidadela e para o banco local de cada máquina; a réplica de uma Torre não tem backup próprio (a Cidadela é a fonte). Falha de backup vira alerta do [checklist](../plataforma/checklist.md).
+- Vale para o banco principal na Cidadela e para o banco local de cada máquina; a réplica de uma Torre não tem backup próprio (a Cidadela é a fonte). Falha de backup vira alerta do [checklist](../plataforma/checklist.md). A Torre que já foi Cidadela guarda os backups do banco principal que fez, cada um uma cópia inteira dele: sair da Guilda os apaga com o resto ([replicação](../guilda/replicacao.md#cofre-em-toda-máquina)).
 - **Cofre no backup da Cidadela:** os segredos vão no banco, já cifrados, e junto vai `cofre-envelope.bin`, a chave de dados cifrada para a chave pública de recuperação; o arquivo da chave protegido pelo sistema não vai. Sem a chave de recuperação, de que o Mestre guarda só a parte pública, o cofre do backup não abre ([cofre na troca](../guilda/replicacao.md#cofre-na-troca), [backup e chave de recuperação](../plataforma/cofre.md#backup-e-chave-de-recuperação)). As capturas do Operador do PC não vão no backup.
 
 ## Critérios de aceite

@@ -1,6 +1,6 @@
 # Mensagens do protocolo
 
-> **Assunto:** catálogo dos tipos de mensagem entre a Cidadela, as Torres e os Guardiões, com os campos principais, e os códigos de erro · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** catálogo dos tipos de mensagem entre a Cidadela, as Torres e os Guardiões, com os campos principais, e os códigos de erro · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 Documento de referência do [protocolo](protocolo.md), que define envelope, versão, ack e transporte. A **fonte dos campos** é a struct Go de cada tipo em `internal/protocol` (o protocolo do Guardião, em `guardian/protocol`); o comentário de cada struct nomeia a linha desta tabela (o `type`), o cabeçalho de `payloads.go` aponta para esta tabela, e os tipos do painel são gerados delas ([convenções](../desenvolvimento/convencoes.md#código-gerado)). Campos opcionais novos não mudam a versão ([regras](protocolo.md#abertura-versão-e-capacidades)). Todo envelope entre máquinas leva `machine_id` e `epoch` ([época](protocolo.md#época)). Sentido: T = Torre (motor), C = Cidadela (motor).
 
@@ -17,7 +17,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `guild.discarded` | T→C | sim | a antiga Cidadela, rebaixada: `epoch` (a dela), `from_lsn` (o último `lsn` que a promovida aplicou), `total` e `transactions[]` (`lsn`, `at` e `changes[]` com `table`, `op` e `key`, sem valores), e `dropped[]`, os nomes das ações externas que a cerca descartou | a Cidadela grava cada transação na auditoria ([perda na troca](../guilda/replicacao.md#perda-na-troca)) |
 | `replica.ack` | T→C | não | `lsn` aplicado | — (os registros vão em frames `0x03`; [replicação](../guilda/replicacao.md)) |
 | `replica.resync` | T→C | sim | `from_lsn`; pede de novo a partir dali, ou cópia completa sem `from_lsn`; a Torre repete o pedido a cada 30 s (padrão) enquanto não vem resposta, e a Cidadela guarda o que chegou antes de a conexão estar pronta | `xfer.begin` com `kind: db-snapshot` ou frames `0x03` |
-| `vault.replica` | C→T | sim | para toda máquina não excluída: `keyring` (o chaveiro da chave de dados, em base64; vai pelo mTLS dessa máquina, que o guarda protegido pela chave dela) e `envelope`; tipo volátil | — ([cofre em toda máquina](../guilda/replicacao.md#cofre-em-toda-máquina)) |
+| `vault.replica` | C→T | sim | para toda máquina não excluída: `keyring` (o chaveiro da chave de dados, em base64; vai pelo mTLS dessa máquina, que o guarda como a Cidadela guarda o dela, [chave do cofre](../plataforma/cofre.md#chave-do-cofre)) e `envelope`; tipo volátil | — ([cofre em toda máquina](../guilda/replicacao.md#cofre-em-toda-máquina)) |
 | `vault.request` | T→C | sim | `agent_id`, `secret`, `purpose`: credencial pedida no momento do uso; a Cidadela confere a classe e registra | `vault.credential {value}`, só em memória (tipo volátil), ou `error` `forbidden` |
 | `vault.drop` | C→T | sim | máquina excluída: apagar a chave, o envelope e as tabelas do cofre da réplica, as cópias completas que ainda chegavam e as pastas que uma excluída não recebe (a cada conexão dela também, sem efeito se não há o que apagar) | recibo `vault.dropped`, só se apagou algo; a Cidadela o aceita só de máquina excluída e o grava na auditoria |
 | `citadel.handover` | C→T | sim | troca planejada: `target_machine_id`, `last_lsn`, `approval_id`, `approved_by` | a máquina escolhida promove-se pela trava e responde com a certidão nova ([troca planejada](../guilda/cidadela-e-torres.md#troca-planejada)) |
@@ -44,7 +44,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `sync.request` / `sync.applied` | ambos | sim | `table_id`, `branch`, `base_commit`, `tip_commit` | ([mesas](../orquestracao/mesas.md)) |
 | `xfer.*` | ambos | sim (menos `xfer.progress`) | `xfer.begin {xfer_id, kind, size, sha256, chunk_size, meta}` (`size` até 64 GiB) → `xfer.ready {xfer_id, next_index}`; `xfer.progress {xfer_id, next_index, resend}`; `xfer.end {xfer_id}` → `xfer.done {xfer_id, ok, error}` ([transferência em partes](protocolo.md#transferência-em-partes)); nenhum passa pelo `outbox` | — |
 | `transcribe.request` | C→T | sim | `audio_xfer_id` (WAV já transferido), `language` | `transcribe.result {text, duration_s}` ou `error` ([transcrição](../telegram/anexos-e-transcricao.md)) |
-| `cert.renew` | T→C | sim | `role` (`motor`), `csr` (PEM) | `cert.issued {cert}`, o certificado em PEM ([credenciais](../guilda/guilda.md#credenciais)) |
+| `cert.renew` | T→C | sim | `role` (`motor`), `csr` (PEM) | `cert.issued {cert}`, o certificado em PEM ([credenciais](../guilda/guilda.md#credenciais)), ou `error` `forbidden` com a Cidadela de cofre fechado |
 | `update.apply` | C→T | sim | `release_tag`, `component` (`motor` \| `guardiao`), `xfer_id` | resultado no passo da [autoatualização](../plataforma/autoatualizacao.md) |
 
 **Tipos voláteis:** os que levam segredo (`vault.replica`, `vault.credential`, `agent.site_login`, `agent.site_login_input`) têm ack, mas esperam por ele só em memória, e voltam na ordem original junto com os do `outbox`: um reinício do processo os perde, e a Cidadela recomeça o pedido.
@@ -80,5 +80,5 @@ Valem para `error.code` em qualquer conexão. `retryable` diz se reenviar a mesm
 | `busy_terminal` | sim | `terminal.input` cru num terminal que não está livre |
 | `unavailable` | sim | recurso local temporariamente fora (ex.: whisper-server reiniciando) |
 | `affects_guardian` | não | ação ou script que tocaria o Guardião ([Guardião](../autocura/guardiao.md)) |
-| `forbidden` | não | a conexão não pode pedir aquilo (ex.: Guardião pedindo `terminal.open`) |
+| `forbidden` | não | a conexão não pode pedir aquilo (ex.: Guardião pedindo `terminal.open`) ou a Cidadela não pode agir (ex.: o cofre dela está fechado e não há CA para `cert.renew` e `guild.leave`, [cofre](../plataforma/cofre.md#regras-e-erros)); a mensagem diz o motivo |
 | `internal` | sim | erro inesperado do destinatário (vai para o log) |

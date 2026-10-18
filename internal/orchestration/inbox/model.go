@@ -183,6 +183,10 @@ func channelName(c string) string {
 	return c
 }
 
+// unreadable stands for a name that has nothing a header keeps (only symbols or
+// letters drawn empty): the parentheses are the engine's, no sender can make them.
+const unreadable = "(sem nome legível)"
+
 // Header is the first line of every item, the one format of the inbox:
 // `[Mestre · <tipo> · de <remetente> · <id>]`; a message of a user has
 // `<nome> (<nível>)` as the sender and the optional fields `via <canal>`,
@@ -191,12 +195,18 @@ func channelName(c string) string {
 // gives, the table a message cites): see headerText.
 func (it Item) Header() string {
 	sender := headerText(it.Sender)
+	if sender == "" && it.Sender != "" {
+		sender = unreadable // not "sistema", the sender of the engine
+	}
 	parts := []string{"Mestre", string(it.Kind)}
 	var extra []string
 	if o := it.Origin; it.Kind == KindUser && o != nil {
 		name := headerText(o.UserName)
 		if name == "" {
 			name = sender
+		}
+		if name == "" {
+			name = unreadable
 		}
 		sender = fmt.Sprintf("%s (%s)", name, headerText(levelName(o.Level)))
 		if o.Channel != "" {

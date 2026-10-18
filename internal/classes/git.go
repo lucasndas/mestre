@@ -189,6 +189,7 @@ func (e *evaluator) ownBranch(b string) bool {
 var gitFixed = []string{
 	"push", "send-pack", "http-push", "fetch", "pull", "fetch-pack", "remote",
 	"update-ref", "filter-branch", "filter-repo", "gc", "prune", "repack", "pack-refs", "maintenance", "prune-packed", "replace", "fast-import",
+	"commit-graph", "multi-pack-index", "index-pack", "unpack-objects",
 	"worktree", "tag", "reflog", "notes", "stash", "symbolic-ref", "config", "submodule", "clean", "branch", "checkout", "switch",
 }
 
@@ -247,7 +248,8 @@ func (e *evaluator) git(args []word, st *shellState, depth int) result {
 		if len(texts) > 0 && !slices.Contains([]string{"-v", "--verbose", "show", "get-url"}, texts[0]) {
 			deny("mudar remotos é só do motor")
 		}
-	case "update-ref", "filter-branch", "filter-repo", "gc", "prune", "repack", "pack-refs", "maintenance", "prune-packed", "replace", "fast-import":
+	case "update-ref", "filter-branch", "filter-repo", "gc", "prune", "repack", "pack-refs", "maintenance", "prune-packed", "replace", "fast-import",
+		"commit-graph", "multi-pack-index", "index-pack", "unpack-objects":
 		if g.sub == "replace" && (len(texts) == 0 || texts[0] == "-l" || texts[0] == "--list") {
 			break
 		}
@@ -360,19 +362,143 @@ func (e *evaluator) git(args []word, st *shellState, depth int) result {
 			res.merge(e.argPath(word{text: p, assign: -1}, use{write: true}, gst))
 		}
 	default:
-		for _, w := range rest {
-			if looksLikePath(w.text) && !strings.HasPrefix(w.text, "-") {
-				res.merge(e.argPath(w, use{}, gst))
+		writes := gitWrittenPaths(g.sub, rest)
+		written := make(map[int]bool, len(writes))
+		for _, wr := range writes {
+			written[wr.at] = true
+			if isDevice(wr.w.text) {
+				continue
 			}
-			if v, ok := strings.CutPrefix(w.text, "--output="); ok {
-				ow := w
-				ow.text = v
-				res.merge(e.argPath(ow, use{write: true}, gst))
+			u := use{write: true, recursive: wr.deep}
+			if ks, known := e.resolve(wr.w.text, gst); known && u.recursive && slices.Contains(ks, e.wt) {
+				// the root of the worktree: the patch names the paths below it,
+				// which the line does not show, as it does without --directory
+				continue
+			}
+			res.merge(e.argPath(wr.w, u, gst))
+		}
+		for i, w := range rest {
+			if !written[i] && looksLikePath(w.text) && !strings.HasPrefix(w.text, "-") {
+				res.merge(e.argPath(w, use{}, gst))
 			}
 		}
 	}
 	return res
 }
+
+// gitWrite is a path a git command writes: w is the path (the value of the
+// option, or the operand) and at the index in the arguments of the word that
+// holds it, whole or with its option attached.
+type gitWrite struct {
+	w    word
+	at   int
+	deep bool // the write is a tree under the path (git apply --directory)
+}
+
+// gitWrittenPaths are the paths a git subcommand writes because it is told
+// to: the output of --output (any command that takes the diff options),
+// archive -o, format-patch -o and --output-directory, bundle create <file>,
+// the base name of pack-objects, and the folder clone and init make. They
+// are paths like any other write: .git/**, .mestre/** and the files block
+// judge them. The forms with a space and the ones with the value attached
+// (--output=f, -of) are both read.
+func gitWrittenPaths(sub string, rest []word) []gitWrite {
+	var out []gitWrite
+	long := func(i int, name string) {
+		w := rest[i]
+		if v, ok := strings.CutPrefix(w.text, name+"="); ok {
+			w.text = v
+			out = append(out, gitWrite{w: w, at: i})
+		} else if w.text == name && i+1 < len(rest) {
+			out = append(out, gitWrite{w: rest[i+1], at: i + 1})
+		}
+	}
+	short := func(i int, letter string) {
+		w := rest[i]
+		if !strings.HasPrefix(w.text, "-"+letter) || strings.HasPrefix(w.text, "--") {
+			return
+		}
+		if v := w.text[2:]; v != "" {
+			w.text = v
+			out = append(out, gitWrite{w: w, at: i})
+		} else if i+1 < len(rest) {
+			out = append(out, gitWrite{w: rest[i+1], at: i + 1})
+		}
+	}
+	for i := range rest {
+		if rest[i].text == "--" {
+			break
+		}
+		long(i, "--output")
+		switch sub {
+		case "archive":
+			short(i, "o")
+		case "format-patch":
+			short(i, "o")
+			long(i, "--output-directory")
+		case "clone", "init":
+			long(i, "--separate-git-dir")
+		case "apply":
+			// git apply --directory=D roots every path of the patch under D.
+			n := len(out)
+			long(i, "--directory")
+			for k := n; k < len(out); k++ {
+				out[k].deep = true
+			}
+		}
+	}
+	taken := map[int]bool{}
+	for _, wr := range out {
+		taken[wr.at] = true
+	}
+	var ops []int // the operands, without the value of an option that takes one
+	value := map[string]bool(nil)
+	if sub == "clone" {
+		value = gitCloneValue
+	}
+	for i := 0; i < len(rest); i++ {
+		t := rest[i].text
+		if t == "--" {
+			for j := i + 1; j < len(rest); j++ {
+				ops = append(ops, j)
+			}
+			break
+		}
+		if strings.HasPrefix(t, "-") && t != "-" {
+			if value[t] {
+				i++
+			}
+			continue
+		}
+		if !taken[i] {
+			ops = append(ops, i)
+		}
+	}
+	switch sub {
+	case "bundle":
+		// bundle create [options] <file> <rev-list-args>: - is the output.
+		if len(ops) >= 2 && rest[ops[0]].text == "create" && rest[ops[1]].text != "-" {
+			out = append(out, gitWrite{w: rest[ops[1]], at: ops[1]})
+		}
+	case "pack-objects", "init":
+		// pack-objects <base-name> and init [<directory>]: the operands (an
+		// option's value among them, git init -b main dir) are judged as
+		// writes, which costs nothing inside the worktree.
+		for _, at := range ops {
+			out = append(out, gitWrite{w: rest[at], at: at})
+		}
+	case "clone":
+		// clone [options] <repository> [<directory>]
+		if len(ops) >= 2 {
+			at := ops[len(ops)-1]
+			out = append(out, gitWrite{w: rest[at], at: at})
+		}
+	}
+	return out
+}
+
+// gitCloneValue are the options of git clone that take the next word.
+var gitCloneValue = set("-b --branch --depth -o --origin -j --jobs --reference --reference-if-able --template --separate-git-dir -c --config -u --upload-pack --filter --shallow-since --shallow-exclude --bundle-uri --server-option --revision")
 
 // gitConfigWrites reports whether a git config command changes a value.
 func gitConfigWrites(rest []word) bool {
@@ -408,7 +534,13 @@ func (e *evaluator) gitBranch(res *result, rest []word) {
 		if len(ps) == 0 {
 			targets = []string{""}
 		}
-	case hasAny(rest, "-u", "--set-upstream-to", "--unset-upstream", "--edit-description", "-t", "--track", "--no-track"):
+	case hasShortFlag(rest, 'u') || hasAny(rest, "--set-upstream-to", "--unset-upstream", "--edit-description"):
+		// The upstream and the description of a branch are lines of the
+		// configuration of the repository (branch.<name>.*), which is the
+		// mirror's: the same write as git config, whichever branch it names.
+		res.fixedDeny("git branch -u|--set-upstream-to, --unset-upstream e --edit-description gravam a configuração do repositório, que é do espelho e compartilhada por todas as mesas")
+		return
+	case hasAny(rest, "-t", "--track", "--no-track"):
 		targets = ps
 		if len(targets) == 0 {
 			return // the current branch, which is the table's
@@ -692,6 +824,10 @@ func configRunsProgram(key string) bool {
 	switch {
 	case strings.HasPrefix(k, "pager."), strings.HasPrefix(k, "filter."),
 		strings.HasPrefix(k, "uploadpack."), strings.HasPrefix(k, "protocol."):
+		return true
+	case k == "include.path", strings.HasPrefix(k, "includeif.") && strings.HasSuffix(k, ".path"):
+		// A file of configuration the line does not show: what it sets (a
+		// core.fsmonitor, an alias with !) runs a program all the same.
 		return true
 	case strings.HasPrefix(k, "diff.") && (strings.HasSuffix(k, ".textconv") || strings.HasSuffix(k, ".command")):
 		return true

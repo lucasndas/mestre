@@ -333,7 +333,7 @@ func (e *evaluator) tableRule(t *providers.Tool, act Action, res result) (Decisi
 			r := e.classify(t, false)
 			own = &r
 		}
-		if !tableRuleCovers(*d, act, *own) {
+		if !tableRuleCovers(*d, act, t, *own) {
 			continue
 		}
 		ok, err := e.env.TableRules.Use(e.ctx, TableRuleUse{Rule: d.ID, Level: d.Level, Risk: d.Risk, AgentID: e.r.AgentID, TableID: e.env.TableID, Action: act, Tool: t, Own: *own})
@@ -347,10 +347,13 @@ func (e *evaluator) tableRule(t *providers.Tool, act Action, res result) (Decisi
 
 // tableRuleCovers says whether a table rule covers the call: the exact action
 // it was made for, or a command (a tool) its pattern matches, in both cases only
-// if the classification of the call fits the risk of the rule. A command with a
-// shell operator, a substitution or a redirection is never covered by a pattern.
-func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
+// if the classification of the call fits the risk of the rule and the call has
+// nothing TableRuleBlocker names.
+func tableRuleCovers(d Decree, act Action, t *providers.Tool, own RiskResult) bool {
 	if !own.Risk.valid() || own.Risk == RiskFixed || own.Risk.rank() > d.Risk.rank() {
+		return false
+	}
+	if TableRuleBlocker(act, t, own) != "" {
 		return false
 	}
 	if d.Action != nil {
@@ -360,22 +363,46 @@ func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
 	if d.Effect.Kind != EffectPermission || g == nil {
 		return false
 	}
-	// A pattern never frees a part the engine does not analyse (an origin with
-	// no group: an unclosed quote, a brace list, a .NET call), whoever made it.
-	if slices.Contains(own.Groups, GroupNone) {
-		return false
-	}
 	list := g.Tools
 	if d.ToolKind == providers.KindShell {
 		list = g.Commands
-		if strings.ContainsAny(act.Command, ";&|`<>\n\r(){}") || strings.Contains(act.Command, "$(") {
-			return false
-		}
 	}
 	if len(list) != 1 {
 		return false
 	}
 	return PatternCovers(ApprovablePattern{Pattern: list[0], Kind: d.ToolKind, Risk: RiskResult{Risk: d.Risk}}, act, own)
+}
+
+// TableRuleBlocker says why no temporary table rule frees a call, "" when one
+// may. It holds for the rule of the exact action as for the rule of a pattern,
+// whoever made it, the Grão-Mestre included
+// (docs/orquestracao/regras-temporarias-de-mesa.md#como-o-motor-decide-o-que-o-texto-deixa-em-aberto):
+// the same text of a command does another thing at each use when the engine does
+// not read all of it, so a rule never frees a part with no group (an unclosed
+// quote, a brace list, a .NET call, the reading of the shell; also a write, a
+// tool the table has no row for, or a web tool with no URL) nor a shell command
+// that chains, pipes, redirects or substitutes, breaks the line, or begins or ends
+// with a space only the engine reads as one. The command is read as the tool gave
+// it, not as the action keeps it (the action trims it: a line break followed by a
+// space of another script would go). The chain asks it again when it makes the
+// rule of an exact action; tool is nil when it has none.
+func TableRuleBlocker(act Action, tool *providers.Tool, own RiskResult) string {
+	command := act.Command
+	if tool != nil && tool.Kind == providers.KindShell {
+		command = strings.Trim(tool.Command, " \t\r\n")
+	}
+	switch {
+	case slices.Contains(own.Groups, GroupNone):
+		return "the engine does not analyse a part of the call"
+	case act.Kind == providers.KindShell && (strings.ContainsAny(command, ";&|`<>\n\r(){}") || strings.Contains(command, "$(")):
+		return "the command chains, pipes, redirects or substitutes other commands"
+	case act.Kind == providers.KindShell && strings.TrimSpace(command) != command:
+		// The action keeps the command trimmed of every space of every script;
+		// the shell skips only blanks and line ends, so "./run.sh" followed by a
+		// form feed or a no-break space is another file for it.
+		return "the command begins or ends with a character the engine reads as a space and the shell does not"
+	}
+	return ""
 }
 
 // action is the tool call as an exception binds it.
@@ -435,6 +462,12 @@ type evaluator struct {
 	wt, tmp  string // keys
 	evCwd    string
 	work     int // the units the analysis spent (budget.go)
+	// homeSet is the variable that moves the global configuration of git
+	// (HOME, XDG_CONFIG_HOME…) set or removed by an earlier part of the line
+	// being analysed, and homeScope the one set for the command being
+	// analysed (a prefix, env): a git that runs under either is a fixed denial
+	// (gitenv.go).
+	homeSet, homeScope string
 }
 
 func newEvaluator(ctx context.Context, env Env, r *Rules, ev providers.Event, degraded bool) *evaluator {

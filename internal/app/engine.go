@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -106,7 +107,8 @@ type Deps struct {
 	// External are the functions the Citadel turns on and off.
 	External []ExternalFunc
 	// Identifier identifies the callers of the local channel; nil identifies
-	// nobody (no terminal runs before milestone 4).
+	// nobody (no terminal runs until the engine hosts the orchestration:
+	// "M5, antes da etapa 1" in docs/desenvolvimento/ordem-de-implementacao.md).
 	Identifier localchan.Identifier
 	// Commands is the definition of the commands of the CLI the engine
 	// checks every call against (nil: cli.Default). Profiles gives the level
@@ -121,7 +123,8 @@ type Deps struct {
 	TableRules classes.TableRuleGate
 	// OnQueuedResult is told, on the Citadel, the result of a call that
 	// waited in the outbox of a Tower; it goes to the inbox of whoever asked
-	// (milestone 4 delivers it; until then it is only logged).
+	// (QueuedToInbox does, once the engine hosts the orchestration; until then
+	// it is only logged).
 	OnQueuedResult func(QueuedResult)
 	// Characters, Approvals and States are what the hook dispatcher needs
 	// from the terminal registry (M4) and the approvals (M5); nil: no
@@ -135,7 +138,7 @@ type Deps struct {
 	Contexts hook.Contexts
 	// ClassHooks gives the dispatcher the synchronous hooks of the class of
 	// a character (hook.ClassHookSource, over the classes of the workspace,
-	// when the registry of characters exists, M4); OnHookEvent is told every
+	// once the engine hosts the orchestration); OnHookEvent is told every
 	// event after it is answered (the asynchronous hooks of the classes,
 	// hook.AsyncRunner). nil: none.
 	ClassHooks  hook.ClassHooks
@@ -150,6 +153,14 @@ type Deps struct {
 	// not happen.
 	OnCitadelDown     func(since time.Time, n int)
 	OnPromotionFailed func(err error)
+	// OnVaultAlert is the grave alert of a vault that does not open (key
+	// missing, refused or wrong; docs/plataforma/cofre.md#regras-e-erros): the
+	// engine goes on without the vault, and what needs it says so, and the
+	// Owner learns it here (milestones 5 and 7 show it as an alert of the
+	// system). It is called from the goroutine that opens the vault, each
+	// time it comes back closed (not while the engine stops), and must not
+	// block.
+	OnVaultAlert func(vault.Alert)
 	// RenewEvery is how often a machine sees whether its engine certificate
 	// is due (a minute by default).
 	RenewEvery time.Duration
@@ -307,9 +318,11 @@ func (e *Engine) wait(ctx context.Context) (transition, bool) {
 // Run starts the instance and keeps it until ctx ends.
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	var wg sync.WaitGroup
+	// the deferred calls run backwards: cancel first, so that returning an
+	// error does not wait for goroutines that only end with ctx
 	defer wg.Wait()
+	defer cancel()
 	if err := e.paths.ensure(); err != nil {
 		return err
 	}
@@ -695,6 +708,9 @@ type joinMux struct {
 
 	mu sync.Mutex
 	h  map[string]http.Handler
+	// reason is why the routes answer 503 when no Citadel serves them,
+	// when the machine is the Citadel and cannot act (the vault is closed).
+	reason string
 }
 
 // Handle implements guild.Mounter.
@@ -706,10 +722,17 @@ func (j *joinMux) Handle(pattern string, h http.Handler) {
 	if !known {
 		j.m.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			j.mu.Lock()
-			h := j.h[pattern]
+			h, reason := j.h[pattern], j.reason
 			j.mu.Unlock()
 			if h == nil {
-				http.Error(w, "this machine is not the Citadel now", http.StatusServiceUnavailable)
+				if reason == "" {
+					reason = "this machine is not the Citadel now"
+				}
+				// the shape of the answers of the routes, which the machine that
+				// enters reads
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unavailable", "message": reason})
 				return
 			}
 			h.ServeHTTP(w, r)
@@ -722,6 +745,14 @@ func (j *joinMux) clear() {
 	for p := range j.h {
 		j.h[p] = nil
 	}
+	j.reason = ""
+	j.mu.Unlock()
+}
+
+// unavailable makes the routes that no Citadel serves say why.
+func (j *joinMux) unavailable(reason string) {
+	j.mu.Lock()
+	j.reason = reason
 	j.mu.Unlock()
 }
 

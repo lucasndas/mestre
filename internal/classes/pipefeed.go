@@ -49,6 +49,9 @@ func (e *evaluator) pipeReader(ws []word, depth int) (u stdinUse, xargs []word) 
 	}
 	base := normalizeInterpreter(cn)
 	switch {
+	case (cn == "invoke-expression" || cn == "iex") && len(args) == 0:
+		// 'git push' | iex: Invoke-Expression runs the text the pipe feeds it.
+		return stdinUse{name: cn, shell: true, d: dialectPwsh}, nil
 	case shells[base], pwshNames[base], cn == "cmd", cn == "source", cn == ".":
 		if readsScriptFromStdin(cn, args) {
 			d := dialectPOSIX

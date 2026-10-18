@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/svc"
 
 	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
 )
@@ -44,18 +46,73 @@ type Account interface {
 	Adopt(id string, pid int) (*Session, error)
 }
 
+// ErrSelfAccountInService is the refusal of SelfAccount in a service.
+var ErrSelfAccountInService = errors.New("winsvc: the account of the launcher itself is refused in a service: the agents would run as the account of the service (LocalSystem)")
+
 // SelfAccount is the "agent account" of a launcher that is not a service,
 // as in the full suite on the CI: the account of the launcher process
 // itself, with its own token and environment and no profile to load. The
 // whole path of the launcher runs, except the logon; what the logon needs
 // (a local account and its password, LoadUserProfile, the window station)
-// belongs to the real-account tests (internal/realaccount).
+// belongs to the real-account tests (internal/realaccount). In a service it
+// refuses to work (the account of the service is LocalSystem, and the agents
+// would run as SYSTEM) and NewLauncher refuses it.
 type SelfAccount struct {
 	// Released is called when a session is released (once per session).
 	Released func(id string)
+	// service says whether this process is a service; nil asks the system (the
+	// tests of the package say it themselves).
+	service func() bool
 }
 
 var _ Account = SelfAccount{}
+
+// inService says whether this process is a service or runs as an identity that
+// only a service has. svc.IsWindowsService looks at the parent of the process
+// (the service manager, in session 0), which a LocalSystem process that
+// something else started (psexec -s, a task as SYSTEM, a wrapper of services)
+// does not have, and the agents would run as SYSTEM all the same: the identity of
+// the token counts too. When the system cannot say, it is taken as one: the
+// account is refused.
+func (a SelfAccount) inService() bool {
+	is := false
+	if a.service != nil {
+		is = a.service()
+	} else {
+		var err error
+		if is, err = svc.IsWindowsService(); err != nil {
+			return true
+		}
+	}
+	if is {
+		return true
+	}
+	sid, err := currentUserSID()
+	return err != nil || isServiceSID(sid.String())
+}
+
+// isServiceSID says whether the SID (in its text form) is of an identity that
+// only a service runs as: LocalSystem, LocalService, NetworkService or a service
+// SID (NT SERVICE\...).
+func isServiceSID(sid string) bool {
+	switch sid {
+	case "S-1-5-18", "S-1-5-19", "S-1-5-20":
+		return true
+	}
+	return strings.HasPrefix(sid, "S-1-5-80-")
+}
+
+// selfInService says whether a is the SelfAccount, by value or by pointer, of a
+// process that is a service.
+func selfInService(a Account) bool {
+	switch s := a.(type) {
+	case SelfAccount:
+		return s.inService()
+	case *SelfAccount:
+		return s != nil && s.inService()
+	}
+	return false
+}
 
 func (a SelfAccount) session(id string) *Session {
 	var once sync.Once
@@ -68,8 +125,19 @@ func (a SelfAccount) session(id string) *Session {
 	}}
 }
 
-func (a SelfAccount) Logon(id string) (*Session, error)        { return a.session(id), nil }
-func (a SelfAccount) Adopt(id string, _ int) (*Session, error) { return a.session(id), nil }
+func (a SelfAccount) Logon(id string) (*Session, error) {
+	if a.inService() {
+		return nil, ErrSelfAccountInService
+	}
+	return a.session(id), nil
+}
+
+func (a SelfAccount) Adopt(id string, _ int) (*Session, error) {
+	if a.inService() {
+		return nil, ErrSelfAccountInService
+	}
+	return a.session(id), nil
+}
 
 // AgentAccount is mestre-agente, the local account without interactive
 // logon of the agents (docs/arquitetura/windows.md#conta-dos-agentes). The

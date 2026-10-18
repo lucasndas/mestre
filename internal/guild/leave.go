@@ -15,7 +15,7 @@ import (
 // and the record of the identity goes. The machine is then outside any Guild,
 // with its services stopped until a new entry (a new machine_id, the
 // history of the old one stays in the Guild). When the wipe fails the record
-// stays, so the leave can be tried again.
+// stays, and `mestre uninstall` tries the leave again.
 func (m *Member) Leave(ctx context.Context, w Wiper, reason string) error {
 	if _, err := m.Identity(ctx); err != nil {
 		return err
@@ -65,6 +65,11 @@ func (t *TowerLeave) Handle(ctx context.Context, m *protocol.Message) (*protocol
 	if m.Peer.Role != protocol.RoleMachine || m.Peer.ID != t.Epochs.Citadel() {
 		return nil, protocol.NewError(protocol.CodeForbidden, "only the Citadel tells a machine to leave the Guild")
 	}
+	// The Citadel waits a few seconds for the answer and revokes the machine
+	// whatever it gets; the connection falls and takes the context of the
+	// handler with it. The departure ends all the same: a machine that erased its
+	// share and kept its identity is left with nothing, and cannot enter again.
+	ctx = context.WithoutCancel(ctx)
 	if err := t.Member.Leave(ctx, t.Wiper, "removed"); err != nil && !errors.Is(err, ErrNotMember) {
 		return nil, err
 	}
