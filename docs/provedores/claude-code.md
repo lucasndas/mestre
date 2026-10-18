@@ -1,6 +1,6 @@
 # Claude Code
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -27,7 +27,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - Só lê `.claude/skills/<nome>/SKILL.md` (e `~/.claude/skills/`, não usada pelo Mestre). `.agents/skills/` não é lida (etapa 9 da conformidade, 2.1.299). Por isso o Mestre mantém a cópia gerenciada ([mesa](../sessao-zero/mesa.md), [ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)).
 - Num worktree, a busca para na raiz do worktree: a cópia precisa existir em cada worktree, **antes** de o agente iniciar (pasta criada depois exige `/reload-skills`; edições em pasta existente recarregam sozinhas).
 - `description` (com `when_to_use`) é cortada em 1.536 caracteres.
-- **Skills por personagem** (nível e classe): ficam em `.mestre/agents/<id>/.claude/skills/`, e o motor passa `--add-dir .mestre/agents/<id>`; o worktree compartilhado só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
+- **Skills por personagem** (nível e classe): ficam em `.mestre/agents/<id>/.claude/skills/`, com as [skills de apoio](../classes/skills-de-apoio.md) ligadas, e o motor passa `--add-dir .mestre/agents/<id>`; o worktree compartilhado só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 
 ### Hooks
 

@@ -1,6 +1,6 @@
 # Sessão zero do personagem
 
-> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -48,7 +48,7 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 
 ### Skills por personagem
 - Claude Code: o motor passa `--add-dir .mestre/agents/<id>`; o Claude carrega o `.claude/skills/` dessa pasta.
-- Codex e Antigravity: não têm pasta de skills por personagem. O conteúdo das skills do nível e da classe ou ficha vai como **seção compacta na camada do Mestre do próprio personagem** (`MESTRE.md`, entregue pelo `developer_instructions` no Codex e pelo arquivo de agente `.agents/agents/mestre-<id>.md` no Antigravity), nunca na pasta compartilhada `.agents/skills/`, que só tem a skill de comunicação ([mesa](mesa.md)).
+- Codex e Antigravity: não têm pasta de skills por personagem. O conteúdo das skills do nível e da classe ou ficha vai como **seção compacta na camada do Mestre do próprio personagem** (`MESTRE.md`, entregue pelo `developer_instructions` no Codex e pelo arquivo de agente `.agents/agents/mestre-<id>.md` no Antigravity), nunca na pasta compartilhada `.agents/skills/` (que recebe também as [skills de apoio](../classes/skills-de-apoio.md) ligadas, com acesso por personagem), que só tem a skill de comunicação ([mesa](mesa.md)).
 - Assim cada agente só recebe as skills do seu nível, nos três provedores. Mesmo que outro agente lesse um arquivo por personagem, não ganharia permissão: o motor confere o nível em toda chamada ([convencoes](../cli/convencoes.md)).
 
 ### Variáveis de ambiente

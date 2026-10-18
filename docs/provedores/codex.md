@@ -1,6 +1,6 @@
 # Codex
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Codex (OpenAI) · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Codex (OpenAI) · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -25,7 +25,7 @@ Registrar o que o [adaptador](adaptador.md) do Codex precisa saber. Pesquisado n
 ### Skills
 
 - Lê `.agents/skills/` nativamente, de cada pasta entre a atual e a raiz do projeto. Também lê `$HOME/.agents/skills` (compartilhada entre todos os `CODEX_HOME`; o Mestre não usa).
-- **Skills por personagem** (nível e classe): o Codex não tem pasta por personagem, então o conteúdo delas vai como seção compacta no `MESTRE.md` do personagem; `.agents/skills/` do worktree só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
+- **Skills por personagem** (nível e classe): o Codex não tem pasta por personagem, então o conteúdo delas vai como seção compacta no `MESTRE.md` do personagem (as [skills de apoio](../classes/skills-de-apoio.md) vão inteiras à pasta compartilhada da mesa, com acesso por personagem); `.agents/skills/` do worktree só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 - `name` e `description` são **obrigatórios** no `SKILL.md`. O catálogo ocupa no máximo ~2% da janela de contexto (ou 8.000 caracteres); o corpo só é lido quando a skill é escolhida. Mudanças são detectadas sozinhas.
 
 ### Hooks
