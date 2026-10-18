@@ -12,13 +12,14 @@ Referência de sintaxe dos comandos com que a mesa trabalha no GitHub sem ter cr
 
 ### `mestre issue`
 ```
-mestre issue create --title "<título>" [--body "<texto>" | --body-file <arq>] [--parent <n>] [--label <rótulo>]…
+mestre issue create --title "<título>" [--body "<texto>" | --body-file <arq>] [--parent <n>] [--label <rótulo>]… [--fingerprint "<texto>"]
 mestre issue update <n> [--title "<…>"] [--body "<…>" | --body-file <arq>] [--add-label <r>]… [--remove-label <r>]…
                         [--state open|closed] [--reason completed|not_planned]
 mestre issue comment <n> ("<texto>" | --body-file <arq>)
 mestre issue list [<n>…] [--all] [--state open|closed|all] [--comments]
 ```
-- `create`: cria a issue como sub-issue de `--parent` (padrão: o épico da mesa). O pai precisa estar na árvore do épico. `--json` → `{number, id, url, parent}`.
+- `create`: cria a issue como sub-issue de `--parent` (padrão: o épico da mesa; o Grão-Mestre, fora de uma mesa, cria uma issue solta). O pai precisa estar na árvore do épico. `--json` → `{number, id, url, parent}`.
+- `--fingerprint`: a **impressão** do problema, para não registrar o mesmo duas vezes. O motor normaliza o texto (minúsculas, espaços juntados), guarda o hash no banco da Cidadela com o número da issue e o põe no corpo (`<!-- mestre:impressao=<hash> -->`). Com uma issue **aberta** de mesma impressão no repositório, não cria outra: comenta "visto de novo" com o título e a data e devolve a existente (`seen_again: true`). Com só uma **fechada**, cria a nova com "Recorrência de #<n>" no início do corpo e o rótulo `recorrencia` (`recurrence_of`). Usado pelo [Vigia](../classes/classes-sugeridas.md#vigia).
 - `update`: título, descrição (inclusive o checklist em Markdown), rótulos e estado.
 - `comment`: comenta, publicado com o App de quem pediu.
 - `list`: sem números, a árvore do épico da mesa (número, título, estado, pai); `--all`, issues do repositório inteiro; com números, mostra essas issues por completo (`--comments` inclui os comentários). `--json` → `{issues: [{number, title, state, parent, labels, url, body?, comments?}]}`.
@@ -72,6 +73,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 - **CA-CLI-GH-07** · *rápida* — **Dado** um diff com `token = "ghp_…"` em `src/x.ts:12`, **quando** o personagem roda `mestre pr update`, **então** sai com 3 `secret_detected` citando `src/x.ts:12 github_token`, o valor não aparece na saída nem no log, e nada é enviado; **dado** `token = process.env.GH_TOKEN`, **então** envia.
 - **CA-CLI-GH-08** · *rápida* — **Dado** um PR cujo bloco `risco` foi criado pela classe Revisor, **quando** o Dev roda `mestre pr update --block risco "x" --expect-head <sha>`, **então** sai com 3 `block_owned`; **quando** o Revisor roda com um `--expect-head` que não é a cabeça atual, **então** sai com 7 `head_changed` e o corpo não muda; **com** a cabeça certa, **então** só o bloco `risco` é reescrito e os outros ficam como estavam.
 - **CA-CLI-GH-09** · *rápida* — **Dado** um PR com `src/x.ts` alterado, **quando** o personagem roda `mestre pr note src/x.ts:12 "por que"`, **então** o GitHub falso recebe um comentário de revisão na linha 12 daquele arquivo, na cabeça atual; **dado** `README.md:1`, fora do diff, **então** sai com 2 `usage`.
+- **CA-CLI-GH-10** · *rápida* — **Dado** `mestre issue create --title "Login lento" --fingerprint "auth: login lento"`, **quando** roda, **então** cria a issue com a impressão no corpo; **quando** roda de novo com `--fingerprint "Auth:  login LENTO"`, **então** não cria outra, comenta "visto de novo" na primeira e devolve `seen_again: true`; **dado** a primeira fechada, **quando** roda de novo, **então** cria uma nova com "Recorrência de #<n>", o rótulo `recorrencia` e `recurrence_of`.
 
 ## Depende de
 

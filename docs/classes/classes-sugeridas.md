@@ -1,6 +1,6 @@
 # Classes sugeridas
 
-> **Assunto:** o pacote de classes e receitas que vem com o Mestre desligado: o que traz, como um Administrador ativa e atualiza, as duas fichas de cada classe, a etapa opcional das receitas, a calibração pela proposta de classe e o aviso de comando inexistente numa skill · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** o pacote de classes e receitas que vem com o Mestre desligado: o que traz, como um Administrador ativa e atualiza, as duas fichas de cada classe, a etapa opcional das receitas, a calibração pela proposta de classe, o ritual Vigia e o aviso de comando inexistente numa skill · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -14,6 +14,7 @@ Versionado com o código do Mestre: embutido no binário e gravado em `<dados da
 
 - **Sete classes**, uma por papel, com `CLASS.md`, `permissions.yaml` e `done_requires`: [Pesquisador, Investigador, Designer, Dev, Revisor, QA e Documentador](sugeridas/INDEX.md). Uma classe por papel: a tecnologia vem do repositório; variações (`qa-api`, `dev-react`) o usuário cria a partir delas.
 - **Receitas de missão** por tipo de pedido (bug, funcionalidade nova, ajuste, investigação) e para refinar uma interface ([receitas](sugeridas/receitas.md)): definições de missão prontas que o Mestre da mesa usa com `--recipe`. Não são [grimórios](../orquestracao/grimorios.md), que nascem de uma seleção do canvas.
+- **O ritual [Vigia](#vigia)**, que procura problemas e os registra como issues candidatas.
 - **Um modelo de direção do workspace** para as [instruções extras do Grão-Mestre](../orquestracao/grao-mestre.md#instruções-extras-do-usuário): prioridades, o que está fora do escopo, quem decide o quê. É texto que o Administrador copia e edita; não é um arquivo novo.
 
 **Skills de apoio e servidores MCP de cada papel** ([skills de apoio](skills-de-apoio.md), [MCP por classe](mcp-por-classe.md)), todos **desligados** na ativação; o Administrador liga os que quiser na mesma tela:
@@ -61,6 +62,17 @@ O PM e o PO não são classes: são o [Grão-Mestre](../orquestracao/grao-mestre
 - A receita pode terminar com uma etapa opcional `retro`, feita pelo Revisor, que lê o pergaminho da missão e o de revisão ([prova e devolução](../orquestracao/prova-e-devolucao.md)) e escreve, no próprio `done`, o que a classe deveria dizer diferente (ex.: "o Dev deu `done` sem rodar a suíte duas vezes").
 - Com a missão concluída, o Mestre da mesa leva a sugestão ao Grão-Mestre, que, se concordar, exporta a classe (`mestre class show --export`), muda o pacote em `$MESTRE_TMP` e o envia (`mestre class edit --from`); como toda edição de classe do workspace feita por ele, isso vira **proposta** com o hash que o Administrador vê e aprova ([classes](classes.md#onde-a-classe-é-alterada)). Nada muda numa classe sem essa aprovação.
 
+### Vigia
+
+Ritual do workspace, desligado como as classes, que o Administrador ativa na mesma tela: diário (`--daily 07:00`, editável), com o Grão-Mestre como alvo ([rituais](../orquestracao/rituais.md)). O prompt pede que ele:
+
+- junte os candidatos: devoluções e achados repetidos das missões concluídas desde o último disparo (pergaminhos e tomos) e as issues abertas sem rótulo (`mestre issue list --all`);
+- confira cada um sem rodar código: ainda acontece? um PR mesclado já corrigiu? é duplicado? Incerto não é descarte: vira candidato com a dúvida escrita;
+- registre cada um com `mestre issue create --label candidato --fingerprint "<componente>: <sintoma>"` ([CLI de issues](../cli/coordenacao-github.md#mestre-issue)), que comenta "visto de novo" na issue aberta em vez de duplicar;
+- nunca abra mesa: promover um candidato a épico é pedido de um usuário ao Grão-Mestre, e reproduzir o problema é a primeira etapa da receita de bug.
+
+Custa uma rodada do Grão-Mestre por disparo; desligado, não roda.
+
 ### Comando inexistente numa skill
 
 O `class check` de qualquer classe, sugerida ou não, avisa quando o `CLASS.md` ou uma skill do pacote cita `mestre <comando>` que a CLI não tem, comparando com a definição de comandos que já está no binário ([skills geradas](../cli/skills-geradas.md)). É aviso, não erro: a classe é salva.
@@ -82,6 +94,7 @@ O `class check` de qualquer classe, sugerida ou não, avisa quando o `CLASS.md` 
 - **CA-SUG-06** · *rápida* — **Dado** uma missão concluída com a etapa `retro` e o Grão-Mestre que roda `mestre class edit "dev" --from <pasta>`, **quando** o motor recebe, **então** nasce uma proposta com o hash e a classe `dev` não muda até um Administrador aprovar.
 - **CA-SUG-07** · *pesada* — **Dado** as sete classes e as receitas ativadas num workspace real, **quando** chega um pedido de bug pelo Telegram (dublê), **então** a missão passa por Investigador, Dev, Revisor e QA (Revisor e QA em paralelo) nos três provedores, cada critério fica com prova e a mesa termina com o PR mesclado (MVP-16).
 - **CA-SUG-08** · *rápida* — **Dado** o pacote sugerido embutido no binário, **quando** o teste o lê, **então** cada classe, com todas as suas skills de apoio, cabe em 64 arquivos e 512 KiB, e cada skill de apoio tem o arquivo de licença.
+- **CA-SUG-09** · *rápida* — **Dado** o Vigia ativado e o mesmo achado repetido em duas missões concluídas, **quando** o ritual dispara em dois dias seguidos com o Grão-Mestre do agente falso, **então** existe uma issue só com o rótulo `candidato`, com um comentário "visto de novo", e nenhuma mesa foi aberta; **dado** o Vigia desligado, **então** nada dispara.
 
 ## Depende de
 
@@ -95,7 +108,5 @@ O `class check` de qualquer classe, sugerida ou não, avisa quando o `CLASS.md` 
 - [Administração](../painel/administracao.md)
 - [Skills de apoio](skills-de-apoio.md)
 - [MCP por classe](mcp-por-classe.md)
-
-## A confirmar
-
-- **Vigia** (o coletor de problemas do estudo): um ritual sugerido que olha as falhas da verificação e as issues abertas e propõe issues "candidatas", sem duplicar. Fica de fora até a CLI ter uma forma de procurar uma issue pela impressão antes de criar (hoje `mestre issue create` não tem), para o "visto de novo" não depender do agente lembrar.
+- [Rituais](../orquestracao/rituais.md)
+- [CLI de issues e PRs](../cli/coordenacao-github.md)
