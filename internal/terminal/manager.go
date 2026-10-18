@@ -274,6 +274,11 @@ func (m *Manager) audit(msg, id string, err error) {
 // without the engine having asked for it.
 func (m *Manager) connectionLost(t *Terminal) {
 	ctx := context.Background()
+	if t.client != nil { // a connection that fell for a violation of the protocol says which
+		if err := t.client.Err(); err != nil {
+			m.log.Warn("terminal connection lost", "terminal", t.id, "error", err.Error())
+		}
+	}
 	gone := !Alive(m.cfg.System, t.proc)
 	if gone {
 		_ = m.cfg.Spawner.KillCgroup(ctx, t.id)

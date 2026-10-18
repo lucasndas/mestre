@@ -24,6 +24,16 @@ const DefaultInstance = "principal"
 
 var instancePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
 
+// AgentAccount is the account the agents of an instance run as, and, on Linux,
+// the group of its socket: mestre-agente for the principal instance and
+// mestre-agente-<inst> for the others (docs/arquitetura/componentes.md#instâncias).
+func AgentAccount(instance string) string {
+	if instance == "" || instance == DefaultInstance {
+		return "mestre-agente"
+	}
+	return "mestre-agente-" + instance
+}
+
 // ValidInstance reports whether name can name an instance.
 func ValidInstance(name string) bool { return instancePattern.MatchString(name) }
 

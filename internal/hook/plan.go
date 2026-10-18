@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/localchan"
 )
 
-// Accounts of the Linux installation (docs/arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes).
-const (
-	OwnerEngine = "mestre"
-	GroupAgents = "mestre-agente"
-)
+// OwnerEngine is the account of the engine on the Linux installation
+// (docs/arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes).
+// The group of the agents is the one of the instance, localchan.AgentAccount:
+// there is no group of the agents that is the same for every instance.
+const OwnerEngine = "mestre"
 
 // CharacterID stands for the id of a character in the paths of the plan.
 const CharacterID = "<id>"
@@ -41,8 +42,10 @@ func LinuxPlan(instance string) []PlanEntry {
 	// Paths of Linux, in slash form wherever the plan is generated.
 	agents := filepath.ToSlash(classes.DefaultLayout("linux", "", instance).Agents)
 	char := path.Join(agents, CharacterID)
+	// the agents of an instance are the account of that instance, not of another
+	group := localchan.AgentAccount(instance)
 	entry := func(p string, dir bool, mode fs.FileMode, per bool, why string) PlanEntry {
-		return PlanEntry{Path: filepath.ToSlash(p), Dir: dir, Owner: OwnerEngine, Group: GroupAgents, Mode: mode, PerCharacter: per, Why: why}
+		return PlanEntry{Path: filepath.ToSlash(p), Dir: dir, Owner: OwnerEngine, Group: group, Mode: mode, PerCharacter: per, Why: why}
 	}
 	return []PlanEntry{
 		entry(agents, true, 0o750, false, "the folders of the characters: the agents' group goes in, does not write"),
