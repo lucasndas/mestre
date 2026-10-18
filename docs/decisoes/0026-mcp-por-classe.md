@@ -31,7 +31,7 @@ Aceita, 2026-10-18, por decisão do Dono. **Revista no mesmo dia:** a entrega pa
 ## Decisão
 
 - **Opção 4.** O workspace tem um **catálogo de servidores MCP**, a classe declara `mcp:` no frontmatter do `CLASS.md`, e o gateway do Mestre é o único servidor que cada CLI conhece. Detalhes em [MCP por classe](../classes/mcp-por-classe.md).
-- Toda ferramenta MCP que não vem do gateway é negada pelo despachante; ligar um servidor só passa se os `domains` dele cabem na rede da classe e do teto.
+- O nome `mestre` é reservado; repositório com servidores MCP próprios é ignorado no Claude (`--strict-mcp-config`) e impede o início do personagem no Codex e no Antigravity. Toda ferramenta MCP que não vem do gateway é negada pelo despachante, menos as do Operador do PC; ligar um servidor só passa se os `domains` dele cabem na rede da classe e do teto.
 - Chave só em servidor remoto, como `mcp_key` do [cofre](../plataforma/cofre.md), usada pelo motor e só nos domínios dela. Servidor local com chave fica em "A confirmar" (conta própria `mestre-mcp`).
 - As regras fixas continuam valendo antes de tudo: MCP de controle do computador ou do navegador do usuário só na base Operador do PC ([ADR 0021](0021-operador-do-pc.md)); um servidor desses é recusado no catálogo pelo pacote ou endereço, não pelo nome.
 
@@ -43,3 +43,4 @@ Aceita, 2026-10-18, por decisão do Dono. **Revista no mesmo dia:** a entrega pa
 - **Negativas:**
   - A rede de um servidor local não é filtrada pela classe: ligar é aprovar o que o servidor acessa, e por isso os `domains` dele precisam caber na rede da classe e do teto.
   - O motor fora do ar deixa o personagem sem MCP (falha fechada), e uma chamada que pede aprovação pode passar do limite de tempo do CLI.
+  - As regras de `files` não olham os argumentos de uma ferramenta MCP; um servidor local alcança o que o `mestre-agente` alcança.
