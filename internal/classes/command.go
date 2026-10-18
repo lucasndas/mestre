@@ -19,8 +19,8 @@ const CmdCheck = "class check"
 type CheckCommand struct {
 	// Scope finds the library of the workspace of the caller and the table he
 	// works in ("" for the Grand Master). The registry of characters provides
-	// it, once the engine hosts the orchestration (docs/desenvolvimento/
-	// ordem-de-implementacao.md, "M5, antes da etapa 1").
+	// it, once the engine hosts the orchestration ("M5, antes da etapa 1" in
+	// docs/desenvolvimento/ordem-de-implementacao.md).
 	Scope func(ctx context.Context, c *localchan.Call) (lib *Library, table string, err error)
 }
 

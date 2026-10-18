@@ -137,9 +137,9 @@ type Deps struct {
 	Contexts hook.Contexts
 	// ClassHooks gives the dispatcher the synchronous hooks of the class of
 	// a character (hook.ClassHookSource, over the classes of the workspace,
-	// once the engine hosts the registry of characters); OnHookEvent is told
-	// every event after it is answered (the asynchronous hooks of the
-	// classes, hook.AsyncRunner). nil: none.
+	// once the engine hosts the orchestration); OnHookEvent is told every
+	// event after it is answered (the asynchronous hooks of the classes,
+	// hook.AsyncRunner). nil: none.
 	ClassHooks  hook.ClassHooks
 	OnHookEvent func(providers.Event, hook.Answer)
 	// Sheet are the probes of the machine sheet; a nil System reads the
