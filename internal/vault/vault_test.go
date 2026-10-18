@@ -438,6 +438,9 @@ func TestInterruptedKeyRotationKeepsEverySecretReadable(t *testing.T) {
 			if got := v2.ring.versions(); !slices.Equal(got, []uint32{tc.wantVersion}) {
 				t.Errorf("keys kept after restart = %v, want [%d]", got, tc.wantVersion)
 			}
+			// And on disk, which is what the Towers copy: the key file and the
+			// envelope hold only that key, not the one the rotation discarded.
+			assertOnlyKeyOnDisk(t, f, tc.wantVersion)
 			// The envelope on disk opens the same secrets with the recovery key.
 			assertEnvelopeOpens(t, f)
 
@@ -449,6 +452,38 @@ func TestInterruptedKeyRotationKeepsEverySecretReadable(t *testing.T) {
 				mustRead(t, v2, s.name, s.value)
 			}
 		})
+	}
+}
+
+// assertOnlyKeyOnDisk reads the key file and the header of the envelope as
+// they are on disk, and wants the version of the key to be the only one in
+// both (CA-COFRE-06): the memory of the engine being right does not make the
+// copies that travel to the Towers right.
+func assertOnlyKeyOnDisk(t *testing.T, f *fixture, version uint32) {
+	t.Helper()
+	data, err := f.cfg.Keys.Load(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ring, err := parseKeyring(data)
+	zero(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ring.destroy()
+	if got := ring.versions(); !slices.Equal(got, []uint32{version}) {
+		t.Errorf("key file holds the versions %v, want [%d]", got, version)
+	}
+	env, err := os.ReadFile(f.cfg.EnvelopePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := parseEnvelopeHeader(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(info.versions, []uint32{version}) {
+		t.Errorf("envelope holds the versions %v, want [%d]", info.versions, version)
 	}
 }
 
