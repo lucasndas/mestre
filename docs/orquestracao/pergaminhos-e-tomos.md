@@ -1,6 +1,6 @@
 # Pergaminhos e tomos
 
-> **Assunto:** notas em Markdown no canvas (pergaminhos), grupos de notas (tomos), operações, concorrência e o pergaminho da missão · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** notas em Markdown no canvas (pergaminhos), grupos de notas (tomos), operações, concorrência e o pergaminho da missão · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -53,7 +53,7 @@ Criado pelo motor ao criar uma [missão](missoes.md), com nome fixo "Missão: <n
 **Não commitados:** (nenhum)
 ```
 
-Também recebe o resumo de encerramento de cada personagem da missão ([encerramento seguro](personagens.md#encerramento-seguro)) e as devoluções com o motivo. Agentes conectados podem ler e escrever nele como em qualquer pergaminho.
+Também recebe o resumo de encerramento de cada personagem da missão ([encerramento seguro](personagens.md#encerramento-seguro)), as devoluções com o motivo e as provas por critério. Missão com etapa que devolve ganha também o pergaminho "Revisão: <nome>" ([prova e devolução](prova-e-devolucao.md#pergaminho-de-revisão)). Agentes conectados podem ler e escrever nele como em qualquer pergaminho.
 
 Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 
