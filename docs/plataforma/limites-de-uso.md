@@ -55,7 +55,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 Para não perder um turno cortado no meio, o motor não espera o corte: com qualquer janela do plano de um provedor (5 h ou 7 d) **no limiar de início** ou acima (padrão 95%, configurável por workspace por um Administrador), ele não recruta nem entrega etapa nova que use aquele provedor e conta. Quem está no turno termina. A mesa fica aguardando cota até o `resets_at` da janela, e o Grão-Mestre e os usuários recebem `⏸ Mesa Login pausada · 5h 96% · volta às 14:05 · faltam 2 etapas`. Ao passar do `resets_at`, o motor entrega o que esperava (como em [aguardando cota](#aguardando-cota)).
 
 - **Leitura antiga:** o uso só cresce dentro da janela. Uma leitura **acima** do limiar continua valendo até o `resets_at`, por velha que seja; uma **abaixo** não prova nada e, depois de 15 min, vira "desconhecido": a etapa é entregue com um aviso ao Mestre da mesa de que o uso não está confirmado, e a próxima leitura decide. Janela sem `resets_at` conhecido só vale enquanto a leitura é recente (menos de 15 min).
-- Vale para o Claude Code e o Codex pelas janelas que informam e para o Antigravity pela fração restante do `/usage` ([fontes](#de-onde-vem-o-uso-por-provedor)); provedor sem janela não tem limiar.
+- Os três informam `resets_at` por janela: o Claude Code pelo statusLine (só muda com turno em andamento), o Codex pelo `token_count` e o Antigravity pelo `/usage` (`used_pct = 1 − fração restante`, lido a cada 10 min). Por isso o corte da leitura antiga é de 15 min, acima do intervalo do Antigravity ([fontes](#de-onde-vem-o-uso-por-provedor)); provedor sem janela não tem limiar.
 
 ### Aguardando cota
 
