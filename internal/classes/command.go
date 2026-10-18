@@ -14,12 +14,13 @@ const CmdCheck = "class check"
 
 // CheckCommand is the engine side of `mestre class check "<classe>"`
 // (docs/cli/coordenacao-classes-e-rituais.md): the "casca" of the command
-// that classes.md uses before the CLI of classes arrives (M4). It validates
+// that classes.md used before the CLI of classes (M4, step 11). It validates
 // the class of the caller's workspace and shows the report.
 type CheckCommand struct {
 	// Scope finds the library of the workspace of the caller and the table he
-	// works in ("" for the Grand Master). The registry of characters (M4)
-	// provides it.
+	// works in ("" for the Grand Master). The registry of characters provides
+	// it, once the engine hosts the orchestration ("M5, antes da etapa 1" in
+	// docs/desenvolvimento/ordem-de-implementacao.md).
 	Scope func(ctx context.Context, c *localchan.Call) (lib *Library, table string, err error)
 }
 
