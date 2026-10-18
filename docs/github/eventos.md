@@ -1,6 +1,6 @@
 # Eventos do GitHub
 
-> **Assunto:** consulta periódica, condicional e adaptativa à API do GitHub, transformada em eventos na caixa de entrada · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** consulta periódica, condicional e adaptativa à API do GitHub, transformada em eventos na caixa de entrada · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -68,7 +68,7 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 - A mesa é descoberta pelas regras de [ações por nível](acoes-por-nivel.md). Sem mesa, o evento vai marcado "sem mesa".
 - Os eventos do mesmo ciclo e da mesma mesa viram **uma única mensagem** na caixa de entrada do Grão-Mestre, para não gastar um turno por evento.
 - Prioridade e entrega: [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md).
-- `pr_mergeado` do PR de uma mesa confirma o merge: o motor marca a mesa como mesclada e o item ao Grão-Mestre diz isso, para ele encerrar a mesa ([encerramento](../orquestracao/mesas.md#encerramento)).
+- `pr_mergeado` do PR de uma mesa confirma o merge: o motor marca a mesa como mesclada e o item ao Grão-Mestre diz isso, para ele encerrar a mesa ([encerramento](../orquestracao/mesas.md#encerramento)). **Antes** de marcar, confere pelo espelho que o `merge_commit_sha` é alcançável da base (`git merge-base --is-ancestor`); se não é (merge desfeito logo depois, ou o espelho ainda sem o commit), a mesa não é marcada e o Grão-Mestre recebe o aviso. Vale também para o merge feito por uma pessoa no GitHub. Nenhum "pronto" vai ao usuário antes disso.
 - Revisões feitas por pessoas direto no GitHub também servem para concluir pedidos de aprovação ([fluxo](../aprovacoes/fluxo.md)).
 
 ### Orçamento de cota
@@ -92,6 +92,7 @@ Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerc
 - **CA-GH-EV-05** · *rápida* — **Dado** uma revisão e o fim do CI do PR da mesa A no mesmo ciclo, **quando** o motor entrega, **então** a caixa de entrada do Grão-Mestre recebe uma única mensagem citando a mesa A e os dois eventos.
 - **CA-GH-EV-06** · *rápida* — **Dado** uma resposta 429 com `retry-after: 60`, **quando** o motor processa, **então** a próxima consulta daquele workspace só acontece após 60 s no relógio falso.
 - **CA-GH-EV-07** · *completa* — **Dado** o GitHub falso com um PR de mesa aberto e CI em andamento, **quando** o CI termina com falha, **então** em até um ciclo o Grão-Mestre recebe o evento `ci` com o link do check.
+- **CA-GH-EV-08** · *rápida* — **Dado** um evento `pr_mergeado` cujo `merge_commit_sha` não é alcançável da base no espelho, **quando** o motor o processa, **então** a mesa não é marcada como mesclada e o Grão-Mestre recebe o aviso; **dado** o commit alcançável, **então** a mesa é marcada.
 
 ## Depende de
 

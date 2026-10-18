@@ -1,6 +1,6 @@
 # Política de aprovação
 
-> **Assunto:** o que o Grão-Mestre decide no nível dele da cadeia de aprovação e quando o pedido vai às pessoas: tipos de ação, o que o motor confere e como decretos ajustam a política · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o que o Grão-Mestre decide no nível dele da cadeia de aprovação e quando o pedido vai às pessoas: tipos de ação, o que o motor confere e como decretos ajustam a política · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -51,11 +51,20 @@ Ampliar o teto do workspace não é aprovação: só por decreto ([decretos](../
 |---|---|
 | CI verde no hash do pedido | mudança dentro do escopo e dos critérios de aceite da issue |
 | revisão concluída por outro personagem, sem pendências | dúvida sobre a intenção do pedido |
-| tamanho (arquivos, linhas, arquivos apagados) | regra do projeto (`AGENTS.md`) que exija uma pessoa |
-| arquivos em áreas sensíveis; comandos sensíveis | apagar dados de forma não coberta pelas regras |
+| tamanho (arquivos, linhas sem as `linhas_ignoradas`, arquivos apagados) | regra do projeto (`AGENTS.md`) que exija uma pessoa |
+| arquivos em áreas sensíveis; palavras sensíveis em linhas adicionadas; comandos sensíveis | apagar dados de forma não coberta pelas regras |
 | custo dentro do teto; regra de quórum que exige pessoas | |
 
 Se uma condição do motor falha, a decisão do Grão-Mestre é recusada como em [fora da política](#o-grão-mestre-como-aprovador-delegado), dizendo qual condição falhou. Se o Grão-Mestre tem dúvida, ele pergunta mesmo com tudo verde.
+
+### O que o motor lê do PR
+
+O motor obtém o diff do PR no hash do pedido e confere, sem modelo, o que o [arquivo de política](arquivo-de-politica.md) pede:
+
+- **Tamanho:** `max_linhas` soma adições e remoções **sem** os arquivos que casam `condicoes.linhas_ignoradas` (lockfiles, snapshots, gerados); esses arquivos também ficam fora da busca de palavras. Continuam contando em `max_arquivos` e nas áreas sensíveis, que olham o caminho.
+- **Palavras:** `areas_sensiveis.palavras_em_linhas_adicionadas` lista palavras (inteiras, sem diferenciar maiúsculas) que mandam para pessoa quando aparecem numa linha **adicionada**, em qualquer arquivo. Linha removida não dispara: tirar um `DROP` não é perigoso.
+- **Rótulo `mestre:humano`:** um PR com esse rótulo nunca é aprovado pelo Grão-Mestre (`human_required`). O rótulo só aperta: sua ausência não libera nada, e nenhuma condição o ignora.
+- **Diff incompleto:** se o motor não obteve o diff por inteiro (lista de arquivos truncada pelo GitHub, ou arquivo de texto sem `patch` e fora de `linhas_ignoradas`), ou não conseguiu ler o rótulo, a decisão é `human_required` com o motivo `diff_incompleto`. Nunca falha para baixo.
 
 ### Arquivo de política
 
@@ -92,6 +101,10 @@ Um decreto `policy` pode mudar a política sem editar o arquivo (ex.: "pode apro
 - **CA-APROV-POL-14** · *rápida* — **Dado** um pedido `envio_workflows` e um decreto `delegation` do Dono para esse tipo na mesa `42-login`, **quando** o Grão-Mestre decide um pedido dessa mesa, **então** o motor aceita; **quando** o pedido é de outra mesa, **então** recebe `human_required`; **dado** também a regra de quórum `{tipo: envio_workflows, aprovacoes: 1}`, **então** o pedido vai às pessoas mesmo dentro da delegação.
 - **CA-APROV-POL-15** · *rápida* — **Dado** um pedido `permissao_de_classe` de risco `alto` e a política padrão, **quando** ele chega às pessoas, **então** só Administradores e o Dono o recebem, e um "Aprovar" vindo de um Aprovador é recusado.
 - **CA-APROV-POL-16** · *rápida* — **Dado** um arquivo de política com `acao_destrutiva: { sozinho: se_condicoes }`, **quando** o motor carrega, **então** o arquivo é inválido, vale a versão anterior e o Dono recebe o alerta com o motivo.
+- **CA-APROV-POL-17** · *rápida* — **Dado** um PR que adiciona `DROP TABLE x` em `scripts/limpa.sql` (fora de `areas_sensiveis`) e outro que só remove essa linha, **quando** o motor avalia as condições, **então** o primeiro sai `human_required` citando a palavra `DROP` e o segundo segue as condições normais.
+- **CA-APROV-POL-18** · *rápida* — **Dado** um PR de 40 linhas de código e 3.000 de `package-lock.json`, com `max_linhas: 600`, **quando** o motor conta, **então** conta 40 e o PR passa na condição de tamanho; **dado** o diff do GitHub incompleto, **então** sai `human_required` com o motivo `diff_incompleto`.
+- **CA-APROV-POL-19** · *rápida* — **Dado** um PR com tudo verde e o rótulo `mestre:humano`, **quando** o Grão-Mestre tenta aprovar, **então** o motor recusa com `human_required`; **dado** o mesmo PR sem o rótulo, **então** segue as condições normais.
+- **CA-APROV-POL-20** · *rápida* — **Dado** um PR que adiciona `config/service-account-prod.json` e outro que adiciona `docs/conta.md`, **quando** o Grão-Mestre tenta aprovar sozinho, **então** o primeiro sai `human_required` citando a área `permissoes_e_segredos` e o segundo segue as condições normais.
 
 ## Depende de
 

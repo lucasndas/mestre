@@ -1,6 +1,6 @@
 # Limites de uso e custo
 
-> **Assunto:** registro de uso por provedor, limites por missão, mesa, workspace e dia, avisos em 80% e pausa em 100%, e o estado "aguardando cota" · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** registro de uso por provedor, limites por missão, mesa, workspace e dia, avisos em 80% e pausa em 100%, o limiar de início, a leitura antiga e o estado "aguardando cota" · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -50,6 +50,13 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 - Aprovado: o limite daquele período sobe pelo valor aprovado e a pausa é retirada. Negado ou expirado: continua pausado, e os usuários e o Grão-Mestre são avisados.
 - A pausa nunca interrompe um turno: o motor confere o limite a cada registro de uso e a pausa vale a partir do fim do turno atual.
 
+### Limiar de início
+
+Para não perder um turno cortado no meio, o motor não espera o corte: com qualquer janela do plano de um provedor (5 h ou 7 d) **no limiar de início** ou acima (padrão 95%, configurável por workspace por um Administrador), ele não recruta nem entrega etapa nova que use aquele provedor e conta. Quem está no turno termina. A mesa fica aguardando cota até o `resets_at` da janela, e o Grão-Mestre e os usuários recebem `⏸ Mesa Login pausada · 5h 96% · volta às 14:05 · faltam 2 etapas`. Ao passar do `resets_at`, o motor entrega o que esperava (como em [aguardando cota](#aguardando-cota)).
+
+- **Leitura antiga:** o uso só cresce dentro da janela. Uma leitura **acima** do limiar continua valendo até o `resets_at`, por velha que seja; uma **abaixo** não prova nada e, depois de 15 min, vira "desconhecido": a etapa é entregue com um aviso ao Mestre da mesa de que o uso não está confirmado, e a próxima leitura decide. Janela sem `resets_at` conhecido só vale enquanto a leitura é recente (menos de 15 min).
+- Vale para o Claude Code e o Codex pelas janelas que informam e para o Antigravity pela fração restante do `/usage` ([fontes](#de-onde-vem-o-uso-por-provedor)); provedor sem janela não tem limiar.
+
 ### Aguardando cota
 
 - **Detecção** (sinais detalhados em cada documento de provedor): Claude Code pelo hook `StopFailure` com `rate_limit` ou pela tela de limite; Codex por `rate_limit_reached_type` preenchido; Antigravity pelo erro de cota no fim do turno ou por uma janela com fração restante zero.
@@ -79,6 +86,7 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - **CA-USO-07** · *rápida* — **Dado** um pedido `custo_extra` que passaria o teto, **quando** o Grão-Mestre tenta aprovar, **então** é recusado e o pedido vai aos usuários Administrador ou acima.
 - **CA-USO-09** · *rápida* — **Dado** um registro de uso gravado de um turno em que o personagem usou um subagente nativo, **quando** o uso é somado, **então** os tokens do subagente entram no personagem, na missão e na mesa dele.
 - **CA-USO-08** · *pesada* — **Dado** uma mesa trabalhando, **quando** abro o painel, **então** vejo o consumo da mesa e de cada personagem (MVP-11).
+- **CA-USO-10** · *rápida* — **Dado** a janela de 5 h em 96% numa leitura de 20 min atrás com `resets_at` daqui a 1 h (relógio falso), **quando** o motor vai entregar uma etapa nova, **então** não entrega e a mesa fica aguardando cota até o reset, e passado o reset a etapa é entregue; **dado** 40% numa leitura de 20 min atrás, **então** o uso fica "desconhecido" e a etapa é entregue com aviso.
 
 ## Depende de
 
