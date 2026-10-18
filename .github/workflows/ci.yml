@@ -1,8 +1,10 @@
 # CI of the repository: the fast and full suites on Linux and Windows, in
 # parallel, required by the ruleset of main (docs/desenvolvimento/ambiente.md
-# and docs/qualidade/testes.md). The Linux job also runs both suites with the
-# race detector (budgets times 3), and both jobs build and vet with cgo off,
-# like the release builds. Third-party actions are pinned by commit SHA;
+# and docs/qualidade/testes.md). Both jobs build and vet with cgo off, like
+# the release builds. A pull request that changes only documents runs the
+# document checks and the tests that read documents. The race detector
+# (budgets times 3) runs on Linux on the pushes to main, not on pull requests:
+# the pre-push hook already runs it on the changed packages. Third-party actions are pinned by commit SHA;
 # golangci-lint is the pinned release binary, checked by its SHA-256.
 name: CI
 
@@ -17,7 +19,9 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A push to main is never cancelled: its run is the one with the race
+  # detector.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   GOLANGCI_LINT_VERSION: 2.14.0
@@ -44,6 +48,25 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The merge commit of a pull request and its first parent, the
+          # base: enough to list the changed files.
+          fetch-depth: 2
+
+      # Only documents: docs/, the Markdown files of the root and LICENSE.
+      # Every other path (Markdown inside a package can be embedded or test
+      # data) runs everything. The push to main always runs everything.
+      - name: What the change touches
+        run: |
+          code=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            files=$(git diff --name-only HEAD^1 HEAD)
+            echo "$files"
+            if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '^docs/|^[^/]+\.md$|^LICENSE$'; then
+              code=false
+            fi
+          fi
+          echo "code=$code"
+          echo "CODE=$code" >> "$GITHUB_ENV"
 
       # Uses the toolchain line of go.mod.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -61,7 +84,7 @@ jobs:
           echo "TMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
 
       - name: Install golangci-lint (Linux)
-        if: runner.os == 'Linux'
+        if: env.CODE == 'true' && runner.os == 'Linux'
         run: |
           f="golangci-lint-$GOLANGCI_LINT_VERSION-linux-amd64"
           cd "$RUNNER_TEMP"
@@ -71,7 +94,7 @@ jobs:
           echo "$RUNNER_TEMP/$f" >> "$GITHUB_PATH"
 
       - name: Install golangci-lint (Windows)
-        if: runner.os == 'Windows'
+        if: env.CODE == 'true' && runner.os == 'Windows'
         shell: pwsh
         run: |
           $f = "golangci-lint-$env:GOLANGCI_LINT_VERSION-windows-amd64"
@@ -83,23 +106,23 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $env:RUNNER_TEMP $f)
 
       - name: golangci-lint version
+        if: env.CODE == 'true'
         run: golangci-lint version
 
       # The first lint of a dependency is slow (modernc.org/sqlite alone takes
       # seconds); keep the analysis cache between runs, keyed by OS, linter
       # version, go.sum and the lint config.
       - name: Point golangci-lint at a cached folder
+        if: env.CODE == 'true'
         run: echo "GOLANGCI_LINT_CACHE=$RUNNER_TEMP/golangci-lint" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - if: env.CODE == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/golangci-lint
           key: golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}
           restore-keys: |
             golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-
-
-      - name: go vet
-        run: go vet ./...
 
       - name: Documentation check
         run: go run ./tools/docscheck
@@ -107,9 +130,22 @@ jobs:
       - name: Code rules
         run: go run ./tools/codecheck
 
+      # A change of documents only: the tests that read a document (the
+      # glossary, the messages of the protocol, the ruleset, the session
+      # zero), found by the path they open, and the tests of the document
+      # check; the push to main runs everything anyway.
+      - name: Tests that read documents
+        if: env.CODE != 'true'
+        run: |
+          pkgs=$(grep -rlE --include='*_test.go' '"(\.\./)+docs/|"\.\.", "\.\.", "docs"' internal tools cmd pkg | xargs -n1 dirname | sort -u | sed 's|^|./|')
+          echo $pkgs
+          go test ./tools/docscheck $pkgs
+          go test -tags full ./tools/docscheck $pkgs
+
       # The release binaries are built with cgo off (ADR 0001): the same build
       # and vet must pass that way too, on both systems.
       - name: Build and vet with cgo off
+        if: env.CODE == 'true'
         env:
           CGO_ENABLED: "0"
         run: |
@@ -120,6 +156,7 @@ jobs:
       # (docs/qualidade/testes.md#executor-testrun): compile the test
       # binaries of both suites first, running no test.
       - name: Warm the build cache
+        if: env.CODE == 'true'
         run: |
           go test -run '^$' ./...
           go test -tags full -run '^$' ./...
@@ -131,28 +168,31 @@ jobs:
       # here, not inside the budget of the fast and the full suite (both run
       # the linter, the full one with the tag).
       - name: Warm the lint cache
+        if: env.CODE == 'true'
         run: |
           golangci-lint run ./...
           golangci-lint run --build-tags full ./...
 
       - name: Fast suite
+        if: env.CODE == 'true'
         run: go run ./tools/testrun fast
 
       - name: Full suite
+        if: env.CODE == 'true'
         run: go run ./tools/testrun full
 
       # The detector needs cgo and a build cache of its own; compile the race
       # test binaries first, so the budgets (3x the normal ones) measure tests.
       - name: Warm the build cache (race)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && github.event_name != 'pull_request'
         run: |
           go test -race '-gcflags=modernc.org/...=-d=checkptr=0' -run '^$' ./...
           go test -race '-gcflags=modernc.org/...=-d=checkptr=0' -tags full -run '^$' ./...
 
       - name: Fast suite (race)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && github.event_name != 'pull_request'
         run: go run ./tools/testrun fast -race
 
       - name: Full suite (race)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && github.event_name != 'pull_request'
         run: go run ./tools/testrun full -race
