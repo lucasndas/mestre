@@ -156,7 +156,8 @@ type Deps struct {
 	// engine goes on without the vault, and what needs it says so, and the
 	// Owner learns it here (milestones 5 and 7 show it as an alert of the
 	// system). It is called from the goroutine that opens the vault, each
-	// time it comes back closed, and must not block.
+	// time it comes back closed (not while the engine stops), and must not
+	// block.
 	OnVaultAlert func(vault.Alert)
 	// RenewEvery is how often a machine sees whether its engine certificate
 	// is due (a minute by default).

@@ -209,10 +209,10 @@ func (v *Vault) settle(ctx context.Context, ring *keyring) error {
 }
 
 // keysInUse checks ring against the secrets stored in db and returns the key
-// versions to keep: every version a row needs that is present must open at
-// least one of its rows, and at least one must be present, or the key is wrong
-// (errWrongKey); rows claiming an unknown version fail alone. It only reads, so
-// db may be a replica.
+// versions to keep: of the versions the rows use, those the ring has are kept,
+// at least one of them must open a row of its own, or the key is wrong
+// (errWrongKey); rows claiming an unknown version fail alone. A table with no
+// rows opens with any key. It only reads, so db may be a replica.
 func keysInUse(ctx context.Context, db *store.DB, ring *keyring) ([]uint32, error) {
 	inUse, err := versionsInUse(ctx, db)
 	if err != nil {
@@ -243,13 +243,17 @@ func keysInUse(ctx context.Context, db *store.DB, ring *keyring) ([]uint32, erro
 }
 
 // Check says whether the key that keys holds would open the vault of the
-// secrets in db, without opening it: the key loads, is a key ring, and opens at
-// least one row of each version the rows use. It writes nothing, rotates
-// nothing and raises no alert, and db may be a replica: it is how a Tower, before
-// it asks to take the command, learns that its copy of the vault would not
-// open, instead of learning it after it won the epoch. The error wraps ErrClosed,
-// like the one of a vault that does not open.
-func Check(ctx context.Context, keys KeyStore, db *store.DB) error {
+// secrets in db, without opening it: the key loads, is a key ring, and opens a
+// row of some version the rows use (Open's own test of the key), and, of the
+// secrets in names, each one exists and opens, which a vault with no rows, or
+// with that row altered, would not (the key of the CA, for a Tower that is going
+// to sign with it). It writes nothing, rotates nothing, records no use and
+// raises no alert, and db may be a replica: it is how a Tower, before it asks
+// to take the command, learns that its copy of the vault would not serve,
+// instead of learning it after it won the epoch. A key that does not open is an
+// error that wraps ErrClosed, like the one of a vault that does not open; a
+// secret that does not is ErrNotFound or ErrVerification.
+func Check(ctx context.Context, keys KeyStore, db *store.DB, names ...string) error {
 	data, err := keys.Load(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNoKey) {
@@ -266,11 +270,14 @@ func Check(ctx context.Context, keys KeyStore, db *store.DB) error {
 	if _, err := keysInUse(ctx, db, ring); err != nil {
 		return &ClosedError{Reason: err}
 	}
+	for _, name := range names {
+		plain, _, err := decryptRow(ctx, db, ring, name)
+		if err != nil {
+			return err
+		}
+		zero(plain)
+	}
 	return nil
-}
-
-func (v *Vault) versionsInUse(ctx context.Context) ([]uint32, error) {
-	return versionsInUse(ctx, v.cfg.DB)
 }
 
 func versionsInUse(ctx context.Context, db *store.DB) ([]uint32, error) {

@@ -61,6 +61,9 @@ func (n citadelNames) Machine(ctx context.Context, id string) (guild.Machine, er
 func (n citadelNames) UpdateNames(ctx context.Context, id, hostname string, ips []net.IP) error {
 	c := n.run.guild()
 	if c == nil {
+		if why := n.run.whyDown(); why != "" {
+			return fmt.Errorf("app: the Citadel cannot act, %s; the names wait for the next sheet", why)
+		}
 		return errors.New("app: the Citadel does not act yet; the names wait for the next sheet")
 	}
 	if err := c.UpdateNames(ctx, id, hostname, ips); err != nil {
@@ -116,8 +119,8 @@ type citadelRun struct {
 	ca      *transport.CA
 	citadel *guild.Citadel  // nil until the Citadel first acts
 	refused map[string]bool // Towers whose messages waited for it
-	// down is why the Citadel cannot act, when it tried and its CA did not
-	// open (the vault is closed); empty otherwise.
+	// down is why the Citadel cannot act (the vault is closed, so the CA does
+	// not open), from the start of the period; empty otherwise.
 	down string
 
 	base      context.Context

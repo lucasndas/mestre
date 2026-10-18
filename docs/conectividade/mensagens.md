@@ -44,7 +44,7 @@ Documento de referência do [protocolo](protocolo.md), que define envelope, vers
 | `sync.request` / `sync.applied` | ambos | sim | `table_id`, `branch`, `base_commit`, `tip_commit` | ([mesas](../orquestracao/mesas.md)) |
 | `xfer.*` | ambos | sim (menos `xfer.progress`) | `xfer.begin {xfer_id, kind, size, sha256, chunk_size, meta}` (`size` até 64 GiB) → `xfer.ready {xfer_id, next_index}`; `xfer.progress {xfer_id, next_index, resend}`; `xfer.end {xfer_id}` → `xfer.done {xfer_id, ok, error}` ([transferência em partes](protocolo.md#transferência-em-partes)); nenhum passa pelo `outbox` | — |
 | `transcribe.request` | C→T | sim | `audio_xfer_id` (WAV já transferido), `language` | `transcribe.result {text, duration_s}` ou `error` ([transcrição](../telegram/anexos-e-transcricao.md)) |
-| `cert.renew` | T→C | sim | `role` (`motor`), `csr` (PEM) | `cert.issued {cert}`, o certificado em PEM ([credenciais](../guilda/guilda.md#credenciais)) |
+| `cert.renew` | T→C | sim | `role` (`motor`), `csr` (PEM) | `cert.issued {cert}`, o certificado em PEM ([credenciais](../guilda/guilda.md#credenciais)), ou `error` `forbidden` com a Cidadela de cofre fechado |
 | `update.apply` | C→T | sim | `release_tag`, `component` (`motor` \| `guardiao`), `xfer_id` | resultado no passo da [autoatualização](../plataforma/autoatualizacao.md) |
 
 **Tipos voláteis:** os que levam segredo (`vault.replica`, `vault.credential`, `agent.site_login`, `agent.site_login_input`) têm ack, mas esperam por ele só em memória, e voltam na ordem original junto com os do `outbox`: um reinício do processo os perde, e a Cidadela recomeça o pedido.
@@ -80,5 +80,5 @@ Valem para `error.code` em qualquer conexão. `retryable` diz se reenviar a mesm
 | `busy_terminal` | sim | `terminal.input` cru num terminal que não está livre |
 | `unavailable` | sim | recurso local temporariamente fora (ex.: whisper-server reiniciando) |
 | `affects_guardian` | não | ação ou script que tocaria o Guardião ([Guardião](../autocura/guardiao.md)) |
-| `forbidden` | não | a conexão não pode pedir aquilo (ex.: Guardião pedindo `terminal.open`) |
+| `forbidden` | não | a conexão não pode pedir aquilo (ex.: Guardião pedindo `terminal.open`) ou a Cidadela não pode agir (ex.: o cofre dela está fechado e não há CA para `cert.renew` e `guild.leave`, [cofre](../plataforma/cofre.md#regras-e-erros)); a mensagem diz o motivo |
 | `internal` | sim | erro inesperado do destinatário (vai para o log) |

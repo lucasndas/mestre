@@ -97,7 +97,7 @@ func TestACitadelWhoseVaultDoesNotOpenGoesOnAndSaysWhatStopped(t *testing.T) {
 			}
 
 			// A machine asks to enter: that needs the CA, which is in the vault. The
-			// Citadel says why it cannot, as soon as it tries to act.
+			// Citadel says why it cannot, from the start of its period.
 			var last error
 			tick := clk.NewTicker(5 * time.Millisecond)
 			defer tick.Stop()
@@ -118,8 +118,16 @@ func TestACitadelWhoseVaultDoesNotOpenGoesOnAndSaysWhatStopped(t *testing.T) {
 			if !errors.Is(last, guild.ErrCitadelUnavailable) {
 				t.Errorf("the entry answered %v; want it to be the retryable \"does not take entries now\"", last)
 			}
-			if st := e.Status(); st.Role != app.RoleCitadel {
-				t.Errorf("the engine is %q, want it to go on as the Citadel: %+v", st.Role, st)
+			// The entry says it from the start of the period, a little before the
+			// status shows the role of the period.
+			for e.Status().Role != app.RoleCitadel {
+				select {
+				case <-stopped:
+					t.Fatalf("the engine stopped: %v", runErr)
+				case <-deadline.C():
+					t.Fatalf("the engine is not the Citadel: %+v", e.Status())
+				case <-tick.C():
+				}
 			}
 			select {
 			case <-stopped:

@@ -433,7 +433,7 @@ func TestInterruptedKeyRotationKeepsEverySecretReadable(t *testing.T) {
 			for _, s := range samples {
 				mustRead(t, v2, s.name, s.value)
 			}
-			if got, _ := v2.versionsInUse(f.ctx); !slices.Equal(got, []uint32{tc.wantVersion}) {
+			if got, _ := versionsInUse(f.ctx, f.db); !slices.Equal(got, []uint32{tc.wantVersion}) {
 				t.Fatalf("key versions in use = %v, want [%d]", got, tc.wantVersion)
 			}
 			if got := v2.ring.versions(); !slices.Equal(got, []uint32{tc.wantVersion}) {
@@ -607,7 +607,7 @@ func TestRotationRefusesADatabaseThatDoesNotFlush(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Error("the key store changed")
 	}
-	if got, _ := v.versionsInUse(f.ctx); !slices.Equal(got, []uint32{1}) {
+	if got, _ := versionsInUse(f.ctx, f.db); !slices.Equal(got, []uint32{1}) {
 		t.Fatalf("key versions in use = %v, want [1]", got)
 	}
 	for _, s := range samples {
@@ -635,7 +635,7 @@ func TestRotationRefusesACommitThatIsNotDurable(t *testing.T) {
 	if err := v.Rotate(f.ctx); err == nil || !strings.Contains(err.Error(), "durable") {
 		t.Fatalf("Rotate = %v, want a refusal of the non-durable commit", err)
 	}
-	if got, _ := v.versionsInUse(f.ctx); !slices.Equal(got, []uint32{1}) {
+	if got, _ := versionsInUse(f.ctx, f.db); !slices.Equal(got, []uint32{1}) {
 		t.Fatalf("key versions in use = %v, want [1]", got)
 	}
 	v2 := f.open(t)
@@ -1054,5 +1054,53 @@ func assertKeyVersions(t *testing.T, f *fixture, want []uint32) {
 	}
 	if !slices.Equal(ring.versions(), want) || !slices.Equal(info.versions, want) {
 		t.Errorf("the key store holds %v and the envelope %v, want both %v", ring.versions(), info.versions, want)
+	}
+}
+
+// CA-COFRE-22
+// A vault with no rows opens with any key, and a vault whose key opens some rows
+// does not say that the row the Tower will sign with opens: Check also wants the
+// named secrets to exist and to open, so the promotion of a Tower that has the
+// right key and no copy of the CA yet (the full copy after an exclusion is
+// undone is still on its way) is refused before it asks for the epoch.
+func TestCheckAlsoWantsTheNamedSecretsToExistAndOpen(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t, nil)
+	v := f.create(t)
+	other := newFixture(t, nil)
+	other.create(t)
+
+	if err := Check(f.ctx, f.cfg.Keys, f.db); err != nil {
+		t.Errorf("a vault with no rows, no names: %v", err)
+	}
+	if err := Check(f.ctx, other.cfg.Keys, f.db); err != nil {
+		t.Errorf("a vault with no rows opens with any key: %v", err)
+	}
+	name := samples[0].name
+	if err := Check(f.ctx, f.cfg.Keys, f.db, name); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a name the vault does not have: %v, want ErrNotFound", err)
+	}
+
+	putSamples(t, v)
+	if err := Check(f.ctx, f.cfg.Keys, f.db, name, samples[1].name); err != nil {
+		t.Errorf("names the vault has: %v", err)
+	}
+	if err := Check(f.ctx, f.cfg.Keys, f.db, name, "missing"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("one name in two missing: %v, want ErrNotFound", err)
+	}
+	if err := Check(f.ctx, other.cfg.Keys, f.db, name); !errors.Is(err, ErrClosed) {
+		t.Errorf("the key of another Guild with names: %v, want a closed vault", err)
+	}
+
+	// a row that was altered: the other rows open, so the key is the right one, and this
+	// one does not
+	if _, err := f.db.Writer().ExecContext(f.ctx, `UPDATE secrets SET ciphertext = ? WHERE name = ?`, bytes.Repeat([]byte{1}, 40), name); err != nil {
+		t.Fatal(err)
+	}
+	if err := Check(f.ctx, f.cfg.Keys, f.db); err != nil {
+		t.Errorf("a key that opens the other rows: %v", err)
+	}
+	if err := Check(f.ctx, f.cfg.Keys, f.db, name); !errors.Is(err, ErrVerification) {
+		t.Errorf("the altered row: %v, want ErrVerification", err)
 	}
 }

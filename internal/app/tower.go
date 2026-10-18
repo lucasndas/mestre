@@ -263,7 +263,7 @@ func (e *Engine) DecideEntry(ctx context.Context, joinID string, d guild.Decisio
 	c := run.guild()
 	if c == nil {
 		if why := run.whyDown(); why != "" {
-			return fmt.Errorf("app: the Citadel cannot take entries: %s", why)
+			return fmt.Errorf("app: the Citadel cannot take entries, %s: %w", why, vault.ErrClosed)
 		}
 		return guild.ErrSuspended
 	}
@@ -305,27 +305,30 @@ func (e *Engine) promotable(ctx context.Context, db *store.DB) error {
 		return fmt.Errorf("%w: the machine is %s", guild.ErrNotPromotable, state)
 	case excluded:
 		return fmt.Errorf("%w: %w", guild.ErrNotPromotable, guild.ErrExcludedMachine)
-	case !e.vaultCopy().Holds(ctx):
-		return fmt.Errorf("%w: the machine has no copy of the vault", guild.ErrNotPromotable)
 	}
-	if err := vault.Check(ctx, e.vaultCopy().Keys, db); err != nil {
+	// the key first: a key that is refused, or wrong, says why, where "no copy" would not
+	if err := vault.Check(ctx, e.vaultCopy().Keys, db, transport.CAKeySecret); err != nil {
 		return fmt.Errorf("%w: %w", guild.ErrNotPromotable, err)
+	}
+	if !e.vaultCopy().Holds(ctx) { // and the envelope
+		return fmt.Errorf("%w: the machine has no copy of the vault", guild.ErrNotPromotable)
 	}
 	return nil
 }
 
 // vaultOpens says whether the copy of the vault this Tower holds would open over
-// its replica (vault.Check). The promotion asks before it wins the epoch: after,
-// the failure would leave the epoch in the lock without a Citadel (and the old
-// Citadel of a planned handover, which sees the new epoch, steps down).
+// its replica and give it the key of the CA (vault.Check). The promotion asks
+// before it wins the epoch: after, the failure would leave the epoch in the lock
+// without a Citadel (and the old Citadel of a planned handover, which sees the
+// new epoch, steps down).
 func (e *Engine) vaultOpens(ctx context.Context) error {
 	db, err := guilddb.Open(ctx, e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: e.cfg.Synchronous, Replica: true})
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	if err := vault.Check(ctx, e.vaultCopy().Keys, db); err != nil {
-		return fmt.Errorf("app: the promotion cannot go on, the vault of this machine does not open: %w", err)
+	if err := vault.Check(ctx, e.vaultCopy().Keys, db, transport.CAKeySecret); err != nil {
+		return fmt.Errorf("app: the promotion cannot go on, the vault of this machine does not serve: %w", err)
 	}
 	return nil
 }
