@@ -64,14 +64,14 @@ O PM e o PO não são classes: são o [Grão-Mestre](../orquestracao/grao-mestre
 
 ### Vigia
 
-Ritual do workspace, desligado como as classes, que o Administrador ativa na mesma tela: diário (`--daily 07:00`, editável), com o Grão-Mestre como alvo ([rituais](../orquestracao/rituais.md)). O prompt pede que ele:
+Ritual do workspace, desligado como as classes: ativá-lo na mesma tela cria o ritual `vigia`, diário (`--daily 07:00`, editável), com o Grão-Mestre como alvo e o prompt que vem no pacote; desativar é `ritual disable` ([rituais](../orquestracao/rituais.md)). O prompt pede que ele:
 
-- junte os candidatos: devoluções e achados repetidos das missões concluídas desde o último disparo (pergaminhos e tomos) e as issues abertas sem rótulo (`mestre issue list --all`);
+- junte os candidatos: devoluções e achados repetidos nas issues das missões fechadas desde o último disparo, que o espelho da [missão](../orquestracao/missoes.md#espelho-no-github) comenta a cada etapa (`mestre issue list --all --state closed --comments`), e as issues abertas sem rótulo (`mestre issue list --all`);
 - confira cada um sem rodar código: ainda acontece? um PR mesclado já corrigiu? é duplicado? Incerto não é descarte: vira candidato com a dúvida escrita;
 - registre cada um com `mestre issue create --label candidato --fingerprint "<componente>: <sintoma>"` ([CLI de issues](../cli/coordenacao-github.md#mestre-issue)), que comenta "visto de novo" na issue aberta em vez de duplicar;
 - nunca abra mesa: promover um candidato a épico é pedido de um usuário ao Grão-Mestre, e reproduzir o problema é a primeira etapa da receita de bug.
 
-Custa uma rodada do Grão-Mestre por disparo; desligado, não roda.
+Registra no máximo 10 candidatos por disparo; o resto fica para o próximo. Custa uma rodada do Grão-Mestre por disparo, dentro dos [limites de uso](../plataforma/limites-de-uso.md); desligado, não roda.
 
 ### Comando inexistente numa skill
 
@@ -94,7 +94,7 @@ O `class check` de qualquer classe, sugerida ou não, avisa quando o `CLASS.md` 
 - **CA-SUG-06** · *rápida* — **Dado** uma missão concluída com a etapa `retro` e o Grão-Mestre que roda `mestre class edit "dev" --from <pasta>`, **quando** o motor recebe, **então** nasce uma proposta com o hash e a classe `dev` não muda até um Administrador aprovar.
 - **CA-SUG-07** · *pesada* — **Dado** as sete classes e as receitas ativadas num workspace real, **quando** chega um pedido de bug pelo Telegram (dublê), **então** a missão passa por Investigador, Dev, Revisor e QA (Revisor e QA em paralelo) nos três provedores, cada critério fica com prova e a mesa termina com o PR mesclado (MVP-16).
 - **CA-SUG-08** · *rápida* — **Dado** o pacote sugerido embutido no binário, **quando** o teste o lê, **então** cada classe, com todas as suas skills de apoio, cabe em 64 arquivos e 512 KiB, e cada skill de apoio tem o arquivo de licença.
-- **CA-SUG-09** · *rápida* — **Dado** o Vigia ativado e o mesmo achado repetido em duas missões concluídas, **quando** o ritual dispara em dois dias seguidos com o Grão-Mestre do agente falso, **então** existe uma issue só com o rótulo `candidato`, com um comentário "visto de novo", e nenhuma mesa foi aberta; **dado** o Vigia desligado, **então** nada dispara.
+- **CA-SUG-09** · *rápida* — **Dado** o Vigia ativado e o Grão-Mestre do agente falso roteirizado para rodar `mestre issue create --title "Login lento" --label candidato --fingerprint "auth: login lento"` a cada item `ritual`, **quando** o ritual dispara em dois dias seguidos (relógio falso), **então** o item entregue traz o prompt do pacote, o GitHub falso tem uma issue só com o rótulo `candidato`, com um comentário "visto de novo", e nenhuma mesa foi aberta; **dado** o ritual `vigia` desativado, **então** nada dispara.
 
 ## Depende de
 
