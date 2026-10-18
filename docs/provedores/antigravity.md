@@ -1,6 +1,6 @@
 # Antigravity CLI (`agy`)
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-15
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -29,7 +29,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 
 - Lê `.agents/skills/<nome>/SKILL.md` nativamente (`.agent/skills` antiga também). `description` é obrigatória; `name` é opcional (padrão: nome da pasta), mas o Mestre sempre escreve, por causa do Codex.
 - Carregamento progressivo; cada skill também vira comando `/<nome>`; `/skills reload` recarrega. Não há menção a `.claude/skills/`.
-- **Skills por personagem** (nível e classe): não há pasta por personagem, então o conteúdo delas vai como seção compacta no arquivo de agente `.agents/agents/mestre-<id>.md`; `.agents/skills/` do worktree só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
+- **Skills por personagem** (nível e classe): não há pasta por personagem, então o conteúdo delas vai como seção compacta no arquivo de agente `.agents/agents/mestre-<id>.md` (as [skills de apoio](../classes/skills-de-apoio.md) vão inteiras à pasta compartilhada da mesa); `.agents/skills/` do worktree só tem, além delas, a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 
 ### Hooks
 

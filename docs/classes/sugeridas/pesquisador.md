@@ -16,6 +16,8 @@ Levanta o que já existe antes de alguém construir: o código do repositório q
 name: pesquisador
 description: Levanta código existente, documentação oficial e alternativas; não escreve código
 app: novo
+mcp:
+  - {name: context7, enabled: false}
 ```
 
 Corpo (instruções):
@@ -35,6 +37,8 @@ git:
   commit: false
 commands:
   default: ask
+tools:
+  allow: ["mcp__context7__*"]   # vale quando o servidor está ligado
 ```
 
 ## O que entrega

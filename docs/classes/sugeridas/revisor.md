@@ -16,6 +16,10 @@ Revisão independente do que o Dev fez, em paralelo com o QA: forma as próprias
 name: revisor
 description: Revisa de forma independente, com achados de identificador estável; não escreve código
 app: novo
+support_skills:                   # todas desligadas na ativação
+  - {name: code-review, enabled: false}
+  - {name: codebase-design, enabled: false}
+  - {name: ponytail-review, enabled: false}
 ```
 
 Corpo (instruções):

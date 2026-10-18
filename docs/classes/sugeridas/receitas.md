@@ -72,4 +72,4 @@ steps:
 ```
 
 - A etapa `critica` lista até 8 problemas com `arquivo:linha`, em ordem de gravidade, e grava a nota de cada rodada no pergaminho da missão (que faz o papel de registro entre rodadas); `conferir` julga pelo que vê e pelo código, nunca pelo resumo de quem corrigiu.
-- Precisa de navegador para capturar a tela: a classe Designer só consegue isso com um MCP de navegador liberado no teto e na classe ([formato das permissões](../formato-das-permissoes.md)); sem ele, a receita roda só pelo código.
+- Precisa de navegador para capturar a tela: a classe Designer só consegue isso com o `playwright` ligado na classe ([MCP por classe](../mcp-por-classe.md)) e liberado no teto ([formato das permissões](../formato-das-permissoes.md)), num personagem Claude Code ou Codex; sem ele, a receita roda só pelo código.

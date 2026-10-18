@@ -16,6 +16,20 @@ Versionado com o código do Mestre: embutido no binário e gravado em `<dados da
 - **Receitas de missão** por tipo de pedido (bug, funcionalidade nova, ajuste, investigação) e para refinar uma interface ([receitas](sugeridas/receitas.md)): definições de missão prontas que o Mestre da mesa usa com `--recipe`. Não são [grimórios](../orquestracao/grimorios.md), que nascem de uma seleção do canvas.
 - **Um modelo de direção do workspace** para as [instruções extras do Grão-Mestre](../orquestracao/grao-mestre.md#instruções-extras-do-usuário): prioridades, o que está fora do escopo, quem decide o quê. É texto que o Administrador copia e edita; não é um arquivo novo.
 
+**Skills de apoio e servidores MCP de cada papel** ([skills de apoio](skills-de-apoio.md), [MCP por classe](mcp-por-classe.md)), todos **desligados** na ativação; o Administrador liga os que quiser na mesma tela:
+
+| Classe | Skills de apoio | MCP |
+|---|---|---|
+| Pesquisador | n/a | `context7` |
+| Investigador | `diagnosing-bugs`, `tdd` | n/a |
+| Designer | `critique`, `audit`, `polish` | `playwright` |
+| Dev | `implement`, `tdd`, `codebase-design`, `resolving-merge-conflicts`, `ponytail` | `context7` |
+| Revisor | `code-review`, `codebase-design`, `ponytail-review` | n/a |
+| QA | `tdd`, `testing-strategy` | `playwright` |
+| Documentador | n/a | n/a |
+
+Origem e licença, conferidas em 2026-10-18 e guardadas na pasta de cada skill, com o commit de origem e os hashes no `SOURCE`: `mattpocock/skills` (MIT: `tdd`, `diagnosing-bugs`, `implement`, `codebase-design`, `resolving-merge-conflicts`, `code-review`), `pbakaus/impeccable` (Apache-2.0, com o `NOTICE`: `critique`, `audit`, `polish`), `DietrichGebert/ponytail` (MIT: `ponytail`, `ponytail-review`); `testing-strategy` é escrita pelo Mestre. Os servidores `playwright` e `context7` (`upstash/context7`, MIT) entram no catálogo do workspace só quando o Administrador liga um deles.
+
 O PM e o PO não são classes: são o [Grão-Mestre](../orquestracao/grao-mestre.md) e o [Mestre da mesa](../orquestracao/mestre-da-mesa.md#o-pedido-que-chega-o-mestre-da-mesa-como-po).
 
 ### Ativar

@@ -1,10 +1,10 @@
 # ADR 0011: `.agents/skills/` como pasta oficial de skills
 
-> **Assunto:** por que as skills ficam em `.agents/skills/` com cópia gerenciada para o Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** por que as skills ficam em `.agents/skills/` com cópia gerenciada para o Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Status
 
-Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas guardam só a skill de comunicação; as de nível e de classe passam a ser entregues por personagem. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda.
+Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas guardam só a skill de comunicação (desde a revisão de 2026-10-18, abaixo, também as de apoio ligadas); as de nível e de classe passam a ser entregues por personagem. **Termos atualizados em 2026-10-13** pelo [ADR 0022](0022-guilda-cidadela-e-torres.md): Core e nó viram Cidadela e Torre (ou máquina); a decisão não muda. **Decisão revista em 2026-10-18 (skills de apoio):** além da de comunicação, a pasta compartilhada `.agents/skills/` de uma mesa passa a guardar as **skills de apoio** ligadas na classe de algum personagem Codex ou Antigravity vivo nela; o acesso a cada uma continua por personagem, por uma regra que o motor gera ([skills de apoio](../classes/skills-de-apoio.md)).
 
 ## Contexto
 
@@ -43,8 +43,9 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas
 - **Fonte única:** `.agents/skills/` em cada worktree.
 - **Cópia gerenciada:** em `.claude/skills/`, regenerada pelo motor a partir da fonte e nunca editada à mão. É uma cópia, não um link.
 - **Frontmatter:** todo `SKILL.md` gerado tem sempre `name` e `description`, o que atende ao provedor mais exigente (Codex).
-- **Só a skill de comunicação nas pastas compartilhadas:** as skills de nível e de classe são entregues só ao personagem que as recebe: no Claude Code por `--add-dir` de uma pasta por personagem; no Codex e no Antigravity como seção compacta da camada do Mestre ([sessão zero do personagem](../sessao-zero/personagem.md#skills-por-personagem)).
+- **Nas pastas compartilhadas, a skill de comunicação** (e, desde a revisão de 2026-10-18, as de apoio ligadas, com acesso por personagem; abaixo): as skills de nível e de classe são entregues só ao personagem que as recebe: no Claude Code por `--add-dir` de uma pasta por personagem; no Codex e no Antigravity como seção compacta da camada do Mestre ([sessão zero do personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 - **Desligar a cópia:** o teste de conformidade detecta quando o Claude Code passar a ler `.agents/skills/`; o checklist (ALL-13) então **oferece** desligar a cópia, e ela só deixa de ser gerada depois da aprovação de um Dono ou Administrador ([checklist](../plataforma/checklist.md), [sessão zero da mesa](../sessao-zero/mesa.md#regras-e-erros)).
+- **Skills de apoio (revisão de 2026-10-18):** um terceiro tipo, ao lado da de comunicação (compartilhada) e das de nível e de classe (por personagem). São skills de engenharia que a classe traz com liga/desliga e que não dão permissão nenhuma. No Codex e no Antigravity vão para a pasta compartilhada da mesa, onde os dois as carregam sob demanda, em vez de caberem no orçamento da camada do Mestre; no Claude Code continuam na pasta do personagem. O personagem cuja classe não tem uma delas ligada recebe `files.deny` para ela nas regras efetivas, aplicado pelo despachante, com reforço nativo onde o provedor permite. É contenção de contexto, não fronteira de segurança: o personagem pode chegar a ver o texto (por exemplo, por caminho com curinga), e isso não libera nada. A cópia gerenciada em `.claude/skills/` continua só com a de comunicação.
 - **Onde estão os detalhes:** materialização por worktree e exclusão do git em [sessão zero da mesa](../sessao-zero/mesa.md).
 
 ## Consequências
@@ -58,6 +59,10 @@ Aceita, 2026-10-12. **Decisão revista em 2026-10-12:** as pastas compartilhadas
   - **Ocultas no git:** as duas pastas precisam ficar fora do git quando não forem versionadas (via `.git/info/exclude`), em todos os worktrees de todas as máquinas.
   - **Worktrees novos:** como o Claude Code procura skills só até a raiz do worktree, cada mesa nova precisa da cópia materializada ([ADR 0004](0004-mesa-igual-worktree.md)).
   - **Recarregar:** uma pasta de skills que não existia quando o agente iniciou pode exigir recarga (`/reload-skills` no Claude Code, `/skills reload` no Antigravity). O motor deve gerar as skills **antes** de iniciar o personagem.
+- **Skills de apoio (revisão de 2026-10-18):**
+  - **Positiva:** skill de engenharia completa (centenas de linhas) chega ao Codex e ao Antigravity sem ocupar o orçamento de 6.000 a 8.000 caracteres da camada do Mestre ([sessão zero do personagem](../sessao-zero/personagem.md)).
+  - **Negativa:** o catálogo do Codex e do Antigravity mostra as skills de apoio da mesa também a quem não as tem ligadas; ler o corpo é negado pela regra gerada, mas o nome e a descrição aparecem. Ruído, não permissão: ler uma skill não libera ação nenhuma.
+  - **Negativa:** a pasta compartilhada muda quando entra na mesa um personagem de outra classe, e o provedor pode precisar recarregar.
 - **Antigravity e `.claude/skills/`:** não está documentado que ele leia essa pasta, e o Mestre não depende disso nem verifica: o Antigravity recebe as skills por `.agents/skills/`. Se ele ler as duas, vê a mesma skill duas vezes com o mesmo conteúdo, sem efeito nas permissões.
 
 ## Fontes

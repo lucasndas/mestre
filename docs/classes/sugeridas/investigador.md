@@ -16,6 +16,9 @@ Para bug: reproduz o problema, acha a causa raiz (não o sintoma) e deixa um tes
 name: investigador
 description: Reproduz o bug, acha a causa raiz e escreve o teste que falha
 app: novo
+support_skills:                   # todas desligadas na ativação
+  - {name: diagnosing-bugs, enabled: false}
+  - {name: tdd, enabled: false}
 ```
 
 Corpo (instruções):

@@ -1,6 +1,6 @@
 # Decisões (ADRs)
 
-> **Assunto:** índice dos registros de decisão de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** índice dos registros de decisão de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
@@ -14,7 +14,7 @@
 | [0008-grao-mestre-aprovador-delegado.md](0008-grao-mestre-aprovador-delegado.md) | **Substituída por 0024.** Histórico: Grão-Mestre como aprovador delegado de tudo, plano B por ruleset e credencial pessoal por device flow | Só para o histórico; a decisão em vigor é o 0024 |
 | [0009-github-por-consulta-periodica.md](0009-github-por-consulta-periodica.md) | Eventos do GitHub por consulta periódica condicional, sem webhooks | Ao mexer na coleta de eventos do GitHub |
 | [0010-instrucoes-em-duas-camadas.md](0010-instrucoes-em-duas-camadas.md) | Camada do Mestre separada do `AGENTS.md` e o canal de entrega por provedor | Ao mexer na montagem de instruções ou num adaptador de provedor |
-| [0011-agents-skills-pasta-oficial.md](0011-agents-skills-pasta-oficial.md) | `.agents/skills/` como fonte das skills, com cópia gerenciada em `.claude/skills/` | Ao mexer na geração de skills |
+| [0011-agents-skills-pasta-oficial.md](0011-agents-skills-pasta-oficial.md) | `.agents/skills/` como fonte das skills, com cópia gerenciada em `.claude/skills/`; desde 2026-10-18, também as skills de apoio ligadas da mesa, com acesso por personagem | Ao mexer na geração de skills |
 | [0012-despachante-unico-de-hooks.md](0012-despachante-unico-de-hooks.md) | `mestre hook` como despachante único de hooks e permissões nos três provedores | Ao mexer em hooks, permissões ou num provedor |
 | [0013-sincronizacao-de-worktrees-por-git-bundle.md](0013-sincronizacao-de-worktrees-por-git-bundle.md) | Sincronização de worktrees entre Torre e Cidadela por git bundle pela conexão WSS | Ao mexer em mesas com mais de uma máquina ou na transferência de arquivos |
 | [0014-commits-sem-assinatura.md](0014-commits-sem-assinatura.md) | Commits locais sem assinatura com o autor do bot do App, sem "Verified" | Ao mexer em commits, envio de branch ou rulesets de assinatura |
@@ -29,3 +29,4 @@
 | [0022-guilda-cidadela-e-torres.md](0022-guilda-cidadela-e-torres.md) | Guilda de instalações iguais com uma Cidadela por vez e Torres com réplica de tudo; época e fencing pela trava no GitHub; máquina excluída; troca de Cidadela sempre manual, pelo Dono; comparação com Core + nós fixo e multi-mestre | Ao mexer em papéis das máquinas, replicação, instalação ou queda da máquina no comando |
 | [0024-cadeia-de-aprovacao-por-risco.md](0024-cadeia-de-aprovacao-por-risco.md) | Risco de cada pedido dado pelo motor (baixo, médio, alto, fixo), cadeia do superior de quem pediu até as pessoas com teto de risco por nível, salvaguardas, respostas, regras temporárias de mesa, delegação, `default` ausente vale `ask`; revisão: sinais de risco, `medio` decidido na mesa com condições, Grão-Mestre supervisor, classe `orquestrador`; mantém a parte do GitHub do 0008 | Ao mexer em aprovações, na política, em delegação ou nos padrões das permissões |
 | [0025-padroes-seguem-os-provedores.md](0025-padroes-seguem-os-provedores.md) | O campo ausente numa classe vale o que a maioria dos provedores faz num terminal comum: `baixo` sem regra roda direto, escrita no worktree, internet, subagentes, commit e envio como pedido; as regras fixas não são padrões | Ao mexer nos padrões das permissões, no pipeline ou no reforço nativo |
+| [0026-mcp-por-classe.md](0026-mcp-por-classe.md) | A classe declara os servidores MCP de que precisa, de um catálogo do workspace aprovado por Administrador; o motor configura só esses no personagem e nega os outros | antes de mudar como um personagem recebe servidores MCP |

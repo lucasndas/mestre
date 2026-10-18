@@ -34,7 +34,7 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
   permissions.yaml    o que a classe pode fazer (ver permissoes.md)
   hooks/hooks.yaml    hooks extras, por evento do Mestre
   hooks/…             scripts usados pelos hooks (só classes globais e do workspace)
-  skills/<nome>/      skills próprias da classe (opcional)
+  skills/<nome>/      skills próprias da classe (opcional); support/<nome>/: skills de apoio
 ```
 O pacote tem até 64 arquivos (inclusive os casos de `cases/`, [teste de classe](../provedores/teste-de-classe.md)), 512 KiB e 256 KiB por arquivo, porque viaja inteiro na replicação; links e arquivos que não são comuns são recusados.
 
@@ -110,7 +110,7 @@ pre_tool:
 
 ### Skills da classe
 
-`skills` lista nomes de skills do pacote (`skills/<nome>/`) ou já existentes no `.agents/skills/` do projeto. As do pacote chegam **só aos personagens da classe**, nunca à pasta compartilhada do worktree: no Claude Code, em `.mestre/agents/<id>/`, lida por `--add-dir`; no Codex e no Antigravity, como seção compacta na camada do Mestre do personagem (`MESTRE.md` ou arquivo de agente). A regra única de entrega por provedor está em [sessão zero do personagem](../sessao-zero/personagem.md); as skills da CLI `mestre`, em [skills geradas](../cli/skills-geradas.md).
+As [skills de apoio](skills-de-apoio.md) (`support_skills`) e os servidores MCP ([MCP por classe](mcp-por-classe.md), campo `mcp`) têm documentos próprios. `skills` lista nomes de skills do pacote (`skills/<nome>/`) ou já existentes no `.agents/skills/` do projeto. As do pacote chegam **só aos personagens da classe**, nunca à pasta compartilhada do worktree: no Claude Code, em `.mestre/agents/<id>/`, lida por `--add-dir`; no Codex e no Antigravity, como seção compacta na camada do Mestre do personagem (`MESTRE.md` ou arquivo de agente). A regra única de entrega por provedor está em [sessão zero do personagem](../sessao-zero/personagem.md); as skills da CLI `mestre`, em [skills geradas](../cli/skills-geradas.md).
 
 ### Como a classe chega ao personagem
 
