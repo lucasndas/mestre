@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-> **Assunto:** marcos de desenvolvimento (M0 a M7), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-15
+> **Assunto:** marcos de desenvolvimento (M0 a M8), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco-e-etapa). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
@@ -24,6 +24,7 @@ Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento
 | M5 | Integrações |  | GitHub e a [trava no GitHub](../guilda/trava-no-github.md) (primeiro marco com ação externa; antes dele não há promoção), Telegram, usuários e níveis, decretos, aprovações (respostas, delegação, resumo e sugestões), Grão-Mestre, Mestre da mesa, anexos e transcrição, limites de uso |
 | M6 | Painel |  | login, canvas, visão do workspace, conversa e aprovações, administração |
 | M7 | Plataforma, autocura e Operador do PC |  | instalação, checklist, Guardião, camadas, diagnóstico com IA, página reserva, Telegram reduzido, autoatualização, detecção de versão nova dos CLIs; por último, o [Operador do PC](#operador-do-pc-no-m7); suíte pesada (MVP-1 a MVP-15) |
+| M8 | Classes sugeridas |  | as [classes sugeridas](../classes/classes.md) (Pesquisador, Investigador, Designer, Dev, Revisor, QA e Documentador), que vêm desligadas e o usuário ativa; os grimórios sugeridos por tipo de pedido, o ritual Vigia, a calibração e o refino de UI; ativação e propostas no painel; suíte pesada (MVP-16) |
 
 - **Guardião em paralelo:** [guardiao.md](../autocura/guardiao.md) depende só de documentos até o M2 e pode começar logo depois do M2, em paralelo com M3 a M6.
 - **Escolhas já feitas:** a biblioteca de mDNS e o gerador de tipos TypeScript ([convenções](convencoes.md#código-gerado)). O modo de captura das mudanças do banco saiu do spike do M2: registro lógico (`replication_log`) ([regras de execução](#regras-de-execução-da-ordem)).
@@ -147,4 +148,4 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 - Comece um marco só com o anterior pronto, salvo o Guardião, acima. **Pronto** quer dizer: critérios de aceite das suítes rápida e completa passando **e auditado**.
 - **Auditoria do marco:** antes de o marco seguinte começar, revisores conferem que o teste de cada critério afirma o que o critério diz (não só que existe um teste marcado), olhando primeiro a segurança e os dois sistemas; os achados são corrigidos antes de o marco seguinte começar. A **data** da auditoria (`AAAA-MM-DD`) entra na coluna "Auditoria" da tabela de [marcos](#marcos); é só a data, o relatório não vai para o repositório (histórico fica no controle de versão). A [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) exige a cobertura dos critérios de um marco auditado e recusa código de um marco cujo anterior ficou sem data.
 - Dentro do marco, implemente na ordem do grafo de "Depende de"; documentos sem dependência entre si podem andar em paralelo.
-- Os critérios *pesada* (MVP-1 a MVP-15) fecham no M7, quando instalação, autocura e laboratório existem ([testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada)).
+- Os critérios *pesada* (MVP-1 a MVP-15) fecham no M7, quando instalação, autocura e laboratório existem; o MVP-16 fecha no M8, com o time sugerido ([testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada)).

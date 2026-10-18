@@ -77,7 +77,7 @@ var (
 	criterionRe      = regexp.MustCompile(`^- \*\*CA-([A-Z0-9]+(?:-[A-Z0-9]+)*)-([0-9]{2})\*\* · \*(rápida|completa|pesada)\* — \*\*Dado\*\* .+, \*\*quando\*\* .+, \*\*então\*\* .+\.$`)
 	criterionIDRe    = regexp.MustCompile(`^- \*\*CA-([A-Z0-9]+(?:-[A-Z0-9]+)*)-([0-9]{2})\*\*`)
 	criterionSuiteRe = regexp.MustCompile(`^- \*\*CA-[A-Z0-9-]+\*\* · \*(rápida|completa|pesada)\*`)
-	mvpRe            = regexp.MustCompile(`\(MVP-(?:1[0-5]|[1-9])(?:, MVP-(?:1[0-5]|[1-9]))*\)`)
+	mvpRe            = regexp.MustCompile(`\(MVP-(?:1[0-6]|[1-9])(?:, MVP-(?:1[0-6]|[1-9]))*\)`)
 	verifyMarkers    = []string{"**Padrão:**", "**Se falhar:**", "**Onde:**"}
 )
 
@@ -491,7 +491,7 @@ func (c *checker) checkCriteria() {
 			case !criterionRe.MatchString(l):
 				c.errf(f, ln, ckCriteria, "CA-%s-%s fora do formato `- **CA-<SIGLA>-<NN>** · *<suíte>* — **Dado** …, **quando** …, **então** ….`", sigla, nn)
 			case strings.Contains(l, "· *pesada*") && !mvpRe.MatchString(l):
-				c.errf(f, ln, ckCriteria, "CA-%s-%s é *pesada* e não cita um critério global (MVP-1 a MVP-15)", sigla, nn)
+				c.errf(f, ln, ckCriteria, "CA-%s-%s é *pesada* e não cita um critério global (MVP-1 a MVP-16)", sigla, nn)
 			}
 			if docSigla == "" {
 				docSigla = sigla
