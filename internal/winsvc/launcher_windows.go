@@ -164,6 +164,9 @@ func NewLauncher(cfg LauncherConfig) (*Launcher, error) {
 	if cfg.Account == nil || cfg.Engine.SID == nil {
 		return nil, errors.New("launcher: no agent account or no engine account")
 	}
+	if self, ok := cfg.Account.(SelfAccount); ok && self.inService() {
+		return nil, ErrSelfAccountInService // not once the first terminal asks
+	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
