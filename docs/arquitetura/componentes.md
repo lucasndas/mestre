@@ -120,7 +120,7 @@ Uma máquina pode ter **várias instâncias** do Mestre, em qualquer sistema e m
 
 | O quê | Por instância (`<inst>`, padrão `principal`) |
 |---|---|
-| Nome | `--instance <inst>` nos subcomandos de serviço; gravado na configuração da instância. De 1 a 32 letras sem acento, dígitos, `-` e `_`, começando por letra ou dígito: a configuração, o canal local e o `/join` da [entrada](../guilda/guilda.md#entrada-na-guilda) recusam outro |
+| Nome | `--instance <inst>` nos subcomandos de serviço; gravado na configuração da instância. `principal`, ou até 6 caracteres em minúsculas, dígitos, `-` e `_`, começando por letra ou dígito: o nome da conta dos agentes (linha abaixo) tem de caber nos 20 caracteres de uma conta local do Windows (o `useradd` do Linux aceita 32) e não pode ter par que só difere na caixa, que seria a mesma conta e a mesma pasta lá. `localchan.ValidInstance` define a regra; a configuração, o canal local e o `/join` da [entrada](../guilda/guilda.md#entrada-na-guilda) a aplicam |
 | Pastas | `/etc/mestre/<inst>/`, `/var/lib/mestre/<inst>/`, `/var/log/mestre/<inst>/` e `/var/spool/mestre/<inst>/` no Linux; `%ProgramData%\Mestre\<inst>\` no Windows. A padrão também usa subpasta, para haver um formato só ([persistência](persistencia.md#arquivos)) |
 | Portas | um bloco livre, escolhido na instalação e gravado na configuração: a padrão usa 7443, 7444, 7446 e 7447; as outras, blocos de 10 acima (7453, 7454, 7456 e 7457; depois 7463…). A 7445/udp é compartilhada |
 | Serviços | systemd: `mestre@<inst>`, `mestre-launcher@<inst>`, `mestre-guardiao@<inst>`, `mestre-update@<inst>`; Windows: `Mestre$<inst>`, `MestreLauncher$<inst>`, `MestreGuardiao$<inst>`, `MestreUpdate$<inst>`, com as contas virtuais `NT SERVICE\Mestre$<inst>` (o `$` é aceito em nomes de serviço, como nas instâncias nomeadas do SQL Server) |
@@ -143,7 +143,3 @@ flowchart LR
 ```
 
 O Guardião nunca é alterado por uma ação de cura ([Guardião](../autocura/guardiao.md)). Entre máquinas, as Torres vigiam a Cidadela ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
-
-## Verificar na implementação
-
-- **Verificar na implementação:** o nome da conta dos agentes cabe nos limites do sistema. `mestre-agente-<inst>` tem até 46 caracteres com uma instância de 32; uma conta local do Windows tem no máximo 20 e não distingue maiúsculas (`X` e `x` seriam a mesma conta e a mesma pasta), e o `useradd` do Linux aceita até 32. **Padrão:** o instalador cria a conta e o grupo com esse nome e falha, antes de criar qualquer coisa, se não couber. **Se falhar:** limitar o nome da instância ao que cabe (6 caracteres no Windows, com o prefixo atual), ou derivar o nome da conta de um resumo da instância nos dois sistemas, em `localchan.AgentAccount`, que define o nome. **Onde:** instalador do M7 e [contas reais](../qualidade/contas-reais.md), com uma instância de 32 caracteres e duas que só diferem na caixa.
