@@ -24,7 +24,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 - **JSON Lines:** cada mensagem é um objeto JSON em uma linha UTF-8 terminada por `\n`. Máximo de 1 MiB por linha (padrão).
 - O motor espera a linha do pedido por até 3 s (padrão), curto de propósito: a CLI e o `mestre hook` mandam o pedido assim que conectam, e uma conexão parada não segura vaga; a CLI recusa na origem um pedido acima do limite (`too_large`, 8).
-- Conteúdo maior (`--file`, `--attach`) vai como **caminho absoluto**; o motor lê o arquivo no disco da máquina e confere que o chamador pode lê-lo pelas regras da classe ([permissões](../classes/permissoes.md)).
+- Conteúdo maior (`--file`, `--attach`) é lido pela CLI, que roda como o agente, e não pelo motor: ver [arquivos](../cli/comunicacao.md#regras-e-erros).
 
 ### Pedido
 
