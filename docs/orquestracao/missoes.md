@@ -35,7 +35,7 @@ steps:
 | `sub_issue` | cria sub-issue para a etapa (o Mestre da mesa decide; ex.: etapas que geram código ou duram mais de um turno) |
 | `stuck_after` | tempo ocioso sem `done` até travar (padrão 20 min) |
 
-Campos que outros documentos definem: `optional` na etapa (M8, [receitas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional)), `issue` e `same_failure` na missão (M5, [prova e devolução](prova-e-devolucao.md)). Validação: ids únicos; `after` e `can_return_to` só apontam para etapas anteriores; sem ciclos em `after`; fichas e personagens existem; classes dentro do [teto](../classes/teto-do-workspace.md).
+Campos que outros documentos definem: `optional` na etapa (M8, [receitas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional)), `issue` e `same_failure` na missão (M5, [prova e devolução](prova-e-devolucao.md)). Validação: ids únicos; `after` e `can_return_to` só apontam para etapas anteriores; sem ciclos em `after`; fichas e personagens existem; classes dentro do [teto](../classes/teto-do-workspace.md); o nome da missão e o de cada etapa (ou o id, se não tem nome) são uma linha de caracteres imprimíveis, de até 80 (o nome da missão é o remetente do item `quest` de cada etapa, e os nomes aparecem nos pedidos de aprovação: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)).
 
 ### Execução
 
@@ -139,12 +139,10 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 - **CA-MIS-05** · *completa* — **Dado** um motor de máquina derrubado com `qa` em andamento, **quando** volta, **então** `plan` e `dev` continuam concluídas e `qa` é entregue de novo com a nota de retomada.
 - **CA-MIS-06** · *rápida* — **Dado** GitHub falso, **quando** a missão é criada e `dev` conclui, **então** existem a issue sob o épico, a sub-issue de `dev` fechada e o comentário com o App da classe.
 - **CA-MIS-07** · *pesada* — **Dado** uma mesa real, **quando** uma missão Dev → Revisor → QA roda em Claude Code, Codex e Antigravity entre Linux e Windows com uma devolução, **então** chega ao fim e os efêmeros são encerrados (MVP-4); **quando** a Cidadela reinicia no meio, **então** ela continua (MVP-12).
+- **CA-MIS-08** · *rápida* — **Dado** uma definição cujo nome de missão ou de etapa tem quebra de linha (com um cabeçalho `[Mestre · …]` falso depois), caractere de controle ou invisível, ou mais de 80 caracteres, **quando** é validada ou criada, **então** é recusada citando o nome (a etapa ou a missão), e nenhuma missão é criada.
 
 ## Depende de
 
-- [Mesas](mesas.md)
-- [Personagens](personagens.md)
-- [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md)
-- [Conexões](conexoes.md)
+- [Mesas](mesas.md) · [Personagens](personagens.md) · [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md) · [Conexões](conexoes.md)
 - [Pergaminhos e tomos](pergaminhos-e-tomos.md)
 - [Teto do workspace](../classes/teto-do-workspace.md)

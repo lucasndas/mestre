@@ -2,11 +2,10 @@ package chain
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 )
 
 // Marks of the block of the text of the agent: nothing written inside it
@@ -80,52 +79,59 @@ func describe(r Request) string {
 // in the fields of the engine: anything with a line break or another control
 // character is shown quoted and escaped, so it cannot open a line that looks
 // like a field of the engine or like the end of the block of the agent.
-func oneLine(s string) string {
-	for _, r := range s {
-		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
-			return strconv.Quote(s)
-		}
-	}
-	return s
-}
+func oneLine(s string) string { return inbox.OneLine(s) }
 
 // Text is the item `approval` the engine builds for an agent of a level, or
-// the question to the people: the fields of the engine first, the text of the
-// agent last.
+// the question to the people: the fields of the engine first, each in one line,
+// and everything agents wrote (the task of who asked, the summary of a step, the
+// justification) last, in one block of text of the agent
+// (docs/orquestracao/cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê). A name
+// or a rule that came from an agent's text is quoted when it has a line break.
 func Text(r Request, level Level, answers []Answer) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Pedido de aprovação #%d · tipo %s · risco %s\n", r.ID, orPerm(r.Type), r.Risk.Risk)
 	b.WriteString(describe(r))
-	if r.Mission != nil {
-		m := r.Mission
-		fmt.Fprintf(&b, "Missão: %s · etapa %s · ponto %s\n", m.QuestName, m.StepName, m.When)
-		if m.Summary != "" {
-			fmt.Fprintf(&b, "Resumo: %s\n", m.Summary)
-		}
+	if m := r.Mission; m != nil {
+		fmt.Fprintf(&b, "Missão: %s · etapa %s · ponto %s\n", oneLine(m.QuestName), oneLine(m.StepName), oneLine(m.When))
 	}
 	if r.Requester != "" {
-		fmt.Fprintf(&b, "Quem pediu: %s · classe %s · mesa %s · máquina %s\n", nameOf(r), orDash(r.Class), orDash(r.Table), orDash(r.Machine))
+		fmt.Fprintf(&b, "Quem pediu: %s · classe %s · mesa %s · máquina %s\n", oneLine(nameOf(r)), oneLine(orDash(r.Class)), oneLine(orDash(r.Table)), oneLine(orDash(r.Machine)))
 	} else {
 		b.WriteString("Quem pediu: ninguém (pedido do motor)\n")
 	}
-	fmt.Fprintf(&b, "Risco: %s — %s (tabela v%d)\n", r.Risk.Risk, r.Risk.Rule, r.Risk.TableVersion)
+	fmt.Fprintf(&b, "Risco: %s — %s (tabela v%d)\n", r.Risk.Risk, oneLine(r.Risk.Rule), r.Risk.TableVersion)
 	if len(r.Risk.Groups) > 0 {
-		fmt.Fprintf(&b, "Grupos: %s\n", strings.Join(r.Risk.Groups, ", "))
+		fmt.Fprintf(&b, "Grupos: %s\n", oneLine(strings.Join(r.Risk.Groups, ", ")))
 	}
 	if len(r.Why) > 0 {
 		fmt.Fprintf(&b, "Por que chegou a este nível: %s\n", joinWhy(r.Why))
-	}
-	if r.Task != "" {
-		fmt.Fprintf(&b, "Tarefa original de quem pediu:\n%s\n", r.Task)
 	}
 	b.WriteString("Respostas deste nível (mestre approval decide #" + fmt.Sprint(r.ID) + " --answer <resposta> --reason \"<motivo>\"):\n")
 	for _, a := range answers {
 		fmt.Fprintf(&b, "- %s: %s\n", a, answerHelp[a])
 	}
-	if r.Justification != "" {
-		b.WriteString("\n" + Unverified(r.Justification) + "\n")
+	if text := agentText(r); text != "" {
+		b.WriteString("\n" + Unverified(text) + "\n")
 	}
 	return b.String()
+}
+
+// agentText is what agents wrote about the request, each part under a label the
+// engine puts inside the block: the summary a point of mission passes on, the
+// task of who asked (the text of the step or of the message it received, which
+// another agent may have written) and the justification of the call.
+func agentText(r Request) string {
+	var parts []string
+	if m := r.Mission; m != nil && m.Summary != "" {
+		parts = append(parts, "Resumo da etapa:\n"+m.Summary)
+	}
+	if r.Task != "" && (r.Mission == nil || r.Task != r.Mission.Summary) {
+		parts = append(parts, "Tarefa original de quem pediu:\n"+r.Task)
+	}
+	if r.Justification != "" {
+		parts = append(parts, "Justificativa de quem pediu:\n"+r.Justification)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func orPerm(t classes.RequestType) classes.RequestType {
