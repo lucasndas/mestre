@@ -163,6 +163,8 @@ func TestLaunchersElevationAndRunnersStartNothingTheFixedRulesDeny(t *testing.T)
 		{"cross-env FOO=1 git push", "git push"}, {"cross-env HOME=/tmp git status", "HOME"}, {"env-cmd -f .env git push", "git push"}, {"dotenv -e .env -- git push", "git push"},
 		{"dotenvx run -f .env -- git push", "git push"}, {"doppler run -p x -- git push", "git push"}, {"direnv exec . git push", "git push"},
 		{"corepack npx claude", "agente"}, {"corepack pnpm exec git push", "git push"}, {"corepack npm exec -- git push", "git push"},
+		{"doppler run --command 'git push'", "git push"}, {"doppler run --command='git push'", "git push"}, {"doppler run --command 'sudo id'", "privilégio"},
+		{"doppler run --command 'npx claude'", "agente"}, {"doppler run --command \"git push\" -p proj", "git push"}, {"sg -c 'git push'", "git push"},
 		{"setarch x86_64 claude", "claude"}, {"unshare sudo id", "privilégio"}, {"gosu root run0 id", "privilégio"}, {"nsenter -t 1 -m cp x .git/hooks/pre-commit", ".git"},
 	}
 	for _, ee := range evasionEnvs() {
@@ -184,7 +186,7 @@ func TestLaunchersElevationAndRunnersStartNothingTheFixedRulesDeny(t *testing.T)
 			"uvx -p 3.12 ruff check .", "pipx run --spec black black .", "npm exec prettier -- --check .", "pnpm dlx prettier --check .",
 			"bun x prettier claude/", "npx git status", "npx --yes create-react-app app", "pnpm exec jest", "yarn exec tsc", "npm exec -- prettier --check .",
 			"npx cp a.txt b.txt", "setarch x86_64 ls", "unshare -r ls", "chroot rootfs ls", "gosu user ls", "systemd-run --user ls", "cross-env NODE_ENV=test npm test",
-			"dotenv -e .env -- npm test", "doppler run -- npm test", "direnv exec . make", "corepack enable", "corepack pnpm install", "sg grp ls", "fakeroot make")
+			"dotenv -e .env -- npm test", "doppler run -- npm test", "direnv exec . make", "corepack enable", "corepack pnpm install", "sg grp ls", "fakeroot make", "doppler run --command 'npm test'", "doppler secrets")
 		neverAllowed(t, name, env, r, "npx -c 'echo hi'", "npm exec -c 'echo hi'")
 	}
 }
@@ -230,7 +232,7 @@ func TestGitWritesThroughItsOwnOutputOptionsAreJudgedLikeAnyWrite(t *testing.T) 
 			"git archive -o out.tar HEAD", "git archive --output out.tar HEAD", "git bundle create out.bundle --all",
 			"git bundle verify out.bundle", "git bundle list-heads .git/x.bundle", "git format-patch -1 -o patches",
 			"git format-patch -1 --output-directory patches", "git diff --output out.diff HEAD", "git archive HEAD", "git format-patch -1 --stdout",
-			"git clone ./src copy", "git init sub", "git archive --prefix=x/ HEAD", "git apply x.patch", "git apply --directory=sub x.patch",
+			"git clone ./src copy", "git init sub", "git archive --prefix=x/ HEAD", "git apply x.patch", "git apply --directory=sub x.patch", "git apply --directory=. x.patch", "git apply -p1 --directory=./ x.patch",
 			"git diff --output=/dev/null HEAD", "git diff --output /dev/null HEAD")
 		allowances(t, name, env, tests, "git archive -o tests/out.tar HEAD", "git bundle create tests/o.bundle --all",
 			"git format-patch -1 -o tests/patches", "git diff --output tests/out.diff HEAD")
@@ -336,5 +338,30 @@ func TestChainsOfLaunchersAndWrappersAreBounded(t *testing.T) {
 				t.Errorf("%s: %s = %s by %s (%q); want a fixed denial", ee.name, name, d.Verdict, d.Layer, d.Reason)
 			}
 		}
+	}
+}
+
+// CA-PERM-25: nor does a chain of the transparent wrappers (exec, nice, env,
+// timeout…) grow the analysis as the square of its length: the text of every
+// level is built, so every level is paid for, and a line of a thousand and a half of them is too
+// laborious to analyse, not allowed.
+func TestChainsOfTransparentWrappersAreTooLaborious(t *testing.T) {
+	t.Parallel()
+	free := rules(t, anyYAML)
+	for _, ee := range evasionEnvs() {
+		chains := map[string]string{"exec": strings.Repeat("exec ", 1500) + "git push"}
+		if ee.name == "native" { // the second reading of Windows doubles the work; one chain shows it
+			chains["env -i"] = strings.Repeat("env -i ", 1200) + "ls"
+		}
+		for name, cmd := range chains {
+			start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
+			d := judge(ee.env, free, cmd)
+			if took := time.Since(start); took > raceFactor*time.Second { //nolint:forbidigo // same
+				t.Errorf("%s: %s took %v; want well under a second", ee.name, name, took)
+			}
+			want(t, d, classes.Deny, classes.LayerFixed, "trabalhoso demais")
+		}
+		// A chain of a few is what it was.
+		allowances(t, ee.name, ee.env, free, "exec nice env -i time ls", "timeout 5 nice -n 5 stdbuf -oL ls")
 	}
 }

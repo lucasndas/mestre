@@ -366,9 +366,16 @@ func (e *evaluator) git(args []word, st *shellState, depth int) result {
 		written := make(map[int]bool, len(writes))
 		for _, wr := range writes {
 			written[wr.at] = true
-			if !isDevice(wr.w.text) {
-				res.merge(e.argPath(wr.w, use{write: true, recursive: wr.deep}, gst))
+			if isDevice(wr.w.text) {
+				continue
 			}
+			u := use{write: true, recursive: wr.deep}
+			if ks, known := e.resolve(wr.w.text, gst); known && u.recursive && slices.Contains(ks, e.wt) {
+				// the root of the worktree: the patch names the paths below it,
+				// which the line does not show, as it does without --directory
+				continue
+			}
+			res.merge(e.argPath(wr.w, u, gst))
 		}
 		for i, w := range rest {
 			if !written[i] && looksLikePath(w.text) && !strings.HasPrefix(w.text, "-") {

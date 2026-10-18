@@ -226,6 +226,16 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	cn := canonical(name.text)
 	args := ws[1:]
 	argText := wordsText(args)
+	// The text of this command is what the deny and ask patterns see around
+	// the commands it runs; building it costs its length at each level of a
+	// chain of wrappers (exec exec … git push), which would be quadratic if
+	// it were free.
+	text := strings.Join(wordsText(ws), " ")
+	if e.spend(len(text)) {
+		res.fixedDeny(reasonTooMuch)
+		return res
+	}
+	around := append(outer, text)
 
 	// The program itself, when given by path.
 	if strings.ContainsAny(name.text, `/\`) || strings.HasPrefix(name.text, ".") && cn != "." {
@@ -242,7 +252,7 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	// (docs/classes/classificacao-de-risco.md).
 	if written, targets := e.madeProgram(cn, ws, st); written || len(targets) > 0 {
 		for _, k := range targets {
-			res.merge(e.command(asProgram(k, ws), d, st, depth+1, append(outer, strings.Join(wordsText(ws), " "))))
+			res.merge(e.command(asProgram(k, ws), d, st, depth+1, around))
 		}
 		if written {
 			res.atLeastAsk("programa criado antes na mesma linha")
@@ -261,7 +271,6 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	case agentRunner(cn, args):
 		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
 	}
-	around := append(outer, strings.Join(wordsText(ws), " "))
 	for _, inner := range runnerCommands(cn, args) {
 		// npx git push: what a package runner runs is a command, and a fixed
 		// rule on it denies (the rest is for the class to decide).
@@ -316,7 +325,7 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 			}
 			return res
 		}
-		res.merge(e.command(inner, d, st, depth, append(outer, strings.Join(wordsText(ws), " "))))
+		res.merge(e.command(inner, d, st, depth, around))
 		if extra != "" {
 			res.atLeastAsk(extra)
 		}

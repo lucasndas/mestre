@@ -20,6 +20,9 @@ type wrapper struct {
 	valued   map[string]bool
 	operands int
 	sub      string
+	// line are the options whose value is a command line for a shell
+	// (doppler run --command 'git push').
+	line map[string]bool
 }
 
 var wrappers = map[string]wrapper{
@@ -41,7 +44,7 @@ var wrappers = map[string]wrapper{
 	"env-cmd": {valued: set("-f --file -e --environments -r --rc-file")},
 	"dotenv":  {valued: set("-e -v -p")},
 	"dotenvx": {valued: set("-f --env-file -fk --env-keys-file -e --env"), sub: "run"},
-	"doppler": {valued: set("-p --project -c --config -t --token --api-host --scope --name-transformer --preserve-env --fallback --mount"), sub: "run"},
+	"doppler": {valued: set("-p --project -c --config -t --token --api-host --scope --name-transformer --preserve-env --fallback --mount"), sub: "run", line: set("--command")},
 	"direnv":  {sub: "exec", operands: 1},
 }
 
@@ -63,14 +66,16 @@ func (e *evaluator) wrapped(cn string, args []word, res *result) []word {
 		return nil
 	case "sg":
 		// sg GROUP command, sg GROUP -c 'command line'
+		for i, a := range args {
+			if a.text == "-c" && i+1 < len(args) {
+				return []word{{text: "sh", assign: -1}, {text: "-c", assign: -1}, args[i+1]}
+			}
+		}
 		rest := skipDashOpts(args, nil)
 		if len(rest) < 2 {
 			return nil
 		}
-		if rest = rest[1:]; rest[0].text == "-c" && len(rest) > 1 {
-			return []word{{text: "sh", assign: -1}, {text: "-c", assign: -1}, rest[1]}
-		}
-		return rest
+		return rest[1:]
 	}
 	spec, ok := wrappers[cn]
 	if !ok {
@@ -86,6 +91,19 @@ func (e *evaluator) wrapped(cn string, args []word, res *result) []word {
 			return nil
 		}
 		rest = rest[i+1:]
+	}
+	for i, a := range rest {
+		opt, val, hasVal := strings.Cut(a.text, "=")
+		if !spec.line[opt] {
+			continue
+		}
+		if hasVal {
+			a.text = val
+			return []word{{text: "sh", assign: -1}, {text: "-c", assign: -1}, a}
+		}
+		if i+1 < len(rest) {
+			return []word{{text: "sh", assign: -1}, {text: "-c", assign: -1}, rest[i+1]}
+		}
 	}
 	rest = skipDashOpts(rest, spec.valued)
 	if len(rest) < spec.operands {
