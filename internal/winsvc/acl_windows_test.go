@@ -4,6 +4,7 @@ import (
 	"net"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -204,5 +205,37 @@ func dial(t *testing.T, ln net.Listener, path string) {
 	_ = c.Close()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The account of the agents is looked up as an account of this computer: a
+// name that points elsewhere (a domain, a UPN) is refused, and the account of
+// the current user, when it is a local one, resolves to its own SID.
+func TestAccountSIDOnlyResolvesLocalAccounts(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{`DOMAIN\mestre-agente`, "mestre-agente@example.com", `.\mestre-agente`, "NT AUTHORITY/SYSTEM"} {
+		if _, err := accountSID(name); err == nil {
+			t.Errorf("accountSID(%q) accepted a name that is not of a local account", name)
+		}
+	}
+	host, err := windows.ComputerName()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok := windows.GetCurrentProcessToken()
+	tu, err := tok.GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, domain, _, err := tu.User.Sid.LookupAccount("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.EqualFold(domain, host) {
+		t.Skipf("the user of the test (%s\\%s) is not a local account", domain, name)
+	}
+	got, err := accountSID(name)
+	if err != nil || !got.Equals(tu.User.Sid) {
+		t.Fatalf("accountSID(%q) = %v, %v; want %v", name, got, err, tu.User.Sid)
 	}
 }
