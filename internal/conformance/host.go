@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -104,6 +105,7 @@ func NewHost(ctx context.Context, cfg HostConfig) (*Host, error) {
 	h.Rules = &classes.Store{DB: db, Clock: h.clk, Agents: filepath.Join(cfg.Root, "agentes")}
 	engine := &hook.Engine{Clock: h.clk, Rules: h.Rules, Ledger: h.Rules, Agents: h.Rules.Agents, Characters: h, Contexts: h, Logger: log}
 	h.tap = newTap(h.clk, engine)
+	h.tap.degraded = h.degradedDecision
 	mode := localchan.ModeTree
 	if cfg.CgroupBase != "" {
 		mode = localchan.ModeCgroup
@@ -141,6 +143,22 @@ func (h *Host) Events() *Log { return h.tap.log }
 // Pause makes the engine stop answering the hooks of a character (on) or
 // answer again (off): step 6, the degraded mode.
 func (h *Host) Pause(agentID string, on bool) { h.tap.pause(agentID, on) }
+
+// degradedDecision is the decision `mestre hook` takes for a character
+// without the engine: the snapshot the engine wrote for it and the fixed
+// rules (the class of the run has no blocking hooks).
+func (h *Host) degradedDecision(ctx context.Context, ev providers.Event) classes.Decision {
+	env, err := h.Env(ctx, ev.AgentID)
+	if err != nil || !classes.ValidAgentID(ev.AgentID) {
+		return classes.Decision{Verdict: classes.Deny}
+	}
+	env.Layout = h.cfg.Layout
+	var snap *classes.Rules
+	if b, err := os.ReadFile(filepath.Join(h.Rules.Agents, ev.AgentID, classes.SnapshotName)); err == nil {
+		snap, _ = classes.ParseRules(b)
+	}
+	return classes.DecideDegraded(ctx, env, snap, ev)
+}
 
 // Env implements hook.Characters: the characters of the runs.
 func (h *Host) Env(_ context.Context, agentID string) (classes.Env, error) {

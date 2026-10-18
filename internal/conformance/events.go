@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/providers"
@@ -23,6 +24,10 @@ type Call struct {
 	// Answered is false for a call the engine did not answer (paused).
 	Answered bool
 	Answer   hook.Answer
+	// Degraded is what the dispatcher decides for a call the engine did
+	// not answer (paused): the fixed rules and the snapshot of the
+	// character, as `mestre hook` computes them without the engine.
+	Degraded classes.Verdict
 	// Arrived is when the call came in; Gone when the dispatcher hung up
 	// (only for a call that was not answered).
 	Arrived, Gone time.Time
@@ -114,6 +119,8 @@ type tap struct {
 	clk    clock.Clock
 	engine *hook.Engine
 	log    *Log
+	// degraded decides a paused call as the dispatcher does; nil: unknown.
+	degraded func(context.Context, providers.Event) classes.Decision
 
 	mu     sync.Mutex
 	paused map[string]bool
@@ -160,6 +167,9 @@ func (t *tap) Handle(ctx context.Context, c *localchan.Call) localchan.Response 
 		case <-ctx.Done():
 		}
 		call.Gone = t.clk.Now()
+		if t.degraded != nil {
+			call.Degraded = t.degraded(ctx, ev).Verdict
+		}
 		t.log.add(call)
 		return localchan.Fail(localchan.CodeTimeout, "the engine of the conformance test stopped answering this character", "")
 	}

@@ -1,6 +1,6 @@
 # Teste de conformidade dos provedores
 
-> **Assunto:** teste automático que confirma, com o provedor real, que instruções, skills, hooks e permissões funcionam · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** teste automático que confirma, com o provedor real, que instruções, skills, hooks e permissões funcionam · **Componente:** Todos · **Atualizado:** 2026-10-15
 
 ## Objetivo
 
@@ -63,7 +63,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 - **Gravações:** o personagem de teste tem `MESTRE_HOOK_RECORD=1`, e o despachante manda ao motor também o payload cru de cada hook ([despachante](despachante-de-hooks.md)); a tela de início vai como os bytes crus do terminal, que o CA-TERM-02 renderiza ([terminal](../arquitetura/terminal.md)).
 - **Ordem:** a etapa 9 roda na primeira sessão, antes da 8; a 12, na sessão retomada da 10. Turno que não termina em 3 min (padrão) é cancelado com Esc antes da etapa seguinte. A resposta é lida da tela estável **depois** do `turn_end` (ou da tela ao vivo, se ela não mudar em 2 s): no Antigravity a tela de antes dele, com a mensagem ecoada e a caixa vazia, também parece pronta e ainda não tem a resposta.
 - **Etapa 5:** `mestre list` só existe no M4; o comando pedido é `mestre debug`, cujo item "identity" diz se o motor reconheceu o terminal certo, junto com um `curl` para fora.
-- **Etapa 6:** o endpoint da rodada não é o de uma instância instalada, então o modo degradado não tem retrato e só leitura vale: o comando é `git status`. O tempo é o da chamada até o despachante desistir da conexão.
+- **Etapa 6:** o endpoint da rodada não é o de uma instância instalada, então o modo degradado não tem retrato e só leitura vale: o comando é `git status`. O tempo é o da chamada até o despachante desistir da conexão. O Antigravity não tem `allow` por hook e pergunta pela tela nativa: ela é respondida com a decisão degradada que o `mestre hook` toma (o executor a calcula do retrato e das regras fixas, como o despachante), então a leitura roda; sem essa decisão, a tela é negada e o turno não termina.
 - **Eventos exigidos:** os que as etapas causam: `session_start`, `turn_start`, `pre_tool`, `post_tool` e `turn_end` nos três; `pre_compact` e `session_end` no Claude e no Codex; `usage` (statusLine) no Claude.
 - **Peças de marcos seguintes**, por interfaces: o checklist (M7), o registro de uso como "sistema" (M5) e o modo do diagnóstico com IA (M7; sem ele, a etapa 11 é "não se aplica"). O requisito `provider` da [ficha](../guilda/ficha-da-maquina.md#requisitos) lê os resultados (`Probe`).
 - **Rodada manual:** `tools/conformance` (comentário do arquivo), como `mestre-agente`, com `MESTRE_REAL_CLI=1`; `setup-codex` é a confiança dos hooks na configuração do perfil Codex. A primeira rodada está na [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem).
@@ -79,7 +79,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 
 ## Critérios de aceite
 
-- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados numa máquina, **quando** a conformidade roda, **então** as etapas 1 a 8 e 10 a 12 passam para os três, inclusive a negação da etapa 4, e o resultado fica registrado com a versão de cada um (MVP-6).
+- **CA-CONF-01** · *pesada* — **Dado** Claude Code, Codex e Antigravity instalados e logados numa máquina, **quando** a conformidade roda, **então** as etapas 1 a 8 e 10 passam para os três, inclusive a negação da etapa 4, e a 12 passa no Claude Code e no Codex; no Antigravity (1.3.5) ela falha porque o subagente pede aprovação antes dos hooks, e o resultado esperado é o plano B (`deny_subagent` ligado, provedor ainda conforme), de modo que, se uma versão passar a 12, a rodada avisa que o plano B pode ser desligado; o resultado fica registrado com a versão de cada um (MVP-6).
 - **CA-CONF-02** · *completa* — **Dado** o agente falso de um provedor configurado para nunca disparar PreToolUse, **quando** a conformidade roda, **então** o provedor fica não conforme na máquina e um recrutamento com essa base naquela máquina falha com a explicação.
 - **CA-CONF-03** · *completa* — **Dado** um pedido de conformidade para um provedor numa máquina (vindo da [atualização dos CLIs](atualizacao-dos-clis.md)), **quando** a conformidade roda, **então** só aquele provedor naquele perfil e máquina é testado e o resultado substitui o anterior dessa combinação.
 - **CA-CONF-04** · *completa* — **Dado** um agente falso do Claude que enxerga `.agents/skills/`, **quando** a etapa 9 roda, **então** o checklist mostra que a cópia gerenciada pode ser desligada.
