@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -150,6 +151,13 @@ type Deps struct {
 	// not happen.
 	OnCitadelDown     func(since time.Time, n int)
 	OnPromotionFailed func(err error)
+	// OnVaultAlert is the grave alert of a vault that does not open (key
+	// missing, refused or wrong; docs/plataforma/cofre.md#regras-e-erros): the
+	// engine goes on without the vault, and what needs it says so, and the
+	// Owner learns it here (milestones 5 and 7 show it as an alert of the
+	// system). It is called from the goroutine that opens the vault, once
+	// for each time the vault is opened, and must not block.
+	OnVaultAlert func(vault.Alert)
 	// RenewEvery is how often a machine sees whether its engine certificate
 	// is due (a minute by default).
 	RenewEvery time.Duration
@@ -697,6 +705,9 @@ type joinMux struct {
 
 	mu sync.Mutex
 	h  map[string]http.Handler
+	// reason is why the routes answer 503 when no Citadel serves them,
+	// when the machine is the Citadel and cannot act (the vault is closed).
+	reason string
 }
 
 // Handle implements guild.Mounter.
@@ -708,10 +719,17 @@ func (j *joinMux) Handle(pattern string, h http.Handler) {
 	if !known {
 		j.m.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			j.mu.Lock()
-			h := j.h[pattern]
+			h, reason := j.h[pattern], j.reason
 			j.mu.Unlock()
 			if h == nil {
-				http.Error(w, "this machine is not the Citadel now", http.StatusServiceUnavailable)
+				if reason == "" {
+					reason = "this machine is not the Citadel now"
+				}
+				// the shape of the answers of the routes, which the machine that
+				// enters reads
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unavailable", "message": reason})
 				return
 			}
 			h.ServeHTTP(w, r)
@@ -724,6 +742,14 @@ func (j *joinMux) clear() {
 	for p := range j.h {
 		j.h[p] = nil
 	}
+	j.reason = ""
+	j.mu.Unlock()
+}
+
+// unavailable makes the routes that no Citadel serves say why.
+func (j *joinMux) unavailable(reason string) {
+	j.mu.Lock()
+	j.reason = reason
 	j.mu.Unlock()
 }
 

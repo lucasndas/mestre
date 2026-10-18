@@ -1,6 +1,6 @@
 # Replicação
 
-> **Assunto:** banco principal na Cidadela e réplicas nas Torres, arquivos e espelhos, cofre cifrado em toda máquina não excluída, envelope e chave de recuperação, CA da Guilda e certidão de época, perda máxima na troca · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** banco principal na Cidadela e réplicas nas Torres, arquivos e espelhos, cofre cifrado em toda máquina não excluída, envelope e chave de recuperação, CA da Guilda e certidão de época, perda máxima na troca · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 | Dado | Cidadela | Torre | Máquina excluída |
 |---|---|---|---|
 | Banco da Guilda (`mestre.db`, [persistência](../arquitetura/persistencia.md)) | principal, leitura e escrita | réplica, só leitura | réplica, **sem** as tabelas do cofre (`secrets`, `site_login_attempts`) |
-| Cofre: chave de dados (protegida pela chave da máquina) e `cofre-envelope.bin` | aberto | cópia, fechada | nunca |
+| Cofre: chave de dados (guardada como a Cidadela guarda a dela) e `cofre-envelope.bin` | aberto | cópia, fechada | nunca |
 | Arquivos da Cidadela: classes globais, modelos, capturas do Operador (já cifradas), anexos, pergaminhos e a pasta `.mestre/` do clone principal de cada workspace (inclusive o que é só local, fora do git) | originais | cópia | cópia, sem as capturas do Operador |
 | Espelho de cada workspace | principal | réplica, por git bundle | réplica |
 | Banco local de máquina (`maquina.db`) | o dela | o dela | o dela; **nunca** replicado |
@@ -32,7 +32,7 @@ Deixar o estado da Guilda em toda máquina, para que qualquer uma (menos a [máq
 
 ### Cofre em toda máquina
 
-- Toda máquina não excluída guarda o **cofre inteiro, cifrado**: as tabelas do cofre na réplica, o envelope e a chave de dados, recebida em `vault.replica` e guardada **cifrada com a chave da máquina** (Windows: DPAPI de escopo de máquina, ACL só de `NT SERVICE\Mestre`; Linux: arquivo `0600` dono `mestre`), como a Cidadela guarda a dela ([chave do cofre](../plataforma/cofre.md#chave-do-cofre)).
+- Toda máquina não excluída guarda o **cofre inteiro, cifrado**: as tabelas do cofre na réplica, o envelope e a chave de dados, recebida em `vault.replica` e guardada como a Cidadela guarda a dela (Windows: cifrada pelo DPAPI de escopo de máquina, ACL só de `NT SERVICE\Mestre`; Linux: **em claro** num arquivo `0600` dono `mestre`, sem cifra por cima; [chave do cofre](../plataforma/cofre.md#chave-do-cofre)).
 - **Só a Cidadela abre o cofre.** Uma Torre que precisa de uma credencial pede à Cidadela no momento do uso; a Cidadela confere se a classe pode usá-la e registra quem pediu, para quê e quando. Login em sites: a Cidadela manda a credencial ao motor da máquina do personagem só para aquele login, sem gravar, e só os cookies chegam ao personagem ([login em sites](../plataforma/cofre.md#login-em-sites)).
 - **Exceção única:** a Torre condutora, em modo reduzido (Cidadela fora), usa só o token do bot e a lista de usuários, da parte restrita que vai aos Guardiões ([réplica para os Guardiões](../plataforma/cofre.md#réplica-para-os-guardiões)), para avisar o Dono e receber a aprovação da promoção ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)). O Guardião da máquina excluída recebe só a lista de usuários, para a página reserva, sem o token.
 - **Regra do programa, não da criptografia:** a chave de dados está em toda máquina não excluída. Uma máquina roubada tem **o mesmo risco da Cidadela**: o painel recomenda trocar os segredos ao remover uma máquina que sumiu ([segurança](../arquitetura/seguranca.md#ameaças-e-proteções)). Quem não pode ter esse risco, o Dono exclui.

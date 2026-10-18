@@ -116,6 +116,9 @@ type citadelRun struct {
 	ca      *transport.CA
 	citadel *guild.Citadel  // nil until the Citadel first acts
 	refused map[string]bool // Towers whose messages waited for it
+	// down is why the Citadel cannot act, when it tried and its CA did not
+	// open (the vault is closed); empty otherwise.
+	down string
 
 	base      context.Context
 	external  []ExternalFunc
@@ -157,6 +160,47 @@ func (r *citadelRun) guild() *guild.Citadel {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.citadel
+}
+
+// cannotAct records why the Citadel, which tried to act, cannot: its CA does
+// not open. What needs the CA answers with it, instead of saying that the
+// Citadel does not act yet and waiting for it.
+func (e *Engine) cannotAct(run *citadelRun, err error) {
+	why := "its CA does not open"
+	if errors.Is(err, vault.ErrClosed) {
+		why = "its vault is closed"
+	}
+	run.mu.Lock()
+	run.down = why
+	run.mu.Unlock()
+	e.joins.unavailable("the Citadel cannot take entries: " + why)
+}
+
+// needsCitadel is the handler of what needs the CA, which the Citadel opens
+// when it first acts: until then a Tower is answered with a retryable error,
+// and, if it cannot act at all, with why.
+func (r *citadelRun) needsCitadel(handle func(c *guild.Citadel) protocol.HandlerFunc) protocol.HandlerFunc {
+	return r.gated(func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
+		c := r.guild()
+		if c == nil {
+			if why := r.whyDown(); why != "" {
+				// retryable too: the Owner fixes the key and restarts the engine
+				return nil, protocol.NewError(protocol.CodeUnavailable, "the Citadel cannot act: %s", why)
+			}
+			// retryable: the outbox of the Tower keeps it, and the Citadel
+			// makes it reconnect (and send it again) once it acts
+			r.waiting(m.Peer.ID)
+			return nil, protocol.NewError(protocol.CodeUnavailable, "the Citadel does not act yet")
+		}
+		return handle(c)(ctx, m)
+	})
+}
+
+// whyDown is why the Citadel cannot act, or empty.
+func (r *citadelRun) whyDown() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.down
 }
 
 // setActing turns the external functions on or off.
@@ -249,9 +293,10 @@ func (r *citadelRun) gated(h protocol.HandlerFunc) protocol.HandlerFunc {
 	}
 }
 
-// openMain opens the Guild database as the main one and the vault; the CA
-// opens later, when the Citadel acts or wins the promotion, because opening
-// its key writes its use.
+// openMain opens the Guild database as the main one and the vault, which stays
+// closed when its key does not open it (openVault); the CA opens later, when
+// the Citadel acts or wins the promotion, because opening its key writes its
+// use.
 func (e *Engine) openMain(ctx context.Context) (*takeover, error) {
 	db, err := guilddb.Open(ctx, e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: e.cfg.Synchronous})
 	if err != nil {
@@ -271,7 +316,10 @@ func (e *Engine) openMain(ctx context.Context) (*takeover, error) {
 }
 
 // openVault opens the vault over the main database db, with the masker of
-// the logger, and every read of it in the audit.
+// the logger, and every read of it in the audit. A key that is missing,
+// refused or wrong does not fail it: the vault comes back closed, every
+// function that needs it fails with a clear error, the engine raises the
+// grave alert and does the rest (docs/plataforma/cofre.md#regras-e-erros).
 func (e *Engine) openVault(ctx context.Context, db *store.DB) (*vault.Vault, error) {
 	var recovery []byte
 	if err := db.Reader().QueryRowContext(ctx, `SELECT recovery_public_key FROM guild WHERE id = 1`).Scan(&recovery); err != nil {
@@ -282,20 +330,28 @@ func (e *Engine) openVault(ctx context.Context, db *store.DB) (*vault.Vault, err
 	}
 	v, err := vault.Open(ctx, vault.Config{
 		DB: db, Keys: vault.NewFileKeyStore(e.paths.vaultKey()), EnvelopePath: e.paths.envelope(),
-		RecoveryPublicKey: recovery, Masker: e.deps.Masker, Clock: e.clk,
+		RecoveryPublicKey: recovery, Masker: e.deps.Masker, Clock: e.clk, OnAlert: e.vaultAlert,
 		OnUse: func(u vault.UseEvent) {
 			if err := guild.RecordUse(context.WithoutCancel(ctx), db, e.clk, e.id.MachineID, u.Name, u.Purpose); err != nil {
 				e.log.Warn("app: the audit of a read of the vault", "secret", u.Name, "err", err)
 			}
 		},
 	})
-	if err == nil {
-		err = v.Err()
-	}
 	if err != nil {
-		return nil, fmt.Errorf("app: the vault does not open: %w", err)
+		// only a wrong configuration: a closed vault is not an error here
+		return nil, fmt.Errorf("app: open the vault: %w", err)
 	}
 	return v, nil
+}
+
+// vaultAlert is the grave alert of a vault that does not open: the log, and
+// the notice to the Owner (Deps.OnVaultAlert).
+func (e *Engine) vaultAlert(a vault.Alert) {
+	e.log.Error("app: the vault does not open; what needs secrets stops and the rest goes on",
+		"severity", a.Severity, "check", a.Check, "err", a.Err)
+	if e.deps.OnVaultAlert != nil {
+		e.deps.OnVaultAlert(a)
+	}
 }
 
 // startCitadel opens the CA, if the period has not yet, and the Citadel of
@@ -479,20 +535,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	guild.Register(router, guild.Wiring{Citadel: run.guild})
 	primary.Register(router)
 	registry.Register(router)
-	needsCitadel := func(handle func(c *guild.Citadel) protocol.HandlerFunc) protocol.HandlerFunc {
-		return run.gated(func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
-			c := run.guild()
-			if c == nil {
-				// retryable: the outbox of the Tower keeps it, and the Citadel
-				// makes it reconnect (and send it again) once it acts
-				run.waiting(m.Peer.ID)
-				return nil, protocol.NewError(protocol.CodeUnavailable, "the Citadel does not act yet")
-			}
-			return handle(c)(ctx, m)
-		})
-	}
-	router.HandleFunc(protocol.TypeCertRenew, needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleCertRenew }))
-	router.HandleFunc(protocol.TypeGuildLeave, needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
+	router.HandleFunc(protocol.TypeCertRenew, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleCertRenew }))
+	router.HandleFunc(protocol.TypeGuildLeave, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
 	router.HandleFunc(protocol.TypeMachineSheet, run.gated(registry.Handler().Handle))
 	router.HandleFunc(protocol.TypeCLICall, e.handleCLICall(run)) // it answers in cli.result, gate included
 	router.HandleFunc(protocol.TypeGuildDiscarded, run.gated(guild.DiscardedHandler(func() *store.DB { return db }, e.clk)))
@@ -517,6 +561,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		c, err := e.startCitadel(pctx, run)
 		if err != nil {
 			e.log.Error("app: the Citadel does not open its CA", "err", err)
+			e.cannotAct(run, err)
 			return
 		}
 		run.resendWaiting()
