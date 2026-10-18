@@ -435,6 +435,12 @@ type evaluator struct {
 	wt, tmp  string // keys
 	evCwd    string
 	work     int // the units the analysis spent (budget.go)
+	// homeSet is the variable that moves the global configuration of git
+	// (HOME, XDG_CONFIG_HOME…) set or removed by an earlier part of the line
+	// being analysed, and homeScope the one set for the command being
+	// analysed (a prefix, env): a git that runs under either is a fixed denial
+	// (gitenv.go).
+	homeSet, homeScope string
 }
 
 func newEvaluator(ctx context.Context, env Env, r *Rules, ev providers.Event, degraded bool) *evaluator {

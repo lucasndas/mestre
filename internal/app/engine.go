@@ -107,7 +107,8 @@ type Deps struct {
 	// External are the functions the Citadel turns on and off.
 	External []ExternalFunc
 	// Identifier identifies the callers of the local channel; nil identifies
-	// nobody (no terminal runs before milestone 4).
+	// nobody (no terminal runs until the engine hosts the orchestration:
+	// "M5, antes da etapa 1" in docs/desenvolvimento/ordem-de-implementacao.md).
 	Identifier localchan.Identifier
 	// Commands is the definition of the commands of the CLI the engine
 	// checks every call against (nil: cli.Default). Profiles gives the level
@@ -122,7 +123,8 @@ type Deps struct {
 	TableRules classes.TableRuleGate
 	// OnQueuedResult is told, on the Citadel, the result of a call that
 	// waited in the outbox of a Tower; it goes to the inbox of whoever asked
-	// (milestone 4 delivers it; until then it is only logged).
+	// (QueuedToInbox does, once the engine hosts the orchestration; until then
+	// it is only logged).
 	OnQueuedResult func(QueuedResult)
 	// Characters, Approvals and States are what the hook dispatcher needs
 	// from the terminal registry (M4) and the approvals (M5); nil: no
@@ -136,7 +138,7 @@ type Deps struct {
 	Contexts hook.Contexts
 	// ClassHooks gives the dispatcher the synchronous hooks of the class of
 	// a character (hook.ClassHookSource, over the classes of the workspace,
-	// when the registry of characters exists, M4); OnHookEvent is told every
+	// once the engine hosts the orchestration); OnHookEvent is told every
 	// event after it is answered (the asynchronous hooks of the classes,
 	// hook.AsyncRunner). nil: none.
 	ClassHooks  hook.ClassHooks
