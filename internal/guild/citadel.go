@@ -104,9 +104,13 @@ type CitadelConfig struct {
 	// that hands over (the decision on an entry, its own certificate): it
 	// returns the function that ends the write, or false to refuse it with
 	// ErrSuspended.
-	Admit  func() (leave func(), ok bool)
-	Rand   io.Reader    // nil means crypto/rand
-	Logger *slog.Logger // nil discards
+	Admit func() (leave func(), ok bool)
+	// CheckSheet, when set, judges the sheet of an entry request (it is
+	// JSON): an error refuses the request as ErrBadRequest. It lives outside
+	// this package because the sheet type does, in a package that imports this.
+	CheckSheet func(sheet json.RawMessage) error
+	Rand       io.Reader    // nil means crypto/rand
+	Logger     *slog.Logger // nil discards
 }
 
 // Citadel is the side of the Guild that admits and removes machines: it
@@ -354,6 +358,11 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 		var object map[string]json.RawMessage
 		if err := json.Unmarshal(req.Sheet, &object); err != nil || object == nil {
 			return "", fmt.Errorf("%w: the sheet is a JSON object", ErrBadRequest)
+		}
+	}
+	if len(req.Sheet) > 0 && c.cfg.CheckSheet != nil {
+		if err := c.cfg.CheckSheet(req.Sheet); err != nil {
+			return "", fmt.Errorf("%w: the sheet: %v", ErrBadRequest, err)
 		}
 	}
 	name := cleanName(req.Name)
