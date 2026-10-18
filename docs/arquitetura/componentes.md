@@ -1,6 +1,6 @@
 # Componentes
 
-> **Assunto:** motor, `mestre-pty`, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** motor, `mestre-pty`, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 Este documento é a **fonte única** dos nomes de binários, subcomandos de serviço, serviços do sistema, portas e rotas, e das instâncias. A escolha da stack está no [ADR 0001](../decisoes/0001-stack-go.md); a Guilda, no [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md).
 
@@ -123,7 +123,7 @@ Uma máquina pode ter **várias instâncias** do Mestre, em qualquer sistema e m
 | Pastas | `/etc/mestre/<inst>/`, `/var/lib/mestre/<inst>/`, `/var/log/mestre/<inst>/` e `/var/spool/mestre/<inst>/` no Linux; `%ProgramData%\Mestre\<inst>\` no Windows. A padrão também usa subpasta, para haver um formato só ([persistência](persistencia.md#arquivos)) |
 | Portas | um bloco livre, escolhido na instalação e gravado na configuração: a padrão usa 7443, 7444, 7446 e 7447; as outras, blocos de 10 acima (7453, 7454, 7456 e 7457; depois 7463…). A 7445/udp é compartilhada |
 | Serviços | systemd: `mestre@<inst>`, `mestre-launcher@<inst>`, `mestre-guardiao@<inst>`, `mestre-update@<inst>`; Windows: `Mestre$<inst>`, `MestreLauncher$<inst>`, `MestreGuardiao$<inst>`, `MestreUpdate$<inst>`, com as contas virtuais `NT SERVICE\Mestre$<inst>` (o `$` é aceito em nomes de serviço, como nas instâncias nomeadas do SQL Server) |
-| Conta dos agentes e canal local | `mestre-agente-<inst>`; canais locais e sockets dos `mestre-pty` com `<inst>` no caminho (acima); o `MESTRE_ENDPOINT` de cada personagem aponta para a instância dele |
+| Conta dos agentes e canal local | `mestre-agente-<inst>` (a instância `principal` usa `mestre-agente`, sem sufixo); o grupo do `cli.sock` e a ACL dele são os dessa conta; canais locais e sockets dos `mestre-pty` com `<inst>` no caminho (acima); o `MESTRE_ENDPOINT` de cada personagem aponta para a instância dele |
 | cgroup e identidade | o cgroup delegado da unidade `mestre-launcher@<inst>`; `machine_id` próprio, anunciado na [descoberta](../conectividade/descoberta.md) como máquina separada; a [ficha da máquina](../guilda/ficha-da-maquina.md#campos) traz o nome do computador e o da instância |
 
 - Nos outros documentos, `mestre`, `mestre-guardiao`, `mestre-update`, `mestre-launcher`, `NT SERVICE\Mestre`, `mestre-agente`, as pastas e as portas querem dizer os da instância.

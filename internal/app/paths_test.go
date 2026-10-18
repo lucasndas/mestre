@@ -32,12 +32,20 @@ func (r *recordingAccess) Apply(path string) error {
 // paths when it opens the channel.
 func TestTheSocketOfAnInstalledInstanceGetsTheAccessOfTheInstaller(t *testing.T) {
 	t.Parallel()
-	p, err := DefaultPaths("principal")
-	if err != nil {
-		t.Fatal(err)
+	for _, instance := range []string{"principal", "x"} {
+		p, err := DefaultPaths(instance)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// the access of the instance: another instance has the account of its own
+		if !reflect.DeepEqual(p.CLIAccess, localchan.DefaultAccess(instance)) {
+			t.Fatalf("installed instance %s: access %#v, want %#v", instance, p.CLIAccess, localchan.DefaultAccess(instance))
+		}
 	}
-	if !reflect.DeepEqual(p.CLIAccess, localchan.DefaultAccess()) {
-		t.Fatalf("installed instance: access %#v, want %#v", p.CLIAccess, localchan.DefaultAccess())
+	main, _ := DefaultPaths("principal")
+	other, _ := DefaultPaths("x")
+	if reflect.DeepEqual(main.CLIAccess, other.CLIAccess) {
+		t.Fatalf("the instance x has the access of the principal one: %#v", other.CLIAccess)
 	}
 	if _, ok := DirPaths(t.TempDir()).cliAccess().(localchan.NoAccess); !ok {
 		t.Fatal("an instance of --dir changes the access of its socket")
