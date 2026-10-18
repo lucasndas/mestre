@@ -5,7 +5,7 @@
 | Documento | O que cobre | Quando ler |
 |---|---|---|
 | [classes.md](classes.md) | estrutura do pacote (`CLASS.md`, `permissions.yaml`, hooks, skills), escopos global/workspace/mesa, vínculo obrigatório com App, hooks extras por evento do Mestre, quem cria e `class check` | ao criar, validar ou entregar classes aos personagens |
-| [classes-sugeridas.md](classes-sugeridas.md) | o pacote que vem desligado: ativar e atualizar, as duas fichas de cada classe, a etapa opcional das receitas, a calibração | ao ativar o time sugerido ou mudar o pacote |
+| [classes-sugeridas.md](classes-sugeridas.md) | o pacote que vem desligado: ativar e atualizar, as duas fichas de cada classe, a etapa opcional das receitas, a calibração, o ritual Vigia | ao ativar o time sugerido ou mudar o pacote |
 | [skills-de-apoio.md](skills-de-apoio.md) | skills de engenharia que a classe traz com liga/desliga: onde ficam, como chegam a cada provedor, as camadas que fazem o desligado valer, licença | ao pôr numa classe uma skill de terceiros |
 | [mcp-por-classe.md](mcp-por-classe.md) | catálogo de servidores MCP do workspace, o campo `mcp` da classe e o gateway do Mestre que entrega só os servidores da classe, igual nos três provedores | ao dar a uma classe um servidor MCP |
 | [sugeridas/](sugeridas/INDEX.md) | o conteúdo do pacote: as sete classes e as receitas de missão | ao ler ou adaptar uma classe sugerida |
