@@ -8,7 +8,9 @@
 # Enable once per clone with
 #   git config core.hooksPath tools/githooks
 # (docs/desenvolvimento/ambiente.md). Skip only in an emergency with
-# git push --no-verify; the CI runs the suites anyway.
+# git push --no-verify: on a pull request the race detector runs only here
+# (the CI runs it on the pushes to main), so a skipped push leaves a race to
+# be caught only after the merge, by the push to main.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 zero=0000000000000000000000000000000000000000
