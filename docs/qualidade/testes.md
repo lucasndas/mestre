@@ -1,6 +1,6 @@
 # Testes
 
-> **Assunto:** política de testes: suítes, orçamentos de tempo, executor, testes afetados, quarentena e mapa do MVP · **Componente:** Projeto · **Atualizado:** 2026-10-15
+> **Assunto:** política de testes: suítes, orçamentos de tempo, executor, testes afetados, quarentena e mapa do MVP · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -14,7 +14,7 @@ Manter os testes rápidos desde o primeiro dia. Tempo de execução é requisito
 |---|---|---|---|---|
 | **rápida** | `fast` | a cada alteração e no gancho de pré-commit | **30 s** | a grande maioria: unitários Go, unitários e de componente do painel (Vitest, a partir do M6), [verificação de docs](verificacao-de-docs.md). Sem rede real, sem disco lento, sem processos externos |
 | **completa** | `full` | no PR, antes de juntar na branch principal (verificação obrigatória) | **3 min** por máquina | rápida + integração: Cidadela e Torres reais na mesma máquina, como [instâncias](../arquitetura/componentes.md#instâncias) rodando como **processos comuns** (motor e Guardião de cada uma; sem instalar serviços) ou como instâncias do motor no processo do teste, banco temporário, git real, agente falso como processo num PTY real; inclui a [troca de Cidadela e a replicação](#troca-de-cidadela-e-replicação-na-completa) |
-| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos 15 critérios do MVP, testes de falha da autocura, [conformidade com os provedores reais](../provedores/conformidade.md) e tudo o que exige instalar serviços ou mexer na integração com o sistema (contas, ACLs, mDNS do sistema), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; o subconjunto de [contas reais](contas-reais.md) também roda em máquina descartável do CI; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
+| **pesada** | `heavy` | sob demanda, toda noite (agendada) e quando a versão de um provedor muda | sem limite rígido, **medida** | ponta a ponta dos critérios do MVP, testes de falha da autocura, [conformidade com os provedores reais](../provedores/conformidade.md) e tudo o que exige instalar serviços ou mexer na integração com o sistema (contas, ACLs, mDNS do sistema), em máquinas reais (Linux e Windows) com os CLIs reais dos provedores; o subconjunto de [contas reais](contas-reais.md) também roda em máquina descartável do CI; Telegram e GitHub são os dublês ([escopo da pesada](#escopo-da-pesada-telegram-e-github)) |
 
 ### Como as suítes são selecionadas
 

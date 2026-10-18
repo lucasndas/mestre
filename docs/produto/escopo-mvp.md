@@ -1,6 +1,6 @@
 # Escopo do MVP
 
-> **Assunto:** o que é o MVP, o ambiente e os 15 critérios globais de aceite · **Componente:** Projeto · **Atualizado:** 2026-10-14
+> **Assunto:** o que é o MVP, o ambiente e os 16 critérios globais de aceite · **Componente:** Projeto · **Atualizado:** 2026-10-18
 
 ## O que é o MVP
 
@@ -13,7 +13,7 @@ O MVP é a especificação original mais as decisões do usuário registradas de
 - Repositórios na conta pessoal do GitHub do Dono ([ADR 0015](../decisoes/0015-epico-como-rotulo.md)).
 - Sem interface gráfica além do painel no navegador; os agentes são de terminal.
 
-## Critérios globais (MVP-1 a MVP-15)
+## Critérios globais (MVP-1 a MVP-16)
 
 Cada critério é coberto por um teste de ponta a ponta na suíte pesada (máquinas e provedores reais; Telegram e GitHub falsos); o mapa critério → teste está em [testes](../qualidade/testes.md) (seção "Mapa do MVP para a suíte pesada"). Os documentos listados detalham o critério em critérios menores (que citam `(MVP-N)`); os guias de [operação](../operacao/INDEX.md) contam o mesmo para quem usa.
 
@@ -34,3 +34,4 @@ Cada critério é coberto por um teste de ponta a ponta na suíte pesada (máqui
 | **MVP-13** | Instalo em cada uma das quatro composições da Guilda (só Linux, Cidadela Linux + Torre Windows, Cidadela Windows + Torre Linux, só Windows) e o Mestre funciona, com as limitações de cada composição documentadas. | [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md), [ADR 0020](../decisoes/0020-linux-e-windows-em-qualquer-papel.md), [Guilda](../guilda/guilda.md), [componentes](../arquitetura/componentes.md), [Windows](../arquitetura/windows.md), [instalação e versões](../plataforma/instalacao-e-atualizacao.md), [checklist](../plataforma/checklist.md), [camadas](../autocura/camadas.md#modo-máquina-única), [instalar](../operacao/instalar.md), [testes](../qualidade/testes.md#mapa-do-mvp-para-a-suíte-pesada) |
 | **MVP-14** | Ativo o Operador pelo Telegram, ele executa uma tarefa no meu PC dentro do prazo, eu vejo o aviso e as capturas, e ele é encerrado sozinho ao fim (ou na hora, com /travar). | [ADR 0021](../decisoes/0021-operador-do-pc.md), [bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc), [Windows](../arquitetura/windows.md#operador-do-pc), [segurança](../arquitetura/seguranca.md#operador-do-pc), [permissões](../classes/permissoes.md), [teto do workspace](../classes/teto-do-workspace.md), [política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md), [decretos](../telegram/decretos.md#delegação-da-ativação-do-operador), [bot](../telegram/bot.md), [segurança do canal](../telegram/seguranca-do-canal.md), [persistência](../arquitetura/persistencia.md#operador-do-pc), [checklist](../plataforma/checklist.md), [instalação e versões](../plataforma/instalacao-e-atualizacao.md), [canvas](../painel/canvas.md#operador-do-pc), [administração](../painel/administracao.md#operador-do-pc), [instalar](../operacao/instalar.md) |
 | **MVP-15** | Derrubo a Cidadela de vez: uma Torre tenta a autocura, não resolve, me avisa pelo Telegram e eu promovo uma máquina; ela vira a Cidadela com o Grão-Mestre e o estado do banco, perdendo no máximo 5 s, e a antiga, ao voltar, entra como Torre sem disputar o comando. | [Cidadela e Torres](../guilda/cidadela-e-torres.md), [replicação](../guilda/replicacao.md) |
+| **MVP-16** | Ativo o time sugerido; um pedido de bug passa por Investigador, Dev, Revisor e QA até o merge, com prova de cada critério, nos três provedores. | [classes](../classes/classes.md), [permissões](../classes/permissoes.md), [missões](../orquestracao/missoes.md), [grimórios](../orquestracao/grimorios.md), [Mestre da mesa](../orquestracao/mestre-da-mesa.md), [administração](../painel/administracao.md) |
