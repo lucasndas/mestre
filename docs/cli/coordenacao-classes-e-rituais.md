@@ -1,6 +1,6 @@
 # CLI: classes e rituais
 
-> **Assunto:** sintaxe de `class` e `ritual` · **Componente:** CLI · **Atualizado:** 2026-10-15
+> **Assunto:** sintaxe de `class` e `ritual` · **Componente:** CLI · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Referência de sintaxe dos comandos que gerenciam classes (pacotes de função d
 
 | Comando | Quem pode usar |
 |---|---|
-| `class list\|show\|check` | Mestre da mesa, Grão-Mestre; classes autorizadas |
+| `class list\|show\|check\|test` | Mestre da mesa, Grão-Mestre; classes autorizadas |
 | `class create\|edit\|assign` | Mestre da mesa (escopo da mesa), Grão-Mestre (escopo do workspace, só propõe) |
 | `class delete` | Mestre da mesa, Grão-Mestre, sempre com pedido explícito de usuário |
 | `ritual …` | Grão-Mestre (rituais do workspace), Mestre da mesa (rituais da própria mesa) |
@@ -23,6 +23,7 @@ mestre class create "<classe>" --app <novo | herdar:<classe> | <nome-do-app>> --
 mestre class edit "<classe>" [--from <pasta>] [--app <…>]
 mestre class assign "<Personagem>" "<classe>"
 mestre class check "<classe>"
+mestre class test "<classe>" [--provider claude|codex|antigravity]… [--case <nome>]
 mestre class delete "<classe>"
 ```
 - `list`: nome, escopo, App vinculado, se o vínculo é herdado (`inherited: true`), estado do App com os identificadores de [criação de Apps](../github/criacao-de-apps.md) (`solicitado` enquanto o Grão-Mestre ainda não preparou o link) e provedor preferido. Padrão: todas as visíveis ao chamador.
@@ -36,6 +37,7 @@ mestre class delete "<classe>"
 - `--from` (em `create` e `edit`) só aceita uma pasta dentro de `$MESTRE_TMP` do próprio personagem; fora dela → 2 `from_outside_tmp`. Usuários pelo painel não usam a CLI.
 - `assign`: muda a classe de um personagem da mesa; vale a partir do próximo turno dele (nunca no meio de um).
 - `check`: valida o pacote e mostra, por provedor, como cada permissão será aplicada (`mestre hook` e reforço nativo) e o App com o estado dele. Exit 0 se válido; 2 `invalid_class` com a lista de problemas. Também avisa quando o `CLASS.md` passa do tamanho recomendado ([personagem](../sessao-zero/personagem.md)).
+- `test`: roda os casos de `cases/` da classe com o provedor real e volta na hora com o `run_id`; o resultado chega como item `system`. Casos, rodada, custo e erros em [teste de classe](../provedores/teste-de-classe.md).
 - `delete`: ação destrutiva (regra 1 de [convencoes](convencoes.md)) → 9 sem pedido explícito; classe em uso por personagem vivo → 7 `in_use`.
 - Erros comuns: permissão acima do teto → 3 `ceiling_denied` (com o item que passou); App inexistente → 4; classe de outra mesa → 4 `not_visible`.
 

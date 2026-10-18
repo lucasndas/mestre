@@ -1,6 +1,6 @@
 # Atualização dos CLIs dos provedores
 
-> **Assunto:** os CLIs `claude`, `codex` e `agy` se atualizam sozinhos; o Mestre detecta a versão nova por máquina e por perfil, roda a conformidade logo depois, marca o provedor como não conforme se ela falhar e avisa o Dono · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** os CLIs `claude`, `codex` e `agy` se atualizam sozinhos; o Mestre detecta a versão nova por máquina e por perfil, roda a conformidade logo depois, marca o provedor como não conforme se ela falhar e avisa o Dono · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -29,7 +29,7 @@ O Mestre não desliga a autoatualização de nenhum CLI: nada de `DISABLE_AUTOUP
 ### Conformidade logo depois
 
 - Enquanto o teste roda, o provedor fica "em verificação" naquela máquina e perfil: recrutamentos desse provedor ali esperam ou vão para outra máquina que atenda ([escolha da máquina](../orquestracao/personagens.md#escolha-da-máquina)).
-- **Passou:** a versão fica registrada como conforme e os personagens novos já nascem nela.
+- **Passou:** a versão fica registrada como conforme e os personagens novos já nascem nela. Os resultados de [teste de classe](teste-de-classe.md#quando-um-cli-muda) daquele provedor passam a "testada em versão anterior".
 - **Falhou:** o provedor fica **não conforme** naquela máquina, pela regra da [conformidade](conformidade.md#regras-e-erros): não recebe personagens novos ali, e o Dono recebe o aviso pelo Telegram e no painel com o relatório do teste. Não há volta de versão: o caminho é a próxima versão do provedor, testada quando aparecer, ou a correção manual pelo Dono.
 
 ### Personagens já rodando
@@ -64,6 +64,7 @@ Uma versão nova pode entrar entre duas tarefas sem teste prévio: o CLI se atua
 - [Claude Code](claude-code.md) · [Codex](codex.md) · [Antigravity](antigravity.md)
 - [Personagens](../orquestracao/personagens.md)
 - [Checklist](../plataforma/checklist.md)
+- [Teste de classe](teste-de-classe.md)
 
 ## Verificar na implementação
 
