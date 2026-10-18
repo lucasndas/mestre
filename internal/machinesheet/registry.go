@@ -63,6 +63,10 @@ type Registry struct {
 	cfg RegistryConfig
 	// mu serializes the read-merge-write of one sheet.
 	mu sync.Mutex
+	// warned is the reason last logged for each machine whose stored sheet is
+	// unreadable, so the log says it once.
+	warnMu sync.Mutex
+	warned map[string]string
 }
 
 // ErrNotActive: the machine is not an active machine of the Guild.
@@ -143,6 +147,9 @@ func (r *Registry) apply(ctx context.Context, machineID string, payload protocol
 		}
 		return protocol.NewError(protocol.CodeInternal, "read the sheet of %s: %v", machineID, err)
 	}
+	if !replace && row.status == sheetUnreadable {
+		return protocol.NewError(protocol.CodeInvalidPayload, "the stored sheet of %s is unreadable: send the whole sheet (a hello) to replace it", machineID)
+	}
 	after, err := Merge(row.sheet, payload, replace)
 	switch {
 	case errors.Is(err, ErrStale):
@@ -167,7 +174,7 @@ func (r *Registry) apply(ctx context.Context, machineID string, payload protocol
 		return protocol.NewError(protocol.CodeForbidden, "%v: %s", ErrNotActive, machineID)
 	}
 	r.followNames(ctx, machineID, after)
-	if h := r.cfg.OnChange; h != nil && (!row.has || !Equal(row.sheet, after)) {
+	if h := r.cfg.OnChange; h != nil && (row.status != sheetOK || !Equal(row.sheet, after)) {
 		h(machineID, row.sheet.Clone(), after.Clone())
 	}
 	return nil
@@ -227,9 +234,21 @@ type querier interface {
 
 // row is a machine of the registry with its sheet.
 type row struct {
-	sheet Sheet
-	has   bool // a sheet was stored
+	sheet  Sheet
+	status sheetStatus
+	// err is why the stored sheet could not be read (sheetUnreadable): the row
+	// is then taken as a machine with no sheet, until its next hello replaces it.
+	err error
 }
+
+// sheetStatus says what the sheet column of a row held.
+type sheetStatus int
+
+const (
+	sheetNone       sheetStatus = iota // no sheet stored yet
+	sheetOK                            // a valid sheet
+	sheetUnreadable                    // wrong types or not a valid sheet
+)
 
 const rowColumns = `machine_id, name, instance, excluded, state, sheet`
 
@@ -245,9 +264,12 @@ func scanRow(sc interface{ Scan(...any) error }) (row, string, error) {
 	out := row{}
 	if sheet.Valid && sheet.String != "" {
 		if err := json.Unmarshal([]byte(sheet.String), &out.sheet); err != nil {
-			return row{}, "", fmt.Errorf("the sheet of %s: %w", id, err)
+			out.sheet, out.status, out.err = Sheet{}, sheetUnreadable, fmt.Errorf("the sheet of %s: %w", id, err)
+		} else if err := out.sheet.Validate(); err != nil {
+			out.sheet, out.status, out.err = Sheet{}, sheetUnreadable, fmt.Errorf("the sheet of %s: %w", id, err)
+		} else {
+			out.status = sheetOK
 		}
-		out.has = true
 	}
 	out.sheet.MachineID, out.sheet.Name, out.sheet.Excluded = id, name, excluded != 0
 	if instance != "" {
@@ -267,7 +289,29 @@ func (r *Registry) load(ctx context.Context, q querier, machineID string) (row, 
 	if state != string(guild.MachineActive) {
 		return row{}, fmt.Errorf("%w: %s is %s", ErrNotActive, machineID, state)
 	}
+	r.warnUnreadable(out)
 	return out, nil
+}
+
+// warnUnreadable logs a stored sheet that could not be read; the listing goes
+// on without it, so one machine cannot stop the choice for the whole Guild.
+// It logs once per machine and per reason, not on every read.
+func (r *Registry) warnUnreadable(rw row) {
+	id := rw.sheet.MachineID
+	r.warnMu.Lock()
+	defer r.warnMu.Unlock()
+	if rw.status != sheetUnreadable {
+		delete(r.warned, id)
+		return
+	}
+	if r.warned[id] == rw.err.Error() {
+		return
+	}
+	if r.warned == nil {
+		r.warned = map[string]string{}
+	}
+	r.warned[id] = rw.err.Error()
+	r.cfg.Logger.Warn("machinesheet: a stored sheet is unreadable and is taken as missing", "machine", id, "err", rw.err)
 }
 
 // online fills the field the connection decides.
@@ -301,6 +345,7 @@ func (r *Registry) Sheets(ctx context.Context) ([]Sheet, error) {
 		if err != nil {
 			return nil, fmt.Errorf("machinesheet: %w", err)
 		}
+		r.warnUnreadable(rw)
 		out = append(out, r.online(rw.sheet))
 	}
 	return out, rows.Err()
