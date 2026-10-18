@@ -378,3 +378,23 @@ func TestAnUnreadableSheetDoesNotStopTheOthers(t *testing.T) {
 		t.Errorf("after the hello: %+v, %v", s, err)
 	}
 }
+
+// A sheet with the right types but invalid content is unreadable too, and a
+// patch to an unreadable row says the machine must send a hello.
+func TestAnInvalidStoredSheetIsMissingAndAPatchAsksForAHello(t *testing.T) {
+	t.Parallel()
+	r := newCitadel(t)
+	addMachine(t, r.db, "m1", "odd", "")
+	if _, err := r.db.Writer().Exec(`UPDATE machines SET sheet = ? WHERE machine_id = 'm1'`, `{"os":"plan9","arch":"x","providers":[]}`); err != nil {
+		t.Fatal(err)
+	}
+	s, err := r.reg.Sheet(t.Context(), "m1")
+	if err != nil || s.OS != "" {
+		t.Fatalf("Sheet = %+v, %v; want no sheet", s, err)
+	}
+	err = r.patch(t, "m1", protocol.Object{"rev": json.RawMessage(`5`), "arch": json.RawMessage(`"arm64"`)})
+	var pe *protocol.Error
+	if !errors.As(err, &pe) || pe.Code != protocol.CodeInvalidPayload {
+		t.Errorf("patch = %v, want invalid_payload", err)
+	}
+}

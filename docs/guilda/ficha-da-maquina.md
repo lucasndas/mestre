@@ -72,7 +72,7 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 
 - **"Precisa de interface"** (`gui: true`) é atendido **só** pela base do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc): só é aceito numa base `operador` e nas fichas dela; em qualquer outra base, ficha ou classe, é recusado ao salvar. Fora do Operador não há agentes com tela ([ADR 0020](../decisoes/0020-linux-e-windows-em-qualquer-papel.md)).
 - Uma ficha recebida com campo desconhecido é aceita (o campo é ignorado); sem os campos obrigatórios (`os`, `arch`, `providers`), a conexão recebe `invalid_payload`, e um `machine.sheet` que deixaria a ficha assim também. Máquina fora da Guilda (removida, ou que nunca entrou) recebe `forbidden`.
-- Uma ficha **guardada** que não se lê mais (campos com tipo errado) não derruba a Guilda: o registro avisa no log e trata aquela máquina como sem ficha (não atende nenhum requisito) até o próximo `hello` trocá-la; a listagem e a escolha das outras máquinas seguem normais (CA-FMAQ-07).
+- Uma ficha **guardada** que não se lê mais (campos com tipo errado, ou conteúdo que o `hello` recusaria) não derruba a Guilda: o registro avisa no log (uma vez por máquina e motivo) e trata aquela máquina como sem ficha (não atende nenhum requisito) até o próximo `hello` trocá-la (um `machine.sheet` parcial nesse meio tempo recebe `invalid_payload`, pedindo a ficha inteira); a listagem e a escolha das outras máquinas seguem normais (CA-FMAQ-07).
 - A ficha nunca leva segredos: perfis de conta aparecem só pelo nome e pelo estado do login.
 
 ## Critérios de aceite
