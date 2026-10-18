@@ -30,10 +30,18 @@ func TestLinuxAccessSetsTheMode(t *testing.T) {
 	}
 }
 
-func TestTheDefaultAccessIsTheOneOfTheDocument(t *testing.T) {
+// CA-LOCAL-15
+// The socket is for the account of the agents of its own instance: mestre-agente
+// for the principal one, mestre-agente-<inst> for the others (the agents of
+// an instance reach its channel and not the channel of another).
+func TestTheDefaultAccessIsTheOneOfTheInstance(t *testing.T) {
 	t.Parallel()
-	a, ok := localchan.DefaultAccess().(localchan.LinuxAccess)
-	if !ok || a.Mode != 0o660 || a.Group != "mestre-agente" {
-		t.Fatalf("default access = %#v", localchan.DefaultAccess())
+	for instance, group := range map[string]string{
+		"": "mestre-agente", localchan.DefaultInstance: "mestre-agente", "x": "mestre-agente-x", "ci_2": "mestre-agente-ci_2",
+	} {
+		a, ok := localchan.DefaultAccess(instance).(localchan.LinuxAccess)
+		if !ok || a.Mode != 0o660 || a.Group != group {
+			t.Errorf("access of instance %q = %#v, want mode 0660 and the group %s", instance, localchan.DefaultAccess(instance), group)
+		}
 	}
 }

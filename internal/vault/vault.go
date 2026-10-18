@@ -348,12 +348,18 @@ func (v *Vault) decrypt(ctx context.Context, name string) ([]byte, Type, error) 
 	if err := v.errLocked(); err != nil {
 		return nil, "", fmt.Errorf("read secret %q: %w", name, err)
 	}
+	return decryptRow(ctx, v.cfg.DB, v.ring, name)
+}
+
+// decryptRow reads the named secret of db and opens it with the ring. It only
+// reads, so db may be a replica.
+func decryptRow(ctx context.Context, db *store.DB, ring *keyring, name string) ([]byte, Type, error) {
 	var (
 		typ        string
 		ct, nonce  []byte
 		keyVersion uint32
 	)
-	err := v.cfg.DB.Reader().QueryRowContext(ctx,
+	err := db.Reader().QueryRowContext(ctx,
 		`SELECT type, ciphertext, nonce, key_version FROM secrets WHERE name = ?`, name).
 		Scan(&typ, &ct, &nonce, &keyVersion)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -362,7 +368,7 @@ func (v *Vault) decrypt(ctx context.Context, name string) ([]byte, Type, error) 
 	if err != nil {
 		return nil, "", fmt.Errorf("vault: read secret %q: %w", name, err)
 	}
-	k := v.ring.get(keyVersion)
+	k := ring.get(keyVersion)
 	if k == nil {
 		return nil, "", fmt.Errorf("vault: secret %q: key version %d is not available: %w", name, keyVersion, ErrVerification)
 	}
