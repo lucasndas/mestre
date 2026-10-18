@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/user"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -196,16 +198,51 @@ func TestDropInheritable(t *testing.T) {
 	}
 }
 
+// CA-TERM-15
+// The mestre-pty never runs as the account of the launcher, which owns the
+// vault and the database (the unit has User=mestre): a launcher with no account
+// of the agents, or with its own, refuses to start instead of starting the
+// terminals as itself, unless it is told to, which only the full suite does (it
+// starts a launcher as the user who runs it).
 func TestLookupAgent(t *testing.T) {
 	t.Parallel()
-	if c, err := launcher.LookupAgent(""); c != nil || err != nil {
-		t.Errorf("no name = %v, %v; want to start as this user", c, err)
+	self, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := launcher.LookupAgent("no-such-account-mestre"); err == nil {
+	for _, name := range []string{"", self.Username} {
+		if c, err := launcher.LookupAgent(name, false); c != nil || err == nil {
+			t.Errorf("account %q of the launcher itself, in production = %v, %v; want it refused", name, c, err)
+		}
+		if os.Geteuid() == 0 {
+			continue // AllowSelf as root would start the terminals as root; the other cases do not run as root
+		}
+		if c, err := launcher.LookupAgent(name, true); c != nil || err != nil {
+			t.Errorf("account %q with AllowSelf = %v, %v; want to start as this user", name, c, err)
+		}
+	}
+	if _, err := launcher.LookupAgent("no-such-account-mestre", false); err == nil {
 		t.Error("an account that does not exist was found")
 	}
-	if _, err := launcher.LookupAgent("root"); err == nil && os.Geteuid() != 0 {
+	if _, err := launcher.LookupAgent("root", false); err == nil && os.Geteuid() != 0 {
 		t.Error("root accepted as the agent account")
+	}
+}
+
+// CA-TERM-15
+// Prepare, the way the service builds the launcher, refuses before it opens its
+// socket: the configuration has no account of the agents.
+func TestPrepareRefusesALauncherWithoutTheAccountOfTheAgents(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := launcher.RunConfig{SocketPath: filepath.Join(dir, "l.sock"), BinDir: dir, SocketDir: dir}
+	srv, ln, err := launcher.Prepare(cfg)
+	if err == nil {
+		_ = ln.Close()
+		t.Fatalf("Prepare with no account of the agents = %v", srv)
+	}
+	if _, err := os.Stat(cfg.SocketPath); err == nil {
+		t.Error("the launcher opened its socket before it refused")
 	}
 }
 

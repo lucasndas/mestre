@@ -12,7 +12,8 @@ var gitSubcommands = strings.Fields(`add am apply archive bisect blame branch bu
 config describe diff fetch fetch-pack filter-branch filter-repo format-patch fsck gc grep http-push init log ls-files
 ls-remote maintenance merge mv notes pack-refs prune prune-packed pull push range-diff read-tree rebase reflog remote
 repack replace request-pull reset restore revert rm send-pack shortlog show sparse-checkout stash status submodule
-switch symbolic-ref tag update-index update-ref worktree write-tree fast-import`)
+switch symbolic-ref tag update-index update-ref worktree write-tree fast-import commit-graph multi-pack-index index-pack unpack-objects
+bundle pack-objects clone init`)
 
 // The reach of a pattern knows every git subcommand the fixed rules deny:
 // gitFixed is the same set the git analysis uses.

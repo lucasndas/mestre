@@ -44,7 +44,10 @@ var (
 type JoinRequest struct {
 	// Name is the name of the computer; the Citadel adds a suffix when it is
 	// already taken.
-	Name     string `json:"name"`
+	Name string `json:"name"`
+	// OS is linux or windows, and Instance, when it comes, follows
+	// ValidInstance: the route is open, and the Citadel refuses any other text
+	// (it reaches the question to the Owner and the registry of the Guild).
 	OS       string `json:"os,omitempty"`
 	Hostname string `json:"hostname"`
 	Instance string `json:"instance,omitempty"`

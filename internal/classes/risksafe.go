@@ -89,7 +89,7 @@ func init() {
 	addSafe("hostname", safeSpec{group: safeRead, deny: []string{"-F", "--file", "-b", "--boot"}, shape: noOperands})
 	addSafe("file", safeSpec{group: safeRead, deny: []string{"-C", "--compile"}})
 	addSafe("tree", safeSpec{group: safeRead, deny: []string{"-o", "-R"}})
-	addSafe("rg", safeSpec{group: safeRead, code: []string{"--pre"}})
+	addSafe("rg", safeSpec{group: safeRead, code: []string{"--pre", "--hostname-bin"}})
 	addSafe("find", safeSpec{group: safeRead, code: []string{"-exec", "-execdir", "-ok", "-okdir"},
 		deny: []string{"-delete", "-fprint", "-fprint0", "-fprintf", "-fls"}})
 	addSafe("sort", safeSpec{group: safeRead, code: []string{"--compress-program"}, deny: []string{"-o", "--output"}})

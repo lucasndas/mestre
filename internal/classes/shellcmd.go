@@ -56,6 +56,14 @@ func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 		res.fixedDeny(reasonTooMuch)
 		return res
 	}
+	if hasControlByte(cmd) {
+		res.fixedDeny(reasonControl)
+		return res
+	}
+	// What a part does to the home of git holds for the parts after it in this
+	// text, and for the texts it runs, not for the one around it.
+	set := e.homeSet
+	defer func() { e.homeSet = set }()
 	parts, opaque, grouped := parseLine(cmd, d)
 	for _, bound := range []string{braceTooLarge, reasonTooDeep} {
 		if slices.Contains(opaque, bound) || partsHold(parts, bound) {
@@ -74,9 +82,17 @@ func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 			res.fixedDeny(reasonTooMuch)
 			return res
 		}
+		// A prefix assignment of HOME (and the like) is for the command it
+		// prefixes, and for what that command runs.
+		scope := e.homeScope
+		if n := assignedHome(&parts[i]); n != "" && len(parts[i].words) > 0 {
+			e.homeScope = n
+		}
 		res.merge(e.part(&parts[i], d, st, depth))
 		res.merge(e.stdinBodies(parts, i, st, depth))
 		res.merge(e.pipeDecision(parts, i, d, st, depth))
+		e.homeScope = scope
+		e.noteHome(&parts[i])
 		e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
 			// cd x && …, in a line without subshells or pipes: the rest
@@ -101,18 +117,11 @@ func (e *evaluator) part(p *simple, d dialect, st *shellState, depth int) result
 		res.merge(e.shell(s, st.cwds[0], depth+1))
 		res.atLeastAsk("substituição de comando")
 	}
-	gitCmd := len(p.words) > 0 && isGitProgram(canonical(p.words[0].text))
 	for _, a := range p.assigns {
-		name := a.text[:a.assign]
-		e.gitEnv(&res, name)
-		if gitCmd {
-			switch strings.ToUpper(name) {
-			case "HOME", "XDG_CONFIG_HOME":
-				// Before git, these point git at another ~/.gitconfig, like
-				// GIT_CONFIG_GLOBAL: a fixed deny.
-				res.fixedDeny(name + " antes do git aponta a configuração global do git para fora")
-			}
-		}
+		e.gitEnv(&res, a.text[:a.assign])
+	}
+	if n := pwshEnvAssign(p); n != "" {
+		e.gitEnv(&res, n)
 	}
 	for _, r := range p.redirs {
 		if r.op == "<<" || r.op == "<<<" || isDevice(r.target.text) {
@@ -161,12 +170,11 @@ func wordsText(ws []word) []string {
 }
 
 var (
-	elevation  = map[string]bool{"sudo": true, "su": true, "doas": true, "pkexec": true, "runas": true, "gsudo": true}
-	startProc  = map[string]bool{"start-process": true, "saps": true, "start": true}
-	agentCLIs  = map[string]bool{"claude": true, "codex": true, "agy": true}
-	pkgRunners = map[string]bool{"npx": true, "bunx": true, "pnpx": true}
-	shells     = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "mksh": true, "csh": true, "tcsh": true, "rbash": true, "yash": true, "nu": true, "elvish": true, "xonsh": true, "posh": true, "oksh": true, "loksh": true, "pdksh": true, "lksh": true}
-	pwshNames  = map[string]bool{"pwsh": true, "powershell": true}
+	elevation = map[string]bool{"sudo": true, "sudoedit": true, "su": true, "doas": true, "pkexec": true, "run0": true, "please": true, "pleaser": true, "runuser": true, "runas": true, "gsudo": true, "psexec": true, "psexec64": true, "nsudo": true, "nsudolc": true, "nsudolg": true}
+	startProc = map[string]bool{"start-process": true, "saps": true, "start": true}
+	agentCLIs = map[string]bool{"claude": true, "codex": true, "agy": true}
+	shells    = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "mksh": true, "csh": true, "tcsh": true, "rbash": true, "yash": true, "nu": true, "elvish": true, "xonsh": true, "posh": true, "oksh": true, "loksh": true, "pdksh": true, "lksh": true}
+	pwshNames = map[string]bool{"pwsh": true, "powershell": true}
 	// interpreters run a file given as an argument.
 	interpreters = map[string]bool{
 		"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "csh": true, "tcsh": true, "mksh": true, "rbash": true, "yash": true, "nu": true, "elvish": true, "xonsh": true, "posh": true, "oksh": true, "loksh": true, "pdksh": true, "lksh": true,
@@ -191,6 +199,9 @@ var programEnv = map[string]bool{
 	// programs git and the read-only commands start by themselves
 	"GIT_PAGER": true, "PAGER": true, "GIT_EXTERNAL_DIFF": true, "GIT_SSH": true, "GIT_SSH_COMMAND": true, "GIT_EDITOR": true,
 	"EDITOR": true, "VISUAL": true, "GIT_ASKPASS": true, "SSH_ASKPASS": true, "LESSOPEN": true, "LESSCLOSE": true,
+	"GIT_SEQUENCE_EDITOR": true, "GIT_PROXY_COMMAND": true, "GIT_TEMPLATE_DIR": true,
+	// ripgrep reads its arguments (--pre among them) from the file this names
+	"RIPGREP_CONFIG_PATH": true,
 }
 
 // gitEnv checks an assignment: one that points git at another repository is
@@ -209,10 +220,22 @@ func (e *evaluator) gitEnv(res *result, name string) {
 // around it, which deny and ask patterns also see.
 func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, outer []string) result {
 	res := newResult()
+	scope := e.homeScope // what an env around the command sets is for it alone
+	defer func() { e.homeScope = scope }()
 	name := ws[0]
 	cn := canonical(name.text)
 	args := ws[1:]
 	argText := wordsText(args)
+	// The text of this command is what the deny and ask patterns see around
+	// the commands it runs; building it costs its length at each level of a
+	// chain of wrappers (exec exec … git push), which would be quadratic if
+	// it were free.
+	text := strings.Join(wordsText(ws), " ")
+	if e.spend(len(text)) {
+		res.fixedDeny(reasonTooMuch)
+		return res
+	}
+	around := append(outer, text)
 
 	// The program itself, when given by path.
 	if strings.ContainsAny(name.text, `/\`) || strings.HasPrefix(name.text, ".") && cn != "." {
@@ -229,7 +252,7 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	// (docs/classes/classificacao-de-risco.md).
 	if written, targets := e.madeProgram(cn, ws, st); written || len(targets) > 0 {
 		for _, k := range targets {
-			res.merge(e.command(asProgram(k, ws), d, st, depth+1, append(outer, strings.Join(wordsText(ws), " "))))
+			res.merge(e.command(asProgram(k, ws), d, st, depth+1, around))
 		}
 		if written {
 			res.atLeastAsk("programa criado antes na mesma linha")
@@ -245,18 +268,52 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		res.fixedDeny("Start-Process -Verb RunAs pede privilégio de administrador")
 	case agentCLIs[cn]:
 		res.fixedDeny(fmt.Sprintf("%s só nasce pelo motor, nunca pelo shell", cn))
-	case pkgRunners[cn] && runsAgentCLI(argText):
-		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
-	case (cn == "npm" || cn == "pnpm" || cn == "yarn") && len(argText) > 0 && (argText[0] == "exec" || argText[0] == "dlx" || argText[0] == "x") && runsAgentCLI(argText[1:]):
+	case agentRunner(cn, args):
 		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
 	}
-	if cn == "export" || cn == "declare" || cn == "typeset" || cn == "setx" || cn == "set" {
-		for _, a := range argText {
-			if n, _, ok := strings.Cut(a, "="); ok {
-				e.gitEnv(&res, n)
-			} else if cn == "setx" && len(argText) > 0 {
-				e.gitEnv(&res, argText[0])
-			}
+	for _, inner := range runnerCommands(cn, args) {
+		// npx git push: what a package runner runs is a command, and a fixed
+		// rule on it denies (the rest is for the class to decide).
+		e.nested(&res, inner, d, st, depth, around, true)
+	}
+	if inner := e.wrapped(cn, args, &res); len(inner) > 0 {
+		// setarch x86_64 git push, cross-env HOME=x git status, corepack npx claude
+		e.nested(&res, inner, d, st, depth, around, true)
+	}
+	if call, ok := runnerCall(cn, args); ok {
+		// npx -c 'git push': a command line, as sh -c
+		res.merge(e.shell(call, st.cwds[0], depth+1))
+		res.atLeastAsk("comando dentro de um argumento de " + cn)
+	}
+	if line, ok := winCreate(cn, args); ok {
+		// wmic process call create "git push"
+		res.merge(e.shell(line, st.cwds[0], depth+1))
+		res.atLeastAsk("comando dentro de um argumento de " + cn)
+	}
+	if v := e.homeMoved(); v != "" && isGitProgram(cn) {
+		res.fixedDeny(v + " alterado antes do git aponta a configuração global do git para fora")
+	}
+	if startProc[cn] {
+		// The program Start-Process launches is a command of its own.
+		cmds, unknown := startCommands(cn, args)
+		for _, inner := range cmds {
+			e.nested(&res, inner, d, st, depth, around, false)
+		}
+		if unknown {
+			res.atLeastAsk("parâmetro do Start-Process que não se analisa")
+		}
+	}
+	if cn == "." && d == dialectPwsh && len(args) > 0 {
+		// . git push: the dot operator runs a command, as & does.
+		e.nested(&res, args, d, st, depth, around, false)
+	}
+	if shellVarBuiltins[cn] || cn == "unset" || pwshEnvSet[cn] || pwshEnvRemove[cn] {
+		assigned, removed := varNames(cn, argText)
+		for _, n := range assigned {
+			e.gitEnv(&res, n)
+		}
+		for _, n := range removed {
+			e.envRemoved(&res, n)
 		}
 	}
 
@@ -268,7 +325,7 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 			}
 			return res
 		}
-		res.merge(e.command(inner, d, st, depth, append(outer, strings.Join(wordsText(ws), " "))))
+		res.merge(e.command(inner, d, st, depth, around))
 		if extra != "" {
 			res.atLeastAsk(extra)
 		}
@@ -360,6 +417,28 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	return res
 }
 
+// nested analyses the command another one runs (a launcher, a package
+// runner, the dot operator, a wrapper): it costs work and nests, so a chain
+// of them is bounded and cannot grow the analysis exponentially. With
+// fixedOnly only what the fixed rules say of it counts; the rest is for the
+// class to decide on the wrapper.
+func (e *evaluator) nested(res *result, inner []word, d dialect, st *shellState, depth int, around []string, fixedOnly bool) {
+	if depth >= maxDepth {
+		res.fixedDeny("comando aninhado demais para ser analisado")
+		return
+	}
+	if e.spend(costNested) {
+		res.fixedDeny(reasonTooMuch)
+		return
+	}
+	r := e.command(inner, d, st, depth+1, around)
+	if fixedOnly {
+		res.fixed.worse(r.fixed)
+		return
+	}
+	res.merge(r)
+}
+
 // commandRule applies the decrees and the commands block to a simple
 // command. Allow patterns see the command as written; deny and ask see it
 // also with the program's base name and with the wrappers around it.
@@ -389,42 +468,6 @@ func hasRunAs(args []string) bool {
 		if l == "runas" || strings.HasSuffix(l, ":runas") {
 			return true
 		}
-	}
-	return false
-}
-
-// runsAgentCLI reports whether a package runner's first operand is a CLI of
-// an agent.
-func runsAgentCLI(args []string) bool {
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if a == "-p" || a == "--package" {
-			if i+1 < len(args) && isAgentPackage(args[i+1]) {
-				return true
-			}
-			i++
-			continue
-		}
-		if strings.HasPrefix(a, "--package=") && isAgentPackage(strings.TrimPrefix(a, "--package=")) {
-			return true
-		}
-		if strings.HasPrefix(a, "-") {
-			continue
-		}
-		return isAgentPackage(a)
-	}
-	return false
-}
-
-func isAgentPackage(p string) bool {
-	p = strings.ToLower(p)
-	if i := strings.LastIndex(p, "@"); i > 0 {
-		p = p[:i]
-	}
-	base := p[strings.LastIndex(p, "/")+1:]
-	switch base {
-	case "claude", "claude-code", "codex", "agy", "antigravity":
-		return true
 	}
 	return false
 }
@@ -479,38 +522,8 @@ func (e *evaluator) unwrap(cn string, args []word, res *result) (inner []word, e
 		}
 		return rest, "", true
 	case "env":
-		i := 0
-		for i < len(args) {
-			a := args[i].text
-			switch {
-			case a == "-u" || a == "--unset":
-				i += 2
-				continue
-			case a == "-C" || a == "--chdir":
-				return args[min(i+2, len(args)):], "env -C", true
-			case strings.HasPrefix(a, "--chdir="):
-				return args[i+1:], "env -C", true
-			case a == "-S" || a == "--split-string":
-				if i+1 >= len(args) {
-					return nil, "env -S", true
-				}
-				var split []word
-				for _, f := range strings.Fields(args[i+1].text) {
-					split = append(split, word{text: f, assign: -1})
-				}
-				return append(split, args[i+2:]...), "env -S", true
-			case strings.HasPrefix(a, "-"):
-				i++
-				continue
-			case strings.Contains(a, "=") && args[i].assign > 0:
-				n, _, _ := strings.Cut(a, "=")
-				e.gitEnv(res, n)
-				i++
-				continue
-			}
-			break
-		}
-		return args[min(i, len(args)):], "", true
+		inner, extra := e.envInner(args, res)
+		return inner, extra, true
 	case "xargs":
 		rest := skip(map[string]bool{"-a": true, "-d": true, "-E": true, "-I": true, "-L": true, "-n": true, "-P": true, "-s": true, "--arg-file": true, "--delimiter": true, "--max-args": true, "--max-procs": true, "--max-chars": true, "--max-lines": true, "--replace": true})
 		if len(rest) == 0 {
@@ -584,7 +597,7 @@ func nestedShell(cn string, args []word) (nested string, d dialect, why string, 
 		return "", dialectPwsh, "Invoke-Command", true
 	case pwshNames[cn]:
 		for i := 0; i < len(texts); i++ {
-			l := strings.ToLower(texts[i])
+			l := strings.ToLower(pwshDashFix(texts[i])) // pwsh –Command: the en dash is a dash
 			switch {
 			case l == "-encodedcommand" || l == "-enc" || l == "-e" || l == "-ec":
 				if i+1 < len(texts) {
@@ -857,11 +870,17 @@ var readOnlyNames = map[string]bool{
 // patternFirst are the readers whose first operand is a pattern.
 var patternFirst = map[string]bool{"grep": true, "rg": true, "select-string": true, "sls": true}
 
-// valueOptions take the next word as a value that is not a path.
-var valueOptions = map[string]bool{
-	"-n": true, "-c": true, "-A": true, "-B": true, "-C": true, "-m": true, "-e": true, "-g": true, "-t": true, "-T": true,
-	"-j": true, "-I": true, "-d": true, "-s": true, "-M": true, "-E": true, "--glob": true, "--type": true, "--regexp": true,
-	"--max-count": true, "--context": true, "--max-depth": true, "--sort": true, "--color": true, "--ignore": true,
+// writeValued are, for the commands that write, the options that take the
+// next word as a value that is not a path to write (a mode, a suffix, a
+// timestamp). It is per command: touch -m and rsync -o are switches, and one
+// that is taken for an option with a value swallows the file after it.
+var writeValued = map[string]map[string]bool{
+	"touch":    set("-d -t -r --date --reference --time"),
+	"mkdir":    set("-m --mode"),
+	"truncate": set("-s -r --size --reference"),
+	"cp":       set("-t -S --target-directory --suffix"),
+	"mv":       set("-t -S --target-directory --suffix"),
+	"install":  set("-m -o -g -t -S --mode --owner --group --target-directory --suffix"),
 }
 
 // pwshValueParams are PowerShell parameters whose value is not a path.
@@ -913,7 +932,7 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 	case "rmdir":
 		all(ops(nil), use{write: true, recursive: true})
 	case "touch", "mkdir", "truncate":
-		all(ops(map[string]bool{"-m": true, "-s": true, "-r": true, "-d": true, "-t": true}), use{write: true})
+		all(ops(writeValued[cn]), use{write: true})
 	case "tee":
 		all(ops(nil), use{write: true})
 	case "ln", "link", "mklink":
@@ -923,7 +942,7 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 			uses = append(uses, pathUse{lp.link, use{write: true}}, pathUse{lp.targetWord(), use{write: true}})
 		}
 	case "cp", "mv", "install", "rsync":
-		o := ops(map[string]bool{"-t": true, "-S": true, "-m": true, "-o": true, "-g": true, "--suffix": true, "--target-directory": true})
+		o := ops(writeValued[cn])
 		var dest []word
 		if t := targetDirWord(args); t != nil {
 			dest = []word{*t}
@@ -970,6 +989,10 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 			o = o[1:]
 		}
 		all(o, use{write: inPlace})
+		// The file of a script (-f F) is read, not written by -i.
+		if w := flagValue(args, "-f", "--file"); w != nil {
+			all([]word{*w}, use{})
+		}
 	case "dd":
 		for _, a := range args {
 			if v, ok := strings.CutPrefix(a.text, "of="); ok {
@@ -991,6 +1014,9 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 		for _, w := range decompressorOutputs(cn, args) {
 			uses = append(uses, pathUse{w, use{write: true}})
 		}
+	case "start-process", "saps", "start":
+		// The program and its arguments are a command of their own (startCommands).
+		uses = startPathUses(args)
 	case "tar", "bsdtar", "gtar", "star", "unzip", "7z", "7za", "7zr", "7zz",
 		"dpkg-deb", "unsquashfs", "cabextract", "xcopy", "robocopy", "fsutil":
 		// Archive extraction and Windows copy tools write a tree under a
@@ -999,14 +1025,9 @@ func pathUses(cn string, args []word, d dialect) (uses []pathUse, readOnly bool)
 		uses = append(uses, extractDest(cn, args)...)
 	default:
 		if readOnlyNames[cn] {
-			o := ops(valueOptions)
-			if patternFirst[cn] && flagValue(args, "-e", "-f", "--regexp", "--file") == nil && len(o) > 0 {
-				o = o[1:]
-			}
 			// rg, grep -r, ls -R and Get-ChildItem -Recurse read the whole tree.
 			deep := cn == "rg" || (cn == "grep" && hasShortFlag(args, 'r', 'R')) || hasFlag(args, "-R", "--recursive") || hasFlagFold(args, "-recurse")
-			all(o, use{recursive: deep})
-			return uses, true
+			return readOnlyUses(cn, args, deep)
 		}
 		// Any other command: the arguments that look like paths are read.
 		for _, a := range args {
