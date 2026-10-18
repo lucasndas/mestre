@@ -471,6 +471,7 @@ type fakeProc struct {
 
 	mu       sync.Mutex
 	typed    []string
+	changed  chan struct{} // closed at the next Input (waitTyped)
 	screen   characters.Screen
 	stops    []stopCall
 	exited   chan struct{}
@@ -494,7 +495,35 @@ func (p *fakeProc) Input(_ context.Context, data []byte) error {
 		return p.inputErr
 	}
 	p.typed = append(p.typed, string(data))
+	if p.changed != nil {
+		close(p.changed)
+		p.changed = nil
+	}
 	return nil
+}
+
+// waitTyped waits until n inputs were typed (by another goroutine, maybe of
+// another machine) and returns them; it fails the test when ctx ends first.
+func (p *fakeProc) waitTyped(t testing.TB, ctx context.Context, n int) []string {
+	t.Helper()
+	for {
+		p.mu.Lock()
+		if len(p.typed) >= n {
+			typed := slices.Clone(p.typed)
+			p.mu.Unlock()
+			return typed
+		}
+		if p.changed == nil {
+			p.changed = make(chan struct{})
+		}
+		ch := p.changed
+		p.mu.Unlock()
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			t.Fatalf("waiting for %d input(s): %v; typed %q", n, ctx.Err(), p.typedAll())
+		}
+	}
 }
 
 func (p *fakeProc) Screen(context.Context) (characters.Screen, error) {
