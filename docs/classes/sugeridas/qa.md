@@ -32,7 +32,7 @@ Corpo (instruções):
 ```yaml
 version: 1
 files:
-  write: ["tests/**", "test/**", "**/*_test.*", "**/*.test.*", "**/*.spec.*", "docs/evidencias/**"]
+  write: ["tests/**", "test/**", "**/*_test.*", "**/*.test.*", "**/*.spec.*", "**/test_*.py", "**/__tests__/**", "spec/**", "docs/evidencias/**"]
 git:
   commit: true
 commands:
