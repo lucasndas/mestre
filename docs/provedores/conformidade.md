@@ -1,6 +1,6 @@
 # Teste de conformidade dos provedores
 
-> **Assunto:** teste automático que confirma, com o provedor real, que instruções, skills, hooks e permissões funcionam · **Componente:** Todos · **Atualizado:** 2026-10-15
+> **Assunto:** teste automático que confirma, com o provedor real, que instruções, skills, hooks e permissões funcionam · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -66,7 +66,7 @@ Ao longo das etapas, todo evento esperado do mapa para aquele provedor precisa t
 - **Etapa 6:** o endpoint da rodada não é o de uma instância instalada, então o modo degradado não tem retrato e só leitura vale: o comando é `git status`. O tempo é o da chamada até o despachante desistir da conexão. O Antigravity não tem `allow` por hook e pergunta pela tela nativa: ela é respondida com a decisão degradada que o `mestre hook` toma (o executor a calcula do retrato e das regras fixas, como o despachante), então a leitura roda; sem essa decisão, a tela é negada e o turno não termina.
 - **Eventos exigidos:** os que as etapas causam: `session_start`, `turn_start`, `pre_tool`, `post_tool` e `turn_end` nos três; `pre_compact` e `session_end` no Claude e no Codex; `usage` (statusLine) no Claude.
 - **Peças de marcos seguintes**, por interfaces: o checklist (M7), o registro de uso como "sistema" (M5) e o modo do diagnóstico com IA (M7; sem ele, a etapa 11 é "não se aplica"). O requisito `provider` da [ficha](../guilda/ficha-da-maquina.md#requisitos) lê os resultados (`Probe`).
-- **Rodada manual:** `tools/conformance` (comentário do arquivo), como `mestre-agente`, com `MESTRE_REAL_CLI=1`; `setup-codex` é a confiança dos hooks na configuração do perfil Codex. A primeira rodada está na [ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem).
+- **Rodada manual:** `tools/conformance` (comentário do arquivo), como `mestre-agente`, com `MESTRE_REAL_CLI=1`; `setup-codex` é a confiança dos hooks na configuração do perfil Codex. O resultado de cada provedor está no documento dele ([Claude Code](claude-code.md), [Codex](codex.md), [Antigravity](antigravity.md)); o histórico das rodadas fica no git.
 
 ## Regras e erros
 
