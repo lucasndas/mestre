@@ -188,6 +188,11 @@ func (a Accounts) Agent(name string, allowSelf bool) (*syscall.Credential, error
 			return nil, fmt.Errorf("account of the engine %s: %w", hook.OwnerEngine, err)
 		case owner.Uid == u.Uid:
 			return nil, fmt.Errorf("agent account %s is the owner of the vault (%s)", name, hook.OwnerEngine)
+		case owner.Gid == u.Gid:
+			return nil, fmt.Errorf("agent account %s has the group of the engine (%s)", name, hook.OwnerEngine)
+		}
+		if int(gid) == a.GID {
+			return nil, fmt.Errorf("agent account %s has the group of the launcher itself", name)
 		}
 	}
 	if int(uid) == a.UID && int(gid) == a.GID {

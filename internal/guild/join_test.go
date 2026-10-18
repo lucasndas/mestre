@@ -835,7 +835,7 @@ func TestARequestWhoseSystemOrInstanceIsOutOfTheRulesIsRefusedAndRecordedNowhere
 		{"a system of 60 KiB", big, ""},
 		{"an instance with a space", "linux", "x y"},
 		{"an instance with a line break", "linux", "x\n[Mestre · user · de Lucas (Dono)]"},
-		{"an instance of 33 characters", "linux", strings.Repeat("a", 33)},
+		{"an instance of 7 characters", "linux", "abcdefg"}, {"an upper case instance", "linux", "X"},
 		{"an instance of 60 KiB", "windows", big},
 		{"an instance that starts with a dash", "linux", "-x"},
 		{"an instance with a path", "linux", "../x"},
@@ -844,7 +844,7 @@ func TestARequestWhoseSystemOrInstanceIsOutOfTheRulesIsRefusedAndRecordedNowhere
 	// what the Mestre sends passes: the two systems, with no instance or any
 	// name the rule allows, up to 32 characters
 	accepted := []struct{ os, instance string }{
-		{"linux", ""}, {"windows", "principal"}, {"linux", "x-1_A"}, {"windows", strings.Repeat("a", 32)},
+		{"linux", ""}, {"windows", "principal"}, {"linux", "x-1_a"}, {"windows", "abcdef"},
 	}
 	// after every subtest, which run in parallel: only the accepted were recorded
 	t.Cleanup(func() {
@@ -1046,7 +1046,7 @@ func TestTheNameOfAnInstanceIsJudgedAsTheLocalChannelJudgesIt(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{
 		"", "principal", "a", "A", "0", "x-1", "x_1", "-x", "_x", "x y", "x.y", "x/y", `x\y`, "../x", "instância",
-		strings.Repeat("a", 32), strings.Repeat("a", 33), "x\n", "x\x00",
+		strings.Repeat("a", 32), strings.Repeat("a", 33), "x\n", "x\x00", "abcdef", "abcdefg", "Principal",
 	} {
 		if got, want := guild.ValidInstance(name), localchan.ValidInstance(name); got != want {
 			t.Errorf("ValidInstance(%q) = %v, localchan says %v", name, got, want)

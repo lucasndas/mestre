@@ -475,8 +475,18 @@ func (c *Character) machineFolders(p CharacterPlan) error {
 		if c.osName() == "windows" {
 			continue // the ACL is the installer's
 		}
-		if err := os.Chmod(f.dir, f.mode); err != nil {
-			return fmt.Errorf("set the mode of %s: %w", f.dir, err)
+		// chmod clears setgid when the caller is not in the group of the
+		// folder, which the engine is not (the folder inherited the group of
+		// the agents from agentes/): leave a folder that already has the mode
+		// alone, and do not accept one that lost the bit.
+		const bits = fs.ModePerm | fs.ModeSetgid | fs.ModeSticky
+		if fi, err := os.Stat(f.dir); err != nil || fi.Mode()&bits != f.mode {
+			if err := os.Chmod(f.dir, f.mode); err != nil {
+				return fmt.Errorf("set the mode of %s: %w", f.dir, err)
+			}
+			if fi, err := os.Stat(f.dir); err != nil || fi.Mode()&bits != f.mode {
+				return fmt.Errorf("%s does not keep the mode %v (setgid is lost when the engine is not in the group of the folder; umask or agentes/ without setgid)", f.dir, f.mode)
+			}
 		}
 	}
 	return nil

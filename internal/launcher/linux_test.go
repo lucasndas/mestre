@@ -281,7 +281,7 @@ func TestTheAgentAccountIsNeitherTheOwnerOfTheVaultNorRootNorTheGroupRoot(t *tes
 	t.Parallel()
 	users := map[string][2]int{
 		"mestre": {990, 990}, "mestre-agente": {991, 991}, "root": {0, 0},
-		"rootgroup": {995, 0}, "sameasvault": {990, 991}, "sharedgid": {996, 990},
+		"rootgroup": {995, 0}, "sameasvault": {990, 991}, "enginegroup": {996, 990},
 	}
 	for _, runAs := range []int{0, 990} {
 		a := fakeAccounts(runAs, runAs, users)
@@ -289,15 +289,11 @@ func TestTheAgentAccountIsNeitherTheOwnerOfTheVaultNorRootNorTheGroupRoot(t *tes
 		if err != nil || cred == nil || cred.Uid != 991 || cred.Gid != 991 {
 			t.Errorf("running as %d: agent = %v, %v; want 991:991", runAs, cred, err)
 		}
-		for _, name := range []string{"mestre", "root", "rootgroup", "sameasvault", "no-such-account"} {
+		for _, name := range []string{"mestre", "root", "rootgroup", "sameasvault", "enginegroup", "no-such-account"} {
 			if cred, err := a.Agent(name, false); err == nil || cred != nil {
 				t.Errorf("running as %d: account %q accepted: %v", runAs, name, cred)
 			}
 		}
-	}
-	// the group of the vault owner is not a reason to refuse: only its uid.
-	if _, err := fakeAccounts(0, 0, users).Agent("sharedgid", false); err != nil {
-		t.Errorf("an account in the group of the owner of the vault was refused: %v", err)
 	}
 	// where there is no account of the owner of the vault (a developer machine
 	// with the fast suite), the other checks stand.
