@@ -101,6 +101,78 @@ func TestAuditDatesGateTheNextMilestone(t *testing.T) {
 	}
 }
 
+// plusGate builds a tree with a M4 document (CA-D-01) and a M5 document
+// (CA-E-01), M0 to M4 audited, the row M4+ and the audit of M5 with the given
+// dates, and Go files by path.
+func plusGate(plus, m5 string, goFiles map[string]string) *tree {
+	tr := newTree().area("a")
+	tr.add("docs/a/m4.md", feature("M4", "D", nil))
+	tr.add("docs/a/m5.md", feature("M5", "E", nil))
+	tr.audit = map[int]string{0: audited, 1: audited, 2: audited, 3: audited, 4: audited, 5: m5}
+	tr.plus = &plus
+	tr.withOrder("| M4 | 1 | [m4](../a/m4.md) |", "| M5 | 1 | [m5](../a/m5.md) |")
+	for p, src := range goFiles {
+		tr.set(p, src)
+	}
+	return tr
+}
+
+// CA-VERDOCS-19
+func TestM4PlusSitsBetweenM4AndM5(t *testing.T) {
+	t.Parallel()
+	const ordem = "docs/desenvolvimento/ordem-de-implementacao.md"
+	until := func(m string) map[string]string {
+		return map[string]string{"internal/x/a.go": "package x\n\n// Until " + m + " it connects by pipes.\nfunc F() {}\n"}
+	}
+	cases := map[string]struct {
+		plus, m5 string
+		files    map[string]string
+		audit    []string // the audit errors, in order
+		stale    []string // the stale comment errors, in order
+	}{
+		"code of M5 and M4+ without a date": {
+			files: testFile("CA-E-01"),
+			audit: []string{ordem + ":14: auditoria: M4+ não tem data de auditoria e há código do M5 (internal/x/x_test.go:5, CA-E-01): audite o M4+ e registre a data antes"},
+		},
+		"M4+ audited, code of M5 allowed":  {plus: audited, files: testFile("CA-E-01")},
+		"code of M4 does not wait for M4+": {files: testFile("CA-D-01")},
+		"M5 audited and M4+ without a date": {
+			m5:    audited,
+			audit: []string{ordem + ":15: auditoria: M5 tem auditoria e M4+ não: os marcos são auditados em ordem"},
+		},
+		"M4+ and M5 audited": {plus: audited, m5: audited},
+		"future date":        {plus: "2026-10-13", audit: []string{"M4+: auditoria 2026-10-13 está no futuro (hoje é 2026-10-12 em UTC)"}},
+		"malformed date":     {plus: "13/10/2026", audit: []string{`M4+: auditoria "13/10/2026" inválida`}},
+		"comment that waits for M4+ before its audit": {files: until("M4+")},
+		"comment that waits for M4+ after its audit": {
+			plus: audited, files: until("M4+"),
+			stale: []string{`internal/x/a.go:3: comentário velho: "Until M4+": o M4+ já foi auditado (2026-10-01)`},
+		},
+		"comment that waits for M4 is still stale": {
+			files: until("M4"),
+			stale: []string{`internal/x/a.go:3: comentário velho: "Until M4": o M4 já foi auditado (2026-10-01)`},
+		},
+		"comment that waits for M5": {plus: audited, files: until("M5")},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			res := run1(t, plusGate(c.plus, c.m5, c.files))
+			for check, want := range map[string][]string{ckAudit: c.audit, ckStale: c.stale} {
+				got := only(res, check)
+				if len(got) != len(want) {
+					t.Fatalf("%s errors = %q, want %q", check, got, want)
+				}
+				for i, w := range want {
+					if !strings.Contains(got[i], w) {
+						t.Fatalf("%s error %d = %q, want %q", check, i, got[i], w)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestTableOfMilestonesNeedsTheAuditColumn(t *testing.T) {
 	t.Parallel()
 	tr := gate(nil, "", nil)

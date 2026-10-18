@@ -20,7 +20,9 @@ const (
 )
 
 var (
-	milestoneRowRe = regexp.MustCompile(`^\| M([0-9]+) \|`)
+	// milestoneRowRe reads a row of the table of milestones: `| M4 |`, or the
+	// row `| M4+ |` of the phase that closes M4, between M4 and M5.
+	milestoneRowRe = regexp.MustCompile(`^\| M([0-9]+)(\+)? \|`)
 	dateRe         = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
 	idPattern      = `CA-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]{2}`
 	// deferredRe finds `CA-X-10` and the range `CA-X-10 a CA-X-17`.
@@ -45,11 +47,31 @@ var (
 	staleSpikeRe = regexp.MustCompile(`\b(?i:waits?\s+for|waiting\s+for|until|pending|espera(?:ndo)?|aguarda(?:ndo)?)\s+(?:(?i:the|o)\s+)?(?i:spike)\s+([0-9]+)\b`)
 )
 
-// milestone is a row of the table of milestones.
+// milestone is a row of the table of milestones. M<n>+ is the phase between
+// M<n> and M<n+1>: it has no documents in the map, only an audit.
 type milestone struct {
 	n     int
+	plus  bool
 	audit string // AAAA-MM-DD, or "" while the milestone is not audited
 	line  int
+}
+
+// rank orders the milestones: M4 comes before M4+, and M4+ before M5.
+func rank(n int, plus bool) int {
+	if plus {
+		return 2*n + 1
+	}
+	return 2 * n
+}
+
+func (m *milestone) rank() int { return rank(m.n, m.plus) }
+
+// name is the milestone as the table writes it: M4 or M4+.
+func (m *milestone) name() string {
+	if m.plus {
+		return fmt.Sprintf("M%d+", m.n)
+	}
+	return fmt.Sprintf("M%d", m.n)
 }
 
 func splitRow(line string) []string {
@@ -65,7 +87,8 @@ func splitRow(line string) []string {
 }
 
 // loadMilestones reads the table of milestones with its audit column and
-// validates the dates. It returns nil when the table cannot be read.
+// validates the dates. The milestones come by rank, so M4+ falls between M4
+// and M5. It returns nil when the table cannot be read.
 func (c *checker) loadMilestones(od *doc) map[int]*milestone {
 	start, end, ok := od.section(milestonesHeader)
 	if !ok {
@@ -94,21 +117,21 @@ func (c *checker) loadMilestones(od *doc) map[int]*milestone {
 		}
 		cells := splitRow(line)
 		if col >= len(cells) {
-			c.errf(orderPath, i+1, ckAudit, "linha do M%s sem a coluna %q", m[1], auditColumn)
+			c.errf(orderPath, i+1, ckAudit, "linha do M%s%s sem a coluna %q", m[1], m[2], auditColumn)
 			continue
 		}
 		n, _ := strconv.Atoi(m[1])
-		ms := &milestone{n: n, audit: cells[col], line: i + 1}
-		out[n] = ms
+		ms := &milestone{n: n, plus: m[2] != "", audit: cells[col], line: i + 1}
+		out[ms.rank()] = ms
 		if ms.audit == "" {
 			continue
 		}
 		d, err := time.Parse(time.DateOnly, ms.audit)
 		switch {
 		case !dateRe.MatchString(ms.audit) || err != nil:
-			c.errf(orderPath, ms.line, ckAudit, "M%d: auditoria %q inválida; use AAAA-MM-DD ou deixe vazia", n, ms.audit)
+			c.errf(orderPath, ms.line, ckAudit, "%s: auditoria %q inválida; use AAAA-MM-DD ou deixe vazia", ms.name(), ms.audit)
 		case d.Format(time.DateOnly) > c.today.UTC().Format(time.DateOnly):
-			c.errf(orderPath, ms.line, ckAudit, "M%d: auditoria %s está no futuro (hoje é %s em UTC)", n, ms.audit, c.today.UTC().Format(time.DateOnly))
+			c.errf(orderPath, ms.line, ckAudit, "%s: auditoria %s está no futuro (hoje é %s em UTC)", ms.name(), ms.audit, c.today.UTC().Format(time.DateOnly))
 		}
 	}
 	if col < 0 {
@@ -220,23 +243,24 @@ func (c *checker) checkMilestones() {
 	scan := scanGo(c.fsys)
 	crits := c.criteriaIndex()
 
+	// The documents belong to M<n>, never to M4+: their rank is even.
 	milestoneOf := func(id string) (int, bool) {
 		cr, ok := crits[id]
 		if !ok {
 			return 0, false
 		}
 		p, ok := c.place[cr.file]
-		return p.milestone, ok
+		return rank(p.milestone, false), ok
 	}
-	audited := func(n int) bool { s := stones[n]; return s != nil && s.audit != "" }
+	audited := func(r int) bool { s := stones[r]; return s != nil && s.audit != "" }
 	nums := make([]int, 0, len(stones))
-	for n := range stones {
-		nums = append(nums, n)
+	for r := range stones {
+		nums = append(nums, r)
 	}
 	sort.Ints(nums)
 
-	// Check 11: audits in order, and no code of a milestone before the
-	// audit of the one before it.
+	// Check 11: audits in order (M4+ between M4 and M5), and no code of a
+	// milestone before the audit of the one before it.
 	firstMarker := map[int]codeMarker{}
 	early := c.listedCriteria(od, earlyHeader)
 	for _, mk := range scan.markers {
@@ -250,7 +274,7 @@ func (c *checker) checkMilestones() {
 		if audited(m) {
 			for _, k := range nums {
 				if k < m && !audited(k) {
-					c.errf(orderPath, stones[m].line, ckAudit, "M%d tem auditoria e M%d não: os marcos são auditados em ordem", m, k)
+					c.errf(orderPath, stones[m].line, ckAudit, "%s tem auditoria e %s não: os marcos são auditados em ordem", stones[m].name(), stones[k].name())
 					break
 				}
 			}
@@ -258,7 +282,7 @@ func (c *checker) checkMilestones() {
 		}
 		for _, n := range nums {
 			if mk, ok := firstMarker[n]; ok && n > m {
-				c.errf(orderPath, stones[m].line, ckAudit, "M%d não tem data de auditoria e há código do M%d (%s:%d, %s): audite o M%d e registre a data antes", m, n, mk.File, mk.Line, mk.ID, m)
+				c.errf(orderPath, stones[m].line, ckAudit, "%s não tem data de auditoria e há código do %s (%s:%d, %s): audite o %s e registre a data antes", stones[m].name(), stones[n].name(), mk.File, mk.Line, mk.ID, stones[m].name())
 				break
 			}
 		}
@@ -283,7 +307,7 @@ func (c *checker) checkMilestones() {
 	for _, id := range ids {
 		cr := crits[id]
 		p, ok := c.place[cr.file]
-		if !ok || !audited(p.milestone) || cr.suite == "pesada" || deferred[id] || tested[id] {
+		if !ok || !audited(rank(p.milestone, false)) || cr.suite == "pesada" || deferred[id] || tested[id] {
 			continue
 		}
 		c.errf(cr.file, cr.line, ckCoverage, "%s (M%d, *%s*) não tem teste marcado: ponha `// %s` acima do teste, ou liste o critério em %q de %s", id, p.milestone, cr.suite, id, deferredHeader, rel(orderPath))
@@ -295,8 +319,13 @@ func (c *checker) checkMilestones() {
 		for _, re := range staleMilestoneRes {
 			for _, loc := range re.FindAllStringSubmatchIndex(g.Text, -1) {
 				n, _ := strconv.Atoi(g.Text[loc[2]:loc[3]])
-				if audited(n) {
-					c.errf(g.File, g.lineAt(loc[0]), ckStale, "%q: o M%d já foi auditado (%s); atualize o comentário", g.Text[loc[0]:loc[1]], n, stones[n].audit)
+				// "M4+" is the phase after M4, not M4 itself.
+				end, plus := loc[3], strings.HasPrefix(g.Text[loc[3]:], "+")
+				if plus {
+					end++
+				}
+				if r := rank(n, plus); audited(r) {
+					c.errf(g.File, g.lineAt(loc[0]), ckStale, "%q: o %s já foi auditado (%s); atualize o comentário", g.Text[loc[0]:end], stones[r].name(), stones[r].audit)
 				}
 			}
 		}
