@@ -70,8 +70,8 @@ O `tarefas.yaml` do M0 traz T1 a T3 como **dados** (pedido, arquivos permitidos,
 
 | Marco | O que entra |
 |---|---|
-| M0 | `NewProject`, modelo `go-basico`, variação padrão, o formato do `tarefas.yaml` e T1 a T3 como dados (T1 já em uso pela completa) |
-| M3 e M4 | nada deste documento entrou: `com-sensiveis`, `sem-agents-md`, `com-claude-md`, `com-hooks-claude`, T2, T3 e T1 na conformidade real esperam um critério que os peça |
+| M0 | `NewProject`, modelo `go-basico`, variação padrão, o formato do `tarefas.yaml` e T1 a T3 como dados (a completa só confere o teste oculto de T1 a T3, CA-TREINO-06) |
+| M3 e M4 | nada deste documento entrou: `com-sensiveis`, `sem-agents-md`, `com-claude-md`, `com-hooks-claude`, T2 e T3 em uso, e T1 na primeira conformidade real, esperam um critério que os peça |
 | M5 | `com-workflows`, T4, git por HTTP no GitHub falso e o sandbox |
 | M6 | segundo modelo-base mínimo, `node-basico` (TypeScript/Node) |
 | M7 | suíte pesada com T1 e T3 nos provedores reais |
