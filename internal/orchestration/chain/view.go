@@ -112,28 +112,33 @@ func Text(r Request, level Level, answers []Answer) string {
 	for _, a := range answers {
 		fmt.Fprintf(&b, "- %s: %s\n", a, answerHelp[a])
 	}
-	if text := agentText(r); text != "" {
-		b.WriteString("\n" + Unverified(text) + "\n")
+	if parts := agentSections(r); len(parts) > 0 {
+		b.WriteString("\n" + unverifiedSections(parts...) + "\n")
 	}
 	return b.String()
 }
 
-// agentText is what agents wrote about the request, each part under a label the
-// engine puts inside the block: the summary a point of mission passes on, the
-// task of who asked (the text of the step or of the message it received, which
-// another agent may have written) and the justification of the call.
-func agentText(r Request) string {
-	var parts []string
+// section is a part of the block of text of an agent: its title is the engine's
+// and stands at the left margin, the words under it are quoted, so no line of an
+// agent can imitate a title.
+type section struct{ title, text string }
+
+// agentSections is what agents wrote about the request, each part under a title
+// of the engine: the summary a point of mission passes on, the task of who asked
+// (the text of the step or of the message it received, which another agent may
+// have written) and the justification of the call.
+func agentSections(r Request) []section {
+	var out []section
 	if m := r.Mission; m != nil && m.Summary != "" {
-		parts = append(parts, "Resumo da etapa:\n"+m.Summary)
+		out = append(out, section{"Resumo da etapa:", m.Summary})
 	}
 	if r.Task != "" && (r.Mission == nil || r.Task != r.Mission.Summary) {
-		parts = append(parts, "Tarefa original de quem pediu:\n"+r.Task)
+		out = append(out, section{"Tarefa original de quem pediu:", r.Task})
 	}
 	if r.Justification != "" {
-		parts = append(parts, "Justificativa de quem pediu:\n"+r.Justification)
+		out = append(out, section{"Justificativa de quem pediu:", r.Justification})
 	}
-	return strings.Join(parts, "\n\n")
+	return out
 }
 
 func orPerm(t classes.RequestType) classes.RequestType {
@@ -155,6 +160,20 @@ func orDash(s string) string {
 // quoted, whatever it is made of.
 func Unverified(text string) string {
 	return UnverifiedOpen + "\n" + inbox.Quote(text) + "\n" + UnverifiedClose
+}
+
+// unverifiedSections is Unverified for texts of agents with a title each: a part
+// with no words is left out.
+func unverifiedSections(parts ...section) string {
+	var b strings.Builder
+	b.WriteString(UnverifiedOpen + "\n")
+	for _, p := range parts {
+		if words := inbox.Quote(p.text); words != "" {
+			b.WriteString(p.title + "\n" + words + "\n")
+		}
+	}
+	b.WriteString(UnverifiedClose)
+	return b.String()
 }
 
 func nameOf(r Request) string {
