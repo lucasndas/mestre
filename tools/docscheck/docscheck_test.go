@@ -292,11 +292,11 @@ func TestHeavyCriterionNeedsMVP(t *testing.T) {
 	}
 	ok := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-4)."
 	mustClean(t, run1(t, newTree().area("a").add("docs/a/p.md", feature("P", "P", []string{ok}))))
-	last := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-13, MVP-15)."
+	last := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-13, MVP-16)."
 	mustClean(t, run1(t, newTree().area("a").add("docs/a/p.md", feature("P", "P", []string{last}))))
-	beyond := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-16)."
+	beyond := "- **CA-P-01** · *pesada* — **Dado** a, **quando** b, **então** c (MVP-17)."
 	if got := only(run1(t, newTree().area("a").add("docs/a/p.md", feature("P", "P", []string{beyond}))), ckCriteria); len(got) != 1 {
-		t.Fatalf("MVP-16 must be rejected, errors = %q", got)
+		t.Fatalf("MVP-17 must be rejected, errors = %q", got)
 	}
 }
 
