@@ -30,7 +30,7 @@ Nenhum dos três depende de a mesa ter conflito de texto: a base ter andado bast
 O `done` da `sync` não encerra a etapa sozinho. O motor roda a verificação num worktree efêmero da mesa, sob a trava por repositório, e confere o resultado:
 
 - **verde:** a etapa conclui; o Dev (ou o Mestre da mesa) faz o `pr update` e a mesa volta a `in_review`. Um pedido de aprovação do PR já aberto sobre o hash antigo fica `invalidado` ([invalidação](../aprovacoes/fluxo.md#invalidação)) e nasce de novo no hash novo;
-- **vermelha:** a etapa volta ao Dev com a saída da verificação como motivo, contando uma volta (`max_returns` da missão, [devolução](missoes.md)). Passou do limite: a mesa fica pausada e o Grão-Mestre recebe o motivo.
+- **vermelha:** a etapa volta ao Dev com a saída da verificação como motivo, contando uma volta (`max_returns` da missão, [devolução](missoes.md)). Passou do limite: a mesa fica pausada e o Grão-Mestre recebe o motivo. A mesma falha repetida (mesma impressão, classe `verify`) pausa antes do limite ([prova e devolução](prova-e-devolucao.md#devolução-com-causa-e-mesma-falha)).
 
 ## Regras e erros
 

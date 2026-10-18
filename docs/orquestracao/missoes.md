@@ -52,7 +52,7 @@ Cada personagem executa uma etapa por vez. Com `join: any`, as anteriores que ai
 
 ### Devolução com limite
 
-A etapa com `can_return_to` pode terminar devolvendo (opção do `done`, ver [comunicação](../cli/comunicacao.md)) com o motivo. O motor soma uma volta para essa etapa; se não passou de `max_returns`, a etapa-alvo volta a `preparing` recebendo o motivo como entrada, e toda etapa que dependa dela (direta ou indiretamente) volta a `pending`. Etapa afetada que ainda roda termina, mas o resultado é descartado. Passou do limite: o `done` é registrado normalmente (não é recusado), a devolução não acontece, a missão vai para `paused` com o motivo "limite de voltas" e o motor coloca na caixa de entrada do Mestre da mesa um evento `return_limit` (etapa, voltas feitas e o último motivo) para ele decidir. Quem deu o `done` recebe a resposta dizendo que a missão foi pausada ([comunicação](../cli/comunicacao.md)). A devolução com causa, a pausa por "mesma falha repetida" (campo `same_failure`), a prova por critério e o `done` que a classe exige estão em [prova e devolução](prova-e-devolucao.md).
+A etapa com `can_return_to` pode terminar devolvendo (opção do `done`, ver [comunicação](../cli/comunicacao.md)) com o motivo. O motor soma uma volta para essa etapa; se não passou de `max_returns`, a etapa-alvo volta a `preparing` recebendo o motivo como entrada, e toda etapa que dependa dela (direta ou indiretamente) volta a `pending`. Etapa afetada que ainda roda termina, mas o resultado é descartado. Passou do limite: o `done` é registrado normalmente (não é recusado), a devolução não acontece, a missão vai para `paused` com o motivo "limite de voltas" e o motor coloca na caixa de entrada do Mestre da mesa um evento `return_limit` (etapa, voltas feitas e o último motivo) para ele decidir. Quem deu o `done` recebe a resposta dizendo que a missão foi pausada ([comunicação](../cli/comunicacao.md)). A devolução com causa, a pausa por "mesma falha repetida" (campos `same_failure` e `issue`), a prova por critério e o `done` que a classe exige estão em [prova e devolução](prova-e-devolucao.md).
 
 ### Pontos de aprovação
 
@@ -110,7 +110,7 @@ Estado de missões e etapas fica no banco. Depois de queda de máquina, da Cidad
 
 ### Espelho no GitHub
 
-Ao criar a missão, o motor cria a issue sob o épico, com a lista de etapas como checklist, e as sub-issues das etapas com `sub_issue: true` (App "Mestre"). Ao concluir uma etapa: marca o item, comenta o resumo com o App da classe do personagem e fecha a sub-issue como concluída. A issue da missão é fechada pelo PR do épico (`Closes`). Missão cancelada: issue e sub-issues abertas fechadas como "não planejado". Commits citam a issue. Identidades: [identidades e Apps](../github/identidades-e-apps.md).
+Ao criar a missão, o motor cria a issue sob o épico (ou usa a do campo `issue`, [prova e devolução](prova-e-devolucao.md#campos-que-a-missão-ganha)), com a lista de etapas como checklist, e as sub-issues das etapas com `sub_issue: true` (App "Mestre"). Ao concluir uma etapa: marca o item, comenta o resumo com o App da classe do personagem e fecha a sub-issue como concluída. A issue da missão é fechada pelo PR do épico (`Closes`). Missão cancelada: issue e sub-issues abertas fechadas como "não planejado". Commits citam a issue. Identidades: [identidades e Apps](../github/identidades-e-apps.md).
 
 ### Entrega
 
