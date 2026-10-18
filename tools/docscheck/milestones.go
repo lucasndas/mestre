@@ -319,12 +319,13 @@ func (c *checker) checkMilestones() {
 		for _, re := range staleMilestoneRes {
 			for _, loc := range re.FindAllStringSubmatchIndex(g.Text, -1) {
 				n, _ := strconv.Atoi(g.Text[loc[2]:loc[3]])
-				// "M4+" is the phase after M4, not M4 itself.
-				end, plus := loc[3], strings.HasPrefix(g.Text[loc[3]:], "+")
-				if plus {
-					end++
+				// "M4+" is the phase after M4, not M4 itself, when the table
+				// has that row; without it the "+" is only punctuation.
+				r, end := rank(n, false), loc[3]
+				if strings.HasPrefix(g.Text[loc[3]:], "+") && stones[rank(n, true)] != nil {
+					r, end = rank(n, true), loc[3]+1
 				}
-				if r := rank(n, plus); audited(r) {
+				if audited(r) {
 					c.errf(g.File, g.lineAt(loc[0]), ckStale, "%q: o %s já foi auditado (%s); atualize o comentário", g.Text[loc[0]:end], stones[r].name(), stones[r].audit)
 				}
 			}
