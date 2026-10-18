@@ -3,14 +3,17 @@ package replication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
+	"github.com/lucasndas/mestre/internal/vault"
 )
 
 // CA-REPL-04
@@ -146,6 +149,133 @@ func TestTheOrderToEraseDoesNotRemoveTheFullCopyThatBeginsAfterIt(t *testing.T) 
 	for _, name := range []string{"after.json", "after.part"} {
 		if !exists(name) {
 			t.Errorf("%s: the copy that began after the order was removed", name)
+		}
+	}
+}
+
+// CA-REPL-12
+// A machine that leaves the Guild erases what it kept from the time it was the
+// Citadel, besides the replica: the databases it discarded when the epoch
+// changed (each is a whole copy of the main database, with the hashes of the
+// passwords and of the PINs, whatever its name or suffix), the full copies it
+// made and the transfers that were arriving. What is not in those places
+// stays (CA-REPL-12).
+func TestWipeErasesWhatTheMachineKeptFromWhenItWasTheCitadel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mestre.db")
+	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	xfer, copies := filepath.Join(dir, "transferencias"), filepath.Join(dir, "copias")
+	for _, d := range []string{xfer, copies} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	erased := []string{
+		"descartado-3.db", "descartado-3.db-wal", "descartado-3.db-shm", "descartado-3.json", "descartado-3-acoes.json",
+		"descartado-3.db.1760000000000", "descartado-3.db.1760000000000-wal", "descartado-3.db.1760000000000-shm",
+		"copias/snapshot-01J9Z0.db", "transferencias/01J9Z1.part", "transferencias/01J9Z1.json", "transferencias/01J9Z2.part",
+	}
+	kept := []string{"unrelated.txt", "descartar-nao.txt"}
+	for _, name := range append(slices.Clone(erased), kept...) {
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(name)), []byte("a copy of the main database"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err := NewReplica(ctx, ReplicaConfig{
+		DB: db, TransferDir: xfer, Leftovers: []Leftover{{Dir: dir, Prefix: "descartado-"}, {Dir: copies}, {Dir: filepath.Join(dir, "no-such-folder")}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Wipe(ctx, "removed"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range erased {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name))); err == nil {
+			t.Errorf("%s is still there", name)
+		}
+	}
+	for _, name := range kept {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("%s was erased: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Error("the replica is still there")
+	}
+}
+
+// CA-REPL-14
+// A machine that left the Guild takes nothing more of it, while its engine runs
+// and the Citadel, that has not revoked it yet, still sends: the key of the
+// vault does not come back to the disk, no order to erase leaves a marker, no
+// record is queued and no full copy replaces the file that was erased. The
+// order of the vault that arrives after the Wipe is the one that mattered: a
+// rotation of the key, or a connection, can overtake the departure.
+func TestAMachineThatLeftTakesNothingMoreOfTheGuild(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mestre.db")
+	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	keyPath, envPath := filepath.Join(dir, "cofre.key"), filepath.Join(dir, "cofre-envelope.bin")
+	r, err := NewReplica(ctx, ReplicaConfig{
+		DB: db, GuildID: "01J9Z0000000000000000000G1",
+		Vault: &vault.Copier{Keys: vault.NewFileKeyStore(keyPath), EnvelopePath: envPath},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := r.lastQueued + 1 // the record that would follow, were the machine still in the Guild
+	if err := r.Wipe(ctx, "removed"); err != nil {
+		t.Fatal(err)
+	}
+
+	forbidden := func(what string, err error) {
+		t.Helper()
+		var pe *protocol.Error
+		if !errors.As(err, &pe) || pe.Code != protocol.CodeForbidden {
+			t.Errorf("%s after the Wipe: %v, want forbidden", what, err)
+		}
+	}
+	_, err = r.handleVaultReplica(ctx, &protocol.Message{Payload: &protocol.VaultReplica{Envelope: []byte("an envelope")}})
+	forbidden("vault.replica", err)
+	if _, err := r.handleVaultDrop(ctx, &protocol.Message{}); err != nil {
+		t.Errorf("vault.drop after the Wipe: %v", err)
+	}
+	row := store.LogRow{LSN: next, At: 1, Body: store.EncodeChanges([]store.Change{{Op: store.OpSQL, SQL: `SELECT 1`}})}
+	r.handleData(ctx, protocol.Peer{}, protocol.DataFrame{ID: r.gid, Pos: next, Data: appendRecord(nil, row)})
+	if st := r.Status(); st.Queued != 0 {
+		t.Errorf("%d records queued after the Wipe", st.Queued)
+	}
+	forbidden("a full copy", r.finalizeSnapshot(ctx, protocol.XferBegin{}, filepath.Join(dir, "copy.db")))
+	for _, name := range []string{"cofre.key", "cofre-envelope.bin", "mestre.db", "mestre.db.excluded"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			t.Errorf("%s is back after the Wipe", name)
 		}
 	}
 }

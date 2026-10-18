@@ -67,6 +67,7 @@ type Client struct {
 
 type call struct {
 	reply chan reply
+	typ   string // the type of the request
 	// replay assembly
 	want int
 	head *ptywire.Msg
@@ -177,6 +178,13 @@ func (c *Client) readLoop() {
 			c.fail(err)
 			return
 		}
+		select {
+		case <-c.done:
+			// the connection failed on the item before (a violation of the
+			// protocol): what is left in the buffer cannot be trusted either
+			return
+		default:
+		}
 		if it.Frame != nil {
 			c.onFrame(it.Frame)
 		} else {
@@ -213,6 +221,24 @@ func (c *Client) onMsg(m *ptywire.Msg) {
 		return
 	}
 	if m.T == ptywire.TypeReplay && m.Len > 0 {
+		// What comes from the mestre-pty may be controlled by the agent of the
+		// terminal: a header of a replay answers a replay, once, and no
+		// allocation is made of a length it chose. The frames that would follow
+		// a violation cannot be trusted either. The call stays in c.calls, for fail.
+		var violation error
+		switch {
+		case cl.typ != ptywire.TypeReplay:
+			violation = fmt.Errorf("the mestre-pty answered a %q with the header of a replay", cl.typ)
+		case cl.head != nil:
+			violation = errors.New("the mestre-pty sent the header of a replay twice")
+		case m.Len > ptywire.MaxReplay:
+			violation = fmt.Errorf("the mestre-pty announced a replay of %d bytes, the most is %d", m.Len, ptywire.MaxReplay)
+		}
+		if violation != nil {
+			c.mu.Unlock()
+			c.fail(violation)
+			return
+		}
 		cl.want, cl.head, cl.data = m.Len, m, make([]byte, 0, m.Len)
 		c.mu.Unlock()
 		return
@@ -251,6 +277,16 @@ func (c *Client) onFrame(f *ptywire.Frame) {
 		c.mu.Unlock()
 		return
 	}
+	// The frames of a replay are the bytes the header announced, in order, from
+	// the offset it said: a mestre-pty sends exactly that, and one that sends
+	// more or elsewhere is broken or taken over.
+	if f.Offset != cl.head.Offset+uint64(len(cl.data)) || len(cl.data)+len(f.Data) > cl.want {
+		got := len(cl.data)
+		c.mu.Unlock()
+		c.fail(fmt.Errorf("a frame of the replay has %d bytes at offset %d, after %d of the %d announced from offset %d",
+			len(f.Data), f.Offset, got, cl.want, cl.head.Offset))
+		return
+	}
 	cl.data = append(cl.data, f.Data...)
 	if len(cl.data) < cl.want {
 		c.mu.Unlock()
@@ -263,7 +299,7 @@ func (c *Client) onFrame(f *ptywire.Frame) {
 
 // do sends req and waits for its reply.
 func (c *Client) do(ctx context.Context, req ptywire.Msg) (reply, error) {
-	cl := &call{reply: make(chan reply, 1)}
+	cl := &call{reply: make(chan reply, 1), typ: req.T}
 	c.mu.Lock()
 	if c.err != nil {
 		err := c.err

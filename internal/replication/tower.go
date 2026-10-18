@@ -44,6 +44,12 @@ type ReplicaConfig struct {
 	// (protocol.XferConfig.Dir). vault.drop removes from it the full copies
 	// that were still arriving, which carry the vault tables. Optional.
 	TransferDir string
+	// Leftovers are the files the machine kept from the time it was the
+	// Citadel and the Tower does not use: the databases it discarded when the
+	// epoch changed (docs/guilda/replicacao.md#perda-na-troca) and the full
+	// copies it made to send. Each is a whole copy of the main database, so
+	// Wipe erases them. Optional.
+	Leftovers []Leftover
 	// ResyncRetry is how long a request for a full copy, or for the records
 	// again, waits for the answer before it is made again (default 30 s).
 	ResyncRetry time.Duration
@@ -51,6 +57,12 @@ type ReplicaConfig struct {
 	// to the replica: the first and the last lsn of it.
 	OnApplied func(first, last uint64)
 	Logger    *slog.Logger
+}
+
+// Leftover names files of a folder: the entries whose name starts with Prefix,
+// or all of them when it is empty.
+type Leftover struct {
+	Dir, Prefix string
 }
 
 // Replica is the replication on a Tower.
@@ -62,6 +74,10 @@ type Replica struct {
 	// applyMu serializes the writes to the replica: applying records, swapping
 	// the file for a full copy, erasing the vault.
 	applyMu sync.Mutex
+	// vaultMu keeps the orders about the vault (vault.replica, vault.drop) from
+	// writing while Wipe erases it: the order that is under way ends before the
+	// Wipe erases, and the ones that come after it see wiped.
+	vaultMu sync.Mutex
 
 	mu          sync.Mutex
 	link        *protocol.Link
@@ -74,6 +90,7 @@ type Replica struct {
 	needCopy    bool
 	resyncAsked bool
 	excluded    bool
+	wiped       bool // Wipe ran: the machine left the Guild and nothing of it comes back
 	state       string
 	lastErr     string
 	erasing     atomic.Bool // a retry of an incomplete erasing is under way
@@ -267,7 +284,7 @@ func (r *Replica) handleData(_ context.Context, _ protocol.Peer, f protocol.Data
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.needCopy || len(rows) == 0 {
+	if r.wiped || r.needCopy || len(rows) == 0 {
 		return
 	}
 	skip := 0
@@ -529,6 +546,9 @@ func (r *Replica) sendAck(force bool) {
 // ---- full copy ----
 
 func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, file string) error {
+	if r.hasWiped() {
+		return errWiped
+	}
 	var meta snapshotMeta
 	raw, _ := json.Marshal(b.Meta)
 	if err := json.Unmarshal(raw, &meta); err != nil {
@@ -549,6 +569,9 @@ func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, fi
 	}
 	r.applyMu.Lock()
 	defer r.applyMu.Unlock()
+	if r.hasWiped() { // Wipe came between the check of the copy and here
+		return errWiped
+	}
 	if err := r.cfg.DB.Replace(ctx, file, meta.LSN); err != nil {
 		var ns *store.NewerSchemaError
 		if errors.As(err, &ns) || errors.Is(err, store.ErrClosed) {
@@ -608,6 +631,11 @@ func (r *Replica) handleVaultReplica(ctx context.Context, m *protocol.Message) (
 		return nil, protocol.NewError(protocol.CodeInvalidPayload, "keyring: not base64")
 	}
 	defer clear(ring)
+	r.vaultMu.Lock()
+	defer r.vaultMu.Unlock()
+	if r.hasWiped() {
+		return nil, errWiped
+	}
 	held := r.cfg.Vault.Holds(ctx)
 	if err := r.cfg.Vault.Import(ctx, vault.Copy{Keyring: ring, Envelope: p.Envelope}); err != nil {
 		return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
@@ -628,6 +656,11 @@ func (r *Replica) handleVaultReplica(ctx context.Context, m *protocol.Message) (
 }
 
 func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+	r.vaultMu.Lock()
+	if r.hasWiped() { // nothing left to erase, and no marker to leave
+		r.vaultMu.Unlock()
+		return nil, nil
+	}
 	// Remembered on disk before anything else, so a restart in the middle of the
 	// erasing, or before the next connection, still filters what comes. An
 	// erasing that was left incomplete stays so until it is done.
@@ -638,6 +671,7 @@ func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*prot
 	if err := os.WriteFile(r.droppedMarker(), []byte(content), 0o600); err != nil {
 		r.cfg.Logger.Error("replication: remembering the order to erase the vault", "err", err)
 	}
+	r.vaultMu.Unlock()
 	r.mu.Lock()
 	r.excluded = true
 	r.mu.Unlock()
@@ -650,6 +684,15 @@ func (r *Replica) handleVaultDrop(_ context.Context, m *protocol.Message) (*prot
 	pending := r.dropPendingCopies()
 	r.background(func(ctx context.Context) { r.eraseAndReceipt(ctx, m.Env.ID, pending) })
 	return nil, nil
+}
+
+// errWiped is what the Citadel hears from a machine that left the Guild.
+var errWiped = protocol.NewError(protocol.CodeForbidden, "this machine left the Guild")
+
+func (r *Replica) hasWiped() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.wiped
 }
 
 // background runs f in a goroutine that Run waits for when it ends.
@@ -828,14 +871,30 @@ func (r *Replica) dropRestrictedFolders() bool {
 // ---- leaving the Guild ----
 
 // Wipe erases this machine's share of the Guild when it leaves
-// (guild.Wiper): the copy of the vault, the replica and the replicated
-// files. The Replica is no good afterwards.
+// (guild.Wiper): the copy of the vault, the replica, the replicated files and
+// mirrors, and what the machine kept from the time it was the Citadel (the
+// databases it discarded, the full copies it made, the transfers under way:
+// whole copies of the main database). The Replica is no good afterwards.
 func (r *Replica) Wipe(ctx context.Context, _ string) error {
+	// What could put something back goes first. From now on the orders about
+	// the vault, the records and the full copies are refused; the transfers
+	// under way are stopped (the temporary file of one that is open cannot be
+	// removed on Windows) and none begins; and an order about the vault that
+	// had begun ends before the vault is erased (vaultMu).
+	r.mu.Lock()
+	r.wiped = true
+	link := r.link
+	r.mu.Unlock()
+	if link != nil {
+		link.StopTransfers()
+	}
 	r.applyMu.Lock()
 	defer r.applyMu.Unlock()
 	var errs []error
 	if r.cfg.Vault != nil {
+		r.vaultMu.Lock()
 		errs = append(errs, r.cfg.Vault.Drop(ctx))
+		r.vaultMu.Unlock()
 	}
 	path := r.cfg.DB.Path()
 	errs = append(errs, r.cfg.DB.Close())
@@ -866,6 +925,31 @@ func (r *Replica) Wipe(ctx context.Context, _ string) error {
 		}
 		for _, e := range entries {
 			errs = append(errs, os.RemoveAll(filepath.Join(r.cfg.Mirrors.Root, e.Name())))
+		}
+	}
+	if r.cfg.TransferDir != "" {
+		errs = append(errs, eraseEntries(r.cfg.TransferDir, ""))
+	}
+	for _, l := range r.cfg.Leftovers {
+		errs = append(errs, eraseEntries(l.Dir, l.Prefix))
+	}
+	return errors.Join(errs...)
+}
+
+// eraseEntries removes what is in dir whose name starts with prefix; a folder
+// that is not there has nothing to erase.
+func eraseEntries(dir, prefix string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	var errs []error
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), prefix) {
+			errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
 		}
 	}
 	return errors.Join(errs...)

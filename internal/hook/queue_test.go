@@ -144,6 +144,24 @@ func TestTheLinuxPlanOfTheFolders(t *testing.T) {
 	}
 }
 
+// CA-HOOK-06: each instance gives the folders to the group of its own agents,
+// mestre-agente-<inst> outside the principal one (the agents of another
+// instance are not in it).
+func TestTheLinuxPlanGivesEachInstanceTheGroupOfItsOwnAgents(t *testing.T) {
+	t.Parallel()
+	for instance, group := range map[string]string{"principal": "mestre-agente", "x": "mestre-agente-x"} {
+		plan := hook.LinuxPlan(instance)
+		if len(plan) == 0 {
+			t.Fatalf("no plan for %s", instance)
+		}
+		for _, e := range plan {
+			if e.Group != group || e.Owner != "mestre" {
+				t.Errorf("%s: %s is of %s:%s, want mestre:%s", instance, e.Path, e.Owner, e.Group, group)
+			}
+		}
+	}
+}
+
 // The instance of the dispatcher comes from MESTRE_ENDPOINT; an endpoint
 // that is not an installed instance's socket names none.
 func TestTheInstanceComesFromTheEndpoint(t *testing.T) {
