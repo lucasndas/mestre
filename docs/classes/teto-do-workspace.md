@@ -1,6 +1,6 @@
 # Teto do workspace
 
-> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -37,7 +37,7 @@ cost:                       # máximo por unidade de limites-de-uso.md: usd | to
 
 - Como máximo: `files.write`, `network.domains`, `cli.allow` e, se existirem, `commands.allow` e `tools.allow` dizem o que **pode** ser dado; o que fica fora é negado: com `commands.allow` ou `tools.allow` no teto, o `default` do bloco nas regras efetivas é `deny` (origem `ceiling`), e uma classe que escreve `default: allow` ou `ask` nesse bloco passa do teto. `deny` e `ask` valem para todas as classes. Campo ausente não limita nada, menos `operator`: ausente vale `false`, porque uma classe só vai à base Operador do PC com `operator: true` no teto ([formato](formato-das-permissoes.md)).
 - Leitura estrita, como a do `permissions.yaml`: `version: 1` só no topo (o bloco `permissions` não tem `version` próprio); campo desconhecido, mais de um documento, unidade fora de `usd | tokens | hours` e custo negativo, infinito ou (em `tokens`) fracionário tornam o arquivo inválido. O código é `internal/classes` (`ParseCeiling`, `CeilingKeeper`).
-- **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas (não restringe a internet), com `git.request_push: false`, `git.workflows: never`, `operator: false` e sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)).
+- **Teto padrão** (criado na [sessão zero do workspace](../sessao-zero/workspace.md)): sem restrição além das regras fixas (não restringe a internet), com `git.request_push: false`, `git.workflows: never`, `operator: false`, sem bloco `cost` (valem só os limites de [limites de uso](../plataforma/limites-de-uso.md)) e com um `files.deny` de segredos: `**/.env`, `**/.env.local`, `**/.env.*.local`, `**/id_rsa*`, `**/id_ed25519*`, `**/id_ecdsa*`, `**/.npmrc`, `**/credentials*.json`, `**/service-account*.json`, `**/*.pem` e `**/*.key` (`.env.example` e afins não casam). Como todo `files.deny`, vale para a ferramenta de leitura e para caminho literal no shell; assim nenhum token do projeto entra no transcript do provedor sem o Dono ter escrito o `deny`. Os mesmos globs estão em `permissoes_e_segredos` do [arquivo de política](../aprovacoes/arquivo-de-politica.md).
 
 ### Onde o teto age
 
@@ -88,6 +88,7 @@ Quem usa o teto: [classes](classes.md) (M3); a sessão zero cria o arquivo (M4);
 - **CA-TETO-04** · *completa* — **Dado** uma mesa no teto de custo, **quando** o Grão-Mestre tenta aprovar mais gasto, **então** a aprovação é recusada e o pedido vai aos usuários Administrador ou acima.
 - **CA-TETO-05** · *rápida* — **Dado** uma classe que escreve em `src/**`, **quando** o teto passa a negar `src/**`, **então** `class check` mostra a classe como "acima do teto".
 - **CA-TETO-06** · *rápida* — **Dado** o teto padrão e uma classe com `operator: true`, **quando** a Cidadela monta as regras efetivas, **então** `operator` sai `false` com `origin` `ceiling`; **dado** um decreto `ceiling` de um Administrador que liga `operator`, **então** ele é recusado antes da confirmação.
+- **CA-TETO-07** · *rápida* — **Dado** o teto padrão e uma classe sem `files.deny`, **quando** a Cidadela monta as regras efetivas e o personagem lê `config/service-account-prod.json` ou `.env.local` pela ferramenta de leitura, **então** as duas leituras são negadas com o motivo "teto do workspace", `files.deny` traz esses globs com `origin` `ceiling`, e a leitura de `.env.example` passa.
 
 ## Depende de
 

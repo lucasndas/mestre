@@ -14,14 +14,16 @@ condicoes:                     # o motor confere antes de aceitar a aprovação 
   max_linhas: 600              # adições + remoções
   max_arquivos_apagados: 5
   dentro_do_teto_de_custo: true
+  linhas_ignoradas: ["**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml", "**/go.sum", "**/Cargo.lock", "**/*.snap", "**/gen/**"]   # não contam em max_linhas nem na busca de palavras
 
 areas_sensiveis:               # caminhos (glob); tocou, pergunta
   autenticacao: ["**/auth/**", "**/*login*", "**/*session*"]
   pagamentos: ["**/payment*/**", "**/billing/**", "**/checkout/**"]
   migracoes: ["**/migrations/**", "**/*.sql"]
   infraestrutura: ["infra/**", "terraform/**", "k8s/**", "**/Dockerfile", "**/docker-compose*.yml", ".github/**"]
-  permissoes_e_segredos: ["**/.env*", "**/secrets/**", "**/*permission*", "**/*.pem", "**/*.key"]
+  permissoes_e_segredos: ["**/.env*", "**/secrets/**", "**/*permission*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/id_ecdsa*", "**/.npmrc", "**/credentials*.json", "**/service-account*.json"]
   mestre: [".mestre/**", "AGENTS.md", "CLAUDE.md"]
+  palavras_em_linhas_adicionadas: ["DROP", "TRUNCATE", "DELETE FROM"]   # chave reservada: não é uma área, é uma lista de palavras
 
 comandos_sensiveis:            # para permissao_de_classe; casou, o Grão-Mestre pergunta
   - "rm -rf *"

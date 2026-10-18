@@ -1,6 +1,6 @@
 # Fluxo de aprovação
 
-> **Assunto:** vida de um pedido de aprovação: estados, vínculo ao estado exato, pedidos da Guilda, perguntas aos usuários e respostas, agrupamento, quórum, expiração, invalidação e auditoria · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** vida de um pedido de aprovação: estados, vínculo ao estado exato, pedidos da Guilda, perguntas aos usuários e respostas, agrupamento, quórum, expiração, invalidação e auditoria · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -12,7 +12,7 @@ Tratar todo pedido de aprovação do mesmo jeito, do pedido até a aplicação, 
 
 Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador), uma atualização do Mestre, a entrada de uma máquina na Guilda ou a promoção de outra máquina a Cidadela quando a Cidadela não volta (tipos em [política](politica.md#tipos-de-ação)).
 
-Campos (tabela `approval_requests`, [persistência](../arquitetura/persistencia.md)): id, workspace, mesa, tipo, alvo, impressão, solicitante (personagem, Grão-Mestre ou motor), risco e a linha da [classificação](../classes/classificacao-de-risco.md) que o deu, nível atual da cadeia e o histórico de níveis, versão da política, resumo, recomendação do Grão-Mestre, motivo da dúvida, quórum exigido, criado em, expira em, estado.
+Campos (tabela `approval_requests`, [persistência](../arquitetura/persistencia.md)): id, workspace, mesa, tipo, alvo, impressão, solicitante (personagem, Grão-Mestre ou motor), risco e a linha da [classificação](../classes/classificacao-de-risco.md) que o deu, nível atual da cadeia e o histórico de níveis, versão da política, resumo, recomendação do Grão-Mestre, motivo da dúvida, quórum exigido, criado em, expira em, estado. O conteúdo da mensagem que o usuário recebe (evidência, dono, motivo e o resto) está em [pedido que bloqueia](pedido-que-bloqueia.md).
 
 O pedido entra na [cadeia](../orquestracao/cadeia-de-aprovacao.md) no primeiro nível que pode decidi-lo (o superior de quem pediu, o Mestre da mesa, o Grão-Mestre ou as pessoas) e sobe por ela; quem pediu fica "aguardando aprovação" ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). Exceções: os [pedidos da Guilda](#pedidos-da-guilda), abaixo, e os pedidos "Sistema" (`atualizacao_mestre`), criados pelo motor, que vão direto a `aguardando_usuarios`, sem workspace, para Dono e Administradores; ao Grão-Mestre chega só um evento informativo ([política](politica.md#tipos-de-ação)).
 

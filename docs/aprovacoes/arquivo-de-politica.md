@@ -1,6 +1,6 @@
 # Arquivo de política
 
-> **Assunto:** o arquivo `politica-de-aprovacao.yaml` de cada workspace: onde fica, quem edita, conteúdo padrão (condições, áreas e comandos sensíveis, tipos, quórum, prazos da cadeia, ajustes de risco, delegação e resumo) e regras de leitura · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o arquivo `politica-de-aprovacao.yaml` de cada workspace: onde fica, quem edita, conteúdo padrão (condições, áreas e comandos sensíveis, tipos, quórum, prazos da cadeia, ajustes de risco, delegação e resumo) e regras de leitura · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 Documento de referência da [política de aprovação](politica.md), que é dona do comportamento e dos critérios de aceite. O sentido de cada seção nova está no documento dono dela: `cadeia` na [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) e na [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md), `risco` na [classificação de risco](../classes/classificacao-de-risco.md#ajustes-do-dono), `delegacao` na [delegação](delegacao.md) e `resumo` em [resumo e sugestões](resumo-e-sugestoes.md).
 
@@ -25,14 +25,16 @@ condicoes:                     # o motor confere antes de aceitar a aprovação 
   max_linhas: 600              # adições + remoções
   max_arquivos_apagados: 5
   dentro_do_teto_de_custo: true
+  linhas_ignoradas: ["**/package-lock.json", "**/yarn.lock", "**/pnpm-lock.yaml", "**/go.sum", "**/Cargo.lock", "**/*.snap", "**/gen/**"]   # não contam em max_linhas nem na busca de palavras
 
 areas_sensiveis:               # caminhos (glob); tocou, pergunta
   autenticacao: ["**/auth/**", "**/*login*", "**/*session*"]
   pagamentos: ["**/payment*/**", "**/billing/**", "**/checkout/**"]
   migracoes: ["**/migrations/**", "**/*.sql"]
   infraestrutura: ["infra/**", "terraform/**", "k8s/**", "**/Dockerfile", "**/docker-compose*.yml", ".github/**"]
-  permissoes_e_segredos: ["**/.env*", "**/secrets/**", "**/*permission*", "**/*.pem", "**/*.key"]
+  permissoes_e_segredos: ["**/.env*", "**/secrets/**", "**/*permission*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/id_ecdsa*", "**/.npmrc", "**/credentials*.json", "**/service-account*.json"]
   mestre: [".mestre/**", "AGENTS.md", "CLAUDE.md"]
+  palavras_em_linhas_adicionadas: ["DROP", "TRUNCATE", "DELETE FROM"]   # chave reservada: não é uma área, é uma lista de palavras
 
 comandos_sensiveis:            # para permissao_de_classe; casou, o Grão-Mestre pergunta
   - "rm -rf *"
@@ -85,6 +87,7 @@ resumo:                        # resumo do que os agentes decidiram (ver resumo-
 ## Regras de leitura
 
 - `quorum.regras`: cada regra casa por `tipo` e/ou `mesa` (aceita `*`). Uma regra que casa com o pedido **obriga a perguntar** às pessoas, mesmo que as condições passem e mesmo com delegação. Se várias casam, vale a mais exigente.
+- `condicoes.linhas_ignoradas` e `areas_sensiveis.palavras_em_linhas_adicionadas` são lidos como a [política](politica.md#o-que-o-motor-lê-do-pr) descreve: glob malformado ou palavra vazia torna o arquivo inválido. Um workspace que tem arquivos gerados próprios acrescenta os globs em `linhas_ignoradas`; o que não está na lista conta.
 - `exigir_usuarios` lista usuários do cadastro ([usuários e níveis](../telegram/usuarios-e-niveis.md)) cuja aprovação é obrigatória.
 - `sozinho` vale só para tipos de risco `medio`, o teto do Grão-Mestre; num tipo `alto`, `se_condicoes` torna o arquivo inválido: o `alto` só se abre ao Grão-Mestre por [delegação](delegacao.md).
 - Prazos (`expiracao`, `cadeia.*`, `delegacao.*`) são durações positivas (`30s`, `10m`, `2h`, `30d`); `regra_temporaria_max` vai até 7 dias e `delegacao.validade_padrao` até 30 dias; `negacoes_para_pausar` vai de 1 a 10; `alerta_fila.abertos`, de 1 a 1000, e `alerta_fila.fator`, de 1 a 10. `cadeia.mesa_decide` lista os grupos de `medio` que o Mestre da mesa decide (`rede`, `apagar`, `conteineres_e_vms`, `pacotes_e_executores`, `interpretador_com_codigo`, `script_alterado`, `instalacao_e_sistema`, `fora_do_worktree`, `escrita_sem_caminho`); o Dono acrescenta ou tira qualquer um, e `[]` deixa só o `baixo` com ele. Nome que não é um desses grupos (`alto`, `fixo`, um desconhecido) torna o arquivo inválido. Nenhuma chave muda o teto de cada nível (`baixo`, `medio`) nem as condições de cada grupo, que são do motor.
