@@ -333,7 +333,7 @@ func (e *evaluator) tableRule(t *providers.Tool, act Action, res result) (Decisi
 			r := e.classify(t, false)
 			own = &r
 		}
-		if !tableRuleCovers(*d, act, *own) {
+		if !tableRuleCovers(*d, act, t, *own) {
 			continue
 		}
 		ok, err := e.env.TableRules.Use(e.ctx, TableRuleUse{Rule: d.ID, Level: d.Level, Risk: d.Risk, AgentID: e.r.AgentID, TableID: e.env.TableID, Action: act, Tool: t, Own: *own})
@@ -349,11 +349,11 @@ func (e *evaluator) tableRule(t *providers.Tool, act Action, res result) (Decisi
 // it was made for, or a command (a tool) its pattern matches, in both cases only
 // if the classification of the call fits the risk of the rule and the call has
 // nothing TableRuleBlocker names.
-func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
+func tableRuleCovers(d Decree, act Action, t *providers.Tool, own RiskResult) bool {
 	if !own.Risk.valid() || own.Risk == RiskFixed || own.Risk.rank() > d.Risk.rank() {
 		return false
 	}
-	if TableRuleBlocker(act, own) != "" {
+	if TableRuleBlocker(act, t, own) != "" {
 		return false
 	}
 	if d.Action != nil {
@@ -379,14 +379,21 @@ func tableRuleCovers(d Decree, act Action, own RiskResult) bool {
 // (docs/orquestracao/regras-temporarias-de-mesa.md#como-o-motor-decide-o-que-o-texto-deixa-em-aberto):
 // the same text of a command does another thing at each use when the engine does
 // not read all of it, so a rule never frees a part with no group (an unclosed
-// quote, a brace list, a .NET call, the reading of the shell) nor a shell command
-// that chains, pipes, redirects or substitutes, or breaks the line. The chain
-// asks it again when it makes the rule of an exact action.
-func TableRuleBlocker(act Action, own RiskResult) string {
+// quote, a brace list, a .NET call, the reading of the shell; also a write, a
+// tool or a URL the table has no row for) nor a shell command that chains, pipes,
+// redirects or substitutes, or breaks the line. The command is read as the tool
+// gave it, not as the action keeps it (the action trims it: a line break followed
+// by a space of another script would go). The chain asks it again when it makes
+// the rule of an exact action; tool is nil when it has none.
+func TableRuleBlocker(act Action, tool *providers.Tool, own RiskResult) string {
+	command := act.Command
+	if tool != nil && tool.Kind == providers.KindShell {
+		command = strings.Trim(tool.Command, " \t\r\n")
+	}
 	switch {
 	case slices.Contains(own.Groups, GroupNone):
 		return "the engine does not analyse a part of the call"
-	case act.Kind == providers.KindShell && (strings.ContainsAny(act.Command, ";&|`<>\n\r(){}") || strings.Contains(act.Command, "$(")):
+	case act.Kind == providers.KindShell && (strings.ContainsAny(command, ";&|`<>\n\r(){}") || strings.Contains(command, "$(")):
 		return "the command chains, pipes, redirects or substitutes other commands"
 	}
 	return ""

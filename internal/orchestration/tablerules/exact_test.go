@@ -1,6 +1,7 @@
 package tablerules_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -34,8 +35,9 @@ func (r *rig) makeExact(level chain.LevelKind, command string, risk classes.Risk
 // classification the engine gave the call.
 func (r *rig) useAs(id int64, command string, own classes.RiskResult) bool {
 	r.t.Helper()
+	// the action keeps the command trimmed, as the engine builds it; the tool keeps it as it came
 	ok, err := r.svc.Use(r.ctx, classes.TableRuleUse{Rule: id, Level: classes.LevelTableMaster, Risk: own.Risk, AgentID: r.dev.ID, TableID: "42-login",
-		Action: classes.Action{Kind: providers.KindShell, Command: command}, Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: command}, Own: own})
+		Action: classes.Action{Kind: providers.KindShell, Command: strings.TrimSpace(command)}, Tool: &providers.Tool{NativeName: "Bash", Kind: providers.KindShell, Command: command}, Own: own})
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -59,19 +61,26 @@ func TestTheGateDoesNotLetAnOpaquePartNorAChainedCommandThroughTheRuleOfTheExact
 			t.Fatalf("%s: the gate does not let the exact action through", level)
 		}
 		for name, c := range map[string]struct {
+			rule    string // the command the rule was made for; the call, when empty
 			command string
 			own     classes.RiskResult
 		}{
-			"a part with no group":               {"alias ll=ls", medio(classes.GroupNone)},
-			"a part with no group, among others": {"make build", medio(classes.GroupChangedScript, classes.GroupNone)},
-			"a chain":                            {"make build && ./run.sh", medio(classes.GroupChangedScript)},
-			"a list":                             {"make build; bash run.sh", medio(classes.GroupChangedScript)},
-			"a pipe":                             {"make build | tee out", medio(classes.GroupChangedScript)},
-			"a substitution":                     {"make $(cat target)", medio(classes.GroupChangedScript)},
-			"a redirection":                      {"make build > out", medio(classes.GroupChangedScript)},
-			"a line break":                       {"make build\n./run.sh", medio(classes.GroupChangedScript)},
+			"a part with no group":               {"", "alias ll=ls", medio(classes.GroupNone)},
+			"a part with no group, among others": {"", "make build", medio(classes.GroupChangedScript, classes.GroupNone)},
+			"a chain":                            {"", "make build && ./run.sh", medio(classes.GroupChangedScript)},
+			"a list":                             {"", "make build; bash run.sh", medio(classes.GroupChangedScript)},
+			"a pipe":                             {"", "make build | tee out", medio(classes.GroupChangedScript)},
+			"a substitution":                     {"", "make $(cat target)", medio(classes.GroupChangedScript)},
+			"a redirection":                      {"", "make build > out", medio(classes.GroupChangedScript)},
+			"a line break":                       {"", "make build\n./run.sh", medio(classes.GroupChangedScript)},
+			"a line break the action trims away": {"make build", "make build\n\U00003000", medio(classes.GroupChangedScript)},
+			"a vertical tab and a line break":    {"make build", "\v\nmake build", medio(classes.GroupChangedScript)},
 		} {
-			id := r.makeExact(level, c.command, classes.RiskMedium)
+			rule := c.rule
+			if rule == "" {
+				rule = c.command
+			}
+			id := r.makeExact(level, rule, classes.RiskMedium)
 			if r.useAs(id, c.command, c.own) {
 				t.Errorf("%s, %s: the gate let %q through the rule of its exact action", level, name, c.command)
 			}

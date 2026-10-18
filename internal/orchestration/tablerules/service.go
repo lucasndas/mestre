@@ -199,7 +199,7 @@ func (s *Service) Use(ctx context.Context, u classes.TableRuleUse) (bool, error)
 	}
 	// No rule frees what the engine does not analyse nor a command that chains
 	// others, the exact action as a pattern, for any level.
-	if classes.TableRuleBlocker(u.Action, u.Own) != "" {
+	if classes.TableRuleBlocker(u.Action, u.Tool, u.Own) != "" {
 		return false, nil
 	}
 	// The author approves only what its own rules would not deny: checked on

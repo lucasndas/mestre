@@ -10,6 +10,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -248,7 +249,11 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 	if ap == nil {
 		// The same text of a command does another thing at each use when the
 		// engine does not read all of it: no rule of the exact action for it.
-		if why := classes.TableRuleBlocker(*r.Action, r.Risk); why != "" {
+		var tool *providers.Tool
+		if r.Event != nil {
+			tool = r.Event.Tool
+		}
+		if why := classes.TableRuleBlocker(*r.Action, tool, r.Risk); why != "" {
 			return "", refuse(CodeBadAnswer, "no temporary rule is made for this request (%s): approve it now instead", why)
 		}
 	}

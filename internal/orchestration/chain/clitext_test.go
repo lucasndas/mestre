@@ -76,6 +76,14 @@ func TestTheTextsOfTheApprovalSpeakTheCLIOfTheDocument(t *testing.T) {
 	if syntax := fmt.Sprintf(`mestre approval decide %d <resposta> --reason "<motivo>"`, id); !strings.Contains(text, syntax) {
 		t.Errorf("the item lacks the syntax %q:\n%s", syntax, text)
 	}
+	// the syntax and the options are the ones the document defines
+	cliDoc, err := os.ReadFile("../../../docs/cli/grao-mestre.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cliDoc), `mestre approval decide <id> <resposta> --reason "<motivo>" [--for <duração> | --until-quest] [--pattern "<padrão>"] [--text "<texto>"]`) {
+		t.Error("docs/cli/grao-mestre.md defines another syntax for mestre approval decide than the one the item names")
+	}
 	for _, wrong := range []string{"--answer", "--instruction", "--until-mission-end", "approve_", "deny_", "ask_back", "climb"} {
 		if strings.Contains(text, wrong) {
 			t.Errorf("the item has %q, which the CLI does not have:\n%s", wrong, text)
@@ -93,9 +101,8 @@ func TestTheTextsOfTheApprovalSpeakTheCLIOfTheDocument(t *testing.T) {
 	}
 
 	// the question of "perguntar de volta" says how to answer it
-	cli, _ := os.ReadFile("../../../docs/cli/grao-mestre.md")
 	reply := fmt.Sprintf(`mestre approval reply %d "<texto>"`, id)
-	if !strings.Contains(string(cli), `mestre approval reply <id> "<texto>"`) {
+	if !strings.Contains(string(cliDoc), `mestre approval reply <id> "<texto>"`) {
 		t.Error(`docs/cli/grao-mestre.md does not define mestre approval reply <id> "<texto>"`)
 	}
 	if _, err := w.ch.Decide(w.ctx, chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerAskBack, Instruction: "para que serve?"}); err != nil {

@@ -41,21 +41,23 @@ func AnswersFor(level LevelKind, r Request) []Answer {
 // answerText says how an answer is named and told. cli is the name an agent
 // gives it in `mestre approval decide` (docs/cli/grao-mestre.md#mestre-approval;
 // empty for the answers only people give), label the button the people see
-// (docs/orquestracao/cadeia-de-aprovacao.md#respostas), help what it does and
-// use the options the CLI takes with it.
-type answerText struct{ cli, label, help, use string }
+// (docs/orquestracao/cadeia-de-aprovacao.md#respostas), help what it does for an
+// agent (and for the people, when peopleHelp is empty) and use the options the CLI
+// takes with it. What a person's answer makes is another thing for some of them
+// (a decree, not a temporary rule), so peopleHelp says it.
+type answerText struct{ cli, label, help, peopleHelp, use string }
 
 var answerTexts = map[Answer]answerText{
-	AnswerApprove:         {"approve", "Aprovar agora", "uma exceção para esta ação, usada uma vez", ""},
-	AnswerApproveFor:      {"approve-for", "Aprovar por um tempo", "regra temporária desta ação na mesa (até o fim da missão ou N horas)", "--for <duração> ou --until-quest"},
-	AnswerApprovePattern:  {"approve-pattern", "Aprovar o padrão", "regra temporária de um padrão", `--pattern "npm install *" e --for <duração> ou --until-quest`},
-	AnswerApproveAlways:   {"always", "Aprovar sempre", "aprova agora e deixa uma sugestão de regra permanente para o Dono", ""},
-	AnswerDelegate:        {"", "Delegar", "entrega a decisão de pedidos como este ao Grão-Mestre", ""},
-	AnswerDeny:            {"deny", "Negar agora", "", ""},
-	AnswerDenyInstruction: {"deny-with", "Negar com instrução", "o texto chega a quem pediu", `--text "use pnpm"`},
-	AnswerDenyAlways:      {"never", "Negar sempre", "nega agora e deixa uma sugestão de regra para o Dono", ""},
-	AnswerAskBack:         {"ask-back", "Perguntar de volta", "pede contexto a quem pediu; o pedido espera e o seu prazo recomeça na resposta", `--text "<pergunta>"`},
-	AnswerClimb:           {"escalate", "Subir agora", "leva o pedido ao nível seguinte", ""},
+	AnswerApprove:         {"approve", "Aprovar agora", "uma exceção para esta ação, usada uma vez", "", ""},
+	AnswerApproveFor:      {"approve-for", "Aprovar por um tempo", "regra temporária desta ação na mesa (até o fim da missão ou N horas)", "decreto com validade (Administrador ou acima, em qualquer escopo)", "--for <duração> ou --until-quest"},
+	AnswerApprovePattern:  {"approve-pattern", "Aprovar o padrão", "regra temporária de um padrão", "decreto permanente do padrão (Administrador ou acima, com PIN)", `--pattern "npm install *" e --for <duração> ou --until-quest`},
+	AnswerApproveAlways:   {"always", "Aprovar sempre", "aprova agora e deixa uma sugestão de regra permanente para o Dono", "decreto permanente na classe (Administrador ou acima, com PIN)", ""},
+	AnswerDelegate:        {"", "Delegar", "", "entrega a decisão de pedidos como este ao Grão-Mestre", ""},
+	AnswerDeny:            {"deny", "Negar agora", "", "", ""},
+	AnswerDenyInstruction: {"deny-with", "Negar com instrução", "o texto chega a quem pediu", "", `--text "use pnpm"`},
+	AnswerDenyAlways:      {"never", "Negar sempre", "nega agora e deixa uma sugestão de regra para o Dono", "decreto permanente que nega (Administrador ou acima)", ""},
+	AnswerAskBack:         {"ask-back", "Perguntar de volta", "pede contexto a quem pediu; o pedido espera e o seu prazo recomeça na resposta", "pede contexto a quem pediu; o pedido espera e o prazo final das pessoas continua correndo", `--text "<pergunta>"`},
+	AnswerClimb:           {"escalate", "Subir agora", "leva o pedido ao nível seguinte", "", ""},
 }
 
 // answersText lists the answers of the level: for an agent, by the name the CLI
@@ -80,8 +82,12 @@ func answersText(r Request, level Level, answers []Answer) string {
 		default:
 			b.WriteString("- " + t.cli + ": " + strings.ToLower(t.label))
 		}
-		if t.help != "" {
-			b.WriteString(": " + t.help)
+		help := t.help
+		if people && t.peopleHelp != "" {
+			help = t.peopleHelp
+		}
+		if help != "" {
+			b.WriteString(": " + help)
 		}
 		if t.use != "" && !people {
 			b.WriteString("; com " + t.use)
