@@ -1,6 +1,6 @@
 # Bot do Telegram
 
-> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -82,7 +82,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Mensagens de saída
 
 - **Quem envia:**
-  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)), o pedido "Sistema" de atualização do Mestre (ao Dono e aos Administradores, com botão e sem PIN, [autoatualização](../plataforma/autoatualizacao.md#aprovação)), os pedidos da Guilda de entrada de máquina e de promoção a Cidadela (só ao Dono, com botão e PIN a cada vez; a entrada em [Guilda](../guilda/guilda.md#entrada-na-guilda)), as perguntas da cadeia de aprovação que chegam às pessoas sem o Grão-Mestre ([fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários)), as sugestões e a amostra do [resumo](../aprovacoes/resumo-e-sugestoes.md), os pedidos de segundo fator e o aviso do Operador do PC (abaixo). Passar a Cidadela e excluir máquina não são pedidos: são ações diretas do Dono pelo `/guilda`, com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); quem aprova cada tipo de pedido está na [política](../aprovacoes/politica.md#tipos-de-ação).
+  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)), o pedido "Sistema" de atualização do Mestre (ao Dono e aos Administradores, com botão e sem PIN, [autoatualização](../plataforma/autoatualizacao.md#aprovação)), os pedidos da Guilda de entrada de máquina e de promoção a Cidadela (só ao Dono, com botão e PIN a cada vez; a entrada em [Guilda](../guilda/guilda.md#entrada-na-guilda)), as perguntas da cadeia de aprovação que chegam às pessoas sem o Grão-Mestre ([fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários)), as sugestões e a amostra do [resumo](../aprovacoes/resumo-e-sugestoes.md), os pedidos de segundo fator, a [mensagem de progresso](../orquestracao/grao-mestre.md#mensagem-de-progresso) e o aviso do Operador do PC (abaixo). Passar a Cidadela e excluir máquina não são pedidos: são ações diretas do Dono pelo `/guilda`, com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); quem aprova cada tipo de pedido está na [política](../aprovacoes/politica.md#tipos-de-ação).
   - **Grão-Mestre:** conversa, ou seja, respostas (`mestre reply`), resumos de épico, missões concluídas, notificações (`mestre notify`) e pedidos de aprovação. A sintaxe está em [CLI de comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md).
 - **Para quem:**
   - Uma resposta vai ao usuário e à conversa de origem ([resposta pelo mesmo canal](../orquestracao/esperas-e-caixa-de-entrada.md)).

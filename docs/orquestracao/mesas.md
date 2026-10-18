@@ -31,7 +31,7 @@ O que o código fixa onde o texto acima deixa em aberto:
 | Estado | Identificador | Entra quando |
 |---|---|---|
 | Aberta | `open` | passos 1–5 da abertura em andamento |
-| Em trabalho | `working` | Mestre da mesa pronto e pedido entregue; ou nova missão iniciada estando em revisão |
+| Em trabalho | `working` | Mestre da mesa pronto e pedido entregue; ou nova missão iniciada estando em revisão (um pedido novo que o Grão-Mestre [roteou](grao-mestre.md#triagem-e-roteamento-do-pedido) para a mesa, ou uma etapa `sync`) |
 | Em revisão | `in_review` | `mestre pr open` (ou `pr update`) concluído com sucesso |
 | Encerrando | `closing` | `mestre table close` do Grão-Mestre, com o merge do PR já confirmado |
 | Encerrada | `closed` | personagens encerrados e worktrees removidos (ou retenção decidida) |
@@ -58,7 +58,7 @@ O merge é confirmado pelo resultado do `mestre gh merge` ou, se uma pessoa fize
 
 ### Pausa
 
-A pausa é uma marca (`paused`) sobre o estado, ligada por `/pausar`, pelo painel ou pelo [limite de uso](../plataforma/limites-de-uso.md). Enquanto pausada:
+A pausa é uma marca (`paused`) sobre o estado, ligada por `/pausar`, pelo painel, pelo botão **Pausar mesa** do aviso de [mesa que gira](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira) ou pelo [limite de uso](../plataforma/limites-de-uso.md). Enquanto pausada:
 - o motor não entrega itens da caixa de entrada aos personagens da mesa (eles ficam na fila);
 - missões não iniciam etapas novas e recrutamentos de missão ficam parados;
 - disparos de [rituais](rituais.md) da mesa enfileiram normalmente (podendo expirar);
@@ -86,14 +86,14 @@ Regras de integração (sempre só *fast-forward*; o motor nunca faz merge sozin
 - Só o motor envia a branch da mesa do espelho para o GitHub ([ações por nível](../github/acoes-por-nivel.md)). Se uma Torre da mesa estiver desconectada no envio, a resposta do `mestre pr` inclui o aviso.
 - **Troca de Cidadela:** o espelho e os worktrees continuam válidos (nada muda de caminho), e os commits que só a Cidadela antiga tinha voltam em `refs/mestre/recuperados/…`, com aviso ao Mestre da mesa; o procedimento está nas [regras da troca](../guilda/cidadela-e-torres.md).
 
-Ver também: a [sincronia com a base](sincronia-com-a-base.md) (etapa `sync`, M5) integra a branch principal na branch da mesa e prova que a verificação passa.
+Ver também: a [sincronia com a base](sincronia-com-a-base.md) (etapa `sync`, M5) integra a branch principal na branch da mesa e prova que a verificação passa; a [dependência entre mesas](dependencia-entre-mesas.md) (M5) segura a mesa que depende de outra.
 
 ### Encerramento
 
 Ao entrar em `closing` (pelo `table close`), o motor:
 1. encerra os personagens da mesa com o [encerramento seguro](personagens.md#encerramento-seguro), o Mestre da mesa por último;
 2. desativa os rituais da mesa ([rituais](rituais.md));
-3. remove cada worktree (Cidadela e Torres) **somente se** a branch está integrada (PR mesclado e a ponta local é o commit-cabeça do PR ou ancestral dele) e `git status --porcelain` está vazio; depois apaga a branch do espelho;
+3. remove cada worktree (Cidadela e Torres) **somente se** a branch está integrada (PR mesclado e a ponta local é o commit-cabeça do PR ou ancestral dele) e `git status --porcelain` está vazio; depois grava na auditoria o SHA da ponta da branch (mesa, branch e SHA) e só então a apaga do espelho, para recuperá-la com `git branch <nome> <sha>` enquanto o git não coletar o commit (o padrão do git guarda commits inalcançáveis por 2 semanas);
 4. se algum worktree não cumprir isso, ou houver personagem fixado, o `table close` devolve ao Grão-Mestre o que falta (ele pergunta aos usuários) e a mesa fica em `closing` até a decisão; um novo `table close` com a decisão retoma os passos.
 
 O encerramento é retomável: um personagem que ainda não chegou ao ponto seguro termina quando chegar, e a varredura do motor (a cada minuto) segue os passos e avisa o Grão-Mestre ("Mesa X encerrada"); `table close` devolve então `scheduled` (só espera) ou `unmerged_changes` (precisa de decisão). A decisão de manter os worktrees que não cumprem a regra é `table close --keep`: a mesa passa a `closed`, os worktrees e a branch ficam e o resultado os lista.
@@ -102,13 +102,13 @@ O histórico (mesa, missões, esperas, personagens, consumo) fica no banco; perg
 
 ### Cancelamento
 
-Pedido por um usuário com nível para dar ordens, via Grão-Mestre (`mestre table close --cancel`). É **ação destrutiva**: o motor só executa com uma exceção pontual para exatamente essa ação ou com a aprovação do tipo `acao_destrutiva`, que o Grão-Mestre nunca dá sozinho ([política](../aprovacoes/politica.md#tipos-de-ação), [convenções da CLI](../cli/convencoes.md)). Aprovado, o motor: encerra os personagens com encerramento seguro; fecha o PR sem merge, se houver; fecha o épico como "não planejado"; mantém a branch no espelho por **30 dias** (padrão configurável por workspace) e depois a apaga do espelho (a branch no GitHub, se enviada, não é apagada); remove cada worktree só se não houver commits nem alterações não enviados ao espelho, senão pergunta como no encerramento: o `HEAD` do worktree (da Cidadela ou de uma Torre) precisa ser ancestral da branch da mesa no espelho, então os commits de uma Torre que divergiram, conflitaram ou foram bloqueados mantêm o worktree. As refs `refs/mestre/torres/…` da mesa ficam até a branch sair do espelho. Fechar o PR e o épico acontece uma vez, depois que os personagens terminaram; a branch sai do espelho na varredura que vem depois do prazo (e fica enquanto um worktree mantido por decisão a usa). Os commits do worktree da Cidadela já estão no espelho (se o `HEAD` está na branch); os de uma Torre só contam se a branch os contém. Reabrir o épico depois de cancelar ou encerrar abre uma mesa nova, de id `<n>-<slug>-2` (e assim por diante), com a branch dela; a antiga fica como está. A retenção precisa ser positiva e o prefixo de branch precisa formar um nome válido, senão a abertura/o cancelamento é recusado.
+Pedido por um usuário com nível para dar ordens, via Grão-Mestre (`mestre table close --cancel`). É **ação destrutiva**: o motor só executa com uma exceção pontual para exatamente essa ação ou com a aprovação do tipo `acao_destrutiva`, que o Grão-Mestre nunca dá sozinho ([política](../aprovacoes/politica.md#tipos-de-ação), [convenções da CLI](../cli/convencoes.md)). Aprovado, o motor: encerra os personagens com encerramento seguro; fecha o PR sem merge, se houver; fecha o épico como "não planejado"; mantém a branch no espelho por **30 dias** (padrão configurável por workspace) e depois a apaga do espelho, também gravando antes o SHA da ponta na auditoria (a branch no GitHub, se enviada, não é apagada); remove cada worktree só se não houver commits nem alterações não enviados ao espelho, senão pergunta como no encerramento: o `HEAD` do worktree (da Cidadela ou de uma Torre) precisa ser ancestral da branch da mesa no espelho, então os commits de uma Torre que divergiram, conflitaram ou foram bloqueados mantêm o worktree. As refs `refs/mestre/torres/…` da mesa ficam até a branch sair do espelho. Fechar o PR e o épico acontece uma vez, depois que os personagens terminaram; a branch sai do espelho na varredura que vem depois do prazo (e fica enquanto um worktree mantido por decisão a usa). Os commits do worktree da Cidadela já estão no espelho (se o `HEAD` está na branch); os de uma Torre só contam se a branch os contém. Reabrir o épico depois de cancelar ou encerrar abre uma mesa nova, de id `<n>-<slug>-2` (e assim por diante), com a branch dela; a antiga fica como está. A retenção precisa ser positiva e o prefixo de branch precisa formar um nome válido, senão a abertura/o cancelamento é recusado.
 
 ## Regras e erros
 
 - Agentes só alteram a branch da própria mesa: as regras fixas do Mestre bloqueiam comandos git que mudam outras refs, outros worktrees ou o espelho, e `git push` ([permissões](../classes/permissoes.md)).
 - Abrir mesa com épico inexistente, sem o rótulo `epico`, fechado ou já usado por outra mesa aberta é recusado; abrir mesa em workspace que não está `active` também.
-- Mesa encerrada ou cancelada não reabre; trabalho novo é mesa nova.
+- Mesa encerrada ou cancelada não reabre; trabalho novo é mesa nova. Um ajuste a algo já mesclado é mesa nova com épico próprio, **ligado ao antigo**: o Grão-Mestre cita "Ajuste de #<n>" no título ou no corpo do épico novo ([regra 5](grao-mestre.md#triagem-e-roteamento-do-pedido)); a ligação é informativa e não cria dependência.
 - Bundle com hash inválido é descartado e pedido de novo (até 3 vezes; depois, alerta ao Mestre da mesa).
 - Um bundle só é aceito para a branch de uma mesa que existe e não terminou; o de outra branch, ou de outra mesa, é recusado (`invalid_payload`). O envio da Torre para a Cidadela é recomeçado quando a conexão volta, a partir do último commit que a Cidadela tem.
 
@@ -124,6 +124,7 @@ Pedido por um usuário com nível para dar ordens, via Grão-Mestre (`mestre tab
 - **CA-MESAS-08** · *rápida* — **Dado** títulos de épico "Login de usuários", "Ação: pagar!" e "!!!", **quando** o slug é gerado, **então** resulta `login-de-usuarios`, `acao-pagar` e `mesa`, e nenhum passa de 30 caracteres.
 - **CA-MESAS-09** · *rápida* — **Dado** uma mesa `in_review` com o merge recém-confirmado, **quando** o motor processa a confirmação, **então** a mesa continua `in_review`, o Grão-Mestre recebe o item `github` do merge, e só um `table close` a leva a `closing`; **dado** `table close` sem merge confirmado, **então** é recusado.
 - **CA-MESAS-10** · *rápida* — **Dado** o GitHub falso sem o épico 7, **quando** o Grão-Mestre chama `table open --epic 7`, **então** é recusado, nenhum épico é criado e nenhuma branch existe.
+- **CA-MESAS-11** · *rápida* — **Dado** uma mesa `closing` com o merge confirmado, o git falso e a ponta da branch no commit `abc123`, **quando** o motor apaga a branch do espelho, **então** a auditoria já tem o registro (mesa, branch, `abc123`) antes do pedido de remoção, e sem o registro gravado a remoção não é pedida; **dado** o cancelamento depois dos 30 dias, **então** o mesmo vale.
 
 ## Depende de
 

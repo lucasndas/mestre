@@ -1,6 +1,6 @@
 # Supervisão da cadeia
 
-> **Assunto:** freios e visibilidade das decisões tomadas perto do trabalho: o resumo não bloqueante das decisões das mesas ao Grão-Mestre, a pausa de autonomia por mesa e as métricas de fila por nível com alerta · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** freios e visibilidade das decisões tomadas perto do trabalho: o resumo não bloqueante das decisões das mesas ao Grão-Mestre, a pausa de autonomia por mesa as métricas de fila por nível com alerta e o aviso de mesa que gira sem entregar · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -30,6 +30,12 @@ Com os Mestres de mesa decidindo o `medio` da própria mesa ([cadeia de aprovaç
 - **Alerta:** um nível acumula quando tem mais de `cadeia.alerta_fila.abertos` pedidos abertos (padrão 10) ou o mais antigo passa de `cadeia.alerta_fila.fator` vezes o prazo do nível (padrão 2). O aviso vai a quem está acima: de um Mestre da mesa, ao Grão-Mestre; do Grão-Mestre, aos Administradores e ao Dono; das pessoas, ao Dono. Um aviso por vez, até o nível voltar abaixo dos dois limites.
 - O tempo que cada personagem passa ocioso, ocupado ou aguardando já se mede pelo histórico de estados ([estados](personagens.md#estados)); as métricas de fila são o lado das aprovações, e um painel de produtividade pode juntar as duas.
 
+### Entrega útil e mesa que gira
+
+- **Entrega útil** é trabalho que pousou, não trabalho em andamento: um commit novo na branch da mesa, o PR aberto ou atualizado, ou uma etapa de missão concluída. O motor guarda, por mesa, o instante da última (`última entrega útil`) e a mostra no `mestre table status` ([CLI](../cli/grao-mestre.md#mestre-table)).
+- **Aviso:** a mesa `working` há mais de 3 h (padrão, configurável por workspace) sem entrega útil, e não pausada nem aguardando [cota](../plataforma/limites-de-uso.md) ou a [dependência de outra mesa](dependencia-entre-mesas.md), gera um item `system` ao Grão-Mestre e uma mensagem a quem tem nível de Aprovador ou acima, com o botão **Pausar mesa** ([bot](../telegram/bot.md), M5; painel no M6). Um aviso por mesa, até a próxima entrega útil.
+- **Pausar mesa** liga a [pausa](mesas.md#pausa) da mesa, sem PIN (só restringe), como o botão **Pausar autonomia** da fila; quem pausa e o motivo vão à auditoria. Não confundir com a pausa de autonomia, que só muda quem decide o `medio`.
+
 ## Regras e erros
 
 - Pausa pedida por quem não tem o nível, ou numa mesa encerrada: recusada, e nada muda.
@@ -44,6 +50,7 @@ Com os Mestres de mesa decidindo o `medio` da própria mesa ([cadeia de aprovaç
 - **CA-SUPCAD-03** · *rápida* — **Dado** o relógio falso e 11 pedidos abertos no Mestre da mesa, **quando** o motor recalcula as filas, **então** o Grão-Mestre recebe um único aviso com a mesa, o total e a idade do mais antigo; **dado** um pedido no Grão-Mestre há mais de 20 min, **então** os Administradores e o Dono recebem o aviso (dublê); **quando** as filas voltam abaixo dos limites e passam de novo, **então** sai um aviso novo.
 - **CA-SUPCAD-04** · *rápida* — **Dado** pedidos que passaram pelo Mestre da mesa e pelo Grão-Mestre, **quando** o motor calcula as métricas de fila, **então** saem, por aprovador, os abertos, a idade do mais antigo e o tempo médio de espera nas últimas 24 h.
 - **CA-SUPCAD-05** · *rápida* — **Dado** o Grão-Mestre, **quando** roda `mestre approval autonomy pause --table 42-login --reason "muitas falhas"`, **então** a mesa fica em pausa e a auditoria registra quem e o motivo; **dado** um Aprovador, **quando** toca **Pausar autonomia** no aviso de fila, **então** a mesa fica em pausa e um `resume` do Grão-Mestre nela recebe `level_denied`.
+- **CA-SUPCAD-06** · *rápida* — **Dado** o relógio falso e a mesa `42-login` em `working` há 3 h sem commit, PR nem etapa concluída, **quando** o motor recalcula, **então** o Grão-Mestre recebe um aviso e um Aprovador recebe a mensagem com o botão **Pausar mesa**, uma única vez; **quando** o Aprovador toca o botão, **então** a mesa fica pausada e a auditoria registra quem e o motivo; **dado** um commit novo depois do aviso, **então** o contador recomeça e um novo aviso só sai depois de mais 3 h sem entrega.
 
 ## Depende de
 

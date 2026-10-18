@@ -1,6 +1,6 @@
 # Sessão zero do workspace
 
-> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -36,12 +36,24 @@ flowchart TD
 - **Com `AGENTS.md`:** não mexe. Pode sugerir melhorias aos usuários, que aplicam ou não.
 - **Com `CLAUDE.md` ou `CLAUDE.local.md`:** avisa que os agentes Claude vão ler esse arquivo no lugar do `AGENTS.md` (os de Codex e Antigravity leem o `AGENTS.md`) e sugere unificar no `AGENTS.md`. O mesmo aviso fica no [checklist](../plataforma/checklist.md). Por que isso não quebra a camada do Mestre: [precedencia](../arquitetura/precedencia.md).
 
+### Comandos de verificação
+- Na etapa `analysis`, o Grão-Mestre propõe os comandos que provam que o projeto está de pé (build e testes, descobertos na análise) em `.mestre/regras/verificacao.yaml`; um Administrador ou acima os confirma pelo painel ([administração](../painel/administracao.md)), e é por lá que o arquivo muda depois. O formato:
+  ```yaml
+  version: 1
+  comandos: ["go build ./...", "go test ./..."]   # em ordem; o primeiro que sair com código diferente de 0 reprova
+  timeout: 15m                                    # por comando
+  ```
+- É a **única fonte** do que o gate de frescor ([ações por nível](../github/acoes-por-nivel.md#merge)) e a etapa `sync` ([sincronia com a base](../orquestracao/sincronia-com-a-base.md)) rodam. O motor os executa num worktree efêmero da mesa, como a conta `mestre-agente` e nunca como a do motor ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)), igual nos três provedores, porque a verificação é do motor e não de um agente. Lido sempre do clone principal, nunca da branch do PR: um PR não troca o que o verifica.
+- **Sem comando confirmado, nada é aprovado sozinho:** o gate não conclui nada e o pedido de aprovação do PR do épico nasce `human_required`, com o aviso "sem comando de verificação configurado"; o Grão-Mestre lembra os usuários no resumo periódico. Seguir adiante sem verificar é o que essa regra impede.
+- Arquivo mudado por fora do painel: vale a última versão confirmada e os Administradores são avisados, como no [teto](../classes/teto-do-workspace.md#arquivo-mudado-por-fora).
+
 ### Estrutura de `.mestre/`
 ```
 .mestre/
 ├── regras/
 │   ├── teto.yaml                    teto de permissões e custo   → teto-do-workspace
 │   ├── politica-de-aprovacao.yaml   política de aprovação        → arquivo-de-politica
+│   ├── verificacao.yaml             comandos de verificação      → abaixo
 │   └── instrucoes/                  instruções extras dos usuários
 │       ├── grao-mestre.md                                         → orquestracao/grao-mestre
 │       └── mestre-da-mesa.md                                      → orquestracao/mestre-da-mesa
@@ -55,7 +67,7 @@ flowchart TD
 └── run/                             execução: estado local, cópias de classes nos worktrees
 ```
 - O formato de cada arquivo é do documento indicado à direita ([teto-do-workspace](../classes/teto-do-workspace.md), [politica](../aprovacoes/politica.md), [grao-mestre](../orquestracao/grao-mestre.md), [mestre-da-mesa](../orquestracao/mestre-da-mesa.md), [classes](../classes/classes.md), [pergaminhos-e-tomos](../orquestracao/pergaminhos-e-tomos.md), [anexos-e-transcricao](../telegram/anexos-e-transcricao.md), [personagem](personagem.md)).
-- `teto.yaml` e `politica-de-aprovacao.yaml` nascem com o padrão sensato definido nos documentos donos.
+- `teto.yaml` e `politica-de-aprovacao.yaml` nascem com o padrão sensato definido nos documentos donos; `verificacao.yaml` nasce vazio e só vale depois da confirmação acima.
 - **Arquivos de execução** (`agents/`, `anexos/`, `run/`) nunca vão para o git, qualquer que seja a escolha abaixo.
 - A fonte de `.mestre/` é o clone principal na Cidadela; o que cada worktree recebe está em [mesa](mesa.md).
 
@@ -88,9 +100,14 @@ O motor descobre se a aprovação do App "Grão-Mestre" conta para as revisões 
 - **CA-SZ-WS-05** · *completa* — **Dado** a resposta "só local", **quando** a sessão zero termina, **então** `.git/info/exclude` contém `/.mestre/` dentro do bloco do Mestre e o `.gitignore` não mudou.
 - **CA-SZ-WS-06** · *completa* — **Dado** um GitHub falso em que a aprovação de App não satisfaz a revisão, **quando** a etapa `approval_test` roda, **então** o resultado `nao_conta` é registrado, a etapa termina e o workspace vai para `active`.
 - **CA-SZ-WS-07** · *rápida* — **Dado** um `.mestre/` existente com `teto.yaml` próprio, **quando** a estrutura é criada, **então** o `teto.yaml` não muda e só as pastas que faltavam são criadas.
+- **CA-SZ-WS-08** · *rápida* — **Dado** um projeto Go analisado pelo Grão-Mestre, **quando** a etapa `analysis` termina, **então** `.mestre/regras/verificacao.yaml` tem a proposta (`go build ./...` e `go test ./...`) e ela não vale antes da confirmação de um Administrador; **dado** uma edição por fora, **então** vale a última versão confirmada e os Administradores são avisados.
 
 ## Depende de
 
 - [Workspaces](../orquestracao/workspaces.md)
 - [Persistência](../arquitetura/persistencia.md)
 - [Componentes](../arquitetura/componentes.md)
+
+## Verificar na implementação
+
+- **Verificar na implementação:** o motor roda os comandos de verificação como `mestre-agente`, num worktree efêmero, nos dois sistemas, e lê o código de saída. **Padrão:** por um terminal `spawn` sem agente, pelo `mestre-pty` que o `mestre-launcher` já inicia como `mestre-agente` ([iniciador](../arquitetura/componentes.md#iniciador-mestre-launcher)); o launcher só inicia esse binário. **Se falhar:** (código de saída ou tempo limite não confiáveis por esse caminho) o motor não roda a verificação, e o gate e a `sync` caem no caso "sem comando": `human_required` com o aviso, nunca aprovação sem verificar. **Onde:** o teste de CA-GH-ACOES-11 (completa), nos dois sistemas do CI.
