@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+
+	"github.com/lucasndas/mestre/internal/store"
 )
 
 // Rotation steps, in order. A crash after any of them leaves every secret
@@ -182,30 +184,9 @@ func (v *Vault) reencryptRows(ctx context.Context, tx *sql.Tx, old *keyring, nk 
 // dropped, keeping the newest when the table is empty; and the envelope is
 // rewritten when it does not match the keys kept or the recovery key.
 func (v *Vault) settle(ctx context.Context, ring *keyring) error {
-	inUse, err := v.versionsInUse(ctx)
+	keep, err := keysInUse(ctx, v.cfg.DB, ring)
 	if err != nil {
 		return err
-	}
-	// keep never drops a key some row claims, even one that failed the probe.
-	var keep []uint32
-	opened := false
-	for _, ver := range inUse {
-		k := ring.get(ver)
-		if k == nil {
-			continue // rows that claim an unknown version: they fail alone
-		}
-		keep = append(keep, ver)
-		ok, err := v.probe(ctx, k)
-		if err != nil {
-			return err
-		}
-		opened = opened || ok
-	}
-	if len(inUse) > 0 && !opened {
-		return fmt.Errorf("%w (versions in use: %v)", errWrongKey, inUse)
-	}
-	if len(keep) == 0 {
-		keep = []uint32{ring.current().version}
 	}
 	if !slices.Equal(keep, ring.versions()) {
 		kept := ring.subset(keep)
@@ -227,8 +208,73 @@ func (v *Vault) settle(ctx context.Context, ring *keyring) error {
 	return nil
 }
 
+// keysInUse checks ring against the secrets stored in db and returns the key
+// versions to keep: every version a row needs that is present must open at
+// least one of its rows, and at least one must be present, or the key is wrong
+// (errWrongKey); rows claiming an unknown version fail alone. It only reads, so
+// db may be a replica.
+func keysInUse(ctx context.Context, db *store.DB, ring *keyring) ([]uint32, error) {
+	inUse, err := versionsInUse(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	// keep never drops a key some row claims, even one that failed the probe.
+	var keep []uint32
+	opened := false
+	for _, ver := range inUse {
+		k := ring.get(ver)
+		if k == nil {
+			continue // rows that claim an unknown version: they fail alone
+		}
+		keep = append(keep, ver)
+		ok, err := probe(ctx, db, k)
+		if err != nil {
+			return nil, err
+		}
+		opened = opened || ok
+	}
+	if len(inUse) > 0 && !opened {
+		return nil, fmt.Errorf("%w (versions in use: %v)", errWrongKey, inUse)
+	}
+	if len(keep) == 0 {
+		keep = []uint32{ring.current().version}
+	}
+	return keep, nil
+}
+
+// Check says whether the key that keys holds would open the vault of the
+// secrets in db, without opening it: the key loads, is a key ring, and opens at
+// least one row of each version the rows use. It writes nothing, rotates
+// nothing and raises no alert, and db may be a replica: it is how a Tower, before
+// it asks to take the command, learns that its copy of the vault would not
+// open, instead of learning it after it won the epoch. The error wraps ErrClosed,
+// like the one of a vault that does not open.
+func Check(ctx context.Context, keys KeyStore, db *store.DB) error {
+	data, err := keys.Load(ctx)
+	if err != nil {
+		if errors.Is(err, ErrNoKey) {
+			err = errors.New("vault: the key is missing")
+		}
+		return &ClosedError{Reason: err}
+	}
+	ring, err := parseKeyring(data)
+	zero(data)
+	if err != nil {
+		return &ClosedError{Reason: err}
+	}
+	defer ring.destroy()
+	if _, err := keysInUse(ctx, db, ring); err != nil {
+		return &ClosedError{Reason: err}
+	}
+	return nil
+}
+
 func (v *Vault) versionsInUse(ctx context.Context) ([]uint32, error) {
-	rows, err := v.cfg.DB.Reader().QueryContext(ctx, `SELECT DISTINCT key_version FROM secrets ORDER BY key_version`)
+	return versionsInUse(ctx, v.cfg.DB)
+}
+
+func versionsInUse(ctx context.Context, db *store.DB) ([]uint32, error) {
+	rows, err := db.Reader().QueryContext(ctx, `SELECT DISTINCT key_version FROM secrets ORDER BY key_version`)
 	if err != nil {
 		return nil, fmt.Errorf("vault: read key versions: %w", err)
 	}
@@ -249,8 +295,8 @@ var errWrongKey = errors.New("vault: the key does not open the stored secrets (w
 
 // probe reports whether k opens at least one row of its version: a single
 // altered row fails only its own reads, a wrong key fails them all.
-func (v *Vault) probe(ctx context.Context, k *dataKey) (bool, error) {
-	rows, err := v.cfg.DB.Reader().QueryContext(ctx,
+func probe(ctx context.Context, db *store.DB, k *dataKey) (bool, error) {
+	rows, err := db.Reader().QueryContext(ctx,
 		`SELECT name, type, ciphertext, nonce FROM secrets WHERE key_version = ?`, k.version)
 	if err != nil {
 		return false, fmt.Errorf("vault: check key: %w", err)

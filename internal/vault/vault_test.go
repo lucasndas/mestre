@@ -18,6 +18,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/store"
+	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -455,10 +456,11 @@ func TestInterruptedKeyRotationKeepsEverySecretReadable(t *testing.T) {
 	}
 }
 
-// assertOnlyKeyOnDisk reads the key file and the header of the envelope as
-// they are on disk, and wants the version of the key to be the only one in
-// both (CA-COFRE-06): the memory of the engine being right does not make the
-// copies that travel to the Towers right.
+// assertOnlyKeyOnDisk reads the key store (the key file, in production; here an
+// in-memory store, whose file has its own tests) and the header of the envelope
+// file as the restart left them, and wants the version of the key to be the only
+// one in both (CA-COFRE-06): the memory of the engine being right does not make
+// the copies that travel to the Towers right.
 func assertOnlyKeyOnDisk(t *testing.T, f *fixture, version uint32) {
 	t.Helper()
 	data, err := f.cfg.Keys.Load(f.ctx)
@@ -963,5 +965,94 @@ func TestWriteFileAtomicReplacesTheFile(t *testing.T) {
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("folder holds %d entries, %v; want only the envelope", len(entries), err)
+	}
+}
+
+// CA-COFRE-22
+// Check is how a Tower learns, before it asks to take the command, that its
+// copy of the vault would not open: the key must load and open the rows, and the
+// error is the one of a vault that is closed. It only reads, so it works over a
+// replica, and a rotation that stopped halfway is left as it is for Open to
+// settle (CA-COFRE-22).
+func TestCheckSaysWhetherTheKeyWouldOpenTheVaultAndChangesNothing(t *testing.T) {
+	t.Parallel()
+	f := newDurableFixture(t, nil)
+	v := f.create(t)
+	putSamples(t, v)
+	// the database as a Tower holds it: a replica, which cannot open the vault
+	replica, err := guilddb.Open(f.ctx, f.db.Path(), store.Options{Replica: true, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { replica.Close() })
+
+	other := newFixture(t, nil) // another Guild: a key of the same version that opens nothing here
+	other.create(t)
+	garbage := &memKeys{data: []byte("not a key ring")}
+	for _, tc := range []struct {
+		name string
+		keys KeyStore
+		want error // nil: opens
+	}{
+		{"the key of the vault", f.cfg.Keys, nil},
+		{"no key", &memKeys{}, ErrClosed},
+		{"the key of another Guild", other.cfg.Keys, errWrongKey},
+		{"something that is not a key ring", garbage, errBadKeyring},
+	} {
+		for dbName, db := range map[string]*store.DB{"main": f.db, "replica": replica} {
+			err := Check(f.ctx, tc.keys, db)
+			switch {
+			case tc.want == nil && err != nil:
+				t.Errorf("%s, %s database: Check = %v, want nil", tc.name, dbName, err)
+			case tc.want != nil && (!errors.Is(err, tc.want) || !errors.Is(err, ErrClosed)):
+				t.Errorf("%s, %s database: Check = %v, want a closed vault (%v)", tc.name, dbName, err, tc.want)
+			}
+		}
+	}
+
+	// a rotation that stopped after it staged the new key: Check says it opens
+	// and leaves the key store and the envelope with both keys, as the crash did
+	v.failAfter = func(s string) error {
+		if s == stepEnvelopeStaged {
+			return errors.New("simulated crash")
+		}
+		return nil
+	}
+	if err := v.Rotate(f.ctx); err == nil {
+		t.Fatal("the rotation did not stop")
+	}
+	if err := Check(f.ctx, f.cfg.Keys, replica); err != nil {
+		t.Fatalf("Check after the interrupted rotation = %v", err)
+	}
+	assertKeyVersions(t, f, []uint32{1, 2})
+	// what Open does with the same state, which Check left alone
+	f.open(t)
+	assertKeyVersions(t, f, []uint32{1})
+}
+
+// assertKeyVersions wants the key store and the envelope to hold these
+// versions.
+func assertKeyVersions(t *testing.T, f *fixture, want []uint32) {
+	t.Helper()
+	data, err := f.cfg.Keys.Load(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ring, err := parseKeyring(data)
+	zero(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ring.destroy()
+	env, err := os.ReadFile(f.cfg.EnvelopePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := parseEnvelopeHeader(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ring.versions(), want) || !slices.Equal(info.versions, want) {
+		t.Errorf("the key store holds %v and the envelope %v, want both %v", ring.versions(), info.versions, want)
 	}
 }

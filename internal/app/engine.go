@@ -155,8 +155,8 @@ type Deps struct {
 	// missing, refused or wrong; docs/plataforma/cofre.md#regras-e-erros): the
 	// engine goes on without the vault, and what needs it says so, and the
 	// Owner learns it here (milestones 5 and 7 show it as an alert of the
-	// system). It is called from the goroutine that opens the vault, once
-	// for each time the vault is opened, and must not block.
+	// system). It is called from the goroutine that opens the vault, each
+	// time it comes back closed, and must not block.
 	OnVaultAlert func(vault.Alert)
 	// RenewEvery is how often a machine sees whether its engine certificate
 	// is due (a minute by default).
