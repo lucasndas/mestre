@@ -26,18 +26,20 @@ support_skills:                   # frontmatter do CLASS.md
   - {name: ponytail, enabled: false}
 ```
 
-- Cada uma fica em `support/<nome>/` no pacote, com o `SKILL.md`, a pasta inteira da skill e o arquivo de **licença** dela (`LICENSE`; e `NOTICE` quando a licença o exige, como a Apache-2.0). Conta nos limites do pacote ([classes](classes.md#estrutura-do-pacote)).
+- Cada uma fica em `support/<nome>/` no pacote, com o `SKILL.md`, a pasta inteira da skill e o arquivo de **licença** dela (`LICENSE`; e `NOTICE` quando a licença o exige, como a Apache-2.0). Conta nos limites do pacote (64 arquivos, 512 KiB, [classes](classes.md#estrutura-do-pacote)): o pacote que passa deles é recusado, e o pacote sugerido é conferido por teste.
 - O pacote é copiado e versionado com a classe; nada vai para `~/.claude/skills` nem `~/.agents/skills` ([ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md), opção 4). Atualizar a skill é editar a classe, com as aprovações do escopo.
 - **Ligar e desligar** é editar `enabled`, pelo painel ou pela CLI, com as mesmas aprovações. Desligada, a skill continua no pacote e a classe funciona pelo próprio `CLASS.md`: desligar escolhe entre profundidade e contexto, nunca entre funcionar e não funcionar.
 
 ### Como chega a cada provedor (camada 1: entrega)
 
 - **Claude Code:** só as ligadas vão para a pasta do personagem, `.mestre/agents/<id>/.claude/skills/<nome>/`, lida por `--add-dir`, como as skills da classe. A cópia gerenciada em `.claude/skills/` do worktree continua só com a de comunicação.
-- **Codex e Antigravity:** o motor materializa em `.agents/skills/<nome>/` do worktree da mesa, em cada máquina onde roda um personagem dela, as skills de apoio **ligadas em alguma classe com personagem vivo na mesa**, antes de iniciar o personagem (fora do git, como a de comunicação). Os dois carregam sob demanda: só o nome e a descrição entram no catálogo, e o corpo é lido quando a skill é usada. Quando nenhum personagem vivo da mesa a tem ligada, a pasta sai na materialização seguinte.
+- **Codex e Antigravity:** o motor materializa em `.agents/skills/<nome>/` do worktree da mesa, em cada máquina onde roda um personagem dela, as skills de apoio **ligadas na classe de algum personagem Codex ou Antigravity vivo na mesa**, antes de iniciar o personagem. Como as `mestre-*`, elas levam o marcador de gerado ([skills geradas](../cli/skills-geradas.md)), ficam no bloco `managed` do `info/exclude` ([sessão zero da mesa](../sessao-zero/mesa.md)) e a regra fixa de escrita as protege ([regras fixas](permissoes.md#regras-fixas-de-segurança)): nenhum agente as altera, e elas nunca vão para um commit. Os dois carregam sob demanda: só o nome e a descrição entram no catálogo, e o corpo é lido quando a skill é usada. Quando nenhum personagem vivo da mesa a tem ligada, a pasta sai na materialização seguinte.
 
-### O desligado vale (camadas 2 a 4)
+### Camadas 2 a 4: o que segura o desligado
 
-2. **Regra gerada pelo motor:** nas regras efetivas de cada personagem, `files.deny: [".agents/skills/<nome>/**"]` para toda skill de apoio da mesa que a classe dele não tem ligada. Quem aplica é o [despachante](../provedores/despachante-de-hooks.md), nas ferramentas de leitura e nos caminhos literais de comando ([formato](formato-das-permissoes.md)), igual nos três provedores. Ninguém escreve essa regra à mão.
+O desligado é **contenção de contexto, não fronteira de segurança**: ler uma skill de apoio não libera ação nenhuma ([ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)). As camadas abaixo fazem o personagem não usar o que a classe dele não tem ligado; não prometem que ele nunca veja o texto.
+
+2. **Regra gerada pelo motor:** nas regras efetivas de cada personagem, `files.deny: [".agents/skills/<nome>/**"]` para toda skill de apoio da mesa que a classe dele não tem ligada. Quem aplica é o [despachante](../provedores/despachante-de-hooks.md), na ferramenta de leitura e no caminho escrito num comando ([formato](formato-das-permissoes.md)). Limites conhecidos: caminho com curinga é julgado pela pasta antes do curinga (`cat .agents/skills/t*/SKILL.md` cai em `.agents/skills/`, fora da regra), e o carregamento que o próprio CLI faz da skill não passa pelo despachante; o Codex nem tem ferramenta de leitura. Ninguém escreve essa regra à mão.
 3. **Reforço nativo**, onde o provedor permite ([reforço nativo](reforco-nativo.md)): no Claude Code, `Read(<glob>)` em `deny` no `--settings` do personagem; no Codex, o motor desliga a skill na configuração de início do personagem (abaixo, "Verificar"); no Antigravity, sem reforço: vale o despachante, que lá falha fechado.
 4. **Aviso:** a camada do Mestre do personagem tem uma linha com as skills de apoio ligadas para ele. É informação, nunca a barreira.
 
@@ -50,10 +52,12 @@ support_skills:                   # frontmatter do CLASS.md
 ## Critérios de aceite
 
 - **CA-APOIO-01** · *rápida* — **Dado** uma mesa com um Dev (com `tdd` ligada) e um Revisor (com `tdd` desligada), ambos Codex, **quando** os arquivos são montados, **então** o `.agents/skills/` da mesa tem `mestre-comunicacao` e `tdd`, as regras efetivas do Revisor têm `files.deny` para `.agents/skills/tdd/**`, e um `cat .agents/skills/tdd/SKILL.md` dele é negado pelo despachante e registrado.
-- **CA-APOIO-02** · *rápida* — **Dado** um Dev e um Revisor Claude Code, com `tdd` ligada só para o Dev, **quando** os arquivos são montados, **então** `tdd` existe só em `.mestre/agents/<id do Dev>/.claude/skills/`, o `.claude/skills/` do worktree tem só `mestre-comunicacao`, e o `--settings` do Revisor tem `Read` em `deny` para `.agents/skills/tdd/**`.
+- **CA-APOIO-02** · *rápida* — **Dado** um Dev e um Revisor Claude Code, com `tdd` ligada só para o Dev, **quando** os arquivos são montados, **então** `tdd` existe só em `.mestre/agents/<id do Dev>/.claude/skills/`, o `.claude/skills/` do worktree tem só `mestre-comunicacao`, nenhuma `tdd` vai ao `.agents/skills/` (não há personagem Codex ou Antigravity na mesa), e o `--settings` do Revisor tem `Read` em `deny` com o caminho absoluto de `.agents/skills/tdd/**` no worktree ([reforço nativo](reforco-nativo.md)).
 - **CA-APOIO-03** · *rápida* — **Dado** uma classe com `support/tdd/` sem `LICENSE`, ou uma skill de apoio chamada `mestre-x`, **quando** o `class check` roda, **então** aponta o erro e a classe não é salva.
 - **CA-APOIO-04** · *rápida* — **Dado** o último personagem vivo com `tdd` ligada dispensado da mesa, **quando** o motor materializa de novo, **então** `.agents/skills/tdd/` sai do worktree; **dado** um repositório que versiona `.agents/skills/tdd/`, **então** a de apoio não é materializada e o Mestre da mesa recebe o aviso.
 - **CA-APOIO-05** · *rápida* — **Dado** o Dev com `tdd` ligada e o Revisor com ela desligada, **quando** as camadas do Mestre são montadas, **então** a do Dev tem a linha das skills de apoio com `tdd` e a do Revisor não a cita.
+- **CA-APOIO-06** · *rápida* — **Dado** o pacote sugerido embutido no binário, **quando** o teste o lê, **então** cada classe, com todas as suas skills de apoio, cabe em 64 arquivos e 512 KiB, e cada skill de apoio tem o arquivo de licença.
+- **CA-APOIO-07** · *rápida* — **Dado** `tdd` materializada numa mesa, **quando** um personagem pede para escrever em `.agents/skills/tdd/SKILL.md`, **então** a regra fixa nega; **e** `git status` do worktree não mostra a pasta.
 
 ## Depende de
 

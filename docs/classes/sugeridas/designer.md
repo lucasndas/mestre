@@ -16,6 +16,12 @@ Quando o pedido mexe em experiência ou interface: define o fluxo, os estados (c
 name: designer
 description: Define fluxo, estados e critérios visuais antes da construção
 app: novo
+support_skills:                   # todas desligadas na ativação
+  - {name: critique, enabled: false}
+  - {name: audit, enabled: false}
+  - {name: polish, enabled: false}
+mcp:
+  - {name: playwright, enabled: false}
 ```
 
 Corpo (instruções):
@@ -36,6 +42,8 @@ git:
   commit: true
 commands:
   default: ask
+tools:
+  allow: ["mcp__playwright__*"]   # vale quando o servidor está ligado
 ```
 
 ## O que entrega

@@ -17,6 +17,14 @@ name: dev
 description: Implementa a menor mudança que cumpre os critérios, com teste antes
 app: novo
 done_requires: {verify: true}
+support_skills:                   # todas desligadas na ativação
+  - {name: implement, enabled: false}
+  - {name: tdd, enabled: false}
+  - {name: codebase-design, enabled: false}
+  - {name: resolving-merge-conflicts, enabled: false}
+  - {name: ponytail, enabled: false}
+mcp:
+  - {name: context7, enabled: false}
 ```
 
 Corpo (instruções):
@@ -37,6 +45,8 @@ git:
   commit: true
 commands:
   default: ask
+tools:
+  allow: ["mcp__context7__*"]   # vale quando o servidor está ligado
 ```
 
 ## O que entrega

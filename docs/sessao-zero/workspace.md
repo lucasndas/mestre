@@ -54,6 +54,7 @@ flowchart TD
 │   ├── teto.yaml                    teto de permissões e custo   → teto-do-workspace
 │   ├── politica-de-aprovacao.yaml   política de aprovação        → arquivo-de-politica
 │   ├── verificacao.yaml             comandos de verificação      → abaixo
+│   ├── mcp.yaml                     catálogo de servidores MCP   → classes/mcp-por-classe
 │   └── instrucoes/                  instruções extras dos usuários
 │       ├── grao-mestre.md                                         → orquestracao/grao-mestre
 │       └── mestre-da-mesa.md                                      → orquestracao/mestre-da-mesa

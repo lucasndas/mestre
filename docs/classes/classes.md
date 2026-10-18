@@ -34,7 +34,7 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
   permissions.yaml    o que a classe pode fazer (ver permissoes.md)
   hooks/hooks.yaml    hooks extras, por evento do Mestre
   hooks/…             scripts usados pelos hooks (só classes globais e do workspace)
-  skills/<nome>/      skills próprias da classe (opcional)
+  skills/<nome>/      skills próprias da classe (opcional); support/<nome>/: skills de apoio
 ```
 O pacote tem até 64 arquivos (inclusive os casos de `cases/`, [teste de classe](../provedores/teste-de-classe.md)), 512 KiB e 256 KiB por arquivo, porque viaja inteiro na replicação; links e arquivos que não são comuns são recusados.
 

@@ -22,13 +22,14 @@ Aceita, 2026-10-18, por decisão do Dono. Complementa o [ADR 0011](0011-agents-s
    - Contras: qualquer autor de classe da mesa faria o motor iniciar um programa novo; segredo dentro de pacote que viaja pela replicação.
 3. **Catálogo do workspace aprovado por Administrador, e a classe só cita nomes dele.**
    - Prós: quem decide que programa roda é uma pessoa com nível para isso; a classe continua só texto e regras; o mesmo servidor serve a várias classes.
-   - Contras: um passo a mais para o Administrador; servidores com segredo exigem cuidado (abaixo).
+   - Contras: um passo a mais para o Administrador.
 
 ## Decisão
 
 - **Opção 3.** O workspace tem um **catálogo de servidores MCP** e a classe declara `mcp: [<nome>…]` no frontmatter do `CLASS.md`. Detalhes em [MCP por classe](../classes/mcp-por-classe.md).
 - O motor configura **só** os servidores da classe no CLI de cada personagem, por provedor, e gera nas regras efetivas o `tools.deny` dos servidores do catálogo que a classe não declara.
-- As regras fixas continuam valendo antes de tudo: MCP de controle do computador ou do navegador do usuário só na base Operador do PC ([ADR 0021](0021-operador-do-pc.md)); um servidor desses é recusado no catálogo de qualquer outra base.
+- **Fora do M8:** servidor que precisa de chave (o agente, na mesma conta, poderia lê-la) e servidores no Antigravity (lá a configuração é do perfil compartilhado, e o reforço nativo a apaga). Ficam em "A confirmar" no documento.
+- As regras fixas continuam valendo antes de tudo: MCP de controle do computador ou do navegador do usuário só na base Operador do PC ([ADR 0021](0021-operador-do-pc.md)); um servidor desses é recusado no catálogo pelo pacote ou endereço, não pelo nome.
 
 ## Consequências
 
@@ -37,5 +38,5 @@ Aceita, 2026-10-18, por decisão do Dono. Complementa o [ADR 0011](0011-agents-s
   - O que roda numa máquina como servidor MCP é decisão de uma pessoa, registrada na auditoria.
 - **Negativas:**
   - A rede do servidor não é filtrada pela classe: entrar no catálogo é aprovar o que o servidor acessa. O catálogo registra os domínios que ele usa, para quem aprova saber.
-  - Servidor com segredo recebe o valor do [cofre](../plataforma/cofre.md) no ambiente do processo; ele roda na mesma conta do agente, que em tese poderia lê-lo. Por isso servidor com segredo entra no catálogo só pelo Dono, com PIN.
+  - Sem servidor com chave e sem MCP no Antigravity no M8: quem precisa de navegador nessas condições usa outro provedor.
   - A configuração por personagem depende de cada provedor aceitar servidores fora da configuração do perfil; onde não aceitar, vale o plano B do documento de [MCP por classe](../classes/mcp-por-classe.md#verificar-na-implementação).

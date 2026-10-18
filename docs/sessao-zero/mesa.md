@@ -43,7 +43,7 @@ O motor mantém um bloco próprio, de nome `managed`, no `info/exclude` do repos
 /.mestre/
 # <<< mestre:managed <<<
 ```
-- `/.mestre/` só aparece quando o workspace escolheu "só local" ([workspace](workspace.md)).
+- `/.mestre/` só aparece quando o workspace escolheu "só local" ([workspace](workspace.md)); desde o M8, o bloco ganha uma linha `/.agents/skills/<nome>/` por [skill de apoio](../classes/skills-de-apoio.md) materializada.
 - `.agents/hooks.json` só entra se foi o Mestre que criou o arquivo (um arquivo da pessoa, ainda não versionado, continua aparecendo para ela no `git status`).
 - Linhas fora do bloco nunca são tocadas; o `.gitignore` do projeto nunca é alterado.
 
@@ -54,7 +54,7 @@ Para arquivos que podem já existir com conteúdo da pessoa:
    - texto (`info/exclude`): o bloco entre `# >>> mestre:managed >>>` e `# <<< mestre:managed <<<`;
    - hooks do Claude Code: os handlers cujo comando é a chamada do Mestre (abaixo) e a `statusLine` do Mestre; handlers da pessoa ficam onde estão, e os do Mestre entram **no fim** de cada lista;
    - hooks do Antigravity: a chave de topo `mestre`;
-   - skills: pastas `mestre-*` com o marcador de gerado ([skills-geradas](../cli/skills-geradas.md)).
+   - skills: pastas `mestre-*` e as de [apoio](../classes/skills-de-apoio.md), com o marcador de gerado ([skills-geradas](../cli/skills-geradas.md)).
 3. Acrescentar a parte atual do Mestre e gravar de forma atômica (arquivo temporário + renomear), só se o conteúdo mudou.
 
 **Arquivo já versionado pelo projeto** (ex.: um `.agents/hooks.json` do repositório): a mescla é feita e o motor marca o arquivo com `git update-index --skip-worktree`, para que a parte do Mestre não apareça no `git status` nem entre em commits. Antes de sincronizar a branch ou atualizar da principal (inclusive por rebase), o motor desliga a marca e tira a parte do Mestre do arquivo (devolvendo-o byte a byte ao que o projeto tem no HEAD, se só a parte do Mestre o diferia; mudanças da pessoa ficam), sincroniza e reaplica, mesmo se a sincronização falhar; assim o `skip-worktree` nunca está ligado durante um rebase. Quem tira a parte do Mestre é o adaptador de cada provedor (`HookStripper`). Se o projeto mudou o mesmo arquivo, vale a versão do projeto e a parte do Mestre é mesclada de novo por cima.

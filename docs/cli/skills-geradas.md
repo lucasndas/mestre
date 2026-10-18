@@ -1,6 +1,6 @@
 # Skills geradas da CLI
 
-> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-15
+> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -18,7 +18,7 @@ Fazer Claude Code, Codex e Antigravity saberem usar o `mestre` sem que ninguém 
 | `mestre-rituais` | Grão-Mestre e Mestres de mesa | só ao personagem |
 
 - **Só ao personagem**, por provedor: no Claude Code, em `.mestre/agents/<id>/.claude/skills/`, lida por `--add-dir`; no Codex e no Antigravity, que não têm pasta por personagem, como seção compacta na camada do Mestre do personagem (`MESTRE.md` ou arquivo de agente). Regra única em [personagem](../sessao-zero/personagem.md#skills-por-personagem). As skills extras da classe seguem o mesmo caminho ([classes](../classes/classes.md#skills-da-classe)).
-- A pasta compartilhada do worktree (`.agents/skills/`) só tem a de comunicação, porque todos os agentes dali a veem; assim cada agente só recebe as skills do seu nível, nos três provedores. Como o arquivo compartilhado é gerado em cada worktree: [mesa](../sessao-zero/mesa.md).
+- A pasta compartilhada do worktree (`.agents/skills/`) só tem, das skills do Mestre, a de comunicação, porque todos os agentes dali a veem (as [skills de apoio](../classes/skills-de-apoio.md) ligadas também vão para lá, com acesso por personagem); assim cada agente só recebe as skills do seu nível, nos três provedores. Como o arquivo compartilhado é gerado em cada worktree: [mesa](../sessao-zero/mesa.md).
 - Ficha com "recebe as skills do Mestre = não": o personagem não recebe as skills por personagem; a compartilhada continua visível na pasta (ela só ensina; quem decide o que pode é o motor).
 - Terminais de `spawn` não recebem skills.
 
