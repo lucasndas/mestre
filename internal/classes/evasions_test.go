@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 )
@@ -150,6 +151,20 @@ func TestLaunchersElevationAndRunnersStartNothingTheFixedRulesDeny(t *testing.T)
 		{"npx -c 'git push'", "git push"}, {"npx --call 'git push'", "git push"}, {"npx --call='git push'", "git push"},
 		{"npm exec -c 'git push'", "git push"}, {"npm exec --call 'git push'", "git push"},
 	}
+	// Programs that run another with other privilege, namespace or environment:
+	// not the safe list's business, but what they run is a command to the fixed rules.
+	wrapped := []evasion{
+		{"setarch x86_64 git push", "git push"}, {"linux64 git push", "git push"}, {"setpriv --reuid=1000 git push", "git push"}, {"setpriv --reuid 1000 --regid 1000 git push", "git push"},
+		{"prlimit --nofile=10 git push", "git push"}, {"unshare -r git push", "git push"}, {"unshare --propagation private git push", "git push"},
+		{"nsenter -t 1 -m git push", "git push"}, {"chroot / git push", "git push"}, {"chroot --userspec=u / git push", "git push"},
+		{"gosu user git push", "git push"}, {"su-exec user git push", "git push"}, {"fakeroot -l lib git push", "git push"}, {"dumb-init git push", "git push"},
+		{"tini -p SIGTERM -- git push", "git push"}, {"ssh-agent -t 10 git push", "git push"}, {"firejail git push", "git push"}, {"rlwrap git push", "git push"},
+		{"systemd-run --user --unit x git push", "git push"}, {"systemd-run --on-active=10 git push", "git push"}, {"sg grp -c 'git push'", "git push"}, {"sg grp git push", "git push"},
+		{"cross-env FOO=1 git push", "git push"}, {"cross-env HOME=/tmp git status", "HOME"}, {"env-cmd -f .env git push", "git push"}, {"dotenv -e .env -- git push", "git push"},
+		{"dotenvx run -f .env -- git push", "git push"}, {"doppler run -p x -- git push", "git push"}, {"direnv exec . git push", "git push"},
+		{"corepack npx claude", "agente"}, {"corepack pnpm exec git push", "git push"}, {"corepack npm exec -- git push", "git push"},
+		{"setarch x86_64 claude", "claude"}, {"unshare sudo id", "privilégio"}, {"gosu root run0 id", "privilégio"}, {"nsenter -t 1 -m cp x .git/hooks/pre-commit", ".git"},
+	}
 	for _, ee := range evasionEnvs() {
 		name, env := ee.name, ee.env
 		for _, operator := range []bool{false, true} {
@@ -157,6 +172,7 @@ func TestLaunchersElevationAndRunnersStartNothingTheFixedRulesDeny(t *testing.T)
 			fixedDenials(t, fmt.Sprintf("%s (operator %v)", name, operator), env, r, launched)
 			fixedDenials(t, fmt.Sprintf("%s (operator %v)", name, operator), env, r, elevated)
 			fixedDenials(t, fmt.Sprintf("%s (operator %v)", name, operator), env, r, runners)
+			fixedDenials(t, fmt.Sprintf("%s (operator %v)", name, operator), env, r, wrapped)
 		}
 		// A launcher, an elevation-free program and a runner of other
 		// packages are what they were.
@@ -167,7 +183,8 @@ func TestLaunchersElevationAndRunnersStartNothingTheFixedRulesDeny(t *testing.T)
 			"uvx ruff check .", "uv tool run ruff check .", "pipx run black .", "uv tool list", "uvx --from ruff ruff check .",
 			"uvx -p 3.12 ruff check .", "pipx run --spec black black .", "npm exec prettier -- --check .", "pnpm dlx prettier --check .",
 			"bun x prettier claude/", "npx git status", "npx --yes create-react-app app", "pnpm exec jest", "yarn exec tsc", "npm exec -- prettier --check .",
-			"npx cp a.txt b.txt")
+			"npx cp a.txt b.txt", "setarch x86_64 ls", "unshare -r ls", "chroot rootfs ls", "gosu user ls", "systemd-run --user ls", "cross-env NODE_ENV=test npm test",
+			"dotenv -e .env -- npm test", "doppler run -- npm test", "direnv exec . make", "corepack enable", "corepack pnpm install", "sg grp ls", "fakeroot make")
 		neverAllowed(t, name, env, r, "npx -c 'echo hi'", "npm exec -c 'echo hi'")
 	}
 }
@@ -202,6 +219,7 @@ func TestGitWritesThroughItsOwnOutputOptionsAreJudgedLikeAnyWrite(t *testing.T) 
 		{"git clone --depth 1 ./src .git/hooks", ".git"},
 		{"git init .mestre/y", ".mestre"},
 		{"git init --separate-git-dir .git/x y", ".git"},
+		{"git apply --directory=.mestre/classes x.patch", ".mestre"}, {"git apply --directory .git/hooks x.patch", ".git"},
 	}
 	for _, ee := range evasionEnvs() {
 		name, env := ee.name, ee.env
@@ -212,7 +230,8 @@ func TestGitWritesThroughItsOwnOutputOptionsAreJudgedLikeAnyWrite(t *testing.T) 
 			"git archive -o out.tar HEAD", "git archive --output out.tar HEAD", "git bundle create out.bundle --all",
 			"git bundle verify out.bundle", "git bundle list-heads .git/x.bundle", "git format-patch -1 -o patches",
 			"git format-patch -1 --output-directory patches", "git diff --output out.diff HEAD", "git archive HEAD", "git format-patch -1 --stdout",
-			"git clone ./src copy", "git init sub", "git archive --prefix=x/ HEAD")
+			"git clone ./src copy", "git init sub", "git archive --prefix=x/ HEAD", "git apply x.patch", "git apply --directory=sub x.patch",
+			"git diff --output=/dev/null HEAD", "git diff --output /dev/null HEAD")
 		allowances(t, name, env, tests, "git archive -o tests/out.tar HEAD", "git bundle create tests/o.bundle --all",
 			"git format-patch -1 -o tests/patches", "git diff --output tests/out.diff HEAD")
 		for _, c := range []string{"git archive -o src/out.tar HEAD", "git archive --output src/out.tar HEAD", "git bundle create src/o.bundle --all",
@@ -271,9 +290,51 @@ func TestPowerShellReadsTheLineWithItsOwnSpacesQuotesAndDashes(t *testing.T) {
 		// the dot operator runs a command as & does
 		{". git push", "git push"}, {". claude", "claude"}, {". sudo id", "privilégio"},
 	})
-	// An expression in parentheses is an argument only PowerShell resolves.
-	neverAllowed(t, win.name, win.env, r, "git (echo push)", "git ('pu'+'sh')", "& git (Write-Output push)", "Start-Process git -ArgumentList (echo push)")
+	// An expression in parentheses is an argument, or the name of the command
+	// after the call operator, that only PowerShell resolves.
+	neverAllowed(t, win.name, win.env, r, "git (echo push)", "git ('pu'+'sh')", "& git (Write-Output push)", "Start-Process git -ArgumentList (echo push)",
+		"&('git') push", "& ('git') push", "&(echo git) push", ".('git') push", "& (Get-Command git) push", "&('git') remote add o https://x")
+	// Invoke-Expression runs what the pipe feeds it, as a shell does, and the
+	// tools that create a process take the command line in a string.
+	fixedDenials(t, win.name, win.env, r, []evasion{
+		{"echo 'git push' | iex", "git push"}, {"'git push' | Invoke-Expression", "git push"}, {"Write-Output 'git push' | iex", "git push"},
+		{"wmic process call create \"git push\"", "git push"}, {"Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList \"git push\"", "git push"},
+		{"iwmi -Class Win32_Process -Name Create -ArgumentList 'git push'", "git push"},
+		{"psexec -s git push", "privilégio"}, {"PsExec64.exe -s cmd", "privilégio"}, {"nsudo git push", "privilégio"},
+	})
+	allowances(t, win.name, win.env, r, "& { git status }", "echo 'hello' | Write-Output", "wmic cpu get name")
 	// Quotes, spaces and dashes of that kind in text are text.
 	allowances(t, win.name, win.env, r, "git status", "git commit -m “feat — x”", "git commit -m ‘feat – x’", "git log --format=“%H”",
 		"Get-Content “a b.txt”", "Write-Output ‘it’’s’", "echo “a”“b”", "git commit -m 'a\u00a0b'")
+}
+
+// CA-PERM-25: the analysis of a chain of commands that run commands is bounded.
+func TestChainsOfLaunchersAndWrappersAreBounded(t *testing.T) {
+	t.Parallel()
+	free := rules(t, anyYAML)
+	for _, ee := range evasionEnvs() {
+		for name, cmd := range map[string]string{
+			"start":        strings.Repeat("start ", 60) + "git push",
+			"saps":         strings.Repeat("saps ", 200) + "git push",
+			"start /wait":  strings.Repeat("start /wait ", 60) + "git push",
+			"npm x exec":   strings.Repeat("npm -a x exec ", 60) + "git push",
+			"npx":          strings.Repeat("npx ", 200) + "git push",
+			"setarch":      strings.Repeat("setarch x86_64 ", 200) + "git push",
+			"cross-env":    strings.Repeat("cross-env A=1 ", 200) + "git push",
+			"dot operator": strings.Repeat(". ", 200) + "git push",
+			"corepack":     strings.Repeat("corepack npx ", 100) + "git push",
+		} {
+			start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
+			d := judge(ee.env, free, cmd)
+			if took := time.Since(start); took > raceFactor*time.Second { //nolint:forbidigo // same
+				t.Errorf("%s: %s took %v; want well under a second", ee.name, name, took)
+			}
+			if name == "dot operator" && ee.name != "windows" {
+				continue // . is source in a POSIX shell, and the call operator in PowerShell
+			}
+			if d.Verdict != classes.Deny || d.Layer != classes.LayerFixed {
+				t.Errorf("%s: %s = %s by %s (%q); want a fixed denial", ee.name, name, d.Verdict, d.Layer, d.Reason)
+			}
+		}
+	}
 }

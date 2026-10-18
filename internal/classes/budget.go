@@ -24,6 +24,10 @@ const (
 	costLine        = 1024
 	costPart        = 32
 	costReader      = 8
+	// costNested is the cost of a command that another one runs (a
+	// launcher, a package runner, a wrapper): each can start more, and the
+	// work of a chain of them must not grow without bound.
+	costNested = 256
 	// maxExpansionDepth bounds the nesting of ${…} and $((…)) read for
 	// the substitutions inside them.
 	maxExpansionDepth = 32

@@ -1,6 +1,9 @@
 package classes
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Start-Process (and saps, its alias, and start, the alias in PowerShell and
 // a command of cmd.exe) runs the program it names with the arguments of
@@ -192,7 +195,8 @@ func startCommands(cn string, args []word) (cmds [][]word, unknown bool) {
 		cmds = append(cmds, append([]word{*prog}, argv...))
 	}
 	if cn == "start" {
-		if cmd := startCmd(args); len(cmd) > 0 {
+		// both readings often give the same command (start git push): once
+		if cmd := startCmd(args); len(cmd) > 0 && (len(cmds) == 0 || !slices.Equal(wordsText(cmds[0]), wordsText(cmd))) {
 			cmds = append(cmds, cmd)
 		}
 	}

@@ -366,7 +366,9 @@ func (e *evaluator) git(args []word, st *shellState, depth int) result {
 		written := make(map[int]bool, len(writes))
 		for _, wr := range writes {
 			written[wr.at] = true
-			res.merge(e.argPath(wr.w, use{write: true}, gst))
+			if !isDevice(wr.w.text) {
+				res.merge(e.argPath(wr.w, use{write: true, recursive: wr.deep}, gst))
+			}
 		}
 		for i, w := range rest {
 			if !written[i] && looksLikePath(w.text) && !strings.HasPrefix(w.text, "-") {
@@ -381,8 +383,9 @@ func (e *evaluator) git(args []word, st *shellState, depth int) result {
 // option, or the operand) and at the index in the arguments of the word that
 // holds it, whole or with its option attached.
 type gitWrite struct {
-	w  word
-	at int
+	w    word
+	at   int
+	deep bool // the write is a tree under the path (git apply --directory)
 }
 
 // gitWrittenPaths are the paths a git subcommand writes because it is told
@@ -398,9 +401,9 @@ func gitWrittenPaths(sub string, rest []word) []gitWrite {
 		w := rest[i]
 		if v, ok := strings.CutPrefix(w.text, name+"="); ok {
 			w.text = v
-			out = append(out, gitWrite{w, i})
+			out = append(out, gitWrite{w: w, at: i})
 		} else if w.text == name && i+1 < len(rest) {
-			out = append(out, gitWrite{rest[i+1], i + 1})
+			out = append(out, gitWrite{w: rest[i+1], at: i + 1})
 		}
 	}
 	short := func(i int, letter string) {
@@ -410,9 +413,9 @@ func gitWrittenPaths(sub string, rest []word) []gitWrite {
 		}
 		if v := w.text[2:]; v != "" {
 			w.text = v
-			out = append(out, gitWrite{w, i})
+			out = append(out, gitWrite{w: w, at: i})
 		} else if i+1 < len(rest) {
-			out = append(out, gitWrite{rest[i+1], i + 1})
+			out = append(out, gitWrite{w: rest[i+1], at: i + 1})
 		}
 	}
 	for i := range rest {
@@ -428,6 +431,13 @@ func gitWrittenPaths(sub string, rest []word) []gitWrite {
 			long(i, "--output-directory")
 		case "clone", "init":
 			long(i, "--separate-git-dir")
+		case "apply":
+			// git apply --directory=D roots every path of the patch under D.
+			n := len(out)
+			long(i, "--directory")
+			for k := n; k < len(out); k++ {
+				out[k].deep = true
+			}
 		}
 	}
 	taken := map[int]bool{}
@@ -461,20 +471,20 @@ func gitWrittenPaths(sub string, rest []word) []gitWrite {
 	case "bundle":
 		// bundle create [options] <file> <rev-list-args>: - is the output.
 		if len(ops) >= 2 && rest[ops[0]].text == "create" && rest[ops[1]].text != "-" {
-			out = append(out, gitWrite{rest[ops[1]], ops[1]})
+			out = append(out, gitWrite{w: rest[ops[1]], at: ops[1]})
 		}
 	case "pack-objects", "init":
 		// pack-objects <base-name> and init [<directory>]: the operands (an
 		// option's value among them, git init -b main dir) are judged as
 		// writes, which costs nothing inside the worktree.
 		for _, at := range ops {
-			out = append(out, gitWrite{rest[at], at})
+			out = append(out, gitWrite{w: rest[at], at: at})
 		}
 	case "clone":
 		// clone [options] <repository> [<directory>]
 		if len(ops) >= 2 {
 			at := ops[len(ops)-1]
-			out = append(out, gitWrite{rest[at], at})
+			out = append(out, gitWrite{w: rest[at], at: at})
 		}
 	}
 	return out

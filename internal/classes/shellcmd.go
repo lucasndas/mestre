@@ -170,7 +170,7 @@ func wordsText(ws []word) []string {
 }
 
 var (
-	elevation = map[string]bool{"sudo": true, "sudoedit": true, "su": true, "doas": true, "pkexec": true, "run0": true, "please": true, "pleaser": true, "runuser": true, "runas": true, "gsudo": true}
+	elevation = map[string]bool{"sudo": true, "sudoedit": true, "su": true, "doas": true, "pkexec": true, "run0": true, "please": true, "pleaser": true, "runuser": true, "runas": true, "gsudo": true, "psexec": true, "psexec64": true, "nsudo": true, "nsudolc": true, "nsudolg": true}
 	startProc = map[string]bool{"start-process": true, "saps": true, "start": true}
 	agentCLIs = map[string]bool{"claude": true, "codex": true, "agy": true}
 	shells    = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "fish": true, "ash": true, "mksh": true, "csh": true, "tcsh": true, "rbash": true, "yash": true, "nu": true, "elvish": true, "xonsh": true, "posh": true, "oksh": true, "loksh": true, "pdksh": true, "lksh": true}
@@ -220,6 +220,8 @@ func (e *evaluator) gitEnv(res *result, name string) {
 // around it, which deny and ask patterns also see.
 func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, outer []string) result {
 	res := newResult()
+	scope := e.homeScope // what an env around the command sets is for it alone
+	defer func() { e.homeScope = scope }()
 	name := ws[0]
 	cn := canonical(name.text)
 	args := ws[1:]
@@ -259,15 +261,24 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	case agentRunner(cn, args):
 		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
 	}
+	around := append(outer, strings.Join(wordsText(ws), " "))
 	for _, inner := range runnerCommands(cn, args) {
 		// npx git push: what a package runner runs is a command, and a fixed
 		// rule on it denies (the rest is for the class to decide).
-		r := e.command(inner, d, st, depth+1, append(outer, strings.Join(wordsText(ws), " ")))
-		res.fixed.worse(r.fixed)
+		e.nested(&res, inner, d, st, depth, around, true)
+	}
+	if inner := e.wrapped(cn, args, &res); len(inner) > 0 {
+		// setarch x86_64 git push, cross-env HOME=x git status, corepack npx claude
+		e.nested(&res, inner, d, st, depth, around, true)
 	}
 	if call, ok := runnerCall(cn, args); ok {
 		// npx -c 'git push': a command line, as sh -c
 		res.merge(e.shell(call, st.cwds[0], depth+1))
+		res.atLeastAsk("comando dentro de um argumento de " + cn)
+	}
+	if line, ok := winCreate(cn, args); ok {
+		// wmic process call create "git push"
+		res.merge(e.shell(line, st.cwds[0], depth+1))
 		res.atLeastAsk("comando dentro de um argumento de " + cn)
 	}
 	if v := e.homeMoved(); v != "" && isGitProgram(cn) {
@@ -277,7 +288,7 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		// The program Start-Process launches is a command of its own.
 		cmds, unknown := startCommands(cn, args)
 		for _, inner := range cmds {
-			res.merge(e.command(inner, d, st, depth+1, append(outer, strings.Join(wordsText(ws), " "))))
+			e.nested(&res, inner, d, st, depth, around, false)
 		}
 		if unknown {
 			res.atLeastAsk("parâmetro do Start-Process que não se analisa")
@@ -285,7 +296,7 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	}
 	if cn == "." && d == dialectPwsh && len(args) > 0 {
 		// . git push: the dot operator runs a command, as & does.
-		res.merge(e.command(args, d, st, depth+1, append(outer, strings.Join(wordsText(ws), " "))))
+		e.nested(&res, args, d, st, depth, around, false)
 	}
 	if shellVarBuiltins[cn] || cn == "unset" || pwshEnvSet[cn] || pwshEnvRemove[cn] {
 		assigned, removed := varNames(cn, argText)
@@ -297,8 +308,6 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		}
 	}
 
-	scope := e.homeScope // what an env around the command sets is for it alone
-	defer func() { e.homeScope = scope }()
 	if inner, extra, ok := e.unwrap(cn, args, &res); ok {
 		if len(inner) == 0 {
 			res.rule(e.commandRule(ws, outer, false))
@@ -397,6 +406,28 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	}
 	res.rule(e.commandRule(ws, outer, readOnly))
 	return res
+}
+
+// nested analyses the command another one runs (a launcher, a package
+// runner, the dot operator, a wrapper): it costs work and nests, so a chain
+// of them is bounded and cannot grow the analysis exponentially. With
+// fixedOnly only what the fixed rules say of it counts; the rest is for the
+// class to decide on the wrapper.
+func (e *evaluator) nested(res *result, inner []word, d dialect, st *shellState, depth int, around []string, fixedOnly bool) {
+	if depth >= maxDepth {
+		res.fixedDeny("comando aninhado demais para ser analisado")
+		return
+	}
+	if e.spend(costNested) {
+		res.fixedDeny(reasonTooMuch)
+		return
+	}
+	r := e.command(inner, d, st, depth+1, around)
+	if fixedOnly {
+		res.fixed.worse(r.fixed)
+		return
+	}
+	res.merge(r)
 }
 
 // commandRule applies the decrees and the commands block to a simple

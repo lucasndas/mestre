@@ -628,6 +628,11 @@ func (lx *lexer) stepPwsh() {
 		lx.op("|")
 		lx.i++
 	case c == '(' || c == ')' || c == '{' || c == '}':
+		if c == '(' && !lx.inWord && len(lx.toks) > 0 && lx.toks[len(lx.toks)-1].op == "&" {
+			// & ('git') push: the value of the expression is the name of the
+			// command the call operator runs, which only PowerShell resolves.
+			lx.opaque = append(lx.opaque, "expressão entre parênteses")
+		}
 		lx.op(string(c))
 		lx.i++
 	case c == '>' || c == '<':
