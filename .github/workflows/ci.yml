@@ -68,10 +68,44 @@ jobs:
           echo "code=$code"
           echo "CODE=$code" >> "$GITHUB_ENV"
 
+      # The build, module and lint caches live on the work disk (on Windows
+      # the default places are on the slower system disk C:) and are kept by
+      # the cache steps below, not by setup-go: its cache has one key per
+      # go.sum, saved once and never refreshed, so it goes stale as the code
+      # moves.
+      - name: Caches on the work disk
+        run: |
+          echo "GOCACHE=$RUNNER_TEMP/go-build" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=$RUNNER_TEMP/go-mod" >> "$GITHUB_ENV"
+          echo "GOLANGCI_LINT_CACHE=$RUNNER_TEMP/golangci-lint" >> "$GITHUB_ENV"
+
+      # The real-time scan of Microsoft Defender reads every file the compiler
+      # and the tests write; the runner is discarded after the job.
+      - name: No real-time scan (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       # Uses the toolchain line of go.mod.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
+
+      # The caches of the last push to main (or the closest older one): only
+      # what this change touches is compiled and analysed again. A push to
+      # main saves a new entry at the end of the job.
+      - name: Restore the caches
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/go-build
+            ${{ runner.temp }}/go-mod
+            ${{ runner.temp }}/golangci-lint
+          key: ci-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            ci-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}-
+            ci-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-
 
       # The temporary folder of the Windows runner is on the system disk (C:),
       # several times slower than the work disk (D:) for what the tests do
@@ -109,20 +143,6 @@ jobs:
         if: env.CODE == 'true'
         run: golangci-lint version
 
-      # The first lint of a dependency is slow (modernc.org/sqlite alone takes
-      # seconds); keep the analysis cache between runs, keyed by OS, linter
-      # version, go.sum and the lint config.
-      - name: Point golangci-lint at a cached folder
-        if: env.CODE == 'true'
-        run: echo "GOLANGCI_LINT_CACHE=$RUNNER_TEMP/golangci-lint" >> "$GITHUB_ENV"
-
-      - if: env.CODE == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/golangci-lint
-          key: golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}
-          restore-keys: |
-            golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-
 
       - name: Documentation check
         run: go run ./tools/docscheck
@@ -196,3 +216,13 @@ jobs:
       - name: Full suite (race)
         if: runner.os == 'Linux' && github.event_name != 'pull_request'
         run: go run ./tools/testrun full -race
+
+      - name: Save the caches
+        if: success() && github.event_name != 'pull_request'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/go-build
+            ${{ runner.temp }}/go-mod
+            ${{ runner.temp }}/golangci-lint
+          key: ci-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}-${{ github.sha }}
