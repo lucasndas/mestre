@@ -380,11 +380,12 @@ func tableRuleCovers(d Decree, act Action, t *providers.Tool, own RiskResult) bo
 // the same text of a command does another thing at each use when the engine does
 // not read all of it, so a rule never frees a part with no group (an unclosed
 // quote, a brace list, a .NET call, the reading of the shell; also a write, a
-// tool or a URL the table has no row for) nor a shell command that chains, pipes,
-// redirects or substitutes, or breaks the line. The command is read as the tool
-// gave it, not as the action keeps it (the action trims it: a line break followed
-// by a space of another script would go). The chain asks it again when it makes
-// the rule of an exact action; tool is nil when it has none.
+// tool the table has no row for, or a web tool with no URL) nor a shell command
+// that chains, pipes, redirects or substitutes, breaks the line, or begins or ends
+// with a space only the engine reads as one. The command is read as the tool gave
+// it, not as the action keeps it (the action trims it: a line break followed by a
+// space of another script would go). The chain asks it again when it makes the
+// rule of an exact action; tool is nil when it has none.
 func TableRuleBlocker(act Action, tool *providers.Tool, own RiskResult) string {
 	command := act.Command
 	if tool != nil && tool.Kind == providers.KindShell {
@@ -395,6 +396,11 @@ func TableRuleBlocker(act Action, tool *providers.Tool, own RiskResult) string {
 		return "the engine does not analyse a part of the call"
 	case act.Kind == providers.KindShell && (strings.ContainsAny(command, ";&|`<>\n\r(){}") || strings.Contains(command, "$(")):
 		return "the command chains, pipes, redirects or substitutes other commands"
+	case act.Kind == providers.KindShell && strings.TrimSpace(command) != command:
+		// The action keeps the command trimmed of every space of every script;
+		// the shell skips only blanks and line ends, so "./run.sh" followed by a
+		// form feed or a no-break space is another file for it.
+		return "the command begins or ends with a character the engine reads as a space and the shell does not"
 	}
 	return ""
 }

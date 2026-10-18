@@ -42,10 +42,15 @@ func TestATableRuleOfTheExactActionNeverFreesAnOpaquePartNorAChainedCommand(t *t
 			{"", "npm install lodash > out.txt", classes.RiskMedium, false},
 			{"", "npm install lodash | tee out.txt", classes.RiskMedium, false},
 			{"", "npm install lodash\nnpm test", classes.RiskMedium, false},
-			{"make build", "make build\n\U00003000", classes.RiskMedium, false},   // the break is not trimmed away by a space of another script
-			{"make build", "make build\n\U00002028", classes.RiskMedium, false},   // nor by a line separator
-			{"make build", "\v\nmake build", classes.RiskMedium, false},           // nor a vertical tab before it
-			{"npm install lodash", "npm install lodash\n", classes.RiskLow, true}, // a plain end of line is not a second line
+			{"make build", "make build\n\U00003000", classes.RiskMedium, false},            // the break is not trimmed away by a space of another script
+			{"make build", "make build\n\U00002028", classes.RiskMedium, false},            // nor by a line separator
+			{"make build", "\v\nmake build", classes.RiskMedium, false},                    // nor a vertical tab before it
+			{"npm install lodash", "npm install lodash\U000000a0", classes.RiskLow, false}, // a no-break space after it is part of the word for the shell
+			{"npm install lodash", "\fnpm install lodash", classes.RiskLow, false},         // a form feed before it
+			{"npm install lodash", "npm install lodash\U00003000", classes.RiskLow, false}, // an ideographic space after it
+			{"./run.sh", "./run.sh\U000000a0", classes.RiskMedium, false},                  // the script of the worktree, with one: another file
+			{"npm install lodash", "npm install lodash\n", classes.RiskLow, true},          // a plain end of line is not a second line
+			{"npm install lodash", "  npm install lodash \r\n", classes.RiskLow, true},     // nor blanks around it
 		} {
 			gate := &gateFake{allow: true}
 			env := m.env()

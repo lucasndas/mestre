@@ -412,6 +412,8 @@ func TestApprovingForATimeIsRefusedForARequestTheEngineDoesNotAnalyseWholeAndFor
 	// a part with no group is the Grand Master's; a chained command whose last part
 	// runs a script of the worktree is a medio the table master decides
 	opaque, chained, tool := w.shell(dev1, "alias ll=ls"), w.shell(dev1, "make build && ./run.sh"), w.mcp(dev1, "mcp__db__query")
+	// the action keeps the command trimmed of every space, and the shell skips only blanks
+	spaced := w.shell(dev1, "./run.sh\U000000a0")
 	if r := w.request(opaque); r.Level.Kind != chain.LevelGrandMaster || !slices.Contains(r.Risk.Groups, classes.GroupNone) {
 		t.Fatalf("alias ll=ls is %s at %+v with groups %v, want a medio with no group at the Grand Master", r.Risk.Risk, r.Level, r.Risk.Groups)
 	}
@@ -421,10 +423,14 @@ func TestApprovingForATimeIsRefusedForARequestTheEngineDoesNotAnalyseWholeAndFor
 	if r := w.request(tool); r.Level.Kind != chain.LevelGrandMaster || !slices.Contains(r.Risk.Groups, classes.GroupNone) {
 		t.Fatalf("a tool with no row in the table is %s at %+v with groups %v, want a medio with no group at the Grand Master", r.Risk.Risk, r.Level, r.Risk.Groups)
 	}
-	for _, c := range []struct {
+	if r := w.request(spaced); r.Level.Kind != chain.LevelMesa || r.Risk.Risk != classes.RiskMedium {
+		t.Fatalf("a script of the worktree and a no-break space is %s at %+v, want a medio at the table master", r.Risk.Risk, r.Level)
+	}
+	asks := []struct {
 		id int64
 		by characters.Character
-	}{{opaque, w.gm}, {chained, w.master}, {tool, w.gm}} {
+	}{{opaque, w.gm}, {chained, w.master}, {tool, w.gm}, {spaced, w.master}}
+	for _, c := range asks {
 		for _, d := range []chain.Decision{
 			{Answer: chain.AnswerApproveFor, For: time.Hour},
 			{Answer: chain.AnswerApproveFor, UntilMissionEnd: true},
@@ -443,9 +449,11 @@ func TestApprovingForATimeIsRefusedForARequestTheEngineDoesNotAnalyseWholeAndFor
 	if n := len(w.rules()); n != 0 {
 		t.Errorf("%d rules were made", n)
 	}
-	// the one-time exception is the way, and it frees nothing for the others
-	if out := w.decide(w.master, chained, chain.AnswerApprove, "só desta vez"); out.Applied != "exception" {
-		t.Errorf("approve now = %+v, want an exception", out)
+	// the one-time exception is the way, for each of them, and it frees nothing for the others
+	for _, c := range asks {
+		if out := w.decide(c.by, c.id, chain.AnswerApprove, "só desta vez"); out.Applied != "exception" {
+			t.Errorf("#%d approve now = %+v, want an exception", c.id, out)
+		}
 	}
 	if d := w.engine(dev2, "make build && ./run.sh"); d.Verdict != classes.Ask {
 		t.Errorf("the same chain by another dev = %+v, want ask", d)
