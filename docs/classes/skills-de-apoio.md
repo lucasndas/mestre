@@ -26,14 +26,15 @@ support_skills:                   # frontmatter do CLASS.md
   - {name: ponytail, enabled: false}
 ```
 
-- Cada uma fica em `support/<nome>/` no pacote, com o `SKILL.md`, a pasta inteira da skill e o arquivo de **licença** dela (`LICENSE`; e `NOTICE` quando a licença o exige, como a Apache-2.0). Conta nos limites do pacote (64 arquivos, 512 KiB, [classes](classes.md#estrutura-do-pacote)): o pacote que passa deles é recusado, e o pacote sugerido é conferido por teste.
+- **Só em classe global ou do workspace,** que passam por aprovação de um usuário ([classes](classes.md)); classe da mesa com `support_skills` é recusada, porque o texto dela iria à pasta que outros personagens leem.
+- O nome é um slug `[a-z0-9-]`, igual ao da pasta. Cada uma fica em `support/<nome>/` no pacote, com o `SKILL.md`, a pasta inteira da skill e o arquivo de **licença** dela (`LICENSE`; e `NOTICE` quando a licença o exige, como a Apache-2.0). Conta nos limites do pacote (64 arquivos, 512 KiB, [classes](classes.md#estrutura-do-pacote)): o pacote que passa deles é recusado, e o pacote sugerido é conferido por teste. A pasta tem também `SOURCE`, com o repositório, o commit de origem e o sha256 de cada arquivo; o `class check` confere os hashes, e quem aprova a classe lê o texto da skill (é instrução que o agente vai seguir).
 - O pacote é copiado e versionado com a classe; nada vai para `~/.claude/skills` nem `~/.agents/skills` ([ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md), opção 4). Atualizar a skill é editar a classe, com as aprovações do escopo.
 - **Ligar e desligar** é editar `enabled`, pelo painel ou pela CLI, com as mesmas aprovações. Desligada, a skill continua no pacote e a classe funciona pelo próprio `CLASS.md`: desligar escolhe entre profundidade e contexto, nunca entre funcionar e não funcionar.
 
 ### Como chega a cada provedor (camada 1: entrega)
 
 - **Claude Code:** só as ligadas vão para a pasta do personagem, `.mestre/agents/<id>/.claude/skills/<nome>/`, lida por `--add-dir`, como as skills da classe. A cópia gerenciada em `.claude/skills/` do worktree continua só com a de comunicação.
-- **Codex e Antigravity:** o motor materializa em `.agents/skills/<nome>/` do worktree da mesa, em cada máquina onde roda um personagem dela, as skills de apoio **ligadas na classe de algum personagem Codex ou Antigravity vivo na mesa**, antes de iniciar o personagem. Como as `mestre-*`, elas levam o marcador de gerado ([skills geradas](../cli/skills-geradas.md)), ficam no bloco `managed` do `info/exclude` ([sessão zero da mesa](../sessao-zero/mesa.md)) e a regra fixa de escrita as protege ([regras fixas](permissoes.md#regras-fixas-de-segurança)): nenhum agente as altera, e elas nunca vão para um commit. Os dois carregam sob demanda: só o nome e a descrição entram no catálogo, e o corpo é lido quando a skill é usada. Quando nenhum personagem vivo da mesa a tem ligada, a pasta sai na materialização seguinte.
+- **Codex e Antigravity:** o motor materializa em `.agents/skills/<nome>/` do worktree da mesa, em cada máquina onde roda um personagem dela, as skills de apoio **ligadas na classe de algum personagem Codex ou Antigravity vivo na mesa**, antes de iniciar o personagem. Como as `mestre-*`, elas levam o marcador de gerado ([skills geradas](../cli/skills-geradas.md)), ficam no bloco `managed` do `info/exclude` ([sessão zero da mesa](../sessao-zero/mesa.md)) e a regra fixa de escrita protege a pasta de **todo nome de skill de apoio declarado** por uma classe da mesa, materializada ou não ([regras fixas](permissoes.md#regras-fixas-de-segurança)): nenhum agente as cria, altera ou planta antes do motor, e elas nunca vão para um commit. Pasta sem o marcador de gerado e não versionada é substituída. Os dois carregam sob demanda: só o nome e a descrição entram no catálogo, e o corpo é lido quando a skill é usada. Quando nenhum personagem vivo da mesa a tem ligada, a pasta sai na materialização seguinte.
 
 ### Camadas 2 a 4: o que segura o desligado
 
@@ -45,7 +46,7 @@ O desligado é **contenção de contexto, não fronteira de segurança**: ler um
 
 ## Regras e erros
 
-- Skill de apoio sem arquivo de licença, ou com nome que começa com `mestre-`: o `class check` recusa a classe.
+- Skill de apoio sem arquivo de licença ou `SOURCE`, com hash que não confere, com nome fora do slug ou que começa com `mestre-`, ou numa classe da mesa: o `class check` recusa a classe.
 - Nome igual ao de uma skill versionada no `.agents/skills/` do próprio repositório: a de apoio não é materializada naquela mesa, e o Mestre da mesa e o `class check` avisam.
 - Duas classes da mesa com a mesma skill de apoio em versões diferentes: vale a da classe do primeiro personagem vivo, e o motor avisa o Mestre da mesa.
 
@@ -53,11 +54,11 @@ O desligado é **contenção de contexto, não fronteira de segurança**: ler um
 
 - **CA-APOIO-01** · *rápida* — **Dado** uma mesa com um Dev (com `tdd` ligada) e um Revisor (com `tdd` desligada), ambos Codex, **quando** os arquivos são montados, **então** o `.agents/skills/` da mesa tem `mestre-comunicacao` e `tdd`, as regras efetivas do Revisor têm `files.deny` para `.agents/skills/tdd/**`, e um `cat .agents/skills/tdd/SKILL.md` dele é negado pelo despachante e registrado.
 - **CA-APOIO-02** · *rápida* — **Dado** um Dev e um Revisor Claude Code, com `tdd` ligada só para o Dev, **quando** os arquivos são montados, **então** `tdd` existe só em `.mestre/agents/<id do Dev>/.claude/skills/`, o `.claude/skills/` do worktree tem só `mestre-comunicacao`, nenhuma `tdd` vai ao `.agents/skills/` (não há personagem Codex ou Antigravity na mesa), e o `--settings` do Revisor tem `Read` em `deny` com o caminho absoluto de `.agents/skills/tdd/**` no worktree ([reforço nativo](reforco-nativo.md)).
-- **CA-APOIO-03** · *rápida* — **Dado** uma classe com `support/tdd/` sem `LICENSE`, ou uma skill de apoio chamada `mestre-x`, **quando** o `class check` roda, **então** aponta o erro e a classe não é salva.
+- **CA-APOIO-03** · *rápida* — **Dado** uma classe com `support/tdd/` sem `LICENSE`, ou uma skill de apoio chamada `mestre-x` ou `../x`, ou um arquivo cujo sha256 não é o do `SOURCE`, ou uma classe da mesa com `support_skills`, **quando** o `class check` roda, **então** aponta o erro e a classe não é salva.
 - **CA-APOIO-04** · *rápida* — **Dado** o último personagem vivo com `tdd` ligada dispensado da mesa, **quando** o motor materializa de novo, **então** `.agents/skills/tdd/` sai do worktree; **dado** um repositório que versiona `.agents/skills/tdd/`, **então** a de apoio não é materializada e o Mestre da mesa recebe o aviso.
 - **CA-APOIO-05** · *rápida* — **Dado** o Dev com `tdd` ligada e o Revisor com ela desligada, **quando** as camadas do Mestre são montadas, **então** a do Dev tem a linha das skills de apoio com `tdd` e a do Revisor não a cita.
 - **CA-APOIO-06** · *rápida* — **Dado** o pacote sugerido embutido no binário, **quando** o teste o lê, **então** cada classe, com todas as suas skills de apoio, cabe em 64 arquivos e 512 KiB, e cada skill de apoio tem o arquivo de licença.
-- **CA-APOIO-07** · *rápida* — **Dado** `tdd` materializada numa mesa, **quando** um personagem pede para escrever em `.agents/skills/tdd/SKILL.md`, **então** a regra fixa nega; **e** `git status` do worktree não mostra a pasta.
+- **CA-APOIO-07** · *rápida* — **Dado** `tdd` declarada numa classe da mesa, materializada ou ainda não, **quando** um personagem pede para escrever em `.agents/skills/tdd/SKILL.md`, **então** a regra fixa nega; **e** `git status` do worktree não mostra a pasta.
 
 ## Depende de
 

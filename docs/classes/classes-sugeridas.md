@@ -28,7 +28,7 @@ Versionado com o código do Mestre: embutido no binário e gravado em `<dados da
 | QA | `tdd`, `testing-strategy` | `playwright` |
 | Documentador | n/a | n/a |
 
-Origem e licença, conferidas em 2026-10-18 e guardadas na pasta de cada skill: `mattpocock/skills` (MIT: `tdd`, `diagnosing-bugs`, `implement`, `codebase-design`, `resolving-merge-conflicts`, `code-review`), `pbakaus/impeccable` (Apache-2.0, com o `NOTICE`: `critique`, `audit`, `polish`), `DietrichGebert/ponytail` (MIT: `ponytail`, `ponytail-review`); `testing-strategy` é escrita pelo Mestre. Os servidores `playwright` e `context7` (`upstash/context7`, MIT) entram no catálogo do workspace só quando o Administrador liga um deles.
+Origem e licença, conferidas em 2026-10-18 e guardadas na pasta de cada skill, com o commit de origem e os hashes no `SOURCE`: `mattpocock/skills` (MIT: `tdd`, `diagnosing-bugs`, `implement`, `codebase-design`, `resolving-merge-conflicts`, `code-review`), `pbakaus/impeccable` (Apache-2.0, com o `NOTICE`: `critique`, `audit`, `polish`), `DietrichGebert/ponytail` (MIT: `ponytail`, `ponytail-review`); `testing-strategy` é escrita pelo Mestre. Os servidores `playwright` e `context7` (`upstash/context7`, MIT) entram no catálogo do workspace só quando o Administrador liga um deles.
 
 O PM e o PO não são classes: são o [Grão-Mestre](../orquestracao/grao-mestre.md) e o [Mestre da mesa](../orquestracao/mestre-da-mesa.md#o-pedido-que-chega-o-mestre-da-mesa-como-po).
 

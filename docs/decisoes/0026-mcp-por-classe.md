@@ -27,7 +27,7 @@ Aceita, 2026-10-18, por decisão do Dono. Complementa o [ADR 0011](0011-agents-s
 ## Decisão
 
 - **Opção 3.** O workspace tem um **catálogo de servidores MCP** e a classe declara `mcp: [<nome>…]` no frontmatter do `CLASS.md`. Detalhes em [MCP por classe](../classes/mcp-por-classe.md).
-- O motor configura **só** os servidores da classe no CLI de cada personagem, por provedor, e gera nas regras efetivas o `tools.deny` dos servidores do catálogo que a classe não declara.
+- O motor configura **só** os servidores da classe no CLI de cada personagem, por provedor, em todo início (nenhum, se a classe não liga nenhum); o despachante nega a ferramenta de qualquer servidor que a classe não liga, do catálogo ou não; e ligar um servidor só passa se os `domains` dele cabem na rede da classe e do teto.
 - **Fora do M8:** servidor que precisa de chave (o agente, na mesma conta, poderia lê-la) e servidores no Antigravity (lá a configuração é do perfil compartilhado, e o reforço nativo a apaga). Ficam em "A confirmar" no documento.
 - As regras fixas continuam valendo antes de tudo: MCP de controle do computador ou do navegador do usuário só na base Operador do PC ([ADR 0021](0021-operador-do-pc.md)); um servidor desses é recusado no catálogo pelo pacote ou endereço, não pelo nome.
 
