@@ -93,6 +93,9 @@ func (e *evaluator) shellIn(cmd, cwd string, d dialect, depth int) result {
 		res.merge(e.pipeDecision(parts, i, d, st, depth))
 		e.homeScope = scope
 		e.noteHome(&parts[i])
+		if d == dialectPwsh {
+			e.dotNetEnv(&res, parts, i)
+		}
 		e.noteEffects(&parts[i], d, st)
 		if st.pending != nil {
 			// cd x && …, in a line without subshells or pipes: the rest
@@ -276,8 +279,10 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		// rule on it denies (the rest is for the class to decide).
 		e.nested(&res, inner, d, st, depth, around, true)
 	}
-	if inner := e.wrapped(cn, args, &res); len(inner) > 0 {
-		// setarch x86_64 git push, cross-env HOME=x git status, corepack npx claude
+	for _, inner := range e.wrapped(cn, args, &res) {
+		// setarch x86_64 git push, cross-env HOME=x git status, corepack npx
+		// claude, bwrap --bind . . git push, perf stat -- git push, ssh host git
+		// push, python -m pipx run claude
 		e.nested(&res, inner, d, st, depth, around, true)
 	}
 	if call, ok := runnerCall(cn, args); ok {
@@ -285,8 +290,8 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		res.merge(e.shell(call, st.cwds[0], depth+1))
 		res.atLeastAsk("comando dentro de um argumento de " + cn)
 	}
-	if line, ok := winCreate(cn, args); ok {
-		// wmic process call create "git push"
+	for _, line := range winCreate(cn, args) {
+		// wmic process call create "git push", schtasks /create /tr "git push"
 		res.merge(e.shell(line, st.cwds[0], depth+1))
 		res.atLeastAsk("comando dentro de um argumento de " + cn)
 	}
