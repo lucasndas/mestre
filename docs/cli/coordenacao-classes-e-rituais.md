@@ -10,7 +10,8 @@ Referência de sintaxe dos comandos que gerenciam classes (pacotes de função d
 
 | Comando | Quem pode usar |
 |---|---|
-| `class list\|show\|check\|test` | Mestre da mesa, Grão-Mestre; classes autorizadas |
+| `class list\|show\|check` | Mestre da mesa, Grão-Mestre; classes autorizadas |
+| `class test` | Mestre da mesa (classes da mesa), Grão-Mestre (classes do workspace); nunca liberável por classe, porque gasta cota |
 | `class create\|edit\|assign` | Mestre da mesa (escopo da mesa), Grão-Mestre (escopo do workspace, só propõe) |
 | `class delete` | Mestre da mesa, Grão-Mestre, sempre com pedido explícito de usuário |
 | `ritual …` | Grão-Mestre (rituais do workspace), Mestre da mesa (rituais da própria mesa) |

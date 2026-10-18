@@ -31,9 +31,9 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 | Branch | nome da branch da mesa (ex.: `epico/42-login`) |
 | Em andamento | a issue da missão atual, com link, e a etapa atual |
 | Party | quantos personagens, e em quais máquinas (selos) |
-| Esperas | marcador quando a mesa está aguardando algo (aprovação, cota, outra mesa), com o motivo; a missão pausada por "mesma falha repetida" mostra a impressão e o `arquivo:linha` ([prova e devolução](../orquestracao/prova-e-devolucao.md#devolução-com-causa-e-mesma-falha)) |
+| Esperas | marcador quando a mesa está aguardando algo (aprovação, cota, outra mesa), com o motivo; a missão pausada por "mesma falha repetida" mostra a impressão e, quando a devolução trouxe `--where`, o `arquivo:linha` ([prova e devolução](../orquestracao/prova-e-devolucao.md#devolução-com-causa-e-mesma-falha)) |
 | Critérios | da missão atual: quantos têm prova e quantos destes foram verificados pelo motor ([prova por critério](../orquestracao/prova-e-devolucao.md#prova-por-critério)) |
-| Última entrega | o instante da última [entrega útil](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira); passado o limite do aviso, o selo "sem entrega há <tempo>" |
+| Última entrega | o instante da última [entrega útil](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira); passado o limite do aviso, o selo "sem entrega há <tempo>", que não aparece com a mesa pausada ou aguardando cota ou outra mesa |
 | PR | link do PR da mesa, quando existir |
 | Uso | consumo da mesa em relação ao limite, quando houver limite ([limites de uso](../plataforma/limites-de-uso.md)) |
 
