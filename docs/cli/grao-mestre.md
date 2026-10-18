@@ -1,6 +1,6 @@
 # CLI: comandos do Grão-Mestre
 
-> **Assunto:** sintaxe de `table`, `gh`, `app`, `approval` (com a pausa de autonomia de uma mesa), `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa) · **Componente:** CLI · **Atualizado:** 2026-10-15
+> **Assunto:** sintaxe de `table` (com o status e a sobreposição entre mesas), `choose`, `gh`, `app`, `approval` (com a pausa de autonomia de uma mesa), `decree` e `notify`, do Grão-Mestre (`approval decide|list` também do Mestre da mesa) · **Componente:** CLI · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -10,10 +10,11 @@ Referência de sintaxe dos comandos que só o Grão-Mestre do workspace usa: abr
 
 | Comando | Comportamento em |
 |---|---|
-| `table open\|list\|status\|close` | [mesas](../orquestracao/mesas.md), [grao-mestre](../orquestracao/grao-mestre.md) |
+| `table open\|list\|status\|overlap\|close` | [mesas](../orquestracao/mesas.md), [grao-mestre](../orquestracao/grao-mestre.md) |
 | `gh epic\|review\|approve\|merge\|settings` | [acoes-por-nivel](../github/acoes-por-nivel.md), [aprovacao-no-github](../github/aprovacao-no-github.md), [politica](../aprovacoes/politica.md) |
 | `app list\|status\|create` | [identidades-e-apps](../github/identidades-e-apps.md), [criacao-de-apps](../github/criacao-de-apps.md) |
 | `approval ask\|decide\|list\|delegate\|autonomy` | [cadeia](../orquestracao/cadeia-de-aprovacao.md), [fluxo](../aprovacoes/fluxo.md), [politica](../aprovacoes/politica.md), [delegacao](../aprovacoes/delegacao.md) |
+| `choose` | [roteamento do pedido](../orquestracao/grao-mestre.md#triagem-e-roteamento-do-pedido), [bot](../telegram/bot.md) |
 | `decree propose\|list` | [decretos](../telegram/decretos.md) |
 | `notify` | [bot](../telegram/bot.md), [roteamento](../telegram/roteamento.md) |
 
@@ -21,13 +22,23 @@ Referência de sintaxe dos comandos que só o Grão-Mestre do workspace usa: abr
 ```
 mestre table open --epic <n> [--sheet "<Ficha do Mestre>"] [--base-branch <branch>] [--from-message <id>] [--notes "<observações>"]
 mestre table list [--state open|closed|all]
-mestre table status "<mesa>"
+mestre table status ["<mesa>"]
+mestre table overlap [--path "<glob>"]…
 mestre table close "<mesa>" [--cancel --reason "<texto>"] [--keep]
 ```
 - `open`: abre a mesa de um épico **já criado** por `gh epic create`: branch `epico/<n>-<slug>`, com o slug gerado pelo motor a partir do título do épico ([mesas](../orquestracao/mesas.md)), a partir de `--base-branch` (padrão: a branch principal), worktree na Cidadela e Mestre da mesa recrutado com `--sheet` (padrão: a ficha de Mestres de mesa do workspace). `--from-message` indica a mensagem de usuário de origem: o motor copia o texto original e os anexos para a caixa de entrada do novo Mestre (sem reescrever). `--notes` são as observações do Grão-Mestre, que vão depois do original, em bloco separado. Volta quando o Mestre foi recrutado; não espera ele trabalhar. `--json` → `{name, branch, epic, worktree, master: {name, id, machine}}`. Épico inexistente ou sem rótulo `epico` → 4 `epic_not_found` (`table open` nunca cria épico); épico fechado → 7 `epic_closed`; mesa já aberta para o épico → 7 `table_exists`; workspace fora do estado `active` → 7 `workspace_not_active` ([workspaces](../orquestracao/workspaces.md)).
 - `list`: nome, estado com os identificadores de [mesas](../orquestracao/mesas.md) (`open`, `working`, `in_review`, `closing`, `closed`, `cancelling`, `cancelled`) e a marca de pausa, épico, branch, Mestre, máquinas em uso, PR e consumo. `--state open` mostra as não encerradas.
-- `status`: missões e etapa atual, esperas, PR (CI e revisões), personagens e consumo da mesa.
+- `status`: sem nome, todas as mesas abertas. Por mesa: título e critérios do épico, issues abertas, missões e etapa atual, esperas, PR (CI, revisões, arquivos e linhas contra o `max_linhas` da [política](../aprovacoes/arquivo-de-politica.md)), as pastas que a branch altera contra a base (até 20), a pausa e a pausa de autonomia, a última entrega útil ([supervisão](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira)), personagens e consumo. É o que o Grão-Mestre usa para rotear um pedido sem adivinhar ([regra de decisão](../orquestracao/grao-mestre.md#triagem-e-roteamento-do-pedido)). `--json` → `{tables: [{name, epic: {number, title, criteria[]}, issues_open[], state, paused, pr: {number, files, lines, ci}, folders[], last_delivery_at}]}`. Mesa inexistente → 4 `table_not_found`.
+- `overlap`: consulta só de leitura, para decidir antes de abrir uma mesa se o trabalho já existe ou colide: lista os commits recentes da base que tocam os caminhos dados (`--path`, repetível; sem ele, nenhum filtro de caminho) e, por mesa aberta, os arquivos que a branch altera nesses caminhos (`git diff --name-only` contra a base). O motor não julga: o Grão-Mestre decide entre seguir, "já foi feito", sequenciar atrás da mesa X ou devolver ao usuário. Dois trabalhos que se sobrepõem: o de épico de número menor segue e o outro espera ([dependência entre mesas](../orquestracao/dependencia-entre-mesas.md)). `--json` → `{base_commits: [{sha, subject}], tables: [{name, files[]}]}`.
 - `close`: o Grão-Mestre chama quando o motor avisa (item `github` na caixa de entrada) que o PR da mesa foi mesclado; é o que leva a mesa a `closing`. Sem merge confirmado → 7 `not_merged`. O motor só remove um worktree se a branch foi integrada e não há alterações pendentes; senão a mesa fica `closing` e a CLI sai com 7 `unmerged_changes` listando o que falta (o Grão-Mestre pergunta aos usuários e chama `close` de novo com a decisão: resolvida a pendência, ou `--keep` para manter os worktrees). Enquanto só falta um personagem chegar ao ponto seguro, sai com 9 `scheduled`, e o motor segue sozinho e avisa ao terminar. `--cancel` fecha o PR sem merge e a issue como "não planejada"; é ação destrutiva: sem pedido explícito de usuário sai com 9 `pending` (regra 1 de [convencoes](convencoes.md)) e nada muda até a aprovação.
+
+### `mestre choose`
+```
+mestre choose "<pergunta>" --option "<rótulo>" --option "<rótulo>"… [--recommend <n>] [--from-message <id>] [--table "<mesa>"]
+```
+- Pergunta ao usuário da mensagem em tratamento (ou da indicada por `--from-message`) com um botão por opção, pelo canal de origem; a recomendada (`--recommend`, a partir de 1; padrão a primeira) vem primeiro. `--table` põe a mesa no cabeçalho. Volta com 9 e o id da pergunta; **nada é repassado antes da resposta**.
+- A escolha chega à caixa de entrada como mensagem do usuário que clicou, com o rótulo e o id da pergunta; só vale o clique do destinatário, conferido como os demais botões ([bot](../telegram/bot.md#mensagens-de-saída)). Uma resposta em texto livre também vale.
+- Menos de 2 ou mais de 6 opções → 2 `bad_options`; texto com cara de segredo → 3 `secret_detected`; usuário sem nível para dar ordens → 3 `level_denied`.
 
 ### `mestre gh`
 ```
@@ -105,6 +116,9 @@ mestre decree list [--all]
 
 - **CA-CLI-GM-11** · *rápida* — **Dado** um pedido `baixo` no Mestre da mesa, **quando** ele roda `mestre approval decide <id> approve-pattern --pattern "npm install *" --for 2h --reason "deps"`, **então** sai com 0 e nasce a regra temporária; **com** `--for 48h`, **então** sai com 2 `too_long`; **com** `--pattern "sh *"`, **então** sai com 2 `pattern_too_broad`; **quando** roda `always`, **então** sai com 0, `suggested: true`, e nenhum decreto é criado.
 - **CA-CLI-GM-12** · *rápida* — **Dado** um personagem comum, **quando** roda `mestre approval decide` ou `mestre approval delegate`, **então** sai com 3 `level_denied`; **dado** o Mestre da mesa, **quando** roda `mestre approval delegate`, **então** também sai com 3 `level_denied`.
+- **CA-CLI-GM-13** · *rápida* — **Dado** duas mesas abertas, **quando** o Grão-Mestre roda `mestre table status --json`, **então** cada mesa traz título e critérios do épico, issues abertas, estado e tamanho do PR e as pastas alteradas na branch.
+- **CA-CLI-GM-14** · *rápida* — **Dado** a base com um commit recente em `src/login/` e a mesa #15 com `src/login/form.ts` alterado, **quando** o Grão-Mestre roda `mestre table overlap --path "src/login/**"`, **então** a saída lista o commit da base e `src/login/form.ts` sob a mesa #15, e nada é alterado no repositório nem no banco.
+- **CA-CLI-GM-15** · *rápida* — **Dado** `mestre choose "Esse ajuste é do Login?" --option "Mesa #12 Login" --option "Nova mesa" --option "Mesa #15 Relatórios" --recommend 1`, **quando** roda, **então** sai com 9, o usuário recebe três botões com a #12 primeiro, e o clique de outro usuário é recusado; **com** uma só opção, **então** sai com 2 `bad_options`.
 
 ## Depende de
 

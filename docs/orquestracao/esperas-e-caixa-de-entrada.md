@@ -1,6 +1,6 @@
 # Esperas e caixa de entrada
 
-> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -49,6 +49,8 @@ Usuários com nível para isso ainda podem digitar direto num terminal pelo canv
 | Horário | chega o horário | `mestre wait --until` |
 | Vaga (`waiting_slot`) | abre vaga ([limites](personagens.md#limites)) | motor, para etapas e para `recruit`/`spawn` diretos |
 | Sincronização | sincronização concluída ([mesas](mesas.md#worktree-por-máquina-e-sincronização)) | motor, só para etapas |
+
+A espera de uma mesa por outra mesa (tipo "épico", M5) é de [dependência entre mesas](dependencia-entre-mesas.md).
 
 `mestre wait` **registra e retorna na hora**; o agente deve encerrar o turno. Quando a espera é satisfeita, o motor coloca um item `wake` com o resultado na fila de quem espera.
 

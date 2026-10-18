@@ -1,6 +1,6 @@
 # Aprovação no GitHub
 
-> **Assunto:** como as aprovações viram reviews no GitHub, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** como as aprovações viram reviews no GitHub, quando um review feito direto no GitHub conclui um pedido, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -56,6 +56,19 @@ Quando um usuário aprova pelo Telegram ou pelo painel:
 
 A credencial de uma pessoa nunca é usada sem a delegação dela ou a aprovação dela para aquela ação.
 
+### Review feito direto no GitHub
+
+É o único caminho em que uma aprovação chega por fora do canal autenticado (Telegram e painel), então o motor só a aceita como resposta ao pedido quando **todas** as condições valem:
+
+1. o estado do review é `APPROVED` (não `DISMISSED`, `COMMENTED`, `CHANGES_REQUESTED` nem `PENDING`);
+2. o `commit_id` do review é o hash atual do pedido ([fluxo](../aprovacoes/fluxo.md#invalidação)); um review de um commit antigo não conta;
+3. o autor é um usuário **cadastrado e ativo** do Mestre, pelo login do GitHub do cadastro ([usuários e níveis](../telegram/usuarios-e-niveis.md)), com o nível e o workspace que o pedido exige: as mesmas condições do toque no botão ([fluxo](../aprovacoes/fluxo.md));
+4. o tipo da conta é `User`, nunca `Bot` nem App;
+5. ele tem permissão de escrita **atual** no repositório, lida na hora e não guardada.
+
+Um review que falha em qualquer condição é registrado na auditoria com o motivo e **não muda nada**: o pedido continua `aguardando_usuarios`. Um review que cumpre tudo vale como a resposta "aprovar" daquele usuário (entra no quórum como o toque dele) e conclui o pedido. Rótulo no PR nunca autoriza. É a conferência que protege a política: sem ela, qualquer conta com acesso de leitura de review poderia liberar um PR numa área sensível.
+
+
 ### Credencial pessoal: user access token pelo device flow
 
 Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/usuarios-e-niveis.md)). Não precisa de porta aberta:
@@ -86,6 +99,7 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - **CA-GH-APROV-06** · *rápida* — **Dado** o device flow com o GitHub falso devolvendo um login diferente do cadastro, **quando** o motor confere, **então** descarta o token e mostra o erro no painel.
 - **CA-GH-APROV-07** · *pesada* — **Dado** um PR de mesa aberto pelo App "Mestre", **quando** o Grão-Mestre aprova pela política, **então** o review aparece no GitHub (dublê) com o App "Grão-Mestre" e o merge acontece (MVP-5).
 - **CA-GH-APROV-08** · *pesada* — **Dado** um PR que toca área sensível, **quando** o Lucas toca "Aprovar" no Telegram (dublê), **então** a aprovação aparece no GitHub (dublê) e o merge acontece (MVP-7).
+- **CA-GH-APROV-09** · *rápida* — **Dado** um pedido `aguardando_usuarios` e um review `APPROVED` feito no GitHub por uma conta não cadastrada, ou com `commit_id` diferente do hash atual do pedido, **quando** o motor recebe o evento, **então** o pedido continua `aguardando_usuarios` e a auditoria registra o motivo; **dado** o review de um usuário cadastrado e ativo, do tipo `User`, com permissão de escrita e o hash certo, **então** o pedido é concluído como se ele tivesse tocado em "Aprovar"; **dado** o mesmo review depois de `DISMISSED`, **então** não conta.
 
 ## Depende de
 
@@ -105,6 +119,7 @@ As respostas reais conferidas à mão viram gravações do [GitHub falso](../qua
 - **Verificar na implementação:** o review `APPROVE` do App "Grão-Mestre" conta para as revisões obrigatórias (é o teste acima), com as permissões da [tabela](identidades-e-apps.md#permissões-mínimas). **Padrão:** conta (o Renovate usa Apps aprovadores). **Se falhar:** plano B do ruleset; se ele também falhar, modo "aprovação humana". **Onde:** à mão, no repositório [sandbox](../qualidade/projetos-de-treino.md#sandbox-real-no-github), exigindo revisão.
 - **Verificar na implementação:** `actor_type: Integration` é aceito na lista de exceção de ruleset em repositório pessoal (a documentação da API só exclui `OrganizationAdmin` ali), e `bypass_mode: pull_request` permite o merge pela API. **Padrão:** os dois funcionam, como no plano B acima. **Se falhar:** com `pull_request` recusado, a proposta ao Dono passa a usar `bypass_mode: always` (o ruleset só tem a regra de revisão, e o motor nunca envia direto à principal); com `Integration` recusado, modo "aprovação humana". **Onde:** à mão, no primeiro repositório real com resultado `nao_conta`.
 - **Verificar na implementação:** o review feito com o user access token aparece como review real do usuário e conta como aprovação dele. **Padrão:** conta. **Se falhar:** a credencial pessoal deixa de ser usada para aprovar; vale o caso "a pessoa exigida não tem credencial" da tabela acima (link do PR pelo Telegram). **Onde:** à mão, com o primeiro usuário que conectar o GitHub pelo device flow.
+- **Verificar na implementação:** a permissão atual de escrita do autor de um review, lida pela instalação do App "Grão-Mestre". **Padrão:** `GET /repos/{o}/{r}/collaborators/{login}/permission` funciona com o token de instalação e as permissões da [tabela](identidades-e-apps.md#permissões-mínimas). **Se falhar:** vale o `author_association` do review (`OWNER` ou `COLLABORATOR`, só em repositório de conta pessoal, onde colaborador escreve); qualquer outro valor não conta. **Onde:** à mão, no repositório [sandbox](../qualidade/projetos-de-treino.md#sandbox-real-no-github), com um colaborador e uma conta sem acesso.
 
 ## Fontes
 
