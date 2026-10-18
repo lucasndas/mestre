@@ -65,6 +65,9 @@ func runLauncher(args []string) int {
 	inst := fl.String("instance", "", "instance")
 	bin := fl.String("bin", "", "folder of the installed binaries")
 	agent := fl.String("agent", "", "account of the agents")
+	// the account of the agents is the one of the instance the test machine
+	// made it for, also for the launcher of another instance (nocg)
+	agentInst := fl.String("agent-instance", "", "instance the account of the agents belongs to")
 	engineUID := fl.Uint("engine-uid", 0, "uid of the engine")
 	engineCgroup := fl.String("engine-cgroup", "", "cgroup of the engine")
 	noCgroup := fl.Bool("no-cgroup", false, "run without a delegated cgroup (LIN-11 failed)")
@@ -72,7 +75,7 @@ func runLauncher(args []string) int {
 		return 2
 	}
 	cfg := launcher.RunConfig{
-		SocketPath: launcherSocket(*inst), BinDir: *bin, SocketDir: ptySocketDir(*inst), Agent: *agent,
+		SocketPath: launcherSocket(*inst), BinDir: *bin, SocketDir: ptySocketDir(*inst), Instance: *agentInst, Agent: *agent,
 		Engine: launcher.PeerPolicy{UID: uint32(*engineUID), Cgroup: *engineCgroup},
 		Audit:  func(e launcher.Event) { fmt.Fprintf(os.Stderr, "audit: %+v\n", e) },
 	}
