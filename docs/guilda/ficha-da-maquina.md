@@ -72,6 +72,7 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 
 - **"Precisa de interface"** (`gui: true`) é atendido **só** pela base do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc): só é aceito numa base `operador` e nas fichas dela; em qualquer outra base, ficha ou classe, é recusado ao salvar. Fora do Operador não há agentes com tela ([ADR 0020](../decisoes/0020-linux-e-windows-em-qualquer-papel.md)).
 - Uma ficha recebida com campo desconhecido é aceita (o campo é ignorado); sem os campos obrigatórios (`os`, `arch`, `providers`), a conexão recebe `invalid_payload`, e um `machine.sheet` que deixaria a ficha assim também. Máquina fora da Guilda (removida, ou que nunca entrou) recebe `forbidden`.
+- Uma ficha **guardada** que não se lê mais (campos com tipo errado) não derruba a Guilda: o registro avisa no log e trata aquela máquina como sem ficha (não atende nenhum requisito) até o próximo `hello` trocá-la; a listagem e a escolha das outras máquinas seguem normais (CA-FMAQ-07).
 - A ficha nunca leva segredos: perfis de conta aparecem só pelo nome e pelo estado do login.
 
 ## Critérios de aceite
@@ -82,6 +83,8 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 - **CA-FMAQ-04** · *rápida* — **Dado** uma classe com `requires: {gui: true}` ou `requires: {cor: azul}`, **quando** é salva, **então** é recusada com o motivo.
 - **CA-FMAQ-05** · *rápida* — **Dado** uma máquina offline que atenderia, **quando** se casa o personagem, **então** ela não atende, com o motivo "offline".
 - **CA-FMAQ-06** · *completa* — **Dado** a Cidadela e uma Torre reais na mesma máquina, **quando** a Torre conecta, **então** a ficha dela no banco principal traz o sistema, a memória, os núcleos reais da máquina e o nome da instância (MVP-1).
+
+- **CA-FMAQ-07** · *rápida* — **Dado** uma máquina cuja ficha guardada tem campos com tipo errado e outra com ficha boa, **quando** se lista as fichas e se casa um personagem, **então** as duas aparecem, só a máquina boa atende, e o próximo `hello` da primeira conserta a ficha.
 
 ## Depende de
 

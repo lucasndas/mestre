@@ -1,9 +1,11 @@
 package guild_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -776,4 +778,30 @@ func (r *rig) falseCitadel(t *testing.T, host string, ca, other *transport.CA, m
 	s.Handle("/join", mux)
 	s.Handle("/join/", mux)
 	return name + ":7443"
+}
+
+// A sheet the Citadel's checker refuses (wrong types) is a bad request, so it
+// never reaches the registry; with no checker only the JSON is checked.
+func TestARequestWithASheetTheCheckerRefusesIsBadRequest(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, clock.NewFake(day0), func(c *guild.CitadelConfig) {
+		c.CheckSheet = func(raw json.RawMessage) error {
+			if bytes.Contains(raw, []byte("poison")) {
+				return errors.New("os is not a string")
+			}
+			return nil
+		}
+	})
+	req, _ := rawRequest(t, "m1")
+	req.Sheet = json.RawMessage(`{"os":"poison"}`)
+	if _, err := r.citadel.Begin(t.Context(), req, "new1"); !errors.Is(err, guild.ErrBadRequest) {
+		t.Fatalf("Begin = %v, want ErrBadRequest", err)
+	}
+	if r.count("join_requests") != 0 || r.approver.questions() != 0 {
+		t.Fatal("a refused request was recorded or reached the Owner")
+	}
+	req.Sheet = json.RawMessage(`{"os":"linux"}`)
+	if _, err := r.citadel.Begin(t.Context(), req, "new1"); err != nil {
+		t.Errorf("a good sheet: %v", err)
+	}
 }

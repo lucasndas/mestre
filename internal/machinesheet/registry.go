@@ -229,6 +229,9 @@ type querier interface {
 type row struct {
 	sheet Sheet
 	has   bool // a sheet was stored
+	// bad is why the stored sheet could not be read (wrong types): the row is
+	// then taken as a machine with no sheet, until its next hello replaces it.
+	bad error
 }
 
 const rowColumns = `machine_id, name, instance, excluded, state, sheet`
@@ -245,9 +248,10 @@ func scanRow(sc interface{ Scan(...any) error }) (row, string, error) {
 	out := row{}
 	if sheet.Valid && sheet.String != "" {
 		if err := json.Unmarshal([]byte(sheet.String), &out.sheet); err != nil {
-			return row{}, "", fmt.Errorf("the sheet of %s: %w", id, err)
+			out.sheet, out.bad = Sheet{}, fmt.Errorf("the sheet of %s: %w", id, err)
+		} else {
+			out.has = true
 		}
-		out.has = true
 	}
 	out.sheet.MachineID, out.sheet.Name, out.sheet.Excluded = id, name, excluded != 0
 	if instance != "" {
@@ -267,7 +271,16 @@ func (r *Registry) load(ctx context.Context, q querier, machineID string) (row, 
 	if state != string(guild.MachineActive) {
 		return row{}, fmt.Errorf("%w: %s is %s", ErrNotActive, machineID, state)
 	}
+	r.warnUnreadable(out)
 	return out, nil
+}
+
+// warnUnreadable logs a stored sheet that could not be read; the listing goes
+// on without it, so one machine cannot stop the choice for the whole Guild.
+func (r *Registry) warnUnreadable(rw row) {
+	if rw.bad != nil {
+		r.cfg.Logger.Warn("machinesheet: a stored sheet is unreadable and is taken as missing", "machine", rw.sheet.MachineID, "err", rw.bad)
+	}
 }
 
 // online fills the field the connection decides.
@@ -301,6 +314,7 @@ func (r *Registry) Sheets(ctx context.Context) ([]Sheet, error) {
 		if err != nil {
 			return nil, fmt.Errorf("machinesheet: %w", err)
 		}
+		r.warnUnreadable(rw)
 		out = append(out, r.online(rw.sheet))
 	}
 	return out, rows.Err()

@@ -77,6 +77,7 @@ sequenceDiagram
 
 - **Pedido recusado, expirado ou com código que não confere:** a máquina mostra "entrada recusada ou expirada", não guarda nenhuma CA e nada é criado na Guilda.
 - **Nomes que um certificado não pode ter** (nome com ponto, `mestre`, IP público, mais de 16 IPs; [nomes dos certificados](../arquitetura/seguranca.md#nomes-dos-certificados)): o pedido é recusado (`400`) com o motivo, sem guardar nada e sem perguntar ao Dono; a mesma conferência vale para os nomes que chegam pela ficha e na renovação.
+- **Ficha do pedido:** tem de ser JSON e passar na mesma conferência do `hello` ([ficha da máquina](ficha-da-maquina.md): campos obrigatórios e tipos); senão o pedido é recusado (`400`) sem guardar nada. A conferência é injetada na Cidadela (`CheckSheet`) porque o pacote da ficha importa este.
 - **Limites:** até 5 pedidos pendentes ao mesmo tempo (do pedido à resposta) e 10 pedidos por IP por hora (padrão); acima disso, recusa sem perguntar ao Dono (`429`) e sem guardar o pedido. Com 20 pedidos recusados em 24 horas (os que não revelaram o `nonce_n` contam), o Dono recebe um alerta.
 - **Nome repetido:** a Cidadela acrescenta um sufixo; quem identifica a máquina é o `machine_id`.
 - **Entrada interrompida** depois dos certificados e antes da primeira conexão: a máquina tenta conectar com o que recebeu.

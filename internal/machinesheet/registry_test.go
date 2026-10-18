@@ -340,3 +340,41 @@ func TestARegistryNeedsTheDatabaseAndThePresence(t *testing.T) {
 		t.Error("an empty configuration was accepted")
 	}
 }
+
+// CA-FMAQ-07: a machine whose stored sheet cannot be read does not stop the
+// listing or the choice for the others, and its next hello repairs it.
+func TestAnUnreadableSheetDoesNotStopTheOthers(t *testing.T) {
+	t.Parallel()
+	r := newCitadel(t)
+	addMachine(t, r.db, "m1", "poisoned", "")
+	addMachine(t, r.db, "m2", "linux-pc", "")
+	if err := r.hello(t, "m2", towerSheet(t, sheetfake.Linux("linux-pc"), "m2", "").Object()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.db.Writer().Exec(`UPDATE machines SET sheet = ? WHERE machine_id = 'm1'`, `{"os":5,"arch":["x"],"providers":"no","cores":"many"}`); err != nil {
+		t.Fatal(err)
+	}
+	r.presence.set("m1", true)
+	r.presence.set("m2", true)
+	sheets, err := r.reg.Sheets(t.Context())
+	if err != nil || len(sheets) != 2 {
+		t.Fatalf("Sheets = %d, %v; want both machines, no error", len(sheets), err)
+	}
+	req, err := machinesheet.ParseRequires(map[string]any{"os": "linux"}, machinesheet.Scope{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := r.reg.Choose(t.Context(), req)
+	if err != nil || len(c.Fit()) != 1 || c.Fit()[0].MachineID != "m2" {
+		t.Fatalf("Choose: fit = %v, err = %v; want only m2", c.Fit(), err)
+	}
+	if _, err := r.reg.Sheet(t.Context(), "m1"); err != nil {
+		t.Errorf("Sheet(m1) = %v, want the machine with no sheet", err)
+	}
+	if err := r.hello(t, "m1", towerSheet(t, sheetfake.Linux("poisoned"), "m1", "").Object()); err != nil {
+		t.Fatalf("the hello of the poisoned machine: %v", err)
+	}
+	if s, err := r.reg.Sheet(t.Context(), "m1"); err != nil || s.OS != machinesheet.OSLinux {
+		t.Errorf("after the hello: %+v, %v", s, err)
+	}
+}

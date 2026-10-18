@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -334,7 +335,8 @@ func (e *Engine) startCitadel(ctx context.Context, run *citadelRun) (*guild.Cita
 			}
 			return run.gate.leave, true
 		},
-		Logger: e.log,
+		CheckSheet: checkJoinSheet,
+		Logger:     e.log,
 	})
 	if err != nil {
 		return nil, err
@@ -798,4 +800,15 @@ func (e *Engine) Handover(ctx context.Context, target, approvalID, approvedBy st
 		}
 		poll = min(poll*2, handoverPoll[1])
 	}
+}
+
+// checkJoinSheet refuses at /join a sheet the registry could not read later
+// (wrong types, missing required fields): the same merge the hello goes through.
+func checkJoinSheet(raw json.RawMessage) error {
+	var obj protocol.Object
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return err
+	}
+	_, err := machinesheet.Merge(machinesheet.Sheet{}, obj, true)
+	return err
 }
