@@ -1,10 +1,10 @@
 # Classes
 
-> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
-A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, Revisor; os nomes são só exemplos). As regras são escritas uma vez e valem igual em Claude Code, Codex e Antigravity. O Mestre não vem com classes prontas para personagens (a única embutida é a dos orquestradores, [`orquestrador`](classe-orquestrador.md)): elas são criadas pelos usuários, pelo Grão-Mestre ou pelo Mestre de uma mesa, conforme a necessidade.
+A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, Revisor; os nomes são só exemplos). As regras são escritas uma vez e valem igual em Claude Code, Codex e Antigravity. O Mestre não vem com classes prontas para personagens (a única embutida é a dos orquestradores, [`orquestrador`](classe-orquestrador.md)): elas são criadas pelos usuários, pelo Grão-Mestre ou pelo Mestre de uma mesa, conforme a necessidade. A partir do M8 existem também as classes sugeridas, que vêm desligadas e o usuário ativa quando quiser (sugerida não é padrão, e a regra acima não muda).
 
 ## Comportamento
 
