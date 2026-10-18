@@ -11,6 +11,7 @@ import (
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/privdir"
+	"github.com/lucasndas/mestre/internal/replication"
 )
 
 // Defaults of an instance (docs/arquitetura/componentes.md#instâncias).
@@ -131,6 +132,21 @@ func (p Paths) discarded(e uint64) string {
 // until the report of what was discarded carries them.
 func (p Paths) droppedActions(e uint64) string {
 	return filepath.Join(p.Banco, fmt.Sprintf("descartado-%d-acoes.json", e))
+}
+
+// discardedPrefix starts the name of everything kept of a discarded database:
+// the database (descartado-<epoch>.db, or with a suffix when the epoch was
+// archived twice), its -wal and -shm, the report (descartado-<epoch>.json) and
+// the dropped actions.
+const discardedPrefix = "descartado-"
+
+// leftovers are the files of the time this machine was the Citadel that a
+// Tower does not use and leaving the Guild erases (replication.ReplicaConfig):
+// the discarded databases with what goes with them, and the full copies that
+// were being made to send. The transfers of the Tower are erased as well, by
+// their own folder.
+func (p Paths) leftovers() []replication.Leftover {
+	return []replication.Leftover{{Dir: p.Banco, Prefix: discardedPrefix}, {Dir: p.snapshots()}}
 }
 
 // ensure makes the folders, private.

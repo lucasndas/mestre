@@ -43,7 +43,7 @@ func Patterns() []Pattern {
 		{Name: PatternPrivateKey, Re: regexp.MustCompile(`-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----(?s:.*?)(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)`)},
 		{Name: PatternAuthorization, Re: regexp.MustCompile(`(?i)(authorization:[ \t]*)([^\r\n]+)`), Group: 2},
 		{Name: PatternGitHubToken, Re: regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b`)},
-		{Name: PatternTelegramToken, Re: regexp.MustCompile(`(\b[0-9]{5,}:[A-Za-z0-9_-]{35})(?:[^A-Za-z0-9_-]|$)`), Group: 1},
+		{Name: PatternTelegramToken, Re: regexp.MustCompile(`(?:\b|\b(?i:bot))([0-9]{5,}:[A-Za-z0-9_-]{35})(?:[^A-Za-z0-9_-]|$)`), Group: 1},
 		{Name: PatternSlackToken, Re: regexp.MustCompile(`\bxox[bp]-[A-Za-z0-9-]{10,}`)},
 		{Name: PatternJWT, Re: regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)},
 		{Name: PatternSKKey, Re: regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{16,}`)},

@@ -3,6 +3,8 @@ package guild
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/subtle"
 	"crypto/x509"
@@ -13,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +25,15 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
+)
+
+// What a request may carry (docs/guilda/guilda.md#regras-e-erros): the route is
+// open and the record of the request goes to every Tower, so none of it is as big
+// as the body the route reads. A certificate request of the Mestre takes about
+// 140 bytes (a public key and no name), and a sheet a few KiB.
+const (
+	maxCSR   = 1 << 10
+	maxSheet = 16 << 10
 )
 
 // Defaults of the entry (docs/guilda/guilda.md#regras-e-erros).
@@ -241,6 +253,7 @@ func (c *Citadel) Begin(ctx context.Context, req JoinRequest, remoteIP string) (
 	t := JoinTicket{JoinID: c.ids.NewString(), NonceC: nonceC, ExpiresAt: now.Add(JoinValidity).UTC()}
 	fp := Fingerprint(c.cfg.Cert.Leaf().Raw)
 	body := req
+	body.Name = name                                                 // the clean one, as the question to the Owner has it
 	body.CSRMotor, body.CSRGuardian, body.Commitment = nil, nil, nil // kept in their own columns
 	reqJSON, _ := json.Marshal(body)                                 // a JoinRequest always encodes
 
@@ -279,18 +292,35 @@ func (c *Citadel) Begin(ctx context.Context, req JoinRequest, remoteIP string) (
 	return t, nil
 }
 
-// checkRequest validates the request and returns the clean name.
+// checkRequest validates the request and returns the clean name. The route is
+// open (outside mTLS), and what it takes is recorded in a table that every Tower
+// replicates, so what goes on is what was checked or bounded: the system reaches
+// the question to the Owner and the instance the registry, and neither may be text
+// of the requester's choice; the sheet is an object of a few KiB, the way the
+// registry reads it; the certificate requests are small and P-256.
 func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	if len(req.Commitment) != 32 {
 		return "", fmt.Errorf("%w: the commitment is a SHA-256", ErrBadRequest)
 	}
+	if req.OS != "linux" && req.OS != "windows" {
+		return "", fmt.Errorf("%w: the system is linux or windows", ErrBadRequest)
+	}
+	if req.Instance != "" && !ValidInstance(req.Instance) {
+		return "", fmt.Errorf("%w: the name of the instance is up to 32 letters, digits, '-' and '_', and starts with a letter or a digit", ErrBadRequest)
+	}
 	for _, csr := range [][]byte{req.CSRMotor, req.CSRGuardian} {
+		if len(csr) > maxCSR {
+			return "", fmt.Errorf("%w: a certificate request of %d bytes, the most is %d", ErrBadRequest, len(csr), maxCSR)
+		}
 		parsed, err := x509.ParseCertificateRequest(csr)
 		if err != nil {
 			return "", fmt.Errorf("%w: a certificate request: %v", ErrBadRequest, err)
 		}
 		if err := parsed.CheckSignature(); err != nil {
 			return "", fmt.Errorf("%w: a certificate request: %v", ErrBadRequest, err)
+		}
+		if pub, ok := parsed.PublicKey.(*ecdsa.PublicKey); !ok || pub.Curve != elliptic.P256() {
+			return "", fmt.Errorf("%w: a certificate request: the key is not ECDSA P-256", ErrBadRequest)
 		}
 	}
 	if bytes.Equal(req.CSRMotor, req.CSRGuardian) {
@@ -317,8 +347,14 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	if req.EnginePort < 0 || req.EnginePort > 65535 {
 		return "", fmt.Errorf("%w: %d is not a port", ErrBadRequest, req.EnginePort)
 	}
-	if len(req.Sheet) > 0 && !json.Valid(req.Sheet) {
-		return "", fmt.Errorf("%w: the sheet is not JSON", ErrBadRequest)
+	if len(req.Sheet) > maxSheet {
+		return "", fmt.Errorf("%w: the sheet has %d bytes, the most is %d", ErrBadRequest, len(req.Sheet), maxSheet)
+	}
+	if len(req.Sheet) > 0 {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(req.Sheet, &object); err != nil || object == nil {
+			return "", fmt.Errorf("%w: the sheet is a JSON object", ErrBadRequest)
+		}
 	}
 	name := cleanName(req.Name)
 	if name == "" {
@@ -329,6 +365,16 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	}
 	return name, nil
 }
+
+// instanceRe is the rule of the name of an instance: letters, digits, "-" and
+// "_", from 1 to 32 characters, the first a letter or a digit
+// (docs/arquitetura/componentes.md#instâncias). localchan.ValidInstance, which
+// the configuration and the local channel use, is the same rule; guild does not
+// import the local channel, and a test keeps the two together.
+var instanceRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+
+// ValidInstance says whether name can name an instance.
+func ValidInstance(name string) bool { return instanceRe.MatchString(name) }
 
 // cleanName keeps printable characters and bounds the length: the name is
 // shown to the Owner in the question.
