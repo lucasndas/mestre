@@ -571,7 +571,7 @@ func loadDropped(path string) []string {
 // discardedRe matches the main file of a database this machine discarded:
 // descartado-<epoch>.db, or the same followed by .<ms> when the epoch had been
 // archived already (archive keeps the first and renames the second).
-var discardedRe = regexp.MustCompile(`^` + discardedPrefix + `(\d+)\.db(\.\d+)?$`)
+var discardedRe = regexp.MustCompile(`^` + regexp.QuoteMeta(discardedPrefix) + `(\d+)\.db(\.\d+)?$`)
 
 // discardedAll lists the main file of every database this machine discarded,
 // the ones kept under another name included, with the epoch of each.
@@ -723,9 +723,12 @@ func (e *Engine) pruneDiscarded() {
 		if err != nil || !fi.ModTime().Before(cutoff) {
 			continue
 		}
-		for _, suffix := range []string{"", "-wal", "-shm"} {
-			_ = os.Remove(path + suffix)
+		if err := os.Remove(path); err != nil {
+			e.log.Warn("app: removing a discarded database after the retention", "file", path, "err", err)
+			continue
 		}
+		_ = os.Remove(path + "-wal")
+		_ = os.Remove(path + "-shm")
 		if filepath.Base(path) == filepath.Base(e.paths.discarded(epoch)) {
 			_ = os.Remove(strings.TrimSuffix(path, ".db") + ".json")
 			_ = os.Remove(e.paths.droppedActions(epoch))

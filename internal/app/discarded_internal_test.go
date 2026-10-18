@@ -165,3 +165,67 @@ func TestATowerStopsReportingTheDiscardedDatabasesBeforeItErasesThem(t *testing.
 		t.Errorf("the Tower did %v, want the report stopped and then the wipe", order)
 	}
 }
+
+// CA-REPL-13
+// The retention counts from the day the database was discarded, not from the
+// last write it had as the main database (the rename keeps that time): a
+// Citadel that stopped weeks ago and comes back as a Tower would otherwise lose
+// what it discarded at once, before it reported what the Guild lost.
+func TestADiscardedDatabaseIsKeptForTheRetentionFromTheDayItWasDiscarded(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC))
+	e := &Engine{paths: DirPaths(t.TempDir()), clk: clk, log: slog.New(slog.DiscardHandler)}
+	if err := e.paths.ensure(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := guildtpl.Open(t.Context(), e.paths.guildDB(), store.Options{Clock: clk, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil { // closing writes to the file: the old time goes after
+		t.Fatal(err)
+	}
+	stopped := clk.Now().Add(-90 * 24 * time.Hour)
+	if err := os.Chtimes(e.paths.guildDB(), stopped, stopped); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.archive(db, 3); err != nil {
+		t.Fatal(err)
+	}
+	kept := func() bool {
+		_, err := os.Stat(e.paths.discarded(3))
+		return err == nil
+	}
+
+	e.pruneDiscarded()
+	if !kept() {
+		t.Fatal("the database was removed the day it was discarded, for the date of its last write")
+	}
+	clk.Advance(DiscardedRetention - time.Hour)
+	e.pruneDiscarded()
+	if !kept() {
+		t.Error("the database left before the retention")
+	}
+	clk.Advance(2 * time.Hour)
+	e.pruneDiscarded()
+	if kept() {
+		t.Error("the database is still there after the retention")
+	}
+}
+
+// CA-REPL-13
+// An epoch archived twice has two databases, and one report: the report is of
+// the first (the one under the plain name), and the copy kept under another name
+// would otherwise make a report of its own, named after the copy, that the
+// retention does not know to remove.
+func TestAnEpochArchivedTwiceHasOneReportAndTheCopyKeepsItsOwnName(t *testing.T) {
+	t.Parallel()
+	e := discardedEngine(t)
+	if got := len(e.discardedAll()); got != 2 {
+		t.Fatalf("the set-up has %d databases of the epoch, want the two", got)
+	}
+	files := e.discardedFiles()
+	if len(files) != 1 || files[3] != e.paths.discarded(3) {
+		t.Errorf("databases to report = %v, want only %s for the epoch 3", files, e.paths.discarded(3))
+	}
+}
