@@ -69,7 +69,7 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 - Os eventos do mesmo ciclo e da mesma mesa viram **uma única mensagem** na caixa de entrada do Grão-Mestre, para não gastar um turno por evento.
 - Prioridade e entrega: [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md).
 - `pr_mergeado` do PR de uma mesa confirma o merge: o motor marca a mesa como mesclada e o item ao Grão-Mestre diz isso, para ele encerrar a mesa ([encerramento](../orquestracao/mesas.md#encerramento)). **Antes** de marcar, confere pelo espelho que o `merge_commit_sha` é alcançável da base (`git merge-base --is-ancestor`); se não é (merge desfeito logo depois, ou o espelho ainda sem o commit), a mesa não é marcada e o Grão-Mestre recebe o aviso. Vale também para o merge feito por uma pessoa no GitHub. Nenhum "pronto" vai ao usuário antes disso.
-- Revisões feitas por pessoas direto no GitHub também servem para concluir pedidos de aprovação ([fluxo](../aprovacoes/fluxo.md)).
+- Revisões feitas por pessoas direto no GitHub também servem para concluir pedidos de aprovação, só sob as condições de [review feito direto no GitHub](aprovacao-no-github.md#review-feito-direto-no-github) ([fluxo](../aprovacoes/fluxo.md)).
 
 ### Orçamento de cota
 
@@ -79,8 +79,10 @@ Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerc
 
 - Erro 403 ou 429: o motor respeita `retry-after` ou `x-ratelimit-reset` e só volta depois disso.
 - Cota restante abaixo de 10%: o workspace fica em "parado" até a cota renovar, e o [checklist](../plataforma/checklist.md) registra o alerta. `GET /rate_limit` pode ser usado, porque não gasta cota.
+- **Escrita também espera.** Com a cota nessa faixa, as ações que mudam dados (comentário, issue, review, merge) não saem: ficam na fila de saída, cada uma com o mesmo uuid e o [marcador de operação](acoes-por-nivel.md#marcador-de-operação), e saem uma vez só quando a cota renova, como no [GitHub fora](../guilda/trava-no-github.md#github-fora). Só segurar a leitura deixaria o motor gastando a cota que sobra em escrita.
 - No máximo 4 requisições simultâneas por workspace, abaixo dos limites secundários do GitHub. Para esses limites, o motor conta toda requisição, inclusive as que voltam `304` (hipótese conservadora; nada depende de medir isso).
 - GitHub fora do ar ou erro de rede: o laço tenta de novo no próximo ciclo, com backoff até o intervalo "parado". Nada se perde, porque o cursor só avança depois que o evento é gravado.
+- **Limite batido (a cota chegou a zero, `403` ou `429` por limite primário):** além de parar o workspace, o motor grava no banco um **teto de mesas em `working` ao mesmo tempo**, um degrau abaixo do que havia (mínimo 1), e avisa o Dono. O teto não sobe sozinho: subir é decisão do Dono, pelo painel. Uma mesa nova além do teto espera aberta até abrir vaga; as que já trabalham seguem.
 - Consultas só leem; nenhuma consulta muda dados no GitHub.
 
 ## Critérios de aceite
@@ -93,6 +95,7 @@ Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerc
 - **CA-GH-EV-06** · *rápida* — **Dado** uma resposta 429 com `retry-after: 60`, **quando** o motor processa, **então** a próxima consulta daquele workspace só acontece após 60 s no relógio falso.
 - **CA-GH-EV-07** · *completa* — **Dado** o GitHub falso com um PR de mesa aberto e CI em andamento, **quando** o CI termina com falha, **então** em até um ciclo o Grão-Mestre recebe o evento `ci` com o link do check.
 - **CA-GH-EV-08** · *rápida* — **Dado** um evento `pr_mergeado` cujo `merge_commit_sha` não é alcançável da base no espelho, **quando** o motor o processa, **então** a mesa não é marcada como mesclada e o Grão-Mestre recebe o aviso; **dado** o commit alcançável, **então** a mesa é marcada.
+- **CA-GH-EV-09** · *rápida* — **Dado** o GitHub falso com a cota em zero, 3 mesas em `working` e um comentário pedido nesse momento, **quando** o motor processa, **então** o teto de mesas simultâneas fica em 2, o Dono é avisado, o comentário espera na fila de saída com o uuid e, renovada a cota (relógio falso), sai uma vez só; **então** o teto continua em 2 até o Dono subi-lo.
 
 ## Depende de
 

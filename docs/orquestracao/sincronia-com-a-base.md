@@ -21,7 +21,7 @@ Nenhum dos três depende de a mesa ter conflito de texto: a base ter andado bast
 ### A etapa
 
 - É uma missão de uma etapa da mesa ([missões](missoes.md)), de risco `baixo`, entregue ao **Dev da mesa**: o personagem que fez a última etapa que mudou código; sem ele, o Mestre da mesa escolhe. Uma mesa aberta em `in_review` volta a `working` ([estados](mesas.md#estados)).
-- O motor monta a instrução: integrar a base no worktree da mesa (merge, nunca push forçado), resolver cada conflito mantendo a intenção dos dois lados, rodar a verificação do workspace (testar e fazer build, descobertos na [análise do projeto](../sessao-zero/workspace.md#análise-do-projeto-e-agentsmd-etapa-analysis)) e só então dar `done`.
+- O motor monta a instrução: integrar a base no worktree da mesa (merge, nunca push forçado), resolver cada conflito mantendo a intenção dos dois lados, rodar a verificação do workspace (os [comandos confirmados](../sessao-zero/workspace.md#comandos-de-verificação), descobertos na análise do projeto) e só então dar `done`.
 - **Conflito é tarefa de build.** O Dev resolve; só chega a pessoa o que é decisão de intenção (dois lados do pedido que não cabem juntos), pelo caminho normal da pergunta ao Mestre da mesa e ao Grão-Mestre.
 - **Quem empurra** é o motor, pelo App da classe do Dev, no `mestre pr update` seguinte; o agente não faz `git push`.
 
@@ -35,6 +35,7 @@ O `done` da `sync` não encerra a etapa sozinho. O motor roda a verificação nu
 ## Regras e erros
 
 - A etapa `sync` não amplia permissões: o Dev usa as da classe dele ([permissões](../classes/permissoes.md)). Quem não pode rodar a verificação a devolve ao Mestre da mesa.
+- Sem comando de verificação confirmado, a `sync` não consegue provar a chegada: o motor a devolve ao Mestre da mesa, que leva ao Grão-Mestre a pergunta de quais comandos usar.
 - Só uma etapa `sync` aberta por mesa; um evento de base andada com uma já em andamento é ignorado.
 - Base que anda de novo durante a `sync` repete o gate no fim, antes de concluir.
 

@@ -1,13 +1,14 @@
 # Orquestração
 
-> **Assunto:** índice da orquestração: workspaces, mesas, sincronia com a base, orquestradores, personagens, presets, conexões, esperas, cadeia de aprovação, regras temporárias de mesa, missões, rituais, pergaminhos e grimórios · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** índice da orquestração: workspaces, mesas, sincronia com a base, dependência entre mesas, orquestradores, personagens, presets, conexões, esperas, cadeia de aprovação, regras temporárias de mesa, missões, rituais, pergaminhos e grimórios · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
 | [workspaces.md](workspaces.md) | árvore de níveis, espelho e clone principal, slug, configuração e estados do workspace | ao mexer no que é por repositório ou no espelho |
 | [mesas.md](mesas.md) | abertura, estados, pausa, worktree por máquina e sincronização por bundle, encerramento e cancelamento | ao mexer no ciclo de vida da mesa ou na sincronização de worktrees |
 | [sincronia-com-a-base.md](sincronia-com-a-base.md) | a etapa `sync`: integrar a base na branch da mesa, conflito como tarefa do Dev, chegada = verificação verde | ao mexer no que acontece quando a base anda depois da mesa aberta |
-| [grao-mestre.md](grao-mestre.md) | papel, proteção, retomada, instruções do sistema e instruções extras do Grão-Mestre | ao mexer no orquestrador do workspace ou no modelo de instruções dele |
+| [dependencia-entre-mesas.md](dependencia-entre-mesas.md) | a espera do tipo "épico": a mesa dependente espera o PR da outra ser mesclado e confirmado na base; sobreposição e ciclo | ao mexer em pedidos encadeados ou na ordem entre mesas |
+| [grao-mestre.md](grao-mestre.md) | papel, triagem e roteamento do pedido, mensagem de progresso, proteção, retomada, instruções do sistema e instruções extras do Grão-Mestre | ao mexer no orquestrador do workspace ou no modelo de instruções dele |
 | [mestre-da-mesa.md](mestre-da-mesa.md) | papel, liberdade dentro do teto, proteção, instruções do sistema e extras do Mestre da mesa | ao mexer no orquestrador da mesa ou no modelo de instruções dele |
 | [personagens.md](personagens.md) | criação sob demanda, escolha da máquina, limites, ciclo de vida, encerramento seguro, fixar, estados e histórico de estados, registro de terminais, retomada | ao mexer em criação, estados ou encerramento de terminais |
 | [personagens-no-codigo.md](personagens-no-codigo.md) | como o código implementa os personagens: Service e Runtime, registro, limites, prontidão, encerramento, retomada e a ligação com as conexões | ao mexer em `internal/orchestration/characters` |
