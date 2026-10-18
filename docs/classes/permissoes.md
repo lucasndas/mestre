@@ -1,6 +1,6 @@
 # Permissões das classes
 
-> **Assunto:** o `permissions.yaml`, regras fixas, regras efetivas por personagem, pipeline de decisão do despachante, modo degradado e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-15
+> **Assunto:** o `permissions.yaml`, regras fixas, regras efetivas por personagem, pipeline de decisão do despachante, modo degradado e "a ficha só restringe" · **Componente:** Todos · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -109,6 +109,7 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 - Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `tools.default`.
 - Nome em `network.credentials` que não existe no cofre, ou cujo domínio não está em `network.domains`: a classe não é salva.
 - Limite conhecido: comandos de shell que escrevem arquivos sem caminho literal escapam da regra de arquivos; por isso classes restritas devem usar lista de comandos permitidos, e o `git commit` confere os arquivos preparados.
+- Chave escrita em arquivo (a partir do M5): o `pre_tool` de escrita (ferramenta de arquivo, here-document, `sed -i`) cujo conteúdo traz um formato de chave do mascarador ([segurança](../arquitetura/seguranca.md), "Mascaramento") é negado nos três provedores, e o aviso para corrigir antes de seguir chega ao agente: o `post_tool` só devolve texto no Claude e no Codex, e no Antigravity (cujo PostToolUse responde `{}`) o aviso vai no `injectSteps` do PostInvocation ou do PreInvocation seguinte ([despachante](../provedores/despachante-de-hooks.md)); a mensagem cita só `arquivo:linha` e o tipo, nunca o valor. É aviso cedo: a rede de segurança é o envio do PR ([CLI](../cli/coordenacao-github.md)).
 
 ## Critérios de aceite
 
@@ -136,6 +137,7 @@ Quem usa estas regras: o [despachante](../provedores/despachante-de-hooks.md), o
 - **CA-PERM-23** · *rápida* — **Dado** classes sem `git.request_push`, com `true` e com `false`, **quando** a Cidadela monta as regras efetivas, **então** saem `ask`, `allow` e `deny`; **dado** um teto com `request_push: false`, **então** a classe sem o campo sai `deny` com `origin` `ceiling`.
 - **CA-PERM-24** · *rápida* — **Dado** o resultado da conformidade do Antigravity com a etapa 12 falha e uma classe que libera `invoke_subagent`, **quando** a Cidadela monta as regras efetivas, **então** as ferramentas de subagente do Antigravity saem em `tools.deny` com origem `machine` e fora do campo `tools` do arquivo de agente, e `Agent` do Claude continua liberado; **dado** a etapa 12 aprovada, **então** nada é negado.
 - **CA-PERM-25** · *rápida* — **Dado** uma classe que libera tudo, no Linux e no Windows, **quando** chegam um comando de 4 MiB, uma linha de 72 KiB de comandos, `${x:-…}` aninhada 10 000 vezes, `$((…))` aninhada 5 000 vezes, um corpo de here-document com 5 000 `${` aninhados, 1 000 here-documents sem comando lidos por 1 000 `bash` e um here-document de 70 KiB lido por `bash`, **então** todos são negados pela regra fixa (longo, aninhado ou trabalhoso demais), cada um em menos de 1 s; **dado** ao motor `cat <<'EOF' > data.json` com 76 KiB de dados, **então** é liberado, e com `git push` depois, negado (o despachante corta antes a linha acima de 64 KiB).
+- **CA-PERM-26** · *rápida* — **Dado** uma classe que escreve em `src/**`, **quando** chega um `pre_tool` de escrita em `src/x.ts` cujo conteúdo traz `token = "ghp_…"` na linha 12, **então** é negado com `src/x.ts:12 github_token` sem o valor, e, para uma escrita que passou com essa chave, o aviso chega ao agente nos três provedores (no `post_tool` ou, no Antigravity, no contexto seguinte); **dado** `token = process.env.GH_TOKEN`, **então** é liberado.
 
 ## Depende de
 
