@@ -19,8 +19,10 @@ func TestTheAccountOfTheLauncherItselfIsRefusedInAService(t *testing.T) {
 	if _, err := inService.Adopt("t1", 1); !errors.Is(err, ErrSelfAccountInService) {
 		t.Errorf("Adopt in a service = %v, want ErrSelfAccountInService", err)
 	}
-	if _, err := NewLauncher(LauncherConfig{Account: inService}); !errors.Is(err, ErrSelfAccountInService) {
-		t.Errorf("NewLauncher over it in a service = %v, want ErrSelfAccountInService", err)
+	for name, account := range map[string]Account{"by value": inService, "by pointer": &inService} {
+		if _, err := NewLauncher(LauncherConfig{Account: account}); !errors.Is(err, ErrSelfAccountInService) {
+			t.Errorf("NewLauncher over it in a service, %s = %v, want ErrSelfAccountInService", name, err)
+		}
 	}
 
 	// not a service, as in the tests: the token of the process, released once

@@ -76,6 +76,18 @@ func (a SelfAccount) inService() bool {
 	return err != nil || is
 }
 
+// selfInService says whether a is the SelfAccount, by value or by pointer, of a
+// process that is a service.
+func selfInService(a Account) bool {
+	switch s := a.(type) {
+	case SelfAccount:
+		return s.inService()
+	case *SelfAccount:
+		return s != nil && s.inService()
+	}
+	return false
+}
+
 func (a SelfAccount) session(id string) *Session {
 	var once sync.Once
 	return &Session{Env: os.Environ(), Release: func() {
