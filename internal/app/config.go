@@ -62,7 +62,7 @@ type Paths struct {
 	HookQueue string
 	// CLIAccess is who may connect to CLISocket: on an installed instance
 	// the access of docs/arquitetura/canal-local.md#endpoint (0660 and the
-	// group mestre-agente on Linux, the ACL on Windows); nil leaves the
+	// group of the agents of the instance on Linux, the ACL on Windows); nil leaves the
 	// socket as the system created it (`mestre run --dir`, the tests).
 	CLIAccess localchan.Access
 }

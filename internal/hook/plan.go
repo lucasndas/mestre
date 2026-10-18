@@ -9,13 +9,11 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 )
 
-// Accounts of the Linux installation (docs/arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes).
-// GroupAgents is the group of the agents of the principal instance; the others
-// have mestre-agente-<inst> (localchan.AgentAccount).
-const (
-	OwnerEngine = "mestre"
-	GroupAgents = "mestre-agente"
-)
+// OwnerEngine is the account of the engine on the Linux installation
+// (docs/arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes).
+// The group of the agents is the one of the instance, localchan.AgentAccount:
+// there is no group of the agents that is the same for every instance.
+const OwnerEngine = "mestre"
 
 // CharacterID stands for the id of a character in the paths of the plan.
 const CharacterID = "<id>"

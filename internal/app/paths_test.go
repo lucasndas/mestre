@@ -26,8 +26,8 @@ func (r *recordingAccess) Apply(path string) error {
 }
 
 // The socket of the local channel of an installed instance gets the access
-// of docs/arquitetura/canal-local.md#endpoint (0660 and the group
-// mestre-agente on Linux, the ACL on Windows); only an instance of `--dir`
+// of docs/arquitetura/canal-local.md#endpoint (0660 and the group of the
+// agents of the instance on Linux, the ACL on Windows); only an instance of `--dir`
 // leaves it as the system created it. The engine applies the access of its
 // paths when it opens the channel.
 func TestTheSocketOfAnInstalledInstanceGetsTheAccessOfTheInstaller(t *testing.T) {

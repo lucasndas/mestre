@@ -215,7 +215,7 @@ func TestLookupAgent(t *testing.T) {
 			t.Errorf("account %q of the launcher itself, in production = %v, %v; want it refused", name, c, err)
 		}
 		if os.Geteuid() == 0 {
-			continue // root is refused whatever the option says
+			continue // AllowSelf as root would start the terminals as root; the other cases do not run as root
 		}
 		if c, err := launcher.LookupAgent(name, true); c != nil || err != nil {
 			t.Errorf("account %q with AllowSelf = %v, %v; want to start as this user", name, c, err)
