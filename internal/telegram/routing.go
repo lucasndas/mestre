@@ -258,5 +258,6 @@ func OriginOf(d Delivery) *inbox.Origin {
 
 // NewItem is the item of the inbox of the Grand Master for a routed message.
 func NewItem(d Delivery, grandMaster string) inbox.NewItem {
-	return inbox.NewItem{Workspace: d.Workspace, Target: grandMaster, Kind: inbox.KindUser, Sender: d.User.Name, Text: d.Text, Origin: OriginOf(d)}
+	return inbox.NewItem{Workspace: d.Workspace, Target: grandMaster, Kind: inbox.KindUser, Sender: d.User.Name, Text: d.Text, Origin: OriginOf(d),
+		Refs: inbox.Refs{Key: fmt.Sprintf("telegram:%d:%d", d.ChatID, d.MessageID)}}
 }
