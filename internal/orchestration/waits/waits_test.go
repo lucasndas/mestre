@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -870,5 +871,40 @@ func TestTheWaitsCommandListsTheMapAndTheCycles(t *testing.T) {
 	}
 	if r := call(w, fwd, nil, "waits", nil); r.OK || r.Error.Code != localchan.CodeNotIdentified {
 		t.Errorf("waits unidentified = %+v", r)
+	}
+}
+
+// CA-LOCAL-02: the `ask` that waits tells how far it went with partial
+// responses — queued, delivered to the terminal of the target, answering when
+// its turn begins — before the final answer
+// (docs/arquitetura/canal-local.md#respostas-parciais).
+func TestAnAskThatWaitsSendsQueuedDeliveredAndAnsweringBeforeTheAnswer(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.dev("42-login", "Dev")
+	rev := w.dev("42-login", "Revisor", dev)
+	var mu sync.Mutex
+	var seen []string
+	ch := w.askAsync(waits.AskRequest{From: dev, To: rev, Prompt: "revise", Progress: func(s string) {
+		mu.Lock()
+		seen = append(seen, s)
+		mu.Unlock()
+	}})
+	items, err := w.in.Store().All(w.ctx, rev.ID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items of the target = %v, %v", items, err)
+	}
+	if err := w.in.Confirmed(w.ctx, items[0].ID); err != nil { // the turn began
+		t.Fatal(err)
+	}
+	w.done(rev, "aprovado")
+	w.turnEnds(rev, "fim do turno")
+	if r := <-ch; r.err != nil || r.out.Status != waits.StatusAnswered {
+		t.Fatalf("ask = %+v", r)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(seen, ","); got != "queued,delivered,answering" {
+		t.Errorf("partial responses = %q, want queued,delivered,answering", got)
 	}
 }
