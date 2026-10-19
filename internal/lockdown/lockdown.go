@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
 	"time"
@@ -55,6 +56,7 @@ type Options struct {
 	// Operator ends the session of the Operator on /travar.
 	Operator OperatorSession
 	Location *time.Location
+	Logger   *slog.Logger
 }
 
 // Service is the lock of the channel.
@@ -74,6 +76,9 @@ func New(o Options) (*Service, error) {
 	}
 	if o.Location == nil {
 		o.Location = time.UTC
+	}
+	if o.Logger == nil {
+		o.Logger = slog.New(slog.DiscardHandler)
 	}
 	return &Service{o: o}, nil
 }
@@ -112,11 +117,14 @@ func (s *Service) OnChange(f func(locked bool)) {
 }
 
 func (s *Service) audit(ctx context.Context, user, action, outcome, detail string) {
-	_ = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO channel_lock_audit (at, user_id, action, outcome, detail) VALUES (?, ?, ?, ?, ?)`,
 			s.o.Clock.Now().UnixMilli(), user, action, outcome, detail)
 		return err
 	})
+	if err != nil {
+		s.o.Logger.Error("lockdown: the audit was not written", "user", user, "action", action, "outcome", outcome, "err", err)
+	}
 }
 
 func (s *Service) changed(locked bool) {
@@ -189,6 +197,10 @@ func (s *Service) Unlock(ctx context.Context, by users.User, pinRequest string) 
 	if err != nil || cur.State != users.Active || users.Require(cur.Level, users.Unlock) != nil {
 		s.audit(ctx, by.ID, "unlock", "refused", "level")
 		return ErrLevel
+	}
+	// nothing to unlock: the PIN is not spent
+	if st, err := s.State(ctx); err == nil && !st.Locked {
+		return nil
 	}
 	if err := s.o.Users.Consume(ctx, pinRequest, cur.ID, UnlockAction); err != nil {
 		s.audit(ctx, cur.ID, "unlock", "refused", "pin")

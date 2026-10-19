@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
@@ -87,9 +88,20 @@ func (g *Gate) profile(ctx context.Context, c *localchan.Call) Profile {
 // tool and the inbox delivers nothing.
 var lockedRefuses = map[string]bool{
 	"recruit": true, "spawn": true, "quest create": true, "quest run": true, "quest resume": true,
-	"ritual create": true, "ritual run": true, "ritual enable": true, "table open": true,
+	"ritual create": true, "ritual run": true, "ritual enable": true, "ritual edit": true, "table open": true,
+	"class create": true, "class edit": true, "class assign": true,
 	"issue create": true, "issue update": true, "issue comment": true, "issue list": true,
 	"pr status": true, "pr comment": true, "pr reply": true, "pr note": true,
+}
+
+// LockedRefuses are the names of the commands the lock refuses, sorted.
+func LockedRefuses() []string {
+	out := make([]string, 0, len(lockedRefuses))
+	for n := range lockedRefuses {
+		out = append(out, n)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Forward implements localchan.Forwarder.

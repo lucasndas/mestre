@@ -204,6 +204,17 @@ func TestOnlyTheOwnerUnlocksAndWithThePIN(t *testing.T) {
 	if got := w.told[adm.ID]; len(got) != 2 || !strings.Contains(got[1], "Lucas destravou") {
 		t.Errorf("told %q", got)
 	}
+	// unlocked already: the PIN of the Owner is not spent for nothing
+	spare := w.pin(w.owner)
+	if err := w.svc.Unlock(w.ctx, w.owner, spare); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Lock(w.ctx, adm); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Unlock(w.ctx, w.owner, spare); err != nil || w.svc.Locked(w.ctx) {
+		t.Fatalf("the PIN left from the unlock that had nothing to do: %v", err)
+	}
 	// the PIN is spent once
 	if err := w.svc.Lock(w.ctx, adm); err != nil {
 		t.Fatal(err)

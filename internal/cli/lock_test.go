@@ -54,3 +54,15 @@ func TestTheLockRefusesWhatStartsWorkAndLetsTheRestGoOn(t *testing.T) {
 		}
 	}
 }
+
+// Every command the lock names is a command that exists: a misspelled name
+// would refuse nothing.
+func TestEveryCommandTheLockRefusesExists(t *testing.T) {
+	t.Parallel()
+	reg := cli.Default()
+	for _, name := range cli.LockedRefuses() {
+		if _, ok := reg.Get(name); !ok {
+			t.Errorf("%q is in the list of the lock and is no command", name)
+		}
+	}
+}
