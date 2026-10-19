@@ -11,6 +11,7 @@ import (
 type PullData struct {
 	Number         int
 	Title, Body    string
+	Author         string
 	State          string
 	Draft, Merged  bool
 	URL            string
@@ -22,6 +23,9 @@ type PullData struct {
 }
 
 type pullJSON struct {
+	User struct {
+		Login string `json:"login"`
+	} `json:"user"`
 	Number         int    `json:"number"`
 	Title          string `json:"title"`
 	Body           string `json:"body"`
@@ -43,7 +47,7 @@ type pullJSON struct {
 }
 
 func (v pullJSON) data() PullData {
-	return PullData{Number: v.Number, Title: v.Title, Body: v.Body, State: v.State, Draft: v.Draft, Merged: v.Merged, URL: v.HTMLURL,
+	return PullData{Number: v.Number, Title: v.Title, Body: v.Body, Author: v.User.Login, State: v.State, Draft: v.Draft, Merged: v.Merged, URL: v.HTMLURL,
 		HeadSHA: v.Head.SHA, HeadRef: v.Head.Ref, HeadRepo: v.Head.Repo.FullName, BaseRef: v.Base.Ref, MergeableState: v.MergeableState}
 }
 
@@ -156,13 +160,23 @@ func (c *REST) ReviewComments(ctx context.Context, repo string, n int) ([]Review
 }
 
 // PullFile is a file of the diff of a PR with its patch.
-type PullFile struct{ Path, Patch string }
+type PullFile struct {
+	Path, Patch string
+	// Status is added, modified, removed or renamed; PreviousPath is where a
+	// renamed file was.
+	Status, PreviousPath string
+	Additions, Deletions int
+}
 
 // PullFiles lists the files of the diff of a PR.
 func (c *REST) PullFiles(ctx context.Context, repo string, n int) ([]PullFile, error) {
 	type item struct {
-		Filename string `json:"filename"`
-		Patch    string `json:"patch"`
+		Filename         string `json:"filename"`
+		Patch            string `json:"patch"`
+		Status           string `json:"status"`
+		PreviousFilename string `json:"previous_filename"`
+		Additions        int    `json:"additions"`
+		Deletions        int    `json:"deletions"`
 	}
 	raw, err := pages[item](ctx, c, repo, fmt.Sprintf("/pulls/%d/files", n), "reading the files of the PR")
 	if err != nil {
@@ -170,7 +184,7 @@ func (c *REST) PullFiles(ctx context.Context, repo string, n int) ([]PullFile, e
 	}
 	out := make([]PullFile, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, PullFile{Path: r.Filename, Patch: r.Patch})
+		out = append(out, PullFile{Path: r.Filename, Patch: r.Patch, Status: r.Status, PreviousPath: r.PreviousFilename, Additions: r.Additions, Deletions: r.Deletions})
 	}
 	return out, nil
 }

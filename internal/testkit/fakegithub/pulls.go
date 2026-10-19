@@ -45,7 +45,37 @@ func (s *Server) AddPullFile(full string, n int, path, patch string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.repos[full].pull(n)
-	p.files = append(p.files, map[string]any{"filename": path, "patch": patch, "status": "modified"})
+	adds, dels := 0, 0
+	for _, l := range strings.Split(patch, "\n") {
+		switch {
+		case strings.HasPrefix(l, "+"):
+			adds++
+		case strings.HasPrefix(l, "-"):
+			dels++
+		}
+	}
+	p.files = append(p.files, map[string]any{"filename": path, "patch": patch, "status": "modified", "additions": adds, "deletions": dels})
+}
+
+// AddPullFileOf adds a file to the diff with the status GitHub gives it (added,
+// removed, renamed), where it was before, and the counts it reports (the patch
+// may be empty: a file too big or binary).
+func (s *Server) AddPullFileOf(full string, n int, path, patch, status, previous string, additions, deletions int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.repos[full].pull(n)
+	f := map[string]any{"filename": path, "patch": patch, "status": status, "additions": additions, "deletions": deletions}
+	if previous != "" {
+		f["previous_filename"] = previous
+	}
+	p.files = append(p.files, f)
+}
+
+// SetPullAuthor sets who opened a PR.
+func (s *Server) SetPullAuthor(full string, n int, login string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repos[full].issues[n-1]["user"] = map[string]any{"login": login}
 }
 
 // AddReview adds a review (APPROVED, CHANGES_REQUESTED, COMMENTED).
@@ -220,7 +250,7 @@ func (s *Server) pullView(rp *repo, full string, n int, head [2]string) map[stri
 	px := rp.pull(n)
 	is := rp.issues[n-1]
 	return map[string]any{
-		"number": n, "title": is["title"], "body": is["body"], "state": px.state, "draft": px.draft, "merged": px.merged,
+		"number": n, "title": is["title"], "body": is["body"], "user": is["user"], "state": px.state, "draft": px.draft, "merged": px.merged,
 		"mergeable_state": px.mergeableState, "html_url": fmt.Sprintf("https://github.com/%s/pull/%d", full, n),
 		"head": map[string]any{"ref": head[0], "sha": px.headSHA, "repo": map[string]any{"full_name": head[1]}},
 		"base": map[string]any{"ref": px.baseRef},
