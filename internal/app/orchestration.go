@@ -183,6 +183,8 @@ type Orchestration struct {
 	// built): the source of their decrees for the effective rules and the
 	// classes.TableRuleGate of the engine.
 	TableRules *tablerules.Service
+	// Policy is the approval policy the chain reads (nil unless the chain was built).
+	Policy chain.Policy
 	// ClassCommands are the commands of classes (nil without libraries).
 	ClassCommands *classes.Commands
 	Rituals       *rituals.Service
@@ -494,6 +496,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		if policy == nil {
 			policy = chain.StaticPolicy{}
 		}
+		orc.Policy = policy
 		temp := o.ChainTempRules
 		if temp == nil {
 			temp = tempRulesRef{p: &trl, pub: o.ChainRulesPublisher, log: o.Logger}
