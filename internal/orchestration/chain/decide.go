@@ -385,7 +385,7 @@ func (s *Service) askBack(ctx context.Context, r Request, by string, level Level
 	cur.AskedBack, cur.AskedAt = true, now
 	// While it waits for the requester the level's time stops; no answer at
 	// all is bounded by the people's time, then the request goes up.
-	cur.Deadline = now.Add(st.PeopleDeadline)
+	cur.Deadline = now.Add(st.peopleDeadline(cur.Type))
 	if level.Kind == LevelPeople {
 		cur.Deadline = r.Deadline
 	}
@@ -427,7 +427,7 @@ func (s *Service) Reply(ctx context.Context, request int64, from, text string) e
 	}
 	cur.AskedBack = false
 	if cur.Level.Kind != LevelPeople {
-		cur.Deadline = s.clk.Now().Add(levelDeadline(st, cur.Level.Kind))
+		cur.Deadline = s.clk.Now().Add(levelDeadline(st, cur.Level.Kind, cur.Type))
 	}
 	err = s.st.Save(ctx, cur)
 	s.mu.Unlock()
@@ -521,8 +521,13 @@ func (s *Service) claim(ctx context.Context, id int64, from *Level, c Closing) (
 }
 
 // unclaim gives the request back at the same level when the effect of the
-// decision was refused: its time starts again where it was.
+// decision was refused: its time starts again, the whole time of the level
+// (docs/orquestracao/cadeia-de-aprovacao.md).
 func (s *Service) unclaim(ctx context.Context, id int64) {
+	var st Settings
+	if r, err := s.st.Get(ctx, id); err == nil {
+		st, _ = s.settings(ctx, r.Workspace)
+	}
 	s.mu.Lock()
 	r, err := s.st.Get(ctx, id)
 	if err != nil || r.State != Open || r.Deciding == nil {
@@ -530,6 +535,9 @@ func (s *Service) unclaim(ctx context.Context, id int64) {
 		return
 	}
 	r.Deciding = nil
+	if !r.AskedBack { // while it waits for the requester the time is the people's
+		r.Deadline = s.clk.Now().Add(levelDeadline(st, r.Level.Kind, r.Type))
+	}
 	err = s.st.Save(ctx, r)
 	s.mu.Unlock()
 	if err != nil {

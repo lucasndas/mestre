@@ -367,6 +367,18 @@ func (f *fakeRituals) Deactivate(_ context.Context, _, table string) error {
 	return nil
 }
 
+type fakeRequests struct {
+	mu        sync.Mutex
+	cancelled []string
+}
+
+func (f *fakeRequests) CancelTable(_ context.Context, _, table string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cancelled = append(f.cancelled, table)
+	return nil
+}
+
 // workspace fakes (GitHub of the workspace, alerts, Grand Master).
 
 type wsGitHub struct{ url string }
@@ -522,17 +534,18 @@ type world struct {
 	inb    *inbox.Service
 	conns  *connections.Service
 
-	chars   *fakeChars
-	deliv   *fakeDeliverer
-	gh      *fakeGitHub
-	msgs    *fakeMessages
-	atts    *fakeAttachments
-	files   *fakeFiles
-	notices *noticeLog
-	alerts  *alertLog
-	dest    *fakeDestructive
-	rituals *fakeRituals
-	peers   *loopPeers
+	chars    *fakeChars
+	deliv    *fakeDeliverer
+	gh       *fakeGitHub
+	msgs     *fakeMessages
+	atts     *fakeAttachments
+	files    *fakeFiles
+	notices  *noticeLog
+	alerts   *alertLog
+	dest     *fakeDestructive
+	rituals  *fakeRituals
+	requests *fakeRequests
+	peers    *loopPeers
 
 	gm characters.Character
 	// enqueueErr makes the inbox refuse what the tables put in it.
@@ -604,10 +617,11 @@ func newWorld(t *testing.T, o worldOpts) *world {
 	w.alerts = &alertLog{}
 	w.dest = &fakeDestructive{}
 	w.rituals = &fakeRituals{}
+	w.requests = &fakeRequests{}
 	w.peers = &loopPeers{w: w, towers: map[string]*tower{}}
 
 	opts := tables.Options{DB: w.db, Git: w.git, Workspaces: w.wss, Clock: w.clk, Machine: w.machine, GitHub: w.gh, Characters: w.chars, Registry: w.reg,
-		Inbox: flakyInbox{w.inb, w}, Notifier: w.notices, Alerts: w.alerts, Files: w.files, Messages: w.msgs, Attachments: w.atts, Destructive: w.dest, Rituals: w.rituals,
+		Inbox: flakyInbox{w.inb, w}, Notifier: w.notices, Alerts: w.alerts, Files: w.files, Messages: w.msgs, Attachments: w.atts, Destructive: w.dest, Rituals: w.rituals, Requests: w.requests,
 		TempDir: filepath.Join(w.root, "tmp")}
 	if !o.noPeers {
 		opts.Peers = w.peers

@@ -161,6 +161,11 @@ func (s *Service) advance(ctx context.Context, t Table) (out Table, miss *Missin
 			return t, nil, nil, false, fmt.Errorf("the rituals of the table were not deactivated: %w", err)
 		}
 	}
+	if cancelling && s.o.Requests != nil {
+		if err := s.o.Requests.CancelTable(ctx, t.Workspace, t.ID); err != nil {
+			return t, nil, nil, false, fmt.Errorf("the requests of the table were not cancelled: %w", err)
+		}
+	}
 	if cancelling && !t.CancelRemoteDone {
 		if t.PRNumber > 0 {
 			if err := s.o.GitHub.ClosePR(ctx, t.Workspace, t.PRNumber); err != nil {

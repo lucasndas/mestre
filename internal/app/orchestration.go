@@ -306,6 +306,13 @@ func (r chainRef) Held(ctx context.Context, id string) (bool, error) {
 	return (*r.p).Held(ctx, id)
 }
 
+func (r chainRef) CancelTable(ctx context.Context, ws, table string) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).CancelTable(ctx, ws, table)
+}
+
 func (r chainRef) StateChanged(ctx context.Context, c characters.Character, from characters.State) error {
 	if *r.p == nil {
 		return nil
@@ -401,7 +408,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	tbl, err = tables.New(tables.Options{DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
 		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.Messages, Attachments: o.Attachments,
-		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Oversight: oversightRef{&sup}, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
+		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Requests: chainRef{&ch}, Oversight: oversightRef{&sup}, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
 	if err != nil {
 		return nil, err
 	}
