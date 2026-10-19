@@ -38,7 +38,6 @@ type IssueData struct {
 // whole list.
 type IssueEdit struct {
 	Title, Body *string
-	Labels      *[]string
 	State       *string
 	StateReason string
 }
@@ -123,9 +122,6 @@ func (c *REST) UpdateIssue(ctx context.Context, repo string, n int, e IssueEdit)
 	if e.Body != nil {
 		in["body"] = *e.Body
 	}
-	if e.Labels != nil {
-		in["labels"] = *e.Labels
-	}
 	if e.State != nil {
 		in["state"] = *e.State
 		if e.StateReason != "" {
@@ -133,6 +129,21 @@ func (c *REST) UpdateIssue(ctx context.Context, repo string, n int, e IssueEdit)
 		}
 	}
 	return c.send(ctx, http.MethodPatch, repo, fmt.Sprintf("/issues/%d", n), in, http.StatusOK, nil, "updating an issue")
+}
+
+// AddLabels adds labels to an issue without touching the others: a label a
+// person put meanwhile stays.
+func (c *REST) AddLabels(ctx context.Context, repo string, n int, labels []string) error {
+	return c.send(ctx, http.MethodPost, repo, fmt.Sprintf("/issues/%d/labels", n), map[string][]string{"labels": labels}, http.StatusOK, nil, "adding labels")
+}
+
+// RemoveLabel takes one label off an issue; one the issue does not have is fine.
+func (c *REST) RemoveLabel(ctx context.Context, repo string, n int, name string) error {
+	err := c.send(ctx, http.MethodDelete, repo, fmt.Sprintf("/issues/%d/labels/%s", n, url.PathEscape(name)), nil, http.StatusOK, nil, "removing a label")
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
 }
 
 // AddSubIssue makes the issue with the id a sub-issue of parent.

@@ -132,12 +132,14 @@ func (g *Guard) Authorize(ctx context.Context, a Actor, t Target) error {
 	}
 	if obj, found, err := g.Objects.Get(ctx, t.Repo, t.Kind, t.Number); err != nil {
 		return err
-	} else if found {
+	} else if found && obj.Table != "" {
 		if obj.Table == a.Table {
 			return nil
 		}
 		return g.otherTable(ctx, t, obj.Table)
 	}
+	// An issue the Grão-Mestre made (registered with no table) is the table's
+	// when it hangs under its epic: it is climbed to, as one of a person.
 	if t.Number == ref.Epic {
 		return nil
 	}

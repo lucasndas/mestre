@@ -85,6 +85,7 @@ type Server struct {
 	pageSize      int
 	loseRefAnswer bool
 	gitDown       int // status every call to the git API answers (0: as usual)
+	subIssueFail  int // status the next POST of a sub-issue answers (0: as usual)
 	requests      []Request
 }
 

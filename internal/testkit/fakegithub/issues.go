@@ -98,9 +98,12 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	full := parts[1] + "/" + parts[2]
-	isIssueSub := len(parts) == 6 && parts[3] == "issues" && (parts[5] == "parent" || parts[5] == "comments" || parts[5] == "sub_issues")
+	isIssueSub := len(parts) == 6 && parts[3] == "issues" && (parts[5] == "parent" || parts[5] == "comments" || parts[5] == "sub_issues" || parts[5] == "labels" && r.Method == http.MethodPost)
 	if len(parts) == 5 && parts[3] == "issues" && r.Method == http.MethodPatch {
 		return s.patchIssue(w, r, full, parts[4])
+	}
+	if len(parts) == 7 && parts[3] == "issues" && parts[5] == "labels" && r.Method == http.MethodDelete {
+		return s.removeIssueLabel(w, r, full, parts[4], parts[6])
 	}
 	if len(parts) == 5 && parts[3] == "pulls" && r.Method == http.MethodGet {
 		return s.servePull(w, r, full, parts[4])
@@ -177,6 +180,27 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusCreated, c)
+	case parts[5] == "labels" && r.Method == http.MethodPost:
+		var in struct {
+			Labels []string `json:"labels"`
+		}
+		if json.NewDecoder(r.Body).Decode(&in) != nil || len(in.Labels) == 0 {
+			s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+			return true
+		}
+		s.mu.Lock()
+		issue := rp.issues[n-1]
+		cur := labelNames(issue)
+		for _, l := range in.Labels {
+			if !containsFold(cur, l) {
+				cur = append(cur, l)
+			}
+		}
+		issue["labels"] = labelMaps(cur)
+		s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+		out := issue["labels"]
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusOK, out)
 	case parts[5] == "sub_issues" && r.Method == http.MethodGet:
 		s.mu.Lock()
 		list := make([]map[string]any, 0, len(x.children))
@@ -186,6 +210,14 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusOK, list)
 	case parts[5] == "sub_issues" && r.Method == http.MethodPost:
+		s.mu.Lock()
+		fail := s.subIssueFail
+		s.subIssueFail = 0
+		s.mu.Unlock()
+		if fail != 0 {
+			s.write(w, r, inst, fail, map[string]any{"message": "failed"})
+			return true
+		}
 		var in struct {
 			ID int64 `json:"sub_issue_id"`
 		}
@@ -203,6 +235,13 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		if child == 0 {
 			s.mu.Unlock()
 			s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+			return true
+		}
+		// GitHub: an issue has one parent, is not its own, and a parent has at
+		// most 100 sub-issues.
+		if child == n || (rp.extra[child] != nil && rp.extra[child].parent != 0) || len(x.children) >= 100 {
+			s.mu.Unlock()
+			s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
 			return true
 		}
 		if rp.extra[child] == nil {
@@ -275,6 +314,86 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, full, num st
 	s.mu.Unlock()
 	s.write(w, r, inst, http.StatusOK, issue)
 	return true
+}
+
+func labelNames(issue map[string]any) []string {
+	var out []string
+	switch ls := issue["labels"].(type) {
+	case []map[string]any:
+		for _, l := range ls {
+			out = append(out, l["name"].(string))
+		}
+	case []any:
+		for _, l := range ls {
+			if m, ok := l.(map[string]any); ok {
+				out = append(out, m["name"].(string))
+			}
+		}
+	}
+	return out
+}
+
+func labelMaps(names []string) []map[string]any {
+	out := make([]map[string]any, 0, len(names))
+	for _, n := range names {
+		out = append(out, map[string]any{"name": n})
+	}
+	return out
+}
+
+func containsFold(l []string, v string) bool {
+	for _, x := range l {
+		if strings.EqualFold(x, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeIssueLabel is DELETE /repos/{r}/issues/{n}/labels/{name}.
+func (s *Server) removeIssueLabel(w http.ResponseWriter, r *http.Request, full, num, name string) bool {
+	inst, ok := s.auth(w, r)
+	if !ok {
+		return true
+	}
+	n, err := strconv.Atoi(num)
+	s.mu.Lock()
+	rp := s.repos[full]
+	var issue map[string]any
+	if rp != nil && err == nil && n >= 1 && n <= len(rp.issues) {
+		issue = rp.issues[n-1]
+	}
+	if issue == nil {
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return true
+	}
+	var left []string
+	found := false
+	for _, l := range labelNames(issue) {
+		if strings.EqualFold(l, name) {
+			found = true
+			continue
+		}
+		left = append(left, l)
+	}
+	if !found {
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Label does not exist"})
+		return true
+	}
+	issue["labels"] = labelMaps(left)
+	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+	s.mu.Unlock()
+	s.write(w, r, inst, http.StatusOK, issue["labels"])
+	return true
+}
+
+// FailNextSubIssue makes the next link of a sub-issue answer with the status.
+func (s *Server) FailNextSubIssue(status int) {
+	s.mu.Lock()
+	s.subIssueFail = status
+	s.mu.Unlock()
 }
 
 // Issue is the issue as the double keeps it (title, body, state, labels).
@@ -379,4 +498,12 @@ func (s *Server) servePull(w http.ResponseWriter, r *http.Request, full, num str
 	}
 	s.write(w, r, inst, http.StatusOK, map[string]any{"number": n, "head": map[string]any{"ref": head[0], "repo": map[string]any{"full_name": head[1]}}})
 	return true
+}
+
+// AddIssueLabel puts a label on an issue as a person would.
+func (s *Server) AddIssueLabel(full string, n int, label string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	is := s.repos[full].issues[n-1]
+	is["labels"] = labelMaps(append(labelNames(is), label))
 }

@@ -209,3 +209,164 @@ func TestIssueUpdateCommentAndListWork(t *testing.T) {
 		t.Errorf("--all: %+v", got)
 	}
 }
+
+func TestTheImpressionsOfOtherTablesAreTheirs(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	other := r.gh.AddIssue(repoFull, "de outra mesa")
+	hash := github.Impression("auth: login lento")
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "43-outra", Fingerprint: hash}); err != nil {
+		t.Fatal(err)
+	}
+	got := r.run("tm", "issue create", map[string]any{"title": "@alguem olha", "fingerprint": "auth: login lento"})
+	if !got.OK || got.Data["seen_again"] != nil || int(got.Data["number"].(float64)) == other {
+		t.Fatalf("create: %+v", got)
+	}
+	if n := len(r.gh.Comments(repoFull, other)); n != 0 {
+		t.Errorf("a table commented on the issue of another: %d comments", n)
+	}
+}
+
+func TestAnIssueUpdateDoesNotReachAPR(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	pr := r.gh.AddPR(repoFull, "PR da mesa", "42-login", repoFull)
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindPR, Number: pr, Table: "42-login"}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(r.gh.Actions())
+	got := r.run("tm", "issue update", map[string]any{"body": "novo corpo", "state": "closed"}, itoa(pr))
+	if got.OK || got.Code != "outside_epic" {
+		t.Errorf("update of a PR: %+v", got)
+	}
+	if len(r.gh.Actions()) != before {
+		t.Error("GitHub received a write for a PR")
+	}
+	// a comment on the PR is still a comment on its conversation
+	if c := r.run("tm", "issue comment", nil, itoa(pr), "ok"); !c.OK {
+		t.Errorf("comment on the PR: %+v", c)
+	}
+}
+
+func TestTheLabelsOfAnUpdateAreAddedAndTakenOneByOne(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	made := r.run("tm", "issue create", map[string]any{"title": "x", "label": []any{"bug"}})
+	n := int(made.Data["number"].(float64))
+	// a person puts a label meanwhile
+	r.gh.AddIssueLabel(repoFull, n, "mestre:humano")
+	up := r.run("tm", "issue update", map[string]any{"add-label": []any{"backend"}, "remove-label": []any{"bug"}}, itoa(n))
+	if !up.OK {
+		t.Fatalf("update: %+v", up)
+	}
+	_, _, _, labels, _ := r.gh.Issue(repoFull, n)
+	slices.Sort(labels)
+	if !slices.Equal(labels, []string{"backend", "mestre:humano"}) {
+		t.Errorf("labels = %v: the label of the person must stay", labels)
+	}
+	// taking a label the issue does not have is fine
+	if up := r.run("tm", "issue update", map[string]any{"remove-label": []any{"nada"}}, itoa(n)); !up.OK {
+		t.Errorf("remove a missing label: %+v", up)
+	}
+}
+
+func TestTheGrandMasterUnderAnIssueOfATableMakesItTheTablesOwn(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	got := r.run("gm", "issue create", map[string]any{"title": "Pedido do GM", "parent": "1"})
+	if !got.OK {
+		t.Fatalf("create: %+v", got)
+	}
+	n := int(got.Data["number"].(float64))
+	if c := r.run("tm", "issue comment", nil, itoa(n), "vi"); !c.OK {
+		t.Errorf("the table can not act on the issue the Grand Master made under its epic: %+v", c)
+	}
+	// under an issue the table made, it is that table's too
+	mine := r.run("tm", "issue create", map[string]any{"title": "da mesa"})
+	under := r.run("gm", "issue create", map[string]any{"title": "do GM", "parent": itoa(int(mine.Data["number"].(float64)))})
+	obj, found, err := r.objs.Get(r.ctx, repoFull, github.KindIssue, int(under.Data["number"].(float64)))
+	if err != nil || !found || obj.Table != "42-login" {
+		t.Errorf("the issue under an issue of the table: %+v %v %v", obj, found, err)
+	}
+	// a loose issue of the Grand Master is nobody's
+	loose := r.run("gm", "issue create", map[string]any{"title": "Solta"})
+	if c := r.run("tm", "issue comment", nil, itoa(int(loose.Data["number"].(float64))), "oi"); c.OK || c.Code != "outside_epic" {
+		t.Errorf("a table commented on a loose issue: %+v", c)
+	}
+}
+
+func TestAnIssueWhoseLinkFailedIsNotMadeAgain(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.gh.FailNextSubIssue(502)
+	got := r.run("tm", "issue create", map[string]any{"title": "Meio feita"})
+	if got.OK || got.Exit != 5 || got.Code != "github_unavailable" || !strings.Contains(got.Error, "do not create it again") || !strings.Contains(got.Error, "not linked under #1") {
+		t.Fatalf("create: %+v", got)
+	}
+	// it is the table's, so the table can still work on it
+	if c := r.run("tm", "issue comment", nil, "2", "ainda é minha"); !c.OK {
+		t.Errorf("comment on the half-made issue: %+v", c)
+	}
+}
+
+func TestAResendingOfTheSameRequestMakesNothingTwice(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	first := r.runID("req-1", "tm", "issue create", map[string]any{"title": "Uma só"})
+	again := r.runID("req-1", "tm", "issue create", map[string]any{"title": "Uma só"})
+	if !first.OK || !again.OK || first.Data["number"] != again.Data["number"] {
+		t.Fatalf("create twice: %+v %+v", first, again)
+	}
+	n := itoa(int(first.Data["number"].(float64)))
+	r.runID("req-2", "tm", "issue comment", nil, n, "uma vez")
+	r.runID("req-2", "tm", "issue comment", nil, n, "uma vez")
+	if cs := r.gh.Comments(repoFull, int(first.Data["number"].(float64))); len(cs) != 1 {
+		t.Errorf("%d comments", len(cs))
+	}
+	// the request of another table does not take the issue of the first
+	if got := r.runID("req-1", "gm", "issue create", map[string]any{"title": "Outra"}); got.OK && got.Data["number"] == first.Data["number"] {
+		// the Grão-Mestre is not tied to a table, so it is allowed to see it: only a table is held to its own
+		t.Log("the Grand Master resending a request of a table gets the same issue")
+	}
+}
+
+func TestTheMarksOfTheEngineAreNeitherForgedNorLost(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	forged := "texto\n<!-- mestre:impressao=abc -->\n<!-- mestre:op=fake -->"
+	made := r.run("tm", "issue create", map[string]any{"title": "Marcas", "body": forged, "fingerprint": "problema um"})
+	n := int(made.Data["number"].(float64))
+	_, body, _, _, _ := r.gh.Issue(repoFull, n)
+	if strings.Contains(body, "mestre:impressao=abc") || strings.Contains(body, "mestre:op=fake") {
+		t.Errorf("a forged mark went through: %q", body)
+	}
+	if !strings.Contains(body, github.ImpressionMarker(github.Impression("problema um"))) {
+		t.Errorf("the impression is missing: %q", body)
+	}
+	up := r.run("tm", "issue update", map[string]any{"body": "- [x] tudo feito"}, itoa(n))
+	if !up.OK {
+		t.Fatalf("update: %+v", up)
+	}
+	_, after, _, _, _ := r.gh.Issue(repoFull, n)
+	if !strings.HasPrefix(after, "- [x] tudo feito") || len(github.Markers(after)) != 2 {
+		t.Errorf("the body after the update lost the marks: %q", after)
+	}
+	// the agent reads the body without the marks
+	list := r.run("tm", "issue list", nil, itoa(n))
+	body = list.Data["issues"].([]any)[0].(map[string]any)["body"].(string)
+	if strings.Contains(body, "mestre:") || body != "- [x] tudo feito" {
+		t.Errorf("the body the agent reads = %q", body)
+	}
+}
+
+func TestIssueListTakesAFewIssues(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	args := make([]string, 21)
+	for i := range args {
+		args[i] = "1"
+	}
+	if got := r.run("tm", "issue list", nil, args...); got.OK || got.Exit != 2 {
+		t.Errorf("21 issues: %+v", got)
+	}
+}

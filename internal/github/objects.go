@@ -109,6 +109,10 @@ func (o *Objects) Register(ctx context.Context, x Object) error {
 		var table string
 		err := tx.QueryRowContext(ctx, `SELECT table_id FROM github_objects WHERE repo = ? AND kind IN (?, ?) AND number = ?`, append([]any{x.Repo}, append(kinds, x.Number)...)...).Scan(&table)
 		switch {
+		case err == nil && table == "" && x.Table != "":
+			// made by the Grão-Mestre, no table yet: the first that climbs to it has it
+			_, err := tx.ExecContext(ctx, `UPDATE github_objects SET table_id = ? WHERE repo = ? AND kind IN (?, ?) AND number = ?`, append([]any{x.Table, x.Repo}, append(kinds, x.Number)...)...)
+			return err
 		case err == nil && table != x.Table:
 			return fmt.Errorf("%w: %s#%d is of %s", ErrOtherTable, x.Repo, x.Number, table)
 		case err == nil:

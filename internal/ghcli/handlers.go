@@ -83,7 +83,7 @@ func (h *Handlers) caller(ctx context.Context, c *localchan.Call) (caller, *loca
 		}
 		ref, ok, err := h.Tables.Epic(ctx, ch.Table)
 		if err != nil {
-			return fail(localchan.CodeInternal, err.Error(), "")
+			return fail(localchan.CodeInternal, "the table of the character could not be read", "")
 		}
 		if !ok {
 			return fail("outside_epic", "your table has no epic registered", "ask the Grand Master")
@@ -103,7 +103,12 @@ func (h *Handlers) caller(ctx context.Context, c *localchan.Call) (caller, *loca
 func refusal(err error) localchan.Response {
 	var ref *github.Refusal
 	var lim *github.LimitError
+	var part *github.PartialError
 	switch {
+	case errors.As(err, &part):
+		// the issue exists: say so, so that the command is not repeated
+		msg := fmt.Sprintf("the issue #%d was created but its setup did not end (%s); do not create it again", part.Number, setupStage(part))
+		return localchan.Fail("github_unavailable", msg, "tell the Grand Master")
 	case errors.As(err, &ref):
 		code := ref.Code
 		switch code {
@@ -121,6 +126,13 @@ func refusal(err error) localchan.Response {
 		return localchan.Fail("not_found", "GitHub does not have it", "")
 	}
 	return localchan.Fail(localchan.CodeInternal, "the action on GitHub failed", "")
+}
+
+func setupStage(p *github.PartialError) string {
+	if !p.Registered {
+		return "it is not registered to your table"
+	}
+	return fmt.Sprintf("it is not linked under #%d", p.Parent)
 }
 
 func flagString(c *localchan.Call, name string) (string, bool) {
@@ -172,7 +184,7 @@ func (h *Handlers) issueCreate(ctx context.Context, c *localchan.Call) localchan
 	if strings.TrimSpace(title) == "" {
 		return usage("--title is required")
 	}
-	in := github.IssueCreate{Title: title, Labels: flagList(c, "label")}
+	in := github.IssueCreate{Title: title, Labels: flagList(c, "label"), Op: c.Request.ID}
 	in.Body, _ = flagString(c, "body")
 	in.Fingerprint, _ = flagString(c, "fingerprint")
 	if p, ok := flagString(c, "parent"); ok {
@@ -262,7 +274,7 @@ func (h *Handlers) issueComment(ctx context.Context, c *localchan.Call) localcha
 	if strings.TrimSpace(args[1]) == "" {
 		return usage("the comment is empty")
 	}
-	got, err := who.svc.Comment(ctx, who.actor, who.repo, n, args[1])
+	got, err := who.svc.Comment(ctx, who.actor, who.repo, n, args[1], c.Request.ID)
 	if err != nil {
 		return refusal(err)
 	}
@@ -284,6 +296,8 @@ func (h *Handlers) issueList(ctx context.Context, c *localchan.Call) localchan.R
 	}
 	var out []map[string]any
 	switch {
+	case len(c.Request.Args) > 20:
+		return usage("name at most 20 issues")
 	case len(c.Request.Args) > 0:
 		for _, raw := range c.Request.Args {
 			n, ok := number(raw)
@@ -295,7 +309,7 @@ func (h *Handlers) issueList(ctx context.Context, c *localchan.Call) localchan.R
 				return refusal(err)
 			}
 			v := issueView(d)
-			v["body"] = github.StripMarkers(d.Body)
+			v["body"] = github.HideMarkers(d.Body)
 			if flagBool(c, "comments") {
 				cs, err := who.svc.API.Comments(ctx, who.repo, n)
 				if err != nil {

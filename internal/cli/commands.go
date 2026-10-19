@@ -441,7 +441,7 @@ func Default() *Registry {
 		Spec{Name: "issue list", Group: GroupGitHub, Summary: "the issues of the epic of your table, or the ones you name",
 			Usage: `mestre issue list [<n>…] [--all] [--state open|closed|all] [--comments]`, Example: `mestre issue list 51 52 --comments --json`,
 			Args:    []Arg{{"[n]", "numbers of issues to show in full"}},
-			MinArgs: 0, MaxArgs: -1, Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true,
+			MinArgs: 0, MaxArgs: 20, Who: WhoTableMaster | WhoGrandMaster, ClassCanGrant: true,
 			Flags: []Flag{{"all", FlagBool, "the issues of the whole repository"}, {"state", FlagString, "open, closed or all"}, {"comments", FlagBool, "include the comments"}},
 			Exits: []int{4, 5}},
 		Spec{Name: "table open", Group: GroupGrandMaster, Summary: "open the table of an epic: its branch, its worktree and its table master",

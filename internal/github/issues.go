@@ -21,6 +21,8 @@ type IssueAPI interface {
 	AddSubIssue(ctx context.Context, repo string, parent int, childID int64) error
 	SubIssues(ctx context.Context, repo string, n int) ([]IssueData, error)
 	Issues(ctx context.Context, repo, state string) ([]IssueData, error)
+	AddLabels(ctx context.Context, repo string, n int, labels []string) error
+	RemoveLabel(ctx context.Context, repo string, n int, name string) error
 }
 
 var _ IssueAPI = (*REST)(nil)
@@ -45,7 +47,26 @@ type IssueCreate struct {
 	Parent      int
 	Labels      []string
 	Fingerprint string
+	// Op identifies the request: the same one again (a resending of the CLI)
+	// finds the issue it made and makes no other. Empty: a new operation.
+	Op string
 }
+
+// PartialError is an issue that exists on GitHub but whose setup did not end:
+// it is the table's (or registered nowhere, Registered false), and the command
+// must not be repeated.
+type PartialError struct {
+	Number     int
+	Parent     int
+	Registered bool
+	Err        error
+}
+
+func (e *PartialError) Error() string {
+	return fmt.Sprintf("the issue #%d was created but its setup did not end: %v", e.Number, e.Err)
+}
+
+func (e *PartialError) Unwrap() error { return e.Err }
 
 // IssueCreated is what `issue create` answers.
 type IssueCreated struct {
@@ -78,6 +99,18 @@ func (s *IssueService) Create(ctx context.Context, a Actor, repo string, in Issu
 	g := s.guard()
 	parent := in.Parent
 	table := ""
+	op := in.Op
+	if op == "" {
+		op = NewOp()
+	} else if obj, found, err := s.Objects.ByOp(ctx, op); err != nil {
+		return IssueCreated{}, err
+	} else if found {
+		// a resending: the issue is already made
+		if obj.Kind != KindIssue || obj.Repo != repo || (a.Kind == ActorTable && obj.Table != a.Table) {
+			return IssueCreated{}, fmt.Errorf("github: the operation %s was made for something else", op)
+		}
+		return IssueCreated{Number: obj.Number, ID: obj.GitHubID, URL: fmt.Sprintf("https://github.com/%s/issues/%d", repo, obj.Number), Parent: obj.ParentNumber}, nil
+	}
 	if a.Kind == ActorTable {
 		table = a.Table
 		ref, ok, err := s.Tables.Epic(ctx, a.Table)
@@ -95,6 +128,14 @@ func (s *IssueService) Create(ctx context.Context, a Actor, repo string, in Issu
 		if err := g.Authorize(ctx, a, Target{Repo: repo, Kind: KindIssue, Number: parent}); err != nil {
 			return IssueCreated{}, err
 		}
+		if a.Kind != ActorTable {
+			// the Grão-Mestre under an issue of a table makes the issue of that table
+			if po, found, err := s.Objects.Get(ctx, repo, KindIssue, parent); err != nil {
+				return IssueCreated{}, err
+			} else if found {
+				table = po.Table
+			}
+		}
 	}
 	if err := CheckLabels(a, in.Labels, nil); err != nil {
 		return IssueCreated{}, err
@@ -108,6 +149,9 @@ func (s *IssueService) Create(ctx context.Context, a Actor, repo string, in Issu
 			return IssueCreated{}, err
 		}
 		for _, o := range found {
+			if a.Kind == ActorTable && o.Table != a.Table {
+				continue // the impressions of the other tables are theirs
+			}
 			cur, err := s.API.IssueData(ctx, repo, o.Number)
 			if errors.Is(err, ErrNotFound) {
 				continue
@@ -132,7 +176,6 @@ func (s *IssueService) Create(ctx context.Context, a Actor, repo string, in Issu
 	if err := g.EnsureLabels(ctx, repo, labels); err != nil {
 		return IssueCreated{}, err
 	}
-	op := NewOp()
 	body := StripMarkers(in.Body)
 	if recurrence != 0 {
 		body = fmt.Sprintf("Recorrência de #%d\n\n%s", recurrence, body)
@@ -140,16 +183,16 @@ func (s *IssueService) Create(ctx context.Context, a Actor, repo string, in Issu
 	if hash != "" {
 		body = strings.TrimRight(body, "\n") + "\n\n" + ImpressionMarker(hash)
 	}
-	made, err := s.API.CreateIssue(ctx, repo, in.Title, WithMarker(body, op), labels)
+	made, err := s.API.CreateIssue(ctx, repo, in.Title, strings.TrimRight(body, "\n")+"\n\n"+Marker(op), labels)
 	if err != nil {
 		return IssueCreated{}, err
 	}
 	if err := s.Objects.Register(ctx, Object{Repo: repo, Kind: KindIssue, Number: made.Number, GitHubID: made.ID, Table: table, ParentNumber: parent, Op: op, Fingerprint: hash}); err != nil {
-		return IssueCreated{}, err
+		return IssueCreated{}, &PartialError{Number: made.Number, Parent: parent, Err: err}
 	}
 	if parent != 0 {
 		if err := s.API.AddSubIssue(ctx, repo, parent, made.ID); err != nil {
-			return IssueCreated{}, fmt.Errorf("the issue #%d was created but not linked under #%d: %w", made.Number, parent, err)
+			return IssueCreated{}, &PartialError{Number: made.Number, Parent: parent, Registered: true, Err: err}
 		}
 	}
 	return IssueCreated{Number: made.Number, ID: made.ID, URL: made.URL, Parent: parent, RecurrenceOf: recurrence}, nil
@@ -174,6 +217,13 @@ func (s *IssueService) Update(ctx context.Context, a Actor, repo string, n int, 
 	if err := g.Authorize(ctx, a, Target{Repo: repo, Kind: KindIssue, Number: n}); err != nil {
 		return IssueData{}, err
 	}
+	// An issue and a PR share the numbers, but a PR is not changed here: its
+	// body has the blocks and the head that `pr update` keeps.
+	if obj, found, err := s.Objects.Get(ctx, repo, KindIssue, n); err != nil {
+		return IssueData{}, err
+	} else if found && obj.Kind == KindPR {
+		return IssueData{}, refuse(CodeNotAllowed, "#%d é um PR, não uma issue; use mestre pr", n)
+	}
 	if err := CheckLabels(a, in.AddLabels, in.RemoveLabel); err != nil {
 		return IssueData{}, err
 	}
@@ -182,47 +232,44 @@ func (s *IssueService) Update(ctx context.Context, a Actor, repo string, n int, 
 	}
 	edit := IssueEdit{Title: in.Title, StateReason: in.Reason}
 	if in.Body != nil {
-		b := StripMarkers(*in.Body)
+		// the marks of the engine (the operation, the impression) stay
+		cur, err := s.API.IssueData(ctx, repo, n)
+		if err != nil {
+			return IssueData{}, err
+		}
+		b := strings.TrimRight(StripMarkers(*in.Body), "\n") + strings.Join(Markers(cur.Body), "")
 		edit.Body = &b
 	}
 	if in.State != "" {
 		st := in.State
 		edit.State = &st
 	}
-	if len(in.AddLabels)+len(in.RemoveLabel) > 0 {
-		cur, err := s.API.IssueData(ctx, repo, n)
-		if err != nil {
+	if edit.Title != nil || edit.Body != nil || edit.State != nil {
+		if err := s.API.UpdateIssue(ctx, repo, n, edit); err != nil {
 			return IssueData{}, err
 		}
-		var next []string
-		drop := func(l string) bool {
-			for _, r := range in.RemoveLabel {
-				if strings.EqualFold(strings.TrimSpace(r), l) {
-					return true
-				}
-			}
-			return false
-		}
-		for _, l := range append(cur.Labels, in.AddLabels...) {
-			dup := false
-			for _, x := range next {
-				dup = dup || strings.EqualFold(x, l)
-			}
-			if !dup && !drop(l) {
-				next = append(next, l)
-			}
-		}
-		edit.Labels = &next
 	}
-	if err := s.API.UpdateIssue(ctx, repo, n, edit); err != nil {
-		return IssueData{}, err
+	// the labels are added and taken one by one: a label a person put
+	// meanwhile is not lost with a list that replaces the others
+	if len(in.AddLabels) > 0 {
+		if err := s.API.AddLabels(ctx, repo, n, in.AddLabels); err != nil {
+			return IssueData{}, err
+		}
+	}
+	for _, l := range in.RemoveLabel {
+		if err := s.API.RemoveLabel(ctx, repo, n, l); err != nil {
+			return IssueData{}, err
+		}
 	}
 	return s.API.IssueData(ctx, repo, n)
 }
 
 // Comment posts a comment on an issue of the table, once for the operation.
-func (s *IssueService) Comment(ctx context.Context, a Actor, repo string, n int, body string) (CommentInfo, error) {
-	return s.guard().PostOnce(ctx, a, repo, n, body, NewOp())
+func (s *IssueService) Comment(ctx context.Context, a Actor, repo string, n int, body, op string) (CommentInfo, error) {
+	if op == "" {
+		op = NewOp()
+	}
+	return s.guard().PostOnce(ctx, a, repo, n, body, op)
 }
 
 // ListTree lists the issues under the epic, the epic first (up to 500, 8 levels).

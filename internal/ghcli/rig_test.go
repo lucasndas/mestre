@@ -65,10 +65,9 @@ type rig struct {
 	gh   *fakegithub.Server
 	objs *github.Objects
 	gate *cli.Gate
-	n    int
 }
 
-// newRig has a table 42-login (epic #42) with its Mestre da mesa "tm", a QA
+// newRig has a table 42-login (its epic is the issue #1) with its Mestre da mesa "tm", a QA
 // "qa" of the class qa that may use issue commands, a Dev "dev" whose class
 // does not, and the Grão-Mestre "gm".
 func newRig(t *testing.T) *rig {
@@ -125,11 +124,16 @@ type result struct {
 // run sends a command of a character through the gate, as the CLI would.
 func (r *rig) run(who, cmd string, flags map[string]any, args ...string) result {
 	r.t.Helper()
-	r.n++
 	id, err := localchan.NewID(clock.Real{})
 	if err != nil {
 		r.t.Fatal(err)
 	}
+	return r.runID(id, who, cmd, flags, args...)
+}
+
+// runID is run with the id of the request: the same one again is a resending.
+func (r *rig) runID(id, who, cmd string, flags map[string]any, args ...string) result {
+	r.t.Helper()
 	if flags == nil {
 		flags = map[string]any{}
 	}
