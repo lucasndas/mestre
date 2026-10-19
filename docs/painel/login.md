@@ -1,6 +1,6 @@
 # Login do painel
 
-> **Assunto:** login, assistente de criação do Dono, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-13
+> **Assunto:** login, assistente de criação do Dono, primeiro acesso de cada usuário, sessões com expiração e PIN em ações sensíveis · **Componente:** Painel · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -37,7 +37,7 @@ Garantir que só usuários autorizados usem o painel, cada um com o seu nível e
 ### Senha
 
 - Mínimo de 12 caracteres, sem outras regras de composição.
-- Guardada só como hash argon2id (com sal por usuário). O mesmo hash vai, criptografado, para a réplica dos Guardiões ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)), para o login da [página reserva](../autocura/pagina-reserva.md).
+- Guardada só como hash argon2id (com sal por usuário). O mesmo hash vai (desde o M7), criptografado, para a réplica dos Guardiões ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)), para o login da [página reserva](../autocura/pagina-reserva.md).
 - Trocar a senha pede a senha atual e encerra as outras sessões do usuário.
 - 5 senhas erradas em 15 min para o mesmo login → login bloqueado por 15 min (padrão), com aviso ao Dono.
 
