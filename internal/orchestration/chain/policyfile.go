@@ -59,6 +59,7 @@ type parsedPolicy struct {
 	version  string
 	settings Settings
 	risk     *classes.RiskPolicy
+	rules    *PolicyRules
 }
 
 var (
@@ -109,8 +110,20 @@ type policyYAML struct {
 // risco section, and the sensitive areas the classification reads. Absent
 // keys are the default. Any error makes the whole file invalid.
 func ParsePolicyFile(data []byte) (Settings, *classes.RiskPolicy, error) {
-	bad := func(item, reason string) (Settings, *classes.RiskPolicy, error) {
-		return Settings{}, nil, &SectionError{Item: item, Reason: reason}
+	st, risk, _, err := parsePolicyFull(data)
+	return st, risk, err
+}
+
+// ParsePolicyRules is the rules of the file (conditions, areas, quorum…) that
+// the Grão-Mestre is held to; the same checks of ParsePolicyFile apply.
+func ParsePolicyRules(data []byte) (PolicyRules, error) {
+	_, _, rules, err := parsePolicyFull(data)
+	return rules, err
+}
+
+func parsePolicyFull(data []byte) (Settings, *classes.RiskPolicy, PolicyRules, error) {
+	bad := func(item, reason string) (Settings, *classes.RiskPolicy, PolicyRules, error) {
+		return Settings{}, nil, PolicyRules{}, &SectionError{Item: item, Reason: reason}
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
@@ -142,7 +155,7 @@ func ParsePolicyFile(data []byte) (Settings, *classes.RiskPolicy, error) {
 	}
 	st, err := ParseSection(section, expiry)
 	if err != nil {
-		return Settings{}, nil, err
+		return Settings{}, nil, PolicyRules{}, err
 	}
 	for name, t := range y.Tipos {
 		rt := classes.RequestType(name)
@@ -182,7 +195,7 @@ func ParsePolicyFile(data []byte) (Settings, *classes.RiskPolicy, error) {
 	} else if len(section) > 0 {
 		adj, err := classes.ParseRiskAdjustments(section)
 		if err != nil {
-			return Settings{}, nil, err
+			return Settings{}, nil, PolicyRules{}, err
 		}
 		risk.Adjustments = adj
 	}
@@ -208,7 +221,11 @@ func ParsePolicyFile(data []byte) (Settings, *classes.RiskPolicy, error) {
 		}
 		*area.dst = globs
 	}
-	return st.WithDefaults(), risk, nil
+	rules, err := parseRules(&y)
+	if err != nil {
+		return Settings{}, nil, PolicyRules{}, err
+	}
+	return st.WithDefaults(), risk, rules, nil
 }
 
 // nodeYAML is the YAML of a section's value, nil when the file does not have it.
@@ -282,8 +299,9 @@ func (f *PolicyFile) loadLocked(workspace string, told *error) *parsedPolicy {
 	if err == nil {
 		var settings Settings
 		var risk *classes.RiskPolicy
-		if settings, risk, err = ParsePolicyFile(data); err == nil {
-			st.valid = &parsedPolicy{version: "sha256:" + hash[:16], settings: settings, risk: risk}
+		var rules PolicyRules
+		if settings, risk, rules, err = parsePolicyFull(data); err == nil {
+			st.valid = &parsedPolicy{version: "sha256:" + hash[:16], settings: settings, risk: risk, rules: &rules}
 			st.alerted = ""
 			return st.valid
 		}

@@ -206,6 +206,12 @@ func (l Level) rank() int {
 	return -1 // unknown: no decree of it counts
 }
 
+// AtLeast says whether l is a person at or above min: the check of "nivel_minimo"
+// of the approval policy (docs/aprovacoes/politica.md#tipos-de-ação).
+func (l Level) AtLeast(min Level) bool {
+	return l.person() && min.rank() >= 0 && l.rank() >= min.rank()
+}
+
 // person reports a level of a person: owner, admin or approver.
 func (l Level) person() bool { return l.rank() > 0 }
 

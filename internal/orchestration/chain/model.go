@@ -183,6 +183,8 @@ type Request struct {
 	AskedAt time.Time
 	// Mission is set for a ponto_de_missao.
 	Mission *Mission `json:"mission,omitempty"`
+	// PR is the PR of a request of type pr or merge.
+	PR *PRRef `json:"pr,omitempty"`
 	// Decision is how it closed.
 	Decision *Closing `json:"decision,omitempty"`
 	// Deciding is the claim of a decision under way: the request stays open

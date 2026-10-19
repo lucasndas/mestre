@@ -264,6 +264,7 @@ type world struct {
 	alerts   *fakeAlerts
 	sup      *fakeSupervision
 	deleg    *fakeDelegations
+	prs      *fakePRs
 	// supervisor is the real supervision, with worldOpts.realSup.
 	supervisor *chain.Supervisor
 	policy     *policy
@@ -279,9 +280,51 @@ type world struct {
 
 // policy is the policy file of the tests: the settings change under it.
 type policy struct {
-	mu  sync.Mutex
-	s   chain.Settings
-	err error
+	mu    sync.Mutex
+	s     chain.Settings
+	err   error
+	rules chain.PolicyRules
+}
+
+// Rules are the rules of the policy file of the tests (the default content
+// until a test sets others).
+func (p *policy) Rules(string) (chain.PolicyRules, string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.rules, "p1"
+}
+
+func (p *policy) setRules(r chain.PolicyRules) {
+	p.mu.Lock()
+	p.rules = r
+	p.mu.Unlock()
+}
+
+// fakePRs gives the facts of the PRs the conditions read, by number.
+type fakePRs struct {
+	mu    sync.Mutex
+	facts map[int]chain.PRFacts
+	err   error
+	read  int
+}
+
+func (f *fakePRs) PullRequest(_ context.Context, _ string, ref chain.PRRef) (chain.PRFacts, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.read++
+	if f.err != nil {
+		return chain.PRFacts{}, f.err
+	}
+	return f.facts[ref.Number], nil
+}
+
+func (f *fakePRs) set(n int, facts chain.PRFacts) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.facts == nil {
+		f.facts = map[int]chain.PRFacts{}
+	}
+	f.facts[n] = facts
 }
 
 func (p *policy) Chain(context.Context, string) (chain.Settings, string, error) {
@@ -338,8 +381,8 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{},
-		policy: &policy{s: chain.DefaultSettings()}}
+	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, prs: &fakePRs{},
+		policy: &policy{s: chain.DefaultSettings(), rules: chain.DefaultRules()}}
 	w.grants = &fakeGrants{f: w.cls}
 	w.machines = orcfakes.NewMachines(clk)
 	w.machines.Chars = func() *characters.Service { return w.orc.Characters }
@@ -347,7 +390,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}, Restrictions: opt.restrictions}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
-		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg}
+		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainPRs: w.prs}
 	if opt.realSup {
 		oo.ChainSupervision = nil
 	}
