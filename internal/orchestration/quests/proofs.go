@@ -81,13 +81,17 @@ func Fingerprint(step, cause string, where []string, worktree string) (string, [
 // under a checked item.
 const proofMark = "  - prova"
 
+// neutral keeps the text of an agent from opening a comment that hides the
+// markers of the engine, or from calling a person of GitHub.
+var neutral = strings.NewReplacer("<!--", "<\u200b!--", "-->", "-\u200b->", "@", "@\u200b")
+
 // proofLine is the line under a criterion that says how it was proved.
 func proofLine(p Proof) string {
 	who := "verificada pelo motor"
 	if p.Origin != ProofVerified {
 		who = "declarada por " + inbox.OneLine(p.By)
 	}
-	return fmt.Sprintf("%s (%s): %s", proofMark, who, inbox.OneLine(p.Text))
+	return fmt.Sprintf("%s (%s): %s", proofMark, who, neutral.Replace(inbox.OneLine(p.Text)))
 }
 
 // markCriteria brings the items of the criteria in the body of the issue to
@@ -101,6 +105,7 @@ func markCriteria(body string, cs []Criterion, proofs []Proof) (string, map[stri
 		byID[p.Criterion] = p
 	}
 	checked := map[string]bool{}
+	seen := map[string]bool{}
 	lines := strings.Split(body, "\n")
 	var out []string
 	for i := 0; i < len(lines); i++ {
@@ -110,8 +115,9 @@ func markCriteria(body string, cs []Criterion, proofs []Proof) (string, map[stri
 		found := false
 		if m != nil {
 			for _, x := range cs {
-				if x.ID == m[1] {
+				if x.ID == m[1] && !seen[x.ID] {
 					c, found = x, true
+					seen[x.ID] = true
 				}
 			}
 		}
@@ -126,6 +132,8 @@ func markCriteria(body string, cs []Criterion, proofs []Proof) (string, map[stri
 		}
 		p, has := byID[c.ID]
 		switch {
+		case has && !c.Marked && strings.Contains(line, "[x]") || has && !c.Marked && strings.Contains(line, "[X]"):
+			out = append(out, line) // somebody else checked it: it stays theirs
 		case has:
 			out = append(out, setBox(line, 'x'), proofLine(p))
 			checked[c.ID] = true
@@ -171,7 +179,7 @@ func mergeSteps(body, block string) string {
 // for the round that starts. A quest with no issue, or whose issue has no
 // item, runs without criteria.
 func (s *Service) criteriaOf(ctx context.Context, q Quest) ([]Criterion, error) {
-	if s.o.GitHub == nil || q.Issue == 0 {
+	if s.o.GitHub == nil || q.Def.Issue == 0 || q.Issue == 0 {
 		return nil, nil
 	}
 	if s.o.Gate != nil {

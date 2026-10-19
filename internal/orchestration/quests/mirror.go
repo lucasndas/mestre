@@ -140,7 +140,10 @@ func (s *Service) mirror(ctx context.Context, id string) {
 				_ = s.updateStep(ctx, st.UID, func(x *Step) { x.SubClosed = true })
 			}
 		}
-		if done {
+		if done && q.Def.Issue != 0 {
+			// the issue is the Master's, shared with the epic: it is not ours to close
+			_ = s.updateQuest(ctx, id, func(x *Quest) { x.IssueClosed = true })
+		} else if done {
 			if err := gh.Close(ctx, q.Workspace, q.Issue, ClosedNotPlanned); err != nil {
 				fail("the closing of the issue", err)
 			} else {

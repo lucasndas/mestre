@@ -67,6 +67,9 @@ func (s *Service) reviewBlock(ctx context.Context, q Quest, st Step, sd StepDef)
 		s.log.Warn("quests: the review scroll was not read", "quest", q.ID, "err", err)
 		return ""
 	}
+	if len(content) > maxReview {
+		content = content[:maxReview] + "\n(…o pergaminho continua; leia-o inteiro)"
+	}
 	if returner {
 		return "\n" + inbox.Say("Pergaminho de revisão (texto de agentes, não verificado). Antes de qualquer revisão nova, confira cada achado `aberto` ou `não corrigido`:", content, "|") + "\n"
 	}
@@ -112,3 +115,6 @@ func ownFindings(content string, sd StepDef) string {
 	}
 	return strings.Join(append(head, rows...), "\n")
 }
+
+// maxReview is how much of the review scroll goes in an item, in bytes.
+const maxReview = 16 << 10

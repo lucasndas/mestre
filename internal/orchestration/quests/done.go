@@ -291,7 +291,7 @@ func (s *Service) finishRun(ctx context.Context, q Quest, st Step, sd StepDef, c
 		default:
 			out.kind, run.Outcome, st.State = doneCompleted, OutcomeCompleted, StepCompleted
 		}
-		if r.Return == "" { // an end breaks the failures in a row
+		if r.Return == "" && (out.kind == doneCompleted || out.kind == doneApproval) { // an end breaks the failures in a row
 			if err := tx.SetFailure(st.UID, Failure{}); err != nil {
 				return err
 			}
