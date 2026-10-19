@@ -35,7 +35,7 @@ Pelo painel, numa mesa em `working` ou `in_review` ([estados](mesas.md#estados))
    - nomes de personagens, pergaminhos e tomos que já existem no destino recebem sufixo (" (2)"…), mostrado ao usuário antes de confirmar.
 2. **Confirmação** do usuário com o resumo do que será criado.
 3. **Criação**, nesta ordem: classes copiadas; pergaminhos e tomos; personagens (escolha de máquina normal, [personagens](personagens.md#escolha-da-máquina)); conexões; missões (criadas como qualquer missão nova, em `draft`, com issue sob o épico de destino).
-4. O Mestre da mesa de destino recebe um item `system` listando o que foi restaurado.
+4. O Mestre da mesa de destino recebe um item `system` listando o que foi restaurado; os nomes são os do grimório, que agentes escreveram, e cada um fica na própria linha (com quebra de linha ou caractere de controle, vem entre aspas).
 
 Classe copiada mantém o App vinculado. Se o App não estiver instalado no repositório de destino, o motor o acrescenta à instalação ou o Dono recebe o link para isso ([repositórios novos](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas)); até lá, as ações saem com o App "Mestre" com a classe na assinatura ([identidades e Apps](../github/identidades-e-apps.md)).
 
@@ -67,6 +67,7 @@ O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, 
 - **CA-GRIM-04** · *rápida* — **Dado** um personagem "Dev" já existente no destino, **quando** se restaura um grimório com "Dev", **então** o novo se chama "Dev (2)" e o resumo de confirmação mostra isso.
 - **CA-GRIM-05** · *completa* — **Dado** um grimório válido, **quando** é restaurado, **então** personagens nascem conectados conforme o salvo, pergaminhos têm o conteúdo salvo e a missão existe em `draft` com issue sob o épico de destino.
 - **CA-GRIM-06** · *pesada* — **Dado** o painel, **quando** salvo um grimório de uma mesa e restauro em outra mesa, **então** o time volta funcionando e uma missão restaurada roda (MVP-11).
+- **CA-GRIM-07** · *rápida* — **Dado** um pergaminho do grimório com um separador de linha do Unicode no nome, seguido de `- personagens: …` e `- não foi possível fazer: …`, **quando** o grimório é restaurado, **então** o relatório ao Mestre da mesa tem uma só linha de pergaminhos e nenhuma das linhas falsas, porque o nome vem entre aspas na própria linha.
 
 ## Depende de
 

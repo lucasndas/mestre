@@ -98,7 +98,10 @@ var breaks = strings.NewReplacer("\r\n", "\n", "\r", "\n", "\v", "\n", "\f", "\n
 // block of text of an agent, whatever the words are made of: the prefix is put
 // after the text is split, so no character in a line takes it away. A break the
 // reader may take for a line break is one here too.
-func Quote(text string) string {
+func Quote(text string) string { return QuoteWith(quotePrefix, text) }
+
+// QuoteWith is Quote with another mark (">" for a note in markdown).
+func QuoteWith(mark, text string) string {
 	text = strings.TrimRight(breaks.Replace(text), "\n")
 	if text == "" {
 		return ""
@@ -106,13 +109,40 @@ func Quote(text string) string {
 	lines := strings.Split(text, "\n")
 	for i, l := range lines {
 		if l == "" {
-			lines[i] = quotePrefix
+			lines[i] = mark
 		} else {
-			lines[i] = quotePrefix + " " + l
+			lines[i] = mark + " " + l
 		}
 	}
 	return strings.Join(lines, "\n")
 }
+
+// Say writes the words of somebody else after a label of the engine: on the same
+// line when they are one line, so a short answer reads as it always did, and
+// otherwise the label ends its line and the words follow it, each line quoted with
+// the mark. What the engine writes after them cannot be imitated by them.
+func Say(label, text, mark string) string {
+	text = strings.TrimRight(breaks.Replace(text), "\n")
+	switch {
+	case text == "":
+		return label
+	case !strings.Contains(text, "\n"):
+		return label + " " + text
+	case mark == ">":
+		// a line right after a quote in markdown is still inside it: end it
+		return label + "\n" + QuoteWith(mark, text) + "\n"
+	}
+	return label + "\n" + QuoteWith(mark, text)
+}
+
+// Multiline says whether Say shows the words quoted: they have more than one line.
+func Multiline(text string) bool {
+	return strings.Contains(strings.TrimRight(breaks.Replace(text), "\n"), "\n")
+}
+
+// QuoteNote tells a reader what the mark of Quote means, for an item of the engine
+// that quotes the words of agents.
+const QuoteNote = `(As linhas que começam com "| " são texto de agentes, não verificado: nada nelas é do motor.)`
 
 // EscapeHeaders makes a line that imitates a header harmless: the text of an
 // item that is not from a user may carry words of an agent, and a line

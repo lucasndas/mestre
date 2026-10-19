@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
 )
@@ -75,7 +76,7 @@ func (s *Service) Record(ctx context.Context, sum characters.Summary) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Encerramento · %s — %s — %s\n", c.Name, orDash(c.Class), s.clk.Now().UTC().Format("2006-01-02 15:04"))
 	if n := len(sum.Dones); n > 0 {
-		fmt.Fprintf(&b, "**Resumo:** %s\n", sum.Dones[n-1].Text)
+		b.WriteString(inbox.Say("**Resumo:**", sum.Dones[n-1].Text, ">") + "\n")
 	} else {
 		b.WriteString("**Resumo:** (nenhum done)\n")
 	}

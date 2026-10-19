@@ -372,8 +372,8 @@ func resultText(r Run) string {
 // returnLimitText is the event return_limit: the step, the returns made and
 // the last reason.
 func (s *Service) returnLimitText(q Quest, sd StepDef, st Step, reason string) string {
-	return fmt.Sprintf("[return_limit] A etapa %s da missão %s chegou ao limite de voltas (%d de %d). Último motivo: %s. A missão está pausada: decida entre `mestre quest resume`, mudar o plano ou `mestre quest cancel`.",
-		sd.Title(), q.Name, st.Returns, q.MaxReturns, reason)
+	return fmt.Sprintf("[return_limit] A etapa %s da missão %s chegou ao limite de voltas (%d de %d). A missão está pausada: decida entre `mestre quest resume`, mudar o plano ou `mestre quest cancel`.\n",
+		sd.Title(), q.Name, st.Returns, q.MaxReturns) + inbox.Say("Último motivo (texto de quem devolveu, não verificado):", reason, "|")
 }
 
 // cancelStepDone ends a cancelled quest when its last step under way ended.

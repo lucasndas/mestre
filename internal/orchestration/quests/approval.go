@@ -116,7 +116,11 @@ func (s *Service) Decided(ctx context.Context, d Decision) error {
 	sd := q.Def.Steps[st.Pos]
 	text := fmt.Sprintf("pedido #%d da etapa %s %s", d.Request, sd.Title(), map[bool]string{true: "aprovado", false: "negado"}[d.Approved])
 	if d.Reason != "" {
-		text += ": " + d.Reason
+		// the reason is the words of who decided: more than one line comes quoted
+		text += "\n" + inbox.Say("Motivo:", d.Reason, "|")
+		if inbox.Multiline(d.Reason) {
+			text += "\n" + inbox.QuoteNote
+		}
 	}
 	if s.o.Waits != nil {
 		s.o.Waits.ApprovalDecided(ctx, d.Request, text)
