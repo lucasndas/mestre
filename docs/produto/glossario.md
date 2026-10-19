@@ -87,6 +87,7 @@ Vocabulário: na interface os rótulos ficam em português, com estes termos; os
 | Regra permanente | Decreto que vale daqui pra frente, até ser revogado ou expirar. | [decretos](../telegram/decretos.md#tipos) |
 | Aprovação | Pedido para liberar uma ação; sobe do superior de quem pediu até o Grão-Mestre e as pessoas. | [fluxo de aprovação](../aprovacoes/fluxo.md) |
 | Pedido que bloqueia | Mensagem que pede algo ao usuário porque a mesa não segue sem ele: traz o motivo, a evidência, o que fazer e quem age. | [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md) |
+| Aviso de bloqueio | Pedido que bloqueia sem tipo na política: só diz o que falta e os passos que o usuário pode fazer, sem decisão. | [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md) |
 | Cadeia de aprovação | O caminho de um pedido: do superior de quem pediu ao Grão-Mestre e às pessoas, cada um decidindo até um risco. | [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) |
 | Superior | Quem criou o personagem; é o primeiro a decidir os pedidos de aprovação dele. | [cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md#superior) |
 | Risco | Quanto um pedido pode estragar: baixo, médio, alto ou fixo. O sistema decide e isso diz quem pode aprovar. | [classificação de risco](../classes/classificacao-de-risco.md) |

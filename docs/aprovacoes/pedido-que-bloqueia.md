@@ -1,10 +1,10 @@
 # Pedido que bloqueia
 
-> **Assunto:** os campos da mensagem que pede algo ao usuário porque uma mesa não segue sem ele: por que parou, evidência, o que já foi conferido, por que o agente não decide, o que fazer, quem age e o motivo no vocabulário fixo · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** os campos da mensagem que pede algo ao usuário porque uma mesa não segue sem ele: por que parou, evidência, o que já foi conferido, por que o agente não decide, o que fazer, quem age e o motivo no vocabulário fixo · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
-Deixar o usuário decidir em segundos, no celular, sem abrir nada: a mensagem diz o que falta, mostra a prova, diz o que já foi conferido e o que fazer. O [fluxo](fluxo.md) dá o ciclo de vida do pedido; aqui está o **conteúdo** da mensagem. Vale para o pedido de aprovação e para o aviso de bloqueio (credencial que falta, cota, ambiguidade), enviados pelo [bot](../telegram/bot.md#mensagens-de-saída). O painel mostra os mesmos campos ([conversa e aprovações](../painel/conversa-e-aprovacoes.md)).
+Deixar o usuário decidir em segundos, no celular, sem abrir nada: a mensagem diz o que falta, mostra a prova, diz o que já foi conferido e o que fazer. O [fluxo](fluxo.md) dá o ciclo de vida do pedido; aqui está o **conteúdo** da mensagem. Vale para o pedido de aprovação e para o **aviso de bloqueio** (credencial que falta, cota, ambiguidade), enviados pelo [bot](../telegram/bot.md#mensagens-de-saída). O aviso não é um tipo da [política](politica.md): não tem catálogo de respostas, nível mínimo nem decisão; só informa e leva os passos que o usuário pode fazer. O painel mostra os mesmos campos ([conversa e aprovações](../painel/conversa-e-aprovacoes.md)).
 
 ## Comportamento
 
@@ -18,10 +18,10 @@ Deixar o usuário decidir em segundos, no celular, sem abrir nada: a mensagem di
 | O que já conferi | para ninguém conferir de novo | agente, marcado como texto dele |
 | Por que não decido | a decisão que o agente se recusa a tomar sozinho (cobrança, destruição, intenção) | agente, marcado como texto dele |
 | Para destravar | checklist de passos concretos | motor, dos passos que ele conhece (cadastrar no cofre, aprovar o PR); o agente acrescenta os outros |
-| Dono | quem age; nunca "alguém" | motor: o usuário de `exigir_usuarios` ou, sem ele, o nível mínimo do tipo ("um Administrador") |
-| `blocked-by` | linha de máquina: números dos épicos ou mesas que precisam andar antes, ou `-` quando só uma pessoa destrava | motor |
+| Dono | quem age; nunca "alguém" | motor: o usuário de `exigir_usuarios` ou, sem ele, o nível mínimo do tipo ("um Administrador"); no aviso, que não tem tipo, o Dono do workspace para `credencial` (o cofre só aceita o Dono) e um Administrador nos demais |
+| `blocked-by` | linha de máquina: números dos épicos ou mesas que precisam andar antes, ou `-` quando só uma pessoa destrava | motor, das dependências declaradas entre as mesas ([dependência entre mesas](../orquestracao/dependencia-entre-mesas.md)); `-` se não há |
 
-Campo sem conteúdo é omitido da mensagem. O texto do agente aparece depois dos campos do motor, dentro do bloco "texto do agente, não verificado" ([cadeia](../orquestracao/cadeia-de-aprovacao.md)); o que o motor monta não pode ser reescrito por ele.
+Campo sem conteúdo é omitido da mensagem. O texto do agente (o que já conferi, por que não decido e os passos dele) aparece depois dos campos do motor, dentro do bloco "texto do agente, não verificado" ([cadeia](../orquestracao/cadeia-de-aprovacao.md)); o que o motor monta não pode ser reescrito por ele.
 
 ### O vocabulário de motivo
 
@@ -40,17 +40,23 @@ Fixo; um valor fora da lista é recusado (2 `usage` com os valores aceitos). O m
 | ⏳ | `espera` | depende de outro trabalho |
 | 🙋 | `so_voce` | só uma pessoa pode fazer o passo |
 
+### Como o agente envia
+
+Só o Grão-Mestre envia, com os campos do agente em flags ([CLI](../cli/grao-mestre.md#mestre-approval)): `--motive <valor>`, `--checked "<o que já conferi>"`, `--why-not "<por que não decido>"` e `--step "<passo>"` (repetível). No pedido de aprovação, vão em `mestre approval ask`; no aviso de bloqueio, em `mestre notify --blocked <valor>` com as mesmas flags. Valor de motivo fora do vocabulário → 2 `usage` com os valores aceitos.
+
 ### Como chega ao usuário
 
-Uma mensagem curta, com o cabeçalho de origem ([roteamento](../telegram/roteamento.md#cabeçalho)). A evidência vai truncada em 3 linhas, com o resto no painel, e passa pelo mascarador antes de sair. Os botões são os do catálogo de respostas do tipo ([cadeia](../orquestracao/cadeia-de-aprovacao.md)) mais um por passo do checklist que o bot sabe fazer. Exemplo:
+Uma mensagem curta, com o cabeçalho de origem ([roteamento](../telegram/roteamento.md#cabeçalho)), os campos do motor e depois o bloco do agente. A evidência vai truncada em 3 linhas, com o resto no painel, e passa pelo mascarador antes de sair. Os botões são os do catálogo de respostas do tipo ([cadeia](../orquestracao/cadeia-de-aprovacao.md)) que **aquele** usuário pode dar, mais um por passo que o bot sabe fazer **e** que o usuário pode fazer, com o nível e o PIN do passo; o aviso, sem catálogo, só tem esses botões e **Ver detalhes**. Cadastrar um segredo exige o Dono, com PIN, e só se faz no painel ([cofre](../plataforma/cofre.md#uso)): o passo vira o botão **Abrir no painel** (um link) para o Dono; para os outros, nenhum botão de cadastro. Exemplo de aviso `credencial`:
 
 ```
-🔐 Mesa Checkout · falta a chave STRIPE_TEST_KEY
+Loja · Mesa #42 Checkout
+🔐 falta a chave STRIPE_TEST_KEY
 Evidência: checkout_test.go:22 → "missing STRIPE_TEST_KEY"
-Por que não decido (agente): envolve cobrança, é decisão sua
-Para destravar: [ ] cadastrar a chave no cofre
+Para destravar: [ ] cadastrar a chave no cofre (painel)
 Dono: Lucas
-[Cadastrar agora] [Pular esta etapa]
+— texto do agente, não verificado —
+Por que não decido: envolve cobrança, é decisão sua
+[Abrir no painel] [Ver detalhes]
 ```
 
 ## Regras e erros
@@ -62,9 +68,11 @@ Dono: Lucas
 ## Critérios de aceite
 
 - **CA-BLOQ-01** · *rápida* — **Dado** um teste da mesa Checkout que falhou com `missing STRIPE_TEST_KEY` em `checkout_test.go:22`, **quando** o agente pede a chave, **então** a mensagem mostra o motivo 🔐, a evidência com esse arquivo, linha e erro montada pelo motor, o checklist com o cofre e o dono; e o "por que não decido" aparece depois, dentro do bloco "texto do agente, não verificado".
-- **CA-BLOQ-02** · *rápida* — **Dado** um pedido com o motivo `urgente`, **quando** o motor o recebe, **então** é recusado com 2 `usage` listando os dez valores; **dado** um pedido `custo_extra` sem motivo, **então** sai 💳.
+- **CA-BLOQ-02** · *rápida* — **Dado** `mestre approval ask --motive urgente`, **quando** o motor o recebe, **então** é recusado com 2 `usage` listando os dez valores; **dado** `mestre notify --blocked credencial --why-not "…" --step "cadastrar a chave"`, **então** a mensagem sai com esses campos do agente no bloco dele; **dado** um pedido `custo_extra` sem motivo, **então** sai 💳.
 - **CA-BLOQ-03** · *rápida* — **Dado** um pedido de `merge` sem `exigir_usuarios` e um com `exigir_usuarios: [lucas]`, **quando** a mensagem é montada, **então** o dono do primeiro é o nível mínimo do tipo, o do segundo é `lucas`, e nenhum diz "alguém".
 - **CA-BLOQ-04** · *rápida* — **Dado** uma evidência de 10 linhas com um token no formato `ghp_…`, **quando** a mensagem é montada, **então** a evidência vai truncada em 3 linhas, o token sai mascarado, e o painel recebe o texto completo, também mascarado.
+- **CA-BLOQ-05** · *rápida* — **Dado** o aviso `credencial` do exemplo, **quando** a mensagem é montada para o Dono e para um Administrador, **então** o Dono vê **Abrir no painel** e o Administrador não vê botão de cadastro, o dono do campo é o Dono, e nenhum botão cadastra o segredo pelo Telegram.
+- **CA-BLOQ-06** · *rápida* — **Dado** a mesa 43 que depende da mesa 42, **quando** o aviso `espera` é montado, **então** o `blocked-by` é `42`; **dado** um aviso só de uma pessoa, **então** é `-`.
 
 ## Depende de
 

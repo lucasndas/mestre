@@ -1,6 +1,6 @@
 # Usuários e níveis
 
-> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** usuários autorizados, níveis e o que cada um pode, cadastro, pareamento, PIN, suspensão e transferência de Dono · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -16,7 +16,8 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
   - ID numérico do Telegram (opcional no cadastro; preenchido no pareamento);
   - nível;
   - workspaces em que pode atuar;
-  - credencial pessoal do GitHub (opcional, para as aprovações dele; ver [aprovação no GitHub](../github/aprovacao-no-github.md)).
+  - login do GitHub (`github_login`, opcional): como o review dele feito direto no GitHub é reconhecido, sem precisar da credencial ([aprovação no GitHub](../github/aprovacao-no-github.md#review-feito-direto-no-github));
+  - credencial pessoal do GitHub (opcional, para as aprovações dele; o login que ela confere é o `github_login`).
 - Os usuários do painel e do Telegram são os mesmos. O primeiro Dono nasce no assistente de primeiro acesso ([login](../painel/login.md)).
 - O Dono atua em todos os workspaces. Os demais só nos workspaces da lista dele.
 - Existe **um único Dono** por Guilda.
