@@ -67,10 +67,18 @@ type Call struct {
 	ChatID, MessageID int64
 }
 
+// Locker says the Mestre is locked (/travar).
+type Locker interface {
+	Locked(ctx context.Context) bool
+}
+
 // Command is a quick command, answered by the engine at once.
 type Command struct {
 	Name        string
 	Description string
+	// Query says the command only reads (or unlocks): it is answered while the
+	// Mestre is locked.
+	Query bool
 	// Capability is what the level needs ("" is any user).
 	Capability users.Capability
 	Run        func(ctx context.Context, c Call) (string, error)
@@ -108,6 +116,9 @@ type Options struct {
 	Router Router
 	// Strangers, when set, takes the messages of who is not a user.
 	Strangers Strangers
+	// Lock, when set, makes the bot answer only the queries and /destravar while
+	// the Mestre is locked, and keep the messages to the Grand Master.
+	Lock Locker
 
 	Commands []Command
 	Actions  map[string]Action
@@ -129,11 +140,12 @@ const PINKind = "pin"
 
 // Bot is the bot of the Citadel.
 type Bot struct {
-	o    Options
-	st   *Store
-	clk  clock.Clock
-	log  *slog.Logger
-	cmds map[string]Command
+	releasing sync.Mutex // ReleaseHeld
+	o         Options
+	st        *Store
+	clk       clock.Clock
+	log       *slog.Logger
+	cmds      map[string]Command
 
 	mu     sync.Mutex
 	last   map[int64]time.Time // the last send to each chat
@@ -453,7 +465,12 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 		return
 	}
 	text := strings.TrimSpace(m.Text)
+	locked := b.o.Lock != nil && b.o.Lock.Locked(ctx)
 	if strings.HasPrefix(text, "/") {
+		if locked && !b.answeredWhenLocked(text) {
+			b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado: só respondo às consultas e ao /destravar.")
+			return
+		}
 		b.command(ctx, u, m, text)
 		return
 	}
@@ -471,6 +488,16 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 			in.ReplyWorkspace, in.ReplyMesa, in.HasReplyWorkspace = ws, mesa, true
 		}
 	}
+	if locked {
+		// kept, and delivered in order when the Mestre is unlocked
+		if err := b.st.Hold(ctx, in); err != nil {
+			b.log.Warn("telegram: a message was not kept while the Mestre is locked", "err", err)
+			b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado e não consegui guardar a mensagem. Mande de novo depois.")
+			return
+		}
+		b.say(ctx, m.Chat.ID, u.ID, "O Mestre está travado: a sua mensagem fica guardada e vai ao Grão-Mestre quando o Dono destravar.")
+		return
+	}
 	if b.o.Router == nil {
 		return
 	}
@@ -478,6 +505,47 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 		b.log.Warn("telegram: the message was not delivered", "err", err)
 		b.say(ctx, m.Chat.ID, u.ID, "Não consegui entregar a mensagem ao Grão-Mestre. Tente de novo em instantes.")
 	}
+}
+
+// answeredWhenLocked says whether the command is one the locked Mestre answers.
+func (b *Bot) answeredWhenLocked(text string) bool {
+	head, _, _ := strings.Cut(text, " ")
+	name, _, _ := strings.Cut(strings.TrimPrefix(head, "/"), "@")
+	if name == "start" {
+		return true
+	}
+	cmd, ok := b.cmds[name]
+	return ok && cmd.Query
+}
+
+// ReleaseHeld delivers, in order, the messages kept while the Mestre was locked
+// (the unlock calls it). It stops at the first that fails and keeps the rest.
+func (b *Bot) ReleaseHeld(ctx context.Context) error {
+	if b.o.Router == nil {
+		return nil
+	}
+	b.releasing.Lock() // two unlocks in a row deliver each message once
+	defer b.releasing.Unlock()
+	held, err := b.st.Held(ctx)
+	if err != nil {
+		return err
+	}
+	for _, h := range held {
+		u, err := b.o.Users.Get(ctx, h.UserID)
+		if err != nil || u.State != users.Active || users.Require(u.Level, users.TalkToGrandMaster) != nil {
+			_ = b.st.Unhold(ctx, h.ID) // the user is gone, or lost the right to talk
+			continue
+		}
+		in := h.Inbound
+		in.User = u
+		if err := b.o.Router.Deliver(ctx, in); err != nil {
+			return err
+		}
+		if err := b.st.Unhold(ctx, h.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // stranger is a sender who is not a user: only a pairing code is looked at.

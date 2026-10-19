@@ -43,6 +43,8 @@ type Handlers struct {
 	PRs PRs
 	// Lease gates every call to GitHub; without it every command is refused.
 	Lease Lease
+	// Locked says the Mestre is locked (/travar): nothing is done on GitHub. nil: never.
+	Locked func(ctx context.Context) bool
 	// Opened is told the PR a table opened (the table keeps its number and head);
 	// nil: nobody is told.
 	Opened func(ctx context.Context, tableKey string, number int, head string) error

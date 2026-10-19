@@ -261,3 +261,52 @@ func (s *Store) MessageOrigin(ctx context.Context, chat, message int64) (workspa
 	}
 	return workspace, mesa, err == nil, err
 }
+
+// HeldMessage is a message kept while the Mestre was locked.
+type HeldMessage struct {
+	ID     int64
+	UserID string
+	Inbound
+}
+
+// Hold keeps a message of a user to the Grand Master.
+func (s *Store) Hold(ctx context.Context, in Inbound) error {
+	has := 0
+	if in.HasReplyWorkspace {
+		has = 1
+	}
+	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_held (user_id, kind, text, chat_id, message_id, reply_to, reply_ws, reply_mesa, has_ws, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			in.User.ID, string(in.Kind), in.Text, in.ChatID, in.MessageID, in.ReplyToMessage, in.ReplyWorkspace, in.ReplyMesa, has, ms(s.Clock.Now()))
+		return err
+	})
+}
+
+// Held lists the messages kept, the oldest first.
+func (s *Store) Held(ctx context.Context) ([]HeldMessage, error) {
+	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, user_id, kind, text, chat_id, message_id, reply_to, reply_ws, reply_mesa, has_ws FROM telegram_held ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HeldMessage
+	for rows.Next() {
+		var h HeldMessage
+		var kind string
+		var has int
+		if err := rows.Scan(&h.ID, &h.UserID, &kind, &h.Text, &h.ChatID, &h.MessageID, &h.ReplyToMessage, &h.ReplyWorkspace, &h.ReplyMesa, &has); err != nil {
+			return nil, err
+		}
+		h.Kind, h.HasReplyWorkspace = Kind(kind), has == 1
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// Unhold forgets a message that was delivered.
+func (s *Store) Unhold(ctx context.Context, id int64) error {
+	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM telegram_held WHERE id = ?`, id)
+		return err
+	})
+}

@@ -155,6 +155,9 @@ type Deps struct {
 	// cannot move the state of a character of another. nil refuses every
 	// event (the safe side).
 	AgentMachine func(ctx context.Context, agentID string) (machine string, ok bool)
+	// Locked says the Mestre is locked (/travar), besides the lock of the Citadel
+	// that acts: the gate of the CLI refuses what starts work. nil: never.
+	Locked func(ctx context.Context) bool
 	// HostOrchestration makes the Citadel host the orchestration (`mestre run`
 	// sets it): the services over the main database of each period, their
 	// commands in the local channel, their loops while the fence lets it act.
@@ -200,6 +203,9 @@ type Engine struct {
 	deps  Deps
 	clk   clock.Clock
 	log   *slog.Logger
+
+	// lockFn is the lock of the period of the Citadel that acts (setLocked).
+	lockFn atomic.Pointer[func(ctx context.Context) bool]
 
 	mdb      *store.DB
 	member   *guild.Member
@@ -653,7 +659,7 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 		profiles = rulesProfiles{src: rules}
 	}
 	hk := e.hookEngine(rules)
-	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker})
+	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker, Locked: e.locked})
 	srv := localchan.NewServer(localchan.Config{
 		Clock: e.clk, Identifier: id, Forwarder: gate, Instance: e.cfg.Instance, EngineVersion: e.deps.Version, Logger: e.log,
 		Local:      map[string]localchan.Handler{localchan.CmdHelp: gate.Help(), localchan.CmdHook: hk},
@@ -828,4 +834,41 @@ func (nobody) Accept(net.Conn, time.Time) (localchan.Peer, error) {
 
 func (nobody) Identify(context.Context, localchan.Peer, string) (localchan.Identity, error) {
 	return localchan.Identity{}, &localchan.IdentifyError{Reason: "this engine runs no terminal"}
+}
+
+// locked says the Mestre is locked: by Deps.Locked or by the lock of the
+// period of the Citadel that acts now.
+func (e *Engine) locked(ctx context.Context) bool {
+	if e.deps.Locked != nil && e.deps.Locked(ctx) {
+		return true
+	}
+	if f := e.lockFn.Load(); f != nil {
+		return (*f)(ctx)
+	}
+	return false
+}
+
+// setLocked gives the engine the lock of the period (nil takes it away).
+func (e *Engine) setLocked(f func(ctx context.Context) bool) {
+	if f == nil {
+		e.lockFn.Store(nil)
+		return
+	}
+	e.lockFn.Store(&f)
+}
+
+// lockRefusal is the lock of the channel at the place where every call meets,
+// the Citadel: a call that came from a Tower did not go through the gate of
+// this machine, and the Tower does not know the lock. ok is false when the
+// command is refused.
+func (e *Engine) lockRefusal(ctx context.Context, cmd string) (localchan.Response, bool) {
+	commands := e.deps.Commands
+	if commands == nil {
+		commands = cli.Default()
+	}
+	spec, found := commands.Get(cmd)
+	if !found || !cli.RefusedWhenLocked(spec.Name) || !e.locked(ctx) {
+		return localchan.Response{}, true
+	}
+	return cli.LockedResponse(), false
 }

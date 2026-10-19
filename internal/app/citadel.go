@@ -504,11 +504,14 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	if e.deps.HostOrchestration {
 		if e.deps.Integration != nil {
 			var err error
-			integ, err = e.deps.Integration.Open(ctx, IntegrationEnv{DB: db, Vault: take.vault, Clock: e.clk, Log: e.log, Machine: e.id.MachineID, Masker: e.deps.Masker})
+			integ, err = e.deps.Integration.Open(ctx, IntegrationEnv{DB: db, Vault: take.vault, Clock: e.clk, Log: e.log, Machine: e.id.MachineID, Masker: e.deps.Masker, SetLocked: e.setLocked})
 			if err != nil {
 				return transition{err: fmt.Errorf("app: the integrations: %w", err)}
 			}
-			defer integ.Close() // before the database is closed (the deferred function above)
+			defer func() {
+				e.setLocked(nil) // the lock of a period is not the next one's
+				integ.Close()    // before the database is closed (the deferred function above)
+			}()
 		}
 		orc, err := e.hostOrchestration(db, integ)
 		if err != nil {

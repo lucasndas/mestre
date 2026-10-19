@@ -16,6 +16,7 @@ import (
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/lockdown"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
@@ -62,9 +63,28 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	}
 	r.users = svc
 	r.alert.Users = svc
-	r.ac = &telegram.ApprovalChannel{Users: svc}
+	r.lock, err = lockdown.New(lockdown.Options{DB: env.DB, Clock: env.Clock, Users: svc, Tell: r.alert.Tell, Logger: env.Log})
+	if err != nil {
+		return nil, fmt.Errorf("app: the lock of the channel: %w", err)
+	}
+	r.pins = &telegram.PINRouter{Users: svc}
+	r.ac = &telegram.ApprovalChannel{Users: svc, PINs: r.pins}
+	r.lc = &telegram.LockChannel{Svc: r.lock, Users: svc, PINs: r.pins}
+	// what was kept while the Mestre was locked goes when it is not
+	r.lock.OnChange(func(locked bool) {
+		if !locked {
+			if bot := r.currentBot(); bot != nil {
+				if err := bot.ReleaseHeld(context.Background()); err != nil {
+					env.Log.Warn("app: the messages kept while the Mestre was locked were not delivered", "err", err)
+				}
+			}
+		}
+	})
+	if env.SetLocked != nil {
+		env.SetLocked(r.lock.Locked)
+	}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
-		Locked: func(context.Context) bool { return false }, Logger: env.Log})
+		Locked: r.lock.Locked, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
@@ -94,6 +114,9 @@ type stdRun struct {
 	ac     *telegram.ApprovalChannel
 	alert  *telegram.OwnerAlerts
 	notice *guild.DownNotice
+	lock   *lockdown.Service
+	pins   *telegram.PINRouter
+	lc     *telegram.LockChannel
 	quota  *github.Quota
 	tokens *github.Tokens
 
@@ -178,8 +201,10 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	}
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
-		Client:  &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP},
-		Actions: r.ac.Actions(), Captures: r.ac.Captures(), Mask: r.env.Masker.Mask,
+		Client:   &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP},
+		Commands: r.lc.Commands(), Lock: r.lock, Mask: r.env.Masker.Mask,
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions()),
+		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
 				f.TelegramConflict()
@@ -190,13 +215,43 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 		return nil, err
 	}
 	r.ac.Bind(bot, r.flow)
+	r.lc.Bind(bot)
 	r.alert.Bind(bot)
 	r.bot = bot
 	return bot, nil
 }
 
+func (r *stdRun) currentBot() *telegram.Bot {
+	r.botMu.Lock()
+	defer r.botMu.Unlock()
+	return r.bot
+}
+
+func mergeActions(ms ...map[string]telegram.Action) map[string]telegram.Action {
+	out := map[string]telegram.Action{}
+	for _, m := range ms {
+		for k, v := range m {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func mergeCaptures(ms ...map[string]telegram.CaptureFunc) map[string]telegram.CaptureFunc {
+	out := map[string]telegram.CaptureFunc{}
+	for _, m := range ms {
+		for k, v := range m {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // Extend implements IntegrationRun: the people of the chain of approval.
-func (r *stdRun) Extend(o *OrchestrationOptions) { o.ChainUsers = r.flow }
+func (r *stdRun) Extend(o *OrchestrationOptions) {
+	o.ChainUsers = r.flow
+	o.Locked = r.lock.Locked
+}
 
 // BindFence implements IntegrationRun.
 func (r *stdRun) BindFence(f *guild.Fence) { r.fence.Store(f) }
@@ -219,7 +274,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	r.chain.Store(orc.Chain)
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
-		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r},
+		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
 	}
 	h.Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {

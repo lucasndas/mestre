@@ -31,6 +31,10 @@ const promptTTL = 10 * time.Minute
 // then bound: the flow needs the channel and the channel needs the flow.
 type ApprovalChannel struct {
 	Users *users.Service
+	// PINs, when set, is where the answer of the PIN of an approval is routed
+	// (the bot has one capture of the PIN for all the actions that ask it);
+	// without it the channel makes that capture itself.
+	PINs *PINRouter
 
 	bot  *Bot
 	flow *approvals.Flow
@@ -49,6 +53,10 @@ func (c *ApprovalChannel) Actions() map[string]Action {
 // Captures are the answers the flow takes by text, for Options.Captures: the
 // text an answer needs and the PIN that confirms an approval.
 func (c *ApprovalChannel) Captures() map[string]CaptureFunc {
+	if c.PINs != nil {
+		c.PINs.On("approval:", c.pinDone)
+		return map[string]CaptureFunc{ApprovalTextKind: c.text}
+	}
 	return map[string]CaptureFunc{ApprovalTextKind: c.text, PINKind: PINCapture(c.Users, c.pinDone)}
 }
 

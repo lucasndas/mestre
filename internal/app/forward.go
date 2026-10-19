@@ -62,6 +62,9 @@ func (f forwarder) forward(ctx context.Context, c *localchan.Call, queue bool) l
 			return errFailover
 		}
 		defer cit.gate.leave()
+		if refusal, ok := e.lockRefusal(ctx, c.Request.Cmd); !ok {
+			return refusal
+		}
 		return e.local.Forward(ctx, c)
 	case tow != nil:
 		link := tow.client.Link()
@@ -280,7 +283,10 @@ func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
 					answer(localchan.Response{Partial: true, Data: data})
 				})
 			}
-			resp := e.local.Forward(bg, lc)
+			resp, ok := e.lockRefusal(bg, call.Cmd)
+			if ok {
+				resp = e.local.Forward(bg, lc)
+			}
 			qresp := resp
 			qresp.V, qresp.ID = call.V, call.ID
 			qr := QueuedResult{OpID: id, AgentID: call.Caller.AgentID, Cmd: call.Cmd, Response: qresp}
