@@ -79,6 +79,7 @@ type Server struct {
 	nextMsg  int64
 	sent     []Sent
 	calls    map[string]int
+	pollGen  int // the long getUpdates in progress; a newer one aborts the older with 409
 	deleted  []Deleted
 	failures map[string][]Failure
 	notify   chan struct{} // closed and replaced on each new update
@@ -278,12 +279,25 @@ func (s *Server) getUpdates(w http.ResponseWriter, r *http.Request, p map[string
 	offset := num(p["offset"])
 	timeout := time.Duration(num(p["timeout"])) * time.Second
 	var t clock.Timer
+	gen := 0
 	if timeout > 0 {
 		t = s.clk.NewTimer(timeout)
 		defer t.Stop()
+		s.mu.Lock()
+		s.pollGen++
+		gen = s.pollGen
+		close(s.notify) // wakes the older long poll, which finds itself replaced
+		s.notify = make(chan struct{})
+		s.mu.Unlock()
 	}
 	for {
 		s.mu.Lock()
+		if gen != 0 && gen != s.pollGen {
+			s.mu.Unlock()
+			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "error_code": 409,
+				"description": "Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"})
+			return
+		}
 		if offset > 0 { // confirm everything before offset
 			keep := s.updates[:0]
 			for _, u := range s.updates {

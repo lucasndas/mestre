@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -233,5 +234,35 @@ func TestTheBotMethodsAreServed(t *testing.T) {
 		if st, _ := call(t, c, m, url.Values{}); st != http.StatusOK {
 			t.Fatalf("%s status %d", m, st)
 		}
+	}
+}
+
+// A long getUpdates that starts aborts the one in progress with 409 Conflict, as
+// the real server does (the lock of the Guild reads it as a sign).
+func TestANewLongGetUpdatesAbortsTheOlderOneWith409(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC))
+	s, c := newServer(t, clk)
+	first := make(chan int, 1)
+	go func() {
+		st, _ := call(t, c, "getUpdates", url.Values{"timeout": {"50"}})
+		first <- st
+	}()
+	for s.Calls("getUpdates") == 0 {
+		runtime.Gosched() // until the first call has started
+	}
+	second := make(chan int, 1)
+	go func() {
+		st, _ := call(t, c, "getUpdates", url.Values{"timeout": {"50"}})
+		second <- st
+	}()
+	if st := <-first; st != http.StatusConflict {
+		t.Fatalf("the older long poll got %d, want 409", st)
+	}
+	if _, err := s.UserSendsText(faketelegram.User{ID: 1, FirstName: "A"}, faketelegram.Chat{ID: 1, Type: "private"}, "oi"); err != nil {
+		t.Fatal(err)
+	}
+	if st := <-second; st != http.StatusOK {
+		t.Fatalf("the newer long poll got %d, want 200 with the update", st)
 	}
 }
