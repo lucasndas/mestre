@@ -246,7 +246,7 @@ func (h handlers) delete(ctx context.Context, c *localchan.Call) localchan.Respo
 	if nerr != nil {
 		return Refusal(nerr)
 	}
-	msg, id := "apagar um pergaminho precisa de pedido explícito de um usuário autorizado; nada foi apagado", int64(0)
+	msg, id := "deleting a scroll needs an explicit request of an authorized user; nothing was deleted", int64(0)
 	if h.ap != nil {
 		var aerr error
 		if id, aerr = h.ap.RequestDelete(ctx, a, n); aerr != nil {

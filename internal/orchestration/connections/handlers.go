@@ -39,9 +39,9 @@ func Refusal(err error) localchan.Response {
 	case errors.As(err, &nc):
 		return localchan.Fail("not_connected", nc.Error(), "ask the Master of the table for the connection")
 	case errors.As(err, &auto):
-		return localchan.Fail("automatic_connection", err.Error(), "ela some sozinha quando o motivo acabar").WithExit(localchan.ExitDenied)
+		return localchan.Fail("automatic_connection", err.Error(), "it goes away by itself when its reason ends").WithExit(localchan.ExitDenied)
 	case errors.Is(err, characters.ErrNoCharacter), errors.Is(err, ErrNotFound):
-		return localchan.Fail("not_visible", err.Error(), "veja `mestre list`")
+		return localchan.Fail("not_visible", err.Error(), "see `mestre list`")
 	case errors.Is(err, ErrGrandMaster), errors.Is(err, ErrLevelDenied):
 		return localchan.Fail("level_denied", err.Error(), "ask who has the level (the Master of the table or the Grand Master)")
 	case errors.Is(err, ErrTableRequired):

@@ -81,7 +81,7 @@ sequenceDiagram
 
 ### Regras de segurança da CLI
 1. **Ações destrutivas** (`note delete`, `ritual delete`, `class delete`, e `table close --cancel`) só rodam se um usuário autorizado pediu explicitamente: o motor procura uma exceção pontual ([decretos](../telegram/decretos.md)) para exatamente aquela ação; sem ela, abre um pedido de aprovação do tipo `acao_destrutiva` aos usuários ([política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md)) e sai com exit 9. O tipo é de risco `alto` ([classificação de risco](../classes/classificacao-de-risco.md#risco-dos-tipos-de-pedido)): o Grão-Mestre só o decide dentro de um decreto `delegation` do Dono para aquele escopo ([delegação](../aprovacoes/delegacao.md)); decreto `policy` não o alcança, e os Mestres de mesa nunca o decidem.
-2. **`dismiss`** só por Mestre da mesa (na própria mesa), Grão-Mestre (ao encerrar uma mesa) e motor. Personagem fixado: exit 3, `pinned`. Alvo ocupado ou sem `done` entregue: o encerramento fica **agendado** para o próximo ponto seguro e a CLI sai com exit 9, `scheduled` (o mesmo vale para `recruit --replace`). Ciclo de vida: [personagens](../orquestracao/personagens.md).
+2. **`dismiss`** só por Mestre da mesa (na própria mesa), Grão-Mestre (qualquer personagem do workspace, menos outro Grão-Mestre; `table close` encerra os da mesa) e motor. Personagem fixado: exit 3, `pinned`. Alvo ocupado ou sem `done` entregue: o encerramento fica **agendado** para o próximo ponto seguro e a CLI sai com exit 9, `scheduled` (o mesmo vale para `recruit --replace`). Ciclo de vida: [personagens](../orquestracao/personagens.md).
 3. **Ninguém interrompe quem trabalha.** Mensagens só são digitadas com o alvo livre ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)). `ask --raw` para alvo ocupado: exit 7, `busy`; para alvo "aguardando permissão": exit 3, `permission_prompt` (permissão se decide pelo `mestre hook` e pelo fluxo de aprovação, nunca por teclas). Recebem o `--raw` o alvo `idle`, o `stuck` e o `blocked` com motivo `input` (tela não reconhecida: é assim que o Mestre da mesa responde a ela), além do terminal de `spawn` ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)); qualquer outro estado não livre (`blocked` por cota, `stopped`…) sai com `busy`.
 4. **Arquivos de outro agente:** não editar o que outro está modificando é regra da camada do Mestre ([personagem](../sessao-zero/personagem.md)) e coordenação do Mestre da mesa ([mesas](../orquestracao/mesas.md)).
 5. **Sem comando livre:** `recruit` e `spawn` só aceitam fichas e bases existentes.
@@ -106,7 +106,7 @@ As variáveis de ambiente vêm da sessão zero do personagem (M4); decretos e ap
 | protocolo incompatível | 5 | `protocol_mismatch` | atualização pendente ([instalacao](../plataforma/instalacao-e-atualizacao.md)) |
 | comando acima do nível | 3 | `level_denied` | peça a quem tem o nível (Mestre da mesa ou Grão-Mestre) |
 | classe não libera | 3 | `class_denied` | peça ao Mestre da mesa |
-| alvo da mesa que não está conectado ao chamador | 3 | `not_connected` | peça a conexão ao Mestre da mesa ([conexões](../orquestracao/conexoes.md)) |
+| alvo da mesa que não está conectado ao chamador | 3 | `not_connected` | pedir a conexão ao Mestre da mesa ([conexões](../orquestracao/conexoes.md)) |
 | alvo invisível ou inexistente | 4 | `not_visible` | veja `mestre list` |
 | encerramento ou troca de alvo ocupado | 9 | `scheduled` | o motor encerra no próximo ponto seguro |
 | flag desconhecida | 2 | `usage` | `mestre <comando> --help` |

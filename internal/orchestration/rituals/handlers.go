@@ -183,7 +183,7 @@ func (s *Service) handleCreate(ctx context.Context, c *localchan.Call) localchan
 		return Refusal(err)
 	}
 	v := s.view(ctx, r)
-	v["text"] = fmt.Sprintf("ritual %s made: %s, next %v", r.Name, r.Schedule.String(), v["next_run"])
+	v["text"] = fmt.Sprintf("ritual %s made: %s, next %v", r.Name, scheduleText(r.Schedule), v["next_run"])
 	return localchan.OK(v)
 }
 
@@ -315,7 +315,7 @@ func (s *Service) handleEdit(ctx context.Context, c *localchan.Call) localchan.R
 		return Refusal(err)
 	}
 	v := s.view(ctx, out)
-	v["text"] = fmt.Sprintf("ritual %s changed: %s, next %v", out.Name, out.Schedule.String(), v["next_run"])
+	v["text"] = fmt.Sprintf("ritual %s changed: %s, next %v", out.Name, scheduleText(out.Schedule), v["next_run"])
 	return localchan.OK(v)
 }
 

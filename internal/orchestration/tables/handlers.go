@@ -49,7 +49,7 @@ func Refusal(err error) localchan.Response {
 	case errors.Is(err, ErrEpicClosed):
 		return localchan.Fail("epic_closed", err.Error(), "reopen the epic or create another").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrTableExists):
-		return localchan.Fail("table_exists", err.Error(), "veja `mestre table list`").WithExit(localchan.ExitConflict)
+		return localchan.Fail("table_exists", err.Error(), "see `mestre table list`").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrNotMerged):
 		return localchan.Fail("not_merged", err.Error(), "o merge do PR precisa estar confirmado; o motor avisa quando estiver").WithExit(localchan.ExitConflict)
 	case errors.As(err, &miss):
@@ -57,7 +57,7 @@ func Refusal(err error) localchan.Response {
 	case errors.Is(err, ErrApprovalRequired):
 		return localchan.Fail("pending", "cancelling a table is a destructive action: it waits for the approval of a user", "the decision arrives in your inbox").WithExit(localchan.ExitPending)
 	case errors.Is(err, ErrNoTable):
-		return localchan.Fail("not_found", err.Error(), "veja `mestre table list`")
+		return localchan.Fail("not_found", err.Error(), "see `mestre table list`")
 	case errors.Is(err, ErrBadTransition):
 		return localchan.Fail("bad_state", err.Error(), "").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrRefMoved):
@@ -78,7 +78,7 @@ func missingResponse(m *MissingError) localchan.Response {
 	if len(m.Decide) > 0 {
 		r = localchan.Fail("unmerged_changes", m.Error(), "ask the users and call `table close` again (with --keep to keep the worktrees)").WithExit(localchan.ExitConflict)
 	} else {
-		r = localchan.Fail("scheduled", m.Error(), "o motor continua o encerramento sozinho e avisa quando terminar").WithExit(localchan.ExitPending)
+		r = localchan.Fail("scheduled", m.Error(), "the engine goes on with the closing by itself and tells you when it ends").WithExit(localchan.ExitPending)
 	}
 	r.Error.Details = map[string]any{"table": m.Table, "decide": orEmpty(m.Decide), "pending": orEmpty(m.Pending)}
 	return r
