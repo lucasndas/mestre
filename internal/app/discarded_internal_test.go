@@ -92,7 +92,11 @@ func TestWhatAMachineErasesWhenItLeavesCoversEveryFileOfItsDiscardedDatabases(t 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	r, err := replication.NewReplica(t.Context(), e.replicaConfig(db))
+	rcfg, err := e.replicaConfig(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := replication.NewReplica(t.Context(), rcfg)
 	if err != nil {
 		t.Fatal(err)
 	}

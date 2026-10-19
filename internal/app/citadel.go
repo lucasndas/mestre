@@ -518,7 +518,16 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		},
 	}
 	var srv *protocol.Server
+	files, err := e.paths.replicationFiles()
+	if err != nil {
+		return transition{err: err}
+	}
+	var cites replication.Cites
+	if files != nil {
+		cites = replicationCites()
+	}
 	primary, err := replication.NewPrimary(ctx, replication.PrimaryConfig{
+		Files: files, Cites: cites,
 		DB: db, Clock: e.clk, Dir: e.paths.snapshots(), Logger: e.log,
 		Roster: replication.RosterFunc(func(ctx context.Context, id string) (bool, error) {
 			m, err := guild.MachineOf(ctx, db, id)

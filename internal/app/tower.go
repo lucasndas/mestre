@@ -64,11 +64,15 @@ func (e *Engine) vaultCopy() *vault.Copier {
 // replicaConfig is the replication of this Tower over its replica db: the copy
 // of the vault, the transfers, and what it erases if the machine leaves the
 // Guild, besides the replica (Paths.leftovers).
-func (e *Engine) replicaConfig(db *store.DB) replication.ReplicaConfig {
+func (e *Engine) replicaConfig(db *store.DB) (replication.ReplicaConfig, error) {
+	files, err := e.paths.replicationFiles()
+	if err != nil {
+		return replication.ReplicaConfig{}, err
+	}
 	return replication.ReplicaConfig{
 		DB: db, Clock: e.clk, GuildID: e.id.GuildID, Vault: e.vaultCopy(),
-		TransferDir: e.paths.transfers(), Leftovers: e.paths.leftovers(), Logger: e.log,
-	}
+		TransferDir: e.paths.transfers(), Leftovers: e.paths.leftovers(), Logger: e.log, Files: files,
+	}, nil
 }
 
 // towerWiper is what a Tower runs when the Citadel tells it to leave the Guild
@@ -110,7 +114,11 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	}
 	e.pruneDiscarded()
 
-	replica, err := replication.NewReplica(ctx, e.replicaConfig(db))
+	rcfg, err := e.replicaConfig(db)
+	if err != nil {
+		return transition{err: err}
+	}
+	replica, err := replication.NewReplica(ctx, rcfg)
 	if err != nil {
 		return transition{err: err}
 	}
