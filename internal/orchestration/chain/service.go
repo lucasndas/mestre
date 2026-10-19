@@ -26,6 +26,14 @@ type Delegations interface {
 	Covers(ctx context.Context, r Request) (bool, error)
 }
 
+// SubDelegations says whether a subdelegation of the Grão-Mestre lets a Mestre
+// da mesa decide a request that is above its ceiling, and is told when it does
+// (docs/aprovacoes/delegacao.md#subdelegação).
+type SubDelegations interface {
+	SubCovers(ctx context.Context, r Request, character string) (bool, error)
+	SubUsed(ctx context.Context, r Request, character string) error
+}
+
 // DelegationRecorder is what a Delegations may also be: told when the Grão-Mestre
 // approved a request on the strength of a delegation, so it registers the use in
 // the decree (docs/telegram/decretos.md#registro).
@@ -50,6 +58,8 @@ type Options struct {
 	Grants      Grants
 	TempRules   TempRules
 	Delegations Delegations
+	// SubDelegations may be nil: the Mestre da mesa decides only its own ceiling.
+	SubDelegations SubDelegations
 	// PRs reads the PRs the conditions of the policy check; without it a
 	// request of a PR is for the people (diff_incompleto).
 	PRs         PRSource
