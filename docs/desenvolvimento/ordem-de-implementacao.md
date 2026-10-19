@@ -144,6 +144,6 @@ Tabela lida pela verificação de docs; é a **única** lista de documentos por 
 
 ## Como usar no dia a dia
 
-- Comece um marco só com o anterior pronto (o M5, só com o M4+ pronto), salvo o Guardião, acima. **Pronto** quer dizer: critérios de aceite das suítes rápida e completa passando **e auditado**.
-- **Auditoria do marco:** antes de o marco seguinte começar, revisores conferem que o teste de cada critério afirma o que o critério diz (não só que existe um teste marcado), olhando primeiro a segurança e os dois sistemas; os achados são corrigidos antes de o marco seguinte começar. A **data** da auditoria (`AAAA-MM-DD`) entra na coluna "Auditoria" da tabela de [marcos](#marcos); é só a data, o relatório não vai para o repositório (histórico fica no controle de versão). A [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) exige a cobertura dos critérios de um marco auditado e recusa código de um marco cujo anterior ficou sem data.
+- Comece um marco só com o anterior pronto (o M5, só com o M4+ pronto), salvo o Guardião, acima. **Pronto** é o da [definição de pronto](convencoes.md#definição-de-pronto).
+- **Auditoria do marco:** a regra está na [definição de pronto](convencoes.md#definição-de-pronto) (item 7); a **data** (`AAAA-MM-DD`) entra na coluna "Auditoria" da tabela de [marcos](#marcos). A [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) exige a cobertura dos critérios de um marco auditado e recusa código de um marco cujo anterior ficou sem data.
 - Dentro do marco, implemente na ordem do grafo de "Depende de"; documentos sem dependência entre si podem andar em paralelo.
