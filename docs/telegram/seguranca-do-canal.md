@@ -45,7 +45,7 @@ Decretos que afrouxam a segurança pedem o PIN do autor. A lista de casos está 
 - **`/destravar`** (só o Dono): pede o PIN pelo Telegram ou é feito pelo painel. Depois de destravar:
   - os decretos voltam ao estado que tinham antes do travamento (os que estavam suspensos por conflito continuam suspensos);
   - a entrega e as missões são retomadas.
-- O estado "travado" fica no banco e sobrevive a reinícios da Cidadela. O Guardião recebe esse estado pela replicação do motor, e o modo reduzido (desde o M7) o respeita ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
+- O estado "travado" fica no banco (`channel_lock`) e sobrevive a reinícios da Cidadela; um erro ao lê-lo vale como travado. As regras efetivas dos personagens são refeitas e reenviadas às Torres quando ele muda. O Guardião recebe esse estado pela replicação do motor, e o modo reduzido (desde o M7) o respeita ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
 
 ### Segredos
 
