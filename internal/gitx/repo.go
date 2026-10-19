@@ -8,10 +8,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/privdir"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // repo is a repository or worktree opened by Real.
@@ -823,4 +825,153 @@ func (r *repo) ExcludeBlock(ctx context.Context, name string) ([]string, error) 
 	}
 	patterns, _ := ParseExcludeBlock(string(content), name)
 	return patterns, nil
+}
+
+// pushTimeout bounds a push: it holds the lock of the repository over the network.
+const pushTimeout = 5 * time.Minute
+
+func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, branch, commit string, force bool) error {
+	if err := ValidateRef(remote); err != nil {
+		return err
+	}
+	if err := CheckURL(remote); err != nil {
+		return fmt.Errorf("push: %w", err)
+	}
+	if err := ValidateBranch(branch); err != nil {
+		return err
+	}
+	if err := ValidateCommit(commit); err != nil {
+		return err
+	}
+	ro, err := r.g.authOpts(&auth)
+	if err != nil {
+		return fmt.Errorf("push %s: %w", RedactURL(remote), err)
+	}
+	ctx, cancel := clock.WithTimeout(ctx, r.g.clk, pushTimeout)
+	defer cancel()
+	// --no-verify: no hook of the repository runs as the engine; --receive-pack
+	// is named here, never read from the configuration. The refspec is the branch
+	// to the branch of the same name: nothing else.
+	args := []string{"push", "--no-verify", "--recurse-submodules=no", "--receive-pack=git-receive-pack"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, "--", remote, commit+":refs/heads/"+branch)
+	return r.mutate(ctx, func() error {
+		_, err := r.run(ctx, ro, args...)
+		if err == nil {
+			return nil
+		}
+		return fmt.Errorf("push %s: %w", RedactURL(remote), classifyPush(err))
+	})
+}
+
+// classifyPush tells what the remote said. Only what the remote says counts (the
+// lines that start with "remote:", and the verdict at the end of a rejected
+// line): the names of the refs are in the text too, and a branch can be called
+// anything.
+func classifyPush(err error) error {
+	var ge *Error
+	if !errors.As(err, &ge) {
+		return err
+	}
+	var remote strings.Builder
+	rejected := ""
+	for _, l := range strings.Split(ge.Stderr, "\n") {
+		l = strings.TrimSpace(l)
+		switch {
+		case strings.HasPrefix(l, "remote:"):
+			remote.WriteString(strings.ToLower(strings.TrimSpace(strings.TrimPrefix(l, "remote:"))) + "\n")
+		case strings.HasPrefix(l, "!") && strings.HasSuffix(l, ")"):
+			rejected = strings.ToLower(l[strings.LastIndexByte(l, '(')+1 : len(l)-1])
+		}
+	}
+	said := remote.String()
+	contains := func(subs ...string) bool {
+		for _, s := range subs {
+			if strings.Contains(said, s) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case strings.Contains(said, "workflow") && contains("permission", "scope"):
+		return as(ErrPushWorkflow, err)
+	case contains("verified signatures", "must have valid signatures"):
+		return as(ErrPushSignature, err)
+	case contains("protected branch", "gh006", "gh013", "repository rule violations"):
+		return as(ErrPushProtected, err)
+	case rejected == "non-fast-forward" || rejected == "fetch first":
+		return as(ErrNotFastForward, err)
+	case strings.HasSuffix(rejected, "hook declined"):
+		return as(ErrPushProtected, err)
+	case rejected != "":
+		return as(ErrPushRejected, err)
+	}
+	return err
+}
+
+func (r *repo) AddedLines(ctx context.Context, base, head string) ([]AddedLine, error) {
+	a, err := r.ResolveRef(ctx, base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.ResolveRef(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	rng := string(a) + "..." + string(b)
+	// the size first (a few bytes per file), so a huge file is not read into memory
+	stat, err := r.git(ctx, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--ignore-submodules=all", "--text", "--numstat", rng, "--")
+	if err != nil {
+		return nil, fmt.Errorf("diff %s...%s: %w", base, head, err)
+	}
+	total := 0
+	for _, l := range strings.Split(string(stat), "\n") {
+		if f := strings.Fields(l); len(f) >= 2 {
+			n, _ := strconv.Atoi(f[0])
+			total += n
+		}
+	}
+	if total > MaxAddedLines {
+		return nil, fmt.Errorf("%w: %d lines added (at most %d)", ErrDiffTooLarge, total, MaxAddedLines)
+	}
+	out, err := r.git(ctx, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--ignore-submodules=all", "--text", "--unified=0", "--no-prefix", rng, "--")
+	if err != nil {
+		return nil, fmt.Errorf("diff %s...%s: %w", base, head, err)
+	}
+	return ParseAddedLines(out), nil
+}
+
+func (r *repo) AddedLinesEach(ctx context.Context, base, head string) ([]AddedLine, error) {
+	a, err := r.ResolveRef(ctx, base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.ResolveRef(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	rng := string(a) + ".." + string(b)
+	common := []string{"--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--ignore-submodules=all", "--text", "-m", "--first-parent", "--format="}
+	stat, err := r.git(ctx, append(append([]string{"log"}, common...), "--numstat", rng, "--")...)
+	if err != nil {
+		return nil, fmt.Errorf("log %s..%s: %w", base, head, err)
+	}
+	total := 0
+	for _, l := range strings.Split(string(stat), "\n") {
+		if f := strings.Fields(l); len(f) >= 2 {
+			n, _ := strconv.Atoi(f[0])
+			total += n
+		}
+	}
+	if total > MaxAddedLines {
+		return nil, fmt.Errorf("%w: %d lines added (at most %d)", ErrDiffTooLarge, total, MaxAddedLines)
+	}
+	out, err := r.git(ctx, append(append([]string{"log"}, common...), "-p", "--unified=0", "--no-prefix", rng, "--")...)
+	if err != nil {
+		return nil, fmt.Errorf("log %s..%s: %w", base, head, err)
+	}
+	return ParseAddedLines(out), nil
 }

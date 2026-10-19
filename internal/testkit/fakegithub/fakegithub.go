@@ -139,6 +139,10 @@ func (s *Server) Actions() []Action {
 // ServeHTTP serves the REST API.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := r.Method + " " + r.URL.Path
+	if r.URL.Path == "/graphql" && r.Method == http.MethodPost {
+		s.serveGraphQL(w, r)
+		return
+	}
 	if s.serveApps(w, r) || s.serveGit(w, r) || s.serveIssues(w, r) {
 		return
 	}

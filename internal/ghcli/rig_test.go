@@ -11,12 +11,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/testkit/fakegit"
 	"github.com/lucasndas/mestre/internal/testkit/fakegithub"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
@@ -42,6 +45,84 @@ func (t tables) Epic(_ context.Context, table string) (github.TableRef, bool, er
 }
 
 type repos struct{}
+
+// branches is the mirror of the Citadel: the branch of the table is in it.
+type branches struct {
+	git    *fakegit.Git
+	mirror string
+	remote string
+	// name is the branch the Citadel says is the table's (default 42-login).
+	name *string
+}
+
+func (b branches) Prepare(ctx context.Context, _ string) (github.Branch, error) {
+	repo, err := b.git.Open(ctx, b.mirror)
+	if err != nil {
+		return github.Branch{}, err
+	}
+	name := "42-login"
+	if b.name != nil && *b.name != "" {
+		name = *b.name
+	}
+	head, err := repo.ResolveRef(ctx, name)
+	if err != nil {
+		return github.Branch{}, err
+	}
+	return github.Branch{Repo: repo, Name: name, Base: "main", BaseBranch: "main", Head: string(head), Remote: b.remote}, nil
+}
+
+// pushAuth gives the credentials of the push and remembers whether the
+// permission of the workflows was asked.
+type pushAuth struct {
+	mu        sync.Mutex
+	workflows []bool
+	// onAuth runs when the credentials are asked, after the change was read and
+	// before the push (another sync of the table).
+	onAuth func()
+}
+
+func (p *pushAuth) PushAuth(_ context.Context, _ string, workflows bool) (gitx.Auth, error) {
+	if p.onAuth != nil {
+		p.onAuth()
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.workflows = append(p.workflows, workflows)
+	return gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushTokenOfTheTestRig0123456789"), nil
+}
+
+// workflowsFake is the policy of the classes for the workflows and the approvals.
+type workflowsFake struct {
+	mu       sync.Mutex
+	policy   map[string]classes.Workflows
+	approved map[string]bool // by head
+	asked    []string
+}
+
+func (w *workflowsFake) Policy(_ context.Context, class string) (classes.Workflows, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.policy[class], nil // never by default
+}
+
+func (w *workflowsFake) Approved(_ context.Context, _, _, head string) (bool, int64, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.asked = append(w.asked, head)
+	return w.approved[head], 77, nil
+}
+
+// criteriaFake says which criteria have no proof.
+type criteriaFake struct {
+	mu   sync.Mutex
+	open []string
+}
+
+func (c *criteriaFake) Unproven(context.Context, string) ([]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.open...), nil
+}
 
 // lease is the lease of the tests: valid, or expired with a queue.
 type lease struct {
@@ -152,6 +233,14 @@ type rig struct {
 	prs   prs
 	lease *lease
 	clk   *clock.Fake
+	// the sending of the branch
+	git      *fakegit.Git
+	mirror   *fakegit.Repo
+	remote   string
+	auth     *pushAuth
+	wf       *workflowsFake
+	criteria *criteriaFake
+	branch   *string
 	// onFiles: see clients.
 	onFiles *func()
 }
@@ -181,6 +270,7 @@ func newRig(t *testing.T) *rig {
 	cs := chars{
 		"tm":  {ID: "tm", Role: characters.RoleTableMaster, Workspace: "meu-app", Table: "42-login", Class: "mestre-da-mesa"},
 		"qa":  {ID: "qa", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "qa"},
+		"rev": {ID: "rev", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "revisor"},
 		"dev": {ID: "dev", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "dev"},
 		"gm":  {ID: "gm", Role: characters.RoleGrandMaster, Workspace: "meu-app"},
 	}
@@ -188,7 +278,24 @@ func newRig(t *testing.T) *rig {
 	quota := &github.Quota{Clock: clk}
 	onFiles := new(func())
 	ls := &lease{}
-	h := &ghcli.Handlers{PRs: pr, Lease: ls, Characters: cs, Quota: quotaOf{quota}, Clients: clients{gh, onFiles, quota}, Repos: repos{}, Tables: tables{"meu-app/42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
+	git := fakegit.NewGit(clk)
+	root := t.TempDir()
+	mirrorDir, remoteDir := filepath.Join(root, "espelho.git"), filepath.Join(root, "github.git")
+	for _, d := range []string{mirrorDir, remoteDir} {
+		if _, err := git.Init(ctx, d, gitx.InitOptions{Bare: true, InitialBranch: "main"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mirror := git.Handle(mirrorDir).Data()
+	mirror.Commit("main", "chore: initial", map[string]string{"README.md": "# Meu App\n", ".github/workflows/ci.yml": "name: ci\n"})
+	if err := mirror.Branch("42-login", "main"); err != nil {
+		t.Fatal(err)
+	}
+	mirror.Commit("42-login", "feat: login", map[string]string{"src/login.ts": "export const timeout = 30\n"})
+	branch := new(string)
+	auth, wf, crit := &pushAuth{}, &workflowsFake{policy: map[string]classes.Workflows{}, approved: map[string]bool{}}, &criteriaFake{}
+	send := github.Sending{Branches: branches{git: git, mirror: mirrorDir, remote: remoteDir, name: branch}, Auth: auth, Workflows: wf, Criteria: crit}
+	h := &ghcli.Handlers{PRs: pr, Lease: ls, Send: send, Opened: func(_ context.Context, key string, n int, _ string) error { pr[key] = n; return nil }, Characters: cs, Quota: quotaOf{quota}, Clients: clients{gh, onFiles, quota}, Repos: repos{}, Tables: tables{"meu-app/42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
 	fwd := localchan.NewLocalForwarder()
 	h.Register(fwd)
 	profiles := cli.ProfilesFunc(func(_ context.Context, id string) cli.Profile {
@@ -197,12 +304,12 @@ func newRig(t *testing.T) *rig {
 			return cli.Profile{Role: cli.RoleTableMaster}
 		case "gm":
 			return cli.Profile{Role: cli.RoleGrandMaster}
-		case "qa":
+		case "qa", "rev":
 			return cli.Profile{Role: cli.RoleCharacter, AllowsCLI: func(c string) bool { return len(c) > 6 && c[:6] == "issue " || len(c) > 3 && c[:3] == "pr " }}
 		}
 		return cli.Profile{Role: cli.RoleCharacter}
 	})
-	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, git: git, mirror: mirror, remote: remoteDir, auth: auth, wf: wf, criteria: crit, branch: branch, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
 }
 
 // result is the answer of a command.
@@ -247,3 +354,22 @@ func (r *rig) runID(id, who, cmd string, flags map[string]any, args ...string) r
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// gitxErr is the refusal of a push, by what GitHub said.
+func gitxErr(kind string) error {
+	switch kind {
+	case "workflow":
+		return gitx.ErrPushWorkflow
+	case "signature":
+		return gitx.ErrPushSignature
+	case "protected":
+		return gitx.ErrPushProtected
+	}
+	return gitx.ErrNotFastForward
+}
+
+// claim makes a class the owner of a block of the PR.
+func claim(r *rig, pr int, block, class string) error {
+	_, err := r.objs.DB.Writer().ExecContext(r.ctx, `INSERT INTO pr_blocks (repo, pr, name, class) VALUES (?, ?, ?, ?) ON CONFLICT (repo, pr, name) DO UPDATE SET class = excluded.class`, repoFull, pr, block, class)
+	return err
+}

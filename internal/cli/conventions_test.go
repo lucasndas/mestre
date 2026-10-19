@@ -34,7 +34,6 @@ func futureCommands() []cli.Spec {
 		mk("gh", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		mk("app", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		notify,
-		mk("pr open", cli.GroupGitHub, cli.WhoAnyone),
 	}
 }
 
@@ -330,7 +329,7 @@ func TestHelpListsOnlyWhatTheCallerMayUse(t *testing.T) {
 				t.Errorf("an ordinary character sees %q in the help: %v", h, alice)
 			}
 		}
-		for _, want := range []string{"list", "ask", "help", "debug", "done", "pr open"} {
+		for _, want := range []string{"list", "ask", "help", "debug", "done"} {
 			if !slices.Contains(alice, want) {
 				t.Errorf("an ordinary character does not see %q: %v", want, alice)
 			}

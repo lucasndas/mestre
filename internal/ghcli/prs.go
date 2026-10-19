@@ -3,6 +3,7 @@ package ghcli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -133,4 +134,78 @@ func (h *Handlers) prNote(ctx context.Context, c *localchan.Call) localchan.Resp
 		return refusal(err)
 	}
 	return localchan.OK(map[string]any{"number": n, "comment_id": id})
+}
+
+func (h *Handlers) prOpen(ctx context.Context, c *localchan.Call) localchan.Response {
+	who, bad := h.caller(ctx, c)
+	if bad != nil {
+		return *bad
+	}
+	if who.actor.Kind != github.ActorTable {
+		return localchan.Fail("table_required", "the pull request commands are for the characters of a table", "")
+	}
+	in := github.POpen{Class: who.char.Class, Draft: flagBool(c, "draft"), Op: c.Request.ID}
+	in.Title, _ = flagString(c, "title")
+	in.Body, _ = flagString(c, "body")
+	if h.PRs != nil {
+		n, ok, err := h.PRs.PRNumber(ctx, who.actor.Table)
+		if err != nil {
+			return localchan.Fail(localchan.CodeInternal, "the pull request of the table could not be read", "")
+		}
+		if ok {
+			in.Existing = n
+		}
+	}
+	got, err := who.prs.Open(ctx, who.actor, who.repo, in)
+	var part *github.PartialError
+	if errors.As(err, &part) && part.Kind == "pull request" && h.Opened != nil {
+		// the PR exists: the table must know it, so that it is not opened twice
+		_ = h.Opened(ctx, who.actor.Table, part.Number, "")
+	}
+	if err != nil {
+		return refusal(err)
+	}
+	if h.Opened != nil {
+		if err := h.Opened(ctx, who.actor.Table, got.Number, got.HeadSHA); err != nil {
+			return localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the pull request #%d was opened but the table was not told", got.Number), "tell the Grand Master")
+		}
+	}
+	return localchan.OK(map[string]any{"number": got.Number, "url": got.URL, "head_sha": got.HeadSHA})
+}
+
+func (h *Handlers) prUpdate(ctx context.Context, c *localchan.Call) localchan.Response {
+	who, bad := h.caller(ctx, c)
+	if bad != nil {
+		return *bad
+	}
+	n, bad := h.tablePR(ctx, who)
+	if bad != nil {
+		return *bad
+	}
+	in := github.PUpdate{Class: who.char.Class, Force: flagBool(c, "force"), Ready: flagBool(c, "ready")}
+	if v, ok := flagString(c, "title"); ok {
+		in.Title = &v
+	}
+	if v, ok := flagString(c, "body"); ok {
+		in.Body = &v
+	}
+	if name, ok := flagString(c, "block"); ok {
+		args, _ := c.Request.Strings()
+		if len(args) != 1 {
+			return usage("--block takes the text of the block")
+		}
+		in.Block, in.BlockText = name, args[0]
+		in.ExpectHead, _ = flagString(c, "expect-head")
+		if in.ExpectHead == "" {
+			return usage("--block takes --expect-head <sha>")
+		}
+		if in.Title != nil || in.Body != nil || in.Force || in.Ready {
+			return usage("--block is used alone")
+		}
+	}
+	got, err := who.prs.Update(ctx, who.actor, who.repo, n, in)
+	if err != nil {
+		return refusal(err)
+	}
+	return localchan.OK(map[string]any{"number": got.Number, "url": got.URL, "head_sha": got.HeadSHA})
 }

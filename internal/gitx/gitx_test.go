@@ -346,3 +346,65 @@ func TestRefValidationRejectsOptions(t *testing.T) {
 		t.Error("open range accepted")
 	}
 }
+
+func TestParseAddedLinesReadsTheLinesOfTheHunks(t *testing.T) {
+	t.Parallel()
+	diff := "diff --git a.go a.go\n--- a.go\n+++ a.go\n@@ -3,0 +4,2 @@ func x()\n+\tfoo()\n+++ not a header\n@@ -9 +11 @@\n-old\n+new\n" +
+		"diff --git \"d\\303\\251.txt\" \"d\\303\\251.txt\"\nnew file mode 100644\n--- /dev/null\n+++ \"d\\303\\251.txt\"\n@@ -0,0 +1 @@\n+hello\n" +
+		"diff --git gone.go gone.go\ndeleted file mode 100644\n--- gone.go\n+++ /dev/null\n@@ -1 +0,0 @@\n-bye\n" +
+		"diff --git bin.png bin.png\nBinary files differ\n"
+	got := gitx.ParseAddedLines([]byte(diff))
+	want := []gitx.AddedLine{{Path: "a.go", Line: 4, Text: "\tfoo()"}, {Path: "a.go", Line: 5, Text: "++ not a header"}, {Path: "a.go", Line: 11, Text: "new"}, {Path: "dé.txt", Line: 1, Text: "hello"}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// The refusal of a push is read from what the remote says, not from the names of
+// the refs, which anybody can choose.
+func TestThePushRefusalIsReadFromWhatTheRemoteSays(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		stderr string
+		want   error
+	}{
+		"protected":   {"remote: error: GH006: Protected branch update failed for refs/heads/x.\n ! [remote rejected] x -> x (protected branch hook declined)\n", gitx.ErrPushProtected},
+		"non-ff":      {"To /tmp/r.git\n ! [rejected]        mesa -> mesa (non-fast-forward)\nerror: failed to push some refs\n", gitx.ErrNotFastForward},
+		"fetch first": {"To /tmp/r.git\n ! [rejected]        mesa -> mesa (fetch first)\n", gitx.ErrNotFastForward},
+		// a branch called as a refusal of the remote does not make one
+		"a branch named protected branch":    {"To /tmp/r.git\n ! [rejected]        protected-branch -> protected-branch (non-fast-forward)\n", gitx.ErrNotFastForward},
+		"a branch named workflow permission": {"To /tmp/r.git\n ! [rejected]        workflow-permission-x -> workflow-permission-x (non-fast-forward)\n", gitx.ErrNotFastForward},
+		"a branch named declined":            {"To /tmp/r.git\n ! [rejected]        declined -> declined (fetch first)\n", gitx.ErrNotFastForward},
+		"workflows":                          {"remote: refusing to allow a GitHub App to create or update workflow `.github/workflows/ci.yml` without `workflows` permission\n", gitx.ErrPushWorkflow},
+		"signatures":                         {"remote: error: GH013: Repository rule violations found for refs/heads/x.\nremote: - Commits must have verified signatures.\n", gitx.ErrPushSignature},
+		"ruleset":                            {"remote: error: GH013: Repository rule violations found for refs/heads/x.\nremote: - Cannot update this protected ref.\n", gitx.ErrPushProtected},
+		"another refusal":                    {" ! [remote rejected] x -> x (some other reason)\n", gitx.ErrPushRejected},
+	} {
+		if got := gitx.ClassifyPush(tc.stderr); !errors.Is(got, tc.want) {
+			t.Errorf("%s: %v, want %v", name, got, tc.want)
+		}
+	}
+	// a text of no refusal stays what it is
+	if got := gitx.ClassifyPush("fatal: unable to access 'https://x/': Could not resolve host\n"); errors.Is(got, gitx.ErrPushRejected) || errors.Is(got, gitx.ErrPushProtected) {
+		t.Errorf("a network error read as a refusal: %v", got)
+	}
+}
+
+func TestBranchNames(t *testing.T) {
+	t.Parallel()
+	for _, ok := range []string{"mesa", "42-login", "mestre/42-login", "a.b", "x+y", "ü"} {
+		if err := gitx.ValidateBranch(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "-f", "a..b", "a b", "a:b", "a?", "a*", "a[", "a\\b", "a~1", "a^", "a@{1}", "@", "/a", "a/", "a//b", "a.lock", "a/.b", "a.", "refs/heads/x", "a\x00b", "a\nb", "a\x7f"} {
+		if err := gitx.ValidateBranch(bad); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}

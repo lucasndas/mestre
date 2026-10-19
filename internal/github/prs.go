@@ -19,6 +19,8 @@ type PullAPI interface {
 	PullFiles(ctx context.Context, repo string, n int) ([]PullFile, error)
 	CreateReviewComment(ctx context.Context, repo string, n int, sha, path string, line int, body string) (int64, error)
 	ReplyReviewComment(ctx context.Context, repo string, n int, id int64, body string) (int64, error)
+	CreatePull(ctx context.Context, repo, title, body, head, base string, draft bool) (PullData, error)
+	MarkReady(ctx context.Context, repo, nodeID string) error
 }
 
 var _ PullAPI = (*REST)(nil)
@@ -29,6 +31,8 @@ type PRService struct {
 	API     PullAPI
 	Objects *Objects
 	Tables  Tables
+	// Send is what `pr open` and `pr update` need to send the branch.
+	Send Sending
 }
 
 func (s *PRService) guard() *Guard { return &Guard{Objects: s.Objects, GH: s.API, Tables: s.Tables} }

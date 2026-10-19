@@ -330,3 +330,48 @@ func ParseRevs(rev string) (base, tip string, err error) {
 	}
 	return "", rev, nil
 }
+
+// ParseAddedLines reads the output of `git diff --unified=0 --no-prefix`: the
+// lines of the hunks that start with "+", with their path and number in the new
+// version. The header of a file ("+++ path") is told from a line added by its
+// place: before the first hunk of the file.
+func ParseAddedLines(diff []byte) []AddedLine {
+	var out []AddedLine
+	var path string
+	inHunk := false
+	line := 0
+	for _, l := range strings.Split(string(diff), "\n") {
+		switch {
+		case strings.HasPrefix(l, "diff --git "):
+			inHunk, path = false, ""
+		case !inHunk && strings.HasPrefix(l, "+++ "):
+			path = strings.TrimSuffix(strings.TrimPrefix(l, "+++ "), "\t") // git adds a tab after a name with a space
+			if q, err := strconv.Unquote(path); err == nil && strings.HasPrefix(path, "\"") {
+				path = q // a name with special characters comes quoted
+			}
+			if path == "/dev/null" {
+				path = ""
+			}
+		case strings.HasPrefix(l, "@@"):
+			inHunk = true
+			// @@ -a,b +c,d @@
+			f := strings.Fields(l)
+			if len(f) < 3 {
+				continue
+			}
+			start := strings.TrimPrefix(f[2], "+")
+			if i := strings.IndexByte(start, ','); i >= 0 {
+				start = start[:i]
+			}
+			n, err := strconv.Atoi(start)
+			if err != nil {
+				continue
+			}
+			line = n
+		case inHunk && strings.HasPrefix(l, "+") && path != "":
+			out = append(out, AddedLine{Path: path, Line: line, Text: l[1:]})
+			line++
+		}
+	}
+	return out
+}

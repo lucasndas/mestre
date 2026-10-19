@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -42,6 +43,11 @@ type Handlers struct {
 	PRs PRs
 	// Lease gates every call to GitHub; without it every command is refused.
 	Lease Lease
+	// Opened is told the PR a table opened (the table keeps its number and head);
+	// nil: nobody is told.
+	Opened func(ctx context.Context, tableKey string, number int, head string) error
+	// Send is what `pr open` and `pr update` need to send the branch.
+	Send github.Sending
 	// Quota, when set, holds what changes data back while the App is low.
 	Quota      Quota
 	Characters Characters
@@ -57,6 +63,7 @@ func (h *Handlers) Register(fwd *localchan.LocalForwarder) {
 	for name, f := range map[string]handler{
 		"issue list": h.read(h.issueList), "pr status": h.read(h.prStatus),
 		"issue create": h.write("issue create", h.issueCreate), "issue update": h.write("issue update", h.issueUpdate), "issue comment": h.write("issue comment", h.issueComment),
+		"pr open": h.write("pr open", h.prOpen), "pr update": h.write("pr update", h.prUpdate),
 		"pr comment": h.write("pr comment", h.prComment), "pr reply": h.write("pr reply", h.prReply), "pr note": h.write("pr note", h.prNote),
 	} {
 		fwd.Handle(name, localchan.HandlerFunc(f))
@@ -115,7 +122,7 @@ func (h *Handlers) caller(ctx context.Context, c *localchan.Call) (caller, *loca
 		return fail("github_unavailable", "GitHub is not available for this character now", "try again later")
 	}
 	out.svc = &github.IssueService{API: api, Objects: h.Objects, Tables: h.Tables, Clock: h.Clock}
-	out.prs = &github.PRService{API: api, Objects: h.Objects, Tables: h.Tables}
+	out.prs = &github.PRService{API: api, Objects: h.Objects, Tables: h.Tables, Send: h.Send}
 	return out, nil
 }
 
@@ -124,10 +131,44 @@ func refusal(err error) localchan.Response {
 	var ref *github.Refusal
 	var lim *github.LimitError
 	var part *github.PartialError
+	var sec *github.SecretError
+	var pending *github.ApprovalPendingError
+	var crit *github.CriteriaError
+	var moved *github.HeadChangedError
 	switch {
+	case errors.As(err, &sec):
+		return localchan.Fail("secret_detected", sec.Error(), "take the secret out of the files and commit again; it is not shown here")
+	case errors.Is(err, github.ErrWorkflowNotAllowed):
+		return localchan.Fail("workflow_not_allowed", "your class does not send changes in .github/workflows", "ask the Grand Master to ask the users whether the class may")
+	case errors.Is(err, github.ErrWorkflowPermission), errors.Is(err, gitx.ErrPushWorkflow):
+		return localchan.Fail("workflow_permission", "GitHub refused the sending: the App has no Workflows permission", "tell the Grand Master; the Owner accepts the permission on GitHub")
+	case errors.As(err, &pending):
+		return localchan.Fail("approval_pending", fmt.Sprintf("the sending of the workflows waits for the approval of a user (request #%d)", pending.Request), "run the command again after the approval")
+	case errors.Is(err, gitx.ErrPushSignature):
+		return localchan.Fail("signature_required", "the rules of the repository ask for signed commits, and the commits of the Mestre are not", "tell the Grand Master")
+	case errors.Is(err, gitx.ErrPushProtected), errors.Is(err, gitx.ErrPushRejected):
+		return localchan.Fail("protected", "GitHub refused the sending: a protection or a ruleset of the repository", "nothing is worked around")
+	case errors.Is(err, gitx.ErrNotFastForward):
+		return localchan.Fail("conflict", "the branch on GitHub has commits yours does not", "update the branch in the table, in the step sync")
+	case errors.Is(err, gitx.ErrDiffTooLarge):
+		return localchan.Fail("too_large", "the change is too large to be checked before it is sent", "split it")
+	case errors.As(err, &crit):
+		return localchan.Fail("criteria_unproven", crit.Error(), "prove them with a fix mission, or take the criterion out of the issue")
+	case errors.As(err, &moved):
+		return localchan.Fail("head_changed", "the head of the pull request is now "+moved.Head, "read the pull request again and repeat")
+	case errors.Is(err, github.ErrBlockOwned):
+		return localchan.Fail("block_owned", err.Error(), "")
+	case errors.Is(err, github.ErrPRExists):
+		return localchan.Fail("pr_exists", "your table already has a pull request", "use mestre pr update")
+	case errors.Is(err, github.ErrNoPushSetup):
+		return localchan.Fail("github_unavailable", "the engine can not send the branch of the table now", "try again later")
 	case errors.As(err, &part):
 		// the issue exists: say so, so that the command is not repeated
-		msg := fmt.Sprintf("the issue #%d was created but its setup did not end (%s); do not create it again", part.Number, setupStage(part))
+		kind := part.Kind
+		if kind == "" {
+			kind = "issue"
+		}
+		msg := fmt.Sprintf("the %s #%d was created but its setup did not end (%s); do not create it again", kind, part.Number, setupStage(part))
 		return localchan.Fail("github_unavailable", msg, "tell the Grand Master")
 	case errors.As(err, &ref):
 		code := ref.Code
@@ -136,6 +177,11 @@ func refusal(err error) localchan.Response {
 			return localchan.Fail("outside_epic", ref.Message, "ask the Grand Master")
 		case github.CodeReservedLabel:
 			return localchan.Fail("reserved_label", ref.Message, "")
+		case github.CodeForce:
+			if strings.Contains(ref.Message, "principal") {
+				return localchan.Fail("force_main_denied", ref.Message, "a forced push is only on the branch of the table")
+			}
+			return localchan.Fail("level_denied", ref.Message, "")
 		}
 		return localchan.Fail(code, ref.Message, "")
 	case errors.As(err, &lim):
