@@ -41,8 +41,28 @@ type Definition struct {
 	Name string `yaml:"name" json:"name"`
 	// MaxReturns is how many times a step may hand the work back; nil is
 	// DefaultMaxReturns.
-	MaxReturns *int      `yaml:"max_returns,omitempty" json:"max_returns,omitempty"`
-	Steps      []StepDef `yaml:"steps" json:"steps"`
+	MaxReturns *int `yaml:"max_returns,omitempty" json:"max_returns,omitempty"`
+	// Issue is an issue of the epic the Master of the table already made
+	// (`mestre issue create`): the quest uses it instead of making another
+	// (docs/orquestracao/prova-e-devolucao.md#campos-que-a-missão-ganha).
+	Issue int `yaml:"issue,omitempty" json:"issue,omitempty"`
+	// SameFailure is how many failures in a row with the same fingerprint
+	// pause the quest; nil is DefaultSameFailure.
+	SameFailure *int      `yaml:"same_failure,omitempty" json:"same_failure,omitempty"`
+	Steps       []StepDef `yaml:"steps" json:"steps"`
+}
+
+// DefaultSameFailure is the failures in a row with the same fingerprint that
+// pause a quest.
+const DefaultSameFailure = 3
+
+// SameMax is the failures in a row with the same fingerprint that pause the
+// quest.
+func (d Definition) SameMax() int {
+	if d.SameFailure == nil {
+		return DefaultSameFailure
+	}
+	return *d.SameFailure
 }
 
 // StepDef is one step of a quest.
@@ -216,6 +236,12 @@ func (d Definition) Validate() error {
 	}
 	if d.MaxReturns != nil && *d.MaxReturns < 0 {
 		add("", "max_returns cannot be negative")
+	}
+	if d.Issue < 0 {
+		add("", "issue is not the number of an issue")
+	}
+	if d.SameFailure != nil && *d.SameFailure < 2 {
+		add("", "same_failure needs at least 2")
 	}
 	if len(d.Steps) == 0 {
 		add("", "the quest has no steps")

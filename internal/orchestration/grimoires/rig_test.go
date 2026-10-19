@@ -52,6 +52,7 @@ func (h *hub) CreateSubIssue(_ context.Context, _ string, _ int, _, _ string) (i
 	return 100 + h.next, nil
 }
 
+func (*hub) IssueBody(context.Context, string, int) (string, error)       { return "", nil }
 func (*hub) UpdateBody(context.Context, string, int, string) error        { return nil }
 func (*hub) Comment(context.Context, string, int, string, string) error   { return nil }
 func (*hub) Close(context.Context, string, int, quests.CloseReason) error { return nil }

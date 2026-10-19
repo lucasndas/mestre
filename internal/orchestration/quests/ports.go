@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
@@ -38,6 +39,15 @@ type Inbox interface {
 type Scrolls interface {
 	Ensure(ctx context.Context, workspace, table, name, content string) (scrolls.Note, error)
 	AppendSection(ctx context.Context, workspace, table, name, section string) (scrolls.Note, error)
+	// Read gives the content of a scroll (the review scroll of a quest).
+	Read(ctx context.Context, r scrolls.ReadRequest) (scrolls.Note, string, error)
+}
+
+// DoneRules gives the done_requires of the class of a character
+// (docs/orquestracao/prova-e-devolucao.md#o-done-que-a-classe-exige). Nil:
+// no class asks for anything.
+type DoneRules interface {
+	DoneRequires(ctx context.Context, workspace, table, class string) (classes.DoneRequires, error)
 }
 
 // Connections are the connections of the quest (*connections.Service).
@@ -112,6 +122,9 @@ type GitHub interface {
 	Comment(ctx context.Context, workspace string, number int, class, body string) error
 	// Close closes an issue.
 	Close(ctx context.Context, workspace string, number int, reason CloseReason) error
+	// IssueBody reads the body of an issue (the criteria of a quest that
+	// uses an issue the Master of the table made).
+	IssueBody(ctx context.Context, workspace string, number int) (string, error)
 }
 
 // MissionPoint is the request of an approval point of a quest: the type

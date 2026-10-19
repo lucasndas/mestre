@@ -70,6 +70,12 @@ done_requires:
 - Da segunda passada da etapa que revisa em diante (depois de uma devolução), o item `quest` dela traz o conteúdo atual do pergaminho de revisão antes das instruções, com a ordem de conferir cada achado `aberto` ou `não corrigido` antes de qualquer revisão nova; o da etapa que recebe a devolução traz os achados dela. Quem edita usa `mestre note edit --expect-rev`, para não apagar a edição de outro.
 - O motor não interpreta a tabela: ele cria, conecta e entrega. A disciplina de revisão é da classe ([classes](../classes/classes.md)).
 
+### No código
+
+- **Pacote:** `internal/orchestration/quests` (`proofs.go`, `checks.go`, `review.go`, `proofstore.go`); o `done_requires` é lido do `CLASS.md` por `internal/classes` (`Meta.Done`). Tabelas `quest_criteria` (congeladas no `quest run`, com a marca de quais itens o motor marcou na issue), `quest_proofs` (a última prova de cada critério por rodada) e `step_failures` (impressão e contagem seguidas da etapa).
+- **A issue do Mestre da mesa:** o motor não a reescreve. A lista de etapas vai entre `<!-- mestre:etapas -->` e `<!-- /mestre:etapas -->`, e cada critério com prova ganha `[x]` e uma linha `  - prova (declarada por <personagem>): <texto>`. Uma nova rodada desmarca só o que o motor marcou; os itens marcados por outra missão ou por uma pessoa ficam.
+- Um `done` recusado por `proof_missing` guarda as provas que trouxe (valem para o `done` seguinte da rodada); recusado por `not_found`, `too_large` ou `usage`, não guarda nada.
+
 ## Regras e erros
 
 - `--proof` com critério que a missão não tem: 4 `not_found`, e o `done` não é registrado. Prova acima de 500 caracteres (padrão): 8 `too_large`. `--proof` junto de `--return`, ou numa tarefa sem missão: 2 `usage`.
