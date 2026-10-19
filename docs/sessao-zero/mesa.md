@@ -89,7 +89,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
 
 - Nada é apagado nem sobrescrito fora das partes marcadas como do Mestre.
 - Falha ao gerar um arquivo de um provedor bloqueia só personagens daquele provedor naquele worktree, com o motivo no painel; os outros seguem.
-- O início do Grão-Mestre, que roda no clone principal, **não** passa por `CheckStart`: a sessão zero do workspace verifica o clone na criação e avisa os usuários dos arquivos de provedor que ficaram sem gerar, mas não recusa o provedor bloqueado. Fechar essa lacuna é trabalho do M5, junto da hospedagem do Grão-Mestre no `mestre run`.
+- O início do Grão-Mestre, que roda no clone principal, **não** passa por `CheckStart`: a sessão zero do workspace verifica o clone na criação e avisa os usuários dos arquivos de provedor que ficaram sem gerar, mas não recusa o provedor bloqueado. Fechar essa lacuna é trabalho do M5, junto da hospedagem do Grão-Mestre no `mestre run` ([CA-GM-17](../orquestracao/grao-mestre.md#critérios-de-aceite)), na etapa 5.
 - A cópia em `.claude/skills/` só deixa de ser gerada por decisão de usuário: quando o teste de conformidade detecta que o Claude Code lê `.agents/skills/`, o checklist (ALL-13) **oferece** desligar a cópia; só depois que um Dono ou Administrador aprova, ela deixa de ser gerada e a existente é removida. Sem a aprovação, nada muda.
 
 ## Critérios de aceite
