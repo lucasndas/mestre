@@ -520,10 +520,15 @@ func (s *Service) tellMaster(ctx context.Context, req RestoreRequest, d Document
 		return
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "O grimório %q foi restaurado na mesa por %s.\n", d.Name, req.By.author())
+	fmt.Fprintf(&b, "O grimório %q foi restaurado na mesa por %s.\n", d.Name, inbox.OneLine(req.By.author()))
+	// the names are those of the grimoire, which agents wrote: each stays on its line
 	list := func(title string, items []string) {
 		if len(items) > 0 {
-			fmt.Fprintf(&b, "- %s: %s\n", title, strings.Join(items, ", "))
+			shown := make([]string, len(items))
+			for i, it := range items {
+				shown[i] = inbox.OneLine(it)
+			}
+			fmt.Fprintf(&b, "- %s: %s\n", title, strings.Join(shown, ", "))
 		}
 	}
 	names := func(kind string) []string {

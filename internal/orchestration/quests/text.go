@@ -3,6 +3,8 @@ package quests
 import (
 	"fmt"
 	"strings"
+
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 )
 
 // stamp is the time as the scroll writes it.
@@ -13,7 +15,7 @@ func (s *Service) roundSection(q Quest) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Rodada %d · iniciada — %s\n", q.Round, s.stamp())
 	if q.Input != "" {
-		fmt.Fprintf(&b, "**Entrada:** %s\n", q.Input)
+		b.WriteString(inbox.Say("**Entrada:**", q.Input, ">") + "\n")
 	}
 	return b.String()
 }
@@ -24,14 +26,14 @@ func (s *Service) roundSection(q Quest) string {
 func (s *Service) stepSection(q Quest, st Step, sd StepDef, r Run, o outcome) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Rodada %d · %d. %s — %s — %s\n", q.Round, st.Pos+1, sd.ID, r.CharacterName, s.stamp())
-	fmt.Fprintf(&b, "**Resumo:** %s\n", orNone(r.Summary))
-	fmt.Fprintf(&b, "**Arquivos:** %s\n", orNone(capList(r.Files, maxListed)))
-	fmt.Fprintf(&b, "**Não commitados:** %s\n", orNone(capList(r.Uncommitted, maxListed)))
+	b.WriteString(inbox.Say("**Resumo:**", orNone(r.Summary), ">") + "\n")
+	fmt.Fprintf(&b, "**Arquivos:** %s\n", inbox.OneLine(orNone(capList(r.Files, maxListed))))
+	fmt.Fprintf(&b, "**Não commitados:** %s\n", inbox.OneLine(orNone(capList(r.Uncommitted, maxListed))))
 	switch o.kind {
 	case doneReturned:
-		fmt.Fprintf(&b, "**Devolvida para:** %s — %s\n", o.returnedTo, o.reason)
+		b.WriteString(inbox.Say("**Devolvida para:** "+o.returnedTo+" —", o.reason, ">") + "\n")
 	case doneLimit:
-		fmt.Fprintf(&b, "**Limite de voltas:** a devolução (%s) não aconteceu; a missão ficou pausada.\n", o.reason)
+		b.WriteString(inbox.Say("**Limite de voltas:** a devolução não aconteceu; a missão ficou pausada. Motivo da devolução:", o.reason, ">") + "\n")
 	case doneApproval:
 		b.WriteString("**Aprovação:** espera a aprovação antes de passar adiante.\n")
 	}
