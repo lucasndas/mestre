@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -25,6 +26,7 @@ func TestTheEventsOfATowerWaitForTheCitadelAndAreAppliedOnce(t *testing.T) {
 	var mu sync.Mutex
 	var got []providers.Event
 	a.setup = func(e *Engine) {
+		e.deps.AgentMachine = func(context.Context, string) (string, bool) { return b.id, true }
 		e.deps.OnAgentEvent = func(machine string, ev providers.Event, _ hook.Answer) {
 			mu.Lock()
 			got = append(got, ev)
