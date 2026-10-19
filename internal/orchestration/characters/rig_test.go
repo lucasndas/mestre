@@ -183,12 +183,17 @@ func withCodex(s machineSpec) machineSpec {
 type noticeLog struct {
 	mu sync.Mutex
 	ns []characters.Notice
+	ch chan struct{} // closed and dropped at each notice (see changed)
 }
 
 func (n *noticeLog) Notify(_ context.Context, x characters.Notice) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.ns = append(n.ns, x)
+	if n.ch != nil {
+		close(n.ch)
+		n.ch = nil
+	}
 	return nil
 }
 

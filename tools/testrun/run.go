@@ -52,12 +52,14 @@ var Suites = map[string]Suite{
 // (docs/qualidade/testes.md#executor-testrun).
 const RaceFactor = 3
 
-// RaceGcflags turns off checkptr, the pointer-conversion check that -race
-// switches on, for the packages of modernc.org (the SQLite transpiled to Go):
-// it is a check of that library's own unsafe code, not of the data races, it
-// costs about half of the CPU of every SQL statement, and the repository's own
-// packages keep it (docs/qualidade/testes.md#executor-testrun).
-const RaceGcflags = "-gcflags=modernc.org/...=-d=checkptr=0"
+// RaceGcflags turns off, for the packages of modernc.org (the SQLite
+// transpiled to Go), checkptr, the pointer-conversion check that -race
+// switches on, and the race instrumentation itself: the first checks that
+// library's own unsafe code, not the data races, and both cost about half of
+// the CPU of every SQL statement. The repository's own packages, database/sql
+// and the runtime keep the detector, so a race between our goroutines is still
+// seen (docs/qualidade/testes.md#executor-testrun).
+const RaceGcflags = "-gcflags=modernc.org/...=-d=checkptr=0 -race=0"
 
 // Limits of the runner.
 const (
