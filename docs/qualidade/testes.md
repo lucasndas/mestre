@@ -50,12 +50,12 @@ Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tool
 
 ### Antes do push
 
-`testrun prepush` roda a completa (tags `full`), **sem `-race`**, só nos pacotes que o push mudou e nos que os importam, direto ou não (também pelos testes). Recebe no stdin os arquivos mudados em relação à branch remota; quem monta a lista é o gancho `tools/githooks/pre-push` ([ambiente](../desenvolvimento/ambiente.md#ganchos-de-git)). Só documentos, arquivos do CI e ganchos: não roda nada. `go.mod`, `go.sum` ou arquivo fora de qualquer pacote: todos os pacotes. Pacote que este sistema não compila (só Windows) fica para o CI. Respeita a quarentena, não tem orçamento (o `-timeout` é o da completa) e imprime o tempo.
+`testrun prepush` roda a completa (tags `full`), **sem `-race`**, só nos pacotes que o push mudou e nos que os importam, direto ou não (também pelos testes). Recebe no stdin os arquivos mudados em relação à branch remota; quem monta a lista é o gancho `tools/githooks/pre-push` ([ambiente](../desenvolvimento/ambiente.md#ganchos-de-git)). Não roda nada se só mudaram arquivos `.md`, `LICENSE`, `.golangci.yml`, `test/quarantine.yaml` ou as pastas `docs/`, `.github/`, `packaging/`, `tools/githooks/` e `web/`. `go.mod`, `go.sum` ou arquivo fora de qualquer pacote: todos os pacotes. Pacote que este sistema não compila (só Windows) fica para o CI. Respeita a quarentena, não tem orçamento (o `-timeout` é o da completa) e imprime o tempo.
 
 ### Testes afetados
 
 `testrun affected` roda só o que as alterações podem ter quebrado:
-- **Go:** `go test ./...` **com** o cache de testes, pulando a quarentena (`-skip`). O Go só roda de novo os pacotes cujo código, dependências, arquivos lidos ou variáveis de ambiente mudaram; o resto sai do cache. Esse é o mecanismo de "afetados" do Go, sem lista manual.
+- **Go:** `go test ./...` **com** o cache de testes, pulando a quarentena (`-skip`) e com `-timeout 45s`, o da rápida. O Go só roda de novo os pacotes cujo código, dependências, arquivos lidos ou variáveis de ambiente mudaram; o resto sai do cache. Esse é o mecanismo de "afetados" do Go, sem lista manual.
 - **Painel (M6):** `vitest related --run <arquivos alterados>`, com a lista vinda de `git diff --name-only HEAD` mais os arquivos novos (`git ls-files --others --exclude-standard`). Até o M6 o executor recusa quando existe `web/` ([executor](#executor-testrun)).
 - **Docs:** a verificação de docs é um teste Go que lê `docs/`; o cache detecta a mudança e a roda de novo.
 - Antes do commit roda a rápida inteira; antes do merge, a completa inteira.
@@ -63,7 +63,7 @@ Programa do repositório que roda as suítes e mede o tempo. Uso: `go run ./tool
 ### Quarentena
 
 - Teste instável vai para `test/quarantine.yaml`: identificador do teste (o nome Go de nível mais alto, como no `-skip`: `test`), link da issue (rótulo `flaky`: `issue`), data de entrada (`added`, AAAA-MM-DD), motivo (`reason`) e, se não for da completa, a suíte (`suite`: `fast`, `full`, padrão, ou `heavy`), que dá as *build tags* do `testrun quarantine`.
-- O executor pula esses testes (`go test -skip`, também no `affected`; `exclude` do Vitest no M6) e lista os pulados no fim. Prazo padrão: **14 dias**; entrada vencida faz a completa falhar até o teste ser corrigido ou apagado.
+- O executor pula esses testes (`go test -skip`, também no `affected`; `exclude` do Vitest no M6) e lista os pulados no fim. Prazo padrão: **14 dias**; entrada vencida faz a completa falhar até o teste ser corrigido ou apagado. Um `test/quarantine.yaml` inválido (YAML ruim, teste que não é de nível mais alto, suíte desconhecida, `issue` ou `reason` faltando, `added` fora de AAAA-MM-DD) faz o `testrun` sair com 2.
 - Toda noite (`.github/workflows/nightly.yml`, [CI](../desenvolvimento/ambiente.md#ci-e-proteção-da-main)), `testrun quarantine` roda cada teste da quarentena 20 vezes, com as *build tags* da suíte dele; quando passa todas, o executor avisa (anotação e resumo do job) que ele pode sair.
 - Para achar instáveis: toda noite, nos dois sistemas, a rápida roda com `-count=5 -shuffle=on` (`testrun fast -count 5 -shuffle`; o Vitest, no M6); resultado misto abre (ou comenta) uma issue `flaky` por teste, num job à parte, sem rodar código do repositório, com a permissão de escrever issues.
 

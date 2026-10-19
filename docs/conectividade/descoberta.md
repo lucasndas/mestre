@@ -1,6 +1,6 @@
 # Descoberta da Guilda
 
-> **Assunto:** como uma máquina (motor e Guardião) encontra a Guilda e a Cidadela atual na rede local sem configuração: broadcast UDP, mDNS (Avahi no Linux, nativo no Windows), cache e endereço configurado · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** como uma máquina (motor e Guardião) encontra a Guilda e a Cidadela atual na rede local sem configuração: broadcast UDP, mDNS (Avahi no Linux, nativo no Windows), cache e endereço configurado · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -66,7 +66,7 @@ Uma instalação nova acha a Guilda sozinha na rede local para pedir a entrada (
   - Linux: o **Avahi**, com o arquivo de serviço `/etc/avahi/services/mestre.service` (`mestre-<instância>.service` nas outras instâncias) e a entrada de `mestre.local` em `/etc/avahi/hosts`, reescritos pelo Guardião quando o papel muda; o conteúdo é gerado por `discovery.AvahiServiceFile` e `AvahiHostsLine`, e a instalação é do [instalador](../plataforma/instalacao-e-atualizacao.md);
   - Windows: o **Guardião**, pelo mDNS nativo do Windows (`DnsServiceRegister`; o próprio Windows já responde pelo nome `<host>.local`).
 - Nos dois casos, quem publica não é o motor: o anúncio continua com o motor fora do ar. Isso ajuda a [recuperação](../autocura/camadas.md).
-- **Na consulta,** a biblioteca de mDNS do binário faz a consulta DNS-SD de `_mestre._tcp.local` e lê o TXT. Só um registro com `v=1`, `machine_id`, `guild_id` da Guilda, `role` e `epoch` válidos conta, e só um com `role=cidadela` dá endereço (o TXT de uma Torre não diz onde está a Cidadela); IPv6 de link local fica de fora.
+- **Na consulta,** a biblioteca de mDNS do binário faz a consulta DNS-SD de `_mestre._tcp.local` e lê o TXT. Só um registro com `v=1`, `machine_id`, `guild_id` da Guilda, `role` e `epoch` válidos conta, e só um com `role=cidadela` dá endereço (o TXT de uma Torre não diz onde está a Cidadela); endereço de link local (IPv4 `169.254.0.0/16` e IPv6 `fe80::/10`), não especificado ou multicast fica de fora, de qualquer origem do endereço (mDNS ou o que uma Torre aponta).
 - Máquinas Windows precisam do perfil de rede "Privada" e das regras de firewall para broadcast e mDNS; as Linux, das regras do firewall delas. O [checklist](../plataforma/checklist.md) confere isso.
 
 ### Cache
