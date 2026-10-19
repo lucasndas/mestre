@@ -60,6 +60,8 @@ type ServiceOptions struct {
 	// and 7 have them).
 	Ceiling  Ceiling
 	Operator Operator
+	// Classes may be nil: the class of a request is not looked up.
+	Classes ClassCheck
 	// Settings gives the sheet of the table masters, which the Grand Master
 	// recruits (nil: "Mestre da mesa").
 	Settings MasterSheets
@@ -302,22 +304,43 @@ func (s *Service) attempt(ctx context.Context, req CreateRequest, waitID string)
 	if err != nil {
 		return Character{}, "", s.failed(ctx, req, waitID, err)
 	}
+	announce := false
 	if waitID != "" {
 		if _, err := s.o.Registry.EndSlotWait(ctx, waitID, SlotSatisfied, s.clk.Now()); err != nil {
 			s.log.Warn("characters: the wait for a vacancy was not closed", "wait", waitID, "err", err)
 		}
 		s.mu.Lock()
-		if _, ok := s.satisfied[waitID]; ok {
+		_, awaited := s.satisfied[waitID]
+		if awaited {
 			s.satisfied[waitID] = ch.ID
 		}
 		s.mu.Unlock()
+		announce = !awaited
 	}
 	s.connect(ctx, ch, p.req.ReplaceOf)
 	if err := s.launch(ctx, ch, p, false); err != nil {
 		return Character{}, "", err
 	}
+	if announce {
+		s.announce(ctx, ch, p.req.Creator)
+	}
 	got, err := s.o.Registry.Get(ctx, ch.ID)
 	return got, "", err
+}
+
+// announce tells who asked for a character (a recruit, a spawn or a replace)
+// that the vacancy opened and the character exists: the answer of the command
+// was "pending". A step of a quest is the engine's own and tells nobody.
+func (s *Service) announce(ctx context.Context, c Character, to Creator) {
+	if to.Kind == CreatedByEngine {
+		return
+	}
+	if got, err := s.o.Registry.Get(ctx, c.ID); err == nil {
+		c = got
+	}
+	_ = s.o.Notifier.Notify(ctx, Notice{Kind: NoticeCreated, To: Recipient{Kind: ToCreator}, Workspace: c.Workspace, Table: c.Table,
+		Character: c.ID, Name: c.Name, Creator: to,
+		Text: fmt.Sprintf("O personagem %q (id %s) que esperava vaga foi criado na máquina %s.", c.Name, c.ID, c.Machine)})
 }
 
 // connect makes the connections of a character just registered: the ones of
@@ -437,6 +460,15 @@ func (s *Service) check(ctx context.Context, req CreateRequest) (placement, erro
 	}
 	if err := s.snapshot(ctx, &p); err != nil {
 		return p, err
+	}
+	if s.o.Classes != nil && req.Role == RoleCharacter && req.Sheet != "" && req.Class != "" {
+		ok, err := s.o.Classes.Exists(ctx, req.Workspace, req.Table, req.Class)
+		if err != nil {
+			return p, err
+		}
+		if !ok {
+			return p, fmt.Errorf("%w: a classe `%s` não existe ou não está aprovada", ErrBadSheet, req.Class)
+		}
 	}
 	// The ceiling of the workspace holds for every character that is made, by
 	// whichever way (recruit, quest step, restore of a grimoire), not only for

@@ -425,7 +425,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}, ritualsRef{&rit}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
-		Ceiling: o.Ceiling, Operator: o.Operator, Settings: o.Settings, Logger: o.Logger})
+		Ceiling: o.Ceiling, Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -619,4 +619,30 @@ type ownerOnlyGrimoires struct{}
 
 func (ownerOnlyGrimoires) CanUse(_ context.Context, user grimoires.Actor, _ string) bool {
 	return user.Level == characters.LevelOwner
+}
+
+// classCheck is the characters.ClassCheck over the libraries of the
+// workspaces; nil without them.
+func classCheck(libs func(workspace string) *classes.Library) characters.ClassCheck {
+	if libs == nil {
+		return nil
+	}
+	return libraryClassCheck(libs)
+}
+
+type libraryClassCheck func(workspace string) *classes.Library
+
+func (f libraryClassCheck) Exists(ctx context.Context, workspace, table, class string) (bool, error) {
+	lib := f(workspace)
+	if lib == nil {
+		return true, nil // the workspace has no library to look in
+	}
+	_, err := lib.Approved(ctx, class, table)
+	switch {
+	case errors.Is(err, classes.ErrNoApproved):
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+	return true, nil
 }

@@ -176,6 +176,9 @@ func TestPrepushRunsTheChangedPackagesAndTheirDependents(t *testing.T) {
 		if code != 1 || !strings.Contains(text, "FAIL prepush:") {
 			t.Fatalf("exit %d:\n%s", code, text)
 		}
+		if !strings.Contains(text, "in 42s (tags full)") {
+			t.Fatalf("a failing push does not print the time:\n%s", text)
+		}
 	})
 	t.Run("the panel is not supported yet", func(t *testing.T) {
 		t.Parallel()

@@ -367,6 +367,9 @@ func TestReplaceKeepsTheNameAndTheCreatorAndStartsWhenTheOldOneEnds(t *testing.T
 	if r.state(c) != characters.Stopped {
 		t.Fatalf("the old one: %s, want stopped", r.state(c))
 	}
+	if ns := r.notes.of(characters.NoticeCreated); len(ns) != 1 || ns[0].Creator != byChar(tm) {
+		t.Errorf("notices of the new character = %+v, want one to who asked", ns)
+	}
 	n, err := r.reg.ByName(r.ctx, workspace, "3-login", "Dev-1")
 	if err != nil || n.ID == c.ID || n.Sheet != "Dev Persistente" || n.CreatedBy != byChar(tm) || n.Machine != "b" {
 		t.Fatalf("the new one = %+v, %v; want the same name, creator and machine with the new sheet", n, err)

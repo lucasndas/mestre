@@ -1,6 +1,6 @@
 # Roteamento de mensagens
 
-> **Assunto:** para qual workspace vai cada mensagem do Telegram, o cabeçalho das mensagens do bot e as mensagens "Sistema" · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** para qual workspace vai cada mensagem do Telegram, o cabeçalho das mensagens do bot e as mensagens "Sistema" · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -66,13 +66,14 @@ flowchart TD
   - `<workspace>`: mensagem do workspace;
   - `<workspace> · Mesa #<nº do épico> <título curto>`: mensagem sobre uma mesa;
   - `Sistema`: mensagem que não pertence a um workspace.
+- O cabeçalho é sempre a primeira linha; os exemplos de mensagem em outros documentos mostram só o corpo.
 - O motor põe o cabeçalho a partir do workspace e da mesa da mensagem. O Grão-Mestre informa a mesa ao responder ou notificar ([CLI de comunicação](../cli/comunicacao.md)).
 
 ### Mensagens "Sistema"
 
-- **O que é "Sistema":** alertas que não pertencem a um workspace, como autocura de uma máquina, checklist da máquina, tentativas não autorizadas, pareamento de usuário, entrada de máquina na Guilda, troca de Cidadela e `/travar`.
+- **O que é "Sistema":** alertas que não pertencem a um workspace, como autocura de uma máquina e checklist da máquina (desde o M7), tentativas não autorizadas, pareamento de usuário, entrada de máquina na Guilda, troca de Cidadela e `/travar`.
 - **Quem responde:** as respostas a essas mensagens são tratadas **pelo próprio motor**, não pelo Grão-Mestre:
-  - botões (por exemplo, a aprovação de uma ação de cura, [camadas](../autocura/camadas.md)) são executados pelo motor;
+  - botões (por exemplo, a aprovação de uma ação de cura, desde o M7, [camadas](../autocura/camadas.md)) são executados pelo motor;
   - texto livre respondendo a uma mensagem "Sistema" recebe a lista de ações possíveis naquela mensagem.
 
 ## Regras e erros
@@ -88,7 +89,7 @@ flowchart TD
 - **CA-ROTA-03** · *rápida* — **Dado** um usuário sem acesso a C, **quando** ele envia `#c oi`, **então** o bot recusa e lista os workspaces permitidos, sem enfileirar nada.
 - **CA-ROTA-04** · *rápida* — **Dado** um usuário de dois workspaces sem ativo, **quando** ele manda texto, **então** o bot pergunta com botões e entrega o texto ao workspace escolhido, que vira o ativo.
 - **CA-ROTA-05** · *rápida* — **Dado** uma resposta a uma mensagem do bot sobre a mesa #42, **quando** ela é entregue, **então** o cabeçalho entregue ao Grão-Mestre traz `via Telegram` e `mesa <mesa da #42>`, e a origem guarda a mesa.
-- **CA-ROTA-06** · *rápida* — **Dado** qualquer mensagem de saída, **quando** é enviada, **então** a primeira linha é o cabeçalho correto (workspace, workspace · mesa ou Sistema).
+- **CA-ROTA-06** · *rápida* — **Dado** qualquer mensagem de saída, **quando** é enviada, **então** a primeira linha é o cabeçalho correto (workspace, workspace · mesa ou Sistema), inclusive no pedido de aprovação, no aviso de bloqueio, no aviso de cota e na mensagem de progresso.
 - **CA-ROTA-07** · *rápida* — **Dado** uma resposta em texto a um alerta "Sistema", **quando** ela chega, **então** o motor responde com as ações possíveis e nada entra na caixa de entrada de agentes.
 
 ## Depende de

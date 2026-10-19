@@ -1,6 +1,6 @@
 # Personagens
 
-> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados, histórico de estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-15
+> **Assunto:** criação sob demanda, escolha da máquina, limites, efêmero/persistente, encerramento seguro, fixar, estados, histórico de estados e registro de terminais, retomada após reinício · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -44,7 +44,7 @@ Antes de iniciar numa máquina nova para a mesa, o motor cria lá o worktree ([s
 | Por workspace | 16 |
 | Cópias simultâneas da mesma ficha | definido na ficha (padrão 3) |
 
-Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite (o da mesa, o do workspace, o da ficha, ou o por máquina em todas as que atendem), o pedido **espera vaga**: o motor registra uma espera `waiting_slot` ("aguardando vaga") com tempo limite ([esperas](esperas-e-caixa-de-entrada.md#esperas)), seja uma etapa de missão, seja um `recruit`/`spawn` direto (que responde na hora com "pendente", e o personagem criado chega depois pela caixa de entrada; [coordenação](../cli/coordenacao.md)). Abrindo vaga, a criação segue na ordem de chegada; estourado o tempo limite, o pedido falha com aviso a quem pediu, dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
+Grão-Mestre e Mestres de mesa não contam nem são barrados. Terminais simples contam. Ao atingir um limite (o da mesa, o do workspace, o da ficha, ou o por máquina em todas as que atendem), o pedido **espera vaga**: o motor registra uma espera `waiting_slot` ("aguardando vaga") com tempo limite ([esperas](esperas-e-caixa-de-entrada.md#esperas)), seja uma etapa de missão, seja um `recruit`/`spawn` direto (que responde na hora com "pendente", e o personagem criado chega depois pela caixa de entrada; [coordenação](../cli/coordenacao.md)). Abrindo vaga, a criação segue na ordem de chegada, e quem pediu (um `recruit`, `spawn` ou `--replace` pendente) recebe um item `system` com o nome, o id e a máquina do personagem criado e deixa de estar em `waiting`; estourado o tempo limite, o pedido falha com aviso a quem pediu, dizendo qual limite e quem ocupa. Nunca se derruba quem está trabalhando para abrir vaga.
 
 ### Ciclo de vida (definido na ficha)
 
@@ -121,7 +121,7 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 - **Motor da Cidadela reinicia com Torres vivas:** os terminais das Torres continuam; ao reconectar, cada máquina informa os que estão vivos e a Cidadela reconcilia (a máquina é a verdade sobre o processo; a Cidadela, sobre o resto).
 - **Troca de Cidadela:** quem fica `interrupted`, quem segue e o que a antiga encerra ao voltar como Torre estão nas [regras da troca](../guilda/cidadela-e-torres.md); a retomada segue as regras abaixo.
 - **Ordem de retomada:** Grão-Mestre → Mestres de mesa → personagens com etapa ou tarefa em andamento → persistentes → demais.
-- Retoma com a sessão do provedor (id salvo) quando o adaptador permite; senão inicia do zero e entrega uma mensagem de retomada (etapa atual, último `done`, link do pergaminho da missão). Caixa de entrada e esperas são preservadas; a caixa só entrega depois que a primeira mensagem (a camada do Mestre) foi digitada.
+- Retoma com a sessão do provedor (id salvo) quando o adaptador permite; senão inicia do zero e entrega uma mensagem de retomada (missão e etapa atuais, último `done` e o nome do pergaminho da missão, que o personagem lê com `mestre note read`). Caixa de entrada e esperas são preservadas; a caixa só entrega depois que a primeira mensagem (a camada do Mestre) foi digitada.
 - Efêmero sem tarefa pendente não é retomado: vai a `stopped` com o motivo registrado. Terminal simples fica `interrupted` e o criador é avisado (o motor não reexecuta comandos sozinho).
 - Se a máquina estiver fora, o personagem fica `interrupted` (visível) e o Mestre da mesa é avisado; tenta-se de novo quando a máquina voltar. **Nenhum personagem some em silêncio.** As camadas de cura que levam a isso: [camadas](../autocura/camadas.md). Como o código faz isso: [personagens no código](personagens-no-codigo.md).
 
@@ -134,7 +134,7 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 ## Critérios de aceite
 
 - **CA-PERS-01** · *rápida* — **Dado** uma máquina Linux sem GPU e uma Windows com GPU na ficha da máquina, **quando** se recruta com ficha que exige GPU, **então** vai para a Windows; **quando** a Windows está desconectada, **então** a criação falha listando o motivo de cada máquina, nada roda na Linux e o Dono recebe o aviso.
-- **CA-PERS-02** · *rápida* — **Dado** limite por mesa 2 atingido e relógio falso, **quando** uma etapa pede personagem e um `recruit` direto é feito, **então** os dois ficam em `waiting_slot` (o `recruit` responde "pendente"); **quando** uma vaga abre, **então** o primeiro a chegar é criado; **quando** o tempo limite do outro estoura, **então** ele falha com aviso dizendo o limite e quem ocupa; em nenhum caso alguém é encerrado.
+- **CA-PERS-02** · *rápida* — **Dado** limite por mesa 2 atingido e relógio falso, **quando** uma etapa pede personagem e um `recruit` direto é feito, **então** os dois ficam em `waiting_slot` (o `recruit` responde "pendente"); **quando** uma vaga abre, **então** o primeiro a chegar é criado e, se foi um `recruit`, quem pediu recebe o item `system` com nome, id e máquina; **quando** o tempo limite do outro estoura, **então** ele falha com aviso dizendo o limite e quem ocupa; em nenhum caso alguém é encerrado.
 - **CA-PERS-03** · *rápida* — **Dado** um personagem `busy`, **quando** recebe `dismiss`, **então** a CLI responde "pendente" (`scheduled`), o encerramento fica agendado e só ocorre após `done` e `idle`, com resumo gravado no pergaminho da missão.
 - **CA-PERS-04** · *rápida* — **Dado** relógio falso e persistente com ociosidade 120 min, **quando** fica 119 min `idle` e 30 min `waiting`, **então** não é encerrado; **quando** completa 120 min `idle` contínuos, **então** é.
 - **CA-PERS-05** · *rápida* — **Dado** um personagem fixado, **quando** o ciclo de vida ou `dismiss` tentam encerrá-lo, **então** nada acontece e a recusa é registrada.
