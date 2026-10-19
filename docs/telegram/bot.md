@@ -1,6 +1,6 @@
 # Bot do Telegram
 
-> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -15,15 +15,12 @@ Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspa
   - `allowed_updates=["message","callback_query"]`.
   - É só conexão de saída: sem webhook e sem porta aberta.
 - **Ao iniciar,** o motor chama `deleteWebhook`, porque `getUpdates` não funciona com webhook ativo.
-- **Offset:**
-  - Cada update é gravado no banco (tabela `telegram_updates`) **antes** de o offset avançar.
-  - O último `update_id` processado também fica no banco.
-  - Assim um reinício não perde nem repete updates (deduplicação por `update_id`).
+- **Offset:** cada update é gravado no banco (`telegram_updates`) **antes** de o offset avançar, e o último `update_id` processado também fica lá: um reinício não perde nem repete updates (deduplicação por `update_id`).
 - **Erros de rede:** o laço tenta de novo com backoff de 1 s a 60 s, com variação aleatória.
 - **Um só leitor:** só a Cidadela da época mais recente lê e envia.
   - **Época:** toda chamada ao Telegram (inclusive cada `getUpdates`, cada envio e cada ação disparada por um botão) só sai da Cidadela não suspensa ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)); suspensa, nada sai e o envio fica na fila de saída. O Telegram não depende do GitHub: com o [GitHub fora](../guilda/trava-no-github.md#github-fora), o bot segue lendo e enviando.
-  - **O `409 Conflict` é só sinal** ([regra](../guilda/trava-no-github.md#o-409-do-telegram)): com o aluguel da trava válido, dispara uma conferência imediata (época maior: para de ler e de enviar e se suspende; senão segue e registra o alerta na auditoria e no painel); com o aluguel vencido, para de ler e de enviar até reconfirmar a trava, e o painel mostra "Telegram parado".
-  - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em [modo reduzido](../autocura/telegram-modo-reduzido.md), a única exceção sem trava (só alertas, os botões Promover e Esperar e `/status`).
+  - **O `409 Conflict` é só sinal:** a regra, com e sem o aluguel válido, é a de [o 409 do Telegram](../guilda/trava-no-github.md#o-409-do-telegram); o painel mostra "Telegram parado" quando o bot para.
+  - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em [modo reduzido](../autocura/telegram-modo-reduzido.md) (desde o M7), a única exceção sem trava (só alertas, os botões Promover e Esperar e `/status`).
   - Quando a Cidadela volta, ou uma máquina é promovida a Cidadela (depois da [espera de 60 s](../guilda/trava-no-github.md#espera-do-promovido)), o motor da Cidadela retoma o bot.
 
 ```mermaid
@@ -65,7 +62,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 | `/status` | estado da Cidadela, das máquinas (online, último heartbeat) e dos agentes por workspace |
 | `/missoes [workspace]` | missões em andamento com a etapa atual; sem argumento, as do workspace ativo |
 | `/aprovacoes` | pedidos esperando por este usuário, cada um com os botões de decisão ([fluxo](../aprovacoes/fluxo.md)) |
-| `/decretos` | decretos ativos e suspensos, com autor e validade ([decretos](decretos.md)) |
+| `/decretos` | decretos ativos e suspensos e as regras temporárias de mesa, com autor e validade ([decretos](decretos.md)) |
 | `/pausar [workspace\|mesa]` | pausa o escopo (efeito em [pausa](../orquestracao/mesas.md#pausa)) |
 | `/retomar [workspace\|mesa\|personagem]` | desfaz o `/pausar`; com um personagem, retoma o que o disjuntor da [cadeia](../orquestracao/cadeia-de-aprovacao.md#salvaguardas) pausou |
 | `/travar`, `/destravar` | emergência ([segurança do canal](seguranca-do-canal.md)) |
@@ -82,7 +79,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 ### Mensagens de saída
 
 - **Quem envia:**
-  - **Motor:** alertas operacionais (autocura, etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)), o pedido "Sistema" de atualização do Mestre (ao Dono e aos Administradores, com botão e sem PIN, [autoatualização](../plataforma/autoatualizacao.md#aprovação)), os pedidos da Guilda de entrada de máquina e de promoção a Cidadela (só ao Dono, com botão e PIN a cada vez; a entrada em [Guilda](../guilda/guilda.md#entrada-na-guilda)), as perguntas da cadeia de aprovação que chegam às pessoas sem o Grão-Mestre ([fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários)), as sugestões e a amostra do [resumo](../aprovacoes/resumo-e-sugestoes.md), os pedidos de segundo fator, a [mensagem de progresso](../orquestracao/grao-mestre.md#mensagem-de-progresso) e o aviso do Operador do PC (abaixo). Passar a Cidadela e excluir máquina não são pedidos: são ações diretas do Dono pelo `/guilda`, com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); quem aprova cada tipo de pedido está na [política](../aprovacoes/politica.md#tipos-de-ação).
+  - **Motor:** alertas operacionais (autocura, desde o M7; etapa travada, impasse, limite de custo), respostas aos comandos rápidos, pareamento, pedidos de PIN, confirmações de decreto, os links de criação e de instalação de GitHub Apps (só ao Dono, [criação de Apps](../github/criacao-de-apps.md)), o pedido "Sistema" de atualização do Mestre (ao Dono e aos Administradores, com botão e sem PIN, [autoatualização](../plataforma/autoatualizacao.md#aprovação)), os pedidos da Guilda de entrada de máquina e de promoção a Cidadela (só ao Dono, com botão e PIN a cada vez; a entrada em [Guilda](../guilda/guilda.md#entrada-na-guilda)), as perguntas da cadeia de aprovação que chegam às pessoas sem o Grão-Mestre ([fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários)), as sugestões e a amostra do [resumo](../aprovacoes/resumo-e-sugestoes.md), os pedidos de segundo fator, a [mensagem de progresso](../orquestracao/grao-mestre.md#mensagem-de-progresso), os avisos da [supervisão da cadeia](../orquestracao/supervisao-da-cadeia.md) (a mesa que gira sem entrega, com o botão **Pausar mesa**; a fila que acumula, com **Pausar autonomia**), a pausa por [cota](../plataforma/limites-de-uso.md), o lembrete da [delegação](../aprovacoes/delegacao.md#delegação-de-decisão) com **Renovar** e **Deixar vencer**, e o aviso do Operador do PC (abaixo). Passar a Cidadela e excluir máquina não são pedidos: são ações diretas do Dono pelo `/guilda`, com PIN ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); quem aprova cada tipo de pedido está na [política](../aprovacoes/politica.md#tipos-de-ação).
   - **Grão-Mestre:** conversa, ou seja, respostas (`mestre reply`), resumos de épico, missões concluídas, notificações (`mestre notify`) e pedidos de aprovação. A sintaxe está em [CLI de comunicação](../cli/comunicacao.md) e [CLI do Grão-Mestre](../cli/grao-mestre.md).
 - **Para quem:**
   - Uma resposta vai ao usuário e à conversa de origem ([resposta pelo mesmo canal](../orquestracao/esperas-e-caixa-de-entrada.md)).
@@ -96,9 +93,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
   - `callback_data` leva só uma chave curta, de até 64 bytes. A ação, o destinatário e a validade ficam no banco.
   - No clique, o motor confere se quem clicou é o destinatário e se ele ainda tem o nível exigido.
   - O motor sempre responde com `answerCallbackQuery`. Depois da decisão, edita a mensagem para mostrar o resultado.
-- **Ritmo:**
-  - Há uma fila de saída por chat, com no máximo 1 mensagem por segundo por chat e cerca de 30 por segundo no total.
-  - Um erro `429` faz a fila respeitar o `retry_after`.
+- **Ritmo:** uma fila de saída por chat, com no máximo 1 mensagem por segundo por chat e cerca de 30 por segundo no total; um `429` faz a fila respeitar o `retry_after`.
 - **Telegram fora do ar:** a fila de saída fica no banco e é entregue quando ele volta.
 - **Registro:** o motor guarda o `message_id` de cada mensagem enviada, com o workspace e a mesa dela ([roteamento](roteamento.md#resposta-encadeada)).
 - **Pedido de segundo fator** (login em sites): mensagem direta do motor ao dono da credencial, em texto ("código de <site>") ou com a imagem do captcha como foto (`sendPhoto`). Enquanto o pedido está aberto, a próxima mensagem de texto desse usuário (ou a resposta encadeada ao pedido) é **capturada pelo motor**, como o PIN: não vai ao Grão-Mestre, à caixa de entrada nem ao histórico, e é apagada com o pedido depois de usada. Mensagem de outro usuário não conta. Regras, prazos e casos em [segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha).
@@ -106,7 +101,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 
 ### Explicação de termos na primeira vez
 
-- Antes de enviar, o motor procura no texto os termos do [glossário](../produto/glossario.md) (coluna "Termo", sem diferenciar maiúsculas, palavra inteira, fora de blocos de código).
+- Antes de enviar, o motor procura no texto os termos do [glossário](../produto/glossario.md) (coluna "Termo", sem diferenciar maiúsculas, palavra inteira, fora de blocos de código). Vale a **maior correspondência**: em "Mestre da mesa", "Cidadela suspensa" ou "Classe sugerida" só o termo inteiro é explicado, não "Mestre", "Cidadela" ou "Classe". Termo de uma palavra que também é verbo ou palavra comum (Vigia, Prova, Espera, Aceite) só conta com a inicial maiúscula fora do começo da frase.
 - Na **primeira vez** que um termo aparece para aquele usuário, o motor acrescenta a "Ajuda curta" entre parênteses logo depois do termo.
 - O banco registra o par usuário+termo (tabela `glossary_seen`). O Dono pode zerar esse registro de um usuário no painel.
 
@@ -132,6 +127,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - **CA-BOT-12** · *rápida* — **Dado** uma Cidadela com época 3 cuja conferência leu `refs/mestre/epoca-4` na trava falsa, **quando** ela tentaria chamar `getUpdates`, enviar a fila de saída ou executar o clique de um botão, **então** o Telegram falso não recebe nada e o clique não é executado.
 
 - **CA-BOT-13** · *rápida* — **Dado** um pedido `atualizacao_mestre` e um `entrada_na_guilda` abertos, **quando** o motor envia as mensagens, **então** a primeira vai ao Dono e aos Administradores e é aprovada pelo botão sem PIN, e a segunda vai só ao Dono e pede o PIN depois do botão.
+- **CA-BOT-14** · *rápida* — **Dado** o texto "o Mestre da mesa vigia a cidadela suspensa" sem nada visto, **quando** sai, **então** só "Mestre da mesa" e "Cidadela suspensa" ganham ajuda, e "vigia" (verbo) não.
+- **CA-BOT-15** · *rápida* — **Dado** um Markdown com negrito e o texto literal "<b>", **quando** o motor converte, **então** sai HTML válido com o `<b>` escapado; **dado** uma conversão que falha, **então** sai texto puro; **dado** 31 mensagens a um chat no mesmo segundo (relógio falso), **então** saem 1 por segundo.
 
 ## Depende de
 
