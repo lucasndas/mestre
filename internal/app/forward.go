@@ -163,7 +163,11 @@ func (e *Engine) callCitadel(ctx context.Context, link *protocol.Link, c *localc
 	if id == "" {
 		id = protocol.NewIDGen(e.clk).NewString()
 	}
-	ch, release := e.results.wait(id)
+	var sink func(json.RawMessage)
+	if !mayQueue { // a call that may be queued has its answer from the queue, not from here
+		sink = func(data json.RawMessage) { c.Partial(data) }
+	}
+	ch, release := e.results.wait(id, sink)
 	defer release()
 	if _, err := link.Send(ctx, protocol.Outgoing{Type: protocol.TypeCLICall, Payload: obj, ID: id, Transient: true}); err != nil {
 		return errUnavailable, false
@@ -265,9 +269,18 @@ func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
 		}
 		go func() {
 			defer run.gate.leave()
-			resp := e.local.Forward(bg, &localchan.Call{Request: call.Request, Caller: localchan.Caller{
+			lc := &localchan.Call{Request: call.Request, Caller: localchan.Caller{
 				Identified: true, AgentID: call.Caller.AgentID, TerminalID: call.Caller.TerminalID,
-			}})
+			}}
+			if !call.Queued {
+				// the signs of life of a long command (`ask`: queued, delivered,
+				// answering…) go back as they happen; a queued call has nobody
+				// waiting at the other end
+				lc.SetPartialSink(func(data json.RawMessage) {
+					answer(localchan.Response{Partial: true, Data: data})
+				})
+			}
+			resp := e.local.Forward(bg, lc)
 			qresp := resp
 			qresp.V, qresp.ID = call.V, call.ID
 			qr := QueuedResult{OpID: id, AgentID: call.Caller.AgentID, Cmd: call.Cmd, Response: qresp}
@@ -297,20 +310,29 @@ func (e *Engine) queuedResult(qr QueuedResult) {
 
 // results are the cli.call waiting for their cli.result on a Tower.
 type results struct {
-	mu      sync.Mutex
-	waiting map[string]chan localchan.Response
+	mu       sync.Mutex
+	waiting  map[string]chan localchan.Response
+	partials map[string]func(json.RawMessage)
 }
 
-func newResults() *results { return &results{waiting: map[string]chan localchan.Response{}} }
+func newResults() *results {
+	return &results{waiting: map[string]chan localchan.Response{}, partials: map[string]func(json.RawMessage){}}
+}
 
-func (r *results) wait(id string) (<-chan localchan.Response, func()) {
+// wait registers the call; partial (nil: none) receives the partial responses of
+// the command as they come.
+func (r *results) wait(id string, partial func(json.RawMessage)) (<-chan localchan.Response, func()) {
 	ch := make(chan localchan.Response, 1)
 	r.mu.Lock()
 	r.waiting[id] = ch
+	if partial != nil {
+		r.partials[id] = partial
+	}
 	r.mu.Unlock()
 	return ch, func() {
 		r.mu.Lock()
 		delete(r.waiting, id)
+		delete(r.partials, id)
 		r.mu.Unlock()
 	}
 }
@@ -326,10 +348,13 @@ func (r *results) handle(_ context.Context, m *protocol.Message) (*protocol.Repl
 		return nil, protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
 	}
 	if resp.Partial {
-		// The Tower ignores the partials of a long command and forwards only
-		// the final answer; passing them on comes with the Tower side of the
-		// orchestration ("M5, antes da etapa 1" in
-		// docs/desenvolvimento/ordem-de-implementacao.md).
+		// a sign of life of a long command: on to the CLI that waits for it
+		r.mu.Lock()
+		sink := r.partials[m.Env.ReplyTo]
+		r.mu.Unlock()
+		if sink != nil {
+			sink(resp.Data)
+		}
 		return nil, nil
 	}
 	r.mu.Lock()
