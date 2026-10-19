@@ -162,8 +162,10 @@ type Decision struct {
 	Reason string
 	// Layer decided it.
 	Layer Layer
-	// Decree is the decree or exception that decided, if one did.
-	Decree int64
+	// Decree is the decree or exception that decided, if one did; TableRule
+	// says it is a temporary table rule, whose numbers are another sequence.
+	Decree    int64
+	TableRule bool
 	// ClassHooks is true when an allow still goes through the synchronous
 	// pre_tool hooks of the class, which can only deny
 	// (docs/classes/classes.md#hooks-extras-da-classe).
@@ -366,7 +368,7 @@ func (e *evaluator) tableRule(t *providers.Tool, act Action, res result) (Decisi
 		if err != nil || !ok {
 			continue
 		}
-		return Decision{Verdict: Allow, Reason: fmt.Sprintf("regra temporária de mesa %d", d.ID), Layer: LayerDecree, Decree: d.ID, Action: act, ClassHooks: true}, true
+		return Decision{Verdict: Allow, Reason: fmt.Sprintf("regra temporária de mesa %d", d.ID), Layer: LayerDecree, Decree: d.ID, TableRule: true, Action: act, ClassHooks: true}, true
 	}
 	return Decision{}, false
 }

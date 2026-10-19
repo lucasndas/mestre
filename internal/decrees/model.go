@@ -1,0 +1,231 @@
+package decrees
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/lucasndas/mestre/internal/classes"
+)
+
+// Kind tells a permanent rule from a one-time exception.
+type Kind string
+
+// The kinds.
+const (
+	KindRule      Kind = "rule"
+	KindException Kind = "exception"
+)
+
+// State is the state of a decree.
+type State string
+
+// The states of a decree (docs/telegram/decretos.md#estados). The proposal
+// that is not confirmed is not a decree: it is cancelled in its own table.
+const (
+	Active    State = "active"
+	Used      State = "used"
+	Expired   State = "expired"
+	Revoked   State = "revoked"
+	Suspended State = "suspended"
+)
+
+// Ended says the decree is over for good.
+func (s State) Ended() bool { return s == Used || s == Expired || s == Revoked }
+
+// The effects of a decree.
+const (
+	EffectPermission = "permission"
+	EffectBehavior   = "behavior"
+	EffectPolicy     = "policy"
+	EffectCeiling    = "ceiling"
+	EffectDelegation = "delegation"
+	// EffectClassEdit is not an effect a decree can have: it names the
+	// attempt to change a class itself, which is refused.
+	EffectClassEdit = "class"
+)
+
+// Effect is what a decree does.
+type Effect struct {
+	Kind string `json:"kind"`
+	// Allow and Deny are the patterns of a permission, with the vocabulary of
+	// permissions.yaml; Allow also holds what a ceiling widens.
+	Allow *classes.Grant `json:"allow,omitempty"`
+	Deny  *classes.Grant `json:"deny,omitempty"`
+	// Instruction is the short instruction of a behavior.
+	Instruction string `json:"instruction,omitempty"`
+	// Setting is the type of request (or the setting) a policy adjusts and
+	// Loosens says the adjustment loosens it; for a delegation, Setting is
+	// the type of request the Grand Master may then decide.
+	Setting string `json:"setting,omitempty"`
+	Loosens bool   `json:"loosens,omitempty"`
+	// MaxMinutes is the longest activation the Grand Master may approve under
+	// a delegation of the Operator (at most 30 by default).
+	MaxMinutes int `json:"max_minutes,omitempty"`
+	// Field is what a class edit names (refused).
+	Field string `json:"field,omitempty"`
+}
+
+// TargetKind is what a decree is about.
+type TargetKind string
+
+// The targets.
+const (
+	TargetClass     TargetKind = "class"
+	TargetCharacter TargetKind = "character"
+	TargetWorkspace TargetKind = "workspace"
+	TargetTable     TargetKind = "table"
+)
+
+// Target is the class, character, workspace or table a decree is about.
+type Target struct {
+	Kind TargetKind `json:"kind"`
+	Name string     `json:"name"`
+}
+
+// Origin is where the order came from.
+type Origin struct {
+	Channel    string `json:"channel,omitempty"` // telegram, panel, approval
+	MessageID  int64  `json:"message_id,omitempty"`
+	Audio      bool   `json:"audio,omitempty"`
+	Attachment string `json:"attachment,omitempty"`
+	Transcript string `json:"transcript,omitempty"`
+}
+
+// Proposal is what the Grand Master sends to the engine after it read the
+// order of a user (`mestre decree propose`).
+type Proposal struct {
+	// Author is the user who gave the order.
+	Author string `json:"author"`
+	Kind   Kind   `json:"kind"`
+	Effect Effect `json:"effect"`
+	Target Target `json:"target"`
+	// Workspace and Mesa are the scope; Scope is the rest of it
+	// ("missao:<nome>", "classe:<nome>", "repo:<dono/nome>").
+	Workspace string `json:"workspace"`
+	Mesa      string `json:"mesa,omitempty"`
+	Scope     string `json:"scope,omitempty"`
+	// Until is the absolute end of the validity; zero is forever.
+	Until time.Time `json:"until,omitzero"`
+	// Text is the message of the user as it came.
+	Text   string `json:"text"`
+	Origin Origin `json:"origin"`
+	// Action is the exact action an exception frees, TargetRef the state of
+	// what it is about (the PR and its head) and RequestType the type of
+	// request it answers; the impression is made from the TargetRef.
+	Action      *classes.Action `json:"action,omitempty"`
+	TargetRef   json.RawMessage `json:"target_ref,omitempty"`
+	RequestType string          `json:"request_type,omitempty"`
+}
+
+// Pending is a proposal that waits for the click of the author.
+type Pending struct {
+	ID string
+	// Text is what the confirmation says; PIN says the author must give the
+	// PIN to confirm, and Why says why.
+	Text string
+	PIN  bool
+	Why  string
+	// Author is the only user whose click counts; Workspace and Mesa are the
+	// scope that will be stored, and the one the message must name.
+	Author          string
+	Workspace, Mesa string
+}
+
+// Decree is a decree as it is kept.
+type Decree struct {
+	Number      int64
+	Kind        Kind
+	State       State
+	Effect      Effect
+	Target      Target
+	Workspace   string
+	Mesa        string
+	Scope       string
+	Author      string
+	AuthorLevel classes.Level
+	Text        string
+	Origin      Origin
+	PIN         bool
+	Request     int64
+	Action      *classes.Action
+	RequestType string
+	Impression  string
+	TargetRef   json.RawMessage
+	SuspendedBy string
+	CreatedAt   time.Time
+	Until       time.Time
+	EndedAt     time.Time
+}
+
+// Change is a line of the history of states of a decree.
+type Change struct {
+	At    time.Time
+	State State
+	By    string
+	Note  string
+}
+
+// Use is something done on the strength of a decree.
+type Use struct {
+	At        time.Time
+	Character string
+	Action    string
+}
+
+// View is a decree as /decretos lists it.
+type View struct {
+	Decree
+	// AuthorName is the name of the author; Level the level that counts now.
+	AuthorName string
+	Level      classes.Level
+	// OverriddenBy is the number of the decree of a higher level that takes
+	// the same point, if one does.
+	OverriddenBy int64
+}
+
+// Summary is the one line of /decretos.
+func (d Decree) Summary() string { return describeEffect(d.Effect, d.Target, d.Kind, d.Action) }
+
+// Refusal is a proposal or an action the engine does not take, with the
+// reason in plain words.
+type Refusal struct {
+	Code    string
+	Message string
+}
+
+func (r *Refusal) Error() string { return r.Message }
+
+func refuse(code, format string, a ...any) *Refusal {
+	return &Refusal{Code: code, Message: fmt.Sprintf(format, a...)}
+}
+
+// The codes of a refusal.
+const (
+	CodeLevel      = "level"
+	CodeWorkspace  = "workspace"
+	CodeInvalid    = "invalid"
+	CodeInvariant  = "invariant"
+	CodeBuiltIn    = "built_in"
+	CodePolicy     = "policy"
+	CodeDelegation = "delegation"
+)
+
+// The errors.
+var (
+	ErrNoDecree   = errors.New("decrees: no such decree")
+	ErrNoProposal = errors.New("decrees: no such proposal, or it is over")
+	ErrNotAuthor  = errors.New("decrees: only the author confirms the proposal")
+	// ErrPINRequired: the proposal or the revocation needs the PIN of the
+	// author; ask for it (BeginPIN) and call again with the request.
+	ErrPINRequired = errors.New("decrees: this needs the PIN")
+	// ErrPINFailed: the PIN was wrong or expired, and the proposal is cancelled.
+	ErrPINFailed     = errors.New("decrees: the PIN was wrong or expired; the proposal is cancelled")
+	ErrEnded         = errors.New("decrees: the decree is already over")
+	ErrNotAllowed    = errors.New("decrees: the level does not revoke this decree")
+	ErrTargetChanged = errors.New("decrees: the target changed since the approval; the exception expired unused")
+	// ErrLocked: the Mestre is locked (/travar); no decree is confirmed or revoked.
+	ErrLocked   = errors.New("decrees: the Mestre is locked")
+	ErrNoVerify = errors.New("decrees: the target could not be verified")
+)
