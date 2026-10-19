@@ -22,7 +22,13 @@ const (
 // not set (docs/arquitetura/componentes.md#instâncias).
 const DefaultInstance = "principal"
 
-var instancePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+// instancePattern is the name of an instance other than the default: lower
+// case, up to 6 characters. The account of its agents is mestre-agente-<inst>
+// (14 characters of prefix), and a local account of Windows has at most 20
+// characters and ignores the case, so a longer name would not fit and X and x
+// would be the same account (docs/arquitetura/componentes.md#instâncias).
+// guild.ValidInstance and winsvc.AgentAccountName follow the same rule.
+var instancePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,5}$`)
 
 // AgentAccount is the account the agents of an instance run as, and, on Linux,
 // the group of its socket: mestre-agente for the principal instance and
@@ -35,7 +41,9 @@ func AgentAccount(instance string) string {
 }
 
 // ValidInstance reports whether name can name an instance.
-func ValidInstance(name string) bool { return instancePattern.MatchString(name) }
+func ValidInstance(name string) bool {
+	return name == DefaultInstance || instancePattern.MatchString(name)
+}
 
 // SocketPath is the path of the socket of the local channel of an instance
 // on this system: /run/mestre/<inst>/cli.sock on Linux and
@@ -43,7 +51,7 @@ func ValidInstance(name string) bool { return instancePattern.MatchString(name) 
 // endpoint_linux.go and endpoint_windows.go.
 func SocketPath(instance string) (string, error) {
 	if !ValidInstance(instance) {
-		return "", fmt.Errorf("instance name %q: use letters, digits, '-' and '_'", instance)
+		return "", fmt.Errorf("instance name %q: use up to 6 lower case letters, digits, '-' and '_' (or %q)", instance, DefaultInstance)
 	}
 	return socketPath(instance), nil
 }

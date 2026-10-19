@@ -40,3 +40,25 @@ func TestEndForGoodRemovesFifosSocketsAndTheFolderOfTheMachine(t *testing.T) {
 		}
 	}
 }
+
+// The folder of the character on the machine is setgid: the engine (group
+// mestre) makes it inside agentes/, and without the bit the folder, and the
+// policy.json and env.json inside it, would be of the group mestre, which
+// the agent is not in, instead of the group of the agents of the instance.
+func TestTheFolderOfTheCharacterOnTheMachineIsSetgid(t *testing.T) {
+	t.Parallel()
+	r := newCharRig(t, nil)
+	plan := r.prepare(r.req("dev", "claude-code", sessionzero.RoleCharacter))
+	for dir, want := range map[string]os.FileMode{
+		plan.MachineDir: os.ModeSetgid | 0o750,
+		plan.Tmp:        os.ModeSetgid | 0o770,
+	} {
+		fi, err := os.Stat(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fi.Mode() & (os.ModePerm | os.ModeSetgid | os.ModeSticky); got != want {
+			t.Errorf("%s: mode %v, want %v", dir, got, want)
+		}
+	}
+}

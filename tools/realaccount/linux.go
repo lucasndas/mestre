@@ -63,8 +63,8 @@ func userExists(ctx context.Context, name string) bool {
 // cgroup also drops Delegate: it is the launcher of a machine where LIN-11 of
 // the checklist failed.
 func dropIn(inst string, engineUID int) string {
-	args := fmt.Sprintf("helper-launcher --instance %s --bin %s/bin --agent %s --engine-uid %d --engine-cgroup /system.slice/%s",
-		inst, realaccount.LinuxStage, realaccount.LinuxAgentUser, engineUID, realaccount.LinuxEngineUnit)
+	args := fmt.Sprintf("helper-launcher --instance %s --bin %s/bin --agent %s --agent-instance %s --engine-uid %d --engine-cgroup /system.slice/%s",
+		inst, realaccount.LinuxStage, realaccount.LinuxAgentUser, realaccount.Instance, engineUID, realaccount.LinuxEngineUnit)
 	s := "[Service]\nUser=" + realaccount.LinuxEngineUser + "\nExecStart=\nExecStart=" + realaccount.LinuxStage + "/realaccount.test " + args
 	if inst == "nocg" {
 		s += " --no-cgroup\nDelegate=no\nDelegateSubgroup=\n"
