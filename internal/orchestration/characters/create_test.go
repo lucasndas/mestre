@@ -501,6 +501,7 @@ func TestARecruitThatWaitedForAVacancyTellsWhoAskedWhenItIsMade(t *testing.T) {
 	}
 }
 
+// CA-CLI-COORD-09
 func TestAReplaceWithoutACapableMachineLeavesTheOldOneAliveAndConnected(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{machines: []machineSpec{linux("linux"), windowsGPU("winpc")}, connect: true})
@@ -535,6 +536,7 @@ type classSet map[string]bool
 
 func (c classSet) Exists(_ context.Context, _, _, class string) (bool, error) { return c[class], nil }
 
+// CA-CLI-COORD-10
 func TestAClassThatDoesNotExistFailsBeforeAnythingIsMade(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{classes: classSet{"Dev": true}})
@@ -567,6 +569,7 @@ func (s *syncLog) Sync(_ context.Context, ws, table string) error {
 
 // A character that is born finds the copies of the scrolls of its table in its
 // worktree: the engine asks for them before it starts.
+// CA-PERG-09
 func TestACharacterThatIsBornHasTheCopiesOfTheScrollsOfItsTableMade(t *testing.T) {
 	t.Parallel()
 	sl := &syncLog{}

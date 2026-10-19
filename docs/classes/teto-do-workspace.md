@@ -90,6 +90,7 @@ Quem usa o teto: [classes](classes.md) (M3); a sessão zero cria o arquivo (M4);
 - **CA-TETO-06** · *rápida* — **Dado** o teto padrão e uma classe com `operator: true`, **quando** a Cidadela monta as regras efetivas, **então** `operator` sai `false` com `origin` `ceiling`; **dado** um decreto `ceiling` de um Administrador que liga `operator`, **então** ele é recusado antes da confirmação.
 - **CA-TETO-07** · *rápida* — **Dado** o teto padrão e uma classe sem `files.deny`, **quando** a Cidadela monta as regras efetivas e o personagem lê `config/service-account-prod.json` ou `.env.local` pela ferramenta de leitura, **então** as duas leituras são negadas com o motivo "teto do workspace", `files.deny` traz esses globs com `origin` `ceiling`, e a leitura de `config/settings.json` passa.
 - **CA-TETO-08** · *rápida* — **Dado** o teto padrão e uma classe sem `files.deny`, **quando** o personagem lê `.env.production`, `.env.development` ou `.env.example` pela ferramenta de leitura, **então** as três leituras são negadas com o motivo "teto do workspace" e `files.deny` traz `**/.env*` com `origin` `ceiling`; a leitura de `config/settings.json` passa.
+- **CA-TETO-09** · *rápida* — **Dado** uma classe aprovada com `network.internet: true` e depois um teto com `internet: false`, **quando** o Mestre roda `recruit --class` com ela e cria uma missão com uma etapa dessa classe, **então** o `recruit` sai com 3 `ceiling_denied` citando `network.internet`, nenhum personagem é criado e o `quest create` recusa a etapa citando o que passa do teto.
 
 ## Depende de
 

@@ -1,6 +1,6 @@
 # Regras temporárias de mesa
 
-> **Assunto:** as regras que agentes da cadeia de aprovação criam ao aprovar por um tempo ou um padrão: o que são, quem cria, alcance, validade máxima, lugar na precedência, como chegam ao personagem e como acabam · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** as regras que agentes da cadeia de aprovação criam ao aprovar por um tempo ou um padrão: o que são, quem cria, alcance, validade máxima, lugar na precedência, como chegam ao personagem e como acabam · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -63,6 +63,7 @@ Deixar um agente da [cadeia de aprovação](cadeia-de-aprovacao.md) liberar por 
 - **CA-RTM-07** · *rápida* — **Dado** o Mestre da mesa e a política padrão, **quando** ele aprova o padrão `curl *` (`medio`) por 2 h e chegam `curl https://pypi.org/x` (domínio no `network.domains` da classe), `curl https://exemplo.io` e `curl -o ../fora/x https://pypi.org/x`, **então** o primeiro passa pela regra, com registro de execução, e os outros dois (condição de rede e caminho fora do worktree falham) viram pedido no Grão-Mestre; **quando** o Dono tira `rede` de `cadeia.mesa_decide` e o arquivo é carregado, **então** o primeiro volta a ser pedido, e a regra volta a valer se o grupo voltar à lista.
 - **CA-RTM-08** · *rápida* — **Dado** uma regra `medio` do Mestre da mesa para `docker compose up *` e a mesa em pausa de autonomia, **quando** chega `docker compose up -d`, **então** vira pedido no Grão-Mestre; **quando** a pausa é retomada, **então** o mesmo comando passa pela regra; **dado** o padrão `docker *` (alcança `docker push`, `alto`), **então** a regra é recusada (risco `alto`, acima do teto dele).
 - **CA-RTM-09** · *rápida* — **Dado** um pedido `medio` com trecho que o motor não analisa (`alias ll=ls`, que nasce no Grão-Mestre), outro de comando encadeado (`make build && ./run.sh`, no Mestre da mesa), outro de um script do worktree com um espaço sem quebra no fim (no Mestre da mesa) e um de ferramenta sem linha na tabela (uma ferramenta MCP), **quando** o nível responde "aprovar por um tempo" (por horas ou até o fim da missão), **então** é recusado com `bad_answer`, nenhuma regra nasce e o pedido segue onde estava, e "aprovar agora" segue possível para cada um; **dado** uma regra da ação exata desses comandos, ou de um comando com quebra de linha ou espaço de outra escrita nas pontas que a ação guarda aparados, feita por outro caminho, **quando** o comando chega, **então** nem o motor nem o portão a usam e nada é registrado como uso.
+- **CA-RTM-10** · *rápida* — **Dado** a seção `cadeia` com `regra_temporaria_max: 7d` e `resumo_mesas: 30d`, **quando** é carregada, **então** valem 7 e 30 dias; **dado** `regra_temporaria_max: 8d` ou `resumo_mesas: xd`, **então** o carregamento é recusado.
 
 ## Depende de
 

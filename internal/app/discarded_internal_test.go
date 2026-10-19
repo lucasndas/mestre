@@ -239,6 +239,7 @@ func TestAnEpochArchivedTwiceHasOneReportAndTheCopyKeepsItsOwnName(t *testing.T)
 
 // A discarded database that was not reported to the new Citadel yet stays after
 // the retention: the report is the audit of what the change of Citadel lost.
+// CA-REPL-16
 func TestADiscardedDatabaseThatWasNotReportedStaysAfterTheRetention(t *testing.T) {
 	t.Parallel()
 	e := discardedEngine(t)

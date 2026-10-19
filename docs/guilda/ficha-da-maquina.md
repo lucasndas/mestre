@@ -89,6 +89,8 @@ O desempate da [eleição da Torre condutora](../autocura/camadas.md#eleição-d
 - **CA-FMAQ-06** · *completa* — **Dado** a Cidadela e uma Torre reais na mesma máquina, **quando** a Torre conecta, **então** a ficha dela no banco principal traz o sistema, a memória, os núcleos reais da máquina e o nome da instância (MVP-1).
 
 - **CA-FMAQ-07** · *rápida* — **Dado** uma máquina cuja ficha guardada tem campos com tipo errado e outra com ficha boa, **quando** se lista as fichas e se casa um personagem, **então** as duas aparecem, só a máquina boa atende, e o próximo `hello` da primeira conserta a ficha.
+- **CA-FMAQ-08** · *rápida* — **Dado** uma máquina cuja ficha guardada tem `os: "plan9"` (tipos certos, conteúdo que o `hello` recusaria), **quando** se lê a ficha dela e chega um `machine.sheet` só com `arch`, **então** a ficha lida vem vazia (sem erro) e o `machine.sheet` recebe `invalid_payload`.
+- **CA-FMAQ-09** · *rápida* — **Dado** uma Torre com a conexão aberta que perdeu o heartbeat, **quando** a presença dela é lida, **então** ela não conta como online; **quando** chega um heartbeat, **então** volta a contar.
 
 ## Depende de
 

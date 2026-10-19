@@ -791,6 +791,7 @@ func (r *rig) falseCitadel(t *testing.T, host string, ca, other *transport.CA, m
 
 // A sheet the Citadel's checker refuses (wrong types) is a bad request, so it
 // never reaches the registry; with no checker only the JSON is checked.
+// CA-GUILDA-17
 func TestARequestWithASheetTheCheckerRefusesIsBadRequest(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, clock.NewFake(day0), func(c *guild.CitadelConfig) {
@@ -1042,6 +1043,7 @@ func TestAnEntryOutOfTheRulesAnswers400AndDoesNotEchoWhatTheMachineSent(t *testi
 // The rule of the name of an instance is written twice, here and in
 // localchan.ValidInstance, which the configuration and the local channel use
 // (guild does not import the local channel): this keeps them from drifting.
+// CA-LOCAL-16
 func TestTheNameOfAnInstanceIsJudgedAsTheLocalChannelJudgesIt(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{

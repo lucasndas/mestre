@@ -6,6 +6,7 @@ import (
 )
 
 // The Citadel refuses at /join a sheet the registry could not read later.
+// CA-GUILDA-17
 func TestCheckJoinSheetRefusesWhatTheHelloWouldRefuse(t *testing.T) {
 	t.Parallel()
 	for name, raw := range map[string]string{

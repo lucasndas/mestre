@@ -30,6 +30,7 @@ func (r *recordingAccess) Apply(path string) error {
 // agents of the instance on Linux, the ACL on Windows); only an instance of `--dir`
 // leaves it as the system created it. The engine applies the access of its
 // paths when it opens the channel.
+// CA-LOCAL-15
 func TestTheSocketOfAnInstalledInstanceGetsTheAccessOfTheInstaller(t *testing.T) {
 	t.Parallel()
 	for _, instance := range []string{"principal", "x"} {

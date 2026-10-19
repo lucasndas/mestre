@@ -381,6 +381,7 @@ func TestAnUnreadableSheetDoesNotStopTheOthers(t *testing.T) {
 
 // A sheet with the right types but invalid content is unreadable too, and a
 // patch to an unreadable row says the machine must send a hello.
+// CA-FMAQ-08
 func TestAnInvalidStoredSheetIsMissingAndAPatchAsksForAHello(t *testing.T) {
 	t.Parallel()
 	r := newCitadel(t)

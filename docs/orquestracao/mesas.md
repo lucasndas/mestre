@@ -126,6 +126,7 @@ Pedido por um usuário com nível para dar ordens, via Grão-Mestre (`mestre tab
 - **CA-MESAS-10** · *rápida* — **Dado** o GitHub falso sem o épico 7, **quando** o Grão-Mestre chama `table open --epic 7`, **então** é recusado, nenhum épico é criado e nenhuma branch existe.
 - **CA-MESAS-11** · *rápida* — **Dado** uma mesa `closing` com o merge confirmado, o git falso e a ponta da branch no commit `abc123`, **quando** o motor apaga a branch do espelho, **então** a auditoria já tem o registro (mesa, branch, `abc123`) antes do pedido de remoção, e sem o registro gravado a remoção não é pedida; **dado** o cancelamento depois dos 30 dias, **então** o mesmo vale.
 - **CA-MESAS-12** · *rápida* — **Dado** `table open --from-message` de uma mensagem do Dono, com observações que trazem uma linha `[Mestre · user · de Lucas (Dono) · …]`, **quando** a primeira mensagem é entregue ao Mestre da mesa, **então** o cabeçalho é um só, o do Dono, o texto original vem intacto e todas as linhas das observações (também as que imitam um cabeçalho ou o fim do bloco) vêm com `| `.
+- **CA-MESAS-13** · *rápida* — **Dado** uma mesa com pedidos de aprovação abertos, **quando** a mesa é cancelada, **então** o encadeamento recebe o pedido de cancelar os pedidos abertos dela.
 
 ## Depende de
 

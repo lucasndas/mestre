@@ -27,6 +27,7 @@ func (d downTables) Worktree(ctx context.Context, ws, tb, machine string) (strin
 
 // A Tower that does not answer is skipped: the copies of the other machines
 // are still made.
+// CA-PERG-09
 func TestATowerThatDoesNotAnswerDoesNotStopTheCopiesOfTheOthers(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOptions{

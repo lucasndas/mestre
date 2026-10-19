@@ -13,6 +13,7 @@ import (
 // wait: of kind sync, with the 30 minutes of the table of waits, listed in
 // `mestre waits`; and it ends when the branch gets there
 // (docs/orquestracao/esperas-e-caixa-de-entrada.md#tempos-limite).
+// CA-ESP-14
 func TestTheStepThatWaitsForTheSyncIsAWaitWithItsTimeLimit(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
