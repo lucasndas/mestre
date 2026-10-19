@@ -1,6 +1,6 @@
 # Classificação de risco
 
-> **Assunto:** o risco de cada pedido de aprovação (`baixo`, `medio`, `alto`, `fixo`), dado pelo motor a partir do tipo da ação e do alvo: tabela padrão, lista de programas seguros, sinais de risco, risco dos tipos de pedido, ajustes do Dono no arquivo de política, padrões aprováveis e o que eles cobrem · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** o risco de cada pedido de aprovação (`baixo`, `medio`, `alto`, `fixo`), dado pelo motor a partir do tipo da ação e do alvo: tabela padrão, lista de programas seguros, sinais de risco, risco dos tipos de pedido, ajustes do Dono no arquivo de política, padrões aprováveis e o que eles cobrem · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -53,7 +53,7 @@ Sem linha `baixo`: os pacotes, scripts, ferramentas e arquivos do projeto (`npm 
 ### Sinais de risco
 
 O que leva a `medio` (ou mais) uma parte sem linha na tabela e dá a origem do `medio` (`RiskTableVersion` 8); sem sinal e fora da lista, a origem é `fora da lista de programas seguros`:
-- **rede:** uma URL ou um host (`usuário@host:`, IP, `localhost`) de domínio fora do `network.domains` das regras efetivas (qualquer domínio, o padrão, não lista nenhum), um programa de rede (`ping`, `dig`, `ftp`, `socat`, `nmap`, `Invoke-RestMethod`…) ou `git clone`, `git ls-remote`, `git submodule`, `git send-email`;
+- **rede:** uma URL ou um host (`usuário@host:`, IP, `localhost`) de domínio fora do `network.domains` das regras efetivas (qualquer domínio, o padrão, não lista nenhum), um programa de rede (`ping`, `dig`, `ftp`, `socat`, `nmap`, `Invoke-RestMethod`…) ou `git clone`, `git ls-remote`, `git archive --remote`, `git submodule`, `git send-email`;
 - **apagar:** os equivalentes de `rm` (`unlink`, `shred`, `rmdir`, `Remove-Item`, `del`…), `git rm` e as opções `--delete`;
 - **instalação ou configuração do sistema:** gerenciadores do sistema e de versões (`apt`, `dnf`, `pacman`, `pip`, `gem`, `rustup`, `nvm`…), `-g`, `--global`, `--location=global` e `--system` de `npm`, `pnpm`, `yarn`, `bun` e `uv`, e o que mexe na máquina (`kill`, `crontab`, `reg`, `setx`, `mount`, `chown`, `mkfs*`…);
 - **contêiner ou VM:** `nerdctl`, `buildah`, `vagrant`, `virsh`, `qemu*`, `multipass`, `lxc`, `minikube`… (`docker` e `podman` já são linha);
