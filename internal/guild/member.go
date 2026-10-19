@@ -8,10 +8,12 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -183,9 +185,32 @@ func (m *Member) SaveCertificate(ctx context.Context, k transport.Kind, cert *x5
 	return nil
 }
 
-// Forget erases the record: the machine is outside any Guild again.
+// Forget erases the record, the Guild-bound tables of the machine database
+// (machine.GuildBound) and the private key of the engine, the one waiting
+// for a renewal included: the machine is outside any Guild again. The keys go
+// first, so that a failure leaves the identity for another try. A key store
+// that cannot forget (not a vault.Deleter) is left as it is.
 func (m *Member) Forget(ctx context.Context) error {
-	if _, err := m.db.Writer().ExecContext(ctx, `DELETE FROM machine_identity`); err != nil {
+	for _, ks := range []vault.KeyStore{m.key, m.pending} {
+		if d, ok := ks.(vault.Deleter); ok {
+			if err := d.Delete(ctx); err != nil {
+				return fmt.Errorf("guild: forget an engine key: %w", err)
+			}
+		}
+	}
+	tx, err := m.db.Writer().BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("guild: forget the identity: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	// What the machine kept of the Guild it leaves in its own database goes
+	// with the identity: the outbox for its Citadel would be sent to the next.
+	for _, t := range append(slices.Clone(machine.GuildBound), "machine_identity") {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+t); err != nil {
+			return fmt.Errorf("guild: forget %s: %w", t, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("guild: forget the identity: %w", err)
 	}
 	return nil

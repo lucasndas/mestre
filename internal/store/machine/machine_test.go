@@ -3,6 +3,7 @@ package machine_test
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/store"
@@ -38,5 +39,43 @@ func TestEmbeddedMigrationsBuildTheMachineSchema(t *testing.T) {
 	var status string
 	if err := db.Reader().QueryRowContext(ctx, `SELECT status FROM terminals WHERE id = 't1'`).Scan(&status); err != nil || status != "starting" {
 		t.Errorf("terminal status = %q, err %v", status, err)
+	}
+}
+
+// CA-GUILDA-16
+// Every table of the machine database is classified: a migration that adds one
+// has to say whether leaving the Guild empties it (CA-GUILDA-16).
+func TestEveryMachineTableIsEitherEmptiedWhenLeavingTheGuildOrKept(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db, err := machine.Open(ctx, filepath.Join(t.TempDir(), "maquina.db"), store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Reader().QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%schema_migrations%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	known := map[string]bool{}
+	for _, n := range append(slices.Clone(machine.GuildBound), machine.Kept...) {
+		known[n] = true
+	}
+	seen := map[string]bool{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		seen[n] = true
+		if !known[n] {
+			t.Errorf("table %q is in neither machine.GuildBound nor machine.Kept", n)
+		}
+	}
+	for n := range known {
+		if !seen[n] {
+			t.Errorf("table %q is classified but does not exist", n)
+		}
 	}
 }

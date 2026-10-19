@@ -279,3 +279,63 @@ func TestAMachineThatLeftTakesNothingMoreOfTheGuild(t *testing.T) {
 		}
 	}
 }
+
+// CA-REPL-15
+// An excluded machine that was the Citadel once is left without secrets: the
+// order to erase the vault removes the databases it discarded and the full
+// copies it made (each a whole copy of the main database, with the vault
+// tables), and counts as something erased, so the receipt goes. What is not in
+// those places stays (CA-REPL-15).
+func TestTheOrderToEraseTheVaultAlsoErasesWhatTheMachineKeptFromWhenItWasTheCitadel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mestre.db")
+	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	copies := filepath.Join(dir, "copias")
+	if err := os.MkdirAll(copies, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	erased := []string{"descartado-3.db", "descartado-3.db-wal", "descartado-3.json", "descartado-3.db.1760000000000", "copias/snapshot-01J9Z0.db"}
+	kept := []string{"unrelated.txt"}
+	for _, name := range append(slices.Clone(erased), kept...) {
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(name)), []byte("a copy of the main database"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err := NewReplica(ctx, ReplicaConfig{DB: db, Leftovers: []Leftover{{Dir: dir, Prefix: "descartado-"}, {Dir: copies}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	did, err := r.dropVault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !did {
+		t.Error("erasing the leftovers did not count as something erased: no receipt")
+	}
+	for _, name := range erased {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name))); err == nil {
+			t.Errorf("%s is still there", name)
+		}
+	}
+	for _, name := range kept {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("%s was erased: %v", name, err)
+		}
+	}
+	if did, err = r.dropVault(ctx); err != nil || did {
+		t.Errorf("the order again: erased=%v err=%v, want nothing to erase", did, err)
+	}
+}

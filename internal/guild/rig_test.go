@@ -136,6 +136,13 @@ func (m *memKeys) Save(_ context.Context, d []byte) error {
 	return nil
 }
 
+func (m *memKeys) Delete(context.Context) error {
+	m.mu.Lock()
+	m.data = nil
+	m.mu.Unlock()
+	return nil
+}
+
 func (m *memKeys) has() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
