@@ -364,3 +364,47 @@ func TestParseAddedLinesReadsTheLinesOfTheHunks(t *testing.T) {
 		}
 	}
 }
+
+// The refusal of a push is read from what the remote says, not from the names of
+// the refs, which anybody can choose.
+func TestThePushRefusalIsReadFromWhatTheRemoteSays(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		stderr string
+		want   error
+	}{
+		"protected":   {"remote: error: GH006: Protected branch update failed for refs/heads/x.\n ! [remote rejected] x -> x (protected branch hook declined)\n", gitx.ErrPushProtected},
+		"non-ff":      {"To /tmp/r.git\n ! [rejected]        mesa -> mesa (non-fast-forward)\nerror: failed to push some refs\n", gitx.ErrNotFastForward},
+		"fetch first": {"To /tmp/r.git\n ! [rejected]        mesa -> mesa (fetch first)\n", gitx.ErrNotFastForward},
+		// a branch called as a refusal of the remote does not make one
+		"a branch named protected branch":    {"To /tmp/r.git\n ! [rejected]        protected-branch -> protected-branch (non-fast-forward)\n", gitx.ErrNotFastForward},
+		"a branch named workflow permission": {"To /tmp/r.git\n ! [rejected]        workflow-permission-x -> workflow-permission-x (non-fast-forward)\n", gitx.ErrNotFastForward},
+		"a branch named declined":            {"To /tmp/r.git\n ! [rejected]        declined -> declined (fetch first)\n", gitx.ErrNotFastForward},
+		"workflows":                          {"remote: refusing to allow a GitHub App to create or update workflow `.github/workflows/ci.yml` without `workflows` permission\n", gitx.ErrPushWorkflow},
+		"signatures":                         {"remote: error: GH013: Repository rule violations found for refs/heads/x.\nremote: - Commits must have verified signatures.\n", gitx.ErrPushSignature},
+		"ruleset":                            {"remote: error: GH013: Repository rule violations found for refs/heads/x.\nremote: - Cannot update this protected ref.\n", gitx.ErrPushProtected},
+		"another refusal":                    {" ! [remote rejected] x -> x (some other reason)\n", gitx.ErrPushRejected},
+	} {
+		if got := gitx.ClassifyPush(tc.stderr); !errors.Is(got, tc.want) {
+			t.Errorf("%s: %v, want %v", name, got, tc.want)
+		}
+	}
+	// a text of no refusal stays what it is
+	if got := gitx.ClassifyPush("fatal: unable to access 'https://x/': Could not resolve host\n"); errors.Is(got, gitx.ErrPushRejected) || errors.Is(got, gitx.ErrPushProtected) {
+		t.Errorf("a network error read as a refusal: %v", got)
+	}
+}
+
+func TestBranchNames(t *testing.T) {
+	t.Parallel()
+	for _, ok := range []string{"mesa", "42-login", "mestre/42-login", "a.b", "x+y", "ü"} {
+		if err := gitx.ValidateBranch(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "-f", "a..b", "a b", "a:b", "a?", "a*", "a[", "a\\b", "a~1", "a^", "a@{1}", "@", "/a", "a/", "a//b", "a.lock", "a/.b", "a.", "refs/heads/x", "a\x00b", "a\nb", "a\x7f"} {
+		if err := gitx.ValidateBranch(bad); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}

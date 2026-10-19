@@ -674,25 +674,32 @@ func pushAndAddedLines(t *testing.T, h Harness) {
 
 	// the push
 	auth := gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushSecretToken0123456789abcdef")
-	ok(work.PushWithAuth(ctx, auth, remote.Dir(), "refs/heads/mesa:refs/heads/mesa", false))
+	ok(work.PushWithAuth(ctx, auth, remote.Dir(), "mesa", false))
 	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c2 {
 		t.Fatalf("pushed branch = %s, want %s", got, c2)
 	}
 	// a push that is no fast-forward is refused, unless forced
-	wt2 := must(work.AddWorktree(ctx, filepath.Join(root, "outra"), gitx.WorktreeOptions{Branch: "outra", Create: true, StartPoint: string(base)}))
+	other := must(g.Clone(ctx, work.Dir(), filepath.Join(root, "outro"), gitx.CloneOptions{}))
+	wt2 := must(other.AddWorktree(ctx, filepath.Join(root, "outra-mesa"), gitx.WorktreeOptions{Branch: "mesa", Create: true, StartPoint: "main"}))
 	c3 := commitFile(t, h, wt2, "b.txt", "x\n", "feat: another history")
-	isErr(t, work.PushWithAuth(ctx, auth, remote.Dir(), "refs/heads/outra:refs/heads/mesa", false), gitx.ErrNotFastForward)
+	isErr(t, wt2.PushWithAuth(ctx, auth, remote.Dir(), "mesa", false), gitx.ErrNotFastForward)
 	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c2 {
 		t.Fatalf("a refused push moved the branch to %s", got)
 	}
-	ok(work.PushWithAuth(ctx, auth, remote.Dir(), "refs/heads/outra:refs/heads/mesa", true))
+	ok(wt2.PushWithAuth(ctx, auth, remote.Dir(), "mesa", true))
 	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c3 {
 		t.Fatalf("forced push = %s, want %s", got, c3)
 	}
-	// a refspec that forces by itself, credentials in the URL and an auth with user information are refused
-	isErr(t, work.PushWithAuth(ctx, auth, remote.Dir(), "+refs/heads/outra:refs/heads/mesa", false), gitx.ErrInvalidArgument)
-	isErr(t, work.PushWithAuth(ctx, auth, "https://x:y@github.com/o/r.git", "refs/heads/outra:refs/heads/mesa", false), gitx.ErrCredentialsInURL)
-	isErr(t, work.PushWithAuth(ctx, gitx.Auth{URL: "https://u:p@github.com/", Header: "Authorization: Basic eA=="}, remote.Dir(), "refs/heads/outra:refs/heads/x", false), gitx.ErrInvalidArgument)
+	// only a branch to the branch of the same name: no refspec, no delete, no glob, no other ref
+	for _, bad := range []string{"refs/heads/mesa:refs/heads/main", ":mesa", "mesa:main", "*", "HEAD:main", "", "-f", "a..b", "x y", "refs/heads/mesa"} {
+		isErr(t, wt2.PushWithAuth(ctx, auth, remote.Dir(), bad, false), gitx.ErrInvalidArgument)
+	}
+	if _, err := remote.ResolveRef(ctx, "refs/heads/main"); err != nil {
+		t.Fatalf("main of the remote: %v", err)
+	}
+	// credentials in the URL and an auth with user information are refused
+	isErr(t, wt2.PushWithAuth(ctx, auth, "https://x:y@github.com/o/r.git", "mesa", false), gitx.ErrCredentialsInURL)
+	isErr(t, wt2.PushWithAuth(ctx, gitx.Auth{URL: "https://u:p@github.com/", Header: "Authorization: Basic eA=="}, remote.Dir(), "mesa", false), gitx.ErrInvalidArgument)
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }

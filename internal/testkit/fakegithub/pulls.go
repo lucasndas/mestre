@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/lucasndas/mestre/internal/testkit"
 )
 
 // The pulls API the commands of PRs use: the PR with its head and its state, the
@@ -90,6 +92,8 @@ func (s *Server) ReviewComments(full string, n int) []map[string]any {
 
 func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string, parts []string) bool {
 	switch {
+	case parts[3] == "pulls" && len(parts) == 4 && r.Method == http.MethodPost:
+		return s.createPull(w, r, full)
 	case parts[3] == "pulls" && len(parts) == 5 && (r.Method == http.MethodGet || r.Method == http.MethodPatch):
 	case parts[3] == "pulls" && len(parts) == 6 && (parts[5] == "reviews" || parts[5] == "files") && r.Method == http.MethodGet:
 	case parts[3] == "pulls" && len(parts) == 6 && parts[5] == "comments" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
@@ -220,7 +224,7 @@ func (s *Server) pullView(rp *repo, full string, n int, head [2]string) map[stri
 	px := rp.pull(n)
 	is := rp.issues[n-1]
 	return map[string]any{
-		"number": n, "title": is["title"], "body": is["body"], "state": px.state, "draft": px.draft, "merged": px.merged,
+		"number": n, "node_id": fmt.Sprintf("PR_%s_%d", full, n), "title": is["title"], "body": is["body"], "state": px.state, "draft": px.draft, "merged": px.merged,
 		"mergeable_state": px.mergeableState, "html_url": fmt.Sprintf("https://github.com/%s/pull/%d", full, n),
 		"head": map[string]any{"ref": head[0], "sha": px.headSHA, "repo": map[string]any{"full_name": head[1]}},
 		"base": map[string]any{"ref": px.baseRef},
@@ -256,4 +260,106 @@ func (s *Server) AddReviewComment(full string, n int, path string, line int, bod
 	}
 	px := s.repos[full].pull(n)
 	px.comments = append(px.comments, c)
+}
+
+// createPull is POST /repos/{r}/pulls: the PR of head into base, with the head
+// commit the double was told (SetPull) or a fixed one.
+func (s *Server) createPull(w http.ResponseWriter, r *http.Request, full string) bool {
+	inst, ok := s.auth(w, r)
+	if !ok {
+		return true
+	}
+	var in struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		Head  string `json:"head"`
+		Base  string `json:"base"`
+		Draft bool   `json:"draft"`
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if dec.Decode(&in) != nil || in.Title == "" || in.Head == "" || in.Base == "" {
+		s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return true
+	}
+	s.mu.Lock()
+	rp := s.repos[full]
+	if rp == nil {
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return true
+	}
+	for _, h := range rp.pulls {
+		if h[0] == in.Head {
+			s.mu.Unlock()
+			s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "A pull request already exists for " + in.Head})
+			return true
+		}
+	}
+	n := len(rp.issues) + 1
+	id := s.nextID
+	s.nextID++
+	rp.issues = append(rp.issues, map[string]any{"id": id, "number": n, "title": in.Title, "body": in.Body, "state": "open", "labels": []map[string]any{}, "user": map[string]any{"login": inst.app + "[bot]"}})
+	if rp.pulls == nil {
+		rp.pulls = map[int][2]string{}
+	}
+	rp.pulls[n] = [2]string{in.Head, full}
+	px := rp.pull(n)
+	px.draft, px.baseRef = in.Draft, in.Base
+	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+	out := s.pullView(rp, full, n, rp.pulls[n])
+	s.mu.Unlock()
+	s.write(w, r, inst, http.StatusCreated, out)
+	return true
+}
+
+// serveGraphQL answers the one mutation the engine makes: markPullRequestReadyForReview.
+func (s *Server) serveGraphQL(w http.ResponseWriter, r *http.Request) {
+	inst, ok := s.auth(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Query     string            `json:"query"`
+		Variables map[string]string `json:"variables"`
+	}
+	if json.NewDecoder(r.Body).Decode(&in) != nil || !strings.Contains(in.Query, "markPullRequestReadyForReview") {
+		testkit.NotImplemented(s.rep, w, "POST /graphql "+firstWord(in.Query))
+		return
+	}
+	var full string
+	var n int
+	if _, err := fmt.Sscanf(strings.Replace(in.Variables["id"], "_", " ", 1), "PR %s", &full); err == nil {
+		i := strings.LastIndexByte(full, '_')
+		if i > 0 {
+			n, _ = strconv.Atoi(full[i+1:])
+			full = full[:i]
+		}
+	}
+	s.mu.Lock()
+	rp := s.repos[full]
+	if rp == nil || n == 0 || rp.pulls == nil || rp.pulls[n] == [2]string{} {
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusOK, map[string]any{"errors": []map[string]any{{"message": "Could not resolve to a node"}}})
+		return
+	}
+	rp.pull(n).draft = false
+	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+	s.mu.Unlock()
+	s.write(w, r, inst, http.StatusOK, map[string]any{"data": map[string]any{"markPullRequestReadyForReview": map[string]any{"pullRequest": map[string]any{"number": n, "isDraft": false}}}})
+}
+
+func firstWord(q string) string {
+	f := strings.Fields(q)
+	if len(f) > 1 {
+		return f[0] + " " + f[1]
+	}
+	return q
+}
+
+// SetPullBody sets the body of a PR as a person would.
+func (s *Server) SetPullBody(full string, n int, body string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repos[full].issues[n-1]["body"] = body
 }

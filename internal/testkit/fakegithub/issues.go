@@ -64,6 +64,10 @@ func (s *Server) SetParent(full string, child, parent int) {
 		rp.extra[child] = &issueExtra{}
 	}
 	rp.extra[child].parent = parent
+	if rp.extra[parent] == nil {
+		rp.extra[parent] = &issueExtra{}
+	}
+	rp.extra[parent].children = append(rp.extra[parent].children, child)
 }
 
 // Labels are the labels of the repository.

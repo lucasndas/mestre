@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 // PullData is a PR as the commands read it.
 type PullData struct {
 	Number         int
+	NodeID         string
 	Title, Body    string
 	State          string
 	Draft, Merged  bool
@@ -22,6 +24,7 @@ type PullData struct {
 }
 
 type pullJSON struct {
+	NodeID         string `json:"node_id"`
 	Number         int    `json:"number"`
 	Title          string `json:"title"`
 	Body           string `json:"body"`
@@ -43,7 +46,7 @@ type pullJSON struct {
 }
 
 func (v pullJSON) data() PullData {
-	return PullData{Number: v.Number, Title: v.Title, Body: v.Body, State: v.State, Draft: v.Draft, Merged: v.Merged, URL: v.HTMLURL,
+	return PullData{Number: v.Number, NodeID: v.NodeID, Title: v.Title, Body: v.Body, State: v.State, Draft: v.Draft, Merged: v.Merged, URL: v.HTMLURL,
 		HeadSHA: v.Head.SHA, HeadRef: v.Head.Ref, HeadRepo: v.Head.Repo.FullName, BaseRef: v.Base.Ref, MergeableState: v.MergeableState}
 }
 
@@ -219,4 +222,39 @@ func pages[T any](ctx context.Context, c *REST, repo, path, what string) ([]T, e
 		}
 	}
 	return nil, errTooMany
+}
+
+// CreatePull opens a PR of head (a branch of the repository) into base.
+func (c *REST) CreatePull(ctx context.Context, repo, title, body, head, base string, draft bool) (PullData, error) {
+	in := map[string]any{"title": title, "body": body, "head": head, "base": base, "draft": draft}
+	var v pullJSON
+	if err := c.send(ctx, http.MethodPost, repo, "/pulls", in, http.StatusCreated, &v, "opening a PR"); err != nil {
+		return PullData{}, err
+	}
+	return v.data(), nil
+}
+
+// MarkReady takes a PR out of the draft state (only GraphQL does it).
+func (c *REST) MarkReady(ctx context.Context, repo, nodeID string) error {
+	repo, err := NormalizeRepo(repo)
+	if err != nil {
+		return err
+	}
+	q := map[string]any{"query": "mutation($id: ID!) { markPullRequestReadyForReview(input: {pullRequestId: $id}) { pullRequest { number isDraft } } }", "variables": map[string]string{"id": nodeID}}
+	st, hdr, raw, err := c.doAbs(ctx, http.MethodPost, repo, "/graphql", q)
+	if err != nil {
+		return err
+	}
+	if st != http.StatusOK {
+		return failed("marking a PR ready", st, raw, hdr)
+	}
+	var v struct {
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if json.Unmarshal(raw, &v) != nil || len(v.Errors) > 0 {
+		return errors.New("github: marking a PR ready: refused")
+	}
+	return nil
 }

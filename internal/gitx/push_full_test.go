@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/gitx"
@@ -26,7 +27,7 @@ func TestRealPushTellsTheRefusalsOfTheRemoteApart(t *testing.T) {
 		said string
 		want error
 	}{
-		"protected branch": {"remote: error: GH006: Protected branch update failed for refs/heads/mesa.", gitx.ErrPushProtected},
+		"protected branch": {"remote: error: GH006: Protected branch update failed for refs/heads/main.", gitx.ErrPushProtected},
 		"ruleset":          {"remote: error: GH013: Repository rule violations found for refs/heads/mesa.", gitx.ErrPushProtected},
 		"workflows":        {"refusing to allow a GitHub App to create or update workflow `.github/workflows/ci.yml` without `workflows` permission", gitx.ErrPushWorkflow},
 		"signatures":       {"remote: error: GH013: Commits must have verified signatures.", gitx.ErrPushSignature},
@@ -46,15 +47,66 @@ func TestRealPushTellsTheRefusalsOfTheRemoteApart(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			writeFile(t, work, "a.txt", "2\n")
+			if err := work.Stage(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := work.Commit(ctx, gitx.CommitOptions{Message: "feat: two", Author: gitx.Signature{Name: "A", Email: "a@example.invalid"}}); err != nil {
+				t.Fatal(err)
+			}
 			hook := "#!/bin/sh\necho '" + tc.said + "' >&2\nexit 1\n"
 			if err := os.WriteFile(filepath.Join(remote.Dir(), "hooks", "pre-receive"), []byte(hook), 0o755); err != nil {
 				t.Fatal(err)
 			}
 			auth := gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushRefusalToken0123456789abcdef")
-			err = work.PushWithAuth(ctx, auth, remote.Dir(), "refs/heads/main:refs/heads/mesa", false)
+			err = work.PushWithAuth(ctx, auth, remote.Dir(), "main", false)
 			if !errors.Is(err, tc.want) {
 				t.Errorf("push = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+// An agent writes the files and the attributes of its worktree: neither a NUL
+// byte nor `-diff` hides a line from the scan.
+func TestRealAddedLinesAreReadWhateverTheFileOrItsAttributesSay(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	g := newReal(gitx.Options{})
+	r := initRepo(t, g)
+	writeFile(t, r, "a.txt", "1\n")
+	commitAll(t, r, "chore: seed")
+	writeFile(t, r, "nul.txt", "ok\x00\nghp_"+strings.Repeat("a1B2", 9)+"\n")
+	writeFile(t, r, "hidden.js", "const t = 'ghp_"+strings.Repeat("c3D4", 9)+"'\n")
+	writeFile(t, r, ".gitattributes", "hidden.js -diff\n*.bin binary\n")
+	writeFile(t, r, "x.bin", "token\x00ghp_"+strings.Repeat("e5F6", 9)+"\n")
+	writeFile(t, r, "sub/tab\tname.txt", "secret = 'AKIA"+strings.Repeat("A1", 8)+"'\n")
+	commitAll(t, r, "feat: sneaky")
+	lines, err := r.AddedLines(ctx, "HEAD~1", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, l := range lines {
+		seen[l.Path] = true
+	}
+	for _, p := range []string{"nul.txt", "hidden.js", "x.bin", "sub/tab\tname.txt"} {
+		if !seen[p] {
+			t.Errorf("the lines of %q were hidden: %+v", p, lines)
+		}
+	}
+}
+
+func TestRealAChangeTooLargeIsNotRead(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	g := newReal(gitx.Options{})
+	r := initRepo(t, g)
+	writeFile(t, r, "a.txt", "1\n")
+	commitAll(t, r, "chore: seed")
+	writeFile(t, r, "big.txt", strings.Repeat("a\n", gitx.MaxAddedLines+1))
+	commitAll(t, r, "feat: big")
+	if _, err := r.AddedLines(ctx, "HEAD~1", "HEAD"); !errors.Is(err, gitx.ErrDiffTooLarge) {
+		t.Fatalf("a change of %d lines: %v", gitx.MaxAddedLines+1, err)
 	}
 }

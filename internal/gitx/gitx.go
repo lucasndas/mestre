@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -47,6 +48,9 @@ var (
 	ErrPushProtected = errors.New("gitx: the remote refused the push: a protection or ruleset of the branch")
 	ErrPushWorkflow  = errors.New("gitx: the remote refused the push: it changes workflows and the App has no permission for them")
 	ErrPushSignature = errors.New("gitx: the remote refused the push: the rules ask for signed commits")
+	ErrPushRejected  = errors.New("gitx: the remote refused the push")
+	// ErrDiffTooLarge: the change adds too many lines to be read.
+	ErrDiffTooLarge = errors.New("gitx: the change is too large to read")
 )
 
 // NoLazyFetchVersion is the first git that honours GIT_NO_LAZY_FETCH, which
@@ -286,15 +290,18 @@ type Repo interface {
 	Fetch(ctx context.Context, remote string, refspecs ...string) error
 	// FetchWithAuth is Fetch with auth handed to git in its environment.
 	FetchWithAuth(ctx context.Context, auth Auth, remote string, refspecs ...string) error
-	// PushWithAuth pushes refspec ("refs/heads/b:refs/heads/b", no leading "+") to
-	// a remote name, URL or path with auth handed to git in its environment. force
-	// pushes a branch that is not a fast-forward of the remote's. A refusal of the
-	// remote is ErrNotFastForward, ErrPushProtected, ErrPushWorkflow or
-	// ErrPushSignature.
-	PushWithAuth(ctx context.Context, auth Auth, remote, refspec string, force bool) error
+	// PushWithAuth pushes the branch to the branch of the same name of a remote
+	// name, URL or path, with auth handed to git in its environment: only that
+	// ref, never a delete, a glob or another destination. force pushes a branch
+	// that is not a fast-forward of the remote's. A refusal of the remote is
+	// ErrNotFastForward, ErrPushProtected, ErrPushWorkflow, ErrPushSignature or
+	// ErrPushRejected.
+	PushWithAuth(ctx context.Context, auth Auth, remote, branch string, force bool) error
 	// AddedLines lists the lines added from the merge base of base and head up to
-	// head (git diff base...head), by file and line of head. A binary file has
-	// none. It never runs a diff driver or a text conversion.
+	// head (git diff base...head), by file and line of head. Every file is read as
+	// text (a NUL byte or an attribute does not hide a line), submodules are not
+	// followed, and a change that adds more than MaxAddedLines lines is
+	// ErrDiffTooLarge. It never runs a diff driver or a text conversion.
 	AddedLines(ctx context.Context, base, head string) ([]AddedLine, error)
 	// CreateBundle writes a bundle of revs (a ref such as "main" or an
 	// incremental range such as "<hash>..main"). ErrEmptyBundle when the
@@ -342,4 +349,27 @@ type Repo interface {
 	// outside the managed blocks are never touched.
 	SetExcludeBlock(ctx context.Context, name string, patterns []string) error
 	ExcludeBlock(ctx context.Context, name string) ([]string, error)
+}
+
+// MaxAddedLines is the most lines AddedLines reads of one change.
+const MaxAddedLines = 200_000
+
+// ValidateBranch checks the name of a branch as git does (git check-ref-format
+// --branch), without starting a process: no empty or "-" start, no "..", no
+// control characters, space, ~ ^ : ? * [ \ or "@{", no ".lock" end, no "/" at the
+// ends or twice in a row, no "." at the start of a part.
+func ValidateBranch(b string) error {
+	bad := b == "" || b == "@" || strings.HasPrefix(b, "-") || strings.HasPrefix(b, "/") || strings.HasSuffix(b, "/") || strings.HasSuffix(b, ".") ||
+		strings.Contains(b, "..") || strings.Contains(b, "//") || strings.Contains(b, "@{") || strings.HasSuffix(b, ".lock") ||
+		strings.ContainsAny(b, " ~^:?*[\\\x7f") || strings.HasPrefix(b, "refs/")
+	for _, r := range b {
+		bad = bad || r < 0x20
+	}
+	for _, part := range strings.Split(b, "/") {
+		bad = bad || strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock")
+	}
+	if bad {
+		return fmt.Errorf("%w: branch %q", ErrInvalidArgument, b)
+	}
+	return nil
 }

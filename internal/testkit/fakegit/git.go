@@ -1090,19 +1090,17 @@ func (g *Git) Pushes() []string {
 // PushWithAuth implements gitx.Repo: the commits and the ref go to the repository
 // the remote names, as git push does; auth is checked like the real one does and
 // otherwise ignored.
-func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, refspec string, force bool) error {
+func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch string, force bool) error {
 	if err := gitx.ValidateRef(remote); err != nil {
 		return err
 	}
 	if err := gitx.CheckURL(remote); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
-	if err := gitx.ValidateRef(refspec); err != nil {
+	if err := gitx.ValidateBranch(branch); err != nil {
 		return err
 	}
-	if strings.HasPrefix(refspec, "+") {
-		return fmt.Errorf("%w: the refspec of a push does not force (use force)", gitx.ErrInvalidArgument)
-	}
+	refspec := "refs/heads/" + branch + ":refs/heads/" + branch
 	if err := auth.Validate(); err != nil {
 		return fmt.Errorf("push %s: %w", gitx.RedactURL(remote), err)
 	}
