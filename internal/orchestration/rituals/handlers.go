@@ -119,8 +119,17 @@ func (s *Service) view(ctx context.Context, r Ritual) map[string]any {
 	if table == "" {
 		table = r.TargetTable
 	}
-	return map[string]any{"name": r.Name, "target": r.Target, "quest": r.Quest, "table": table, "action": string(r.Action), "schedule": r.Schedule.String(),
-		"pre_run": r.PreRun, "timeout": r.Timeout.String(), "enabled": r.State == Enabled, "state": string(r.State), "next_run": when(r.NextRun), "last_result": last}
+	return map[string]any{"name": r.Name, "target": r.Target, "quest": r.Quest, "table": table, "action": string(r.Action), "schedule": scheduleText(r.Schedule),
+		"pre_run": r.PreRun, "timeout": int64(r.Timeout / time.Second), "enabled": r.State == Enabled, "state": string(r.State), "next_run": when(r.NextRun), "last_result": last}
+}
+
+// scheduleText is the schedule as the CLI prints it: durations in whole
+// seconds (docs/cli/convencoes.md).
+func scheduleText(s Schedule) string {
+	if s.Kind == Every {
+		return fmt.Sprintf("every %ds", int64(s.Every/time.Second))
+	}
+	return s.String()
 }
 
 func (s *Service) line(v map[string]any) string {

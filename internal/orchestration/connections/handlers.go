@@ -37,17 +37,17 @@ func Refusal(err error) localchan.Response {
 	var auto *AutomaticError
 	switch {
 	case errors.As(err, &nc):
-		return localchan.Fail("not_connected", nc.Error(), "peça a conexão ao Mestre da mesa")
+		return localchan.Fail("not_connected", nc.Error(), "ask the Master of the table for the connection")
 	case errors.As(err, &auto):
 		return localchan.Fail("automatic_connection", err.Error(), "ela some sozinha quando o motivo acabar").WithExit(localchan.ExitDenied)
 	case errors.Is(err, characters.ErrNoCharacter), errors.Is(err, ErrNotFound):
 		return localchan.Fail("not_visible", err.Error(), "veja `mestre list`")
 	case errors.Is(err, ErrGrandMaster), errors.Is(err, ErrLevelDenied):
-		return localchan.Fail("level_denied", err.Error(), "peça a quem tem o nível (o Mestre da mesa ou o Grão-Mestre)")
+		return localchan.Fail("level_denied", err.Error(), "ask who has the level (the Master of the table or the Grand Master)")
 	case errors.Is(err, ErrTableRequired):
-		return localchan.Fail("table_required", err.Error(), "use --table \"<mesa>\"").WithExit(localchan.ExitUsage)
+		return localchan.Fail("table_required", err.Error(), "use --table \"<table>\"").WithExit(localchan.ExitUsage)
 	case errors.Is(err, ErrDifferentTables):
-		return localchan.Fail("different_tables", err.Error(), "uma conexão liga itens da mesma mesa").WithExit(localchan.ExitUsage)
+		return localchan.Fail("different_tables", err.Error(), "a connection links items of the same table").WithExit(localchan.ExitUsage)
 	case errors.Is(err, ErrSame):
 		return localchan.Fail("same_item", err.Error(), "").WithExit(localchan.ExitUsage)
 	case errors.Is(err, ErrNoConnection):
@@ -123,7 +123,7 @@ func (s *Service) handleConnect(ctx context.Context, c *localchan.Call) localcha
 	}
 	args, ok := c.Request.Strings()
 	if !ok || len(args) != 2 {
-		return localchan.Fail(localchan.CodeUsage, `usage: mestre connect "<A>" "<B>" [--table "<mesa>"]`, "")
+		return localchan.Fail(localchan.CodeUsage, `usage: mestre connect "<A>" "<B>" [--table "<table>"]`, "")
 	}
 	res, err := s.Connect(ctx, ConnectRequest{Caller: x, Table: flagString(c, "table"), A: args[0], B: args[1]})
 	if err != nil {

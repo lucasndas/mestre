@@ -1,6 +1,6 @@
 # Rituais
 
-> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -76,7 +76,7 @@ stateDiagram-v2
 - **Alvo livre:** o personagem em `idle` ou `waiting` com a mesa (e o workspace) sem pausa; uma missão em `draft` ou `completed` (uma `completed` começa nova rodada); `running` e `paused` são ocupadas; cancelada falha.
 - **Relógio:** o motor olha a cada 30 s e também quando um personagem fica livre; um ritual é disparado até 2 min depois do horário sem contar como atrasado. A regra do disparo perdido vale para qualquer olhada, então não há rotina à parte para "o motor voltou"; guarda-se no máximo os 200 horários perdidos mais recentes. Ritual `--once` já disparado fica `finished`.
 - **Conteúdo:** `--prompt` só vai a agente e `--command` só a terminal simples (uma linha, sem quebra); se a saída da pré-execução, num `--command`, trouxer quebra de linha, caractere de controle (inclusive os C1) ou metacaractere do shell (`` ` $ & | ; < > ( ) [ ] { } \ " ' * ? ! ~ # ^ % ``), o comando não é digitado e o disparo falha; num `--prompt`, o item chega com o remetente marcado "saída da pré-execução: texto não verificado" (a saída é dado, não ordem), e o texto entregue é o conteúdo com a saída no lugar de `{{output}}`. Missão não aceita `--pre-run`, e ritual do workspace só mira o Grão-Mestre ou um Mestre de mesa.
-- **Tempo limite:** o padrão é o menor entre 30 min e o intervalo; um valor maior que o intervalo é recusado.
+- **Tempo limite:** o padrão é o menor entre 30 min e o intervalo; um valor maior que o intervalo é recusado. Se o ritual editado tinha o tempo limite padrão e a edição só muda a agenda, o padrão é recalculado para a nova agenda.
 - **Pré-execução:** roda pela máquina do alvo (as Torres, no [M5, antes da etapa 1](../desenvolvimento/ordem-de-implementacao.md#regras-de-execução-da-ordem)) depois da decisão de permissões do próprio alvo; só `allow` passa, `ask` e qualquer dúvida recusam, e sem as regras do alvo, sem decisão ou sem máquina o disparo falha. A saída perde as quebras do fim.
 - **No máximo uma vez:** antes do efeito (a pré-execução, o comando digitado, o item na caixa) o motor grava a intenção no disparo (`pre_running`, depois `delivering`); um disparo achado nesses estados depois de uma queda nunca repete o efeito. Um `prompt` sem pré-execução entra na caixa uma vez só (o item leva a chave do disparo, e um segundo `Enqueue` com a mesma chave devolve o primeiro); um `prompt` já entregue é marcado `delivered`; um `command` ou uma pré-execução que pode ter rodado vira `failed`, com o motivo, devolvido ao dono. Se gravar o fim do disparo falhar, ele não é entregue de novo.
 - **Alvo no disparo:** o papel e o tipo do alvo (agente para `prompt`, terminal simples para `command`) são conferidos de novo a cada disparo; se mudaram, o disparo falha sem enviar nada.

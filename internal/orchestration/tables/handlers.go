@@ -41,13 +41,13 @@ func Refusal(err error) localchan.Response {
 	var na *workspaces.NotActiveError
 	switch {
 	case errors.Is(err, ErrNotGrandMaster):
-		return localchan.Fail("level_denied", "só o Grão-Mestre do workspace abre e encerra mesas", "")
+		return localchan.Fail("level_denied", "only the Grand Master of the workspace opens and closes tables", "")
 	case errors.As(err, &na):
-		return localchan.Fail("workspace_not_active", na.Error(), "espere o workspace ficar ativo, ou retome-o se está pausado").WithExit(localchan.ExitConflict)
+		return localchan.Fail("workspace_not_active", na.Error(), "wait for the workspace to become active, or resume it if it is paused").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrEpicNotFound):
-		return localchan.Fail("epic_not_found", err.Error(), "crie o épico com `mestre gh epic create` antes; `table open` nunca cria épico").WithExit(localchan.ExitNotFound)
+		return localchan.Fail("epic_not_found", err.Error(), "create the epic with `mestre gh epic create` first; `table open` never creates an epic").WithExit(localchan.ExitNotFound)
 	case errors.Is(err, ErrEpicClosed):
-		return localchan.Fail("epic_closed", err.Error(), "reabra o épico ou crie outro").WithExit(localchan.ExitConflict)
+		return localchan.Fail("epic_closed", err.Error(), "reopen the epic or create another").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrTableExists):
 		return localchan.Fail("table_exists", err.Error(), "veja `mestre table list`").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrNotMerged):
@@ -55,7 +55,7 @@ func Refusal(err error) localchan.Response {
 	case errors.As(err, &miss):
 		return missingResponse(miss)
 	case errors.Is(err, ErrApprovalRequired):
-		return localchan.Fail("pending", "cancelar uma mesa é ação destrutiva: aguarda a aprovação de um usuário", "a decisão chega pela caixa de entrada").WithExit(localchan.ExitPending)
+		return localchan.Fail("pending", "cancelling a table is a destructive action: it waits for the approval of a user", "the decision arrives in your inbox").WithExit(localchan.ExitPending)
 	case errors.Is(err, ErrNoTable):
 		return localchan.Fail("not_found", err.Error(), "veja `mestre table list`")
 	case errors.Is(err, ErrBadTransition):
@@ -76,7 +76,7 @@ func Refusal(err error) localchan.Response {
 func missingResponse(m *MissingError) localchan.Response {
 	var r localchan.Response
 	if len(m.Decide) > 0 {
-		r = localchan.Fail("unmerged_changes", m.Error(), "pergunte aos usuários e chame `table close` de novo (com --keep para manter os worktrees)").WithExit(localchan.ExitConflict)
+		r = localchan.Fail("unmerged_changes", m.Error(), "ask the users and call `table close` again (with --keep to keep the worktrees)").WithExit(localchan.ExitConflict)
 	} else {
 		r = localchan.Fail("scheduled", m.Error(), "o motor continua o encerramento sozinho e avisa quando terminar").WithExit(localchan.ExitPending)
 	}
@@ -126,7 +126,7 @@ func (s *Service) handleOpen(ctx context.Context, c *localchan.Call) localchan.R
 	}
 	epic, err := strconv.Atoi(strings.TrimPrefix(flagString(c, "epic"), "#"))
 	if err != nil || epic <= 0 {
-		return localchan.Fail(localchan.CodeUsage, `usage: mestre table open --epic <n> [--sheet "<ficha>"] [--base-branch <branch>] [--from-message <id>]`, "")
+		return localchan.Fail(localchan.CodeUsage, `usage: mestre table open --epic <n> [--sheet "<sheet>"] [--base-branch <branch>] [--from-message <id>]`, "")
 	}
 	res, err := s.Open(ctx, OpenRequest{By: gm, Epic: epic, Sheet: flagString(c, "sheet"), BaseBranch: flagString(c, "base-branch"),
 		FromMessage: flagString(c, "from-message"), Notes: flagString(c, "notes")})
@@ -215,7 +215,7 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	}
 	args, ok := c.Request.Strings()
 	if !ok || len(args) != 1 {
-		return localchan.Fail(localchan.CodeUsage, `usage: mestre table status "<mesa>"`, "")
+		return localchan.Fail(localchan.CodeUsage, `usage: mestre table status "<table>"`, "")
 	}
 	t, err := s.Find(ctx, gm.Workspace, args[0])
 	if err != nil {
@@ -281,7 +281,7 @@ func (s *Service) handleClose(ctx context.Context, c *localchan.Call) localchan.
 	}
 	args, ok := c.Request.Strings()
 	if !ok || len(args) != 1 {
-		return localchan.Fail(localchan.CodeUsage, `usage: mestre table close "<mesa>" [--cancel --reason "<texto>"]`, "")
+		return localchan.Fail(localchan.CodeUsage, `usage: mestre table close "<table>" [--cancel --reason "<text>"]`, "")
 	}
 	cancel := flagBool(c, "cancel")
 	reason := flagString(c, "reason")
