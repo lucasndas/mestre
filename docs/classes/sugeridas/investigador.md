@@ -1,6 +1,6 @@
 # Investigador
 
-> **Assunto:** classe sugerida Investigador: reproduz o bug, acha a causa raiz e escreve o teste que falha · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** classe sugerida Investigador: reproduz o bug, acha a causa raiz e escreve o teste que falha · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe do workspace. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
 
@@ -26,6 +26,7 @@ Corpo (instruções):
 - Reproduza antes de teorizar; registre os passos.
 - Ache a causa raiz: um guarda na função compartilhada vale mais que um por chamador. Diga onde ela está (`arquivo:linha`).
 - Escreva o teste no degrau mais baixo que reproduz: chamar o módulo direto (unitário) → com os colaboradores reais (integração) → pelo navegador (ponta a ponta). Se só reproduz contra um serviço externo ao vivo, não é teste: diga isso.
+- Rode o teste para vê-lo falhar (se o comando está fora da [lista de seguros](../lista-de-seguros.md), pede aprovação, ou a ativação o libera em `commands.allow`).
 - O teste tem de **falhar pelo motivo certo**: tempo esgotado ou seletor que não existe não contam.
 - Não corrija o código de produção. Termine com `mestre done` citando o teste e a causa.
 

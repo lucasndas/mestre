@@ -448,7 +448,7 @@ func TestTheGrandMasterCannotCreateAScrollAndNothingIsWrittenOutsideTheTables(t 
 	fwd := localchan.NewLocalForwarder()
 	w.svc.Register(fwd, w.reg, nil)
 	r := fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: "note create", Args: localchan.TextArgs("# Plano do Grão-Mestre")}, Caller: localchan.Caller{Identified: true, AgentID: gm.ID}})
-	if r.OK || r.Error.Code != "level_denied" || r.ExitCode() != localchan.ExitDenied || !strings.Contains(r.Error.Message, "só existem dentro das mesas") {
+	if r.OK || r.Error.Code != "level_denied" || r.ExitCode() != localchan.ExitDenied || !strings.Contains(r.Error.Message, "exist only inside the tables") {
 		t.Fatalf("note create by the Grand Master = %+v", r)
 	}
 	if _, err := w.svc.Create(w.ctx, scrolls.CreateRequest{Workspace: workspace, Table: "", Actor: by(gm), Content: "x"}); !errors.Is(err, scrolls.ErrNoTable) {

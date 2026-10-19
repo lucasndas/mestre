@@ -139,6 +139,12 @@ type Rituals interface {
 	Deactivate(ctx context.Context, workspace, table string) error
 }
 
+// Requests cancels the open requests of the approval chain of a table that
+// was cancelled (*chain.Service; nil: none).
+type Requests interface {
+	CancelTable(ctx context.Context, workspace, table string) error
+}
+
 // Oversight is what the supervision of the approval chain says about a table
 // for `mestre table status` (docs/orquestracao/supervisao-da-cadeia.md; nil:
 // nothing is said).

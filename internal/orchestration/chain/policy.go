@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +28,10 @@ type Settings struct {
 	AgentDeadline, GrandMasterDeadline time.Duration
 	// PeopleDeadline is the time of the people (the file's `expiracao`).
 	PeopleDeadline time.Duration
+	// PeopleDeadlines are the times of the people of the types that have one of
+	// their own (`tipos.<tipo>.expiracao` of the policy file, which the loader of
+	// the policy of milestone 5 fills in); the other types have PeopleDeadline.
+	PeopleDeadlines map[classes.RequestType]time.Duration
 	// TempRuleMax is the longest validity of a temporary table rule.
 	TempRuleMax time.Duration
 	// MesaDecides are the groups of medio the Mestre da mesa decides.
@@ -42,10 +48,35 @@ type Settings struct {
 	QueueAlertOpen, QueueAlertFactor int
 }
 
+// peopleDeadline is the time of the people for a request of a type.
+func (s Settings) peopleDeadline(t classes.RequestType) time.Duration {
+	if t == "" {
+		t = classes.RequestClassPermission // the requests of an action have no type in old records
+	}
+	if d, ok := s.PeopleDeadlines[t]; ok && d > 0 {
+		return d
+	}
+	return s.PeopleDeadline
+}
+
+// ParseDuration is time.ParseDuration that also reads whole days (`7d`, `30d`),
+// the unit the policy file uses for the long times.
+func ParseDuration(v string) (time.Duration, error) {
+	if n, ok := strings.CutSuffix(v, "d"); ok {
+		days, err := strconv.Atoi(n)
+		if err != nil || days < 0 || days > 36500 {
+			return 0, fmt.Errorf("invalid duration %q", v)
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(v)
+}
+
 // DefaultSettings is the default content of the section.
 func DefaultSettings() Settings {
 	return Settings{AgentDeadline: 2 * time.Minute, GrandMasterDeadline: 10 * time.Minute, PeopleDeadline: 24 * time.Hour,
-		TempRuleMax: 24 * time.Hour, MesaDecides: slices.Clone(classes.DefaultMesaGroups), DenialsToPause: 3,
+		PeopleDeadlines: map[classes.RequestType]time.Duration{classes.RequestClassPermission: 2 * time.Hour},
+		TempRuleMax:     24 * time.Hour, MesaDecides: slices.Clone(classes.DefaultMesaGroups), DenialsToPause: 3,
 		SummaryEvery: 30 * time.Minute, QueueAlertOpen: 10, QueueAlertFactor: 2}
 }
 
@@ -60,6 +91,9 @@ func (s Settings) WithDefaults() Settings {
 	}
 	if s.PeopleDeadline <= 0 {
 		s.PeopleDeadline = d.PeopleDeadline
+	}
+	if s.PeopleDeadlines == nil {
+		s.PeopleDeadlines = d.PeopleDeadlines
 	}
 	if s.TempRuleMax <= 0 {
 		s.TempRuleMax = d.TempRuleMax
@@ -132,7 +166,7 @@ func ParseSection(data []byte, expiry time.Duration) (Settings, error) {
 		if v == "" {
 			return nil
 		}
-		d, err := time.ParseDuration(v)
+		d, err := ParseDuration(v)
 		switch {
 		case err != nil || d <= 0:
 			return &SectionError{Item: item, Reason: "needs a positive duration like 2m or 10m"}

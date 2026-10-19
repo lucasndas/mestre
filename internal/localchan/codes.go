@@ -86,7 +86,6 @@ var exitByCode = map[string]int{
 	"rev_conflict":         ExitConflict,
 	"edit_ambiguous":       ExitConflict,
 	"invalid_state":        ExitConflict,
-	"already_running":      ExitConflict,
 	"edit_not_found":       ExitNotFound,
 	"invalid_quest":        ExitUsage,
 	"table_required":       ExitUsage,
