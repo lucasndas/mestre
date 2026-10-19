@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/logging"
@@ -83,12 +85,25 @@ func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*pr
 	// The identity of the sender is the verified one of the connection; the
 	// character the event names must run there, or any Tower could forge the
 	// events of a character of another (and move its state).
-	if e.deps.AgentMachine == nil {
-		return nil, protocol.NewError(protocol.CodeForbidden, "agent.event: this Citadel does not know where the characters run")
+	if ev.AgentID == "" {
+		return nil, protocol.NewError(protocol.CodeForbidden, "agent.event: the event names no character")
 	}
-	if machine, ok := e.deps.AgentMachine(ctx, ev.AgentID); !ok || machine != m.Peer.ID {
-		return nil, protocol.NewError(protocol.CodeForbidden, "agent.event: the character %q does not run on %s", ev.AgentID, m.Peer.ID)
+	if err := e.runsOn(ctx, ev.AgentID, m.Peer.ID); err != nil {
+		return nil, protocol.NewError(protocol.CodeForbidden, "agent.event: %v", err)
 	}
 	e.deps.OnAgentEvent(m.Peer.ID, ev, ans)
 	return nil, nil
+}
+
+// runsOn says whether the character runs on the machine, by the registry of the
+// Citadel (Deps.AgentMachine). Without the registry nothing runs anywhere: the
+// answer is no.
+func (e *Engine) runsOn(ctx context.Context, agentID, machine string) error {
+	if e.deps.AgentMachine == nil {
+		return errors.New("this Citadel does not know where the characters run")
+	}
+	if where, ok := e.deps.AgentMachine(ctx, agentID); !ok || where != machine {
+		return fmt.Errorf("the character %q does not run on %s", agentID, machine)
+	}
+	return nil
 }
