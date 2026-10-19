@@ -21,6 +21,8 @@ const ButtonTTL = 24 * time.Hour
 // the action, the argument, the recipient and the validity stay in the database.
 type Button struct {
 	Text, Action, Arg string
+	// URL makes the button a link (the panel): nothing comes back to the bot.
+	URL string
 	// Capability is the level the click needs (checked again at the click).
 	Capability users.Capability
 }
@@ -138,6 +140,10 @@ func (b *Bot) buttons(ctx context.Context, tx *sql.Tx, userID string, rows [][]B
 	for _, row := range rows {
 		var r []map[string]string
 		for _, bt := range row {
+			if bt.URL != "" {
+				r = append(r, map[string]string{"text": bt.Text, "url": bt.URL})
+				continue
+			}
 			key, err := newKey()
 			if err != nil {
 				return nil, err
