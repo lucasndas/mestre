@@ -1,6 +1,6 @@
 # Arquitetura
 
-> **Assunto:** índice da área de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** índice da área de arquitetura · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 | Documento | O que cobre | Quando ler |
 |---|---|---|
@@ -11,4 +11,5 @@
 | [canal-local.md](canal-local.md) | canal entre a CLI (e o `mestre hook`) e o motor local: endpoint (socket Unix nos dois sistemas), JSON Lines, pedido, resposta, parciais, tempo limite, motor reiniciando, versão, encaminhamento à Cidadela | implementar a CLI, o despachante ou o lado do motor que os atende |
 | [persistencia.md](persistencia.md) | banco da Guilda (principal na Cidadela, réplica nas Torres) e banco local de máquina, migrações, tabelas principais, registro de terminais, arquivos, pastas, logs, backup | mexer no banco, em arquivos de dados ou em logs |
 | [seguranca.md](seguranca.md) | modelo de ameaças, TLS e CA da Guilda, credenciais de máquina, uma Cidadela por vez, identidade de quem chama a CLI, isolamento dos agentes, mascaramento, quem vê o quê | antes de qualquer mudança que toque em segredos, rede ou permissões |
+| [risco-do-codigo-nao-analisado.md](risco-do-codigo-nao-analisado.md) | o risco aceito do código que o hook não lê e roda como `mestre-agente`: o que alcança (credenciais, binários, configuração do Mestre, chaves de API), o que não alcança, o que reduz, o que removeria e o que fazer depois de um incidente | avaliar o risco das contas; mudar o isolamento dos agentes |
 | [precedencia.md](precedencia.md) | ordem decretos > regras do Mestre > decisões de agentes > classe > ficha > AGENTS.md, delegação, canais de cada camada, combinação na decisão de permissão | implementar o `mestre hook`, decretos, classes ou a camada do Mestre |
