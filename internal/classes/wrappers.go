@@ -30,8 +30,11 @@ type wrapper struct {
 	// it (bwrap --unsetenv NAME): what moves the global configuration of git
 	// for the command moves it for the git it runs.
 	sets, unsets map[string]bool
-	operands     int
-	sub          string
+	// props are the options whose value is a unit property of systemd
+	// (systemd-run -p Environment=NAME=value, EnvironmentFile=…).
+	props    map[string]bool
+	operands int
+	sub      string
 	// line are the options whose value is a command line for a shell
 	// (doppler run --command 'git push').
 	line map[string]bool
@@ -52,7 +55,8 @@ var wrappers = map[string]wrapper{
 	"firejail":  {sets: set("--env")},
 	"rlwrap":    {valued: set("-b -C -D -f -F -H -l -M -p -P -q -s -S -t -z")},
 	"systemd-run": {valued: set("-u --unit --description --slice -p --property -E --setenv --uid --gid --working-directory --service-type --nice " +
-		"-M --machine -H --host --on-active --on-boot --on-startup --on-unit-active --on-unit-inactive --on-calendar --timer-property"), sets: set("-E --setenv")},
+		"-M --machine -H --host --on-active --on-boot --on-startup --on-unit-active --on-unit-inactive --on-calendar --timer-property"), sets: set("-E --setenv"),
+		props: set("-p --property")},
 	"env-cmd": {valued: set("-f --file -e --environments -r --rc-file")},
 	"dotenv":  {valued: set("-e -v -p"), sets: set("-v")},
 	"dotenvx": {valued: set("-f --env-file -fk --env-keys-file -e --env"), sets: set("-e --env"), sub: "run"},
@@ -80,6 +84,49 @@ var corepackManagers = set("npm npx pnpm pnpx yarn yarnpkg")
 // debugger, a profiler or a meter, or python -m runs, as the words of a
 // command each, or nil.
 func (e *evaluator) wrapped(cn string, args []word, res *result) [][]word {
+	out := e.wrappedBy(cn, args, res)
+	if cn == "systemd-run" {
+		// -p ExecStartPre='git push': the unit runs the command line
+		for _, line := range unitExecLines(args) {
+			out = append(out, shellWords(line))
+		}
+	}
+	return out
+}
+
+// unitExecProps are the properties of a systemd unit whose value is a command
+// line the unit runs.
+var unitExecProps = set("execstart execstartpre execstartpost execstop execstoppost execreload execcondition")
+
+// unitExecLines are the command lines of the Exec… properties given to
+// systemd-run (-p Exec…=LINE, --property Exec…=LINE, -pExec…=LINE), without
+// the modifiers a unit puts before the program (-, @, +, !, :).
+func unitExecLines(args []word) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		t := args[i].text
+		var prop string
+		switch {
+		case (t == "-p" || t == "--property") && i+1 < len(args):
+			i++
+			prop = args[i].text
+		case strings.HasPrefix(t, "--property="):
+			prop = strings.TrimPrefix(t, "--property=")
+		case strings.HasPrefix(t, "-p") && !strings.HasPrefix(t, "--"):
+			prop = t[2:]
+		default:
+			continue
+		}
+		if key, val, ok := strings.Cut(prop, "="); ok && unitExecProps[strings.ToLower(key)] {
+			if val = strings.TrimLeft(val, "-@+!: "); val != "" {
+				out = append(out, val)
+			}
+		}
+	}
+	return out
+}
+
+func (e *evaluator) wrappedBy(cn string, args []word, res *result) [][]word {
 	one := func(inner []word) [][]word {
 		if len(inner) == 0 {
 			return nil
@@ -115,6 +162,9 @@ func (e *evaluator) wrapped(cn string, args []word, res *result) [][]word {
 	}
 	if inner := pythonRunner(cn, args); inner != nil {
 		return one(inner)
+	}
+	if cn == "gdb" || cn == "rr" {
+		e.debuggerEnv(cn, args, res)
 	}
 	if cmds := debugged(cn, args); cmds != nil {
 		return cmds
@@ -154,9 +204,34 @@ func (e *evaluator) wrapped(cn string, args []word, res *result) [][]word {
 	return one(rest[spec.operands:])
 }
 
+// envFileName is the name under which an environment file, whose content the
+// motor does not read, is noted: the variables it sets may be any.
+const envFileName = "EnvironmentFile"
+
+// unitEnvironment reads a property of a systemd unit that sets the
+// environment: Environment=NAME=value NAME=value (quotes allowed) names its
+// variables; EnvironmentFile=PATH may set any, and is noted as itself.
+func unitEnvironment(prop string, note func(name string, set bool)) {
+	key, val, _ := strings.Cut(prop, "=")
+	switch strings.ToLower(key) {
+	case "environment":
+		for _, f := range strings.Fields(val) {
+			if name, _, ok := strings.Cut(strings.Trim(f, `"'`), "="); ok && name != "" {
+				note(name, true)
+			}
+		}
+	case "environmentfile":
+		note(envFileName, true)
+	}
+}
+
 // wrapperEnv is what an option of a wrapper does to the environment of the
 // command it runs: setting or taking out the variable is judged as env does.
 func (e *evaluator) wrapperEnv(res *result, name string, set bool) {
+	if name == envFileName {
+		e.homeScope = name
+		return
+	}
 	if set {
 		e.gitEnv(res, name)
 	} else {
@@ -231,6 +306,9 @@ func (w wrapper) skipOpts(args []word, note func(name string, set bool)) []word 
 		if note != nil && len(vals) > 0 && (w.sets[opt] || w.unsets[opt]) {
 			name, _, _ := strings.Cut(vals[0], "=")
 			note(name, w.sets[opt])
+		}
+		if note != nil && len(vals) > 0 && w.props[opt] {
+			unitEnvironment(vals[0], note)
 		}
 	}
 	return args[min(i, len(args)):]
@@ -326,7 +404,7 @@ func pythonRunner(cn string, args []word) []word {
 // -Class Win32_Process -Name Create "cmd", schtasks /create /tr "cmd" (the task
 // runs it later, in the account that made it) and the calls that start a
 // process in the script a line of mshta carries.
-func winCreate(cn string, args []word) []string {
+func winCreate(cn string, args []word, windows bool) []string {
 	texts := wordsText(args)
 	switch cn {
 	case "wmic":
@@ -345,8 +423,125 @@ func winCreate(cn string, args []word) []string {
 		}
 	case "mshta":
 		return scriptRuns(texts)
+	case "new-scheduledtaskaction":
+		// the task runs Execute with Argument later, in the account that made it
+		m := pwshNamed(args, taskActionParams, nil, []string{"execute", "argument", "workingdirectory"})
+		if m["execute"] != "" {
+			return []string{strings.TrimSpace(m["execute"] + " " + m["argument"])}
+		}
+	case "new-service":
+		if line := pwshNamed(args, newServiceParams, nil, []string{"name", "binarypathname"})["binarypathname"]; line != "" {
+			return []string{line}
+		}
+	case "sc":
+		// sc create NAME binPath= "command line", also config
+		for i, t := range texts {
+			if v, ok := cutFold(t, "binpath="); ok {
+				if v == "" && i+1 < len(texts) {
+					v = texts[i+1]
+				}
+				return []string{v}
+			}
+		}
+	case "rundll32":
+		// rundll32 shell32.dll,ShellExec_RunDLL command line
+		for i, t := range texts {
+			// ShellExec_RunDLL by name or by its ordinal (shell32.dll,#572):
+			// any entry given by ordinal that is followed by words is read so
+			if l := strings.ToLower(t); strings.Contains(l, "shellexec_rundll") || strings.Contains(l, "fileprotocolhandler") || strings.Contains(l, ",#") {
+				return commandLines(texts[i+1:])
+			}
+		}
+	case "pcalua":
+		// pcalua -a APP -c ARGUMENTS
+		var app, arg string
+		for i := 0; i+1 < len(texts); i++ {
+			switch strings.ToLower(texts[i]) {
+			case "-a":
+				app = texts[i+1]
+			case "-c":
+				arg = texts[i+1]
+			}
+		}
+		for _, t := range texts { // -a:git -c:push
+			if v, ok := cutFold(t, "-a:"); ok {
+				app = v
+			} else if v, ok := cutFold(t, "-c:"); ok {
+				arg = v
+			}
+		}
+		if app != "" {
+			return []string{strings.TrimSpace(app + " " + arg)}
+		}
+	case "at":
+		// at [\\computer] TIME [/every:… | /next:… | /interactive] command;
+		// the at of the other systems has no such form
+		if !windows {
+			return nil
+		}
+		i := 0
+		for i < len(texts) && strings.HasPrefix(texts[i], `\\`) {
+			i++
+		}
+		if i < len(texts) && atTimeRe.MatchString(texts[i]) {
+			i++
+			for i < len(texts) && strings.HasPrefix(texts[i], "/") {
+				i++
+			}
+			return commandLines(texts[i:])
+		}
 	}
 	return nil
+}
+
+var atTimeRe = regexp.MustCompile(`^(?i)\d{1,2}:\d{2}(?:am|pm|a|p)?$`)
+
+// cutFold cuts the prefix off a word, ignoring case.
+func cutFold(s, prefix string) (string, bool) {
+	if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+		return strings.Trim(s[len(prefix):], `"'`), true
+	}
+	return "", false
+}
+
+// taskActionParams and newServiceParams are the parameters of the cmdlets
+// that make an action of the Task Scheduler and a service, true for those that
+// take a value.
+var (
+	taskActionParams = map[string]bool{"execute": true, "argument": true, "workingdirectory": true, "id": true, "cimsession": true, "throttlelimit": true, "asjob": false}
+	newServiceParams = map[string]bool{"name": true, "binarypathname": true, "displayname": true, "description": true, "startuptype": true, "credential": true, "dependson": true,
+		"securitydescriptorstring": true, "whatif": false, "confirm": false}
+)
+
+// pwshNamed reads the arguments of a cmdlet: the value of each parameter by
+// its name (under any abbreviation), and the words without a name in the order
+// of the positional parameters.
+func pwshNamed(args []word, params map[string]bool, aliases map[string]string, positional []string) map[string]string {
+	out := map[string]string{}
+	next := 0
+	for i := 0; i < len(args); i++ {
+		name, val, haveVal, isParam := wmiParam(args[i])
+		if isParam {
+			if canon, ok := pwshParam(name, params, aliases); ok {
+				if !haveVal && params[canon] && i+1 < len(args) {
+					i++
+					val, haveVal = args[i].text, true
+				}
+				if haveVal {
+					out[canon] = val
+				}
+				continue
+			}
+		}
+		for next < len(positional) && out[positional[next]] != "" {
+			next++
+		}
+		if next < len(positional) {
+			out[positional[next]] = args[i].text
+			next++
+		}
+	}
+	return out
 }
 
 // commandLines are the command lines that the words of an argument list stand
