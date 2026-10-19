@@ -313,7 +313,8 @@ func TestClaudeGetsTheSkillsOfItsLevelInAFolderOfItsOwn(t *testing.T) {
 	}
 }
 
-// CA-SZ-PERS-10
+// Part of CA-SZ-PERS-10 (the environment and the file; the commit with the
+// new author, with the real git, is in character_full_test.go)
 func TestTheGitIdentityIsOnlyTheFileOfTheCharacter(t *testing.T) {
 	t.Parallel()
 	r := newCharRig(t, nil)

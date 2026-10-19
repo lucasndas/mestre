@@ -295,6 +295,10 @@ func (w *world) externalRuns(p *proc) [][]string {
 	return runs
 }
 
+// Part of CA-CIDADELA-06 and CA-CIDADELA-07 (fecham no M7; falta: a aprovação
+// pelo Telegram, o Grão-Mestre retomado, o commit em
+// refs/mestre/recuperados/epoca-1/<mesa> e o GitHub falso sem chamadas da
+// antiga).
 // The change of Citadel with three instances: the Citadel stops for good, a
 // Tower is promoted with the approval of the fake Owner and the fake lock, it
 // has the data up to the last lsn it applied, the third one follows it, the
@@ -478,6 +482,8 @@ func TestTheCitadelFallsATowerIsPromotedTheOtherFollowsAndTheOldOneReturnsAsATow
 	}
 }
 
+// Part of CA-CIDADELA-08 (fecha no M6; falta: o 307 da Torre para a Cidadela
+// no painel).
 // The planned handover (docs/guilda/cidadela-e-torres.md#troca-planejada):
 // the Citadel stops acting outside, waits for the chosen machine to confirm
 // its last lsn and tells it to promote itself through the lock; the chosen

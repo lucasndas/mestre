@@ -251,8 +251,8 @@ func (o *outputs) Agent(_ context.Context, r hook.AsyncResult) error {
 	return nil
 }
 
-// Part of CA-CLASSES-04 (it closes in M4, with the scroll of the quest and
-// the real fake agent): the end of the turn does not wait for the
+// Part of CA-CLASSES-04 (it closes in M5, with the HookExec and the
+// runner in mestre run): the end of the turn does not wait for the
 // asynchronous hook of the class, the next turn starts while it runs, the
 // hooks of a character run one at a time, and the output goes to the scroll.
 func TestAnAsyncTurnEndHookDoesNotHoldTheNextTurnAndItsOutputGoesToTheScroll(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
@@ -127,11 +128,21 @@ func TestOpeningATableMakesTheBranchTheWorktreeAndTheTableMaster(t *testing.T) {
 	if err != nil || !ok || master.ID != res.Master.ID || !master.Pinned {
 		t.Fatalf("table master = %+v, %v, %v", master, ok, err)
 	}
-	conn, err := w.conns.Target(w.ctx, master.ID, "", w.gm.Name)
-	if err != nil {
-		t.Fatalf("the table master is not connected to the Grand Master: %v", err)
+	// The connection to the Grand Master exists, for the reason "master".
+	if c, ok, err := w.conns.Store().Between(w.ctx, connections.Char(master.ID), connections.Char(w.gm.ID)); err != nil || !ok || !c.Has(connections.ReasonMaster) {
+		t.Fatalf("connection between the table master and the Grand Master = %+v, %v, %v", c, ok, err)
 	}
-	_ = conn
+	// The Grand Master is reachable from the table master, and the other way
+	// round, and each name leads to the right character.
+	if to, err := w.conns.Target(w.ctx, master.ID, "", w.gm.Name); err != nil || to.ID != w.gm.ID {
+		t.Fatalf("the table master reaches %+v, %v; want the Grand Master %s", to, err, w.gm.ID)
+	}
+	if to, err := w.conns.Target(w.ctx, w.gm.ID, "", master.Name); err != nil || to.ID != master.ID {
+		t.Fatalf("the Grand Master reaches %+v, %v; want the table master %s", to, err, master.ID)
+	}
+	if _, err := w.conns.Target(w.ctx, master.ID, "", "Fulano de Tal"); err == nil {
+		t.Fatal("the table master reaches a name that is nobody")
+	}
 
 	// The first message: the original text, byte for byte, then the notes.
 	items, err := w.inb.Store().All(w.ctx, master.ID)
@@ -388,6 +399,8 @@ func TestAMissionTakesAReviewedTableBackToWork(t *testing.T) {
 	}
 }
 
+// Part of CA-SUPCAD-06 (fecha no M5; falta: o aviso de 3 h sem entrega, o botão
+// Pausar mesa e a auditoria de quem pausou).
 // The pause is a mark over the state: the inbox does not deliver to the
 // characters of the table, the other tables go on, a paused workspace pauses
 // every table, and resume delivers what waited in the order of the queue.

@@ -32,6 +32,7 @@ func (w *commWorld) ask(c characters.Character, args ...string) <-chan result {
 
 // CA-CLI-COM-01: a target that does not answer in the default time limit: exit
 // 6, status pending, and the late answer reaches the inbox of who asked.
+// Part of CA-ESP-04, at the command: at 90 s the answer is "sem resposta no prazo".
 func TestAskThatRunsOutOfTimeIsPendingAndTheLateAnswerComesToTheInbox(t *testing.T) {
 	t.Parallel()
 	w := newCommWorld(t)
@@ -42,6 +43,9 @@ func TestAskThatRunsOutOfTimeIsPendingAndTheLateAnswerComesToTheInbox(t *testing
 	v := decodeJSON(t, r)
 	if r.code != 6 || v.OK || v.Error.Code != "timeout" || v.Error.Details["status"] != "pending" || v.Error.Details["to"] != "Revisor" || v.Error.Details["request_id"] == "" {
 		t.Fatalf("ask that ran out of time = %d %s", r.code, r.stdout)
+	}
+	if !strings.Contains(v.Error.Message, "sem resposta no prazo") {
+		t.Errorf("message = %q, want \"sem resposta no prazo\"", v.Error.Message)
 	}
 	if !strings.Contains(v.Error.Hint, "não reenvie") {
 		t.Errorf("hint = %q", v.Error.Hint)

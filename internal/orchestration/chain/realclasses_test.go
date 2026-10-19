@@ -34,3 +34,14 @@ func (w *world) approveClass(name, perms string) {
 		w.t.Fatal(err)
 	}
 }
+
+// ceilingFile is the teto.yaml of the workspace on disk, read at each use.
+type ceilingFile string
+
+func (p ceilingFile) Current(ctx context.Context) (*classes.Ceiling, error) {
+	data, err := classes.CeilingPath(p).Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return classes.ParseCeiling(data)
+}
