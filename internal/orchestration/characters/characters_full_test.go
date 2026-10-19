@@ -57,7 +57,7 @@ func TestARealScreenNoAdapterKnowsBlocksTheCharacterOnInputAndARawKeyBringsItBac
 	if got := f.get(c); got.Reason != characters.ReasonInput {
 		t.Fatalf("reason = %q, want input", got.Reason)
 	}
-	ns := f.notes.of(characters.NoticeBlockedInput)
+	ns := f.waitNotice(characters.NoticeBlockedInput) // sent after the report of the state
 	if len(ns) != 1 || !containsText(ns[0].Screen, "Uma tela que nenhum adaptador conhece") {
 		t.Fatalf("the table master was not told with the screen: %+v", ns)
 	}
