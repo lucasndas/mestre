@@ -84,7 +84,13 @@ func TestRealAddedLinesAreReadWhateverTheFileOrItsAttributesSay(t *testing.T) {
 	writeFile(t, r, "hidden.js", "const t = 'ghp_"+strings.Repeat("c3D4", 9)+"'\n")
 	writeFile(t, r, ".gitattributes", "hidden.js -diff\n*.bin binary\n")
 	writeFile(t, r, "x.bin", "token\x00ghp_"+strings.Repeat("e5F6", 9)+"\n")
-	writeFile(t, r, "sub/tab\tname.txt", "secret = 'AKIA"+strings.Repeat("A1", 8)+"'\n")
+	// Windows does not accept a TAB (nor quotes, `*`, `?`, `:`) in a file name,
+	// so the odd name is only written where the system allows it.
+	odd := "sub/tab\tname.txt"
+	if runtime.GOOS == "windows" {
+		odd = "sub/plain name.txt"
+	}
+	writeFile(t, r, odd, "secret = 'AKIA"+strings.Repeat("A1", 8)+"'\n")
 	commitAll(t, r, "feat: sneaky")
 	lines, err := r.AddedLines(ctx, "HEAD~1", "HEAD")
 	if err != nil {
@@ -94,7 +100,7 @@ func TestRealAddedLinesAreReadWhateverTheFileOrItsAttributesSay(t *testing.T) {
 	for _, l := range lines {
 		seen[l.Path] = true
 	}
-	for _, p := range []string{"nul.txt", "hidden.js", "x.bin", "sub/tab\tname.txt"} {
+	for _, p := range []string{"nul.txt", "hidden.js", "x.bin", odd} {
 		if !seen[p] {
 			t.Errorf("the lines of %q were hidden: %+v", p, lines)
 		}
