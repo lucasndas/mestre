@@ -74,7 +74,7 @@ func (a logAlerts) Operational(_ context.Context, al workspaces.Alert) error {
 
 // hostOrchestration builds the orchestration of a period of the Citadel over its
 // main database.
-func (e *Engine) hostOrchestration(db *store.DB) (*Orchestration, error) {
+func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchestration, error) {
 	if e.paths.Workspaces == "" || e.paths.Maquina == "" {
 		return nil, errors.New("app: no folder for the workspaces and the machine")
 	}
@@ -101,10 +101,14 @@ func (e *Engine) hostOrchestration(db *store.DB) (*Orchestration, error) {
 	if err := privdir.Ensure(tmp); err != nil {
 		return nil, err
 	}
-	return NewOrchestration(OrchestrationOptions{
+	opts := OrchestrationOptions{
 		Guild: db, Machine: e.id.MachineID, Clock: e.clk, Logger: e.log, WorkspacesDir: workspacesDir, TempDir: tmp,
 		Git: git, Machines: characters.MachineSet{}, Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk}},
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
 		Limits: characters.DefaultLimits(),
-	})
+	}
+	if integ != nil {
+		integ.Extend(&opts)
+	}
+	return NewOrchestration(opts)
 }

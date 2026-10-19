@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/users"
@@ -26,12 +27,15 @@ const (
 // notices of the engine (users.Alerts). It is the Alerts and the Strangers of
 // the Bot.
 type OwnerAlerts struct {
-	Bot   *Bot
+	// Bind gives the bot (made after the alerts: the bot needs them); until then
+	// nothing is told.
+	bot   atomic.Pointer[Bot]
 	Users *users.Service
 	Clock clock.Clock
 
-	mu    sync.Mutex
-	group map[int64]*strangerGroup
+	mu      sync.Mutex
+	group   map[int64]*strangerGroup
+	pending []string // notices that wait for the bot
 }
 
 type strangerGroup struct {
@@ -39,6 +43,25 @@ type strangerGroup struct {
 	count         int
 	last          Stranger
 	sent          map[string]int64 // owner → outbox id
+}
+
+// maxPending is how many notices wait for the bot to be up.
+const maxPending = 20
+
+// Bind gives the alerts the bot they tell through; the notices that came before
+// it was up (the lock going out while the bot starts) are sent now. nil unbinds.
+func (a *OwnerAlerts) Bind(b *Bot) {
+	a.bot.Store(b)
+	if b == nil {
+		return
+	}
+	a.mu.Lock()
+	pending := a.pending
+	a.pending = nil
+	a.mu.Unlock()
+	for _, text := range pending {
+		a.OwnerAlert(context.Background(), text)
+	}
 }
 
 var (
@@ -62,6 +85,10 @@ func (a *OwnerAlerts) owners(ctx context.Context) []users.User {
 
 // Stranger implements Strangers.
 func (a *OwnerAlerts) Stranger(ctx context.Context, s Stranger) {
+	bot := a.bot.Load()
+	if bot == nil {
+		return // the bot is not up: nothing can be told, and nothing is answered
+	}
 	now := a.Clock.Now()
 	a.mu.Lock()
 	if a.group == nil {
@@ -94,9 +121,9 @@ func (a *OwnerAlerts) Stranger(ctx context.Context, s Stranger) {
 	switch {
 	case first:
 		for _, o := range a.owners(ctx) {
-			id, err := a.Bot.Send(ctx, Out{ChatID: o.TelegramID, UserID: o.ID, Text: text, Origin: "motor"})
+			id, err := bot.Send(ctx, Out{ChatID: o.TelegramID, UserID: o.ID, Text: text, Origin: "motor"})
 			if err != nil {
-				a.Bot.log.Warn("telegram: the alert of a stranger was not queued", "err", err)
+				bot.log.Warn("telegram: the alert of a stranger was not queued", "err", err)
 				continue
 			}
 			a.mu.Lock()
@@ -105,8 +132,8 @@ func (a *OwnerAlerts) Stranger(ctx context.Context, s Stranger) {
 		}
 	case due:
 		for owner, id := range sent {
-			if err := a.Bot.Edit(ctx, Edit{Outbox: id, UserID: owner, Text: text}); err != nil {
-				a.Bot.log.Warn("telegram: the alert of a stranger was not updated", "err", err)
+			if err := bot.Edit(ctx, Edit{Outbox: id, UserID: owner, Text: text}); err != nil {
+				bot.log.Warn("telegram: the alert of a stranger was not updated", "err", err)
 			}
 		}
 	}
@@ -147,20 +174,33 @@ func (a *OwnerAlerts) Unauthorized(ctx context.Context, telegramID int64, reason
 
 // OwnerAlert implements users.Alerts: a notice to the Owner.
 func (a *OwnerAlerts) OwnerAlert(ctx context.Context, text string) {
+	bot := a.bot.Load()
+	if bot == nil {
+		a.mu.Lock()
+		if a.pending = append(a.pending, text); len(a.pending) > maxPending {
+			a.pending = a.pending[1:]
+		}
+		a.mu.Unlock()
+		return
+	}
 	for _, o := range a.owners(ctx) {
-		if _, err := a.Bot.Send(ctx, Out{ChatID: o.TelegramID, UserID: o.ID, Text: text, Origin: "motor"}); err != nil {
-			a.Bot.log.Warn("telegram: a notice to the Owner was not queued", "err", err)
+		if _, err := bot.Send(ctx, Out{ChatID: o.TelegramID, UserID: o.ID, Text: text, Origin: "motor"}); err != nil {
+			bot.log.Warn("telegram: a notice to the Owner was not queued", "err", err)
 		}
 	}
 }
 
 // Tell implements users.Alerts: a notice to one user.
 func (a *OwnerAlerts) Tell(ctx context.Context, userID, text string) {
+	bot := a.bot.Load()
+	if bot == nil {
+		return
+	}
 	u, err := a.Users.Get(ctx, userID)
 	if err != nil || u.State != users.Active || u.TelegramID == 0 {
 		return
 	}
-	if _, err := a.Bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
-		a.Bot.log.Warn("telegram: a notice was not queued", "err", err)
+	if _, err := bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
+		bot.log.Warn("telegram: a notice was not queued", "err", err)
 	}
 }
