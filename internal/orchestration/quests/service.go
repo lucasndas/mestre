@@ -495,7 +495,7 @@ func (s *Service) Cancel(ctx context.Context, id, reason string) (Quest, error) 
 func (s *Service) finalizeCancel(ctx context.Context, q Quest) {
 	text := "## Missão cancelada\n"
 	if q.PausedReason != "" {
-		text += "**Motivo:** " + q.PausedReason + "\n"
+		text += inbox.Say("**Motivo:**", q.PausedReason, ">") + "\n"
 	}
 	s.appendScroll(ctx, q, text)
 	s.endResources(ctx, q)

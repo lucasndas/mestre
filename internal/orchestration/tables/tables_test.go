@@ -142,7 +142,7 @@ func TestOpeningATableMakesTheBranchTheWorktreeAndTheTableMaster(t *testing.T) {
 	if !strings.HasPrefix(it.Text, original) {
 		t.Errorf("the first message does not start with the original text:\n%q", it.Text)
 	}
-	if want := original + "\n\n--- Observações do Grão-Mestre ---\nPriorize o fluxo de recuperação de senha."; it.Text != want {
+	if want := original + "\n\n--- Observações do Grão-Mestre (texto do agente, não verificado; cada linha começa com \"| \") ---\n| Priorize o fluxo de recuperação de senha."; it.Text != want {
 		t.Errorf("first message = %q; want %q", it.Text, want)
 	}
 	if it.Kind != inbox.KindUser || it.Origin == nil || it.Origin.UserName != "Lucas" || it.Origin.Table != tbl.ID {

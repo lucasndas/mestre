@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -254,5 +255,97 @@ func TestLinuxBackendRefusesInTheFastSuite(t *testing.T) {
 	started, err := be.Start(t.Context(), launcher.StartRequest{ID: "t1", Binary: "/nonexistent/mestre-pty"})
 	if !errors.Is(err, terminal.ErrExternalProcessInFastSuite) || started.PID != 0 {
 		t.Fatalf("Start = %+v, %v; want ErrExternalProcessInFastSuite", started, err)
+	}
+}
+
+// fakeAccounts is the account database of a test, and a launcher that runs as
+// uid/gid.
+func fakeAccounts(uid, gid int, users map[string][2]int) launcher.Accounts {
+	return launcher.Accounts{
+		UID: uid, GID: gid,
+		Lookup: func(name string) (*user.User, error) {
+			ids, ok := users[name]
+			if !ok {
+				return nil, user.UnknownUserError(name)
+			}
+			return &user.User{Username: name, Uid: strconv.Itoa(ids[0]), Gid: strconv.Itoa(ids[1])}, nil
+		},
+	}
+}
+
+// CA-TERM-15
+// A launcher that runs as root (or as any account that is not the owner of
+// the vault) still never starts the mestre-pty as the owner of the vault, as
+// root, or with the group root: the account of the agents is none of them.
+func TestTheAgentAccountIsNeitherTheOwnerOfTheVaultNorRootNorTheGroupRoot(t *testing.T) {
+	t.Parallel()
+	users := map[string][2]int{
+		"mestre": {990, 990}, "mestre-agente": {991, 991}, "root": {0, 0},
+		"rootgroup": {995, 0}, "sameasvault": {990, 991}, "enginegroup": {996, 990},
+	}
+	for _, runAs := range []int{0, 990} {
+		a := fakeAccounts(runAs, runAs, users)
+		cred, err := a.Agent("mestre-agente", false)
+		if err != nil || cred == nil || cred.Uid != 991 || cred.Gid != 991 {
+			t.Errorf("running as %d: agent = %v, %v; want 991:991", runAs, cred, err)
+		}
+		for _, name := range []string{"mestre", "root", "rootgroup", "sameasvault", "enginegroup", "no-such-account"} {
+			if cred, err := a.Agent(name, false); err == nil || cred != nil {
+				t.Errorf("running as %d: account %q accepted: %v", runAs, name, cred)
+			}
+		}
+	}
+	// where there is no account of the owner of the vault (a developer machine
+	// with the fast suite), the other checks stand.
+	bare := fakeAccounts(1000, 1000, map[string][2]int{"agent": {1001, 1001}})
+	if cred, err := bare.Agent("agent", false); err != nil || cred == nil {
+		t.Errorf("without an owner of the vault: %v, %v", cred, err)
+	}
+	// AllowSelf does not let root or the group root through.
+	self := fakeAccounts(1000, 1000, map[string][2]int{"rootgroup": {995, 0}, "me": {1000, 1000}})
+	if cred, err := self.Agent("rootgroup", true); err == nil || cred != nil {
+		t.Errorf("group root accepted with AllowSelf: %v", cred)
+	}
+	if cred, err := self.Agent("me", true); err != nil || cred != nil {
+		t.Errorf("AllowSelf, the user itself = %v, %v; want to start as this user", cred, err)
+	}
+}
+
+// CA-TERM-15
+// The account of the agents of a launcher is the one of its own instance: a
+// launcher of one instance never starts a mestre-pty as the agents of another.
+func TestPrepareBindsTheAgentAccountToTheInstance(t *testing.T) {
+	t.Parallel()
+	users := map[string][2]int{"mestre-agente": {991, 991}, "mestre-agente-x": {992, 992}}
+	for _, c := range []struct {
+		instance, agent string
+		ok              bool
+	}{
+		{"", "mestre-agente", true}, {"principal", "mestre-agente", true}, {"x", "mestre-agente-x", true},
+		{"x", "mestre-agente", false}, {"principal", "mestre-agente-x", false}, {"y", "mestre-agente-x", false},
+	} {
+		dir := t.TempDir()
+		cfg := launcher.RunConfig{
+			SocketPath: filepath.Join(dir, "l.sock"), BinDir: dir, SocketDir: dir,
+			Instance: c.instance, Agent: c.agent, Accounts: fakeAccounts(0, 0, users),
+		}
+		_, ln, err := launcher.Prepare(cfg)
+		if ln != nil {
+			_ = ln.Close()
+		}
+		if (err == nil) != c.ok {
+			t.Errorf("instance %q, agent %q: err = %v, want ok = %v", c.instance, c.agent, err, c.ok)
+		}
+	}
+}
+
+// CA-TERM-15
+// A backend with no credential starts nothing unless it is told it may (the
+// full suite): the mestre-pty would be the account of the launcher.
+func TestLinuxBackendWithoutACredentialRefusesUnlessAllowed(t *testing.T) {
+	t.Parallel()
+	be := &launcher.LinuxBackend{}
+	if _, err := be.Start(t.Context(), launcher.StartRequest{ID: "t1", Binary: "/nonexistent/mestre-pty"}); err == nil || !strings.Contains(err.Error(), "credential") {
+		t.Fatalf("Start without a credential = %v; want a refusal", err)
 	}
 }

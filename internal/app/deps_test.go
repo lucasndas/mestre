@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/discovery"
@@ -33,5 +34,21 @@ func TestTheEngineGetsTheSystemBrowserUnlessDiscoveryIsOff(t *testing.T) {
 	}
 	if off.deps.Browser != nil || off.deps.Packets != nil {
 		t.Errorf("with no_discovery, the engine still has a browser (%T) or packet network (%T)", off.deps.Browser, off.deps.Packets)
+	}
+}
+
+// The configuration refuses the name of an instance whose agents' account
+// would not fit a Windows local account (docs/arquitetura/componentes.md#instâncias).
+func TestTheConfigurationRefusesAnInstanceWhoseAccountDoesNotFit(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"principal", "a", "seg-1"} {
+		if err := (Config{Instance: name, Name: "a", EnginePort: 7443}).check(); err != nil {
+			t.Errorf("instance %q: %v", name, err)
+		}
+	}
+	for _, name := range []string{"abcdefg", "X", strings.Repeat("a", 32)} {
+		if err := (Config{Instance: name, Name: "a", EnginePort: 7443}).check(); err == nil {
+			t.Errorf("instance %q accepted", name)
+		}
 	}
 }

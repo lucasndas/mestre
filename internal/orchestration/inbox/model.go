@@ -183,25 +183,37 @@ func channelName(c string) string {
 	return c
 }
 
+// unreadable stands for a name that has nothing a header keeps (only symbols or
+// letters drawn empty): the parentheses are the engine's, no sender can make them.
+const unreadable = "(sem nome legível)"
+
 // Header is the first line of every item, the one format of the inbox:
 // `[Mestre · <tipo> · de <remetente> · <id>]`; a message of a user has
 // `<nome> (<nível>)` as the sender and the optional fields `via <canal>`,
-// `mesa <mesa>` and `áudio transcrito` before the id.
+// `mesa <mesa>` and `áudio transcrito` before the id. It is the engine's whoever
+// chose the words in it (the name of a quest or of a ritual, the name a user
+// gives, the table a message cites): see headerText.
 func (it Item) Header() string {
-	sender := it.Sender
+	sender := headerText(it.Sender)
+	if sender == "" && it.Sender != "" {
+		sender = unreadable // not "sistema", the sender of the engine
+	}
 	parts := []string{"Mestre", string(it.Kind)}
 	var extra []string
 	if o := it.Origin; it.Kind == KindUser && o != nil {
-		name := o.UserName
+		name := headerText(o.UserName)
 		if name == "" {
 			name = sender
 		}
-		sender = fmt.Sprintf("%s (%s)", name, levelName(o.Level))
+		if name == "" {
+			name = unreadable
+		}
+		sender = fmt.Sprintf("%s (%s)", name, headerText(levelName(o.Level)))
 		if o.Channel != "" {
-			extra = append(extra, "via "+channelName(o.Channel))
+			extra = append(extra, "via "+headerText(channelName(o.Channel)))
 		}
 		if o.Table != "" {
-			extra = append(extra, "mesa "+o.Table)
+			extra = append(extra, "mesa "+headerText(o.Table))
 		}
 		if o.Transcribed {
 			extra = append(extra, "áudio transcrito")
@@ -212,16 +224,16 @@ func (it Item) Header() string {
 	}
 	parts = append(parts, "de "+sender)
 	parts = append(parts, extra...)
-	parts = append(parts, it.ID)
+	parts = append(parts, headerText(it.ID))
 	return "[" + strings.Join(parts, " · ") + "]"
 }
 
 // Body is the text delivered after the header: the text and, when there are
-// attachments, their paths.
+// attachments, their paths, one per line.
 func (it Item) Body() string {
 	text := it.Text
 	if it.Kind != KindUser {
-		text = escapeHeaders(text)
+		text = EscapeHeaders(text)
 	}
 	if len(it.Attachments) == 0 {
 		return text
@@ -233,29 +245,9 @@ func (it Item) Body() string {
 	}
 	b.WriteString("Anexos:")
 	for _, a := range it.Attachments {
-		b.WriteString("\n- " + a)
+		b.WriteString("\n- " + OneLine(a))
 	}
 	return b.String()
-}
-
-// headerStart is how every header begins.
-const headerStart = "[Mestre ·"
-
-// escapeHeaders makes a line that imitates a header harmless: the text of an
-// item that is not from a user may carry words of an agent, and a line
-// `[Mestre · …]` in it must not read as the header of another item. The line
-// keeps its words, behind a backslash.
-func escapeHeaders(text string) string {
-	if !strings.Contains(text, headerStart) {
-		return text
-	}
-	lines := strings.Split(text, "\n")
-	for i, l := range lines {
-		if t := strings.TrimLeft(l, " \t"); strings.HasPrefix(t, headerStart) {
-			lines[i] = l[:len(l)-len(t)] + `\` + t
-		}
-	}
-	return strings.Join(lines, "\n")
 }
 
 func priorityOf(n NewItem) (Priority, int) {

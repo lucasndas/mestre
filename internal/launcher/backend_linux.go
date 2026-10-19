@@ -25,6 +25,10 @@ type LinuxBackend struct {
 	// supplementary groups). Nil starts it as the user of this process: the
 	// full suite, which has no CAP_SETUID.
 	Credential *syscall.Credential
+	// AllowSelf lets a nil Credential start the mestre-pty as the account of
+	// the launcher; without it a nil Credential refuses every start (the
+	// account of the launcher owns the vault). Only the tests set it.
+	AllowSelf bool
 	// Env is the environment of the mestre-pty; the engine sends the one of
 	// the agent in the start message, so this one is minimal.
 	Env []string
@@ -47,6 +51,9 @@ var DefaultEnv = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8"}
 func (b *LinuxBackend) Start(ctx context.Context, r StartRequest) (Started, error) {
 	if err := terminal.GuardSuite(b.Suite); err != nil {
 		return Started{}, err
+	}
+	if b.Credential == nil && !b.AllowSelf {
+		return Started{}, errors.New("launcher: no credential for the agents: the mestre-pty would run as the account of the launcher")
 	}
 	if err := checkFiles(r); err != nil {
 		return Started{}, Refused("%v", err)
