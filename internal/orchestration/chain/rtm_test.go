@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
@@ -400,4 +401,77 @@ func TestApprovingForATimeMakesARuleOfTheExactActionAndTheGrandMasterMakesTheMed
 	if rs := w.rules(); len(rs) != 2 || rs[1].Level != chain.LevelGrandMaster || rs[1].Risk != classes.RiskMedium {
 		t.Errorf("rules = %+v", rs)
 	}
+}
+
+// CA-RTM-09
+func TestApprovingForATimeIsRefusedForARequestTheEngineDoesNotAnalyseWholeAndForAChainedCommand(t *testing.T) {
+	t.Parallel()
+	w := newRTM(t)
+	dev1, dev2 := w.recruit("Dev1"), w.recruit("Dev2")
+
+	// a part with no group is the Grand Master's; a chained command whose last part
+	// runs a script of the worktree is a medio the table master decides
+	opaque, chained, tool := w.shell(dev1, "alias ll=ls"), w.shell(dev1, "make build && ./run.sh"), w.mcp(dev1, "mcp__db__query")
+	// the action keeps the command trimmed of every space, and the shell skips only blanks
+	spaced := w.shell(dev1, "./run.sh\U000000a0")
+	if r := w.request(opaque); r.Level.Kind != chain.LevelGrandMaster || !slices.Contains(r.Risk.Groups, classes.GroupNone) {
+		t.Fatalf("alias ll=ls is %s at %+v with groups %v, want a medio with no group at the Grand Master", r.Risk.Risk, r.Level, r.Risk.Groups)
+	}
+	if r := w.request(chained); r.Level.Kind != chain.LevelMesa || r.Risk.Risk != classes.RiskMedium {
+		t.Fatalf("the chained command is %s at %+v, want a medio at the table master", r.Risk.Risk, r.Level)
+	}
+	if r := w.request(tool); r.Level.Kind != chain.LevelGrandMaster || !slices.Contains(r.Risk.Groups, classes.GroupNone) {
+		t.Fatalf("a tool with no row in the table is %s at %+v with groups %v, want a medio with no group at the Grand Master", r.Risk.Risk, r.Level, r.Risk.Groups)
+	}
+	if r := w.request(spaced); r.Level.Kind != chain.LevelMesa || r.Risk.Risk != classes.RiskMedium {
+		t.Fatalf("a script of the worktree and a no-break space is %s at %+v, want a medio at the table master", r.Risk.Risk, r.Level)
+	}
+	asks := []struct {
+		id int64
+		by characters.Character
+	}{{opaque, w.gm}, {chained, w.master}, {tool, w.gm}, {spaced, w.master}}
+	for _, c := range asks {
+		for _, d := range []chain.Decision{
+			{Answer: chain.AnswerApproveFor, For: time.Hour},
+			{Answer: chain.AnswerApproveFor, UntilMissionEnd: true},
+		} {
+			d.Request, d.By, d.Reason = c.id, c.by.ID, "por um tempo"
+			ref := w.refusal(d)
+			if ref.Code != chain.CodeBadAnswer || ref.Climbed || !strings.Contains(ref.Message, "approve it now") {
+				// the message tells the blocker from the other bad_answer ("the request has no mission to end with")
+				t.Errorf("#%d for a time %+v = %+v, want bad_answer from the blocker and the request kept at its level", c.id, d, ref)
+			}
+			if r := w.request(c.id); r.State != chain.Open || r.Level.Agent != c.by.ID {
+				t.Errorf("#%d moved to %s at %+v", c.id, r.State, r.Level)
+			}
+		}
+	}
+	if n := len(w.rules()); n != 0 {
+		t.Errorf("%d rules were made", n)
+	}
+	// the one-time exception is the way, for each of them, and it frees nothing for the others
+	for _, c := range asks {
+		if out := w.decide(c.by, c.id, chain.AnswerApprove, "só desta vez"); out.Applied != "exception" {
+			t.Errorf("#%d approve now = %+v, want an exception", c.id, out)
+		}
+	}
+	if d := w.engine(dev2, "make build && ./run.sh"); d.Verdict != classes.Ask {
+		t.Errorf("the same chain by another dev = %+v, want ask", d)
+	}
+}
+
+// mcp is an ask of a character for a call of an MCP tool, the kind the table has
+// no row for.
+func (w *world) mcp(c characters.Character, name string) int64 {
+	w.t.Helper()
+	tool := &providers.Tool{NativeName: name, Kind: providers.KindMCP}
+	ev := providers.Event{Version: providers.EventVersion, Event: providers.EventPreTool, AgentID: c.ID, TableID: c.Table, Cwd: "/work/42-login", Tool: tool}
+	env, _ := w.cls.Env(w.ctx, c.ID)
+	rules, _ := w.cls.Rules(w.ctx, c.ID)
+	risk := classes.ClassifyRisk(env, rules, classes.RiskRequest{Tool: tool, Cwd: ev.Cwd})
+	id, err := w.ch.Open(w.ctx, hook.ApprovalRequest{AgentID: c.ID, TableID: c.Table, Action: classes.Action{Kind: tool.Kind, Tool: name}, About: name, Risk: risk, Event: ev})
+	if err != nil {
+		w.t.Fatalf("open %q: %v", name, err)
+	}
+	return id
 }

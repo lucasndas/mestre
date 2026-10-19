@@ -10,6 +10,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -201,7 +202,7 @@ func (s *Service) effect(ctx context.Context, r Request, st Settings, by string,
 		return s.temp(ctx, r, st, by, level, nil, dur, untilEnd, agent)
 	case AnswerApprovePattern:
 		if strings.TrimSpace(pattern) == "" {
-			return "", refuse(CodeBadAnswer, "approve_pattern needs --pattern")
+			return "", refuse(CodeBadAnswer, "approve-pattern needs --pattern")
 		}
 		if r.Action == nil {
 			return "", refuse(CodeBadAnswer, "a pattern is for a request of an action")
@@ -245,6 +246,17 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 	if !riskWithin(r.Risk.Risk, ceiling) {
 		return "", refuse(CodeAboveCeiling, "a temporary rule of this level covers up to %s; this request is %s", ceiling, r.Risk.Risk)
 	}
+	if ap == nil {
+		// The same text of a command does another thing at each use when the
+		// engine does not read all of it: no rule of the exact action for it.
+		var tool *providers.Tool
+		if r.Event != nil {
+			tool = r.Event.Tool
+		}
+		if why := classes.TableRuleBlocker(*r.Action, tool, r.Risk); why != "" {
+			return "", refuse(CodeBadAnswer, "no temporary rule is made for this request (%s): approve it now instead", why)
+		}
+	}
 	if ap != nil {
 		if !riskWithin(ap.Risk.Risk, ceiling) {
 			return "", refuse(CodeAboveCeiling, "the pattern reaches risk %s (%s), above the ceiling of this level (%s)", ap.Risk.Risk, ap.Risk.Rule, ceiling)
@@ -256,7 +268,7 @@ func (s *Service) temp(ctx context.Context, r Request, st Settings, by string, l
 		}
 	}
 	if ap == nil && dur <= 0 && !untilEnd {
-		return "", refuse(CodeBadAnswer, "approve_for needs --for <duration> or --until-mission-end")
+		return "", refuse(CodeBadAnswer, "approve-for needs --for <duration> or --until-quest")
 	}
 	if dur > st.TempRuleMax {
 		return "", refuse(CodeDurationTooLong, "a temporary rule goes up to %s", st.TempRuleMax)
@@ -360,7 +372,7 @@ func (s *Service) askBack(ctx context.Context, r Request, by string, level Level
 	case r.Requester == "":
 		return Outcome{}, s.refused(ctx, r, by, AnswerAskBack, refuse(CodeBadAnswer, "nobody asked this request: there is no one to ask"))
 	case question == "":
-		return Outcome{}, s.refused(ctx, r, by, AnswerAskBack, refuse(CodeBadAnswer, "ask_back needs the question (--instruction)"))
+		return Outcome{}, s.refused(ctx, r, by, AnswerAskBack, refuse(CodeBadAnswer, "ask-back needs the question (--text)"))
 	}
 	st, _ := s.settings(ctx, r.Workspace)
 	now := s.clk.Now()
@@ -384,7 +396,7 @@ func (s *Service) askBack(ctx context.Context, r Request, by string, level Level
 	}
 	s.arm(r.ID, level, cur.Deadline)
 	text := fmt.Sprintf("Quem decide o seu pedido de aprovação #%d (%s) pede contexto antes de decidir:\n%s\n\nResponda com `mestre approval reply %d \"<texto>\"`; o pedido espera a sua resposta.",
-		r.ID, orDefault(r.About, string(orPerm(r.Type))), question, r.ID)
+		r.ID, oneLine(orDefault(r.About, string(orPerm(r.Type)))), Unverified(question), r.ID)
 	if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: r.Requester, Kind: inbox.KindAnswer, Sender: "Motor", Text: text,
 		Refs: inbox.Refs{Approval: r.ID, Table: r.Table}}); err != nil {
 		s.log.Warn("chain: the question did not reach the requester", "request", r.ID, "err", err)
@@ -426,7 +438,6 @@ func (s *Service) Reply(ctx context.Context, request int64, from, text string) e
 	body := fmt.Sprintf("Resposta de %s à sua pergunta sobre o pedido de aprovação #%d:\n%s\n\nO pedido segue com você.", orDefault(r.RequesterName, r.Requester), r.ID, Unverified(text))
 	if cur.Level.Kind == LevelPeople {
 		if s.o.Users != nil {
-			cur.Why = append(cur.Why, "resposta de quem pediu: "+text)
 			s.o.Users.Ask(ctx, PeopleQuestion{Request: cur, Text: Text(cur, cur.Level, AnswersFor(LevelPeople, cur)) + "\n" + body, Deadline: cur.Deadline, Answers: AnswersFor(LevelPeople, cur)}) //nolint:errcheck // logged by the channel
 		}
 	} else if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: cur.Level.Agent, Kind: inbox.KindAnswer, Sender: "Motor", Text: body,
@@ -617,12 +628,20 @@ func (s *Service) resultText(r Request, byName, instruction string) string {
 	case Cancelled:
 		return fmt.Sprintf("O pedido de aprovação #%d foi cancelado.", r.ID)
 	}
+	// who decided wrote the reason and the instruction: with more than one line they
+	// come quoted, so they cannot imitate another line of the engine
 	text := fmt.Sprintf("O pedido de aprovação #%d foi negado%s.", r.ID, by)
+	quoted := false
 	if r.Decision != nil && r.Decision.Reason != "" {
-		text += " Motivo: " + r.Decision.Reason + "."
+		text += "\n" + inbox.Say("Motivo:", r.Decision.Reason, "|")
+		quoted = inbox.Multiline(r.Decision.Reason)
 	}
 	if instruction != "" {
-		text += " Instrução: " + instruction
+		text += "\n" + inbox.Say("Instrução:", instruction, "|")
+		quoted = quoted || inbox.Multiline(instruction)
+	}
+	if quoted {
+		text += "\n" + inbox.QuoteNote
 	}
 	return text
 }

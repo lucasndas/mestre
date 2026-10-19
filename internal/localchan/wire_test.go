@@ -123,8 +123,8 @@ func TestTheEndpointOfTheEnvironment(t *testing.T) {
 	if err != nil || !strings.Contains(def, "principal") || !strings.HasSuffix(def, "cli.sock") {
 		t.Fatalf("without it: %q, %v", def, err)
 	}
-	want, _ := localchan.SocketPath("segunda")
-	if !strings.Contains(want, "segunda") {
+	want, _ := localchan.SocketPath("seg")
+	if !strings.Contains(want, "seg") {
 		t.Fatalf("the path of another instance: %q", want)
 	}
 	if _, err := localchan.SocketPath("../etc"); err == nil {

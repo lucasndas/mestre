@@ -13,6 +13,7 @@
 # be caught only after the merge, by the push to main.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
+. "$(dirname "$0")/suite.sh"
 zero=0000000000000000000000000000000000000000
 gitdir="$(cd "$(git rev-parse --git-dir)" && pwd)"
 snap="$gitdir/prepush-snapshot"
@@ -43,6 +44,12 @@ while read -r _ local_sha _ remote_sha; do
 		echo "pre-push: only documents changed, skipped"
 		continue
 	fi
+	# The same tree against the same base passed today: nothing new to test.
+	key="$gitdir/suite-passed/prepush-$(git rev-parse "$local_sha^{tree}")-${from:-none}"
+	if passed "$key"; then
+		echo "pre-push: this push already passed today, skipped"
+		continue
+	fi
 	start="$(date +%s)"
 	rm -rf "$snap" "$idx"
 	mkdir -p "$snap"
@@ -52,9 +59,11 @@ while read -r _ local_sha _ remote_sha; do
 	# The suite starts no git; the snapshot is not a repository.
 	if ! (
 		unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX
-		cd "$snap" && printf '%s\n' "$files" | go run ./tools/testrun prepush
+		cd "$snap" && printf '%s\n' "$files" | with_suite_lock go run ./tools/testrun prepush
 	); then
 		status=1
+	else
+		mark "$key"
 	fi
 	echo "pre-push: $(($(date +%s) - start)) s"
 done
