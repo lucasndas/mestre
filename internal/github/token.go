@@ -146,7 +146,25 @@ func (t *Tokens) Installation(ctx context.Context, r Request) (Token, error) {
 	if err != nil {
 		return Token{}, err
 	}
+	tok, err := t.mint(ctx, app, inst, r.Repo, r.Permissions, now)
+	if err != nil {
+		return Token{}, err
+	}
+	t.mu.Lock()
+	if t.cache == nil {
+		t.cache = map[string]Token{}
+	}
+	t.cache[key] = tok
+	t.mu.Unlock()
+	return tok, nil
+}
+
+// mint asks GitHub for the token of an installation, signing the JWT of the App
+// with its key (read from the vault only for that). The permissions are the
+// list the token may have, and repo (when set) the one repository it covers.
+func (t *Tokens) mint(ctx context.Context, app App, inst int64, repo string, perms map[string]string, now time.Time) (Token, error) {
 	var jwt string
+	var err error
 	err = t.Keys.Use(ctx, KeySecret(app.Name), "sign the JWT of the App "+app.Name, func(pemBytes []byte) error {
 		var serr error
 		jwt, serr = signJWT(pemBytes, app.AppID, now)
@@ -155,9 +173,9 @@ func (t *Tokens) Installation(ctx context.Context, r Request) (Token, error) {
 	if err != nil {
 		return Token{}, fmt.Errorf("github: the JWT of the App %q: %w", app.Name, err)
 	}
-	doc := map[string]any{"permissions": r.Permissions}
-	if r.Repo != "" { // restricted to the repository of the action, and only to it
-		name := r.Repo
+	doc := map[string]any{"permissions": perms}
+	if repo != "" { // restricted to the repository of the action, and only to it
+		name := repo
 		if i := strings.IndexByte(name, '/'); i >= 0 {
 			name = name[i+1:]
 		}
@@ -187,7 +205,9 @@ func (t *Tokens) Installation(ctx context.Context, r Request) (Token, error) {
 		return Token{}, fmt.Errorf("%w (%d)", ErrRateLimited, resp.StatusCode) // not the fault of the App
 	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
-		_ = t.Apps.SetState(ctx, app.Name, classes.AppWithError)
+		if app.Ready() { // an App that never worked is not "in error": it is not ready yet
+			_ = t.Apps.SetState(ctx, app.Name, classes.AppWithError)
+		}
 		return Token{}, fmt.Errorf("%w: %s (%d)", ErrTokenRefused, app.Name, resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusCreated {
@@ -201,12 +221,6 @@ func (t *Tokens) Installation(ctx context.Context, r Request) (Token, error) {
 		return Token{}, fmt.Errorf("github: the answer of the token of %q is not readable", app.Name)
 	}
 	tok := Token{value: out.Token, ExpiresAt: out.ExpiresAt}
-	t.mu.Lock()
-	if t.cache == nil {
-		t.cache = map[string]Token{}
-	}
-	t.cache[key] = tok
-	t.mu.Unlock()
 	return tok, nil
 }
 
