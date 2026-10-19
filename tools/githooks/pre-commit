@@ -16,11 +16,14 @@ gitdir="$(cd "$(git rev-parse --git-dir)" && pwd)"
 snap="$gitdir/precommit-snapshot"
 # The tree of this commit (the index): the same tree passed today, say on an
 # amend, is not tested again.
-key="$gitdir/suite-passed/fast-$(git write-tree)"
-if passed "$key"; then
-	echo "pre-commit: this tree already passed the fast suite today, skipped"
+tree="$(git write-tree)"
+key="$gitdir/suite-passed/fast-$tree"
+if passed "$key" || passed "$gitdir/suite-passed/docs-$tree"; then
+	echo "pre-commit: this tree already passed today, skipped"
 	exit 0
 fi
+# What this commit changes, read while we are still in the repository.
+files="$(git diff --cached --name-only)"
 rm -rf "$snap"
 mkdir -p "$snap"
 # GIT_INDEX_FILE is the index of this commit (also for `commit -a` and
@@ -29,5 +32,21 @@ git checkout-index --all --prefix="$snap/"
 # The fast suite starts no git; the snapshot is not a repository.
 unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX
 cd "$snap"
-with_suite_lock go run ./tools/testrun fast
+# A commit of documents only (the same rule as the CI: docs/, the Markdown
+# files of the root and LICENSE) cannot break a Go test, except the ones that
+# read a document: run the document check, the code rules and those tests,
+# found by the path they open, as the CI does, not the whole fast suite.
+if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '^docs/|^[^/]+\.md$|^LICENSE$'; then
+	echo "pre-commit: only documents changed, running the document checks"
+	docs_checks() {
+		go run ./tools/docscheck &&
+			go run ./tools/codecheck &&
+			MESTRE_TEST_SUITE=fast go test ./tools/docscheck $(grep -rlE --include='*_test.go' '"(\.\./)+docs/|"\.\.", "\.\.", "docs"' internal tools cmd pkg | xargs -n1 dirname | sort -u | sed 's|^|./|')
+	}
+	with_suite_lock docs_checks
+	mark "$gitdir/suite-passed/docs-$tree"
+	exit 0
+else
+	with_suite_lock go run ./tools/testrun fast
+fi
 mark "$key"
