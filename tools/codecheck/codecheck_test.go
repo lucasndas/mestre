@@ -239,6 +239,15 @@ func TestAgentFilesGoThroughSafefile(t *testing.T) {
 		"test code":             {"internal/providers/a_test.go", mk("_, _ = os.ReadFile(p)"), nil},
 		"excused":               {"internal/providers/a.go", mk("// mestre:allow agent-files: a file of the engine only\n\t_, _ = os.ReadFile(p)"), nil},
 	}
+	// every call of the table of the rule, not only the ones above
+	for call, args := range map[string]string{
+		"WriteFile": "p, nil, 0o644", "OpenFile": "p, 0, 0o644", "Open": "p", "Create": "p", "CreateTemp": "p, \"x\"", "Chmod": "p, 0o644",
+	} {
+		cases[call+" in providers"] = struct {
+			path, src string
+			want      []string
+		}{"internal/providers/a.go", mk("_, _ = os." + call + "(" + args + ")"), []string{"internal/providers/a.go:6: agent-files:"}}
+	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
