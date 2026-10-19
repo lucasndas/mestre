@@ -136,6 +136,8 @@ type PeopleQuestion struct {
 	Approvals int
 	Require   []string
 	MinLevel  classes.Level
+	// PIN says the approval asks the PIN of the user after the button.
+	PIN bool
 }
 
 // Grants makes the effects of an approval or a denial.
