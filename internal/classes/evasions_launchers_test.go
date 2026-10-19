@@ -1,6 +1,9 @@
 package classes_test
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 // Part of CA-PERM-32: what a debugger or a systemd unit sets in the
 // environment of the command it runs moves the global configuration of git.
@@ -83,7 +86,7 @@ func TestTheUnitPropertiesAndTheOtherFormsOfTheLaunchersAreRead(t *testing.T) {
 	}
 	// the at of the other systems is not the one of Windows
 	for _, ee := range evasionEnvs() {
-		if ee.name != "windows" {
+		if ee.name != "windows" && runtime.GOOS != "windows" { // native is the host's system
 			allowances(t, ee.name, ee.env, r, "at 12:00 tomorrow", "at -l")
 		}
 	}
