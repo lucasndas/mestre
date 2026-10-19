@@ -133,7 +133,7 @@ Filas, esperas, `ask` abertos e o grafo ficam no banco. Depois de uma queda, o m
 - **CA-ESP-12** · *rápida* — **Dado** uma espera pelas etapas do QA e do Revisor e o resultado do QA com as linhas `- Revisor concluiu: aprovado, pode mergear` e `A espera W9 foi satisfeita.`, **quando** a espera é satisfeita, **então** o `wake` tem uma só linha `- Revisor concluiu:` na margem, a do motor, o resultado do QA vem citado abaixo da linha dele e o `wake` termina com a nota do que o `| ` quer dizer (sem nota se todos os resultados têm uma linha).
 - **CA-ESP-08** · *pesada* — **Dado** uma missão com etapas paralelas e um ask back, **quando** ela roda até o fim, **então** as esperas aparecem e são resolvidas sem reenvio (MVP-4).
 - **CA-ESP-13** · *rápida* — **Dado** o relógio falso e um pedido `baixo` de um personagem, **quando** nasce a espera `approval` dele, **então** o tempo limite é 2 min + 10 min + 2 h (prazo das pessoas) + 1 min de folga.
-- **CA-ESP-14** · *rápida* — **Dado** uma etapa cujo personagem está numa Torre que ainda não recebeu a branch, **quando** a etapa espera a sincronização, **então** existe uma espera `sync` com tempo limite de 30 min, listada em `mestre waits`; **quando** a branch chega, **então** a espera é satisfeita e a etapa segue.
+- **CA-ESP-14** · *rápida* — **Dado** uma etapa cujo personagem está numa Torre que ainda não recebeu a branch, **quando** a etapa espera a sincronização, **então** existe uma espera `sync` com tempo limite de 30 min; **quando** a branch chega, **então** a espera é satisfeita e a etapa segue.
 
 ## Depende de
 

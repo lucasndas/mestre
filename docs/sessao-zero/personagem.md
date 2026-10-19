@@ -110,7 +110,7 @@ Quando o personagem é encerrado de vez (estado final em [personagens](../orques
 - **CA-SZ-PERS-12** · *rápida* — **Dado** um personagem com arquivos em `MESTRE_TMP`, **quando** ele é encerrado de vez, **então** a pasta `MESTRE_TMP` dele não existe mais; e, num reinício com retomada, ela continua com o mesmo conteúdo.
 - **CA-SZ-PERS-13** · *rápida* — **Dado** qualquer personagem, **quando** o `MESTRE.md` é montado, **então** as regras do Mestre contêm a instrução de tratar `queued: true`/`PENDING:` como pendente e esperar o resultado na caixa de entrada.
 - **CA-SZ-PERS-14** · *rápida* — **Dado** um personagem recém-preparado no Linux, **quando** o motor monta as pastas dele na máquina, **então** `agentes/<id>/` tem modo 2750 e `tmp/` 2770, ambos com o bit setgid.
-- **CA-SZ-PERS-15** · *rápida* — **Dado** uma pasta `.agents/skills/mestre-meu/` da pessoa, sem o marcador de gerado, **quando** o motor gera a pasta de skills de um personagem, **então** a pasta fica intacta (nem podada nem substituída) e o motor registra um aviso.
+- **CA-SZ-PERS-15** · *rápida* — **Dado** o Mestre da mesa de um personagem Claude Code com uma pasta `mestre-minha/` da pessoa, sem o marcador de gerado, e um recurso `ref.md` ao lado dela na pasta de skills dele, **quando** o motor o prepara de novo, **então** a preparação recusa com o aviso que cita `mestre-minha`, e a skill e o recurso ficam intactos.
 
 ## Depende de
 
