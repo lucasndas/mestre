@@ -61,7 +61,7 @@ func TestAdvanceReturnsTheErrorOfAProcessThatDoesNotApplyTheTime(t *testing.T) {
 	}
 	t.Cleanup(s.Close)
 
-	follower(t, path, "ok x", "ok x", "ok x") // the set, then two advances
+	follower(t, path, "ok x", "ok x", "ok x", "ok x") // the set, then three advances
 	waitPeers(t, s, 1)
 	if err := s.Advance(time.Hour); err != nil {
 		t.Fatalf("one process that answers ok: %v", err)
@@ -84,5 +84,8 @@ func TestAdvanceReturnsTheErrorOfAProcessThatDoesNotApplyTheTime(t *testing.T) {
 	waitPeers(t, s, 2)
 	if err := s.Advance(time.Minute); err == nil || !strings.Contains(err.Error(), "error no clock") {
 		t.Fatalf("a process that refuses: %v", err)
+	}
+	if s.Peers() != 1 {
+		t.Fatalf("%d peers after the one that refused, want 1", s.Peers())
 	}
 }

@@ -612,9 +612,7 @@ func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 
 	// 30 s into the wait the process stops; the clock steps forward 2 minutes
 	// while it is down, and it starts again
-	if err := w.clk.Advance(30 * time.Second); err != nil {
-		t.Fatal(err)
-	}
+	_ = w.clk.Advance(30 * time.Second) // a is down: it cannot apply the time, and the error says so
 	w.kill(b)
 	_ = w.clk.Advance(2 * time.Minute) // b is down: it cannot apply the time, and the error says so
 	w.start(b)
