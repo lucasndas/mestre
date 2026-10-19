@@ -504,7 +504,7 @@ func (p *fakeProc) Input(_ context.Context, data []byte) error {
 
 // waitTyped waits until n inputs were typed (by another goroutine, maybe of
 // another machine) and returns them; it fails the test when ctx ends first.
-func (p *fakeProc) waitTyped(t testing.TB, ctx context.Context, n int) []string {
+func (p *fakeProc) waitTyped(t testing.TB, ctx context.Context, n int) []string { //nolint:unused // used by the full suite
 	t.Helper()
 	for {
 		p.mu.Lock()
@@ -590,6 +590,8 @@ type rigOptions struct {
 	longText int
 	// classes checks the class of each request (nil: not checked).
 	classes characters.ClassCheck
+	// scrolls gets the call that copies the scrolls of the table of a new character.
+	scrolls characters.ScrollCopies
 }
 
 type machineRig struct {
@@ -697,6 +699,7 @@ func newRig(t *testing.T, o rigOptions) *rig {
 		Builder: r.builder, Notifier: r.notes, Scrolls: r.scrolls, Inbox: r.inbox, Limits: o.limits,
 	}
 	so.Classes = o.classes
+	so.ScrollCopies = o.scrolls
 	if o.connect {
 		r.conns, err = connections.NewService(connections.Options{Registry: r.reg, Clock: r.clk})
 		if err != nil {

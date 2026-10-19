@@ -12,7 +12,7 @@ import (
 // not make "python3 -" a script of the project (baixo): "-" is the standard
 // input, so the code is not one the repository has.
 
-// CA-RISCO-12
+// Part of CA-RISCO-12
 func TestDashIsTheStandardInputEvenIfTheRepositoryHasAFileNamedDash(t *testing.T) {
 	t.Parallel()
 	tr := newTableRepo(t)

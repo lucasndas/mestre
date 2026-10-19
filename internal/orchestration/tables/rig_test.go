@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -973,8 +972,6 @@ func (tw *tower) notes() []string {
 	defer tw.mu.Unlock()
 	return slices.Clone(tw.told)
 }
-
-func lines(s ...string) string { return strings.Join(s, "\n") }
 
 func sha256hex(b []byte) string {
 	sum := sha256.Sum256(b)

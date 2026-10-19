@@ -1,21 +1,11 @@
 package providers
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 // The operations of the adapter contract that prepare a character before
-// it starts (docs/provedores/adaptador.md#contrato): HookFiles, PreTrust and
+// it starts (docs/provedores/adaptador.md#contrato-interface-go-adapter-descrita-em-prosa): HookFiles, PreTrust and
 // DeliverMestreLayer; and ReadUsage, which reads what it spent. Each
 // provider document says what its adapter does.
-
-// ErrNotImplemented is an operation a provider adapter does not have yet.
-var ErrNotImplemented = errors.New("not implemented in this change")
-
-func notImplemented(p ID, op string) error {
-	return fmt.Errorf("%s %s: %w", p, op, ErrNotImplemented)
-}
 
 // ManagedFile is a file the Mestre keeps part of. Merge builds the new
 // content from the current one (nil when the file does not exist): it takes

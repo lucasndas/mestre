@@ -6,7 +6,7 @@
 //
 // The tests are a subset of the heavy suite (build tag realaccount, files
 // *_realaccount_test.go), run by tools/realaccount on a disposable machine
-// only (docs/qualidade/testes.md#contas-reais): that tool creates the
+// only (docs/qualidade/contas-reais.md): that tool creates the
 // accounts, installs the units or services, runs this package's test binary
 // as the account of the engine, and removes everything. Without the tool, the
 // test binary refuses to run.

@@ -95,21 +95,25 @@ func (s *Server) Peers() int {
 }
 
 // Advance moves the clock of every process forward by d and returns when
-// each one applied it. A process that does not answer (it was stopped) is
-// dropped.
-func (s *Server) Advance(d time.Duration) {
+// each one applied it. A process that does not answer (it was stopped, or it
+// answered something else than ok) is dropped, and the error names it: the
+// test must not go on as if every process had applied the new time.
+func (s *Server) Advance(d time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.now = s.now.Add(d)
+	var errs []error
 	live := s.peers[:0]
 	for _, p := range s.peers {
 		if err := p.send("advance " + d.String()); err != nil {
+			errs = append(errs, fmt.Errorf("clocksock: a process did not apply advance %v: %w", d, err))
 			p.c.Close()
 			continue
 		}
 		live = append(live, p)
 	}
 	s.peers = live
+	return errors.Join(errs...)
 }
 
 // Close stops the server.

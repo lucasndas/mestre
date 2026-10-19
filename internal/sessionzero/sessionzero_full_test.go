@@ -18,14 +18,6 @@ import (
 
 const projectAgents = "# Meu App\n\nConvenções do projeto, escritas à mão.\r\n\tcom bytes estranhos \xc3\xa9\n"
 
-// The mestre-owned part of the exclusions, as the document lists it (the
-// hooks file only because the Mestre made it).
-var localExcludes = []string{
-	"/.mestre/agents/", "/.mestre/anexos/", "/.mestre/run/",
-	"/.agents/skills/mestre-*/", "/.claude/skills/mestre-*/", "/.agents/agents/mestre-*.md",
-	"/.claude/settings.local.json", "/.agents/hooks.json", "/.mestre/",
-}
-
 // Part of CA-SZ-WS-01 (heavy, MVP-3, closed at the end of the project in the
 // laboratory): a repository with AGENTS.md and a rule of required review. The
 // full suite checks, with the real git and a fake GitHub, that .mestre/, the

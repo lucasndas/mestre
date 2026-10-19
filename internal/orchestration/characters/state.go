@@ -39,9 +39,6 @@ func (s State) Alive() bool { return s.Valid() && s != Stopped }
 // Receives says whether a delivery of the inbox may be typed in s.
 func (s State) Receives() bool { return s == Idle || s == Waiting }
 
-// CountsAsIdle says whether the time in s is idle time.
-func (s State) CountsAsIdle() bool { return s == Idle }
-
 // ReasonDeliveryFailed is the reason of the return to idle of a character
 // whose delivery could not be typed.
 const ReasonDeliveryFailed = "delivery failed"

@@ -371,7 +371,7 @@ func readPIDs(t *testing.T, path string) []int {
 	return pids
 }
 
-// CA-TERM-07 (real accounts): the launcher of the unit starts the mestre-pty
+// Part of CA-TERM-07 (real accounts): the launcher of the unit starts the mestre-pty
 // as the agent account, with no supplementary group, born in the cgroup
 // term-<id> under the cgroup systemd delegated to the launcher; the agent of
 // the terminal runs as the same account in the same cgroup.
@@ -416,7 +416,7 @@ func TestLinuxTheMestrePTYRunsAsTheAgentAccountInTheCgroupOfItsTerminal(t *testi
 	}
 }
 
-// CA-TERM-07 (real accounts): the launcher keeps CAP_SETUID and CAP_SETGID
+// Part of CA-TERM-07 (real accounts): the launcher keeps CAP_SETUID and CAP_SETGID
 // (permitted and effective) and no ambient capability, in the account of the
 // engine; the mestre-pty and the agent have none, in any set.
 func TestLinuxNeitherTheMestrePTYNorTheAgentHoldsCapabilities(t *testing.T) {
@@ -443,7 +443,7 @@ func TestLinuxNeitherTheMestrePTYNorTheAgentHoldsCapabilities(t *testing.T) {
 	noCaps(t, "agent", term.AgentPID())
 }
 
-// CA-TERM-05 (real accounts): with a delegated cgroup, the engine cannot
+// Part of CA-TERM-05 (real accounts): with a delegated cgroup, the engine cannot
 // signal anything of the agent account, and the forced stop still leaves
 // nothing: the launcher's cgroup.kill reaches the mestre-pty, the agent, the
 // grandchild that ignores SIGTERM and the one that left the session, and the
@@ -490,7 +490,7 @@ func TestLinuxTheEngineEndsATreeOnlyThroughTheLauncherCgroup(t *testing.T) {
 	}
 }
 
-// CA-TERM-05 and CA-TERM-07 (real accounts): without a delegated cgroup, the
+// Part of CA-TERM-05 and CA-TERM-07 (real accounts): without a delegated cgroup, the
 // kill by identity asks the launcher, which takes the user ID of the agent
 // account on a thread of its own and ends the mestre-pty and the sessions of
 // the agent; the bystander, a terminal of the same account in a session of its
@@ -534,7 +534,7 @@ func TestLinuxTheLauncherEndsByIdentityWithoutACgroup(t *testing.T) {
 	}
 }
 
-// CA-TERM-07 (real accounts): restarting the unit of the launcher (systemctl
+// Part of CA-TERM-07 (real accounts): restarting the unit of the launcher (systemctl
 // restart, with KillMode=process) ends its own process only: the terminals go
 // on, the new launcher serves, and it ends the old terminal through its
 // cgroup, which it finds again.
@@ -587,7 +587,7 @@ func TestLinuxTerminalsSurviveARestartOfTheLauncherUnit(t *testing.T) {
 
 var denied = regexp.MustCompile(`^(EACCES|EPERM)$`)
 
-// CA-TERM-11 (real accounts): another process of the agent account, in
+// Part of CA-TERM-11 (real accounts): another process of the agent account, in
 // another terminal, cannot read the environment or the memory of a mestre-pty,
 // attach to it with ptrace or take a descriptor of it (PR_SET_DUMPABLE 0), nor
 // reach the sockets of the engine, while the same attempts on a dumpable
@@ -641,7 +641,7 @@ func TestLinuxAnotherAgentProcessCannotTouchTheMestrePTY(t *testing.T) {
 	}
 }
 
-// CA-TERM-07 (real accounts): the launcher accepts the engine by its account
+// Part of CA-TERM-07 (real accounts): the launcher accepts the engine by its account
 // and by its cgroup. This run is of the same account in another unit (the tool
 // runs it apart): the request is refused (the tool then looks for the record of
 // the refusal in the journal of the launcher), and no mestre-pty or socket is

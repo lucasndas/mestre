@@ -92,7 +92,7 @@ func (p *permissions) Allow(_ context.Context, c characters.Character, command s
 	return rituals.Decision{Allow: true}, nil
 }
 
-func (p *permissions) denyWith(reason string) {
+func (p *permissions) denyWith(reason string) { //nolint:unused // used by the full suite
 	p.mu.Lock()
 	p.deny = reason
 	p.mu.Unlock()
@@ -120,6 +120,8 @@ type worldOpts struct {
 	noPre   bool
 	zone    *time.Location
 	perTabl int
+	// guildZone is the time zone kept in the Guild database (none: no row).
+	guildZone string
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -136,6 +138,12 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	if opt.guildZone != "" {
+		if _, err := db.Writer().ExecContext(ctx, `INSERT INTO guild (id, guild_id, ca_cert, epoch, epoch_certificate, timezone, recovery_public_key, created_at)
+			VALUES (1, '01M4ZPXYG0PNPDZ5JN7697ZSCH', x'00', 1, '{}', ?, x'07', 0)`, opt.guildZone); err != nil {
+			t.Fatal(err)
+		}
+	}
 	git := fakegit.NewGit(clk)
 	remote, err := git.Init(ctx, filepath.Join(root, "remote", "meu-app"), gitx.InitOptions{})
 	if err != nil {
@@ -240,7 +248,7 @@ func (w *world) byMaster() rituals.Actor {
 	return rituals.Actor{Kind: rituals.ByCharacter, Character: w.master}
 }
 
-func (w *world) byGM() rituals.Actor {
+func (w *world) byGM() rituals.Actor { //nolint:unused // used by the full suite
 	return rituals.Actor{Kind: rituals.ByCharacter, Character: w.gm}
 }
 

@@ -84,6 +84,9 @@ type Options struct {
 	Attachments Attachments
 	// Timeouts gives the time limits of a workspace (nil: the defaults).
 	Timeouts func(ctx context.Context, workspace string) Timeouts
+	// ApprovalTimeout gives the time limit of a wait for an approval that names
+	// none: the sum of the times of the levels of the chain (nil: none).
+	ApprovalTimeout func(ctx context.Context, workspace string) time.Duration
 	// Zone is the time zone of the Guild, for a wait until "HH:MM" (UTC by
 	// default).
 	Zone   *time.Location
@@ -316,6 +319,9 @@ func (s *Service) ParseUntil(v string) (time.Time, error) {
 // time limit is the sum of the deadlines of the levels of the chain: the flow
 // passes it.
 func (s *Service) WaitApproval(ctx context.Context, waiter characters.Character, request int64, timeout time.Duration) (Wait, error) {
+	if timeout <= 0 && s.o.ApprovalTimeout != nil {
+		timeout = s.o.ApprovalTimeout(ctx, waiter.Workspace)
+	}
 	return s.create(ctx, Wait{Workspace: waiter.Workspace, Table: waiter.Table, Waiter: waiter.ID, Kind: KindApproval, Mode: All,
 		Targets: []Target{{ID: approvalTarget(request), Name: fmt.Sprintf("approval #%d", request)}}, Reason: fmt.Sprintf("approval #%d", request)}, timeout)
 }

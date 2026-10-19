@@ -180,20 +180,32 @@ func (s *Service) prepare(ctx context.Context, q Quest, uid string) {
 	if c.Machine != s.o.Machine {
 		if err := s.o.Tables.SyncTower(ctx, q.Workspace, q.Table, c.Machine); err != nil {
 			if errors.Is(err, tables.ErrMachineUnreachable) {
-				s.hold(ctx, &st, blockSync)
+				if s.hold(ctx, &st, blockSync) && s.o.Waits != nil {
+					// the wait of the character for the sync: 30 min, then the Master is told
+					if _, err := s.o.Waits.WaitSync(ctx, c, syncRef(st.UID), 0); err != nil {
+						s.log.Warn("quests: the wait for the sync was not made", "step", st.UID, "err", err)
+					}
+				}
 				return
 			}
 			s.pauseAndTell(ctx, q, fmt.Sprintf("a branch da mesa não chegou à máquina %s: %v", c.Machine, err))
 			return
 		}
+		if s.o.Waits != nil { // a no-op without a wait for the sync of this step
+			s.o.Waits.SyncDone(ctx, syncRef(st.UID), "a branch da mesa chegou à máquina "+c.Machine)
+		}
 	}
 	s.deliver(ctx, q, st, sd, c)
 }
 
-// hold records what keeps a step in preparing.
-func (s *Service) hold(ctx context.Context, st *Step, blocker string) {
+// syncRef names the wait for the synchronization of a step.
+func syncRef(uid string) string { return "sync:" + uid }
+
+// hold records what keeps a step in preparing; it says whether the blocker is
+// new.
+func (s *Service) hold(ctx context.Context, st *Step, blocker string) bool {
 	if st.Blocker == blocker {
-		return
+		return false
 	}
 	st.Blocker = blocker
 	err := s.st.Do(ctx, func(tx *Tx) error {
@@ -206,7 +218,9 @@ func (s *Service) hold(ctx context.Context, st *Step, blocker string) {
 	})
 	if err != nil {
 		s.log.Warn("quests: a pending thing of a step was not recorded", "step", st.UID, "err", err)
+		return false
 	}
+	return true
 }
 
 // assign records the character of a step.

@@ -145,4 +145,4 @@ func SecretPipe(secret []byte) (*os.File, error) {
 	return r, nil
 }
 
-func itoa(n uintptr) string { return strconv.FormatUint(uint64(n), 10) }
+func itoa(n uintptr) string { return strconv.FormatUint(uint64(n), 10) } //nolint:unused // used by the Windows build

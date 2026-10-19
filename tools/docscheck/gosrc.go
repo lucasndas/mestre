@@ -4,6 +4,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"io/fs"
+	"path"
 	"regexp"
 	"runtime"
 	"strings"
@@ -18,6 +19,11 @@ type codeMarker struct {
 	File string
 	Line int
 	Test bool // the file is a _test.go
+	// Suite is the suite the file belongs to (rápida, completa or pesada).
+	Suite string
+	// Placed says whether the comment sits right above a test: the line after
+	// the comment it opens is `func Test…` or a `t.Run(`.
+	Placed bool
 }
 
 // commentGroup is a run of consecutive line comments (or one block comment)
@@ -43,6 +49,26 @@ func (g commentGroup) lineAt(off int) int {
 type goScan struct {
 	markers  []codeMarker
 	comments []commentGroup
+	refs     []docRef // the path of a document and #anchor, written in comments
+}
+
+// docRef is a reference to a heading of a document, written in a comment or a
+// configuration file: the path of the document under docs/, then #heading.
+type docRef struct {
+	File   string
+	Line   int
+	Doc    string
+	Anchor string
+}
+
+// docRefRe finds a reference with the path from the root of the repository.
+var docRefRe = regexp.MustCompile(`\b(docs/[A-Za-z0-9_./-]+\.md)#([^\s)\]>,;:'"` + "`" + `]+)`)
+
+// findRefs adds the references of the text, which starts at line.
+func (s *goScan) findRefs(file, text string, line int) {
+	for _, loc := range docRefRe.FindAllStringSubmatchIndex(text, -1) {
+		s.refs = append(s.refs, docRef{file, line + strings.Count(text[:loc[0]], "\n"), text[loc[2]:loc[3]], strings.TrimRight(text[loc[4]:loc[5]], ".")})
+	}
 }
 
 var (
@@ -113,6 +139,7 @@ func scanGo(fsys fs.FS) *goScan {
 	for i := range parts { // in path order: the same result on every run
 		out.markers = append(out.markers, parts[i].markers...)
 		out.comments = append(out.comments, parts[i].comments...)
+		out.refs = append(out.refs, parts[i].refs...)
 	}
 	return out
 }
@@ -123,6 +150,8 @@ func (s *goScan) scanFile(fset *token.FileSet, p string, src []byte) {
 	sc.Init(file, src, func(token.Position, string) {}, scanner.ScanComments)
 	isTest := strings.HasSuffix(p, "_test.go")
 	track := !inSpikes(p)
+	suite := fileSuite(p, src)
+	lines := strings.Split(string(src), "\n")
 
 	var cur *commentGroup
 	prev := -10
@@ -141,10 +170,11 @@ func (s *goScan) scanFile(fset *token.FileSet, p string, src []byte) {
 			continue
 		}
 		line := file.Line(pos)
+		s.findRefs(p, lit, line)
 		if strings.HasPrefix(lit, "//") {
 			text := strings.TrimPrefix(lit, "//")
-			if m := markerRe.FindStringSubmatch(strings.TrimSpace(text)); m != nil {
-				s.markers = append(s.markers, codeMarker{ID: m[1], File: p, Line: line, Test: isTest})
+			if m := markerRe.FindStringSubmatch(strings.TrimSpace(text)); m != nil && track {
+				s.markers = append(s.markers, codeMarker{ID: m[1], File: p, Line: line, Test: isTest, Suite: suite, Placed: aboveATest(lines, line)})
 			}
 			if !track {
 				continue
@@ -175,4 +205,82 @@ func (s *goScan) scanFile(fset *token.FileSet, p string, src []byte) {
 		prev = -10
 	}
 	flush()
+}
+
+// testLineRe is the line a marker may sit above: a test the suites run, or a
+// subtest.
+var testLineRe = regexp.MustCompile(`^(func Test[A-Z0-9_]\w*\(\w+ \*testing\.T\)|(\w+, \w+ :?= )?t\.Run\()`)
+
+var buildLineRe = regexp.MustCompile(`^//go:build\s+(.*)$`)
+
+// fileSuite is the suite a Go file runs in: `full` in its build line (not
+// negated) or a _full_test.go name is the completa; `heavy` or `realaccount`
+// the pesada; the rest the rápida.
+func fileSuite(p string, src []byte) string {
+	expr := ""
+	for _, l := range strings.Split(string(src), "\n") {
+		l = strings.TrimSpace(l)
+		if m := buildLineRe.FindStringSubmatch(l); m != nil {
+			expr = m[1]
+			break
+		}
+		if strings.HasPrefix(l, "package ") {
+			break
+		}
+	}
+	has := func(tag string) bool {
+		for _, f := range strings.FieldsFunc(expr, func(r rune) bool { return r != '_' && r != '!' && (r < 'a' || r > 'z') && (r < '0' || r > '9') }) {
+			if f == tag {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case has("ignore") || has("spike") || has("realcli") || has("ptylegacy"):
+		return "nenhuma" // no suite builds it
+	case has("heavy") || has("realaccount") || strings.HasSuffix(p, "_heavy_test.go") || strings.HasSuffix(p, "_realaccount_test.go"):
+		return "pesada"
+	case has("full") || strings.HasSuffix(p, "_full_test.go"):
+		return "completa"
+	}
+	return "rápida"
+}
+
+// aboveATest says whether the line comment of number line opens a run of
+// comment lines that ends right above `func Test…` or a `t.Run(`.
+func aboveATest(lines []string, line int) bool {
+	i := line // 0-based index of the next line
+	for i < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i]), "//") {
+		i++
+	}
+	if i >= len(lines) {
+		return false
+	}
+	return testLineRe.MatchString(strings.TrimSpace(lines[i]))
+}
+
+// scanConfigRefs reads the references in the files that are not Go (the
+// workflows and the SQL migrations): the lines that carry a comment.
+func scanConfigRefs(fsys fs.FS) []docRef {
+	var out []docRef
+	scan := &goScan{}
+	_ = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil //nolint:nilerr // unreadable entries are skipped
+		}
+		if d.IsDir() {
+			if p == ".git" || d.Name() == "node_modules" || p == ".claude" || p == "docs" || d.Name() == "testdata" {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if ext := path.Ext(p); ext == ".yml" || ext == ".yaml" || ext == ".sql" {
+			if b, err := fs.ReadFile(fsys, p); err == nil {
+				scan.findRefs(p, string(b), 1)
+			}
+		}
+		return nil
+	})
+	return append(out, scan.refs...)
 }

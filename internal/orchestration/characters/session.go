@@ -111,12 +111,6 @@ func (s *session) status() Status {
 	return s.st
 }
 
-// transition is a change applied under the lock, to report after it.
-type transition struct {
-	from, to State
-	rep      Report
-}
-
 // applyLocked moves the state along an edge of the diagram, keeps the row of
 // the machine, and arms or stops the timers the new state needs. It returns
 // the report to send, and false when the diagram has no such edge from the

@@ -55,7 +55,7 @@ func (h *hub) CreateSubIssue(_ context.Context, _ string, _ int, _, _ string) (i
 func (*hub) UpdateBody(context.Context, string, int, string) error        { return nil }
 func (*hub) Comment(context.Context, string, int, string, string) error   { return nil }
 func (*hub) Close(context.Context, string, int, quests.CloseReason) error { return nil }
-func (h *hub) epicOf(issue int) int                                       { h.mu.Lock(); defer h.mu.Unlock(); return h.epics[issue] }
+func (h *hub) epicOf(issue int) int                                       { h.mu.Lock(); defer h.mu.Unlock(); return h.epics[issue] } //nolint:unused // used by the full suite
 
 // ceilingOf is the ceiling of a workspace, which a test changes.
 type ceilingOf struct {

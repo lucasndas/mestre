@@ -1,7 +1,6 @@
 package testkit
 
 import (
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,20 +20,4 @@ func WriteFiles(t testing.TB, dir string, files map[string]string) string {
 		}
 	}
 	return dir
-}
-
-// LocalListener listens on a free 127.0.0.1 port, closed at cleanup. It is
-// real network, so only the full and heavy suites may use it; the fast suite
-// uses the fake network (internal/testkit/fakenet).
-func LocalListener(t testing.TB, suite string) net.Listener {
-	t.Helper()
-	if suite == "fast" {
-		t.Fatal("real network in fast suite: use the fake network (internal/testkit/fakenet)")
-	}
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = l.Close() })
-	return l
 }

@@ -70,6 +70,11 @@ type Waits interface {
 	CancelQuest(ctx context.Context, quest string) error
 	// WaitApproval makes the character wait for a request of approval.
 	WaitApproval(ctx context.Context, waiter characters.Character, request int64, timeout time.Duration) (waits.Wait, error)
+	// WaitSync makes the character wait for the synchronization of the
+	// worktree of its machine (30 min by default).
+	WaitSync(ctx context.Context, waiter characters.Character, ref string, timeout time.Duration) (waits.Wait, error)
+	// SyncDone satisfies the wait for a synchronization that ended.
+	SyncDone(ctx context.Context, ref, text string)
 	// ApprovalDecided satisfies the wait for a request that was decided.
 	ApprovalDecided(ctx context.Context, request int64, text string)
 }

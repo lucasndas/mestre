@@ -66,11 +66,15 @@ func TestAwkAndSedDynamicCodeIsTheCodeSignal(t *testing.T) {
 		`sed -f script.sed f`,
 	} {
 		wantRisk(t, env, def, cmd, classes.RiskMedium)
-		// The -f forms are medio only because the program is not on the list of
-		// safe ones, not by the code signal the criterion names (a gap of the
-		// classifier, reported apart from this change).
-		if got := shellRisk(env, def, cmd); !strings.Contains(cmd, " -f ") && !strings.Contains(got.Rule, "sinal de interpretador com código") {
-			t.Errorf("%q is medio by %q; want the signal of an interpreter with code", cmd, got.Rule)
+		// The -f forms are medio because the program is in a file the engine
+		// does not read, so the command is off the list of safe programs; the
+		// others by the signal of an interpreter with code.
+		want := "sinal de interpretador com código"
+		if strings.Contains(cmd, " -f ") {
+			want = "fora da lista de programas seguros"
+		}
+		if got := shellRisk(env, def, cmd); !strings.Contains(got.Rule, want) {
+			t.Errorf("%q is medio by %q; want %q", cmd, got.Rule, want)
 		}
 		if d := decide(env, def, m.shell(cmd)); d.Verdict == classes.Allow {
 			t.Errorf("%q allowed; want ask (code the motor cannot read)", cmd)

@@ -1,6 +1,7 @@
 # golangci-lint v2 configuration (docs/desenvolvimento/convencoes.md#estilo).
 # tools/testrun runs it in the fast and full suites; tools/codecheck keeps
-# only the rule the linter does not cover (t.Parallel in subtests).
+# the seven rules the linter does not cover (parallel, bare-select,
+# child-stdio, nil-sa, private-dir, secret-receiver and agent-files).
 version: "2"
 
 linters:
@@ -12,6 +13,7 @@ linters:
     - forbidigo
     - paralleltest
     - depguard
+    - unused
   settings:
     paralleltest:
       # Subtests are tools/codecheck's rule alone ("each rule in one tool"):
@@ -86,6 +88,12 @@ linters:
           - forbidigo
       # Dialing and listening: the layers that own connections.
       - path: ^(internal/(terminal|launcher|winsvc|localchan|transport|discovery|testkit|realaccount)|cmd|tools)/
+        text: designated layers
+        linters:
+          - forbidigo
+      # The full and heavy suites are the ones that dial, listen and start
+      # processes (docs/qualidade/testes.md#regras-e-erros).
+      - path: _(full|heavy)_test\.go$
         text: designated layers
         linters:
           - forbidigo
