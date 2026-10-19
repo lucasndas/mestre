@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Impedir que o PR da mesa trave por conflito de rotina ou chegue ao merge com a base andada e a `main` quebrada. "Sem conflito de texto" não é "funciona": uma mescla limpa pode não compilar. Por isso o conflito é uma **tarefa do Dev**, nunca um bloqueio para o usuário, e a linha de chegada é a **verificação verde**, não a ausência de marcadores de conflito.
+Impedir que o PR da mesa trave por conflito de rotina ou chegue ao merge com a base andada e a `main` quebrada. "Sem conflito de texto" não é "funciona": uma mescla limpa pode não compilar. Por isso o conflito é uma **tarefa do Dev**, nunca um bloqueio para o usuário, e a linha de chegada é a **verificação verde**, não a ausência de marcadores de conflito. Neste documento, "a base" é a branch principal do repositório, não a [Base](../produto/glossario.md) de um terminal.
 
 ## Comportamento
 
@@ -30,7 +30,7 @@ Nenhum dos três depende de a mesa ter conflito de texto: a base ter andado bast
 O `done` da `sync` não encerra a etapa sozinho. O motor roda a verificação num worktree efêmero da mesa, sob a trava por repositório, e confere o resultado:
 
 - **verde:** a etapa conclui; o Dev (ou o Mestre da mesa) faz o `pr update` e a mesa volta a `in_review`. Um pedido de aprovação do PR já aberto sobre o hash antigo fica `invalidado` ([invalidação](../aprovacoes/fluxo.md#invalidação)) e nasce de novo no hash novo;
-- **vermelha:** a etapa volta ao Dev com a saída da verificação como motivo, contando uma volta (`max_returns` da missão, [devolução](missoes.md)). Passou do limite: a mesa fica pausada e o Grão-Mestre recebe o motivo. A mesma falha repetida (mesma impressão, classe `verify`) pausa antes do limite ([prova e devolução](prova-e-devolucao.md#devolução-com-causa-e-mesma-falha)).
+- **vermelha:** a etapa volta ao Dev com a saída da verificação como motivo, contando uma volta (`max_returns` da missão, [devolução](missoes.md)). Passou do limite: a mesa fica pausada e o Grão-Mestre recebe o motivo. A mesma falha repetida (mesma impressão, causa `verify`) pausa antes do limite ([prova e devolução](prova-e-devolucao.md#devolução-com-causa-e-mesma-falha)).
 
 ## Regras e erros
 
