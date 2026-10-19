@@ -1,6 +1,6 @@
 # Mesas
 
-> **Assunto:** ciclo de vida da mesa, worktree por máquina e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** ciclo de vida da mesa, worktree por máquina e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -16,7 +16,7 @@ Só o Grão-Mestre abre mesas, e só num workspace `active` ([estados do workspa
 3. cria o worktree na Cidadela em `<dados>/workspaces/<slug do workspace>/mesas/<mesa>/` ([pastas](workspaces.md#espelho-e-clone-principal-na-cidadela)); o identificador da mesa (`<mesa>`, `MESTRE_MESA`) é `<n>-<slug>`, o mesmo da branch sem o prefixo;
 4. roda a sessão zero da mesa ([materialização de arquivos](../sessao-zero/mesa.md));
 5. recruta o Mestre da mesa com a ficha padrão do workspace (ou a indicada), conectado ao Grão-Mestre;
-6. entrega ao Mestre da mesa, como primeira mensagem, o **texto original** da(s) mensagem(ns) de usuário indicada(s) e cópias dos anexos ([anexos](../telegram/anexos-e-transcricao.md)), seguidos das observações do Grão-Mestre em bloco separado. O motor copia o original; o Grão-Mestre não o reescreve.
+6. entrega ao Mestre da mesa, como primeira mensagem, o **texto original** da(s) mensagem(ns) de usuário indicada(s) e cópias dos anexos ([anexos](../telegram/anexos-e-transcricao.md)), seguidos das observações do Grão-Mestre em bloco separado. O motor copia o original; o Grão-Mestre não o reescreve. Se o épico depende de outro com mesa em andamento, este passo espera ([dependência entre mesas](dependencia-entre-mesas.md#a-espera-do-tipo-épico)).
 
 Se algum passo falhar, o motor desfaz os anteriores (branch e worktree) e devolve o erro ao Grão-Mestre; o épico não é tocado, porque já existia.
 
@@ -30,8 +30,8 @@ O que o código fixa onde o texto acima deixa em aberto:
 
 | Estado | Identificador | Entra quando |
 |---|---|---|
-| Aberta | `open` | passos 1–5 da abertura em andamento |
-| Em trabalho | `working` | Mestre da mesa pronto e pedido entregue; ou nova missão iniciada estando em revisão (um pedido novo que o Grão-Mestre [roteou](grao-mestre.md#triagem-e-roteamento-do-pedido) para a mesa, ou uma etapa `sync`) |
+| Aberta | `open` | passos 1–5 da abertura em andamento, ou o passo 6 adiado pela [espera de dependência](dependencia-entre-mesas.md#a-espera-do-tipo-épico) |
+| Em trabalho | `working` | pedido entregue ao Mestre da mesa; ou nova missão iniciada estando em revisão (um pedido novo que o Grão-Mestre [roteou](grao-mestre.md#triagem-e-roteamento-do-pedido) para a mesa, ou uma etapa `sync`) |
 | Em revisão | `in_review` | `mestre pr open` (ou `pr update`) concluído com sucesso |
 | Encerrando | `closing` | `mestre table close` do Grão-Mestre, com o merge do PR já confirmado |
 | Encerrada | `closed` | personagens encerrados e worktrees removidos (ou retenção decidida) |
@@ -41,7 +41,7 @@ O que o código fixa onde o texto acima deixa em aberto:
 ```mermaid
 stateDiagram-v2
     [*] --> open : mestre table open
-    open --> working : Mestre da mesa pronto
+    open --> working : pedido entregue
     working --> in_review : pr open/update ok
     in_review --> working : missão de ajuste iniciada
     in_review --> closing : table close (merge confirmado)

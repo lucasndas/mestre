@@ -1,6 +1,6 @@
 # Limites de uso e custo
 
-> **Assunto:** registro de uso por provedor, limites por missão, mesa, workspace e dia, avisos em 80% e pausa em 100%, o limiar de início, a leitura antiga e o estado "aguardando cota" · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** registro de uso por provedor, limites por missão, mesa, workspace e dia, avisos em 80% e pausa em 100%, o limiar de início, a leitura antiga e o estado "aguardando cota" · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -10,10 +10,11 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 
 ### Registro de uso
 
-- Tabela `usage_records` na Cidadela ([persistência](../arquitetura/persistencia.md)). Cada registro tem: personagem, etapa, missão, mesa, workspace, perfil de conta, provedor, modelo, horário, origem do dado e o que o provedor informar:
+- Tabela `usage_records` na Cidadela ([persistência](../arquitetura/persistencia.md)). Cada registro tem: personagem, etapa, missão, mesa, workspace, perfil de conta, provedor, modelo, horário, origem do dado, **origem do trabalho** (`etapa`, `conformidade` ou `teste_de_classe`) e o que o provedor informar:
   - tokens (entrada, saída, cache lido e escrito, raciocínio);
   - custo estimado em USD;
   - sempre, mesmo sem nada do provedor: **tempo ativo** (soma dos intervalos em `busy`, pelos eventos de início e fim de turno do [adaptador](../provedores/adaptador.md)) e **número de turnos**.
+- Conformidade e teste de classe gravam sem missão nem mesa (origem `conformidade` ou `teste_de_classe`): contam só no limite diário total e no consumo por conta, nunca nos limites de missão, mesa ou workspace.
 - O adaptador de cada provedor entrega um registro normalizado (`ReadUsage`) no fim de cada turno e periodicamente. Os registros são somados por personagem, missão, mesa, workspace, conta e dia.
 - **Subagentes nativos** usados por um personagem são trabalho dele: o uso entra no registro do personagem e conta para os limites da missão, da mesa, do workspace e do dia como qualquer outro ([subagentes nativos](../classes/permissoes.md#subagentes-nativos)). Enquanto um subagente roda, o personagem segue `busy`, então o tempo ativo já o inclui.
 
@@ -52,7 +53,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 
 ### Limiar de início
 
-Para não perder um turno cortado no meio, o motor não espera o corte: com qualquer janela do plano de um provedor (5 h ou 7 d) **no limiar de início** ou acima (padrão 95%, configurável por workspace por um Administrador), ele não recruta nem entrega etapa nova que use aquele provedor e conta. Quem está no turno termina. A mesa fica aguardando cota até o `resets_at` da janela, e o Grão-Mestre e os usuários recebem `⏸ Mesa Login pausada · 5h 96% · volta às 14:05 · faltam 2 etapas`. Ao passar do `resets_at`, o motor entrega o que esperava (como em [aguardando cota](#aguardando-cota)).
+Para não perder um turno cortado no meio, o motor não espera o corte: com qualquer janela do plano de um provedor (5 h ou 7 d) **no limiar de início** ou acima (padrão 95%, configurável por workspace por um Administrador), ele não recruta nem entrega etapa nova que use aquele provedor e conta; o Administrador o ajusta na tela de consumo do painel ([administração](../painel/administracao.md)). Quem está no turno termina. A mesa fica aguardando cota até o `resets_at` da janela, e o Grão-Mestre e os usuários recebem `⏸ Mesa Login pausada · 5h 96% · volta às 14:05 · faltam 2 etapas`. Ao passar do `resets_at`, o motor entrega o que esperava (como em [aguardando cota](#aguardando-cota)).
 
 - **Leitura antiga:** o uso só cresce dentro da janela. Uma leitura **acima** do limiar continua valendo até o `resets_at`, por velha que seja; uma **abaixo** não prova nada e, depois de 15 min, vira "desconhecido": a etapa é entregue com um aviso ao Mestre da mesa de que o uso não está confirmado, e a próxima leitura decide. Janela sem `resets_at` conhecido só vale enquanto a leitura é recente (menos de 15 min).
 - Os três informam `resets_at` por janela: o Claude Code pelo statusLine (só muda com turno em andamento), o Codex pelo `token_count` e o Antigravity pelo `/usage` (`used_pct = 1 − fração restante`, lido a cada 10 min). Por isso o corte da leitura antiga é de 15 min, acima do intervalo do Antigravity ([fontes](#de-onde-vem-o-uso-por-provedor)); provedor sem janela não tem limiar.
@@ -71,7 +72,7 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 
 ## Regras e erros
 
-- Fonte de uso indisponível (statusLine não roda, JSONL não encontrado) → registra só tempo ativo e turnos e abre um alerta do [checklist](checklist.md).
+- Fonte de uso indisponível (statusLine não roda, JSONL não encontrado) → registra só tempo ativo e turnos e abre o alerta ALL-23 do [checklist](checklist.md).
 - Formato de uso mudou numa versão nova do provedor → o [teste de conformidade](../provedores/conformidade.md) acusa; até a correção, valem tempo ativo e turnos.
 - Um limite configurado acima do teto é recusado na hora de salvar.
 
@@ -87,6 +88,8 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - **CA-USO-09** · *rápida* — **Dado** um registro de uso gravado de um turno em que o personagem usou um subagente nativo, **quando** o uso é somado, **então** os tokens do subagente entram no personagem, na missão e na mesa dele.
 - **CA-USO-08** · *pesada* — **Dado** uma mesa trabalhando, **quando** abro o painel, **então** vejo o consumo da mesa e de cada personagem (MVP-11).
 - **CA-USO-10** · *rápida* — **Dado** a janela de 5 h em 96% numa leitura de 20 min atrás com `resets_at` daqui a 1 h (relógio falso), **quando** o motor vai entregar uma etapa nova, **então** não entrega e a mesa fica aguardando cota até o reset, e passado o reset a etapa é entregue; **dado** 40% numa leitura de 20 min atrás, **então** o uso fica "desconhecido" e a etapa é entregue com aviso.
+- **CA-USO-11** · *rápida* — **Dado** um limite de mesa acima do teto de custo do workspace, **quando** o Administrador salva, **então** é recusado; **dado** um limite diário total salvo por um Administrador, **então** é recusado e só o Dono consegue.
+- **CA-USO-12** · *rápida* — **Dado** uma conformidade que grava 2 USD de origem `conformidade`, **quando** o motor soma, **então** o limite da mesa e o do workspace não mudam e o diário total sobe; **dado** a fonte de uso de um personagem indisponível, **então** só tempo ativo e turnos são gravados e o ALL-23 abre um aviso.
 
 ## Depende de
 

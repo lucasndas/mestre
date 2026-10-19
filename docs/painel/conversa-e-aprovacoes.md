@@ -1,6 +1,6 @@
 # Conversa e aprovações no painel
 
-> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-18
+> **Assunto:** conversa com o Grão-Mestre pelo painel, central de aprovações e área de avisos · **Componente:** Painel · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -18,6 +18,8 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **Resposta:** o `mestre reply` de uma mensagem vinda do painel volta para o painel daquele usuário. Se ele não estiver com o painel aberto, a resposta fica guardada e aparece ao abrir, com um contador de não lidas.
 - **Histórico:** a conversa mostra também as mensagens trocadas pelo Telegram com o mesmo usuário e workspace, marcadas com um ícone do canal, para a conversa fazer sentido nos dois lugares. A resposta continua indo pelo canal de origem de cada mensagem.
 - Mensagens do Grão-Mestre são Markdown, mostradas sem HTML ativo. Arquivos enviados com `mestre reply --attach` aparecem como download.
+- **Mensagem de progresso** ([Grão-Mestre](../orquestracao/grao-mestre.md#mensagem-de-progresso)): aparece como um cartão no topo da conversa, atualizado no lugar, com a contagem das mesas e uma linha por pendência.
+- **Pergunta de escolha** (`mestre choose`, [CLI](../cli/grao-mestre.md#mestre-choose)): um botão por opção, no canal de origem da mensagem que a causou; a escolha volta ao Grão-Mestre como resposta e vale uma vez.
 - Estado do Grão-Mestre no topo (ocioso, ocupado, itens na fila à frente), para o usuário saber quando esperar resposta.
 - Com o sistema travado, o envio mostra "guardado até destravar" ([segurança do canal](../telegram/seguranca-do-canal.md)).
 
@@ -25,11 +27,11 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 
 - Lista os pedidos `aguardando_usuarios` que o usuário pode responder, em todos os workspaces dele, mais recentes primeiro, com filtro por workspace, mesa e tipo ([fluxo](../aprovacoes/fluxo.md)).
 - Cada item mostra o mesmo conteúdo do Telegram (o que é, onde, por quê, risco, arquivos, motivo da dúvida, recomendação, os níveis da [cadeia](../orquestracao/cadeia-de-aprovacao.md) por onde já passou) e os botões das [respostas](../orquestracao/cadeia-de-aprovacao.md#respostas) que aquele usuário pode dar, filtrados pelo nível e pelo tipo como no [fluxo](../aprovacoes/fluxo.md#pergunta-aos-usuários), mais **Ver detalhes**. As respostas que pedem dado mostram o campo antes de confirmar: a duração em "por um tempo", o padrão (já sugerido pelo motor, editável) em "o padrão", o texto em "negar com instrução" e "perguntar de volta", o escopo em "delegar". No painel, **Ver detalhes** mostra o diff inteiro.
-- **Pedido que bloqueia** ([os campos](../aprovacoes/pedido-que-bloqueia.md#os-campos)): os mesmos campos da mensagem do Telegram, com a evidência **inteira** (o Telegram a corta em 3 linhas), já passada pelo mascarador, e o texto do agente dentro do bloco "texto do agente, não verificado". Cada passo de **Para destravar** que o painel sabe fazer (cadastrar no cofre, abrir o PR) vira botão.
+- **Pedido que bloqueia** ([os campos](../aprovacoes/pedido-que-bloqueia.md#os-campos)): os mesmos campos da mensagem do Telegram, com a evidência **inteira** (o Telegram a corta em 3 linhas), já passada pelo mascarador, e o texto do agente dentro do bloco "texto do agente, não verificado". Cada passo de **Para destravar** que o painel sabe fazer vira botão **só para quem tem o nível e o PIN do passo**: o cadastro no cofre, com o nível e o PIN de [credenciais de site](../plataforma/cofre.md#credenciais-de-site), abre a tela de Segredos; abrir o PR, de quem pode ver o workspace.
 - Pedidos parecidos agrupados aparecem como um item com a lista das ações ([fluxo](../aprovacoes/fluxo.md#quórum-e-já-respondido-por)).
 - Tipos que pedem PIN abrem o campo de PIN depois do botão ([login](login.md#pin-em-ações-sensíveis)).
 - Resposta dada em outro canal ou por outro usuário atualiza o item na hora: "Já respondido por <nome>: Aprovado às 14:32", sem botões.
-- Aprovações de cura (scripts de diagnóstico, volta de versão com restauração do banco) aparecem aqui, numa seção "Autocura", só para Dono e Administradores ([diagnóstico com IA](../autocura/diagnostico-com-ia.md#proposta-e-aprovação)).
+- Aprovações de cura (scripts de diagnóstico, volta de versão com restauração do banco) aparecem aqui, numa seção "Autocura" (desde o M7), só para Dono e Administradores ([diagnóstico com IA](../autocura/diagnostico-com-ia.md#proposta-e-aprovação)).
 - Aba **Histórico:** pedidos encerrados com filtros (estado, quem decidiu, nível da cadeia, risco, período), lidos da auditoria do fluxo; inclui o que os agentes decidiram sozinhos.
 - Contador de pendentes no topo de todas as telas.
 
@@ -56,6 +58,8 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - **CA-CONV-06** · *pesada* — **Dado** um PR numa área sensível, **quando** o Grão-Mestre pergunta e eu aprovo pela central do painel, **então** a decisão é aplicada no GitHub (dublê) (MVP-7).
 - **CA-CONV-07** · *rápida* — **Dado** um pedido `alto` aberto nas pessoas, **quando** um Administrador e o Dono abrem a central, **então** os dois veem **Aprovar o padrão** e **Aprovar sempre para a classe**, só o Dono vê **Delegar**, e a rota de delegar chamada pelo Administrador é recusada com o nível exigido; **quando** o Administrador escolhe **Aprovar o padrão**, **então** o campo traz o padrão sugerido pelo motor e o PIN é pedido antes de valer.
 - **CA-CONV-08** · *rápida* — **Dado** um pedido que bloqueia com evidência de 10 linhas contendo um token `ghp_…` e o campo "Por que não decido" vindo do agente, **quando** a central o mostra, **então** aparecem as 10 linhas com o token mascarado, o texto do agente dentro do bloco "não verificado" e o botão do passo "cadastrar no cofre".
+- **CA-CONV-09** · *rápida* — **Dado** o Grão-Mestre perguntando `mestre choose` com 3 opções a um usuário que escreveu pelo painel, **quando** a pergunta chega, **então** a conversa mostra 3 botões, só ela, e o clique entrega a escolha uma vez (um segundo clique é recusado); **dado** a mensagem de progresso, **então** ela é um cartão no topo, atualizado sem duplicar.
+- **CA-CONV-10** · *rápida* — **Dado** um aviso `credencial` com o passo "cadastrar no cofre", **quando** um Administrador e o Dono abrem a central, **então** o Administrador não vê botão de cadastro e o Dono vê o botão que abre Segredos e pede o PIN.
 
 ## Depende de
 
