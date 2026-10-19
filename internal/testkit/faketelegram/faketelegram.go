@@ -1,14 +1,17 @@
 // Package faketelegram is the in-memory Telegram Bot API of every suite
 // (docs/qualidade/dubles.md#telegram-falso). M0 serves the text flow:
 // getUpdates (long polling timed by the clock), sendMessage,
-// editMessageText and answerCallbackQuery, with injected failures. Voice,
-// photos, documents, getFile and callback buttons arrive with the bot in M5;
-// until then those methods fail the test as not implemented.
+// editMessageText and answerCallbackQuery, with injected failures. The bot of
+// M5 adds the buttons (reply_markup, callback clicks), parse modes, replies,
+// deleteMessage, deleteWebhook, setMyCommands, leaveChat and documents, and the
+// stickers a user may send; voice, photos and getFile arrive with the
+// attachments.
 package faketelegram
 
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"sort"
@@ -49,11 +52,16 @@ type Sent struct {
 	Params    map[string]any
 }
 
+// Deleted is a message the bot deleted.
+type Deleted struct{ ChatID, MessageID int64 }
+
 // Failure is injected into the next call of a method.
 type Failure struct {
-	Status     int  // HTTP status and error_code, e.g. 429 or 502
-	RetryAfter int  // seconds, for 429
-	Cut        bool // the connection drops without a response
+	Status     int // HTTP status and error_code, e.g. 429 or 502
+	RetryAfter int // seconds, for 429
+	// Description replaces the standard text of the error (e.g. a parse error).
+	Description string
+	Cut         bool // the connection drops without a response
 }
 
 // Server is the fake Bot API. Use it as an http.Handler, usually through
@@ -70,6 +78,7 @@ type Server struct {
 	nextUpd  int64
 	nextMsg  int64
 	sent     []Sent
+	deleted  []Deleted
 	failures map[string][]Failure
 	notify   chan struct{} // closed and replaced on each new update
 }
@@ -188,7 +197,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.getUpdates(w, r, params)
 	case "sendMessage", "editMessageText":
 		s.sendMessage(w, method, params)
+	case "sendDocument":
+		s.sendDocument(w, params)
 	case "answerCallbackQuery":
+		s.mu.Lock()
+		s.sent = append(s.sent, Sent{Method: method, Text: str(params["text"]), Params: params})
+		s.mu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": true})
+	case "deleteMessage":
+		s.mu.Lock()
+		s.deleted = append(s.deleted, Deleted{ChatID: num(params["chat_id"]), MessageID: num(params["message_id"])})
+		s.sent = append(s.sent, Sent{Method: method, ChatID: num(params["chat_id"]), MessageID: num(params["message_id"]), Params: params})
+		s.mu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": true})
+	default: // deleteWebhook, setMyCommands, leaveChat
+		s.mu.Lock()
+		s.sent = append(s.sent, Sent{Method: method, ChatID: num(params["chat_id"]), Params: params})
+		s.mu.Unlock()
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": true})
 	}
 }
@@ -197,10 +222,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // that it honours. Anything else fails the test as not implemented (buttons,
 // replies, parse modes and files arrive with the bot in M5).
 var knownParams = map[string]map[string]bool{
-	"getUpdates":          {"offset": true, "timeout": true},
-	"sendMessage":         {"chat_id": true, "text": true},
-	"editMessageText":     {"chat_id": true, "message_id": true, "text": true},
-	"answerCallbackQuery": {"callback_query_id": true},
+	"getUpdates":          {"offset": true, "timeout": true, "allowed_updates": true},
+	"sendMessage":         {"chat_id": true, "text": true, "parse_mode": true, "reply_markup": true, "reply_to_message_id": true},
+	"editMessageText":     {"chat_id": true, "message_id": true, "text": true, "parse_mode": true, "reply_markup": true},
+	"answerCallbackQuery": {"callback_query_id": true, "text": true, "show_alert": true},
+	"deleteMessage":       {"chat_id": true, "message_id": true},
+	"deleteWebhook":       {"drop_pending_updates": true},
+	"setMyCommands":       {"commands": true},
+	"leaveChat":           {"chat_id": true},
+	"sendDocument":        {"chat_id": true, "document": true, "caption": true, "parse_mode": true},
 }
 
 func sortedKeys(m map[string]any) []string {
@@ -226,6 +256,9 @@ func (s *Server) injectFailure(w http.ResponseWriter, method string) bool {
 		panic(http.ErrAbortHandler)
 	}
 	body := map[string]any{"ok": false, "error_code": f.Status, "description": http.StatusText(f.Status)}
+	if f.Description != "" {
+		body["description"] = f.Description
+	}
 	if f.Status == http.StatusTooManyRequests {
 		if rec, err := s.template("error-429"); err == nil {
 			body = rec // recorded shape, with this failure's values
@@ -310,6 +343,27 @@ func readParams(r *http.Request) (map[string]any, error) {
 		}
 		return p, nil
 	}
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			return nil, fmt.Errorf("parse multipart: %w", err)
+		}
+		for k, v := range r.MultipartForm.Value {
+			p[k] = v[0]
+		}
+		for k, fh := range r.MultipartForm.File {
+			f, err := fh[0].Open()
+			if err != nil {
+				return nil, err
+			}
+			b, err := io.ReadAll(f)
+			f.Close()
+			if err != nil {
+				return nil, err
+			}
+			p[k] = File{Name: fh[0].Filename, Content: b}
+		}
+		return p, nil
+	}
 	if err := r.ParseForm(); err != nil {
 		return nil, fmt.Errorf("parse form: %w", err)
 	}
@@ -338,4 +392,90 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// File is a file uploaded to the bot API (the document of sendDocument).
+type File struct {
+	Name    string
+	Content []byte
+}
+
+func str(v any) string { s, _ := v.(string); return s }
+
+func (s *Server) sendDocument(w http.ResponseWriter, p map[string]any) {
+	f, ok := p["document"].(File)
+	chatID := num(p["chat_id"])
+	if !ok || chatID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error_code": 400, "description": "Bad Request: chat_id and a document file are required"})
+		return
+	}
+	s.mu.Lock()
+	id := s.nextMsg
+	s.nextMsg++
+	s.sent = append(s.sent, Sent{Method: "sendDocument", ChatID: chatID, MessageID: id, Text: str(p["caption"]), Params: p})
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": map[string]any{"message_id": id, "date": s.clk.Now().Unix(),
+		"chat": map[string]any{"id": chatID, "type": "private"}, "document": map[string]any{"file_name": f.Name, "file_size": len(f.Content)}}})
+}
+
+// Deleted returns the messages the bot deleted.
+func (s *Server) Deleted() []Deleted {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Deleted(nil), s.deleted...)
+}
+
+// UserSendsSticker queues a sticker from u in the private chat with them.
+func (s *Server) UserSendsSticker(u User) (int64, error) {
+	upd, err := s.template("update-message-sticker")
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	msg, _ := upd["message"].(map[string]any)
+	from, _ := msg["from"].(map[string]any)
+	ch, _ := msg["chat"].(map[string]any)
+	id := s.nextUpd
+	s.nextUpd++
+	upd["update_id"] = id
+	msg["message_id"] = s.nextMsg
+	s.nextMsg++
+	msg["date"] = s.clk.Now().Unix()
+	from["id"], from["first_name"], from["username"] = u.ID, u.FirstName, u.Username
+	ch["id"] = u.ID
+	s.push(upd)
+	return id, nil
+}
+
+// UserClicks queues the click of u on the button with data, of the message
+// messageID of the private chat with them.
+func (s *Server) UserClicks(u User, messageID int64, data string) (callbackID string, err error) {
+	upd, err := s.template("update-callback-query")
+	if err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cq, _ := upd["callback_query"].(map[string]any)
+	from, _ := cq["from"].(map[string]any)
+	msg, _ := cq["message"].(map[string]any)
+	ch, _ := msg["chat"].(map[string]any)
+	id := s.nextUpd
+	s.nextUpd++
+	upd["update_id"] = id
+	callbackID = fmt.Sprintf("cb%d", id)
+	cq["id"], cq["data"] = callbackID, data
+	from["id"], from["first_name"], from["username"] = u.ID, u.FirstName, u.Username
+	msg["message_id"] = messageID
+	ch["id"] = u.ID
+	s.push(upd)
+	return callbackID, nil
+}
+
+// push appends an update and wakes the pending getUpdates. The caller holds mu.
+func (s *Server) push(upd map[string]any) {
+	s.updates = append(s.updates, upd)
+	close(s.notify)
+	s.notify = make(chan struct{})
 }
