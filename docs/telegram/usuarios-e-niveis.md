@@ -126,6 +126,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 - Ação negada por nível: o bot ou o painel diz qual nível é exigido. Nada é executado.
 - Mudança de nível ou de workspaces vale na próxima mensagem. Aprovações pendentes que o novo nível não permite são invalidadas, como na suspensão.
 - O Dono não pode suspender nem remover a si mesmo. Antes, precisa transferir o posto.
+- **Implementação:** `internal/users` guarda os usuários (tabelas `users`, `user_workspaces`, `telegram_pairing_codes`, `telegram_pairing_failures`, `pin_requests`, `pin_failures` e `owner_transfers`, no banco da Guilda): a tabela de níveis é `Can`/`Require` (um nível ou capacidade desconhecido é recusado), o pareamento é `NewCode`/`Pair`, o PIN (argon2id) é `StartPIN`/`CheckPIN`/`Consume` e a transferência é `StartTransfer`/`AcceptTransfer`. Quem pede o PIN no Telegram e quem recebe o texto livre do Observador é o [bot](bot.md) (etapa 2): CA-USR-01 e CA-USR-06 fecham com ele.
 
 ## Critérios de aceite
 
