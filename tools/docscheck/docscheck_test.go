@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"os"
 	"path"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/testkit/countfs"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -331,33 +331,36 @@ func TestNamesSkipDotAndUnderscoreFolders(t *testing.T) {
 
 // CA-VERDOCS-10
 //
-// The budget is on the check itself, not on the machine's load: the test runs
-// in parallel with the rest of the suite, so it times up to three runs and
-// takes the fastest. A check that is really slow is slow in all three. Under
-// the race detector the budget is multiplied by raceFactor, as testrun does
-// with the suite budgets.
+// The bound is on the work of the check, not on the clock, which the load of
+// the other tests in parallel (and of other sessions) moves: the opens are at
+// most maxOpensPerPath times the paths opened (4.5 today) and the bytes read at
+// most maxPasses times the size of the documents (5.2 today), so the check
+// cannot turn quadratic in the number or the size of the documents. A wall-clock net of ten times the old 1 s budget
+// (raceFactor under -race) still catches a slowness the counting does not see.
 func TestDocs(t *testing.T) {
 	t.Parallel()
-	const runs = 3
-	budget := time.Second * raceFactor
+	const maxOpensPerPath, maxPasses = 8, 8
+	net := 10 * time.Second * raceFactor
 	wall := clock.Real{}
-	best := time.Duration(math.MaxInt64)
+	c := countfs.New(os.DirFS("../.."))
 	var out bytes.Buffer
-	for range runs {
-		out.Reset()
-		start := wall.Now()
-		code := run(os.DirFS("../.."), wall, &out)
-		best = min(best, clock.Since(wall, start))
-		if code != 0 {
-			t.Fatalf("documentation check failed:\n%s", out.String())
-		}
-		if best < budget {
-			break // within the budget: no need to measure again
-		}
+	start := wall.Now()
+	code := run(c, wall, &out)
+	took := clock.Since(wall, start)
+	if code != 0 {
+		t.Fatalf("documentation check failed:\n%s", out.String())
 	}
-	if best >= budget {
-		t.Fatalf("documentation check took %v at its fastest of %d runs, budget %v", best, runs, budget)
+	size := countfs.Size(os.DirFS("../.."), "docs")
+	if opens, paths := c.Opens(); opens > maxOpensPerPath*paths {
+		t.Errorf("documentation check opened %d times %d paths; want at most %d per path", opens, paths, maxOpensPerPath)
 	}
+	if c.Bytes() > maxPasses*size {
+		t.Errorf("documentation check read %d bytes of %d bytes of documents; want at most %d passes", c.Bytes(), size, maxPasses)
+	}
+	if took > net {
+		t.Errorf("documentation check took %v; the net of the bound is %v", took, net)
+	}
+	t.Logf("read %d bytes of %d, in %v", c.Bytes(), size, took)
 	t.Log(strings.TrimSpace(out.String()))
 }
 

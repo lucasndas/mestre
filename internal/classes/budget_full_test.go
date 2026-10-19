@@ -4,36 +4,21 @@ package classes_test
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 )
 
-// decisionBound is the bound of one decision on this host: 1 s, and 3 s on
-// Windows, whose shared CI runners are several times slower than the rest
-// (the same input takes about 0.3 s locally, and up to 1.1 s on a loaded
-// runner). Under the race detector it is multiplied by raceFactor, as the
-// other bounds of this package are.
-func decisionBound() time.Duration {
-	base := time.Second
-	if runtime.GOOS == "windows" {
-		base = 3 * time.Second
-	}
-	return base * raceFactor
-}
-
 // The bound of the analysis, measured on the inputs built to take long, up
-// to the 4 MiB the hook reads: each decision ends well under the bound (1 s,
-// or 3 s on Windows; see decisionBound). The suites run in parallel on shared
-// runners, so a decision is timed up to three times and the best counts: the
-// first within the bound ends the measuring, as in the code rules and in the
-// docs check. The best time of every decision is logged.
+// to the 4 MiB the hook reads: each decision spends at most workLimit units
+// of work (see boundedDecision). Work is counted, not
+// timed, so the load of the machine, which runs several suites at once, does
+// not change the result; a wall-clock net far above the old 1 s bound still
+// catches work the counter does not see. The most laborious decision is
+// logged.
 func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 	t.Parallel()
-	bound := decisionBound()
 	free := rules(t, anyYAML)
 	def := rules(t, "version: 1\n")
 	w := "echo " + strings.Repeat("x", 1900) + strings.Repeat("{b,c}", 8)
@@ -65,38 +50,24 @@ func TestTheBoundOfTheAnalysisIsMeasured(t *testing.T) {
 		"a 1 MiB body":          "cat <<'EOF' > d\n" + strings.Repeat("{a,b} $(x) ${y:-z}\n", 50000) + "EOF\necho ok",
 		"4 MiB":                 strings.Repeat("echo a; ", 500000),
 	}
-	var slowest time.Duration
-	var slowName string
+	var most int
+	var mostName string
 	for goos, env := range tableEnvs() {
 		for name, cmd := range cases {
 			for _, r := range []struct {
 				name string
 				r    *classes.Rules
 			}{{"allow *", free}, {"default", def}} {
-				var d classes.Decision
-				var took time.Duration
-				for try := range 3 {
-					start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
-					d = decideOn(t, env, r.r, cmd)
-					if run := time.Since(start); try == 0 || run < took { //nolint:forbidigo // same
-						took = run
-					}
-					if took <= bound {
-						break // within the bound: no need to measure again
-					}
-				}
-				t.Logf("%s, %s, %s: best %v (%s)", goos, r.name, name, took, d.Verdict)
-				if took > slowest {
-					slowest, slowName = took, goos+", "+r.name+", "+name
-				}
-				if took > bound {
-					t.Errorf("%s, %s, %s: %v (%s); want under %v", goos, r.name, name, took, d.Verdict, bound)
+				label := goos + ", " + r.name + ", " + name
+				d, work := boundedDecision(t, label, env, r.r, cmd)
+				if work > most {
+					most, mostName = work, label
 				}
 				if strings.Contains(cmd, "git push") && d.Verdict == classes.Allow {
-					t.Errorf("%s, %s, %s: allowed; want a denial", goos, r.name, name)
+					t.Errorf("%s: allowed; want a denial", label)
 				}
 			}
 		}
 	}
-	t.Logf("bound per decision: %v (host %s); slowest decision: %v (%s)", bound, runtime.GOOS, slowest, slowName)
+	t.Logf("bound per decision: %d units; most laborious decision: %d (%s)", workLimit, most, mostName)
 }

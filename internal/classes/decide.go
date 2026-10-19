@@ -220,6 +220,12 @@ func readOnlyRules(agentID string) *Rules {
 }
 
 func decide(ctx context.Context, env Env, rules *Rules, ev providers.Event, degraded bool) Decision {
+	return decideCounting(ctx, env, rules, ev, degraded, nil)
+}
+
+// decideCounting is decide that also reports, in work when it is not nil, the
+// units the analysis spent (budget.go); the tests of the bound read it.
+func decideCounting(ctx context.Context, env Env, rules *Rules, ev providers.Event, degraded bool, work *int) Decision {
 	if ev.Event != providers.EventPreTool && ev.Event != providers.EventPermissionRequest {
 		return Decision{Verdict: Allow}
 	}
@@ -227,6 +233,9 @@ func decide(ctx context.Context, env Env, rules *Rules, ev providers.Event, degr
 		return Decision{Verdict: Deny, Reason: "evento de ferramenta sem a ferramenta", Layer: LayerFixed}
 	}
 	e := newEvaluator(ctx, env, rules, ev, degraded)
+	if work != nil {
+		defer func() { *work = e.work }()
+	}
 	act := e.action(ev.Tool)
 	deny := func(reason string, l Layer) Decision {
 		return Decision{Verdict: Deny, Reason: reason, Layer: l, Action: act}

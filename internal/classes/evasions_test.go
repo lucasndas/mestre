@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 )
@@ -326,11 +325,7 @@ func TestChainsOfLaunchersAndWrappersAreBounded(t *testing.T) {
 			"dot operator": strings.Repeat(". ", 200) + "git push",
 			"corepack":     strings.Repeat("corepack npx ", 100) + "git push",
 		} {
-			start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
-			d := judge(ee.env, free, cmd)
-			if took := time.Since(start); took > raceFactor*time.Second { //nolint:forbidigo // same
-				t.Errorf("%s: %s took %v; want well under a second", ee.name, name, took)
-			}
+			d, _ := boundedDecision(t, ee.name+": "+name, ee.env, free, cmd)
 			if name == "dot operator" && ee.name != "windows" {
 				continue // . is source in a POSIX shell, and the call operator in PowerShell
 			}
@@ -354,11 +349,7 @@ func TestChainsOfTransparentWrappersAreTooLaborious(t *testing.T) {
 			chains["env -i"] = strings.Repeat("env -i ", 1200) + "ls"
 		}
 		for name, cmd := range chains {
-			start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
-			d := judge(ee.env, free, cmd)
-			if took := time.Since(start); took > raceFactor*time.Second { //nolint:forbidigo // same
-				t.Errorf("%s: %s took %v; want well under a second", ee.name, name, took)
-			}
+			d, _ := boundedDecision(t, ee.name+": "+name, ee.env, free, cmd)
 			want(t, d, classes.Deny, classes.LayerFixed, "trabalhoso demais")
 		}
 		// A chain of a few is what it was.
