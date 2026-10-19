@@ -1,6 +1,6 @@
 # Verificação de docs
 
-> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite, grafo de "Depende de", auditoria dos marcos, cobertura dos critérios pelos testes, comentários de marco velhos e pinos do `go.mod`) na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-18
+> **Assunto:** checagens automáticas da documentação (índices, links, tamanho, cabeçalho, seções, critérios de aceite, grafo de "Depende de", auditoria dos marcos, cobertura dos critérios pelos testes, comentários de marco velhos e pinos do `go.mod`) na suíte rápida · **Componente:** Projeto · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -83,7 +83,7 @@ O formato conferido vem dos documentos de referência [ordem de implementação]
 - **CA-VERDOCS-07** · *rápida* — **Dado** um critério sem a suíte, outro com sigla diferente no mesmo documento e uma sigla já usada em outro documento, **quando** a verificação roda, **então** ela aponta os três erros de uma vez.
 - **CA-VERDOCS-08** · *rápida* — **Dado** um critério *pesada* sem `(MVP-n)`, **quando** a verificação roda, **então** ela falha; **dado** o mesmo critério com `(MVP-4)` ou `(MVP-16)`, **então** passa, e **dado** `(MVP-17)`, falha.
 - **CA-VERDOCS-09** · *rápida* — **Dado** um arquivo `docs/a/PROGRESS.md` ou `docs/a/configuração.md`, **quando** a verificação roda, **então** ela falha pelo nome.
-- **CA-VERDOCS-10** · *rápida* — **Dado** a pasta `docs/` real do repositório, **quando** a suíte rápida roda, **então** a verificação passa em menos de 1 s (a mais rápida de até três execuções, para a carga dos outros testes em paralelo não contar); com o detector de corridas (`-race`), o limite é multiplicado pelo mesmo fator que o `testrun` aplica aos orçamentos ([testes](testes.md)).
+- **CA-VERDOCS-10** · *rápida* — **Dado** a pasta `docs/` real do repositório, **quando** a suíte rápida roda, **então** a verificação lê cada arquivo poucas vezes (no máximo 8 aberturas por arquivo, em média, e 8 passagens sobre os bytes dos documentos), um limite de trabalho que a carga da máquina não muda ([testes](testes.md)); uma rede de segurança de parede, dez vezes o limite antigo de 1 s, pega o resto (multiplicada pelo fator do `-race` do `testrun`).
 - **CA-VERDOCS-11** · *rápida* — **Dado** uma árvore em que `a.md` depende de `b.md` e `b.md` depende de `a.md`, ambos no M3, **quando** a verificação roda, **então** ela falha mostrando o ciclo `a.md → b.md → a.md`.
 - **CA-VERDOCS-12** · *rápida* — **Dado** um documento do M3 cujo "Depende de" aponta para um documento do M5, e um documento de funcionalidade fora do mapa, **quando** a verificação roda, **então** ela aponta os dois erros; **dado** o mesmo documento apontando para `../arquitetura/seguranca.md` (referência), **então** não há erro.
 - **CA-VERDOCS-13** · *rápida* — **Dado** um documento na etapa 3 do M4 que passa a depender de outro na etapa 5 do mesmo marco, **quando** a verificação roda, **então** ela falha com os dois nomes e as etapas; ajustando a etapa do primeiro para 6, passa.

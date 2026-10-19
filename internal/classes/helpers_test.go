@@ -182,3 +182,31 @@ func (g fakeGit) Committed(_ context.Context, _ string, all bool) ([]string, err
 	}
 	return g.staged, nil
 }
+
+// netOfTheBound is the wall-clock net under the counting of the bound: the
+// work the counter does not see (the brace scan, the lexing of a long line)
+// still cannot grow without limit. It is ten times the old bound, so the load
+// of a shared machine does not reach it; the bound itself is the work.
+const netOfTheBound = 10 * time.Second * raceFactor
+
+// workLimit is the most work a decision may spend: the bound of one reading
+// of the line (maxAnalysisWork, which the last unit spent may pass), once for
+// the decision and once for the risk, and once more for the second reading of
+// Windows. The inputs built to take long spend up to about 3 times the bound.
+const workLimit = 4 * classes.MaxAnalysisWork
+
+// boundedDecision decides cmd and checks the bound of the analysis by the
+// work it spent: at most workLimit units, however loaded the machine is, and then by the wall-clock net.
+// It returns the decision and the work.
+func boundedDecision(t *testing.T, label string, env classes.Env, r *classes.Rules, cmd string) (classes.Decision, int) {
+	t.Helper()
+	start := time.Now() //nolint:forbidigo // only the net under the counting of the bound
+	d, work := classes.DecideWork(context.Background(), env, r, event(newMachine().shell(cmd).Tool, env.Worktree))
+	if took := time.Since(start); took > netOfTheBound { //nolint:forbidigo // same
+		t.Errorf("%s: took %v; the net of the bound is %v", label, took, netOfTheBound)
+	}
+	if work > workLimit {
+		t.Errorf("%s: spent %d units of work; want at most %d", label, work, workLimit)
+	}
+	return d, work
+}

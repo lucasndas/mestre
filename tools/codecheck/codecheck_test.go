@@ -7,6 +7,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/testkit/countfs"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -318,32 +319,31 @@ func TestExceptionsNeedAReasonAndExcuseSomething(t *testing.T) {
 }
 
 // CA-CODIGO-08
-// The rules hold for the whole repository, and the check is fast: the best
-// of up to three runs takes under a second (the first within the budget ends
-// the measuring).
+// The rules hold for the whole repository, and the check is bounded by its
+// work, not by the clock, which the load of the machine moves: no more than
+// maxOpensPerPath opens per path (a wall-clock net of ten times the old 1 s budget still catches
+// a slowness the counting does not see).
 func TestCodeRules(t *testing.T) {
 	t.Parallel()
-	root := os.DirFS("../..")
-	budget := time.Second * raceFactor
-	var best time.Duration
-	for i := 0; i < 3; i++ {
-		clk := clock.Real{}
-		start := clk.Now()
-		issues, err := Check(root)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, is := range issues {
-			t.Error(is)
-		}
-		if d := clock.Since(clk, start); i == 0 || d < best {
-			best = d
-		}
-		if best <= budget {
-			break // within the budget: no need to measure again
-		}
+	const maxOpensPerPath = 3
+	net := 10 * time.Second * raceFactor
+	c := countfs.New(os.DirFS("../.."))
+	clk := clock.Real{}
+	start := clk.Now()
+	issues, err := Check(c)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if best > budget {
-		t.Errorf("the code rules took %v, budget %v", best, budget)
+	took := clock.Since(clk, start)
+	for _, is := range issues {
+		t.Error(is)
+	}
+	opens, paths := c.Opens()
+	t.Logf("%d opens of %d paths, %d bytes, in %v", opens, paths, c.Bytes(), took)
+	if opens > maxOpensPerPath*paths {
+		t.Errorf("the code rules opened %d times %d paths; want at most %d per path", opens, paths, maxOpensPerPath)
+	}
+	if took > net {
+		t.Errorf("the code rules took %v; the net of the bound is %v", took, net)
 	}
 }
