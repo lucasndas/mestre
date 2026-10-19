@@ -101,6 +101,29 @@ Conferidos no laboratório da [suíte pesada](../qualidade/testes.md#laboratóri
 - **Verificar na implementação:** o servidor de controle do computador do catálogo, instalado pelo motor e iniciado pelo gateway, consegue capturar a tela e enviar mouse e teclado quando iniciado como filho do processo da sessão (ConPTY, mesma sessão e área de trabalho do usuário, integridade média). **Padrão:** consegue. **Se falhar:** o processo da sessão passa a criar o terminal do Operador com `CreateProcess` comum anexado à área de trabalho `winsta0\default` e o ConPTY só para entrada e saída; se ainda falhar, o Operador fica só com o navegador do usuário e o painel explica. **Onde:** o mesmo spike do M7.
 - **Verificar na implementação:** as threads do `mestre-pty` que não são a primária (as do runtime do Go, criadas com atributos de segurança nulos) recebem a DACL padrão do token que o launcher dá ao terminal, com a SID de logon dele em controle total; só a thread primária recebe o descritor restrito. Se um processo do próprio terminal puder abri-las (suspender, mudar o contexto, APC), um agente que controle o `mestre-pty` sai do Job e se identifica no terminal. **Padrão:** o descritor de thread na primária e a DACL padrão do token como está. **Se falhar:** o token do `mestre-pty` sem a SID de logon na DACL padrão (uma cópia com ela só para o filho) ou a restrição da DACL de cada thread na criação. **Onde:** contas reais no Windows ([contas reais](../qualidade/contas-reais.md)): `OpenThread` com `THREAD_SUSPEND_RESUME` e `THREAD_SET_CONTEXT` numa thread não primária do `mestre-pty`, a partir de um processo do mesmo terminal e de outro.
 
+## Rodada de verificações reais
+
+Os itens de M3 e M4 que só o Windows real responde rodam num único script, `tools/winsandbox/round/run-all.ps1`, no Windows Sandbox (preparo: `setup.ps1 -Round`, [ambiente](../desenvolvimento/ambiente.md#windows-sandbox-para-os-spikes-do-m1)). Cada item é uma função, e a falha de um não para os outros; o script nunca faz login nem imprime segredo, e termina com `RESULTADO.txt` (PASS, FAIL ou SKIP por item, com a saída mínima).
+
+1. No Windows do Dono, atualize `C:\mestre` (`git pull`) e abra `C:\mestre\tools\winsandbox\round\mestre-round.wsb`. Ele clona a `main`; com o PR da rodada ainda aberto, troque `-Branch main` pela branch dele.
+2. O preparo instala Git, Go e Claude Code; o script instala PowerShell 7 (zip fixado), Codex e `agy` pelos instaladores oficiais, só dentro do Sandbox.
+3. **Pausa para o login** de cada CLI (Claude, Codex com `--device-auth`, Antigravity): abra o link no navegador do Sandbox e volte ao console; `P` pula. Depois roda sozinho (30 a 90 min, poucos turnos de cota real); a única outra pausa é o item 7, no fim.
+4. Cole de volta `C:\mestre\tools\winsandbox\resultados\round\RESULTADO.txt` (no Sandbox, `C:\winsandbox\resultados\round\`, fora do git; `detalhes\` guarda os logs). `-Only 1,8` roda só esses itens; `-NoPause` nunca pausa (o que pede o Dono vira SKIP).
+
+| # | O que o script faz | Fica manual |
+|---|---|---|
+| 1 | `go test` das linhas reais; a linha do Codex no PowerShell 5.1 e no 7 e a do Claude no Git Bash chamando um `mestre.exe` que sai com 2; etapas 4 a 6 da conformidade do Claude e do Codex | nada |
+| 2 | etapa 5 da conformidade do Codex (`mestre debug` identificado) e uma sonda: `codex exec` com `network_access=false` roda `curl --unix-socket` num servidor do script, que lê PID, dono e cadeia de pais do outro lado | a chave `windows.sandbox=elevated` pode mudar com a versão do Codex; sem ela, o Codex pode cair no sandbox sem elevação |
+| 3 | nomes das ferramentas de shell vistos nas etapas 5 e 6 (Claude, Codex, `agy`) contra o mapa | nada |
+| 4 | credencial `gemini:antigravity` (só o nome), `agy -p /usage`, `agy --sandbox` rodando `git --version`, o login depois, etapas 1, 4 a 6 do `agy` | nada |
+| 5 | etapa 12 de cada provedor (hook dentro do subagente nativo) | nada |
+| 6 | as 12 etapas nos três provedores, com `tools/conformance` | nada |
+| 7 | telas de permissão que a conformidade encontrou; Bloco de Notas para colar a tela de permissão do Claude (janela de terminal já aberta) e o menu de limite de uso | o menu de limite só aparece no limite real: se aparecer, cole o texto; senão, deixe vazio |
+| 8 | 33 casos (aspas e espaços tipográficos, travessões, `.`, parêntese, `Start-Process -ArgumentList`, CR solto, `New-ScheduledTaskAction`, `sc.exe`, `schtasks`) em `powershell.exe` e `pwsh.exe`, com um `git` de mentira que registra o que recebeu | nada |
+| 9 | ACL de `maquina\agentes\<id>\` numa conta local de teste, a SID da conta, `go test ./internal/winsvc` e `tools/realaccount` (setgid não existe no Windows) | nada |
+
+A conformidade roda aqui como o usuário do Sandbox (administrador), não como `mestre-agente`: o que ela confere (hooks, nomes, telas, subagentes) não depende da conta; a conta dos agentes é do item 9.
+
 ## Fontes
 
 - Sessão ConPTY (Microsoft): https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session
