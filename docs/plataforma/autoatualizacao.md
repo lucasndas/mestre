@@ -1,6 +1,6 @@
 # Autoatualização do Mestre
 
-> **Assunto:** como o motor e o Guardião de cada máquina se atualizam sozinhos a partir das Releases do GitHub: assinatura, aprovação, ordem, alternância motor/Guardião e volta automática · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** como o motor e o Guardião de cada máquina se atualizam sozinhos a partir das Releases do GitHub: assinatura, aprovação, ordem, alternância motor/Guardião e volta automática · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -24,8 +24,7 @@ Uma release por versão, com tag única `vX.Y.Z` (a versão do motor), traz os b
 | `mestre-release.json.minisig` | assinatura Ed25519 do manifesto no formato minisign; o comentário confiável repete a `tag` |
 
 - **Chaves:** as chaves públicas aceitas (a atual e a próxima, para troca de chave) ficam **embutidas** nos binários `mestre` e `mestre-guardiao`. A privada fica só no computador do autor, num arquivo cifrado com senha, e as versões são assinadas lá antes de publicar ([ADR 0019](../decisoes/0019-autoatualizacao-por-releases.md)); nunca fica no repositório nem no GitHub Actions. Se a chave atual for perdida, a próxima chave embutida assume.
-- **Verificação em três pontos:** (1) a Cidadela, ao baixar; (2) a máquina de destino, com a chave embutida no binário dela (a máquina não confia na Cidadela às cegas); (3) o ajudante de troca, logo antes de trocar o arquivo. Em cada ponto: assinatura e chave, `tag` igual no comentário e no manifesto, SHA-256 e tamanho de cada binário, e versão maior que a instalada (não se volta versão por esse caminho).
-- A Cidadela baixa só as plataformas em uso na Guilda e guarda as duas últimas releases verificadas.
+- **Verificação em três pontos:** (1) a Cidadela, ao baixar; (2) a máquina de destino, com a chave embutida no binário dela (a máquina não confia na Cidadela às cegas); (3) o ajudante de troca, logo antes de trocar o arquivo. Em cada ponto: assinatura e chave, `tag` igual no comentário e no manifesto, SHA-256 e tamanho de cada binário, e versão maior que a instalada (não se volta versão por esse caminho). A Cidadela baixa só as plataformas em uso na Guilda e guarda as duas últimas releases verificadas.
 
 ### Aprovação
 
@@ -105,7 +104,7 @@ stateDiagram-v2
   em_andamento --> revertida: um passo falhou e voltou
 ```
 
-Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro` (só motor) → `aplicando` → `confirmando` → `ok` ou `voltando` → `revertido`. Se a volta falhar: `falha_na_volta` e incidente aberto.
+Cada passo (auditado): `pendente` → `preparando` → `aplicando` → `confirmando` → `ok` ou `voltando` → `revertido`. Se a volta falhar: `falha_na_volta` e incidente aberto.
 
 ## Regras e erros
 
@@ -132,6 +131,8 @@ Cada passo (auditado): `pendente` → `preparando` → `aguardando_ponto_seguro`
 - **CA-AUTO-13** · *rápida* — **Dado** o motor da Cidadela em janela de confirmação, **quando** um Guardião de Torre pede a trava de condução, **então** recebe `updating` e não conduz cura.
 - **CA-AUTO-14** · *rápida* — **Dado** uma Guilda só com a Cidadela (Linux e Windows; dublês, relógio falso), **quando** a atualização roda, **então** a ordem auditada é: troca do binário com reinício do `mestre`, confirmação, e só então o Guardião.
 - **CA-AUTO-15** · *rápida* — **Dado** uma atualização revertida com migração do banco, **quando** o Guardião volta a versão, **então** faz só o `rollback` comum e o pedido de restauração do banco fica esperando Dono ou Administrador com PIN, mostrando o intervalo que será perdido.
+- **CA-AUTO-16** · *completa* — **Dado** o ajudante de troca instalado em cada sistema, **quando** a conta do motor e depois outra conta (inclusive `mestre-agente`) tentam iniciá-lo, **então** só a do motor consegue.
+- **CA-AUTO-17** · *rápida* — **Dado** uma Torre cuja faixa de protocolo não entra na nova versão (dublê), **quando** a release é aprovada, **então** a atualização não começa e o Dono recebe a explicação; **dado** o pedido `aguardando_aprovacao` e uma release mais nova, **então** o pedido vira `cancelado` e nasce outro com as notas das duas.
 
 ## Depende de
 

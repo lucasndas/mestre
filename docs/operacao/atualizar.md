@@ -1,6 +1,6 @@
 # Atualizar
 
-> **Assunto:** passo a passo para aprovar e acompanhar a atualização do Mestre, acompanhar a dos CLIs dos provedores, e voltar de versão · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** passo a passo para aprovar e acompanhar a atualização do Mestre, acompanhar a dos CLIs dos provedores, e voltar de versão · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 Guia para quem usa. O Mestre se atualiza sozinho, máquina por máquina, depois que alguém aprova; você não precisa entrar no servidor nem no PC. Como funciona por dentro: [autoatualização](../plataforma/autoatualizacao.md) e [instalação e versões](../plataforma/instalacao-e-atualizacao.md).
 
@@ -9,9 +9,7 @@ Guia para quem usa. O Mestre se atualiza sozinho, máquina por máquina, depois 
 1. **Aviso.** Quando sai uma versão nova, o Dono e os Administradores recebem um pedido de aprovação marcado **"Sistema"**, no Telegram e na central de aprovações do painel. Ele traz as notas da versão e a ordem em que as máquinas serão atualizadas. Para procurar na hora, use **Verificar agora** no painel.
 2. **Decidir.** Leia as notas e toque em **Aprovar** ou **Negar**. O Grão-Mestre pode explicar a versão, mas não aprova esse tipo de pedido. Um "Aprovar" basta.
 3. **Esperar.** Depois de aprovar, não há mais nada a fazer. O Mestre atualiza uma peça por vez: cada Torre (motor e Guardião), a Torre condutora por último, e depois o motor e o Guardião da Cidadela. Numa máquina única (só Linux ou só Windows), são só as duas peças da Cidadela. Máquinas em versões diferentes convivem durante o processo.
-4. **Agentes ocupados.** Antes de reiniciar o motor de uma máquina, o Mestre espera cada agente dali terminar o que está fazendo. Se demorar demais várias vezes, você recebe a escolha:
-   - **Aplicar agora:** os agentes ocupados são interrompidos e retomados depois do reinício;
-   - **Continuar esperando.**
+4. **Agentes.** Eles continuam rodando durante a troca: o motor reinicia sem esperar ninguém e os personagens seguem no estado em que estavam ([terminais durante a atualização](../plataforma/autoatualizacao.md#terminais-durante-a-atualização)).
 5. **Conferir.** Em **Guilda e saúde das máquinas**, a coluna **Motor e Guardião** mostra a versão de cada peça. Todas devem estar na versão nova.
 
 Atualizações do Mestre não passam pelo `apt` nem pelo instalador do Windows: depois da primeira instalação, elas chegam só por esse fluxo.
@@ -30,7 +28,7 @@ Atualizações do Mestre não passam pelo `apt` nem pelo instalador do Windows: 
 
 ### Torre que ficou muito tempo desligada
 
-Se uma Torre ficou desligada por tanto tempo que a versão dela não conversa mais com a Cidadela, o painel mostra a máquina como fora da versão aceita. Atualize essa máquina à mão: rode o instalador mais novo do sistema dela (`mestre-<versão>-x64.msi` ou `install.sh`), como na [instalação](instalar.md). Ele mantém a entrada na Guilda, a tarefa agendada e os dados.
+Se uma Torre ficou desligada por tanto tempo que a versão dela não conversa mais com a Cidadela, o painel mostra a máquina como fora da versão aceita. Atualize essa máquina à mão: rode o instalador mais novo do sistema dela (`mestre-<versão>-x64.msi` ou `install.sh`), como na [instalação](instalar.md). Ele mantém a entrada na Guilda e os dados (e, no Windows com o Operador habilitado, a tarefa agendada `\Mestre\Operador`).
 
 ## CLIs dos provedores
 

@@ -1,6 +1,6 @@
 # Entrar na Guilda
 
-> **Assunto:** passo a passo para uma máquina nova (Windows ou Ubuntu) entrar na Guilda: comparar o código de entrada, aceitar com PIN, conferir, excluir e remover uma máquina, máquina fora da rede local · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** passo a passo para uma máquina nova (Windows ou Ubuntu) entrar na Guilda: comparar o código de entrada, aceitar com PIN, conferir, excluir e remover uma máquina, máquina fora da rede local · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 Guia para quem usa. Só o Dono aceita e remove máquinas. Como a entrada funciona por dentro (código de comparação, certificados, prazo): [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Como a máquina acha a Guilda: [descoberta](../conectividade/descoberta.md).
 
@@ -16,10 +16,10 @@ No fim, o instalador mostra o **código de entrada**, com 6 dígitos (ex.: `123 
 
 1. O Dono recebe no Telegram (e vê no painel, em **Guilda e saúde das máquinas**) a pergunta "Aceitar `<máquina>` (`<sistema>`) na Guilda? Código 123 456".
 2. **Compare o código** da mensagem com o da tela do instalador. Só aceite se forem iguais; diferentes indicam que alguém está no meio da conexão: recuse.
-3. Toque em **Aceitar** e responda o seu PIN. A máquina recebe uma cópia de tudo, inclusive o cofre cifrado, e pode assumir se a Cidadela cair; para que ela nunca guarde segredos nem assuma, **exclua-a** depois (abaixo; [replicação](../guilda/replicacao.md)).
+3. Toque em **Aceitar** e responda o seu PIN. A máquina recebe uma cópia de tudo, inclusive o cofre cifrado, e pode assumir se a Cidadela cair; para que ela nunca guarde segredos nem assuma, marque **Excluída** já na aceitação (padrão: não) ou depois (abaixo; [replicação](../guilda/replicacao.md)).
 4. O instalador termina sozinho: a máquina recebe a configuração, passa a confiar na CA da Guilda e conecta como Torre.
 
-O pedido **expira em 1 hora** sem resposta ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)): rode o instalador de novo. Ele não duplica nada: confere o que já existe e completa o que falta.
+O pedido **expira em 1 hora** sem resposta ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)): rode `mestre join <endereço da Cidadela>`, ou o instalador de novo, que numa máquina fora de qualquer Guilda procura outra vez. Ele não duplica nada: confere o que já existe e completa o que falta.
 
 ### Se a Guilda não for encontrada
 

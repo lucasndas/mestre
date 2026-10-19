@@ -121,7 +121,7 @@ Reiniciar o motor (camadas 1 a 3, `rollback`, atualização) **não interrompe o
 ## Regras e erros
 
 - Nenhuma camada altera, desliga ou atualiza o Guardião ([Guardião](guardiao.md#proteções)).
-- Pedido de trava de uma máquina sem certificado válido → recusado e auditado.
+- Pedido de trava de uma máquina sem certificado válido → recusado e auditado; com o motor da Cidadela na janela de [atualização](../plataforma/autoatualizacao.md#um-passo-do-motor), o árbitro responde `updating` e ninguém conduz cura (CA-AUTO-13).
 - Dois condutores ao mesmo tempo é erro grave: o árbitro só concede uma trava por incidente; no modo sem árbitro, quem vê o `409 Conflict` do Telegram para de ler e volta a sondar ([Telegram em modo reduzido](telegram-modo-reduzido.md)).
 - A máquina inteira desligada não tem cura: vai direto para a camada 5 depois do tempo de graça.
 
