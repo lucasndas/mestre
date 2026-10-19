@@ -1,6 +1,6 @@
 # Cadeia de aprovação
 
-> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, as condições da mesa para o `medio`, o Grão-Mestre como supervisor, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** quem decide cada pedido de aprovação: o superior de cada personagem, os níveis da cadeia e o risco até onde cada um decide, as condições da mesa para o `medio`, o Grão-Mestre como supervisor, a subida por teto ou prazo, as salvaguardas do motor, o pedido que o aprovador vê e as respostas possíveis · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -18,7 +18,7 @@ Decidir cada pedido o mais perto possível de quem pediu, sem que um agente apro
 |---|---|---|
 | superior agente | `baixo` | 2 min |
 | Mestre da mesa | `baixo` e `medio` dos personagens da própria mesa; o `medio` só nos grupos de `cadeia.mesa_decide` e com as [condições da mesa](#condições-da-mesa) | 2 min |
-| Grão-Mestre, supervisor | `baixo` e `medio`, dentro da [política](../aprovacoes/politica.md), dos pedidos dos próprios Mestres de mesa, dos que cruzam mesas (outra branch, outro worktree, o espelho, issue ou PR de outra mesa), dos que o Mestre da mesa não decide (parado, sem resposta no prazo, em [pausa de autonomia](supervisao-da-cadeia.md#pausa-de-autonomia)) e dos `medio` de grupo fora da lista ou cujas condições da mesa falham; `alto` só com delegação do Dono | 10 min |
+| Grão-Mestre, supervisor | `baixo` e `medio`, dentro da [política](../aprovacoes/politica.md), dos pedidos dos próprios Mestres de mesa, dos que cruzam mesas (outra branch, outro worktree, o espelho, issue ou PR de outra mesa; hoje nenhum tipo de pedido vem marcado assim, e só as regras fixas negam o espelho e os worktrees alheios), dos que o Mestre da mesa não decide (parado, sem resposta no prazo, em [pausa de autonomia](supervisao-da-cadeia.md#pausa-de-autonomia)) e dos `medio` de grupo fora da lista ou cujas condições da mesa falham; `alto` só com delegação do Dono | 10 min |
 | pessoas | qualquer risco não `fixo`, pelo nível mínimo do tipo e do risco, com quórum | o do tipo na política |
 
 - O teto de cada nível de agente é fixo; nenhum arquivo o muda. Só uma **delegação** das pessoas (M5) o estende, no escopo dela ([delegação](../aprovacoes/delegacao.md)).
@@ -87,8 +87,8 @@ Os campos do motor têm uma linha cada: o que um agente nomeou ou escreveu e o m
 Conferidas pelo motor em toda decisão de agente; uma decisão que fura uma delas é recusada e o pedido sobe na hora:
 1. **Atenuação:** um agente só aprova uma ação que as regras efetivas dele mesmo não negariam (dariam `allow` ou `ask`, sem contar exceções pontuais dele), no worktree de quem pediu; um padrão, só se as regras dele não negam nada do que o padrão casa, o que o motor confere de novo a cada chamada que usa a regra ([regras temporárias](regras-temporarias-de-mesa.md#como-o-motor-decide-o-que-o-texto-deixa-em-aberto)). Quem decide precisa estar no caminho do pedido; fora dele (substituído, encerrado), a decisão é recusada com `not_at_level` e o pedido é reencaminhado. As regras dos orquestradores vêm da classe embutida [`orquestrador`](../classes/classe-orquestrador.md).
 2. **Nada em causa própria:** nenhum nível decide um pedido de que é o solicitante, nem um que serve a uma proposta dele (classe que criou, `AGENTS.md` que propôs, PR que abriu): o pedido pula esse nível. O Mestre da mesa nunca decide os `ponto_de_missao` das missões que criou.
-3. **Disjuntor:** 3 negações seguidas (padrão) dos pedidos de um mesmo personagem pausam o personagem (o motor não lhe entrega mais nada, como na [pausa](mesas.md#pausa), mas só para ele) e avisam as pessoas; uma aprovação no meio zera a contagem. Um Administrador ou acima retoma.
-4. **Auditoria:** toda decisão registra aprovador, nível na cadeia, risco, versão da tabela de risco, das regras efetivas e da política, a resposta e o motivo, obrigatório para agentes.
+3. **Disjuntor:** 3 negações seguidas (padrão) dos pedidos de um mesmo personagem pausam o personagem (o motor não lhe entrega mais nada, como na [pausa](mesas.md#pausa), mas só para ele) e avisam as pessoas; uma aprovação no meio zera a contagem; contam as negações de agentes e de pessoas, e pedido `expirado` ou `cancelado` não conta nem zera. Um Administrador ou acima retoma.
+4. **Auditoria:** toda decisão registra aprovador, nível na cadeia, risco, versão da tabela de risco, das regras efetivas e da política, a resposta e o motivo, obrigatório para agentes (na negação com instrução, a instrução vale como motivo).
 5. **Decisão atômica:** a decisão toma o pedido (o *claim*, gravado no próprio pedido) antes de gerar a exceção ou a regra; subida, prazo e cancelamento não mexem num pedido tomado. Se o efeito falha, o pedido volta ao mesmo nível com o tempo recomeçando; se o motor cai no meio, o `Recover` conclui a decisão como foi tomada (uma aprovação sem exceção feita só faz quem pediu tentar de novo e pedir outra vez).
 6. **Agentes só tornam `ask` em `allow`:** o que eles aprovam nunca vence um `deny` de camada nenhuma nem um decreto de pessoa que proíbe ([precedência](../arquitetura/precedencia.md#a-ordem)).
 

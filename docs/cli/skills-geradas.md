@@ -1,6 +1,6 @@
 # Skills geradas da CLI
 
-> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-18
+> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -63,7 +63,7 @@ description: >-
 
 **`mestre-grao-mestre`** (Grão-Mestre)
 1. Conversar: identificar quem fala e o nível; perguntar na ambiguidade; responder sempre com `reply`; repassar pedidos com `ask --from-message` ou `table open --from-message`, sem reescrever; nunca mandar segredos.
-2. Mesas: decidir mesa nova ou existente; criar o épico com `gh epic create` e depois `table open --epic <n>` (`table open` não cria épico); `table close` quando o motor avisar que o PR foi mesclado; `table list|status`.
+2. Mesas: decidir mesa nova ou existente; criar o épico com `gh epic create` e depois `table open --epic <n>` (`table open` não cria épico); `table close` quando o motor avisar que o PR foi mesclado; `table list|status`. A skill traz também a sintaxe de `quest status`, `recruit`, `dismiss` e `connect`.
 3. GitHub: `gh review|approve|merge`; `gh approve` só com aprovação vigente (dele pela política ou de um usuário); `gh settings` só com aprovação; o que fazer com cada erro de regra do repositório.
 4. Apps: `app list|status|create`; decidir entre App novo e herdado.
 5. Decretos e aprovações: `decree propose` só depois de entender a ordem, mostrando exatamente o que vai valer ([decretos](../telegram/decretos.md)); `approval decide` no que a política deixa; `human_required` ou dúvida → `approval ask` ([política](../aprovacoes/politica.md)).

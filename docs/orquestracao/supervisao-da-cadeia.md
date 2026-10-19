@@ -25,7 +25,7 @@ Com os Mestres de mesa decidindo o `medio` da própria mesa ([cadeia de aprovaç
 
 ### Métricas de fila
 
-- **Por aprovador:** cada Mestre da mesa, o Grão-Mestre e as pessoas (uma fila por nível mínimo). Para cada um: pedidos abertos no nível agora, a idade do mais antigo e o tempo médio de espera nas últimas 24 h, calculados do histórico de níveis dos pedidos ([fluxo](../aprovacoes/fluxo.md)) pelo relógio injetável.
+- **Por aprovador:** cada Mestre da mesa, o Grão-Mestre e as pessoas (uma fila por nível mínimo); o superior agente que não é Mestre também tem fila própria por mesa. Para cada um: pedidos abertos no nível agora, a idade do mais antigo e o tempo médio de espera nas últimas 24 h, calculados do histórico de níveis dos pedidos ([fluxo](../aprovacoes/fluxo.md)) pelo relógio injetável.
 - Vão na mensagem de retomada e no resumo do Grão-Mestre, no `mestre table status` de cada mesa e no painel (M6). O nível de um pedido, e quando entrou e saiu dele, vem da auditoria da subida; a fila do Mestre da mesa é uma por mesa, e a espera média conta as passagens que terminaram nas últimas 24 h.
 - **Alerta:** um nível acumula quando tem mais de `cadeia.alerta_fila.abertos` pedidos abertos (padrão 10) ou o mais antigo passa de `cadeia.alerta_fila.fator` vezes o prazo do nível (padrão 2). O aviso vai a quem está acima: de um Mestre da mesa, ao Grão-Mestre; do Grão-Mestre, aos Administradores e ao Dono; das pessoas, ao Dono. Um aviso por vez, até o nível voltar abaixo dos dois limites.
 - O tempo que cada personagem passa ocioso, ocupado ou aguardando já se mede pelo histórico de estados ([estados](personagens.md#estados)); as métricas de fila são o lado das aprovações, e um painel de produtividade pode juntar as duas.
