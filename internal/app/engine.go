@@ -150,6 +150,11 @@ type Deps struct {
 	// Tower generated (agent.event), once, whenever it arrives: the Tower keeps
 	// them in its outbox while the Citadel is away. nil: they are dropped.
 	OnAgentEvent func(machine string, ev providers.Event, ans hook.Answer)
+	// AgentMachine says on which machine the registry of the Citadel has a
+	// character. An agent.event is accepted only from that machine: a Tower
+	// cannot move the state of a character of another. nil refuses every
+	// event (the safe side).
+	AgentMachine func(ctx context.Context, agentID string) (machine string, ok bool)
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources

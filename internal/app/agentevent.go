@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/logging"
@@ -69,7 +71,7 @@ func agentEventPayload(ev providers.Event, ans hook.Answer, mask *logging.Masker
 
 // handleAgentEvent is the handler of agent.event on the Citadel: the event of a
 // character of a Tower, from the machine that sent it.
-func (e *Engine) handleAgentEvent(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
 	obj, ok := m.Payload.(*protocol.Object)
 	if !ok || e.deps.OnAgentEvent == nil {
 		return nil, nil
@@ -80,6 +82,28 @@ func (e *Engine) handleAgentEvent(_ context.Context, m *protocol.Message) (*prot
 		return nil, protocol.NewError(protocol.CodeInvalidPayload, "agent.event: the event is not readable: %v", err)
 	}
 	_ = json.Unmarshal((*obj)["answer"], &ans)
+	// The identity of the sender is the verified one of the connection; the
+	// character the event names must run there, or any Tower could forge the
+	// events of a character of another (and move its state).
+	if ev.AgentID == "" {
+		return nil, protocol.NewError(protocol.CodeForbidden, "agent.event: the event names no character")
+	}
+	if err := e.runsOn(ctx, ev.AgentID, m.Peer.ID); err != nil {
+		return nil, protocol.NewError(protocol.CodeForbidden, "agent.event: %v", err)
+	}
 	e.deps.OnAgentEvent(m.Peer.ID, ev, ans)
 	return nil, nil
+}
+
+// runsOn says whether the character runs on the machine, by the registry of the
+// Citadel (Deps.AgentMachine). Without the registry nothing runs anywhere: the
+// answer is no.
+func (e *Engine) runsOn(ctx context.Context, agentID, machine string) error {
+	if e.deps.AgentMachine == nil {
+		return errors.New("this Citadel does not know where the characters run")
+	}
+	if where, ok := e.deps.AgentMachine(ctx, agentID); !ok || where != machine {
+		return fmt.Errorf("the character %q does not run on %s", agentID, machine)
+	}
+	return nil
 }
