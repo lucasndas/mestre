@@ -145,6 +145,11 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 			}
 		}
 	}
+	if level.Kind == LevelMesa && d.Answer.Approves() && s.o.SubDelegations != nil && !isPermission(r.Type) {
+		if err := s.o.SubDelegations.SubUsed(ctx, r, d.By); err != nil {
+			s.log.Warn("chain: the use of the subdelegation was not registered", "request", r.ID, "err", err)
+		}
+	}
 	s.audit(ctx, r, AuditEntry{Approver: d.By, Level: level.Kind, Answer: d.Answer, Outcome: "accepted", Reason: c.Reason})
 	s.settle(ctx, r, st, appr.Name, d.Instruction)
 	return Outcome{Request: r.ID, State: r.State, Applied: applied}, nil
@@ -1000,4 +1005,26 @@ func peopleLevel(l string) classes.Level {
 		return classes.LevelAdmin
 	}
 	return classes.Level(l)
+}
+
+// RerouteWorkspace takes the open requests of a workspace that wait at a level
+// that no longer may decide them to the level above: the Owner revoked every
+// delegation, so what leaned on one goes up at once
+// (docs/aprovacoes/delegacao.md#revogar-tudo).
+func (s *Service) RerouteWorkspace(ctx context.Context, workspace, why string) error {
+	rs, err := s.st.Open(ctx)
+	if err != nil {
+		return err
+	}
+	st, _ := s.settings(ctx, workspace)
+	for _, r := range rs {
+		if r.Workspace != workspace || r.Level.Kind == LevelPeople {
+			continue
+		}
+		if ok, err := s.stillHere(ctx, r, st); err == nil && ok {
+			continue
+		}
+		s.reroute(ctx, r, why)
+	}
+	return nil
 }
