@@ -23,6 +23,13 @@ type IssueInfo struct {
 	Labels []string
 }
 
+// PullInfo is what the guard reads of a PR: the branch it comes from and the
+// repository of that branch.
+type PullInfo struct {
+	HeadRef  string
+	HeadRepo string
+}
+
 // CommentInfo is a comment of an issue or a PR.
 type CommentInfo struct {
 	ID   int64
@@ -35,6 +42,8 @@ type GitHub interface {
 	Issue(ctx context.Context, repo string, n int) (IssueInfo, error)
 	// Parent is the issue above a sub-issue; ok is false for one with none.
 	Parent(ctx context.Context, repo string, n int) (parent int, ok bool, err error)
+	// Pull reads a PR; ErrNotFound for a number that is not one.
+	Pull(ctx context.Context, repo string, n int) (PullInfo, error)
 	Comments(ctx context.Context, repo string, n int) ([]CommentInfo, error)
 	PostComment(ctx context.Context, repo string, n int, body string) (CommentInfo, error)
 	HasLabel(ctx context.Context, repo, name string) (bool, error)
@@ -52,6 +61,10 @@ type REST struct {
 var _ GitHub = (*REST)(nil)
 
 func (c *REST) do(ctx context.Context, method, repo, path string, body any) (int, []byte, error) {
+	repo, err := NormalizeRepo(repo)
+	if err != nil {
+		return 0, nil, err
+	}
 	tok, err := c.Token(ctx, repo)
 	if err != nil {
 		return 0, nil, fmt.Errorf("github: no token for %s", repo)
@@ -128,20 +141,42 @@ func (c *REST) Parent(ctx context.Context, repo string, n int) (int, bool, error
 	return v.Number, err == nil, err
 }
 
-// Comments lists the comments of an issue or a PR.
+// Pull reads a PR.
+func (c *REST) Pull(ctx context.Context, repo string, n int) (PullInfo, error) {
+	var v struct {
+		Head struct {
+			Ref  string `json:"ref"`
+			Repo struct {
+				FullName string `json:"full_name"`
+			} `json:"repo"`
+		} `json:"head"`
+	}
+	if err := c.get(ctx, repo, fmt.Sprintf("/pulls/%d", n), &v); err != nil {
+		return PullInfo{}, err
+	}
+	return PullInfo{HeadRef: v.Head.Ref, HeadRepo: v.Head.Repo.FullName}, nil
+}
+
+// Comments lists the comments of an issue or a PR, page by page (100 each, up to
+// 50 pages).
 func (c *REST) Comments(ctx context.Context, repo string, n int) ([]CommentInfo, error) {
-	var v []CommentInfo
-	var raw []struct {
-		ID   int64  `json:"id"`
-		Body string `json:"body"`
+	var out []CommentInfo
+	for page := 1; page <= 50; page++ {
+		var raw []struct {
+			ID   int64  `json:"id"`
+			Body string `json:"body"`
+		}
+		if err := c.get(ctx, repo, fmt.Sprintf("/issues/%d/comments?per_page=100&page=%d", n, page), &raw); err != nil {
+			return nil, err
+		}
+		for _, r := range raw {
+			out = append(out, CommentInfo{ID: r.ID, Body: r.Body})
+		}
+		if len(raw) < 100 {
+			return out, nil
+		}
 	}
-	if err := c.get(ctx, repo, fmt.Sprintf("/issues/%d/comments?per_page=100", n), &raw); err != nil {
-		return nil, err
-	}
-	for _, r := range raw {
-		v = append(v, CommentInfo{ID: r.ID, Body: r.Body})
-	}
-	return v, nil
+	return nil, errors.New("github: too many comments to look through")
 }
 
 // PostComment creates a comment.

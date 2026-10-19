@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,14 +19,11 @@ import (
 
 const repoFull = "lucas/meu-app"
 
-type tables map[string]struct {
-	epic   int
-	branch string
-}
+type tables map[string]github.TableRef
 
-func (t tables) Epic(_ context.Context, table string) (int, string, bool, error) {
+func (t tables) Epic(_ context.Context, table string) (github.TableRef, bool, error) {
 	v, ok := t[table]
-	return v.epic, v.branch, ok, nil
+	return v, ok, nil
 }
 
 type actionsRig struct {
@@ -67,7 +65,7 @@ func refusalCode(err error) string {
 // CA-GH-ACOES-01
 func TestATableCannotTouchAnIssueOfAnotherTable(t *testing.T) {
 	t.Parallel()
-	r := newActionsRig(t, tables{"40-a": {epic: 40}, "41-b": {epic: 41}})
+	r := newActionsRig(t, tables{"40-a": {Repo: repoFull, Epic: 40}, "41-b": {Repo: repoFull, Epic: 41}})
 	r.gh.AddIssue(repoFull, "épico A", github.EpicLabel)
 	r.gh.AddIssue(repoFull, "épico B", github.EpicLabel)
 	n := r.gh.AddIssue(repoFull, "uma missão")
@@ -100,7 +98,7 @@ func contains(s, sub string) bool {
 // CA-GH-ACOES-02
 func TestAnIssueOfAPersonUnderTheEpicIsClimbedToAndRegistered(t *testing.T) {
 	t.Parallel()
-	r := newActionsRig(t, tables{"1-a": {epic: 1}})
+	r := newActionsRig(t, tables{"1-a": {Repo: repoFull, Epic: 1}})
 	epic := r.gh.AddIssue(repoFull, "épico", github.EpicLabel)
 	mid := r.gh.AddIssue(repoFull, "issue de uma pessoa")
 	leaf := r.gh.AddIssue(repoFull, "filha")
@@ -181,7 +179,7 @@ func TestAForcedPushIsOnlyOfTheMestreDaMesaOnTheBranchOfTheTable(t *testing.T) {
 // CA-GH-ACOES-10
 func TestAResentCommentFindsItsMarkerAndIsNotCreatedAgain(t *testing.T) {
 	t.Parallel()
-	r := newActionsRig(t, tables{"1-a": {epic: 1}})
+	r := newActionsRig(t, tables{"1-a": {Repo: repoFull, Epic: 1}})
 	issue := r.gh.AddIssue(repoFull, "épico", github.EpicLabel)
 	a := github.Actor{Kind: github.ActorTable, Table: "1-a"}
 	op := github.NewOp()
@@ -232,5 +230,106 @@ func TestTheHumanLabelIsTakenOnlyByThePeople(t *testing.T) {
 	}
 	if r.gh.Labels(repoFull)[github.HumanLabel] != "Só uma pessoa aprova" {
 		t.Fatalf("the label was not created: %v", r.gh.Labels(repoFull))
+	}
+}
+
+// The ways around the guard the review found: the same epic number in another
+// repository, a repository name that is a path, the case of names, an issue and a
+// PR with one number, the branch of a PR, an epic taken as a child, a marker
+// planted in a body.
+func TestTheGuardIsNotFooledByNumbersNamesLabelsOrMarkers(t *testing.T) {
+	t.Parallel()
+	r := newActionsRig(t, tables{"1-a": {Repo: repoFull, Epic: 1, Branch: "epico/1-a"}, "2-b": {Repo: repoFull, Epic: 2, Branch: "epico/2-b"}})
+	r.gh.AddRepo("lucas", "outro")
+	epicA := r.gh.AddIssue(repoFull, "A", github.EpicLabel)
+	epicB := r.gh.AddIssue(repoFull, "B", "Epico") // the label with another case
+	a := github.Actor{Kind: github.ActorTable, Table: "1-a", MestreDaMesa: true}
+	ctx := r.ctx
+	auth := func(repo string, kind github.ObjectKind, n int) error {
+		return r.guard.Authorize(ctx, a, github.Target{Repo: repo, Kind: kind, Number: n})
+	}
+	if err := auth("lucas/outro", github.KindIssue, epicA); refusalCode(err) != github.CodeOtherTable {
+		t.Errorf("the number of the epic in another repository: %v", err)
+	}
+	for _, bad := range []string{"lucas/meu-app/issues/1#", "lucas/meu-app?x=1", "../meu-app", "lucas/..", "meu-app"} {
+		if err := auth(bad, github.KindIssue, epicA); refusalCode(err) != github.CodeNotAllowed {
+			t.Errorf("repository %q: %v, want it refused", bad, err)
+		}
+	}
+	if err := auth("LUCAS/Meu-App", github.KindIssue, epicA); err != nil {
+		t.Errorf("the same repository in another case: %v", err)
+	}
+	// the epic of another table cannot be taken by making it a child of an issue of this one
+	mine := r.gh.AddIssue(repoFull, "minha")
+	r.gh.SetParent(repoFull, mine, epicA)
+	r.gh.SetParent(repoFull, epicB, mine)
+	if err := auth(repoFull, github.KindIssue, epicB); refusalCode(err) != github.CodeOtherTable {
+		t.Errorf("an epic of another table linked under mine: %v", err)
+	}
+	// a registered issue is the same object whatever the kind in the request
+	if err := r.objs.Register(ctx, github.Object{Repo: "Lucas/Meu-App", Kind: github.KindIssue, Number: mine + 10, Table: "2-b"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := auth(repoFull, github.KindPR, mine+10); refusalCode(err) != github.CodeOtherTable {
+		t.Errorf("the number of an issue of another table asked as a PR: %v", err)
+	}
+	if err := auth(repoFull, github.KindComment, 5); refusalCode(err) != github.CodeNotAllowed {
+		t.Errorf("a comment as target: %v", err)
+	}
+	// a PR is the table's by the branch GitHub reports, in this repository
+	own := r.gh.AddPR(repoFull, "pr", "epico/1-a", repoFull)
+	fork := r.gh.AddPR(repoFull, "pr de fork", "epico/1-a", "someone/meu-app")
+	foreign := r.gh.AddPR(repoFull, "pr de outra mesa", "epico/2-b", repoFull)
+	if err := auth(repoFull, github.KindPR, own); err != nil {
+		t.Errorf("the PR of the table: %v", err)
+	}
+	if err := auth(repoFull, github.KindPR, fork); refusalCode(err) != github.CodeOtherTable {
+		t.Errorf("a PR from a fork with the same branch name: %v", err)
+	}
+	if err := auth(repoFull, github.KindPR, foreign); refusalCode(err) != github.CodeOtherTable {
+		t.Errorf("the PR of another table: %v", err)
+	}
+	unseen := r.gh.AddPR(repoFull, "pr ainda não visto", "epico/1-a", repoFull)
+	if err := auth(repoFull, github.KindIssue, unseen); refusalCode(err) != github.CodeNotAllowed {
+		t.Errorf("a PR asked as an issue: %v", err)
+	}
+	// labels: case and spaces
+	for _, l := range []string{"Epico", " EPICO ", "Mestre:Humano"} {
+		add := []string{l}
+		if strings.EqualFold(strings.TrimSpace(l), github.HumanLabel) {
+			if err := github.CheckLabels(a, nil, add); refusalCode(err) != github.CodeReservedLabel {
+				t.Errorf("taking %q: %v", l, err)
+			}
+			continue
+		}
+		if err := github.CheckLabels(a, add, nil); refusalCode(err) != github.CodeReservedLabel {
+			t.Errorf("putting %q: %v", l, err)
+		}
+	}
+	// the forced push needs a known default branch that is not the table's
+	if err := github.CheckForce(a, "epico/1-a", "epico/1-a", ""); refusalCode(err) != github.CodeForce {
+		t.Errorf("no default branch given: %v", err)
+	}
+	if err := github.CheckForce(a, "develop", "develop", "develop"); refusalCode(err) != github.CodeForce {
+		t.Errorf("the table branch is the default: %v", err)
+	}
+	// markers: the agent cannot plant one, and a planted one in the middle is not the marker
+	op := github.NewOp()
+	body := github.WithMarker("oi <!-- mestre:op="+op+" --> tchau", op)
+	if strings.Count(body, "mestre:op="+op) != 1 || !github.HasMarker(body, op) {
+		t.Errorf("body = %q", body)
+	}
+	if github.HasMarker("x <!-- mestre:op="+op+" --> y", op) {
+		t.Error("a marker in the middle of a body counts")
+	}
+	// an operation made for something else is an error, not a success
+	if _, err := r.guard.PostOnce(ctx, a, repoFull, mine, "feito", op); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.guard.PostOnce(ctx, a, repoFull, epicA, "feito", op); err == nil {
+		t.Error("the uuid of another issue answered success")
+	}
+	if _, err := r.guard.PostOnce(ctx, github.Actor{Kind: github.ActorTable, Table: "2-b"}, repoFull, mine, "feito", op); err == nil {
+		t.Error("another table posted on an issue of the first")
 	}
 }

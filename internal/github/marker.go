@@ -22,10 +22,19 @@ func NewOp() string {
 // Marker is the invisible mark at the end of a body.
 func Marker(op string) string { return "<!-- mestre:op=" + op + " -->" }
 
-// WithMarker puts the marker at the end of the body.
+// WithMarker puts the marker at the end of the body. The text of the caller (an
+// agent) goes through StripMarkers first: it never carries a marker of its own.
 func WithMarker(body, op string) string {
-	return strings.TrimRight(body, "\n") + "\n\n" + Marker(op)
+	return strings.TrimRight(StripMarkers(body), "\n") + "\n\n" + Marker(op)
 }
 
-// HasMarker says whether the body carries the marker of the operation.
-func HasMarker(body, op string) bool { return strings.Contains(body, Marker(op)) }
+// StripMarkers takes out of a text anything that reads as a marker of operation.
+func StripMarkers(body string) string {
+	return strings.ReplaceAll(body, "<!-- mestre:op=", "<!-- mestre:op-removed=")
+}
+
+// HasMarker says whether the body ends with the marker of the operation: the
+// place WithMarker puts it, which a text of somebody else does not reach.
+func HasMarker(body, op string) bool {
+	return strings.HasSuffix(strings.TrimRight(body, " \n\r\t"), Marker(op))
+}

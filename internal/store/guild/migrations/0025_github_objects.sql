@@ -17,3 +17,5 @@ CREATE TABLE github_objects (
 	PRIMARY KEY (repo, kind, number)
 );
 CREATE UNIQUE INDEX github_objects_op ON github_objects (op) WHERE op <> '';
+-- An issue and a PR share the numbers of a repository (repo is kept in lower case).
+CREATE UNIQUE INDEX github_objects_number ON github_objects (repo, number) WHERE kind IN ('issue', 'pr');

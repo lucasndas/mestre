@@ -54,6 +54,7 @@ type installation struct {
 
 type repo struct {
 	extra  map[int]*issueExtra
+	pulls  map[int][2]string
 	labels map[string]string
 	issues []map[string]any
 }

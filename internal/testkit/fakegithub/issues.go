@@ -36,6 +36,20 @@ func (s *Server) AddIssue(full, title string, labels ...string) int {
 	return n
 }
 
+// AddPR creates a PR (it is an issue too, as on GitHub) from head in headRepo
+// and returns its number.
+func (s *Server) AddPR(full, title, head, headRepo string) int {
+	n := s.AddIssue(full, title)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rp := s.repos[full]
+	if rp.pulls == nil {
+		rp.pulls = map[int][2]string{}
+	}
+	rp.pulls[n] = [2]string{head, headRepo}
+	return n
+}
+
 // SetParent makes child a sub-issue of parent.
 func (s *Server) SetParent(full string, child, parent int) {
 	s.mu.Lock()
@@ -83,6 +97,9 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 	}
 	full := parts[1] + "/" + parts[2]
 	isIssueSub := len(parts) == 6 && parts[3] == "issues" && (parts[5] == "parent" || parts[5] == "comments")
+	if len(parts) == 5 && parts[3] == "pulls" && r.Method == http.MethodGet {
+		return s.servePull(w, r, full, parts[4])
+	}
 	isLabel := (len(parts) == 4 && parts[3] == "labels" && r.Method == http.MethodPost) || (len(parts) == 5 && parts[3] == "labels" && r.Method == http.MethodGet)
 	if !isIssueSub && !isLabel {
 		return false
@@ -198,4 +215,25 @@ func (s *Server) serveLabel(w http.ResponseWriter, r *http.Request, inst *instal
 		return
 	}
 	s.write(w, r, inst, http.StatusCreated, map[string]any{"name": in.Name, "description": in.Description})
+}
+
+func (s *Server) servePull(w http.ResponseWriter, r *http.Request, full, num string) bool {
+	inst, ok := s.auth(w, r)
+	if !ok {
+		return true
+	}
+	n, _ := strconv.Atoi(num)
+	s.mu.Lock()
+	var head [2]string
+	found := false
+	if rp := s.repos[full]; rp != nil {
+		head, found = rp.pulls[n]
+	}
+	s.mu.Unlock()
+	if !found {
+		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return true
+	}
+	s.write(w, r, inst, http.StatusOK, map[string]any{"number": n, "head": map[string]any{"ref": head[0], "repo": map[string]any{"full_name": head[1]}}})
+	return true
 }
