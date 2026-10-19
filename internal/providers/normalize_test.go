@@ -265,7 +265,10 @@ func TestUnknownAndUnmappedNativeEvents(t *testing.T) {
 	}
 }
 
-// The tool table of each provider, and its fallback: a tool or a field
+// Part of CA-ADAPT-01 (the tool.kind, command and paths of the tables; the
+// event, session_id and turn_id of the recorded payloads are in
+// TestNormalizeHookFillsTheMapFromRecordedPayloads). The tool table of each
+// provider, and its fallback: a tool or a field
 // outside the map is `other`, decided by the class default.
 func TestToolKindsAndTheOtherFallback(t *testing.T) {
 	t.Parallel()

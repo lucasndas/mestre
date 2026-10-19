@@ -238,6 +238,9 @@ func TestASynchronousHookIsCutTwoSecondsBelowTheProvider(t *testing.T) {
 	}
 }
 
+// CA-TETO-01: the table master saves a class beyond the domains of the
+// ceiling and the refusal cites example.com (the check alone is in
+// ceiling_test.go).
 func TestSavingEnforcesTheCeilingTheScopeAndTheEditOfTheApp(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
