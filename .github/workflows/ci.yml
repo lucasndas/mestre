@@ -3,7 +3,8 @@
 # and docs/qualidade/testes.md). Both jobs build and vet with cgo off, like
 # the release builds. A pull request that changes only documents runs the
 # document checks and the tests that read documents. The race detector
-# (budgets times 3) runs on Linux on the pushes to main, not on pull requests:
+# (budgets times 3) runs in its own job, in parallel with the tests and with a
+# cache of its own, on the pushes to main (and by hand), not on pull requests:
 # neither does the pre-push hook. Third-party actions are pinned by commit SHA;
 # golangci-lint is the pinned release binary, checked by its SHA-256.
 name: CI
@@ -35,7 +36,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    # Linux also runs the race detector (docs/qualidade/testes.md).
     timeout-minutes: 30
     defaults:
       run:
@@ -96,7 +96,8 @@ jobs:
 
       # The caches of the last push to main (or the closest older one): only
       # what this change touches is compiled and analysed again. A push to
-      # main saves a new entry at the end of the job.
+      # main saves a new entry after the suites (the race detector runs in
+      # another job and has no part in it).
       - name: Restore the caches
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -205,22 +206,6 @@ jobs:
         if: env.CODE == 'true'
         run: go run ./tools/testrun full
 
-      # The detector needs cgo and a build cache of its own; compile the race
-      # test binaries first, so the budgets (3x the normal ones) measure tests.
-      - name: Warm the build cache (race)
-        if: runner.os == 'Linux' && github.event_name != 'pull_request'
-        run: |
-          go test -race '-gcflags=modernc.org/...=-d=checkptr=0' -run '^$' ./...
-          go test -race '-gcflags=modernc.org/...=-d=checkptr=0' -tags full -run '^$' ./...
-
-      - name: Fast suite (race)
-        if: runner.os == 'Linux' && github.event_name != 'pull_request'
-        run: go run ./tools/testrun fast -race
-
-      - name: Full suite (race)
-        if: runner.os == 'Linux' && github.event_name != 'pull_request'
-        run: go run ./tools/testrun full -race
-
       - name: Save the caches
         if: success() && github.event_name != 'pull_request'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -230,3 +215,64 @@ jobs:
             ${{ runner.temp }}/go-mod
             ${{ runner.temp }}/golangci-lint
           key: ci-${{ runner.os }}-${{ env.GOLANGCI_LINT_VERSION }}-${{ hashFiles('go.sum', '.golangci.yml') }}-${{ github.sha }}
+
+  # The race detector (docs/qualidade/testes.md, step 9) in a job of its own:
+  # off the path of the required checks, which are the jobs above. Its build
+  # artifacts (cgo, -race) live in a cache of their own, so the cache of the
+  # tests stays small. Only on the pushes to main and by hand.
+  race:
+    name: race (ubuntu-latest)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Caches on the work disk
+        run: |
+          echo "GOCACHE=$RUNNER_TEMP/go-build" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=$RUNNER_TEMP/go-mod" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Restore the caches
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/go-build
+            ${{ runner.temp }}/go-mod
+          key: ci-race-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            ci-race-${{ runner.os }}-${{ hashFiles('go.sum') }}-
+            ci-race-${{ runner.os }}-
+
+      # The detector needs cgo and a build cache of its own; compile the race
+      # test binaries first, so the budgets (3x the normal ones) measure tests.
+      - name: Warm the build cache (race)
+        run: |
+          go test -race '-gcflags=modernc.org/...=-d=checkptr=0' -run '^$' ./...
+          go test -race '-gcflags=modernc.org/...=-d=checkptr=0' -tags full -run '^$' ./...
+
+      # Right after the warm-up, so a race found by the suites below does not
+      # lose the cache.
+      - name: Save the caches
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/go-build
+            ${{ runner.temp }}/go-mod
+          key: ci-race-${{ runner.os }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+
+      - name: Fast suite (race)
+        run: go run ./tools/testrun fast -race
+
+      - name: Full suite (race)
+        run: go run ./tools/testrun full -race
