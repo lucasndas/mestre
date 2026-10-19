@@ -40,7 +40,7 @@ git: { commit: false, request_push: false, workflows: never }  # o pr open do Me
 ## Regras e erros
 
 - Classe criada com o nome `orquestrador`, em qualquer escopo: recusada como nome em uso (`name_taken`).
-- Decreto de pessoa que libera algo a um orquestrador vale como para qualquer personagem; um que tenta mudar a classe em si é recusado: o que muda é a regra efetiva, não a classe (a recusa chega com os decretos, no M5).
+- Decreto de pessoa que libera algo a um orquestrador vale como para qualquer personagem; um que tenta mudar a classe em si é recusado: o que muda é a regra efetiva, não a classe (a recusa chega com os decretos, na etapa 4 do M5: [CA-DEC-12](../telegram/decretos.md#critérios-de-aceite)).
 
 ## Critérios de aceite
 
