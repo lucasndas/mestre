@@ -148,7 +148,7 @@ func runLauncher(ctx context.Context, path string) int {
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return fail(err)
 	}
-	// CA-TERM-15: the refusal of the account of the launcher itself is checked
+	// Part of CA-TERM-15: the refusal of the account of the launcher itself is checked
 	// where it matters, in a service as LocalSystem, which the tests of the
 	// package are not: the agents would run as SYSTEM.
 	if _, err := (winsvc.SelfAccount{}).Logon("probe"); !errors.Is(err, winsvc.ErrSelfAccountInService) {

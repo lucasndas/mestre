@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,13 +35,15 @@ var (
 	// are case-insensitive; the milestone is an upper-case M and a digit.
 	staleMilestoneRes = []*regexp.Regexp{
 		// the verb arrives/comes/lands, then "in M<n>" a few words later
-		regexp.MustCompile(`\b(?i:arrives?|comes?|lands?)\b[^.;:]{0,40}?\b(?i:in|at|with)\s+(?:the\s+)?M([0-9])\b`),
+		regexp.MustCompile(`\b(?i:arrives?|comes?|lands?|replaces?|replaced|closes?)\b[^.;:]{0,40}?\b(?i:in|at|with)\s+(?:the\s+)?M([0-9])\b`),
+		// the same verbs, then the milestone between parentheses
+		regexp.MustCompile(`\b(?i:arrives?|comes?|lands?|replaces?|replaced|closes?|chegam?|vem|vêm)\b[^.;:]{0,60}?\(M([0-9])\)`),
 		// "until M<n>"
 		regexp.MustCompile(`\b(?i:until|till)\s+(?:the\s+)?M([0-9])\b`),
 		// "waits for M<n>", "pending M<n>", "deferred to M<n>"
 		regexp.MustCompile(`\b(?i:waits?\s+for|waiting\s+for|pending|deferred\s+(?:to|until)|postponed\s+(?:to|until)|left\s+for)\s+(?:the\s+)?M([0-9])\b`),
-		// "chega no M<n>", "vem com o M<n>", "fica para o M<n>"
-		regexp.MustCompile(`\b(?i:chegam?|vem|ficam?|esperam?|aguardam?)\b[^.;:]{0,40}?\b(?i:no|com o|para o|até o|do)\s+M([0-9])\b`),
+		// "chega no M<n>", "vem/vêm com o M<n>", "fica para o M<n>"
+		regexp.MustCompile(`\b(?i:chegam?|vem|vêm|ficam?|esperam?|aguardam?)\b[^.;:]{0,40}?\b(?i:no|com o|para o|até o|do)\s+M([0-9])\b`),
 		// "até o M<n>", "até M<n>"
 		regexp.MustCompile(`\b(?i:até)\s+(?:o\s+)?M([0-9])\b`),
 	}
@@ -186,21 +190,107 @@ func (c *checker) listedCriteria(od *doc, headers ...string) map[string]bool {
 			continue
 		}
 		for i := start; i < end; i++ {
-			for _, m := range deferredRe.FindAllStringSubmatch(od.lines[i], -1) {
-				out[m[1]] = true
-				if m[2] == "" {
+			maps.Copy(out, idsIn(od.lines[i]))
+		}
+	}
+	return out
+}
+
+// deferredTargets reads, from the order document, the criterion that each
+// table puts off and the rank of the milestone where it closes: a criterion is
+// exempt from its marker only until that milestone is audited.
+//
+// In "Critérios em marcos posteriores" the cell is a list of entries
+// separated by ";" outside parentheses; the criteria written before the
+// `→ M<n>` of an entry (a range "CA-X-10 a CA-X-17" counts every item) close
+// at that milestone (the latest, in "→ M5 e M6"; "→ Guardião" is the M7). What
+// is inside parentheses is explanation: a criterion cited there is not
+// deferred. In "Operador do PC no M7" every criterion of the table is for M7.
+func (c *checker) deferredTargets(od *doc, stones map[int]*milestone) map[string]int {
+	out := map[string]int{}
+	put := func(ids map[string]bool, target int) {
+		if stones[target] == nil {
+			c.errf(orderPath, 1, ckCoverage, "adiamento para um marco que não está na tabela de marcos (rank %d): %v", target, slices.Sorted(maps.Keys(ids)))
+			return
+		}
+		for id := range ids {
+			out[id] = max(out[id], target)
+		}
+	}
+	if start, end, ok := od.body(operatorHeader); ok {
+		for i := start; i < end; i++ {
+			if cells := splitRow(od.lines[i]); len(cells) >= 2 && strings.HasPrefix(od.lines[i], "| [") {
+				put(idsIn(outsideParens(cells[1])), rank(7, false))
+			}
+		}
+	}
+	if start, end, ok := od.body(deferredHeader); ok {
+		for i := start; i < end; i++ {
+			cells := splitRow(od.lines[i])
+			if len(cells) < 2 || !strings.HasPrefix(od.lines[i], "| [") {
+				continue
+			}
+			for _, entry := range strings.Split(outsideParens(cells[1]), ";") {
+				arrow := strings.Index(entry, "→")
+				if arrow < 0 {
 					continue
 				}
-				out[m[2]] = true
-				pre1, n1 := splitID(m[1])
-				pre2, n2 := splitID(m[2])
-				if pre1 != pre2 {
-					continue
+				target := -1
+				for _, m := range targetRe.FindAllStringSubmatch(entry[arrow:], -1) {
+					n, _ := strconv.Atoi(m[1])
+					target = max(target, rank(n, m[2] != ""))
 				}
-				for k := n1; k <= n2; k++ {
-					out[fmt.Sprintf("%s-%02d", pre1, k)] = true
+				if strings.Contains(entry[arrow:], "Guardião") {
+					target = max(target, rank(7, false))
+				}
+				if target >= 0 {
+					put(idsIn(entry[:arrow]), target)
 				}
 			}
+		}
+	}
+	return out
+}
+
+// targetRe finds the milestone after an arrow: M5, M4+.
+var targetRe = regexp.MustCompile(`\bM([0-9]+)(\+)?`)
+
+// outsideParens drops what is inside parentheses (nested ones too), keeping
+// ";" and the rest of the text of the cell.
+func outsideParens(s string) string {
+	var b strings.Builder
+	depth := 0
+	for _, r := range s {
+		switch {
+		case r == '(':
+			depth++
+		case r == ')':
+			if depth > 0 {
+				depth--
+			}
+		case depth == 0:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// idsIn lists the criteria named in the text, ranges expanded.
+func idsIn(text string) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range deferredRe.FindAllStringSubmatch(text, -1) {
+		out[m[1]] = true
+		if m[2] == "" {
+			continue
+		}
+		out[m[2]] = true
+		pre1, n1 := splitID(m[1])
+		pre2, n2 := splitID(m[2])
+		if pre1 != pre2 {
+			continue
+		}
+		for k := n1; k <= n2; k++ {
+			out[fmt.Sprintf("%s-%02d", pre1, k)] = true
 		}
 	}
 	return out
@@ -291,14 +381,24 @@ func (c *checker) checkMilestones() {
 	// Check 12: every criterion of an audited milestone has its test.
 	tested := map[string]bool{}
 	for _, mk := range scan.markers {
-		if mk.Test {
+		cr, known := crits[mk.ID]
+		if !known {
+			c.errf(mk.File, mk.Line, ckCoverage, "o marcador %s não nomeia nenhum critério de aceite dos documentos", mk.ID)
+			continue
+		}
+		if !mk.Test {
+			continue
+		}
+		switch {
+		case !mk.Placed:
+			c.errf(mk.File, mk.Line, ckCoverage, "o marcador %s não está logo acima de um `func Test…` ou `t.Run(`: junte-o ao comentário do teste", mk.ID)
+		case cr.suite != "" && mk.Suite != cr.suite:
+			c.errf(mk.File, mk.Line, ckCoverage, "o marcador %s está num teste da suíte %s e o critério é *%s*: use `// Part of %s` ou mude o critério (%s:%d)", mk.ID, mk.Suite, cr.suite, mk.ID, rel(cr.file), cr.line)
+		default:
 			tested[mk.ID] = true
 		}
-		if _, ok := crits[mk.ID]; !ok {
-			c.errf(mk.File, mk.Line, ckCoverage, "o marcador %s não nomeia nenhum critério de aceite dos documentos", mk.ID)
-		}
 	}
-	deferred := c.listedCriteria(od, deferredHeader, operatorHeader)
+	deferred := c.deferredTargets(od, stones)
 	ids := make([]string, 0, len(crits))
 	for id := range crits {
 		ids = append(ids, id)
@@ -306,11 +406,26 @@ func (c *checker) checkMilestones() {
 	sort.Strings(ids)
 	for _, id := range ids {
 		cr := crits[id]
-		p, ok := c.place[cr.file]
-		if !ok || !audited(rank(p.milestone, false)) || cr.suite == "pesada" || deferred[id] || tested[id] {
+		// A document outside the map (a reference one) counts from M0.
+		p := c.place[cr.file]
+		if !audited(rank(p.milestone, false)) || cr.suite == "pesada" || tested[id] {
 			continue
 		}
-		c.errf(cr.file, cr.line, ckCoverage, "%s (M%d, *%s*) não tem teste marcado: ponha `// %s` acima do teste, ou liste o critério em %q de %s", id, p.milestone, cr.suite, id, deferredHeader, rel(orderPath))
+		if target, ok := deferred[id]; ok && !audited(target) {
+			continue // put off, and the milestone where it closes is still open
+		}
+		c.errf(cr.file, cr.line, ckCoverage, "%s (M%d, *%s*) não tem teste marcado: ponha `// %s` acima do teste (`Part of` não basta), ou ponha o critério em %q de %s com o marco em que fecha, que ainda não foi auditado", id, p.milestone, cr.suite, id, deferredHeader, rel(orderPath))
+	}
+
+	// Check 3, in code: the anchor of a document in a comment or a config file.
+	for _, r := range append(scan.refs, scanConfigRefs(c.fsys)...) {
+		d := c.load(r.Doc)
+		switch {
+		case d == nil:
+			c.errf(r.File, r.Line, ckLink, "%s não existe", r.Doc)
+		case !d.anchorSet()[r.Anchor]:
+			c.errf(r.File, r.Line, ckLink, "o título #%s não existe em %s", r.Anchor, r.Doc)
+		}
 	}
 
 	// Check 13: comments that wait for a milestone or a spike already closed.

@@ -150,7 +150,7 @@ func (f wipeFunc) Wipe(ctx context.Context, reason string) error { return f(ctx,
 // The report of the discarded databases reads the files the Wipe takes and
 // writes its record next to them once the Citadel acknowledged: it stops, and
 // is gone, before the Wipe erases, or it would write the record back
-// (docs/guilda/replicacao.md#sair-da-guilda).
+// (docs/guilda/replicacao.md#cofre-em-toda-máquina).
 func TestATowerStopsReportingTheDiscardedDatabasesBeforeItErasesThem(t *testing.T) {
 	t.Parallel()
 	var order []string

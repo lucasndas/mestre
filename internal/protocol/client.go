@@ -138,7 +138,7 @@ func (c *Client) incompatible(remote Range) {
 // NotCitadelError is why a connection did not open: the machine reached is of
 // the Guild but is not the Citadel (close 4007). The certificate it answered
 // with is the current one, already followed if it was newer, and names the
-// Citadel to look for (docs/conectividade/protocolo.md#códigos-de-fechamento).
+// Citadel to look for (docs/conectividade/protocolo.md#heartbeat-e-reconexão).
 type NotCitadelError struct {
 	Peer        Peer
 	Certificate Certificate

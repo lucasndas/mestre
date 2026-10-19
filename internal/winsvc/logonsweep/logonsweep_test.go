@@ -7,7 +7,7 @@ import (
 	"github.com/lucasndas/mestre/internal/winsvc/logonsweep"
 )
 
-// CA-TERM-05 (what the sweep takes: the matching logic; the real sweep of a
+// Part of CA-TERM-05 (what the sweep takes: the matching logic; the real sweep of a
 // logon session is in the real-account tests, because the full suite cannot
 // make a logon session of its own)
 func TestSelectTakesTheProcessesOfTheSessionOnly(t *testing.T) {

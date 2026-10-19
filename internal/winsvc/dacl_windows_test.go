@@ -12,7 +12,7 @@ type ace struct {
 	mask uint32
 }
 
-// Part of CA-TERM-12 (the DACL that is built, in the fast suite on Windows;
+// CA-TERM-12 (the DACL that is built, in the fast suite on Windows;
 // the Job Object clause is in internal/terminal/ptyd, and that a process of
 // another terminal cannot open it is in the real-account tests, which can make
 // two logon sessions of the agent account)

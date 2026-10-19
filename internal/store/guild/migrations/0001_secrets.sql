@@ -1,4 +1,4 @@
--- Vault table (docs/plataforma/cofre.md#formato-proposta). Timestamps are
+-- Vault table (docs/plataforma/cofre.md#formato). Timestamps are
 -- Unix milliseconds in UTC. Secret values are only ever stored encrypted.
 CREATE TABLE secrets (
 	name         TEXT    PRIMARY KEY,
