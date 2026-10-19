@@ -23,8 +23,9 @@ type Presence interface {
 }
 
 // ServerPresence is the presence as the protocol server of the Citadel knows
-// it: a machine is online while it has a connection (and a connection that
-// misses its heartbeat is closed by the protocol).
+// it: a machine is online while it has a connection. The application adds the
+// heartbeat on top of it (app.heartbeatPresence): a Tower that missed its
+// heartbeat for 90 s is offline until the next one, with the connection open.
 func ServerPresence(srv *protocol.Server) Presence { return serverPresence{srv} }
 
 type serverPresence struct{ srv *protocol.Server }

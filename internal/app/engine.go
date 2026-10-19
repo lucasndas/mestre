@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -213,6 +216,8 @@ type Engine struct {
 	connected bool
 	next      *transition
 	cit       *citadelRun
+	// stop ends Run: a machine the Owner removed from the Guild stops its engine.
+	stop      context.CancelFunc
 	tow       *towerRun
 	discarded int
 	// discardIDs are the ids of the reports of the discarded transactions, by epoch.
@@ -322,6 +327,9 @@ func (e *Engine) wait(ctx context.Context) (transition, bool) {
 // Run starts the instance and keeps it until ctx ends.
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
+	e.mu.Lock()
+	e.stop = cancel
+	e.mu.Unlock()
 	var wg sync.WaitGroup
 	// the deferred calls run backwards: cancel first, so that returning an
 	// error does not wait for goroutines that only end with ctx
@@ -673,12 +681,38 @@ func (e *Engine) respond(ctx context.Context) error {
 	return nil
 }
 
+// guildFacts are the two numbers a machine tells in the answer of the
+// discovery besides its role: how many machines are active in the Guild and the
+// SHA-256 of the CA, so who looks can see it is its Guild.
+func guildFacts(ctx context.Context, db *store.DB, ca *x509.Certificate) (machines int, caFp string) {
+	if ca != nil {
+		sum := sha256.Sum256(ca.Raw)
+		caFp = "sha256:" + hex.EncodeToString(sum[:])
+	}
+	if db != nil {
+		if err := db.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM machines WHERE state = 'active'`).Scan(&machines); err != nil {
+			machines = 0
+		}
+	}
+	return machines, caFp
+}
+
 func (e *Engine) discoveryInfo() (discovery.Info, bool) {
 	st := e.Status()
 	info := discovery.Info{
 		GuildID: e.id.GuildID, MachineID: e.id.MachineID, Name: e.cfg.Name, Role: discovery.RoleTower,
 		Epoch: st.Epoch, Port: e.cfg.EnginePort,
 	}
+	e.mu.Lock()
+	var db *store.DB
+	switch {
+	case e.cit != nil:
+		db = e.cit.db
+	case e.tow != nil:
+		db = e.tow.db
+	}
+	e.mu.Unlock()
+	info.Machines, info.CAFp = guildFacts(context.Background(), db, e.id.CA)
 	if st.Role == RoleCitadel {
 		info.Role = discovery.RoleCitadel
 		info.Citadel = &discovery.CitadelRef{MachineID: e.id.MachineID, Addrs: e.cfg.IPs, Port: e.cfg.EnginePort}

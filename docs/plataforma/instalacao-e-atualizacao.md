@@ -53,7 +53,7 @@ A instalação no Windows não pede senha nenhuma: nenhum serviço usa a conta d
 
 - `claude`, `codex` e `agy` são instalados pelo instalador oficial de cada provedor, rodando como `mestre-agente` com o `HOME` do perfil de conta (`/var/lib/mestre/<inst>/contas/<perfil>/` ou `%ProgramData%\Mestre\<inst>\contas\<perfil>\`; [perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)), na configuração inicial do perfil. Ficam onde esse instalador grava (ex.: o do Claude Code, em `$HOME/.local/share/claude`); o motor resolve o executável pelo perfil.
 - **Os CLIs se atualizam sozinhos:** o Mestre não desliga a autoatualização deles. Ele detecta a versão nova e roda a conformidade depois ([atualização dos CLIs](../provedores/atualizacao-dos-clis.md)).
-- **Cuidado:** como a pasta do CLI é gravável por `mestre-agente`, um agente poderia alterar o binário. As regras fixas negam às ferramentas dos agentes as pastas de dados do Mestre, inclusive os perfis de conta ([regras fixas](../classes/permissoes.md#regras-fixas-de-segurança)).
+- **Cuidado:** como a pasta do CLI é gravável por `mestre-agente`, um agente poderia alterar o binário. As regras fixas negam às ferramentas dos agentes as pastas de dados do Mestre, inclusive os perfis de conta ([regras fixas](../classes/permissoes.md#regras-fixas-de-segurança)), mas só pela linha de comando: o código que o hook não lê as alcança ([risco aceito](../arquitetura/risco-do-codigo-nao-analisado.md)).
 - **Codex:** precisa do pacote completo da versão (`bin/`, `codex-path/`, `codex-resources/`, `codex-package.json`); o binário solto não funciona ([Codex](../provedores/codex.md#contas-múltiplas)).
 
 ### Whisper

@@ -533,8 +533,9 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		return transition{err: err}
 	}
 	run.primary = primary
+	beats := newHeartbeats()
 	registry, err := machinesheet.NewRegistry(machinesheet.RegistryConfig{
-		DB: db, Presence: lazyPresence{&srv}, Self: func() string { return e.id.MachineID }, Names: citadelNames{e: e, run: run}, Logger: e.log,
+		DB: db, Presence: heartbeatPresence{lazyPresence{&srv}, beats}, Self: func() string { return e.id.MachineID }, Names: citadelNames{e: e, run: run}, Logger: e.log,
 	})
 	if err != nil {
 		return transition{err: err}
@@ -550,6 +551,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 			defer run.gate.leave()
 			return registry.OnHello(ctx, peer, h)
 		},
+		HeartbeatLost: beats.Lost,
 		// every Tower that connects learns the machines and the refusals
 		OnReady: func(s *protocol.Session) { go e.sendConfig(pctx, run, s.Peer().ID) },
 	})
@@ -566,6 +568,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	router.HandleFunc(protocol.TypeCertRenew, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleCertRenew }))
 	router.HandleFunc(protocol.TypeGuildLeave, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
 	router.HandleFunc(protocol.TypeAgentEvent, run.gated(e.handleAgentEvent))
+	router.HandleFunc(protocol.TypeMachineHeartbeat, beats.Handle)
 	router.HandleFunc(protocol.TypeMachineSheet, run.gated(registry.Handler().Handle))
 	router.HandleFunc(protocol.TypeCLICall, e.handleCLICall(run)) // it answers in cli.result, gate included
 	router.HandleFunc(protocol.TypeGuildDiscarded, run.gated(guild.DiscardedHandler(func() *store.DB { return db }, e.clk)))

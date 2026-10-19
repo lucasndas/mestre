@@ -1,6 +1,6 @@
 # Protocolo entre as máquinas da Guilda e o navegador
 
-> **Assunto:** conexão WSS iniciada pela Torre até a Cidadela atual: endpoints, envelope com época, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-14
+> **Assunto:** conexão WSS iniciada pela Torre até a Cidadela atual: endpoints, envelope com época, versão, ack e idempotência, multiplexação, tipos de mensagem, transferência em partes, Guardião e navegador · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -73,7 +73,7 @@ Toda mensagem de controle é um frame de texto com um objeto JSON:
 ### Heartbeat e reconexão
 
 - **Ping:** ping do WebSocket a cada 15 s, pelos dois lados. Sem pong em 45 s (contados do último pong, mesmo que o ping não tenha saído por uma escrita longa), a conexão é dada como morta e fechada sem o aperto de fechamento.
-- **Heartbeat:** `machine.heartbeat` logo depois do `welcome` e a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
+- **Heartbeat:** `machine.heartbeat` logo depois do `welcome` e a cada 30 s, com CPU, memória, disco livre, número de terminais e atraso da réplica. Hoje a Torre preenche o disco livre e o atraso da réplica (CPU, memória e terminais saem 0 até o motor da Torre hospedar terminais, M5); a Cidadela guarda o último heartbeat de cada Torre em memória (não há tabela). Sem heartbeat por 90 s, a Cidadela considera a Torre offline ([camadas](../autocura/camadas.md)); sem resposta da Cidadela, as Torres começam a vigilância ([Cidadela e Torres](../guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono)).
 - **Reconexão:** backoff de 1 s, dobrando até 60 s, com variação de ±20%; só uma conexão que durou 30 s volta o atraso a 1 s. Depois de 3 falhas seguidas ao abrir, a Torre refaz a [descoberta](descoberta.md).
 - **Uma conexão por `machine_id`:** uma conexão nova substitui a antiga. "Nova" é a aceita por último (a ordem é fixada ao aceitar a conexão, antes do `welcome`), não a que se liga primeiro ao vínculo: uma conexão mais velha que chega depois da mais nova é ela quem se fecha com `4004`, e o que espera ack é reenviado na que ficou.
 - **Códigos de fechamento:** `4001` credencial inválida · `4002` credencial revogada (a máquina para de tentar) · `4003` versão incompatível · `4004` substituída por conexão nova · `4005` Cidadela desligando (reconectar logo) · `4006` época vencida · `4007` não sou a Cidadela (a resposta traz a certidão atual, assinada pela CA, que a Torre segue se for mais nova antes de refazer a [descoberta](descoberta.md) na hora; vale também para o Guardião de uma Cidadela antiga, que se retira na hora ao receber certidão mais nova, [concessão do motor](../autocura/guardiao.md#concessão-do-motor)) · `4008` quem recebe não dá conta do que chega (reconectar com backoff).

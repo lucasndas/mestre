@@ -208,8 +208,15 @@ func TestADiscardedDatabaseIsKeptForTheRetentionFromTheDayItWasDiscarded(t *test
 	}
 	clk.Advance(2 * time.Hour)
 	e.pruneDiscarded()
+	if !kept() {
+		t.Error("the database left before it was reported")
+	}
+	if err := os.WriteFile(strings.TrimSuffix(e.paths.discarded(3), ".db")+".json", []byte("{}"), 0o600); err != nil { // the report was sent
+		t.Fatal(err)
+	}
+	e.pruneDiscarded()
 	if kept() {
-		t.Error("the database is still there after the retention")
+		t.Error("the database is still there after the retention and the report")
 	}
 }
 
@@ -227,5 +234,27 @@ func TestAnEpochArchivedTwiceHasOneReportAndTheCopyKeepsItsOwnName(t *testing.T)
 	files := e.discardedFiles()
 	if len(files) != 1 || files[3] != e.paths.discarded(3) {
 		t.Errorf("databases to report = %v, want only %s for the epoch 3", files, e.paths.discarded(3))
+	}
+}
+
+// A discarded database that was not reported to the new Citadel yet stays after
+// the retention: the report is the audit of what the change of Citadel lost.
+func TestADiscardedDatabaseThatWasNotReportedStaysAfterTheRetention(t *testing.T) {
+	t.Parallel()
+	e := discardedEngine(t)
+	db, err := guildtpl.Open(t.Context(), e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.archive(db, 5); err != nil {
+		t.Fatal(err)
+	}
+	old := e.clk.Now().Add(-DiscardedRetention - time.Hour)
+	if err := os.Chtimes(e.paths.discarded(5), old, old); err != nil {
+		t.Fatal(err)
+	}
+	e.pruneDiscarded()
+	if _, err := os.Stat(e.paths.discarded(5)); err != nil {
+		t.Errorf("the database of the epoch 5, not reported, is gone: %v", err)
 	}
 }

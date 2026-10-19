@@ -45,6 +45,8 @@ type rig struct {
 
 // inproc is one instance.
 type inproc struct {
+	// ended is closed when Run of the engine returns.
+	ended  <-chan struct{}
 	r      *rig
 	name   string
 	ip     string
@@ -155,8 +157,9 @@ func (r *rig) start(n *inproc, clk clock.Clock) {
 	}
 	ctx, cancel := context.WithCancel(r.t.Context())
 	done := make(chan error, 1)
-	go func() { done <- e.Run(ctx) }()
-	n.e = e
+	ended := make(chan struct{})
+	go func() { done <- e.Run(ctx); close(ended) }()
+	n.e, n.ended = e, ended
 	n.stop = func() {
 		cancel()
 		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
