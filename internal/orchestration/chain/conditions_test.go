@@ -227,3 +227,44 @@ func TestTheOtherConditionsOfThePolicyAreCheckedBeforeTheApproval(t *testing.T) 
 	}
 	w.humanRequired(w.prRequest(classes.RequestPR, 83, del), "6 arquivos apagados")
 }
+
+// The label and a diff the engine could not read hold for every risk, a rename
+// out of a sensitive area is seen, and the commands are matched by segment.
+func TestTheLabelTheRenamesAndTheCompoundCommandsAreNotWaysAround(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	mixed := green(1)
+	mixed.Labels = []string{"Mestre:Humano"}
+	w.humanRequired(w.prRequest(classes.RequestPR, 90, mixed), chain.HumanLabel)
+	moved := green(1)
+	moved.Files = append(moved.Files, chain.PRFile{Path: "docs/x.yaml", PreviousPath: ".mestre/regras/politica-de-aprovacao.yaml", Added: 1})
+	w.humanRequired(w.prRequest(classes.RequestPR, 91, moved), "mestre")
+	w.humanRequired(w.prRequest(classes.RequestPR, 92, chain.PRFacts{LabelsRead: true, CIGreen: true, ReviewDone: true}), chain.ReasonIncompleteDiff)
+	rules := chain.DefaultRules()
+	for _, cmd := range []string{"cd x && git push", "FOO=1 sudo git  push origin", `psql -c "drop table users"`} {
+		got := rules.Conditions(chain.Request{Type: classes.RequestClassPermission, Action: &classes.Action{Command: cmd}}, chain.PRFacts{}, false)
+		if len(got) == 0 {
+			t.Errorf("%q passed the sensitive commands", cmd)
+		}
+	}
+	if got := rules.Conditions(chain.Request{Type: classes.RequestClassPermission, Action: &classes.Action{Command: "npm test"}}, chain.PRFacts{}, false); len(got) != 0 {
+		t.Errorf("npm test = %v", got)
+	}
+}
+
+// A person below the minimum answers nothing, and the fixed types are the Owner's.
+func TestAPersonBelowTheMinimumAnswersNothing(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	id := w.shell(w.recruit("Dev"), `psql -c "DROP TABLE users"`)
+	for _, ans := range []chain.Answer{chain.AnswerDeny, chain.AnswerDenyAlways, chain.AnswerAskBack} {
+		_, err := w.ch.DecideByPerson(w.ctx, chain.PersonDecision{Request: id, User: "ana", Level: "approver", Answer: ans, Instruction: "?"})
+		if ref, ok := err.(*chain.Refusal); !ok || ref.Code != chain.CodeHumanRequired {
+			t.Fatalf("%s by an Approver = %v, want human_required", ans, err)
+		}
+	}
+	rules := chain.DefaultRules()
+	if _, _, min := rules.Need(chain.Request{Type: classes.RequestGuildEntry}); min != classes.LevelOwner {
+		t.Fatalf("entrada_na_guilda minimum = %s, want owner", min)
+	}
+}

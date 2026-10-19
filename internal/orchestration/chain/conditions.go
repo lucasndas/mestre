@@ -25,10 +25,12 @@ type PRRef struct {
 
 // PRFile is a file of the diff of a PR at the hash of the request.
 type PRFile struct {
-	Path    string
-	Added   int
-	Removed int
-	Deleted bool
+	Path string
+	// PreviousPath is where a renamed file was: the areas look at both.
+	PreviousPath string
+	Added        int
+	Removed      int
+	Deleted      bool
 	// PatchMissing says the file is text and GitHub gave no patch for it (too
 	// big): the engine cannot read it.
 	PatchMissing bool
@@ -96,12 +98,23 @@ func (r PolicyRules) ignored(path string) bool {
 // that an agent wrote, but the path of a file and a word of the file, which
 // are quoted.
 func (r PolicyRules) Conditions(req Request, f PRFacts, hasFacts bool) []string {
+	return r.conditions(req, f, hasFacts, true)
+}
+
+// conditions with thresholds=false keeps what no delegation lifts: the label and
+// the diff the engine could not read.
+func (r PolicyRules) conditions(req Request, f PRFacts, hasFacts, thresholds bool) []string {
 	var out []string
 	if req.Type == classes.RequestClassPermission || req.Type == "" {
-		if req.Action != nil {
+		if req.Action != nil && thresholds {
+			segs := append(commandSegments(req.Action.Command), strings.ToLower(strings.Join(strings.Fields(req.Action.Command), " ")))
 			for _, p := range r.Commands {
-				if wildMatch(p, req.Action.Command) {
-					out = append(out, fmt.Sprintf("comando sensível (%q)", p))
+				lp := strings.ToLower(p)
+				for _, seg := range segs {
+					if wildMatch(lp, seg) {
+						out = append(out, fmt.Sprintf("comando sensível (%q)", p))
+						break
+					}
 				}
 			}
 		}
@@ -117,12 +130,20 @@ func (r PolicyRules) Conditions(req Request, f PRFacts, hasFacts bool) []string 
 		out = append(out, ReasonIncompleteDiff+": os rótulos do PR não foram lidos")
 	}
 	for _, l := range f.Labels {
-		if l == HumanLabel {
+		if strings.EqualFold(l, HumanLabel) {
 			out = append(out, "o PR tem o rótulo "+HumanLabel)
 		}
 	}
-	if f.Incomplete {
+	if f.Incomplete || len(f.Files) == 0 {
 		out = append(out, ReasonIncompleteDiff+": o GitHub cortou a lista de arquivos")
+	}
+	for _, file := range f.Files {
+		if file.PatchMissing && !r.ignored(file.Path) {
+			out = append(out, fmt.Sprintf("%s: o GitHub não deu o patch de %q", ReasonIncompleteDiff, file.Path))
+		}
+	}
+	if !thresholds {
+		return out
 	}
 	if r.CIGreen && !f.CIGreen {
 		out = append(out, "o CI não está verde neste hash")
@@ -139,12 +160,9 @@ func (r PolicyRules) Conditions(req Request, f PRFacts, hasFacts bool) []string 
 		if !ignored {
 			lines += file.Added + file.Removed
 		}
-		if file.PatchMissing && !ignored {
-			out = append(out, fmt.Sprintf("%s: o GitHub não deu o patch de %q", ReasonIncompleteDiff, file.Path))
-		}
 		for _, name := range r.areaNames() {
 			for _, g := range r.Areas[name] {
-				if classes.MatchGlob(g, file.Path) {
+				if classes.MatchGlob(g, file.Path) || (file.PreviousPath != "" && classes.MatchGlob(g, file.PreviousPath)) {
 					out = append(out, fmt.Sprintf("área sensível %s: %q", name, file.Path))
 					break
 				}
@@ -190,11 +208,10 @@ func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
 	if why := rules.ForcesPeople(r); why != "" {
 		return refuse(CodeHumanRequired, "%s", oneLine(why))
 	}
-	if r.Risk.Risk == classes.RiskHigh {
-		// An alto request is the Grão-Mestre's only inside a delegation of the
-		// Owner (checked by the level): the conditions below are for medio.
-		return nil
-	}
+	// An alto request is the Grão-Mestre's only inside a delegation of the Owner
+	// (checked by the level): the thresholds below are for medio, but the label
+	// and a diff the engine could not read hold for every risk.
+	thresholds := r.Risk.Risk != classes.RiskHigh
 	var facts PRFacts
 	has := false
 	if (r.Type == classes.RequestPR || r.Type == classes.RequestMerge) && r.PR != nil && s.o.PRs != nil {
@@ -205,7 +222,7 @@ func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
 			facts, has = f, true
 		}
 	}
-	if why := rules.Conditions(r, facts, has); len(why) > 0 {
+	if why := rules.conditions(r, facts, has, thresholds); len(why) > 0 {
 		for i := range why {
 			why[i] = oneLine(why[i])
 		}

@@ -472,12 +472,11 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	who := "user:" + d.User
 	level := Level{Kind: LevelPeople, Name: d.User}
 	// The level of the user, against the minimum of the policy for the type and
-	// the risk: below it the user does not answer (an Approver does not approve
-	// an alto).
-	if rules, _ := s.rulesOf(r.Workspace); d.Answer.Approves() || d.Answer == AnswerDelegate {
-		if _, _, min := rules.Need(r); !peopleLevel(d.Level).AtLeast(min) {
-			return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeHumanRequired, "the level of the user is below the minimum of this request (%s)", min))
-		}
+	// the risk: below it the user answers nothing (an Approver does not approve
+	// an alto, nor deny it for good). The quorum is counted by the flow.
+	rules, _ := s.rulesOf(r.Workspace)
+	if _, _, min := rules.Need(r); !peopleLevel(d.Level).AtLeast(min) {
+		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeHumanRequired, "the level of the user is below the minimum of this request (%s)", min))
 	}
 	switch d.Answer {
 	case AnswerClimb:

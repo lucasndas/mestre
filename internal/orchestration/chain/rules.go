@@ -115,7 +115,7 @@ func (r PolicyRules) ForcesPeople(req Request) string {
 	if t == "" {
 		t = classes.RequestClassPermission
 	}
-	if req.Risk.Risk == classes.RiskMedium && !r.Alone[t] {
+	if req.Risk.Risk != classes.RiskHigh && !r.Alone[t] {
 		return fmt.Sprintf("a política manda %s para as pessoas (sozinho: nunca)", t)
 	}
 	for _, q := range r.QuorumRules {
@@ -147,6 +147,14 @@ func (r PolicyRules) Need(req Request) (approvals int, require []string, min cla
 	min = classes.LevelApprover
 	if l, ok := r.MinLevel[req.Type]; ok {
 		min = l
+	}
+	// The fixed rules are not in the file: only the Owner answers these, and the
+	// Administrator the update of the Mestre.
+	switch req.Type {
+	case classes.RequestOperator, classes.RequestGuildEntry, classes.RequestCitadelPromotion:
+		min = classes.LevelOwner
+	case classes.RequestMestreUpdate:
+		min = classes.LevelAdmin
 	}
 	if l, ok := r.RiskMinLevel[req.Risk.Risk]; ok && l.AtLeast(min) {
 		min = l
@@ -363,4 +371,22 @@ func wildMatch(pattern, s string) bool {
 		s = s[i+len(p):]
 	}
 	return strings.HasSuffix(s, parts[len(parts)-1])
+}
+
+// commandSegments are the simple commands of a command line, lower case, with
+// the blanks collapsed and without the assignments and `sudo` that lead them:
+// `cd x && FOO=1 sudo git push` has the segments `cd x` and `git push`.
+func commandSegments(cmd string) []string {
+	seps := strings.NewReplacer("&&", "\n", "||", "\n", ";", "\n", "|", "\n", "&", "\n", "(", "\n", ")", "\n", "`", "\n", "$", "\n")
+	var out []string
+	for _, seg := range strings.Split(seps.Replace(strings.ToLower(cmd)), "\n") {
+		words := strings.Fields(seg)
+		for len(words) > 0 && (strings.Contains(words[0], "=") || words[0] == "sudo" || words[0] == "env" || words[0] == "command") {
+			words = words[1:]
+		}
+		if len(words) > 0 {
+			out = append(out, strings.Join(words, " "))
+		}
+	}
+	return out
 }
