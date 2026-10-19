@@ -1,6 +1,6 @@
 # Componentes
 
-> **Assunto:** motor, `mestre-pty`, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** motor, `mestre-pty`, Guardião, CLI e painel: binários, subcomandos, serviços, contas, portas e rotas de cada máquina da Guilda, e as instâncias múltiplas na mesma máquina · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 Este documento é a **fonte única** dos nomes de binários, subcomandos de serviço, serviços do sistema, portas e rotas, e das instâncias. A escolha da stack está no [ADR 0001](../decisoes/0001-stack-go.md); a Guilda, no [ADR 0022](../decisoes/0022-guilda-cidadela-e-torres.md).
 
@@ -32,6 +32,7 @@ Três binários por plataforma (Linux amd64 e Windows amd64), compilados com `CG
 | `mestre uninstall [--purge]` | Linux, Windows | pede a saída da Guilda e remove os serviços; `--purge` apaga também as pastas de dados da instância, sem a qual logs, worktrees e perfis ficam ([saída e remoção](../guilda/guilda.md#saída-e-remoção)) |
 | `mestre setup-code` | Linux, Windows | gera um novo código de configuração do Dono (invalida o anterior) quando o da instalação se perdeu; só root ou administrador na Cidadela e só enquanto não existe usuário ([login](../painel/login.md)) |
 | `mestre launcher` | Linux, Windows | o serviço `mestre-launcher`, o único que inicia processos com outra conta ([iniciador](#iniciador-mestre-launcher)); recusa rodar fora do serviço |
+| `mestre mcp --instance <inst>` | Linux, Windows | o gateway do Mestre (desde o M7): servidor MCP por stdio, filho do CLI do personagem, que fala com o motor pelo canal local (`cmd: "mcp"`); só dentro do terminal de um personagem, fora dele o motor responde `not_identified` ([MCP por classe](../classes/mcp-por-classe.md#o-gateway-do-mestre)) |
 | `mestre operator-session` | Windows | processo da sessão do [Operador do PC](windows.md#operador-do-pc): iniciado pela tarefa agendada `\Mestre\Operador` no logon do usuário configurado, com a conta dele; liga-se ao `mestre` pelo pipe do Operador e cria os terminais do Operador; recusa rodar como serviço ou com outra conta |
 | `mestre attach <personagem> [--write]` | todas | abre o terminal de um personagem de qualquer máquina da Guilda no terminal de quem chama, pela Cidadela, com login de usuário ([attach](../cli/attach.md)) |
 | `mestre hook --provider <p> --event <e>` | todas | despachante de hooks; uso interno dos arquivos de hooks ([adaptador](../provedores/adaptador.md)) |
@@ -110,7 +111,7 @@ Tabela única de portas e rotas. Os números são os da instância padrão; cada
 | Motor → `mestre-pty` | socket `/run/mestre/<inst>/pty/<id>.sock` | socket Unix `%ProgramData%\Mestre\<inst>\pty\<id>.sock` | só a conta do motor, com aperto de mão pelo segredo do terminal ([terminal](terminal.md#socket-e-aperto-de-mão)) |
 | Motor ↔ Guardião | socket `/run/mestre-guardiao/<inst>/guardiao.sock` | named pipe `\\.\pipe\mestre-<inst>-guardiao` | só a conta do motor (`mestre` ou `NT SERVICE\Mestre`) e a do Guardião; leva o `health` e a concessão `lease` (a cada 30 s, com a época, sem depender do GitHub; [Guardião](../autocura/guardiao.md#canal-local-motor--guardião)) |
 | Motor → `mestre-launcher` | socket `/run/mestre/<inst>/launcher.sock` | named pipe `\\.\pipe\mestre-<inst>-launcher` | só a conta do motor, conferido também pelo processo cliente ([iniciador](#iniciador-mestre-launcher)) |
-| Operador do PC ↔ motor (Windows) | — | named pipes `\\.\pipe\mestre-<inst>-operador` (processo da sessão) e `\\.\pipe\mestre-<inst>-operador-cli` (CLI e `mestre hook` dos terminais do Operador) | só a conta do usuário configurado e `NT SERVICE\Mestre` ([Windows](windows.md#operador-do-pc)) |
+| Operador do PC ↔ motor (Windows) | — | named pipes `\\.\pipe\mestre-<inst>-operador` (processo da sessão) e `\\.\pipe\mestre-<inst>-operador-cli` (CLI, `mestre hook` e gateway dos terminais do Operador) | só a conta do usuário configurado e `NT SERVICE\Mestre` ([Windows](windows.md#operador-do-pc)) |
 
 `<inst>` é o nome da [instância](#instâncias). O motor confere quem chama a CLI antes de aceitar o `MESTRE_AGENT_ID` ([segurança](seguranca.md#identidade-de-quem-chama-a-cli)).
 
