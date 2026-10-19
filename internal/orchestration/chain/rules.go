@@ -37,6 +37,9 @@ type PolicyRules struct {
 	Alone map[classes.RequestType]bool
 	// MinLevel is the nivel_minimo of each type.
 	MinLevel map[classes.RequestType]classes.Level
+	// Pin says which types ask the PIN of the user after the button (the
+	// pin of the file; the fixed types always do).
+	Pin map[classes.RequestType]bool
 	// RiskMinLevel is the minimum level of the people for each risk.
 	RiskMinLevel map[classes.Risk]classes.Level
 	// Quorum is the default number of approvals; Rules the ones that force a
@@ -80,6 +83,7 @@ func DefaultRules() PolicyRules {
 		Commands:     []string{"rm -rf *", "git push*", "*DROP TABLE*", "*TRUNCATE*", "*DELETE FROM*"},
 		Alone:        map[classes.RequestType]bool{},
 		MinLevel:     map[classes.RequestType]classes.Level{},
+		Pin:          map[classes.RequestType]bool{},
 		RiskMinLevel: map[classes.Risk]classes.Level{classes.RiskHigh: classes.LevelAdmin},
 		Quorum:       1,
 	}
@@ -127,6 +131,18 @@ func (r PolicyRules) ForcesPeople(req Request) string {
 		}
 	}
 	return ""
+}
+
+// NeedsPIN says whether the approval of a request asks the PIN of the user
+// after the button: the types of the policy with pin, and always the fixed
+// ones (the Operator, the entry in the Guild, the promotion, the settings of the
+// repository).
+func (r PolicyRules) NeedsPIN(req Request) bool {
+	switch req.Type {
+	case classes.RequestOperator, classes.RequestGuildEntry, classes.RequestCitadelPromotion, classes.RequestRepoSettings:
+		return true
+	}
+	return r.Pin[req.Type]
 }
 
 // Need is what the people must give a request: the approvals (the strictest
@@ -287,6 +303,9 @@ func parseRules(y *policyYAML) (PolicyRules, error) {
 			r.Alone[rt] = false
 		case "se_condicoes":
 			r.Alone[rt] = true
+		}
+		if t.Pin {
+			r.Pin[rt] = true
 		}
 		switch t.NivelMinimo {
 		case "aprovador":

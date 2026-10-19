@@ -565,7 +565,7 @@ func (s *Service) unclaim(ctx context.Context, id int64) {
 // cancellation; a claimed one only by the decision that claimed it.
 func claimMatches(claim *Closing, c Closing) bool {
 	if claim == nil {
-		return c.State == Expired || c.State == Cancelled
+		return c.State == Expired || c.State == Cancelled || c.State == Invalidated
 	}
 	return claim.State == c.State && claim.By == c.By && claim.Answer == c.Answer
 }
@@ -649,6 +649,8 @@ func (s *Service) resultText(r Request, byName, instruction string) string {
 		return fmt.Sprintf("O pedido de aprovação #%d expirou sem resposta e foi negado. Nada foi aprovado.", r.ID)
 	case Cancelled:
 		return fmt.Sprintf("O pedido de aprovação #%d foi cancelado.", r.ID)
+	case Invalidated:
+		return fmt.Sprintf("O pedido de aprovação #%d foi invalidado: o alvo mudou ou quem aprovou perdeu o direito antes de a ação ser aplicada. Nada foi aprovado.", r.ID)
 	}
 	// who decided wrote the reason and the instruction: with more than one line they
 	// come quoted, so they cannot imitate another line of the engine
@@ -817,6 +819,20 @@ func (s *Service) cancel(ctx context.Context, r Request, why string) {
 	st, _ := s.settings(ctx, r.Workspace)
 	s.audit(ctx, r, AuditEntry{Level: r.Level.Kind, Answer: "cancel", Outcome: "accepted", Reason: why})
 	s.settle(ctx, r, st, "", "")
+}
+
+// Invalidate ends an open request whose target changed, or whose approver lost
+// the right, before the approval was applied: nothing is applied and whoever
+// waited is told.
+func (s *Service) Invalidate(ctx context.Context, id int64, why string) error {
+	r, ok := s.closeRequest(ctx, id, nil, Closing{State: Invalidated, Reason: why})
+	if !ok {
+		return refuse(CodeNoRequest, "the request #%d is not open", id)
+	}
+	st, _ := s.settings(ctx, r.Workspace)
+	s.audit(ctx, r, AuditEntry{Level: r.Level.Kind, Answer: "invalidate", Outcome: "accepted", Reason: why})
+	s.settle(ctx, r, st, "", "")
+	return nil
 }
 
 // CancelTable cancels the open requests of a table that was cancelled.

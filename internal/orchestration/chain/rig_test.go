@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/app"
+	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/hook"
@@ -21,9 +22,11 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/testkit/fakechannel"
 	"github.com/lucasndas/mestre/internal/testkit/fakegit"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/orcfakes"
+	"github.com/lucasndas/mestre/internal/users"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -276,6 +279,11 @@ type world struct {
 	sheets     int
 	// lib is the library of the real classes (worldOpts.realClasses).
 	lib *classes.Library
+	// The real flow of approval over the people (worldOpts.flow).
+	usvc  *users.Service
+	flow  *approvals.Flow
+	chn   *fakechannel.Channel
+	owner users.User
 }
 
 // policy is the policy file of the tests: the settings change under it.
@@ -358,6 +366,8 @@ type worldOpts struct {
 	// classYAML replaces devYAML as the permissions of the approved class
 	// dev (realClasses).
 	classYAML string
+	// flow puts the real flow of approval in the place of the fake people.
+	flow bool
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -393,6 +403,21 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainPRs: w.prs}
 	if opt.realSup {
 		oo.ChainSupervision = nil
+	}
+	if opt.flow {
+		w.chn = fakechannel.New()
+		w.usvc, err = users.New(users.Options{DB: db, Clock: clk, Approvals: lateApprovals{w}, PIN: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w.owner, err = w.usvc.CreateOwner(ctx, "Lucas"); err != nil {
+			t.Fatal(err)
+		}
+		w.flow, err = approvals.New(approvals.Options{DB: db, Clock: clk, Chain: lateChain{w}, Users: w.usvc, PINs: w.usvc, Messenger: w.chn})
+		if err != nil {
+			t.Fatal(err)
+		}
+		oo.ChainUsers = w.flow
 	}
 	if opt.realClasses {
 		w.lib = &classes.Library{Roots: classes.DefaultRoots(filepath.Join(root, "classes-globais"), filepath.Join(root, "clone")), Records: classes.ClassDB{DB: db, Clock: clk},
@@ -615,4 +640,26 @@ func (w *world) setWaiting(c characters.Character, reason string) {
 	if err := w.orc.Observers.StateChanged(w.ctx, w.get(c.ID), from); err != nil {
 		w.t.Fatal(err)
 	}
+}
+
+// lateChain and lateApprovals tie the flow to the chain and to the users, which
+// are made after it.
+type lateChain struct{ w *world }
+
+func (c lateChain) Get(ctx context.Context, id int64) (chain.Request, error) {
+	return c.w.ch.Get(ctx, id)
+}
+
+func (c lateChain) DecideByPerson(ctx context.Context, d chain.PersonDecision) (chain.Outcome, error) {
+	return c.w.ch.DecideByPerson(ctx, d)
+}
+
+func (c lateChain) Invalidate(ctx context.Context, id int64, why string) error {
+	return c.w.ch.Invalidate(ctx, id, why)
+}
+
+type lateApprovals struct{ w *world }
+
+func (a lateApprovals) InvalidateBy(ctx context.Context, id string) error {
+	return a.w.flow.InvalidateBy(ctx, id)
 }

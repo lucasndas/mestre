@@ -1,0 +1,665 @@
+package approvals
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/users"
+	"github.com/lucasndas/mestre/pkg/clock"
+)
+
+// Chain is what the flow needs of the chain of approval (chain.Service).
+type Chain interface {
+	Get(ctx context.Context, id int64) (chain.Request, error)
+	DecideByPerson(ctx context.Context, d chain.PersonDecision) (chain.Outcome, error)
+	Invalidate(ctx context.Context, id int64, why string) error
+}
+
+// Directory is the registry of the users (users.Service).
+type Directory interface {
+	Get(ctx context.Context, id string) (users.User, error)
+	List(ctx context.Context) ([]users.User, error)
+}
+
+// PINs is the PIN of the users (users.Service).
+type PINs interface {
+	StartPIN(ctx context.Context, userID, action string) (users.PINRequest, error)
+	Consume(ctx context.Context, requestID, userID, action string) error
+}
+
+// ErrNoChannel is what a Messenger answers when the user can not be reached by
+// it (no Telegram): the user still sees the request in the panel.
+var ErrNoChannel = errors.New("approvals: the user has no channel")
+
+// Message is the question to one user.
+type Message struct {
+	UserID  string
+	Request chain.Request
+	Text    string
+	// Answers are those this user may give.
+	Answers []chain.Answer
+}
+
+// Messenger is the channel the questions go through (the Telegram bot).
+type Messenger interface {
+	// Send puts the question in front of the user and returns the reference
+	// of the message, to edit it.
+	Send(ctx context.Context, m Message) (ref string, err error)
+	// Edit replaces the text of a message and takes its buttons away.
+	Edit(ctx context.Context, ref, text string, keepButtons bool) error
+}
+
+// Targets reads the live target of a request (the head of the PR, the
+// pergaminho and its revision…), to compare with the impression the request
+// was bound to.
+type Targets interface {
+	Current(ctx context.Context, r chain.Request) (json.RawMessage, error)
+}
+
+// Options are the pieces of the Flow.
+type Options struct {
+	DB    *store.DB
+	Clock clock.Clock
+	Chain Chain
+	Users Directory
+	PINs  PINs
+	// Messenger puts the questions in front of the users.
+	Messenger Messenger
+	// Targets is required for a request bound to an impression: without it
+	// such a request is not approved (it can not be verified).
+	Targets Targets
+	// Locked says the channel is locked (/travar): no approval is taken.
+	Locked func(ctx context.Context) bool
+	// Location is where the hours of the messages are said (UTC by default).
+	Location *time.Location
+	Logger   *slog.Logger
+}
+
+// Flow is the flow of approval over the people.
+type Flow struct {
+	o   Options
+	clk clock.Clock
+	log *slog.Logger
+}
+
+// New returns the Flow.
+func New(o Options) (*Flow, error) {
+	if o.DB == nil || o.Chain == nil || o.Users == nil || o.Messenger == nil {
+		return nil, errors.New("approvals: the flow needs the database, the chain, the users and the channel")
+	}
+	if o.Clock == nil {
+		o.Clock = clock.Real{}
+	}
+	if o.Location == nil {
+		o.Location = time.UTC
+	}
+	if o.Logger == nil {
+		o.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	return &Flow{o: o, clk: o.Clock, log: o.Logger}, nil
+}
+
+// Refusals the user reads.
+var (
+	ErrNotYours      = errors.New("você não pode responder a esse pedido")
+	ErrNotOpen       = errors.New("o pedido já foi encerrado")
+	ErrAnswered      = errors.New("você já respondeu a esse pedido")
+	ErrLevel         = errors.New("seu nível não permite essa resposta")
+	ErrLocked        = errors.New("o canal está travado: nenhuma aprovação é aceita até destravar")
+	ErrTargetChanged = errors.New("o alvo do pedido mudou: ele foi invalidado")
+	ErrNoVerify      = errors.New("o alvo do pedido não pôde ser conferido: nada foi aprovado")
+	ErrPIN           = errors.New("o PIN não foi confirmado")
+)
+
+// capability is what the level of a user needs to give an answer.
+func capability(a chain.Answer) users.Capability {
+	switch a {
+	case chain.AnswerApproveFor, chain.AnswerApproveAlways, chain.AnswerApprovePattern, chain.AnswerDenyAlways:
+		return users.PermanentDecree
+	case chain.AnswerDelegate:
+		return users.DelegateHigh
+	}
+	return users.DecideApprovals
+}
+
+func (f *Flow) may(u users.User, a chain.Answer) bool { return users.Can(u.Level, capability(a)) }
+
+// atLeast says whether the level of a user is at least min, the minimum of the policy.
+func atLeast(l users.Level, min classes.Level) bool {
+	rank := map[string]int{string(users.Observer): 1, string(users.Approver): 2, string(users.Administrator): 3, string(users.Owner): 4}
+	need := map[classes.Level]int{classes.LevelApprover: 2, classes.LevelAdmin: 3, classes.LevelOwner: 4}[min]
+	return need > 0 && rank[string(l)] >= need
+}
+
+// eligible says whether the user may answer the request at all: active, acting
+// in its workspace, able to decide approvals and at the minimum level.
+func eligible(u users.User, workspace string, min classes.Level) bool {
+	return u.State == users.Active && u.Acts(workspace) && users.Can(u.Level, users.DecideApprovals) && atLeast(u.Level, min)
+}
+
+func (f *Flow) ms(t time.Time) int64 { return t.UnixMilli() }
+
+// flowRow is what the question needs to be answered.
+type flowRow struct {
+	Approvals int
+	Require   []string
+	Min       classes.Level
+	PIN       bool
+	Text      string
+}
+
+func (f *Flow) row(ctx context.Context, request int64) (flowRow, bool, error) {
+	var r flowRow
+	var req, min string
+	var pin int
+	err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT approvals, require, min_level, pin, text FROM approval_flow WHERE request = ?`, request).Scan(&r.Approvals, &req, &min, &pin, &r.Text)
+	if errors.Is(err, sql.ErrNoRows) {
+		return flowRow{}, false, nil
+	}
+	if err != nil {
+		return flowRow{}, false, err
+	}
+	if err := json.Unmarshal([]byte(req), &r.Require); err != nil {
+		return flowRow{}, false, err
+	}
+	r.Min, r.PIN = classes.Level(min), pin == 1
+	return r, true, nil
+}
+
+// Ask implements chain.UserAsker: it records the question, and sends it to
+// each user who may answer (or edits the one they have, when the question
+// changed).
+func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
+	req, _ := json.Marshal(q.Require)
+	if q.Require == nil {
+		req = []byte("[]")
+	}
+	pin := 0
+	if q.PIN {
+		pin = 1
+	}
+	err := f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO approval_flow (request, approvals, require, min_level, pin, text, asked_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (request) DO UPDATE SET approvals = excluded.approvals, require = excluded.require, min_level = excluded.min_level, pin = excluded.pin, text = excluded.text`,
+			q.Request.ID, max(q.Approvals, 1), string(req), string(q.MinLevel), pin, q.Text, f.ms(f.clk.Now()))
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	all, err := f.o.Users.List(ctx)
+	if err != nil {
+		return err
+	}
+	var sent int
+	for _, u := range all {
+		if !eligible(u, q.Request.Workspace, q.MinLevel) {
+			continue
+		}
+		var answers []chain.Answer
+		for _, a := range q.Answers {
+			if f.may(u, a) {
+				answers = append(answers, a)
+			}
+		}
+		if len(answers) == 0 {
+			continue
+		}
+		text, err := f.render(ctx, q.Request.ID, q.Text, max(q.Approvals, 1))
+		if err != nil {
+			return err
+		}
+		if ref, ok, err := f.ref(ctx, q.Request.ID, u.ID); err != nil {
+			return err
+		} else if ok {
+			if err := f.o.Messenger.Edit(ctx, ref, text, true); err != nil {
+				f.log.Warn("approvals: the question was not updated", "request", q.Request.ID, "user", u.ID, "err", err)
+			}
+			sent++
+			continue
+		}
+		ref, err := f.o.Messenger.Send(ctx, Message{UserID: u.ID, Request: q.Request, Text: text, Answers: answers})
+		switch {
+		case errors.Is(err, ErrNoChannel):
+			continue
+		case err != nil:
+			f.log.Warn("approvals: the question was not sent", "request", q.Request.ID, "user", u.ID, "err", err)
+			continue
+		}
+		if err := f.setRef(ctx, q.Request.ID, u.ID, ref); err != nil {
+			return err
+		}
+		sent++
+	}
+	if sent == 0 {
+		f.log.Warn("approvals: nobody can answer the request", "request", q.Request.ID, "min", q.MinLevel)
+	}
+	return nil
+}
+
+// render is the text of the question, with the count of the quorum when it is
+// more than one.
+func (f *Flow) render(ctx context.Context, request int64, text string, quorum int) (string, error) {
+	if quorum <= 1 {
+		return text, nil
+	}
+	n, err := f.counted(ctx, request)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s\n\n%d de %d aprovações", text, n, quorum), nil
+}
+
+func (f *Flow) ref(ctx context.Context, request int64, user string) (string, bool, error) {
+	var ref string
+	err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT ref FROM approval_messages WHERE request = ? AND user_id = ?`, request, user).Scan(&ref)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return ref, err == nil, err
+}
+
+func (f *Flow) setRef(ctx context.Context, request int64, user, ref string) error {
+	return f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO approval_messages (request, user_id, ref) VALUES (?, ?, ?) ON CONFLICT (request, user_id) DO UPDATE SET ref = excluded.ref`, request, user, ref)
+		return err
+	})
+}
+
+type recipient struct{ user, ref string }
+
+func (f *Flow) recipients(ctx context.Context, request int64) ([]recipient, error) {
+	rows, err := f.o.DB.Reader().QueryContext(ctx, `SELECT user_id, ref FROM approval_messages WHERE request = ? ORDER BY user_id`, request)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []recipient
+	for rows.Next() {
+		var r recipient
+		if err := rows.Scan(&r.user, &r.ref); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// counted is how many approvals count to the quorum now.
+func (f *Flow) counted(ctx context.Context, request int64) (int, error) {
+	var n int
+	err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_votes WHERE request = ? AND counts = 1`, request).Scan(&n)
+	return n, err
+}
+
+func (f *Flow) voters(ctx context.Context, request int64) ([]string, error) {
+	rows, err := f.o.DB.Reader().QueryContext(ctx, `SELECT user_id FROM approval_votes WHERE request = ? AND counts = 1 ORDER BY user_id`, request)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// Withdraw implements chain.UserAsker: the request ended (or went up), so each
+// recipient reads how, and the buttons go away.
+func (f *Flow) Withdraw(ctx context.Context, request int64, why string) error {
+	r, err := f.o.Chain.Get(ctx, request)
+	if err != nil {
+		return err
+	}
+	rs, err := f.recipients(ctx, request)
+	if err != nil {
+		return err
+	}
+	by, at := f.decider(ctx, r)
+	for _, m := range rs {
+		text := f.endText(why, by, at, m.user == by.id)
+		if err := f.o.Messenger.Edit(ctx, m.ref, text, false); err != nil {
+			f.log.Warn("approvals: the message was not edited", "request", request, "user", m.user, "err", err)
+		}
+	}
+	return nil
+}
+
+type who struct{ id, name string }
+
+// decider is who decided the request and when ("" when none did).
+func (f *Flow) decider(ctx context.Context, r chain.Request) (who, time.Time) {
+	if r.Decision == nil || !strings.HasPrefix(r.Decision.By, "user:") {
+		return who{}, r.ClosedAt
+	}
+	id := strings.TrimPrefix(r.Decision.By, "user:")
+	name := id
+	if u, err := f.o.Users.Get(ctx, id); err == nil {
+		name = u.Name
+	}
+	return who{id: id, name: name}, r.ClosedAt
+}
+
+func (f *Flow) endText(why string, by who, at time.Time, self bool) string {
+	hour := at.In(f.o.Location).Format("15:04")
+	verb := map[string]string{"approved": "Aprovado", "denied": "Negado"}[why]
+	switch {
+	case verb != "" && by.id != "" && self:
+		return fmt.Sprintf("Você respondeu: %s às %s.", verb, hour)
+	case verb != "" && by.id != "":
+		return fmt.Sprintf("Já respondido por %s: %s às %s.", by.name, verb, hour)
+	case why == "approved":
+		return "Aprovado."
+	case why == "denied":
+		return "Negado."
+	case why == "expired":
+		return "Expirado: ninguém aprovou no prazo e nada foi aprovado."
+	case why == "invalidated":
+		return "Invalidado: o alvo mudou ou quem aprovou perdeu o direito. Nada foi aprovado."
+	case why == "cancelled":
+		return "Cancelado: a ação não é mais necessária."
+	}
+	return "Esse pedido mudou de nível; você receberá a pergunta de novo se for preciso."
+}
+
+// Input is an answer of a user.
+type Input struct {
+	Request int64
+	Answer  chain.Answer
+	Reason  string
+	// Instruction, Pattern and For as in chain.PersonDecision.
+	Instruction string
+	Pattern     string
+	For         time.Duration
+}
+
+// Reply is what the user is told. PIN is the request of PIN the channel must
+// ask the PIN for (users.PINRequest.ID); when set, Answer was not applied yet.
+type Reply struct {
+	Text string
+	PIN  string
+}
+
+// Answer takes the answer of a user to a request: the user, the level, the
+// state and the target are checked again here, at the click.
+func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, error) {
+	if f.o.Locked != nil && f.o.Locked(ctx) {
+		return Reply{}, ErrLocked
+	}
+	u, r, fr, err := f.check(ctx, userID, in.Request, in.Answer)
+	if err != nil {
+		return Reply{}, err
+	}
+	if (in.Answer.Approves() || in.Answer == chain.AnswerDelegate) && fr.PIN {
+		if f.o.PINs == nil {
+			return Reply{}, ErrPIN
+		}
+		pr, err := f.o.PINs.StartPIN(ctx, u.ID, fmt.Sprintf("approval:%d", r.ID))
+		if err != nil {
+			return Reply{}, fmt.Errorf("%w: %v", ErrPIN, err)
+		}
+		if err := f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `INSERT INTO approval_pins (pin_request, request, user_id, answer, reason, instruction, pattern, for_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				pr.ID, r.ID, u.ID, string(in.Answer), in.Reason, in.Instruction, in.Pattern, in.For.Milliseconds())
+			return err
+		}); err != nil {
+			return Reply{}, err
+		}
+		return Reply{Text: "Digite o seu PIN para confirmar.", PIN: pr.ID}, nil
+	}
+	return f.apply(ctx, u, r, fr, in)
+}
+
+// ConfirmPIN applies the answer that waited for the PIN, once, after the PIN
+// of the request was right.
+func (f *Flow) ConfirmPIN(ctx context.Context, userID, pinRequest string) (Reply, error) {
+	var in Input
+	var owner, answer string
+	var forMS int64
+	err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT request, user_id, answer, reason, instruction, pattern, for_ms FROM approval_pins WHERE pin_request = ?`, pinRequest).
+		Scan(&in.Request, &owner, &answer, &in.Reason, &in.Instruction, &in.Pattern, &forMS)
+	if err != nil || owner != userID {
+		return Reply{}, ErrPIN
+	}
+	in.Answer, in.For = chain.Answer(answer), time.Duration(forMS)*time.Millisecond
+	if f.o.PINs == nil {
+		return Reply{}, ErrPIN
+	}
+	// The PIN request is spent once, before anything is applied.
+	if err := f.o.PINs.Consume(ctx, pinRequest, userID, fmt.Sprintf("approval:%d", in.Request)); err != nil {
+		return Reply{}, ErrPIN
+	}
+	if err := f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM approval_pins WHERE pin_request = ?`, pinRequest)
+		return err
+	}); err != nil {
+		return Reply{}, err
+	}
+	if f.o.Locked != nil && f.o.Locked(ctx) {
+		return Reply{}, ErrLocked
+	}
+	u, r, fr, err := f.check(ctx, userID, in.Request, in.Answer)
+	if err != nil {
+		return Reply{}, err
+	}
+	return f.apply(ctx, u, r, fr, in)
+}
+
+// check is everything that must hold for the answer of a user to count.
+func (f *Flow) check(ctx context.Context, userID string, request int64, a chain.Answer) (users.User, chain.Request, flowRow, error) {
+	u, err := f.o.Users.Get(ctx, userID)
+	if err != nil || u.State != users.Active {
+		return users.User{}, chain.Request{}, flowRow{}, ErrNotYours
+	}
+	r, err := f.o.Chain.Get(ctx, request)
+	if err != nil {
+		return users.User{}, chain.Request{}, flowRow{}, ErrNotYours
+	}
+	if r.State.Closed() {
+		return users.User{}, chain.Request{}, flowRow{}, ErrNotOpen
+	}
+	fr, ok, err := f.row(ctx, request)
+	if err != nil {
+		return users.User{}, chain.Request{}, flowRow{}, err
+	}
+	if !ok || r.Level.Kind != chain.LevelPeople {
+		return users.User{}, chain.Request{}, flowRow{}, ErrNotOpen
+	}
+	if !eligible(u, r.Workspace, fr.Min) {
+		return users.User{}, chain.Request{}, flowRow{}, ErrNotYours
+	}
+	if !f.may(u, a) {
+		return users.User{}, chain.Request{}, flowRow{}, ErrLevel
+	}
+	if !a.Valid() || a == chain.AnswerClimb {
+		return users.User{}, chain.Request{}, flowRow{}, fmt.Errorf("resposta desconhecida: %q", a)
+	}
+	return u, r, fr, nil
+}
+
+// verify compares the live target with the impression of the request; a
+// target that changed ends the request as invalidated.
+func (f *Flow) verify(ctx context.Context, r chain.Request) error {
+	if r.Impression == "" {
+		return nil
+	}
+	if f.o.Targets == nil {
+		return ErrNoVerify
+	}
+	cur, err := f.o.Targets.Current(ctx, r)
+	if err != nil {
+		return ErrNoVerify
+	}
+	imp, err := chain.Impress(cur)
+	if err != nil {
+		return ErrNoVerify
+	}
+	if imp != r.Impression {
+		if err := f.o.Chain.Invalidate(ctx, r.ID, "o alvo mudou antes de a aprovação ser aplicada"); err != nil {
+			f.log.Warn("approvals: the request was not invalidated", "request", r.ID, "err", err)
+		}
+		return ErrTargetChanged
+	}
+	return nil
+}
+
+// apply records the answer and, when it decides, hands it to the chain.
+func (f *Flow) apply(ctx context.Context, u users.User, r chain.Request, fr flowRow, in Input) (Reply, error) {
+	approves := in.Answer.Approves() || in.Answer == chain.AnswerDelegate
+	// Only an approval needs the target to be the one the request was bound
+	// to; a denial stands whatever the target became.
+	if approves {
+		if err := f.verify(ctx, r); err != nil {
+			return Reply{}, err
+		}
+	}
+	d := chain.PersonDecision{Request: r.ID, User: u.ID, Level: string(u.Level), Answer: in.Answer, Reason: in.Reason, Instruction: in.Instruction, Pattern: in.Pattern, For: in.For}
+	if in.Answer == chain.AnswerAskBack {
+		out, err := f.o.Chain.DecideByPerson(ctx, d)
+		return f.reply(out, err)
+	}
+	counts := 0
+	if approves {
+		counts = 1
+	}
+	if err := f.vote(ctx, r.ID, u.ID, in.Answer, counts); err != nil {
+		return Reply{}, err
+	}
+	if approves {
+		n, err := f.counted(ctx, r.ID)
+		if err != nil {
+			return Reply{}, err
+		}
+		voters, err := f.voters(ctx, r.ID)
+		if err != nil {
+			return Reply{}, err
+		}
+		missing := 0
+		for _, must := range fr.Require {
+			if !slices.Contains(voters, must) {
+				missing++
+			}
+		}
+		if n < fr.Approvals || missing > 0 {
+			f.refresh(ctx, r.ID, fr)
+			return Reply{Text: fmt.Sprintf("Sua aprovação foi contada: %d de %d.", n, fr.Approvals)}, nil
+		}
+	}
+	out, err := f.o.Chain.DecideByPerson(ctx, d)
+	if err != nil {
+		// After an error the user can answer again.
+		_ = f.unvote(ctx, r.ID, u.ID)
+		return Reply{}, err
+	}
+	return f.reply(out, nil)
+}
+
+func (f *Flow) reply(out chain.Outcome, err error) (Reply, error) {
+	if err != nil {
+		return Reply{}, err
+	}
+	switch out.State {
+	case chain.Approved:
+		return Reply{Text: "Aprovado."}, nil
+	case chain.Denied:
+		return Reply{Text: "Negado."}, nil
+	}
+	return Reply{Text: "Resposta registrada."}, nil
+}
+
+// vote records the first answer of a user; a second one is refused.
+func (f *Flow) vote(ctx context.Context, request int64, user string, a chain.Answer, counts int) error {
+	return f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `INSERT INTO approval_votes (request, user_id, answer, counts, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (request, user_id) DO NOTHING`,
+			request, user, string(a), counts, f.ms(f.clk.Now()))
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrAnswered
+		}
+		return nil
+	})
+}
+
+func (f *Flow) unvote(ctx context.Context, request int64, user string) error {
+	return f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM approval_votes WHERE request = ? AND user_id = ?`, request, user)
+		return err
+	})
+}
+
+// refresh edits the question of every recipient with the count of the quorum.
+func (f *Flow) refresh(ctx context.Context, request int64, fr flowRow) {
+	text, err := f.render(ctx, request, fr.Text, fr.Approvals)
+	if err != nil {
+		return
+	}
+	rs, err := f.recipients(ctx, request)
+	if err != nil {
+		return
+	}
+	for _, m := range rs {
+		if err := f.o.Messenger.Edit(ctx, m.ref, text, true); err != nil {
+			f.log.Warn("approvals: the question was not updated", "request", request, "user", m.user, "err", err)
+		}
+	}
+}
+
+// InvalidateBy implements users.Approvals: the user was suspended, removed or
+// lost the level, so what they approved in the requests still open stops
+// counting (the request goes on to the others) and a PIN they had not
+// typed yet is dropped.
+func (f *Flow) InvalidateBy(ctx context.Context, userID string) error {
+	rows, err := f.o.DB.Reader().QueryContext(ctx, `SELECT v.request FROM approval_votes v JOIN approval_requests r ON r.id = v.request
+		WHERE v.user_id = ? AND v.counts = 1 AND r.state = 'open'`, userID)
+	if err != nil {
+		return err
+	}
+	var open []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		open = append(open, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	err = f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM approval_votes WHERE user_id = ? AND counts = 1 AND request IN (SELECT id FROM approval_requests WHERE state = 'open')`, userID); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `DELETE FROM approval_pins WHERE user_id = ?`, userID)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	for _, id := range open {
+		if fr, ok, err := f.row(ctx, id); err == nil && ok {
+			f.refresh(ctx, id, fr)
+		}
+	}
+	return nil
+}

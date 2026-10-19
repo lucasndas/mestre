@@ -44,7 +44,7 @@ stateDiagram-v2
   aguardando_usuarios --> cancelado: ação não é mais necessária
 ```
 
-`em_avaliacao` é a vez de um agente da cadeia; a subida entre agentes e às pessoas acontece por teto, salvaguarda, prazo do nível ou "Subir agora" ([subida](../orquestracao/cadeia-de-aprovacao.md#subida)). Um `approval decide` recusado com `human_required` ([fora da política](politica.md#o-grão-mestre-como-aprovador-delegado)) não muda o estado: o pedido segue no Grão-Mestre até ele usar `approval ask` ou o prazo dele acabar. Os pedidos "Sistema" e os de risco `alto` sem delegação já nascem em `aguardando_usuarios`. Em `aguardando_contexto`, o prazo do nível fica parado; o prazo final das pessoas, não. Quem pediu responde com `mestre approval reply` (M5, [CLI](../cli/grao-mestre.md#mestre-approval)); o texto, marcado como não verificado, volta ao nível que perguntou, que decide com ele ([cadeia](../orquestracao/cadeia-de-aprovacao.md#respostas)). `negado`, `expirado`, `invalidado`, `cancelado`, `aplicado` e `falhou` são finais. Quem esperava recebe o resultado com o motivo.
+`em_avaliacao` é a vez de um agente da cadeia; a subida entre agentes e às pessoas acontece por teto, salvaguarda, prazo do nível ou "Subir agora" ([subida](../orquestracao/cadeia-de-aprovacao.md#subida)). Um `approval decide` recusado com `human_required` ([fora da política](politica.md#o-grão-mestre-como-aprovador-delegado)) não muda o estado: o pedido segue no Grão-Mestre até ele usar `approval ask` ou o prazo dele acabar. Os pedidos "Sistema" e os de risco `alto` sem delegação já nascem em `aguardando_usuarios`. Em `aguardando_contexto`, o prazo do nível fica parado; o prazo final das pessoas, não. Quem pediu responde com `mestre approval reply` (M5, [CLI](../cli/grao-mestre.md#mestre-approval)); o texto, marcado como não verificado, volta ao nível que perguntou, que decide com ele ([cadeia](../orquestracao/cadeia-de-aprovacao.md#respostas)). `negado`, `expirado`, `invalidado`, `cancelado`, `aplicado` e `falhou` são finais. Quem esperava recebe o resultado com o motivo. Hoje o pedido fecha em `aprovado` e o dono do tipo aplica na hora; `aplicando`, `aplicado`, `falhou` e a janela entre a aprovação e a aplicação chegam com os donos dos tipos (etapas 4 e 5 do M5).
 
 ### Vínculo ao estado exato
 
@@ -106,7 +106,7 @@ Um toque numa resposta que aprova só vale se: o usuário está ativo, tem o ní
 ### Invalidação
 
 - **Alvo mudou:** como acima.
-- **Usuário suspenso ou removido:** na hora, as respostas dele em pedidos ainda abertos deixam de contar (o pedido segue para os demais), e as aprovações dele ainda não aplicadas viram `invalidado`. O que já foi executado continua no histórico ([usuários e níveis](../telegram/usuarios-e-niveis.md)).
+- **Usuário suspenso ou removido:** na hora, as respostas dele em pedidos ainda abertos deixam de contar (o pedido segue para os demais) e um PIN que ele não digitou ainda cai; a aprovação dele que ainda não foi aplicada vira `invalidado` quando a janela de aplicação existir (acima). O que já foi executado continua no histórico ([usuários e níveis](../telegram/usuarios-e-niveis.md)).
 - **`/travar`:** nenhuma aprovação é aplicada até destravar ([segurança do canal](../telegram/seguranca-do-canal.md)).
 - **Mesa cancelada ou etapa encerrada:** os pedidos dela viram `cancelado`.
 
@@ -131,8 +131,9 @@ O resumo do que os agentes decidiram sozinhos, as sugestões de regra e a amostr
 - **CA-APROV-FLUXO-02** · *rápida* — **Dado** um pedido com quórum 1 enviado a Lucas e Ana, **quando** Ana aprova, **então** o pedido vira `aprovado` e a mensagem de Lucas passa a "Já respondido por Ana" sem botões (MVP-7).
 - **CA-APROV-FLUXO-03** · *rápida* — **Dado** quórum 2 com `exigir_usuarios: [lucas]`, **quando** Ana e Bia aprovam, **então** o pedido continua `aguardando_usuarios`.
 - **CA-APROV-FLUXO-04** · *rápida* — **Dado** um pedido aguardando com prazo de 24 h, **quando** o relógio falso avança 24 h, **então** ele vira `expirado`, quem esperava é avisado e nenhuma pergunta nova é enviada.
-- **CA-APROV-FLUXO-05** · *rápida* — **Dado** uma aprovação de Ana ainda não aplicada, **quando** Ana é suspensa, **então** o pedido vira `invalidado`.
+- **CA-APROV-FLUXO-05** · *rápida* — **Dado** um quórum de 2 com a aprovação de Ana já contada (1 de 2), **quando** Ana é suspensa, **então** a aprovação dela deixa de contar (0 de 2, nas mensagens dos outros), o pedido segue aberto e a resposta que ela der depois é recusada.
 - **CA-APROV-FLUXO-06** · *rápida* — **Dado** um callback "Aprovar" com o id do pedido vindo de um usuário Observador, **quando** o motor valida, **então** recusa e o pedido não muda.
+- **CA-APROV-FLUXO-07** · *rápida* — **Dado** um tipo que pede PIN, **quando** o Dono toca Aprovar, **então** nada é decidido até o PIN certo (de outro usuário, errado ou já gasto, o pedido continua aberto); **e** um Negar não pede PIN.
 - **CA-APROV-FLUXO-08** · *completa* — **Dado** um pedido aguardando e a Cidadela reiniciada, **quando** o usuário aprova pelo painel, **então** a decisão é aplicada e registrada na auditoria.
 - **CA-APROV-FLUXO-09** · *pesada* — **Dado** uma etapa de missão que toca área sensível, **quando** o Grão-Mestre pergunta pelo Telegram (dublê) e o Lucas aprova, **então** a missão segue, inclusive no GitHub (dublê) (MVP-7).
 - **CA-APROV-FLUXO-11** · *rápida* — **Dado** um pedido `ativacao_operador` aprovado pelo Dono e a ficha da máquina sem o Operador pronto, **quando** o relógio falso avança 10 min, **então** o pedido vira `falhou` com "tela bloqueada" ou "usuário não logado", conforme a máquina informou, e quem pediu recebe o motivo.

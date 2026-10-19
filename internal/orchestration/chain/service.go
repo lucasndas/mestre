@@ -172,6 +172,9 @@ type OpenRequest struct {
 	PR *PRRef
 	// Task overrides the original task of the requester.
 	Task string
+	// Target is the exact target (JSON); the request is bound to its
+	// impression.
+	Target json.RawMessage
 }
 
 // Open implements hook.Approvals: the requests of permissao_de_classe the
@@ -216,6 +219,13 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	r := Request{Workspace: o.Workspace, Table: o.Table, Type: o.Type, State: Open, Requester: o.Requester, Designer: o.Designer, Proposer: o.Proposer,
 		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Task: o.Task,
 		CreatedAt: s.clk.Now()}
+	if len(o.Target) > 0 {
+		imp, err := Impress(o.Target)
+		if err != nil {
+			return 0, fmt.Errorf("chain: the target of the request: %w", err)
+		}
+		r.Target, r.Impression = o.Target, imp
+	}
 	if r.Risk.Risk == "" {
 		r.Risk = classes.ClassifyRisk(classes.Env{}, nil, classes.RiskRequest{Type: o.Type})
 	}
@@ -356,7 +366,7 @@ func (s *Service) arrive(ctx context.Context, id int64, st Settings) {
 func (s *Service) question(r Request, text string, answers []Answer) PeopleQuestion {
 	rules, _ := s.rulesOf(r.Workspace)
 	n, require, min := rules.Need(r)
-	return PeopleQuestion{Request: r, Text: text, Deadline: r.Deadline, Answers: answers, Approvals: n, Require: require, MinLevel: min}
+	return PeopleQuestion{Request: r, Text: text, Deadline: r.Deadline, Answers: answers, Approvals: n, Require: require, MinLevel: min, PIN: rules.NeedsPIN(r)}
 }
 
 // informGM tells the Grão-Mestre about a request that went over him to the
