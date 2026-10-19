@@ -26,7 +26,7 @@ Decidir cada pedido o mais perto possível de quem pediu, sem que um agente apro
 
 ### Condições da mesa
 
-Cada parte `medio` tem uma origem, a linha da tabela ou o [sinal](../classes/classificacao-de-risco.md#sinais-de-risco) que a deu, e cada origem pertence a um **grupo**. O Mestre da mesa decide um `medio` só se **todo** grupo de origem de **toda** parte `medio` está em `cadeia.mesa_decide` e o motor confere a condição do grupo (se não consegue ler a política, o `medio` do Mestre da mesa não vale: falha fechado); uma parte com várias origens (`npx x https://exemplo.io` é pacotes e rede) precisa de todas. Se uma falha, o pedido nasce no Grão-Mestre, com o grupo ou a condição que falhou.
+Cada parte `medio` tem uma origem, a linha da tabela ou o [sinal](../classes/classificacao-de-risco.md#sinais-de-risco) que a deu, e cada origem pertence a um **grupo**. O Mestre da mesa decide um `medio` só se **todo** grupo de origem de **toda** parte `medio` está em `cadeia.mesa_decide` e o motor confere a condição do grupo; uma parte com várias origens (`npx x https://exemplo.io` é pacotes e rede) precisa de todas. Se uma falha, o pedido nasce no Grão-Mestre, com o grupo ou a condição que falhou.
 
 | Grupo | Origens | Padrão | Condição que o motor confere |
 |---|---|---|---|

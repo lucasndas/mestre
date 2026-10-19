@@ -60,7 +60,7 @@ O pedido é do tipo `ponto_de_missao`, de risco `medio`: quem aprova é o Grão-
 
 ### Etapa travada
 
-Etapa `running` cujo personagem fica `idle` (sem espera ativa) por `stuck_after` sem `done`, ou cujo personagem fica `stuck`, vira `stuck`: o Mestre da mesa é avisado. Também vira `stuck`, na varredura, a etapa cujo personagem foi encerrado, e a varredura cancela a missão de uma mesa que terminou. Sem solução em mais **30 min** (padrão), o motor avisa o Grão-Mestre e os usuários. O Mestre da mesa resolve com `check`/`ask`, trocando o personagem (`recruit --replace` mantém a etapa) ou cancelando. Um `done` ou um novo turno do personagem leva a etapa de volta.
+Etapa `running` cujo personagem fica `idle` (sem espera ativa) por `stuck_after` sem `done`, ou cujo personagem fica `stuck`, vira `stuck`: o Mestre da mesa é avisado. Também vira `stuck`, na varredura, a etapa cujo personagem foi encerrado, e a varredura cancela a missão de uma mesa que já não aceita trabalho (encerrando, encerrada, cancelando ou cancelada). Sem solução em mais **30 min** (padrão), o motor avisa o Grão-Mestre e os usuários. O Mestre da mesa resolve com `check`/`ask`, trocando o personagem (`recruit --replace` mantém a etapa) ou cancelando. Um `done` ou um novo turno do personagem leva a etapa de volta.
 
 ### Estados
 
