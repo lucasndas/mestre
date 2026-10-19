@@ -26,8 +26,10 @@ type DoneRequest struct {
 	// the `--cause` and `--where` of a return
 	// (docs/orquestracao/prova-e-devolucao.md).
 	Proofs []ProofInput
-	Cause  string
-	Where  []string
+	// expectStep is the step a verified done may end (set by the engine).
+	expectStep string
+	Cause      string
+	Where      []string
 }
 
 // tooLong says whether the summary is over the limit of its kind.
@@ -92,6 +94,9 @@ func (s *Service) finish(ctx context.Context, r DoneRequest, mode doneMode) (Don
 	}
 	if !ok {
 		return DoneResult{}, ErrNoStep
+	}
+	if r.expectStep != "" && st.UID != r.expectStep {
+		return DoneResult{}, ErrNoStep // the character has another step now
 	}
 	q, err := s.st.Quest(ctx, st.Quest)
 	if err != nil {
