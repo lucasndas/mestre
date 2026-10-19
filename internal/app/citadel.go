@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -476,6 +477,15 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		}
 		e.changed()
 	}()
+
+	if e.deps.HostOrchestration {
+		orc, err := e.hostOrchestration(db)
+		if err != nil {
+			return transition{err: fmt.Errorf("app: the orchestration: %w", err)}
+		}
+		orc.Register(e.local, nil)
+		run.external = append(slices.Clone(run.external), orc.External())
+	}
 
 	promoted, wait := take.promoted, guild.PromotedWait
 	if !promoted {
