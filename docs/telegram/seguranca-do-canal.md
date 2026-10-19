@@ -1,6 +1,6 @@
 # Segurança do canal
 
-> **Assunto:** quem o bot aceita, alerta de intrusos, travamento de emergência e o que nunca passa pelo Telegram · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** quem o bot aceita, alerta de intrusos, travamento de emergência e o que nunca passa pelo Telegram · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -45,16 +45,16 @@ Decretos que afrouxam a segurança pedem o PIN do autor. A lista de casos está 
 - **`/destravar`** (só o Dono): pede o PIN pelo Telegram ou é feito pelo painel. Depois de destravar:
   - os decretos voltam ao estado que tinham antes do travamento (os que estavam suspensos por conflito continuam suspensos);
   - a entrega e as missões são retomadas.
-- O estado "travado" fica no banco e sobrevive a reinícios da Cidadela. O Guardião recebe esse estado pela replicação do motor, e o modo reduzido o respeita ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
+- O estado "travado" fica no banco e sobrevive a reinícios da Cidadela. O Guardião recebe esse estado pela replicação do motor, e o modo reduzido (desde o M7) o respeita ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
 
 ### Segredos
 
-- O token do bot fica no [cofre](../plataforma/cofre.md). Nunca vai para arquivo do projeto, banco em texto puro, log ou ambiente dos agentes. Só a Cidadela abre o cofre para usá-lo; a única exceção é a Torre condutora em [modo reduzido](../autocura/telegram-modo-reduzido.md).
-- **Uma só instância age pelo bot:** só a Cidadela não suspensa chama o Telegram, inclusive o `getUpdates`; um `409 Conflict` é só sinal: com o aluguel da trava válido, faz conferir a trava, e com ele vencido, tira a Cidadela do bot até reconfirmar ([o `409`](../guilda/trava-no-github.md#o-409-do-telegram), [bot](bot.md#recepção-por-long-polling)).
+- O token do bot fica no [cofre](../plataforma/cofre.md). Nunca vai para arquivo do projeto, banco em texto puro, log ou ambiente dos agentes. Só a Cidadela abre o cofre para usá-lo; a única exceção é a Torre condutora em [modo reduzido](../autocura/telegram-modo-reduzido.md) (desde o M7).
+- **Uma só instância age pelo bot:** só a Cidadela não suspensa chama o Telegram, inclusive o `getUpdates`; o `409 Conflict` é só sinal ([regra](../guilda/trava-no-github.md#o-409-do-telegram), [bot](bot.md#recepção-por-long-polling)).
 - **O Mestre nunca envia segredos pelo Telegram** (tokens, senhas, chaves), porque conversas com bots não têm criptografia ponta a ponta.
   - Toda mensagem de saída passa pelo mesmo mascarador dos logs ([segurança](../arquitetura/seguranca.md)).
   - Se algo for mascarado, o motor avisa o remetente (agente ou motor) de que o trecho foi retirado.
-- **Segredos mandados por usuários:** credenciais só se cadastram pelo painel. Senha ou token que chega pelo Telegram é tirado antes de chegar ao Grão-Mestre quando o motor reconhece, a mensagem é apagada (`deleteMessage`) e não entra em histórico, caixa de entrada nem log; o Grão-Mestre recusa e recomenda trocar a senha ([credenciais de site](../plataforma/cofre.md#credenciais-de-site)).
+- **Segredos mandados por usuários:** credenciais só se cadastram pelo painel, pelo Dono e com PIN; um passo de cadastro numa mensagem do Telegram é só o link para o painel ([pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md#como-chega-ao-usuário)). Senha ou token que chega pelo Telegram é tirado antes de chegar ao Grão-Mestre quando o motor reconhece, a mensagem é apagada (`deleteMessage`) e não entra em histórico, caixa de entrada nem log; o Grão-Mestre recusa e recomenda trocar a senha ([credenciais de site](../plataforma/cofre.md#credenciais-de-site)).
 - **Segundo fator de login em sites** não é exceção a essa regra: o motor só **recebe** o código (ou a resposta de um captcha) do dono da credencial, digita no navegador de login e apaga as duas mensagens; retenção zero, sem passar por agente ([segundo fator](../plataforma/cofre.md#segundo-fator-e-captcha)).
 - **Anexos** são conteúdo trazido pelo usuário. Os agentes os leem, mas nunca os executam: é regra fixa do Mestre ([permissões](../classes/permissoes.md), [anexos](anexos-e-transcricao.md)).
 

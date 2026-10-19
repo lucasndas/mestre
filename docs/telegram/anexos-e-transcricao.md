@@ -1,6 +1,6 @@
 # Anexos e transcrição
 
-> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -37,7 +37,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 
 ### Envio de arquivos (`mestre reply --attach`)
 
-- **Quem lê o arquivo é a CLI**, que roda como o próprio agente: o motor nunca abre um caminho que um agente nomeia, e o caminho não segue na chamada ([regras da CLI](../cli/comunicacao.md#regras-e-erros)). A CLI só aceita um arquivo dentro do clone principal do workspace ou de um worktree de mesa e recusa qualquer outro caminho, para não mandar por engano arquivos da máquina; ela não é uma barreira (quem monta o pedido à mão não passa por ela), e o que o agente não consegue ler, a CLI também não lê.
+- **Quem lê o arquivo é a CLI**, que roda como o próprio agente: o motor nunca abre um caminho que um agente nomeia, e o caminho não segue na chamada ([regras da CLI](../cli/comunicacao.md#regras-e-erros)). A CLI só aceita um arquivo dentro do clone principal do workspace ou de um worktree de mesa e recusa qualquer outro caminho com 3 `path_not_allowed` (a recusa é da CLI; o motor nunca vê o caminho), para não mandar por engano arquivos da máquina; ela não é uma barreira (quem monta o pedido à mão não passa por ela), e o que o agente não consegue ler, a CLI também não lê.
 - **Como sai:**
   - Imagens JPG, PNG ou WebP de até 10 MB saem com `sendPhoto`.
   - O resto sai com `sendDocument`, até **50 MB** (limite da Bot API).
@@ -49,13 +49,12 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 ### Transcrição local
 
 - **Motor de transcrição:** whisper.cpp, `whisper-server`, com o modelo `large-v3-turbo` quantizado ([ADR 0016](../decisoes/0016-whisper-cpp-local.md)).
-  - A quantização é q5_0 ou q8_0, escolhida por benchmark na máquina durante a instalação.
-  - O modelo é baixado em toda máquina não excluída pelo Dono, porque qualquer uma pode virar Cidadela, e numa máquina excluída só quando ela passa a transcrever; a que não passa no benchmark não anuncia a transcrição ([Whisper na instalação](../plataforma/instalacao-e-atualizacao.md#whisper)).
+  - A quantização (q5_0 ou q8_0, por benchmark), quais máquinas baixam o modelo e quando uma não anuncia a transcrição estão em [Whisper na instalação](../plataforma/instalacao-e-atualizacao.md#whisper) (desde o M7).
 - **Processo auxiliar:**
   - O motor da máquina que transcreve sobe o `whisper-server` e o supervisiona.
   - Opções: `--host 127.0.0.1 --port <porta do Whisper da instância>` (7447 na instância padrão, só local; [componentes](../arquitetura/componentes.md)), `-t <núcleos físicos>`, `-l auto` e um `--prompt` curto em português. O idioma pode ser fixado em `pt` na configuração.
   - O modelo fica carregado (servidor quente).
-  - Se o processo cair, o motor o reinicia com backoff de 1 s a 60 s. Com 5 quedas em 10 minutos, o motor gera um alerta e o item fica com erro no [checklist](../plataforma/checklist.md).
+  - Se o processo cair, o motor o reinicia com backoff de 1 s a 60 s. Com 5 quedas em 10 minutos, o motor gera um alerta e o item fica com erro no [checklist](../plataforma/checklist.md) (desde o M7).
 - **Qual máquina transcreve:**
   - O `whisper-server` roda em qualquer máquina da Guilda, Linux ou Windows, cuja [ficha da máquina](../guilda/ficha-da-maquina.md) diz que transcreve; havendo mais de uma, a com GPU é preferida.
   - **Padrão: a própria Cidadela, por CPU**, no próprio motor (serviço `mestre`, [componentes](../arquitetura/componentes.md)).
@@ -100,7 +99,7 @@ sequenceDiagram
 
 - Um anexo que falha no download é tentado 3 vezes. Depois disso, o bot avisa o usuário e o Grão-Mestre não recebe nada.
 - O tipo MIME detectado prevalece sobre o declarado. A divergência fica registrada.
-- Sem modelo baixado ou sem máquina capaz, todo áudio cai no caminho de falha e o checklist acusa.
+- Sem modelo baixado ou sem máquina capaz, todo áudio cai no caminho de falha e o checklist (desde o M7) acusa.
 
 ## Critérios de aceite
 
@@ -109,9 +108,11 @@ sequenceDiagram
 - **CA-ANEXO-03** · *rápida* — **Dado** uma voz e um whisper falso, **quando** ela chega, **então** o Grão-Mestre recebe o texto marcado como transcrito e o anexo original.
 - **CA-ANEXO-04** · *rápida* — **Dado** o whisper falso que não responde, **quando** o relógio falso passa do tempo limite, **então** o Grão-Mestre recebe o áudio com o motivo da falha.
 - **CA-ANEXO-05** · *rápida* — **Dado** uma Torre com GPU e transcrição e a Cidadela com transcrição, **quando** a Torre está offline, **então** o áudio é transcrito pela própria Cidadela.
-- **CA-ANEXO-06** · *rápida* — **Dado** `mestre reply --attach /etc/passwd`, **quando** a CLI processa, **então** recusa por caminho fora do workspace e não manda nada ao motor.
+- **CA-ANEXO-06** · *rápida* — **Dado** `mestre reply --attach /etc/passwd`, **quando** a CLI processa, **então** a CLI recusa com 3 `path_not_allowed` e nenhuma chamada chega ao motor.
 - **CA-ANEXO-07** · *rápida* — **Dado** uma mensagem do Grão-Mestre ao Mestre da mesa citando um anexo, **quando** ela é entregue, **então** o arquivo já existe nos worktrees da mesa.
 - **CA-ANEXO-08** · *pesada* — **Dado** o sistema instalado, **quando** mando um áudio e depois um PDF pelo Telegram (dublê), **então** o áudio é transcrito localmente pelo `whisper-server` real e respondido no Telegram, e o PDF chega à mesa certa e é usado na tarefa (MVP-10).
+- **CA-ANEXO-09** · *rápida* — **Dado** o Telegram falso com `getFile` que falha, **quando** um anexo chega, **então** há 3 tentativas (relógio falso), o usuário é avisado e o Grão-Mestre não recebe nada.
+- **CA-ANEXO-10** · *rápida* — **Dado** um arquivo que declara `image/png` mas é um PDF, **quando** chega, **então** vale o tipo detectado e a divergência fica registrada.
 
 ## Depende de
 

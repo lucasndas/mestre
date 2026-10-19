@@ -1,6 +1,6 @@
 # Resumo e sugestões
 
-> **Assunto:** resumo periódico do que os agentes da cadeia decidiram, sugestões de regra a partir de aprovações repetidas e amostra das ações aprovadas por agentes para revisão depois · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** resumo periódico do que os agentes da cadeia decidiram, sugestões de regra a partir de aprovações repetidas e amostra das ações aprovadas por agentes para revisão depois · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -25,7 +25,7 @@ Deixar as pessoas verem depois o que os agentes da [cadeia de aprovação](../or
 ### Amostra para revisão
 
 - Cada resumo traz uma amostra sorteada de `resumo.amostra` (padrão: 5) ações aprovadas por agentes no período **de cada nível** (todas, se forem menos): uma das decisões dos Mestres de mesa, que agora decidem o `medio` das mesas ([cadeia](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa)), e outra das do Grão-Mestre; cada ação vem com o pedido montado pelo motor, quem aprovou, o nível, o risco e o motivo. O sorteio usa uma fonte aleatória injetada no motor, para o teste fixar a semente.
-- Botão **Foi um erro**: registra a marcação na auditoria da decisão e revoga a regra temporária que tenha nascido dela; a pessoa pode então criar um decreto que proíbe pelo caminho normal.
+- Botão **Foi um erro** (só aparece para Administrador ou acima, [níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)): registra a marcação na auditoria da decisão e revoga a regra temporária que tenha nascido dela; a pessoa pode então criar um decreto que proíbe pelo caminho normal.
 
 ## Regras e erros
 
