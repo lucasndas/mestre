@@ -180,6 +180,17 @@ func (s *Session) RunHook(ctx context.Context, spec HookSpec) (HookResult, error
 		return HookResult{}, ErrHookBusy
 	}
 	defer s.hookMu.Unlock()
+	// the end of the terminal (Kill, Close) ends the hook with its tree
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	s.mu.Lock()
+	s.hookCancel = cancel
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.hookCancel = nil
+		s.mu.Unlock()
+	}()
 	spec.Dir, spec.Env = dir, env
 	hooks := s.cfg.Hooks
 	if hooks == nil {
@@ -202,4 +213,14 @@ func hookDir(base, dir string) (string, error) {
 		return "", ErrHookDir
 	}
 	return filepath.Join(base, rel), nil
+}
+
+// cancelHook ends the hook that runs, if any.
+func (s *Session) cancelHook() {
+	s.mu.Lock()
+	cancel := s.hookCancel
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }

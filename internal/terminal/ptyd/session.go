@@ -117,8 +117,9 @@ type Session struct {
 	hookMu sync.Mutex // one hook at a time
 
 	mu         sync.Mutex
-	startDir   string   // the folder the agent started in
-	startEnv   []string // the environment it started with
+	hookCancel context.CancelFunc // ends the hook that runs
+	startDir   string             // the folder the agent started in
+	startEnv   []string           // the environment it started with
 	state      string
 	agent      Agent
 	emu        Emulator
@@ -337,6 +338,7 @@ func (s *Session) Signal() error {
 
 // Kill ends the whole tree of the agent.
 func (s *Session) Kill() error {
+	s.cancelHook()
 	s.mu.Lock()
 	agent := s.agent
 	s.mu.Unlock()
@@ -442,6 +444,7 @@ func (s *Session) WaitProcessed(ctx context.Context, off uint64) error {
 // Close stops the goroutines and releases the PTY and the emulator. It does
 // not stop the process: that is Signal and Kill.
 func (s *Session) Close() {
+	s.cancelHook()
 	s.mu.Lock()
 	agent, cancel, emu := s.agent, s.cancel, s.emu
 	if s.timer != nil {

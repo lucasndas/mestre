@@ -20,9 +20,12 @@ type fakeHooks struct {
 	result ptyd.HookResult
 	block  chan struct{} // when set, Run waits for it to close
 	in     chan struct{} // told when a Run began
+	// untilEnd makes Run wait for the end of its context, as a shell that runs
+	// until it is killed.
+	untilEnd bool
 }
 
-func (f *fakeHooks) Run(_ context.Context, spec ptyd.HookSpec) (ptyd.HookResult, error) {
+func (f *fakeHooks) Run(ctx context.Context, spec ptyd.HookSpec) (ptyd.HookResult, error) {
 	f.mu.Lock()
 	f.specs = append(f.specs, spec)
 	first := len(f.specs) == 1
@@ -32,6 +35,10 @@ func (f *fakeHooks) Run(_ context.Context, spec ptyd.HookSpec) (ptyd.HookResult,
 		case f.in <- struct{}{}:
 		default:
 		}
+	}
+	if f.untilEnd {
+		<-ctx.Done()
+		return ptyd.HookResult{}, ctx.Err()
 	}
 	if f.block != nil && first { // only the first waits: a second one that gets in is a failure of the test, not a hang
 		<-f.block
@@ -127,4 +134,24 @@ func TestOnlyOneHookRunsAtATimeAndAnOldMestrePtyIsNeverReplaced(t *testing.T) {
 func isRemote(err error, code string) bool {
 	var re *terminal.RemoteError
 	return errors.As(err, &re) && re.Code == code
+}
+
+// CA-TERM-18: the end of the terminal ends the hook that runs, with its tree.
+func TestTheEndOfTheTerminalEndsTheHookThatRuns(t *testing.T) {
+	t.Parallel()
+	hooks := &fakeHooks{untilEnd: true, in: make(chan struct{}, 1)}
+	r := newRig(t, rigOptions{hooks: hooks})
+	c := r.dial(t)
+	if _, err := c.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: "/w"}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, err := c.RunHook(t.Context(), "sleep 600", "", "turn_end", nil, time.Hour); done <- err }()
+	<-hooks.in
+	if err := r.sess.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err == nil {
+		t.Fatal("the hook ended without an error when the terminal was killed")
+	}
 }

@@ -23,7 +23,9 @@ type hookTree struct{ c *exec.Cmd }
 
 func newHookTree(c *exec.Cmd) (*hookTree, error) {
 	t := &hookTree{c: c}
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Pdeathsig: a hook never outlives the mestre-pty (a kill of it, or its exit
+	// before the tree was killed, takes the shell with it)
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	c.Cancel = func() error {
 		t.kill()
 		return nil
