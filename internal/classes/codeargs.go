@@ -10,7 +10,8 @@ import (
 // screen -dm cmd, expect -c 'spawn cmd', vim -c '!cmd', less +!cmd,
 // man -P cmd, gdb -ex 'shell cmd', tar -I cmd, sort --compress-program=cmd,
 // make --eval='t:;cmd', zip -TT cmd, rsync -e cmd, ssh -o ProxyCommand=cmd,
-// and the inline code of an interpreter that calls system("cmd"). None of
+// lldb -o 'platform shell cmd', and the inline code of an interpreter (or of a
+// debugger: gdb -ex 'python …') that calls system("cmd"). None of
 // them is in the list of known-safe programs, so the part is medio; when the
 // command is a literal the motor reads, it is analysed as a command line
 // too, so a fixed rule in it denies.
@@ -54,6 +55,20 @@ func argCommands(cn string, args []string) []string {
 				out = append(out, after)
 			} else if after, ok := strings.CutPrefix(v, "!"); ok {
 				out = append(out, after)
+			} else {
+				// python import os; os.system("cmd"), call (int)system("cmd")
+				out = append(out, scriptCalls([]string{v}, codeCall)...)
+			}
+		}
+		return out
+	case cn == "lldb":
+		var out []string
+		for _, v := range optValues(args, "-o", "--one-line", "-O", "--one-line-before-file", "-k", "--one-line-on-crash") {
+			v = strings.TrimSpace(v)
+			if after, ok := strings.CutPrefix(v, "platform shell "); ok {
+				out = append(out, after)
+			} else {
+				out = append(out, scriptCalls([]string{v}, codeCall)...)
 			}
 		}
 		return out

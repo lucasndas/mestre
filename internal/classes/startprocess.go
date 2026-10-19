@@ -31,19 +31,24 @@ var startAliases = map[string]string{
 	"db": "debug", "wi": "whatif", "cf": "confirm",
 }
 
-// startParam is the parameter a name stands for: its own name, an alias or
-// the one parameter that starts with it, as PowerShell takes an
-// abbreviation. ok is false for a name that is not one of them or that
-// stands for more than one.
+// startParam is the parameter of Start-Process a name stands for.
 func startParam(name string) (canon string, ok bool) {
+	return pwshParam(name, startParams, startAliases)
+}
+
+// pwshParam is the parameter of a cmdlet a name stands for: its own name, an
+// alias or the one parameter that starts with it, as PowerShell takes an
+// abbreviation. ok is false for a name that is not one of them or that stands
+// for more than one.
+func pwshParam(name string, params map[string]bool, aliases map[string]string) (canon string, ok bool) {
 	n := strings.ToLower(name)
-	if c, found := startAliases[n]; found {
+	if c, found := aliases[n]; found {
 		return c, true
 	}
-	if _, found := startParams[n]; found {
+	if _, found := params[n]; found {
 		return n, true
 	}
-	for p := range startParams {
+	for p := range params {
 		if strings.HasPrefix(p, n) {
 			if canon != "" && canon != p {
 				return "", false
@@ -51,7 +56,7 @@ func startParam(name string) (canon string, ok bool) {
 			canon = p
 		}
 	}
-	for a, p := range startAliases {
+	for a, p := range aliases {
 		if strings.HasPrefix(a, n) {
 			if canon != "" && canon != p {
 				return "", false

@@ -29,16 +29,32 @@ var shellVarBuiltins = set("export declare typeset readonly local setx set")
 
 // pwshEnvSet and pwshEnvRemove are the cmdlets that set and remove an item
 // of the Env: drive, which is the environment (Set-Item Env:HOME x,
-// Remove-Item Env:GIT_CONFIG_GLOBAL).
+// Remove-Item Env:GIT_CONFIG_GLOBAL), or that name a variable of it
+// (Set-Variable env:HOME x); copying, moving and renaming an item sets
+// another. Several are also commands of cmd.exe or of a POSIX shell (set, cp,
+// mv, rm), and an argument spelled Env:NAME is the variable in all of them.
 var (
-	pwshEnvSet    = set("set-item si new-item ni set-content sc add-content ac")
+	pwshEnvSet    = set("set-item si new-item ni set-content sc add-content ac set-variable sv new-variable nv set copy-item cpi copy cp move-item mi move mv rename-item rni ren")
 	pwshEnvRemove = set("remove-item ri rm del erase rd clear-item cli clear-content clc")
+	// pwshRename are the cmdlets whose second operand is the new name of the item.
+	pwshRename = set("rename-item rni ren")
 )
 
-// envDrive is the variable an argument names on the Env: drive, or "".
+// envDrive is the variable an argument names on the Env: drive (Env:HOME,
+// Env:\HOME, -Path:Env:HOME, Environment::HOME), or "".
 func envDrive(a string) string {
+	if len(a) > 1 && a[0] == '-' {
+		_, v, ok := strings.Cut(a, ":") // -Path:Env:HOME
+		if !ok {
+			return ""
+		}
+		a = v
+	}
+	if i := strings.Index(strings.ToLower(a), "environment::"); i >= 0 { // the path of the provider
+		return strings.TrimLeft(a[i+len("environment::"):], `\/`)
+	}
 	if len(a) > len("env:") && strings.EqualFold(a[:len("env:")], "env:") {
-		return a[len("env:"):]
+		return strings.TrimLeft(a[len("env:"):], `\/`)
 	}
 	return ""
 }
@@ -48,8 +64,7 @@ func envDrive(a string) string {
 // commands that follow (unset X, export -n X, declare +x X, and the Env:
 // drive of PowerShell).
 func varNames(cn string, args []string) (assigned, removed []string) {
-	switch {
-	case pwshEnvSet[cn] || pwshEnvRemove[cn]:
+	if pwshEnvSet[cn] || pwshEnvRemove[cn] {
 		for _, a := range args {
 			if n := envDrive(a); n != "" {
 				if pwshEnvSet[cn] {
@@ -59,6 +74,22 @@ func varNames(cn string, args []string) (assigned, removed []string) {
 				}
 			}
 		}
+		if pwshRename[cn] && len(assigned) > 0 {
+			// Rename-Item Env:FOO HOME, -Path Env:FOO -NewName HOME: the new
+			// name is a variable of the drive.
+			for _, a := range args {
+				switch {
+				case strings.HasPrefix(a, "-"):
+					if _, v, ok := strings.Cut(a, ":"); ok && v != "" && envDrive(a) == "" {
+						assigned = append(assigned, v) // -NewName:HOME
+					}
+				case envDrive(a) == "":
+					assigned = append(assigned, a)
+				}
+			}
+		}
+	}
+	switch {
 	case cn == "unset":
 		for _, a := range args {
 			if !strings.HasPrefix(a, "-") {
@@ -94,20 +125,78 @@ func varNames(cn string, args []string) (assigned, removed []string) {
 	return assigned, removed
 }
 
+// pwshAssignOps are the operators of PowerShell that assign.
+var pwshAssignOps = []string{"=", "+=", "-=", "*=", "/=", "%=", "??="}
+
 // pwshEnvAssign is the variable a PowerShell part assigns with $env:NAME =
-// value, or "".
+// value (also ${env:NAME}, and the operators that assign and compute: +=
+// ??=…), or "".
 func pwshEnvAssign(p *simple) string {
-	if len(p.words) == 0 || !strings.HasPrefix(strings.ToLower(p.words[0].text), "$env:") {
+	if len(p.words) == 0 {
 		return ""
 	}
-	rest := p.words[0].text[len("$env:"):]
-	if n, _, ok := strings.Cut(rest, "="); ok {
-		return n
+	first := p.words[0].text
+	var name, after string
+	switch {
+	case len(first) > len("$env:") && strings.EqualFold(first[:len("$env:")], "$env:"):
+		rest := first[len("$env:"):]
+		i := 0
+		for i < len(rest) && isNameByte(rest[i]) {
+			i++
+		}
+		name, after = rest[:i], rest[i:]
+	case len(first) > len("${env:") && strings.EqualFold(first[:len("${env:")], "${env:"):
+		end := strings.IndexByte(first, '}')
+		if end < 0 {
+			return ""
+		}
+		name, after = first[len("${env:"):end], first[end+1:]
+	default:
+		return ""
 	}
-	if len(p.words) > 1 && strings.HasPrefix(p.words[1].text, "=") {
-		return rest
+	if after == "" && len(p.words) > 1 {
+		after = p.words[1].text
+	}
+	for _, op := range pwshAssignOps {
+		if strings.HasPrefix(after, op) {
+			return name
+		}
 	}
 	return ""
+}
+
+// dotNetEnvSet is the variable that a [Environment]::SetEnvironmentVariable
+// call sets, when part i of a PowerShell line is the call and the next part
+// holds its arguments (the parenthesis ends the part); "" when it is another
+// call or the name is not a literal.
+func dotNetEnvSet(parts []simple, i int) string {
+	p := parts[i]
+	if p.next != "(" || len(p.words) == 0 || i+1 >= len(parts) {
+		return ""
+	}
+	call, ok := strings.CutSuffix(strings.ToLower(p.words[len(p.words)-1].text), "::setenvironmentvariable")
+	if !ok || !strings.HasSuffix(call, "environment]") {
+		return ""
+	}
+	args := parts[i+1].words
+	if len(args) == 0 || args[0].expand {
+		return ""
+	}
+	name, _, _ := strings.Cut(args[0].text, ",")
+	return strings.TrimSpace(name)
+}
+
+// dotNetEnv follows a [Environment]::SetEnvironmentVariable('NAME', …) call as
+// the assignment of NAME.
+func (e *evaluator) dotNetEnv(res *result, parts []simple, i int) {
+	n := dotNetEnvSet(parts, i)
+	if n == "" {
+		return
+	}
+	e.gitEnv(res, n)
+	if homeLike(n) {
+		e.homeSet = n
+	}
 }
 
 // envRemoved denies taking a variable of the configuration of git, the one
