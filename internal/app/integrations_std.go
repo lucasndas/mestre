@@ -90,6 +90,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, fmt.Errorf("app: the decrees: %w", err)
 	}
 	r.routing = &telegram.Routing{}
+	r.block = &telegram.BlockChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Logger: env.Log})
@@ -123,15 +124,17 @@ type stdRun struct {
 	decrees *decrees.Service
 	// routing decides the workspace of each message of a user.
 	routing *telegram.Routing
-	dc      *telegram.DecreeChannel
-	ac      *telegram.ApprovalChannel
-	alert   *telegram.OwnerAlerts
-	notice  *guild.DownNotice
-	lock    *lockdown.Service
-	pins    *telegram.PINRouter
-	lc      *telegram.LockChannel
-	quota   *github.Quota
-	tokens  *github.Tokens
+	// block sends the messages that ask something of the users because a table is stopped.
+	block  *telegram.BlockChannel
+	dc     *telegram.DecreeChannel
+	ac     *telegram.ApprovalChannel
+	alert  *telegram.OwnerAlerts
+	notice *guild.DownNotice
+	lock   *lockdown.Service
+	pins   *telegram.PINRouter
+	lc     *telegram.LockChannel
+	quota  *github.Quota
+	tokens *github.Tokens
 
 	fence  atomic.Pointer[guild.Fence]
 	chain  atomic.Pointer[chain.Service]
@@ -222,7 +225,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP},
 		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
-		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.routing.Actions()),
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.routing.Actions(), r.block.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
@@ -237,6 +240,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.lc.Bind(bot)
 	r.dc.Bind(bot)
 	r.routing.Bind(bot)
+	r.block.Bind(bot)
 	r.alert.Bind(bot)
 	r.bot = bot
 	return bot, nil
