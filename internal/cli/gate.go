@@ -94,6 +94,14 @@ var lockedRefuses = map[string]bool{
 	"pr status": true, "pr comment": true, "pr reply": true, "pr note": true,
 }
 
+// LockedResponse is the answer of a command the lock refuses.
+func LockedResponse() localchan.Response {
+	return localchan.Fail("locked", "o Mestre está travado: este comando não é executado até o Dono destravar", "o Dono destrava com /destravar")
+}
+
+// RefusedWhenLocked says whether the lock refuses the command.
+func RefusedWhenLocked(name string) bool { return lockedRefuses[name] }
+
 // LockedRefuses are the names of the commands the lock refuses, sorted.
 func LockedRefuses() []string {
 	out := make([]string, 0, len(lockedRefuses))
@@ -117,7 +125,7 @@ func (g *Gate) Forward(ctx context.Context, c *localchan.Call) localchan.Respons
 		return refusal
 	}
 	if g.cfg.Locked != nil && lockedRefuses[spec.Name] && g.cfg.Locked(ctx) {
-		return localchan.Fail("locked", "o Mestre está travado: este comando não é executado até o Dono destravar", "o Dono destrava com /destravar")
+		return LockedResponse()
 	}
 	if refusal, ok := spec.checkRequest(c.Request); !ok {
 		return refusal

@@ -168,6 +168,25 @@ func TestTheCommandsOfIssuesAndPRsAreInTheLocalChannelAndRefuseOutsideTheFence(t
 	}
 }
 
+func TestTheCommandsOfGitHubRefuseWhileTheMestreIsLockedWhateverTheFence(t *testing.T) {
+	t.Parallel()
+	i := newInteg(t, false)
+	run := i.open()
+	defer run.Close()
+	fwd := localchan.NewLocalForwarder()
+	run.Attach(&Orchestration{Registry: characters.Registry{DB: i.db}}, fwd)
+	run.BindFence(guild.NewFence(guild.FenceConfig{Clock: i.clk, Epoch: func() uint64 { return 1 }}))
+	if _, err := i.db.Writer().ExecContext(i.ctx, `UPDATE channel_lock SET locked = 1 WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"issue create", "issue list", "pr status", "pr comment"} {
+		got := fwd.Forward(i.ctx, &localchan.Call{Request: localchan.Request{V: 1, ID: "x", AgentID: "ghost", Cmd: cmd}, Caller: localchan.Caller{Identified: true, AgentID: "ghost"}})
+		if got.OK || got.Error == nil || got.Error.Code != "locked" {
+			t.Errorf("%s while locked: %+v, want locked", cmd, got.Error)
+		}
+	}
+}
+
 func TestTheOwnerIsToldWhenGitHubGoesOutAndIsBackEvenIfTheBotWasNotUpYet(t *testing.T) {
 	t.Parallel()
 	i := newInteg(t, true)

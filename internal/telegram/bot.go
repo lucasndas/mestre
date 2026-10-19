@@ -140,11 +140,12 @@ const PINKind = "pin"
 
 // Bot is the bot of the Citadel.
 type Bot struct {
-	o    Options
-	st   *Store
-	clk  clock.Clock
-	log  *slog.Logger
-	cmds map[string]Command
+	releasing sync.Mutex // ReleaseHeld
+	o         Options
+	st        *Store
+	clk       clock.Clock
+	log       *slog.Logger
+	cmds      map[string]Command
 
 	mu     sync.Mutex
 	last   map[int64]time.Time // the last send to each chat
@@ -523,6 +524,8 @@ func (b *Bot) ReleaseHeld(ctx context.Context) error {
 	if b.o.Router == nil {
 		return nil
 	}
+	b.releasing.Lock() // two unlocks in a row deliver each message once
+	defer b.releasing.Unlock()
 	held, err := b.st.Held(ctx)
 	if err != nil {
 		return err

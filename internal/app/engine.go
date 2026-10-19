@@ -856,3 +856,19 @@ func (e *Engine) setLocked(f func(ctx context.Context) bool) {
 	}
 	e.lockFn.Store(&f)
 }
+
+// lockRefusal is the lock of the channel at the place where every call meets,
+// the Citadel: a call that came from a Tower did not go through the gate of
+// this machine, and the Tower does not know the lock. ok is false when the
+// command is refused.
+func (e *Engine) lockRefusal(ctx context.Context, cmd string) (localchan.Response, bool) {
+	commands := e.deps.Commands
+	if commands == nil {
+		commands = cli.Default()
+	}
+	spec, found := commands.Get(cmd)
+	if !found || !cli.RefusedWhenLocked(spec.Name) || !e.locked(ctx) {
+		return localchan.Response{}, true
+	}
+	return cli.LockedResponse(), false
+}
