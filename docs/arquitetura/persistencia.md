@@ -115,7 +115,7 @@ Donos e acessos (em todos os casos, **outras contas da máquina não têm acesso
 ## Operador do PC
 
 - **`operator_sessions`:** uma linha por ativação: pedido de aprovação, quem aprovou (Dono ou Grão-Mestre e o decreto de delegação), mesa, missão, personagem, máquina, usuário do Windows, tarefa, duração pedida, início, fim previsto, fim real e motivo (`prazo`, `done`, `encerrado_por`, `parar_no_pc`, `travar`, `tela_bloqueada`, `queda_da_sessao`). As ações vão completas para `audit_log`, com o id da sessão ([bases e fichas](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)).
-- **`operator_captures`:** sessão, horário, gatilho (`intervalo` ou `acao`, com o id do evento do hook), mesa, missão, caminho e SHA-256 do arquivo cifrado.
+- **`operator_captures`:** sessão, horário, gatilho (`intervalo` ou `acao`, com o id da chamada que o gateway avisou), mesa, missão, caminho e SHA-256 do arquivo cifrado.
 - **Arquivos:** `operador/<sessão>/<horário>.png.enc` na pasta da Cidadela (copiada às Torres não excluídas), cifrado com AES-256-GCM por uma chave própria guardada no [cofre](../plataforma/cofre.md) (segredo `operator_capture_key`); só a pasta do motor, sem acesso de `mestre-agente`. O painel decifra só para o Dono ([administração](../painel/administracao.md#operador-do-pc)).
 - **Retenção:** 30 dias depois do fim da sessão (padrão); a limpeza apaga arquivos e linhas de `operator_captures`, e `operator_sessions` fica. Na máquina do Operador, `maquina\operador\` só guarda a captura até a Cidadela confirmar o recebimento, e os backups do banco não levam as imagens.
 
