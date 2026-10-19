@@ -29,13 +29,6 @@ func fromMs(v int64) time.Time {
 	return time.UnixMilli(v).UTC()
 }
 
-func b2i(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 type scanner interface{ Scan(dest ...any) error }
 
 const tableColumns = `workspace, id, epic, epic_title, branch, base_branch, base_commit, state, paused, paused_reason, paused_by, paused_at,

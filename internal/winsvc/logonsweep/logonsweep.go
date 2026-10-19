@@ -93,7 +93,7 @@ type Options struct {
 	Only func(pid uint32) bool
 	// terminate replaces TerminateProcess (Windows tests of a process that is
 	// already ending, which no test can arrange for real).
-	terminate func(handle uintptr) error
+	terminate func(handle uintptr) error //nolint:unused // used by the Windows build
 }
 
 // MaxRounds bounds the rounds of a sweep: each round ends what the previous

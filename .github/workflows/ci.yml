@@ -68,7 +68,7 @@ jobs:
         run: |
           code=true
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            files=$(git diff --name-only HEAD^1 HEAD)
+            files=$(git diff --no-renames --name-only HEAD^1 HEAD)
             echo "$files"
             if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '^docs/|^[^/]+\.md$|^LICENSE$'; then
               code=false

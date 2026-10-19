@@ -100,7 +100,7 @@ func windowsVersion(productName, displayVersion, build string) string {
 // virtualVendors are the PCI vendors of virtual display adapters (Hyper-V,
 // VMware, QEMU and VirtIO, VirtualBox, Red Hat QXL): none is a GPU for the
 // work of a character.
-var virtualVendors = map[string]bool{"1414": true, "15ad": true, "1234": true, "1af4": true, "80ee": true, "1b36": true}
+var virtualVendors = map[string]bool{"1414": true, "15ad": true, "1234": true, "1af4": true, "80ee": true, "1b36": true} //nolint:unused // used by the Linux files
 
 // virtualWords mark a virtual adapter by the name the driver gives.
 var virtualWords = []string{"basic display", "basic render", "hyper-v", "remote display", "virtual", "vmware", "virtualbox", "qxl", "parallels", "citrix", "indirect display"}
@@ -156,4 +156,4 @@ func pciName(idsText, vendor, device string) (string, bool) {
 
 // vendorShort names the vendors a GPU usually comes from when pci.ids is not
 // installed.
-var vendorShort = map[string]string{"10de": "NVIDIA", "1002": "AMD", "8086": "Intel"}
+var vendorShort = map[string]string{"10de": "NVIDIA", "1002": "AMD", "8086": "Intel"} //nolint:unused // used by the Linux files

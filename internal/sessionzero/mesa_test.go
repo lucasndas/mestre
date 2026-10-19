@@ -338,7 +338,7 @@ func TestExcludeBlockIsTheOneOfTheDocument(t *testing.T) {
 
 // hookLines are the commands of the PreToolUse of Claude Code and of
 // Antigravity in a generated worktree.
-func hookLines(t *testing.T, dir string) (claude, agy string) {
+func hookLines(t *testing.T, dir string) (claude, agy string) { //nolint:unused // used by the full suite
 	t.Helper()
 	var c struct {
 		Hooks map[string][]struct {

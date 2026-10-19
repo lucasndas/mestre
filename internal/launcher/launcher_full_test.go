@@ -113,19 +113,19 @@ func (a *auditLog) all() []launcher.Event {
 
 // countingBackend counts the processes the launcher is asked to create: the
 // refusals must leave this at zero.
-type countingBackend struct {
+type countingBackend struct { //nolint:unused // used by the Unix tests
 	launcher.Backend
 	starts atomic.Int32
 }
 
-func (c *countingBackend) Start(ctx context.Context, r launcher.StartRequest) (launcher.Started, error) {
+func (c *countingBackend) Start(ctx context.Context, r launcher.StartRequest) (launcher.Started, error) { //nolint:unused // used by the Unix tests
 	c.starts.Add(1)
 	return c.Backend.Start(ctx, r)
 }
 
 // KillProcs passes on what the backend underneath can do, so the tests of
 // the kill by identity can go through the counting wrapper.
-func (c *countingBackend) KillProcs(ctx context.Context, id string, p terminal.ProcID, sessions []int) error {
+func (c *countingBackend) KillProcs(ctx context.Context, id string, p terminal.ProcID, sessions []int) error { //nolint:unused // used by the Unix tests
 	pk, ok := c.Backend.(launcher.ProcKiller)
 	if !ok {
 		return launcher.Refused("this launcher does not end processes by identity")
