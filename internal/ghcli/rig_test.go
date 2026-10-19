@@ -41,13 +41,21 @@ func (t tables) Epic(_ context.Context, table string) (github.TableRef, bool, er
 
 type repos struct{}
 
+// prs gives the PR of each table.
+type prs map[string]int
+
+func (p prs) PRNumber(_ context.Context, key string) (int, bool, error) {
+	n, ok := p[key]
+	return n, ok, nil
+}
+
 func (repos) Repo(context.Context, string) (string, error) { return repoFull, nil }
 
 // clients gives each character the REST of its App: the token tells the App to
 // the double.
 type clients struct{ gh *fakegithub.Server }
 
-func (c clients) For(_ context.Context, ch characters.Character, _ string) (github.IssueAPI, error) {
+func (c clients) For(_ context.Context, ch characters.Character, _ string) (github.PullAPI, error) {
 	tok := "tok_mestre"
 	switch {
 	case ch.Role == characters.RoleGrandMaster:
@@ -65,6 +73,7 @@ type rig struct {
 	gh   *fakegithub.Server
 	objs *github.Objects
 	gate *cli.Gate
+	prs  prs
 }
 
 // newRig has a table 42-login (its epic is the issue #1) with its Mestre da mesa "tm", a QA
@@ -95,7 +104,8 @@ func newRig(t *testing.T) *rig {
 		"dev": {ID: "dev", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "dev"},
 		"gm":  {ID: "gm", Role: characters.RoleGrandMaster, Workspace: "meu-app"},
 	}
-	h := &ghcli.Handlers{Characters: cs, Clients: clients{gh}, Repos: repos{}, Tables: tables{"42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
+	pr := prs{}
+	h := &ghcli.Handlers{PRs: pr, Characters: cs, Clients: clients{gh}, Repos: repos{}, Tables: tables{"meu-app/42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
 	fwd := localchan.NewLocalForwarder()
 	h.Register(fwd)
 	profiles := cli.ProfilesFunc(func(_ context.Context, id string) cli.Profile {
@@ -109,7 +119,7 @@ func newRig(t *testing.T) *rig {
 		}
 		return cli.Profile{Role: cli.RoleCharacter}
 	})
-	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
 }
 
 // result is the answer of a command.

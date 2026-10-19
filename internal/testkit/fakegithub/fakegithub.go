@@ -55,6 +55,8 @@ type installation struct {
 type repo struct {
 	extra  map[int]*issueExtra
 	pulls  map[int][2]string
+	pullx  map[int]*pullExtra
+	checks map[string][]map[string]any // check runs by commit sha
 	labels map[string]string
 	issues []map[string]any
 	git    *gitData
