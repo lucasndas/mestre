@@ -67,7 +67,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 ### Validade (regra permanente)
 
 - A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); "por 3 dias" vira 72 horas.
-- O Grão-Mestre converte a validade em data e hora absolutas, e elas aparecem na confirmação.
+- O Grão-Mestre converte a validade em um instante absoluto (`--until`, ISO 8601 com o deslocamento do fuso da Guilda) e o motor guarda só esse instante. A confirmação o mostra em UTC (`até 26/10/2026 02:59 UTC`); o fuso da Guilda só entra na conversão de expressões como "esta semana".
 - Ao vencer, o decreto passa a **expirado** sozinho. O motor avisa o autor.
 
 ### Estados
@@ -134,6 +134,7 @@ Cada decreto fica no banco da Cidadela com:
 - **CA-DEC-09** · *rápida* — **Dado** o decreto "o Dev pode enviar a branch da mesa" ativo, **quando** o Dev tenta `git push`, **então** o `mestre hook` continua negando; **quando** o Dev roda `mestre pr update`, **então** o motor envia a branch da mesa com o App da classe e registra a execução no decreto; **dado** um decreto "pode ignorar a revisão obrigatória", **então** ele é recusado antes da confirmação com a explicação.
 - **CA-DEC-11** · *rápida* — **Dado** um Administrador que responde "Negar sempre" a um pedido, **quando** confirma, **então** nasce o decreto permanente que nega sem pedir PIN; **dado** que ele propõe um decreto permanente que libera, **então** o PIN é pedido; **dado** a regra temporária de mesa ativa, **quando** `/decretos` roda, **então** ela aparece marcada com **Revogar**, e o toque de um Aprovador é recusado.
 - **CA-DEC-12** · *rápida* — **Dado** um Administrador que pede um decreto que altera a classe `orquestrador` (por exemplo, tirar uma regra fixa dela), **quando** o decreto é proposto, **então** é recusado antes da confirmação, nada é gravado e a classe segue como estava; **dado** um decreto que libera uma ação a um orquestrador, **então** ele é aceito e vale como para qualquer personagem.
+- **CA-DEC-13** · *rápida* — **Dado** uma proposta com `--until 2026-10-25T23:59:59-03:00`, **quando** o motor monta a confirmação, **então** ela diz "até 26/10/2026 02:59 UTC"; **dado** a hora passando desse instante (relógio falso), **então** o decreto vira `expirado`.
 
 ## Depende de
 
