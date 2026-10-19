@@ -220,7 +220,24 @@ func readOnlyRules(agentID string) *Rules {
 }
 
 func decide(ctx context.Context, env Env, rules *Rules, ev providers.Event, degraded bool) Decision {
-	return decideCounting(ctx, env, rules, ev, degraded, nil)
+	return failClosed(func() Decision { return decideCounting(ctx, env, rules, ev, degraded, nil) })
+}
+
+// ReasonInternalError is the reason of the denial of a line the analysis fell
+// on: no line may bring the process down, and a failure of the analysis is a
+// denial, never an allow.
+const ReasonInternalError = "falha interna na análise do comando; negado por segurança"
+
+// failClosed runs the decision and turns a panic of the analysis into a fixed
+// denial (the callers of the decision are the hook, the pre-run of the
+// rituals and the engine: none of them may fall on a line).
+func failClosed(run func() Decision) (d Decision) {
+	defer func() {
+		if r := recover(); r != nil {
+			d = Decision{Verdict: Deny, Reason: ReasonInternalError, Layer: LayerFixed}
+		}
+	}()
+	return run()
 }
 
 // decideCounting is decide that also reports, in work when it is not nil, the

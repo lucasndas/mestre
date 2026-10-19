@@ -114,6 +114,9 @@ var perfValued = set("-e --event -p --pid -t --tid -C --cpu -r --repeat -I --int
 func perfRuns(args []word) [][]word {
 	var out [][]word
 	for _, c := range commandsAfter(args, set("--buildid-dir")) {
+		if len(c) == 0 { // "perf --": the command is what follows, and nothing does
+			continue
+		}
 		sub, rest := c[0].text, c[1:]
 		switch sub {
 		case "stat", "record", "trace", "ftrace":
@@ -160,8 +163,21 @@ var rrValued = set("-c --num-cpu-ticks -e --num-events -i --ignore-signal -o --o
 func rrRuns(args []word) [][]word {
 	var out [][]word
 	for _, c := range commandsAfter(args, nil) {
-		if c[0].text == "record" {
+		if len(c) == 0 {
+			continue
+		}
+		switch c[0].text {
+		case "record":
 			out = append(out, commandsAfter(c[1:], rrValued)...)
+		case "replay", "dump":
+			// rr replay [options] [-- GDB-OPTIONS]: what follows -- is handed
+			// to gdb, whose -ex is a command like any other
+			for i, w := range c {
+				if w.text == "--" {
+					out = append(out, append([]word{{text: "gdb", assign: -1}}, c[i+1:]...))
+					break
+				}
+			}
 		}
 	}
 	return out
@@ -190,7 +206,28 @@ func hyperfineRuns(args []word) [][]word {
 			}
 		case !strings.HasPrefix(t, "-") || t == "-":
 			out = append(out, shellOf(a))
+		default:
+			// a cluster of short options: the first that takes a value takes
+			// the rest of the word (-p'git push', -w3), or the next word when
+			// it is the last letter, which the loop reads as a command
+			for j := 1; j < len(t); j++ {
+				if !strings.ContainsRune(hyperfineShortValued, rune(t[j])) {
+					continue
+				}
+				if val := t[j+1:]; val != "" && strings.ContainsRune(hyperfineShortCommands, rune(t[j])) {
+					out = append(out, shellWords(val))
+				}
+				break
+			}
 		}
 	}
 	return out
 }
+
+// hyperfineShortValued are the short options of hyperfine that take a value,
+// and hyperfineShortCommands the ones whose value is a shell command
+// (-p --prepare, -s --setup, -c --conclude, -C --cleanup).
+const (
+	hyperfineShortValued   = "wmMrpscCSLnu"
+	hyperfineShortCommands = "pscC"
+)

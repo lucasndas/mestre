@@ -49,25 +49,30 @@ func argCommands(cn string, args []string) []string {
 		return optValues(args, "-P", "--pager", "-H", "--html")
 	case cn == "gdb":
 		var out []string
-		for _, v := range optValues(args, "-ex", "--ex", "-iex", "--iex", "--eval-command", "--init-eval-command") {
-			v = strings.TrimSpace(v)
-			if after, ok := strings.CutPrefix(v, "shell "); ok {
-				out = append(out, after)
-			} else if after, ok := strings.CutPrefix(v, "!"); ok {
-				out = append(out, after)
-			} else {
-				// python import os; os.system("cmd"), call (int)system("cmd")
-				out = append(out, scriptCalls([]string{v}, codeCall)...)
+		for _, v := range optValues(args, gdbCommandOptions...) {
+			// a value may hold several commands, one per line (a body of if,
+			// while or define)
+			for _, line := range strings.Split(v, "\n") {
+				line = gdbUnwrap(line)
+				if cmd, ok := gdbShellCommand(line); ok {
+					out = append(out, cmd)
+				} else if after, ok := gdbExecWrapper(line); ok {
+					out = append(out, after)
+				} else {
+					// python import os; os.system("cmd"), call (int)system("cmd")
+					out = append(out, scriptCalls([]string{strings.TrimSpace(line)}, codeCall)...)
+				}
 			}
 		}
 		return out
 	case cn == "lldb":
 		var out []string
 		for _, v := range optValues(args, "-o", "--one-line", "-O", "--one-line-before-file", "-k", "--one-line-on-crash") {
-			v = strings.TrimSpace(v)
-			if after, ok := strings.CutPrefix(v, "platform shell "); ok {
-				out = append(out, after)
+			v = lldbUnalias(v)
+			if cmd, ok := lldbShellCommand(v); ok {
+				out = append(out, cmd)
 			} else {
+				v = strings.TrimSpace(v)
 				out = append(out, scriptCalls([]string{v}, codeCall)...)
 			}
 		}
@@ -108,6 +113,128 @@ func argCommands(cn string, args []string) []string {
 		return scriptCalls(args, codeCall)
 	}
 	return nil
+}
+
+// gdbShellRe and gdbTargetRe read the gdb commands that run a shell command: gdb
+// takes any unambiguous prefix of a command, and the ones it would not take
+// are denied all the same (fail closed): sh, she, shel and shell, ! , pipe (and
+// |), and target … | command.
+var (
+	gdbShellRe  = regexp.MustCompile(`^\s*(?:!|sh(?:e(?:l(?:l)?)?)?\b)\s*(.*)$`)
+	gdbPipeRe   = regexp.MustCompile(`^\s*(?:\||pi(?:p(?:e)?)?\b)\s*(.*)$`)
+	gdbTargetRe = regexp.MustCompile(`^\s*ta(?:r(?:g(?:e(?:t)?)?)?)?\s+\S+[^|]*?\|\s*(.+)$`)
+)
+
+// gdbCommandOptions are the options of gdb whose value is a command: the long
+// ones with one dash or two, and the unambiguous prefixes gdb takes of them.
+var gdbCommandOptions = []string{"-ex", "--ex", "-iex", "--iex",
+	"--eval-command", "-eval-command", "--eval-comman", "--eval", "-eval", "--ev", "-ev",
+	"--init-eval-command", "-init-eval-command", "--init-eval", "-init-eval", "--init-ev", "-init-ev"}
+
+var (
+	gdbWithRe  = regexp.MustCompile(`^\s*w(?:i(?:t(?:h)?)?)?\s+.*?\s--\s+(.+)$`)
+	gdbAliasRe = regexp.MustCompile(`^\s*al(?:i(?:a(?:s)?)?)?\s+(?:-\S+\s+)*[^=]+=\s*(.+)$`)
+	gdbWrapRe  = regexp.MustCompile(`^\s*set\s+exec-wrapper\s+(.+)$`)
+)
+
+// gdbUnwrap is the command that gdb's with SETTING -- COMMAND and alias
+// NAME = COMMAND hold (the alias runs when it is used; the definition is
+// where the command is written, so it is read there).
+func gdbUnwrap(line string) string {
+	for range 4 {
+		if m := gdbWithRe.FindStringSubmatch(line); m != nil {
+			line = m[1]
+		} else if m := gdbAliasRe.FindStringSubmatch(line); m != nil {
+			line = m[1]
+		} else {
+			break
+		}
+	}
+	return line
+}
+
+// gdbExecWrapper is the command line of set exec-wrapper: the program gdb
+// starts the debugged program through.
+func gdbExecWrapper(line string) (string, bool) {
+	if m := gdbWrapRe.FindStringSubmatch(line); m != nil {
+		return strings.TrimSpace(m[1]), true
+	}
+	return "", false
+}
+
+// lldbAliasRe is command alias [options] NAME COMMAND…: the command is read
+// where it is written.
+var lldbAliasRe = regexp.MustCompile(`^\s*(?:command|comm\w*)\s+alias\s+(?:-\S+\s+)*\S+\s+(.+)$`)
+
+func lldbUnalias(v string) string {
+	if m := lldbAliasRe.FindStringSubmatch(v); m != nil {
+		return m[1]
+	}
+	return v
+}
+
+// gdbShellCommand is the shell command line a gdb command runs, when it is
+// one of shell, ! , pipe, | or target remote |: pipe COMMAND | SHELL_COMMAND
+// runs what follows the first | (or the delimiter of pipe -d DELIM COMMAND
+// DELIM SHELL_COMMAND).
+func gdbShellCommand(v string) (string, bool) {
+	if m := gdbShellRe.FindStringSubmatch(v); m != nil && strings.TrimSpace(m[1]) != "" {
+		return strings.TrimSpace(m[1]), true
+	}
+	if m := gdbTargetRe.FindStringSubmatch(v); m != nil {
+		return strings.TrimSpace(m[1]), true
+	}
+	if m := gdbPipeRe.FindStringSubmatch(v); m != nil {
+		rest := strings.TrimSpace(m[1])
+		delim := "|"
+		if after, ok := strings.CutPrefix(rest, "-d"); ok {
+			fields := strings.Fields(after)
+			if len(fields) > 0 {
+				delim = fields[0]
+				rest = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(after), delim))
+			}
+		}
+		if _, shell, ok := strings.Cut(rest, delim); ok && strings.TrimSpace(shell) != "" {
+			return strings.TrimSpace(shell), true
+		}
+	}
+	return "", false
+}
+
+// lldbShellRe reads platform shell [options] [--] COMMAND with the prefixes
+// lldb takes for its command and subcommand (and shell by itself).
+var lldbShellRe = regexp.MustCompile(`^\s*(?:pl(?:a(?:t(?:f(?:o(?:r(?:m)?)?)?)?)?)?\s+)?s(?:h(?:e(?:l(?:l)?)?)?)?\s+(.*)$`)
+
+// lldbShellCommand is the command line that platform shell (or shell) runs.
+func lldbShellCommand(v string) (string, bool) {
+	m := lldbShellRe.FindStringSubmatch(v)
+	if m == nil {
+		return "", false
+	}
+	rest := strings.TrimSpace(m[1])
+	for strings.HasPrefix(rest, "-") && rest != "-" {
+		word, after := cutField(rest)
+		if word == "--" {
+			rest = after
+			break
+		}
+		if word == "-t" || word == "-s" { // the timeout and the shell take a value
+			_, after = cutField(after)
+		}
+		rest = after
+	}
+	return rest, rest != ""
+}
+
+// cutField cuts the first word, up to a space or a tab, off the text and
+// returns it with the rest, trimmed.
+func cutField(s string) (word, rest string) {
+	s = strings.TrimSpace(s)
+	i := strings.IndexAny(s, " \t")
+	if i < 0 {
+		return s, ""
+	}
+	return s[:i], strings.TrimSpace(s[i:])
 }
 
 var vimNames = set("vim vi nvim view ex gvim vimdiff rvim evim gview nvi elvis")
