@@ -75,6 +75,7 @@ type world struct {
 	opts   telegram.Options
 	next   int64
 	// The flow of approval over the bot (rigOpts.approvals).
+	oa    *telegram.OwnerAlerts
 	ac    *telegram.ApprovalChannel
 	flow  *approvals.Flow
 	chain *fakechannel.Chain
@@ -88,6 +89,8 @@ type rigOpts struct {
 	mask     func(string) string
 	// approvals puts the flow of approval over the bot.
 	approvals bool
+	// ownerAlerts puts the real alerts of the Owner (grouped) in the place of the fake.
+	ownerAlerts bool
 }
 
 func newWorld(t *testing.T, ro ...rigOpts) *world {
@@ -130,9 +133,16 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if ropt.terms {
 		w.opts.Terms = glossary.Terms
 	}
+	if ropt.ownerAlerts {
+		w.oa = &telegram.OwnerAlerts{Users: w.users, Clock: clk}
+		w.opts.Alerts, w.opts.Strangers = w.oa, w.oa
+	}
 	w.bot, err = telegram.New(w.opts)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if w.oa != nil {
+		w.oa.Bot = w.bot
 	}
 	if ropt.approvals {
 		w.chain = fakechannel.NewChain(db, clk)

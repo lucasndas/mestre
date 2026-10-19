@@ -19,7 +19,7 @@ O motor aplica este filtro a cada update, **antes** de qualquer outra lógica, i
    - A única exceção é a mensagem de pareamento por código.
 3. **Não autorizado:** a mensagem é descartada sem resposta. Nada é baixado nem transcrito, e nada entra em fila.
    - O Dono recebe um alerta com ID, nome exibido, @usuário e o início do texto (até 200 caracteres).
-   - Os alertas são agrupados: 1 alerta por ID por hora (padrão), com a contagem das tentativas.
+   - Os alertas são agrupados: 1 alerta por ID por hora (padrão), com a contagem das tentativas (o mesmo alerta é editado com a contagem, no máximo a cada 10 s).
 4. **Suspenso:** a mensagem é descartada sem resposta e sem alerta.
 5. **Nível e workspace:** passou do filtro, a mensagem segue para o [roteamento](roteamento.md). O nível é checado em cada ação ([níveis](usuarios-e-niveis.md#níveis-e-capacidades)).
 
