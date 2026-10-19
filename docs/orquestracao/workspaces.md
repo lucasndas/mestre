@@ -1,6 +1,6 @@
 # Workspaces
 
-> **Assunto:** o que é um workspace, a árvore de níveis, o espelho e o clone principal, configuração e estados · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** o que é um workspace, a árvore de níveis, o espelho e o clone principal, configuração e estados · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -60,6 +60,7 @@ Cada item tem o seu documento dono; aqui só a lista do que pertence ao workspac
 | Teto de permissões e de custo | [teto do workspace](../classes/teto-do-workspace.md) |
 | Política de aprovação | [política](../aprovacoes/politica.md) |
 | Limites de uso | [limites de uso](../plataforma/limites-de-uso.md) |
+| Aviso de mesa sem entrega (3 h), limiar de início da cota (95%) e intervalo da mensagem de progresso (2 h) | [supervisão](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira), [limites de uso](../plataforma/limites-de-uso.md#limiar-de-início), [Grão-Mestre](grao-mestre.md#mensagem-de-progresso) |
 | Prazo de retenção de branch cancelada | [mesas.md](mesas.md#cancelamento) |
 | Fuso horário dos rituais (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda)) | [rituais.md](rituais.md) |
 | Usuários com acesso | [usuários e níveis](../telegram/usuarios-e-niveis.md) |

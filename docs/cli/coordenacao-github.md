@@ -56,6 +56,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 | `--block` com a cabeça do PR diferente de `--expect-head` | 7 | `head_changed` | a cabeça atual; ler o PR de novo e repetir |
 | `--block` num bloco de outra classe | 3 | `block_owned` | qual classe é a dona |
 | branch da mesa em conflito com a principal, ou a base andou desde a abertura | 7 | `conflict` | atualizar a branch dentro da mesa, na etapa `sync` ([sincronia](../orquestracao/sincronia-com-a-base.md)) |
+| `pr open` com missão `completed` do épico que tem critério sem prova | 7 | `criteria_unproven` | os critérios sem prova; provar com uma missão de correção ou tirar o critério da issue ([aceite](../orquestracao/mestre-da-mesa.md#o-pedido-que-chega-o-mestre-da-mesa-como-po)) |
 | push forçado pedido na branch principal | 3 | `force_main_denied` | push forçado só na branch da mesa |
 | GitHub fora (`5xx`, rede) ou limite secundário (abuso) | 5 | `github_unavailable` | quando tentar de novo (a resposta do GitHub diz); a ação que muda dados não é repetida sozinha |
 | cota primária esgotada ou abaixo de 10% | 0 | `queued: true` | o comando que muda dados espera na fila de saída e sai uma vez na renovação; só as leituras (`issue list`, `pr status`) saem com 5 `github_unavailable` e a hora da renovação ([eventos](../github/eventos.md#regras-e-erros)) |
