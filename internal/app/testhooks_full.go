@@ -223,6 +223,10 @@ type controlRequest struct {
 	Op     string `json:"op"`
 	SQL    string `json:"sql,omitempty"`
 	Target string `json:"target,omitempty"`
+	// Cmd and Agent are a command of the CLI, called as a character the engine
+	// is told about (op call).
+	Cmd   string `json:"cmd,omitempty"`
+	Agent string `json:"agent,omitempty"`
 }
 
 type controlAnswer struct {
@@ -231,6 +235,8 @@ type controlAnswer struct {
 	Status *Status `json:"status,omitempty"`
 	LSN    uint64  `json:"lsn,omitempty"`
 	Rows   [][]any `json:"rows,omitempty"`
+	// Call is the response of the command of op call.
+	Call *localchan.Response `json:"call,omitempty"`
 }
 
 func serveControl(ctx context.Context, e *Engine, ln net.Listener) {
@@ -304,6 +310,14 @@ func control(ctx context.Context, e *Engine, req controlRequest) controlAnswer {
 			return fail(err)
 		}
 		return controlAnswer{OK: true, LSN: lsn}
+	case "call":
+		// the command goes where the CLI of a character goes: the forwarder of
+		// the local channel of the Citadel, which the orchestration registers
+		resp := e.local.Forward(ctx, &localchan.Call{
+			Request: localchan.Request{V: 1, ID: "control-call", AgentID: req.Agent, Cmd: req.Cmd},
+			Caller:  localchan.Caller{Identified: true, AgentID: req.Agent},
+		})
+		return controlAnswer{OK: true, Call: &resp}
 	case "query":
 		var out [][]any
 		if err := e.withGuildDB(func(db *store.DB) error {

@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -124,6 +126,7 @@ type citadelRun struct {
 	// not open), from the start of the period; empty otherwise.
 	down string
 
+	log       *slog.Logger
 	base      context.Context
 	external  []ExternalFunc
 	firstAct  func()
@@ -232,7 +235,13 @@ func (r *citadelRun) setActing(on bool) {
 			r.once.Do(func() { r.extWG.Go(r.firstAct) })
 		}
 		for _, fn := range r.external {
-			r.extWG.Go(func() { _ = fn(ctx, r.fence) })
+			r.extWG.Go(func() {
+				// a function that fails by itself stops for the rest of the period
+				// and says so (the others go on)
+				if err := fn(ctx, r.fence); err != nil && ctx.Err() == nil {
+					r.log.Error("app: a function of the Citadel stopped", "err", err)
+				}
+			})
 		}
 	case !on && r.extCancel != nil:
 		r.extCancel()
@@ -421,6 +430,10 @@ func (e *Engine) startCitadel(ctx context.Context, run *citadelRun) (*guild.Cita
 	return c, nil
 }
 
+// drainWait is how long the end of a period waits for the commands in flight
+// before the database is closed or archived.
+const drainWait = 10 * time.Second
+
 // runCitadel serves as the Citadel until the role changes or ctx ends: the
 // main database, the vault, the Towers, the replication and, once the fence
 // lets it act, the CA, the entries and the external functions.
@@ -434,7 +447,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	db := take.db
 	pctx, cancel := context.WithCancel(ctx)
 	var wg sync.WaitGroup
-	run := &citadelRun{db: db, epoch: e.epochs.Epoch(), base: pctx, external: e.deps.External, vault: take.vault, ca: take.ca,
+	run := &citadelRun{db: db, epoch: e.epochs.Epoch(), log: e.log, base: pctx, external: e.deps.External, vault: take.vault, ca: take.ca,
 		ran: newRanCalls(e.clk, e.queuedResult)}
 	if take.vault.Err() != nil {
 		// no CA, so no entries and no certificates, and the Towers hear it from
@@ -462,6 +475,16 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		} else if run.srv != nil {
 			run.srv.Shutdown()
 		}
+		// what the commands of the local channel and the messages of the Towers
+		// started ends before the database is closed or archived (a command
+		// that does not end in time is left to fail on the closed database)
+		drained, stop := clock.WithTimeout(context.Background(), e.clk, drainWait)
+		select {
+		case <-run.gate.drain():
+		case <-drained.Done():
+			e.log.Warn("app: a command was still running when the period ended")
+		}
+		stop()
 		cancel()
 		run.extWG.Wait() // firstAct starts goroutines of wg: it ends first
 		wg.Wait()
@@ -476,6 +499,15 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		}
 		e.changed()
 	}()
+
+	if e.deps.HostOrchestration {
+		orc, err := e.hostOrchestration(db)
+		if err != nil {
+			return transition{err: fmt.Errorf("app: the orchestration: %w", err)}
+		}
+		orc.Register(e.local, nil)
+		run.external = append(slices.Clone(run.external), orc.External())
+	}
 
 	promoted, wait := take.promoted, guild.PromotedWait
 	if !promoted {
