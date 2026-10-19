@@ -4,7 +4,7 @@
 
 Guia para quem usa. O que a remoção apaga por dentro está em [instalação e versões](../plataforma/instalacao-e-atualizacao.md#remoção-mestre-uninstall); onde ficam os dados, em [persistência](../arquitetura/persistencia.md#arquivos).
 
-**Regra geral:** `mestre uninstall` remove serviços, a conta dos agentes no Windows, regras de firewall e programas. Numa **Torre**, apaga também a réplica (banco, arquivos e espelhos), a cópia do cofre e, se a máquina já foi Cidadela, os bancos descartados, as cópias e as transferências que ela guardou ([lista](../guilda/replicacao.md#cofre-em-toda-máquina)): o que a réplica tem está na Cidadela, e o que os bancos descartados tinham de a mais só entra na auditoria se a máquina o relatou antes. Na **Cidadela sozinha**, mantém os dados (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo, para dar para reinstalar sem perder nada.
+**Regra geral:** `mestre uninstall` remove serviços, a conta dos agentes no Windows, regras de firewall e programas. Numa **Torre**, apaga também a réplica (banco, arquivos e espelhos), a cópia do cofre, a chave privada do motor, o que o banco local da máquina (`maquina.db`) guardava da Guilda e, se a máquina já foi Cidadela, os bancos descartados, as cópias e as transferências que ela guardou ([lista](../guilda/replicacao.md#cofre-em-toda-máquina)): o que a réplica tem está na Cidadela, e o que os bancos descartados tinham de a mais só entra na auditoria se a máquina o relatou antes. Na **Cidadela sozinha**, mantém os dados (banco, backups, worktrees, logs, chave do cofre), a não ser que você peça para apagar tudo, para dar para reinstalar sem perder nada.
 
 ## Antes de começar
 
@@ -16,7 +16,7 @@ Guia para quem usa. O que a remoção apaga por dentro está em [instalação e 
 1. Na Torre, rode `mestre uninstall` como administrador (PowerShell **como administrador** no Windows; `sudo mestre uninstall` no Ubuntu, seguido de `sudo apt remove mestre`). Ele pede antes a saída da Guilda à Cidadela; com a Cidadela fora, desinstala assim mesmo e o painel mostra a máquina como "sumida": remova-a no painel ([remover uma máquina](entrar-na-guilda.md#remover-uma-máquina)).
 2. Isso para e remove os serviços `mestre`, `mestre-guardiao` e `mestre-update`, a conta `mestre-agente` e o perfil dela (no Windows), as regras de firewall do Mestre e os programas. Os logins dos perfis de conta feitos por essa conta deixam de valer: numa reinstalação no Windows, refaça o login de cada perfil ([primeiro acesso](primeiro-acesso.md#4-configurar-os-perfis-de-conta)).
 3. Confira: `Get-Service mestre*` e `Get-LocalUser mestre-agente` (Windows) ou `systemctl status mestre` (Ubuntu) não acham nada.
-4. A réplica e a cópia do cofre já foram apagadas. O que sobra (logs, worktrees locais, perfis de conta) fica em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
+4. A réplica e a cópia do cofre já foram apagadas. O que sobra (logs, worktrees locais, `workspaces/` e perfis de conta com os logins, em `contas/`) fica em `%ProgramData%\Mestre\` ou em `/etc/mestre/`, `/var/lib/mestre/` e `/var/log/mestre/`. Se não vai reinstalar, peça ao `mestre uninstall` para apagar tudo, ou apague as pastas à mão.
 
 ## Remover a Cidadela
 
