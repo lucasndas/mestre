@@ -1,6 +1,6 @@
 # Mesas
 
-> **Assunto:** ciclo de vida da mesa, worktree por máquina e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** ciclo de vida da mesa, worktree por máquina e sincronização por bundle, pausa, encerramento e cancelamento · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -16,7 +16,7 @@ Só o Grão-Mestre abre mesas, e só num workspace `active` ([estados do workspa
 3. cria o worktree na Cidadela em `<dados>/workspaces/<slug do workspace>/mesas/<mesa>/` ([pastas](workspaces.md#espelho-e-clone-principal-na-cidadela)); o identificador da mesa (`<mesa>`, `MESTRE_MESA`) é `<n>-<slug>`, o mesmo da branch sem o prefixo;
 4. roda a sessão zero da mesa ([materialização de arquivos](../sessao-zero/mesa.md));
 5. recruta o Mestre da mesa com a ficha padrão do workspace (ou a indicada), conectado ao Grão-Mestre;
-6. entrega ao Mestre da mesa, como primeira mensagem, o **texto original** da(s) mensagem(ns) de usuário indicada(s) e cópias dos anexos ([anexos](../telegram/anexos-e-transcricao.md)), seguidos das observações do Grão-Mestre em bloco separado. O motor copia o original; o Grão-Mestre não o reescreve.
+6. entrega ao Mestre da mesa, como primeira mensagem, o **texto original** da(s) mensagem(ns) de usuário indicada(s) e cópias dos anexos ([anexos](../telegram/anexos-e-transcricao.md)), seguidos das observações do Grão-Mestre em bloco separado. O motor copia o original; o Grão-Mestre não o reescreve. Se o épico depende de outro com mesa em andamento, este passo espera ([dependência entre mesas](dependencia-entre-mesas.md#a-espera-do-tipo-épico)).
 
 Se algum passo falhar, o motor desfaz os anteriores (branch e worktree) e devolve o erro ao Grão-Mestre; o épico não é tocado, porque já existia.
 

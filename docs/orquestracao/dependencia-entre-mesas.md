@@ -1,6 +1,6 @@
 # Dependência entre mesas
 
-> **Assunto:** a espera do tipo "épico": a mesa que depende de outra espera, sem ninguém lembrar, até o PR da outra ser mesclado e confirmado na base · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** a espera do tipo "épico": a mesa que depende de outra espera, sem ninguém lembrar, até o PR da outra ser mesclado e confirmado na base · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -12,13 +12,13 @@ Pedidos encadeados ("o checkout só depois do login") andam sozinhos. Hoje a dep
 
 - **Quem cria:** o motor, quando o Grão-Mestre registra a dependência (`gh epic update <n> --depends-on <m>`) de uma mesa aberta ou ao abrir uma mesa cujo épico já depende de outro com mesa em andamento. Vale também para a resposta "esperar a outra terminar" da [regra de decisão](grao-mestre.md#triagem-e-roteamento-do-pedido).
 - **Satisfeita quando** o PR da mesa do épico `<m>` é mesclado **e** o motor confirma o commit na base ([eventos](../github/eventos.md#entrega-na-caixa-de-entrada)). Se o épico `<m>` não tem mesa aberta, a dependência já vale como satisfeita só se o épico está fechado; senão o Grão-Mestre recebe o aviso e decide.
-- **Enquanto espera:** a mesa dependente continua `open`, não recebe o pedido nem recruta ninguém para a etapa dependente, e aparece como "aguardando a mesa #12" no canvas e no `mestre table list`. Uma mesa sem dependência pendente não é afetada.
+- **Enquanto espera:** a mesa dependente fica `open` com o passo 6 da [abertura](mesas.md#abertura) adiado (o Mestre da mesa já está recrutado, mas só recebe o pedido quando a espera é satisfeita; nenhuma etapa dependente é recrutada), e aparece como "aguardando a mesa #12" no canvas e no `mestre table list`. Uma mesa sem dependência pendente não é afetada.
 - **Satisfeita:** o motor registra a espera como `satisfied` e coloca um item `wake` na caixa de entrada do Grão-Mestre ("a mesa #12 foi mesclada; a #15 pode seguir"), que manda a mesa dependente continuar. A mesa dependente integra a base com a etapa `sync` ([sincronia com a base](sincronia-com-a-base.md)) antes do PR.
-- **Tempo limite:** sem tempo limite próprio; o aviso é o das mesas paradas ([supervisão](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira)). Mesa cancelada, ou épico `<m>` fechado como "não planejado": a espera é `cancelled` e o Grão-Mestre decide o que fazer com a dependente.
+- **Tempo limite:** sem tempo limite próprio; a mesa aguardando dependência fica fora do aviso das mesas paradas ([supervisão](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira)). Mesa cancelada, ou épico `<m>` fechado como "não planejado": a espera é `cancelled` e o Grão-Mestre decide o que fazer com a dependente.
 
 ### Sobreposição sem dependência
 
-Quando duas mesas mexem na mesma área e nenhuma depende da outra (resultado do `mestre table overlap`, [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-table)), vale a regra de um só caminho: **o épico de número menor segue e o outro espera**, nunca os dois um atrás do outro. Assim a sobreposição não vira impasse.
+Quando duas mesas mexem na mesma área e nenhuma depende da outra (resultado do `mestre table overlap`, [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-table)), a decisão é do Grão-Mestre, com a pergunta ao usuário da regra 6 ([roteamento](grao-mestre.md#triagem-e-roteamento-do-pedido)); o motor não julga. A recomendação de um só caminho é: **o épico de número menor segue e o outro espera**, nunca os dois um atrás do outro. Escolhida a espera, o Grão-Mestre registra a dependência do de número maior no menor (`gh epic update --depends-on`) e daí vale a espera do motor, acima.
 
 ### Ciclo
 
@@ -35,7 +35,8 @@ Dependência que fecharia um ciclo entre épicos (#12 depende de #15, #15 de #12
 - **CA-DEPMESA-01** · *rápida* — **Dado** o épico #15 dependendo do #12, com a mesa #12 em `in_review`, **quando** o Grão-Mestre abre a mesa do #15, **então** o motor registra uma espera de épico, a mesa fica `open` sem recrutar ninguém para a etapa dependente e o `table list` mostra "aguardando a mesa #12".
 - **CA-DEPMESA-02** · *rápida* — **Dado** a espera acima, **quando** o PR da #12 é mesclado e o commit está na base, **então** a espera vira `satisfied` e o Grão-Mestre recebe um `wake` citando a #12 e a #15; **dado** o merge sem o commit na base, **então** a espera continua `active`.
 - **CA-DEPMESA-03** · *rápida* — **Dado** o épico #12 dependendo do #15, **quando** o Grão-Mestre registra que o #15 depende do #12, **então** a dependência é recusada com o ciclo `#12 → #15 → #12` e nenhuma espera nasce.
-- **CA-DEPMESA-04** · *rápida* — **Dado** duas mesas (#12 e #15) alterando `src/login/`, sem dependência entre elas e com a resposta "esperar", **quando** o motor aplica a regra de sobreposição, **então** a #12 segue e a #15 espera; a #12 mesclada acorda a #15.
+- **CA-DEPMESA-04** · *rápida* — **Dado** duas mesas (#12 e #15) alterando `src/login/`, sem dependência entre elas e com a resposta "esperar", **quando** o Grão-Mestre registra a dependência da #15 na #12, **então** a #15 espera e a #12 segue; a #12 mesclada acorda a #15.
+- **CA-DEPMESA-05** · *rápida* — **Dado** a espera da #15 pela #12, **quando** a mesa #12 é cancelada, ou o épico #12 é fechado como "não planejado", **então** a espera vira `cancelled` e o Grão-Mestre é avisado; **dado** um Mestre da mesa que tenta `gh epic update --depends-on`, **então** sai com `level_denied`; **dado** a mesa #15 aguardando, **então** ela não gera aviso de mesa parada.
 
 ## Depende de
 

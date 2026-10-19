@@ -1,6 +1,6 @@
 # Prova e devolução
 
-> **Assunto:** a prova de cada critério no `done`, o `done` que a classe exige (prova e verificação pelo motor), a devolução com causa e a pausa por "mesma falha repetida", e o pergaminho de revisão com achados de identificador estável · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** a prova de cada critério no `done`, o `done` que a classe exige (prova e verificação pelo motor), a devolução com causa e a pausa por "mesma falha repetida", e o pergaminho de revisão com achados de identificador estável · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -24,7 +24,7 @@ Somam-se à [definição da missão](missoes.md#definição), com a mesma valida
 - **Os critérios** são os itens `- [ ] C<n> <texto>` do corpo da issue da missão, escritos pelo Mestre da mesa ([o pedido que chega](mestre-da-mesa.md#o-pedido-que-chega-o-mestre-da-mesa-como-po)). O motor os lê no `quest run` e os congela no banco para a rodada: editar a issue depois só vale na próxima rodada. O escopo é a missão: duas missões do mesmo épico têm cada uma o seu C1.
 - A etapa que prova um critério diz isso no `done`: `mestre done "<resumo>" --proof "C1=<prova>"` (a flag se repete; sintaxe em [comunicação](../cli/comunicacao.md#mestre-done)). A prova é texto curto: o teste, o comando com o resultado, ou o caminho de uma captura **commitada** na branch da mesa (a prova vai com o PR).
 - O motor grava a prova na execução da etapa e no [pergaminho da missão](pergaminhos-e-tomos.md#pergaminho-da-missão), e marca o item na issue (App "Mestre"), com a linha de prova e de onde ela veio: **declarada por <personagem>** (o agente afirmou) ou **verificada pelo motor** (a mesma etapa passou na verificação abaixo).
-- Dentro de uma rodada, a última prova de cada critério vale. Uma nova rodada desmarca todos.
+- **Rodada** é cada execução da missão, do `quest run` ao `completed` (rodar de novo uma missão `completed` abre outra, [missões](missoes.md)); uma devolução repete a etapa dentro da mesma rodada e não desmarca nada. Dentro de uma rodada, a última prova de cada critério vale. Uma nova rodada desmarca todos.
 - Critério sem prova fica desmarcado. O aceite do Mestre da mesa e o "pronto" que o Grão-Mestre dá ao usuário leem esta marcação; a justificativa do agente continua sendo texto não verificado ([cadeia](cadeia-de-aprovacao.md)).
 
 ### O `done` que a classe exige
@@ -33,10 +33,11 @@ O frontmatter do `CLASS.md` ([classes](../classes/classes.md)) pode declarar:
 
 ```yaml
 done_requires:
-  proof: all       # all: cada critério da missão precisa de prova nesta etapa; none (padrão)
+  proof: all       # all: cada critério da missão precisa de prova na etapa (contam as dadas em `done` anteriores da mesma rodada); none (padrão)
   verify: true     # o motor roda a verificação do workspace antes de concluir; false (padrão)
 ```
 
+- **`done_requires` vale só para o `done` que conclui a etapa.** A devolução (`done --return`, de qualquer classe, como o QA) não exige prova nem verificação: exige o motivo e, se quiser contar para a mesma falha, `--cause` e `--where`.
 - **`proof: all`:** um `done` sem prova para algum critério é recusado (7 `proof_missing`, com os que faltam); a etapa continua `running`. Prova dada num `done` anterior da mesma rodada conta.
 - **`verify: true`:** "a chegada é a verificação", como na [etapa `sync`](sincronia-com-a-base.md#a-chegada-é-a-verificação). O `done` não conclui a etapa sozinho: o motor roda os [comandos de verificação](../sessao-zero/workspace.md#comandos-de-verificação) num worktree efêmero da mesa, na ponta da branch na Cidadela, como `mestre-agente` e sob a trava por repositório, e então:
   - **verde:** a etapa conclui e o bastão passa; as provas desse `done` ficam "verificadas pelo motor";
@@ -65,7 +66,7 @@ done_requires:
   ```
 
   Estados: `aberto`, `corrigido` (com `arquivo:linha`), `não corrigido`, `não se aplica mais`. Tipos de achado: `Gap`, `Bug`, `Verification miss`, `Scope drift`, `Over-engineering` (nunca bloqueia sozinho).
-- Na segunda rodada em diante, o item `quest` da etapa que revisa traz o conteúdo atual do pergaminho de revisão antes das instruções, com a ordem de conferir cada achado `aberto` ou `não corrigido` antes de qualquer revisão nova; o da etapa que recebe a devolução traz os achados dela. Quem edita usa `mestre note edit --expect-rev`, para não apagar a edição de outro.
+- Da segunda passada da etapa que revisa em diante (depois de uma devolução), o item `quest` dela traz o conteúdo atual do pergaminho de revisão antes das instruções, com a ordem de conferir cada achado `aberto` ou `não corrigido` antes de qualquer revisão nova; o da etapa que recebe a devolução traz os achados dela. Quem edita usa `mestre note edit --expect-rev`, para não apagar a edição de outro.
 - O motor não interpreta a tabela: ele cria, conecta e entrega. A disciplina de revisão é da classe ([classes](../classes/classes.md)).
 
 ## Regras e erros
@@ -91,6 +92,9 @@ done_requires:
 - **CA-PROVA-10** · *rápida* — **Dado** `verify: true`, `same_failure: 3` e o executor falso que falha três vezes com a mesma saída `src/a.go:7: x`, **quando** o personagem dá `done` três vezes, **então** a missão fica `paused` com "mesma falha repetida" na terceira e o Mestre da mesa recebe o `return_limit`.
 - **CA-PROVA-11** · *rápida* — **Dado** uma missão com `issue: 41` e a issue #41 com os itens C1 e C2, **quando** a missão roda e alguém edita a issue acrescentando C3, **então** a rodada continua com C1 e C2, nenhuma issue nova é criada e a próxima rodada passa a ter C3.
 - **CA-PROVA-12** · *rápida* — **Dado** uma classe com `done_requires: {verify: true}` e `git.commit` efetivo em `deny`, **quando** é salva, **então** é recusada; **dado** `mestre done "x" --return "y" --proof "C1=t"`, **então** sai com 2 `usage`.
+- **CA-PROVA-13** · *rápida* — **Dado** uma classe QA com `done_requires: {proof: all, verify: true}` e uma missão com C1 e C2, **quando** ela roda `mestre done "x" --return "bug" --cause test --where src/a.go:7` sem prova e com arquivo não commitado, **então** a devolução é aceita, nenhuma verificação roda e conta uma volta.
+- **CA-PROVA-14** · *rápida* — **Dado** uma verificação em andamento, **quando** chega um segundo `done`, **então** sai com 7 `verification_running`; **dado** o comando que estoura o `timeout`, **então** conta como vermelha com "tempo esgotado"; **dado** uma prova de 501 caracteres, **então** sai com 8 `too_large`; **dado** `--cause urgente`, **então** sai com 2 `usage`.
+- **CA-PROVA-15** · *rápida* — **Dado** `--where ./a.go:12:5` e `a.go:12`, **quando** a impressão é calculada, **então** as duas são a mesma; **dado** o Cidadela fora e um `done` na fila de saída com `--proof "C9=x"`, **quando** a fila é entregue, **então** a recusa chega como item `system` com o `op_id` e a etapa segue `running`; **dado** uma issue sem nenhum `C<n>`, **então** a missão roda sem critérios e o Mestre da mesa avisa o Grão-Mestre.
 
 ## Depende de
 
