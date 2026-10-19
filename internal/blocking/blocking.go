@@ -206,7 +206,7 @@ func Build(n Notice, v Viewer, mask func(string) string) Message {
 		motive = HumanDecision
 	}
 	if n.Stopped != "" {
-		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), engineLine(mask(n.Stopped)))
+		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), clip(engineLine(mask(n.Stopped)), MaxField))
 	} else {
 		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), motive)
 	}
@@ -233,7 +233,7 @@ func Build(n Notice, v Viewer, mask func(string) string) Message {
 	}
 	buttons = append(buttons, Button{Text: "Ver detalhes", Details: true})
 	text := strings.TrimRight(b.String(), "\n")
-	if strings.TrimSpace(n.Evidence) == "" {
+	if len(lines(mask(n.Evidence))) == 0 {
 		// nothing the engine could put together: only the text of the agent
 		text = strings.Replace(text, "\n", "\nsem evidência verificada\n", 1)
 	}
@@ -246,8 +246,8 @@ func Full(n Notice, mask func(string) string) string {
 	if n.Stopped != "" {
 		b.WriteString(engineLine(mask(n.Stopped)) + "\n")
 	}
-	if n.Evidence != "" {
-		b.WriteString("Evidência:\n```\n" + safeBlock(mask(n.Evidence)) + "\n```\n")
+	if ls := lines(mask(n.Evidence)); len(ls) > 0 {
+		b.WriteString("Evidência:\n```\n" + safeBlock(strings.Join(ls, "\n")) + "\n```\n")
 	}
 	if agent := agentBlock(n, mask); agent != "" {
 		b.WriteString("— texto do agente, não verificado —\n" + agent)
@@ -255,18 +255,48 @@ func Full(n Notice, mask func(string) string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// cut keeps the first lines of the evidence and says how many were left out.
-func cut(ev string) string {
-	ev = strings.TrimRight(ev, "\n ")
+// MaxLine is the longest line of the evidence the message shows, and MaxField the
+// longest field of the agent, in characters.
+const (
+	MaxLine  = 300
+	MaxField = 500
+)
+
+// clip cuts a text to n characters.
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+// lines splits the evidence at every break a reader may take for the end of a line.
+func lines(ev string) []string {
+	ev = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(strings.TrimSpace(ev))
 	if ev == "" {
+		return nil
+	}
+	return strings.Split(ev, "\n")
+}
+
+// cut keeps the first lines of the evidence, each cut to a length, and says how
+// many were left out.
+func cut(ev string) string {
+	ls := lines(ev)
+	if len(ls) == 0 {
 		return ""
 	}
-	lines := strings.Split(strings.ReplaceAll(ev, "\r\n", "\n"), "\n")
-	if len(lines) <= MaxEvidenceLines {
-		return safeBlock(strings.Join(lines, "\n"))
+	rest := len(ls) - MaxEvidenceLines
+	ls = ls[:min(len(ls), MaxEvidenceLines)]
+	for i, l := range ls {
+		ls[i] = clip(l, MaxLine)
 	}
-	rest := len(lines) - MaxEvidenceLines
-	return safeBlock(strings.Join(lines[:MaxEvidenceLines], "\n")) + fmt.Sprintf("\n… +%d linhas em Ver detalhes", rest)
+	out := safeBlock(strings.Join(ls, "\n"))
+	if rest > 0 {
+		out += fmt.Sprintf("\n… +%d linhas em Ver detalhes", rest)
+	}
+	return out
 }
 
 // safeBlock keeps a text from closing the fence it is shown in.
@@ -276,6 +306,9 @@ func safeBlock(s string) string { return strings.ReplaceAll(s, "```", "'''") }
 // somewhere else: one line, with no mark that the bot would turn into bold, code
 // or a link.
 func engineLine(s string) string { return plain(inbox.OneLine(s)) }
+
+// Line is a text of the engine or of an agent as one safe line, masked.
+func Line(s string, mask func(string) string) string { return clip(engineLine(mask(s)), MaxField) }
 
 // plain takes away the marks of the Markdown of the bot (bold, code, links).
 func plain(s string) string {
@@ -288,14 +321,14 @@ func agentBlock(n Notice, mask func(string) string) string {
 	var b strings.Builder
 	add := func(title, text string) {
 		if strings.TrimSpace(text) != "" {
-			fmt.Fprintf(&b, "%s: %s\n", title, engineLine(mask(text)))
+			fmt.Fprintf(&b, "%s: %s\n", title, clip(engineLine(mask(text)), MaxField))
 		}
 	}
 	add("Já conferi", n.Checked)
 	add("Por que não decido", n.WhyNot)
 	for _, s := range n.AgentSteps {
 		if strings.TrimSpace(s) != "" {
-			fmt.Fprintf(&b, "[ ] %s\n", engineLine(mask(s)))
+			fmt.Fprintf(&b, "[ ] %s\n", clip(engineLine(mask(s)), MaxField))
 		}
 	}
 	return b.String()

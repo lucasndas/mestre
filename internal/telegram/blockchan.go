@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 
 	"github.com/lucasndas/mestre/internal/blocking"
@@ -40,10 +41,15 @@ func (c *BlockChannel) Actions() map[string]Action {
 // built for his level. It returns the number of the notice and how many users it
 // was sent to.
 func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64, sent int, err error) {
-	mask := c.bot.o.Mask
-	if mask == nil {
-		mask = func(s string) string { return s }
+	if _, err := blocking.ParseMotive(string(n.Motive)); err != nil {
+		return 0, 0, err
 	}
+	for _, e := range n.BlockedBy {
+		if _, err := strconv.Atoi(e); err != nil {
+			return 0, 0, fmt.Errorf("blocked-by takes numbers of epics, not %q", e)
+		}
+	}
+	mask := c.bot.maskText // looks through the marks that could hide a secret
 	full := blocking.Full(n, mask)
 	summary := n.Stopped
 	if summary == "" {
@@ -51,7 +57,7 @@ func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64,
 	}
 	err = c.bot.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `INSERT INTO blocking_notices (workspace, mesa, motive, summary, full, machine, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			n.Workspace, n.Mesa, string(n.Motive), mask(summary), full, n.MachineLine(), ms(c.bot.clk.Now()))
+			n.Workspace, n.Mesa, string(n.Motive), blocking.Line(summary, mask), full, n.MachineLine(), ms(c.bot.clk.Now()))
 		if err != nil {
 			return err
 		}
@@ -74,7 +80,7 @@ func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64,
 		for _, b := range m.Buttons {
 			switch {
 			case b.Panel:
-				if c.PanelURL != "" {
+				if panelURL(c.PanelURL) {
 					rows = append(rows, []Button{{Text: b.Text, URL: c.PanelURL}})
 				}
 			case b.Details:
@@ -110,4 +116,12 @@ func (c *BlockChannel) details(ctx context.Context, k Click) (string, string, er
 		return "", "", err
 	}
 	return "Enviei os detalhes.", "", nil
+}
+
+// panelURL says the link of the panel is one the Telegram takes in a button: a
+// plain http(s) URL with a host and no credentials. A bad one costs the button,
+// never the notice.
+func panelURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil
 }
