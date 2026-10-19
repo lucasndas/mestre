@@ -310,7 +310,7 @@ func (s *Service) handleDone(ctx context.Context, c *localchan.Call) localchan.R
 		return Refusal(err)
 	}
 	// No step: a task (the done answers it), or nothing to answer.
-	if len(req.Proofs) > 0 {
+	if len(req.Proofs) > 0 || req.Cause != "" || len(req.Where) > 0 {
 		return Refusal(fmt.Errorf("%w: --proof is for the step of a quest; %s has none", ErrUsage, x.Name))
 	}
 	if strings.TrimSpace(flagString(c, "return")) != "" {
