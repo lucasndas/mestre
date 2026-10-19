@@ -44,6 +44,11 @@ func (c *Call) Partial(data any) {
 	c.publish(b)
 }
 
+// SetPartialSink makes the partial responses of the call go to f: the
+// Citadel serves the call of a Tower with it and sends each partial back as a
+// cli.result; the CLI of the Tower then gets them as if the command ran there.
+func (c *Call) SetPartialSink(f func(json.RawMessage)) { c.publish = f }
+
 // Handler serves a command. It runs with the context of the server, not of
 // the connection: a CLI that dies does not cancel its request.
 type Handler interface {
