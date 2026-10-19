@@ -78,6 +78,8 @@ type Server struct {
 	nextUpd  int64
 	nextMsg  int64
 	sent     []Sent
+	calls    map[string]int
+	pollGen  int // the long getUpdates in progress; a newer one aborts the older with 409
 	deleted  []Deleted
 	failures map[string][]Failure
 	notify   chan struct{} // closed and replaced on each new update
@@ -93,7 +95,7 @@ func New(clk clock.Clock, rep testkit.Reporter, token string) (*Server, error) {
 	return &Server{
 		clk: clk, rep: rep, token: token, recs: recs, ver: ver,
 		nextUpd: 100000001, nextMsg: 1,
-		failures: map[string][]Failure{}, notify: make(chan struct{}),
+		failures: map[string][]Failure{}, calls: map[string]int{}, notify: make(chan struct{}),
 	}, nil
 }
 
@@ -178,6 +180,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"ok": false, "error_code": 401, "description": "Unauthorized"})
 		return
 	}
+	s.mu.Lock()
+	s.calls[method]++
+	s.mu.Unlock()
 	if s.injectFailure(w, method) {
 		return
 	}
@@ -274,12 +279,25 @@ func (s *Server) getUpdates(w http.ResponseWriter, r *http.Request, p map[string
 	offset := num(p["offset"])
 	timeout := time.Duration(num(p["timeout"])) * time.Second
 	var t clock.Timer
+	gen := 0
 	if timeout > 0 {
 		t = s.clk.NewTimer(timeout)
 		defer t.Stop()
+		s.mu.Lock()
+		s.pollGen++
+		gen = s.pollGen
+		close(s.notify) // wakes the older long poll, which finds itself replaced
+		s.notify = make(chan struct{})
+		s.mu.Unlock()
 	}
 	for {
 		s.mu.Lock()
+		if gen != 0 && gen != s.pollGen {
+			s.mu.Unlock()
+			writeJSON(w, http.StatusConflict, map[string]any{"ok": false, "error_code": 409,
+				"description": "Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"})
+			return
+		}
 		if offset > 0 { // confirm everything before offset
 			keep := s.updates[:0]
 			for _, u := range s.updates {
@@ -392,6 +410,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// Calls is how many times the method was called (the failed ones too): what a
+// Citadel that must not call the Telegram did not do.
+func (s *Server) Calls(method string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls[method]
 }
 
 // File is a file uploaded to the bot API (the document of sendDocument).
