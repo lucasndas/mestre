@@ -134,23 +134,15 @@ func (s *Service) Decided(ctx context.Context, d Decision) error {
 		err = s.updateStep(ctx, st.UID, func(x *Step) { x.Approval, x.Blocker = 0, "" })
 		s.pauseAndTell(ctx, q, fmt.Sprintf("a aprovação antes da etapa %s foi negada%s", sd.Title(), reasonSuffix(d.Reason)))
 	case st.State == StepApproving && d.Approved:
-		discarded := false
 		err = s.st.Do(ctx, func(tx *Tx) error {
 			cur, err := tx.Step(st.UID)
 			if err != nil || cur.State != StepApproving {
 				return err
 			}
-			if cur.DiscardResult { // a return made the work useless while it waited
-				cur.State, cur.Approval, cur.Approved, cur.Entry, cur.DiscardResult = StepPending, 0, false, "", false
-				discarded = true
-				return tx.SaveStep(cur, now)
-			}
 			cur.State, cur.Approval, cur.Entry = StepCompleted, 0, ""
 			return tx.SaveStep(cur, now)
 		})
-		if err == nil && discarded {
-			s.kick(ctx, q.ID)
-		} else if err == nil {
+		if err == nil {
 			run, _ := s.lastRun(ctx, st.UID)
 			s.o.waitsStepDone(ctx, st.UID, resultText(run))
 			s.kick(ctx, q.ID)
@@ -178,11 +170,6 @@ func (s *Service) deniedAfter(ctx context.Context, q Quest, st Step, sd StepDef,
 		cur, err := tx.Step(st.UID)
 		if err != nil || cur.State != StepApproving {
 			return err
-		}
-		if cur.DiscardResult { // a return made the work useless: nothing to return
-			cur.State, cur.Approval, cur.Approved, cur.Entry, cur.DiscardResult = StepPending, 0, false, "", false
-			st = cur
-			return tx.SaveStep(cur, s.clk.Now())
 		}
 		cur.Returns++
 		over = cur.Returns > q.MaxReturns

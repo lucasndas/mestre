@@ -189,11 +189,11 @@ func TestWithoutTheFlowOfApprovalTheQuestPausesAtThePoint(t *testing.T) {
 }
 
 // A return that reaches a step waiting for its approval after makes its work
-// useless: the approval, whichever way it goes, does not complete the step; it
-// goes back to pending (docs/orquestracao/missoes.md#devolução-com-limite).
+// useless: the step goes back to pending at once, and a late decision of the old
+// request completes nothing (docs/orquestracao/missoes.md#devolução-com-limite).
 func TestAReturnThatReachesAStepWaitingForItsApprovalAfterSendsItBackToPending(t *testing.T) {
 	t.Parallel()
-	for _, approved := range []bool{true, false} {
+	{
 		w := newWorld(t)
 		q := w.run(w.create(`
 name: Devolução
@@ -208,14 +208,15 @@ steps:
 		w.wantStates(q, map[string]quests.StepState{"qa": quests.StepApproving, "review": quests.StepRunning})
 		req := w.step(q, "qa").Approval
 		w.finish("Revisor Codex 1", "falta teste", nil, "faltam testes")
-		if err := w.orc.Quests.Decided(w.ctx, quests.Decision{Request: req, Approved: approved, Reason: "ok"}); err != nil {
-			t.Fatal(err)
-		}
-		if got := w.states(q)["qa"]; got == quests.StepCompleted {
-			t.Errorf("approved=%v: qa completed with a result a return made useless", approved)
+		if got := w.states(q)["qa"]; got != quests.StepPending {
+			t.Errorf("qa is %s after the return; want pending", got)
 		}
 		if st := w.step(q, "qa"); st.DiscardResult || st.Approval != 0 {
-			t.Errorf("approved=%v: qa keeps the marks of the old work: %+v", approved, st)
+			t.Errorf("qa keeps the marks of the old work: %+v", st)
+		}
+		_ = w.orc.Quests.Decided(w.ctx, quests.Decision{Request: req, Approved: true, Reason: "ok"})
+		if got := w.states(q)["qa"]; got == quests.StepCompleted {
+			t.Error("a late approval completed a step whose work was discarded")
 		}
 	}
 }

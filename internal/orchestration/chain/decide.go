@@ -524,6 +524,10 @@ func (s *Service) claim(ctx context.Context, id int64, from *Level, c Closing) (
 // decision was refused: its time starts again, the whole time of the level
 // (docs/orquestracao/cadeia-de-aprovacao.md).
 func (s *Service) unclaim(ctx context.Context, id int64) {
+	var st Settings
+	if r, err := s.st.Get(ctx, id); err == nil {
+		st, _ = s.settings(ctx, r.Workspace)
+	}
 	s.mu.Lock()
 	r, err := s.st.Get(ctx, id)
 	if err != nil || r.State != Open || r.Deciding == nil {
@@ -531,8 +535,9 @@ func (s *Service) unclaim(ctx context.Context, id int64) {
 		return
 	}
 	r.Deciding = nil
-	st, _ := s.settings(ctx, r.Workspace)
-	r.Deadline = s.clk.Now().Add(levelDeadline(st, r.Level.Kind, r.Type))
+	if !r.AskedBack { // while it waits for the requester the time is the people's
+		r.Deadline = s.clk.Now().Add(levelDeadline(st, r.Level.Kind, r.Type))
+	}
 	err = s.st.Save(ctx, r)
 	s.mu.Unlock()
 	if err != nil {

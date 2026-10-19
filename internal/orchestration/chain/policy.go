@@ -29,8 +29,8 @@ type Settings struct {
 	// PeopleDeadline is the time of the people (the file's `expiracao`).
 	PeopleDeadline time.Duration
 	// PeopleDeadlines are the times of the people of the types that have one of
-	// their own (`tipos.<tipo>.expiracao` of the policy file); the other types
-	// have PeopleDeadline.
+	// their own (`tipos.<tipo>.expiracao` of the policy file, which the loader of
+	// the policy of milestone 5 fills in); the other types have PeopleDeadline.
 	PeopleDeadlines map[classes.RequestType]time.Duration
 	// TempRuleMax is the longest validity of a temporary table rule.
 	TempRuleMax time.Duration
@@ -50,6 +50,9 @@ type Settings struct {
 
 // peopleDeadline is the time of the people for a request of a type.
 func (s Settings) peopleDeadline(t classes.RequestType) time.Duration {
+	if t == "" {
+		t = classes.RequestClassPermission // the requests of an action have no type in old records
+	}
 	if d, ok := s.PeopleDeadlines[t]; ok && d > 0 {
 		return d
 	}
