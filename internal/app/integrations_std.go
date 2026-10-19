@@ -284,6 +284,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.ChainGrants == nil {
 		o.ChainGrants = r.decrees
 	}
+	if o.ChainSubDelegations == nil {
+		o.ChainSubDelegations = r.decrees
+	}
 	if o.ChainDelegations == nil {
 		o.ChainDelegations = r.decrees
 	}
@@ -313,6 +316,27 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	if orc.TableRules != nil {
 		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)
 	}
+	r.decrees.SetReminder(r.dc)
+	r.decrees.SetRevokeHooks(telegram.RevokeAllHooks{Rules: orc.TableRules, Users: r.users, Channel: r.dc,
+		GrandMaster: func(ctx context.Context, workspace, text string) {
+			gm, ok, err := orc.Registry.GrandMaster(ctx, workspace)
+			if err != nil || !ok {
+				return
+			}
+			if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
+				r.env.Log.Warn("app: the Grand Master was not told of the revocation", "workspace", workspace, "err", err)
+			}
+		},
+		RerouteFn: func(ctx context.Context, workspace string) error {
+			return orc.Chain.RerouteWorkspace(ctx, workspace, "o Dono revogou todas as delegações")
+		}})
+	r.decrees.SetTableOpen(func(ctx context.Context, workspace, table string) (bool, error) {
+		tb, err := orc.Tables.Get(ctx, workspace, table)
+		if errors.Is(err, tables.ErrNoTable) {
+			return false, nil
+		}
+		return err == nil && tb.State == tables.StateOpen, err
+	})
 	var dgst *digest.Service
 	if orc.Policy != nil && orc.Chain != nil {
 		var err error

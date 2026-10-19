@@ -35,7 +35,7 @@ func TestTheConfirmationNamesTheScopeThatWillBeStored(t *testing.T) {
 	if len(texts) != 3 {
 		t.Fatalf("proposals of different scopes read the same: %v", texts)
 	}
-	del := decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "loja", Scope: "classe:dev", Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"},
+	del := decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "loja", Scope: "padrao:x", Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"},
 		Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: "configuracao_repositorio"}, Text: "delegue"}
 	if ref := w.refusal(del); ref.Code != decrees.CodeDelegation {
 		t.Fatalf("a scope the engine does not understand: %+v", ref)

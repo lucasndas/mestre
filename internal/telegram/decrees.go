@@ -73,12 +73,16 @@ func (c *DecreeChannel) Bind(bot *Bot) {
 // Commands is /decretos, for Options.Commands. It only reads, so it is answered
 // while the Mestre is locked.
 func (c *DecreeChannel) Commands() []Command {
-	return []Command{{Name: "decretos", Description: "lista os decretos ativos e suspensos e as regras temporárias de mesa", Query: true, Capability: users.Status, Run: c.list}}
+	return []Command{
+		{Name: "decretos", Description: "lista os decretos ativos e suspensos e as regras temporárias de mesa", Query: true, Capability: users.Status, Run: c.list},
+		{Name: "revogar_tudo", Description: "revoga todas as delegações e regras temporárias de mesa (só o Dono)", Capability: users.DelegateHigh, Query: true, Run: c.revokeAllAsk},
+	}
 }
 
 // Actions are the buttons, for Options.Actions.
 func (c *DecreeChannel) Actions() map[string]Action {
-	return map[string]Action{DecreeAction: c.click, DecreeRevokeAction: c.revoke, TableRuleRevokeAction: c.revokeRule}
+	return map[string]Action{DecreeAction: c.click, DecreeRevokeAction: c.revoke, TableRuleRevokeAction: c.revokeRule,
+		DelegationRenewAction: c.renew, DelegationLapseAction: c.lapse, RevokeAllAction: c.revokeAll}
 }
 
 // Offer puts a proposal in front of its author with the buttons Confirmar and
