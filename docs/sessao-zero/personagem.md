@@ -111,6 +111,7 @@ Quando o personagem é encerrado de vez (estado final em [personagens](../orques
 - **CA-SZ-PERS-13** · *rápida* — **Dado** qualquer personagem, **quando** o `MESTRE.md` é montado, **então** as regras do Mestre contêm a instrução de tratar `queued: true`/`PENDING:` como pendente e esperar o resultado na caixa de entrada.
 - **CA-SZ-PERS-14** · *rápida* — **Dado** um personagem recém-preparado no Linux, **quando** o motor monta as pastas dele na máquina, **então** `agentes/<id>/` tem modo 2750 e `tmp/` 2770, ambos com o bit setgid.
 - **CA-SZ-PERS-15** · *rápida* — **Dado** o Mestre da mesa de um personagem Claude Code com uma pasta `mestre-minha/` da pessoa, sem o marcador de gerado, e um recurso `ref.md` ao lado dela na pasta de skills dele, **quando** o motor o prepara de novo, **então** a preparação recusa com o aviso que cita `mestre-minha`, e a skill e o recurso ficam intactos.
+- **CA-SZ-PERS-16** · *pesada* — **Dado** a instalação com as contas reais dos agentes, **quando** um personagem nasce, **então** o `sessionzero.Character` usa essas contas e a sessão zero entrega o `MESTRE.md` e as identidades (MVP-4).
 
 ## Depende de
 

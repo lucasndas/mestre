@@ -143,7 +143,7 @@ Esta seção é a fonte única do que é "pronto"; outros documentos fazem link 
 4. Linter limpo e arquivos gerados em dia.
 5. Nada fora do [escopo do MVP](../produto/escopo-mvp.md) foi acrescentado.
 6. Commits e PR seguem as convenções acima.
-7. **Marco:** só está pronto depois da auditoria (revisores conferem que o teste de cada critério afirma o que o critério diz, olhando primeiro a segurança e os dois sistemas, e os achados são corrigidos antes de o marco seguinte começar); a data (só ela: o relatório não vai para o repositório) entra na coluna "Auditoria" da tabela de [marcos](ordem-de-implementacao.md#marcos), e a [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) a confere.
+7. **Marco:** só está pronto depois da auditoria (revisores conferem que o teste de cada critério afirma o que o critério diz, olhando primeiro a segurança e os dois sistemas, e os achados são corrigidos antes de o marco seguinte começar); a data (só ela: o relatório não vai para o repositório) entra na coluna "Auditoria" da tabela de [marcos](ordem-de-implementacao.md#marcos), e a [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) a confere; a do M5 confere também a [ligação de produção](ligacao-de-producao.md).
 
 ## Fontes
 
