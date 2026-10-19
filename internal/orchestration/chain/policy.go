@@ -158,6 +158,7 @@ func ParseSection(data []byte, expiry time.Duration) (Settings, error) {
 		s.PeopleDeadline = expiry
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
 	var y sectionYAML
 	if err := dec.Decode(&y); err != nil && !errors.Is(err, io.EOF) {
 		return Settings{}, &SectionError{Item: "cadeia", Reason: err.Error()}

@@ -119,6 +119,13 @@ func TestAnInvalidPolicyFileNeverLoosensWhatHeldBeforeAndTheOwnerIsToldOnce(t *t
 		"two documents":       "versao: 1\n---\nversao: 1\n",
 		"not yaml":            "versao: [\n",
 		"area not a list":     "versao: 1\nareas_sensiveis:\n  mestre: nada\n",
+		"empty area":          "versao: 1\nareas_sensiveis:\n  permissoes_e_segredos: []\n",
+		"bad glob":            "versao: 1\nareas_sensiveis:\n  mestre: [\"[x\"]\n",
+		"empty glob":          "versao: 1\nareas_sensiveis:\n  mestre: [\"\"]\n",
+		"typo in cadeia":      "versao: 1\ncadeia:\n  mesa_decid: [rede]\n",
+		"high type alone":     "versao: 1\ntipos:\n  acao_destrutiva: { sozinho: se_condicoes }\n",
+		"bad sozinho":         "versao: 1\ntipos:\n  pr: { sozinho: as_vezes }\n",
+		"bad minimum level":   "versao: 1\ntipos:\n  pr: { nivel_minimo: todos }\n",
 	} {
 		n := len(r.alerts)
 		r.write(bad)
@@ -171,5 +178,20 @@ func TestAnInvalidFirstPolicyFileHoldsTheDefaultAndALinkIsNotFollowed(t *testing
 	}
 	if len(r.alerts) != 2 {
 		t.Fatalf("alerts %v; want the link told", r.alerts)
+	}
+}
+
+func TestTheAlertMayComeBackAndTheSnapshotIsTheCallersOwn(t *testing.T) {
+	t.Parallel()
+	r := newPolicyRig(t)
+	r.file.Alert = func(string, error) { r.file.Snapshot("meu-app") } // would wait for itself under the lock
+	r.write("versao: 1\nexpiracao: 6h\n")
+	snap := r.file.Snapshot("meu-app")
+	snap.Settings.PeopleDeadlines[classes.RequestPR] = time.Nanosecond
+	snap.Settings.MesaDecides[0] = "mexido"
+	r.write("versao: [\n")
+	again := r.file.Snapshot("meu-app")
+	if again.Settings.PeopleDeadlines[classes.RequestPR] == time.Nanosecond || again.Settings.MesaDecides[0] == "mexido" || again.Version != snap.Version {
+		t.Fatalf("what a caller changed reached what holds: %+v", again.Settings)
 	}
 }

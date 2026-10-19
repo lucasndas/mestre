@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -69,6 +70,10 @@ var (
 	// fixedTypes are the types of a fixed rule: the file cannot give them a time
 	// or a way to decide.
 	fixedTypes = []classes.RequestType{classes.RequestOperator, classes.RequestGuildEntry, classes.RequestCitadelPromotion, classes.RequestMestreUpdate}
+
+	// highTypes are the types of risk alto: the Grand Master opens them only by
+	// delegation, so the file cannot let them be decided alone.
+	highTypes = []classes.RequestType{classes.RequestWorkflows, classes.RequestRepoSettings, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD}
 
 	// knownTypes are the types the file may configure.
 	knownTypes = []classes.RequestType{
@@ -147,6 +152,18 @@ func ParsePolicyFile(data []byte) (Settings, *classes.RiskPolicy, error) {
 		if !slices.Contains(knownTypes, rt) {
 			return bad("tipos."+name, "tipo desconhecido")
 		}
+		switch t.Sozinho {
+		case "", "nunca":
+		case "se_condicoes":
+			if slices.Contains(highTypes, rt) {
+				return bad("tipos."+name+".sozinho", "um tipo de risco alto não se decide sozinho; só por delegação")
+			}
+		default:
+			return bad("tipos."+name+".sozinho", "precisa de se_condicoes ou nunca")
+		}
+		if !slices.Contains([]string{"", "aprovador", "administrador", "dono"}, t.NivelMinimo) {
+			return bad("tipos."+name+".nivel_minimo", "precisa de aprovador, administrador ou dono")
+		}
 		if t.Expiracao == "" {
 			continue
 		}
@@ -181,6 +198,14 @@ func ParsePolicyFile(data []byte) (Settings, *classes.RiskPolicy, error) {
 		if err := node.Decode(&globs); err != nil {
 			return bad("areas_sensiveis."+area.key, "precisa de uma lista de globs")
 		}
+		if len(globs) == 0 {
+			return bad("areas_sensiveis."+area.key, "a lista vazia tiraria a proteção; apague a chave para valer o padrão")
+		}
+		for _, g := range globs {
+			if !classes.ValidGlob(g) {
+				return bad("areas_sensiveis."+area.key, fmt.Sprintf("glob inválido %q", g))
+			}
+		}
 		*area.dst = globs
 	}
 	return st.WithDefaults(), risk, nil
@@ -205,10 +230,21 @@ func (f *PolicyFile) log() *slog.Logger {
 	return f.Logger
 }
 
-// load reads the file of the workspace and returns what holds now.
+// load reads the file of the workspace and returns what holds now; the Owner
+// is told after the lock is let go (an Alert that comes back here must not wait
+// for itself).
 func (f *PolicyFile) load(workspace string) *parsedPolicy {
+	var told error
 	f.mu.Lock()
-	defer f.mu.Unlock()
+	p := f.loadLocked(workspace, &told)
+	f.mu.Unlock()
+	if told != nil && f.Alert != nil {
+		f.Alert(workspace, told)
+	}
+	return p
+}
+
+func (f *PolicyFile) loadLocked(workspace string, told *error) *parsedPolicy {
 	if f.last == nil {
 		f.last = map[string]*policyState{}
 	}
@@ -259,20 +295,43 @@ func (f *PolicyFile) load(workspace string) *parsedPolicy {
 	f.log().Warn("chain: the policy file does not hold, the last valid version does", "workspace", workspace, "err", err)
 	if st.alerted != hash {
 		st.alerted = hash
-		if f.Alert != nil {
-			f.Alert(workspace, err)
-		}
+		*told = err
 	}
 	return holds()
+}
+
+// PolicySnapshot is what holds of a workspace at one reading of the file: the
+// settings, the version (hash) and the owner's part of the risk. A decision that
+// audits the version takes all three from one snapshot.
+type PolicySnapshot struct {
+	Settings Settings
+	Version  string
+	Risk     *classes.RiskPolicy
+}
+
+// Snapshot reads the file once. The result is the caller's own: changing it
+// does not change what holds.
+func (f *PolicyFile) Snapshot(workspace string) PolicySnapshot {
+	p := f.load(workspace)
+	s := p.settings
+	s.PeopleDeadlines = maps.Clone(s.PeopleDeadlines)
+	s.MesaDecides = slices.Clone(s.MesaDecides)
+	var risk *classes.RiskPolicy
+	if p.risk != nil {
+		r := *p.risk
+		r.Secrets, r.Mestre = slices.Clone(r.Secrets), slices.Clone(r.Mestre)
+		risk = &r
+	}
+	return PolicySnapshot{Settings: s, Version: p.version, Risk: risk}
 }
 
 // Chain implements Policy: the settings that hold and the version (hash) of
 // the file they come from ("default" when none has been read).
 func (f *PolicyFile) Chain(_ context.Context, workspace string) (Settings, string, error) {
-	p := f.load(workspace)
-	return p.settings, p.version, nil
+	s := f.Snapshot(workspace)
+	return s.Settings, s.Version, nil
 }
 
 // Risk is the owner's part of the risk classification of the workspace
 // (env.Risk of the decisions); nil is the default table.
-func (f *PolicyFile) Risk(workspace string) *classes.RiskPolicy { return f.load(workspace).risk }
+func (f *PolicyFile) Risk(workspace string) *classes.RiskPolicy { return f.Snapshot(workspace).Risk }
