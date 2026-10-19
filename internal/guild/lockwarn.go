@@ -25,10 +25,23 @@ type DownNotice struct {
 	down  bool
 }
 
-// Changed is the OnChange of the Fence.
+// Changed is the OnChange of the Fence. Tell must not block (it queues the
+// message): it runs on the goroutine that checks the lock.
 func (n *DownNotice) Changed(st FenceState) {
+	if n.Tell == nil || n.Clock == nil {
+		return
+	}
+	queued := func() int {
+		if n.Queued == nil {
+			return 0
+		}
+		return n.Queued()
+	}
 	n.mu.Lock()
 	switch {
+	case st == FenceDemoted:
+		n.down = false // the Citadel stepped down: there is no GitHub fora to show
+		n.mu.Unlock()
 	case st == FenceLockDown && !n.down:
 		n.down, n.since = true, n.Clock.Now()
 		since := n.since
@@ -37,11 +50,11 @@ func (n *DownNotice) Changed(st FenceState) {
 		if n.LastError != nil && n.LastError() != nil {
 			why = n.LastError().Error()
 		}
-		n.Tell(context.Background(), fmt.Sprintf("GitHub fora desde %s. Último erro: %s. O Telegram e o comando seguem; as ações no GitHub ficam na fila (%d até agora).", since.Format("15:04:05"), why, n.Queued()))
+		n.Tell(context.Background(), fmt.Sprintf("GitHub fora desde %s. Último erro: %s. O Telegram e o comando seguem; as ações no GitHub ficam na fila (%d até agora).", since.Format("15:04:05"), why, queued()))
 	case st == FenceConfirmed && n.down:
 		n.down = false
 		n.mu.Unlock()
-		n.Tell(context.Background(), fmt.Sprintf("GitHub de volta. %d ações saem da fila, na ordem.", n.Queued()))
+		n.Tell(context.Background(), fmt.Sprintf("GitHub de volta. %d ações saem da fila, na ordem.", queued()))
 	default:
 		n.mu.Unlock()
 	}

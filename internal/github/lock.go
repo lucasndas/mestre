@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -41,6 +42,7 @@ type LairLock struct {
 	mu    sync.Mutex
 	etag  string
 	known uint64 // the highest epoch of the listing the ETag belongs to
+	multi bool   // the last listing had more than one page: no conditional request
 }
 
 var _ guild.Lock = (*LairLock)(nil)
@@ -50,6 +52,11 @@ var _ guild.Lock = (*LairLock)(nil)
 var ErrLockUnreachable = errors.New("github: the lock cannot be reached")
 
 func (l *LairLock) do(ctx context.Context, method, path string, body any, header map[string]string) (int, http.Header, []byte, error) {
+	return l.doAt(ctx, method, "/git/"+path, body, header)
+}
+
+// doAt makes a request to a path under the repository (`/git/...`, or “ for the repository).
+func (l *LairLock) doAt(ctx context.Context, method, path string, body any, header map[string]string) (int, http.Header, []byte, error) {
 	repo, err := l.Repo(ctx)
 	if err != nil || repo == "" {
 		return 0, nil, nil, fmt.Errorf("%w: no repository of the lock", ErrLockUnreachable)
@@ -63,7 +70,7 @@ func (l *LairLock) do(ctx context.Context, method, path string, body any, header
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(l.BaseURL, "/")+"/repos/"+repo+"/git/"+path, rd)
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(l.BaseURL, "/")+"/repos/"+repo+path, rd)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("%w: %v", ErrLockUnreachable, scrubToken(err.Error(), tok))
 	}
@@ -110,7 +117,7 @@ func statusError(what string, status int, h http.Header) error {
 // is conditional: a 304 repeats the listing that confirmed before.
 func (l *LairLock) list(ctx context.Context, conditional bool) (uint64, error) {
 	hdr := map[string]string{}
-	if conditional && l.etag != "" {
+	if conditional && l.etag != "" && !l.multi {
 		hdr["If-None-Match"] = l.etag
 	}
 	status, h, raw, err := l.do(ctx, http.MethodGet, "matching-refs/"+epochPrefix+"?per_page=100", nil, hdr)
@@ -131,7 +138,11 @@ func (l *LairLock) list(ctx context.Context, conditional bool) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+	pages := 1
 	for next := nextLink(h); next != ""; {
+		if pages++; pages > maxPages {
+			return 0, fmt.Errorf("%w: the list of refs has more than %d pages", ErrLockUnreachable, maxPages)
+		}
 		st, h2, raw2, err := l.doURL(ctx, next)
 		if err != nil {
 			return 0, err
@@ -146,6 +157,7 @@ func (l *LairLock) list(ctx context.Context, conditional bool) (uint64, error) {
 		highest = max(highest, n)
 		next = nextLink(h2)
 	}
+	l.multi = pages > 1 // the ETag is of the first page only: with more pages every check lists them all
 	l.etag, l.known = h.Get("ETag"), highest
 	return highest, nil
 }
@@ -167,6 +179,9 @@ func highestEpoch(raw []byte) (uint64, error) {
 	return highest, nil
 }
 
+// maxPages bounds the pages of the listing (100 refs each): a Link that never ends is an error.
+const maxPages = 20
+
 var linkNext = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
 
 func nextLink(h http.Header) string {
@@ -176,12 +191,25 @@ func nextLink(h http.Header) string {
 	return ""
 }
 
-// doURL follows a Link of a listing, only to the same API.
+// doURL follows a Link of a listing, only to the host of BaseURL: the path and
+// the query are taken from it, and the request is made as any other (GitHub
+// writes these links with /repositories/<id> instead of the name).
 func (l *LairLock) doURL(ctx context.Context, link string) (int, http.Header, []byte, error) {
-	repo, _ := l.Repo(ctx)
-	_, after, ok := strings.Cut(link, "/repos/"+repo+"/git/")
-	if !ok {
+	base, err := url.Parse(l.BaseURL)
+	if err != nil {
+		return 0, nil, nil, fmt.Errorf("%w: bad base URL", ErrLockUnreachable)
+	}
+	u, err := url.Parse(link)
+	if err != nil || !strings.EqualFold(u.Host, base.Host) || u.Scheme != base.Scheme {
 		return 0, nil, nil, fmt.Errorf("%w: a link to somewhere else", ErrLockUnreachable)
+	}
+	repo, _ := l.Repo(ctx)
+	_, after, ok := strings.Cut(u.Path, "/git/")
+	if !ok || (!strings.Contains(u.Path, "/repos/"+repo+"/") && !strings.Contains(u.Path, "/repositories/")) {
+		return 0, nil, nil, fmt.Errorf("%w: a link to somewhere else", ErrLockUnreachable)
+	}
+	if u.RawQuery != "" {
+		after += "?" + u.RawQuery
 	}
 	return l.do(ctx, http.MethodGet, after, nil, nil)
 }
@@ -205,10 +233,21 @@ func (l *LairLock) Claim(ctx context.Context, n uint64, machineID string) (bool,
 	if err != nil {
 		return false, err
 	}
-	if n <= highest {
-		return false, nil
+	if n != highest+1 {
+		return false, nil // not the next epoch: another machine has already moved the lock
 	}
-	status, h, raw, err := l.do(ctx, http.MethodGet, "ref/heads/main", nil, nil)
+	// The base is the first commit of the default branch of the repository.
+	status, h, raw, err := l.doAt(ctx, http.MethodGet, "", nil, nil)
+	if err != nil {
+		return false, err
+	}
+	var info struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if status != http.StatusOK || json.Unmarshal(raw, &info) != nil || info.DefaultBranch == "" {
+		return false, statusError("reading the repository", status, h)
+	}
+	status, h, raw, err = l.do(ctx, http.MethodGet, "ref/heads/"+info.DefaultBranch, nil, nil)
 	if err != nil {
 		return false, err
 	}
@@ -247,29 +286,46 @@ func (l *LairLock) Claim(ctx context.Context, n uint64, machineID string) (bool,
 		return false, statusError("making the commit of the claim", status, h)
 	}
 	ref := "refs/" + epochPrefix + strconv.FormatUint(n, 10)
-	status, h, _, err = l.do(ctx, http.MethodPost, "refs", map[string]any{"ref": ref, "sha": mine.SHA}, nil)
-	if err != nil {
-		return false, err
+	// Whatever the creation answered (201, 422 that also covers "spammed", a 5xx or a
+	// cut connection after the server did it), the ref says who won: it is read.
+	createStatus, ch, _, createErr := l.do(ctx, http.MethodPost, "refs", map[string]any{"ref": ref, "sha": mine.SHA}, nil)
+	var readErr error
+	for try := 0; try < 3; try++ {
+		if try > 0 {
+			if err := clock.Sleep(ctx, l.Clock, time.Second<<try); err != nil {
+				return false, err
+			}
+		}
+		status, h, raw, err = l.do(ctx, http.MethodGet, "ref/"+strings.TrimPrefix(ref, "refs/"), nil, nil)
+		if err != nil {
+			readErr = err
+			continue
+		}
+		if status != http.StatusOK {
+			readErr = statusError("reading the ref", status, h)
+			if status != http.StatusNotFound {
+				break
+			}
+			continue // a 404 right after the creation may be lag
+		}
+		var got struct {
+			Object struct {
+				SHA string `json:"sha"`
+			} `json:"object"`
+		}
+		if json.Unmarshal(raw, &got) != nil {
+			return false, fmt.Errorf("%w: the ref is not readable", ErrLockUnreachable)
+		}
+		l.etag = "" // the listing changed
+		return got.Object.SHA == mine.SHA, nil
 	}
-	if status != http.StatusCreated && status != http.StatusUnprocessableEntity {
-		return false, statusError("creating the ref", status, h) // before the reading: it did not win
+	// Neither the creation nor the reading told: the machine did not win, and the
+	// next check shows what became of the epoch.
+	if createErr != nil {
+		return false, createErr
 	}
-	// 201 or 422 (which also covers "spammed"): the ref names the winner.
-	status, h, raw, err = l.do(ctx, http.MethodGet, "ref/"+strings.TrimPrefix(ref, "refs/"), nil, nil)
-	if err != nil {
-		return false, err
+	if createStatus != http.StatusCreated && createStatus != http.StatusUnprocessableEntity {
+		return false, statusError("creating the ref", createStatus, ch)
 	}
-	if status != http.StatusOK {
-		return false, statusError("reading the ref", status, h)
-	}
-	var got struct {
-		Object struct {
-			SHA string `json:"sha"`
-		} `json:"object"`
-	}
-	if json.Unmarshal(raw, &got) != nil {
-		return false, fmt.Errorf("%w: the ref is not readable", ErrLockUnreachable)
-	}
-	l.etag = "" // the listing changed
-	return got.Object.SHA == mine.SHA, nil
+	return false, readErr
 }

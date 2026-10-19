@@ -70,16 +70,19 @@ type Server struct {
 	actions []Action
 	nextID  int64
 
-	apps         map[int64]*appInfo // by id of the App
-	installs     map[int64]*appInfo // by id of the installation
-	bots         map[string]int64
-	tokenReqs    []TokenRequest
-	public       map[string]bool // repositories that are not private
-	tokenFail    int
-	tokenFailHdr map[string]string
-	userRepoSt   int // status the next POST /user/repos answers (0: as the permissions say)
-	gitDown      int // status every call to the git API answers (0: as usual)
-	requests     []Request
+	apps          map[int64]*appInfo // by id of the App
+	installs      map[int64]*appInfo // by id of the installation
+	bots          map[string]int64
+	tokenReqs     []TokenRequest
+	public        map[string]bool // repositories that are not private
+	tokenFail     int
+	tokenFailHdr  map[string]string
+	userRepoSt    int // status the next POST /user/repos answers (0: as the permissions say)
+	defaultBranch map[string]string
+	pageSize      int
+	loseRefAnswer bool
+	gitDown       int // status every call to the git API answers (0: as usual)
+	requests      []Request
 }
 
 // New returns an empty server using the newest recordings.

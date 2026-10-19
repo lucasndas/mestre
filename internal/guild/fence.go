@@ -147,9 +147,15 @@ type Fence struct {
 	// tgStopped: the Telegram stopped for a 409 with the lease gone, until a
 	// check confirms the epoch or shows a higher one.
 	tgStopped bool
-	conflict  bool // a 409 asked for the next check
-	queue     []held
-	err       error // the last failure of a check
+	conflict  bool // a 409 asked for a check that starts after it
+	cseq      int  // counts the 409s: a check counts for the last one only if it started after it
+	// cb serializes the callbacks, each delivered with what holds when its turn
+	// comes, so a stale one is dropped (the panel never keeps 'Telegram parado'
+	// after a confirmation, nor 'confirmed' after a demotion).
+	cb     sync.Mutex
+	tgTold bool
+	queue  []held
+	err    error // the last failure of a check
 }
 
 // NewFence returns the fence of a Citadel that is starting (or, with
@@ -324,25 +330,35 @@ func (f *Fence) CheckNow() {
 // reads again) or shows a higher one (the Citadel steps down).
 func (f *Fence) TelegramConflict() {
 	f.mu.Lock()
-	if f.state == FenceDemoted || f.state == FenceNoLock {
+	if !acting(f.state) || f.state == FenceNoLock {
 		f.mu.Unlock()
-		return // nothing to check, or already out
+		return // suspended, waiting or out already, or no lock: the Gate holds, or there is nothing to check
 	}
 	valid := f.leaseValidLocked()
 	f.conflict = true
-	changed := !valid && !f.tgStopped
+	f.cseq++
 	if !valid {
 		f.tgStopped = true
 	}
 	f.mu.Unlock()
-	if valid {
-		f.CheckNow()
+	f.telegramTold()
+	f.CheckNow()
+}
+
+// telegramTold delivers OnTelegram with the current state, once per change.
+func (f *Fence) telegramTold() {
+	if f.cfg.OnTelegram == nil {
 		return
 	}
-	if changed && f.cfg.OnTelegram != nil {
-		f.cfg.OnTelegram(true)
+	f.cb.Lock()
+	defer f.cb.Unlock()
+	f.mu.Lock()
+	now := f.tgStopped
+	f.mu.Unlock()
+	if now != f.tgTold {
+		f.tgTold = now
+		f.cfg.OnTelegram(now)
 	}
-	f.CheckNow()
 }
 
 // TelegramStopped says the Telegram is stopped by a 409 with the lease gone.
@@ -424,6 +440,9 @@ func WaitLeft(clk clock.Clock, claimed time.Time, wait time.Duration) time.Durat
 // (demoted).
 func (f *Fence) check(ctx context.Context) bool {
 	sent := clock.StampOf(f.cfg.Clock)
+	f.mu.Lock()
+	startSeq := f.cseq
+	f.mu.Unlock()
 	n, err := f.cfg.Lock.Check(ctx)
 	if ctx.Err() != nil {
 		return false
@@ -468,12 +487,14 @@ func (f *Fence) check(ctx context.Context) bool {
 	if after != before {
 		f.changed(after)
 	}
-	if resumed && f.cfg.OnTelegram != nil {
-		f.cfg.OnTelegram(false)
+	if resumed {
+		f.telegramTold()
 	}
 	f.mu.Lock()
-	own := f.conflict && err == nil && n == epoch
-	f.conflict = false
+	own := f.conflict && startSeq == f.cseq && err == nil && n == epoch
+	if startSeq == f.cseq && err == nil {
+		f.conflict = false // answered by a check that began after the last 409
+	}
 	f.mu.Unlock()
 	if own && f.cfg.OnConflictOwn != nil {
 		f.cfg.OnConflictOwn()
@@ -536,7 +557,13 @@ func (f *Fence) flushNow(ctx context.Context) {
 }
 
 func (f *Fence) changed(s FenceState) {
-	if f.cfg.OnChange != nil {
-		f.cfg.OnChange(s)
+	if f.cfg.OnChange == nil {
+		return
 	}
+	f.cb.Lock()
+	defer f.cb.Unlock()
+	if s != FenceDemoted && f.State() == FenceDemoted {
+		return // a demotion came first: nothing says 'confirmed' after it
+	}
+	f.cfg.OnChange(s)
 }

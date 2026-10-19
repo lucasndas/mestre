@@ -4,7 +4,9 @@ import (
 	"crypto/sha1" //nolint:gosec // the id of a git object, not a secret
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/lucasndas/mestre/internal/testkit"
@@ -92,6 +94,9 @@ func (s *Server) Requests() []Request {
 // request was one of them.
 func (s *Server) serveGit(w http.ResponseWriter, r *http.Request) bool {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) == 3 && parts[0] == "repos" && r.Method == http.MethodGet {
+		return s.serveRepo(w, r, parts[1]+"/"+parts[2])
+	}
 	if len(parts) < 5 || parts[0] != "repos" || parts[3] != "git" {
 		return false
 	}
@@ -142,7 +147,19 @@ func (s *Server) serveGit(w http.ResponseWriter, r *http.Request) bool {
 		for i := len(names) - 1; i >= 0; i-- { // the order of the answer is not guaranteed: newest first here
 			list = append(list, refObject(names[i], g.refs[names[i]]))
 		}
+		page, size := 1, 100
+		if v, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && v > 0 {
+			page = v
+		}
+		if s.pageSize > 0 {
+			size = s.pageSize
+		}
+		more := len(list) > page*size
+		list = list[min((page-1)*size, len(list)):min(page*size, len(list))]
 		s.mu.Unlock()
+		if more { // GitHub writes these links with /repositories/<id>
+			w.Header().Set("Link", fmt.Sprintf(`<https://api.github.com/repositories/1/git/matching-refs/%s?per_page=100&page=%d>; rel="next"`, rest, page+1))
+		}
 		status, body = http.StatusOK, list
 	case r.Method == http.MethodGet && parts[4] == "ref":
 		s.mu.Lock()
@@ -184,6 +201,8 @@ func (s *Server) serveGit(w http.ResponseWriter, r *http.Request) bool {
 			break
 		}
 		s.mu.Lock()
+		lose := s.loseRefAnswer
+		s.loseRefAnswer = false
 		_, taken := g.refs[in.Ref]
 		_, known := g.commits[in.SHA]
 		switch {
@@ -196,6 +215,9 @@ func (s *Server) serveGit(w http.ResponseWriter, r *http.Request) bool {
 			g.order = append(g.order, in.Ref)
 			s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
 			status, body = http.StatusCreated, refObject(in.Ref, in.SHA)
+			if lose { // the server did it and the answer was lost
+				status, body = http.StatusBadGateway, map[string]any{"message": "Bad Gateway"}
+			}
 		}
 		s.mu.Unlock()
 	default:
@@ -218,4 +240,59 @@ func (s *Server) Used(token string) int {
 		return inst.used
 	}
 	return 0
+}
+
+// serveRepo answers GET /repos/{owner}/{repo} for the repositories made with
+// AddRepo: the name, the default branch and that it is private.
+func (s *Server) serveRepo(w http.ResponseWriter, r *http.Request, full string) bool {
+	inst, ok := s.auth(w, r)
+	if !ok {
+		return true
+	}
+	s.mu.Lock()
+	_, exists := s.repos[full]
+	branch := s.defaultBranch[full]
+	s.mu.Unlock()
+	if !exists {
+		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return true
+	}
+	if branch == "" {
+		branch = "main"
+	}
+	s.write(w, r, inst, http.StatusOK, map[string]any{"full_name": full, "private": !s.public[full], "default_branch": branch})
+	return true
+}
+
+// SetDefaultBranch names the default branch of a repository (an account that
+// does not use main).
+func (s *Server) SetDefaultBranch(full, branch string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rp, ok := s.repos[full]
+	if !ok {
+		return
+	}
+	g := rp.ensureGit()
+	g.refs["refs/heads/"+branch] = g.refs["refs/heads/main"]
+	delete(g.refs, "refs/heads/main")
+	if s.defaultBranch == nil {
+		s.defaultBranch = map[string]string{}
+	}
+	s.defaultBranch[full] = branch
+}
+
+// LoseNextRefAnswer makes the next successful creation of a ref answer 502
+// after the server made it (the answer was lost on the way).
+func (s *Server) LoseNextRefAnswer() {
+	s.mu.Lock()
+	s.loseRefAnswer = true
+	s.mu.Unlock()
+}
+
+// SetPageSize makes the listings of refs have that many per page (0: 100).
+func (s *Server) SetPageSize(n int) {
+	s.mu.Lock()
+	s.pageSize = n
+	s.mu.Unlock()
 }

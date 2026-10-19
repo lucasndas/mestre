@@ -318,3 +318,53 @@ func TestThePromotedMachineWaits60SecondsBeforeAnyActionAndThenChecksTheLock(t *
 		}
 	})
 }
+
+func TestTheClaimIsOnlyForTheNextEpochAndStartsFromTheDefaultBranch(t *testing.T) {
+	t.Parallel()
+	clk := clock.Real{}
+	rig := newLockRig(t, clk)
+	rig.gh.SetDefaultBranch(lairRepo, "trunk")
+	l := rig.lock(clk, nil)
+	ctx := context.Background()
+	if won, err := l.Claim(ctx, 5, "b"); err != nil || won {
+		t.Fatalf("a claim that skips an epoch = %v, %v; want a defeat", won, err)
+	}
+	if won, err := l.Claim(ctx, 3, "b"); err != nil || won {
+		t.Fatalf("a claim of an epoch already there = %v, %v; want a defeat", won, err)
+	}
+	if won, err := l.Claim(ctx, 4, "b"); err != nil || !won {
+		t.Fatalf("the next epoch on a repository whose branch is trunk = %v, %v", won, err)
+	}
+}
+
+func TestAClaimWhoseAnswerWasLostStillWinsByReadingTheRef(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		clk := clock.Real{}
+		rig := newLockRig(t, clk)
+		rig.gh.LoseNextRefAnswer()
+		won, err := rig.lock(clk, nil).Claim(context.Background(), 4, "b")
+		if err != nil || !won {
+			t.Fatalf("claim = %v, %v; want the win the ref shows", won, err)
+		}
+	})
+}
+
+func TestTheLockListsEveryPageAndNeverTrustsTheETagOfTheFirstOne(t *testing.T) {
+	t.Parallel()
+	clk := clock.Real{}
+	rig := newLockRig(t, clk)
+	rig.gh.SetPageSize(2)
+	for n := 4; n <= 6; n++ {
+		rig.gh.AddRef(lairRepo, "refs/mestre/epoca-"+string(rune('0'+n)), "epoch")
+	}
+	l := rig.lock(clk, nil)
+	ctx := context.Background()
+	if n, err := l.Check(ctx); err != nil || n != 6 {
+		t.Fatalf("check = %d, %v; want 6 over two pages", n, err)
+	}
+	rig.gh.AddRef(lairRepo, "refs/mestre/epoca-7", "epoch")
+	if n, err := l.Check(ctx); err != nil || n != 7 {
+		t.Fatalf("check = %d, %v; want 7 (a new ref must not hide behind the 304 of the first page)", n, err)
+	}
+}
