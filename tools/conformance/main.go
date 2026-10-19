@@ -131,7 +131,40 @@ func run(ctx context.Context, args []string, out io.Writer, getenv func(string) 
 // baseEnv is the environment of the CLI: nothing of this process is
 // inherited but what a terminal needs.
 func baseEnv(o options) []string {
-	env := []string{"PATH=" + filepath.Dir(o.cli) + ":/usr/local/bin:/usr/bin:/bin", "TERM=xterm-256color", "LANG=C.UTF-8"}
+	return baseEnvFor(runtime.GOOS, o, os.Getenv)
+}
+
+// windowsEnvNames are the variables of the account that a Windows terminal
+// needs (the shells, git, Node and the CLIs read them); the PATH is the
+// process's, with the folder of the CLI first.
+var windowsEnvNames = []string{"SystemRoot", "SystemDrive", "windir", "ComSpec", "PATHEXT", "USERNAME", "USERDOMAIN", "COMPUTERNAME",
+	"USERPROFILE", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432",
+	"CommonProgramFiles", "TEMP", "TMP", "PSModulePath", "OS", "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS"}
+
+// cliDir is the folder of the CLI as it was written, with either separator,
+// whatever the system the tool runs on (the env of a Windows terminal is
+// built from Linux in the tests, and the other way around).
+func cliDir(cli string) string {
+	i := strings.LastIndexAny(cli, `/\`)
+	switch {
+	case i < 0:
+		return "."
+	case i == 0:
+		return cli[:1]
+	}
+	return cli[:i]
+}
+
+func baseEnvFor(goos string, o options, getenv func(string) string) []string {
+	env := []string{"PATH=" + cliDir(o.cli) + ":/usr/local/bin:/usr/bin:/bin", "TERM=xterm-256color", "LANG=C.UTF-8"}
+	if goos == "windows" {
+		env = []string{"PATH=" + cliDir(o.cli) + ";" + getenv("PATH"), "TERM=xterm-256color"}
+		for _, n := range windowsEnvNames {
+			if v := getenv(n); v != "" {
+				env = append(env, n+"="+v)
+			}
+		}
+	}
 	// The HOME of Antigravity is its account profile, which the run gives
 	// as the engine does; a base may not set it
 	// (docs/orquestracao/bases-e-fichas.md#regras-e-erros).

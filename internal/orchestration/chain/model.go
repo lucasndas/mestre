@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -77,6 +78,9 @@ const (
 	Denied    State = "denied"
 	Expired   State = "expired"
 	Cancelled State = "cancelled"
+	// Invalidated: the target changed (or who approved lost the right) before
+	// the approval was applied; nothing is applied.
+	Invalidated State = "invalidated"
 )
 
 // Closed says the request was decided or ended.
@@ -155,6 +159,11 @@ type Request struct {
 	Event  *providers.Event `json:"event,omitempty"`
 	// Fingerprint binds the request to the exact action.
 	Fingerprint string
+	// Target is the exact target of the request (docs/aprovacoes/fluxo.md#vínculo-ao-estado-exato)
+	// and Impression its SHA-256 over the canonical JSON; the flow compares it
+	// with the live target before an approval is applied.
+	Target     json.RawMessage `json:"target,omitempty"`
+	Impression string          `json:"impression,omitempty"`
 	// About is what the request is about, in one line (the action and the
 	// rule that asked).
 	About string
