@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/logging"
@@ -54,7 +58,7 @@ func Found(ctx context.Context, cfg Config, paths Paths, clk clock.Clock) (*guil
 	f, err := guild.Create(ctx, guild.CreateConfig{
 		GuildDB: gdb, Member: guild.NewMember(mdb, vault.NewFileKeyStore(paths.engineKey()), clk), Secrets: v, Clock: clk,
 		Name: cfg.Name, Hostname: cfg.Hostname, Instance: cfg.Instance, IPs: parseIPs(cfg.IPs), EnginePort: cfg.EnginePort,
-		RecoveryPublicKey: rk.PublicKey(),
+		RecoveryPublicKey: rk.PublicKey(), Timezone: systemTimezone(),
 	})
 	if err != nil {
 		rk.Destroy()
@@ -95,4 +99,34 @@ func parseIPs(ss []string) []net.IP {
 		}
 	}
 	return out
+}
+
+// systemTimezone is the IANA name of the time zone of the system of this
+// machine, which becomes the zone of a new Guild (docs/guilda/guilda.md); UTC
+// when the system does not say.
+func systemTimezone() string {
+	known := func(name string) bool {
+		if name == "" || name == "Local" {
+			return false
+		}
+		_, err := time.LoadLocation(name)
+		return err == nil
+	}
+	if tz := strings.TrimPrefix(os.Getenv("TZ"), ":"); known(tz) {
+		return tz
+	}
+	if link, err := os.Readlink("/etc/localtime"); err == nil {
+		if _, name, ok := strings.Cut(filepath.ToSlash(link), "zoneinfo/"); ok && known(name) {
+			return name
+		}
+	}
+	if b, err := os.ReadFile("/etc/timezone"); err == nil {
+		if name := strings.TrimSpace(string(b)); known(name) {
+			return name
+		}
+	}
+	if name := time.Local.String(); known(name) {
+		return name
+	}
+	return "UTC"
 }

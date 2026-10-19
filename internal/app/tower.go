@@ -131,6 +131,10 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
+	sys := e.deps.Sheet.System
+	if sys == nil {
+		sys = machinesheet.NewSystemProbe(e.paths.Maquina)
+	}
 	router := protocol.NewRouter()
 	replica.Register(router)
 	router.HandleFunc(protocol.TypeCLIResult, e.results.handle)
@@ -160,8 +164,8 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 			replica.Hello(ctx, &info)
 			return info, err
 		},
-		Heartbeat: func(context.Context) (protocol.MachineHeartbeat, error) {
-			return protocol.MachineHeartbeat{ReplicaLagS: replica.LagSeconds()}, nil
+		Heartbeat: func(ctx context.Context) (protocol.MachineHeartbeat, error) {
+			return towerHeartbeat(ctx, sys, replica.LagSeconds()), nil
 		},
 		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: replica.Finalizers()},
 		Hooks: protocol.Hooks{
@@ -207,7 +211,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	defer stopReporting()
 	reported := make(chan struct{}) // closed when the report of the discarded databases ends
 	wiper := towerWiper{replica: replica, stopReport: func() { stopReporting(); <-reported }}
-	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: wiper}, Renewer: renewer})
+	guild.Register(router, guild.Wiring{Tower: &guild.TowerLeave{Member: e.member, Epochs: e.epochs, Wiper: wiper, OnLeft: e.stopEngine}, Renewer: renewer})
 	// Whoever takes this machine for the Citadel is told 4007, with the
 	// certificate this machine follows.
 	refuser, err := protocol.NewServer(protocol.Config{
@@ -754,14 +758,26 @@ func (e *Engine) listDiscarded(ctx context.Context, path string, epoch, from uin
 	return r, nil
 }
 
-// pruneDiscarded removes the discarded databases older than the retention,
+// pruneDiscarded removes the discarded databases older than the retention that
+// were already reported,
 // the ones kept under another name included, with what goes with each: its -wal
 // and -shm, and, for the one of the epoch, the report and the dropped actions.
 func (e *Engine) pruneDiscarded() {
 	cutoff := e.clk.Now().Add(-DiscardedRetention)
-	for path, epoch := range e.discardedAll() {
+	all := e.discardedAll()
+	reported := map[uint64]bool{} // read before anything goes: the files of an epoch share one report
+	for _, epoch := range all {
+		_, err := os.Stat(strings.TrimSuffix(e.paths.discarded(epoch), ".db") + ".json")
+		reported[epoch] = err == nil
+	}
+	for path, epoch := range all {
 		fi, err := os.Stat(path)
 		if err != nil || !fi.ModTime().Before(cutoff) {
+			continue
+		}
+		// What was not reported to the new Citadel stays, whatever its age: the
+		// report is the audit of the transactions that were lost.
+		if !reported[epoch] {
 			continue
 		}
 		if err := os.Remove(path); err != nil {
@@ -780,3 +796,19 @@ func (e *Engine) pruneDiscarded() {
 
 // osName is the system for the entry request.
 func osName() string { return runtime.GOOS }
+
+// leaveGrace is how long the engine of a machine that left the Guild stays up
+// after the erasure, so that the answer to guild.leave reaches the Citadel.
+const leaveGrace = 2 * time.Second
+
+// stopEngine ends the engine after the machine left the Guild: it erased its
+// share and has nothing left to serve (guild.TowerLeave.OnLeft). The end comes
+// a moment later, once the Citadel has the answer.
+func (e *Engine) stopEngine() {
+	e.mu.Lock()
+	stop := e.stop
+	e.mu.Unlock()
+	if stop != nil {
+		e.clk.AfterFunc(leaveGrace, stop)
+	}
+}

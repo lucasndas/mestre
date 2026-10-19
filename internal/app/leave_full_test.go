@@ -64,4 +64,12 @@ func TestATowerTheOwnerRemovesErasesWhatItKeptFromTheTimeItWasTheCitadel(t *test
 	} else if err != guild.ErrNotMember {
 		t.Errorf("identity after leaving: %v", err)
 	}
+	r.waitFor("b to stop its engine", func() bool {
+		select {
+		case <-b.ended:
+			return true
+		default:
+			return false
+		}
+	})
 }
