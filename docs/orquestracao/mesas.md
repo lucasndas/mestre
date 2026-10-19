@@ -30,8 +30,8 @@ O que o código fixa onde o texto acima deixa em aberto:
 
 | Estado | Identificador | Entra quando |
 |---|---|---|
-| Aberta | `open` | passos 1–5 da abertura em andamento |
-| Em trabalho | `working` | Mestre da mesa pronto e pedido entregue; ou nova missão iniciada estando em revisão (um pedido novo que o Grão-Mestre [roteou](grao-mestre.md#triagem-e-roteamento-do-pedido) para a mesa, ou uma etapa `sync`) |
+| Aberta | `open` | passos 1–5 da abertura em andamento, ou o passo 6 adiado pela [espera de dependência](dependencia-entre-mesas.md#a-espera-do-tipo-épico) |
+| Em trabalho | `working` | pedido entregue ao Mestre da mesa; ou nova missão iniciada estando em revisão (um pedido novo que o Grão-Mestre [roteou](grao-mestre.md#triagem-e-roteamento-do-pedido) para a mesa, ou uma etapa `sync`) |
 | Em revisão | `in_review` | `mestre pr open` (ou `pr update`) concluído com sucesso |
 | Encerrando | `closing` | `mestre table close` do Grão-Mestre, com o merge do PR já confirmado |
 | Encerrada | `closed` | personagens encerrados e worktrees removidos (ou retenção decidida) |
@@ -41,7 +41,7 @@ O que o código fixa onde o texto acima deixa em aberto:
 ```mermaid
 stateDiagram-v2
     [*] --> open : mestre table open
-    open --> working : Mestre da mesa pronto
+    open --> working : pedido entregue
     working --> in_review : pr open/update ok
     in_review --> working : missão de ajuste iniciada
     in_review --> closing : table close (merge confirmado)
