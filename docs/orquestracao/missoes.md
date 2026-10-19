@@ -110,7 +110,7 @@ Estado de missões e etapas fica no banco. Depois de queda de máquina, da Cidad
 
 ### Espelho no GitHub
 
-Ao criar a missão, o motor cria a issue sob o épico (ou usa a do campo `issue`, [prova e devolução](prova-e-devolucao.md#campos-que-a-missão-ganha)), com a lista de etapas como checklist, e as sub-issues das etapas com `sub_issue: true` (App "Mestre"). Ao concluir uma etapa: marca o item, comenta o resumo com o App da classe do personagem e fecha a sub-issue como concluída. A issue da missão é fechada pelo PR do épico (`Closes`). Missão cancelada: issue e sub-issues abertas fechadas como "não planejado". Commits citam a issue. Identidades: [identidades e Apps](../github/identidades-e-apps.md).
+Ao criar a missão, o motor (desde o M5, com o GitHub) cria a issue sob o épico (ou usa a do campo `issue`, [prova e devolução](prova-e-devolucao.md#campos-que-a-missão-ganha)), com a lista de etapas como checklist, e as sub-issues das etapas com `sub_issue: true` (App "Mestre"). Ao concluir uma etapa: marca o item, comenta o resumo com o App da classe do personagem e fecha a sub-issue como concluída. A issue da missão é fechada pelo PR do épico (`Closes`). Missão cancelada: issue e sub-issues abertas fechadas como "não planejado". Commits citam a issue. Identidades: [identidades e Apps](../github/identidades-e-apps.md).
 
 ### Entrega
 

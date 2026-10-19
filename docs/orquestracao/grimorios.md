@@ -16,7 +16,7 @@ Pelo painel, com uma seleção no canvas da mesa (usuário Administrador ou acim
 |---|---|---|
 | Personagens | nome, ficha, classe (se diferente da padrão da ficha), máquina indicada, posição, fixado | processo, sessão do provedor, caixa de entrada, esperas, uso |
 | Classes usadas | globais: só a referência; do workspace ou da mesa: referência **e** cópia do pacote ([classes](../classes/classes.md)) com o App vinculado | — |
-| Pergaminhos e tomos | nomes, conteúdo, tomos e posição (o usuário pode optar por salvar só a estrutura, sem conteúdo) | revisões anteriores |
+| Pergaminhos e tomos | nomes, conteúdo, tomos e posição, inclusive o "Revisão: <missão>" (desde o M5); o usuário pode optar por salvar só a estrutura, sem conteúdo | revisões anteriores |
 | Conexões | as manuais entre elementos salvos (as automáticas são recriadas pelo motor) | conexões com elementos fora da seleção |
 | Missões | a definição ([missões](missoes.md#definição)) cujas etapas usam personagens ou fichas da seleção | estado, rodadas, números de issue |
 
@@ -37,7 +37,7 @@ Pelo painel, numa mesa em `working` ou `in_review` ([estados](mesas.md#estados))
 3. **Criação**, nesta ordem: classes copiadas; pergaminhos e tomos; personagens (escolha de máquina normal, [personagens](personagens.md#escolha-da-máquina)); conexões; missões (criadas como qualquer missão nova, em `draft`, com issue sob o épico de destino).
 4. O Mestre da mesa de destino recebe um item `system` listando o que foi restaurado; os nomes são os do grimório, que agentes escreveram, e cada um fica na própria linha (com quebra de linha ou caractere de controle, vem entre aspas).
 
-Classe copiada mantém o App vinculado. Se o App não estiver instalado no repositório de destino, o motor o acrescenta à instalação ou o Dono recebe o link para isso ([repositórios novos](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas)); até lá, as ações saem com o App "Mestre" com a classe na assinatura ([identidades e Apps](../github/identidades-e-apps.md)).
+Classe copiada mantém o App vinculado (desde o M5, com o GitHub). Se o App não estiver instalado no repositório de destino, o motor o acrescenta à instalação ou o Dono recebe o link para isso ([repositórios novos](../github/criacao-de-apps.md#repositórios-novos-e-permissões-novas)); até lá, as ações saem com o App "Mestre" com a classe na assinatura ([identidades e Apps](../github/identidades-e-apps.md)).
 
 ### Listar e apagar
 
