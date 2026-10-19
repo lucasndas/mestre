@@ -282,7 +282,10 @@ func (r questsRef) TurnEnded(context.Context, characters.Character, string) erro
 
 // presetsCatalog checks the sheets of a quest against the presets; the ceiling
 // is not checked unless a Catalog says how.
-type presetsCatalog struct{ characters.Presets }
+type presetsCatalog struct {
+	characters.Presets
+	libs func(workspace string) *classes.Library
+}
 
 func (c presetsCatalog) Sheet(ctx context.Context, name string) (quests.SheetInfo, bool, error) {
 	snap, err := c.Snapshot(ctx, name)
@@ -292,7 +295,32 @@ func (c presetsCatalog) Sheet(ctx context.Context, name string) (quests.SheetInf
 	return quests.SheetInfo{Name: snap.Sheet.Name, Class: snap.Sheet.Class}, true, nil
 }
 
-func (presetsCatalog) ClassAllowed(context.Context, string, string) error { return nil }
+// ClassAllowed implements quests.Catalog: the class fits in the ceiling of the
+// workspace (nil when the workspace has no library of classes).
+func (c presetsCatalog) ClassAllowed(ctx context.Context, workspace, class string) error {
+	if c.libs == nil {
+		return nil
+	}
+	return libraryCeiling(c.libs).Allows(ctx, workspace, "", class)
+}
+
+// libraryCeiling is the characters.Ceiling over the libraries of the
+// workspaces: the class a character would have must still fit in the ceiling,
+// which may have narrowed since the class was approved. Only the global and the
+// workspace classes are looked at; the sheet only hardens the class.
+type libraryCeiling func(workspace string) *classes.Library
+
+func (f libraryCeiling) Allows(ctx context.Context, workspace, _, class string) error {
+	lib := f(workspace)
+	if class == "" || lib == nil {
+		return nil
+	}
+	err := lib.CheckCeiling(ctx, class, "")
+	if errors.Is(err, classes.ErrCeilingDenied) {
+		return fmt.Errorf("%w: a classe %s %v", characters.ErrCeiling, class, err)
+	}
+	return err
+}
 
 // chainRef is the chain of approval seen by the pieces made before it: the
 // inbox asks it whether a character is held, and it follows the states of the
@@ -344,6 +372,10 @@ func (r scrollsRef) Resolve(ctx context.Context, ws, table, name string) (connec
 
 func (r scrollsRef) Get(ctx context.Context, ref connections.Ref) (connections.ScrollRef, bool, error) {
 	return (*r.p).Get(ctx, ref)
+}
+
+func (r scrollsRef) Sync(ctx context.Context, workspace, table string) error {
+	return (*r.p).Sync(ctx, workspace, table)
 }
 
 func (r scrollsRef) Members(ctx context.Context, tome string) ([]string, error) {
@@ -413,19 +445,26 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	scr, err = scrolls.NewService(scrolls.Options{Store: &scrolls.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Tables: tbl, Connections: conns,
-		Principal: ws.Layout().Principal, Quests: questsRef{&qs}, Logger: o.Logger})
+		Principal: ws.Layout().Principal, Quests: questsRef{&qs}, Logger: o.Logger,
+		Targets: scrolls.CharacterTargets{Registry: reg, Tables: tbl}, Copies: scrolls.LocalCopies{Machine: o.Machine}})
 	if err != nil {
 		return nil, err
 	}
 	wt, err := waits.NewService(waits.Options{Store: &waits.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Inbox: ib, Notifier: ib, Connections: conns,
-		Quests: questsRef{&qs}, Waker: o.Waker, Terminals: o.Machines, Attachments: o.MessageAttachments, Logger: o.Logger})
+		Quests: questsRef{&qs}, Waker: o.Waker, Terminals: o.Machines, Attachments: o.MessageAttachments, Logger: o.Logger,
+		ApprovalTimeout: func(ctx context.Context, workspace string) time.Duration {
+			if ch == nil {
+				return 0
+			}
+			return ch.ApprovalTimeout(ctx, workspace)
+		}})
 	if err != nil {
 		return nil, err
 	}
 	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}, ritualsRef{&rit}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
-		Ceiling: o.Ceiling, Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), Logger: o.Logger})
+		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +500,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	catalog := o.QuestCatalog
 	if catalog == nil {
-		catalog = presetsCatalog{o.Presets}
+		catalog = presetsCatalog{o.Presets, o.ClassLibraries}
 	}
 	qs, err = quests.NewService(quests.Options{Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
@@ -484,7 +523,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		orc.TableRules = trl
 	}
 	rit, err = rituals.NewService(rituals.Options{Store: &rituals.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Inbox: ib, Quests: qs, Pauses: tbl,
-		Terminals: o.Machines, PreRunner: o.RitualPreRun, Permissions: o.RitualPermissions, Zones: o.RitualZones, Approvals: o.RitualApprovals, Logger: o.Logger})
+		Terminals: o.Machines, PreRunner: o.RitualPreRun, Permissions: o.RitualPermissions, Zones: ritualZones(o.RitualZones, o.Guild), Approvals: o.RitualApprovals, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -645,4 +684,41 @@ func (f libraryClassCheck) Exists(ctx context.Context, workspace, table, class s
 		return false, err
 	}
 	return true, nil
+}
+
+// ceilingOf is the ceiling the characters check: the one given, or the one of
+// the libraries of classes; nil without either.
+func ceilingOf(given characters.Ceiling, libs func(workspace string) *classes.Library) characters.Ceiling {
+	switch {
+	case given != nil:
+		return given
+	case libs != nil:
+		return libraryCeiling(libs)
+	}
+	return nil
+}
+
+// ritualZones is the time zone the rituals use: the one given, or the zone of
+// the Guild (guild.timezone), which a workspace has until its own is kept
+// (docs/orquestracao/rituais.md).
+func ritualZones(given rituals.Zones, db *store.DB) rituals.Zones {
+	if given != nil {
+		return given
+	}
+	return guildZone{db}
+}
+
+type guildZone struct{ db *store.DB }
+
+// Zone implements rituals.Zones; an unknown name is UTC.
+func (g guildZone) Zone(ctx context.Context, _ string) *time.Location {
+	var name string
+	if err := g.db.Reader().QueryRowContext(ctx, `SELECT timezone FROM guild WHERE id = 1`).Scan(&name); err != nil || name == "" {
+		return nil
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil
+	}
+	return loc
 }

@@ -90,6 +90,8 @@ type Service struct {
 
 	// mu applies the changes one at a time.
 	mu sync.Mutex
+	// cmu serializes the copies among themselves (not the reads and writes).
+	cmu sync.Mutex
 }
 
 var (
@@ -230,9 +232,24 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (Note, error) {
 		return Note{}, &SizeError{Name: orUntitled(r.Name, r.Content), Size: size, Limit: int64(s.max)}
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	n, err := s.createLocked(ctx, r)
+	s.mu.Unlock()
+	if err != nil {
+		return Note{}, err
+	}
+	// the copies go out with the lock released: a Tower is reached over the network
+	s.copyOut(ctx, n)
+	s.emit(Created, n)
+	return n, nil
+}
+
+// createLocked makes the scroll: the file first, then the row of the index (a
+// row that cites a file that is not there must never be seen, nor sent to a
+// replica). The lock is held.
+func (s *Service) createLocked(ctx context.Context, r CreateRequest) (Note, error) {
 	now := s.clk.Now()
 	var n Note
+	written := false
 	err := s.st.exec(ctx, func(tx *sql.Tx) error {
 		name, fixed := r.Name, r.Name != ""
 		if fixed {
@@ -262,15 +279,20 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (Note, error) {
 		}
 		n = Note{Key: keyOf(r.Workspace, r.Table, id), Workspace: r.Workspace, Table: r.Table, ID: id, Name: name, FixedName: fixed, Tome: tome,
 			Revision: 1, Size: int64(len(r.Content)), Author: r.Actor.author(), AuthorID: r.Actor.ID, CreatedAt: now, UpdatedAt: now}
+		if err := s.writeFile(n, r.Content); err != nil {
+			return err
+		}
+		written = true
 		_, err = tx.ExecContext(ctx, `INSERT INTO notes (key, workspace, table_id, id, name, name_key, fixed_name, tome, revision, size, author, author_id, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`, n.Key, n.Workspace, n.Table, n.ID, n.Name, nameKey(n.Name), boolInt(fixed), n.Tome, n.Size, n.Author, n.AuthorID, now.UnixMilli(), now.UnixMilli())
 		return err
 	})
 	if err != nil {
-		return Note{}, err
-	}
-	if err := s.writeFile(n, r.Content); err != nil {
-		s.undoCreate(ctx, n)
+		if written { // the index refused it: the file must not stay
+			if rerr := safefile.Remove(s.File(n.Workspace, n.Table, n.ID), nil); rerr != nil {
+				s.log.Warn("scrolls: the file of a scroll the index refused was not removed", "scroll", n.Key, "err", rerr)
+			}
+		}
 		return Note{}, err
 	}
 	if n, _, err = s.reload(ctx, n.Key); err != nil {
@@ -281,8 +303,6 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (Note, error) {
 			s.log.Warn("scrolls: the scroll was not connected to its author", "scroll", n.Key, "err", err)
 		}
 	}
-	s.copyOut(ctx, n, r.Content)
-	s.emit(Created, n)
 	return n, nil
 }
 
@@ -298,16 +318,6 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
-}
-
-// undoCreate takes the row of a scroll whose file could not be written.
-func (s *Service) undoCreate(ctx context.Context, n Note) {
-	if err := s.st.exec(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE key = ?`, n.Key)
-		return err
-	}); err != nil {
-		s.log.Warn("scrolls: a scroll that was not written was not taken out of the index", "scroll", n.Key, "err", err)
-	}
 }
 
 func (s *Service) reload(ctx context.Context, key string) (Note, bool, error) {
@@ -401,32 +411,40 @@ func (s *Service) change(ctx context.Context, workspace, table string, a Actor, 
 		return Note{}, ErrLevelDenied
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	n, err := s.find(ctx, workspace, table, a, name)
+	if err != nil {
+		s.mu.Unlock()
+		return Note{}, err
+	}
+	out, _, err := s.apply(ctx, n, a, expect, f)
+	s.mu.Unlock()
 	if err != nil {
 		return Note{}, err
 	}
-	return s.apply(ctx, n, a, expect, f)
+	s.copyOut(ctx, out) // with the lock released
+	s.emit(Changed, out)
+	return out, nil
 }
 
 // apply changes the content of a scroll that was found. The lock is held.
-func (s *Service) apply(ctx context.Context, n Note, a Actor, expect *int64, f func(cur string) (string, error)) (Note, error) {
+func (s *Service) apply(ctx context.Context, n Note, a Actor, expect *int64, f func(cur string) (string, error)) (Note, string, error) {
 	if expect != nil && *expect != n.Revision {
-		return Note{}, &ConflictError{Name: n.Name, Expected: *expect, Have: n.Revision}
+		return Note{}, "", &ConflictError{Name: n.Name, Expected: *expect, Have: n.Revision}
 	}
 	cur, err := s.readFile(n)
 	if err != nil {
-		return Note{}, err
+		return Note{}, "", err
 	}
 	next, err := f(cur)
 	if err != nil {
-		return Note{}, err
+		return Note{}, "", err
 	}
 	if size := int64(len(next)); size > int64(s.max) {
-		return Note{}, &SizeError{Name: n.Name, Size: size, Limit: int64(s.max)}
+		return Note{}, "", &SizeError{Name: n.Name, Size: size, Limit: int64(s.max)}
 	}
 	now := s.clk.Now()
 	name := n.Name
+	written := false
 	err = s.st.exec(ctx, func(tx *sql.Tx) error {
 		if !n.FixedName {
 			var err error
@@ -434,32 +452,29 @@ func (s *Service) apply(ctx context.Context, n Note, a Actor, expect *int64, f f
 				return err
 			}
 		}
+		// the file first, then the row: the index never cites a file that is
+		// not there yet
+		if err := s.writeFile(n, next); err != nil {
+			return err
+		}
+		written = true
 		_, err := tx.ExecContext(ctx, `UPDATE notes SET name = ?, name_key = ?, revision = revision + 1, size = ?, author = ?, author_id = ?, updated_at = ? WHERE key = ? AND revision = ?`,
 			name, nameKey(name), int64(len(next)), a.author(), a.ID, now.UnixMilli(), n.Key, n.Revision)
 		return err
 	})
 	if err != nil {
-		return Note{}, err
-	}
-	if err := s.writeFile(n, next); err != nil {
-		// The index moved but the file did not: put the old content back in
-		// the index too, so the two never disagree.
-		if rerr := s.st.exec(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `UPDATE notes SET name = ?, name_key = ?, revision = ?, size = ?, author = ?, author_id = ?, updated_at = ? WHERE key = ?`,
-				n.Name, nameKey(n.Name), n.Revision, n.Size, n.Author, n.AuthorID, n.UpdatedAt.UnixMilli(), n.Key)
-			return err
-		}); rerr != nil {
-			s.log.Error("scrolls: the index could not be put back after a file that was not written", "scroll", n.Key, "err", rerr)
+		if written { // the index refused it: put the old content back in the file
+			if rerr := s.writeFile(n, cur); rerr != nil {
+				s.log.Error("scrolls: the file could not be put back after an index that refused the change", "scroll", n.Key, "err", rerr)
+			}
 		}
-		return Note{}, err
+		return Note{}, "", err
 	}
 	out, _, err := s.reload(ctx, n.Key)
 	if err != nil {
-		return Note{}, err
+		return Note{}, "", err
 	}
-	s.copyOut(ctx, out, next)
-	s.emit(Changed, out)
-	return out, nil
+	return out, next, nil
 }
 
 // StackRequest is `note stack`.
@@ -607,10 +622,20 @@ func (s *Service) Delete(ctx context.Context, r DeleteRequest) error {
 		return ErrApproval
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	n, err := s.find(ctx, r.Workspace, r.Table, r.Actor, r.Name)
+	n, err := s.deleteLocked(ctx, r)
+	s.mu.Unlock()
 	if err != nil {
 		return err
+	}
+	s.dropCopies(ctx, n) // with the lock released
+	s.emit(Deleted, n)
+	return nil
+}
+
+func (s *Service) deleteLocked(ctx context.Context, r DeleteRequest) (Note, error) {
+	n, err := s.find(ctx, r.Workspace, r.Table, r.Actor, r.Name)
+	if err != nil {
+		return Note{}, err
 	}
 	var emptied []string
 	err = s.st.exec(ctx, func(tx *sql.Tx) error {
@@ -632,7 +657,7 @@ func (s *Service) Delete(ctx context.Context, r DeleteRequest) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return Note{}, err
 	}
 	if err := safefile.Remove(s.File(n.Workspace, n.Table, n.ID), nil); err != nil {
 		s.log.Warn("scrolls: the file of a deleted scroll was not removed", "scroll", n.Key, "err", err)
@@ -643,9 +668,7 @@ func (s *Service) Delete(ctx context.Context, r DeleteRequest) error {
 		}
 	}
 	s.forget(ctx, emptied)
-	s.dropCopies(ctx, n)
-	s.emit(Deleted, n)
-	return nil
+	return n, nil
 }
 
 // --- connections.Scrolls: what the connections need to know ---

@@ -101,6 +101,7 @@ type world struct {
 	ctx     context.Context
 	clk     *clock.Fake
 	db      *store.DB
+	dbPath  string
 	reg     characters.Registry
 	conns   *connections.Service
 	svc     *scrolls.Service
@@ -138,6 +139,7 @@ func newWorld(t *testing.T, o worldOptions) *world {
 	t.Helper()
 	w := &world{t: t, ctx: context.Background(), clk: clock.NewFake(day0), root: t.TempDir(), changes: &changeLog{}}
 	path := filepath.Join(t.TempDir(), "mestre.db")
+	w.dbPath = path
 	if err := os.WriteFile(path, guildTemplate, 0o600); err != nil {
 		t.Fatal(err)
 	}
