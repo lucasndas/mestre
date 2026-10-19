@@ -31,7 +31,7 @@ O que o código fixa onde o texto acima deixa em aberto:
 | Estado | Identificador | Entra quando |
 |---|---|---|
 | Aberta | `open` | passos 1–5 da abertura em andamento, ou o passo 6 adiado pela [espera de dependência](dependencia-entre-mesas.md#a-espera-do-tipo-épico) |
-| Em trabalho | `working` | pedido entregue ao Mestre da mesa; ou nova missão iniciada estando em revisão (um pedido novo que o Grão-Mestre [roteou](grao-mestre.md#triagem-e-roteamento-do-pedido) para a mesa, ou uma etapa `sync`) |
+| Em trabalho | `working` | pedido entregue ao Mestre da mesa; ou nova missão iniciada estando em revisão (um pedido novo que o Grão-Mestre [roteou](grao-mestre.md#triagem-e-roteamento-do-pedido) para a mesa, ou uma etapa `sync`, desde o M5) |
 | Em revisão | `in_review` | `mestre pr open` (ou `pr update`) concluído com sucesso |
 | Encerrando | `closing` | `mestre table close` do Grão-Mestre, com o merge do PR já confirmado |
 | Encerrada | `closed` | personagens encerrados e worktrees removidos (ou retenção decidida) |
@@ -58,7 +58,7 @@ O merge é confirmado pelo resultado do `mestre gh merge` ou, se uma pessoa fize
 
 ### Pausa
 
-A pausa é uma marca (`paused`) sobre o estado, ligada por `/pausar`, pelo painel, pelo botão **Pausar mesa** do aviso de [mesa que gira](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira) ou pelo [limite de uso](../plataforma/limites-de-uso.md). Enquanto pausada:
+A pausa é uma marca (`paused`) sobre o estado, ligada por `/pausar`, pelo painel, pelo botão **Pausar mesa** (desde o M5; no painel, M6) do aviso de [mesa que gira](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira) ou pelo [limite de uso](../plataforma/limites-de-uso.md). Enquanto pausada:
 - o motor não entrega itens da caixa de entrada aos personagens da mesa (eles ficam na fila);
 - missões não iniciam etapas novas e recrutamentos de missão ficam parados;
 - disparos de [rituais](rituais.md) da mesa enfileiram normalmente (podendo expirar);
