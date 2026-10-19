@@ -346,3 +346,21 @@ func TestRefValidationRejectsOptions(t *testing.T) {
 		t.Error("open range accepted")
 	}
 }
+
+func TestParseAddedLinesReadsTheLinesOfTheHunks(t *testing.T) {
+	t.Parallel()
+	diff := "diff --git a.go a.go\n--- a.go\n+++ a.go\n@@ -3,0 +4,2 @@ func x()\n+\tfoo()\n+++ not a header\n@@ -9 +11 @@\n-old\n+new\n" +
+		"diff --git \"d\\303\\251.txt\" \"d\\303\\251.txt\"\nnew file mode 100644\n--- /dev/null\n+++ \"d\\303\\251.txt\"\n@@ -0,0 +1 @@\n+hello\n" +
+		"diff --git gone.go gone.go\ndeleted file mode 100644\n--- gone.go\n+++ /dev/null\n@@ -1 +0,0 @@\n-bye\n" +
+		"diff --git bin.png bin.png\nBinary files differ\n"
+	got := gitx.ParseAddedLines([]byte(diff))
+	want := []gitx.AddedLine{{Path: "a.go", Line: 4, Text: "\tfoo()"}, {Path: "a.go", Line: 5, Text: "++ not a header"}, {Path: "a.go", Line: 11, Text: "new"}, {Path: "dé.txt", Line: 1, Text: "hello"}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}

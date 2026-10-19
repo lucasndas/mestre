@@ -43,6 +43,10 @@ var (
 	ErrMissingPrerequisite        = errors.New("gitx: repository lacks the bundle prerequisite commits")
 	ErrConfigNotSet               = errors.New("gitx: config key not set")
 	ErrUnsafeRepo                 = errors.New("gitx: the repository configuration could make git run a command")
+	// The refusals of a push, told apart by what the remote said.
+	ErrPushProtected = errors.New("gitx: the remote refused the push: a protection or ruleset of the branch")
+	ErrPushWorkflow  = errors.New("gitx: the remote refused the push: it changes workflows and the App has no permission for them")
+	ErrPushSignature = errors.New("gitx: the remote refused the push: the rules ask for signed commits")
 )
 
 // NoLazyFetchVersion is the first git that honours GIT_NO_LAZY_FETCH, which
@@ -167,6 +171,14 @@ type FileChange struct {
 // String is the line of the name-status listing ("M src/login.go").
 func (c FileChange) String() string { return string(c.Status) + " " + c.Path }
 
+// AddedLine is a line a change adds: the file, the number of the line in the new
+// version and its text (without the newline).
+type AddedLine struct {
+	Path string
+	Line int
+	Text string
+}
+
 // BundleInfo is what the header of a bundle file declares.
 type BundleInfo struct {
 	Refs          []Ref  // refs the bundle carries
@@ -274,6 +286,16 @@ type Repo interface {
 	Fetch(ctx context.Context, remote string, refspecs ...string) error
 	// FetchWithAuth is Fetch with auth handed to git in its environment.
 	FetchWithAuth(ctx context.Context, auth Auth, remote string, refspecs ...string) error
+	// PushWithAuth pushes refspec ("refs/heads/b:refs/heads/b", no leading "+") to
+	// a remote name, URL or path with auth handed to git in its environment. force
+	// pushes a branch that is not a fast-forward of the remote's. A refusal of the
+	// remote is ErrNotFastForward, ErrPushProtected, ErrPushWorkflow or
+	// ErrPushSignature.
+	PushWithAuth(ctx context.Context, auth Auth, remote, refspec string, force bool) error
+	// AddedLines lists the lines added from the merge base of base and head up to
+	// head (git diff base...head), by file and line of head. A binary file has
+	// none. It never runs a diff driver or a text conversion.
+	AddedLines(ctx context.Context, base, head string) ([]AddedLine, error)
 	// CreateBundle writes a bundle of revs (a ref such as "main" or an
 	// incremental range such as "<hash>..main"). ErrEmptyBundle when the
 	// range holds no commit.

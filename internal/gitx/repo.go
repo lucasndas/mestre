@@ -824,3 +824,61 @@ func (r *repo) ExcludeBlock(ctx context.Context, name string) ([]string, error) 
 	patterns, _ := ParseExcludeBlock(string(content), name)
 	return patterns, nil
 }
+
+func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, refspec string, force bool) error {
+	if err := ValidateRef(remote); err != nil {
+		return err
+	}
+	if err := CheckURL(remote); err != nil {
+		return fmt.Errorf("push: %w", err)
+	}
+	if err := ValidateRef(refspec); err != nil {
+		return err
+	}
+	if strings.HasPrefix(refspec, "+") {
+		return fmt.Errorf("%w: the refspec of a push does not force (use force)", ErrInvalidArgument)
+	}
+	ro, err := r.g.authOpts(&auth)
+	if err != nil {
+		return fmt.Errorf("push %s: %w", RedactURL(remote), err)
+	}
+	// --no-verify: no hook of the repository runs as the engine; --receive-pack
+	// and --exec are named here, never read from the configuration.
+	args := []string{"push", "--no-verify", "--recurse-submodules=no", "--receive-pack=git-receive-pack"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, "--", remote, refspec)
+	return r.mutate(ctx, func() error {
+		_, err := r.run(ctx, ro, args...)
+		switch {
+		case err == nil:
+			return nil
+		case has(err, "workflow") && has(err, "permission", "scope"):
+			err = as(ErrPushWorkflow, err)
+		case has(err, "verified signatures", "must have valid signatures"):
+			err = as(ErrPushSignature, err)
+		case has(err, "protected branch", "gh006", "gh013", "repository rule violations", "declined"):
+			err = as(ErrPushProtected, err)
+		case has(err, "non-fast-forward", "fetch first", "[rejected]"):
+			err = as(ErrNotFastForward, err)
+		}
+		return fmt.Errorf("push %s: %w", RedactURL(remote), err)
+	})
+}
+
+func (r *repo) AddedLines(ctx context.Context, base, head string) ([]AddedLine, error) {
+	a, err := r.ResolveRef(ctx, base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.ResolveRef(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	out, err := r.git(ctx, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--unified=0", "--no-prefix", string(a)+"..."+string(b), "--")
+	if err != nil {
+		return nil, fmt.Errorf("diff %s...%s: %w", base, head, err)
+	}
+	return ParseAddedLines(out), nil
+}

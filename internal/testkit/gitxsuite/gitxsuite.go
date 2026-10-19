@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,7 @@ func Run(t *testing.T, h Harness) {
 		{"bundles", bundles},
 		{"fetch and config", fetchAndConfig},
 		{"credentials only through auth", credentialsOnlyThroughAuth},
+		{"push and added lines", pushAndAddedLines},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -642,3 +644,55 @@ func fetchAndConfig(t *testing.T, h Harness) {
 	isErr(t, mirror.Fetch(ctx, origin.Dir(), "refs/heads/nope:refs/remotes/origin/nope"), gitx.ErrRefNotFound)
 	isErr(t, mirror.Fetch(ctx, "-bad"), gitx.ErrInvalidArgument)
 }
+
+func pushAndAddedLines(t *testing.T, h Harness) {
+	ctx := context.Background()
+	g := h.New(t)
+	root := t.TempDir()
+	work := seed(t, h, g, filepath.Join(root, "work"), map[string]string{"a.txt": "um\ndois\n", "keep.go": "package x\n"})
+	remote := must(g.Clone(ctx, work.Dir(), filepath.Join(root, "remoto.git"), gitx.CloneOptions{Bare: true}))
+	base := must(work.ResolveRef(ctx, "main"))
+	wt := must(work.AddWorktree(ctx, filepath.Join(root, "mesa"), gitx.WorktreeOptions{Branch: "mesa", Create: true, StartPoint: "main"}))
+	commitFile(t, h, wt, "a.txt", "um\ndois\ntres\n++ quatro\n", "feat: more lines")
+	c2 := commitFile(t, h, wt, "novo/arquivo.ts", "const a = 1\nconst b = 2\n", "feat: new file")
+
+	// the lines the change adds, by file and line of the new version
+	got := must(work.AddedLines(ctx, string(base), "mesa"))
+	var lines []string
+	for _, l := range got {
+		lines = append(lines, l.Path+":"+itoa(l.Line)+":"+l.Text)
+	}
+	want := []string{"a.txt:3:tres", "a.txt:4:++ quatro", "novo/arquivo.ts:1:const a = 1", "novo/arquivo.ts:2:const b = 2"}
+	if !slices.Equal(lines, want) {
+		t.Fatalf("added lines = %q, want %q", lines, want)
+	}
+	if none := must(work.AddedLines(ctx, "mesa", "mesa")); len(none) != 0 {
+		t.Fatalf("added lines of nothing = %v", none)
+	}
+	_, err := work.AddedLines(ctx, "nao-existe", "mesa")
+	isErr(t, err, gitx.ErrRefNotFound)
+
+	// the push
+	auth := gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushSecretToken0123456789abcdef")
+	ok(work.PushWithAuth(ctx, auth, remote.Dir(), "refs/heads/mesa:refs/heads/mesa", false))
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c2 {
+		t.Fatalf("pushed branch = %s, want %s", got, c2)
+	}
+	// a push that is no fast-forward is refused, unless forced
+	wt2 := must(work.AddWorktree(ctx, filepath.Join(root, "outra"), gitx.WorktreeOptions{Branch: "outra", Create: true, StartPoint: string(base)}))
+	c3 := commitFile(t, h, wt2, "b.txt", "x\n", "feat: another history")
+	isErr(t, work.PushWithAuth(ctx, auth, remote.Dir(), "refs/heads/outra:refs/heads/mesa", false), gitx.ErrNotFastForward)
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c2 {
+		t.Fatalf("a refused push moved the branch to %s", got)
+	}
+	ok(work.PushWithAuth(ctx, auth, remote.Dir(), "refs/heads/outra:refs/heads/mesa", true))
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c3 {
+		t.Fatalf("forced push = %s, want %s", got, c3)
+	}
+	// a refspec that forces by itself, credentials in the URL and an auth with user information are refused
+	isErr(t, work.PushWithAuth(ctx, auth, remote.Dir(), "+refs/heads/outra:refs/heads/mesa", false), gitx.ErrInvalidArgument)
+	isErr(t, work.PushWithAuth(ctx, auth, "https://x:y@github.com/o/r.git", "refs/heads/outra:refs/heads/mesa", false), gitx.ErrCredentialsInURL)
+	isErr(t, work.PushWithAuth(ctx, gitx.Auth{URL: "https://u:p@github.com/", Header: "Authorization: Basic eA=="}, remote.Dir(), "refs/heads/outra:refs/heads/x", false), gitx.ErrInvalidArgument)
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
