@@ -1,6 +1,6 @@
 # Teto do workspace
 
-> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** o máximo de permissões e de custo que qualquer classe de um workspace pode ter · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 

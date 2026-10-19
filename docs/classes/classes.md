@@ -1,6 +1,6 @@
 # Classes
 
-> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -66,7 +66,8 @@ operator: true                     # só valida com o teto que tenha operator: t
 tools:
   allow: ["mcp__navegador-do-usuario__*", "mcp__<mcp-de-controle>__*"]   # ligados no mcp: do CLASS.md (desde o M7)
   default: ask
-git: { commit: false, request_push: false, workflows: never }   # age pela tela, não pelos arquivos da mesa
+files: { write: [] }               # o Operador age pela tela, não pelos arquivos da mesa
+git: { commit: false, request_push: false, workflows: never }
 ```
 O `CLASS.md` descreve a tarefa típica, o que nunca fazer (ex.: compras, mudar senhas) e como entregar o `done`.
 
@@ -121,13 +122,12 @@ As [skills de apoio](skills-de-apoio.md) (`support_skills`, desde o M8) e os ser
 
 ### Validação (`mestre class check`)
 
-Confere: frontmatter e nome (a unicidade entre os escopos é conferida ao salvar e ao aprovar, não aqui) (e, desde o M8, avisa de `mestre <comando>` inexistente citado no pacote, [classes sugeridas](classes-sugeridas.md#comando-inexistente-numa-skill)); desde o M7, os casos de `cases/` ([teste de classe](../provedores/teste-de-classe.md#os-casos)); esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali. Pacote inválido sai com `invalid_class` e a lista de problemas; "acima do teto" é só um estado (nada é apagado), e o `run` que o pipeline recusa é um aviso.
+Confere: frontmatter e nome (a unicidade do nome entre os escopos é conferida ao salvar e ao aprovar) e, desde o M8, avisa de `mestre <comando>` inexistente citado no pacote, [classes sugeridas](classes-sugeridas.md#comando-inexistente-numa-skill); desde o M7, os casos de `cases/` ([teste de classe](../provedores/teste-de-classe.md#os-casos)); esquema do `permissions.yaml`; que tudo cabe no teto; eventos, tempos limite e scripts dos hooks; skills existentes; App vinculado, se é herdado e o estado dele ([criação de Apps](../github/criacao-de-apps.md)). Mostra, por provedor, como as permissões viram controles nativos e quais hooks não rodam ali. Pacote inválido sai com `invalid_class` e a lista de problemas; "acima do teto" é só um estado (nada é apagado), e o `run` que o pipeline recusa é um aviso.
 
 ## Regras e erros
 
 - Criar sem `--app`: recusado, com a explicação das três opções.
 - Arquivos da classe diferentes do hash registrado: a classe continua na última versão aprovada e nasce a proposta descrita acima.
-- Nome já usado num escopo visível: recusado.
 - Mestre da mesa criando ou editando algo fora do teto: recusado, mostrando o que passa do teto.
 - Excluir só a pedido explícito de um usuário autorizado ([convenções da CLI](../cli/convencoes.md)); classe em uso por personagem ativo não é excluída até ele trocar de classe ou ser encerrado.
 - Restaurar um grimório com classes que não existem no destino: [grimórios](../orquestracao/grimorios.md).

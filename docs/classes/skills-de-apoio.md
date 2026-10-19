@@ -1,6 +1,6 @@
 # Skills de apoio
 
-> **Assunto:** skills de engenharia que uma classe traz com liga/desliga (como TDD, diagnóstico de bug, revisão de código): onde ficam no pacote, como chegam a cada provedor, as quatro camadas que fazem o desligado valer e a licença · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** skills de engenharia que uma classe traz com liga/desliga (como TDD, diagnóstico de bug, revisão de código): onde ficam no pacote, como chegam a cada provedor, as quatro camadas que fazem o desligado valer e a licença · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 

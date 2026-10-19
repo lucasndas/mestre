@@ -1,6 +1,6 @@
 # Formato das permissões
 
-> **Assunto:** formato do `permissions.yaml` (o mesmo do teto do workspace e das restrições da ficha), o padrão de cada campo ausente, padrões de arquivos, comandos e ferramentas e como o despachante os casa · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** formato do `permissions.yaml` (o mesmo do teto do workspace e das restrições da ficha), o padrão de cada campo ausente, padrões de arquivos, comandos e ferramentas e como o despachante os casa · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 Documento de referência das [permissões](permissoes.md), que são donas do comportamento, das regras fixas, das regras efetivas e dos critérios de aceite. O código é `internal/classes` (`ParsePermissions`).
 
