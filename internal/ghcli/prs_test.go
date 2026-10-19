@@ -361,3 +361,42 @@ func TestWithTheLeaseExpiredWritesWaitAndReadingsAreRefused(t *testing.T) {
 		t.Errorf("after the lease the comments are %q", cs)
 	}
 }
+
+// Part of CA-CANAL-04: with the Mestre locked nothing is done on GitHub, not even
+// what waited in the queue.
+func TestNothingIsDoneOnGitHubWhileTheMestreIsLocked(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	n := r.gh.AddIssue(repoFull, "da mesa")
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: n, Table: "meu-app/42-login"}); err != nil {
+		t.Fatal(err)
+	}
+	r.locked.Store(true)
+	for _, cmd := range []string{"issue list", "issue create", "issue comment", "pr status"} {
+		args := []string{}
+		flags := map[string]any{}
+		switch cmd {
+		case "issue comment":
+			args = []string{itoa(n), "x"}
+		case "issue create":
+			flags = map[string]any{"title": "x"}
+		}
+		if got := r.run("tm", cmd, flags, args...); got.OK || got.Code != "locked" {
+			t.Errorf("%s: %+v, want locked", cmd, got)
+		}
+	}
+	if len(r.gh.Actions()) != 0 {
+		t.Errorf("GitHub got %d writes while locked", len(r.gh.Actions()))
+	}
+	// what waited for the lease and goes out after the lock: refused when it goes
+	r.locked.Store(false)
+	r.lease.expire()
+	if got := r.run("tm", "issue comment", nil, itoa(n), "depois"); !got.OK || got.Data["queued"] != true {
+		t.Fatalf("queued: %+v", got)
+	}
+	r.locked.Store(true)
+	r.lease.renew(r.ctx)
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 0 {
+		t.Errorf("a queued comment went out under the lock: %q", cs)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -151,7 +152,9 @@ type rig struct {
 	gate  *cli.Gate
 	prs   prs
 	lease *lease
-	clk   *clock.Fake
+	// locked makes the Mestre locked.
+	locked atomic.Bool
+	clk    *clock.Fake
 	// onFiles: see clients.
 	onFiles *func()
 }
@@ -202,7 +205,9 @@ func newRig(t *testing.T) *rig {
 		}
 		return cli.Profile{Role: cli.RoleCharacter}
 	})
-	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	rg := &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	h.Locked = func(context.Context) bool { return rg.locked.Load() }
+	return rg
 }
 
 // result is the answer of a command.

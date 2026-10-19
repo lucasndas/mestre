@@ -42,6 +42,8 @@ type Handlers struct {
 	PRs PRs
 	// Lease gates every call to GitHub; without it every command is refused.
 	Lease Lease
+	// Locked says the Mestre is locked (/travar): nothing is done on GitHub. nil: never.
+	Locked func(ctx context.Context) bool
 	// Quota, when set, holds what changes data back while the App is low.
 	Quota      Quota
 	Characters Characters

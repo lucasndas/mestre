@@ -247,6 +247,34 @@ func TestTheGateOfTheBotIsClosedUntilTheFenceExists(t *testing.T) {
 	}
 }
 
+// The lock of the channel is one state for the whole Citadel: the engine, the
+// commands of GitHub and the orchestration read the same one.
+func TestTheLockOfTheChannelReachesTheEngineAndTheOrchestration(t *testing.T) {
+	t.Parallel()
+	i := newInteg(t, false)
+	var seen func(context.Context) bool
+	run, err := i.std.Open(i.ctx, IntegrationEnv{DB: i.db, Vault: i.vault, Clock: i.clk, Machine: "m1", Masker: logging.NewMasker(),
+		SetLocked: func(f func(context.Context) bool) { seen = f }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer run.Close()
+	var o OrchestrationOptions
+	run.Extend(&o)
+	if seen == nil || o.Locked == nil {
+		t.Fatal("the lock did not reach the engine or the orchestration")
+	}
+	if seen(i.ctx) || o.Locked(i.ctx) {
+		t.Fatal("locked with nothing locking")
+	}
+	if _, err := i.db.Writer().ExecContext(i.ctx, `UPDATE channel_lock SET locked = 1 WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if !seen(i.ctx) || !o.Locked(i.ctx) {
+		t.Error("the lock is not seen by the engine and the orchestration")
+	}
+}
+
 // memKeyStore keeps the key of the vault in memory.
 type memKeyStore struct {
 	mu   sync.Mutex
@@ -267,4 +295,25 @@ func (m *memKeyStore) Save(_ context.Context, d []byte) error {
 	defer m.mu.Unlock()
 	m.data = slices.Clone(d)
 	return nil
+}
+
+func TestTheEngineIsLockedByTheLockOfThePeriodAndByTheOneItWasGiven(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	e := &Engine{}
+	if e.locked(ctx) {
+		t.Fatal("locked with no lock")
+	}
+	e.setLocked(func(context.Context) bool { return true })
+	if !e.locked(ctx) {
+		t.Fatal("the lock of the period is not seen")
+	}
+	e.setLocked(nil)
+	if e.locked(ctx) {
+		t.Fatal("the lock of a period outlived it")
+	}
+	e.deps.Locked = func(context.Context) bool { return true }
+	if !e.locked(ctx) {
+		t.Fatal("the lock given in the dependencies is not seen")
+	}
 }

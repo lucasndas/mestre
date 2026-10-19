@@ -29,6 +29,9 @@ type IntegrationEnv struct {
 	Machine string
 	// Masker hides the secrets in every message that leaves.
 	Masker *logging.Masker
+	// SetLocked gives the engine the lock of the period (/travar): its gate of
+	// the CLI refuses what starts work while it holds. Nil takes it away.
+	SetLocked func(f func(ctx context.Context) bool)
 }
 
 // Integration opens the integrations of a period. The zero Deps has none.

@@ -39,6 +39,12 @@ func (h *Handlers) quotaLow(ctx context.Context, c *localchan.Call) (time.Time, 
 	return h.Quota.Low(ctx, ch)
 }
 
+func (h *Handlers) isLocked(ctx context.Context) bool { return h.Locked != nil && h.Locked(ctx) }
+
+func lockedResponse() localchan.Response {
+	return localchan.Fail("locked", "o Mestre está travado: nada é feito no GitHub até o Dono destravar", "o Dono destrava com /destravar")
+}
+
 type handler func(ctx context.Context, c *localchan.Call) localchan.Response
 
 func unavailable(why string) localchan.Response {
@@ -48,6 +54,9 @@ func unavailable(why string) localchan.Response {
 // read serves a command that only reads: refused while the lease is not valid.
 func (h *Handlers) read(f handler) handler {
 	return func(ctx context.Context, c *localchan.Call) localchan.Response {
+		if h.isLocked(ctx) {
+			return lockedResponse()
+		}
 		if h.Lease == nil {
 			return unavailable("the lease of the epoch is not set")
 		}
@@ -67,12 +76,20 @@ func (h *Handlers) read(f handler) handler {
 // does not double what an earlier sending made.
 func (h *Handlers) write(name string, f handler) handler {
 	return func(ctx context.Context, c *localchan.Call) localchan.Response {
+		if h.isLocked(ctx) {
+			return lockedResponse()
+		}
 		if h.Lease == nil {
 			return unavailable("the lease of the epoch is not set")
 		}
 		run := func(ctx context.Context) localchan.Response {
 			var resp localchan.Response
 			queued, err := h.Lease.Do(ctx, name, func(ctx context.Context) error {
+				// it may have waited: the lock is looked at when it goes out
+				if h.isLocked(ctx) {
+					resp = lockedResponse()
+					return nil
+				}
 				resp = f(ctx, c)
 				return nil
 			})
