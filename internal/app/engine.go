@@ -143,6 +143,10 @@ type Deps struct {
 	// hook.AsyncRunner). nil: none.
 	ClassHooks  hook.ClassHooks
 	OnHookEvent func(providers.Event, hook.Answer)
+	// OnAgentEvent is told, on the Citadel, each event that a character of a
+	// Tower generated (agent.event), once, whenever it arrives: the Tower keeps
+	// them in its outbox while the Citadel is away. nil: they are dropped.
+	OnAgentEvent func(machine string, ev providers.Event, ans hook.Answer)
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources
@@ -650,7 +654,7 @@ func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
 	return &hook.Engine{
 		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
 		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States, Contexts: e.deps.Contexts,
-		ClassHooks: e.deps.ClassHooks, OnEvent: e.deps.OnHookEvent, TableRules: e.deps.TableRules,
+		ClassHooks: e.deps.ClassHooks, OnEvent: e.onHookEvent, TableRules: e.deps.TableRules,
 	}
 }
 

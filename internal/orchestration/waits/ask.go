@@ -22,6 +22,9 @@ type AskRequest struct {
 	// Gone is closed when the call of the CLI that waits for the answer is
 	// gone; the ask stays open and its answer goes to the inbox.
 	Gone <-chan struct{}
+	// Progress hears `queued`, `delivered` and `answering` while the call
+	// waits (nil: nobody listens).
+	Progress func(status string)
 }
 
 // AskStatus says how an ask ended for the caller.
@@ -104,7 +107,18 @@ func (s *Service) Ask(ctx context.Context, r AskRequest) (AskOutcome, error) {
 		ch = make(chan askResult, 1)
 		s.mu.Lock()
 		s.blockers[a.ID] = ch
+		if r.Progress != nil {
+			s.progress[a.ID] = r.Progress
+			defer func() {
+				s.mu.Lock()
+				delete(s.progress, a.ID)
+				s.mu.Unlock()
+			}()
+		}
 		s.mu.Unlock()
+		if r.Progress != nil {
+			r.Progress("queued")
+		}
 	}
 	item, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.From.Workspace, Target: r.To.ID, Kind: inbox.KindAgent, Sender: r.From.Name, SenderID: r.From.ID,
 		Text: r.Prompt, Refs: inbox.Refs{Ask: a.ID, Table: table}})
@@ -266,4 +280,15 @@ func (s *Service) TurnEnded(ctx context.Context, c characters.Character, lastMes
 		break // one item, one turn
 	}
 	return nil
+}
+
+// AskProgress implements inbox.AskProgress: the call of the CLI that waits for
+// the ask, if there is one, hears how far the item of the ask went.
+func (s *Service) AskProgress(_ context.Context, ask, status string) {
+	s.mu.Lock()
+	f := s.progress[ask]
+	s.mu.Unlock()
+	if f != nil {
+		f(status)
+	}
 }

@@ -565,6 +565,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	registry.Register(router)
 	router.HandleFunc(protocol.TypeCertRenew, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleCertRenew }))
 	router.HandleFunc(protocol.TypeGuildLeave, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
+	router.HandleFunc(protocol.TypeAgentEvent, run.gated(e.handleAgentEvent))
 	router.HandleFunc(protocol.TypeMachineSheet, run.gated(registry.Handler().Handle))
 	router.HandleFunc(protocol.TypeCLICall, e.handleCLICall(run)) // it answers in cli.result, gate included
 	router.HandleFunc(protocol.TypeGuildDiscarded, run.gated(guild.DiscardedHandler(func() *store.DB { return db }, e.clk)))
