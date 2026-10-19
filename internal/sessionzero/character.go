@@ -202,7 +202,6 @@ type charState struct {
 	input   LayerInput
 	layer   Layer
 	pending map[string]string // section key -> text, for the next turn
-	order   []string
 	// hookText is the layer that travels by the hook of the start, until
 	// the hook delivers it.
 	hookText  string

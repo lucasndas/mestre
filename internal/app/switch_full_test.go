@@ -258,7 +258,10 @@ func (w *world) waitFor(what string, step time.Duration, ok func() bool) {
 			w.t.Fatalf("timed out waiting for %s (test clock at %s)", what, w.clk.Now().Format(time.TimeOnly))
 		}
 		if step > 0 {
-			w.clk.Advance(step)
+			// a process that is down does not answer: logged, the wait goes on
+			if err := w.clk.Advance(step); err != nil {
+				w.t.Logf("clock: %v", err)
+			}
 		}
 		_ = clock.Sleep(w.t.Context(), clock.Real{}, 15*time.Millisecond)
 	}
@@ -609,19 +612,25 @@ func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 
 	// 30 s into the wait the process stops; the clock steps forward 2 minutes
 	// while it is down, and it starts again
-	w.clk.Advance(30 * time.Second)
+	if err := w.clk.Advance(30 * time.Second); err != nil {
+		t.Fatal(err)
+	}
 	w.kill(b)
-	w.clk.Advance(2 * time.Minute)
+	_ = w.clk.Advance(2 * time.Minute) // b is down: it cannot apply the time, and the error says so
 	w.start(b)
 	w.waitFor("b to come back as the Citadel of the epoch 2", 0, func() bool {
 		st, ok := w.status(b)
 		return ok && st.Role == app.RoleCitadel && st.Epoch == 2
 	})
-	w.clk.Advance(59 * time.Second)
+	if err := w.clk.Advance(59 * time.Second); err != nil {
+		t.Fatal(err)
+	}
 	if st, _ := w.status(b); st.Acting || st.Fence != "waiting" {
 		t.Fatalf("59 s after the restart the Citadel is %s (acting %v); want it waiting the whole wait again", st.Fence, st.Acting)
 	}
-	w.clk.Advance(time.Second)
+	if err := w.clk.Advance(time.Second); err != nil {
+		t.Fatal(err)
+	}
 	w.waitFor("b to act after the wait and the check of the lock", 0, func() bool {
 		st, ok := w.status(b)
 		return ok && st.Acting

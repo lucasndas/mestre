@@ -578,11 +578,6 @@ func (r *rig) insertMachine(i int) {
 		fmt.Sprintf("m%04d", i), fmt.Sprintf("machine %d", i), int64(i))
 }
 
-func (r *rig) insertSecret(name string, ciphertext []byte) {
-	r.t.Helper()
-	r.exec(`INSERT INTO secrets (name, type, ciphertext, nonce, key_version, fingerprint, created_at, updated_at) VALUES (?, 'x', ?, x'00', 1, 'f', 0, 0)`, name, ciphertext)
-}
-
 // dump is every table of the database but the log, as text.
 func dump(t *testing.T, db *store.DB, skip ...string) string {
 	t.Helper()

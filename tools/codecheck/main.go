@@ -141,6 +141,10 @@ func Check(fsys fs.FS) ([]Issue, error) {
 		}
 		if !s.isTest() && !s.isWindows() {
 			checkPrivateDirs(s, add)
+		}
+		// Also in _windows.go: the links and junctions the rule guards against
+		// are most of all a Windows matter.
+		if !s.isTest() {
 			checkAgentFiles(s, add)
 		}
 	}

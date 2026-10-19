@@ -103,8 +103,7 @@ A tradução das regras efetivas para os controles nativos de cada provedor est�
 ## Regras e erros
 
 - `permissions.yaml` inválido: a classe não é salva; numa classe já salva que fica inválida (edição manual), o motor mantém a última versão válida e avisa.
-- Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `tools.default`.
-- Nome em `network.credentials` que não existe no cofre, ou cujo domínio não está em `network.domains`: a classe não é salva.
+- Ferramenta não mapeada (`other`) ou MCP (`mcp`): vale `tools` e, se nada casar, `tools.default`. Nome em `network.credentials` que não existe no cofre, ou cujo domínio não está em `network.domains`: a classe não é salva.
 - Limite conhecido: comandos de shell que escrevem arquivos sem caminho literal escapam da regra de arquivos; por isso classes restritas devem usar lista de comandos permitidos, e o `git commit` confere os arquivos preparados.
 - Chave escrita em arquivo (a partir do M5): o `pre_tool` de escrita (ferramenta de arquivo, here-document, `sed -i`) cujo conteúdo traz um formato de chave do mascarador ([segurança](../arquitetura/seguranca.md), "Mascaramento") é negado nos três provedores, e o aviso para corrigir antes de seguir chega ao agente: o `post_tool` só devolve texto no Claude e no Codex, e no Antigravity (cujo PostToolUse responde `{}`) o aviso vai no `injectSteps` do PostInvocation ou do PreInvocation seguinte ([despachante](../provedores/despachante-de-hooks.md)); a mensagem cita só `arquivo:linha` e o tipo, nunca o valor. É aviso cedo: a rede de segurança é o envio do PR ([CLI](../cli/coordenacao-github.md)).
 
