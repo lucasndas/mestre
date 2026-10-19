@@ -105,6 +105,7 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - Exatamente um Grão-Mestre por workspace: tentar recrutar outro é recusado.
 - Os comandos exclusivos do Grão-Mestre estão na [CLI do Grão-Mestre](../cli/grao-mestre.md); chamados por outro personagem, retornam erro de permissão ([convenções da CLI](../cli/convencoes.md)).
 - O Grão-Mestre só recruta Mestres de mesa (na abertura, dentro de `mestre table open`, e na troca de ficha de um Mestre de mesa) e o Operador do PC (desde o M7, sempre por pedido de ativação); o nível de cada comando é o da [CLI](../cli/coordenacao.md).
+- O início do Grão-Mestre passa pelo `CheckStart` da sessão zero ([mesa](../sessao-zero/mesa.md)), como o de todo personagem: se os arquivos do provedor dele no clone principal não foram gerados, o início é recusado (`BlockedError`) com os problemas, sem segurar os outros provedores, e vale a regra abaixo (CA-GM-17).
 - Se o Grão-Mestre não conseguir iniciar (ex.: conta do provedor deslogada), as mensagens de usuários ficam na fila e o motor responde ao usuário, como "Sistema", que o Grão-Mestre está indisponível e por quê.
 
 ## Critérios de aceite
@@ -126,6 +127,7 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - **CA-GM-14** · *pesada* — **Dado** um pedido ambíguo, **quando** o Grão-Mestre faz a triagem, **então** o usuário recebe no máximo 3 perguntas, cada uma com a recomendação como primeiro botão; **dado** "você escolhe", **então** a recomendação vale e fica registrada como tal (MVP-4).
 - **CA-GM-15** · *rápida* — **Dado** duas mesas mescladas e uma esperando a aprovação do PR #41, **quando** o motor monta a mensagem de progresso, **então** ela traz a contagem das mescladas e uma linha com o dono e o motivo da pendente; **dado** um `pr_mergeado` sem o commit na base, **então** a mesa não conta como mesclada.
 - **CA-GM-16** · *rápida* — **Dado** o modelo de instruções do Grão-Mestre, **quando** é montado, **então** contém as 8 linhas da regra de decisão na ordem, "até 3 perguntas" com a recomendação primeiro e a leitura da marcação de prova; **dado** um épico com a seção `## Critérios` de 3 itens, **quando** o `mestre table status` roda, **então** `epic.criteria[]` traz os 3 textos.
+- **CA-GM-17** · *rápida* — **Dado** um workspace cujo clone principal tem os arquivos do provedor do Grão-Mestre não gerados (e os de outro provedor gerados), **quando** o motor inicia o Grão-Mestre, **então** o `CheckStart` o recusa com o provedor e os problemas, as mensagens dos usuários ficam na fila e eles recebem do "Sistema" que ele está indisponível e por quê; **dado** os arquivos corrigidos, **então** o Grão-Mestre inicia.
 
 ## Depende de
 
