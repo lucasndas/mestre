@@ -560,6 +560,16 @@ func TestLinuxTerminalsSurviveARestartOfTheLauncherUnit(t *testing.T) {
 	if got, err := terminal.ProcCgroup(old.PTY().PID); err != nil || got != cg {
 		t.Errorf("the cgroup of the mestre-pty changed to %q, %v", got, err)
 	}
+	// systemctl restart returns when the unit has started, not when the new
+	// launcher has opened its socket (it removes the old one and listens again).
+	until(ctxFor(t), t, "the new launcher listens on its socket", func() bool {
+		c, err := net.Dial("unix", launcherSocket("rst"))
+		if err != nil {
+			return false
+		}
+		_ = c.Close()
+		return true
+	})
 	// The new launcher starts terminals, and ends the one it did not start.
 	fresh := r.ready(t, newID("lr"), "sleeper")
 	ctx := ctxFor(t)
