@@ -79,6 +79,11 @@ type Server struct {
 	apps           map[int64]*appInfo // by id of the App
 	installs       map[int64]*appInfo // by id of the installation
 	bots           map[string]int64
+	manifests      map[string]Conversion
+	conversions    int
+	lookups        int
+	convFail       int
+	convFailHdr    map[string]string
 	tokenReqs      []TokenRequest
 	public         map[string]bool // repositories that are not private
 	tokenFail      int
