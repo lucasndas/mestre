@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
@@ -43,6 +44,9 @@ type GateConfig struct {
 	// Masker is the detector of secrets, the one of the log masking (nil:
 	// the formats alone, without the values of the vault).
 	Masker *logging.Masker
+	// Locked says the Mestre is locked (/travar): the commands that start work or
+	// act on GitHub are refused. nil: never.
+	Locked func(ctx context.Context) bool
 }
 
 // Gate is the engine side of the conventions of the CLI
@@ -78,6 +82,28 @@ func (g *Gate) profile(ctx context.Context, c *localchan.Call) Profile {
 	return g.cfg.Profiles.Profile(ctx, c.Caller.AgentID)
 }
 
+// lockedRefuses are the commands the lock of the channel refuses: those that
+// start work (recruits, quests, rituals, tables) or act on GitHub. The others
+// (reading, talking between the characters) go on, since the hook denies every
+// tool and the inbox delivers nothing.
+var lockedRefuses = map[string]bool{
+	"recruit": true, "spawn": true, "quest create": true, "quest run": true, "quest resume": true,
+	"ritual create": true, "ritual run": true, "ritual enable": true, "ritual edit": true, "table open": true,
+	"class create": true, "class edit": true, "class assign": true,
+	"issue create": true, "issue update": true, "issue comment": true, "issue list": true,
+	"pr status": true, "pr comment": true, "pr reply": true, "pr note": true,
+}
+
+// LockedRefuses are the names of the commands the lock refuses, sorted.
+func LockedRefuses() []string {
+	out := make([]string, 0, len(lockedRefuses))
+	for n := range lockedRefuses {
+		out = append(out, n)
+	}
+	slices.Sort(out)
+	return out
+}
+
 // Forward implements localchan.Forwarder.
 func (g *Gate) Forward(ctx context.Context, c *localchan.Call) localchan.Response {
 	spec, ok := g.cfg.Commands.Get(c.Request.Cmd)
@@ -89,6 +115,9 @@ func (g *Gate) Forward(ctx context.Context, c *localchan.Call) localchan.Respons
 	}
 	if refusal, ok := spec.Check(g.profile(ctx, c)); !ok {
 		return refusal
+	}
+	if g.cfg.Locked != nil && lockedRefuses[spec.Name] && g.cfg.Locked(ctx) {
+		return localchan.Fail("locked", "o Mestre está travado: este comando não é executado até o Dono destravar", "o Dono destrava com /destravar")
 	}
 	if refusal, ok := spec.checkRequest(c.Request); !ok {
 		return refusal

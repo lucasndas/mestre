@@ -119,9 +119,12 @@ type OrchestrationOptions struct {
 	// ChainRulesPublisher, when set, sends the effective rules of the
 	// characters whose temporary table rules changed (RulesPublisher).
 	ChainRulesPublisher *RulesPublisher
-	ChainPolicy         chain.Policy
-	ChainUsers          chain.UserAsker
-	ChainGrants         chain.Grants
+	// Locked says the Mestre is locked (/travar): the inbox delivers nothing to
+	// the characters (the messages wait) until it is not. nil: never.
+	Locked      func(ctx context.Context) bool
+	ChainPolicy chain.Policy
+	ChainUsers  chain.UserAsker
+	ChainGrants chain.Grants
 	// ChainTempRules, when set, replaces the temporary table rules of stage 11
 	// (a double for the tests of the chain); without it the chain makes them
 	// in Orchestration.TableRules.
@@ -324,6 +327,20 @@ func (f libraryCeiling) Allows(ctx context.Context, workspace, _, class string) 
 	return err
 }
 
+// lockedHolds holds every character while the Mestre is locked, then asks the
+// chain (the circuit breaker).
+type lockedHolds struct {
+	locked func(ctx context.Context) bool
+	then   inbox.Holds
+}
+
+func (h lockedHolds) Held(ctx context.Context, id string) (bool, error) {
+	if h.locked != nil && h.locked(ctx) {
+		return true, nil
+	}
+	return h.then.Held(ctx, id)
+}
+
 // chainRef is the chain of approval seen by the pieces made before it: the
 // inbox asks it whether a character is held, and it follows the states of the
 // characters as an Observer.
@@ -431,7 +448,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	ib, err := inbox.NewService(inbox.Options{DB: &inbox.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Deliverer: o.Machines, Pauses: tablesRef{&tbl},
-		Holds: chainRef{&ch}, Channels: o.Channels, Users: o.Users, Logger: o.Logger})
+		Holds: lockedHolds{locked: o.Locked, then: chainRef{&ch}}, Channels: o.Channels, Users: o.Users, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
