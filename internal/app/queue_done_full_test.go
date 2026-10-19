@@ -93,7 +93,7 @@ func newDoneStack(t *testing.T) *doneStack {
 	return &doneStack{orc: orc, dev: res.Character}
 }
 
-// Part of CA-CIDADELA-10 (the events of the engine of the Tower are in queue_events_full_test.go;
+// CA-CIDADELA-10 (the events of the engine of the Tower are in queue_events_full_test.go;
 // here the `done` and the `list`), and
 // CA-CLI-CONV-05, with the real `done` of the quests: with the Citadel away, a
 // character of a Tower runs `mestre done`; the CLI answers 0 and queued: true;

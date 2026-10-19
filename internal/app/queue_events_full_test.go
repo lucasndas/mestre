@@ -12,7 +12,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// Part of CA-CIDADELA-10, the half of the events of the engine of the Tower: with the
+// CA-CIDADELA-10, the half of the events of the engine of the Tower: with the
 // Citadel away, an event of a character of the Tower waits in the outbox; when
 // the Citadel is back it is applied once, and the same message sent again (the
 // Tower sends its queue after every reconnection) is applied no more. The `done`
