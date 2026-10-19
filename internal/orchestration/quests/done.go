@@ -54,6 +54,9 @@ type DoneResult struct {
 	// Queued is always false here: a done that waited in the outbox answers
 	// with the queued form instead (cli.Queued).
 	Queued bool `json:"queued"`
+	// Verification is "pending" while the verification of the class runs, and
+	// "unverified" when the step ended with no command to verify with.
+	Verification string `json:"verification,omitempty"`
 	// ReturnedTo is the step the work went back to; nil when it did not.
 	ReturnedTo *string `json:"returned_to"`
 	// QuestState is the state of the quest after the done.
@@ -76,6 +79,10 @@ const uncommittedPrefix = "alterações não commitadas não foram sincronizadas
 // back, up to the limit of returns of the quest. The character with no step is
 // ErrNoStep, and the caller treats its done as a task.
 func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error) {
+	return s.finish(ctx, r, modeNormal)
+}
+
+func (s *Service) finish(ctx context.Context, r DoneRequest, mode doneMode) (DoneResult, error) {
 	c := r.Character
 	// Two dones of the same character at once: the second finds no step.
 	defer s.finishLock(c.ID).Unlock()
@@ -91,6 +98,9 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 		return DoneResult{}, err
 	}
 	sd := q.Def.Steps[st.Pos]
+	if mode == modeNormal && s.verifying(st.UID) {
+		return DoneResult{}, fmt.Errorf("%w: wait for it to end", ErrVerificationRunning)
+	}
 	switch {
 	case r.Return != "" && sd.CanReturnTo == "":
 		return DoneResult{}, fmt.Errorf("%w: %s", ErrNoReturnStep, sd.Title())
@@ -107,6 +117,18 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 			s.kick(ctx, q.ID)
 		}
 		return DoneResult{}, err
+	}
+	if mode == modeVerified {
+		for i := range proofs {
+			proofs[i].Origin = ProofVerified
+		}
+	}
+	if mode == modeNormal && r.Return == "" {
+		res, handled, m, err := s.verifyFirst(ctx, q, st, c, r, proofs)
+		if handled || err != nil {
+			return res, err
+		}
+		mode = m
 	}
 	if err := s.o.Characters.Done(ctx, c.ID, r.Text); err != nil {
 		return DoneResult{}, err
@@ -164,6 +186,10 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 	res := DoneResult{Task: st.UID, Quest: q.Name, Step: st.ID, QuestState: string(out.questState), Warnings: orEmpty(warnings)}
 	if out.returnedTo != "" {
 		res.ReturnedTo = &out.returnedTo
+	}
+	if mode == modeUnverified {
+		res.Verification = VerificationUnverified
+		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A etapa %s foi concluída sem verificação: o workspace não tem comando de verificação confirmado. Nenhuma prova dela conta como verificada pelo motor.", sd.Title()))
 	}
 	return res, nil
 }

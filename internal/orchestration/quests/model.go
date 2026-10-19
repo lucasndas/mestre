@@ -160,6 +160,12 @@ var (
 	ErrTooLong = errors.New("the summary is too long")
 	// ErrUsage: a done that asks for something that does not go together.
 	ErrUsage = errors.New("invalid use of done")
+	// ErrVerificationRunning: a done came while the verification of the step runs.
+	ErrVerificationRunning = errors.New("the verification of the step is running")
+	// ErrUncommitted: the class verifies the branch and the character left changes not committed.
+	ErrUncommitted = errors.New("changes not committed")
+	// ErrNotIntegrated: the commits of a Tower did not reach the Citadel.
+	ErrNotIntegrated = errors.New("the commits did not reach the Citadel")
 	// ErrNoCriterion: a proof for a criterion the quest does not have.
 	ErrNoCriterion = errors.New("the quest has no such criterion")
 	// ErrProofTooLong: a proof over the limit.

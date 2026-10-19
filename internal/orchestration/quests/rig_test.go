@@ -250,6 +250,8 @@ type worldOpts struct {
 	ceiling characters.Ceiling
 	// done is the done_requires of the classes (nil: nothing is asked).
 	done quests.DoneRules
+	// verifier runs the verification of the workspace (nil: no command).
+	verifier quests.Verifier
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -281,6 +283,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{},
 		Messages: orcfakes.Messages{}, Peers: w.peers, QuestCatalog: catalog{}, Users: w.users, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerTable: opt.perTable}, Ceiling: opt.ceiling}
 	oo.QuestDone = opt.done
+	oo.QuestVerifier = opt.verifier
 	if !opt.noTowers {
 		oo.QuestTowers = w.towers
 	}
