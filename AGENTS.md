@@ -33,8 +33,4 @@ Convenções em [docs/desenvolvimento/convencoes.md](docs/desenvolvimento/conven
 
 ## Quando uma tarefa está pronta
 
-- Os critérios de aceite do documento da funcionalidade estão cobertos por testes na suíte indicada.
-- A suíte rápida passa dentro do orçamento, e a completa também antes do merge.
-- A documentação afetada foi atualizada e a verificação de docs passa.
-- Nada fora do escopo do MVP ([escopo](docs/produto/escopo-mvp.md)) foi acrescentado.
-- Um marco só está pronto depois da auditoria, cuja data fica na [tabela de marcos](docs/desenvolvimento/ordem-de-implementacao.md#como-usar-no-dia-a-dia).
+A definição de pronto, com a auditoria do marco, está em [docs/desenvolvimento/convencoes.md](docs/desenvolvimento/convencoes.md#definição-de-pronto); não a repita aqui. Em resumo: critérios de aceite com teste, suíte rápida (e a completa antes do merge) passando, documentação afetada atualizada com a verificação de docs passando, nada fora do [escopo do MVP](docs/produto/escopo-mvp.md) e, para um marco, a auditoria feita e datada na [tabela de marcos](docs/desenvolvimento/ordem-de-implementacao.md#marcos).
