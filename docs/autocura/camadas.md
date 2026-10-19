@@ -143,7 +143,7 @@ Reiniciar o motor (camadas 1 a 3, `rollback`, atualização) **não interrompe o
 ## Depende de
 
 - [Guardião](guardiao.md) · [Componentes](../arquitetura/componentes.md) · [Persistência](../arquitetura/persistencia.md) · [Protocolo](../conectividade/protocolo.md)
-- [Guilda](../guilda/guilda.md) · [Personagens](../orquestracao/personagens.md) · [Bot do Telegram](../telegram/bot.md)
+- [Guilda](../guilda/guilda.md) · [Personagens](../orquestracao/personagens.md) · [Bot do Telegram](../telegram/bot.md) · [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
 
 ## Fontes
 

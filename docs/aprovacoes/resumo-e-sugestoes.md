@@ -46,3 +46,5 @@ Deixar as pessoas verem depois o que os agentes da [cadeia de aprovação](../or
 
 - [Fluxo de aprovação](fluxo.md) · [Decretos](../telegram/decretos.md) · [Arquivo de política](arquivo-de-politica.md)
 - [Cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) · [Regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) · [Classificação de risco](../classes/classificacao-de-risco.md)
+- [Bot do Telegram](../telegram/bot.md)
+- [Usuários e níveis](../telegram/usuarios-e-niveis.md)

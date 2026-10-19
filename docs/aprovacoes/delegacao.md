@@ -1,6 +1,6 @@
 # Delegação
 
-> **Assunto:** decretos `delegation` das pessoas ao Grão-Mestre por tipo e escopo, validade e lembrete, subdelegação a um Mestre da mesa e o botão de emergência do Dono que revoga todas as delegações e regras temporárias · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** decretos `delegation` das pessoas ao Grão-Mestre por tipo e escopo, validade e lembrete, subdelegação a um Mestre da mesa e o botão de emergência do Dono que revoga todas as delegações e regras temporárias · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -58,3 +58,4 @@ Deixar as pessoas passarem ao Grão-Mestre, de forma explícita, com escopo e pr
 
 - [Decretos](../telegram/decretos.md) · [Política de aprovação](politica.md) · [Fluxo de aprovação](fluxo.md) · [Usuários e níveis](../telegram/usuarios-e-niveis.md)
 - [Cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) · [Regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) · [Classificação de risco](../classes/classificacao-de-risco.md)
+- [Bot do Telegram](../telegram/bot.md)

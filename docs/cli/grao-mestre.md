@@ -131,3 +131,6 @@ mestre decree list [--all]
 - [acoes-por-nivel](../github/acoes-por-nivel.md) · [aprovacao-no-github](../github/aprovacao-no-github.md) · [identidades-e-apps](../github/identidades-e-apps.md) · [criacao-de-apps](../github/criacao-de-apps.md)
 - [politica](../aprovacoes/politica.md) · [fluxo](../aprovacoes/fluxo.md) · [decretos](../telegram/decretos.md) · [bot](../telegram/bot.md) · [delegacao](../aprovacoes/delegacao.md)
 - [cadeia](../orquestracao/cadeia-de-aprovacao.md) · [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md)
+- [Pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md)
+- [Dependência entre mesas](../orquestracao/dependencia-entre-mesas.md)
+- [Grão-Mestre](../orquestracao/grao-mestre.md)

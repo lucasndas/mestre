@@ -142,3 +142,4 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 - [Conformidade](../provedores/conformidade.md)
 - [Sessão zero da mesa](../sessao-zero/mesa.md)
 - [Persistência](../arquitetura/persistencia.md)
+- [Instalação e atualização](instalacao-e-atualizacao.md)

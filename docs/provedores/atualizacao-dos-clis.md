@@ -1,6 +1,6 @@
 # Atualização dos CLIs dos provedores
 
-> **Assunto:** os CLIs `claude`, `codex` e `agy` se atualizam sozinhos; o Mestre detecta a versão nova por máquina e por perfil, roda a conformidade logo depois, marca o provedor como não conforme se ela falhar e avisa o Dono · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** os CLIs `claude`, `codex` e `agy` se atualizam sozinhos; o Mestre detecta a versão nova por máquina e por perfil, roda a conformidade logo depois, marca o provedor como não conforme se ela falhar e avisa o Dono · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -66,6 +66,8 @@ Uma versão nova pode entrar entre duas tarefas sem teste prévio: o CLI se atua
 - [Personagens](../orquestracao/personagens.md)
 - [Checklist](../plataforma/checklist.md)
 - [Teste de classe](teste-de-classe.md)
+- [Autoatualização](../plataforma/autoatualizacao.md)
+- [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
 
 ## Verificar na implementação
 
