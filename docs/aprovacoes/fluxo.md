@@ -1,6 +1,6 @@
 # Fluxo de aprovação
 
-> **Assunto:** vida de um pedido de aprovação: estados, vínculo ao estado exato, pedidos da Guilda, perguntas aos usuários e respostas, agrupamento, quórum, expiração, invalidação e auditoria · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** vida de um pedido de aprovação: estados, vínculo ao estado exato, pedidos da Guilda, perguntas aos usuários e respostas, agrupamento, quórum, expiração, invalidação e auditoria · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Tratar todo pedido de aprovação do mesmo jeito, do pedido até a aplicação, 
 
 ### O pedido
 
-Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador), uma atualização do Mestre, a entrada de uma máquina na Guilda ou a promoção de outra máquina a Cidadela quando a Cidadela não volta (tipos em [política](politica.md#tipos-de-ação)).
+Um pedido nasce quando algo precisa de aprovação: um ponto de aprovação de missão, um comando "pedir aprovação" de uma classe (vindo do `mestre hook`), um PR ou merge, um custo extra, uma configuração do repositório, uma classe do workspace, uma ação destrutiva sem exceção pontual, a proposta de `AGENTS.md` da sessão zero, a ativação do Operador do PC (pedida no `mestre recruit` de uma ficha da base Operador), uma atualização do Mestre (desde o M7), a entrada de uma máquina na Guilda ou a promoção de outra máquina a Cidadela quando a Cidadela não volta (desde o M7; tipos em [política](politica.md#tipos-de-ação)).
 
 Campos (tabela `approval_requests`, [persistência](../arquitetura/persistencia.md)): id, workspace, mesa, tipo, alvo, impressão, solicitante (personagem, Grão-Mestre ou motor), risco e a linha da [classificação](../classes/classificacao-de-risco.md) que o deu, nível atual da cadeia e o histórico de níveis, versão da política, resumo, recomendação do Grão-Mestre, motivo da dúvida, quórum exigido, criado em, expira em, estado. O conteúdo da mensagem que o usuário recebe (evidência, dono, motivo e o resto) está em [pedido que bloqueia](pedido-que-bloqueia.md).
 
@@ -52,7 +52,7 @@ Cada pedido guarda o **alvo** e a **impressão** (SHA-256 do alvo em JSON canôn
 
 | Tipo | Alvo |
 |---|---|
-| `pr`, `merge`, `envio_workflows` | repositório, número do PR ou branch, hash da cabeça |
+| `pr`, `merge`, `envio_workflows` | repositório, número do PR ou branch, hash da cabeça; em `pr`/`merge`, também a ponta da base (`base_sha`) quando o gate de verificação rodou ([frescor](../github/acoes-por-nivel.md#merge)) |
 | `ponto_de_missao` | missão, etapa, hash do HEAD do worktree |
 | `permissao_de_classe` | personagem, comando exato, pasta |
 | padrão aprovado (resposta "o padrão", [regra temporária](../orquestracao/regras-temporarias-de-mesa.md)) | padrão, tipo de ferramenta, classe e mesa ([padrões aprováveis](../classes/classificacao-de-risco.md#padrões-aprováveis)) |
@@ -62,15 +62,15 @@ Cada pedido guarda o **alvo** e a **impressão** (SHA-256 do alvo em JSON canôn
 | `acao_destrutiva` | comando exato e objeto (pergaminho e revisão, ritual, classe e hash do pacote, ou mesa e hash da cabeça da branch) |
 | `proposta_agents_md` | workspace e SHA-256 do texto proposto |
 | `ativacao_operador` | mesa, missão (se houver), ficha, classe, máquina, tarefa (texto inteiro) e duração pedida; o pedido mostra tudo isso ao Dono |
-| `atualizacao_mestre` | `tag` + SHA-256 do manifesto da release ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) |
+| `atualizacao_mestre` (M7) | `tag` + SHA-256 do manifesto da release ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) |
 | `entrada_na_guilda` | nome e sistema da máquina, os pedidos de certificado (CSRs) e o código de entrada de 6 dígitos ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
-| `promocao_cidadela` | máquina proposta, época atual e nova, e o último ponto do banco replicado nela |
+| `promocao_cidadela` (M7) | máquina proposta, época atual e nova, e o último ponto do banco replicado nela |
 
-Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commit novo no PR), o pedido vira `invalidado`, e o Grão-Mestre reavalia e, se for o caso, cria um pedido novo. No GitHub, o hash também vai no review e no merge ([aprovação no GitHub](../github/aprovacao-no-github.md)).
+Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commit novo no PR, ou a base andou depois do gate), o pedido vira `invalidado`, e o Grão-Mestre reavalia e, se for o caso, cria um pedido novo. No GitHub, o hash também vai no review e no merge ([aprovação no GitHub](../github/aprovacao-no-github.md)).
 
 ### Pedidos da Guilda
 
-`entrada_na_guilda` e `promocao_cidadela` nascem em `aguardando_usuarios`, vão só ao Dono, sem quórum maior, e pedem o PIN depois do botão ([política](politica.md#tipos-de-ação)). Nunca passam pelo Grão-Mestre, nem como evento.
+`entrada_na_guilda` e `promocao_cidadela` (esta, desde o M7) nascem em `aguardando_usuarios`, vão só ao Dono, sem quórum maior, e pedem o PIN depois do botão ([política](politica.md#tipos-de-ação)). Nunca passam pelo Grão-Mestre, nem como evento.
 
 - **`entrada_na_guilda`:** criado pela Cidadela quando uma instalação nova pede para entrar, com o código de 6 dígitos mostrado nas duas máquinas. **Expira em 1 h**, o prazo da [entrada na Guilda](../guilda/guilda.md#entrada-na-guilda). Aplicar é emitir os certificados e mandar a configuração da Guilda.
 - **`promocao_cidadela`:** criado pelo Guardião da Torre condutora quando a Cidadela não volta no prazo ([camadas](../autocura/camadas.md#cidadela-que-não-volta-proposta-de-promoção)). A promoção é **só manual**: nunca há aprovação automática, e máquina excluída ou fora da rede local é recusada como alvo. Como não há Cidadela, o pedido fica no Guardião e vai pelo [Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md) e pela [página reserva](../autocura/pagina-reserva.md), com os botões **Promover** e **Esperar**; o PIN é conferido na cópia de usuários do Guardião. Não expira: vale até a resposta, com lembrete a cada 1 h (padrão); se a Cidadela volta antes, vira `cancelado` ([Cidadela e Torres](../guilda/cidadela-e-torres.md)). Aplicar é a promoção ([Cidadela e Torres](../guilda/cidadela-e-torres.md)); depois dela, o pedido e a resposta entram na auditoria do banco principal da nova Cidadela.
@@ -83,7 +83,7 @@ Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commi
 - Destinatários: usuários com nível Aprovador ou acima naquele workspace e com o `nivel_minimo` do tipo ([usuários e níveis](../telegram/usuarios-e-niveis.md)). Pedidos "Sistema": Dono e Administradores, com a mensagem montada pelo motor.
 - **Ver detalhes** mostra a lista completa de arquivos e o link do PR; o diff inteiro fica no painel.
 - Resposta por texto ("pode aprovar"): o Grão-Mestre identifica o pedido e confirma com os botões antes de valer. Resposta por áudio também passa por essa confirmação ([anexos e transcrição](../telegram/anexos-e-transcricao.md)).
-- Tipos com `pin: true` pedem o PIN do usuário depois do botão ([PIN pessoal](../telegram/usuarios-e-niveis.md#pin-pessoal)).
+- Tipos com `pin: true` pedem o PIN do usuário depois do botão ([PIN pessoal](../telegram/usuarios-e-niveis.md#pin-pessoal)); por isso um tipo com PIN **não** conclui por review feito direto no GitHub: o motor pede o PIN pelo canal ([aprovação no GitHub](../github/aprovacao-no-github.md#review-feito-direto-no-github)).
 
 Um toque numa resposta que aprova só vale se: o usuário está ativo, tem o nível e o workspace, o pedido está `aguardando_usuarios`, não expirou e a impressão não mudou. Senão, o usuário recebe o motivo e nada muda.
 
@@ -112,7 +112,7 @@ Um toque numa resposta que aprova só vale se: o usuário está ativo, tem o ní
 
 ### Auditoria
 
-Todo pedido e toda resposta ficam no banco da Cidadela (tabelas `approval_requests` e `approval_responses`): quem decidiu (agente da cadeia ou usuário), o nível na cadeia, o risco, as versões da tabela de risco, das regras efetivas e da política, a resposta, canal, texto original, motivo (obrigatório para agentes), impressão, horários e resultado da aplicação. Nada é apagado. O painel mostra o histórico com filtros.
+Todo pedido e toda resposta ficam no banco da Cidadela (`approval_requests` e `approval_audit`, [persistência](../arquitetura/persistencia.md)): quem decidiu (agente da cadeia ou usuário), o nível na cadeia, o risco, as versões da tabela de risco, das regras efetivas e da política, a resposta, canal, texto original, motivo (obrigatório para agentes), impressão, horários e resultado da aplicação. Nada é apagado. O painel mostra o histórico com filtros.
 
 ### Resumo periódico
 

@@ -1,6 +1,6 @@
 # Aprovação no GitHub
 
-> **Assunto:** como as aprovações viram reviews no GitHub, quando um review feito direto no GitHub conclui um pedido, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** como as aprovações viram reviews no GitHub, quando um review feito direto no GitHub conclui um pedido, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -62,16 +62,17 @@ A credencial de uma pessoa nunca é usada sem a delegação dela ou a aprovaçã
 
 1. o estado do review é `APPROVED` (não `DISMISSED`, `COMMENTED`, `CHANGES_REQUESTED` nem `PENDING`);
 2. o `commit_id` do review é o hash atual do pedido ([fluxo](../aprovacoes/fluxo.md#invalidação)); um review de um commit antigo não conta;
-3. o autor é um usuário **cadastrado e ativo** do Mestre, pelo login do GitHub do cadastro ([usuários e níveis](../telegram/usuarios-e-niveis.md)), com o nível e o workspace que o pedido exige: as mesmas condições do toque no botão ([fluxo](../aprovacoes/fluxo.md));
+3. o autor é um usuário **cadastrado e ativo** do Mestre, pelo campo `github_login` do cadastro, que não depende da credencial pessoal ([usuários e níveis](../telegram/usuarios-e-niveis.md#cadastro)), com o nível e o workspace que o pedido exige: as mesmas condições do toque no botão ([fluxo](../aprovacoes/fluxo.md));
 4. o tipo da conta é `User`, nunca `Bot` nem App;
-5. ele tem permissão de escrita **atual** no repositório, lida na hora e não guardada.
+5. ele tem permissão de escrita **atual** no repositório, lida na hora e não guardada;
+6. o tipo do pedido não tem `pin: true`. Com PIN, o review válido fica registrado na auditoria e **não conclui**: o motor pede o PIN a esse usuário pelo canal, e o pedido só conclui com ele.
 
 Um review que falha em qualquer condição é registrado na auditoria com o motivo e **não muda nada**: o pedido continua `aguardando_usuarios`. Um review que cumpre tudo vale como a resposta "aprovar" daquele usuário (entra no quórum como o toque dele) e conclui o pedido. Rótulo no PR nunca autoriza. É a conferência que protege a política: sem ela, qualquer conta com acesso de leitura de review poderia liberar um PR numa área sensível.
 
 
 ### Credencial pessoal: user access token pelo device flow
 
-Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/usuarios-e-niveis.md)). Não precisa de porta aberta:
+Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/usuarios-e-niveis.md#cadastro); o login que ela confere é o `github_login`, que existe mesmo sem ela). Não precisa de porta aberta:
 
 1. No painel, o usuário escolhe "Conectar GitHub". O motor chama `POST https://github.com/login/device/code` com o `client_id` do App "Grão-Mestre".
 2. O painel mostra o código curto e o link `https://github.com/login/device`; o usuário digita o código no navegador dele e autoriza.
@@ -99,7 +100,7 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - **CA-GH-APROV-06** · *rápida* — **Dado** o device flow com o GitHub falso devolvendo um login diferente do cadastro, **quando** o motor confere, **então** descarta o token e mostra o erro no painel.
 - **CA-GH-APROV-07** · *pesada* — **Dado** um PR de mesa aberto pelo App "Mestre", **quando** o Grão-Mestre aprova pela política, **então** o review aparece no GitHub (dublê) com o App "Grão-Mestre" e o merge acontece (MVP-5).
 - **CA-GH-APROV-08** · *pesada* — **Dado** um PR que toca área sensível, **quando** o Lucas toca "Aprovar" no Telegram (dublê), **então** a aprovação aparece no GitHub (dublê) e o merge acontece (MVP-7).
-- **CA-GH-APROV-09** · *rápida* — **Dado** um pedido `aguardando_usuarios` e um review `APPROVED` feito no GitHub por uma conta não cadastrada, ou com `commit_id` diferente do hash atual do pedido, **quando** o motor recebe o evento, **então** o pedido continua `aguardando_usuarios` e a auditoria registra o motivo; **dado** o review de um usuário cadastrado e ativo, do tipo `User`, com permissão de escrita e o hash certo, **então** o pedido é concluído como se ele tivesse tocado em "Aprovar"; **dado** o mesmo review depois de `DISMISSED`, **então** não conta.
+- **CA-GH-APROV-09** · *rápida* — **Dado** um pedido `aguardando_usuarios` e um review `APPROVED` feito no GitHub por uma conta não cadastrada, ou com `commit_id` diferente do hash atual do pedido, **quando** o motor recebe o evento, **então** o pedido continua `aguardando_usuarios` e a auditoria registra o motivo; **dado** o review de um usuário cadastrado e ativo, do tipo `User`, com permissão de escrita e o hash certo, **então** o pedido é concluído como se ele tivesse tocado em "Aprovar"; **dado** o mesmo review depois de `DISMISSED`, **então** não conta; **dado** um pedido `configuracao_repositorio` (`pin: true`) e o review válido do Dono, **então** o pedido segue `aguardando_usuarios`, o Dono recebe o pedido do PIN pelo canal e só com o PIN o pedido conclui.
 
 ## Depende de
 
@@ -108,6 +109,7 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - [Política de aprovação](../aprovacoes/politica.md)
 - [Ações por nível no GitHub](acoes-por-nivel.md)
 - [Decretos](../telegram/decretos.md)
+- [Usuários e níveis](../telegram/usuarios-e-niveis.md) (cadastro, nível e `github_login`)
 - [Cofre](../plataforma/cofre.md)
 - [Sessão zero do workspace](../sessao-zero/workspace.md)
 

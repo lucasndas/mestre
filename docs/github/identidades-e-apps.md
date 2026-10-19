@@ -1,6 +1,6 @@
 # Identidades e GitHub Apps
 
-> **Assunto:** quais Apps existem, com que nome e permissões, e como cada ação sai com o App de quem fez · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** quais Apps existem, com que nome e permissões, e como cada ação sai com o App de quem fez · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -56,7 +56,7 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 
 - O motor assina um JWT com a chave privada do App (no [cofre](../plataforma/cofre.md)) e pede um token de instalação (`POST /app/installations/{id}/access_tokens`) **restrito ao repositório da ação** e às permissões que ela usa.
 - O token dura 1 hora; o motor guarda em memória e renova 5 minutos antes. Nunca vai para disco, log ou ambiente de agente.
-- Cada instalação tem a própria cota (5.000 requisições por hora no mínimo), então cada App tem orçamento separado.
+- Cada instalação tem a própria cota (5.000 requisições por hora no mínimo), então cada App tem orçamento separado; a do App "Grão-Mestre" é uma só para todos os workspaces da conta e a trava ([orçamento](eventos.md#orçamento-de-cota)).
 
 ### Repositório da trava
 
@@ -68,7 +68,7 @@ O GitHub não tem permissão separada de merge: merge exige Contents escrita, qu
 
 - Os agentes fazem commits locais. O autor e o committer são o bot do App: nome `<slug>[bot]`, e-mail `<bot_user_id>+<slug>[bot]@users.noreply.github.com`.
 - `bot_user_id` **não** é o id do App: o motor lê `GET /users/<slug>%5Bbot%5D` → `.id` uma vez e guarda no banco.
-- A identidade fica num arquivo de configuração git por personagem (`.mestre/agents/<id>/gitconfig`), apontado por `GIT_CONFIG_GLOBAL` (existe a partir do git 2.32; o [checklist](../plataforma/checklist.md) confere a versão em cada máquina). Esse arquivo inclui o `.gitconfig` global do usuário e só define `user.name` e `user.email`. É a **única** fonte da identidade: o motor nunca põe `GIT_AUTHOR_*` nem `GIT_COMMITTER_*` no ambiente, porque essas variáveis venceriam o arquivo e não mudariam com o processo vivo. Assim o motor pode trocar a identidade sem reiniciar o agente (ex.: quando o App da classe fica pronto). Outras variáveis do personagem: [personagem](../sessao-zero/personagem.md).
+- A identidade fica num arquivo de configuração git por personagem (`.mestre/agents/<id>/gitconfig`), apontado por `GIT_CONFIG_GLOBAL` (existe a partir do git 2.32; o [checklist](../plataforma/checklist.md), desde o M7, confere a versão em cada máquina). Esse arquivo inclui o `.gitconfig` global do usuário e só define `user.name` e `user.email`. É a **única** fonte da identidade: o motor nunca põe `GIT_AUTHOR_*` nem `GIT_COMMITTER_*` no ambiente, porque essas variáveis venceriam o arquivo e não mudariam com o processo vivo. Assim o motor pode trocar a identidade sem reiniciar o agente (ex.: quando o App da classe fica pronto). Outras variáveis do personagem: [personagem](../sessao-zero/personagem.md).
 - Personagem sem classe própria: Mestre da mesa usa o App "Mestre"; Grão-Mestre usa o App "Grão-Mestre".
 - A mensagem de commit cita a mesa e a issue, com trailers no fim: `Mestre-Mesa: epico/42-login` e `Refs: #57`. A skill ensina o formato ([skills geradas](../cli/skills-geradas.md)).
 - **Commits sem assinatura:** não aparecem como "Verified" ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)).
@@ -95,7 +95,7 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
 
 - Nenhum agente recebe chave, token, `gh` ou credencial. Só o motor usa o cofre ([segurança](../arquitetura/seguranca.md)).
 - App sem instalação no repositório da ação: o pedido falha com "App `<nome>` não instalado em `<repo>`"; o motor acrescenta o repositório à instalação ou o Dono recebe o link para isso ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)).
-- Falha ao ler `bot_user_id` de um App de classe: os personagens usam a identidade temporária do App "Mestre" (seção acima), o motor tenta de novo a cada início de personagem e o [checklist](../plataforma/checklist.md) registra o alerta.
+- Falha ao ler `bot_user_id` de um App de classe: os personagens usam a identidade temporária do App "Mestre" (seção acima), o motor tenta de novo a cada início de personagem e o [checklist](../plataforma/checklist.md) (desde o M7) registra o alerta.
 - Token recusado (chave revogada ou App apagado): o App vai para o estado "com erro" e o Grão-Mestre avisa o Dono.
 
 ## Critérios de aceite

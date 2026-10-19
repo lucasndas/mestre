@@ -1,6 +1,6 @@
 # Eventos do GitHub
 
-> **Assunto:** consulta periódica, condicional e adaptativa à API do GitHub, transformada em eventos na caixa de entrada · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** consulta periódica, condicional e adaptativa à API do GitHub, transformada em eventos na caixa de entrada · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -68,21 +68,21 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 - A mesa é descoberta pelas regras de [ações por nível](acoes-por-nivel.md). Sem mesa, o evento vai marcado "sem mesa".
 - Os eventos do mesmo ciclo e da mesma mesa viram **uma única mensagem** na caixa de entrada do Grão-Mestre, para não gastar um turno por evento.
 - Prioridade e entrega: [esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md).
-- `pr_mergeado` do PR de uma mesa confirma o merge: o motor marca a mesa como mesclada e o item ao Grão-Mestre diz isso, para ele encerrar a mesa ([encerramento](../orquestracao/mesas.md#encerramento)). **Antes** de marcar, confere pelo espelho que o `merge_commit_sha` é alcançável da base (`git merge-base --is-ancestor`); se não é (merge desfeito logo depois, ou o espelho ainda sem o commit), a mesa não é marcada e o Grão-Mestre recebe o aviso. Vale também para o merge feito por uma pessoa no GitHub. Nenhum "pronto" vai ao usuário antes disso.
+- `pr_mergeado` do PR de uma mesa confirma o merge: o motor marca a mesa como mesclada e o item ao Grão-Mestre diz isso, para ele encerrar a mesa ([encerramento](../orquestracao/mesas.md#encerramento)). **Antes** de marcar, confere pelo espelho que o `merge_commit_sha` é alcançável da base (`git merge-base --is-ancestor`); se não é (merge desfeito logo depois, ou o espelho ainda sem o commit), a mesa não é marcada e o Grão-Mestre recebe o aviso; o motor repete a checagem a cada busca do espelho até o commit ser alcançável ou até 1 h, e passado o prazo registra o alerta e deixa de repetir. Vale também para o merge feito por uma pessoa no GitHub e para o resultado de `mestre gh merge` ([mesas](../orquestracao/mesas.md#encerramento)). Nenhum "pronto" vai ao usuário antes disso.
 - Revisões feitas por pessoas direto no GitHub também servem para concluir pedidos de aprovação, só sob as condições de [review feito direto no GitHub](aprovacao-no-github.md#review-feito-direto-no-github) ([fluxo](../aprovacoes/fluxo.md)).
 
 ### Orçamento de cota
 
-Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerca de (3 + 3 × 5) × 120 = 2.160 requisições por hora, abaixo das 5.000 por hora da instalação.
+Cada ciclo "ativo" custa 3 listas + `pulls?state=open` + 3 chamadas por PR de mesa (revisões, `check-runs`, `status`). Com 5 PRs, o pior caso (nenhum `304`) é (4 + 3 × 5) × 120 = 2.280 requisições por hora **por workspace**. A cota de 5.000 por hora é da **instalação** do App "Grão-Mestre", dividida entre todos os workspaces da conta e a trava (120 por hora, [trava](../guilda/trava-no-github.md)): dois workspaces assim já somam 4.680, e três passam do limite. Por isso, ao bater o limite primário (abaixo), o laço para em todos os workspaces.
 
 ## Regras e erros
 
 - Erro 403 ou 429: o motor respeita `retry-after` ou `x-ratelimit-reset` e só volta depois disso.
-- Cota restante abaixo de 10%: o workspace fica em "parado" até a cota renovar, e o [checklist](../plataforma/checklist.md) registra o alerta. `GET /rate_limit` pode ser usado, porque não gasta cota.
+- Cota restante abaixo de 10%: o workspace fica em "parado" até a cota renovar, e o [checklist](../plataforma/checklist.md) (desde o M7) registra o alerta. `GET /rate_limit` pode ser usado, porque não gasta cota.
 - **Escrita também espera.** Com a cota nessa faixa, as ações que mudam dados (comentário, issue, review, merge) não saem: ficam na fila de saída, cada uma com o mesmo uuid e o [marcador de operação](acoes-por-nivel.md#marcador-de-operação), e saem uma vez só quando a cota renova, como no [GitHub fora](../guilda/trava-no-github.md#github-fora). Só segurar a leitura deixaria o motor gastando a cota que sobra em escrita.
 - No máximo 4 requisições simultâneas por workspace, abaixo dos limites secundários do GitHub. Para esses limites, o motor conta toda requisição, inclusive as que voltam `304` (hipótese conservadora; nada depende de medir isso).
 - GitHub fora do ar ou erro de rede: o laço tenta de novo no próximo ciclo, com backoff até o intervalo "parado". Nada se perde, porque o cursor só avança depois que o evento é gravado.
-- **Limite batido (a cota chegou a zero, `403` ou `429` por limite primário):** além de parar o workspace, o motor grava no banco um **teto de mesas em `working` ao mesmo tempo**, um degrau abaixo do que havia (mínimo 1), e avisa o Dono. O teto não sobe sozinho: subir é decisão do Dono, pelo painel. Uma mesa nova além do teto espera aberta até abrir vaga; as que já trabalham seguem.
+- **Limite batido (a cota chegou a zero, `403` ou `429` por limite primário):** o motor para os laços da instalação até a renovação e avisa o Dono. Reduzir também o número de mesas em `working` ao mesmo tempo é **pendente**: o campo, a tela, o valor inicial e a espera da mesa nova ainda não têm documento dono em `orquestracao/`. Limite **secundário** (abuso, `retry-after`): a escrita falha com o motivo e nada que muda dados é repetido sozinho ([ações por nível](acoes-por-nivel.md#regras-e-erros)).
 - Consultas só leem; nenhuma consulta muda dados no GitHub.
 
 ## Critérios de aceite
@@ -95,7 +95,9 @@ Com 5 PRs de mesa abertos no modo "ativo", o pior caso (nenhum `304`) é de cerc
 - **CA-GH-EV-06** · *rápida* — **Dado** uma resposta 429 com `retry-after: 60`, **quando** o motor processa, **então** a próxima consulta daquele workspace só acontece após 60 s no relógio falso.
 - **CA-GH-EV-07** · *completa* — **Dado** o GitHub falso com um PR de mesa aberto e CI em andamento, **quando** o CI termina com falha, **então** em até um ciclo o Grão-Mestre recebe o evento `ci` com o link do check.
 - **CA-GH-EV-08** · *rápida* — **Dado** um evento `pr_mergeado` cujo `merge_commit_sha` não é alcançável da base no espelho, **quando** o motor o processa, **então** a mesa não é marcada como mesclada e o Grão-Mestre recebe o aviso; **dado** o commit alcançável, **então** a mesa é marcada.
-- **CA-GH-EV-09** · *rápida* — **Dado** o GitHub falso com a cota em zero, 3 mesas em `working` e um comentário pedido nesse momento, **quando** o motor processa, **então** o teto de mesas simultâneas fica em 2, o Dono é avisado, o comentário espera na fila de saída com o uuid e, renovada a cota (relógio falso), sai uma vez só; **então** o teto continua em 2 até o Dono subi-lo.
+- **CA-GH-EV-09** · *rápida* — **Dado** o GitHub falso com a cota em zero e um comentário pedido nesse momento, **quando** o motor processa, **então** os laços param, o Dono é avisado, o comentário espera na fila de saída com o uuid e, renovada a cota (relógio falso), sai uma vez só.
+- **CA-GH-EV-10** · *rápida* — **Dado** a cota restante em 9%, **quando** o motor processa, **então** o workspace passa a "parado", uma ação que muda dados fica na fila de saída e a leitura continua no intervalo "parado"; **dado** um `403` com `retry-after` de limite secundário, **então** a escrita sai com falha e o motivo e não é repetida.
+- **CA-GH-EV-11** · *rápida* — **Dado** um `pr_mergeado` com o `merge_commit_sha` ainda ausente do espelho, **quando** o espelho busca e passa a alcançá-lo (relógio falso), **então** a mesa é marcada na busca seguinte sem novo aviso; **dado** que ele nunca chega, **quando** passa 1 h, **então** o motor registra o alerta e não checa mais.
 
 ## Depende de
 
