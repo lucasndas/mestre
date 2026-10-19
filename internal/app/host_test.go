@@ -33,8 +33,10 @@ func TestTheOrchestrationOfTheCitadelIsBuiltAndWhatWaitsForMilestone5Refuses(t *
 	if err != nil || orc == nil || orc.Workspaces == nil || orc.Characters == nil || orc.Inbox == nil {
 		t.Fatalf("orchestration: %+v, %v", orc, err)
 	}
-	if _, err := (&Engine{paths: Paths{}, deps: Deps{Masker: logging.NewMasker()}}).hostOrchestration(db); err == nil {
-		t.Fatal("the orchestration was built without a folder for the workspaces")
+	for _, p := range []Paths{{}, {Workspaces: filepath.Join(root, "w")}, {Maquina: filepath.Join(root, "m")}} {
+		if _, err := (&Engine{paths: p, deps: Deps{Masker: logging.NewMasker()}}).hostOrchestration(db); err == nil {
+			t.Fatalf("the orchestration was built with the folders %+v", p)
+		}
 	}
 
 	ctx := context.Background()

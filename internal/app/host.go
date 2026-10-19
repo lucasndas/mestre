@@ -75,8 +75,8 @@ func (a logAlerts) Operational(_ context.Context, al workspaces.Alert) error {
 // hostOrchestration builds the orchestration of a period of the Citadel over its
 // main database.
 func (e *Engine) hostOrchestration(db *store.DB) (*Orchestration, error) {
-	if e.paths.Workspaces == "" {
-		return nil, errors.New("app: no folder for the workspaces")
+	if e.paths.Workspaces == "" || e.paths.Maquina == "" {
+		return nil, errors.New("app: no folder for the workspaces and the machine")
 	}
 	git, err := gitx.New(gitx.Options{Clock: e.clk, Masker: e.deps.Masker, Suite: os.Getenv("MESTRE_TEST_SUITE")})
 	if err != nil {
