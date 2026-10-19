@@ -21,6 +21,10 @@ func matchGlob(pattern, p string) bool {
 	return matchSegs(patternSegs(pattern), appendSegs(buf[:0], p))
 }
 
+// MatchGlob reports whether the slash path p matches the glob pattern (the
+// globs of the sensitive areas of the approval policy file).
+func MatchGlob(pattern, p string) bool { return matchGlob(pattern, p) }
+
 // patternSegs is splitSegs of a pattern, kept: the patterns come from the
 // rules and the code, a short fixed set.
 func patternSegs(pattern string) []string {

@@ -109,6 +109,13 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 		if ref := s.attenuation(ctx, r, d.By); ref != nil {
 			return Outcome{}, s.refusedAndClimbed(ctx, r, d.By, d.Answer, ref)
 		}
+		if level.Kind == LevelGrandMaster {
+			// The conditions of the policy: a refusal here does not climb the
+			// request; the Grão-Mestre takes it to the people (approval ask).
+			if ref := s.policyGate(ctx, r); ref != nil {
+				return Outcome{}, s.refused(ctx, r, d.By, d.Answer, ref)
+			}
+		}
 	}
 	c := Closing{State: Denied, By: d.By, Answer: d.Answer, Reason: d.Reason}
 	if d.Answer.Approves() {
@@ -438,7 +445,7 @@ func (s *Service) Reply(ctx context.Context, request int64, from, text string) e
 	body := fmt.Sprintf("Resposta de %s à sua pergunta sobre o pedido de aprovação #%d:\n%s\n\nO pedido segue com você.", orDefault(r.RequesterName, r.Requester), r.ID, Unverified(text))
 	if cur.Level.Kind == LevelPeople {
 		if s.o.Users != nil {
-			s.o.Users.Ask(ctx, PeopleQuestion{Request: cur, Text: Text(cur, cur.Level, AnswersFor(LevelPeople, cur)) + "\n" + body, Deadline: cur.Deadline, Answers: AnswersFor(LevelPeople, cur)}) //nolint:errcheck // logged by the channel
+			s.o.Users.Ask(ctx, s.question(cur, Text(cur, cur.Level, AnswersFor(LevelPeople, cur))+"\n"+body, AnswersFor(LevelPeople, cur))) //nolint:errcheck // logged by the channel
 		}
 	} else if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: cur.Level.Agent, Kind: inbox.KindAnswer, Sender: "Motor", Text: body,
 		Refs: inbox.Refs{Approval: r.ID, Table: r.Table}}); err != nil {
@@ -464,6 +471,14 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	}
 	who := "user:" + d.User
 	level := Level{Kind: LevelPeople, Name: d.User}
+	// The level of the user, against the minimum of the policy for the type and
+	// the risk: below it the user does not answer (an Approver does not approve
+	// an alto).
+	if rules, _ := s.rulesOf(r.Workspace); d.Answer.Approves() || d.Answer == AnswerDelegate {
+		if _, _, min := rules.Need(r); !peopleLevel(d.Level).AtLeast(min) {
+			return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeHumanRequired, "the level of the user is below the minimum of this request (%s)", min))
+		}
+	}
 	switch d.Answer {
 	case AnswerClimb:
 		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "the people have no level above"))
@@ -951,4 +966,13 @@ func (s *Service) fire(id int64, level Level, at time.Time) {
 		why = "quem pediu não respondeu à pergunta"
 	}
 	s.climb(ctx, id, level, answerTimeout, why)
+}
+
+// peopleLevel reads the level of a user as the policy names it (the registry of
+// the users says `administrator`, the decrees say `admin`).
+func peopleLevel(l string) classes.Level {
+	if l == "administrator" {
+		return classes.LevelAdmin
+	}
+	return classes.Level(l)
 }

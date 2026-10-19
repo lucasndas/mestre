@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -193,5 +194,93 @@ func TestTheAlertMayComeBackAndTheSnapshotIsTheCallersOwn(t *testing.T) {
 	again := r.file.Snapshot("meu-app")
 	if again.Settings.PeopleDeadlines[classes.RequestPR] == time.Nanosecond || again.Settings.MesaDecides[0] == "mexido" || again.Version != snap.Version {
 		t.Fatalf("what a caller changed reached what holds: %+v", again.Settings)
+	}
+}
+
+// CA-APROV-POL-04
+func TestAPolicyFileWithASyntaxErrorKeepsThePreviousRulesAndTellsTheOwner(t *testing.T) {
+	t.Parallel()
+	r := newPolicyRig(t)
+	r.write("versao: 1\ncondicoes:\n  max_arquivos: 3\n")
+	before, v := r.file.Rules("meu-app")
+	if before.MaxFiles != 3 {
+		t.Fatalf("rules = %+v", before)
+	}
+	r.write("versao: 1\ncondicoes: [oops\n")
+	after, v2 := r.file.Rules("meu-app")
+	if after.MaxFiles != 3 || v2 != v {
+		t.Fatalf("after the broken file the rules are %+v (version %q, was %q), want the previous", after, v2, v)
+	}
+	if len(r.alerts) != 1 {
+		t.Fatalf("alerts = %v, want one", r.alerts)
+	}
+}
+
+// CA-APROV-POL-16
+func TestAPolicyThatLetsADestructiveActionBeDecidedAloneIsInvalid(t *testing.T) {
+	t.Parallel()
+	r := newPolicyRig(t)
+	r.write("versao: 1\nexpiracao: 6h\n")
+	r.chain()
+	r.write("versao: 1\nexpiracao: 12h\ntipos:\n  acao_destrutiva: { sozinho: se_condicoes }\n")
+	if st, _ := r.chain(); st.PeopleDeadline != 6*time.Hour {
+		t.Fatalf("settings = %+v, want the previous version", st)
+	}
+	if len(r.alerts) != 1 || !strings.Contains(r.alerts[0].Error(), "acao_destrutiva") {
+		t.Fatalf("alerts = %v, want one naming the item", r.alerts)
+	}
+	if _, err := chain.ParsePolicyRules([]byte("versao: 1\ntipos:\n  acao_destrutiva: { sozinho: se_condicoes }\n")); err == nil {
+		t.Fatal("the rules of the invalid file were read")
+	}
+}
+
+func TestTheRulesOfTheDefaultFileAreTheDefaultRules(t *testing.T) {
+	t.Parallel()
+	got, err := chain.ParsePolicyRules([]byte(sessionzero.DefaultPolicyYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := chain.DefaultRules()
+	if !reflect.DeepEqual(got.Areas, want.Areas) || !reflect.DeepEqual(got.Alone, want.Alone) || !reflect.DeepEqual(got.MinLevel, want.MinLevel) ||
+		!reflect.DeepEqual(got.RiskMinLevel, want.RiskMinLevel) || !slices.Equal(got.Words, want.Words) || !slices.Equal(got.Commands, want.Commands) ||
+		!slices.Equal(got.IgnoredLines, want.IgnoredLines) || got.MaxFiles != want.MaxFiles || got.MaxLines != want.MaxLines || got.MaxDeleted != want.MaxDeleted ||
+		got.CIGreen != want.CIGreen || got.ReviewByOther != want.ReviewByOther || got.Quorum != want.Quorum || len(got.QuorumRules) != 0 {
+		t.Fatalf("default file = %+v\nDefaultRules = %+v", got, want)
+	}
+}
+
+func TestTheRulesOfTheFileAreCheckedAndTheQuorumRulesAreRead(t *testing.T) {
+	t.Parallel()
+	good := `versao: 1
+condicoes: { max_linhas: 50, linhas_ignoradas: ["**/*.lock"] }
+areas_sensiveis: { palavras_em_linhas_adicionadas: ["EXEC"], nova: ["x/**"] }
+comandos_sensiveis: ["make deploy*"]
+tipos: { merge: { sozinho: nunca } }
+quorum:
+  padrao: { aprovacoes: 2 }
+  regras:
+    - { tipo: merge, mesa: "epico/42-login", aprovacoes: 2, exigir_usuarios: [lucas] }
+`
+	got, err := chain.ParsePolicyRules([]byte(good))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MaxLines != 50 || !slices.Equal(got.Words, []string{"EXEC"}) || got.Areas["nova"] == nil || got.Areas["migracoes"] == nil || got.Alone[classes.RequestMerge] ||
+		got.Quorum != 2 || len(got.QuorumRules) != 1 || got.QuorumRules[0].Require[0] != "lucas" || !slices.Equal(got.Commands, []string{"make deploy*"}) {
+		t.Fatalf("rules = %+v", got)
+	}
+	for name, bad := range map[string]string{
+		"unknown condition": "versao: 1\ncondicoes: { max_coisas: 1 }\n",
+		"negative size":     "versao: 1\ncondicoes: { max_linhas: -1 }\n",
+		"bad glob":          "versao: 1\ncondicoes: { linhas_ignoradas: [\"[\"] }\n",
+		"empty word":        "versao: 1\nareas_sensiveis: { palavras_em_linhas_adicionadas: [\" \"] }\n",
+		"quorum no target":  "versao: 1\nquorum: { regras: [{ aprovacoes: 2 }] }\n",
+		"quorum no count":   "versao: 1\nquorum: { regras: [{ tipo: merge }] }\n",
+		"quorum bad type":   "versao: 1\nquorum: { regras: [{ tipo: coisa, aprovacoes: 2 }] }\n",
+		"quorum too many":   "versao: 1\nquorum: { padrao: { aprovacoes: 11 } }\n",
+	} {
+		if _, err := chain.ParsePolicyRules([]byte(bad)); err == nil {
+			t.Errorf("%s: the file was accepted", name)
+		}
 	}
 }
