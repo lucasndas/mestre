@@ -1,6 +1,6 @@
 # Canvas da mesa
 
-> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-14
+> **Assunto:** canvas infinito da mesa: personagens com terminal ao vivo, conexões, pergaminhos, missões, esperas, ajuda nos termos e digitação no terminal · **Componente:** Painel · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -37,7 +37,7 @@ Mostrar, em tempo real, tudo o que acontece numa mesa: o Mestre da mesa, a party
 
 - O PTY tem tamanho fixo, definido pela máquina (padrão 200 × 50; [terminal](../arquitetura/terminal.md)). O navegador nunca redimensiona: o xterm.js desenha nesse tamanho e o nó do canvas mostra com rolagem e zoom; redimensionar o nó do canvas não muda o PTY.
 - Ao conectar ou reconectar, a Cidadela pede à máquina o **buffer recente** do terminal (`terminal.replay`; o buffer de 1 MiB fica na máquina, a Cidadela não guarda) e depois repassa o fluxo ao vivo. Cliente lento recebe um retrato da tela em vez da fila inteira.
-- Para não pesar o navegador: no máximo 8 terminais com renderização WebGL ao mesmo tempo (padrão); os fora da tela ou muito afastados no zoom viram um retrato estático, atualizado a cada 2 s.
+- Para não pesar o navegador: no máximo 8 terminais com renderização WebGL ao mesmo tempo (padrão); todos os demais, os fora da tela, os muito afastados no zoom e os que passam do limite, viram um retrato estático, atualizado a cada 2 s.
 - As classes `nodrag`, `nowheel` e `nopan` do React Flow ficam no terminal, para o mouse e a rolagem irem para o xterm.
 
 ### Digitar no terminal
@@ -54,6 +54,7 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 | Ação | Como | Regras |
 |---|---|---|
 | Criar conexão | arrastar de um elemento para outro | [conexões](../orquestracao/conexoes.md) |
+| Remover conexão | selecionar a aresta e apagar; a automática Mestre da mesa ↔ Grão-Mestre é recusada | [conexões](../orquestracao/conexoes.md) |
 | Montar ou ajustar missão | arrastar setas de etapa entre personagens e numerar | [missões](../orquestracao/missoes.md) |
 | Fixar personagem | ícone de alfinete | [personagens](../orquestracao/personagens.md) |
 | Editar pergaminho | editor no próprio nó | [pergaminhos e tomos](../orquestracao/pergaminhos-e-tomos.md) |
@@ -82,11 +83,13 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 - **CA-CANVAS-01** · *pesada* — **Dado** uma mesa com missão em andamento em duas máquinas, **quando** abro o canvas, **então** vejo personagens com selo da máquina, conexões, pergaminhos ao vivo, setas numeradas com a etapa atual destacada e linhas tracejadas de espera com motivo (MVP-11).
 - **CA-CANVAS-02** · *rápida* — **Dado** o glossário com o termo "Party", **quando** o build roda, **então** a ajuda do "?" de Party é exatamente a Ajuda curta da tabela; e um termo sem linha faz o build falhar.
 - **CA-CANVAS-03** · *rápida* — **Dado** um Aprovador, **quando** envia entrada para um terminal pelo WebSocket, **então** o servidor recusa e nada chega ao PTY.
-- **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** a Cidadela pede à máquina o `terminal.replay` e a tela do navegador fica igual à do emulador da máquina.
+- **CA-CANVAS-04** · *completa* — **Dado** um terminal com saída, **quando** o navegador reconecta, **então** a Cidadela pede à máquina o `terminal.replay` e o fluxo reenviado é, byte a byte, o do buffer da máquina (comparado em Go).
+- **CA-CANVAS-09** · *rápida* — **Dado** esse replay, **quando** o painel (Vitest, xterm.js sem navegador) o recebe, **então** o buffer de linhas renderizado é igual ao do emulador da máquina.
 - **CA-CANVAS-05** · *rápida* — **Dado** uma conexão arrastada que o motor recusa, **quando** a resposta chega, **então** a aresta some e o motivo aparece.
 - **CA-CANVAS-06** · *rápida* — **Dado** elementos movidos, **quando** recarrego a página, **então** as posições e grupos são os mesmos (MVP-12).
+- **CA-CANVAS-10** · *rápida* — **Dado** a conexão automática do Mestre da mesa e uma conexão criada pelo usuário, **quando** ele apaga as duas, **então** a segunda some e a primeira é recusada com o motivo.
 - **CA-CANVAS-08** · *rápida* — **Dado** uma sessão do Operador ativa e o relógio falso, **quando** um Aprovador e o Dono abrem o painel, **então** os dois veem a faixa com a contagem, o botão **Encerrar agora** aparece só para o Dono (e para um Administrador, que também pode encerrar, [níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)), não para o Aprovador (e a API recusa o encerramento vindo dele), e um toque nele manda encerrar a sessão na hora; ao fim, a faixa some.
-- **CA-CANVAS-07** · *rápida* — **Dado** 12 terminais visíveis, **quando** o canvas renderiza, **então** no máximo 8 usam WebGL e os demais mostram retrato.
+- **CA-CANVAS-07** · *rápida* — **Dado** 12 terminais visíveis, **quando** o canvas renderiza, **então** exatamente 8 usam WebGL e os 4 restantes mostram retrato.
 
 ## Depende de
 
