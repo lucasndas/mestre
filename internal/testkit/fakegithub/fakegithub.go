@@ -53,6 +53,8 @@ type installation struct {
 }
 
 type repo struct {
+	extra  map[int]*issueExtra
+	labels map[string]string
 	issues []map[string]any
 }
 
@@ -117,7 +119,7 @@ func (s *Server) Actions() []Action {
 // ServeHTTP serves the REST API.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := r.Method + " " + r.URL.Path
-	if s.serveApps(w, r) {
+	if s.serveApps(w, r) || s.serveIssues(w, r) {
 		return
 	}
 	// The route comes before the credentials: a route the double does not
