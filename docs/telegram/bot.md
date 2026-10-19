@@ -111,6 +111,8 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - Uma falha ao enviar, que não seja `429` nem erro de rede, é registrada. O texto fica disponível no painel ([conversa](../painel/conversa-e-aprovacoes.md)).
 - Um botão vencido ou já decidido responde "já respondido por <nome>" ou "expirado". Nada é executado.
 
+- **Implementação:** `internal/telegram` (cliente da Bot API, laço de `getUpdates`, fila de saída, filtro do remetente, comandos, botões e `Ask`/`PINCapture` para as respostas capturadas); a Cidadela suspensa entra pela porta `Gate`. As ligações com o fluxo de aprovação e o roteamento vêm nas etapas 3 e 4.
+
 ## Critérios de aceite
 
 - **CA-BOT-01** · *rápida* — **Dado** um update gravado e o motor reiniciado antes de avançar o offset, **quando** o mesmo `update_id` chega de novo, **então** ele não é processado duas vezes.
