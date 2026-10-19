@@ -322,6 +322,9 @@ func (s *Service) recruit(ctx context.Context, q Quest, st *Step, sd StepDef) (c
 	case errors.Is(err, characters.ErrBadSheet):
 		s.pauseAndTell(ctx, q, fmt.Sprintf("a ficha %s da etapa %s não existe", sd.Sheet, sd.Title()))
 		return characters.Character{}, false
+	case errors.Is(err, characters.ErrCeiling):
+		s.pauseAndTell(ctx, q, fmt.Sprintf("a ficha %s da etapa %s está acima do teto do workspace: %v", sd.Sheet, sd.Title(), err))
+		return characters.Character{}, false
 	case errors.Is(err, characters.ErrTableClosed), errors.Is(err, characters.ErrLevelDenied):
 		s.pauseAndTell(ctx, q, fmt.Sprintf("o personagem da etapa %s não pôde ser criado: %v", sd.Title(), err))
 		return characters.Character{}, false

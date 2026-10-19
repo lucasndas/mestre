@@ -286,6 +286,23 @@ func TestTheBranchOfACancelledTableLeavesTheMirrorAfterThirtyDays(t *testing.T) 
 	}
 }
 
+// Cancelling a table cancels the open requests of the approval chain that have
+// no requester to end them (docs/orquestracao/cadeia-de-aprovacao.md).
+func TestCancellingATableCancelsTheOpenRequestsOfItsChain(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{})
+	w.activate()
+	w.gh.add(42, "Login", "epico")
+	tbl := w.open(42).Table
+	w.dest.allowed = true
+	if _, err := w.svc.Close(w.ctx, tables.CloseRequest{By: w.gm, Table: tbl.ID, Cancel: true, Reason: "desistiu"}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(w.requests.cancelled, tbl.ID) {
+		t.Errorf("requests cancelled for %v; want %s", w.requests.cancelled, tbl.ID)
+	}
+}
+
 // The cancellation is destructive: without the exception or the approval it
 // waits and nothing happens; once allowed, the characters end, the PR and the
 // epic are closed on GitHub, the worktree is removed when clean and the
