@@ -232,6 +232,35 @@ func (d *fakeDelegations) set(v bool) {
 	d.mu.Unlock()
 }
 
+// fakeSubs says whether a subdelegation covers a request of a character.
+type fakeSubs struct {
+	mu    sync.Mutex
+	chars map[string]bool
+	used  []string
+}
+
+func (d *fakeSubs) SubCovers(_ context.Context, _ chain.Request, character string) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.chars[character], nil
+}
+
+func (d *fakeSubs) SubUsed(_ context.Context, _ chain.Request, character string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.used = append(d.used, character)
+	return nil
+}
+
+func (d *fakeSubs) set(character string, v bool) {
+	d.mu.Lock()
+	if d.chars == nil {
+		d.chars = map[string]bool{}
+	}
+	d.chars[character] = v
+	d.mu.Unlock()
+}
+
 type fakeSupervision struct {
 	mu     sync.Mutex
 	paused bool
@@ -267,6 +296,7 @@ type world struct {
 	alerts   *fakeAlerts
 	sup      *fakeSupervision
 	deleg    *fakeDelegations
+	subs     *fakeSubs
 	prs      *fakePRs
 	// supervisor is the real supervision, with worldOpts.realSup.
 	supervisor *chain.Supervisor
@@ -391,7 +421,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, prs: &fakePRs{},
+	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, subs: &fakeSubs{}, prs: &fakePRs{},
 		policy: &policy{s: chain.DefaultSettings(), rules: chain.DefaultRules()}}
 	w.grants = &fakeGrants{f: w.cls}
 	w.machines = orcfakes.NewMachines(clk)
@@ -400,7 +430,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}, Restrictions: opt.restrictions}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
-		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainPRs: w.prs}
+		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainSubDelegations: w.subs, ChainPRs: w.prs}
 	if opt.realSup {
 		oo.ChainSupervision = nil
 	}
