@@ -11,6 +11,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/glossary"
+	"github.com/lucasndas/mestre/internal/lockdown"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/testkit/fakechannel"
@@ -33,6 +34,12 @@ func (r *router) Deliver(_ context.Context, in telegram.Inbound) error {
 	defer r.mu.Unlock()
 	r.got = append(r.got, in)
 	return nil
+}
+
+func (r *router) all() []telegram.Inbound {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]telegram.Inbound(nil), r.got...)
 }
 
 func (r *router) count() int {
@@ -75,6 +82,8 @@ type world struct {
 	opts   telegram.Options
 	next   int64
 	// The flow of approval over the bot (rigOpts.approvals).
+	lock  *lockdown.Service
+	lc    *telegram.LockChannel
 	oa    *telegram.OwnerAlerts
 	ac    *telegram.ApprovalChannel
 	flow  *approvals.Flow
@@ -91,6 +100,8 @@ type rigOpts struct {
 	approvals bool
 	// ownerAlerts puts the real alerts of the Owner (grouped) in the place of the fake.
 	ownerAlerts bool
+	// lockdown puts /travar and /destravar over the bot, with a real lock.
+	lockdown bool
 }
 
 func newWorld(t *testing.T, ro ...rigOpts) *world {
@@ -133,6 +144,25 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if ropt.terms {
 		w.opts.Terms = glossary.Terms
 	}
+	if ropt.lockdown {
+		router := &telegram.PINRouter{Users: w.users}
+		var err error
+		w.lock, err = lockdown.New(lockdown.Options{DB: db, Clock: clk, Users: w.users, Tell: func(ctx context.Context, id, text string) { w.tell(ctx, id, text) }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.lc = &telegram.LockChannel{Svc: w.lock, Users: w.users, PINs: router}
+		w.opts.Commands = append(append([]telegram.Command(nil), ropt.commands...), w.lc.Commands()...)
+		w.opts.Actions = map[string]telegram.Action{}
+		for k, v := range ropt.actions {
+			w.opts.Actions[k] = v
+		}
+		for k, v := range w.lc.Actions() {
+			w.opts.Actions[k] = v
+		}
+		w.opts.Captures = map[string]telegram.CaptureFunc{telegram.PINKind: router.Capture()}
+		w.opts.Lock = w.lock
+	}
 	if ropt.ownerAlerts {
 		w.oa = &telegram.OwnerAlerts{Users: w.users, Clock: clk}
 		w.opts.Alerts, w.opts.Strangers = w.oa, w.oa
@@ -143,6 +173,16 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	}
 	if w.oa != nil {
 		w.oa.Bind(w.bot)
+	}
+	if w.lc != nil {
+		w.lc.Bind(w.bot)
+		w.lock.OnChange(func(locked bool) {
+			if !locked {
+				if err := w.bot.ReleaseHeld(w.ctx); err != nil {
+					t.Error(err)
+				}
+			}
+		})
 	}
 	if ropt.approvals {
 		w.chain = fakechannel.NewChain(db, clk)
@@ -209,4 +249,15 @@ func (w *world) sent(method string) []faketelegram.Sent {
 		}
 	}
 	return out
+}
+
+// tell sends a notice to a user, as the engine does for the lock.
+func (w *world) tell(ctx context.Context, id, text string) {
+	u, err := w.users.Get(ctx, id)
+	if err != nil || u.TelegramID == 0 {
+		return
+	}
+	if _, err := w.bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
+		w.t.Error(err)
+	}
 }

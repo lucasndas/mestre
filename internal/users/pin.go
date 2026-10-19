@@ -291,3 +291,11 @@ func (s *Service) consume(ctx context.Context, tx *sql.Tx, requestID, userID, ac
 	}
 	return nil
 }
+
+// PINAction is the action a request of PIN was opened for (the engine decides
+// by it what to do when the PIN is right).
+func (s *Service) PINAction(ctx context.Context, requestID string) (string, error) {
+	var action string
+	err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT action FROM pin_requests WHERE id = ?`, requestID).Scan(&action)
+	return action, err
+}
