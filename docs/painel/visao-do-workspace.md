@@ -1,6 +1,6 @@
 # Visão do workspace
 
-> **Assunto:** tela do workspace com o Grão-Mestre ao centro e as mesas ao redor, e o seletor de workspaces · **Componente:** Painel · **Atualizado:** 2026-10-18
+> **Assunto:** tela do workspace com o Grão-Mestre ao centro e as mesas ao redor, e o seletor de workspaces · **Componente:** Painel · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -33,7 +33,7 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 | Party | quantos personagens, e em quais máquinas (selos) |
 | Esperas | marcador quando a mesa está aguardando algo (aprovação, cota, outra mesa), com o motivo; a missão pausada por "mesma falha repetida" mostra a impressão e, quando a devolução trouxe `--where`, o `arquivo:linha` ([prova e devolução](../orquestracao/prova-e-devolucao.md#devolução-com-causa-e-mesma-falha)) |
 | Critérios | da missão atual: quantos têm prova e quantos destes foram verificados pelo motor ([prova por critério](../orquestracao/prova-e-devolucao.md#prova-por-critério)) |
-| Última entrega | o instante da última [entrega útil](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira); passado o limite do aviso, o selo "sem entrega há <tempo>", que não aparece com a mesa pausada ou aguardando cota ou outra mesa |
+| Última entrega | o instante da última [entrega útil](../orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira); passado o limite do aviso, o selo "sem entrega há <tempo>", só em mesa `working` (nunca com a mesa pausada ou aguardando cota ou outra mesa), com o botão **Pausar mesa** para Aprovador ou acima, sem PIN ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)) |
 | PR | link do PR da mesa, quando existir |
 | Uso | consumo da mesa em relação ao limite, quando houver limite ([limites de uso](../plataforma/limites-de-uso.md)) |
 
@@ -61,7 +61,9 @@ Dar, numa tela só, o estado de todas as mesas de um workspace e o caminho para 
 - **CA-VWS-04** · *rápida* — **Dado** uma mesa que muda de "em trabalho" para "em revisão" no motor, **quando** o evento chega pelo WebSocket, **então** o bloco muda sem recarregar a página.
 - **CA-VWS-05** · *pesada* — **Dado** duas mesas trabalhando em paralelo, **quando** abro a visão do workspace e entro em cada mesa, **então** vejo o estado de cada uma e o canvas certo de cada uma (MVP-11).
 - **CA-VWS-06** · *rápida* — **Dado** um workspace em `preparing` com a etapa `mirror` com erro, **quando** a tela abre, **então** mostra `apps` concluída, `mirror` com o motivo do erro e o botão "tentar de novo", e nenhum bloco de mesa nem pergaminho.
-- **CA-VWS-07** · *rápida* — **Dado** a missão atual de uma mesa com C1 verificado pelo motor, C2 declarado e C3 sem prova, e a mesa `working` há 4 h sem entrega útil, **quando** o bloco renderiza, **então** mostra "Critérios 2 de 3 (1 verificado)" e o selo "sem entrega há 4 h"; **dado** a missão pausada por "mesma falha repetida", **então** a coluna de esperas mostra o motivo e o `arquivo:linha`.
+- **CA-VWS-07** · *rápida* — **Dado** a missão atual com C1 verificado pelo motor, C2 declarado e C3 sem prova, **quando** o bloco renderiza, **então** mostra "Critérios 2 de 3 (1 verificado)".
+- **CA-VWS-08** · *rápida* — **Dado** a mesa `working` há 4 h sem entrega útil (relógio falso), **quando** o bloco renderiza, **então** mostra o selo "sem entrega há 4 h" e **Pausar mesa**, que um Aprovador toca e um Observador não vê; **dado** a mesma mesa pausada, **então** o selo não aparece.
+- **CA-VWS-09** · *rápida* — **Dado** a missão pausada por "mesma falha repetida", **quando** o bloco renderiza, **então** a coluna de esperas mostra o motivo e o `arquivo:linha`.
 
 ## Depende de
 
