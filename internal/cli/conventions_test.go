@@ -29,15 +29,12 @@ func futureCommands() []cli.Spec {
 	notify := mk("notify", cli.GroupGrandMaster, cli.WhoGrandMaster)
 	notify.Secret = true
 	notify.Flags = []cli.Flag{{Name: "table", Kind: cli.FlagString, Desc: "the table of the notice"}}
-	issue := mk("issue comment", cli.GroupGitHub, cli.WhoTableMaster|cli.WhoGrandMaster)
-	issue.ClassCanGrant = true
 	return []cli.Spec{
 		mk("table", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		mk("gh", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		mk("app", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		notify,
 		mk("pr open", cli.GroupGitHub, cli.WhoAnyone),
-		issue,
 	}
 }
 
@@ -387,9 +384,9 @@ func TestTheEngineRefusesACommandAboveTheLevelOrTheClass(t *testing.T) {
 			{"alice", "table", "level_denied", 3},
 			{"alice", "recruit", "level_denied", 3},
 			{"tm", "table", "level_denied", 3},
-			{"alice", "issue comment", "class_denied", 3},
-			{"carol", "issue comment", "", 0},
-			{"tm", "issue comment", "", 0},
+			{"alice", "issue comment 5 ok", "class_denied", 3},
+			{"carol", "issue comment 5 ok", "", 0},
+			{"tm", "issue comment 5 ok", "", 0},
 			{"tm", "recruit", "", 0},
 			{"alice", "list", "", 0},
 		}

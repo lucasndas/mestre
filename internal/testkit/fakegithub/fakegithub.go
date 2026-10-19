@@ -141,9 +141,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// No query parameter is implemented yet (state, labels, per_page and
 	// the like arrive with the poller in M5); ignoring one would answer a
 	// different question than the caller asked.
-	if len(r.URL.Query()) > 0 {
-		testkit.NotImplemented(s.rep, w, route+"?"+firstParam(r))
-		return
+	// The list of issues takes state, per_page and page (the first page is
+	// the whole list here).
+	state := "all"
+	for k, v := range r.URL.Query() {
+		switch {
+		case len(parts) == 4 && r.Method == http.MethodGet && (k == "per_page" || k == "page"):
+		case len(parts) == 4 && r.Method == http.MethodGet && k == "state" && len(v) == 1 && (v[0] == "open" || v[0] == "closed" || v[0] == "all"):
+			state = v[0]
+		default:
+			testkit.NotImplemented(s.rep, w, route+"?"+firstParam(r))
+			return
+		}
 	}
 	inst, ok := s.auth(w, r)
 	if !ok {
@@ -159,7 +168,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case len(parts) == 4 && r.Method == http.MethodGet:
 		s.mu.Lock()
-		list := append(make([]map[string]any, 0, len(rp.issues)), rp.issues...)
+		list := make([]map[string]any, 0, len(rp.issues))
+		for _, is := range rp.issues {
+			if st, _ := is["state"].(string); state == "all" || st == state || st == "" && state == "open" {
+				list = append(list, is)
+			}
+		}
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusOK, list)
 	case len(parts) == 4 && r.Method == http.MethodPost:

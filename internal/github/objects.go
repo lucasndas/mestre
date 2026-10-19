@@ -31,6 +31,9 @@ type Object struct {
 	Table        string
 	ParentNumber int
 	Op           string
+	// Fingerprint is the hash of the impression of the problem an issue is about
+	// (`issue create --fingerprint`).
+	Fingerprint string
 }
 
 // Objects is the registry of what the engine made on GitHub, by table.
@@ -113,8 +116,33 @@ func (o *Objects) Register(ctx context.Context, x Object) error {
 		case !errors.Is(err, sql.ErrNoRows):
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO github_objects (repo, kind, number, github_id, table_id, parent_number, op, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			x.Repo, string(x.Kind), x.Number, x.GitHubID, x.Table, x.ParentNumber, x.Op, o.Clock.Now().UnixMilli())
+		_, err = tx.ExecContext(ctx, `INSERT INTO github_objects (repo, kind, number, github_id, table_id, parent_number, op, fingerprint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			x.Repo, string(x.Kind), x.Number, x.GitHubID, x.Table, x.ParentNumber, x.Op, x.Fingerprint, o.Clock.Now().UnixMilli())
 		return err
 	})
+}
+
+// ByFingerprint finds the issues of a repository made for an impression of a
+// problem, the newest first.
+func (o *Objects) ByFingerprint(ctx context.Context, repo, fingerprint string) ([]Object, error) {
+	repo, err := NormalizeRepo(repo)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := o.DB.Reader().QueryContext(ctx, `SELECT repo, kind, number, github_id, table_id, parent_number, op, fingerprint FROM github_objects WHERE repo = ? AND kind = 'issue' AND fingerprint = ? ORDER BY number DESC`, repo, fingerprint)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Object
+	for rows.Next() {
+		var x Object
+		var kind string
+		if err := rows.Scan(&x.Repo, &kind, &x.Number, &x.GitHubID, &x.Table, &x.ParentNumber, &x.Op, &x.Fingerprint); err != nil {
+			return nil, err
+		}
+		x.Kind = ObjectKind(kind)
+		out = append(out, x)
+	}
+	return out, rows.Err()
 }

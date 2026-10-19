@@ -14,6 +14,8 @@ import (
 type issueExtra struct {
 	parent   int
 	comments []map[string]any
+	// children are the sub-issues, in the order they were added.
+	children []int
 }
 
 // AddIssue creates an issue (as a person would) and returns its number.
@@ -32,7 +34,7 @@ func (s *Server) AddIssue(full, title string, labels ...string) int {
 	}
 	id := s.nextID
 	s.nextID++
-	rp.issues = append(rp.issues, map[string]any{"id": id, "number": n, "title": title, "labels": ls, "user": map[string]any{"login": "lucas"}})
+	rp.issues = append(rp.issues, map[string]any{"id": id, "number": n, "title": title, "state": "open", "labels": ls, "user": map[string]any{"login": "lucas"}})
 	return n
 }
 
@@ -96,7 +98,10 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	full := parts[1] + "/" + parts[2]
-	isIssueSub := len(parts) == 6 && parts[3] == "issues" && (parts[5] == "parent" || parts[5] == "comments")
+	isIssueSub := len(parts) == 6 && parts[3] == "issues" && (parts[5] == "parent" || parts[5] == "comments" || parts[5] == "sub_issues")
+	if len(parts) == 5 && parts[3] == "issues" && r.Method == http.MethodPatch {
+		return s.patchIssue(w, r, full, parts[4])
+	}
 	if len(parts) == 5 && parts[3] == "pulls" && r.Method == http.MethodGet {
 		return s.servePull(w, r, full, parts[4])
 	}
@@ -172,10 +177,148 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusCreated, c)
+	case parts[5] == "sub_issues" && r.Method == http.MethodGet:
+		s.mu.Lock()
+		list := make([]map[string]any, 0, len(x.children))
+		for _, c := range x.children {
+			list = append(list, rp.issues[c-1])
+		}
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusOK, list)
+	case parts[5] == "sub_issues" && r.Method == http.MethodPost:
+		var in struct {
+			ID int64 `json:"sub_issue_id"`
+		}
+		if json.NewDecoder(r.Body).Decode(&in) != nil || in.ID == 0 {
+			s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+			return true
+		}
+		s.mu.Lock()
+		child := 0
+		for i, is := range rp.issues {
+			if id, _ := is["id"].(int64); id == in.ID {
+				child = i + 1
+			}
+		}
+		if child == 0 {
+			s.mu.Unlock()
+			s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+			return true
+		}
+		if rp.extra[child] == nil {
+			rp.extra[child] = &issueExtra{}
+		}
+		rp.extra[child].parent = n
+		x.children = append(x.children, child)
+		s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+		parent := rp.issues[n-1]
+		s.mu.Unlock()
+		s.write(w, r, inst, http.StatusCreated, parent)
 	default:
 		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
 	return true
+}
+
+// patchIssue updates the title, the body, the labels and the state of an issue.
+func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, full, num string) bool {
+	inst, ok := s.auth(w, r)
+	if !ok {
+		return true
+	}
+	n, err := strconv.Atoi(num)
+	s.mu.Lock()
+	rp := s.repos[full]
+	var issue map[string]any
+	if rp != nil && err == nil && n >= 1 && n <= len(rp.issues) {
+		issue = rp.issues[n-1]
+	}
+	s.mu.Unlock()
+	if issue == nil {
+		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return true
+	}
+	var in struct {
+		Title       *string   `json:"title"`
+		Body        *string   `json:"body"`
+		Labels      *[]string `json:"labels"`
+		State       *string   `json:"state"`
+		StateReason *string   `json:"state_reason"`
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil {
+		s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return true
+	}
+	s.mu.Lock()
+	if in.Title != nil {
+		issue["title"] = *in.Title
+	}
+	if in.Body != nil {
+		issue["body"] = *in.Body
+	}
+	if in.Labels != nil {
+		ls := make([]map[string]any, 0, len(*in.Labels))
+		for _, l := range *in.Labels {
+			ls = append(ls, map[string]any{"name": l})
+		}
+		issue["labels"] = ls
+	}
+	if in.State != nil {
+		issue["state"] = *in.State
+	}
+	if in.StateReason != nil {
+		issue["state_reason"] = *in.StateReason
+	}
+	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+	s.mu.Unlock()
+	s.write(w, r, inst, http.StatusOK, issue)
+	return true
+}
+
+// Issue is the issue as the double keeps it (title, body, state, labels).
+func (s *Server) Issue(full string, n int) (title, body, state string, labels []string, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rp := s.repos[full]
+	if rp == nil || n < 1 || n > len(rp.issues) {
+		return
+	}
+	is := rp.issues[n-1]
+	title, _ = is["title"].(string)
+	body, _ = is["body"].(string)
+	state, _ = is["state"].(string)
+	switch ls := is["labels"].(type) {
+	case []map[string]any:
+		for _, l := range ls {
+			labels = append(labels, l["name"].(string))
+		}
+	case []any:
+		for _, l := range ls {
+			if m, ok := l.(map[string]any); ok {
+				labels = append(labels, m["name"].(string))
+			}
+		}
+	}
+	return title, body, state, labels, true
+}
+
+// SetIssueState opens or closes an issue as a person would.
+func (s *Server) SetIssueState(full string, n int, state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repos[full].issues[n-1]["state"] = state
+}
+
+// Parent is the parent of a sub-issue (0: none).
+func (s *Server) Parent(full string, n int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if x := s.repos[full].extra[n]; x != nil {
+		return x.parent
+	}
+	return 0
 }
 
 func (s *Server) serveLabel(w http.ResponseWriter, r *http.Request, inst *installation, rp *repo, parts []string) {
