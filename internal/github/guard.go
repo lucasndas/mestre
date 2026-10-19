@@ -14,8 +14,15 @@ const (
 	EpicLabel  = "epico"
 	HumanLabel = "mestre:humano"
 
-	epicLabelHelp  = "Épico do Mestre: uma mesa"
-	humanLabelHelp = "Só uma pessoa aprova"
+	// CandidateLabel marks the issue a Vigia registered as a candidate;
+	// RecurrenceLabel the one that comes back after a closed one.
+	CandidateLabel  = "candidato"
+	RecurrenceLabel = "recorrencia"
+
+	candidateLabelHelp  = "Candidato a trabalho: registrado pelo Vigia"
+	recurrenceLabelHelp = "Recorrência de uma issue já fechada"
+	epicLabelHelp       = "Épico do Mestre: uma mesa"
+	humanLabelHelp      = "Só uma pessoa aprova"
 	// maxClimb is how many levels of the tree the guard goes up (GitHub allows 8).
 	maxClimb = 8
 )
@@ -125,12 +132,14 @@ func (g *Guard) Authorize(ctx context.Context, a Actor, t Target) error {
 	}
 	if obj, found, err := g.Objects.Get(ctx, t.Repo, t.Kind, t.Number); err != nil {
 		return err
-	} else if found {
+	} else if found && obj.Table != "" {
 		if obj.Table == a.Table {
 			return nil
 		}
 		return g.otherTable(ctx, t, obj.Table)
 	}
+	// An issue the Grão-Mestre made (registered with no table) is the table's
+	// when it hangs under its epic: it is climbed to, as one of a person.
 	if t.Number == ref.Epic {
 		return nil
 	}
@@ -226,7 +235,7 @@ func CheckLabels(a Actor, add, remove []string) error {
 // not have yet, before the issue or the PR that uses them.
 func (g *Guard) EnsureLabels(ctx context.Context, repo string, labels []string) error {
 	for _, l := range labels {
-		help := map[string]string{EpicLabel: epicLabelHelp, HumanLabel: humanLabelHelp}[strings.ToLower(strings.TrimSpace(l))]
+		help := map[string]string{EpicLabel: epicLabelHelp, HumanLabel: humanLabelHelp, CandidateLabel: candidateLabelHelp, RecurrenceLabel: recurrenceLabelHelp}[strings.ToLower(strings.TrimSpace(l))]
 		if help == "" {
 			continue
 		}

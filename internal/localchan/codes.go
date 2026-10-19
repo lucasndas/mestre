@@ -95,6 +95,22 @@ var exitByCode = map[string]int{
 	"automatic_connection": ExitDenied,
 	"waiting_slot":         ExitPending,
 	"approval_pending":     ExitPending,
+
+	// The codes of the commands of issues and PRs
+	// (docs/cli/coordenacao-github.md#regras-e-erros).
+	"outside_epic":         ExitDenied,
+	"reserved_label":       ExitDenied,
+	"workflow_not_allowed": ExitDenied,
+	"workflow_permission":  ExitDenied,
+	"signature_required":   ExitDenied,
+	"protected":            ExitDenied,
+	"block_owned":          ExitDenied,
+	"force_main_denied":    ExitDenied,
+	"head_changed":         ExitConflict,
+	"criteria_unproven":    ExitConflict,
+	"pr_exists":            ExitConflict,
+	"no_pr":                ExitNotFound,
+	"github_unavailable":   ExitUnavailable,
 }
 
 // ExitFor is the exit code of an error code: the code of the family it

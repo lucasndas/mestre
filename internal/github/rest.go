@@ -61,13 +61,19 @@ type REST struct {
 var _ GitHub = (*REST)(nil)
 
 func (c *REST) do(ctx context.Context, method, repo, path string, body any) (int, []byte, error) {
+	st, _, raw, err := c.doHeader(ctx, method, repo, path, body)
+	return st, raw, err
+}
+
+// doHeader is do with the headers of the answer (Retry-After).
+func (c *REST) doHeader(ctx context.Context, method, repo, path string, body any) (int, http.Header, []byte, error) {
 	repo, err := NormalizeRepo(repo)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	tok, err := c.Token(ctx, repo)
 	if err != nil {
-		return 0, nil, fmt.Errorf("github: no token for %s", repo)
+		return 0, nil, nil, fmt.Errorf("github: no token for %s", repo)
 	}
 	var rd io.Reader
 	if body != nil {
@@ -76,7 +82,7 @@ func (c *REST) do(ctx context.Context, method, repo, path string, body any) (int
 	}
 	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.BaseURL, "/")+"/repos/"+repo+path, rd)
 	if err != nil {
-		return 0, nil, errors.New("github: bad request")
+		return 0, nil, nil, errors.New("github: bad request")
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -90,11 +96,11 @@ func (c *REST) do(ctx context.Context, method, repo, path string, body any) (int
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return 0, nil, errors.New("github: " + strings.ReplaceAll(err.Error(), tok, "***"))
+		return 0, nil, nil, errors.New("github: " + strings.ReplaceAll(err.Error(), tok, "***"))
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	return resp.StatusCode, raw, err
+	return resp.StatusCode, resp.Header, raw, err
 }
 
 func (c *REST) get(ctx context.Context, repo, path string, out any) error {
