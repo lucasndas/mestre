@@ -65,6 +65,7 @@ func TestACommandThatNeedsNoAnswerWaitsInTheOutboxWhileTheCitadelIsAway(t *testi
 	var mu sync.Mutex
 	var delivered []QueuedResult
 	a.setup = func(e *Engine) {
+		e.deps.AgentMachine = func(context.Context, string) (string, bool) { return b.id, true }
 		e.Commands().Handle("done", done.handler(false))
 		e.Commands().Handle("pr open", done.handler(true))
 	}

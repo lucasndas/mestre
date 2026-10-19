@@ -106,7 +106,10 @@ func TestADoneOfACharacterOfATowerWaitsForTheCitadelAndIsRegisteredOnce(t *testi
 	a := r.node("a")
 	b := r.node("b", a)
 	st := newDoneStack(t)
-	a.setup = func(e *Engine) { e.Commands().Handle("done", st.orc.Quests.Handlers()["done"]) }
+	a.setup = func(e *Engine) {
+		e.deps.AgentMachine = func(context.Context, string) (string, bool) { return b.id, true }
+		e.Commands().Handle("done", st.orc.Quests.Handlers()["done"])
+	}
 	var mu sync.Mutex
 	var results []QueuedResult
 	a.onQueued = func(q QueuedResult) {

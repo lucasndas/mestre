@@ -119,6 +119,7 @@ Ver também, de marcos posteriores: a [trava no GitHub](trava-no-github.md) (M5)
 - **CA-CIDADELA-11** · *rápida* — **Dado** uma promoção com personagens vivos numa Torre e outros na máquina da antiga, cada um com uma etapa de missão, **quando** a nova Cidadela assume, **então** só os da antiga ficam `interrupted` e só as etapas deles são reentregues.
 - **CA-CIDADELA-12** · *rápida* — **Dado** um comentário criado pela antiga com marcador e não replicado, e a fila de saída com o mesmo marcador, **quando** a nova Cidadela reconcilia e esvazia a fila, **então** o GitHub falso tem um comentário só, e o evento dele não vira "evento externo".
 - **CA-CIDADELA-13** · *completa* — **Dado** uma instância parada no meio do trabalho, com um personagem, uma espera e a fila de saída com itens, **quando** o processo reinicia, **então** os três voltam ao estado anterior (a máquina reiniciada de verdade é o MVP-12, na pesada).
+- **CA-CIDADELA-14** · *rápida* — **Dado** um `agent.event` de uma Torre sobre um personagem que o registro da Cidadela põe nela, e outro sobre um personagem de outra máquina (ou uma Cidadela sem saber onde os personagens rodam), **quando** chegam, **então** o primeiro é entregue e o segundo é recusado com `forbidden`, sem mudar o estado de ninguém; o mesmo vale para o `AgentID` do chamador de um `cli.call` (a completa confere: a chamada em nome de um personagem de outra máquina recebe `not_identified` e o comando não roda).
 
 ## Depende de
 

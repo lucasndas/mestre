@@ -27,6 +27,7 @@ func TestADoneThatRanAndLostItsAnswerStillDeliversItsResult(t *testing.T) {
 	var mu sync.Mutex
 	var delivered []QueuedResult
 	a.setup = func(e *Engine) {
+		e.deps.AgentMachine = func(context.Context, string) (string, bool) { return b.id, true }
 		h := done.handler(false)
 		e.Commands().Handle("done", localchan.HandlerFunc(func(ctx context.Context, c *localchan.Call) localchan.Response {
 			resp := h.Handle(ctx, c)

@@ -227,6 +227,16 @@ func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
 				e.log.Warn("app: cli.result", "err", err)
 			}
 		}
+		// The caller named by a Tower is believed only for a character that runs
+		// on that Tower: the call gets the level of the character, so a Tower
+		// must not speak for the characters of another machine. The answer is a
+		// result, so the CLI that waits for it hears it at once.
+		if call.Caller.AgentID != "" {
+			if err := e.runsOn(ctx, call.Caller.AgentID, m.Peer.ID); err != nil {
+				answer(localchan.Fail(localchan.CodeNotIdentified, "the caller is not a character of this machine: "+err.Error(), ""))
+				return nil, nil
+			}
+		}
 		if refusal, ok := run.cliRefusal(); !ok {
 			if call.Queued {
 				// retryable: the call waited in the outbox of its Tower for

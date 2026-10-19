@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -25,7 +26,10 @@ func TestACommandThatNeedsNoAnswerWaitsForASuspendedCitadelToAct(t *testing.T) {
 	var done applied
 	var mu sync.Mutex
 	var delivered []QueuedResult
-	a.setup = func(e *Engine) { e.Commands().Handle("done", done.handler(false)) }
+	a.setup = func(e *Engine) {
+		e.deps.AgentMachine = func(context.Context, string) (string, bool) { return b.id, true }
+		e.Commands().Handle("done", done.handler(false))
+	}
 	a.onQueued = func(q QueuedResult) {
 		mu.Lock()
 		delivered = append(delivered, q)
