@@ -81,7 +81,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 
 ### Segundo fator e captcha
 
-Quando a página de login pede um segundo passo, o motor trata nesta ordem, sempre no navegador de login da máquina; o motor da Cidadela conduz a conversa e repassa à máquina o que o usuário responder. Quem responde é o **dono da credencial**: o `owner_user` dela ou o Dono; respostas de qualquer outro usuário são ignoradas. A conversa é do **motor** pelo Telegram, numa mensagem direta a essa pessoa ([bot](../telegram/bot.md#mensagens-de-saída)); nada passa pelo Grão-Mestre nem por agente.
+(Desde o M7, como o login acima.) Quando a página de login pede um segundo passo, o motor trata nesta ordem, sempre no navegador de login da máquina; o motor da Cidadela conduz a conversa e repassa à máquina o que o usuário responder. Quem responde é o **dono da credencial**: o `owner_user` dela ou o Dono; respostas de qualquer outro usuário são ignoradas. A conversa é do **motor** pelo Telegram, numa mensagem direta a essa pessoa ([bot](../telegram/bot.md#mensagens-de-saída)); nada passa pelo Grão-Mestre nem por agente.
 
 | Caso | O que o motor faz | Espera (padrão, configurável) |
 |---|---|---|
