@@ -81,6 +81,13 @@ func TestTheSkillsFolderOfACharacterDoesNotPruneAMestreSkillWithoutTheMarker(t *
 	r.prepare(q)
 	mine := filepath.Join(r.dir, ".mestre", "agents", "mestre", ".claude", "skills", "mestre-minha", "SKILL.md")
 	write(t, mine, "feita à mão\n")
+	extra := filepath.Join(filepath.Dir(mine), "ref.md")
+	write(t, extra, "recurso\n")
+	defer func() {
+		if read(t, extra) != "recurso\n" {
+			t.Error("a resource of the skill of the person was removed")
+		}
+	}()
 	if _, err := r.ch.Prepare(r.ctx, q); err == nil || !strings.Contains(err.Error(), "mestre-minha") {
 		t.Fatalf("Prepare = %v; want the report of mestre-minha", err)
 	}
