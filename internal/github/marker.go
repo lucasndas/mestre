@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -28,9 +29,26 @@ func WithMarker(body, op string) string {
 	return strings.TrimRight(StripMarkers(body), "\n") + "\n\n" + Marker(op)
 }
 
-// StripMarkers takes out of a text anything that reads as a marker of operation.
+// StripMarkers takes out of a text anything that reads as a marker of the
+// engine (of an operation or of an impression): what an agent writes never
+// carries one.
 func StripMarkers(body string) string {
-	return strings.ReplaceAll(body, "<!-- mestre:op=", "<!-- mestre:op-removed=")
+	body = strings.ReplaceAll(body, "<!-- mestre:op=", "<!-- mestre:op-removed=")
+	return strings.ReplaceAll(body, "<!-- mestre:impressao=", "<!-- mestre:impressao-removed=")
+}
+
+var markerRe = regexp.MustCompile(`\n*<!-- mestre:(op|impressao)=[^ \n]+ -->`)
+
+// Markers are the marks of the engine a body ends with (the operation and the
+// impression), as written, in order.
+func Markers(body string) []string {
+	return markerRe.FindAllString(strings.TrimRight(body, " \n\r\t"), -1)
+}
+
+// HideMarkers takes the marks of the engine out of a body, for whoever reads
+// it (the agent never sees them, so it can not copy them back).
+func HideMarkers(body string) string {
+	return strings.TrimRight(markerRe.ReplaceAllString(body, ""), " \n")
 }
 
 // HasMarker says whether the body ends with the marker of the operation: the

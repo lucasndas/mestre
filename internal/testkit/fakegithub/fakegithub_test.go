@@ -123,7 +123,7 @@ func TestUnknownRouteParameterOrFieldFailsEvenWithoutCredentials(t *testing.T) {
 		{"unauthenticated unknown method", "DELETE", "/repos/octo/repo/issues", "", "", "DELETE /repos/octo/repo/issues"},
 		{"unknown method on an issue", "POST", "/repos/octo/repo/issues/1", "{}", "inst-token", "POST /repos/octo/repo/issues/1"},
 		{"unknown query parameter", "GET", "/repos/octo/repo/issues?labels=epico&state=closed", "", "inst-token", "GET /repos/octo/repo/issues?labels"},
-		{"unauthenticated unknown query parameter", "GET", "/repos/octo/repo/issues?state=closed", "", "", "GET /repos/octo/repo/issues?state"},
+		{"unauthenticated unknown query parameter", "GET", "/repos/octo/repo/issues?since=2026-01-01", "", "", "GET /repos/octo/repo/issues?since"},
 		{"unknown body field", "POST", "/repos/octo/repo/issues", `{"title":"x","assignees":["a"]}`, "inst-token", `POST /repos/octo/repo/issues field "assignees"`},
 	}
 	for _, tc := range cases {
