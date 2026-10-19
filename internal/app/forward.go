@@ -272,7 +272,7 @@ func (e *Engine) handleCLICall(run *citadelRun) protocol.HandlerFunc {
 			lc := &localchan.Call{Request: call.Request, Caller: localchan.Caller{
 				Identified: true, AgentID: call.Caller.AgentID, TerminalID: call.Caller.TerminalID,
 			}}
-			if !call.Queued {
+			if !call.Queued && !call.MayQueue {
 				// the signs of life of a long command (`ask`: queued, delivered,
 				// answering…) go back as they happen; a queued call has nobody
 				// waiting at the other end
