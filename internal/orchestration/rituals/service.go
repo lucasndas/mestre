@@ -238,12 +238,18 @@ func (s *Service) validate(ctx context.Context, r *Ritual, now time.Time, checkS
 		return fmt.Errorf("%w: the timeout (%s) is longer than the interval (%s)", ErrBadRequest, r.Timeout, iv)
 	}
 	if r.Timeout <= 0 {
-		r.Timeout = DefaultTimeout
-		if iv := r.Schedule.Interval(); iv > 0 && iv < r.Timeout {
-			r.Timeout = iv
-		}
+		r.Timeout = defaultTimeout(r.Schedule)
 	}
 	return nil
+}
+
+// defaultTimeout is the timeout a ritual gets when none is given: 30 minutes,
+// or the interval when it is shorter.
+func defaultTimeout(s Schedule) time.Duration {
+	if iv := s.Interval(); iv > 0 && iv < DefaultTimeout {
+		return iv
+	}
+	return DefaultTimeout
 }
 
 // checkTarget checks that the target is something the ritual may aim at: a
@@ -385,6 +391,8 @@ func (s *Service) Edit(ctx context.Context, id string, req EditRequest) (Ritual,
 	}
 	if req.Timeout != nil {
 		r.Timeout = *req.Timeout
+	} else if req.Schedule != nil && cur.Timeout == defaultTimeout(cur.Schedule) {
+		r.Timeout = 0 // the timeout was the default of the old schedule: the new one has its own
 	}
 	now := s.clk.Now()
 	if req.Schedule != nil {

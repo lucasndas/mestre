@@ -119,8 +119,17 @@ func (s *Service) view(ctx context.Context, r Ritual) map[string]any {
 	if table == "" {
 		table = r.TargetTable
 	}
-	return map[string]any{"name": r.Name, "target": r.Target, "quest": r.Quest, "table": table, "action": string(r.Action), "schedule": r.Schedule.String(),
-		"pre_run": r.PreRun, "timeout": r.Timeout.String(), "enabled": r.State == Enabled, "state": string(r.State), "next_run": when(r.NextRun), "last_result": last}
+	return map[string]any{"name": r.Name, "target": r.Target, "quest": r.Quest, "table": table, "action": string(r.Action), "schedule": scheduleText(r.Schedule),
+		"pre_run": r.PreRun, "timeout": int64(r.Timeout / time.Second), "enabled": r.State == Enabled, "state": string(r.State), "next_run": when(r.NextRun), "last_result": last}
+}
+
+// scheduleText is the schedule as the CLI prints it: durations in whole
+// seconds (docs/cli/convencoes.md).
+func scheduleText(s Schedule) string {
+	if s.Kind == Every {
+		return fmt.Sprintf("every %ds", int64(s.Every/time.Second))
+	}
+	return s.String()
 }
 
 func (s *Service) line(v map[string]any) string {
@@ -174,7 +183,7 @@ func (s *Service) handleCreate(ctx context.Context, c *localchan.Call) localchan
 		return Refusal(err)
 	}
 	v := s.view(ctx, r)
-	v["text"] = fmt.Sprintf("ritual %s made: %s, next %v", r.Name, r.Schedule.String(), v["next_run"])
+	v["text"] = fmt.Sprintf("ritual %s made: %s, next %v", r.Name, scheduleText(r.Schedule), v["next_run"])
 	return localchan.OK(v)
 }
 
@@ -306,7 +315,7 @@ func (s *Service) handleEdit(ctx context.Context, c *localchan.Call) localchan.R
 		return Refusal(err)
 	}
 	v := s.view(ctx, out)
-	v["text"] = fmt.Sprintf("ritual %s changed: %s, next %v", out.Name, out.Schedule.String(), v["next_run"])
+	v["text"] = fmt.Sprintf("ritual %s changed: %s, next %v", out.Name, scheduleText(out.Schedule), v["next_run"])
 	return localchan.OK(v)
 }
 

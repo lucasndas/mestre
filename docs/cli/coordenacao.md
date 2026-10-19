@@ -11,7 +11,7 @@ Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a pa
 | Comando | Quem pode usar | Comportamento em |
 |---|---|---|
 | `recruit`, `spawn` | Mestre da mesa; Grão-Mestre só recruta Mestres de mesa e o Operador do PC | [personagens](../orquestracao/personagens.md), [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
-| `dismiss` | Mestre da mesa; Grão-Mestre ao encerrar mesa | [personagens](../orquestracao/personagens.md) |
+| `dismiss` | Mestre da mesa (personagens da própria mesa); Grão-Mestre (qualquer personagem do workspace, menos outro Grão-Mestre; `table close` encerra os da mesa) | [personagens](../orquestracao/personagens.md) |
 | `connect` | Mestre da mesa (na própria mesa); Grão-Mestre (em qualquer mesa do workspace) | [conexoes](../orquestracao/conexoes.md) |
 | `sheet list\|show`, `base list\|show` | Mestre da mesa, Grão-Mestre; classes autorizadas | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | `quest create\|run\|pause\|resume\|cancel` | Mestre da mesa | [missoes](../orquestracao/missoes.md) |

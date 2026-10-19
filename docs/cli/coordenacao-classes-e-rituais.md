@@ -1,6 +1,6 @@
 # CLI: classes e rituais
 
-> **Assunto:** sintaxe de `class` e `ritual` · **Componente:** CLI · **Atualizado:** 2026-10-18
+> **Assunto:** sintaxe de `class` e `ritual` · **Componente:** CLI · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -36,7 +36,7 @@ mestre class delete "<classe>"
   - `--json` → `{name, scope, path, app, app_status}`.
 - `edit`: troca o pacote e/ou o App, com as mesmas validações e aprovações do escopo ([onde a classe é alterada](../classes/classes.md#onde-a-classe-é-alterada)). Trocar o App só vale para ações novas.
 - `--from` (em `create` e `edit`) só aceita uma pasta dentro de `$MESTRE_TMP` do próprio personagem; fora dela → 2 `from_outside_tmp`. Usuários pelo painel não usam a CLI.
-- `assign`: muda a classe de um personagem da mesa; vale a partir do próximo turno dele (nunca no meio de um).
+- `assign`: muda a classe de um personagem da mesa; as permissões e os hooks valem na próxima chamada de hook dele (a Cidadela já publicou as regras efetivas) e o `CLASS.md`, no contexto do próximo turno ([classes](../classes/classes.md)).
 - `check`: valida o pacote e mostra, por provedor, como cada permissão será aplicada (`mestre hook` e reforço nativo) e o App com o estado dele. Exit 0 se válido; 2 `invalid_class` com a lista de problemas. Também avisa quando o `CLASS.md` passa do tamanho recomendado ([personagem](../sessao-zero/personagem.md)).
 - `test` (desde o M7): roda os casos de `cases/` da classe com o provedor real e volta na hora com o `run_id`; o resultado chega como item `system`. Casos, rodada, custo e erros em [teste de classe](../provedores/teste-de-classe.md).
 - `delete`: ação destrutiva (regra 1 de [convencoes](convencoes.md)) → 9 sem pedido explícito; classe em uso por personagem vivo → 7 `in_use`.
@@ -58,7 +58,7 @@ mestre ritual delete "<nome>"
 - Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. No fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [rituais](../orquestracao/rituais.md)). Exatamente uma das quatro.
 - `--pre-run`: comando rodado antes do disparo; a saída dele substitui `{{output}}` no `--prompt` ou no `--command` (onde roda e com que permissões: [rituais](../orquestracao/rituais.md)). `{{output}}` sem `--pre-run` → 2.
 - `--timeout`: quanto o disparo pode ficar na fila do alvo ocupado antes de ser cancelado e devolvido ao dono do ritual (padrão 30m).
-- `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o histórico recente. `--json` → `{name, target, quest, table, action: "prompt" | "command" | "quest", schedule, pre_run, timeout, enabled, next_run, last_result}`.
+- `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o histórico recente. `--json` → `{name, target, quest, table, action: "prompt" | "command" | "quest", schedule, pre_run, timeout, enabled, next_run, last_result}`, com `timeout` em segundos (inteiro) e `schedule` como `every 3600s`, `daily 02:00`…
 - `run`: dispara agora, pelo mesmo caminho da agenda (entra na fila se o alvo estiver ocupado). `enable`/`disable`: liga e desliga sem apagar.
 - `delete`: ação destrutiva → 9 sem pedido explícito.
 - Erros: alvo fora da mesa do chamador → 4 `not_visible`; agenda inválida → 2 `invalid_schedule`; nome repetido → 7 `name_taken`.
@@ -72,7 +72,7 @@ O estado do App das classes vem com o GitHub, no M5 ([criação de Apps](../gith
 - **`show --export`:** o motor grava em `$MESTRE_TMP/classes/<classe>/` só com `safefile` (um link no caminho recusa) e tira o que uma exportação anterior deixou e o pacote não tem. `--json` → `{name, scope, version, description, class_md, permissions, hooks, skills, app, text}` (e `path` com `--export`).
 - **`list`:** `--json` → `{classes: [{name, scope, table, state, app, inherited, app_state, provider}]}`; `state` é o da listagem do motor (`approved`, `pending`, `new`, `missing`, `unreadable`).
 - **`create`:** o Grão-Mestre sem `--scope` faz classe do workspace; o Mestre da mesa, da mesa. `--scope table` sem mesa (Grão-Mestre) → 2 `table_required`. Proposta (workspace pelo Grão-Mestre) sai com 9 `pending` e o número em `details.proposal`; só um Administrador ou acima aprova, nunca quem propôs. `--app novo` aplicado põe um item de sistema na caixa do Grão-Mestre pedindo o App.
-- **`assign`:** grava a classe no registro; o motor da máquina a lê no início do turno. O Grão-Mestre não tem mesa → 2. Personagem fora da mesa → 4 `not_visible`. Alvo que não é personagem comum (o Mestre da mesa, e o próprio chamador) → 3 `forbidden`: as regras dos orquestradores vêm da classe `orquestrador`, e o Mestre não muda as próprias.
+- **`assign`:** grava a classe no registro e publica as regras efetivas na hora; o `CLASS.md` é lido pelo motor da máquina no início do turno. O Grão-Mestre não tem mesa → 2. Personagem fora da mesa → 4 `not_visible`. Alvo que não é personagem comum (o Mestre da mesa, e o próprio chamador) → 3 `forbidden`: as regras dos orquestradores vêm da classe `orquestrador`, e o Mestre não muda as próprias.
 - **`delete`:** confere o direito no escopo (3 `forbidden`), depois o uso (7 `in_use`, com os nomes), depois o pedido explícito do usuário; sem ele, 9 `approval_required` (o fluxo de aprovação é do M5).
 - **Ritual:** o escopo vem de quem chama (Mestre da mesa: a mesa; Grão-Mestre: o workspace). `--table` só existe em `create` e `edit` e, para o Grão-Mestre, nomeia a mesa do Mestre alvo (sem ele, alvo que não é ele mesmo → 2 `table_required`); `--quest` do Grão-Mestre → 2, porque missão é de mesa. `--timeout` do ritual é dado do ritual, não o limite da chamada. `delete` por personagem → 9 `approval_required` (o fluxo é do M5).
 

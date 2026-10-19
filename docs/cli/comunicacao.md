@@ -1,6 +1,6 @@
 # CLI: comandos de comunicação
 
-> **Assunto:** sintaxe de `list`, `ask`, `check`, `note`, `reply`, `done`, `wait`, `inbox` e `waits` · **Componente:** CLI · **Atualizado:** 2026-10-18
+> **Assunto:** sintaxe de `list`, `ask`, `check`, `note`, `reply`, `done`, `wait`, `inbox` e `waits` · **Componente:** CLI · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -34,7 +34,7 @@ mestre ask "<Nome>" --raw "<texto>"
 - `--no-wait`: entrega e volta na hora (exit 0, `status: "sent"`); a resposta chega pela caixa de entrada. É o jeito de delegar sem ficar bloqueado.
 - `--from-message <id>`: repassa uma mensagem da própria caixa de entrada (texto original e anexos, sem reescrever; o `<Nome>` basta, o `<prompt>` é opcional); o `<prompt>`, se houver, vai como nota antes dela, separado por `--- Mensagem repassada ---`. Anexos são copiados para a mesa do alvo e o texto termina com uma linha `[anexo] <caminho da cópia>` para cada um ([anexos](../telegram/anexos-e-transcricao.md)). Mensagem que não está na caixa de quem chamou → 4 `not_found`; anexos que não puderam ser copiados → 5.
 - `--batch`: pede a vários em paralelo; a saída é sempre JSON, mesmo sem `--json`: `{results: {"A": {status, response}, …}}`. Exit 0 se todos responderam; 6 se algum ficou `pending`.
-- `--raw`: digita entrada crua, com escapes `\n`, `\t`, `\xNN` (ex.: `\x03` = Ctrl+C) e setas `\e[A` `\e[B` `\e[C` `\e[D`; volta assim que digita (exit 0), sem esperar resposta; use `check` para ver a tela. Só para menus, telas que o adaptador não reconheceu (alvo `blocked` com motivo `input`, que é digitado) e terminais de `spawn`.
+- `--raw`: digita entrada crua, com escapes `\n`, `\t`, `\xNN` (ex.: `\x03` = Ctrl+C) e setas `\e[A` `\e[B` `\e[C` `\e[D`; volta assim que digita (exit 0), sem esperar resposta; use `check` para ver a tela. Só para menus, telas que o adaptador não reconheceu e terminais de `spawn`: o alvo precisa estar `idle`, `stuck` ou `blocked` com motivo `input`, ou ser um terminal de `spawn` ([regra](../orquestracao/esperas-e-caixa-de-entrada.md)).
 - Erros: alvo não conectado → 3 `not_connected`; perguntar a si mesmo → 2; alvo ocupado com `--raw` → 7 `busy`; alvo aguardando permissão com `--raw` → 3 `permission_prompt` (alvo `blocked` por `input` recebe a entrada normalmente).
 
 ### `mestre check`
@@ -74,7 +74,7 @@ mestre wait --until "<HH:MM | ISO 8601>"
 Registra a espera no motor e **volta na hora** com o id da espera; quem chamou deve encerrar o turno, e o motor o acorda com uma mensagem quando a espera termina ou o tempo estoura. Com vários nomes, espera todos; `--first`, o primeiro. `--timeout` padrão: o do workspace. `--json` → `{wait_id, kind, targets, timeout_at}`. Alvo ou missão inexistente → 4; horário que já passou → 2. O chamador passa a `aguardando <alvo>` quando o turno dele termina.
 
 ### `mestre inbox`
-`mestre inbox [--full]` — fila do próprio personagem, na ordem de entrega: id, origem (`user`, `agent`, `answer`, `quest`, `ritual`, `github`, `system`, `wake`; tipos em [esperas](../orquestracao/esperas-e-caixa-de-entrada.md)), prioridade, chegada e início do texto (`--full`: texto inteiro). Só leitura: quem entrega é o motor. `--json` → `{items: [{id, from, kind, priority, received_at, text}]}`.
+`mestre inbox [--full]` — fila do próprio personagem, na ordem de entrega: id, origem (os tipos estão em [esperas](../orquestracao/esperas-e-caixa-de-entrada.md)), prioridade, chegada e início do texto (`--full`: texto inteiro). Só leitura: quem entrega é o motor. `--json` → `{items: [{id, from, kind, priority, received_at, text}]}`.
 
 ### `mestre waits`
 `mestre waits [--table <mesa> | --all]` — mapa de esperas: padrão a mesa do chamador (no Grão-Mestre, todas). Uma linha por espera (`Dev -> Revisor  reason  since  timeout_at`) e, no fim, os ciclos (`CYCLE: A -> B -> A`). `--json` → `{waits: [{id, waiter, target, kind, reason, since, timeout_at}], cycles: [[…]]}`. `--all` e outra mesa: só o Grão-Mestre.
