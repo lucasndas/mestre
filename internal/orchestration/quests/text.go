@@ -29,7 +29,15 @@ func (s *Service) stepSection(q Quest, st Step, sd StepDef, r Run, o outcome) st
 	b.WriteString(inbox.Say("**Resumo:**", orNone(r.Summary), ">") + "\n")
 	fmt.Fprintf(&b, "**Arquivos:** %s\n", inbox.OneLine(orNone(capList(r.Files, maxListed))))
 	fmt.Fprintf(&b, "**Não commitados:** %s\n", inbox.OneLine(orNone(capList(r.Uncommitted, maxListed))))
+	if len(o.proofs) > 0 {
+		b.WriteString("**Provas:**\n")
+		for _, p := range o.proofs {
+			b.WriteString(inbox.Say(fmt.Sprintf("- %s (declarada por %s):", p.Criterion, inbox.OneLine(p.By)), p.Text, ">") + "\n")
+		}
+	}
 	switch o.kind {
+	case doneSameFailure:
+		b.WriteString(inbox.Say("**Mesma falha repetida:** a devolução não aconteceu; a missão ficou pausada. Motivo da devolução:", o.reason, ">") + "\n")
 	case doneReturned:
 		b.WriteString(inbox.Say("**Devolvida para:** "+o.returnedTo+" —", o.reason, ">") + "\n")
 	case doneLimit:

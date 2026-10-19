@@ -494,6 +494,7 @@ func (s *Service) itemText(ctx context.Context, q Quest, st Step, sd StepDef, no
 	if note != "" {
 		fmt.Fprintf(&b, "\nAtenção: %s.\n", note)
 	}
+	b.WriteString(s.reviewBlock(ctx, q, st, sd))
 	if sd.Instructions != "" {
 		fmt.Fprintf(&b, "\nInstruções:\n%s\n", sd.Instructions)
 	}

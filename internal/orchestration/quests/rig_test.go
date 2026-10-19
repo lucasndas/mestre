@@ -120,6 +120,19 @@ func (g *github) UpdateBody(_ context.Context, _ string, n int, body string) err
 	return nil
 }
 
+func (g *github) IssueBody(_ context.Context, _ string, n int) (string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.record("read"); err != nil {
+		return "", err
+	}
+	i, ok := g.issues[n]
+	if !ok {
+		return "", fmt.Errorf("issue %d does not exist", n)
+	}
+	return i.Body, nil
+}
+
 func (g *github) Comment(_ context.Context, _ string, n int, class, body string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -235,6 +248,8 @@ type worldOpts struct {
 	perTable int
 	// ceiling is the ceiling of the workspace (nil: not checked).
 	ceiling characters.Ceiling
+	// done is the done_requires of the classes (nil: nothing is asked).
+	done quests.DoneRules
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -265,6 +280,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{},
 		Messages: orcfakes.Messages{}, Peers: w.peers, QuestCatalog: catalog{}, Users: w.users, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerTable: opt.perTable}, Ceiling: opt.ceiling}
+	oo.QuestDone = opt.done
 	if !opt.noTowers {
 		oo.QuestTowers = w.towers
 	}

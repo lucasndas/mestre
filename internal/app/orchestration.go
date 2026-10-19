@@ -106,6 +106,9 @@ type OrchestrationOptions struct {
 	QuestGitHub    quests.GitHub
 	QuestApprovals quests.Approvals
 	QuestCatalog   quests.Catalog
+	// QuestDone gives the done_requires of the class of a character (nil: from
+	// the libraries of classes, ClassLibraries).
+	QuestDone quests.DoneRules
 
 	// The chain of approval (stage 10). ChainClasses gives the effective rules,
 	// the environment and the domains of the characters; without it the chain
@@ -538,7 +541,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	qs, err = quests.NewService(quests.Options{Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: questApprovals, Gate: gate, Logger: o.Logger})
+		Approvals: questApprovals, Done: questDone(o), Gate: gate, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -771,4 +774,12 @@ func (g guildZone) Zone(ctx context.Context, _ string) *time.Location {
 		return nil
 	}
 	return loc
+}
+
+// questDone is the source of the done_requires of the quests.
+func questDone(o OrchestrationOptions) quests.DoneRules {
+	if o.QuestDone != nil {
+		return o.QuestDone
+	}
+	return doneRules{o.ClassLibraries}
 }

@@ -123,6 +123,10 @@ func Examine(files Files, o ExamineOptions) Examination {
 		bad(PermissionsFile, "%v", err)
 	} else {
 		c.Permissions = p
+		// the done of a class that verifies needs the branch: the character commits
+		if c.Meta.Done().Verify && p.Git != nil && p.Git.Commit != nil && !*p.Git.Commit {
+			bad(ClassFile+" done_requires", "verify: true pede que a classe commite, e %s tem git.commit: false", PermissionsFile)
+		}
 	}
 
 	// hooks
@@ -165,6 +169,9 @@ func checkMeta(c *Class, o ExamineOptions, bad func(string, string, ...any)) {
 	}
 	if m.Provider != "" && !slices.Contains(machinesheet.KnownProviders(), m.Provider) {
 		bad(ClassFile+" provider", "%q desconhecido; os aceitos são %s", m.Provider, strings.Join(machinesheet.KnownProviders(), ", "))
+	}
+	if d := m.DoneRequires; d != nil && d.Proof != "" && d.Proof != ProofAll && d.Proof != ProofNone {
+		bad(ClassFile+" done_requires", "proof aceita `all` ou `none`; recebeu %q", d.Proof)
 	}
 	if r, err := machinesheet.ParseRequires(m.Requires, machinesheet.Scope{}); err != nil {
 		bad(ClassFile+" requires", "%v", err)
