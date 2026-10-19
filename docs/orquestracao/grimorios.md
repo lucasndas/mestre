@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Um grimório é um time salvo: uma seleção do canvas de uma mesa que pode ser restaurada em outra mesa, **de qualquer workspace**, para reaproveitar o time inteiro com o fluxo pronto. Ele guarda a receita, não o estado: nada de sessões, filas ou histórico.
+Um grimório é um time salvo: uma seleção do canvas de uma mesa que pode ser restaurada em outra mesa, **de qualquer workspace**, para reaproveitar o time inteiro com o fluxo pronto. Ele guarda o desenho do time, não o estado: nada de sessões, filas ou histórico.
 
 ## Comportamento
 
