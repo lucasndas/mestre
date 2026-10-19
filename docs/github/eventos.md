@@ -105,6 +105,7 @@ Cada ciclo "ativo" custa 3 listas + `pulls?state=open` + 3 chamadas por PR de me
 - [Ações por nível](acoes-por-nivel.md)
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Persistência](../arquitetura/persistencia.md)
+- [Trava no GitHub](../guilda/trava-no-github.md)
 
 ## Fontes
 

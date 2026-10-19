@@ -110,3 +110,5 @@ Recebe as skills de comunicação, de coordenação de mesa e de rituais ([skill
 - [Teto do workspace](../classes/teto-do-workspace.md)
 - [Sessão zero do personagem](../sessao-zero/personagem.md)
 - [Conexões](conexoes.md) · [Cadeia de aprovação](cadeia-de-aprovacao.md) · [Regras temporárias de mesa](regras-temporarias-de-mesa.md) · [Supervisão da cadeia](supervisao-da-cadeia.md) · [Classe `orquestrador`](../classes/classe-orquestrador.md)
+- [CLI de issues e PRs](../cli/coordenacao-github.md)
+- [Ações por nível no GitHub](../github/acoes-por-nivel.md)

@@ -112,6 +112,7 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - [Usuários e níveis](../telegram/usuarios-e-niveis.md) (cadastro, nível e `github_login`)
 - [Cofre](../plataforma/cofre.md)
 - [Sessão zero do workspace](../sessao-zero/workspace.md)
+- [Eventos do GitHub](eventos.md)
 
 ## Verificar na implementação
 

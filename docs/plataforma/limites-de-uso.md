@@ -102,6 +102,7 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md)
 - [Workspaces](../orquestracao/workspaces.md)
 - [Política de aprovação](../aprovacoes/politica.md)
+- [Bot do Telegram](../telegram/bot.md)
 
 ## Verificar na implementação
 
