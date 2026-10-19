@@ -834,12 +834,14 @@ func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
 	answer(b.o.Mask(toast))
 	if result != "" && msg != 0 {
 		result = b.maskText(result)
-		h, herr := ToHTML(result)
+		// the message keeps its header: where it came from is still true
+		ws, mesa, _, _ := b.st.MessageOrigin(ctx, chat, msg)
+		h, plain, ok := render(headOf(u.ID, ws, mesa), result)
 		p := map[string]any{"chat_id": chat, "message_id": msg}
-		if herr == nil {
+		if ok {
 			p["text"], p["parse_mode"] = b.o.Mask(h), "HTML"
 		} else {
-			p["text"] = result
+			p["text"] = plain
 		}
 		if _, err := b.o.Client.Call(ctx, "editMessageText", p); err != nil {
 			b.log.Warn("telegram: the message was not edited", "err", err)

@@ -307,11 +307,14 @@ function Initialize-Provider([string]$Provider) {
             if (-not (Wait-Owner "login do $short. Vou rodar: $cmd")) { $why = "sem o login do $short"; throw $why }
             $saved = @{}
             foreach ($k in (Get-CliEnv $Provider).Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, (Get-CliEnv $Provider)[$k]) }
-            # Start-Process keeps the console of the Owner (a call inside a function would capture the output).
+            # The call operator keeps the console of the Owner and waits only for the CLI
+            # itself: Start-Process -Wait also waits for the helper processes that the
+            # login of Claude and of Codex leave running after "Successfully logged in",
+            # which hung the script. Out-Host keeps the output out of the function result.
             switch ($Provider) {
-                'claude-code' { Start-Process -FilePath $exe -ArgumentList @('auth', 'login') -NoNewWindow -Wait }
-                'codex'       { Start-Process -FilePath $exe -ArgumentList @('login', '--device-auth') -NoNewWindow -Wait }
-                'antigravity' { Start-Process -FilePath $exe -NoNewWindow -Wait }
+                'claude-code' { & $exe auth login | Out-Host }
+                'codex'       { & $exe login --device-auth | Out-Host }
+                'antigravity' { & $exe | Out-Host }
             }
             foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
             if (-not (Test-Login $Provider)) { $why = "o login do $short não ficou pronto"; throw $why }

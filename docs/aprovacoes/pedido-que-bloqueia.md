@@ -65,6 +65,8 @@ Por que não decido: envolve cobrança, é decisão sua
 - Pedido sem evidência que o motor possa montar (só texto do agente) vai marcado "sem evidência verificada".
 - O vocabulário e os campos não mudam quem decide nem o risco: isso é da [política](politica.md) e da [classificação de risco](../classes/classificacao-de-risco.md).
 
+- **Implementação:** `internal/blocking` faz a mensagem (`Build` para cada nível, `Full` para o painel e o **Ver detalhes**), o vocabulário (`ParseMotive`, que devolve o erro de uso com os dez valores) e o dono (`OwnerOf`, `NoticeOwner`); `telegram.BlockChannel` guarda o aviso mascarado (`blocking_notices`) e o manda ao Dono e aos Administradores do workspace, cada um com os botões do seu nível (o **Abrir no painel** é um link, só do Dono). O texto do agente sai numa linha por campo, sem negrito, código nem link. As flags `--motive`, `--checked`, `--why-not` e `--step`, o `blocked-by` vindo das dependências entre mesas e a montagem dos pedidos de aprovação por este formato chegam com a CLI do Grão-Mestre e a dependência entre mesas (etapa 5): [ligação de produção](../desenvolvimento/ligacao-de-producao.md).
+
 ## Critérios de aceite
 
 - **CA-BLOQ-01** · *rápida* — **Dado** um teste da mesa Checkout que falhou com `missing STRIPE_TEST_KEY` em `checkout_test.go:22`, **quando** o agente pede a chave, **então** a mensagem mostra o motivo 🔐, a evidência com esse arquivo, linha e erro montada pelo motor, o checklist com o cofre e o dono; e o "por que não decido" aparece depois, dentro do bloco "texto do agente, não verificado".
