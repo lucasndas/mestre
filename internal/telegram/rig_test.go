@@ -9,9 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/glossary"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/telegram"
+	"github.com/lucasndas/mestre/internal/testkit/fakechannel"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
 	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
@@ -72,6 +74,10 @@ type world struct {
 	alerts *alerts
 	opts   telegram.Options
 	next   int64
+	// The flow of approval over the bot (rigOpts.approvals).
+	ac    *telegram.ApprovalChannel
+	flow  *approvals.Flow
+	chain *fakechannel.Chain
 }
 
 type rigOpts struct {
@@ -80,6 +86,8 @@ type rigOpts struct {
 	actions  map[string]telegram.Action
 	captures map[string]telegram.CaptureFunc
 	mask     func(string) string
+	// approvals puts the flow of approval over the bot.
+	approvals bool
 }
 
 func newWorld(t *testing.T, ro ...rigOpts) *world {
@@ -107,6 +115,16 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if ropt.approvals {
+		w.ac = &telegram.ApprovalChannel{Users: w.users}
+		ropt.actions, ropt.captures = w.ac.Actions(), w.ac.Captures()
+		for _, slug := range []string{"loja", "blog"} {
+			if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+				VALUES (?, ?, ?, 'https://example.test/x.git', 'main', 'active', '', 1, 1)`, slug, "lucas/"+slug, "lucas/"+slug); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	w.opts = telegram.Options{DB: db, Clock: clk, Client: &telegram.Client{Token: token, HTTP: &http.Client{Transport: fakenet.HandlerTransport(w.fake)}},
 		Users: w.users, Alerts: w.alerts, Router: w.router, Commands: ropt.commands, Actions: ropt.actions, Captures: ropt.captures, Mask: ropt.mask, PollTimeout: time.Millisecond}
 	if ropt.terms {
@@ -116,13 +134,23 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if ropt.approvals {
+		w.chain = fakechannel.NewChain(db, clk)
+		w.flow, err = approvals.New(approvals.Options{DB: db, Clock: clk, Chain: w.chain, Users: w.users, PINs: w.users, Messenger: w.ac,
+			Locked: func(context.Context) bool { return false }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.chain.Flow = w.flow
+		w.ac.Bind(w.bot, w.flow)
+	}
 	return w
 }
 
 // user registers and pairs a user.
-func (w *world) user(name string, level users.Level) (users.User, faketelegram.User) {
+func (w *world) user(name string, level users.Level, workspaces ...string) (users.User, faketelegram.User) {
 	w.t.Helper()
-	u, err := w.users.Create(w.ctx, w.owner, users.NewUser{Name: name, Level: level, Workspaces: nil})
+	u, err := w.users.Create(w.ctx, w.owner, users.NewUser{Name: name, Level: level, Workspaces: workspaces})
 	if err != nil {
 		w.t.Fatal(err)
 	}

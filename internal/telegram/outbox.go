@@ -74,7 +74,7 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 		msgs = append(msgs, item{"sendMessage", params})
 	}
 	items = append(msgs, items...) // the message first, the file after it
-	var id int64
+	var id, msgID int64
 	err := b.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		now := b.clk.Now()
 		last := msgs[len(msgs)-1].params
@@ -82,21 +82,9 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 		case o.ForceReply:
 			last["reply_markup"] = map[string]any{"force_reply": true}
 		case len(o.Buttons) > 0:
-			var rows [][]map[string]string
-			for _, row := range o.Buttons {
-				var r []map[string]string
-				for _, bt := range row {
-					key, err := newKey()
-					if err != nil {
-						return err
-					}
-					if _, err := tx.ExecContext(ctx, `INSERT INTO telegram_callbacks (key, user_id, action, arg, capability, expires_at, state) VALUES (?, ?, ?, ?, ?, ?, 'open')`,
-						key, o.UserID, bt.Action, bt.Arg, string(bt.Capability), ms(now.Add(ButtonTTL))); err != nil {
-						return err
-					}
-					r = append(r, map[string]string{"text": bt.Text, "callback_data": key})
-				}
-				rows = append(rows, r)
+			rows, err := b.buttons(ctx, tx, o.UserID, o.Buttons, false)
+			if err != nil {
+				return err
 			}
 			last["reply_markup"] = map[string]any{"inline_keyboard": rows}
 		}
@@ -105,7 +93,7 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 				return err
 			}
 		}
-		for _, it := range items {
+		for i, it := range items {
 			body, err := json.Marshal(it.params)
 			if err != nil {
 				return err
@@ -116,6 +104,9 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 				return err
 			}
 			id, _ = res.LastInsertId()
+			if i == len(msgs)-1 {
+				msgID = id // the message with the buttons, not the file after it
+			}
 		}
 		return nil
 	})
@@ -123,7 +114,39 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 		return 0, err
 	}
 	b.wake()
+	if msgID != 0 {
+		id = msgID
+	}
 	return id, nil
+}
+
+// buttons registers the buttons of a message for a user and gives the rows of
+// the inline keyboard: only a key goes to the Telegram.
+func (b *Bot) buttons(ctx context.Context, tx *sql.Tx, userID string, rows [][]Button, replace bool) ([][]map[string]string, error) {
+	now := b.clk.Now()
+	var out [][]map[string]string
+	for _, row := range rows {
+		var r []map[string]string
+		for _, bt := range row {
+			key, err := newKey()
+			if err != nil {
+				return nil, err
+			}
+			if replace {
+				// the button this one replaces stops working
+				if _, err := tx.ExecContext(ctx, `UPDATE telegram_callbacks SET state = 'void' WHERE user_id = ? AND action = ? AND arg = ? AND state = 'open'`, userID, bt.Action, bt.Arg); err != nil {
+					return nil, err
+				}
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO telegram_callbacks (key, user_id, action, arg, capability, expires_at, state) VALUES (?, ?, ?, ?, ?, ?, 'open')`,
+				key, userID, bt.Action, bt.Arg, string(bt.Capability), ms(now.Add(ButtonTTL))); err != nil {
+				return nil, err
+			}
+			r = append(r, map[string]string{"text": bt.Text, "callback_data": key})
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 // maskText takes the secrets out of a text. The Markdown marks that could split

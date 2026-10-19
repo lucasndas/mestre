@@ -19,76 +19,6 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// fakeChain keeps the requests in memory and decides as the chain does for a
-// person: it closes the request and withdraws the question.
-type fakeChain struct {
-	mu       sync.Mutex
-	flow     *approvals.Flow
-	reqs     map[int64]*chain.Request
-	decided  []chain.PersonDecision
-	invalid  []int64
-	failNext error
-	clk      clock.Clock
-	db       *store.DB
-}
-
-func (c *fakeChain) Get(_ context.Context, id int64) (chain.Request, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	r, ok := c.reqs[id]
-	if !ok {
-		return chain.Request{}, chain.ErrNoRequest
-	}
-	return *r, nil
-}
-
-func (c *fakeChain) close(id int64, state chain.State, by string) {
-	c.mu.Lock()
-	r := c.reqs[id]
-	r.State, r.ClosedAt = state, c.clk.Now()
-	r.Decision = &chain.Closing{State: state, By: by}
-	c.mu.Unlock()
-	if _, err := c.db.Writer().ExecContext(context.Background(), `UPDATE approval_requests SET state = ? WHERE id = ?`, string(state), id); err != nil {
-		panic(err)
-	}
-	_ = c.flow.Withdraw(context.Background(), id, string(state))
-}
-
-func (c *fakeChain) DecideByPerson(_ context.Context, d chain.PersonDecision) (chain.Outcome, error) {
-	c.mu.Lock()
-	if c.failNext != nil {
-		err := c.failNext
-		c.failNext = nil
-		c.mu.Unlock()
-		return chain.Outcome{}, err
-	}
-	c.decided = append(c.decided, d)
-	c.mu.Unlock()
-	if d.Answer == chain.AnswerAskBack {
-		return chain.Outcome{Request: d.Request, State: chain.Open, Applied: "asked_back"}, nil
-	}
-	st := chain.Denied
-	if d.Answer.Approves() || d.Answer == chain.AnswerDelegate {
-		st = chain.Approved
-	}
-	c.close(d.Request, st, "user:"+d.User)
-	return chain.Outcome{Request: d.Request, State: st}, nil
-}
-
-func (c *fakeChain) Invalidate(_ context.Context, id int64, _ string) error {
-	c.mu.Lock()
-	c.invalid = append(c.invalid, id)
-	c.mu.Unlock()
-	c.close(id, chain.Invalidated, "")
-	return nil
-}
-
-func (c *fakeChain) decisions() []chain.PersonDecision {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]chain.PersonDecision(nil), c.decided...)
-}
-
 // targets is the live target of the requests, by id.
 type targets struct {
 	mu  sync.Mutex
@@ -127,7 +57,7 @@ type world struct {
 	clk   *clock.Fake
 	svc   *users.Service
 	owner users.User
-	ch    *fakeChain
+	ch    *fakechannel.Chain
 	msg   *fakechannel.Channel
 	tg    *targets
 	flow  *approvals.Flow
@@ -153,7 +83,7 @@ func newWorld(t *testing.T) *world {
 		}
 	}
 	w := &world{t: t, ctx: ctx, clk: clk, db: db, msg: fakechannel.New(), tg: &targets{cur: map[int64]string{}}}
-	w.ch = &fakeChain{reqs: map[int64]*chain.Request{}, clk: clk, db: db}
+	w.ch = fakechannel.NewChain(db, clk)
 	svc, err := users.New(users.Options{DB: db, Clock: clk, Approvals: late{&w.flow}, PIN: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}})
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +97,7 @@ func newWorld(t *testing.T) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w.ch.flow = w.flow
+	w.ch.Flow = w.flow
 	return w
 }
 
@@ -201,8 +131,7 @@ func (w *world) open(o openOpts) chain.Request {
 		r.Target, r.Impression = json.RawMessage(o.target), imp
 		w.tg.set(r.ID, o.target)
 	}
-	w.ch.reqs[r.ID] = &r
-	if _, err := w.ch.db.Writer().ExecContext(w.ctx, `INSERT INTO approval_requests (id, workspace, type, state, body, created_at) VALUES (?, 'loja', ?, 'open', '{}', 1)`, r.ID, string(r.Type)); err != nil {
+	if err := w.ch.Add(w.ctx, r); err != nil {
 		w.t.Fatal(err)
 	}
 	min := o.min
@@ -231,10 +160,7 @@ func (w *world) answer(u users.User, request int64, a chain.Answer) (approvals.R
 	return w.flow.Answer(w.ctx, u.ID, approvals.Input{Request: request, Answer: a})
 }
 
-func (w *world) state(id int64) chain.State {
-	r, _ := w.ch.Get(w.ctx, id)
-	return r.State
-}
+func (w *world) state(id int64) chain.State { return w.ch.State(id) }
 
 func (w *world) textTo(u users.User) string {
 	w.t.Helper()
