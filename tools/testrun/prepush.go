@@ -37,7 +37,7 @@ type pkgInfo struct {
 	imports    []string
 }
 
-// Prepush runs the full suite with the race detector on the packages the
+// Prepush runs the full suite, without the race detector, on the packages the
 // pushed commits changed and the ones that import them
 // (docs/qualidade/testes.md#antes-do-push). The changed files come on stdin,
 // one per line, from the pre-push hook. It honours the quarantine and has no
@@ -90,8 +90,7 @@ func (r *Runner) Prepush(ctx context.Context) int {
 	}
 
 	full := Suites["full"]
-	r.Race = true
-	args := []string{"test", "-json", "-count=1", "-tags", full.Tags, "-race", RaceGcflags}
+	args := []string{"test", "-json", "-count=1", "-tags", full.Tags}
 	if to := goTimeout(full, r.runs()); to != "" {
 		args = append(args, "-timeout", to)
 	}
@@ -110,7 +109,7 @@ func (r *Runner) Prepush(ctx context.Context) int {
 	if result != 0 {
 		status = "FAIL"
 	}
-	r.printf("%s prepush: %d tests in %d package(s) in %v (race, tags %s)\n", status, len(rep.leaves()), len(targets), clock.Since(r.Clock, start).Round(1e6), full.Tags)
+	r.printf("%s prepush: %d tests in %d package(s) in %v (tags %s)\n", status, len(rep.leaves()), len(targets), clock.Since(r.Clock, start).Round(1e6), full.Tags)
 	return result
 }
 

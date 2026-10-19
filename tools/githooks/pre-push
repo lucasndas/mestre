@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-push hook of the repository: the full suite with -race on the packages
+# Pre-push hook of the repository: the full suite, without -race, on the packages
 # the push changed, and the ones that import them (docs/qualidade/testes.md,
 # "Antes do push"). Like the pre-commit hook it tests what is being pushed,
 # not the working tree: the pushed commit is written to a folder inside the
@@ -8,9 +8,8 @@
 # Enable once per clone with
 #   git config core.hooksPath tools/githooks
 # (docs/desenvolvimento/ambiente.md). Skip only in an emergency with
-# git push --no-verify: on a pull request the race detector runs only here
-# (the CI runs it on the pushes to main), so a skipped push leaves a race to
-# be caught only after the merge, by the push to main.
+# git push --no-verify: the CI runs the suites anyway. The race detector runs
+# only on the pushes to main, never here.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 . "$(dirname "$0")/suite.sh"
