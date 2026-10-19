@@ -278,3 +278,26 @@ func TestAClosedPRAndABaseThatMovedAreNotWhatWasAsked(t *testing.T) {
 		t.Error("changing the base did not change the target")
 	}
 }
+
+type movingReader struct {
+	approvals.PullReader
+	onFiles func()
+}
+
+func (m movingReader) PullFiles(ctx context.Context, repo string, n int) ([]github.PullFile, error) {
+	fs, err := m.PullReader.PullFiles(ctx, repo, n)
+	m.onFiles()
+	return fs, err
+}
+
+func TestAPushWhileThePRIsReadGivesNoFacts(t *testing.T) {
+	t.Parallel()
+	w := newGHWorld(t)
+	inner, _ := w.src.Reader(context.Background(), "meu-app")
+	w.src.Reader = func(context.Context, string) (approvals.PullReader, error) {
+		return movingReader{inner, func() { w.gh.SetPull(repo, w.pr, strings.Repeat("d", 40), false, "clean") }}, nil
+	}
+	if _, err := w.facts(); err == nil {
+		t.Error("facts of a PR that moved while they were read")
+	}
+}
