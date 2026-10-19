@@ -318,9 +318,9 @@ func (r Registry) SetPinned(ctx context.Context, id string, pinned bool) error {
 	return r.exec(ctx, id, `pinned = ?`, b2i(pinned))
 }
 
-// SetClass gives a character another class. The engine of its machine reads
-// the class of the registry at the start of each turn, so it holds from the next
-// turn, never in the middle of one.
+// SetClass gives a character another class. The effective rules are published
+// at once (they hold from the next hook call); the engine of its machine reads
+// the class for the CLASS.md at the start of each turn.
 func (r Registry) SetClass(ctx context.Context, id, class string) error {
 	return r.exec(ctx, id, `class = ?`, class)
 }

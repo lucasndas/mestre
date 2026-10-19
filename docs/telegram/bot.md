@@ -20,7 +20,7 @@ Dar aos usuários autorizados um canal direto com o Grão-Mestre de cada workspa
 - **Um só leitor:** só a Cidadela da época mais recente lê e envia.
   - **Época:** toda chamada ao Telegram (inclusive cada `getUpdates`, cada envio e cada ação disparada por um botão) só sai da Cidadela não suspensa ([Cidadela suspensa](../guilda/cidadela-e-torres.md#cidadela-suspensa)); suspensa, nada sai e o envio fica na fila de saída. O Telegram não depende do GitHub: com o [GitHub fora](../guilda/trava-no-github.md#github-fora), o bot segue lendo e enviando.
   - **O `409 Conflict` é só sinal:** a regra, com e sem o aluguel válido, é a de [o 409 do Telegram](../guilda/trava-no-github.md#o-409-do-telegram); o painel mostra "Telegram parado" quando o bot para.
-  - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em [modo reduzido](../autocura/telegram-modo-reduzido.md) (desde o M7), a única exceção sem trava (só alertas, os botões Promover e Esperar e `/status`).
+  - Se a Cidadela cair, o Guardião da Torre condutora assume o bot em [modo reduzido](../autocura/telegram-modo-reduzido.md) (desde o M7), a única exceção sem trava (alertas, `/status`, as aprovações de cura e os botões Promover e Esperar).
   - Quando a Cidadela volta, ou uma máquina é promovida a Cidadela (depois da [espera de 60 s](../guilda/trava-no-github.md#espera-do-promovido)), o motor da Cidadela retoma o bot.
 
 ```mermaid

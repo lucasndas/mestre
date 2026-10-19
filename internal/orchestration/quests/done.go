@@ -308,6 +308,10 @@ func sendBack(tx *Tx, q Quest, steps []Step, from Step, sd StepDef, reason strin
 			x.State, x.Entry, x.Blocker, x.ResumeNote, x.Approval = StepPreparing, reason, "", "", 0
 		case slices.Contains(affected, x.ID):
 			switch {
+			case x.State == StepApproving:
+				// the work waiting for its approval is useless now: the step
+				// goes back to pending at once (the open request is the flow's)
+				x.State, x.Entry, x.Blocker, x.Approval, x.Approved = StepPending, "", "", 0, false
 			case x.State.Active():
 				x.DiscardResult = true
 			case x.State == StepCompleted || x.State == StepDiscarded || x.State == StepPreparing:

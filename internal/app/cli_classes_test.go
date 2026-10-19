@@ -349,11 +349,21 @@ func (w *commWorld) ritualListShowEditDisableEnableAndDeleteWork(t *testing.T, d
 			t.Errorf("a ritual of the list has no %q: %v", k, row)
 		}
 	}
+	if row["timeout"] != float64(1800) || row["schedule"] != "daily 02:00" {
+		t.Errorf("timeout %v and schedule %v: want whole seconds (1800) and the expression", row["timeout"], row["schedule"])
+	}
 	if row["name"] != "diario" || row["target"] != "Dev" || row["action"] != "prompt" || row["enabled"] != true || row["table"] != w.table.ID {
 		t.Errorf("row = %v", row)
 	}
-	if r := w.run(w.master, "ritual", "edit", "diario", "--every", "30m", "--timeout", "10m", "--json"); r.code != 0 || !strings.Contains(r.stdout, "every 30m") {
+	if r := w.run(w.master, "ritual", "edit", "diario", "--every", "30m", "--timeout", "10m", "--json"); r.code != 0 || !strings.Contains(r.stdout, "every 1800s") {
 		t.Errorf("ritual edit = %+v", r)
+	}
+	// the default timeout is the one of the schedule: a shorter interval moves it
+	if r := w.run(w.master, "ritual", "create", "curto", "--target", "Dev", "--prompt", "oi", "--every", "1h", "--json"); r.code != 0 {
+		t.Fatalf("ritual create --every 1h = %+v", r)
+	}
+	if r := w.run(w.master, "ritual", "edit", "curto", "--every", "10m", "--json"); r.code != 0 || !strings.Contains(r.stdout, `"timeout":600`) {
+		t.Errorf("ritual edit --every 10m of a ritual with the default timeout = %+v", r)
 	}
 	if r := w.run(w.master, "ritual", "edit", "diario", "--every", "1m", "--json"); r.code != 2 {
 		t.Errorf("an --every under the minimum = %+v", r)

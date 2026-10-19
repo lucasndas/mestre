@@ -55,21 +55,21 @@ func Refusal(err error) localchan.Response {
 	var sz *SizeError
 	switch {
 	case errors.Is(err, ErrNoTable):
-		return localchan.Fail("level_denied", "pergaminhos só existem dentro das mesas", "o Grão-Mestre não tem pergaminhos")
+		return localchan.Fail("level_denied", "scrolls exist only inside the tables", "the Grand Master has no scrolls")
 	case errors.Is(err, ErrNotVisible):
-		return localchan.Fail("not_visible", err.Error(), "veja `mestre list`")
+		return localchan.Fail("not_visible", err.Error(), "see `mestre list`")
 	case errors.Is(err, ErrRevision):
-		return localchan.Fail("rev_conflict", err.Error(), "leia de novo com `mestre note read` e refaça a mudança").WithExit(localchan.ExitConflict)
+		return localchan.Fail("rev_conflict", err.Error(), "read it again with `mestre note read` and redo the change").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrEditAmbiguous):
-		return localchan.Fail("edit_ambiguous", err.Error(), "use um trecho maior, que apareça uma só vez").WithExit(localchan.ExitConflict)
+		return localchan.Fail("edit_ambiguous", err.Error(), "use a longer piece, one that appears only once").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrEditNotFound):
-		return localchan.Fail("edit_not_found", err.Error(), "confira o trecho com `mestre note read`").WithExit(localchan.ExitNotFound)
+		return localchan.Fail("edit_not_found", err.Error(), "check the piece with `mestre note read`").WithExit(localchan.ExitNotFound)
 	case errors.Is(err, ErrNameTaken):
-		return localchan.Fail("name_taken", err.Error(), "escolha outro nome").WithExit(localchan.ExitConflict)
+		return localchan.Fail("name_taken", err.Error(), "choose another name").WithExit(localchan.ExitConflict)
 	case errors.As(err, &sz):
-		return localchan.Fail("too_large", sz.Error(), "reduza o conteúdo ou divida em dois pergaminhos")
+		return localchan.Fail("too_large", sz.Error(), "reduce the content or split it into two scrolls")
 	case errors.Is(err, ErrOtherTable):
-		return localchan.Fail("different_tables", err.Error(), "um tomo agrupa pergaminhos da mesma mesa").WithExit(localchan.ExitUsage)
+		return localchan.Fail("different_tables", err.Error(), "a tome groups scrolls of the same table").WithExit(localchan.ExitUsage)
 	case errors.Is(err, ErrLevelDenied):
 		return localchan.Fail("level_denied", err.Error(), "")
 	case errors.Is(err, ErrBadRequest):
@@ -246,15 +246,15 @@ func (h handlers) delete(ctx context.Context, c *localchan.Call) localchan.Respo
 	if nerr != nil {
 		return Refusal(nerr)
 	}
-	msg, id := "apagar um pergaminho precisa de pedido explícito de um usuário autorizado; nada foi apagado", int64(0)
+	msg, id := "deleting a scroll needs an explicit request of an authorized user; nothing was deleted", int64(0)
 	if h.ap != nil {
 		var aerr error
 		if id, aerr = h.ap.RequestDelete(ctx, a, n); aerr != nil {
 			return Refusal(aerr)
 		}
-		msg = fmt.Sprintf("pedido de aprovação #%d criado; nada foi apagado", id)
+		msg = fmt.Sprintf("approval request #%d created; nothing was deleted", id)
 	}
-	r := localchan.Fail("approval_required", msg, "o resultado chega na sua caixa de entrada").WithExit(localchan.ExitPending)
+	r := localchan.Fail("approval_required", msg, "the result arrives in your inbox").WithExit(localchan.ExitPending)
 	r.Error.Details = map[string]any{"request": id}
 	return r
 }

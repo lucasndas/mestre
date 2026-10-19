@@ -27,7 +27,9 @@ func AnswersFor(level LevelKind, r Request) []Answer {
 	}
 	out := []Answer{AnswerApprove}
 	if r.Type == classes.RequestClassPermission || r.Type == "" {
-		if r.Risk.Risk == classes.RiskLow {
+		// the Mestre da mesa and the Grão-Mestre give a temporary rule up to
+		// medio; the other agents, only baixo
+		if r.Risk.Risk == classes.RiskLow || r.Risk.Risk == classes.RiskMedium && (level == LevelMesa || level == LevelGrandMaster) {
 			out = append(out, AnswerApproveFor, AnswerApprovePattern)
 		}
 		out = append(out, AnswerApproveAlways)
