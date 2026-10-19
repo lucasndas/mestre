@@ -180,7 +180,7 @@ func TestADelegationOfTheOwnerCoversTheRequestsInItsScope(t *testing.T) {
 		}
 	}
 	// a delegation ends with its validity and when it is revoked
-	d2 := w.confirm(decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "loja", Until: w.clk.Now().Add(time.Hour),
+	d2 := w.confirm(decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "loja", Mesa: "42-login", Until: w.clk.Now().Add(time.Hour),
 		Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"}, Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: "envio_workflows"}, Text: "delegue os workflows"})
 	if !cover(req(6, classes.RequestWorkflows, "42-login", "lucas/loja")) {
 		t.Fatal("not covered")
