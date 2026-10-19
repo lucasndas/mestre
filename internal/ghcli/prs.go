@@ -9,6 +9,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
 
 // tablePR finds the PR of the table of who asks; a table with none, or the
@@ -170,7 +171,17 @@ func (h *Handlers) prOpen(ctx context.Context, c *localchan.Call) localchan.Resp
 			return localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the pull request #%d was opened but the table was not told", got.Number), "tell the Grand Master")
 		}
 	}
+	h.executed(ctx, who.char, "mestre pr open")
 	return localchan.OK(map[string]any{"number": got.Number, "url": got.URL, "head_sha": got.HeadSHA})
+}
+
+// executed tells the decrees that the engine sent the branch for the character;
+// a failure to register is not a failure of the command, which was done.
+func (h *Handlers) executed(ctx context.Context, c characters.Character, action string) {
+	if h.Executed == nil {
+		return
+	}
+	_ = h.Executed(ctx, c, action)
 }
 
 func (h *Handlers) prUpdate(ctx context.Context, c *localchan.Call) localchan.Response {
@@ -206,6 +217,9 @@ func (h *Handlers) prUpdate(ctx context.Context, c *localchan.Call) localchan.Re
 	got, err := who.prs.Update(ctx, who.actor, who.repo, n, in)
 	if err != nil {
 		return refusal(err)
+	}
+	if in.Block == "" {
+		h.executed(ctx, who.char, "mestre pr update")
 	}
 	return localchan.OK(map[string]any{"number": got.Number, "url": got.URL, "head_sha": got.HeadSHA})
 }

@@ -118,6 +118,8 @@ Cada decreto fica no banco da Cidadela com:
 - Se a proposta do Grão-Mestre não bate com a confirmação do usuário, nada é gravado.
 - Um decreto que tenta mudar a classe `orquestrador` em si (campos, regras fixas ou `files.deny` da classe, e não uma liberação como a de qualquer personagem) é recusado antes da confirmação, com o motivo; o que o decreto de pessoa pode é liberar algo a um orquestrador, que vale como para qualquer personagem ([classe orquestrador](../classes/classe-orquestrador.md); CA-DEC-12).
 
+- **Implementação:** `internal/decrees` guarda os decretos (`decrees`, `decree_events`, `decree_uses` e `decree_proposals`, no banco da Guilda). `Propose` confere nível, workspaces e recusas e só guarda a proposta; `Confirm` (só o autor, com o PIN pedido pelo `BeginPIN`) relê o autor do que está gravado e numera o decreto; `Revoke`, `Reactivate`, `Sweep` e `InvalidateBy` cobrem a revogação, a validade e o autor que sai. É também o `chain.Grants` e o `chain.Delegations`, o `ExceptionLedger` das exceções, a fonte dos decretos das regras efetivas (`Decrees`) e da camada do Mestre (`Notes`). O canal é `telegram.DecreeChannel` (**Confirmar**, **Cancelar**, `/decretos`, **Revogar**). Falta ligar nas regras efetivas e no hook de produção e a CLI `mestre decree propose` (etapa 5): [ligação de produção](../desenvolvimento/ligacao-de-producao.md).
+
 ## Critérios de aceite
 
 - **CA-DEC-01** · *rápida* — **Dado** um decreto permanente confirmado com PIN, **quando** um personagem da classe alvo tenta a ação liberada, **então** o `mestre hook` permite e a execução fica registrada no decreto (MVP-8).

@@ -138,6 +138,13 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 	if !ok {
 		return Outcome{}, refuse(CodeNoRequest, "the request #%d was decided meanwhile", d.Request)
 	}
+	if level.Kind == LevelGrandMaster && d.Answer.Approves() && r.Risk.Risk == classes.RiskHigh {
+		if rec, ok := s.o.Delegations.(DelegationRecorder); ok {
+			if err := rec.Used(ctx, r, d.By); err != nil {
+				s.log.Warn("chain: the use of the delegation was not registered", "request", r.ID, "err", err)
+			}
+		}
+	}
 	s.audit(ctx, r, AuditEntry{Approver: d.By, Level: level.Kind, Answer: d.Answer, Outcome: "accepted", Reason: c.Reason})
 	s.settle(ctx, r, st, appr.Name, d.Instruction)
 	return Outcome{Request: r.ID, State: r.State, Applied: applied}, nil

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/guild"
@@ -83,6 +84,11 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	if env.SetLocked != nil {
 		env.SetLocked(r.lock.Locked)
 	}
+	r.decrees, err = decrees.New(decrees.Options{DB: env.DB, Clock: env.Clock, PINs: svc, Alerts: r.alert, Requests: lateChain{r}, Locked: r.lock.Locked, Logger: env.Log})
+	if err != nil {
+		return nil, fmt.Errorf("app: the decrees: %w", err)
+	}
+	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Logger: env.Log})
 	if err != nil {
@@ -109,16 +115,19 @@ type stdRun struct {
 	s   StandardIntegration
 	env IntegrationEnv
 
-	users  *users.Service
-	flow   *approvals.Flow
-	ac     *telegram.ApprovalChannel
-	alert  *telegram.OwnerAlerts
-	notice *guild.DownNotice
-	lock   *lockdown.Service
-	pins   *telegram.PINRouter
-	lc     *telegram.LockChannel
-	quota  *github.Quota
-	tokens *github.Tokens
+	users *users.Service
+	flow  *approvals.Flow
+	// decrees are the decrees of the users and dc their channel over the bot.
+	decrees *decrees.Service
+	dc      *telegram.DecreeChannel
+	ac      *telegram.ApprovalChannel
+	alert   *telegram.OwnerAlerts
+	notice  *guild.DownNotice
+	lock    *lockdown.Service
+	pins    *telegram.PINRouter
+	lc      *telegram.LockChannel
+	quota   *github.Quota
+	tokens  *github.Tokens
 
 	fence  atomic.Pointer[guild.Fence]
 	chain  atomic.Pointer[chain.Service]
@@ -175,8 +184,14 @@ func (c lateChain) Invalidate(ctx context.Context, id int64, why string) error {
 
 type lateApprovals struct{ r *stdRun }
 
+// InvalidateBy is what happens to what a user left when he is suspended,
+// removed or loses the level: the approvals not executed and the decrees.
 func (a lateApprovals) InvalidateBy(ctx context.Context, id string) error {
-	return a.r.flow.InvalidateBy(ctx, id)
+	err := a.r.flow.InvalidateBy(ctx, id)
+	if derr := a.r.decrees.InvalidateBy(ctx, id); derr != nil {
+		err = errors.Join(err, derr)
+	}
+	return err
 }
 
 // startBot makes the bot, reading its token from the vault: it runs only when the
@@ -202,8 +217,8 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client:   &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP},
-		Commands: r.lc.Commands(), Lock: r.lock, Mask: r.env.Masker.Mask,
-		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions()),
+		Commands: append(r.lc.Commands(), r.dc.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
@@ -216,6 +231,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	}
 	r.ac.Bind(bot, r.flow)
 	r.lc.Bind(bot)
+	r.dc.Bind(bot)
 	r.alert.Bind(bot)
 	r.bot = bot
 	return bot, nil
@@ -250,6 +266,12 @@ func mergeCaptures(ms ...map[string]telegram.CaptureFunc) map[string]telegram.Ca
 // Extend implements IntegrationRun: the people of the chain of approval.
 func (r *stdRun) Extend(o *OrchestrationOptions) {
 	o.ChainUsers = r.flow
+	if o.ChainGrants == nil {
+		o.ChainGrants = r.decrees
+	}
+	if o.ChainDelegations == nil {
+		o.ChainDelegations = r.decrees
+	}
 	o.Locked = r.lock.Locked
 }
 
@@ -272,12 +294,18 @@ func (r *stdRun) Close() {
 // Attach implements IntegrationRun.
 func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []ExternalFunc {
 	r.chain.Store(orc.Chain)
+	if orc.TableRules != nil {
+		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)
+	}
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
+		Executed: r.decrees.Fulfilled,
 	}
 	h.Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
+		// the decrees whose validity ran out end while the Citadel acts
+		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()
 		bot, err := r.startBot(ctx)
 		if err != nil {
 			r.env.Log.Warn("app: the bot of the Telegram is off", "err", err)
