@@ -390,6 +390,37 @@ func (f *fullRig) waitState(c characters.Character, want characters.State) {
 	f.watch.until(f.t, fmt.Sprintf("%s is %s", c.Name, want), func() bool { return f.state(c) == want })
 }
 
+// changed returns a channel that closes at the next notice.
+func (n *noticeLog) changed() <-chan struct{} {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.ch == nil {
+		n.ch = make(chan struct{})
+	}
+	return n.ch
+}
+
+// waitNotice waits, without polling, until a notice of the kind was sent: it
+// comes after the report of the state, not with it.
+func (f *fullRig) waitNotice(kind characters.NoticeKind) []characters.Notice {
+	f.t.Helper()
+	limit := clock.Real{}.NewTimer(90 * time.Second)
+	defer limit.Stop()
+	for {
+		ch := f.notes.changed()
+		if ns := f.notes.of(kind); len(ns) > 0 {
+			return ns
+		}
+		select {
+		case <-ch:
+		case <-f.t.Context().Done():
+			f.t.Fatalf("never: a notice %s", kind)
+		case <-limit.C():
+			f.t.Fatalf("not in 90 s: a notice %s", kind)
+		}
+	}
+}
+
 func (f *fullRig) log(c characters.Character) []characters.State {
 	f.t.Helper()
 	log, err := f.reg.Log(f.ctx, c.ID)
