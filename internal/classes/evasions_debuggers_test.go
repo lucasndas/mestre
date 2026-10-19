@@ -59,3 +59,20 @@ func TestTheDebuggersAndMetersStillRunWhatIsHarmless(t *testing.T) {
 			"perf --version", "rr --version")
 	}
 }
+
+// Part of CA-PERM-32: what the review of the first fix found around gdb, lldb and rr.
+func TestTheCommandsAGdbOrLldbValueHoldsAreAllRead(t *testing.T) {
+	t.Parallel()
+	r := rules(t, anyYAML)
+	cases := []evasion{
+		{"gdb -batch -eval-command 'sh git push' x", "git push"}, {"gdb -batch -init-eval-command 'sh git push' x", "git push"},
+		{"gdb -ex \"bt\nsh git push\"", "git push"}, {"gdb -ex 'if 1\nsh git push\nend'", "git push"},
+		{"gdb -ex 'with confirm off -- sh git push'", "git push"}, {"gdb -ex 'alias -a gp = shell git push' -ex gp", "git push"},
+		{"gdb -ex 'set exec-wrapper git push' --args ls", "git push"},
+		{"lldb -o 'command alias p platform shell git push' -o p x", "git push"},
+		{"rr replay -- -ex 'sh git push'", "git push"}, {"rr replay -a -- -ex 'shell git push'", "git push"},
+	}
+	for _, ee := range evasionEnvs() {
+		fixedDenials(t, ee.name, ee.env, r, cases)
+	}
+}

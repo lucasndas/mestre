@@ -163,8 +163,21 @@ var rrValued = set("-c --num-cpu-ticks -e --num-events -i --ignore-signal -o --o
 func rrRuns(args []word) [][]word {
 	var out [][]word
 	for _, c := range commandsAfter(args, nil) {
-		if len(c) > 0 && c[0].text == "record" {
+		if len(c) == 0 {
+			continue
+		}
+		switch c[0].text {
+		case "record":
 			out = append(out, commandsAfter(c[1:], rrValued)...)
+		case "replay", "dump":
+			// rr replay [options] [-- GDB-OPTIONS]: what follows -- is handed
+			// to gdb, whose -ex is a command like any other
+			for i, w := range c {
+				if w.text == "--" {
+					out = append(out, append([]word{{text: "gdb", assign: -1}}, c[i+1:]...))
+					break
+				}
+			}
 		}
 	}
 	return out

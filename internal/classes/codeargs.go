@@ -49,18 +49,26 @@ func argCommands(cn string, args []string) []string {
 		return optValues(args, "-P", "--pager", "-H", "--html")
 	case cn == "gdb":
 		var out []string
-		for _, v := range optValues(args, "-ex", "--ex", "-iex", "--iex", "--eval-command", "--init-eval-command") {
-			if cmd, ok := gdbShellCommand(v); ok {
-				out = append(out, cmd)
-			} else {
-				// python import os; os.system("cmd"), call (int)system("cmd")
-				out = append(out, scriptCalls([]string{strings.TrimSpace(v)}, codeCall)...)
+		for _, v := range optValues(args, gdbCommandOptions...) {
+			// a value may hold several commands, one per line (a body of if,
+			// while or define)
+			for _, line := range strings.Split(v, "\n") {
+				line = gdbUnwrap(line)
+				if cmd, ok := gdbShellCommand(line); ok {
+					out = append(out, cmd)
+				} else if after, ok := gdbExecWrapper(line); ok {
+					out = append(out, after)
+				} else {
+					// python import os; os.system("cmd"), call (int)system("cmd")
+					out = append(out, scriptCalls([]string{strings.TrimSpace(line)}, codeCall)...)
+				}
 			}
 		}
 		return out
 	case cn == "lldb":
 		var out []string
 		for _, v := range optValues(args, "-o", "--one-line", "-O", "--one-line-before-file", "-k", "--one-line-on-crash") {
+			v = lldbUnalias(v)
 			if cmd, ok := lldbShellCommand(v); ok {
 				out = append(out, cmd)
 			} else {
@@ -116,6 +124,54 @@ var (
 	gdbPipeRe   = regexp.MustCompile(`^\s*(?:\||pi(?:p(?:e)?)?\b)\s*(.*)$`)
 	gdbTargetRe = regexp.MustCompile(`^\s*ta(?:r(?:g(?:e(?:t)?)?)?)?\s+\S+[^|]*?\|\s*(.+)$`)
 )
+
+// gdbCommandOptions are the options of gdb whose value is a command: the long
+// ones with one dash or two, and the unambiguous prefixes gdb takes of them.
+var gdbCommandOptions = []string{"-ex", "--ex", "-iex", "--iex",
+	"--eval-command", "-eval-command", "--eval-comman", "--eval", "-eval", "--ev", "-ev",
+	"--init-eval-command", "-init-eval-command", "--init-eval", "-init-eval", "--init-ev", "-init-ev"}
+
+var (
+	gdbWithRe  = regexp.MustCompile(`^\s*w(?:i(?:t(?:h)?)?)?\s+.*?\s--\s+(.+)$`)
+	gdbAliasRe = regexp.MustCompile(`^\s*al(?:i(?:a(?:s)?)?)?\s+(?:-\S+\s+)*[^=]+=\s*(.+)$`)
+	gdbWrapRe  = regexp.MustCompile(`^\s*set\s+exec-wrapper\s+(.+)$`)
+)
+
+// gdbUnwrap is the command that gdb's with SETTING -- COMMAND and alias
+// NAME = COMMAND hold (the alias runs when it is used; the definition is
+// where the command is written, so it is read there).
+func gdbUnwrap(line string) string {
+	for range 4 {
+		if m := gdbWithRe.FindStringSubmatch(line); m != nil {
+			line = m[1]
+		} else if m := gdbAliasRe.FindStringSubmatch(line); m != nil {
+			line = m[1]
+		} else {
+			break
+		}
+	}
+	return line
+}
+
+// gdbExecWrapper is the command line of set exec-wrapper: the program gdb
+// starts the debugged program through.
+func gdbExecWrapper(line string) (string, bool) {
+	if m := gdbWrapRe.FindStringSubmatch(line); m != nil {
+		return strings.TrimSpace(m[1]), true
+	}
+	return "", false
+}
+
+// lldbAliasRe is command alias [options] NAME COMMAND…: the command is read
+// where it is written.
+var lldbAliasRe = regexp.MustCompile(`^\s*(?:command|comm\w*)\s+alias\s+(?:-\S+\s+)*\S+\s+(.+)$`)
+
+func lldbUnalias(v string) string {
+	if m := lldbAliasRe.FindStringSubmatch(v); m != nil {
+		return m[1]
+	}
+	return v
+}
 
 // gdbShellCommand is the shell command line a gdb command runs, when it is
 // one of shell, ! , pipe, | or target remote |: pipe COMMAND | SHELL_COMMAND
