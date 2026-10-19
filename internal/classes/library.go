@@ -172,6 +172,27 @@ func (l *Library) ceiling(ctx context.Context) (*Ceiling, error) {
 	return l.Ceiling.Current(ctx)
 }
 
+// CheckCeiling says whether the approved version of a class still fits in the
+// ceiling of the workspace, which may have narrowed since it was approved: nil
+// when it fits (or has no approved version, which is not a matter of the
+// ceiling), ErrCeilingDenied naming what passes otherwise.
+func (l *Library) CheckCeiling(ctx context.Context, name, table string) error {
+	c, err := l.Approved(ctx, name, table)
+	switch {
+	case errors.Is(err, ErrNoApproved):
+		return nil
+	case err != nil:
+		return err
+	case c.Permissions == nil:
+		return nil
+	}
+	ceil, err := l.ceiling(ctx)
+	if err != nil {
+		return err
+	}
+	return ceil.Fits(c.Permissions)
+}
+
 // scopes are the scopes visible from a table, the most specific first.
 func scopes(table string) []ClassKey {
 	var out []ClassKey

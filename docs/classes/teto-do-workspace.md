@@ -69,7 +69,7 @@ Se `teto.yaml` mudar sem passar pelo painel ou por decreto (edição manual, ou 
 
 ### Teto reduzido com classes que já existem
 
-Classes que passam do novo teto aparecem como "acima do teto" no `mestre class check` e no painel. Nada é apagado: o pipeline simplesmente corta o que passou, com o motivo.
+Classes que passam do novo teto aparecem como "acima do teto" no `mestre class check` e no painel. Nada é apagado: o pipeline simplesmente corta o que passou, com o motivo. Uma classe aprovada que o teto novo deixou para trás não é dada a personagem novo: `recruit` sai com 3 `ceiling_denied` e `quest create` recusa a etapa, citando o que passa do teto (`Library.CheckCeiling`; classes de mesa ainda não são conferidas aqui).
 
 Quem usa o teto: [classes](classes.md) (M3); a sessão zero cria o arquivo (M4); decretos, limites de uso e aprovações (M5) e a administração no painel (M6) o ampliam, consomem ou editam ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md)).
 

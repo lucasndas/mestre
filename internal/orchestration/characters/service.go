@@ -60,6 +60,10 @@ type ServiceOptions struct {
 	// and 7 have them).
 	Ceiling  Ceiling
 	Operator Operator
+	// ScrollCopies may be nil: the scrolls of the table are not copied to the
+	// worktree of a character that is born (the scrolls service, which keeps
+	// the read-only copies).
+	ScrollCopies ScrollCopies
 	// Classes may be nil: the class of a request is not looked up.
 	Classes ClassCheck
 	// Settings gives the sheet of the table masters, which the Grand Master
@@ -318,6 +322,13 @@ func (s *Service) attempt(ctx context.Context, req CreateRequest, waitID string)
 		announce = !awaited
 	}
 	s.connect(ctx, ch, p.req.ReplaceOf)
+	if s.o.ScrollCopies != nil && ch.Table != "" {
+		// the copies are a convenience of reading: a failure is logged, never a
+		// reason for the character not to start
+		if err := s.o.ScrollCopies.Sync(ctx, ch.Workspace, ch.Table); err != nil {
+			s.log.Warn("characters: the copies of the scrolls were not made for a new character", "id", ch.ID, "err", err)
+		}
+	}
 	if err := s.launch(ctx, ch, p, false); err != nil {
 		return Character{}, "", err
 	}

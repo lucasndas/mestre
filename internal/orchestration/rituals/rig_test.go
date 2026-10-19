@@ -120,6 +120,8 @@ type worldOpts struct {
 	noPre   bool
 	zone    *time.Location
 	perTabl int
+	// guildZone is the time zone kept in the Guild database (none: no row).
+	guildZone string
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -136,6 +138,12 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	if opt.guildZone != "" {
+		if _, err := db.Writer().ExecContext(ctx, `INSERT INTO guild (id, guild_id, ca_cert, epoch, epoch_certificate, timezone, recovery_public_key, created_at)
+			VALUES (1, '01M4ZPXYG0PNPDZ5JN7697ZSCH', x'00', 1, '{}', ?, x'07', 0)`, opt.guildZone); err != nil {
+			t.Fatal(err)
+		}
+	}
 	git := fakegit.NewGit(clk)
 	remote, err := git.Init(ctx, filepath.Join(root, "remote", "meu-app"), gitx.InitOptions{})
 	if err != nil {

@@ -444,6 +444,13 @@ func (os Observers) TurnEnded(ctx context.Context, c Character, lastMessage stri
 	return errors.Join(errs...)
 }
 
+// ScrollCopies writes again the read-only copies of the scrolls of a table in
+// the worktrees where there are characters (*scrolls.Service), which a
+// character that is born reads at once.
+type ScrollCopies interface {
+	Sync(ctx context.Context, workspace, table string) error
+}
+
 // ClassCheck says whether a class has an approved version for a workspace
 // (and a table), so a request that names one that does not exist fails before
 // anything is made.
