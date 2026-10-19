@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 )
@@ -138,11 +137,7 @@ func TestChainsOfTheNewWrappersAreBounded(t *testing.T) {
 			"python":   strings.Repeat("python -m pipx run ", 200) + "git push",
 			"mixed":    strings.Repeat("bwrap --bind . . perf stat -- ssh host ", 50) + "git push",
 		} {
-			start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
-			d := judge(ee.env, free, cmd)
-			if took := time.Since(start); took > raceFactor*time.Second { //nolint:forbidigo // same
-				t.Errorf("%s: %s took %v; want well under a second", ee.name, name, took)
-			}
+			d, _ := boundedDecision(t, ee.name+": "+name, ee.env, free, cmd)
 			if d.Verdict != classes.Deny || d.Layer != classes.LayerFixed {
 				t.Errorf("%s: %s = %s by %s (%q); want a fixed denial", ee.name, name, d.Verdict, d.Layer, d.Reason)
 			}
