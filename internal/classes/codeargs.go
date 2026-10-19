@@ -50,24 +50,21 @@ func argCommands(cn string, args []string) []string {
 	case cn == "gdb":
 		var out []string
 		for _, v := range optValues(args, "-ex", "--ex", "-iex", "--iex", "--eval-command", "--init-eval-command") {
-			v = strings.TrimSpace(v)
-			if after, ok := strings.CutPrefix(v, "shell "); ok {
-				out = append(out, after)
-			} else if after, ok := strings.CutPrefix(v, "!"); ok {
-				out = append(out, after)
+			if cmd, ok := gdbShellCommand(v); ok {
+				out = append(out, cmd)
 			} else {
 				// python import os; os.system("cmd"), call (int)system("cmd")
-				out = append(out, scriptCalls([]string{v}, codeCall)...)
+				out = append(out, scriptCalls([]string{strings.TrimSpace(v)}, codeCall)...)
 			}
 		}
 		return out
 	case cn == "lldb":
 		var out []string
 		for _, v := range optValues(args, "-o", "--one-line", "-O", "--one-line-before-file", "-k", "--one-line-on-crash") {
-			v = strings.TrimSpace(v)
-			if after, ok := strings.CutPrefix(v, "platform shell "); ok {
-				out = append(out, after)
+			if cmd, ok := lldbShellCommand(v); ok {
+				out = append(out, cmd)
 			} else {
+				v = strings.TrimSpace(v)
 				out = append(out, scriptCalls([]string{v}, codeCall)...)
 			}
 		}
@@ -108,6 +105,80 @@ func argCommands(cn string, args []string) []string {
 		return scriptCalls(args, codeCall)
 	}
 	return nil
+}
+
+// gdbShellRe and gdbTargetRe read the gdb commands that run a shell command: gdb
+// takes any unambiguous prefix of a command, and the ones it would not take
+// are denied all the same (fail closed): sh, she, shel and shell, ! , pipe (and
+// |), and target … | command.
+var (
+	gdbShellRe  = regexp.MustCompile(`^\s*(?:!|sh(?:e(?:l(?:l)?)?)?\b)\s*(.*)$`)
+	gdbPipeRe   = regexp.MustCompile(`^\s*(?:\||pi(?:p(?:e)?)?\b)\s*(.*)$`)
+	gdbTargetRe = regexp.MustCompile(`^\s*ta(?:r(?:g(?:e(?:t)?)?)?)?\s+\S+[^|]*?\|\s*(.+)$`)
+)
+
+// gdbShellCommand is the shell command line a gdb command runs, when it is
+// one of shell, ! , pipe, | or target remote |: pipe COMMAND | SHELL_COMMAND
+// runs what follows the first | (or the delimiter of pipe -d DELIM COMMAND
+// DELIM SHELL_COMMAND).
+func gdbShellCommand(v string) (string, bool) {
+	if m := gdbShellRe.FindStringSubmatch(v); m != nil && strings.TrimSpace(m[1]) != "" {
+		return strings.TrimSpace(m[1]), true
+	}
+	if m := gdbTargetRe.FindStringSubmatch(v); m != nil {
+		return strings.TrimSpace(m[1]), true
+	}
+	if m := gdbPipeRe.FindStringSubmatch(v); m != nil {
+		rest := strings.TrimSpace(m[1])
+		delim := "|"
+		if after, ok := strings.CutPrefix(rest, "-d"); ok {
+			fields := strings.Fields(after)
+			if len(fields) > 0 {
+				delim = fields[0]
+				rest = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(after), delim))
+			}
+		}
+		if _, shell, ok := strings.Cut(rest, delim); ok && strings.TrimSpace(shell) != "" {
+			return strings.TrimSpace(shell), true
+		}
+	}
+	return "", false
+}
+
+// lldbShellRe reads platform shell [options] [--] COMMAND with the prefixes
+// lldb takes for its command and subcommand (and shell by itself).
+var lldbShellRe = regexp.MustCompile(`^\s*(?:pl(?:a(?:t(?:f(?:o(?:r(?:m)?)?)?)?)?)?\s+)?s(?:h(?:e(?:l(?:l)?)?)?)?\s+(.*)$`)
+
+// lldbShellCommand is the command line that platform shell (or shell) runs.
+func lldbShellCommand(v string) (string, bool) {
+	m := lldbShellRe.FindStringSubmatch(v)
+	if m == nil {
+		return "", false
+	}
+	rest := strings.TrimSpace(m[1])
+	for strings.HasPrefix(rest, "-") && rest != "-" {
+		word, after := cutField(rest)
+		if word == "--" {
+			rest = after
+			break
+		}
+		if word == "-t" || word == "-s" { // the timeout and the shell take a value
+			_, after = cutField(after)
+		}
+		rest = after
+	}
+	return rest, rest != ""
+}
+
+// cutField cuts the first word, up to a space or a tab, off the text and
+// returns it with the rest, trimmed.
+func cutField(s string) (word, rest string) {
+	s = strings.TrimSpace(s)
+	i := strings.IndexAny(s, " \t")
+	if i < 0 {
+		return s, ""
+	}
+	return s[:i], strings.TrimSpace(s[i:])
 }
 
 var vimNames = set("vim vi nvim view ex gvim vimdiff rvim evim gview nvi elvis")
