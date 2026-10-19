@@ -140,3 +140,28 @@ func TestWindowsToolsThatCreateAProcessRunTheCommandTheyAreGiven(t *testing.T) {
 	win := evasionEnvs()[1]
 	allowances(t, win.name, win.env, r, `schtasks -query`, `schtasks -delete -tn t -f`, `Invoke-WmiMethod -Class Win32_OperatingSystem -Name GetOwner`)
 }
+
+// CA-PERM-34: PowerShell reads CR, LF and CRLF as new-line characters, so a
+// lone CR ends a command as a LF does; the POSIX reading keeps it a blank (stricter, never looser).
+func TestPowerShellReadsALoneCarriageReturnAsANewLine(t *testing.T) {
+	t.Parallel()
+	r := rules(t, anyYAML)
+	envs := evasionEnvs()
+	native, win := envs[0], envs[1]
+	denied := []evasion{
+		{"echo hi\rgit push --force", "push"},
+		{"echo hi\r\ngit push --force", "push"},
+		{"echo hi\ngit push --force", "push"},
+		{"# note\rgit push --force", "push"},
+		{"echo hi `\rgit push --force", "push"},
+	}
+	fixedDenials(t, win.name, win.env, r, denied)
+	// The POSIX reading is unchanged: the CR stays a blank, so the line is
+	// read as the arguments of echo and no new command appears.
+	posix := native.env
+	posix.OS = "linux"
+	c := "echo hi\rgit push --force"
+	if d := judge(posix, r, c); d.Verdict == classes.Deny && d.Layer == classes.LayerFixed {
+		t.Errorf("%s: %q = fixed denial (%q)", native.name, c, d.Reason)
+	}
+}

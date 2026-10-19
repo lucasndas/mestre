@@ -550,10 +550,15 @@ func (lx *lexer) stepPwsh() {
 		return
 	}
 	switch {
-	case c == ' ' || c == '\t' || c == '\r':
+	case c == ' ' || c == '\t':
 		lx.flush()
 		lx.i++
-	case c == '\n':
+	case c == '\r' && lx.peek(1) == '\n':
+		// CRLF is one new-line: the \n step ends the command.
+		lx.i++
+	case c == '\r' || c == '\n':
+		// PowerShell reads CR, LF and CRLF as new-line characters
+		// (language specification 2.2.2), so a lone CR ends the command.
 		lx.op("\n")
 		lx.i++
 		lx.readBodies()
@@ -576,12 +581,15 @@ func (lx *lexer) stepPwsh() {
 		}
 		lx.i += end + 2
 	case c == '#' && !lx.inWord:
-		for lx.i < len(lx.s) && lx.s[lx.i] != '\n' {
+		for lx.i < len(lx.s) && lx.s[lx.i] != '\n' && lx.s[lx.i] != '\r' {
 			lx.i++
 		}
 	case c == '`':
-		if lx.peek(1) == '\n' {
+		if lx.peek(1) == '\n' || lx.peek(1) == '\r' {
 			lx.i += 2
+			if lx.s[lx.i-1] == '\r' && lx.peek(0) == '\n' {
+				lx.i++
+			}
 			return
 		}
 		lx.startWord()
