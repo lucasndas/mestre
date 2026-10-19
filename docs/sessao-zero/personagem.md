@@ -9,7 +9,7 @@ Fazer todo personagem nascer sabendo quem é, o que vale acima de tudo e o que d
 ## Comportamento
 
 ### O que o motor monta
-Ao criar um personagem (na máquina escolhida, dentro do worktree da mesa; o Grão-Mestre, no clone principal da Cidadela), a partir dos modelos. **Quem monta:** desde o M5, a Cidadela renderiza o conteúdo (a partir dos modelos dela e das entradas que só ela tem: decretos, `CLASS.md`, instruções extras, contexto) e o envia ao motor da máquina que vai rodar o personagem: a uma Torre pela conexão WSS ([protocolo](../conectividade/protocolo.md)); quando roda na própria Cidadela, direto ao próprio motor. O motor da máquina só grava os arquivos (de forma atômica) e inicia o processo, e assim nenhuma Torre precisa ter os modelos nem a mesma versão deles. Até lá (M4), o motor da máquina renderiza com os modelos que tem, e a Cidadela envia só as entradas.
+Ao criar um personagem (na máquina escolhida, dentro do worktree da mesa; o Grão-Mestre, no clone principal da Cidadela), a partir dos modelos. **Quem monta:** o motor da máquina que vai rodar o personagem renderiza o conteúdo com os modelos versionados (a Torre os recebe replicados da Cidadela, [persistência](../arquitetura/persistencia.md)) e com as entradas que só a Cidadela tem (decretos, `CLASS.md`, instruções extras, contexto), que ela envia: a uma Torre pela conexão WSS ([protocolo](../conectividade/protocolo.md)); quando o personagem roda na própria Cidadela, direto ao próprio motor. O motor da máquina grava os arquivos (de forma atômica) e inicia o processo.
 1. `.mestre/agents/<id>/MESTRE.md`: a camada do Mestre (abaixo).
 2. As skills do nível dele e as extras da classe ou da ficha (lista em [skills-geradas](../cli/skills-geradas.md)), entregues só a ele ([skills por personagem](#skills-por-personagem)).
 3. Fiação por provedor: no Claude Code, `.mestre/agents/<id>/.claude/skills/` (as skills por personagem) e `.mestre/agents/<id>/claude-settings.json` (reforço nativo das permissões, [permissoes](../classes/permissoes.md)); no Antigravity, `.agents/agents/mestre-<id>.md`.
@@ -96,7 +96,7 @@ Quando o personagem é encerrado de vez (estado final em [personagens](../orques
 
 ## Critérios de aceite
 
-- **CA-SZ-PERS-01** · *rápida* — **Dado** qualquer personagem, **quando** o `MESTRE.md` é montado, **então** ele começa pela regra de prioridade exata e as seções seguem a ordem decretos, regras, classe, skills (só Codex e Antigravity), linhas de skills de apoio e MCP (quando há), contexto.
+- **CA-SZ-PERS-01** · *rápida* — **Dado** qualquer personagem, **quando** o `MESTRE.md` é montado, **então** ele começa pela regra de prioridade exata e as seções seguem a ordem decretos, regras, classe, skills (só Codex e Antigravity), linhas de skills de apoio e MCP (quando há, desde o M8 e o M7), contexto.
 - **CA-SZ-PERS-02** · *rápida* — **Dado** um `CLASS.md` de 7.000 caracteres, **quando** o `MESTRE.md` é montado, **então** ele fica abaixo de 8.000 caracteres e aponta para `.mestre/agents/<id>/CLASS.md`, que existe.
 - **CA-SZ-PERS-03** · *rápida* — **Dado** uma ficha Codex, **quando** o motor monta o comando de início, **então** há um `-c developer_instructions=` com o conteúdo escapado que, lido como TOML, é igual ao `MESTRE.md`.
 - **CA-SZ-PERS-04** · *completa* — **Dado** o canal principal do Antigravity marcado como falho para a versão instalada, **quando** um personagem Antigravity falso inicia, **então** a primeira mensagem que ele recebe é o `MESTRE.md`.

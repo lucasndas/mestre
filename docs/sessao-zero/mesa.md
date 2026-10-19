@@ -21,7 +21,7 @@ A geração é idempotente: rodar de novo sem mudança nos modelos não altera n
 |---|---|---|---|
 | `.agents/skills/mestre-comunicacao/SKILL.md` | Codex, Antigravity | a única skill compartilhada (as de nível e de classe são por personagem: [personagem](personagem.md#skills-por-personagem)), ao lado das [skills de apoio](../classes/skills-de-apoio.md) ligadas na mesa (desde o M8) | [skills-geradas](../cli/skills-geradas.md) |
 | `.claude/skills/mestre-comunicacao/SKILL.md` | Claude Code | cópia gerenciada da anterior (cópia, não link: links no Windows exigem permissão especial) | idem |
-| `.claude/settings.local.json` | Claude Code | só as chaves `hooks` e `statusLine`, mescladas | [claude-code](../provedores/claude-code.md) |
+| `.claude/settings.local.json` | Claude Code | só a chave `hooks`, mesclada (a `statusLine` só entra no plano B do Claude Code) | [claude-code](../provedores/claude-code.md) |
 | `.agents/hooks.json` | Antigravity | um hook nomeado `mestre` | [antigravity](../provedores/antigravity.md) |
 | `.mestre/run/classes/<classe>/` | todos | cópia das classes usadas ali (os hooks extras rodam na máquina) | [classes](../classes/classes.md) |
 | `.mestre/anexos/…` | todos | cópias dos anexos repassados à mesa | [anexos-e-transcricao](../telegram/anexos-e-transcricao.md) |
@@ -80,7 +80,7 @@ Sem confiança, hooks e instruções do projeto não carregam. O motor grava a c
   if [ -n "$MESTRE_AGENT_ID" ] && [ -e '/caminho/estavel/mestre' ]; then exec '/caminho/estavel/mestre' hook --provider antigravity --event PreToolUse; else printf '%s\n' '{"decision":"allow"}'; fi
   ```
 - Resposta neutra: `{"decision":"allow"}` no PreToolUse do Antigravity; `{}` nos outros eventos dele; saída vazia no Claude Code e no Codex.
-- A mesma linha é a forma definitiva. O `hooks.json` do Codex fica no perfil de conta, não no repositório, e não leva a guarda: o conteúdo é fixo, só o caminho do binário e os argumentos, para o Dono confiar uma vez. Dentro do `mestre hook` a regra se repete: sem `MESTRE_AGENT_ID`, libera e sai ([adaptador](../provedores/adaptador.md)).
+- A mesma linha é a forma definitiva. O `hooks.json` do Codex fica no perfil de conta, não no repositório, e não leva a guarda: o conteúdo é fixo, só o caminho do binário e os argumentos, para a confiança valer uma vez. Dentro do `mestre hook` a regra se repete: sem `MESTRE_AGENT_ID`, libera e sai ([adaptador](../provedores/adaptador.md)).
 
 ### Como o motor faz
 `sessionzero.Table` (`internal/sessionzero/table.go`) junta as peças. `Prepare` gera os arquivos do worktree (`Worktree.Ensure`), copia as classes e os anexos (pelo `safefile`; remove da cópia da classe o que saiu do pacote, nunca um anexo) e grava a confiança em cada perfil. `CheckStart` roda antes de cada personagem: é o `Prepare` mais a recusa (`BlockedError`) quando um arquivo do provedor do personagem não foi gerado; os outros provedores seguem, e o aviso aos usuários sai uma vez por conjunto de problemas. `Release` tira a confiança quando o worktree é removido; `Sync` envolve a atualização da branch. As fontes das classes, dos anexos, da conformidade e da aprovação da cópia são interfaces pequenas (o Telegram, o fluxo de aprovação e o checklist são dos marcos 5 e 7).
