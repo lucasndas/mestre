@@ -2,6 +2,15 @@
 # Installs Git for Windows and Go (SHA-256 checked) and Claude Code (official
 # installer), then clones the repository. Nothing persists after the Sandbox
 # closes, so this runs on every opening. See docs/desenvolvimento/ambiente.md.
+#
+# -Round (round\mestre-round.wsb, with -Branch main) is the Windows round of M3/M4:
+# it skips the linter and, instead of the guide of the spikes, runs
+# round\run-all.ps1.
+param(
+    [string]$Branch = 'spike/m1-windows-3',
+    [string]$Prompt = 'tools/winsandbox/rodada-3-prompt.md',
+    [switch]$Round
+)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -23,9 +32,7 @@ $GitSha256  = '52188f917b378f00c70ec136bcf090005f30d44fbc4eba0bce759cc6592d60f6'
 $GoFile     = 'go1.27.2.windows-amd64.msi'
 $GoSha256   = 'dc673c9207a83f95031549fafe72cc0b4c4554a1c16b373d875e90cf8d995ed9'
 $Repo       = 'https://github.com/lucasndas/mestre.git'
-# Each spike round gets its own branch, created from main.
-$Branch     = 'spike/m1-windows-3'
-$Prompt     = 'tools/winsandbox/rodada-3-prompt.md'
+# Each spike round gets its own branch, created from main (-Branch, -Prompt).
 
 function Get-Checked([string]$Url, [string]$Path, [string]$Sha256) {
     if ((Test-Path $Path) -and ((Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLowerInvariant() -eq $Sha256)) {
@@ -86,18 +93,20 @@ try {
     }
 } catch { Write-Host "Windows Terminal nao instalado ($_); siga no console classico." }
 
-# golangci-lint, the pinned release binary (the fast suite runs it).
-$LintVersion = '2.14.0'
-$LintFile    = "golangci-lint-$LintVersion-windows-amd64.zip"
-$LintSha256  = 'b15f903d1649283a2ab6e8d2f0c317eaf1f9f6b3763950e7e8b7e72a43dd724f'
-$LintDir     = 'C:\tools\golangci-lint'
-if (-not (Test-Path (Join-Path $LintDir "golangci-lint-$LintVersion-windows-amd64\golangci-lint.exe"))) {
-    $lintZip = Join-Path $Downloads $LintFile
-    Get-Checked "https://github.com/golangci/golangci-lint/releases/download/v$LintVersion/$LintFile" $lintZip $LintSha256
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($lintZip, $LintDir)
+if (-not $Round) {
+    # golangci-lint, the pinned release binary (the fast suite runs it).
+    $LintVersion = '2.14.0'
+    $LintFile    = "golangci-lint-$LintVersion-windows-amd64.zip"
+    $LintSha256  = 'b15f903d1649283a2ab6e8d2f0c317eaf1f9f6b3763950e7e8b7e72a43dd724f'
+    $LintDir     = 'C:\tools\golangci-lint'
+    if (-not (Test-Path (Join-Path $LintDir "golangci-lint-$LintVersion-windows-amd64\golangci-lint.exe"))) {
+        $lintZip = Join-Path $Downloads $LintFile
+        Get-Checked "https://github.com/golangci/golangci-lint/releases/download/v$LintVersion/$LintFile" $lintZip $LintSha256
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($lintZip, $LintDir)
+    }
+    Add-ToPath (Join-Path $LintDir "golangci-lint-$LintVersion-windows-amd64")
 }
-Add-ToPath (Join-Path $LintDir "golangci-lint-$LintVersion-windows-amd64")
 
 # Repository, on the spike branch.
 git config --global user.name 'Lucas Novais'
@@ -111,6 +120,12 @@ if (git ls-remote --heads origin $Branch) { git checkout -B $Branch "origin/$Bra
 git --version
 go version
 claude --version
+
+if ($Round) {
+    Stop-Transcript | Out-Null
+    & (Join-Path $Shared 'round\run-all.ps1')
+    return
+}
 
 Write-Host ''
 Write-Host 'Preparo pronto. Agora:'
