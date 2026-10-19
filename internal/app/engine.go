@@ -162,6 +162,10 @@ type Deps struct {
 	// call (default: the running one).
 	HostOrchestration bool
 	Binary            string
+	// Integration opens, for each period of the Citadel that hosts the
+	// orchestration, the bot of the Telegram, the users, the flow of approval and
+	// the commands of GitHub (StandardIntegration); nil: none.
+	Integration Integration
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources

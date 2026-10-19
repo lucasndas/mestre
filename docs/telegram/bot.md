@@ -111,7 +111,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 - Uma falha ao enviar, que não seja `429` nem erro de rede, é registrada. O texto fica disponível no painel ([conversa](../painel/conversa-e-aprovacoes.md)).
 - Um botão vencido, trocado ou já decidido responde "já respondido por <nome>", "expirado" ou "substituído". Nada é executado.
 
-- **Implementação:** `internal/telegram` (cliente da Bot API, laço de `getUpdates`, fila de saída, filtro do remetente, comandos, botões e `Ask`/`PINCapture` para as respostas capturadas); a Cidadela suspensa entra pela porta `Gate`. O canal do [fluxo de aprovação](../aprovacoes/fluxo.md) (`ApprovalChannel`: a pergunta com os botões do nível de cada um, o texto que uma resposta pede, o PIN no chat e a edição das mensagens quando o pedido acaba; um botão trocado por uma edição fica sem efeito) está pronto; a ligação ao motor e o roteamento vêm nas etapas 3 e 4.
+- **Implementação:** `internal/telegram` (cliente da Bot API, laço de `getUpdates`, fila de saída, filtro do remetente, comandos, botões e `Ask`/`PINCapture` para as respostas capturadas); a Cidadela suspensa entra pela porta `Gate`. O canal do [fluxo de aprovação](../aprovacoes/fluxo.md) (`ApprovalChannel`: a pergunta com os botões do nível de cada um, o texto que uma resposta pede, o PIN no chat e a edição das mensagens quando o pedido acaba; um botão trocado por uma edição fica sem efeito) está pronto e a Cidadela o liga no início de cada período (`app.StandardIntegration`: o bot só roda se o cofre tem `telegram_bot_token`, pela porta `Gate` da trava); o roteamento das mensagens ao Grão-Mestre vem na etapa 4.
 
 ## Critérios de aceite
 
