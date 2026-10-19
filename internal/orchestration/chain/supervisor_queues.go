@@ -157,7 +157,7 @@ func breach(m QueueMetric, st Settings) bool {
 	if m.Open == 0 {
 		return false
 	}
-	return m.Open > st.QueueAlertOpen || m.Oldest > time.Duration(st.QueueAlertFactor)*levelDeadline(st, m.Level)
+	return m.Open > st.QueueAlertOpen || m.Oldest > time.Duration(st.QueueAlertFactor)*levelDeadline(st, m.Level, "")
 }
 
 // alerts warns about the queues that accumulate, once each until they go back

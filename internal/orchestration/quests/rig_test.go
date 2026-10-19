@@ -233,6 +233,8 @@ type worldOpts struct {
 	noGitHub, noApprovals, noTowers bool
 	// perTable is the limit of characters of a table (0: the default).
 	perTable int
+	// ceiling is the ceiling of the workspace (nil: not checked).
+	ceiling characters.Ceiling
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -262,7 +264,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	w.machines.Chars = func() *characters.Service { return w.orc.Characters }
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{},
-		Messages: orcfakes.Messages{}, Peers: w.peers, QuestCatalog: catalog{}, Users: w.users, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerTable: opt.perTable}}
+		Messages: orcfakes.Messages{}, Peers: w.peers, QuestCatalog: catalog{}, Users: w.users, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerTable: opt.perTable}, Ceiling: opt.ceiling}
 	if !opt.noTowers {
 		oo.QuestTowers = w.towers
 	}

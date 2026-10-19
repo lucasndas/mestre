@@ -128,7 +128,7 @@ func TestQuestRunReturnsAtOnceRunning(t *testing.T) {
 	if !r.OK || data(t, r)["status"] != "running" || !w.clk.Now().Equal(start) {
 		t.Fatalf("quest run = %+v", r)
 	}
-	if r := w.call(w.master.ID, "quest run", nil, v.Name); r.OK || r.Error.Code != "invalid_state" && r.Error.Code != "already_running" || r.ExitCode() != localchan.ExitConflict {
+	if r := w.call(w.master.ID, "quest run", nil, v.Name); r.OK || r.Error.Code != "invalid_state" || r.ExitCode() != localchan.ExitConflict {
 		t.Errorf("a quest that already runs = %+v", r)
 	}
 	s := data(t, w.call(w.master.ID, "quest status", nil, v.Name))

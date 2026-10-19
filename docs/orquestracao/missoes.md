@@ -1,6 +1,6 @@
 # Missões
 
-> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -52,7 +52,7 @@ Cada personagem executa uma etapa por vez. Com `join: any`, as anteriores que ai
 
 ### Devolução com limite
 
-A etapa com `can_return_to` pode terminar devolvendo (opção do `done`, ver [comunicação](../cli/comunicacao.md)) com o motivo. O motor soma uma volta para essa etapa; se não passou de `max_returns`, a etapa-alvo volta a `preparing` recebendo o motivo como entrada, e toda etapa que dependa dela (direta ou indiretamente) volta a `pending`. Etapa afetada que ainda roda termina, mas o resultado é descartado. Passou do limite: o `done` é registrado normalmente (não é recusado), a devolução não acontece, a missão vai para `paused` com o motivo "limite de voltas" e o motor coloca na caixa de entrada do Mestre da mesa um evento `return_limit` (etapa, voltas feitas e o último motivo) para ele decidir. Quem deu o `done` recebe a resposta dizendo que a missão foi pausada ([comunicação](../cli/comunicacao.md)). A devolução com causa, a pausa por "mesma falha repetida" (campos `same_failure` e `issue`), a prova por critério e o `done` que a classe exige estão em [prova e devolução](prova-e-devolucao.md); a etapa opcional das receitas (`optional`, `--skip`), em [classes sugeridas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional).
+A etapa com `can_return_to` pode terminar devolvendo (opção do `done`, ver [comunicação](../cli/comunicacao.md)) com o motivo. O motor soma uma volta para essa etapa; se não passou de `max_returns`, a etapa-alvo volta a `preparing` recebendo o motivo como entrada, e toda etapa que dependa dela (direta ou indiretamente) volta a `pending`. Etapa afetada que ainda roda termina, mas o resultado é descartado; a que espera a aprovação `after` volta a `pending` na hora (o pedido aberto fica para o fluxo de aprovação do M5 encerrar; uma decisão tardia dele não a conclui). Passou do limite: o `done` é registrado normalmente (não é recusado), a devolução não acontece, a missão vai para `paused` com o motivo "limite de voltas" e o motor coloca na caixa de entrada do Mestre da mesa um evento `return_limit` (etapa, voltas feitas e o último motivo) para ele decidir. Quem deu o `done` recebe a resposta dizendo que a missão foi pausada ([comunicação](../cli/comunicacao.md)). A devolução com causa, a pausa por "mesma falha repetida" (campos `same_failure` e `issue`), a prova por critério e o `done` que a classe exige estão em [prova e devolução](prova-e-devolucao.md); a etapa opcional das receitas (`optional`, `--skip`), em [classes sugeridas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional).
 
 ### Pontos de aprovação
 

@@ -1,6 +1,6 @@
 # Revisor
 
-> **Assunto:** classe sugerida Revisor: revisão independente com hipóteses próprias, achados de identificador estável e devolução com causa · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** classe sugerida Revisor: revisão independente com hipóteses próprias, achados de identificador estável e devolução com causa · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe do workspace. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
 
@@ -25,9 +25,9 @@ support_skills:                   # todas desligadas na ativação
 Corpo (instruções):
 
 - **Hipóteses primeiro:** antes de ler o resumo do Dev e o do QA, leia os critérios e o diff e escreva de 2 a 4 hipóteses (o que precisa ser verdade para estar certo; onde mais provavelmente quebra). O resumo dos outros é pista, não prova.
-- **Classes de achado:** Gap (critério faltando), Bug, Verification miss (a prova não prova), Scope drift (fora do pedido), Over-engineering (sempre "deveria"; **nunca devolve sozinho**). Hipótese conferida e certa vai no resumo com `arquivo:linha`, para não ser discutida de novo.
+- **Tipos de achado:** Gap (critério faltando), Bug, Verification miss (a prova não prova), Scope drift (fora do pedido), Over-engineering (sempre "deveria"; **nunca devolve sozinho**). Hipótese conferida e certa vai no resumo com `arquivo:linha`, para não ser discutida de novo.
 - **Memória:** mantenha a tabela do pergaminho "Revisão: <missão>" com `mestre note edit --expect-rev` (pela CLI, que não depende de `files.write`: a classe continua sem escrever arquivo); da segunda rodada em diante, confira cada achado aberto antes de qualquer revisão nova (corrigido, com `arquivo:linha`; não corrigido; não se aplica mais). Thread resolvido ou "corrigi" do Dev não é prova.
-- Rode de novo o comando de teste que o QA citou (sem `commands.allow` para ele, é um pedido de aprovação a cada rodada; a ativação pode liberar os comandos de teste do projeto).
+- Rode de novo o comando de teste que o QA citou (os comandos da [lista de seguros](../lista-de-seguros.md) rodam direto; fora dela, sem `commands.allow`, é um pedido a cada rodada, e a ativação pode liberar).
 - Devolva ao Dev com causa: `mestre done "…" --return "<motivo>" --cause <causa> --where <arquivo:linha>`.
 - Melhoria de arquitetura que o diff revela mas não pede vira pedido ao Mestre da mesa, não devolução.
 

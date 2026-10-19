@@ -1,6 +1,6 @@
 # Instalar
 
-> **Assunto:** passo a passo para instalar o Mestre no Ubuntu ou no Windows com o instalador único: a primeira máquina cria a Guilda e as outras entram nela · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** passo a passo para instalar o Mestre no Ubuntu ou no Windows com o instalador único: a primeira máquina cria a Guilda e as outras entram nela · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 Guia para quem usa. O que cada passo cria por dentro (pastas, contas, serviços, CA, Whisper) está em [instalação e versões](../plataforma/instalacao-e-atualizacao.md); aqui fica só o que você faz e o que vai ver.
 
@@ -54,7 +54,7 @@ O instalador é o mesmo em toda máquina e não pergunta papel. Ele procura uma 
 
 1. No painel, abra **Guilda e saúde das máquinas**. A Cidadela e cada Torre aparecem **conectadas**, com motor e Guardião em dia. Numa máquina única, uma faixa lembra que ninguém de fora percebe se ela cair inteira.
 2. Veja a coluna **Checklist** de cada máquina e use a correção oferecida; correções de rede, firewall ou serviços pedem a sua aprovação ([checklist](../plataforma/checklist.md)).
-3. Portas da instância padrão, se precisar conferir um firewall ([componentes](../arquitetura/componentes.md#portas)): `7443/tcp` (painel e conexões da Guilda), `7444/tcp` (Guardião), `7445/udp` (descoberta) e `7446/tcp` (página reserva).
+3. As portas que o firewall precisa liberar, se for conferir um, estão na tabela de [componentes](../arquitetura/componentes.md#portas).
 
 Em seguida: [primeiro acesso](primeiro-acesso.md), [parear o Telegram](parear-telegram.md) e criar o primeiro workspace (**Workspaces → Criar**, [sessão zero do workspace](../sessao-zero/workspace.md)). Máquina em outra rede: `--join <endereço da Cidadela>` no instalador, ou `JOIN=<endereço>` no MSI ([entrar na Guilda](entrar-na-guilda.md#máquina-fora-da-rede-local)).
 

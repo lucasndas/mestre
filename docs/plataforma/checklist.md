@@ -1,6 +1,6 @@
 # Checklist de ambiente
 
-> **Assunto:** verificação de pré-requisitos de cada máquina da Guilda, por sistema e por papel (Cidadela, Torre, máquina não excluída): itens, quando roda, gravidade, alertas e correções · **Componente:** Todos · **Atualizado:** 2026-10-13
+> **Assunto:** verificação de pré-requisitos de cada máquina da Guilda, por sistema e por papel (Cidadela, Torre, máquina não excluída): itens, quando roda, gravidade, alertas e correções · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -108,6 +108,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 | ALL-20 | Torre | réplica do banco, dos arquivos e (se não excluída) do cofre em dia, dentro do alvo de atraso de [replicação](../guilda/replicacao.md) | aviso | refazer a cópia completa (sozinho) |
 | ALL-21 | não excluída | a ficha do Grão-Mestre de cada workspace tem base executável nesta máquina ([Grão-Mestre](../orquestracao/grao-mestre.md#onde-roda)) | aviso | manual: instalar e logar o provedor, ou excluir a máquina |
 | ALL-22 | Cidadela | [repositório da trava](../github/identidades-e-apps.md#repositório-da-trava) acessível e aluguel válido (última conferência confirmada há menos de 60 s); vencido, é o [GitHub fora](../guilda/trava-no-github.md#github-fora): ações no GitHub na fila e nenhuma promoção possível | grave | sozinho quando o GitHub volta; repositório apagado ou sem acesso: manual (o alerta traz o link) |
+| ALL-23 | todas | fonte de uso de um personagem em atividade indisponível (statusLine, JSONL ou `/usage`; [limites de uso](limites-de-uso.md)) | aviso | conforme a fonte; sem correção automática |
 
 ## Regras e erros
 
@@ -131,6 +132,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 - **CA-CHK-17** · *rápida* — **Dado** um Linux falso com `kernel.yama.ptrace_scope = 0`, `/proc` montado com `hidepid=2` sem o grupo de `mestre` e linger ligado para `mestre-agente`, **quando** o checklist roda, **então** LIN-12 e LIN-13 abrem alertas graves e LIN-14 um aviso, e nenhuma correção é aplicada sem aprovação.
 - **CA-CHK-14** · *rápida* — **Dado** um Windows falso em que `mestre-agente` está em `Administradores` e o `mestre` roda com a conta de um usuário, **quando** o checklist roda, **então** WIN-17 e WIN-19 abrem alertas graves, e nenhuma correção é aplicada sem aprovação.
 - **CA-CHK-18** · *rápida* — **Dado** um Windows falso com o horário ativo de 08:00 às 17:00 e um reinício pendente, e um Linux falso com a unidade `mestre-launcher` em `KillMode=control-group`, **quando** o checklist roda, **então** WIN-24 reaplica o horário de 18 h sozinho, WIN-25 avisa o Dono com os terminais vivos da máquina sem reiniciar nada, e LIN-15 abre alerta grave cuja correção só é aplicada com aprovação.
+- **CA-CHK-19** · *rápida* — **Dado** o relógio falso, **quando** passam 30 min, **então** o checklist roda de novo; **quando** o heartbeat de uma Torre cai, **então** só os itens baratos são reavaliados na hora; **dado** um Windows falso, **quando** o serviço `mestre` sobe, **então** a verificação de início confere WIN-19, WIN-17, WIN-14, ALL-01 e WIN-05 nessa ordem.
 
 ## Depende de
 

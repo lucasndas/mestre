@@ -11,7 +11,7 @@ Referência de sintaxe dos comandos com que o Mestre da mesa monta e conduz a pa
 | Comando | Quem pode usar | Comportamento em |
 |---|---|---|
 | `recruit`, `spawn` | Mestre da mesa; Grão-Mestre só recruta Mestres de mesa e o Operador do PC | [personagens](../orquestracao/personagens.md), [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
-| `dismiss` | Mestre da mesa; Grão-Mestre ao encerrar mesa | [personagens](../orquestracao/personagens.md) |
+| `dismiss` | Mestre da mesa (personagens da própria mesa); Grão-Mestre (qualquer personagem do workspace, menos outro Grão-Mestre; `table close` encerra os da mesa) | [personagens](../orquestracao/personagens.md) |
 | `connect` | Mestre da mesa (na própria mesa); Grão-Mestre (em qualquer mesa do workspace) | [conexoes](../orquestracao/conexoes.md) |
 | `sheet list\|show`, `base list\|show` | Mestre da mesa, Grão-Mestre; classes autorizadas | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | `quest create\|run\|pause\|resume\|cancel` | Mestre da mesa | [missoes](../orquestracao/missoes.md) |
@@ -53,8 +53,8 @@ mestre quest status ["<Missão>"]
 mestre quest pause "<Missão>"      mestre quest resume "<Missão>"
 mestre quest cancel "<Missão>" [--reason "<texto>"]
 ```
-- `create`: a CLI lê a definição de `--file` (`-` lê de stdin; o motor nunca abre um caminho) e a envia; ela é YAML ou JSON, formato em [missoes](../orquestracao/missoes.md). O motor valida fichas, classes, junções, devoluções e pontos de aprovação, e cria a issue (e sub-issues) sob o épico da mesa. `--json` → `{name, id, issue, steps}`. Definição inválida → 2 `invalid_quest` com a lista de problemas, cada um com a etapa; ficha inexistente → 4. `max_returns` tem padrão 3, e só um valor negativo (devolução sem limite) é inválido numa etapa com `can_return_to`.
-- `run`: `--input-file` lê o `--input` de um arquivo (`-` é stdin; os dois juntos → 2). Dispara e **volta na hora** (exit 0, `status: "running"`); o motor conduz e avisa o Mestre da mesa pela caixa de entrada. Já rodando → 7 `already_running`.
+- `create`: a CLI lê a definição de `--file` (`-` lê de stdin; o motor nunca abre um caminho) e a envia; ela é YAML ou JSON, formato em [missoes](../orquestracao/missoes.md). O motor valida fichas, classes, junções, devoluções e pontos de aprovação, e cria a issue (e sub-issues) sob o épico da mesa. `--json` → `{name, id, issue, steps}`. Definição inválida → 2 `invalid_quest` com a lista de problemas, cada um com a etapa (uma ficha inexistente é um desses problemas, também 2). `max_returns` tem padrão 3, e só um valor negativo (devolução sem limite) é inválido numa etapa com `can_return_to`.
+- `run`: `--input-file` lê o `--input` de um arquivo (`-` é stdin; os dois juntos → 2). Dispara e **volta na hora** (exit 0, `status: "running"`); o motor conduz e avisa o Mestre da mesa pela caixa de entrada. Já rodando → 7 `invalid_state`.
 - `status`: sem nome, lista as missões da mesa; com nome, mostra cada etapa (número, personagem, estado, voltas usadas, espera atual) e a etapa atual. `--json` → `{name, state, current_step, steps: [{n, sheet, agent, state, loops, waiting_for, issue}]}` (`current_step`: o `n` da etapa em andamento, ou `null`; sem nome, `{quests: [{name, id, state, round}]}`). Texto: a missão com o estado e uma linha por etapa (`1. dev  Dev-1  running  loops 0`). O Grão-Mestre indica a mesa com `--table`.
 - `pause` deixa a etapa atual terminar e não dispara a próxima; `resume` continua de onde parou; `cancel` encerra a missão (a etapa em andamento termina antes) e atualiza a issue. Estado incompatível → 7 `invalid_state`.
 

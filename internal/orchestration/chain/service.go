@@ -250,13 +250,14 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	return r.ID, nil
 }
 
-// levelDeadline is the time of a level.
-func levelDeadline(st Settings, k LevelKind) time.Duration {
+// levelDeadline is the time of a level for a request of a type (the type
+// matters only to the people; "" is any other).
+func levelDeadline(st Settings, k LevelKind, t classes.RequestType) time.Duration {
 	switch k {
 	case LevelGrandMaster:
 		return st.GrandMasterDeadline
 	case LevelPeople:
-		return st.PeopleDeadline
+		return st.peopleDeadline(t)
 	}
 	return st.AgentDeadline
 }
@@ -270,7 +271,7 @@ func (s *Service) arrive(ctx context.Context, id int64, st Settings) {
 		return
 	}
 	now := s.clk.Now()
-	r.Deadline = now.Add(levelDeadline(st, r.Level.Kind))
+	r.Deadline = now.Add(levelDeadline(st, r.Level.Kind, r.Type))
 	r.AskedBack = false
 	r.Item = ""
 	answers := AnswersFor(r.Level.Kind, r)
