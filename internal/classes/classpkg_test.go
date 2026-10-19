@@ -303,9 +303,9 @@ func TestSavingEnforcesTheCeilingTheScopeAndTheEditOfTheApp(t *testing.T) {
 	}
 }
 
-// Part of CA-GH-ID-09 (it closes in M5 with the real state of the Apps): a
-// class that inherits an App cannot do more with workflows than the class it
-// inherits from.
+// CA-GH-ID-09: a class that inherits an App cannot do more with workflows than
+// the class it inherits from (the App of a class made with `never` has no
+// Workflows permission).
 func TestInheritingAnAppRefusesMoreWorkflowsThanTheOriginHas(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
