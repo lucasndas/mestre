@@ -97,6 +97,7 @@ type world struct {
 	dc        *telegram.DecreeChannel
 	rules     *tablerules.Service
 	routing   *telegram.Routing
+	bc        *telegram.BlockChannel
 	delivered *deliveries
 	// requests are the approval requests the decrees read.
 	requests requests
@@ -126,6 +127,8 @@ type rigOpts struct {
 	// routing puts the routing of the messages by workspace over the bot, with a
 	// recorder as the Grand Masters.
 	routing bool
+	// block puts the messages that block a table over the bot.
+	block bool
 	// decrees puts the decrees (/decretos, the confirmation, the PIN) over the bot.
 	decrees bool
 }
@@ -213,6 +216,23 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		}
 		w.opts.Actions = acts
 	}
+	if ropt.block {
+		for _, slug := range []string{"loja", "blog"} {
+			if _, err := db.Writer().ExecContext(ctx, `INSERT OR IGNORE INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+				VALUES (?, ?, ?, 'https://example.test/x.git', 'main', 'active', '', 1, 1)`, slug, "lucas/"+slug, "lucas/"+slug); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w.bc = &telegram.BlockChannel{Users: w.users, PanelURL: "https://painel.test/cofre"}
+		acts := map[string]telegram.Action{}
+		for k, v := range w.opts.Actions {
+			acts[k] = v
+		}
+		for k, v := range w.bc.Actions() {
+			acts[k] = v
+		}
+		w.opts.Actions = acts
+	}
 	if ropt.decrees {
 		for _, slug := range []string{"loja", "blog"} {
 			if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
@@ -257,6 +277,9 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	}
 	if w.routing != nil {
 		w.routing.Bind(w.bot)
+	}
+	if w.bc != nil {
+		w.bc.Bind(w.bot)
 	}
 	if w.lc != nil {
 		w.lc.Bind(w.bot)
