@@ -98,6 +98,7 @@ var exitByCode = map[string]int{
 
 	// The codes of the commands of issues and PRs
 	// (docs/cli/coordenacao-github.md#regras-e-erros).
+	"locked":               ExitDenied,
 	"outside_epic":         ExitDenied,
 	"reserved_label":       ExitDenied,
 	"workflow_not_allowed": ExitDenied,
