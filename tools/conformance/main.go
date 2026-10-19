@@ -141,10 +141,24 @@ var windowsEnvNames = []string{"SystemRoot", "SystemDrive", "windir", "ComSpec",
 	"USERPROFILE", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432",
 	"CommonProgramFiles", "TEMP", "TMP", "PSModulePath", "OS", "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS"}
 
+// cliDir is the folder of the CLI as it was written, with either separator,
+// whatever the system the tool runs on (the env of a Windows terminal is
+// built from Linux in the tests, and the other way around).
+func cliDir(cli string) string {
+	i := strings.LastIndexAny(cli, `/\`)
+	switch {
+	case i < 0:
+		return "."
+	case i == 0:
+		return cli[:1]
+	}
+	return cli[:i]
+}
+
 func baseEnvFor(goos string, o options, getenv func(string) string) []string {
-	env := []string{"PATH=" + filepath.Dir(o.cli) + ":/usr/local/bin:/usr/bin:/bin", "TERM=xterm-256color", "LANG=C.UTF-8"}
+	env := []string{"PATH=" + cliDir(o.cli) + ":/usr/local/bin:/usr/bin:/bin", "TERM=xterm-256color", "LANG=C.UTF-8"}
 	if goos == "windows" {
-		env = []string{"PATH=" + filepath.Dir(o.cli) + ";" + getenv("PATH"), "TERM=xterm-256color"}
+		env = []string{"PATH=" + cliDir(o.cli) + ";" + getenv("PATH"), "TERM=xterm-256color"}
 		for _, n := range windowsEnvNames {
 			if v := getenv(n); v != "" {
 				env = append(env, n+"="+v)
