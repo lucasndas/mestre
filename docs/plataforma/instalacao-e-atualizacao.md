@@ -100,6 +100,7 @@ Sem opções, preserva os dados do que sobra; com `--purge`, apaga também as pa
 - **CA-INST-15** · *rápida* — **Dado** uma máquina nova que entra na Guilda e dublês de rede, **quando** a entrada termina, **então** ela recebe os arquivos do Whisper e roda o benchmark; **quando** o Dono a exclui, **então** os arquivos são apagados, a não ser que a transcrição dela esteja ativada no painel.
 - **CA-INST-16** · *completa* — **Dado** duas instâncias na mesma máquina, com personagens do agente falso, uma mesa aberta, uma espera e um item na fila de saída, **quando** o processo do motor de cada uma é encerrado à força e iniciado de novo, **então** personagens, mesa, espera e fila voltam ao estado anterior.
 - **CA-INST-17** · *pesada* — **Dado** a instalação no Linux e no Windows, **quando** reinicio cada máquina, **então** os serviços sobem sozinhos com o sistema e o estado volta como no CA-INST-16 (MVP-12, MVP-13).
+- **CA-INST-18** · *pesada* — **Dado** a instalação, **quando** um personagem começa, **então** o motor usa o socket do lançador do serviço e a pasta e a versão instaladas do `mestre-pty`, e o terminal é real (MVP-13).
 
 ## Depende de
 
