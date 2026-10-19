@@ -78,3 +78,4 @@ Por que não decido: envolve cobrança, é decisão sua
 
 - [Fluxo de aprovação](fluxo.md)
 - [Bot do Telegram](../telegram/bot.md)
+- [Política de aprovação](politica.md)

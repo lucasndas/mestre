@@ -138,6 +138,10 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - [Ações por nível no GitHub](../github/acoes-por-nivel.md)
 - [Política de aprovação](../aprovacoes/politica.md) · [Cadeia de aprovação](cadeia-de-aprovacao.md) · [Supervisão da cadeia](supervisao-da-cadeia.md) · [Classe `orquestrador`](../classes/classe-orquestrador.md)
 - [Roteamento do Telegram](../telegram/roteamento.md) · [Bot](../telegram/bot.md) · [Eventos do GitHub](../github/eventos.md) · [Pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md)
+- [Prova e devolução](prova-e-devolucao.md)
+- [Decretos](../telegram/decretos.md)
+- [Criação de Apps](../github/criacao-de-apps.md)
+- [Limites de uso](../plataforma/limites-de-uso.md)
 
 ## Verificar na implementação
 

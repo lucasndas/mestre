@@ -43,3 +43,4 @@ Dependência que fecharia um ciclo entre épicos (#12 depende de #15, #15 de #12
 - [Esperas e caixa de entrada](esperas-e-caixa-de-entrada.md)
 - [Mesas](mesas.md)
 - [Eventos do GitHub](../github/eventos.md)
+- [Sincronia com a base](sincronia-com-a-base.md)

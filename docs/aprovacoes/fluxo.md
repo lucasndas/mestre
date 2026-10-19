@@ -146,3 +146,4 @@ O resumo do que os agentes decidiram sozinhos, as sugestões de regra e a amostr
 
 - [Política de aprovação](politica.md) · [Usuários e níveis](../telegram/usuarios-e-niveis.md) · [Bot do Telegram](../telegram/bot.md)
 - [Esperas e caixa de entrada](../orquestracao/esperas-e-caixa-de-entrada.md) · [Cadeia de aprovação](../orquestracao/cadeia-de-aprovacao.md) · [Classificação de risco](../classes/classificacao-de-risco.md) · [Persistência](../arquitetura/persistencia.md)
+- [Ações por nível no GitHub](../github/acoes-por-nivel.md)

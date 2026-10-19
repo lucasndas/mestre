@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-> **Assunto:** marcos de desenvolvimento (M0 a M8 e o M4+, que fecha o M4), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-18
+> **Assunto:** marcos de desenvolvimento (M0 a M8 e o M4+, que fecha o M4), o marco de cada documento de funcionalidade, a auditoria que fecha cada marco, as partes que chegam em marco posterior e a regra de "Depende de" · **Componente:** Projeto · **Atualizado:** 2026-10-19
 
 Este documento é a **fonte única** da ordem de desenvolvimento. Cada documento de funcionalidade (todo documento com a seção "Objetivo") pertence a exatamente um marco, listado no [mapa](#mapa-de-documentos-por-marco-e-etapa). A [verificação de docs](../qualidade/verificacao-de-docs.md) lê o mapa e confere a regra abaixo.
 
@@ -44,7 +44,7 @@ O [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-p
 | [permissões](../classes/permissoes.md) (M3) | CA-PERM-14, CA-PERM-15 |
 | [teto do workspace](../classes/teto-do-workspace.md) (M3) | CA-TETO-06 |
 | [bases e fichas](../orquestracao/bases-e-fichas.md) (M4) | CA-BF-06, CA-BF-07, CA-BF-08, CA-BF-09 |
-| [política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md), [decretos](../telegram/decretos.md) (M5) | CA-APROV-POL-10, CA-APROV-FLUXO-11, CA-DEC-10 |
+| [política](../aprovacoes/politica.md), [fluxo](../aprovacoes/fluxo.md), [decretos](../telegram/decretos.md) (M5) | CA-APROV-POL-10, CA-APROV-POL-11, CA-APROV-FLUXO-11, CA-DEC-10 |
 | [bot](../telegram/bot.md), [segurança do canal](../telegram/seguranca-do-canal.md) (M5) | CA-BOT-10, CA-CANAL-08 |
 | [canvas](../painel/canvas.md), [administração](../painel/administracao.md) (M6) | CA-CANVAS-08, CA-ADM-09 |
 | [instalação](../plataforma/instalacao-e-atualizacao.md), [checklist](../plataforma/checklist.md) (M7) | CA-INST-14, CA-CHK-15 (e CA-INST-11 ganha a exceção do Operador) |
@@ -65,7 +65,8 @@ Critérios de documentos de um marco que usam peças de marcos seguintes; cada u
 | [teto do workspace](../classes/teto-do-workspace.md) (M3) | CA-TETO-07 e CA-TETO-08 → M5 (CA-TETO-08 substitui o trecho do `.env.example` de CA-TETO-07; o `files.deny` de segredos do teto padrão, lido pelo pipeline com o teto e as regras efetivas montadas pela Cidadela e o corte pela ferramenta de leitura; o M3 testa o corte pelo teto, CA-TETO-02, e o `deny` de arquivos) |
 | [permissões](../classes/permissoes.md) (M3) | CA-PERM-26 → M5 (a chave escrita em arquivo no `pre_tool` e no `post_tool`, que usa o mascarador do motor e a mensagem ao agente; o M3 testa o pipeline de arquivos e o despachante) |
 | [fluxo de aprovação](../aprovacoes/fluxo.md) (M5) | CA-APROV-FLUXO-08 → M6 (aprovar pelo painel); CA-APROV-FLUXO-12 → M7 (o pedido `promocao_cidadela` nasce no Guardião da Torre condutora e vai pelo Telegram em modo reduzido e pela página reserva) |
-| [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md), [criação de Apps](../github/criacao-de-apps.md) e [aprovação no GitHub](../github/aprovacao-no-github.md) (M5) | CA-BLOQ-04, CA-GH-APPS-04 e CA-GH-APROV-06 → M6 (o painel recebe o texto completo, mascarado; o login do Administrador; o erro do device flow mostrado no painel) |
+| [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md), [criação de Apps](../github/criacao-de-apps.md), [aprovação no GitHub](../github/aprovacao-no-github.md), [limites de uso](../plataforma/limites-de-uso.md), [segurança do canal](../telegram/seguranca-do-canal.md) e [trava no GitHub](../guilda/trava-no-github.md) (M5) | CA-BLOQ-04, CA-GH-APPS-04, CA-GH-APROV-06, CA-USO-08, CA-CANAL-07, CA-TRAVA-05 e CA-TRAVA-07 → M6 (o painel recebe o texto completo, mascarado; o login do Administrador; o erro do device flow; o consumo da mesa; o alerta de remetente desconhecido; o aviso de GitHub fora e o "Telegram parado") |
+| [administração](../painel/administracao.md) (M6) | CA-ADM-06 e CA-ADM-14 → M7 (colunas de Autocura e Checklist dependem do Guardião e do checklist; o catálogo MCP, do gateway) |
 
 ### Critérios antecipados
 
