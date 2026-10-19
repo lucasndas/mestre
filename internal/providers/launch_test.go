@@ -164,7 +164,7 @@ func TestABaseMayNotSetTheVariablesOfTheSafety(t *testing.T) {
 			"CLAUDE_CODE_GIT_BASH_PATH=/tmp/bash", "CLAUDE_CODE_SHELL=/tmp/bash", "SHELL=/tmp/bash",
 			"CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY=1", "CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT=1",
 			"CLAUDE_CODE_DISABLE_PERMISSION_PROMPT_NOTIFY_HOOKS=1", "CLAUDE_CODE_DISABLE_ANYTHING_NEW=1",
-			"CLAUDE_CODE_PLUGIN_DIRS=/tmp/p", "CLAUDE_AFK_TIMEOUT_MS=1",
+			"CLAUDE_CODE_PLUGIN_DIRS=/tmp/p", "CLAUDE_CODE_PLUGIN_NEW_THING=1", "CLAUDE_CODE_MESSAGING_ANYTHING=1", "CLAUDE_AFK_TIMEOUT_MS=1",
 		}),
 		providers.Codex:       slices.Concat(every, agents, []string{"CODEX_HOME=/elsewhere", "CODEX_SANDBOX=seatbelt", "CODEX_UNSAFE_ALLOW_NO_SANDBOX=1"}),
 		providers.Antigravity: slices.Concat(every, agents, []string{"HOME=/home/x", `USERPROFILE=C:\x`, "home=/x"}),

@@ -426,6 +426,10 @@ func syncFolder(dir, rel string, files []File, prune, skills bool) (written, rem
 		if want[old] {
 			continue
 		}
+		if top, name, nested := strings.Cut(old, "/"); skills && nested && name == "SKILL.md" && strings.HasPrefix(top, "mestre-") && handmade(top) {
+			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, old), Reason: "não tem o marcador de arquivo gerado: é de quem a fez e não foi removido"})
+			continue
+		}
 		if err := safefile.Remove(filepath.Join(base, filepath.FromSlash(old)), nil); err != nil {
 			rep.Problems = append(rep.Problems, Problem{Path: path.Join(rel, old), Reason: "não foi removido: " + err.Error()})
 			continue

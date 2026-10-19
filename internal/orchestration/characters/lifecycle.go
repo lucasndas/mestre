@@ -573,8 +573,10 @@ func (s *Service) Replace(ctx context.Context, rq ReplaceRequest) (CreateResult,
 	creator := old.CreatedBy
 	req := CreateRequest{Name: old.Name, Sheet: rq.Sheet, Class: rq.Class, Workspace: old.Workspace, Table: old.Table, Role: old.Role,
 		Creator: rq.By, Quest: old.Quest, Step: old.Step, ReplaceOf: old.ID, Prefer: old.Machine, Inherit: &creator}
-	if err := s.authorize(ctx, req); err != nil {
-		return CreateResult{}, err
+	// The sheet, the ceiling and the machine are checked before the old one is
+	// stopped: a replacement that cannot start leaves the old one alive.
+	if _, err := s.check(ctx, req); err != nil {
+		return CreateResult{}, s.failed(ctx, req, "", err)
 	}
 	s.mu.Lock()
 	s.replacing[old.ID] = true
@@ -682,6 +684,10 @@ func (s *Service) resumeMessage(ctx context.Context, c Character) string {
 	b.WriteString("The engine restarted you after an interruption; your previous session could not be resumed.")
 	if c.Quest != "" {
 		fmt.Fprintf(&b, " You were working on the step of quest %s.", c.Quest)
+		if c.Step != "" {
+			fmt.Fprintf(&b, " Your step is %s.", c.Step)
+		}
+		b.WriteString(" Read the scroll of the quest, the note named `Missão: <quest name>` (`mestre note read`), before you go on.")
 	}
 	if dones, err := s.o.Registry.Dones(ctx, c.ID); err == nil && len(dones) > 0 {
 		fmt.Fprintf(&b, " Your last done was: %s", dones[len(dones)-1].Text)

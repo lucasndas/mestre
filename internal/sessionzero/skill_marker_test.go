@@ -71,3 +71,20 @@ func TestTheSkillsFolderOfACharacterDoesNotOverwriteASkillWithoutTheMarker(t *te
 		t.Fatal("the skill of the person was overwritten")
 	}
 }
+
+// A mestre-* folder of the person that the engine does not generate is not
+// pruned from the folder of skills of a character, and it is reported.
+func TestTheSkillsFolderOfACharacterDoesNotPruneAMestreSkillWithoutTheMarker(t *testing.T) {
+	t.Parallel()
+	r := newCharRig(t, nil)
+	q := r.req("mestre", presets.AgentClaudeCode, sessionzero.RoleTableMaster)
+	r.prepare(q)
+	mine := filepath.Join(r.dir, ".mestre", "agents", "mestre", ".claude", "skills", "mestre-minha", "SKILL.md")
+	write(t, mine, "feita à mão\n")
+	if _, err := r.ch.Prepare(r.ctx, q); err == nil || !strings.Contains(err.Error(), "mestre-minha") {
+		t.Fatalf("Prepare = %v; want the report of mestre-minha", err)
+	}
+	if read(t, mine) != "feita à mão\n" {
+		t.Fatal("the skill of the person was removed")
+	}
+}
