@@ -57,19 +57,29 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 		params map[string]any
 	}
 	var items []item
+	// every message to a user says where it comes from
+	head := headOf(o.UserID, o.Workspace, o.Mesa)
 	parts := Split(text, partSize)
 	if len(parts) > MaxParts {
 		summary := Split(text, 600)[0] + "\n\n(o texto completo vai no arquivo abaixo)"
+		whole := text
+		if head != "" {
+			whole = head + "\n\n" + text
+		}
 		parts = []string{summary}
-		items = append(items, item{"sendDocument", map[string]any{"chat_id": o.ChatID, "caption": "Texto completo", "filename": "mensagem.md", "content": text}})
+		items = append(items, item{"sendDocument", map[string]any{"chat_id": o.ChatID, "caption": "Texto completo", "filename": "mensagem.md", "content": whole}})
 	}
 	var msgs []item
-	for _, p := range parts {
+	for i, p := range parts {
+		hd := ""
+		if i == 0 {
+			hd = head
+		}
 		params := map[string]any{"chat_id": o.ChatID}
-		if h, err := ToHTML(p); err == nil {
-			params["text"], params["parse_mode"], params["_plain"] = b.o.Mask(h), "HTML", p
+		if h, plain, ok := render(hd, p); ok {
+			params["text"], params["parse_mode"], params["_plain"] = b.o.Mask(h), "HTML", plain
 		} else {
-			params["text"] = p // the conversion failed: plain text
+			params["text"] = plain // the conversion failed: plain text
 		}
 		msgs = append(msgs, item{"sendMessage", params})
 	}
@@ -336,8 +346,8 @@ func (b *Bot) sent(ctx context.Context, q queued, msgID int64) error {
 		if msgID == 0 {
 			return nil
 		}
-		_, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO bot_messages (chat_id, message_id, workspace, mesa, origin, at) VALUES (?, ?, ?, ?, ?, ?)`,
-			q.chat, msgID, q.workspace, q.mesa, q.origin, ms(b.clk.Now()))
+		_, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO bot_messages (chat_id, message_id, workspace, mesa, origin, at, actions) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			q.chat, msgID, q.workspace, q.mesa, q.origin, ms(b.clk.Now()), labelsOf(q.params))
 		return err
 	})
 }

@@ -147,6 +147,24 @@ func (s *Server) UserSendsText(u User, chat Chat, text string) (int64, error) {
 	return id, nil
 }
 
+// UserRepliesText is UserSendsText as a reply to a message of the bot (the
+// threaded reply): the update carries reply_to_message with that message_id.
+func (s *Server) UserRepliesText(u User, chat Chat, text string, replyTo int64) (int64, error) {
+	id, err := s.UserSendsText(u, chat, text)
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, upd := range s.updates {
+		if n, _ := upd["update_id"].(int64); n == id {
+			msg, _ := upd["message"].(map[string]any)
+			msg["reply_to_message"] = map[string]any{"message_id": replyTo, "date": s.clk.Now().Unix(), "chat": map[string]any{"id": chat.ID, "type": chat.Type}, "from": map[string]any{"id": int64(1), "is_bot": true, "first_name": "Mestre"}, "text": "."}
+		}
+	}
+	return id, nil
+}
+
 // Sent returns what the bot sent so far.
 func (s *Server) Sent() []Sent {
 	s.mu.Lock()

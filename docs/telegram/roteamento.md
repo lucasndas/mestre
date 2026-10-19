@@ -82,6 +82,8 @@ flowchart TD
 - Comandos rápidos não passam pelo roteamento. O argumento opcional deles indica o escopo ([bot](bot.md#comandos-rápidos)).
 - O painel tem o seletor de workspace na própria tela ([conversa no painel](../painel/conversa-e-aprovacoes.md)). Lá, as regras desta página não se aplicam.
 
+- **Implementação:** `telegram.Routing` é o `Router` do bot: escolhe o workspace pelas três regras (o usuário e a lista de workspaces são relidos do banco a cada mensagem) e entrega a um `Deliverer`; o motor liga esse ao `inbox.Service` do Grão-Mestre com `telegram.NewItem` (a origem guarda o chat, a mensagem, a resposta encadeada e a mesa). O ativo e as mensagens que esperam a escolha ficam em `telegram_active` e `telegram_pending`; o que cada mensagem do bot permitia, em `bot_messages.actions`, para a resposta a "Sistema". O cabeçalho é posto por `Bot.Send` e `Bot.Edit` em toda mensagem a um usuário (a resposta a quem não é usuário fica sem). Os avisos de bloqueio e de cota e a mensagem de progresso nascem em outros marcos e já saem pelo mesmo `Send`.
+
 ## Critérios de aceite
 
 - **CA-ROTA-01** · *rápida* — **Dado** um usuário com workspace ativo A, **quando** ele responde a uma mensagem do bot do workspace B, **então** a mensagem vai ao Grão-Mestre de B e o ativo continua A.

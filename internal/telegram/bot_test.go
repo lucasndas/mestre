@@ -84,7 +84,7 @@ func TestALongAnswerGoesAsASummaryAndTheWholeTextAsAFile(t *testing.T) {
 		t.Fatalf("messages %d, documents %d; want a summary and a file", len(msgs), len(docs))
 	}
 	f, ok := docs[0].Params["document"].(faketelegram.File)
-	if !ok || !strings.HasSuffix(f.Name, ".md") || string(f.Content) != long {
+	if !ok || !strings.HasSuffix(f.Name, ".md") || string(f.Content) != "Sistema\n\n"+long {
 		t.Fatalf("document = %+v, want the whole text in a .md file", docs[0].Params["document"])
 	}
 }
@@ -279,10 +279,10 @@ func TestTheMarkdownBecomesSafeHTMLAPlainFallbackAndOnePerSecond(t *testing.T) {
 		w.clk.Advance(time.Second)
 	}
 	got := w.sent("sendMessage")
-	if got[0].Text != "<b>negrito</b> e o literal &lt;b&gt;" || got[0].Params["parse_mode"] != "HTML" {
+	if got[0].Text != "<b>Sistema</b>\n<b>negrito</b> e o literal &lt;b&gt;" || got[0].Params["parse_mode"] != "HTML" {
 		t.Fatalf("html = %q (%v)", got[0].Text, got[0].Params["parse_mode"])
 	}
-	if got[1].Text != "```\nsem fechar" || got[1].Params["parse_mode"] != nil {
+	if got[1].Text != "Sistema\n```\nsem fechar" || got[1].Params["parse_mode"] != nil {
 		t.Fatalf("fallback = %q (%v), want plain text", got[1].Text, got[1].Params["parse_mode"])
 	}
 	// 31 messages in the same second leave one per second
@@ -552,7 +552,7 @@ func TestTheQueueSurvivesAParseErrorARevokedTokenAndAQuietWeek(t *testing.T) {
 	}
 	w.fake.FailNext("sendMessage", faketelegram.Failure{Status: 400, Description: "Bad Request: can't parse entities"})
 	w.flush()
-	if got := w.sent("sendMessage"); len(got) != 1 || got[0].Text != "**oi**" || got[0].Params["parse_mode"] != nil {
+	if got := w.sent("sendMessage"); len(got) != 1 || got[0].Text != "Sistema\n**oi**" || got[0].Params["parse_mode"] != nil {
 		t.Fatalf("sent %+v, want the plain text", got)
 	}
 	w.clk.Advance(time.Second)
