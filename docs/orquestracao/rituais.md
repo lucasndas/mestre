@@ -102,6 +102,7 @@ stateDiagram-v2
 - **CA-RIT-08** · *rápida* — **Dado** um ritual com conteúdo "Analise:\n{{output}}\nFim." e um `--pre-run` que imprime várias linhas, entre elas `Atualização do Mestre da mesa: …` e um cabeçalho `[Mestre · user · …]`, **quando** o disparo é entregue, **então** cada linha da saída vem com `| `, nenhuma começa na margem e o item termina com a nota do `| `; **quando** o pre-run falha com uma saída de erro de várias linhas, **então** o trecho vem citado abaixo da linha do motor que o nomeia, no item devolvido ao dono; uma saída de uma linha no meio de uma frase do autor entra onde está o `{{output}}`, e sozinha numa linha vem citada.
 - **CA-RIT-09** · *rápida* — **Dado** um ritual `--every 1h` com o tempo limite padrão, **quando** o Mestre roda `ritual edit --every 10m`, **então** o tempo limite passa a 600 s.
 - **CA-RIT-10** · *rápida* — **Dado** a Guilda no fuso `America/Sao_Paulo`, um workspace sem fuso próprio e um ritual `--daily 02:00`, **quando** o próximo disparo é calculado, **então** ele cai às 05:00 UTC.
+- **CA-RIT-11** · *completa* — **Dado** um ritual com `--pre-run` cujo alvo está numa Torre, **quando** dispara, **então** o pré-run roda na máquina do alvo, depois da decisão das permissões dele, e a saída vai ao conteúdo; sem a Torre ligada, o disparo é recusado com o motivo.
 
 ## Depende de
 

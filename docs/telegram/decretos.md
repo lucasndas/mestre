@@ -116,6 +116,7 @@ Cada decreto fica no banco da Cidadela com:
 - Um decreto fora dos workspaces do autor é recusado.
 - Um decreto que libera algo numa [invariante arquitetural](../arquitetura/precedencia.md#invariantes-arquiteturais) (ex.: "o Dev pode enviar a branch da mesa") é **cumprido pelo motor**, nunca entregando a capacidade ao agente: o `git push` continua negado ao Dev, e o envio da branch é feito pelo motor quando o Dev roda `mestre pr open|update`. O que nem o motor pode fazer (contornar proteção do GitHub, entregar segredo do cofre a um agente) é recusado antes da confirmação, com a explicação.
 - Se a proposta do Grão-Mestre não bate com a confirmação do usuário, nada é gravado.
+- Um decreto que tenta mudar a classe `orquestrador` em si (campos, regras fixas ou `files.deny` da classe, e não uma liberação como a de qualquer personagem) é recusado antes da confirmação, com o motivo; o que o decreto de pessoa pode é liberar algo a um orquestrador, que vale como para qualquer personagem ([classe orquestrador](../classes/classe-orquestrador.md); CA-DEC-12).
 
 ## Critérios de aceite
 
@@ -130,6 +131,7 @@ Cada decreto fica no banco da Cidadela com:
 - **CA-DEC-08** · *pesada* — **Dado** o sistema instalado, **quando** o Dono cria pelo Telegram (dublê) um decreto permanente, vê o efeito num agente e o revoga, **então** o comportamento muda e volta, e o registro mostra os dois momentos (MVP-8).
 - **CA-DEC-09** · *rápida* — **Dado** o decreto "o Dev pode enviar a branch da mesa" ativo, **quando** o Dev tenta `git push`, **então** o `mestre hook` continua negando; **quando** o Dev roda `mestre pr update`, **então** o motor envia a branch da mesa com o App da classe e registra a execução no decreto; **dado** um decreto "pode ignorar a revisão obrigatória", **então** ele é recusado antes da confirmação com a explicação.
 - **CA-DEC-11** · *rápida* — **Dado** um Administrador que responde "Negar sempre" a um pedido, **quando** confirma, **então** nasce o decreto permanente que nega sem pedir PIN; **dado** que ele propõe um decreto permanente que libera, **então** o PIN é pedido; **dado** a regra temporária de mesa ativa, **quando** `/decretos` roda, **então** ela aparece marcada com **Revogar**, e o toque de um Aprovador é recusado.
+- **CA-DEC-12** · *rápida* — **Dado** um Administrador que pede um decreto que altera a classe `orquestrador` (por exemplo, tirar uma regra fixa dela), **quando** o decreto é proposto, **então** é recusado antes da confirmação, nada é gravado e a classe segue como estava; **dado** um decreto que libera uma ação a um orquestrador, **então** ele é aceito e vale como para qualquer personagem.
 
 ## Depende de
 

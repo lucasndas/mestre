@@ -61,6 +61,8 @@ Toda ação usa a mesma API do motor que a CLI usa; as regras são as do documen
 | Salvar seleção como grimório e restaurar em outra mesa | botão na barra da seleção | [grimórios](../orquestracao/grimorios.md) |
 | Ver e editar rituais da mesa | painel lateral | [rituais](../orquestracao/rituais.md) |
 
+Depois de `mestre recruit --replace`, o nó do personagem novo fica na posição do antigo, com as mesmas conexões ([coordenação](../cli/coordenacao.md); a parte do canvas de CA-CLI-COORD-04 é do M6).
+
 ### Operador do PC
 
 - Enquanto uma sessão do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) está ativa, uma faixa fixa no topo de todas as telas do painel, para os usuários daquele workspace, mostra máquina, tarefa, "até HH:MM" e a contagem regressiva, com o botão **Encerrar agora** para quem tem o nível ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).

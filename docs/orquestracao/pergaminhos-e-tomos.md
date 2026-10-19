@@ -86,6 +86,7 @@ Pergaminhos e tomos são salvos em [grimórios](grimorios.md).
 - **CA-PERG-07** · *rápida* — **Dado** o Grão-Mestre, **quando** chama `mestre note create`, **então** é recusado porque pergaminhos só existem em mesas, e nenhum arquivo é criado fora de `.mestre/mesas/`.
 - **CA-PERG-08** · *rápida* — **Dado** o resumo de encerramento de um personagem com uma linha `## Encerramento · …` e uma linha `**Resumo:** …` falsas, **quando** o motor acrescenta a seção ao pergaminho, **então** o resumo vem citado com `> ` abaixo do rótulo e o pergaminho tem uma só seção desse encerramento.
 - **CA-PERG-09** · *rápida* — **Dado** uma mesa com pergaminhos e uma Torre que não responde, **quando** um personagem nasce, **então** as cópias dos pergaminhos da mesa são pedidas para o worktree dele, e a Torre que não responde não impede nem faz falhar as cópias das outras.
+- **CA-PERG-10** · *completa* — **Dado** uma mesa com pergaminhos e um personagem que nasce numa Torre pela conexão WSS, **quando** ele nasce, **então** as cópias somente leitura chegam ao worktree da Torre e uma alteração posterior do pergaminho é copiada de novo.
 
 ## Depende de
 

@@ -272,6 +272,22 @@ func (p *RulesPublisher) publish(ctx context.Context, ch characters.Character) e
 	return p.Sender.SendRules(ctx, ch.Machine, msg)
 }
 
+// PublishAll builds and sends the rules of every character that is alive, as the
+// lock of the channel changed them (the Towers learn it from here).
+func (p *RulesPublisher) PublishAll(ctx context.Context) error {
+	alive, err := p.Classes.o.Registry.Alive(ctx)
+	if err != nil {
+		return err
+	}
+	var first error
+	for _, ch := range alive {
+		if err := p.publish(ctx, ch); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
 // PublishTable sends the rules of every living character of a class in a
 // table (the temporary table rules of the class changed). It tries all of
 // them and returns what failed.

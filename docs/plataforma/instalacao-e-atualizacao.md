@@ -83,6 +83,7 @@ Sem opções, preserva os dados do que sobra; com `--purge`, apaga também as pa
 - Rodar de novo numa máquina já instalada não duplica nada: confere e completa o que falta (contas, direitos, privilégios, pastas, serviços, regras) e, numa máquina que já está numa Guilda, não procura outra; numa máquina fora de qualquer Guilda (removida, ou que a perdeu), procura de novo.
 - Falha no meio da instalação → mostra o passo que falhou e como repetir; nada do que já foi criado é apagado sozinho.
 - O Guardião nunca é trocado por ação de cura ([Guardião](../autocura/guardiao.md#proteções)).
+- Backup restaurado numa máquina nova: o motor gera um **id de geração** novo a cada restauração e o manda no `hello` e na meta da cópia completa; a Torre que vê a geração mudar pede cópia completa em vez de seguir pelo `lsn` ([replicação](../guilda/replicacao.md#banco-cópia-completa-e-envio-contínuo); CA-INST-19).
 
 ## Critérios de aceite
 
@@ -100,6 +101,8 @@ Sem opções, preserva os dados do que sobra; com `--purge`, apaga também as pa
 - **CA-INST-15** · *rápida* — **Dado** uma máquina nova que entra na Guilda e dublês de rede, **quando** a entrada termina, **então** ela recebe os arquivos do Whisper e roda o benchmark; **quando** o Dono a exclui, **então** os arquivos são apagados, a não ser que a transcrição dela esteja ativada no painel.
 - **CA-INST-16** · *completa* — **Dado** duas instâncias na mesma máquina, com personagens do agente falso, uma mesa aberta, uma espera e um item na fila de saída, **quando** o processo do motor de cada uma é encerrado à força e iniciado de novo, **então** personagens, mesa, espera e fila voltam ao estado anterior.
 - **CA-INST-17** · *pesada* — **Dado** a instalação no Linux e no Windows, **quando** reinicio cada máquina, **então** os serviços sobem sozinhos com o sistema e o estado volta como no CA-INST-16 (MVP-12, MVP-13).
+- **CA-INST-18** · *pesada* — **Dado** a instalação, **quando** um personagem começa, **então** o motor usa o socket do lançador do serviço e a pasta e a versão instaladas do `mestre-pty`, e o terminal é real (MVP-13).
+- **CA-INST-19** · *completa* — **Dado** uma Cidadela restaurada de um backup, na mesma época, e uma Torre que já usou `lsn` além do backup, **quando** a Torre conecta, **então** o `hello` e a meta trazem um id de geração novo, a Torre pede cópia completa e não aplica registros com `lsn` repetido; **dado** a mesma Cidadela sem restauração, **então** o id não muda e a Torre segue pelo `lsn`.
 
 ## Depende de
 
