@@ -47,16 +47,67 @@ func (s *Server) AddPullFile(full string, n int, path, patch string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.repos[full].pull(n)
-	p.files = append(p.files, map[string]any{"filename": path, "patch": patch, "status": "modified"})
+	adds, dels := 0, 0
+	for _, l := range strings.Split(patch, "\n") {
+		switch {
+		case strings.HasPrefix(l, "+"):
+			adds++
+		case strings.HasPrefix(l, "-"):
+			dels++
+		}
+	}
+	p.files = append(p.files, map[string]any{"filename": path, "patch": patch, "status": "modified", "additions": adds, "deletions": dels})
 }
 
-// AddReview adds a review (APPROVED, CHANGES_REQUESTED, COMMENTED).
+// AddPullFileOf adds a file to the diff with the status GitHub gives it (added,
+// removed, renamed), where it was before, and the counts it reports (the patch
+// may be empty: a file too big or binary).
+func (s *Server) AddPullFileOf(full string, n int, path, patch, status, previous string, additions, deletions int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.repos[full].pull(n)
+	f := map[string]any{"filename": path, "patch": patch, "status": status, "additions": additions, "deletions": deletions}
+	if previous != "" {
+		f["previous_filename"] = previous
+	}
+	p.files = append(p.files, f)
+}
+
+// SetPullAuthor sets who opened a PR.
+func (s *Server) SetPullAuthor(full string, n int, login string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repos[full].issues[n-1]["user"] = map[string]any{"login": login}
+}
+
+// AddReview adds a review (APPROVED, CHANGES_REQUESTED, COMMENTED) on the head
+// the PR has now.
 func (s *Server) AddReview(full string, n int, by, state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.repos[full].pull(n)
-	p.reviews = append(p.reviews, map[string]any{"id": s.nextID, "user": map[string]any{"login": by}, "state": state})
+	p.reviews = append(p.reviews, map[string]any{"id": s.nextID, "user": map[string]any{"login": by}, "state": state, "commit_id": p.headSHA})
 	s.nextID++
+}
+
+// AddReviewAt adds a review made on the commit sha.
+func (s *Server) AddReviewAt(full string, n int, by, state, sha string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.repos[full].pull(n)
+	p.reviews = append(p.reviews, map[string]any{"id": s.nextID, "user": map[string]any{"login": by}, "state": state, "commit_id": sha})
+	s.nextID++
+}
+
+// AddStatus adds a legacy commit status (success, pending, failure, error).
+func (s *Server) AddStatus(full, sha, context, state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rp := s.repos[full]
+	if rp.statuses == nil {
+		rp.statuses = map[string][]map[string]any{}
+	}
+	rp.statuses[sha] = append(rp.statuses[sha], map[string]any{"context": context, "state": state})
 }
 
 // AddCheck adds a check run to a commit; conclusion "" is one still running.
@@ -98,7 +149,7 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 	case parts[3] == "pulls" && len(parts) == 6 && (parts[5] == "reviews" || parts[5] == "files") && r.Method == http.MethodGet:
 	case parts[3] == "pulls" && len(parts) == 6 && parts[5] == "comments" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 	case parts[3] == "pulls" && len(parts) == 8 && parts[5] == "comments" && parts[7] == "replies" && r.Method == http.MethodPost:
-	case parts[3] == "commits" && len(parts) == 6 && parts[5] == "check-runs" && r.Method == http.MethodGet:
+	case parts[3] == "commits" && len(parts) == 6 && (parts[5] == "check-runs" || parts[5] == "status") && r.Method == http.MethodGet:
 	default:
 		return false
 	}
@@ -115,6 +166,24 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 	s.mu.Unlock()
 	if rp == nil {
 		return notFound()
+	}
+	if parts[3] == "commits" && parts[5] == "status" {
+		s.mu.Lock()
+		list := append([]map[string]any(nil), rp.statuses[parts[4]]...)
+		s.mu.Unlock()
+		state := "success"
+		for _, st := range list {
+			switch st["state"] {
+			case "failure", "error":
+				state = "failure"
+			case "pending":
+				if state != "failure" {
+					state = "pending"
+				}
+			}
+		}
+		s.write(w, r, inst, http.StatusOK, map[string]any{"state": state, "statuses": list})
+		return true
 	}
 	if parts[3] == "commits" {
 		s.mu.Lock()
@@ -224,7 +293,7 @@ func (s *Server) pullView(rp *repo, full string, n int, head [2]string) map[stri
 	px := rp.pull(n)
 	is := rp.issues[n-1]
 	return map[string]any{
-		"number": n, "node_id": fmt.Sprintf("PR_%s_%d", full, n), "title": is["title"], "body": is["body"], "state": px.state, "draft": px.draft, "merged": px.merged,
+		"number": n, "node_id": fmt.Sprintf("PR_%s_%d", full, n), "title": is["title"], "body": is["body"], "user": is["user"], "state": px.state, "draft": px.draft, "merged": px.merged,
 		"mergeable_state": px.mergeableState, "html_url": fmt.Sprintf("https://github.com/%s/pull/%d", full, n),
 		"head": map[string]any{"ref": head[0], "sha": px.headSHA, "repo": map[string]any{"full_name": head[1]}},
 		"base": map[string]any{"ref": px.baseRef},
@@ -362,4 +431,15 @@ func (s *Server) SetPullBody(full string, n int, body string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.repos[full].issues[n-1]["body"] = body
+}
+
+// SetPullState closes or merges a PR, or moves its base.
+func (s *Server) SetPullState(full string, n int, state string, merged bool, base string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.repos[full].pull(n)
+	p.state, p.merged = state, merged
+	if base != "" {
+		p.baseRef = base
+	}
 }
