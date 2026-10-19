@@ -783,26 +783,37 @@ func (r *Replica) dropVault(ctx context.Context) (bool, error) {
 	if r.dropRestrictedFolders() {
 		erased = true
 	}
+	// What the machine kept from when it was the Citadel is a whole copy of the
+	// main database, vault tables included. A failure (on Windows, a file still
+	// open) is retried like a purge that was left incomplete.
+	n, lerr := r.eraseLeftovers()
+	if lerr != nil {
+		r.setPurgeOwed(true)
+	}
+	if n > 0 {
+		erased = true
+	}
 	if !erased {
 		var rows int
 		for _, t := range VaultTables {
 			var n int
 			if err := r.cfg.DB.Reader().QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, t).Scan(&n); err != nil {
-				return false, err
+				return false, errors.Join(lerr, err)
 			}
 			if n == 0 {
 				continue
 			}
 			if err := r.cfg.DB.Reader().QueryRowContext(ctx, `SELECT count(*) FROM `+t).Scan(&n); err != nil {
-				return false, err
+				return false, errors.Join(lerr, err)
 			}
 			rows += n
 		}
 		if rows == 0 {
-			return false, nil
+			return false, lerr
 		}
 	}
-	return true, r.purgeVault(ctx)
+	// The purge of the replica runs even when a leftover could not be erased.
+	return true, errors.Join(lerr, r.purgeVault(ctx))
 }
 
 // dropPendingCopies removes the full copies still arriving: they hold the
@@ -928,29 +939,47 @@ func (r *Replica) Wipe(ctx context.Context, _ string) error {
 		}
 	}
 	if r.cfg.TransferDir != "" {
-		errs = append(errs, eraseEntries(r.cfg.TransferDir, ""))
+		_, err := eraseEntries(r.cfg.TransferDir, "")
+		errs = append(errs, err)
 	}
-	for _, l := range r.cfg.Leftovers {
-		errs = append(errs, eraseEntries(l.Dir, l.Prefix))
-	}
+	_, err := r.eraseLeftovers()
+	errs = append(errs, err)
 	return errors.Join(errs...)
+}
+
+// eraseLeftovers removes what the machine kept from the time it was the
+// Citadel and says how many entries went.
+func (r *Replica) eraseLeftovers() (int, error) {
+	total := 0
+	var errs []error
+	for _, l := range r.cfg.Leftovers {
+		n, err := eraseEntries(l.Dir, l.Prefix)
+		total += n
+		errs = append(errs, err)
+	}
+	return total, errors.Join(errs...)
 }
 
 // eraseEntries removes what is in dir whose name starts with prefix; a folder
 // that is not there has nothing to erase.
-func eraseEntries(dir, prefix string) error {
+func eraseEntries(dir, prefix string) (int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil
+			return 0, nil
 		}
-		return err
+		return 0, err
 	}
 	var errs []error
+	n := 0
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), prefix) {
-			errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
+			if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			n++
 		}
 	}
-	return errors.Join(errs...)
+	return n, errors.Join(errs...)
 }

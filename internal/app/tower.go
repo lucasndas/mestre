@@ -657,6 +657,10 @@ func (e *Engine) reportDiscarded(ctx context.Context, db *store.DB, link *protoc
 	defer tick.Stop()
 	for len(files) > 0 {
 		for epoch, path := range files {
+			if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+				delete(files, epoch) // erased by the exclusion or the leaving: nothing left to report
+				continue
+			}
 			if e.epochs.Epoch() <= epoch {
 				continue // the certificate of the epoch that replaced it is not known yet
 			}
@@ -666,6 +670,13 @@ func (e *Engine) reportDiscarded(ctx context.Context, db *store.DB, link *protoc
 			}
 			r, err := e.listDiscarded(ctx, path, epoch, rec.FromLSN, link)
 			if err != nil {
+				if fi, serr := os.Stat(path); serr == nil && fi.Size() == 0 {
+					// The exclusion erased it while it was being opened and the
+					// opening made an empty file again.
+					_ = os.Remove(path)
+					delete(files, epoch)
+					continue
+				}
 				e.log.Error("app: listing the discarded transactions", "file", path, "err", err)
 				continue
 			}
