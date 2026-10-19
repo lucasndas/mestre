@@ -94,6 +94,8 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - Mais de 100 sub-issues num pai: recusado com explicação.
 - **Época:** toda ação no GitHub (envio, comentário, review, merge, criação de issue) só sai com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)); uma Torre ou uma Cidadela suspensa não faz nenhuma ação e registra a recusa na auditoria. Assim duas Cidadelas nunca agem no mesmo repositório.
 
+- **Implementação:** `internal/github` tem o registro `github_objects` (`Objects`), a conferência do alvo e dos rótulos reservados (`Guard`, `CheckLabels`, `CheckForce`), o marcador de operação (`NewOp`, `WithMarker`, `Guard.PostOnce`) e o cliente REST das leituras. O envio pelo espelho, o push, o merge e o gate de frescor vêm com a CLI de issues e PRs e a [aprovação no GitHub](aprovacao-no-github.md): CA-GH-ACOES-06, 07, 09, 11, 12, 13 e 15 ficam para elas.
+
 ## Critérios de aceite
 
 - **CA-GH-ACOES-01** · *rápida* — **Dado** a issue `#57` registrada para a mesa A, **quando** um personagem da mesa B pede `mestre issue comment 57`, **então** o motor recusa e cita o épico dono.
