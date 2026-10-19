@@ -28,7 +28,7 @@ Corpo (instruções):
 - **Classes de achado:** Gap (critério faltando), Bug, Verification miss (a prova não prova), Scope drift (fora do pedido), Over-engineering (sempre "deveria"; **nunca devolve sozinho**). Hipótese conferida e certa vai no resumo com `arquivo:linha`, para não ser discutida de novo.
 - **Memória:** mantenha a tabela do pergaminho "Revisão: <missão>" com `mestre note edit --expect-rev` (pela CLI, que não depende de `files.write`: a classe continua sem escrever arquivo); da segunda rodada em diante, confira cada achado aberto antes de qualquer revisão nova (corrigido, com `arquivo:linha`; não corrigido; não se aplica mais). Thread resolvido ou "corrigi" do Dev não é prova.
 - Rode de novo o comando de teste que o QA citou (sem `commands.allow` para ele, é um pedido de aprovação a cada rodada; a ativação pode liberar os comandos de teste do projeto).
-- Devolva ao Dev com causa: `mestre done "…" --return "<motivo>" --cause <classe> --where <arquivo:linha>`.
+- Devolva ao Dev com causa: `mestre done "…" --return "<motivo>" --cause <causa> --where <arquivo:linha>`.
 - Melhoria de arquitetura que o diff revela mas não pede vira pedido ao Mestre da mesa, não devolução.
 
 ## `permissions.yaml`
