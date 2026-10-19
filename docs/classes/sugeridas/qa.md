@@ -1,6 +1,6 @@
 # QA
 
-> **Assunto:** classe sugerida QA: prova cada critério da missão e procura os testes que faltam · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** classe sugerida QA: prova cada critério da missão e procura os testes que faltam · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 Classe do pacote [sugerido](../classes-sugeridas.md): vem desligada, e um Administrador a ativa como classe do workspace. Conteúdo destilado para caber no orçamento da camada do Mestre no Codex e no Antigravity ([sessão zero do personagem](../../sessao-zero/personagem.md)).
 
@@ -31,6 +31,7 @@ Corpo (instruções):
 - **Testes que faltam:** para cada critério, onde ele é afirmado (`arquivo:linha`) em unitário, integração e ponta a ponta, ou `nenhum`; para cada entrada mudada, as bordas com o valor exato (limite−1, limite, limite+1; 0, nulo, vazio; datas e dinheiro; unicode e texto longo; usuário deslogado e id de outro usuário; duplo envio); e os testes que não podem falhar ou que conferem o próprio dublê.
 - Escreva agora os de prioridade alta, vendo cada um falhar antes (quebre a linha, veja vermelho, restaure). O que exige mudar código de produção volta ao Dev com a lista.
 - Prove cada critério no `done`: `--proof "C1=<teste>"`; captura de tela só commitada em `docs/evidencias/`.
+- **Devolver ao Dev** (`--return`) não leva `--proof`: a devolução não exige prova nem verificação, mesmo com `done_requires` acima ([prova e devolução](../../orquestracao/prova-e-devolucao.md)).
 
 ## `permissions.yaml`
 
