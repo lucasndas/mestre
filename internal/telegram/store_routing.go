@@ -39,7 +39,7 @@ func (s *Store) SetActive(ctx context.Context, userID, workspace string) error {
 
 // Workspaces are the workspaces that exist, sorted.
 func (s *Store) Workspaces(ctx context.Context) ([]string, error) {
-	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT slug FROM workspaces ORDER BY slug`)
+	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT slug FROM workspaces WHERE state <> 'preparing' ORDER BY slug`)
 	if err != nil {
 		return nil, err
 	}
@@ -59,15 +59,15 @@ func (s *Store) Workspaces(ctx context.Context) ([]string, error) {
 // chosen one: it is delivered when he does.
 func (s *Store) Park(ctx context.Context, in Inbound) error {
 	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_pending (user_id, kind, text, chat_id, message_id, at) VALUES (?, ?, ?, ?, ?, ?)`,
-			in.User.ID, string(in.Kind), in.Text, in.ChatID, in.MessageID, ms(s.Clock.Now()))
+		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_pending (user_id, kind, text, chat_id, message_id, reply_to, at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			in.User.ID, string(in.Kind), in.Text, in.ChatID, in.MessageID, in.ReplyToMessage, ms(s.Clock.Now()))
 		return err
 	})
 }
 
 // Parked lists the messages the user parked that are still alive, oldest first.
 func (s *Store) Parked(ctx context.Context, userID string) ([]HeldMessage, error) {
-	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, kind, text, chat_id, message_id FROM telegram_pending WHERE user_id = ? AND at > ? ORDER BY id`,
+	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, kind, text, chat_id, message_id, reply_to FROM telegram_pending WHERE user_id = ? AND at > ? ORDER BY id`,
 		userID, ms(s.Clock.Now().Add(-PendingLife)))
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (s *Store) Parked(ctx context.Context, userID string) ([]HeldMessage, error
 	for rows.Next() {
 		var h HeldMessage
 		var kind string
-		if err := rows.Scan(&h.ID, &kind, &h.Text, &h.ChatID, &h.MessageID); err != nil {
+		if err := rows.Scan(&h.ID, &kind, &h.Text, &h.ChatID, &h.MessageID, &h.ReplyToMessage); err != nil {
 			return nil, err
 		}
 		h.UserID, h.Kind = userID, Kind(kind)

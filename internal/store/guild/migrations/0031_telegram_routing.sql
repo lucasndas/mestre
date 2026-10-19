@@ -17,6 +17,7 @@ CREATE TABLE telegram_pending (
 	text    TEXT    NOT NULL,
 	chat_id INTEGER NOT NULL,
 	message_id INTEGER NOT NULL,
+	reply_to INTEGER NOT NULL DEFAULT 0,
 	at      INTEGER NOT NULL
 );
 
