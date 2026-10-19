@@ -1,6 +1,6 @@
 # Ficha da máquina
 
-> **Assunto:** o que cada máquina informa à Guilda (ficha da máquina), como a ficha se atualiza sozinha, os requisitos de bases, fichas e classes e o casamento requisito × ficha · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** o que cada máquina informa à Guilda (ficha da máquina), como a ficha se atualiza sozinha, os requisitos de bases, fichas e classes e o casamento requisito × ficha · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -63,6 +63,10 @@ Bases, fichas de personagem e classes podem declarar `requires` ([bases e fichas
 - **Nenhuma atende:** o personagem **não roda em outra máquina**. A criação falha com o motivo de cada máquina, e o Dono é avisado pelo Telegram e pelo painel, com o que falta em cada uma; quem pediu (o Mestre da mesa, por exemplo) recebe o mesmo motivo ([coordenação](../cli/coordenacao.md)).
 - **Durante a vida do personagem:** se a máquina deixa de atender (o login do perfil caiu, por exemplo), o personagem continua até o próximo reinício; ao reiniciar, a escolha é feita de novo, e o aviso ao Dono vale do mesmo jeito.
 - O Grão-Mestre roda sempre na Cidadela ([Cidadela e Torres](cidadela-e-torres.md)); o checklist avisa quando uma máquina não excluída não atende aos requisitos da ficha dele.
+
+### Melhor ficha
+
+O desempate da [eleição da Torre condutora](../autocura/camadas.md#eleição-da-torre-condutora) compara, nesta ordem: com GPU (`gpus[]` não vazio) antes de sem; maior `cpu_cores`; maior `mem_bytes`. Igual nos três, decide o menor `machine_id`.
 
 ### No código
 

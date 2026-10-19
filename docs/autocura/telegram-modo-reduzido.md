@@ -1,6 +1,6 @@
 # Telegram em modo reduzido
 
-> **Assunto:** o Guardião da Torre condutora (ou o da Cidadela, no modo máquina única) assume o bot quando a Cidadela cai: o que aceita, pedido de promoção, um só leitor, exceção à trava de época e devolução à Cidadela · **Componente:** Guardião · **Atualizado:** 2026-10-13
+> **Assunto:** o Guardião da Torre condutora (ou o da Cidadela, no modo máquina única) assume o bot quando a Cidadela cai: o que aceita, pedido de promoção, um só leitor, exceção à trava de época e devolução à Cidadela · **Componente:** Guardião · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ Manter os usuários avisados e permitir aprovar curas e a promoção de uma Torr
 - Assume o **Guardião da Torre condutora** (qualquer Torre pode sê-lo), escolhida pela [eleição](camadas.md#eleição-da-torre-condutora), assim que ganha a trava da eleição (ou, sem árbitro, assim que assume pela sondagem).
 - No [modo máquina única](camadas.md#modo-máquina-única), não há eleição: assume o **Guardião da Cidadela**, quando a camada 2 desiste. A devolução abaixo é igual, pelo canal local em vez da WSS.
 - Usa o token do bot e a lista de usuários da [réplica dos Guardiões](../plataforma/cofre.md#réplica-para-os-guardiões): é a **única** abertura de segredo fora da Cidadela, e só para isto. Uma máquina excluída pelo Dono não tem o token e não conduz o modo reduzido.
-- **Sem trava de época:** o modo reduzido não confere a trava de época no GitHub, porque não age como Cidadela: só envia alertas e recebe Promover, Esperar e `/status` (mais as aprovações de cura). É a exceção registrada em [época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing).
+- **Sem trava de época:** a exceção, e o que ela cobre, é a de [época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing) (alertas, `/status`, aprovações de cura, Promover e Esperar); nada além disso.
 - Antes de ler, carrega o último `update_id` processado que a Cidadela mandou na réplica, para não repetir updates já tratados.
 - Lê por long polling, como a Cidadela ([bot](../telegram/bot.md#recepção-por-long-polling)), com `allowed_updates=["message","callback_query"]`.
 
@@ -22,8 +22,8 @@ Manter os usuários avisados e permitir aprovar curas e a promoção de uma Torr
 | Entrada | Resposta |
 |---|---|
 | `/status` | Cidadela (desde quando está fora), Torres, época, incidente e camada atual, Torre condutora, link da [página reserva](pagina-reserva.md) |
-| Botões de aprovação de cura (Aprovar / Negar / Ver detalhes) | scripts de diagnóstico seguem o [diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação); o `rollback` com restauração do banco mostra antes o intervalo que será perdido ([Guardião](guardiao.md#rollback-com-restauração-do-banco)); o PIN é pedido do mesmo jeito que na Cidadela ([PIN](../telegram/usuarios-e-niveis.md#pin-pessoal)) |
-| Botões do pedido de promoção (**Promover** / **Esperar**) | só o Dono; **Promover** pede o PIN, conferido na cópia de usuários do Guardião ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); confirmado, a promoção segue [Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção) |
+| Botões de aprovação de cura (Aprovar / Negar / Ver detalhes) | scripts de diagnóstico seguem o [diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação); o `rollback` com restauração do banco mostra antes o intervalo que será perdido ([Guardião](guardiao.md#rollback-com-restauração-do-banco)); o PIN é pedido do mesmo jeito que na Cidadela, com o mesmo bloqueio, contado no Guardião ([página reserva](pagina-reserva.md#login)) |
+| Botões do pedido de promoção (**Promover** / **Esperar**) | só o Dono; **Promover** pede o PIN, conferido na cópia de usuários do Guardião ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)); confirmado, o Guardião manda `citadel.promote` e a promoção segue [Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção). **Esperar** só adia (o pedido segue aberto, sem decisão, e o lembrete volta em 1 h) |
 | Qualquer outra mensagem ou comando | resposta fixa: "Sistema · A Cidadela está fora do ar e o bot está em modo reduzido. Só `/status`, aprovações de cura e a promoção funcionam agora. Sua mensagem **não** foi entregue; mande de novo quando a Cidadela voltar." |
 
 - O modo reduzido **não guarda** mensagens de conversa: o Guardião não guarda estado do produto ([Guardião](guardiao.md)).
@@ -89,7 +89,8 @@ sequenceDiagram
 - **CA-TGRED-04** · *rápida* — **Dado** o Guardião lendo, **quando** o Telegram falso responde `409 Conflict`, **então** o Guardião para de ler e registra alerta.
 - **CA-TGRED-05** · *completa* — **Dado** updates tratados no modo reduzido, **quando** a Cidadela volta e recebe a devolução, **então** ela lê a partir do offset recebido, sem repetir nem perder updates.
 - **CA-TGRED-06** · *rápida* — **Dado** um Administrador que toca "Aprovar" num script de cura, **quando** responde o PIN certo, **então** o Guardião registra a aprovação presa ao hash.
-- **CA-TGRED-07** · *rápida* — **Dado** o modo reduzido com um pedido de promoção aberto, **quando** um Administrador toca **Promover**, **então** é recusado; **quando** o Dono toca **Promover** e responde o PIN certo, **então** o Guardião inicia a promoção e, depois dela, o bot é devolvido ao motor da nova Cidadela, que lê a partir do offset recebido.
+- **CA-TGRED-07** · *rápida* — **Dado** o modo reduzido com um pedido de promoção aberto, **quando** um Administrador toca **Promover**, **então** é recusado; **quando** o Dono toca **Esperar**, **então** nada é decidido e o lembrete só volta em 1 h; **quando** o Dono toca **Promover** e responde o PIN certo, **então** o Guardião inicia a promoção e, depois dela, o bot é devolvido ao motor da nova Cidadela, que lê a partir do offset recebido.
+- **CA-TGRED-08** · *rápida* — **Dado** o modo reduzido e o PIN do Dono errado 5 vezes em 15 min (relógio falso), **quando** chega o sexto, **então** é recusado sem conferir e o PIN fica bloqueado por 30 min; **dado** 3 erros no mesmo pedido, **então** o pedido é cancelado.
 
 ## Depende de
 
