@@ -63,6 +63,14 @@ var answerTexts = map[Answer]answerText{
 	AnswerClimb:           {"escalate", "Subir agora", "leva o pedido ao nível seguinte", "", ""},
 }
 
+// Label is the button the people see for an answer.
+func (a Answer) Label() string {
+	if t, ok := answerTexts[a]; ok {
+		return t.label
+	}
+	return string(a)
+}
+
 // answersText lists the answers of the level: for an agent, by the name the CLI
 // gives them and with the options they take; for the people, who answer with the
 // buttons, by their labels.
