@@ -54,6 +54,8 @@ Quem recebe alertas segue a [tabela de níveis](../telegram/usuarios-e-niveis.md
 
 ### Devolução à Cidadela
 
+Aqui "devolução" é o bot voltar para a Cidadela, não a [devolução](../orquestracao/prova-e-devolucao.md) de uma etapa a outra.
+
 ```mermaid
 sequenceDiagram
   participant MC as Motor da Cidadela
