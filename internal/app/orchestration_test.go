@@ -181,6 +181,7 @@ type orcWorld struct {
 	orc      *app.Orchestration
 	machines *orcMachines
 	epics    *orcEpics
+	clk      *clock.Fake
 }
 
 func newOrcWorld(t *testing.T) *orcWorld {
@@ -200,7 +201,7 @@ func newOrcWorld(t *testing.T) *orcWorld {
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &orcWorld{epics: &orcEpics{}}
+	w := &orcWorld{epics: &orcEpics{}, clk: clk}
 	w.machines = &orcMachines{seq: map[string]uint64{}, chars: func() *characters.Service { return w.orc.Characters }}
 	w.orc, err = app.NewOrchestration(app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: git, Machines: w.machines, Presets: orcPresets{}, Builder: orcBuilder{}, GitHub: orcGitHub{url: remote.Dir()}, Epics: w.epics, Alerts: orcAlerts{}, Files: orcFiles{},
