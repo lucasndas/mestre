@@ -93,9 +93,11 @@ type world struct {
 	flow  *approvals.Flow
 	chain *fakechannel.Chain
 	// The decrees over the bot (rigOpts.decrees).
-	ds    *decrees.Service
-	dc    *telegram.DecreeChannel
-	rules *tablerules.Service
+	ds        *decrees.Service
+	dc        *telegram.DecreeChannel
+	rules     *tablerules.Service
+	routing   *telegram.Routing
+	delivered *deliveries
 	// requests are the approval requests the decrees read.
 	requests requests
 }
@@ -121,6 +123,9 @@ type rigOpts struct {
 	ownerAlerts bool
 	// lockdown puts /travar and /destravar over the bot, with a real lock.
 	lockdown bool
+	// routing puts the routing of the messages by workspace over the bot, with a
+	// recorder as the Grand Masters.
+	routing bool
 	// decrees puts the decrees (/decretos, the confirmation, the PIN) over the bot.
 	decrees bool
 }
@@ -188,6 +193,26 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		w.oa = &telegram.OwnerAlerts{Users: w.users, Clock: clk}
 		w.opts.Alerts, w.opts.Strangers = w.oa, w.oa
 	}
+	if ropt.routing {
+		for _, slug := range []string{"loja", "blog", "shop"} {
+			if _, err := db.Writer().ExecContext(ctx, `INSERT OR IGNORE INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+				VALUES (?, ?, ?, 'https://example.test/x.git', 'main', 'active', '', 1, 1)`, slug, "lucas/"+slug, "lucas/"+slug); err != nil {
+				t.Fatal(err)
+			}
+		}
+		w.delivered = &deliveries{}
+		w.routing = &telegram.Routing{To: w.delivered}
+		w.opts.Router = w.routing
+		w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.routing.Commands()...)
+		acts := map[string]telegram.Action{}
+		for k, v := range w.opts.Actions {
+			acts[k] = v
+		}
+		for k, v := range w.routing.Actions() {
+			acts[k] = v
+		}
+		w.opts.Actions = acts
+	}
 	if ropt.decrees {
 		for _, slug := range []string{"loja", "blog"} {
 			if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
@@ -229,6 +254,9 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	}
 	if w.dc != nil {
 		w.dc.Bind(w.bot)
+	}
+	if w.routing != nil {
+		w.routing.Bind(w.bot)
 	}
 	if w.lc != nil {
 		w.lc.Bind(w.bot)
@@ -316,4 +344,23 @@ func (w *world) tell(ctx context.Context, id, text string) {
 	if _, err := w.bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
 		w.t.Error(err)
 	}
+}
+
+// deliveries records what the routing hands to the Grand Masters.
+type deliveries struct {
+	mu  sync.Mutex
+	got []telegram.Delivery
+}
+
+func (d *deliveries) Deliver(_ context.Context, m telegram.Delivery) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.got = append(d.got, m)
+	return nil
+}
+
+func (d *deliveries) all() []telegram.Delivery {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]telegram.Delivery(nil), d.got...)
 }

@@ -50,7 +50,13 @@ func (s *Store) Offset(ctx context.Context) (int64, error) {
 // must not be taken for a repetition.
 func (s *Store) Prune(ctx context.Context) error {
 	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `DELETE FROM telegram_updates WHERE state = 'done' AND received_at < ?`, ms(s.Clock.Now().Add(-48*time.Hour)))
+		if _, err := tx.ExecContext(ctx, `DELETE FROM telegram_updates WHERE state = 'done' AND received_at < ?`, ms(s.Clock.Now().Add(-48*time.Hour))); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM bot_messages WHERE at < ?`, ms(s.Clock.Now().Add(-MessageLife))); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `DELETE FROM telegram_pending WHERE at < ?`, ms(s.Clock.Now().Add(-PendingLife)))
 		return err
 	})
 }
@@ -255,7 +261,7 @@ func (s *Store) ResetSeen(ctx context.Context, userID string) error {
 // MessageOrigin is the workspace and the mesa of a message the bot sent
 // (the threaded reply).
 func (s *Store) MessageOrigin(ctx context.Context, chat, message int64) (workspace, mesa string, ok bool, err error) {
-	err = s.DB.Reader().QueryRowContext(ctx, `SELECT workspace, mesa FROM bot_messages WHERE chat_id = ? AND message_id = ?`, chat, message).Scan(&workspace, &mesa)
+	err = s.DB.Reader().QueryRowContext(ctx, `SELECT workspace, mesa FROM bot_messages WHERE chat_id = ? AND message_id = ? AND at > ?`, chat, message, ms(s.Clock.Now().Add(-MessageLife))).Scan(&workspace, &mesa)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", false, nil
 	}
