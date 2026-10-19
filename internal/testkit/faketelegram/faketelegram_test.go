@@ -165,8 +165,8 @@ func TestUnknownMethodOrParameterFailsTheTest(t *testing.T) {
 	}{
 		{"unknown method", token, "sendPhoto", url.Values{"chat_id": {"1"}}, "telegram sendPhoto"},
 		{"unknown method with a wrong token", "wrong", "getFile", nil, "telegram getFile"},
-		{"unknown parameter", token, "sendMessage", url.Values{"chat_id": {"1"}, "text": {"x"}, "reply_markup": {"{}"}}, "telegram sendMessage parameter reply_markup"},
-		{"unknown getUpdates parameter", token, "getUpdates", url.Values{"allowed_updates": {"[]"}}, "telegram getUpdates parameter allowed_updates"},
+		{"unknown parameter", token, "sendMessage", url.Values{"chat_id": {"1"}, "text": {"x"}, "message_thread_id": {"3"}}, "telegram sendMessage parameter message_thread_id"},
+		{"unknown getUpdates parameter", token, "getUpdates", url.Values{"limit": {"5"}}, "telegram getUpdates parameter limit"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -201,4 +201,37 @@ type reporter struct{ msgs []string }
 
 func (r *reporter) Errorf(format string, args ...any) {
 	r.msgs = append(r.msgs, fmt.Sprintf(format, args...))
+}
+
+// The bot of M5: buttons, clicks, stickers, deleteMessage, documents and the
+// parameters the bot uses are served and recorded.
+func TestTheBotMethodsAreServed(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC))
+	s, c := newServer(t, clk)
+	u := faketelegram.User{ID: 7, FirstName: "Ana", Username: "ana"}
+	if _, err := s.UserSendsSticker(u); err != nil {
+		t.Fatal(err)
+	}
+	cb, err := s.UserClicks(u, 5, "k1")
+	if err != nil || cb == "" {
+		t.Fatalf("click = %q, %v", cb, err)
+	}
+	_, body := call(t, c, "getUpdates", url.Values{})
+	ups := body["result"].([]any)
+	if len(ups) != 2 || ups[0].(map[string]any)["message"].(map[string]any)["sticker"] == nil ||
+		ups[1].(map[string]any)["callback_query"].(map[string]any)["data"] != "k1" {
+		t.Fatalf("updates = %v", ups)
+	}
+	if st, _ := call(t, c, "sendMessage", url.Values{"chat_id": {"7"}, "text": {"<b>x</b>"}, "parse_mode": {"HTML"}, "reply_markup": {"{}"}}); st != http.StatusOK {
+		t.Fatalf("sendMessage status %d", st)
+	}
+	if st, _ := call(t, c, "deleteMessage", url.Values{"chat_id": {"7"}, "message_id": {"3"}}); st != http.StatusOK || len(s.Deleted()) != 1 {
+		t.Fatalf("deleteMessage status %d, deleted %v", st, s.Deleted())
+	}
+	for _, m := range []string{"deleteWebhook", "setMyCommands", "leaveChat"} {
+		if st, _ := call(t, c, m, url.Values{}); st != http.StatusOK {
+			t.Fatalf("%s status %d", m, st)
+		}
+	}
 }

@@ -1,0 +1,22 @@
+{
+  "origin": "telegram",
+  "version": "bot-api-10.3",
+  "captured_at": "2026-10-19",
+  "source": "documentation: https://core.telegram.org/bots/api#callbackquery",
+  "body": {
+    "update_id": 100000001,
+    "callback_query": {
+      "id": "4382bfdwdsb323b2d9",
+      "from": {"id": 1, "is_bot": false, "first_name": "Dono", "username": "dono", "language_code": "pt-br"},
+      "message": {
+        "message_id": 1,
+        "from": {"id": 7000000001, "is_bot": true, "first_name": "Mestre", "username": "mestre_bot"},
+        "chat": {"id": 1, "first_name": "Dono", "username": "dono", "type": "private"},
+        "date": 1791936000,
+        "text": "Aprovar?"
+      },
+      "chat_instance": "-3925424492",
+      "data": "k"
+    }
+  }
+}

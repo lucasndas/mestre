@@ -1,0 +1,16 @@
+{
+  "origin": "telegram",
+  "version": "bot-api-10.3",
+  "captured_at": "2026-10-19",
+  "source": "documentation: https://core.telegram.org/bots/api#sticker",
+  "body": {
+    "update_id": 100000001,
+    "message": {
+      "message_id": 1,
+      "from": {"id": 1, "is_bot": false, "first_name": "Dono", "username": "dono", "language_code": "pt-br"},
+      "chat": {"id": 1, "first_name": "Dono", "username": "dono", "type": "private"},
+      "date": 1791936000,
+      "sticker": {"file_id": "CAACAgIAAxkBAAI", "file_unique_id": "AgADaQ", "type": "regular", "width": 512, "height": 512, "is_animated": false, "is_video": false}
+    }
+  }
+}
