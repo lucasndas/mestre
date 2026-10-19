@@ -20,9 +20,15 @@ type Store struct {
 func ms(t time.Time) int64     { return t.UnixMilli() }
 func fromMs(v int64) time.Time { return time.UnixMilli(v).UTC() }
 
-// Offset is the next offset of getUpdates: the last update recorded plus one.
+// QuietReset is how long without an update makes the offset be dropped: after a
+// week with none the Telegram picks the next update_id at random, maybe below
+// the one kept, and an offset above it would confirm (and lose) everything.
+const QuietReset = 5 * 24 * time.Hour
+
+// Offset is the next offset of getUpdates: the last update recorded plus one;
+// zero (no offset) when none is kept or the bot was quiet for QuietReset.
 func (s *Store) Offset(ctx context.Context) (int64, error) {
-	var v string
+	var v, at string
 	err := s.DB.Reader().QueryRowContext(ctx, `SELECT value FROM telegram_state WHERE key = 'last_update'`).Scan(&v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
@@ -30,8 +36,23 @@ func (s *Store) Offset(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if err := s.DB.Reader().QueryRowContext(ctx, `SELECT value FROM telegram_state WHERE key = 'last_update_at'`).Scan(&at); err == nil {
+		if t, _ := strconv.ParseInt(at, 10, 64); s.Clock.Now().Sub(fromMs(t)) > QuietReset {
+			return 0, nil
+		}
+	}
 	n, _ := strconv.ParseInt(v, 10, 64)
 	return n + 1, nil
+}
+
+// Prune forgets the updates processed more than two days ago: the deduplication
+// only needs the recent ones, and an id the Telegram reuses after a long quiet
+// must not be taken for a repetition.
+func (s *Store) Prune(ctx context.Context) error {
+	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM telegram_updates WHERE state = 'done' AND received_at < ?`, ms(s.Clock.Now().Add(-48*time.Hour)))
+		return err
+	})
 }
 
 // Record keeps the update before the offset moves; false says it was already
@@ -46,9 +67,12 @@ func (s *Store) Record(ctx context.Context, id int64, body []byte) (bool, error)
 		}
 		n, _ := res.RowsAffected()
 		fresh = n > 0
-		_, err = tx.ExecContext(ctx, `INSERT INTO telegram_state (key, value) VALUES ('last_update', ?)
-			ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE CAST(excluded.value AS INTEGER) > CAST(telegram_state.value AS INTEGER)`, strconv.FormatInt(id, 10))
-		return err
+		for k, v := range map[string]string{"last_update": strconv.FormatInt(id, 10), "last_update_at": strconv.FormatInt(ms(s.Clock.Now()), 10)} {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO telegram_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, k, v); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	return fresh, err
 }
@@ -93,24 +117,41 @@ type Capture struct {
 	UserID, Kind, Ref string
 	OutboxID          int64
 	Expires           time.Time
+	// Armed says the prompt was delivered: before that the user has not seen it,
+	// and what he writes is an ordinary message. Expired says the time ran out.
+	Armed, Expired bool
 }
 
-// SetCapture makes the bot wait for the next text of the user (one at a time).
+// ErrCaptureBusy is an Ask while the user is still answering another one.
+var ErrCaptureBusy = errors.New("telegram: the user is still answering another prompt")
+
+// SetCapture makes the bot wait for the next text of the user, once his prompt
+// is delivered. One at a time: a prompt that is still open is not replaced.
 func (s *Store) SetCapture(ctx context.Context, c Capture) error {
 	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_captures (user_id, kind, ref, outbox_id, expires_at) VALUES (?, ?, ?, ?, ?)
+		var exp int64
+		err := tx.QueryRowContext(ctx, `SELECT expires_at FROM telegram_captures WHERE user_id = ?`, c.UserID).Scan(&exp)
+		if err == nil && s.Clock.Now().Before(fromMs(exp)) {
+			return ErrCaptureBusy
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO telegram_captures (user_id, kind, ref, outbox_id, expires_at) VALUES (?, ?, ?, ?, ?)
 			ON CONFLICT(user_id) DO UPDATE SET kind = excluded.kind, ref = excluded.ref, outbox_id = excluded.outbox_id, expires_at = excluded.expires_at`,
 			c.UserID, c.Kind, c.Ref, c.OutboxID, ms(c.Expires))
 		return err
 	})
 }
 
-// Capturing is the open capture of a user, if any and not expired.
+// Capturing is the capture of a user, if any (armed or not, expired or not).
 func (s *Store) Capturing(ctx context.Context, userID string) (Capture, bool, error) {
 	var c Capture
 	var exp int64
-	err := s.DB.Reader().QueryRowContext(ctx, `SELECT user_id, kind, ref, outbox_id, expires_at FROM telegram_captures WHERE user_id = ?`, userID).
-		Scan(&c.UserID, &c.Kind, &c.Ref, &c.OutboxID, &exp)
+	var state sql.NullString
+	err := s.DB.Reader().QueryRowContext(ctx, `SELECT c.user_id, c.kind, c.ref, c.outbox_id, c.expires_at, o.state
+		FROM telegram_captures c LEFT JOIN telegram_outbox o ON o.id = c.outbox_id WHERE c.user_id = ?`, userID).
+		Scan(&c.UserID, &c.Kind, &c.Ref, &c.OutboxID, &exp, &state)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Capture{}, false, nil
 	}
@@ -118,14 +159,16 @@ func (s *Store) Capturing(ctx context.Context, userID string) (Capture, bool, er
 		return Capture{}, false, err
 	}
 	c.Expires = fromMs(exp)
-	return c, s.Clock.Now().Before(c.Expires), nil
+	c.Expired = !s.Clock.Now().Before(c.Expires)
+	c.Armed = state.Valid && state.String == "sent"
+	return c, true, nil
 }
 
-// ClearCapture ends the wait of the user; true says this call ended it.
-func (s *Store) ClearCapture(ctx context.Context, userID string) (bool, error) {
+// ClearCapture ends the wait for that prompt; true says this call ended it.
+func (s *Store) ClearCapture(ctx context.Context, userID, ref string) (bool, error) {
 	cleared := false
 	err := s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `DELETE FROM telegram_captures WHERE user_id = ?`, userID)
+		res, err := tx.ExecContext(ctx, `DELETE FROM telegram_captures WHERE user_id = ? AND ref = ?`, userID, ref)
 		if err != nil {
 			return err
 		}

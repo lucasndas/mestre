@@ -28,6 +28,7 @@ CREATE TABLE telegram_outbox (
 	not_before INTEGER NOT NULL,
 	attempts   INTEGER NOT NULL DEFAULT 0,
 	message_id INTEGER NOT NULL DEFAULT 0,
+	last_error TEXT    NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL
 );
 CREATE INDEX telegram_outbox_queued ON telegram_outbox (state, id);

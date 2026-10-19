@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/users"
@@ -41,7 +42,7 @@ type Out struct {
 // Send puts a message in the queue and returns the id of its last part. It goes
 // out when the queue is flushed, never before the Gate lets it.
 func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
-	text := b.o.Mask(o.Text)
+	text := b.maskText(o.Text)
 	var seen map[string]bool
 	var explained []string
 	if o.UserID != "" && len(b.o.Terms) > 0 {
@@ -66,7 +67,7 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 	for _, p := range parts {
 		params := map[string]any{"chat_id": o.ChatID}
 		if h, err := ToHTML(p); err == nil {
-			params["text"], params["parse_mode"] = h, "HTML"
+			params["text"], params["parse_mode"], params["_plain"] = b.o.Mask(h), "HTML", p
 		} else {
 			params["text"] = p // the conversion failed: plain text
 		}
@@ -123,6 +124,18 @@ func (b *Bot) Send(ctx context.Context, o Out) (int64, error) {
 	}
 	b.wake()
 	return id, nil
+}
+
+// maskText takes the secrets out of a text. The Markdown marks that could split
+// one (`ghp_AAAA**BBBB**` is a token to whoever reads the rendered message) are
+// looked through: when the mask finds a secret that way the text goes without
+// formatting.
+func (b *Bot) maskText(t string) string {
+	flat := strings.NewReplacer("**", "", "`", "").Replace(t)
+	if f := b.o.Mask(flat); f != flat {
+		return f
+	}
+	return b.o.Mask(t)
 }
 
 func newKey() (string, error) {
@@ -190,6 +203,9 @@ func (b *Bot) Flush(ctx context.Context) (time.Time, error) {
 	}
 	blocked := map[int64]bool{}
 	for _, q := range list {
+		if !b.allowed(ctx) {
+			break // suspended in the middle of the queue: nothing else goes
+		}
 		if blocked[q.chat] {
 			continue
 		}
@@ -209,6 +225,14 @@ func (b *Bot) Flush(ctx context.Context) (time.Time, error) {
 		}
 		msgID, err := b.deliver(ctx, q)
 		var api *APIError
+		if errors.As(err, &api) && api.Code == 400 && q.method == "sendMessage" && q.params["parse_mode"] != nil && strings.Contains(strings.ToLower(api.Description), "parse") {
+			// The HTML did not parse: once more as plain text.
+			if plain, ok := q.params["_plain"].(string); ok {
+				q.params["text"] = plain
+				delete(q.params, "parse_mode")
+				msgID, err = b.deliver(ctx, q)
+			}
+		}
 		switch {
 		case err == nil:
 			b.last[q.chat] = now
@@ -223,8 +247,19 @@ func (b *Bot) Flush(ctx context.Context) (time.Time, error) {
 			}
 			blocked[q.chat] = true
 			soon(at)
+		case errors.As(err, &api) && (api.Code == 401 || api.Code == 404):
+			// The token was revoked or is wrong: the queue waits for the new one.
+			at := now.Add(backoff(q.attempts))
+			if herr := b.hold(ctx, q.id, at, true); herr != nil {
+				return next, herr
+			}
+			if b.o.Alerts != nil {
+				b.o.Alerts.OwnerAlert(ctx, "O Telegram recusou o token do bot. Troque-o no cofre; a fila de saída espera.")
+			}
+			soon(at)
+			return next, err
 		case errors.As(err, &api) && !api.Retryable():
-			b.log.Warn("telegram: a message was refused and dropped", "outbox", q.id, "code", api.Code)
+			b.log.Warn("telegram: a message was refused", "outbox", q.id, "code", api.Code)
 			if err := b.fail(ctx, q.id, fmt.Sprintf("%d %s", api.Code, api.Description)); err != nil {
 				return next, err
 			}
@@ -243,16 +278,22 @@ func (b *Bot) Flush(ctx context.Context) (time.Time, error) {
 func (b *Bot) deliver(ctx context.Context, q queued) (int64, error) {
 	var raw json.RawMessage
 	var err error
+	params := make(map[string]any, len(q.params))
+	for k, v := range q.params {
+		if !strings.HasPrefix(k, "_") { // kept for the plain-text retry only
+			params[k] = v
+		}
+	}
 	if q.method == "sendDocument" {
-		content, _ := q.params["content"].(string)
-		name, _ := q.params["filename"].(string)
+		content, _ := params["content"].(string)
+		name, _ := params["filename"].(string)
 		fields := map[string]string{"chat_id": fmt.Sprint(q.chat)}
-		if c, ok := q.params["caption"].(string); ok {
+		if c, ok := params["caption"].(string); ok {
 			fields["caption"] = c
 		}
 		raw, err = b.o.Client.Upload(ctx, q.method, fields, "document", name, []byte(content))
 	} else {
-		raw, err = b.o.Client.Call(ctx, q.method, q.params)
+		raw, err = b.o.Client.Call(ctx, q.method, params)
 	}
 	if err != nil {
 		return 0, err
@@ -291,12 +332,10 @@ func (b *Bot) hold(ctx context.Context, id int64, at time.Time, failed bool) err
 
 func (b *Bot) fail(ctx context.Context, id int64, why string) error {
 	return b.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `UPDATE telegram_outbox SET state = 'failed', params = ? WHERE id = ?`, `{"error":`+quote(why)+`}`, id)
+		_, err := tx.ExecContext(ctx, `UPDATE telegram_outbox SET state = 'failed', last_error = ? WHERE id = ?`, why, id)
 		return err
 	})
 }
-
-func quote(s string) string { b, _ := json.Marshal(s); return string(b) }
 
 // backoff is 1 s, doubling to 60 s.
 func backoff(attempts int) time.Duration {

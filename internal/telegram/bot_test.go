@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -222,14 +223,18 @@ func TestAStickerIsRefusedWithTheAcceptedTypesAndNothingIsQueued(t *testing.T) {
 func TestTheAnswerToASecondFactorIsTakenByTheEngineAndOnlyBythatUser(t *testing.T) {
 	t.Parallel()
 	var used []string
-	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(_ context.Context, _ users.User, ref, text string) (string, error) {
+	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(_ context.Context, _ users.User, ref, text string) (string, bool, error) {
 		used = append(used, ref+":"+text)
-		return "", nil
+		return "", false, nil
 	}}})
 	ana, ta := w.user("Ana", users.Approver)
 	_, tb := w.user("Bia", users.Approver)
 	if err := w.bot.Ask(w.ctx, ana.ID, "factor", "login-github", "Código de github.com", time.Hour); err != nil {
 		t.Fatal(err)
+	}
+	w.say(ta, "uma conversa antes de o pedido chegar") // the prompt is still in the queue
+	if w.router.count() != 1 {
+		t.Fatal("an ordinary message was swallowed before the user saw the prompt")
 	}
 	w.flush()
 	w.say(tb, "uma conversa da Bia")
@@ -237,8 +242,8 @@ func TestTheAnswerToASecondFactorIsTakenByTheEngineAndOnlyBythatUser(t *testing.
 	if len(used) != 1 || used[0] != "login-github:482913" {
 		t.Fatalf("the engine used %v", used)
 	}
-	if w.router.count() != 1 || w.router.got[0].User.Name != "Bia" {
-		t.Fatalf("delivered %+v, want only Bia's message", w.router.got)
+	if w.router.count() != 2 || w.router.got[1].User.Name != "Bia" {
+		t.Fatalf("delivered %+v, want only the ordinary messages", w.router.got)
 	}
 	if len(w.fake.Deleted()) != 2 {
 		t.Fatalf("deleted %+v, want the answer and the prompt", w.fake.Deleted())
@@ -423,5 +428,154 @@ func TestAStrangerIsIgnoredAGroupIsLeftAndAPairingCodeWorks(t *testing.T) {
 	}
 	if _, err := w.users.ByTelegram(w.ctx, caio.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The PIN prompt stays open for another try after a wrong PIN: the second
+// answer is captured too, never delivered, and a second prompt is refused.
+func TestAWrongPINKeepsThePromptOpenAndTheRetryIsCapturedToo(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.opts.Captures = map[string]telegram.CaptureFunc{telegram.PINKind: telegram.PINCapture(w.users, nil)}
+	var err error
+	if w.bot, err = telegram.New(w.opts); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.users.SetPIN(w.ctx, w.owner.ID, "482913"); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := w.users.NewCode(w.ctx, w.owner, w.owner.ID)
+	tg := faketelegram.User{ID: 77, FirstName: "Lucas", Username: "lucas"}
+	if _, err := w.users.Pair(w.ctx, users.PairRequest{Text: c.Code, TelegramID: tg.ID, Private: true}); err != nil {
+		t.Fatal(err)
+	}
+	req, _ := w.users.StartPIN(w.ctx, w.owner.ID, "unlock")
+	if err := w.bot.Ask(w.ctx, w.owner.ID, telegram.PINKind, req.ID, "Digite o PIN.", 5*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.bot.Ask(w.ctx, w.owner.ID, telegram.PINKind, "outro", "Outro PIN.", 5*time.Minute); !errors.Is(err, telegram.ErrCaptureBusy) {
+		t.Fatalf("a second prompt = %v, want busy", err)
+	}
+	w.flush()
+	w.say(tg, "000000")
+	w.say(tg, "482913")
+	if w.router.count() != 0 {
+		t.Fatalf("a PIN went to the inbox: %+v", w.router.got)
+	}
+	var kept int
+	_ = w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM telegram_updates WHERE body LIKE '%482913%' OR body LIKE '%000000%'`).Scan(&kept)
+	if kept != 0 {
+		t.Fatalf("a PIN is kept in %d updates", kept)
+	}
+	for range 3 {
+		w.flush()
+		w.clk.Advance(time.Second)
+	}
+	got := w.sent("sendMessage")
+	if len(got) < 3 || !strings.Contains(got[1].Text, "incorreto") || !strings.Contains(got[2].Text, "confirmado") {
+		t.Fatalf("sent %+v", got)
+	}
+	// the wait is over: an ordinary message goes through again
+	w.clk.Advance(time.Second)
+	w.say(tg, "oi")
+	if w.router.count() != 1 {
+		t.Fatal("the message after the PIN did not go to the Grão-Mestre")
+	}
+}
+
+// An answer after the prompt expired is not an ordinary message either.
+func TestAnAnswerAfterThePromptExpiredIsDeletedAndNotDelivered(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(context.Context, users.User, string, string) (string, bool, error) { return "", false, nil }}})
+	a, ta := w.user("Ana", users.Approver)
+	if err := w.bot.Ask(w.ctx, a.ID, "factor", "r", "Código", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	w.flush()
+	w.clk.Advance(2 * time.Minute)
+	w.say(ta, "482913")
+	w.flush()
+	if w.router.count() != 0 || len(w.fake.Deleted()) < 1 {
+		t.Fatalf("delivered %d, deleted %+v", w.router.count(), w.fake.Deleted())
+	}
+	if got := w.sent("sendMessage"); !strings.Contains(got[len(got)-1].Text, "expirou") {
+		t.Fatalf("sent %+v", got)
+	}
+}
+
+// A recorded answer is kept without its text, and a copy without text is not replayed.
+func TestTheRecordedCopyOfACapturedAnswerHasNoTextAndIsNotReplayed(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{captures: map[string]telegram.CaptureFunc{"factor": func(context.Context, users.User, string, string) (string, bool, error) { return "", false, nil }}})
+	a, ta := w.user("Ana", users.Approver)
+	if err := w.bot.Ask(w.ctx, a.ID, "factor", "r", "Código", time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	w.flush()
+	// the Gate closes right after the update is recorded: it stays pending
+	g := &stopAfter{n: 1}
+	w.opts.Gate = g
+	var err error
+	if w.bot, err = telegram.New(w.opts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.fake.UserSendsText(ta, faketelegram.Private(ta), "482913"); err != nil {
+		t.Fatal(err)
+	}
+	w.poll()
+	var body string
+	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT body FROM telegram_updates WHERE state = 'new'`).Scan(&body); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "482913") || !strings.Contains(body, `"redacted":true`) {
+		t.Fatalf("stored copy = %s", body)
+	}
+	g.n = 100 // the Citadel acts again: the copy without text is dropped, not handled
+	w.poll()
+	if w.router.count() != 0 {
+		t.Fatal("the stored copy was replayed")
+	}
+}
+
+type stopAfter struct{ n int }
+
+func (g *stopAfter) Allowed(context.Context) bool { g.n--; return g.n >= 0 }
+
+// A 400 that says the HTML did not parse is sent once more as plain text; a 401
+// holds the whole queue and tells the Owner; a quiet week drops the offset.
+func TestTheQueueSurvivesAParseErrorARevokedTokenAndAQuietWeek(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	u, tg := w.user("Ana", users.Approver)
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "**oi**"}); err != nil {
+		t.Fatal(err)
+	}
+	w.fake.FailNext("sendMessage", faketelegram.Failure{Status: 400, Description: "Bad Request: can't parse entities"})
+	w.flush()
+	if got := w.sent("sendMessage"); len(got) != 1 || got[0].Text != "**oi**" || got[0].Params["parse_mode"] != nil {
+		t.Fatalf("sent %+v, want the plain text", got)
+	}
+	w.clk.Advance(time.Second)
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: tg.ID, UserID: u.ID, Text: "segunda"}); err != nil {
+		t.Fatal(err)
+	}
+	w.fake.FailNext("sendMessage", faketelegram.Failure{Status: 401})
+	if _, err := w.bot.Flush(w.ctx); err == nil {
+		t.Fatal("a 401 was not reported")
+	}
+	if q, _, f, _ := w.bot.OutboxState(w.ctx); q != 1 || f != 0 || len(w.alerts.owner) == 0 {
+		t.Fatalf("queued %d, failed %d, alerts %v; want the message kept and the Owner told", q, f, w.alerts.owner)
+	}
+	// a quiet week: no offset
+	body, _ := json.Marshal(telegram.Update{UpdateID: 900})
+	if _, err := w.bot.Store().Record(w.ctx, 900, body); err != nil {
+		t.Fatal(err)
+	}
+	if off, _ := w.bot.Store().Offset(w.ctx); off != 901 {
+		t.Fatalf("offset = %d, want 901", off)
+	}
+	w.clk.Advance(6 * 24 * time.Hour)
+	if off, _ := w.bot.Store().Offset(w.ctx); off != 0 {
+		t.Fatalf("offset after a quiet week = %d, want none", off)
 	}
 }

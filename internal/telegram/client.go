@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // DefaultBaseURL is the Telegram Bot API.
@@ -22,6 +23,8 @@ type Client struct {
 	BaseURL string
 	HTTP    *http.Client
 }
+
+var defaultHTTP = &http.Client{Timeout: 2 * time.Minute}
 
 // APIError is an answer of the Bot API with ok=false.
 type APIError struct {
@@ -53,7 +56,7 @@ func (c *Client) url(method string) string {
 func (c *Client) do(ctx context.Context, method string, req *http.Request) (json.RawMessage, error) {
 	hc := c.HTTP
 	if hc == nil {
-		hc = http.DefaultClient
+		hc = defaultHTTP // a hung call must not hold the loop past a change of the Gate
 	}
 	resp, err := hc.Do(req.WithContext(ctx))
 	if err != nil {
@@ -135,7 +138,9 @@ func (c *Client) Upload(ctx context.Context, method string, fields map[string]st
 type (
 	// Update is one update of getUpdates.
 	Update struct {
-		UpdateID      int64          `json:"update_id"`
+		UpdateID int64 `json:"update_id"`
+		// Redacted marks the copy the bot keeps of an answer it captured: its text is gone.
+		Redacted      bool           `json:"redacted,omitempty"`
 		Message       *Message       `json:"message,omitempty"`
 		CallbackQuery *CallbackQuery `json:"callback_query,omitempty"`
 	}

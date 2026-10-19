@@ -66,14 +66,18 @@ type Click struct {
 	ChatID, MessageID int64
 }
 
-// Action is what a button does: the text for the toast and the text that
+// Action is what a button does. The bot checked the recipient, the level and
+// the validity; the scope (the workspace the user still acts in) and
+// idempotence are the action's: after an error the button can be clicked again.
+// It gives the text for the toast and the text that
 // replaces the message ("" keeps it).
 type Action func(ctx context.Context, c Click) (toast, result string, err error)
 
 // CaptureFunc takes the answer a user typed to a prompt of the bot (a PIN, a
 // second factor). The text is never kept: not in the inbox, not in the
-// history, not in a log.
-type CaptureFunc func(ctx context.Context, user users.User, ref, text string) (reply string, err error)
+// history, not in a log. again keeps the prompt open for another try (a wrong
+// PIN of a request that still has tries).
+type CaptureFunc func(ctx context.Context, user users.User, ref, text string) (reply string, again bool, err error)
 
 // Options are the pieces of the Bot.
 type Options struct {
@@ -174,11 +178,14 @@ func (b *Bot) counted(now time.Time) {
 	b.count++
 }
 
+// ErrSuspended is a call while this Citadel may not act.
+var ErrSuspended = errors.New("telegram: this Citadel is suspended")
+
 // Start does what the bot does once when it starts: it takes the webhook off
 // (getUpdates does not work with one) and registers the commands.
 func (b *Bot) Start(ctx context.Context) error {
 	if !b.allowed(ctx) {
-		return nil
+		return ErrSuspended
 	}
 	if _, err := b.o.Client.Call(ctx, "deleteWebhook", map[string]any{}); err != nil {
 		return err
@@ -279,6 +286,9 @@ func (b *Bot) PollOnce(ctx context.Context) error {
 	if err := b.processPending(ctx); err != nil {
 		return err
 	}
+	if err := b.st.Prune(ctx); err != nil {
+		return err
+	}
 	offset, err := b.st.Offset(ctx)
 	if err != nil {
 		return err
@@ -341,6 +351,7 @@ func (b *Bot) redacted(ctx context.Context, up Update, raw []byte) []byte {
 	cp := *m
 	cp.Text, cp.Caption = "", ""
 	up.Message = &cp // a copy: the update being handled keeps its text
+	up.Redacted = true
 	out, err := json.Marshal(up)
 	if err != nil {
 		return []byte("{}")
@@ -358,7 +369,9 @@ func (b *Bot) processPending(ctx context.Context) error {
 			return nil // what is left waits for the Citadel that may act
 		}
 		var up Update
-		if err := json.Unmarshal(p.Body, &up); err == nil {
+		if err := json.Unmarshal(p.Body, &up); err == nil && !up.Redacted {
+			// A copy kept without its text (a captured answer) is not replayed:
+			// the user answers again.
 			b.handle(ctx, up)
 		}
 		if err := b.st.Done(ctx, p.ID); err != nil {
@@ -369,6 +382,11 @@ func (b *Bot) processPending(ctx context.Context) error {
 }
 
 func (b *Bot) handle(ctx context.Context, up Update) {
+	defer func() {
+		if r := recover(); r != nil {
+			b.log.Error("telegram: handling an update panicked", "panic", fmt.Sprint(r))
+		}
+	}()
 	switch {
 	case up.CallbackQuery != nil:
 		b.click(ctx, up.CallbackQuery)
@@ -404,7 +422,9 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	case u.State != users.Active:
 		return // suspended: no answer, no alert
 	}
-	if c, open, err := b.st.Capturing(ctx, u.ID); err == nil && open && m.Kind() == KindText {
+	if c, found, err := b.st.Capturing(ctx, u.ID); err == nil && found && c.Armed {
+		// The prompt reached the user: what he writes now is the answer (or
+		// the end of the wait), never an ordinary message.
 		b.capture(ctx, u, c, m)
 		return
 	}
@@ -531,6 +551,14 @@ func (b *Bot) Ask(ctx context.Context, userID, kind, ref, prompt string, ttl tim
 	if err != nil {
 		return err
 	}
+	if u.State != users.Active {
+		return fmt.Errorf("%w: %s", users.ErrNoUser, userID)
+	}
+	if c, found, err := b.st.Capturing(ctx, u.ID); err != nil {
+		return err
+	} else if found && !c.Expired {
+		return ErrCaptureBusy
+	}
 	if u.TelegramID == 0 {
 		return errors.New("telegram: the user has no Telegram")
 	}
@@ -545,26 +573,44 @@ func (b *Bot) Ask(ctx context.Context, userID, kind, ref, prompt string, ttl tim
 }
 
 // capture takes the answer: the message of the user and the prompt are deleted
-// and the text goes only to the function of the kind.
+// and the text goes only to the function of the kind. A prompt that expired, or
+// an answer that is not text, ends here too: nothing of it goes to an agent.
 func (b *Bot) capture(ctx context.Context, u users.User, c Capture, m *Message) {
-	if ok, err := b.st.ClearCapture(ctx, u.ID); err != nil || !ok {
-		return
-	}
 	b.deleteMessage(ctx, m.Chat.ID, m.MessageID)
-	if prompt := b.promptMessage(ctx, c.OutboxID); prompt != 0 {
-		b.deleteMessage(ctx, m.Chat.ID, prompt)
+	switch {
+	case c.Expired:
+		b.endCapture(ctx, u, c, m.Chat.ID)
+		b.say(ctx, m.Chat.ID, u.ID, "O pedido expirou. Peça de novo a ação que o fez.")
+		return
+	case m.Kind() != KindText:
+		b.say(ctx, m.Chat.ID, u.ID, "Responda ao pedido com texto.")
+		return
 	}
 	fn := b.o.Captures[c.Kind]
 	if fn == nil {
+		b.endCapture(ctx, u, c, m.Chat.ID)
 		return
 	}
-	reply, err := fn(ctx, u, c.Ref, m.Text)
+	reply, again, err := fn(ctx, u, c.Ref, m.Text)
 	if err != nil {
 		b.log.Warn("telegram: a capture failed", "kind", c.Kind)
-		reply = "Não consegui usar a resposta."
+		reply, again = "Não consegui usar a resposta.", false
+	}
+	if !again {
+		b.endCapture(ctx, u, c, m.Chat.ID)
 	}
 	if reply != "" {
 		b.say(ctx, m.Chat.ID, u.ID, reply)
+	}
+}
+
+// endCapture ends the wait and takes the prompt off the chat.
+func (b *Bot) endCapture(ctx context.Context, u users.User, c Capture, chat int64) {
+	if _, err := b.st.ClearCapture(ctx, u.ID, c.Ref); err != nil {
+		b.log.Warn("telegram: a capture was not cleared", "err", err)
+	}
+	if prompt := b.promptMessage(ctx, c.OutboxID); prompt != 0 {
+		b.deleteMessage(ctx, chat, prompt)
 	}
 }
 
@@ -584,18 +630,20 @@ func (b *Bot) deleteMessage(ctx context.Context, chat, message int64) {
 // PIN of the users, the text is checked and never kept; done is told whether the
 // PIN was right (the action that asked for it is applied there, once).
 func PINCapture(svc *users.Service, done func(ctx context.Context, user users.User, requestID string, err error)) CaptureFunc {
-	return func(ctx context.Context, user users.User, ref, text string) (string, error) {
+	return func(ctx context.Context, user users.User, ref, text string) (string, bool, error) {
 		err := svc.CheckPIN(ctx, ref, strings.TrimSpace(text))
 		if done != nil {
 			done(ctx, user, ref, err)
 		}
 		switch {
 		case err == nil:
-			return "PIN confirmado.", nil
+			return "PIN confirmado.", false, nil
 		case errors.Is(err, users.ErrPINLocked):
-			return "O PIN está bloqueado por um tempo.", nil
+			return "O PIN está bloqueado por um tempo.", false, nil
+		case err == users.ErrBadPIN:
+			return "PIN incorreto. Tente de novo.", true, nil // the request still has tries
 		default:
-			return "PIN incorreto ou pedido expirado.", nil
+			return "PIN incorreto ou pedido encerrado.", false, nil
 		}
 	}
 }
@@ -641,7 +689,7 @@ func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
 	}
 	if cb.Capability != "" {
 		if err := users.Require(u.Level, users.Capability(cb.Capability)); err != nil {
-			answer("Seu nível não permite: " + err.Error())
+			answer("Seu nível não permite: " + b.o.Mask(err.Error()))
 			return
 		}
 	}
@@ -661,15 +709,16 @@ func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
 	toast, result, err := act(ctx, Click{User: u, Arg: cb.Arg, ChatID: chat, MessageID: msg})
 	if err != nil {
 		_ = b.st.Release(ctx, cb.Key)
-		answer(err.Error())
+		answer(b.o.Mask(err.Error()))
 		return
 	}
-	answer(toast)
+	answer(b.o.Mask(toast))
 	if result != "" && msg != 0 {
-		h, herr := ToHTML(b.o.Mask(result))
+		result = b.maskText(result)
+		h, herr := ToHTML(result)
 		p := map[string]any{"chat_id": chat, "message_id": msg}
 		if herr == nil {
-			p["text"], p["parse_mode"] = h, "HTML"
+			p["text"], p["parse_mode"] = b.o.Mask(h), "HTML"
 		} else {
 			p["text"] = result
 		}

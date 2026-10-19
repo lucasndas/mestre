@@ -57,9 +57,11 @@ type Deleted struct{ ChatID, MessageID int64 }
 
 // Failure is injected into the next call of a method.
 type Failure struct {
-	Status     int  // HTTP status and error_code, e.g. 429 or 502
-	RetryAfter int  // seconds, for 429
-	Cut        bool // the connection drops without a response
+	Status     int // HTTP status and error_code, e.g. 429 or 502
+	RetryAfter int // seconds, for 429
+	// Description replaces the standard text of the error (e.g. a parse error).
+	Description string
+	Cut         bool // the connection drops without a response
 }
 
 // Server is the fake Bot API. Use it as an http.Handler, usually through
@@ -254,6 +256,9 @@ func (s *Server) injectFailure(w http.ResponseWriter, method string) bool {
 		panic(http.ErrAbortHandler)
 	}
 	body := map[string]any{"ok": false, "error_code": f.Status, "description": http.StatusText(f.Status)}
+	if f.Description != "" {
+		body["description"] = f.Description
+	}
 	if f.Status == http.StatusTooManyRequests {
 		if rec, err := s.template("error-429"); err == nil {
 			body = rec // recorded shape, with this failure's values
