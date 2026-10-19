@@ -262,10 +262,19 @@ func (s *Service) tickOf(ctx context.Context, workspace string) error {
 	if slot.Sub(lastSlot) < period-time.Hour { // a day with 23 or 25 hours is still a day
 		return nil
 	}
-	if err := s.send(ctx, workspace, sum, st, lastSlot, slot); err != nil {
+	reqs, audit, err := s.send(ctx, workspace, sum, lastSlot, slot)
+	if err != nil {
 		return err
 	}
-	return s.saveSlot(ctx, workspace, slot)
+	// The list and the sample are out: the slot is done even if the suggestions
+	// fail, or the whole summary would go out again at every tick.
+	if err := s.saveSlot(ctx, workspace, slot); err != nil {
+		return err
+	}
+	if err := s.suggestions(ctx, workspace, sum, reqs, audit, slot); err != nil {
+		s.log.Warn("digest: the suggestions of a workspace failed", "workspace", workspace, "err", err)
+	}
+	return nil
 }
 
 func (s *Service) saveSlot(ctx context.Context, workspace string, slot time.Time) error {
@@ -320,29 +329,34 @@ func levelWord(l chain.LevelKind) string {
 	return "Mestre da mesa"
 }
 
-func (s *Service) send(ctx context.Context, workspace string, sum chain.SummarySettings, st chain.Settings, from, to time.Time) error {
+func (s *Service) send(ctx context.Context, workspace string, sum chain.SummarySettings, from, to time.Time) ([]chain.Request, map[int64][]chain.AuditEntry, error) {
 	since := to.Add(-Window)
 	if from.Before(since) {
 		since = from
 	}
 	reqs, audit, err := s.o.Source.Window(ctx, since)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	ds := s.decisions(ctx, workspace, reqs, audit, from, to)
 	people, err := s.o.Directory.Recipients(ctx, workspace, sum.For)
 	if err != nil {
-		return err
-	}
-	owners, err := s.o.Directory.Owners(ctx)
-	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if len(ds) > 0 {
 		if err := s.o.Inbox.ToGrandMaster(ctx, workspace, s.o.Mask(s.listText(ctx, ds, from, to))); err != nil {
 			s.log.Warn("digest: the Grand Master was not given the list", "workspace", workspace, "err", err)
 		}
 		s.sample(ctx, workspace, people, sum.Sample, ds)
+	}
+	return reqs, audit, nil
+}
+
+// suggestions makes the suggestions of the period and sends the open ones to the Owner.
+func (s *Service) suggestions(ctx context.Context, workspace string, sum chain.SummarySettings, reqs []chain.Request, audit map[int64][]chain.AuditEntry, to time.Time) error {
+	owners, err := s.o.Directory.Owners(ctx)
+	if err != nil {
+		return err
 	}
 	if err := s.suggest(ctx, workspace, sum, reqs, audit, to); err != nil {
 		return err
@@ -358,7 +372,7 @@ func (s *Service) listText(ctx context.Context, ds []Decision, from, to time.Tim
 		if d.Approved {
 			verb = "aprovou"
 		}
-		fmt.Fprintf(&b, "- #%d · %s %s %s · risco %s · mesa %s: %s", d.Request, levelWord(d.Level), s.name(ctx, d.Approver), verb, orDash(d.Risk), orDash(d.Table), d.About)
+		fmt.Fprintf(&b, "- #%d · %s %s %s · risco %s · mesa %s: %s", d.Request, levelWord(d.Level), s.name(ctx, d.Approver), verb, orDash(d.Risk), orDash(d.Table), oneLine(d.About))
 		if d.Reason != "" {
 			fmt.Fprintf(&b, " · motivo (texto do agente, não verificado): %s", strings.Join(strings.Fields(d.Reason), " "))
 		}
@@ -366,6 +380,8 @@ func (s *Service) listText(ctx context.Context, ds []Decision, from, to time.Tim
 	}
 	return b.String()
 }
+
+func oneLine(v string) string { return strings.Join(strings.Fields(v), " ") }
 
 func orDash(v string) string {
 	if v == "" {
@@ -395,15 +411,16 @@ func (s *Service) sample(ctx context.Context, workspace string, people []Person,
 			j := i + s.o.Rand.IntN(len(pool)-i)
 			pool[i], pool[j] = pool[j], pool[i]
 		}
+		total := len(pool)
 		if len(pool) > n {
 			pool = pool[:n]
 		}
 		sort.Slice(pool, func(i, j int) bool { return pool[i].Request < pool[j].Request })
 		var b strings.Builder
-		fmt.Fprintf(&b, "Amostra para revisão: ações aprovadas por %s (%d de um total do período). Foi um erro? O botão registra a marcação e revoga a regra temporária que nasceu da decisão.\n", levelWord(level), len(pool))
+		fmt.Fprintf(&b, "Amostra para revisão: ações aprovadas por %s (%d de %d do período). Foi um erro? O botão registra a marcação e revoga a regra temporária que nasceu da decisão.\n", levelWord(level), len(pool), total)
 		var rows [][]Button
 		for _, d := range pool {
-			fmt.Fprintf(&b, "\n#%d · %s · nível %s · risco %s · mesa %s\n  pedido: %s\n", d.Request, s.name(ctx, d.Approver), levelWord(d.Level), orDash(d.Risk), orDash(d.Table), d.About)
+			fmt.Fprintf(&b, "\n#%d · %s · nível %s · risco %s · mesa %s\n  pedido: %s\n", d.Request, s.name(ctx, d.Approver), levelWord(d.Level), orDash(d.Risk), orDash(d.Table), oneLine(d.About))
 			if d.Reason != "" {
 				fmt.Fprintf(&b, "  motivo (texto do agente, não verificado): %s\n", strings.Join(strings.Fields(d.Reason), " "))
 			}
@@ -439,12 +456,21 @@ func (s *Service) Mark(ctx context.Context, request int64, userID string) (int, 
 	if !s.o.Directory.MayMark(ctx, userID, r.Workspace) {
 		return 0, errors.New("digest: only an Administrator or above marks a decision as a mistake")
 	}
+	fresh := false
 	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO digest_marks (request, by_user, at) VALUES (?, ?, ?) ON CONFLICT (request) DO NOTHING`, request, userID, ms(s.clk.Now()))
-		return err
+		res, err := tx.ExecContext(ctx, `INSERT INTO digest_marks (request, by_user, at) VALUES (?, ?, ?) ON CONFLICT (request) DO NOTHING`, request, userID, ms(s.clk.Now()))
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		fresh = n > 0
+		return nil
 	})
 	if err != nil {
 		return 0, err
+	}
+	if !fresh {
+		return 0, nil // already marked: neither the audit nor the rules again
 	}
 	if err := s.o.Source.Audit(ctx, chain.AuditEntry{Request: request, At: s.clk.Now(), Approver: userID, Answer: "marked_error", Outcome: "accepted", Reason: "marcada como erro na amostra do resumo"}); err != nil {
 		return 0, err
@@ -571,8 +597,8 @@ func (s *Service) keep(ctx context.Context, f found, now time.Time) error {
 	}
 	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		var n int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM digest_suggestions WHERE workspace = ? AND class = ? AND pattern = ? AND effect = ? AND (state = 'open' OR (state = 'declined' AND declined_until > ?))`,
-			f.workspace, f.class, f.pattern, f.effect, ms(now)).Scan(&n); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM digest_suggestions WHERE workspace = ? AND class = ? AND mesa = ? AND pattern = ? AND effect = ? AND (state = 'open' OR (state = 'declined' AND declined_until > ?) OR (state = 'accepted' AND created_at > ?))`,
+			f.workspace, f.class, mesa, f.pattern, f.effect, ms(now), ms(now.Add(-Window))).Scan(&n); err != nil {
 			return err
 		}
 		if n > 0 {
@@ -781,17 +807,33 @@ func (s *Service) Accept(ctx context.Context, id int64, userID string) (decrees.
 	if x.Effect == "deny" {
 		eff = decrees.Effect{Kind: decrees.EffectPermission, Deny: grant}
 	}
+	claimed := false
+	if err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE digest_suggestions SET state = 'accepted', decided_by = ? WHERE id = ? AND state = 'open'`, userID, id)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		claimed = n > 0
+		return nil
+	}); err != nil {
+		return decrees.Pending{}, err
+	}
+	if !claimed {
+		return decrees.Pending{}, ErrNotOpen
+	}
 	pend, err := s.o.Decrees.Propose(ctx, decrees.Proposal{Author: userID, Kind: decrees.KindRule, Effect: eff, Target: decrees.Target{Kind: decrees.TargetClass, Name: x.Class},
 		Workspace: x.Workspace, Mesa: x.Mesa, Text: fmt.Sprintf("Sugestão do resumo %d: %s `%s` para a classe %s", x.ID, map[string]string{"allow": "permitir", "deny": "negar"}[x.Effect], x.Pattern, x.Class),
 		Origin: decrees.Origin{Channel: "summary"}})
 	if err != nil {
+		// nothing was proposed: the suggestion is open again
+		_ = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+			_, uerr := tx.ExecContext(ctx, `UPDATE digest_suggestions SET state = 'open', decided_by = '' WHERE id = ? AND state = 'accepted'`, id)
+			return uerr
+		})
 		return decrees.Pending{}, err
 	}
-	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `UPDATE digest_suggestions SET state = 'accepted', decided_by = ? WHERE id = ? AND state = 'open'`, userID, id)
-		return err
-	})
-	return pend, err
+	return pend, nil
 }
 
 func orErr(err error, fallback string) string {

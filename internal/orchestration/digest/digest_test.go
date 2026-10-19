@@ -491,3 +491,63 @@ func TestTheSecretsOfTheSummaryAreMasked(t *testing.T) {
 		t.Fatal("a secret reached the summary")
 	}
 }
+
+// An accepted suggestion is not suggested again while its approvals are still in
+// the window, a double tap on Aceitar makes one proposal, a second mark does
+// not repeat the audit, and the sample says the total.
+func TestAnAcceptedSuggestionDoesNotComeBackAndAcceptIsOnce(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 1)
+	w.tick()
+	for _, pkg := range []string{"a", "b", "c"} {
+		w.decided(chain.LevelMesa, true, "42-login", "dev", "npm install "+pkg, classes.RiskLow)
+	}
+	w.toSlot()
+	w.tick()
+	open, _ := w.svc.Suggestions(w.ctx, "loja", "open")
+	if len(open) != 1 {
+		t.Fatalf("open = %+v", open)
+	}
+	if _, err := w.svc.Accept(w.ctx, open[0].ID, w.owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.svc.Accept(w.ctx, open[0].ID, w.owner.ID); err != digest.ErrNotOpen {
+		t.Fatalf("the second Aceitar = %v", err)
+	}
+	w.clk.Advance(24 * time.Hour)
+	w.tick()
+	all, _ := w.svc.Suggestions(w.ctx, "loja", "")
+	if len(all) != 1 {
+		t.Fatalf("an accepted suggestion came back: %+v", all)
+	}
+	var sampleText string
+	for _, text := range w.ownerTexts() {
+		if strings.HasPrefix(text, "Amostra para revisão") {
+			sampleText = text
+		}
+	}
+	if !strings.Contains(sampleText, "3 de 3 do período") {
+		t.Fatalf("sample header = %q", sampleText)
+	}
+}
+
+func TestAMistakeMarkedTwiceIsAuditedOnce(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 1)
+	r := w.decided(chain.LevelMesa, true, "42-login", "dev", "make x y", classes.RiskLow)
+	for range 2 {
+		if _, err := w.svc.Mark(w.ctx, r.ID, w.owner.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	marks := 0
+	audit, _ := w.st.AuditOf(w.ctx, r.ID)
+	for _, e := range audit {
+		if e.Answer == "marked_error" {
+			marks++
+		}
+	}
+	if marks != 1 || len(w.rules.revoked) != 1 {
+		t.Fatalf("marks = %d, revoked = %v", marks, w.rules.revoked)
+	}
+}
