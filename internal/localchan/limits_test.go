@@ -45,6 +45,9 @@ func TestTheConnectionsOfOneProcessAreBounded(t *testing.T) {
 		if got := final(t, rawCall(t, r, "flood", fmt.Sprintf(debug, "f4"))); !got.OK {
 			t.Fatalf("the process again, below the limit: %+v", got)
 		}
+		// The server goroutine of that call frees its slots after the client
+		// closed; the count below needs it done.
+		synctest.Wait()
 		// The whole server: b, two of other and one more are 4; the next is
 		// closed with nothing read or answered.
 		o1, o2, o3 := hold("other"), hold("other"), hold("flood")

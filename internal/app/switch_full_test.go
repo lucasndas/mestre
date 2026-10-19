@@ -622,16 +622,20 @@ func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 		st, ok := w.status(b)
 		return ok && st.Role == app.RoleCitadel && st.Epoch == 2
 	})
-	if err := w.clk.Advance(59 * time.Second); err != nil {
-		t.Fatal(err)
+	// The role is told before the fence arms its timer of 60 s (Run starts
+	// after it), so one jump of 59 s could land before the timer exists and
+	// leave it 60 s ahead of the clock. The clock goes by steps of 1 s: the
+	// wait ends 60 s after the timer was armed, whenever that was, and never
+	// earlier.
+	for range 59 {
+		if err := w.clk.Advance(time.Second); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if st, _ := w.status(b); st.Acting || st.Fence != "waiting" {
 		t.Fatalf("59 s after the restart the Citadel is %s (acting %v); want it waiting the whole wait again", st.Fence, st.Acting)
 	}
-	if err := w.clk.Advance(time.Second); err != nil {
-		t.Fatal(err)
-	}
-	w.waitFor("b to act after the wait and the check of the lock", 0, func() bool {
+	w.waitFor("b to act after the wait and the check of the lock", time.Second, func() bool {
 		st, ok := w.status(b)
 		return ok && st.Acting
 	})
