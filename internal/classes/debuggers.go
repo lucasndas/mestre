@@ -1,6 +1,9 @@
 package classes
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // Debuggers, profilers and meters that run a command of their own: gdb
 // --args, lldb --, perf stat and record, rr record and hyperfine. Like the
@@ -231,3 +234,66 @@ const (
 	hyperfineShortValued   = "wmMrpscCSLnu"
 	hyperfineShortCommands = "pscC"
 )
+
+var (
+	gdbSetEnvRe   = regexp.MustCompile(`^\s*set\s+env(?:i(?:r(?:o(?:n(?:m(?:e(?:n(?:t)?)?)?)?)?)?)?)?\s+([^\s=]+)`)
+	gdbUnsetEnvRe = regexp.MustCompile(`^\s*unset\s+env(?:i(?:r(?:o(?:n(?:m(?:e(?:n(?:t)?)?)?)?)?)?)?)?(?:\s+(\S+))?\s*$`)
+)
+
+// debuggerEnv notes what gdb and rr set in the environment of the program
+// they run, as env does: rr record --env NAME=value, gdb's set environment,
+// unset environment and set exec-wrapper env …
+func (e *evaluator) debuggerEnv(cn string, args []word, res *result) {
+	if cn == "rr" {
+		for _, v := range optValues(wordsText(args), "--env") {
+			if name, _, ok := strings.Cut(v, "="); ok {
+				e.wrapperEnv(res, name, true)
+			}
+		}
+		return
+	}
+	for _, v := range optValues(wordsText(args), gdbCommandOptions...) {
+		for _, line := range strings.Split(v, "\n") {
+			line = gdbUnwrap(line)
+			switch {
+			case gdbSetEnvRe.MatchString(line):
+				e.wrapperEnv(res, gdbSetEnvRe.FindStringSubmatch(line)[1], true)
+			case gdbUnsetEnvRe.MatchString(line):
+				name := gdbUnsetEnvRe.FindStringSubmatch(line)[1]
+				if name == "" { // unset environment: all of it
+					name = "GIT_CONFIG_GLOBAL"
+				}
+				e.wrapperEnv(res, name, false)
+			default:
+				if cmd, ok := gdbExecWrapper(line); ok {
+					e.execWrapperEnv(cmd, res)
+				}
+			}
+		}
+	}
+}
+
+// execWrapperEnv reads the assignments and the -u / -i of an env used as the
+// exec-wrapper of gdb.
+func (e *evaluator) execWrapperEnv(cmd string, res *result) {
+	f := strings.Fields(cmd)
+	if len(f) == 0 || f[0] != "env" {
+		return
+	}
+	for i := 1; i < len(f); i++ {
+		switch t := f[i]; {
+		case t == "-u" && i+1 < len(f):
+			i++
+			e.wrapperEnv(res, f[i], false)
+		case strings.HasPrefix(t, "--unset="):
+			e.wrapperEnv(res, strings.TrimPrefix(t, "--unset="), false)
+		case t == "-i" || t == "--ignore-environment" || t == "-":
+			e.wrapperEnv(res, "GIT_CONFIG_GLOBAL", false)
+		case strings.HasPrefix(t, "-"):
+		default:
+			if name, _, ok := strings.Cut(t, "="); ok {
+				e.wrapperEnv(res, name, true)
+			}
+		}
+	}
+}
