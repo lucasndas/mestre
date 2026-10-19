@@ -224,6 +224,7 @@ func newWorldOver(t *testing.T, db *store.DB, clk *clock.Fake) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
+	w.in.SetAskProgress(w.svc)
 	return w
 }
 

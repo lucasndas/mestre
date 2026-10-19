@@ -83,6 +83,35 @@ type Service struct {
 	mu     sync.Mutex
 	pumps  map[string]*pumpState
 	warned map[string]bool
+	// progress hears how far the items that carry an ask went.
+	progress AskProgress
+}
+
+// AskProgress is told how far an item that carries an ask went: `delivered`
+// when it was typed in the terminal of the target and `answering` when the turn
+// that handles it began (the partial responses of the `ask`,
+// docs/arquitetura/canal-local.md#respostas-parciais).
+type AskProgress interface {
+	AskProgress(ctx context.Context, ask, status string)
+}
+
+// SetAskProgress sets who hears the progress of the asks (*waits.Service).
+func (s *Service) SetAskProgress(p AskProgress) {
+	s.mu.Lock()
+	s.progress = p
+	s.mu.Unlock()
+}
+
+func (s *Service) tellProgress(ctx context.Context, ask, status string) {
+	if ask == "" {
+		return
+	}
+	s.mu.Lock()
+	p := s.progress
+	s.mu.Unlock()
+	if p != nil {
+		p.AskProgress(ctx, ask, status)
+	}
 }
 
 var (
@@ -285,6 +314,7 @@ func (s *Service) pumpOnce(ctx context.Context, target string) error {
 				s.log.Warn("inbox: a task was not marked", "item", it.ID, "err", terr)
 			}
 		}
+		s.tellProgress(ctx, it.Refs.Ask, "delivered")
 		return nil
 	}
 	if rerr := s.st.Requeue(ctx, it.ID); rerr != nil {
@@ -366,6 +396,11 @@ func (s *Service) TurnEnded(context.Context, characters.Character, string) error
 // Confirmed implements providers.Inbox: the turn of the delivery began.
 func (s *Service) Confirmed(ctx context.Context, id string) error {
 	_, err := s.st.Deliver(ctx, id, s.clk.Now(), false)
+	if err == nil {
+		if it, gerr := s.st.Get(ctx, id); gerr == nil && it.Kind == KindAgent {
+			s.tellProgress(ctx, it.Refs.Ask, "answering")
+		}
+	}
 	return err
 }
 

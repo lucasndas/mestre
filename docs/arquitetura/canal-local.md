@@ -1,6 +1,6 @@
 # Canal local
 
-> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** contrato entre a CLI `mestre` (e o `mestre hook`) e o motor local: endpoint, enquadramento, pedido, resposta, respostas parciais, tempo limite, versão e encaminhamento · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -55,7 +55,7 @@ Definir o único caminho pelo qual um agente fala com o Mestre: o processo `mest
 
 ### Respostas parciais
 
-- Comandos longos (o `ask` que espera a resposta) mandam linhas `{"v":1,"id":"01J…","partial":true,"data":{"status":"queued"}}` antes da resposta final: `queued`, `delivered`, `answering` e um sinal de vida a cada 15 s (padrão), `{"status":"alive"}`, mandado por conexão enquanto o pedido roda (as demais parciais são guardadas com o pedido).
+- Comandos longos (o `ask` que espera a resposta) mandam linhas `{"v":1,"id":"01J…","partial":true,"data":{"status":"queued"}}` antes da resposta final: `queued` (a mensagem entrou na fila do alvo), `delivered` (foi digitada no terminal dele) e `answering` (o turno que a trata começou), cada uma com o nome do alvo em `to`, e um sinal de vida a cada 15 s (padrão), `{"status":"alive"}`, mandado por conexão enquanto o pedido roda (as demais parciais são guardadas com o pedido).
 - A CLI não imprime as parciais (só com `--debug`); usa o sinal de vida para saber que o motor está vivo: sem nenhuma linha por 45 s (3 sinais), dá a conexão por morta e reenvia o pedido ([motor reiniciando](#motor-reiniciando)).
 
 ### Tempo limite

@@ -146,7 +146,8 @@ func (s *Service) handleAsk(ctx context.Context, c *localchan.Call) localchan.Re
 			return Refusal(err)
 		}
 	}
-	out, err := s.Ask(ctx, AskRequest{From: x, To: t, Prompt: prompt, Timeout: timeout, NoWait: flagBool(c, "no-wait"), Gone: c.Gone})
+	out, err := s.Ask(ctx, AskRequest{From: x, To: t, Prompt: prompt, Timeout: timeout, NoWait: flagBool(c, "no-wait"), Gone: c.Gone,
+		Progress: func(status string) { c.Partial(map[string]any{"status": status, "to": t.Name}) }})
 	if err != nil {
 		return Refusal(err)
 	}
@@ -201,7 +202,8 @@ func (s *Service) askBatch(ctx context.Context, x characters.Character, c *local
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			outs[i], errs[i] = s.Ask(ctx, AskRequest{From: x, To: targets[i], Prompt: prompts[names[i]], Timeout: timeout, NoWait: flagBool(c, "no-wait"), Gone: c.Gone})
+			outs[i], errs[i] = s.Ask(ctx, AskRequest{From: x, To: targets[i], Prompt: prompts[names[i]], Timeout: timeout, NoWait: flagBool(c, "no-wait"), Gone: c.Gone,
+				Progress: func(status string) { c.Partial(map[string]any{"status": status, "to": targets[i].Name}) }})
 		}()
 	}
 	wg.Wait()
