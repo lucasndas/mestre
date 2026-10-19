@@ -328,7 +328,7 @@ func (w *world) inboxOf(c characters.Character) []inbox.Item {
 }
 
 // enqueue puts an item in an inbox.
-func (w *world) enqueue(n inbox.NewItem) inbox.Item {
+func (w *world) enqueue(n inbox.NewItem) inbox.Item { //nolint:unused // used by the full suite
 	w.t.Helper()
 	if n.Workspace == "" {
 		n.Workspace = workspace

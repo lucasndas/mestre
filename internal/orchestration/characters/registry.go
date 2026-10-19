@@ -141,15 +141,6 @@ func (r Registry) GrandMaster(ctx context.Context, workspace string) (Character,
 	return cs[0], true, nil
 }
 
-// NameTaken is the check of a name in a table; the insert repeats it in its
-// own transaction.
-func (r Registry) NameTaken(ctx context.Context, workspace, table, name string) (bool, error) {
-	var n int
-	err := r.DB.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM characters WHERE state <> 'stopped' AND workspace = ? AND table_id = ? AND name_key = ?`,
-		workspace, table, nameKey(name)).Scan(&n)
-	return n > 0, err
-}
-
 // Insert creates the row of a character, with its first line of the state
 // history, refusing a name a living character of the table already has.
 func (r Registry) Insert(ctx context.Context, c Character) error {
@@ -340,12 +331,6 @@ func (r Registry) SetStop(ctx context.Context, id string, at time.Time, by, reas
 	return r.exec(ctx, id, `stop_requested_at = ?, stop_requested_by = ?, stop_reason = ?`, ms(at), by, reason)
 }
 
-// SetReduced marks the monitoring of the character as reduced, with the reason
-// ("" clears it).
-func (r Registry) SetReduced(ctx context.Context, id, reason string) error {
-	return r.exec(ctx, id, `reduced_monitoring = ?`, reason)
-}
-
 // SetSession records the id of the session of the provider.
 func (r Registry) SetSession(ctx context.Context, id, session string) error {
 	return r.exec(ctx, id, `provider_session_id = ?`, session)
@@ -354,11 +339,6 @@ func (r Registry) SetSession(ctx context.Context, id, session string) error {
 // SetCreator replaces who created the character (the creator was replaced).
 func (r Registry) SetCreator(ctx context.Context, id string, by Creator) error {
 	return r.exec(ctx, id, `created_by = ?, created_by_kind = ?`, by.ID, string(by.Kind))
-}
-
-// Touch records a signal of the character at a time.
-func (r Registry) Touch(ctx context.Context, id string, at time.Time) error {
-	return r.exec(ctx, id, `last_signal_at = ?`, ms(at))
 }
 
 // Done is a done a character delivered.

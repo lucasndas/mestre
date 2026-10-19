@@ -92,7 +92,7 @@ func (p *permissions) Allow(_ context.Context, c characters.Character, command s
 	return rituals.Decision{Allow: true}, nil
 }
 
-func (p *permissions) denyWith(reason string) {
+func (p *permissions) denyWith(reason string) { //nolint:unused // used by the full suite
 	p.mu.Lock()
 	p.deny = reason
 	p.mu.Unlock()
@@ -248,7 +248,7 @@ func (w *world) byMaster() rituals.Actor {
 	return rituals.Actor{Kind: rituals.ByCharacter, Character: w.master}
 }
 
-func (w *world) byGM() rituals.Actor {
+func (w *world) byGM() rituals.Actor { //nolint:unused // used by the full suite
 	return rituals.Actor{Kind: rituals.ByCharacter, Character: w.gm}
 }
 

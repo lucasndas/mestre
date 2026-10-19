@@ -43,14 +43,6 @@ func (v Verdict) rank() int {
 
 func (v Verdict) valid() bool { return v == Allow || v == Ask || v == Deny }
 
-// stricter returns the more restrictive of a and b.
-func stricter(a, b Verdict) Verdict {
-	if b.rank() > a.rank() {
-		return b
-	}
-	return a
-}
-
 // Layer is where a rule comes from (origin of the effective rules), cited by
 // the reason of a denial.
 type Layer string

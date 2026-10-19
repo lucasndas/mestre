@@ -77,8 +77,13 @@ func (r *Runner) flagSlow(ctx context.Context, s Suite, rep *report, allowance t
 		fmt.Fprintf(&md, "| %v | %s | %s%s |\n", f.time.Round(time.Millisecond), f.r.Package, f.r.Test, note)
 		names[i] = f.r.Test
 	}
-	r.printf("warning: %d fast-suite test(s) above %v when run alone:\n%s\n", len(flagged), slowTest, strings.Join(lines, "\n"))
-	r.ciReport("warning", "Slow tests", fmt.Sprintf("%d fast-suite test(s) above %v when run alone: %s", len(flagged), slowTest, strings.Join(names, ", ")), md.String())
+	// The time is the one of the suite run when no test was timed alone.
+	how := "when run alone"
+	if !slices.ContainsFunc(flagged, func(f slowTestEntry) bool { return f.measured }) {
+		how = "in the suite (not re-run)"
+	}
+	r.printf("warning: %d fast-suite test(s) above %v %s:\n%s\n", len(flagged), slowTest, how, strings.Join(lines, "\n"))
+	r.ciReport("warning", "Slow tests", fmt.Sprintf("%d fast-suite test(s) above %v %s: %s", len(flagged), slowTest, how, strings.Join(names, ", ")), md.String())
 }
 
 // aloneTimes is the outcome of timing the candidates of one package.

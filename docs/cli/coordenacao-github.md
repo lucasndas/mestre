@@ -56,6 +56,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 | `--block` com a cabeça do PR diferente de `--expect-head` | 7 | `head_changed` | a cabeça atual; ler o PR de novo e repetir |
 | `--block` num bloco de outra classe | 3 | `block_owned` | qual classe é a dona |
 | branch da mesa em conflito com a principal, ou a base andou desde a abertura | 7 | `conflict` | atualizar a branch dentro da mesa, na etapa `sync` ([sincronia](../orquestracao/sincronia-com-a-base.md)) |
+| `pr open` com missão `completed` do épico que tem critério sem prova | 7 | `criteria_unproven` | os critérios sem prova; provar com uma missão de correção ou tirar o critério da issue ([aceite](../orquestracao/mestre-da-mesa.md#o-pedido-que-chega-o-mestre-da-mesa-como-po)) |
 | push forçado pedido na branch principal | 3 | `force_main_denied` | push forçado só na branch da mesa |
 | GitHub fora (`5xx`, rede) ou limite secundário (abuso) | 5 | `github_unavailable` | quando tentar de novo (a resposta do GitHub diz); a ação que muda dados não é repetida sozinha |
 | cota primária esgotada ou abaixo de 10% | 0 | `queued: true` | o comando que muda dados espera na fila de saída e sai uma vez na renovação; só as leituras (`issue list`, `pr status`) saem com 5 `github_unavailable` e a hora da renovação ([eventos](../github/eventos.md#regras-e-erros)) |
@@ -78,6 +79,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 - **CA-CLI-GH-10** · *rápida* — **Dado** `mestre issue create --title "Login lento" --fingerprint "auth: login lento"`, **quando** roda, **então** cria a issue com a impressão no corpo; **quando** roda de novo com `--fingerprint "Auth:  login LENTO"`, **então** não cria outra, comenta "visto de novo" na primeira e devolve `seen_again: true`; **dado** a primeira fechada, **quando** roda de novo, **então** cria uma nova com "Recorrência de #<n>", o rótulo `recorrencia` (criado no GitHub falso, que não o tinha) e `recurrence_of`.
 - **CA-CLI-GH-11** · *rápida* — **Dado** o GitHub falso com a cota em zero e o aluguel válido, **quando** o Mestre da mesa roda `mestre issue comment 50 "x"`, **então** sai com 0 e `queued: true`, e `mestre pr status` sai com 5 `github_unavailable`; **dado** um limite secundário (`403` com `retry-after`), **então** o comentário sai com 5 `github_unavailable` e não é repetido sozinho.
 - **CA-CLI-GH-12** · *rápida* — **Dado** `mestre issue update 42 --remove-label mestre:humano` (ou `--add-label epico`) pedido por um personagem da mesa, **quando** o motor avalia, **então** sai com 3 `reserved_label` e o GitHub falso não recebe nada.
+- **CA-CLI-GH-13** · *rápida* — **Dado** uma missão `completed` do épico com o critério C3 sem prova, **quando** o Mestre da mesa roda `mestre pr open --body-file corpo.md`, **então** sai com 7 `criteria_unproven` citando C3 e nada é enviado; **dado** C3 marcado, **então** o PR abre com o bloco `criterios` do corpo.
 
 ## Depende de
 

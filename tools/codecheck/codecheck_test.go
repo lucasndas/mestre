@@ -231,13 +231,16 @@ func TestAgentFilesGoThroughSafefile(t *testing.T) {
 		path, src string
 		want      []string
 	}{
-		"ReadFile in providers": {"internal/providers/a.go", mk("_, _ = os.ReadFile(p)"), []string{"internal/providers/a.go:6: agent-files:"}},
-		"Rename in providers":   {"internal/providers/a.go", mk("_ = os.Rename(p, p)"), []string{"internal/providers/a.go:6: agent-files:"}},
-		"Chmod in classes":      {"internal/classes/a.go", mk("_ = os.Chmod(p, 0o644)"), []string{"internal/classes/a.go:6: agent-files:"}},
-		"ReadFile in classes":   {"internal/classes/a.go", mk("_, _ = os.ReadFile(p)"), nil},
-		"elsewhere":             {"internal/store/a.go", mk("_ = os.Chmod(p, 0o644)"), nil},
-		"test code":             {"internal/providers/a_test.go", mk("_, _ = os.ReadFile(p)"), nil},
-		"excused":               {"internal/providers/a.go", mk("// mestre:allow agent-files: a file of the engine only\n\t_, _ = os.ReadFile(p)"), nil},
+		"ReadFile in providers":                   {"internal/providers/a.go", mk("_, _ = os.ReadFile(p)"), []string{"internal/providers/a.go:6: agent-files:"}},
+		"Rename in providers":                     {"internal/providers/a.go", mk("_ = os.Rename(p, p)"), []string{"internal/providers/a.go:6: agent-files:"}},
+		"Chmod in classes":                        {"internal/classes/a.go", mk("_ = os.Chmod(p, 0o644)"), []string{"internal/classes/a.go:6: agent-files:"}},
+		"ReadFile in classes":                     {"internal/classes/a.go", mk("_, _ = os.ReadFile(p)"), nil},
+		"ReadFile in a Windows file of providers": {"internal/providers/a_windows.go", mk("_, _ = os.ReadFile(p)"), []string{"internal/providers/a_windows.go:6: agent-files:"}},
+		"Chmod in a Windows file of classes":      {"internal/classes/a_windows.go", mk("_ = os.Chmod(p, 0o644)"), []string{"internal/classes/a_windows.go:6: agent-files:"}},
+		"a Windows test file":                     {"internal/providers/a_windows_test.go", mk("_, _ = os.ReadFile(p)"), nil},
+		"elsewhere":                               {"internal/store/a.go", mk("_ = os.Chmod(p, 0o644)"), nil},
+		"test code":                               {"internal/providers/a_test.go", mk("_, _ = os.ReadFile(p)"), nil},
+		"excused":                                 {"internal/providers/a.go", mk("// mestre:allow agent-files: a file of the engine only\n\t_, _ = os.ReadFile(p)"), nil},
 	}
 	// every call of the table of the rule, not only the ones above
 	for call, args := range map[string]string{

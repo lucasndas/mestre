@@ -55,7 +55,7 @@ func runCmd(ctx context.Context, out io.Writer, env []string, name string, args 
 }
 
 // output executes a command and returns what it printed.
-func output(ctx context.Context, name string, args ...string) (string, error) {
+func output(ctx context.Context, name string, args ...string) (string, error) { //nolint:unused // used by the Linux files
 	b, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 	if err != nil {
 		return string(b), fmt.Errorf("%s %v: %w: %s", name, args, err, b)
