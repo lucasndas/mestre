@@ -3,9 +3,11 @@ package ghcli_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,30 +43,117 @@ func (t tables) Epic(_ context.Context, table string) (github.TableRef, bool, er
 
 type repos struct{}
 
+// lease is the lease of the tests: valid, or expired with a queue.
+type lease struct {
+	mu     sync.Mutex
+	down   bool
+	queued []func(context.Context) error
+}
+
+func (l *lease) Allow() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.down {
+		return errors.New("expired")
+	}
+	return nil
+}
+
+func (l *lease) Do(ctx context.Context, _ string, fn func(context.Context) error) (bool, error) {
+	l.mu.Lock()
+	if l.down {
+		l.queued = append(l.queued, fn)
+		l.mu.Unlock()
+		return true, nil
+	}
+	l.mu.Unlock()
+	return false, fn(ctx)
+}
+
+// expire makes the lease expire; renew gives it back and sends the queue, in order.
+func (l *lease) expire() { l.mu.Lock(); l.down = true; l.mu.Unlock() }
+
+func (l *lease) renew(ctx context.Context) int {
+	l.mu.Lock()
+	l.down = false
+	q := l.queued
+	l.queued = nil
+	l.mu.Unlock()
+	for _, f := range q {
+		_ = f(ctx)
+	}
+	return len(q)
+}
+
+// prs gives the PR of each table.
+type prs map[string]int
+
+func (p prs) PRNumber(_ context.Context, key string) (int, bool, error) {
+	n, ok := p[key]
+	return n, ok, nil
+}
+
 func (repos) Repo(context.Context, string) (string, error) { return repoFull, nil }
 
 // clients gives each character the REST of its App: the token tells the App to
 // the double.
-type clients struct{ gh *fakegithub.Server }
+type clients struct {
+	gh *fakegithub.Server
+	// onFiles runs when the files of a PR are read (a push in the middle of a command).
+	onFiles *func()
+	quota   *github.Quota
+}
 
-func (c clients) For(_ context.Context, ch characters.Character, _ string) (github.IssueAPI, error) {
-	tok := "tok_mestre"
+// hooked is the REST with a hook on the reading of the files of a PR.
+type hooked struct {
+	*github.REST
+	onFiles *func()
+}
+
+func (h hooked) PullFiles(ctx context.Context, repo string, n int) ([]github.PullFile, error) {
+	files, err := h.REST.PullFiles(ctx, repo, n)
+	if h.onFiles != nil && *h.onFiles != nil {
+		(*h.onFiles)()
+	}
+	return files, err
+}
+
+// appOf is the App of a character (its slug) and the token the double knows it by.
+func appOf(ch characters.Character) (app, token string) {
 	switch {
 	case ch.Role == characters.RoleGrandMaster:
-		tok = "tok_gm"
+		return "grand_master", "tok_gm"
 	case ch.Class == "qa":
-		tok = "tok_qa"
+		return "qa", "tok_qa"
 	}
-	return &github.REST{BaseURL: "https://api.github.com", HTTP: &http.Client{Transport: fakenet.HandlerTransport(c.gh)},
-		Token: func(context.Context, string) (string, error) { return tok, nil }}, nil
+	return "mestre", "tok_mestre"
+}
+
+func (c clients) For(_ context.Context, ch characters.Character, _ string) (github.PullAPI, error) {
+	app, tok := appOf(ch)
+	return hooked{&github.REST{BaseURL: "https://api.github.com", HTTP: &http.Client{Transport: fakenet.HandlerTransport(c.gh)},
+		Token: func(context.Context, string) (string, error) { return tok, nil }, Quota: c.quota, App: app}, c.onFiles}, nil
+}
+
+// quotaOf says whether the App of a character is low.
+type quotaOf struct{ q *github.Quota }
+
+func (q quotaOf) Low(_ context.Context, ch characters.Character) (time.Time, bool) {
+	app, _ := appOf(ch)
+	return q.q.Low(app)
 }
 
 type rig struct {
-	t    *testing.T
-	ctx  context.Context
-	gh   *fakegithub.Server
-	objs *github.Objects
-	gate *cli.Gate
+	t     *testing.T
+	ctx   context.Context
+	gh    *fakegithub.Server
+	objs  *github.Objects
+	gate  *cli.Gate
+	prs   prs
+	lease *lease
+	clk   *clock.Fake
+	// onFiles: see clients.
+	onFiles *func()
 }
 
 // newRig has a table 42-login (its epic is the issue #1) with its Mestre da mesa "tm", a QA
@@ -95,7 +184,11 @@ func newRig(t *testing.T) *rig {
 		"dev": {ID: "dev", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "dev"},
 		"gm":  {ID: "gm", Role: characters.RoleGrandMaster, Workspace: "meu-app"},
 	}
-	h := &ghcli.Handlers{Characters: cs, Clients: clients{gh}, Repos: repos{}, Tables: tables{"42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
+	pr := prs{}
+	quota := &github.Quota{Clock: clk}
+	onFiles := new(func())
+	ls := &lease{}
+	h := &ghcli.Handlers{PRs: pr, Lease: ls, Characters: cs, Quota: quotaOf{quota}, Clients: clients{gh, onFiles, quota}, Repos: repos{}, Tables: tables{"meu-app/42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
 	fwd := localchan.NewLocalForwarder()
 	h.Register(fwd)
 	profiles := cli.ProfilesFunc(func(_ context.Context, id string) cli.Profile {
@@ -109,7 +202,7 @@ func newRig(t *testing.T) *rig {
 		}
 		return cli.Profile{Role: cli.RoleCharacter}
 	})
-	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
 }
 
 // result is the answer of a command.

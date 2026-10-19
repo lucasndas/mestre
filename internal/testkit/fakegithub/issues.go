@@ -105,8 +105,8 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 	if len(parts) == 7 && parts[3] == "issues" && parts[5] == "labels" && r.Method == http.MethodDelete {
 		return s.removeIssueLabel(w, r, full, parts[4], parts[6])
 	}
-	if len(parts) == 5 && parts[3] == "pulls" && r.Method == http.MethodGet {
-		return s.servePull(w, r, full, parts[4])
+	if parts[3] == "pulls" || parts[3] == "commits" {
+		return s.servePulls(w, r, full, parts)
 	}
 	isLabel := (len(parts) == 4 && parts[3] == "labels" && r.Method == http.MethodPost) || (len(parts) == 5 && parts[3] == "labels" && r.Method == http.MethodGet)
 	if !isIssueSub && !isLabel {
@@ -165,6 +165,15 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusOK, list)
 	case parts[5] == "comments" && r.Method == http.MethodPost:
+		s.mu.Lock()
+		fail, after := s.failWrite, s.failWriteAfter
+		s.failWrite = 0
+		s.mu.Unlock()
+		if fail != 0 {
+			w.Header().Set("Retry-After", after)
+			s.write(w, r, inst, fail, map[string]any{"message": "You have exceeded a secondary rate limit"})
+			return true
+		}
 		var in struct {
 			Body string `json:"body"`
 		}
@@ -477,27 +486,6 @@ func (s *Server) serveLabel(w http.ResponseWriter, r *http.Request, inst *instal
 		return
 	}
 	s.write(w, r, inst, http.StatusCreated, map[string]any{"name": in.Name, "description": in.Description})
-}
-
-func (s *Server) servePull(w http.ResponseWriter, r *http.Request, full, num string) bool {
-	inst, ok := s.auth(w, r)
-	if !ok {
-		return true
-	}
-	n, _ := strconv.Atoi(num)
-	s.mu.Lock()
-	var head [2]string
-	found := false
-	if rp := s.repos[full]; rp != nil {
-		head, found = rp.pulls[n]
-	}
-	s.mu.Unlock()
-	if !found {
-		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
-		return true
-	}
-	s.write(w, r, inst, http.StatusOK, map[string]any{"number": n, "head": map[string]any{"ref": head[0], "repo": map[string]any{"full_name": head[1]}}})
-	return true
 }
 
 // AddIssueLabel puts a label on an issue as a person would.
