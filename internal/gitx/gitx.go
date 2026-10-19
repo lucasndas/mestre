@@ -290,13 +290,19 @@ type Repo interface {
 	Fetch(ctx context.Context, remote string, refspecs ...string) error
 	// FetchWithAuth is Fetch with auth handed to git in its environment.
 	FetchWithAuth(ctx context.Context, auth Auth, remote string, refspecs ...string) error
-	// PushWithAuth pushes the branch to the branch of the same name of a remote
-	// name, URL or path, with auth handed to git in its environment: only that
-	// ref, never a delete, a glob or another destination. force pushes a branch
-	// that is not a fast-forward of the remote's. A refusal of the remote is
-	// ErrNotFastForward, ErrPushProtected, ErrPushWorkflow, ErrPushSignature or
-	// ErrPushRejected.
-	PushWithAuth(ctx context.Context, auth Auth, remote, branch string, force bool) error
+	// PushWithAuth pushes the commit (a full hash, the one that was checked) to
+	// the branch of a remote name, URL or path, with auth handed to git in its
+	// environment: only that ref, never a delete, a glob or another destination,
+	// and the commit that was read, not what the branch is by the time git looks.
+	// force pushes a commit that is not a fast-forward of the remote's. A refusal
+	// of the remote is ErrNotFastForward, ErrPushProtected, ErrPushWorkflow,
+	// ErrPushSignature or ErrPushRejected.
+	PushWithAuth(ctx context.Context, auth Auth, remote, branch, commit string, force bool) error
+	// AddedLinesEach lists the lines added by each commit of base..head (merges
+	// against their first parent): a line that one commit adds and a later one
+	// takes out is listed, since the push sends both. Like AddedLines, the files are
+	// read as text and a change of more than MaxAddedLines lines is ErrDiffTooLarge.
+	AddedLinesEach(ctx context.Context, base, head string) ([]AddedLine, error)
 	// AddedLines lists the lines added from the merge base of base and head up to
 	// head (git diff base...head), by file and line of head. Every file is read as
 	// text (a NUL byte or an attribute does not hide a line), submodules are not
@@ -370,6 +376,14 @@ func ValidateBranch(b string) error {
 	}
 	if bad {
 		return fmt.Errorf("%w: branch %q", ErrInvalidArgument, b)
+	}
+	return nil
+}
+
+// ValidateCommit checks a full commit hash (40 or 64 hexadecimal digits).
+func ValidateCommit(c string) error {
+	if (len(c) != 40 && len(c) != 64) || strings.Trim(c, "0123456789abcdef") != "" {
+		return fmt.Errorf("%w: commit %q", ErrInvalidArgument, c)
 	}
 	return nil
 }

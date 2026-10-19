@@ -105,7 +105,8 @@ type Sending struct {
 // scanAndCheck reads the change before it is sent: the secrets in the added
 // lines, and the workflows. It says whether the change touches workflows.
 func (s *PRService) scanAndCheck(ctx context.Context, tableKey, class string, b Branch) (workflows bool, err error) {
-	lines, err := b.Repo.AddedLines(ctx, b.Base, b.Head)
+	// every commit that goes: the push sends the history, not the final diff
+	lines, err := b.Repo.AddedLinesEach(ctx, b.Base, b.Head)
 	if err != nil {
 		return false, fmt.Errorf("the change could not be read: %w", err)
 	}
@@ -150,11 +151,16 @@ func (s *PRService) push(ctx context.Context, repo string, b Branch, workflows, 
 	if s.Send.Auth == nil {
 		return ErrNoPushSetup
 	}
+	// the branch of a table is never the branch it goes into
+	if strings.EqualFold(b.Name, b.BaseBranch) || strings.EqualFold(b.Name, "main") || strings.EqualFold(b.Name, "master") {
+		return refuse(CodeForce, "o envio na branch principal não é feito: a mesa trabalha na sua branch")
+	}
 	auth, err := s.Send.Auth.PushAuth(ctx, repo, workflows)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrNoPushSetup, err)
 	}
-	return b.Repo.PushWithAuth(ctx, auth, b.Remote, b.Name, force)
+	// the commit that was read is the one that goes, whatever the branch is by now
+	return b.Repo.PushWithAuth(ctx, auth, b.Remote, b.Name, b.Head, force)
 }
 
 // POpen is `pr open`.
@@ -224,7 +230,7 @@ func (s *PRService) Open(ctx context.Context, a Actor, repo string, in POpen) (P
 	if err := s.push(ctx, repo, b, wf, false); err != nil {
 		return POpened{}, err
 	}
-	title, body := in.Title, StripMarkers(in.Body)
+	title, body := in.Title, agentText(in.Body)
 	issues := IssueService{API: s.API, Objects: s.Objects, Tables: s.Tables}
 	tree, err := issues.ListTree(ctx, repo, ref.Epic)
 	if err != nil {
@@ -233,21 +239,15 @@ func (s *PRService) Open(ctx context.Context, a Actor, repo string, in POpen) (P
 	if title == "" && len(tree) > 0 {
 		title = tree[0].Title
 	}
-	var closes []string
-	for _, n := range tree {
-		if n.State == "open" {
-			closes = append(closes, fmt.Sprintf("Closes #%d", n.Number))
-		}
-	}
-	if len(closes) > 0 {
-		body = strings.TrimRight(body, "\n") + "\n\n" + strings.Join(closes, "\n")
+	if closes := closesOf(tree); closes != "" {
+		body = strings.TrimRight(body, "\n") + "\n\n" + closes
 	}
 	made, err := s.API.CreatePull(ctx, repo, title, strings.TrimLeft(body, "\n")+"\n\n"+Marker(op), b.Name, b.BaseBranch, in.Draft)
 	if err != nil {
 		return POpened{}, err
 	}
 	if err := s.Objects.Register(ctx, Object{Repo: repo, Kind: KindPR, Number: made.Number, Table: a.Table, Op: op}); err != nil {
-		return POpened{}, &PartialError{Number: made.Number, Registered: false, Err: err}
+		return POpened{}, &PartialError{Kind: "pull request", Number: made.Number, Registered: false, Err: err}
 	}
 	return POpened{Number: made.Number, URL: made.URL, HeadSHA: b.Head}, nil
 }
@@ -260,6 +260,39 @@ type PUpdate struct {
 	// Block, BlockText and ExpectHead are `--block <name> <text> --expect-head`.
 	Block, BlockText, ExpectHead string
 	Class                        string
+}
+
+// allBlocks matches every block of a body.
+var allBlocks = regexp.MustCompile(`(?s)<!-- mestre:bloco=[a-z-]+ -->.*?<!-- /mestre:bloco -->`)
+
+// closing is a keyword that makes GitHub close an issue when the PR is merged.
+var closing = regexp.MustCompile(`(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b(\s*:?\s*)((?:[\w.-]+/[\w.-]+)?#\d+|https?://\S+)`)
+
+// agentText is what an agent writes for a title, a description or a block: the marks
+// of the engine and of the blocks are taken out (until nothing is left of them,
+// since one taken out may close another), and a keyword that closes an issue turns
+// into a reference: only the engine says what the merge closes.
+func agentText(s string) string {
+	for {
+		t := StripMarkers(s)
+		t = strings.NewReplacer("<!-- /mestre:", "<!-- /mestre-removed:", "<!-- mestre:", "<!-- mestre-removed:").Replace(t)
+		if t == s {
+			break
+		}
+		s = t
+	}
+	return closing.ReplaceAllString(s, "Refs$2$3")
+}
+
+// closesOf is the "Closes #n" of each open issue of the tree of the epic.
+func closesOf(tree []IssueNode) string {
+	var lines []string
+	for _, n := range tree {
+		if n.State == "open" {
+			lines = append(lines, fmt.Sprintf("Closes #%d", n.Number))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // blockRe is the mark of a block of the body.
@@ -305,12 +338,28 @@ func (s *PRService) Update(ctx context.Context, a Actor, repo string, n int, in 
 		title = in.Title
 	}
 	if in.Body != nil {
-		// the marks of the engine and the blocks the body has stay
+		// what the agent writes replaces the text; the blocks the classes made, the
+		// Closes of the engine and its marks stay
 		cur, err := s.API.PullData(ctx, repo, n)
 		if err != nil {
 			return POpened{}, err
 		}
-		nb := strings.TrimRight(StripMarkers(*in.Body), "\n") + strings.Join(Markers(cur.Body), "")
+		ref, ok, err := s.Tables.Epic(ctx, a.Table)
+		if err != nil || !ok {
+			return POpened{}, fmt.Errorf("the epic of the table could not be read")
+		}
+		tree, err := (&IssueService{API: s.API, Objects: s.Objects, Tables: s.Tables}).ListTree(ctx, repo, ref.Epic)
+		if err != nil {
+			return POpened{}, err
+		}
+		nb := strings.TrimRight(agentText(*in.Body), "\n")
+		for _, blk := range allBlocks.FindAllString(cur.Body, -1) {
+			nb += "\n\n" + blk
+		}
+		if closes := closesOf(tree); closes != "" {
+			nb += "\n\n" + closes
+		}
+		nb += strings.Join(Markers(cur.Body), "")
 		body = &nb
 	}
 	if title != nil || body != nil {
@@ -348,9 +397,7 @@ func (s *PRService) updateBlock(ctx context.Context, a Actor, repo string, n int
 	if has && owner != in.Class && !a.MestreDaMesa {
 		return fmt.Errorf("%w: %s", ErrBlockOwned, owner)
 	}
-	text := strings.TrimSpace(StripMarkers(in.BlockText))
-	// the text may not close the block or open another by itself
-	text = strings.NewReplacer("<!-- /mestre:bloco -->", "", "<!-- mestre:bloco=", "").Replace(text)
+	text := strings.TrimSpace(agentText(in.BlockText))
 	block := "<!-- mestre:bloco=" + in.Block + " -->\n" + text + "\n<!-- /mestre:bloco -->"
 	body := p.Body
 	if re := blockRe(in.Block); re.MatchString(body) {

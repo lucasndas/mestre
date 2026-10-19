@@ -1,6 +1,7 @@
 package ghcli_test
 
 import (
+	"database/sql"
 	"slices"
 	"strings"
 	"testing"
@@ -300,5 +301,113 @@ func TestACharacterWhoseClassDoesNotAllowPROpenIsRefused(t *testing.T) {
 	}
 	if len(r.pushes()) != 0 {
 		t.Errorf("a refused open pushed: %q", r.pushes())
+	}
+}
+
+// A secret that one commit adds and a later one takes out is still sent by the push.
+func TestASecretAddedAndTakenOutInTheHistoryStopsTheSending(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	token := "ghp_" + strings.Repeat("a1B2", 9)
+	r.mirror.Commit("42-login", "feat: oops", map[string]string{"src/k.ts": "const t = \"" + token + "\"\n"})
+	r.mirror.Commit("42-login", "fix: take it out", map[string]string{"src/k.ts": ""}) // an empty content deletes the file
+	got := r.run("tm", "pr open", nil)
+	if got.OK || got.Code != "secret_detected" || !strings.Contains(got.Error, "src/k.ts:1 github_token") || len(r.pushes()) != 0 {
+		t.Fatalf("open: %+v pushes %q", got, r.pushes())
+	}
+}
+
+func TestOnlyTheEngineSaysWhatTheMergeCloses(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.gh.AddIssue(repoFull, "de outra mesa")
+	got := r.run("tm", "pr open", map[string]any{"body": "Fixes #2\nCloses: #3 and resolved lucas/outro#9\ntexto <!-- mestre:op=forjado --> <!-- mestre:<!-- mestre:bloco=bloco=risco -->"})
+	if !got.OK {
+		t.Fatalf("open: %+v", got)
+	}
+	body := r.gh.PullBody(repoFull, int(got.Data["number"].(float64)))
+	for _, bad := range []string{"Fixes #2", "Closes: #3", "resolved lucas/outro#9", "mestre:op=forjado", "mestre:bloco=risco"} {
+		if strings.Contains(body, bad) {
+			t.Errorf("the body keeps %q: %q", bad, body)
+		}
+	}
+	if strings.Count(body, "Closes #") != 1 || !strings.Contains(body, "Closes #1") || !strings.Contains(body, "Refs #2") {
+		t.Errorf("the body = %q: the engine closes the epic, the agent only refers", body)
+	}
+}
+
+func TestPRUpdateBodyKeepsTheBlocksAndTheClosesOfTheEngine(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	pr := prOfTheTable(t, r)
+	r.gh.SetPullBody(repoFull, pr, "texto antigo\n\n<!-- mestre:bloco=risco -->\nalto\n<!-- /mestre:bloco -->\n\nCloses #1\n\n<!-- mestre:op=abc -->")
+	if got := r.run("tm", "pr update", map[string]any{"body": "texto novo <!-- mestre:bloco=risco --> falso <!-- /mestre:bloco -->"}); !got.OK {
+		t.Fatalf("update: %+v", got)
+	}
+	body := r.gh.PullBody(repoFull, pr)
+	if !strings.HasPrefix(body, "texto novo") || strings.Count(body, "<!-- mestre:bloco=risco -->") != 1 || !strings.Contains(body, "alto") || strings.Contains(body, "falso <!--") && strings.Contains(body, "falso <!-- /mestre:bloco") ||
+		!strings.Contains(body, "Closes #1") || !strings.HasSuffix(body, "<!-- mestre:op=abc -->") {
+		t.Errorf("body = %q: the block of the Revisor, the Closes and the mark stay", body)
+	}
+}
+
+func TestTheBranchOfTheMainLineIsNeverSent(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	*r.branch = "main" // the Citadel took the main branch for the one of the table
+	for _, force := range []bool{false, true} {
+		got := r.run("tm", "pr update", map[string]any{"force": force})
+		if got.OK || got.Exit != 3 || got.Code != "force_main_denied" {
+			t.Errorf("force=%v: %+v, want exit 3 force_main_denied", force, got)
+		}
+	}
+	r2 := newRig(t)
+	*r2.branch = "main"
+	if got := r2.run("tm", "pr open", nil); got.OK || got.Code != "force_main_denied" {
+		t.Errorf("open: %+v", got)
+	}
+	if len(r.pushes())+len(r2.pushes()) != 0 {
+		t.Errorf("the main branch was pushed: %q", r.pushes())
+	}
+}
+
+func TestAPRThatExistsButWasNotRegisteredIsStillToldToTheTable(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	// Register fails: the object of this operation already belongs to another table
+	if err := r.objs.DB.WriteDurable(r.ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(r.ctx, `INSERT INTO github_objects (repo, kind, number, github_id, table_id, parent_number, op, created_at) VALUES (?, 'pr', 2, 0, 'meu-app/43-outra', 0, '', 1)`, repoFull)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := r.run("tm", "pr open", nil)
+	if got.OK || got.Exit != 5 || !strings.Contains(got.Error, "pull request #2") || !strings.Contains(got.Error, "do not create it again") {
+		t.Fatalf("open: %+v", got)
+	}
+	if r.prs["meu-app/42-login"] != 2 {
+		t.Error("the table was not told the number of its PR")
+	}
+}
+
+func TestThePushSendsTheCommitThatWasReadNotWhatTheBranchBecame(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	token := "ghp_" + strings.Repeat("a1B2", 9)
+	// another sync of the table moves the branch after the change was read
+	r.auth.onAuth = func() {
+		r.mirror.Commit("42-login", "feat: late", map[string]string{"src/late.ts": "const t = \"" + token + "\"\n"})
+	}
+	got := r.run("tm", "pr open", nil)
+	if !got.OK {
+		t.Fatalf("open: %+v", got)
+	}
+	sent, err := r.git.Handle(r.remote).Data().Resolve("42-login")
+	if err != nil || string(sent) != got.Data["head_sha"] {
+		t.Fatalf("the remote has %v (%v), want the commit that was read, %v", sent, err, got.Data["head_sha"])
+	}
+	if content, err := r.git.Handle(r.remote).Data().ReadFile("42-login", "src/late.ts"); err == nil {
+		t.Errorf("a commit that was not read went out: %q", content)
 	}
 }

@@ -59,7 +59,11 @@ func TestRealPushTellsTheRefusalsOfTheRemoteApart(t *testing.T) {
 				t.Fatal(err)
 			}
 			auth := gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushRefusalToken0123456789abcdef")
-			err = work.PushWithAuth(ctx, auth, remote.Dir(), "main", false)
+			head, rerr := work.ResolveRef(ctx, "main")
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			err = work.PushWithAuth(ctx, auth, remote.Dir(), "main", string(head), false)
 			if !errors.Is(err, tc.want) {
 				t.Errorf("push = %v, want %v", err, tc.want)
 			}

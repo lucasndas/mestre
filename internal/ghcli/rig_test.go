@@ -51,6 +51,8 @@ type branches struct {
 	git    *fakegit.Git
 	mirror string
 	remote string
+	// name is the branch the Citadel says is the table's (default 42-login).
+	name *string
 }
 
 func (b branches) Prepare(ctx context.Context, _ string) (github.Branch, error) {
@@ -58,11 +60,15 @@ func (b branches) Prepare(ctx context.Context, _ string) (github.Branch, error) 
 	if err != nil {
 		return github.Branch{}, err
 	}
-	head, err := repo.ResolveRef(ctx, "42-login")
+	name := "42-login"
+	if b.name != nil && *b.name != "" {
+		name = *b.name
+	}
+	head, err := repo.ResolveRef(ctx, name)
 	if err != nil {
 		return github.Branch{}, err
 	}
-	return github.Branch{Repo: repo, Name: "42-login", Base: "main", BaseBranch: "main", Head: string(head), Remote: b.remote}, nil
+	return github.Branch{Repo: repo, Name: name, Base: "main", BaseBranch: "main", Head: string(head), Remote: b.remote}, nil
 }
 
 // pushAuth gives the credentials of the push and remembers whether the
@@ -70,9 +76,15 @@ func (b branches) Prepare(ctx context.Context, _ string) (github.Branch, error) 
 type pushAuth struct {
 	mu        sync.Mutex
 	workflows []bool
+	// onAuth runs when the credentials are asked, after the change was read and
+	// before the push (another sync of the table).
+	onAuth func()
 }
 
 func (p *pushAuth) PushAuth(_ context.Context, _ string, workflows bool) (gitx.Auth, error) {
+	if p.onAuth != nil {
+		p.onAuth()
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.workflows = append(p.workflows, workflows)
@@ -228,6 +240,7 @@ type rig struct {
 	auth     *pushAuth
 	wf       *workflowsFake
 	criteria *criteriaFake
+	branch   *string
 	// onFiles: see clients.
 	onFiles *func()
 }
@@ -279,8 +292,9 @@ func newRig(t *testing.T) *rig {
 		t.Fatal(err)
 	}
 	mirror.Commit("42-login", "feat: login", map[string]string{"src/login.ts": "export const timeout = 30\n"})
+	branch := new(string)
 	auth, wf, crit := &pushAuth{}, &workflowsFake{policy: map[string]classes.Workflows{}, approved: map[string]bool{}}, &criteriaFake{}
-	send := github.Sending{Branches: branches{git: git, mirror: mirrorDir, remote: remoteDir}, Auth: auth, Workflows: wf, Criteria: crit}
+	send := github.Sending{Branches: branches{git: git, mirror: mirrorDir, remote: remoteDir, name: branch}, Auth: auth, Workflows: wf, Criteria: crit}
 	h := &ghcli.Handlers{PRs: pr, Lease: ls, Send: send, Opened: func(_ context.Context, key string, n int, _ string) error { pr[key] = n; return nil }, Characters: cs, Quota: quotaOf{quota}, Clients: clients{gh, onFiles, quota}, Repos: repos{}, Tables: tables{"meu-app/42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
 	fwd := localchan.NewLocalForwarder()
 	h.Register(fwd)
@@ -295,7 +309,7 @@ func newRig(t *testing.T) *rig {
 		}
 		return cli.Profile{Role: cli.RoleCharacter}
 	})
-	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, git: git, mirror: mirror, remote: remoteDir, auth: auth, wf: wf, criteria: crit, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	return &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, git: git, mirror: mirror, remote: remoteDir, auth: auth, wf: wf, criteria: crit, branch: branch, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
 }
 
 // result is the answer of a command.

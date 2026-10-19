@@ -148,11 +148,20 @@ func (h *Handlers) prOpen(ctx context.Context, c *localchan.Call) localchan.Resp
 	in.Title, _ = flagString(c, "title")
 	in.Body, _ = flagString(c, "body")
 	if h.PRs != nil {
-		if n, ok, err := h.PRs.PRNumber(ctx, who.actor.Table); err == nil && ok {
+		n, ok, err := h.PRs.PRNumber(ctx, who.actor.Table)
+		if err != nil {
+			return localchan.Fail(localchan.CodeInternal, "the pull request of the table could not be read", "")
+		}
+		if ok {
 			in.Existing = n
 		}
 	}
 	got, err := who.prs.Open(ctx, who.actor, who.repo, in)
+	var part *github.PartialError
+	if errors.As(err, &part) && part.Kind == "pull request" && h.Opened != nil {
+		// the PR exists: the table must know it, so that it is not opened twice
+		_ = h.Opened(ctx, who.actor.Table, part.Number, "")
+	}
 	if err != nil {
 		return refusal(err)
 	}

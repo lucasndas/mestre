@@ -164,7 +164,11 @@ func refusal(err error) localchan.Response {
 		return localchan.Fail("github_unavailable", "the engine can not send the branch of the table now", "try again later")
 	case errors.As(err, &part):
 		// the issue exists: say so, so that the command is not repeated
-		msg := fmt.Sprintf("the issue #%d was created but its setup did not end (%s); do not create it again", part.Number, setupStage(part))
+		kind := part.Kind
+		if kind == "" {
+			kind = "issue"
+		}
+		msg := fmt.Sprintf("the %s #%d was created but its setup did not end (%s); do not create it again", kind, part.Number, setupStage(part))
 		return localchan.Fail("github_unavailable", msg, "tell the Grand Master")
 	case errors.As(err, &ref):
 		code := ref.Code

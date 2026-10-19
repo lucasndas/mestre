@@ -830,7 +830,7 @@ func (r *repo) ExcludeBlock(ctx context.Context, name string) ([]string, error) 
 // pushTimeout bounds a push: it holds the lock of the repository over the network.
 const pushTimeout = 5 * time.Minute
 
-func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, branch string, force bool) error {
+func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, branch, commit string, force bool) error {
 	if err := ValidateRef(remote); err != nil {
 		return err
 	}
@@ -838,6 +838,9 @@ func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, branch strin
 		return fmt.Errorf("push: %w", err)
 	}
 	if err := ValidateBranch(branch); err != nil {
+		return err
+	}
+	if err := ValidateCommit(commit); err != nil {
 		return err
 	}
 	ro, err := r.g.authOpts(&auth)
@@ -853,7 +856,7 @@ func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, branch strin
 	if force {
 		args = append(args, "--force")
 	}
-	args = append(args, "--", remote, "refs/heads/"+branch+":refs/heads/"+branch)
+	args = append(args, "--", remote, commit+":refs/heads/"+branch)
 	return r.mutate(ctx, func() error {
 		_, err := r.run(ctx, ro, args...)
 		if err == nil {
@@ -937,6 +940,38 @@ func (r *repo) AddedLines(ctx context.Context, base, head string) ([]AddedLine, 
 	out, err := r.git(ctx, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--ignore-submodules=all", "--text", "--unified=0", "--no-prefix", rng, "--")
 	if err != nil {
 		return nil, fmt.Errorf("diff %s...%s: %w", base, head, err)
+	}
+	return ParseAddedLines(out), nil
+}
+
+func (r *repo) AddedLinesEach(ctx context.Context, base, head string) ([]AddedLine, error) {
+	a, err := r.ResolveRef(ctx, base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.ResolveRef(ctx, head)
+	if err != nil {
+		return nil, err
+	}
+	rng := string(a) + ".." + string(b)
+	common := []string{"--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--ignore-submodules=all", "--text", "-m", "--first-parent", "--format="}
+	stat, err := r.git(ctx, append(append([]string{"log"}, common...), "--numstat", rng, "--")...)
+	if err != nil {
+		return nil, fmt.Errorf("log %s..%s: %w", base, head, err)
+	}
+	total := 0
+	for _, l := range strings.Split(string(stat), "\n") {
+		if f := strings.Fields(l); len(f) >= 2 {
+			n, _ := strconv.Atoi(f[0])
+			total += n
+		}
+	}
+	if total > MaxAddedLines {
+		return nil, fmt.Errorf("%w: %d lines added (at most %d)", ErrDiffTooLarge, total, MaxAddedLines)
+	}
+	out, err := r.git(ctx, append(append([]string{"log"}, common...), "-p", "--unified=0", "--no-prefix", rng, "--")...)
+	if err != nil {
+		return nil, fmt.Errorf("log %s..%s: %w", base, head, err)
 	}
 	return ParseAddedLines(out), nil
 }

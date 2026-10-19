@@ -1090,7 +1090,7 @@ func (g *Git) Pushes() []string {
 // PushWithAuth implements gitx.Repo: the commits and the ref go to the repository
 // the remote names, as git push does; auth is checked like the real one does and
 // otherwise ignored.
-func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch string, force bool) error {
+func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch, commit string, force bool) error {
 	if err := gitx.ValidateRef(remote); err != nil {
 		return err
 	}
@@ -1099,6 +1099,13 @@ func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch 
 	}
 	if err := gitx.ValidateBranch(branch); err != nil {
 		return err
+	}
+	if err := gitx.ValidateCommit(commit); err != nil {
+		return err
+	}
+	// what goes is the commit, not what the branch is by now
+	if _, ok := h.r.commits[Hash(commit)]; !ok {
+		return fmt.Errorf("push: %w: %s", gitx.ErrRefNotFound, commit)
 	}
 	refspec := "refs/heads/" + branch + ":refs/heads/" + branch
 	if err := auth.Validate(); err != nil {
@@ -1127,7 +1134,9 @@ func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch 
 	commits, refs, _ := h.r.snapshot()
 	defer dst.lock()()
 	maps.Copy(dst.r.commits, commits)
-	spec := refspec
+	// the source of the push is the commit: a ref that points at it, made here
+	refs = append(refs, gitx.Ref{Name: "refs/mestre/push", Hash: gitx.Hash(commit)})
+	spec := "refs/mestre/push:refs/heads/" + branch
 	if force {
 		spec = "+" + spec
 	}
@@ -1190,4 +1199,49 @@ func splitLines(s string) []string {
 		return nil
 	}
 	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
+}
+
+// AddedLinesEach implements gitx.Repo: the lines each commit of base..head adds
+// against its parent, in the order of the history.
+func (h *Handle) AddedLinesEach(_ context.Context, base, head string) ([]gitx.AddedLine, error) {
+	if err := gitx.ValidateRef(base); err != nil {
+		return nil, err
+	}
+	if err := gitx.ValidateRef(head); err != nil {
+		return nil, err
+	}
+	defer h.lock()()
+	a, err := h.resolveLocked(base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := h.resolveLocked(head)
+	if err != nil {
+		return nil, err
+	}
+	known := h.r.ancestorsLocked(a)
+	var chain []Hash
+	for c := b; c != "" && !known[c]; c = h.r.commits[c].Parent {
+		chain = append(chain, c)
+	}
+	var out []gitx.AddedLine
+	for i := len(chain) - 1; i >= 0; i-- {
+		c := chain[i]
+		before := h.r.commits[h.r.commits[c].Parent].Files
+		after := h.r.commits[c].Files
+		for _, p := range slices.Sorted(maps.Keys(after)) {
+			old := map[string]int{}
+			for _, l := range splitLines(before[p]) {
+				old[l]++
+			}
+			for n, l := range splitLines(after[p]) {
+				if old[l] > 0 {
+					old[l]--
+					continue
+				}
+				out = append(out, gitx.AddedLine{Path: p, Line: n + 1, Text: l})
+			}
+		}
+	}
+	return out, nil
 }
