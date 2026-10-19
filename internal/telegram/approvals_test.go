@@ -345,3 +345,148 @@ func TestAButtonAboveTheLevelOfTheUserIsRefusedByTheBot(t *testing.T) {
 		t.Error("the bot let an Approver give a permanent answer")
 	}
 }
+
+// the PIN wrong three times ends the request of PIN, and the buttons come back
+func TestThreeWrongPINsBringTheButtonsBack(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{approvals: true})
+	if err := w.users.SetPIN(w.ctx, w.owner.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.pairOwnerTelegram()
+	r := w.ask(9, classes.RequestGuildEntry, classes.LevelOwner, true)
+	msg, keys := w.buttons(owner)
+	w.click(owner, msg, keys["Aprovar agora"])
+	for range 3 {
+		w.say(owner, "000000")
+		w.drain()
+	}
+	if w.chain.State(r.ID) != chain.Open {
+		t.Fatal("a wrong PIN approved")
+	}
+	var back map[string]string
+	for _, e := range w.sent("editMessageText") {
+		if kb, ok := e.Params["reply_markup"].(map[string]any); ok && e.ChatID == owner.ID {
+			if rows, _ := kb["inline_keyboard"].([]any); len(rows) > 0 {
+				back = map[string]string{}
+				for _, row := range rows {
+					for _, b := range row.([]any) {
+						bt := b.(map[string]any)
+						back[bt["text"].(string)] = bt["callback_data"].(string)
+					}
+				}
+			}
+		}
+	}
+	if back["Aprovar agora"] == "" || back["Aprovar agora"] == keys["Aprovar agora"] {
+		t.Fatalf("the buttons did not come back: %v", back)
+	}
+	// the old button is void; the new one asks the PIN again and, with the right one, approves
+	w.click(owner, msg, keys["Aprovar agora"])
+	if w.chain.State(r.ID) != chain.Open {
+		t.Fatal("the spent button worked")
+	}
+	w.click(owner, msg, back["Aprovar agora"])
+	w.say(owner, "123456")
+	w.drain()
+	if w.chain.State(r.ID) != chain.Approved {
+		t.Errorf("state = %s", w.chain.State(r.ID))
+	}
+}
+
+// an answer that needs a text and the PIN: the text first, then the PIN
+func TestATextAnswerThatAsksThePINAsksItAfterTheText(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{approvals: true})
+	if err := w.users.SetPIN(w.ctx, w.owner.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.pairOwnerTelegram()
+	r := w.ask(10, classes.RequestWorkspaceClass, classes.LevelOwner, true)
+	msg, keys := w.buttons(owner)
+	w.click(owner, msg, keys["Aprovar por um tempo"])
+	w.say(owner, "3h")
+	w.drain()
+	if w.chain.State(r.ID) != chain.Open {
+		t.Fatal("approved before the PIN")
+	}
+	w.say(owner, "123456")
+	w.drain()
+	d := w.chain.Decisions()
+	if w.chain.State(r.ID) != chain.Approved || len(d) != 1 || d[0].For != 3*time.Hour {
+		t.Errorf("state %s, decisions %+v", w.chain.State(r.ID), d)
+	}
+}
+
+func TestAnEditedQuestionVoidsTheOldButtons(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{approvals: true})
+	_, ana := w.user("Ana", users.Approver, "loja")
+	r := w.ask(11, classes.RequestExtraCost, classes.LevelApprover, false)
+	_, old := w.buttons(ana)
+	q := chain.PeopleQuestion{Request: r, Text: "Texto novo", Approvals: 1, MinLevel: classes.LevelApprover, Answers: allAnswers}
+	if err := w.flow.Ask(w.ctx, q); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	w.click(ana, 1, old["Aprovar agora"])
+	if w.chain.State(r.ID) != chain.Open {
+		t.Error("a button the edit replaced still worked")
+	}
+}
+
+func TestALongQuestionIsEditedInTheMessageNotInTheFile(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{approvals: true})
+	ana, tg := w.user("Ana", users.Approver, "loja")
+	r := chain.Request{ID: 12, Workspace: "loja", Type: classes.RequestExtraCost, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople}}
+	if err := w.chain.Add(w.ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("linha de arquivo alterado\n", 600)
+	ref, err := w.ac.Send(w.ctx, approvals.Message{UserID: ana.ID, Request: r, Text: long, Answers: []chain.Answer{chain.AnswerApprove}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	if err := w.ac.Edit(w.ctx, approvals.MessageEdit{UserID: ana.ID, Ref: ref, Text: "Encerrado.", Request: r.ID}); err != nil {
+		t.Fatal(err)
+	}
+	var msgID int64
+	for _, s := range w.sent("sendMessage") {
+		if s.ChatID == tg.ID {
+			msgID = s.MessageID
+		}
+	}
+	edits := w.sent("editMessageText")
+	if len(edits) != 1 || edits[0].MessageID != msgID || edits[0].Text != "Encerrado." {
+		t.Errorf("edits = %+v, want one on message %d", edits, msgID)
+	}
+}
+
+func TestTheNameOfWhoAnsweredMakesNoLinkInTheMessageOfTheOthers(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{approvals: true})
+	_, ana := w.user("Ana [clique](https://evil.example)", users.Approver, "loja")
+	_, adm := w.user("Adm", users.Administrator, "loja")
+	w.ask(13, classes.RequestExtraCost, classes.LevelApprover, false)
+	msg, keys := w.buttons(ana)
+	w.click(ana, msg, keys["Aprovar agora"])
+	got := w.lastEdit(adm)
+	if !strings.HasPrefix(got, "Já respondido por Ana") || strings.ContainsAny(got, "[]()") {
+		t.Errorf("the message = %q", got)
+	}
+}
+
+func (w *world) pairOwnerTelegram() faketelegram.User {
+	w.t.Helper()
+	c, err := w.users.NewCode(w.ctx, w.owner, w.owner.ID)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	tg := faketelegram.User{ID: 77, FirstName: "Lucas", Username: "lucas"}
+	if _, err := w.users.Pair(w.ctx, users.PairRequest{Text: c.Code, TelegramID: tg.ID, Private: true}); err != nil {
+		w.t.Fatal(err)
+	}
+	return tg
+}

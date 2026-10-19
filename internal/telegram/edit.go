@@ -45,7 +45,7 @@ func (b *Bot) Edit(ctx context.Context, e Edit) error {
 		var rows [][]map[string]string
 		err := b.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 			var err error
-			rows, err = b.buttons(ctx, tx, e.UserID, e.Buttons)
+			rows, err = b.buttons(ctx, tx, e.UserID, e.Buttons, true)
 			return err
 		})
 		if err != nil {
@@ -67,7 +67,11 @@ func (b *Bot) Edit(ctx context.Context, e Edit) error {
 		} else {
 			delete(q, "parse_mode")
 		}
-		delete(q, "_plain")
+		if _, html := p["parse_mode"]; html {
+			q["_plain"] = text // the plain retry keeps the new text
+		} else {
+			delete(q, "_plain")
+		}
 		q["reply_markup"] = markup
 		body, err := json.Marshal(q)
 		if err != nil {

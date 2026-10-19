@@ -121,6 +121,7 @@ type Bot struct {
 	window time.Time           // the second being counted
 	count  int                 // sends in that second
 	wakeCh chan struct{}
+	then   map[string]func(context.Context) // one-shot, after a capture of the user ends
 }
 
 // New returns the Bot.
@@ -140,7 +141,7 @@ func New(o Options) (*Bot, error) {
 	if o.PollTimeout == 0 {
 		o.PollTimeout = 50 * time.Second
 	}
-	b := &Bot{o: o, st: &Store{DB: o.DB, Clock: o.Clock}, clk: o.Clock, log: o.Logger, cmds: map[string]Command{}, last: map[int64]time.Time{}, wakeCh: make(chan struct{}, 1)}
+	b := &Bot{o: o, st: &Store{DB: o.DB, Clock: o.Clock}, clk: o.Clock, log: o.Logger, cmds: map[string]Command{}, last: map[int64]time.Time{}, wakeCh: make(chan struct{}, 1), then: map[string]func(context.Context){}}
 	for _, c := range o.Commands {
 		b.cmds[c.Name] = c
 	}
@@ -576,6 +577,7 @@ func (b *Bot) Ask(ctx context.Context, userID, kind, ref, prompt string, ttl tim
 // and the text goes only to the function of the kind. A prompt that expired, or
 // an answer that is not text, ends here too: nothing of it goes to an agent.
 func (b *Bot) capture(ctx context.Context, u users.User, c Capture, m *Message) {
+	b.takeThen(u.ID) // a continuation left by an earlier answer is not this one's
 	b.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 	switch {
 	case c.Expired:
@@ -602,6 +604,26 @@ func (b *Bot) capture(ctx context.Context, u users.User, c Capture, m *Message) 
 	if reply != "" {
 		b.say(ctx, m.Chat.ID, u.ID, reply)
 	}
+	if next := b.takeThen(u.ID); next != nil && !again {
+		next(ctx)
+	}
+}
+
+// Then leaves a continuation for after the capture the user is answering ends:
+// the answer needs another prompt (the PIN after a time), and a prompt can only
+// be asked when the first is over.
+func (b *Bot) Then(userID string, f func(context.Context)) {
+	b.mu.Lock()
+	b.then[userID] = f
+	b.mu.Unlock()
+}
+
+func (b *Bot) takeThen(userID string) func(context.Context) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	f := b.then[userID]
+	delete(b.then, userID)
+	return f
 }
 
 // endCapture ends the wait and takes the prompt off the chat.
@@ -678,6 +700,9 @@ func (b *Bot) click(ctx context.Context, cq *CallbackQuery) {
 		return
 	case !b.clk.Now().Before(cb.Expires):
 		answer("Esse botão expirou.")
+		return
+	case cb.State == "void":
+		answer("Esse botão foi substituído por um novo.")
 		return
 	case cb.State != "open":
 		name := cb.DecidedBy

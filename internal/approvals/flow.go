@@ -377,7 +377,7 @@ func (f *Flow) decider(ctx context.Context, r chain.Request) (who, time.Time) {
 	id := strings.TrimPrefix(r.Decision.By, "user:")
 	name := id
 	if u, err := f.o.Users.Get(ctx, id); err == nil {
-		name = u.Name
+		name = plain(u.Name)
 	}
 	return who{id: id, name: name}, r.ClosedAt
 }
@@ -790,4 +790,15 @@ func (f *Flow) PINFailed(ctx context.Context, userID, pinRequest string) {
 		return err
 	})
 	f.Resend(ctx, request, userID)
+}
+
+// plain takes the marks of Markdown out of a name, so that it can not make a
+// link or a format in the message of the others.
+func plain(s string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune("[]()*_`<>~|\\", r) {
+			return -1
+		}
+		return r
+	}, s)
 }

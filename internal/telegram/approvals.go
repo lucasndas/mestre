@@ -175,7 +175,9 @@ func (c *ApprovalChannel) text(ctx context.Context, u users.User, ref, text stri
 		return c.bot.o.Mask(err.Error()), false, nil
 	}
 	if rep.PIN != "" {
-		return c.afterAnswer(ctx, u, rep), false, nil
+		// the PIN is asked when this capture is over
+		c.bot.Then(u.ID, func(ctx context.Context) { c.afterAnswer(ctx, u, rep) })
+		return "Agora confirme com o seu PIN.", false, nil
 	}
 	return rep.Text, false, nil
 }
@@ -183,15 +185,15 @@ func (c *ApprovalChannel) text(ctx context.Context, u users.User, ref, text stri
 // pinDone is told whether the PIN of an approval was right: if so the approval
 // is applied, once; if not, the buttons come back (the request of PIN ended).
 func (c *ApprovalChannel) pinDone(ctx context.Context, u users.User, pinRequest string, err error) {
-	switch {
-	case err == nil:
+	switch err { //nolint:errorlint // the error that cancelled the request wraps ErrBadPIN: only the bare one has tries left
+	case nil:
 		rep, aerr := c.flow.ConfirmPIN(ctx, u.ID, pinRequest)
 		text := rep.Text
 		if aerr != nil {
 			text = "Não apliquei a aprovação: " + aerr.Error()
 		}
 		c.tell(ctx, u, text)
-	case errors.Is(err, users.ErrBadPIN):
+	case users.ErrBadPIN:
 		// still has tries: the prompt stays
 	default:
 		c.flow.PINFailed(ctx, u.ID, pinRequest)
