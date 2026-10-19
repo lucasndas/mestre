@@ -26,6 +26,7 @@ type rig struct {
 	runner *fakepty.Runner
 	sess   *ptyd.Session
 	srv    *ptyd.Server
+	opts   rigOptions
 	secret []byte
 	log    *syncBuffer
 }
@@ -34,6 +35,7 @@ type rigOptions struct {
 	bufferSize, unackedMax int
 	proto                  int
 	noJob                  bool
+	hooks                  ptyd.HookRunner
 }
 
 type syncBuffer struct {
@@ -87,10 +89,10 @@ func (s *syncBuffer) String() string {
 func newRig(t *testing.T, o rigOptions) *rig {
 	t.Helper()
 	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
-	r := &rig{clk: clk, net: fakenet.New(clk), runner: &fakepty.Runner{Clock: clk, NoJob: o.noJob}, log: &syncBuffer{}, secret: bytes.Repeat([]byte{7}, ptywire.SecretSize)}
+	r := &rig{clk: clk, net: fakenet.New(clk), runner: &fakepty.Runner{Clock: clk, NoJob: o.noJob}, log: &syncBuffer{}, opts: o, secret: bytes.Repeat([]byte{7}, ptywire.SecretSize)}
 	log := slog.New(slog.NewTextHandler(r.log, nil))
 	r.sess = ptyd.NewSession(ptyd.SessionConfig{
-		Runner: r.runner, Clock: clk, BufferSize: o.bufferSize, UnackedMax: o.unackedMax,
+		Runner: r.runner, Clock: clk, BufferSize: o.bufferSize, UnackedMax: o.unackedMax, Hooks: o.hooks,
 		OnEvent: func(m ptywire.Msg) { r.srv.Broadcast(m) },
 	})
 	r.srv = ptyd.NewServer(ptyd.ServerConfig{
@@ -104,6 +106,9 @@ func newRig(t *testing.T, o rigOptions) *rig {
 	t.Cleanup(r.sess.Close)
 	return r
 }
+
+// hooks is the fake shell of the rig, when it has one.
+func (r *rig) hooks() *fakeHooks { h, _ := r.opts.hooks.(*fakeHooks); return h }
 
 func (r *rig) dial(t *testing.T) *terminal.Client {
 	t.Helper()
