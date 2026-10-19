@@ -1,6 +1,6 @@
 # Antigravity CLI (`agy`)
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Antigravity CLI · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -14,7 +14,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 - Quando o agente lê ou edita um arquivo, sobe da pasta dele até a raiz do workspace carregando, em cada nível: `AGENTS.md`/`GEMINI.md`, `.agents/AGENTS.md`/`.agents/GEMINI.md` e `.agents/rules/*.md`.
 - Arquivos em `.agents/rules/` precisam de frontmatter com `trigger` (`always_on`, `model_decision`, `glob`, `manual`); sem frontmatter válido são **descartados em silêncio**.
 - Limites: 24.000 bytes por arquivo; regras globais e `always_on` dividem 20.000 tokens (acima disso, os maiores viram ponteiros lidos sob demanda).
-- Arquivos globais (`~/.gemini/…`) não são usados pelo Mestre, salvo, desde o M7, o `mcp_config.json` do perfil (abaixo).
+- Arquivos globais (`~/.gemini/…`) não são usados pelo Mestre, salvo, no `HOME` do perfil, o `settings.json` (confiança e `toolPermission`, abaixo) e, desde o M7, o `mcp_config.json` (abaixo).
 
 ### Camada do Mestre
 
@@ -29,7 +29,7 @@ Registrar o que o [adaptador](adaptador.md) do Antigravity precisa saber. O `agy
 
 - Lê `.agents/skills/<nome>/SKILL.md` nativamente (`.agent/skills` antiga também). `description` é obrigatória; `name` é opcional (padrão: nome da pasta), mas o Mestre sempre escreve, por causa do Codex.
 - Carregamento progressivo; cada skill também vira comando `/<nome>`; `/skills reload` recarrega. Não há menção a `.claude/skills/`.
-- **Skills por personagem** (nível e classe): não há pasta por personagem, então o conteúdo delas vai como seção compacta no arquivo de agente `.agents/agents/mestre-<id>.md` (as [skills de apoio](../classes/skills-de-apoio.md) vão inteiras à pasta compartilhada da mesa); `.agents/skills/` do worktree só tem, além delas, a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
+- **Skills por personagem** (nível e classe): não há pasta por personagem, então o conteúdo delas vai como seção compacta no arquivo de agente `.agents/agents/mestre-<id>.md` (desde o M8, as [skills de apoio](../classes/skills-de-apoio.md) vão inteiras à pasta compartilhada da mesa); `.agents/skills/` do worktree só tem, além delas, a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 
 ### Hooks
 
@@ -111,13 +111,12 @@ Quem chama estas operações na criação de mesas e personagens é a sessão ze
 - **CA-AGY-03** · *rápida* — **Dado** um `settings.json` com outras chaves, **quando** `PreTrust` roda duas vezes, **então** o worktree aparece uma vez em `trustedWorkspaces` e o JSON continua válido.
 - **CA-AGY-04** · *rápida* — **Dado** qualquer base e ficha válidas, **quando** `BuildLaunch` monta o comando, **então** ele tem `--agent mestre-<id>` e o `HOME` do perfil, e nunca `--dangerously-skip-permissions`, em nenhuma forma (um traço ou dois, com `=`, depois de um argumento que não é opção).
 - **CA-AGY-05** · *rápida* — **Dado** a saída gravada de `/usage` em JSON, **quando** `ReadUsage` lê, **então** cada janela tem `used_pct = 1 − remaining_fraction` (em %, de 0 a 100) e `resets_at`.
-- **CA-AGY-07** · *rápida* — **Dado** um personagem Antigravity, **quando** `BuildLaunch` gera o arquivo de agente, **então** o `name` do frontmatter é igual ao do `--agent`, há `mainAgent: true` e nunca `excludeDefaultComponents` nem `permissionMode`; e, se o arquivo não existir no disco na hora de iniciar, o início falha com erro em vez de abrir o agente padrão.
+- **CA-AGY-07** · *rápida* — **Dado** um personagem Antigravity, **quando** `DeliverMestreLayer` gera o arquivo de agente e `BuildLaunch` monta o início, **então** o `name` do frontmatter é igual ao do `--agent`, há `mainAgent: true` e nunca `excludeDefaultComponents` nem `permissionMode`; e, se o arquivo não existir no disco na hora de iniciar, `BuildLaunch` falha com erro em vez de abrir o agente padrão.
 - **CA-AGY-06** · *completa* — **Dado** uma máquina sem o binário `mestre` no caminho estável, **quando** o comando gerado do PreToolUse roda, **então** imprime `{"decision":"allow"}` e sai com 0.
 
 ## Depende de
 
-- [Adaptador](adaptador.md) · [Despachante de hooks](despachante-de-hooks.md)
-- [Reforço nativo](../classes/reforco-nativo.md)
+- [Adaptador](adaptador.md) · [Despachante de hooks](despachante-de-hooks.md) · [Reforço nativo](../classes/reforco-nativo.md)
 
 ## Verificar na implementação
 
@@ -127,8 +126,10 @@ Conferidos pelo [teste de conformidade](conformidade.md), salvo onde indicado.
 - **Verificar na implementação:** o `AGENTS.md` da raiz carrega já no primeiro turno (e não só quando o agente toca um arquivo), e o que acontece com `AGENTS.md` e `GEMINI.md` na mesma pasta. **Padrão:** carrega no primeiro turno, e os dois somam. **Se falhar:** a camada do Mestre do Antigravity manda ler o `AGENTS.md` da raiz antes de começar; com só um dos dois lido, a sessão zero avisa como faz com o `CLAUDE.md` ([sessão zero do workspace](../sessao-zero/workspace.md)). **Onde:** etapa 2 (código `P-…`); a pasta com os dois arquivos, à mão. **Resultado (2026-10-14, 1.3.5):** a primeira parte confirmada (o `P-…` veio sem ferramenta nenhuma); a pasta com os dois arquivos continua para conferir à mão.
 - **Verificar na implementação:** o `agy` aceita colagem entre colchetes no modo interativo e envia com `\r`. **Padrão:** como em Digitação. **Se falhar:** mensagens de várias linhas vão pelo arquivo de mensagem longa ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)) e só a linha que pede para lê-lo é digitada. **Onde:** etapa 2 do [teste de conformidade](conformidade.md), com a pergunta em três linhas. **Resultado (2026-10-14, 1.3.5):** Padrão confirmado.
 - **Verificar na implementação:** `permissionOverrides` no `allow` evita a tela de permissão nativa. **Padrão:** o despachante devolve, no `allow` de um comando de shell, o comando já permitido em `permissionOverrides` (lista de textos `command(<comando>)`; comando com `*`, parênteses ou quebra de linha não é repetido). **Se falhar:** o adaptador responde a tela nativa com a decisão registrada (tabela de telas; textos do binário 1.3.3 e teclas a confirmar). **Onde:** etapa 5. **Resultado (2026-10-14, 1.3.5):** falhou: com `toolPermission` em `request-review`, a tela aparece depois de todo `allow`, também com `permissionOverrides`; vale o Se falhar, com os textos e as teclas da tabela de telas (Esc cancela e interrompe o turno). Rodada 3 (1.3.5): a tela apareceu cinco vezes na rodada e foi respondida com a decisão da chamada que ela mostra (allow); a etapa 5 passou. Rodada 4: idem, depois de o título "Requesting permission for:" entrar no casamento estrito.
+- **Verificar na implementação:** hooks do próprio repositório (outras chaves do `.agents/hooks.json` ou arquivos versionados) que respondem `allow` a uma ferramenta que o Mestre nega. **Padrão:** (hipótese a confirmar) o `deny` de qualquer hook vence, e esses hooks rodam como `mestre-agente`, como qualquer comando do projeto. **Se falhar:** o personagem não inicia num repositório com hooks de ferramenta próprios, e o checklist avisa. **Onde:** o repositório de teste da conformidade traz o `.agents/hooks.json` hostil ([conformidade](conformidade.md#comportamento)), e as etapas 4 a 6 falham se ele vencer.
+- **Verificar na implementação:** `--sandbox` (AppContainer) no Windows, com a classe sem internet, deixa o `agy` rodar comandos do worktree e manter login e `mestre hook`. **Padrão:** deixa. **Se falhar:** `NativeFallbacks.AntigravityNoSandbox` o tira e vale só o despachante. **Onde:** suíte pesada, na VM Windows.
 - **Verificar na implementação:** no Linux, `HOME` separado isola o login com duas contas reais (o spike confirmou o login só em arquivo sob `HOME`, sem chaveiro). **Padrão:** isola. **Se falhar:** só um perfil de conta Antigravity por máquina Linux também; o checklist recusa o segundo. **Onde:** suíte pesada, com dois perfis de contas diferentes na VM Linux.
-- **Verificar na implementação:** no Windows, o `agy` mantém a credencial do Gerenciador de Credenciais rodando no `mestre-pty` iniciado pelo `mestre-launcher` ([Windows](../arquitetura/windows.md#iniciador-mestre-launcher)). Na rodada 2 do Sandbox, manteve em todas as execuções, cada uma numa sessão de logon nova, também pelo token entregue a outro processo; a hipótese da rodada 1 (o `agy` apagou a credencial ao falhar uma renovação) ficou para o item seguinte. **Padrão:** mantém. **Se falhar:** o `mestre-launcher` mantém a sessão de logon do `mestre-agente` aberta enquanto a máquina roda, e o checklist mostra o perfil deslogado até lá. **Onde:** spike 5 no Windows Sandbox ([Windows](../arquitetura/windows.md#verificar-na-implementação)); depois, a suíte pesada.
+- **Verificar na implementação:** no Windows, o `agy` mantém a credencial do Gerenciador de Credenciais rodando no `mestre-pty` iniciado pelo `mestre-launcher` ([Windows](../arquitetura/windows.md#iniciador-mestre-launcher)). Na rodada 2 do Sandbox, manteve em todas as execuções, cada uma numa sessão de logon nova, também pelo token entregue a outro processo; a hipótese da rodada 1 (o `agy` apagou a credencial ao falhar uma renovação) ficou para o item seguinte. **Padrão:** mantém. **Se falhar:** o `mestre-launcher` mantém a sessão de logon do `mestre-agente` aberta enquanto a máquina roda, e o checklist mostra o perfil deslogado até lá. **Onde:** spike 5 no Windows Sandbox ([Windows](../arquitetura/windows.md#verificar-na-implementação)); depois, a suíte pesada. **Resultado (2026-10-13, rodada 3 do spike 5):** Padrão confirmado: o `agy` achou o login num `mestre-pty` novo, iniciado pelo launcher ([Windows](../arquitetura/windows.md#resultado-dos-spikes-do-m1)).
 - **Verificar na implementação:** o `agy` renova sozinho o token de login, que vale 1 h, gravando o arquivo do perfil. **Padrão:** renova. **Se falhar:** o perfil aparece deslogado no ALL-11 do [checklist](../plataforma/checklist.md), o personagem fica `blocked` e o alerta pede novo login. **Onde:** suíte pesada, com um personagem ativo por mais de 1 h, no Linux e no Windows (no Windows, no `mestre-pty` iniciado pelo `mestre-launcher`).
 
 ## Fontes

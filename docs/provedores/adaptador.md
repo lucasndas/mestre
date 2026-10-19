@@ -1,6 +1,6 @@
 # Adaptador de provedor
 
-> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-15
+> **Assunto:** contrato do adaptador, formato interno de evento, mapa de eventos e ferramentas, telas, digitação de mensagens e retomada de sessão · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -16,7 +16,7 @@ Cada provedor tem um adaptador registrado pelo seu id (`claude-code`, `codex`, `
 |---|---|---|---|
 | `BuildLaunch` (montar comando de início) | base, ficha, personagem, perfil de conta, SO da máquina, regras efetivas, id de sessão a retomar (opcional) | executável, argumentos, ambiente, pasta | ao criar ou [retomar](#retomada-de-sessão) um personagem |
 | `HookFiles` (gerar arquivos de hooks) | worktree ou perfil de conta, SO da máquina, caminho estável do binário `mestre` | lista de arquivos e a parte gerenciada de cada um (nos do worktree, também como tirá-la: `HookStripper`) | ao abrir a mesa ([mesa](../sessao-zero/mesa.md)), ao configurar o perfil e ao regenerar |
-| `PreTrust` (pré-confiar pasta) | perfil de conta, caminho do worktree, raiz do repositório | entradas gravadas no arquivo de confiança do provedor | antes do primeiro personagem do worktree; idempotente |
+| `PreTrust` / `Untrust` (pré-confiar pasta e tirar a confiança) | perfil de conta, caminho do worktree, raiz do repositório | entradas gravadas no arquivo de confiança do provedor, ou retiradas | `PreTrust` antes do primeiro personagem do worktree (idempotente); `Untrust` ao remover o worktree |
 | `DeliverMestreLayer` (entregar camada do Mestre) | caminho de `MESTRE.md` do personagem | argumentos e/ou arquivos extras | junto com `BuildLaunch` ([personagem](../sessao-zero/personagem.md)) |
 | `NormalizeHook` (normalizar entrada de hook) | evento nativo, JSON do stdin | evento no formato interno | a cada chamada de `mestre hook` |
 | `FormatResponse` (formatar resposta) | evento, decisão ou contexto | stdout e código de saída no formato do provedor | no fim de cada `mestre hook` |
@@ -42,7 +42,7 @@ Regras do contrato: nenhuma operação escreve no `AGENTS.md`; toda geração é
 | `tool_result` | só em `post_tool`: `ok`, `error`, `output` (truncado em 16 KiB, padrão) |
 | `prompt`, `last_message` | texto do turno e última resposta, quando existem (truncados em 16 KiB, como o `output`) |
 | `stop_reason`, `error` | `normal`, `interrupted`, `max_steps`, `rate_limit`, `auth`, `error` e o detalhe nativo |
-| `usage` | só em `usage`: tokens, custo estimado, % de contexto, janelas de limite (`window`, `used_pct`, `resets_at`) |
+| `usage` | só em `usage`: tokens, custo estimado, % de contexto, janelas de limite (`window`: `5h` ou `7d`, o `weekly` do Antigravity também como `7d`; `used_pct`, `resets_at`) |
 | `received_at` | instante pelo relógio da máquina |
 
 Os caminhos são normalizados (absolutos, sem `..`, com links resolvidos, inclusive os da pasta de um arquivo que ainda não existe; sem diferença de maiúsculas no Windows) antes de qualquer decisão. O `..` vale onde o sistema o aplica (`NormalizePath`, também para os argumentos dos comandos): no Linux, depois do link à esquerda dele, logo `link/../x` é o `x` ao lado do alvo do link, não ao lado do link; no Windows, que tira o `..` do texto antes de abrir o caminho, antes dos links.
@@ -81,7 +81,7 @@ Mapa atualizado pela pesquisa de 2026-10-12. O Antigravity só tem cinco eventos
 | `internal` | `TodoWrite` | `update_plan` | `manage_task`, `ask_question`, `list_permissions`, `ask_permission` |
 | `other` | qualquer nome não mapeado | idem | `generate_image`, `schedule`, não mapeados |
 
-Ferramenta de tipo `shell` sem comando, ou `read`, `write`, `edit` ou `search` sem caminho lido de um campo do mapa, vira `other`: nenhuma regra de caminho decide sem ver o caminho. Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/formato-das-permissoes.md)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. Cada provedor tem a sua tabela completa no próprio documento; nomes novos aparecem no teste de conformidade.
+Ferramenta de tipo `shell` sem comando, ou `read`, `write`, `edit` ou `search` sem caminho lido de um campo do mapa, vira `other`: nenhuma regra de caminho decide sem ver o caminho. Ferramentas `mcp` (inclusive as do MCP de navegador do personagem) e `other` são decididas pelo nome nativo, com os padrões de `tools` da classe ([permissões](../classes/formato-das-permissoes.md)); desde o M7, `mcp__mestre__*` (o gateway) passa sem decisão aqui, porque o motor julga o par (servidor, ferramenta), e toda outra `mcp` é negada ([despachante](despachante-de-hooks.md), [MCP por classe](../classes/mcp-por-classe.md)). O comando vem de `tool_input.command` (Claude, Codex) ou `args.CommandLine` (Antigravity). Os caminhos vêm de `file_path`/`notebook_path` (Claude), dos cabeçalhos `*** Add/Update/Delete File:` do `apply_patch` (Codex) e dos argumentos de arquivo do Antigravity. A tabela acima é a que o adaptador reconhece; um nome novo cai em `other` e aparece no teste de conformidade.
 
 ### Prontidão e telas interativas
 
@@ -108,7 +108,7 @@ O id da sessão fica no registro de terminais ([persistência](../arquitetura/pe
 
 | Provedor | Comando de retomada | De onde vem o id |
 |---|---|---|
-| Claude Code | `claude --resume <uuid>` | o `--session-id` que o motor gerou ao iniciar |
+| Claude Code | `claude --resume=<uuid>` | o `--session-id` que o motor gerou ao iniciar |
 | Codex | `codex resume <SESSION_ID>` com os mesmos `-c` | `session_id` dos hooks |
 | Antigravity | `agy --conversation <id> --agent mestre-<id>` | `conversationId` dos hooks |
 
