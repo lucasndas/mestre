@@ -97,7 +97,7 @@ Cada ciclo "ativo" custa 3 listas + `pulls?state=open` + 3 chamadas por PR de me
 - **CA-GH-EV-08** · *rápida* — **Dado** um evento `pr_mergeado` cujo `merge_commit_sha` não é alcançável da base no espelho, **quando** o motor o processa, **então** a mesa não é marcada como mesclada e o Grão-Mestre recebe o aviso; **dado** o commit alcançável, **então** a mesa é marcada.
 - **CA-GH-EV-09** · *rápida* — **Dado** o GitHub falso com a cota em zero e um comentário pedido nesse momento, **quando** o motor processa, **então** os laços param, o Dono é avisado, o comentário espera na fila de saída com o uuid e, renovada a cota (relógio falso), sai uma vez só.
 - **CA-GH-EV-10** · *rápida* — **Dado** a cota restante em 9%, **quando** o motor processa, **então** o workspace passa a "parado", uma ação que muda dados fica na fila de saída e a leitura continua no intervalo "parado"; **dado** um `403` com `retry-after` de limite secundário, **então** a escrita sai com falha e o motivo e não é repetida.
-- **CA-GH-EV-11** · *rápida* — **Dado** um `pr_mergeado` com o `merge_commit_sha` ainda ausente do espelho, **quando** o espelho busca e passa a alcançá-lo (relógio falso), **então** a mesa é marcada na busca seguinte sem novo aviso; **dado** que ele nunca chega, **quando** passa 1 h, **então** o motor registra o alerta e não checa mais.
+- **CA-GH-EV-11** · *rápida* — **Dado** um `pr_mergeado` com o `merge_commit_sha` ainda ausente do espelho, **quando** o espelho busca e passa a alcançá-lo (relógio falso), **então** a mesa é marcada na busca seguinte sem novo aviso; **dado** que ele nunca chega, **quando** passa 1 h (relógio falso), **então** o motor registra o alerta e não checa mais.
 
 ## Depende de
 
