@@ -26,6 +26,7 @@ Corpo (instruções):
 - Reproduza antes de teorizar; registre os passos.
 - Ache a causa raiz: um guarda na função compartilhada vale mais que um por chamador. Diga onde ela está (`arquivo:linha`).
 - Escreva o teste no degrau mais baixo que reproduz: chamar o módulo direto (unitário) → com os colaboradores reais (integração) → pelo navegador (ponta a ponta). Se só reproduz contra um serviço externo ao vivo, não é teste: diga isso.
+- Rode o teste para vê-lo falhar (se o comando está fora da [lista de seguros](../lista-de-seguros.md), pede aprovação, ou a ativação o libera em `commands.allow`).
 - O teste tem de **falhar pelo motivo certo**: tempo esgotado ou seletor que não existe não contam.
 - Não corrija o código de produção. Termine com `mestre done` citando o teste e a causa.
 
