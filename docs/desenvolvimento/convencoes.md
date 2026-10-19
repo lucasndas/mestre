@@ -79,9 +79,9 @@ Nomes dos termos do produto no código (use sempre estes; entre parênteses, ond
 | Party | `Party` (ainda sem tipo; o conceito vive no pacote `connections`) | Missão / Etapa | `Quest` / `Step` |
 | Base / Ficha | `Base` / `Sheet` | Decreto | `Decree` |
 | Classe | `Class` | Caixa de entrada / Espera | `Inbox` / `Wait` |
-| Grão-Mestre | `GrandMaster` | Guardião | `Guardian` |
-| Mestre da mesa | `TableMaster` | Guilda / Cidadela / Torre | `Guild` / `Citadel` / `Tower` |
-| Ficha da máquina | `MachineSheet` (`machinesheet.Sheet`) | Época | `Epoch` |
+| Grão-Mestre | `GrandMaster` | Guardião | `Guardian` (ainda sem tipo nem pacote: é do M7, em `guardian/`) |
+| Mestre da mesa | `TableMaster` | Guilda / Cidadela / Torre | `Guild` / `Citadel` / `Tower` (`Guild` ainda sem tipo: o conceito vive no pacote `guild`, com `guild.Member` e `guild.Identity`) |
+| Ficha da máquina | `MachineSheet` (`machinesheet.Sheet`) | Época | `Epoch` (`guild.Epochs`, e o campo `Epoch` do certificado em `protocol.Certificate`) |
 | Sessão zero | `SessionZero` (pacote `sessionzero`) | Perfil de conta | `AccountProfile` (`accounts.Profile`) |
 
 Exceções herdadas, mantidas como estão: identificadores de protocolo, variáveis de ambiente e pastas usam `agent` para personagem (`agent.rules`, `MESTRE_AGENT_ID`, `.mestre/agents/`) e `mesa` para mesa (`MESTRE_MESA`, `.mestre/mesas/`). No código Go, os tipos continuam `Character` e `Table`.
@@ -143,7 +143,7 @@ Esta seção é a fonte única do que é "pronto"; outros documentos fazem link 
 4. Linter limpo e arquivos gerados em dia.
 5. Nada fora do [escopo do MVP](../produto/escopo-mvp.md) foi acrescentado.
 6. Commits e PR seguem as convenções acima.
-7. **Marco:** só está pronto depois da auditoria (revisores conferem que o teste de cada critério afirma o que o critério diz, olhando primeiro a segurança e os dois sistemas, e os achados são corrigidos antes de o marco seguinte começar); a data entra na coluna "Auditoria" da tabela de [marcos](ordem-de-implementacao.md#marcos), e a [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) a confere.
+7. **Marco:** só está pronto depois da auditoria (revisores conferem que o teste de cada critério afirma o que o critério diz, olhando primeiro a segurança e os dois sistemas, e os achados são corrigidos antes de o marco seguinte começar); a data (só ela: o relatório não vai para o repositório) entra na coluna "Auditoria" da tabela de [marcos](ordem-de-implementacao.md#marcos), e a [verificação de docs](../qualidade/verificacao-de-docs.md#checagens-de-código-e-de-marcos) a confere.
 
 ## Fontes
 
