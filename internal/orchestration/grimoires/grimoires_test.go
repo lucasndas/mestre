@@ -8,12 +8,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/orchestration/quests"
 )
 
 // team makes the team of the examples in workspace A: Dev and QA, the scroll
@@ -222,5 +224,32 @@ func TestANameThatExistsInTheDestinationGetsASuffixShownInTheSummary(t *testing.
 	}
 	if !w.has(w.a, "Dev (3)") || !w.has(w.a, "QA (3)") {
 		t.Error("the third restoration did not make Dev (3) and QA (3)")
+	}
+}
+
+// Part of CA-GRIM-04: the name of a quest has a limit (docs/orquestracao/missoes.md#definição), so
+// the suffix of a name that exists in the destination makes room for itself.
+func TestTheNameOfAQuestAtTheLimitStillFitsWithItsSuffix(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit(w.a, "Dev Claude", "Dev", "")
+	qa := w.recruit(w.a, "Revisor Codex", "QA", "")
+	name := strings.Repeat("q", quests.MaxName)
+	v := w.quest(w.a, "name: "+name+"\nsteps:\n  - {id: dev, character: Dev, instructions: \"Faça o login\"}\n  - {id: qa, character: QA, after: [dev]}\n")
+	w.save(w.a, "Longo", grimoires.Selection{Characters: picks(dev.ID, qa.ID), Quests: picks(v.ID)})
+
+	plan, err := w.orc.Grimoires.Plan(w.ctx, w.restoreReq(w.a, "Longo", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Quests) != 1 || utf8.RuneCountInString(plan.Quests[0].To) > quests.MaxName || !strings.HasSuffix(plan.Quests[0].To, " (2)") {
+		t.Fatalf("quests = %+v, want the name shortened to fit its suffix in %d characters", plan.Quests, quests.MaxName)
+	}
+	rep, err := w.orc.Grimoires.Restore(w.ctx, w.restoreReq(w.a, "Longo", nil))
+	if err != nil || len(rep.Failed) != 0 {
+		t.Fatalf("restore = %+v, %v; want the quest made", rep, err)
+	}
+	if _, err := w.orc.Quests.Get(w.ctx, w.a.slug, w.a.table.ID, plan.Quests[0].To); err != nil {
+		t.Errorf("the quest %q was not made: %v", plan.Quests[0].To, err)
 	}
 }

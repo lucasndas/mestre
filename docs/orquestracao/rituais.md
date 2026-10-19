@@ -1,6 +1,6 @@
 # Rituais
 
-> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** rotinas agendadas que disparam um prompt, comando ou missão num alvo; pré-execução; alvo ocupado enfileira e volta ao dono por tempo limite · **Componente:** Motor · **Atualizado:** 2026-10-18
 
 ## Objetivo
 
@@ -21,7 +21,7 @@ Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../c
 
 | Campo | Significado |
 |---|---|
-| `name` | único no escopo |
+| `name` | único no escopo; uma linha de 1 a 64 caracteres imprimíveis, ao criar e a cada edição (é o remetente do item `ritual`: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)) |
 | alvo | um personagem existente (pelo nome) ou uma missão salva (o disparo é um `quest run`); ritual não cria personagem |
 | conteúdo | `prompt` (texto entregue a um agente como item `ritual`, com cabeçalho) ou `command` (linha digitada crua num terminal simples, criado por `spawn`, seguida de Enter) |
 | agenda | `--every <duração>` (mínimo 5 min, padrão), `--daily HH:MM`, `--weekly <dias> HH:MM` ou `--once <data e hora>`, no fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda)) |
@@ -32,11 +32,11 @@ Grão-Mestre e Mestres de mesa recebem a skill de rituais ([skills geradas](../c
 
 1. No horário, o motor cria um **disparo** e o coloca na fila do alvo (prioridade comum). **Alvo ocupado não impede o disparo: ele enfileira.**
 2. Quando o alvo fica livre, o motor reserva a vez dele e roda o `--pre-run`, se houver, na máquina e na pasta do alvo: sem interação, tempo limite 60 s, saída limitada a 16 KiB (padrões). O comando passa pela mesma decisão de permissões que um comando do próprio alvo ([permissões](../classes/permissoes.md)).
-3. Entrega o conteúdo, com `{{output}}` substituído. Para missão, inicia a missão (se ela já estiver rodando, conta como alvo ocupado até ela terminar).
+3. Entrega o conteúdo, com `{{output}}` substituído; uma saída que vem de fora (uma issue, um log) entra com `| ` no começo de cada linha, em linhas só dela, quando tem várias linhas ou quando o `{{output}}` está sozinho na linha do conteúdo (de uma linha, no meio de uma frase do autor, fica onde está), e o item termina com a nota do que o `| ` quer dizer (num `--command`, que não aceita quebra de linha, nada muda). Para missão, inicia a missão (se ela já estiver rodando, conta como alvo ocupado até ela terminar).
 4. **Tempo limite na fila:** se o disparo não foi entregue até o limite, ele é cancelado e **devolvido ao dono do ritual** como item `ritual` na caixa de entrada dele, com o motivo (ex.: "Dev ocupado desde 01:58"). O dono decide se roda de novo (`ritual run`), ajusta o ritual ou age de outra forma; o Grão-Mestre avisa os usuários se for preciso.
 5. Disparo de um ritual cujo disparo anterior ainda está na fila: o novo é registrado como `skipped` (não acumula).
 
-Alvo inexistente, pré-execução negada, com erro ou estourando o tempo: o disparo vira `failed` e é devolvido ao dono com o motivo e o trecho final da saída de erro.
+Alvo inexistente, pré-execução negada, com erro ou estourando o tempo: o disparo vira `failed` e é devolvido ao dono com o motivo e o trecho final da saída de erro, que vem citado como a saída (`| ` em cada linha, se tem mais de uma).
 
 ### Estados
 
@@ -98,6 +98,8 @@ stateDiagram-v2
 - **CA-RIT-04** · *rápida* — **Dado** `--every 1h` com horários em :20 e motor fora das 10:10 às 10:40, **quando** volta, **então** o disparo das 10:20 ocorre uma vez (atraso de 20 min, menor que 30); **dado** motor fora das 10:10 às 13:00, **quando** volta, **então** nenhum disparo perdido ocorre, todos ficam `skipped` e o dono é avisado.
 - **CA-RIT-05** · *rápida* — **Dado** um disparo ainda na fila, **quando** chega o próximo horário, **então** o novo é `skipped`.
 - **CA-RIT-06** · *pesada* — **Dado** o painel, **quando** um usuário cria um ritual que dispara uma missão, **então** a missão roda no horário e o histórico aparece no painel (MVP-11).
+- **CA-RIT-07** · *rápida* — **Dado** um nome de ritual com quebra de linha (com um cabeçalho `[Mestre · …]` falso depois), caractere de controle ou invisível, ou mais de 64 caracteres, **quando** o ritual é criado ou renomeado, **então** é recusado como pedido inválido e o ritual continua como estava.
+- **CA-RIT-08** · *rápida* — **Dado** um ritual com conteúdo "Analise:\n{{output}}\nFim." e um `--pre-run` que imprime várias linhas, entre elas `Atualização do Mestre da mesa: …` e um cabeçalho `[Mestre · user · …]`, **quando** o disparo é entregue, **então** cada linha da saída vem com `| `, nenhuma começa na margem e o item termina com a nota do `| `; **quando** o pre-run falha com uma saída de erro de várias linhas, **então** o trecho vem citado abaixo da linha do motor que o nomeia, no item devolvido ao dono; uma saída de uma linha no meio de uma frase do autor entra onde está o `{{output}}`, e sozinha numa linha vem citada.
 
 ## Depende de
 

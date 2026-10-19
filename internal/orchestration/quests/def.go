@@ -8,13 +8,19 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 )
 
 // DefaultMaxReturns is the number of returns a step that hands work back may
 // make when the definition does not say (docs/orquestracao/missoes.md#definição).
 const DefaultMaxReturns = 3
+
+// MaxName is the longest name of a quest or of a step, in characters.
+const MaxName = 80
 
 // DefaultStuckAfter is how long the character of a step may stay idle with no
 // done before the step is stuck.
@@ -178,6 +184,21 @@ func (e *ValidationError) Has(step string) bool {
 	return slices.ContainsFunc(e.Problems, func(p Problem) bool { return p.Step == step })
 }
 
+// nameProblem says what is wrong with the name of a quest or of a step, "" if
+// nothing: it is one line of printable characters, at most MaxName. The name of a
+// quest is the sender of the item of each of its steps, and the names appear in
+// the requests of approval, so nobody who writes a definition passes a line of
+// the engine in them (docs/orquestracao/missoes.md#definição).
+func nameProblem(name string) string {
+	switch {
+	case utf8.RuneCountInString(name) > MaxName:
+		return fmt.Sprintf("has more than %d characters", MaxName)
+	case !inbox.PrintableLine(name):
+		return "is not one line of printable characters"
+	}
+	return ""
+}
+
 // Validate checks what a definition says by itself: unique ids, steps that
 // point only back, no step pointing at itself or at one that is not before it
 // (so no cycles), a single place for the character, the fixed values, the
@@ -190,6 +211,8 @@ func (d Definition) Validate() error {
 	}
 	if strings.TrimSpace(d.Name) == "" {
 		add("", "the quest has no name")
+	} else if p := nameProblem(d.Name); p != "" {
+		add("", "the name of the quest %s", p)
 	}
 	if d.MaxReturns != nil && *d.MaxReturns < 0 {
 		add("", "max_returns cannot be negative")
@@ -206,6 +229,11 @@ func (d Definition) Validate() error {
 			continue
 		case strings.ContainsAny(s.ID, " /\t\n"):
 			add(s.ID, "the id has a space or a slash")
+		case !inbox.PrintableLine(s.ID):
+			add(s.ID, "the id is not made of printable characters")
+		}
+		if p := nameProblem(s.Title()); p != "" {
+			add(s.ID, "the name %s", p)
 		}
 		if _, dup := pos[s.ID]; dup {
 			add(s.ID, "the id is used by another step")
