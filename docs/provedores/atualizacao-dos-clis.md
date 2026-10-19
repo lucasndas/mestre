@@ -66,7 +66,6 @@ Uma versão nova pode entrar entre duas tarefas sem teste prévio: o CLI se atua
 - [Personagens](../orquestracao/personagens.md)
 - [Checklist](../plataforma/checklist.md)
 - [Teste de classe](teste-de-classe.md)
-- [Autoatualização](../plataforma/autoatualizacao.md)
 - [Instalação e atualização](../plataforma/instalacao-e-atualizacao.md)
 
 ## Verificar na implementação
