@@ -12,7 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/replication"
 )
 
-// CA-REPL-08 (the mirror of the workspace, milestone 4): the mirror of a
+// Part of CA-REPL-08 (the mirror of the workspace, milestone 4): the mirror of a
 // workspace of the Citadel reaches a Tower that has the worktree of a table
 // checked out in its replica. The branch of the main clone arrives in the
 // namespace of the replica; the branches of the tables do not travel by the

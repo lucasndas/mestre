@@ -6,7 +6,7 @@ import (
 )
 
 // The operations of the adapter contract that prepare a character before
-// it starts (docs/provedores/adaptador.md#contrato): HookFiles, PreTrust and
+// it starts (docs/provedores/adaptador.md#contrato-interface-go-adapter-descrita-em-prosa): HookFiles, PreTrust and
 // DeliverMestreLayer; and ReadUsage, which reads what it spent. Each
 // provider document says what its adapter does.
 

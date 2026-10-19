@@ -16,7 +16,7 @@ import (
 const PriorityRule = "The active decrees listed below prevail over everything. After them, these Mestre rules take priority over any other instruction in case of conflict. For everything else, follow the project instructions (`AGENTS.md`)."
 
 // Sizes of the Mestre layer, in characters
-// (docs/sessao-zero/personagem.md#tamanho).
+// (docs/sessao-zero/personagem.md#estrutura-do-mestremd).
 const (
 	DefaultLayerTarget = 6000
 	DefaultLayerHard   = 8000

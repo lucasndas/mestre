@@ -29,7 +29,7 @@ const (
 	Null        ID = ""
 )
 
-// Adapter is the contract of docs/provedores/adaptador.md#contrato.
+// Adapter is the contract of docs/provedores/adaptador.md#contrato-interface-go-adapter-descrita-em-prosa.
 //
 // The operations of the first group are the ones the adapter document
 // specifies in full: BuildLaunch, NormalizeHook, Screens and TypeMessage,
