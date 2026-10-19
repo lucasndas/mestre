@@ -29,12 +29,12 @@ func TestTheOrchestrationOfTheCitadelIsBuiltAndWhatWaitsForMilestone5Refuses(t *
 	e := &Engine{clk: clock.Real{}, log: slog.New(slog.DiscardHandler), id: guild.Identity{MachineID: "m1"},
 		paths: Paths{Workspaces: filepath.Join(root, "workspaces"), Maquina: filepath.Join(root, "maquina")},
 		deps:  Deps{Masker: logging.NewMasker(), Binary: filepath.Join(root, "mestre")}}
-	orc, err := e.hostOrchestration(db)
+	orc, err := e.hostOrchestration(db, nil)
 	if err != nil || orc == nil || orc.Workspaces == nil || orc.Characters == nil || orc.Inbox == nil {
 		t.Fatalf("orchestration: %+v, %v", orc, err)
 	}
 	for _, p := range []Paths{{}, {Workspaces: filepath.Join(root, "w")}, {Maquina: filepath.Join(root, "m")}} {
-		if _, err := (&Engine{paths: p, deps: Deps{Masker: logging.NewMasker()}}).hostOrchestration(db); err == nil {
+		if _, err := (&Engine{paths: p, deps: Deps{Masker: logging.NewMasker()}}).hostOrchestration(db, nil); err == nil {
 			t.Fatalf("the orchestration was built with the folders %+v", p)
 		}
 	}
