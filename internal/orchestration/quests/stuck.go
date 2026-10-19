@@ -152,6 +152,9 @@ func (s *Service) Sweep(ctx context.Context) error {
 		for _, st := range steps {
 			switch st.State {
 			case StepRunning:
+				if s.verifying(st.UID) {
+					continue // the time of a verification is not the time of an idle step
+				}
 				if why, stuck := s.idleTooLong(ctx, q, st, now); stuck {
 					s.markStuck(ctx, st, why)
 				}

@@ -109,6 +109,9 @@ type OrchestrationOptions struct {
 	// QuestDone gives the done_requires of the class of a character (nil: from
 	// the libraries of classes, ClassLibraries).
 	QuestDone quests.DoneRules
+	// QuestVerifier runs the verification of the workspace (nil: nothing is
+	// confirmed, and a class with verify: true ends its steps unverified).
+	QuestVerifier quests.Verifier
 
 	// The chain of approval (stage 10). ChainClasses gives the effective rules,
 	// the environment and the domains of the characters; without it the chain
@@ -541,7 +544,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	qs, err = quests.NewService(quests.Options{Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: questApprovals, Done: questDone(o), Gate: gate, Logger: o.Logger})
+		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
