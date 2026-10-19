@@ -2,6 +2,7 @@ package scrolls
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -59,6 +60,10 @@ func (c CharacterTargets) Of(ctx context.Context, workspace, table string) ([]Ta
 	out := make([]Target, 0, len(machines))
 	for _, m := range machines {
 		dir, err := c.Tables.Worktree(ctx, workspace, table, m)
+		var down *characters.MachineUnreachableError
+		if errors.As(err, &down) {
+			continue // a Tower that does not answer must not stop the copies of the others
+		}
 		if err != nil {
 			return nil, fmt.Errorf("worktree of %s on %s: %w", table, m, err)
 		}
@@ -127,19 +132,29 @@ func (s *Service) Sync(ctx context.Context, workspace, table string) error {
 	if s.o.Targets == nil || s.o.Copies == nil {
 		return nil
 	}
+	type item struct {
+		n       Note
+		content string
+	}
+	var items []item
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	ns, err := s.st.OfTable(ctx, workspace, table)
+	if err == nil {
+		for _, n := range ns {
+			content, rerr := s.readFile(n)
+			if rerr != nil {
+				s.log.Warn("scrolls: a scroll could not be read to be copied", "scroll", n.Key, "err", rerr)
+				continue
+			}
+			items = append(items, item{n, content})
+		}
+	}
+	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	for _, n := range ns {
-		content, err := s.readFile(n)
-		if err != nil {
-			s.log.Warn("scrolls: a scroll could not be read to be copied", "scroll", n.Key, "err", err)
-			continue
-		}
-		s.copyOut(ctx, n, content)
+	for _, it := range items { // with the lock released
+		s.copyOut(ctx, it.n, it.content)
 	}
 	return nil
 }

@@ -1,6 +1,6 @@
 # Esperas e caixa de entrada
 
-> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** fila por personagem, prioridade, entrega só quando livre, origem e resposta pelo mesmo canal, ask e ask back, tipos de espera, tempos limite, impasse e persistência · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -85,7 +85,7 @@ Quem tem espera ativa (ou está `blocked`) aparece no canvas e no `mestre list` 
 | `ask` bloqueante | 90 s; máximo 9 min (o `ask` segura a ferramenta de shell do agente, cujo tempo limite padrão no Claude Code é 2 min) |
 | Personagem | 60 min |
 | Etapas | 120 min |
-| Aprovação | a soma dos prazos dos níveis da [cadeia](cadeia-de-aprovacao.md#subida) e, nas pessoas, o da política ([fluxo](../aprovacoes/fluxo.md)) |
+| Aprovação | a soma dos prazos dos níveis da [cadeia](cadeia-de-aprovacao.md#subida) e, nas pessoas, o da política ([fluxo](../aprovacoes/fluxo.md)), mais 1 min de folga para o pedido fechar (e avisar a negação) antes da espera |
 | Horário | sem tempo limite |
 | Vaga, sincronização | 30 min (vaga: ao estourar, o pedido de criação falha com aviso) |
 

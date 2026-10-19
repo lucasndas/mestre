@@ -110,6 +110,23 @@ func (s *Service) settings(ctx context.Context, workspace string) (Settings, str
 	return s.pol.read(ctx, s.o.Policy, s.log, workspace)
 }
 
+// ApprovalTimeout is the time limit of a wait for an approval that does not
+// know the type of the request: the times of the agent, of the Grão-Mestre and
+// the longest of the people (docs/orquestracao/esperas-e-caixa-de-entrada.md#tempos-limite).
+func (s *Service) ApprovalTimeout(ctx context.Context, workspace string) time.Duration {
+	st, _ := s.settings(ctx, workspace)
+	people := st.PeopleDeadline
+	for _, d := range st.PeopleDeadlines {
+		people = max(people, d)
+	}
+	return st.AgentDeadline + st.GrandMasterDeadline + people + approvalWaitGrace
+}
+
+// approvalWaitGrace is how long the wait of a requester outlives the last time
+// of the chain, so that the closing of the request (the denial that tells the
+// requester) comes before the expiry of the wait.
+const approvalWaitGrace = time.Minute
+
 // OpenRequest is a request to put in the chain.
 type OpenRequest struct {
 	// Type is the request type; "" is permissao_de_classe.
@@ -243,7 +260,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	s.audit(ctx, r, AuditEntry{Answer: answerBorn, Outcome: "accepted", Level: lvl.Kind, Reason: joinWhy(why)})
 	s.arrive(ctx, r.ID, st)
 	if r.Type == classes.RequestClassPermission && s.o.Waits != nil && who.ID != "" {
-		if _, err := s.o.Waits.WaitApproval(ctx, who, r.ID, 0); err != nil {
+		if _, err := s.o.Waits.WaitApproval(ctx, who, r.ID, st.AgentDeadline+st.GrandMasterDeadline+st.peopleDeadline(r.Type)+approvalWaitGrace); err != nil {
 			s.log.Warn("chain: the wait of the requester was not made", "request", r.ID, "err", err)
 		}
 	}

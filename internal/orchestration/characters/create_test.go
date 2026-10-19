@@ -552,3 +552,27 @@ func TestAClassThatDoesNotExistFailsBeforeAnythingIsMade(t *testing.T) {
 		t.Errorf("an approved class: %v", err)
 	}
 }
+
+type syncLog struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (s *syncLog) Sync(_ context.Context, ws, table string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, ws+"/"+table)
+	return nil
+}
+
+// A character that is born finds the copies of the scrolls of its table in its
+// worktree: the engine asks for them before it starts.
+func TestACharacterThatIsBornHasTheCopiesOfTheScrollsOfItsTableMade(t *testing.T) {
+	t.Parallel()
+	sl := &syncLog{}
+	r := newRig(t, rigOptions{scrolls: sl})
+	r.make("Dev Claude", "Dev", "3-login")
+	if len(sl.calls) != 1 || sl.calls[0] != workspace+"/3-login" {
+		t.Fatalf("copies made for %v; want one for the table of the character", sl.calls)
+	}
+}

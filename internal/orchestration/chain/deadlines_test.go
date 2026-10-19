@@ -94,3 +94,21 @@ func TestTheDurationsOfThePolicyAcceptDays(t *testing.T) {
 		t.Error("xd is not a duration")
 	}
 }
+
+// The wait of the requester for the approval has the time limit the table of
+// waits promises: the sum of the times of the levels of the chain, the one of
+// the people being that of the type (docs/orquestracao/esperas-e-caixa-de-entrada.md).
+func TestTheWaitOfTheRequesterForAnApprovalHasTheSumOfTheTimesOfTheLevels(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	w.shell(dev, "npm install lodash")
+	ws, err := w.orc.Waits.Store().ActiveOf(w.ctx, dev.ID)
+	if err != nil || len(ws) != 1 {
+		t.Fatalf("waits of the requester = %+v, %v", ws, err)
+	}
+	want := 2*time.Minute + 10*time.Minute + 2*time.Hour + time.Minute // and a minute of grace after the last level
+	if got := ws[0].TimeoutAt.Sub(ws[0].CreatedAt); got != want {
+		t.Errorf("the time limit of the wait is %v, want %v", got, want)
+	}
+}

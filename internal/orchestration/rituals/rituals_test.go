@@ -258,3 +258,19 @@ func TestAFiringStillInTheQueueSkipsTheNextOne(t *testing.T) {
 		t.Errorf("the target got %d items; the skipped one is not delivered", n)
 	}
 }
+
+// The hour of a ritual is the one of the time zone of the Guild when the
+// workspace has none of its own: 02:00 in São Paulo is 05:00 UTC
+// (docs/orquestracao/rituais.md).
+func TestTheHourOfARitualFollowsTheTimeZoneOfTheGuild(t *testing.T) {
+	t.Parallel()
+	if _, err := time.LoadLocation("America/Sao_Paulo"); err != nil {
+		t.Skip("no tzdata")
+	}
+	w := newWorld(t, worldOpts{guildZone: "America/Sao_Paulo"})
+	w.recruit("Dev Claude", "Dev")
+	r := w.make("Testes da noite", "Dev", daily(2, 0))
+	if want := time.Date(2026, 10, 16, 5, 0, 0, 0, time.UTC); !r.NextRun.Equal(want) {
+		t.Fatalf("next run = %s; want %s (02:00 in São Paulo)", r.NextRun, want)
+	}
+}
