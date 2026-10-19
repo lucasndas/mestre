@@ -420,6 +420,16 @@ func (s *Server) Calls(method string) int {
 	return s.calls[method]
 }
 
+// LongPolls is how many long getUpdates have been registered (waiting for
+// updates, replacing the one before). Calls counts a call when it arrives, a
+// moment before it is registered: a test that needs "the older poll is in
+// place" waits for this.
+func (s *Server) LongPolls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pollGen
+}
+
 // File is a file uploaded to the bot API (the document of sendDocument).
 type File struct {
 	Name    string

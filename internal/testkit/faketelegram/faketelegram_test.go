@@ -248,8 +248,8 @@ func TestANewLongGetUpdatesAbortsTheOlderOneWith409(t *testing.T) {
 		st, _ := call(t, c, "getUpdates", url.Values{"timeout": {"50"}})
 		first <- st
 	}()
-	for s.Calls("getUpdates") == 0 {
-		runtime.Gosched() // until the first call has started
+	for s.LongPolls() == 0 {
+		runtime.Gosched() // until the first poll is registered: a second that registers before it would be the newer one
 	}
 	second := make(chan int, 1)
 	go func() {
