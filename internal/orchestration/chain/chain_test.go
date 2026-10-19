@@ -190,7 +190,7 @@ func TestARequestWithoutAnAnswerClimbsWithTheSameIdAndExpiresAtThePeopleWithoutB
 	if len(w.users.askedFor(id)) != 1 {
 		t.Errorf("the people were asked %d times", len(w.users.askedFor(id)))
 	}
-	w.clk.Advance(24 * time.Hour)
+	w.clk.Advance(2 * time.Hour) // the time of a permission of a class
 	r = w.request(id)
 	if r.State != chain.Expired {
 		t.Fatalf("at the end of the time of the people the request is %s, want expired", r.State)
