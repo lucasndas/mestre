@@ -39,7 +39,11 @@ type PRs interface {
 // Handlers are the commands `issue` and `pr`, to register in the local
 // forwarder of the Citadel.
 type Handlers struct {
-	PRs        PRs
+	PRs PRs
+	// Lease gates every call to GitHub; without it every command is refused.
+	Lease Lease
+	// Quota, when set, holds what changes data back while the App is low.
+	Quota      Quota
 	Characters Characters
 	Clients    Clients
 	Repos      Repos
@@ -50,14 +54,13 @@ type Handlers struct {
 
 // Register registers the handlers.
 func (h *Handlers) Register(fwd *localchan.LocalForwarder) {
-	fwd.Handle("issue create", localchan.HandlerFunc(h.issueCreate))
-	fwd.Handle("issue update", localchan.HandlerFunc(h.issueUpdate))
-	fwd.Handle("issue comment", localchan.HandlerFunc(h.issueComment))
-	fwd.Handle("issue list", localchan.HandlerFunc(h.issueList))
-	fwd.Handle("pr status", localchan.HandlerFunc(h.prStatus))
-	fwd.Handle("pr comment", localchan.HandlerFunc(h.prComment))
-	fwd.Handle("pr reply", localchan.HandlerFunc(h.prReply))
-	fwd.Handle("pr note", localchan.HandlerFunc(h.prNote))
+	for name, f := range map[string]handler{
+		"issue list": h.read(h.issueList), "pr status": h.read(h.prStatus),
+		"issue create": h.write("issue create", h.issueCreate), "issue update": h.write("issue update", h.issueUpdate), "issue comment": h.write("issue comment", h.issueComment),
+		"pr comment": h.write("pr comment", h.prComment), "pr reply": h.write("pr reply", h.prReply), "pr note": h.write("pr note", h.prNote),
+	} {
+		fwd.Handle(name, localchan.HandlerFunc(f))
+	}
 }
 
 // TableKey is how the guard knows a table: its workspace and its id (the ids

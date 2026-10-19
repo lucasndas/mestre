@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -127,20 +128,29 @@ func mergeability(p PullData, checks []Check, reviews []Review) (bool, string) {
 			last[r.By] = r.State
 		}
 	}
-	for by, st := range last {
-		if st == "CHANGES_REQUESTED" {
+	names := make([]string, 0, len(last))
+	for by := range last {
+		names = append(names, by)
+	}
+	slices.Sort(names)
+	for _, by := range names {
+		if last[by] == "CHANGES_REQUESTED" {
 			return false, "changes requested by " + by
 		}
 	}
 	switch p.MergeableState {
+	case "clean", "has_hooks":
+		return true, ""
 	case "dirty":
 		return false, "conflict with the base"
 	case "behind":
 		return false, "the branch is behind the base"
 	case "blocked":
 		return false, "blocked by the rules of the repository"
+	case "unstable":
+		return false, "a check that is not required failed"
 	}
-	return true, ""
+	return false, "GitHub has not said yet whether it can be merged"
 }
 
 // Comment comments on the conversation of the PR, once for the operation.
@@ -148,8 +158,17 @@ func (s *PRService) Comment(ctx context.Context, a Actor, repo string, n int, bo
 	if op == "" {
 		op = NewOp()
 	}
+	// as a PR first: it registers the PR of the table, which the comment (an
+	// issue comment) is then authorized through
+	repo, err := s.authorize(ctx, a, repo, n)
+	if err != nil {
+		return CommentInfo{}, err
+	}
 	return s.guard().PostOnce(ctx, a, repo, n, body, op)
 }
+
+// ErrHeadChanged: the head of the PR moved while the command was checked.
+var ErrHeadChanged = errors.New("github: the head of the PR changed")
 
 // ErrOutsideDiff: the line is not in the diff of the PR.
 var ErrOutsideDiff = errors.New("github: that line is not in the diff of the PR")
@@ -157,6 +176,10 @@ var ErrOutsideDiff = errors.New("github: that line is not in the diff of the PR"
 // Note puts the note of the author on a line of the diff, at the head of the PR.
 func (s *PRService) Note(ctx context.Context, a Actor, repo string, n int, path string, line int, body string) (int64, error) {
 	repo, err := s.authorize(ctx, a, repo, n)
+	if err != nil {
+		return 0, err
+	}
+	p, err := s.API.PullData(ctx, repo, n)
 	if err != nil {
 		return 0, err
 	}
@@ -173,9 +196,14 @@ func (s *PRService) Note(ctx context.Context, a Actor, repo string, n int, path 
 	if !ok {
 		return 0, ErrOutsideDiff
 	}
-	p, err := s.API.PullData(ctx, repo, n)
+	// the lines were checked against the head read first: if the head moved, the
+	// diff is another
+	now, err := s.API.PullData(ctx, repo, n)
 	if err != nil {
 		return 0, err
+	}
+	if now.HeadSHA != p.HeadSHA {
+		return 0, ErrHeadChanged
 	}
 	return s.API.CreateReviewComment(ctx, repo, n, p.HeadSHA, path, line, StripMarkers(body))
 }
@@ -219,6 +247,18 @@ func (s *PRService) Reply(ctx context.Context, a Actor, repo string, n int, id i
 	repo, err := s.authorize(ctx, a, repo, n)
 	if err != nil {
 		return 0, err
+	}
+	// the comment must be one of this PR, and the start of a thread
+	cs, err := s.API.ReviewComments(ctx, repo, n)
+	if err != nil {
+		return 0, err
+	}
+	found := false
+	for _, c := range cs {
+		found = found || c.ID == id && c.InReplyTo == 0
+	}
+	if !found {
+		return 0, ErrNotFound
 	}
 	return s.API.ReplyReviewComment(ctx, repo, n, id, StripMarkers(body))
 }

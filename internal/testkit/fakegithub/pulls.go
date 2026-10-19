@@ -114,9 +114,9 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 	}
 	if parts[3] == "commits" {
 		s.mu.Lock()
-		list := append([]map[string]any(nil), rp.checks[parts[4]]...)
+		all := append([]map[string]any(nil), rp.checks[parts[4]]...)
 		s.mu.Unlock()
-		s.write(w, r, inst, http.StatusOK, map[string]any{"total_count": len(list), "check_runs": list})
+		s.write(w, r, inst, http.StatusOK, map[string]any{"total_count": len(all), "check_runs": paginate(all, r)})
 		return true
 	}
 	n, err := strconv.Atoi(parts[4])
@@ -159,17 +159,17 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 		s.mu.Lock()
 		list := append([]map[string]any(nil), rp.pull(n).reviews...)
 		s.mu.Unlock()
-		s.write(w, r, inst, http.StatusOK, list)
+		s.write(w, r, inst, http.StatusOK, paginate(list, r))
 	case parts[5] == "files":
 		s.mu.Lock()
 		list := append([]map[string]any(nil), rp.pull(n).files...)
 		s.mu.Unlock()
-		s.write(w, r, inst, http.StatusOK, list)
+		s.write(w, r, inst, http.StatusOK, paginate(list, r))
 	case parts[5] == "comments" && len(parts) == 6 && r.Method == http.MethodGet:
 		s.mu.Lock()
 		list := append([]map[string]any(nil), rp.pull(n).comments...)
 		s.mu.Unlock()
-		s.write(w, r, inst, http.StatusOK, list)
+		s.write(w, r, inst, http.StatusOK, paginate(list, r))
 	default: // a comment of review, or a reply to one
 		var in struct {
 			Body     string `json:"body"`
@@ -225,4 +225,35 @@ func (s *Server) pullView(rp *repo, full string, n int, head [2]string) map[stri
 		"head": map[string]any{"ref": head[0], "sha": px.headSHA, "repo": map[string]any{"full_name": head[1]}},
 		"base": map[string]any{"ref": px.baseRef},
 	}
+}
+
+// paginate takes the page of a listing: per_page (at most 100) and page.
+func paginate(list []map[string]any, r *http.Request) []map[string]any {
+	per, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if per <= 0 || per > 100 {
+		per = 30
+	}
+	if page <= 0 {
+		page = 1
+	}
+	from := (page - 1) * per
+	if from >= len(list) {
+		return []map[string]any{}
+	}
+	return list[from:min(from+per, len(list))]
+}
+
+// AddReviewComment puts a comment of review on a PR as a person would (replyTo
+// 0: the start of a thread).
+func (s *Server) AddReviewComment(full string, n int, path string, line int, body string, replyTo int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := map[string]any{"id": s.nextID, "body": body, "path": path, "line": line, "user": map[string]any{"login": "pessoa"}}
+	s.nextID++
+	if replyTo != 0 {
+		c["in_reply_to_id"] = replyTo
+	}
+	px := s.repos[full].pull(n)
+	px.comments = append(px.comments, c)
 }

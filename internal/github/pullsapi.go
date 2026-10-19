@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -73,25 +74,30 @@ type Check struct{ Name, State string }
 // CheckRuns lists the checks of a commit; State is the conclusion, or the status
 // of one still running.
 func (c *REST) CheckRuns(ctx context.Context, repo, sha string) ([]Check, error) {
-	var v struct {
-		Runs []struct {
-			Name       string  `json:"name"`
-			Status     string  `json:"status"`
-			Conclusion *string `json:"conclusion"`
-		} `json:"check_runs"`
-	}
-	if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/commits/%s/check-runs?per_page=100", sha), nil, http.StatusOK, &v, "reading the checks"); err != nil {
-		return nil, err
-	}
-	out := make([]Check, 0, len(v.Runs))
-	for _, r := range v.Runs {
-		st := r.Status
-		if r.Conclusion != nil {
-			st = *r.Conclusion
+	var out []Check
+	for page := 1; page <= maxListPages; page++ {
+		var v struct {
+			Runs []struct {
+				Name       string  `json:"name"`
+				Status     string  `json:"status"`
+				Conclusion *string `json:"conclusion"`
+			} `json:"check_runs"`
 		}
-		out = append(out, Check{Name: r.Name, State: st})
+		if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/commits/%s/check-runs?per_page=100&page=%d", sha, page), nil, http.StatusOK, &v, "reading the checks"); err != nil {
+			return nil, err
+		}
+		for _, r := range v.Runs {
+			st := r.Status
+			if r.Conclusion != nil {
+				st = *r.Conclusion
+			}
+			out = append(out, Check{Name: r.Name, State: st})
+		}
+		if len(v.Runs) < 100 {
+			return out, nil
+		}
 	}
-	return out, nil
+	return nil, errTooMany
 }
 
 // Review is a review of a PR.
@@ -99,13 +105,14 @@ type Review struct{ By, State string }
 
 // Reviews lists the reviews of a PR.
 func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error) {
-	var raw []struct {
+	type item struct {
 		User struct {
 			Login string `json:"login"`
 		} `json:"user"`
 		State string `json:"state"`
 	}
-	if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/pulls/%d/reviews?per_page=100", n), nil, http.StatusOK, &raw, "reading the reviews"); err != nil {
+	raw, err := pages[item](ctx, c, repo, fmt.Sprintf("/pulls/%d/reviews", n), "reading the reviews")
+	if err != nil {
 		return nil, err
 	}
 	out := make([]Review, 0, len(raw))
@@ -127,7 +134,7 @@ type ReviewComment struct {
 
 // ReviewComments lists the comments of review of a PR.
 func (c *REST) ReviewComments(ctx context.Context, repo string, n int) ([]ReviewComment, error) {
-	var raw []struct {
+	type item struct {
 		ID        int64  `json:"id"`
 		InReplyTo int64  `json:"in_reply_to_id"`
 		Path      string `json:"path"`
@@ -137,7 +144,8 @@ func (c *REST) ReviewComments(ctx context.Context, repo string, n int) ([]Review
 			Login string `json:"login"`
 		} `json:"user"`
 	}
-	if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/pulls/%d/comments?per_page=100", n), nil, http.StatusOK, &raw, "reading the comments of review"); err != nil {
+	raw, err := pages[item](ctx, c, repo, fmt.Sprintf("/pulls/%d/comments", n), "reading the comments of review")
+	if err != nil {
 		return nil, err
 	}
 	out := make([]ReviewComment, 0, len(raw))
@@ -152,11 +160,12 @@ type PullFile struct{ Path, Patch string }
 
 // PullFiles lists the files of the diff of a PR.
 func (c *REST) PullFiles(ctx context.Context, repo string, n int) ([]PullFile, error) {
-	var raw []struct {
+	type item struct {
 		Filename string `json:"filename"`
 		Patch    string `json:"patch"`
 	}
-	if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/pulls/%d/files?per_page=100", n), nil, http.StatusOK, &raw, "reading the files of the PR"); err != nil {
+	raw, err := pages[item](ctx, c, repo, fmt.Sprintf("/pulls/%d/files", n), "reading the files of the PR")
+	if err != nil {
 		return nil, err
 	}
 	out := make([]PullFile, 0, len(raw))
@@ -188,4 +197,26 @@ func (c *REST) ReplyReviewComment(ctx context.Context, repo string, n int, id in
 		return 0, err
 	}
 	return v.ID, nil
+}
+
+// maxListPages bounds a listing: 20 pages of 100.
+const maxListPages = 20
+
+var errTooMany = errors.New("github: too many items to look through")
+
+// pages reads a listing page by page (100 each), whole: a reading that stops at
+// the first page loses the newest reviews and the last checks.
+func pages[T any](ctx context.Context, c *REST, repo, path, what string) ([]T, error) {
+	var out []T
+	for page := 1; page <= maxListPages; page++ {
+		var raw []T
+		if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("%s?per_page=100&page=%d", path, page), nil, http.StatusOK, &raw, what); err != nil {
+			return nil, err
+		}
+		out = append(out, raw...)
+		if len(raw) < 100 {
+			return out, nil
+		}
+	}
+	return nil, errTooMany
 }

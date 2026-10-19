@@ -165,6 +165,15 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusOK, list)
 	case parts[5] == "comments" && r.Method == http.MethodPost:
+		s.mu.Lock()
+		fail, after := s.failWrite, s.failWriteAfter
+		s.failWrite = 0
+		s.mu.Unlock()
+		if fail != 0 {
+			w.Header().Set("Retry-After", after)
+			s.write(w, r, inst, fail, map[string]any{"message": "You have exceeded a secondary rate limit"})
+			return true
+		}
 		var in struct {
 			Body string `json:"body"`
 		}

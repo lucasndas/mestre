@@ -3,6 +3,7 @@ package ghcli_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/github"
 )
@@ -189,5 +190,174 @@ func TestAClassMayBeGrantedThePRCommands(t *testing.T) {
 	}
 	if got := r.run("dev", "pr comment", nil, "x"); got.Code != "class_denied" {
 		t.Errorf("a Dev comment: %+v", got)
+	}
+}
+
+func TestAReplyIsToAThreadOfThisPRNotToAnyComment(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	// a comment of review on another PR of the repository
+	other := r.gh.AddPR(repoFull, "de outra mesa", "43-outra", repoFull)
+	r.gh.AddPullFile(repoFull, other, "src/x.ts", patchLogin)
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindPR, Number: other, Table: "meu-app/43-outra"}); err != nil {
+		t.Fatal(err)
+	}
+	r.gh.AddReviewComment(repoFull, other, "src/x.ts", 11, "de outra", 0)
+	foreign := r.gh.ReviewComments(repoFull, other)[0]["id"].(int64)
+	if got := r.run("tm", "pr reply", nil, itoa(int(foreign)), "intrometido"); got.OK || got.Code != "not_found" {
+		t.Errorf("reply to the comment of another PR: %+v", got)
+	}
+	if n := len(r.gh.ReviewComments(repoFull, other)); n != 1 {
+		t.Errorf("the other PR got %d comments, want its own only", n)
+	}
+	// a reply is not itself replied to: the thread starts at the first comment
+	r.run("tm", "pr note", nil, "src/login.ts:11", "primeira")
+	mine := r.gh.ReviewComments(repoFull, r.prs["meu-app/42-login"])[0]["id"].(int64)
+	if got := r.run("tm", "pr reply", nil, itoa(int(mine)), "ok"); !got.OK {
+		t.Fatal(got)
+	}
+	cs := r.gh.ReviewComments(repoFull, r.prs["meu-app/42-login"])
+	if got := r.run("tm", "pr reply", nil, itoa(int(cs[1]["id"].(int64))), "resposta da resposta"); got.OK {
+		t.Errorf("a reply to a reply: %+v", got)
+	}
+}
+
+func TestTheStatusReadsEveryPageOfTheReviewsAndTheChecks(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	pr := prOfTheTable(t, r)
+	sha := strings.Repeat("a", 40)
+	for i := range 130 {
+		r.gh.AddReview(repoFull, pr, "ana", "COMMENTED")
+		r.gh.AddCheck(repoFull, sha, "job"+itoa(i), "success")
+	}
+	r.gh.AddReview(repoFull, pr, "bia", "CHANGES_REQUESTED") // the 131st
+	r.gh.AddCheck(repoFull, sha, "last", "failure")          // the 131st
+	got := r.run("tm", "pr status", nil)
+	if !got.OK || got.Data["mergeable"] != false || len(got.Data["checks"].([]any)) != 131 || len(got.Data["reviews"].([]any)) != 131 {
+		t.Fatalf("status: ok %v, mergeable %v, %d checks, %d reviews", got.OK, got.Data["mergeable"], len(got.Data["checks"].([]any)), len(got.Data["reviews"].([]any)))
+	}
+	if got.Data["blocked_by"] != "check last failure" {
+		t.Errorf("blocked_by = %v", got.Data["blocked_by"])
+	}
+}
+
+func TestAPRIsMergeableOnlyWhenGitHubSaysClean(t *testing.T) {
+	t.Parallel()
+	for state, want := range map[string]bool{"clean": true, "has_hooks": true, "unknown": false, "unstable": false, "blocked": false, "behind": false, "": false} {
+		r := newRig(t)
+		pr := prOfTheTable(t, r)
+		r.gh.SetPull(repoFull, pr, strings.Repeat("a", 40), false, state)
+		got := r.run("tm", "pr status", nil)
+		if got.Data["mergeable"] != want {
+			t.Errorf("%q: mergeable %v, want %v (%v)", state, got.Data["mergeable"], want, got.Data["blocked_by"])
+		}
+	}
+}
+
+func TestANoteIsNotPutOnAnotherHeadThanTheOneItWasCheckedAgainst(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	pr := prOfTheTable(t, r)
+	*r.onFiles = func() { r.gh.SetPull(repoFull, pr, strings.Repeat("b", 40), false, "clean") } // a push in the middle
+	got := r.run("tm", "pr note", nil, "src/login.ts:12", "x")
+	if got.OK || got.Exit != 7 || got.Code != "head_changed" {
+		t.Errorf("note: %+v, want exit 7 head_changed", got)
+	}
+	if n := len(r.gh.ReviewComments(repoFull, pr)); n != 0 {
+		t.Errorf("%d comments were put", n)
+	}
+}
+
+// CA-CLI-GH-11
+func TestUnderTheQuotaWritesWaitForTheRenewalAndReadingsAreRefused(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	n := itoa(r.gh.AddIssue(repoFull, "da mesa"))
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: 3, Table: "meu-app/42-login"}); err != nil {
+		t.Fatal(err)
+	}
+	// the App answers once, so the engine learns how much is left, and then the quota is gone
+	if got := r.run("tm", "issue list", nil); !got.OK {
+		t.Fatalf("before: %+v", got)
+	}
+	r.gh.SetUsed("tok_mestre", 4600) // 400 of 5000 left: under 10%
+	if got := r.run("tm", "pr status", nil); !got.OK {
+		t.Fatalf("this answer teaches the engine the quota: %+v", got)
+	}
+	if got := r.run("tm", "pr status", nil); got.OK || got.Exit != 5 || got.Code != "github_unavailable" || !strings.Contains(got.Error, "renews at 13:00 UTC") {
+		t.Fatalf("a reading under the quota: %+v", got)
+	}
+	got := r.run("tm", "issue comment", nil, n, "uma vez só")
+	if !got.OK || got.Exit != 0 || got.Data["queued"] != true {
+		t.Fatalf("a write under the quota: %+v, want exit 0 and queued", got)
+	}
+	if cs := r.gh.Comments(repoFull, 3); len(cs) != 0 {
+		t.Fatalf("the comment went out under the quota: %q", cs)
+	}
+	r.clk.Advance(59 * time.Minute)
+	if cs := r.gh.Comments(repoFull, 3); len(cs) != 0 {
+		t.Fatal("the comment went out before the renewal")
+	}
+	r.gh.IssueToken("tok_mestre", "mestre") // the token of the double lasts an hour
+	r.clk.Advance(time.Minute)
+	if cs := r.gh.Comments(repoFull, 3); len(cs) != 1 || !strings.HasPrefix(cs[0], "uma vez só") {
+		t.Errorf("after the renewal the comments are %q, want one", cs)
+	}
+	if got := r.run("tm", "pr status", nil); !got.OK {
+		t.Errorf("a reading after the renewal: %+v", got)
+	}
+}
+
+// CA-CLI-GH-11, the other half: the secondary limit is not repeated on its own
+func TestASecondaryLimitIsNotRepeatedOnItsOwn(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	n := r.gh.AddIssue(repoFull, "da mesa")
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: n, Table: "meu-app/42-login"}); err != nil {
+		t.Fatal(err)
+	}
+	r.gh.FailNextWrite(403, "60")
+	got := r.run("tm", "issue comment", nil, itoa(n), "x")
+	if got.OK || got.Exit != 5 || got.Code != "github_unavailable" || !strings.Contains(got.Error, "limit") {
+		t.Fatalf("comment: %+v", got)
+	}
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 0 {
+		t.Errorf("the comment went out: %q", cs)
+	}
+	r.clk.Advance(5 * time.Minute)
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 0 {
+		t.Errorf("the comment was repeated on its own: %q", cs)
+	}
+}
+
+func TestWithTheLeaseExpiredWritesWaitAndReadingsAreRefused(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	n := r.gh.AddIssue(repoFull, "da mesa")
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: n, Table: "meu-app/42-login"}); err != nil {
+		t.Fatal(err)
+	}
+	r.lease.expire()
+	if got := r.run("tm", "issue comment", nil, itoa(n), "depois"); !got.OK || got.Data["queued"] != true {
+		t.Fatalf("a write: %+v", got)
+	}
+	for _, cmd := range []string{"issue list", "pr status"} {
+		if got := r.run("tm", cmd, nil); got.OK || got.Exit != 5 || got.Code != "github_unavailable" {
+			t.Errorf("%s: %+v", cmd, got)
+		}
+	}
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 0 {
+		t.Fatalf("the comment went out with the lease expired: %q", cs)
+	}
+	if sent := r.lease.renew(r.ctx); sent != 1 {
+		t.Fatalf("the queue sent %d", sent)
+	}
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 1 {
+		t.Errorf("after the lease the comments are %q", cs)
 	}
 }

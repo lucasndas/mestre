@@ -127,6 +127,8 @@ func (h *Handlers) prNote(ctx context.Context, c *localchan.Call) localchan.Resp
 	switch {
 	case errors.Is(err, github.ErrOutsideDiff):
 		return usage("%s is not in the diff of the pull request", args[0])
+	case errors.Is(err, github.ErrHeadChanged):
+		return localchan.Fail("head_changed", "the head of the pull request changed while the note was checked", "read the pull request again and repeat")
 	case err != nil:
 		return refusal(err)
 	}
