@@ -310,7 +310,7 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 		return "", fmt.Errorf("%w: the system is linux or windows", ErrBadRequest)
 	}
 	if req.Instance != "" && !ValidInstance(req.Instance) {
-		return "", fmt.Errorf("%w: the name of the instance is up to 32 letters, digits, '-' and '_', and starts with a letter or a digit", ErrBadRequest)
+		return "", fmt.Errorf("%w: the name of the instance is principal or up to 6 lower case letters, digits, '-' and '_', and starts with a letter or a digit", ErrBadRequest)
 	}
 	for _, csr := range [][]byte{req.CSRMotor, req.CSRGuardian} {
 		if len(csr) > maxCSR {
@@ -375,15 +375,18 @@ func (c *Citadel) checkRequest(req *JoinRequest) (string, error) {
 	return name, nil
 }
 
-// instanceRe is the rule of the name of an instance: letters, digits, "-" and
-// "_", from 1 to 32 characters, the first a letter or a digit
-// (docs/arquitetura/componentes.md#instâncias). localchan.ValidInstance, which
+// instanceRe is the rule of the name of an instance other than the principal
+// one: lower case letters, digits, "-" and "_", from 1 to 6 characters, the
+// first a letter or a digit, so that the account of its agents fits a Windows
+// local account (docs/arquitetura/componentes.md#instâncias). localchan.ValidInstance, which
 // the configuration and the local channel use, is the same rule; guild does not
 // import the local channel, and a test keeps the two together.
-var instanceRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+var instanceRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,5}$`)
 
 // ValidInstance says whether name can name an instance.
-func ValidInstance(name string) bool { return instanceRe.MatchString(name) }
+func ValidInstance(name string) bool {
+	return name == "principal" || instanceRe.MatchString(name)
+}
 
 // cleanName keeps printable characters and bounds the length: the name is
 // shown to the Owner in the question.

@@ -84,7 +84,7 @@ Quando o personagem é encerrado de vez (estado final em [personagens](../orques
 - **Canais de reserva:** o Claude Code exige `--append-system-prompt-file` em todo início, então a primeira mensagem vem **além** do arquivo; o Codex deixa o argumento de lado quando o canal é o hook ou a primeira mensagem.
 - **Ambiente:** só os valores da base passam pelo detector de segredos (os outros são caminhos e ids do motor, que um slug longo faria parecer segredo); a chave de API do provedor entra à parte, só sob os nomes do provedor. Um terminal de `spawn` ou uma ficha `shell` não é um personagem: não recebe `MESTRE_AGENT_ID`, camada nem pastas.
 - **Atualização:** `Refresh` regrava o `MESTRE.md` e guarda em memória as seções que mudaram; `Contexts()` (o `hook.Contexts` do despachante) as entrega no início do próximo turno, e `TakeUpdate` para o provedor sem esse hook. Depois de um reinício do motor o arquivo em disco é o novo, e o que estava pendente não se repete. O `Restore` devolve à sessão zero o pedido com que o personagem vivo foi preparado (o runtime o guarda sem a chave do provedor), para `Refresh` e `UpdateIdentity` seguirem valendo; a camada ainda não digitada (terminal que sobreviveu antes de ficar pronto) também é guardada. `NewCharacter` exige o detector de segredos.
-- **Pastas da máquina:** `agentes/<id>/` sai 0750 e `tmp/` 2770 (setgid); o grupo `mestre-agente` herdar a pasta é do instalador ([persistência](../arquitetura/persistencia.md#arquivos)).
+- **Pastas da máquina:** `agentes/<id>/` sai 2750 e `tmp/` 2770 (setgid nos dois: a pasta herda o grupo dos agentes da instância de `agentes/`, que o instalador deixa 2750 com esse grupo) ([persistência](../arquitetura/persistencia.md#arquivos)).
 
 ## Regras e erros
 

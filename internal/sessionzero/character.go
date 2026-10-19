@@ -459,22 +459,34 @@ func (c *Character) classBody(req CharacterRequest) string {
 }
 
 // machineFolders makes agentes/<id>/ (the group of the agents goes in and
-// does not write) and its tmp/, the MESTRE_TMP the character writes
+// does not write; setgid, so the folder and what the engine writes in it are
+// of the group of the agents, which agentes/ has, and not of the group of the
+// engine) and its tmp/, the MESTRE_TMP the character writes
 // (docs/arquitetura/persistencia.md#arquivos). The parent is not a folder the
 // agents write, so the folders cannot have been swapped for links.
 func (c *Character) machineFolders(p CharacterPlan) error {
 	for _, f := range []struct {
 		dir  string
 		mode fs.FileMode
-	}{{p.MachineDir, 0o750}, {p.Tmp, fs.ModeSetgid | 0o770}} {
+	}{{p.MachineDir, fs.ModeSetgid | 0o750}, {p.Tmp, fs.ModeSetgid | 0o770}} {
 		if err := os.MkdirAll(f.dir, f.mode.Perm()); err != nil {
 			return fmt.Errorf("make %s: %w", f.dir, err)
 		}
 		if c.osName() == "windows" {
 			continue // the ACL is the installer's
 		}
-		if err := os.Chmod(f.dir, f.mode); err != nil {
-			return fmt.Errorf("set the mode of %s: %w", f.dir, err)
+		// chmod clears setgid when the caller is not in the group of the
+		// folder, which the engine is not (the folder inherited the group of
+		// the agents from agentes/): leave a folder that already has the mode
+		// alone, and do not accept one that lost the bit.
+		const bits = fs.ModePerm | fs.ModeSetgid | fs.ModeSticky
+		if fi, err := os.Stat(f.dir); err != nil || fi.Mode()&bits != f.mode {
+			if err := os.Chmod(f.dir, f.mode); err != nil {
+				return fmt.Errorf("set the mode of %s: %w", f.dir, err)
+			}
+			if fi, err := os.Stat(f.dir); err != nil || fi.Mode()&bits != f.mode {
+				return fmt.Errorf("%s does not keep the mode %v (setgid is lost when the engine is not in the group of the folder; umask or agentes/ without setgid)", f.dir, f.mode)
+			}
 		}
 	}
 	return nil
