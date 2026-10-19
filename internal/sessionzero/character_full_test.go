@@ -353,7 +353,7 @@ func TestTheGrandMasterGetsItsOwnSkillsAndNoOtherOfTheMestre(t *testing.T) { //n
 	}
 }
 
-// Part of CA-SZ-PERS-10: the next commit of the living character has the
+// CA-SZ-PERS-10 (with the environment and the file in character_test.go): the next commit of the living character has the
 // author of the new App, with the real git.
 func TestTheNextCommitHasTheAuthorOfTheNewApp(t *testing.T) {
 	t.Parallel()

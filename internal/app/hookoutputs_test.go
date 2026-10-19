@@ -37,7 +37,7 @@ steps:
   - {id: b, sheet: Revisor Codex, after: [a]}
 `
 
-// CA-CLASSES-04
+// Part of CA-CLASSES-04 (fecha no M5, com o HookExec e o runner no mestre run)
 func TestAnAsyncTurnEndHookOfTheClassOfACharacterInAQuestWritesToTheScrollOfTheQuest(t *testing.T) {
 	t.Parallel()
 	w := newCitadelWorld(t)

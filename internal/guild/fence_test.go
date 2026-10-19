@@ -41,6 +41,8 @@ func (r *record) list() []string {
 	return slices.Clone(r.out)
 }
 
+// Part of CA-CIDADELA-03 (fecha no M5; falta: o comentário do GitHub que fica
+// na fila e sai uma vez, e o "GitHub fora" no painel).
 // The Citadel acts outside only with its epoch confirmed by the lock: nothing
 // before the first check, the GitHub only with the lease of 60 s, the
 // Telegram also with the lock unreachable, and nothing ever again once the
@@ -369,6 +371,8 @@ func (a *promoApprover) set(f func(string)) {
 	a.mu.Unlock()
 }
 
+// Part of CA-CIDADELA-05 (fecha no M7; falta: a Torre condutora, o PIN e os
+// botões do Telegram reduzido).
 // A promotion needs the Owner's yes; a second request cancels the first.
 func TestAPromotionWaitsForTheOwnerAndASecondRequestCancelsTheFirst(t *testing.T) {
 	t.Parallel()
@@ -410,6 +414,8 @@ func TestAPromotionWaitsForTheOwnerAndASecondRequestCancelsTheFirst(t *testing.T
 	}
 }
 
+// Part of CA-CIDADELA-05 (fecha no M7; falta: a Torre condutora, o PIN e os
+// botões do Telegram reduzido).
 // Only the answer to the exact question counts: another id, given while the
 // question waits or while it is being put, changes nothing.
 func TestOnlyTheAnswerOfTheExactQuestionPromotes(t *testing.T) {
@@ -443,6 +449,8 @@ func TestOnlyTheAnswerOfTheExactQuestionPromotes(t *testing.T) {
 	}
 }
 
+// Part of CA-CIDADELA-05 (fecha no M7; falta: o diagnóstico e os botões do
+// Telegram reduzido).
 // The Owner hears of the Citadel away after 15 min and every hour after, and
 // not again once it is back (docs/guilda/cidadela-e-torres.md#recuperação-e-aviso-ao-dono).
 func TestTheOwnerIsWarnedOfTheCitadelAwayAfterFifteenMinutesAndEveryHour(t *testing.T) {

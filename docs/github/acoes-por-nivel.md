@@ -1,6 +1,6 @@
 # Ações no GitHub por nível
 
-> **Assunto:** o que a mesa e o Grão-Mestre podem fazer no GitHub, e como o motor confere · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** o que a mesa e o Grão-Mestre podem fazer no GitHub, e como o motor confere · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -39,6 +39,7 @@ graph TD
 
 - O motor cria o rótulo `epico` no repositório se ele não existir (descrição "Épico do Mestre: uma mesa"). Se já existir, reaproveita.
 - O rótulo `epico` é **reservado**: só o Grão-Mestre o coloca ou tira. Um pedido da mesa que adicione ou remova `epico` é recusado.
+- O rótulo `mestre:humano` (o PR que só uma pessoa aprova, [política](../aprovacoes/politica.md#o-que-o-motor-lê-do-pr)) também é **reservado**: o motor o cria se faltar (descrição "Só uma pessoa aprova"), o Grão-Mestre e as pessoas o põem, e **só as pessoas o tiram**, pelo GitHub ou pelo painel. Um pedido da mesa que o ponha ou tire é recusado, e o do Grão-Mestre para tirá-lo também (3 `reserved_label`, [CLI](../cli/coordenacao-github.md)).
 - Sub-issues são ligadas pela API REST `.../issues/{n}/sub_issues`, que recebe o **`id`** da issue (não o número). O GitHub aceita até 100 sub-issues por pai e 8 níveis; a árvore do Mestre usa 3.
 - Quando a missão vira issue e cada etapa vira sub-issue: ver [missões](../orquestracao/missoes.md).
 
@@ -81,7 +82,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 
 - Feito pelo Grão-Mestre com o App "Grão-Mestre", depois da aprovação ([aprovação no GitHub](aprovacao-no-github.md)). Mesclado o PR, o motor avisa o Grão-Mestre, que encerra a mesa ([encerramento](../orquestracao/mesas.md#encerramento)).
 - O motor envia o `sha` da cabeça aprovada no pedido de merge; se o PR mudou, o GitHub recusa.
-- **Frescor:** antes de pedir a aprovação do PR do épico, o motor lê a regra da branch (a leitura das regras da branch da etapa `approval_test` da [sessão zero](../sessao-zero/workspace.md#teste-de-aprovação-de-app-etapa-approval_test), repetida antes do pedido). Se ela **não** exige a branch atualizada, o CI verde diz só como a cabeça se comporta, não o resultado do merge. Então o motor integra a base num worktree efêmero da mesa, sob a trava por repositório do `gitx`, e roda os comandos de verificação do workspace; se falham, nenhum pedido nasce e a mesa recebe a etapa `sync` ([sincronia com a base](../orquestracao/sincronia-com-a-base.md)). Se a base andar depois do `ci_verde`, o pedido vira `invalidado` ([invalidação](../aprovacoes/fluxo.md#invalidação)). Com a regra no repositório, o gate não roda: o GitHub já recusa. **Os comandos** vêm de `.mestre/regras/verificacao.yaml` ([sessão zero](../sessao-zero/workspace.md#comandos-de-verificação)); sem comando confirmado o gate não aprova sozinho: o pedido nasce `human_required` com o aviso "sem comando de verificação configurado", em vez de seguir sem verificar.
+- **Frescor:** antes de pedir a aprovação do PR do épico, o motor lê a regra da branch (a leitura das regras da branch da etapa `approval_test` da [sessão zero](../sessao-zero/workspace.md#teste-de-aprovação-de-app-etapa-approval_test), repetida antes do pedido). Se ela **não** exige a branch atualizada, o CI verde diz só como a cabeça se comporta, não o resultado do merge. Então o motor integra a base num worktree efêmero da mesa, sob a trava por repositório do `gitx`, e roda os comandos de verificação do workspace; se falham, nenhum pedido nasce e a mesa recebe a etapa `sync` ([sincronia com a base](../orquestracao/sincronia-com-a-base.md)). Quando o gate roda, o alvo do pedido `pr`/`merge` leva também a ponta da base em que ele rodou (`base_sha`): se a base andar depois, o pedido vira `invalidado` e o gate roda de novo ([vínculo ao estado](../aprovacoes/fluxo.md#vínculo-ao-estado-exato)). Com a regra no repositório, o gate não roda: o GitHub já recusa. **Os comandos** vêm de `.mestre/regras/verificacao.yaml` ([sessão zero](../sessao-zero/workspace.md#comandos-de-verificação)); sem comando confirmado o gate não aprova sozinho: o Grão-Mestre não pode decidir o pedido (`approval decide` recusa com `human_required` e o aviso "sem comando de verificação configurado", [política](../aprovacoes/politica.md#quem-confere-o-quê)) e ele segue às pessoas, em vez de seguir sem verificar.
 - Método padrão: **merge commit**, para manter cada commit com o autor da classe que o fez. Configurável por workspace, dentro dos métodos que o repositório permite.
 
 ## Regras e erros
@@ -89,7 +90,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - **Respeitar as regras do repositório** (branch protegida, revisões obrigatórias, CI, rulesets). O Mestre nunca contorna proteção. Quando o GitHub recusa, o motor traduz o motivo e o Grão-Mestre avisa os usuários.
 - Ruleset que exige commits assinados: os commits do Mestre não são assinados ([ADR 0014](../decisoes/0014-commits-sem-assinatura.md)). O motor explica e o Grão-Mestre avisa; não há contorno.
 - Pedido fora do épico, rótulo `epico` mexido pela mesa ou push forçado fora das regras: recusado com motivo, registrado na auditoria.
-- Erro do GitHub numa chamada com o aluguel válido (`5xx`, limite de cota): o pedido falha com o motivo; o motor não repete sozinho ações que mudam dados. Com o aluguel vencido ([GitHub fora](../guilda/trava-no-github.md#github-fora)), a ação nem começa: espera na fila de saída e sai uma vez quando o aluguel volta.
+- Erro do GitHub numa chamada com o aluguel válido (`5xx`, limite secundário ou de abuso): o pedido falha com o motivo; o motor não repete sozinho ações que mudam dados. **Limite primário** (cota da instalação esgotada ou abaixo de 10%): a ação que muda dados não falha, espera na fila de saída e sai uma vez na renovação ([eventos](eventos.md#regras-e-erros)). Com o aluguel vencido ([GitHub fora](../guilda/trava-no-github.md#github-fora)), a ação nem começa: espera na fila de saída e sai uma vez quando o aluguel volta.
 - Mais de 100 sub-issues num pai: recusado com explicação.
 - **Época:** toda ação no GitHub (envio, comentário, review, merge, criação de issue) só sai com o aluguel da trava válido ([aluguel](../guilda/trava-no-github.md#aluguel)); uma Torre ou uma Cidadela suspensa não faz nenhuma ação e registra a recusa na auditoria. Assim duas Cidadelas nunca agem no mesmo repositório.
 
@@ -106,7 +107,9 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - **CA-GH-ACOES-09** · *completa* — **Dado** uma Cidadela antiga que volta depois de uma promoção (época dela menor que a da Guilda), **quando** um pedido pendente dela tentaria comentar numa issue, **então** o GitHub falso não recebe nenhuma chamada, a máquina se rebaixa a Torre e a recusa fica na auditoria.
 - **CA-GH-ACOES-10** · *rápida* — **Dado** uma criação de comentário cujo envio caiu depois de chegar ao GitHub falso, **quando** a fila de saída a reenvia com o mesmo uuid, **então** o motor acha `<!-- mestre:op=<uuid> -->` no comentário existente, só o registra em `github_objects` e o GitHub falso tem um comentário só.
 - **CA-GH-ACOES-11** · *completa* — **Dado** o GitHub falso sem a regra "branch atualizada" e a base com um commit novo que quebra a verificação depois do merge, **quando** o Grão-Mestre pede a aprovação do PR do épico, **então** o motor integra a base num worktree efêmero, a verificação falha, nenhum pedido de aprovação nasce e a mesa recebe a etapa `sync`; **dado** o GitHub falso com a regra, **então** o gate não roda.
-- **CA-GH-ACOES-12** · *rápida* — **Dado** o GitHub falso sem a regra "branch atualizada" e um workspace sem comando de verificação confirmado, **quando** o Grão-Mestre pede a aprovação do PR do épico, **então** o pedido nasce `human_required` com o aviso "sem comando de verificação configurado" e nenhum comando é executado; **dado** os comandos confirmados, **então** o gate roda como em CA-GH-ACOES-11.
+- **CA-GH-ACOES-12** · *rápida* — **Dado** o GitHub falso sem a regra "branch atualizada" e um workspace sem comando de verificação confirmado, **quando** o Grão-Mestre pede a aprovação do PR do épico, **então** `approval decide` do Grão-Mestre recusa com `human_required` e o aviso "sem comando de verificação configurado", o pedido segue às pessoas e nenhum comando é executado; **dado** os comandos confirmados, **então** o gate roda como em CA-GH-ACOES-11.
+- **CA-GH-ACOES-13** · *rápida* — **Dado** o GitHub falso sem a regra "branch atualizada" e um pedido `merge` aberto cujo gate passou, **quando** a base ganha um commit novo, **então** o pedido vira `invalidado` e o gate roda de novo; **dado** o GitHub falso com a regra, **então** o `base_sha` não entra no alvo e a base andar não invalida.
+- **CA-GH-ACOES-14** · *rápida* — **Dado** o rótulo `mestre:humano` num PR, **quando** um personagem da mesa ou o Grão-Mestre pede para tirá-lo, **então** o motor recusa com 3 `reserved_label` e o rótulo continua; **quando** uma pessoa o tira no GitHub falso, **então** o PR volta às condições normais; **dado** um repositório sem o rótulo, **quando** o Grão-Mestre o põe, **então** o motor o cria antes.
 
 ## Depende de
 
@@ -115,6 +118,7 @@ São resolvidos dentro da mesa: o Grão-Mestre pede ao Mestre da mesa para atual
 - [Missões](../orquestracao/missoes.md)
 - [Permissões das classes](../classes/permissoes.md)
 - [Persistência](../arquitetura/persistencia.md)
+- [Sessão zero do workspace](../sessao-zero/workspace.md) (`verificacao.yaml` e `approval_test`)
 
 ## Fontes
 

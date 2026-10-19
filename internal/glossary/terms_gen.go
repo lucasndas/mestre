@@ -73,6 +73,7 @@ var Terms = []Term{
 	{Name: "Regra permanente", Help: "Decreto que vale daqui pra frente, até ser revogado ou expirar.", Detail: "../telegram/decretos.md#tipos"},
 	{Name: "Aprovação", Help: "Pedido para liberar uma ação; sobe do superior de quem pediu até o Grão-Mestre e as pessoas.", Detail: "../aprovacoes/fluxo.md"},
 	{Name: "Pedido que bloqueia", Help: "Mensagem que pede algo ao usuário porque a mesa não segue sem ele: traz o motivo, a evidência, o que fazer e quem age.", Detail: "../aprovacoes/pedido-que-bloqueia.md"},
+	{Name: "Aviso de bloqueio", Help: "Pedido que bloqueia sem tipo na política: só diz o que falta e os passos que o usuário pode fazer, sem decisão.", Detail: "../aprovacoes/pedido-que-bloqueia.md"},
 	{Name: "Cadeia de aprovação", Help: "O caminho de um pedido: do superior de quem pediu ao Grão-Mestre e às pessoas, cada um decidindo até um risco.", Detail: "../orquestracao/cadeia-de-aprovacao.md"},
 	{Name: "Superior", Help: "Quem criou o personagem; é o primeiro a decidir os pedidos de aprovação dele.", Detail: "../orquestracao/cadeia-de-aprovacao.md#superior"},
 	{Name: "Risco", Help: "Quanto um pedido pode estragar: baixo, médio, alto ou fixo. O sistema decide e isso diz quem pode aprovar.", Detail: "../classes/classificacao-de-risco.md"},

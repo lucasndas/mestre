@@ -3,6 +3,8 @@ package chain_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -161,6 +163,37 @@ func TestTheMedioRequestsGoToTheLevelThatCanDecideThemAndTheHighOnesToThePeople(
 	}
 	if len(w.users.askedFor(high)) != 1 {
 		t.Errorf("the people were asked %d times about the alto request", len(w.users.askedFor(high)))
+	}
+}
+
+// CA-CADEIA-03, with the domains the Citadel really computes: the union of
+// the approved class (docs.exemplo.dev) and the ceiling in teto.yaml
+// (pypi.org), through app.CitadelClasses and the library. It is also the
+// part of CA-RTM-07 that reads those domains: the network condition of a
+// medio request is judged on the same list.
+func TestTheDomainsOfTheChainAreTheUnionOfTheApprovedClassAndTheCeilingFile(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{realClasses: true, classYAML: strings.Replace(devYAML, "registry.npmjs.org", "docs.exemplo.dev", 1)})
+	path := filepath.Join(t.TempDir(), "teto.yaml")
+	if err := os.WriteFile(path, []byte("version: 1\npermissions:\n  network:\n    domains: [\"pypi.org\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w.lib.Ceiling = ceilingFile(path)
+	dev := w.recruit("Dev")
+
+	for _, c := range []struct {
+		cmd  string
+		want chain.LevelKind
+		why  string
+	}{
+		{"curl https://docs.exemplo.dev/x", chain.LevelMesa, ""}, // the class
+		{"curl https://pypi.org/x", chain.LevelMesa, ""},         // the ceiling
+		{"curl https://exemplo.io", chain.LevelGrandMaster, "exemplo.io"},
+	} {
+		r := w.request(w.shell(dev, c.cmd))
+		if r.Level.Kind != c.want || (c.why != "" && !contains(strings.Join(r.Why, " "), "rede", c.why)) {
+			t.Errorf("%s: %s at %+v why %q, want %v", c.cmd, r.Risk.Risk, r.Level, r.Why, c.want)
+		}
 	}
 }
 

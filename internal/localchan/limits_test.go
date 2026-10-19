@@ -98,8 +98,11 @@ func TestOneTerminalCannotStarveAnotherTerminalsHookCalls(t *testing.T) {
 				refused++
 			}
 		}
-		if want := 32*16 - localchan.DefaultMaxConnsPerGroup; refused != want {
-			t.Fatalf("%d of the flooding connections refused; want %d (all over the cap of %d per terminal)", refused, want, localchan.DefaultMaxConnsPerGroup)
+		if localchan.DefaultMaxConnsPerGroup != 64 {
+			t.Fatalf("the cap of a terminal is %d; the criterion says 64", localchan.DefaultMaxConnsPerGroup)
+		}
+		if want := 32*16 - 64; refused != want {
+			t.Fatalf("%d of the flooding connections refused; want %d (all over the cap of 64 per terminal)", refused, want)
 		}
 		if got := final(t, rawCall(t, r, "bob-proc", fmt.Sprintf(hookLine, "b1"))); !got.OK {
 			t.Fatalf("the hook call of another terminal with the flood held: %+v", got.Error)
@@ -199,8 +202,9 @@ func TestTheLastConnectionsAreForHookCalls(t *testing.T) {
 	})
 }
 
-// A connection that sends nothing is closed after the read timeout, so the
-// idle connections of a flood are held for seconds, not for a minute.
+// Part of CA-LOCAL-14 (the idle connections close in 3 s). A connection that
+// sends nothing is closed after the read timeout, so the idle connections of
+// a flood are held for seconds, not for a minute.
 func TestAnIdleConnectionIsClosedAfterTheShortReadTimeout(t *testing.T) {
 	t.Parallel()
 	bubble(t, localrig.Options{}, func(t *testing.T, r *localrig.Rig) {
@@ -210,10 +214,10 @@ func TestAnIdleConnectionIsClosedAfterTheShortReadTimeout(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer c.Close()
-		if localchan.DefaultReadTimeout > 5*time.Second {
-			t.Fatalf("the default read timeout is %v; want a few seconds", localchan.DefaultReadTimeout)
+		if localchan.DefaultReadTimeout != 3*time.Second {
+			t.Fatalf("the default read timeout is %v; the criterion says 3 s", localchan.DefaultReadTimeout)
 		}
-		if err := clock.Sleep(t.Context(), clock.Real{}, localchan.DefaultReadTimeout+time.Second); err != nil {
+		if err := clock.Sleep(t.Context(), clock.Real{}, 3*time.Second+time.Second); err != nil {
 			t.Fatal(err)
 		}
 		if n, err := c.Read(make([]byte, 1)); n != 0 || err != io.EOF {
@@ -222,7 +226,8 @@ func TestAnIdleConnectionIsClosedAfterTheShortReadTimeout(t *testing.T) {
 	})
 }
 
-// A client whose connection the engine closes at once (it is full) does not
+// Part of CA-LOCAL-14 (the CLI backs off). A client whose connection the
+// engine closes at once (it is full) does not
 // reconnect in a tight loop: it waits, longer each time, with jitter, and
 // its time limit still ends the call.
 func TestTheClientBacksOffWhenTheEngineKeepsClosingItsConnection(t *testing.T) {

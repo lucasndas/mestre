@@ -14,7 +14,10 @@ import (
 
 // pipeNet is a transport.Dialer and Listener over transport.Pipe: the
 // adapter runs against the contract of the real transport without TLS.
-type pipeNet struct{ accept chan transport.Conn }
+type pipeNet struct {
+	accept chan transport.Conn
+	wrap   func(transport.Conn) transport.Conn // the end the listener accepts, when set
+}
 
 func (n pipeNet) Dial(ctx context.Context, _, _ string) (transport.Conn, error) {
 	id := func(machine string) transport.Peer {
@@ -32,6 +35,9 @@ func (n pipeNet) Dial(ctx context.Context, _, _ string) (transport.Conn, error) 
 func (n pipeNet) Accept(ctx context.Context) (transport.Conn, error) {
 	select {
 	case c := <-n.accept:
+		if n.wrap != nil {
+			c = n.wrap(c)
+		}
 		return c, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
