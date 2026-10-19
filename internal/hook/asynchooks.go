@@ -56,6 +56,10 @@ type HookOutputs interface {
 	Agent(ctx context.Context, r AsyncResult) error
 }
 
+// HookGrace is how much longer than the time limit of a hook the engine waits
+// for the terminal to answer.
+const HookGrace = 5 * time.Second
+
 // DefaultMaxAsync is how many events wait in the queue of a character before
 // the oldest is dropped.
 const DefaultMaxAsync = 1000
@@ -174,7 +178,10 @@ func (a *AsyncRunner) handle(ev providers.Event) {
 		return
 	}
 	for _, h := range hooks {
-		hctx, cancel := clock.WithTimeout(a.ctx, a.Clock, time.Duration(h.Timeout)*time.Second)
+		// the terminal ends a hook at its time limit and says so; the engine waits a
+		// little longer, so the next hook of the queue does not meet the one that is
+		// still being ended
+		hctx, cancel := clock.WithTimeout(a.ctx, a.Clock, time.Duration(h.Timeout)*time.Second+HookGrace)
 		res, err := a.Exec.Exec(hctx, ev.AgentID, h, ev.Event, stdin)
 		if err == nil && hctx.Err() != nil {
 			err = hctx.Err()

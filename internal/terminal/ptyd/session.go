@@ -98,6 +98,8 @@ type SessionConfig struct {
 	StableAfter            time.Duration
 	DrainAfterExit         time.Duration
 	Emulator               EmulatorFactory // default NewVTEmulator
+	// Hooks runs the asynchronous hooks of the classes; nil is ShellHooks.
+	Hooks HookRunner
 	// OnEvent receives the "stable" and "exit" events. It must not block.
 	OnEvent func(ptywire.Msg)
 	Logger  *slog.Logger
@@ -112,7 +114,12 @@ type Session struct {
 	buf *Buffer
 	clk clock.Clock
 
+	hookMu sync.Mutex // one hook at a time
+
 	mu         sync.Mutex
+	hookCancel context.CancelFunc // ends the hook that runs
+	startDir   string             // the folder the agent started in
+	startEnv   []string           // the environment it started with
 	state      string
 	agent      Agent
 	emu        Emulator
@@ -185,6 +192,7 @@ func (s *Session) Start(ctx context.Context, spec StartSpec) (int, error) {
 		return 0, err
 	}
 	s.agent, s.cols, s.rows = agent, spec.Cols, spec.Rows
+	s.startDir, s.startEnv = spec.Dir, append([]string(nil), spec.Env...)
 	s.emu = s.cfg.Emulator(int(spec.Cols), int(spec.Rows), s.cfg.HistoryLines, s.reply)
 	s.state = ptywire.StateRunning
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -330,6 +338,7 @@ func (s *Session) Signal() error {
 
 // Kill ends the whole tree of the agent.
 func (s *Session) Kill() error {
+	s.cancelHook()
 	s.mu.Lock()
 	agent := s.agent
 	s.mu.Unlock()
@@ -435,6 +444,7 @@ func (s *Session) WaitProcessed(ctx context.Context, off uint64) error {
 // Close stops the goroutines and releases the PTY and the emulator. It does
 // not stop the process: that is Signal and Kill.
 func (s *Session) Close() {
+	s.cancelHook()
 	s.mu.Lock()
 	agent, cancel, emu := s.agent, s.cancel, s.emu
 	if s.timer != nil {

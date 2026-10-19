@@ -23,6 +23,7 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	machinedb "github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/terminal"
 	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -478,6 +479,10 @@ type fakeProc struct {
 	once     sync.Once
 	detached bool
 	inputErr error
+
+	hooks      []hookCall
+	hookResult terminal.HookResult
+	hookErr    error
 }
 
 type stopCall struct {
@@ -883,4 +888,17 @@ func (r *rig) turnObserver(on bool) characters.TurnObserver {
 		return nil
 	}
 	return r.svc
+}
+
+// RunHook makes the fake process one that runs the hooks of the class as its agent.
+func (p *fakeProc) RunHook(_ context.Context, run, dir, event string, stdin []byte, timeout time.Duration) (terminal.HookResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.hooks = append(p.hooks, hookCall{run, dir, event, string(stdin), timeout})
+	return p.hookResult, p.hookErr
+}
+
+type hookCall struct {
+	run, dir, event, stdin string
+	timeout                time.Duration
 }

@@ -448,3 +448,29 @@ func (c *Client) InJob(ctx context.Context, pid int, start string) (bool, error)
 	}
 	return r.msg.InJob != nil && *r.msg.InJob, nil
 }
+
+// HookResult is how a hook of a class ended in the terminal.
+type HookResult struct {
+	Exit      int
+	Output    string
+	TimedOut  bool
+	Truncated bool
+}
+
+// RunHook runs a hook of a class as the agent, in the folder dir (empty: the
+// one of the agent), and waits for it. It is ErrUnsupported for a mestre-pty
+// older than protocol 4: the engine never runs the hook as another account.
+func (c *Client) RunHook(ctx context.Context, run, dir, event string, stdin []byte, timeout time.Duration) (HookResult, error) {
+	if c.info.Proto < ptywire.ProtoHook {
+		return HookResult{}, fmt.Errorf("%w: hook needs protocol %d, this one speaks %d", ErrUnsupported, ptywire.ProtoHook, c.info.Proto)
+	}
+	r, err := c.do(ctx, ptywire.Msg{T: ptywire.TypeHook, Run: run, Dir: dir, Event: event, Stdin: stdin, TimeoutMS: timeout.Milliseconds()})
+	if err != nil {
+		return HookResult{}, err
+	}
+	res := HookResult{Output: r.msg.Output, TimedOut: r.msg.TimedOut, Truncated: r.msg.Truncated}
+	if r.msg.ExitCode != nil {
+		res.Exit = *r.msg.ExitCode
+	}
+	return res, nil
+}
