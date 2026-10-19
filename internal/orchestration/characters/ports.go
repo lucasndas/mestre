@@ -254,8 +254,10 @@ const (
 	NoticeBlockedInput     NoticeKind = "blocked_input"
 	NoticeUnconfirmed      NoticeKind = "delivery_unconfirmed"
 	NoticeStartFailed      NoticeKind = "start_failed"
-	NoticeDismissed        NoticeKind = "dismissed"
-	NoticeNotResumed       NoticeKind = "not_resumed"
+	// NoticeCreated: a request that waited for a vacancy was made (to who asked).
+	NoticeCreated    NoticeKind = "character_created"
+	NoticeDismissed  NoticeKind = "dismissed"
+	NoticeNotResumed NoticeKind = "not_resumed"
 	// NoticeDeadlock: a cycle of waits (docs/orquestracao/esperas-e-caixa-de-entrada.md#detecção-de-impasse).
 	NoticeDeadlock NoticeKind = "deadlock"
 	// NoticeQueueLong: more than 50 items wait in an inbox.
@@ -440,4 +442,11 @@ func (os Observers) TurnEnded(ctx context.Context, c Character, lastMessage stri
 		errs = append(errs, o.TurnEnded(ctx, c, lastMessage))
 	}
 	return errors.Join(errs...)
+}
+
+// ClassCheck says whether a class has an approved version for a workspace
+// (and a table), so a request that names one that does not exist fails before
+// anything is made.
+type ClassCheck interface {
+	Exists(ctx context.Context, workspace, table, class string) (bool, error)
 }

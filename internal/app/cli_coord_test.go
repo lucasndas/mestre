@@ -104,7 +104,13 @@ func TestSpawnTakesNoFreeCommand(t *testing.T) {
 func TestRecruitSpawnAndDismissAnswerAsTheDocumentSays(t *testing.T) {
 	t.Parallel()
 	w := newCommWorld(t)
-	r := w.run(w.master, "recruit", "Dev-2", "--sheet", "Dev Claude", "--class", "Dev")
+	if r := w.run(w.master, "recruit", "Fantasma", "--sheet", "Dev Claude", "--class", "NaoExiste"); r.code != 4 {
+		t.Fatalf("recruit with an unknown class = %+v, want exit 4", r)
+	}
+	if _, err := w.orc.Registry.ByName(w.ctx, w.slug, w.table.ID, "Fantasma"); err == nil {
+		t.Fatal("a character was made for a class that does not exist")
+	}
+	r := w.run(w.master, "recruit", "Dev-2", "--sheet", "Dev Claude")
 	if r.code != 0 || !strings.HasPrefix(r.stdout, "recruited Dev-2 (class Dev, machine Cidadela, ") {
 		t.Fatalf("recruit text = %+v", r)
 	}

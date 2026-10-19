@@ -588,6 +588,8 @@ type rigOptions struct {
 	// longText is the size above which a delivery goes to a file (the
 	// default of the document when zero).
 	longText int
+	// classes checks the class of each request (nil: not checked).
+	classes characters.ClassCheck
 }
 
 type machineRig struct {
@@ -694,6 +696,7 @@ func newRig(t *testing.T, o rigOptions) *rig {
 		Registry: r.reg, Clock: r.clk, Presets: characters.CatalogPresets{Catalog: r.cat}, Tables: r.tables, Machines: r.machines,
 		Builder: r.builder, Notifier: r.notes, Scrolls: r.scrolls, Inbox: r.inbox, Limits: o.limits,
 	}
+	so.Classes = o.classes
 	if o.connect {
 		r.conns, err = connections.NewService(connections.Options{Registry: r.reg, Clock: r.clk})
 		if err != nil {

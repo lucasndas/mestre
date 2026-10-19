@@ -187,7 +187,11 @@ func TestAMachineThatIsAwayLeavesItsCharactersInterruptedAndTheTableMasterToldUn
 func TestACharacterWithoutASessionRestartsFromScratchWithAMessageThatSaysWhereItWas(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{first: "THE LAYER", machines: []machineSpec{withCodex(linux("linux"))}})
-	c := r.make("Revisor Codex", "Dev", "3-login")
+	res, err := r.create(characters.CreateRequest{Name: "Dev", Sheet: "Revisor Codex", Table: "3-login", Quest: "q1", Step: "s-qa"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := res.Character
 	// Codex tells its session in the hooks; this one never did.
 	ready := event(c, providers.EventSessionStart)
 	ready.SessionID = ""
@@ -202,7 +206,8 @@ func TestACharacterWithoutASessionRestartsFromScratchWithAMessageThatSaysWhereIt
 	ready.Provider = providers.Codex
 	r.mach[c.Machine].rt.OnHook(ready, hook.Answer{}) // the new process is ready
 	typed := r.mach[c.Machine].host.proc(c.ID).typedAll()
-	if len(typed) != 1 || !strings.Contains(typed[0], "THE LAYER") || !strings.Contains(typed[0], "terminei a tela de login") || !strings.Contains(typed[0], "could not be resumed") {
+	if len(typed) != 1 || !strings.Contains(typed[0], "THE LAYER") || !strings.Contains(typed[0], "terminei a tela de login") || !strings.Contains(typed[0], "could not be resumed") ||
+		!strings.Contains(typed[0], "s-qa") || !strings.Contains(typed[0], "Missão: ") {
 		t.Errorf("typed = %q, want the layer and the resumption message together", typed)
 	}
 }
