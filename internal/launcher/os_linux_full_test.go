@@ -165,7 +165,7 @@ func dialUnix(path string) func(context.Context) (net.Conn, error) {
 // backend, and returns the counter. It runs until the test ends.
 func (e *env) listen(t *testing.T, cfg launcher.RunConfig) func() int {
 	t.Helper()
-	be := &countingBackend{Backend: &launcher.LinuxBackend{CgroupBase: cfg.CgroupBase, Env: cfg.Env, System: e.sys}}
+	be := &countingBackend{Backend: &launcher.LinuxBackend{AllowSelf: true, CgroupBase: cfg.CgroupBase, Env: cfg.Env, System: e.sys}}
 	srv, err := launcher.NewServer(launcher.Config{
 		Backend: be, Check: cfg.Engine.Check, BinDir: cfg.BinDir, SocketDir: cfg.SocketDir, Audit: cfg.Audit,
 	})

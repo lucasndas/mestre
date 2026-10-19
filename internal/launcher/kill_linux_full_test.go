@@ -81,7 +81,7 @@ func sessionMembers(t *testing.T, sid int) int {
 // the mestre-pty, the account filter and the sessions.
 func TestTheLauncherEndsATerminalWithoutACgroupByIdentity(t *testing.T) {
 	t.Parallel()
-	be := &launcher.LinuxBackend{System: terminal.NewSystem()} // no CgroupBase: no cgroup to kill
+	be := &launcher.LinuxBackend{AllowSelf: true, System: terminal.NewSystem()} // no CgroupBase: no cgroup to kill
 	uid := os.Geteuid()
 
 	t.Run("ends the mestre-pty and the whole session", func(t *testing.T) {
