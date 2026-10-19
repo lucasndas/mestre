@@ -635,10 +635,29 @@ func TestACitadelRestartedDuringTheWaitOfItsPromotionStillWaits(t *testing.T) {
 	if st, _ := w.status(b); st.Acting || st.Fence != "waiting" {
 		t.Fatalf("59 s after the restart the Citadel is %s (acting %v); want it waiting the whole wait again", st.Fence, st.Acting)
 	}
-	w.waitFor("b to act after the wait and the check of the lock", time.Second, func() bool {
+	// The wait is 60 s from the timer, so it ends within a few seconds of the
+	// clock past the 59: a wait of 30 s would have acted before, one of 10
+	// minutes never does here.
+	acting := func() bool {
 		st, ok := w.status(b)
 		return ok && st.Acting
-	})
+	}
+	for i := range 3 {
+		if err := w.clk.Advance(time.Second); err != nil {
+			t.Fatal(err)
+		}
+		// no advance while the check of the lock runs on the real time
+		deadline := clock.Real{}.Now().Add(5 * time.Second)
+		for !acting() && (clock.Real{}).Now().Before(deadline) {
+			_ = clock.Sleep(t.Context(), clock.Real{}, 15*time.Millisecond)
+		}
+		if acting() {
+			break
+		}
+		if i == 2 {
+			t.Fatalf("b did not act %d s after the restart (test clock at %s)", 59+3, w.clk.Now().Format(time.TimeOnly))
+		}
+	}
 	for i, run := range w.externalRuns(b) {
 		for _, l := range run {
 			f := strings.Fields(l)
