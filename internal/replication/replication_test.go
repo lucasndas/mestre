@@ -366,8 +366,8 @@ func TestTheVaultReachesOnlyTheMachinesThatAreNotExcludedAndThePromotedTowerChan
 	})
 }
 
-// CA-REPL-06, the part of milestone 2 (the checklist that reads the alert is
-// milestone 7)
+// Part of CA-REPL-06 (fecha no M7, com o checklist que lê o alerta): the alert
+// of the late Tower, the part of milestone 2
 func TestALateTowerIsAnAlertAfterAMinuteOverTheThreshold(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

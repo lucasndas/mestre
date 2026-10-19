@@ -93,6 +93,8 @@ func newDoneStack(t *testing.T) *doneStack {
 	return &doneStack{orc: orc, dev: res.Character}
 }
 
+// Part of CA-CIDADELA-10 (falta o motor da Torre enfileirar seus eventos, `agent.event`,
+// que nenhum código manda ainda; aqui o `done` e o `list`), and
 // CA-CLI-CONV-05, with the real `done` of the quests: with the Citadel away, a
 // character of a Tower runs `mestre done`; the CLI answers 0 and queued: true;
 // when the Citadel is back, the done is registered once (the Tower sends the
@@ -144,6 +146,20 @@ func TestADoneOfACharacterOfATowerWaitsForTheCitadelAndIsRegisteredOnce(t *testi
 	if dones, _ := st.orc.Registry.Dones(t.Context(), st.dev.ID); len(dones) != 0 {
 		t.Fatalf("the done was registered while the Citadel was away: %+v", dones)
 	}
+	// A command that needs the answer now is not queued: `mestre list` says
+	// the Citadel is away, and that another machine is taking its place
+	// while the Tower sees a promotion.
+	list := func() localchan.Response {
+		return gate.Forward(t.Context(), &localchan.Call{Request: localchan.Request{V: 1, ID: "list-1", Cmd: "list"}, Caller: call.Caller})
+	}
+	if resp := list(); resp.Error == nil || resp.Error.Code != localchan.CodeCitadelUnavailable || resp.ExitCode() != localchan.ExitUnavailable {
+		t.Fatalf("list with the Citadel away: %+v", resp)
+	}
+	b.e.setFailover(true)
+	if resp := list(); resp.Error == nil || resp.Error.Code != localchan.CodeCitadelInFailover || resp.ExitCode() != localchan.ExitUnavailable {
+		t.Fatalf("list during the promotion: %+v", resp)
+	}
+	b.e.setFailover(false)
 
 	r.start(a, clock.Real{})
 	r.waitFor("the result of the done", func() bool { mu.Lock(); defer mu.Unlock(); return len(results) == 1 })

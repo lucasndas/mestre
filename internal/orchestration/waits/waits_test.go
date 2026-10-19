@@ -42,7 +42,9 @@ func notYet(t *testing.T, ch <-chan askRes, what string) {
 	}
 }
 
-// CA-ESP-04
+// CA-ESP-04 (the service: pending at 90 s, the late answer whole, no resend;
+// the text "sem resposta no prazo" is asserted at the command, in
+// internal/app/cli_comm_test.go and in TestTheAskCommandAnswersPendingBatchAndNotConnected)
 func TestAnAskThatRunsOutOfTimeReturnsPendingAndTheLateAnswerComesWholeAsAnAnswerWithoutAResend(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -635,6 +637,8 @@ func TestAskRawIntoTheTerminalOfASpawnWorksInAnyState(t *testing.T) {
 	}
 }
 
+// Part of CA-ESP-04, the command: past the time limit the answer is exit 6, pending,
+// "sem resposta no prazo".
 func TestTheAskCommandAnswersPendingBatchAndNotConnected(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

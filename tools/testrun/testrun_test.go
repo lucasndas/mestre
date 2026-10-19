@@ -145,7 +145,8 @@ func TestSlowFastSuiteTestIsFlaggedOnly(t *testing.T) {
 	}
 }
 
-// A test between 100 and 200 ms in the suite run is not run again: contention
+// Part of CA-TESTES-10 (a test of 150 ms is neither re-run nor flagged). A test
+// between 100 and 200 ms in the suite run is not run again: contention
 // does not double a time that often, and the re-run is for the few that might be
 // slow. It is not flagged either.
 func TestATestUnder200msInTheSuiteIsNotRunAgainNorFlagged(t *testing.T) {

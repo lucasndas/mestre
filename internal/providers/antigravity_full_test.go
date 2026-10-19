@@ -133,9 +133,14 @@ func TestTheGeneratedHookPrintsTheNeutralAnswerWithoutTheMestreBinary(t *testing
 		if event == "PreToolUse" {
 			want = `{"decision":"allow"}`
 		}
-		out, exit := runHook(t, line, dir, payload)
-		if exit != 0 || strings.TrimSpace(out) != want {
-			t.Errorf("%s: exit %d, stdout %q; want exit 0 and %s", event, exit, out, want)
+		// With the agent id the command reaches the binary check, so a
+		// missing binary is what yields the neutral answer; without it the
+		// first condition already does.
+		for _, env := range [][]string{{"MESTRE_AGENT_ID=agy-1"}, {"MESTRE_AGENT_ID="}} {
+			out, exit := runHook(t, line, dir, payload, env...)
+			if exit != 0 || strings.TrimSpace(out) != want {
+				t.Errorf("%s with %v: exit %d, stdout %q; want exit 0 and %s", event, env, exit, out, want)
+			}
 		}
 	}
 }

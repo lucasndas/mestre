@@ -682,8 +682,9 @@ func assertClosed(t *testing.T, f *fixture, v *Vault, reason error) {
 	}
 }
 
-// Vault-level part of CA-COFRE-07: the package API never returns a value;
-// the panel routes (M6) and CLI commands (M3) must build on List and Info.
+// Part of CA-COFRE-07 (fecha no M6, com as rotas do painel): the package API
+// never returns a value; the panel routes and the CLI commands must build on
+// List and Info.
 func TestMetadataNeverCarriesTheValue(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t, nil)
@@ -922,9 +923,10 @@ func TestEnvelopeRefusesAWrongRecoveryKey(t *testing.T) {
 	}
 }
 
-// Vault-level part of CA-COFRE-21: the release decision from metadata
-// alone. The Tower request over the protocol and its audit close in M5
-// (ordem-de-implementacao.md, "Critérios em marcos posteriores").
+// Part of CA-COFRE-21 and CA-COFRE-16 (fecham no M5): the release decision
+// from metadata alone. The Tower request over the protocol and the audit of
+// the use close in M5 (ordem-de-implementacao.md, "Critérios em marcos
+// posteriores").
 func TestSiteCredentialReleasedOnlyToListedClasses(t *testing.T) {
 	t.Parallel()
 	cred := Info{Name: "site_loja", Type: TypeSiteCredential, Site: sampleSite}

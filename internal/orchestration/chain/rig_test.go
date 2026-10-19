@@ -312,6 +312,9 @@ type worldOpts struct {
 	// library; restrictions are the restrictions of sheets, by name.
 	realClasses  bool
 	restrictions map[string]map[string]any
+	// classYAML replaces devYAML as the permissions of the approved class
+	// dev (realClasses).
+	classYAML string
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -393,7 +396,12 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	}
 	w.slug = ws.Slug
 	if opt.realClasses {
-		w.approveClass("dev", devYAML)
+		w.lib.Workspace = ws.Slug
+		perms := devYAML
+		if opt.classYAML != "" {
+			perms = opt.classYAML
+		}
+		w.approveClass("dev", perms)
 	}
 	res, err := w.orc.Characters.Create(ctx, characters.CreateRequest{Sheet: "Grão-Mestre", Workspace: ws.Slug, Role: characters.RoleGrandMaster, Creator: characters.Creator{Kind: characters.CreatedByEngine}})
 	if err != nil {

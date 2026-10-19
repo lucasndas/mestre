@@ -8,7 +8,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// The Job Object has a DACL of its own: SYSTEM and the logon session of the
+// Part of CA-TERM-12 (the clause of the Job Object, which has only SYSTEM and
+// the logon SID of the mestre-pty; it skips where the process has no logon SID,
+// and the rest of the criterion runs in the real-account tests). The Job Object
+// has a DACL of its own: SYSTEM and the logon session of the
 // mestre-pty, and not the user of the process, which every terminal shares
 // (docs/arquitetura/windows.md#conpty). Creating the Job starts no process.
 func TestTheJobObjectIsForTheLogonSessionOnly(t *testing.T) {

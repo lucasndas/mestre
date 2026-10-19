@@ -1,15 +1,18 @@
 package protocol_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/transport"
 )
 
 // typist is the handler of terminal.input on a Tower: it records what was
@@ -266,6 +269,73 @@ func TestAnUnknownTypeGetsAnErrorAndTheConnectionStays(t *testing.T) {
 		sendRaw(t, w, conn, protocol.Envelope{ID: "01J9Z0000000000000000000E2", Type: protocol.TypeMachineHeartbeat,
 			Payload: json.RawMessage(`{"cpu_pct":1,"mem_pct":2,"disk_free_bytes":3,"terminals":0}`)})
 		settle()
+	})
+}
+
+// discarding is the end of a transport connection that reports the marked
+// message as the real transport does for one over its limit: discarded, with
+// transport.ErrTooLarge, and the connection up.
+type discarding struct {
+	transport.Conn
+	marker string
+}
+
+func (d discarding) Read(ctx context.Context) (transport.MessageType, []byte, error) {
+	typ, p, err := d.Conn.Read(ctx)
+	if err == nil && string(p) == d.marker {
+		return 0, nil, fmt.Errorf("%w: discarded", transport.ErrTooLarge)
+	}
+	return typ, p, err
+}
+
+// CA-PROTO-17
+// Through the adapter of the real transport: what the transport discards for
+// its size reaches the session as ErrFrameTooLarge, which answers too_large
+// and keeps reading; a message of exactly 1 MiB is not discarded.
+func TestTheAdapterOfTheTransportTurnsADiscardedMessageIntoTooLargeAndTheConnectionStays(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := newWorld(t, opts{})
+		const marker = "DISCARDED-BY-THE-TRANSPORT"
+		n := pipeNet{accept: make(chan transport.Conn), wrap: func(c transport.Conn) transport.Conn { return discarding{c, marker} }}
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		srv, err := protocol.NewServer(w.cfgC)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() { _ = srv.Serve(ctx, protocol.FromTransportListener(n)); close(done) }()
+		defer func() {
+			cancel()
+			<-done
+		}()
+		d, err := n.Dial(ctx, "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn := protocol.FromTransport(d)
+		defer conn.Close(1000, "")
+		openRaw(t, w, conn, protocol.DefaultRange())
+
+		if err := conn.Write(ctx, protocol.FrameText, []byte(marker)); err != nil {
+			t.Fatal(err)
+		}
+		if code := errorCode(t, recvRaw(t, conn)); code != protocol.CodeTooLarge {
+			t.Fatalf("code = %s, want too_large", code)
+		}
+		// exactly 1 MiB is read, not discarded: it fails as a payload, not as a size
+		if err := conn.Write(ctx, protocol.FrameText, bytes.Repeat([]byte("x"), protocol.MaxMessage)); err != nil {
+			t.Fatal(err)
+		}
+		if code := errorCode(t, recvRaw(t, conn)); code != protocol.CodeInvalidPayload {
+			t.Fatalf("1 MiB: code = %s, want invalid_payload", code)
+		}
+		// the connection stays: a valid message after both is taken
+		sendRaw(t, w, conn, protocol.Envelope{ID: "01J9Z0000000000000000000G1", Type: protocol.TypeMachineHeartbeat,
+			Payload: json.RawMessage(`{"cpu_pct":"high"}`)})
+		if code := errorCode(t, recvRaw(t, conn)); code != protocol.CodeInvalidPayload {
+			t.Fatalf("after: code = %s, want invalid_payload", code)
+		}
 	})
 }
 

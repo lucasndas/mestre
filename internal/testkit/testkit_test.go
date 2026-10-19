@@ -62,7 +62,8 @@ func TestRecordingsEmbedDotFilesSoTheScanSeesThem(t *testing.T) {
 	}
 }
 
-// The guard itself: the real recordings never hold secrets.
+// CA-DUBLES-10: the guard itself, which fails the fast suite naming the file:
+// the real recordings never hold secrets.
 func TestRecordingsHaveNoSecrets(t *testing.T) {
 	t.Parallel()
 	got, err := testkit.ScanSecrets(testkit.Recordings())

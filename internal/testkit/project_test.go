@@ -85,6 +85,7 @@ func TestTasksFileAndHiddenTests(t *testing.T) {
 	}
 }
 
+// CA-TREINO-03 (the reads that fail)
 func TestParseTasksRejectsBadEntries(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ name, src, reason string }{

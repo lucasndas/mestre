@@ -17,12 +17,14 @@ import (
 var realStartScreens = []struct {
 	origin, version string
 	id              providers.ID
-	// prompt is the input line of the CLI on its start screen.
+	// prompt is the input line of the CLI on its start screen and row the
+	// line (from 0) where the recording puts it.
 	prompt string
+	row    int
 }{
-	{"claude-code", "2.1.299", providers.ClaudeCode, "❯"},
-	{"codex", "0.162.1", providers.Codex, "›"},
-	{"antigravity", "1.3.5", providers.Antigravity, ">"},
+	{"claude-code", "2.1.299", providers.ClaudeCode, "❯", 46},
+	{"codex", "0.162.1", providers.Codex, "›", 46},
+	{"antigravity", "1.3.5", providers.Antigravity, ">", 8},
 }
 
 // CA-TERM-02
@@ -60,8 +62,8 @@ func TestEmulatorRendersTheRealStartScreenOfEachProvider(t *testing.T) {
 					row = i
 				}
 			}
-			if row < 2 || row >= body.Rows {
-				t.Fatalf("the prompt %q is not on a line of the screen below the banner (row %d):\n%s", c.prompt, row, screen)
+			if row != c.row {
+				t.Fatalf("the prompt %q is on line %d of the screen, want line %d:\n%s", c.prompt, row, c.row, screen)
 			}
 			a, err := reg.For(c.id)
 			if err != nil {
