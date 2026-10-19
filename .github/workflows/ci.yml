@@ -4,7 +4,7 @@
 # the release builds. A pull request that changes only documents runs the
 # document checks and the tests that read documents. The race detector
 # (budgets times 3) runs on Linux on the pushes to main, not on pull requests:
-# the pre-push hook already runs it on the changed packages. Third-party actions are pinned by commit SHA;
+# neither does the pre-push hook. Third-party actions are pinned by commit SHA;
 # golangci-lint is the pinned release binary, checked by its SHA-256.
 name: CI
 

@@ -110,14 +110,14 @@ func prepush(t *testing.T, files string, testCode int) (int, string, string) {
 	r, out := newRunner(nil, clk, ex)
 	r.Stdin = strings.NewReader(files)
 	code := r.Prepush(context.Background())
-	if testArgs != "" && (!strings.Contains(testEnv, "CGO_ENABLED=1") || !strings.Contains(testEnv, "MESTRE_TEST_SUITE=full")) {
+	if testArgs != "" && (strings.Contains(testEnv, "CGO_ENABLED=1") || !strings.Contains(testEnv, "MESTRE_TEST_SUITE=full")) {
 		t.Errorf("go test env = %q", testEnv)
 	}
 	return code, out.String(), testArgs
 }
 
 // CA-TESTES-12
-// The pre-push run is the full suite, with -race, on the changed packages and
+// The pre-push run is the full suite, without -race, on the changed packages and
 // their dependents only; documents alone run nothing.
 func TestPrepushRunsTheChangedPackagesAndTheirDependents(t *testing.T) {
 	t.Parallel()
@@ -150,7 +150,10 @@ func TestPrepushRunsTheChangedPackagesAndTheirDependents(t *testing.T) {
 					t.Fatalf("ran go test: %s", args)
 				}
 			} else {
-				for _, w := range []string{" -race ", "-tags full ", "-count=1 ", "-timeout 13m30s "} {
+				if strings.Contains(args, "-race") {
+					t.Fatalf("the pre-push run has no -race: %s", args)
+				}
+				for _, w := range []string{"-tags full ", "-count=1 ", "-timeout 4m30s "} {
 					if !strings.Contains(args, w) {
 						t.Fatalf("go test lacks %q: %s", w, args)
 					}
@@ -158,7 +161,7 @@ func TestPrepushRunsTheChangedPackagesAndTheirDependents(t *testing.T) {
 				if !strings.HasSuffix(args, " "+c.wantPkgs) {
 					t.Fatalf("go test = %s\nwant packages %s", args, c.wantPkgs)
 				}
-				if !strings.Contains(text, "PASS prepush: 2 tests in") || !strings.Contains(text, "in 42s (race, tags full)") {
+				if !strings.Contains(text, "PASS prepush: 2 tests in") || !strings.Contains(text, "in 42s (tags full)") {
 					t.Fatalf("no time line:\n%s", text)
 				}
 			}
