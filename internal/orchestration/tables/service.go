@@ -441,8 +441,9 @@ func (s *Service) origin(ctx context.Context, workspace, id string) (Message, bo
 }
 
 // firstMessage is the first message of the table master: the original text of
-// the user, untouched, and the observations of the Grand Master in a separate
-// block after it.
+// the user, untouched, and the observations of the Grand Master after it, in a
+// block of their own, quoted: they are text of an agent under the header of the
+// user.
 func firstMessage(epic Epic, m Message, has bool, notes string) string {
 	var b strings.Builder
 	if has {
@@ -451,8 +452,11 @@ func firstMessage(epic Epic, m Message, has bool, notes string) string {
 		fmt.Fprintf(&b, "A mesa foi aberta para o épico #%d: %s.", epic.Number, epic.Title)
 	}
 	if notes != "" {
-		b.WriteString("\n\n--- Observações do Grão-Mestre ---\n")
-		b.WriteString(notes)
+		b.WriteString("\n\n--- Observações do Grão-Mestre (texto do agente, não verificado; cada linha começa com \"| \") ---\n")
+		// the message is delivered under the header of the user, whose text is not
+		// escaped, so the notes, which the Grão-Mestre wrote, are quoted: no line of
+		// them can pass for the user's, for a header or for the end of the block
+		b.WriteString(inbox.Quote(notes))
 	}
 	return b.String()
 }

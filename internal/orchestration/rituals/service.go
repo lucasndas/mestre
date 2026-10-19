@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -193,6 +194,10 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (Ritual, error)
 func (s *Service) validate(ctx context.Context, r *Ritual, now time.Time, checkSchedule bool) error {
 	if r.Name == "" || utf8.RuneCountInString(r.Name) > MaxName {
 		return fmt.Errorf("%w: the name has 1 to %d characters", ErrBadRequest, MaxName)
+	}
+	if !inbox.PrintableLine(r.Name) {
+		// The name is the sender of the items the ritual puts in an inbox.
+		return fmt.Errorf("%w: the name is one line of printable characters", ErrBadRequest)
 	}
 	if checkSchedule {
 		if err := r.Schedule.Validate(now); err != nil {

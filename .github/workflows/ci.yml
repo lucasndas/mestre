@@ -45,6 +45,15 @@ jobs:
       - name: Keep LF line endings
         run: git config --global core.autocrlf false
 
+      # The real-time scan of Microsoft Defender reads every file the checkout,
+      # the Go toolchain, the compiler and the tests write; the runner is
+      # discarded after the job. First, so the checkout and setup-go are not
+      # scanned either.
+      - name: No real-time scan (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -78,13 +87,6 @@ jobs:
           echo "GOCACHE=$RUNNER_TEMP/go-build" >> "$GITHUB_ENV"
           echo "GOMODCACHE=$RUNNER_TEMP/go-mod" >> "$GITHUB_ENV"
           echo "GOLANGCI_LINT_CACHE=$RUNNER_TEMP/golangci-lint" >> "$GITHUB_ENV"
-
-      # The real-time scan of Microsoft Defender reads every file the compiler
-      # and the tests write; the runner is discarded after the job.
-      - name: No real-time scan (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
 
       # Uses the toolchain line of go.mod.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

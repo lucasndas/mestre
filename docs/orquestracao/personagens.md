@@ -21,7 +21,7 @@ Todo personagem nasce de uma **ficha** (agente) e todo terminal simples de uma *
 
 O personagem nasce já conectado a quem o criou e ao Mestre da mesa ([conexões](conexoes.md)), e inicia no worktree da mesa na máquina escolhida.
 
-**Nomes:** 1 a 32 caracteres (letras, dígitos, espaço, `-`, `_`, `(` e `)`; os parênteses vêm do sufixo " (2)" que a [restauração de grimório](grimorios.md#restaurar) acrescenta), únicos na mesa sem diferenciar maiúsculas. `Grão-Mestre` e `Mestre` são reservados. Sem nome, o motor usa `<ficha> <n>` (ex.: "Dev Claude 2").
+**Nomes:** 1 a 32 caracteres (letras, dígitos, espaço, `-`, `_`, `(` e `)`; os parênteses vêm do sufixo " (2)" que a [restauração de grimório](grimorios.md#restaurar) acrescenta), únicos na mesa sem diferenciar maiúsculas. `Grão-Mestre` e `Mestre` são reservados, e também `Motor` e `sistema`, os remetentes do motor no [cabeçalho](esperas-e-caixa-de-entrada.md#caixa-de-entrada); letras desenhadas vazias (o preenchimento do hangul) são recusadas, para que `Mestre` mais uma delas não pareça o reservado. Letras de outras escritas que parecem as latinas (o `е` cirílico) não são cobertas. Sem nome, o motor usa `<ficha> <n>` (ex.: "Dev Claude 2").
 
 ### Escolha da máquina
 
@@ -143,8 +143,8 @@ Tabela no banco da Cidadela (réplica nas Torres; cópia dos terminais locais no
 - **CA-PERS-08** · *pesada* — **Dado** a Cidadela e as Torres reiniciadas, **quando** voltam, **então** Grão-Mestre, Mestres de mesa e persistentes voltam ao estado anterior, e nenhum personagem fica sem estado visível (MVP-12).
 - **CA-PERS-09** · *rápida* — **Dado** um agente falso que mostra uma tela que o adaptador não reconhece, **quando** a tela fica estável, **então** o personagem vai a `blocked` com motivo `input`, o Mestre da mesa é avisado, e uma entrada `ask --raw` leva o personagem de volta a `busy` ou `idle`.
 - **CA-PERS-10** · *rápida* — **Dado** um personagem que passa por `starting`, `idle`, `busy`, `waiting` (motivo: espera por outro personagem) e `idle`, e o relógio falso, **quando** consulto `character_state_log`, **então** há uma linha por transição, em ordem, com o estado anterior, o novo, o motivo e o horário de cada uma; **quando** o relógio passa de 90 dias, **então** a limpeza apaga as linhas antigas.
+- **CA-PERS-11** · *rápida* — **Dado** os nomes `Motor`, `sistema`, `Grão-Mestre` seguido do preenchimento do hangul e `Mestre` seguido dele, **quando** se tenta criar um personagem com cada um, **então** todos são recusados com `invalid_name`; `Motoristas` e `Sistema Novo` são aceitos.
 
 ## Depende de
-
 - [Bases e fichas](bases-e-fichas.md) · [Workspaces](workspaces.md) · [Sessão zero do personagem](../sessao-zero/personagem.md) · [Adaptador de provedores](../provedores/adaptador.md)
 - [Terminal](../arquitetura/terminal.md) · [Persistência](../arquitetura/persistencia.md) · [Protocolo](../conectividade/protocolo.md) · [Ficha da máquina](../guilda/ficha-da-maquina.md)

@@ -114,8 +114,8 @@ func TestABigEventIsCutToFitTheQueue(t *testing.T) {
 	}
 }
 
-// CA-HOOK-06: the plan of the Linux installation gives agentes/ mode 0750
-// and policy.json 0640, both of the owner mestre and the group
+// CA-HOOK-06: the plan of the Linux installation gives agentes/ and agentes/<id>/ mode
+// 2750 (setgid) and policy.json 0640, both of the owner mestre and the group
 // mestre-agente, and the hook queue 1730.
 func TestTheLinuxPlanOfTheFolders(t *testing.T) {
 	t.Parallel()
@@ -134,7 +134,8 @@ func TestTheLinuxPlanOfTheFolders(t *testing.T) {
 			t.Fatalf("%s: dir %v mode %v (%o) %s:%s", path, e.Dir, e.Mode, e.Mode.Perm(), e.Owner, e.Group)
 		}
 	}
-	check("/var/lib/mestre/principal/agentes", true, 0o750)
+	check("/var/lib/mestre/principal/agentes", true, fs.ModeSetgid|0o750)
+	check("/var/lib/mestre/principal/agentes/<id>", true, fs.ModeSetgid|0o750)
 	check("/var/lib/mestre/principal/agentes/<id>/policy.json", false, 0o640)
 	check("/var/spool/mestre/principal/hook", true, fs.ModeSticky|0o730)
 	// What the dispatcher reads is where the plan puts it.

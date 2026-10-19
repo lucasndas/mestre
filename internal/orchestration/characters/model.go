@@ -174,13 +174,19 @@ var (
 )
 
 // ValidName checks a name: 1 to 32 characters (letters, digits, space, `-`
-// and `_`), and not a reserved one.
+// and `_`), and not a reserved one (the Grand Master, the table master and the
+// senders of the engine).
 func ValidName(name string) error {
 	n := utf8.RuneCountInString(name)
 	if n < 1 || n > 32 {
 		return fmt.Errorf("%w: use 1 to 32 characters", ErrInvalidName)
 	}
 	for _, r := range name {
+		switch r {
+		case '\U0000115F', '\U00001160', '\U00003164', '\U0000FFA0':
+			// letters drawn empty: "Mestre" plus one would read as the reserved name
+			return fmt.Errorf("%w: no letters that are drawn empty", ErrInvalidName)
+		}
 		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != ' ' && r != '-' && r != '_' && r != '(' && r != ')' {
 			return fmt.Errorf("%w: only letters, digits, space, -, _ and parentheses", ErrInvalidName)
 		}
@@ -188,7 +194,8 @@ func ValidName(name string) error {
 	if strings.TrimSpace(name) != name || strings.TrimSpace(name) == "" {
 		return fmt.Errorf("%w: no space at the ends", ErrInvalidName)
 	}
-	if nameKey(name) == nameKey(NameGrandMaster) || nameKey(name) == nameKey(NameTableMaster) {
+	// "Motor" and "sistema" are the senders of the engine in the header of an item
+	if k := nameKey(name); k == nameKey(NameGrandMaster) || k == nameKey(NameTableMaster) || k == "motor" || k == "sistema" {
 		return fmt.Errorf("%w: %q is reserved", ErrInvalidName, name)
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"golang.org/x/sys/windows"
 )
@@ -46,11 +47,25 @@ func ptyDirSDDL(engine, agents *windows.SID) string {
 	return fmt.Sprintf("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;%s)(A;OICI;0x%x;;;OW)(A;;0x%x;;;%s)", engine, readControl, fileAddFile, agents)
 }
 
-// accountSID resolves the SID of an account by name (mestre-agente).
+// accountSID resolves the SID of a local account by name (mestre-agente). The
+// name goes to the lookup as <computer>\<name>: an unqualified name is also
+// looked up in the domain of a machine that joined one, where an account of
+// that name could stand for the local one. The answer has to be a user of this
+// computer.
 func accountSID(name string) (*windows.SID, error) {
-	sid, _, _, err := windows.LookupSID("", name)
+	if strings.ContainsAny(name, `\@/`) {
+		return nil, fmt.Errorf("account %q: only the name of a local account", name)
+	}
+	host, err := windows.ComputerName()
+	if err != nil {
+		return nil, fmt.Errorf("account %s: the name of the computer: %w", name, err)
+	}
+	sid, domain, kind, err := windows.LookupSID("", host+`\`+name)
 	if err != nil {
 		return nil, fmt.Errorf("account %s: %w", name, err)
+	}
+	if kind != windows.SidTypeUser || !strings.EqualFold(domain, host) {
+		return nil, fmt.Errorf("account %s is not a user of this computer (%s, type %d)", name, domain, kind)
 	}
 	return sid, nil
 }
