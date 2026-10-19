@@ -58,7 +58,8 @@ func TestTheSheetOfARealTowerReachesTheRealCitadelWithTheNumbersOfThisMachine(t 
 
 	// the Citadel: the protocol server on a real listener, the registry over a file
 	db := newGuildDB(t)
-	addMachine(t, db, "tower1", "this-machine", "torre-2")
+	// the row has no instance: only the hello of the Tower can give it
+	addMachine(t, db, "tower1", "this-machine", "")
 	tlsSrv, err := transport.NewServer(transport.ServerConfig{CA: ca.Certificate(), Cert: transport.NewCertSource(citadelCert, citadelKey), Credentials: transport.NewMemCredentials(), Clock: clk})
 	if err != nil {
 		t.Fatal(err)

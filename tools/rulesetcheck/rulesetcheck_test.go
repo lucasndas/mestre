@@ -237,6 +237,8 @@ func TestServerFieldsAndOrderAreNotDrift(t *testing.T) {
 	})
 }
 
+// Part of CA-TESTES-13 (the exit codes: 1 with the differences, 2 for a JSON
+// that is not a ruleset)
 func TestExitCodes(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

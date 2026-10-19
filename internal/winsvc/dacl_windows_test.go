@@ -12,9 +12,10 @@ type ace struct {
 	mask uint32
 }
 
-// CA-TERM-12 (the DACL that is built; that a process of another terminal
-// cannot open it is in the real-account tests, which can make two logon
-// sessions of the agent account)
+// Part of CA-TERM-12 (the DACL that is built, in the fast suite on Windows;
+// the Job Object clause is in internal/terminal/ptyd, and that a process of
+// another terminal cannot open it is in the real-account tests, which can make
+// two logon sessions of the agent account)
 func TestTheDefaultDACLOfATerminalExcludesTheAccount(t *testing.T) {
 	t.Parallel()
 	logon, err := windows.StringToSid("S-1-5-5-0-123456")

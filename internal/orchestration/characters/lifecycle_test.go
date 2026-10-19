@@ -61,7 +61,7 @@ func TestDismissOfABusyCharacterIsScheduledAndHappensAfterTheDoneAndIdleWithTheS
 		t.Errorf("summary = %+v", sums)
 	}
 	calls := proc.stopCalls()
-	if len(calls) != 1 || calls[0].graceful != "/exit\r" || calls[0].wait != characters.DefaultGracefulWait {
+	if len(calls) != 1 || calls[0].graceful != "/exit\r" || calls[0].wait != 30*time.Second {
 		t.Errorf("the normal exit of the provider, then 30 s: %+v", calls)
 	}
 	if ends := r.mach[c.Machine].prep.endedOf(c.ID); len(ends) != 1 || !ends[0].Final {
