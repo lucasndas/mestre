@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/hook"
+	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 )
@@ -46,5 +48,32 @@ func TestAnAgentEventIsAcceptedOnlyFromTheMachineWhereTheCharacterRuns(t *testin
 	var perr *protocol.Error
 	if err := send(deps, "torre-1", "dev-1"); !errors.As(err, &perr) || perr.Code != protocol.CodeForbidden {
 		t.Fatalf("without a registry: %v; want forbidden", err)
+	}
+}
+
+// Part of CA-LOCAL-17: a partial that reaches a Tower goes to the call that waits
+// for it, and one for a call nobody waits for is dropped.
+func TestAPartialResultGoesToTheCallThatWaitsAndTheFinalOneEndsIt(t *testing.T) {
+	t.Parallel()
+	r := newResults()
+	var got []string
+	ch, release := r.wait("c1", func(data json.RawMessage) { got = append(got, string(data)) })
+	defer release()
+	send := func(replyTo string, resp localchan.Response) {
+		raw, _ := json.Marshal(resp)
+		var obj protocol.Object
+		_ = json.Unmarshal(raw, &obj)
+		if _, err := r.handle(t.Context(), &protocol.Message{Payload: &obj, Env: protocol.Envelope{ReplyTo: replyTo}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send("c1", localchan.Response{Partial: true, Data: json.RawMessage(`{"status":"queued"}`)})
+	send("outro", localchan.Response{Partial: true, Data: json.RawMessage(`{"status":"x"}`)})
+	send("c1", localchan.Response{OK: true})
+	if len(got) != 1 || got[0] != `{"status":"queued"}` {
+		t.Fatalf("partials = %v", got)
+	}
+	if resp := <-ch; !resp.OK {
+		t.Fatalf("final = %+v", resp)
 	}
 }
