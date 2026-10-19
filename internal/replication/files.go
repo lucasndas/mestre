@@ -41,6 +41,13 @@ type FileRoot struct {
 	// Walk makes the Citadel send every file of the folder when a Tower
 	// connects, not only the ones a record cites or a notification names.
 	Walk bool
+	// Allow, when set, says which paths of the folder travel: dir is true for a
+	// folder (a folder that is not allowed is not entered; one that only leads
+	// to allowed files must be), false for a file. Both machines apply it: the
+	// Citadel sends nothing else and the Tower refuses nothing else, so a folder
+	// that holds more than the Mestre's own files (the folder of the workspaces
+	// holds the mirrors and the worktrees too) is shared only where it is meant.
+	Allow func(rel string, dir bool) bool
 }
 
 // Files is the set of folders of one machine.
@@ -91,8 +98,15 @@ func (f *Files) checkRef(ref FileRef) (FileRoot, string, error) {
 	if !ok {
 		return FileRoot{}, "", fmt.Errorf("replication: no folder %q", ref.Root)
 	}
-	if !fs.ValidPath(ref.Path) || ref.Path == "." || !filepath.IsLocal(filepath.FromSlash(ref.Path)) {
+	// A backslash, a colon or a NUL would make a different path on another
+	// system (on Windows a backslash is a separator and a colon an alternate
+	// stream): the folders carry the names the same on both sides, and the
+	// filter below sees the path as it is written.
+	if strings.ContainsAny(ref.Path, "\\:\x00") || !fs.ValidPath(ref.Path) || ref.Path == "." || !filepath.IsLocal(filepath.FromSlash(ref.Path)) {
 		return FileRoot{}, "", fmt.Errorf("%w: %q is not a path inside %s", ErrPathEscapes, ref.Path, ref.Root)
+	}
+	if root.Allow != nil && !root.Allow(ref.Path, false) {
+		return FileRoot{}, "", fmt.Errorf("%w: %s/%s is not a path this folder carries", ErrPathEscapes, ref.Root, ref.Path)
 	}
 	return root, filepath.FromSlash(ref.Path), nil
 }
@@ -132,6 +146,7 @@ func lstat(root *os.Root, rel string, ref FileRef) (fs.FileInfo, error) {
 // walk lists the files of a folder, in order. Links are not followed and not
 // listed.
 func (f *Files) walk(name string) ([]FileRef, error) {
+	allow := f.roots[name].Allow
 	dir := f.roots[name].Dir
 	root, err := os.OpenRoot(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -146,7 +161,16 @@ func (f *Files) walk(name string) ([]FileRef, error) {
 		if err != nil {
 			return err
 		}
-		if d.Type().IsRegular() {
+		if p == "." {
+			return nil
+		}
+		if d.IsDir() {
+			if allow != nil && !allow(p, true) {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if d.Type().IsRegular() && (allow == nil || allow(p, false)) {
 			out = append(out, FileRef{Root: name, Path: p})
 		}
 		return nil

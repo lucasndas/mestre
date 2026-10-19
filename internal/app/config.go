@@ -56,6 +56,10 @@ type Paths struct {
 	// Agentes holds the folder of each character: the snapshot policy.json
 	// of its effective rules and its MESTRE_TMP.
 	Agentes string
+	// Workspaces, ClassesGlobais, Modelos and Operador are the folders of the
+	// Citadel that every Tower keeps a copy of (replication.Files); empty
+	// leaves that folder out.
+	Workspaces, ClassesGlobais, Modelos, Operador string
 	// CLISocket is the socket of the local channel; empty serves none.
 	CLISocket string
 	// HookQueue is where `mestre hook` leaves the events while the engine
@@ -93,12 +97,16 @@ func DefaultPaths(instance string) (Paths, error) {
 		root := filepath.Join(programData, "Mestre", instance)
 		return Paths{
 			Config: filepath.Join(root, "config"), Banco: filepath.Join(root, "banco"),
+			Workspaces: filepath.Join(root, "workspaces"), ClassesGlobais: filepath.Join(root, "classes-globais"),
+			Modelos: filepath.Join(root, "modelos"), Operador: filepath.Join(root, "operador"),
 			Maquina: filepath.Join(root, "maquina"), Agentes: filepath.Join(root, "maquina", "agentes"), CLISocket: sock,
 			HookQueue: hook.QueueDir("windows", programData, instance), CLIAccess: localchan.DefaultAccess(instance),
 		}, nil
 	}
 	return Paths{
 		Config: filepath.Join("/etc/mestre", instance), Banco: filepath.Join("/var/lib/mestre", instance, "banco"),
+		Workspaces: filepath.Join("/var/lib/mestre", instance, "workspaces"), ClassesGlobais: filepath.Join("/var/lib/mestre", instance, "classes-globais"),
+		Modelos: filepath.Join("/var/lib/mestre", instance, "modelos"), Operador: filepath.Join("/var/lib/mestre", instance, "operador"),
 		Maquina: filepath.Join("/var/lib/mestre", instance, "maquina"), Agentes: filepath.Join("/var/lib/mestre", instance, "agentes"),
 		CLISocket: sock, HookQueue: hook.QueueDir("linux", "", instance), CLIAccess: localchan.DefaultAccess(instance),
 	}, nil
@@ -109,6 +117,8 @@ func DefaultPaths(instance string) (Paths, error) {
 func DirPaths(dir string) Paths {
 	return Paths{
 		Config: filepath.Join(dir, "config"), Banco: filepath.Join(dir, "banco"),
+		Workspaces: filepath.Join(dir, "workspaces"), ClassesGlobais: filepath.Join(dir, "classes-globais"),
+		Modelos: filepath.Join(dir, "modelos"), Operador: filepath.Join(dir, "operador"),
 		Maquina: filepath.Join(dir, "maquina"), Agentes: filepath.Join(dir, "agentes"), CLISocket: filepath.Join(dir, "run", "cli.sock"),
 		HookQueue: filepath.Join(dir, "fila-hook"),
 	}

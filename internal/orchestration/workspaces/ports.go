@@ -3,6 +3,7 @@ package workspaces
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/gitx"
@@ -136,4 +137,30 @@ const principalName = "principal"
 func (l Layout) record(slug string) gitx.WorktreeRecord {
 	mirror := l.Mirror(slug)
 	return gitx.WorktreeRecord{Dir: l.Principal(slug), GitDir: filepath.Join(mirror, "worktrees", principalName), Common: mirror}
+}
+
+// SharedFile says which paths of the folder of the workspaces travel to the
+// Towers (replication.FileRoot.Allow): the `.mestre/` of the main clone of
+// each workspace, with what is only local in it. Nothing else of the folder
+// does: the mirror and the worktrees of the tables have their own paths
+// (bundles), and the rest of the clones is the project's.
+func SharedFile(rel string, dir bool) bool {
+	parts := strings.Split(rel, "/")
+	n := len(parts)
+	switch {
+	case n == 0 || parts[0] == "" || parts[0] == "." || parts[0] == "..":
+		return false
+	case dir && n == 1:
+		return true // the folder of a workspace
+	case dir && n == 2:
+		return parts[1] == principalName
+	case n >= 3:
+		if parts[1] != principalName || parts[2] != ".mestre" || (!dir && n < 4) {
+			return false
+		}
+		// the execution folders (agents/, run/) are local and rebuilt at each
+		// start: they have no value on a Tower and an agent writes to them
+		return n < 4 || (parts[3] != "agents" && parts[3] != "run")
+	}
+	return false
 }
