@@ -39,17 +39,63 @@ func AnswersFor(level LevelKind, r Request) []Answer {
 	return append(out, AnswerAskBack, AnswerClimb)
 }
 
-var answerHelp = map[Answer]string{
-	AnswerApprove:         "aprovar agora: uma exceção para esta ação, usada uma vez",
-	AnswerApproveFor:      "aprovar por um tempo: regra temporária desta ação na mesa (até o fim da missão ou N horas)",
-	AnswerApprovePattern:  "aprovar o padrão: regra temporária de um padrão (--pattern \"npm install *\")",
-	AnswerApproveAlways:   "aprovar sempre: aprova agora e deixa uma sugestão de regra permanente para o Dono",
-	AnswerDelegate:        "delegar",
-	AnswerDeny:            "negar agora",
-	AnswerDenyInstruction: "negar com instrução: o texto chega a quem pediu (--instruction \"use pnpm\")",
-	AnswerDenyAlways:      "negar sempre: nega agora e deixa uma sugestão de regra para o Dono",
-	AnswerAskBack:         "perguntar de volta: pede contexto a quem pediu; o pedido espera e o seu prazo recomeça na resposta",
-	AnswerClimb:           "subir agora: leva o pedido ao nível seguinte",
+// answerText says how an answer is named and told. cli is the name an agent
+// gives it in `mestre approval decide` (docs/cli/grao-mestre.md#mestre-approval;
+// empty for the answers only people give), label the button the people see
+// (docs/orquestracao/cadeia-de-aprovacao.md#respostas), help what it does for an
+// agent (and for the people, when peopleHelp is empty) and use the options the CLI
+// takes with it. What a person's answer makes is another thing for some of them
+// (a decree, not a temporary rule), so peopleHelp says it.
+type answerText struct{ cli, label, help, peopleHelp, use string }
+
+var answerTexts = map[Answer]answerText{
+	AnswerApprove:         {"approve", "Aprovar agora", "uma exceção para esta ação, usada uma vez", "", ""},
+	AnswerApproveFor:      {"approve-for", "Aprovar por um tempo", "regra temporária desta ação na mesa (até o fim da missão ou N horas)", "decreto com validade (Administrador ou acima, em qualquer escopo)", "--for <duração> ou --until-quest"},
+	AnswerApprovePattern:  {"approve-pattern", "Aprovar o padrão", "regra temporária de um padrão", "decreto permanente do padrão (Administrador ou acima, com PIN)", `--pattern "npm install *" e --for <duração> ou --until-quest`},
+	AnswerApproveAlways:   {"always", "Aprovar sempre", "aprova agora e deixa uma sugestão de regra permanente para o Dono", "decreto permanente na classe (Administrador ou acima, com PIN)", ""},
+	AnswerDelegate:        {"", "Delegar", "", "entrega a decisão de pedidos como este ao Grão-Mestre", ""},
+	AnswerDeny:            {"deny", "Negar agora", "", "", ""},
+	AnswerDenyInstruction: {"deny-with", "Negar com instrução", "o texto chega a quem pediu", "", `--text "use pnpm"`},
+	AnswerDenyAlways:      {"never", "Negar sempre", "nega agora e deixa uma sugestão de regra para o Dono", "decreto permanente que nega (Administrador ou acima)", ""},
+	AnswerAskBack:         {"ask-back", "Perguntar de volta", "pede contexto a quem pediu; o pedido espera e o seu prazo recomeça na resposta", "pede contexto a quem pediu; o pedido espera e o prazo final das pessoas continua correndo", `--text "<pergunta>"`},
+	AnswerClimb:           {"escalate", "Subir agora", "leva o pedido ao nível seguinte", "", ""},
+}
+
+// answersText lists the answers of the level: for an agent, by the name the CLI
+// gives them and with the options they take; for the people, who answer with the
+// buttons, by their labels.
+func answersText(r Request, level Level, answers []Answer) string {
+	var b strings.Builder
+	people := level.Kind == LevelPeople
+	if people {
+		b.WriteString("Respostas deste nível (botões):\n")
+	} else {
+		fmt.Fprintf(&b, "Respostas deste nível (mestre approval decide %d <resposta> --reason \"<motivo>\"):\n", r.ID)
+	}
+	for _, a := range answers {
+		t := answerTexts[a]
+		if t.cli == "" && !people {
+			continue // only people give it
+		}
+		switch {
+		case people:
+			b.WriteString("- " + t.label)
+		default:
+			b.WriteString("- " + t.cli + ": " + strings.ToLower(t.label))
+		}
+		help := t.help
+		if people && t.peopleHelp != "" {
+			help = t.peopleHelp
+		}
+		if help != "" {
+			b.WriteString(": " + help)
+		}
+		if t.use != "" && !people {
+			b.WriteString("; com " + t.use)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // Describe is the action of the request, as the approver reads it.
@@ -108,10 +154,7 @@ func Text(r Request, level Level, answers []Answer) string {
 	if len(r.Why) > 0 {
 		fmt.Fprintf(&b, "Por que chegou a este nível: %s\n", joinWhy(r.Why))
 	}
-	b.WriteString("Respostas deste nível (mestre approval decide #" + fmt.Sprint(r.ID) + " --answer <resposta> --reason \"<motivo>\"):\n")
-	for _, a := range answers {
-		fmt.Fprintf(&b, "- %s: %s\n", a, answerHelp[a])
-	}
+	b.WriteString(answersText(r, level, answers))
 	if parts := agentSections(r); len(parts) > 0 {
 		b.WriteString("\n" + unverifiedSections(parts...) + "\n")
 	}
