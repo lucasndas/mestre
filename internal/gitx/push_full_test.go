@@ -80,7 +80,7 @@ func TestRealAddedLinesAreReadWhateverTheFileOrItsAttributesSay(t *testing.T) {
 	r := initRepo(t, g)
 	writeFile(t, r, "a.txt", "1\n")
 	commitAll(t, r, "chore: seed")
-	writeFile(t, r, "nul.txt", "ok\x00\nghp_"+strings.Repeat("a1B2", 9)+"\n")
+	writeFile(t, r, "zero-byte.txt", "ok\x00\nghp_"+strings.Repeat("a1B2", 9)+"\n")
 	writeFile(t, r, "hidden.js", "const t = 'ghp_"+strings.Repeat("c3D4", 9)+"'\n")
 	writeFile(t, r, ".gitattributes", "hidden.js -diff\n*.bin binary\n")
 	writeFile(t, r, "x.bin", "token\x00ghp_"+strings.Repeat("e5F6", 9)+"\n")
@@ -100,7 +100,7 @@ func TestRealAddedLinesAreReadWhateverTheFileOrItsAttributesSay(t *testing.T) {
 	for _, l := range lines {
 		seen[l.Path] = true
 	}
-	for _, p := range []string{"nul.txt", "hidden.js", "x.bin", odd} {
+	for _, p := range []string{"zero-byte.txt", "hidden.js", "x.bin", odd} {
 		if !seen[p] {
 			t.Errorf("the lines of %q were hidden: %+v", p, lines)
 		}
