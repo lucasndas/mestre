@@ -23,6 +23,9 @@ func TestOnlyTheMestreOfTheMainCloneOfEachWorkspaceIsShared(t *testing.T) {
 		{"meu-app/mesas", true, false}, {"meu-app/mesas/42-login/leak.txt", false, false}, {"meu-app/espelho.git", true, false}, {"meu-app/espelho.git/HEAD", false, false},
 		{"meu-app/outro/.mestre/a", false, false}, {".mestre/a", false, false}, {"", true, false}, {"..", true, false}, {"../x/principal/.mestre/a", false, false},
 		{"meu-app", false, false}, {"meu-app/principal", false, false},
+		{"meu-app/principal/.mestre/agents", true, false}, {"meu-app/principal/.mestre/agents/01J/gitconfig", false, false},
+		{"meu-app/principal/.mestre/run/estado.json", false, false}, {"meu-app/principal/.mestre/anexos/a.png", false, true},
+		{"meu-app/principal/.mestre/agentsX/a", false, true},
 	} {
 		if got := workspaces.SharedFile(c.rel, c.dir); got != c.want {
 			t.Errorf("SharedFile(%q, dir %v) = %v; want %v", c.rel, c.dir, got, c.want)

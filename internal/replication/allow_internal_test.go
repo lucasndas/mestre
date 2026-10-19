@@ -45,6 +45,13 @@ func TestAFolderThatCarriesOnlySomePathsSendsAndTakesOnlyThose(t *testing.T) {
 			t.Errorf("%s: %v; want the path refused", p, err)
 		}
 	}
+	// a backslash, a colon or a NUL leaves the folder on another system: refused
+	// before the filter, whatever it says
+	for _, p := range []string{`ws/principal/.mestre/x\..\..\..\mesas\c.txt`, "ws/principal/.mestre/a.md:stream", "ws/principal/.mestre/a\x00.md"} {
+		if _, _, err := f.checkRef(FileRef{Root: "ws", Path: p}); !errors.Is(err, ErrPathEscapes) {
+			t.Errorf("%q: %v; want the path refused", p, err)
+		}
+	}
 	if _, _, err := f.checkRef(FileRef{Root: "ws", Path: "ws/principal/.mestre/a.md"}); err != nil {
 		t.Errorf("an allowed path was refused: %v", err)
 	}

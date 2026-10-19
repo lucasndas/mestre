@@ -98,7 +98,11 @@ func (f *Files) checkRef(ref FileRef) (FileRoot, string, error) {
 	if !ok {
 		return FileRoot{}, "", fmt.Errorf("replication: no folder %q", ref.Root)
 	}
-	if !fs.ValidPath(ref.Path) || ref.Path == "." || !filepath.IsLocal(filepath.FromSlash(ref.Path)) {
+	// A backslash, a colon or a NUL would make a different path on another
+	// system (on Windows a backslash is a separator and a colon an alternate
+	// stream): the folders carry the names the same on both sides, and the
+	// filter below sees the path as it is written.
+	if strings.ContainsAny(ref.Path, "\\:\x00") || !fs.ValidPath(ref.Path) || ref.Path == "." || !filepath.IsLocal(filepath.FromSlash(ref.Path)) {
 		return FileRoot{}, "", fmt.Errorf("%w: %q is not a path inside %s", ErrPathEscapes, ref.Path, ref.Root)
 	}
 	if root.Allow != nil && !root.Allow(ref.Path, false) {

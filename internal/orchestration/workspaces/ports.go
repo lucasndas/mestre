@@ -155,7 +155,12 @@ func SharedFile(rel string, dir bool) bool {
 	case dir && n == 2:
 		return parts[1] == principalName
 	case n >= 3:
-		return parts[1] == principalName && parts[2] == ".mestre" && (dir || n >= 4)
+		if parts[1] != principalName || parts[2] != ".mestre" || (!dir && n < 4) {
+			return false
+		}
+		// the execution folders (agents/, run/) are local and rebuilt at each
+		// start: they have no value on a Tower and an agent writes to them
+		return n < 4 || (parts[3] != "agents" && parts[3] != "run")
 	}
 	return false
 }
