@@ -20,7 +20,7 @@ func (s *Service) guildZone(ctx context.Context) *time.Location {
 }
 
 // Moment is how a user sees the instant a decree ends: in the time zone of the
-// Guild with its name and offset ("25/10/2026 23:59 (America/Sao_Paulo,
+// Guild with its name and offset ("25/10/2026 23:59:59 (America/Sao_Paulo,
 // UTC-03:00)"), or in UTC, saying so, when that zone is not available. It is
 // only the text; the decree ends at the absolute instant, to the second.
 func (s *Service) Moment(ctx context.Context, t time.Time) string {

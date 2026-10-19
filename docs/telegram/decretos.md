@@ -67,7 +67,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 ### Validade (regra permanente)
 
 - A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); "por 3 dias" vira 72 horas.
-- O Grão-Mestre converte a validade em um instante absoluto (`--until`, ISO 8601 com o deslocamento do fuso da Guilda) e o motor guarda só esse instante; a validade termina nele, ao segundo, em qualquer fuso. A confirmação, a mensagem de decreto ativo e a lista o mostram no fuso da Guilda, com o nome e o deslocamento (`até 25/10/2026 23:59:59 (America/Sao_Paulo, UTC-03:00)`, o horário de verão incluído); sem fuso utilizável (não guardado ou inválido), mostram em UTC, dizendo `UTC`. Os segundos aparecem quando não são zero, para o horário mostrado ser exatamente o instante em que a validade termina.
+- O Grão-Mestre converte a validade em um instante absoluto (`--until`, ISO 8601 com o deslocamento do fuso da Guilda) e o motor guarda só esse instante; a validade termina nele, ao segundo, em qualquer fuso. A confirmação, a mensagem de decreto ativo e a lista o mostram no fuso da Guilda, com o nome e o deslocamento (`até 25/10/2026 23:59:59 (America/Sao_Paulo, UTC-03:00)`, o horário de verão incluído); sem fuso utilizável (não guardado ou inválido), mostram em UTC, dizendo `UTC`. Os segundos aparecem quando não são zero e o limite é guardado em segundos inteiros (a fração é descartada), para o horário mostrado ser exatamente o instante em que a validade termina. O lembrete e a recusa de delegação usam o mesmo formato.
 - Ao vencer, o decreto passa a **expirado** sozinho. O motor avisa o autor.
 
 ### Estados

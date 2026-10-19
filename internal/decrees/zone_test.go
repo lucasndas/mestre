@@ -59,6 +59,15 @@ func TestTheConfirmationFallsBackToUTCWithoutAUsableGuildZone(t *testing.T) {
 }
 
 // CA-DEC-13
+func TestASubSecondLimitIsKeptInWholeSecondsSoTheShownMomentIsTheEnd(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.setZone("America/Sao_Paulo")
+	until := time.Date(2026, 10, 26, 2, 59, 59, 700_000_000, time.UTC)
+	contains(t, w.confirmationUntil(until), "até 25/10/2026 23:59:59 (America/Sao_Paulo, UTC-03:00)")
+}
+
+// CA-DEC-13
 func TestTheZoneOnlyChangesTheTextNotTheMomentTheDecreeEnds(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

@@ -139,6 +139,9 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 // normalize fills what an exception implies.
 func normalize(p Proposal) Proposal {
 	p.Text = strings.TrimSpace(p.Text)
+	// a limit is whole seconds (never later than asked), so what is shown is
+	// exactly the instant it ends
+	p.Until = p.Until.Truncate(time.Second)
 	if p.Kind == KindException && p.Effect.Kind == "" {
 		p.Effect.Kind = EffectPermission
 	}
