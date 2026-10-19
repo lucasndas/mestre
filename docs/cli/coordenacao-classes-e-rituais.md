@@ -58,10 +58,10 @@ mestre ritual delete "<nome>"
 - Agenda: `--every 30m`; `--daily 02:00`; `--weekly "mon,thu 09:00"` (dias `mon`…`sun`); `--once "2026-10-20T14:00"`. No fuso do workspace (padrão: o [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); [rituais](../orquestracao/rituais.md)). Exatamente uma das quatro.
 - `--pre-run`: comando rodado antes do disparo; a saída dele substitui `{{output}}` no `--prompt` ou no `--command` (onde roda e com que permissões: [rituais](../orquestracao/rituais.md)). `{{output}}` sem `--pre-run` → 2.
 - `--timeout`: quanto o disparo pode ficar na fila do alvo ocupado antes de ser cancelado e devolvido ao dono do ritual (padrão 30m).
-- `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o histórico recente. `--json` → `{name, target, quest, table, action: "prompt" | "command" | "quest", schedule, pre_run, timeout, enabled, next_run, last_result}`, com `timeout` em segundos (inteiro) e `schedule` como `every 3600s`, `daily 02:00`…
-- `run`: dispara agora, pelo mesmo caminho da agenda (entra na fila se o alvo estiver ocupado). `enable`/`disable`: liga e desliga sem apagar.
+- `list`: nome, alvo, agenda, próximo disparo, ativo, último resultado. `show`: tudo, mais o `content` e os 10 últimos disparos. `--json` → `{name, state, target, quest, table, action: "prompt" | "command" | "quest", schedule, pre_run, timeout, enabled, next_run, last_result}`, com `timeout` em segundos (inteiro) e `schedule` como `every 3600s`, `daily 02:00`…
+- `run`: dispara agora, pelo mesmo caminho da agenda (entra na fila se o alvo estiver ocupado); de ritual desativado → 2 `usage`. `enable`/`disable`: liga e desliga sem apagar.
 - `delete`: ação destrutiva → 9 sem pedido explícito.
-- Erros: alvo fora da mesa do chamador → 4 `not_visible`; agenda inválida → 2 `invalid_schedule`; nome repetido → 7 `name_taken`.
+- Erros: alvo fora da mesa do chamador → 4 `not_visible`; agenda inválida → 2 `invalid_schedule`; nome repetido (sem diferenciar maiúsculas) → 7 `name_taken`.
 
 O estado do App das classes vem com o GitHub, no M5 ([criação de Apps](../github/criacao-de-apps.md)).
 
