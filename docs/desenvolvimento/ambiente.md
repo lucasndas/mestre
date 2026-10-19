@@ -137,6 +137,11 @@ Os [spikes de Windows](ordem-de-implementacao.md#spikes-do-m1) continuam rodando
 4. Comece a rodada: `cd C:\mestre; claude --model opus --effort high "Leia e execute o arquivo <prompt da rodada>"` — a janela do preparo mostra o comando exato. Cada rodada tem o seu prompt e a sua branch, definidos no início do `setup.ps1` (`$Prompt` e `$Branch`): 1ª rodada `spikes-prompt.md` em `spike/m1-windows`; 2ª rodada (Antigravity e identificação do chamador) `rodada-2-prompt.md` em `spike/m1-windows-2`; 3ª rodada (`mestre-pty`, spike 5) `rodada-3-prompt.md` em `spike/m1-windows-3`.
 5. No fim, a sessão faz commit e `git push` da branch da rodada (o Git pede login do GitHub no navegador do Sandbox) e copia o relatório e os logs para `C:\winsandbox\resultados\`, que no Windows do Dono é `C:\mestre\tools\winsandbox\resultados\` (fora do git). Feche o Sandbox só depois disso.
 
+## Passos pendentes do Dono
+
+- **Repositório `lucasndas/mestre-sandbox`:** crie-o (vazio, privado) antes dos testes de GitHub reais do M5; serve só às conferências manuais ([projetos de treino](../qualidade/projetos-de-treino.md#sandbox-real-no-github)) e às da [trava no GitHub](../guilda/trava-no-github.md#verificar-na-implementação).
+- **Rodada Windows real de M3 e M4:** pendente; está pronta em `tools/winsandbox/round/` e roda numa vez só, junto da do M4 ([Windows](../arquitetura/windows.md#rodada-de-verificações-reais)).
+
 ## O que não precisa
 
 - Nenhum serviço instalado (systemd, serviço do Windows, Avahi): a completa roda a Cidadela e as Torres como processos comuns ou instâncias no processo do teste.

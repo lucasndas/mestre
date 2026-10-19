@@ -82,6 +82,7 @@ Tela só do **Dono** ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capac
 - O servidor confere o nível em toda requisição; telas sem permissão nem aparecem no menu.
 - Salvar um arquivo inválido (política, importação) → nada é gravado; os erros aparecem com a linha.
 - Valores de segredos nunca são devolvidos pela API, nem mascarados: só nome, tipo, impressão curta e datas.
+- Login do Administrador pelo device flow do GitHub com um login diferente do cadastro → o motor descarta o token e o painel mostra o erro ([aprovação no GitHub](../github/aprovacao-no-github.md); CA-GH-APROV-06, M6).
 - Remover uma máquina da Guilda com personagens rodando → o painel avisa quantos e quais antes de confirmar.
 
 ## Critérios de aceite

@@ -40,6 +40,7 @@ Oferecer no painel o mesmo que o Telegram oferece: conversar com o Grão-Mestre 
 - Um sino no topo com os avisos que o usuário receberia no Telegram: notificações do Grão-Mestre (`mestre notify`), alertas operacionais do motor (autocura, etapa travada, impasse, limite de uso) e mensagens "Sistema" ([bot](../telegram/bot.md)).
 - Cada aviso tem workspace e mesa (ou "Sistema"), horário e link para o lugar certo (mesa, máquina, pedido).
 - Lido/não lido por usuário, guardado na Cidadela.
+- O alerta de remetente desconhecido do bot ([segurança do canal](../telegram/seguranca-do-canal.md)) aparece aqui, para o Dono e os Administradores, além do Telegram do Dono (CA-CANAL-07, M6).
 
 ## Regras e erros
 
