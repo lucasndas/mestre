@@ -791,3 +791,43 @@ func TestAnAltoRequestGoesToTheGrandMasterOnlyWithADelegation(t *testing.T) {
 		t.Errorf("a fixo request = %v, want ErrFixed", err)
 	}
 }
+
+// A subdelegation of the Grand Master lets the Mestre da mesa decide a type it
+// never decides (docs/aprovacoes/delegacao.md#subdelegação): the request is
+// born with it, it is registered, and the safeguards stay; without it the
+// request goes to the Grand Master.
+func TestASubdelegationLetsTheTableMasterDecideAWorkflowsRequest(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	open := func() int64 {
+		id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestWorkflows, Workspace: w.slug, Requester: dev.ID, About: "enviar o workflow",
+			Risk: classes.RiskResult{Risk: classes.RiskHigh, TableVersion: classes.RiskTableVersion, Rule: "workflows"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	if k := w.level(open()); k == chain.LevelMesa {
+		t.Fatalf("a type alto is at the Mestre da mesa without a subdelegation")
+	}
+	w.deleg.set(true)
+	w.subs.set(w.master.ID, true)
+	id := open()
+	if r := w.request(id); r.Level.Kind != chain.LevelMesa || r.Level.Agent != w.master.ID {
+		t.Fatalf("with a subdelegation the request is at %+v, want the Mestre da mesa", r.Level)
+	}
+	w.decide(w.master, id, chain.AnswerApprove, "dentro da subdelegação")
+	if len(w.subs.used) != 1 || w.subs.used[0] != w.master.ID {
+		t.Fatalf("the use was not registered: %v", w.subs.used)
+	}
+	// a request that crosses tables is never the Mestre da mesa's, subdelegation or not
+	cross, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestWorkflows, Workspace: w.slug, Requester: dev.ID, Cross: true, About: "cruza",
+		Risk: classes.RiskResult{Risk: classes.RiskHigh, TableVersion: classes.RiskTableVersion, Rule: "workflows"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := w.level(cross); k == chain.LevelMesa {
+		t.Fatal("a subdelegation lifted the safeguard of the request that crosses tables")
+	}
+}
