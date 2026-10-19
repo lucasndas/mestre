@@ -39,7 +39,7 @@ func TestTheFirstValidAnswerDecidesAndTheOthersReadWhoAnswered(t *testing.T) {
 	if _, err := w.answer(lucas, r.ID, chain.AnswerDeny); !errors.Is(err, approvals.ErrNotOpen) {
 		t.Errorf("a late answer: %v", err)
 	}
-	if n := len(w.ch.decisions()); n != 1 {
+	if n := len(w.ch.Decisions()); n != 1 {
 		t.Errorf("%d decisions", n)
 	}
 }
@@ -63,7 +63,7 @@ func TestAQuorumNeedsTheRequiredUsersAndEachUserCountsOnce(t *testing.T) {
 	if _, err := w.answer(bia, r.ID, chain.AnswerApprove); err != nil {
 		t.Fatal(err)
 	}
-	if w.state(r.ID) != chain.Open || len(w.ch.decisions()) != 0 {
+	if w.state(r.ID) != chain.Open || len(w.ch.Decisions()) != 0 {
 		t.Fatalf("two approvals without Lucas decided: %s", w.state(r.ID))
 	}
 	contains(t, w.textTo(lucas), "2 de 2 aprovações")
@@ -119,7 +119,7 @@ func TestAnAnswerOfWhoCanNotAnswerIsRefusedAndNothingChanges(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if w.state(r.ID) != chain.Open || len(w.ch.decisions()) != 0 {
+	if w.state(r.ID) != chain.Open || len(w.ch.Decisions()) != 0 {
 		t.Fatalf("a refused answer changed the request: %s", w.state(r.ID))
 	}
 	if _, _, ok := w.msg.To(obs.ID); ok {
@@ -165,8 +165,8 @@ func TestAnApprovalOfAnotherTargetIsInvalidatedAndNothingIsApplied(t *testing.T)
 	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrTargetChanged) {
 		t.Fatalf("the answer: %v", err)
 	}
-	if w.state(r.ID) != chain.Invalidated || len(w.ch.decisions()) != 0 {
-		t.Fatalf("state = %s, decisions = %d", w.state(r.ID), len(w.ch.decisions()))
+	if w.state(r.ID) != chain.Invalidated || len(w.ch.Decisions()) != 0 {
+		t.Fatalf("state = %s, decisions = %d", w.state(r.ID), len(w.ch.Decisions()))
 	}
 	contains(t, w.textTo(ana), "Invalidado")
 	// the same target in another spelling is the same target
@@ -200,7 +200,7 @@ func TestAnApprovalThatAsksThePINAppliesOnlyAfterTheRightPIN(t *testing.T) {
 	if err != nil || rep.PIN == "" {
 		t.Fatalf("the button: %+v, %v", rep, err)
 	}
-	if w.state(r.ID) != chain.Open || len(w.ch.decisions()) != 0 {
+	if w.state(r.ID) != chain.Open || len(w.ch.Decisions()) != 0 {
 		t.Fatal("the button alone approved a request that asks the PIN")
 	}
 	// the PIN of another user's request does not apply it
@@ -246,7 +246,7 @@ func TestAChainThatRefusesLetsTheUserAnswerAgain(t *testing.T) {
 	w := newWorld(t)
 	ana := w.add("Ana", users.Approver, "loja")
 	r := w.open(openOpts{})
-	w.ch.failNext = errors.New("recusado")
+	w.ch.FailNext(errors.New("recusado"))
 	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); err == nil {
 		t.Fatal("the refusal was swallowed")
 	}
@@ -296,7 +296,7 @@ func TestAVoteOfWhoWasSuspendedMeanwhileDoesNotMakeTheQuorum(t *testing.T) {
 		t.Fatal(err)
 	}
 	rep, err := w.answer(bia, r.ID, chain.AnswerApprove)
-	if err != nil || w.state(r.ID) != chain.Open || len(w.ch.decisions()) != 0 {
+	if err != nil || w.state(r.ID) != chain.Open || len(w.ch.Decisions()) != 0 {
 		t.Fatalf("Bia: %+v, %v, %s: the vote of a suspended user made the quorum", rep, err, w.state(r.ID))
 	}
 	if rep.Text != "Sua aprovação foi contada: 1 de 2." {
@@ -314,7 +314,7 @@ func TestALateClickApprovesNothingEvenBeforeTheTimerFires(t *testing.T) {
 	w := newWorld(t)
 	ana := w.add("Ana", users.Approver, "loja")
 	r := w.open(openOpts{late: true})
-	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrExpired) || len(w.ch.decisions()) != 0 {
+	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrExpired) || len(w.ch.Decisions()) != 0 {
 		t.Errorf("a late click: %v", err)
 	}
 }
@@ -363,7 +363,7 @@ func TestAUserSuspendedWhileTheTargetIsReadVotesNothing(t *testing.T) {
 		t.Fatalf("the answer: %v", err)
 	}
 	var n int
-	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM approval_votes WHERE request = ?`, r.ID).Scan(&n); err != nil || n != 0 || len(w.ch.decisions()) != 0 {
-		t.Errorf("votes %d, decisions %d, %v", n, len(w.ch.decisions()), err)
+	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM approval_votes WHERE request = ?`, r.ID).Scan(&n); err != nil || n != 0 || len(w.ch.Decisions()) != 0 {
+		t.Errorf("votes %d, decisions %d, %v", n, len(w.ch.Decisions()), err)
 	}
 }
