@@ -25,17 +25,17 @@ steps:
 
 | Campo da etapa | Significado |
 |---|---|
-| `id`, `name` | identificador único na missão; nome exibido (padrão: o id) |
+| `id`, `name` | identificador único na missão, sem espaço nem `/`; nome exibido (padrão: o id), único sem diferenciar maiúsculas |
 | `sheet` ou `character` | ficha a usar, ou um personagem existente da mesa |
 | `class`, `machine` | substituem a classe da ficha / fixam a máquina (opcionais) |
 | `instructions` | o que a etapa deve fazer |
 | `after`, `join` | etapas anteriores; `all` (padrão, "esperar todas") ou `any` ("esperar a primeira") |
-| `can_return_to` | etapa anterior para a qual esta pode devolver |
+| `can_return_to` | etapa anterior, de que esta depende por `after` (direta ou indiretamente), para a qual pode devolver |
 | `approval` | `before` (antes de começar) ou `after` (antes de passar adiante) |
 | `sub_issue` | cria sub-issue para a etapa (o Mestre da mesa decide; ex.: etapas que geram código ou duram mais de um turno) |
 | `stuck_after` | tempo ocioso sem `done` até travar (padrão 20 min) |
 
-Campos que outros documentos definem: `optional` na etapa (M8, [receitas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional)), `issue` e `same_failure` na missão (M5, [prova e devolução](prova-e-devolucao.md)). Validação: ids únicos; `after` e `can_return_to` só apontam para etapas anteriores; sem ciclos em `after`; fichas e personagens existem; classes dentro do [teto](../classes/teto-do-workspace.md); o nome da missão e o de cada etapa (ou o id, se não tem nome) são uma linha de caracteres imprimíveis, de até 80, e o id também é imprimível (o nome da missão é o remetente do item `quest` de cada etapa, e os nomes aparecem nos pedidos de aprovação: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)).
+Campos que outros documentos definem: `optional` na etapa (M8, [receitas](../classes/classes-sugeridas.md#receitas-e-etapa-opcional)), `issue` e `same_failure` na missão (M5, [prova e devolução](prova-e-devolucao.md)). Validação: a definição é lida de forma estrita (campo desconhecido é recusado, e `max_returns` negativo também); ids únicos; `after` e `can_return_to` só apontam para etapas anteriores; sem ciclos em `after`; fichas e personagens existem; classes dentro do [teto](../classes/teto-do-workspace.md); o nome da missão e o de cada etapa (ou o id, se não tem nome) são uma linha de caracteres imprimíveis, de até 80, e o id também é imprimível (o nome da missão é o remetente do item `quest` de cada etapa, e os nomes aparecem nos pedidos de aprovação: [caixa de entrada](esperas-e-caixa-de-entrada.md#caixa-de-entrada)).
 
 ### Execução
 
@@ -60,7 +60,7 @@ O pedido é do tipo `ponto_de_missao`, de risco `medio`: quem aprova é o Grão-
 
 ### Etapa travada
 
-Etapa `running` cujo personagem fica `idle` (sem espera ativa) por `stuck_after` sem `done`, ou cujo personagem fica `stuck`, vira `stuck`: o Mestre da mesa é avisado. Sem solução em mais **30 min** (padrão), o motor avisa o Grão-Mestre e os usuários. O Mestre da mesa resolve com `check`/`ask`, trocando o personagem (`recruit --replace` mantém a etapa) ou cancelando. Um `done` ou um novo turno do personagem leva a etapa de volta.
+Etapa `running` cujo personagem fica `idle` (sem espera ativa) por `stuck_after` sem `done`, ou cujo personagem fica `stuck`, vira `stuck`: o Mestre da mesa é avisado. Também vira `stuck`, na varredura, a etapa cujo personagem foi encerrado, e a varredura cancela a missão de uma mesa que terminou. Sem solução em mais **30 min** (padrão), o motor avisa o Grão-Mestre e os usuários. O Mestre da mesa resolve com `check`/`ask`, trocando o personagem (`recruit --replace` mantém a etapa) ou cancelando. Um `done` ou um novo turno do personagem leva a etapa de volta.
 
 ### Estados
 

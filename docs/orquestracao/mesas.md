@@ -58,7 +58,7 @@ O merge é confirmado pelo resultado do `mestre gh merge` ou, se uma pessoa fize
 
 ### Pausa
 
-A pausa é uma marca (`paused`) sobre o estado, ligada por `/pausar`, pelo painel, pelo botão **Pausar mesa** (desde o M5; no painel, M6) do aviso de [mesa que gira](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira) ou pelo [limite de uso](../plataforma/limites-de-uso.md). Enquanto pausada:
+A pausa é uma marca (`paused`) sobre o estado (mesa encerrada ou cancelada não pode ser pausada, e uma missão não começa em mesa encerrando ou cancelando), ligada por `/pausar`, pelo painel, pelo botão **Pausar mesa** (desde o M5; no painel, M6) do aviso de [mesa que gira](supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira) ou pelo [limite de uso](../plataforma/limites-de-uso.md). Enquanto pausada:
 - o motor não entrega itens da caixa de entrada aos personagens da mesa (eles ficam na fila);
 - missões não iniciam etapas novas e recrutamentos de missão ficam parados;
 - disparos de [rituais](rituais.md) da mesa enfileiram normalmente (podendo expirar);

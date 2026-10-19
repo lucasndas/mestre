@@ -50,7 +50,7 @@ Todo terminal nasce de uma **base** (o "como iniciar") e todo agente de uma **fi
 | `max_copies` | inteiro ≥ 1 | não (padrão 3) | cópias simultâneas |
 | `restrictions` | mesmo formato de `permissions.yaml` | não | só restringe a classe, nunca libera ([permissões](../classes/permissoes.md)) |
 
-Validação ao salvar: a base existe; `agent` é compatível com o `ready` da base (`hook` exige agente diferente de `shell`); `restrictions` não libera nada.
+Validação ao salvar: a base existe; `agent` é compatível com o `ready` da base (`hook` exige agente diferente de `shell`); `restrictions` não libera nada. Nome de base: `a-z`, dígitos e `-`, de 1 a 64 caracteres; nome de ficha: de 1 a 80, sem espaços nas pontas nem caracteres de controle; `ready.delay`: de 1 a 3600 s; `platforms` e `machines` não repetem item.
 
 ### Exemplos
 
@@ -87,7 +87,7 @@ sheets:
 ### Exportar e importar
 
 - Formato único em YAML ou JSON (mesma estrutura acima: `kind`, `version`, `bases`, `sheets`). Exporta-se tudo ou uma seleção; nunca contém segredos.
-- Importação: valida o arquivo inteiro primeiro (versão, campos, referências). Para cada nome que já existe, o usuário escolhe **substituir**, **renomear** ou **pular**. Depois das escolhas, aplica tudo de uma vez ou nada.
+- Importação: valida o arquivo inteiro primeiro (versão, campos, referências). Para cada nome que já existe, o usuário escolhe **substituir**, **renomear** ou **pular**. Depois das escolhas, aplica tudo de uma vez ou nada. Lê arquivos de até 1 MiB (o que começa com `{` é JSON, o resto é YAML; campo desconhecido é recusado), e renomear uma base leva junto as fichas do arquivo que a citam.
 - `version` maior que a suportada: recusa dizendo a versão esperada.
 
 ### Perfis de conta
@@ -116,11 +116,11 @@ Agente que age na área de trabalho do usuário, com a conta dele, por tempo cur
 
 `internal/orchestration/presets` (bases, fichas, exportar e importar, escolha da máquina) e `internal/orchestration/accounts` (perfis e configuração inicial); `bases` e `sheets` ficam no banco da Cidadela e `account_profiles` no da máquina. Ao salvar, a base passa pela mesma conferência que o adaptador roda a cada início (`providers.CheckBase`), com o provedor deduzido do comando (`claude`, `codex`, `agy`), e a ficha por ela com o `agent` dela.
 - **Ficha × classe:** `restrictions` que dá o que a classe proíbe (um `allow` coberto por um `deny` dela, um interruptor que ela desligou) é recusada; um `allow` que a classe só não dá é guardado com aviso e ignorado. A classe é achada pelo nome; não achada, a ficha é guardada com aviso (cada workspace resolve a sua), menos na base `operador`, que exige uma com `operator: true`.
-- **Perfis:** o primeiro perfil de um provedor é o padrão; `<provedor>-padrao` é o que o Mestre cria quando a máquina não tem nenhum (sempre no Codex). Remover um perfil guarda a pasta, com o login. Exportar "tudo" deixa de fora a base `operador` e as fichas dela.
+- **Perfis:** o primeiro perfil de um provedor é o padrão; `<provedor>-padrao` é o que o Mestre cria quando a máquina não tem nenhum (sempre no Codex). Remover um perfil guarda a pasta, com o login. Só exportar "tudo" deixa de fora a base `operador` e as fichas dela (numa seleção explícita ela pode ir).
 
 ## Regras e erros
 
-- `env` não pode definir variáveis `MESTRE_*` nem conter segredos; valores que parecem segredo são recusados ao salvar ([segurança](../arquitetura/seguranca.md)).
+- `env` não pode definir variáveis `MESTRE_*` nem conter segredos; valores que parecem segredo são recusados ao salvar ([segurança](../arquitetura/seguranca.md)); o mesmo vale para argumento de linha de comando da base, inclusive os de cada plataforma.
 - **A cada início**, não só ao salvar, o adaptador recusa o `env` da base que define (sem diferença de maiúsculas) `MESTRE_*` e, numa base de agente, o que roda código antes dos hooks ou muda o git que o motor fixa (`LD_PRELOAD`, `LD_AUDIT`, `LD_LIBRARY_PATH`, `DYLD_*`, `NODE_OPTIONS`, `BASH_ENV`, `ENV`, `GIT_CONFIG*`, `GIT_EXEC_PATH`) e o que desliga ou desvia hooks, permissões, configuração ou sandbox do provedor: no Claude Code, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_SIMPLE`, `CLAUDE_CODE_SAFE_MODE`, `CLAUDE_CODE_RESTRICTED`, o shell e o que embrulha os comandos (`SHELL`, `CLAUDE_CODE_SHELL`, `CLAUDE_CODE_SHELL_PREFIX`, `CLAUDE_ENV_FILE`, `CLAUDE_CODE_PROCESS_WRAPPER`, `CLAUDE_CODE_GIT_BASH_PATH`, `CLAUDE_CODE_USE_POWERSHELL_TOOL`), plugins, pastas e mensagens de fora (`CLAUDE_CODE_PLUGIN_*`, `CLAUDE_CODE_PROJECT_DIR_NAME`, `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD`, `CLAUDE_CODE_MESSAGING_*`, `CLAUDE_CODE_TMPDIR`), o modo automático e os limites de hooks (`CLAUDE_CODE_AUTO_MODE_SERVER`, `CLAUDE_CODE_ENABLE_AUTO_MODE`, `CLAUDE_AFK_TIMEOUT_MS`, `CLAUDE_CODE_ENABLE_CFC`, `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`, `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) e todo `CLAUDE_CODE_DISABLE_*` fora dos de tela e de modelo (`TERMINAL_TITLE`, `MOUSE`, `MOUSE_CLICKS`, `ALTERNATE_SCREEN`, `VIRTUAL_SCROLL`, `FEEDBACK_SURVEY`, `NONESSENTIAL_TRAFFIC`, `EXPERIMENTAL_BETAS`, `1M_CONTEXT`, `ADAPTIVE_THINKING`, `THINKING`, `FAST_MODE`, `LEGACY_MODEL_REMAP`, `STRUCTURED_OUTPUTS`, `NONSTREAMING_FALLBACK`); no Codex, todo `CODEX_*`; no Antigravity, `HOME` e `USERPROFILE`. O perfil de conta e as `MESTRE_*` vêm do motor. O resto passa: a lista não tenta prever as variáveis de rede, idioma ou modelo que uma base usa.
 - Apagar base usada por ficha, ou ficha usada por personagem vivo, é recusado com a lista de quem usa. Missões e grimórios que citam uma ficha apagada falham ao rodar/restaurar, dizendo qual ficha falta.
 - Base sem nenhuma plataforma, ou `cwd` de agente fora de `{mesa}` (exceto a base `operador`): recusada ao salvar.

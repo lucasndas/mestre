@@ -13,7 +13,7 @@ Ao criar um personagem (na máquina escolhida, dentro do worktree da mesa; o Gr�
 1. `.mestre/agents/<id>/MESTRE.md`: a camada do Mestre (abaixo).
 2. As skills do nível dele e as extras da classe ou da ficha (lista em [skills-geradas](../cli/skills-geradas.md)), entregues só a ele ([skills por personagem](#skills-por-personagem)).
 3. Fiação por provedor: no Claude Code, `.mestre/agents/<id>/.claude/skills/` (as skills por personagem) e `.mestre/agents/<id>/claude-settings.json` (reforço nativo das permissões, [permissoes](../classes/permissoes.md)); no Antigravity, `.agents/agents/mestre-<id>.md`.
-4. `.mestre/agents/<id>/gitconfig`, com a identidade de autor do personagem ([identidades-e-apps](../github/identidades-e-apps.md)) e `safe.directory` para o clone principal e os worktrees dele, para o git aceitar pastas de outro dono ([Windows](../arquitetura/windows.md#verificar-na-implementação)).
+4. `.mestre/agents/<id>/gitconfig`, com a identidade de autor do personagem ([identidades-e-apps](../github/identidades-e-apps.md)) o `.gitconfig` global da conta dos agentes, quando há um (por `include`), e `safe.directory` para o clone principal e os worktrees dele, para o git aceitar pastas de outro dono ([Windows](../arquitetura/windows.md#verificar-na-implementação)).
 5. As variáveis de ambiente e o comando de início, a partir da base e da ficha ([bases-e-fichas](../orquestracao/bases-e-fichas.md)).
 
 Os arquivos compartilhados do worktree (a skill de comunicação, hooks e confiança) já existem: [mesa](mesa.md). As [skills de apoio](../classes/skills-de-apoio.md) ligadas (desde o M8) o motor materializa em `.agents/skills/` antes de iniciar o personagem. Tudo em `.mestre/agents/` e `.agents/agents/mestre-*` fica fora do git.
