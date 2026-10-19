@@ -38,6 +38,23 @@ type Inbound struct {
 	HasReplyWorkspace bool
 }
 
+// Stranger is an update of someone who is not a user, as the Owner reads it in
+// the alert (docs/telegram/seguranca-do-canal.md#filtro-de-entrada): the
+// numeric id, the name and the @user the Telegram gave, and the start of the text.
+type Stranger struct {
+	ID             int64
+	Name, Username string
+	Text           string
+	Kind           Kind
+}
+
+// Strangers is told of every message of a stranger; it groups the alerts (an
+// alert per id per hour, with the count). Without it, Options.Alerts is told
+// only the id.
+type Strangers interface {
+	Stranger(ctx context.Context, s Stranger)
+}
+
 // Router takes the text of the users to the inbox of the Grão-Mestre.
 type Router interface {
 	Deliver(ctx context.Context, in Inbound) error
@@ -89,6 +106,8 @@ type Options struct {
 	Gate   Gate
 	Alerts users.Alerts
 	Router Router
+	// Strangers, when set, takes the messages of who is not a user.
+	Strangers Strangers
 
 	Commands []Command
 	Actions  map[string]Action
@@ -465,6 +484,13 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 func (b *Bot) stranger(ctx context.Context, m *Message) {
 	text := strings.TrimSpace(m.Text)
 	if !users.LooksLikeCode(text) {
+		if b.o.Strangers != nil {
+			if text == "" {
+				text = strings.TrimSpace(m.Caption)
+			}
+			b.o.Strangers.Stranger(ctx, Stranger{ID: m.From.ID, Name: strings.TrimSpace(m.From.FirstName), Username: m.From.Username, Text: text, Kind: m.Kind()})
+			return
+		}
 		if b.o.Alerts != nil {
 			b.o.Alerts.Unauthorized(ctx, m.From.ID, "remetente desconhecido")
 		}
