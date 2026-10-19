@@ -12,10 +12,8 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 
 - Só o **Dono** cadastra usuários, no painel ([administração](../painel/administracao.md)).
 - Campos de cada usuário:
-  - nome;
+  - nome, nível e workspaces em que pode atuar;
   - ID numérico do Telegram (opcional no cadastro; preenchido no pareamento);
-  - nível;
-  - workspaces em que pode atuar;
   - login do GitHub (`github_login`, opcional): como o review dele feito direto no GitHub é reconhecido, sem precisar da credencial ([aprovação no GitHub](../github/aprovacao-no-github.md#review-feito-direto-no-github));
   - credencial pessoal do GitHub (opcional, para as aprovações dele; o login que ela confere é o `github_login`).
 - Os usuários do painel e do Telegram são os mesmos. O primeiro Dono nasce no assistente de primeiro acesso ([login](../painel/login.md)).
@@ -36,7 +34,8 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Criar regra permanente (decreto) | sim | sim | não | não |
 | Revogar decretos | qualquer um | de Administrador e de Aprovador | só as próprias exceções ainda não usadas | não |
 | `/pausar` e `/retomar` (também retomar um personagem pausado pelo disjuntor da [cadeia](../orquestracao/cadeia-de-aprovacao.md#salvaguardas)) | sim | sim | não | não |
-| Revogar [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) e subdelegações | sim | sim | não | não |
+| Botões **Pausar mesa** e **Pausar autonomia** (só restringem, sem PIN) e retomar a pausa de autonomia feita por uma pessoa ([supervisão](../orquestracao/supervisao-da-cadeia.md)) | sim | sim | sim | não |
+| Revogar [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) e subdelegações, inclusive pelo botão **Foi um erro** do resumo ([resumo](../aprovacoes/resumo-e-sugestoes.md)) | sim | sim | não | não |
 | `/travar` ([segurança do canal](seguranca-do-canal.md)) | sim | sim | não | não |
 | `/destravar` (com PIN) | sim | não | não | não |
 | Encerrar uma sessão do Operador do PC: `/operador encerrar` e botão **Encerrar agora** ([Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc)) | sim | sim | não | não |
@@ -45,7 +44,8 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Alterar a configuração de um workspace pelo painel (fichas do Grão-Mestre e dos Mestres de mesa, instruções extras, limites, retenção, fuso), menos o que outra linha reserva | sim | sim | não | não |
 | Aprovar classe do workspace ([classes](../classes/classes.md)) | sim | sim | não | não |
 | Ampliar o teto ou passar do teto de custo ([teto](../classes/teto-do-workspace.md)) | sim | sim | não | não |
-| Aprovar ações de cura que pedem pessoa e correções de rede, firewall ou serviços do checklist | sim | sim | não | não |
+| Aprovar ações de cura que pedem pessoa e correções de rede, firewall ou serviços do checklist (desde o M7) | sim | sim | não | não |
+| Ativar classes e receitas sugeridas, rodar **Testar** numa classe, acrescentar ao catálogo MCP, recuperar a Cidadela e pedir diagnóstico pela [página reserva](../autocura/pagina-reserva.md), ver a Auditoria no painel | sim | sim | não | não |
 | Ativar ou desativar a transcrição numa máquina ([Whisper](../plataforma/instalacao-e-atualizacao.md#whisper)) | sim | sim | não | não |
 | Cadastrar, editar, suspender e remover usuários; gerar código de pareamento | sim | não | não | não |
 | Aceitar máquinas na Guilda, remover e excluir máquinas, mudar a prioridade, aprovar a promoção a Cidadela e passar a Cidadela a outra máquina ([Guilda](../guilda/guilda.md), [Cidadela e Torres](../guilda/cidadela-e-torres.md)) | sim | não | não | não |
@@ -54,6 +54,8 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 | Configurar perfis de conta: login e, no Codex, confiança dos hooks ([perfis de conta](../orquestracao/bases-e-fichas.md#perfis-de-conta)) | sim | não | não | não |
 | Aprovar a ativação do Operador do PC (`ativacao_operador`), ligar `operator` no teto, delegar essa aprovação ao Grão-Mestre e ver as capturas de tela das sessões ([política](../aprovacoes/politica.md#tipos-de-ação)) | sim | não | não | não |
 | Delegar ao Grão-Mestre a decisão de um tipo `alto` e revogar de uma vez todas as delegações e regras temporárias (`/revogar_tudo`) ([delegação](../aprovacoes/delegacao.md)) | sim | não | não | não |
+| Fuso da Guilda, limite diário total de uso e zerar o registro de termos (`glossary_seen`) de um usuário | sim | não | não | não |
+| Conectar o próprio GitHub (credencial pessoal, [aprovação no GitHub](../github/aprovacao-no-github.md)) | sim | sim | sim | não |
 | Transferir o posto de Dono | sim | não | não | não |
 
 - **Observador:** se escrever texto livre, a mensagem não vai ao Grão-Mestre. O bot responde, uma vez por dia no máximo, com os comandos que ele pode usar.
@@ -74,10 +76,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
    - se o cadastro já tem ID do Telegram, o `from.id` é esse ID;
    - o ID não pertence a outro usuário.
 5. Se tudo confere, o motor grava o `from.id`, marca o código como usado e responde com nível, workspaces e uma frase de boas-vindas. O Dono recebe um aviso.
-- **Tentativas erradas:**
-  - O bot responde "código inválido ou expirado" só a mensagens com formato de pareamento.
-  - O limite é de 5 tentativas por ID do Telegram por hora. Depois disso, o bot fica em silêncio.
-  - Cada falha conta como tentativa não autorizada ([segurança do canal](seguranca-do-canal.md)).
+- **Tentativas erradas:** o bot responde "código inválido ou expirado" só a mensagens com formato de pareamento; o limite é 5 por ID do Telegram por hora, e depois o bot fica em silêncio. Cada falha conta como tentativa não autorizada ([segurança do canal](seguranca-do-canal.md)).
 - **Trocar o ID:** para trocar o Telegram de alguém, o Dono limpa o ID no cadastro e gera um código novo.
 - O passo a passo para quem usa está em [parear Telegram](../operacao/parear-telegram.md).
 
@@ -90,7 +89,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
   - gerenciar usuários: cadastrar, editar nível, suspender, remover, gerar códigos, transferir o posto de Dono;
   - cofre ([cofre](../plataforma/cofre.md));
   - `/destravar` ([segurança do canal](seguranca-do-canal.md));
-  - aprovar script de cura ou volta de versão com restauração do banco ([diagnóstico com IA](../autocura/diagnostico-com-ia.md));
+  - aprovar script de cura ou volta de versão com restauração do banco ([diagnóstico com IA](../autocura/diagnostico-com-ia.md), desde o M7);
   - aceitar, remover e excluir máquinas da Guilda, aprovar a promoção a Cidadela e passar a Cidadela a outra máquina ([Guilda](../guilda/guilda.md));
   - tipos de aprovação marcados com PIN na [política](../aprovacoes/politica.md).
 - **Troca e reset:** trocar o PIN pede o PIN atual. O Dono pode resetar o PIN de outro usuário, que define um novo no próximo login.
@@ -119,9 +118,7 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 1. No painel, o Dono escolhe um usuário ativo que já tenha PIN e confirma com o próprio PIN.
 2. O escolhido recebe o pedido no painel e no Telegram e aceita com o PIN dele, em até 24 horas (padrão).
 3. A troca é atômica: o novo Dono assume e o antigo vira Administrador de todos os workspaces. O novo Dono pode ajustar isso depois.
-- Nunca existem zero ou dois Donos.
-- O Dono pode cancelar o pedido antes do aceite.
-- Tudo fica na auditoria, e os dois recebem aviso.
+- Nunca existem zero ou dois Donos. O Dono pode cancelar o pedido antes do aceite. Tudo fica na auditoria, e os dois recebem aviso.
 
 ## Regras e erros
 
@@ -140,6 +137,8 @@ Definir quem pode falar com o Mestre e o que cada pessoa pode fazer. Este docume
 - **CA-USR-06** · *rápida* — **Dado** um pedido de PIN no Telegram, **quando** o usuário responde, **então** a mensagem é apagada, não entra na caixa de entrada e não aparece em log.
 - **CA-USR-07** · *rápida* — **Dado** 5 PINs errados em 15 minutos, **quando** chega o sexto, **então** ele é recusado sem verificação e o Dono recebe alerta.
 - **CA-USR-08** · *completa* — **Dado** o Dono e um Administrador com PIN, **quando** os dois confirmam a transferência, **então** os níveis trocam numa única transação e em nenhum momento há zero ou dois Donos.
+- **CA-USR-09** · *rápida* — **Dado** o mesmo ID do Telegram tentando 6 códigos errados em 1 h (relógio falso), **quando** chega o sexto, **então** o bot não responde e cada falha foi registrada como tentativa não autorizada; **dado** o código do usuário A enviado por um `from.id` já cadastrado em B, **então** o pareamento é recusado e o código não é consumido.
+- **CA-USR-10** · *rápida* — **Dado** um Aprovador, **quando** toca **Pausar mesa**, **então** a mesa pausa; **quando** retoma a pausa de autonomia feita por uma pessoa, **então** o motor aceita; **quando** tenta `/pausar` ou **Foi um erro**, **então** o motor recusa e diz que o nível exigido é Administrador; **dado** um Observador, **então** nenhum dos três vale.
 
 ## Depende de
 

@@ -1,6 +1,6 @@
 # Decretos
 
-> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Motor · **Atualizado:** 2026-10-14
+> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 | Tipo | Vale para | Exemplo | Quem cria ([níveis](usuarios-e-niveis.md)) |
 |---|---|---|---|
 | **Exceção pontual** | uma ação exata, uma única vez | "aprovo o merge do PR #42" | Aprovador ou acima |
-| **Regra permanente** | daqui pra frente, até ser revogada ou expirar | "o Dev pode fazer push na develop" | Administrador ou acima |
+| **Regra permanente** | daqui pra frente, até ser revogada ou expirar | "o Dev pode enviar a branch da mesa" | Administrador ou acima |
 
 - **Respostas viram decretos:** "Aprovar agora" a um pedido de aprovação cria uma exceção pontual; "por um tempo", "o padrão", "sempre para a classe" e "negar sempre", dadas por uma pessoa, criam uma regra (com validade, ou permanente), com as regras de nível e PIN desta página ([respostas](../orquestracao/cadeia-de-aprovacao.md#respostas)). O fluxo do pedido está em [fluxo de aprovação](../aprovacoes/fluxo.md).
 - **Não são decretos:** as [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md), que agentes da cadeia criam, e as subdelegações do Grão-Mestre ([delegação](../aprovacoes/delegacao.md#subdelegação)); ficam abaixo de todo decreto de pessoa.
@@ -28,7 +28,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 1. O usuário dá a ordem em linguagem natural (texto, áudio ou painel).
 2. O Grão-Mestre interpreta e envia ao motor uma **proposta estruturada** com `mestre decree propose`: tipo, efeito (`--effect`), alvo (`--target`), escopo (`--scope`), validade (`--until`) e o texto original da mensagem (`--text`). A sintaxe está em [CLI do Grão-Mestre](../cli/grao-mestre.md).
-3. O motor confere o nível do autor e mostra o que vai valer, com os botões **Confirmar** e **Cancelar**. Exemplo: "Entendi: permitir push na develop para a classe Dev, permanente. Confirma?".
+3. O motor confere o nível do autor e mostra o que vai valer, com os botões **Confirmar** e **Cancelar**. Exemplo: "Entendi: permitir o envio da branch da mesa para a classe Dev, permanente. Confirma?".
    - Mensagens ambíguas: o Grão-Mestre pergunta antes de propor.
    - Ordens vindas de **áudio** sempre passam por essa confirmação, com o texto transcrito à vista ([transcrição](anexos-e-transcricao.md)). O mesmo vale para aprovações dadas por áudio.
 4. Se for preciso, o motor pede a **confirmação reforçada** (abaixo).
@@ -40,7 +40,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 ### Confirmação reforçada com PIN
 
 - O motor pede o PIN do autor ([PIN](usuarios-e-niveis.md#pin-pessoal)) quando o efeito líquido **afrouxa a segurança**:
-  - todo decreto permanente;
+  - todo decreto permanente que libera (o que só nega, como "Negar sempre", não pede PIN: só restringe);
   - liberar push ou merge em branch protegida;
   - liberar comandos destrutivos ou proibidos pela classe;
   - ampliar o teto;
@@ -66,7 +66,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 ### Validade (regra permanente)
 
-- A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no fuso do workspace ([fuso da Guilda](../painel/administracao.md#fuso-da-guilda), se o workspace não tem um próprio); "por 3 dias" vira 72 horas.
+- A validade é opcional. Exemplos: "esta semana" vira o fim do domingo, no [fuso da Guilda](../painel/administracao.md#fuso-da-guilda); "por 3 dias" vira 72 horas.
 - O Grão-Mestre converte a validade em data e hora absolutas, e elas aparecem na confirmação.
 - Ao vencer, o decreto passa a **expirado** sozinho. O motor avisa o autor.
 
@@ -108,13 +108,13 @@ Cada decreto fica no banco da Cidadela com:
 - estado e histórico de estados;
 - lista do que foi executado com base nele (ação, quando, por quem).
 
-`/decretos` lista os decretos ativos e suspensos dos workspaces do usuário, com número, autor, resumo e validade.
+`/decretos` lista os decretos ativos e suspensos dos workspaces do usuário, com número, autor, resumo e validade, e também as [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md) ativas (marcadas como tal), cada uma com o botão **Revogar** para Administrador ou acima ([níveis](usuarios-e-niveis.md#níveis-e-capacidades)).
 
 ## Regras e erros
 
 - Um decreto fora do nível do autor é recusado antes da confirmação, com o nível exigido.
 - Um decreto fora dos workspaces do autor é recusado.
-- Um decreto que libera algo numa [invariante arquitetural](../arquitetura/precedencia.md#invariantes-arquiteturais) (ex.: "o Dev pode fazer push na develop") é **cumprido pelo motor**, nunca entregando a capacidade ao agente: o `git push` continua negado ao Dev, e o envio da branch é feito pelo motor quando o Dev pede pela CLI. O que nem o motor pode fazer (contornar proteção do GitHub, entregar segredo do cofre a um agente) é recusado antes da confirmação, com a explicação.
+- Um decreto que libera algo numa [invariante arquitetural](../arquitetura/precedencia.md#invariantes-arquiteturais) (ex.: "o Dev pode enviar a branch da mesa") é **cumprido pelo motor**, nunca entregando a capacidade ao agente: o `git push` continua negado ao Dev, e o envio da branch é feito pelo motor quando o Dev roda `mestre pr open|update`. O que nem o motor pode fazer (contornar proteção do GitHub, entregar segredo do cofre a um agente) é recusado antes da confirmação, com a explicação.
 - Se a proposta do Grão-Mestre não bate com a confirmação do usuário, nada é gravado.
 
 ## Critérios de aceite
@@ -128,7 +128,8 @@ Cada decreto fica no banco da Cidadela com:
 - **CA-DEC-07** · *rápida* — **Dado** uma ordem vinda de áudio, **quando** o Grão-Mestre propõe o decreto, **então** a confirmação mostra o texto transcrito e nada vale sem o clique do autor.
 - **CA-DEC-10** · *rápida* — **Dado** um decreto do Dono `delegation` para `ativacao_operador` com escopo `classe:operador`, validade de 3 dias e duração até 30 min, **quando** o Grão-Mestre aprova um pedido dessa classe de 20 min, **então** o motor aceita, registra no decreto e avisa o Dono com o botão **Encerrar agora**; **quando** o pedido é de 45 min ou de outra classe, **então** recebe `human_required`; **dado** a mesma proposta de um Administrador ou com validade de 10 dias, **então** é recusada antes da confirmação.
 - **CA-DEC-08** · *pesada* — **Dado** o sistema instalado, **quando** o Dono cria pelo Telegram (dublê) um decreto permanente, vê o efeito num agente e o revoga, **então** o comportamento muda e volta, e o registro mostra os dois momentos (MVP-8).
-- **CA-DEC-09** · *rápida* — **Dado** o decreto "o Dev pode fazer push na develop" ativo, **quando** o Dev tenta `git push`, **então** o `mestre hook` continua negando; **quando** o Dev pede o envio pela CLI, **então** o motor envia a branch para a develop com o App da classe e registra a execução no decreto; **dado** um decreto "pode ignorar a revisão obrigatória", **então** ele é recusado antes da confirmação com a explicação.
+- **CA-DEC-09** · *rápida* — **Dado** o decreto "o Dev pode enviar a branch da mesa" ativo, **quando** o Dev tenta `git push`, **então** o `mestre hook` continua negando; **quando** o Dev roda `mestre pr update`, **então** o motor envia a branch da mesa com o App da classe e registra a execução no decreto; **dado** um decreto "pode ignorar a revisão obrigatória", **então** ele é recusado antes da confirmação com a explicação.
+- **CA-DEC-11** · *rápida* — **Dado** um Administrador que responde "Negar sempre" a um pedido, **quando** confirma, **então** nasce o decreto permanente que nega sem pedir PIN; **dado** que ele propõe um decreto permanente que libera, **então** o PIN é pedido; **dado** a regra temporária de mesa ativa, **quando** `/decretos` roda, **então** ela aparece marcada com **Revogar**, e o toque de um Aprovador é recusado.
 
 ## Depende de
 

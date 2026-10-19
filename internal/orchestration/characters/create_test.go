@@ -11,6 +11,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/connections"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 )
@@ -455,5 +456,99 @@ func TestTableFilesNeedsTheSessionZeroOfTheTable(t *testing.T) {
 	}
 	if err := files.CheckStart(ctx, "w", "t", "/d", providers.ClaudeCode); err == nil {
 		t.Error("a request without a worktree passed")
+	}
+}
+
+// CA-PERS-02, the success of a direct recruit: when the vacancy opens the
+// character is made and who asked is told (the answer of the command was
+// "pending"); the same for a pending --replace.
+func TestARecruitThatWaitedForAVacancyTellsWhoAskedWhenItIsMade(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{limits: characters.Limits{PerTable: 2}})
+	tm := r.makeTM("3-login")
+	a := r.make("Dev Claude", "Dev A", "3-login")
+	b := r.make("Dev Claude", "Dev B", "3-login")
+	r.ready(a)
+	r.ready(b)
+	resp := r.svc.Handlers()["recruit"].Handle(r.ctx, &localchan.Call{
+		Request: localchan.Request{Cmd: "recruit", Args: localchan.TextArgs("Direto"), Flags: map[string]any{"sheet": "Dev Claude"}},
+		Caller:  localchan.Caller{Identified: true, AgentID: tm.ID},
+	})
+	if resp.ExitCode() != localchan.ExitPending {
+		t.Fatalf("the recruit answered %+v, want pending", resp)
+	}
+	if len(r.notes.of(characters.NoticeCreated)) != 0 {
+		t.Fatal("told before the character existed")
+	}
+	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: a.ID, By: engine}); err != nil {
+		t.Fatal(err)
+	}
+	made, err := r.reg.ByName(r.ctx, workspace, "3-login", "Direto")
+	if err != nil {
+		t.Fatalf("the recruit was not made: %v", err)
+	}
+	ns := r.notes.of(characters.NoticeCreated)
+	if len(ns) != 1 || ns[0].Creator != byChar(tm) || ns[0].To.Kind != characters.ToCreator {
+		t.Fatalf("notices = %+v, want one to the table master", ns)
+	}
+	for _, want := range []string{"Direto", made.ID, made.Machine} {
+		if !strings.Contains(ns[0].Text, want) {
+			t.Errorf("the notice lacks %q: %s", want, ns[0].Text)
+		}
+	}
+	if w, _ := r.reg.ActiveSlotWaits(r.ctx); len(w) != 0 {
+		t.Errorf("%d waits still active", len(w))
+	}
+}
+
+func TestAReplaceWithoutACapableMachineLeavesTheOldOneAliveAndConnected(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{machines: []machineSpec{linux("linux"), windowsGPU("winpc")}, connect: true})
+	tm := r.makeTM("3-login")
+	old, err := r.create(characters.CreateRequest{Name: "Treino", Sheet: "GPU Claude", Table: "3-login", Creator: byChar(tm)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := old.Character
+	r.ready(c)
+	before, _ := r.conns.Store().Of(r.ctx, connections.Char(c.ID))
+	if len(before) == 0 {
+		t.Fatal("the old one has no connections to keep")
+	}
+	r.sheets.setOnline("winpc", false)
+	_, err = r.svc.Replace(r.ctx, characters.ReplaceRequest{Workspace: workspace, Table: "3-login", Name: "Treino", Sheet: "GPU Claude", By: byChar(tm)})
+	if !errors.Is(err, machinesheet.ErrNoMachine) {
+		t.Fatalf("Replace = %v, want no_capable_machine", err)
+	}
+	if st := r.state(c); !st.Alive() {
+		t.Fatalf("the old one is %s", st)
+	}
+	if p := r.mach["winpc"].host.proc(c.ID); p == nil || len(p.stopCalls()) != 0 {
+		t.Error("the old one was stopped")
+	}
+	if after, _ := r.conns.Store().Of(r.ctx, connections.Char(c.ID)); len(after) != len(before) {
+		t.Errorf("connections: before %v, after %v", before, after)
+	}
+}
+
+type classSet map[string]bool
+
+func (c classSet) Exists(_ context.Context, _, _, class string) (bool, error) { return c[class], nil }
+
+func TestAClassThatDoesNotExistFailsBeforeAnythingIsMade(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{classes: classSet{"Dev": true}})
+	_, err := r.create(characters.CreateRequest{Name: "X", Sheet: "Dev Claude", Class: "NaoExiste", Table: "3-login"})
+	if !errors.Is(err, characters.ErrBadSheet) || !strings.Contains(err.Error(), "NaoExiste") {
+		t.Fatalf("error = %v, want a bad class", err)
+	}
+	if resp := characters.Refusal(err); resp.ExitCode() != localchan.ExitNotFound {
+		t.Errorf("exit = %d, want not found", resp.ExitCode())
+	}
+	if cs, _ := r.reg.Alive(r.ctx); len(cs) != 0 {
+		t.Errorf("%d characters alive", len(cs))
+	}
+	if _, err := r.create(characters.CreateRequest{Name: "Y", Sheet: "Dev Claude", Class: "Dev", Table: "3-login"}); err != nil {
+		t.Errorf("an approved class: %v", err)
 	}
 }
