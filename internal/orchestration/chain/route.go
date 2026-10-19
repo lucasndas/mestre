@@ -304,4 +304,12 @@ func (s *Service) stillHere(ctx context.Context, r Request, st Settings) (bool, 
 	return false, nil
 }
 
-func joinWhy(why []string) string { return strings.Join(why, "; ") }
+// joinWhy is the reasons a request skipped the levels below, each in one line:
+// some name a domain or a part of the command the agent wrote.
+func joinWhy(why []string) string {
+	lines := make([]string, len(why))
+	for i, w := range why {
+		lines[i] = oneLine(w)
+	}
+	return strings.Join(lines, "; ")
+}

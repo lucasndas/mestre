@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -198,8 +197,9 @@ func (s *Service) Use(ctx context.Context, u classes.TableRuleUse) (bool, error)
 			return false, err
 		}
 	}
-	// A pattern never frees what the engine does not analyse, for any level.
-	if r.Action == nil && slices.Contains(u.Own.Groups, classes.GroupNone) {
+	// No rule frees what the engine does not analyse nor a command that chains
+	// others, the exact action as a pattern, for any level.
+	if classes.TableRuleBlocker(u.Action, u.Tool, u.Own) != "" {
 		return false, nil
 	}
 	// The author approves only what its own rules would not deny: checked on
