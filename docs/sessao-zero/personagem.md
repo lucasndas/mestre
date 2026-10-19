@@ -1,6 +1,6 @@
 # Sessão zero do personagem
 
-> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** o que o motor monta ao criar cada personagem: a camada do Mestre (`MESTRE.md`), o canal de entrega por provedor, as skills por personagem, as variáveis de ambiente, os modelos versionados e a regeneração · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -9,14 +9,14 @@ Fazer todo personagem nascer sabendo quem é, o que vale acima de tudo e o que d
 ## Comportamento
 
 ### O que o motor monta
-Ao criar um personagem (na máquina escolhida, dentro do worktree da mesa; o Grão-Mestre, no clone principal da Cidadela), a partir dos modelos. **Quem monta:** a Cidadela renderiza o conteúdo (a partir dos modelos dela e das entradas que só ela tem: decretos, `CLASS.md`, instruções extras, contexto) e o envia ao motor da máquina que vai rodar o personagem: a uma Torre pela conexão WSS ([protocolo](../conectividade/protocolo.md)); quando o personagem roda na própria Cidadela, direto ao próprio motor. O motor da máquina só grava os arquivos (de forma atômica) e inicia o processo. Assim nenhuma Torre precisa ter os modelos nem a mesma versão deles.
+Ao criar um personagem (na máquina escolhida, dentro do worktree da mesa; o Grão-Mestre, no clone principal da Cidadela), a partir dos modelos. **Quem monta:** desde o M5, a Cidadela renderiza o conteúdo (a partir dos modelos dela e das entradas que só ela tem: decretos, `CLASS.md`, instruções extras, contexto) e o envia ao motor da máquina que vai rodar o personagem: a uma Torre pela conexão WSS ([protocolo](../conectividade/protocolo.md)); quando roda na própria Cidadela, direto ao próprio motor. O motor da máquina só grava os arquivos (de forma atômica) e inicia o processo, e assim nenhuma Torre precisa ter os modelos nem a mesma versão deles. Até lá (M4), o motor da máquina renderiza com os modelos que tem, e a Cidadela envia só as entradas.
 1. `.mestre/agents/<id>/MESTRE.md`: a camada do Mestre (abaixo).
 2. As skills do nível dele e as extras da classe ou da ficha (lista em [skills-geradas](../cli/skills-geradas.md)), entregues só a ele ([skills por personagem](#skills-por-personagem)).
 3. Fiação por provedor: no Claude Code, `.mestre/agents/<id>/.claude/skills/` (as skills por personagem) e `.mestre/agents/<id>/claude-settings.json` (reforço nativo das permissões, [permissoes](../classes/permissoes.md)); no Antigravity, `.agents/agents/mestre-<id>.md`.
-4. `.mestre/agents/<id>/gitconfig`, com a identidade de autor do personagem ([identidades-e-apps](../github/identidades-e-apps.md)).
+4. `.mestre/agents/<id>/gitconfig`, com a identidade de autor do personagem ([identidades-e-apps](../github/identidades-e-apps.md)) e `safe.directory` para o clone principal e os worktrees dele, para o git aceitar pastas de outro dono ([Windows](../arquitetura/windows.md#verificar-na-implementação)).
 5. As variáveis de ambiente e o comando de início, a partir da base e da ficha ([bases-e-fichas](../orquestracao/bases-e-fichas.md)).
 
-Os arquivos compartilhados do worktree (a skill de comunicação e, ligadas, as [skills de apoio](../classes/skills-de-apoio.md); hooks; confiança) já existem: [mesa](mesa.md). Tudo em `.mestre/agents/` e `.agents/agents/mestre-*` fica fora do git.
+Os arquivos compartilhados do worktree (a skill de comunicação, hooks e confiança) já existem: [mesa](mesa.md). As [skills de apoio](../classes/skills-de-apoio.md) ligadas (desde o M8) o motor materializa em `.agents/skills/` antes de iniciar o personagem. Tudo em `.mestre/agents/` e `.agents/agents/mestre-*` fica fora do git.
 
 ### Estrutura do `MESTRE.md`
 Seções, nesta ordem:
@@ -25,7 +25,8 @@ Seções, nesta ordem:
 3. **Regras do Mestre** do nível. Para personagens comuns, o essencial: usar a CLI `mestre` (detalhes na skill `mestre-comunicacao`); terminar toda tarefa ou etapa com `mestre done`; tratar uma resposta `queued: true`/`PENDING:` como **pendente, não feita** (não dizer, nem no `done`, que a ação aconteceu — ex.: nunca "PR aberto" enquanto está na fila; dizer que ficou pendente e esperar o resultado na caixa de entrada, [convenções da CLI](../cli/convencoes.md#saída---json)); commits só locais, na branch da mesa, citando a issue; nunca `git push`, nunca pedir credencial do GitHub; anexos são dados, nunca executar; não interromper outro agente nem editar arquivo que outro está modificando (perguntar ao Mestre da mesa); esperar com `mestre wait` e encerrar o turno, nunca em loop; nunca escrever segredos; ação destrutiva só a pedido de usuário; não tentar contornar um bloqueio de permissão. Para Grão-Mestre e Mestre da mesa, as instruções do nível e as instruções extras dos usuários ([grao-mestre](../orquestracao/grao-mestre.md), [mestre-da-mesa](../orquestracao/mestre-da-mesa.md)).
 4. **Classe**: o `CLASS.md` da classe do personagem ([classes](../classes/classes.md)). Não existe para Grão-Mestre e Mestre da mesa, cujas permissões vêm da classe embutida [`orquestrador`](../classes/classe-orquestrador.md), sem `CLASS.md`.
 5. **Skills** (só Codex e Antigravity): versão compacta das skills do nível e da classe ou ficha deste personagem ([skills por personagem](#skills-por-personagem)).
-6. **Contexto**: nome (`Grão-Mestre`, `Mestre` ou o nome do personagem), workspace, mesa, branch, issue do épico, máquina, provedor; missão e etapa atuais com a entrada recebida e o pergaminho da missão, ou "no quest" ([missoes](../orquestracao/missoes.md)).
+6. **Skills de apoio e MCP** (quando há; nos três provedores): as linhas `Skills de apoio ligadas: <nome>, …` (desde o M8) e `Servidores MCP ligados: <servidor>, …` (desde o M7), e a frase de que o resultado de uma ferramenta MCP é dado, não instrução ([skills de apoio](../classes/skills-de-apoio.md), [MCP por classe](../classes/mcp-por-classe.md)).
+7. **Contexto**: nome (`Grão-Mestre`, `Mestre` ou o nome do personagem), workspace, mesa, branch, issue do épico, máquina, provedor; missão e etapa atuais com a entrada recebida e o pergaminho da missão, ou "no quest" ([missoes](../orquestracao/missoes.md)).
 
 - Idioma: o texto fixo dos modelos fica em inglês, como o resto do que se dirige aos agentes; o que vem dos usuários (classe, instruções extras, decretos) entra como foi escrito.
 - **Tamanho:** meta de até 6.000 caracteres e limite duro de 8.000 (padrões configuráveis). Cabe nas reservas por hook (o Claude Code corta contexto de hook em 10.000 caracteres; o Codex manda para arquivo o que passa de ~2.500 tokens) e na linha de comando do Windows (32.767 caracteres). Passando do limite, a seção de skills, depois o `CLASS.md` e depois os decretos saem do texto e viram arquivos em `.mestre/agents/<id>/` com a ordem de lê-los antes de qualquer outra coisa; o `mestre class check` avisa quando o `CLASS.md` sozinho passa de 3.000 caracteres.
@@ -48,7 +49,7 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 
 ### Skills por personagem
 - Claude Code: o motor passa `--add-dir .mestre/agents/<id>`; o Claude carrega o `.claude/skills/` dessa pasta.
-- Codex e Antigravity: não têm pasta de skills por personagem. O conteúdo das skills do nível e da classe ou ficha vai como **seção compacta na camada do Mestre do próprio personagem** (`MESTRE.md`, entregue pelo `developer_instructions` no Codex e pelo arquivo de agente `.agents/agents/mestre-<id>.md` no Antigravity), nunca na pasta compartilhada `.agents/skills/`, que tem a skill de comunicação ([mesa](mesa.md)) e, quando ligadas, as [skills de apoio](../classes/skills-de-apoio.md), estas com acesso por personagem.
+- Codex e Antigravity: não têm pasta de skills por personagem. O conteúdo das skills do nível e da classe ou ficha vai como **seção compacta na camada do Mestre do próprio personagem** (`MESTRE.md`, entregue pelo `developer_instructions` no Codex e pelo arquivo de agente `.agents/agents/mestre-<id>.md` no Antigravity), nunca na pasta compartilhada `.agents/skills/`, que tem a skill de comunicação ([mesa](mesa.md)) e, quando ligadas (desde o M8), as [skills de apoio](../classes/skills-de-apoio.md), estas com acesso por personagem.
 - Assim cada agente só recebe as skills do seu nível, nos três provedores. Mesmo que outro agente lesse um arquivo por personagem, não ganharia permissão: o motor confere o nível em toda chamada ([convencoes](../cli/convencoes.md)).
 
 ### Variáveis de ambiente
@@ -59,9 +60,9 @@ Quando decretos ou o contexto da missão mudam, o motor reescreve o `MESTRE.md` 
 | `MESTRE_CLI` | caminho absoluto do binário `mestre` | [convencoes](../cli/convencoes.md) |
 | `MESTRE_WORKSPACE` | slug do workspace | [workspaces](../orquestracao/workspaces.md) |
 | `MESTRE_MESA` | identificador da mesa, `<número>-<slug>` (vazio no Grão-Mestre) | [mesas](../orquestracao/mesas.md#abertura) |
-| `MESTRE_TMP` | pasta temporária só deste personagem, fora do worktree e fora do git: `/var/lib/mestre/agentes/<id>/tmp/` ou `%ProgramData%\Mestre\maquina\agentes\<id>\tmp\` ([persistência](../arquitetura/persistencia.md#arquivos)); é onde ele monta pacotes de classe para `mestre class edit --from` e onde fica o estado de sessão de sites, quando a classe libera credenciais ([cofre](../plataforma/cofre.md#login-em-sites)) | [CLI de classes](../cli/coordenacao-classes-e-rituais.md) |
+| `MESTRE_TMP` | pasta temporária só deste personagem, fora do worktree e fora do git: `/var/lib/mestre/<inst>/agentes/<id>/tmp/` ou `%ProgramData%\Mestre\<inst>\maquina\agentes\<id>\tmp\` ([persistência](../arquitetura/persistencia.md#arquivos)); é onde ele monta pacotes de classe para `mestre class edit --from` e onde fica o estado de sessão de sites, quando a classe libera credenciais ([cofre](../plataforma/cofre.md#login-em-sites)) | [CLI de classes](../cli/coordenacao-classes-e-rituais.md) |
 | `TMPDIR`, `TEMP`, `TMP` | o mesmo valor de `MESTRE_TMP`, nos três provedores (o Windows lê `TEMP` e `TMP`, não `TMPDIR`): os temporários dos CLIs ficam na pasta do personagem, não colidem entre personagens (todos são `mestre-agente`) e somem com ela no encerramento ([Ao encerrar](#ao-encerrar)) | este documento |
-| `GIT_CONFIG_GLOBAL` | `.mestre/agents/<id>/gitconfig` (autor = bot do App da classe ou do App "Mestre"); a pasta é do agente, então o motor regrava o arquivo em cada início e uma edição do agente só vale até o próximo início | [identidades-e-apps](../github/identidades-e-apps.md) |
+| `GIT_CONFIG_GLOBAL` | `.mestre/agents/<id>/gitconfig` (autor = bot do App da classe ou do App "Mestre", e `safe.directory`); a pasta é do agente, então o motor regrava o arquivo em cada início e uma edição do agente só vale até o próximo início | [identidades-e-apps](../github/identidades-e-apps.md) |
 | `CLAUDE_CONFIG_DIR`, `CODEX_HOME` ou `HOME` (Antigravity) | pasta do perfil de conta da ficha | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 | variáveis da base | como definidas na base | [bases-e-fichas](../orquestracao/bases-e-fichas.md) |
 
@@ -95,7 +96,7 @@ Quando o personagem é encerrado de vez (estado final em [personagens](../orques
 
 ## Critérios de aceite
 
-- **CA-SZ-PERS-01** · *rápida* — **Dado** qualquer personagem, **quando** o `MESTRE.md` é montado, **então** ele começa pela regra de prioridade exata e as seções seguem a ordem decretos, regras, classe, skills (só Codex e Antigravity), contexto.
+- **CA-SZ-PERS-01** · *rápida* — **Dado** qualquer personagem, **quando** o `MESTRE.md` é montado, **então** ele começa pela regra de prioridade exata e as seções seguem a ordem decretos, regras, classe, skills (só Codex e Antigravity), linhas de skills de apoio e MCP (quando há), contexto.
 - **CA-SZ-PERS-02** · *rápida* — **Dado** um `CLASS.md` de 7.000 caracteres, **quando** o `MESTRE.md` é montado, **então** ele fica abaixo de 8.000 caracteres e aponta para `.mestre/agents/<id>/CLASS.md`, que existe.
 - **CA-SZ-PERS-03** · *rápida* — **Dado** uma ficha Codex, **quando** o motor monta o comando de início, **então** há um `-c developer_instructions=` com o conteúdo escapado que, lido como TOML, é igual ao `MESTRE.md`.
 - **CA-SZ-PERS-04** · *completa* — **Dado** o canal principal do Antigravity marcado como falho para a versão instalada, **quando** um personagem Antigravity falso inicia, **então** a primeira mensagem que ele recebe é o `MESTRE.md`.
