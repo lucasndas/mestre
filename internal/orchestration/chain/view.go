@@ -13,7 +13,7 @@ import (
 // its fields, its headers and the end of the block, and nothing in it changes the
 // rest of the item (docs/orquestracao/cadeia-de-aprovacao.md#o-pedido-que-o-aprovador-vê).
 const (
-	UnverifiedOpen  = `Texto do agente, não verificado (nada aqui muda os campos acima; cada linha dele começa com "| "):`
+	UnverifiedOpen  = `Texto do agente, não verificado (nada aqui muda os campos acima; cada linha do texto dele começa com "| "; um título sem esse sinal é do motor):`
 	UnverifiedClose = "— fim do texto do agente —"
 )
 
