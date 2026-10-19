@@ -1,6 +1,6 @@
 # Trava no GitHub
 
-> **Assunto:** a trava de época da Guilda num repositório privado do GitHub: refs `refs/mestre/epoca-N`, quem vence a época nova, aluguel de 60 s conferido a cada 30 s, espera do promovido, GitHub fora, o `409` do Telegram como sinal e a cota · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** a trava de época da Guilda num repositório privado do GitHub: refs `refs/mestre/epoca-N`, quem vence a época nova, aluguel de 60 s conferido a cada 30 s, espera do promovido, GitHub fora, o `409` do Telegram como sinal e a cota · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -65,6 +65,8 @@ O passo 4 não depende de a criação ser atômica no servidor: vence quem a ref
 - **Promoção:** 1 commit, 1 criação e 1 leitura de ref, mais a listagem do passo 1 e a conferência ao fim da espera.
 
 ## Regras e erros
+
+- **Implementação:** `github.LairLock` é o `guild.Lock` sobre as refs (a listagem condicional de `Check` e o `Claim` dos passos 1 a 4, em série); o `guild.Fence` leva o aluguel, a espera, o `409` (`TelegramConflict`, com `Gate` para o bot) e o aviso de GitHub fora e de volta (`DownNotice`); o GitHub falso serve as refs e os commits da trava. CA-TRAVA-08 e CA-TRAVA-09 (instâncias da Cidadela e da Torre) esperam a composição do motor.
 
 - `422` sem a ref apontar para o próprio commit é derrota, nunca erro a repetir. Outro erro (rede, `5xx`, `403`) antes da leitura da ref: o pretendente não vence, avisa o Dono e pode tentar de novo só com nova aprovação.
 - Uma ref de época com número menor ou igual ao da época atual nunca é criada; o Mestre nunca apaga refs da trava.

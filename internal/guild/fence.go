@@ -69,6 +69,9 @@ const (
 	// FenceNoLock: the Guild has no lock (no GitHub): the Telegram goes
 	// without it, and there is no GitHub and no promotion.
 	FenceNoLock FenceState = "no-lock"
+	// FenceTelegramStopped is only the reason a Telegram call is refused: the 409
+	// came with the lease gone (the state of the fence itself does not change).
+	FenceTelegramStopped FenceState = "telegram-stopped"
 	// FenceDemoted: a higher epoch was seen. Nothing goes out again; the
 	// engine becomes a Tower.
 	FenceDemoted FenceState = "demoted"
@@ -111,7 +114,14 @@ type FenceConfig struct {
 	// OnDiscard receives the names of the queued actions dropped at the
 	// demotion, for the audit.
 	OnDiscard func(names []string)
-	Logger    *slog.Logger
+	// OnTelegram is told when the Telegram stops for the 409 with the lease gone,
+	// and when it may read again ("Telegram parado: outro leitor no bot e GitHub fora").
+	OnTelegram func(stopped bool)
+	// OnConflictOwn is told when the check that a 409 asked for shows this
+	// Citadel's own epoch: it goes on reading, and the alert of "outro leitor no
+	// bot" is recorded there.
+	OnConflictOwn func()
+	Logger        *slog.Logger
 }
 
 type held struct {
@@ -134,6 +144,16 @@ type Fence struct {
 	state  FenceState
 	sent   clock.Stamp // the last check that confirmed the epoch was sent then
 	leased bool
+	// tgStopped: the Telegram stopped for a 409 with the lease gone, until a
+	// check confirms the epoch or shows a higher one.
+	tgStopped bool
+	conflict  bool // a 409 asked for a check that starts after it
+	cseq      int  // counts the 409s: a check counts for the last one only if it started after it
+	// cb serializes the callbacks, each delivered with what holds when its turn
+	// comes, so a stale one is dropped (the panel never keeps 'Telegram parado'
+	// after a confirmation, nor 'confirmed' after a demotion).
+	cb     sync.Mutex
+	tgTold bool
 	queue  []held
 	err    error // the last failure of a check
 }
@@ -222,6 +242,9 @@ func (f *Fence) allowLocked(kind External) error {
 	if !acting(f.state) {
 		return &FencedError{State: f.state, Kind: kind}
 	}
+	if kind == ExternalTelegram && f.tgStopped {
+		return &FencedError{State: FenceTelegramStopped, Kind: kind}
+	}
 	if kind == ExternalGitHub && !f.leaseValidLocked() {
 		st := f.state
 		if st == FenceConfirmed {
@@ -301,6 +324,62 @@ func (f *Fence) CheckNow() {
 	}
 }
 
+// TelegramConflict is told of a 409 of the getUpdates (docs/guilda/trava-no-github.md#o-409-do-telegram):
+// with the lease valid it only asks for a check now; with the lease gone the
+// Telegram stops, reading and sending, until a check confirms the epoch (it
+// reads again) or shows a higher one (the Citadel steps down).
+func (f *Fence) TelegramConflict() {
+	f.mu.Lock()
+	if !acting(f.state) || f.state == FenceNoLock {
+		f.mu.Unlock()
+		return // suspended, waiting or out already, or no lock: the Gate holds, or there is nothing to check
+	}
+	valid := f.leaseValidLocked()
+	f.conflict = true
+	f.cseq++
+	if !valid {
+		f.tgStopped = true
+	}
+	f.mu.Unlock()
+	f.telegramTold()
+	f.CheckNow()
+}
+
+// telegramTold delivers OnTelegram with the current state, once per change.
+func (f *Fence) telegramTold() {
+	if f.cfg.OnTelegram == nil {
+		return
+	}
+	f.cb.Lock()
+	defer f.cb.Unlock()
+	f.mu.Lock()
+	now := f.tgStopped
+	f.mu.Unlock()
+	if now != f.tgTold {
+		f.tgTold = now
+		f.cfg.OnTelegram(now)
+	}
+}
+
+// TelegramStopped says the Telegram is stopped by a 409 with the lease gone.
+func (f *Fence) TelegramStopped() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.tgStopped
+}
+
+// Gate is what the bot asks before each call to the Telegram.
+type Gate struct {
+	f    *Fence
+	kind External
+}
+
+// Gate gives the gate of a kind of external action.
+func (f *Fence) Gate(kind External) Gate { return Gate{f, kind} }
+
+// Allowed says whether a call of that kind may go now.
+func (g Gate) Allowed(context.Context) bool { return g.f.Allow(g.kind) == nil }
+
 // Run checks the lock: after the wait of a promoted machine, at once, and
 // then every Interval, until ctx ends or a higher epoch is seen. The queued
 // actions go out on a flusher of their own, so a slow action never holds a
@@ -361,6 +440,9 @@ func WaitLeft(clk clock.Clock, claimed time.Time, wait time.Duration) time.Durat
 // (demoted).
 func (f *Fence) check(ctx context.Context) bool {
 	sent := clock.StampOf(f.cfg.Clock)
+	f.mu.Lock()
+	startSeq := f.cseq
+	f.mu.Unlock()
 	n, err := f.cfg.Lock.Check(ctx)
 	if ctx.Err() != nil {
 		return false
@@ -381,9 +463,12 @@ func (f *Fence) check(ctx context.Context) bool {
 		return true
 	}
 	before := f.state
+	resumed := false
 	if err == nil && n == epoch {
 		f.sent, f.leased, f.err = sent, true, nil
 		f.state = FenceConfirmed
+		resumed = f.tgStopped
+		f.tgStopped = false
 	} else {
 		if err == nil {
 			err = fmt.Errorf("guild: the lock shows epoch %d, not %d", n, epoch)
@@ -401,6 +486,18 @@ func (f *Fence) check(ctx context.Context) bool {
 	f.mu.Unlock()
 	if after != before {
 		f.changed(after)
+	}
+	if resumed {
+		f.telegramTold()
+	}
+	f.mu.Lock()
+	own := f.conflict && startSeq == f.cseq && err == nil && n == epoch
+	if startSeq == f.cseq && err == nil {
+		f.conflict = false // answered by a check that began after the last 409
+	}
+	f.mu.Unlock()
+	if own && f.cfg.OnConflictOwn != nil {
+		f.cfg.OnConflictOwn()
 	}
 	f.wakeFlusher()
 	return false
@@ -460,7 +557,13 @@ func (f *Fence) flushNow(ctx context.Context) {
 }
 
 func (f *Fence) changed(s FenceState) {
-	if f.cfg.OnChange != nil {
-		f.cfg.OnChange(s)
+	if f.cfg.OnChange == nil {
+		return
 	}
+	f.cb.Lock()
+	defer f.cb.Unlock()
+	if s != FenceDemoted && f.State() == FenceDemoted {
+		return // a demotion came first: nothing says 'confirmed' after it
+	}
+	f.cfg.OnChange(s)
 }
