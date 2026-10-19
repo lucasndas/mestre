@@ -13,6 +13,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -511,5 +512,97 @@ func TestAMachineThatLeftCanEnterAgainButAMemberCannotJoinTwice(t *testing.T) {
 	}
 	if got := r.count("machines"); got != 3 {
 		t.Errorf("%d machines; the history of the old one stays", got)
+	}
+}
+
+// CA-GUILDA-15
+// Leaving takes the private key of the engine with it, the one waiting for a
+// renewal included, whether the Citadel removed the machine or `mestre
+// uninstall` asked; a failed wipe keeps the keys, with the identity (CA-GUILDA-15).
+func TestLeavingErasesTheEngineKeyAndTheOneWaitingForARenewal(t *testing.T) {
+	t.Parallel()
+	for _, how := range []string{"removed", "uninstall"} {
+		t.Run(how, func(t *testing.T) {
+			t.Parallel()
+			r := newRig(t, clock.NewFake(day0))
+			n := r.newNode("tower-" + how)
+			pending := &memKeys{}
+			n.member.UsePendingKey(pending)
+			r.enroll(n)
+			if err := pending.Save(t.Context(), []byte("a key waiting for its certificate")); err != nil {
+				t.Fatal(err)
+			}
+			if !n.keys.has() {
+				t.Fatal("the machine has no engine key after the entry")
+			}
+			if err := n.member.Leave(t.Context(), &wiper{err: errors.New("disk busy")}, how); err == nil {
+				t.Fatal("a failed wipe was reported as done")
+			}
+			if !n.keys.has() || !pending.has() {
+				t.Error("a failed wipe erased the keys: the machine would keep its identity without them")
+			}
+			if err := n.member.Leave(t.Context(), &wiper{}, how); err != nil {
+				t.Fatal(err)
+			}
+			if n.keys.has() {
+				t.Error("the engine key is still there")
+			}
+			if pending.has() {
+				t.Error("the key waiting for a renewal is still there")
+			}
+		})
+	}
+}
+
+// CA-GUILDA-16
+// Leaving empties what the machine database held of the Guild (the outbox for
+// the old Citadel above all: a new Citadel must not receive it) and keeps the
+// account profiles and the worktrees, whose folders stay on disk
+// (CA-GUILDA-16).
+func TestLeavingEmptiesWhatTheMachineDatabaseHeldOfTheGuildAndKeepsTheLocalProfiles(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, clock.NewFake(day0))
+	n := r.newNode("tower-leaves")
+	r.enroll(n)
+	ctx := t.Context()
+	exec := func(q string) {
+		t.Helper()
+		if _, err := n.mach.Writer().ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO outbox (peer, id, type, body, created_at) VALUES ('citadel', 'm1', 'guild.discarded', x'7b7d', 1)`)
+	exec(`INSERT INTO processed_commands (sender, id, type, processed_at) VALUES ('citadel', 'c1', 'x', 1)`)
+	exec(`INSERT INTO known_addresses (addr, source, added_at) VALUES ('10.0.0.1:7000', 'mdns', 1)`)
+	exec(`INSERT INTO account_profiles (name, provider, dir, is_default, setup_step, setup_detail, created_at) VALUES ('p', 'claude', '/contas/p', 1, 'done', '', 1)`)
+	count := func(table string) int {
+		t.Helper()
+		var c int
+		if err := n.mach.Reader().QueryRowContext(ctx, `SELECT count(*) FROM `+table).Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	for _, tb := range []string{"outbox", "processed_commands", "known_addresses"} {
+		if count(tb) != 1 {
+			t.Fatalf("%s: setup", tb)
+		}
+	}
+	if err := n.member.Leave(ctx, &wiper{err: errors.New("disk busy")}, "removed"); err == nil {
+		t.Fatal("a failed wipe was reported as done")
+	}
+	if count("outbox") != 1 {
+		t.Error("a failed wipe emptied the outbox")
+	}
+	if err := n.member.Leave(ctx, &wiper{}, "removed"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tb := range machine.GuildBound {
+		if c := count(tb); c != 0 {
+			t.Errorf("%s still has %d rows", tb, c)
+		}
+	}
+	if count("account_profiles") != 1 {
+		t.Error("the account profile was erased: its login stays in contas/")
 	}
 }
