@@ -112,6 +112,7 @@ func (s *Service) Ask(ctx context.Context, r AskRequest) (AskOutcome, error) {
 			defer func() {
 				s.mu.Lock()
 				delete(s.progress, a.ID)
+				delete(s.reached, a.ID)
 				s.mu.Unlock()
 			}()
 		}
@@ -285,10 +286,14 @@ func (s *Service) TurnEnded(ctx context.Context, c characters.Character, lastMes
 // AskProgress implements inbox.AskProgress: the call of the CLI that waits for
 // the ask, if there is one, hears how far the item of the ask went.
 func (s *Service) AskProgress(_ context.Context, ask, status string) {
+	rank := map[string]int{"queued": 1, "delivered": 2, "answering": 3}[status]
 	s.mu.Lock()
 	f := s.progress[ask]
-	s.mu.Unlock()
-	if f != nil {
-		f(status)
+	if f == nil || rank <= s.reached[ask] { // a status never goes back: a fast turn can confirm before the delivery returns
+		s.mu.Unlock()
+		return
 	}
+	s.reached[ask] = rank
+	s.mu.Unlock()
+	f(status)
 }

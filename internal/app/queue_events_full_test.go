@@ -51,7 +51,7 @@ func TestTheEventsOfATowerWaitForTheCitadelAndAreAppliedOnce(t *testing.T) {
 	r.waitFor("the event to arrive", func() bool { mu.Lock(); defer mu.Unlock(); return len(got) == 1 })
 
 	// the same message sent again, as the queue is after a reconnection
-	payload, err := agentEventPayload(providers.Event{AgentID: "dev-2", Event: providers.EventTurnEnd}, hook.Answer{})
+	payload, err := agentEventPayload(providers.Event{AgentID: "dev-2", Event: providers.EventTurnEnd}, hook.Answer{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -114,6 +114,7 @@ type Service struct {
 	blockers map[string]chan askResult
 	// progress are the listeners of the partial responses of the asks that block.
 	progress map[string]func(string)
+	reached  map[string]int
 	// dones are the texts of the done of each character in its current turn:
 	// the answer of an ask is the done of the turn that handled it.
 	dones map[string]string
@@ -147,7 +148,7 @@ func NewService(o Options) (*Service, error) {
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, timers: map[string]clock.Timer{}, blockers: map[string]chan askResult{}, progress: map[string]func(string){}, dones: map[string]string{}}, nil
+	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, timers: map[string]clock.Timer{}, blockers: map[string]chan askResult{}, progress: map[string]func(string){}, reached: map[string]int{}, dones: map[string]string{}}, nil
 }
 
 // Store gives access to the tables.
