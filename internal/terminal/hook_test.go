@@ -3,6 +3,8 @@ package terminal_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"testing"
@@ -64,24 +66,25 @@ func TestAHookOfAClassRunsAsTheAgentInItsFolderAndOnlyThere(t *testing.T) {
 		t.Fatalf("before the start: %v; want not_running", err)
 	}
 
-	if _, err := c.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: "/w", Env: []string{"MESTRE_AGENT_ID=a1", "A=1"}}); err != nil {
+	w := absRoot()
+	if _, err := c.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: w, Env: []string{"MESTRE_AGENT_ID=a1", "A=1"}}); err != nil {
 		t.Fatal(err)
 	}
-	res, err := c.RunHook(t.Context(), "npm test", "/w/sub", "turn_end", []byte(`{"event":"turn_end"}`), 90*time.Second)
+	res, err := c.RunHook(t.Context(), "npm test", filepath.Join(w, "sub"), "turn_end", []byte(`{"event":"turn_end"}`), 90*time.Second)
 	if err != nil || res.Exit != 3 || res.Output != "dito" || res.TimedOut || res.Truncated {
 		t.Fatalf("result = %+v, %v", res, err)
 	}
 	got := hooks.last()
-	if got.Run != "npm test" || got.Dir != "/w/sub" || got.Event != "turn_end" || string(got.Stdin) != `{"event":"turn_end"}` || got.Timeout != 90*time.Second ||
+	if got.Run != "npm test" || got.Dir != filepath.Join(w, "sub") || got.Event != "turn_end" || string(got.Stdin) != `{"event":"turn_end"}` || got.Timeout != 90*time.Second ||
 		!slices.Contains(got.Env, "MESTRE_AGENT_ID=a1") || !slices.Contains(got.Env, "A=1") {
 		t.Fatalf("what the shell was asked = %+v", got)
 	}
 	// no folder asked: the one of the agent
-	if _, err := c.RunHook(t.Context(), "ls", "", "turn_end", nil, time.Second); err != nil || hooks.last().Dir != "/w" {
+	if _, err := c.RunHook(t.Context(), "ls", "", "turn_end", nil, time.Second); err != nil || hooks.last().Dir != w {
 		t.Fatalf("folder of the agent: %v, %+v", err, hooks.last())
 	}
 	// outside the folder of the agent, or not absolute
-	for _, dir := range []string{"/etc", "/w/../etc", "/wx", "sub", ".."} {
+	for _, dir := range []string{filepath.Join(filepath.VolumeName(w)+string(filepath.Separator), "etc"), w + string(filepath.Separator) + ".." + string(filepath.Separator) + "etc", w + "x", "sub", ".."} {
 		if _, err := c.RunHook(t.Context(), "ls", dir, "turn_end", nil, time.Second); !isRemote(err, ptywire.CodeBadRequest) {
 			t.Errorf("folder %q: %v; want bad_request", dir, err)
 		}
@@ -104,7 +107,7 @@ func TestOnlyOneHookRunsAtATimeAndAnOldMestrePtyIsNeverReplaced(t *testing.T) {
 	hooks := &fakeHooks{block: make(chan struct{}), in: make(chan struct{}, 1)}
 	r := newRig(t, rigOptions{hooks: hooks})
 	c := r.dial(t)
-	if _, err := c.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: "/w"}); err != nil {
+	if _, err := c.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: absRoot()}); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
@@ -120,7 +123,7 @@ func TestOnlyOneHookRunsAtATimeAndAnOldMestrePtyIsNeverReplaced(t *testing.T) {
 
 	old := newRig(t, rigOptions{proto: ptywire.ProtoInJob, hooks: &fakeHooks{}})
 	oc := old.dial(t)
-	if _, err := oc.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: "/w"}); err != nil {
+	if _, err := oc.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: absRoot()}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := oc.RunHook(t.Context(), "ls", "", "turn_end", nil, time.Second); !errors.Is(err, terminal.ErrUnsupported) {
@@ -142,7 +145,7 @@ func TestTheEndOfTheTerminalEndsTheHookThatRuns(t *testing.T) {
 	hooks := &fakeHooks{untilEnd: true, in: make(chan struct{}, 1)}
 	r := newRig(t, rigOptions{hooks: hooks})
 	c := r.dial(t)
-	if _, err := c.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: "/w"}); err != nil {
+	if _, err := c.Start(t.Context(), ptywire.Msg{Path: "agent", Dir: absRoot()}); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
@@ -154,4 +157,10 @@ func TestTheEndOfTheTerminalEndsTheHookThatRuns(t *testing.T) {
 	if err := <-done; err == nil {
 		t.Fatal("the hook ended without an error when the terminal was killed")
 	}
+}
+
+// absRoot is an absolute folder of the system that runs the test (the hook
+// folder check wants one; "/w" is not absolute on Windows).
+func absRoot() string {
+	return filepath.Join(filepath.VolumeName(os.TempDir())+string(filepath.Separator), "w")
 }
