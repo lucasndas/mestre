@@ -46,6 +46,10 @@ type installation struct {
 	expiresAt time.Time
 	used      int
 	resetAt   time.Time
+	// id is the installation the token belongs to (0: a token made with IssueToken).
+	id int64
+	// repos are the repositories the token reaches (nil: any of the installation).
+	repos []string
 }
 
 type repo struct {
@@ -64,6 +68,12 @@ type Server struct {
 	repos   map[string]*repo
 	actions []Action
 	nextID  int64
+
+	apps       map[int64]*appInfo // by id of the App
+	installs   map[int64]*appInfo // by id of the installation
+	bots       map[string]int64
+	tokenReqs  []TokenRequest
+	userRepoSt int // status the next POST /user/repos answers (0: as the permissions say)
 }
 
 // New returns an empty server using the newest recordings.
@@ -74,7 +84,8 @@ func New(clk clock.Clock, rep testkit.Reporter) (*Server, error) {
 		return nil, err
 	}
 	return &Server{clk: clk, rep: rep, recs: recs, ver: ver,
-		tokens: map[string]*installation{}, repos: map[string]*repo{}, nextID: 1}, nil
+		tokens: map[string]*installation{}, repos: map[string]*repo{}, nextID: 1,
+		apps: map[int64]*appInfo{}, installs: map[int64]*appInfo{}, bots: map[string]int64{}}, nil
 }
 
 // AddRepo creates owner/name.
@@ -103,6 +114,9 @@ func (s *Server) Actions() []Action {
 // ServeHTTP serves the REST API.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := r.Method + " " + r.URL.Path
+	if s.serveApps(w, r) {
+		return
+	}
 	// The route comes before the credentials: a route the double does not
 	// know fails the test instead of looking like a 401.
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
