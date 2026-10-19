@@ -90,6 +90,8 @@ type Service struct {
 
 	// mu applies the changes one at a time.
 	mu sync.Mutex
+	// cmu serializes the copies among themselves (not the reads and writes).
+	cmu sync.Mutex
 }
 
 var (
@@ -236,7 +238,7 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (Note, error) {
 		return Note{}, err
 	}
 	// the copies go out with the lock released: a Tower is reached over the network
-	s.copyOut(ctx, n, r.Content)
+	s.copyOut(ctx, n)
 	s.emit(Created, n)
 	return n, nil
 }
@@ -414,12 +416,12 @@ func (s *Service) change(ctx context.Context, workspace, table string, a Actor, 
 		s.mu.Unlock()
 		return Note{}, err
 	}
-	out, next, err := s.apply(ctx, n, a, expect, f)
+	out, _, err := s.apply(ctx, n, a, expect, f)
 	s.mu.Unlock()
 	if err != nil {
 		return Note{}, err
 	}
-	s.copyOut(ctx, out, next) // with the lock released
+	s.copyOut(ctx, out) // with the lock released
 	s.emit(Changed, out)
 	return out, nil
 }

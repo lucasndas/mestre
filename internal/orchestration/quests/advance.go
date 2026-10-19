@@ -191,7 +191,7 @@ func (s *Service) prepare(ctx context.Context, q Quest, uid string) {
 			s.pauseAndTell(ctx, q, fmt.Sprintf("a branch da mesa não chegou à máquina %s: %v", c.Machine, err))
 			return
 		}
-		if st.Blocker == blockSync && s.o.Waits != nil {
+		if s.o.Waits != nil { // a no-op without a wait for the sync of this step
 			s.o.Waits.SyncDone(ctx, syncRef(st.UID), "a branch da mesa chegou à máquina "+c.Machine)
 		}
 	}

@@ -122,6 +122,21 @@ func (s *Service) ApprovalTimeout(ctx context.Context, workspace string) time.Du
 	return st.AgentDeadline + st.GrandMasterDeadline + people + approvalWaitGrace
 }
 
+// pathTime is the time limit of the wait of a requester: the times of every
+// level of the path of the request (an agent above the other counts again),
+// and the grace.
+func (s *Service) pathTime(ctx context.Context, r Request, st Settings) time.Duration {
+	hops, err := s.path(ctx, r)
+	if err != nil {
+		return st.AgentDeadline + st.GrandMasterDeadline + st.peopleDeadline(r.Type) + approvalWaitGrace
+	}
+	total := approvalWaitGrace
+	for _, h := range hops {
+		total += levelDeadline(st, h.level.Kind, r.Type)
+	}
+	return total
+}
+
 // approvalWaitGrace is how long the wait of a requester outlives the last time
 // of the chain, so that the closing of the request (the denial that tells the
 // requester) comes before the expiry of the wait.
@@ -260,7 +275,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	s.audit(ctx, r, AuditEntry{Answer: answerBorn, Outcome: "accepted", Level: lvl.Kind, Reason: joinWhy(why)})
 	s.arrive(ctx, r.ID, st)
 	if r.Type == classes.RequestClassPermission && s.o.Waits != nil && who.ID != "" {
-		if _, err := s.o.Waits.WaitApproval(ctx, who, r.ID, st.AgentDeadline+st.GrandMasterDeadline+st.peopleDeadline(r.Type)+approvalWaitGrace); err != nil {
+		if _, err := s.o.Waits.WaitApproval(ctx, who, r.ID, s.pathTime(ctx, r, st)); err != nil {
 			s.log.Warn("chain: the wait of the requester was not made", "request", r.ID, "err", err)
 		}
 	}

@@ -93,10 +93,29 @@ func (l LocalCopies) Remove(_ context.Context, t Target, rel string) error {
 	return safefile.Remove(filepath.Join(t.Dir, filepath.FromSlash(rel)), nil)
 }
 
-// copyOut writes the copies of a scroll that changed. A copy that cannot be
-// written is logged and made again by Sync; it never fails the change.
-func (s *Service) copyOut(ctx context.Context, n Note, content string) {
+// copyOut brings the copies of a scroll to what the scroll is now: the engine
+// reads the index and the file again, so two changes that come one after the
+// other (or a change and a delete) never leave an older copy behind, whatever
+// the order the goroutines get here. Copies are serialized among themselves
+// by their own lock, never by the one of the service: a Tower is reached over
+// the network and a slow one must not stop the reads and writes of the scrolls.
+// A copy that cannot be written is logged and made again by Sync; it never
+// fails the change.
+func (s *Service) copyOut(ctx context.Context, n Note) {
 	if s.o.Targets == nil || s.o.Copies == nil {
+		return
+	}
+	s.cmu.Lock()
+	defer s.cmu.Unlock()
+	s.mu.Lock()
+	cur, ok, err := s.reload(ctx, n.Key)
+	content := ""
+	if err == nil && ok {
+		content, err = s.readFile(cur)
+	}
+	s.mu.Unlock()
+	if err != nil {
+		s.log.Warn("scrolls: a scroll could not be read to be copied", "scroll", n.Key, "err", err)
 		return
 	}
 	ts, err := s.o.Targets.Of(ctx, n.Workspace, n.Table)
@@ -105,26 +124,20 @@ func (s *Service) copyOut(ctx context.Context, n Note, content string) {
 		return
 	}
 	for _, t := range ts {
+		if !ok { // the scroll is gone: so are its copies
+			if err := s.o.Copies.Remove(ctx, t, Rel(n.Table, n.ID)); err != nil {
+				s.log.Warn("scrolls: a copy was not removed", "scroll", n.Key, "machine", t.Machine, "err", err)
+			}
+			continue
+		}
 		if err := s.o.Copies.Put(ctx, t, Rel(n.Table, n.ID), []byte(content)); err != nil {
 			s.log.Warn("scrolls: a copy was not written", "scroll", n.Key, "machine", t.Machine, "err", err)
 		}
 	}
 }
 
-func (s *Service) dropCopies(ctx context.Context, n Note) {
-	if s.o.Targets == nil || s.o.Copies == nil {
-		return
-	}
-	ts, err := s.o.Targets.Of(ctx, n.Workspace, n.Table)
-	if err != nil {
-		return
-	}
-	for _, t := range ts {
-		if err := s.o.Copies.Remove(ctx, t, Rel(n.Table, n.ID)); err != nil {
-			s.log.Warn("scrolls: a copy was not removed", "scroll", n.Key, "machine", t.Machine, "err", err)
-		}
-	}
-}
+// dropCopies takes the copies of a scroll that was deleted.
+func (s *Service) dropCopies(ctx context.Context, n Note) { s.copyOut(ctx, n) }
 
 // Sync writes again the copy of every scroll of a table in every place: when a
 // character is born on a machine that has none yet, or a machine is back.
@@ -132,29 +145,14 @@ func (s *Service) Sync(ctx context.Context, workspace, table string) error {
 	if s.o.Targets == nil || s.o.Copies == nil {
 		return nil
 	}
-	type item struct {
-		n       Note
-		content string
-	}
-	var items []item
 	s.mu.Lock()
 	ns, err := s.st.OfTable(ctx, workspace, table)
-	if err == nil {
-		for _, n := range ns {
-			content, rerr := s.readFile(n)
-			if rerr != nil {
-				s.log.Warn("scrolls: a scroll could not be read to be copied", "scroll", n.Key, "err", rerr)
-				continue
-			}
-			items = append(items, item{n, content})
-		}
-	}
 	s.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	for _, it := range items { // with the lock released
-		s.copyOut(ctx, it.n, it.content)
+	for _, n := range ns {
+		s.copyOut(ctx, n)
 	}
 	return nil
 }
