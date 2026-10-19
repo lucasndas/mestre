@@ -54,6 +54,7 @@ type installation struct {
 
 type repo struct {
 	issues []map[string]any
+	git    *gitData
 }
 
 // Server is the fake API. Use it as an http.Handler.
@@ -77,6 +78,8 @@ type Server struct {
 	tokenFail    int
 	tokenFailHdr map[string]string
 	userRepoSt   int // status the next POST /user/repos answers (0: as the permissions say)
+	gitDown      int // status every call to the git API answers (0: as usual)
+	requests     []Request
 }
 
 // New returns an empty server using the newest recordings.
@@ -117,7 +120,7 @@ func (s *Server) Actions() []Action {
 // ServeHTTP serves the REST API.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := r.Method + " " + r.URL.Path
-	if s.serveApps(w, r) {
+	if s.serveApps(w, r) || s.serveGit(w, r) {
 		return
 	}
 	// The route comes before the credentials: a route the double does not
@@ -249,11 +252,11 @@ func (s *Server) createIssue(w http.ResponseWriter, r *http.Request, inst *insta
 
 // write answers with ETag and rate-limit headers. A GET whose ETag matches
 // If-None-Match gets 304 and does not count against the quota.
-func (s *Server) write(w http.ResponseWriter, r *http.Request, inst *installation, status int, v any) {
+func (s *Server) write(w http.ResponseWriter, r *http.Request, inst *installation, status int, v any) int {
 	body, err := json.Marshal(v)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError
 	}
 	sum := sha256.Sum256(body)
 	etag := `W/"` + hex.EncodeToString(sum[:16]) + `"`
@@ -281,11 +284,12 @@ func (s *Server) write(w http.ResponseWriter, r *http.Request, inst *installatio
 	}
 	if notModified {
 		w.WriteHeader(http.StatusNotModified)
-		return
+		return http.StatusNotModified
 	}
 	h.Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
+	return status
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

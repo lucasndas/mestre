@@ -70,6 +70,7 @@ type Server struct {
 	nextUpd  int64
 	nextMsg  int64
 	sent     []Sent
+	calls    map[string]int
 	failures map[string][]Failure
 	notify   chan struct{} // closed and replaced on each new update
 }
@@ -84,7 +85,7 @@ func New(clk clock.Clock, rep testkit.Reporter, token string) (*Server, error) {
 	return &Server{
 		clk: clk, rep: rep, token: token, recs: recs, ver: ver,
 		nextUpd: 100000001, nextMsg: 1,
-		failures: map[string][]Failure{}, notify: make(chan struct{}),
+		failures: map[string][]Failure{}, calls: map[string]int{}, notify: make(chan struct{}),
 	}, nil
 }
 
@@ -169,6 +170,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"ok": false, "error_code": 401, "description": "Unauthorized"})
 		return
 	}
+	s.mu.Lock()
+	s.calls[method]++
+	s.mu.Unlock()
 	if s.injectFailure(w, method) {
 		return
 	}
@@ -338,4 +342,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// Calls is how many times the method was called (the failed ones too): what a
+// Citadel that must not call the Telegram did not do.
+func (s *Server) Calls(method string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls[method]
 }
