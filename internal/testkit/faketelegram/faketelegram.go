@@ -474,6 +474,43 @@ func (s *Server) UserSendsSticker(u User) (int64, error) {
 	return id, nil
 }
 
+// UserSendsDocument queues a document from u in the private chat with them. The
+// update is the sticker one with the sticker replaced by a document (the Bot API
+// shape; it is not a recording).
+func (s *Server) UserSendsDocument(u User, name string) (int64, error) {
+	return s.userSendsMedia(u, "document", map[string]any{"file_name": name, "mime_type": "application/pdf", "file_id": "doc-" + name, "file_unique_id": "u-" + name, "file_size": 1234})
+}
+
+// UserSendsVoice queues a voice message from u in the private chat with them
+// (the same hand-made shape).
+func (s *Server) UserSendsVoice(u User) (int64, error) {
+	return s.userSendsMedia(u, "voice", map[string]any{"duration": 3, "mime_type": "audio/ogg", "file_id": "voice-1", "file_unique_id": "u-voice-1", "file_size": 4321})
+}
+
+func (s *Server) userSendsMedia(u User, key string, media map[string]any) (int64, error) {
+	upd, err := s.template("update-message-sticker")
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	msg, _ := upd["message"].(map[string]any)
+	from, _ := msg["from"].(map[string]any)
+	ch, _ := msg["chat"].(map[string]any)
+	delete(msg, "sticker")
+	msg[key] = media
+	id := s.nextUpd
+	s.nextUpd++
+	upd["update_id"] = id
+	msg["message_id"] = s.nextMsg
+	s.nextMsg++
+	msg["date"] = s.clk.Now().Unix()
+	from["id"], from["first_name"], from["username"] = u.ID, u.FirstName, u.Username
+	ch["id"] = u.ID
+	s.push(upd)
+	return id, nil
+}
+
 // UserClicks queues the click of u on the button with data, of the message
 // messageID of the private chat with them.
 func (s *Server) UserClicks(u User, messageID int64, data string) (callbackID string, err error) {
