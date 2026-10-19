@@ -125,6 +125,13 @@ func (s *Session) closeCause() error {
 	return errLocalClose
 }
 
+// localCause is why this side decided to close, or nil if it did not.
+func (s *Session) localCause() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cause
+}
+
 func (s *Session) peerSide() Side {
 	if s.side == SideTower {
 		return SideCitadel
@@ -176,6 +183,12 @@ func (s *Session) serve(ctx context.Context) error {
 			case errors.Is(err, errLocalClose):
 				cancel(s.closeCause())
 			default:
+				// A close this side decided (its code is the cause) wins over
+				// the error that the peer's hang-up gives a loop still running:
+				// which of the two came first is only timing.
+				if local := s.localCause(); local != nil {
+					err = local
+				}
 				cancel(err)
 			}
 		}()
