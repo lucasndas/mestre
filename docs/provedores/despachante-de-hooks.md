@@ -1,6 +1,6 @@
 # Despachante de hooks (`mestre hook`)
 
-> **Assunto:** o comando `mestre hook`: fluxo de cada chamada, prazos, modo degradado, erro interno e formato das respostas por provedor · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** o comando `mestre hook`: fluxo de cada chamada, prazos, modo degradado, erro interno e formato das respostas por provedor · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -47,7 +47,7 @@ No Claude, nunca usar exit 1 para bloquear: exit 1 não bloqueia. No Antigravity
 - Evento nativo desconhecido: registrado no log e respondido com a resposta neutra.
 - Fila local cheia (10.000 eventos, padrão): descarta os mais antigos de tipo informativo; decisões já tomadas só quando elas sozinhas passam do limite (as mais antigas, com aviso no log). Como o hook não lista a pasta, o limite é aplicado pelo motor ao ler a fila, pelo tipo no nome de cada arquivo e pela ordem de chegada; evento acima de 64 KiB entra sem `raw_input` e com os textos cortados.
 - `policy.json` ausente ou ilegível no modo degradado: só as regras fixas valem, e tudo o que não é só leitura é negado com "motor indisponível".
-- **MCP, desde o M7:** `mcp__mestre__*` passa sem decisão nem registro aqui, porque o gateway do Mestre já julga e registra cada chamada pelo mesmo pipeline (o nome `mestre` é reservado, e um servidor com esse nome vindo do repositório ou do perfil impede o início); toda outra ferramenta MCP é negada, também no Operador do PC ([MCP por classe](../classes/mcp-por-classe.md)).
+- **MCP, desde o M7:** `mcp__mestre__*` passa sem decisão nem registro aqui, porque o gateway do Mestre já julga e registra cada chamada pelo mesmo pipeline (o nome `mestre` é reservado; o que acontece com um servidor desse nome vindo do repositório ou do perfil está em [MCP por classe](../classes/mcp-por-classe.md)); toda outra ferramenta MCP é negada, também no Operador do PC ([MCP por classe](../classes/mcp-por-classe.md)).
 - A mesa de um evento é a do registro de terminais, nunca o `MESTRE_MESA` do chamador: é por ela que o motor abre o pedido de aprovação e acha a classe da mesa.
 - **Eventos informativos não provam nada.** `post_tool`, `turn_end`, `turn_failure` e os demais vêm de um processo do terminal do personagem, que o próprio agente pode rodar com o payload que quiser (`mestre hook --event Stop` no shell dele). O canal confirma só o personagem; quem os consome no M4 (estado do personagem, pergaminhos, caixa de entrada) não muda estado de confiança só por eles, e confere o que importa por outra fonte (tela do PTY, git, registro do motor).
 

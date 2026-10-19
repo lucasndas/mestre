@@ -28,7 +28,7 @@ network:
   credentials: []           # credenciais de site do cofre (nome); o domínio precisa estar em domains, e a classe, na lista da credencial
 cli:
   allow: ["issue comment"]  # comandos de GitHub e coordenação que o nível permite
-tools:                      # ferramentas de tipo mcp, subagent e other, pelo nome nativo; * casa qualquer texto
+tools:                      # ferramentas de tipo mcp (desde o M7, do gateway), subagent e other, pelo nome nativo; * casa qualquer texto
   allow: ["mcp__playwright__*"]       # ex.: o MCP de navegador do personagem
   ask: []
   deny: ["mcp__*__delete_*"]

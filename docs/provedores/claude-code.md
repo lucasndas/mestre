@@ -1,6 +1,6 @@
 # Claude Code
 
-> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-18
+> **Assunto:** como o Mestre inicia, instrui, vigia e mede agentes Claude Code · **Componente:** Todos · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -27,7 +27,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 - Só lê `.claude/skills/<nome>/SKILL.md` (e `~/.claude/skills/`, não usada pelo Mestre). `.agents/skills/` não é lida (etapa 9 da conformidade, 2.1.299). Por isso o Mestre mantém a cópia gerenciada ([mesa](../sessao-zero/mesa.md), [ADR 0011](../decisoes/0011-agents-skills-pasta-oficial.md)).
 - Num worktree, a busca para na raiz do worktree: a cópia precisa existir em cada worktree, **antes** de o agente iniciar (pasta criada depois exige `/reload-skills`; edições em pasta existente recarregam sozinhas).
 - `description` (com `when_to_use`) é cortada em 1.536 caracteres.
-- **Skills por personagem** (nível e classe): ficam em `.mestre/agents/<id>/.claude/skills/`, com as [skills de apoio](../classes/skills-de-apoio.md) ligadas, e o motor passa `--add-dir .mestre/agents/<id>`; o worktree compartilhado só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
+- **Skills por personagem** (nível e classe): ficam em `.mestre/agents/<id>/.claude/skills/`, com as [skills de apoio](../classes/skills-de-apoio.md) ligadas (desde o M8), e o motor passa `--add-dir .mestre/agents/<id>`; o worktree compartilhado só tem a de comunicação ([personagem](../sessao-zero/personagem.md#skills-por-personagem)).
 
 ### Hooks
 
@@ -75,7 +75,7 @@ Registrar o que o [adaptador](adaptador.md) do Claude Code precisa saber: arquiv
 ### Uso, custo e rate limit
 
 - **statusLine** (no arquivo `--settings` do personagem, chamando `mestre hook --provider claude-code --event StatusLine`): recebe `cost.total_cost_usd` (estimativa pelo preço de lista, zera no `/clear`), `context_window.*` (tokens, `used_percentage`) e `rate_limits.five_hour` / `seven_day` (`used_percentage`, `resets_at`; só planos Pro/Max, depois da primeira resposta). Roda a cada mensagem, com intervalo mínimo de 300 ms. O adaptador normaliza as janelas como `5h` e `7d` (`used_pct`, `resets_at`); `ReadUsage` lê o JSON ou o evento já normalizado.
-- **StopFailure** com `error = rate_limit` (também `overloaded`, `billing_error`, `authentication_failed`): sinal estruturado de limite.
+- **StopFailure** com `error = rate_limit`: o sinal estruturado de limite. `overloaded` e `billing_error` viram `error`, e `authentication_failed`, `auth`; nenhum deles é limite de cota.
 - **Notification** `quota_auto_resume_fired`, `quota_auto_resume_stale`, `quota_auto_resume_disabled`: a espera pelo limite continuou, parou esperando Enter ou terminou.
 - Reserva pela tela: `You've hit your session limit · resets …`, `Usage limit reached`, `API Error: Request rejected (429)`.
 - A continuação automática após o limite vem ligada; o personagem fica `blocked` com motivo `quota` ("aguardando cota") até ela disparar ([limites](../plataforma/limites-de-uso.md)).
