@@ -19,7 +19,7 @@ import (
 // the version that brought it.
 const (
 	// ProtoVersion is the version this code speaks.
-	ProtoVersion = 3
+	ProtoVersion = 4
 	// MinProtoVersion is the oldest mestre-pty the engine still serves.
 	MinProtoVersion = 1
 	// ProtoPing is the version that added the "ping" message and the
@@ -29,6 +29,18 @@ const (
 	// process is in the Job Object of the terminal (Windows), for the
 	// caller identification of the local channel.
 	ProtoInJob = 3
+	// ProtoHook is the version that added the "hook" message: the
+	// asynchronous hook of a class, run as the agent.
+	ProtoHook = 4
+)
+
+// Limits of the hook message.
+const (
+	// MaxHookOutput is the most output of a hook that comes back.
+	MaxHookOutput = 64 << 10
+	// MinHookTimeout and MaxHookTimeout bound the time limit of a hook.
+	MinHookTimeout = time.Second
+	MaxHookTimeout = time.Hour
 )
 
 // Terminal defaults (docs/arquitetura/terminal.md#criação).
@@ -67,6 +79,7 @@ const (
 	TypeStop     = "stop"
 	TypePing     = "ping"
 	TypeInJob    = "injob"
+	TypeHook     = "hook"
 	TypeOK       = "ok"
 	TypeError    = "error"
 	// Events, sent without a request.
@@ -100,6 +113,8 @@ const (
 	// CodeNotSupported: the message is known but this terminal cannot
 	// answer it (e.g. "injob" on Linux, where the cgroup groups the tree).
 	CodeNotSupported = "not_supported"
+	// CodeBusy: a hook is already running in this terminal.
+	CodeBusy = "busy"
 )
 
 // Msg is one control message. A single flat struct keeps the protocol
@@ -160,6 +175,19 @@ type Msg struct {
 	// reply carries InJob. A pointer, so that false is not omitted.
 	Start string `json:"start,omitempty"`
 	InJob *bool  `json:"in_job,omitempty"`
+
+	// hook: Run is the command line, Dir the folder it runs in (the one of the
+	// start or inside it), Event the Mestre event (MESTRE_HOOK_EVENT), Stdin
+	// the event and TimeoutMS the time limit. The reply carries ExitCode, the
+	// Output (stdout and stderr, at most MaxHookOutput bytes), TimedOut and
+	// Truncated.
+	Run       string `json:"run,omitempty"`
+	Event     string `json:"event,omitempty"`
+	Stdin     []byte `json:"stdin,omitempty"`
+	TimeoutMS int64  `json:"timeout_ms,omitempty"`
+	Output    string `json:"output,omitempty"`
+	TimedOut  bool   `json:"timed_out,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"`
 }
 
 // Frame is a run of terminal bytes. Stream is the id of the request it

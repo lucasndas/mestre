@@ -207,6 +207,8 @@ func (s *Server) dispatch(ctx context.Context, p *peer, m *ptywire.Msg) {
 		p.enqueue(out{msg: &ptywire.Msg{T: ptywire.TypeOK, ID: m.ID, End: s.sess.Buffer().End()}})
 	case ptywire.TypeInJob:
 		s.handleInJob(p, m)
+	case ptywire.TypeHook:
+		s.handleHook(ctx, p, m)
 	default:
 		// Additive protocol: a message from a newer engine is refused for
 		// this request only, the connection goes on.
@@ -235,6 +237,38 @@ func (s *Server) handleInJob(p *peer, m *ptywire.Msg) {
 	default:
 		p.enqueue(out{msg: &ptywire.Msg{T: ptywire.TypeOK, ID: m.ID, InJob: &in}})
 	}
+}
+
+// handleHook runs a hook of a class as the agent
+// (docs/arquitetura/terminal.md#protocolo-motor--mestre-pty). It answers when the
+// hook ends, from a goroutine of its own: a long hook does not hold the
+// other requests of the connection.
+func (s *Server) handleHook(ctx context.Context, p *peer, m *ptywire.Msg) {
+	if s.cfg.ProtoVersion < ptywire.ProtoHook {
+		p.enqueue(replyErr(m.ID, ptywire.CodeUnknownMessage, "unknown message hook"))
+		return
+	}
+	spec := HookSpec{Run: m.Run, Dir: m.Dir, Event: m.Event, Stdin: m.Stdin, Timeout: time.Duration(m.TimeoutMS) * time.Millisecond}
+	go func() {
+		res, err := s.sess.RunHook(ctx, spec)
+		switch {
+		case errors.Is(err, ErrNotRunning):
+			p.enqueue(replyErr(m.ID, ptywire.CodeNotRunning, err.Error()))
+		case errors.Is(err, ErrHookBusy):
+			p.enqueue(replyErr(m.ID, ptywire.CodeBusy, err.Error()))
+		case errors.Is(err, ErrHookDir), errors.Is(err, ErrHookSpec):
+			p.enqueue(replyErr(m.ID, ptywire.CodeBadRequest, err.Error()))
+		case err != nil && res == (HookResult{}):
+			s.log.Warn("hook failed", "error", err)
+			p.enqueue(replyErr(m.ID, ptywire.CodeStartFailed, err.Error()))
+		case err != nil:
+			s.log.Warn("hook ended badly", "error", err)
+			p.enqueue(replyErr(m.ID, ptywire.CodeStartFailed, err.Error()))
+		default:
+			code := res.Exit
+			p.enqueue(out{msg: &ptywire.Msg{T: ptywire.TypeOK, ID: m.ID, ExitCode: &code, Output: res.Output, TimedOut: res.TimedOut, Truncated: res.Truncated}})
+		}
+	}()
 }
 
 func (s *Server) handleStart(ctx context.Context, p *peer, m *ptywire.Msg) {

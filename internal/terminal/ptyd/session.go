@@ -98,6 +98,8 @@ type SessionConfig struct {
 	StableAfter            time.Duration
 	DrainAfterExit         time.Duration
 	Emulator               EmulatorFactory // default NewVTEmulator
+	// Hooks runs the asynchronous hooks of the classes; nil is ShellHooks.
+	Hooks HookRunner
 	// OnEvent receives the "stable" and "exit" events. It must not block.
 	OnEvent func(ptywire.Msg)
 	Logger  *slog.Logger
@@ -112,7 +114,11 @@ type Session struct {
 	buf *Buffer
 	clk clock.Clock
 
+	hookMu sync.Mutex // one hook at a time
+
 	mu         sync.Mutex
+	startDir   string   // the folder the agent started in
+	startEnv   []string // the environment it started with
 	state      string
 	agent      Agent
 	emu        Emulator
@@ -185,6 +191,7 @@ func (s *Session) Start(ctx context.Context, spec StartSpec) (int, error) {
 		return 0, err
 	}
 	s.agent, s.cols, s.rows = agent, spec.Cols, spec.Rows
+	s.startDir, s.startEnv = spec.Dir, append([]string(nil), spec.Env...)
 	s.emu = s.cfg.Emulator(int(spec.Cols), int(spec.Rows), s.cfg.HistoryLines, s.reply)
 	s.state = ptywire.StateRunning
 	runCtx, cancel := context.WithCancel(context.Background())
