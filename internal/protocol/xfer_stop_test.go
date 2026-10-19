@@ -49,7 +49,7 @@ func partOf(t *testing.T, dir string) string {
 // CA-REPL-14
 // A machine that leaves the Guild erases the folder of the transfers, and on
 // Windows a file that is open cannot be removed: the transfers in progress are
-// stopped first (docs/guilda/replicacao.md#sair-da-guilda).
+// stopped first (docs/guilda/replicacao.md#cofre-em-toda-máquina).
 func TestStoppingTheTransfersClosesTheFilesInProgress(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

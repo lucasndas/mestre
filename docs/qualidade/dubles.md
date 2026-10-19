@@ -109,6 +109,7 @@ O que este documento descreve e ainda não existe entra assim:
 - **CA-DUBLES-09** · *rápida* — **Dado** um dublê que recebe uma rota, um parâmetro ou um campo que não implementa, com ou sem credencial, **quando** o código o chama, **então** o teste falha com a mensagem de não implementado.
 - **CA-DUBLES-10** · *rápida* — **Dado** um arquivo em `testdata/recordings/` com um token de bot do Telegram, **quando** a suíte rápida roda, **então** ela falha apontando o arquivo.
 - **CA-DUBLES-11** · *completa* — **Dado** o binário do agente falso chamado `claude` no PATH e uma base `claude-code`, **quando** o motor cria um personagem, **então** o agente roda num PTY real e os hooks chamam o `mestre hook` de verdade.
+- **CA-DUBLES-12** · *completa* — **Dado** o servidor do relógio de `internal/testkit/clocksock` com um processo que aplica o tempo e outro que sai ou responde diferente de `ok`, **quando** o teste chama `Advance`, **então** ele devolve o erro do processo que não aplicou e o larga; com todos respondendo `ok`, devolve `nil`.
 
 ## Depende de
 

@@ -8,7 +8,7 @@ import (
 	"github.com/lucasndas/mestre/internal/terminal"
 )
 
-// CA-TERM-05: the engine can ask for the end of the same terminal twice at
+// Part of CA-TERM-05: the engine can ask for the end of the same terminal twice at
 // once (the stop, and the end of its agent), and the second request finds the
 // cgroup removed by the first while it waits for it to empty: that is success,
 // not "no such file". Here the first request is the missing cgroup.events of a

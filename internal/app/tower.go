@@ -74,7 +74,7 @@ func (e *Engine) replicaConfig(db *store.DB) replication.ReplicaConfig {
 // towerWiper is what a Tower runs when the Citadel tells it to leave the Guild
 // (guild.leave). The report of the databases it discarded stops first: it reads
 // those files, and a report that waits for the ack would write its record after
-// the Wipe took the files (docs/guilda/replicacao.md#sair-da-guilda).
+// the Wipe took the files (docs/guilda/replicacao.md#cofre-em-toda-máquina).
 type towerWiper struct {
 	replica    guild.Wiper
 	stopReport func()

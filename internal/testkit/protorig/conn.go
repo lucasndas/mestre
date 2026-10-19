@@ -51,7 +51,6 @@ type Conn struct {
 	frames chan protocol.Frame
 	pong   chan struct{}
 	dead   chan struct{} // closed when the reader ended
-	gone   chan struct{} // closed when the connection is over, by either end
 	closed chan struct{} // closed by a local Close
 	once   sync.Once
 	err    error // why the reader ended; read after dead is closed

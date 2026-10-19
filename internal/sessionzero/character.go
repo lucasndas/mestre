@@ -202,7 +202,6 @@ type charState struct {
 	input   LayerInput
 	layer   Layer
 	pending map[string]string // section key -> text, for the next turn
-	order   []string
 	// hookText is the layer that travels by the hook of the start, until
 	// the hook delivers it.
 	hookText  string
@@ -654,7 +653,7 @@ func (c *Character) gitInclude() string {
 
 // gitConfigText is the gitconfig of a character: it includes the global one
 // of the account and defines only the author
-// (docs/github/identidades-e-apps.md#identidade-nos-commits).
+// (docs/github/identidades-e-apps.md#autoria-dos-commits).
 func gitConfigText(include string, id Identity) string {
 	q := func(s string) string { return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"` }
 	var b strings.Builder

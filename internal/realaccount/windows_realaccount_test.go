@@ -184,7 +184,7 @@ func engineMatrix(t *testing.T, what string, pid int, allowed ...string) {
 	}, allowed...)
 }
 
-// CA-TERM-07 (real accounts): the mestre-pty the launcher service starts runs
+// Part of CA-TERM-07 (real accounts): the mestre-pty the launcher service starts runs
 // as the agent account, in a batch logon session of its own that is not the
 // engine's nor another terminal's, outside the Job Object of the engine, with
 // the profile the launcher loaded; the engine may query, wait and end it and
@@ -269,7 +269,7 @@ func TestWindowsTheMestrePTYRunsAsTheAgentAccountInALogonOfItsOwn(t *testing.T) 
 	}
 }
 
-// CA-TERM-12 (real accounts): two terminals with distinct logons of the same
+// Part of CA-TERM-12 (real accounts): two terminals with distinct logons of the same
 // account: a process of one cannot open the agent processes of the other, nor
 // ask the mestre-pty of the other for more than to be queried; it has the run
 // of its own terminal; the engine queries and waits and does no more.
@@ -411,7 +411,7 @@ func waitGone(t *testing.T, what string, gone <-chan struct{}) {
 	}
 }
 
-// CA-TERM-05 (real accounts, the logon-session sweep): a process created
+// Part of CA-TERM-05 (real accounts, the logon-session sweep): a process created
 // through WMI from inside a terminal is born outside the Job Object, in the
 // logon session of the terminal, and the end of the terminal ends it: by the
 // forced stop of the mestre-pty itself, by the stop of the engine, and by the
@@ -444,7 +444,7 @@ func TestWindowsTheEndOfATerminalEndsWhatWMIStartedInIt(t *testing.T) {
 	}
 }
 
-// CA-TERM-07 (real accounts, the release): when the mestre-pty ends, the
+// Part of CA-TERM-07 (real accounts, the release): when the mestre-pty ends, the
 // launcher unloads the profile. It runs alone (a serial test), because the user
 // hive stays loaded while any terminal of the account lives. That the logon
 // sessions are closed too is for tools/realaccount to check at the end: only an

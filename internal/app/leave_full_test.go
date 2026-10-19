@@ -11,11 +11,11 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// CA-REPL-12
+// Part of CA-REPL-12
 // A Tower the Owner removes while it runs erases what it kept from the time it
 // was the Citadel, with its replica and the key of the vault: the engine puts
 // the replication together with the folders of its machine, and the Wipe
-// covers all of them (docs/guilda/replicacao.md#sair-da-guilda).
+// covers all of them (docs/guilda/replicacao.md#cofre-em-toda-máquina).
 func TestATowerTheOwnerRemovesErasesWhatItKeptFromTheTimeItWasTheCitadel(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)

@@ -1,4 +1,4 @@
-# The real-account tests (docs/qualidade/testes.md#contas-reais): the parts of
+# The real-account tests (docs/qualidade/contas-reais.md): the parts of
 # the criteria of the terminal, the launcher and the vault that need real
 # accounts (CAP_SETUID and a second user on Linux, the batch logon of the agent
 # account, a virtual service account and DPAPI on Windows). The runners of

@@ -504,7 +504,7 @@ func (p *fakeProc) Input(_ context.Context, data []byte) error {
 
 // waitTyped waits until n inputs were typed (by another goroutine, maybe of
 // another machine) and returns them; it fails the test when ctx ends first.
-func (p *fakeProc) waitTyped(t testing.TB, ctx context.Context, n int) []string {
+func (p *fakeProc) waitTyped(t testing.TB, ctx context.Context, n int) []string { //nolint:unused // used by the full suite
 	t.Helper()
 	for {
 		p.mu.Lock()
