@@ -51,10 +51,10 @@ func (c *Channel) Send(_ context.Context, m approvals.Message) (string, error) {
 }
 
 // Edit implements approvals.Messenger.
-func (c *Channel) Edit(_ context.Context, ref, text string, keepButtons bool) error {
+func (c *Channel) Edit(_ context.Context, e approvals.MessageEdit) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.text[ref], c.keep[ref] = text, keepButtons
+	c.text[e.Ref], c.keep[e.Ref] = e.Text, len(e.Answers) > 0
 	return nil
 }
 

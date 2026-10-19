@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -56,8 +57,16 @@ type Messenger interface {
 	// Send puts the question in front of the user and returns the reference
 	// of the message, to edit it.
 	Send(ctx context.Context, m Message) (ref string, err error)
-	// Edit replaces the text of a message and takes its buttons away.
-	Edit(ctx context.Context, ref, text string, keepButtons bool) error
+	// Edit replaces the text of a message and its buttons: the answers it
+	// lists (none takes them all away).
+	Edit(ctx context.Context, e MessageEdit) error
+}
+
+// MessageEdit is the new content of a question already sent.
+type MessageEdit struct {
+	UserID, Ref, Text string
+	Request           int64
+	Answers           []chain.Answer
 }
 
 // Targets reads the live target of a request (the head of the PR, the
@@ -88,6 +97,9 @@ type Options struct {
 
 // Flow is the flow of approval over the people.
 type Flow struct {
+	// mu serialises the votes with the invalidation of a user: a vote that
+	// counts is one of a user who was eligible when the quorum was reached.
+	mu  sync.Mutex
 	o   Options
 	clk clock.Clock
 	log *slog.Logger
@@ -95,8 +107,8 @@ type Flow struct {
 
 // New returns the Flow.
 func New(o Options) (*Flow, error) {
-	if o.DB == nil || o.Chain == nil || o.Users == nil || o.Messenger == nil {
-		return nil, errors.New("approvals: the flow needs the database, the chain, the users and the channel")
+	if o.DB == nil || o.Chain == nil || o.Users == nil || o.Messenger == nil || o.Locked == nil {
+		return nil, errors.New("approvals: the flow needs the database, the chain, the users, the channel and the lock of the channel")
 	}
 	if o.Clock == nil {
 		o.Clock = clock.Real{}
@@ -120,10 +132,12 @@ var (
 	ErrTargetChanged = errors.New("o alvo do pedido mudou: ele foi invalidado")
 	ErrNoVerify      = errors.New("o alvo do pedido não pôde ser conferido: nada foi aprovado")
 	ErrPIN           = errors.New("o PIN não foi confirmado")
+	ErrExpired       = errors.New("o prazo do pedido acabou")
+	ErrQuorumEffect  = errors.New("com mais de uma aprovação exigida, só \"Aprovar agora\" vale: decreto e delegação são de quem decide sozinho")
 )
 
-// capability is what the level of a user needs to give an answer.
-func capability(a chain.Answer) users.Capability {
+// Capability is what the level of a user needs to give an answer.
+func Capability(a chain.Answer) users.Capability {
 	switch a {
 	case chain.AnswerApproveFor, chain.AnswerApproveAlways, chain.AnswerApprovePattern, chain.AnswerDenyAlways:
 		return users.PermanentDecree
@@ -133,7 +147,7 @@ func capability(a chain.Answer) users.Capability {
 	return users.DecideApprovals
 }
 
-func (f *Flow) may(u users.User, a chain.Answer) bool { return users.Can(u.Level, capability(a)) }
+func (f *Flow) may(u users.User, a chain.Answer) bool { return users.Can(u.Level, Capability(a)) }
 
 // atLeast says whether the level of a user is at least min, the minimum of the policy.
 func atLeast(l users.Level, min classes.Level) bool {
@@ -223,7 +237,10 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 		if ref, ok, err := f.ref(ctx, q.Request.ID, u.ID); err != nil {
 			return err
 		} else if ok {
-			if err := f.o.Messenger.Edit(ctx, ref, text, true); err != nil {
+			if err := f.setRef(ctx, q.Request.ID, u.ID, ref, answers); err != nil {
+				return err
+			}
+			if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: u.ID, Ref: ref, Text: text, Request: q.Request.ID, Answers: answers}); err != nil {
 				f.log.Warn("approvals: the question was not updated", "request", q.Request.ID, "user", u.ID, "err", err)
 			}
 			sent++
@@ -237,7 +254,7 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 			f.log.Warn("approvals: the question was not sent", "request", q.Request.ID, "user", u.ID, "err", err)
 			continue
 		}
-		if err := f.setRef(ctx, q.Request.ID, u.ID, ref); err != nil {
+		if err := f.setRef(ctx, q.Request.ID, u.ID, ref, answers); err != nil {
 			return err
 		}
 		sent++
@@ -270,17 +287,22 @@ func (f *Flow) ref(ctx context.Context, request int64, user string) (string, boo
 	return ref, err == nil, err
 }
 
-func (f *Flow) setRef(ctx context.Context, request int64, user, ref string) error {
+func (f *Flow) setRef(ctx context.Context, request int64, user, ref string, answers []chain.Answer) error {
+	body, _ := json.Marshal(answers)
 	return f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO approval_messages (request, user_id, ref) VALUES (?, ?, ?) ON CONFLICT (request, user_id) DO UPDATE SET ref = excluded.ref`, request, user, ref)
+		_, err := tx.ExecContext(ctx, `INSERT INTO approval_messages (request, user_id, ref, answers) VALUES (?, ?, ?, ?)
+			ON CONFLICT (request, user_id) DO UPDATE SET ref = excluded.ref, answers = excluded.answers`, request, user, ref, string(body))
 		return err
 	})
 }
 
-type recipient struct{ user, ref string }
+type recipient struct {
+	user, ref string
+	answers   []chain.Answer
+}
 
 func (f *Flow) recipients(ctx context.Context, request int64) ([]recipient, error) {
-	rows, err := f.o.DB.Reader().QueryContext(ctx, `SELECT user_id, ref FROM approval_messages WHERE request = ? ORDER BY user_id`, request)
+	rows, err := f.o.DB.Reader().QueryContext(ctx, `SELECT user_id, ref, answers FROM approval_messages WHERE request = ? ORDER BY user_id`, request)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +310,11 @@ func (f *Flow) recipients(ctx context.Context, request int64) ([]recipient, erro
 	var out []recipient
 	for rows.Next() {
 		var r recipient
-		if err := rows.Scan(&r.user, &r.ref); err != nil {
+		var answers string
+		if err := rows.Scan(&r.user, &r.ref, &answers); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(answers), &r.answers); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -334,7 +360,7 @@ func (f *Flow) Withdraw(ctx context.Context, request int64, why string) error {
 	by, at := f.decider(ctx, r)
 	for _, m := range rs {
 		text := f.endText(why, by, at, m.user == by.id)
-		if err := f.o.Messenger.Edit(ctx, m.ref, text, false); err != nil {
+		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request}); err != nil {
 			f.log.Warn("approvals: the message was not edited", "request", request, "user", m.user, "err", err)
 		}
 	}
@@ -399,7 +425,7 @@ type Reply struct {
 // Answer takes the answer of a user to a request: the user, the level, the
 // state and the target are checked again here, at the click.
 func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, error) {
-	if f.o.Locked != nil && f.o.Locked(ctx) {
+	if f.o.Locked(ctx) {
 		return Reply{}, ErrLocked
 	}
 	u, r, fr, err := f.check(ctx, userID, in.Request, in.Answer)
@@ -451,7 +477,7 @@ func (f *Flow) ConfirmPIN(ctx context.Context, userID, pinRequest string) (Reply
 	}); err != nil {
 		return Reply{}, err
 	}
-	if f.o.Locked != nil && f.o.Locked(ctx) {
+	if f.o.Locked(ctx) {
 		return Reply{}, ErrLocked
 	}
 	u, r, fr, err := f.check(ctx, userID, in.Request, in.Answer)
@@ -490,13 +516,35 @@ func (f *Flow) check(ctx context.Context, userID string, request int64, a chain.
 	if !a.Valid() || a == chain.AnswerClimb {
 		return users.User{}, chain.Request{}, flowRow{}, fmt.Errorf("resposta desconhecida: %q", a)
 	}
+	// The time ran out: whether or not the timer of the chain fired yet, a
+	// late click approves nothing.
+	if !r.Deadline.IsZero() && !f.clk.Now().Before(r.Deadline) {
+		return users.User{}, chain.Request{}, flowRow{}, ErrExpired
+	}
+	// With more than one approval required, the effect is the plain exception:
+	// a decree or a delegation is made by who decides alone, never by the last
+	// of the voters.
+	if fr.Approvals > 1 && (a.Approves() && a != chain.AnswerApprove || a == chain.AnswerDelegate) {
+		return users.User{}, chain.Request{}, flowRow{}, ErrQuorumEffect
+	}
 	return u, r, fr, nil
+}
+
+// mustBind are the types that are never approved without a target.
+var mustBind = map[classes.RequestType]bool{
+	classes.RequestPR: true, classes.RequestMerge: true, classes.RequestWorkflows: true, classes.RequestDestructive: true, classes.RequestRepoSettings: true,
 }
 
 // verify compares the live target with the impression of the request; a
 // target that changed ends the request as invalidated.
 func (f *Flow) verify(ctx context.Context, r chain.Request) error {
 	if r.Impression == "" {
+		// Types whose approval acts outside the engine, or destroys, are
+		// always bound to a target; a request of them without one is not
+		// approved (it can not be verified).
+		if mustBind[r.Type] {
+			return ErrNoVerify
+		}
 		return nil
 	}
 	if f.o.Targets == nil {
@@ -538,23 +586,20 @@ func (f *Flow) apply(ctx context.Context, u users.User, r chain.Request, fr flow
 	if approves {
 		counts = 1
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	// The user may have been suspended while the target was read.
+	if cur, err := f.o.Users.Get(ctx, u.ID); err != nil || !eligible(cur, r.Workspace, fr.Min) {
+		return Reply{}, ErrNotYours
+	}
 	if err := f.vote(ctx, r.ID, u.ID, in.Answer, counts); err != nil {
 		return Reply{}, err
 	}
 	if approves {
-		n, err := f.counted(ctx, r.ID)
+		n, missing, err := f.quorum(ctx, r, fr)
 		if err != nil {
+			_ = f.unvote(ctx, r.ID, u.ID)
 			return Reply{}, err
-		}
-		voters, err := f.voters(ctx, r.ID)
-		if err != nil {
-			return Reply{}, err
-		}
-		missing := 0
-		for _, must := range fr.Require {
-			if !slices.Contains(voters, must) {
-				missing++
-			}
 		}
 		if n < fr.Approvals || missing > 0 {
 			f.refresh(ctx, r.ID, fr)
@@ -568,6 +613,33 @@ func (f *Flow) apply(ctx context.Context, u users.User, r chain.Request, fr flow
 		return Reply{}, err
 	}
 	return f.reply(out, nil)
+}
+
+// quorum counts the approvals that stand now: every voter is looked at again
+// (a user suspended since the vote does not count) and how many of the
+// required users are among them.
+func (f *Flow) quorum(ctx context.Context, r chain.Request, fr flowRow) (n, missing int, err error) {
+	voters, err := f.voters(ctx, r.ID)
+	if err != nil {
+		return 0, 0, err
+	}
+	var standing []string
+	for _, id := range voters {
+		u, err := f.o.Users.Get(ctx, id)
+		if err != nil || !eligible(u, r.Workspace, fr.Min) {
+			if err := f.revoke(ctx, r.ID, id); err != nil {
+				return 0, 0, err
+			}
+			continue
+		}
+		standing = append(standing, id)
+	}
+	for _, must := range fr.Require {
+		if !slices.Contains(standing, must) {
+			missing++
+		}
+	}
+	return len(standing), missing, nil
 }
 
 func (f *Flow) reply(out chain.Outcome, err error) (Reply, error) {
@@ -598,6 +670,15 @@ func (f *Flow) vote(ctx context.Context, request int64, user string, a chain.Ans
 	})
 }
 
+// revoke ends the count of a vote and keeps the row: it stays in the record of
+// the request, and the user does not vote again.
+func (f *Flow) revoke(ctx context.Context, request int64, user string) error {
+	return f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE approval_votes SET counts = 0, revoked_at = ? WHERE request = ? AND user_id = ? AND counts = 1`, f.ms(f.clk.Now()), request, user)
+		return err
+	})
+}
+
 func (f *Flow) unvote(ctx context.Context, request int64, user string) error {
 	return f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `DELETE FROM approval_votes WHERE request = ? AND user_id = ?`, request, user)
@@ -616,7 +697,7 @@ func (f *Flow) refresh(ctx context.Context, request int64, fr flowRow) {
 		return
 	}
 	for _, m := range rs {
-		if err := f.o.Messenger.Edit(ctx, m.ref, text, true); err != nil {
+		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
 			f.log.Warn("approvals: the question was not updated", "request", request, "user", m.user, "err", err)
 		}
 	}
@@ -627,6 +708,8 @@ func (f *Flow) refresh(ctx context.Context, request int64, fr flowRow) {
 // counting (the request goes on to the others) and a PIN they had not
 // typed yet is dropped.
 func (f *Flow) InvalidateBy(ctx context.Context, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	rows, err := f.o.DB.Reader().QueryContext(ctx, `SELECT v.request FROM approval_votes v JOIN approval_requests r ON r.id = v.request
 		WHERE v.user_id = ? AND v.counts = 1 AND r.state = 'open'`, userID)
 	if err != nil {
@@ -647,7 +730,7 @@ func (f *Flow) InvalidateBy(ctx context.Context, userID string) error {
 	}
 	rows.Close()
 	err = f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM approval_votes WHERE user_id = ? AND counts = 1 AND request IN (SELECT id FROM approval_requests WHERE state = 'open')`, userID); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE approval_votes SET counts = 0, revoked_at = ? WHERE user_id = ? AND counts = 1 AND request IN (SELECT id FROM approval_requests WHERE state = 'open')`, f.ms(f.clk.Now()), userID); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, `DELETE FROM approval_pins WHERE user_id = ?`, userID)
@@ -662,4 +745,49 @@ func (f *Flow) InvalidateBy(ctx context.Context, userID string) error {
 		}
 	}
 	return nil
+}
+
+// Resend gives a user the buttons of an open request back: the ones they had
+// were used up by an answer that did not end (a PIN that failed, a text that
+// was refused).
+func (f *Flow) Resend(ctx context.Context, request int64, userID string) {
+	r, err := f.o.Chain.Get(ctx, request)
+	if err != nil || r.State.Closed() {
+		return
+	}
+	fr, ok, err := f.row(ctx, request)
+	if err != nil || !ok {
+		return
+	}
+	text, err := f.render(ctx, request, fr.Text, fr.Approvals)
+	if err != nil {
+		return
+	}
+	rs, err := f.recipients(ctx, request)
+	if err != nil {
+		return
+	}
+	for _, m := range rs {
+		if m.user != userID {
+			continue
+		}
+		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
+			f.log.Warn("approvals: the buttons were not given back", "request", request, "user", userID, "err", err)
+		}
+	}
+}
+
+// PINFailed drops the approval that waited for a PIN that will not come (it
+// failed for good) and gives the user the buttons back.
+func (f *Flow) PINFailed(ctx context.Context, userID, pinRequest string) {
+	var request int64
+	err := f.o.DB.Reader().QueryRowContext(ctx, `SELECT request FROM approval_pins WHERE pin_request = ? AND user_id = ?`, pinRequest, userID).Scan(&request)
+	if err != nil {
+		return
+	}
+	_ = f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM approval_pins WHERE pin_request = ?`, pinRequest)
+		return err
+	})
+	f.Resend(ctx, request, userID)
 }

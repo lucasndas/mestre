@@ -17,13 +17,15 @@ CREATE TABLE approval_flow (
 );
 
 -- The answer of each user to a request: the first one is final, and only an
--- approval counts to the quorum.
+-- approval counts to the quorum until the user is revoked (suspended, removed,
+-- below the level): the row stays, with counts at 0 and the time of it.
 CREATE TABLE approval_votes (
 	request  INTEGER NOT NULL REFERENCES approval_requests (id),
 	user_id  TEXT    NOT NULL,
 	answer   TEXT    NOT NULL,
 	counts   INTEGER NOT NULL DEFAULT 1,
 	at       INTEGER NOT NULL,
+	revoked_at INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (request, user_id)
 );
 
@@ -33,6 +35,7 @@ CREATE TABLE approval_messages (
 	request  INTEGER NOT NULL REFERENCES approval_requests (id),
 	user_id  TEXT    NOT NULL,
 	ref      TEXT    NOT NULL,
+	answers  TEXT    NOT NULL DEFAULT '[]',
 	PRIMARY KEY (request, user_id)
 );
 

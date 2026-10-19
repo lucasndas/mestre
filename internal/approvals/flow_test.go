@@ -160,7 +160,7 @@ func TestAnApprovalOfAnotherTargetIsInvalidatedAndNothingIsApplied(t *testing.T)
 	t.Parallel()
 	w := newWorld(t)
 	ana := w.add("Ana", users.Approver, "loja")
-	r := w.open(openOpts{target: `{"repo":"lucas/loja","pr":7,"head":"aaa"}`})
+	r := w.open(openOpts{typ: classes.RequestPR, target: `{"repo":"lucas/loja","pr":7,"head":"aaa"}`})
 	w.tg.set(r.ID, `{"head":"bbb","pr":7,"repo":"lucas/loja"}`) // same keys, another head
 	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrTargetChanged) {
 		t.Fatalf("the answer: %v", err)
@@ -170,13 +170,13 @@ func TestAnApprovalOfAnotherTargetIsInvalidatedAndNothingIsApplied(t *testing.T)
 	}
 	contains(t, w.textTo(ana), "Invalidado")
 	// the same target in another spelling is the same target
-	r2 := w.open(openOpts{target: `{"repo":"lucas/loja","pr":8,"head":"aaa"}`})
+	r2 := w.open(openOpts{typ: classes.RequestPR, target: `{"repo":"lucas/loja","pr":8,"head":"aaa"}`})
 	w.tg.set(r2.ID, `{ "head": "aaa", "pr": 8, "repo": "lucas/loja" }`)
 	if _, err := w.answer(ana, r2.ID, chain.AnswerApprove); err != nil || w.state(r2.ID) != chain.Approved {
 		t.Errorf("same target: %v, %s", err, w.state(r2.ID))
 	}
 	// a target that can not be read approves nothing (fail closed)
-	r3 := w.open(openOpts{target: `{"pr":9}`})
+	r3 := w.open(openOpts{typ: classes.RequestPR, target: `{"pr":9}`})
 	w.tg.err = errors.New("github down")
 	if _, err := w.answer(ana, r3.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrNoVerify) || w.state(r3.ID) != chain.Open {
 		t.Errorf("unreadable target: %v, %s", err, w.state(r3.ID))
@@ -211,6 +211,13 @@ func TestAnApprovalThatAsksThePINAppliesOnlyAfterTheRightPIN(t *testing.T) {
 	if _, err := w.flow.ConfirmPIN(w.ctx, owner.ID, rep.PIN); !errors.Is(err, approvals.ErrPIN) || w.state(r.ID) != chain.Open {
 		t.Fatalf("without the PIN: %v, %s", err, w.state(r.ID))
 	}
+	// a wrong PIN confirms nothing
+	if err := w.svc.CheckPIN(w.ctx, rep.PIN, "654321"); err == nil {
+		t.Fatal("a wrong PIN was accepted")
+	}
+	if _, err := w.flow.ConfirmPIN(w.ctx, owner.ID, rep.PIN); !errors.Is(err, approvals.ErrPIN) || w.state(r.ID) != chain.Open {
+		t.Fatalf("after a wrong PIN: %v, %s", err, w.state(r.ID))
+	}
 	if err := w.svc.CheckPIN(w.ctx, rep.PIN, "123456"); err != nil {
 		t.Fatal(err)
 	}
@@ -227,13 +234,11 @@ func TestAnApprovalThatAsksThePINAppliesOnlyAfterTheRightPIN(t *testing.T) {
 		t.Errorf("deny: %+v, %v, %s", rep, err, w.state(r2.ID))
 	}
 	// a user with no PIN can not approve what asks it
-	r3 := w.open(openOpts{typ: classes.RequestGuildEntry, min: classes.LevelOwner, pin: true})
 	w2 := newWorld(t)
 	r4 := w2.open(openOpts{pin: true})
 	if _, err := w2.answer(w2.owner, r4.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrPIN) {
 		t.Errorf("no PIN: %v", err)
 	}
-	_ = r3
 }
 
 func TestAChainThatRefusesLetsTheUserAnswerAgain(t *testing.T) {
@@ -274,5 +279,91 @@ func TestAskingAgainUpdatesTheQuestionAndAskBackKeepsItOpen(t *testing.T) {
 	// asking back is not an answer: Ana still approves
 	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestAVoteOfWhoWasSuspendedMeanwhileDoesNotMakeTheQuorum(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Approver, "loja")
+	bia := w.add("Bia", users.Approver, "loja")
+	r := w.open(openOpts{quorum: 2})
+	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); err != nil {
+		t.Fatal(err)
+	}
+	// Ana is suspended and the invalidation did not run yet (it is a race)
+	if _, err := w.db.Writer().ExecContext(w.ctx, `UPDATE users SET state = 'suspended' WHERE id = ?`, ana.ID); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := w.answer(bia, r.ID, chain.AnswerApprove)
+	if err != nil || w.state(r.ID) != chain.Open || len(w.ch.decisions()) != 0 {
+		t.Fatalf("Bia: %+v, %v, %s: the vote of a suspended user made the quorum", rep, err, w.state(r.ID))
+	}
+	if rep.Text != "Sua aprovação foi contada: 1 de 2." {
+		t.Errorf("the count = %q", rep.Text)
+	}
+	// the vote stays in the record, revoked
+	var counts, revoked int64
+	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT counts, revoked_at FROM approval_votes WHERE request = ? AND user_id = ?`, r.ID, ana.ID).Scan(&counts, &revoked); err != nil || counts != 0 || revoked == 0 {
+		t.Errorf("the vote of Ana: counts %d, revoked %d, %v", counts, revoked, err)
+	}
+}
+
+func TestALateClickApprovesNothingEvenBeforeTheTimerFires(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Approver, "loja")
+	r := w.open(openOpts{late: true})
+	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrExpired) || len(w.ch.decisions()) != 0 {
+		t.Errorf("a late click: %v", err)
+	}
+}
+
+func TestWithMoreThanOneApprovalOnlyThePlainApprovalCounts(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Administrator, "loja")
+	r := w.open(openOpts{quorum: 2})
+	for _, a := range []chain.Answer{chain.AnswerApproveAlways, chain.AnswerApprovePattern, chain.AnswerApproveFor} {
+		if _, err := w.answer(ana, r.ID, a); !errors.Is(err, approvals.ErrQuorumEffect) {
+			t.Errorf("%s: %v", a, err)
+		}
+	}
+	if _, err := w.answer(w.owner, r.ID, chain.AnswerDelegate); !errors.Is(err, approvals.ErrQuorumEffect) {
+		t.Errorf("delegate: %v", err)
+	}
+	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestARequestThatMustBeBoundToATargetIsNotApprovedWithoutOne(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Approver, "loja")
+	for _, typ := range []classes.RequestType{classes.RequestPR, classes.RequestMerge, classes.RequestDestructive} {
+		r := w.open(openOpts{typ: typ, min: classes.LevelApprover})
+		if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrNoVerify) || w.state(r.ID) != chain.Open {
+			t.Errorf("%s with no target: %v, %s", typ, err, w.state(r.ID))
+		}
+	}
+}
+
+func TestAUserSuspendedWhileTheTargetIsReadVotesNothing(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Approver, "loja")
+	r := w.open(openOpts{typ: classes.RequestPR, target: `{"pr":7}`})
+	w.tg.on = func() {
+		if _, err := w.db.Writer().ExecContext(w.ctx, `UPDATE users SET state = 'suspended' WHERE id = ?`, ana.ID); err != nil {
+			t.Error(err)
+		}
+	}
+	if _, err := w.answer(ana, r.ID, chain.AnswerApprove); !errors.Is(err, approvals.ErrNotYours) {
+		t.Fatalf("the answer: %v", err)
+	}
+	var n int
+	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM approval_votes WHERE request = ?`, r.ID).Scan(&n); err != nil || n != 0 || len(w.ch.decisions()) != 0 {
+		t.Errorf("votes %d, decisions %d, %v", n, len(w.ch.decisions()), err)
 	}
 }

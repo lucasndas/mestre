@@ -458,7 +458,10 @@ func (s *Service) Reply(ctx context.Context, request int64, from, text string) e
 // DecideByPerson is the decision of a person through the flow of approval
 // (milestone 5, which checks the level of the user, the PIN and the quorum):
 // the people are above every level, so the request may be anywhere in the
-// chain, and no ceiling nor attenuation holds.
+// chain, and no ceiling nor attenuation holds. It trusts the caller for who
+// the user is, the quorum, the PIN, the target and the time: its only caller is
+// the flow of approval (internal/approvals), which checks them; a new caller
+// must check them too.
 func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome, error) {
 	r, err := s.st.Get(ctx, d.Request)
 	switch {

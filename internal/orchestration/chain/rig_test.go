@@ -413,7 +413,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		if w.owner, err = w.usvc.CreateOwner(ctx, "Lucas"); err != nil {
 			t.Fatal(err)
 		}
-		w.flow, err = approvals.New(approvals.Options{DB: db, Clock: clk, Chain: lateChain{w}, Users: w.usvc, PINs: w.usvc, Messenger: w.chn})
+		w.flow, err = approvals.New(approvals.Options{DB: db, Clock: clk, Chain: lateChain{w}, Users: w.usvc, PINs: w.usvc, Messenger: w.chn, Locked: func(context.Context) bool { return false }})
 		if err != nil {
 			t.Fatal(err)
 		}

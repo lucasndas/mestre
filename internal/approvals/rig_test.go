@@ -94,11 +94,16 @@ type targets struct {
 	mu  sync.Mutex
 	cur map[int64]string
 	err error
+	// on runs when a target is read (a user suspended while it is).
+	on func()
 }
 
 func (t *targets) Current(_ context.Context, r chain.Request) (json.RawMessage, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.on != nil {
+		t.on()
+	}
 	if t.err != nil {
 		return nil, t.err
 	}
@@ -127,6 +132,7 @@ type world struct {
 	tg    *targets
 	flow  *approvals.Flow
 	nextR int64
+	db    *store.DB
 	locks bool
 	mu    sync.Mutex
 }
@@ -146,7 +152,7 @@ func newWorld(t *testing.T) *world {
 			t.Fatal(err)
 		}
 	}
-	w := &world{t: t, ctx: ctx, clk: clk, msg: fakechannel.New(), tg: &targets{cur: map[int64]string{}}}
+	w := &world{t: t, ctx: ctx, clk: clk, db: db, msg: fakechannel.New(), tg: &targets{cur: map[int64]string{}}}
 	w.ch = &fakeChain{reqs: map[int64]*chain.Request{}, clk: clk, db: db}
 	svc, err := users.New(users.Options{DB: db, Clock: clk, Approvals: late{&w.flow}, PIN: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}})
 	if err != nil {
@@ -180,9 +186,12 @@ func (w *world) add(name string, level users.Level, workspaces ...string) users.
 func (w *world) open(o openOpts) chain.Request {
 	w.t.Helper()
 	w.nextR++
-	r := chain.Request{ID: w.nextR, Workspace: "loja", Type: classes.RequestPR, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople}, Requester: "c1"}
+	r := chain.Request{ID: w.nextR, Workspace: "loja", Type: classes.RequestExtraCost, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople}, Requester: "c1"}
 	if o.typ != "" {
 		r.Type = o.typ
+	}
+	if o.late {
+		r.Deadline = w.clk.Now().Add(-time.Second)
 	}
 	if o.target != "" {
 		imp, err := chain.Impress(json.RawMessage(o.target))
@@ -215,6 +224,7 @@ type openOpts struct {
 	min     classes.Level
 	pin     bool
 	target  string
+	late    bool // the time of the level is over
 }
 
 func (w *world) answer(u users.User, request int64, a chain.Answer) (approvals.Reply, error) {
