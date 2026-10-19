@@ -44,7 +44,10 @@ func newGHWorld(t *testing.T) *ghWorld {
 	rest := &github.REST{BaseURL: "https://api.github.com", HTTP: &http.Client{Transport: fakenet.HandlerTransport(gh)},
 		Token: func(context.Context, string) (string, error) { return "tok", nil }}
 	w := &ghWorld{t: t, gh: gh, sha: strings.Repeat("a", 40)}
-	w.src = approvals.GitHubSource{Reader: func(context.Context, string) (approvals.PullReader, error) { return rest, nil }}
+	w.src = approvals.GitHubSource{Reader: func(context.Context, string) (approvals.PullReader, error) { return rest, nil },
+		Characters: func(context.Context) (map[string]bool, error) {
+			return map[string]bool{"dev[bot]": true, "revisor[bot]": true, "qa[bot]": true}, nil
+		}}
 	w.pr = gh.AddPR(repo, "Login", "42-login", repo)
 	gh.SetPullAuthor(repo, w.pr, "dev[bot]")
 	gh.SetPull(repo, w.pr, w.sha, false, "clean")
@@ -59,7 +62,7 @@ func (w *ghWorld) facts() (chain.PRFacts, error) {
 func TestTheFactsOfAPRAreWhatGitHubSaysAtTheCommitOfTheRequest(t *testing.T) {
 	t.Parallel()
 	w := newGHWorld(t)
-	w.gh.AddPullFile(repo, w.pr, "src/login.ts", "@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n")
+	w.gh.AddPullFile(repo, w.pr, "src/login.ts", "@@ -1,2 +1,4 @@\n a\n-b\n+c\n+d\n+++ DROP TABLE users\n")
 	w.gh.AddPullFileOf(repo, w.pr, "old.ts", "", "removed", "", 0, 9)
 	w.gh.AddPullFileOf(repo, w.pr, "big.sql", "", "modified", "", 5000, 10) // GitHub gave no patch
 	w.gh.AddPullFileOf(repo, w.pr, "new/name.ts", "@@ -1 +1 @@\n-x\n+y\n", "renamed", "name.ts", 1, 1)
@@ -75,7 +78,7 @@ func TestTheFactsOfAPRAreWhatGitHubSaysAtTheCommitOfTheRequest(t *testing.T) {
 	for _, x := range f.Files {
 		by[x.Path] = x
 	}
-	if l := by["src/login.ts"]; l.Added != 2 || l.Removed != 1 || len(l.AddedLines) != 2 || l.AddedLines[0] != "c" || l.PatchMissing || l.Deleted {
+	if l := by["src/login.ts"]; l.Added != 3 || l.Removed != 1 || len(l.AddedLines) != 3 || l.AddedLines[0] != "c" || l.AddedLines[2] != "++ DROP TABLE users" || l.PatchMissing || l.Deleted {
 		t.Errorf("src/login.ts = %+v", l)
 	}
 	if o := by["old.ts"]; !o.Deleted || o.PatchMissing || o.Removed != 9 {
@@ -122,13 +125,15 @@ func TestAReviewIsDoneOnlyByAnotherCharacterWithNothingPending(t *testing.T) {
 		reviews [][2]string
 		want    bool
 	}{
-		"none":               {nil, false},
-		"another character":  {[][2]string{{"revisor[bot]", "APPROVED"}}, true},
-		"only comments":      {[][2]string{{"revisor[bot]", "COMMENTED"}}, true},
-		"the author itself":  {[][2]string{{"dev[bot]", "APPROVED"}}, false},
-		"a person":           {[][2]string{{"lucas", "APPROVED"}}, false},
-		"changes requested":  {[][2]string{{"revisor[bot]", "APPROVED"}, {"qa[bot]", "CHANGES_REQUESTED"}}, false},
-		"requested, then ok": {[][2]string{{"qa[bot]", "CHANGES_REQUESTED"}, {"qa[bot]", "APPROVED"}}, true},
+		"none":                              {nil, false},
+		"another character":                 {[][2]string{{"revisor[bot]", "APPROVED"}}, true},
+		"only comments":                     {[][2]string{{"revisor[bot]", "COMMENTED"}}, true},
+		"the author itself":                 {[][2]string{{"dev[bot]", "APPROVED"}}, false},
+		"a person":                          {[][2]string{{"lucas", "APPROVED"}}, false},
+		"an app of no one":                  {[][2]string{{"intruso[bot]", "APPROVED"}}, false},
+		"a comment does not lift a request": {[][2]string{{"qa[bot]", "CHANGES_REQUESTED"}, {"qa[bot]", "COMMENTED"}, {"revisor[bot]", "APPROVED"}}, false},
+		"changes requested":                 {[][2]string{{"revisor[bot]", "APPROVED"}, {"qa[bot]", "CHANGES_REQUESTED"}}, false},
+		"requested, then ok":                {[][2]string{{"qa[bot]", "CHANGES_REQUESTED"}, {"qa[bot]", "APPROVED"}}, true},
 	} {
 		w := newGHWorld(t)
 		for _, r := range tc.reviews {
@@ -183,7 +188,7 @@ func TestAPushAfterTheQuestionInvalidatesTheApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	ch.Flow = flow
-	target := approvals.PRTarget(repo, w.pr, w.sha)
+	target := approvals.PRTarget(repo, w.pr, w.sha, "main")
 	imp, err := chain.Impress(target)
 	if err != nil {
 		t.Fatal(err)
@@ -215,5 +220,61 @@ func TestAPushAfterTheQuestionInvalidatesTheApproval(t *testing.T) {
 	}
 	if _, err := flow.Answer(ctx, owner.ID, approvals.Input{Request: 2, Answer: chain.AnswerApprove}); err != nil || ch.State(2) != chain.Approved {
 		t.Errorf("the head that did not move: %v, %s", err, ch.State(2))
+	}
+}
+
+func TestAReviewOfAnotherCommitDoesNotDescribeTheHead(t *testing.T) {
+	t.Parallel()
+	w := newGHWorld(t)
+	w.gh.AddReviewAt(repo, w.pr, "revisor[bot]", "APPROVED", strings.Repeat("0", 40)) // an old commit
+	if f, err := w.facts(); err != nil || f.ReviewDone {
+		t.Errorf("an approval of another commit counted: %v, %v", f.ReviewDone, err)
+	}
+	w.gh.AddReview(repo, w.pr, "qa[bot]", "APPROVED") // on the head
+	if f, err := w.facts(); err != nil || !f.ReviewDone {
+		t.Errorf("an approval of the head did not count: %v, %v", f.ReviewDone, err)
+	}
+}
+
+func TestTheLegacyStatusesCountForTheCI(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		check, status string
+		want          bool
+	}{
+		"only a status that passed":        {"", "success", true},
+		"a check and a failed status":      {"success", "failure", false},
+		"a check and a pending status":     {"success", "pending", false},
+		"a check and a status that passed": {"success", "success", true},
+	} {
+		w := newGHWorld(t)
+		if tc.check != "" {
+			w.gh.AddCheck(repo, w.sha, "build", tc.check)
+		}
+		w.gh.AddStatus(repo, w.sha, "ci/legacy", tc.status)
+		if f, err := w.facts(); err != nil || f.CIGreen != tc.want {
+			t.Errorf("%s: green %v, %v", name, f.CIGreen, err)
+		}
+	}
+}
+
+func TestAClosedPRAndABaseThatMovedAreNotWhatWasAsked(t *testing.T) {
+	t.Parallel()
+	w := newGHWorld(t)
+	w.gh.SetPullState(repo, w.pr, "closed", false, "")
+	if _, err := w.facts(); err == nil {
+		t.Error("facts of a closed PR")
+	}
+	w2 := newGHWorld(t)
+	before, err := w2.src.Current(context.Background(), chain.Request{Workspace: "meu-app", Type: classes.RequestPR, PR: &chain.PRRef{Repo: repo, Number: w2.pr, SHA: w2.sha}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w2.gh.SetPullState(repo, w2.pr, "open", false, "release")
+	after, _ := w2.src.Current(context.Background(), chain.Request{Workspace: "meu-app", Type: classes.RequestPR, PR: &chain.PRRef{Repo: repo, Number: w2.pr, SHA: w2.sha}})
+	a, _ := chain.Impress(before)
+	b, _ := chain.Impress(after)
+	if a == b {
+		t.Error("changing the base did not change the target")
 	}
 }

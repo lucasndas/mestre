@@ -105,7 +105,11 @@ func (c *REST) CheckRuns(ctx context.Context, repo, sha string) ([]Check, error)
 }
 
 // Review is a review of a PR.
-type Review struct{ By, State string }
+type Review struct {
+	By, State string
+	// Commit is the commit the review was made on.
+	Commit string
+}
 
 // Reviews lists the reviews of a PR.
 func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error) {
@@ -113,7 +117,8 @@ func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error
 		User struct {
 			Login string `json:"login"`
 		} `json:"user"`
-		State string `json:"state"`
+		State    string `json:"state"`
+		CommitID string `json:"commit_id"`
 	}
 	raw, err := pages[item](ctx, c, repo, fmt.Sprintf("/pulls/%d/reviews", n), "reading the reviews")
 	if err != nil {
@@ -121,7 +126,7 @@ func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error
 	}
 	out := make([]Review, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, Review{By: r.User.Login, State: r.State})
+		out = append(out, Review{By: r.User.Login, State: r.State, Commit: r.CommitID})
 	}
 	return out, nil
 }
@@ -233,4 +238,22 @@ func pages[T any](ctx context.Context, c *REST, repo, path, what string) ([]T, e
 		}
 	}
 	return nil, errTooMany
+}
+
+// CommitStatus is the combined state of the legacy statuses of a commit
+// (success, pending, failure, error); "" when it has none.
+func (c *REST) CommitStatus(ctx context.Context, repo, sha string) (string, error) {
+	var v struct {
+		State    string `json:"state"`
+		Statuses []struct {
+			State string `json:"state"`
+		} `json:"statuses"`
+	}
+	if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/commits/%s/status", sha), nil, http.StatusOK, &v, "reading the statuses"); err != nil {
+		return "", err
+	}
+	if len(v.Statuses) == 0 {
+		return "", nil
+	}
+	return v.State, nil
 }
