@@ -43,6 +43,9 @@ type Options struct {
 	Grants      Grants
 	TempRules   TempRules
 	Delegations Delegations
+	// PRs reads the PRs the conditions of the policy check; without it a
+	// request of a PR is for the people (diff_incompleto).
+	PRs         PRSource
 	Supervision Supervision
 	Alerts      Alerts
 	Tasks       Tasks
@@ -165,6 +168,8 @@ type OpenRequest struct {
 	// Risk is the classification; zero is the risk of the type.
 	Risk    classes.RiskResult
 	Mission *Mission
+	// PR is the PR of a request of type pr or merge.
+	PR *PRRef
 	// Task overrides the original task of the requester.
 	Task string
 }
@@ -209,7 +214,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		o.Type = classes.RequestClassPermission
 	}
 	r := Request{Workspace: o.Workspace, Table: o.Table, Type: o.Type, State: Open, Requester: o.Requester, Designer: o.Designer, Proposer: o.Proposer,
-		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, Task: o.Task,
+		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Task: o.Task,
 		CreatedAt: s.clk.Now()}
 	if r.Risk.Risk == "" {
 		r.Risk = classes.ClassifyRisk(classes.Env{}, nil, classes.RiskRequest{Type: o.Type})
@@ -311,7 +316,7 @@ func (s *Service) arrive(ctx context.Context, id int64, st Settings) {
 	switch r.Level.Kind {
 	case LevelPeople:
 		if s.o.Users != nil {
-			if err := s.o.Users.Ask(ctx, PeopleQuestion{Request: r, Text: Text(r, r.Level, answers), Deadline: r.Deadline, Answers: answers}); err != nil {
+			if err := s.o.Users.Ask(ctx, s.question(r, Text(r, r.Level, answers), answers)); err != nil {
 				s.log.Warn("chain: the people were not asked", "request", r.ID, "err", err)
 			}
 		}
@@ -344,6 +349,14 @@ func (s *Service) arrive(ctx context.Context, id int64, st Settings) {
 	if informed {
 		s.informGM(ctx, r)
 	}
+}
+
+// question is what the people are asked: the text, the answers and what the
+// policy requires of who answers.
+func (s *Service) question(r Request, text string, answers []Answer) PeopleQuestion {
+	rules, _ := s.rulesOf(r.Workspace)
+	n, require, min := rules.Need(r)
+	return PeopleQuestion{Request: r, Text: text, Deadline: r.Deadline, Answers: answers, Approvals: n, Require: require, MinLevel: min}
 }
 
 // informGM tells the Grão-Mestre about a request that went over him to the

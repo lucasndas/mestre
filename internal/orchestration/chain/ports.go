@@ -130,6 +130,12 @@ type PeopleQuestion struct {
 	Deadline time.Time
 	// Answers are those the people may give.
 	Answers []Answer
+	// Approvals is how many approvals the request needs (the quorum), Require
+	// the users whose approval is required and MinLevel the minimum level of
+	// who may answer (the policy: nivel_minimo of the type, or of the risk).
+	Approvals int
+	Require   []string
+	MinLevel  classes.Level
 }
 
 // Grants makes the effects of an approval or a denial.

@@ -127,6 +127,8 @@ type OrchestrationOptions struct {
 	// in Orchestration.TableRules.
 	ChainTempRules   chain.TempRules
 	ChainDelegations chain.Delegations
+	// ChainPRs reads the PRs for the conditions of the approval policy.
+	ChainPRs         chain.PRSource
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
 
@@ -489,7 +491,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			supervision = sup
 		}
 		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
-			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations,
+			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}}, Logger: o.Logger})
 		if err != nil {
