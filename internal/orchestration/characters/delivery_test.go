@@ -357,10 +357,6 @@ func TestTheEndOfTheTurnOfTheRuntimeAnswersTheAskOfAnotherCharacter(t *testing.T
 
 func connectionsChar(c characters.Character) connections.Ref { return connections.Char(c.ID) }
 
-func askRequest(from, to characters.Character, prompt string) waits.AskRequest {
-	return waits.AskRequest{From: from, To: to, Prompt: prompt}
-}
-
 func hookAnswer() hook.Answer { return hook.Answer{} }
 
 // CA-CLI-CONV-07: a target waiting for a permission (blocked by permission)

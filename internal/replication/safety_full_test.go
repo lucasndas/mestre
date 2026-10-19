@@ -21,7 +21,7 @@ import (
 // costs a Citadel, a Tower and their files, which on a Windows runner is where
 // the 30 s of the fast suite go.
 
-// CA-REPL-04
+// Part of CA-REPL-04
 // What an excluded machine does not get, it does not keep: the folders marked
 // so are emptied with the vault, and the replica stays the same otherwise.
 func TestVaultDropAlsoErasesTheFoldersThatAreNotForAnExcludedMachine(t *testing.T) {

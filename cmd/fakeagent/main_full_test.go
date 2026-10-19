@@ -51,8 +51,8 @@ func copyStdin(path string) int {
 
 // The fake agent binary, called "claude", runs as a real process started by
 // the real launcher and runs its hooks as real processes (sh -c on Linux,
-// cmd /c on Windows). CA-DUBLES-11 itself (motor, base and `mestre hook`)
-// closes when those exist (M4).
+// cmd /c on Windows). CA-DUBLES-11 itself (engine, base and `mestre hook`)
+// has its own test, in the packages that own those parts.
 func TestFakeAgentBinaryAsClaudeRunsRealHooks(t *testing.T) {
 	t.Parallel()
 	// Long, symlink-free path: the agent compares its working folder with

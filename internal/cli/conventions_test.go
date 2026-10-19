@@ -233,7 +233,7 @@ func TestASuccessWithJSONIsOneObjectWithData(t *testing.T) {
 	})
 }
 
-// CA-CLI-CONV-03, with the cgroup of the terminal (Linux): the id of a
+// Part of CA-CLI-CONV-03, with the cgroup of the terminal (Linux): the id of a
 // character used by a process outside its terminal, or inside the terminal of
 // another character, is refused with 3 and not_identified, and nothing runs.
 // The real processes are the full suite's (CA-LOCAL-11 and CA-LOCAL-13, and

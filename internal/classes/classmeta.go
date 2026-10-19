@@ -26,7 +26,7 @@ const (
 const MaxNameLen = 40
 
 // RecommendedClassChars is the size of the CLASS.md over which `class check`
-// warns (docs/sessao-zero/personagem.md#tamanho).
+// warns (docs/sessao-zero/personagem.md#estrutura-do-mestremd).
 const RecommendedClassChars = 3000
 
 var slugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)

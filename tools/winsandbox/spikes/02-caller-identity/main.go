@@ -1,7 +1,7 @@
 //go:build windows
 
 // Command callerid is the 4th M1 Windows spike: identifying who calls the
-// local channel (docs/arquitetura/seguranca.md#verificar-na-implementação).
+// local channel (docs/arquitetura/seguranca.md#identidade-de-quem-chama-a-cli).
 //
 // It reuses the setup of tools/winsandbox/spikes/01-agent-service: the
 // mestre-agente account, the MestreSpikeLauncher service (LocalSystem, hands

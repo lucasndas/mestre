@@ -13,8 +13,6 @@ import (
 // Store is the notes, tomes and note_counters tables of the Guild database.
 type Store struct{ DB *store.DB }
 
-func ms(t time.Time) int64 { return t.UnixMilli() }
-
 func fromMs(v int64) time.Time {
 	if v == 0 {
 		return time.Time{}

@@ -114,6 +114,9 @@ func TestSoloRerunsCountInTheWallTimeWithinTheBudgetLeft(t *testing.T) {
 			if got := len(ex.callsMatching("-run")) > 0; got != c.wantRerun {
 				t.Fatalf("re-run = %v, want %v", got, c.wantRerun)
 			}
+			if name == "fits" && !strings.Contains(text, "above 100ms when run alone") || name == "no time left" && !strings.Contains(text, "above 100ms in the suite (not re-run)") {
+				t.Fatalf("the warning does not say how the time was measured:\n%s", text)
+			}
 			if name == "fits" && strings.Contains(text, "not re-run") {
 				t.Fatalf("a test measured within the budget is not reported as unmeasured:\n%s", text)
 			}

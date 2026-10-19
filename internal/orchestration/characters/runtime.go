@@ -405,23 +405,6 @@ func (rt *Runtime) WaitResolved(ctx context.Context, agentID string) error {
 	return nil
 }
 
-// Unblock brings a blocked character back: to busy (the permission was decided,
-// the quota came back) or to idle (the input was given and it is at the prompt).
-func (rt *Runtime) Unblock(ctx context.Context, agentID string, toIdle bool) error {
-	s := rt.session(agentID)
-	if s == nil {
-		return fmt.Errorf("characters: %s does not run on this machine", agentID)
-	}
-	trig, why := TrigUnblockBusy, "unblocked"
-	if toIdle {
-		trig = TrigUnblockIdle
-	}
-	if !s.do(ctx, trig, why) {
-		return fmt.Errorf("characters: %s is %s, not blocked", agentID, s.status().State)
-	}
-	return nil
-}
-
 // Deliver types a delivery of the inbox into the terminal of a character that
 // is idle or waiting, marks it busy, and starts the wait for the turn to
 // begin. The sections of the layer that changed go in front of the text of a

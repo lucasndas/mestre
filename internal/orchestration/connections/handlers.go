@@ -225,10 +225,3 @@ func orDash(s string) string {
 	}
 	return s
 }
-
-func orEmpty(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
-}
