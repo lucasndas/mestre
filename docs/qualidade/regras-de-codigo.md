@@ -10,7 +10,7 @@ Impedir por máquina as classes de erro que a auditoria do M0 e do M1 achou à m
 
 ### Onde roda
 
-- Ferramenta Go `tools/codecheck`: o teste `TestCodeRules` (sem build tag, portanto da rápida) confere o repositório inteiro; `go run ./tools/codecheck` roda sozinha. Lê todos os `.go` com `go/parser`, em paralelo, menos as pastas que o `go` ignora, `testdata`, `web` e `node_modules`. Orçamento: o repositório inteiro em menos de 1 s (medido em cerca de 40 ms).
+- Ferramenta Go `tools/codecheck`: o teste `TestCodeRules` (sem build tag, portanto da rápida) confere o repositório inteiro; `go run ./tools/codecheck` roda sozinha. Lê todos os `.go` com `go/parser`, em paralelo, menos as pastas que o `go` ignora, `testdata`, `web` e `node_modules`. Orçamento: o repositório inteiro em menos de 1 s (medido em cerca de 40 ms). Um `.go` que não parseia faz o `codecheck` imprimir `parse <arquivo>: …` e sair com 2; violação de regra sai com 1.
 - Mostra todos os problemas de uma vez: `<arquivo>:<linha>: <regra>: <mensagem>`. O código de saída é 1 se houver algum.
 - Código de spike (`tools/spikes/`, `tools/winsandbox/spikes/`) fica fora das regras novas ([convenções](../desenvolvimento/convencoes.md#estilo)); só os subtestes paralelos valem para os testes dele.
 

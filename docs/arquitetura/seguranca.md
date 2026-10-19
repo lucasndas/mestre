@@ -129,6 +129,7 @@ Aplicado a tudo o que vai para log (motor, Guardião, histórico de terminais, a
 4. **Registro de valores:** `Register` ignora valores de menos de 4 bytes, para não mascarar palavras comuns.
 5. O mesmo mascarador filtra as mensagens de usuários antes de chegarem ao Grão-Mestre ([credenciais de site](../plataforma/cofre.md#credenciais-de-site)).
 6. Histórico de terminal: o mascaramento é por linha, depois de remover as sequências de escape (CSI, OSC, DCS, designação de conjunto de caracteres como o `ESC ( B` do `tput sgr0`, `ESC 7`/`8`/`=`/`>` e `ESC` solto). O fluxo ao vivo no painel não é mascarado (é a tela do agente).
+7. **Atributos de log:** o valor de um atributo cuja chave é `password`, `token`, `secret` ou `authorization` (sem diferenciar maiúsculas) é trocado por inteiro; nos demais, erro, `Stringer` e `[]byte` viram texto e qualquer outro valor vira `%+v` antes de o mascarador passar; num grupo, só os atributos de dentro são julgados (`internal/logging`).
 
 ## Quem vê o quê
 
