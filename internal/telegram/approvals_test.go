@@ -76,6 +76,9 @@ func (w *world) lastEdit(u faketelegram.User) string {
 	for _, s := range w.sent("editMessageText") {
 		if s.ChatID == u.ID {
 			text = s.Text
+			if head, rest, ok := strings.Cut(text, "\n"); ok && strings.HasPrefix(head, "<b>") {
+				text = rest // the header is checked on its own (CA-ROTA-06)
+			}
 		}
 	}
 	return text
@@ -467,7 +470,7 @@ func TestALongQuestionIsEditedInTheMessageNotInTheFile(t *testing.T) {
 		}
 	}
 	edits := w.sent("editMessageText")
-	if len(edits) != 1 || edits[0].MessageID != msgID || edits[0].Text != "Encerrado." {
+	if len(edits) != 1 || edits[0].MessageID != msgID || edits[0].Text != "<b>loja</b>\nEncerrado." {
 		t.Errorf("edits = %+v, want one on message %d", edits, msgID)
 	}
 }
