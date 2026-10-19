@@ -68,7 +68,8 @@ func TestParseCeilingReadsTheDocExampleStrictly(t *testing.T) {
 	}
 }
 
-// CA-TETO-01
+// Part of CA-TETO-01 (the check; the save by the table master is in
+// classpkg_test.go)
 func TestCreatingAClassBeyondTheCeilingDomainsIsRefused(t *testing.T) {
 	t.Parallel()
 	c := ceiling(t, "version: 1\npermissions: {network: {domains: [\"github.com\"]}}\n")

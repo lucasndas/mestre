@@ -1,6 +1,7 @@
 package classes_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -65,6 +66,12 @@ func TestAwkAndSedDynamicCodeIsTheCodeSignal(t *testing.T) {
 		`sed -f script.sed f`,
 	} {
 		wantRisk(t, env, def, cmd, classes.RiskMedium)
+		// The -f forms are medio only because the program is not on the list of
+		// safe ones, not by the code signal the criterion names (a gap of the
+		// classifier, reported apart from this change).
+		if got := shellRisk(env, def, cmd); !strings.Contains(cmd, " -f ") && !strings.Contains(got.Rule, "sinal de interpretador com código") {
+			t.Errorf("%q is medio by %q; want the signal of an interpreter with code", cmd, got.Rule)
+		}
 		if d := decide(env, def, m.shell(cmd)); d.Verdict == classes.Allow {
 			t.Errorf("%q allowed; want ask (code the motor cannot read)", cmd)
 		}

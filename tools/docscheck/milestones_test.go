@@ -227,13 +227,15 @@ func TestAuditedMilestoneNeedsATestForEveryCriterion(t *testing.T) {
 		files map[string]string
 		want  []string // identifiers reported
 	}{
-		"no markers":                    {audit: closed, want: []string{"CA-A-01", "CA-A-03"}},
-		"one marker":                    {audit: closed, files: testFile("CA-A-01"), want: []string{"CA-A-03"}},
-		"all markers":                   {audit: closed, files: testFile("CA-A-01", "CA-A-03")},
-		"a marker outside a _test.go":   {audit: closed, files: map[string]string{"internal/x/x.go": "package x\n\n// CA-A-01\n// CA-A-03\nfunc F() {}\n"}, want: []string{"CA-A-01", "CA-A-03"}},
-		"milestone without a date":      {files: nil},
-		"listed as coming later":        {audit: closed, extra: deferredList},
-		"a range counts for every item": {audit: closed, extra: deferredList},
+		"no markers":                     {audit: closed, want: []string{"CA-A-01", "CA-A-03"}},
+		"one marker":                     {audit: closed, files: testFile("CA-A-01"), want: []string{"CA-A-03"}},
+		"all markers":                    {audit: closed, files: testFile("CA-A-01", "CA-A-03")},
+		"a marker outside a _test.go":    {audit: closed, files: map[string]string{"internal/x/x.go": "package x\n\n// CA-A-01\n// CA-A-03\nfunc F() {}\n"}, want: []string{"CA-A-01", "CA-A-03"}},
+		"milestone without a date":       {files: nil},
+		"listed as coming later":         {audit: closed, extra: "### Critérios em marcos posteriores\n\n| Documento | Critério → marco em que fecha |\n|---|---|\n| [m1](../a/m1.md) | CA-A-01 e CA-A-03 → M5 |\n"},
+		"listed in the PC operator list": {audit: closed, extra: "### Operador do PC no M7\n\n| Documento | Critérios implementados no M7 |\n|---|---|\n| [m1](../a/m1.md) | CA-A-01, CA-A-03 |\n"},
+		"only one of the two is listed":  {audit: closed, extra: "### Critérios em marcos posteriores\n\n| Documento | Critério → marco em que fecha |\n|---|---|\n| [m1](../a/m1.md) | CA-A-01 → M5 |\n", want: []string{"CA-A-03"}},
+		"a range counts for every item":  {audit: closed, extra: deferredList},
 		"listed under another heading": {audit: closed, extra: "### Outra lista\n\n| [m1](../a/m1.md) | CA-A-01 a CA-A-03 |\n",
 			want: []string{"CA-A-01", "CA-A-03"}},
 	}
