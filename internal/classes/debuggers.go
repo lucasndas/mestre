@@ -82,7 +82,45 @@ func gdbRuns(args []word) [][]word {
 			return nil
 		}
 	}
-	return nil
+	return gdbProgramRuns(args)
+}
+
+// gdbValued are the options of gdb that take the next word.
+var gdbValued = set("-ex --ex -iex --iex -x --command -ix --init-command -d --directory -cd --cd -s --symbols -e --exec -se -c --core -p --pid " +
+	"-tty --tty -l -b -D --data-directory --eval-command -eval-command --init-eval-command -init-eval-command")
+
+// gdbRunRe is the commands that start the program with arguments: run,
+// start and set args.
+var gdbRunRe = regexp.MustCompile(`^\s*(?:r(?:u(?:n)?)?|start|set\s+args)\s+(.+)$`)
+
+// gdbProgramRuns are the runs of gdb PROGRAM without --args: the arguments
+// come in the -ex that runs it (-ex 'run push', -ex 'set args push').
+func gdbProgramRuns(args []word) [][]word {
+	var prog *word
+	for i := 0; i < len(args) && prog == nil; i++ {
+		switch a := args[i].text; {
+		case a == "--":
+			if i+1 < len(args) {
+				prog = &args[i+1]
+			}
+		case gdbValued[a]:
+			i++
+		case !strings.HasPrefix(a, "-"):
+			prog = &args[i]
+		}
+	}
+	if prog == nil {
+		return nil
+	}
+	var out [][]word
+	for _, v := range optValues(wordsText(args), gdbCommandOptions...) {
+		for _, line := range strings.Split(v, "\n") {
+			if m := gdbRunRe.FindStringSubmatch(gdbUnwrap(line)); m != nil {
+				out = append(out, shellWords(prog.text+" "+strings.TrimSpace(m[1])))
+			}
+		}
+	}
+	return out
 }
 
 // lldbValued are the options of lldb that take the next word.

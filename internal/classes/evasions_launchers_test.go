@@ -60,3 +60,36 @@ func TestTheWindowsLaunchersAskForWhatIsNotAFixedRuleAndMshtaAlways(t *testing.T
 		allowances(t, ee.name, ee.env, r, "sc.exe query x", "sc start x", "rundll32 user32.dll,LockWorkStation", "at", "New-ScheduledTaskTrigger -Daily -At 3am")
 	}
 }
+
+// Part of CA-PERM-32 and CA-PERM-33: what the review of the second fix found.
+func TestTheUnitPropertiesAndTheOtherFormsOfTheLaunchersAreRead(t *testing.T) {
+	t.Parallel()
+	r := rules(t, anyYAML)
+	cases := []evasion{
+		{`systemd-run -p ExecStartPre="git push" true`, "git push"}, {`systemd-run -p ExecStart="git push" true`, "git push"},
+		{`systemd-run --property="ExecStartPost=git push" true`, "git push"}, {`systemd-run "-pExecStart=-git push" true`, "git push"},
+		{`systemd-run --property ExecStop="@git push" true`, "git push"},
+		{"gdb -ex 'run push' git", "git push"}, {"gdb -ex 'set args push' -ex run git", "git push"}, {"gdb -batch -ex 'r push' -- git", "git push"},
+		{"gdb -ex 'start push' git", "git push"},
+	}
+	win := []evasion{
+		{"pcalua -a:git -c:push", "git push"}, {`rundll32 shell32.dll,#572 git push`, "git push"}, {`rundll32.exe shell32,#572 "git push"`, "git push"},
+	}
+	for _, ee := range evasionEnvs() {
+		fixedDenials(t, ee.name, ee.env, r, cases)
+		if ee.name == "windows" {
+			fixedDenials(t, ee.name, ee.env, r, win)
+		}
+	}
+	// the at of the other systems is not the one of Windows
+	for _, ee := range evasionEnvs() {
+		if ee.name != "windows" {
+			allowances(t, ee.name, ee.env, r, "at 12:00 tomorrow", "at -l")
+		}
+	}
+	for _, ee := range evasionEnvs() {
+		if ee.name == "windows" {
+			allowances(t, ee.name, ee.env, r, "systemd-run -p CPUQuota=50% ls", "gdb -ex 'run' ls")
+		}
+	}
+}

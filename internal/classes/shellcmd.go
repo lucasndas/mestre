@@ -294,7 +294,7 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		// a script, an .hta or an address: what it runs is not read whole
 		res.atLeastAsk("mshta roda um script que o motor não lê por inteiro")
 	}
-	for _, line := range winCreate(cn, args) {
+	for _, line := range winCreate(cn, args, e.windows) {
 		// wmic process call create "git push", schtasks /create /tr "git push"
 		res.merge(e.shell(line, st.cwds[0], depth+1))
 		res.atLeastAsk("comando dentro de um argumento de " + cn)

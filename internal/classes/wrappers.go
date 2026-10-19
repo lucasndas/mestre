@@ -84,6 +84,49 @@ var corepackManagers = set("npm npx pnpm pnpx yarn yarnpkg")
 // debugger, a profiler or a meter, or python -m runs, as the words of a
 // command each, or nil.
 func (e *evaluator) wrapped(cn string, args []word, res *result) [][]word {
+	out := e.wrappedBy(cn, args, res)
+	if cn == "systemd-run" {
+		// -p ExecStartPre='git push': the unit runs the command line
+		for _, line := range unitExecLines(args) {
+			out = append(out, shellWords(line))
+		}
+	}
+	return out
+}
+
+// unitExecProps are the properties of a systemd unit whose value is a command
+// line the unit runs.
+var unitExecProps = set("execstart execstartpre execstartpost execstop execstoppost execreload execcondition")
+
+// unitExecLines are the command lines of the Exec… properties given to
+// systemd-run (-p Exec…=LINE, --property Exec…=LINE, -pExec…=LINE), without
+// the modifiers a unit puts before the program (-, @, +, !, :).
+func unitExecLines(args []word) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		t := args[i].text
+		var prop string
+		switch {
+		case (t == "-p" || t == "--property") && i+1 < len(args):
+			i++
+			prop = args[i].text
+		case strings.HasPrefix(t, "--property="):
+			prop = strings.TrimPrefix(t, "--property=")
+		case strings.HasPrefix(t, "-p") && !strings.HasPrefix(t, "--"):
+			prop = t[2:]
+		default:
+			continue
+		}
+		if key, val, ok := strings.Cut(prop, "="); ok && unitExecProps[strings.ToLower(key)] {
+			if val = strings.TrimLeft(val, "-@+!: "); val != "" {
+				out = append(out, val)
+			}
+		}
+	}
+	return out
+}
+
+func (e *evaluator) wrappedBy(cn string, args []word, res *result) [][]word {
 	one := func(inner []word) [][]word {
 		if len(inner) == 0 {
 			return nil
@@ -361,7 +404,7 @@ func pythonRunner(cn string, args []word) []word {
 // -Class Win32_Process -Name Create "cmd", schtasks /create /tr "cmd" (the task
 // runs it later, in the account that made it) and the calls that start a
 // process in the script a line of mshta carries.
-func winCreate(cn string, args []word) []string {
+func winCreate(cn string, args []word, windows bool) []string {
 	texts := wordsText(args)
 	switch cn {
 	case "wmic":
@@ -403,7 +446,9 @@ func winCreate(cn string, args []word) []string {
 	case "rundll32":
 		// rundll32 shell32.dll,ShellExec_RunDLL command line
 		for i, t := range texts {
-			if l := strings.ToLower(t); strings.Contains(l, "shellexec_rundll") || strings.Contains(l, "fileprotocolhandler") {
+			// ShellExec_RunDLL by name or by its ordinal (shell32.dll,#572):
+			// any entry given by ordinal that is followed by words is read so
+			if l := strings.ToLower(t); strings.Contains(l, "shellexec_rundll") || strings.Contains(l, "fileprotocolhandler") || strings.Contains(l, ",#") {
 				return commandLines(texts[i+1:])
 			}
 		}
@@ -418,11 +463,22 @@ func winCreate(cn string, args []word) []string {
 				arg = texts[i+1]
 			}
 		}
+		for _, t := range texts { // -a:git -c:push
+			if v, ok := cutFold(t, "-a:"); ok {
+				app = v
+			} else if v, ok := cutFold(t, "-c:"); ok {
+				arg = v
+			}
+		}
 		if app != "" {
 			return []string{strings.TrimSpace(app + " " + arg)}
 		}
 	case "at":
-		// at [\\computer] TIME [/every:… | /next:… | /interactive] command
+		// at [\\computer] TIME [/every:… | /next:… | /interactive] command;
+		// the at of the other systems has no such form
+		if !windows {
+			return nil
+		}
 		i := 0
 		for i < len(texts) && strings.HasPrefix(texts[i], `\\`) {
 			i++
