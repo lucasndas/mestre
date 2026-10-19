@@ -277,6 +277,7 @@ func fakeAccounts(uid, gid int, users map[string][2]int) launcher.Accounts {
 // A launcher that runs as root (or as any account that is not the owner of
 // the vault) still never starts the mestre-pty as the owner of the vault, as
 // root, or with the group root: the account of the agents is none of them.
+// CA-TERM-16
 func TestTheAgentAccountIsNeitherTheOwnerOfTheVaultNorRootNorTheGroupRoot(t *testing.T) {
 	t.Parallel()
 	users := map[string][2]int{
@@ -314,6 +315,7 @@ func TestTheAgentAccountIsNeitherTheOwnerOfTheVaultNorRootNorTheGroupRoot(t *tes
 // CA-TERM-15
 // The account of the agents of a launcher is the one of its own instance: a
 // launcher of one instance never starts a mestre-pty as the agents of another.
+// CA-TERM-16
 func TestPrepareBindsTheAgentAccountToTheInstance(t *testing.T) {
 	t.Parallel()
 	users := map[string][2]int{"mestre-agente": {991, 991}, "mestre-agente-x": {992, 992}}

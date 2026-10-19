@@ -430,6 +430,8 @@ func TestTheCLIOfClassesCreatesChecksExportsEditsListsAssignsAndDeletes(t *testi
 // CA-CLI-CLR-06
 // CA-CLI-CLR-08
 // CA-CLI-CLR-09
+// CA-CLI-CLR-11
+// CA-RIT-09
 func TestTheCLIOfRitualsCreatesFiresAndManagesThem(t *testing.T) {
 	t.Parallel()
 	w := newCommWorld(t)

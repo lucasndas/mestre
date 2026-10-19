@@ -229,6 +229,7 @@ func TestANameThatExistsInTheDestinationGetsASuffixShownInTheSummary(t *testing.
 
 // Part of CA-GRIM-04: the name of a quest has a limit (docs/orquestracao/missoes.md#definição), so
 // the suffix of a name that exists in the destination makes room for itself.
+// CA-GRIM-08
 func TestTheNameOfAQuestAtTheLimitStillFitsWithItsSuffix(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

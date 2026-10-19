@@ -15,6 +15,7 @@ const maxAccountName = 20
 // instance must give an account that fits the system and that a system
 // which ignores the case cannot confuse with the account of another instance
 // (docs/arquitetura/componentes.md#instâncias).
+// CA-LOCAL-16
 func TestTheNameOfAnInstanceGivesAnAccountThatFitsAndHasNoCaseTwin(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"principal", "a", "ci_2", "seg-1", "abcdef", "0"} {

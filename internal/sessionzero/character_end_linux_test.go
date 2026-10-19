@@ -45,6 +45,7 @@ func TestEndForGoodRemovesFifosSocketsAndTheFolderOfTheMachine(t *testing.T) {
 // mestre) makes it inside agentes/, and without the bit the folder, and the
 // policy.json and env.json inside it, would be of the group mestre, which
 // the agent is not in, instead of the group of the agents of the instance.
+// CA-SZ-PERS-14
 func TestTheFolderOfTheCharacterOnTheMachineIsSetgid(t *testing.T) {
 	t.Parallel()
 	r := newCharRig(t, nil)

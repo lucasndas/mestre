@@ -13,6 +13,7 @@ import (
 // be given to a new character (recruit: 3 ceiling_denied) nor to a step of a
 // quest (quest create: 2 invalid_quest naming the ceiling); the production
 // Ceiling is over the libraries of classes.
+// CA-TETO-09
 func TestAClassAboveTheNarrowedCeilingIsRefusedByRecruitAndByQuestCreate(t *testing.T) {
 	t.Parallel()
 	w := newCitadelWorld(t)

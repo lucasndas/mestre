@@ -11,6 +11,7 @@ import (
 // In the real assembly the scrolls of a table are copied, read-only, into the
 // worktree of the machine where its characters live: at each change, and for a
 // character that is born (the item of a quest cites that path).
+// CA-PERG-09
 func TestTheScrollsOfATableAreCopiedToTheWorktreeOfItsCharacters(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

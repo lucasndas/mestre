@@ -21,6 +21,7 @@ func (d deniedCeiling) Allows(_ context.Context, _, sheet, _ string) error {
 
 // A step whose sheet is above the ceiling pauses the quest with the reason and
 // tells the Master of the table, like the other failures of recruit.
+// CA-MIS-10
 func TestAStepWhoseSheetIsAboveTheCeilingPausesTheQuestAndTellsTheMaster(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOpts{ceiling: deniedCeiling{sheet: "Dev Claude"}})

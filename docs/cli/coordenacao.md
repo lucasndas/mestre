@@ -69,11 +69,13 @@ mestre quest cancel "<Missão>" [--reason "<texto>"]
 - **CA-CLI-COORD-01** · *rápida* — **Dado** uma ficha "QA Codex" que exige `gpu: true` e nenhuma máquina com GPU, **quando** o Mestre da mesa roda `mestre recruit "QA-1" --sheet "QA Codex"`, **então** sai com 4 `no_capable_machine` e a mensagem diz que requisito faltou em cada máquina.
 - **CA-CLI-COORD-02** · *rápida* — **Dado** um personagem comum, **quando** roda `mestre recruit "X" --sheet "Dev Claude"`, **então** sai com 3 `level_denied`.
 - **CA-CLI-COORD-03** · *rápida* — **Dado** um personagem fixado, **quando** o Mestre da mesa roda `mestre dismiss` nele, **então** sai com 3 `pinned` e o personagem continua vivo.
-- **CA-CLI-COORD-04** · *completa* — **Dado** "Dev-1" com duas conexões, **quando** o Mestre roda `mestre recruit --replace "Dev-1" --sheet "Dev Codex"`, **então** o novo terminal usa a ficha nova, mantém o nome, as duas conexões e a posição; e **quando** nenhuma máquina atende à ficha nova, **então** o antigo segue vivo e conectado. Uma `--class` sem versão aprovada sai com 4 e nada é criado.
+- **CA-CLI-COORD-04** · *completa* — **Dado** "Dev-1" com duas conexões, **quando** o Mestre roda `mestre recruit --replace "Dev-1" --sheet "Dev Codex"`, **então** o novo terminal usa a ficha nova, mantém o nome, as duas conexões e a posição.
 - **CA-CLI-COORD-05** · *rápida* — **Dado** `mestre spawn "srv" --base "bash" --command "rm -rf /"`, **quando** roda, **então** sai com 2 `usage` (opção inexistente).
 - **CA-CLI-COORD-06** · *rápida* — **Dado** uma definição com `can_return_to` e `max_returns: -1` (devolução sem limite), **quando** roda `mestre quest create`, **então** sai com 2 `invalid_quest` apontando a etapa.
 - **CA-CLI-COORD-08** · *rápida* — **Dado** um personagem `busy`, **quando** o Mestre da mesa roda `mestre dismiss` nele, **então** sai com 9 `scheduled` e o personagem continua vivo até o próximo ponto seguro.
 - **CA-CLI-COORD-07** · *rápida* — **Dado** uma missão válida, **quando** o Mestre roda `mestre quest run`, **então** o comando volta em menos de 1s com `status: "running"`.
+- **CA-CLI-COORD-09** · *rápida* — **Dado** "Dev-1" vivo e conectado e nenhuma máquina que atenda à ficha nova, **quando** o Mestre roda `mestre recruit --replace "Dev-1" --sheet "Dev Codex"`, **então** o comando falha, "Dev-1" continua vivo e conectado e nenhum terminal novo é criado.
+- **CA-CLI-COORD-10** · *rápida* — **Dado** uma classe sem versão aprovada no workspace, **quando** o Mestre roda `mestre recruit "X" --sheet "Dev Claude" --class inexistente`, **então** sai com 4, a mensagem lista as classes válidas e nenhum personagem, terminal ou nome reservado é criado.
 
 ## Depende de
 

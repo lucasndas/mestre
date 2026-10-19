@@ -262,6 +262,7 @@ func TestAFiringStillInTheQueueSkipsTheNextOne(t *testing.T) {
 // The hour of a ritual is the one of the time zone of the Guild when the
 // workspace has none of its own: 02:00 in São Paulo is 05:00 UTC
 // (docs/orquestracao/rituais.md).
+// CA-RIT-10
 func TestTheHourOfARitualFollowsTheTimeZoneOfTheGuild(t *testing.T) {
 	t.Parallel()
 	if _, err := time.LoadLocation("America/Sao_Paulo"); err != nil {

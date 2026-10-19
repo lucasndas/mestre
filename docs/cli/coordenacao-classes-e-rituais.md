@@ -93,6 +93,7 @@ O estado do App das classes vem com o GitHub, no M5 ([criação de Apps](../gith
 - **CA-CLI-CLR-09** · *rápida* — **Dado** `ritual create "limpa" --target "srv" --command "make clean" --every 1h`, **quando** dispara com `srv` livre, **então** o terminal recebe `make clean` seguido de Enter.
 - **CA-CLI-CLR-10** · *rápida* — **Dado** um pacote em `./rascunho/qa` dentro do worktree, **quando** o Mestre da mesa roda `mestre class edit "qa" --from ./rascunho/qa`, **então** sai com 2 `from_outside_tmp` e nada muda; e, depois de `class show "qa" --export`, o pacote aparece em `$MESTRE_TMP/classes/qa/` igual à versão aprovada.
 - **CA-CLI-CLR-07** · *rápida* — **Dado** `mestre class check "Dev"` de uma classe válida, **quando** roda, **então** a saída tem uma seção por provedor (Claude Code, Codex, Antigravity) e a linha do App com o estado.
+- **CA-CLI-CLR-11** · *rápida* — **Dado** um ritual `--every 30m --timeout 30m`, **quando** se roda `mestre ritual list --json`, **então** `timeout` é `1800` (inteiro, em segundos) e `schedule` é `every 1800s`; num `--daily 02:00`, `schedule` é `daily 02:00`.
 
 ## Depende de
 

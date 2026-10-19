@@ -54,6 +54,7 @@ func TestThePeopleHaveATimeForEachTypeOfRequest(t *testing.T) {
 
 // A decision whose effect fails gives the request back with the whole time of
 // its level, not what was left.
+// CA-CADEIA-19
 func TestAnEffectThatFailsRestartsTheTimeOfTheLevel(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -69,6 +70,7 @@ func TestAnEffectThatFailsRestartsTheTimeOfTheLevel(t *testing.T) {
 	}
 }
 
+// CA-CADEIA-20
 func TestTheMestreDaMesaAndTheGrandMasterMayApproveForATimeAMedioRequest(t *testing.T) {
 	t.Parallel()
 	medio := chain.Request{Type: classes.RequestClassPermission}
@@ -81,6 +83,7 @@ func TestTheMestreDaMesaAndTheGrandMasterMayApproveForATimeAMedioRequest(t *test
 	}
 }
 
+// CA-RTM-10
 func TestTheDurationsOfThePolicyAcceptDays(t *testing.T) {
 	t.Parallel()
 	s, err := chain.ParseSection([]byte("regra_temporaria_max: 7d\nresumo_mesas: 30d\n"), 0)
@@ -98,6 +101,7 @@ func TestTheDurationsOfThePolicyAcceptDays(t *testing.T) {
 // The wait of the requester for the approval has the time limit the table of
 // waits promises: the sum of the times of the levels of the chain, the one of
 // the people being that of the type (docs/orquestracao/esperas-e-caixa-de-entrada.md).
+// CA-ESP-13
 func TestTheWaitOfTheRequesterForAnApprovalHasTheSumOfTheTimesOfTheLevels(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

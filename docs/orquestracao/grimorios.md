@@ -49,7 +49,7 @@ O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, 
 - **Missão:** o salvamento é recusado, listando o personagem, se algum `character` das etapas não está na seleção; as fichas são citadas pelo nome e conferidas na restauração.
 - **Restaurar em duas chamadas:** `Plan` valida e devolve o que será criado (nomes com sufixo, classes e a escolha pendente); `Restore` repete a validação e cria. Com escolha de classe pendente ele recusa antes de criar qualquer coisa.
 - **Classes:** a classe do destino com o mesmo nome, de qualquer escopo, é a usada; a de mesa de origem ausente no destino é copiada sem perguntar; a cópia é gravada pela biblioteca de classes (`Library.Save`), que confere pacote, teto e nome, e o pacote do documento é conferido de novo (vem do banco, que as Torres replicam).
-- **Nomes:** missões repetidas também recebem " (2)"; o nome é encurtado para caber nos 32 caracteres, e os nomes que ficam são reservados antes dos que mudam. A máquina salva é só preferência. A missão restaurada segue os novos nomes dos personagens.
+- **Nomes:** missões repetidas também recebem " (2)"; o nome é encurtado para caber nos 80 caracteres do nome de missão, e os nomes que ficam são reservados antes dos que mudam. A máquina salva é só preferência. A missão restaurada segue os novos nomes dos personagens.
 - **Falhas parciais:** o relatório lista personagens `interrupted`, personagens à espera de vaga (limite de máquina ou de cópias da ficha) e o que não pôde ser feito.
 
 ## Regras e erros
@@ -68,6 +68,7 @@ O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, 
 - **CA-GRIM-05** · *completa* — **Dado** um grimório válido, **quando** é restaurado, **então** personagens nascem conectados conforme o salvo, pergaminhos têm o conteúdo salvo e a missão existe em `draft` com issue sob o épico de destino.
 - **CA-GRIM-06** · *pesada* — **Dado** o painel, **quando** salvo um grimório de uma mesa e restauro em outra mesa, **então** o time volta funcionando e uma missão restaurada roda (MVP-11).
 - **CA-GRIM-07** · *rápida* — **Dado** um pergaminho do grimório com um separador de linha do Unicode no nome, seguido de `- personagens: …` e `- não foi possível fazer: …`, **quando** o grimório é restaurado, **então** o relatório ao Mestre da mesa tem uma só linha de pergaminhos e nenhuma das linhas falsas, porque o nome vem entre aspas na própria linha.
+- **CA-GRIM-08** · *rápida* — **Dado** um grimório com uma missão de nome de 80 caracteres e uma missão do mesmo nome já no destino, **quando** se planeja e se restaura, **então** o nome novo termina em " (2)", tem no máximo 80 caracteres (o nome é encurtado para dar lugar ao sufixo), o resumo de confirmação mostra esse nome e a missão é criada com ele.
 
 ## Depende de
 

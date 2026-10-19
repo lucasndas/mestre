@@ -39,6 +39,7 @@ func TestTheEngineGetsTheSystemBrowserUnlessDiscoveryIsOff(t *testing.T) {
 
 // The configuration refuses the name of an instance whose agents' account
 // would not fit a Windows local account (docs/arquitetura/componentes.md#instâncias).
+// CA-LOCAL-16
 func TestTheConfigurationRefusesAnInstanceWhoseAccountDoesNotFit(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"principal", "a", "seg-1"} {

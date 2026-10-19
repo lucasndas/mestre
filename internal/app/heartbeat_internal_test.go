@@ -44,6 +44,7 @@ func TestTheHeartbeatOfATowerCarriesTheFreeDiskAndTheReplicaLag(t *testing.T) {
 
 // A Tower that missed its heartbeat is not online even with its connection
 // open; the next heartbeat brings it back (docs/guilda/ficha-da-maquina.md).
+// CA-FMAQ-09
 func TestATowerThatMissedItsHeartbeatIsNotOnlineUntilTheNextOne(t *testing.T) {
 	t.Parallel()
 	b := newHeartbeats()

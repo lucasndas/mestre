@@ -211,6 +211,7 @@ func dial(t *testing.T, ln net.Listener, path string) {
 // The account of the agents is looked up as an account of this computer: a
 // name that points elsewhere (a domain, a UPN) is refused, and the account of
 // the current user, when it is a local one, resolves to its own SID.
+// CA-TERM-17
 func TestAccountSIDOnlyResolvesLocalAccounts(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{`DOMAIN\mestre-agente`, "mestre-agente@example.com", `.\mestre-agente`, "NT AUTHORITY/SYSTEM"} {

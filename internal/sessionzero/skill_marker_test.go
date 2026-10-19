@@ -74,6 +74,7 @@ func TestTheSkillsFolderOfACharacterDoesNotOverwriteASkillWithoutTheMarker(t *te
 
 // A mestre-* folder of the person that the engine does not generate is not
 // pruned from the folder of skills of a character, and it is reported.
+// CA-SZ-PERS-15
 func TestTheSkillsFolderOfACharacterDoesNotPruneAMestreSkillWithoutTheMarker(t *testing.T) {
 	t.Parallel()
 	r := newCharRig(t, nil)

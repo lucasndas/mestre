@@ -288,6 +288,7 @@ func TestTheBranchOfACancelledTableLeavesTheMirrorAfterThirtyDays(t *testing.T) 
 
 // Cancelling a table cancels the open requests of the approval chain that have
 // no requester to end them (docs/orquestracao/cadeia-de-aprovacao.md).
+// CA-MESAS-13
 func TestCancellingATableCancelsTheOpenRequestsOfItsChain(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOpts{})
