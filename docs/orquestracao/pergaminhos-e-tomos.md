@@ -35,7 +35,7 @@ Sintaxe de `mestre note create|read|write|edit|stack|delete` em [comunicação](
 
 - **Quem:** agentes só operam pergaminhos visíveis para eles ([conexões](conexoes.md#visibilidade)). Usuários Administrador ou acima editam no canvas; os demais níveis só leem.
 - **Concorrência:** a Cidadela aplica as mudanças uma de cada vez, na ordem de chegada; cada uma aumenta a revisão em 1 e é enviada ao canvas na hora ([canvas](../painel/canvas.md)).
-- **Tamanho máximo:** 256 KiB por pergaminho (padrão configurável).
+- **Tamanho máximo:** 256 KiB por pergaminho; o `--file` da CLI (de `note`, `quest create` e `quest run --input-file`) usa o mesmo limite fixo.
 
 ### Tomos
 
