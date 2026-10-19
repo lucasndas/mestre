@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -43,6 +44,13 @@ var (
 	ErrMissingPrerequisite        = errors.New("gitx: repository lacks the bundle prerequisite commits")
 	ErrConfigNotSet               = errors.New("gitx: config key not set")
 	ErrUnsafeRepo                 = errors.New("gitx: the repository configuration could make git run a command")
+	// The refusals of a push, told apart by what the remote said.
+	ErrPushProtected = errors.New("gitx: the remote refused the push: a protection or ruleset of the branch")
+	ErrPushWorkflow  = errors.New("gitx: the remote refused the push: it changes workflows and the App has no permission for them")
+	ErrPushSignature = errors.New("gitx: the remote refused the push: the rules ask for signed commits")
+	ErrPushRejected  = errors.New("gitx: the remote refused the push")
+	// ErrDiffTooLarge: the change adds too many lines to be read.
+	ErrDiffTooLarge = errors.New("gitx: the change is too large to read")
 )
 
 // NoLazyFetchVersion is the first git that honours GIT_NO_LAZY_FETCH, which
@@ -167,6 +175,14 @@ type FileChange struct {
 // String is the line of the name-status listing ("M src/login.go").
 func (c FileChange) String() string { return string(c.Status) + " " + c.Path }
 
+// AddedLine is a line a change adds: the file, the number of the line in the new
+// version and its text (without the newline).
+type AddedLine struct {
+	Path string
+	Line int
+	Text string
+}
+
 // BundleInfo is what the header of a bundle file declares.
 type BundleInfo struct {
 	Refs          []Ref  // refs the bundle carries
@@ -274,6 +290,25 @@ type Repo interface {
 	Fetch(ctx context.Context, remote string, refspecs ...string) error
 	// FetchWithAuth is Fetch with auth handed to git in its environment.
 	FetchWithAuth(ctx context.Context, auth Auth, remote string, refspecs ...string) error
+	// PushWithAuth pushes the commit (a full hash, the one that was checked) to
+	// the branch of a remote name, URL or path, with auth handed to git in its
+	// environment: only that ref, never a delete, a glob or another destination,
+	// and the commit that was read, not what the branch is by the time git looks.
+	// force pushes a commit that is not a fast-forward of the remote's. A refusal
+	// of the remote is ErrNotFastForward, ErrPushProtected, ErrPushWorkflow,
+	// ErrPushSignature or ErrPushRejected.
+	PushWithAuth(ctx context.Context, auth Auth, remote, branch, commit string, force bool) error
+	// AddedLinesEach lists the lines added by each commit of base..head (merges
+	// against their first parent): a line that one commit adds and a later one
+	// takes out is listed, since the push sends both. Like AddedLines, the files are
+	// read as text and a change of more than MaxAddedLines lines is ErrDiffTooLarge.
+	AddedLinesEach(ctx context.Context, base, head string) ([]AddedLine, error)
+	// AddedLines lists the lines added from the merge base of base and head up to
+	// head (git diff base...head), by file and line of head. Every file is read as
+	// text (a NUL byte or an attribute does not hide a line), submodules are not
+	// followed, and a change that adds more than MaxAddedLines lines is
+	// ErrDiffTooLarge. It never runs a diff driver or a text conversion.
+	AddedLines(ctx context.Context, base, head string) ([]AddedLine, error)
 	// CreateBundle writes a bundle of revs (a ref such as "main" or an
 	// incremental range such as "<hash>..main"). ErrEmptyBundle when the
 	// range holds no commit.
@@ -320,4 +355,35 @@ type Repo interface {
 	// outside the managed blocks are never touched.
 	SetExcludeBlock(ctx context.Context, name string, patterns []string) error
 	ExcludeBlock(ctx context.Context, name string) ([]string, error)
+}
+
+// MaxAddedLines is the most lines AddedLines reads of one change.
+const MaxAddedLines = 200_000
+
+// ValidateBranch checks the name of a branch as git does (git check-ref-format
+// --branch), without starting a process: no empty or "-" start, no "..", no
+// control characters, space, ~ ^ : ? * [ \ or "@{", no ".lock" end, no "/" at the
+// ends or twice in a row, no "." at the start of a part.
+func ValidateBranch(b string) error {
+	bad := b == "" || b == "@" || strings.HasPrefix(b, "-") || strings.HasPrefix(b, "/") || strings.HasSuffix(b, "/") || strings.HasSuffix(b, ".") ||
+		strings.Contains(b, "..") || strings.Contains(b, "//") || strings.Contains(b, "@{") || strings.HasSuffix(b, ".lock") ||
+		strings.ContainsAny(b, " ~^:?*[\\\x7f") || strings.HasPrefix(b, "refs/")
+	for _, r := range b {
+		bad = bad || r < 0x20
+	}
+	for _, part := range strings.Split(b, "/") {
+		bad = bad || strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock")
+	}
+	if bad {
+		return fmt.Errorf("%w: branch %q", ErrInvalidArgument, b)
+	}
+	return nil
+}
+
+// ValidateCommit checks a full commit hash (40 or 64 hexadecimal digits).
+func ValidateCommit(c string) error {
+	if (len(c) != 40 && len(c) != 64) || strings.Trim(c, "0123456789abcdef") != "" {
+		return fmt.Errorf("%w: commit %q", ErrInvalidArgument, c)
+	}
+	return nil
 }

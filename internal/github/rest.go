@@ -74,6 +74,12 @@ func (c *REST) doHeader(ctx context.Context, method, repo, path string, body any
 	if err != nil {
 		return 0, nil, nil, err
 	}
+	return c.doAbs(ctx, method, repo, "/repos/"+repo+path, body)
+}
+
+// doAbs sends a request to a path under the base URL, with the token of the
+// repository.
+func (c *REST) doAbs(ctx context.Context, method, repo, abs string, body any) (int, http.Header, []byte, error) {
 	tok, err := c.Token(ctx, repo)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("github: no token for %s", repo)
@@ -83,7 +89,7 @@ func (c *REST) doHeader(ctx context.Context, method, repo, path string, body any
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.BaseURL, "/")+"/repos/"+repo+path, rd)
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.BaseURL, "/")+abs, rd)
 	if err != nil {
 		return 0, nil, nil, errors.New("github: bad request")
 	}
@@ -99,7 +105,7 @@ func (c *REST) doHeader(ctx context.Context, method, repo, path string, body any
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return 0, nil, nil, errors.New("github: " + strings.ReplaceAll(err.Error(), tok, "***"))
+		return 0, nil, nil, fmt.Errorf("%w: %s", ErrUnavailable, strings.ReplaceAll(err.Error(), tok, "***"))
 	}
 	defer resp.Body.Close()
 	if c.Quota != nil {

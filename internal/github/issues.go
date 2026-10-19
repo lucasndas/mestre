@@ -56,6 +56,8 @@ type IssueCreate struct {
 // it is the table's (or registered nowhere, Registered false), and the command
 // must not be repeated.
 type PartialError struct {
+	// Kind is what was made ("issue" if empty).
+	Kind       string
 	Number     int
 	Parent     int
 	Registered bool
@@ -63,7 +65,11 @@ type PartialError struct {
 }
 
 func (e *PartialError) Error() string {
-	return fmt.Sprintf("the issue #%d was created but its setup did not end: %v", e.Number, e.Err)
+	kind := e.Kind
+	if kind == "" {
+		kind = "issue"
+	}
+	return fmt.Sprintf("the %s #%d was created but its setup did not end: %v", kind, e.Number, e.Err)
 }
 
 func (e *PartialError) Unwrap() error { return e.Err }

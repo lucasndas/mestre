@@ -27,6 +27,9 @@ type Git struct {
 	mu    sync.Mutex // guards the registry and every repository handled here
 	clk   clock.Clock
 	byDir map[string]*Handle
+
+	pushFail error
+	pushes   []string
 }
 
 var _ gitx.Git = (*Git)(nil)
@@ -1066,4 +1069,179 @@ func (h *Handle) ExcludeBlock(_ context.Context, name string) ([]string, error) 
 	}
 	defer h.lock()()
 	return slices.Clone(h.r.blocks[name]), nil
+}
+
+// FailNextPush makes the next push refuse with err (one of the refusals of
+// gitx: ErrPushProtected, ErrPushWorkflow, ErrPushSignature, ErrNotFastForward).
+func (g *Git) FailNextPush(err error) {
+	g.mu.Lock()
+	g.pushFail = err
+	g.mu.Unlock()
+}
+
+// Pushes are the refspecs pushed so far, by remote and in order ("remote refspec"
+// and "force" when forced).
+func (g *Git) Pushes() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]string(nil), g.pushes...)
+}
+
+// PushWithAuth implements gitx.Repo: the commits and the ref go to the repository
+// the remote names, as git push does; auth is checked like the real one does and
+// otherwise ignored.
+func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch, commit string, force bool) error {
+	if err := gitx.ValidateRef(remote); err != nil {
+		return err
+	}
+	if err := gitx.CheckURL(remote); err != nil {
+		return fmt.Errorf("push: %w", err)
+	}
+	if err := gitx.ValidateBranch(branch); err != nil {
+		return err
+	}
+	if err := gitx.ValidateCommit(commit); err != nil {
+		return err
+	}
+	// what goes is the commit, not what the branch is by now
+	if _, ok := h.r.commits[Hash(commit)]; !ok {
+		return fmt.Errorf("push: %w: %s", gitx.ErrRefNotFound, commit)
+	}
+	refspec := "refs/heads/" + branch + ":refs/heads/" + branch
+	if err := auth.Validate(); err != nil {
+		return fmt.Errorf("push %s: %w", gitx.RedactURL(remote), err)
+	}
+	h.g.mu.Lock()
+	rec := remote + " " + refspec
+	if force {
+		rec += " force"
+	}
+	h.g.pushes = append(h.g.pushes, rec)
+	if err := h.g.pushFail; err != nil {
+		h.g.pushFail = nil
+		h.g.mu.Unlock()
+		return fmt.Errorf("push %s: %w", gitx.RedactURL(remote), err)
+	}
+	url := remote
+	if u, ok := h.r.configGet("remote." + remote + ".url"); ok {
+		url = u
+	}
+	dst, ok := h.g.byDir[absDir(url)]
+	h.g.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("push %s: %w", gitx.RedactURL(url), gitx.ErrNotARepo)
+	}
+	commits, refs, _ := h.r.snapshot()
+	defer dst.lock()()
+	maps.Copy(dst.r.commits, commits)
+	// the source of the push is the commit: a ref that points at it, made here
+	refs = append(refs, gitx.Ref{Name: "refs/mestre/push", Hash: gitx.Hash(commit)})
+	spec := "refs/mestre/push:refs/heads/" + branch
+	if force {
+		spec = "+" + spec
+	}
+	return dst.r.applyRefspecsLocked(refs, []string{spec})
+}
+
+// AddedLines implements gitx.Repo: the lines of head that are not in the merge
+// base, by file (a line that moved counts as added only if the text is new to
+// the file).
+func (h *Handle) AddedLines(_ context.Context, base, head string) ([]gitx.AddedLine, error) {
+	if err := gitx.ValidateRef(base); err != nil {
+		return nil, err
+	}
+	if err := gitx.ValidateRef(head); err != nil {
+		return nil, err
+	}
+	defer h.lock()()
+	a, err := h.resolveLocked(base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := h.resolveLocked(head)
+	if err != nil {
+		return nil, err
+	}
+	mb := a
+	if !h.r.ancestorsLocked(b)[a] {
+		mb = ""
+		for c := a; c != ""; c = h.r.commits[c].Parent {
+			if h.r.ancestorsLocked(b)[c] {
+				mb = c
+				break
+			}
+		}
+	}
+	var before map[string]string
+	if mb != "" {
+		before = h.r.commits[mb].Files
+	}
+	after := h.r.commits[b].Files
+	var out []gitx.AddedLine
+	for _, p := range slices.Sorted(maps.Keys(after)) {
+		old := map[string]int{}
+		for _, l := range splitLines(before[p]) {
+			old[l]++
+		}
+		for i, l := range splitLines(after[p]) {
+			if old[l] > 0 {
+				old[l]--
+				continue
+			}
+			out = append(out, gitx.AddedLine{Path: p, Line: i + 1, Text: l})
+		}
+	}
+	return out, nil
+}
+
+func splitLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
+}
+
+// AddedLinesEach implements gitx.Repo: the lines each commit of base..head adds
+// against its parent, in the order of the history.
+func (h *Handle) AddedLinesEach(_ context.Context, base, head string) ([]gitx.AddedLine, error) {
+	if err := gitx.ValidateRef(base); err != nil {
+		return nil, err
+	}
+	if err := gitx.ValidateRef(head); err != nil {
+		return nil, err
+	}
+	defer h.lock()()
+	a, err := h.resolveLocked(base)
+	if err != nil {
+		return nil, err
+	}
+	b, err := h.resolveLocked(head)
+	if err != nil {
+		return nil, err
+	}
+	known := h.r.ancestorsLocked(a)
+	var chain []Hash
+	for c := b; c != "" && !known[c]; c = h.r.commits[c].Parent {
+		chain = append(chain, c)
+	}
+	var out []gitx.AddedLine
+	for i := len(chain) - 1; i >= 0; i-- {
+		c := chain[i]
+		before := h.r.commits[h.r.commits[c].Parent].Files
+		after := h.r.commits[c].Files
+		for _, p := range slices.Sorted(maps.Keys(after)) {
+			old := map[string]int{}
+			for _, l := range splitLines(before[p]) {
+				old[l]++
+			}
+			for n, l := range splitLines(after[p]) {
+				if old[l] > 0 {
+					old[l]--
+					continue
+				}
+				out = append(out, gitx.AddedLine{Path: p, Line: n + 1, Text: l})
+			}
+		}
+	}
+	return out, nil
 }

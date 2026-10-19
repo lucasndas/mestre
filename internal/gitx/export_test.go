@@ -18,3 +18,8 @@ var GlobalArgs = globalArgs
 
 // LockKey exposes the canonical lock key to the tests.
 var LockKey = lockKey
+
+// ClassifyPush exposes the reading of a refusal of the remote to the tests.
+func ClassifyPush(stderr string) error {
+	return classifyPush(&Error{Stderr: stderr, ExitCode: 1, Err: fmt.Errorf("exit status 1")})
+}

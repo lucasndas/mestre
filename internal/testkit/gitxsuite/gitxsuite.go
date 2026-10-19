@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,7 @@ func Run(t *testing.T, h Harness) {
 		{"bundles", bundles},
 		{"fetch and config", fetchAndConfig},
 		{"credentials only through auth", credentialsOnlyThroughAuth},
+		{"push and added lines", pushAndAddedLines},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -642,3 +644,85 @@ func fetchAndConfig(t *testing.T, h Harness) {
 	isErr(t, mirror.Fetch(ctx, origin.Dir(), "refs/heads/nope:refs/remotes/origin/nope"), gitx.ErrRefNotFound)
 	isErr(t, mirror.Fetch(ctx, "-bad"), gitx.ErrInvalidArgument)
 }
+
+func pushAndAddedLines(t *testing.T, h Harness) {
+	ctx := context.Background()
+	g := h.New(t)
+	root := t.TempDir()
+	work := seed(t, h, g, filepath.Join(root, "work"), map[string]string{"a.txt": "um\ndois\n", "keep.go": "package x\n"})
+	remote := must(g.Clone(ctx, work.Dir(), filepath.Join(root, "remoto.git"), gitx.CloneOptions{Bare: true}))
+	base := must(work.ResolveRef(ctx, "main"))
+	wt := must(work.AddWorktree(ctx, filepath.Join(root, "mesa"), gitx.WorktreeOptions{Branch: "mesa", Create: true, StartPoint: "main"}))
+	commitFile(t, h, wt, "a.txt", "um\ndois\ntres\n++ quatro\n", "feat: more lines")
+	c2 := commitFile(t, h, wt, "novo/arquivo.ts", "const a = 1\nconst b = 2\n", "feat: new file")
+
+	// the lines the change adds, by file and line of the new version
+	got := must(work.AddedLines(ctx, string(base), "mesa"))
+	var lines []string
+	for _, l := range got {
+		lines = append(lines, l.Path+":"+itoa(l.Line)+":"+l.Text)
+	}
+	want := []string{"a.txt:3:tres", "a.txt:4:++ quatro", "novo/arquivo.ts:1:const a = 1", "novo/arquivo.ts:2:const b = 2"}
+	if !slices.Equal(lines, want) {
+		t.Fatalf("added lines = %q, want %q", lines, want)
+	}
+	if none := must(work.AddedLines(ctx, "mesa", "mesa")); len(none) != 0 {
+		t.Fatalf("added lines of nothing = %v", none)
+	}
+	_, err := work.AddedLines(ctx, "nao-existe", "mesa")
+	isErr(t, err, gitx.ErrRefNotFound)
+
+	// a line that one commit adds and a later one takes out is added all the same
+	oops := must(work.AddWorktree(ctx, filepath.Join(root, "oops"), gitx.WorktreeOptions{Branch: "oops", Create: true, StartPoint: "main"}))
+	commitFile(t, h, oops, "temp.txt", "chave-secreta\n", "feat: oops")
+	h.Remove(t, oops, "temp.txt")
+	ok(oops.Stage(ctx))
+	must(oops.Commit(ctx, gitx.CommitOptions{Message: "fix: take it out", Author: alice}))
+	if combined := must(work.AddedLines(ctx, "main", "oops")); len(combined) != 0 {
+		t.Fatalf("the combined diff of a line added and removed = %v, want nothing", combined)
+	}
+	each := must(work.AddedLinesEach(ctx, "main", "oops"))
+	if len(each) != 1 || each[0] != (gitx.AddedLine{Path: "temp.txt", Line: 1, Text: "chave-secreta"}) {
+		t.Fatalf("lines of each commit = %+v, want temp.txt:1", each)
+	}
+	if got := must(work.AddedLinesEach(ctx, "main", "mesa")); len(got) != len(want) {
+		t.Fatalf("lines of each commit of mesa = %+v, want %d", got, len(want))
+	}
+	_, err = work.AddedLinesEach(ctx, "nao-existe", "mesa")
+	isErr(t, err, gitx.ErrRefNotFound)
+
+	// the push
+	auth := gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushSecretToken0123456789abcdef")
+	ok(work.PushWithAuth(ctx, auth, remote.Dir(), "mesa", string(c2), false))
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c2 {
+		t.Fatalf("pushed branch = %s, want %s", got, c2)
+	}
+	// a push that is no fast-forward is refused, unless forced
+	other := must(g.Clone(ctx, work.Dir(), filepath.Join(root, "outro"), gitx.CloneOptions{}))
+	wt2 := must(other.AddWorktree(ctx, filepath.Join(root, "outra-mesa"), gitx.WorktreeOptions{Branch: "mesa", Create: true, StartPoint: "main"}))
+	c3 := commitFile(t, h, wt2, "b.txt", "x\n", "feat: another history")
+	isErr(t, wt2.PushWithAuth(ctx, auth, remote.Dir(), "mesa", string(c3), false), gitx.ErrNotFastForward)
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c2 {
+		t.Fatalf("a refused push moved the branch to %s", got)
+	}
+	ok(wt2.PushWithAuth(ctx, auth, remote.Dir(), "mesa", string(c3), true))
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c3 {
+		t.Fatalf("forced push = %s, want %s", got, c3)
+	}
+	// only a branch to the branch of the same name: no refspec, no delete, no glob, no other ref
+	for _, bad := range []string{"refs/heads/mesa:refs/heads/main", ":mesa", "mesa:main", "*", "HEAD:main", "", "-f", "a..b", "x y", "refs/heads/mesa"} {
+		isErr(t, wt2.PushWithAuth(ctx, auth, remote.Dir(), bad, string(c3), false), gitx.ErrInvalidArgument)
+	}
+	if _, err := remote.ResolveRef(ctx, "refs/heads/main"); err != nil {
+		t.Fatalf("main of the remote: %v", err)
+	}
+	// credentials in the URL and an auth with user information are refused
+	isErr(t, wt2.PushWithAuth(ctx, auth, "https://x:y@github.com/o/r.git", "mesa", string(c3), false), gitx.ErrCredentialsInURL)
+	isErr(t, wt2.PushWithAuth(ctx, gitx.Auth{URL: "https://u:p@github.com/", Header: "Authorization: Basic eA=="}, remote.Dir(), "mesa", string(c3), false), gitx.ErrInvalidArgument)
+	// only the commit that was read: a branch name, a short hash or a ref is not one
+	for _, bad := range []string{"mesa", "HEAD", "abc123", string(c3)[:39], string(c3) + "0", "--all"} {
+		isErr(t, wt2.PushWithAuth(ctx, auth, remote.Dir(), "mesa", bad, false), gitx.ErrInvalidArgument)
+	}
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
