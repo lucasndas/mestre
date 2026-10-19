@@ -222,6 +222,19 @@ func (s *Service) deliver(ctx context.Context, f Firing, now time.Time) error {
 			}
 		}
 		shown := out
+		quotedAlone := false
+		if r.Action != ActionCommand && strings.TrimSpace(out) != "" {
+			// a placeholder alone on its line stands where the author's own words would:
+			// the output is quoted there even when it is one line
+			lines := strings.Split(content, "\n")
+			for i, l := range lines {
+				if strings.TrimSpace(l) == Placeholder {
+					lines[i] = inbox.Quote(out)
+					quotedAlone = true
+				}
+			}
+			content = strings.Join(lines, "\n")
+		}
 		if r.Action != ActionCommand && inbox.Multiline(out) {
 			// the output is text from outside: with more than one line it is quoted, so
 			// it cannot pass for the words of the author of the ritual
@@ -230,7 +243,7 @@ func (s *Service) deliver(ctx context.Context, f Firing, now time.Time) error {
 		content = strings.ReplaceAll(content, Placeholder, shown)
 		if r.Action != ActionCommand && strings.Contains(r.Content, Placeholder) {
 			sender += " (" + UnverifiedOutput + ")"
-			if shown != out {
+			if shown != out || quotedAlone {
 				content += "\n" + inbox.QuoteNote
 			}
 		}

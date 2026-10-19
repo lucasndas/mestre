@@ -54,7 +54,7 @@ Usuários com nível para isso ainda podem digitar direto num terminal pelo canv
 
 A espera de uma mesa por outra mesa (tipo "épico", M5) é de [dependência entre mesas](dependencia-entre-mesas.md).
 
-`mestre wait` **registra e retorna na hora**; o agente deve encerrar o turno. Quando a espera é satisfeita, o motor coloca um item `wake` com o resultado na fila de quem espera; o resultado de cada etapa é texto de agente: de uma linha, segue na linha do motor (`- QA concluiu: …`); de mais, vem citado, com `| ` em cada linha, abaixo dela, e a última linha do `wake` diz o que o `| ` quer dizer. O resultado de uma espera por aprovação é texto do motor, que já cita o que quem decidiu escreveu ([cadeia](cadeia-de-aprovacao.md#respostas)).
+`mestre wait` **registra e retorna na hora**; o agente deve encerrar o turno. Quando a espera é satisfeita, o motor coloca um item `wake` com o resultado na fila de quem espera; o resultado de cada etapa é texto de agente: de uma linha, segue na linha do motor (`- QA concluiu: …`); de mais, vem citado, com `| ` em cada linha, abaixo dela, e a última linha do `wake` diz o que o `| ` quer dizer. O resultado de uma espera por aprovação é texto do motor, que já cita o que quem decidiu escreveu, tanto a [cadeia](cadeia-de-aprovacao.md#respostas) quanto o ponto de aprovação de uma [missão](missoes.md).
 
 | Estado | Identificador |
 |---|---|
