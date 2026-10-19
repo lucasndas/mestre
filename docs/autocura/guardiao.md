@@ -58,7 +58,7 @@ Os nomes das ações ficam em inglês, como no protocolo ([protocolo](../conecti
 | `citadel.promote` | a Torre condutora manda ao Guardião da máquina escolhida a ordem de promoção ([mensagens](../conectividade/mensagens.md)) | **sim**, só o Dono, com PIN ([promoção](../guilda/cidadela-e-torres.md#promoção)) |
 
 - Não existe shell livre, envio de arquivo, troca de configuração nem qualquer ação fora da tabela.
-- Os pedidos da Cidadela às Torres não usam a trava de condução (a Cidadela conduz); só o Guardião da Torre condutora pede a trava, e só ele manda `citadel.promote` ou `recover` à Cidadela.
+- Os pedidos da Cidadela às Torres não usam a trava de condução (a Cidadela conduz); só o Guardião da Torre condutora pede a trava, e só ele manda `recover` à Cidadela ou `citadel.promote` à máquina escolhida.
 - Ações que apagam dados do produto ou mexem em rede, firewall ou serviços do sistema nunca são automáticas: pedem aprovação de Dono ou Administrador ([níveis](../telegram/usuarios-e-niveis.md#níveis-e-capacidades)).
 
 ### Quem pode pedir

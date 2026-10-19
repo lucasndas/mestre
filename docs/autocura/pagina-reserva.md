@@ -18,7 +18,7 @@ Dar aos usuários um lugar para ver o estado das máquinas, aprovar curas, aprov
 ### Login
 
 - Mesmos usuários e níveis do painel, a partir da cópia local criptografada que o Guardião recebe da Cidadela ([cofre](../plataforma/cofre.md#réplica-para-os-guardiões)).
-- Usuário e senha, conferidos contra o hash da cópia. Ações que pedem PIN pedem o PIN, conferido do mesmo jeito e com o **mesmo bloqueio** de [usuários e níveis](../telegram/usuarios-e-niveis.md#pin-pessoal) (3 erros no pedido o cancelam; 5 em 15 min bloqueiam o PIN por 30 min), contado localmente pelo Guardião, que o compartilha com o modo reduzido e o sobe à Cidadela com a auditoria.
+- Usuário e senha, conferidos contra o hash da cópia. Ações que pedem PIN pedem o PIN, conferido do mesmo jeito e com o **mesmo bloqueio** de [usuários e níveis](../telegram/usuarios-e-niveis.md#pin-pessoal), contado localmente pelo Guardião, que o compartilha com o modo reduzido e o sobe à Cidadela com a auditoria.
 - Sessão curta: expira após 30 min sem uso (padrão) e sempre que a cópia de usuários muda para aquele usuário (suspenso, removido, nível alterado).
 - Bloqueio por senhas erradas: o do [painel](../painel/login.md), contado localmente e registrado na auditoria local.
 - Proteções da sessão iguais às do painel (cookie seguro, origem conferida) ([login](../painel/login.md#sessões)).
@@ -43,7 +43,7 @@ Com a Cidadela no ar, a página mostra um aviso "use o painel", com o link, e co
 | Ver estado | qualquer nível | — |
 | Aprovar ou negar cura | Dono ou Administrador, com PIN | aprovação presa ao hash do script ([diagnóstico com IA](diagnostico-com-ia.md#proposta-e-aprovação)) ou, no `rollback` com restauração do banco, à versão e ao backup indicados |
 | **Recuperar a Cidadela** | Dono ou Administrador | se esta Torre é a condutora, ou consegue a trava, começa ou retoma o runbook do zero (zera o backoff e as tentativas do incidente). Se outra Torre é a condutora, mostra qual é e o link da página reserva dela. No modo máquina única, o Guardião da Cidadela recomeça o runbook sobre o próprio motor |
-| Promover ou esperar | só o Dono; **Promover** com PIN | **Promover** manda `citadel.promote` ([Guardião](guardiao.md#lista-fechada-de-ações)) e a promoção segue [Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção). **Esperar** só adia: o pedido segue aberto, os botões somem da mensagem até o próximo lembrete (1 h) e nada é decidido. Em outra Torre, a página leva à da condutora |
+| Promover ou esperar | só o Dono; **Promover** com PIN | **Promover** manda `citadel.promote` ([Guardião](guardiao.md#lista-fechada-de-ações)) e a promoção segue [Cidadela e Torres](../guilda/cidadela-e-torres.md#promoção). **Esperar** é o de [fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda). Em outra Torre, a página leva à da condutora |
 | Pedir diagnóstico com IA | Dono ou Administrador | `diagnose` no Guardião da Cidadela, dentro do limite por incidente |
 
 - A promoção vive no Guardião: sai só pelo Telegram reduzido e por esta página, nunca pelo painel; a troca planejada (Cidadela no ar) é pelo painel ou pelo `/guilda` ([fluxo](../aprovacoes/fluxo.md#pedidos-da-guilda)).
