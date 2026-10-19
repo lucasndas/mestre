@@ -12,7 +12,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// CA-COFRE-23
+// Part of CA-COFRE-23
 // A Citadel whose key is the wrong one, a key of the same version as the
 // envelope that opens nothing, goes on and does not send it to its Towers: a
 // Tower takes any ring of the versions of its envelope and puts it in place of its

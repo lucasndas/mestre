@@ -1,7 +1,7 @@
 //go:build linux
 
 // Command 01-caller-identity is the M1 spike "identificação do chamador
-// subindo a árvore de processos" (docs/arquitetura/seguranca.md#verificar-na-implementação).
+// subindo a árvore de processos" (docs/arquitetura/seguranca.md#identidade-de-quem-chama-a-cli).
 //
 // A minimal engine accepts the CLI on a Unix socket, reads SO_PEERCRED and
 // SO_PEERPIDFD and decides the terminal of the caller in four modes (tree,

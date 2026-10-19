@@ -1,7 +1,7 @@
 //go:build linux
 
 // Command 02-clis-as-agent is the M1 spike "claude, codex e agy rodando como
-// mestre-agente no Linux" (docs/arquitetura/seguranca.md#verificar-na-implementação).
+// mestre-agente no Linux" (docs/arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes).
 //
 // It runs one command inside a real PTY (stdlib only: /dev/ptmx + ioctls),
 // answers the terminal queries TUIs make at start-up (cursor position, device

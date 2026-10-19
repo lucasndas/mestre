@@ -1,6 +1,6 @@
 // Command rulesetcheck compares the live ruleset of main with the one written
 // in docs/desenvolvimento/ambiente.md, the single source
-// (docs/qualidade/testes.md#conferência-do-ruleset). The nightly workflow
+// (docs/desenvolvimento/ambiente.md#ci-e-proteção-da-main). The nightly workflow
 // feeds it the JSON of `gh api repos/<repo>/rulesets/<id>`:
 //
 //	go run ./tools/rulesetcheck [-doc ambiente.md] -live live.json

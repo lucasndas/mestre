@@ -414,7 +414,7 @@ func TestALateTowerIsAnAlertAfterAMinuteOverTheThreshold(t *testing.T) {
 	})
 }
 
-// CA-REPL-08, the part of milestone 2: a file that a record cites is on the
+// Part of CA-REPL-08, the part of milestone 2: a file that a record cites is on the
 // Tower before the record is applied there.
 func TestFilesReachTheTowerBeforeTheRecordsThatCiteThemAndAMachineThatLeavesErasesThem(t *testing.T) {
 	t.Parallel()

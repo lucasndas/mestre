@@ -270,7 +270,7 @@ func TestCoverageErrorPointsToTheCriterionLine(t *testing.T) {
 func TestMarkerNamesAnExistingCriterion(t *testing.T) {
 	t.Parallel()
 	files := map[string]string{
-		"internal/x/x_test.go": "package x\n\n// CA-ZZZ-99\nfunc TestA() {}\n\nvar s = \"// CA-YYY-98\"\n\n// CA-A-01 is real\nfunc TestB() {}\n",
+		"internal/x/x_test.go": "package x\n\n// CA-ZZZ-99\nfunc TestA(t *testing.T) {}\n\nvar s = \"// CA-YYY-98\"\n\n// CA-A-01 is real\nfunc TestB(t *testing.T) {}\n",
 		"internal/y/y.go":      "package y\n\n/* CA-XXX-97 */\n\n// not a marker CA-WWW-96\nfunc F() {}\n",
 	}
 	got := only(run1(t, gate(nil, "", files)), ckCoverage)
@@ -297,7 +297,10 @@ func TestStaleMilestoneComments(t *testing.T) {
 		"portuguese fica":       {"internal/x/a.go", "package x\n\n// Fica para o M1.\nfunc F() {}\n", 3},
 		"portuguese até":        {"internal/x/a.go", "package x\n\n// Vale até o M1.\nfunc F() {}\n", 3},
 		"block comment":         {"internal/x/a.go", "package x\n\n/*\n until M1 */\nfunc F() {}\n", 4},
-		"test file":             {"internal/x/a_test.go", "package x\n\n// arrives in M1\nfunc TestA() {}\n", 3},
+		"test file":             {"internal/x/a_test.go", "package x\n\n// arrives in M1\nfunc TestA(t *testing.T) {}\n", 3},
+		"portuguese vêm":        {"internal/x/a.go", "package x\n\n// As filas vêm com o M1.\nfunc F() {}\n", 3},
+		"replaces in":           {"internal/x/a.go", "package x\n\n// The real one replaces it in M1.\nfunc F() {}\n", 3},
+		"closes in parentheses": {"internal/x/a.go", "package x\n\n// The rest closes when it exists (M1).\nfunc F() {}\n", 3},
 		"spike done":            {"internal/x/a.go", "package x\n\n// waits for spike 5 to be done\nfunc F() {}\n", 3},
 		"spike open":            {"internal/x/a.go", "package x\n\n// waits for spike 6\nfunc F() {}\n", 0},
 		"milestone not audited": {"internal/x/a.go", "package x\n\n// arrives in M2\nfunc F() {}\n", 0},
@@ -369,6 +372,158 @@ func TestGoModKeepsThePinnedVersions(t *testing.T) {
 				return
 			}
 			if len(got) != 1 || !strings.Contains(got[0], c.want) {
+				t.Fatalf("errors = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+const (
+	laterHeader = "### Critérios em marcos posteriores\n\n| Documento | Critério → marco em que fecha |\n|---|---|\n"
+	operHeader  = "### Operador do PC no M7\n\n| Documento (marco no mapa) | Critérios implementados no M7 |\n|---|---|\n"
+)
+
+// CA-VERDOCS-20
+func TestADeferredCriterionIsExemptOnlyUntilItsMilestoneIsAudited(t *testing.T) {
+	t.Parallel()
+	row := func(cell string) string { return laterHeader + "| [m1](../a/m1.md) | " + cell + " |\n" }
+	cases := map[string]struct {
+		audit map[int]string
+		extra string
+		want  []string
+	}{
+		"the milestone where it closes is open":       {audit: map[int]string{1: audited}, extra: row("CA-A-01 e CA-A-03 → M5")},
+		"the milestone where it closes is audited":    {audit: map[int]string{1: audited, 5: audited}, extra: row("CA-A-01 e CA-A-03 → M5"), want: []string{"CA-A-01", "CA-A-03"}},
+		"a criterion only cited in the explanation":   {audit: map[int]string{1: audited}, extra: row("CA-A-01 → M5 (como CA-A-03)"), want: []string{"CA-A-03"}},
+		"a criterion after the arrow inside a paren":  {audit: map[int]string{1: audited}, extra: row("CA-A-01 → M5 (faltam: CA-A-03 → M5)"), want: []string{"CA-A-03"}},
+		"each entry has its own milestone":            {audit: map[int]string{1: audited, 5: audited}, extra: row("CA-A-01 → M5; CA-A-03 → M6"), want: []string{"CA-A-01"}},
+		"the latest of two milestones":                {audit: map[int]string{1: audited, 5: audited}, extra: row("CA-A-01 e CA-A-03 → M5 e M6")},
+		"a range":                                     {audit: map[int]string{1: audited, 5: audited}, extra: row("CA-A-01 a CA-A-03 → M5"), want: []string{"CA-A-01", "CA-A-03"}},
+		"the Guardian is the M7":                      {audit: map[int]string{1: audited, 5: audited}, extra: row("CA-A-01 e CA-A-03 → Guardião")},
+		"an entry without a milestone defers nothing": {audit: map[int]string{1: audited}, extra: row("CA-A-01 e CA-A-03 fecham depois"), want: []string{"CA-A-01", "CA-A-03"}},
+		"the PC operator list is for M7":              {audit: map[int]string{1: audited, 5: audited}, extra: operHeader + "| [m1](../a/m1.md) | CA-A-01, CA-A-03 (e CA-B-01 ganha a exceção) |\n"},
+		"the PC operator list once M7 is audited":     {audit: map[int]string{1: audited, 7: audited}, extra: operHeader + "| [m1](../a/m1.md) | CA-A-01, CA-A-03 |\n", want: []string{"CA-A-01", "CA-A-03"}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := only(run1(t, gate(c.audit, c.extra, nil)), ckCoverage)
+			if len(got) != len(c.want) {
+				t.Fatalf("errors = %q, want %v", got, c.want)
+			}
+			for i, id := range c.want {
+				if !strings.Contains(got[i], id+" (M1") {
+					t.Fatalf("error %d = %q, want %s", i, got[i], id)
+				}
+			}
+		})
+	}
+}
+
+// CA-VERDOCS-20: a milestone that is not in the table cannot be audited, so a
+// criterion put off for it would be exempt forever.
+func TestACriterionPutOffForAMilestoneThatDoesNotExistIsAnError(t *testing.T) {
+	t.Parallel()
+	extra := laterHeader + "| [m1](../a/m1.md) | CA-A-01 e CA-A-03 → M9 |\n"
+	got := only(run1(t, gate(map[int]string{1: audited}, extra, nil)), ckCoverage)
+	if !strings.Contains(strings.Join(got, "\n"), "marco que não está na tabela de marcos") {
+		t.Fatalf("errors = %q", got)
+	}
+}
+
+// CA-VERDOCS-21
+func TestADocumentWithCriteriaOutsideTheMapIsCoveredFromM0(t *testing.T) {
+	t.Parallel()
+	ref := hdr("Referência") + "## Critérios de aceite\n\n- **CA-R-01** · *rápida* — **Dado** a, **quando** b, **então** c.\n"
+	for name, c := range map[string]struct {
+		files map[string]string
+		want  int
+	}{
+		"no marker":    {nil, 1},
+		"the marker":   {testFile("CA-R-01"), 0},
+		"part of only": {map[string]string{"internal/x/x_test.go": "package x\n\nimport \"testing\"\n\n// Part of CA-R-01\nfunc TestC(t *testing.T) {}\n"}, 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			tr := gate(nil, "", c.files)
+			tr.add("docs/a/ref.md", ref)
+			got := only(run1(t, tr), ckCoverage)
+			if len(got) != c.want || c.want == 1 && !strings.HasPrefix(got[0], "docs/a/ref.md:") {
+				t.Fatalf("errors = %q, want %d", got, c.want)
+			}
+		})
+	}
+}
+
+// CA-VERDOCS-22
+func TestAMarkerSitsOnATestOfTheSuiteOfTheCriterion(t *testing.T) {
+	t.Parallel()
+	test := func(tag, name, marker string) map[string]string {
+		return map[string]string{"internal/x/" + name: tag + "package x\n\nimport \"testing\"\n\n" + marker + "\nfunc TestC(t *testing.T) {}\n"}
+	}
+	for name, c := range map[string]struct {
+		files map[string]string
+		want  string // the error about the file of the marker; "" passes
+	}{
+		"a fast test":                 {test("", "x_test.go", "// CA-A-01"), ""},
+		"a negated full tag":          {test("//go:build !full\n\n", "x_test.go", "// CA-A-01"), ""},
+		"a full tag":                  {test("//go:build full\n\n", "x_test.go", "// CA-A-01"), "suíte completa"},
+		"a full file name":            {test("", "x_full_test.go", "// CA-A-01"), "suíte completa"},
+		"a full tag with an OS":       {test("//go:build full && windows\n\n", "x_windows_test.go", "// CA-A-01"), "suíte completa"},
+		"a heavy tag":                 {test("//go:build full && heavy\n\n", "x_heavy_test.go", "// CA-A-01"), "suíte pesada"},
+		"a real account tag":          {test("//go:build realaccount\n\n", "x_realaccount_test.go", "// CA-A-01"), "suíte pesada"},
+		"a heavy criterion in a fast": {test("", "x_test.go", "// CA-A-02"), "o critério é *pesada*"},
+		"part of in a full test":      {test("//go:build full\n\n", "x_test.go", "// Part of CA-A-01"), ""},
+		"above a helper named Test":   {map[string]string{"internal/x/x_test.go": "package x\n\nimport \"testing\"\n\n// CA-A-01\nfunc TestHelper(t *testing.T, n int) {}\n"}, "logo acima"},
+		"above another Run":           {map[string]string{"internal/x/x_test.go": "package x\n\nimport \"testing\"\n\nfunc TestC(t *testing.T) {\n\t// CA-A-01\n\troot.Run(\"a\")\n}\n"}, "logo acima"},
+		"a file that no suite builds": {test("//go:build ignore\n\n", "x_test.go", "// CA-A-01"), "suíte nenhuma"},
+		"far from the test":           {test("", "x_test.go", "// CA-A-01\n"), "logo acima"},
+		"above a helper":              {map[string]string{"internal/x/x_test.go": "package x\n\nimport \"testing\"\n\n// CA-A-01\nfunc helper(t *testing.T) {}\n"}, "logo acima"},
+		"in the comment of the test":  {test("", "x_test.go", "// CA-A-01: what it does,\n// in two lines."), ""},
+		"above a t.Run":               {map[string]string{"internal/x/x_test.go": "package x\n\nimport \"testing\"\n\nfunc TestC(t *testing.T) {\n\t// CA-A-01\n\tt.Run(\"a\", func(t *testing.T) {})\n}\n"}, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var got []string
+			for _, e := range only(run1(t, gate(map[int]string{1: audited}, "", c.files)), ckCoverage) {
+				if strings.HasPrefix(e, "internal/x/") { // the errors of the file of the marker
+					got = append(got, e)
+				}
+			}
+			if (c.want == "") != (len(got) == 0) || c.want != "" && !strings.Contains(strings.Join(got, "\n"), c.want) {
+				t.Fatalf("errors = %q, want %q", got, c.want)
+			}
+		})
+	}
+	// the criterion that no marker of its suite covers is not covered
+	files := test("//go:build full\n\n", "x_test.go", "// CA-A-01")
+	if got := only(run1(t, gate(map[int]string{1: audited}, "", files)), ckCoverage); !strings.Contains(strings.Join(got, "\n"), "CA-A-01 (M1, *rápida*) não tem teste marcado") {
+		t.Fatalf("errors = %q: a marker of another suite covered the criterion", got)
+	}
+}
+
+// CA-VERDOCS-23
+func TestAnAnchorWrittenInCodeMustExist(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct {
+		path, src string
+		want      string // "" passes
+	}{
+		"a Go comment with the heading":    {"internal/x/a.go", "package x\n\n// See docs/a/m1.md#objetivo.\nfunc F() {}\n", ""},
+		"a Go comment with a dead heading": {"internal/x/a.go", "package x\n\n// See docs/a/m1.md#sumiu.\nfunc F() {}\n", "internal/x/a.go:3: link: o título #sumiu não existe em docs/a/m1.md"},
+		"a block comment":                  {"internal/x/a.go", "package x\n\n/* line\n   docs/a/m1.md#sumiu */\nfunc F() {}\n", "internal/x/a.go:4: link"},
+		"a document that is gone":          {"internal/x/a.go", "package x\n\n// See docs/a/some.md#objetivo\nfunc F() {}\n", "internal/x/a.go:3: link: docs/a/some.md não existe"},
+		"a string is not a comment":        {"internal/x/a.go", "package x\n\nvar s = \"docs/a/m1.md#sumiu\"\n", ""},
+		"a workflow":                       {".github/workflows/ci.yml", "# docs/a/m1.md#sumiu\nname: x\n", ".github/workflows/ci.yml:1: link"},
+		"a migration":                      {"internal/store/migrations/0001.sql", "-- docs/a/m1.md#sumiu\nCREATE TABLE t (x INT);\n", "internal/store/migrations/0001.sql:1: link"},
+		"a workflow with the heading":      {".github/workflows/ci.yml", "# docs/a/m1.md#objetivo\nname: x\n", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			tr := gate(nil, "", nil)
+			tr.set(c.path, c.src)
+			got := only(run1(t, tr), ckLink)
+			if (c.want == "") != (len(got) == 0) || c.want != "" && !strings.Contains(strings.Join(got, "\n"), c.want) {
 				t.Fatalf("errors = %q, want %q", got, c.want)
 			}
 		})
