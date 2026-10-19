@@ -142,7 +142,7 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		t.Fatal(err)
 	}
 	if w.oa != nil {
-		w.oa.Bot = w.bot
+		w.oa.Bind(w.bot)
 	}
 	if ropt.approvals {
 		w.chain = fakechannel.NewChain(db, clk)
