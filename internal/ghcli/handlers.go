@@ -23,7 +23,7 @@ type Characters interface {
 // Mestre, or the App of the class of the character (the App "Mestre" until it is
 // ready). The token is made when the API is used and never leaves it.
 type Clients interface {
-	For(ctx context.Context, c characters.Character, repo string) (github.IssueAPI, error)
+	For(ctx context.Context, c characters.Character, repo string) (github.PullAPI, error)
 }
 
 // Repos gives the repository of a workspace.
@@ -31,9 +31,19 @@ type Repos interface {
 	Repo(ctx context.Context, workspace string) (string, error)
 }
 
-// Handlers are the commands `issue`, to register in the local forwarder of the
-// Citadel.
+// PRs says which PR is the table's (the one `pr open` made).
+type PRs interface {
+	PRNumber(ctx context.Context, tableKey string) (n int, ok bool, err error)
+}
+
+// Handlers are the commands `issue` and `pr`, to register in the local
+// forwarder of the Citadel.
 type Handlers struct {
+	PRs PRs
+	// Lease gates every call to GitHub; without it every command is refused.
+	Lease Lease
+	// Quota, when set, holds what changes data back while the App is low.
+	Quota      Quota
 	Characters Characters
 	Clients    Clients
 	Repos      Repos
@@ -44,11 +54,18 @@ type Handlers struct {
 
 // Register registers the handlers.
 func (h *Handlers) Register(fwd *localchan.LocalForwarder) {
-	fwd.Handle("issue create", localchan.HandlerFunc(h.issueCreate))
-	fwd.Handle("issue update", localchan.HandlerFunc(h.issueUpdate))
-	fwd.Handle("issue comment", localchan.HandlerFunc(h.issueComment))
-	fwd.Handle("issue list", localchan.HandlerFunc(h.issueList))
+	for name, f := range map[string]handler{
+		"issue list": h.read(h.issueList), "pr status": h.read(h.prStatus),
+		"issue create": h.write("issue create", h.issueCreate), "issue update": h.write("issue update", h.issueUpdate), "issue comment": h.write("issue comment", h.issueComment),
+		"pr comment": h.write("pr comment", h.prComment), "pr reply": h.write("pr reply", h.prReply), "pr note": h.write("pr note", h.prNote),
+	} {
+		fwd.Handle(name, localchan.HandlerFunc(f))
+	}
 }
+
+// TableKey is how the guard knows a table: its workspace and its id (the ids
+// of two workspaces may be the same).
+func TableKey(c characters.Character) string { return c.Workspace + "/" + c.Table }
 
 // caller is who asks, with the repository it works on, the actor the guard
 // judges and the service over its App.
@@ -57,6 +74,7 @@ type caller struct {
 	repo  string
 	actor github.Actor
 	svc   *github.IssueService
+	prs   *github.PRService
 }
 
 func (h *Handlers) caller(ctx context.Context, c *localchan.Call) (caller, *localchan.Response) {
@@ -81,7 +99,8 @@ func (h *Handlers) caller(ctx context.Context, c *localchan.Call) (caller, *loca
 		if ch.Table == "" {
 			return fail("table_required", "this command is for the characters of a table", "")
 		}
-		ref, ok, err := h.Tables.Epic(ctx, ch.Table)
+		key := TableKey(ch)
+		ref, ok, err := h.Tables.Epic(ctx, key)
 		if err != nil {
 			return fail(localchan.CodeInternal, "the table of the character could not be read", "")
 		}
@@ -89,13 +108,14 @@ func (h *Handlers) caller(ctx context.Context, c *localchan.Call) (caller, *loca
 			return fail("outside_epic", "your table has no epic registered", "ask the Grand Master")
 		}
 		out.repo = ref.Repo
-		out.actor = github.Actor{Kind: github.ActorTable, Table: ch.Table, MestreDaMesa: ch.Role == characters.RoleTableMaster}
+		out.actor = github.Actor{Kind: github.ActorTable, Table: key, MestreDaMesa: ch.Role == characters.RoleTableMaster}
 	}
 	api, err := h.Clients.For(ctx, ch, out.repo)
 	if err != nil {
 		return fail("github_unavailable", "GitHub is not available for this character now", "try again later")
 	}
 	out.svc = &github.IssueService{API: api, Objects: h.Objects, Tables: h.Tables, Clock: h.Clock}
+	out.prs = &github.PRService{API: api, Objects: h.Objects, Tables: h.Tables}
 	return out, nil
 }
 

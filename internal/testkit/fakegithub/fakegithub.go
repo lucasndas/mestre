@@ -55,6 +55,8 @@ type installation struct {
 type repo struct {
 	extra  map[int]*issueExtra
 	pulls  map[int][2]string
+	pullx  map[int]*pullExtra
+	checks map[string][]map[string]any // check runs by commit sha
 	labels map[string]string
 	issues []map[string]any
 	git    *gitData
@@ -73,20 +75,22 @@ type Server struct {
 	actions []Action
 	nextID  int64
 
-	apps          map[int64]*appInfo // by id of the App
-	installs      map[int64]*appInfo // by id of the installation
-	bots          map[string]int64
-	tokenReqs     []TokenRequest
-	public        map[string]bool // repositories that are not private
-	tokenFail     int
-	tokenFailHdr  map[string]string
-	userRepoSt    int // status the next POST /user/repos answers (0: as the permissions say)
-	defaultBranch map[string]string
-	pageSize      int
-	loseRefAnswer bool
-	gitDown       int // status every call to the git API answers (0: as usual)
-	subIssueFail  int // status the next POST of a sub-issue answers (0: as usual)
-	requests      []Request
+	apps           map[int64]*appInfo // by id of the App
+	installs       map[int64]*appInfo // by id of the installation
+	bots           map[string]int64
+	tokenReqs      []TokenRequest
+	public         map[string]bool // repositories that are not private
+	tokenFail      int
+	tokenFailHdr   map[string]string
+	userRepoSt     int // status the next POST /user/repos answers (0: as the permissions say)
+	defaultBranch  map[string]string
+	pageSize       int
+	loseRefAnswer  bool
+	gitDown        int // status every call to the git API answers (0: as usual)
+	failWrite      int // status the next write answers (0: as usual), with Retry-After failWriteAfter
+	failWriteAfter string
+	subIssueFail   int // status the next POST of a sub-issue answers (0: as usual)
+	requests       []Request
 }
 
 // New returns an empty server using the newest recordings.
@@ -115,6 +119,13 @@ func (s *Server) IssueToken(token, app string) {
 	s.mu.Lock()
 	s.tokens[token] = &installation{app: app, expiresAt: now.Add(TokenTTL), resetAt: now.Add(time.Hour)}
 	s.mu.Unlock()
+}
+
+// SetUsed sets how much of the hourly quota the installation of the token has used.
+func (s *Server) SetUsed(token string, used int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokens[token].used = used
 }
 
 // Actions returns the writes done so far.
@@ -317,4 +328,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// FailNextWrite makes the next write answer with the status and a Retry-After
+// of that many seconds (the secondary limit of GitHub).
+func (s *Server) FailNextWrite(status int, retryAfter string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failWrite, s.failWriteAfter = status, retryAfter
 }

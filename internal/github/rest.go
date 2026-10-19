@@ -56,6 +56,9 @@ type REST struct {
 	BaseURL string
 	HTTP    *http.Client
 	Token   func(ctx context.Context, repo string) (string, error)
+	// Quota, when set, is told the headers of every answer, for App.
+	Quota *Quota
+	App   string
 }
 
 var _ GitHub = (*REST)(nil)
@@ -99,19 +102,20 @@ func (c *REST) doHeader(ctx context.Context, method, repo, path string, body any
 		return 0, nil, nil, errors.New("github: " + strings.ReplaceAll(err.Error(), tok, "***"))
 	}
 	defer resp.Body.Close()
+	if c.Quota != nil {
+		c.Quota.Observe(c.App, resp.Header)
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	return resp.StatusCode, resp.Header, raw, err
 }
 
 func (c *REST) get(ctx context.Context, repo, path string, out any) error {
-	st, raw, err := c.do(ctx, http.MethodGet, repo, path, nil)
+	st, hdr, raw, err := c.doHeader(ctx, http.MethodGet, repo, path, nil)
 	switch {
 	case err != nil:
 		return err
-	case st == http.StatusNotFound:
-		return ErrNotFound
 	case st != http.StatusOK:
-		return fmt.Errorf("github: GET %s: status %d", path, st)
+		return failed("GET "+path, st, raw, hdr)
 	}
 	return json.Unmarshal(raw, out)
 }
@@ -187,12 +191,12 @@ func (c *REST) Comments(ctx context.Context, repo string, n int) ([]CommentInfo,
 
 // PostComment creates a comment.
 func (c *REST) PostComment(ctx context.Context, repo string, n int, body string) (CommentInfo, error) {
-	st, raw, err := c.do(ctx, http.MethodPost, repo, fmt.Sprintf("/issues/%d/comments", n), map[string]string{"body": body})
+	st, hdr, raw, err := c.doHeader(ctx, http.MethodPost, repo, fmt.Sprintf("/issues/%d/comments", n), map[string]string{"body": body})
 	if err != nil {
 		return CommentInfo{}, err
 	}
 	if st != http.StatusCreated {
-		return CommentInfo{}, fmt.Errorf("github: creating a comment: status %d", st)
+		return CommentInfo{}, failed("creating a comment", st, raw, hdr)
 	}
 	var v CommentInfo
 	var r struct {

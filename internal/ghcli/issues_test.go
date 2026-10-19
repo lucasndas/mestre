@@ -13,7 +13,7 @@ func TestAnIssueOutsideTheEpicOfTheTableIsRefused(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	other := r.gh.AddIssue(repoFull, "de outra mesa")
-	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "43-outra"}); err != nil {
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "meu-app/43-outra"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"issue comment", "issue update"} {
@@ -78,7 +78,7 @@ func TestAnIssueIsCreatedUnderTheEpicWithTheAppOfWhoAsked(t *testing.T) {
 	}
 	// a parent that is not of the table
 	other := r.gh.AddIssue(repoFull, "de outra mesa")
-	_ = r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "43-outra"})
+	_ = r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "meu-app/43-outra"})
 	if got := r.run("tm", "issue create", map[string]any{"title": "x", "parent": itoa(other)}); got.Code != "outside_epic" {
 		t.Errorf("parent of another table: %+v", got)
 	}
@@ -139,7 +139,7 @@ func TestTheReservedLabelsAreNotChangedByATable(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	n := r.gh.AddIssue(repoFull, "da mesa")
-	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: n, Table: "42-login"}); err != nil {
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: n, Table: "meu-app/42-login"}); err != nil {
 		t.Fatal(err)
 	}
 	before := len(r.gh.Actions())
@@ -215,7 +215,7 @@ func TestTheImpressionsOfOtherTablesAreTheirs(t *testing.T) {
 	r := newRig(t)
 	other := r.gh.AddIssue(repoFull, "de outra mesa")
 	hash := github.Impression("auth: login lento")
-	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "43-outra", Fingerprint: hash}); err != nil {
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "meu-app/43-outra", Fingerprint: hash}); err != nil {
 		t.Fatal(err)
 	}
 	got := r.run("tm", "issue create", map[string]any{"title": "@alguem olha", "fingerprint": "auth: login lento"})
@@ -231,7 +231,7 @@ func TestAnIssueUpdateDoesNotReachAPR(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	pr := r.gh.AddPR(repoFull, "PR da mesa", "42-login", repoFull)
-	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindPR, Number: pr, Table: "42-login"}); err != nil {
+	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindPR, Number: pr, Table: "meu-app/42-login"}); err != nil {
 		t.Fatal(err)
 	}
 	before := len(r.gh.Actions())
@@ -285,7 +285,7 @@ func TestTheGrandMasterUnderAnIssueOfATableMakesItTheTablesOwn(t *testing.T) {
 	mine := r.run("tm", "issue create", map[string]any{"title": "da mesa"})
 	under := r.run("gm", "issue create", map[string]any{"title": "do GM", "parent": itoa(int(mine.Data["number"].(float64)))})
 	obj, found, err := r.objs.Get(r.ctx, repoFull, github.KindIssue, int(under.Data["number"].(float64)))
-	if err != nil || !found || obj.Table != "42-login" {
+	if err != nil || !found || obj.Table != "meu-app/42-login" {
 		t.Errorf("the issue under an issue of the table: %+v %v %v", obj, found, err)
 	}
 	// a loose issue of the Grand Master is nobody's
