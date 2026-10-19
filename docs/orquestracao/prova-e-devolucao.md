@@ -48,9 +48,9 @@ done_requires:
 
 ### Devolução com causa e mesma falha
 
-- A devolução pode dizer o que falhou: `mestre done "<resumo>" --return "<motivo>" --cause <classe> --where <arquivo:linha>` (até 3 `--where`). Classes: `test`, `build`, `lint`, `conflict`, `network`, `auth`, `quota`, `other`.
-- **Impressão da falha:** os 12 primeiros hexadecimais do SHA-256 de `etapa | classe | os --where`. Os `--where` são normalizados: caminho relativo ao worktree com `/`, sem a coluna (`a.go:12:5` vira `a.go:12`), sem repetidos, em ordem. **Sem nenhum `--where`, não há impressão:** a devolução conta só para `max_returns`.
-- **Na verificação do motor** (`sync` e `verify: true`), a classe é `verify` e os `--where` são os 3 primeiros, depois de normalizados e ordenados, dos trechos `<caminho>:<linha>` da saída (stdout e stderr) cujo caminho existe no worktree, com o prefixo do worktree efêmero retirado. Outros formatos de localização (como `File "x", line 12`) não são reconhecidos; sem nenhum trecho reconhecido, não há impressão. Como a linha muda quando o código acima muda, uma impressão nova também pode ser só o código andando: conta como progresso.
+- A devolução pode dizer o que falhou: `mestre done "<resumo>" --return "<motivo>" --cause <causa> --where <arquivo:linha>` (até 3 `--where`). Causas: `test`, `build`, `lint`, `conflict`, `network`, `auth`, `quota`, `other`.
+- **Impressão da falha:** os 12 primeiros hexadecimais do SHA-256 de `etapa | causa | os --where`. Os `--where` são normalizados: caminho relativo ao worktree com `/`, sem a coluna (`a.go:12:5` vira `a.go:12`), sem repetidos, em ordem. **Sem nenhum `--where`, não há impressão:** a devolução conta só para `max_returns`.
+- **Na verificação do motor** (`sync` e `verify: true`), a causa é `verify` e os `--where` são os 3 primeiros, depois de normalizados e ordenados, dos trechos `<caminho>:<linha>` da saída (stdout e stderr) cujo caminho existe no worktree, com o prefixo do worktree efêmero retirado. Outros formatos de localização (como `File "x", line 12`) não são reconhecidos; sem nenhum trecho reconhecido, não há impressão. Como a linha muda quando o código acima muda, uma impressão nova também pode ser só o código andando: conta como progresso.
 - **Mesma falha repetida:** devoluções ou verificações vermelhas **seguidas** da mesma etapa com a mesma impressão contam juntas; ao chegar a `same_failure`, a missão vai para `paused` com o motivo "mesma falha repetida" e o Mestre da mesa recebe o evento `return_limit` com a impressão, as tentativas e os `--where`, antes de gastar as voltas que sobram de `max_returns` ([devolução com limite](missoes.md#devolução-com-limite)). Uma impressão diferente, ou nenhuma, zera essa contagem; `max_returns` continua contando tudo.
 
 ### Pergaminho de revisão
@@ -59,12 +59,12 @@ done_requires:
 - Ele nasce com a tabela que o revisor mantém; o identificador de um achado nunca muda nem é reaproveitado:
 
   ```markdown
-  | ID | Etapa dona | Classe | Onde | Achado | Estado |
+  | ID | Etapa dona | Tipo | Onde | Achado | Estado |
   |---|---|---|---|---|---|
   | R1 | dev | Bug | `src/login.go:40` | aceita senha vazia | aberto |
   ```
 
-  Estados: `aberto`, `corrigido` (com `arquivo:linha`), `não corrigido`, `não se aplica mais`. Classes: `Gap`, `Bug`, `Verification miss`, `Scope drift`, `Over-engineering` (nunca bloqueia sozinho).
+  Estados: `aberto`, `corrigido` (com `arquivo:linha`), `não corrigido`, `não se aplica mais`. Tipos de achado: `Gap`, `Bug`, `Verification miss`, `Scope drift`, `Over-engineering` (nunca bloqueia sozinho).
 - Na segunda rodada em diante, o item `quest` da etapa que revisa traz o conteúdo atual do pergaminho de revisão antes das instruções, com a ordem de conferir cada achado `aberto` ou `não corrigido` antes de qualquer revisão nova; o da etapa que recebe a devolução traz os achados dela. Quem edita usa `mestre note edit --expect-rev`, para não apagar a edição de outro.
 - O motor não interpreta a tabela: ele cria, conecta e entrega. A disciplina de revisão é da classe ([classes](../classes/classes.md)).
 
