@@ -52,7 +52,7 @@ type FileFlag struct {
 }
 
 // MaxAttach is the largest file `reply --attach` sends
-// (docs/telegram/anexos-e-transcricao.md#envio-de-arquivos): the limit of the
+// (docs/telegram/anexos-e-transcricao.md#envio-de-arquivos-mestre-reply---attach): the limit of the
 // Bot API for a document.
 const MaxAttach = 50 << 20
 

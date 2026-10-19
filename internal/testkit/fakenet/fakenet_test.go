@@ -149,7 +149,8 @@ func TestHeartbeatLossDetectedInFakeTime(t *testing.T) {
 }
 
 // towerLoop is a test-local reconnecting client with the protocol backoff
-// (1 s doubling). The real Tower replaces it in M2 (conectividade/protocolo.md).
+// (1 s doubling). The real Tower has its own (conectividade/protocolo.md); this
+// one stands in for it in the tests of the double.
 func towerLoop(ctx context.Context, n *fakenet.Network, clk clock.Clock, attempts chan<- time.Time) {
 	wait := time.Second
 	for ctx.Err() == nil {
@@ -167,7 +168,7 @@ func towerLoop(ctx context.Context, n *fakenet.Network, clk clock.Clock, attempt
 	}
 }
 
-// CA-DUBLES-08 (double side: the real Tower replaces towerLoop in M2)
+// CA-DUBLES-08 (double side: the real Tower has its own loop in internal/protocol)
 func TestCutConnectionReconnectsWithBackoff(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

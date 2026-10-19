@@ -1,5 +1,5 @@
 // Command realaccount runs the real-account tests of internal/realaccount on a
-// disposable machine (docs/qualidade/testes.md#contas-reais):
+// disposable machine (docs/qualidade/contas-reais.md):
 //
 //	MESTRE_REAL_ACCOUNT=1 go run ./tools/realaccount run [-budget 10m] [-timeout 25m] [-keep]
 //

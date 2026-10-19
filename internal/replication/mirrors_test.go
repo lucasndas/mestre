@@ -9,7 +9,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// CA-REPL-08 (the mirrors; the criterion with real git and real sockets is in
+// Part of CA-REPL-08 (the mirrors; the criterion with real git and real sockets is in
 // the full suite, and the mirror of a workspace itself is milestone 4)
 func TestTheMirrorFollowsTheCitadelByBundleWithTheFakeGit(t *testing.T) {
 	t.Parallel()

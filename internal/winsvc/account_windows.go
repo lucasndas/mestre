@@ -140,7 +140,7 @@ func (a SelfAccount) Adopt(id string, _ int) (*Session, error) {
 }
 
 // AgentAccount is mestre-agente, the local account without interactive
-// logon of the agents (docs/arquitetura/windows.md#conta-dos-agentes). The
+// logon of the agents (docs/arquitetura/windows.md#conta-dos-agentes-mestre-agente). The
 // launcher runs as LocalSystem, the only one that may load the profile of
 // another account.
 type AgentAccount struct {

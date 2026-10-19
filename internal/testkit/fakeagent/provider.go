@@ -11,8 +11,8 @@
 // /fake-dump. The fake Codex fires the nine events the Mestre binds and
 // writes its session transcript with the use (token_count), and simulates
 // the usage limit with FAKEAGENT_CODEX_USAGE_LIMIT=1 (codex.go). The rest of
-// the usage and limit emulation and the full instruction dump arrive with
-// the other adapters and the conformance in M3.
+// the usage and limit emulation and the full instruction dump are in the
+// other adapters and in the conformance test.
 package fakeagent
 
 import (

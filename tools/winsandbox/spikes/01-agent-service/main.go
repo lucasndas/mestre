@@ -2,7 +2,7 @@
 
 // Command spikesvc is the test service of the M1 Windows spikes
 // (docs/desenvolvimento/ordem-de-implementacao.md#spikes-do-m1, items in
-// docs/arquitetura/windows.md#verificar-na-implementaÃ§Ã£o). One binary covers
+// docs/arquitetura/windows.md#verificar-na-implementação). One binary covers
 // the three spikes:
 //
 //  1. ConPTY with the process started as mestre-agente from a service with a
