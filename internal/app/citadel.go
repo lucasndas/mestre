@@ -500,13 +500,25 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		e.changed()
 	}()
 
+	var integ IntegrationRun
 	if e.deps.HostOrchestration {
-		orc, err := e.hostOrchestration(db)
+		if e.deps.Integration != nil {
+			var err error
+			integ, err = e.deps.Integration.Open(ctx, IntegrationEnv{DB: db, Vault: take.vault, Clock: e.clk, Log: e.log, Machine: e.id.MachineID, Masker: e.deps.Masker})
+			if err != nil {
+				return transition{err: fmt.Errorf("app: the integrations: %w", err)}
+			}
+			defer integ.Close() // before the database is closed (the deferred function above)
+		}
+		orc, err := e.hostOrchestration(db, integ)
 		if err != nil {
 			return transition{err: fmt.Errorf("app: the orchestration: %w", err)}
 		}
 		orc.Register(e.local, nil)
 		run.external = append(slices.Clone(run.external), orc.External())
+		if integ != nil {
+			run.external = append(run.external, integ.Attach(orc, e.local)...)
+		}
 	}
 
 	promoted, wait := take.promoted, guild.PromotedWait
@@ -525,10 +537,16 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		OnHigher: func(uint64) { e.signal(transition{to: RoleTower, unknown: true}) },
 		OnChange: func(s guild.FenceState) {
 			run.setActing(s == guild.FenceConfirmed || s == guild.FenceLockDown || s == guild.FenceNoLock)
+			if integ != nil {
+				integ.FenceChanged(s)
+			}
 			e.changed()
 		},
 		OnDiscard: func(names []string) { e.dropped(run.epoch, names) },
 	})
+	if integ != nil {
+		integ.BindFence(run.fence)
+	}
 	if err := e.reloadCreds(ctx, db); err != nil {
 		return transition{err: fmt.Errorf("app: the refused credentials of the Guild: %w", err)}
 	}
