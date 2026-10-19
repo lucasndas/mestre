@@ -158,8 +158,10 @@ func TestPowerShellReadsALoneCarriageReturnAsANewLine(t *testing.T) {
 	fixedDenials(t, win.name, win.env, r, denied)
 	// The POSIX reading is unchanged: the CR stays a blank, so the line is
 	// read as the arguments of echo and no new command appears.
+	posix := native.env
+	posix.OS = "linux"
 	c := "echo hi\rgit push --force"
-	if d := judge(native.env, r, c); d.Verdict == classes.Deny && d.Layer == classes.LayerFixed {
+	if d := judge(posix, r, c); d.Verdict == classes.Deny && d.Layer == classes.LayerFixed {
 		t.Errorf("%s: %q = fixed denial (%q)", native.name, c, d.Reason)
 	}
 }
