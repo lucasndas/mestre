@@ -110,8 +110,8 @@ type Deps struct {
 	// External are the functions the Citadel turns on and off.
 	External []ExternalFunc
 	// Identifier identifies the callers of the local channel; nil identifies
-	// nobody (no terminal runs until the engine hosts the orchestration:
-	// "M5, antes da etapa 1" in docs/desenvolvimento/ordem-de-implementacao.md).
+	// nobody (no terminal runs until the engine hosts the terminals of the
+	// characters: "M5, antes da etapa 1" in docs/desenvolvimento/ordem-de-implementacao.md).
 	Identifier localchan.Identifier
 	// Commands is the definition of the commands of the CLI the engine
 	// checks every call against (nil: cli.Default). Profiles gives the level
@@ -155,6 +155,13 @@ type Deps struct {
 	// cannot move the state of a character of another. nil refuses every
 	// event (the safe side).
 	AgentMachine func(ctx context.Context, agentID string) (machine string, ok bool)
+	// HostOrchestration makes the Citadel host the orchestration (`mestre run`
+	// sets it): the services over the main database of each period, their
+	// commands in the local channel, their loops while the fence lets it act.
+	// Binary is the stable absolute path of the mestre binary the hook files
+	// call (default: the running one).
+	HostOrchestration bool
+	Binary            string
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources

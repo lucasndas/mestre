@@ -185,6 +185,8 @@ type answer struct {
 	Status app.Status `json:"status"`
 	LSN    uint64     `json:"lsn"`
 	Rows   [][]any    `json:"rows"`
+	// Call is the response of a command of the CLI, op call.
+	Call *localchan.Response `json:"call"`
 }
 
 func (w *world) ask(p *proc, req map[string]string) (answer, error) {

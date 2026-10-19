@@ -47,7 +47,7 @@ func Main(ctx context.Context, args []string, stderr io.Writer, lookupEnv func(s
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
-	deps := Deps{Version: version}
+	deps := Deps{Version: version, HostOrchestration: true}
 	after, cleanup, err := testHooks(ctx, &deps, cfg, getenv)
 	defer cleanup()
 	if err != nil {
