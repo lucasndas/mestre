@@ -189,3 +189,7 @@ func coversDomain(t, c string) bool {
 	}
 	return false
 }
+
+// ValidGlob says whether the pattern is a glob the rules read (the policy file
+// checks the globs of the sensitive areas with it).
+func ValidGlob(pattern string) bool { return pattern != "" && validGlob(pattern) }
