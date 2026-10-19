@@ -3,7 +3,6 @@ package classes_test
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 )
@@ -24,11 +23,7 @@ func TestTheAnalysisOfACommandIsBounded(t *testing.T) {
 			"bare bodies":               {strings.Repeat("<<E\nx\nE\n", 1000) + strings.Repeat("bash\n", 1000), "trabalhoso demais"},
 			"a long body a shell reads": {"bash <<'EOF'\n" + strings.Repeat("echo a\n", 10000) + "EOF", "longo demais"},
 		} {
-			start := time.Now() //nolint:forbidigo // the point is to measure the bound of the analysis
-			d := decideOn(t, env, free, c.cmd)
-			if took := time.Since(start); took > raceFactor*time.Second { //nolint:forbidigo // same
-				t.Errorf("%s: %s took %v; want well under a second", goos, name, took)
-			}
+			d, _ := boundedDecision(t, goos+": "+name, env, free, c.cmd)
 			want(t, d, classes.Deny, classes.LayerFixed, c.reason)
 		}
 	}
