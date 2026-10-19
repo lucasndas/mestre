@@ -47,7 +47,12 @@ func (c PINCost) withDefaults() PINCost {
 	return c
 }
 
-const pinKeyLen = 32
+const (
+	pinKeyLen    = 32
+	maxMemoryKiB = 256 * 1024
+	maxPasses    = 10
+	maxThreads   = 16
+)
 
 func (s *Service) hashPIN(pin string) (string, error) {
 	salt := make([]byte, 16)
@@ -71,12 +76,13 @@ func verifyPIN(hash, pin string) bool {
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &v); err != nil {
 		return false
 	}
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &c.MemoryKiB, &c.Time, &threads); err != nil || threads == 0 || threads > 255 {
-		return false
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &c.MemoryKiB, &c.Time, &threads); err != nil || threads == 0 || threads > maxThreads ||
+		c.Time == 0 || c.Time > maxPasses || c.MemoryKiB < 8 || c.MemoryKiB > maxMemoryKiB {
+		return false // a hash with costs out of the limits is not one the Service made
 	}
 	salt, err1 := base64.RawStdEncoding.DecodeString(parts[4])
 	want, err2 := base64.RawStdEncoding.DecodeString(parts[5])
-	if err1 != nil || err2 != nil || len(want) == 0 {
+	if err1 != nil || err2 != nil || len(want) == 0 || len(want) > 64 {
 		return false
 	}
 	got := argon2.IDKey([]byte(pin), salt, c.Time, c.MemoryKiB, uint8(threads), uint32(len(want)))
@@ -98,7 +104,7 @@ func ValidPIN(pin string) bool {
 
 // SetPIN sets the PIN of a user; the Service keeps only the hash. Changing it asks
 // for the current PIN, which the caller confirms with a request of PIN
-// before (CheckPIN).
+// before (CheckPIN). The answers given with the old PIN stop counting.
 func (s *Service) SetPIN(ctx context.Context, id, pin string) error {
 	if !ValidPIN(pin) {
 		return errors.New("users: the PIN has 6 to 12 digits")
@@ -115,18 +121,26 @@ func (s *Service) SetPIN(ctx context.Context, id, pin string) error {
 		if n, _ := res.RowsAffected(); n == 0 {
 			return fmt.Errorf("%w: %s", ErrNoUser, id)
 		}
-		return nil
+		_, err = tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'cancelled' WHERE user_id = ? AND state IN ('open', 'done')`, id)
+		return err
 	})
 }
 
 // ResetPIN clears the PIN of another user; he sets a new one at the next login.
-// Only the Owner.
+// Only the Owner. What the user had answered with the old PIN stops counting.
 func (s *Service) ResetPIN(ctx context.Context, by User, id string) error {
-	if err := s.mayManage(by); err != nil {
-		return err
-	}
 	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `UPDATE users SET pin_hash = '', pin_locked_until = 0, updated_at = ? WHERE id = ?`, ms(s.clk.Now()), id)
+		if _, err := s.actor(ctx, tx, by, ManageUsers); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE users SET pin_hash = '', pin_locked_until = 0, updated_at = ? WHERE id = ? AND state <> 'removed'`, ms(s.clk.Now()), id)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return fmt.Errorf("%w: %s", ErrNoUser, id)
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'cancelled' WHERE user_id = ? AND state IN ('open', 'done')`, id)
 		return err
 	})
 }
@@ -141,126 +155,139 @@ type PINRequest struct {
 // StartPIN opens a request of PIN for an action of the user. A user with no PIN
 // can not do the action; one with the PIN locked is refused without a request.
 func (s *Service) StartPIN(ctx context.Context, userID, action string) (PINRequest, error) {
-	u, err := s.Get(ctx, userID)
-	if err != nil {
-		return PINRequest{}, err
-	}
 	now := s.clk.Now()
-	switch {
-	case u.State != Active:
-		return PINRequest{}, fmt.Errorf("%w: %s", ErrNoUser, userID)
-	case !u.HasPIN:
-		return PINRequest{}, ErrNoPIN
-	case now.Before(u.PINLockedUntil):
-		return PINRequest{}, ErrPINLocked
-	}
 	r := PINRequest{ID: s.ids.NewString(), UserID: userID, Action: action, ExpiresAt: now.Add(PINRequestTTL)}
-	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO pin_requests (id, user_id, action, created_at, expires_at, state) VALUES (?, ?, ?, ?, ?, 'open')`,
+	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		var state string
+		var hasPIN bool
+		var locked int64
+		err := tx.QueryRowContext(ctx, `SELECT state, pin_hash <> '', pin_locked_until FROM users WHERE id = ?`, userID).Scan(&state, &hasPIN, &locked)
+		switch {
+		case err == sql.ErrNoRows, err == nil && state != string(Active):
+			return fmt.Errorf("%w: %s", ErrNoUser, userID)
+		case err != nil:
+			return err
+		case !hasPIN:
+			return ErrNoPIN
+		case now.Before(fromMs(locked)):
+			return ErrPINLocked
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO pin_requests (id, user_id, action, created_at, expires_at, state) VALUES (?, ?, ?, ?, ?, 'open')`,
 			r.ID, userID, action, ms(now), ms(r.ExpiresAt))
 		return err
 	})
-	return r, err
+	if err != nil {
+		return PINRequest{}, err
+	}
+	return r, nil
 }
 
 // CheckPIN checks the answer to a request. A right PIN makes the request `done`
 // (the caller then applies the action, once: Consume). A wrong one counts: 3 in the
 // same request cancel it, 5 in 15 minutes lock the PIN of the user for 30
 // minutes and the Owner is alerted; a locked PIN is refused without being
-// verified. The PIN is never logged and never part of an error.
+// verified. The PIN is never logged and never part of an error. All of it is one
+// transaction, and the writes of the database go one at a time, so answers at
+// the same time are checked one by one and each wrong one is counted.
 func (s *Service) CheckPIN(ctx context.Context, requestID, pin string) error {
-	var (
-		r       PINRequest
-		state   string
-		errs    int
-		expires int64
-	)
-	err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT id, user_id, action, expires_at, errors, state FROM pin_requests WHERE id = ?`, requestID).
-		Scan(&r.ID, &r.UserID, &r.Action, &expires, &errs, &state)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrPINRequest
-	}
-	if err != nil {
-		return err
-	}
-	now := s.clk.Now()
-	if state != "open" || !now.Before(fromMs(expires)) {
-		return ErrPINRequest
-	}
-	var hash string
-	var locked int64
-	if err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT pin_hash, pin_locked_until FROM users WHERE id = ? AND state = 'active'`, r.UserID).Scan(&hash, &locked); err != nil {
-		return ErrNoUser
-	}
-	if now.Before(fromMs(locked)) {
-		return ErrPINLocked // refused without verification
-	}
-	if hash == "" {
-		return ErrNoPIN
-	}
-	if verifyPIN(hash, pin) {
-		return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'done' WHERE id = ? AND state = 'open'`, r.ID)
-			return err
-		})
-	}
-	return s.wrongPIN(ctx, r, errs+1, now)
-}
-
-func (s *Service) wrongPIN(ctx context.Context, r PINRequest, errs int, now time.Time) error {
-	lock := false
+	var result error
+	var lockedNow bool
+	var userID string
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO pin_failures (user_id, at) VALUES (?, ?)`, r.UserID, ms(now)); err != nil {
+		now := s.clk.Now()
+		var state string
+		var errs int
+		var expires int64
+		err := tx.QueryRowContext(ctx, `SELECT user_id, expires_at, errors, state FROM pin_requests WHERE id = ?`, requestID).Scan(&userID, &expires, &errs, &state)
+		if err == sql.ErrNoRows {
+			result = ErrPINRequest
+			return nil
+		}
+		if err != nil {
 			return err
 		}
-		state := "open"
+		if state != "open" || !now.Before(fromMs(expires)) {
+			result = ErrPINRequest
+			return nil
+		}
+		var hash string
+		var locked int64
+		if err := tx.QueryRowContext(ctx, `SELECT pin_hash, pin_locked_until FROM users WHERE id = ? AND state = 'active'`, userID).Scan(&hash, &locked); err != nil {
+			result = ErrNoUser
+			return nil
+		}
+		if now.Before(fromMs(locked)) {
+			result = ErrPINLocked // refused without verification
+			return nil
+		}
+		if hash == "" {
+			result = ErrNoPIN
+			return nil
+		}
+		if verifyPIN(hash, pin) {
+			_, err := tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'done' WHERE id = ? AND state = 'open'`, requestID)
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO pin_failures (user_id, at) VALUES (?, ?)`, userID, ms(now)); err != nil {
+			return err
+		}
+		errs++
+		state = "open"
 		if errs >= PINRequestErrors {
 			state = "cancelled"
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE pin_requests SET errors = ?, state = ? WHERE id = ?`, errs, state, r.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE pin_requests SET errors = ?, state = ? WHERE id = ? AND state = 'open'`, errs, state, requestID); err != nil {
 			return err
 		}
 		var n int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM pin_failures WHERE user_id = ? AND at > ?`, r.UserID, ms(now.Add(-PINLockWindow))).Scan(&n); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM pin_failures WHERE user_id = ? AND at > ?`, userID, ms(now.Add(-PINLockWindow))).Scan(&n); err != nil {
 			return err
 		}
 		if n >= PINLockErrors {
-			lock = true
-			if _, err := tx.ExecContext(ctx, `UPDATE users SET pin_locked_until = ? WHERE id = ?`, ms(now.Add(PINLockFor)), r.UserID); err != nil {
+			lockedNow = true
+			if _, err := tx.ExecContext(ctx, `UPDATE users SET pin_locked_until = ? WHERE id = ?`, ms(now.Add(PINLockFor)), userID); err != nil {
 				return err
 			}
+			if _, err := tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'cancelled' WHERE user_id = ? AND state IN ('open', 'done')`, userID); err != nil {
+				return err
+			}
+		}
+		result = ErrBadPIN
+		if state == "cancelled" {
+			result = fmt.Errorf("%w: o pedido foi cancelado depois de %d erros", ErrBadPIN, PINRequestErrors)
 		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	if lock && s.o.Alerts != nil {
-		name := r.UserID
-		if u, gerr := s.Get(ctx, r.UserID); gerr == nil {
+	if lockedNow && s.o.Alerts != nil {
+		name := userID
+		if u, gerr := s.Get(ctx, userID); gerr == nil {
 			name = u.Name
 		}
 		s.o.Alerts.OwnerAlert(ctx, fmt.Sprintf("O PIN de %s foi bloqueado por %d minutos: %d erros em %d minutos.", name, int(PINLockFor/time.Minute), PINLockErrors, int(PINLockWindow/time.Minute)))
 	}
-	if errs >= PINRequestErrors {
-		return fmt.Errorf("%w: o pedido foi cancelado depois de %d erros", ErrBadPIN, PINRequestErrors)
-	}
-	return ErrBadPIN
+	return result
 }
 
 // Consume spends a request that was answered right, for the action named, once:
 // the second call is refused. This is what an action that asks for PIN calls
-// before it acts.
+// before it acts. A user that is no longer active has no request to spend.
 func (s *Service) Consume(ctx context.Context, requestID, userID, action string) error {
 	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'used' WHERE id = ? AND user_id = ? AND action = ? AND state = 'done' AND expires_at > ?`,
-			requestID, userID, action, ms(s.clk.Now()))
-		if err != nil {
-			return err
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return ErrPINRequest
-		}
-		return nil
+		return s.consume(ctx, tx, requestID, userID, action)
 	})
+}
+
+func (s *Service) consume(ctx context.Context, tx *sql.Tx, requestID, userID, action string) error {
+	res, err := tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'used' WHERE id = ? AND user_id = ? AND action = ? AND state = 'done' AND expires_at > ?
+		AND EXISTS (SELECT 1 FROM users WHERE id = ? AND state = 'active')`, requestID, userID, action, ms(s.clk.Now()), userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrPINRequest
+	}
+	return nil
 }

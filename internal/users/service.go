@@ -183,7 +183,7 @@ type NewUser struct {
 	GitHubLogin string
 }
 
-func (s *Service) insert(ctx context.Context, in NewUser) (User, error) {
+func (s *Service) insert(ctx context.Context, by *User, in NewUser) (User, error) {
 	if !in.Level.Valid() {
 		return User{}, fmt.Errorf("%w: %q", ErrBadLevel, in.Level)
 	}
@@ -197,6 +197,11 @@ func (s *Service) insert(ctx context.Context, in NewUser) (User, error) {
 	slices.Sort(ws)
 	ws = slices.Compact(ws)
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		if by != nil {
+			if _, err := s.actor(ctx, tx, *by, ManageUsers); err != nil {
+				return err
+			}
+		}
 		if in.Level == Owner {
 			var n int
 			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE level = 'owner' AND state <> 'removed'`).Scan(&n); err != nil {
@@ -226,28 +231,41 @@ func (s *Service) insert(ctx context.Context, in NewUser) (User, error) {
 // CreateOwner makes the first Owner, in the wizard of the first access; there is
 // only one Owner in a Guild.
 func (s *Service) CreateOwner(ctx context.Context, name string) (User, error) {
-	return s.insert(ctx, NewUser{Name: name, Level: Owner})
+	return s.insert(ctx, nil, NewUser{Name: name, Level: Owner})
 }
 
 // Create registers a user. Only the Owner registers users, and there is no second
 // Owner: the post passes by a transfer.
 func (s *Service) Create(ctx context.Context, by User, in NewUser) (User, error) {
-	if err := s.mayManage(by); err != nil {
-		return User{}, err
-	}
 	if in.Level == Owner {
 		return User{}, ErrOwnerExists
 	}
-	return s.insert(ctx, in)
+	return s.insert(ctx, &by, in)
 }
 
-// mayManage is the check of every action of managing users: the level and a
-// user that is active.
-func (s *Service) mayManage(by User) error {
-	if by.State != Active {
-		return &LevelError{Capability: ManageUsers, Have: by.Level, Need: Owner}
+// actor reloads the user that acts from the database, inside the transaction of
+// the action: the struct the caller holds may be old (the Owner that passed the
+// post, a user that was suspended meanwhile), and the level that counts is the
+// one stored now. A user that is not active, or does not exist, has no level.
+func (s *Service) actor(ctx context.Context, q queryer, by User, c Capability) (User, error) {
+	us, err := s.load(ctx, q, `id = ?`, by.ID)
+	if err != nil {
+		return User{}, err
 	}
-	return Require(by.Level, ManageUsers)
+	if len(us) == 0 || us[0].State != Active {
+		return User{}, &LevelError{Capability: c, Have: by.Level, Need: minimumOrOwner(c)}
+	}
+	if err := Require(us[0].Level, c); err != nil {
+		return User{}, err
+	}
+	return us[0], nil
+}
+
+func minimumOrOwner(c Capability) Level {
+	if m := Minimum(c); m != "" {
+		return m
+	}
+	return Owner
 }
 
 // Edit is the change of a user; a nil field stays.
@@ -261,23 +279,25 @@ type Edit struct {
 // Edit changes a user. What the new level or the shorter list of workspaces no
 // longer allows is invalidated: the pending approvals of the user.
 func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, error) {
-	if err := s.mayManage(by); err != nil {
-		return User{}, err
-	}
-	cur, err := s.Get(ctx, id)
-	if err != nil {
-		return User{}, err
-	}
-	if e.Level != nil {
-		switch {
-		case !e.Level.Valid():
-			return User{}, fmt.Errorf("%w: %q", ErrBadLevel, *e.Level)
-		case *e.Level == Owner && cur.Level != Owner, cur.Level == Owner && *e.Level != Owner:
-			return User{}, ErrOwnerExists // the post only passes by a transfer
-		}
+	if e.Level != nil && !e.Level.Valid() {
+		return User{}, fmt.Errorf("%w: %q", ErrBadLevel, *e.Level)
 	}
 	narrowed := false
-	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		if _, err := s.actor(ctx, tx, by, ManageUsers); err != nil {
+			return err
+		}
+		us, err := s.load(ctx, tx, `id = ? AND state <> 'removed'`, id)
+		if err != nil {
+			return err
+		}
+		if len(us) == 0 {
+			return fmt.Errorf("%w: %s", ErrNoUser, id)
+		}
+		cur := us[0]
+		if e.Level != nil && (*e.Level == Owner && cur.Level != Owner || cur.Level == Owner && *e.Level != Owner) {
+			return ErrOwnerExists // the post only passes by a transfer
+		}
 		now := ms(s.clk.Now())
 		if e.Name != nil {
 			if strings.TrimSpace(*e.Name) == "" {
@@ -294,7 +314,7 @@ func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, e
 		}
 		if e.Level != nil && *e.Level != cur.Level {
 			narrowed = rank(*e.Level) < rank(cur.Level)
-			if _, err := tx.ExecContext(ctx, `UPDATE users SET level = ?, updated_at = ? WHERE id = ?`, string(*e.Level), now, id); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE users SET level = ?, updated_at = ? WHERE id = ? AND level <> 'owner' AND ? <> 'owner'`, string(*e.Level), now, id, string(*e.Level)); err != nil {
 				return err
 			}
 		}
@@ -340,25 +360,34 @@ func (s *Service) invalidate(ctx context.Context, id string) error {
 }
 
 func (s *Service) setState(ctx context.Context, by User, id string, to State) error {
-	if err := s.mayManage(by); err != nil {
-		return err
-	}
-	if by.ID == id && to != Active {
-		return ErrSelf
-	}
-	cur, err := s.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if cur.State == Removed {
-		return fmt.Errorf("%w: %s", ErrNoUser, id)
-	}
-	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		me, err := s.actor(ctx, tx, by, ManageUsers)
+		if err != nil {
+			return err
+		}
+		if me.ID == id && to != Active {
+			return ErrSelf
+		}
 		tg := ``
 		if to == Removed { // a removed user frees the Telegram id
 			tg = `, telegram_id = 0`
 		}
-		_, err := tx.ExecContext(ctx, `UPDATE users SET state = ?, updated_at = ?`+tg+` WHERE id = ?`, string(to), ms(s.clk.Now()), id)
+		res, err := tx.ExecContext(ctx, `UPDATE users SET state = ?, updated_at = ?`+tg+` WHERE id = ? AND state <> 'removed'`, string(to), ms(s.clk.Now()), id)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return fmt.Errorf("%w: %s", ErrNoUser, id)
+		}
+		if to == Active {
+			return nil
+		}
+		// what the user had in hand stops with him: his answers to the PIN and the
+		// transfers he is in
+		if _, err := tx.ExecContext(ctx, `UPDATE pin_requests SET state = 'cancelled' WHERE user_id = ? AND state IN ('open', 'done')`, id); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE owner_transfers SET state = 'cancelled', ended_at = ? WHERE state = 'pending' AND (from_user = ? OR to_user = ?)`, ms(s.clk.Now()), id, id)
 		return err
 	})
 	if err != nil {
