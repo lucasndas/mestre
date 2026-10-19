@@ -46,6 +46,10 @@ type Answer struct {
 	// now (docs/classes/classes.md#hooks-extras-da-classe): in pre_tool,
 	// only after an allow, and they can only deny.
 	ClassHooks []ClassHook `json:"class_hooks,omitempty"`
+	// Decree is the decree or exception that let the call through, when one
+	// did (not a temporary table rule). It never travels: the engine uses it to
+	// register what was executed on the strength of the decree.
+	Decree int64 `json:"-"`
 	// Unidentified marks the answer to a call whose caller was not
 	// identified as a process of the character the event names. It never
 	// travels; whoever takes the events (Engine.OnEvent consumers) must not

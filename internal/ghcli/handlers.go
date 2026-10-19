@@ -48,6 +48,10 @@ type Handlers struct {
 	// Opened is told the PR a table opened (the table keeps its number and head);
 	// nil: nobody is told.
 	Opened func(ctx context.Context, tableKey string, number int, head string) error
+	// Executed is told that the engine sent the branch of the table for a
+	// character (`pr open`, `pr update`), so the decrees that free the push to
+	// it register the execution; nil: nobody is told.
+	Executed func(ctx context.Context, c characters.Character, action string) error
 	// Send is what `pr open` and `pr update` need to send the branch.
 	Send github.Sending
 	// Quota, when set, holds what changes data back while the App is low.

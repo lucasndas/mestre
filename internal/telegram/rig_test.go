@@ -2,6 +2,7 @@ package telegram_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -10,8 +11,11 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/glossary"
 	"github.com/lucasndas/mestre/internal/lockdown"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/testkit/fakechannel"
@@ -88,6 +92,21 @@ type world struct {
 	ac    *telegram.ApprovalChannel
 	flow  *approvals.Flow
 	chain *fakechannel.Chain
+	// The decrees over the bot (rigOpts.decrees).
+	ds    *decrees.Service
+	dc    *telegram.DecreeChannel
+	rules *tablerules.Service
+	// requests are the approval requests the decrees read.
+	requests requests
+}
+
+type requests map[int64]chain.Request
+
+func (r requests) Get(_ context.Context, id int64) (chain.Request, error) {
+	if q, ok := r[id]; ok {
+		return q, nil
+	}
+	return chain.Request{}, errors.New("no such request")
 }
 
 type rigOpts struct {
@@ -102,6 +121,8 @@ type rigOpts struct {
 	ownerAlerts bool
 	// lockdown puts /travar and /destravar over the bot, with a real lock.
 	lockdown bool
+	// decrees puts the decrees (/decretos, the confirmation, the PIN) over the bot.
+	decrees bool
 }
 
 func newWorld(t *testing.T, ro ...rigOpts) *world {
@@ -167,12 +188,47 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		w.oa = &telegram.OwnerAlerts{Users: w.users, Clock: clk}
 		w.opts.Alerts, w.opts.Strangers = w.oa, w.oa
 	}
+	if ropt.decrees {
+		for _, slug := range []string{"loja", "blog"} {
+			if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+				VALUES (?, ?, ?, 'https://example.test/x.git', 'main', 'active', '', 1, 1)`, slug, "lucas/"+slug, "lucas/"+slug); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var alerts users.Alerts = w.alerts
+		if w.oa != nil {
+			alerts = w.oa
+		}
+		w.requests = requests{}
+		w.ds, err = decrees.New(decrees.Options{DB: db, Clock: clk, PINs: w.users, Alerts: alerts, Requests: w.requests})
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.rules, err = tablerules.NewService(tablerules.Options{Store: &tablerules.Store{DB: db}, Clock: clk, Characters: struct{ chain.Characters }{}, Policy: chain.StaticPolicy{}, Classes: struct{ chain.Classes }{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pins := &telegram.PINRouter{Users: w.users}
+		w.dc = &telegram.DecreeChannel{Svc: w.ds, Users: w.users, PINs: pins, Rules: telegram.TableRulesOf(w.rules)}
+		w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.dc.Commands()...)
+		w.opts.Actions = map[string]telegram.Action{}
+		for k, v := range ropt.actions {
+			w.opts.Actions[k] = v
+		}
+		for k, v := range w.dc.Actions() {
+			w.opts.Actions[k] = v
+		}
+		w.opts.Captures = map[string]telegram.CaptureFunc{telegram.PINKind: pins.Capture()}
+	}
 	w.bot, err = telegram.New(w.opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if w.oa != nil {
 		w.oa.Bind(w.bot)
+	}
+	if w.dc != nil {
+		w.dc.Bind(w.bot)
 	}
 	if w.lc != nil {
 		w.lc.Bind(w.bot)

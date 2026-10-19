@@ -147,6 +147,17 @@ func Capability(a chain.Answer) users.Capability {
 	return users.DecideApprovals
 }
 
+// asksPIN says the answer makes a permanent rule that frees, or a delegation:
+// they ask the PIN whatever the policy says (docs/telegram/decretos.md#confirmação-reforçada-com-pin).
+// "Negar sempre" only restricts and asks none.
+func asksPIN(a chain.Answer) bool {
+	switch a {
+	case chain.AnswerApproveFor, chain.AnswerApproveAlways, chain.AnswerApprovePattern, chain.AnswerDelegate:
+		return true
+	}
+	return false
+}
+
 func (f *Flow) may(u users.User, a chain.Answer) bool { return users.Can(u.Level, Capability(a)) }
 
 // atLeast says whether the level of a user is at least min, the minimum of the policy.
@@ -432,7 +443,7 @@ func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, erro
 	if err != nil {
 		return Reply{}, err
 	}
-	if (in.Answer.Approves() || in.Answer == chain.AnswerDelegate) && fr.PIN {
+	if (in.Answer.Approves() || in.Answer == chain.AnswerDelegate) && (fr.PIN || asksPIN(in.Answer)) {
 		if f.o.PINs == nil {
 			return Reply{}, ErrPIN
 		}

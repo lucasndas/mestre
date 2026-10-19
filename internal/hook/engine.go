@@ -204,6 +204,9 @@ func (e *Engine) decide(ctx context.Context, ev providers.Event) Answer {
 	switch d.Verdict {
 	case classes.Allow:
 		ans = Answer{Verdict: VerdictAllow}
+		if d.Decree != 0 && !d.TableRule && (d.Layer == classes.LayerDecree || d.Layer == classes.LayerException) {
+			ans.Decree = d.Decree
+		}
 		if d.ClassHooks {
 			hooks, err := e.classHooks(ctx, ev)
 			if err != nil {
