@@ -55,6 +55,9 @@ type Options struct {
 	Alerts   users.Alerts
 	Targets  Targets
 	Requests Requests
+	// Locked says the Mestre is locked (/travar): nothing is confirmed, revoked
+	// or reactivated meanwhile. nil: never.
+	Locked func(ctx context.Context) bool
 	// ExceptionTTL is how long an exception not used stays valid.
 	ExceptionTTL time.Duration
 	Logger       *slog.Logger
@@ -84,6 +87,8 @@ func New(o Options) (*Service, error) {
 	}
 	return &Service{o: o, clk: o.Clock, ids: protocol.NewIDGen(o.Clock), log: log, ttl: ttl}, nil
 }
+
+func (s *Service) locked(ctx context.Context) bool { return s.o.Locked != nil && s.o.Locked(ctx) }
 
 func proposalAction(id string) string { return "decree:" + id }
 func revokeAction(n int64) string     { return fmt.Sprintf("decree_revoke:%d", n) }
@@ -116,7 +121,7 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 	}); err != nil {
 		return Pending{}, err
 	}
-	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p)}, nil
+	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p), Workspace: p.Workspace, Mesa: p.Mesa}, nil
 }
 
 // normalize fills what an exception implies.
@@ -138,7 +143,14 @@ func confirmationText(p Proposal) string {
 	} else if !p.Until.IsZero() {
 		until = "até " + p.Until.UTC().Format("02/01/2006 15:04 UTC")
 	}
-	text := fmt.Sprintf("Entendi: %s, %s. Confirma?", describeEffect(p.Effect, p.Target, p.Kind, p.Action), until)
+	where := "workspace " + p.Workspace
+	if p.Mesa != "" {
+		where += ", mesa " + p.Mesa
+	}
+	if p.Scope != "" {
+		where += ", escopo " + p.Scope
+	}
+	text := fmt.Sprintf("Entendi: %s, %s (%s). Confirma?", describeEffect(p.Effect, p.Target, p.Kind, p.Action), until, where)
 	if p.Origin.Audio && p.Origin.Transcript != "" {
 		text += fmt.Sprintf("\nVoz transcrita: %q", p.Origin.Transcript)
 	}
@@ -189,6 +201,9 @@ func (s *Service) loadProposal(ctx context.Context, q queryer, id string) (store
 // PIN answered right (BeginPIN), and a wrong or expired one cancels it. It
 // returns the decree, active, with its number.
 func (s *Service) Confirm(ctx context.Context, proposal, userID, pinRequest string) (Decree, error) {
+	if s.locked(ctx) {
+		return Decree{}, ErrLocked
+	}
 	_, _, why, err := s.authorizeConfirm(ctx, s.o.DB.Reader(), proposal, userID)
 	if err != nil {
 		s.cancelIfRefused(ctx, proposal, err)
@@ -434,8 +449,8 @@ func (s *Service) levelOf(ctx context.Context, q queryer, d Decree) (classes.Lev
 	if err != nil {
 		return "", err
 	}
-	if u.State != users.Active {
-		return "", nil
+	if u.State != users.Active || !u.Acts(d.Workspace) {
+		return "", nil // gone, suspended, or no longer acting in the workspace of the decree
 	}
 	return classLevel(u.Level), nil
 }
@@ -459,6 +474,9 @@ func (s *Service) announce(ctx context.Context, cs []conflict) {
 // own exceptions not used yet; nobody revokes one of a level above his own. A
 // decree that restricted something is revoked with the PIN (pinRequest).
 func (s *Service) Revoke(ctx context.Context, number int64, userID, pinRequest string) error {
+	if s.locked(ctx) {
+		return ErrLocked
+	}
 	d, needPIN, err := s.authorizeRevoke(ctx, s.o.DB.Reader(), number, userID)
 	if err != nil {
 		return err
@@ -565,6 +583,9 @@ func restricts(e Effect) bool {
 // the decree is his (docs/telegram/decretos.md#autor-suspenso-ou-removido). A
 // decree that opposes another active one of the same level stays suspended.
 func (s *Service) Reactivate(ctx context.Context, number int64, userID string) error {
+	if s.locked(ctx) {
+		return ErrLocked
+	}
 	var cs []conflict
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()
@@ -613,13 +634,13 @@ func (s *Service) InvalidateBy(ctx context.Context, userID string) error {
 		}
 		for _, d := range mine {
 			switch {
-			case d.Kind == KindException && (u.State != users.Active || users.Require(u.Level, users.OneOffException) != nil):
+			case d.Kind == KindException && (u.State != users.Active || !u.Acts(d.Workspace) || users.Require(u.Level, users.OneOffException) != nil):
 				if ok, err := transition(ctx, tx, d.Number, Revoked, "", "o autor foi suspenso, removido ou perdeu o nível", now, Active, Suspended); err != nil {
 					return err
 				} else if ok {
 					exceptions = append(exceptions, d)
 				}
-			case d.Kind == KindRule && d.State == Active && (u.State != users.Active || users.Require(u.Level, users.PermanentDecree) != nil):
+			case d.Kind == KindRule && d.State == Active && (u.State != users.Active || !u.Acts(d.Workspace) || users.Require(u.Level, users.PermanentDecree) != nil):
 				if ok, err := transition(ctx, tx, d.Number, Suspended, "", "o autor foi suspenso, removido ou perdeu o nível", now, Active); err != nil {
 					return err
 				} else if ok {

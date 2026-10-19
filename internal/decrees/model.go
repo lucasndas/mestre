@@ -127,8 +127,10 @@ type Pending struct {
 	Text string
 	PIN  bool
 	Why  string
-	// Author is the only user whose click counts.
-	Author string
+	// Author is the only user whose click counts; Workspace and Mesa are the
+	// scope that will be stored, and the one the message must name.
+	Author          string
+	Workspace, Mesa string
 }
 
 // Decree is a decree as it is kept.
@@ -223,5 +225,7 @@ var (
 	ErrEnded         = errors.New("decrees: the decree is already over")
 	ErrNotAllowed    = errors.New("decrees: the level does not revoke this decree")
 	ErrTargetChanged = errors.New("decrees: the target changed since the approval; the exception expired unused")
-	ErrNoVerify      = errors.New("decrees: the target could not be verified")
+	// ErrLocked: the Mestre is locked (/travar); no decree is confirmed or revoked.
+	ErrLocked   = errors.New("decrees: the Mestre is locked")
+	ErrNoVerify = errors.New("decrees: the target could not be verified")
 )

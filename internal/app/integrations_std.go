@@ -84,7 +84,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	if env.SetLocked != nil {
 		env.SetLocked(r.lock.Locked)
 	}
-	r.decrees, err = decrees.New(decrees.Options{DB: env.DB, Clock: env.Clock, PINs: svc, Alerts: r.alert, Requests: lateChain{r}, Logger: env.Log})
+	r.decrees, err = decrees.New(decrees.Options{DB: env.DB, Clock: env.Clock, PINs: svc, Alerts: r.alert, Requests: lateChain{r}, Locked: r.lock.Locked, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the decrees: %w", err)
 	}

@@ -104,10 +104,11 @@ func (s *Service) Decree(ctx context.Context, g chain.DecreeGrant) error {
 		if !p.Until.IsZero() && !p.Until.After(now) {
 			return refuse(CodeInvalid, "a validade já passou")
 		}
-		if _, ref := check(p, u, now); ref != nil {
+		why, ref := check(p, u, now)
+		if ref != nil {
 			return ref
 		}
-		d = s.build(p, u, false, now)
+		d = s.build(p, u, why != "", now)
 		d.Request = g.Request
 		_, err = insertDecree(ctx, tx, d, fmt.Sprintf("resposta ao pedido %d: %s", g.Request, g.Answer), now)
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") {

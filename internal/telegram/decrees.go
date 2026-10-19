@@ -83,7 +83,7 @@ func (c *DecreeChannel) Actions() map[string]Action {
 
 // Offer puts a proposal in front of its author with the buttons Confirmar and
 // Cancelar: the Grand Master proposed, and only his click makes the decree.
-func (c *DecreeChannel) Offer(ctx context.Context, p decrees.Pending, workspace, mesa string) error {
+func (c *DecreeChannel) Offer(ctx context.Context, p decrees.Pending) error {
 	u, err := c.Users.Get(ctx, p.Author)
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func (c *DecreeChannel) Offer(ctx context.Context, p decrees.Pending, workspace,
 	if p.PIN {
 		text += "\nPara confirmar vou pedir o seu PIN (" + p.Why + ")."
 	}
-	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Workspace: workspace, Mesa: mesa, Origin: "motor",
+	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Workspace: p.Workspace, Mesa: p.Mesa, Origin: "motor",
 		Buttons: [][]Button{{{Text: "Confirmar", Action: DecreeAction, Arg: "c:" + p.ID}, {Text: "Cancelar", Action: DecreeAction, Arg: "x:" + p.ID}}}})
 	return err
 }
@@ -162,6 +162,8 @@ func (c *DecreeChannel) say(err error) error {
 		return errors.New("esse decreto já acabou")
 	case errors.Is(err, decrees.ErrNoDecree):
 		return errors.New("não existe esse decreto")
+	case errors.Is(err, decrees.ErrLocked):
+		return errors.New("o Mestre está travado: só o Dono destrava")
 	case errors.Is(err, decrees.ErrPINFailed):
 		return errors.New("PIN incorreto ou expirado")
 	}

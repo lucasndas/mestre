@@ -119,8 +119,8 @@ func (s *Service) Decrees(ctx context.Context, c characters.Character) ([]classe
 			cd.Until = &until
 		}
 		if d.Kind == KindException {
-			if d.Action == nil {
-				continue
+			if d.Action == nil || d.Impression != "" {
+				continue // bound to a target: only the engine spends it (Redeem)
 			}
 			a := *d.Action
 			cd.Kind, cd.Action = classes.DecreeException, &a
@@ -396,8 +396,11 @@ func (s *Service) delegationFor(ctx context.Context, r chain.Request) (Decree, b
 		} else if level != classes.LevelOwner {
 			continue
 		}
-		if repo := scopeRepo(d.Scope); repo != "" && repo != requestRepo(r) {
-			continue
+		if d.Scope != "" {
+			repo := scopeRepo(d.Scope)
+			if repo == "" || repo != requestRepo(r) {
+				continue // a scope the engine does not understand covers nothing
+			}
 		}
 		return d, true, nil
 	}
