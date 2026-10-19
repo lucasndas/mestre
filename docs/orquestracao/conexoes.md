@@ -1,6 +1,6 @@
 # Conexões
 
-> **Assunto:** conexões automáticas e manuais entre personagens e pergaminhos, e o que cada agente enxerga · **Componente:** Motor · **Atualizado:** 2026-10-15
+> **Assunto:** conexões automáticas e manuais entre personagens e pergaminhos, e o que cada agente enxerga · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -28,7 +28,7 @@ O motor cria (e recria, se faltarem) sem ninguém pedir:
 | Qualquer personagem da mesa nasce | personagem ↔ Mestre da mesa | `mesa` |
 | Personagem nasce por `recruit`/`spawn` | personagem ↔ quem o criou | `criador` |
 | Etapa de missão recebe personagem | personagem da etapa ↔ personagem da etapa seguinte; e ↔ da anterior quando a etapa pode devolver para ela | `missao:<id>` |
-| Missão é criada | cada personagem de etapa ↔ pergaminhos da missão | `missao:<id>` |
+| Missão é criada | cada personagem de etapa ↔ pergaminhos da missão (desde o M5, também o de revisão, [prova e devolução](prova-e-devolucao.md#pergaminho-de-revisão), ligado aos personagens da etapa que devolve e das etapas para onde ela devolve) | `missao:<id>` |
 
 Conexões de missão são removidas quando a missão termina, se nenhum outro motivo as mantiver. Uma conexão pode ter vários motivos; ela existe enquanto houver ao menos um.
 

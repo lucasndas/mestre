@@ -13,7 +13,7 @@ O Mestre da mesa é o agente orquestrador de **uma [mesa](mesas.md)**: monta e c
 - Um por mesa, recrutado pelo motor dentro do `mestre table open` do Grão-Mestre, que fica como "criado por" no registro de terminais ([abertura](mesas.md#abertura)) com a ficha padrão de Mestres de mesa do workspace (ou outra indicada pelo Grão-Mestre a pedido de um usuário).
 - Nome fixo no canvas e na CLI: `Mestre` (único dentro da mesa).
 - Inicia no worktree da mesa na Cidadela. Pode rodar em outra máquina se a ficha exigir, mas o worktree de referência continua sendo o da Cidadela ([sincronização](mesas.md#worktree-por-máquina-e-sincronização)).
-- No GitHub, tudo o que ele pede sai com o App "Mestre" ([identidades](../github/identidades-e-apps.md)).
+- No GitHub (desde o M5), tudo o que ele pede sai com o App "Mestre" ([identidades](../github/identidades-e-apps.md)).
 - Conexões automáticas: com o Grão-Mestre e com todo personagem da mesa ([conexões](conexoes.md)).
 
 ### Liberdade dentro da mesa
@@ -23,7 +23,7 @@ Pode, sem pedir aprovação, sempre dentro do [teto do workspace](../classes/tet
 - criar, rodar, pausar e cancelar [missões](missoes.md);
 - criar **classes da mesa** e pedir o App delas ([classes](../classes/classes.md));
 - criar conexões extras, pergaminhos e [rituais](rituais.md) da mesa;
-- pedir operações no GitHub restritas ao épico da mesa (`mestre issue`, `mestre pr`; [ações por nível](../github/acoes-por-nivel.md)).
+- pedir operações no GitHub (desde o M5) restritas ao épico da mesa (`mestre issue`, `mestre pr`; [ações por nível](../github/acoes-por-nivel.md)).
 
 Nunca libera para uma classe algo que o teto proíbe; o motor recusa a classe se o fizer. Sintaxe dos comandos: [coordenação](../cli/coordenacao.md), [classes e rituais](../cli/coordenacao-classes-e-rituais.md) e [issues e PRs](../cli/coordenacao-github.md).
 

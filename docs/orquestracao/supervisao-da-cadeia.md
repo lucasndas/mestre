@@ -1,6 +1,6 @@
 # Supervisão da cadeia
 
-> **Assunto:** freios e visibilidade das decisões tomadas perto do trabalho: o resumo não bloqueante das decisões das mesas ao Grão-Mestre, a pausa de autonomia por mesa as métricas de fila por nível com alerta e o aviso de mesa que gira sem entregar · **Componente:** Motor · **Atualizado:** 2026-10-18
+> **Assunto:** freios e visibilidade das decisões tomadas perto do trabalho: o resumo não bloqueante das decisões das mesas ao Grão-Mestre, a pausa de autonomia por mesa as métricas de fila por nível com alerta e o aviso de mesa que gira sem entregar · **Componente:** Motor · **Atualizado:** 2026-10-19
 
 ## Objetivo
 
@@ -33,8 +33,8 @@ Com os Mestres de mesa decidindo o `medio` da própria mesa ([cadeia de aprovaç
 ### Entrega útil e mesa que gira
 
 - **Entrega útil** é trabalho que pousou, não trabalho em andamento: um commit novo na branch da mesa, o PR aberto ou atualizado, ou uma etapa de missão concluída. O motor guarda, por mesa, o instante da última (`última entrega útil`) e a mostra no `mestre table status` ([CLI](../cli/grao-mestre.md#mestre-table)).
-- **Aviso:** a mesa `working` há mais de 3 h (padrão, configurável por workspace) sem entrega útil, e não pausada nem aguardando [cota](../plataforma/limites-de-uso.md) ou a [dependência de outra mesa](dependencia-entre-mesas.md), gera um item `system` ao Grão-Mestre e uma mensagem a quem tem nível de Aprovador ou acima, com o botão **Pausar mesa** ([bot](../telegram/bot.md), M5; painel no M6). Um aviso por mesa, até a próxima entrega útil.
-- **Pausar mesa** liga a [pausa](mesas.md#pausa) da mesa, sem PIN (só restringe), como o botão **Pausar autonomia** da fila; quem pausa e o motivo vão à auditoria. Não confundir com a pausa de autonomia, que só muda quem decide o `medio`.
+- **Aviso** (desde o M5): a mesa `working` há mais de 3 h (padrão, configurável por workspace) sem entrega útil, e não pausada nem aguardando [cota](../plataforma/limites-de-uso.md) ou a [dependência de outra mesa](dependencia-entre-mesas.md), gera um item `system` ao Grão-Mestre e uma mensagem a quem tem nível de Aprovador ou acima, com o botão **Pausar mesa** ([bot](../telegram/bot.md), M5; painel no M6). Um aviso por mesa, até a próxima entrega útil.
+- **Pausar mesa** (desde o M5; painel, M6) liga a [pausa](mesas.md#pausa) da mesa, sem PIN (só restringe), como o botão **Pausar autonomia** da fila; quem pausa e o motivo vão à auditoria. Não confundir com a pausa de autonomia, que só muda quem decide o `medio`.
 
 ## Regras e erros
 
