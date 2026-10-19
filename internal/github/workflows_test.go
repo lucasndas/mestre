@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -71,5 +72,32 @@ func TestTheAppOfAClassIsMadeWithTheWorkflowsPermissionOnlyIfTheClassMayChangeTh
 	}
 	if err := github.CheckApp(app, []string{"a.go"}); err != nil {
 		t.Errorf("a push that does not touch the CI: %v", err)
+	}
+}
+
+func TestAPathThatLooksLikeItIsNotTheCIButOneThatGitQuotedOrWithASlashIs(t *testing.T) {
+	t.Parallel()
+	for _, f := range []string{"/.github/workflows/x.yml", `".github/workflows/\303\251.yml"`, `"src/\303\251.go"`} {
+		if !github.TouchesWorkflows([]string{f}) {
+			t.Errorf("%q escapes the rule of the CI", f)
+		}
+	}
+}
+
+func TestACommitIsNotAbleToCarryAnotherTrailerThroughTheNameOfTheClass(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.ready(github.App{Name: "lucas-mestre-mestre", Role: github.RoleMestre}, 2, 12, 101, false, "lucas/x")
+	id, err := github.Identities{Apps: w.apps}.For(w.ctx, github.Who{Role: "character", Class: "QA\nCo-authored-by: x <x@y>\r\u2028"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range id.Trailers() {
+		if strings.ContainsAny(line, "\r\n\u2028") || strings.Count(line, ":") != 1 {
+			t.Errorf("trailer %q", line)
+		}
+	}
+	if m := id.Mark("oi"); strings.ContainsAny(m, "\r\n\u2028") {
+		t.Errorf("mark %q", m)
 	}
 }

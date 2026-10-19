@@ -22,7 +22,10 @@ var (
 // `.github/workflows/`.
 func TouchesWorkflows(changed []string) bool {
 	for _, f := range changed {
-		f = path.Clean(strings.ReplaceAll(f, `\`, "/"))
+		if strings.HasPrefix(f, `"`) {
+			return true // a name that git quoted (bytes outside ASCII): not read, so taken as a change of the CI
+		}
+		f = path.Clean(strings.TrimLeft(strings.ReplaceAll(f, `\`, "/"), "/"))
 		if strings.HasPrefix(strings.ToLower(f), ".github/workflows/") || strings.EqualFold(f, ".github/workflows") {
 			return true
 		}

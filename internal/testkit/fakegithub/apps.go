@@ -51,6 +51,29 @@ func (s *Server) AddBot(slug string, id int64) {
 	s.mu.Unlock()
 }
 
+// AddInstalledRepo adds a repository (`owner/name`) to the installation of the
+// App, public or private.
+func (s *Server) AddInstalledRepo(appSlug, full string, private bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, a := range s.apps {
+		if a.slug == appSlug {
+			a.repos = append(a.repos, full)
+		}
+	}
+	if !private {
+		s.public[full] = true
+	}
+}
+
+// FailTokens makes the next request for a token answer with the status and the
+// headers (a 403 with Retry-After is the limit of requests of GitHub).
+func (s *Server) FailTokens(status int, headers map[string]string) {
+	s.mu.Lock()
+	s.tokenFail, s.tokenFailHdr = status, headers
+	s.mu.Unlock()
+}
+
 // FailUserRepos makes the next POST /user/repos answer with the status (403 for
 // the App that may not create repositories).
 func (s *Server) FailUserRepos(status int) {
@@ -92,6 +115,17 @@ func (s *Server) accessToken(w http.ResponseWriter, r *http.Request, id string) 
 	s.mu.Unlock()
 	if err != nil || app == nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	s.mu.Lock()
+	failSt, failHdr := s.tokenFail, s.tokenFailHdr
+	s.tokenFail, s.tokenFailHdr = 0, nil
+	s.mu.Unlock()
+	if failSt != 0 {
+		for k, v := range failHdr {
+			w.Header().Set(k, v)
+		}
+		writeJSON(w, failSt, map[string]any{"message": "injected failure"})
 		return
 	}
 	if !s.verifyJWT(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), app) {
@@ -239,14 +273,24 @@ func (s *Server) installationRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.Lock()
-	list := make([]map[string]any, 0, len(app.repos))
+	all := make([]map[string]any, 0, len(app.repos))
 	for _, rp := range app.repos {
 		if inst.repos == nil || contains(inst.repos, rp) {
-			list = append(list, map[string]any{"full_name": rp, "private": true})
+			all = append(all, map[string]any{"full_name": rp, "private": !s.public[rp]})
 		}
 	}
 	s.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"total_count": len(list), "repositories": list})
+	// the list is paged, 30 by default and 100 at most, as the real one
+	per, page := 30, 1
+	if v, err := strconv.Atoi(r.URL.Query().Get("per_page")); err == nil && v > 0 {
+		per = min(v, 100)
+	}
+	if v, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && v > 0 {
+		page = v
+	}
+	lo := min((page-1)*per, len(all))
+	hi := min(lo+per, len(all))
+	writeJSON(w, http.StatusOK, map[string]any{"total_count": len(all), "repositories": all[lo:hi]})
 }
 
 func contains(l []string, v string) bool {

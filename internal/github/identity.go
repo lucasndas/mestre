@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Who is the character an action is made for: the level and the class decide
@@ -120,7 +121,7 @@ func (i Identities) For(ctx context.Context, w Who) (Identity, error) {
 		if err != nil {
 			return Identity{}, err
 		}
-		id.Temporary, id.Class = true, w.Class
+		id.Temporary, id.Class = true, safeClass(w.Class)
 		return id, nil
 	}
 	return i.fixed(ctx, RoleMestre)
@@ -139,4 +140,19 @@ func (i Identities) fixed(ctx context.Context, role string) (Identity, error) {
 
 func identityOf(a App) Identity {
 	return Identity{Name: a.BotLogin(), Email: a.BotEmail(), App: a.Name}
+}
+
+// safeClass keeps only what a class name may have (letters, digits, space, dot,
+// dash, underscore and the accented letters): the name goes into a comment and
+// into the trailer of a commit, and a line break in it would make another
+// trailer.
+func safeClass(c string) string {
+	var b strings.Builder
+	for _, r := range c {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == ' ' || r == '.' || r == '-' || r == '_' ||
+			r > 127 && r != 0x85 && r != 0x2028 && r != 0x2029 {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(b.String())
 }

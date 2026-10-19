@@ -2,12 +2,15 @@ package github_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/github"
 )
+
+var lairPerms = map[string]string{"administration": "write"}
 
 const guildID = "01M4ZPXYG0PNPDZ5JN7697ZSCH"
 
@@ -20,7 +23,7 @@ func TestTheRepositoryOfTheLockIsMadePrivateWithAutoInitAndRecorded(t *testing.T
 	t.Parallel()
 	w := newWorld(t)
 	w.ready(github.App{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster}, 1, 11, 100, true, "lucas/meu-app")
-	tok, err := w.tokens.Installation(w.ctx, github.Request{App: "lucas-mestre-grao-mestre", Permissions: map[string]string{"administration": "write"}})
+	tok, err := w.tokens.Installation(w.ctx, github.Request{App: "lucas-mestre-grao-mestre", Permissions: lairPerms})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +48,7 @@ func TestWhenGitHubRefusesTheCreationTheOwnerGetsTheLinkAndNoLockIsRecorded(t *t
 	t.Parallel()
 	w := newWorld(t)
 	w.ready(github.App{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster}, 1, 11, 100, true, "lucas/meu-app")
-	tok, _ := w.tokens.Installation(w.ctx, github.Request{App: "lucas-mestre-grao-mestre"})
+	tok, _ := w.tokens.Installation(w.ctx, github.Request{App: "lucas-mestre-grao-mestre", Permissions: lairPerms})
 	w.gh.FailUserRepos(http.StatusForbidden)
 	_, err := newLair(w).Ensure(w.ctx, "lucas", guildID, tok.Secret())
 	var by *github.ErrCreateByHand
@@ -58,8 +61,47 @@ func TestWhenGitHubRefusesTheCreationTheOwnerGetsTheLinkAndNoLockIsRecorded(t *t
 	// an App without the permission of creating gets the same answer
 	w2 := newWorld(t)
 	w2.ready(github.App{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster}, 1, 11, 100, false, "lucas/meu-app")
-	tok2, _ := w2.tokens.Installation(w2.ctx, github.Request{App: "lucas-mestre-grao-mestre"})
+	tok2, _ := w2.tokens.Installation(w2.ctx, github.Request{App: "lucas-mestre-grao-mestre", Permissions: lairPerms})
 	if _, err := newLair(w2).Ensure(w2.ctx, "lucas", guildID, tok2.Secret()); !errors.As(err, &by) {
 		t.Errorf("an App that may not create = %v", err)
+	}
+}
+
+// A repository with the name of the lock that is not private is not taken as the lock.
+func TestARepositoryOfTheLockThatIsPublicIsRefused(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.ready(github.App{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster}, 1, 11, 100, true, "lucas/meu-app")
+	name := github.LairRepoName(guildID)
+	w.gh.AddRepo("lucas", name)
+	w.gh.AddInstalledRepo("lucas-mestre-grao-mestre", "lucas/"+name, false)
+	tok, _ := w.tokens.Installation(w.ctx, github.Request{App: "lucas-mestre-grao-mestre", Permissions: lairPerms})
+	if _, err := newLair(w).Ensure(w.ctx, "lucas", guildID, tok.Secret()); !errors.Is(err, github.ErrLairNotPrivate) {
+		t.Fatalf("Ensure = %v", err)
+	}
+	if _, ok, _ := w.apps.LairRepo(w.ctx); ok {
+		t.Error("a public repository was recorded as the lock")
+	}
+}
+
+// The list of the repositories of the installation is paged: the lock is found
+// even after the first page.
+func TestTheRepositoryOfTheLockIsFoundAfterTheFirstPageOfTheInstallation(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.ready(github.App{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster}, 1, 11, 100, true, "lucas/meu-app")
+	for i := range 120 {
+		w.gh.AddInstalledRepo("lucas-mestre-grao-mestre", fmt.Sprintf("lucas/r%03d", i), true)
+	}
+	tok, _ := w.tokens.Installation(w.ctx, github.Request{App: "lucas-mestre-grao-mestre", Permissions: lairPerms})
+	full, err := newLair(w).Ensure(w.ctx, "lucas", guildID, tok.Secret())
+	if err != nil || !strings.HasSuffix(full, github.LairRepoName(guildID)) {
+		t.Fatalf("Ensure = %q, %v", full, err)
+	}
+	if n := github.LairRepoName("01M4ZPXYG0PNPDZ5JN7697ZSCH"); n != "mestre-guilda-7697zsch" {
+		t.Errorf("name = %q", n)
+	}
+	if n := github.LairRepoName("Ünï/../x"); strings.ContainsAny(n, "/.ÜÏ") {
+		t.Errorf("a strange guild id made %q", n)
 	}
 }

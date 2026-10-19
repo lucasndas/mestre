@@ -58,7 +58,11 @@ type Token struct {
 // should read it.
 func (t Token) Secret() string { return t.value }
 
-// String and GoString do not print the token (nor does a log: LogValue).
+// Format prints the token as redacted in every verb (%v, %+v, %#v, %d, %x…), and
+// String, GoString and LogValue keep it out of the logs too.
+func (t Token) Format(f fmt.State, _ rune) { _, _ = f.Write([]byte("github.Token(redacted)")) }
+
+// String does not print the token.
 func (t Token) String() string   { return "github.Token(redacted)" }
 func (t Token) GoString() string { return "github.Token(redacted)" }
 
@@ -85,6 +89,16 @@ type Tokens struct {
 	cache map[string]Token
 }
 
+// The refusals before a token is asked for.
+var (
+	// ErrNoPermissions: a request for a token must say the permissions it uses.
+	ErrNoPermissions = errors.New("github: a token is asked for with the list of the permissions it uses")
+	// ErrAppNotReady: only an App that is ready (installed, not in error) gives tokens.
+	ErrAppNotReady = errors.New("github: the App is not ready")
+	// ErrRateLimited: GitHub limited the requests; the App is fine and the engine tries again later.
+	ErrRateLimited = errors.New("github: GitHub limited the requests")
+)
+
 // ErrTokenRefused is a token GitHub did not give (key revoked, App deleted): the
 // App goes to `com_erro` and the Grand Master tells the Owner.
 var ErrTokenRefused = errors.New("github: GitHub refused the token of the App")
@@ -103,6 +117,17 @@ func cacheKey(r Request) string {
 // it uses; a token still good (more than 5 minutes ahead) is reused. The key of
 // the App is read from the vault only to sign the JWT.
 func (t *Tokens) Installation(ctx context.Context, r Request) (Token, error) {
+	if len(r.Permissions) == 0 {
+		// without a list GitHub gives the token all the permissions of the App
+		return Token{}, ErrNoPermissions
+	}
+	app, err := t.Apps.Get(ctx, r.App)
+	if err != nil {
+		return Token{}, err
+	}
+	if !app.Ready() || app.AppID == 0 {
+		return Token{}, fmt.Errorf("%w: %s (%s)", ErrAppNotReady, app.Name, app.State.Label())
+	}
 	key := cacheKey(r)
 	now := t.Clock.Now()
 	t.mu.Lock()
@@ -112,13 +137,6 @@ func (t *Tokens) Installation(ctx context.Context, r Request) (Token, error) {
 	}
 	t.mu.Unlock()
 
-	app, err := t.Apps.Get(ctx, r.App)
-	if err != nil {
-		return Token{}, err
-	}
-	if app.AppID == 0 {
-		return Token{}, fmt.Errorf("github: the App %q was not created yet", app.Name)
-	}
 	var inst int64
 	if r.Repo == "" { // a token for what is not in a repository: the repository of the lock is made so
 		inst, err = t.Apps.AnyInstallation(ctx, app.Name)
@@ -164,6 +182,10 @@ func (t *Tokens) Installation(ctx context.Context, r Request) (Token, error) {
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusForbidden &&
+		(resp.Header.Get("Retry-After") != "" || resp.Header.Get("x-ratelimit-remaining") == "0") {
+		return Token{}, fmt.Errorf("%w (%d)", ErrRateLimited, resp.StatusCode) // not the fault of the App
+	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
 		_ = t.Apps.SetState(ctx, app.Name, classes.AppWithError)
 		return Token{}, fmt.Errorf("%w: %s (%d)", ErrTokenRefused, app.Name, resp.StatusCode)

@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
@@ -192,5 +193,28 @@ func TestTheRegistryIsTheDirectoryOfTheAppsOfTheClasses(t *testing.T) {
 	}
 	if _, ok, _ := w.apps.App(w.ctx, "nobody"); ok {
 		t.Error("an App that does not exist")
+	}
+}
+
+func TestAnAppThatWasNotCreatedCannotBeInstalledAndAReinstallReplacesTheRepositories(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	if _, err := w.apps.Request(w.ctx, github.App{Name: "lucas-mestre-qa", Role: github.RoleClass, Class: "QA"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.apps.Installed(w.ctx, "lucas-mestre-qa", 13, []string{"lucas/a"}); err == nil {
+		t.Fatal("an App not created was installed")
+	}
+	if err := w.apps.Created(w.ctx, "lucas-mestre-qa", "lucas-mestre-qa", 3, "Iv1.x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.apps.Installed(w.ctx, "lucas-mestre-qa", 13, []string{"lucas/a", "lucas/b"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.apps.Installed(w.ctx, "lucas-mestre-qa", 13, []string{"lucas/b"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.apps.Installation(w.ctx, "lucas-mestre-qa", "lucas/a"); !errors.Is(err, github.ErrNotInstalled) {
+		t.Errorf("the repository the new installation does not cover = %v", err)
 	}
 }

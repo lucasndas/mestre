@@ -230,8 +230,12 @@ func (r *Registry) BotID(ctx context.Context, name string, id int64) error {
 	return r.update(ctx, name, `bot_user_id = ?`, id)
 }
 
-// SetState moves an App to another state.
+// SetState moves an App to another state. `pronto` is not set here: only
+// Installed makes an App ready, after the installation was checked.
 func (r *Registry) SetState(ctx context.Context, name string, s classes.AppState) error {
+	if s == classes.AppReady {
+		return errors.New("github: an App becomes ready by its installation (Installed)")
+	}
 	return r.update(ctx, name, `state = ?`, string(s))
 }
 
@@ -253,6 +257,26 @@ func (r *Registry) update(ctx context.Context, name, set string, args ...any) er
 // `pronto`.
 func (r *Registry) Installed(ctx context.Context, name string, installationID int64, repos []string) error {
 	return r.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		var state string
+		var appID int64
+		if err := tx.QueryRowContext(ctx, `SELECT state, app_id FROM github_apps WHERE name = ?`, name).Scan(&state, &appID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("%w: %s", ErrNoApp, name)
+			}
+			return err
+		}
+		switch classes.AppState(state) {
+		case classes.AppAwaitingInstall, classes.AppReady, classes.AppWithError:
+		default: // an App that was not created has nothing to install
+			return fmt.Errorf("github: the App %q is %s and can not be installed", name, state)
+		}
+		if appID == 0 {
+			return fmt.Errorf("github: the App %q was not created yet", name)
+		}
+		// the installation is the list now: what it no longer covers stops counting
+		if _, err := tx.ExecContext(ctx, `DELETE FROM app_installations WHERE app = ?`, name); err != nil {
+			return err
+		}
 		for _, repo := range repos {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO app_installations (app, repo, installation_id) VALUES (?, ?, ?)
 				ON CONFLICT (app, repo) DO UPDATE SET installation_id = excluded.installation_id`, name, repo, installationID); err != nil {

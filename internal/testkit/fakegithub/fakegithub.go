@@ -69,11 +69,14 @@ type Server struct {
 	actions []Action
 	nextID  int64
 
-	apps       map[int64]*appInfo // by id of the App
-	installs   map[int64]*appInfo // by id of the installation
-	bots       map[string]int64
-	tokenReqs  []TokenRequest
-	userRepoSt int // status the next POST /user/repos answers (0: as the permissions say)
+	apps         map[int64]*appInfo // by id of the App
+	installs     map[int64]*appInfo // by id of the installation
+	bots         map[string]int64
+	tokenReqs    []TokenRequest
+	public       map[string]bool // repositories that are not private
+	tokenFail    int
+	tokenFailHdr map[string]string
+	userRepoSt   int // status the next POST /user/repos answers (0: as the permissions say)
 }
 
 // New returns an empty server using the newest recordings.
@@ -85,7 +88,7 @@ func New(clk clock.Clock, rep testkit.Reporter) (*Server, error) {
 	}
 	return &Server{clk: clk, rep: rep, recs: recs, ver: ver,
 		tokens: map[string]*installation{}, repos: map[string]*repo{}, nextID: 1,
-		apps: map[int64]*appInfo{}, installs: map[int64]*appInfo{}, bots: map[string]int64{}}, nil
+		public: map[string]bool{}, apps: map[int64]*appInfo{}, installs: map[int64]*appInfo{}, bots: map[string]int64{}}, nil
 }
 
 // AddRepo creates owner/name.
