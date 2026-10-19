@@ -23,6 +23,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/lucasndas/mestre/internal/orchestration/usage"
 	"github.com/lucasndas/mestre/internal/orchestration/waits"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
@@ -138,6 +139,15 @@ type OrchestrationOptions struct {
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
 
+	// The limits of use (milestone 5, stage 4). UsageChecklist opens the alert
+	// ALL-23 of the checklist when a source of use is not available (nil:
+	// only the log); UsageZone gives the time zone of the Guild, where the
+	// day turns (UTC by default). The users are told through ChainAlerts, and
+	// the extra the limits ask for goes through the chain of approval, which
+	// ChainClasses builds.
+	UsageChecklist usage.Checklist
+	UsageZone      func(ctx context.Context) *time.Location
+
 	// The rituals (stage 10). The pre-run on the machine of the target, the
 	// decision of permissions that holds it and the approval to delete a
 	// ritual belong to milestone 5 (the Towers, the flow); nil refuses a
@@ -180,6 +190,9 @@ type Orchestration struct {
 	BaseSync *basesync.Service
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
+	// Usage is the use and the limits on it (docs/plataforma/limites-de-uso.md).
+	// It is told the events of the characters (OnEvent) by the engine.
+	Usage *usage.Service
 	// Supervisor is the supervision of the chain: the summary of the
 	// decisions of the Mestres de mesa, the pause of the autonomy of a table
 	// and the queue metrics. Nil unless the chain was built without a
@@ -445,6 +458,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		rit   *rituals.Service
 		trl   *tablerules.Service
 		sup   *chain.Supervisor
+		us    *usage.Service
 	)
 	deactivate := o.Rituals
 	if deactivate == nil {
@@ -456,7 +470,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	ib, err := inbox.NewService(inbox.Options{DB: &inbox.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Deliverer: o.Machines, Pauses: tablesRef{&tbl},
-		Holds: lockedHolds{locked: o.Locked, then: chainRef{&ch}}, Channels: o.Channels, Users: o.Users, Logger: o.Logger})
+		Holds: lockedHolds{locked: o.Locked, then: usageHolds{p: &us, then: chainRef{&ch}}}, Channels: o.Channels, Users: o.Users, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -519,7 +533,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
 			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
-			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}}, Logger: o.Logger})
+			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}, Logger: o.Logger})
 		if err != nil {
 			return nil, err
 		}
@@ -573,6 +587,21 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	uopts := usage.Options{Store: &usage.Store{DB: o.Guild}, Clock: o.Clock, Logger: o.Logger,
+		Directory: usageDirectory{reg: reg, presets: o.Presets, quests: &qs},
+		Pauser:    usagePauser{quests: &qs, tables: &tbl, ws: ws},
+		Ceilings:  usageCeilings{libs: o.ClassLibraries}, Characters: usageCharacters{svc: &chars, reg: reg, ib: &ib}, Pump: quotaPump{&ib}, Notifier: ib,
+		Checklist: o.UsageChecklist, Zone: o.UsageZone}
+	if o.ChainAlerts != nil {
+		uopts.Alerts = o.ChainAlerts
+	}
+	if ch != nil {
+		uopts.Extras = usageExtras{&ch}
+	}
+	if us, err = usage.NewService(uopts); err != nil {
+		return nil, err
+	}
+	orc.Usage = us
 	orc.Registry = reg
 	orc.Quests = qs
 	orc.Chain = ch
@@ -666,6 +695,7 @@ func (o *Orchestration) External() ExternalFunc {
 		run("characters", func(ctx context.Context) error { return o.Characters.Run(ctx, sweepEvery) })
 		run("tables", func(ctx context.Context) error { return o.Tables.Run(ctx, sweepEvery) })
 		run("quests", func(ctx context.Context) error { return o.Quests.Loop(ctx, sweepEvery) })
+		run("usage", func(ctx context.Context) error { return o.Usage.Loop(ctx, sweepEvery) })
 		run("rituals", func(ctx context.Context) error { return o.Rituals.Loop(ctx, ritualEvery) })
 		if o.Supervisor != nil {
 			run("supervision", func(ctx context.Context) error { return o.Supervisor.Loop(ctx, sweepEvery) })
