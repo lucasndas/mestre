@@ -165,6 +165,11 @@ func transition(ctx context.Context, tx queryer, n int64, to State, by, note str
 	if changed, _ := res.RowsAffected(); changed == 0 {
 		return false, nil
 	}
+	if to.Ended() || to == Suspended {
+		if err := endSubsOf(ctx, tx, n, now); err != nil {
+			return false, err
+		}
+	}
 	return true, addEvent(ctx, tx, n, to, by, note, now)
 }
 
