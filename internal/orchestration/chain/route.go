@@ -127,6 +127,13 @@ func (s *Service) can(ctx context.Context, h hop, r Request, st Settings) verdic
 	case LevelMesa:
 		return s.mesaCan(ctx, c, r, st, perm)
 	case LevelGrandMaster:
+		// What the policy sends to the people whatever the conditions find (a
+		// type that is not decided alone, a rule of quorum): the request is
+		// born with them.
+		rules, _ := s.rulesOf(r.Workspace)
+		if why := rules.ForcesPeople(r); why != "" {
+			return no(true, "%s", why)
+		}
 		switch risk {
 		case classes.RiskLow, classes.RiskMedium:
 			return yes()

@@ -493,3 +493,16 @@ func TestWindowsCommandsInBothShells(t *testing.T) {
 	want(t, decide(env, any, m.shell("echo $env:PATH")), classes.Ask, "")
 	want(t, decide(env, rules(t, qaYAML), m.shell("Get-Content src/a.ts")), classes.Allow, "")
 }
+
+// CA-APROV-POL-07
+func TestNoAgentWritesTheApprovalPolicyFile(t *testing.T) {
+	t.Parallel()
+	m := newMachine()
+	env := m.env()
+	r := rules(t, anyYAML)
+	const policy = ".mestre/regras/politica-de-aprovacao.yaml"
+	want(t, decide(env, r, m.file(providers.KindWrite, filepath.Join(m.wt, policy))), classes.Deny, classes.LayerFixed, "politica-de-aprovacao.yaml")
+	want(t, decide(env, r, m.file(providers.KindEdit, filepath.Join(m.wt, policy))), classes.Deny, classes.LayerFixed, "politica-de-aprovacao.yaml")
+	want(t, decide(env, r, m.shell("echo 'versao: 1' > "+policy)), classes.Deny, classes.LayerFixed, "politica-de-aprovacao.yaml")
+	want(t, decide(env, r, m.shell("rm "+policy)), classes.Deny, classes.LayerFixed, ".mestre")
+}
