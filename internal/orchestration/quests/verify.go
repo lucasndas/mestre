@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // Verifier runs the verification of the workspace for the done of a class
@@ -42,6 +44,10 @@ type VerifyResult struct {
 	// the worktree, relative to it (the first three are the print).
 	Places []string
 }
+
+// VerifyTimeout is the longest a verification may take before the engine gives
+// it up (the commands have their own limits; this is the bound of the whole).
+const VerifyTimeout = 30 * time.Minute
 
 // MaxVerifyOutput is how much of the end of the output goes to the character.
 const MaxVerifyOutput = 4 << 10
@@ -83,9 +89,11 @@ func (s *Service) uncommittedOf(ctx context.Context, q Quest, st Step, c charact
 		return nil, fmt.Errorf("%w: the step %s has no delivery", ErrNoStep, st.UID)
 	}
 	var un []string
-	if ch, err := s.o.Tables.Changes(ctx, q.Workspace, q.Table, c.Machine, run.StartCommit); err == nil {
-		un = ch.Uncommitted
+	ch, err := s.o.Tables.Changes(ctx, q.Workspace, q.Table, c.Machine, run.StartCommit)
+	if err != nil {
+		return nil, fmt.Errorf("the changes of the branch could not be read: %w", err) // not knowing is not "nothing left"
 	}
+	un = ch.Uncommitted
 	for _, w := range warnings {
 		if rest, ok := strings.CutPrefix(w, uncommittedPrefix); ok {
 			un = append(un, strings.Split(rest, ", ")...)
@@ -158,11 +166,24 @@ func (s *Service) verified(ctx context.Context, q Quest, st Step, c characters.C
 		delete(s.verifs, st.UID)
 		s.mu.Unlock()
 	}()
-	res, err := s.o.Verifier.Verify(ctx, req)
-	if err != nil {
-		s.log.Warn("quests: the verification did not run", "step", st.UID, "err", err)
+	failed := func(why any) {
+		s.log.Warn("quests: the verification did not run", "step", st.UID, "err", why)
+		if cur, err := s.st.Step(ctx, st.UID); err != nil || !cur.State.Active() || cur.Character != c.ID {
+			return // the step moved on while it ran
+		}
 		s.tellCharacter(ctx, q, c.ID, "A verificação não pôde rodar agora (veja o log do motor). O `done` não foi concluído: tente de novo em instantes.")
 		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A verificação do `done` de %s na etapa %s não pôde rodar; a etapa segue em andamento.", c.Name, st.ID))
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			failed(fmt.Sprint("panic: ", p))
+		}
+	}()
+	vctx, cancel := clock.WithTimeout(ctx, s.clk, VerifyTimeout)
+	defer cancel()
+	res, err := s.o.Verifier.Verify(vctx, req)
+	if err != nil {
+		failed(err)
 		return
 	}
 	cur, err := s.st.Step(ctx, st.UID)
@@ -171,6 +192,7 @@ func (s *Service) verified(ctx context.Context, q Quest, st Step, c characters.C
 	}
 	if res.OK {
 		r.Where = nil
+		r.expectStep = st.UID
 		if _, err := s.finish(ctx, r, modeVerified); err != nil {
 			s.log.Warn("quests: the done that was verified was not registered", "step", st.UID, "err", err)
 		}
@@ -201,7 +223,7 @@ func (s *Service) red(ctx context.Context, q Quest, st Step, c characters.Charac
 		if err != nil {
 			return err
 		}
-		if cur.State != Running || !fresh.State.Active() {
+		if cur.State != Running || !fresh.State.Active() || fresh.Character != c.ID {
 			kind = doneCancelled
 			return nil
 		}
