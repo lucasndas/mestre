@@ -26,6 +26,13 @@ type Delegations interface {
 	Covers(ctx context.Context, r Request) (bool, error)
 }
 
+// DelegationRecorder is what a Delegations may also be: told when the Grão-Mestre
+// approved a request on the strength of a delegation, so it registers the use in
+// the decree (docs/telegram/decretos.md#registro).
+type DelegationRecorder interface {
+	Used(ctx context.Context, r Request, by string) error
+}
+
 // Options are the pieces of the Service. Store, Characters, Inbox, Classes
 // and Policy are required; the rest may be nil: no wait is kept, the people
 // are not asked (the request waits at their level until it expires), no

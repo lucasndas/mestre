@@ -225,7 +225,10 @@ func TestADenialWithInstructionTakesTheTextOfTheUser(t *testing.T) {
 func TestABadTimeIsAskedAgainAndAGoodOneDecides(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{approvals: true})
-	_, adm := w.user("Adm", users.Administrator, "loja")
+	admU, adm := w.user("Adm", users.Administrator, "loja")
+	if err := w.users.SetPIN(w.ctx, admU.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
 	r := w.ask(5, classes.RequestExtraCost, classes.LevelApprover, false)
 	msg, keys := w.buttons(adm)
 	w.click(adm, msg, keys["Aprovar por um tempo"])
@@ -235,6 +238,11 @@ func TestABadTimeIsAskedAgainAndAGoodOneDecides(t *testing.T) {
 		t.Fatal("a bad time decided")
 	}
 	w.say(adm, "3h")
+	w.drain()
+	if len(w.chain.Decisions()) != 0 {
+		t.Fatal("a rule that frees was applied before the PIN")
+	}
+	w.say(adm, "123456")
 	w.drain()
 	d := w.chain.Decisions()
 	if len(d) != 1 || d[0].For != 3*time.Hour || d[0].Answer != chain.AnswerApproveFor {
