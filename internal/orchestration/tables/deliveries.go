@@ -36,11 +36,15 @@ func (s Store) delivery(ctx context.Context, workspace, table string) (delivery,
 	return d, err
 }
 
-func (s Store) putDelivery(ctx context.Context, workspace, table string, d delivery) error {
+// setDelivery writes one column of the row of a table, creating the row: the
+// writers (a step that ended, the round of the supervision) never overwrite what
+// another wrote meanwhile.
+func (s Store) setDelivery(ctx context.Context, workspace, table, column string, delivered int64, tip string, alerted int64) error {
 	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO table_deliveries (workspace, table_id, delivered_at, tip, alerted_for) VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT (workspace, table_id) DO UPDATE SET delivered_at = excluded.delivered_at, tip = excluded.tip, alerted_for = excluded.alerted_for`,
-			workspace, table, ms(d.at), d.tip, ms(d.alerted))
+		_, err := tx.ExecContext(ctx, `INSERT INTO table_deliveries (workspace, table_id, delivered_at, tip, alerted_for)
+			SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM tables WHERE workspace = ? AND id = ?)
+			ON CONFLICT (workspace, table_id) DO UPDATE SET `+column+` = excluded.`+column,
+			workspace, table, delivered, tip, alerted, workspace, table)
 		return err
 	})
 }
@@ -49,12 +53,10 @@ func (s Store) putDelivery(ctx context.Context, workspace, table string, d deliv
 // opened or updated, or a step of a mission that ended. A new commit on the
 // branch is seen by Stalled.
 func (s *Service) Delivered(ctx context.Context, workspace, table string) error {
-	d, err := s.store.delivery(ctx, workspace, table)
-	if err != nil {
-		return err
+	if table == "" {
+		return nil
 	}
-	d.at = s.clk.Now()
-	return s.store.putDelivery(ctx, workspace, table, d)
+	return s.store.setDelivery(ctx, workspace, table, "delivered_at", ms(s.clk.Now()), "", 0)
 }
 
 // LastDelivery is the instant of the last useful delivery of the table (zero
@@ -83,22 +85,33 @@ func (s *Service) Stalled(ctx context.Context, after time.Duration) ([]Stall, er
 			continue
 		}
 		if p, err := s.Paused(ctx, t.Workspace, t.ID); err != nil || p {
+			if err != nil {
+				s.log.Warn("tables: could not tell whether a table is paused", "table", t.ID, "err", err)
+			}
 			continue
 		}
 		if h, err := s.Held(ctx, t.Workspace, t.ID); err != nil || h {
+			if err != nil {
+				s.log.Warn("tables: could not tell whether a table is held", "table", t.ID, "err", err)
+			}
 			continue
 		}
 		d, err := s.store.delivery(ctx, t.Workspace, t.ID)
 		if err != nil {
-			return out, err
+			s.log.Warn("tables: the deliveries of a table could not be read", "table", t.ID, "err", err)
+			continue
 		}
 		if tip := s.branchTip(ctx, mirrors, t); tip != "" && tip != d.tip {
-			if d.tip != "" {
-				d.at = now // a commit that was not there the last time
+			if d.tip != "" { // a commit that was not there the last time
+				d.at = now
+				err = s.store.setDelivery(ctx, t.Workspace, t.ID, "delivered_at", ms(now), "", 0)
 			}
-			d.tip = tip
-			if err := s.store.putDelivery(ctx, t.Workspace, t.ID, d); err != nil {
-				return out, err
+			if err == nil {
+				err = s.store.setDelivery(ctx, t.Workspace, t.ID, "tip", 0, tip, 0)
+			}
+			if err != nil {
+				s.log.Warn("tables: the commit of a table could not be recorded", "table", t.ID, "err", err)
+				continue
 			}
 		}
 		since := d.at
@@ -136,10 +149,5 @@ func (s *Service) branchTip(ctx context.Context, mirrors map[string]gitx.Repo, t
 // StallWarned records that the warning of the quiet that began at since was
 // sent: no other comes before the next delivery.
 func (s *Service) StallWarned(ctx context.Context, workspace, table string, since time.Time) error {
-	d, err := s.store.delivery(ctx, workspace, table)
-	if err != nil {
-		return err
-	}
-	d.alerted = since
-	return s.store.putDelivery(ctx, workspace, table, d)
+	return s.store.setDelivery(ctx, workspace, table, "alerted_for", 0, "", ms(since))
 }

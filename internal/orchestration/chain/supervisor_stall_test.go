@@ -2,6 +2,7 @@ package chain_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -16,11 +17,16 @@ import (
 type fakeStallPeople struct {
 	mu   sync.Mutex
 	told []chain.StallNotice
+	// fail makes the delivery fail (the bot is not up yet).
+	fail bool
 }
 
 func (f *fakeStallPeople) StalledTable(_ context.Context, n chain.StallNotice) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.fail {
+		return errors.New("the bot is not running")
+	}
 	f.told = append(f.told, n)
 	return nil
 }
@@ -113,5 +119,27 @@ func TestATableThatSpinsWarnsTheGrandMasterAndThePeopleOnceAndTheButtonPausesItW
 	w.tick()
 	if w.stallers.count() == before {
 		t.Error("no new warning after 3 h more without a delivery")
+	}
+}
+
+// Part of CA-SUPCAD-06: if the people could not be told (the bot is not up), nothing is
+// marked and the Grão-Mestre is not told yet: the next round tries again and each gets
+// the warning once.
+func TestTheWarningOfAStalledTableIsTriedAgainWhenThePeopleCouldNotBeTold(t *testing.T) {
+	t.Parallel()
+	w := newSup(t)
+	w.stallers.fail = true
+	w.clk.Advance(3 * time.Hour)
+	w.tick()
+	if len(w.stallItems()) != 0 || w.stallers.count() != 0 {
+		t.Fatal("the warning went out although the people could not be told")
+	}
+	w.stallers.mu.Lock()
+	w.stallers.fail = false
+	w.stallers.mu.Unlock()
+	w.tick()
+	w.tick()
+	if len(w.stallItems()) != 1 || w.stallers.count() != 1 {
+		t.Fatalf("after the bot came up: %d items for the Grão-Mestre, %d messages to the people; want 1 and 1", len(w.stallItems()), w.stallers.count())
 	}
 }

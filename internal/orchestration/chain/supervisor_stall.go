@@ -59,27 +59,25 @@ func (s *Supervisor) stalls(ctx context.Context) error {
 	if after <= 0 {
 		after = DefaultStallAfter
 	}
-	list, err := ts.Stalled(ctx, after)
-	if err != nil {
-		return err
-	}
+	list, err := ts.Stalled(ctx, after) // what was found is warned about even if part of the search failed
 	now := s.clk.Now()
 	var errs []error
 	for _, st := range list {
 		quiet := now.Sub(st.Since).Truncate(time.Minute)
 		text := fmt.Sprintf("A mesa %s está em trabalho há %s sem entregar nada: nenhum commit novo na branch, nenhum PR aberto ou atualizado e nenhuma etapa de missão concluída.", st.Table, short(quiet))
-		told := false
+		// The people first: they hold the button. If they could not be told, nothing
+		// is marked and the next round tries again, so the Grão-Mestre is not told twice.
+		if s.o.StallPeople != nil {
+			if err := s.o.StallPeople.StalledTable(ctx, StallNotice{Workspace: st.Workspace, Table: st.Table, Since: st.Since, Text: text}); err != nil {
+				s.log.Warn("supervision: the people were not told of a stalled table", "table", st.Table, "err", err)
+				continue
+			}
+		}
+		told := s.o.StallPeople != nil
 		if gm, ok, err := s.o.Characters.GrandMaster(ctx, st.Workspace); err == nil && ok {
 			if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: st.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: "Motor",
 				Text: text + "\nVeja o que ela faz (mestre table status) e, se estiver girando em vão, pause a mesa.", Refs: inbox.Refs{Table: st.Table}}); err != nil {
 				s.log.Warn("supervision: the Grand Master was not told of a stalled table", "table", st.Table, "err", err)
-			} else {
-				told = true
-			}
-		}
-		if s.o.StallPeople != nil {
-			if err := s.o.StallPeople.StalledTable(ctx, StallNotice{Workspace: st.Workspace, Table: st.Table, Since: st.Since, Text: text}); err != nil {
-				s.log.Warn("supervision: the people were not told of a stalled table", "table", st.Table, "err", err)
 			} else {
 				told = true
 			}
@@ -91,7 +89,7 @@ func (s *Supervisor) stalls(ctx context.Context) error {
 			errs = append(errs, err)
 		}
 	}
-	return errors.Join(errs...)
+	return errors.Join(append(errs, err)...)
 }
 
 // PauseStalled is the button **Pausar mesa** of the warning: it pauses the table
@@ -122,8 +120,11 @@ func (s *Supervisor) PauseStalled(ctx context.Context, r PauseRequest) (bool, er
 		return false, err
 	}
 	now := s.clk.Now()
+	// The table is paused and keeps who and why (paused_by, paused_reason); a failure
+	// of the audit is logged, not turned into a refusal of a pause that happened.
 	if err := s.st.DB.WriteDurable(ctx, func(tx *sql.Tx) error { return s.auditTx(ctx, tx, r, "pause_table", now) }); err != nil {
-		return true, err
+		s.log.Warn("supervision: the pause of a table was not audited", "table", r.Table, "by", r.By.name(), "err", err)
 	}
+	s.tellPause(ctx, r, fmt.Sprintf("A mesa %s foi pausada por %s: %s. Nada foi interrompido; a caixa de entrada para de entregar e nenhuma etapa nova começa até a retomada.", r.Table, s.who(ctx, r.By), r.Reason))
 	return true, nil
 }

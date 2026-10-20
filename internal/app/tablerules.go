@@ -115,11 +115,17 @@ func (t supTables) Stalled(ctx context.Context, after time.Duration) ([]chain.St
 
 // StallWarned implements chain.TableStalls.
 func (t supTables) StallWarned(ctx context.Context, workspace, table string, since time.Time) error {
+	if *t.p == nil {
+		return nil
+	}
 	return (*t.p).StallWarned(ctx, workspace, table, since)
 }
 
 // PauseTable implements chain.TableStalls: the pause of the table itself.
 func (t supTables) PauseTable(ctx context.Context, workspace, table, reason, by string) (bool, error) {
+	if *t.p == nil {
+		return false, errors.New("app: the tables are not built")
+	}
 	cur, err := (*t.p).Get(ctx, workspace, table)
 	if err != nil {
 		if errors.Is(err, tables.ErrNoTable) {
