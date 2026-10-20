@@ -119,6 +119,10 @@ type citadelRun struct {
 	// ran keeps the results of the calls that may come back from the
 	// outbox of a Tower (ranCalls).
 	ran *ranCalls
+	// approver asks the Owner about an entry and lock is the lock of the epoch,
+	// both from the integration of the period (nil: the engine's own or none).
+	approver guild.Approver
+	lock     guild.Lock
 
 	mu      sync.Mutex
 	ca      *transport.CA
@@ -409,7 +413,7 @@ func (e *Engine) startCitadel(ctx context.Context, run *citadelRun) (*guild.Cita
 		run.ca = ca
 	}
 	c, err := guild.NewCitadel(ctx, guild.CitadelConfig{
-		DB: run.db, CA: run.ca, Clock: e.clk, Cert: e.cert, Approver: e.deps.Approver, Credentials: e.creds,
+		DB: run.db, CA: run.ca, Clock: e.clk, Cert: e.cert, Approver: e.approverOf(run), Credentials: e.creds,
 		Peers: guild.ProtocolPeers{Server: run.srv, Transport: e.tls, Clock: e.clk},
 		Hooks: guild.Hooks{
 			ExclusionChanged: run.primary.ExclusionChanged,
@@ -507,9 +511,20 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	if e.deps.HostOrchestration {
 		if e.deps.Integration != nil {
 			var err error
-			integ, err = e.deps.Integration.Open(ctx, IntegrationEnv{DB: db, Vault: take.vault, Clock: e.clk, Log: e.log, Machine: e.id.MachineID, Masker: e.deps.Masker, SetLocked: e.setLocked})
+			integ, err = e.deps.Integration.Open(ctx, IntegrationEnv{DB: db, Vault: take.vault, Clock: e.clk, Log: e.log, Machine: e.id.MachineID, Masker: e.deps.Masker, SetLocked: e.setLocked,
+				GuildID: e.id.GuildID, DecideJoin: e.DecideEntry})
 			if err != nil {
 				return transition{err: fmt.Errorf("app: the integrations: %w", err)}
+			}
+			if g, ok := integ.(GuildApprover); ok {
+				run.approver = g.GuildApprover()
+			}
+			if g, ok := integ.(GuildLocker); ok {
+				// a lock that cannot be made leaves the Guild without promotion (safe)
+				if run.lock, err = g.GuildLock(ctx); err != nil {
+					e.log.Error("app: the lock of the epoch could not be made; this period has no promotion", "err", err)
+					run.lock = nil
+				}
 			}
 			defer func() {
 				e.setLocked(nil) // the lock of a period is not the next one's
@@ -548,7 +563,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		}
 	}
 	run.fence = guild.NewFence(guild.FenceConfig{
-		Lock: e.deps.Lock, Clock: e.clk, Epoch: func() uint64 { return run.epoch }, Promoted: promoted, Wait: wait, Logger: e.log,
+		Lock: e.lockOf(run), Clock: e.clk, Epoch: func() uint64 { return run.epoch }, Promoted: promoted, Wait: wait, Logger: e.log,
 		OnHigher: func(uint64) { e.signal(transition{to: RoleTower, unknown: true}) },
 		OnChange: func(s guild.FenceState) {
 			run.setActing(s == guild.FenceConfirmed || s == guild.FenceLockDown || s == guild.FenceNoLock)
@@ -967,8 +982,8 @@ func (e *Engine) Handover(ctx context.Context, target, approvalID, approvedBy st
 	}()
 	poll := handoverPoll[0]
 	for {
-		if e.deps.Lock != nil {
-			if n, err := e.deps.Lock.Check(wctx); err == nil && n > run.epoch {
+		if lock := e.lockOf(run); lock != nil {
+			if n, err := lock.Check(wctx); err == nil && n > run.epoch {
 				e.signal(transition{to: RoleTower, unknown: true})
 				return nil
 			}
@@ -996,6 +1011,28 @@ func checkJoinSheet(raw json.RawMessage) error {
 	}
 	_, err := machinesheet.Merge(machinesheet.Sheet{}, obj, true)
 	return err
+}
+
+// approverOf is who asks the Owner about an entry in the period of run: the one the
+// engine was given, else the flow of approval of the integration, else nobody.
+func (e *Engine) approverOf(run *citadelRun) guild.Approver {
+	switch {
+	case e.deps.Approver != nil:
+		return e.deps.Approver
+	case run.approver != nil:
+		return run.approver
+	}
+	return noOwner{}
+}
+
+// lockOf is the lock of the epoch in the period of run: the one the engine was
+// given, else the one over the repository of the lock of the integration, else
+// none (the Guild has no promotion).
+func (e *Engine) lockOf(run *citadelRun) guild.Lock {
+	if e.deps.Lock != nil {
+		return e.deps.Lock
+	}
+	return run.lock
 }
 
 // sweepBundles removes the bundles a crash left in the folder where the mirrors

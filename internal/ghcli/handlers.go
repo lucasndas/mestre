@@ -62,9 +62,13 @@ type Handlers struct {
 	Tables     github.Tables
 	// Deps is the dependency between epics (nil: `gh epic update --depends-on`
 	// answers that it is not available).
-	Deps    EpicDeps
-	Objects *github.Objects
-	Clock   clock.Clock
+	Deps EpicDeps
+	// Heads keeps the commit `gh review` read (nil: none is kept).
+	Heads Heads
+	// Settings is what `gh settings show` reads besides GitHub (nil: it is not available).
+	Settings Settings
+	Objects  *github.Objects
+	Clock    clock.Clock
 }
 
 // Register registers the handlers.
@@ -73,7 +77,7 @@ func (h *Handlers) Register(fwd *localchan.LocalForwarder) {
 		"issue list": h.read(h.issueList), "pr status": h.read(h.prStatus),
 		"issue create": h.write("issue create", h.issueCreate), "issue update": h.write("issue update", h.issueUpdate), "issue comment": h.write("issue comment", h.issueComment),
 		"pr open": h.write("pr open", h.prOpen), "pr update": h.write("pr update", h.prUpdate),
-		"gh epic":    h.epic,
+		"gh epic": h.epic, "gh review": h.reviewCmd, "gh settings": h.settings,
 		"pr comment": h.write("pr comment", h.prComment), "pr reply": h.write("pr reply", h.prReply), "pr note": h.write("pr note", h.prNote),
 	} {
 		fwd.Handle(name, localchan.HandlerFunc(f))

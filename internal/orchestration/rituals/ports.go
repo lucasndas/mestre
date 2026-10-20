@@ -92,3 +92,10 @@ type Zones interface {
 type Approvals interface {
 	RequestDelete(ctx context.Context, by Actor, r Ritual) (request int64, err error)
 }
+
+// DeleteGate is what an Approvals may also be: it spends the approval of the
+// deletion if there is one for the ritual in the state it is in now, or leaves
+// the request open and says which.
+type DeleteGate interface {
+	DeleteAllowed(ctx context.Context, by Actor, r Ritual) (granted bool, request int64, err error)
+}

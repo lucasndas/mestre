@@ -57,5 +57,8 @@ func OpenMachine(ctx context.Context, path string, opts store.Options) (*store.D
 	if opts.ReadConns <= 0 {
 		opts.ReadConns = 1
 	}
+	if opts.StmtCache == 0 {
+		opts.StmtCache = StmtCache
+	}
 	return machinedb.Open(ctx, path, opts)
 }

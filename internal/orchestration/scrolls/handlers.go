@@ -19,6 +19,14 @@ type Approvals interface {
 	RequestDelete(ctx context.Context, by Actor, n Note) (request int64, err error)
 }
 
+// DeleteGate is what an Approvals may also be: it spends the approval of the
+// deletion if there is one for the scroll in the state it is in now (granted),
+// or leaves the request open and says which. It replaces RequestDelete, which
+// can only open the request.
+type DeleteGate interface {
+	DeleteAllowed(ctx context.Context, by Actor, n Note) (granted bool, request int64, err error)
+}
+
 // Handlers are the commands of the scrolls to register in the local forwarder
 // of the Citadel (the "casca" of stage 7: docs/cli/comunicacao.md has the
 // syntax, the CLI answers the syntax and the level, the engine does the
@@ -247,7 +255,19 @@ func (h handlers) delete(ctx context.Context, c *localchan.Call) localchan.Respo
 		return Refusal(nerr)
 	}
 	msg, id := "deleting a scroll needs an explicit request of an authorized user; nothing was deleted", int64(0)
-	if h.ap != nil {
+	if gate, ok := h.ap.(DeleteGate); ok && h.ap != nil {
+		granted, req, aerr := gate.DeleteAllowed(ctx, a, n)
+		if aerr != nil {
+			return Refusal(aerr)
+		}
+		if granted {
+			if err := h.s.Delete(ctx, DeleteRequest{Workspace: x.Workspace, Table: x.Table, Actor: a, Name: args[0], Approved: true, ExpectKey: n.Key, ExpectRevision: n.Revision}); err != nil {
+				return Refusal(err)
+			}
+			return localchan.OK(map[string]any{"text": "pergaminho apagado"})
+		}
+		id, msg = req, fmt.Sprintf("approval request #%d is open; nothing was deleted", req)
+	} else if h.ap != nil {
 		var aerr error
 		if id, aerr = h.ap.RequestDelete(ctx, a, n); aerr != nil {
 			return Refusal(aerr)

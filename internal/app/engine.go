@@ -106,7 +106,7 @@ type Deps struct {
 	Masker *logging.Masker
 	// Lock is the lock of the epoch (milestone 5); nil means no promotion.
 	Lock guild.Lock
-	// Approver asks the Owner about an entry; Promotions about a promotion.
+	// Approver asks the Owner about an entry (nil: the one of the integration of the period, the flow of approval); Promotions about a promotion.
 	// Both arrive with the bot (milestone 5); nil refuses.
 	Approver   guild.Approver
 	Promotions guild.PromotionApprover
@@ -222,9 +222,11 @@ type Engine struct {
 	// (periodHooks); nil on a Tower and between periods.
 	period atomic.Pointer[periodHooks]
 
-	mdb      *store.DB
-	rt       *machineRuntime
-	orc      atomic.Pointer[Orchestration] // the orchestration of the period that acts
+	mdb *store.DB
+	rt  *machineRuntime
+	orc atomic.Pointer[Orchestration] // the orchestration of the period that acts
+	// edits keeps who edited what in the turns in progress (the hook reads it).
+	edits    *classes.EditTracker
 	sheets   atomic.Pointer[machinesheet.Registry]
 	hk       atomic.Pointer[hook.Engine]     // the hook engine of this machine, which also decides the pre-runs
 	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
@@ -292,17 +294,16 @@ func New(cfg Config, paths Paths, deps Deps) (*Engine, error) {
 	if deps.Masker == nil {
 		deps.Masker = logging.NewMasker()
 	}
-	if deps.Approver == nil {
-		deps.Approver = noOwner{}
-	}
 	if deps.Version == "" {
 		deps.Version = "dev"
 	}
 	if deps.RenewEvery <= 0 {
 		deps.RenewEvery = renewCheck
 	}
+	edits := classes.NewEditTracker()
+	deps.UseEdits(edits, nil)
 	e := &Engine{
-		cfg: cfg, paths: paths, deps: deps, clk: deps.Clock, log: deps.Logger.With("instance", cfg.Instance),
+		edits: edits, cfg: cfg, paths: paths, deps: deps, clk: deps.Clock, log: deps.Logger.With("instance", cfg.Instance),
 		promoter: guild.NewPromoter(deps.Promotions), local: localchan.NewLocalForwarder(),
 		results: newResults(), kick: make(chan struct{}, 1), statusCh: make(chan struct{}, 1), role: RoleTower,
 	}

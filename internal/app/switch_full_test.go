@@ -21,6 +21,7 @@ import (
 	"github.com/lucasndas/mestre/internal/app"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/testkit/clocksock"
+	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -40,7 +41,15 @@ func TestMain(m *testing.M) {
 		stop()
 		os.Exit(code)
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	// The rigs end the terminals they start; one that does not is a failure,
+	// and the folder of the binaries (built by the first test that needs them)
+	// is the mark of this test binary's processes.
+	if dir := app.RuntimeBuildsDir(); dir != "" {
+		code = leakcheck.Main(os.Stderr, code, dir)
+		_ = os.RemoveAll(dir)
+	}
+	os.Exit(code)
 }
 
 func suite() string { return os.Getenv("MESTRE_TEST_SUITE") }

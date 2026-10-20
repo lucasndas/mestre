@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
 )
 
 // envInScope tells the test binary it is running in the delegated scope.
@@ -71,12 +72,15 @@ func inDelegatedScope(t *testing.T, name string) (cgroup string, inside bool) {
 // it left behind (docs/arquitetura/terminal.md#encerramento), so an orphan
 // that called after the shell was gone would be killed before it could.
 // Both FIFOs are held open for reading and writing, so reads never see an end
-// of file.
+// of file, and the orphans open them for reading and writing too: opened for
+// writing only, the open blocks until someone reads, and an orphan of a shell
+// that is gone (a test that failed early) would wait for ever, out of reach of
+// the tree and of the cgroup of the terminal.
 func orphansScript(mestre, base string) string {
 	ready, done := base+"/ready", base+"/done"
 	orphan := func(dir string) string {
-		return `sh -c "p=\$PPID; trap '' HUP; echo ready > '` + ready + `'; while kill -0 \$p 2>/dev/null; do :; done; ` +
-			`cd '` + base + `/` + dir + `' && '` + mestre + `' list; echo done > '` + done + `'" >/dev/null 2>&1`
+		return `sh -c "p=\$PPID; trap '' HUP; echo ready 1<> '` + ready + `'; while kill -0 \$p 2>/dev/null; do :; done; ` +
+			`cd '` + base + `/` + dir + `' && '` + mestre + `' list; echo done 1<> '` + done + `'" >/dev/null 2>&1`
 	}
 	return strings.Join([]string{
 		`cd '` + base + `/direct' && '` + mestre + `' list >/dev/null 2>&1`,
@@ -90,6 +94,8 @@ func orphansScript(mestre, base string) string {
 func orphansBase(t *testing.T, e *fullEngine) string {
 	t.Helper()
 	base := filepath.Join(e.root, "calls")
+	// Whatever an orphan of the test is still doing when it ends is ended.
+	t.Cleanup(func() { leakcheck.Reap(base + string(filepath.Separator)) })
 	for _, m := range []string{"direct", "nohup", "subshell", "setsid"} {
 		if err := os.MkdirAll(filepath.Join(base, m), 0o755); err != nil {
 			t.Fatal(err)
