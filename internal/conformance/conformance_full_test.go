@@ -163,7 +163,7 @@ func newRig(t *testing.T) *rig {
 	if err := os.MkdirAll(filepath.Join(root, "ws"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r.runner = &conformance.Runner{Clock: clock.Real{}, Git: git, Host: host, Results: r.results, Checklist: r.list,
+	r.runner = &conformance.Runner{Clock: clock.Real{}, Git: newDecisionGit(git), Host: host, Results: r.results, Checklist: r.list,
 		TempDir: filepath.Join(root, "ws"), Limit: 2 * time.Minute, ReadyLimit: 30 * time.Second, TurnLimit: 30 * time.Second}
 	return r
 }
