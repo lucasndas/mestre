@@ -175,16 +175,16 @@ func (s *Service) Depend(ctx context.Context, by characters.Character, epic, on 
 		return Result{}, back(err)
 	}
 	if !hasTable || cur.State != Pending {
-		return Result{State: cur.State, New: added}, nil
+		return Result{State: cur.State, New: added && !had}, nil
 	}
 	if cur.Wait != "" {
-		return Result{State: Pending, Waiting: true, New: added}, nil
+		return Result{State: Pending, Waiting: true, New: added && !had}, nil
 	}
 	state, err := s.arm(ctx, cur, t)
 	if err != nil {
 		return Result{}, back(err)
 	}
-	return Result{State: state, Waiting: state == Pending, New: added}, nil
+	return Result{State: state, Waiting: state == Pending, New: added && !had}, nil
 }
 
 // undo takes back a dependency that could not be armed, so no half-made one

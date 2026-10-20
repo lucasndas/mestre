@@ -98,7 +98,7 @@ func (h *Handlers) isEpic(ctx context.Context, who caller, n int) (github.IssueD
 		return d, localchan.Fail("not_found", fmt.Sprintf("#%d does not exist", n), "see `mestre gh epic list`").WithExit(localchan.ExitNotFound), false
 	case err != nil:
 		return d, refusal(err), false
-	case d.IsPull || !slices.Contains(d.Labels, github.EpicLabel):
+	case d.IsPull || !hasEpicLabel(d.Labels):
 		return d, localchan.Fail("not_found", fmt.Sprintf("#%d is not an epic (it has no label %s)", n, github.EpicLabel), "see `mestre gh epic list`").WithExit(localchan.ExitNotFound), false
 	}
 	return d, localchan.Response{}, true
@@ -193,6 +193,11 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 	}
 	data := map[string]any{"number": n, "depends_on": orEmptyMaps(deps)}
 	if in.Title != nil || in.Body != nil || in.State != "" {
+		// the lock may have come while the command read: nothing is written then
+		if h.isLocked(ctx) {
+			undo()
+			return lockedResponse()
+		}
 		got, err := who.svc.Update(ctx, who.actor, who.repo, n, in)
 		if err != nil {
 			undo()
@@ -212,6 +217,10 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 func flagStr(c *localchan.Call, name string) string {
 	v, _ := flagString(c, name)
 	return v
+}
+
+func hasEpicLabel(labels []string) bool {
+	return slices.ContainsFunc(labels, func(l string) bool { return strings.EqualFold(strings.TrimSpace(l), github.EpicLabel) })
 }
 
 func orEmptyMaps(m []map[string]any) []map[string]any {
@@ -245,7 +254,7 @@ func (h *Handlers) epicList(ctx context.Context, c *localchan.Call) localchan.Re
 	out := []map[string]any{}
 	var text strings.Builder
 	for _, d := range all {
-		if !d.IsPull && slices.Contains(d.Labels, github.EpicLabel) {
+		if !d.IsPull && hasEpicLabel(d.Labels) {
 			out = append(out, issueView(d))
 			fmt.Fprintf(&text, "- #%d %s (%s)\n", d.Number, d.Title, d.State)
 		}

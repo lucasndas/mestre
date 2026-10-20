@@ -340,3 +340,23 @@ func TestTellingTheMergeAgainRepairsAReleaseThatFailed(t *testing.T) {
 		t.Fatalf("the second Merged = %v, released %v; want the release repeated", err, w.released)
 	}
 }
+
+func TestADependencyThatWasHeldBeforeIsNotNewWhenItIsDeclaredAgain(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	t12 := w.tables.put(12, tables.StateWorking, false)
+	w.tables.put(15, tables.StateWorking, false)
+	first, err := w.svc.Depend(w.ctx, w.gm, 15, 12)
+	if err != nil || !first.New {
+		t.Fatalf("the first Depend = %+v, %v; want a new dependency", first, err)
+	}
+	if err := w.svc.Cancelled(w.ctx, workspace, t12); err != nil {
+		t.Fatal(err)
+	}
+	// declared again over the cancelled one: it is revived, but it is not the
+	// work of this call, so a command that undoes its own work leaves it
+	again, err := w.svc.Depend(w.ctx, w.gm, 15, 12)
+	if err != nil || again.New {
+		t.Fatalf("Depend over a cancelled dependency = %+v, %v; want it not new", again, err)
+	}
+}

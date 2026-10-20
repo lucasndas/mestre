@@ -76,6 +76,10 @@ func (e stdEpics) CloseEpic(ctx context.Context, workspace string, number int) e
 	if err != nil {
 		return err
 	}
+	// an epic closed already keeps the reason it was closed with
+	if d, err := api.IssueData(ctx, repo, number); err == nil && d.State != "open" {
+		return nil
+	}
 	closed := "closed"
 	return api.UpdateIssue(ctx, repo, number, github.IssueEdit{State: &closed, StateReason: "not_planned"})
 }
