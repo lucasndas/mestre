@@ -48,6 +48,11 @@ type Options struct {
 	Towers    Towers
 	GitHub    GitHub
 	Approvals Approvals
+	// Issues checks that the `issue` of a new mission is one of the table
+	// (nil: not checked); MaxCorrections is how many fix missions an epic may
+	// have (zero: DefaultMaxCorrections).
+	Issues         IssueOwner
+	MaxCorrections int
 	// Done gives the done_requires of the classes (nil: none asks for a proof).
 	Done DoneRules
 	// Verifier runs the verification of the workspace for a class with verify:
@@ -268,6 +273,9 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (View, error) {
 		return View{}, err
 	}
 	if err := s.check(ctx, r.Workspace, r.Table, def); err != nil {
+		return View{}, err
+	}
+	if err := s.checkIssue(ctx, r.Workspace, r.Table, def.Issue); err != nil {
 		return View{}, err
 	}
 	now := s.clk.Now()
