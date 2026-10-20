@@ -86,6 +86,8 @@ type Service struct {
 	booted bool
 	// withhold keeps refs of the mirrors out of the replication.
 	withhold RefFilter
+	// afterFetch is told that a fetch worked (OnFetched).
+	afterFetch func(ctx context.Context, slug string)
 }
 
 // New builds the Service. The mirror stage is the Service's own; the others
