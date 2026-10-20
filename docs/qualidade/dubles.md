@@ -1,6 +1,6 @@
 # Dublês de teste
 
-> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub, rede, PTY e git falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-19
+> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub, rede, PTY e git falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -110,7 +110,7 @@ O que este documento descreve e ainda não existe entra assim:
 - **CA-DUBLES-10** · *rápida* — **Dado** um arquivo em `testdata/recordings/` com um token de bot do Telegram, **quando** a suíte rápida roda, **então** ela falha apontando o arquivo.
 - **CA-DUBLES-11** · *completa* — **Dado** o binário do agente falso chamado `claude` no PATH e uma base `claude-code`, **quando** o motor cria um personagem, **então** o agente roda num PTY real e os hooks chamam o `mestre hook` de verdade.
 - **CA-DUBLES-12** · *completa* — **Dado** o servidor do relógio de `internal/testkit/clocksock` com um processo que aplica o tempo e outro que sai ou responde diferente de `ok`, **quando** o teste chama `Advance`, **então** ele devolve o erro do processo que não aplicou e o larga; com todos respondendo `ok`, devolve `nil`.
-- **CA-DUBLES-13** · *completa* — **Dado** o agente falso como Antigravity no Windows e uma linha de hook com aspas, **quando** ele roda o hook, **então** o processo é `cmd /c` com a linha como um único argumento entre aspas pelo Go, sem `/s` nem linha de comando própria, como o `agy` real.
+- **CA-DUBLES-13** · *completa* — **Dado** o agente falso como Antigravity no Windows e uma linha de hook com aspas, **quando** ele roda o hook, **então** o processo é `cmd /c` com a linha como um único argumento entre aspas pelo Go, sem `/s` nem linha de comando própria, como o `agy` real (um `echo "x"` imprime `\"x\"`); e a linha gerada pelo adaptador do Antigravity para o PreToolUse, com o `mestre` falso numa pasta de nome com espaço (pelo nome 8.3), roda e chama o `mestre`.
 
 ## Depende de
 
