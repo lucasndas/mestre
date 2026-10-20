@@ -34,7 +34,10 @@ type Record struct {
 	Secret            []byte
 	PTYVersion        string
 	// PTY is the mestre-pty process; PTY.PID is 0 until it was recorded.
-	PTY        ProcID
+	PTY ProcID
+	// LogonSID is the logon SID of the terminal (Windows), told by the
+	// launcher that made the token; empty elsewhere.
+	LogonSID   string
 	StartedAt  time.Time
 	LastSeenAt time.Time
 }
@@ -43,14 +46,14 @@ type Record struct {
 func (r Record) Live() bool { return r.Status != StatusInterrupted && r.Status != StatusStopped }
 
 const recordColumns = `id, character_id, machine_id, dir, class, status, provider_session_id,
-	socket_path, handshake_secret, pty_version, pty_pid, pty_started, started_at, last_seen_at`
+	socket_path, handshake_secret, pty_version, pty_pid, pty_started, started_at, last_seen_at, logon_sid`
 
 // registry reads and writes the terminals table.
 type registry struct{ db *store.DB }
 
 func (r registry) insert(ctx context.Context, rec Record) error {
 	_, err := r.db.Writer().ExecContext(ctx, `INSERT INTO terminals (`+recordColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL)`,
 		rec.ID, rec.CharacterID, rec.MachineID, rec.Dir, nullable(rec.Class), rec.Status, nullable(rec.ProviderSessionID),
 		rec.SocketPath, rec.Secret, rec.PTYVersion, rec.StartedAt.UnixMilli(), rec.LastSeenAt.UnixMilli())
 	if err != nil {
@@ -63,6 +66,14 @@ func (r registry) setProcess(ctx context.Context, id string, p ProcID) error {
 	_, err := r.db.Writer().ExecContext(ctx, `UPDATE terminals SET pty_pid = ?, pty_started = ? WHERE id = ?`, p.PID, p.Start, id)
 	if err != nil {
 		return fmt.Errorf("record mestre-pty of terminal %s: %w", id, err)
+	}
+	return nil
+}
+
+func (r registry) setLogon(ctx context.Context, id, sid string) error {
+	_, err := r.db.Writer().ExecContext(ctx, `UPDATE terminals SET logon_sid = ? WHERE id = ?`, sid, id)
+	if err != nil {
+		return fmt.Errorf("record the logon SID of terminal %s: %w", id, err)
 	}
 	return nil
 }
@@ -116,17 +127,17 @@ func scanRecords(rows *sql.Rows) ([]Record, error) {
 	var out []Record
 	for rows.Next() {
 		var (
-			rec                 Record
-			class, providerSess sql.NullString
-			pid                 sql.NullInt64
-			started             sql.NullString
-			startedAt, seenAt   int64
+			rec                        Record
+			class, providerSess, logon sql.NullString
+			pid                        sql.NullInt64
+			started                    sql.NullString
+			startedAt, seenAt          int64
 		)
 		if err := rows.Scan(&rec.ID, &rec.CharacterID, &rec.MachineID, &rec.Dir, &class, &rec.Status, &providerSess,
-			&rec.SocketPath, &rec.Secret, &rec.PTYVersion, &pid, &started, &startedAt, &seenAt); err != nil {
+			&rec.SocketPath, &rec.Secret, &rec.PTYVersion, &pid, &started, &startedAt, &seenAt, &logon); err != nil {
 			return nil, fmt.Errorf("scan terminal: %w", err)
 		}
-		rec.Class, rec.ProviderSessionID = class.String, providerSess.String
+		rec.Class, rec.ProviderSessionID, rec.LogonSID = class.String, providerSess.String, logon.String
 		rec.PTY = ProcID{PID: int(pid.Int64), Start: started.String}
 		rec.StartedAt, rec.LastSeenAt = time.UnixMilli(startedAt).UTC(), time.UnixMilli(seenAt).UTC()
 		out = append(out, rec)
