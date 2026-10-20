@@ -78,8 +78,9 @@ func TestTableStatusGivesTheEpicWithItsNumberItsTitleAndTheThreeCriteria(t *test
 	d := dataOf(t, r)
 	epic, _ := d["epic"].(map[string]any)
 	crit, _ := epic["criteria"].([]any)
-	if epic["number"] != float64(42) || epic["title"] != "Login" || len(crit) != 3 || crit[2] != "Dado 5 erros, quando tenta de novo, então espera 15 min" || epic["criteria_error"] != nil {
-		t.Errorf("epic = %v", epic)
+	wantCrit := []any{"Dado um e-mail válido, quando entra, então vê o painel", "Dado senha errada, quando entra, então vê o erro", "Dado 5 erros, quando tenta de novo, então espera 15 min"}
+	if epic["number"] != float64(42) || epic["title"] != "Login" || !slices.Equal(crit, wantCrit) || epic["criteria_error"] != nil {
+		t.Errorf("epic = %v; want the 3 criteria %q in order", epic, wantCrit)
 	}
 	proofs, _ := d["proofs"].([]any)
 	if len(proofs) != 2 || proofs[0].(map[string]any)["origin"] != "verificada pelo motor" || proofs[0].(map[string]any)["marked"] != true || proofs[1].(map[string]any)["origin"] != "sem prova" {

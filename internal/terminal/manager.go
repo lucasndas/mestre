@@ -83,7 +83,7 @@ type ManagerConfig struct {
 	// row interrupted; the local channel forgets the terminal here
 	// (Directory.Remove). It must not block.
 	OnEnded func(id string)
-	// HandshakeTimeout (default 5 s) bounds connecting to a mestre-pty.
+	// HandshakeTimeout (default ptywire.EngineHandshakeTimeout, 35 s) bounds connecting to a mestre-pty.
 	HandshakeTimeout time.Duration
 	// AckDelay (default 200 ms): see DefaultAckDelay.
 	AckDelay time.Duration
@@ -123,7 +123,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 		cfg.AckDelay = DefaultAckDelay
 	}
 	if cfg.HandshakeTimeout == 0 {
-		cfg.HandshakeTimeout = ptywire.HandshakeTimeout
+		cfg.HandshakeTimeout = ptywire.EngineHandshakeTimeout
 	}
 	log := cfg.Logger
 	if log == nil {

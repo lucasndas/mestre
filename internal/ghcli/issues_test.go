@@ -10,7 +10,7 @@ import (
 
 // CA-CLI-GH-01
 // Part of CA-GH-ACOES-01: `mestre issue comment` end to end, refused with the epic that owns the issue.
-// Part of CA-MM-03: the table master is refused the issue of another table (the commands reply and notify are in internal/app)
+// Part of CA-MM-03: the table master is refused the issue of another table (the three commands together are in internal/app)
 func TestAnIssueOutsideTheEpicOfTheTableIsRefused(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)

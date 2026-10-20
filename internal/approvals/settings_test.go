@@ -186,7 +186,7 @@ func TestSettingsDoNotApplyWhatTheyDoNotKnow(t *testing.T) {
 	}
 }
 
-// Part of CA-CLI-GM-04: a ruleset proposed by `gh settings apply` is a request to the Owner
+// Part of CA-CLI-GM-05: a ruleset proposed by `gh settings apply` is a request to the Owner
 // for the exact body, in the repository of the workspace; nothing is created before the
 // answer, and when the Owner approves that body, and only that, is created; a body that
 // is not a ruleset or is too large is refused.

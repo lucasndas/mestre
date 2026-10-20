@@ -101,9 +101,10 @@ func (w *world) covers(r chain.Request) bool {
 	return ok
 }
 
-// CA-DELEG-01: "Delegar" on a destructive request, confirmed by the Owner, is a
-// decree of delegation for that type in that table, for 30 days; another table
-// is not covered.
+// Part of CA-DELEG-01 (the PIN through the flow and the decisions of the chain
+// are in internal/orchestration/chain/delegation_audit_test.go): "Delegar" on a
+// destructive request, confirmed by the Owner, is a decree of delegation for
+// that type in that table, for 30 days; another table is not covered.
 func TestDelegarMakesADelegationOfThirtyDaysForTheTable(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -131,8 +132,9 @@ func TestDelegarMakesADelegationOfThirtyDaysForTheTable(t *testing.T) {
 	_ = r
 }
 
-// CA-DELEG-02: an Administrator can not delegate a type alto; "Delegar" on a
-// medio request proposes a decree of policy in that type and table.
+// Part of CA-DELEG-02 (no proposal is shown: the flow makes the decree after the
+// PIN): an Administrator can not delegate a type alto; "Delegar" on a medio
+// request makes a decree of policy in that type and table.
 func TestAnAdministratorDelegatesNoHighTypeAndDelegarOnAMedioIsAPolicy(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -154,7 +156,9 @@ func TestAnAdministratorDelegatesNoHighTypeAndDelegarOnAMedioIsAPolicy(t *testin
 	}
 }
 
-// CA-DELEG-03: the reminder comes 3 days before the end with Renovar; Renovar
+// Part of CA-DELEG-03 (the whole criterion, over the bot and the chain, is in
+// internal/orchestration/chain/delegation_audit_test.go): the reminder comes 3
+// days before the end with Renovar; Renovar
 // proposes 30 more days with the PIN; the delegation expires at 30 days and
 // covers nothing; 31 days is refused.
 func TestADelegationIsRemindedRenewedAndExpires(t *testing.T) {
@@ -270,7 +274,9 @@ func refusalCode(t *testing.T, err error) string {
 	return ref.Code
 }
 
-// CA-DELEG-04: the Grand Master subdelegates to the Mestre da mesa inside its
+// Part of CA-DELEG-04 (the decision of the Mestre da mesa through the chain is in
+// internal/orchestration/chain/delegation_audit_test.go): the Grand Master
+// subdelegates to the Mestre da mesa inside its
 // delegation; wider, other table, too long or by the Mestre da mesa is refused;
 // when the origin is revoked the subdelegation ends with it.
 func TestTheGrandMasterSubdelegatesNarrowerAndTheOriginEndsIt(t *testing.T) {
@@ -388,7 +394,9 @@ func TestASubdelegationOfAHighTypeNeedsTheDelegationAndAMedioDoesNot(t *testing.
 	}
 }
 
-// CA-DELEG-05: the emergency button ends every delegation and subdelegation of
+// Part of CA-DELEG-05 (over fakes of the hooks; the real rules and the bot are in
+// internal/telegram/delegation_test.go): the emergency button ends every
+// delegation and subdelegation of
 // every workspace, in the audit with who and when, tells the workspaces and
 // takes the open requests up; an Administrator is refused.
 func TestRevokeAllEndsEveryDelegationAndIsTheOwnersOnly(t *testing.T) {
@@ -448,8 +456,10 @@ func TestRevokeAllEndsEveryDelegationAndIsTheOwnersOnly(t *testing.T) {
 	_ = json.RawMessage(nil)
 }
 
-// CA-DELEG-06: the types that are never delegated are refused before the
-// confirmation.
+// CA-DELEG-06: the types that are never delegated (the entry in the Guild, and
+// the extra cost, which a delegation would only ever open above the ceiling:
+// below it the type is medio and a decree of policy is the way) are refused
+// before the confirmation, with "tipo não delegável"; nothing is left to confirm.
 func TestTypesThatAreNeverDelegatedAreRefused(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -460,7 +470,20 @@ func TestTypesThatAreNeverDelegatedAreRefused(t *testing.T) {
 		if ref.Code != decrees.CodeDelegation {
 			t.Fatalf("%s: %+v", typ, ref)
 		}
-		contains(t, ref.Message, "não se delega")
+		contains(t, ref.Message, "tipo não delegável")
+		contains(t, ref.Message, typ)
+	}
+	if n := w.count("decree_proposals"); n != 0 {
+		t.Fatalf("%d proposals left to confirm", n)
+	}
+	if n := w.count("decrees"); n != 0 {
+		t.Fatalf("%d decrees", n)
+	}
+	// the same proposal for a type alto is not refused: the refusal is of the type
+	ok := decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "loja", Mesa: "42-login", Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"},
+		Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: "envio_workflows"}, Text: "delegue"}
+	if _, err := w.svc.Propose(w.ctx, ok); err != nil {
+		t.Fatalf("a type alto: %v", err)
 	}
 }
 

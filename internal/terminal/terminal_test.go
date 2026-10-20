@@ -371,7 +371,7 @@ func TestTheEngineRefusesAMestrePtyThatDoesNotKnowTheSecret(t *testing.T) {
 	}
 }
 
-func TestAHandshakeThatNeverEndsIsClosedAfter5Seconds(t *testing.T) {
+func TestAHandshakeThatNeverEndsIsClosedAfter30Seconds(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{})
 	nc, err := r.net.Dial(t.Context(), "silent", "pty:1")

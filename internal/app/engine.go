@@ -125,6 +125,11 @@ type Deps struct {
 	// machine (nil: sessionzero.Character over the accounts of the machine).
 	Spawner       terminal.Spawner
 	CharacterPrep characters.Preparer
+	// TerminalHandshake is how long the engine waits for a mestre-pty to answer
+	// the handshake (zero: ptywire.EngineHandshakeTimeout). The full suite lengthens
+	// it: a starved CI machine can take longer than that to schedule a process
+	// it just started, and that says nothing about the engine.
+	TerminalHandshake time.Duration
 	// Commands is the definition of the commands of the CLI the engine
 	// checks every call against (nil: cli.Default). Profiles gives the level
 	// and the class of a character (nil: an ordinary character, with the
