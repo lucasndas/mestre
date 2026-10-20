@@ -111,6 +111,10 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
 		Limits: characters.DefaultLimits(), Peers: towerTables{e.towerClient()}, QuestTowers: towerTables{e.towerClient()},
 	}
+	if m, ok := opts.Machines.(*machineRouter); ok {
+		// the copies of the scrolls and the pre-run of the rituals reach the Towers as the characters do
+		opts.ScrollCopies, opts.RitualPreRun = m, m
+	}
 	if integ != nil {
 		integ.Extend(&opts)
 	}
@@ -208,6 +212,9 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 		pub.Local = &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
 	}
 	o.ChainClasses, o.ChainRulesPublisher = cc, pub
+	if o.RitualPermissions == nil {
+		o.RitualPermissions = ritualPermissions{cc}
+	}
 	pub.Sender = towerRules{&e.srvp}
 	o.Machines = PublishingMachines(o.Machines, pub)
 	return cc, nil
