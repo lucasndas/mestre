@@ -3,6 +3,7 @@ package github_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -152,5 +153,40 @@ func TestMergePullRecognizesAMergeThatHappenedWhoseAnswerWasLost(t *testing.T) {
 	// merged at another commit: not the merge that was approved
 	if _, err := rest.MergePull(t.Context(), repo, n, moved, ""); !errors.Is(err, github.ErrNotMergeable) {
 		t.Errorf("a PR merged at another commit: %v", err)
+	}
+}
+
+// CA-CLI-GM-13: the sub-issues of an epic are read page after page (GitHub allows
+// 100 per parent, so the second page is empty, and it is asked for all the same).
+func TestSubIssuesAreReadPageAfterPage(t *testing.T) {
+	t.Parallel()
+	rest, gh, _, repo := mergeRig(t)
+	epic := gh.AddIssue(repo, "Epic", "epico")
+	for i := range 100 {
+		n := gh.AddIssue(repo, fmt.Sprintf("Sub %d", i))
+		data, err := rest.Issue(t.Context(), repo, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := rest.AddSubIssue(t.Context(), repo, epic, data.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	subs, err := rest.SubIssues(t.Context(), repo, epic)
+	if err != nil || len(subs) != 100 {
+		t.Fatalf("sub-issues = %d, %v; want 100", len(subs), err)
+	}
+}
+
+// CA-CLI-GM-13: the legacy commit statuses are read, to count in the CI of a
+// pull request that reports by them.
+func TestCommitStatusesAreRead(t *testing.T) {
+	t.Parallel()
+	rest, gh, _, repo := mergeRig(t)
+	gh.AddStatus(repo, approved, "ci/legacy", "failure")
+	gh.AddStatus(repo, approved, "ci/other", "success")
+	got, err := rest.CommitStatuses(t.Context(), repo, approved)
+	if err != nil || len(got) != 2 || got[0] != (github.Check{Name: "ci/legacy", State: "failure"}) {
+		t.Fatalf("statuses = %+v, %v", got, err)
 	}
 }

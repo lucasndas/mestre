@@ -112,6 +112,31 @@ func (c *REST) CheckRuns(ctx context.Context, repo, sha string) ([]Check, error)
 	return nil, errTooMany
 }
 
+// CommitStatuses lists the legacy commit statuses of a commit (the ones CI
+// systems that are not GitHub Actions report), the latest of each context, as
+// Checks whose State is success, failure, error or pending.
+func (c *REST) CommitStatuses(ctx context.Context, repo, sha string) ([]Check, error) {
+	var out []Check
+	for page := 1; page <= maxListPages; page++ {
+		var v struct {
+			Statuses []struct {
+				Context string `json:"context"`
+				State   string `json:"state"`
+			} `json:"statuses"`
+		}
+		if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/commits/%s/status?per_page=100&page=%d", sha, page), nil, http.StatusOK, &v, "reading the commit statuses"); err != nil {
+			return nil, err
+		}
+		for _, r := range v.Statuses {
+			out = append(out, Check{Name: r.Context, State: r.State})
+		}
+		if len(v.Statuses) < 100 {
+			return out, nil
+		}
+	}
+	return nil, errTooMany
+}
+
 // Review is a review of a PR.
 type Review struct {
 	ID        int64

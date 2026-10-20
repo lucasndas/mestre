@@ -190,6 +190,21 @@ func (e stdEpics) PullStats(ctx context.Context, workspace string, number int) (
 	if err != nil {
 		return tables.PullStats{}, err
 	}
+	// The legacy commit statuses count too: a CI that reports by them is not "none".
+	if ss, ok := api.(interface {
+		CommitStatuses(ctx context.Context, repo, sha string) ([]github.Check, error)
+	}); ok {
+		statuses, err := ss.CommitStatuses(ctx, repo, pr.HeadSHA)
+		if err != nil {
+			return tables.PullStats{}, err
+		}
+		for _, s := range statuses {
+			if s.State == "error" {
+				s.State = "failure"
+			}
+			checks = append(checks, s)
+		}
+	}
 	failed, pending := false, false
 	for _, c := range checks {
 		switch c.State {
