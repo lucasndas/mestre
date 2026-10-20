@@ -218,8 +218,11 @@ type Request struct {
 // decide, plus the fields of the request that blocks. All of it is the text of an
 // agent.
 type AskNote struct {
-	By                      string
-	Summary, Details        string
+	By               string
+	Summary, Details string
+	// Action is what the Grão-Mestre asks to do, for a question about an action that
+	// is not a request yet (acao_do_grao_mestre).
+	Action                  string
 	Recommend, Reason       string
 	Motive, Checked, WhyNot string
 	Steps                   []string

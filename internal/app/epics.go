@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
@@ -101,6 +102,19 @@ func (e stdEpics) ClosePR(ctx context.Context, workspace string, number int) err
 		return errors.New("the GitHub of this run cannot close a pull request")
 	}
 	return c.ClosePull(ctx, repo, number)
+}
+
+// appCreator is the creation of an App before the panel: the link of creation is a
+// page of the panel, which only exists in milestone 6, so the command prepares
+// nothing and says why (docs/desenvolvimento/ligacao-de-producao.md).
+type appCreator struct{}
+
+func (appCreator) Available(context.Context) string {
+	return "the link of the creation of an App is a page of the panel, which comes with milestone 6: nothing was prepared"
+}
+
+func (appCreator) Begin(context.Context, string, string) (ghcli.AppLink, error) {
+	return ghcli.AppLink{}, errors.New("the creation of Apps needs the panel")
 }
 
 // stdSettings is what `gh settings show` reads of the Mestre: the main branch of

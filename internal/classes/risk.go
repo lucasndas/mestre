@@ -63,6 +63,11 @@ const (
 	RequestMestreUpdate     RequestType = "atualizacao_mestre"
 	RequestGuildEntry       RequestType = "entrada_na_guilda"
 	RequestCitadelPromotion RequestType = "promocao_cidadela"
+	// RequestGMAction is a question of the Grão-Mestre to the people about an
+	// action it will take by the normal commands (`mestre approval ask --action
+	// "<text>"`): nobody decides it alone, no delegation opens it, and approving it
+	// only answers the Grão-Mestre.
+	RequestGMAction RequestType = "acao_do_grao_mestre"
 )
 
 // typeRisk is the risk table of the request types other than
@@ -70,7 +75,7 @@ const (
 var typeRisk = map[RequestType]Risk{
 	RequestMissionPoint: RiskMedium, RequestPR: RiskMedium, RequestMerge: RiskMedium,
 	RequestWorkflows: RiskHigh, RequestRepoSettings: RiskHigh, RequestWorkspaceClass: RiskHigh,
-	RequestDestructive: RiskHigh, RequestAgentsMD: RiskHigh,
+	RequestDestructive: RiskHigh, RequestAgentsMD: RiskHigh, RequestGMAction: RiskHigh,
 	RequestOperator: RiskFixed, RequestMestreUpdate: RiskFixed, RequestGuildEntry: RiskFixed, RequestCitadelPromotion: RiskFixed,
 }
 
