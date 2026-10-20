@@ -799,6 +799,9 @@ func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scroll
 	if o.Supervisor != nil {
 		o.Supervisor.Register(fwd)
 	}
+	if o.Chain != nil {
+		o.Chain.Register(fwd)
+	}
 }
 
 // Intervals of the loops that External runs.

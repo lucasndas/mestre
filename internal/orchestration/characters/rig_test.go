@@ -61,15 +61,16 @@ func TestMain(m *testing.M) {
 	}
 	code := m.Run()
 	for _, f := range exitHooks {
-		f()
+		code = f(code)
 	}
 	os.RemoveAll(dir)
 	os.Exit(code)
 }
 
-// exitHooks are run when the tests are over (the full suite removes what it
-// built).
-var exitHooks []func()
+// exitHooks are run when the tests are over, each with the exit code so far and
+// returning the code to go on with (the full suite removes what it built and
+// fails when a test left a process alive).
+var exitHooks []func(code int) int
 
 func openCopy(t *testing.T, name string, template []byte, open func(context.Context, string, store.Options) (*store.DB, error)) *store.DB {
 	t.Helper()
