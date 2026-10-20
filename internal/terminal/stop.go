@@ -160,6 +160,7 @@ func (t *Terminal) disconnected() bool {
 // socket goes away and the row says "stopped".
 func (t *Terminal) finish(ctx context.Context) {
 	t.Detach()
+	t.m.revokeAccess(t.id, t.rec.LogonSID)
 	_ = os.Remove(t.rec.SocketPath)
 	if err := t.m.reg.setStatus(ctx, t.id, StatusStopped, t.m.clk.Now()); err != nil {
 		t.m.log.Warn("terminal stopped but its row was not updated", "terminal", t.id, "error", err)
