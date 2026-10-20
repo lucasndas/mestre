@@ -125,16 +125,16 @@ func (a *antigravity) hookCommand(goos, binary, event string) (string, error) {
 		// agy runs the line as cmd /c "<line>" with the quoting of Go, every
 		// " turned into \" (1.4.2, the Windows round of 2026-10-19), and cmd
 		// reads \"C:\…\" as a path that does not exist: so the line has no
-		// quote at all. The path goes bare (or by its 8.3 name); without
-		// MESTRE_AGENT_ID the mestre answers neutral by itself, and without
-		// the binary the line prints {}, the neutral answer of every event but
-		// PreToolUse, which it blocks (no JSON string can be printed without
-		// quotes).
+		// quote at all. The path goes bare (or by its 8.3 name). Without
+		// MESTRE_AGENT_ID or without the binary the line prints {}, the
+		// neutral answer of every event but PreToolUse, which it blocks: no
+		// JSON string can be printed without quotes, and the line never
+		// answers allow by itself.
 		p, err := cmdBarePath(binary)
 		if err != nil {
 			return "", err
 		}
-		return `if exist ` + p + ` (` + p + args + `) else (echo {})`, nil
+		return `if not defined MESTRE_AGENT_ID (echo {}) else if exist ` + p + ` (` + p + args + `) else (echo {})`, nil
 	}
 	q := "'" + strings.ReplaceAll(binary, "'", `'\''`) + "'"
 	return `if [ -n "$MESTRE_AGENT_ID" ] && [ -e ` + q + ` ]; then exec ` + q + args + "; else printf '%s\\n' '" + neutral + "'; fi", nil

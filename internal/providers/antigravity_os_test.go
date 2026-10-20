@@ -26,7 +26,7 @@ func TestAntigravityHookLineOfTheMachineWhenTheOSIsEmpty(t *testing.T) {
 	}
 	want := `[ -n "$MESTRE_AGENT_ID" ]`
 	if runtime.GOOS == "windows" {
-		want = "if exist "
+		want = "if not defined MESTRE_AGENT_ID (echo {}) else if exist "
 	}
 	if !strings.Contains(string(doc), strings.ReplaceAll(want, `"`, `\"`)) {
 		t.Fatalf("the hook file does not have the line of %s (%s):\n%s", runtime.GOOS, want, doc)
