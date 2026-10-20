@@ -284,3 +284,32 @@ quorum:
 		}
 	}
 }
+
+// The `delegacao` of the file gives the validity a delegation gets by default
+// and the reminder before its end; absent, the 30 and 3 days; out of range, the
+// file is invalid (docs/aprovacoes/arquivo-de-politica.md).
+func TestThePolicyFileGivesTheValidityAndTheReminderOfDelegations(t *testing.T) {
+	t.Parallel()
+	r := newPolicyRig(t)
+	st, _ := r.chain()
+	if st.DelegationValidity != 30*24*time.Hour || st.DelegationReminder != 3*24*time.Hour {
+		t.Fatalf("default: %v and %v", st.DelegationValidity, st.DelegationReminder)
+	}
+	r.write("versao: 1\ndelegacao:\n  validade_padrao: 10d\n  aviso_antes: 2d\n")
+	st, _ = r.chain()
+	if st.DelegationValidity != 10*24*time.Hour || st.DelegationReminder != 2*24*time.Hour {
+		t.Fatalf("from the file: %v and %v", st.DelegationValidity, st.DelegationReminder)
+	}
+	for name, section := range map[string]string{
+		"more than 30 days":         "validade_padrao: 31d",
+		"zero validity":             "validade_padrao: 0s",
+		"not a duration":            "aviso_antes: logo",
+		"reminder past validity":    "validade_padrao: 5d\n  aviso_antes: 5d",
+		"reminder past the default": "aviso_antes: 30d",
+		"unknown key":               "validade: 5d",
+	} {
+		if _, _, err := chain.ParsePolicyFile([]byte("versao: 1\ndelegacao:\n  " + section + "\n")); err == nil {
+			t.Errorf("%s: the file was accepted", name)
+		}
+	}
+}

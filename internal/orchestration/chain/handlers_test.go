@@ -359,3 +359,21 @@ func TestApprovalAskWithATextOfActionOpensAQuestionForThePeople(t *testing.T) {
 		t.Fatalf("a table master: %+v", got)
 	}
 }
+
+// CA-CLI-GM-08: a request that waits at the Grand Master and touches a sensitive area
+// of the policy: `approval decide <id> approve --reason ok` is exit 3 human_required
+// and the request stays open and undecided.
+func TestApprovalDecideOfARequestInASensitiveAreaIsHumanRequiredAndTheRequestStaysOpen(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	f := green(2)
+	f.Files = append(f.Files, chain.PRFile{Path: "src/billing/charge.go", Added: 5})
+	id := w.prRequest(classes.RequestMerge, 60, f)
+	got := w.cli(w.gm, "approval decide", map[string]any{"reason": "ok"}, itoa(id), "approve")
+	if got.OK || got.Code != "human_required" || got.Exit != 3 {
+		t.Fatalf("decide = %+v, want exit 3 human_required", got)
+	}
+	if r := w.request(id); r.State != chain.Open || r.Decision != nil {
+		t.Fatalf("the request is %s with decision %+v after the refusal", r.State, r.Decision)
+	}
+}

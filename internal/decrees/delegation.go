@@ -38,6 +38,30 @@ type RevokeHooks interface {
 	Told(ctx context.Context, workspace, text string)
 }
 
+// SetDelegationTimes tells the Service where the validity a delegation gets by
+// default and the reminder before its end are read for a workspace (the
+// `delegacao` of its policy file). Without it the constants rule.
+func (s *Service) SetDelegationTimes(f func(ctx context.Context, workspace string) (validity, reminder time.Duration)) {
+	s.delegation = f
+}
+
+// delegationTimes are the validity and the reminder of a workspace: what the
+// policy file says, never more than 30 days of validity.
+func (s *Service) delegationTimes(ctx context.Context, workspace string) (validity, reminder time.Duration) {
+	validity, reminder = MaxDelegation, s.reminderBefore()
+	if s.delegation == nil {
+		return validity, reminder
+	}
+	v, r := s.delegation(ctx, workspace)
+	if v > 0 && v < validity {
+		validity = v
+	}
+	if r > 0 {
+		reminder = r
+	}
+	return validity, reminder
+}
+
 func (s *Service) reminderBefore() time.Duration {
 	if s.o.ReminderBefore > 0 {
 		return s.o.ReminderBefore
@@ -50,13 +74,16 @@ func (s *Service) remind(ctx context.Context) error {
 	now := s.clk.Now()
 	var soon []Decree
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		ds, err := queryDecrees(ctx, tx, `WHERE state = 'active' AND effect_kind = 'delegation' AND until > ? AND until <= ? AND reminded_at = 0`, ms(now), ms(now.Add(s.reminderBefore())))
+		ds, err := queryDecrees(ctx, tx, `WHERE state = 'active' AND effect_kind = 'delegation' AND until > ? AND until <= ? AND reminded_at = 0`, ms(now), ms(now.Add(MaxDelegation)))
 		if err != nil {
 			return err
 		}
 		for _, d := range ds {
 			if !highTypes[d.Effect.Setting] {
 				continue // the delegation of the Operator is short and has no reminder
+			}
+			if _, before := s.delegationTimes(ctx, d.Workspace); d.Until.Sub(now) > before {
+				continue // not yet the time of this workspace's reminder
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE decrees SET reminded_at = ? WHERE id = ?`, ms(now), d.Number); err != nil {
 				return err
@@ -79,7 +106,7 @@ func (s *Service) remind(ctx context.Context) error {
 	return nil
 }
 
-// Renew is the click on Renovar: the same delegation for 30 more days, as a new
+// Renew is the click on Renovar: the same delegation for the default validity of the workspace (up to 30 days), as a new
 // proposal the author confirms with the PIN. The old one ends on its own date.
 func (s *Service) Renew(ctx context.Context, number int64, userID string) (Pending, error) {
 	d, err := getDecree(ctx, s.o.DB.Reader(), number)
@@ -89,8 +116,9 @@ func (s *Service) Renew(ctx context.Context, number int64, userID string) (Pendi
 	if d.Author != userID || d.State != Active || d.Effect.Kind != EffectDelegation || !highTypes[d.Effect.Setting] {
 		return Pending{}, ErrNotAllowed
 	}
+	validity, _ := s.delegationTimes(ctx, d.Workspace)
 	return s.Propose(ctx, Proposal{Author: userID, Kind: KindRule, Effect: d.Effect, Target: d.Target, Workspace: d.Workspace, Mesa: d.Mesa, Scope: d.Scope,
-		Until: s.clk.Now().Add(MaxDelegation), Text: fmt.Sprintf("Renovar a delegação %d por mais 30 dias: %s", d.Number, d.Text),
+		Until: s.clk.Now().Add(validity), Text: fmt.Sprintf("Renovar a delegação %d por mais %s: %s", d.Number, spanText(validity), d.Text),
 		Origin: Origin{Channel: "renewal"}})
 }
 
@@ -189,4 +217,12 @@ func (s *Service) SetRevokeHooks(h RevokeHooks) { s.o.Revoked = h }
 // after the service). Call it before the service runs.
 func (s *Service) SetTableOpen(f func(ctx context.Context, workspace, table string) (bool, error)) {
 	s.o.TableOpen = f
+}
+
+// spanText says a validity in days when it is of whole days, else in hours.
+func spanText(d time.Duration) string {
+	if d >= 24*time.Hour && d%(24*time.Hour) == 0 {
+		return fmt.Sprintf("%d dias", int(d/(24*time.Hour)))
+	}
+	return fmt.Sprintf("%d horas", int(d.Round(time.Hour)/time.Hour))
 }
