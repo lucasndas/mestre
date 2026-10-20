@@ -90,7 +90,7 @@ func (s *Service) openPR(ctx context.Context, w workspaces.Workspace) error {
 		return err
 	}
 	url, err := s.o.PullRequests.Publish(ctx, PullRequest{
-		Repo: w.Repo, Branch: PRBranch, Base: w.DefaultBranch,
+		Workspace: w.Slug, Repo: w.Repo, Branch: PRBranch, Base: w.DefaultBranch,
 		Title: "Sessão zero do Mestre",
 		Body:  prBody(slices.Sorted(maps.Keys(files))),
 	})

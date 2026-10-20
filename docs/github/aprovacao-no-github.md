@@ -75,12 +75,13 @@ Um review que falha em qualquer condição é registrado na auditoria com o moti
 
 Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/usuarios-e-niveis.md#cadastro); o login que ela confere é o `github_login`, que existe mesmo sem ela). Não precisa de porta aberta:
 
-1. No painel, o usuário escolhe "Conectar GitHub". O motor chama `POST https://github.com/login/device/code` com o `client_id` do App "Grão-Mestre".
-2. O painel mostra o código curto e o link `https://github.com/login/device`; o usuário digita o código no navegador dele e autoriza.
+1. No painel (M6) ou no Telegram com `/github`, o usuário escolhe "Conectar GitHub". O motor chama `POST https://github.com/login/device/code` com o `client_id` do App "Grão-Mestre".
+2. O painel, ou o bot, mostra o código curto e o link `https://github.com/login/device`; o usuário digita o código no navegador dele e autoriza.
 3. O motor consulta `POST https://github.com/login/oauth/access_token` (`grant_type=urn:ietf:params:oauth:grant-type:device_code`) no intervalo indicado pelo GitHub, até receber o token.
 4. O motor confere com `GET /user` que o login do GitHub é o do cadastro e guarda o token e o token de renovação no [cofre](../plataforma/cofre.md). Ele renova o token antes de vencer.
 
 - O token só faz o que o usuário **e** o App "Grão-Mestre" podem fazer, e só nos repositórios onde o App está instalado.
+- A credencial acaba (token revogado no GitHub, tokens e linha apagados) quando o usuário é removido, suspenso, vira Observador ou fica sem workspace; mudar para outro nível que ainda conecta a mantém.
 - Renovação recusada: a credencial fica "expirada", o painel mostra e o bot avisa o usuário para conectar de novo (sem mandar segredo).
 - Usuário suspenso: a credencial não é usada. Usuário removido: a credencial é apagada do cofre e revogada no GitHub.
 

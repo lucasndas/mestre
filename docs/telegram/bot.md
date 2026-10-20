@@ -1,6 +1,6 @@
 # Bot do Telegram
 
-> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** o bot único do Mestre: long polling, tipos de mensagem, comandos rápidos, mensagens de saída e explicação de termos · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -67,6 +67,7 @@ O filtro está em [segurança do canal](seguranca-do-canal.md), o roteamento em 
 | `/retomar [workspace\|mesa\|personagem]` | desfaz o `/pausar`; com um personagem, retoma o que o disjuntor da [cadeia](../orquestracao/cadeia-de-aprovacao.md#salvaguardas) pausou |
 | `/travar`, `/destravar` | emergência ([segurança do canal](seguranca-do-canal.md)) |
 | `/guilda` | máquinas da Guilda com papel (Cidadela ou Torre), online/offline, excluída ou não e a época; ao Dono, também os pedidos de entrada na Guilda e de promoção pendentes e os botões **Passar a Cidadela** e **Excluir**, todos com PIN ([Guilda](../guilda/guilda.md)) |
+| `/github` | conecta o GitHub pessoal do usuário (device flow): mostra o código e o endereço, espera a autorização no ritmo do GitHub e avisa quando conectou; só quem atua em algum workspace (Dono, ou nível com a lista de workspaces não vazia) e acima de Observador ([aprovação no GitHub](../github/aprovacao-no-github.md#credencial-pessoal-user-access-token-pelo-device-flow)) |
 | `/revogar_tudo` | só o Dono: revoga todas as delegações e regras temporárias de mesa, depois de um botão de confirmação ([revogar tudo](../aprovacoes/delegacao.md#revogar-tudo)) |
 | `/operador encerrar` | encerra na hora as sessões ativas do [Operador do PC](../orquestracao/bases-e-fichas.md#base-especial-operador-do-pc) nos workspaces do usuário, sem a espera de 60 s |
 

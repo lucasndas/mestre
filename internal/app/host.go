@@ -141,6 +141,12 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		return nil, err
 	}
 	built = orc
+	if zh, ok := integ.(sessionZeroHost); ok {
+		// the stages of the session zero of the workspaces
+		if _, err := zh.SessionZero(orc, sessionzero.Worktree{Providers: reg, Binary: binary}); err != nil {
+			return nil, fmt.Errorf("app: the session zero of the workspaces: %w", err)
+		}
+	}
 	// the use of the providers: the events of the characters and the sources
 	// read periodically (usagehost.go)
 	reader := newUsageReader(&usageReader{svc: orc.Usage, dir: usageDirectory{reg: orc.Registry, presets: opts.Presets, quests: &orc.Quests},

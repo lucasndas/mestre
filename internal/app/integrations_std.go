@@ -32,6 +32,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/users"
 )
@@ -123,6 +124,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.gc = &telegram.GuildChannel{Users: svc, PINs: r.pins, Machines: env.Machines, SetExcluded: env.SetExcluded, Pending: env.Pending}
+	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
@@ -166,6 +168,8 @@ type stdRun struct {
 	stall *telegram.StallChannel
 	dc    *telegram.DecreeChannel
 	gc    *telegram.GuildChannel
+	// gh is /github: the personal credential of the user by the device flow.
+	gh *telegram.GitHubChannel
 	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
 	fetch  atomic.Pointer[telegram.Client]
 	dg     *telegram.DigestChannel
@@ -185,6 +189,9 @@ type stdRun struct {
 	// when the orchestration exists.
 	approver atomic.Pointer[approvals.Approver]
 	settings atomic.Pointer[approvals.Settings]
+	// zero is the session zero of the workspaces (sessionzerohost.go), made when
+	// the host has the orchestration.
+	zero atomic.Pointer[sessionzero.Service]
 
 	fence atomic.Pointer[guild.Fence]
 	chain atomic.Pointer[chain.Service]
@@ -284,7 +291,29 @@ func (a lateApprovals) InvalidateBy(ctx context.Context, id string) error {
 	if derr := a.r.decrees.InvalidateBy(ctx, id); derr != nil {
 		err = errors.Join(err, derr)
 	}
+	if perr := a.r.dropPersonal(ctx, id); perr != nil {
+		err = errors.Join(err, perr)
+	}
 	return err
+}
+
+// dropPersonal ends the personal GitHub credential of a user who no longer may
+// have one: suspended or removed, an Observer, or a user who acts in no workspace.
+// A user who only lost part of what he had (a lower level that still connects, a
+// shorter list of workspaces that is not empty) keeps it. A user that does not exist
+// loses it too.
+func (r *stdRun) dropPersonal(ctx context.Context, id string) error {
+	u, err := r.users.Get(ctx, id)
+	if err != nil && !errors.Is(err, users.ErrNoUser) {
+		return fmt.Errorf("app: the user %s was not read to settle his GitHub credential: %w", id, err)
+	}
+	if err == nil && u.State == users.Active && users.Can(u.Level, users.ConnectOwnGitHub) && (u.Level == users.Owner || len(u.Workspaces) > 0) {
+		return nil
+	}
+	if rerr := r.personal.Remove(ctx, id); rerr != nil {
+		return fmt.Errorf("app: the personal GitHub credential of %s was not removed: %w", id, rerr)
+	}
+	return nil
 }
 
 // startBot makes the bot, reading its token from the vault: it runs only when the
@@ -312,7 +341,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: client,
-		Router: r.routing, Commands: append(append(append(r.lc.Commands(), r.dc.Commands()...), r.gc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask, Machine: r.env.Machine,
+		Router: r.routing, Commands: append(append(append(append(r.lc.Commands(), r.dc.Commands()...), r.gc.Commands()...), r.routing.Commands()...), r.gh.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask, Machine: r.env.Machine,
 		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.gc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions(), r.stall.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
@@ -328,6 +357,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.lc.Bind(bot)
 	r.dc.Bind(bot)
 	r.gc.Bind(bot)
+	r.gh.Bind(bot, ctx)
 	r.dg.Bind(bot)
 	r.routing.Bind(bot)
 	r.replies.Bind(bot)
@@ -391,6 +421,7 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		classes.RequestPR:           lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
 		classes.RequestMerge:        lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
 		classes.RequestRepoSettings: lateSink{func() chain.Sink { return soft(r.settings.Load()) }, r.alert.OwnerAlert},
+		classes.RequestAgentsMD:     szDecisions{r},
 	}
 	for t, s := range o.ChainSinks { // a test that gives its own keeps it
 		sinks[t] = s
