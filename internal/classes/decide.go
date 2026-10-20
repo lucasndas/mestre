@@ -106,6 +106,27 @@ type GitState interface {
 	Committed(ctx context.Context, worktree string, all bool) ([]string, error)
 }
 
+// CommitState is what a decision on a commit needs of the git state, read at
+// the moment of the decision.
+type CommitState struct {
+	// Branch is the branch checked out; BranchErr is why it is not known
+	// (detached, unreadable), and Branch is then empty.
+	Branch    string
+	BranchErr error
+	// Files are the paths the next commit takes (see GitState.Committed).
+	Files []string
+}
+
+// CommitStater is the part of a GitState that answers the branch and the
+// files of a commit in one reading (one git process). The decision uses it
+// when the GitState has it, and asks Branch and Committed otherwise; the
+// answer is the same. An implementation must read the real state each time:
+// the index at the moment of the decision is what the decision judges, so it
+// is never kept between decisions.
+type CommitStater interface {
+	CommitState(ctx context.Context, worktree string, all bool) (CommitState, error)
+}
+
 // TableScripts is the part of a GitState that tells a script of the
 // repository from one created or changed at the table, for the risk of
 // running it (docs/classes/classificacao-de-risco.md#sinais-de-risco). With
@@ -496,6 +517,29 @@ type evaluator struct {
 	// analysed (a prefix, env): a git that runs under either is a fixed denial
 	// (gitenv.go).
 	homeSet, homeScope string
+	// commitStates are the readings of the git state this one decision made
+	// (by all): the analysis may reach the same git commit more than once
+	// (the two readings of a line on Windows), and the decision reads the
+	// real state once. It lives and dies with the decision.
+	commitStates map[bool]commitReading
+}
+
+type commitReading struct {
+	state CommitState
+	err   error
+}
+
+// commitState reads the branch and the files of a commit once per decision.
+func (e *evaluator) commitState(cs CommitStater, all bool) (CommitState, error) {
+	if r, ok := e.commitStates[all]; ok {
+		return r.state, r.err
+	}
+	state, err := cs.CommitState(e.ctx, e.env.Worktree, all)
+	if e.commitStates == nil {
+		e.commitStates = map[bool]commitReading{}
+	}
+	e.commitStates[all] = commitReading{state, err}
+	return state, err
 }
 
 func newEvaluator(ctx context.Context, env Env, r *Rules, ev providers.Event, degraded bool) *evaluator {
