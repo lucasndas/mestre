@@ -222,7 +222,7 @@ func (s *Service) launch(ctx context.Context, c Character, p placement, resumed 
 	}
 	term := terminalID(c, resumed)
 	cmd := StartCommand{Character: c.ID, Terminal: term, Kind: c.Kind, Request: req, Resumed: resumed}
-	if resumed && (c.ProviderSessionID == "" || c.Role == RoleGrandMaster) {
+	if resumed && (c.ProviderSessionID == "" || c.Role == RoleGrandMaster || c.Role == RoleTableMaster) {
 		cmd.ResumeMessage = s.resumeMessage(ctx, c)
 	}
 	res, err := s.o.Machines.Start(ctx, c.Machine, cmd)

@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
 )
 
 func (w *world) acceptance(live bool) quests.Acceptance {
@@ -101,6 +104,71 @@ func TestACriterionTakenOutOfTheIssueIsNotAskedWhenTheBodyIsReadAndAFailingReadS
 	w.hub.fail = true
 	if got, err := w.acceptance(true).Unproven(w.ctx, w.slug+"/"+w.table.ID); err == nil || len(got) != 0 {
 		t.Errorf("GitHub failed: %v, %v; want an error", got, err)
+	}
+}
+
+// The count of the fix missions includes the ones that were cancelled and the
+// first mission of an issue the engine made; the missions of another table do
+// not count, nor are they asked for in this one.
+func TestTheLimitCountsCancelledMissionsAndEngineMadeIssuesButNotAnotherTable(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{epics: []int{43}})
+	first := w.run(w.create("name: Livre\nsteps:\n  - {id: dev, sheet: Dev Claude}\n")) // the engine makes its issue
+	n := w.quest(first.ID).Issue
+	if n == 0 {
+		t.Fatal("the engine made no issue for the first mission")
+	}
+	other, err := w.orc.Tables.Open(w.ctx, tables.OpenRequest{By: w.gm, Epic: 43})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a mission of another table on a number that happens to be the same
+	if _, err := w.orc.Quests.Create(w.ctx, quests.CreateRequest{Workspace: w.slug, Table: other.Table.ID, Data: []byte(fixQuest("De outra mesa", n)), Designer: other.Master.ID}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 3; i++ {
+		v := w.create(fixQuest(fmt.Sprintf("Correção %d", i), n))
+		if i == 1 {
+			if _, err := w.orc.Quests.Cancel(w.ctx, v.ID, "não serve"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := w.orc.Quests.Create(w.ctx, quests.CreateRequest{Workspace: w.slug, Table: w.table.ID, Data: []byte(fixQuest("Correção 4", n)), Designer: w.master.ID}); !errors.Is(err, quests.ErrCorrectionLimit) {
+		t.Fatalf("the fourth fix mission = %v, want the limit", err)
+	}
+	// nothing is asked of another table whose missions did not complete
+	if got, err := w.acceptance(true).Unproven(w.ctx, w.slug+"/"+other.Table.ID); err != nil || len(got) != 0 {
+		t.Errorf("another table: %v, %v", got, err)
+	}
+}
+
+// Two creations at once cannot both take the last place: the check runs in the
+// transaction that inserts the mission.
+func TestTheLastFixMissionGoesToOnlyOneOfSeveralCreationsAtOnce(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	n := w.issueOf(criteriaBody)
+	w.run(w.create(proofQuest(n)))
+	w.create(fixQuest("Correção 1", n))
+	w.create(fixQuest("Correção 2", n))
+	var made atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := w.orc.Quests.Create(w.ctx, quests.CreateRequest{Workspace: w.slug, Table: w.table.ID, Data: []byte(fixQuest(fmt.Sprintf("Concorrente %d", i), n)), Designer: w.master.ID})
+			if err == nil {
+				made.Add(1)
+			} else if !errors.Is(err, quests.ErrCorrectionLimit) {
+				t.Errorf("create %d: %v", i, err)
+			}
+		}()
+	}
+	wg.Wait()
+	if made.Load() != 1 {
+		t.Errorf("%d creations took the last place, want 1", made.Load())
 	}
 }
 

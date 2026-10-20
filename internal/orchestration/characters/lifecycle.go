@@ -741,6 +741,13 @@ func (s *Service) resumeMessage(ctx context.Context, c Character) string {
 			b.WriteString("\n\n" + brief)
 		}
 	}
+	if c.Role == RoleTableMaster && s.o.TableBrief != nil {
+		if brief, err := s.o.TableBrief.BriefTable(ctx, c); err != nil {
+			s.log.Warn("characters: the state of the table was not read for the resumption message", "workspace", c.Workspace, "table", c.Table, "err", err)
+		} else if brief != "" {
+			b.WriteString("\n\n" + brief)
+		}
+	}
 	return b.String()
 }
 

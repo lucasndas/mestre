@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -32,6 +33,10 @@ func TestAnIssueIsTheTablesOnlyWhenTheEngineRegisteredItForThatTable(t *testing.
 			t.Fatal(err)
 		}
 	}
+	if err := (tables.Store{DB: db}).Insert(ctx, tables.Table{Workspace: "meu-app", ID: "42-login", Epic: 42, EpicTitle: "Login", Branch: "epico/42-login", BaseBranch: "main", State: tables.StateWorking,
+		CreatedAt: clk.Now(), UpdatedAt: clk.Now()}); err != nil {
+		t.Fatal(err)
+	}
 	owner := issueOwner{db: db, clk: clk}
 	for _, c := range []struct {
 		workspace, table string
@@ -43,6 +48,8 @@ func TestAnIssueIsTheTablesOnlyWhenTheEngineRegisteredItForThatTable(t *testing.
 		{"meu-app", "42-login", 99, false}, // nobody's
 		{"outro", "42-login", 51, false},   // a workspace that does not exist
 		{"meu-app", "43-outra", 52, true},
+		{"meu-app", "42-login", 42, true},  // the epic, which the engine does not register
+		{"meu-app", "43-outra", 42, false}, // but only for its own table
 	} {
 		got, err := owner.Owns(ctx, c.workspace, c.table, c.issue)
 		if err != nil || got != c.want {
