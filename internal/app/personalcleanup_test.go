@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 	"errors"
+	"github.com/lucasndas/mestre/pkg/clock"
 	"runtime"
 	"strings"
 	"testing"
@@ -84,9 +85,11 @@ func TestTheWaitThatReplacedAnotherIsStillTheOneThatTheRemovalOfTheUserCancels(t
 	}
 	done := make(chan struct{})
 	go func() { w.run.gh.Wait(); close(done) }()
+	tm := clock.Real{}.NewTimer(10 * time.Second)
+	defer tm.Stop()
 	select {
 	case <-done:
-	case <-time.After(10 * time.Second):
+	case <-tm.C():
 		t.Fatal("the wait of a user who lost the right was not cancelled")
 	}
 }
