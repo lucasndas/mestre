@@ -30,13 +30,34 @@ type ApprovedSource interface {
 
 // ErrNoCredential is what Personal answers for a person without a personal
 // credential, or whose credential expired: nothing is done in her name.
-var ErrNoCredential = errors.New("approvals: the user has no GitHub credential in use")
+var ErrNoCredential = github.ErrNoCredential
 
 // Personal gives the client of a person acting as herself on GitHub, with her
 // user access token (docs/github/aprovacao-no-github.md#credencial-pessoal-user-access-token-pelo-device-flow).
 // A suspended or removed user, a missing or expired credential is ErrNoCredential.
 type Personal interface {
 	Client(ctx context.Context, userID string) (ReviewClient, error)
+}
+
+// PersonalSource is the personal credentials of the users (*github.Personal).
+type PersonalSource interface {
+	Client(ctx context.Context, userID string) (*github.REST, error)
+}
+
+var _ PersonalSource = (*github.Personal)(nil)
+
+// PersonalCredentials is the Personal over the credentials of the users.
+type PersonalCredentials struct{ Source PersonalSource }
+
+var _ Personal = PersonalCredentials{}
+
+// Client implements Personal.
+func (p PersonalCredentials) Client(ctx context.Context, userID string) (ReviewClient, error) {
+	c, err := p.Source.Client(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // Reviewers tells who the repository requires to approve a PR: the logins on
