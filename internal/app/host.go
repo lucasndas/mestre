@@ -177,12 +177,14 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}}
 	if dc, ok := integ.(interface{ DecreesChanged(func(context.Context)) }); ok && opts.ChainRulesPublisher != nil {
 		// the decrees in force are part of the effective rules: a decree made,
-		// revoked or suspended reaches the hooks without waiting for a restart
-		pub := opts.ChainRulesPublisher
-		dc.DecreesChanged(func(ctx context.Context) {
-			if err := pub.PublishAll(ctx); err != nil {
-				e.log.Warn("app: the effective rules were not sent after a change of the decrees", "err", err)
-			}
+		// revoked or suspended reaches the hooks without waiting for a restart;
+		// a publication that fails is retried by the loop of the period, and the
+		// callback belongs to the period (nothing is told to one that ended)
+		rep := &rulesRepublisher{pub: opts.ChainRulesPublisher, clk: e.clk, log: e.log}
+		dc.DecreesChanged(rep.Changed)
+		orc.Loops = append(orc.Loops, func(ctx context.Context) error {
+			defer dc.DecreesChanged(nil)
+			return rep.Loop(ctx, rulesRetryEvery)
 		})
 	}
 	if q := hostDecreeUses(integ, orc, e.clk, e.log.Warn); q != nil {

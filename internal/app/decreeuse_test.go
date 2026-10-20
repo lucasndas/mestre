@@ -6,8 +6,10 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -510,5 +512,90 @@ func TestADecreeQueueThatIsFullDropsTheUseWithAWarning(t *testing.T) {
 	}
 	if log.count() != 3 {
 		t.Fatalf("warnings = %d; want 3 dropped uses", log.count())
+	}
+}
+
+// flakyPublisher fails while fail is set and signals each attempt.
+type flakyPublisher struct {
+	fail     atomic.Bool
+	attempts chan bool
+	ctxErrs  chan error
+}
+
+func (p *flakyPublisher) PublishAll(ctx context.Context) error {
+	p.ctxErrs <- ctx.Err()
+	failed := p.fail.Load()
+	p.attempts <- failed
+	if failed {
+		return errors.New("tower away")
+	}
+	return nil
+}
+
+func TestAFailedPublicationOfTheRulesIsRetriedByTheLoopWithAContextOfItsOwn(t *testing.T) {
+	t.Parallel()
+	w := newDecreeWorld(t)
+	pub := &flakyPublisher{attempts: make(chan bool, 64), ctxErrs: make(chan error, 64)}
+	pub.fail.Store(true)
+	rep := &rulesRepublisher{pub: pub, clk: w.clk, log: slog.New(slog.DiscardHandler)}
+	// the context of the change already ended (a handler that returned): the publication still has a live one
+	ended, cancel := context.WithCancel(w.ctx)
+	cancel()
+	rep.Changed(ended)
+	if err := <-pub.ctxErrs; err != nil {
+		t.Fatalf("the publication ran on the context of the change: %v", err)
+	}
+	if !<-pub.attempts || !rep.Dirty() {
+		t.Fatal("a failed publication left no flag to retry")
+	}
+	ctx, stop := context.WithCancel(w.ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); _ = rep.Loop(ctx, rulesRetryEvery) }()
+	defer func() { stop(); <-done }()
+	pub.fail.Store(false)
+	for rep.Dirty() { // the ticker may not be armed yet: advance until the retry happens
+		w.clk.Advance(rulesRetryEvery)
+		runtime.Gosched()
+	}
+	if failed := <-pub.attempts; failed {
+		t.Fatal("the retry ran while the publication still failed")
+	}
+}
+
+func TestAPromotionAndTheTransferOfTheOwnerPublishTheEffectiveRulesAgain(t *testing.T) {
+	t.Parallel()
+	w := newDecreeWorld(t)
+	var n atomic.Int32
+	w.run.DecreesChanged(func(context.Context) { n.Add(1) })
+	ana := w.person("Ana", users.Approver)
+	lvl := users.Administrator
+	if _, err := w.run.users.Edit(w.ctx, w.owner, ana.ID, users.Edit{Level: &lvl}); err != nil {
+		t.Fatal(err)
+	}
+	if n.Load() != 1 {
+		t.Fatalf("published %d times after a promotion, want 1", n.Load())
+	}
+	startPIN, err := w.run.users.StartPIN(w.ctx, w.owner.ID, users.ActionStartTransfer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.run.users.CheckPIN(w.ctx, startPIN.ID, decreePIN); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.run.users.StartTransfer(w.ctx, w.owner, w.admin.ID, startPIN.ID); err != nil {
+		t.Fatal(err)
+	}
+	acceptPIN, err := w.run.users.StartPIN(w.ctx, w.admin.ID, users.ActionAcceptTransfer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.run.users.CheckPIN(w.ctx, acceptPIN.ID, decreePIN); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.run.users.AcceptTransfer(w.ctx, w.admin, acceptPIN.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n.Load() != 2 {
+		t.Fatalf("published %d times after the transfer, want 2", n.Load())
 	}
 }

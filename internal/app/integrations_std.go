@@ -297,6 +297,10 @@ func (a lateApprovals) InvalidateBy(ctx context.Context, id string) error {
 	return err
 }
 
+// LevelsChanged is told when the level of a user changed without narrowing what
+// he may do (a promotion, the transfer of the post of Owner).
+func (a lateApprovals) LevelsChanged(ctx context.Context) { a.r.decrees.LevelsChanged(ctx) }
+
 // dropPersonal ends the personal GitHub credential of a user who no longer may
 // have one: suspended or removed, an Observer, or a user who acts in no workspace.
 // A user who only lost part of what he had (a lower level that still connects, a

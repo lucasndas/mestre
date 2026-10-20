@@ -112,6 +112,11 @@ func (s *Service) fire(ctx context.Context) {
 	}
 }
 
+// LevelsChanged tells that the level of a user changed (a promotion, a transfer
+// of the post of Owner): the level that counts of each decree is the one its
+// author has now, so the effective rules are published again.
+func (s *Service) LevelsChanged(ctx context.Context) { s.fire(ctx) }
+
 // fireAsync is fire off the path of the caller (the use of an exception in the
 // answer of a hook): the publication goes on its own and is not cancelled with
 // the caller.

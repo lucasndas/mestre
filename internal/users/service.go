@@ -282,7 +282,7 @@ func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, e
 	if e.Level != nil && !e.Level.Valid() {
 		return User{}, fmt.Errorf("%w: %q", ErrBadLevel, *e.Level)
 	}
-	narrowed := false
+	narrowed, relevel := false, false
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		if _, err := s.actor(ctx, tx, by, ManageUsers); err != nil {
 			return err
@@ -314,6 +314,7 @@ func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, e
 		}
 		if e.Level != nil && *e.Level != cur.Level {
 			narrowed = rank(*e.Level) < rank(cur.Level)
+			relevel = true
 			if _, err := tx.ExecContext(ctx, `UPDATE users SET level = ?, updated_at = ? WHERE id = ? AND level <> 'owner' AND ? <> 'owner'`, string(*e.Level), now, id, string(*e.Level)); err != nil {
 				return err
 			}
@@ -345,8 +346,19 @@ func (s *Service) Edit(ctx context.Context, by User, id string, e Edit) (User, e
 		if err := s.invalidate(ctx, id); err != nil {
 			return User{}, err
 		}
+	} else if relevel {
+		s.levelsChanged(ctx) // a promotion changes what the decrees of the user weigh
 	}
 	return s.Get(ctx, id)
+}
+
+// levelsChanged tells whoever keeps what depends on the levels (the effective
+// rules, which carry the level that counts of each decree) that a level changed:
+// optional on the Approvals, and a failure is its own to retry.
+func (s *Service) levelsChanged(ctx context.Context) {
+	if lc, ok := s.o.Approvals.(interface{ LevelsChanged(ctx context.Context) }); ok {
+		lc.LevelsChanged(ctx)
+	}
 }
 
 func (s *Service) invalidate(ctx context.Context, id string) error {
