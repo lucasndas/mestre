@@ -142,7 +142,7 @@ func TestTheGrandMasterRevokesARuleOfTheSummaryAndPausesTheAutonomyOfTheTable(t 
 func (w *world) repoSettings(about string) int64 {
 	w.t.Helper()
 	id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: w.slug, About: about,
-		Target: json.RawMessage(`{"ruleset":"main"}`)})
+		Target: json.RawMessage(`{"kind":"ruleset","repo":"lucas/Meu_App","branch":"main"}`)})
 	if err != nil {
 		w.t.Fatal(err)
 	}
