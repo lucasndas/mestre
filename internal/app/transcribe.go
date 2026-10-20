@@ -159,7 +159,7 @@ func (a *towerAudio) transcribe(ctx context.Context, wav []byte, lang string) (a
 // the connection are handled one after the other.
 func (e *Engine) registerTowerTranscription(ctx context.Context, router *protocol.Router, audio *towerAudio) {
 	router.HandleFunc(protocol.TypeTranscribeRequest, func(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
-		if !e.fromCitadel(m.Peer) {
+		if m.Peer.ID == "" || !e.fromCitadel(m.Peer) {
 			return nil, protocol.NewError(protocol.CodeForbidden, "transcribe.request: only the Citadel gives this command")
 		}
 		p, ok := m.Payload.(*protocol.TranscribeRequest)
