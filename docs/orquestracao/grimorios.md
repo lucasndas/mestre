@@ -1,6 +1,6 @@
 # Grimórios
 
-> **Assunto:** salvar um pedaço do canvas (time, classes, pergaminhos, conexões e missões) e restaurá-lo em mesa de qualquer workspace · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** salvar um pedaço do canvas (time, classes, pergaminhos, conexões e missões) e restaurá-lo em mesa de qualquer workspace · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -64,7 +64,7 @@ O painel lista os grimórios de todos os workspaces (nome, origem, autor, data, 
 - **CA-GRIM-01** · *rápida* — **Dado** uma seleção com dois personagens, um pergaminho, uma conexão manual e uma missão, **quando** é salva, **então** o documento contém esses elementos e nenhum dado de sessão, fila ou espera.
 - **CA-GRIM-02** · *rápida* — **Dado** um grimório com classe do workspace A ausente no workspace B, **quando** é restaurado em mesa de B, **então** o usuário recebe o aviso com as três opções e, escolhendo "copiar como classe da mesa", a classe aparece em `.mestre/mesas/<mesa>/classes/`.
 - **CA-GRIM-03** · *rápida* — **Dado** uma classe copiada que excede o teto de B, **quando** se tenta restaurar, **então** é recusado listando o item excedente e nada é criado.
-- **CA-GRIM-04** · *rápida* — **Dado** um personagem "Dev" já existente no destino, **quando** se restaura um grimório com "Dev", **então** o novo se chama "Dev (2)" e o resumo de confirmação mostra isso.
+- **CA-GRIM-04** · *completa* — **Dado** um personagem "Dev" já existente no destino, **quando** se restaura um grimório com "Dev", **então** o novo se chama "Dev (2)" e o resumo de confirmação mostra isso.
 - **CA-GRIM-05** · *completa* — **Dado** um grimório válido, **quando** é restaurado, **então** personagens nascem conectados conforme o salvo, pergaminhos têm o conteúdo salvo e a missão existe em `draft` com issue sob o épico de destino.
 - **CA-GRIM-06** · *pesada* — **Dado** o painel, **quando** salvo um grimório de uma mesa e restauro em outra mesa, **então** o time volta funcionando e uma missão restaurada roda (MVP-11).
 - **CA-GRIM-07** · *rápida* — **Dado** um pergaminho do grimório com um separador de linha do Unicode no nome, seguido de `- personagens: …` e `- não foi possível fazer: …`, **quando** o grimório é restaurado, **então** o relatório ao Mestre da mesa tem uma só linha de pergaminhos e nenhuma das linhas falsas, porque o nome vem entre aspas na própria linha.
