@@ -46,6 +46,92 @@ type Settings struct {
 	// queue: more open requests than the first, or the oldest past the
 	// second times the deadline of the level (cadeia.alerta_fila).
 	QueueAlertOpen, QueueAlertFactor int
+	// Summary is the periodic summary of what the agents decided (the file's
+	// `resumo`, docs/aprovacoes/resumo-e-sugestoes.md).
+	Summary SummarySettings
+}
+
+// SummarySettings are the `resumo` of the policy file.
+type SummarySettings struct {
+	// Frequency is diario, semanal or desligado; At the "HH:MM" of the
+	// workspace's time zone.
+	Frequency string
+	At        string
+	// For are the people the summary goes to: `dono`, `administradores` or the
+	// name of a user.
+	For []string
+	// Sample is how many approved actions of each level are drawn for review,
+	// SuggestAfter how many approvals of one pattern in 7 days make a suggestion.
+	Sample, SuggestAfter int
+}
+
+// The frequencies of the summary.
+const (
+	SummaryDaily  = "diario"
+	SummaryWeekly = "semanal"
+	SummaryOff    = "desligado"
+)
+
+// DefaultSummary is the content of the file when it says nothing of `resumo`.
+func DefaultSummary() SummarySettings {
+	return SummarySettings{Frequency: SummaryDaily, At: "18:00", For: []string{"dono"}, Sample: 5, SuggestAfter: 3}
+}
+
+type summaryYAML struct {
+	Frequencia  string   `yaml:"frequencia"`
+	Horario     string   `yaml:"horario"`
+	Para        []string `yaml:"para"`
+	Amostra     *int     `yaml:"amostra"`
+	SugerirApos *int     `yaml:"sugerir_apos"`
+}
+
+// ParseSummary reads the `resumo` section: absent keys are the default; an
+// unknown frequency, a time that is not HH:MM, an empty list of recipients or a
+// number out of range (amostra 0 to 50, sugerir_apos 2 to 20) make the whole file invalid.
+func ParseSummary(data []byte) (SummarySettings, error) {
+	out := DefaultSummary()
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	var y summaryYAML
+	if err := dec.Decode(&y); err != nil && !errors.Is(err, io.EOF) {
+		return SummarySettings{}, &SectionError{Item: "resumo", Reason: err.Error()}
+	}
+	if y.Frequencia != "" {
+		if !slices.Contains([]string{SummaryDaily, SummaryWeekly, SummaryOff}, y.Frequencia) {
+			return SummarySettings{}, &SectionError{Item: "resumo.frequencia", Reason: "precisa de diario, semanal ou desligado"}
+		}
+		out.Frequency = y.Frequencia
+	}
+	if y.Horario != "" {
+		if _, err := time.Parse("15:04", y.Horario); err != nil {
+			return SummarySettings{}, &SectionError{Item: "resumo.horario", Reason: "precisa de HH:MM, como 18:00"}
+		}
+		out.At = y.Horario
+	}
+	if y.Para != nil {
+		if len(y.Para) == 0 {
+			return SummarySettings{}, &SectionError{Item: "resumo.para", Reason: "a lista vazia não manda o resumo a ninguém; use frequencia: desligado"}
+		}
+		for _, p := range y.Para {
+			if strings.TrimSpace(p) == "" {
+				return SummarySettings{}, &SectionError{Item: "resumo.para", Reason: "nome vazio"}
+			}
+		}
+		out.For = slices.Clone(y.Para)
+	}
+	if a := y.Amostra; a != nil {
+		if *a < 0 || *a > 50 {
+			return SummarySettings{}, &SectionError{Item: "resumo.amostra", Reason: "vai de 0 a 50"}
+		}
+		out.Sample = *a
+	}
+	if n := y.SugerirApos; n != nil {
+		if *n < 2 || *n > 20 {
+			return SummarySettings{}, &SectionError{Item: "resumo.sugerir_apos", Reason: "vai de 2 a 20"}
+		}
+		out.SuggestAfter = *n
+	}
+	return out, nil
 }
 
 // peopleDeadline is the time of the people for a request of a type.
@@ -77,7 +163,7 @@ func DefaultSettings() Settings {
 	return Settings{AgentDeadline: 2 * time.Minute, GrandMasterDeadline: 10 * time.Minute, PeopleDeadline: 24 * time.Hour,
 		PeopleDeadlines: map[classes.RequestType]time.Duration{classes.RequestClassPermission: 2 * time.Hour},
 		TempRuleMax:     24 * time.Hour, MesaDecides: slices.Clone(classes.DefaultMesaGroups), DenialsToPause: 3,
-		SummaryEvery: 30 * time.Minute, QueueAlertOpen: 10, QueueAlertFactor: 2}
+		SummaryEvery: 30 * time.Minute, QueueAlertOpen: 10, QueueAlertFactor: 2, Summary: DefaultSummary()}
 }
 
 // WithDefaults fills what the policy file leaves out with the defaults.
@@ -106,6 +192,9 @@ func (s Settings) WithDefaults() Settings {
 	}
 	if s.SummaryEvery <= 0 {
 		s.SummaryEvery = d.SummaryEvery
+	}
+	if s.Summary.Frequency == "" {
+		s.Summary = d.Summary
 	}
 	if s.QueueAlertOpen <= 0 {
 		s.QueueAlertOpen = d.QueueAlertOpen
