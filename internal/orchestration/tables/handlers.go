@@ -306,8 +306,28 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 			fmt.Fprintf(&text, "\n%s", queue)
 		}
 	}
+	data["proofs"] = s.proofsOf(ctx, t)
 	data["text"] = strings.TrimRight(text.String(), "\n")
 	return localchan.OK(data)
+}
+
+// proofsOf is the proof of each criterion of the missions of the table, as the
+// engine has it: whether it checked the item on the issue and where the proof
+// came from ("verificada pelo motor" or "declarada por <personagem>"). It is
+// the only thing that says a criterion is proved: the body of an issue is edited
+// by anyone.
+func (s *Service) proofsOf(ctx context.Context, t Table) any {
+	if s.o.Proofs == nil {
+		return []ProofState{}
+	}
+	ps, err := s.o.Proofs.Of(ctx, t.Workspace, t.ID)
+	if err != nil {
+		return map[string]string{"error": err.Error()}
+	}
+	if ps == nil {
+		ps = []ProofState{}
+	}
+	return ps
 }
 
 // epicReadTimeout is how long `table status` waits for the epic.
@@ -319,7 +339,7 @@ const epicReadTimeout = 10 * time.Second
 // criteria_error says why: the Grand Master must not take that for an epic
 // without criteria.
 func (s *Service) epicOf(ctx context.Context, t Table) map[string]any {
-	e := map[string]any{"number": t.Epic, "title": t.EpicTitle, "criteria": []string{}}
+	e := map[string]any{"number": t.Epic, "title": CleanText(t.EpicTitle), "criteria": []string{}}
 	if err := s.gate("table status"); err != nil {
 		e["criteria_error"] = err.Error()
 		return e
@@ -332,9 +352,14 @@ func (s *Service) epicOf(ctx context.Context, t Table) map[string]any {
 		return e
 	}
 	if epic.Title != "" {
-		e["title"] = clean(epic.Title)
+		e["title"] = CleanText(epic.Title)
 	}
-	e["criteria"] = ParseCriteria(epic.Body)
+	c, err := ParseCriteria(epic.Body)
+	if err != nil {
+		e["criteria_error"] = err.Error()
+		return e
+	}
+	e["criteria"] = c
 	return e
 }
 

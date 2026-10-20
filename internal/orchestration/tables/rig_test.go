@@ -589,6 +589,8 @@ type worldOpts struct {
 	settings tables.Settings
 	// deps replaces the absence of dependencies between the epics.
 	deps tables.Dependencies
+	// proofs says which criteria of the missions are proved.
+	proofs tables.Proofs
 }
 
 func newWorld(t *testing.T, o worldOpts) *world {
@@ -646,6 +648,7 @@ func newWorld(t *testing.T, o worldOpts) *world {
 	}
 	opts.Settings = o.settings
 	opts.Dependencies = o.deps
+	opts.Proofs = o.proofs
 	w.svc, err = tables.New(opts)
 	if err != nil {
 		t.Fatal(err)
