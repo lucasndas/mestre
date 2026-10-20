@@ -44,6 +44,10 @@ type Handler struct {
 	BlockedBy func(ctx context.Context, workspace string, epic int) ([]int, error)
 	// Owner is the name of the Owner, who acts on a credential.
 	Owner func(ctx context.Context, workspace string) string
+	// Evidence is what the engine can show of the table that stopped: built
+	// from its last test that failed (TestEvidence); "" when it has none, and
+	// then the notice says it has no verified evidence. Nil: none does.
+	Evidence func(ctx context.Context, workspace, mesa string) string
 }
 
 // Register registers the command.
@@ -137,6 +141,9 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 				n.BlockedBy = append(n.BlockedBy, strconv.Itoa(e))
 			}
 		}
+	}
+	if n.Mesa != "" && h.Evidence != nil && (motive == Credential || motive == Permission) {
+		n.Evidence = h.Evidence(ctx, who.Workspace, n.Mesa)
 	}
 	var owner string
 	if h.Owner != nil {

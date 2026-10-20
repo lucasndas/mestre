@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/digest"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
@@ -210,10 +212,20 @@ func TestAReplyAboutAMesaCarriesTheMesaInTheHeaderAndInTheOrigin(t *testing.T) {
 	if n.Origin.Table != "42-checkout" || n.Origin.Channel != inbox.ChannelTelegram || n.Origin.User != u.ID || n.Origin.Message == "" || n.Origin.Conversation == "" || n.Origin.RepliedTo == "" {
 		t.Fatalf("origin %+v", n.Origin)
 	}
-	item := inbox.Item{ID: "m7", Workspace: n.Workspace, Kind: n.Kind, Sender: n.Sender, Text: n.Text, Origin: n.Origin}
-	want := "[Mestre · user · de Ana (Administrador) · via Telegram · mesa 42-checkout · m7]"
-	if item.Header() != want {
+	// what reaches the Grand Master is the item kept by the inbox, with its header
+	if _, err := w.db.Writer().ExecContext(w.ctx, `INSERT OR IGNORE INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/x.git', 'main', 'active', '', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	item, err := (&inbox.Store{DB: w.db}).Insert(w.ctx, n, w.clk.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "[Mestre · user · de Ana (Administrador) · via Telegram · mesa 42-checkout · " + item.ID + "]"; item.Header() != want {
 		t.Fatalf("header %q, want %q", item.Header(), want)
+	}
+	if item.Origin == nil || item.Origin.Table != "42-checkout" || item.Origin.Channel != inbox.ChannelTelegram {
+		t.Fatalf("the origin kept: %+v", item.Origin)
 	}
 	if n.Text != "pode mesclar quando passar" {
 		t.Fatalf("the text was changed: %q", n.Text)
@@ -311,5 +323,119 @@ func TestTheMemoryOfTheMessagesOfTheBotLasts180Days(t *testing.T) {
 	w.reply(tg, "e isso?", id)
 	if got := w.delivered.all(); len(got) != 1 || got[0].Workspace != "loja" {
 		t.Fatalf("an old reply went to %+v; want the active workspace", got)
+	}
+}
+
+// CA-ROTA-06, the other messages of the list: the approval of a mesa, the
+// notice that blocks, the notice of quota and the message of progress start
+// with the header of where they come from, and a reply to who is no user says
+// nothing about the Mestre.
+func TestTheApprovalOfAMesaTheBlockNoticeTheQuotaNoticeAndTheProgressStartWithTheirHeaders(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{approvals: true, ownerAlerts: true, block: true})
+	dg := &telegram.DigestChannel{Users: w.users}
+	dg.Bind(w.bot)
+	tg := w.pairOwnerTelegram()
+	chatTexts := func() []string {
+		var out []string
+		for _, s := range w.sent("sendMessage") {
+			if s.ChatID == tg.ID {
+				out = append(out, s.Text)
+			}
+		}
+		return out
+	}
+	startsWith := func(marker, header string) {
+		t.Helper()
+		var seen int
+		for _, text := range chatTexts() {
+			if !strings.Contains(text, marker) {
+				continue
+			}
+			seen++
+			if !strings.HasPrefix(text, header+"\n") {
+				t.Errorf("%s: the message starts with %q, want the header %q", marker, text, header)
+			}
+		}
+		if seen == 0 {
+			t.Errorf("%s: no message to the user", marker)
+		}
+	}
+
+	// the approval of a mesa: workspace · mesa, in the question and in its edit
+	req := chain.Request{ID: 21, Workspace: "loja", Table: "42-checkout", Type: classes.RequestExtraCost, State: chain.Open, Level: chain.Level{Kind: chain.LevelPeople}}
+	if err := w.chain.Add(w.ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.flow.Ask(w.ctx, chain.PeopleQuestion{Request: req, Text: "Posso rodar npm install lodash?", Approvals: 1, MinLevel: classes.LevelApprover, Answers: allAnswers}); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	startsWith("npm install lodash", "<b>loja · Mesa #42 checkout</b>")
+	msg, keys := w.buttons(tg)
+	w.click(tg, msg, keys["Aprovar agora"])
+	var edited string
+	for _, s := range w.sent("editMessageText") {
+		if s.ChatID == tg.ID {
+			edited = s.Text
+		}
+	}
+	if !strings.HasPrefix(edited, "<b>loja · Mesa #42 checkout</b>\n") {
+		t.Errorf("the edit of the approval of a mesa starts with %q", edited)
+	}
+
+	// the notice that blocks, of a mesa and of a workspace
+	if _, _, err := w.bc.Notify(w.ctx, stripeNotice("loja")); err != nil {
+		t.Fatal(err)
+	}
+	n := stripeNotice("blog")
+	n.Mesa = ""
+	if _, _, err := w.bc.Notify(w.ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	var blocks int
+	for _, text := range chatTexts() {
+		if !strings.Contains(text, "falta a chave STRIPE_TEST_KEY") {
+			continue
+		}
+		blocks++
+		if !strings.HasPrefix(text, "<b>loja · Mesa #42 checkout</b>\n") && !strings.HasPrefix(text, "<b>blog</b>\n") {
+			t.Errorf("the notice that blocks starts with %q", text)
+		}
+	}
+	if blocks != 2 {
+		t.Errorf("%d notices that block reached the Owner, want 2", blocks)
+	}
+
+	// the notice of quota is of a workspace, not of the Sistema
+	w.oa.OwnerWorkspaceAlert(w.ctx, "loja", "O limite diário do Claude passou de 80%.")
+	w.drain()
+	startsWith("passou de 80%", "<b>loja</b>")
+
+	// the message of progress is of the workspace it counts
+	if err := dg.Send(w.ctx, digest.Message{UserID: w.owner.ID, Workspace: "blog", Text: "Progresso do blog: 2 de 3 etapas confirmadas."}); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	startsWith("Progresso do blog", "<b>blog</b>")
+
+	// a reply to who is no user says nothing about the Mestre: no header at all
+	if _, err := w.bot.Send(w.ctx, telegram.Out{ChatID: 999, Text: "Código inválido ou expirado.", Origin: "motor"}); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	var replies int
+	for _, s := range w.sent("sendMessage") {
+		if s.ChatID != 999 {
+			continue
+		}
+		replies++
+		if s.Text != "Código inválido ou expirado." || strings.Contains(s.Text, "<b>") || strings.Contains(s.Text, telegram.SystemHeader) {
+			t.Errorf("the reply to a stranger carries a header: %q", s.Text)
+		}
+	}
+	if replies != 1 {
+		t.Errorf("%d replies to the stranger, want 1", replies)
 	}
 }

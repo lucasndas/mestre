@@ -124,8 +124,12 @@ func Examine(files Files, o ExamineOptions) Examination {
 	} else {
 		c.Permissions = p
 		// the done of a class that verifies needs the branch: the character commits
-		if c.Meta.Done().Verify && p.Git != nil && p.Git.Commit != nil && !*p.Git.Commit {
-			bad(ClassFile+" done_requires", "verify: true pede que a classe commite, e %s tem git.commit: false", PermissionsFile)
+		if c.Meta.Done().Verify {
+			if p.Git != nil && p.Git.Commit != nil && !*p.Git.Commit {
+				bad(ClassFile+" done_requires", "verify: true pede que a classe commite, e %s tem git.commit: false", PermissionsFile)
+			} else if d := commitDenyPattern(p); d != "" {
+				bad(ClassFile+" done_requires", "verify: true pede que a classe commite, e %s nega %q em commands.deny", PermissionsFile, d)
+			}
 		}
 	}
 
@@ -217,4 +221,19 @@ func checkSkills(c *Class, o ExamineOptions, files Files, bad func(string, strin
 			warn(SkillsDir+"/"+d, "a skill não está em `skills` do CLASS.md; não chega ao personagem")
 		}
 	}
+}
+
+// commitDenyPattern is the first commands.deny pattern of the permissions that
+// takes `git commit`, which turns the effective git.commit to deny as much as
+// git.commit: false does ("" when none does).
+func commitDenyPattern(p *Permissions) string {
+	if p.Commands == nil || p.Commands.Deny == nil {
+		return ""
+	}
+	for _, d := range *p.Commands.Deny {
+		if matchText(d, "git commit") {
+			return d
+		}
+	}
+	return ""
 }

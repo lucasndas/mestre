@@ -101,6 +101,10 @@ type Service struct {
 	// verifs are the steps whose verification runs; vwg waits for them.
 	verifs map[string]bool
 	vwg    sync.WaitGroup
+	// reds is the last verification that failed in each table, by
+	// "<workspace>/<table>", until one passes: what the engine has to show as
+	// the evidence of a notice about that table (LastRed).
+	reds map[string]VerifyResult
 
 	// work is the queue of the loop (Run); until it runs, an advance asked for
 	// is made at once, in the call that asked for it.
@@ -137,7 +141,7 @@ func NewService(o Options) (*Service, error) {
 	if o.EscalateAfter <= 0 {
 		o.EscalateAfter = DefaultEscalateAfter
 	}
-	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, finishing: map[string]*sync.Mutex{}, verifs: map[string]bool{}, work: make(chan string, 256)}, nil
+	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, finishing: map[string]*sync.Mutex{}, verifs: map[string]bool{}, reds: map[string]VerifyResult{}, work: make(chan string, 256)}, nil
 }
 
 // Store gives access to the tables.
@@ -425,6 +429,11 @@ func (s *Service) Run(ctx context.Context, id, input string) (Quest, error) {
 		return Quest{}, err
 	}
 	s.appendScroll(ctx, q, s.roundSection(q))
+	if len(crit) == 0 && q.Def.Issue != 0 && q.Issue != 0 && s.o.GitHub != nil {
+		// an issue with no item C<n>: the quest runs without criteria, and the
+		// Master of the table has nothing to check at the acceptance, so he tells the Grand Master
+		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A issue #%d da missão %s não tem nenhum item `- [ ] C<n>`: a missão roda sem critérios, `proof: all` não exige nada e o aceite não terá o que conferir. Avise o Grão-Mestre.", q.Issue, q.Name))
+	}
 	s.link(ctx, q)
 	s.kick(ctx, q.ID)
 	return s.st.Quest(ctx, q.ID)
@@ -712,4 +721,27 @@ func (s *Service) finishLock(id string) *sync.Mutex {
 	s.mu.Unlock()
 	m.Lock()
 	return m
+}
+
+// LastRed is the last verification of the table that failed, if no later one
+// passed: the command, the end of its output and the places in it. The engine
+// builds the evidence of a notice about the table from it (it is kept in
+// memory: after a restart there is none, and the notice says so).
+func (s *Service) LastRed(workspace, table string) (VerifyResult, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.reds[workspace+"/"+table]
+	return r, ok
+}
+
+// noteVerification keeps the outcome of a verification of a table for LastRed.
+func (s *Service) noteVerification(q Quest, res VerifyResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := q.Workspace + "/" + q.Table
+	if res.OK {
+		delete(s.reds, k)
+		return
+	}
+	s.reds[k] = res
 }

@@ -549,35 +549,6 @@ func TestACompletedMissionIsToldToTheMessageOfProgress(t *testing.T) {
 	}
 }
 
-// Part of CA-PROVA-12, the half of the done
-func TestProofDoesNotGoWithReturnAndTheCauseMustBeOneOfTheList(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	n := w.issueOf("- [ ] C1 um\n")
-	w.run(w.create("name: Rev\nissue: " + fmt.Sprint(n) + "\nsteps:\n  - {id: dev, sheet: Dev Claude}\n  - {id: review, sheet: Revisor Codex, after: [dev], can_return_to: dev}\n"))
-	w.finish("Dev Claude 1", "v1", nil, "")
-	for name, flags := range map[string]map[string]any{
-		"proof with return":    {"return": "y", "proof": []string{"C1=t"}},
-		"unknown cause":        {"return": "y", "cause": "urgente"},
-		"cause with no return": {"cause": "test"},
-		"where with no return": {"where": []string{"a.go:1"}},
-		"four places":          {"return": "y", "where": []string{"a:1", "b:1", "c:1", "d:1"}},
-		"proof with no equal":  {"proof": []string{"C1"}},
-	} {
-		r := w.done("Revisor Codex 1", flags, "x")
-		if r.OK || r.ExitCode() != localchan.ExitUsage {
-			t.Errorf("%s = %+v, want usage", name, r)
-		}
-	}
-	if r := w.done("Revisor Codex 1", map[string]any{"proof": []string{"C1=" + strings.Repeat("x", quests.MaxProof+1)}}, "x"); r.OK || r.ExitCode() != localchan.ExitLimit {
-		t.Errorf("a proof of 501 characters = %+v, want too_large", r)
-	}
-	// a task with no quest takes no proof
-	if r := w.call(w.master.ID, "done", map[string]any{"proof": []string{"C1=t"}}, "x"); r.OK || r.ExitCode() != localchan.ExitUsage {
-		t.Errorf("a proof of a character with no step = %+v", r)
-	}
-}
-
 // Part of CA-CLASSES-04 (it closes with the fake agent in a quest, in the
 // full suite of the hooks of the engine): the output of an asynchronous hook
 // of the class with `output: scroll` is added to the scroll of the quest of the

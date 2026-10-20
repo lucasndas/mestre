@@ -84,8 +84,8 @@ done_requires:
 - `--cause` fora da lista, mais de 3 `--where`, ou `--cause`/`--where` sem `--return`: 2 `usage`.
 - Uma verificação por etapa de cada vez: um segundo `done` durante a verificação sai com 7 `verification_running`.
 - A verificação que estoura o `timeout` do comando conta como vermelha, com o motivo "tempo esgotado".
-- `done_requires` desconhecido, com valor fora da lista, ou `verify: true` com `git.commit` efetivo em `deny`: a classe é recusada ao salvar ([classes](../classes/classes.md)).
-- Issue sem nenhum item `C<n>`: a missão roda sem critérios; `proof: all` não exige nada e o aceite do Mestre da mesa não tem o que conferir (ele avisa o Grão-Mestre).
+- `done_requires` desconhecido, com valor fora da lista, ou `verify: true` com `git.commit` efetivo em `deny` (`git.commit: false` ou um `commands.deny` que pega `git commit`): a classe é recusada ao salvar ([classes](../classes/classes.md)).
+- Issue sem nenhum item `C<n>`: a missão roda sem critérios; `proof: all` não exige nada e o aceite do Mestre da mesa não tem o que conferir. Ao rodar a missão, o motor põe um item `system` na caixa do Mestre da mesa pedindo que avise o Grão-Mestre. Os lugares (`--where`, a saída da verificação) são comparados com `/`, sem coluna e sem o prefixo do worktree; no Windows, a unidade e o compartilhamento de rede não distinguem maiúsculas.
 
 ## Critérios de aceite
 

@@ -124,8 +124,17 @@ func policyFileFor(layout workspaces.Layout, tell ownerTeller, log *slog.Logger)
 type chainOwnerAlerts struct{ tell ownerTeller }
 
 func (a chainOwnerAlerts) Notify(ctx context.Context, workspace, text string) error {
+	if t, ok := a.tell.(workspaceTeller); ok && workspace != "" {
+		t.OwnerWorkspaceAlert(ctx, workspace, text) // the header of the message is the workspace's
+		return nil
+	}
 	a.tell.OwnerAlert(ctx, fmt.Sprintf("[%s] %s", workspace, text))
 	return nil
+}
+
+// workspaceTeller is the Owner told about a workspace, with its header.
+type workspaceTeller interface {
+	OwnerWorkspaceAlert(ctx context.Context, workspace, text string)
 }
 
 // userGrimoires says which workspaces a user may use for the grimoires: the
