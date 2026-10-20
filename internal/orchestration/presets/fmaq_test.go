@@ -12,7 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -57,7 +57,7 @@ func (r *results) Latest(_ context.Context, _, profile string, _ providers.ID) (
 func machineWithProfile(t *testing.T, id string, loggedIn bool, conformant *bool) machinesheet.Sheet {
 	t.Helper()
 	ctx := context.Background()
-	db, err := machinedb.Open(ctx, filepath.Join(t.TempDir(), "maquina.db"), store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.OpenMachine(ctx, filepath.Join(t.TempDir(), "maquina.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
