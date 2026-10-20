@@ -202,6 +202,25 @@ func TestAReviewMadeOnGitHubOnlyAnswersTheRequestUnderEveryCondition(t *testing.
 	}
 }
 
+func TestAReviewTheEnginePostedItselfIsNotAnotherVote(t *testing.T) {
+	t.Parallel()
+	r := newReviewsRig(t)
+	r.person("Ana", "ana-dev", users.Approver)
+	req := r.request(openOpts{})
+	r.gh.AddReviewBody(loja, r.pr, "ana-dev", "APPROVED", r.sha, "Aprovado por Ana.\n\n<!-- mestre:op=11111111-2222-3333-4444-555555555555 -->")
+	all, err := r.rest.Reviews(r.ctx, loja, r.pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.deliver(r.event(all[len(all)-1].ID, "ana-dev", "APPROVED"))
+	if r.state(req.ID) != chain.Open {
+		t.Fatalf("the request is %s; the review the engine wrote in the name of a person decided another request", r.state(req.ID))
+	}
+	if got := r.audit(req.ID); len(got) != 1 || !strings.Contains(got[0], "|ignored|") || !strings.Contains(got[0], "próprio Mestre") {
+		t.Fatalf("audit = %q; want the review ignored with its reason", got)
+	}
+}
+
 func TestAReviewThatWasDismissedDoesNotCount(t *testing.T) {
 	t.Parallel()
 	r := newReviewsRig(t)
