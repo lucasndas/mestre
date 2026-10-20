@@ -9,12 +9,14 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/machinesheet"
+	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
@@ -505,6 +507,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	}()
 
 	var integ IntegrationRun
+	var hosted *Orchestration
 	if e.deps.HostOrchestration {
 		if e.deps.Integration != nil {
 			var err error
@@ -537,6 +540,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 				p.usage.close()
 			}
 		}()
+		hosted = orc
 		e.orc.Store(orc) // what the characters of this machine report to
 		defer e.orc.Store(nil)
 		e.reconcileLocal(ctx, orc)
@@ -593,6 +597,15 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 			return current && serving && e.epochs.Citadel() == e.id.MachineID
 		},
 	}
+	if hosted := e.orc.Load(); hosted != nil {
+		// the commits a Tower sends back after a done, received for its machine
+		e.tabs.Store(hosted.Tables)
+		defer e.tabs.Store(nil)
+		pcfg.Xfer = &protocol.XferConfig{
+			Dir:        e.paths.transfers(), // the folder the Replica erases when the machine leaves the Guild
+			Finalizers: map[string]protocol.Finalizer{protocol.KindGitBundle: citadelBundles{&e.tabs}},
+		}
+	}
 	var srv *protocol.Server
 	files, err := e.paths.replicationFiles()
 	if err != nil {
@@ -602,8 +615,17 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	if files != nil {
 		cites = replicationCites()
 	}
+	var mirrors *replication.Mirrors
+	if hosted != nil {
+		// the mirror of each workspace goes to the Towers (docs/guilda/replicacao.md#arquivos-e-espelhos)
+		if err := privdir.Ensure(e.paths.mirrorBundles()); err != nil {
+			return transition{err: err}
+		}
+		sweepBundles(e.paths.mirrorBundles(), e.log)
+		mirrors = replication.NewMirrors(hosted.Workspaces.Mirrors(), e.paths.mirrorBundles())
+	}
 	primary, err := replication.NewPrimary(ctx, replication.PrimaryConfig{
-		Files: files, Cites: cites,
+		Files: files, Cites: cites, Mirrors: mirrors,
 		DB: db, Clock: e.clk, Dir: e.paths.snapshots(), Logger: e.log,
 		Roster: replication.RosterFunc(func(ctx context.Context, id string) (bool, error) {
 			m, err := guild.MachineOf(ctx, db, id)
@@ -618,6 +640,9 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		return transition{err: err}
 	}
 	run.primary = primary
+	if hosted != nil {
+		hosted.Workspaces.OnMirrorMoved(func(_ context.Context, slug string) { primary.MirrorChanged(slug) })
+	}
 	beats := newHeartbeats()
 	registry, err := machinesheet.NewRegistry(machinesheet.RegistryConfig{
 		DB: db, Presence: heartbeatPresence{lazyPresence{&srv}, beats}, Self: func() string { return e.id.MachineID }, Names: citadelNames{e: e, run: run}, Logger: e.log,
@@ -646,6 +671,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		return transition{err: err}
 	}
 	run.srv = srv
+	e.srvp.Store(srv) // what the machines of the orchestration reach the Towers by
+	defer e.srvp.Store(nil)
 	primary.Attach(srv)
 	// The handlers of what changes the Guild pass the gate of the handover;
 	// those that need the CA wait for the Citadel to act.
@@ -654,6 +681,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	registry.Register(router)
 	router.HandleFunc(protocol.TypeCertRenew, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleCertRenew }))
 	router.HandleFunc(protocol.TypeGuildLeave, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
+	e.registerCitadelCharacters(router, run)
 	router.HandleFunc(protocol.TypeAgentEvent, run.gated(e.handleAgentEvent))
 	router.HandleFunc(protocol.TypeMachineHeartbeat, beats.Handle)
 	router.HandleFunc(protocol.TypeMachineSheet, run.gated(registry.Handler().Handle))
@@ -1005,4 +1033,15 @@ func (e *Engine) lockOf(run *citadelRun) guild.Lock {
 		return e.deps.Lock
 	}
 	return run.lock
+}
+
+// sweepBundles removes the bundles a crash left in the folder where the mirrors
+// are written while they are sent (nothing is being sent when a period starts).
+func sweepBundles(dir string, log *slog.Logger) {
+	old, _ := filepath.Glob(filepath.Join(dir, "mirror-*.bundle"))
+	for _, f := range old {
+		if err := os.Remove(f); err != nil {
+			log.Warn("app: a leftover bundle of a mirror was not removed", "err", err)
+		}
+	}
 }

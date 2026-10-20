@@ -16,7 +16,7 @@ func TestTheStartChecksRefuseTheAuditProbes(t *testing.T) {
 	codex := providers.NewCodex(providers.Options{})
 	sandbox := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"}
 	start := func(base []string) ([]string, error) {
-		l, err := codex.BuildLaunch(providers.LaunchRequest{Base: providers.Base{Command: "codex", Args: base}, AgentID: "a1", Profile: "/p", ProviderArgs: sandbox})
+		l, err := codex.BuildLaunch(providers.LaunchRequest{OS: "linux", Base: providers.Base{Command: "codex", Args: base}, AgentID: "a1", Profile: "/p", ProviderArgs: sandbox})
 		return l.Args, err
 	}
 	for _, b := range [][]string{

@@ -71,6 +71,18 @@ func (s *Server) InstallationLookups() int {
 	return s.lookups
 }
 
+// SetClientID gives the App (by slug) the client id of its device flow, for an
+// App registered by AddApp instead of by the conversion of a manifest.
+func (s *Server) SetClientID(slug, clientID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, a := range s.apps {
+		if a.slug == slug {
+			a.clientID = clientID
+		}
+	}
+}
+
 // SetDeviceFlow says whether the App (by slug) has "Enable Device Flow" marked.
 func (s *Server) SetDeviceFlow(slug string, on bool) {
 	s.mu.Lock()
@@ -222,6 +234,6 @@ func (s *Server) deviceCode(w http.ResponseWriter, r *http.Request) {
 	case !on:
 		writeJSON(w, http.StatusOK, map[string]any{"error": "device_flow_disabled", "error_description": "Device flow must be explicitly enabled for this App"})
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"device_code": "fake-device-code", "user_code": "ABCD-1234", "verification_uri": "https://github.com/login/device", "expires_in": 900, "interval": 5})
+		writeJSON(w, http.StatusOK, s.registerDevice(id))
 	}
 }

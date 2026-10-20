@@ -201,6 +201,48 @@ func TestAnApprovalThatAsksThePINWaitsForItInTheChat(t *testing.T) {
 	}
 }
 
+// Part of CA-GH-APROV-09: the review made on GitHub of a request that asks the
+// PIN: the engine asks it in the chat, and only the PIN approves.
+func TestAReviewOnGitHubOfARequestThatAsksThePINAsksItInTheChat(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{approvals: true})
+	if err := w.users.SetPIN(w.ctx, w.owner.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	c, err := w.users.NewCode(w.ctx, w.owner, w.owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := faketelegram.User{ID: 78, FirstName: "Lucas", Username: "lucas"}
+	if _, err := w.users.Pair(w.ctx, users.PairRequest{Text: c.Code, TelegramID: owner.ID, Private: true}); err != nil {
+		t.Fatal(err)
+	}
+	r := w.ask(5, classes.RequestGuildEntry, classes.LevelOwner, true)
+	rep, err := w.flow.Answer(w.ctx, w.owner.ID, approvals.Input{Request: r.ID, Answer: chain.AnswerApprove}) // what the intake of the reviews does
+	if err != nil || rep.PIN == "" {
+		t.Fatalf("Answer = %+v, %v", rep, err)
+	}
+	if err := w.ac.AskPIN(w.ctx, w.owner.ID, rep); err != nil {
+		t.Fatal(err)
+	}
+	w.drain()
+	if w.chain.State(r.ID) != chain.Open {
+		t.Fatal("the review alone approved")
+	}
+	var asked bool
+	for _, s := range w.sent("sendMessage") {
+		asked = asked || (s.ChatID == owner.ID && strings.Contains(s.Text, "review no GitHub") && strings.Contains(s.Text, "PIN"))
+	}
+	if !asked {
+		t.Fatal("the PIN was not asked in the chat")
+	}
+	w.say(owner, "123456")
+	w.drain()
+	if w.chain.State(r.ID) != chain.Approved {
+		t.Fatalf("with the PIN: %s", w.chain.State(r.ID))
+	}
+}
+
 func TestADenialWithInstructionTakesTheTextOfTheUser(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, rigOpts{approvals: true})

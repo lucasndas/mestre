@@ -42,6 +42,7 @@ func dataOf(t *testing.T, r localchan.Response) map[string]any {
 	return m
 }
 
+// CA-GM-05
 // Part of CA-CLI-GM-01: a table master that runs `mestre table open --epic 42`
 // leaves with 3 level_denied, and nothing is opened.
 func TestATableMasterCannotOpenATable(t *testing.T) {

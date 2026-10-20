@@ -284,6 +284,11 @@ func (s *Store) Do(ctx context.Context, fn func(*Tx) error) error {
 	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error { return fn(&Tx{ctx: ctx, tx: tx}) })
 }
 
+// OfTable lists the quests of a table inside the transaction.
+func (t *Tx) OfTable(workspace, table string) ([]Quest, error) {
+	return listQuests(t.ctx, t.tx, `workspace = ? AND table_id = ?`, workspace, table)
+}
+
 // Quest reads a quest inside the transaction.
 func (t *Tx) Quest(id string) (Quest, error) { return getQuest(t.ctx, t.tx, id) }
 

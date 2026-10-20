@@ -19,7 +19,9 @@ import (
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/discovery"
+	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/replication"
@@ -42,6 +44,8 @@ type towerRun struct {
 	locator *discovery.Locator
 	agent   *machinesheet.Agent
 	renewer *guild.Renewer
+	// tables is the half of the tables of this Tower (worktrees, bundles).
+	tables *lateTower
 }
 
 func (e *Engine) sheetBuilder() (*machinesheet.Builder, error) {
@@ -69,10 +73,23 @@ func (e *Engine) replicaConfig(db *store.DB) (replication.ReplicaConfig, error) 
 	if err != nil {
 		return replication.ReplicaConfig{}, err
 	}
-	return replication.ReplicaConfig{
+	cfg := replication.ReplicaConfig{
 		DB: db, Clock: e.clk, GuildID: e.id.GuildID, Vault: e.vaultCopy(),
 		TransferDir: e.paths.transfers(), Leftovers: e.paths.leftovers(), Logger: e.log, Files: files,
-	}, nil
+	}
+	if e.paths.Workspaces != "" {
+		// the replica of each mirror lives where the worktrees of the tables of the Tower come from
+		masker := e.deps.Masker
+		if masker == nil {
+			masker = logging.NewMasker()
+		}
+		git, err := gitx.New(gitx.Options{Clock: e.clk, Masker: masker, Suite: os.Getenv("MESTRE_TEST_SUITE")})
+		if err != nil {
+			return replication.ReplicaConfig{}, err
+		}
+		cfg.Mirrors = &replication.MirrorStore{Root: e.paths.Workspaces, Git: git}
+	}
+	return cfg, nil
 }
 
 // towerWiper is what a Tower runs when the Citadel tells it to leave the Guild
@@ -155,6 +172,10 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		}
 	}
 	router.HandleFunc(protocol.TypeGuildConfig, e.handleGuildConfig(db, locator, kickRenew))
+	e.registerTowerCharacters(router)
+	tableHalf := &lateTower{}
+	e.registerTowerTables(router, tableHalf)
+	e.registerTowerScrolls(router)
 	// The effective rules of the characters of this machine: kept in the
 	// machine database, with the snapshot for the degraded hook
 	// (docs/classes/permissoes.md#regras-efetivas).
@@ -175,10 +196,21 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		Heartbeat: func(ctx context.Context) (protocol.MachineHeartbeat, error) {
 			return towerHeartbeat(ctx, sys, replica.LagSeconds()), nil
 		},
-		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: replica.Finalizers()},
+		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: towerFinalizers(replica.Finalizers(), tableHalf)},
 		Hooks: protocol.Hooks{
 			OnConnect: func(*protocol.Session) {
 				locator.Connected(pctx)
+				go func() {
+					if link := e.towerLink(); link != nil {
+						e.resyncCharacters(pctx, link)
+					}
+				}()
+				go func() {
+					// the commits a done could not send while the Citadel was away
+					if err := tableHalf.Resend(pctx); err != nil {
+						e.log.Warn("app: the commits of the tables were not sent again", "err", err)
+					}
+				}()
 				e.setConnected(true)
 				e.down.Back()
 				kickRenew()
@@ -194,6 +226,11 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		return transition{err: err}
 	}
 	replica.Attach(client.Link())
+	if half, err := e.newTowerTables(client.Link()); err != nil {
+		e.log.Warn("app: this machine cannot keep worktrees of tables", "err", err)
+	} else {
+		tableHalf.p.Store(half)
+	}
 	agent.Attach(client.Link())
 	// The engine certificate renews over the connection to the Citadel, 30
 	// days before it expires and when the registry gives it other names
@@ -229,7 +266,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer}
+	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer, tables: tableHalf}
 	e.setGuildDB(db)
 	e.mu.Lock()
 	e.role, e.tow, e.cit, e.unknown = RoleTower, run, nil, unknown

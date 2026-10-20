@@ -18,7 +18,7 @@ import (
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -26,7 +26,7 @@ func fakeClock() clock.Clock { return clock.NewFake(time.Date(2026, 10, 15, 12, 
 
 func newMachineDB(t *testing.T) *store.DB {
 	t.Helper()
-	db, err := machinedb.Open(t.Context(), filepath.Join(t.TempDir(), "maquina.db"), store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.OpenMachine(t.Context(), filepath.Join(t.TempDir(), "maquina.db"), store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

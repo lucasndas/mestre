@@ -30,6 +30,18 @@ type Verifier interface {
 // VerifyRequest is a verification to run.
 type VerifyRequest struct {
 	Workspace, Table, Branch string
+	// Base is a commit of the main branch to integrate (a merge, never kept)
+	// into the ephemeral worktree before the commands run: the gate of
+	// freshness (docs/github/acoes-por-nivel.md#merge) proves what the merge
+	// will be, not only the head. Empty: the commands run at the tip of
+	// Branch. A base that cannot be integrated is a red result, never an
+	// error and never a green one. The commands are the ones the main clone
+	// of the workspace confirmed, whatever Branch changes
+	// (docs/sessao-zero/workspace.md#comandos-de-verificação).
+	Base string
+	// Head is the commit Branch must be at (empty: the tip it has). The gate
+	// proves the head of the PR; a branch that moved is a red result.
+	Head string
 }
 
 // VerifyResult is what a verification gave.

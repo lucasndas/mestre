@@ -14,6 +14,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/attachments"
+	"github.com/lucasndas/mestre/internal/blocking"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
@@ -25,6 +26,8 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/digest"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/orchestration/progress"
+	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/telegram"
@@ -45,7 +48,10 @@ type StandardIntegration struct {
 	// TelegramBase and GitHubBase are the base URLs (empty: the real ones);
 	// HTTP is the client of both (nil: one with a time limit).
 	TelegramBase, GitHubBase string
-	HTTP                     *http.Client
+	// GitHubWeb is github.com (empty: the real one), where the device flow and the
+	// pages of the installations are.
+	GitHubWeb string
+	HTTP      *http.Client
 	// WhisperURL is the whisper-server of this machine (http://127.0.0.1:<port>);
 	// empty: no machine transcribes, and every voice message is delivered with
 	// the reason. The installation sets it (docs/desenvolvimento/ligacao-de-producao.md).
@@ -63,6 +69,9 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	if s.GitHubBase == "" {
 		s.GitHubBase = DefaultGitHubBase
 	}
+	if s.GitHubWeb == "" {
+		s.GitHubWeb = DefaultGitHubWeb
+	}
 	if s.HTTP == nil {
 		s.HTTP = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -77,6 +86,9 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, fmt.Errorf("app: the users: %w", err)
 	}
 	r.users = svc
+	if err := r.githubSetup(); err != nil {
+		return nil, err
+	}
 	r.alert.Users = svc
 	r.lock, err = lockdown.New(lockdown.Options{DB: env.DB, Clock: env.Clock, Users: svc, Tell: r.alert.Tell, Logger: env.Log})
 	if err != nil {
@@ -152,10 +164,16 @@ type stdRun struct {
 	lc     *telegram.LockChannel
 	quota  *github.Quota
 	tokens *github.Tokens
+	// personal and installs are the personal credentials and GitHub's side of the
+	// stage apps (githubcompose.go).
+	personal *github.Personal
+	installs *github.Installs
 
-	fence  atomic.Pointer[guild.Fence]
-	chain  atomic.Pointer[chain.Service]
-	closed atomic.Bool
+	fence atomic.Pointer[guild.Fence]
+	chain atomic.Pointer[chain.Service]
+	// progress is the message of progress of the workspaces, once the period has it.
+	progress atomic.Pointer[progress.Service]
+	closed   atomic.Bool
 
 	botMu sync.Mutex
 	bot   *telegram.Bot
@@ -294,7 +312,24 @@ func mergeCaptures(ms ...map[string]telegram.CaptureFunc) map[string]telegram.Ca
 
 // Extend implements IntegrationRun: the people of the chain of approval.
 func (r *stdRun) Extend(o *OrchestrationOptions) {
+	o.MissionCompleted = func(ctx context.Context, workspace, _, _ string) {
+		if p := r.progress.Load(); p != nil && !r.closed.Load() {
+			go p.MissionEnded(context.WithoutCancel(ctx), workspace) // the quest does not wait for the bot
+		}
+	}
 	o.ChainUsers = r.flow
+	// the gate of freshness reads the rules of the base branch as the Grand Master
+	if o.FreshnessRules == nil {
+		o.FreshnessRules = stdRules{r}
+	}
+	// the GitHub of the workspaces, with the App Grão-Mestre; a test that gives its own keeps it
+	gh := grandMasterGitHub{r}
+	if _, off := o.GitHub.(unavailableGitHub); off {
+		o.GitHub = gh
+	}
+	if o.Credentials == nil {
+		o.Credentials = gh
+	}
 	if o.ChainGrants == nil {
 		o.ChainGrants = r.decrees
 	}
@@ -309,6 +344,7 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		o.ChainSinks = map[classes.RequestType]chain.Sink{}
 	}
 	o.ChainSinks[classes.RequestGuildEntry] = r.entries()
+	o.Epics = stdEpics{r: r, reg: characters.Registry{DB: r.env.DB}}
 }
 
 // entries is the question to the Owner about the entry of a machine, over the
@@ -405,6 +441,14 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 			r.dg.Svc = dgst
 		}
 	}
+	prog, err := progress.New(progress.Options{Clock: r.env.Clock, Tables: tables.Store{DB: r.env.DB}, Requests: &chain.Store{DB: r.env.DB},
+		Workspaces: activeWorkspaces{orc}, Recipients: progressPeople{digest.UsersDirectory{Users: r.users}}, Sender: progressSender{r.dg},
+		Mask: r.env.Masker.Mask, Logger: r.env.Log})
+	if err != nil {
+		r.env.Log.Warn("app: the message of progress is off", "err", err)
+	} else {
+		r.progress.Store(prog)
+	}
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
@@ -413,12 +457,29 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	if orc.BaseSync != nil {
 		h.Send.Base = orc.BaseSync
 	}
+	if orc.EpicDeps != nil {
+		h.Deps = orc.EpicDeps
+	}
+	// the acceptance of the Master of the table: no pull request while a
+	// completed mission of the epic has a criterion with no proof
+	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
 	h.Register(fwd)
+	poll, perr := r.poller(orc)
+	if perr != nil {
+		r.env.Log.Warn("app: the reading of the events of GitHub is off", "err", perr)
+	}
+	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
 		// the decrees whose validity ran out end while the Citadel acts
 		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()
+		if poll != nil {
+			go poll.Run(ctx) // the events of GitHub, only while the lease holds
+		}
 		if dgst != nil {
 			go func() { _ = dgst.Loop(ctx, time.Minute) }()
+		}
+		if p := r.progress.Load(); p != nil {
+			go func() { _ = p.Loop(ctx, time.Minute) }()
 		}
 		bot, err := r.startBot(ctx)
 		if err != nil {
@@ -428,6 +489,21 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		}
 		return bot.Run(ctx)
 	}}
+}
+
+// ownerName is the name of the Owner, who acts on a credential ("o Dono" when
+// the users cannot be read).
+func (r *stdRun) ownerName(ctx context.Context, _ string) string {
+	all, err := r.users.List(ctx)
+	if err != nil {
+		return "o Dono"
+	}
+	for _, u := range all {
+		if u.Level == users.Owner && u.State == users.Active {
+			return u.Name
+		}
+	}
+	return "o Dono"
 }
 
 // stdLease is the lease of the epoch over GitHub: the fence of the period.
@@ -477,6 +553,23 @@ func (c stdClients) For(ctx context.Context, ch characters.Character, _ string) 
 		}
 		return tok.Secret(), nil
 	}}, nil
+}
+
+// issueBody reads the body of an issue as the App "Mestre", for the acceptance
+// of the table master: what the Master took out of the issue stops being asked.
+func (r *stdRun) issueBody(orc *Orchestration) func(ctx context.Context, workspace string, number int) (string, error) {
+	return func(ctx context.Context, workspace string, number int) (string, error) {
+		repo, err := workspaceRepos{orc}.Repo(ctx, workspace)
+		if err != nil {
+			return "", err
+		}
+		api, err := stdClients{r}.For(ctx, characters.Character{Role: characters.RoleTableMaster, Workspace: workspace}, repo)
+		if err != nil {
+			return "", err
+		}
+		d, err := api.IssueData(ctx, repo, number)
+		return d.Body, err
+	}
 }
 
 // stdQuota says whether the App of a character is under its quota.

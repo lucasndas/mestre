@@ -52,7 +52,7 @@ func (f *fakeBackend) Start(_ context.Context, r launcher.StartRequest) (launche
 	if f.err != nil {
 		return launcher.Started{}, f.err
 	}
-	return launcher.Started{PID: 4242, Start: "t0", CgroupDir: "/cg/term-" + r.ID}, nil
+	return launcher.Started{PID: 4242, Start: "t0", CgroupDir: "/cg/term-" + r.ID, Logon: "S-1-5-5-0-4242"}, nil
 }
 
 func (f *fakeBackend) Kill(_ context.Context, id string) error {

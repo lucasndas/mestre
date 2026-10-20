@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // Handlers are the commands `table open|list|status|close` of the Grand
@@ -172,6 +174,8 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 		Machines []string `json:"machines"`
 		PR       int      `json:"pr"`
 		Usage    string   `json:"usage"`
+		// WaitingFor are the epics whose tables must be merged first.
+		WaitingFor []int `json:"waiting_for"`
 	}
 	rows := make([]row, 0, len(ts))
 	var text strings.Builder
@@ -179,7 +183,7 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 		if filter == "open" && Over(t.State) || filter == "closed" && !Over(t.State) {
 			continue
 		}
-		r := row{Name: t.ID, State: string(t.State), Paused: t.Paused, Epic: t.Epic, Branch: t.Branch, PR: t.PRNumber, Machines: []string{}, Usage: "-"}
+		r := row{Name: t.ID, State: string(t.State), Paused: t.Paused, Epic: t.Epic, Branch: t.Branch, PR: t.PRNumber, Machines: []string{}, Usage: "-", WaitingFor: s.waitingFor(ctx, t)}
 		if m, ok, _ := s.o.Registry.TableMaster(ctx, t.Workspace, t.ID); ok {
 			r.Master = m.Name
 		}
@@ -193,12 +197,42 @@ func (s *Service) handleList(ctx context.Context, c *localchan.Call) localchan.R
 		if t.Paused {
 			st += " (pausada)"
 		}
+		st += waitingLabel(r.WaitingFor)
 		fmt.Fprintf(&text, "- %s: %s, épico #%d, branch %s, PR %s\n", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
 	}
 	if len(rows) == 0 {
 		text.WriteString("nenhuma mesa\n")
 	}
 	return localchan.OK(map[string]any{"text": strings.TrimRight(text.String(), "\n"), "tables": rows})
+}
+
+// waitingFor gives the epics the table waits for (none when it is over, or
+// when the dependencies cannot be read: the table list is not worth failing).
+func (s *Service) waitingFor(ctx context.Context, t Table) []int {
+	if s.o.Dependencies == nil || Over(t.State) {
+		return []int{}
+	}
+	on, err := s.o.Dependencies.Waiting(ctx, t.Workspace, t.Epic)
+	if err != nil || on == nil {
+		return []int{}
+	}
+	return on
+}
+
+// waitingLabel is " (aguardando a mesa #12)" for the epics a table waits for.
+func waitingLabel(on []int) string {
+	if len(on) == 0 {
+		return ""
+	}
+	parts := make([]string, len(on))
+	for i, e := range on {
+		parts[i] = "#" + strconv.Itoa(e)
+	}
+	noun := "a mesa "
+	if len(on) > 1 {
+		noun = "as mesas "
+	}
+	return " (aguardando " + noun + strings.Join(parts, ", ") + ")"
 }
 
 func prLabel(n int) string {
@@ -243,6 +277,8 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	if t.Paused {
 		st += " (pausada: " + t.PausedReason + ")"
 	}
+	waiting := s.waitingFor(ctx, t)
+	st += waitingLabel(waiting)
 	fmt.Fprintf(&text, "Mesa %s: %s. Épico #%d, branch %s, PR %s", t.ID, st, t.Epic, t.Branch, prLabel(t.PRNumber))
 	if t.Merged {
 		text.WriteString(" (mesclado)")
@@ -255,7 +291,7 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 		text.WriteString("- ninguém\n")
 	}
 	data := map[string]any{"name": t.ID, "state": string(t.State), "paused": t.Paused,
-		"pause_reason": t.PausedReason, "epic": t.Epic, "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "characters": chars,
+		"pause_reason": t.PausedReason, "epic": s.epicOf(ctx, t), "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "waiting_for": waiting, "characters": chars,
 		"missions": []string{}, "waits": []string{}, "usage": "-"}
 	if s.o.Oversight != nil {
 		paused, reason, queue, err := s.o.Oversight.Status(ctx, t.Workspace, t.ID)
@@ -270,8 +306,61 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 			fmt.Fprintf(&text, "\n%s", queue)
 		}
 	}
+	data["proofs"] = s.proofsOf(ctx, t)
 	data["text"] = strings.TrimRight(text.String(), "\n")
 	return localchan.OK(data)
+}
+
+// proofsOf is the proof of each criterion of the missions of the table, as the
+// engine has it: whether it checked the item on the issue and where the proof
+// came from ("verificada pelo motor" or "declarada por <personagem>"). It is
+// the only thing that says a criterion is proved: the body of an issue is edited
+// by anyone.
+func (s *Service) proofsOf(ctx context.Context, t Table) any {
+	if s.o.Proofs == nil {
+		return []ProofState{}
+	}
+	ps, err := s.o.Proofs.Of(ctx, t.Workspace, t.ID)
+	if err != nil {
+		return map[string]string{"error": err.Error()}
+	}
+	if ps == nil {
+		ps = []ProofState{}
+	}
+	return ps
+}
+
+// epicReadTimeout is how long `table status` waits for the epic.
+const epicReadTimeout = 10 * time.Second
+
+// epicOf is the epic of a table for `table status`: its number, its title and
+// the criteria written in the section `## Critérios` of its body, read from
+// the repository host now. When it cannot be read the criteria are empty and
+// criteria_error says why: the Grand Master must not take that for an epic
+// without criteria.
+func (s *Service) epicOf(ctx context.Context, t Table) map[string]any {
+	e := map[string]any{"number": t.Epic, "title": CleanText(t.EpicTitle), "criteria": []string{}}
+	if err := s.gate("table status"); err != nil {
+		e["criteria_error"] = err.Error()
+		return e
+	}
+	rctx, cancel := clock.WithTimeout(ctx, s.clk, epicReadTimeout)
+	defer cancel()
+	epic, err := s.o.GitHub.Epic(rctx, t.Workspace, t.Epic)
+	if err != nil {
+		e["criteria_error"] = err.Error()
+		return e
+	}
+	if epic.Title != "" {
+		e["title"] = CleanText(epic.Title)
+	}
+	c, err := ParseCriteria(epic.Body)
+	if err != nil {
+		e["criteria_error"] = err.Error()
+		return e
+	}
+	e["criteria"] = c
+	return e
 }
 
 func (s *Service) handleClose(ctx context.Context, c *localchan.Call) localchan.Response {

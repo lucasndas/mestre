@@ -50,6 +50,10 @@ type PRFacts struct {
 	// CIGreen says the checks of the hash are green; ReviewDone that another
 	// character finished a review with nothing pending.
 	CIGreen, ReviewDone bool
+	// OpenedByGrandMaster says the PR was opened by the App "Grão-Mestre": the
+	// same App can not approve it, so only a person does
+	// (docs/github/aprovacao-no-github.md#quem-abre-e-quem-aprova).
+	OpenedByGrandMaster bool
 }
 
 // PRSource reads a PR for the conditions of the policy. An error is a
@@ -133,6 +137,9 @@ func (r PolicyRules) conditions(req Request, f PRFacts, hasFacts, thresholds boo
 		if strings.EqualFold(l, HumanLabel) {
 			out = append(out, "o PR tem o rótulo "+HumanLabel)
 		}
+	}
+	if f.OpenedByGrandMaster {
+		out = append(out, "o PR foi aberto pelo App Grão-Mestre, que não pode aprová-lo")
 	}
 	if f.Incomplete || len(f.Files) == 0 {
 		out = append(out, ReasonIncompleteDiff+": o GitHub cortou a lista de arquivos")
@@ -222,7 +229,18 @@ func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
 			facts, has = f, true
 		}
 	}
-	if why := rules.conditions(r, facts, has, thresholds); len(why) > 0 {
+	why := rules.conditions(r, facts, has, thresholds)
+	if s.o.Freshness != nil && isPR(r.Type) && r.PR != nil {
+		// a workspace with no command to verify with: nothing is approved alone
+		switch w, err := s.o.Freshness.Unverifiable(ctx, r); {
+		case err != nil:
+			s.log.Warn("chain: the gate of freshness could not be checked", "request", r.ID, "err", err)
+			why = append(why, "frescor: não foi possível conferir o gate (veja o log do motor)")
+		case w != "":
+			why = append(why, w)
+		}
+	}
+	if len(why) > 0 {
 		for i := range why {
 			why[i] = oneLine(why[i])
 		}
