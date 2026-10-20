@@ -159,6 +159,19 @@ var (
 	ErrPRClosed = errors.New("approvals: the PR is not open")
 )
 
+// CodeNoDelegation is the refusal of `--on-behalf` with no decree of delegation that covers it.
+const CodeNoDelegation = "no_delegation"
+
+// noDelegation turns the human_required refusal of the branch of `--on-behalf` into the one
+// that says there is no delegation (any other error is left as it is).
+func noDelegation(err error) error {
+	var ref *chain.Refusal
+	if errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired {
+		return &chain.Refusal{Code: CodeNoDelegation, Message: ref.Message}
+	}
+	return err
+}
+
 func human(format string, a ...any) error {
 	return &chain.Refusal{Code: chain.CodeHumanRequired, Message: fmt.Sprintf(format, a...)}
 }
@@ -306,12 +319,14 @@ func (a *Approver) asPerson(ctx context.Context, o ApproveOrder, r chain.Request
 				return Approval{}, err
 			}
 			if !ok || author != p.ID {
-				return a.askPerson(ctx, o, r, p)
+				ap, err := a.askPerson(ctx, o, r, p)
+				return ap, noDelegation(err)
 			}
 			ap, err := a.withCredential(ctx, o, p, fmt.Sprintf("Aprovado pelo Grão-Mestre em nome de %s, por delegação", plain(p.Name)), AsDelegate)
 			if err != nil {
 				if errors.Is(err, ErrNoCredential) {
-					return a.askPerson(ctx, o, r, p)
+					ap, err := a.askPerson(ctx, o, r, p)
+					return ap, noDelegation(err)
 				}
 				return Approval{}, err
 			}
@@ -327,7 +342,7 @@ func (a *Approver) asPerson(ctx context.Context, o ApproveOrder, r chain.Request
 		return lastWaiting, nil
 	}
 	if o.OnBehalf != "" {
-		return Approval{}, human("%s não está entre as pessoas que o PR #%d exige", o.OnBehalf, o.Number)
+		return Approval{}, noDelegation(human("%s não está entre as pessoas que o PR #%d exige", o.OnBehalf, o.Number))
 	}
 	// nobody of the required ones approved it yet: ask the first
 	return a.askPerson(ctx, o, r, targets[0])

@@ -174,6 +174,10 @@ func TestACodeOwnerIsNotApprovedForWithoutHerDelegation(t *testing.T) {
 	if !isHumanRequired(err) {
 		t.Fatalf("Approve on behalf without a decree = %v; want human_required", err)
 	}
+	var ref *chain.Refusal
+	if !errors.As(err, &ref) || ref.Code != approvals.CodeNoDelegation {
+		t.Fatalf("Approve on behalf without a decree = %v; want the code no_delegation", err)
+	}
 	if got := l.sent(); len(got) != 0 {
 		t.Fatalf("a review was sent without the delegation: %+v", got)
 	}
