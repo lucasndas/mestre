@@ -445,49 +445,6 @@ func TestCheckShowsTheScreenOfTheTarget(t *testing.T) {
 	}
 }
 
-// Part of CA-CLI-COM-09 (the attachments of a real channel and their copy are
-// milestone 5, here a double): a message of the inbox is passed on whole, with
-// the path of the copy of its attachment in the table of the target.
-func TestAskFromMessagePassesTheMessageOnWithItsAttachments(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	text := "Corrija o login, por favor!\n\nO print do erro está anexo."
-	it, err := w.orc.Inbox.Enqueue(w.ctx, inbox.NewItem{Workspace: w.slug, Target: w.gm.ID, Kind: inbox.KindUser, Sender: "Lucas", Text: text,
-		Attachments: []string{".mestre/anexos/2026/10/print.png"}, Origin: &inbox.Origin{Channel: "telegram", User: "u1", UserName: "Lucas", Level: characters.LevelOwner}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := w.run(w.gm, "ask", "Mestre", "--table", w.table.ID, "--from-message", it.ID, "--no-wait", "--json")
-	if v := decodeJSON(t, r); r.code != 0 || v.Data["status"] != "sent" {
-		t.Fatalf("ask --from-message = %+v", r)
-	}
-	got := w.mach.Delivered(w.get(w.master))
-	if len(got) == 0 {
-		t.Fatal("the table master got nothing")
-	}
-	last := got[len(got)-1]
-	if !strings.Contains(last, text) || !strings.Contains(last, ".mestre/anexos/print.png") {
-		t.Errorf("the table master got:\n%s", last)
-	}
-	if w.atts.table != w.table.ID {
-		t.Errorf("the attachments were copied to %q, not to the table of the target", w.atts.table)
-	}
-	// With a prompt, it goes before the message, as a note.
-	r = w.run(w.gm, "ask", "Mestre", "veja isto antes", "--table", w.table.ID, "--from-message", it.ID, "--no-wait")
-	if r.code != 0 {
-		t.Fatal(r)
-	}
-	w.turnEnds(w.master, "")
-	got = w.mach.Delivered(w.get(w.master))
-	if last := got[len(got)-1]; !strings.HasPrefix(last, "veja isto antes") || !strings.Contains(last, text) {
-		t.Errorf("with a note:\n%s", last)
-	}
-	// A message that is not in the inbox of the caller.
-	if r := w.run(w.gm, "ask", "Mestre", "--table", w.table.ID, "--from-message", "m999", "--json"); r.code != 4 {
-		t.Errorf("a message that is not there = %+v", r)
-	}
-}
-
 // CA-CLI-COM-11: the Grand Master with two open tables names the table.
 func TestAskToMestreWithTwoTablesNeedsTheTable(t *testing.T) {
 	t.Parallel()

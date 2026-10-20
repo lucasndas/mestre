@@ -1,6 +1,6 @@
 # Anexos e transcrição
 
-> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** imagens, documentos e áudios recebidos, arquivos enviados de volta e a transcrição local com whisper.cpp · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -30,7 +30,8 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 - **Entrega ao Grão-Mestre:** depois da linha de origem ([roteamento](roteamento.md#entrega-ao-grão-mestre)), vêm a legenda (como texto) e uma linha por arquivo:
   `[anexo] .mestre/anexos/2026/10/a1b2-relatorio.pdf · application/pdf · 1,2 MB`
 - **Repasse à mesa:** o Grão-Mestre repassa o pedido ao Mestre da mesa com o texto original e os caminhos dos anexos ([Grão-Mestre](../orquestracao/grao-mestre.md)).
-  - Quando o motor encontra um caminho em `.mestre/anexos/` numa mensagem para um personagem de mesa, ele copia o arquivo para os worktrees daquela mesa, inclusive nas Torres, pela conexão de cada Torre ([protocolo](../conectividade/protocolo.md#transferência-em-partes)).
+  - Quando o motor encontra um caminho em `.mestre/anexos/` numa mensagem para um personagem de mesa (`ask --from-message`, ou a abertura da mesa com a mensagem do usuário), ele copia o arquivo, no mesmo caminho, para **todos** os worktrees daquela mesa antes de entregar o texto, e anota a mesa na linha do anexo (`attachments.tables`). Só vale o caminho limpo sob `.mestre/anexos/` do clone principal; qualquer outro é recusado.
+  - Numa Torre, o arquivo vai primeiro ao clone principal dela pela transferência `kind: file` ([protocolo](../conectividade/protocolo.md#transferência-em-partes)) e a Cidadela manda `table.attach`; a Torre copia para o worktree, sem permissão de execução. A linha do anexo cita o arquivo na [replicação](../guilda/replicacao.md#arquivos-e-espelhos): uma Torre que estava fora recebe o arquivo antes da linha e, ao aplicá-la, copia o anexo para as mesas dela que a linha cita.
   - Onde a cópia fica está em [sessão zero da mesa](../sessao-zero/mesa.md).
 - **Qualquer tipo é guardado:** o motor não recusa um tipo; vale o que o conteúdo diz ser, o arquivo nasce sem permissão de execução e o caminho é sempre o saneado. Legenda e transcrição passam pelo mascaramento de segredos antes de chegar a um agente.
 - **Mensagem que espera:** a mensagem do usuário guardada com o Mestre travado, ou à espera da escolha do workspace, leva a referência do arquivo; o arquivo só é baixado quando a mensagem é entregue, já com o workspace conhecido.
@@ -39,7 +40,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
 
 ### Envio de arquivos (`mestre reply --attach`)
 
-- **Quem lê o arquivo é a CLI**, que roda como o próprio agente: o motor nunca abre um caminho que um agente nomeia, e o caminho não segue na chamada ([regras da CLI](../cli/comunicacao.md#regras-e-erros)). A CLI só aceita um arquivo dentro do clone principal do workspace ou de um worktree de mesa e recusa qualquer outro caminho com 3 `path_not_allowed` (a recusa é da CLI; o motor nunca vê o caminho), para não mandar por engano arquivos da máquina; ela não é uma barreira (quem monta o pedido à mão não passa por ela), e o que o agente não consegue ler, a CLI também não lê.
+- **Quem lê o arquivo é a CLI**, que roda como o próprio agente: o motor nunca abre um caminho que um agente nomeia, e o caminho não segue na chamada ([regras da CLI](../cli/comunicacao.md#regras-e-erros)). A CLI só aceita um arquivo dentro do clone principal do workspace ou de um worktree de mesa (achados pelo worktree onde o processo está, com os links resolvidos; a pasta do git e `.mestre/agents/` ficam de fora) e recusa qualquer outro caminho com 3 `path_not_allowed` (a recusa é da CLI; o motor nunca vê o caminho), para não mandar por engano arquivos da máquina; ela não é uma barreira (quem monta o pedido à mão não passa por ela), e o que o agente não consegue ler, a CLI também não lê.
 - **Como sai:**
   - Imagens JPG, PNG ou WebP de até 10 MB saem com `sendPhoto`.
   - O resto sai com `sendDocument`, até **50 MB** (limite da Bot API).

@@ -265,6 +265,9 @@ type EpochRecord struct {
 	ApprovalID       string
 	ApprovedBy       string
 	StartedAt        time.Time
+	// ReconciledAt is when the Citadel of the epoch finished reconciling GitHub
+	// after taking it (zero until it did).
+	ReconciledAt time.Time
 }
 
 // ErrNoEpoch: the database has no row for that epoch (yet: a replica learns
@@ -276,10 +279,11 @@ func EpochStart(ctx context.Context, db *store.DB, epoch uint64) (EpochRecord, e
 	var (
 		r  EpochRecord
 		at int64
+		rc int64
 	)
 	err := db.Reader().QueryRowContext(ctx,
-		`SELECT epoch, citadel_machine_id, from_lsn, approval_id, approved_by, started_at FROM epochs WHERE epoch = ?`, epoch).
-		Scan(&r.Epoch, &r.CitadelMachineID, &r.FromLSN, &r.ApprovalID, &r.ApprovedBy, &at)
+		`SELECT epoch, citadel_machine_id, from_lsn, approval_id, approved_by, started_at, reconciled_at FROM epochs WHERE epoch = ?`, epoch).
+		Scan(&r.Epoch, &r.CitadelMachineID, &r.FromLSN, &r.ApprovalID, &r.ApprovedBy, &at, &rc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return EpochRecord{}, ErrNoEpoch
 	}
@@ -287,7 +291,25 @@ func EpochStart(ctx context.Context, db *store.DB, epoch uint64) (EpochRecord, e
 		return EpochRecord{}, fmt.Errorf("guild: read the epoch %d: %w", epoch, err)
 	}
 	r.StartedAt = time.UnixMilli(at).UTC()
+	if rc != 0 {
+		r.ReconciledAt = time.UnixMilli(rc).UTC()
+	}
 	return r, nil
+}
+
+// MarkReconciled records that the Citadel of the epoch finished reconciling
+// GitHub, so a restart does not do it again.
+func MarkReconciled(ctx context.Context, db *store.DB, epoch uint64, at time.Time) error {
+	return db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE epochs SET reconciled_at = ? WHERE epoch = ?`, at.UnixMilli(), epoch)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrNoEpoch
+		}
+		return nil
+	})
 }
 
 // audit writes a row of audit_log in a transaction.

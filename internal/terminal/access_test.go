@@ -206,3 +206,31 @@ func TestTheEngineSweepsBeforeTheSocketAndPutsTheGrantsBackAfter(t *testing.T) {
 		t.Error("no Access configured: not a no-op")
 	}
 }
+
+// Prune forgets the rows of a prefix that are not live, and only those.
+func TestPruneForgetsOnlyTheRowsOfThePrefixThatAreNotLive(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m := accessManager(t, &fakeAccess{})
+	for _, id := range []string{"verifica-stopped", "verifica-gone", "verifica-live", "char-stopped"} {
+		row(t, m, id)
+	}
+	for id, st := range map[string]string{"verifica-stopped": StatusStopped, "verifica-gone": StatusInterrupted, "char-stopped": StatusStopped} {
+		if err := m.reg.setStatus(ctx, id, st, m.clk.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := m.Prune(ctx, "verifica-")
+	if err != nil || n != 2 {
+		t.Fatalf("Prune = %d, %v; want 2", n, err)
+	}
+	rows, _ := m.Records(ctx)
+	var left []string
+	for _, r := range rows {
+		left = append(left, r.ID)
+	}
+	slices.Sort(left)
+	if !slices.Equal(left, []string{"char-stopped", "verifica-live"}) {
+		t.Errorf("rows left: %v", left)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/logging"
@@ -323,6 +324,27 @@ func (m *Manager) SetStatus(ctx context.Context, id, status string) error {
 		return err
 	}
 	return m.reg.setStatus(ctx, id, status, m.clk.Now())
+}
+
+// Prune deletes the rows of the terminals whose id starts with prefix and that
+// are not live (stopped or interrupted), and says how many. A live terminal is
+// never touched.
+func (m *Manager) Prune(ctx context.Context, prefix string) (int, error) {
+	rows, err := m.reg.list(ctx)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, r := range rows {
+		if !strings.HasPrefix(r.ID, prefix) || r.Live() {
+			continue
+		}
+		if err := m.reg.delete(ctx, r.ID); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 // Records lists the registry rows.
