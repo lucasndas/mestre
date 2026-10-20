@@ -125,7 +125,6 @@ func TestTheFenceOfThePeriodIsGivenTheReconciliationOfTheIntegration(t *testing.
 	if !called {
 		t.Error("the reconciliation of the config is not the one given")
 	}
-	var _ guild.FenceConfig = cfg
 }
 
 // The status shows why a promoted Citadel waits.
