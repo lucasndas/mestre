@@ -27,6 +27,7 @@ import (
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -349,6 +350,59 @@ func (e *Engine) DecideEntry(ctx context.Context, joinID string, d guild.Decisio
 		return guild.ErrSuspended
 	}
 	return c.Decide(ctx, joinID, d)
+}
+
+// actingCitadel is the Citadel of the Guild of the period that runs, or why
+// this machine has none now (the guild operations belong to the acting one).
+func (e *Engine) actingCitadel() (*guild.Citadel, error) {
+	e.mu.Lock()
+	run := e.cit
+	e.mu.Unlock()
+	if run == nil {
+		return nil, errors.New("app: only the Citadel changes the Guild")
+	}
+	c := run.guild()
+	if c == nil {
+		if why := run.whyDown(); why != "" {
+			return nil, fmt.Errorf("app: the Citadel cannot act, %s: %w", why, vault.ErrClosed)
+		}
+		return nil, guild.ErrSuspended
+	}
+	return c, nil
+}
+
+// SetExcluded is the Owner's exclusion of a machine from the secrets, or its
+// undoing, given by /guilda after the PIN. The Citadel refuses itself.
+func (e *Engine) SetExcluded(ctx context.Context, machineID string, excluded bool) error {
+	c, err := e.actingCitadel()
+	if err != nil {
+		return err
+	}
+	return c.SetExcluded(ctx, machineID, excluded)
+}
+
+// GuildMachines lists the active machines of the Guild with the epoch, for
+// /guilda.
+func (e *Engine) GuildMachines(ctx context.Context) ([]telegram.GuildMachine, uint64, error) {
+	c, err := e.actingCitadel()
+	if err != nil {
+		return nil, 0, err
+	}
+	all, err := c.Machines(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	citadel, err := c.CitadelID(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	var out []telegram.GuildMachine
+	for _, m := range all {
+		if m.State == guild.MachineActive {
+			out = append(out, telegram.GuildMachine{ID: m.ID, Name: m.Name, Citadel: m.ID == citadel, Excluded: m.Excluded})
+		}
+	}
+	return out, e.epochs.Epoch(), nil
 }
 
 // DecidePromotion is the Owner's answer to the request of Promote, given by

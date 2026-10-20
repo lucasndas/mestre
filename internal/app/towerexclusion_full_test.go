@@ -3,25 +3,152 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/telegram"
+	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/transport"
+	"github.com/lucasndas/mestre/internal/users"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// Part of CA-GUILDA-12
-// The Owner excludes a Tower that holds the vault: the engines do what the
-// criterion says with the hook the Citadel fires wired to the replication. The
-// Tower erases the key, the envelope and the vault tables of its replica (the
+// guildBot is the Owner at the fake Telegram with /guilda over the engine of the
+// Citadel: the bot, its users and its clock are the test's own, and the two
+// functions of the channel are the engine's (GuildMachines and SetExcluded).
+type guildBot struct {
+	t     *testing.T
+	clk   *clock.Fake
+	fake  *faketelegram.Server
+	bot   *telegram.Bot
+	owner faketelegram.User
+}
+
+type noAlerts struct{}
+
+func (noAlerts) Unauthorized(context.Context, int64, string) {}
+func (noAlerts) OwnerAlert(context.Context, string)          {}
+func (noAlerts) Tell(context.Context, string, string)        {}
+
+type noRouter struct{}
+
+func (noRouter) Deliver(context.Context, telegram.Inbound) error { return nil }
+
+func newGuildBot(t *testing.T, citadel *Engine, pin string) *guildBot {
+	t.Helper()
+	ctx := t.Context()
+	clk := clock.NewFake(time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC))
+	db, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	svc, err := users.New(users.Options{DB: db, Clock: clk, Alerts: noAlerts{}, PIN: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := svc.CreateOwner(ctx, "Lucas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetPIN(ctx, owner.ID, pin); err != nil {
+		t.Fatal(err)
+	}
+	code, err := svc.NewCode(ctx, owner, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tg := faketelegram.User{ID: 77, FirstName: "Lucas", Username: "lucas"}
+	if _, err := svc.Pair(ctx, users.PairRequest{Text: code.Code, TelegramID: tg.ID, Private: true}); err != nil {
+		t.Fatal(err)
+	}
+	fake, err := faketelegram.New(clk, t, "123456:fake-bot-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pins := &telegram.PINRouter{Users: svc}
+	gc := &telegram.GuildChannel{Users: svc, PINs: pins, Machines: citadel.GuildMachines, SetExcluded: citadel.SetExcluded}
+	bot, err := telegram.New(telegram.Options{DB: db, Clock: clk, Users: svc, Alerts: noAlerts{}, Router: noRouter{},
+		Client:   &telegram.Client{Token: "123456:fake-bot-token", HTTP: &http.Client{Transport: fakenet.HandlerTransport(fake)}},
+		Commands: gc.Commands(), Actions: gc.Actions(), Captures: map[string]telegram.CaptureFunc{telegram.PINKind: pins.Capture()}, PollTimeout: time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gc.Bind(bot)
+	return &guildBot{t: t, clk: clk, fake: fake, bot: bot, owner: tg}
+}
+
+func (g *guildBot) poll() {
+	g.t.Helper()
+	if err := g.bot.PollOnce(g.t.Context()); err != nil {
+		g.t.Fatal(err)
+	}
+	for range 3 {
+		g.clk.Advance(1100 * time.Millisecond)
+		if _, err := g.bot.Flush(g.t.Context()); err != nil {
+			g.t.Fatal(err)
+		}
+	}
+}
+
+func (g *guildBot) say(text string) {
+	g.t.Helper()
+	if _, err := g.fake.UserSendsText(g.owner, faketelegram.Private(g.owner), text); err != nil {
+		g.t.Fatal(err)
+	}
+	g.poll()
+}
+
+// tap presses the button of the last message with buttons, by its text.
+func (g *guildBot) tap(label string) {
+	g.t.Helper()
+	var msg int64
+	var key string
+	for _, s := range g.fake.Sent() {
+		kb, ok := s.Params["reply_markup"].(map[string]any)
+		if s.Method != "sendMessage" || s.ChatID != g.owner.ID || !ok || kb["inline_keyboard"] == nil {
+			continue
+		}
+		msg, key = s.MessageID, ""
+		for _, row := range kb["inline_keyboard"].([]any) {
+			for _, b := range row.([]any) {
+				if bt := b.(map[string]any); strings.HasPrefix(bt["text"].(string), label) {
+					key = bt["callback_data"].(string)
+				}
+			}
+		}
+	}
+	if key == "" {
+		g.t.Fatalf("no button %q in the last message", label)
+	}
+	if _, err := g.fake.UserClicks(g.owner, msg, key); err != nil {
+		g.t.Fatal(err)
+	}
+	g.poll()
+}
+
+// Part of CA-GUILDA-12 (the criterion is fast, so the test that closes it is
+// the one with the fake Guild; this is the composition with the engines, in the
+// full suite).
+// The Owner excludes a Tower that holds the vault from the fake Telegram: /guilda,
+// the button Excluir and the PIN (a wrong one does nothing). The engines do what
+// the criterion says with the hook the Citadel fires wired to the replication:
+// the Tower erases the key, the envelope and the vault tables of its replica (the
 // Citadel audits the receipt), its certificates go on without mestre.local, a
-// promotion of it is refused (by itself and by the Citadel), and the exclusion
-// undone brings the vault back. What is not here is the PIN: the caller of
-// SetExcluded is the panel and the /guilda of the bot, which come in milestone 6
-// (CA-ADM-10 holds the PIN of the panel).
+// promotion of it is refused (by itself and by the Citadel), and Desfazer
+// exclusão, with the PIN, brings the vault back. The part of the PIN and of the
+// buttons alone, with a fake Guild, is in internal/telegram/guildchan_test.go
+// (same id, fast suite).
 func TestExcludingATowerErasesItsVaultAndUndoingItBringsTheVaultBack(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
@@ -65,10 +192,19 @@ func TestExcludingATowerErasesItsVaultAndUndoingItBringsTheVaultBack(t *testing.
 	}
 	r.waitFor("b to be promotable", func() bool { return promotable() == nil })
 
-	// the Owner excludes it
-	if err := a.e.citadelNow().SetExcluded(ctx, b.id, true); err != nil {
-		t.Fatal(err)
+	// the Owner excludes it: /guilda, Excluir, a wrong PIN changes nothing, the right one excludes
+	owner := newGuildBot(t, a.e, "246810")
+	owner.say("/guilda")
+	owner.tap("Excluir")
+	for range 3 { // three wrong ones end the request
+		owner.say("000000")
 	}
+	if m, err := a.e.citadelNow().Machine(ctx, b.id); err != nil || m.Excluded {
+		t.Fatalf("a wrong PIN excluded the machine (%v, %v)", m.Excluded, err)
+	}
+	owner.say("/guilda")
+	owner.tap("Excluir")
+	owner.say("246810")
 	r.waitFor("b to erase the key, the envelope and the vault tables", func() bool {
 		k, e := keyAndEnvelope()
 		return !k && !e && secrets() == 0
@@ -107,9 +243,9 @@ func TestExcludingATowerErasesItsVaultAndUndoingItBringsTheVaultBack(t *testing.
 	}
 
 	// the exclusion undone: the vault comes back, with every table, and the promotion is open again
-	if err := a.e.citadelNow().SetExcluded(ctx, b.id, false); err != nil {
-		t.Fatal(err)
-	}
+	owner.say("/guilda")
+	owner.tap("Desfazer exclusão")
+	owner.say("246810")
 	r.waitFor("b to receive the vault again", func() bool {
 		k, e := keyAndEnvelope()
 		return k && e && secrets() == want
