@@ -2,7 +2,6 @@ package chain
 
 import (
 	"context"
-	"fmt"
 )
 
 // AskRequest is `mestre approval ask`: the Grão-Mestre takes a request that waits
@@ -32,7 +31,7 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 	case r.Level.Agent != a.By:
 		return Outcome{}, s.refused(ctx, r, a.By, AnswerClimb, refuse(CodeNotAtLevel, "the request #%d is not at your level: it waits on %s", r.ID, r.Level.Label()))
 	case r.Deciding != nil:
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d is being decided", r.ID)
+		return Outcome{}, refuse(CodeBusy, "the request #%d is being decided: try again in a moment", r.ID)
 	}
 	level := r.Level
 	note := a.Note
@@ -41,7 +40,7 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 	cur, err := s.st.Get(ctx, a.Request)
 	if err != nil || cur.State != Open || cur.Deciding != nil || !cur.Level.same(level) {
 		s.mu.Unlock()
-		return Outcome{}, refuse(CodeNoRequest, "the request #%d changed meanwhile", a.Request)
+		return Outcome{}, refuse(CodeBusy, "the request #%d changed meanwhile: look at it again", a.Request)
 	}
 	cur.Ask = &note
 	err = s.st.Save(ctx, cur)
@@ -49,11 +48,19 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 	if err != nil {
 		return Outcome{}, err
 	}
-	s.audit(ctx, cur, AuditEntry{Approver: a.By, Level: level.Kind, Answer: AnswerClimb, Outcome: "accepted", Reason: "approval ask: " + oneLine(note.Summary)})
 	s.climb(ctx, cur.ID, level, AnswerClimb, "o Grão-Mestre levou o pedido às pessoas")
 	out := s.outcome(ctx, cur.ID, "asked")
 	if out.Level.Kind != LevelPeople {
-		return out, fmt.Errorf("chain: the request #%d did not reach the people", cur.ID)
+		// overtaken by a decision or an expiry, or no level above: the words do not
+		// stay on a request that did not go up
+		s.mu.Lock()
+		if back, err := s.st.Get(ctx, cur.ID); err == nil && back.State == Open && back.Level.Kind != LevelPeople && back.Ask != nil {
+			back.Ask = nil
+			_ = s.st.Save(ctx, back)
+		}
+		s.mu.Unlock()
+		return out, refuse(CodeBusy, "the request #%d did not reach the people: look at it again", cur.ID)
 	}
+	s.audit(ctx, cur, AuditEntry{Approver: a.By, Level: level.Kind, Answer: AnswerClimb, Outcome: "accepted", Reason: "approval ask: " + oneLine(note.Summary)})
 	return out, nil
 }

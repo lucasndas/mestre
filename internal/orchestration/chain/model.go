@@ -269,6 +269,7 @@ const (
 	CodePaused          = "character_paused"
 	CodeNotRequester    = "not_requester"
 	CodeAlreadyAsked    = "already_asked"
+	CodeBusy            = "busy"
 	codeNothingToAnswer = "nothing_to_answer"
 )
 

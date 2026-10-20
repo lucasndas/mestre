@@ -192,9 +192,9 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 	}
 	note := chain.AskNote{Summary: flagText(c, "summary"), Details: flagText(c, "details"), Recommend: flagText(c, "recommend"), Reason: flagText(c, "reason"),
 		Checked: flagText(c, "checked"), WhyNot: flagText(c, "why-not"), Steps: flagTexts(c, "step")}
-	for name, v := range map[string]string{"summary": note.Summary, "details": note.Details, "reason": note.Reason} {
-		if strings.TrimSpace(v) == "" {
-			return localchan.Fail(localchan.CodeUsage, "--"+name+" is required", usageMsg)
+	for _, f := range []struct{ name, v string }{{"summary", note.Summary}, {"details", note.Details}, {"reason", note.Reason}, {"recommend", note.Recommend}} {
+		if strings.TrimSpace(f.v) == "" {
+			return localchan.Fail(localchan.CodeUsage, "--"+f.name+" is required", usageMsg)
 		}
 	}
 	if note.Recommend != "approve" && note.Recommend != "deny" {
@@ -217,11 +217,8 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 		switch {
 		case errors.As(err, &ref) && ref.Code == chain.CodeNotAtLevel:
 			return localchan.Fail("not_at_level", ref.Message, "see `mestre approval list --mine`").WithExit(localchan.ExitDenied)
-		case errors.As(err, &ref) && (ref.Code == chain.CodeAlreadyAsked || ref.Code == chain.CodeNoRequest):
-			code := "already_asked"
-			if ref.Code == chain.CodeNoRequest {
-				code = "already_decided"
-			}
+		case errors.As(err, &ref) && (ref.Code == chain.CodeAlreadyAsked || ref.Code == chain.CodeNoRequest || ref.Code == chain.CodeBusy):
+			code := map[string]string{chain.CodeAlreadyAsked: "already_asked", chain.CodeNoRequest: "already_decided", chain.CodeBusy: "busy"}[ref.Code]
 			return localchan.Fail(code, ref.Message, "").WithExit(localchan.ExitConflict)
 		}
 		return localchan.Fail(localchan.CodeInternal, "the request could not be taken to the users: "+err.Error(), "")
