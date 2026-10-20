@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"testing"
 )
 
@@ -21,12 +20,11 @@ func stubMestre(t *testing.T) string {
 	return p
 }
 
-// antigravityShell runs a hook line with cmd /s /c "<line>", the form that
-// keeps the quotes of the line intact.
+// antigravityShell runs a hook line as agy 1.4.2 does on Windows: cmd /c with
+// the quoting of Go, which turns every " of the line into \" (a line with
+// quotes breaks here as it breaks in agy).
 func antigravityShell(_ *testing.T, line string) *exec.Cmd {
-	c := exec.Command("cmd")
-	c.SysProcAttr = &syscall.SysProcAttr{CmdLine: `cmd /s /c "` + line + `"`}
-	return c
+	return exec.Command("cmd", "/c", line)
 }
 
 // claudeShell runs a hook line the way Claude Code does on Windows: with the

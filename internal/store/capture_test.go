@@ -731,3 +731,38 @@ func TestAFullCopyThatArrivesAfterCloseTouchesNoFile(t *testing.T) {
 		t.Error("the pools of a closed replica work")
 	}
 }
+
+// Replace removes the -wal of the replica only after every connection of the
+// old file is closed: a query that was running holds the file, and on Windows
+// a file that is open cannot be removed.
+func TestReplaceWaitsForTheQueryThatHoldsTheReplica(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	p := openPrimary(t, clock.NewFake(time.UnixMilli(9)))
+	exec(t, p.Writer(), `INSERT INTO parents (id, name) VALUES (1, 'a')`)
+	tmp := filepath.Join(t.TempDir(), "snap.db")
+	lsn, err := p.Snapshot(ctx, tmp, store.SnapshotOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clk := clock.NewFake(time.UnixMilli(9))
+	r := open(t, filepath.Join(t.TempDir(), "r.db"), logSet, store.Options{Replica: true, Clock: clk})
+	rows, err := r.Reader().QueryContext(ctx, `SELECT 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- r.Replace(ctx, tmp, lsn) }()
+	clk.BlockUntil(1) // Replace is waiting for the connection of the query
+	select {
+	case err := <-done:
+		t.Fatalf("Replace finished while a query held the file: %v", err)
+	default:
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

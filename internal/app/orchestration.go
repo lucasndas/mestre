@@ -174,6 +174,9 @@ type OrchestrationOptions struct {
 	// ritual belong to milestone 5 (the Towers, the flow); nil refuses a
 	// pre-run and a delete by a character. RitualZones gives the time zone of
 	// a workspace (the Guild's, UTC by default).
+	// ScrollCopies writes the copies of the scrolls in the worktrees (nil: the
+	// ones of this machine only).
+	ScrollCopies      scrolls.Copies
 	RitualPreRun      rituals.PreRunner
 	RitualPermissions rituals.Permissions
 	RitualApprovals   rituals.Approvals
@@ -609,7 +612,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	scr, err = scrolls.NewService(scrolls.Options{Store: &scrolls.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Tables: tbl, Connections: conns,
 		Principal: ws.Layout().Principal, Quests: questsRef{&qs}, Logger: o.Logger,
-		Targets: scrolls.CharacterTargets{Registry: reg, Tables: tbl}, Copies: scrolls.LocalCopies{Machine: o.Machine}})
+		Targets: scrolls.CharacterTargets{Registry: reg, Tables: tbl}, Copies: scrollCopies(o)})
 	if err != nil {
 		return nil, err
 	}
@@ -660,7 +663,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			supervision = sup
 		}
 		var freshness chain.Freshness
-		if o.FreshnessRules != nil {
+		if o.FreshnessRules != nil { // the chain exists in this branch
 			freshness = freshnessRef{&fresh}
 		}
 		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
@@ -696,10 +699,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	if o.FreshnessRules != nil {
-		if ch == nil {
-			return nil, errors.New("app: the gate of freshness needs the chain of approval")
-		}
+	if o.FreshnessRules != nil && ch != nil { // without the chain of approval there is no request to gate
 		if fresh, err = basesync.NewGate(basesync.GateOptions{Rules: o.FreshnessRules, Verifier: o.QuestVerifier, Tables: tbl, Mirrors: ws, Base: bsync, Logger: o.Logger}); err != nil {
 			return nil, err
 		}
@@ -951,4 +951,13 @@ func questDone(o OrchestrationOptions) quests.DoneRules {
 		return o.QuestDone
 	}
 	return doneRules{o.ClassLibraries}
+}
+
+// scrollCopies are the writers of the copies of the scrolls: the given ones, or
+// the ones of this machine.
+func scrollCopies(o OrchestrationOptions) scrolls.Copies {
+	if o.ScrollCopies != nil {
+		return o.ScrollCopies
+	}
+	return scrolls.LocalCopies{Machine: o.Machine}
 }
