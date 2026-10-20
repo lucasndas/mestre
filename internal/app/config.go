@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/internal/replication"
+	"github.com/lucasndas/mestre/internal/terminal"
 )
 
 // Defaults of an instance (docs/arquitetura/componentes.md#instâncias).
@@ -74,6 +75,9 @@ type Paths struct {
 	// group of the agents of the instance on Linux, the ACL on Windows); nil leaves the
 	// socket as the system created it (`mestre run --dir`, the tests).
 	CLIAccess localchan.Access
+	// TerminalAccess grants the logon SID of each terminal on CLISocket
+	// while the terminal lives (Windows; nil elsewhere and in the tests).
+	TerminalAccess terminal.Access
 }
 
 // cliAccess is CLIAccess, or none.
@@ -105,6 +109,7 @@ func DefaultPaths(instance string) (Paths, error) {
 			Modelos: filepath.Join(root, "modelos"), Operador: filepath.Join(root, "operador"),
 			Maquina: filepath.Join(root, "maquina"), Agentes: filepath.Join(root, "maquina", "agentes"), CLISocket: sock,
 			HookQueue: hook.QueueDir("windows", programData, instance), CLIAccess: localchan.DefaultAccess(instance),
+			TerminalAccess: localchan.DefaultTerminalAccess(sock),
 		}, nil
 	}
 	return Paths{

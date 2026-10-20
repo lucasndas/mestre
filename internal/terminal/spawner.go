@@ -37,6 +37,9 @@ type Spawned struct {
 	ProcID
 	// CgroupDir is the cgroup of the terminal (Linux), empty without one.
 	CgroupDir string
+	// LogonSID is the logon SID of the terminal (Windows), told by the
+	// launcher that made the token; empty elsewhere.
+	LogonSID string
 }
 
 // Spawner starts the mestre-pty and ends what it started. Who may do it, and
