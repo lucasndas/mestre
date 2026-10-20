@@ -83,6 +83,8 @@ type Service struct {
 	mu     sync.Mutex
 	pumps  map[string]*pumpState
 	warned map[string]bool
+	// unavail remembers who was told the Grand Master is unavailable, and why.
+	unavail map[string]string
 	// progress hears how far the items that carry an ask went.
 	progress AskProgress
 }
@@ -139,7 +141,7 @@ func NewService(o Options) (*Service, error) {
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	return &Service{o: o, st: o.DB, clk: o.Clock, log: o.Logger, pumps: map[string]*pumpState{}, warned: map[string]bool{}}, nil
+	return &Service{o: o, st: o.DB, clk: o.Clock, log: o.Logger, pumps: map[string]*pumpState{}, warned: map[string]bool{}, unavail: map[string]string{}}, nil
 }
 
 // ByKey finds the item that was queued with the idempotency key (Refs.Key).
@@ -195,7 +197,37 @@ func (s *Service) Enqueue(ctx context.Context, n NewItem) (Item, error) {
 		s.log.Warn("inbox: the delivery was not made, the item stays queued", "item", it.ID, "target", n.Target, "err", err)
 	}
 	s.checkLong(ctx, c)
+	s.tellUnavailable(ctx, c, n)
 	return it, nil
+}
+
+// tellUnavailable answers, as "Sistema", a user who writes to a Grand Master
+// that cannot run (interrupted: it could not start, or its machine is away):
+// the message stays in the inbox and is delivered when the Grand Master is
+// back, and the user learns it is unavailable and why
+// (docs/orquestracao/grao-mestre.md#regras-e-erros).
+func (s *Service) tellUnavailable(ctx context.Context, c characters.Character, n NewItem) {
+	if n.Kind != KindUser || c.Role != characters.RoleGrandMaster || n.Origin == nil {
+		return
+	}
+	key := n.Workspace + "\x00" + n.Origin.User
+	s.mu.Lock()
+	if c.State != characters.Interrupted {
+		delete(s.unavail, key)
+		s.mu.Unlock()
+		return
+	}
+	// once per user and reason, until the Grand Master runs again
+	if s.unavail[key] == c.Reason {
+		s.mu.Unlock()
+		return
+	}
+	s.unavail[key] = c.Reason
+	s.mu.Unlock()
+	text := "O Grão-Mestre está indisponível: " + c.Reason + ". A sua mensagem ficou na fila e segue quando ele voltar."
+	if err := s.tellUser(ctx, n.Workspace, n.Origin.User, text); err != nil {
+		s.log.Warn("inbox: the user was not told the Grand Master is unavailable", "workspace", n.Workspace, "err", err)
+	}
 }
 
 // checkLong warns the table master (the Grand Master, for a table master)
