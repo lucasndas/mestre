@@ -134,6 +134,10 @@ func (g userGrimoires) CanUse(ctx context.Context, actor grimoires.Actor, worksp
 type periodHooks struct {
 	chain *chain.Service
 	rules classes.TableRuleGate
+	// usage takes the events of the characters; agentMachine says where the
+	// registry puts a character (nil in a period without orchestration).
+	usage        *hookUsage
+	agentMachine func(ctx context.Context, id string) (string, bool)
 }
 
 // errNoPeriod is why an approval is not opened: this machine is not the

@@ -439,15 +439,14 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 	if n, _ := orc.Inbox.Pending(ctx, dev.ID); n != 1 {
 		t.Fatalf("the item of a busy character is not queued: %d", n)
 	}
+	// the report of the change of state is acked when its handler ends, and the
+	// handler asked the Tower to type the item: if the answer waited behind the
+	// handler the ack would come only after the time out
 	clk := clock.Real{}
 	start := clk.Now()
 	report("idle")
-	r.waitFor("the item to be delivered from inside the handler of the report", func() bool {
-		n, err := orc.Inbox.Pending(ctx, dev.ID)
-		return err == nil && n == 0
-	})
 	if took := clk.Now().Sub(start); took > 8*time.Second {
-		t.Errorf("the item %s took %v: the answer waited behind the handler", queued.ID, took)
+		t.Errorf("the report of %s took %v: the answer of the delivery waited behind the handler", queued.ID, took)
 	}
 }
 

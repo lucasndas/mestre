@@ -84,7 +84,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if err != nil {
 		return nil, err
 	}
-	reg := providers.NewRegistry(providers.Options{})
+	reg := providers.NewRegistry(providers.Options{NoFlush: e.cfg.Synchronous == "OFF"}) // the files follow the databases (Synchronous OFF: tests)
 	binary := e.deps.Binary
 	if binary == "" {
 		if binary, err = os.Executable(); err != nil {
@@ -122,9 +122,20 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if err != nil {
 		return nil, err
 	}
+	// the use of the providers: the events of the characters and the sources
+	// read periodically (usagehost.go)
+	reader := newUsageReader(&usageReader{svc: orc.Usage, dir: usageDirectory{reg: orc.Registry, presets: opts.Presets, quests: &orc.Quests},
+		alive: orc.Registry.Alive, adapters: providers.NewRegistry(providers.Options{Exec: e.deps.UsageSources.Exec}), src: e.deps.UsageSources,
+		machine: e.id.MachineID, clk: e.clk, log: e.log})
+	orc.Loops = append(orc.Loops, func(ctx context.Context) error { return reader.Loop(ctx, usageEvery) })
+	ph := &periodHooks{usage: newHookUsage(orc.Usage, reader, e.log), agentMachine: func(ctx context.Context, id string) (string, bool) {
+		c, err := orc.Registry.Get(ctx, id)
+		return c.Machine, err == nil
+	}}
 	if cc != nil {
-		e.period.Store(&periodHooks{chain: orc.Chain, rules: tableRuleGate(orc.TableRules)})
+		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
 	}
+	e.period.Store(ph)
 	return orc, nil
 }
 

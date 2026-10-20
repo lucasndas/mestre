@@ -339,6 +339,15 @@ func (s *Service) WaitSync(ctx context.Context, waiter characters.Character, ref
 		Targets: []Target{{ID: ref, Name: "sincronização"}}, Reason: "sincronização"}, timeout)
 }
 
+// WaitEpic registers the wait of a workspace for the epic of another table
+// (docs/orquestracao/dependencia-entre-mesas.md): the waiter is the Grand Master,
+// who is woken when the table of the epic is merged; table is the table that
+// depends on it. It has no time limit.
+func (s *Service) WaitEpic(ctx context.Context, waiter characters.Character, table, ref, name string) (Wait, error) {
+	return s.create(ctx, Wait{Workspace: waiter.Workspace, Table: table, Waiter: waiter.ID, Kind: KindEpic, Mode: All,
+		Targets: []Target{{ID: ref, Name: name}}, Reason: name}, 0)
+}
+
 func approvalTarget(request int64) string { return fmt.Sprintf("approval:%d", request) }
 
 // create registers the wait, arms its timer and looks for a deadlock.
@@ -450,7 +459,7 @@ func wakeText(w Wait, targets []Target) string {
 			fmt.Fprintf(&b, "\n- %s concluiu.", t.Name)
 			continue
 		}
-		if w.Kind == KindApproval {
+		if w.Kind == KindApproval || w.Kind == KindEpic {
 			// the result of a request of approval is written by the chain, which quotes
 			// the words of whoever decided: quoting it again would quote the engine
 			fmt.Fprintf(&b, "\n- %s concluiu: %s", t.Name, t.Result)
@@ -567,6 +576,12 @@ func (s *Service) SyncDone(ctx context.Context, ref, text string) {
 	s.targetDone(ctx, KindSync, ref, "", text)
 }
 
+// EpicDone says the table of an epic was merged and its commit is in the base;
+// text is what the Grand Master reads.
+func (s *Service) EpicDone(ctx context.Context, ref, text string) {
+	s.targetDone(ctx, KindEpic, ref, "", text)
+}
+
 // Done implements characters.Observer: the done of a character satisfies the
 // waits for it, and is the answer of the ask its turn handled.
 func (s *Service) Done(ctx context.Context, c characters.Character, text string) error {
@@ -597,7 +612,7 @@ func (s *Service) cancelWait(ctx context.Context, w Wait) {
 	s.disarm(w.ID)
 	// Nothing is delivered for a wait that was cancelled: a character still
 	// waiting for it goes back to idle.
-	if s.o.Waker != nil {
+	if s.o.Waker != nil && w.Kind != KindEpic {
 		if rest, err := s.st.ActiveOf(ctx, w.Waiter); err == nil && len(rest) == 0 {
 			if err := s.o.Waker.WaitResolved(ctx, w.Waiter); err != nil {
 				s.log.Warn("waits: a cancelled wait was not resolved on the machine", "wait", w.ID, "err", err)
