@@ -117,7 +117,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, fmt.Errorf("app: the decrees: %w", err)
 	}
 	r.routing = &telegram.Routing{}
-	r.replies = &telegram.Replies{}
+	r.replies = &telegram.Replies{Users: svc}
 	r.block = &telegram.BlockChannel{Users: svc}
 	r.choose = &telegram.ChooseChannel{Users: svc}
 	r.stall = &telegram.StallChannel{Users: svc}
@@ -408,9 +408,6 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	// Grand Master and the answers of `mestre reply` go out by the bot
 	if o.Users == nil {
 		o.Users = inboxUsers{r}
-	}
-	if o.Channels == nil {
-		o.Channels = inboxChannel{r}
 	}
 	if o.ChainSinks == nil {
 		o.ChainSinks = map[classes.RequestType]chain.Sink{}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
@@ -65,6 +66,8 @@ func TestTheNoticeSystemWithNoGrandMasterAndTheAnswerOfReplyReachTheUserChannel(
 	if _, err := c.run.startBot(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// the Citadel acts: the Telegram is allowed by its fence
+	c.run.BindFence(guild.NewFence(guild.FenceConfig{Clock: c.clk, Epoch: func() uint64 { return 1 }}))
 	fwd := localchan.NewLocalForwarder()
 	c.orc.Register(fwd, nil)
 	gm, ok, err := c.orc.Registry.GrandMaster(ctx, c.ws.Slug)
@@ -109,7 +112,7 @@ func TestTheNoticeSystemWithNoGrandMasterAndTheAnswerOfReplyReachTheUserChannel(
 	}
 	// an answer while the bot is not up is kept for it (ErrChannelDown), not lost
 	c.run.Close()
-	if err := (inboxChannel{c.run}).Send(ctx, inbox.Outbound{Channel: inbox.ChannelTelegram, User: owner.ID, Conversation: "77", Text: "x"}); !errors.Is(err, inbox.ErrChannelDown) {
+	if err := c.run.replies.Send(ctx, inbox.Outbound{Channel: inbox.ChannelTelegram, User: owner.ID, Conversation: "77", Text: "x"}); !errors.Is(err, inbox.ErrChannelDown) {
 		t.Errorf("the channel answered %v after the period ended; want it down, the answer kept", err)
 	}
 }
