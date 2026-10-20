@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -120,7 +121,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
-		Locked: r.lock.Locked, Logger: env.Log})
+		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
@@ -172,6 +173,7 @@ type stdRun struct {
 
 	fence atomic.Pointer[guild.Fence]
 	chain atomic.Pointer[chain.Service]
+	orc   atomic.Pointer[Orchestration]
 	// progress is the message of progress of the workspaces, once the period has it.
 	progress atomic.Pointer[progress.Service]
 	closed   atomic.Bool
@@ -223,6 +225,22 @@ func (c lateChain) Invalidate(ctx context.Context, id int64, why string) error {
 		return err
 	}
 	return s.Invalidate(ctx, id, why)
+}
+
+// lateTargets reads the live target of a request for the flow, from the
+// orchestration of the period. Only the destructive requests have one today; any
+// other type bound to a target is not approved (it cannot be verified).
+type lateTargets struct{ r *stdRun }
+
+func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMessage, error) {
+	orc := t.r.orc.Load()
+	if orc == nil {
+		return nil, errors.New("app: the orchestration is not built")
+	}
+	if req.Type == classes.RequestDestructive {
+		return orc.DestructiveTarget(ctx, req)
+	}
+	return nil, fmt.Errorf("app: no live target for requests of type %q", req.Type)
 }
 
 type lateApprovals struct{ r *stdRun }
@@ -403,6 +421,7 @@ func (r *stdRun) Close() {
 // Attach implements IntegrationRun.
 func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []ExternalFunc {
 	r.chain.Store(orc.Chain)
+	r.orc.Store(orc)
 	r.routing.To = inboxDeliverer{orc}
 	if orc.TableRules != nil {
 		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)

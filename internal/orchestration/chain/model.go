@@ -186,6 +186,8 @@ type Request struct {
 	Item string
 	// Informed says the Grão-Mestre was told the request went to the people.
 	Informed bool
+	// Spent says an approved destructive request was used (the action ran).
+	Spent bool `json:"spent,omitempty"`
 	// AskedBack says the level asked the requester for context and waits.
 	AskedBack bool
 	// AskedAt is when the question was asked.

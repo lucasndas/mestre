@@ -415,6 +415,9 @@ func (p *policy) set(s chain.Settings) {
 
 type worldOpts struct {
 	noGrants, noTemp, realTemp, realSup bool
+	// destructive leaves the destructive commands to the chain of approval, as
+	// production does, instead of the fake that lets them run.
+	destructive bool
 	// realClasses builds the rules of the approvers (and the domains) with
 	// the production builder of the Citadel (app.CitadelClasses) over a real
 	// library; restrictions are the restrictions of sheets, by name.
@@ -464,6 +467,9 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainSubDelegations: w.subs, ChainPRs: w.prs}
 	w.entries = &recordSink{}
 	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries}
+	if opt.destructive {
+		oo.Destructive = nil
+	}
 	if opt.realSup {
 		oo.ChainSupervision = nil
 	}

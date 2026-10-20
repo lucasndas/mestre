@@ -59,14 +59,14 @@ Cada pedido guarda o **alvo** e a **impressão** (SHA-256 do alvo em JSON canôn
 | `custo_extra` | missão ou mesa, valor pedido |
 | `configuracao_repositorio` | a mudança proposta inteira (JSON) |
 | `classe_workspace` | hash do pacote da classe |
-| `acao_destrutiva` | comando exato e objeto (pergaminho e revisão, ritual, classe e hash do pacote, ou mesa e hash da cabeça da branch) |
+| `acao_destrutiva` | comando exato e objeto (pergaminho e revisão, ritual e a hora da última mudança, classe e hash do pacote, ou mesa e hash da cabeça da branch); quem pediu é o personagem que roda o comando |
 | `proposta_agents_md` | workspace e SHA-256 do texto proposto |
 | `ativacao_operador` | mesa, missão (se houver), ficha, classe, máquina, tarefa (texto inteiro) e duração pedida; o pedido mostra tudo isso ao Dono |
 | `atualizacao_mestre` (M7) | `tag` + SHA-256 do manifesto da release ([autoatualização](../plataforma/autoatualizacao.md#aprovação)) |
 | `entrada_na_guilda` | nome e sistema da máquina, os pedidos de certificado (CSRs) e o código de entrada de 6 dígitos ([entrada na Guilda](../guilda/guilda.md#entrada-na-guilda)) |
 | `promocao_cidadela` (M7) | máquina proposta, época atual e nova, e o último ponto do banco replicado nela |
 
-Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commit novo no PR, ou a base andou depois do gate), o pedido vira `invalidado`, e o Grão-Mestre reavalia e, se for o caso, cria um pedido novo. No GitHub, o hash também vai no review e no merge ([aprovação no GitHub](../github/aprovacao-no-github.md)).
+Na `acao_destrutiva` a aplicação é o comando repetido: o primeiro sai com 9 e abre o pedido (o mesmo pedido aberto serve a uma repetição), e o mesmo personagem que o repete depois da aprovação gasta a aprovação **uma vez**, se o objeto está no estado aprovado e o prazo das pessoas, contado da decisão, não acabou; senão o pedido vira `invalidado` (o objeto mudou) ou a aprovação não vale e nasce outro pedido. Antes de aplicar, o motor recalcula a impressão. Se mudou (ex.: entrou um commit novo no PR, ou a base andou depois do gate), o pedido vira `invalidado`, e o Grão-Mestre reavalia e, se for o caso, cria um pedido novo. No GitHub, o hash também vai no review e no merge ([aprovação no GitHub](../github/aprovacao-no-github.md)).
 
 ### Pedidos da Guilda
 
