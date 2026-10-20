@@ -185,3 +185,57 @@ func TestSettingsDoNotApplyWhatTheyDoNotKnow(t *testing.T) {
 		t.Fatalf("Decided = %v with %d writes; want nothing", err, len(l.gh.Actions()))
 	}
 }
+
+// Part of CA-CLI-GM-04: a ruleset proposed by `gh settings apply` is a request to the Owner
+// for the exact body, in the repository of the workspace; nothing is created before the
+// answer, and when the Owner approves that body, and only that, is created; a body that
+// is not a ruleset or is too large is refused.
+func TestARulesetProposedByTheGrandMasterIsCreatedOnlyWhenTheOwnerApprovesItsExactBody(t *testing.T) {
+	t.Parallel()
+	l := newGHLab(t)
+	l.gh.SetPro("lucas/meu-app", true)
+	s := l.settings()
+	body := map[string]any{"name": "mestre-extra", "target": "branch", "enforcement": "active",
+		"rules": []any{map[string]any{"type": "required_linear_history"}}, "bypass_actors": []any{}}
+	id, err := s.ProposeRuleset(l.ctx, "loja", body)
+	if err != nil || id == 0 {
+		t.Fatalf("ProposeRuleset = %d, %v", id, err)
+	}
+	made := l.open.all()
+	if len(made) != 1 || made[0].Type != classes.RequestRepoSettings || made[0].Workspace != "loja" || !strings.Contains(made[0].About, "mestre-extra") {
+		t.Fatalf("requests = %+v", made)
+	}
+	tg := decodeTarget(t, made[0].Target)
+	if tg.Kind != approvals.KindRuleset || tg.Repo != "lucas/meu-app" || tg.PlanB || tg.Body["name"] != "mestre-extra" {
+		t.Fatalf("target = %+v; want the ruleset of the repository of the workspace, not the plan B", tg)
+	}
+	if got := l.gh.Rulesets("lucas/meu-app"); len(got) != 0 {
+		t.Fatalf("a ruleset was created before the approval: %v", got)
+	}
+	if err := s.Decided(l.ctx, chain.Result{Request: chain.Request{Workspace: "loja", Type: classes.RequestRepoSettings, Target: made[0].Target}, Approved: false}); err != nil {
+		t.Fatalf("a denial: %v", err)
+	}
+	if got := l.gh.Rulesets("lucas/meu-app"); len(got) != 0 {
+		t.Fatalf("a ruleset was created after a denial: %v", got)
+	}
+	if mode, _, _ := l.modes.Get(l.ctx, "loja"); mode != approvals.ModeApp {
+		t.Errorf("a denied ruleset that is not the plan B changed the mode to %q", mode)
+	}
+	if err := s.Decided(l.ctx, chain.Result{Request: chain.Request{Workspace: "loja", Type: classes.RequestRepoSettings, Target: made[0].Target}, Approved: true}); err != nil {
+		t.Fatalf("the approval: %v", err)
+	}
+	if got := l.gh.Rulesets("lucas/meu-app"); len(got) != 1 {
+		t.Fatalf("rulesets after the approval = %v; want the one approved", got)
+	}
+	for _, bad := range []map[string]any{
+		nil, {}, {"name": "x"}, {"name": "x", "enforcement": "active"}, {"name": "x", "enforcement": "active", "rules": "no"},
+		{"name": "x", "enforcement": "active", "rules": []any{}, "blob": strings.Repeat("a", 40<<10)},
+	} {
+		if _, err := s.ProposeRuleset(l.ctx, "loja", bad); !errors.Is(err, approvals.ErrBadRuleset) {
+			t.Errorf("ProposeRuleset(%v) = %v; want ErrBadRuleset", len(bad), err)
+		}
+	}
+	if n := len(l.open.all()); n != 1 {
+		t.Errorf("%d requests; a refused body opened one", n)
+	}
+}

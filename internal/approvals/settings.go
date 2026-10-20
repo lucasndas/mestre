@@ -98,6 +98,39 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 		About: "plano B da aprovação: " + github.PlanBChange(rules)})
 }
 
+// ErrBadRuleset: the body is not the body of a ruleset of the API of GitHub.
+var ErrBadRuleset = errors.New("approvals: the change is not a ruleset (a JSON object with name, enforcement and rules)")
+
+// maxRulesetBytes is the largest body of a ruleset that is put to the Owner.
+const maxRulesetBytes = 32 << 10
+
+// ProposeRuleset makes the request to the Owner for a ruleset the Grão-Mestre wants in
+// the repository of the workspace (`mestre gh settings apply`). The target is the exact
+// body: what the Owner approves, with the PIN, is what is created. The repository is
+// the one of the workspace, never one the caller names. It returns the number of the
+// request; nothing is changed until the Owner approves.
+func (s *Settings) ProposeRuleset(ctx context.Context, workspace string, body map[string]any) (int64, error) {
+	name, _ := body["name"].(string)
+	_, hasRules := body["rules"].([]any)
+	if name == "" || body["enforcement"] == nil || !hasRules {
+		return 0, ErrBadRuleset
+	}
+	if raw, err := json.Marshal(body); err != nil || len(raw) > maxRulesetBytes {
+		return 0, fmt.Errorf("%w: it is too large", ErrBadRuleset)
+	}
+	repo, branch, err := s.Workspace(ctx, workspace)
+	if err != nil {
+		return 0, err
+	}
+	target, err := json.Marshal(SettingsTarget{Kind: KindRuleset, Repo: repo, Branch: branch, Body: body})
+	if err != nil {
+		return 0, err
+	}
+	bypass, _ := body["bypass_actors"].([]any)
+	return s.Requests.Request(ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: workspace, Target: target,
+		About: fmt.Sprintf("ruleset %q no repositório %s (%v regras, %d exceções, aplicação %v)", name, repo, len(body["rules"].([]any)), len(bypass), body["enforcement"])})
+}
+
 // Decided implements chain.Sink for the requests of settings: an approved ruleset
 // is created; a refusal of the Owner, or of GitHub because the account has no Pro
 // for a private repository, leaves the workspace in the mode of human approval.

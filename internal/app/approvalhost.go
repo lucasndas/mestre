@@ -7,9 +7,12 @@ import (
 	"log/slog"
 
 	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/decrees"
+	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 )
 
@@ -227,4 +230,86 @@ func (r *stdRun) AppReview() sessionzero.AppReview {
 		Mestre:      r.roleRest(github.RoleMestre, probeMestrePermissions),
 		GrandMaster: r.roleRest(github.RoleGrandMaster, probeGMPermissions),
 	}}
+}
+
+// mergePermissions are the permissions of the token of a merge: the merge is a write
+// in the contents of the repository and in its pull request, and nothing else.
+var mergePermissions = map[string]string{"metadata": "read", "contents": "write", "pull_requests": "write"}
+
+// lateApprover gives `gh approve` the Approver the period makes after the handlers.
+type lateApprover struct{ r *stdRun }
+
+func (l lateApprover) Approve(ctx context.Context, o approvals.ApproveOrder) (approvals.Approval, error) {
+	a := l.r.approver.Load()
+	if a == nil {
+		return approvals.Approval{}, errNoApproval
+	}
+	return a.Approve(ctx, o)
+}
+
+// lateRulesets gives `gh settings apply` the Settings the period makes after the handlers.
+type lateRulesets struct{ r *stdRun }
+
+func (l lateRulesets) ProposeRuleset(ctx context.Context, workspace string, body map[string]any) (int64, error) {
+	s := l.r.settings.Load()
+	if s == nil {
+		return 0, errNoApproval
+	}
+	return s.ProposeRuleset(ctx, workspace, body)
+}
+
+// mergeHost is `gh merge` over the App "Grão-Mestre" and the chain of approval.
+type mergeHost struct{ r *stdRun }
+
+var _ ghcli.Merging = mergeHost{}
+
+// Merger gives the REST of the Grão-Mestre with the token of a merge.
+func (m mergeHost) Merger(ctx context.Context, _ string) (ghcli.PullMerger, error) {
+	app := m.r.gmApp(ctx)
+	if app == "" {
+		return nil, errors.New("the App Grão-Mestre is not made yet")
+	}
+	return m.r.gmRest(app, mergePermissions), nil
+}
+
+// Approved is the newest approved request of type merge for the PR at the commit.
+func (m mergeHost) Approved(ctx context.Context, workspace, repo string, n int, sha string) (int64, error) {
+	rs, err := (&chain.Store{DB: m.r.env.DB}).ApprovedPR(ctx, workspace, repo, n, sha)
+	if err != nil {
+		return 0, err
+	}
+	var id int64
+	for _, r := range rs {
+		if r.Type == classes.RequestMerge && r.ID > id {
+			id = r.ID
+		}
+	}
+	return id, nil
+}
+
+// Ask opens the request of the merge in the chain.
+func (m mergeHost) Ask(ctx context.Context, o chain.OpenRequest) (int64, error) {
+	c := m.r.chain.Load()
+	if c == nil {
+		return 0, errNoApproval
+	}
+	return c.Request(ctx, o)
+}
+
+// Table is the table whose branch is the head of the PR.
+func (m mergeHost) Table(ctx context.Context, workspace, headRef string) string {
+	orc := m.r.orc.Load()
+	if orc == nil || headRef == "" {
+		return ""
+	}
+	all, err := orc.Tables.List(ctx, workspace)
+	if err != nil {
+		return ""
+	}
+	for _, t := range all {
+		if t.Branch == headRef && !tables.Over(t.State) {
+			return t.ID
+		}
+	}
+	return ""
 }

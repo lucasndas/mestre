@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/users"
@@ -25,7 +28,14 @@ type approvalWorld struct {
 	*ghCompose
 	owner users.User
 	head  string
+	fwd   *localchan.LocalForwarder
 }
+
+// epochLock is the lock of the Guild that shows the epoch this Citadel holds.
+type epochLock struct{}
+
+func (epochLock) Check(context.Context) (uint64, error)               { return 1, nil }
+func (epochLock) Claim(context.Context, uint64, string) (bool, error) { return true, nil }
 
 func newApprovalWorld(t *testing.T) *approvalWorld {
 	t.Helper()
@@ -49,7 +59,19 @@ func newApprovalWorld(t *testing.T) *approvalWorld {
 	}
 	c.gh.SetPull("lucas/meu_app", c.pr, w.head, false, "clean")
 	c.gh.SetPullAuthor("lucas/meu_app", c.pr, "lucas-mestre-mestre[bot]")
-	c.run.Attach(c.orc, localchan.NewLocalForwarder())
+	w.fwd = localchan.NewLocalForwarder()
+	c.run.Attach(c.orc, w.fwd)
+	// the lease of the epoch is valid: the lock shows this epoch
+	fence := guild.NewFence(guild.FenceConfig{Lock: epochLock{}, Clock: c.clk, Epoch: func() uint64 { return 1 }})
+	c.run.BindFence(fence)
+	go func() { _ = fence.Run(c.ctx) }()
+	for i := 0; i < 2000 && !fence.LeaseValid(); i++ {
+		c.clk.Advance(guild.LeaseInterval)
+		runtime.Gosched()
+	}
+	if !fence.LeaseValid() {
+		t.Fatal("the lease of the epoch did not become valid")
+	}
 	return w
 }
 
@@ -283,5 +305,70 @@ func TestAReviewMadeOnGitHubItselfConcludesTheRequestThatWaitsForThePeople(t *te
 	}
 	if r, _ := w.orc.Chain.Get(w.ctx, id); r.State != chain.Approved {
 		t.Fatalf("request = %s after the review of lucas on GitHub, want approved", r.State)
+	}
+}
+
+// call runs a command as the Grão-Mestre of the workspace, through the local channel.
+func (w *approvalWorld) call(cmd string, flags map[string]any, args ...string) localchan.Response {
+	w.t.Helper()
+	gm, _, err := w.orc.Registry.GrandMaster(w.ctx, w.ws.Slug)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return w.fwd.Forward(w.ctx, &localchan.Call{
+		Request: localchan.Request{V: 1, ID: "c-" + cmd, AgentID: gm.ID, Cmd: cmd, Args: localchan.TextArgs(args...), Flags: flags},
+		Caller:  localchan.Caller{Identified: true, AgentID: gm.ID, TerminalID: "t-" + gm.ID}})
+}
+
+// Part of CA-CLI-GM-04: over the real composition, `gh merge` opens the request of the merge in
+// the chain (the commit and the base of the PR), waits, and merges the approved commit
+// when the Owner approves; `gh settings apply` asks the Owner and the ruleset appears only
+// when it approves.
+func TestGhMergeAndGhSettingsApplyOverTheRealCompositionWaitForTheOwner(t *testing.T) {
+	t.Parallel()
+	w := newApprovalWorld(t)
+	itoa := func(n int) string { return strconv.Itoa(n) }
+	got := w.call("gh merge", nil, itoa(w.pr))
+	if got.OK || got.Error == nil || got.Error.Code != "approval_pending" || got.ExitCode() != localchan.ExitPending {
+		t.Fatalf("merge before the approval: %+v %+v", got, got.Error)
+	}
+	open, err := (&chain.Store{DB: w.db}).OpenPR(w.ctx, w.ws.Slug, "lucas/meu_app", w.pr)
+	if err != nil || len(open) != 1 || open[0].Type != classes.RequestMerge || open[0].PR == nil || open[0].PR.SHA != w.head {
+		t.Fatalf("open requests of the PR = %+v, %v; want the request of the merge at the commit", open, err)
+	}
+	if len(w.gh.Merges("lucas/meu_app")) != 0 {
+		t.Fatal("merged before the approval")
+	}
+	w.approve(open[0].ID)
+	got = w.call("gh merge", nil, itoa(w.pr))
+	if !got.OK {
+		t.Fatalf("merge after the approval: %+v", got.Error)
+	}
+	if ms := w.gh.Merges("lucas/meu_app"); len(ms) != 1 || ms[0].SHA != w.head || ms[0].Method != "merge" {
+		t.Fatalf("GitHub merged %+v; want the approved commit by the default method", ms)
+	}
+	// the ruleset
+	w.gh.SetPro("lucas/meu_app", true)
+	body := `{"name":"` + github.RulesetName + `","target":"branch","enforcement":"active","rules":[{"type":"pull_request"}]}`
+	got = w.call("gh settings", map[string]any{"body": body}, "apply")
+	if got.OK || got.Error == nil || got.Error.Code != "approval_pending" {
+		t.Fatalf("apply before the approval: %+v", got)
+	}
+	if n := len(w.gh.Rulesets("lucas/meu_app")); n != 0 {
+		t.Fatalf("%d rulesets before the Owner approved", n)
+	}
+	all, err := (&chain.Store{DB: w.db}).Open(w.ctx)
+	var settings []chain.Request
+	for _, r := range all {
+		if r.Type == classes.RequestRepoSettings {
+			settings = append(settings, r)
+		}
+	}
+	if err != nil || len(settings) != 1 {
+		t.Fatalf("requests of settings = %+v, %v", settings, err)
+	}
+	w.approve(settings[0].ID)
+	if n := len(w.gh.Rulesets("lucas/meu_app")); n != 1 {
+		t.Fatalf("%d rulesets after the Owner approved; want 1", n)
 	}
 }
