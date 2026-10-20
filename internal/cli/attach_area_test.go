@@ -27,7 +27,7 @@ func TestReplyAttachOutsideTheWorkspaceIsPathNotAllowed(t *testing.T) {
 		}
 		p.links = map[string]string{ws + "/mesas/42-login/src/link": "/etc/passwd"}
 		got := capture(r, "reply")
-		for _, path := range []string{"/etc/passwd", "../../../../../../etc/passwd", "link", ws + "/espelho.git/HEAD", "/data/workspaces/outro/principal/d.png",
+		for _, path := range []string{"/etc/passwd", `C:\Windows\System32\config\SAM`, `c:/Users/x/.ssh/id_rsa`, `\\\\srv\\share\\x`, "../../../../../../etc/passwd", "link", ws + "/espelho.git/HEAD", "/data/workspaces/outro/principal/d.png",
 			ws + "/mesas/42-login/.git/config", ws + "/mesas/42-login/.mestre/agents/x", ws + "/mesas/f.png"} {
 			res := p.run(t.Context(), "reply", "veja", "--attach", path, "--json")
 			if res.code != 3 || !strings.Contains(res.stdout, `"path_not_allowed"`) {

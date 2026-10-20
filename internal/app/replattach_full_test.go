@@ -171,11 +171,33 @@ func TestAnAttachmentForACharacterOfTheTowerIsCopiedIntoItsTableBeforeTheRowsTha
 	if b, err := os.ReadFile(filepath.Join(w.citadel, filepath.FromSlash(first))); err != nil || string(b) != "PNG" {
 		t.Fatalf("the worktree of the Citadel: %q, %v", b, err)
 	}
+	copies2, err := w.b.e.towerAttachmentCopies(orcDB(t, w.b))
+	if err != nil {
+		t.Fatal(err)
+	}
 	// only the Citadel gives the order, and only for the paths of the attachments
 	link := w.b.e.towerLink()
 	res, err := link.Call(ctx, protocol.Outgoing{Type: protocol.TypeTableAttach, Payload: protocol.TableAttach{Workspace: rwWS, Table: rwTable, Paths: []string{"../x"}}})
 	if err == nil && res.Status == protocol.AckOK {
 		t.Error("a Tower took a table.attach of its own")
+	}
+
+	// the Tower writes nothing for who is not the Citadel, nor for a path that is not an attachment
+	handle := w.b.e.tableAttach(copies2)
+	const planted = ".mestre/anexos/2026/10/zz-planted.png"
+	w.keep(t, planted, "ZZ", "[]")
+	call := func(from protocol.Peer, paths ...string) error {
+		_, err := handle(ctx, &protocol.Message{Peer: from, Payload: &protocol.TableAttach{Workspace: rwWS, Table: rwTable, Paths: paths}})
+		return err
+	}
+	if err := call(protocol.Peer{Role: protocol.RoleMachine, ID: "intruder"}, planted); err == nil {
+		t.Error("a table.attach of a machine that is not the Citadel was taken")
+	}
+	if err := call(protocol.Peer{Role: protocol.RoleMachine, ID: w.a.id}, "../../etc/passwd"); err == nil {
+		t.Error("a table.attach of a path that is not an attachment was taken")
+	}
+	if exists(filepath.Join(w.towerDir, filepath.FromSlash(planted))) {
+		t.Error("the Tower wrote a file for a command it refused")
 	}
 
 	// the Tower is away; a row that names its table is written; the Tower connects

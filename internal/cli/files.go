@@ -186,6 +186,10 @@ func checkAttachments(env Env, p *parsed) *localchan.Response {
 	}
 	names := make([]string, 0, len(list))
 	for _, path := range list {
+		if foreignAbs(path) {
+			r := localchan.Fail("path_not_allowed", fmt.Sprintf("the attachment %q is outside the main clone and the worktrees of the tables", path), "put the file in the workspace first")
+			return &r
+		}
 		full := resolvePath(env.Cwd, path)
 		real, err := env.RealPath(full)
 		if err != nil && errors.Is(err, fs.ErrNotExist) {
@@ -217,6 +221,16 @@ func checkAttachments(env Env, p *parsed) *localchan.Response {
 	}
 	p.flags["attach"] = names
 	return nil
+}
+
+// foreignAbs says a path is absolute in another system (a drive letter or a UNC
+// path): on this one it would be read as a name inside the folder, so it is
+// refused whatever system the process runs on.
+func foreignAbs(p string) bool {
+	if strings.HasPrefix(p, `\\`) {
+		return true
+	}
+	return len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/') && (p[0]|0x20 >= 'a' && p[0]|0x20 <= 'z')
 }
 
 // attachAllowed says a file (its path, links resolved) is in the area of the

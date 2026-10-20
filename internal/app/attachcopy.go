@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -117,9 +118,20 @@ func have(dir, rel string, m meta) bool {
 // is known the file must be what it says (size and SHA-256), so a file that was
 // changed after the channel kept it is not spread to the tables.
 func (c *attachmentCopies) source(workspace, rel string, m meta) ([]byte, error) {
-	data, _, err := safefile.Read(filepath.Join(c.layout.Principal(workspace), filepath.FromSlash(rel)), maxAttachCopy)
+	f, info, err := safefile.Open(filepath.Join(c.layout.Principal(workspace), filepath.FromSlash(rel)))
 	if err != nil {
 		return nil, fmt.Errorf("o anexo %s não pôde ser lido: %w", rel, err)
+	}
+	defer f.Close()
+	if hardLinked(f) {
+		return nil, fmt.Errorf("o anexo %s tem mais de um nome (link físico): não é copiado", rel)
+	}
+	if info.Size > maxAttachCopy {
+		return nil, fmt.Errorf("o anexo %s passa de %d MB", rel, maxAttachCopy>>20)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxAttachCopy+1))
+	if err != nil || int64(len(data)) > maxAttachCopy {
+		return nil, fmt.Errorf("o anexo %s não pôde ser lido por inteiro: %v", rel, err)
 	}
 	if m.known && m.sha256 != "" {
 		if sum := sha256.Sum256(data); int64(len(data)) != m.size || hex.EncodeToString(sum[:]) != m.sha256 {

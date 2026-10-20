@@ -57,7 +57,13 @@ func (e *Engine) towerCatchUp(copies *attachmentCopies, sync *attachSync) func(f
 // `table.attach`: the Citadel has sent the files to the main clone of this
 // machine and asks for the copy into the worktree of a table.
 func (e *Engine) registerTowerAttachments(router *protocol.Router, copies *attachmentCopies) {
-	router.HandleFunc(protocol.TypeTableAttach, func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
+	router.HandleFunc(protocol.TypeTableAttach, e.tableAttach(copies))
+}
+
+// tableAttach is the handler of `table.attach`: it writes nothing for a peer
+// that is not the Citadel of the epoch.
+func (e *Engine) tableAttach(copies *attachmentCopies) protocol.HandlerFunc {
+	return func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
 		if !e.fromCitadel(m.Peer) {
 			return nil, protocol.NewError(protocol.CodeForbidden, "table.attach: only the Citadel gives this command")
 		}
@@ -79,5 +85,5 @@ func (e *Engine) registerTowerAttachments(router *protocol.Router, copies *attac
 			return nil, protocol.NewError(protocol.CodeMissingPrerequisite, "table.attach: %v", err)
 		}
 		return nil, nil
-	})
+	}
 }
