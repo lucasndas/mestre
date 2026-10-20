@@ -3,7 +3,6 @@ package app
 import (
 	"database/sql"
 	"errors"
-	"github.com/lucasndas/mestre/pkg/clock"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/users"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // connectedAna is a world with Ana connected.
