@@ -261,3 +261,21 @@ func TestReleaseDropsTheWaitOfAnEpicForAnotherAndRefusesWhatDoesNotWait(t *testi
 		t.Errorf("release with no dependencies in the run: %+v", got)
 	}
 }
+
+// Part of CA-DEPMESA-05: a release of a wait that is gone (the command was repeated) is
+// not an error when the command changes something else, the same epic twice is one
+// release, and the tables that wait for a closed epic are told all the same.
+func TestAReleaseThatWasAlreadyDoneDoesNotStopTheRestOfTheCommand(t *testing.T) {
+	t.Parallel()
+	r, deps := epicRig(t)
+	e12 := int(r.run("gm", "gh epic", map[string]any{"title": "Login"}, "create").Data["number"].(float64))
+	e15 := int(r.run("gm", "gh epic", map[string]any{"title": "Checkout"}, "create").Data["number"].(float64))
+	deps.releaseErr = epicdeps.ErrNoDependency
+	got := r.run("gm", "gh epic", map[string]any{"release": []any{itoa(e12), itoa(e12)}, "state": "closed"}, "update", itoa(e15))
+	if !got.OK || !slices.Equal(deps.closed, []int{e15}) {
+		t.Fatalf("closing with a release already done: %+v, closed %v", got, deps.closed)
+	}
+	if nw, _ := got.Data["not_waiting"].([]any); len(nw) != 1 {
+		t.Errorf("not_waiting = %v; want the epic once", got.Data["not_waiting"])
+	}
+}

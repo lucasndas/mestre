@@ -129,7 +129,9 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 		if slices.Contains(depends, m) {
 			return usage("an epic is not made to wait and released in the same command")
 		}
-		release = append(release, m)
+		if !slices.Contains(release, m) {
+			release = append(release, m)
+		}
 	}
 	in := github.IssueUpdate{}
 	if v, ok := flagString(c, "title"); ok {
@@ -218,23 +220,34 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 	}
 	// The Grand Master's decision to go on without an epic is made after GitHub took
 	// the rest, so a refusal there leaves nothing released.
-	released := []int{}
+	released, already := []int{}, []int{}
+	var releaseErr *localchan.Response
 	for _, m := range release {
 		switch err := h.Deps.Release(ctx, who.char, n, m); {
 		case errors.Is(err, epicdeps.ErrNotGrandMaster):
-			return localchan.Fail("level_denied", "only the Grand Master of the workspace works on the epics", "")
+			r := localchan.Fail("level_denied", "only the Grand Master of the workspace works on the epics", "")
+			releaseErr = &r
 		case errors.Is(err, epicdeps.ErrNoDependency):
-			return localchan.Fail("not_found", fmt.Sprintf("#%d does not wait for #%d (or the wait already ended)", n, m), "see `mestre table list`").WithExit(localchan.ExitNotFound)
+			already = append(already, m) // it does not wait for it (any more): the command can be repeated
 		case err != nil:
-			return localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the wait of #%d for #%d was not released: %v", n, m, err), "run the command again")
+			r := localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the wait of #%d for #%d was not released: %v", n, m, err), "run the command again")
+			releaseErr = &r
+		default:
+			released = append(released, m)
 		}
-		released = append(released, m)
 	}
-	data["released"] = released
+	data["released"], data["not_waiting"] = released, already
+	// the tables that wait for this epic are told even if a release failed: the epic is closed on GitHub
 	if flagStr(c, "state") == "closed" {
 		if err := h.Deps.EpicClosed(ctx, who.char.Workspace, n, wasClosed && notPlanned); err != nil {
 			return localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the epic #%d is closed on GitHub but the tables that wait for it were not told: %v", n, err), "run the command again")
 		}
+	}
+	if releaseErr != nil {
+		return *releaseErr
+	}
+	if len(release) > 0 && len(released) == 0 && len(already) > 0 && in.Title == nil && in.Body == nil && in.State == "" && len(depends) == 0 && flagStr(c, "state") != "closed" {
+		return localchan.Fail("not_found", fmt.Sprintf("#%d does not wait for %s", n, epicList(already)), "see `mestre table list`").WithExit(localchan.ExitNotFound)
 	}
 	data["text"] = fmt.Sprintf("épico #%d atualizado", n)
 	return localchan.OK(data)
@@ -289,4 +302,12 @@ func (h *Handlers) epicList(ctx context.Context, c *localchan.Call) localchan.Re
 		text.WriteString("nenhum épico\n")
 	}
 	return localchan.OK(map[string]any{"epics": out, "text": strings.TrimRight(text.String(), "\n")})
+}
+
+func epicList(ns []int) string {
+	var out []string
+	for _, n := range ns {
+		out = append(out, "#"+strconv.Itoa(n))
+	}
+	return strings.Join(out, ", ")
 }
