@@ -72,6 +72,7 @@ const (
 	slowestShown = 10
 	quarantineN  = 20
 	envSuite     = "MESTRE_TEST_SUITE"
+	testGOGC     = "400"
 	// LintDoc says how to install the pinned golangci-lint.
 	LintDoc = "docs/desenvolvimento/ambiente.md"
 	// The go test -timeout of a budgeted suite is its budget times 3/2, so
@@ -131,6 +132,11 @@ func (r *Runner) goEnv(suite string) []string {
 	env := []string{envSuite + "=" + suite}
 	if r.Race {
 		env = append(env, "CGO_ENABLED=1")
+	} else {
+		// The test binaries are short and small: the collector would run
+		// often for little. Four times the default spares about a tenth of
+		// the CPU of the fast suite, which is what its budget measures.
+		env = append(env, "GOGC="+testGOGC)
 	}
 	return env
 }

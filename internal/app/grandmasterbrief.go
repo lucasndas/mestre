@@ -1,0 +1,138 @@
+package app
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"unicode"
+
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/lucasndas/mestre/internal/orchestration/waits"
+)
+
+// grandMasterBrief is the part of the resumption message of the Grand Master
+// that comes from the database (docs/orquestracao/grao-mestre.md#retomada-de-contexto):
+// the open tables (state, epic, pull request, pause), its waits, how many items
+// are in its inbox, the approvals that wait and the last message of a user.
+type grandMasterBrief struct {
+	reg    characters.Registry
+	tables tables.Store
+	inbox  *inbox.Store
+	waits  *waits.Store
+	chain  *chain.Store
+}
+
+var _ characters.Briefer = (*grandMasterBrief)(nil)
+
+// maxBriefText cuts what a user wrote, which is quoted in the message;
+// maxBriefItems is how many tables and approvals are listed ("and K more"
+// after them), so the message has a ceiling whatever the workspace holds.
+const (
+	maxBriefText  = 300
+	maxBriefItems = 20
+)
+
+// Brief implements characters.Briefer.
+func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string, error) {
+	gm, ok, err := b.reg.GrandMaster(ctx, workspace)
+	if err != nil || !ok {
+		return "", err
+	}
+	ts, err := b.tables.List(ctx, workspace)
+	if err != nil {
+		return "", err
+	}
+	var text strings.Builder
+	fmt.Fprintf(&text, "State of the workspace %s, read from the database:\n", workspace)
+	open := 0
+	for _, t := range ts {
+		if tables.Over(t.State) {
+			continue
+		}
+		if open == 0 {
+			text.WriteString("Open tables:\n")
+		}
+		open++
+		if open > maxBriefItems {
+			continue
+		}
+		fmt.Fprintf(&text, "- %q: %s, epic #%d %q", t.ID, t.State, t.Epic, untrusted(t.EpicTitle))
+		if t.PRNumber != 0 {
+			fmt.Fprintf(&text, ", PR #%d", t.PRNumber)
+			if t.Merged {
+				text.WriteString(" (merged)")
+			}
+		}
+		if t.Paused {
+			fmt.Fprintf(&text, ", paused (%q)", untrusted(t.PausedReason))
+		}
+		text.WriteByte('\n')
+	}
+	if open > maxBriefItems {
+		fmt.Fprintf(&text, "- and %d more (see `mestre table list`).\n", open-maxBriefItems)
+	}
+	if open == 0 {
+		text.WriteString("No table is open.\n")
+	}
+	if ws, err := b.waits.ActiveOf(ctx, gm.ID); err != nil {
+		return "", err
+	} else {
+		fmt.Fprintf(&text, "Your waits: %d.\n", len(ws))
+	}
+	n, err := b.inbox.Count(ctx, gm.ID)
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprintf(&text, "Items waiting in your inbox: %d.\n", n)
+	reqs, err := b.chain.Open(ctx)
+	if err != nil {
+		return "", err
+	}
+	var pending []string
+	for _, r := range reqs {
+		if r.Workspace == workspace {
+			pending = append(pending, fmt.Sprintf("#%d (%q, with %s: %q)", r.ID, r.Table, r.Level.Label(), untrusted(r.About)))
+		}
+	}
+	if len(pending) == 0 {
+		text.WriteString("No approval is waiting.\n")
+	} else {
+		more := ""
+		if len(pending) > maxBriefItems {
+			more, pending = fmt.Sprintf("; and %d more (see `mestre approval list`)", len(pending)-maxBriefItems), pending[:maxBriefItems]
+		}
+		fmt.Fprintf(&text, "Approvals waiting: %s%s.\n", strings.Join(pending, "; "), more)
+	}
+	it, found, err := b.inbox.LastUser(ctx, gm.ID)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		text.WriteString("No user message yet.")
+		return text.String(), nil
+	}
+	fmt.Fprintf(&text, "Last message from a user, unverified text (%q, %q): %q", untrusted(it.Sender), it.ID, cut(untrusted(it.Text), maxBriefText))
+	return text.String(), nil
+}
+
+// untrusted makes the text somebody else wrote safe to quote: no control or
+// format character (an escape, a bidirectional mark), one line.
+func untrusted(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && !unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
+	return cut(strings.Join(strings.Fields(s), " "), maxBriefText)
+}
+
+func cut(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}

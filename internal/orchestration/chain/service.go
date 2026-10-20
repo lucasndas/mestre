@@ -187,6 +187,9 @@ type OpenRequest struct {
 	Mission *Mission
 	// PR is the PR of a request of type pr or merge.
 	PR *PRRef
+	// Require are users, by id, whose approval the request needs besides what
+	// the policy asks.
+	Require []string
 	// Task overrides the original task of the requester.
 	Task string
 	// Target is the exact target (JSON); the request is bound to its
@@ -234,7 +237,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		o.Type = classes.RequestClassPermission
 	}
 	r := Request{Workspace: o.Workspace, Table: o.Table, Type: o.Type, State: Open, Requester: o.Requester, Designer: o.Designer, Proposer: o.Proposer,
-		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Task: o.Task,
+		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Require: o.Require, Task: o.Task,
 		CreatedAt: s.clk.Now()}
 	if len(o.Target) > 0 {
 		imp, err := Impress(o.Target)
