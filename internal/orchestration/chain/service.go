@@ -64,7 +64,10 @@ type Options struct {
 	// request of a PR is for the people (diff_incompleto).
 	PRs PRSource
 	// Freshness is the gate of freshness of the requests of a PR; nil: none.
-	Freshness   Freshness
+	Freshness Freshness
+	// Repos gives the repository of a workspace: a request of PR, merge or settings
+	// is refused when its target is another one. Nil: not checked.
+	Repos       WorkspaceRepos
 	Supervision Supervision
 	Alerts      Alerts
 	Tasks       Tasks
@@ -313,6 +316,9 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	}
 	if r.Workspace == "" {
 		return 0, errors.New("chain: a request needs a workspace")
+	}
+	if err := s.guardRepo(ctx, r); err != nil {
+		return 0, err
 	}
 	// The gate runs before anything is stored or asked of anyone: a red one
 	// leaves no request (only a PR is gated, and a PR never takes the lock).

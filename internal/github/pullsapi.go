@@ -146,6 +146,8 @@ type Review struct {
 	// ByType is the type of the account that reviewed (User, Bot, Organization)
 	// and Association what the repository says of it (OWNER, COLLABORATOR, NONE…).
 	ByType, Association string
+	// Body is the text of the review: the engine marks the ones it writes.
+	Body string
 }
 
 // Reviews lists the reviews of a PR.
@@ -159,6 +161,7 @@ func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error
 		State       string `json:"state"`
 		CommitID    string `json:"commit_id"`
 		Association string `json:"author_association"`
+		Body        string `json:"body"`
 	}
 	raw, err := pages[item](ctx, c, repo, fmt.Sprintf("/pulls/%d/reviews", n), "reading the reviews")
 	if err != nil {
@@ -166,7 +169,7 @@ func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error
 	}
 	out := make([]Review, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, Review{ID: r.ID, By: r.User.Login, State: r.State, Commit: r.CommitID, ByType: r.User.Type, Association: r.Association})
+		out = append(out, Review{ID: r.ID, By: r.User.Login, State: r.State, Commit: r.CommitID, ByType: r.User.Type, Association: r.Association, Body: r.Body})
 	}
 	return out, nil
 }
