@@ -13,7 +13,6 @@ import (
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -27,7 +26,7 @@ func TestMain(m *testing.M) {
 	if err == nil {
 		path := filepath.Join(dir, "maquina.db")
 		var db *store.DB
-		if db, err = machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"}); err == nil {
+		if db, err = guildtpl.OpenMachine(context.Background(), path, store.Options{Synchronous: "OFF"}); err == nil {
 			if err = db.Close(); err == nil {
 				machineTemplate, err = os.ReadFile(path)
 			}
@@ -56,7 +55,7 @@ func newStore(t *testing.T) *classes.Store {
 	if err := os.WriteFile(path, machineTemplate, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.OpenMachine(context.Background(), path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
