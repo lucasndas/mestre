@@ -21,8 +21,10 @@ type MergeOrder struct {
 	// Method is the method of the merge (github.MergeMethod…; "" is merge), shown to who
 	// approves: it is the choice of who merges, not part of what the approval binds.
 	Method string
-	// Requester is the character that asked.
-	Requester string
+	// Requester is the character that asked (it takes the table of the request away when it
+	// has none, like the Grão-Mestre); Proposer is the one who proposed it and decides
+	// nothing of it.
+	Requester, Proposer string
 }
 
 // MergeRequest is the request of type merge for the order: it names the PR and the
@@ -51,7 +53,7 @@ func MergeRequest(o MergeOrder) (chain.OpenRequest, error) {
 		return chain.OpenRequest{}, fmt.Errorf("approvals: %q is not a method of merge", o.Method)
 	}
 	return chain.OpenRequest{
-		Type: classes.RequestMerge, Workspace: o.Workspace, Table: o.Table, Requester: o.Requester,
+		Type: classes.RequestMerge, Workspace: o.Workspace, Table: o.Table, Requester: o.Requester, Proposer: o.Proposer,
 		About:  fmt.Sprintf("merge do PR #%d de %s (%s) em %s, método %s", o.Number, o.Repo, shortSHA(o.Head), o.Base, o.Method),
 		PR:     &chain.PRRef{Repo: o.Repo, Number: o.Number, SHA: o.Head},
 		Target: PRTarget(o.Repo, o.Number, o.Head, o.Base),

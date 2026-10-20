@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/safefile"
 )
@@ -122,25 +123,81 @@ func (g *Real) resolve(ctx context.Context, ro runOpts) (gitdir, common string, 
 	return clean(lines[0]), clean(lines[1]), strings.TrimSpace(lines[2]) == "true", nil
 }
 
+// checkTTL bounds how long a worktree that git resolved to its record is not
+// asked again. Every call still runs verify (the .git file and the commondir
+// read in process, no link followed), which is what an agent can change; the
+// resolve by git adds what only changes with the repository itself, so the
+// bound only limits that.
+const checkTTL = 5 * time.Minute
+
 // CheckWorktree compares what git resolves from the worktree itself (its
 // .git file and commondir) with the record: a difference is ErrWorktreeMoved,
 // which the engine raises as an alert.
 func (g *Real) CheckWorktree(ctx context.Context, rec WorktreeRecord) error {
+	return g.checkWorktree(ctx, rec)
+}
+
+// checkWorktree is CheckWorktree. verify runs every time; the process that
+// resolves the worktree runs only when the record was not resolved in the
+// last checkTTL or when a folder of the record is reached through a link
+// (what only the realpath of git sees), and a failure forgets the record.
+func (g *Real) checkWorktree(ctx context.Context, rec WorktreeRecord) error {
 	if err := rec.check(); err != nil {
 		return err
 	}
 	if err := rec.verify(); err != nil {
+		g.forget(rec)
 		return err
 	}
-	gitdir, common, _, err := g.resolve(ctx, runOpts{dir: rec.Dir})
+	now := g.clk.Now()
+	g.checkMu.Lock()
+	at, ok := g.checked[rec]
+	g.checkMu.Unlock()
+	if age := now.Sub(at); ok && age >= 0 && age < checkTTL && rec.plain() {
+		return nil
+	}
+	gitdir, common, bare, err := g.resolve(ctx, runOpts{dir: rec.Dir})
 	if err != nil {
+		g.forget(rec)
 		return fmt.Errorf("check worktree %s: %w", rec.Dir, err)
 	}
 	if lockKey(gitdir) != lockKey(rec.GitDir) || lockKey(common) != lockKey(rec.Common) {
+		g.forget(rec)
 		return fmt.Errorf("%w: %s resolves to git folder %s and common dir %s; the record says %s and %s",
 			ErrWorktreeMoved, rec.Dir, gitdir, common, rec.GitDir, rec.Common)
 	}
+	if bare {
+		g.forget(rec)
+		return fmt.Errorf("%w: %s is a bare repository", ErrWorktreeMoved, rec.Dir)
+	}
+	g.checkMu.Lock()
+	for k, t := range g.checked { // forget the expired ones
+		if age := now.Sub(t); age < 0 || age >= checkTTL {
+			delete(g.checked, k)
+		}
+	}
+	g.checked[rec] = now
+	g.checkMu.Unlock()
 	return nil
+}
+
+// plain reports whether the git folder and the common dir of the record are
+// real folders, with no link in their path: only then the strings that
+// verify compares are what git resolves.
+func (rec WorktreeRecord) plain() bool {
+	for _, p := range []string{rec.GitDir, rec.Common} {
+		real, err := filepath.EvalSymlinks(p)
+		if err != nil || lockKey(real) != lockKey(p) {
+			return false
+		}
+	}
+	return true
+}
+
+func (g *Real) forget(rec WorktreeRecord) {
+	g.checkMu.Lock()
+	delete(g.checked, rec)
+	g.checkMu.Unlock()
 }
 
 // OpenWorktree opens the worktree of the record: every call is checked
@@ -148,24 +205,12 @@ func (g *Real) CheckWorktree(ctx context.Context, rec WorktreeRecord) error {
 // to it (GIT_DIR, GIT_COMMON_DIR, GIT_WORK_TREE), so an engine operation does
 // not follow a .git file or a commondir an agent rewrote (ErrWorktreeMoved),
 // and the lock is the one of the recorded common dir. A worktree that points
-// elsewhere at the opening is ErrWorktreeMoved, not opened.
+// elsewhere at the opening is ErrWorktreeMoved, not opened. At most one git
+// process runs here (none while the record is in the cache of
+// checkWorktree).
 func (g *Real) OpenWorktree(ctx context.Context, rec WorktreeRecord) (Repo, error) {
-	if err := g.CheckWorktree(ctx, rec); err != nil {
+	if err := g.checkWorktree(ctx, rec); err != nil {
 		return nil, err
-	}
-	return g.openPinned(ctx, rec)
-}
-
-func (g *Real) openPinned(ctx context.Context, rec WorktreeRecord) (*repo, error) {
-	if err := rec.check(); err != nil {
-		return nil, err
-	}
-	gitdir, common, bare, err := g.resolve(ctx, runOpts{dir: rec.Dir, env: rec.pin()})
-	if err != nil {
-		return nil, fmt.Errorf("open worktree %s: %w", rec.Dir, err)
-	}
-	if lockKey(gitdir) != lockKey(rec.GitDir) || lockKey(common) != lockKey(rec.Common) || bare {
-		return nil, fmt.Errorf("%w: pinned to its record, %s resolves to %s and %s", ErrWorktreeMoved, rec.Dir, gitdir, common)
 	}
 	return &repo{g: g, dir: rec.Dir, common: rec.Common, rec: &rec}, nil
 }

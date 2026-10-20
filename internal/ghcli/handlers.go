@@ -72,6 +72,11 @@ type Handlers struct {
 	Heads Heads
 	// Settings is what `gh settings show` reads besides GitHub (nil: it is not available).
 	Settings Settings
+	// Approver, Merges and Rulesets are what `gh approve`, `gh merge` and `gh settings apply`
+	// need (nil: the command is not available).
+	Approver Approving
+	Merges   Merging
+	Rulesets Rulesets
 	Objects  *github.Objects
 	Clock    clock.Clock
 }
@@ -83,6 +88,7 @@ func (h *Handlers) Register(fwd *localchan.LocalForwarder) {
 		"issue create": h.write("issue create", h.issueCreate), "issue update": h.write("issue update", h.issueUpdate), "issue comment": h.write("issue comment", h.issueComment),
 		"pr open": h.write("pr open", h.prOpen), "pr update": h.write("pr update", h.prUpdate),
 		"gh epic": h.epic, "gh review": h.reviewCmd, "gh settings": h.settings,
+		"gh approve": h.write("gh approve", h.approve), "gh merge": h.write("gh merge", h.merge),
 		"pr comment": h.write("pr comment", h.prComment), "pr reply": h.write("pr reply", h.prReply), "pr note": h.write("pr note", h.prNote),
 	} {
 		fwd.Handle(name, localchan.HandlerFunc(f))

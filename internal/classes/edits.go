@@ -1,10 +1,8 @@
 package classes
 
 import (
-	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
 	"sync"
 )
 
@@ -127,6 +125,3 @@ func (t *EditTracker) OtherEditor(tableID, agentID, path string) (string, bool) 
 	sort.Strings(ids)
 	return who[ids[0]], true
 }
-
-// pathKey is the loose key the git state compares folders with.
-func pathKey(p string) string { return strings.ToLower(filepath.ToSlash(filepath.Clean(p))) }
