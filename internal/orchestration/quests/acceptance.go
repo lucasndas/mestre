@@ -148,6 +148,13 @@ func (s *Service) checkIssue(ctx context.Context, workspace, table string, issue
 	if err != nil {
 		return err
 	}
+	return s.checkCorrections(qs, issue)
+}
+
+// checkCorrections refuses the fix mission past the limit, given the missions
+// of the table: it runs again inside the transaction that inserts the mission,
+// so two creations at once cannot both take the last place.
+func (s *Service) checkCorrections(qs []Quest, issue int) error {
 	slices.SortStableFunc(qs, func(a, b Quest) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	seen := map[int]bool{}
 	fixes := 0

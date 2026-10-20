@@ -598,7 +598,8 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
 		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger,
-		Brief: &grandMasterBrief{reg: reg, tables: tables.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}, chain: &chain.Store{DB: o.Guild}}})
+		Brief:      &grandMasterBrief{reg: reg, tables: tables.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}, chain: &chain.Store{DB: o.Guild}},
+		TableBrief: &tableMasterBrief{reg: reg, quests: &quests.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}}})
 	if err != nil {
 		return nil, err
 	}
