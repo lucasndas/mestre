@@ -51,6 +51,8 @@ type installation struct {
 	id int64
 	// repos are the repositories the token reaches (nil: any of the installation).
 	repos []string
+	// user is the login of a user access token (the device flow): it acts as a person.
+	user string
 }
 
 type repo struct {
@@ -101,6 +103,7 @@ type Server struct {
 	reads          []Request
 	readFail       int
 	readFailHdr    map[string]string
+	ap             *approvalState
 }
 
 // New returns an empty server using the newest recordings.
@@ -155,7 +158,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveGraphQL(w, r)
 		return
 	}
-	if s.serveApps(w, r) || s.serveGit(w, r) || s.serveIssues(w, r) {
+	if s.serveApproval(w, r) || s.serveApps(w, r) || s.serveGit(w, r) || s.serveIssues(w, r) {
 		return
 	}
 	// The route comes before the credentials: a route the double does not
