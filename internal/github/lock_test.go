@@ -13,8 +13,10 @@ import (
 
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/testkit/fakegithub"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -314,6 +316,12 @@ func TestThePromotedMachineWaits60SecondsBeforeAnyActionAndThenChecksTheLock(t *
 		var steps []string
 		step := func(s string) { mu.Lock(); steps = append(steps, s); mu.Unlock() }
 		reconcileFails := true
+		// the Telegram double: the first read of the bot is a getUpdates that reaches it
+		tg, err := faketelegram.New(clk, t, "123456:fake-bot-token")
+		if err != nil {
+			t.Fatal(err)
+		}
+		bot := &telegram.Client{Token: "123456:fake-bot-token", HTTP: &http.Client{Transport: fakenet.HandlerTransport(tg)}}
 		var f *guild.Fence
 		f = guild.NewFence(guild.FenceConfig{Lock: l, Clock: clk, Epoch: func() uint64 { return 4 }, Promoted: true,
 			Reconcile: func(context.Context) error {
@@ -330,7 +338,14 @@ func TestThePromotedMachineWaits60SecondsBeforeAnyActionAndThenChecksTheLock(t *
 			},
 			OnChange: func(s guild.FenceState) {
 				if s == guild.FenceConfirmed {
-					step("bot read")
+					// the bot asks the gate of the fence before each call to the Telegram
+					if !f.Gate(guild.ExternalTelegram).Allowed(ctx) {
+						t.Error("the gate of the Telegram is closed when the fence confirmed")
+					}
+					if _, err := bot.Call(ctx, "getUpdates", map[string]any{"timeout": 0}); err != nil {
+						t.Errorf("getUpdates: %v", err)
+					}
+					step(fmt.Sprintf("bot read: %d getUpdates", tg.Calls("getUpdates")))
 				}
 			}})
 		go func() { _ = f.Run(ctx) }()
@@ -355,6 +370,9 @@ func TestThePromotedMachineWaits60SecondsBeforeAnyActionAndThenChecksTheLock(t *
 		if len(rig.gh.Requests()) != claimed+1 || f.State() != guild.FenceWaiting || f.Allow(guild.ExternalTelegram) == nil || f.Allow(guild.ExternalGitHub) == nil {
 			t.Fatalf("at 60 s with the reconciliation failing: %d requests (was %d), state %s", len(rig.gh.Requests()), claimed, f.State())
 		}
+		if n := tg.Calls("getUpdates") + tg.LongPolls(); n != 0 {
+			t.Fatalf("the Telegram was called %d times before the reconciliation worked", n)
+		}
 		// the next check (30 s later) reconciles again and only then the bot is read
 		advance(30 * time.Second)
 		if f.State() != guild.FenceConfirmed || f.Allow(guild.ExternalTelegram) != nil || f.Allow(guild.ExternalGitHub) != nil {
@@ -363,7 +381,7 @@ func TestThePromotedMachineWaits60SecondsBeforeAnyActionAndThenChecksTheLock(t *
 		mu.Lock()
 		defer mu.Unlock()
 		// the listing of the claim is the first one
-		want := []string{"lock checked: 2 listings", "reconcile", "lock checked: 3 listings", "reconcile", "bot read"}
+		want := []string{"lock checked: 2 listings", "reconcile", "lock checked: 3 listings", "reconcile", "bot read: 1 getUpdates"}
 		if strings.Join(steps, "|") != strings.Join(want, "|") {
 			t.Fatalf("steps = %q, want %q", steps, want)
 		}
@@ -418,4 +436,62 @@ func TestTheLockListsEveryPageAndNeverTrustsTheETagOfTheFirstOne(t *testing.T) {
 	if n, err := l.Check(ctx); err != nil || n != 7 {
 		t.Fatalf("check = %d, %v; want 7 (a new ref must not hide behind the 304 of the first page)", n, err)
 	}
+}
+
+// The reconciliation of a promoted machine has the time of a lease, by the clock
+// of the fence, and a demotion cancels it (Part of CA-TRAVA-06).
+func TestTheReconciliationEndsAtTheLeaseAndIsCancelledByTheDemotion(t *testing.T) {
+	t.Parallel()
+	run := func(t *testing.T, stop func(f *guild.Fence)) (ended error, f *guild.Fence) {
+		t.Helper()
+		clk := clock.Real{}
+		rig := newLockRig(t, clk)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		l := rig.lock(clk, nil)
+		if won, err := l.Claim(ctx, 4, "b"); err != nil || !won {
+			t.Fatalf("claim = %v, %v", won, err)
+		}
+		done := make(chan error, 1)
+		started := make(chan struct{})
+		var once sync.Once
+		f = guild.NewFence(guild.FenceConfig{Lock: l, Clock: clk, Epoch: func() uint64 { return 4 }, Promoted: true,
+			Reconcile: func(rctx context.Context) error {
+				once.Do(func() { close(started) })
+				<-rctx.Done() // a reconciliation that never ends by itself
+				select {
+				case done <- rctx.Err():
+				default: // a later try, after the first one ended
+				}
+				return rctx.Err()
+			}})
+		go func() { _ = f.Run(ctx) }()
+		advance(guild.PromotedWait)
+		<-started
+		stop(f)
+		synctest.Wait()
+		select {
+		case err := <-done:
+			return err, f
+		default:
+			t.Fatal("the reconciliation was not ended")
+			return nil, f
+		}
+	}
+	t.Run("the lease", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			err, f := run(t, func(*guild.Fence) { advance(guild.LeaseValidity) })
+			if !errors.Is(err, context.DeadlineExceeded) || f.State() != guild.FenceWaiting {
+				t.Fatalf("ended with %v, fence %s; want the deadline and the fence still waiting", err, f.State())
+			}
+		})
+	})
+	t.Run("the demotion", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			err, f := run(t, func(f *guild.Fence) { f.Demote() })
+			if !errors.Is(err, context.Canceled) || f.State() != guild.FenceDemoted {
+				t.Fatalf("ended with %v, fence %s; want it cancelled and the fence demoted", err, f.State())
+			}
+		})
+	})
 }
