@@ -39,6 +39,7 @@ func main() {
 		stop()
 		os.Exit(code)
 	}
+	allowEngine() // Windows: the engine must be able to open this process to identify it
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: cannot read the current folder:", err)
