@@ -263,9 +263,16 @@ func TestTheSkillsOfTheLevelAreOnlyInTheLayerOfTheCharacterThatHasThem(t *testin
 	if !slices.Equal(names, []string{"mestre-comunicacao"}) {
 		t.Errorf(".agents/skills/ = %v; want only mestre-comunicacao", names)
 	}
+	// the skills are in the text, or in SKILLS.md when the layer is over its
+	// limit and the text only points to it
 	skills := func(p sessionzero.CharacterPlan) string {
 		_, after, _ := strings.Cut(p.Layer.Text, "## Skills")
 		after, _, _ = strings.Cut(after, "## Context")
+		for _, f := range p.Layer.Files {
+			if f.Path == "SKILLS.md" {
+				after += string(f.Data)
+			}
+		}
 		return after
 	}
 	if s := skills(master); !strings.Contains(s, "### mestre-coordenacao-mesa") || !strings.Contains(s, "### mestre-rituais") {
@@ -477,6 +484,7 @@ func TestTheRulesTellToTreatQueuedAsPending(t *testing.T) {
 	}
 }
 
+// CA-GM-03
 func TestTheInstructionsOfTheUsersAddToTheRulesOfTheGrandMasterAndNeverToACommonCharacter(t *testing.T) {
 	t.Parallel()
 	r := newCharRig(t, nil)
@@ -486,6 +494,12 @@ func TestTheInstructionsOfTheUsersAddToTheRulesOfTheGrandMasterAndNeverToACommon
 	i := strings.Index(rules, "### Instruções dos usuários para este workspace")
 	if i < 0 || !strings.Contains(rules[i:], "Prefira Codex para revisão.") || !strings.Contains(rules[:i], "Grand Master") {
 		t.Errorf("the rules of the Grand Master:\n%s", rules)
+	}
+	// The rules of the system stay complete, before the text of the users.
+	for _, rule := range (sessionzero.BuiltinModels{}).Current().Rules[sessionzero.RoleGrandMaster] {
+		if !strings.Contains(rules[:i], "- "+rule.Text) {
+			t.Errorf("the rule %.40q... is not complete before the instructions of the users", rule.Text)
+		}
 	}
 	tm := r.req("tm", presets.AgentClaudeCode, sessionzero.RoleTableMaster)
 	tm.Instructions = "Sempre abra o PR em rascunho."

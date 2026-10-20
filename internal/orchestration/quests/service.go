@@ -48,6 +48,11 @@ type Options struct {
 	Towers    Towers
 	GitHub    GitHub
 	Approvals Approvals
+	// Issues checks that the `issue` of a new mission is one of the table
+	// (nil: not checked); MaxCorrections is how many fix missions an epic may
+	// have (zero: DefaultMaxCorrections).
+	Issues         IssueOwner
+	MaxCorrections int
 	// Done gives the done_requires of the classes (nil: none asks for a proof).
 	Done DoneRules
 	// Verifier runs the verification of the workspace for a class with verify:
@@ -61,6 +66,9 @@ type Options struct {
 	// (docs/orquestracao/dependencia-entre-mesas.md): no step begins until it is
 	// merged. nil: no table waits.
 	Held func(ctx context.Context, workspace, table string) (bool, error)
+	// Completed is told when a mission ended with all its steps done (the
+	// message of progress goes out); nil: nobody is.
+	Completed func(ctx context.Context, workspace, table, quest string)
 	// EscalateAfter defaults to DefaultEscalateAfter.
 	EscalateAfter time.Duration
 	// Gate is asked before the outside is touched (GitHub); an error means
@@ -265,6 +273,9 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (View, error) {
 		return View{}, err
 	}
 	if err := s.check(ctx, r.Workspace, r.Table, def); err != nil {
+		return View{}, err
+	}
+	if err := s.checkIssue(ctx, r.Workspace, r.Table, def.Issue); err != nil {
 		return View{}, err
 	}
 	now := s.clk.Now()

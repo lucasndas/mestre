@@ -304,10 +304,21 @@ func TestTheSkillsOfTheTableMasterAndOfTheDevReachOnlyEachOfThem(t *testing.T) {
 					}
 					return
 				}
-				// A section of the layer, and only the shared skill in the folder.
+				// A section of the layer (or of SKILLS.md, to which the layer points
+				// when the rules of the table master leave no room for it), and only
+				// the shared skill in the folder.
+				inLayer := func(p sessionzero.CharacterPlan, delivered string) string {
+					for _, f := range p.Layer.Files {
+						if f.Path == "SKILLS.md" {
+							delivered += string(f.Data)
+						}
+					}
+					return delivered
+				}
+				masterText, devText := inLayer(master, dm.Instructions), inLayer(dev, dd.Instructions)
 				for _, s := range []string{"### mestre-coordenacao-mesa", "### mestre-rituais"} {
-					if !strings.Contains(dm.Instructions, s) || strings.Contains(dd.Instructions, s) {
-						t.Errorf("the section %q: table master %v, Dev %v", s, strings.Contains(dm.Instructions, s), strings.Contains(dd.Instructions, s))
+					if !strings.Contains(masterText, s) || strings.Contains(devText, s) {
+						t.Errorf("the section %q: table master %v, Dev %v", s, strings.Contains(masterText, s), strings.Contains(devText, s))
 					}
 				}
 				for who, d := range map[string]dump{"table master": dm, "Dev": dd} {

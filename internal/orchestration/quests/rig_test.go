@@ -254,6 +254,10 @@ type worldOpts struct {
 	verifier quests.Verifier
 	// epics are other epics that exist and are open.
 	epics []int
+	// completed is told when a mission ends with all its steps done.
+	completed func(ctx context.Context, workspace, table, quest string)
+	// issues says which issues are the table's (nil: not checked).
+	issues quests.IssueOwner
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -285,7 +289,9 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: orcfakes.Epics{Also: opt.epics}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{},
 		Messages: orcfakes.Messages{}, Peers: w.peers, QuestCatalog: catalog{}, Users: w.users, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerTable: opt.perTable}, Ceiling: opt.ceiling}
 	oo.QuestDone = opt.done
+	oo.MissionCompleted = opt.completed
 	oo.QuestVerifier = opt.verifier
+	oo.QuestIssues = opt.issues
 	if !opt.noTowers {
 		oo.QuestTowers = w.towers
 	}

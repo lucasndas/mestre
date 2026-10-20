@@ -41,6 +41,9 @@ func (c *BlockChannel) Actions() map[string]Action {
 // built for his level. It returns the number of the notice and how many users it
 // was sent to.
 func (c *BlockChannel) Notify(ctx context.Context, n blocking.Notice) (id int64, sent int, err error) {
+	if c.bot == nil {
+		return 0, 0, errors.New("the bot of the Telegram is not running")
+	}
 	if _, err := blocking.ParseMotive(string(n.Motive)); err != nil {
 		return 0, 0, err
 	}

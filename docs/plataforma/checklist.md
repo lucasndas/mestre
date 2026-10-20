@@ -109,6 +109,7 @@ Ids que saíram não são reaproveitados. Toda máquina abre o bloco de portas d
 | ALL-21 | não excluída | a ficha do Grão-Mestre de cada workspace tem base executável nesta máquina ([Grão-Mestre](../orquestracao/grao-mestre.md#onde-roda)) | aviso | manual: instalar e logar o provedor, ou excluir a máquina |
 | ALL-22 | Cidadela | [repositório da trava](../github/identidades-e-apps.md#repositório-da-trava) acessível e aluguel válido (última conferência confirmada há menos de 60 s); vencido, é o [GitHub fora](../guilda/trava-no-github.md#github-fora): ações no GitHub na fila e nenhuma promoção possível | grave | sozinho quando o GitHub volta; repositório apagado ou sem acesso: manual (o alerta traz o link) |
 | ALL-23 | todas | fonte de uso de um personagem em atividade indisponível (statusLine, JSONL ou `/usage`; [limites de uso](limites-de-uso.md)) | aviso | conforme a fonte; sem correção automática |
+| ALL-24 | todas | perfil de conta com `cli_unreachable` no resultado da [conformidade](../provedores/conformidade.md#resultado): a CLI `mestre` da ferramenta de shell do provedor não alcança o motor; as fichas que chamam a CLI não são recrutadas nele | aviso | manual: corrigir o que barra o canal local (ex.: a rede do sandbox do Codex) e rodar a conformidade de novo |
 
 ## Regras e erros
 
