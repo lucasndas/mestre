@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -134,6 +135,11 @@ type Library struct {
 	// OS is the system `class check` translates the controls for ("" is
 	// this one).
 	OS string
+	// Fallbacks are the plans B the conformance test switched on for this
+	// machine (docs/classes/reforco-nativo.md#verificar-na-implementação):
+	// `class check` translates the controls with them, as a character of the
+	// machine starts. The zero value is the default of each item.
+	Fallbacks providers.NativeFallbacks
 
 	mu       sync.Mutex
 	alerted  map[ClassKey]string   // the last change alerted, so one change gives one alert
