@@ -208,6 +208,16 @@ func tableRuleGate(r *tablerules.Service) classes.TableRuleGate {
 func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout workspaces.Layout) (*CitadelClasses, error) {
 	books := newClassBooks(o.Guild, e.clk, e.paths.ClassesGlobais, layout)
 	o.ClassLibraries = books.For
+	if o.ClassTmp == nil {
+		agents, err := filepath.Abs(e.paths.Agentes)
+		if err != nil {
+			return nil, err
+		}
+		// the same folder the session zero gives the character as MESTRE_TMP
+		o.ClassTmp = func(_ context.Context, character string) (string, error) {
+			return sessionzero.CharacterTmp(agents, character), nil
+		}
+	}
 	o.ChainPolicy = policyFileFor(layout, people, e.log)
 	if o.ChainAlerts == nil {
 		o.ChainAlerts = chainOwnerAlerts{people}

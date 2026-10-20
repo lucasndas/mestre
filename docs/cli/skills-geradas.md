@@ -1,6 +1,6 @@
 # Skills geradas da CLI
 
-> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-19
+> **Assunto:** quais SKILL.md o Mestre gera para ensinar a CLI, quem recebe cada uma, frontmatter e conteúdo · **Componente:** CLI · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -37,6 +37,7 @@ description: >-
 - Só `name` e `description` no frontmatter: são os campos que os três provedores aceitam (Codex exige os dois; o Antigravity exige `description`). Nada de campos próprios de um provedor.
 - `name` em minúsculas com hífen e prefixo `mestre-` (o prefixo também permite achar e excluir do git só as skills do Mestre). `description` em inglês, até 500 caracteres (padrão), dizendo o que faz e quando usar. O limite fica bem abaixo do corte do Claude Code (1.536) e não depende dos limites não documentados do Codex e do Antigravity; a etapa 3 do [teste de conformidade](../provedores/conformidade.md) mostra se a skill é achada.
 - A linha de comentário logo abaixo é o marcador de arquivo gerado, com a versão do modelo.
+- A versão compacta dentro da camada do Mestre (Codex e Antigravity) leva só a orientação, sem a lista de sintaxe (que fica no `mestre help <comando>`), para caber no limite da camada.
 - Corpo em inglês, como o resto do texto voltado aos agentes; até ~6 KiB por skill (padrão), sem arquivos auxiliares.
 - A parte de sintaxe (uso, flags, códigos de saída) é gerada da mesma definição de comandos que produz o `--help` ([convencoes](convencoes.md)); o texto de orientação vem do modelo versionado na Cidadela ([personagem](../sessao-zero/personagem.md)).
 
@@ -75,7 +76,7 @@ description: >-
 3. Alvo ocupado: o disparo entra na fila; passou do `--timeout`, volta para o dono com o motivo.
 4. `list|show|edit|enable|disable|run`; `delete` só a pedido de usuário.
 
-A orientação de cada skill é feita de linhas, cada uma com os comandos de que fala: a linha só entra quando todos eles existem na definição de comandos, e a lista de sintaxe traz só os que existem. Assim, até o M5 a skill do Grão-Mestre não ensina `gh`, `app`, `decree` nem `approval`, e a regeneração (que reescreve o arquivo quando o texto muda) acompanha qualquer comando que entre, saia ou mude.
+A orientação de cada skill é feita de linhas, cada uma com os comandos de que fala: a linha só entra quando todos eles existem na definição de comandos, e a lista de sintaxe traz só os que existem. Assim a skill do Grão-Mestre ensina `gh`, `app`, `decree` e `approval` (a do Mestre da mesa, `issue` e `pr`) porque esses comandos existem na definição, e a regeneração (que reescreve o arquivo quando o texto muda) acompanha qualquer comando que entre, saia ou mude.
 
 A entrega aos personagens é feita pela sessão zero ([mesa](../sessao-zero/mesa.md), [personagem](../sessao-zero/personagem.md)), que depende deste documento. A skill `mestre-grao-mestre` ganha a sintaxe dos comandos do [Grão-Mestre](grao-mestre.md) quando eles existem (M5), pela mesma definição de comandos.
 

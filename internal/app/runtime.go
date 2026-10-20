@@ -199,8 +199,13 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 	}
 	prep = e.refreshingLayers(prep)
 	sk := sinks{e}
+	checker, err := e.mainCloneChecker()
+	if err != nil {
+		host.Close()
+		return nil, err
+	}
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
-		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}),
+		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}), Tables: checker,
 		PreRunGate: e.preRunGate, Reporter: sk, Notifier: sk, Waits: sk, Inbox: sk, Turns: sk, OS: runtime.GOOS, Logger: e.log, EnvExtra: e.envExtra(),
 	})
 	if err != nil {
