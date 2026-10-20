@@ -173,9 +173,12 @@ func readFiles(env Env, p *parsed) *localchan.Response {
 }
 
 // checkAttachments looks at the files of `--attach` before anything is sent:
-// each must exist, be a file and fit the limit
-// (docs/telegram/anexos-e-transcricao.md). What travels is their names; the
-// bytes follow with the attachments of the channel (milestone 5).
+// each must exist, be inside the area of the workspace (the main clone or a
+// worktree of a table; path_not_allowed otherwise), be a file and fit the
+// limit (docs/telegram/anexos-e-transcricao.md). What travels is the name; the
+// path never does. The refusal is the CLI's and no barrier (whoever builds the
+// request by hand does not pass through it): it keeps an agent from sending a
+// file of the machine by mistake.
 func checkAttachments(env Env, p *parsed) *localchan.Response {
 	list, _ := p.flags["attach"].([]string)
 	if len(list) == 0 {
@@ -184,7 +187,21 @@ func checkAttachments(env Env, p *parsed) *localchan.Response {
 	names := make([]string, 0, len(list))
 	for _, path := range list {
 		full := resolvePath(env.Cwd, path)
-		size, err := env.FileSize(full)
+		real, err := env.RealPath(full)
+		if err != nil && errors.Is(err, fs.ErrNotExist) {
+			r := localchan.Fail(localchan.CodeNotFound, fmt.Sprintf("the attachment %q does not exist", path), "check the path")
+			return &r
+		}
+		if err != nil {
+			r := localchan.Fail(localchan.CodeDenied, fmt.Sprintf("the attachment %q could not be read: %v", path, err), "check that it is a file you may read")
+			return &r
+		}
+		if !attachAllowed(env, real) {
+			r := localchan.Fail("path_not_allowed", fmt.Sprintf("the attachment %q is outside the main clone and the worktrees of the tables", path),
+				"put the file in the workspace first; .git and .mestre/agents are never sent")
+			return &r
+		}
+		size, err := env.FileSize(real)
 		switch {
 		case err != nil && errors.Is(err, fs.ErrNotExist):
 			r := localchan.Fail(localchan.CodeNotFound, fmt.Sprintf("the attachment %q does not exist", path), "check the path")
@@ -196,10 +213,79 @@ func checkAttachments(env Env, p *parsed) *localchan.Response {
 			r := localchan.Fail(localchan.CodeTooLarge, fmt.Sprintf("the attachment %q is over %d MB", path, MaxAttach>>20), "send a smaller file")
 			return &r
 		}
-		names = append(names, filepath.Base(path))
+		names = append(names, filepath.Base(real))
 	}
 	p.flags["attach"] = names
 	return nil
+}
+
+// attachAllowed says a file (its path, links resolved) is in the area of the
+// workspace of the caller: the main clone (<workspace>/principal) or a worktree
+// of a table (<workspace>/mesas/<table>). The workspace is found from the
+// worktree the process is in (worktreeRoot); a process outside any has the
+// area of its own folder only. The git folder and the folders the engine
+// writes for the character (.mestre/agents) are never in it.
+func attachAllowed(env Env, real string) bool {
+	root := worktreeRoot(env)
+	if root == "" {
+		return false
+	}
+	if r, err := env.RealPath(root); err == nil {
+		root = r
+	}
+	areas := []string{root}
+	switch {
+	case filepath.Base(root) == "principal":
+		areas = append(areas, filepath.Join(filepath.Dir(root), "mesas"))
+	case filepath.Base(filepath.Dir(root)) == "mesas":
+		areas = append(areas, filepath.Join(filepath.Dir(filepath.Dir(root)), "principal"), filepath.Dir(root))
+	}
+	for i, area := range areas {
+		rel, err := filepath.Rel(area, real)
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+			continue
+		}
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		// the folder of the tables is an area only below a table: mesas/<table>/…
+		if i > 0 && filepath.Base(area) == "mesas" {
+			if len(parts) < 2 {
+				continue
+			}
+			parts = parts[1:]
+		}
+		return !mestreOwn(parts)
+	}
+	return false
+}
+
+// mestreOwn says a path below a worktree is the git folder or the folder the
+// engine writes for the characters.
+func mestreOwn(parts []string) bool {
+	for i, p := range parts {
+		if p == ".git" || (p == ".mestre" && i+1 < len(parts) && parts[i+1] == "agents") {
+			return true
+		}
+	}
+	return false
+}
+
+// worktreeRoot is the nearest folder, from the current one up, that has a
+// `.git` (a folder in a clone, a file in a worktree); empty when there is none.
+func worktreeRoot(env Env) string {
+	dir := env.Cwd
+	if !filepath.IsAbs(dir) && !strings.HasPrefix(dir, "/") { // "/" is rooted for the tests on Windows too
+		return ""
+	}
+	for {
+		if env.FileExists(filepath.Join(dir, ".git")) {
+			return dir
+		}
+		up := filepath.Dir(dir)
+		if up == dir {
+			return ""
+		}
+		dir = up
+	}
 }
 
 // readTree reads the folder of a flag that takes one: it must be inside the

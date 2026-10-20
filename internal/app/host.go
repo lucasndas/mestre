@@ -93,11 +93,15 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 			return nil, fmt.Errorf("app: the path of the binary: %w", err)
 		}
 	}
-	files, err := sessionzero.NewTable(sessionzero.TableOptions{Worktree: sessionzero.Worktree{Providers: reg, Binary: binary}})
+	workspacesDir, err := filepath.Abs(e.paths.Workspaces)
 	if err != nil {
 		return nil, err
 	}
-	workspacesDir, err := filepath.Abs(e.paths.Workspaces)
+	// the attachments of the messages: copied into the worktrees of the tables, here
+	// and on the Towers, and recorded in their rows (attachcopy.go)
+	attached := &attachmentCopies{db: db, tables: tables.Store{DB: db}, layout: workspaces.Layout{Root: workspacesDir}, machine: e.id.MachineID,
+		towers: towerAttachments{towerClient: e.towerClient(), send: e.sendFile}, log: e.log}
+	files, err := sessionzero.NewTable(sessionzero.TableOptions{Worktree: sessionzero.Worktree{Providers: reg, Binary: binary}, Attachments: attached})
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +119,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		// the copies of the scrolls and the pre-run of the rituals reach the Towers as the characters do
 		opts.ScrollCopies, opts.RitualPreRun = m, m
 	}
+	opts.Attachments, opts.MessageAttachments = openAttachments{attached}, messageAttachments{attached}
 	opts.QuestIssues = issueOwner{db: db, clk: e.clk}
 	if integ != nil {
 		integ.Extend(&opts)

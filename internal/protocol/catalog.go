@@ -46,6 +46,7 @@ const (
 	TypeTableWhere           = "table.where"
 	TypeTableRemove          = "table.remove"
 	TypeTableDone            = "table.done"
+	TypeTableAttach          = "table.attach"
 	TypeTableSent            = "table.sent"
 	TypeTableNotice          = "table.notice"
 	TypeRitualPreRun         = "ritual.prerun"
@@ -129,6 +130,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeTableWhere, Dir: CitadelToTower, Ack: true, Payload: TableRef{}, Reply: TableWhere{}},
 		Spec{Type: TypeTableRemove, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
 		Spec{Type: TypeTableDone, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
+		Spec{Type: TypeTableAttach, Dir: CitadelToTower, Ack: true, Payload: TableAttach{}},
 		Spec{Type: TypeTableSent, Dir: TowerToCitadel, Ack: true, Payload: TableSent{}},
 		Spec{Type: TypeTableNotice, Dir: TowerToCitadel, Ack: true, Payload: TableNotice{}},
 		Spec{Type: TypeRitualPreRun, Dir: CitadelToTower, Ack: true, Payload: RitualPreRun{}, Reply: RitualPreRunResult{}},

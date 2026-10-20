@@ -208,7 +208,7 @@ func (e *Engine) towerWorktreeDir(workspace, table string) string {
 
 // newTowerTables makes the half of the tables of this Tower over its link to
 // the Citadel.
-func (e *Engine) newTowerTables(link *protocol.Link) (*tables.Tower, error) {
+func (e *Engine) newTowerTables(link *protocol.Link, attached sessionzero.AttachmentSource) (*tables.Tower, error) {
 	if e.paths.Workspaces == "" {
 		return nil, errors.New("this machine keeps no folder of workspaces")
 	}
@@ -226,7 +226,7 @@ func (e *Engine) newTowerTables(link *protocol.Link) (*tables.Tower, error) {
 			return nil, err
 		}
 	}
-	files, err := sessionzero.NewTable(sessionzero.TableOptions{Worktree: sessionzero.Worktree{Providers: towerProviders(), Binary: binary}})
+	files, err := sessionzero.NewTable(sessionzero.TableOptions{Worktree: sessionzero.Worktree{Providers: towerProviders(), Binary: binary}, Attachments: attached})
 	if err != nil {
 		return nil, err
 	}

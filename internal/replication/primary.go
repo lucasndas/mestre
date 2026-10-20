@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -703,6 +704,7 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 		return err
 	}
 	var sent uint64
+	syncedMirrors := map[string]bool{}
 	for _, r := range rows {
 		row := r
 		if excluded {
@@ -716,6 +718,13 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 			if err != nil {
 				return sent, err
 			}
+			// a mirror is brought up to date once per batch: it holds every commit the
+			// rows of the batch cite (the rows are written after the commits arrive)
+			mirrors = slices.DeleteFunc(mirrors, func(id string) bool {
+				seen := syncedMirrors[id]
+				syncedMirrors[id] = true
+				return seen
+			})
 			if len(files)+len(mirrors) > 0 {
 				if err := flush(); err != nil {
 					return sent, err
@@ -826,6 +835,28 @@ func (p *Primary) FileChanged(root, rel string) {
 			}
 		})
 	}
+}
+
+// ErrNoTower is returned by SendFile for a machine that is not connected.
+var ErrNoTower = errors.New("replication: the machine is not connected")
+
+// SendFile sends one file of the folders to a Tower now and returns when the
+// Tower has it (or already had it): for a command that needs the file there
+// before it goes on, as the copy of an attachment into a table of the Tower.
+// FileChanged is for the files nobody waits for.
+func (p *Primary) SendFile(ctx context.Context, machine string, ref FileRef) error {
+	srv := p.server()
+	p.mu.Lock()
+	pe := p.peers[machine]
+	p.mu.Unlock()
+	if srv == nil || pe == nil || pe.files == nil {
+		return fmt.Errorf("%w: %s", ErrNoTower, machine)
+	}
+	link := srv.Link(machine)
+	if !link.Connected() {
+		return fmt.Errorf("%w: %s", ErrNoTower, machine)
+	}
+	return pe.files.ensure(ctx, link, pe.isExcluded(), ref)
 }
 
 func (p *Primary) syncMirrors(ctx context.Context, link *protocol.Link, pe *peer) error {
