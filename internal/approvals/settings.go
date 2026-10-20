@@ -109,6 +109,9 @@ const maxRulesetBytes = 32 << 10
 // is not here is not put to the Owner.
 var rulesetKeys = map[string]bool{"name": true, "target": true, "enforcement": true, "rules": true, "bypass_actors": true, "conditions": true}
 
+// bypassActorTypes are the kinds of actor a ruleset may let bypass it.
+var bypassActorTypes = map[string]bool{"Integration": true, "OrganizationAdmin": true, "RepositoryRole": true, "Team": true, "DeployKey": true}
+
 // checkRuleset validates the body of a ruleset by an allow list, so that what the Owner
 // reads (summarized) is all there is in it.
 func checkRuleset(body map[string]any) error {
@@ -149,7 +152,7 @@ func checkRuleset(body map[string]any) error {
 			id, isNum := m["actor_id"].(float64)
 			typ, _ := m["actor_type"].(string)
 			mode, _ := m["bypass_mode"].(string)
-			if !isNum || id != float64(int64(id)) || !(typ == "Integration" || typ == "OrganizationAdmin" || typ == "RepositoryRole" || typ == "Team" || typ == "DeployKey") || (mode != "always" && mode != "pull_request") {
+			if !isNum || id != float64(int64(id)) || !bypassActorTypes[typ] || (mode != "always" && mode != "pull_request") {
 				return fmt.Errorf("%w: a bypass actor has an integer actor_id, a known actor_type and a bypass_mode always or pull_request", ErrBadRuleset)
 			}
 		}
