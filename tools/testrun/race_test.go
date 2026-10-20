@@ -25,12 +25,12 @@ func TestRaceMultipliesTheBudget(t *testing.T) {
 		wantLine string
 		timeout  string
 	}{
-		"fast, race, inside 3x":  {"fast", true, 0, 80 * time.Second, false, "PASS fast: 1 tests in 1m20s (budget 1m30s, race x3)", "2m15s"},
-		"fast, race, over 3x":    {"fast", true, 0, 100 * time.Second, true, "FAIL fast suite took 1m40s, budget 1m30s", "2m15s"},
-		"fast, no race, over 1x": {"fast", false, 0, 80 * time.Second, true, "FAIL fast suite took 1m20s, budget 30s", "45s"},
-		"full, race, inside 3x":  {"full", true, 0, 8 * time.Minute, false, "PASS full: 1 tests in 8m0s (budget 9m0s, race x3)", "13m30s"},
-		"full, race, over 3x":    {"full", true, 0, 9*time.Minute + time.Second, true, "FAIL full suite took 9m1s, budget 9m0s", "13m30s"},
-		"fast, race and count 2": {"fast", true, 2, 170 * time.Second, false, "PASS fast: 1 tests in 2m50s (budget 3m0s, race x3)", "4m30s"},
+		"fast, race, inside 3x":  {"fast", true, 0, 100 * time.Second, false, "PASS fast: 1 tests in 1m40s (budget 1m48s, race x3)", "2m42s"},
+		"fast, race, over 3x":    {"fast", true, 0, 110 * time.Second, true, "FAIL fast suite took 1m50s, budget 1m48s", "2m42s"},
+		"fast, no race, over 1x": {"fast", false, 0, 80 * time.Second, true, "FAIL fast suite took 1m20s, budget 36s", "54s"},
+		"full, race, inside 3x":  {"full", true, 0, 10 * time.Minute, false, "PASS full: 1 tests in 10m0s (budget 10m48s, race x3)", "16m12s"},
+		"full, race, over 3x":    {"full", true, 0, 10*time.Minute + 49*time.Second, true, "FAIL full suite took 10m49s, budget 10m48s", "16m12s"},
+		"fast, race and count 2": {"fast", true, 2, 200 * time.Second, false, "PASS fast: 1 tests in 3m20s (budget 3m36s, race x3)", "5m24s"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -153,7 +153,7 @@ func TestPrepushRunsTheChangedPackagesAndTheirDependents(t *testing.T) {
 				if strings.Contains(args, "-race") {
 					t.Fatalf("the pre-push run has no -race: %s", args)
 				}
-				for _, w := range []string{"-tags full ", "-count=1 ", "-timeout 4m30s "} {
+				for _, w := range []string{"-tags full ", "-count=1 ", "-timeout 5m24s "} {
 					if !strings.Contains(args, w) {
 						t.Fatalf("go test lacks %q: %s", w, args)
 					}

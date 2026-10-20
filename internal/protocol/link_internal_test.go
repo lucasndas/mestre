@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,6 +32,26 @@ func (nopStore) Release(context.Context, string, string) error                 {
 func (nopStore) Prune(context.Context, string, time.Time, string) (int, error) { return 0, nil }
 func (nopStore) Claim(context.Context, string, string, string, time.Time) (bool, []byte, error) {
 	return true, nil, nil
+}
+
+// A message sent now to a connection that ended but is not yet detached from
+// the link went nowhere: it is the error of no connection, as it is one moment
+// later, not a closed-connection error that reads like a lost answer.
+func TestASendOnAConnectionThatEndedBeforeItDetachedIsNotConnected(t *testing.T) {
+	t.Parallel()
+	cfg := Config{MachineID: "citadel", Clock: clock.Real{}, Epoch: nopEpoch{}, Certs: nopEpoch{}, Outbox: nopStore{}, Processed: nopStore{}}
+	if err := cfg.prepare(); err != nil {
+		t.Fatal(err)
+	}
+	l := newLink(&cfg, "tower1", SideCitadel)
+	s := newSession(&cfg, l, &sink{}, 1, SideCitadel, 1, nil)
+	l.sess = s
+	s.lanes.stop(ErrSessionClosed) // the end of the connection, before l.detach(s)
+
+	_, err := l.Send(t.Context(), Outgoing{Type: TypeTableWhere, Payload: TableRef{Workspace: "w", Table: "t"}, Transient: true})
+	if !errors.Is(err, ErrNotConnected) {
+		t.Fatalf("send on an ended connection: %v", err)
+	}
 }
 
 // An older connection of a machine that ends after a newer one took its

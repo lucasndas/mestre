@@ -16,7 +16,7 @@ O Mestre tem serviços que ficam ligados o tempo todo em duas plataformas, e a l
 - **Conexões:** WSS com TLS e CA interna, com mTLS entre Torre e Cidadela ([protocolo](../conectividade/protocolo.md), [segurança](../arquitetura/seguranca.md)).
 - **Banco:** SQLite em modo WAL em cada máquina, com réplica do banco da Cidadela nas Torres ([persistência](../arquitetura/persistencia.md)).
 - **Entrega:** um binário por componente e plataforma, fácil de instalar, atualizar e voltar de versão. O Guardião é separado e quase nunca muda ([ADR 0003](0003-autocura-com-guardiao-sem-ssh.md)).
-- **Testes:** a suíte rápida tem orçamento de 30 segundos, sem `sleep` e com relógio injetável ([testes](../qualidade/testes.md), [dublês](../qualidade/dubles.md)). O sistema tem muitos temporizadores.
+- **Testes:** a suíte rápida tem orçamento de 30 segundos (hoje 36 s, [testes](../qualidade/testes.md)), sem `sleep` e com relógio injetável ([testes](../qualidade/testes.md), [dublês](../qualidade/dubles.md)). O sistema tem muitos temporizadores.
 
 ## Opções consideradas
 
@@ -41,7 +41,7 @@ Com **Node SEA** no lugar do Bun, as lacunas de serviço do Windows e de ConPTY 
 
 **Rust**
 - Prós: ConPTY mais testado, menor uso de memória e Whisper dentro do processo (`whisper-rs` 0.16).
-- Contras: ciclo de compilar e testar mais lento, que afeta direto o orçamento de 30 s. Compilação cruzada para Windows com dependências em C. O código de ConPTY, ACL e ambiente do usuário é o mesmo trabalho que em Go.
+- Contras: ciclo de compilar e testar mais lento, que afeta direto o orçamento de 30 s (hoje 36 s, [testes](../qualidade/testes.md)). Compilação cruzada para Windows com dependências em C. O código de ConPTY, ACL e ambiente do usuário é o mesmo trabalho que em Go.
 
 **TypeScript/Bun**
 - Prós: uma só linguagem com o painel e testes muito rápidos.
