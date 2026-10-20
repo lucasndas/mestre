@@ -80,10 +80,6 @@ func (w *world) gmActor() chain.Actor {
 	return chain.Actor{Character: &gm}
 }
 
-func person(level characters.UserLevel) chain.Actor {
-	return chain.Actor{User: "u-" + string(level), UserLevel: level}
-}
-
 // CA-SUPCAD-01
 func TestTheGrandMasterGetsTheSummaryOfTheTableMastersEvery30MinutesWithoutWaitingOrADeadline(t *testing.T) {
 	t.Parallel()
@@ -207,125 +203,6 @@ func TestPausingTheAutonomyOfATableSendsItsMedioUpAndSuspendsTheRulesOfTheTableM
 	// resuming what is not paused succeeds without effect
 	if changed, err := w.resume(w.gmActor(), w.table.ID, "de novo"); err != nil || changed {
 		t.Errorf("resume of a table that is not paused = %v, %v", changed, err)
-	}
-}
-
-// Part of CA-SUPCAD-05 (M5 closes it: the command of the Grão-Mestre by the CLI
-// definition and the button of the Telegram; here the engine handlers and the
-// interface of the supervision with a double for the person).
-func TestThePauseIsAuditedWithWhoAndWhyAndTheLevelRulesHoldForPausingAndResuming(t *testing.T) {
-	t.Parallel()
-	w := newSup(t)
-	table43, master43, _ := w.otherTable()
-	call := func(by characters.Character, cmd string, flags map[string]any) localchan.Response {
-		t.Helper()
-		return w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: cmd, Flags: flags}, Caller: localchan.Caller{Identified: true, AgentID: by.ID}})
-	}
-	// the Grand Master by the command
-	resp := call(w.gm, "approval autonomy pause", map[string]any{"table": w.table.ID, "reason": "muitas falhas"})
-	if !resp.OK {
-		t.Fatalf("pause by the Grand Master: %+v", resp.Error)
-	}
-	log, err := w.supervisor.PauseAudit(w.ctx, w.slug, w.table.ID)
-	if err != nil || len(log) != 1 || log[0].Action != "pause" || log[0].By != w.gm.ID || log[0].Reason != "muitas falhas" || log[0].At.IsZero() {
-		t.Fatalf("audit = %+v, %v", log, err)
-	}
-	if p, ok, _ := w.supervisor.PauseOf(w.ctx, w.slug, w.table.ID); !ok || p.By != w.gm.ID || p.Reason != "muitas falhas" {
-		t.Errorf("pause = %+v, %v", p, ok)
-	}
-	if items := w.itemsOf(w.master, inbox.KindSystem); !slices.ContainsFunc(items, func(i inbox.Item) bool { return strings.Contains(i.Text, "pausada") }) {
-		t.Error("the table master was not told")
-	}
-	// the table master does not pause, with level_denied
-	if r := call(w.master, "approval autonomy pause", map[string]any{"table": table43.ID, "reason": "x"}); r.OK || r.Error.Code != "level_denied" || r.ExitCode() != localchan.ExitDenied {
-		t.Errorf("pause by a table master = %+v", r)
-	}
-	if r := call(master43, "approval autonomy pause", map[string]any{"table": table43.ID, "reason": "x"}); r.OK || r.Error.Code != "level_denied" {
-		t.Errorf("pause of its own table by its master = %+v", r)
-	}
-	if r := call(w.gm, "approval autonomy pause", map[string]any{"table": table43.ID}); r.OK || r.Error.Code != localchan.CodeUsage {
-		t.Errorf("pause without reason = %+v", r)
-	}
-	if r := call(w.gm, "approval autonomy pause", map[string]any{"table": "99-nada", "reason": "x"}); r.OK || r.Error.Code != "not_found" {
-		t.Errorf("pause of a table that does not exist = %+v", r)
-	}
-	// an Approver pauses (the button) and the Grand Master cannot resume it
-	if changed, err := w.pause(person(characters.LevelApprover), table43.ID, "fila grande"); err != nil || !changed {
-		t.Fatalf("pause by an Approver = %v, %v", changed, err)
-	}
-	if r := call(w.gm, "approval autonomy resume", map[string]any{"table": table43.ID, "reason": "voltar"}); r.OK || r.Error.Code != "level_denied" {
-		t.Errorf("resume by the Grand Master of the pause of a person = %+v", r)
-	}
-	if paused, _ := w.supervisor.AutonomyPaused(w.ctx, w.slug, table43.ID); !paused {
-		t.Error("the refused resume changed the pause")
-	}
-	if _, err := w.resume(person(characters.LevelObserver), table43.ID, "x"); err == nil {
-		t.Error("an Observer resumed")
-	}
-	if changed, err := w.resume(person(characters.LevelApprover), table43.ID, "ok"); err != nil || !changed {
-		t.Errorf("resume by an Approver = %v, %v", changed, err)
-	}
-	// the pause of the Grand Master is resumed by him
-	if r := call(w.gm, "approval autonomy resume", map[string]any{"table": w.table.ID, "reason": "ok"}); !r.OK {
-		t.Errorf("resume by the Grand Master of its own pause: %+v", r.Error)
-	}
-	log, _ = w.supervisor.PauseAudit(w.ctx, w.slug, w.table.ID)
-	if len(log) != 2 || log[1].Action != "resume" || log[1].Reason != "ok" {
-		t.Errorf("audit after the resume = %+v", log)
-	}
-	// the status of the table says it
-	if _, err := w.pause(w.gmActor(), w.table.ID, "de novo"); err != nil {
-		t.Fatal(err)
-	}
-	st := w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: "table status", Args: localchan.TextArgs(w.table.ID)}, Caller: localchan.Caller{Identified: true, AgentID: w.gm.ID}})
-	if !st.OK || !strings.Contains(string(st.Data), "Autonomia do Mestre da mesa pausada") {
-		t.Errorf("table status = %s", st.Data)
-	}
-}
-
-// CA-SUPCAD-03
-func TestAnAccumulatingQueueWarnsWhoIsAboveOnceUntilItGoesBackBelowTheLimits(t *testing.T) {
-	t.Parallel()
-	w := newSup(t)
-	dev := w.recruit("Dev")
-	open := func(from, to int) []int64 {
-		var ids []int64
-		for i := from; i < to; i++ {
-			ids = append(ids, w.shell(dev, fmt.Sprintf("pip install p%d", i)))
-		}
-		return ids
-	}
-	ids := open(0, 10)
-	w.clk.Advance(time.Minute)
-	w.tick()
-	if got := w.queueAlertsToGM(); len(got) != 0 {
-		t.Fatalf("10 open requests warned the Grand Master: %d", len(got))
-	}
-	ids = append(ids, open(10, 11)...)
-	w.tick()
-	w.tick() // one at a time
-	alerts := w.queueAlertsToGM()
-	if len(alerts) != 1 {
-		t.Fatalf("the Grand Master got %d alerts, want 1", len(alerts))
-	}
-	for _, want := range []string{w.table.ID, "11", "1 min"} {
-		if !strings.Contains(alerts[0].Text, want) {
-			t.Errorf("the alert lacks %q:\n%s", want, alerts[0].Text)
-		}
-	}
-	if len(w.queueAlertsToPeople()) != 0 {
-		t.Error("the people were warned of a queue of a table master")
-	}
-	// back below the limits, and over them again
-	w.decide(w.master, ids[0], chain.AnswerApprove, "ok")
-	w.tick()
-	if got := w.queueAlertsToGM(); len(got) != 1 {
-		t.Fatalf("10 open again, alerts = %d", len(got))
-	}
-	open(20, 21)
-	w.tick()
-	if got := w.queueAlertsToGM(); len(got) != 2 {
-		t.Errorf("after going below and over again the Grand Master has %d alerts, want 2", len(got))
 	}
 }
 
@@ -483,4 +360,134 @@ func errorsAs(err error, target **chain.SectionError) bool {
 		return true
 	}
 	return false
+}
+
+// Part of CA-SUPCAD-05 (M5 closes it: the command of the Grão-Mestre by the CLI
+// definition and the button of the Telegram; here the engine handlers and the
+// interface of the supervision with a double for the person).
+func TestThePauseIsAuditedWithWhoAndWhyAndTheLevelRulesHoldForPausingAndResuming(t *testing.T) {
+	t.Parallel()
+	w := newSup(t)
+	table43, master43, _ := w.otherTable()
+	call := func(by characters.Character, cmd string, flags map[string]any) localchan.Response {
+		t.Helper()
+		// the CLI resolves two words: pause or resume is the argument
+		args := localchan.TextArgs("pause")
+		if strings.HasSuffix(cmd, " resume") {
+			cmd, args = strings.TrimSuffix(cmd, " resume"), localchan.TextArgs("resume")
+		} else {
+			cmd = strings.TrimSuffix(cmd, " pause")
+		}
+		return w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: cmd, Args: args, Flags: flags}, Caller: localchan.Caller{Identified: true, AgentID: by.ID}})
+	}
+	// the Grand Master by the command
+	resp := call(w.gm, "approval autonomy pause", map[string]any{"table": w.table.ID, "reason": "muitas falhas"})
+	if !resp.OK {
+		t.Fatalf("pause by the Grand Master: %+v", resp.Error)
+	}
+	log, err := w.supervisor.PauseAudit(w.ctx, w.slug, w.table.ID)
+	if err != nil || len(log) != 1 || log[0].Action != "pause" || log[0].By != w.gm.ID || log[0].Reason != "muitas falhas" || log[0].At.IsZero() {
+		t.Fatalf("audit = %+v, %v", log, err)
+	}
+	if p, ok, _ := w.supervisor.PauseOf(w.ctx, w.slug, w.table.ID); !ok || p.By != w.gm.ID || p.Reason != "muitas falhas" {
+		t.Errorf("pause = %+v, %v", p, ok)
+	}
+	if items := w.itemsOf(w.master, inbox.KindSystem); !slices.ContainsFunc(items, func(i inbox.Item) bool { return strings.Contains(i.Text, "pausada") }) {
+		t.Error("the table master was not told")
+	}
+	// the table master does not pause, with level_denied
+	if r := call(w.master, "approval autonomy pause", map[string]any{"table": table43.ID, "reason": "x"}); r.OK || r.Error.Code != "level_denied" || r.ExitCode() != localchan.ExitDenied {
+		t.Errorf("pause by a table master = %+v", r)
+	}
+	if r := call(master43, "approval autonomy pause", map[string]any{"table": table43.ID, "reason": "x"}); r.OK || r.Error.Code != "level_denied" {
+		t.Errorf("pause of its own table by its master = %+v", r)
+	}
+	if r := call(w.gm, "approval autonomy pause", map[string]any{"table": table43.ID}); r.OK || r.Error.Code != localchan.CodeUsage {
+		t.Errorf("pause without reason = %+v", r)
+	}
+	if r := call(w.gm, "approval autonomy pause", map[string]any{"table": "99-nada", "reason": "x"}); r.OK || r.Error.Code != "not_found" {
+		t.Errorf("pause of a table that does not exist = %+v", r)
+	}
+	// an Approver pauses (the button) and the Grand Master cannot resume it
+	if changed, err := w.pause(person(characters.LevelApprover), table43.ID, "fila grande"); err != nil || !changed {
+		t.Fatalf("pause by an Approver = %v, %v", changed, err)
+	}
+	if r := call(w.gm, "approval autonomy resume", map[string]any{"table": table43.ID, "reason": "voltar"}); r.OK || r.Error.Code != "level_denied" {
+		t.Errorf("resume by the Grand Master of the pause of a person = %+v", r)
+	}
+	if paused, _ := w.supervisor.AutonomyPaused(w.ctx, w.slug, table43.ID); !paused {
+		t.Error("the refused resume changed the pause")
+	}
+	if _, err := w.resume(person(characters.LevelObserver), table43.ID, "x"); err == nil {
+		t.Error("an Observer resumed")
+	}
+	if changed, err := w.resume(person(characters.LevelApprover), table43.ID, "ok"); err != nil || !changed {
+		t.Errorf("resume by an Approver = %v, %v", changed, err)
+	}
+	// the pause of the Grand Master is resumed by him
+	if r := call(w.gm, "approval autonomy resume", map[string]any{"table": w.table.ID, "reason": "ok"}); !r.OK {
+		t.Errorf("resume by the Grand Master of its own pause: %+v", r.Error)
+	}
+	log, _ = w.supervisor.PauseAudit(w.ctx, w.slug, w.table.ID)
+	if len(log) != 2 || log[1].Action != "resume" || log[1].Reason != "ok" {
+		t.Errorf("audit after the resume = %+v", log)
+	}
+	// the status of the table says it
+	if _, err := w.pause(w.gmActor(), w.table.ID, "de novo"); err != nil {
+		t.Fatal(err)
+	}
+	st := w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: "table status", Args: localchan.TextArgs(w.table.ID)}, Caller: localchan.Caller{Identified: true, AgentID: w.gm.ID}})
+	if !st.OK || !strings.Contains(string(st.Data), "Autonomia do Mestre da mesa pausada") {
+		t.Errorf("table status = %s", st.Data)
+	}
+}
+
+// CA-SUPCAD-03
+func TestAnAccumulatingQueueWarnsWhoIsAboveOnceUntilItGoesBackBelowTheLimits(t *testing.T) {
+	t.Parallel()
+	w := newSup(t)
+	dev := w.recruit("Dev")
+	open := func(from, to int) []int64 {
+		var ids []int64
+		for i := from; i < to; i++ {
+			ids = append(ids, w.shell(dev, fmt.Sprintf("pip install p%d", i)))
+		}
+		return ids
+	}
+	ids := open(0, 10)
+	w.clk.Advance(time.Minute)
+	w.tick()
+	if got := w.queueAlertsToGM(); len(got) != 0 {
+		t.Fatalf("10 open requests warned the Grand Master: %d", len(got))
+	}
+	ids = append(ids, open(10, 11)...)
+	w.tick()
+	w.tick() // one at a time
+	alerts := w.queueAlertsToGM()
+	if len(alerts) != 1 {
+		t.Fatalf("the Grand Master got %d alerts, want 1", len(alerts))
+	}
+	for _, want := range []string{w.table.ID, "11", "1 min"} {
+		if !strings.Contains(alerts[0].Text, want) {
+			t.Errorf("the alert lacks %q:\n%s", want, alerts[0].Text)
+		}
+	}
+	if len(w.queueAlertsToPeople()) != 0 {
+		t.Error("the people were warned of a queue of a table master")
+	}
+	// back below the limits, and over them again
+	w.decide(w.master, ids[0], chain.AnswerApprove, "ok")
+	w.tick()
+	if got := w.queueAlertsToGM(); len(got) != 1 {
+		t.Fatalf("10 open again, alerts = %d", len(got))
+	}
+	open(20, 21)
+	w.tick()
+	if got := w.queueAlertsToGM(); len(got) != 2 {
+		t.Errorf("after going below and over again the Grand Master has %d alerts, want 2", len(got))
+	}
+}
+
+func person(level characters.UserLevel) chain.Actor {
+	return chain.Actor{User: "u-" + string(level), UserLevel: level}
 }

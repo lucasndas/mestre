@@ -60,6 +60,9 @@ func (d *DB) privileged(ctx context.Context, fn func(conn *sql.Conn) error) erro
 	defer conn.Close()
 	gate := func(open bool) error {
 		return conn.Raw(func(dc any) error {
+			if t, ok := dc.(*trackConn); ok {
+				dc = t.innerConn
+			}
 			g, ok := dc.(*guardConn)
 			if !ok {
 				return fmt.Errorf("store: the writer of a replica is a %T, not the guarded connection", dc)
@@ -503,15 +506,25 @@ func (d *DB) Replace(ctx context.Context, src string, wantLSN uint64) error {
 			return fmt.Errorf("store: replace: %w", err)
 		}
 	}
+	d.swapMu.Lock()
+	defer d.swapMu.Unlock()
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.closed { // closed while the copy was being checked and moved
+		d.mu.Unlock()
 		removeDB(incoming)
 		return ErrClosed
 	}
-	if err := d.closePools(); err != nil {
+	cerr := d.closePools()
+	live := d.live
+	d.mu.Unlock()
+	// Outside the lock, so a goroutine that still holds a query can ask for the
+	// pools; the file is free only when its connections are closed.
+	werr := live.wait(d.clock)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if cerr != nil || werr != nil {
 		removeDB(incoming)
-		return fmt.Errorf("store: replace: %w", err)
+		return errors.Join(fmt.Errorf("store: replace: %w", errors.Join(cerr, werr)), d.openPools(ctx))
 	}
 	d.forgetTables()
 	for _, suffix := range []string{"-wal", "-shm", "-journal"} {

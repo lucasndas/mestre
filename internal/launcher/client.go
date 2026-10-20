@@ -75,7 +75,7 @@ func (c *Client) Spawn(ctx context.Context, spec terminal.SpawnSpec) (terminal.S
 	}
 	return terminal.Spawned{
 		ProcID:    terminal.ProcID{PID: resp.PID, Start: resp.Start},
-		CgroupDir: resp.CgroupDir,
+		CgroupDir: resp.CgroupDir, LogonSID: resp.Logon,
 	}, nil
 }
 

@@ -1,10 +1,8 @@
 package characters_test
 
 import (
-	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -39,123 +37,6 @@ func (r *rig) restart(machine string, alive []characters.Character, dead []chara
 	r.t.Cleanup(rt.Close)
 	m.rt, r.machines[machine] = rt, rt
 }
-
-// Part of CA-PERS-07 and of CA-CIDADELA-13: the full suite does the same with a
-// real mestre-pty and the fake agent (the waits and the outbox of the
-// criterion of the Guild come with the stages that own them).
-func TestAfterTheRestartOfTheEngineTheSurvivorsKeepTheirStateAndTheDeadOnesAreInterruptedAndResumed(t *testing.T) {
-	t.Parallel()
-	r := newRig(t, rigOptions{})
-	gm := r.makeGM()
-	tm := r.makeTM("3-login")
-	busy := r.make("Dev Claude", "Ocupado", "3-login")
-	waiting := r.make("Dev Claude", "Espera", "3-login")
-	task := r.make("Dev Claude", "Com tarefa", "3-login")
-	persistent := r.make("Dev Persistente", "Persistente", "3-login")
-	ephemeral := r.make("Dev Claude", "Efemero", "3-login")
-	shell := mustCreate(t, r, characters.CreateRequest{Name: "srv", Base: "bash", Table: "3-login"})
-	for _, c := range []characters.Character{gm, tm, busy, waiting, task, persistent, ephemeral} {
-		r.ready(c)
-	}
-	r.stable(shell, "user@host:~$ ", 0)
-	r.busy(busy)
-	r.busy(waiting)
-	r.waits.set(waiting.ID, "Revisor")
-	r.hook(waiting, providers.EventTurnEnd)
-	r.waits.set(waiting.ID, "")
-	if err := r.svc.TaskAssigned(r.ctx, task.ID); err != nil {
-		t.Fatal(err)
-	}
-	r.busy(task)
-	lastBusy := r.get(busy.ID)
-	machine := busy.Machine
-	prep := r.mach[machine].prep
-
-	// The engine goes down; the terminals of "busy" and "waiting" survive.
-	r.clk.Advance(10 * time.Minute)
-	r.restart(machine, []characters.Character{busy, waiting}, []characters.Character{gm, tm, task, persistent, ephemeral, shell})
-	prep.mu.Lock()
-	prep.prepared = nil
-	prep.mu.Unlock()
-	rep, err := r.mach[machine].rt.Recover(r.ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	slices.Sort(rep.Reconnected)
-	if want := []string{busy.ID, waiting.ID}; !slices.Equal(rep.Reconnected, sorted(want)) || len(rep.Interrupted) != 6 {
-		t.Fatalf("recover = %+v", rep)
-	}
-	if got := r.get(busy.ID); got.State != characters.Busy || got.StoppedAt != lastBusy.StoppedAt {
-		t.Errorf("the busy survivor = %s, want busy", got.State)
-	}
-	if got := r.get(waiting.ID); got.State != characters.Waiting || got.Reason != "Revisor" {
-		t.Errorf("the waiting survivor = %s (%s), want waiting (Revisor)", got.State, got.Reason)
-	}
-	for _, c := range []characters.Character{busy, waiting} {
-		for _, l := range mustLog(t, r, c) {
-			if l.To == characters.Interrupted {
-				t.Errorf("%s passed through interrupted", c.Name)
-			}
-		}
-	}
-	// The 15 minutes continue from the last signal, before the restart.
-	r.clk.Advance(4*time.Minute + 59*time.Second)
-	if r.state(busy) != characters.Busy {
-		t.Fatalf("5 minutes before the last signal + 10 + 4:59: %s", r.state(busy))
-	}
-	r.clk.Advance(time.Second)
-	if r.state(busy) != characters.Stuck {
-		t.Errorf("15 minutes after its last signal: %s, want stuck", r.state(busy))
-	}
-	for _, c := range []characters.Character{gm, tm, task, persistent, ephemeral, shell} {
-		if r.state(c) != characters.Interrupted {
-			t.Errorf("%s = %s, want interrupted (its mestre-pty died)", c.Name, r.state(c))
-		}
-	}
-
-	// The resumption: the order, the sessions and what is not resumed.
-	if err := r.svc.ResumeMachine(r.ctx, machine); err != nil {
-		t.Fatal(err)
-	}
-	prep.mu.Lock()
-	var order []string
-	for _, p := range prep.prepared {
-		order = append(order, p.Name)
-		if p.ResumeSessionID == "" && p.ID != gm.ID && p.ID != tm.ID {
-			t.Errorf("%s was not resumed with its session", p.Name)
-		}
-	}
-	prep.mu.Unlock()
-	if want := []string{"Grão-Mestre", "Mestre", "Com tarefa", "Persistente"}; !slices.Equal(order, want) {
-		t.Errorf("resumption order = %v, want %v", order, want)
-	}
-	for _, c := range []characters.Character{gm, tm, task, persistent} {
-		if got := r.state(c); got != characters.Starting {
-			t.Errorf("%s = %s after the resumption, want starting", c.Name, got)
-		}
-	}
-	if got := r.get(ephemeral.ID); got.State != characters.Stopped {
-		t.Errorf("an ephemeral with no task: %s, want stopped", got.State)
-	}
-	if got := r.path(ephemeral); got[len(got)-1] != characters.Stopped {
-		t.Errorf("states = %v", got)
-	}
-	if got := r.state(shell); got != characters.Interrupted {
-		t.Errorf("a simple terminal: %s, want interrupted (the engine does not run commands again)", got)
-	}
-	if ns := r.notes.of(characters.NoticeNotResumed); len(ns) != 1 || ns[0].Character != shell.ID {
-		t.Errorf("the creator of the terminal: %+v", ns)
-	}
-	// The resumed one got a new terminal and kept its session.
-	if in := r.builder.input(task.ID); !in.Resumed || in.ResumeSessionID != r.get(task.ID).ProviderSessionID || in.ResumeSessionID == "" {
-		t.Errorf("build input of the resumption = %+v", in)
-	}
-	if got := r.get(task.ID).TerminalID; got != task.ID+"-2" {
-		t.Errorf("terminal = %q, want the second of the character", got)
-	}
-}
-
-func sorted(s []string) []string { slices.Sort(s); return s }
 
 func TestAMachineThatIsAwayLeavesItsCharactersInterruptedAndTheTableMasterToldUntilItIsBack(t *testing.T) {
 	t.Parallel()
