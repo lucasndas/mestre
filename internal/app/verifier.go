@@ -41,7 +41,7 @@ var _ verification.Runner = terminalRunner{}
 // shellFor is the shell and the arguments that run one command line.
 func shellFor(goos, command string) (string, []string) {
 	if goos == "windows" {
-		return "cmd.exe", []string{"/d", "/c", command}
+		return systemCmd(), []string{"/d", "/c", command}
 	}
 	return "/bin/sh", []string{"-c", command}
 }
@@ -108,16 +108,16 @@ func (r terminalRunner) Run(ctx context.Context, run verification.Run) (verifica
 		r.stop(t)
 		return verification.Result{}, ctx.Err()
 	}
-	if err := t.WaitLogged(ctx, t.Client().Exit().End); err != nil && !timedOut {
-		r.log(err)
+	if timedOut {
+		r.stop(t) // the command goes first; what it printed is in the log
+	} else if err := t.WaitLogged(ctx, t.Client().Exit().End); err != nil {
+		r.stop(t)
+		return verification.Result{}, fmt.Errorf("the output of the command could not be read: %w", err)
 	}
 	exit := t.Client().Exit()
-	// the end of the output is what is kept: read from near the end, not from the start
-	from := uint64(0)
-	if exit.End > verifyOutputRead {
-		from = exit.End - verifyOutputRead
-	}
-	rep, rerr := t.Replay(ctx, from)
+	// the end of the output is what is kept, from the log of the terminal: the
+	// mestre-pty leaves once the engine confirmed the output, so it is not asked
+	tail, rerr := t.LogTail(verifyOutputRead)
 	r.stop(t)
 	if rerr != nil {
 		return verification.Result{}, fmt.Errorf("the output of the command could not be read: %w", rerr)
@@ -126,13 +126,11 @@ func (r terminalRunner) Run(ctx context.Context, run verification.Run) (verifica
 	if (exit.Signal != "" || exit.NoCode) && code == 0 {
 		code = -1 // ended by a signal, or with no code announced: never a green
 	}
-	return verification.Result{ExitCode: code, Output: string(rep.Data), TimedOut: timedOut}, nil
+	return verification.Result{ExitCode: code, Output: string(tail), TimedOut: timedOut}, nil
 }
 
 // verifyOutputRead is how much of the end of the output is read.
 const verifyOutputRead = 256 << 10
-
-func (r terminalRunner) log(error) {}
 
 // stop ends the terminal and its tree; it does not depend on the context of the
 // caller, which may be the one that ended.

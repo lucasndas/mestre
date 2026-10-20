@@ -30,7 +30,7 @@ func TestTheShellRunsOneCommandLineOnEachSystem(t *testing.T) {
 	if p, a := shellFor("linux", "make test"); p != "/bin/sh" || len(a) != 2 || a[0] != "-c" || a[1] != "make test" {
 		t.Errorf("linux = %q %q", p, a)
 	}
-	if p, a := shellFor("windows", "make test"); p != "cmd.exe" || a[len(a)-1] != "make test" || a[len(a)-2] != "/c" {
+	if p, a := shellFor("windows", "make test"); !strings.HasSuffix(p, `\cmd.exe`) || !strings.Contains(p, `:\`) || a[len(a)-1] != "make test" || a[len(a)-2] != "/c" {
 		t.Errorf("windows = %q %q", p, a)
 	}
 }

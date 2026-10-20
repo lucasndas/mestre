@@ -5,6 +5,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -133,7 +134,12 @@ func TestAVerificationTerminalLeftByAFallIsEndedAndForgottenAtTheNextStart(t *te
 
 	host := a.e.rt.host
 	id := characters.VerificationTerminalPrefix + "fall"
-	tm, err := host.Manager().Create(t.Context(), terminal.CreateSpec{ID: id, Dir: root, Path: "/bin/sh", Args: []string{"-c", "sleep 300"}, Env: []string{"PATH=" + os.Getenv("PATH")}, WorkDir: root})
+	sleeper := "sleep 300"
+	if os.PathSeparator == '\\' {
+		sleeper = "ping -n 300 127.0.0.1"
+	}
+	path, args := shellFor(runtime.GOOS, sleeper) // the shell the verification itself uses
+	tm, err := host.Manager().Create(t.Context(), terminal.CreateSpec{ID: id, Dir: root, Path: path, Args: args, Env: verifyEnv(runtime.GOOS, root, os.Getenv), WorkDir: root})
 	if err != nil {
 		t.Fatal(err)
 	}
