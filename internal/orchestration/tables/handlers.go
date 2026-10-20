@@ -332,9 +332,19 @@ func (s *Service) statusOf(ctx context.Context, t Table) (map[string]any, string
 	if len(chars) == 0 {
 		text.WriteString("- ninguém\n")
 	}
+	issues, pr, folders := s.issuesOf(ctx, t), s.prOf(ctx, t), s.foldersOf(ctx, t)
+	if list, ok := issues.([]map[string]any); ok {
+		fmt.Fprintf(&text, "\nIssues abertas: %d", len(list))
+	}
+	if pr["error"] == nil && t.PRNumber != 0 {
+		fmt.Fprintf(&text, "\nPR: %v arquivos, %v linhas, CI %v", pr["files"], pr["lines"], pr["ci"])
+	}
+	if len(folders) > 0 {
+		fmt.Fprintf(&text, "\nPastas alteradas: %s", strings.Join(folders, ", "))
+	}
 	data := map[string]any{"name": t.ID, "state": string(t.State), "paused": t.Paused,
-		"pause_reason": t.PausedReason, "epic": s.epicOf(ctx, t), "issues_open": s.issuesOf(ctx, t), "branch": t.Branch, "pr": s.prOf(ctx, t), "merged": t.Merged,
-		"folders": s.foldersOf(ctx, t), "waiting_for": waiting, "characters": chars, "missions": []string{}, "waits": []string{}, "usage": "-"}
+		"pause_reason": t.PausedReason, "epic": s.epicOf(ctx, t), "issues_open": issues, "branch": t.Branch, "pr": pr, "merged": t.Merged,
+		"folders": folders, "waiting_for": waiting, "characters": chars, "missions": []string{}, "waits": []string{}, "usage": "-"}
 	if s.o.Oversight != nil {
 		paused, reason, queue, err := s.o.Oversight.Status(ctx, t.Workspace, t.ID)
 		if err != nil {
@@ -359,21 +369,22 @@ func (s *Service) statusOf(ctx context.Context, t Table) (map[string]any, string
 	return data, line, nil
 }
 
-// issuesOf are the open issues under the epic of the table; an issue_error says
-// why they could not be read, which is not the same as having none.
+// issuesOf are the open issues under the epic of the table; an error says
+// why they could not be read, which is not the same as having none
+// (a map with the key error instead of the list).
 func (s *Service) issuesOf(ctx context.Context, t Table) any {
 	d, ok := s.o.GitHub.(Details)
 	if !ok {
 		return map[string]string{"error": "the repository host of this run does not list issues"}
 	}
 	if err := s.gate("table status"); err != nil {
-		return map[string]string{"error": err.Error()}
+		return map[string]string{"error": CleanText(err.Error())}
 	}
 	rctx, cancel := clock.WithTimeout(ctx, s.clk, epicReadTimeout)
 	defer cancel()
 	issues, err := d.OpenIssues(rctx, t.Workspace, t.Epic)
 	if err != nil {
-		return map[string]string{"error": err.Error()}
+		return map[string]string{"error": CleanText(err.Error())}
 	}
 	out := make([]map[string]any, 0, len(issues))
 	for _, i := range issues {
@@ -395,14 +406,14 @@ func (s *Service) prOf(ctx context.Context, t Table) map[string]any {
 		return pr
 	}
 	if err := s.gate("table status"); err != nil {
-		pr["error"] = err.Error()
+		pr["error"] = CleanText(err.Error())
 		return pr
 	}
 	rctx, cancel := clock.WithTimeout(ctx, s.clk, epicReadTimeout)
 	defer cancel()
 	st, err := d.PullStats(rctx, t.Workspace, t.PRNumber)
 	if err != nil {
-		pr["error"] = err.Error()
+		pr["error"] = CleanText(err.Error())
 		return pr
 	}
 	pr["files"], pr["lines"], pr["ci"] = st.Files, st.Lines, st.CI
@@ -438,7 +449,7 @@ func (s *Service) foldersOf(ctx context.Context, t Table) []string {
 		if i := strings.LastIndexByte(c.Path, '/'); i >= 0 {
 			dir = c.Path[:i]
 		}
-		count[dir]++
+		count[CleanText(dir)]++
 	}
 	for dir := range count {
 		out = append(out, dir)
@@ -466,7 +477,7 @@ func (s *Service) proofsOf(ctx context.Context, t Table) any {
 	}
 	ps, err := s.o.Proofs.Of(ctx, t.Workspace, t.ID)
 	if err != nil {
-		return map[string]string{"error": err.Error()}
+		return map[string]string{"error": CleanText(err.Error())}
 	}
 	if ps == nil {
 		ps = []ProofState{}
