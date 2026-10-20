@@ -145,7 +145,7 @@ func (h *Handlers) prOpen(ctx context.Context, c *localchan.Call) localchan.Resp
 	if who.actor.Kind != github.ActorTable {
 		return localchan.Fail("table_required", "the pull request commands are for the characters of a table", "")
 	}
-	in := github.POpen{Class: who.char.Class, Draft: flagBool(c, "draft"), Op: c.Request.ID}
+	in := github.POpen{Character: who.char.ID, Class: who.char.Class, Draft: flagBool(c, "draft"), Op: c.Request.ID}
 	in.Title, _ = flagString(c, "title")
 	in.Body, _ = flagString(c, "body")
 	if h.PRs != nil {
@@ -194,7 +194,7 @@ func (h *Handlers) prUpdate(ctx context.Context, c *localchan.Call) localchan.Re
 	if bad != nil {
 		return *bad
 	}
-	in := github.PUpdate{Class: who.char.Class, Force: flagBool(c, "force"), Ready: flagBool(c, "ready")}
+	in := github.PUpdate{Character: who.char.ID, Class: who.char.Class, Force: flagBool(c, "force"), Ready: flagBool(c, "ready")}
 	if v, ok := flagString(c, "title"); ok {
 		in.Title = &v
 	}

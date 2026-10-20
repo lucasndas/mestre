@@ -292,7 +292,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 				r.Task = t
 			}
 		}
-		if o.Fingerprint != "" && r.Type == classes.RequestDestructive {
+		if o.Fingerprint != "" && (r.Type == classes.RequestDestructive || r.Type == classes.RequestWorkflows) {
 			r.Fingerprint = o.Fingerprint
 			s.omu.Lock()
 			locked = true

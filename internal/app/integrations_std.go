@@ -282,6 +282,8 @@ func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMe
 			return nil, fmt.Errorf("app: request %d is not the AGENTS.md proposal of workspace %s", req.ID, req.Workspace)
 		}
 		return agentsMDTarget(req.Workspace, st.AgentsMDText), nil
+	case classes.RequestWorkflows:
+		return orc.WorkflowsTarget(ctx, req)
 	}
 	return nil, fmt.Errorf("app: no live target for requests of type %q", req.Type)
 }
@@ -467,6 +469,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.ChainStallPeople == nil {
 		o.ChainStallPeople = r.stall
 	}
+	if o.ChainQueuePeople == nil {
+		o.ChainQueuePeople = r.stall
+	}
 	// the gate of freshness reads the rules of the base branch as the Grand Master
 	if o.FreshnessRules == nil {
 		o.FreshnessRules = stdRules{r}
@@ -583,6 +588,12 @@ func (r *stdRun) ghHandlers(orc *Orchestration) *ghcli.Handlers {
 	if orc.BaseSync != nil {
 		h.Send.Base = orc.BaseSync
 	}
+	// the sending of the branch: from the mirror, with the token of the App of who asks,
+	// and the workflows as the class decides (`ask` opens a request envio_workflows)
+	h.Send.Branches, h.Send.Auth = prBranches{orc}, stdPush{r}
+	if orc.Chain != nil {
+		h.Send.Workflows = workflowsGate{orc}
+	}
 	if orc.EpicDeps != nil {
 		h.Deps = orc.EpicDeps
 	}
@@ -649,6 +660,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	r.routing.To = inboxDeliverer{orc}
 	if orc.Supervisor != nil {
 		r.stall.Pauser = orc.Supervisor
+		r.stall.Autonomy = orc.Supervisor
 	}
 	if orc.TableRules != nil {
 		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)

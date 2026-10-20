@@ -227,6 +227,13 @@ func TestTheWorkflowsOfTheClassDecideTheSendingOfThemInTheDiff(t *testing.T) {
 	if got := r2.run("tm", "pr open", nil); !got.OK {
 		t.Errorf("allow: %+v", got)
 	}
+	// a workflow added in a commit and undone in the next one still goes in the history
+	r5 := newRig(t)
+	r5.mirror.Commit("42-login", "ci: add", map[string]string{".github/workflows/ci.yml": "name: ci2\n"})
+	r5.mirror.Commit("42-login", "ci: undo", map[string]string{".github/workflows/ci.yml": ""})
+	if got := r5.run("tm", "pr open", nil); got.OK || got.Code != "workflow_not_allowed" || len(r5.pushes()) != 0 {
+		t.Errorf("undone workflow: %+v pushes %q", got, r5.pushes())
+	}
 	r3 := newRig(t)
 	if got := r3.run("tm", "pr open", nil); !got.OK || len(r3.wf.asked) != 0 || !slices.Equal(r3.auth.workflows, []bool{false}) {
 		t.Errorf("no workflows: %+v asked %v token %v", got, r3.wf.asked, r3.auth.workflows)

@@ -94,6 +94,52 @@ func TestALockedMestreConfirmsNothing(t *testing.T) {
 	}
 }
 
+// Part of CA-CANAL-04 and CA-CANAL-05: while the Mestre is locked every decree is
+// listed as frozen (suspended by the lock) and the state in the database is
+// untouched, so the unlock brings each back as it was.
+func TestWhileTheMestreIsLockedEveryDecreeIsListedFrozenAndNoneIsChanged(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	locked := false
+	svc, err := decrees.New(decrees.Options{DB: w.db, Clock: w.clk, PINs: w.users, Locked: func(context.Context) bool { return locked }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ana := w.person("Ana", users.Administrator, "loja")
+	pend, err := svc.Propose(w.ctx, denyCmd(ana, "dev", "curl *"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := svc.Confirm(w.ctx, pend.ID, ana.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	frozen := func(list func() ([]decrees.View, error)) bool {
+		t.Helper()
+		views, err := list()
+		if err != nil || len(views) != 1 || views[0].Number != d.Number {
+			t.Fatalf("list = %+v, %v", views, err)
+		}
+		return views[0].Frozen
+	}
+	mine := func() ([]decrees.View, error) { return svc.List(w.ctx, ana.ID) }
+	ofWorkspace := func() ([]decrees.View, error) { return svc.ListWorkspace(w.ctx, "loja", false) }
+	if frozen(mine) || frozen(ofWorkspace) {
+		t.Fatal("frozen before the lock")
+	}
+	locked = true
+	if !frozen(mine) || !frozen(ofWorkspace) {
+		t.Fatal("not frozen while locked")
+	}
+	if got, _ := svc.Get(w.ctx, d.Number); got.State != decrees.Active {
+		t.Fatalf("the lock changed the state of the decree to %s", got.State)
+	}
+	locked = false
+	if frozen(mine) || frozen(ofWorkspace) {
+		t.Fatal("still frozen after the unlock")
+	}
+}
+
 func TestADecreeBoundToATargetIsOnlySpentByTheEngine(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

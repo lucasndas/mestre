@@ -167,6 +167,10 @@ type SupervisorOptions struct {
 	// must be a TableStalls for the warning to exist.
 	StallAfter  time.Duration
 	StallPeople StallPeople
+	// QueuePeople gets the warning of a queue of a table that accumulates,
+	// with the button to pause the autonomy of the table (nil: only the
+	// Grão-Mestre is told).
+	QueuePeople QueuePeople
 }
 
 // Supervisor is the supervision of the chain
