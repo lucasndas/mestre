@@ -61,7 +61,9 @@ type inproc struct {
 	log    syncBuffer
 	// setup runs on the engine before it starts (the commands of the CLI the
 	// Citadel serves); onQueued is Deps.OnQueuedResult.
-	setup    func(*Engine)
+	setup func(*Engine)
+	// host makes the engine host the orchestration (Deps.HostOrchestration).
+	host     bool
 	onQueued func(QueuedResult)
 }
 
@@ -145,7 +147,7 @@ func (r *rig) start(n *inproc, clk clock.Clock) {
 	owner := &testOwner{e: &atomic.Pointer[Engine]{}}
 	e, err := New(n.cfg, n.paths, Deps{
 		Clock: clk, Network: r.net.Host(n.name), Lock: n.lock, Approver: owner, Promotions: owner,
-		Sheet: n.sheet.Sources(), RenewEvery: 20 * time.Millisecond, OnQueuedResult: n.onQueued,
+		HostOrchestration: n.host, Sheet: n.sheet.Sources(), RenewEvery: 20 * time.Millisecond, OnQueuedResult: n.onQueued,
 		Logger: slog.New(slog.NewTextHandler(&n.log, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})
 	if err != nil {
