@@ -86,6 +86,7 @@ type Service struct {
 	mu     sync.Mutex // short critical sections on a request; never held over a call out
 	tmu    sync.Mutex
 	omu    sync.Mutex // FindOpen and Insert of a request, as one step
+	dmu    sync.Mutex // the use of an approved destructive request
 	bmu    sync.Mutex // the counter of the circuit breaker
 	timers map[int64]clock.Timer
 	pol    policyReader
@@ -192,6 +193,9 @@ type OpenRequest struct {
 	// Target is the exact target (JSON); the request is bound to its
 	// impression.
 	Target json.RawMessage
+	// Fingerprint, for a request that is not a class permission, finds the
+	// open request for the same thing (a destructive action).
+	Fingerprint string
 }
 
 // Open implements hook.Approvals: the requests of permissao_de_classe the
@@ -273,6 +277,16 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		if r.Task == "" && s.o.Tasks != nil {
 			if t, err := s.o.Tasks.Task(ctx, c.ID); err == nil {
 				r.Task = t
+			}
+		}
+		if o.Fingerprint != "" && r.Type == classes.RequestDestructive {
+			r.Fingerprint = o.Fingerprint
+			s.omu.Lock()
+			locked = true
+			if found, ok, err := s.st.FindOpen(ctx, c.ID, r.Fingerprint); err != nil {
+				return 0, err
+			} else if ok {
+				return found.ID, nil
 			}
 		}
 		if r.Type == classes.RequestClassPermission && r.Action != nil {

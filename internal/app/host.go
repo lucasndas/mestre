@@ -135,6 +135,11 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
 	}
+	if rp, ok := orc.Policy.(interface {
+		Risk(workspace string) *classes.RiskPolicy
+	}); ok {
+		ph.risk = rp.Risk
+	}
 	e.period.Store(ph)
 	return orc, nil
 }

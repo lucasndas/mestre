@@ -200,7 +200,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 	sinks := periodSinks{&e.orc}
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
 		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}),
-		Reporter: sinks, Notifier: sinks, Waits: sinks, Inbox: sinks, Turns: sinks, OS: runtime.GOOS, Logger: e.log,
+		Reporter: sinks, Notifier: sinks, Waits: sinks, Inbox: sinks, Turns: sinks, OS: runtime.GOOS, Logger: e.log, EnvExtra: e.envExtra(),
 	})
 	if err != nil {
 		host.Close()

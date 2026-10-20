@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -229,8 +230,20 @@ type Orchestration struct {
 	// Loops are the periodic readers the host adds; External runs them.
 	Loops []func(ctx context.Context) error
 
+	// destructive reads the live state of what a destructive request is about
+	// (nil unless the chain was built).
+	destructive *destructiveBroker
+
 	fence atomic.Pointer[guild.Fence]
 	log   *slog.Logger
+}
+
+// DestructiveTarget is approvals.Targets for the requests of type acao_destrutiva.
+func (o *Orchestration) DestructiveTarget(ctx context.Context, r chain.Request) (json.RawMessage, error) {
+	if o == nil || o.destructive == nil {
+		return nil, errors.New("app: this period has no chain of approval")
+	}
+	return o.destructive.Live(ctx, r)
 }
 
 // Lazy references break the loops of the construction: the tables are asked by
@@ -537,6 +550,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		us    *usage.Service
 		deps  *epicdeps.Service
 	)
+	if o.ChainClasses != nil {
+		// the destructive commands of the characters ask the people through the chain
+		b := destructiveBroker{chain: &ch, scrolls: &scr, rituals: &rit, tables: &tbl, classes: o.ClassLibraries}
+		o.withDestructive(b)
+		orc.destructive = &b
+	}
 	deactivate := o.Rituals
 	if deactivate == nil {
 		deactivate = ritualsRef{&rit}
@@ -707,6 +726,9 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 // scrolls, the tables and the quests. The commands of later stages and milestones are
 // added where they are built.
 func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scrolls.Approvals) {
+	if approvals == nil && o.destructive != nil {
+		approvals = noteGate{*o.destructive}
+	}
 	o.Connections.Register(fwd)
 	o.Inbox.Register(fwd)
 	o.Characters.Register(fwd)

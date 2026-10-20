@@ -173,6 +173,16 @@ func (s *Store) FindOpen(ctx context.Context, requester, fingerprint string) (Re
 	return rs[0], true, nil
 }
 
+// ApprovedFor lists the approved requests of a requester for a fingerprint, the
+// newest first.
+func (s *Store) ApprovedFor(ctx context.Context, requester, fingerprint string) ([]Request, error) {
+	rs, err := s.list(ctx, `state = 'approved' AND requester = ? AND fingerprint = ? AND fingerprint != ''`, requester, fingerprint)
+	for i, j := 0, len(rs)-1; i < j; i, j = i+1, j-1 {
+		rs[i], rs[j] = rs[j], rs[i]
+	}
+	return rs, err
+}
+
 // Audit appends a row of the audit.
 func (s *Store) Audit(ctx context.Context, e AuditEntry) error {
 	body, err := json.Marshal(e)

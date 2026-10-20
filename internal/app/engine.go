@@ -221,9 +221,11 @@ type Engine struct {
 	// (periodHooks); nil on a Tower and between periods.
 	period atomic.Pointer[periodHooks]
 
-	mdb      *store.DB
-	rt       *machineRuntime
-	orc      atomic.Pointer[Orchestration] // the orchestration of the period that acts
+	mdb *store.DB
+	rt  *machineRuntime
+	orc atomic.Pointer[Orchestration] // the orchestration of the period that acts
+	// edits keeps who edited what in the turns in progress (the hook reads it).
+	edits    *classes.EditTracker
 	sheets   atomic.Pointer[machinesheet.Registry]
 	member   *guild.Member
 	id       guild.Identity
@@ -295,8 +297,10 @@ func New(cfg Config, paths Paths, deps Deps) (*Engine, error) {
 	if deps.RenewEvery <= 0 {
 		deps.RenewEvery = renewCheck
 	}
+	edits := classes.NewEditTracker()
+	deps.UseEdits(edits, nil)
 	e := &Engine{
-		cfg: cfg, paths: paths, deps: deps, clk: deps.Clock, log: deps.Logger.With("instance", cfg.Instance),
+		edits: edits, cfg: cfg, paths: paths, deps: deps, clk: deps.Clock, log: deps.Logger.With("instance", cfg.Instance),
 		promoter: guild.NewPromoter(deps.Promotions), local: localchan.NewLocalForwarder(),
 		results: newResults(), kick: make(chan struct{}, 1), statusCh: make(chan struct{}, 1), role: RoleTower,
 	}

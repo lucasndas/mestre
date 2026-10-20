@@ -138,6 +138,8 @@ type periodHooks struct {
 	// registry puts a character (nil in a period without orchestration).
 	usage        *hookUsage
 	agentMachine func(ctx context.Context, id string) (string, bool)
+	// risk is the risk policy of a workspace, from its approval policy file.
+	risk func(workspace string) *classes.RiskPolicy
 }
 
 // errNoPeriod is why an approval is not opened: this machine is not the
