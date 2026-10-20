@@ -63,6 +63,60 @@ func ParseStatus(out []byte) []StatusEntry {
 	return entries
 }
 
+// ParseTrackedStatus parses `git status --porcelain=v2 --branch -z`. A listing
+// without the branch.head header is an error (never read as a branch).
+func ParseTrackedStatus(out []byte) (TrackedStatus, error) {
+	var ts TrackedStatus
+	haveHead := false
+	fields := strings.Split(string(out), "\x00")
+	state := func(b byte) byte {
+		if b == '.' {
+			return ' '
+		}
+		return b
+	}
+	for i := 0; i < len(fields); i++ {
+		f := fields[i]
+		if f == "" {
+			continue
+		}
+		if head, ok := strings.CutPrefix(f, "# branch.head "); ok {
+			haveHead = true
+			if head == "(detached)" {
+				ts.Detached = true
+			} else {
+				ts.Branch = head
+			}
+			continue
+		}
+		var n int // fields up to and with the path
+		switch f[0] {
+		case '1':
+			n = 9
+		case '2':
+			n = 10
+		case 'u':
+			n = 11
+		default:
+			continue // headers, untracked and ignored
+		}
+		parts := strings.SplitN(f, " ", n)
+		if len(parts) != n || len(parts[1]) != 2 {
+			return TrackedStatus{}, fmt.Errorf("unexpected status entry %q", f)
+		}
+		e := StatusEntry{Index: state(parts[1][0]), Worktree: state(parts[1][1]), Path: parts[n-1]}
+		if f[0] == '2' && i+1 < len(fields) {
+			i++
+			e.OrigPath = fields[i]
+		}
+		ts.Entries = append(ts.Entries, e)
+	}
+	if !haveHead {
+		return TrackedStatus{}, fmt.Errorf("status without branch.head")
+	}
+	return ts, nil
+}
+
 // ParseNameStatus parses the name-status listing of diff-tree -z without
 // renames: pairs of a status and a path, sorted by path.
 func ParseNameStatus(out []byte) []FileChange {

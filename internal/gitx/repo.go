@@ -49,6 +49,7 @@ func (r *repo) run(ctx context.Context, ro runOpts, args ...string) ([]byte, err
 	switch {
 	case r.rec != nil:
 		if err := r.rec.verify(); err != nil {
+			r.g.forget(*r.rec)
 			return nil, err
 		}
 		ro.env = append(r.rec.pin(), ro.env...)
@@ -628,6 +629,21 @@ func (r *repo) Status(ctx context.Context) ([]StatusEntry, error) {
 		return nil, fmt.Errorf("status: %w", err)
 	}
 	return ParseStatus(out), nil
+}
+
+// TrackedStatus implements Repo: one git status for the branch and the
+// tracked entries. Untracked files are not scanned (they never take part in
+// a commit), which is also what makes it cheap on a large worktree. It is
+// never cached: the index is what the next commit takes.
+func (r *repo) TrackedStatus(ctx context.Context) (TrackedStatus, error) {
+	if err := r.needTree(); err != nil {
+		return TrackedStatus{}, err
+	}
+	out, err := r.treeGit(ctx, runOpts{}, "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=no", "--no-renames", "--ignore-submodules=all")
+	if err != nil {
+		return TrackedStatus{}, fmt.Errorf("status: %w", err)
+	}
+	return ParseTrackedStatus(out)
 }
 
 func (r *repo) Stage(ctx context.Context, paths ...string) error {
