@@ -205,12 +205,16 @@ func (s *Server) botUser(w http.ResponseWriter, r *http.Request, login string) {
 	}
 	s.mu.Lock()
 	id, ok := s.bots[login]
+	typ, human := s.approval().humans[strings.ToLower(login)]
 	s.mu.Unlock()
-	if !ok {
+	switch {
+	case ok:
+		writeJSON(w, http.StatusOK, map[string]any{"login": login, "id": id, "type": "Bot"})
+	case human:
+		writeJSON(w, http.StatusOK, map[string]any{"login": login, "id": 1, "type": typ})
+	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
-		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"login": login, "id": id, "type": "Bot"})
 }
 
 func (s *Server) tokenOf(w http.ResponseWriter, r *http.Request) (*installation, *appInfo, bool) {
