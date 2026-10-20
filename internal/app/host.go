@@ -168,6 +168,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}}
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
+		ph.siteRules = cc.Rules
 	}
 	if rp, ok := orc.Policy.(interface {
 		Risk(workspace string) *classes.RiskPolicy
