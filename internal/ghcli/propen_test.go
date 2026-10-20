@@ -1,7 +1,9 @@
 package ghcli_test
 
 import (
+	"context"
 	"database/sql"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"slices"
 	"strings"
 	"testing"
@@ -98,27 +100,39 @@ func TestAForcedPushIsOnlyForTheMasterOfTheTable(t *testing.T) {
 	}
 }
 
-// Part of CA-CLI-GH-05: the sending that GitHub refuses (the workflows
-// permission, signatures, a protection) is told apart, and nothing is worked around.
+// CA-CLI-GH-05 and CA-GH-ACOES-07: the sending that GitHub refuses (the workflows
+// permission, signatures, a protection) is told apart, nothing is worked around
+// (the sending is tried once), and for the two that only the Owner or the Grand
+// Master can lift the Grand Master gets the event with the reason.
 func TestTheRefusalsOfGitHubAreToldApart(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		err   error
-		exit  int
-		code  string
-		field string
+		err    error
+		exit   int
+		code   string
+		toldGM bool
 	}{
-		"workflows permission": {gitxErr("workflow"), 3, "workflow_permission", ""},
-		"signatures":           {gitxErr("signature"), 3, "signature_required", ""},
-		"protection":           {gitxErr("protected"), 3, "protected", ""},
-		"history":              {gitxErr("ff"), 7, "conflict", ""},
+		"workflows permission": {gitxErr("workflow"), 3, "workflow_permission", true},
+		"signatures":           {gitxErr("signature"), 3, "signature_required", true},
+		"protection":           {gitxErr("protected"), 3, "protected", false},
+		"history":              {gitxErr("ff"), 7, "conflict", false},
 	} {
 		r := newRig(t)
 		prOfTheTable(t, r)
+		var told []string
+		r.h.Refused = func(_ context.Context, c characters.Character, code, reason string) {
+			told = append(told, c.Table+" "+code+": "+reason)
+		}
 		r.git.FailNextPush(tc.err)
 		got := r.run("tm", "pr update", nil)
 		if got.OK || got.Exit != tc.exit || got.Code != tc.code {
 			t.Errorf("%s: %+v, want exit %d %s", name, got, tc.exit, tc.code)
+		}
+		if len(r.pushes()) != 1 {
+			t.Errorf("%s: the sending was tried %d times, want once: %q", name, len(r.pushes()), r.pushes())
+		}
+		if tc.toldGM != (len(told) == 1) || tc.toldGM && !strings.HasPrefix(told[0], "42-login "+tc.code+": ") {
+			t.Errorf("%s: the Grand Master was told %q, want told=%v with the code and a reason", name, told, tc.toldGM)
 		}
 	}
 }
