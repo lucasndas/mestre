@@ -36,6 +36,12 @@ type Merging interface {
 	// Standing is the newest approved request of type merge that still stands for the PR
 	// at the commit and the base it goes into, and the newest open one (0: none).
 	Standing(ctx context.Context, workspace, repo string, n int, sha, base string) (approved, open int64, err error)
+	// Redeem spends the point exception of an Approver or above ("I approve the merge of PR
+	// #42": one exact action, once, bound to the repository, the PR and the head) that is
+	// active for the target, if there is one: used is true when it was spent, and the merge may
+	// go on without a request. A target that moved since the exception was made expires it unused
+	// (ErrExceptionExpired); none, or none that applies, is (0, false, nil).
+	Redeem(ctx context.Context, workspace string, target json.RawMessage, character string) (decree int64, used bool, err error)
 	// Ask opens the request of the merge.
 	Ask(ctx context.Context, o chain.OpenRequest) (int64, error)
 	// Table is the table whose branch the PR comes from ("": none).
@@ -47,6 +53,9 @@ type Merging interface {
 type Rulesets interface {
 	ProposeRuleset(ctx context.Context, workspace, proposer string, body map[string]any) (int64, error)
 }
+
+// ErrExceptionExpired: the exception was for another head of the PR: it expired unused.
+var ErrExceptionExpired = errors.New("ghcli: the exception was for another commit of the PR and expired unused")
 
 // prNumber reads the number of the PR, the only argument of approve and merge.
 func prNumber(c *localchan.Call, usageText string) (int, *localchan.Response) {
@@ -158,11 +167,26 @@ func (h *Handlers) merge(ctx context.Context, c *localchan.Call) localchan.Respo
 	if err != nil {
 		return localchan.Fail(localchan.CodeInternal, "the approvals of the pull request could not be looked up", "")
 	}
-	if id == 0 && open != 0 {
+	// the exception of an Approver is the approval of this exact merge: it is spent first, once, and the
+	// merge goes on with no request (GitHub's rules still apply; if it refuses, the exception stays spent)
+	var byException int64
+	var expired bool
+	if id == 0 {
+		dec, used, rerr := h.Merges.Redeem(ctx, ws, approvals.PRTarget(who.repo, n, pr.HeadSHA, pr.BaseRef), who.char.ID)
+		switch {
+		case errors.Is(rerr, ErrExceptionExpired):
+			expired = true
+		case rerr != nil:
+			return localchan.Fail(localchan.CodeInternal, "the exceptions of the Approvers could not be looked up", "")
+		case used:
+			byException = dec
+		}
+	}
+	if id == 0 && byException == 0 && open != 0 {
 		// the request is already with the people: no other is made (a repetition of the command)
 		return localchan.Fail("approval_pending", fmt.Sprintf("the merge of #%d waits for the approval of the request #%d", n, open), "run the command again after the approval").WithExit(localchan.ExitPending)
 	}
-	if id == 0 {
+	if id == 0 && byException == 0 {
 		// the table is the one whose branch the PR comes from, and only a branch of the repository itself
 		table := ""
 		if strings.EqualFold(pr.HeadRepo, who.repo) {
@@ -180,7 +204,11 @@ func (h *Handlers) merge(ctx context.Context, c *localchan.Call) localchan.Respo
 			return localchan.Fail(localchan.CodeInternal, "the approvals of the pull request could not be looked up", "")
 		}
 		if id == 0 {
-			return localchan.Fail("approval_pending", fmt.Sprintf("the merge of #%d waits for the approval of the request #%d", n, asked), "run the command again after the approval").WithExit(localchan.ExitPending)
+			hint := "run the command again after the approval"
+			if expired {
+				hint = "the exception of an Approver was for another commit of the PR and expired unused; " + hint
+			}
+			return localchan.Fail("approval_pending", fmt.Sprintf("the merge of #%d waits for the approval of the request #%d", n, asked), hint).WithExit(localchan.ExitPending)
 		}
 	}
 	if h.isLocked(ctx) {
@@ -206,7 +234,7 @@ func (h *Handlers) merge(ctx context.Context, c *localchan.Call) localchan.Respo
 	default:
 		return refusal(err)
 	}
-	return localchan.OK(map[string]any{"merged": res.Merged, "sha": res.SHA, "recovered": res.Recovered, "method": method, "request": id, "head_sha": pr.HeadSHA,
+	return localchan.OK(map[string]any{"merged": res.Merged, "sha": res.SHA, "recovered": res.Recovered, "method": method, "request": id, "decree": byException, "head_sha": pr.HeadSHA,
 		"text": fmt.Sprintf("PR #%d mesclado (%s)", n, method)})
 }
 

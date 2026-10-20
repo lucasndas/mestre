@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -597,5 +598,70 @@ func TestAPromotionAndTheTransferOfTheOwnerPublishTheEffectiveRulesAgain(t *test
 	}
 	if n.Load() != 2 {
 		t.Fatalf("published %d times after the transfer, want 2", n.Load())
+	}
+}
+
+// Part of CA-DEC-03: over the real composition, the exception of an Approver for the exact merge (the
+// repository of the workspace, the PR, the head and the base) is the approval of `gh merge`: the merge
+// goes out with no request and the exception is spent once; if the head moved the exception expires unused
+// and the merge waits for a request; an exception for another repository does not apply and stays active.
+func TestGhMergeIsApprovedByTheExceptionOfAnApproverForTheExactMergeAndSpendsItOnce(t *testing.T) {
+	t.Parallel()
+	itoaPR := func(w *decreeWorld) string { return strconv.Itoa(w.pr) }
+	exc := func(w *decreeWorld, repo, head string) decrees.Decree {
+		return w.confirm(decrees.Proposal{Author: w.admin.ID, Kind: decrees.KindException, Workspace: w.ws.Slug, Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: w.ws.Slug},
+			Action: &classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: "gh merge"}, RequestType: string(classes.RequestMerge),
+			TargetRef: approvals.PRTarget(repo, w.pr, head, "main"), Text: "aprovo o merge do PR"})
+	}
+	openRequests := func(w *decreeWorld) int {
+		rs, err := (&chain.Store{DB: w.db}).OpenPR(w.ctx, w.ws.Slug, "lucas/meu_app", w.pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(rs)
+	}
+	// the exception of the workspace repository and the live head: merged, no request, spent once
+	w := newDecreeWorld(t)
+	d := exc(w, "lucas/Meu_App", w.head)
+	got := w.call("gh merge", nil, itoaPR(w))
+	if !got.OK || !strings.Contains(string(got.Data), `"decree":`+strconv.FormatInt(d.Number, 10)) {
+		t.Fatalf("merge by exception: ok=%v %s %v", got.OK, got.Data, got.Error)
+	}
+	if ms := w.gh.Merges("lucas/meu_app"); len(ms) != 1 || ms[0].SHA != w.head {
+		t.Fatalf("GitHub merged %+v; want the head of the exception", ms)
+	}
+	if n := openRequests(w); n != 0 {
+		t.Errorf("%d request(s) opened although the exception approved the merge", n)
+	}
+	if st, _ := w.run.decrees.Get(w.ctx, d.Number); st.State != decrees.Used || len(w.uses(d.Number)) != 1 {
+		t.Errorf("the exception is %+v with %d uses; want used once", st.State, len(w.uses(d.Number)))
+	}
+	// the PR is merged: the same command does not spend anything else
+	if again := w.call("gh merge", nil, itoaPR(w)); again.OK || len(w.gh.Merges("lucas/meu_app")) != 1 {
+		t.Errorf("a second merge: ok=%v, merges %d", again.OK, len(w.gh.Merges("lucas/meu_app")))
+	}
+
+	// the head moved after the exception: it expires unused, nothing is merged, a request is opened
+	m := newDecreeWorld(t)
+	moved := exc(m, "lucas/Meu_App", m.head)
+	m.gh.SetPull("lucas/meu_app", m.pr, strings.Repeat("b", 40), false, "clean")
+	if got := m.call("gh merge", nil, itoaPR(m)); got.OK || got.Error == nil || got.Error.Code != "approval_pending" || len(m.gh.Merges("lucas/meu_app")) != 0 {
+		t.Fatalf("merge after a new commit: ok=%v %v", got.OK, got.Error)
+	}
+	if st, _ := m.run.decrees.Get(m.ctx, moved.Number); st.State != decrees.Expired || len(m.uses(moved.Number)) != 0 {
+		t.Errorf("the exception is %v with %d uses; want expired and unused", st.State, len(m.uses(moved.Number)))
+	}
+	if n := openRequests(m); n != 1 {
+		t.Errorf("%d open requests; want the normal one", n)
+	}
+
+	// an exception for another repository does not apply and is not spent
+	f := newDecreeWorld(t)
+	foreign := exc(f, "lucas/outro", f.head)
+	if got := f.call("gh merge", nil, itoaPR(f)); got.OK || got.Error == nil || got.Error.Code != "approval_pending" || len(f.gh.Merges("lucas/meu_app")) != 0 {
+		t.Fatalf("merge with an exception of another repository: ok=%v %v", got.OK, got.Error)
+	}
+	if st, _ := f.run.decrees.Get(f.ctx, foreign.Number); st.State != decrees.Active || len(f.uses(foreign.Number)) != 0 {
+		t.Errorf("the exception of another repository is %v with %d uses; want active and unused", st.State, len(f.uses(foreign.Number)))
 	}
 }

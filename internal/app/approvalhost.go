@@ -322,6 +322,37 @@ func (m mergeHost) sameBase(ctx context.Context, r chain.Request, base string) b
 	return err == nil && tip == sha
 }
 
+// Redeem spends the exception of an Approver that approves exactly this merge (the
+// repository, the PR and the head of the target); see ghcli.Merging.
+func (m mergeHost) Redeem(ctx context.Context, workspace string, target json.RawMessage, character string) (int64, bool, error) {
+	if m.r.decrees == nil {
+		return 0, false, nil
+	}
+	n, ok, err := m.r.decrees.FindException(ctx, workspace, classes.RequestMerge, target)
+	if err != nil {
+		return 0, false, err
+	}
+	if !ok { // an exception for another state of this PR (the head moved) expires unused
+		if old, err := m.r.decrees.ExpireMoved(ctx, workspace, classes.RequestMerge, target); err != nil || old != 0 {
+			if err != nil {
+				return 0, false, err
+			}
+			return old, false, ghcli.ErrExceptionExpired
+		}
+		return 0, false, nil
+	}
+	err = m.r.decrees.Redeem(ctx, n, chain.Request{Workspace: workspace, Type: classes.RequestMerge, Target: target}, character, "merge")
+	switch {
+	case err == nil:
+		return n, true, nil
+	case errors.Is(err, decrees.ErrTargetChanged):
+		return n, false, ghcli.ErrExceptionExpired
+	case errors.Is(err, decrees.ErrEnded), errors.Is(err, decrees.ErrWrongRequest):
+		return 0, false, nil // someone spent it first, or it is not for this request
+	}
+	return 0, false, err
+}
+
 // Ask opens the request of the merge in the chain.
 func (m mergeHost) Ask(ctx context.Context, o chain.OpenRequest) (int64, error) {
 	c := m.r.chain.Load()

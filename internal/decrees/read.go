@@ -474,6 +474,69 @@ func commandCovers(pattern, command string) bool {
 	return base != "" && strings.HasPrefix(command, base)
 }
 
+// FindException is the active exception of a workspace, in validity, for a request of the
+// type bound to the impression of the target: the one that `gh merge` redeems. It is only a
+// search; Redeem checks the target again and spends it. ok is false when there is none.
+func (s *Service) FindException(ctx context.Context, workspace string, typ classes.RequestType, target json.RawMessage) (number int64, ok bool, err error) {
+	imp, err := chain.Impress(target)
+	if err != nil || workspace == "" {
+		return 0, false, nil
+	}
+	ds, err := queryDecrees(ctx, s.o.DB.Reader(), `WHERE kind = ? AND state = ? AND workspace = ? AND request_type = ? AND impression = ? ORDER BY id`,
+		string(KindException), string(Active), workspace, string(typ), imp)
+	if err != nil {
+		return 0, false, err
+	}
+	now := s.clk.Now()
+	for _, d := range ds {
+		if d.Until.IsZero() || now.Before(d.Until) {
+			return d.Number, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+// ExpireMoved expires, unused, the active exceptions of the workspace for a request of the type
+// whose target is the same pull request (same repository and number) but another state of it (another
+// head): the PR moved since they were made, so they can never apply again. It returns the number of the
+// first one it expired (0 when none).
+func (s *Service) ExpireMoved(ctx context.Context, workspace string, typ classes.RequestType, target json.RawMessage) (int64, error) {
+	imp, err := chain.Impress(target)
+	var cur struct {
+		Repo string `json:"repo"`
+		PR   int    `json:"pr"`
+	}
+	if err != nil || workspace == "" || json.Unmarshal(target, &cur) != nil || cur.PR == 0 {
+		return 0, nil
+	}
+	ds, err := queryDecrees(ctx, s.o.DB.Reader(), `WHERE kind = ? AND state = ? AND workspace = ? AND request_type = ? AND impression != ? ORDER BY id`,
+		string(KindException), string(Active), workspace, string(typ), imp)
+	if err != nil {
+		return 0, err
+	}
+	var first int64
+	for _, d := range ds {
+		var old struct {
+			Repo string `json:"repo"`
+			PR   int    `json:"pr"`
+		}
+		if json.Unmarshal(d.TargetRef, &old) != nil || old.PR != cur.PR || !chain.SameRepo(old.Repo, cur.Repo) {
+			continue
+		}
+		n := d.Number
+		if err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+			_, err := transition(ctx, tx, n, Expired, "", "o alvo mudou antes de a exceção ser usada", s.clk.Now(), Active)
+			return err
+		}); err != nil {
+			return first, err
+		}
+		if first == 0 {
+			first = n
+		}
+	}
+	return first, nil
+}
+
 // Redeem spends an exception for an action that the engine executes (a merge):
 // the live target is compared with the impression the exception was bound to,
 // and if anything changed (a new commit in the PR) the exception expires unused
