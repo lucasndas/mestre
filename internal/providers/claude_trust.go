@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -250,15 +251,49 @@ func entryKey(goos string, projects map[string]any, folder string) string {
 	return folder
 }
 
-// sameFolder compares two folders: after Clean on Linux; without difference
-// of case or of slash on Windows.
+// sameFolder compares two folders after cleaning both (doubled slashes, "."
+// and ".." segments): with the rules of goos even when the Mestre runs
+// elsewhere. On Windows also without difference of case or of slash, without
+// the \\?\ prefix and the dots at the end of the name. The limit, documented
+// in docs/provedores/claude-code.md#confiança-de-pasta: 8.3 short names and
+// junctions or symbolic links are not resolved (they need the file system),
+// so two writings of one folder through them are two folders here.
 func sameFolder(goos, a, b string) bool {
 	goos = machineOS(goos)
-	a, b = strings.TrimRight(a, `/\`), strings.TrimRight(b, `/\`)
+	a, b = cleanFolder(goos, a), cleanFolder(goos, b)
 	if goos == "windows" {
-		return asciiEqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
+		return asciiEqualFold(a, b)
 	}
 	return a == b
+}
+
+// cleanFolder is folder in a canonical writing for comparing: on Windows
+// with forward slashes, with no \\?\ prefix; ".." never climbs above the
+// root (or the drive, or the share's server).
+func cleanFolder(goos, folder string) string {
+	if folder == "" {
+		return ""
+	}
+	if goos != "windows" {
+		return strings.TrimRight(path.Clean(folder), "/")
+	}
+	p := strings.ReplaceAll(folder, `\`, "/")
+	switch {
+	case strings.HasPrefix(p, "//?/UNC/"):
+		p = "//" + p[len("//?/UNC/"):]
+	case strings.HasPrefix(p, "//?/"):
+		p = p[len("//?/"):]
+	}
+	var out string
+	switch {
+	case len(p) >= 2 && p[1] == ':': // C:/…: the drive stays out of the cleaning
+		out = p[:2] + path.Clean("/"+p[2:])
+	case strings.HasPrefix(p, "//"): // //server/share/…
+		out = "/" + path.Clean("/"+strings.TrimLeft(p, "/"))
+	default:
+		out = path.Clean(p)
+	}
+	return strings.TrimRight(out, "/.")
 }
 
 // asciiEqualFold compares without difference of case in ASCII only: the

@@ -266,6 +266,28 @@ function Get-ProfileDir([string]$Provider) {
     switch ($Provider) { 'claude-code' { return "$Profiles\claude" } 'codex' { return "$Profiles\codex" } 'antigravity' { return "$Profiles\agy" } }
 }
 
+# The probes that swap the settings.json of the agy profile of the round (its
+# own folder, never the profile of the user) save it to disk first, so a run
+# that dies in the middle does not lose it: the next one restores it. A file
+# that was empty goes back empty (an empty byte array is "false" in PowerShell,
+# so the test is against $null); one that did not exist is removed.
+function Save-AgySettings([string]$Settings) {
+    $bak = $Settings + '.mestre-bak'
+    $none = $Settings + '.mestre-none'
+    if (Test-Path -LiteralPath $bak) { Copy-Item -LiteralPath $bak -Destination $Settings -Force; Remove-Item -LiteralPath $bak -Force }
+    elseif (Test-Path -LiteralPath $none) { Remove-Item -LiteralPath $Settings -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $none -Force }
+    New-Item -ItemType Directory -Force -Path (Split-Path $Settings) | Out-Null
+    if (Test-Path -LiteralPath $Settings) { Copy-Item -LiteralPath $Settings -Destination $bak -Force }
+    else { [IO.File]::WriteAllBytes($none, [byte[]]@()) }
+}
+
+function Restore-AgySettings([string]$Settings) {
+    $bak = $Settings + '.mestre-bak'
+    $none = $Settings + '.mestre-none'
+    if (Test-Path -LiteralPath $bak) { Copy-Item -LiteralPath $bak -Destination $Settings -Force; Remove-Item -LiteralPath $bak -Force }
+    elseif (Test-Path -LiteralPath $none) { Remove-Item -LiteralPath $Settings -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $none -Force }
+}
+
 function Install-Cli([string]$Provider) {
     $exe = Get-CliPath $Provider
     if (Test-Path $exe) { return $true }
@@ -659,14 +681,12 @@ function Test-Item4 {
     # for this command alone stands in for the answer, only for this probe
     # (--dangerously-skip-permissions would undo --sandbox, docs/provedores/antigravity.md).
     $settings = Join-Path (Get-ProfileDir 'antigravity') '.gemini\antigravity-cli\settings.json'
-    $before = $null
-    if (Test-Path $settings) { $before = [IO.File]::ReadAllBytes($settings) }
-    New-Item -ItemType Directory -Force -Path (Split-Path $settings) | Out-Null
+    Save-AgySettings $settings
     Set-Content -LiteralPath $settings -Encoding ASCII -Value '{"permissions":{"allow":["command(git --version)"]}}'
     try {
         $r = Invoke-Native -File $agy -Env $e -Dir $w -TimeoutSec 240 -Arguments @('--sandbox', '-p', 'Rode o comando git --version no shell e responda só com a saída dele.')
     } finally {
-        if ($before) { [IO.File]::WriteAllBytes($settings, $before) } else { Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue }
+        Restore-AgySettings $settings
     }
     Save-Detail 'item4-agy-sandbox.log' $r.Out
     if ($r.Out -match 'git version') { Add-Sub 4 'PASS' 'agy --sandbox rodou git --version no worktree (AppContainer deixou rodar comando)' }
@@ -687,9 +707,7 @@ function Test-Item4 {
 function Test-AgyNeutralBlocks([string]$Agy, [hashtable]$Env) {
     if (-not (Get-BuiltBinaries)) { Add-Sub 4 'SKIP' ('bloqueio do {} do hook do agy: ' + $script:BuildWhy); return }
     $settings = Join-Path (Get-ProfileDir 'antigravity') '.gemini\antigravity-cli\settings.json'
-    $before = $null
-    if (Test-Path $settings) { $before = [IO.File]::ReadAllBytes($settings) }
-    New-Item -ItemType Directory -Force -Path (Split-Path $settings) | Out-Null
+    Save-AgySettings $settings
     $cases = @(
         @{ Name = 'controle, sem hooks'; Hooks = $false; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $true },
         @{ Name = 'sem MESTRE_AGENT_ID'; Hooks = $true; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $true },
@@ -711,7 +729,7 @@ function Test-AgyNeutralBlocks([string]$Agy, [hashtable]$Env) {
             $results += [pscustomobject]@{ Case = $c; Ran = (Test-Path (Join-Path $d 'marca.txt')); Out = (Tail $r.Out 2) }
         }
     } finally {
-        if ($before) { [IO.File]::WriteAllBytes($settings, $before) } else { Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue }
+        Restore-AgySettings $settings
     }
     $control = $results | Where-Object { -not $_.Case.Hooks } | Select-Object -First 1
     if (-not $control -or -not $control.Ran) { Add-Sub 4 'FAIL' ("bloqueio do {} do hook do agy: o controle sem hooks não rodou o comando, o teste não vale. Fim da saída:`n" + $control.Out); return }

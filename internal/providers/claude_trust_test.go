@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/providers"
@@ -210,6 +211,66 @@ func TestPreTrustOnWindowsWritesTheKeyWithForwardSlashes(t *testing.T) {
 	}
 	if projects := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any); len(projects) != 0 {
 		t.Errorf("projects after Untrust = %v, want none of the two writings", projects)
+	}
+}
+
+// A key that names the folder with doubled slashes, "." or ".." segments, the
+// \\?\ prefix or a dot at the end is the same folder: PreTrust clears the
+// mirror under it and Untrust takes it out; one that climbs to another folder
+// is not touched.
+func TestTrustOnWindowsCleansTheFolderBeforeComparing(t *testing.T) {
+	t.Parallel()
+	same := []string{
+		"C:/Mestre/espelhos//projeto.git",
+		"C:/Mestre/./espelhos/projeto.git",
+		"C:/Mestre/x/../espelhos/projeto.git",
+		`\\?\C:\Mestre\espelhos\projeto.git`,
+		"C:/Mestre/espelhos/projeto.git.",
+		"C:/Mestre/espelhos/projeto.git/",
+	}
+	other := []string{
+		"C:/Mestre/espelhos/../projeto.git",
+		"C:/../Mestre/espelhos/projeto.git/..",
+		"D:/Mestre/espelhos/projeto.git",
+	}
+	entries := map[string]any{}
+	for _, k := range append(slices.Clone(same), other...) {
+		entries[k] = map[string]any{"hasTrustDialogAccepted": true}
+	}
+	raw, err := json.Marshal(map[string]any{"projects": entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, path := trustFile(t, string(raw))
+	claude := providers.NewClaudeCode(providers.Options{})
+	if _, err := claude.PreTrust(providers.PreTrustRequest{OS: "windows", Profile: profile, Worktree: `C:\Mestre\work\3-login`, RepoRoot: `C:\Mestre\espelhos\projeto.git`}); err != nil {
+		t.Fatal(err)
+	}
+	projects := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any)
+	for _, k := range same {
+		if _, has := projects[k].(map[string]any)["hasTrustDialogAccepted"]; has {
+			t.Errorf("mirror key %q kept the trust", k)
+		}
+	}
+	for _, k := range other {
+		if projects[k].(map[string]any)["hasTrustDialogAccepted"] != true {
+			t.Errorf("key %q of another folder lost the trust", k)
+		}
+	}
+	// Untrust, by the same rule, for the worktree.
+	wt := map[string]any{}
+	for _, k := range []string{"C:/Mestre/work//3-login", "C:/Mestre/work/./3-login", `\\?\C:\Mestre\work\3-login`, "C:/Mestre/work/3-login/x/.."} {
+		wt[k] = map[string]any{"hasTrustDialogAccepted": true}
+	}
+	wt["C:/Mestre/work/3-login/.."] = map[string]any{"hasTrustDialogAccepted": true}
+	raw, _ = json.Marshal(map[string]any{"projects": wt})
+	profile, path = trustFile(t, string(raw))
+	if _, err := claude.(providers.TrustRemover).Untrust(providers.PreTrustRequest{OS: "windows", Profile: profile, Worktree: `C:\Mestre\work\3-login`}); err != nil {
+		t.Fatal(err)
+	}
+	left := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any)
+	if len(left) != 1 || left["C:/Mestre/work/3-login/.."] == nil {
+		t.Errorf("projects after Untrust = %v, want only the key of the parent folder", left)
 	}
 }
 

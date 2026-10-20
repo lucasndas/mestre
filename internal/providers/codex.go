@@ -225,12 +225,24 @@ func (c *codex) TypeMessage(text string) ([]byte, error) {
 
 var _ SendRetrier = (*codex)(nil)
 
+// codexModal is every dialog of Codex that would take the send key as the
+// answer of its default option, anywhere on the screen: the update, the model
+// switch, the rate-limit notices, the approvals, and the trust, hook review,
+// sandbox and login screens. The known screens are not enough here: the
+// update is StartOnly and the model switch and the rate limit have no entry.
+// A numbered menu option (› 1. …) is a dialog too. Refusing on a quote of the
+// model is the safe side: the delivery then waits for its timeout.
+var codexModal = regexp.MustCompile(`Update available|Update now|Skip until next version|Switch to |Keep current model|Switch model|Approaching rate limits?|rate limit|usage limit|Would you like to run the following command\?|approve network access to|Trust this folder\?|Hooks need review|Trust all and continue|Set up the Codex agent sandbox|Sign in with ChatGPT|(?m:^\s*[›❯>]\s*\d+\.\s)`)
+
 // InputHolds: the input line of Codex (the last line that starts with ›)
 // starts with the first line of text. On Windows, 0.163.0 keeps there a
 // message whose send key came in the same write as the paste, without
 // sending it: every delivery of the conformance (the Windows round of
 // 2026-10-19).
 func (c *codex) InputHolds(screen, text string) bool {
+	if codexModal.MatchString(screen) {
+		return false
+	}
 	first, _, _ := strings.Cut(strings.TrimSpace(clean(text)), "\n")
 	want := []rune(strings.TrimSpace(first))
 	if len(want) == 0 {

@@ -161,10 +161,32 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 		// No drive or share: relative to the drive or to the folder of cmd.
 		{Root: "/wt", OS: "windows", Binary: stableBinary},
 		{Root: "/wt", OS: "windows", Binary: `\Mestre\bin\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:foo\mestre.exe`},
+		// Device and extended namespaces, an alternate data stream and ..
+		{Root: "/wt", OS: "windows", Binary: `\\?\C:\Mestre\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `\\.\C:\Mestre\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `\\.\GLOBALROOT\Device\x\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\a:b`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\mestre.exe:x`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\..\Other\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:/Mestre/../mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `\\srv\share\..\m.exe`},
 	} {
 		if _, err := prov.HookFiles(bad); err == nil {
 			t.Errorf("%+v was accepted", bad)
 		}
+	}
+}
+
+// A share names its server and folder: accepted, bare.
+func TestTheWindowsHookLineOfAntigravityTakesAShare(t *testing.T) {
+	t.Parallel()
+	files, err := agy(t, providers.Options{}).HookFiles(providers.HookFilesRequest{Root: "/wt", OS: "windows", Binary: `\\srv\share\m.exe`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc := mergedM(t, files[0], ""); !strings.Contains(doc, `\\\\srv\\share\\m.exe`) {
+		t.Errorf("the share is not in the line:\n%s", doc)
 	}
 }
 

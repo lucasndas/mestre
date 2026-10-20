@@ -52,6 +52,13 @@ type Keyboard interface {
 	Input(ctx context.Context, data []byte) error
 }
 
+// ScreenReader reads the screen of the character's terminal at the moment of
+// the call (terminal.Terminal.Screen), not the last one the emulator
+// reported. Optional (SupervisorConfig.Reader).
+type ScreenReader interface {
+	ReadScreen(ctx context.Context) (text string, err error)
+}
+
 // Characters is the part of the character state the supervision changes
 // (docs/orquestracao/personagens.md).
 type Characters interface {
@@ -171,7 +178,10 @@ type SupervisorConfig struct {
 	// ReadyPattern is the base's `ready: pattern`, when it has one.
 	ReadyPattern *regexp.Regexp
 
-	Keyboard    Keyboard
+	Keyboard Keyboard
+	// Reader, when set, gives the screen at the instant of the send key
+	// again (resend); nil: the last screen received is all there is.
+	Reader      ScreenReader
 	Characters  Characters
 	TableMaster TableMaster
 	Checklist   Checklist
@@ -501,19 +511,40 @@ func (s *Supervisor) Deliver(ctx context.Context, id, text string) error {
 // its turn_start, no hook came since it was typed (a CLI that took the
 // prompt runs its hooks; a slow turn_start is not a lost key), and the last
 // screen, stable, is the input area with the text still in it and no known
-// screen (a dialog, as an approval, would take the key as its answer). The
-// look and the key are under the lock, so no screen comes in between. A key
+// screen or modal (a dialog, as an approval, an update or a model switch,
+// would take the key as its answer; InputHolds refuses the modals too). With
+// a Reader the screen is read at that instant and must equal the last stable
+// one. The look and the key are under the lock, so no screen reported comes
+// in between. A key
 // sent empties the input area, so the next look types nothing.
 func (s *Supervisor) resend(id, text string, r SendRetrier, hooks, look int) {
+	// The terminal is read before the lock, so its I/O never holds the
+	// supervision; the window left is the time between this read and the
+	// key, typed right after under the lock.
+	fresh, read := "", false
+	if s.cfg.Reader != nil {
+		if t, err := s.cfg.Reader.ReadScreen(s.ctx); err == nil {
+			fresh, read = t, true
+		} else {
+			s.report(fmt.Errorf("read the screen for delivery %s: %w", id, err))
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, waiting := s.pending[id]; !waiting || s.hooks != hooks {
 		return
 	}
+	// With a reader the screen judged is the one read now, and it must be
+	// the stable one the emulator reported: a screen that moved since (a
+	// modal on its way) is not judged, and the next look sees it.
+	screen, stable := s.lastScreen, s.lastStable
+	if s.cfg.Reader != nil {
+		screen, stable = fresh, read && fresh == s.lastScreen && s.lastStable
+	}
 	res := s.cfg.Adapter.Screens(ScreenInput{
-		Text: s.lastScreen, Stable: s.lastStable, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
+		Text: screen, Stable: stable, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
 	})
-	if s.lastStable && res.Known == nil && res.State == StateReady && r.InputHolds(s.lastScreen, text) {
+	if stable && res.Known == nil && res.State == StateReady && r.InputHolds(screen, text) {
 		if err := s.cfg.Keyboard.Input(s.ctx, r.SendKey()); err != nil {
 			s.report(fmt.Errorf("send key again for delivery %s: %w", id, err))
 		}

@@ -53,7 +53,7 @@ func (ru *run) start(ctx context.Context, launch providers.Launch, resumeAfter s
 	c.sess = sess
 	c.sup = providers.NewSupervisor(providers.SupervisorConfig{
 		Clock: ru.r.clk(), Adapter: ru.adapter, AgentID: ru.ws.AgentID, TableID: ru.lreq.TableID,
-		Keyboard: sess, Characters: c, TableMaster: c, Checklist: c, Inbox: c, Decisions: ru,
+		Keyboard: sess, Reader: sessionReader{sess}, Characters: c, TableMaster: c, Checklist: c, Inbox: c, Decisions: ru,
 	})
 	pctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	c.cancel = cancel
