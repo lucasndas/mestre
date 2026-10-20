@@ -517,8 +517,14 @@ func (c *Citadel) ask(ctx context.Context, j joinRow) error {
 	if err != nil {
 		return fmt.Errorf("guild: ask the Owner: %w", err)
 	}
-	if _, err := c.db.Writer().ExecContext(ctx, `UPDATE join_requests SET approval_id = ? WHERE join_id = ? AND state = 'pending'`, approval, j.ID); err != nil {
+	res, err := c.db.Writer().ExecContext(ctx, `UPDATE join_requests SET approval_id = ? WHERE join_id = ? AND state = 'pending'`, approval, j.ID)
+	if err != nil {
+		c.cfg.Approver.Withdraw(context.WithoutCancel(ctx), approval)
 		return fmt.Errorf("guild: reveal: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// answered (or over) while it was being asked: nobody would take the question down
+		c.cfg.Approver.Withdraw(context.WithoutCancel(ctx), approval)
 	}
 	return nil
 }

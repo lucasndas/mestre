@@ -22,6 +22,11 @@ const (
 // is listed with what becomes of it (approve_always and deny_always become a
 // suggestion for the Owner); the people-only ones (delegate) are not listed.
 func AnswersFor(level LevelKind, r Request) []Answer {
+	if IsSystem(r.Type) {
+		// a request of the engine has no pattern, no decree and no delegation
+		// to give: the Owner approves it or denies it
+		return []Answer{AnswerApprove, AnswerDeny}
+	}
 	if level == LevelPeople {
 		return []Answer{AnswerApprove, AnswerApproveFor, AnswerApprovePattern, AnswerApproveAlways, AnswerDelegate, AnswerDeny, AnswerDenyInstruction, AnswerDenyAlways, AnswerAskBack}
 	}

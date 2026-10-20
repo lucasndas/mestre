@@ -139,6 +139,9 @@ func (s Settings) peopleDeadline(t classes.RequestType) time.Duration {
 	if t == "" {
 		t = classes.RequestClassPermission // the requests of an action have no type in old records
 	}
+	if t == classes.RequestGuildEntry {
+		return GuildEntryValidity // fixed: the file cannot change it
+	}
 	if d, ok := s.PeopleDeadlines[t]; ok && d > 0 {
 		return d
 	}
