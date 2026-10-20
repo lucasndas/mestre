@@ -27,6 +27,7 @@ func TestTheCitadelKeepsItsOwnSheetFreshEveryFiveMinutes(t *testing.T) {
 		cfg := app.Config{Instance: "a", Name: "a", Hostname: "a", Bind: "a", EnginePort: 7443, NoDiscovery: true, Synchronous: "OFF"}
 		paths := app.DirPaths(dir)
 		paths.CLISocket = ""
+		seedGuild(t, paths)
 		founded, rk, err := app.Found(ctx, cfg, paths, clk)
 		if err != nil {
 			t.Fatal(err)

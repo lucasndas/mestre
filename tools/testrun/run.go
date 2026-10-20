@@ -186,7 +186,9 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 	lintDone := r.startLint(ctx, lintSuite)
 	var b bytes.Buffer
 	goCode, goErr := r.Exec.Run(ctx, goCmd, &b)
-	lintFailed := r.reportLint(<-lintDone)
+	goWall := clock.Since(r.Clock, start)
+	lint := <-lintDone
+	lintFailed := r.reportLint(lint)
 
 	rep := parseEvents(b.Bytes())
 	code := 0
@@ -233,6 +235,10 @@ func (r *Runner) RunSuite(ctx context.Context, s Suite) int {
 		if r.Race {
 			limit += fmt.Sprintf(", race x%d", RaceFactor)
 		}
+	}
+	if lint.ran && lint.took > 0 {
+		// The two run side by side: whichever is longer is the floor of the wall time.
+		r.printf("info: go test took %v, golangci-lint %v (side by side)\n", goWall.Round(time.Millisecond), lint.took.Round(time.Millisecond))
 	}
 	timing := ""
 	if slowWall.Round(time.Millisecond) > 0 {
@@ -282,6 +288,7 @@ func errOrEmpty(err error) string {
 // lintResult is the outcome of one golangci-lint run.
 type lintResult struct {
 	ran  bool
+	took time.Duration
 	out  []byte
 	code int
 	err  error
@@ -302,8 +309,9 @@ func (r *Runner) startLint(ctx context.Context, s Suite) <-chan lintResult {
 	args = append(args, "./...")
 	go func() {
 		var b bytes.Buffer
+		t0 := r.Clock.Now()
 		code, err := r.Exec.Run(ctx, Cmd{Name: "golangci-lint", Args: args}, &b)
-		done <- lintResult{ran: true, out: b.Bytes(), code: code, err: err}
+		done <- lintResult{ran: true, took: clock.Since(r.Clock, t0), out: b.Bytes(), code: code, err: err}
 	}()
 	return done
 }

@@ -12,12 +12,13 @@ type codex struct {
 	paths     pathNormalizer
 	failure   func(Event) (StopReason, string, bool)
 	multiline bool // CodexMultilineViaFile
+	noFlush   bool // NoFlush
 	screens   screenSet
 }
 
 // NewCodex returns the Codex adapter.
 func NewCodex(opts Options) Adapter {
-	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, screens: screenSet{
+	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, noFlush: opts.NoFlush, screens: screenSet{
 		prompt:   agentPrompt,
 		busy:     regexp.MustCompile(`(?i)esc to interrupt|Working…`),
 		known:    codexScreens(),

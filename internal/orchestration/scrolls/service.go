@@ -184,7 +184,10 @@ func (s *Service) readFile(n Note) (string, error) {
 }
 
 func (s *Service) writeFile(n Note, content string) error {
-	return safefile.Write(s.File(n.Workspace, n.Table, n.ID), []byte(content), safefile.Options{Sync: true})
+	// The file is flushed like the database it goes with: a database opened
+	// without flushes (the tests that are not about durability, as in
+	// store.Options.Synchronous) has nothing to flush here either.
+	return safefile.Write(s.File(n.Workspace, n.Table, n.ID), []byte(content), safefile.Options{Sync: s.st.DB.Flushes()})
 }
 
 // ReadRequest names a scroll.
