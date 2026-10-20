@@ -172,7 +172,10 @@ type Deps struct {
 	// Binary is the stable absolute path of the mestre binary the hook files
 	// call (default: the running one).
 	HostOrchestration bool
-	Binary            string
+	// UsageSources are the account profiles and the command runner the
+	// periodic reading of the use needs (the installation gives them).
+	UsageSources UsageSources
+	Binary       string
 	// Integration opens, for each period of the Citadel that hosts the
 	// orchestration, the bot of the Telegram, the users, the flow of approval and
 	// the commands of GitHub (StandardIntegration); nil: none.
