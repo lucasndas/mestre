@@ -69,6 +69,9 @@ type Options struct {
 	// Completed is told when a mission ended with all its steps done (the
 	// message of progress goes out); nil: nobody is.
 	Completed func(ctx context.Context, workspace, table, quest string)
+	// Delivered is told when a step ended with its result accepted: useful
+	// work landed on the table (nil: nobody is).
+	Delivered func(ctx context.Context, workspace, table string)
 	// EscalateAfter defaults to DefaultEscalateAfter.
 	EscalateAfter time.Duration
 	// Gate is asked before the outside is touched (GitHub); an error means

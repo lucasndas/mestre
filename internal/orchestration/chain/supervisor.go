@@ -160,6 +160,13 @@ type SupervisorOptions struct {
 	Reroute Rerouter
 	Rules   RuleLister
 	Logger  *slog.Logger
+
+	// StallAfter is how long a table at work may deliver nothing before the
+	// warning (DefaultStallAfter); StallPeople gets that warning with the
+	// button to pause the table (nil: only the Grão-Mestre is told). Tables
+	// must be a TableStalls for the warning to exist.
+	StallAfter  time.Duration
+	StallPeople StallPeople
 }
 
 // Supervisor is the supervision of the chain
@@ -489,7 +496,7 @@ func (s *Supervisor) Sample(ctx context.Context, workspace string, level LevelKi
 func (s *Supervisor) Tick(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return errors.Join(s.summaries(ctx), s.alerts(ctx))
+	return errors.Join(s.summaries(ctx), s.alerts(ctx), s.stalls(ctx))
 }
 
 // Loop runs Tick every so often until the context ends.

@@ -119,6 +119,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.routing = &telegram.Routing{}
 	r.block = &telegram.BlockChannel{Users: svc}
 	r.choose = &telegram.ChooseChannel{Users: svc}
+	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
@@ -157,7 +158,9 @@ type stdRun struct {
 	block *telegram.BlockChannel
 	// choose asks a user a question with buttons (`mestre choose`).
 	choose *telegram.ChooseChannel
-	dc     *telegram.DecreeChannel
+	// stall warns the people of a table that works without delivering, with the button to pause it.
+	stall *telegram.StallChannel
+	dc    *telegram.DecreeChannel
 	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
 	fetch  atomic.Pointer[telegram.Client]
 	dg     *telegram.DigestChannel
@@ -284,7 +287,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: client,
 		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
-		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions()),
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions(), r.stall.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
@@ -302,6 +305,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.routing.Bind(bot)
 	r.block.Bind(bot)
 	r.choose.Bind(bot)
+	r.stall.Bind(bot)
 	r.alert.Bind(bot)
 	r.bot = bot
 	return bot, nil
@@ -341,6 +345,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		}
 	}
 	o.ChainUsers = r.flow
+	if o.ChainStallPeople == nil {
+		o.ChainStallPeople = r.stall
+	}
 	// the gate of freshness reads the rules of the base branch as the Grand Master
 	if o.FreshnessRules == nil {
 		o.FreshnessRules = stdRules{r}
@@ -430,6 +437,9 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	r.chain.Store(orc.Chain)
 	r.orc.Store(orc)
 	r.routing.To = inboxDeliverer{orc}
+	if orc.Supervisor != nil {
+		r.stall.Pauser = orc.Supervisor
+	}
 	if orc.TableRules != nil {
 		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)
 	}

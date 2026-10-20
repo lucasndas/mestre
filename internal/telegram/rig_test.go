@@ -101,6 +101,8 @@ type world struct {
 	bc        *telegram.BlockChannel
 	cc        *telegram.ChooseChannel
 	answers   []inbox.NewItem
+	sc        *telegram.StallChannel
+	pauser    *fakeTablePauser
 	dg        *telegram.DigestChannel
 	delivered *deliveries
 	// requests are the approval requests the decrees read.
@@ -244,6 +246,11 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		for k, v := range w.cc.Actions() {
 			acts[k] = v
 		}
+		w.pauser = &fakeTablePauser{}
+		w.sc = &telegram.StallChannel{Users: w.users, Pauser: w.pauser}
+		for k, v := range w.sc.Actions() {
+			acts[k] = v
+		}
 		w.opts.Actions = acts
 	}
 	if ropt.decrees {
@@ -302,6 +309,7 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	}
 	if w.bc != nil {
 		w.bc.Bind(w.bot)
+		w.sc.Bind(w.bot)
 	}
 	if w.cc != nil {
 		w.cc.Bind(w.bot)
