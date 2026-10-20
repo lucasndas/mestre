@@ -24,6 +24,7 @@ import (
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	machinedb "github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -78,7 +79,7 @@ func openCopy(t *testing.T, name string, template []byte, open func(context.Cont
 	if err := os.WriteFile(path, template, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := open(context.Background(), path, store.Options{Synchronous: "OFF", StmtCache: guildtpl.StmtCache})
 	if err != nil {
 		t.Fatal(err)
 	}

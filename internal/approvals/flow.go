@@ -527,6 +527,11 @@ func (f *Flow) check(ctx context.Context, userID string, request int64, a chain.
 	if !a.Valid() || a == chain.AnswerClimb {
 		return users.User{}, chain.Request{}, flowRow{}, fmt.Errorf("resposta desconhecida: %q", a)
 	}
+	// A request of the engine (the entry in the Guild) is approved or denied: no
+	// decree, no pattern, no delegation and no question back to nobody.
+	if chain.IsSystem(r.Type) && !slices.Contains(chain.AnswersFor(chain.LevelPeople, r), a) {
+		return users.User{}, chain.Request{}, flowRow{}, ErrLevel
+	}
 	// The time ran out: whether or not the timer of the chain fired yet, a
 	// late click approves nothing.
 	if !r.Deadline.IsZero() && !f.clk.Now().Before(r.Deadline) {

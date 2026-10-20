@@ -87,7 +87,7 @@ func TestWhatAMachineErasesWhenItLeavesCoversEveryFileOfItsDiscardedDatabases(t 
 		t.Fatalf("the set-up left only %v", got)
 	}
 	// the replica of the Tower lives where the main database was
-	db, err := guilddb.Open(t.Context(), e.paths.guildDB(), store.Options{Clock: e.clk, Synchronous: "OFF", Replica: true})
+	db, err := guilddb.Open(t.Context(), e.paths.guildDB(), store.Options{StmtCache: guildtpl.StmtCache, Clock: e.clk, Synchronous: "OFF", Replica: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestADiscardedDatabaseIsKeptForTheRetentionFromTheDayItWasDiscarded(t *test
 	if err := e.paths.ensure(); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guildtpl.Open(t.Context(), e.paths.guildDB(), store.Options{Clock: clk, Synchronous: "OFF"})
+	db, err := guildtpl.Open(t.Context(), e.paths.guildDB(), store.Options{StmtCache: guildtpl.StmtCache, Clock: clk, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

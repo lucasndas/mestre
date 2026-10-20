@@ -484,6 +484,16 @@ func (s *Service) Delete(ctx context.Context, id string, by Actor, approved bool
 		if s.o.Approvals == nil {
 			return ErrApproval
 		}
+		if gate, ok := s.o.Approvals.(DeleteGate); ok {
+			granted, n, err := gate.DeleteAllowed(ctx, by, r)
+			if err != nil {
+				return err
+			}
+			if !granted {
+				return &ApprovalPendingError{Request: n}
+			}
+			return s.st.Do(ctx, func(t *Tx) error { return t.Delete(r.ID) })
+		}
 		n, err := s.o.Approvals.RequestDelete(ctx, by, r)
 		if err != nil {
 			return err

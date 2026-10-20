@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
@@ -100,4 +101,31 @@ func (e stdEpics) ClosePR(ctx context.Context, workspace string, number int) err
 		return errors.New("the GitHub of this run cannot close a pull request")
 	}
 	return c.ClosePull(ctx, repo, number)
+}
+
+// stdSettings is what `gh settings show` reads of the Mestre: the main branch of
+// the workspace, the mode of approval of its reviews and the Apps.
+type stdSettings struct{ r *stdRun }
+
+func (s stdSettings) Branch(ctx context.Context, workspace string) (string, error) {
+	var branch string
+	err := s.r.env.DB.Reader().QueryRowContext(ctx, `SELECT default_branch FROM workspaces WHERE slug = ?`, workspace).Scan(&branch)
+	return branch, err
+}
+
+func (s stdSettings) Mode(ctx context.Context, workspace string) (string, string, error) {
+	mode, why, err := (&approvals.Modes{DB: s.r.env.DB, Clock: s.r.env.Clock}).Get(ctx, workspace)
+	return string(mode), why, err
+}
+
+func (s stdSettings) Apps(ctx context.Context) ([]string, error) {
+	apps, err := (&github.Registry{DB: s.r.env.DB}).List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(apps))
+	for _, a := range apps {
+		out = append(out, fmt.Sprintf("%s (%s)", a.Name, a.State))
+	}
+	return out, nil
 }

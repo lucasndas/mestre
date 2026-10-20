@@ -32,6 +32,23 @@ type IntegrationEnv struct {
 	// SetLocked gives the engine the lock of the period (/travar): its gate of
 	// the CLI refuses what starts work while it holds. Nil takes it away.
 	SetLocked func(f func(ctx context.Context) bool)
+	// DecideJoin gives the answer of the Owner about the entry of a machine to
+	// the Citadel of the period; GuildID is the id of the Guild.
+	DecideJoin func(ctx context.Context, joinID string, d guild.Decision) error
+	GuildID    string
+}
+
+// GuildApprover is what an IntegrationRun may also be: the question to the Owner
+// about the entry of a machine in the Guild (guild.Approver).
+type GuildApprover interface {
+	GuildApprover() guild.Approver
+}
+
+// GuildLocker is what an IntegrationRun may also be: the lock of the epoch over
+// the repository of the Guild in GitHub, nil while that repository is not made
+// (the Guild has no promotion until it is).
+type GuildLocker interface {
+	GuildLock(ctx context.Context) (guild.Lock, error)
 }
 
 // Integration opens the integrations of a period. The zero Deps has none.

@@ -22,6 +22,11 @@ const (
 // is listed with what becomes of it (approve_always and deny_always become a
 // suggestion for the Owner); the people-only ones (delegate) are not listed.
 func AnswersFor(level LevelKind, r Request) []Answer {
+	if IsSystem(r.Type) {
+		// a request of the engine has no pattern, no decree and no delegation
+		// to give: the Owner approves it or denies it
+		return []Answer{AnswerApprove, AnswerDeny}
+	}
 	if level == LevelPeople {
 		return []Answer{AnswerApprove, AnswerApproveFor, AnswerApprovePattern, AnswerApproveAlways, AnswerDelegate, AnswerDeny, AnswerDenyInstruction, AnswerDenyAlways, AnswerAskBack}
 	}
@@ -190,6 +195,15 @@ func agentSections(r Request) []section {
 	}
 	if r.Justification != "" {
 		out = append(out, section{"Justificativa de quem pediu:", r.Justification})
+	}
+	if a := r.Ask; a != nil {
+		for _, f := range []section{{"Resumo do Grão-Mestre:", a.Summary}, {"Detalhes do Grão-Mestre:", a.Details}, {"Recomendação do Grão-Mestre:", a.Recommend},
+			{"Por que o Grão-Mestre pergunta:", a.Reason}, {"Motivo do bloqueio:", a.Motive}, {"O que o Grão-Mestre já conferiu:", a.Checked},
+			{"Por que o Grão-Mestre não decide:", a.WhyNot}, {"Passos que o Grão-Mestre sugere:", strings.Join(a.Steps, "\n")}} {
+			if strings.TrimSpace(f.text) != "" {
+				out = append(out, f)
+			}
+		}
 	}
 	return out
 }

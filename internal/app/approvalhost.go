@@ -2,13 +2,11 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/lucasndas/mestre/internal/approvals"
-	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
@@ -87,19 +85,6 @@ func (i isolated) Deliver(ctx context.Context, w github.Watch, table string, evs
 	return nil
 }
 
-// lateTargets gives the flow the live target of a PR, which needs the mirrors of
-// the orchestration made after it.
-type lateTargets struct{ r *stdRun }
-
-func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMessage, error) {
-	if req.Type == classes.RequestRepoSettings {
-		// what the Owner approves is exactly what Settings applies: the body is in the target
-		// itself and there is no live state to compare it with
-		return req.Target, nil
-	}
-	return t.r.source().Current(ctx, req)
-}
-
 // botLogins are the logins of the bots of the Apps of the Mestre.
 func (r *stdRun) botLogins(ctx context.Context) (map[string]bool, error) {
 	all, err := (&github.Registry{DB: r.env.DB}).List(ctx)
@@ -132,7 +117,7 @@ func (r *stdRun) source() approvals.GitHubSource {
 			return a.BotLogin(), nil
 		},
 		BaseTip: func(ctx context.Context, workspace, table string) (string, error) {
-			orc := r.orcp.Load()
+			orc := r.orc.Load()
 			if orc == nil {
 				return "", errNoApproval
 			}
@@ -192,7 +177,6 @@ func (r *stdRun) grandMasterReview(ctx context.Context, _ string) (approvals.Rev
 
 // approvalSetup makes the approvers over the chain of the orchestration.
 func (r *stdRun) approvalSetup(orc *Orchestration) {
-	r.orcp.Store(orc)
 	if orc.Chain == nil {
 		return
 	}
