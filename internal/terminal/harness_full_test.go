@@ -197,9 +197,10 @@ func buildManager(ctx context.Context, cfg harnessConfig) (*terminal.Manager, *s
 	sys := terminal.NewSystem()
 	m, err := terminal.NewManager(terminal.ManagerConfig{
 		DB: db, System: sys, MachineID: "m1", SocketDir: cfg.Sockets, LogDir: cfg.Logs,
-		Spawner:    &terminal.DirectSpawner{Suite: "full", System: sys, CgroupBase: cfg.CgroupBase},
-		PTYBinary:  func(v string) (string, error) { return cfg.PTYBins[v], nil },
-		PTYVersion: cfg.Version,
+		Spawner:          &terminal.DirectSpawner{Suite: "full", System: sys, CgroupBase: cfg.CgroupBase},
+		HandshakeTimeout: time.Minute, // a loaded CI machine can be slow to schedule the mestre-pty it just started
+		PTYBinary:        func(v string) (string, error) { return cfg.PTYBins[v], nil },
+		PTYVersion:       cfg.Version,
 		OnEnded: func(id string) {
 			if c, ok := endedSignals.Load(id); ok {
 				close(c.(chan struct{}))

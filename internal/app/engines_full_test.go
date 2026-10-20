@@ -148,6 +148,8 @@ func (r *rig) start(n *inproc, clk clock.Clock) {
 	owner := &testOwner{e: &atomic.Pointer[Engine]{}}
 	e, err := New(n.cfg, n.paths, Deps{
 		Clock: clk, Network: r.net.Host(n.name), Lock: n.lock, Approver: owner, Promotions: owner,
+		// a mestre-pty the CI machine is too busy to schedule within the 5 s of the protocol is not what these tests are about
+		TerminalHandshake: time.Minute,
 		HostOrchestration: n.host, Sheet: n.sheet.Sources(), RenewEvery: 20 * time.Millisecond, OnQueuedResult: n.onQueued,
 		Logger: slog.New(slog.NewTextHandler(&n.log, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})
