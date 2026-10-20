@@ -29,7 +29,7 @@ Política completa em [docs/qualidade/testes.md](docs/qualidade/testes.md); não
 
 ## Código, commits e branches
 
-Convenções em [docs/desenvolvimento/convencoes.md](docs/desenvolvimento/convencoes.md): layout do código, Conventional Commits, branches e PRs. A ordem de desenvolvimento (marcos) está em [docs/desenvolvimento/ordem-de-implementacao.md](docs/desenvolvimento/ordem-de-implementacao.md).
+Convenções em [docs/desenvolvimento/convencoes.md](docs/desenvolvimento/convencoes.md): layout do código, Conventional Commits, branches e PRs. PRs são unidades coerentes, não um por comando ou achado, e entram na `main` em trens, com um CI para vários: [fluxo de PRs](docs/desenvolvimento/fluxo-de-prs.md). A ordem de desenvolvimento (marcos) está em [docs/desenvolvimento/ordem-de-implementacao.md](docs/desenvolvimento/ordem-de-implementacao.md).
 
 ## Quando uma tarefa está pronta
 
