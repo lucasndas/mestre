@@ -61,6 +61,9 @@ type Options struct {
 	// (docs/orquestracao/dependencia-entre-mesas.md): no step begins until it is
 	// merged. nil: no table waits.
 	Held func(ctx context.Context, workspace, table string) (bool, error)
+	// Completed is told when a mission ended with all its steps done (the
+	// message of progress goes out); nil: nobody is.
+	Completed func(ctx context.Context, workspace, table, quest string)
 	// EscalateAfter defaults to DefaultEscalateAfter.
 	EscalateAfter time.Duration
 	// Gate is asked before the outside is touched (GitHub); an error means
