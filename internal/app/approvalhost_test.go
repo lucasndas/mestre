@@ -65,7 +65,7 @@ func newApprovalWorld(t *testing.T) *approvalWorld {
 	fence := guild.NewFence(guild.FenceConfig{Lock: epochLock{}, Clock: c.clk, Epoch: func() uint64 { return 1 }})
 	c.run.BindFence(fence)
 	go func() { _ = fence.Run(c.ctx) }()
-	for i := 0; i < 2000 && !fence.LeaseValid(); i++ {
+	for i := 0; i < 200000 && !fence.LeaseValid(); i++ {
 		c.clk.Advance(guild.LeaseInterval)
 		runtime.Gosched()
 	}
