@@ -29,6 +29,7 @@ Pastas padrão (`<dados>` é a pasta de dados da instância, ver [persistência]
 | `<dados>/workspaces/<slug>/espelho.git` | **espelho**: clone sem cópia de trabalho (`--bare`) do repositório; na Cidadela, o principal, fonte de todas as cópias; nas Torres, a réplica dele ([replicação](../guilda/replicacao.md)) |
 | `<dados>/workspaces/<slug>/principal/` | **clone principal**: worktree do espelho na branch principal; pasta de trabalho do Grão-Mestre e fonte de `.mestre/`; existe na Cidadela e vai às Torres como arquivos replicados |
 | `<dados>/workspaces/<slug>/mesas/<mesa>/` | worktrees das mesas nesta máquina, sempre do espelho local ([mesas.md](mesas.md)) |
+| `<dados>/workspaces/<slug>/verificacoes/verifica-*` | worktrees efêmeros da verificação e suas pastas de `HOME`; apagados ao fim e varridos na partida ([prova e devolução](prova-e-devolucao.md#no-código)) |
 
 As Torres nunca falam direto com o GitHub; os commits das mesas passam sempre pela Cidadela ([mesas.md](mesas.md#worktree-por-máquina-e-sincronização)).
 

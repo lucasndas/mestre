@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -273,6 +274,33 @@ func (t *Terminal) FlushLog(ctx context.Context) error {
 	t.logw.Flush()
 	t.ackNow(ctx)
 	return t.logw.Err()
+}
+
+// LogTail is the last n bytes of the log of the terminal (escapes removed,
+// secrets masked), after the unfinished last line is written. The caller waits
+// for the output it wants with WaitLogged first. Unlike Replay it does not need
+// the mestre-pty: once the agent ended, the mestre-pty leaves as soon as the
+// engine confirmed the output, and a Replay after that finds the connection closed.
+func (t *Terminal) LogTail(n int64) ([]byte, error) {
+	t.logw.Flush()
+	if err := t.logw.Err(); err != nil {
+		return nil, fmt.Errorf("the log of %s: %w", t.id, err)
+	}
+	f, err := os.Open(t.m.logPath(t.id))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	off := max(st.Size()-n, 0)
+	buf := make([]byte, st.Size()-off)
+	if _, err := f.ReadAt(buf, off); err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return buf, nil
 }
 
 // ID is the terminal id.

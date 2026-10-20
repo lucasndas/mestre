@@ -59,7 +59,10 @@ type VerifyResult struct {
 
 // VerifyTimeout is the longest a verification may take before the engine gives
 // it up (the commands have their own limits; this is the bound of the whole).
-const VerifyTimeout = 30 * time.Minute
+// The executor never takes longer: verification.MaxTotal is this value, and a
+// command may take up to verification.MaxTimeout (1 h), so a document the
+// executor accepts can always end inside it.
+const VerifyTimeout = 2 * time.Hour
 
 // MaxVerifyOutput is how much of the end of the output goes to the character.
 const MaxVerifyOutput = 4 << 10
@@ -81,29 +84,29 @@ func (s *Service) verifying(uid string) bool {
 // WaitVerifications waits for the verifications under way to be taken in.
 func (s *Service) WaitVerifications() { s.vwg.Wait() }
 
-// uncommittedOf lists what the character left not committed, after its
-// commits reached the Citadel; a Tower whose commits did not arrive is an
+// uncommittedOf lists what the character left not committed, and the head of
+// the branch it was given at, after its commits reached the Citadel; a Tower whose commits did not arrive is an
 // error, and the verification does not start.
-func (s *Service) uncommittedOf(ctx context.Context, q Quest, st Step, c characters.Character) ([]string, error) {
+func (s *Service) uncommittedOf(ctx context.Context, q Quest, st Step, c characters.Character) ([]string, string, error) {
 	var warnings []string
 	if c.Machine != s.o.Machine && s.o.Towers != nil {
 		rep, err := s.o.Towers.Done(ctx, c.Machine, q.Workspace, q.Table)
 		warnings = rep.Warnings
 		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrNotIntegrated, err)
+			return nil, "", fmt.Errorf("%w: %v", ErrNotIntegrated, err)
 		}
 	}
 	run, open, err := s.openRun(ctx, st.UID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if !open {
-		return nil, fmt.Errorf("%w: the step %s has no delivery", ErrNoStep, st.UID)
+		return nil, "", fmt.Errorf("%w: the step %s has no delivery", ErrNoStep, st.UID)
 	}
 	var un []string
 	ch, err := s.o.Tables.Changes(ctx, q.Workspace, q.Table, c.Machine, run.StartCommit)
 	if err != nil {
-		return nil, fmt.Errorf("the changes of the branch could not be read: %w", err) // not knowing is not "nothing left"
+		return nil, "", fmt.Errorf("the changes of the branch could not be read: %w", err) // not knowing is not "nothing left"
 	}
 	un = ch.Uncommitted
 	for _, w := range warnings {
@@ -111,7 +114,23 @@ func (s *Service) uncommittedOf(ctx context.Context, q Quest, st Step, c charact
 			un = append(un, strings.Split(rest, ", ")...)
 		}
 	}
-	return un, nil
+	return un, ch.Head, nil
+}
+
+// headNow is the head of the branch of the table now, in the mirror.
+func (s *Service) headNow(ctx context.Context, q Quest, st Step, c characters.Character) (string, error) {
+	run, open, err := s.openRun(ctx, st.UID)
+	if err != nil {
+		return "", err
+	}
+	if !open {
+		return "", fmt.Errorf("%w: the step %s has no delivery", ErrNoStep, st.UID)
+	}
+	ch, err := s.o.Tables.Changes(ctx, q.Workspace, q.Table, c.Machine, run.StartCommit)
+	if err != nil {
+		return "", fmt.Errorf("the head of the branch could not be read: %w", err)
+	}
+	return ch.Head, nil
 }
 
 // verifyFirst is what a done of a class with verify: true does before it ends
@@ -131,7 +150,7 @@ func (s *Service) verifyFirst(ctx context.Context, q Quest, st Step, c character
 			return DoneResult{}, false, modeNormal, nil
 		}
 	}
-	un, err := s.uncommittedOf(ctx, q, st, c)
+	un, head, err := s.uncommittedOf(ctx, q, st, c)
 	if err != nil {
 		if errors.Is(err, ErrNotIntegrated) {
 			s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("O `done` de %s não pôde ser verificado: os commits dele não chegaram à Cidadela (%v).", c.Name, err))
@@ -164,6 +183,9 @@ func (s *Service) verifyFirst(ctx context.Context, q Quest, st Step, c character
 			return DoneResult{}, true, modeNormal, ErrBaseMoved
 		}
 	}
+	if head == "" {
+		return DoneResult{}, true, modeNormal, errors.New("the head of the branch of the table is unknown: nothing to prove")
+	}
 	t, err := s.o.Tables.Table(ctx, q.Workspace, q.Table)
 	if err != nil {
 		return DoneResult{}, true, modeNormal, err
@@ -171,7 +193,8 @@ func (s *Service) verifyFirst(ctx context.Context, q Quest, st Step, c character
 	s.mu.Lock()
 	s.verifs[st.UID] = true
 	s.mu.Unlock()
-	req := VerifyRequest{Workspace: q.Workspace, Table: q.Table, Branch: t.Branch}
+	// the commit the done was given at: it is what is proved, and a branch that moved is red
+	req := VerifyRequest{Workspace: q.Workspace, Table: q.Table, Branch: t.Branch, Head: head}
 	s.vwg.Add(1)
 	go func() {
 		defer s.vwg.Done()
@@ -277,6 +300,19 @@ func (s *Service) verified(ctx context.Context, q Quest, st Step, c characters.C
 	cur, err := s.st.Step(ctx, st.UID)
 	if err != nil || !cur.State.Active() || cur.Character != c.ID {
 		return // the step moved on while it ran
+	}
+	if res.OK && req.Head != "" {
+		// the character goes on while it runs: green proves the commit the done was
+		// given at, and a branch that moved since is not what was proved
+		now, err := s.headNow(ctx, q, cur, c)
+		if err != nil {
+			failed(err)
+			return
+		}
+		if now != req.Head {
+			s.tellCharacter(ctx, q, c.ID, "A verificação passou, mas a branch da mesa andou enquanto ela rodava (commits depois do `done`). A etapa segue em andamento: confira, commite e dê `mestre done` de novo.")
+			return
+		}
 	}
 	if res.OK {
 		if forcesVerify(q, cur) && s.o.BaseMoved != nil {
