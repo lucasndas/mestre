@@ -209,6 +209,9 @@ type Orchestration struct {
 	Waits       *waits.Service
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
+	// Verifier is the executor of the verification of the workspace the quests
+	// and the gate use (nil: none).
+	Verifier quests.Verifier
 	// BaseSync makes the step `sync` when the main branch moves
 	// (docs/orquestracao/sincronia-com-a-base.md).
 	BaseSync *basesync.Service
@@ -564,7 +567,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.DiscardHandler)
 	}
-	orc := &Orchestration{log: o.Logger}
+	orc := &Orchestration{log: o.Logger, Verifier: o.QuestVerifier}
 	gate := func() error {
 		if f := orc.fence.Load(); f != nil {
 			return f.Allow(guild.ExternalGitHub)

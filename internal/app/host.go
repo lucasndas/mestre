@@ -116,6 +116,8 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		opts.ScrollCopies, opts.RitualPreRun = m, m
 	}
 	opts.QuestIssues = issueOwner{db: db, clk: e.clk}
+	var built *Orchestration
+	opts.QuestVerifier = e.verifier(db, git, func() *Orchestration { return built })
 	if integ != nil {
 		integ.Extend(&opts)
 	}
@@ -138,6 +140,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if err != nil {
 		return nil, err
 	}
+	built = orc
 	// the use of the providers: the events of the characters and the sources
 	// read periodically (usagehost.go)
 	reader := newUsageReader(&usageReader{svc: orc.Usage, dir: usageDirectory{reg: orc.Registry, presets: opts.Presets, quests: &orc.Quests},

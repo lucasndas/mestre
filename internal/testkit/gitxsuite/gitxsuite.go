@@ -49,6 +49,7 @@ func Run(t *testing.T, h Harness) {
 		{"status stage exclude and skip-worktree", statusStageExcludeSkip},
 		{"mirror and worktrees", mirrorAndWorktrees},
 		{"merge fast-forward only", mergeFastForwardOnly},
+		{"merge with a merge commit", mergeWithCommit},
 		{"bundles", bundles},
 		{"fetch and config", fetchAndConfig},
 		{"credentials only through auth", credentialsOnlyThroughAuth},
@@ -498,6 +499,43 @@ func mergeFastForwardOnly(t *testing.T, h Harness) {
 	}
 	_, err = mesa.MergeFFOnly(ctx, "refs/mestre/no-such")
 	isErr(t, err, gitx.ErrRefNotFound)
+}
+
+func mergeWithCommit(t *testing.T, h Harness) {
+	ctx := context.Background()
+	g := h.New(t)
+	root := t.TempDir()
+	origin := seed(t, h, g, filepath.Join(root, "origin"), map[string]string{"f.txt": "base\n", "g.txt": "base\n"})
+	mirror := must(g.Clone(ctx, origin.Dir(), filepath.Join(root, "espelho.git"), gitx.CloneOptions{Bare: true}))
+	mesa := must(mirror.AddWorktree(ctx, filepath.Join(root, "mesa"), gitx.WorktreeOptions{Branch: "mesa", Create: true, StartPoint: "main"}))
+	other := must(mirror.AddWorktree(ctx, filepath.Join(root, "outra"), gitx.WorktreeOptions{Branch: "outra", Create: true, StartPoint: "main"}))
+
+	// Diverged histories on different files merge, with a merge commit.
+	commitFile(t, h, mesa, "m.txt", "mesa\n", "feat: mesa")
+	o1 := commitFile(t, h, other, "o.txt", "outra\n", "feat: outra")
+	got := must(mesa.Merge(ctx, "outra", alice))
+	if got == o1 || must(mesa.ResolveRef(ctx, "HEAD")) != got {
+		t.Fatalf("merge = %s", got)
+	}
+	for f, want := range map[string]string{"m.txt": "mesa\n", "o.txt": "outra\n", "f.txt": "base\n"} {
+		if b := string(must(mesa.ReadFile(ctx, "HEAD", f))); b != want {
+			t.Fatalf("%s = %q, want %q", f, b, want)
+		}
+	}
+
+	// The same file changed on both sides is a conflict, and nothing stays.
+	commitFile(t, h, mesa, "f.txt", "mesa edit\n", "fix: mesa edit f")
+	before := must(mesa.ResolveRef(ctx, "HEAD"))
+	commitFile(t, h, other, "f.txt", "outra edit\n", "fix: outra edit f")
+	_, err := mesa.Merge(ctx, "outra", alice)
+	isErr(t, err, gitx.ErrMergeConflict)
+	if must(mesa.ResolveRef(ctx, "HEAD")) != before || len(statusOf(t, mesa)) != 0 {
+		t.Fatalf("a conflicting merge left HEAD at %s and status %q", must(mesa.ResolveRef(ctx, "HEAD")), statusOf(t, mesa))
+	}
+	_, err = mesa.Merge(ctx, "refs/mestre/no-such", alice)
+	isErr(t, err, gitx.ErrRefNotFound)
+	_, err = mesa.Merge(ctx, "outra", gitx.Signature{})
+	isErr(t, err, gitx.ErrInvalidArgument)
 }
 
 func bundles(t *testing.T, h Harness) {
