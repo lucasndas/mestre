@@ -16,7 +16,7 @@ Somam-se à [definição da missão](missoes.md#definição), com a mesma valida
 
 | Campo | Significado |
 |---|---|
-| `issue` | número de uma issue do épico já criada pelo Mestre da mesa (`mestre issue create`); a missão a usa em vez de criar outra, e o motor só acrescenta o checklist das etapas e as sub-issues. Sem o campo, o motor cria a issue, como hoje |
+| `issue` | número de uma issue do épico já criada pelo Mestre da mesa (`mestre issue create`) e registrada para a mesa (outra: 3 `outside_epic`); a missão a usa em vez de criar outra, e o motor só acrescenta o checklist das etapas e as sub-issues. Sem o campo, o motor cria a issue, como hoje |
 | `same_failure` | quantas falhas seguidas com a mesma impressão pausam a missão (padrão 3; menor que 2 é inválido; acima de `max_returns` não tem efeito) |
 
 ### Prova por critério

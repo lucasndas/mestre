@@ -276,7 +276,7 @@ func (e *Engine) reconcileLocal(ctx context.Context, orc *Orchestration) {
 	if e.rt == nil {
 		return
 	}
-	if err := orc.Characters.Reconcile(ctx, e.id.MachineID, e.rt.rt.Live()); err != nil {
+	if err := orc.Characters.Reconcile(ctx, e.id.MachineID, e.liveWithWaits(ctx, orc, e.rt.rt.Live())); err != nil {
 		e.log.Warn("app: the characters of this machine were not reconciled with the registry", "err", err)
 	}
 }

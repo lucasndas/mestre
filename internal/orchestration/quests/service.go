@@ -48,6 +48,11 @@ type Options struct {
 	Towers    Towers
 	GitHub    GitHub
 	Approvals Approvals
+	// Issues checks that the `issue` of a new mission is one of the table
+	// (nil: not checked); MaxCorrections is how many fix missions an epic may
+	// have (zero: DefaultMaxCorrections).
+	Issues         IssueOwner
+	MaxCorrections int
 	// Done gives the done_requires of the classes (nil: none asks for a proof).
 	Done DoneRules
 	// Verifier runs the verification of the workspace for a class with verify:
@@ -270,6 +275,9 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (View, error) {
 	if err := s.check(ctx, r.Workspace, r.Table, def); err != nil {
 		return View{}, err
 	}
+	if err := s.checkIssue(ctx, r.Workspace, r.Table, def.Issue); err != nil {
+		return View{}, err
+	}
 	now := s.clk.Now()
 	q := Quest{Workspace: r.Workspace, Table: r.Table, Name: def.Name, State: Draft, Def: def, MaxReturns: def.Max(), Designer: r.Designer, Issue: def.Issue,
 		Dirty: 1, CreatedAt: now, UpdatedAt: now}
@@ -279,6 +287,15 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (View, error) {
 	}
 	err := s.st.Do(ctx, func(tx *Tx) error {
 		var err error
+		if def.Issue != 0 {
+			all, err := tx.OfTable(q.Workspace, q.Table)
+			if err != nil {
+				return err
+			}
+			if err := s.checkCorrections(all, def.Issue); err != nil {
+				return err
+			}
+		}
 		q, err = tx.Insert(q, steps)
 		return err
 	})
