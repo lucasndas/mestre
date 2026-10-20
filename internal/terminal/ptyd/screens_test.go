@@ -25,7 +25,7 @@ func startScreen(t *testing.T, program string, trusted bool) string {
 	files := map[string]string{"work/.git/HEAD": "ref: refs/heads/main\n", "home/.keep": ""}
 	if trusted {
 		files["cfg/.credentials.json"] = "{}"
-		files["cfg/.claude.json"] = fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, work)
+		files["cfg/.claude.json"] = fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(work))
 	}
 	testkit.WriteFiles(t, root, files)
 	var out string

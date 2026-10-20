@@ -115,6 +115,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		// the copies of the scrolls and the pre-run of the rituals reach the Towers as the characters do
 		opts.ScrollCopies, opts.RitualPreRun = m, m
 	}
+	opts.QuestIssues = issueOwner{db: db, clk: e.clk}
 	if integ != nil {
 		integ.Extend(&opts)
 	}

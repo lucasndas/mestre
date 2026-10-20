@@ -42,6 +42,7 @@ const (
 	TypeCharacterStop        = "character.stop"
 	TypeCharacterNotice      = "character.notice"
 	TypeCharacterTurn        = "character.turn"
+	TypeCharacterResync      = "character.resync"
 	TypeTableWhere           = "table.where"
 	TypeTableRemove          = "table.remove"
 	TypeTableDone            = "table.done"
@@ -124,6 +125,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeCharacterStop, Dir: CitadelToTower, Ack: true, Payload: CharacterStop{}},
 		Spec{Type: TypeCharacterNotice, Dir: TowerToCitadel, Ack: true, Payload: CharacterNotice{}},
 		Spec{Type: TypeCharacterTurn, Dir: TowerToCitadel, Ack: true, Payload: CharacterTurn{}},
+		Spec{Type: TypeCharacterResync, Dir: TowerToCitadel, Ack: true, Payload: CharacterResync{}, Reply: CharacterResyncResult{}},
 		Spec{Type: TypeTableWhere, Dir: CitadelToTower, Ack: true, Payload: TableRef{}, Reply: TableWhere{}},
 		Spec{Type: TypeTableRemove, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
 		Spec{Type: TypeTableDone, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},

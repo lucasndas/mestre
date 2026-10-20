@@ -263,9 +263,16 @@ func TestTheSkillsOfTheLevelAreOnlyInTheLayerOfTheCharacterThatHasThem(t *testin
 	if !slices.Equal(names, []string{"mestre-comunicacao"}) {
 		t.Errorf(".agents/skills/ = %v; want only mestre-comunicacao", names)
 	}
+	// the skills are in the text, or in SKILLS.md when the layer is over its
+	// limit and the text only points to it
 	skills := func(p sessionzero.CharacterPlan) string {
 		_, after, _ := strings.Cut(p.Layer.Text, "## Skills")
 		after, _, _ = strings.Cut(after, "## Context")
+		for _, f := range p.Layer.Files {
+			if f.Path == "SKILLS.md" {
+				after += string(f.Data)
+			}
+		}
 		return after
 	}
 	if s := skills(master); !strings.Contains(s, "### mestre-coordenacao-mesa") || !strings.Contains(s, "### mestre-rituais") {

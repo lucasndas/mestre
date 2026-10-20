@@ -279,6 +279,65 @@ func TestAClosedPRAndABaseThatMovedAreNotWhatWasAsked(t *testing.T) {
 	}
 }
 
+func TestTheTipOfTheBaseEntersTheLiveTargetOnlyWhenTheGateRanOnIt(t *testing.T) {
+	t.Parallel()
+	w := newGHWorld(t)
+	tip := "b1"
+	w.src.BaseTip = func(_ context.Context, ws, table string) (string, error) {
+		if ws != "meu-app" || table != "42-login" {
+			t.Errorf("the tip was asked of %s/%s", ws, table)
+		}
+		return tip, nil
+	}
+	ask := func(target string) string {
+		t.Helper()
+		r := chain.Request{Workspace: "meu-app", Table: "42-login", Type: classes.RequestPR, PR: &chain.PRRef{Repo: repo, Number: w.pr, SHA: w.sha}}
+		if target != "" {
+			r.Target = approvals.PRTarget(repo, w.pr, w.sha, "main")
+			var err error
+			if r.Target, err = chain.WithBaseSHA(r.Target, target); err != nil {
+				t.Fatal(err)
+			}
+		}
+		cur, err := w.src.Current(context.Background(), r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		imp, _ := chain.Impress(cur)
+		return imp
+	}
+	// the gate did not run: the base moving is nothing
+	plain := ask("")
+	tip = "b2"
+	if ask("") != plain {
+		t.Error("the tip of the base entered a target the gate did not run on")
+	}
+	// the gate ran on b1: the live target carries the tip now, b2
+	gated, _ := chain.Impress(mustTarget(t, w, "b1"))
+	if ask("b1") == gated {
+		t.Error("a base that moved after the gate left the target as it was")
+	}
+	tip = "b1"
+	if ask("b1") != gated {
+		t.Error("the base did not move and the target changed")
+	}
+	// no way to read the tip: the request can not be verified
+	w.src.BaseTip = nil
+	r := chain.Request{Workspace: "meu-app", Table: "42-login", Type: classes.RequestPR, PR: &chain.PRRef{Repo: repo, Number: w.pr, SHA: w.sha}, Target: mustTarget(t, w, "b1")}
+	if _, err := w.src.Current(context.Background(), r); err == nil {
+		t.Error("a target with a base_sha was read with no way to read the tip")
+	}
+}
+
+func mustTarget(t *testing.T, w *ghWorld, base string) []byte {
+	t.Helper()
+	tg, err := chain.WithBaseSHA(approvals.PRTarget(repo, w.pr, w.sha, "main"), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tg
+}
+
 type movingReader struct {
 	approvals.PullReader
 	onFiles func()

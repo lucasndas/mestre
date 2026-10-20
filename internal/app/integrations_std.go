@@ -26,6 +26,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/digest"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/progress"
+	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/telegram"
@@ -407,6 +408,9 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	if orc.BaseSync != nil {
 		h.Send.Base = orc.BaseSync
 	}
+	// the acceptance of the Master of the table: no pull request while a
+	// completed mission of the epic has a criterion with no proof
+	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
 	h.Register(fwd)
 	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
@@ -490,6 +494,23 @@ func (c stdClients) For(ctx context.Context, ch characters.Character, _ string) 
 		}
 		return tok.Secret(), nil
 	}}, nil
+}
+
+// issueBody reads the body of an issue as the App "Mestre", for the acceptance
+// of the table master: what the Master took out of the issue stops being asked.
+func (r *stdRun) issueBody(orc *Orchestration) func(ctx context.Context, workspace string, number int) (string, error) {
+	return func(ctx context.Context, workspace string, number int) (string, error) {
+		repo, err := workspaceRepos{orc}.Repo(ctx, workspace)
+		if err != nil {
+			return "", err
+		}
+		api, err := stdClients{r}.For(ctx, characters.Character{Role: characters.RoleTableMaster, Workspace: workspace}, repo)
+		if err != nil {
+			return "", err
+		}
+		d, err := api.IssueData(ctx, repo, number)
+		return d.Body, err
+	}
 }
 
 // stdQuota says whether the App of a character is under its quota.

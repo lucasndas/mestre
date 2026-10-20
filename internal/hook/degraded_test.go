@@ -81,7 +81,7 @@ func TestWithTheEngineDownTheSnapshotDecides(t *testing.T) {
 				"      - edit: {path: src/a.ts, content: x}\n" +
 				"      - tool: {name: Bash, input: {command: npm install x}}\n",
 			"cfg/.credentials.json": "{}",
-			"cfg/.claude.json":      fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, work),
+			"cfg/.claude.json":      fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(work)),
 		})
 		l := &fakeagent.MemLauncher{Clock: clock.Real{}, Reporter: t, Hooks: inProcess{dial: down, machine: mc}}
 		p, err := l.Start(t.Context(), terminal.Spec{Path: "claude", Dir: work,
