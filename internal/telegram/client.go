@@ -9,8 +9,11 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+
+	"github.com/lucasndas/mestre/internal/attachments"
 )
 
 // DefaultBaseURL is the Telegram Bot API.
@@ -215,4 +218,103 @@ func (m *Message) Kind() Kind {
 		return KindText
 	}
 	return KindOther
+}
+
+// GetFile asks the Bot API where a file is (getFile): the path to download it
+// from and the size the Bot API knows.
+func (c *Client) GetFile(ctx context.Context, id string) (string, int64, error) {
+	raw, err := c.Call(ctx, "getFile", map[string]any{"file_id": id})
+	if err != nil {
+		return "", 0, err
+	}
+	var f struct {
+		FilePath string `json:"file_path"`
+		FileSize int64  `json:"file_size"`
+	}
+	if err := json.Unmarshal(raw, &f); err != nil || f.FilePath == "" {
+		return "", 0, errors.New("telegram getFile: unreadable answer")
+	}
+	return f.FilePath, f.FileSize, nil
+}
+
+// Download reads a file from the link of the Bot API; one bigger than limit is
+// cut and refused.
+func (c *Client) Download(ctx context.Context, filePath string, limit int64) ([]byte, error) {
+	if filePath == "" || strings.HasPrefix(filePath, "/") || strings.Contains(filePath, "..") || strings.ContainsAny(filePath, "?#\\") {
+		return nil, errors.New("telegram download: the path of the file is not valid")
+	}
+	base := c.BaseURL
+	if base == "" {
+		base = DefaultBaseURL
+	}
+	segs := strings.Split(filePath, "/")
+	for i, s := range segs {
+		segs[i] = url.PathEscape(s)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/file/bot"+c.Token+"/"+strings.Join(segs, "/"), nil)
+	if err != nil {
+		return nil, errors.New("telegram download: " + c.scrub(err.Error()))
+	}
+	hc := c.HTTP
+	if hc == nil {
+		hc = defaultHTTP
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, errors.New("telegram download: " + c.scrub(err.Error()))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("telegram download: status %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, errors.New("telegram download: " + c.scrub(err.Error()))
+	}
+	if int64(len(data)) > limit {
+		return nil, &attachments.TooLargeError{Limit: limit}
+	}
+	return data, nil
+}
+
+var _ attachments.Fetcher = (*Client)(nil)
+
+// FileOf is the file a message carries: a voice message or an audio, a photo (the
+// biggest size) or a document. It is nil for a message with no file.
+func (m *Message) FileOf() *attachments.Ref {
+	type media struct {
+		FileID   string `json:"file_id"`
+		Size     int64  `json:"file_size"`
+		Name     string `json:"file_name"`
+		MIME     string `json:"mime_type"`
+		Duration int    `json:"duration"`
+		Width    int    `json:"width"`
+		Height   int    `json:"height"`
+	}
+	one := func(raw json.RawMessage) (media, bool) {
+		var x media
+		return x, len(raw) > 0 && json.Unmarshal(raw, &x) == nil && x.FileID != ""
+	}
+	if x, ok := one(m.Voice); ok {
+		return &attachments.Ref{ID: x.FileID, Name: x.Name, MIME: x.MIME, Size: x.Size, Duration: time.Duration(x.Duration) * time.Second, Kind: attachments.KindVoice}
+	}
+	if x, ok := one(m.Audio); ok {
+		return &attachments.Ref{ID: x.FileID, Name: x.Name, MIME: x.MIME, Size: x.Size, Duration: time.Duration(x.Duration) * time.Second, Kind: attachments.KindVoice}
+	}
+	if x, ok := one(m.Document); ok {
+		return &attachments.Ref{ID: x.FileID, Name: x.Name, MIME: x.MIME, Size: x.Size, Kind: attachments.KindDocument}
+	}
+	var sizes []media
+	if len(m.Photo) > 0 && json.Unmarshal(m.Photo, &sizes) == nil && len(sizes) > 0 {
+		best := sizes[0]
+		for _, x := range sizes {
+			if x.Width*x.Height > best.Width*best.Height || (x.Width*x.Height == best.Width*best.Height && x.Size > best.Size) {
+				best = x
+			}
+		}
+		if best.FileID != "" {
+			return &attachments.Ref{ID: best.FileID, MIME: "image/jpeg", Size: best.Size, Kind: attachments.KindPhoto}
+		}
+	}
+	return nil
 }
