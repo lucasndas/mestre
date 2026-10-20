@@ -1,0 +1,100 @@
+package telegram
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/users"
+)
+
+// PauseTableAction is the button **Pausar mesa** of the warning of a table that
+// spins; its argument is "<workspace>:<table>".
+const PauseTableAction = "pause_table"
+
+// TablePauser pauses a table on the word of a person (*chain.Supervisor).
+type TablePauser interface {
+	PauseStalled(ctx context.Context, r chain.PauseRequest) (bool, error)
+}
+
+// StallChannel sends the warning of a table that works without delivering
+// (docs/orquestracao/supervisao-da-cadeia.md#entrega-útil-e-mesa-que-gira) to
+// the people who may pause it, with the button **Pausar mesa**. It is the
+// chain.StallPeople of the bot.
+type StallChannel struct {
+	Users *users.Service
+	// Pauser is who the button calls; the audit keeps who touched it and why.
+	Pauser TablePauser
+
+	bot *Bot
+}
+
+var _ chain.StallPeople = (*StallChannel)(nil)
+
+// Bind ties the channel to the bot.
+func (c *StallChannel) Bind(bot *Bot) { c.bot = bot }
+
+// Actions are the buttons, for Options.Actions.
+func (c *StallChannel) Actions() map[string]Action {
+	return map[string]Action{PauseTableAction: c.pause}
+}
+
+// StalledTable implements chain.StallPeople: the message goes to each active
+// user who acts in the workspace and has the level of the button (an Approver or
+// above). It fails only when nobody could be told.
+func (c *StallChannel) StalledTable(ctx context.Context, n chain.StallNotice) error {
+	if c.bot == nil {
+		return errors.New("the bot of the Telegram is not running")
+	}
+	all, err := c.Users.List(ctx)
+	if err != nil {
+		return err
+	}
+	sent := 0
+	for _, u := range all {
+		if u.State != users.Active || u.TelegramID == 0 || !u.Acts(n.Workspace) || !users.Can(u.Level, users.PauseButtons) {
+			continue
+		}
+		rows := [][]Button{{{Text: "Pausar mesa", Action: PauseTableAction, Arg: n.Workspace + ":" + n.Table, Capability: users.PauseButtons}}}
+		if _, err := c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: n.Text, Workspace: n.Workspace, Mesa: n.Table, Origin: "mesa_parada", Buttons: rows}); err != nil {
+			c.bot.log.Warn("telegram: the warning of a stalled table was not queued", "user", u.ID, "err", err)
+			continue
+		}
+		sent++
+	}
+	if sent == 0 {
+		return errors.New("nobody with the level to pause a table could be told")
+	}
+	return nil
+}
+
+// pause is the button: it pauses the table of the warning in the name of the
+// user who touched it, if the user still acts in the workspace.
+func (c *StallChannel) pause(ctx context.Context, k Click) (string, string, error) {
+	ws, table, ok := strings.Cut(k.Arg, ":")
+	if !ok || ws == "" || table == "" {
+		return "", "", errors.New("botão inválido")
+	}
+	if c.Pauser == nil {
+		return "", "", errors.New("a pausa de mesa não está disponível agora")
+	}
+	u, err := c.Users.Get(ctx, k.User.ID) // the level and the workspaces as stored now
+	if err != nil || !u.Acts(ws) {
+		return "", "", errors.New("essa mesa não é de um workspace seu")
+	}
+	changed, err := c.Pauser.PauseStalled(ctx, chain.PauseRequest{Workspace: ws, Table: table,
+		Reason: "a mesa trabalhava há horas sem entregar nada; pausada pelo botão do aviso",
+		By:     chain.Actor{User: u.ID, UserLevel: characters.UserLevel(u.Level)}})
+	switch {
+	case errors.Is(err, chain.ErrTableOver):
+		return "", "", errors.New("essa mesa já terminou")
+	case err != nil:
+		return "", "", err
+	case !changed:
+		return "A mesa já estava pausada.", "", nil
+	}
+	return fmt.Sprintf("Mesa %s pausada.", table), "", nil
+}

@@ -306,6 +306,10 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 			fmt.Fprintf(&text, "\n%s", queue)
 		}
 	}
+	if at, err := s.LastDelivery(ctx, t.Workspace, t.ID); err == nil && !at.IsZero() {
+		data["last_delivery"] = at.UTC().Format(time.RFC3339)
+		fmt.Fprintf(&text, "\nÚltima entrega útil: %s", at.UTC().Format("2006-01-02 15:04 UTC"))
+	}
 	data["proofs"] = s.proofsOf(ctx, t)
 	data["text"] = strings.TrimRight(text.String(), "\n")
 	return localchan.OK(data)
