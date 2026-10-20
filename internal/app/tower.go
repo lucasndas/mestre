@@ -202,10 +202,12 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 				go func() {
 					if link := e.towerLink(); link != nil {
 						e.resyncCharacters(pctx, link)
-						// the commits a done could not send while the Citadel was away
-						if err := tableHalf.Resend(pctx); err != nil {
-							e.log.Warn("app: the commits of the tables were not sent again", "err", err)
-						}
+					}
+				}()
+				go func() {
+					// the commits a done could not send while the Citadel was away
+					if err := tableHalf.Resend(pctx); err != nil {
+						e.log.Warn("app: the commits of the tables were not sent again", "err", err)
 					}
 				}()
 				e.setConnected(true)
