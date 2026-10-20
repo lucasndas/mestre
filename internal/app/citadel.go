@@ -517,7 +517,14 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		if err != nil {
 			return transition{err: fmt.Errorf("app: the orchestration: %w", err)}
 		}
-		defer e.period.Store(nil) // the chain and the rules of a period are not the next one's
+		defer func() { // the chain, the rules and the use of a period are not the next one's
+			if p := e.period.Swap(nil); p != nil && p.usage != nil {
+				p.usage.close()
+			}
+		}()
+		e.orc.Store(orc) // what the characters of this machine report to
+		defer e.orc.Store(nil)
+		e.reconcileLocal(ctx, orc)
 		orc.Register(e.local, nil)
 		run.external = append(slices.Clone(run.external), orc.External())
 		if integ != nil {
@@ -603,6 +610,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	if err != nil {
 		return transition{err: err}
 	}
+	e.sheets.Store(registry) // the machines the characters are placed on
+	defer e.sheets.Store(nil)
 	pcfg.Hooks = primary.Hooks(protocol.Hooks{
 		OnHello: func(ctx context.Context, peer protocol.Peer, h *protocol.Hello) error {
 			// the sheet of the hello is a write: during the handover the

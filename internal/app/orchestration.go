@@ -226,6 +226,9 @@ type Orchestration struct {
 	// tables.
 	Observers characters.Observers
 
+	// Loops are the periodic readers the host adds; External runs them.
+	Loops []func(ctx context.Context) error
+
 	fence atomic.Pointer[guild.Fence]
 	log   *slog.Logger
 }
@@ -781,6 +784,9 @@ func (o *Orchestration) External() ExternalFunc {
 		run("quests", func(ctx context.Context) error { return o.Quests.Loop(ctx, sweepEvery) })
 		run("usage", func(ctx context.Context) error { return o.Usage.Loop(ctx, sweepEvery) })
 		run("rituals", func(ctx context.Context) error { return o.Rituals.Loop(ctx, ritualEvery) })
+		for i, loop := range o.Loops {
+			run(fmt.Sprintf("loop %d", i), loop)
+		}
 		if o.Supervisor != nil {
 			run("supervision", func(ctx context.Context) error { return o.Supervisor.Loop(ctx, sweepEvery) })
 		}

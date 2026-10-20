@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
@@ -137,6 +138,26 @@ func (rt *Runtime) nextSeq(prev uint64) uint64 {
 	return n
 }
 
+// Live is the state of every terminal this machine knows, as the Citadel
+// reconciles its registry with it (Service.Reconcile) when it takes over the
+// reports a machine could not make while no Citadel was there.
+func (rt *Runtime) Live() []protocol.TerminalState {
+	rt.mu.Lock()
+	all := make([]*session, 0, len(rt.sessions))
+	for _, s := range rt.sessions {
+		all = append(all, s)
+	}
+	rt.mu.Unlock()
+	out := make([]protocol.TerminalState, 0, len(all))
+	for _, s := range all {
+		st := s.status()
+		s.mu.Lock()
+		out = append(out, protocol.TerminalState{TerminalID: s.terminal, AgentID: s.id, State: string(st.State), SessionID: s.sessionID})
+		s.mu.Unlock()
+	}
+	return out
+}
+
 func (rt *Runtime) session(id string) *session {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
@@ -173,7 +194,10 @@ func (rt *Runtime) Start(ctx context.Context, cmd StartCommand) (StartResult, er
 		rt.mu.Unlock()
 	}()
 	provider := providerOfAgent(req.Snapshot.Sheet.Agent)
-	if cmd.Request.Role != RoleGrandMaster && req.Table.ID != "" && rt.o.Tables != nil {
+	// The files of the worktree are checked before every character, the Grand
+	// Master included: its worktree is the main clone (the table ""), and a
+	// provider whose files were not generated there does not start it.
+	if rt.o.Tables != nil && (req.Role == RoleGrandMaster || req.Table.ID != "") {
 		if err := rt.o.Tables.CheckStart(ctx, req.Workspace, req.Table.ID, req.Dir, provider); err != nil {
 			return StartResult{}, err
 		}
