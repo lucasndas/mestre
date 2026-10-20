@@ -146,7 +146,12 @@ type OrchestrationOptions struct {
 	// ChainSubDelegations lets a Mestre da mesa decide what a subdelegation of the Grão-Mestre gives it.
 	ChainSubDelegations chain.SubDelegations
 	// ChainPRs reads the PRs for the conditions of the approval policy.
-	ChainPRs         chain.PRSource
+	ChainPRs chain.PRSource
+	// FreshnessRules reads what the base branch of a repository asks of a PR:
+	// with it, the requests of a PR go through the gate of freshness
+	// (docs/github/acoes-por-nivel.md#merge), which proves the base integrated
+	// with QuestVerifier. Nil: no gate.
+	FreshnessRules   basesync.Rules
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
 
@@ -199,6 +204,9 @@ type Orchestration struct {
 	// BaseSync makes the step `sync` when the main branch moves
 	// (docs/orquestracao/sincronia-com-a-base.md).
 	BaseSync *basesync.Service
+	// Gate is the gate of freshness of the requests of a PR (nil without
+	// OrchestrationOptions.FreshnessRules).
+	Gate *basesync.Gate
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
 	// Usage is the use and the limits on it (docs/plataforma/limites-de-uso.md).
@@ -447,6 +455,26 @@ func (h lockedHolds) Held(ctx context.Context, id string) (bool, error) {
 // characters as an Observer.
 type chainRef struct{ p **chain.Service }
 
+// freshnessRef is the gate of freshness seen by the chain, which is made before
+// the base sync the gate needs.
+type freshnessRef struct{ p **basesync.Gate }
+
+var errNoGate = errors.New("app: the gate of freshness is not composed")
+
+func (r freshnessRef) Open(ctx context.Context, req chain.Request) (chain.FreshnessVerdict, error) {
+	if *r.p == nil {
+		return chain.FreshnessVerdict{}, errNoGate
+	}
+	return (*r.p).Open(ctx, req)
+}
+
+func (r freshnessRef) Unverifiable(ctx context.Context, req chain.Request) (string, error) {
+	if *r.p == nil {
+		return "", errNoGate
+	}
+	return (*r.p).Unverifiable(ctx, req)
+}
+
 func (r chainRef) Held(ctx context.Context, id string) (bool, error) {
 	if *r.p == nil {
 		return false, nil
@@ -535,6 +563,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		scr   *scrolls.Service
 		qs    *quests.Service
 		ch    *chain.Service
+		fresh *basesync.Gate
 		rit   *rituals.Service
 		trl   *tablerules.Service
 		sup   *chain.Supervisor
@@ -617,7 +646,11 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			}
 			supervision = sup
 		}
-		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
+		var freshness chain.Freshness
+		if o.FreshnessRules != nil {
+			freshness = freshnessRef{&fresh}
+		}
+		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
 			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}, Logger: o.Logger})
@@ -642,9 +675,22 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	bsync, err = basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Logger: o.Logger})
+	var requests basesync.Requests
+	if ch != nil {
+		requests = ch
+	}
+	bsync, err = basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Requests: requests, Logger: o.Logger})
 	if err != nil {
 		return nil, err
+	}
+	if o.FreshnessRules != nil {
+		if ch == nil {
+			return nil, errors.New("app: the gate of freshness needs the chain of approval")
+		}
+		if fresh, err = basesync.NewGate(basesync.GateOptions{Rules: o.FreshnessRules, Verifier: o.QuestVerifier, Tables: tbl, Mirrors: ws, Base: bsync, Logger: o.Logger}); err != nil {
+			return nil, err
+		}
+		orc.Gate = fresh
 	}
 	ws.OnFetched(bsync.AfterFetch)
 	orc.BaseSync = bsync

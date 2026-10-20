@@ -55,6 +55,10 @@ type Options struct {
 	Inbox    Inbox
 	// Notifier reaches the Grand Master when the table has no Master alive.
 	Notifier characters.Notifier
+	// Requests is told the tip of the base of each table at every fetch, so a
+	// request of a PR whose gate ran on another tip ends (*chain.Service). Nil:
+	// nobody is told.
+	Requests Requests
 	Logger   *slog.Logger
 }
 
@@ -153,9 +157,31 @@ func (s *Service) AfterFetch(ctx context.Context, slug string) {
 		if t.State != tables.StateWorking && t.State != tables.StateInReview {
 			continue
 		}
+		s.baseMoved(ctx, t)
 		if _, err := s.Ensure(ctx, t.Workspace, t.ID); err != nil {
 			s.log.Warn("basesync: the base of a table was not checked", "workspace", slug, "table", t.ID, "err", err)
 		}
+	}
+}
+
+// baseMoved tells the requests of the chain the tip of the base of the table:
+// a gate that ran on another tip proved something that is no longer the merge.
+func (s *Service) baseMoved(ctx context.Context, t tables.Table) {
+	if s.o.Requests == nil {
+		return
+	}
+	mirror, err := s.o.Mirrors.OpenMirror(ctx, t.Workspace)
+	if err != nil {
+		s.log.Warn("basesync: the mirror was not opened", "table", t.ID, "err", err)
+		return
+	}
+	tip, err := mirror.ResolveRef(ctx, "refs/remotes/origin/"+t.BaseBranch)
+	if err != nil {
+		s.log.Warn("basesync: the base of a table was not read", "table", t.ID, "err", err)
+		return
+	}
+	if err := s.o.Requests.BaseMoved(ctx, t.Workspace, t.ID, string(tip)); err != nil {
+		s.log.Warn("basesync: the requests of a table were not checked against the base", "table", t.ID, "err", err)
 	}
 }
 

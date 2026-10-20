@@ -229,7 +229,17 @@ func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
 			facts, has = f, true
 		}
 	}
-	if why := rules.conditions(r, facts, has, thresholds); len(why) > 0 {
+	why := rules.conditions(r, facts, has, thresholds)
+	if s.o.Freshness != nil && isPR(r.Type) && r.PR != nil {
+		// a workspace with no command to verify with: nothing is approved alone
+		switch w, err := s.o.Freshness.Unverifiable(ctx, r); {
+		case err != nil:
+			why = append(why, "frescor: não foi possível conferir o gate ("+err.Error()+")")
+		case w != "":
+			why = append(why, w)
+		}
+	}
+	if len(why) > 0 {
 		for i := range why {
 			why[i] = oneLine(why[i])
 		}
