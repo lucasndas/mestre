@@ -185,10 +185,42 @@ func remove(dir, base string, guard func(Info) error) error {
 		}
 	}
 	// The folders of the path are held, so the file is in the checked folder.
-	if err := os.Remove(filepath.Join(d.path, base)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	full := filepath.Join(d.path, base)
+	clearReadOnly(full) // a read-only copy is taken away like any other file
+	if err := os.Remove(full); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil
+}
+
+// clearReadOnly takes the READONLY attribute off a file, if it has it (Windows
+// replaces and deletes no read-only file). On a link it is the link that
+// changes, not its target; a path that is not there, or an attribute that
+// cannot change, is left to the operation that follows.
+func clearReadOnly(path string) {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return
+	}
+	attrs, err := windows.GetFileAttributes(p)
+	if err != nil || attrs&windows.FILE_ATTRIBUTE_READONLY == 0 {
+		return
+	}
+	_ = windows.SetFileAttributes(p, attrs&^windows.FILE_ATTRIBUTE_READONLY)
+}
+
+// setReadOnly puts the READONLY attribute on a file: the Windows form of the
+// mode without the write bit.
+func setReadOnly(path string) error {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	attrs, err := windows.GetFileAttributes(p)
+	if err != nil {
+		return err
+	}
+	return windows.SetFileAttributes(p, attrs|windows.FILE_ATTRIBUTE_READONLY)
 }
 
 func removeEntry(dir, base string) error {
@@ -285,6 +317,14 @@ func write(dir, base string, data []byte, o Options) error {
 		_ = os.Remove(tmp)
 		return err
 	}
+	// a mode without the write bit is the READONLY attribute of Windows
+	readOnly := o.Mode != 0 && o.Mode&0o200 == 0
+	if readOnly {
+		if err := setReadOnly(tmp); err != nil {
+			_ = os.Remove(tmp)
+			return err
+		}
+	}
 	target := filepath.Join(d.path, base)
 	if o.Guard != nil {
 		cur, err := statIn(d, base)
@@ -297,8 +337,13 @@ func write(dir, base string, data []byte, o Options) error {
 		}
 	}
 	// MoveFileEx replaces a reparse point in place of the file itself; the
-	// folders of the path are held, so the target is in the checked folder.
+	// folders of the path are held, so the target is in the checked folder. A
+	// read-only target (the copy it replaces) is made writable to be replaced.
+	clearReadOnly(target)
 	if err := os.Rename(tmp, target); err != nil {
+		if readOnly {
+			clearReadOnly(tmp)
+		}
 		_ = os.Remove(tmp)
 		return err
 	}

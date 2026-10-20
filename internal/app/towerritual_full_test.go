@@ -23,6 +23,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/protocol"
+	"github.com/lucasndas/mestre/internal/safefile"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/terminal"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -186,16 +187,18 @@ func TestTheCopiesOfTheScrollsReachTheWorktreeOfATower(t *testing.T) {
 	copyPath := filepath.Join(x.towerTree, filepath.FromSlash(scrolls.Rel(x.table, n.ID)))
 	read := func() string { b, _ := os.ReadFile(copyPath); return string(b) }
 	x.r.waitFor("the copy on the Tower", func() bool { return strings.Contains(read(), "primeira versão") })
-	if st, err := os.Stat(copyPath); err != nil || st.Mode().Perm()&0o222 != 0 {
-		t.Errorf("the copy on the Tower is not read only: %v %v", st, err)
+	// read only, the way that holds on both systems: the file does not open for writing
+	if f, err := os.OpenFile(copyPath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
+		_ = f.Close()
+		t.Error("the copy on the Tower opens for writing")
 	}
 	if _, err := x.orc.Scrolls.Write(ctx, scrolls.WriteRequest{Workspace: x.ws, Table: x.table, Actor: scrolls.Engine, Name: "plano", Content: "# Plano\nsegunda versão\n"}); err != nil {
 		t.Fatal(err)
 	}
 	x.r.waitFor("the changed copy on the Tower", func() bool { return strings.Contains(read(), "segunda versão") })
 	// a copy that went missing is made again by the sync (a Tower back, a new character)
-	if err := os.Remove(copyPath); err != nil {
-		t.Fatal(err)
+	if err := safefile.Remove(copyPath, nil); err != nil {
+		t.Fatalf("remove the copy: %v", err)
 	}
 	if err := x.orc.Scrolls.Sync(ctx, x.ws, x.table); err != nil {
 		t.Fatal(err)
@@ -323,6 +326,7 @@ func TestThePreRunOfARitualRunsOnTheTowerOfItsTarget(t *testing.T) {
 		}
 		return rt
 	}
+	// a line both shells read the same: sh on Linux, PowerShell on Windows (where pwd is Get-Location)
 	ok := create("quadro", "echo ola-da-torre; pwd")
 	f, err := x.orc.Rituals.Run(ctx, ok.ID, by)
 	if err != nil || f.State != rituals.Delivered {

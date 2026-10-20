@@ -2,8 +2,10 @@ package characters
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"time"
+	"unicode/utf16"
 )
 
 // PreRunOutcome is what a command run as a character came to.
@@ -43,7 +45,7 @@ func (rt *Runtime) PreRun(ctx context.Context, agentID, command string, timeout 
 	if err := rt.o.PreRunGate(ctx, PreRunCheck{Agent: agentID, Table: s.launch.Table, Dir: s.launch.Dir, Command: command}); err != nil {
 		return PreRunOutcome{}, err
 	}
-	res, err := runner.RunHook(ctx, command, s.launch.Dir, "pre_run", nil, timeout)
+	res, err := runner.RunHook(ctx, shellLine(rt.o.OS, command), s.launch.Dir, "pre_run", nil, timeout)
 	if err != nil {
 		return PreRunOutcome{}, err
 	}
@@ -56,4 +58,21 @@ func (rt *Runtime) PreRun(ctx context.Context, agentID, command string, timeout 
 		o.Stderr = out // the terminal gives both streams in one: the tail of it is what the failure shows
 	}
 	return o, nil
+}
+
+// shellLine is the line the terminal runs for a command of a pre-run. On Windows
+// the runner of the terminal is cmd, and a command of an agent there is
+// PowerShell's (the permissions read it as POSIX and as PowerShell, never as
+// cmd): it runs in PowerShell, with the command as the text it was decided on
+// (-EncodedCommand carries it with no quoting at all).
+func shellLine(goos, command string) string {
+	if goos != "windows" {
+		return command
+	}
+	u := utf16.Encode([]rune(command))
+	b := make([]byte, 0, 2*len(u))
+	for _, c := range u {
+		b = append(b, byte(c), byte(c>>8))
+	}
+	return "powershell.exe -NoProfile -NonInteractive -EncodedCommand " + base64.StdEncoding.EncodeToString(b)
 }
