@@ -26,6 +26,24 @@ type PolicyDecrees interface {
 // own and the secrets (the protections of docs/aprovacoes/politica.md).
 var neverLoosened = []string{"mestre", "permissoes_e_segredos"}
 
+// KnownPolicyType says whether the name is a type of request the policy
+// configures (the types a decree of policy may tighten).
+func KnownPolicyType(s string) bool { return slices.Contains(knownTypes, classes.RequestType(s)) }
+
+// LoosenablePolicySetting says whether a decree of policy may loosen the setting:
+// a sensitive area (not the ones of the engine and the secrets) or a type of risk
+// medio.
+func LoosenablePolicySetting(s string) bool {
+	if slices.Contains(neverLoosened, s) {
+		return false
+	}
+	if _, ok := DefaultRules().Areas[s]; ok {
+		return true
+	}
+	t := classes.RequestType(s)
+	return slices.Contains(knownTypes, t) && !slices.Contains(highTypes, t)
+}
+
 // WithDecrees returns the rules with the decrees applied, leaving the original
 // untouched. A tightening always wins over a loosening of the same setting; a
 // setting the engine does not know is ignored, which is the stricter side.

@@ -475,10 +475,14 @@ func (s *Service) PolicyFor(ctx context.Context, r chain.Request) (chain.PolicyA
 		return a, err
 	}
 	for _, d := range ds {
+		// a decree made for one table reaches only that table, whatever it aims at
+		if d.Mesa != "" && d.Mesa != r.Table {
+			continue
+		}
 		switch d.Target.Kind {
 		case TargetWorkspace:
 		case TargetTable:
-			if d.Mesa != r.Table && d.Target.Name != r.Table {
+			if r.Table == "" || d.Mesa == "" && d.Target.Name != r.Table {
 				continue
 			}
 		case TargetClass:
@@ -489,6 +493,15 @@ func (s *Service) PolicyFor(ctx context.Context, r chain.Request) (chain.PolicyA
 			continue
 		}
 		if d.Effect.Loosens {
+			// only the decree of someone who still can make it loosens: an author who is gone,
+			// suspended or below an Administrator leaves the policy as it was (tightening needs no check)
+			level, err := s.levelOf(ctx, s.o.DB.Reader(), d)
+			if err != nil {
+				return a, err
+			}
+			if level == "" || !level.AtLeast(classes.LevelAdmin) {
+				continue
+			}
 			a.Loosen = append(a.Loosen, d.Effect.Setting)
 		} else {
 			a.Tighten = append(a.Tighten, d.Effect.Setting)

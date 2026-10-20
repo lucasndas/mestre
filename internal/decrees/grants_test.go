@@ -318,3 +318,61 @@ func TestThePolicyDecreesThatReachARequestAreThoseOfItsWorkspaceTableAndClass(t 
 		t.Fatalf("another workspace: %+v", got)
 	}
 }
+
+// The reach of a decree of policy is the one it was made for: a decree made for a
+// table loosens only that table, the loosening of an author who was suspended
+// ends, a decree aimed at a character or at a setting that is not one is refused,
+// and what a real decree loosens is what the rules of the chain stop asking.
+func TestADecreeOfPolicyReachesOnlyWhatItWasMadeForAndEndsWithItsAuthor(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.person("Ana", users.Administrator, "loja")
+	pol := func(setting string, loosens bool, target decrees.Target, mesa string) decrees.Proposal {
+		return decrees.Proposal{Author: ana.ID, Kind: decrees.KindRule, Workspace: "loja", Mesa: mesa, Target: target,
+			Effect: decrees.Effect{Kind: decrees.EffectPolicy, Setting: setting, Loosens: loosens}, Text: "ajuste a política"}
+	}
+	workspace := decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"}
+	// made for the table 42-login, aimed at the workspace (the answer "Delegar" of a medio request)
+	w.confirm(pol("migracoes", true, workspace, "42-login"))
+	inside := w.request(1, classes.RequestPR, nil) // loja, 42-login
+	got, err := w.svc.PolicyFor(w.ctx, inside)
+	if err != nil || !slices.Equal(got.Loosen, []string{"migracoes"}) {
+		t.Fatalf("the table of the decree: %+v, %v", got, err)
+	}
+	other := inside
+	other.Table = "43-busca"
+	if got, _ := w.svc.PolicyFor(w.ctx, other); len(got.Loosen) != 0 {
+		t.Fatalf("another table of the workspace is loosened too: %+v", got)
+	}
+	// what the rules of the chain stop asking
+	pr := chain.PRFacts{LabelsRead: true, CIGreen: true, ReviewDone: true, Files: []chain.PRFile{{Path: "db/migrations/0003.sql", Added: 3}}}
+	if why := chain.DefaultRules().Conditions(inside, pr, true); len(why) == 0 {
+		t.Fatal("a migration passes the conditions without the decree")
+	}
+	loosened, _ := w.svc.PolicyFor(w.ctx, inside)
+	if why := chain.DefaultRules().WithDecrees(loosened).Conditions(inside, pr, true); len(why) != 0 {
+		t.Fatalf("the decree loosened migracoes but the rules still ask: %v", why)
+	}
+	// the author is suspended: the loosening ends (a tightening would stay)
+	if err := w.users.Suspend(w.ctx, w.owner, ana.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := w.svc.PolicyFor(w.ctx, inside); len(got.Loosen) != 0 {
+		t.Fatalf("the decree of a suspended author still loosens: %+v", got)
+	}
+
+	// refused at the proposal
+	bia := w.person("Bia", users.Administrator, "loja")
+	bad := func(p decrees.Proposal) {
+		t.Helper()
+		p.Author = bia.ID
+		if ref := w.refusal(p); ref.Code != decrees.CodeInvalid && ref.Code != decrees.CodeInvariant {
+			t.Errorf("%+v: %+v", p.Effect, ref)
+		}
+	}
+	bad(pol("*", false, decrees.Target{Kind: decrees.TargetCharacter, Name: "Dev"}, ""))
+	bad(pol("migracoes", false, workspace, "")) // an area is not tightened by name
+	bad(pol("mestre", true, workspace, ""))     // the areas of the engine are never opened
+	bad(pol("permissoes_e_segredos", true, workspace, ""))
+	bad(pol("tipo_que_nao_existe", true, workspace, ""))
+}

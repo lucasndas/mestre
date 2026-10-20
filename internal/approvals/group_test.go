@@ -97,3 +97,64 @@ func TestSimilarRequestsAreOneQuestionAndThePatternApprovesTheOnesItCovers(t *te
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// Aprovar agora and Negar on the shared question stand for every request listed;
+// a request of another table, another class or another risk is not put in the
+// question; and a request that arrives while a PIN waits is asked apart, so the
+// PIN approves only what the user read.
+func TestTheAnswerOfAGroupStandsForTheListedRequestsAndNoOtherJoinsIt(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.add("Ana", users.Administrator, "loja")
+	if err := w.svc.SetPIN(w.ctx, ana.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	a := w.open(openOpts{action: "npm install a"})
+	b := w.open(openOpts{action: "npm install b"})
+	// not alike: another table, another class, a command with no pattern in common
+	otherTable := w.open(openOpts{action: "npm install t", table: "43-busca"})
+	otherClass := w.open(openOpts{action: "npm install k", class: "qa"})
+	unlike := w.open(openOpts{action: "make deploy"})
+	if got := w.msg.Sent(); got != 2*4 { // the group (a, b) and the three alone, for each of the two users
+		t.Fatalf("%d messages were sent; want 8", got)
+	}
+	if rep, err := w.flow.Answer(w.ctx, ana.ID, approvals.Input{Request: a.ID, Answer: chain.AnswerDeny}); err != nil || rep.Text != "Negado." {
+		t.Fatalf("deny: %+v, %v", rep, err)
+	}
+	for _, r := range []chain.Request{a, b} {
+		if got := w.state(r.ID); got != chain.Denied {
+			t.Errorf("request %d is %s; want denied with the group", r.ID, got)
+		}
+	}
+	for _, r := range []chain.Request{otherTable, otherClass, unlike} {
+		if got := w.state(r.ID); got != chain.Open {
+			t.Errorf("request %d (not alike) is %s; want it open", r.ID, got)
+		}
+	}
+
+	// a PIN waits for the pattern of two requests; a third arrives meanwhile
+	w = newWorld(t)
+	ana = w.add("Ana", users.Administrator, "loja")
+	if err := w.svc.SetPIN(w.ctx, ana.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	x := w.open(openOpts{action: "npm install x"})
+	y := w.open(openOpts{action: "npm install y"})
+	rep, err := w.flow.Answer(w.ctx, ana.ID, approvals.Input{Request: x.ID, Answer: chain.AnswerApprovePattern, Pattern: "npm install *"})
+	if err != nil || rep.PIN == "" {
+		t.Fatalf("pattern: %+v, %v", rep, err)
+	}
+	late := w.open(openOpts{action: "npm install z"})
+	if err := w.svc.CheckPIN(w.ctx, rep.PIN, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.flow.ConfirmPIN(w.ctx, ana.ID, rep.PIN); err != nil {
+		t.Fatal(err)
+	}
+	if w.state(x.ID) != chain.Approved || w.state(y.ID) != chain.Approved {
+		t.Errorf("the two read by the user are %s and %s; want approved", w.state(x.ID), w.state(y.ID))
+	}
+	if got := w.state(late.ID); got != chain.Open {
+		t.Errorf("the request that arrived while the PIN waited is %s; want it open", got)
+	}
+}

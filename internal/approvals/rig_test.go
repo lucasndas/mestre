@@ -128,6 +128,12 @@ func (w *world) open(o openOpts) chain.Request {
 	if o.action != "" {
 		// a permission of the class for a shell command of a table
 		r.Type, r.Table, r.Class = classes.RequestClassPermission, "42-login", "dev"
+		if o.table != "" {
+			r.Table = o.table
+		}
+		if o.class != "" {
+			r.Class = o.class
+		}
 		r.Action = &classes.Action{Kind: providers.KindShell, Command: o.action}
 		r.Risk = classes.RiskResult{Risk: classes.RiskLow}
 	}
@@ -165,6 +171,8 @@ type openOpts struct {
 	pr      *chain.PRRef
 	// action is the shell command of a permission of the class (type, table and risk follow).
 	action string
+	// table and class replace the table 42-login and the class dev of an action.
+	table, class string
 }
 
 func (w *world) answer(u users.User, request int64, a chain.Answer) (approvals.Reply, error) {

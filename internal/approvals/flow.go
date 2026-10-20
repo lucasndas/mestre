@@ -251,7 +251,7 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 			if err := f.setRef(ctx, q.Request.ID, u.ID, ref, answers); err != nil {
 				return err
 			}
-			if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: u.ID, Ref: ref, Text: text, Request: q.Request.ID, Answers: answers}); err != nil {
+			if err := f.edit(ctx, MessageEdit{UserID: u.ID, Ref: ref, Text: text, Request: q.Request.ID, Answers: answers}); err != nil {
 				f.log.Warn("approvals: the question was not updated", "request", q.Request.ID, "user", u.ID, "err", err)
 			}
 			sent++
@@ -451,6 +451,11 @@ func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, erro
 		return Reply{}, err
 	}
 	members := f.sharedWith(ctx, userID, in)
+	for _, m := range members { // one PIN for the group asks it if any of them does
+		if other, ok, err := f.row(ctx, m.ID); err == nil && ok && other.PIN {
+			fr.PIN = true
+		}
+	}
 	if (in.Answer.Approves() || in.Answer == chain.AnswerDelegate) && (fr.PIN || asksPIN(in.Answer)) {
 		if f.o.PINs == nil {
 			return Reply{}, ErrPIN
@@ -740,7 +745,7 @@ func (f *Flow) refresh(ctx context.Context, request int64, fr flowRow) {
 		return
 	}
 	for _, m := range rs {
-		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
+		if err := f.edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
 			f.log.Warn("approvals: the question was not updated", "request", request, "user", m.user, "err", err)
 		}
 	}
@@ -843,7 +848,7 @@ func (f *Flow) Resend(ctx context.Context, request int64, userID string) {
 		if m.user != userID {
 			continue
 		}
-		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
+		if err := f.edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request, Answers: m.answers}); err != nil {
 			f.log.Warn("approvals: the buttons were not given back", "request", request, "user", userID, "err", err)
 		}
 	}
