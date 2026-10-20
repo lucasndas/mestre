@@ -59,6 +59,12 @@ func Refusal(err error) localchan.Response {
 		return localchan.Fail(localchan.CodeNotFound, err.Error(), "the criteria are the items C<n> of the issue of the quest, as they were when it ran")
 	case errors.Is(err, ErrProofMissing):
 		return localchan.Fail("proof_missing", err.Error(), `give --proof "C<n>=<proof>" for each one that is missing`).WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrVerificationRunning):
+		return localchan.Fail("verification_running", err.Error(), "wait for the verification to end").WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrUncommitted):
+		return localchan.Fail("uncommitted_changes", err.Error(), "commit the changes and run `mestre done` again").WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrNotIntegrated):
+		return localchan.Fail("conflict", err.Error(), "the engine tells the Master of the table").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrUsage):
 		return localchan.Fail(localchan.CodeUsage, err.Error(), "see `mestre done --help`")
 	case errors.Is(err, ErrNotMaster):

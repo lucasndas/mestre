@@ -97,7 +97,11 @@ func (s *Service) relWhere(ctx context.Context, q Quest, c characters.Character,
 // print as the last one adds to the count, another print or none starts it
 // again. It keeps the count.
 func (s *Service) countFailure(tx *Tx, st Step, sd StepDef, r DoneRequest) (Failure, error) {
-	fp, places := Fingerprint(sd.ID, r.Cause, r.Where, "")
+	return s.countFailureOf(tx, st, sd, r.Cause, r.Where)
+}
+
+func (s *Service) countFailureOf(tx *Tx, st Step, sd StepDef, cause string, where []string) (Failure, error) {
+	fp, places := Fingerprint(sd.ID, cause, where, "")
 	if fp == "" {
 		return Failure{}, tx.SetFailure(st.UID, Failure{})
 	}
