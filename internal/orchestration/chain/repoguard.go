@@ -43,7 +43,16 @@ func bindsRepo(t classes.RequestType) bool {
 }
 
 // SameRepo says two names are the same repository (GitHub spells it in any case).
-func SameRepo(a, b string) bool { return a != "" && strings.EqualFold(a, b) }
+// Only ASCII names are one: a letter that folds to an ASCII one (the Kelvin sign)
+// is another name.
+func SameRepo(a, b string) bool {
+	for _, c := range a + b {
+		if c > 127 {
+			return false
+		}
+	}
+	return a != "" && strings.EqualFold(a, b)
+}
 
 // guardRepo refuses, closed, a request whose target is not the repository of its
 // workspace, or whose workspace has none that can be read.
@@ -57,6 +66,15 @@ func (s *Service) guardRepo(ctx context.Context, r Request) error {
 	}
 	if got := TargetRepo(r); !SameRepo(want, got) {
 		return fmt.Errorf("%w: %q is not %q", ErrWrongRepo, got, want)
+	}
+	if r.Type == classes.RequestPR || r.Type == classes.RequestMerge {
+		// the target names the repository too, and decrees and people read it there
+		var t struct {
+			Repo string `json:"repo"`
+		}
+		if len(r.Target) > 0 && json.Unmarshal(r.Target, &t) == nil && t.Repo != "" && !SameRepo(want, t.Repo) {
+			return fmt.Errorf("%w: the target names %q, not %q", ErrWrongRepo, t.Repo, want)
+		}
 	}
 	return nil
 }
