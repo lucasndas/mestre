@@ -1,6 +1,6 @@
 # Grão-Mestre
 
-> **Assunto:** papel do Grão-Mestre, triagem e roteamento do pedido, mensagem de progresso, supervisor das aprovações das mesas, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** papel do Grão-Mestre, triagem e roteamento do pedido, mensagem de progresso, supervisor das aprovações das mesas, proteção, retomada, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -106,7 +106,7 @@ Recebe as skills de comunicação, do Grão-Mestre e de rituais ([skills geradas
 - Os comandos exclusivos do Grão-Mestre estão na [CLI do Grão-Mestre](../cli/grao-mestre.md); chamados por outro personagem, retornam erro de permissão ([convenções da CLI](../cli/convencoes.md)).
 - O Grão-Mestre só recruta Mestres de mesa (na abertura, dentro de `mestre table open`, e na troca de ficha de um Mestre de mesa) e o Operador do PC (desde o M7, sempre por pedido de ativação); o nível de cada comando é o da [CLI](../cli/coordenacao.md).
 - O início do Grão-Mestre passa pelo `CheckStart` da sessão zero ([mesa](../sessao-zero/mesa.md)), como o de todo personagem: se os arquivos do provedor dele no clone principal não foram gerados, o início é recusado (`BlockedError`) com os problemas, sem segurar os outros provedores, e vale a regra abaixo (CA-GM-17).
-- Se o Grão-Mestre não conseguir iniciar (ex.: conta do provedor deslogada), as mensagens de usuários ficam na fila e o motor responde ao usuário, como "Sistema", que o Grão-Mestre está indisponível e por quê.
+- Se o Grão-Mestre não conseguir iniciar (ex.: conta do provedor deslogada, arquivos do provedor não gerados), ele continua registrado como `interrupted`, com o motivo; as mensagens de usuários ficam na fila e o motor responde ao usuário, como "Sistema", que o Grão-Mestre está indisponível e por quê. O Dono recebe o aviso do início que falhou, com o erro completo; os usuários leem só o provedor e os arquivos com problema, uma vez por motivo. A próxima retomada da máquina (reinício do motor ou volta da máquina) o inicia de novo.
 
 ## Critérios de aceite
 
