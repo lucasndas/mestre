@@ -17,12 +17,14 @@
 # the results and removes the temporary accounts, services and tasks it makes.
 [CmdletBinding()]
 param(
-    # Run only these items (1 to 9); the default is all of them.
-    [int[]]$Only = @(),
+    # Run only these items (1 to 9); the default is all of them. Text, split
+    # at the commas: under powershell -File, "-Only 1,8" arrives as one string.
+    [string[]]$Only = @(),
     # Never pause: what needs a login of the Owner or a manual step is SKIP.
     [switch]$NoPause,
     [string]$Out = 'C:\winsandbox\resultados\round'
 )
+$Wanted = [int[]]@($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_.Trim() -ne '' } | ForEach-Object { [int]$_.Trim() })
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -157,13 +159,13 @@ function Invoke-Native {
 
 # Runs one check; an exception is a FAIL of that item, never the end of the run.
 function Invoke-Check([int]$Item, [scriptblock]$Body) {
-    if ($Only.Count -gt 0 -and ($Only -notcontains $Item)) { return }
+    if ($Wanted.Count -gt 0 -and ($Wanted -notcontains $Item)) { return }
     Write-Host ''
     Write-Host ("=== Item {0}: {1}" -f $Item, $Titles[$Item]) -ForegroundColor Cyan
     try { & $Body } catch { Add-Sub $Item 'FAIL' ("erro inesperado: " + $_.Exception.Message) }
 }
 
-function Test-Wanted([int]$Item) { return ($Only.Count -eq 0 -or ($Only -contains $Item)) }
+function Test-Wanted([int]$Item) { return ($Wanted.Count -eq 0 -or ($Wanted -contains $Item)) }
 
 function New-Terminal([string]$Dir, [string[]]$Lines) {
     # A console window for the Owner (Windows Terminal when setup.ps1 put it there).
@@ -184,9 +186,21 @@ function Read-PastedText([string]$Name, [string]$Instructions) {
     $file = Join-Path $Detail $Name
     $header = ($Instructions -split "`n" | ForEach-Object { '# ' + $_.TrimEnd() }) -join "`r`n"
     Set-Content -LiteralPath $file -Value ($header + "`r`n# --- cole o texto abaixo desta linha, salve (Ctrl+S) e feche o Bloco de Notas ---`r`n") -Encoding UTF8
-    if (-not (Wait-Owner "vou abrir o Bloco de Notas para você colar o texto ($Name); as instruções estão no topo dele.")) { return '' }
-    Start-Process notepad.exe -ArgumentList $file -Wait
-    $lines = @(Get-Content -LiteralPath $file | Where-Object { $_ -notmatch '^\s*#' })
+    # The Sandbox of Windows 11 has no Notepad (it became an app of the Store):
+    # there the text is pasted in this console.
+    $notepad = Get-Command notepad.exe -ErrorAction SilentlyContinue
+    $where = 'o Bloco de Notas'; if (-not $notepad) { $where = 'este console' }
+    if (-not (Wait-Owner "vou pedir o texto ($Name) em $where.")) { return '' }
+    if ($notepad) {
+        Start-Process $notepad.Source -ArgumentList $file -Wait
+        $lines = @(Get-Content -LiteralPath $file | Where-Object { $_ -notmatch '^\s*#' })
+    } else {
+        Write-Host $Instructions
+        Write-Host 'Cole o texto aqui e termine com uma linha só com FIM (vazio = nada a colar):' -ForegroundColor Yellow
+        $lines = @()
+        while ($true) { $l = Read-Host; if ($l.Trim() -eq 'FIM') { break }; $lines += $l }
+        Add-Content -LiteralPath $file -Value $lines -Encoding UTF8
+    }
     return (($lines -join "`n").Trim())
 }
 
@@ -259,8 +273,22 @@ function Get-CliEnv([string]$Provider) {
     switch ($Provider) {
         'claude-code' { return @{ CLAUDE_CONFIG_DIR = $dir } }
         'codex'       { return @{ CODEX_HOME = $dir } }
-        'antigravity' { return @{ HOME = $dir } }
+        # On Windows the adapter gives agy USERPROFILE = HOME (providers/antigravity.go).
+        'antigravity' { return @{ HOME = $dir; USERPROFILE = $dir } }
     }
+}
+
+# The theme picker of a new CLAUDE_CONFIG_DIR is answered in the initial setup
+# of the account profile (docs/provedores/claude-code.md#telas-que-o-pty-precisa-tratar);
+# `claude auth login` never shows it, so the profile keeps what that choice writes.
+function Complete-ClaudeFirstUse {
+    $file = Join-Path (Get-ProfileDir 'claude-code') '.claude.json'
+    if (-not (Test-Path $file)) { return }
+    $j = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+    if ($j.hasCompletedOnboarding -and $j.theme) { return }
+    if (-not $j.theme) { $j | Add-Member -NotePropertyName theme -NotePropertyValue 'dark' -Force }
+    $j | Add-Member -NotePropertyName hasCompletedOnboarding -NotePropertyValue $true -Force
+    [IO.File]::WriteAllText($file, ($j | ConvertTo-Json -Depth 100), (New-Object Text.UTF8Encoding $false))
 }
 
 function Test-Login([string]$Provider) {
@@ -277,7 +305,11 @@ function Test-Login([string]$Provider) {
         }
         'antigravity' {
             $r = Invoke-Native -File $exe -Arguments @('-p', '/usage', '--output-format', 'json') -Env $e -TimeoutSec 90
-            return ($r.Exit -eq 0 -and $r.Out -match '"buckets"')
+            # The first use (the color scheme) of the interactive agy is in the profile
+            # too; a login made with HOME alone left it under the real USERPROFILE.
+            $onb = Join-Path (Get-ProfileDir $Provider) '.gemini\antigravity-cli\cache\onboarding.json'
+            $done = (Test-Path $onb) -and ((Get-Content -LiteralPath $onb -Raw) -match '"onboardingComplete"\s*:\s*true')
+            return ($r.Exit -eq 0 -and $r.Out -match '"buckets"' -and $done)
         }
     }
 }
@@ -303,7 +335,7 @@ function Initialize-Provider([string]$Provider) {
         if (-not (Test-Login $Provider)) {
             $cmd = @{ 'claude-code' = 'claude auth login (faça o login no navegador do Sandbox e volte aqui)';
                       'codex' = 'codex login --device-auth (abra o link no navegador do Sandbox, digite o código e volte aqui)';
-                      'antigravity' = 'agy (faça o login no navegador do Sandbox; depois saia do agy com /exit ou Ctrl+C duas vezes)' }[$Provider]
+                      'antigravity' = 'agy (escolha o esquema de cores e faça o login no navegador do Sandbox, se ele pedir; depois saia do agy com /exit ou Ctrl+C duas vezes)' }[$Provider]
             if (-not (Wait-Owner "login do $short. Vou rodar: $cmd")) { $why = "sem o login do $short"; throw $why }
             $saved = @{}
             foreach ($k in (Get-CliEnv $Provider).Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, (Get-CliEnv $Provider)[$k]) }
@@ -319,6 +351,7 @@ function Initialize-Provider([string]$Provider) {
             foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
             if (-not (Test-Login $Provider)) { $why = "o login do $short não ficou pronto"; throw $why }
         }
+        if ($Provider -eq 'claude-code') { Complete-ClaudeFirstUse }
         if ($Provider -eq 'codex') {
             # The Owner's trust of the hooks of the Mestre in the profile, once (docs/provedores/codex.md#hooks).
             if (-not (Get-BuiltBinaries)) { $why = $script:BuildWhy; throw $why }
@@ -406,8 +439,12 @@ function Test-Item1 {
     if (Get-BuiltBinaries) {
         $r = Invoke-Native -File 'go' -Arguments @('test', '-tags', 'full', '-run', 'HookLine', '-count=1', '-v', './internal/providers') -Dir $Repo -TimeoutSec 900
         Save-Detail 'item1-gotest.log' $r.Out
-        $ok = ($r.Exit -eq 0 -and $r.Out -match '--- PASS: TestCodexHookLineInTheShellOfCodex' -and $r.Out -notmatch '--- SKIP')
-        if ($ok) { Add-Sub 1 'PASS' 'go test das linhas reais (Codex no PowerShell 5.1, Claude no shell do sistema) passou, sem SKIP' }
+        # This test runs the Windows line in the bash of Linux: on Windows it skips by
+        # design, and TestHookLineInTheShellOfTheSystem runs the line here.
+        $skipsByDesign = @('TestWindowsHookLineTakesABackslashMestreCLI')
+        $skips = @([regex]::Matches($r.Out, '--- SKIP: (\S+)') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $skipsByDesign -notcontains $_ })
+        $ok = ($r.Exit -eq 0 -and $r.Out -match '--- PASS: TestCodexHookLineInTheShellOfCodex' -and $skips.Count -eq 0)
+        if ($ok) { Add-Sub 1 'PASS' 'go test das linhas reais (Codex no PowerShell 5.1, Claude no shell do sistema) passou, sem SKIP fora dos de Linux' }
         else { Add-Sub 1 'FAIL' ('go test das linhas dos hooks: ' + (Tail $r.Out 8)) }
     } else { Add-Sub 1 'SKIP' ('go test das linhas dos hooks: ' + $script:BuildWhy) }
 
@@ -465,20 +502,27 @@ $SocketServer = @'
 param($Path, $Out)
 $ErrorActionPreference = 'Stop'
 $lines = New-Object System.Collections.ArrayList
-function Describe($procId) {
-    $cur = $procId
-    for ($i = 0; $i -lt 8 -and $cur; $i++) {
-        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$cur" -ErrorAction SilentlyContinue
-        if (-not $p) { break }
+# The chain of parents, from one snapshot taken while the caller still lives.
+function Get-Chain($procId) {
+    $all = @{}
+    foreach ($p in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) { $all[[int]$p.ProcessId] = $p }
+    $chain = @(); $cur = [int]$procId
+    for ($i = 0; $i -lt 8 -and $all.ContainsKey($cur); $i++) { $chain += $all[$cur]; $cur = [int]$all[$cur].ParentProcessId }
+    return , $chain
+}
+function Describe($chain) {
+    foreach ($p in $chain) {
         $o = Invoke-CimMethod -InputObject $p -MethodName GetOwner -ErrorAction SilentlyContinue
         [void]$lines.Add(('  {0}({1}) dono={2}\{3}' -f $p.Name, $p.ProcessId, $o.Domain, $o.User))
-        $cur = $p.ParentProcessId
     }
 }
 if (Test-Path $Path) { Remove-Item -Force $Path }
 $s = [System.Net.Sockets.Socket]::new([System.Net.Sockets.AddressFamily]::Unix, [System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Unspecified)
 $s.Bind([System.Net.Sockets.UnixDomainSocketEndPoint]::new($Path))
 $s.Listen(8)
+# The answer for "no connection" is there from the start: the script stops the
+# server when Codex ends, long before the deadline below.
+Set-Content -LiteralPath $Out -Value 'conectou=nao'
 Set-Content -LiteralPath "$Out.ready" -Value 'ok'
 $deadline = (Get-Date).AddMinutes(9)
 $got = $false
@@ -490,12 +534,16 @@ while ((Get-Date) -lt $deadline -and -not $got) {
     $peer = -1
     try { [void]$c.IOControl(0x58000100, [byte[]]::new(0), $o); $peer = [BitConverter]::ToInt32($o, 0) } catch { [void]$lines.Add('GETPEERPID: ' + $_.Exception.Message) }
     [void]$lines.Add("conectou=sim pid=$peer")
+    Set-Content -LiteralPath $Out -Value $lines
     $buf = New-Object byte[] 4096
     try { [void]$c.Receive($buf) } catch { }
-    if ($peer -gt 0) { Describe $peer }
+    $chain = @(); if ($peer -gt 0) { $chain = Get-Chain $peer }
+    # Answer before the owners (one CIM call per process): that can take long
+    # enough for the command of the sandbox to give up.
     $resp = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Length: 2`r`nConnection: close`r`n`r`nok")
     [void]$c.Send($resp)
     $c.Close()
+    Describe $chain
 }
 if (-not $got) { [void]$lines.Add('conectou=nao') }
 Set-Content -LiteralPath $Out -Value $lines
@@ -520,29 +568,40 @@ function Test-Item2 {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     & icacls.exe $dir /grant 'Everyone:(OI)(CI)M' | Out-Null
     $work = Join-Path $Work 'sockwork'
+    if (Test-Path $work) { Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $work | Out-Null
     Set-Content -LiteralPath (Join-Path $dir 'server.ps1') -Value $SocketServer -Encoding UTF8
-    $sock = Join-Path $dir 'p.sock'
-    $res = Join-Path $dir 'peer.txt'
-    $srv = Start-Process -FilePath $p7 -ArgumentList @('-NoProfile', '-File', (Join-Path $dir 'server.ps1'), $sock, $res) -PassThru -WindowStyle Hidden
-    $t0 = Get-Date
-    while (-not (Test-Path "$res.ready") -and ((Get-Date) - $t0).TotalSeconds -lt 30) { Start-Sleep -Milliseconds 300 }
-    if (-not (Test-Path "$res.ready")) { Add-Sub 2 'SKIP' 'o servidor do socket não subiu'; if (-not $srv.HasExited) { $srv.Kill() }; return }
-    $prompt = "Use a ferramenta de shell para rodar exatamente este comando e mostre só a saída dele, sem comentar: curl.exe --silent --unix-socket $sock http://localhost/ping"
-    $r = Invoke-Native -File (Get-CliPath 'codex') -Env (Get-CliEnv 'codex') -Dir $work -TimeoutSec 420 -Arguments @(
-        'exec', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'windows.sandbox=elevated', $prompt)
-    Save-Detail 'item2-codex-exec.log' $r.Out
-    [void]$srv.WaitForExit(15000)
-    if (-not $srv.HasExited) { $srv.Kill() }
-    $peer = ''
-    if (Test-Path $res) { $peer = (Get-Content -LiteralPath $res) -join "`n" }
-    if ($peer -match 'conectou=sim') {
-        $chainsToCodex = ($peer -match 'codex')
-        Add-Sub 2 'PASS' ("sandbox do Codex (rede desligada) ALCANÇOU o socket local. Quem o servidor viu (PID, dono e cadeia de pais):`n" + $peer + "`n  cadeia chega a um processo 'codex': " + $(if ($chainsToCodex) { 'sim' } else { 'não (a identificação tem de ser pelo Job Object do terminal)' }))
-    } elseif ($peer -match 'conectou=nao') {
-        Add-Sub 2 'FAIL' ("sandbox do Codex (rede desligada) NÃO alcançou o socket local (nenhuma conexão em 9 min). Fim da saída do codex:`n" + (Tail $r.Out 8))
-    } else {
-        Add-Sub 2 'FAIL' ('sonda do socket sem resultado. Fim da saída do codex:' + "`n" + (Tail $r.Out 8))
+    # The socket outside the writable roots (where the cli.sock of the engine is),
+    # then inside the workdir: the second tells an ACL that keeps the sandbox
+    # users out from a sandbox that blocks every AF_UNIX connect.
+    $where = @(@{ Dir = $dir; Name = 'fora das pastas graváveis'; Log = 'item2-codex-exec.log' },
+               @{ Dir = $work; Name = 'dentro do workdir (pasta gravável do sandbox)'; Log = 'item2-codex-exec-workdir.log' })
+    foreach ($w in $where) {
+        $sock = Join-Path $w.Dir 'p.sock'
+        $res = Join-Path $w.Dir 'peer.txt'
+        Remove-Item -Force $sock, $res, "$res.ready" -ErrorAction SilentlyContinue
+        $srv = Start-Process -FilePath $p7 -ArgumentList @('-NoProfile', '-File', (Join-Path $dir 'server.ps1'), $sock, $res) -PassThru -WindowStyle Hidden
+        $t0 = Get-Date
+        while (-not (Test-Path "$res.ready") -and ((Get-Date) - $t0).TotalSeconds -lt 30) { Start-Sleep -Milliseconds 300 }
+        if (-not (Test-Path "$res.ready")) { Add-Sub 2 'SKIP' "o servidor do socket ($($w.Name)) não subiu"; if (-not $srv.HasExited) { $srv.Kill() }; continue }
+        $prompt = "Use a ferramenta de shell para rodar exatamente este comando e mostre só a saída dele, sem comentar: curl.exe --silent --show-error --unix-socket $sock http://localhost/ping; echo EXIT=`$LASTEXITCODE; whoami"
+        $r = Invoke-Native -File (Get-CliPath 'codex') -Env (Get-CliEnv 'codex') -Dir $work -TimeoutSec 420 -Arguments @(
+            'exec', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'windows.sandbox=elevated', $prompt)
+        Save-Detail $w.Log $r.Out
+        # A connection ends the server after it describes the caller; without one it waits.
+        [void]$srv.WaitForExit($(if ((Get-Content -LiteralPath $res -ErrorAction SilentlyContinue) -match 'conectou=sim') { 30000 } else { 5000 }))
+        if (-not $srv.HasExited) { $srv.Kill() }
+        $peer = ''
+        if (Test-Path $res) { $peer = (Get-Content -LiteralPath $res) -join "`n" }
+        $curl = (@($r.Out -split "`r?`n" | Where-Object { $_ -match '^(curl: |EXIT=|\S+\\codexsandbox)' } | Select-Object -Unique) -join "`n    ")
+        if ($peer -match 'conectou=sim') {
+            $chainsToCodex = ($peer -match 'codex')
+            Add-Sub 2 'PASS' ("sandbox do Codex (rede desligada), socket $($w.Name): ALCANÇOU. Quem o servidor viu (PID, dono e cadeia de pais):`n" + $peer + "`n  cadeia chega a um processo 'codex': " + $(if ($chainsToCodex) { 'sim' } else { 'não (a identificação tem de ser pelo Job Object do terminal)' }))
+        } elseif ($peer -match 'conectou=nao') {
+            Add-Sub 2 'FAIL' ("sandbox do Codex (rede desligada), socket $($w.Name): NÃO alcançou. O que o curl disse:`n    " + $(if ($curl) { $curl } else { Tail $r.Out 8 }))
+        } else {
+            Add-Sub 2 'FAIL' ("sonda do socket ($($w.Name)) sem resultado. Fim da saída do codex:`n" + (Tail $r.Out 8))
+        }
     }
 }
 
@@ -587,7 +646,19 @@ function Test-Item4 {
     $w = Join-Path $Work 'agywork'
     New-Item -ItemType Directory -Force -Path $w | Out-Null
     & git -C $w init -q 2>&1 | Out-Null
-    $r = Invoke-Native -File $agy -Env $e -Dir $w -TimeoutSec 240 -Arguments @('--sandbox', '-p', 'Rode o comando git --version no shell e responda só com a saída dele.')
+    # -p cannot ask for the "command" permission and denies it; an allow rule
+    # for this command alone stands in for the answer, only for this probe
+    # (--dangerously-skip-permissions would undo --sandbox, docs/provedores/antigravity.md).
+    $settings = Join-Path (Get-ProfileDir 'antigravity') '.gemini\antigravity-cli\settings.json'
+    $before = $null
+    if (Test-Path $settings) { $before = [IO.File]::ReadAllBytes($settings) }
+    New-Item -ItemType Directory -Force -Path (Split-Path $settings) | Out-Null
+    Set-Content -LiteralPath $settings -Encoding ASCII -Value '{"permissions":{"allow":["command(git --version)"]}}'
+    try {
+        $r = Invoke-Native -File $agy -Env $e -Dir $w -TimeoutSec 240 -Arguments @('--sandbox', '-p', 'Rode o comando git --version no shell e responda só com a saída dele.')
+    } finally {
+        if ($before) { [IO.File]::WriteAllBytes($settings, $before) } else { Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue }
+    }
     Save-Detail 'item4-agy-sandbox.log' $r.Out
     if ($r.Out -match 'git version') { Add-Sub 4 'PASS' 'agy --sandbox rodou git --version no worktree (AppContainer deixou rodar comando)' }
     else { Add-Sub 4 'FAIL' ('agy --sandbox não rodou o comando (código ' + $r.Exit + $(if ($r.TimedOut) { ', estourou o prazo' } else { '' }) + '). Fim da saída:' + "`n" + (Tail $r.Out 6)) }
@@ -713,15 +784,16 @@ function Test-Item8 {
         @{ Id = 'cr-depois-de-comentario'; Code = "# nota${CR}git push --force"; Expect = @('push --force') },
         @{ Id = 'scheduledtaskaction-execute-argument'; Code = '$a = New-ScheduledTaskAction -Execute git -Argument push; "ACTION[$($a.Execute)|$($a.Arguments)]"'; ExpectOut = 'ACTION\[git\|push\]' },
         @{ Id = 'scheduledtaskaction-linha-inteira-no-execute'; Code = '$a = New-ScheduledTaskAction -Execute ''git push''; "ACTION[$($a.Execute)|$($a.Arguments)]"'; ExpectOut = 'ACTION\[git push\|\]' },
-        @{ Id = 'sc-exe-create-binpath'; Code = 'sc.exe delete rodadasvc 2>&1 | Out-Null; sc.exe create rodadasvc binPath= "git push" | Out-Null; sc.exe qc rodadasvc | Select-String BINARY_PATH_NAME; sc.exe delete rodadasvc | Out-Null'; ExpectOut = 'BINARY_PATH_NAME\s*:\s*git push' },
-        @{ Id = 'sc-exe-config-binpath'; Code = 'sc.exe delete rodadasvc 2>&1 | Out-Null; sc.exe create rodadasvc binPath= "x" | Out-Null; sc.exe config rodadasvc binPath= "git push" | Out-Null; sc.exe qc rodadasvc | Select-String BINARY_PATH_NAME; sc.exe delete rodadasvc | Out-Null'; ExpectOut = 'BINARY_PATH_NAME\s*:\s*git push' },
+        # The binary path is read from the registry: the labels of sc.exe qc are translated (pt-BR: NOME_DO_CAMINHO_BINÁRIO).
+        @{ Id = 'sc-exe-create-binpath'; Code = 'sc.exe delete rodadasvc 2>&1 | Out-Null; sc.exe create rodadasvc binPath= "git push" | Out-Null; "BIN[" + (Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\rodadasvc).ImagePath + "]"; sc.exe delete rodadasvc | Out-Null'; ExpectOut = 'BIN\[git push\]' },
+        @{ Id = 'sc-exe-config-binpath'; Code = 'sc.exe delete rodadasvc 2>&1 | Out-Null; sc.exe create rodadasvc binPath= "x" | Out-Null; sc.exe config rodadasvc binPath= "git push" | Out-Null; "BIN[" + (Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\rodadasvc).ImagePath + "]"; sc.exe delete rodadasvc | Out-Null'; ExpectOut = 'BIN\[git push\]' },
         @{ Id = 'schtasks-create-tr'; Code = 'schtasks /delete /tn rodadatask /f 2>&1 | Out-Null; schtasks /create /tn rodadatask /tr "git push" /sc once /st 23:59 /f | Out-Null; schtasks /query /tn rodadatask /xml | Select-String ''<Command>|<Arguments>''; schtasks /delete /tn rodadatask /f | Out-Null'; ExpectOut = '(?s)git.*push' }
     )
     $hosts = @(, @('PowerShell 5.1', 'powershell.exe'))
     if ($p7) { $hosts += , @('PowerShell 7', $p7) }
     $table = New-Object System.Collections.ArrayList
     foreach ($h in $hosts) {
-        $bad = @()
+        $bad = @(); $stricter = @()
         foreach ($case in $cases) {
             $log = Join-Path $Work 'probe.log'
             if (Test-Path $log) { Remove-Item -Force $log }
@@ -732,11 +804,15 @@ function Test-Item8 {
             $ok = $false
             if ($case.ContainsKey('ExpectOut')) { $ok = ($r.Out -match $case.ExpectOut); $seen = (Tail $r.Out 2) -replace "`r?`n", ' / ' }
             else { $ok = (($logged -join '|') -eq ($case.Expect -join '|')); $seen = $(if ($logged.Count) { 'git recebeu: ' + ($logged -join ' | ') } else { 'git NÃO rodou' }) }
-            [void]$table.Add(("{0} | {1} | {2} | {3}" -f $h[0], $case.Id, $(if ($ok) { 'ok' } else { 'DIVERGE' }), $seen))
-            if (-not $ok) { $bad += ($case.Id + ' -> ' + $seen) }
+            # git not run at all where the analyzer supposes it runs: the analyzer is
+            # stricter than PowerShell (safe); git run with other arguments is the divergence.
+            $safe = (-not $ok -and -not $case.ContainsKey('ExpectOut') -and $logged.Count -eq 0)
+            [void]$table.Add(("{0} | {1} | {2} | {3}" -f $h[0], $case.Id, $(if ($ok) { 'ok' } elseif ($safe) { 'MAIS-RIGIDO' } else { 'DIVERGE' }), $seen))
+            if ($safe) { $stricter += ($case.Id + ' -> ' + $seen) }
+            elseif (-not $ok) { $bad += ($case.Id + ' -> ' + $seen) }
         }
-        if ($bad.Count -eq 0) { Add-Sub 8 'PASS' ($h[0] + ': os ' + $cases.Count + ' casos leem como o analisador supõe') }
-        else { Add-Sub 8 'FAIL' ($h[0] + ': ' + $bad.Count + ' de ' + $cases.Count + " casos DIVERGEM do que o analisador supõe:`n    " + ($bad -join "`n    ")) }
+        if ($bad.Count -eq 0) { Add-Sub 8 'PASS' ($h[0] + ': os ' + $cases.Count + ' casos leem como o analisador supõe' + $(if ($stricter) { ", ou ele é mais rígido que o PowerShell (seguro):`n    " + ($stricter -join "`n    ") } else { '' })) }
+        else { Add-Sub 8 'FAIL' ($h[0] + ': ' + $bad.Count + ' de ' + $cases.Count + " casos DIVERGEM do que o analisador supõe:`n    " + ($bad -join "`n    ") + $(if ($stricter) { "`n  mais rígido que o PowerShell (seguro):`n    " + ($stricter -join "`n    ") } else { '' })) }
     }
     Save-Detail 'item8-casos.txt' ($table -join "`r`n")
 }
@@ -766,7 +842,8 @@ function Test-AgentFolderAcl {
     if (Get-LocalUser -Name $user -ErrorAction SilentlyContinue) { Remove-LocalUser -Name $user }
     $pw = New-RandomPassword
     New-LocalUser -Name $user -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -PasswordNeverExpires -AccountNeverExpires -UserMayNotChangePassword | Out-Null
-    Add-LocalGroupMember -Group 'Users' -Member $user -ErrorAction SilentlyContinue
+    # By SID: the name of the group is translated (pt-BR: Usuários).
+    Add-LocalGroupMember -SID 'S-1-5-32-545' -Member $user
     try {
         # The tree of docs/arquitetura/persistencia.md#arquivos, with the ACL the installer will apply.
         $x = "$root\maquina\agentes\x"
@@ -783,20 +860,21 @@ function Test-AgentFolderAcl {
         New-Item -ItemType Directory -Force -Path $outDir, $probeDir | Out-Null
         & icacls.exe $outDir /grant "${user}:(OI)(CI)M" | Out-Null
         Set-Content -LiteralPath (Join-Path $probeDir 'probe.ps1') -Encoding UTF8 -Value @"
-`$R = '$root'
-`$r = [ordered]@{}
-function T(`$n, [scriptblock]`$b) { try { & `$b | Out-Null; `$r[`$n] = 'ok' } catch { `$r[`$n] = 'negado' } }
-T 'ler policy.json' { Get-Content -LiteralPath "`$R\maquina\agentes\x\policy.json" -ErrorAction Stop }
-T 'gravar policy.json' { Set-Content -LiteralPath "`$R\maquina\agentes\x\policy.json" -Value 'x' -ErrorAction Stop }
-T 'criar arquivo em agentes\x' { New-Item -ItemType File -Path "`$R\maquina\agentes\x\novo.txt" -ErrorAction Stop }
-T 'gravar em agentes\x\tmp' { Set-Content -LiteralPath "`$R\maquina\agentes\x\tmp\a.txt" -Value 'y' -ErrorAction Stop }
-T 'listar maquina' { Get-ChildItem -LiteralPath "`$R\maquina" -ErrorAction Stop }
-T 'ler maquina\segredo.txt' { Get-Content -LiteralPath "`$R\maquina\segredo.txt" -ErrorAction Stop }
-T 'ler config\cofre.key' { Get-Content -LiteralPath "`$R\config\cofre.key" -ErrorAction Stop }
-T 'criar em fila-hook' { Set-Content -LiteralPath "`$R\maquina\fila-hook\f1" -Value 'x' -ErrorAction Stop }
-T 'listar fila-hook' { Get-ChildItem -LiteralPath "`$R\maquina\fila-hook" -ErrorAction Stop }
-T 'apagar policy.json' { Remove-Item -LiteralPath "`$R\maquina\agentes\x\policy.json" -ErrorAction Stop }
-`$r | ConvertTo-Json | Set-Content -LiteralPath '$outDir\r.json'
+`$Root = '$root'
+# Not `$r/`$R: the names of PowerShell variables ignore case.
+`$res = [ordered]@{}
+function T(`$n, [scriptblock]`$b) { try { & `$b | Out-Null; `$res[`$n] = 'ok' } catch { `$res[`$n] = 'negado' } }
+T 'ler policy.json' { Get-Content -LiteralPath "`$Root\maquina\agentes\x\policy.json" -ErrorAction Stop }
+T 'gravar policy.json' { Set-Content -LiteralPath "`$Root\maquina\agentes\x\policy.json" -Value 'x' -ErrorAction Stop }
+T 'criar arquivo em agentes\x' { New-Item -ItemType File -Path "`$Root\maquina\agentes\x\novo.txt" -ErrorAction Stop }
+T 'gravar em agentes\x\tmp' { Set-Content -LiteralPath "`$Root\maquina\agentes\x\tmp\a.txt" -Value 'y' -ErrorAction Stop }
+T 'listar maquina' { Get-ChildItem -LiteralPath "`$Root\maquina" -ErrorAction Stop }
+T 'ler maquina\segredo.txt' { Get-Content -LiteralPath "`$Root\maquina\segredo.txt" -ErrorAction Stop }
+T 'ler config\cofre.key' { Get-Content -LiteralPath "`$Root\config\cofre.key" -ErrorAction Stop }
+T 'criar em fila-hook' { Set-Content -LiteralPath "`$Root\maquina\fila-hook\f1" -Value 'x' -ErrorAction Stop }
+T 'listar fila-hook' { Get-ChildItem -LiteralPath "`$Root\maquina\fila-hook" -ErrorAction Stop }
+T 'apagar policy.json' { Remove-Item -LiteralPath "`$Root\maquina\agentes\x\policy.json" -ErrorAction Stop }
+`$res | ConvertTo-Json | Set-Content -LiteralPath '$outDir\r.json'
 "@
         & icacls.exe $probeDir /grant "${user}:(OI)(CI)RX" | Out-Null
         $cred = New-Object System.Management.Automation.PSCredential("$env:COMPUTERNAME\$user", (ConvertTo-SecureString $pw -AsPlainText -Force))
@@ -835,7 +913,18 @@ function Test-Item9 {
         else { Add-Sub 9 'FAIL' ('go test ./internal/winsvc: ' + (Tail $r.Out 8)) }
         Clear-RealAccountLeftovers
         Write-Host 'Rodando tools/realaccount (cria a conta mestre-agente-ci e os serviços, e remove tudo)...'
-        $r = Invoke-Native -File 'go' -Arguments @('run', './tools/realaccount', 'run', '-budget', '20m', '-timeout', '40m') -Dir $Repo -Env @{ MESTRE_REAL_ACCOUNT = '1'; CGO_ENABLED = '0' } -TimeoutSec 3000
+        # tools/realaccount adds the account to the group by the English name
+        # 'Users'; on a Windows in another language (pt-BR: Usuários) the group
+        # of SID S-1-5-32-545 is called 'Users' only while the tool runs.
+        $users = Get-LocalGroup -SID 'S-1-5-32-545'
+        $renamed = $false
+        if ($users.Name -ne 'Users') { Rename-LocalGroup -SID 'S-1-5-32-545' -NewName 'Users'; $renamed = $true }
+        try {
+            $r = Invoke-Native -File 'go' -Arguments @('run', './tools/realaccount', 'run', '-budget', '20m', '-timeout', '40m') -Dir $Repo -Env @{ MESTRE_REAL_ACCOUNT = '1'; CGO_ENABLED = '0' } -TimeoutSec 3000
+        } finally {
+            if ($renamed) { Rename-LocalGroup -SID 'S-1-5-32-545' -NewName $users.Name }
+        }
+        if ($renamed) { $r.Out = "(grupo $($users.Name) chamado de Users durante a ferramenta: ela usa o nome em inglês)`n" + $r.Out }
         Save-Detail 'item9-realaccount.log' $r.Out
         if ($r.Out -match '(?m)^PASS realaccount') { Add-Sub 9 'PASS' ('contas reais: ' + ((Tail $r.Out 1) -replace '\s+', ' ')) }
         else { Add-Sub 9 'FAIL' ("contas reais:`n" + (Tail $r.Out 10)) }
