@@ -63,6 +63,8 @@ func Refusal(err error) localchan.Response {
 		return localchan.Fail("verification_running", err.Error(), "wait for the verification to end").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrUncommitted):
 		return localchan.Fail("uncommitted_changes", err.Error(), "commit the changes and run `mestre done` again").WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrBaseMoved):
+		return localchan.Fail("conflict", err.Error(), "merge origin/<base> into the branch, commit, and run `mestre done` again").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrNotIntegrated):
 		return localchan.Fail("conflict", err.Error(), "the engine tells the Master of the table").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrUsage):
