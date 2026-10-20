@@ -37,7 +37,7 @@ O [Grão-Mestre](grao-mestre.md#triagem-e-roteamento-do-pedido) é o PM do works
 4. **Monta o time** para ela, recrutando personagens efêmeros e dispensando-os ao fim da missão.
 5. **Devolve** o que não é da mesa: um pedido de outra área, fora do escopo do épico, não vira issue nem trabalho. Ele o devolve ao Grão-Mestre, com o motivo e a mensagem de origem (`mestre ask "Grão-Mestre" "<motivo>" --from-message <id> --no-wait`), e o Grão-Mestre reencaminha.
 6. **Aceita** antes de pedir o PR: confere cada critério das missões `completed` do épico contra a marcação da issue (a [prova por critério](prova-e-devolucao.md#prova-por-critério), "declarada" ou "verificada pelo motor") e o estado do worktree. O resultado vai num comentário na issue do épico (App "Mestre") e, depois, no bloco `criterios` do PR (`mestre pr open --body-file`, `pr update --block criterios`), que o Grão-Mestre lê: ele não tem pergaminhos.
-   - **Critério sem prova:** o Mestre da mesa cria uma **missão de correção** (`quest create`/`run`) com o campo `issue` igual e só as etapas que faltam (as marcações ficam: [regra](prova-e-devolucao.md#prova-por-critério)). São até 3 missões de correção por épico (padrão); passou disso, ele escala ao Grão-Mestre (`mestre ask`).
+   - **Critério sem prova:** o Mestre da mesa cria uma **missão de correção** (`quest create`/`run`) com o campo `issue` igual e só as etapas que faltam (as marcações ficam: [regra](prova-e-devolucao.md#prova-por-critério)). São até 3 missões de correção por épico (padrão); a quarta é recusada pelo motor (7 `correction_limit`) e ele escala ao Grão-Mestre (`mestre ask`).
    - **Critério que não será provado:** ele o tira da issue, com o motivo num comentário, ou pergunta ao Grão-Mestre; não há exceção no `pr open`.
    - O motor recusa `mestre pr open` com 7 `criteria_unproven`, listando os critérios, enquanto uma missão `completed` do épico tiver critério sem prova.
 
@@ -81,7 +81,7 @@ Recebe as skills de comunicação, de coordenação de mesa e de rituais ([skill
 ## Regras e erros
 
 - Não fala com usuários: `mestre reply` e `mestre notify` chamados por ele retornam erro de permissão. Para falar com usuários, pede ao Grão-Mestre.
-- Não mexe em issues ou PRs de outra mesa (pede ao Grão-Mestre); o motor recusa.
+- Não mexe em issues ou PRs de outra mesa (pede ao Grão-Mestre); o motor recusa. Vale também para o campo `issue` de uma missão: só a issue registrada para a mesa (3 `outside_epic`).
 - Classe da mesa com permissão acima do teto: o motor recusa a criação e lista os itens que excedem.
 - Ações destrutivas (`note delete`, `ritual delete`, `class delete`) só com pedido explícito de um usuário autorizado: exceção pontual para aquela ação ou aprovação do tipo `acao_destrutiva` ([política](../aprovacoes/politica.md#tipos-de-ação), [convenções da CLI](../cli/convencoes.md)).
 
