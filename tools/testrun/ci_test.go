@@ -83,10 +83,10 @@ func TestSoloRerunsCountInTheWallTimeWithinTheBudgetLeft(t *testing.T) {
 		wantRerun    bool
 		wantLine     string
 	}{
-		"fits":         {20 * time.Second, 5 * time.Second, false, true, "PASS fast: 1 tests in 25s (budget 30s, 5s of it timing slow tests alone)"},
-		"cut off":      {20 * time.Second, 15 * time.Second, false, true, "PASS fast: 1 tests in 27s (budget 30s, 7s of it timing slow tests alone)"},
-		"no time left": {28 * time.Second, 5 * time.Second, false, false, "PASS fast: 1 tests in 28s (budget 30s)"},
-		"over budget":  {31 * time.Second, 5 * time.Second, true, false, "FAIL fast: 1 tests in 31s (budget 30s)"},
+		"fits":         {24 * time.Second, 5 * time.Second, false, true, "PASS fast: 1 tests in 29s (budget 36s, 5s of it timing slow tests alone)"},
+		"cut off":      {24 * time.Second, 15 * time.Second, false, true, "PASS fast: 1 tests in 32.4s (budget 36s, 8.4s of it timing slow tests alone)"},
+		"no time left": {33 * time.Second, 5 * time.Second, false, false, "PASS fast: 1 tests in 33s (budget 36s)"},
+		"over budget":  {37 * time.Second, 5 * time.Second, true, false, "FAIL fast: 1 tests in 37s (budget 36s)"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestSoloRerunsCountInTheWallTimeWithinTheBudgetLeft(t *testing.T) {
 					clk.Advance(c.suite)
 				case strings.Contains(cmd.String(), "-run"):
 					_, _ = io.WriteString(out, ev("TestSlow", "pass", 0.5))
-					clk.Advance(min(c.rerun, 7*time.Second)) // killed at the allowance, 30s - 20s - 3s
+					clk.Advance(min(c.rerun, 8400*time.Millisecond)) // killed at the allowance, 36s - 24s - 3.6s
 				}
 				return 0
 			}}
@@ -142,7 +142,7 @@ func TestMixedResultsAreNamedWithCount(t *testing.T) {
 				ev("TestFlaky", "pass", 0.01)+ev("TestFlaky", "fail", 0.01)+ev("TestFlaky", "pass", 0.01)+
 				strings.Repeat(ev("TestSteady", "pass", 0.01), 5)+
 				ev("TestBroken", "fail", 0.01)+strings.Repeat(ev("TestBroken", "fail", 0.01), 4))
-		clk.Advance(100 * time.Second) // over the 30s budget of one run, under five
+		clk.Advance(100 * time.Second) // over the 36s budget of one run, under five
 		return 1
 	}}
 	r, out := newRunner(nil, clk, ex)
@@ -157,7 +157,7 @@ func TestMixedResultsAreNamedWithCount(t *testing.T) {
 	for _, want := range []string{
 		"flaky: 1 test(s) passed and failed in the same 5 runs:",
 		"mixed: " + pkg + " TestFlaky passed 3 failed 2",
-		"budget 2m30s",
+		"budget 3m0s",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q:\n%s", want, text)
@@ -170,7 +170,7 @@ func TestMixedResultsAreNamedWithCount(t *testing.T) {
 		t.Fatalf("budget not scaled by -count:\n%s", text)
 	}
 	run := ex.callsMatching("-count=5")
-	if len(run) != 1 || !strings.Contains(run[0].String(), "-shuffle=on") || !strings.Contains(run[0].String(), "-timeout 3m45s") {
+	if len(run) != 1 || !strings.Contains(run[0].String(), "-shuffle=on") || !strings.Contains(run[0].String(), "-timeout 4m30s") {
 		t.Fatalf("go test call = %v", run)
 	}
 	if n := len(ex.callsMatching("-run")); n != 0 {

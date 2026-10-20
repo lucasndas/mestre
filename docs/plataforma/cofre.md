@@ -1,6 +1,6 @@
 # Cofre de segredos
 
-> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** onde e como os segredos ficam (cifrados em toda máquina não excluída, abertos só na Cidadela), quem pode usá-los, pedido de credencial pela Torre e a réplica restrita para os Guardiões · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 | Segredo | Tipo | Quem usa |
 |---|---|---|
 | Token do bot do Telegram | `telegram_bot_token` | motor da Cidadela ([bot](../telegram/bot.md)); a Torre condutora em [modo reduzido](../autocura/telegram-modo-reduzido.md), pela réplica dos Guardiões (abaixo) |
-| Chave privada de cada GitHub App (fixos e por classe) | `github_app_key` | motor da Cidadela, para gerar tokens de instalação ([identidades e Apps](../github/identidades-e-apps.md)) |
+| Chave privada de cada GitHub App (fixos e por classe) e o segredo de cliente do App "Grão-Mestre" (`github_app_client_secret:<App>`) | `github_app_key` | motor da Cidadela, para gerar tokens de instalação ([identidades e Apps](../github/identidades-e-apps.md)) e renovar e revogar os tokens de usuário |
 | Token de acesso e de renovação de usuário do GitHub (device flow do App "Grão-Mestre") | `github_user_token` | motor da Cidadela, só com delegação ou aprovação daquele usuário ([aprovação no GitHub](../github/aprovacao-no-github.md)) |
 | Chave de API de provedor, quando a conta usa chave em vez de login | `provider_api_key` | motor da máquina que inicia o personagem daquela conta, pedida à Cidadela no uso ([bases e fichas](../orquestracao/bases-e-fichas.md)) |
 | Credencial de site: endereço da página de login, usuário, senha (ou senha de app, token, chave de API) e, se preciso, os seletores dos campos e a verificação de sucesso; metadados em [credenciais de site](#credenciais-de-site) | `site_credential` | motor da Cidadela, para fazer o login e entregar ao personagem só o estado de sessão ([login em sites](#login-em-sites)) |
@@ -26,7 +26,7 @@ Guardar todos os segredos do Mestre criptografados, com a chave protegida pelo s
 ### Formato
 
 - Tabela `secrets` no banco da Cidadela ([persistência](../arquitetura/persistencia.md)): `name`, `type`, `ciphertext`, `nonce`, `key_version`, `fingerprint`, os metadados de `site_credential` (`owner_user`, `classes`, `domains`, `kind`, `expires_at`, e os `domains` de `mcp_key`, fora da parte cifrada, para o motor decidir sem decifrar), `created_at`, `updated_at`, `last_used_at`.
-- **Valor:** o próprio segredo (token, chave, bloco PEM), menos dois tipos, que são objetos JSON conferidos ao gravar (campo desconhecido é recusado): `site_credential` com `url`, `password` (ou senha de app, token, chave de API) e, opcionais, `user`, `selectors` e `success`; `github_user_token` com `access_token` e, opcional, `refresh_token`.
+- **Valor:** o próprio segredo (token, chave, bloco PEM), menos dois tipos, que são objetos JSON conferidos ao gravar (campo desconhecido é recusado): `site_credential` com `url`, `password` (ou senha de app, token, chave de API) e, opcionais, `user`, `selectors` e `success`; `github_user_token` (nome `github_user_token:<usuário>`) com `access_token` e, opcional, `refresh_token`.
 - **Criptografia:** AES-256-GCM, com nonce aleatório de 96 bits a cada gravação e dados associados (AAD) = rótulo de domínio `mestre/vault/secret/v1` + `name` + `type` + `key_version`, cada campo com o tamanho na frente. Assim um valor copiado para outra linha não decifra. A chave do GCM e a da impressão são derivadas da chave do cofre por HKDF-SHA256, com rótulos diferentes; a chave do cofre nunca cifra direto. **Impressão (`fingerprint`):** HMAC-SHA256 do valor com a chave derivada, guardando e mostrando 8 caracteres hexadecimais. Serve para comparar sem revelar o valor; muda quando a chave do cofre é trocada.
 - **Arquivos:** o arquivo da chave guarda o chaveiro (`MCKR`, versão do formato, quantidade e, por chave, a versão e os 32 bytes); o envelope `cofre-envelope.bin` é `MCEV`, versão, chave pública de recuperação, chave pública efêmera e versões das chaves, em claro e autenticados, seguidos do chaveiro cifrado (X25519, HKDF-SHA256, AES-256-GCM). Os dois são trocados de forma atômica e durável: arquivo temporário sincronizado e movido por cima (no Linux, com a pasta sincronizada depois; no Windows, `MoveFileEx` com write-through).
 

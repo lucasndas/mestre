@@ -105,7 +105,7 @@ func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
 	if err := refuseLatest(Codex, slices.Concat(req.Base.Args, req.ProviderArgs), "--last"); err != nil {
 		return Launch{}, err
 	}
-	flags, err := codexStartArgs(req.Base.Args, req.ProviderArgs, req.Model)
+	flags, err := codexStartArgs(req.Base.Args, req.ProviderArgs, req.Model, req.OS)
 	if err != nil {
 		return Launch{}, err
 	}
