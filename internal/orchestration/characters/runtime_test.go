@@ -302,8 +302,10 @@ func TestStopOnlyFromTheSafePointStuckOrInterrupted(t *testing.T) {
 	}
 }
 
-// A start the Citadel gave up on is ended where it is; a stop that does not say
-// so still waits for the safe point.
+// A start the Citadel gave up on is ended where it is, whatever state it reached
+// (the first message already makes it busy); a stop that does not say so still
+// waits for the safe point.
+// Part of CA-CIDADELA-16
 func TestAStartTheCitadelGaveUpOnIsEndedWhileStarting(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{})
@@ -320,6 +322,25 @@ func TestAStartTheCitadelGaveUpOnIsEndedWhileStarting(t *testing.T) {
 	}
 	if _, err := rt.Env(r.ctx, c.ID); err == nil {
 		t.Error("the character is still on the machine after the abandon")
+	}
+}
+
+// Part of CA-CIDADELA-16
+func TestAnAbandonedStartIsEndedWhenItIsAlreadyBusy(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	c := r.make("Dev Claude", "Dev", "3-login")
+	rt := r.mach[c.Machine].rt
+	r.ready(c)
+	r.busy(c)
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Final: true, Abandon: true, Reason: "the Citadel gave up"}); err != nil {
+		t.Fatalf("the abandoned start of a busy character: %v", err)
+	}
+	if _, err := rt.Env(r.ctx, c.ID); err == nil {
+		t.Error("the character is still on the machine after the abandon")
+	}
+	if got := r.get(c.ID).State; got != characters.Stopped {
+		t.Errorf("the registry has the character %s; want stopped", got)
 	}
 }
 

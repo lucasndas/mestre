@@ -194,7 +194,10 @@ func (e *Engine) resyncCharacters(ctx context.Context, link *protocol.Link) {
 	if live == nil {
 		live = []protocol.TerminalState{}
 	}
-	res, err := link.Call(ctx, protocol.Outgoing{Type: protocol.TypeCharacterResync, Payload: protocol.CharacterResync{Terminals: live}, Transient: true})
+	at := protocol.Timestamp{Time: e.clk.Now().UTC()}
+	cctx, cancel := clock.WithTimeout(ctx, e.clk, towerCallWait)
+	defer cancel()
+	res, err := link.Call(cctx, protocol.Outgoing{Type: protocol.TypeCharacterResync, Payload: protocol.CharacterResync{Terminals: live, At: &at}, Transient: true})
 	switch {
 	case err != nil:
 		e.log.Warn("app: the terminals of this machine were not sent to the Citadel", "err", err)
@@ -209,7 +212,7 @@ func (e *Engine) resyncCharacters(ctx context.Context, link *protocol.Link) {
 		return
 	}
 	for _, id := range out.End {
-		if err := e.rt.rt.Stop(ctx, characters.StopCommand{Character: id, Final: true, Abandon: true, Reason: "the Citadel does not have it"}); err != nil {
+		if err := e.rt.rt.Stop(ctx, characters.StopCommand{Character: id, Abandon: true, Reason: "the Citadel does not have it"}); err != nil {
 			e.log.Warn("app: a terminal the Citadel does not have was not ended", "id", id, "err", err)
 		}
 	}

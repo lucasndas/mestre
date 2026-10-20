@@ -167,8 +167,8 @@ func (m *machineRouter) Start(ctx context.Context, machine string, cmd character
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return characters.StartResult{}, fmt.Errorf("the request of %s: %w", cmd.Character, err)
 	}
-	m.fly(cmd.Character, 1)
-	defer m.fly(cmd.Character, -1)
+	m.markInFlight(cmd.Character, 1)
+	defer m.markInFlight(cmd.Character, -1)
 	_, err = m.call(ctx, machine, towerStartWait, protocol.Outgoing{Type: protocol.TypeCharacterStart, Payload: protocol.CharacterStart{
 		Character: cmd.Character, TerminalID: cmd.Terminal, Kind: string(cmd.Kind), Resumed: cmd.Resumed, ResumeMessage: cmd.ResumeMessage, Request: req,
 	}})
@@ -187,9 +187,9 @@ func (m *machineRouter) Start(ctx context.Context, machine string, cmd character
 	return characters.StartResult{Terminal: cmd.Terminal}, nil
 }
 
-// fly counts the starts of a character on their way to a Tower; starting says
-// whether one is.
-func (m *machineRouter) fly(id string, d int) {
+// markInFlight counts the starts of a character on their way to a Tower;
+// inFlight says whether one is.
+func (m *machineRouter) markInFlight(id string, d int) {
 	m.fmu.Lock()
 	defer m.fmu.Unlock()
 	if m.flying == nil {
@@ -200,7 +200,7 @@ func (m *machineRouter) fly(id string, d int) {
 	}
 }
 
-func (m *machineRouter) starting(id string) bool {
+func (m *machineRouter) inFlight(id string) bool {
 	m.fmu.Lock()
 	defer m.fmu.Unlock()
 	return m.flying[id] > 0
@@ -285,6 +285,59 @@ func (m *machineRouter) ScreenLines(ctx context.Context, machine, character stri
 		_ = json.Unmarshal(raw, &sc.Row)
 	}
 	return sc, nil
+}
+
+// startGrace is how long a character that says starting in the registry is
+// taken as a start on its way, whatever the Tower's list says: the row is made
+// before the command goes, and the start takes the time it takes.
+const startGrace = towerStartWait + 30*time.Second
+
+// resyncFromTower takes the list of the terminals a Tower tells at each
+// connection (taken at `at`) as the truth about its processes: the characters
+// the registry has alive there that the list lacks are interrupted, except a
+// start on its way and a character that changed on the Citadel after the
+// picture was taken; and the terminals the Tower has that the Citadel does not
+// have there are answered as the ones to end (without erasing their files).
+func (e *Engine) resyncFromTower(ctx context.Context, orc *Orchestration, machine string, terminals []protocol.TerminalState, at time.Time) (end []string, err error) {
+	live := e.liveWithWaits(ctx, orc, terminals)
+	mine, err := orc.Registry.OnMachine(ctx, machine)
+	if err != nil {
+		return nil, err
+	}
+	now := e.clk.Now()
+	mr := e.mach.Load()
+	inFlight := func(c characters.Character) bool {
+		return mr != nil && mr.inFlight(c.ID) || c.State == characters.Starting && now.Sub(c.CreatedAt) < startGrace
+	}
+	listed := func(id string) bool {
+		return slices.ContainsFunc(live, func(t protocol.TerminalState) bool { return t.AgentID == id })
+	}
+	for _, c := range mine {
+		// not judged by the list: a start on its way, a change made after the picture
+		if !listed(c.ID) && (c.State == characters.Starting && inFlight(c) || c.LastSignalAt.After(at)) {
+			live = append(live, protocol.TerminalState{TerminalID: c.TerminalID, AgentID: c.ID, State: string(c.State)})
+		}
+	}
+	if err := orc.Characters.Reconcile(ctx, machine, live); err != nil {
+		return nil, err
+	}
+	// The Tower has a terminal the registry has not on that machine (a start the
+	// Citadel gave up on, a character that ended): the Tower ends it. Only what the
+	// registry says plainly: a character it does not know may be one a replica
+	// that is behind (a promotion) has not got yet, so it is left, and none of
+	// them is erased.
+	for _, t := range terminals {
+		if t.AgentID == "" {
+			continue
+		}
+		c, err := orc.Registry.Get(ctx, t.AgentID)
+		switch {
+		case err != nil || inFlight(c):
+		case c.State == characters.Stopped || c.Machine != machine:
+			end = append(end, t.AgentID)
+		}
+	}
+	return end, nil
 }
 
 // liveWithWaits turns the idle of a list of terminals into waiting for the
@@ -391,32 +444,13 @@ func (e *Engine) registerCitadelCharacters(router *protocol.Router, run *citadel
 		if !ok {
 			return nil, protocol.NewError(protocol.CodeInvalidPayload, "character.resync: %T", m.Payload)
 		}
-		live := e.liveWithWaits(ctx, orc, p.Terminals)
-		mine, err := orc.Registry.OnMachine(ctx, m.Peer.ID)
+		at := e.clk.Now()
+		if p.At != nil {
+			at = p.At.Time
+		}
+		end, err := e.resyncFromTower(ctx, orc, m.Peer.ID, p.Terminals, at)
 		if err != nil {
 			return nil, protocol.NewError(protocol.CodeInternal, "character.resync: %v", err)
-		}
-		// A start the Citadel has on its way there is not on the Tower's list yet: it is
-		// not a character the Tower lacks (only the starts in flight, not any that says starting).
-		if mr := e.mach.Load(); mr != nil {
-			for _, c := range mine {
-				if c.State == characters.Starting && mr.starting(c.ID) && !slices.ContainsFunc(live, func(t protocol.TerminalState) bool { return t.AgentID == c.ID }) {
-					live = append(live, protocol.TerminalState{TerminalID: c.TerminalID, AgentID: c.ID, State: string(characters.Starting)})
-				}
-			}
-		}
-		if err := orc.Characters.Reconcile(ctx, m.Peer.ID, live); err != nil {
-			return nil, protocol.NewError(protocol.CodeInternal, "character.resync: %v", err)
-		}
-		// the Tower has a terminal the registry has not on that machine (a start the
-		// Citadel gave up on, a character that ended): the Tower ends it
-		var end []string
-		for _, t := range p.Terminals {
-			c, err := orc.Registry.Get(ctx, t.AgentID)
-			if (errors.Is(err, characters.ErrNoCharacter) || err == nil && (c.State == characters.Stopped || c.Machine != m.Peer.ID)) &&
-				!(e.mach.Load() != nil && e.mach.Load().starting(t.AgentID)) {
-				end = append(end, t.AgentID)
-			}
 		}
 		return &protocol.Reply{Type: protocol.TypeCharacterResync, InAck: true, Payload: protocol.CharacterResyncResult{End: end}}, nil
 	})

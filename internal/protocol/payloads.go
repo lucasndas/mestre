@@ -382,6 +382,9 @@ type CharacterNotice struct {
 // have is interrupted.
 type CharacterResync struct {
 	Terminals []TerminalState `json:"terminals"`
+	// At is when the Tower took the picture: a character that changed on the
+	// Citadel after it is not judged by it.
+	At *Timestamp `json:"at,omitempty"`
 }
 
 // CharacterResyncResult is the answer to `character.resync`, in the ack: the

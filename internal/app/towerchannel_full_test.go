@@ -4,7 +4,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,6 +17,27 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
+// prepGate holds the session zero of the characters of the Tower until it is
+// released: the point where a start can be cancelled with the Tower in the middle of it.
+type prepGate struct {
+	characters.Preparer
+	entered chan string
+	release chan struct{}
+}
+
+func (g *prepGate) Prepare(ctx context.Context, req sessionzero.CharacterRequest) (sessionzero.CharacterPlan, error) {
+	select {
+	case g.entered <- req.ID:
+	default:
+	}
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+		return sessionzero.CharacterPlan{}, ctx.Err()
+	}
+	return g.Preparer.Prepare(ctx, req)
+}
+
 // channelRig is a Citadel that hosts the orchestration and a Tower with its
 // terminals and the fake agent.
 type channelRig struct {
@@ -26,9 +46,10 @@ type channelRig struct {
 	root string
 	orc  *Orchestration
 	work string
+	gate *prepGate
 }
 
-func newChannelRig(t *testing.T) *channelRig {
+func newChannelRig(t *testing.T, gated ...bool) *channelRig {
 	t.Helper()
 	buildRuntimeBinaries(t)
 	r := newRig(t)
@@ -42,6 +63,7 @@ func newChannelRig(t *testing.T) *channelRig {
 	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	r.root = root
 	x := &channelRig{r: r, root: root}
+	var gate *prepGate
 	x.a = r.node("a")
 	x.b = r.node("b", x.a)
 	x.a.paths.CLISocket = filepath.Join(root, "a", "cli.sock")
@@ -70,7 +92,13 @@ func newChannelRig(t *testing.T) *channelRig {
 	x.b.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
 	x.b.setup = func(e *Engine) {
 		e.deps.Spawner = &terminal.DirectSpawner{Suite: "full", System: terminal.NewSystem()}
-		e.deps.CharacterPrep = runtimePrep{cfg: filepath.Join(home, "cfg"), home: home, sock: x.b.paths.CLISocket}
+		var prep characters.Preparer = runtimePrep{cfg: filepath.Join(home, "cfg"), home: home, sock: x.b.paths.CLISocket}
+		if len(gated) > 0 && gated[0] {
+			gate = &prepGate{Preparer: prep, entered: make(chan string, 1), release: make(chan struct{})}
+			x.gate = gate
+			prep = gate
+		}
+		e.deps.CharacterPrep = prep
 	}
 	r.found(x.a, clock.Real{})
 	r.start(x.a, clock.Real{})
@@ -123,6 +151,7 @@ func (x *channelRig) state(t *testing.T, id string) characters.State {
 // A character of a Tower that has an active wait on the Citadel is not idle
 // when its turn ends: the waits are in the database of the Citadel, which a
 // Tower cannot ask, so the Citadel turns the idle of the report into waiting.
+// Part of CA-CIDADELA-16
 func TestATurnThatEndsOnATowerWithAnActiveWaitEndsWaiting(t *testing.T) {
 	t.Parallel()
 	x := newChannelRig(t)
@@ -155,6 +184,7 @@ func TestATurnThatEndsOnATowerWithAnActiveWaitEndsWaiting(t *testing.T) {
 // A character the registry has alive on a Tower that the Tower does not know
 // (it lost its row, or its terminal is gone) is interrupted when the Tower
 // tells its terminals at the next connection; one it does have keeps its state.
+// Part of CA-CIDADELA-11
 func TestACharacterTheTowerDoesNotHaveIsInterruptedWhenItConnects(t *testing.T) {
 	t.Parallel()
 	x := newChannelRig(t)
@@ -198,40 +228,39 @@ func (x *channelRig) aliveOnTower(id string) bool {
 // A start the Citadel gives up on (it was cancelled while the Tower prepared the
 // character) does not leave the terminal alive on the Tower: the Citadel tells the
 // Tower to end it.
+// Part of CA-CIDADELA-16
 func TestAStartTheCitadelGivesUpOnLeavesNoTerminalOnTheTower(t *testing.T) {
 	t.Parallel()
-	x := newChannelRig(t)
-	for i := 0; i < 5; i++ {
-		c := x.character(t, fmt.Sprintf("c%d", i+1), fmt.Sprintf("Dev-%d", i+1), characters.Starting)
-		ctx, cancel := context.WithCancel(t.Context())
-		done := make(chan struct{})
-		go func() { // the caller gives up as soon as the Tower has begun
-			defer close(done)
-			tk := clock.Real{}.NewTicker(2 * time.Millisecond)
-			defer tk.Stop()
-			for !x.aliveOnTower(c.ID) && ctx.Err() == nil {
-				<-tk.C()
-			}
-			cancel()
-		}()
-		err := x.startOnTower(ctx, c)
-		cancel()
-		<-done
-		if err == nil {
-			continue // the start was quicker than the cancel: nothing to clean, try again
-		}
-		x.r.waitFor("the Tower to have no live terminal of the character", func() bool { return !x.aliveOnTower(c.ID) })
-		return
+	x := newChannelRig(t, true)
+	c := x.character(t, "c1", "Dev-1", characters.Starting)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- x.startOnTower(ctx, c) }()
+	<-x.gate.entered // the Tower is in the middle of the start
+	cancel()         // the Citadel gives up
+	close(x.gate.release)
+	if err := <-result; err == nil {
+		t.Fatal("the start the caller gave up on answered ok")
 	}
-	t.Fatal("the start always finished before the caller gave up")
+	// the stop of the Citadel goes behind the start on the same line: it finds the character the start made
+	x.r.waitFor("the Tower to have no live terminal of the character", func() bool { return !x.aliveOnTower(c.ID) })
+	if _, err := x.b.e.rt.rt.Env(t.Context(), c.ID); err == nil {
+		t.Error("the character is still on the Tower")
+	}
 }
 
 // A character that the registry has alive and Starting but that no start of the
 // Citadel is making is not exempt from the resync: it was lost on the way.
+// Part of CA-CIDADELA-11
 func TestAStartingCharacterNoStartIsMakingIsInterruptedByTheResync(t *testing.T) {
 	t.Parallel()
 	x := newChannelRig(t)
 	ghost := x.character(t, "c5", "Perdido", characters.Starting)
+	// a start lost on the way: its row is older than any start takes
+	if _, err := orcDB(t, x.a).Writer().ExecContext(t.Context(), `UPDATE characters SET created_at = ? WHERE id = ?`, clock.Real{}.Now().Add(-10*time.Minute).UnixMilli(), ghost.ID); err != nil {
+		t.Fatal(err)
+	}
 	x.a.e.srvp.Load().CloseAll(protocol.CloseShuttingDown, "the test cuts the connection")
 	x.r.waitFor("the lost start to be interrupted", func() bool { return x.state(t, ghost.ID) == characters.Interrupted })
 }
@@ -239,6 +268,7 @@ func TestAStartingCharacterNoStartIsMakingIsInterruptedByTheResync(t *testing.T)
 // What the Tower has a terminal of and the Citadel does not have on that machine (a
 // character that ended, a start whose stop was lost) is ended by the Tower at the
 // resync.
+// Part of CA-CIDADELA-16
 func TestATerminalTheCitadelDoesNotHaveIsEndedByTheTowerAtTheResync(t *testing.T) {
 	t.Parallel()
 	x := newChannelRig(t)
@@ -255,6 +285,7 @@ func TestATerminalTheCitadelDoesNotHaveIsEndedByTheTowerAtTheResync(t *testing.T
 }
 
 // The idle of the resync is waiting for a character with an active wait.
+// Part of CA-CIDADELA-16
 func TestAnIdleCharacterWithAWaitIsWaitingAfterTheResync(t *testing.T) {
 	t.Parallel()
 	x := newChannelRig(t)
