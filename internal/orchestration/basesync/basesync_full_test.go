@@ -26,12 +26,20 @@ func TestSyncStepForTheDevWhenTheBaseMoves(t *testing.T) {
 	if len(sq) != 1 || sq[0].Name != "sync" || sq[0].State != quests.Running {
 		t.Fatalf("missions of the step sync = %+v; want one running", sq)
 	}
+	// risk baixo: the step has no point of approval (the mission has no field of
+	// risk), so no request of approval is born for it
+	if len(sq[0].Def.Steps) != 1 || sq[0].Def.Steps[0].Approval != "" {
+		t.Errorf("the step sync has an approval point: %+v", sq[0].Def.Steps)
+	}
 	steps, err := w.orc.Quests.Store().Steps(w.ctx, sq[0].ID)
 	if err != nil || len(steps) != 1 || steps[0].ID != "sync" {
 		t.Fatalf("steps = %+v, %v", steps, err)
 	}
 	if steps[0].Character != dev.ID {
 		t.Errorf("the step is for %q; want the Dev %q", steps[0].Character, dev.ID)
+	}
+	if steps[0].Approval != 0 || steps[0].Approved {
+		t.Errorf("the step waits for an approval: %+v", steps[0])
 	}
 	if got := w.tableNow().State; got != tables.StateWorking {
 		t.Errorf("the table is %s; want working", got)
@@ -89,5 +97,16 @@ func TestARedVerificationReturnsTheSyncToTheDevAndAGreenOneEndsIt(t *testing.T) 
 	}
 	if v.count() != 2 {
 		t.Errorf("verifications = %d; want 2", v.count())
+	}
+	// the sync took the table back to work; the `pr update` of the Dev (it tells
+	// the table with PROpened, as the commands of production do) puts it in review
+	if got := w.tableNow().State; got != tables.StateWorking {
+		t.Fatalf("the table is %s after the sync ended; want working until the pr update", got)
+	}
+	if _, err := w.orc.Tables.PROpened(w.ctx, w.slug, w.table.ID, 7, "head2"); err != nil {
+		t.Fatal(err)
+	}
+	if now := w.tableNow(); now.State != tables.StateInReview || now.PRHead != "head2" {
+		t.Errorf("after the pr update the table is %s with head %q; want in_review with head2", now.State, now.PRHead)
 	}
 }

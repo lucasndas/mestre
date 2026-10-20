@@ -150,6 +150,8 @@ type OrchestrationOptions struct {
 	// in Orchestration.TableRules.
 	ChainTempRules   chain.TempRules
 	ChainDelegations chain.Delegations
+	// ChainPolicyDecrees gives the decrees of policy that adjust the rules of the policy file.
+	ChainPolicyDecrees chain.PolicyDecrees
 	// ChainSubDelegations lets a Mestre da mesa decide what a subdelegation of the Grão-Mestre gives it.
 	ChainSubDelegations chain.SubDelegations
 	// ChainPRs reads the PRs for the conditions of the approval policy.
@@ -217,6 +219,9 @@ type Orchestration struct {
 	Waits       *waits.Service
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
+	// Verifier is the executor of the verification of the workspace the quests
+	// and the gate use (nil: none).
+	Verifier quests.Verifier
 	// BaseSync makes the step `sync` when the main branch moves
 	// (docs/orquestracao/sincronia-com-a-base.md).
 	BaseSync *basesync.Service
@@ -584,7 +589,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.DiscardHandler)
 	}
-	orc := &Orchestration{log: o.Logger}
+	orc := &Orchestration{log: o.Logger, Verifier: o.QuestVerifier}
 	gate := func() error {
 		if f := orc.fence.Load(); f != nil {
 			return f.Allow(guild.ExternalGitHub)
@@ -693,7 +698,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			freshness = freshnessRef{&fresh}
 		}
 		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
-			Classes: o.ChainClasses, Policy: policy, Repos: workspaceRepoOf{ws}, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
+			Classes: o.ChainClasses, Policy: policy, Repos: workspaceRepoOf{ws}, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, PolicyDecrees: o.ChainPolicyDecrees, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: o.chainSinks(&qs, &us), Logger: o.Logger})
 		if err != nil {
@@ -864,6 +869,9 @@ func (o *Orchestration) External() ExternalFunc {
 			if err := o.Chain.Recover(ctx); err != nil {
 				o.log.Warn("app: the chain of approval was not recovered", "err", err)
 			}
+		}
+		if o.Verifier != nil {
+			o.sweepVerifications(ctx)
 		}
 		var wg sync.WaitGroup
 		errs := make(chan error, 8)

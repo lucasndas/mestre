@@ -93,7 +93,7 @@ func (r *repo) guard(ctx context.Context, ro runOpts) ([]string, error) {
 	}
 	re := `^(extensions\.partialclone|remote\..+\.promisor)$`
 	if ro.tree {
-		re = `^(filter\..+|extensions\.partialclone|remote\..+\.promisor)$`
+		re = `^(filter\..+|merge\..+\.driver|extensions\.partialclone|remote\..+\.promisor)$`
 	}
 	out, err := r.g.run(ctx, runOpts{dir: ro.dir, env: ro.env}, "config", "--null", "--get-regexp", re)
 	if err != nil {
@@ -115,6 +115,9 @@ func (r *repo) guard(ctx context.Context, ro runOpts) ([]string, error) {
 			if !hasValue || configTrue(value) {
 				return nil, fmt.Errorf("%w: %s has a promisor remote (%s)", ErrUnsafeRepo, r.dir, key)
 			}
+		case strings.HasPrefix(lower, "merge.") && strings.HasSuffix(lower, ".driver"):
+			// a merge driver named by an attribute of the tree would run as the engine
+			config = append(config, key+"=")
 		case strings.HasPrefix(lower, "filter."):
 			dot := strings.LastIndexByte(key, '.')
 			if dot <= len("filter.") {
@@ -725,6 +728,45 @@ func (r *repo) MergeFFOnly(ctx context.Context, ref string) (Hash, error) {
 		case has(err, "not something we can merge", "unknown revision"):
 			return fmt.Errorf("merge %s: %w", ref, as(ErrRefNotFound, err))
 		default:
+			return fmt.Errorf("merge %s: %w", ref, err)
+		}
+		head, err = r.ResolveRef(ctx, "HEAD")
+		return err
+	})
+	return head, err
+}
+
+func (r *repo) Merge(ctx context.Context, ref string, who Signature) (Hash, error) {
+	if err := r.needTree(); err != nil {
+		return "", err
+	}
+	if err := ValidateRef(ref); err != nil {
+		return "", err
+	}
+	if who.Name == "" || who.Email == "" {
+		return "", fmt.Errorf("%w: merge needs an identity", ErrInvalidArgument)
+	}
+	env := []string{
+		"GIT_AUTHOR_NAME=" + who.Name, "GIT_AUTHOR_EMAIL=" + who.Email, "GIT_AUTHOR_DATE=" + r.gitDate(who.When),
+		"GIT_COMMITTER_NAME=" + who.Name, "GIT_COMMITTER_EMAIL=" + who.Email, "GIT_COMMITTER_DATE=" + r.gitDate(who.When),
+	}
+	var head Hash
+	err := r.mutate(ctx, func() error {
+		_, err := r.treeGit(ctx, runOpts{env: env}, "merge", "--no-edit", "--no-stat", "--quiet", "--no-verify", "--no-gpg-sign", "--no-autostash", ref)
+		switch {
+		case err == nil:
+		case has(err, "would be overwritten by merge", "your local changes"):
+			return fmt.Errorf("merge %s: %w", ref, as(ErrLocalChanges, err))
+		case has(err, "not something we can merge", "unknown revision"):
+			return fmt.Errorf("merge %s: %w", ref, as(ErrRefNotFound, err))
+		default:
+			if ctx.Err() != nil {
+				return fmt.Errorf("merge %s: %w", ref, err) // cut off, not a conflict
+			}
+			// a merge that stopped on conflicts leaves MERGE_HEAD: undo it
+			if _, aerr := r.treeGit(context.WithoutCancel(ctx), runOpts{}, "merge", "--abort"); aerr == nil {
+				return fmt.Errorf("merge %s: %w", ref, as(ErrMergeConflict, err))
+			}
 			return fmt.Errorf("merge %s: %w", ref, err)
 		}
 		head, err = r.ResolveRef(ctx, "HEAD")

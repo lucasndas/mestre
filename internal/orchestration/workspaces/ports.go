@@ -126,6 +126,10 @@ func (l Layout) Principal(slug string) string { return filepath.Join(l.Dir(slug)
 // Tables is the folder of the worktrees of the tables.
 func (l Layout) Tables(slug string) string { return filepath.Join(l.Dir(slug), "mesas") }
 
+// Verifications is the folder of the ephemeral worktrees of the verification,
+// next to mesas/ and not in it: they are not tables.
+func (l Layout) Verifications(slug string) string { return filepath.Join(l.Dir(slug), "verificacoes") }
+
 // principalName is the name git gives the administrative folder of the main
 // clone: the last element of its path.
 const principalName = "principal"

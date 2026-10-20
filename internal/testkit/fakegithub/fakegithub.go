@@ -92,7 +92,8 @@ type Server struct {
 	convFail       int
 	convFailHdr    map[string]string
 	tokenReqs      []TokenRequest
-	public         map[string]bool // repositories that are not private
+	public         map[string]bool     // repositories that are not private
+	made           map[string]MadeRepo // what POST /user/repos was asked, by repository
 	tokenFail      int
 	tokenFailHdr   map[string]string
 	userRepoSt     int // status the next POST /user/repos answers (0: as the permissions say)

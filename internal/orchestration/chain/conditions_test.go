@@ -54,6 +54,10 @@ func TestTheGrandMasterApprovesAPRThatPassesTheConditionsAndTheReasonIsKept(t *t
 	if out.State != chain.Approved {
 		t.Fatalf("outcome = %+v, want approved", out)
 	}
+	// the sink that stands for GitHub hears the approval (so POL-02 can tell "nothing")
+	if got := w.prSink.results(); len(got) != 1 || !got[0].Approved {
+		t.Fatalf("the sink of the PR heard %+v, want one approval", got)
+	}
 	audit, err := w.ch.Audit(w.ctx, id)
 	if err != nil {
 		t.Fatal(err)
@@ -75,11 +79,19 @@ func TestAPRThatTouchesAMigrationGoesToThePeopleOnlyWhenTheGrandMasterAsksOrHisT
 	if got := w.users.askedFor(id); len(got) != 0 {
 		t.Fatalf("the people were asked before the Grão-Mestre took it to them: %+v", got)
 	}
+	noGitHubApproval := func(when string) {
+		t.Helper()
+		if got := w.prSink.results(); len(got) != 0 {
+			t.Fatalf("%s something was approved on GitHub: %+v", when, got)
+		}
+	}
+	noGitHubApproval("after human_required")
 	// asking is his answer "Subir agora": same id, now with the people
 	w.decide(w.gm, id, chain.AnswerClimb, "migração")
 	if r := w.request(id); r.State != chain.Open || r.Level.Kind != chain.LevelPeople || len(w.users.askedFor(id)) == 0 {
 		t.Fatalf("after asking: %s at %+v, asked %d times", r.State, r.Level, len(w.users.askedFor(id)))
 	}
+	noGitHubApproval("after asking the people")
 	// or his time (10 min, fake clock) runs out, with the same id
 	id2 := w.prRequest(classes.RequestPR, 22, f)
 	w.humanRequired(id2, "migracoes")
@@ -87,6 +99,7 @@ func TestAPRThatTouchesAMigrationGoesToThePeopleOnlyWhenTheGrandMasterAsksOrHisT
 	if r := w.request(id2); r.ID != id2 || r.Level.Kind != chain.LevelPeople {
 		t.Fatalf("after the time of the Grão-Mestre #%d is at %+v, want the people", id2, r.Level)
 	}
+	noGitHubApproval("after the time of the Grão-Mestre")
 }
 
 // CA-APROV-POL-03
@@ -149,6 +162,13 @@ func TestASensitiveWordInAnAddedLineSendsThePRToAPersonButARemovedOneDoesNot(t *
 	id := w.prRequest(classes.RequestPR, 41, rem)
 	if out := w.decide(w.gm, id, chain.AnswerApprove, "só tirou o DROP"); out.State != chain.Approved {
 		t.Fatalf("outcome = %+v", out)
+	}
+	// the PR that only removes the line has no added line at all
+	only := green(1)
+	only.Files = append(only.Files, chain.PRFile{Path: "scripts/limpa.sh", Removed: 1})
+	id = w.prRequest(classes.RequestPR, 42, only)
+	if out := w.decide(w.gm, id, chain.AnswerApprove, "só removeu o DROP TABLE x"); out.State != chain.Approved {
+		t.Fatalf("a PR that only removes = %+v, want the normal conditions (approved)", out)
 	}
 }
 

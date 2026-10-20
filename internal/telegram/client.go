@@ -143,7 +143,10 @@ type (
 	Update struct {
 		UpdateID int64 `json:"update_id"`
 		// Redacted marks the copy the bot keeps of an answer it captured: its text is gone.
-		Redacted      bool           `json:"redacted,omitempty"`
+		Redacted bool `json:"redacted,omitempty"`
+		// Secret is the kind of secret the text carried (it is gone too): an update
+		// kept with it and never handled is blocked, not dropped.
+		Secret        string         `json:"secret,omitempty"`
 		Message       *Message       `json:"message,omitempty"`
 		CallbackQuery *CallbackQuery `json:"callback_query,omitempty"`
 	}

@@ -31,7 +31,11 @@ func (e *RemoteError) Error() string { return fmt.Sprintf("mestre-pty: %s: %s", 
 
 // Exit is how the agent ended.
 type Exit struct {
-	Code   int
+	Code int
+	// NoCode: the mestre-pty announced the exit with no code. Code is then 0
+	// only because it is the zero value, and a reader that decides on success
+	// must treat it as a failure.
+	NoCode bool
 	Signal string
 	End    uint64 // offset after the last byte of output
 }
@@ -256,7 +260,7 @@ func (c *Client) onEventMsg(m *ptywire.Msg) {
 		if m.ExitCode != nil {
 			code = *m.ExitCode
 		}
-		c.exit = &Exit{Code: code, Signal: m.Signal, End: m.End}
+		c.exit = &Exit{Code: code, NoCode: m.ExitCode == nil, Signal: m.Signal, End: m.End}
 		close(c.exited)
 	}
 	c.mu.Unlock()

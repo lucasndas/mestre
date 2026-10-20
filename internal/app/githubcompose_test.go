@@ -46,6 +46,12 @@ func newGHCompose(t *testing.T) *ghCompose { return newGHComposeWith(t, false) }
 
 // newGHComposeWith can put the chain of approval in the orchestration.
 func newGHComposeWith(t *testing.T, withChain bool) *ghCompose {
+	return newGHComposeCfg(t, withChain, false)
+}
+
+// newGHComposeCfg is newGHComposeWith that can leave the people and the channel of the
+// inbox to the integration, as `mestre run` does (no double of them).
+func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose {
 	t.Helper()
 	i := newInteg(t, false)
 	double, err := fakegithub.New(i.clk, t)
@@ -100,6 +106,9 @@ func newGHComposeWith(t *testing.T, withChain bool) *ghCompose {
 		Git: c.remote, Machines: machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: c.rdir},
 		Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}}
+	if integrationPeople {
+		o.Users = nil
+	}
 	if withChain {
 		o.ChainClasses = stubClasses{}
 	}
@@ -332,4 +341,79 @@ func (stubClasses) Env(_ context.Context, id string) (classes.Env, error) {
 
 func (stubClasses) Domains(context.Context, string) ([]string, error) {
 	return []string{"registry.npmjs.org"}, nil
+}
+
+// Part of CA-CLI-GH-05 (the command and the exit 3 are in internal/ghcli): the
+// refusal of the sending that the standard integration hands to the handlers
+// reaches the inbox of the Grand Master of the workspace, with the code and the
+// table, and nobody else's.
+func TestTheRefusalOfTheSendingOfAGitHubReachesTheInboxOfTheGrandMaster(t *testing.T) {
+	t.Parallel()
+	c := newGHCompose(t)
+	gm, _, err := c.orc.Registry.GrandMaster(c.ctx, c.ws.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	master, err := c.orc.Registry.Get(c.ctx, c.master.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.run.ghHandlers(c.orc).Refused(c.ctx, master, "workflow_permission", "o App Mestre não tem a permissão Workflows")
+	system := func(id string) []string {
+		items, err := c.orc.Inbox.Store().All(c.ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, it := range items {
+			if it.Kind == inbox.KindSystem && strings.Contains(it.Text, "workflow_permission") {
+				out = append(out, it.Text)
+			}
+		}
+		return out
+	}
+	got := system(gm.ID)
+	if len(got) != 1 || !strings.Contains(got[0], master.Table) || !strings.Contains(got[0], "Workflows") {
+		t.Fatalf("the Grand Master got %q, want the refusal with the table and the reason", got)
+	}
+	if other := system(master.ID); len(other) != 0 {
+		t.Errorf("the table master got the word meant for the Grand Master: %q", other)
+	}
+}
+
+// Part of CA-SYNC-02: the hook that the standard integration gives to `pr open`
+// and `pr update` takes the table in work to review and keeps its PR.
+func TestThePRCommandsTellTheTableAndATableInWorkGoesToReview(t *testing.T) {
+	t.Parallel()
+	c := newGHCompose(t)
+	if _, err := c.orc.Tables.MissionStarted(c.ctx, c.ws.Slug, c.table.ID); err != nil {
+		t.Fatal(err)
+	}
+	if now, err := c.orc.Tables.Get(c.ctx, c.ws.Slug, c.table.ID); err != nil || now.State != tables.StateWorking {
+		t.Fatalf("the table is %+v (%v), want working", now.State, err)
+	}
+	if err := c.run.ghHandlers(c.orc).Opened(c.ctx, c.ws.Slug+"/"+c.table.ID, c.pr, "newhead"); err != nil {
+		t.Fatal(err)
+	}
+	now, err := c.orc.Tables.Get(c.ctx, c.ws.Slug, c.table.ID)
+	if err != nil || now.State != tables.StateInReview || now.PRNumber != c.pr || now.PRHead != "newhead" {
+		t.Fatalf("the table is %s with PR #%d head %q (%v); want in_review with the new head", now.State, now.PRNumber, now.PRHead, err)
+	}
+	if err := c.run.ghHandlers(c.orc).Opened(c.ctx, "no-slash", 1, ""); err == nil {
+		t.Error("a key that is no table was taken")
+	}
+}
+
+// A table that can not take its PR (it is closing) does not turn `pr open` or
+// `pr update` into a failure: the PR is on GitHub already, so the hook tells the
+// log and the command stands.
+func TestATableThatCannotTakeItsPRDoesNotFailThePRCommands(t *testing.T) {
+	t.Parallel()
+	c := newGHCompose(t)
+	if _, err := c.db.Writer().ExecContext(c.ctx, `UPDATE tables SET state = 'closing' WHERE workspace = ? AND id = ?`, c.ws.Slug, c.table.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.run.ghHandlers(c.orc).Opened(c.ctx, c.ws.Slug+"/"+c.table.ID, c.pr, "h"); err != nil {
+		t.Fatalf("a closing table failed the command: %v", err)
+	}
 }

@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -36,6 +38,13 @@ type IntegrationEnv struct {
 	// the Citadel of the period; GuildID is the id of the Guild.
 	DecideJoin func(ctx context.Context, joinID string, d guild.Decision) error
 	GuildID    string
+	// Machines lists the machines of the Guild and its epoch, and SetExcluded
+	// excludes one from the secrets or undoes it (/guilda, after the Owner's
+	// PIN); both are of the acting Citadel. Nil: this machine cannot.
+	Machines    func(ctx context.Context) ([]telegram.GuildMachine, uint64, error)
+	SetExcluded func(ctx context.Context, machineID string, excluded bool) error
+	// Pending lists the entry and promotion requests that wait for the Owner.
+	Pending func(ctx context.Context) ([]telegram.GuildPending, error)
 }
 
 // GuildApprover is what an IntegrationRun may also be: the question to the Owner
@@ -49,6 +58,23 @@ type GuildApprover interface {
 // (the Guild has no promotion until it is).
 type GuildLocker interface {
 	GuildLock(ctx context.Context) (guild.Lock, error)
+}
+
+// GuildReconciler is what an IntegrationRun may also be: the reconciliation with
+// GitHub that a promoted Citadel makes before it acts outside
+// (docs/guilda/cidadela-e-torres.md#github-depois-da-troca).
+type GuildReconciler interface {
+	GuildReconcile(orc *Orchestration, anchor func(ctx context.Context) (time.Time, error)) func(ctx context.Context) error
+}
+
+// reconcilerOf is the reconciliation for FenceConfig.Reconcile: nil when the
+// period has no orchestration or the integration reconciles nothing.
+func reconcilerOf(integ IntegrationRun, orc *Orchestration, anchor func(ctx context.Context) (time.Time, error)) func(ctx context.Context) error {
+	g, ok := integ.(GuildReconciler)
+	if !ok || orc == nil {
+		return nil
+	}
+	return g.GuildReconcile(orc, anchor)
 }
 
 // Integration opens the integrations of a period. The zero Deps has none.

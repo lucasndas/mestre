@@ -10,6 +10,8 @@ import (
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/quests"
+	"github.com/lucasndas/mestre/internal/orchestration/verification"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
@@ -54,5 +56,43 @@ func TestTheOrchestrationOfTheCitadelIsBuiltAndWhatWaitsForMilestone5Refuses(t *
 	// of the chain lacks (SessionBuilder is the real one).
 	if _, err := (unavailableBuilder{}).Build(ctx, characters.BuildInput{}); err == nil || !strings.Contains(err.Error(), "decrees") {
 		t.Errorf("builder: %v; want a refusal that names what is missing", err)
+	}
+}
+
+// The executor of the verification is composed by the host (milestone 5, by
+// injected configuration): it reads the commands the workspace confirmed in the
+// database of the Guild, and a machine with no terminals (no Config.Terminais)
+// confirms nothing, so the done ends unverified and the gate does not approve
+// alone.
+func TestTheHostComposesTheExecutorOfTheVerificationAndWithoutTerminalsItIsNeverGreen(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	db, err := guildtpl.Open(t.Context(), filepath.Join(root, "mestre.db"), store.Options{Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	e := &Engine{clk: clock.Real{}, log: slog.New(slog.DiscardHandler), id: guild.Identity{MachineID: "m1"},
+		paths: Paths{Workspaces: filepath.Join(root, "workspaces"), Maquina: filepath.Join(root, "maquina")},
+		deps:  Deps{Masker: logging.NewMasker(), Binary: filepath.Join(root, "mestre")}}
+	orc, err := e.hostOrchestration(db, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ex, ok := orc.Verifier.(*verification.Executor)
+	if !ok || ex.Worktrees == nil {
+		t.Fatalf("the verifier of the host = %T", orc.Verifier)
+	}
+	if ok, err := orc.Verifier.Confirmed(t.Context(), "loja"); err != nil || ok {
+		t.Fatalf("no command confirmed: %v, %v", ok, err)
+	}
+	if _, err := (verification.Store{DB: db, Clock: clock.Real{}}).Confirm(t.Context(), "loja", "u1", []byte("version: 1\ncomandos: [\"make\"]\n")); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := orc.Verifier.Confirmed(t.Context(), "loja"); err != nil || ok {
+		t.Fatalf("a machine with no terminals confirmed commands: %v, %v", ok, err)
+	}
+	if res, err := orc.Verifier.Verify(t.Context(), quests.VerifyRequest{Workspace: "loja", Table: "1", Branch: "b"}); err == nil || res.OK {
+		t.Fatalf("a machine with no terminals verified: %+v, %v", res, err)
 	}
 }

@@ -85,6 +85,18 @@ func (s *Server) FailUserRepos(status int) {
 	s.mu.Unlock()
 }
 
+// MadeRepo is what the engine asked for when it created a repository.
+type MadeRepo struct{ Private, AutoInit bool }
+
+// MadeRepo says what POST /user/repos asked for the repository, and whether the
+// double created it by that route.
+func (s *Server) MadeRepo(full string) (MadeRepo, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.made[full]
+	return m, ok
+}
+
 // TokenRequests returns the requests for installation tokens made so far.
 func (s *Server) TokenRequests() []TokenRequest {
 	s.mu.Lock()
@@ -268,6 +280,13 @@ func (s *Server) userRepos(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.mu.Lock()
 		s.repos[full] = &repo{}
+		if s.made == nil {
+			s.made = map[string]MadeRepo{}
+		}
+		s.made[full] = MadeRepo{Private: in.Private, AutoInit: in.AutoInit}
+		if !in.Private {
+			s.public[full] = true
+		}
 		app.repos = append(app.repos, full) // the App gets access to the repository it makes
 		s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
 		s.mu.Unlock()

@@ -117,10 +117,12 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, fmt.Errorf("app: the decrees: %w", err)
 	}
 	r.routing = &telegram.Routing{}
+	r.replies = &telegram.Replies{Users: svc}
 	r.block = &telegram.BlockChannel{Users: svc}
 	r.choose = &telegram.ChooseChannel{Users: svc}
 	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
+	r.gc = &telegram.GuildChannel{Users: svc, PINs: r.pins, Machines: env.Machines, SetExcluded: env.SetExcluded, Pending: env.Pending}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
@@ -154,6 +156,8 @@ type stdRun struct {
 	decrees *decrees.Service
 	// routing decides the workspace of each message of a user.
 	routing *telegram.Routing
+	// replies takes the answers of the Grand Master back to the chat of the user.
+	replies *telegram.Replies
 	// block sends the messages that ask something of the users because a table is stopped.
 	block *telegram.BlockChannel
 	// choose asks a user a question with buttons (`mestre choose`).
@@ -161,6 +165,7 @@ type stdRun struct {
 	// stall warns the people of a table that works without delivering, with the button to pause it.
 	stall *telegram.StallChannel
 	dc    *telegram.DecreeChannel
+	gc    *telegram.GuildChannel
 	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
 	fetch  atomic.Pointer[telegram.Client]
 	dg     *telegram.DigestChannel
@@ -297,8 +302,8 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: client,
-		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
-		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions(), r.stall.Actions()),
+		Router: r.routing, Commands: append(append(append(r.lc.Commands(), r.dc.Commands()...), r.gc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask, Machine: r.env.Machine,
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.gc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions(), r.stall.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
@@ -312,8 +317,10 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.ac.Bind(bot, r.flow)
 	r.lc.Bind(bot)
 	r.dc.Bind(bot)
+	r.gc.Bind(bot)
 	r.dg.Bind(bot)
 	r.routing.Bind(bot)
+	r.replies.Bind(bot)
 	r.block.Bind(bot)
 	r.choose.Bind(bot)
 	r.stall.Bind(bot)
@@ -356,6 +363,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		}
 	}
 	o.ChainUsers = r.flow
+	if o.Channels == nil {
+		o.Channels = r.replies // the answer of `mestre reply` goes back to the chat of the user
+	}
 	if o.ChainStallPeople == nil {
 		o.ChainStallPeople = r.stall
 	}
@@ -390,12 +400,20 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.ChainSubDelegations == nil {
 		o.ChainSubDelegations = r.decrees
 	}
+	if o.ChainPolicyDecrees == nil {
+		o.ChainPolicyDecrees = r.decrees
+	}
 	if o.ChainDelegations == nil {
 		o.ChainDelegations = r.decrees
 	}
 	o.Locked = r.lock.Locked
 	if o.Messages == nil {
 		o.Messages = inboxMessages{&inbox.Store{DB: r.env.DB}}
+	}
+	// the people and the channel of the inbox: the notices "Sistema" that find no
+	// Grand Master and the answers of `mestre reply` go out by the bot
+	if o.Users == nil {
+		o.Users = inboxUsers{r}
 	}
 	if o.ChainSinks == nil {
 		o.ChainSinks = map[classes.RequestType]chain.Sink{}
@@ -442,6 +460,65 @@ func (r *stdRun) Users() *users.Service                       { return r.users }
 
 // BindFence implements IntegrationRun.
 func (r *stdRun) BindFence(f *guild.Fence) { r.fence.Store(f) }
+
+// ghHandlers are the commands `issue` and `pr` of the Citadel, with what the
+// standard integration gives them (the refusal and the PR of a table reach the
+// Grand Master and the table, among the rest).
+func (r *stdRun) ghHandlers(orc *Orchestration) *ghcli.Handlers {
+	h := &ghcli.Handlers{
+		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
+		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
+		Refused: r.refusedSending(orc), Opened: r.tablePROpened(orc),
+		Executed: r.decrees.Fulfilled, Heads: &github.ReviewedHeads{DB: r.env.DB, Clock: r.env.Clock}, Settings: stdSettings{r},
+		Approver: lateApprover{r}, Merges: mergeHost{r}, Rulesets: lateRulesets{r},
+	}
+	if orc.BaseSync != nil {
+		h.Send.Base = orc.BaseSync
+	}
+	if orc.EpicDeps != nil {
+		h.Deps = orc.EpicDeps
+	}
+	// the acceptance of the Master of the table: no pull request while a
+	// completed mission of the epic has a criterion with no proof
+	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
+	return h
+}
+
+// tablePROpened tells the table that its PR was opened or updated by the
+// engine: a table in work goes to review, one in review learns the new head
+// (docs/orquestracao/mesas.md#estados, CA-SYNC-02).
+func (r *stdRun) tablePROpened(orc *Orchestration) func(ctx context.Context, key string, number int, head string) error {
+	return func(ctx context.Context, key string, number int, head string) error {
+		ws, id, ok := cutKey(key)
+		if !ok {
+			return fmt.Errorf("app: %q is not the key of a table", key)
+		}
+		_, err := orc.Tables.PROpened(ctx, ws, id, number, head)
+		if errors.Is(err, tables.ErrBadTransition) {
+			// the PR exists on GitHub already (opened or sent): a table that can not
+			// take it (closing, cancelling) does not turn the command into a failure
+			r.env.Log.Warn("app: the table could not take its PR; the command stands", "table", key, "pr", number, "err", err)
+			return nil
+		}
+		return err
+	}
+}
+
+// refusedSending tells the Grand Master of the workspace that GitHub refused the
+// sending of the branch of a table (docs/cli/coordenacao-github.md, CA-CLI-GH-05):
+// the word comes to its inbox, and the engine tries no other way.
+func (r *stdRun) refusedSending(orc *Orchestration) func(ctx context.Context, c characters.Character, code, reason string) {
+	return func(ctx context.Context, c characters.Character, code, reason string) {
+		gm, ok, err := orc.Registry.GrandMaster(ctx, c.Workspace)
+		if err != nil || !ok {
+			return
+		}
+		text := fmt.Sprintf("O envio da branch da mesa %s foi recusado (%s): %s. O motor não tenta outro caminho.", c.Table, code, reason)
+		if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: c.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
+			r.env.Log.Warn("app: the Grand Master was not told of the refusal of GitHub", "workspace", c.Workspace, "err", err)
+		}
+	}
+}
 
 // FenceChanged implements IntegrationRun.
 func (r *stdRun) FenceChanged(s guild.FenceState) { r.notice.Changed(s) }
@@ -526,31 +603,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	} else {
 		r.progress.Store(prog)
 	}
-	h := &ghcli.Handlers{
-		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
-		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
-		Refused: func(ctx context.Context, c characters.Character, code, reason string) {
-			gm, ok, err := orc.Registry.GrandMaster(ctx, c.Workspace)
-			if err != nil || !ok {
-				return
-			}
-			text := fmt.Sprintf("O envio da branch da mesa %s foi recusado (%s): %s. O motor não tenta outro caminho.", c.Table, code, reason)
-			if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: c.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
-				r.env.Log.Warn("app: the Grand Master was not told of the refusal of GitHub", "workspace", c.Workspace, "err", err)
-			}
-		},
-		Executed: r.decrees.Fulfilled, Heads: &github.ReviewedHeads{DB: r.env.DB, Clock: r.env.Clock}, Settings: stdSettings{r},
-		Approver: lateApprover{r}, Merges: mergeHost{r}, Rulesets: lateRulesets{r},
-	}
-	if orc.BaseSync != nil {
-		h.Send.Base = orc.BaseSync
-	}
-	if orc.EpicDeps != nil {
-		h.Deps = orc.EpicDeps
-	}
-	// the acceptance of the Master of the table: no pull request while a
-	// completed mission of the epic has a criterion with no proof
-	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
+	h := r.ghHandlers(orc)
 	h.Register(fwd)
 	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{}}).Register(fwd)
 	(&decrees.ProposeHandler{Service: r.decrees, Characters: orc.Registry, Message: inboxMessages{&inbox.Store{DB: r.env.DB}}.Source, Offer: r.dc}).Register(fwd)
@@ -590,6 +643,13 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 			<-ctx.Done()
 			return nil
 		}
+		go func() { // the answers kept while the bot was not up
+			if _, err := orc.Inbox.ChannelUp(ctx, inbox.ChannelTelegram); err != nil && ctx.Err() == nil {
+				r.env.Log.Warn("app: the answers kept for the Telegram were not sent", "err", err)
+			}
+		}()
+		// the owners of the site credentials are told of their validity by the bot
+		go func() { _ = r.expiryWatcher().Run(ctx) }()
 		return bot.Run(ctx)
 	}}
 }

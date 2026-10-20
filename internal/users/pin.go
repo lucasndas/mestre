@@ -206,18 +206,24 @@ func (s *Service) CheckPIN(ctx context.Context, requestID, pin string) error {
 		if err != nil {
 			return err
 		}
+		var hash string
+		var locked int64
+		uerr := tx.QueryRowContext(ctx, `SELECT pin_hash, pin_locked_until FROM users WHERE id = ? AND state = 'active'`, userID).Scan(&hash, &locked)
+		if uerr != nil && uerr != sql.ErrNoRows {
+			return uerr
+		}
+		if uerr == nil && now.Before(fromMs(locked)) {
+			// refused without verification, even for a request opened before the
+			// lock (the lock cancels it, but the answer is still "locked")
+			result = ErrPINLocked
+			return nil
+		}
 		if state != "open" || !now.Before(fromMs(expires)) {
 			result = ErrPINRequest
 			return nil
 		}
-		var hash string
-		var locked int64
-		if err := tx.QueryRowContext(ctx, `SELECT pin_hash, pin_locked_until FROM users WHERE id = ? AND state = 'active'`, userID).Scan(&hash, &locked); err != nil {
+		if uerr != nil {
 			result = ErrNoUser
-			return nil
-		}
-		if now.Before(fromMs(locked)) {
-			result = ErrPINLocked // refused without verification
 			return nil
 		}
 		if hash == "" {
@@ -253,7 +259,9 @@ func (s *Service) CheckPIN(ctx context.Context, requestID, pin string) error {
 			}
 		}
 		result = ErrBadPIN
-		if state == "cancelled" {
+		if lockedNow {
+			result = fmt.Errorf("%w: %w", ErrBadPIN, ErrPINLocked)
+		} else if state == "cancelled" {
 			result = fmt.Errorf("%w: o pedido foi cancelado depois de %d erros", ErrBadPIN, PINRequestErrors)
 		}
 		return nil
