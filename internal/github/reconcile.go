@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -74,9 +75,15 @@ type Reconciler struct {
 	Objects *Objects
 	API     CommentLister
 	// Repos are the repositories of the workspaces to read.
-	Repos  func(ctx context.Context) ([]string, error)
-	Clock  clock.Clock
-	Window time.Duration
+	Repos func(ctx context.Context) ([]string, error)
+	// Authors are the logins ("<slug>[bot]", lower case) of the Apps of the Guild:
+	// only their comments are the Guild's, not those of any other bot.
+	Authors func(ctx context.Context) (map[string]bool, error)
+	Clock   clock.Clock
+	Window  time.Duration
+
+	mu    sync.Mutex
+	since time.Time
 }
 
 // Reconcile reads the recent comments of each repository. It fails closed: any
@@ -90,7 +97,18 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 	if window <= 0 {
 		window = ReconcileWindow
 	}
-	since := r.Clock.Now().Add(-window)
+	authors, err := r.Authors(ctx)
+	if err != nil {
+		return err
+	}
+	// the window is anchored at the first try: a try that comes after failures
+	// reads from the same moment, so the comments of the old Citadel do not leave it
+	r.mu.Lock()
+	if r.since.IsZero() {
+		r.since = r.Clock.Now().Add(-window)
+	}
+	since := r.since
+	r.mu.Unlock()
 	for _, repo := range repos {
 		repo, err := NormalizeRepo(repo)
 		if err != nil {
@@ -101,7 +119,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 			return fmt.Errorf("github: reconciling %s: %w", repo, err)
 		}
 		for _, c := range list {
-			if err := r.adopt(ctx, repo, c); err != nil {
+			if err := r.adopt(ctx, repo, c, authors); err != nil {
 				return fmt.Errorf("github: reconciling %s: %w", repo, err)
 			}
 		}
@@ -111,8 +129,8 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 
 // adopt records the comment if an App of the Guild wrote it with a marker of
 // operation and the database does not know the operation.
-func (r *Reconciler) adopt(ctx context.Context, repo string, c RecentComment) error {
-	if !strings.HasSuffix(c.Login, "[bot]") || !endsWithMarker(c.Body) {
+func (r *Reconciler) adopt(ctx context.Context, repo string, c RecentComment, authors map[string]bool) error {
+	if !authors[strings.ToLower(c.Login)] || !endsWithMarker(c.Body) {
 		return nil // a person's text, or one that quotes a marker, is not the Guild's
 	}
 	ms := Markers(c.Body)
@@ -125,15 +143,9 @@ func (r *Reconciler) adopt(ctx context.Context, repo string, c RecentComment) er
 	if _, found, err := r.Objects.ByOp(ctx, op); err != nil || found {
 		return err
 	}
+	// the table is not known from here (the Grão-Mestre and the Apps of the classes
+	// write alike): PostOnce takes an object with no table as the operation's own
 	table := ""
-	if parent, found, err := r.Objects.Get(ctx, repo, KindIssue, c.Issue); err != nil {
-		return err
-	} else if found {
-		table = parent.Table // the comment is of the table that owns the issue
-	}
 	err := r.Objects.Register(ctx, Object{Repo: repo, Kind: KindComment, Number: int(c.ID), GitHubID: c.ID, Table: table, ParentNumber: c.Issue, Op: op})
-	if errors.Is(err, ErrOtherTable) {
-		return nil
-	}
 	return err
 }
