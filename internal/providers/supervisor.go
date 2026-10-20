@@ -28,11 +28,13 @@ const (
 // small interface here, implemented by its owner.
 
 // SendRetrier is an adapter whose CLI may keep a delivery in its input area
-// without sending it: Codex 0.163.0 on Windows, the first message typed
-// while it still starts (docs/provedores/codex.md#digitação). InputHolds
-// tells whether the input area of screen still holds text; the supervisor
-// then types SendKey once more, never the text.
+// without sending it: Codex 0.163.0 on Windows, which drops the send key that
+// comes in the same write as the paste (docs/provedores/codex.md#digitação).
+// SendsAgain is false where the CLI does not do that (the other systems);
+// InputHolds tells whether the input area of screen still holds text; the
+// supervisor then types SendKey once more, never the text.
 type SendRetrier interface {
+	SendsAgain() bool
 	InputHolds(screen, text string) bool
 	SendKey() []byte
 }
@@ -204,6 +206,8 @@ type Supervisor struct {
 	delivered      bool
 	noHooks        bool
 	lastScreen     string
+	lastStable     bool   // lastScreen was stable when it came
+	hooks          int    // hook events so far (a resend needs none after the delivery)
 	handled        string // the known screen already acted on
 	trustRetried   bool
 	startTimer     clock.Timer
@@ -321,6 +325,7 @@ func (s *Supervisor) screen(text string, stable bool, row int, cursor bool) {
 	}
 	changed := text != s.lastScreen
 	s.lastScreen = text
+	s.lastStable = stable
 	var act *KnownScreen
 	var confirmed []string
 	switch {
@@ -415,6 +420,7 @@ func (s *Supervisor) act(k *KnownScreen, screen, dialog string) {
 // Hook takes a normalized event of the character (after Turns).
 func (s *Supervisor) Hook(ev Event) {
 	s.mu.Lock()
+	s.hooks++
 	if s.starting { // a hook arrived: the start is not stuck
 		s.starting = false
 		s.stopStartLocked()
@@ -482,34 +488,38 @@ func (s *Supervisor) Deliver(ctx context.Context, id, text string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("type delivery %s: %w", id, err)
 	}
-	if r, ok := s.cfg.Adapter.(SendRetrier); ok {
-		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, 1) })
+	if r, ok := s.cfg.Adapter.(SendRetrier); ok && r.SendsAgain() {
+		s.mu.Lock()
+		hooks := s.hooks
+		s.mu.Unlock()
+		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, hooks, 1) })
 	}
 	return nil
 }
 
 // resend types the send key once more when the delivery is still waiting for
-// its turn_start and the screen is the input area with the text still in
-// it: no known screen (a dialog would take the key as its answer). A key sent
-// empties the input area, so the next look types nothing.
-func (s *Supervisor) resend(id, text string, r SendRetrier, look int) {
+// its turn_start, no hook came since it was typed (a CLI that took the
+// prompt runs its hooks; a slow turn_start is not a lost key), and the last
+// screen, stable, is the input area with the text still in it and no known
+// screen (a dialog, as an approval, would take the key as its answer). The
+// look and the key are under the lock, so no screen comes in between. A key
+// sent empties the input area, so the next look types nothing.
+func (s *Supervisor) resend(id, text string, r SendRetrier, hooks, look int) {
 	s.mu.Lock()
-	_, waiting := s.pending[id]
-	screen := s.lastScreen
-	res := s.cfg.Adapter.Screens(ScreenInput{
-		Text: screen, Stable: true, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
-	})
-	s.mu.Unlock()
-	if !waiting {
+	defer s.mu.Unlock()
+	if _, waiting := s.pending[id]; !waiting || s.hooks != hooks {
 		return
 	}
-	if res.Known == nil && res.State == StateReady && r.InputHolds(screen, text) {
+	res := s.cfg.Adapter.Screens(ScreenInput{
+		Text: s.lastScreen, Stable: s.lastStable, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
+	})
+	if s.lastStable && res.Known == nil && res.State == StateReady && r.InputHolds(s.lastScreen, text) {
 		if err := s.cfg.Keyboard.Input(s.ctx, r.SendKey()); err != nil {
 			s.report(fmt.Errorf("send key again for delivery %s: %w", id, err))
 		}
 	}
 	if look < SendRetries {
-		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, look+1) })
+		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, hooks, look+1) })
 	}
 }
 

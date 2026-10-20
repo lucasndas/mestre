@@ -13,11 +13,12 @@ type codex struct {
 	failure   func(Event) (StopReason, string, bool)
 	multiline bool // CodexMultilineViaFile
 	screens   screenSet
+	windows   bool // Options.OS: the send key typed again (SendRetrier)
 }
 
 // NewCodex returns the Codex adapter.
 func NewCodex(opts Options) Adapter {
-	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, screens: screenSet{
+	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, windows: machineOS(opts.OS) == "windows", screens: screenSet{
 		prompt:   agentPrompt,
 		busy:     regexp.MustCompile(`(?i)esc to interrupt|Working…`),
 		known:    codexScreens(),
@@ -224,9 +225,10 @@ func (c *codex) TypeMessage(text string) ([]byte, error) {
 var _ SendRetrier = (*codex)(nil)
 
 // InputHolds: the input line of Codex (the last line that starts with ›)
-// starts with the first line of text. On Windows, 0.163.0 keeps there the
-// first message typed while it still starts, without sending it (the
-// Windows round of 2026-10-19).
+// starts with the first line of text. On Windows, 0.163.0 keeps there a
+// message whose send key came in the same write as the paste, without
+// sending it: every delivery of the conformance (the Windows round of
+// 2026-10-19).
 func (c *codex) InputHolds(screen, text string) bool {
 	first, _, _ := strings.Cut(strings.TrimSpace(clean(text)), "\n")
 	want := []rune(strings.TrimSpace(first))
@@ -247,3 +249,8 @@ func (c *codex) InputHolds(screen, text string) bool {
 
 // SendKey is the key that sends what the input line of Codex holds.
 func (c *codex) SendKey() []byte { return []byte("\r") }
+
+// SendsAgain: only on Windows, where Codex drops the key that comes with the
+// paste; elsewhere the paste and the key in one write are sent (the
+// conformance test on Linux).
+func (c *codex) SendsAgain() bool { return c.windows }

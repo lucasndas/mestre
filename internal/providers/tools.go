@@ -125,6 +125,10 @@ type Options struct {
 	// a text with line breaks is not typed (ErrTooLong), it goes through the
 	// file of the long messages.
 	AntigravityNoPaste bool
+	// OS is the system the adapters drive the CLIs on (windows, linux…);
+	// empty is this machine's. It decides what only one system needs at
+	// run time: the send key of Codex typed again, on Windows.
+	OS string
 }
 
 // NormalizePath normalizes a path the way the adapters do with the paths of

@@ -407,7 +407,7 @@ func (c *character) command(ctx context.Context, text string) error {
 	if err := c.sess.Input(ctx, b); err != nil {
 		return err
 	}
-	if r, ok := c.ru.adapter.(providers.SendRetrier); ok {
+	if r, ok := c.ru.adapter.(providers.SendRetrier); ok && r.SendsAgain() {
 		go c.resendCommand(ctx, text, r)
 	}
 	return nil
@@ -416,8 +416,9 @@ func (c *character) command(ctx context.Context, text string) error {
 // resendCommand types the send key once more while the input line still
 // holds the command, as the supervision does for a delivery: Codex on
 // Windows can keep what it was given without sending it
-// (providers.SendRetrier). It stops at the first look that finds the line
-// without the command, or after providers.SendRetries looks.
+// (providers.SendRetrier). Only on the input area with no known screen (a
+// dialog would take the key as its answer). It stops at the first look that
+// finds the line without the command, or after providers.SendRetries looks.
 func (c *character) resendCommand(ctx context.Context, text string, r providers.SendRetrier) {
 	for range providers.SendRetries {
 		t := c.ru.r.clk().NewTimer(providers.DefaultSendRetry)
@@ -433,6 +434,9 @@ func (c *character) resendCommand(ctx context.Context, text string, r providers.
 		screen, err := c.sess.Screen(ctx)
 		if err != nil || !r.InputHolds(screen, text) {
 			return
+		}
+		if res := c.ru.adapter.Screens(providers.ScreenInput{Text: screen, Stable: true}); res.Known != nil || res.State != providers.StateReady {
+			continue
 		}
 		if err := c.sess.Input(ctx, r.SendKey()); err != nil {
 			return
