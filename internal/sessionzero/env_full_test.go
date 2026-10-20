@@ -185,7 +185,9 @@ type fakes struct {
 	// events are "<stage>:<what>" in the order they happened.
 	events []string
 
-	// apps
+	// apps: real, when set, answers the three questions of the stage apps (the
+	// Installations over a double of GitHub); the fields below serve otherwise.
+	real           sessionzero.Installations
 	missing        []string
 	addErr         error
 	addCalls       int
@@ -298,17 +300,28 @@ func (f *fakes) NotifySystem(context.Context, string, string) error { return nil
 
 // sessionzero ports
 
-func (f *fakes) Missing(context.Context, workspaces.Repo) ([]string, error) {
+func (f *fakes) Missing(ctx context.Context, repo workspaces.Repo) ([]string, error) {
+	if f.real != nil {
+		f.mu.Lock()
+		f.record("apps")
+		f.mu.Unlock()
+		return f.real.Missing(ctx, repo)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.record("apps")
 	return slices.Clone(f.missing), nil
 }
 
-func (f *fakes) AddRepository(context.Context, workspaces.Repo, []string) error {
+func (f *fakes) AddRepository(ctx context.Context, repo workspaces.Repo, apps []string) error {
+	f.mu.Lock()
+	f.addCalls++
+	f.mu.Unlock()
+	if f.real != nil {
+		return f.real.AddRepository(ctx, repo, apps)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.addCalls++
 	if f.addErr != nil {
 		return f.addErr
 	}
@@ -316,7 +329,10 @@ func (f *fakes) AddRepository(context.Context, workspaces.Repo, []string) error 
 	return nil
 }
 
-func (f *fakes) InstallLink(_ context.Context, repo workspaces.Repo, app string) (string, error) {
+func (f *fakes) InstallLink(ctx context.Context, repo workspaces.Repo, app string) (string, error) {
+	if f.real != nil {
+		return f.real.InstallLink(ctx, repo, app)
+	}
 	return fmt.Sprintf("https://github.example/apps/%s/installations/new?repo=%s", app, repo), nil
 }
 

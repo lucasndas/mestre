@@ -220,6 +220,7 @@ func (t *Terminal) agentEnded(ctx context.Context) {
 	if err := t.m.killTree(ctx, t.id, t.proc, []int{t.agentPID}); err != nil {
 		t.m.log.Warn("what the agent left behind was not all ended", "terminal", t.id, "error", err)
 	}
+	t.m.revokeAccess(t.id, t.rec.LogonSID)
 	_ = os.Remove(t.rec.SocketPath)
 	if err := t.m.reg.setStatus(ctx, t.id, StatusInterrupted, t.m.clk.Now()); err != nil {
 		t.m.log.Warn("agent ended but the row of its terminal was not updated", "terminal", t.id, "error", err)

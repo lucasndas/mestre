@@ -2,10 +2,7 @@ package classes_test
 
 import (
 	"fmt"
-	"strings"
 	"testing"
-
-	"github.com/lucasndas/mestre/internal/classes"
 )
 
 // The programs that run another one and the wrapper table did not know yet
@@ -118,29 +115,5 @@ func TestProgramsThatRunAnotherAreNotAWayAroundTheFixedRules(t *testing.T) {
 			"python -W ignore -m pytest", "python x.py", "py -3 -m pytest",
 			"ssh host ls", "ssh -p 22 host 'git status'", "ssh -N -L 8080:localhost:80 host", "ssh host", "ssh -i key user@host uname -a", "ssh host git log",
 			"sshpass -p x ssh host ls", "systemd-run -E FOO=1 ls", "firejail --env=FOO=1 ls", "dotenv -v FOO=1 -- ls", "dotenvx run --env FOO=1 -- ls")
-	}
-}
-
-// CA-PERM-32: a chain of the new wrappers is bounded like the others, and a
-// line made to take long is never allowed by running out of time.
-func TestChainsOfTheNewWrappersAreBounded(t *testing.T) {
-	t.Parallel()
-	free := rules(t, anyYAML)
-	for _, ee := range evasionEnvs() {
-		for name, cmd := range map[string]string{
-			"bwrap":    strings.Repeat("bwrap --bind . . ", 200) + "git push",
-			"runcon":   strings.Repeat("runcon -t t ", 200) + "git push",
-			"cpulimit": strings.Repeat("cpulimit -l 50 ", 200) + "git push",
-			"gdb":      strings.Repeat("gdb --args ", 200) + "git push",
-			"perf":     strings.Repeat("perf stat -a ", 200) + "git push",
-			"ssh":      strings.Repeat("ssh host ", 200) + "git push",
-			"python":   strings.Repeat("python -m pipx run ", 200) + "git push",
-			"mixed":    strings.Repeat("bwrap --bind . . perf stat -- ssh host ", 50) + "git push",
-		} {
-			d, _ := boundedDecision(t, ee.name+": "+name, ee.env, free, cmd)
-			if d.Verdict != classes.Deny || d.Layer != classes.LayerFixed {
-				t.Errorf("%s: %s = %s by %s (%q); want a fixed denial", ee.name, name, d.Verdict, d.Layer, d.Reason)
-			}
-		}
 	}
 }

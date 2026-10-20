@@ -143,6 +143,9 @@ const (
 	classFile   = "CLASS.md"
 	skillsFile  = "SKILLS.md"
 	decreesFile = "DECREES.md"
+	// instructionsFile holds the instructions of the users when the layer does
+	// not fit with them in it.
+	instructionsFile = "INSTRUCTIONS.md"
 )
 
 type part struct {
@@ -152,12 +155,22 @@ type part struct {
 	// pointer is what stays in its place.
 	pointer string
 	spilled bool
+	// tail is a block at the end of the body that can leave the text on its
+	// own (the instructions of the users, after the rules of the system), to
+	// tailFile, leaving tailPointer.
+	tail, tailFile, tailPointer string
+	tailSpilled                 bool
 }
 
 func (p part) text() string {
 	body := p.body
-	if p.spilled {
+	switch {
+	case p.spilled:
 		body = p.pointer
+	case p.tail != "" && p.tailSpilled:
+		body += "\n\n" + p.tailPointer
+	case p.tail != "":
+		body += "\n\n" + p.tail
 	}
 	if p.heading == "" {
 		return body
@@ -182,7 +195,8 @@ func RenderLayer(in LayerInput) (Layer, error) {
 		{key: SectionPriority, body: PriorityRule},
 		{key: SectionDecrees, heading: "## Active decrees", body: decreesText(in.Decrees), file: decreesFile,
 			pointer: pointer(decreesFile, "the active decrees")},
-		{key: SectionRules, heading: "## Mestre rules", body: rulesText(in)},
+		{key: SectionRules, heading: "## Mestre rules", body: rulesText(in), tail: instructionsText(in), tailFile: instructionsFile,
+			tailPointer: pointer(instructionsFile, "the instructions of the users for this workspace")},
 	}
 	if in.Role == RoleCharacter && strings.TrimSpace(in.ClassBody) != "" {
 		parts = append(parts, &part{key: SectionClass, heading: "## Class", body: strings.TrimSpace(in.ClassBody), file: classFile,
@@ -203,25 +217,32 @@ func RenderLayer(in LayerInput) (Layer, error) {
 	}
 	hard := in.Limits.hard()
 	text := join()
-	for _, key := range []string{SectionSkills, SectionClass, SectionDecrees} {
+	for _, key := range []string{SectionSkills, SectionClass, SectionDecrees, SectionRules} {
 		if utf8.RuneCountInString(text) <= hard {
 			break
 		}
 		for _, p := range parts {
-			if p.key == key {
+			switch {
+			case p.key != key:
+			case key == SectionRules:
+				p.tailSpilled = p.tail != "" // only what the users wrote leaves; the rules of the system never do
+			default:
 				p.spilled = true
 			}
 		}
 		text = join()
 	}
 	if n := utf8.RuneCountInString(text); n > hard {
-		return Layer{}, fmt.Errorf("layer of %s: %w (%d characters, at most %d, with the skills, the class and the decrees already in files)", in.AgentID, ErrLayerTooLarge, n, hard)
+		return Layer{}, fmt.Errorf("layer of %s: %w (%d characters, at most %d, with the skills, the class, the decrees and the instructions of the users already in files)", in.AgentID, ErrLayerTooLarge, n, hard)
 	}
 	l := Layer{Text: text, OverTarget: utf8.RuneCountInString(text) > in.Limits.target()}
 	for _, p := range parts {
 		l.Sections = append(l.Sections, Section{Key: p.key, Text: p.text()})
 		if p.spilled {
 			l.Files = append(l.Files, File{Path: p.file, Data: []byte(p.body + "\n")})
+		}
+		if p.tailSpilled {
+			l.Files = append(l.Files, File{Path: p.tailFile, Data: []byte(p.tail + "\n")})
 		}
 	}
 	return l, nil
@@ -253,14 +274,21 @@ func rulesText(in LayerInput) string {
 		}
 		b.WriteString("- " + r.Text + "\n")
 	}
-	if x := strings.TrimSpace(in.Instructions); x != "" && in.Role != RoleCharacter {
-		title := "Instruções dos usuários para este workspace"
-		if in.Role == RoleTableMaster {
-			title = "Instruções dos usuários para os Mestres de mesa"
-		}
-		b.WriteString("\n### " + title + "\n\n" + x + "\n")
-	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// instructionsText is the block of the instructions of the users that follows
+// the rules of the system, under its title ("" when there are none).
+func instructionsText(in LayerInput) string {
+	x := strings.TrimSpace(in.Instructions)
+	if x == "" || in.Role == RoleCharacter {
+		return ""
+	}
+	title := "Instruções dos usuários para este workspace"
+	if in.Role == RoleTableMaster {
+		title = "Instruções dos usuários para os Mestres de mesa"
+	}
+	return "### " + title + "\n\n" + x
 }
 
 // skillsText is the compact version of the skills, for the providers that

@@ -67,6 +67,12 @@ func (s *Service) advanceOnce(ctx context.Context, id string) {
 	if paused, err := s.o.Tables.Paused(ctx, q.Workspace, q.Table); err != nil || paused {
 		return
 	}
+	// So does a table that waits for another table to be merged.
+	if s.o.Held != nil {
+		if held, err := s.o.Held(ctx, q.Workspace, q.Table); err != nil || held {
+			return
+		}
+	}
 	// An approval after that could not be asked (the flow was not there) is
 	// asked again.
 	for _, st := range steps {
@@ -157,6 +163,9 @@ func (s *Service) complete(ctx context.Context, q Quest) {
 	s.appendScroll(ctx, q, fmt.Sprintf("## Rodada %d · concluída — %s\nTodas as etapas terminaram.\n", q.Round, s.stamp()))
 	s.endResources(ctx, q)
 	s.tellMaster(ctx, q, inbox.KindQuest, fmt.Sprintf("A missão %s (rodada %d) foi concluída: todas as etapas terminaram.", q.Name, q.Round))
+	if s.o.Completed != nil {
+		s.o.Completed(ctx, q.Workspace, q.Table, q.ID)
+	}
 }
 
 // prepare takes a step in preparing as far as it goes: the approval before,

@@ -105,7 +105,7 @@ func (c *codex) BuildLaunch(req LaunchRequest) (Launch, error) {
 	if err := refuseLatest(Codex, slices.Concat(req.Base.Args, req.ProviderArgs), "--last"); err != nil {
 		return Launch{}, err
 	}
-	flags, err := codexStartArgs(req.Base.Args, req.ProviderArgs, req.Model)
+	flags, err := codexStartArgs(req.Base.Args, req.ProviderArgs, req.Model, req.OS)
 	if err != nil {
 		return Launch{}, err
 	}
@@ -221,3 +221,30 @@ func (c *codex) TypeMessage(text string) ([]byte, error) {
 	}
 	return pasteAndSend(text, "\r")
 }
+
+var _ SendRetrier = (*codex)(nil)
+
+// InputHolds: the input line of Codex (the last line that starts with ›)
+// starts with the first line of text. On Windows, 0.163.0 keeps there the
+// first message typed while it still starts, without sending it (the
+// Windows round of 2026-10-19).
+func (c *codex) InputHolds(screen, text string) bool {
+	first, _, _ := strings.Cut(strings.TrimSpace(clean(text)), "\n")
+	want := []rune(strings.TrimSpace(first))
+	if len(want) == 0 {
+		return false
+	}
+	if len(want) > 20 { // the line may be wrapped by the width of the screen
+		want = want[:20]
+	}
+	lines := strings.Split(screen, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(lines[i]), "›"); ok {
+			return strings.HasPrefix(strings.TrimSpace(rest), string(want))
+		}
+	}
+	return false
+}
+
+// SendKey is the key that sends what the input line of Codex holds.
+func (c *codex) SendKey() []byte { return []byte("\r") }

@@ -248,8 +248,10 @@ func TestAnEntryThatNobodyAnswersIsTakenDownAfterTheHour(t *testing.T) {
 	if _, err := j.result(); err == nil {
 		t.Fatal("the machine entered with nobody answering")
 	}
-	if r, err := ew.chain.Get(t.Context(), id); err != nil || r.State != chain.Expired {
-		t.Fatalf("the request = %+v, %v, want expired", r, err)
+	// the hour ends the question twice, by the timer of the chain (expired) and by the
+	// Citadel taking it down (cancelled): either way it is over and never approved
+	if r, err := ew.chain.Get(t.Context(), id); err != nil || (r.State != chain.Expired && r.State != chain.Cancelled) {
+		t.Fatalf("the request = %+v, %v, want expired or cancelled", r.State, err)
 	}
 	if _, err := ew.flow.Answer(t.Context(), ew.owner.ID, approvals.Input{Request: id, Answer: chain.AnswerApprove}); !errors.Is(err, approvals.ErrNotOpen) {
 		t.Errorf("an answer after the hour: %v", err)

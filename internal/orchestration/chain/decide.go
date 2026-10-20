@@ -48,7 +48,12 @@ func (s *Service) Decide(ctx context.Context, d Decision) (Outcome, error) {
 	case r.State != Open:
 		return Outcome{}, refuse(CodeNoRequest, "the request #%d is already %s", r.ID, r.State)
 	}
-	if r.Level.Kind == LevelPeople || r.Level.Agent != d.By {
+	if r.Level.Kind == LevelPeople {
+		// what waits on the people is not for an agent: the Grand Master was told
+		// it only to know, and the people answer it
+		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeHumanRequired, "the request #%d waits on the people: only they decide it", r.ID))
+	}
+	if r.Level.Agent != d.By {
 		return Outcome{}, s.refused(ctx, r, d.By, d.Answer, refuse(CodeNotAtLevel, "the request #%d is not at your level: it waits on %s", r.ID, r.Level.Label()))
 	}
 	if !d.Answer.Valid() {
