@@ -59,15 +59,15 @@ func (s *Store) Workspaces(ctx context.Context) ([]string, error) {
 // chosen one: it is delivered when he does.
 func (s *Store) Park(ctx context.Context, in Inbound) error {
 	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_pending (user_id, kind, text, chat_id, message_id, reply_to, at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			in.User.ID, string(in.Kind), in.Text, in.ChatID, in.MessageID, in.ReplyToMessage, ms(s.Clock.Now()))
+		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_pending (user_id, kind, text, chat_id, message_id, reply_to, file, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			in.User.ID, string(in.Kind), in.Text, in.ChatID, in.MessageID, in.ReplyToMessage, fileJSON(in.File), ms(s.Clock.Now()))
 		return err
 	})
 }
 
 // Parked lists the messages the user parked that are still alive, oldest first.
 func (s *Store) Parked(ctx context.Context, userID string) ([]HeldMessage, error) {
-	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, kind, text, chat_id, message_id, reply_to FROM telegram_pending WHERE user_id = ? AND at > ? ORDER BY id`,
+	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, kind, text, chat_id, message_id, reply_to, file FROM telegram_pending WHERE user_id = ? AND at > ? ORDER BY id`,
 		userID, ms(s.Clock.Now().Add(-PendingLife)))
 	if err != nil {
 		return nil, err
@@ -76,11 +76,11 @@ func (s *Store) Parked(ctx context.Context, userID string) ([]HeldMessage, error
 	var out []HeldMessage
 	for rows.Next() {
 		var h HeldMessage
-		var kind string
-		if err := rows.Scan(&h.ID, &kind, &h.Text, &h.ChatID, &h.MessageID, &h.ReplyToMessage); err != nil {
+		var kind, file string
+		if err := rows.Scan(&h.ID, &kind, &h.Text, &h.ChatID, &h.MessageID, &h.ReplyToMessage, &file); err != nil {
 			return nil, err
 		}
-		h.UserID, h.Kind = userID, Kind(kind)
+		h.UserID, h.Kind, h.File = userID, Kind(kind), fileOf(file)
 		out = append(out, h)
 	}
 	return out, rows.Err()

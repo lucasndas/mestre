@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/users"
@@ -28,6 +29,14 @@ type Delivery struct {
 	Inbound
 	// ShortcutUsed says the workspace came from `#nome`.
 	ShortcutUsed bool
+	// File is the file the message carried, received and kept; nil for a text.
+	File *attachments.Stored
+}
+
+// Files receives the files of the messages once the workspace is known
+// (attachments.Service).
+type Files interface {
+	Receive(ctx context.Context, r attachments.Request) (attachments.Stored, error)
 }
 
 // Deliverer takes a routed message to the inbox of the Grand Master.
@@ -40,6 +49,9 @@ type Deliverer interface {
 // Deliverer. The bot is made with it as its Router, and then bound.
 type Routing struct {
 	To Deliverer
+	// Files receives the attachments; nil: a message with a file is answered
+	// that the engine cannot receive it, and nothing is delivered.
+	Files Files
 
 	bot *Bot
 }
@@ -136,7 +148,39 @@ func (r *Routing) to(ctx context.Context, in Inbound, allowed []string, ws, mesa
 		return nil
 	}
 	in.Text = text
-	return r.To.Deliver(ctx, Delivery{Workspace: ws, Mesa: mesa, Inbound: in, ShortcutUsed: short})
+	d := Delivery{Workspace: ws, Mesa: mesa, Inbound: in, ShortcutUsed: short}
+	if in.File != nil {
+		stored, ok := r.receive(ctx, in, ws)
+		if !ok {
+			return nil
+		}
+		d.File = &stored
+	}
+	return r.To.Deliver(ctx, d)
+}
+
+// receive keeps the file of the message; when it can not, the user is told why
+// and nothing goes to the Grão-Mestre (a file that failed is not delivered).
+func (r *Routing) receive(ctx context.Context, in Inbound, ws string) (attachments.Stored, bool) {
+	if r.Files == nil {
+		r.say(ctx, in, "Não consigo receber arquivos agora.")
+		return attachments.Stored{}, false
+	}
+	stored, err := r.Files.Receive(ctx, attachments.Request{Workspace: ws, UserID: in.User.ID, File: *in.File, Caption: in.Text,
+		Origin: attachments.Origin{Channel: "telegram", ChatID: in.ChatID, MessageID: in.MessageID}})
+	var big *attachments.TooLargeError
+	switch {
+	case errors.As(err, &big):
+		r.say(ctx, in, fmt.Sprintf("O arquivo passa do limite de %s. Não baixei nada: mande um menor.", attachments.HumanSize(big.Limit)))
+	case errors.Is(err, attachments.ErrDownload):
+		r.say(ctx, in, fmt.Sprintf("Não consegui baixar o arquivo depois de %d tentativas. Tente de novo em instantes.", attachments.Attempts))
+	case err != nil:
+		r.bot.log.Warn("telegram: an attachment was not received", "err", err)
+		r.say(ctx, in, "Não consegui guardar o arquivo. Tente de novo em instantes.")
+	default:
+		return stored, true
+	}
+	return attachments.Stored{}, false
 }
 
 func listOf(allowed []string) string {
@@ -219,6 +263,9 @@ func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
 	if !contains(allowed, k.Arg) {
 		return "", "", errors.New("você não atua nesse workspace")
 	}
+	if users.Require(u.Level, users.TalkToGrandMaster) != nil {
+		return "", "", errors.New("com o seu nível você não fala com o Grão-Mestre")
+	}
 	if err := st.SetActive(ctx, u.ID, k.Arg); err != nil {
 		return "", "", err
 	}
@@ -229,7 +276,16 @@ func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
 	for _, h := range parked {
 		in := h.Inbound
 		in.User = u
-		if err := r.To.Deliver(ctx, Delivery{Workspace: k.Arg, Inbound: in}); err != nil {
+		d := Delivery{Workspace: k.Arg, Inbound: in}
+		if in.File != nil {
+			stored, ok := r.receive(ctx, in, k.Arg)
+			if !ok {
+				_ = st.Unpark(ctx, h.ID) // the user was told; the file is not kept waiting
+				continue
+			}
+			d.File = &stored
+		}
+		if err := r.To.Deliver(ctx, d); err != nil {
 			return "", "", fmt.Errorf("a mensagem não foi entregue: %w", err)
 		}
 		if err := st.Unpark(ctx, h.ID); err != nil {
@@ -258,6 +314,13 @@ func OriginOf(d Delivery) *inbox.Origin {
 
 // NewItem is the item of the inbox of the Grand Master for a routed message.
 func NewItem(d Delivery, grandMaster string) inbox.NewItem {
-	return inbox.NewItem{Workspace: d.Workspace, Target: grandMaster, Kind: inbox.KindUser, Sender: d.User.Name, Text: d.Text, Origin: OriginOf(d),
+	n := inbox.NewItem{Workspace: d.Workspace, Target: grandMaster, Kind: inbox.KindUser, Sender: d.User.Name, Text: d.Text, Origin: OriginOf(d),
 		Refs: inbox.Refs{Key: fmt.Sprintf("telegram:%d:%d", d.ChatID, d.MessageID)}}
+	if d.File != nil {
+		// the caption (or the transcript) and the line `[anexo]`, in the words
+		// of docs/telegram/anexos-e-transcricao.md#recebimento-de-anexos
+		n.Text = strings.Join(d.File.Lines(), "\n")
+		n.Attachments = []string{d.File.Path}
+	}
+	return n
 }
