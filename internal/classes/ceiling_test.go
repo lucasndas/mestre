@@ -19,7 +19,7 @@ const docCeiling = `version: 1
 permissions:
   files:
     write: ["**"]
-    deny: ["infra/**", ".github/workflows/**"]
+    deny: ["infra/**", ".github/workflows/**", "**/.env*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/id_ed25519*", "**/id_ecdsa*", "**/.npmrc", "**/credentials*.json", "**/service-account*.json"]
   commands:
     ask: ["npm publish *"]
     deny: ["docker *", "terraform *"]

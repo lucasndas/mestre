@@ -62,7 +62,8 @@ func TestAnAsynchronousHookOfTheClassDoesNotHoldTheNextTurnAndItsOutputReachesTh
 	// the hook is a program of the worktree: the permissions of the class read nothing outside it
 	probe, run := "hookprobe", "./hookprobe"
 	if runtime.GOOS == "windows" {
-		probe, run = "hookprobe.exe", "hookprobe.exe"
+		probe = "hookprobe.exe"
+		run = `"` + filepath.Join(citadelTree, probe) + `"`
 	}
 	if err := os.Link(exe, filepath.Join(citadelTree, probe)); err != nil {
 		src, rerr := os.ReadFile(exe)
