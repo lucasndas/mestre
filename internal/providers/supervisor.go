@@ -28,11 +28,13 @@ const (
 // small interface here, implemented by its owner.
 
 // SendRetrier is an adapter whose CLI may keep a delivery in its input area
-// without sending it: Codex 0.163.0 on Windows, the first message typed
-// while it still starts (docs/provedores/codex.md#digitação). InputHolds
-// tells whether the input area of screen still holds text; the supervisor
-// then types SendKey once more, never the text.
+// without sending it: Codex 0.163.0 on Windows, which drops the send key that
+// comes in the same write as the paste (docs/provedores/codex.md#digitação).
+// SendsAgain is false where the CLI does not do that (the other systems);
+// InputHolds tells whether the input area of screen still holds text; the
+// supervisor then types SendKey once more, never the text.
 type SendRetrier interface {
+	SendsAgain() bool
 	InputHolds(screen, text string) bool
 	SendKey() []byte
 }
@@ -48,6 +50,13 @@ const (
 // Keyboard types into the character's terminal (terminal.Terminal.Input).
 type Keyboard interface {
 	Input(ctx context.Context, data []byte) error
+}
+
+// ScreenReader reads the screen of the character's terminal at the moment of
+// the call (terminal.Terminal.Screen), not the last one the emulator
+// reported. Optional (SupervisorConfig.Reader).
+type ScreenReader interface {
+	ReadScreen(ctx context.Context) (text string, err error)
 }
 
 // Characters is the part of the character state the supervision changes
@@ -169,7 +178,10 @@ type SupervisorConfig struct {
 	// ReadyPattern is the base's `ready: pattern`, when it has one.
 	ReadyPattern *regexp.Regexp
 
-	Keyboard    Keyboard
+	Keyboard Keyboard
+	// Reader, when set, gives the screen at the instant of the send key
+	// again (resend); nil: the last screen received is all there is.
+	Reader      ScreenReader
 	Characters  Characters
 	TableMaster TableMaster
 	Checklist   Checklist
@@ -204,6 +216,8 @@ type Supervisor struct {
 	delivered      bool
 	noHooks        bool
 	lastScreen     string
+	lastStable     bool   // lastScreen was stable when it came
+	hooks          int    // hook events so far (a resend needs none after the delivery)
 	handled        string // the known screen already acted on
 	trustRetried   bool
 	startTimer     clock.Timer
@@ -321,6 +335,7 @@ func (s *Supervisor) screen(text string, stable bool, row int, cursor bool) {
 	}
 	changed := text != s.lastScreen
 	s.lastScreen = text
+	s.lastStable = stable
 	var act *KnownScreen
 	var confirmed []string
 	switch {
@@ -415,6 +430,7 @@ func (s *Supervisor) act(k *KnownScreen, screen, dialog string) {
 // Hook takes a normalized event of the character (after Turns).
 func (s *Supervisor) Hook(ev Event) {
 	s.mu.Lock()
+	s.hooks++
 	if s.starting { // a hook arrived: the start is not stuck
 		s.starting = false
 		s.stopStartLocked()
@@ -482,34 +498,59 @@ func (s *Supervisor) Deliver(ctx context.Context, id, text string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("type delivery %s: %w", id, err)
 	}
-	if r, ok := s.cfg.Adapter.(SendRetrier); ok {
-		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, 1) })
+	if r, ok := s.cfg.Adapter.(SendRetrier); ok && r.SendsAgain() {
+		s.mu.Lock()
+		hooks := s.hooks
+		s.mu.Unlock()
+		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, hooks, 1) })
 	}
 	return nil
 }
 
 // resend types the send key once more when the delivery is still waiting for
-// its turn_start and the screen is the input area with the text still in
-// it: no known screen (a dialog would take the key as its answer). A key sent
-// empties the input area, so the next look types nothing.
-func (s *Supervisor) resend(id, text string, r SendRetrier, look int) {
+// its turn_start, no hook came since it was typed (a CLI that took the
+// prompt runs its hooks; a slow turn_start is not a lost key), and the last
+// screen, stable, is the input area with the text still in it and no known
+// screen or modal (a dialog, as an approval, an update or a model switch,
+// would take the key as its answer; InputHolds refuses the modals too). With
+// a Reader the screen is read at that instant and must equal the last stable
+// one. The look and the key are under the lock, so no screen reported comes
+// in between. A key
+// sent empties the input area, so the next look types nothing.
+func (s *Supervisor) resend(id, text string, r SendRetrier, hooks, look int) {
+	// The terminal is read before the lock, so its I/O never holds the
+	// supervision; the window left is the time between this read and the
+	// key, typed right after under the lock.
+	fresh, read := "", false
+	if s.cfg.Reader != nil {
+		if t, err := s.cfg.Reader.ReadScreen(s.ctx); err == nil {
+			fresh, read = t, true
+		} else {
+			s.report(fmt.Errorf("read the screen for delivery %s: %w", id, err))
+		}
+	}
 	s.mu.Lock()
-	_, waiting := s.pending[id]
-	screen := s.lastScreen
-	res := s.cfg.Adapter.Screens(ScreenInput{
-		Text: screen, Stable: true, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
-	})
-	s.mu.Unlock()
-	if !waiting {
+	defer s.mu.Unlock()
+	if _, waiting := s.pending[id]; !waiting || s.hooks != hooks {
 		return
 	}
-	if res.Known == nil && res.State == StateReady && r.InputHolds(screen, text) {
+	// With a reader the screen judged is the one read now, and it must be
+	// the stable one the emulator reported: a screen that moved since (a
+	// modal on its way) is not judged, and the next look sees it.
+	screen, stable := s.lastScreen, s.lastStable
+	if s.cfg.Reader != nil {
+		screen, stable = fresh, read && fresh == s.lastScreen && s.lastStable
+	}
+	res := s.cfg.Adapter.Screens(ScreenInput{
+		Text: screen, Stable: stable, SessionStarted: s.sessionStarted, Begun: s.begun || s.sessionStarted, ReadyPattern: s.cfg.ReadyPattern,
+	})
+	if stable && res.Known == nil && res.State == StateReady && r.InputHolds(screen, text) {
 		if err := s.cfg.Keyboard.Input(s.ctx, r.SendKey()); err != nil {
 			s.report(fmt.Errorf("send key again for delivery %s: %w", id, err))
 		}
 	}
 	if look < SendRetries {
-		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, look+1) })
+		s.cfg.Clock.AfterFunc(DefaultSendRetry, func() { s.resend(id, text, r, hooks, look+1) })
 	}
 }
 

@@ -330,22 +330,29 @@ func TestCodexSendsAgainADeliveryLeftInItsInputLine(t *testing.T) {
 	t.Parallel()
 	text := "Teste de conformidade do Mestre. Sem usar nenhuma ferramenta, responda só com estas duas linhas, preenchidas:\nCODIGOS: <…>\nPALAVRA: <…>"
 	sent := "› Teste de conformidade do Mestre. Sem usar nenhuma ferramenta…\n\n• CODIGOS: M-1 P-2\n\n› Ask Codex to do anything\n\n  GPT-6.1-Sol default · ? for shortcuts"
+	approval := "Would you like to run the following command?\n\n  $ git push\n\n› 1. Yes, proceed (y)\n  2. No, and tell Codex what to do differently (esc)"
 	for _, tt := range []struct {
-		name      string
-		screen    string
-		turnStart bool
-		again     bool
+		name     string
+		os       string
+		screen   string
+		unstable bool
+		event    providers.EventKind // a hook after the delivery
+		again    bool
 	}{
-		{"kept in the input line", codexHeldScreen, false, true},
-		{"the turn started", codexHeldScreen, true, false},
-		{"sent, the input line is empty", sent, false, false},
-		{"a login screen", "Sign in with ChatGPT\n\n› 1. Sign in with ChatGPT", false, false},
+		{"kept in the input line", "windows", codexHeldScreen, false, "", true},
+		{"the turn started", "windows", codexHeldScreen, false, providers.EventTurnStart, false},
+		{"a hook came, slow turn_start", "windows", codexHeldScreen, false, providers.EventSessionStart, false},
+		{"the screen is not stable", "windows", codexHeldScreen, true, "", false},
+		{"sent, the input line is empty", "windows", sent, false, "", false},
+		{"an approval dialog", "windows", approval, false, "", false},
+		{"a login screen", "windows", "Sign in with ChatGPT\n\n› 1. Sign in with ChatGPT", false, "", false},
+		{"not on Windows", "linux", codexHeldScreen, false, "", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			clk := clock.NewFake(at)
 			w := &world{}
-			a := providers.NewCodex(providers.Options{})
+			a := providers.NewCodex(providers.Options{OS: tt.os})
 			sup := supervisor(clk, a, w, nil)
 			defer sup.Close()
 			sup.Start(t.Context())
@@ -353,28 +360,33 @@ func TestCodexSendsAgainADeliveryLeftInItsInputLine(t *testing.T) {
 			if err := sup.Deliver(t.Context(), "d1", text); err != nil {
 				t.Fatal(err)
 			}
-			if tt.turnStart {
-				sup.Hook(providers.Event{Event: providers.EventTurnStart})
+			if tt.event != "" {
+				sup.Hook(providers.Event{Event: tt.event})
 			}
-			sup.Screen(tt.screen, true)
+			sup.Screen(tt.screen, !tt.unstable)
+			// The keys sent again; the answer of a known screen is its own.
+			keys := func() int { return strings.Count(strings.Join(w.snapshot().typed, "\x00")+"\x00", "\x00\r\x00") }
+			want, _ := a.TypeMessage(text)
+			if s := w.snapshot(); len(s.typed) == 0 || s.typed[0] != string(want) {
+				t.Fatalf("typed = %q, want the delivery first", s.typed)
+			}
 			clk.Advance(providers.DefaultSendRetry - time.Millisecond)
-			if n := len(w.snapshot().typed); n != 1 {
-				t.Fatalf("before the retry: typed %d times", n)
+			if n := keys(); n != 0 {
+				t.Fatalf("before the retry: the key went %d times", n)
 			}
 			clk.Advance(time.Millisecond)
-			want, _ := a.TypeMessage(text)
-			wantTyped := []string{string(want)}
+			wantKeys := 0
 			if tt.again {
-				wantTyped = append(wantTyped, "\r")
+				wantKeys = 1
 			}
-			if s := w.snapshot(); !slices.Equal(s.typed, wantTyped) {
-				t.Fatalf("typed = %q, want %q", s.typed, wantTyped)
+			if n := keys(); n != wantKeys {
+				t.Fatalf("the key went %d times, want %d (typed %q)", n, wantKeys, w.snapshot().typed)
 			}
 			// The key sent, the input line is empty: the next looks type nothing.
 			sup.Screen(sent, true)
 			clk.Advance(time.Minute)
-			if s := w.snapshot(); !slices.Equal(s.typed, wantTyped) {
-				t.Errorf("after the input line emptied: typed = %q, want %q", s.typed, wantTyped)
+			if n := keys(); n != wantKeys {
+				t.Errorf("after the input line emptied: the key went %d times, want %d", n, wantKeys)
 			}
 		})
 	}
@@ -386,7 +398,7 @@ func TestCodexSendsAgainAtMostSendRetriesTimes(t *testing.T) {
 	t.Parallel()
 	clk := clock.NewFake(at)
 	w := &world{}
-	a := providers.NewCodex(providers.Options{})
+	a := providers.NewCodex(providers.Options{OS: "windows"})
 	sup := supervisor(clk, a, w, nil)
 	defer sup.Close()
 	sup.Start(t.Context())
