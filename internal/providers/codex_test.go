@@ -152,7 +152,7 @@ func TestBuildLaunchCarriesMestreMDAsATOMLString(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l, err := a.BuildLaunch(providers.LaunchRequest{
+	l, err := a.BuildLaunch(providers.LaunchRequest{OS: "linux",
 		Base: providers.Base{Command: "codex"}, Profile: "/profiles/codex-1",
 		ProviderArgs: slices.Concat(layer.Args, []string{"-s", "workspace-write"}),
 	})
