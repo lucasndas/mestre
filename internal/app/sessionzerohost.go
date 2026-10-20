@@ -1,7 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -109,18 +113,31 @@ type szApprovals struct {
 
 var _ sessionzero.Approvals = szApprovals{}
 
-// RequestAgentsMD opens the request proposta_agents_md with the whole text, for
-// the people to answer. The answer comes back by szDecisions.
+// RequestAgentsMD opens the request proposta_agents_md for the people to answer.
+// The request is short (About); the text is in the agent block (Task) and the
+// request is bound to the exact text (Target: the workspace and the SHA-256 of
+// the proposed AGENTS.md), so what the people approve is what is sent: the text
+// that goes into the pull request must still be the one with that hash
+// (docs/aprovacoes/fluxo.md#vínculo-ao-estado-exato). The answer comes back by
+// szDecisions.
 func (a szApprovals) RequestAgentsMD(ctx context.Context, workspace, text string) (string, error) {
 	if a.orc.Chain == nil {
 		return "", errors.New("app: this period has no chain of approval for the AGENTS.md proposal")
 	}
 	id, err := a.orc.Chain.Request(ctx, chain.OpenRequest{Type: classes.RequestAgentsMD, Workspace: workspace,
-		About: "Proposta de AGENTS.md para o projeto. Texto inteiro:\n\n" + text})
+		About: "Proposta de AGENTS.md para o projeto " + workspace + " (o texto inteiro está no bloco do agente)", Task: text, Target: agentsMDTarget(workspace, text)})
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprint(id), nil
+}
+
+// agentsMDTarget is the exact target of an AGENTS.md proposal: the workspace and
+// the SHA-256 of the text.
+func agentsMDTarget(workspace, text string) json.RawMessage {
+	sum := sha256.Sum256([]byte(text))
+	b, _ := json.Marshal(map[string]string{"workspace": workspace, "sha256": hex.EncodeToString(sum[:])})
+	return b
 }
 
 // szDecisions is the owner of the type proposta_agents_md in the chain: what the
@@ -145,6 +162,11 @@ func (d szDecisions) Decided(ctx context.Context, res chain.Result) error {
 	}
 	if st.AgentsMDRequest != fmt.Sprint(rq.ID) {
 		return fmt.Errorf("app: request %d is not the AGENTS.md proposal of workspace %s", rq.ID, rq.Workspace)
+	}
+	if rq.State == chain.Approved && !bytes.Equal(rq.Target, agentsMDTarget(rq.Workspace, st.AgentsMDText)) {
+		// the text that would go into the pull request is not the one the people
+		// approved: nothing is sent
+		return fmt.Errorf("app: the AGENTS.md of workspace %s is not the text request %d approved", rq.Workspace, rq.ID)
 	}
 	return svc.AgentsMDDecided(ctx, rq.Workspace, rq.State == chain.Approved)
 }
@@ -185,6 +207,9 @@ func (szAnalyst) Analyze(context.Context, sessionzero.AnalysisInput) (sessionzer
 type szPullRequests struct {
 	r   *stdRun
 	orc *Orchestration
+	// head reads the commit a branch has on GitHub now (nil: the API of the
+	// App); the lease of the push expects exactly it.
+	head func(ctx context.Context, repo, branch string) (string, error)
 }
 
 var _ sessionzero.PullRequests = szPullRequests{}
@@ -214,6 +239,11 @@ func (p szPullRequests) Publish(ctx context.Context, pr sessionzero.PullRequest)
 	if err != nil {
 		return "", fmt.Errorf("the token of the App Grão-Mestre for %s: %w", repo, err)
 	}
+	// the fence is checked again once the token exists (it was asked from GitHub,
+	// which takes time) and again right before the push
+	if err := (stdLease{p.r}).Allow(); err != nil {
+		return "", err
+	}
 	mirror, err := p.orc.Workspaces.OpenMirror(ctx, pr.Workspace)
 	if err != nil {
 		return "", err
@@ -222,8 +252,25 @@ func (p szPullRequests) Publish(ctx context.Context, pr sessionzero.PullRequest)
 	if err != nil {
 		return "", fmt.Errorf("the branch %s: %w", pr.Branch, err)
 	}
-	// the branch is rebuilt from the main branch each time, so the push replaces it
-	if err := mirror.PushWithAuth(ctx, gitx.BasicAuth("https://github.com/", "x-access-token", token), w.CloneURL, pr.Branch, string(commit), true); err != nil {
+	// The branch is rebuilt from the main branch each time, so the push replaces
+	// it, but only the one this read saw: with a lease on the commit the remote has
+	// now, whoever pushed to the branch since is never overwritten.
+	head := p.head
+	if head == nil {
+		head = api.RefSHA
+	}
+	expected, err := head(ctx, repo, pr.Branch)
+	switch {
+	case errors.Is(err, github.ErrNotFound):
+		expected = ""
+	case err != nil:
+		return "", fmt.Errorf("the branch %s of %s: %w", pr.Branch, repo, err)
+	}
+	// the credential is for the web of the configured GitHub, never a fixed host
+	if err := (stdLease{p.r}).Allow(); err != nil {
+		return "", err
+	}
+	if err := mirror.PushWithLease(ctx, gitx.BasicAuth(p.r.gitWeb()+"/", "x-access-token", token), w.CloneURL, pr.Branch, string(commit), expected); err != nil {
 		return "", err
 	}
 	if open, ok, err := api.OpenPullOf(ctx, repo, pr.Branch, pr.Base); err != nil {
@@ -236,4 +283,14 @@ func (p szPullRequests) Publish(ctx context.Context, pr sessionzero.PullRequest)
 		return "", err
 	}
 	return d.URL, nil
+}
+
+// gitWeb is the web base of the configured GitHub, which the credential of a push
+// is for (never a fixed host: a GitHub of another address would not be reached
+// with the token, and the token would go to a host that is not the configured).
+func (r *stdRun) gitWeb() string {
+	if web := strings.TrimRight(r.s.GitHubWeb, "/"); web != "" {
+		return web
+	}
+	return DefaultGitHubWeb
 }

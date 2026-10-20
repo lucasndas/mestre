@@ -581,6 +581,7 @@ func (f *Flow) check(ctx context.Context, userID string, request int64, a chain.
 // mustBind are the types that are never approved without a target.
 var mustBind = map[classes.RequestType]bool{
 	classes.RequestPR: true, classes.RequestMerge: true, classes.RequestWorkflows: true, classes.RequestDestructive: true, classes.RequestRepoSettings: true,
+	classes.RequestAgentsMD: true,
 }
 
 // verify compares the live target with the impression of the request; a

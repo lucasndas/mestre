@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
@@ -121,8 +124,8 @@ func TestTheAgentsMDProposalIsDecidedByThePeopleAndTheDecisionReachesTheSessionZ
 			t.Fatal(err)
 		}
 		rq, err := w.orc.Chain.Get(w.ctx, mustID(t, id))
-		if err != nil || rq.Type != classes.RequestAgentsMD || !strings.Contains(rq.About, text) {
-			t.Fatalf("request = %+v, %v; want the proposal with its whole text", rq, err)
+		if err != nil || rq.Type != classes.RequestAgentsMD || rq.Task != text || strings.Contains(rq.About, text) || !bytes.Equal(rq.Target, agentsMDTarget(w.ws.Slug, text)) {
+			t.Fatalf("request = %+v, %v; want a short About, the text in the agent block and the target bound to its hash", rq, err)
 		}
 		if err := (sessionzero.Store{DB: w.db}).AgentsMDProposed(w.ctx, w.ws.Slug, w.clk.Now(), id, text); err != nil {
 			t.Fatal(err)
@@ -145,6 +148,26 @@ func TestTheAgentsMDProposalIsDecidedByThePeopleAndTheDecisionReachesTheSessionZ
 	}
 }
 
+// What the people approve is the text that was hashed: if the text held by the
+// session zero is no longer the one of the request, the approval changes nothing.
+func TestAnApprovedAgentsMDWhoseTextChangedAfterTheRequestIsNotSent(t *testing.T) {
+	t.Parallel()
+	w := newSZWorld(t)
+	id, err := szApprovals{r: w.run, orc: w.orc}.RequestAgentsMD(w.ctx, w.ws.Slug, "# o texto aprovado\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (sessionzero.Store{DB: w.db}).AgentsMDProposed(w.ctx, w.ws.Slug, w.clk.Now(), id, "# outro texto, trocado depois\n"); err != nil {
+		t.Fatal(err)
+	}
+	// the sink refuses (the chain logs it): the state is what proves nothing was taken
+	_, _ = w.orc.Chain.DecideByPerson(w.ctx, chain.PersonDecision{Request: mustID(t, id), User: w.owner.ID, Level: string(users.Owner), Answer: chain.AnswerApprove})
+	st, _ := w.zero.State(w.ctx, w.ws.Slug)
+	if st.AgentsMD != sessionzero.AgentsMDProposed || st.PRURL != "" || len(w.remote.Pushes()) != 0 {
+		t.Fatalf("state %q, PR %q, pushes %v; want nothing sent", st.AgentsMD, st.PRURL, w.remote.Pushes())
+	}
+}
+
 // The pull request of the session zero: the branch the engine built goes out with a
 // token of the App "Grão-Mestre" and is opened once, however many times it is sent.
 func TestThePullRequestOfTheSessionZeroIsSentWithTheGrandMasterAppAndOpenedOnce(t *testing.T) {
@@ -160,7 +183,15 @@ func TestThePullRequestOfTheSessionZeroIsSentWithTheGrandMasterAppAndOpenedOnce(
 	}
 	h.Data().Commit(sessionzero.PRBranch, "chore: add the Mestre session zero files", map[string]string{"AGENTS.md": "# Meu app\n"})
 	pr := sessionzero.PullRequest{Workspace: w.ws.Slug, Repo: w.ws.Repo, Branch: sessionzero.PRBranch, Base: "main", Title: "Sessão zero do Mestre", Body: "arquivos"}
-	pub := szPullRequests{r: w.run, orc: w.orc}
+	// GitHub says what the remote has (the doubles are two worlds)
+	remoteHead := func(context.Context, string, string) (string, error) {
+		h, err := w.remote.Handle(w.rdir).Data().Resolve("refs/heads/" + sessionzero.PRBranch)
+		if err != nil {
+			return "", github.ErrNotFound
+		}
+		return string(h), nil
+	}
+	pub := szPullRequests{r: w.run, orc: w.orc, head: remoteHead}
 	first, err := pub.Publish(w.ctx, pr)
 	if err != nil || first == "" {
 		t.Fatalf("Publish = %q, %v", first, err)
@@ -169,7 +200,7 @@ func TestThePullRequestOfTheSessionZeroIsSentWithTheGrandMasterAppAndOpenedOnce(
 	if err != nil || again != first {
 		t.Fatalf("second Publish = %q, %v; want the same pull request %q", again, err, first)
 	}
-	if p := w.remote.Pushes(); len(p) != 2 || !strings.HasSuffix(p[0], sessionzero.PRBranch+":refs/heads/"+sessionzero.PRBranch+" force") {
+	if p := w.remote.Pushes(); len(p) != 2 || !strings.HasSuffix(p[0], sessionzero.PRBranch+":refs/heads/"+sessionzero.PRBranch+" lease:") || !strings.Contains(p[1], sessionzero.PRBranch+" lease:") || strings.Contains(p[1], " force") {
 		t.Errorf("pushes = %q, want the branch of the session zero, twice", p)
 	}
 	if _, open, err := openSessionZeroPR(w); err != nil || !open {
@@ -177,6 +208,20 @@ func TestThePullRequestOfTheSessionZeroIsSentWithTheGrandMasterAppAndOpenedOnce(
 	}
 	if sig, err := pub.Author(w.ctx); err != nil || sig.Name == "" || sig.Email == "" {
 		t.Errorf("author = %+v, %v; want the identity of the App Grão-Mestre", sig, err)
+	}
+	// someone pushed to the branch after it was read: the lease refuses, and what
+	// they pushed stays
+	read, err := remoteHead(w.ctx, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := w.remote.Handle(w.rdir).Data().Commit(sessionzero.PRBranch, "someone else", map[string]string{"x": "y"})
+	stale := szPullRequests{r: w.run, orc: w.orc, head: func(context.Context, string, string) (string, error) { return read, nil }}
+	if _, err := stale.Publish(w.ctx, pr); !errors.Is(err, gitx.ErrPushRejected) {
+		t.Errorf("Publish over a branch that moved = %v; want ErrPushRejected", err)
+	}
+	if now, _ := remoteHead(w.ctx, "", ""); now != string(other) {
+		t.Errorf("the branch is %s; the push overwrote the commit of the other (%s)", now, other)
 	}
 	// without the lease of the epoch nothing goes out
 	w.run.fence.Store(nil)
@@ -418,4 +463,16 @@ func between(s, a, b string) string {
 	}
 	v, _, _ := strings.Cut(rest, b)
 	return v
+}
+
+func TestThePushCredentialIsForTheConfiguredGitHubWeb(t *testing.T) {
+	t.Parallel()
+	r := &stdRun{}
+	if got := r.gitWeb(); got != DefaultGitHubWeb {
+		t.Errorf("default = %q", got)
+	}
+	r.s.GitHubWeb = "https://github.example.com/"
+	if got := r.gitWeb(); got != "https://github.example.com" {
+		t.Errorf("configured = %q", got)
+	}
 }

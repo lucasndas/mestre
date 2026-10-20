@@ -268,6 +268,20 @@ func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMe
 		return t.r.source().Current(ctx, req)
 	case classes.RequestRepoSettings:
 		return req.Target, nil
+	case classes.RequestAgentsMD:
+		// the text the session zero holds for this very request, as it is now
+		zero := t.r.zero.Load()
+		if zero == nil {
+			return nil, errors.New("app: the session zero is not composed in this period")
+		}
+		st, err := zero.State(ctx, req.Workspace)
+		if err != nil {
+			return nil, err
+		}
+		if st.AgentsMDRequest != fmt.Sprint(req.ID) {
+			return nil, fmt.Errorf("app: request %d is not the AGENTS.md proposal of workspace %s", req.ID, req.Workspace)
+		}
+		return agentsMDTarget(req.Workspace, st.AgentsMDText), nil
 	}
 	return nil, fmt.Errorf("app: no live target for requests of type %q", req.Type)
 }
