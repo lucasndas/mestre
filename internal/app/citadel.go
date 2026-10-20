@@ -683,6 +683,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	router.HandleFunc(protocol.TypeGuildLeave, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
 	e.registerCitadelCharacters(router, run)
 	router.HandleFunc(protocol.TypeAgentEvent, run.gated(e.handleAgentEvent))
+	router.HandleFunc(protocol.TypeUsageReading, run.gated(e.handleUsageReading))
 	router.HandleFunc(protocol.TypeVaultRequest, run.gated(e.handleVaultRequest(run)))
 	router.HandleFunc(protocol.TypeMachineHeartbeat, beats.Handle)
 	router.HandleFunc(protocol.TypeMachineSheet, run.gated(registry.Handler().Handle))

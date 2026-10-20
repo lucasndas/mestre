@@ -48,6 +48,8 @@ type towerRun struct {
 	renewer *guild.Renewer
 	// tables is the half of the tables of this Tower (worktrees, bundles).
 	tables *lateTower
+	// usage reads the use of the characters of this Tower (nil without terminals).
+	usage *usageReader
 }
 
 func (e *Engine) sheetBuilder() (*machinesheet.Builder, error) {
@@ -268,7 +270,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer, tables: tableHalf}
+	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer, tables: tableHalf, usage: e.newTowerUsage()}
 	e.setGuildDB(db)
 	e.mu.Lock()
 	e.role, e.tow, e.cit, e.unknown = RoleTower, run, nil, unknown
@@ -283,6 +285,9 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	})
 	wg.Go(func() { _ = replica.Run(pctx) })
 	wg.Go(func() { _ = agent.Run(pctx) })
+	if run.usage != nil {
+		wg.Go(func() { _ = run.usage.Loop(pctx, usageEvery) })
+	}
 	wg.Go(func() { e.renewTower(pctx, db, renewer, client.Link(), renewKick) })
 	wg.Go(func() {
 		defer close(reported)
