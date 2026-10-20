@@ -7,6 +7,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
 
@@ -179,5 +180,54 @@ func TestTheTableMasterListsOnlyTheRequestsOfItsOwnTable(t *testing.T) {
 	gmList := w.cli(w.gm, "approval list", map[string]any{"state": "all"})
 	if all, _ := gmList.Data["text"].(string); !strings.Contains(all, "#"+itoa(foreign)) {
 		t.Errorf("the Grand Master lists %q, want the requests of every table", all)
+	}
+}
+
+// CA-BLOQ-02 (`approval ask`) and CA-GM-07: the command takes the request to the
+// users and answers 9 with the number; the motive outside the vocabulary is a
+// usage error with the ten values.
+func TestApprovalAskTakesTheRequestToTheUsersAndRefusesAMotiveOutsideTheVocabulary(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	id := w.shell(dev, "npm install -g x")
+	flags := map[string]any{"action": itoa(id), "summary": "global", "details": "npm install -g x", "recommend": "approve", "reason": "sistema"}
+	bad := map[string]any{"motive": "urgente"}
+	for k, v := range flags {
+		bad[k] = v
+	}
+	if got := w.cli(w.gm, "approval ask", bad); got.OK || got.Code != "usage" || !strings.Contains(got.Msg, "decisao_humana") {
+		t.Fatalf("a motive outside the vocabulary: %+v, want usage with the values", got)
+	}
+	if w.level(id) != chain.LevelGrandMaster {
+		t.Fatal("a refused ask moved the request")
+	}
+	flags["motive"] = "decisao_humana"
+	got := w.cli(w.gm, "approval ask", flags)
+	if got.OK || got.Exit != 9 || got.Code != "pending" {
+		t.Fatalf("ask = %+v, want exit 9 pending", got)
+	}
+	if w.level(id) != chain.LevelPeople || len(w.users.askedFor(id)) != 1 {
+		t.Fatal("the request did not reach the people")
+	}
+	if again := w.cli(w.gm, "approval ask", flags); again.OK || again.Code != "already_asked" || again.Exit != 7 {
+		t.Fatalf("the second ask = %+v, want exit 7 already_asked", again)
+	}
+	if got := w.cli(w.master, "approval ask", flags); got.OK || got.Code != "level_denied" {
+		t.Fatalf("a table master = %+v, want level_denied", got)
+	}
+	for _, drop := range []string{"summary", "details", "reason", "recommend"} {
+		less := map[string]any{}
+		for k, v := range flags {
+			if k != drop {
+				less[k] = v
+			}
+		}
+		if got := w.cli(w.gm, "approval ask", less); got.OK || got.Code != "usage" {
+			t.Errorf("without --%s: %+v, want usage", drop, got)
+		}
+	}
+	if got := w.cli(w.gm, "approval ask", map[string]any{"action": "9999", "summary": "x", "details": "x", "recommend": "deny", "reason": "x"}); got.OK || got.Code != "not_found" || got.Exit != 4 {
+		t.Fatalf("a request that does not exist: %+v", got)
 	}
 }

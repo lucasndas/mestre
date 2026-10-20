@@ -197,6 +197,9 @@ type Request struct {
 	// Require are users, by id, whose approval this request needs besides what
 	// the policy asks (the person a repository requires to review a PR).
 	Require []string `json:"require,omitempty"`
+	// Ask is what the Grão-Mestre wrote when it took the request to the people
+	// (`mestre approval ask`): text of an agent, shown as such.
+	Ask *AskNote `json:"ask,omitempty"`
 	// Decision is how it closed.
 	Decision *Closing `json:"decision,omitempty"`
 	// Deciding is the claim of a decision under way: the request stays open
@@ -206,6 +209,18 @@ type Request struct {
 	Deciding *Closing `json:"deciding,omitempty"`
 
 	CreatedAt, ClosedAt time.Time
+}
+
+// AskNote is the text of the Grão-Mestre that goes with a request it took to
+// the people: what it is, the details, what it recommends and why it does not
+// decide, plus the fields of the request that blocks. All of it is the text of an
+// agent.
+type AskNote struct {
+	By                      string
+	Summary, Details        string
+	Recommend, Reason       string
+	Motive, Checked, WhyNot string
+	Steps                   []string
 }
 
 // Mission is what a ponto_de_missao carries.
@@ -253,6 +268,7 @@ const (
 	CodeMesaCondition   = "mesa_condition"
 	CodePaused          = "character_paused"
 	CodeNotRequester    = "not_requester"
+	CodeAlreadyAsked    = "already_asked"
 	codeNothingToAnswer = "nothing_to_answer"
 )
 

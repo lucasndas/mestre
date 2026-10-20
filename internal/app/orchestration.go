@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/blocking"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -797,6 +798,7 @@ func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scroll
 	}
 	if o.Chain != nil {
 		o.Chain.Register(fwd)
+		(&blocking.AskHandler{Characters: o.Registry, Asker: o.Chain, Requests: o.Chain}).Register(fwd)
 	}
 }
 
