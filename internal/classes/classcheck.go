@@ -236,7 +236,7 @@ func (l *Library) providerReports(c *Class, ceil *Ceiling, k ClassKey, goos stri
 			pr.Notes = append(pr.Notes, "monitoramento reduzido: este provedor não tem todos os eventos do Mestre (ver o mapa de eventos do adaptador)")
 		}
 		if rules != nil {
-			pr.Native, pr.DispatcherOnly = nativeLines(ad, rules, pn.id, goos, wt, home)
+			pr.Native, pr.DispatcherOnly = nativeLines(ad, rules, pn.id, goos, wt, home, l.Fallbacks)
 		}
 		for _, ev := range HookEvents {
 			for _, h := range c.Hooks[ev] {
@@ -306,9 +306,9 @@ func checkRoot(goos, name string) string {
 // nativeLines describes what the native controls of a provider hold of the
 // rules: the generic content (writing, denied files, commands, network) and
 // the arguments and files the adapter produces for this provider.
-func nativeLines(ad providers.Adapter, r *Rules, id providers.ID, goos, wt, home string) (native, dispatcher []string) {
+func nativeLines(ad providers.Adapter, r *Rules, id providers.ID, goos, wt, home string, fb providers.NativeFallbacks) (native, dispatcher []string) {
 	ch := NativeCharacter{AgentID: "check", Provider: id, OS: goos, Worktree: wt, ProfileHome: home}
-	pol := NativePolicy(r, ch, providers.NativeFallbacks{})
+	pol := NativePolicy(r, ch, fb)
 	switch {
 	case pol.NoWrite:
 		native = append(native, "escrita: nada")
