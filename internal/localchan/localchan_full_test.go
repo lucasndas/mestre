@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -32,7 +31,7 @@ func TestAFakeAgentCallsListThroughTheSocket(t *testing.T) {
 	testkit.WriteFiles(t, e.root, map[string]string{
 		"work/.git/HEAD":        "ref: refs/heads/main\n",
 		"cfg/.credentials.json": "{}",
-		"cfg/.claude.json":      fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, work),
+		"cfg/.claude.json":      fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(work)),
 	})
 	env := e.env(agent, "HOME="+e.root, "CLAUDE_CONFIG_DIR="+cfg, "FAKEAGENT_SCRIPT="+script)
 	term := e.spawn("t7", agent, builds.fakeagent, []string{"--provider", "claude"}, env, work)
@@ -126,12 +125,7 @@ func TestListenAppliesTheAccess(t *testing.T) {
 	_ = ln.Close()
 
 	// A socket file left by an engine that died is replaced.
-	stale, err := net.Listen("unix", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stale.(*net.UnixListener).SetUnlinkOnClose(false)
-	_ = stale.Close()
+	leaveStaleSocket(t, path)
 	if _, err := os.Lstat(path); err != nil {
 		t.Fatalf("test bug: no stale socket: %v", err)
 	}

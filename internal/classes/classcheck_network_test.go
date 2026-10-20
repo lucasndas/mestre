@@ -20,7 +20,7 @@ func TestCheckSaysWhichProvidersRunWithoutTheNativeNetworkBarrier(t *testing.T) 
 		gap   []providers.ID
 	}{
 		{"linux", offline, []providers.ID{providers.Codex, providers.Antigravity}},
-		{"windows", offline, nil},
+		{"windows", offline, []providers.ID{providers.Codex}},
 		{"linux", "version: 1\n", nil},
 	}
 	for _, tt := range tests {
@@ -74,6 +74,42 @@ func TestCheckSaysCodexRunsWithoutTheNativeWriteBarrier(t *testing.T) {
 		}
 		if !slices.Equal(got, tt.gap) {
 			t.Errorf("%s, %q: providers without the native write barrier = %v, want %v", tt.os, tt.perms, got, tt.gap)
+		}
+	}
+}
+
+// CA-NATIVO-13
+//
+// `class check` translates the controls with the plans B of the machine, as
+// a character of it starts: on Windows, Codex always runs with the network on
+// (unelevated mode), so the check always says it has no native network
+// barrier; Antigravity says so only with the plan B that turns its sandbox off.
+func TestCheckUsesThePlansBOfTheMachine(t *testing.T) {
+	t.Parallel()
+	const offline = "version: 1\nnetwork: {internet: false}\n"
+	for _, tt := range []struct {
+		name string
+		fb   providers.NativeFallbacks
+		gap  []providers.ID
+	}{
+		{"default", providers.NativeFallbacks{}, []providers.ID{providers.Codex}},
+		{"antigravity no sandbox", providers.NativeFallbacks{AntigravityNoSandbox: true}, []providers.ID{providers.Codex, providers.Antigravity}},
+	} {
+		f := newFixture(t)
+		f.lib.OS, f.lib.Fallbacks = "windows", tt.fb
+		rep, err := f.lib.CheckFiles(context.Background(), pkg(t, "qa", "novo", offline, nil),
+			classes.ClassKey{Scope: classes.ClassWorkspace, Name: "qa"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []providers.ID
+		for _, p := range rep.Providers {
+			if slices.ContainsFunc(p.DispatcherOnly, func(l string) bool { return strings.HasPrefix(l, "internet: sem reforço nativo de rede") }) {
+				got = append(got, p.Provider)
+			}
+		}
+		if !slices.Equal(got, tt.gap) {
+			t.Errorf("%s: providers without the native network barrier = %v, want %v", tt.name, got, tt.gap)
 		}
 	}
 }

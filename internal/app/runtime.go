@@ -183,7 +183,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 	dir := localchan.NewDirectory(sys)
 	run := filepath.Join(e.paths.Maquina, "terminais")
 	host, err := characters.NewTerminalHost(terminal.ManagerConfig{
-		DB: e.mdb, Clock: e.clk, System: sys, Spawner: spawner, MachineID: e.id.MachineID,
+		DB: e.mdb, Clock: e.clk, System: sys, Spawner: spawner, Access: e.paths.TerminalAccess, MachineID: e.id.MachineID,
 		SocketDir: filepath.Join(run, "s"), LogDir: filepath.Join(run, "l"),
 		PTYBinary: t.ptyBinary, PTYVersion: t.Version, Masker: e.deps.Masker, Logger: e.log,
 	}, dir)
@@ -201,7 +201,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 	sk := sinks{e}
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
 		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}),
-		Reporter: sk, Notifier: sk, Waits: sk, Inbox: sk, Turns: sk, OS: runtime.GOOS, Logger: e.log,
+		PreRunGate: e.preRunGate, Reporter: sk, Notifier: sk, Waits: sk, Inbox: sk, Turns: sk, OS: runtime.GOOS, Logger: e.log,
 	})
 	if err != nil {
 		host.Close()
@@ -245,7 +245,7 @@ func (e *Engine) characterPrep() (characters.Preparer, error) {
 // machines are the engines the Citadel of a period reaches: this machine's
 // Runtime (or the refusal that says its terminals are not wired) and the Towers.
 func (e *Engine) machines(db *store.DB) OrchestrationMachines {
-	m := &machineRouter{local: e.id.MachineID, srv: &e.srvp, reg: characters.Registry{DB: db}, clk: e.clk}
+	m := &machineRouter{towerClient: e.towerClient(), local: e.id.MachineID, reg: characters.Registry{DB: db}}
 	if e.rt != nil {
 		m.rt = e.rt.rt
 	}
@@ -276,7 +276,12 @@ func (e *Engine) reconcileLocal(ctx context.Context, orc *Orchestration) {
 	if e.rt == nil {
 		return
 	}
-	if err := orc.Characters.Reconcile(ctx, e.id.MachineID, e.rt.rt.Live()); err != nil {
+	if err := orc.Characters.Reconcile(ctx, e.id.MachineID, e.liveWithWaits(ctx, orc, e.rt.rt.Live())); err != nil {
 		e.log.Warn("app: the characters of this machine were not reconciled with the registry", "err", err)
 	}
+}
+
+// towerClient is how this machine, as the Citadel of a period, reaches the Towers.
+func (e *Engine) towerClient() towerClient {
+	return towerClient{srv: &e.srvp, clk: e.clk, ids: protocol.NewIDGen(e.clk), rep: &e.sent}
 }

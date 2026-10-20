@@ -256,6 +256,8 @@ type worldOpts struct {
 	epics []int
 	// completed is told when a mission ends with all its steps done.
 	completed func(ctx context.Context, workspace, table, quest string)
+	// issues says which issues are the table's (nil: not checked).
+	issues quests.IssueOwner
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -289,6 +291,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	oo.QuestDone = opt.done
 	oo.MissionCompleted = opt.completed
 	oo.QuestVerifier = opt.verifier
+	oo.QuestIssues = opt.issues
 	if !opt.noTowers {
 		oo.QuestTowers = w.towers
 	}

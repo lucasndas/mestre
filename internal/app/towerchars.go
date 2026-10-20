@@ -98,7 +98,7 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 		if !ok {
 			return nil, protocol.NewError(protocol.CodeInvalidPayload, "character.stop: %T", m.Payload)
 		}
-		if err := rt.Stop(ctx, characters.StopCommand{Character: p.Character, Final: p.Final, Reason: p.Reason}); err != nil {
+		if err := rt.Stop(ctx, characters.StopCommand{Character: p.Character, Final: p.Final, Reason: p.Reason, Abandon: p.Abandon, Terminal: p.TerminalID}); err != nil {
 			return nil, towerCharacterError("character.stop", err)
 		}
 		return nil, nil
@@ -127,6 +127,21 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 			return nil, towerCharacterError("terminal.input", err)
 		}
 		return nil, nil
+	})
+	guard(protocol.TypeRitualPreRun, func(ctx context.Context, rt *characters.Runtime, m *protocol.Message) (*protocol.Reply, error) {
+		p, ok := m.Payload.(*protocol.RitualPreRun)
+		if !ok {
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "ritual.prerun: %T", m.Payload)
+		}
+		timeout := preRunTimeout(time.Duration(p.TimeoutSeconds) * time.Second)
+		ctx, cancel := clock.WithTimeout(ctx, e.clk, timeout+10*time.Second)
+		defer cancel()
+		out, err := rt.PreRun(ctx, p.Character, p.Command, timeout, p.MaxOutput)
+		if err != nil {
+			return nil, towerCharacterError("ritual.prerun", err)
+		}
+		return &protocol.Reply{Type: protocol.TypeRitualPreRun, InAck: true, Payload: protocol.RitualPreRunResult{
+			Output: out.Output, ExitCode: out.ExitCode, TimedOut: out.TimedOut, Stderr: out.Stderr}}, nil
 	})
 	guard(protocol.TypeTerminalScreen, func(ctx context.Context, rt *characters.Runtime, m *protocol.Message) (*protocol.Reply, error) {
 		p, ok := m.Payload.(*protocol.TerminalScreen)
@@ -188,10 +203,32 @@ func (e *Engine) resyncCharacters(ctx context.Context, link *protocol.Link) {
 	if e.rt == nil {
 		return
 	}
-	for _, t := range e.rt.rt.Live() {
-		st := protocol.TerminalStatus{TerminalID: t.TerminalID, State: t.State, SessionID: t.SessionID, AgentID: t.AgentID, Resync: true}
-		if err := e.towerSend(ctx, link, protocol.TypeTerminalStatus, st); err != nil {
-			e.log.Warn("app: the state of a character was not sent to the Citadel", "id", t.AgentID, "err", err)
+	// one message, so the Citadel sees which characters the Tower does not have; only
+	// on this connection: a picture that waits in an outbox is no longer the truth
+	at := protocol.Timestamp{Time: e.clk.Now().UTC()} // before the picture: what changes meanwhile is not judged by it
+	live := e.rt.rt.Live()
+	if live == nil {
+		live = []protocol.TerminalState{}
+	}
+	cctx, cancel := clock.WithTimeout(ctx, e.clk, towerCallWait)
+	defer cancel()
+	res, err := link.Call(cctx, protocol.Outgoing{Type: protocol.TypeCharacterResync, Payload: protocol.CharacterResync{Terminals: live, At: &at}, Transient: true})
+	switch {
+	case err != nil:
+		e.log.Warn("app: the terminals of this machine were not sent to the Citadel", "err", err)
+		return
+	case res.Status == protocol.AckError:
+		e.log.Warn("app: the Citadel refused the terminals of this machine", "err", res.Error)
+		return
+	}
+	// what the Citadel does not have there is ended here: a terminal of a start it gave up on
+	var out protocol.CharacterResyncResult
+	if len(res.Result) == 0 || json.Unmarshal(res.Result, &out) != nil {
+		return
+	}
+	for _, id := range out.End {
+		if err := e.rt.rt.Stop(ctx, characters.StopCommand{Character: id, Abandon: true, Reason: "the Citadel does not have it"}); err != nil {
+			e.log.Warn("app: a terminal the Citadel does not have was not ended", "id", id, "err", err)
 		}
 	}
 }

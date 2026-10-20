@@ -361,6 +361,11 @@ type CharacterStop struct {
 	// Final ends for good (the files go away); false is a restart that resumes.
 	Final  bool   `json:"final,omitempty"`
 	Reason string `json:"reason,omitempty"`
+	// Abandon ends a character that is still starting (the Citadel gave up on the start).
+	// TerminalID, when given, is the terminal of that start: a character that runs in
+	// another one (a restart that came after) is not touched.
+	Abandon    bool   `json:"abandon,omitempty"`
+	TerminalID string `json:"terminal_id,omitempty"`
 }
 
 // CharacterNotice is `character.notice`: a notice about a character of the
@@ -372,6 +377,92 @@ type CharacterNotice struct {
 	Text      string `json:"text,omitempty"`
 	// Screen is the screen that waits for input (kind blocked_input).
 	Screen string `json:"screen,omitempty"`
+}
+
+// CharacterResync is `character.resync`: every terminal a Tower has, as it is,
+// at each connection. The Citadel takes it as the truth about the processes:
+// a character its registry has alive on that machine and the list does not
+// have is interrupted.
+type CharacterResync struct {
+	Terminals []TerminalState `json:"terminals"`
+	// At is when the Tower took the picture: a character that changed on the
+	// Citadel after it is not judged by it.
+	At *Timestamp `json:"at,omitempty"`
+}
+
+// CharacterResyncResult is the answer to `character.resync`, in the ack: the
+// characters the Tower has a terminal for that the Citadel does not have (any
+// more) on that machine, which the Tower ends.
+type CharacterResyncResult struct {
+	End []string `json:"end,omitempty"`
+}
+
+// TableRef names the worktree of a table on a Tower (`table.where`,
+// `table.remove`, `table.done`).
+type TableRef struct {
+	Workspace string `json:"workspace" proto:"req"`
+	Table     string `json:"table" proto:"req"`
+}
+
+// TableWhere is the answer to `table.where`, in the ack: where the Tower keeps
+// (or would keep) the worktree of the table and, when it exists, its state.
+type TableWhere struct {
+	Dir    string   `json:"dir" proto:"req"`
+	Exists bool     `json:"exists"`
+	Tip    string   `json:"tip,omitempty"`
+	Dirty  []string `json:"dirty,omitempty"`
+}
+
+// TableSent is `table.sent`, the end of a `table.done` (its reply_to): the
+// Tower sent its commits to the Citadel (Sent), up to Tip; Warnings lists what
+// did not travel; Error says why it could not send.
+type TableSent struct {
+	Workspace string   `json:"workspace" proto:"req"`
+	Table     string   `json:"table" proto:"req"`
+	Sent      bool     `json:"sent"`
+	Tip       string   `json:"tip,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
+	Error     string   `json:"error,omitempty"`
+}
+
+// RitualPreRun is `ritual.prerun`: run Command as the character, in its
+// worktree, without interaction. The answer is RitualPreRunResult, in the ack.
+type RitualPreRun struct {
+	Character string `json:"character" proto:"req"`
+	Command   string `json:"command" proto:"req"`
+	// TimeoutSeconds bounds the run; MaxOutput is the most that is kept of the output.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+	MaxOutput      int `json:"max_output,omitempty"`
+}
+
+// RitualPreRunResult is what came of the pre-run.
+type RitualPreRunResult struct {
+	Output   string `json:"output,omitempty"`
+	ExitCode int    `json:"exit_code"`
+	Stderr   string `json:"stderr,omitempty"`
+	TimedOut bool   `json:"timed_out,omitempty"`
+}
+
+// ScrollPut is `scroll.put`: write the read-only copy of a scroll at Rel, in the
+// worktree Dir of a table on this machine.
+type ScrollPut struct {
+	Dir     string `json:"dir" proto:"req"`
+	Rel     string `json:"rel" proto:"req"`
+	Content string `json:"content"`
+}
+
+// ScrollRemove is `scroll.remove`: take the copy of a scroll that was deleted.
+type ScrollRemove struct {
+	Dir string `json:"dir" proto:"req"`
+	Rel string `json:"rel" proto:"req"`
+}
+
+// TableNotice is `table.notice`: a Tower tells the master of a table something
+// about its worktree (a branch that diverged, a worktree that conflicts).
+type TableNotice struct {
+	Workspace string `json:"workspace" proto:"req"`
+	Table     string `json:"table" proto:"req"`
+	Text      string `json:"text" proto:"req"`
 }
 
 // CharacterTurn is `character.turn`: a turn of a character of the Tower ended,
