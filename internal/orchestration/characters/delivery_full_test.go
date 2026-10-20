@@ -3,8 +3,10 @@
 package characters_test
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -40,14 +42,24 @@ func TestAnAskBetweenCharactersOfTwoMachinesIsAnsweredWithoutSayingAMachine(t *t
 	fwd := localchan.NewLocalForwarder()
 	r.wt.Register(fwd)
 	done := make(chan localchan.Response, 1)
+	// A wait that nothing ends would hold the whole test binary until its
+	// timeout: it ends with the test's own limit, or when the ask returns before
+	// the question was typed (then it says why).
+	wait, stop := context.WithTimeout(t.Context(), 30*time.Second)
+	defer stop()
 	go func() {
 		// no machine anywhere in the call: the engine finds the target
-		done <- fwd.Forward(r.ctx, &localchan.Call{Request: localchan.Request{Cmd: "ask", Args: localchan.TextArgs("Revisor", "revise o PR 12")},
+		resp := fwd.Forward(r.ctx, &localchan.Call{Request: localchan.Request{Cmd: "ask", Args: localchan.TextArgs("Revisor", "revise o PR 12")},
 			Caller: localchan.Caller{Identified: true, AgentID: d.ID}})
+		if !resp.OK {
+			t.Logf("ask returned before the answer: %+v", resp)
+			stop()
+		}
+		done <- resp
 	}()
 	// the question is typed on the other machine: wait for it, not for a
 	// number of yields, which a loaded runner can exhaust first
-	typed := r.mach[v.Machine].host.proc(v.ID).waitTyped(t, t.Context(), 1)
+	typed := r.mach[v.Machine].host.proc(v.ID).waitTyped(t, wait, 1)
 	if len(typed) != 1 || !strings.Contains(plain(t, typed[0]), "revise o PR 12") {
 		t.Fatalf("typed on the Tower: %q", typed)
 	}
@@ -59,7 +71,12 @@ func TestAnAskBetweenCharactersOfTwoMachinesIsAnsweredWithoutSayingAMachine(t *t
 		t.Fatal(err)
 	}
 	r.hook(v, providers.EventTurnEnd)
-	resp := <-done
+	var resp localchan.Response
+	select {
+	case resp = <-done:
+	case <-wait.Done():
+		t.Fatalf("the ask did not return: %v", wait.Err())
+	}
 	var data map[string]any
 	if err := resp.DecodeData(&data); err != nil || !resp.OK || data["response"] != "PR 12 aprovado, sem ressalvas" || data["status"] != "answered" {
 		t.Fatalf("ask = %+v (%v) %v", resp, err, data)
