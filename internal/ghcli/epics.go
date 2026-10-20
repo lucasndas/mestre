@@ -106,7 +106,7 @@ func (h *Handlers) isEpic(ctx context.Context, who caller, n int) (github.IssueD
 
 func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller, rest []string) localchan.Response {
 	if len(rest) != 1 {
-		return usage("usage: mestre gh epic update <n> [--title …] [--body … | --body-file …] [--depends-on <m>]… [--state open|closed]")
+		return usage("usage: mestre gh epic update <n> [--title …] [--body … | --body-file …] [--depends-on <m>]… [--release <m>]… [--state open|closed]")
 	}
 	n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(rest[0]), "#"))
 	if err != nil || n <= 0 {
@@ -119,6 +119,19 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 			return usage("--depends-on is the number of an epic")
 		}
 		depends = append(depends, m)
+	}
+	var release []int
+	for _, raw := range flagList(c, "release") {
+		m, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(raw), "#"))
+		if err != nil || m <= 0 {
+			return usage("--release is the number of an epic")
+		}
+		if slices.Contains(depends, m) {
+			return usage("an epic is not made to wait and released in the same command")
+		}
+		if !slices.Contains(release, m) {
+			release = append(release, m)
+		}
 	}
 	in := github.IssueUpdate{}
 	if v, ok := flagString(c, "title"); ok {
@@ -133,10 +146,10 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 	default:
 		return usage("--state is open or closed")
 	}
-	if in.Title == nil && in.Body == nil && in.State == "" && len(depends) == 0 {
-		return usage("nothing to change: give --title, --body, --state or --depends-on")
+	if in.Title == nil && in.Body == nil && in.State == "" && len(depends) == 0 && len(release) == 0 {
+		return usage("nothing to change: give --title, --body, --state, --depends-on or --release")
 	}
-	if (len(depends) > 0 || in.State == "closed") && h.Deps == nil {
+	if (len(depends) > 0 || len(release) > 0 || in.State == "closed") && h.Deps == nil {
 		return unavailable("the dependencies between epics are not available in this run: nothing was changed")
 	}
 	cur, resp, ok := h.isEpic(ctx, who, n)
@@ -205,10 +218,36 @@ func (h *Handlers) epicUpdate(ctx context.Context, c *localchan.Call, who caller
 		}
 		data["state"] = got.State
 	}
+	// The Grand Master's decision to go on without an epic is made after GitHub took
+	// the rest, so a refusal there leaves nothing released.
+	released, already := []int{}, []int{}
+	var releaseErr *localchan.Response
+	for _, m := range release {
+		switch err := h.Deps.Release(ctx, who.char, n, m); {
+		case errors.Is(err, epicdeps.ErrNotGrandMaster):
+			r := localchan.Fail("level_denied", "only the Grand Master of the workspace works on the epics", "")
+			releaseErr = &r
+		case errors.Is(err, epicdeps.ErrNoDependency):
+			already = append(already, m) // it does not wait for it (any more): the command can be repeated
+		case err != nil:
+			r := localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the wait of #%d for #%d was not released: %v", n, m, err), "run the command again")
+			releaseErr = &r
+		default:
+			released = append(released, m)
+		}
+	}
+	data["released"], data["not_waiting"] = released, already
+	// the tables that wait for this epic are told even if a release failed: the epic is closed on GitHub
 	if flagStr(c, "state") == "closed" {
 		if err := h.Deps.EpicClosed(ctx, who.char.Workspace, n, wasClosed && notPlanned); err != nil {
 			return localchan.Fail(localchan.CodeInternal, fmt.Sprintf("the epic #%d is closed on GitHub but the tables that wait for it were not told: %v", n, err), "run the command again")
 		}
+	}
+	if releaseErr != nil {
+		return *releaseErr
+	}
+	if len(release) > 0 && len(released) == 0 && len(already) > 0 && in.Title == nil && in.Body == nil && in.State == "" && len(depends) == 0 && flagStr(c, "state") != "closed" {
+		return localchan.Fail("not_found", fmt.Sprintf("#%d does not wait for %s", n, epicList(already)), "see `mestre table list`").WithExit(localchan.ExitNotFound)
 	}
 	data["text"] = fmt.Sprintf("épico #%d atualizado", n)
 	return localchan.OK(data)
@@ -263,4 +302,12 @@ func (h *Handlers) epicList(ctx context.Context, c *localchan.Call) localchan.Re
 		text.WriteString("nenhum épico\n")
 	}
 	return localchan.OK(map[string]any{"epics": out, "text": strings.TrimRight(text.String(), "\n")})
+}
+
+func epicList(ns []int) string {
+	var out []string
+	for _, n := range ns {
+		out = append(out, "#"+strconv.Itoa(n))
+	}
+	return strings.Join(out, ", ")
 }
