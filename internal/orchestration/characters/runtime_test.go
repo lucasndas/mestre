@@ -302,6 +302,27 @@ func TestStopOnlyFromTheSafePointStuckOrInterrupted(t *testing.T) {
 	}
 }
 
+// A start the Citadel gave up on is ended where it is; a stop that does not say
+// so still waits for the safe point.
+func TestAStartTheCitadelGaveUpOnIsEndedWhileStarting(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	c := r.make("Dev Claude", "Dev", "3-login")
+	rt := r.mach[c.Machine].rt
+	if r.state(c) != characters.Starting {
+		t.Fatalf("the character is %s; want starting", r.state(c))
+	}
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Final: true}); !errors.Is(err, characters.ErrNotAtSafePoint) {
+		t.Errorf("a stop of a character that starts: %v; want not at a safe point", err)
+	}
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Final: true, Abandon: true, Reason: "the Citadel gave up"}); err != nil {
+		t.Fatalf("the abandoned start: %v", err)
+	}
+	if _, err := rt.Env(r.ctx, c.ID); err == nil {
+		t.Error("the character is still on the machine after the abandon")
+	}
+}
+
 func TestAnAgentThatEndsOnItsOwnIsInterruptedAndNotForgotten(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{})

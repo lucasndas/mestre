@@ -24,6 +24,7 @@ func (rt *Runtime) Stop(ctx context.Context, cmd StopCommand) error {
 	}
 	s.mu.Lock()
 	var trig Trigger
+	abandoned := false
 	switch s.st.State {
 	case Idle:
 		trig = TrigStop
@@ -32,6 +33,15 @@ func (rt *Runtime) Stop(ctx context.Context, cmd StopCommand) error {
 	case Interrupted:
 		trig = TrigDiscard
 	case Stopping:
+	case Starting:
+		// A start nobody waits for any more (the Citadel gave up on it) is ended
+		// where it is: the start fails, and the interrupted character is discarded.
+		if !cmd.Abandon {
+			s.mu.Unlock()
+			return fmt.Errorf("%w: %s is %s", ErrNotAtSafePoint, cmd.Character, Starting)
+		}
+		s.applyLocked(TrigStartFailed, "abandoned: "+cmd.Reason)
+		trig, abandoned = TrigDiscard, true
 	default:
 		st := s.st.State
 		s.mu.Unlock()
@@ -43,7 +53,7 @@ func (rt *Runtime) Stop(ctx context.Context, cmd StopCommand) error {
 		rep, changed = s.applyLocked(trig, "stop: "+cmd.Reason)
 	}
 	s.stopping = true
-	wasInterrupted := trig == TrigDiscard
+	wasInterrupted := trig == TrigDiscard && !abandoned
 	proc := s.proc
 	provider, l := s.launch.Provider, s.launch
 	s.mu.Unlock()

@@ -361,6 +361,8 @@ type CharacterStop struct {
 	// Final ends for good (the files go away); false is a restart that resumes.
 	Final  bool   `json:"final,omitempty"`
 	Reason string `json:"reason,omitempty"`
+	// Abandon ends a character that is still starting (the Citadel gave up on the start).
+	Abandon bool `json:"abandon,omitempty"`
 }
 
 // CharacterNotice is `character.notice`: a notice about a character of the
@@ -372,6 +374,21 @@ type CharacterNotice struct {
 	Text      string `json:"text,omitempty"`
 	// Screen is the screen that waits for input (kind blocked_input).
 	Screen string `json:"screen,omitempty"`
+}
+
+// CharacterResync is `character.resync`: every terminal a Tower has, as it is,
+// at each connection. The Citadel takes it as the truth about the processes:
+// a character its registry has alive on that machine and the list does not
+// have is interrupted.
+type CharacterResync struct {
+	Terminals []TerminalState `json:"terminals"`
+}
+
+// CharacterResyncResult is the answer to `character.resync`, in the ack: the
+// characters the Tower has a terminal for that the Citadel does not have (any
+// more) on that machine, which the Tower ends.
+type CharacterResyncResult struct {
+	End []string `json:"end,omitempty"`
 }
 
 // TableRef names the worktree of a table on a Tower (`table.where`,
