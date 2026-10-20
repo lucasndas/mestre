@@ -101,6 +101,9 @@ func (r *Router) HandleData(t DataType, h DataHandler) {
 	r.mu.Unlock()
 }
 
+// Lookup returns the handler of a type, the exact one before a pattern.
+func (r *Router) Lookup(typ string) (Handler, bool) { return r.lookup(typ) }
+
 func (r *Router) lookup(typ string) (Handler, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -187,7 +187,7 @@ func (m *machineRouter) ScreenLines(ctx context.Context, machine, character stri
 	}
 	var res protocol.TerminalScreenResult
 	if err := json.Unmarshal(raw, &res); err != nil {
-		return characters.Screen{}, fmt.Errorf("%s answered the screen with %s", machine, raw)
+		return characters.Screen{}, fmt.Errorf("%s answered the screen with something that is not a screen", machine)
 	}
 	sc := characters.Screen{Text: res.Text, History: res.History}
 	if raw, ok := res.Cursor["row"]; ok {

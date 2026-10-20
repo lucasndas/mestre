@@ -248,6 +248,7 @@ func (e *Engine) machines(db *store.DB) OrchestrationMachines {
 	if e.rt != nil {
 		m.rt = e.rt.rt
 	}
+	e.mach.Store(m)
 	return m
 }
 
