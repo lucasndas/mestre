@@ -284,7 +284,7 @@ func Default() *Registry {
 			Args:    []Arg{{"<text>", "the answer"}},
 			MinArgs: 1, MaxArgs: 1, Who: WhoGrandMaster, Secret: true,
 			Flags: []Flag{{"attach", FlagList, "a file to attach (repeat the flag for more)"}, {"to-message", FlagString, "the id of the message to answer (see mestre inbox)"},
-				{"redact-source", FlagBool, "the message answered carried a password the engine did not catch: delete it from its channel and from the inbox"}},
+				{"redact-source", FlagBool, "the message answered (--to-message is required with it) carried a password the engine did not catch: delete it from its channel and from the inbox"}},
 			Exits: []int{4, 7, 8}},
 		Spec{Name: "done", Group: GroupCommunication, Summary: "end your task or step and hand over the result",
 			Usage:   `mestre done "<summary>" [--file <file | ->] [--proof "C<n>=<proof>"]… [--return "<reason>" [--cause <cause>] [--where <file:line>]…]`,

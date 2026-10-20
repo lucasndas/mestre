@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
-	"github.com/lucasndas/mestre/internal/protocol"
 )
 
 // Delivery says what happened to an answer to a user.
@@ -20,6 +20,20 @@ const (
 	// panel and sent when the channel is back.
 	DeliveryQueued Delivery = "queued"
 )
+
+// ErrRedactNeedsMessage: `reply --redact-source` always names the message
+// (--to-message). The "current" message is the last one delivered, and after a
+// first redaction that is the message before it, perhaps of another user.
+var ErrRedactNeedsMessage = errors.New("--redact-source needs --to-message: say which message carried the secret")
+
+// RotationAdvice is what the engine itself adds to the answer of a redaction:
+// the recommendation to change the secret does not depend on the free text of the
+// agent.
+const RotationAdvice = " Troque essa senha ou esse segredo: ele já passou pelo Telegram e pela IA."
+
+// quotedRun is the length from which a stretch of the answer that is also in the
+// message deleted is taken for a quote of the secret.
+const quotedRun = 6
 
 // ReplyRequest is `mestre reply`.
 type ReplyRequest struct {
@@ -59,6 +73,9 @@ func (s *Service) Reply(ctx context.Context, r ReplyRequest) (ReplyResult, error
 	if r.From.Role != characters.RoleGrandMaster {
 		return ReplyResult{}, ErrNotGrandMaster
 	}
+	if r.RedactSource && r.ToMessage == "" {
+		return ReplyResult{}, ErrRedactNeedsMessage
+	}
 	var msg Item
 	if r.ToMessage != "" {
 		it, err := s.st.Get(ctx, r.ToMessage)
@@ -87,16 +104,18 @@ func (s *Service) Reply(ctx context.Context, r ReplyRequest) (ReplyResult, error
 		Conversation: msg.Origin.Conversation, ReplyTo: msg.Origin.Message, Text: r.Text, Attachments: r.Attachments, CreatedAt: s.clk.Now(),
 	}
 	deleted := false
+	var o Outbound
+	var err error
 	if r.RedactSource {
-		// the answer does not cite the message that is going away
+		// the answer does not cite the message that is going away, nor repeat
+		// what it said, and carries the advice to rotate the secret
 		out.ReplyTo = ""
-		var err error
-		if deleted, err = s.redactSource(ctx, r.From, msg); err != nil {
+		out.Text = scrubQuoted(r.Text, msg.Text) + RotationAdvice
+		if o, err = s.redactSource(ctx, r.From, msg, out); err != nil {
 			return ReplyResult{}, err
 		}
-	}
-	o, err := s.st.AddOutbound(ctx, out)
-	if err != nil {
+		deleted = s.deleteSource(ctx, msg)
+	} else if o, err = s.st.AddOutbound(ctx, out); err != nil {
 		return ReplyResult{}, err
 	}
 	res := ReplyResult{Message: msg.ID, Channel: o.Channel, Outbound: o.ID, Delivery: DeliveryQueued, SourceDeleted: deleted}
@@ -153,24 +172,60 @@ type SourceDeleter interface {
 	DeleteSource(ctx context.Context, o Origin) error
 }
 
-// redactSource makes a message of a user leave: it is deleted from its channel,
-// removed from the inbox (and so from every list of it) and the attempt goes to
-// the audit without the text. The removal comes first: what the engine keeps is
-// the first to go, and a channel that is away does not hold it back.
-func (s *Service) redactSource(ctx context.Context, gm characters.Character, msg Item) (bool, error) {
-	if err := s.st.Delete(ctx, msg.ID); err != nil {
-		return false, err
-	}
-	if err := AuditSecretAttempt(ctx, s.st.DB, protocol.NewIDGen(s.clk).NewString(), s.clk.Now(), gm.Machine, msg.Origin.User, msg.Origin.Channel, "reply --redact-source"); err != nil {
-		return false, err
-	}
+// redactSource makes a message of a user leave: it is removed from the inbox
+// (and so from every list of it), the attempt goes to the audit without the text
+// and the answer is kept, all in one transaction (Store.RedactSource); the
+// audit id comes from the message, so a repeated request writes nothing twice.
+func (s *Service) redactSource(ctx context.Context, gm characters.Character, msg Item, out Outbound) (Outbound, error) {
+	return s.st.RedactSource(ctx, msg, "redact-"+msg.ID, gm.Machine, s.clk.Now(), out)
+}
+
+// deleteSource takes the message off its channel, once it is out of the inbox; a
+// channel that is away or cannot do it does not hold the redaction back.
+func (s *Service) deleteSource(ctx context.Context, msg Item) bool {
 	d, ok := s.o.Channels.(SourceDeleter)
 	if !ok {
-		return false, nil
+		s.log.Warn("inbox: the channel cannot delete the message with a secret", "id", msg.ID, "channel", msg.Origin.Channel)
+		return false
 	}
 	if err := d.DeleteSource(ctx, *msg.Origin); err != nil {
 		s.log.Warn("inbox: the message with a secret was not deleted from its channel", "id", msg.ID, "channel", msg.Origin.Channel, "err", err)
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
+}
+
+// scrubQuoted takes out of the answer every stretch of quotedRun characters or
+// more that is also in the message deleted: an agent that explains what it saw
+// ("a senha bananaAzul…") must not send the secret back through the channel.
+func scrubQuoted(answer, source string) string {
+	rs := []rune(answer)
+	cut := make([]bool, len(rs))
+	for i := range rs {
+		end := i
+		for j := i + 1; j <= len(rs); j++ {
+			if !strings.Contains(source, string(rs[i:j])) {
+				break
+			}
+			end = j
+		}
+		if end-i >= quotedRun {
+			for k := i; k < end; k++ {
+				cut[k] = true
+			}
+		}
+	}
+	var b strings.Builder
+	in := false
+	for i, r := range rs {
+		switch {
+		case !cut[i]:
+			b.WriteRune(r)
+			in = false
+		case !in:
+			b.WriteString("[trecho removido]")
+			in = true
+		}
+	}
+	return b.String()
 }

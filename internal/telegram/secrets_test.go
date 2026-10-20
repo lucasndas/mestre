@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
@@ -256,6 +258,7 @@ func TestASecretSentByTheOwnerNeverReachesTheGrandMasterOrTheHistory(t *testing.
 
 	// a password in free text only the Grand Master notices: his fake agent
 	// answers it with `reply --redact-source`
+	sw.clk.Advance(6 * time.Minute) // the message after a held phrase is held too, for a while
 	free := sw.said("o acesso do site y é lucas com a palavra bananaAzul")
 	if len(sw.term.texts()) != 3 || !strings.Contains(sw.term.texts()[2], "bananaAzul") {
 		t.Fatalf("the free text was not delivered as it came: %q", sw.term.texts())
@@ -286,5 +289,304 @@ func TestASecretSentByTheOwnerNeverReachesTheGrandMasterOrTheHistory(t *testing.
 	}
 	if strings.Contains(sw.logs.String(), "level=ERROR") {
 		t.Errorf("the log has errors: %s", sw.logs)
+	}
+}
+
+// rebuild makes the bot again over the same database, with a change of options.
+func (sw *secretWorld) rebuild(mut func(*telegram.Options)) {
+	sw.t.Helper()
+	mut(&sw.opts)
+	var err error
+	if sw.bot, err = telegram.New(sw.opts); err != nil {
+		sw.t.Fatal(err)
+	}
+	sw.routing.Bind(sw.bot)
+}
+
+// CA-COFRE-15: the secret of an update recorded and not handled yet (the Citadel
+// could not act when it came) is not in the queue of updates, and is blocked when
+// the bot may act: deleted, audited and the author told.
+func TestAnUpdateWithASecretRecordedAndNotHandledIsStillBlocked(t *testing.T) {
+	t.Parallel()
+	sw := newSecretWorld(t)
+	g := &stopAfter{n: 100}
+	sw.rebuild(func(o *telegram.Options) { o.Gate = g })
+	for i, secret := range []string{"Abc123", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"} {
+		text := "a senha é Abc123!"
+		if i == 1 {
+			text = "token " + secret
+		}
+		g.n = 1 // the poll starts, and the gate closes right after the update is recorded
+		if _, err := sw.fake.UserSendsText(sw.ana, faketelegram.Private(sw.ana), text); err != nil {
+			t.Fatal(err)
+		}
+		sw.poll()
+		var pending int
+		if err := sw.db.Reader().QueryRowContext(sw.ctx, `SELECT COUNT(*) FROM telegram_updates WHERE state = 'new'`).Scan(&pending); err != nil || pending != 1 {
+			t.Fatalf("pending updates = %d, %v", pending, err)
+		}
+		// the queue of updates, before anything marks it done: the copy that was kept
+		sw.nothingOf(secret, true)
+		if len(sw.fake.Deleted()) != i {
+			t.Fatalf("deleted %+v while the Citadel could not act", sw.fake.Deleted())
+		}
+		g.n = 100 // the Citadel acts again
+		sw.poll()
+		sw.drain()
+		if del := sw.fake.Deleted(); len(del) != i+1 || del[i].ChatID != sw.ana.ID {
+			t.Fatalf("deleted %+v, want the message of the chat", del)
+		}
+		sw.nothingOf(secret, true)
+	}
+	if rows := sw.audits(); len(rows) != 2 {
+		t.Fatalf("audit = %q, want one row per message", rows)
+	}
+	if got := sw.toOwner(); len(got) != 2 || !strings.Contains(got[0], "troque essa senha") || !strings.Contains(got[1], "Troque esse segredo") {
+		t.Fatalf("the Owner was told %q", got)
+	}
+	if len(sw.term.texts()) != 0 {
+		t.Fatalf("the Grand Master was typed %q", sw.term.texts())
+	}
+}
+
+// CA-COFRE-15: the phrases of a password are read after the text is normalized
+// (full-width letters, zero-width characters) and cover the common ways to say it.
+func TestThePasswordPhrasesAreNotEasyToBypass(t *testing.T) {
+	t.Parallel()
+	sw := newSecretWorld(t)
+	phrases := []string{
+		"a senha do Gmail é Zk93!qx",
+		"senha=Zk93!qx",
+		"pwd Zk93!qx",
+		"password is Zk93!qx",
+		"\U0000FF4D\U0000FF49\U0000FF4E\U0000FF48\U0000FF41 senha Zk93!qx",
+		"a sen\U0000200bha é Zk93!qx",
+		"minha\U000000a0senha\U0000FF1A Zk93!qx",
+		"senha\U0000FF1A Zk93!qx",
+	}
+	for i, ph := range phrases {
+		sw.clk.Advance(6 * time.Minute) // each phrase on its own, not as the follow-up of the one before
+		sw.said(ph)
+		if got := len(sw.fake.Deleted()); got != i+1 {
+			t.Fatalf("%q: %d messages deleted, want %d", ph, got, i+1)
+		}
+		typed := sw.term.texts()
+		if len(typed) != i+1 || !strings.Contains(typed[i], telegram.HeldNotice) {
+			t.Fatalf("%q: the Grand Master was typed %q, want only the notice", ph, typed)
+		}
+	}
+	sw.nothingOf("Zk93", true)
+}
+
+// CA-COFRE-15: after a held phrase, the next message of the author is held too,
+// for a few minutes ("minha senha:" and then the value).
+func TestTheMessageAfterAHeldPasswordPhraseIsHeldToo(t *testing.T) {
+	t.Parallel()
+	sw := newSecretWorld(t)
+	sw.said("minha senha:")
+	sw.said("Qw7-pelicano-azul")
+	if got := len(sw.fake.Deleted()); got != 2 {
+		t.Fatalf("%d messages deleted, want both", got)
+	}
+	sw.nothingOf("pelicano", true)
+	sw.said("obrigado, pode seguir") // the wait ended with one message
+	if typed := sw.term.texts(); len(typed) != 3 || !strings.HasSuffix(typed[2], "obrigado, pode seguir") {
+		t.Fatalf("the Grand Master was typed %q", typed)
+	}
+	sw.said("a senha é X1")
+	sw.clk.Advance(6 * time.Minute)
+	sw.said("fora do prazo")
+	if typed := sw.term.texts(); !strings.HasSuffix(typed[len(typed)-1], "fora do prazo") {
+		t.Fatalf("a message after the wait was held: %q", typed)
+	}
+}
+
+// CA-COFRE-15: the filter comes before every branch: a command, the free text of
+// a capture, a user who may not talk to the Grand Master and a stranger.
+func TestTheSecretFilterComesBeforeEveryBranch(t *testing.T) {
+	t.Parallel()
+	var captured []string
+	var mu sync.Mutex
+	strangers := &strangerLog{}
+	sw := newSecretWorld(t)
+	sw.rebuild(func(o *telegram.Options) {
+		o.Strangers = strangers
+		o.Captures = map[string]telegram.CaptureFunc{"free": func(_ context.Context, _ users.User, _, text string) (string, bool, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			captured = append(captured, text)
+			return "ok", false, nil
+		}}
+	})
+	say := func(u faketelegram.User, text string) {
+		t.Helper()
+		if _, err := sw.fake.UserSendsText(u, faketelegram.Private(u), text); err != nil {
+			t.Fatal(err)
+		}
+		sw.poll()
+		sw.drain()
+	}
+
+	// a command with a secret: not run, not echoed, deleted and audited
+	say(sw.ana, "/status senha: Cmd9pass")
+	if got := len(sw.fake.Deleted()); got != 1 {
+		t.Fatalf("%d messages deleted, want 1", got)
+	}
+	for _, s := range sw.toOwner() {
+		if strings.Contains(s, "Cmd9pass") {
+			t.Fatalf("the secret was echoed: %q", s)
+		}
+	}
+	if len(sw.audits()) != 1 {
+		t.Fatalf("audit = %q", sw.audits())
+	}
+
+	// the free text of a capture that is not a PIN
+	if err := sw.bot.Ask(sw.ctx, sw.owner.ID, "free", "r", "Diga", time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	sw.drain()
+	sw.clk.Advance(6 * time.Minute)
+	say(sw.ana, "a senha é Cap7word")
+	mu.Lock()
+	got := captured
+	mu.Unlock()
+	for _, c := range got {
+		if strings.Contains(c, "Cap7word") {
+			t.Fatalf("the capture received the secret: %q", c)
+		}
+	}
+	if len(sw.audits()) != 2 {
+		t.Fatalf("audit = %q, want the capture too", sw.audits())
+	}
+
+	// a user who may not talk to the Grand Master
+	_, obs := sw.user("Obs", users.Observer)
+	say(obs, "minha senha é Obs5word")
+	if len(sw.audits()) != 3 || len(sw.fake.Deleted()) != 3 {
+		t.Fatalf("audit = %q, deleted %+v, want the observer's message too", sw.audits(), sw.fake.Deleted())
+	}
+
+	// a stranger: the Owner never reads the raw text
+	str := faketelegram.User{ID: 9001, FirstName: "Estranho"}
+	say(str, "o login é eu e a senha é Str3word")
+	say(str, "ghp_abcdefghijklmnopqrstuvwxyz0123456789")
+	for _, tx := range strangers.texts() {
+		if strings.Contains(tx, "Str3word") || strings.Contains(tx, "ghp_abcdef") {
+			t.Fatalf("the Owner was given the secret of a stranger: %q", tx)
+		}
+	}
+	if len(strangers.texts()) != 2 || len(sw.audits()) != 5 {
+		t.Fatalf("strangers %q, audit %q", strangers.texts(), sw.audits())
+	}
+	sw.nothingOf("Cmd9pass", true)
+	sw.nothingOf("Cap7word", true)
+	sw.nothingOf("Obs5word", true)
+	sw.nothingOf("Str3word", true)
+}
+
+type strangerLog struct {
+	mu  sync.Mutex
+	got []string
+}
+
+func (l *strangerLog) Stranger(_ context.Context, s telegram.Stranger) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.got = append(l.got, s.Text)
+}
+
+func (l *strangerLog) texts() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.got...)
+}
+
+// reply runs `mestre reply` as the Grand Master.
+func (sw *secretWorld) reply(text string, flags map[string]any) localchan.Response {
+	return sw.svc.Handlers()["reply"].Handle(sw.ctx, &localchan.Call{
+		Caller:  localchan.Caller{Identified: true, AgentID: sw.gm.ID},
+		Request: localchan.Request{Cmd: "reply", Args: localchan.TextArgs(text), Flags: flags}})
+}
+
+// CA-COFRE-15: `reply --redact-source` always names the message; it is done once
+// (a repeat finds nothing to delete); its answer never quotes the secret and the
+// engine adds the advice to rotate it.
+func TestRedactSourceNeedsTheMessageIsDoneOnceAndDoesNotQuoteTheSecret(t *testing.T) {
+	t.Parallel()
+	sw := newSecretWorld(t)
+	a := sw.said("o acesso do site y é lucas com a palavra bananaAzul")
+	b := sw.said("pode abrir a mesa de testes, por favor")
+	item, ok, err := sw.svc.ByKey(sw.ctx, fmt.Sprintf("telegram:%d:%d", sw.ana.ID, a))
+	if err != nil || !ok {
+		t.Fatalf("the item: %v, %v", ok, err)
+	}
+
+	// without --to-message the "current" message would be the last one (b): refused
+	resp := sw.reply("Recuse", map[string]any{"redact-source": true})
+	if resp.OK || resp.Error == nil || resp.Error.Code != localchan.CodeUsage {
+		t.Fatalf("reply --redact-source without --to-message = %+v", resp)
+	}
+	if len(sw.fake.Deleted()) != 0 || len(sw.audits()) != 0 {
+		t.Fatal("something was deleted or audited by a refused call")
+	}
+
+	// the answer that quotes what was said: the run is taken out
+	resp = sw.reply("Vi a palavra bananaAzul no seu texto; cadastre pelo painel.", map[string]any{"redact-source": true, "to-message": item.ID})
+	if !resp.OK {
+		t.Fatalf("reply = %+v", resp)
+	}
+	sw.drain()
+	told := sw.toOwner()
+	if len(told) == 0 || strings.Contains(told[len(told)-1], "bananaAzul") || !strings.Contains(told[len(told)-1], "Troque essa senha") {
+		t.Fatalf("the Owner was told %q, want no quote and the advice to rotate", told)
+	}
+	sw.nothingOf("bananaAzul", false)
+
+	// the same request again: nothing more is deleted or audited
+	resp = sw.reply("Recuse", map[string]any{"redact-source": true, "to-message": item.ID})
+	if resp.OK {
+		t.Fatalf("the repeated request worked: %+v", resp)
+	}
+	if del := sw.fake.Deleted(); len(del) != 1 || del[0].MessageID != a {
+		t.Fatalf("deleted %+v, want only the first message", del)
+	}
+	if len(sw.audits()) != 1 {
+		t.Fatalf("audit = %q, want one row", sw.audits())
+	}
+	// the message after it is still there
+	if _, ok, _ := sw.svc.ByKey(sw.ctx, fmt.Sprintf("telegram:%d:%d", sw.ana.ID, b)); !ok {
+		t.Fatal("the other message left the inbox")
+	}
+}
+
+// CA-COFRE-15: DeleteSource checks what Send checks.
+func TestDeleteSourceChecksTheChannelAndTheChatOfTheUser(t *testing.T) {
+	t.Parallel()
+	sw := newSecretWorld(t)
+	r := &telegram.Replies{Users: sw.users}
+	origin := inbox.Origin{Channel: inbox.ChannelTelegram, User: sw.owner.ID, Conversation: strconv.FormatInt(sw.ana.ID, 10), Message: "5"}
+	if err := r.DeleteSource(sw.ctx, origin); !errors.Is(err, inbox.ErrChannelDown) {
+		t.Fatalf("unbound: %v", err)
+	}
+	r.Bind(sw.bot)
+	other := origin
+	other.Channel = "painel"
+	if err := r.DeleteSource(sw.ctx, other); err == nil {
+		t.Fatal("a channel that is not the Telegram was deleted from")
+	}
+	other = origin
+	other.Conversation = "31337" // the chat of someone else
+	if err := r.DeleteSource(sw.ctx, other); err == nil {
+		t.Fatal("a message of a chat that is not the user's was deleted")
+	}
+	if len(sw.fake.Deleted()) != 0 {
+		t.Fatalf("deleted %+v", sw.fake.Deleted())
+	}
+	if err := r.DeleteSource(sw.ctx, origin); err != nil {
+		t.Fatal(err)
+	}
+	if len(sw.fake.Deleted()) != 1 {
+		t.Fatalf("deleted %+v, want the one", sw.fake.Deleted())
 	}
 }

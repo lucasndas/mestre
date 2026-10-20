@@ -160,6 +160,9 @@ type Bot struct {
 	count  int                 // sends in that second
 	wakeCh chan struct{}
 	then   map[string]func(context.Context) // one-shot, after a capture of the user ends
+	// followUp is, per user, until when his next message is held: he just sent a
+	// password phrase and the value may come in the next message.
+	followUp map[string]time.Time
 }
 
 // New returns the Bot.
@@ -179,7 +182,7 @@ func New(o Options) (*Bot, error) {
 	if o.PollTimeout == 0 {
 		o.PollTimeout = 50 * time.Second
 	}
-	b := &Bot{o: o, st: &Store{DB: o.DB, Clock: o.Clock}, clk: o.Clock, log: o.Logger, cmds: map[string]Command{}, last: map[int64]time.Time{}, wakeCh: make(chan struct{}, 1), then: map[string]func(context.Context){}}
+	b := &Bot{o: o, st: &Store{DB: o.DB, Clock: o.Clock}, clk: o.Clock, log: o.Logger, cmds: map[string]Command{}, last: map[int64]time.Time{}, wakeCh: make(chan struct{}, 1), then: map[string]func(context.Context){}, followUp: map[string]time.Time{}}
 	for _, c := range o.Commands {
 		b.cmds[c.Name] = c
 	}
@@ -374,20 +377,33 @@ func (b *Bot) PollOnce(ctx context.Context) error {
 }
 
 // redacted is the update as it is kept: the text of a user the bot waits an
-// answer from (a PIN) and the text that carries a secret are not kept.
+// answer from (a PIN) and the text that carries a secret are not kept. A secret
+// leaves its kind in the copy, so an update never handled is still blocked.
 func (b *Bot) redacted(ctx context.Context, up Update, raw []byte) []byte {
 	m := up.Message
-	if m == nil || m.From == nil || (m.Text == "" && m.Caption == "") {
+	if m == nil || m.From == nil || bodyOf(m) == "" {
 		return raw
 	}
+	secret := secretNone
 	u, err := b.o.Users.ByTelegram(ctx, m.From.ID)
-	if err != nil {
+	switch {
+	case errors.Is(err, users.ErrNoUser):
+		// the text of a stranger goes to the Owner: it is kept only if it is clean
+		if secret, _ = b.screen(bodyOf(m)); secret == secretNone {
+			return raw
+		}
+	case err != nil:
 		return raw
-	}
-	if _, open, err := b.st.Capturing(ctx, u.ID); err != nil || !open {
-		// a message with a secret is not kept either: the queue of updates would
-		// hold it until it is processed
-		if k, _ := b.screen(m.Text + "\n" + m.Caption); k == secretNone {
+	default:
+		if c, found, cerr := b.st.Capturing(ctx, u.ID); cerr == nil && found {
+			// the answer of a capture is kept without text; but free text that is
+			// not a PIN is a secret of the filter too
+			if c.Kind != PINKind {
+				secret, _ = b.screen(bodyOf(m))
+			}
+		} else if secret, _ = b.screenMessage(u, m, false); secret == secretNone {
+			// a message with a secret is not kept either: the queue of updates
+			// would hold it until it is processed
 			return raw
 		}
 	}
@@ -395,6 +411,7 @@ func (b *Bot) redacted(ctx context.Context, up Update, raw []byte) []byte {
 	cp.Text, cp.Caption = "", ""
 	up.Message = &cp // a copy: the update being handled keeps its text
 	up.Redacted = true
+	up.Secret = string(secret)
 	out, err := json.Marshal(up)
 	if err != nil {
 		return []byte("{}")
@@ -412,10 +429,17 @@ func (b *Bot) processPending(ctx context.Context) error {
 			return nil // what is left waits for the Citadel that may act
 		}
 		var up Update
-		if err := json.Unmarshal(p.Body, &up); err == nil && !up.Redacted {
-			// A copy kept without its text (a captured answer) is not replayed:
-			// the user answers again.
-			b.handle(ctx, up)
+		if err := json.Unmarshal(p.Body, &up); err == nil {
+			switch {
+			case !up.Redacted:
+				b.handle(ctx, up)
+			case up.Secret != "":
+				// the text had a secret and was never handled: the message is
+				// still in the chat, so it is deleted, audited and the author told
+				b.blockedPending(ctx, up)
+			}
+			// A copy kept without its text and without a secret (a captured
+			// answer) is not replayed: the user answers again.
 		}
 		if err := b.st.Done(ctx, p.ID); err != nil {
 			return err
@@ -465,7 +489,27 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	case u.State != users.Active:
 		return // suspended: no answer, no alert
 	}
-	if c, found, err := b.st.Capturing(ctx, u.ID); err == nil && found && c.Armed {
+	c, found, cerr := b.st.Capturing(ctx, u.ID)
+	armed := cerr == nil && found && c.Armed
+	// The filter of secrets comes right after the user is known, before any
+	// branch: a command, a capture of free text, a user without the right to talk
+	// to the Grand Master. The answer of the PIN is the one thing that is no text.
+	var kind secretKind
+	var clean string
+	if !(armed && c.Kind == PINKind) {
+		kind, clean = b.screenMessage(u, m, true)
+	}
+	if kind != secretNone {
+		b.blocked(ctx, u, m, kind)
+		// only an ordinary message of a user who may talk goes on, as the notice or
+		// without the piece; what else it would do (run a command, be a capture)
+		// would need the text
+		text := strings.TrimSpace(bodyOf(m))
+		if armed || strings.HasPrefix(text, "/") || m.Kind() == KindOther || users.Require(u.Level, users.TalkToGrandMaster) != nil {
+			return
+		}
+	}
+	if armed {
 		// The prompt reached the user: what he writes now is the answer (or
 		// the end of the wait), never an ordinary message.
 		b.capture(ctx, u, c, m)
@@ -493,15 +537,13 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	if in.Text == "" {
 		in.Text = strings.TrimSpace(m.Caption)
 	}
-	// A secret is taken out before anything keeps or delivers the text: the
-	// message is deleted from the chat, and the Grand Master gets only what is left.
-	switch kind, clean := b.screen(in.Text); kind {
-	case secretPassphrase:
-		b.blocked(ctx, u, m, kind)
+	// What the Grand Master gets of a secret: the notice, or the text without
+	// the piece (the message was already deleted above).
+	switch {
+	case kind.held():
 		in.Text, in.File, in.Kind = HeldNotice, nil, KindText
-	case secretFormat:
-		b.blocked(ctx, u, m, kind)
-		in.Text, in.File = clean, nil
+	case kind == secretFormat:
+		in.Text, in.File = strings.TrimSpace(clean), nil
 	}
 	if m.ReplyTo != nil {
 		in.ReplyToMessage = m.ReplyTo.MessageID
@@ -577,6 +619,15 @@ func (b *Bot) stranger(ctx context.Context, m *Message) {
 			if text == "" {
 				text = strings.TrimSpace(m.Caption)
 			}
+			// the Owner reads what a stranger wrote: never a secret in it
+			switch kind, clean := b.screen(text); {
+			case kind.held():
+				b.blockedStranger(ctx, m, kind)
+				text = "[mensagem com senha omitida pelo motor]"
+			case kind == secretFormat:
+				b.blockedStranger(ctx, m, kind)
+				text = strings.TrimSpace(clean)
+			}
 			b.o.Strangers.Stranger(ctx, Stranger{ID: m.From.ID, Name: strings.TrimSpace(m.From.FirstName), Username: m.From.Username, Text: text, Kind: m.Kind()})
 			return
 		}
@@ -637,8 +688,8 @@ func (b *Bot) command(ctx context.Context, u users.User, m *Message, text string
 	}
 	out, err := cmd.Run(ctx, Call{User: u, Args: args, ChatID: m.Chat.ID, MessageID: m.MessageID})
 	if err != nil {
-		b.log.Warn("telegram: a command failed", "command", name, "err", err)
-		out = "Não consegui executar /" + name + ": " + err.Error()
+		b.log.Warn("telegram: a command failed", "command", name)
+		out = "Não consegui executar /" + name + ": " + b.o.Mask(err.Error())
 	}
 	if out != "" {
 		b.say(ctx, m.Chat.ID, u.ID, out)

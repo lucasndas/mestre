@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -22,11 +23,19 @@ const SecretBlockedEvent = "tentativa de envio de segredo bloqueada"
 // the time, and how it was caught (the way the engine saw it); nothing of the
 // message.
 func AuditSecretAttempt(ctx context.Context, db *store.DB, id string, at time.Time, machine, user, channel, how string) error {
+	return db.WriteDurable(ctx, func(tx *sql.Tx) error {
+		return auditSecretAttemptTx(ctx, tx, id, at, machine, user, channel, how)
+	})
+}
+
+// auditSecretAttemptTx is AuditSecretAttempt inside a transaction; an id that is
+// already there is not written twice.
+func auditSecretAttemptTx(ctx context.Context, tx *sql.Tx, id string, at time.Time, machine, user, channel, how string) error {
 	raw, err := json.Marshal(map[string]string{"event": SecretBlockedEvent, "user": user, "channel": channel, "how": how})
 	if err != nil {
 		return err
 	}
-	_, err = db.Writer().ExecContext(ctx, `INSERT INTO audit_log (id, at, machine_id, action, detail) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
+	_, err = tx.ExecContext(ctx, `INSERT INTO audit_log (id, at, machine_id, action, detail) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`,
 		id, at.UnixMilli(), machine, AuditSecretBlocked, string(raw))
 	return err
 }

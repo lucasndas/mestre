@@ -11,39 +11,42 @@ import (
 	"github.com/lucasndas/mestre/internal/vault"
 )
 
-// errNobodyToTell is a notice about a credential that reached no one: it is made
-// again at the next look.
-var errNobodyToTell = errors.New("app: nobody could be told about the credential")
-
 // vaultNotices takes the notices of the validity of the site credentials to the
 // people by the bot: one message to the owner_user of the credential and one to
 // each Owner (one message to a person who is both). The text names the credential
-// and the days, never a value.
+// and the days, never a value. Each person is told, and remembered, on his own
+// (vault.ExpiryWatcher): one who could not be reached is tried again at the next
+// look and the others are not told twice.
 type vaultNotices struct{ r *stdRun }
 
-func (v vaultNotices) Notify(ctx context.Context, n vault.Notice) error {
+// People are the active users with a Telegram who are owed the notice: its
+// owner_user and every Owner.
+func (v vaultNotices) People(ctx context.Context, n vault.Notice) ([]string, error) {
+	all, err := v.r.users.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, u := range all {
+		if u.State == users.Active && u.TelegramID != 0 && (u.ID == n.Owner || u.Level == users.Owner) {
+			ids = append(ids, u.ID)
+		}
+	}
+	return ids, nil
+}
+
+// Notify tells one person.
+func (v vaultNotices) Notify(ctx context.Context, n vault.Notice, person string) error {
 	bot := v.r.currentBot()
 	if bot == nil {
 		return errors.New("app: the bot of the Telegram is not up")
 	}
-	all, err := v.r.users.List(ctx)
+	u, err := v.r.users.Get(ctx, person)
 	if err != nil {
 		return err
 	}
-	text := noticeText(n)
-	told := 0
-	for _, u := range all {
-		if u.State != users.Active || u.TelegramID == 0 || (u.ID != n.Owner && u.Level != users.Owner) {
-			continue
-		}
-		if _, err := bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
-			v.r.env.Log.Warn("app: a notice about a credential was not queued", "user", u.ID, "err", err)
-			continue
-		}
-		told++
-	}
-	if told == 0 {
-		return errNobodyToTell
+	if _, err := bot.Send(ctx, telegram.Out{ChatID: u.TelegramID, UserID: u.ID, Text: noticeText(n), Origin: "motor"}); err != nil {
+		return fmt.Errorf("app: a notice about a credential was not queued for %s: %w", u.ID, err)
 	}
 	return nil
 }
@@ -66,5 +69,5 @@ func noticeText(n vault.Notice) string {
 // expiryWatcher is the watcher of the validity of the site credentials of this
 // period (CA-COFRE-17).
 func (r *stdRun) expiryWatcher() *vault.ExpiryWatcher {
-	return &vault.ExpiryWatcher{Vault: r.env.Vault, Clock: r.env.Clock, Notify: vaultNotices{r}.Notify, Logger: r.env.Log}
+	return &vault.ExpiryWatcher{Vault: r.env.Vault, Clock: r.env.Clock, People: vaultNotices{r}.People, Notify: vaultNotices{r}.Notify, Logger: r.env.Log}
 }

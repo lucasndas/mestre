@@ -418,6 +418,43 @@ func (s *Store) AddOutbound(ctx context.Context, o Outbound) (Outbound, error) {
 	return o, nil
 }
 
+// RedactSource is the database part of `reply --redact-source`, in one
+// transaction: the message leaves the inbox, the attempt goes to the audit (under
+// auditID, so it is written once) and the answer is kept. Either all of it
+// happens or none: a failure never leaves a message deleted without its audit,
+// and a message already gone is ErrNoItem, so a repeated request cannot go on to
+// delete anything else.
+func (s *Store) RedactSource(ctx context.Context, msg Item, auditID, machine string, at time.Time, out Outbound) (Outbound, error) {
+	seq, ok := seqOf(msg.ID)
+	if !ok {
+		return Outbound{}, fmt.Errorf("%w: %q", ErrNoItem, msg.ID)
+	}
+	attach, err := marshalOrEmpty(out.Attachments, len(out.Attachments) == 0)
+	if err != nil {
+		return Outbound{}, err
+	}
+	err = s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `DELETE FROM inbox_messages WHERE seq = ?`, seq)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return ErrNoItem
+		}
+		if err := auditSecretAttemptTx(ctx, tx, auditID, at, machine, msg.Origin.User, msg.Origin.Channel, "reply --redact-source"); err != nil {
+			return err
+		}
+		res, err = tx.ExecContext(ctx, `INSERT INTO outbound_messages (workspace, message, channel, user_id, conversation, reply_to, body, attachments, state, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`, out.Workspace, out.Message, out.Channel, out.User, out.Conversation, out.ReplyTo, out.Text, attach, ms(out.CreatedAt))
+		if err != nil {
+			return err
+		}
+		out.ID, err = res.LastInsertId()
+		return err
+	})
+	return out, err
+}
+
 // MarkSent records that the channel took the answer.
 func (s *Store) MarkSent(ctx context.Context, id int64, at time.Time) error {
 	_, err := s.exec(ctx, `UPDATE outbound_messages SET state = 'sent', sent_at = ? WHERE id = ? AND state = 'pending'`, ms(at), id)

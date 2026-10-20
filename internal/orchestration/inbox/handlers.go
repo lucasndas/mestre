@@ -50,6 +50,8 @@ func Refusal(err error) localchan.Response {
 		return localchan.Fail("nothing_to_reply", err.Error(), "see `mestre inbox` for the id of the message").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrNotGrandMaster):
 		return localchan.Fail("level_denied", err.Error(), "only the Grand Master answers the users")
+	case errors.Is(err, ErrRedactNeedsMessage):
+		return localchan.Fail(localchan.CodeUsage, err.Error(), "")
 	case errors.Is(err, ErrNoItem):
 		return localchan.Fail("not_found", err.Error(), "")
 	}
@@ -146,6 +148,9 @@ func (s *Service) handleReply(ctx context.Context, c *localchan.Call) localchan.
 	args, ok := c.Request.Strings()
 	if !ok || len(args) != 1 {
 		return localchan.Fail(localchan.CodeUsage, `usage: mestre reply "<text>" [--to-message <id>]`, "")
+	}
+	if flagBool(c, "redact-source") && flagString(c, "to-message") == "" {
+		return localchan.Fail(localchan.CodeUsage, "usage: mestre reply --redact-source needs --to-message <id>: say which message carried the secret", "")
 	}
 	attach := flagList(c, "attach")
 	res, err := s.Reply(ctx, ReplyRequest{From: x, Text: args[0], Attachments: attach, ToMessage: flagString(c, "to-message"), RedactSource: flagBool(c, "redact-source")})
