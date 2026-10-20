@@ -305,6 +305,12 @@ func (s *Session) ID() string { return s.id }
 // Input types into the terminal (implements providers.Keyboard).
 func (s *Session) Input(ctx context.Context, data []byte) error { return s.term.Input(ctx, data) }
 
+// sessionReader gives the supervision the screen as it is now.
+type sessionReader struct{ s *Session }
+
+// ReadScreen implements providers.ScreenReader.
+func (r sessionReader) ReadScreen(ctx context.Context) (string, error) { return r.s.Screen(ctx) }
+
 // Screen is the rendered screen.
 func (s *Session) Screen(ctx context.Context) (string, error) {
 	sc, err := s.term.Screen(ctx, 0)

@@ -6,6 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
 )
 
 // PullData is a PR as the commands read it.
@@ -301,4 +306,173 @@ func (c *REST) CommitStatus(ctx context.Context, repo, sha string) (string, erro
 		return "", nil
 	}
 	return v.State, nil
+}
+
+// The methods of a merge.
+const (
+	MergeMethodMerge  = "merge"
+	MergeMethodSquash = "squash"
+	MergeMethodRebase = "rebase"
+)
+
+// The refusals of a merge, told apart by the reason GitHub gives, because what the
+// caller does next depends on it. ErrHeadChanged (prs.go) is the PR having moved since
+// the commit that was approved; ErrBaseChanged the base having moved while the merge
+// was made (repeating with the same commit is safe); ErrBranchOutdated the rule
+// "branch up to date"; ErrMergeProtected any other rule of the branch (checks,
+// reviews, code owners, rulesets); ErrMethodNotAllowed a method the repository does
+// not allow; ErrForbidden the App not being allowed to merge (permission, not a
+// rule); ErrNotMergeable the rest (a conflict, a draft, closed or merged already).
+var (
+	ErrBaseChanged      = errors.New("github: the base branch moved while the PR was merged")
+	ErrBranchOutdated   = errors.New("github: the branch is not up to date with the base")
+	ErrMergeProtected   = errors.New("github: a rule of the branch does not let the PR be merged")
+	ErrMethodNotAllowed = errors.New("github: the repository does not allow this method of merge")
+	ErrForbidden        = errors.New("github: the App is not allowed to merge")
+	ErrNotMergeable     = errors.New("github: the PR is not mergeable")
+)
+
+// MergeResult is what GitHub answers to a merge. Recovered says the merge had
+// already happened (the answer to an earlier call was lost) and SHA is then empty.
+type MergeResult struct {
+	// SHA is the merge commit.
+	SHA       string
+	Merged    bool
+	Recovered bool
+}
+
+var shaRe = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// ValidSHA says s is the full hash of a commit, in lower case: the only thing a
+// merge is bound to (a branch, a prefix or a mixed-case text is refused).
+func ValidSHA(s string) bool { return shaRe.MatchString(s) }
+
+// MergePull merges a PR with the commit that was approved: GitHub refuses with
+// ErrHeadChanged if the PR has moved since. The rules of the repository apply to
+// the App that merges (the errors above carry GitHub's reason, cleaned). method is
+// MergeMethodMerge, MergeMethodSquash or MergeMethodRebase ("" is merge).
+//
+// The commit is the head of the PR; GitHub has no way to bind the base, so the caller
+// who needs the base not to move (the gate of freshness) reads its tip just before.
+// The caller writes the operation in github_objects before sending
+// (docs/github/acoes-por-nivel.md): if the answer is lost, the call can be made again,
+// and a merge that had happened is recognized (Recovered) when the PR is merged at the
+// approved commit.
+func (c *REST) MergePull(ctx context.Context, repo string, n int, sha, method string) (MergeResult, error) {
+	switch method {
+	case "":
+		method = MergeMethodMerge
+	case MergeMethodMerge, MergeMethodSquash, MergeMethodRebase:
+	default:
+		return MergeResult{}, fmt.Errorf("github: %q is not a method of merge", method)
+	}
+	if n <= 0 {
+		return MergeResult{}, errors.New("github: a merge needs the number of the PR")
+	}
+	if !ValidSHA(sha) {
+		return MergeResult{}, errors.New("github: a merge needs the full hash of the commit that was approved")
+	}
+	st, hdr, raw, err := c.doHeader(ctx, http.MethodPut, repo, fmt.Sprintf("/pulls/%d/merge", n), map[string]string{"sha": sha, "merge_method": method})
+	if err != nil {
+		if errors.Is(err, ErrUnavailable) {
+			return c.recoverMerge(ctx, repo, n, sha, err)
+		}
+		return MergeResult{}, err
+	}
+	var v struct {
+		SHA     string `json:"sha"`
+		Merged  bool   `json:"merged"`
+		Message string `json:"message"`
+	}
+	_ = json.Unmarshal(raw, &v)
+	why := cleanReason(v.Message)
+	switch {
+	case st == http.StatusOK:
+		if !v.Merged || !shaRe.MatchString(v.SHA) {
+			return MergeResult{}, fmt.Errorf("github: merging a PR: GitHub answered 200 without a merge (%s)", why)
+		}
+		return MergeResult{SHA: v.SHA, Merged: true}, nil
+	case st >= 500:
+		return c.recoverMerge(ctx, repo, n, sha, failed("merging a PR", st, raw, hdr))
+	case st == http.StatusConflict:
+		if strings.Contains(strings.ToLower(why), "base branch was modified") {
+			return MergeResult{}, fmt.Errorf("%w: %s", ErrBaseChanged, why)
+		}
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrHeadChanged, why)
+	case st == http.StatusForbidden:
+		low := strings.ToLower(why)
+		switch {
+		case hdr.Get("Retry-After") != "" || hdr.Get("X-RateLimit-Remaining") == "0" || strings.Contains(low, "rate limit"):
+			wait, _ := strconv.Atoi(hdr.Get("Retry-After"))
+			if wait < 1 {
+				wait = 60
+			}
+			return MergeResult{}, &LimitError{RetryAfter: time.Duration(wait) * time.Second}
+		case mergeRuleMessage(low):
+			return MergeResult{}, fmt.Errorf("%w: %s", ErrMergeProtected, why)
+		}
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrForbidden, why)
+	case st == http.StatusMethodNotAllowed || st == http.StatusUnprocessableEntity:
+		low := strings.ToLower(why)
+		switch {
+		case strings.Contains(low, "base branch was modified"):
+			return MergeResult{}, fmt.Errorf("%w: %s", ErrBaseChanged, why)
+		case strings.Contains(low, "not allowed on this repository") || strings.Contains(low, "invalid merge method"):
+			return MergeResult{}, fmt.Errorf("%w: %s", ErrMethodNotAllowed, why)
+		case strings.Contains(low, "not up to date"):
+			return MergeResult{}, fmt.Errorf("%w: %s", ErrBranchOutdated, why)
+		case mergeRuleMessage(low):
+			return MergeResult{}, fmt.Errorf("%w: %s", ErrMergeProtected, why)
+		}
+		if st == http.StatusMethodNotAllowed { // maybe the merge happened and the answer was lost
+			return c.recoverMerge(ctx, repo, n, sha, fmt.Errorf("%w: %s", ErrNotMergeable, why))
+		}
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrNotMergeable, why)
+	}
+	return MergeResult{}, failed("merging a PR", st, raw, hdr)
+}
+
+// recoverMerge reads the PR after an answer that does not say the merge failed for
+// sure: if it is merged at the approved commit the merge happened (the answer was
+// lost, or the call is a repetition), and that is success; merged at another commit it
+// is not ours; otherwise the original error stands.
+func (c *REST) recoverMerge(ctx context.Context, repo string, n int, sha string, orig error) (MergeResult, error) {
+	pr, err := c.PullData(ctx, repo, n)
+	switch {
+	case err != nil || !pr.Merged:
+		return MergeResult{}, orig
+	case pr.HeadSHA != sha:
+		return MergeResult{}, fmt.Errorf("%w: the PR is merged at another commit (%s)", ErrNotMergeable, pr.HeadSHA)
+	}
+	return MergeResult{Merged: true, Recovered: true}, nil
+}
+
+// cleanReason is a reason of GitHub made safe to show: printable characters only (no
+// control or direction marks), whitespace folded and cut by characters.
+func cleanReason(m string) string {
+	var b strings.Builder
+	for _, r := range m {
+		switch {
+		case unicode.IsSpace(r):
+			b.WriteRune(' ')
+		case unicode.IsPrint(r) && !unicode.Is(unicode.Cf, r):
+			b.WriteRune(r)
+		}
+	}
+	out := []rune(strings.Join(strings.Fields(b.String()), " "))
+	if len(out) > 300 {
+		out = out[:300]
+	}
+	return string(out)
+}
+
+// mergeRuleMessage says GitHub's reason (in lower case) is a rule of the branch: a
+// protected branch, a ruleset, a check, a review or the code owners.
+func mergeRuleMessage(m string) bool {
+	for _, k := range []string{"protected branch", "rule violation", "repository rule", "required status", "required review", "review is required", "required check", "ruleset", "branch protection", "code owner", "approving review", "waiting on"} {
+		if strings.Contains(m, k) {
+			return true
+		}
+	}
+	return false
 }

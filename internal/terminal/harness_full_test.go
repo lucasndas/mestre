@@ -23,6 +23,7 @@ import (
 	"github.com/lucasndas/mestre/internal/terminal"
 	"github.com/lucasndas/mestre/internal/terminal/ptywire"
 	"github.com/lucasndas/mestre/internal/testkit"
+	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -97,6 +98,8 @@ func TestMain(m *testing.M) {
 		}
 	}
 	code := m.Run()
+	// A test that left a process of these binaries alive fails the run.
+	code = leakcheck.Main(os.Stderr, code, dir)
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }

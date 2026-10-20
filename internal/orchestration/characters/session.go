@@ -539,6 +539,20 @@ func (k sessionKeyboard) Input(ctx context.Context, data []byte) error {
 	return p.Input(ctx, data)
 }
 
+type sessionReader struct{ s *session }
+
+// ReadScreen implements providers.ScreenReader: the screen as it is now.
+func (r sessionReader) ReadScreen(ctx context.Context) (string, error) {
+	r.s.mu.Lock()
+	p := r.s.proc
+	r.s.mu.Unlock()
+	if p == nil {
+		return "", noProcess(r.s.id)
+	}
+	sc, err := p.Screen(ctx)
+	return sc.Text, err
+}
+
 type nopChecklist struct{}
 
 func (nopChecklist) Alert(context.Context, providers.Alert) error { return nil }

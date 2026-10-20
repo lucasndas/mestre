@@ -26,6 +26,7 @@ import (
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	machinedb "github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
 	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -51,7 +52,13 @@ func buildFull(t *testing.T) {
 			fullErr = err
 			return
 		}
-		exitHooks = append(exitHooks, func() { _ = os.RemoveAll(dir) })
+		exitHooks = append(exitHooks, func(code int) int {
+			// A test that left a terminal alive fails the binary: the folder of
+			// the binaries marks the processes of this test binary.
+			code = leakcheck.Main(os.Stderr, code, dir)
+			_ = os.RemoveAll(dir)
+			return code
+		})
 		exe := ""
 		if runtime.GOOS == "windows" {
 			exe = ".exe"

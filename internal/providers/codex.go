@@ -14,11 +14,12 @@ type codex struct {
 	multiline bool // CodexMultilineViaFile
 	noFlush   bool // NoFlush
 	screens   screenSet
+	windows   bool // Options.OS: the send key typed again (SendRetrier)
 }
 
 // NewCodex returns the Codex adapter.
 func NewCodex(opts Options) Adapter {
-	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, noFlush: opts.NoFlush, screens: screenSet{
+	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, noFlush: opts.NoFlush, windows: machineOS(opts.OS) == "windows", screens: screenSet{
 		prompt:   agentPrompt,
 		busy:     regexp.MustCompile(`(?i)esc to interrupt|Working…`),
 		known:    codexScreens(),
@@ -224,11 +225,24 @@ func (c *codex) TypeMessage(text string) ([]byte, error) {
 
 var _ SendRetrier = (*codex)(nil)
 
+// codexModal is every dialog of Codex that would take the send key as the
+// answer of its default option, anywhere on the screen: the update, the model
+// switch, the rate-limit notices, the approvals, and the trust, hook review,
+// sandbox and login screens. The known screens are not enough here: the
+// update is StartOnly and the model switch and the rate limit have no entry.
+// A numbered menu option (› 1. …) is a dialog too. Refusing on a quote of the
+// model is the safe side: the delivery then waits for its timeout.
+var codexModal = regexp.MustCompile(`(?i)Press enter to|Enable full access|Continue anyway|make the following edits|world-writable|Try new model|Use existing model|Update available|Update now|Skip until next version|Switch to |Keep current model|Switch model|Approaching rate limits?|rate limit|usage limit|Would you like to run the following command\?|approve network access to|Trust this folder\?|Hooks need review|Trust all and continue|Set up the Codex agent sandbox|Sign in with ChatGPT|(?m:^[\s│┃|]*[›❯>]\s*\d+\.\s)`)
+
 // InputHolds: the input line of Codex (the last line that starts with ›)
-// starts with the first line of text. On Windows, 0.163.0 keeps there the
-// first message typed while it still starts, without sending it (the
-// Windows round of 2026-10-19).
+// starts with the first line of text. On Windows, 0.163.0 keeps there a
+// message whose send key came in the same write as the paste, without
+// sending it: every delivery of the conformance (the Windows round of
+// 2026-10-19).
 func (c *codex) InputHolds(screen, text string) bool {
+	if codexModal.MatchString(screen) {
+		return false
+	}
 	first, _, _ := strings.Cut(strings.TrimSpace(clean(text)), "\n")
 	want := []rune(strings.TrimSpace(first))
 	if len(want) == 0 {
@@ -238,9 +252,17 @@ func (c *codex) InputHolds(screen, text string) bool {
 		want = want[:20]
 	}
 	lines := strings.Split(screen, "\n")
+	below := 0 // non-empty lines from the candidate to the end of the screen
 	for i := len(lines) - 1; i >= 0; i-- {
-		if rest, ok := strings.CutPrefix(strings.TrimSpace(lines[i]), "›"); ok {
-			return strings.HasPrefix(strings.TrimSpace(rest), string(want))
+		t := strings.TrimSpace(lines[i])
+		if t != "" {
+			below++
+		}
+		if rest, ok := strings.CutPrefix(t, "›"); ok {
+			// The input line sits in the bottom lines, above the footer: a
+			// › line higher up is the history (the message of an earlier
+			// delivery), with a modal without the box below it.
+			return below <= bottomLines && strings.HasPrefix(strings.TrimSpace(rest), string(want))
 		}
 	}
 	return false
@@ -248,3 +270,8 @@ func (c *codex) InputHolds(screen, text string) bool {
 
 // SendKey is the key that sends what the input line of Codex holds.
 func (c *codex) SendKey() []byte { return []byte("\r") }
+
+// SendsAgain: only on Windows, where Codex drops the key that comes with the
+// paste; elsewhere the paste and the key in one write are sent (the
+// conformance test on Linux).
+func (c *codex) SendsAgain() bool { return c.windows }

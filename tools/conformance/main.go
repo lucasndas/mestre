@@ -70,9 +70,12 @@ func main() {
 	os.Exit(code)
 }
 
-const usage = "usage: MESTRE_REAL_CLI=1 conformance run|setup-codex -provider <id> -profile-dir <dir> -cli <path> -mestre <path> -pty <path> -root <dir> [flags]"
+const usage = "usage: MESTRE_REAL_CLI=1 conformance run|setup-codex -provider <id> -profile-dir <dir> -cli <path> -mestre <path> -pty <path> -root <dir> [flags]\n       conformance hookfiles -provider <id> -root <worktree> -mestre <path>"
 
 func run(ctx context.Context, args []string, out io.Writer, getenv func(string) string) int {
+	if len(args) > 0 && args[0] == "hookfiles" {
+		return hookFiles(args[1:], out)
+	}
 	if len(args) == 0 || (args[0] != "run" && args[0] != "setup-codex") {
 		fmt.Fprintln(out, usage)
 		return 2
