@@ -158,7 +158,7 @@ func TestADecreeCreatedForAnIdleCharacterReachesItsLayerAtTheStartOfTheNextTurn(
 		t.Fatal(err)
 	}
 
-	e := &Engine{log: slog.New(slog.DiscardHandler)}
+	e := &Engine{log: slog.New(slog.DiscardHandler), clk: clk}
 	e.period.Store(&periodHooks{layers: func(ctx context.Context, _ string) (sessionzero.Dynamic, error) { return sb.Refresh(ctx, gm) }})
 	ctxs := e.refreshingLayers(ch).Contexts()
 	turn := providers.Event{Event: providers.EventTurnStart, AgentID: gm.ID}

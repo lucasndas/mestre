@@ -8,7 +8,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 )
 
 var day = 24 * time.Hour
@@ -24,7 +24,7 @@ func TestTheCacheKeepsTheHistoryOfEachAddressAndForgetsTheOldOnes(t *testing.T) 
 		"machine database": func(t *testing.T) (discovery.Cache, func() discovery.Cache) {
 			path := filepath.Join(t.TempDir(), "maquina.db")
 			open := func() *store.DB {
-				db, err := machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+				db, err := guildtpl.OpenMachine(context.Background(), path, store.Options{Synchronous: "OFF"})
 				if err != nil {
 					t.Fatal(err)
 				}

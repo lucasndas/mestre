@@ -116,7 +116,7 @@ func (r *Runner) timeAlone(ctx context.Context, s Suite, pkg string, ts []*resul
 	defer cancel()
 	start := r.Clock.Now()
 	var b bytes.Buffer
-	_, err := r.Exec.Run(rctx, Cmd{Name: "go", Args: args, Env: []string{envSuite + "=" + s.Name}}, &b)
+	_, err := r.Exec.Run(rctx, Cmd{Name: "go", Args: args, Env: r.goEnv(s.Name)}, &b)
 	out.spent = clock.Since(r.Clock, start)
 	if err != nil || rctx.Err() != nil {
 		return out, false

@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 type spyRefresher struct{ calls []string }
@@ -26,7 +29,7 @@ func (s *spyInner) Context(context.Context, providers.Event) (string, error) {
 
 func TestTheLayerIsBroughtUpToDateOnlyAtTheStartOfATurnAndNeverHoldsIt(t *testing.T) {
 	t.Parallel()
-	e := &Engine{log: slog.New(slog.DiscardHandler)}
+	e := &Engine{log: slog.New(slog.DiscardHandler), clk: clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))}
 	r, in := &spyRefresher{}, &spyInner{}
 	c := &refreshingContexts{inner: in, r: r, e: e}
 	turn := providers.Event{Event: providers.EventTurnStart, AgentID: "gm"}
@@ -59,14 +62,33 @@ func TestTheLayerIsBroughtUpToDateOnlyAtTheStartOfATurnAndNeverHoldsIt(t *testin
 
 func TestAnUpdateThatHangsDoesNotHoldTheStartOfTheTurn(t *testing.T) {
 	t.Parallel()
-	e := &Engine{log: slog.New(slog.DiscardHandler)}
+	e := &Engine{log: slog.New(slog.DiscardHandler), clk: clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))}
 	e.period.Store(&periodHooks{layers: func(ctx context.Context, _ string) (sessionzero.Dynamic, error) {
 		<-ctx.Done()
 		return sessionzero.Dynamic{}, ctx.Err()
 	}})
 	r, in := &spyRefresher{}, &spyInner{}
 	c := &refreshingContexts{inner: in, r: r, e: e}
-	if got, err := c.Context(t.Context(), providers.Event{Event: providers.EventTurnStart, AgentID: "gm"}); got != "inner" || err != nil || len(r.calls) != 0 {
-		t.Fatalf("got %q, %v, refreshed %v", got, err, r.calls)
+	type answer struct {
+		got string
+		err error
+	}
+	done := make(chan answer)
+	go func() {
+		got, err := c.Context(t.Context(), providers.Event{Event: providers.EventTurnStart, AgentID: "gm"})
+		done <- answer{got, err}
+	}()
+	var a answer
+	for waiting := true; waiting; {
+		e.clk.(*clock.Fake).Advance(time.Second)
+		select {
+		case a = <-done:
+			waiting = false
+		default:
+			runtime.Gosched()
+		}
+	}
+	if a.got != "inner" || a.err != nil || len(r.calls) != 0 {
+		t.Fatalf("got %q, %v, refreshed %v", a.got, a.err, r.calls)
 	}
 }

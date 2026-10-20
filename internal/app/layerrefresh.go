@@ -9,6 +9,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // The Mestre layer is brought up to date at the start of each turn
@@ -65,7 +66,7 @@ func (c *refreshingContexts) Context(ctx context.Context, ev providers.Event) (s
 		if p := c.e.period.Load(); p != nil && p.layers != nil {
 			mu, _ := c.locks.LoadOrStore(ev.AgentID, &sync.Mutex{})
 			mu.(*sync.Mutex).Lock()
-			rctx, cancel := context.WithTimeout(ctx, refreshTimeout)
+			rctx, cancel := clock.WithTimeout(ctx, c.e.clk, refreshTimeout)
 			d, err := p.layers(rctx, ev.AgentID)
 			if err == nil {
 				_, err = c.r.Refresh(rctx, ev.AgentID, d)
