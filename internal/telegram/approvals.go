@@ -157,6 +157,22 @@ func (c *ApprovalChannel) afterAnswer(ctx context.Context, u users.User, rep app
 	return "Confirme com o PIN."
 }
 
+// AskPIN implements approvals.PINPrompter: the review a user made on GitHub is
+// valid and the request asks the PIN, so the PIN is asked here, as after the
+// button; the approval is applied when it is right (pinDone).
+func (c *ApprovalChannel) AskPIN(ctx context.Context, userID string, rep approvals.Reply) error {
+	if rep.PIN == "" {
+		return nil
+	}
+	err := c.bot.Ask(ctx, userID, PINKind, rep.PIN, "Seu review no GitHub vale como aprovação, mas este pedido exige o seu PIN. Digite o PIN para confirmar. A mensagem com o PIN é apagada.", promptTTL)
+	if err != nil {
+		c.flow.PINFailed(ctx, userID, rep.PIN)
+	}
+	return err
+}
+
+var _ approvals.PINPrompter = (*ApprovalChannel)(nil)
+
 // text takes the text an answer needs and applies the answer.
 func (c *ApprovalChannel) text(ctx context.Context, u users.User, ref, text string) (string, bool, error) {
 	request, ans, ok := parseArg(ref)

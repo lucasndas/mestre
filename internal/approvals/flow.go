@@ -758,6 +758,26 @@ func (f *Flow) InvalidateBy(ctx context.Context, userID string) error {
 	return nil
 }
 
+// RevokeVote ends the count of the approval of a user in a request still open
+// (the review that made it was dismissed on GitHub): the row stays in the
+// record, the quorum is counted again and the question shows it. A request
+// already decided is left as it was.
+func (f *Flow) RevokeVote(ctx context.Context, request int64, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, err := f.o.Chain.Get(ctx, request)
+	if err != nil || r.State.Closed() {
+		return err
+	}
+	if err := f.revoke(ctx, request, userID); err != nil {
+		return err
+	}
+	if fr, ok, err := f.row(ctx, request); err == nil && ok {
+		f.refresh(ctx, request, fr)
+	}
+	return nil
+}
+
 // Resend gives a user the buttons of an open request back: the ones they had
 // were used up by an answer that did not end (a PIN that failed, a text that
 // was refused).
