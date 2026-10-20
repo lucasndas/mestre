@@ -355,6 +355,13 @@ type CharacterStart struct {
 	Request       Object `json:"request" proto:"req"`
 }
 
+// CharacterStartResult is the answer (in the ack) of character.start. ClassHooks is the hash
+// of the package of the hooks of the class that the Tower applies to the character: empty
+// when the class has none. A Tower that does not say it (an old one) is not taken to run them.
+type CharacterStartResult struct {
+	ClassHooks string `json:"class_hooks,omitempty"`
+}
+
 // CharacterStop is `character.stop`: the end of a character on its machine.
 type CharacterStop struct {
 	Character string `json:"character" proto:"req"`

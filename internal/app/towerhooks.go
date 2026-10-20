@@ -35,21 +35,21 @@ var errHooksNotReceived = errors.New("the class of the character has hooks and t
 // towerClassHooksReady checks, before the terminal is made, that the Tower holds the hooks of
 // the class of the character that starts: the effective rules the Citadel sent before the
 // start carry them, from the same package (the same hash) as the class of the request.
-func (e *Engine) towerClassHooksReady(ctx context.Context, req sessionzero.CharacterRequest) error {
+func (e *Engine) towerClassHooksReady(ctx context.Context, req sessionzero.CharacterRequest) (string, error) {
 	if req.Class == nil || len(req.Class.Hooks) == 0 {
-		return nil
+		return "", nil
 	}
 	if e.mdb == nil {
-		return errHooksNotReceived
+		return "", errHooksNotReceived
 	}
 	rules, err := (&classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}).Rules(ctx, req.ID)
 	if err != nil || rules.ClassHooks == nil || len(rules.ClassHooks.Hooks) == 0 {
-		return errHooksNotReceived
+		return "", errHooksNotReceived
 	}
 	if req.Class.Hash != "" && rules.ClassHooks.Hash != req.Class.Hash {
-		return fmt.Errorf("%w (the package of the hooks is not the one of the class)", errHooksNotReceived)
+		return "", fmt.Errorf("%w (the package of the hooks is not the one of the class)", errHooksNotReceived)
 	}
-	return nil
+	return rules.ClassHooks.Hash, nil
 }
 
 // towerHookOutputs is where the asynchronous hooks of a Tower write: the log is the Tower's,

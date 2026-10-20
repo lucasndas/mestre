@@ -171,7 +171,7 @@ func (m *machineRouter) Start(ctx context.Context, machine string, cmd character
 	}
 	m.markInFlight(cmd.Character, 1)
 	defer m.markInFlight(cmd.Character, -1)
-	_, err = m.call(ctx, machine, towerStartWait, protocol.Outgoing{Type: protocol.TypeCharacterStart, Payload: protocol.CharacterStart{
+	ans, err := m.call(ctx, machine, towerStartWait, protocol.Outgoing{Type: protocol.TypeCharacterStart, Payload: protocol.CharacterStart{
 		Character: cmd.Character, TerminalID: cmd.Terminal, Kind: string(cmd.Kind), Resumed: cmd.Resumed, ResumeMessage: cmd.ResumeMessage, Request: req,
 	}})
 	if errors.Is(err, errNoAnswer) {
@@ -186,7 +186,35 @@ func (m *machineRouter) Start(ctx context.Context, machine string, cmd character
 	if err != nil {
 		return characters.StartResult{}, err
 	}
+	// A class with hooks starts only on a Tower that confirms it applies the same hooks: a Tower
+	// that does not say so (an old one) or says another package would run it without them.
+	if c := cmd.Request.Class; c != nil && len(c.Hooks) > 0 {
+		if why := hooksNotConfirmed(ans, c.Hash); why != "" {
+			sctx, cancel := clock.WithTimeout(context.WithoutCancel(ctx), m.clk, towerCallWait)
+			defer cancel()
+			_, _ = m.call(sctx, machine, towerCallWait, protocol.Outgoing{Type: protocol.TypeCharacterStop,
+				Payload: protocol.CharacterStop{Character: cmd.Character, TerminalID: cmd.Terminal, Final: !cmd.Resumed, Reason: why, Abandon: true}})
+			return characters.StartResult{}, fmt.Errorf("%w: %s", errHooksUnconfirmed, why)
+		}
+	}
 	return characters.StartResult{Terminal: cmd.Terminal}, nil
+}
+
+// errHooksUnconfirmed is why a character whose class has hooks was stopped on a Tower.
+var errHooksUnconfirmed = errors.New("the Tower did not confirm the hooks of the class")
+
+// hooksNotConfirmed says why the answer of character.start does not confirm the hooks of the
+// class (hash is the one of its package), or "" when it does.
+func hooksNotConfirmed(ans json.RawMessage, hash string) string {
+	var res protocol.CharacterStartResult
+	_ = json.Unmarshal(ans, &res)
+	switch {
+	case res.ClassHooks == "":
+		return "the Tower did not say it applies the hooks of the class (a version that does not run them)"
+	case hash != "" && res.ClassHooks != hash:
+		return "the Tower applies another package of hooks than the one of the class"
+	}
+	return ""
 }
 
 // markInFlight counts the starts of a character on their way to a Tower;

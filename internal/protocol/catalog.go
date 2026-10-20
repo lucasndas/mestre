@@ -124,7 +124,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeTerminalScreenResult, Dir: TowerToCitadel, Payload: TerminalScreenResult{}},
 		Spec{Type: TypeInboxDeliver, Dir: CitadelToTower, Ack: true, Payload: InboxDeliver{}},
 		Spec{Type: TypeInboxResult, Dir: TowerToCitadel, Ack: true, Payload: InboxResult{}},
-		Spec{Type: TypeCharacterStart, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: CharacterStart{}},
+		Spec{Type: TypeCharacterStart, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: CharacterStart{}, Reply: CharacterStartResult{}},
 		Spec{Type: TypeCharacterStop, Dir: CitadelToTower, Ack: true, Payload: CharacterStop{}},
 		Spec{Type: TypeCharacterNotice, Dir: TowerToCitadel, Ack: true, Payload: CharacterNotice{}},
 		Spec{Type: TypeCharacterTurn, Dir: TowerToCitadel, Ack: true, Payload: CharacterTurn{}},
