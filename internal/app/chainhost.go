@@ -105,7 +105,9 @@ func policyFileFor(layout workspaces.Layout, tell ownerTeller, log *slog.Logger)
 	}
 	if tell != nil {
 		pf.Alert = func(workspace string, err error) {
-			tell.OwnerAlert(context.Background(), fmt.Sprintf("O arquivo de política de aprovação do workspace %s não vale (%v); continua valendo a última versão válida.", workspace, err))
+			// in its own goroutine: the alert is read by the sweeps of other services inside
+			// a write of the database, and sending it writes to the same database
+			go tell.OwnerAlert(context.Background(), fmt.Sprintf("O arquivo de política de aprovação do workspace %s não vale (%v); continua valendo a última versão válida.", workspace, err))
 		}
 	}
 	return pf

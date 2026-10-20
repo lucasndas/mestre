@@ -132,7 +132,7 @@ func TestTheRefusalsOfGitHubAreToldApart(t *testing.T) {
 		if len(r.pushes()) != 1 {
 			t.Errorf("%s: the sending was tried %d times, want once: %q", name, len(r.pushes()), r.pushes())
 		}
-		if tc.toldGM != (len(told) == 1) || tc.toldGM && !strings.HasPrefix(told[0], "42-login "+tc.code+": ") {
+		if tc.toldGM != (len(told) == 1) || tc.toldGM && (!strings.HasPrefix(told[0], "42-login "+tc.code+": ") || strings.HasSuffix(told[0], ": ")) {
 			t.Errorf("%s: the Grand Master was told %q, want told=%v with the code and a reason", name, told, tc.toldGM)
 		}
 	}

@@ -160,7 +160,7 @@ func TestTheGrandMasterApprovesRepositorySettingsOnlyWithADelegationOfTheOwner(t
 	if w.level(id) != chain.LevelPeople {
 		t.Fatalf("without a delegation the request is at %+v, want the people", w.request(id).Level)
 	}
-	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired && ref.Code != chain.CodeNotAtLevel {
+	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired {
 		t.Fatalf("approval without a delegation = %+v, want human_required", ref)
 	}
 	w.deleg.set(true)
@@ -209,7 +209,7 @@ func TestADelegationForWorkflowsCoversOnlyItsTableAndAQuorumRuleStillSendsItToTh
 	if w.level(outside) != chain.LevelPeople {
 		t.Fatalf("the request of another table is at %+v, want the people", w.request(outside).Level)
 	}
-	if ref := w.refusal(chain.Decision{Request: outside, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired && ref.Code != chain.CodeNotAtLevel {
+	if ref := w.refusal(chain.Decision{Request: outside, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired {
 		t.Fatalf("approval outside the delegation = %+v, want human_required", ref)
 	}
 	rules := chain.DefaultRules()

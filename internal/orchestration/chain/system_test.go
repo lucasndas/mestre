@@ -57,7 +57,7 @@ func TestARequestToEnterTheGuildGoesOnlyToTheOwnerWhoApprovesOrDeniesWithThePIN(
 	}
 	// a delegation of the Owner does not give it to the Grand Master
 	w.deleg.set(true)
-	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove}); ref.Code != chain.CodeHumanRequired && ref.Code != chain.CodeNotAtLevel {
+	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove}); ref.Code != chain.CodeHumanRequired {
 		t.Errorf("the Grand Master deciding the entry: %+v", ref)
 	}
 	if _, _, err := chain.ParsePolicyFile([]byte("versao: 1\ntipos:\n  promocao_cidadela: { sozinho: nunca }\n")); err == nil {

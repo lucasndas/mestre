@@ -3,6 +3,7 @@ package decrees_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -504,6 +505,17 @@ func TestTheValidityAndTheReminderOfADelegationComeFromThePolicyOfItsWorkspace(t
 		Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"}, Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: "envio_workflows"}, Text: "delegue os workflows"})
 	if want := w.clk.Now().Add(10 * day); !d.Until.Equal(want) {
 		t.Fatalf("until = %v, want %v", d.Until, want)
+	}
+	// another workspace asks for more than the 30 days the file may give: it gets 30
+	other := w.confirm(decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "blog", Mesa: "7-post",
+		Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "blog"}, Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: "envio_workflows"}, Text: "delegue os workflows"})
+	if want := w.clk.Now().Add(30 * day); !other.Until.Equal(want) {
+		t.Fatalf("another workspace: until = %v, want the 30 days at most (%v)", other.Until, want)
+	}
+	// the renewal gives the validity of the workspace
+	pend, err := svc.Renew(w.ctx, d.Number, w.owner.ID)
+	if err != nil || !strings.Contains(pend.Text, "29/10/2026") {
+		t.Fatalf("renew = %+v, %v; want the 10 days of the workspace", pend, err)
 	}
 	w.clk.Advance(7 * day) // 3 days left: the reminder of the workspace is 2
 	if err := svc.Sweep(w.ctx); err != nil || rem.n() != 0 {

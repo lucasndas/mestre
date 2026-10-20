@@ -534,7 +534,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 			if err != nil || !ok {
 				return
 			}
-			text := fmt.Sprintf("GitHub recusou o envio da branch da mesa %s (%s): %s. O motor não tenta outro caminho.", c.Table, code, reason)
+			text := fmt.Sprintf("O envio da branch da mesa %s foi recusado (%s): %s. O motor não tenta outro caminho.", c.Table, code, reason)
 			if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: c.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
 				r.env.Log.Warn("app: the Grand Master was not told of the refusal of GitHub", "workspace", c.Workspace, "err", err)
 			}
