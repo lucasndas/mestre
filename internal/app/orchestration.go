@@ -112,6 +112,11 @@ type OrchestrationOptions struct {
 	QuestGitHub    quests.GitHub
 	QuestApprovals quests.Approvals
 	QuestCatalog   quests.Catalog
+	// QuestIssues checks that the `issue` of a mission is one of its table
+	// (nil: not checked); QuestMaxCorrections is how many fix missions an
+	// epic may have (zero: quests.DefaultMaxCorrections).
+	QuestIssues         quests.IssueOwner
+	QuestMaxCorrections int
 	// QuestDone gives the done_requires of the class of a character (nil: from
 	// the libraries of classes, ClassLibraries).
 	QuestDone quests.DoneRules
@@ -629,7 +634,8 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
 		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger,
-		Brief: &grandMasterBrief{reg: reg, tables: tables.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}, chain: &chain.Store{DB: o.Guild}}})
+		Brief:      &grandMasterBrief{reg: reg, tables: tables.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}, chain: &chain.Store{DB: o.Guild}},
+		TableBrief: &tableMasterBrief{reg: reg, quests: &quests.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}}})
 	if err != nil {
 		return nil, err
 	}
@@ -678,7 +684,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	},
 		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted})
+		Issues: o.QuestIssues, MaxCorrections: o.QuestMaxCorrections, Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted})
 	if err != nil {
 		return nil, err
 	}
