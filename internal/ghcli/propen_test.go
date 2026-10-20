@@ -217,18 +217,35 @@ func TestTheWorkflowsOfTheClassDecideTheSendingOfThemInTheDiff(t *testing.T) {
 	}
 }
 
-// Part of CA-CLI-GH-13: the criteria without proof stop the opening.
+// CA-CLI-GH-13: the criteria without proof stop the opening (exit 7
+// criteria_unproven citing C3, nothing sent); with C3 proved the pull request
+// opens, the marks of block that the agent wrote in the body are taken out, and
+// the block criterios is written only by `pr update --block criterios`.
 func TestCriteriaWithoutProofStopTheOpening(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	r.criteria.open = []string{"C3"}
-	got := r.run("tm", "pr open", nil)
+	body := "Login.\n\n<!-- mestre:bloco=criterios -->\nC1, C2 e C3 provados.\n<!-- /mestre:bloco -->"
+	got := r.run("tm", "pr open", map[string]any{"body": body})
 	if got.OK || got.Exit != 7 || got.Code != "criteria_unproven" || !strings.Contains(got.Error, "C3") || len(r.pushes()) != 0 {
 		t.Fatalf("open: %+v pushes %q", got, r.pushes())
 	}
 	r.criteria.open = nil
-	if got := r.run("tm", "pr open", nil); !got.OK {
-		t.Errorf("proved: %+v", got)
+	got = r.run("tm", "pr open", map[string]any{"body": body})
+	if !got.OK {
+		t.Fatalf("proved: %+v", got)
+	}
+	n := int(got.Data["number"].(float64))
+	if pb := r.gh.PullBody(repoFull, n); strings.Contains(pb, "<!-- mestre:bloco=criterios -->") {
+		t.Fatalf("the body written by the agent made a block: %q", pb)
+	}
+	head := strings.Repeat("c", 40)
+	r.gh.SetPull(repoFull, n, head, false, "clean")
+	if up := r.run("tm", "pr update", map[string]any{"block": "criterios", "expect-head": head}, "C1, C2 e C3 provados."); !up.OK {
+		t.Fatalf("pr update --block criterios: %+v", up)
+	}
+	if pb := r.gh.PullBody(repoFull, n); !strings.Contains(pb, "<!-- mestre:bloco=criterios -->") || !strings.Contains(pb, "C1, C2 e C3 provados.") {
+		t.Errorf("the block criterios is not in the body: %q", pb)
 	}
 }
 
