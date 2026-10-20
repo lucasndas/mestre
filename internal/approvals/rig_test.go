@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit/fakechannel"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
@@ -124,6 +125,12 @@ func (w *world) open(o openOpts) chain.Request {
 		r.Deadline = w.clk.Now().Add(-time.Second)
 	}
 	r.PR = o.pr
+	if o.action != "" {
+		// a permission of the class for a shell command of a table
+		r.Type, r.Table, r.Class = classes.RequestClassPermission, "42-login", "dev"
+		r.Action = &classes.Action{Kind: providers.KindShell, Command: o.action}
+		r.Risk = classes.RiskResult{Risk: classes.RiskLow}
+	}
 	if o.target != "" {
 		imp, err := chain.Impress(json.RawMessage(o.target))
 		if err != nil {
@@ -156,6 +163,8 @@ type openOpts struct {
 	target  string
 	late    bool // the time of the level is over
 	pr      *chain.PRRef
+	// action is the shell command of a permission of the class (type, table and risk follow).
+	action string
 }
 
 func (w *world) answer(u users.User, request int64, a chain.Answer) (approvals.Reply, error) {

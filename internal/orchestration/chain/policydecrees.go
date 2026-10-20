@@ -39,7 +39,9 @@ func (r PolicyRules) WithDecrees(a PolicyAdjust) PolicyRules {
 	if r.AskAlways == nil {
 		r.AskAlways = map[classes.RequestType]bool{}
 	}
-	tightened := func(s string) bool { return slices.Contains(a.Tighten, s) || slices.Contains(a.Tighten, "*") || slices.Contains(a.Tighten, "tudo") }
+	tightened := func(s string) bool {
+		return slices.Contains(a.Tighten, s) || slices.Contains(a.Tighten, "*") || slices.Contains(a.Tighten, "tudo")
+	}
 	for _, s := range a.Loosen {
 		if tightened(s) || slices.Contains(neverLoosened, s) {
 			continue

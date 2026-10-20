@@ -257,6 +257,10 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 			sent++
 			continue
 		}
+		if f.joinGroup(ctx, q, u.ID, answers) {
+			sent++
+			continue
+		}
 		ref, err := f.o.Messenger.Send(ctx, Message{UserID: u.ID, Request: q.Request, Text: text, Answers: answers})
 		switch {
 		case errors.Is(err, ErrNoChannel):
@@ -370,6 +374,9 @@ func (f *Flow) Withdraw(ctx context.Context, request int64, why string) error {
 	}
 	by, at := f.decider(ctx, r)
 	for _, m := range rs {
+		if f.regroup(ctx, request, m) {
+			continue // the question is shared with requests that are still open
+		}
 		text := f.endText(why, by, at, m.user == by.id)
 		if err := f.o.Messenger.Edit(ctx, MessageEdit{UserID: m.user, Ref: m.ref, Text: text, Request: request}); err != nil {
 			f.log.Warn("approvals: the message was not edited", "request", request, "user", m.user, "err", err)
@@ -443,6 +450,7 @@ func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, erro
 	if err != nil {
 		return Reply{}, err
 	}
+	members := f.sharedWith(ctx, userID, in)
 	if (in.Answer.Approves() || in.Answer == chain.AnswerDelegate) && (fr.PIN || asksPIN(in.Answer)) {
 		if f.o.PINs == nil {
 			return Reply{}, ErrPIN
@@ -460,7 +468,23 @@ func (f *Flow) Answer(ctx context.Context, userID string, in Input) (Reply, erro
 		}
 		return Reply{Text: "Digite o seu PIN para confirmar.", PIN: pr.ID}, nil
 	}
+	if len(members) > 1 {
+		return f.applyGroup(ctx, userID, members, in)
+	}
 	return f.apply(ctx, u, r, fr, in)
+}
+
+// sharedWith are the requests that answer together with the one of the input: the
+// ones of the question it is in, when the answer stands for all of them.
+func (f *Flow) sharedWith(ctx context.Context, userID string, in Input) []chain.Request {
+	if !groupAnswers(in.Answer) {
+		return nil
+	}
+	members, err := f.groupOf(ctx, userID, in.Request)
+	if err != nil {
+		return nil
+	}
+	return members
 }
 
 // ConfirmPIN applies the answer that waited for the PIN, once, after the PIN
@@ -494,6 +518,9 @@ func (f *Flow) ConfirmPIN(ctx context.Context, userID, pinRequest string) (Reply
 	u, r, fr, err := f.check(ctx, userID, in.Request, in.Answer)
 	if err != nil {
 		return Reply{}, err
+	}
+	if members := f.sharedWith(ctx, userID, in); len(members) > 1 {
+		return f.applyGroup(ctx, userID, members, in)
 	}
 	return f.apply(ctx, u, r, fr, in)
 }
@@ -847,3 +874,5 @@ func plain(s string) string {
 		return r
 	}, s)
 }
+
+func jsonUnmarshal(s string, v any) error { return json.Unmarshal([]byte(s), v) }
