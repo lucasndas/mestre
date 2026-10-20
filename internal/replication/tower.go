@@ -83,6 +83,7 @@ type Replica struct {
 	link        *protocol.Link
 	queue       []store.LogRow
 	queueBytes  int
+	queueGen    uint64 // bumped when the queue is dropped, so a drain in flight knows its batch is gone
 	lastQueued  uint64
 	applied     uint64
 	lastAcked   uint64
@@ -343,6 +344,7 @@ func (r *Replica) askFromLocked(full bool) {
 		r.needCopy = true
 		r.state = "waiting-copy"
 		r.queue, r.queueBytes = nil, 0
+		r.queueGen++
 	}
 	r.sendResyncLocked(from)
 }
@@ -429,6 +431,7 @@ func (r *Replica) drain(ctx context.Context) {
 		}
 		batch := append([]store.LogRow(nil), r.queue[:n]...)
 		excluded := r.excluded
+		gen := r.queueGen
 		r.mu.Unlock()
 
 		if excluded { // vault.drop may overtake records still on their way
@@ -453,6 +456,10 @@ func (r *Replica) drain(ctx context.Context) {
 			return
 		}
 		r.mu.Lock()
+		if r.queueGen != gen { // a copy or a resync dropped the queue while the batch applied
+			r.mu.Unlock()
+			continue
+		}
 		r.queue = r.queue[n:]
 		for _, row := range batch {
 			r.queueBytes -= len(row.Body)
@@ -496,6 +503,7 @@ func (r *Replica) failed(err error) {
 	case errors.As(err, &gap):
 		r.mu.Lock()
 		r.queue, r.queueBytes = nil, 0
+		r.queueGen++
 		r.lastQueued, r.applied = gap.Have, gap.Have
 		r.resyncAsked = false
 		r.askFromLocked(false)
@@ -592,6 +600,7 @@ func (r *Replica) finalizeSnapshot(ctx context.Context, b protocol.XferBegin, fi
 	}
 	r.mu.Lock()
 	r.queue, r.queueBytes = nil, 0
+	r.queueGen++
 	r.lastQueued, r.applied, r.lastAcked = meta.LSN, meta.LSN, 0
 	r.needCopy, r.resyncAsked = false, false
 	r.state, r.lastErr = "ok", ""
