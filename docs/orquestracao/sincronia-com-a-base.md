@@ -13,7 +13,7 @@ Impedir que o PR da mesa trave por conflito de rotina ou chegue ao merge com a b
 O motor cria a etapa `sync` quando:
 
 1. o [gate de frescor](../github/acoes-por-nivel.md#merge) falha: a base integrada num worktree efêmero não passa na verificação;
-2. a base andou depois do PR aberto: o motor deduz isso a cada `fetch` do espelho (a ponta da base mudou desde a abertura da mesa ou desde a última `sync`) e, como segundo sinal, do `pr_alterado` com o PR atrás da base ou em conflito ([eventos](../github/eventos.md)); nenhum evento novo do GitHub é preciso;
+2. a base andou depois do PR aberto: o motor deduz isso a cada `fetch` do espelho (a ponta da base mudou desde a abertura da mesa ou desde a última `sync`; na prática, a ponta de `origin/<base>` no espelho não está na branch da mesa, sem estado guardado para esquecer) e, como segundo sinal, do `pr_alterado` com o PR atrás da base ou em conflito ([eventos](../github/eventos.md)); nenhum evento novo do GitHub é preciso;
 3. o Mestre da mesa pede `mestre pr open` e a base andou desde a abertura da mesa: o envio é recusado com 7 `conflict` e a dica de que a etapa `sync` foi criada ([CLI](../cli/coordenacao-github.md)).
 
 Nenhum dos três depende de a mesa ter conflito de texto: a base ter andado basta para o motor conferir.
@@ -36,7 +36,9 @@ O `done` da `sync` não encerra a etapa sozinho. O motor roda a verificação nu
 
 - A etapa `sync` não amplia permissões: o Dev usa as da classe dele ([permissões](../classes/permissoes.md)). Quem não pode rodar a verificação a devolve ao Mestre da mesa.
 - Sem comando de verificação confirmado, a `sync` não consegue provar a chegada: o motor a devolve ao Mestre da mesa, que leva ao Grão-Mestre a pergunta de quais comandos usar.
-- Só uma etapa `sync` aberta por mesa; um evento de base andada com uma já em andamento é ignorado.
+- Sem Dev da mesa vivo (ninguém vivo fez uma etapa que mudou código) a missão não nasce: o Mestre da mesa recebe um item `system` (uma vez por ponta da base) pedindo que escolha quem integra e crie a missão `sync`; `mestre pr open` segue recusado. Mesa pausada, ou que não está em `working` ou `in_review`, não recebe a etapa, e `mestre pr open` continua recusado: na dúvida o envio não sai.
+- O risco `baixo` da etapa quer dizer que ela não tem ponto de aprovação; a missão não tem campo de risco.
+- Só uma etapa `sync` aberta por mesa (missão `sync`; uma nova depois da concluída roda de novo a mesma missão, e a cancelada deixa o nome, então a seguinte é `sync-2`); um evento de base andada com uma já em andamento é ignorado.
 - Base que anda de novo durante a `sync` repete o gate no fim, antes de concluir.
 
 ## Critérios de aceite
