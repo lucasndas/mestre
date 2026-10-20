@@ -13,6 +13,7 @@ import (
 // engine with PROCESS_QUERY_LIMITED_INFORMATION and nothing else; calling it
 // again adds nothing; the ACEs that were there stay.
 func TestTheCLIAllowsTheEngineToQueryItselfAndNothingMore(t *testing.T) {
+	t.Parallel()
 	sid, err := windows.StringToSid("S-1-5-80-9-8-7-6-5")
 	if err != nil {
 		t.Fatal(err)
