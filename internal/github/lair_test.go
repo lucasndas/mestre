@@ -38,6 +38,10 @@ func TestTheRepositoryOfTheLockIsMadePrivateWithAutoInitAndRecorded(t *testing.T
 	if got, ok, _ := w.apps.LairRepo(w.ctx); !ok || got != want {
 		t.Errorf("recorded %q, %v", got, ok)
 	}
+	// what was asked of GitHub: private and with the first commit (auto_init)
+	if made, ok := w.gh.MadeRepo(want); !ok || !made.Private || !made.AutoInit {
+		t.Errorf("GitHub was asked %+v (created %v); want private with auto_init", made, ok)
+	}
 	// the second call finds it already made and is not an error
 	if again, err := newLair(w).Ensure(w.ctx, "lucas", guildID, tok.Secret()); err != nil || again != want {
 		t.Errorf("the second Ensure = %q, %v", again, err)
@@ -57,6 +61,22 @@ func TestWhenGitHubRefusesTheCreationTheOwnerGetsTheLinkAndNoLockIsRecorded(t *t
 	}
 	if _, ok, _ := w.apps.LairRepo(w.ctx); ok {
 		t.Error("a repository of the lock was recorded without the access being confirmed")
+	}
+	// no promotion is possible: the Guild has no lock until the access is confirmed
+	if lock, err := github.NewLairLock(w.ctx, w.tokens, guildID, w.srv.URL, w.srv.Client()); err != nil || lock != nil {
+		t.Errorf("a lock was made with no repository confirmed: %v, %v", lock, err)
+	}
+	// the Owner makes it in the browser (private); the engine confirms the access
+	// and only then the Guild has the lock
+	name := github.LairRepoName(guildID)
+	w.gh.AddRepo("lucas", name)
+	w.gh.AddInstalledRepo("lucas-mestre-grao-mestre", "lucas/"+name, true)
+	tok, _ = w.tokens.Installation(w.ctx, github.Request{App: "lucas-mestre-grao-mestre", Permissions: lairPerms})
+	if _, err := newLair(w).Ensure(w.ctx, "lucas", guildID, tok.Secret()); err != nil {
+		t.Fatalf("Ensure after the Owner made it by hand = %v", err)
+	}
+	if lock, err := github.NewLairLock(w.ctx, w.tokens, guildID, w.srv.URL, w.srv.Client()); err != nil || lock == nil {
+		t.Errorf("no lock after the access was confirmed: %v, %v", lock, err)
 	}
 	// an App without the permission of creating gets the same answer
 	w2 := newWorld(t)

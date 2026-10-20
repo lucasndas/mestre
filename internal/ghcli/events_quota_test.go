@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // pollWorld is the poller of the events over the same Guild, double of GitHub and
@@ -90,7 +92,12 @@ func TestWhenTheQuotaRunsOutEveryLoopWaitsTheOwnerIsToldOnceAndAWriteAsksedMeanw
 		t.Fatalf("GitHub was asked %d times with the quota over", len(r.gh.Reads())-reads)
 	}
 	// a comment asked meanwhile waits in the queue and goes out once
-	got := r.run("tm", "issue comment", nil, itoa(n), "uma vez só")
+	// (it keeps the uuid of the request, which is the marker of the operation)
+	uuid, err := localchan.NewID(clock.Real{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := r.runID(uuid, "tm", "issue comment", nil, itoa(n), "uma vez só")
 	if !got.OK || got.Data["queued"] != true {
 		t.Fatalf("the comment: %+v", got)
 	}
@@ -99,8 +106,15 @@ func TestWhenTheQuotaRunsOutEveryLoopWaitsTheOwnerIsToldOnceAndAWriteAsksedMeanw
 	}
 	r.clk.Advance(20 * time.Minute) // the renewal
 	r.gh.IssueToken("tok_mestre", "mestre")
-	if cs := r.gh.Comments(repoFull, n); len(cs) != 1 || !strings.HasPrefix(cs[0], "uma vez só") {
-		t.Fatalf("after the renewal the comments are %q, want one", cs)
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 1 || !strings.HasPrefix(cs[0], "uma vez só") || !strings.Contains(cs[0], "mestre:op="+uuid) {
+		t.Fatalf("after the renewal the comments are %q, want one carrying the uuid %s", cs, uuid)
+	}
+	// the same request again (a resending of the CLI) does not make a second one
+	if again := r.runID(uuid, "tm", "issue comment", nil, itoa(n), "uma vez só"); !again.OK {
+		t.Fatalf("the resending: %+v", again)
+	}
+	if cs := r.gh.Comments(repoFull, n); len(cs) != 1 {
+		t.Fatalf("the resending made %d comments, want 1", len(cs))
 	}
 	_ = pw.p.Tick(r.ctx)
 	if len(r.gh.Reads()) == reads {

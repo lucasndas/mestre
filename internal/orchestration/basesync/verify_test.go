@@ -154,6 +154,18 @@ func TestTheLimitOfReturnsPausesTheSyncAndTheSameFailureAgainPausesBefore(t *tes
 		for i := 0; i < 3; i++ {
 			w.doneOfSync(dev)
 			w.orc.Quests.WaitVerifications()
+			if i < 2 {
+				// the first two failures only give the step back to the Dev
+				if got := w.syncState().State; got != quests.Running {
+					t.Fatalf("the sync is %s after the failure %d; want it back with the Dev (it pauses at the third)", got, i+1)
+				}
+				if steps, err := w.orc.Quests.Store().Steps(w.ctx, w.syncState().ID); err != nil || len(steps) != 1 || steps[0].Returns != i+1 {
+					t.Fatalf("steps after the failure %d = %+v, %v; want %d returns", i+1, steps, err, i+1)
+				}
+			}
+		}
+		if v.count() != 3 {
+			t.Errorf("verifications = %d; want exactly 3 (it pauses at the third, not later)", v.count())
 		}
 		q := w.syncState()
 		if q.State != quests.Paused || q.PausedReason != "mesma falha repetida" {
