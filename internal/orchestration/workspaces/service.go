@@ -88,8 +88,6 @@ type Service struct {
 	withhold RefFilter
 	// afterFetch is told that a fetch worked (OnFetched).
 	afterFetch func(ctx context.Context, slug string)
-	// afterMirror are the others told the same (OnMirrorMoved).
-	afterMirror []func(ctx context.Context, slug string)
 }
 
 // New builds the Service. The mirror stage is the Service's own; the others

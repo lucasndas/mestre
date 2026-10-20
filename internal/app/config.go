@@ -129,16 +129,15 @@ func DirPaths(dir string) Paths {
 }
 
 // The files of an instance.
-func (p Paths) configFile() string    { return filepath.Join(p.Config, "config.json") }
-func (p Paths) engineKey() string     { return filepath.Join(p.Config, "motor.key") }
-func (p Paths) pendingKey() string    { return filepath.Join(p.Config, "motor.key.nova") }
-func (p Paths) vaultKey() string      { return filepath.Join(p.Config, "cofre.key") }
-func (p Paths) guildDB() string       { return filepath.Join(p.Banco, "mestre.db") }
-func (p Paths) envelope() string      { return filepath.Join(p.Banco, "cofre-envelope.bin") }
-func (p Paths) mirrorBundles() string { return filepath.Join(p.Banco, "espelhos") }
-func (p Paths) snapshots() string     { return filepath.Join(p.Banco, "copias") }
-func (p Paths) transfers() string     { return filepath.Join(p.Banco, "transferencias") }
-func (p Paths) machineDB() string     { return filepath.Join(p.Maquina, "maquina.db") }
+func (p Paths) configFile() string { return filepath.Join(p.Config, "config.json") }
+func (p Paths) engineKey() string  { return filepath.Join(p.Config, "motor.key") }
+func (p Paths) pendingKey() string { return filepath.Join(p.Config, "motor.key.nova") }
+func (p Paths) vaultKey() string   { return filepath.Join(p.Config, "cofre.key") }
+func (p Paths) guildDB() string    { return filepath.Join(p.Banco, "mestre.db") }
+func (p Paths) envelope() string   { return filepath.Join(p.Banco, "cofre-envelope.bin") }
+func (p Paths) snapshots() string  { return filepath.Join(p.Banco, "copias") }
+func (p Paths) transfers() string  { return filepath.Join(p.Banco, "transferencias") }
+func (p Paths) machineDB() string  { return filepath.Join(p.Maquina, "maquina.db") }
 func (p Paths) discarded(e uint64) string {
 	return filepath.Join(p.Banco, fmt.Sprintf("descartado-%d.db", e))
 }

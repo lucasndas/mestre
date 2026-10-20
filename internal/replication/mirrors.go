@@ -11,7 +11,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/protocol"
@@ -67,9 +66,6 @@ var mirrorID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
 type Mirrors struct {
 	src MirrorSource
 	dir string
-	// mu serializes the syncs: two bundles of one mirror to one Tower must not
-	// finish in the wrong order and leave the replica behind.
-	mu sync.Mutex
 }
 
 // NewMirrors returns the sender; dir is where the bundles are written while
@@ -112,17 +108,12 @@ func (m *Mirrors) syncAll(ctx context.Context, link *protocol.Link, pe *peer) er
 	if err != nil {
 		return fmt.Errorf("replication: listing the mirrors: %w", err)
 	}
-	// a mirror that cannot be sent does not keep the Tower from the rest
-	var errs []error
 	for _, id := range ids {
 		if err := m.sync(ctx, link, pe, id); err != nil {
-			if ctx.Err() != nil {
-				return err
-			}
-			errs = append(errs, fmt.Errorf("mirror %s: %w", id, err))
+			return err
 		}
 	}
-	return errors.Join(errs...)
+	return nil
 }
 
 // sync brings one mirror of one Tower up to date: a bundle of what moved since
@@ -130,8 +121,6 @@ func (m *Mirrors) syncAll(ctx context.Context, link *protocol.Link, pe *peer) er
 // Tower that lacks the base of an incremental bundle answers
 // missing_prerequisite and gets the whole mirror (protocol.Link.SendBundle).
 func (m *Mirrors) sync(ctx context.Context, link *protocol.Link, pe *peer, id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	pe.mu.Lock()
 	prev := pe.tips[id]
 	pe.mu.Unlock()

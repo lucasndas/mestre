@@ -511,11 +511,7 @@ func (p *Primary) serve(ctx context.Context, pe *peer, hello helloInfo) error {
 		return err
 	}
 	if err := p.syncMirrors(ctx, link, pe); err != nil {
-		if ctx.Err() != nil {
-			return err
-		}
-		// the mirrors that failed are told; the Tower still gets the database
-		p.cfg.Logger.Warn("replication: a mirror was not sent", "machine", pe.id, "err", err)
+		return err
 	}
 
 	last, err := p.start(ctx, link, pe, hello)
