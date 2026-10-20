@@ -157,18 +157,19 @@ func cliDir(cli string) string {
 
 func baseEnvFor(goos string, o options, getenv func(string) string) []string {
 	env := []string{"PATH=" + cliDir(o.cli) + ":/usr/local/bin:/usr/bin:/bin", "TERM=xterm-256color", "LANG=C.UTF-8"}
+	// The HOME of Antigravity is its account profile, which the run gives
+	// as the engine does, and on Windows the USERPROFILE that follows it; a
+	// base may set neither (docs/orquestracao/bases-e-fichas.md#regras-e-erros).
+	agy := providers.ID(o.provider) == providers.Antigravity
 	if goos == "windows" {
 		env = []string{"PATH=" + cliDir(o.cli) + ";" + getenv("PATH"), "TERM=xterm-256color"}
 		for _, n := range windowsEnvNames {
-			if v := getenv(n); v != "" {
+			if v := getenv(n); v != "" && (!agy || n != "USERPROFILE") {
 				env = append(env, n+"="+v)
 			}
 		}
 	}
-	// The HOME of Antigravity is its account profile, which the run gives
-	// as the engine does; a base may not set it
-	// (docs/orquestracao/bases-e-fichas.md#regras-e-erros).
-	if providers.ID(o.provider) != providers.Antigravity {
+	if !agy {
 		env = append(env, "HOME="+o.home)
 	}
 	return env

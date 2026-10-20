@@ -243,7 +243,7 @@ func newFakeRig(t *testing.T, files map[string]string) fakeRig {
 		"work/.git/HEAD":        "ref: refs/heads/main\n",
 		"home/.keep":            "",
 		"cfg/.credentials.json": "{}",
-		"cfg/.claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, r.work),
+		"cfg/.claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(r.work)),
 	}
 	for k, v := range files {
 		all[k] = v
