@@ -10,7 +10,7 @@ O motor passa `-c windows.sandbox="unelevated"` em todo início de personagem Co
 
 No modo `unelevated` não há `codex-command-runner`: o comando roda como o usuário do terminal, com uma DACL que dá controle só ao **SID de logon do processo que chamou o `codex.exe`** (mais leitura da DACL ao dono). Como o [launcher](../arquitetura/windows.md#iniciador-mestre-launcher) faz um logon em lote por terminal, cada terminal tem o seu SID de logon, e o isolamento entre personagens Codex é o mesmo dos outros provedores.
 
-## Medições (Codex 0.163.0, Windows 10.0.26100, rodada de 2026-10-20)
+## Medições (Codex 0.163.0, Windows 10.0.26100, medições de 2026-10-19 e 20)
 
 | Modo | Resultado |
 |---|---|
@@ -28,7 +28,7 @@ No `unelevated` o sandbox não tem barreira de rede, como no Linux ([canal local
 
 ## A verificar no Windows real
 
-Tudo o que o CI não alcança (CA-CODEX-WIN-05, no round do Windows, `tools/winsandbox/round/run-all.ps1`): (1) dois personagens Codex, logons distintos, `OpenProcess` de um sobre o outro negado; (2) escrita no worktree alheio e fora dos workspaces negada, no próprio permitida; (3) o `connect()` da CLI passa com a pasta `run\` só em leitura e execução e com a ACE da CLI no próprio processo, e o `mestre list` volta com o terminal certo; (4) um `.codex/config.toml` com perfil ou recurso antigo não devolve o modo a `elevated`; (5) a ACE do terminal sai ao fim dele; (6) o processo da CLI no sandbox tem mesmo `WRITE_DAC` sobre si pela SID de logon, e o `mestre-pty` o abre para o `IsProcessInJob`; (7) o limite de conexões por usuário do canal local: o token do comando do Codex provavelmente não nomeia o motor, então a SID do chamador não é lida e só valem os limites por processo e globais.
+Tudo o que o CI não alcança. Os pontos 1 e 2 (e a sonda de `connect()` num socket de teste) são do round do Windows, item 2 de `tools/winsandbox/round/run-all.ps1`; os pontos 3 a 7, que precisam do launcher e do motor de verdade, são das [contas reais](../qualidade/contas-reais.md) e da conformidade (CA-CODEX-WIN-05 reúne os dois): (1) dois personagens Codex, logons distintos, `OpenProcess` de um sobre o outro negado; (2) escrita no worktree alheio e fora dos workspaces negada, no próprio permitida; (3) o `connect()` da CLI passa com a pasta `run\` só em leitura e execução e com a ACE da CLI no próprio processo, e o `mestre list` volta com o terminal certo; (4) um `.codex/config.toml` com perfil ou recurso antigo não devolve o modo a `elevated`; (5) a ACE do terminal sai ao fim dele; (6) o processo da CLI no sandbox tem mesmo `WRITE_DAC` sobre si pela SID de logon, e o `mestre-pty` o abre para o `IsProcessInJob`; (7) o limite de conexões por usuário do canal local: o token do comando do Codex provavelmente não nomeia o motor, então a SID do chamador não é lida e só valem os limites por processo e globais.
 
 ## Evolução: `mxc` (M7)
 

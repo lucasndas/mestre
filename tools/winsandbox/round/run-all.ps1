@@ -564,65 +564,90 @@ function Test-CodexCrossIsolation {
     $x = Join-Path $Work 'cx'
     $wa = Join-Path $x 'wa'; $wb = Join-Path $x 'wb'; $probe = Join-Path $x 'probe'; $out = Join-Path $x 'out'
     if (Test-Path $x) { Remove-Item -Recurse -Force $x -ErrorAction SilentlyContinue }
+    if (Test-Path $x) { Add-Sub 2 'FAIL' 'isolamento entre dois Codex: não consegui limpar C:\rodada\cx de uma rodada anterior'; return }
     New-Item -ItemType Directory -Force -Path $wa, $wb, $probe, $out | Out-Null
     $codex = Get-CliPath 'codex'
     $home7 = (Get-CliEnv 'codex').CODEX_HOME
     $envLines = @("`$env:CODEX_HOME = '$home7'", "`$env:USERPROFILE = '$env:USERPROFILE'", "`$env:LOCALAPPDATA = '$env:LOCALAPPDATA'", "`$env:APPDATA = '$env:APPDATA'", "`$env:TEMP = '$env:TEMP'", "`$env:TMP = '$env:TEMP'")
     Set-Content -LiteralPath (Join-Path $probe 'hold.ps1') -Encoding UTF8 -Value @"
-`$PID | Set-Content -LiteralPath '$out\bpid.txt'
+`$PID | Set-Content -LiteralPath '$wb\bpid.txt'
 Start-Sleep -Seconds 240
 "@
     Set-Content -LiteralPath (Join-Path $probe 'attack.ps1') -Encoding UTF8 -Value @"
 param([int]`$Target)
-try { `$p = [Diagnostics.Process]::GetProcessById(`$Target); `$null = `$p.StartTime; 'OPEN=ok' } catch { 'OPEN=negado' }
-try { Set-Content -LiteralPath '$wb\x.txt' -Value 'x' -ErrorAction Stop; 'WB=ok' } catch { 'WB=negado' }
-try { Set-Content -LiteralPath '$x\fora.txt' -Value 'x' -ErrorAction Stop; 'FORA=ok' } catch { 'FORA=negado' }
-try { Set-Content -LiteralPath '$wa\own.txt' -Value 'x' -ErrorAction Stop; 'WA=ok' } catch { 'WA=negado' }
+function Probe(`$name, [scriptblock]`$b) {
+    try { & `$b | Out-Null; "`$name=ok" }
+    catch {
+        `$e = `$_.Exception
+        while (`$e.InnerException) { `$e = `$e.InnerException }
+        if (`$e -is [ArgumentException]) { "`$name=ausente" }
+        elseif (`$e -is [ComponentModel.Win32Exception] -and `$e.NativeErrorCode -eq 5) { "`$name=negado" }
+        elseif (`$e -is [UnauthorizedAccessException]) { "`$name=negado" }
+        else { "`$name=erro" }
+    }
+}
+Probe 'OPEN' { `$p = [Diagnostics.Process]::GetProcessById(`$Target); `$null = `$p.StartTime }
+Probe 'HANDLE' { `$p = [Diagnostics.Process]::GetProcessById(`$Target); `$null = `$p.Handle }
+Probe 'WB' { Set-Content -LiteralPath '$wb\x.txt' -Value 'x' -ErrorAction Stop }
+Probe 'FORA' { Set-Content -LiteralPath '$x\fora.txt' -Value 'x' -ErrorAction Stop }
+Probe 'WA' { Set-Content -LiteralPath '$wa\own.txt' -Value 'x' -ErrorAction Stop }
 'FIM'
 "@
     function New-CodexRun([string]$Name, [string]$Dir, [string]$Command) {
         $prompt = "Use a ferramenta de shell para rodar exatamente este comando e mostre so a saida dele, sem comentar: $Command"
         $body = ($envLines -join "`r`n") + "`r`n" + @"
 Set-Location -LiteralPath '$Dir'
+((whoami.exe /groups) -join ' ') -match 'S-1-5-5-\d+-\d+' | Out-Null
+`$Matches[0] | Set-Content -LiteralPath '$out\$Name.sid'
 & '$codex' exec --skip-git-repo-check -s workspace-write -c sandbox_workspace_write.network_access=true -c 'windows.sandbox="unelevated"' '$prompt' *> '$out\$Name.log'
 '' | Set-Content -LiteralPath '$out\$Name.done'
 "@
         Set-Content -LiteralPath (Join-Path $probe "$Name.ps1") -Value $body -Encoding UTF8
     }
-    New-CodexRun 'b' $wb ("powershell.exe -NoProfile -File $probe\hold.ps1")
+    New-CodexRun 'b' $wb ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File $probe\hold.ps1")
     $tasks = @()
     $user = "$env:USERDOMAIN\$env:USERNAME"
     function Start-AsOwnLogon([string]$Name) {
         $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$probe\$Name.ps1`""
         $pri = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Limited
-        Register-ScheduledTask -TaskName "MestreRodadaCx$Name" -Action $act -Principal $pri -Force | Out-Null
+        $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        Register-ScheduledTask -TaskName "MestreRodadaCx$Name" -Action $act -Principal $pri -Settings $set -Force | Out-Null
         Start-ScheduledTask -TaskName "MestreRodadaCx$Name"
     }
     try {
-        Start-AsOwnLogon 'b'; $tasks += 'MestreRodadaCxb'
+        $tasks += 'MestreRodadaCxb'; Start-AsOwnLogon 'b'
         $t0 = Get-Date
-        while (-not (Test-Path "$out\bpid.txt") -and ((Get-Date) - $t0).TotalSeconds -lt 300) { Start-Sleep -Seconds 2 }
-        if (-not (Test-Path "$out\bpid.txt")) { Add-Sub 2 'FAIL' ('isolamento entre dois Codex: o comando do Codex B não segurou o processo. Saída:' + "`n" + (Tail (Get-Content -LiteralPath "$out\b.log" -Raw -ErrorAction SilentlyContinue) 8)); return }
-        $bpid = [int](Get-Content -LiteralPath "$out\bpid.txt" -Raw)
-        New-CodexRun 'a' $wa ("powershell.exe -NoProfile -File $probe\attack.ps1 -Target $bpid")
-        Start-AsOwnLogon 'a'; $tasks += 'MestreRodadaCxa'
+        $bpid = 0
+        while ($bpid -le 0 -and ((Get-Date) - $t0).TotalSeconds -lt 300) {
+            Start-Sleep -Seconds 2
+            if (Test-Path "$wb\bpid.txt") { $bpid = [int](('0' + ((Get-Content -LiteralPath "$wb\bpid.txt" -Raw) -replace '\D', ''))) }
+        }
+        if ($bpid -le 0) { Add-Sub 2 'FAIL' ('isolamento entre dois Codex: o comando do Codex B não segurou o processo. Saída:' + "`n" + (Tail (Get-Content -LiteralPath "$out\b.log" -Raw -ErrorAction SilentlyContinue) 8)); return }
+        if (-not (Get-Process -Id $bpid -ErrorAction SilentlyContinue)) { Add-Sub 2 'FAIL' 'isolamento entre dois Codex: o processo do comando de B já tinha acabado antes de A começar'; return }
+        New-CodexRun 'a' $wa ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File $probe\attack.ps1 -Target $bpid")
+        $tasks += 'MestreRodadaCxa'; Start-AsOwnLogon 'a'
         $t0 = Get-Date
         while (-not (Test-Path "$out\a.done") -and ((Get-Date) - $t0).TotalSeconds -lt 420) { Start-Sleep -Seconds 2 }
         $log = if (Test-Path "$out\a.log") { Get-Content -LiteralPath "$out\a.log" -Raw } else { '' }
         Save-Detail 'item2-cx-a.log' $log
         Save-Detail 'item2-cx-b.log' (Get-Content -LiteralPath "$out\b.log" -Raw -ErrorAction SilentlyContinue)
-        $want = [ordered]@{ 'OPEN' = 'negado'; 'WB' = 'negado'; 'FORA' = 'negado'; 'WA' = 'ok' }
+        $want = [ordered]@{ 'OPEN' = 'negado'; 'HANDLE' = 'negado'; 'WB' = 'negado'; 'FORA' = 'negado'; 'WA' = 'ok' }
         $bad = @()
+        $sidA = (Get-Content -LiteralPath "$out\a.sid" -ErrorAction SilentlyContinue | Select-Object -First 1)
+        $sidB = (Get-Content -LiteralPath "$out\b.sid" -ErrorAction SilentlyContinue | Select-Object -First 1)
+        if (-not $sidA -or -not $sidB) { $bad += 'não li o SID de logon de uma das tarefas' }
+        elseif ($sidA -eq $sidB) { Add-Sub 2 'SKIP' "isolamento entre dois Codex: as duas tarefas caíram na mesma sessão de logon ($sidA); o cenário não foi medido"; return }
+        if (-not (Get-Process -Id $bpid -ErrorAction SilentlyContinue)) { $bad += 'o processo de B acabou durante a sonda (o resultado OPEN não vale)' }
         foreach ($k in $want.Keys) {
             if ($log -match "(?m)^$k=(ok|negado)") {
                 if ($Matches[1] -ne $want[$k]) { $bad += "$k`: obtido $($Matches[1]), esperado $($want[$k])" }
             } else { $bad += "$k`: sem resultado" }
         }
-        if ($bad.Count -eq 0) { Add-Sub 2 'PASS' 'isolamento entre dois Codex (unelevated, dois logons): o comando de A não abriu o processo do comando de B, não escreveu no worktree de B nem fora de um workspace, e escreveu no próprio' }
+        if ($bad.Count -eq 0) { Add-Sub 2 'PASS' "isolamento entre dois Codex (unelevated, logons $sidA e $sidB): o comando de A não abriu o processo do comando de B, não escreveu no worktree de B nem fora de um workspace, e escreveu no próprio" }
         else { Add-Sub 2 'FAIL' ("isolamento entre dois Codex diverge:`n    " + ($bad -join "`n    ") + "`n  fim da saída do Codex A:`n" + (Tail $log 8)) }
     } finally {
         foreach ($t in $tasks) { Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $t -Confirm:$false -ErrorAction SilentlyContinue }
-        if (Test-Path "$out\bpid.txt") { & taskkill.exe /T /F /PID ([int](Get-Content -LiteralPath "$out\bpid.txt" -Raw)) 2>&1 | Out-Null }
+        if ($bpid -gt 0) { & taskkill.exe /T /F /PID $bpid 2>&1 | Out-Null }
     }
 }
 
@@ -643,7 +668,16 @@ function Test-Item2 {
     $dir = Join-Path $Work 'sock'
     if (Test-Path $dir) { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    & icacls.exe $dir /grant 'Everyone:(OI)(CI)M' | Out-Null
+    # What the engine does for a terminal: the logon SID of this session with read
+    # and write on the socket file and read and execute on the folder (icacls does
+    # not take that SID, so .NET).
+    $logon = ((whoami.exe /groups) -join ' ') -match 'S-1-5-5-\d+-\d+'
+    if (-not $logon) { Add-Sub 2 'SKIP' 'sonda direta do socket: não achei o SID de logon desta sessão'; return }
+    $logonSid = New-Object Security.Principal.SecurityIdentifier $Matches[0]
+    $dacl = Get-Acl -LiteralPath $dir
+    $dacl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($logonSid, 'ReadAndExecute', 'None', 'None', 'Allow')))
+    $dacl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($logonSid, 'Read, Write', 'ObjectInherit', 'InheritOnly', 'Allow')))
+    Set-Acl -LiteralPath $dir -AclObject $dacl
     $work = Join-Path $Work 'sockwork'
     if (Test-Path $work) { Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $work | Out-Null
