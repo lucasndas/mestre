@@ -40,6 +40,8 @@ type AckResult struct {
 	// Status is ack's ok, duplicate or error.
 	Status string
 	Error  *Error
+	// Result is the answer the command carried in its ack, if it had one.
+	Result json.RawMessage
 }
 
 // Link is the relation of this machine with one peer. It outlives the
@@ -121,6 +123,11 @@ func (l *Link) Send(ctx context.Context, o Outgoing) (string, error) {
 	if err := l.sess.enqueue(env); err != nil {
 		if spec.Ack && !o.Transient {
 			return env.ID, nil // stays in the outbox for the next connection
+		}
+		if errors.Is(err, ErrSessionClosed) {
+			// The connection ended after the link took it for the current one and
+			// before it detached: nothing went out, which is what ErrNotConnected says.
+			return env.ID, fmt.Errorf("%w: %w", ErrNotConnected, err)
 		}
 		return env.ID, err
 	}
@@ -371,7 +378,7 @@ func (l *Link) waitConnected(ctx context.Context) (*Session, error) {
 // (docs/conectividade/protocolo.md#ack-e-idempotência).
 func (l *Link) ackArrived(ctx context.Context, id string, a *Ack) {
 	retryable := a.Status == AckError && a.Error != nil && a.Error.Retryable
-	l.finish(ctx, id, AckResult{Status: a.Status, Error: a.Error}, !retryable)
+	l.finish(ctx, id, AckResult{Status: a.Status, Error: a.Error, Result: a.Result}, !retryable)
 }
 
 // errorArrived is a refusal in place of the ack: the message did not reach a

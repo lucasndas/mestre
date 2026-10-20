@@ -12,11 +12,12 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// shellCommand runs line with cmd /s /c "<line>", the form that keeps the
-// quoted paths of line intact.
+// shellCommand runs line with cmd /d /s /c "<line>", the form that keeps the
+// quoted paths of line intact; /d keeps the AutoRun of the account of the agent
+// (a command in its registry) from running before every hook.
 func shellCommand(ctx context.Context, line string) *exec.Cmd {
 	c := exec.CommandContext(ctx, "cmd")
-	c.SysProcAttr = &syscall.SysProcAttr{CmdLine: `cmd /s /c "` + line + `"`}
+	c.SysProcAttr = &syscall.SysProcAttr{CmdLine: `cmd /d /s /c "` + line + `"`}
 	return c
 }
 

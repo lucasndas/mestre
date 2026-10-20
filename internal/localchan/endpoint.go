@@ -84,6 +84,24 @@ func EndpointFromEnv(getenv func(string) string) (string, error) {
 	return SocketPath(DefaultInstance)
 }
 
+// InstanceOfSocket is the instance a Windows socket path belongs to:
+// <...>\Mestre\<inst>\run\cli.sock. A path of another shape says nothing.
+// The separators of both systems count, so the same text reads the same
+// everywhere.
+func InstanceOfSocket(sock string) (string, bool) {
+	p := strings.FieldsFunc(sock, func(r rune) bool { return r == '/' || r == '\\' })
+	n := len(p)
+	if n < 4 || p[n-1] != "cli.sock" || p[n-2] != "run" || !strings.EqualFold(p[n-4], "Mestre") {
+		return "", false
+	}
+	// Windows paths ignore the case: the folder of instance x may be spelled X.
+	inst := strings.ToLower(p[n-3])
+	if !ValidInstance(inst) {
+		return "", false
+	}
+	return inst, true
+}
+
 // Access sets who may connect to the socket of the engine. The engine
 // creates the socket and then applies it: on Linux the mode and owner
 // (LinuxAccess), on Windows the ACL (winsvc.CLIAccess).

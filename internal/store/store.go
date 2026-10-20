@@ -71,10 +71,12 @@ type DB struct {
 	replica bool
 	capture *capture
 
+	swapMu sync.Mutex   // serializes Close and Replace, which wait outside mu
 	mu     sync.RWMutex // guards the pools, which Replace swaps, and closed
 	writer *sql.DB
 	reader *sql.DB
-	closed bool // Close was called: Replace does not bring the file up again
+	live   *connTracker // the connections of the pools that are open
+	closed bool         // Close was called: Replace does not bring the file up again
 
 	infoMu sync.Mutex
 	infos  map[string]tableInfo // primary keys of the tables, for Apply
@@ -120,6 +122,7 @@ func Open(ctx context.Context, path string, set Set, opts Options) (*DB, error) 
 // openPools opens the writer, prepares the schema (unless it is a replica)
 // and opens the read-only pool. It is also how Replace brings a new file up.
 func (d *DB) openPools(ctx context.Context) error {
+	d.live = &connTracker{}
 	writer, err := d.openWriter()
 	if err != nil {
 		return fmt.Errorf("store: open %s: %w", d.path, err)
@@ -129,11 +132,12 @@ func (d *DB) openPools(ctx context.Context) error {
 		writer.Close()
 		return err
 	}
-	reader, err := sql.Open("sqlite", roDSN(d.path, readerPragmas(d.opts.BusyTimeout)))
+	rbase, err := sqlite.NewConnector(roDSN(d.path, readerPragmas(d.opts.BusyTimeout)))
 	if err != nil {
 		writer.Close()
 		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
 	}
+	reader := sql.OpenDB(trackConnector{Connector: rbase, t: d.live})
 	reader.SetMaxOpenConns(d.opts.ReadConns)
 	reader.SetMaxIdleConns(d.opts.ReadConns)
 	reader.SetConnMaxLifetime(0)
@@ -162,18 +166,19 @@ func (d *DB) openWriter() (*sql.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(logConnector{Connector: base, cap: d.capture})
+		w = sql.OpenDB(trackConnector{Connector: logConnector{Connector: base, cap: d.capture}, t: d.live})
 	case d.replica:
 		base, err := sqlite.NewConnector(conn)
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(guardConnector{Connector: base})
+		w = sql.OpenDB(trackConnector{Connector: guardConnector{Connector: base}, t: d.live})
 	default:
-		var err error
-		if w, err = sql.Open("sqlite", conn); err != nil {
+		base, err := sqlite.NewConnector(conn)
+		if err != nil {
 			return nil, err
 		}
+		w = sql.OpenDB(trackConnector{Connector: base, t: d.live})
 	}
 	w.SetMaxOpenConns(1)
 	w.SetMaxIdleConns(1)
@@ -352,12 +357,24 @@ func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error 
 // that is still using it (a handler that was running when the process shut
 // down) gets "sql: database is closed" from the pools, not a nil pointer.
 func (d *DB) Close() error {
+	d.swapMu.Lock()
+	defer d.swapMu.Unlock()
 	d.mu.Lock()
-	defer d.mu.Unlock()
+	if d.closed { // already closed (and waited for): nothing left to wait for
+		d.mu.Unlock()
+		return nil
+	}
 	d.closed = true
-	return d.closePools()
+	err := d.closePools()
+	live := d.live
+	d.mu.Unlock()
+	// The wait is outside the lock: a goroutine that still holds a query may
+	// ask for the pools (Writer, Reader) before it ends.
+	return errors.Join(err, live.wait(d.clock))
 }
 
+// closePools closes both pools, with d.mu held. The files are free only after
+// d.live.wait: a query that was running keeps its connection until it ends.
 func (d *DB) closePools() error {
 	var rerr error
 	if d.reader != nil {

@@ -160,6 +160,11 @@ func (r PolicyRules) Need(req Request) (approvals int, require []string, min cla
 			}
 		}
 	}
+	for _, u := range req.Require { // the people this very request needs
+		if !slices.Contains(require, u) {
+			require = append(require, u)
+		}
+	}
 	min = classes.LevelApprover
 	if l, ok := r.MinLevel[req.Type]; ok {
 		min = l

@@ -30,52 +30,6 @@ func (w *commWorld) ask(c characters.Character, args ...string) <-chan result {
 	return done
 }
 
-// CA-CLI-COM-01: a target that does not answer in the default time limit: exit
-// 6, status pending, and the late answer reaches the inbox of who asked.
-// Part of CA-ESP-04, at the command: at 90 s the answer is "sem resposta no prazo".
-func TestAskThatRunsOutOfTimeIsPendingAndTheLateAnswerComesToTheInbox(t *testing.T) {
-	t.Parallel()
-	w := newCommWorld(t)
-	dev, rev := w.pair()
-	done := w.ask(dev, "Revisor", "revise o PR", "--json")
-	w.clk.Advance(90 * time.Second) // the default time limit of an ask
-	r := <-done
-	v := decodeJSON(t, r)
-	if r.code != 6 || v.OK || v.Error.Code != "timeout" || v.Error.Details["status"] != "pending" || v.Error.Details["to"] != "Revisor" || v.Error.Details["request_id"] == "" {
-		t.Fatalf("ask that ran out of time = %d %s", r.code, r.stdout)
-	}
-	if !strings.Contains(v.Error.Message, "sem resposta no prazo") {
-		t.Errorf("message = %q, want \"sem resposta no prazo\"", v.Error.Message)
-	}
-	if !strings.Contains(v.Error.Hint, "não reenvie") {
-		t.Errorf("hint = %q", v.Error.Hint)
-	}
-	// The request goes on: the target answers later, in the turn that handled it.
-	if r := w.run(rev, "done", "aprovado, com ressalvas"); r.code != 0 {
-		t.Fatalf("done of the target: %+v", r)
-	}
-	w.turnEnds(rev, "")
-	items, err := w.orc.Inbox.Store().All(w.ctx, dev.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got *inbox.Item
-	for i := range items {
-		if items[i].Kind == inbox.KindAnswer {
-			got = &items[i]
-		}
-	}
-	if got == nil || !strings.Contains(got.Text, "aprovado, com ressalvas") || got.Sender != "Revisor" {
-		t.Fatalf("the late answer: %+v", items)
-	}
-	// The text mode of a request that is still pending.
-	done = w.ask(dev, "Revisor", "e agora?", "--timeout", "1m")
-	w.clk.Advance(time.Minute)
-	if r := <-done; r.code != 6 || !strings.Contains(r.stderr, "error: sem resposta no prazo") || !strings.Contains(r.stderr, "hint: ") {
-		t.Errorf("text of the pending ask: %+v", r)
-	}
-}
-
 // A normal ask: the answer is the final text of the turn of the target, in the
 // text and in --json; --no-wait delivers and returns.
 func TestAskAnswersAndNoWaitReturnsAtOnce(t *testing.T) {
@@ -618,5 +572,51 @@ func TestTextThatStartsWithTwoHyphensIsDataUnlessItIsAFlag(t *testing.T) {
 	// a real flag that does not exist is still an error
 	if r := w.run(dev, "ask", "Revisor", "oi", "--nope"); r.code != 2 {
 		t.Errorf("an unknown flag = %+v", r)
+	}
+}
+
+// CA-CLI-COM-01: a target that does not answer in the default time limit: exit
+// 6, status pending, and the late answer reaches the inbox of who asked.
+// Part of CA-ESP-04, at the command: at 90 s the answer is "sem resposta no prazo".
+func TestAskThatRunsOutOfTimeIsPendingAndTheLateAnswerComesToTheInbox(t *testing.T) {
+	t.Parallel()
+	w := newCommWorld(t)
+	dev, rev := w.pair()
+	done := w.ask(dev, "Revisor", "revise o PR", "--json")
+	w.clk.Advance(90 * time.Second) // the default time limit of an ask
+	r := <-done
+	v := decodeJSON(t, r)
+	if r.code != 6 || v.OK || v.Error.Code != "timeout" || v.Error.Details["status"] != "pending" || v.Error.Details["to"] != "Revisor" || v.Error.Details["request_id"] == "" {
+		t.Fatalf("ask that ran out of time = %d %s", r.code, r.stdout)
+	}
+	if !strings.Contains(v.Error.Message, "sem resposta no prazo") {
+		t.Errorf("message = %q, want \"sem resposta no prazo\"", v.Error.Message)
+	}
+	if !strings.Contains(v.Error.Hint, "não reenvie") {
+		t.Errorf("hint = %q", v.Error.Hint)
+	}
+	// The request goes on: the target answers later, in the turn that handled it.
+	if r := w.run(rev, "done", "aprovado, com ressalvas"); r.code != 0 {
+		t.Fatalf("done of the target: %+v", r)
+	}
+	w.turnEnds(rev, "")
+	items, err := w.orc.Inbox.Store().All(w.ctx, dev.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got *inbox.Item
+	for i := range items {
+		if items[i].Kind == inbox.KindAnswer {
+			got = &items[i]
+		}
+	}
+	if got == nil || !strings.Contains(got.Text, "aprovado, com ressalvas") || got.Sender != "Revisor" {
+		t.Fatalf("the late answer: %+v", items)
+	}
+	// The text mode of a request that is still pending.
+	done = w.ask(dev, "Revisor", "e agora?", "--timeout", "1m")
+	w.clk.Advance(time.Minute)
+	if r := <-done; r.code != 6 || !strings.Contains(r.stderr, "error: sem resposta no prazo") || !strings.Contains(r.stderr, "hint: ") {
+		t.Errorf("text of the pending ask: %+v", r)
 	}
 }

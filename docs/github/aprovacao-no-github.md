@@ -1,6 +1,6 @@
 # Aprovação no GitHub
 
-> **Assunto:** como as aprovações viram reviews no GitHub, quando um review feito direto no GitHub conclui um pedido, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** como as aprovações viram reviews no GitHub, quando um review feito direto no GitHub conclui um pedido, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -34,6 +34,7 @@ Se o resultado for `nao_conta`:
 - Repositório pessoal **não** aceita lista de exceção na proteção clássica de branch; só **rulesets** aceitam.
 - O Grão-Mestre propõe ao Dono um pedido de aprovação do tipo `configuracao_repositorio` (com PIN): criar o ruleset `mestre-aprovacao` na branch principal, contendo **só** a regra de PR com o mesmo número de aprovações exigido hoje, e com `bypass_actors: [{actor_id: <app_id do Grão-Mestre>, actor_type: "Integration", bypass_mode: "pull_request"}]`.
 - Quem está na lista de exceção **ignora todas as regras daquele ruleset**, não só a revisão. Por isso o ruleset novo tem só a regra de revisão. As outras regras (CI obrigatório etc.) continuam onde estão, sem exceção. Se a regra de revisão hoje está na proteção clássica ou num ruleset com outras regras, a proposta mostra a mudança completa: tirar a revisão de lá e criá-la no ruleset novo.
+- Se o repositório exige review de **code owner** ou a aprovação do **último push**, não há plano B: a exceção ignoraria essas regras do ruleset, então o workspace vai direto ao modo "aprovação humana".
 - Mesmo com a exceção, o Grão-Mestre envia o review `APPROVE` antes do merge, para registro.
 - Rulesets em **repositório privado** de conta pessoal exigem **GitHub Pro**. Sem isso, ou se o Dono negar, o repositório passa ao modo "aprovação humana": cada merge pede a aprovação de uma pessoa pelo Telegram, aplicada como abaixo.
 
@@ -89,6 +90,9 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - Mudar ruleset ou proteção só com a aprovação do tipo `configuracao_repositorio` ([política](../aprovacoes/politica.md#tipos-de-ação)).
 - `mestre gh approve` só aprova com uma aprovação vigente para aquele PR e aquele hash: a do próprio Grão-Mestre, quando a política deixa, ou a de um usuário ([o Grão-Mestre como aprovador delegado](../aprovacoes/politica.md#o-grão-mestre-como-aprovador-delegado)).
 - Review recusado com 422 (ex.: autor tentando aprovar o próprio PR): o motor registra e o Grão-Mestre pede aprovação humana.
+
+- **Implementação (etapa 5, parte 1):** `github.ReviewProbe` e `sessionzero.GitHubReview` (teste do App), `github.PlanBRuleset` e `approvals.Settings` (plano B e modo de aprovação humana, tabela `github_review_modes`), `approvals.Approver` (`gh approve`, os três casos da tabela e a delegação), `github.CodeOwners` (quem o repositório exige) e `approvals.GitHubReviews` (review feito no GitHub, auditoria em `approval_github_reviews`, PIN pelo canal). Ficam fora e na [ligação de produção](../desenvolvimento/ligacao-de-producao.md): a composição no `mestre run` (poller, sinks, clientes dos Apps).
+- **Implementação da credencial pessoal:** `github.Personal` (`internal/github/personal.go`): `Begin` e `Poll` fazem o device flow (o `device_code` fica só na memória, o intervalo e o `slow_down` do GitHub são respeitados), conferem com `GET /user` que a conta é o `github_login` do cadastro (outra conta: o token é revogado e descartado, `ErrLoginMismatch`, CA-GH-APROV-06) e guardam os tokens no cofre (`github_user_token:<usuário>`) e o estado na tabela `github_user_credentials`. `Client` devolve o cliente que age como a pessoa, renovando o token 5 minutos antes de vencer com o segredo de cliente do App; renovação recusada deixa a credencial `expired`, e usuário suspenso, removido ou com `github_login` mudado não tem credencial em uso. `Remove` revoga no GitHub e apaga. Nenhum token vai para log, auditoria, banco ou erro. `approvals.PersonalCredentials` a entrega ao `approvals.Approver`; `github.Installs` a usa para o `PUT` de [criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas). O painel e o bot ("Conectar GitHub") ainda não chamam `Begin` e `Poll`: [ligação de produção](../desenvolvimento/ligacao-de-producao.md).
 
 ## Critérios de aceite
 

@@ -278,6 +278,7 @@ func (r *Registry) Installed(ctx context.Context, name string, installationID in
 			return err
 		}
 		for _, repo := range repos {
+			repo = strings.ToLower(repo) // GitHub spells the name its way; the engine looks it up in lower case
 			if _, err := tx.ExecContext(ctx, `INSERT INTO app_installations (app, repo, installation_id) VALUES (?, ?, ?)
 				ON CONFLICT (app, repo) DO UPDATE SET installation_id = excluded.installation_id`, name, repo, installationID); err != nil {
 				return err
@@ -295,10 +296,11 @@ func (r *Registry) Installed(ctx context.Context, name string, installationID in
 }
 
 // Installation is the installation of the App that covers the repository
-// (`owner/name`); an App that is not installed there is ErrNotInstalled.
+// (`owner/name`, in any case: GitHub spells it one way and the requests are
+// made in lower case); an App that is not installed there is ErrNotInstalled.
 func (r *Registry) Installation(ctx context.Context, app, repo string) (int64, error) {
 	var id int64
-	err := r.DB.Reader().QueryRowContext(ctx, `SELECT installation_id FROM app_installations WHERE app = ? AND repo = ?`, app, repo).Scan(&id)
+	err := r.DB.Reader().QueryRowContext(ctx, `SELECT installation_id FROM app_installations WHERE app = ? AND lower(repo) = lower(?)`, app, repo).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, fmt.Errorf("%w: App `%s` não instalado em `%s`", ErrNotInstalled, app, repo)
 	}
