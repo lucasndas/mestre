@@ -14,8 +14,8 @@ import (
 // CA-CODEX-WIN-03
 //
 // The ACE of the logon SID of a terminal goes on the file of the socket and
-// on its folder, with the access the measurements asked (read and write,
-// this object only), stays out of everything else, goes away on Revoke, and
+// on its folder (read and write on the file, only the read side on the
+// folder, this object only), stays out of everything else, goes away on Revoke, and
 // the sweep of Only takes away the SIDs of dead terminals and nothing else.
 // The base ACL (SYSTEM, the engine, the agents) and its protection from
 // inheritance stay as they were.
@@ -40,7 +40,10 @@ func TestTheACEOfTheTerminalIsPutOnTheSocketAndItsFolderAndTakenAway(t *testing.
 	base := entries(t, baseSock)
 	a := TerminalAccess{Socket: sock}
 	const t1, t2 = "S-1-5-5-0-11111", "S-1-5-5-0-22222"
-	mask := uint32(windows.FILE_GENERIC_READ | windows.FILE_GENERIC_WRITE)
+	masks := map[string]uint32{
+		sock: windows.FILE_GENERIC_READ | windows.FILE_GENERIC_WRITE,
+		dir:  windows.FILE_GENERIC_READ | windows.FILE_GENERIC_EXECUTE, // nothing that creates in the folder
+	}
 
 	for _, sid := range []string{t1, t2, t1} { // twice t1: idempotent
 		if err := a.Grant(sid); err != nil {
@@ -58,8 +61,8 @@ func TestTheACEOfTheTerminalIsPutOnTheSocketAndItsFolderAndTakenAway(t *testing.
 			for _, e := range got {
 				if e.sid == sid {
 					n++
-					if e.typ != allowed || e.flags != 0 || e.mask != mask {
-						t.Errorf("%s: ACE of %s = %+v, want allow, no inheritance, read and write", p, sid, e)
+					if e.typ != allowed || e.flags != 0 || e.mask != masks[p] {
+						t.Errorf("%s: ACE of %s = %+v, want allow, no inheritance, mask %#x", p, sid, e, masks[p])
 					}
 				}
 			}
@@ -95,6 +98,10 @@ func TestTheACEOfTheTerminalIsPutOnTheSocketAndItsFolderAndTakenAway(t *testing.
 	}
 	if err := a.Only(nil); err != nil {
 		t.Fatal(err)
+	}
+	// A socket that is not there (after a clean stop) is no error.
+	if err := (TerminalAccess{Socket: filepath.Join(dir, "gone", "cli.sock")}).Only(nil); err != nil {
+		t.Errorf("Only on a missing socket: %v", err)
 	}
 	acl, _ = applied(t, sock)
 	if got := entries(t, acl); !slices.Equal(got, base) {

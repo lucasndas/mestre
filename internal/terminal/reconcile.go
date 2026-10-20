@@ -61,15 +61,6 @@ func (m *Manager) Reconcile(ctx context.Context) (*Report, error) {
 			rep.Interrupted = append(rep.Interrupted, rec.ID)
 		}
 	}
-	if m.cfg.Access != nil {
-		// After the rows were settled: the live ones get their grant again
-		// (the socket of the CLI was made anew) and no other stays.
-		if now, err := m.reg.list(ctx); err == nil {
-			m.syncAccess(now)
-		} else {
-			errs = append(errs, err)
-		}
-	}
 	socks, err := filepath.Glob(filepath.Join(m.cfg.SocketDir, "*.sock"))
 	if err != nil {
 		return rep, err

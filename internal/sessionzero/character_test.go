@@ -615,8 +615,8 @@ func TestTheReserveChannelsOfTheLayer(t *testing.T) {
 	}
 }
 
-// Part of CA-SZ-PERS-05 (the decree itself is created by the Telegram flow of
-// milestone 5; here the change of what goes in the layer).
+// The change of what goes in the layer, in the session zero (CA-SZ-PERS-05 is
+// proved end to end, with a decree made by the flow of the people, in internal/app).
 func TestAChangeOfTheDecreesRewritesTheFileAndTheNextTurnGetsOnlyThatSection(t *testing.T) {
 	t.Parallel()
 	for _, agent := range threeAgents {
