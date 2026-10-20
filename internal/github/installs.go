@@ -62,7 +62,8 @@ func (i *Installs) refresh(ctx context.Context, app App) error {
 }
 
 // Missing lists the Apps (by name) that do not cover the repository, after
-// reading their installations again.
+// reading their installations again. An App is asked for by its name or, for the
+// fixed ones, by its role.
 func (i *Installs) Missing(ctx context.Context, repo string, apps []string) ([]string, error) {
 	repo, err := NormalizeRepo(repo)
 	if err != nil {
@@ -70,9 +71,15 @@ func (i *Installs) Missing(ctx context.Context, repo string, apps []string) ([]s
 	}
 	var missing []string
 	for _, name := range apps {
-		app, err := i.Apps.Get(ctx, name)
+		var app App
+		var err error
+		if name == RoleGrandMaster || name == RoleMestre {
+			app, err = i.Apps.Fixed(ctx, name) // a fixed App is asked for by its role
+		} else {
+			app, err = i.Apps.Get(ctx, name)
+		}
 		if errors.Is(err, ErrNoApp) {
-			missing = append(missing, name)
+			missing = append(missing, roleLabel(name))
 			continue
 		}
 		if err != nil {
@@ -81,14 +88,25 @@ func (i *Installs) Missing(ctx context.Context, repo string, apps []string) ([]s
 		if err := i.refresh(ctx, app); err != nil {
 			return nil, err
 		}
-		if _, err := i.Apps.Installation(ctx, name, repo); err != nil {
+		if _, err := i.Apps.Installation(ctx, app.Name, repo); err != nil {
 			if !errors.Is(err, ErrNotInstalled) {
 				return nil, err
 			}
-			missing = append(missing, name)
+			missing = append(missing, app.Name)
 		}
 	}
 	return missing, nil
+}
+
+// roleLabel is how an App that was not made yet is named to the people.
+func roleLabel(name string) string {
+	switch name {
+	case RoleGrandMaster:
+		return "Grão-Mestre"
+	case RoleMestre:
+		return "Mestre"
+	}
+	return name
 }
 
 // AddRepository adds the repository to the installation of each App through

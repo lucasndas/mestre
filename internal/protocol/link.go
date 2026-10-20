@@ -124,6 +124,11 @@ func (l *Link) Send(ctx context.Context, o Outgoing) (string, error) {
 		if spec.Ack && !o.Transient {
 			return env.ID, nil // stays in the outbox for the next connection
 		}
+		if errors.Is(err, ErrSessionClosed) {
+			// The connection ended after the link took it for the current one and
+			// before it detached: nothing went out, which is what ErrNotConnected says.
+			return env.ID, fmt.Errorf("%w: %w", ErrNotConnected, err)
+		}
 		return env.ID, err
 	}
 	return env.ID, nil
