@@ -82,7 +82,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if err != nil {
 		return nil, err
 	}
-	reg := providers.NewRegistry(providers.Options{})
+	reg := providers.NewRegistry(providers.Options{NoFlush: e.cfg.Synchronous == "OFF"}) // the files follow the databases (Synchronous OFF: tests)
 	binary := e.deps.Binary
 	if binary == "" {
 		if binary, err = os.Executable(); err != nil {

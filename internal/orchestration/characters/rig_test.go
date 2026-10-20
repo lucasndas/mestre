@@ -742,7 +742,7 @@ func newRig(t *testing.T, o rigOptions) *rig {
 		mr := &machineRig{id: m.id, host: newFakeHost(), prep: &fakePrep{first: o.first}}
 		mr.db = openCopy(t, "maquina.db", machineTemplate, machinedb.Open)
 		mr.rt, err = characters.NewRuntime(characters.RuntimeOptions{
-			Machine: m.id, Clock: r.clk, DB: mr.db, Host: mr.host, Prep: mr.prep, Providers: providers.NewRegistry(providers.Options{}),
+			Machine: m.id, Clock: r.clk, DB: mr.db, Host: mr.host, Prep: mr.prep, Providers: providers.NewRegistry(providers.Options{NoFlush: true}),
 			Reporter: r.tap, Notifier: r.notes, Waits: waitProbe, Tables: o.tables, Inbox: inboxProbe, Turns: r.turnObserver(o.stage7), LongText: o.longText,
 		})
 		if err != nil {
