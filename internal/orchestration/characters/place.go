@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/lucasndas/mestre/internal/sessionzero"
 )
 
 // authorize says whether who asks may create what is asked
@@ -184,6 +186,9 @@ func (s *Service) insert(ctx context.Context, p placement) (Character, error) {
 // that is resumed. A creation that fails leaves nothing behind.
 func (s *Service) launch(ctx context.Context, c Character, p placement, resumed bool) error {
 	fail := func(err error) error {
+		if !resumed && c.Role == RoleGrandMaster {
+			return s.grandMasterNotStarted(ctx, c, err)
+		}
 		if !resumed {
 			if s.o.Connections != nil {
 				_ = s.o.Connections.Ended(ctx, c)
@@ -317,3 +322,29 @@ func (s *Service) expire(ctx context.Context, w SlotWait, req CreateRequest) err
 }
 
 var _ = providers.Null
+
+// grandMasterNotStarted is what a Grand Master that could not start becomes:
+// not a character that never was, but the Grand Master of the workspace,
+// interrupted, with the reason. The messages of the users stay in its inbox,
+// the users are told it is unavailable and why (the inbox does it as they
+// write), the Owner is told now, and the next resumption of the machine starts
+// it again (docs/orquestracao/grao-mestre.md#regras-e-erros).
+func (s *Service) grandMasterNotStarted(ctx context.Context, c Character, cause error) error {
+	// the reason is what the users read: no path of the machine, no raw error
+	reason := "falha ao iniciar; o Dono foi avisado"
+	var blocked *sessionzero.BlockedError
+	if errors.As(cause, &blocked) {
+		paths := make([]string, 0, len(blocked.Problems))
+		for _, p := range blocked.Problems {
+			paths = append(paths, p.Path)
+		}
+		reason = fmt.Sprintf("os arquivos do provedor %s no clone principal não foram gerados (%s)", blocked.Provider, strings.Join(paths, ", "))
+	}
+	s.log.Warn("characters: the Grand Master did not start", "workspace", c.Workspace, "err", cause)
+	if _, _, err := s.o.Registry.Transition(ctx, c.ID, Interrupted, Change{Reason: reason, At: s.clk.Now()}); err != nil {
+		return errors.Join(fmt.Errorf("character %s did not start: %w", c.Name, cause), err)
+	}
+	_ = s.o.Notifier.Notify(ctx, Notice{Kind: NoticeStartFailed, To: Recipient{Kind: ToOwner}, Workspace: c.Workspace,
+		Character: c.ID, Name: c.Name, Creator: c.CreatedBy, Text: fmt.Sprintf("%s não iniciou: %v", c.Name, cause)})
+	return fmt.Errorf("character %s did not start: %w", c.Name, cause)
+}

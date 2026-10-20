@@ -12,7 +12,8 @@ import (
 // Runtime: the check before each character and the trust written again when a
 // provider shows its trust screen. Requests builds the request for the
 // worktree of a table on this machine (its record, the mirror, the account
-// profiles that will run characters there): the tables of stage 8 know it.
+// profiles that will run characters there): the tables know it, and the
+// workspace knows the main clone (the table "", where the Grand Master runs).
 type TableFiles struct {
 	Table    *sessionzero.Table
 	Requests func(ctx context.Context, workspace, table, dir string) (sessionzero.TableRequest, error)
