@@ -293,6 +293,26 @@ func (c *REST) CreatePull(ctx context.Context, repo, title, body, head, base str
 	return v.data(), nil
 }
 
+// OpenPullOf finds the open PR whose head is the branch of the repository itself
+// (not of a fork) and goes into base; ok is false when there is none.
+func (c *REST) OpenPullOf(ctx context.Context, repo, branch, base string) (PullData, bool, error) {
+	norm, err := NormalizeRepo(repo)
+	if err != nil {
+		return PullData{}, false, err
+	}
+	raw, err := pages[pullJSON](ctx, c, repo, "/pulls", "listing the open PRs")
+	if err != nil {
+		return PullData{}, false, err
+	}
+	for _, v := range raw {
+		d := v.data()
+		if d.HeadRef == branch && strings.EqualFold(d.HeadRepo, norm) && d.BaseRef == base && d.State == "open" {
+			return d, true, nil
+		}
+	}
+	return PullData{}, false, nil
+}
+
 // MarkReady takes a PR out of the draft state (only GraphQL does it).
 func (c *REST) MarkReady(ctx context.Context, repo, nodeID string) error {
 	repo, err := NormalizeRepo(repo)

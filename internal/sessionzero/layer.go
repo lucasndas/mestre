@@ -302,9 +302,18 @@ func skillsText(in LayerInput) string {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		fmt.Fprintf(&b, "### %s\n\n%s\n\n%s\n", s.Name, strings.TrimSpace(s.Description), strings.TrimSpace(s.Body))
+		fmt.Fprintf(&b, "### %s\n\n%s\n\n%s\n", s.Name, strings.TrimSpace(s.Description), compactSkillBody(s.Body))
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// compactSkillBody is the orientation of a skill without the list of syntax,
+// which does not fit the layer of the Grand Master (`mestre help` has it).
+func compactSkillBody(body string) string {
+	if i := strings.Index(body, "\n"+skillSyntaxHeading+"\n"); i >= 0 {
+		body = body[:i] + "\nThe syntax of each command is in `mestre help <command>`."
+	}
+	return strings.TrimSpace(body)
 }
 
 func contextText(in LayerInput) string {

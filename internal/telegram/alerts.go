@@ -202,6 +202,23 @@ func (a *OwnerAlerts) OwnerAlert(ctx context.Context, text string) {
 	}
 }
 
+// OwnerWorkspaceAlert is a notice to the Owner about a workspace (the warning of
+// quota of a limit, a chain alert): the message starts with the header of the
+// workspace, not with "Sistema". While the bot is not up it waits as a plain
+// notice that names the workspace in its text.
+func (a *OwnerAlerts) OwnerWorkspaceAlert(ctx context.Context, workspace, text string) {
+	bot := a.bot.Load()
+	if bot == nil {
+		a.OwnerAlert(ctx, fmt.Sprintf("[%s] %s", workspace, text))
+		return
+	}
+	for _, o := range a.owners(ctx) {
+		if _, err := bot.Send(ctx, Out{ChatID: o.TelegramID, UserID: o.ID, Text: text, Workspace: workspace, Origin: "motor"}); err != nil {
+			bot.log.Warn("telegram: a notice to the Owner was not queued", "workspace", workspace, "err", err)
+		}
+	}
+}
+
 // Tell implements users.Alerts: a notice to one user.
 func (a *OwnerAlerts) Tell(ctx context.Context, userID, text string) {
 	bot := a.bot.Load()

@@ -13,11 +13,11 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// Part of CA-PROVA-15, the half of the queue: a done with a proof that waited in the
-// outbox of a Tower is refused when the Citadel gets it, and the refusal comes
-// to the character as an item `system` with the op_id of the request (the
-// refusals of the quests themselves, the step that goes on running, are in
-// internal/orchestration/quests).
+// The transport behind CA-PROVA-15 (the criterion itself is in the fast suite,
+// in internal/orchestration/quests, which also asserts the step that keeps
+// running): a done with a proof that waited in the outbox of a Tower is refused
+// when the Citadel gets it, and the refusal comes to the character as an item
+// `system` with the op_id of the request.
 func TestARefusedDoneThatWaitedInTheOutboxComesBackAsASystemItemWithItsOpID(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)

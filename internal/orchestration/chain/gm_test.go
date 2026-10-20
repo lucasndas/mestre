@@ -222,7 +222,7 @@ func TestTheGrandMasterApprovesRepositorySettingsOnlyWithADelegationOfTheOwner(t
 func (w *world) workflowsRequest(table string) int64 {
 	w.t.Helper()
 	id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestWorkflows, Workspace: w.slug, Table: table, About: "workflows da mesa " + table,
-		Target: json.RawMessage(`{"files":[".github/workflows/ci.yml"]}`)})
+		Target: json.RawMessage(`{"repo":"lucas/Meu_App","branch":"mestre/x","head":"abc","files":[".github/workflows/ci.yml"]}`)})
 	if err != nil {
 		w.t.Fatal(err)
 	}

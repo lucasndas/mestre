@@ -206,6 +206,11 @@ func (f *Flow) row(ctx context.Context, request int64) (flowRow, bool, error) {
 // each user who may answer (or edits the one they have, when the question
 // changed).
 func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
+	all, err := f.o.Users.List(ctx)
+	if err != nil {
+		return err
+	}
+	q.Text = withFields(q, all)
 	req, _ := json.Marshal(q.Require)
 	if q.Require == nil {
 		req = []byte("[]")
@@ -214,16 +219,12 @@ func (f *Flow) Ask(ctx context.Context, q chain.PeopleQuestion) error {
 	if q.PIN {
 		pin = 1
 	}
-	err := f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err = f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO approval_flow (request, approvals, require, min_level, pin, text, asked_at) VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (request) DO UPDATE SET approvals = excluded.approvals, require = excluded.require, min_level = excluded.min_level, pin = excluded.pin, text = excluded.text`,
 			q.Request.ID, max(q.Approvals, 1), string(req), string(q.MinLevel), pin, q.Text, f.ms(f.clk.Now()))
 		return err
 	})
-	if err != nil {
-		return err
-	}
-	all, err := f.o.Users.List(ctx)
 	if err != nil {
 		return err
 	}
@@ -581,6 +582,7 @@ func (f *Flow) check(ctx context.Context, userID string, request int64, a chain.
 // mustBind are the types that are never approved without a target.
 var mustBind = map[classes.RequestType]bool{
 	classes.RequestPR: true, classes.RequestMerge: true, classes.RequestWorkflows: true, classes.RequestDestructive: true, classes.RequestRepoSettings: true,
+	classes.RequestAgentsMD: true,
 }
 
 // verify compares the live target with the impression of the request; a

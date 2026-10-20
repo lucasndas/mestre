@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/users"
 )
@@ -173,12 +175,13 @@ func (s *Service) List(ctx context.Context, userID string) ([]View, error) {
 	if err != nil {
 		return nil, err
 	}
+	frozen := s.locked(ctx)
 	var out []View
 	for _, d := range ds {
 		if !u.Acts(d.Workspace) {
 			continue
 		}
-		v := View{Decree: d, AuthorName: d.Author}
+		v := View{Decree: d, AuthorName: d.Author, Frozen: frozen}
 		if a, err := readUser(ctx, r, d.Author); err == nil {
 			v.AuthorName = a.Name
 		}
@@ -211,12 +214,13 @@ func (s *Service) ListWorkspace(ctx context.Context, workspace string, all bool)
 	if err != nil {
 		return nil, err
 	}
+	frozen := s.locked(ctx)
 	var out []View
 	for _, d := range ds {
 		if d.Workspace != workspace || (!all && d.State != Active && d.State != Suspended) {
 			continue
 		}
-		v := View{Decree: d, AuthorName: d.Author}
+		v := View{Decree: d, AuthorName: d.Author, Frozen: frozen && (d.State == Active || d.State == Suspended)}
 		if a, err := readUser(ctx, r, d.Author); err == nil {
 			v.AuthorName = a.Name
 		}
@@ -226,8 +230,20 @@ func (s *Service) ListWorkspace(ctx context.Context, workspace string, all bool)
 }
 
 // Use is the classes.ExceptionLedger of the exceptions the hook lets through:
-// true only the first time, atomically. It records the use in the decree.
+// true only the first time, atomically, whoever the character is: an exception
+// is spent once for the whole decree, not once per character it reaches. An
+// effective use republishes the effective rules, so the exception leaves the
+// rules of every character it reached.
 func (s *Service) Use(ctx context.Context, agentID string, id int64) (bool, error) {
+	return s.spend(ctx, agentID, id, "exceção pontual", s.clk.Now())
+}
+
+// maxUseAction bounds the action recorded in a use: it comes from an event.
+const maxUseAction = 500
+
+// spend marks the exception used and records the use, at the instant at; false
+// when it was not active (already used, over).
+func (s *Service) spend(ctx context.Context, agentID string, id int64, action string, at time.Time) (bool, error) {
 	used := false
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()
@@ -243,10 +259,24 @@ func (s *Service) Use(ctx context.Context, agentID string, id int64) (bool, erro
 		if err := addEvent(ctx, tx, id, Used, agentID, "usada", now); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO decree_uses (decree, at, character, action) VALUES (?, ?, ?, 'exceção pontual')`, id, ms(now), agentID)
-		return err
+		return insertUse(ctx, tx, id, at, agentID, action)
 	})
+	if used && err == nil {
+		s.fireAsync(ctx)
+	}
 	return used && err == nil, err
+}
+
+func insertUse(ctx context.Context, tx queryer, number int64, at time.Time, character, action string) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO decree_uses (decree, at, character, action) VALUES (?, ?, ?, ?)`, number, ms(at), character, boundText(action, maxUseAction))
+	return err
+}
+
+func boundText(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
 }
 
 // Executed records that the character did an action on the strength of a decree
@@ -265,6 +295,149 @@ func (s *Service) Executed(ctx context.Context, number int64, character, action 
 		_, err = tx.ExecContext(ctx, `INSERT INTO decree_uses (decree, at, character, action) VALUES (?, ?, ?, ?)`, number, ms(s.clk.Now()), character, action)
 		return err
 	})
+}
+
+// AppliedUse is what the hook did on the strength of a decree: the call (the
+// decree must free that call), what to write of it in the list of the decree and
+// the instant of the event, which can be older than the delivery (an event
+// waits in the outbox of a Tower).
+type AppliedUse struct {
+	Tool   *providers.Tool
+	Action string
+	At     time.Time
+}
+
+// Applied registers that the hook let a call of the character through on the
+// strength of the decree (hook.Answer.Decree): an exception is spent (it is used
+// once, for the decree as a whole), a rule that stays active gets the execution
+// in its list. The number an event carries is never trusted alone: it registers
+// nothing, and says ErrEnded, when the decree is not one the hook frees a call
+// with (an exception bound to a target goes to the engine, never to the hook;
+// the call must be the exact action of an exception, and covered by what a rule
+// allows), when it does not reach the character (another workspace or table), or
+// when it was not active at the instant of the event. A use of a decree that was
+// active then and ended since (revoked right after the hook allowed) is kept; a
+// use after the end is recorded marked as such, with ErrEnded, so the caller
+// warns.
+func (s *Service) Applied(ctx context.Context, c characters.Character, number int64, u AppliedUse) error {
+	if number <= 0 {
+		return nil
+	}
+	d, err := getDecree(ctx, s.o.DB.Reader(), number)
+	if err != nil {
+		return err
+	}
+	now := s.clk.Now()
+	at := u.At
+	if at.IsZero() || at.After(now) {
+		at = now
+	}
+	if d.Effect.Kind != EffectPermission || !reaches(d, c) {
+		return ErrEnded
+	}
+	if d.Kind == KindException {
+		if d.Impression != "" || d.Action == nil || !classes.ActionMatchesTool(*d.Action, u.Tool) {
+			return ErrEnded
+		}
+	} else if d.Effect.Allow == nil || !classes.GrantCoversTool(d.Effect.Allow, u.Tool) {
+		return ErrEnded
+	}
+	hist, err := s.History(ctx, number)
+	if err != nil {
+		return err
+	}
+	if !activeAt(d, hist, at) {
+		return s.recordAfterEnd(ctx, number, c.ID, "[depois do fim] "+u.Action, now)
+	}
+	if d.Kind == KindException {
+		return s.appliedException(ctx, d, c, u.Action, at)
+	}
+	if d.State == Active {
+		if level, err := s.levelOf(ctx, s.o.DB.Reader(), d); err != nil {
+			return err
+		} else if level == "" {
+			return ErrEnded
+		}
+	}
+	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error { return insertUse(ctx, tx, number, at, c.ID, u.Action) })
+}
+
+// appliedException spends an exception the hook let through. The ledger of the
+// Citadel already spent it for a character of its own (Use), and then the use of
+// that character gets the real action; a second character, or a second use of
+// the same one, is refused and recorded as repeated.
+func (s *Service) appliedException(ctx context.Context, d Decree, c characters.Character, action string, at time.Time) error {
+	if d.State == Active {
+		ok, err := s.spend(ctx, c.ID, d.Number, action, at)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
+		return s.recordAfterEnd(ctx, d.Number, c.ID, "[uso repetido] "+action, s.clk.Now())
+	}
+	// used: by this character through the ledger (its row has the placeholder)
+	// or by another one
+	res, err := s.execResult(ctx, `UPDATE decree_uses SET action = ? WHERE id = (SELECT id FROM decree_uses WHERE decree = ? AND character = ? AND action = 'exceção pontual' ORDER BY id LIMIT 1)`, boundText(action, maxUseAction), d.Number, c.ID)
+	if err != nil {
+		return err
+	}
+	if res > 0 {
+		return nil
+	}
+	// the same event told again (a replay after a reconnection) is the same use
+	var n int
+	if err := s.o.DB.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM decree_uses WHERE decree = ? AND character = ? AND action = ?`, d.Number, c.ID, boundText(action, maxUseAction)).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	if d.State == Used {
+		return s.recordAfterEnd(ctx, d.Number, c.ID, "[uso repetido] "+action, s.clk.Now())
+	}
+	// revoked or expired after the hook allowed it, active at the instant: kept
+	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error { return insertUse(ctx, tx, d.Number, at, c.ID, action) })
+}
+
+func (s *Service) execResult(ctx context.Context, q string, args ...any) (int64, error) {
+	var n int64
+	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, q, args...)
+		if err != nil {
+			return err
+		}
+		n, _ = res.RowsAffected()
+		return nil
+	})
+	return n, err
+}
+
+// recordAfterEnd keeps the use that came after the decree ended (or a repeated
+// one), marked, and says ErrEnded.
+func (s *Service) recordAfterEnd(ctx context.Context, number int64, character, action string, at time.Time) error {
+	if err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error { return insertUse(ctx, tx, number, at, character, action) }); err != nil {
+		return err
+	}
+	return ErrEnded
+}
+
+// activeAt says whether the decree stood in force at the instant: its state at
+// that moment, from the history, was active, and its validity had not run out.
+func activeAt(d Decree, hist []Change, at time.Time) bool {
+	if !d.Until.IsZero() && !at.Before(d.Until) {
+		return false
+	}
+	state := State("")
+	for _, h := range hist {
+		if h.At.After(at) {
+			break
+		}
+		state = h.State
+	}
+	// the use of an exception is the end of it: it was in force until then
+	return state == Active || (d.Kind == KindException && state == Used)
 }
 
 // Fulfilled registers, in each active decree that frees the push to the
@@ -303,11 +476,77 @@ func commandCovers(pattern, command string) bool {
 	return base != "" && strings.HasPrefix(command, base)
 }
 
+// FindException is the active exception of a workspace, in validity, for a request of the
+// type bound to the impression of the target: the one that `gh merge` redeems. It is only a
+// search; Redeem checks the target again and spends it. ok is false when there is none.
+func (s *Service) FindException(ctx context.Context, workspace string, typ classes.RequestType, target json.RawMessage) (number int64, ok bool, err error) {
+	imp, err := chain.Impress(target)
+	if err != nil || workspace == "" {
+		return 0, false, nil
+	}
+	ds, err := queryDecrees(ctx, s.o.DB.Reader(), `WHERE kind = ? AND state = ? AND workspace = ? AND request_type = ? AND impression = ? ORDER BY id`,
+		string(KindException), string(Active), workspace, string(typ), imp)
+	if err != nil {
+		return 0, false, err
+	}
+	now := s.clk.Now()
+	for _, d := range ds {
+		if d.Until.IsZero() || now.Before(d.Until) {
+			return d.Number, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+// ExpireMoved expires, unused, the active exceptions of the workspace for a request of the type
+// whose target is the same pull request (same repository and number) but another state of it (another
+// head): the PR moved since they were made, so they can never apply again. It returns the number of the
+// first one it expired (0 when none).
+func (s *Service) ExpireMoved(ctx context.Context, workspace string, typ classes.RequestType, target json.RawMessage) (int64, error) {
+	imp, err := chain.Impress(target)
+	var cur struct {
+		Repo string `json:"repo"`
+		PR   int    `json:"pr"`
+	}
+	if err != nil || workspace == "" || json.Unmarshal(target, &cur) != nil || cur.PR == 0 {
+		return 0, nil
+	}
+	ds, err := queryDecrees(ctx, s.o.DB.Reader(), `WHERE kind = ? AND state = ? AND workspace = ? AND request_type = ? AND impression != ? ORDER BY id`,
+		string(KindException), string(Active), workspace, string(typ), imp)
+	if err != nil {
+		return 0, err
+	}
+	var first int64
+	for _, d := range ds {
+		var old struct {
+			Repo string `json:"repo"`
+			PR   int    `json:"pr"`
+		}
+		if json.Unmarshal(d.TargetRef, &old) != nil || old.PR != cur.PR || !chain.SameRepo(old.Repo, cur.Repo) {
+			continue
+		}
+		n := d.Number
+		if err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+			_, err := transition(ctx, tx, n, Expired, "", "o alvo mudou antes de a exceção ser usada", s.clk.Now(), Active)
+			return err
+		}); err != nil {
+			return first, err
+		}
+		if first == 0 {
+			first = n
+		}
+	}
+	return first, nil
+}
+
 // Redeem spends an exception for an action that the engine executes (a merge):
 // the live target is compared with the impression the exception was bound to,
 // and if anything changed (a new commit in the PR) the exception expires unused
-// and the merge is not made with it (ErrTargetChanged).
-func (s *Service) Redeem(ctx context.Context, number int64, character, action string) error {
+// and the merge is not made with it (ErrTargetChanged). The request being
+// redeemed is required: an exception made in a workspace and bound to a target
+// spends nothing for a request of another workspace or of another target
+// (ErrWrongRequest), whatever the number the caller names.
+func (s *Service) Redeem(ctx context.Context, number int64, req chain.Request, character, action string) error {
 	d, err := getDecree(ctx, s.o.DB.Reader(), number)
 	if err != nil {
 		return err
@@ -315,6 +554,21 @@ func (s *Service) Redeem(ctx context.Context, number int64, character, action st
 	now := s.clk.Now()
 	if d.Kind != KindException || d.State != Active || (!d.Until.IsZero() && !now.Before(d.Until)) {
 		return ErrEnded
+	}
+	if req.Workspace == "" || req.Workspace != d.Workspace {
+		return ErrWrongRequest
+	}
+	if d.Impression != "" {
+		imp := req.Impression
+		if len(req.Target) > 0 {
+			var err error
+			if imp, err = chain.Impress(req.Target); err != nil {
+				return ErrWrongRequest
+			}
+		}
+		if imp != d.Impression {
+			return ErrWrongRequest
+		}
 	}
 	if d.Impression != "" {
 		if err := s.verify(ctx, d); err != nil {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
@@ -85,6 +86,54 @@ type Service struct {
 	// delegation gives the validity and the reminder of a workspace (nil: the
 	// constants).
 	delegation func(ctx context.Context, workspace string) (validity, reminder time.Duration)
+	// changed is told after a write that can change what the decrees in force
+	// say (a decree made, revoked, reactivated, suspended or invalidated), so
+	// that the effective rules are published again.
+	changed atomic.Pointer[func(ctx context.Context)]
+}
+
+// SetChanged sets what is told after the decrees in force may have changed (the
+// publication of the effective rules). A failure belongs to whoever is told: the
+// change is made.
+// It is safe to call while the service works, and per period: nil takes the
+// callback of an ended period away.
+func (s *Service) SetChanged(f func(ctx context.Context)) {
+	if f == nil {
+		s.changed.Store(nil)
+		return
+	}
+	s.changed.Store(&f)
+}
+
+// fire tells the change to whoever was set to hear it.
+func (s *Service) fire(ctx context.Context) {
+	if f := s.changed.Load(); f != nil {
+		(*f)(ctx)
+	}
+}
+
+// LevelsChanged tells that the level of a user changed (a promotion, a transfer
+// of the post of Owner): the level that counts of each decree is the one its
+// author has now, so the effective rules are published again.
+func (s *Service) LevelsChanged(ctx context.Context) { s.fire(ctx) }
+
+// fireAsync is fire off the path of the caller (the use of an exception in the
+// answer of a hook): the publication goes on its own and is not cancelled with
+// the caller.
+func (s *Service) fireAsync(ctx context.Context) {
+	if s.changed.Load() == nil {
+		return
+	}
+	go s.fire(context.WithoutCancel(ctx))
+}
+
+// write is WriteDurable that tells the change once it is committed.
+func (s *Service) write(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	if err := s.o.DB.WriteDurable(ctx, fn); err != nil {
+		return err
+	}
+	s.fire(ctx)
+	return nil
 }
 
 // New returns the Service.
@@ -239,7 +288,7 @@ func (s *Service) Confirm(ctx context.Context, proposal, userID, pinRequest stri
 	}
 	var out Decree
 	var conflicts []conflict
-	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err = s.write(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()
 		// Authorized by what is stored now, never by what was true at the proposal.
 		sp, u, again, err := s.authorizeConfirm(ctx, tx, proposal, userID)
@@ -511,7 +560,7 @@ func (s *Service) Revoke(ctx context.Context, number int64, userID, pinRequest s
 			return ErrPINFailed
 		}
 	}
-	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err = s.write(ctx, func(tx *sql.Tx) error {
 		// Authorized again by what is stored now.
 		_, again, err := s.authorizeRevoke(ctx, tx, number, userID)
 		if err != nil {
@@ -609,7 +658,7 @@ func (s *Service) Reactivate(ctx context.Context, number int64, userID string) e
 		return ErrLocked
 	}
 	var cs []conflict
-	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.write(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()
 		by, err := readUser(ctx, tx, userID)
 		if err != nil || by.State != users.Active || by.Level != users.Owner {
@@ -644,7 +693,7 @@ func (s *Service) Reactivate(ctx context.Context, number int64, userID string) e
 // the list. The Owner reactivates each one (and it becomes his) or revokes it.
 func (s *Service) InvalidateBy(ctx context.Context, userID string) error {
 	var rules, exceptions []Decree
-	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err := s.write(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()
 		u, err := readUser(ctx, tx, userID)
 		if err != nil {

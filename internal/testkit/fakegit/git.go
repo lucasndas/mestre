@@ -1174,6 +1174,22 @@ func (g *Git) Pushes() []string {
 // the remote names, as git push does; auth is checked like the real one does and
 // otherwise ignored.
 func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch, commit string, force bool) error {
+	return h.push(auth, remote, branch, commit, force, nil)
+}
+
+// PushWithLease implements gitx.Repo: the push replaces the branch only if the
+// remote still has expected ("": it must not exist), and then it is forced, as
+// --force-with-lease does.
+func (h *Handle) PushWithLease(_ context.Context, auth gitx.Auth, remote, branch, commit, expected string) error {
+	if expected != "" {
+		if err := gitx.ValidateCommit(expected); err != nil {
+			return err
+		}
+	}
+	return h.push(auth, remote, branch, commit, false, &expected)
+}
+
+func (h *Handle) push(auth gitx.Auth, remote, branch, commit string, force bool, lease *string) error {
 	if err := gitx.ValidateRef(remote); err != nil {
 		return err
 	}
@@ -1199,6 +1215,9 @@ func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch,
 	if force {
 		rec += " force"
 	}
+	if lease != nil {
+		rec += " lease:" + *lease
+	}
 	h.g.pushes = append(h.g.pushes, rec)
 	if err := h.g.pushFail; err != nil {
 		h.g.pushFail = nil
@@ -1216,6 +1235,13 @@ func (h *Handle) PushWithAuth(_ context.Context, auth gitx.Auth, remote, branch,
 	}
 	commits, refs, _ := h.r.snapshot()
 	defer dst.lock()()
+	if lease != nil {
+		cur, there := dst.r.branches[refKey("refs/heads/"+branch)]
+		if (*lease == "" && there) || (*lease != "" && (!there || string(cur) != *lease)) {
+			return fmt.Errorf("push %s: %w: stale info", gitx.RedactURL(remote), gitx.ErrPushRejected)
+		}
+		force = true
+	}
 	maps.Copy(dst.r.commits, commits)
 	// the source of the push is the commit: a ref that points at it, made here
 	refs = append(refs, gitx.Ref{Name: "refs/mestre/push", Hash: gitx.Hash(commit)})

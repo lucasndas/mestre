@@ -747,6 +747,18 @@ func pushAndAddedLines(t *testing.T, h Harness) {
 	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c3 {
 		t.Fatalf("forced push = %s, want %s", got, c3)
 	}
+	// a forced push with a lease replaces the branch only if the remote still has
+	// the commit that was read (c3 now): a stale lease changes nothing
+	isErr(t, wt2.PushWithLease(ctx, auth, remote.Dir(), "mesa", string(c2), string(c2)), gitx.ErrPushRejected)
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c3 {
+		t.Fatalf("a push with a stale lease moved the branch to %s", got)
+	}
+	isErr(t, wt2.PushWithLease(ctx, auth, remote.Dir(), "mesa", string(c2), ""), gitx.ErrPushRejected) // it must not exist
+	ok(wt2.PushWithLease(ctx, auth, remote.Dir(), "mesa", string(c2), string(c3)))
+	if got := must(remote.ResolveRef(ctx, "refs/heads/mesa")); got != c2 {
+		t.Fatalf("push with the right lease = %s, want %s", got, c2)
+	}
+	ok(wt2.PushWithAuth(ctx, auth, remote.Dir(), "mesa", string(c3), true)) // as it was
 	// only a branch to the branch of the same name: no refspec, no delete, no glob, no other ref
 	for _, bad := range []string{"refs/heads/mesa:refs/heads/main", ":mesa", "mesa:main", "*", "HEAD:main", "", "-f", "a..b", "x y", "refs/heads/mesa"} {
 		isErr(t, wt2.PushWithAuth(ctx, auth, remote.Dir(), bad, string(c3), false), gitx.ErrInvalidArgument)

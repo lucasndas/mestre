@@ -37,6 +37,25 @@ func (f *fakeStallPeople) count() int {
 	return len(f.told)
 }
 
+// fakeQueuePeople is the Telegram of the warning of a queue that accumulates.
+type fakeQueuePeople struct {
+	mu   sync.Mutex
+	told []chain.QueueNotice
+}
+
+func (f *fakeQueuePeople) QueueAccumulating(_ context.Context, n chain.QueueNotice) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.told = append(f.told, n)
+	return nil
+}
+
+func (f *fakeQueuePeople) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.told)
+}
+
 // stallItems lists the warnings of a stalled table the Grão-Mestre got.
 func (w *world) stallItems() []inbox.Item {
 	w.t.Helper()

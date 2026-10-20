@@ -278,14 +278,58 @@ func (s MirrorStore) open(ctx context.Context, id string) (gitx.Repo, error) {
 		return nil, fmt.Errorf("mirror id %q is not valid", id)
 	}
 	dir := filepath.Join(s.Root, id, "espelho.git")
-	repo, err := s.Git.Open(ctx, dir)
-	if err == nil {
-		return repo, nil
+	if repo, err := s.Git.Open(ctx, dir); err == nil || !errors.Is(err, gitx.ErrNotARepo) {
+		return repo, err
 	}
-	if !errors.Is(err, gitx.ErrNotARepo) {
+	// Making the replica is serialized per folder: the sync of a table, the
+	// mirrors by batch and the copy of an attachment may all meet a Tower
+	// that has none yet, and two "git init" in one folder collide.
+	unlock := lockMirrorDir(dir)
+	defer unlock()
+	repo, err := s.Git.Open(ctx, dir)
+	if err == nil || !errors.Is(err, gitx.ErrNotARepo) {
+		return repo, err // the other one made it while this waited
+	}
+	if err := refuseForeignDir(dir); err != nil {
 		return nil, err
 	}
 	return s.Git.Init(ctx, dir, gitx.InitOptions{Bare: true})
+}
+
+// mirrorDirLocks holds one lock per replica folder, for the life of the process.
+var mirrorDirLocks sync.Map // map[string]*sync.Mutex
+
+func lockMirrorDir(dir string) (unlock func()) {
+	key := dir
+	if abs, err := filepath.Abs(dir); err == nil {
+		key = abs
+	}
+	mu, _ := mirrorDirLocks.LoadOrStore(key, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	return mu.(*sync.Mutex).Unlock
+}
+
+// refuseForeignDir lets a missing or empty folder be turned into a replica
+// and refuses anything else (a file, or a folder with other things in it).
+func refuseForeignDir(dir string) error {
+	fi, err := os.Stat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("replication: %s exists and is not a folder", dir)
+	}
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	if len(ents) > 0 {
+		return fmt.Errorf("replication: %s exists and is not a git repository", dir)
+	}
+	return nil
 }
 
 // mirrorReceiver is the Finalizer of kind git-bundle for the mirrors: it

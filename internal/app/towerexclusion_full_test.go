@@ -137,9 +137,8 @@ func (g *guildBot) tap(label string) {
 	g.poll()
 }
 
-// Part of CA-GUILDA-12 (the criterion is fast, so the test that closes it is
-// the one with the fake Guild; this is the composition with the engines, in the
-// full suite).
+// CA-GUILDA-12 (the criterion is complete: this is the composition with the engines; the Owner's
+// button and PIN alone are in internal/telegram/guildchan_test.go, in the fast suite).
 // The Owner excludes a Tower that holds the vault from the fake Telegram: /guilda,
 // the button Excluir and the PIN (a wrong one does nothing). The engines do what
 // the criterion says with the hook the Citadel fires wired to the replication:

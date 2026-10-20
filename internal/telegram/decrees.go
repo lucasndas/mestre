@@ -328,13 +328,15 @@ func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
 			line += " · até " + c.Svc.Moment(ctx, v.Until)
 		}
 		switch {
+		case v.Frozen:
+			line += " · SUSPENSO (sistema travado)"
 		case v.State == decrees.Suspended:
 			line += " · SUSPENSO"
 		case v.OverriddenBy != 0:
 			line += fmt.Sprintf(" · sobreposto pelo decreto %d", v.OverriddenBy)
 		}
 		lines = append(lines, line)
-		if canRevoke(call.User, v) {
+		if !v.Frozen && canRevoke(call.User, v) {
 			addButton(Button{Text: fmt.Sprintf("Revogar #%d", v.Number), Action: DecreeRevokeAction, Arg: strconv.FormatInt(v.Number, 10)})
 		}
 	}

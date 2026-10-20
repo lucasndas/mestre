@@ -169,7 +169,8 @@ func (x *towerTableRig) sync(t *testing.T) {
 	x.towerTree = filepath.Join(x.b.paths.Workspaces, x.ws, "mesas", x.table)
 }
 
-// CA-PERG-10: the copies of the scrolls of a table reach the worktree of the
+// Part of CA-PERG-10 (the copies in the worktree of the Tower, read only, copied again when the
+// scroll changes; the birth of the character is TestACharacterBornOnATowerFindsTheCopiesOfTheScrollsInItsWorktree): the copies of the scrolls of a table reach the worktree of the
 // Tower where its characters are, read only, and a change of the scroll is
 // copied again; the Tower writes only that path, in its own worktrees, and
 // only for the Citadel it follows.
@@ -412,4 +413,56 @@ func TestThePreRunOfARitualRunsOnTheTowerOfItsTarget(t *testing.T) {
 	if _, err := m.Run(ctx, rituals.PreRunRequest{Machine: x.b.id, Character: dev.ID, Command: "true", Timeout: time.Second}); !errors.As(err, &unreachable) {
 		t.Errorf("the pre-run with the Tower away: %v", err)
 	}
+}
+
+// CA-PERG-10: a table with scrolls and a character that is born on a Tower through the WSS connection:
+// when it is born the read-only copies are in the worktree of the Tower, and a later change of the
+// scroll is copied again.
+func TestACharacterBornOnATowerFindsTheCopiesOfTheScrollsInItsWorktree(t *testing.T) {
+	t.Parallel()
+	x := newTowerTableRig(t, builderIntegration{}, true)
+	ctx := t.Context()
+	x.sync(t)
+	cat := &presets.Catalog{DB: orcDB(t, x.a), Clock: clock.Real{}}
+	doc, err := presets.ParseDocument([]byte("kind: mestre/presets\nversion: 1\nbases:\n  - {name: claude-code, command: claude, platforms: [{os: linux}, {os: windows, command: claude.exe}], ready: hook}\n" +
+		"sheets:\n  - {name: Dev Claude, base: claude-code, agent: claude-code, class: Dev, max_copies: 200}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := cat.PlanImport(ctx, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.ApplyImport(ctx, plan, nil); err != nil {
+		t.Fatal(err)
+	}
+	// the scroll exists before anyone of the table is on the Tower
+	n, err := x.orc.Scrolls.Create(ctx, scrolls.CreateRequest{Workspace: x.ws, Table: x.table, Actor: scrolls.Engine, Name: "plano", Content: "# Plano\nprimeira versão\n"})
+	if err != nil {
+		t.Fatalf("the scroll: %v", err)
+	}
+	copyPath := filepath.Join(x.towerTree, filepath.FromSlash(scrolls.Rel(x.table, n.ID)))
+	read := func() string { b, _ := os.ReadFile(copyPath); return string(b) }
+	if read() != "" {
+		t.Fatal("the copy was already on the Tower before the character: the birth is not what brings it") // nobody of the table is there yet
+	}
+	res, err := x.orc.Characters.Create(ctx, characters.CreateRequest{Name: "Dev-Torre", Sheet: "Dev Claude", Machine: x.b.id, Workspace: x.ws, Table: x.table,
+		Role: characters.RoleCharacter, Creator: characters.Creator{Kind: characters.CreatedByEngine}})
+	if err != nil {
+		t.Fatalf("the character was not born on the Tower: %v", err)
+	}
+	if res.Character.Machine != x.b.id {
+		t.Fatalf("the character is on %q; want the Tower", res.Character.Machine)
+	}
+	if !strings.Contains(read(), "primeira versão") {
+		t.Fatalf("the copy of the scroll is not in the worktree of the Tower when its character is born: %q", read())
+	}
+	if f, err := os.OpenFile(copyPath, os.O_WRONLY|os.O_APPEND, 0); err == nil {
+		_ = f.Close()
+		t.Error("the copy opens for writing")
+	}
+	if _, err := x.orc.Scrolls.Write(ctx, scrolls.WriteRequest{Workspace: x.ws, Table: x.table, Actor: scrolls.Engine, Name: "plano", Content: "# Plano\nsegunda versão\n"}); err != nil {
+		t.Fatal(err)
+	}
+	x.r.waitFor("the changed copy on the Tower", func() bool { return strings.Contains(read(), "segunda versão") })
 }

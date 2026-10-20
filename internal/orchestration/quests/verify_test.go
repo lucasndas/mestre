@@ -175,6 +175,39 @@ func TestAFileNotCommittedRefusesTheDoneOfAClassThatVerifies(t *testing.T) {
 	if v.count() != 0 {
 		t.Error("a verification started over a branch that is not the work")
 	}
+	// an ignored file is not a change; the file that is a change, in a folder,
+	// is listed with the path the way git gives it
+	w.git.Handle(dir).RemoveFile("notes.md")
+	w.git.Handle(dir).Data().AddExclude("*.log")
+	w.git.Handle(dir).SetFile("run.log", "ruído")
+	w.git.Handle(dir).SetFile("docs/rascunho.md", "wip")
+	r = w.done("Dev Claude 1", nil, "pronto")
+	if r.OK || r.Error.Code != "uncommitted_changes" || !strings.Contains(r.Error.Message, "docs/rascunho.md") || strings.Contains(r.Error.Message, "run.log") || strings.Contains(r.Error.Message, "notes.md") {
+		t.Fatalf("done with a file in a folder and an ignored one = %+v", r)
+	}
+}
+
+// CA-PROVA-04, the half of no change: with nothing left out of a commit the
+// verification begins.
+func TestWithNothingToCommitTheDoneOfAClassThatVerifiesStartsTheVerification(t *testing.T) {
+	t.Parallel()
+	v := &fakeVerifier{confirmed: true}
+	w := verifyWorld(t, v, verifyRules{})
+	q := w.run(w.create(devOnly("")))
+	dir, err := w.orc.Tables.Worktree(w.ctx, w.slug, w.table.ID, "cidadela")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.git.Handle(dir).Data().AddExclude("*.log")
+	w.git.Handle(dir).SetFile("run.log", "ruído") // ignored: not a change
+	res := resultOf(t, w.done("Dev Claude 1", nil, "pronto"))
+	w.orc.Quests.WaitVerifications()
+	if v.count() != 1 {
+		t.Errorf("verifications = %d, want one (%+v)", v.count(), res)
+	}
+	if got := w.quest(q.ID); got.State != quests.Completed {
+		t.Errorf("the quest is %s after the green verification", got.State)
+	}
 }
 
 // CA-PROVA-05
@@ -209,12 +242,17 @@ func TestWithoutAConfirmedCommandTheStepEndsUnverifiedAndTheMasterIsTold(t *test
 func TestTheSameVerificationFailureThreeTimesPausesTheQuest(t *testing.T) {
 	t.Parallel()
 	same := red("go test", "src/a.go:7: x", "src/a.go:7")
-	v := &fakeVerifier{confirmed: true, results: []quests.VerifyResult{same, same, same}}
+	// on Windows the same place comes with backslashes and a column: still the same failure
+	onWindows := red("go test", `src\a.go:7:3: x`, `src\a.go:7:3`)
+	v := &fakeVerifier{confirmed: true, results: []quests.VerifyResult{same, onWindows, same}}
 	w := verifyWorld(t, v, verifyRules{})
 	q := w.run(w.create("name: Uma\nsame_failure: 3\nsteps:\n  - {id: dev, sheet: Dev Claude}\n"))
 	for i := 0; i < 3; i++ {
 		resultOf(t, w.done("Dev Claude 1", nil, fmt.Sprintf("tentativa %d", i+1)))
 		w.orc.Quests.WaitVerifications()
+		if st := w.quest(q.ID).State; i < 2 && st != quests.Running {
+			t.Fatalf("the quest is %s after %d failures, want it running until the third", st, i+1)
+		}
 	}
 	got := w.quest(q.ID)
 	if got.State != quests.Paused || got.PausedReason != "mesma falha repetida" {
@@ -313,5 +351,31 @@ func TestAGreenVerificationOfACommitThatMovedDoesNotEndTheStep(t *testing.T) {
 	w.wantStates(q, map[string]quests.StepState{"dev": quests.StepRunning})
 	if items := w.systemItems("Dev Claude 1"); !strings.Contains(items, "andou enquanto ela rodava") {
 		t.Errorf("the character was not told:\n%s", items)
+	}
+}
+
+// The evidence of a notice about a table (CA-BLOQ-01): the engine keeps the last
+// verification of the table that failed, until one passes.
+func TestTheLastRedVerificationOfATableIsKeptUntilOnePasses(t *testing.T) {
+	t.Parallel()
+	v := &fakeVerifier{confirmed: true, results: []quests.VerifyResult{red("go test ./...", "--- FAIL: TestCheckout\n    checkout_test.go:22: missing STRIPE_TEST_KEY", "checkout_test.go:22"), {OK: true}}}
+	w := verifyWorld(t, v, verifyRules{})
+	w.run(w.create(devOnly("")))
+	if _, ok := w.orc.Quests.LastRed(w.slug, w.table.ID); ok {
+		t.Fatal("a red verification before any ran")
+	}
+	resultOf(t, w.done("Dev Claude 1", nil, "tentativa 1"))
+	w.orc.Quests.WaitVerifications()
+	got, ok := w.orc.Quests.LastRed(w.slug, w.table.ID)
+	if !ok || got.Command != "go test ./..." || !strings.Contains(got.Output, "missing STRIPE_TEST_KEY") || len(got.Places) != 1 || got.Places[0] != "checkout_test.go:22" {
+		t.Fatalf("last red = %+v, %v", got, ok)
+	}
+	if _, ok := w.orc.Quests.LastRed(w.slug, "outra-mesa"); ok {
+		t.Error("the red verification of a table is of another")
+	}
+	resultOf(t, w.done("Dev Claude 1", nil, "tentativa 2"))
+	w.orc.Quests.WaitVerifications()
+	if _, ok := w.orc.Quests.LastRed(w.slug, w.table.ID); ok {
+		t.Error("a green verification left the red one as the evidence")
 	}
 }

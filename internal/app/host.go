@@ -157,6 +157,12 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}
 	classChain.Store(orc.Chain)
 	built = orc
+	if zh, ok := integ.(sessionZeroHost); ok {
+		// the stages of the session zero of the workspaces
+		if _, err := zh.SessionZero(orc, sessionzero.Worktree{Providers: reg, Binary: binary}); err != nil {
+			return nil, fmt.Errorf("app: the session zero of the workspaces: %w", err)
+		}
+	}
 	// the use of the providers: the events of the characters and the sources
 	// read periodically (usagehost.go)
 	reader := newUsageReader(&usageReader{svc: orc.Usage, dir: usageDirectory{reg: orc.Registry, presets: opts.Presets, quests: &orc.Quests},
@@ -185,6 +191,30 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		c, err := orc.Registry.Get(ctx, id)
 		return c.Machine, err == nil
 	}}
+	if dc, ok := integ.(interface{ DecreesChanged(func(context.Context)) }); ok && opts.ChainRulesPublisher != nil {
+		// the decrees in force are part of the effective rules: a decree made,
+		// revoked or suspended reaches the hooks without waiting for a restart;
+		// a publication that fails is retried by the loop of the period, and the
+		// callback belongs to the period (nothing is told to one that ended)
+		rep := &rulesRepublisher{pub: opts.ChainRulesPublisher, clk: e.clk, log: e.log}
+		dc.DecreesChanged(rep.Changed)
+		orc.Loops = append(orc.Loops, func(ctx context.Context) error {
+			defer dc.DecreesChanged(nil)
+			return rep.Loop(ctx, rulesRetryEvery)
+		})
+	}
+	if sw, ok := integ.(interface {
+		PersonalSweepLoop(ctx context.Context) error
+	}); ok {
+		orc.Loops = append(orc.Loops, sw.PersonalSweepLoop)
+	}
+	if q := hostDecreeUses(integ, orc, e.clk, e.log.Warn); q != nil {
+		ph.decrees = q.Enqueue
+		orc.Loops = append(orc.Loops, q.Loop)
+		if people, ok := integ.(chainPeople); ok {
+			ph.exceptions, _ = people.CharacterDecrees().(classes.ExceptionLedger)
+		}
+	}
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
 		e.hostClassHooks(orc, opts.ClassLibraries, ph)
@@ -234,6 +264,16 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 	}
 	if o.ChainSinks[classes.RequestWorkspaceClass] == nil {
 		o.ChainSinks[classes.RequestWorkspaceClass] = ca
+	}
+	if o.ClassTmp == nil {
+		agents, err := filepath.Abs(e.paths.Agentes)
+		if err != nil {
+			return nil, err
+		}
+		// the same folder the session zero gives the character as MESTRE_TMP
+		o.ClassTmp = func(_ context.Context, character string) (string, error) {
+			return sessionzero.CharacterTmp(agents, character), nil
+		}
 	}
 	o.ChainPolicy = policyFileFor(layout, people, e.log)
 	if o.ChainAlerts == nil {

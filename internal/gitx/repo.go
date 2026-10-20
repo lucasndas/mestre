@@ -889,6 +889,22 @@ func (r *repo) ExcludeBlock(ctx context.Context, name string) ([]string, error) 
 const pushTimeout = 5 * time.Minute
 
 func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, branch, commit string, force bool) error {
+	return r.push(ctx, auth, remote, branch, commit, force, nil)
+}
+
+// PushWithLease implements Repo: the push replaces the branch only if the remote
+// still has expected (the lease names the commit, never the remote-tracking ref
+// of the mirror); "" means the branch must not exist.
+func (r *repo) PushWithLease(ctx context.Context, auth Auth, remote, branch, commit, expected string) error {
+	if expected != "" {
+		if err := ValidateCommit(expected); err != nil {
+			return err
+		}
+	}
+	return r.push(ctx, auth, remote, branch, commit, false, &expected)
+}
+
+func (r *repo) push(ctx context.Context, auth Auth, remote, branch, commit string, force bool, lease *string) error {
 	if err := ValidateRef(remote); err != nil {
 		return err
 	}
@@ -913,6 +929,9 @@ func (r *repo) PushWithAuth(ctx context.Context, auth Auth, remote, branch, comm
 	args := []string{"push", "--no-verify", "--recurse-submodules=no", "--receive-pack=git-receive-pack"}
 	if force {
 		args = append(args, "--force")
+	}
+	if lease != nil {
+		args = append(args, "--force-with-lease=refs/heads/"+branch+":"+*lease)
 	}
 	args = append(args, "--", remote, commit+":refs/heads/"+branch)
 	return r.mutate(ctx, func() error {

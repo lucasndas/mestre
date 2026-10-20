@@ -482,7 +482,7 @@ func (p *Personal) Client(ctx context.Context, userID string) (*REST, error) {
 		}
 		return nil, err
 	}
-	if u.State != users.Active || u.Level == users.Observer {
+	if !u.MayHoldGitHub() { // not active, an Observer, or acting in no workspace
 		return nil, ErrNoCredential
 	}
 	c, ok, err := p.row(ctx, userID)
@@ -501,6 +501,48 @@ func (p *Personal) Client(ctx context.Context, userID string) (*REST, error) {
 		v, err := p.tokens(ctx, userID, "act on GitHub as user "+userID)
 		return v.AccessToken, err
 	}}, nil
+}
+
+// Sweep takes away the credential of every user who may no longer have one
+// (suspended, removed, an Observer, acting in no workspace): the removal done
+// when the user changed can fail after the change was committed, so this runs
+// periodically and settles what was left. It returns the users whose credential
+// it removed.
+func (p *Personal) Sweep(ctx context.Context) ([]string, error) {
+	rows, err := p.o.DB.Reader().QueryContext(ctx, `SELECT user_id FROM github_user_credentials`)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	var gone []string
+	var errs []error
+	for _, id := range ids {
+		u, err := p.o.Users.Get(ctx, id)
+		if err != nil && !errors.Is(err, users.ErrNoUser) {
+			errs = append(errs, err)
+			continue
+		}
+		if err == nil && u.MayHoldGitHub() {
+			continue
+		}
+		if err := p.Remove(ctx, id); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		gone = append(gone, id)
+	}
+	return gone, errors.Join(errs...)
 }
 
 // renew exchanges the refresh token for new tokens. A refusal of GitHub makes

@@ -17,6 +17,7 @@ import (
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/testkit/fakegit"
@@ -47,6 +48,9 @@ type mm struct {
 	// realEpics makes the epics of the tables the ones of the GitHub double, and the
 	// messages of the users the ones of the inbox, as `mestre run` has them.
 	realEpics bool
+	// gate, when set, is the gate of the workflows of mestre run in place of the
+	// double that never lets them through.
+	gate bool
 }
 
 // mmEpics is GitHub's side of the tables over the double, with the App of the
@@ -101,6 +105,9 @@ func (m *mm) setup(w *commWorld, oo *app.OrchestrationOptions) {
 
 	root := w.t.TempDir()
 	m.git = fakegit.NewGit(w.clk)
+	if g, ok := oo.Git.(*fakegit.Git); ok && m.gate {
+		m.git = g // the mirror of the workspace is the one the sending reads
+	}
 	m.mirror, m.remote = filepath.Join(root, "espelho.git"), filepath.Join(root, "github.git")
 	for _, d := range []string{m.mirror, m.remote} {
 		if _, err := m.git.Init(w.ctx, d, gitx.InitOptions{Bare: true, InitialBranch: "main"}); err != nil {
@@ -119,6 +126,14 @@ func (m *mm) setup(w *commWorld, oo *app.OrchestrationOptions) {
 			},
 			Send: github.Sending{Branches: mmBranches{m}, Auth: mmAuth{}, Workflows: mmWorkflows{},
 				Criteria: quests.Acceptance{Store: &quests.Store{DB: oo.Guild}, Body: m.hub.IssueBody}}}
+		if m.gate {
+			h.Send.Workflows = app.NewWorkflowsGate(w.orc)
+			h.Refused = func(ctx context.Context, c characters.Character, code, reason string) {
+				if gm, ok, err := w.orc.Registry.GrandMaster(ctx, c.Workspace); err == nil && ok {
+					_, _ = w.orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: c.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: code + ": " + reason})
+				}
+			}
+		}
 		h.Register(fwd)
 	})
 }
@@ -274,16 +289,16 @@ func (b mmBranches) Prepare(ctx context.Context, _ string) (github.Branch, error
 
 type mmAuth struct{}
 
-func (mmAuth) PushAuth(context.Context, string, bool) (gitx.Auth, error) {
+func (mmAuth) PushAuth(context.Context, github.Asker, string, bool) (gitx.Auth, error) {
 	return gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushTokenOfTheTestRig0123456789"), nil
 }
 
 type mmWorkflows struct{}
 
-func (mmWorkflows) Policy(context.Context, string) (classes.Workflows, error) {
+func (mmWorkflows) Policy(context.Context, github.Asker) (classes.Workflows, error) {
 	return classes.WorkflowsNever, nil
 }
-func (mmWorkflows) Approved(context.Context, string, string, string) (bool, int64, error) {
+func (mmWorkflows) Approved(context.Context, github.Asker, string, string) (bool, int64, error) {
 	return false, 0, nil
 }
 

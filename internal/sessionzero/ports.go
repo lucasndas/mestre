@@ -134,7 +134,10 @@ type VerificationProposer interface {
 
 // PullRequest is the pull request of the session zero.
 type PullRequest struct {
-	Repo workspaces.Repo
+	// Workspace is the slug of the workspace: it names the mirror that holds
+	// the branch.
+	Workspace string
+	Repo      workspaces.Repo
 	// Branch is the branch in the mirror that holds the commit
 	// (mestre/sessao-zero); Base the main branch of the repository.
 	Branch, Base string

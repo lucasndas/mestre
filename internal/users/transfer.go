@@ -135,6 +135,7 @@ func (s *Service) AcceptTransfer(ctx context.Context, by User, pinRequest string
 	if err != nil {
 		return err
 	}
+	s.levelsChanged(ctx) // the Owner of the decrees is another now
 	if s.o.Alerts != nil {
 		s.o.Alerts.Tell(ctx, from, fmt.Sprintf("%s aceitou o posto de Dono. Você agora é Administrador.", newName))
 		s.o.Alerts.Tell(ctx, by.ID, "Você é o Dono.")

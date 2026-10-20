@@ -197,6 +197,12 @@ func towerFinalizers(base map[string]protocol.Finalizer, tower *lateTower) map[s
 	return base
 }
 
+// withAudio adds the receiver of the audios to transcribe (kind `audio`).
+func withAudio(fin map[string]protocol.Finalizer, audio *towerAudio) map[string]protocol.Finalizer {
+	fin[protocol.KindAudio] = audio
+	return fin
+}
+
 // names are the names of a workspace and of a table in the path of a worktree:
 // nothing that leaves the folder.
 var names = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$`)

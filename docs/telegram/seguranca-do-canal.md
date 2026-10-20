@@ -1,6 +1,6 @@
 # Segurança do canal
 
-> **Assunto:** quem o bot aceita, alerta de intrusos, travamento de emergência e o que nunca passa pelo Telegram · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** quem o bot aceita, alerta de intrusos, travamento de emergência e o que nunca passa pelo Telegram · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -32,7 +32,7 @@ Decretos que afrouxam a segurança pedem o PIN do autor. A lista de casos está 
 ### `/travar` e `/destravar`
 
 - **`/travar`** (Dono e Administradores, níveis em [usuários e níveis](usuarios-e-niveis.md)): o motor pede confirmação com um botão e aplica em todos os workspaces, de uma vez:
-  - todos os decretos ficam **suspensos**;
+  - todos os decretos ficam **suspensos**: o estado gravado de cada um não muda, e `/decretos` (e `mestre decree list`) mostra todos como suspensos pelo travamento, sem os botões de revogar, até o `/destravar`;
   - o `mestre hook` passa a responder **negar** a todo uso de ferramenta, em todos os personagens e provedores;
   - a caixa de entrada para de entregar mensagens a agentes. Elas ficam guardadas;
   - missões, rituais e recrutamentos ficam pausados;
@@ -43,7 +43,7 @@ Decretos que afrouxam a segurança pedem o PIN do autor. A lista de casos está 
   - o bot responde só aos comandos de consulta e a `/destravar`;
   - mensagens de conversa ficam guardadas e são entregues ao Grão-Mestre depois de destravar.
 - **`/destravar`** (só o Dono): pede o PIN pelo Telegram ou é feito pelo painel. Depois de destravar:
-  - os decretos voltam ao estado que tinham antes do travamento (os que estavam suspensos por conflito continuam suspensos);
+  - os decretos voltam ao estado que tinham antes do travamento, porque o estado gravado nunca mudou (os que estavam suspensos por conflito continuam suspensos);
   - a entrega e as missões são retomadas.
 - O estado "travado" fica no banco (`channel_lock`) e sobrevive a reinícios da Cidadela; um erro ao lê-lo vale como travado. As regras efetivas dos personagens são refeitas e reenviadas às Torres quando ele muda. O Guardião recebe esse estado pela replicação do motor, e o modo reduzido (desde o M7) o respeita ([Telegram em modo reduzido](../autocura/telegram-modo-reduzido.md)).
 

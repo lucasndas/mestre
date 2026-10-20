@@ -339,3 +339,48 @@ func TestTheOrderToEraseTheVaultAlsoErasesWhatTheMachineKeptFromWhenItWasTheCita
 		t.Errorf("the order again: erased=%v err=%v, want nothing to erase", did, err)
 	}
 }
+
+// CA-REPL-03
+// A copy that drops the queue while a batch is being applied does not make the
+// drain slice the queue out of range (which panicked with the lock held).
+func TestADrainWhoseQueueWasDroppedWhileApplyingDoesNotTrimIt(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "mestre.db")
+	primary, err := guildtpl.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := primary.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := guilddb.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	last, err := db.LastLSN(ctx)
+	if err != nil || last == 0 {
+		t.Fatalf("last lsn %d, %v", last, err)
+	}
+	r, err := NewReplica(ctx, ReplicaConfig{DB: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := store.EncodeChanges([]store.Change{{Op: store.OpSQL, SQL: `SELECT 1`}})
+	r.queue = []store.LogRow{{LSN: last + 1, At: 1, Body: body}}
+	r.queueBytes = len(body)
+	r.lastQueued = last + 1
+	r.beforeApply = func() { // the copy arrives while the batch is about to apply
+		r.mu.Lock()
+		r.queue, r.queueBytes = nil, 0
+		r.queueGen++
+		r.mu.Unlock()
+	}
+	r.drain(ctx) // panics on r.queue[n:] without the generation check
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.queue) != 0 || r.queueBytes != 0 {
+		t.Fatalf("queue %d rows, %d bytes after the drop", len(r.queue), r.queueBytes)
+	}
+}

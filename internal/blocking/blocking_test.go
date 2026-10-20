@@ -156,3 +156,33 @@ func TestTheMachineLineSaysWhichEpicsMustMoveFirst(t *testing.T) {
 		t.Fatalf("%q", n.MachineLine())
 	}
 }
+
+// CA-BLOQ-01: the evidence the engine builds from the output of a test that failed.
+func TestTheEvidenceIsBuiltFromTheOutputOfTheTestThatFailed(t *testing.T) {
+	t.Parallel()
+	out := "=== RUN   TestCheckout\n--- FAIL: TestCheckout (0.00s)\n    checkout_test.go:22: missing STRIPE_TEST_KEY\nFAIL\nFAIL\tloja/checkout\t0.004s\n"
+	for name, c := range map[string]struct {
+		cmd, out string
+		places   []string
+		want     string
+	}{
+		"go test":          {"go test ./...", out, []string{"checkout_test.go:22"}, "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"\n$ go test ./..."},
+		"windows paths":    {"go test", "    C:\\wt\\checkout_test.go:22:7: missing STRIPE_TEST_KEY\r\n", []string{"checkout_test.go:22"}, "C:/wt/checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"\n$ go test"},
+		"the place listed": {"go test", "a.go:1: ruído\nb.go:2: o erro\n", []string{"b.go:2"}, "b.go:2 → \"o erro\"\na.go:1 → \"ruído\"\n$ go test"},
+		"at most two":      {"", "a.go:1: um\nb.go:2: dois\nc.go:3: três\n", nil, "a.go:1 → \"um\"\nb.go:2 → \"dois\""},
+		"no place":         {"make", "tudo quebrou\n\nsem lugar\n", nil, "→ \"sem lugar\"\n$ make"},
+		"quotes":           {"", "a.go:1: disse \"x\"", nil, "a.go:1 → \"disse 'x'\""},
+		"nothing":          {"go test", " \n", nil, ""},
+	} {
+		if got := blocking.TestEvidence(c.cmd, c.out, c.places); got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
+	}
+	// the message built from it names the file, the line and the error, masked and cut like any evidence
+	n := stripe()
+	n.Evidence = blocking.TestEvidence("go test ./...", out+"    ghp_abcdefgh12345678\n", []string{"checkout_test.go:22"})
+	m := blocking.Build(n, blocking.Viewer{Level: users.Owner}, mask)
+	if !strings.Contains(m.Text, "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"") || strings.Contains(m.Text, "ghp_") {
+		t.Errorf("the message:\n%s", m.Text)
+	}
+}

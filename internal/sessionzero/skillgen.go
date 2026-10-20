@@ -24,6 +24,11 @@ const SkillMaxBytes = 6 << 10
 // SkillDescriptionMax is the largest description, in characters.
 const SkillDescriptionMax = 500
 
+// skillSyntaxHeading starts the list of syntax of a skill; the compact version
+// of the skills inside the layer (Codex and Antigravity) stops before it, and
+// the syntax stays in `mestre help <command>`.
+const skillSyntaxHeading = "Commands:"
+
 const (
 	skillCommunication = "mestre-comunicacao"
 )
@@ -69,10 +74,11 @@ func skillDefs() []skillDef {
 				{"Plan: turn the request into a mission (steps, sheet and class of each step, parallel work, returns with a limit of rounds, approvals) and write the file for `mestre quest create`.", []string{"quest create"}},
 				{"Build the party: look at `mestre class list`, `mestre sheet list` and `mestre list` first; reuse free persistent characters and respect the limits; then `recruit`, `spawn`, `connect`; `dismiss` only an idle character that sent `done`.", []string{"class list", "sheet list", "list", "recruit", "spawn", "connect", "dismiss"}},
 				{"Classes of the table: create them inside the ceiling; every class has `--app` (`novo`, `herdar:<class>` or an existing App).", []string{"class create"}},
+				{"GitHub of the table: `mestre issue create`, `update`, `comment` and `list` inside the epic; `mestre pr open`, `update`, `status`, `comment` and `reply`; use `--force` only after reorganizing commits.", []string{"issue create", "issue update", "issue comment", "issue list", "pr open", "pr update", "pr status", "pr comment", "pr reply"}},
 				{"Do not block: delegate, start the mission with `mestre quest run` and end your turn; react to the inbox.", []string{"quest run"}},
 				{"Report to the Grand Master through the inbox: progress, blockers, decisions you need and the final result (what is done, the files, what is left).", nil},
 			},
-			commands: []string{"quest create", "quest run", "quest pause", "quest resume", "quest cancel", "quest status", "class list", "class show", "class check", "class create", "class edit", "class assign", "class delete", "sheet list", "sheet show", "base list", "base show", "recruit", "spawn", "connect", "dismiss"},
+			commands: []string{"quest create", "quest run", "quest pause", "quest resume", "quest cancel", "quest status", "class list", "class show", "class check", "class create", "class edit", "class assign", "class delete", "sheet list", "sheet show", "base list", "base show", "recruit", "spawn", "connect", "dismiss", "issue create", "issue update", "issue comment", "issue list", "pr open", "pr update", "pr status", "pr comment", "pr reply"},
 		},
 		{
 			name:        skillGrandMaster,
@@ -82,9 +88,12 @@ func skillDefs() []skillDef {
 				{"Talk: know who is speaking and their level; ask when a request is ambiguous; answer users only with `mestre reply`; pass requests on with `mestre ask --from-message` or `mestre table open --from-message`, without rewriting them; never send secrets.", []string{"reply", "ask", "table open"}},
 				{"Tables: decide between a new and an existing table; `mestre table open --epic <n>` (it never creates the epic); `mestre table close` when the engine says the pull request was merged; `table list` and `table status` to follow them.", []string{"table open", "table close", "table list", "table status"}},
 				{"Do not block: delegate and end your turn; send a short summary at the end of each epic.", nil},
-				{"GitHub, Apps, decrees and approvals have their own commands; use only the ones `mestre help` lists for you.", nil},
+				{"GitHub: `mestre gh review`, `gh approve` and `gh merge`; approve only with an approval in force (yours by the policy or a user's); `gh settings` only with an approval; read each repository-rule error before trying again.", []string{"gh review", "gh approve", "gh merge", "gh settings"}},
+				{"Epics: `mestre gh epic create` first, then `table open --epic <n>`.", []string{"gh epic", "table open"}},
+				{"Apps: `mestre app list`, `app status` and `app create`; choose between a new App and an inherited one.", []string{"app list", "app status", "app create"}},
+				{"Decrees: run `mestre decree propose` only after understanding the order, showing exactly what will be in force. Approvals: `mestre approval decide` what the policy leaves to you; `human_required` or doubt means `approval ask`.", []string{"decree propose", "approval decide", "approval ask"}},
 			},
-			commands: []string{"reply", "table open", "table list", "table status", "table close", "quest status", "recruit", "dismiss", "connect"},
+			commands: []string{"reply", "table open", "table list", "table status", "table close", "quest status", "recruit", "dismiss", "connect", "gh epic", "gh review", "gh approve", "gh merge", "gh settings", "app list", "app status", "app create", "decree propose", "decree list", "approval decide", "approval ask", "approval list", "notify"},
 		},
 		{
 			name:        skillRituals,
@@ -149,7 +158,7 @@ func (d skillDef) render(reg *cli.Registry) string {
 		syn.WriteString(".\n")
 	}
 	if syn.Len() > 0 {
-		b.WriteString("\nCommands:\n\n")
+		b.WriteString("\n" + skillSyntaxHeading + "\n\n")
 		b.WriteString(syn.String())
 	}
 	return b.String()

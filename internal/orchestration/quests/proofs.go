@@ -48,7 +48,14 @@ func normalizeWhere(w, worktree string) string {
 	}
 	if worktree != "" {
 		wt := strings.TrimRight(strings.ReplaceAll(worktree, `\`, "/"), "/") + "/"
-		w = strings.TrimPrefix(w, wt)
+		if windowsPath(wt) {
+			// Windows paths do not tell `C:\wt` from `c:\WT`
+			if len(w) >= len(wt) && strings.EqualFold(w[:len(wt)], wt) {
+				w = w[len(wt):]
+			}
+		} else {
+			w = strings.TrimPrefix(w, wt)
+		}
 	}
 	file, line, hasLine := strings.Cut(w, ":")
 	file = path.Clean(file)
@@ -56,6 +63,15 @@ func normalizeWhere(w, worktree string) string {
 		return file + ":" + line
 	}
 	return file
+}
+
+// windowsPath says whether a path (with `/`) is a drive path (`C:/wt/`) or a
+// network one (`//server/share/`): the ones that compare without case.
+func windowsPath(p string) bool {
+	if len(p) >= 3 && p[1] == ':' && p[2] == '/' && (p[0]|0x20 >= 'a' && p[0]|0x20 <= 'z') {
+		return true
+	}
+	return strings.HasPrefix(p, "//")
 }
 
 // Fingerprint is the print of a failure: the first 12 hexadecimal digits of

@@ -362,9 +362,10 @@ func errorsAs(err error, target **chain.SectionError) bool {
 	return false
 }
 
-// Part of CA-SUPCAD-05 (M5 closes it: the command of the Grão-Mestre by the CLI
-// definition and the button of the Telegram; here the engine handlers and the
-// interface of the supervision with a double for the person).
+// Part of CA-SUPCAD-05 (it closes in internal/telegram, with the button
+// Pausar autonomia of the queue warning over the real supervision; here the
+// engine handlers and the interface of the supervision with a double for the
+// person).
 func TestThePauseIsAuditedWithWhoAndWhyAndTheLevelRulesHoldForPausingAndResuming(t *testing.T) {
 	t.Parallel()
 	w := newSup(t)
@@ -474,6 +475,11 @@ func TestAnAccumulatingQueueWarnsWhoIsAboveOnceUntilItGoesBackBelowTheLimits(t *
 	}
 	if len(w.queueAlertsToPeople()) != 0 {
 		t.Error("the people were warned of a queue of a table master")
+	}
+	// the people who may pause the autonomy of the table get the warning too, with
+	// the button (the Telegram), once
+	if w.queuers.count() != 1 || w.queuers.told[0].Table != w.table.ID || w.queuers.told[0].Workspace != w.slug || !strings.Contains(w.queuers.told[0].Text, "11") {
+		t.Errorf("warnings with the button: %+v", w.queuers.told)
 	}
 	// back below the limits, and over them again
 	w.decide(w.master, ids[0], chain.AnswerApprove, "ok")

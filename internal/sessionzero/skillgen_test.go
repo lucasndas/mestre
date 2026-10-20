@@ -76,9 +76,9 @@ func specFlag(s cli.Spec, flag string) (cli.Flag, bool) {
 	return cli.Flag{}, false
 }
 
-// Part of CA-CLI-SKL-02 (M5 closes it: the commands of the Grand Master and of
-// GitHub only exist in the definition then; here every command and flag the
-// skills cite exists, and a command taken out of the definition is caught).
+// CA-CLI-SKL-02: every command and flag the skills cite exists, a command
+// taken out of the definition is caught, and the skills teach the commands of
+// the Grand Master, of GitHub, of the decrees and of the approvals.
 func TestEveryCommandAndFlagTheSkillsCiteIsInTheDefinition(t *testing.T) {
 	t.Parallel()
 	reg := cli.Default()
@@ -88,6 +88,17 @@ func TestEveryCommandAndFlagTheSkillsCiteIsInTheDefinition(t *testing.T) {
 		}
 		if n := len(s.Body); n == 0 || n > sessionzero.SkillMaxBytes {
 			t.Errorf("%s: body of %d bytes", s.Name, n)
+		}
+	}
+	_, levels := sessionzero.GenerateSkills(reg)
+	for skill, want := range map[string][]string{
+		"mestre-grao-mestre":      {"mestre gh review", "mestre gh approve", "mestre gh merge", "mestre gh settings", "mestre app list", "mestre decree propose", "mestre approval decide", "mestre approval ask"},
+		"mestre-coordenacao-mesa": {"mestre issue create", "mestre pr open"},
+	} {
+		for _, w := range want {
+			if !strings.Contains(levels[skill].Body, w) {
+				t.Errorf("%s does not teach %q", skill, w)
+			}
 		}
 	}
 	// A command taken out of the definition leaves a citation the check finds
@@ -129,14 +140,6 @@ func TestTheSkillsFollowTheDefinitionOfCommands(t *testing.T) {
 	shared2, _ := sessionzero.GenerateSkills(cli.MustRegistry(rest...))
 	if shared.Body == shared2.Body || strings.Contains(shared2.Body, "`mestre check`") {
 		t.Errorf("the communication skill did not follow the definition")
-	}
-	// The GitHub, App, decree and approval commands are not taught before they exist.
-	for _, bad := range []string{"mestre gh", "mestre app", "mestre decree", "mestre approval", "mestre issue", "mestre pr "} {
-		for _, s := range allSkills(reg) {
-			if strings.Contains(s.Body, bad) {
-				t.Errorf("%s teaches %q, which is not in the definition", s.Name, bad)
-			}
-		}
 	}
 }
 

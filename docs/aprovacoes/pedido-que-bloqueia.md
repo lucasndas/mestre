@@ -14,7 +14,7 @@ Deixar o usuário decidir em segundos, no celular, sem abrir nada: a mensagem di
 |---|---|---|
 | Motivo | uma palavra do vocabulário fixo (abaixo), com o ícone | motor, pelo tipo; o agente escolhe entre os valores quando o motor não sabe |
 | Por que está parado | o que falta, concreto, numa linha | motor, quando vem do tipo ou do erro; senão o agente |
-| Evidência | comando e saída, `arquivo:linha`, erro; nunca paráfrase | **motor**, de dados que ele tem (saída do teste, caminho, hash) |
+| Evidência | comando e saída, `arquivo:linha`, erro; nunca paráfrase | **motor**, de dados que ele tem (saída do teste, caminho, hash): a última verificação vermelha da mesa (`quests.Service.LastRed`, em memória até a próxima verde), que `blocking.TestEvidence` reduz a `arquivo:linha → "erro"` e ao comando |
 | O que já conferi | para ninguém conferir de novo | agente, marcado como texto dele |
 | Por que não decido | a decisão que o agente se recusa a tomar sozinho (cobrança, destruição, intenção) | agente, marcado como texto dele |
 | Para destravar | checklist de passos concretos | motor, dos passos que ele conhece (cadastrar no cofre, aprovar o PR); o agente acrescenta os outros |
@@ -46,7 +46,7 @@ Só o Grão-Mestre envia, com os campos do agente em flags ([CLI](../cli/grao-me
 
 ### Como chega ao usuário
 
-Uma mensagem curta, com o cabeçalho de origem ([roteamento](../telegram/roteamento.md#cabeçalho)), os campos do motor e depois o bloco do agente. A evidência vai truncada em 3 linhas, com o resto no painel, e passa pelo mascarador antes de sair. Os botões são os do catálogo de respostas do tipo ([cadeia](../orquestracao/cadeia-de-aprovacao.md)) que **aquele** usuário pode dar, mais um por passo que o bot sabe fazer **e** que o usuário pode fazer, com o nível e o PIN do passo; o aviso, sem catálogo, só tem esses botões e **Ver detalhes**. Cadastrar um segredo exige o Dono, com PIN, e só se faz no painel ([cofre](../plataforma/cofre.md#uso)): o passo vira o botão **Abrir no painel** (um link) para o Dono; para os outros, nenhum botão de cadastro. Exemplo de aviso `credencial`:
+Uma mensagem curta (no pedido de aprovação, o motivo com o ícone abre o texto e a linha `Dono:` vem antes do bloco dos agentes, montados em `internal/approvals`), com o cabeçalho de origem ([roteamento](../telegram/roteamento.md#cabeçalho)), os campos do motor e depois o bloco do agente. A evidência vai truncada em 3 linhas, com o resto no painel, e passa pelo mascarador antes de sair. Os botões são os do catálogo de respostas do tipo ([cadeia](../orquestracao/cadeia-de-aprovacao.md)) que **aquele** usuário pode dar, mais um por passo que o bot sabe fazer **e** que o usuário pode fazer, com o nível e o PIN do passo; o aviso, sem catálogo, só tem esses botões e **Ver detalhes**. Cadastrar um segredo exige o Dono, com PIN, e só se faz no painel ([cofre](../plataforma/cofre.md#uso)): o passo vira o botão **Abrir no painel** (um link) para o Dono; para os outros, nenhum botão de cadastro. Exemplo de aviso `credencial`:
 
 ```
 Loja · Mesa #42 Checkout

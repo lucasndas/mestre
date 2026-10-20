@@ -183,6 +183,11 @@ type View struct {
 	// OverriddenBy is the number of the decree of a higher level that takes
 	// the same point, if one does.
 	OverriddenBy int64
+	// Frozen says the Mestre is locked (/travar): every decree is shown as
+	// suspended while the lock lasts. The state kept in the database is not
+	// touched, so the unlock brings back each decree as it was (the ones a
+	// conflict suspended stay suspended).
+	Frozen bool
 }
 
 // Summary is the one line of /decretos.
@@ -228,4 +233,7 @@ var (
 	// ErrLocked: the Mestre is locked (/travar); no decree is confirmed or revoked.
 	ErrLocked   = errors.New("decrees: the Mestre is locked")
 	ErrNoVerify = errors.New("decrees: the target could not be verified")
+	// ErrWrongRequest: the request offered is not the one the exception was
+	// made for (another workspace, another target).
+	ErrWrongRequest = errors.New("decrees: the request is not the one the exception was made for")
 )

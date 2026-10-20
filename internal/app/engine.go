@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/discovery"
@@ -189,6 +190,10 @@ type Deps struct {
 	// orchestration, the bot of the Telegram, the users, the flow of approval and
 	// the commands of GitHub (StandardIntegration); nil: none.
 	Integration Integration
+	// Whisper is the whisper-server of this machine, which it uses to transcribe
+	// the audio another machine of the Guild sends it (nil: this machine does not
+	// transcribe for others; the installation sets it, milestone 7).
+	Whisper attachments.Engine
 	// Sheet are the probes of the machine sheet; a nil System reads the
 	// system.
 	Sheet machinesheet.Sources
@@ -761,8 +766,12 @@ func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
 			tableRules = periodTableRules{e}
 		}
 	}
+	var ledger classes.ExceptionLedger = rules
+	if e.deps.HostOrchestration {
+		ledger = periodLedger{e: e, local: rules}
+	}
 	return &hook.Engine{
-		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
+		Clock: e.clk, Rules: rules, Ledger: ledger, Agents: e.paths.Agentes, Logger: e.log,
 		Characters: e.deps.Characters, Approvals: approvals, States: e.deps.States, Contexts: e.deps.Contexts,
 		ClassHooks: classHooks, OnEvent: e.onHookEvent, TableRules: tableRules, Masker: e.deps.Masker,
 	}

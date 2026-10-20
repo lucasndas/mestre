@@ -59,6 +59,7 @@ const (
 	TypeOperatorSession      = "operator.session"
 	TypeOperatorCapture      = "operator.capture"
 	TypeAgentEvent           = "agent.event"
+	TypeUsageReading         = "usage.reading"
 	TypeCLICall              = "cli.call"
 	TypeCLIResult            = "cli.result"
 	TypeSyncRequest          = "sync.request"
@@ -143,6 +144,7 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeOperatorSession, Dir: TowerToCitadel, Ack: true, Payload: OperatorSession{}},
 		Spec{Type: TypeOperatorCapture, Dir: TowerToCitadel, Ack: true, Payload: OperatorCapture{}},
 		Spec{Type: TypeAgentEvent, Dir: TowerToCitadel, Ack: true, Payload: Object{}},
+		Spec{Type: TypeUsageReading, Dir: TowerToCitadel, Ack: true, Payload: UsageReading{}},
 		Spec{Type: TypeCLICall, Dir: TowerToCitadel, Ack: true, Payload: CLICall{}},
 		Spec{Type: TypeCLIResult, Dir: CitadelToTower, Ack: true, Payload: CLIResult{}},
 		Spec{Type: TypeSyncRequest, Dir: Both, Ack: true, Payload: SyncMessage{}},

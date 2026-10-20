@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -175,6 +176,38 @@ func (rt *Runtime) AgentOf(terminal string) (string, bool) {
 		return "", false
 	}
 	return s.id, true
+}
+
+// Living are the characters this machine runs now, as the registry of the
+// Citadel would say them (id, name, workspace, table, class, machine, worktree
+// and state), with the provider each one was launched with. A Tower, which has
+// no registry, reads the use of its characters from this.
+func (rt *Runtime) Living() []LivingCharacter {
+	rt.mu.Lock()
+	all := make([]*session, 0, len(rt.sessions))
+	for _, s := range rt.sessions {
+		all = append(all, s)
+	}
+	rt.mu.Unlock()
+	out := make([]LivingCharacter, 0, len(all))
+	for _, s := range all {
+		s.mu.Lock()
+		gone, st, l := s.gone, s.st, s.launch
+		s.mu.Unlock()
+		if gone {
+			continue
+		}
+		out = append(out, LivingCharacter{Provider: l.Provider, Character: Character{ID: s.id, Name: l.Name, Role: l.Role, Kind: l.Kind, Workspace: l.Workspace,
+			Table: l.Table, Class: l.Class, Machine: l.Machine, Dir: l.Dir, State: st.State}})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// LivingCharacter is a character the Runtime runs, with its provider.
+type LivingCharacter struct {
+	Character
+	Provider providers.ID
 }
 
 func (rt *Runtime) session(id string) *session {

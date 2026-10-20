@@ -45,6 +45,9 @@ type IntegrationEnv struct {
 	SetExcluded func(ctx context.Context, machineID string, excluded bool) error
 	// Pending lists the entry and promotion requests that wait for the Owner.
 	Pending func(ctx context.Context) ([]telegram.GuildPending, error)
+	// Transcribers are the Towers that transcribe now, from the sheets of the
+	// Guild and the connections (nil: none; docs/telegram/anexos-e-transcricao.md).
+	Transcribers func(ctx context.Context) Fleet
 }
 
 // GuildApprover is what an IntegrationRun may also be: the question to the Owner
