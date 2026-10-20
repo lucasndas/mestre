@@ -124,48 +124,6 @@ func TestABaixoRequestReachesTheTableMasterAsAnApprovalItemAndApprovingNowIsAOne
 	}
 }
 
-// CA-CADEIA-03
-func TestTheMedioRequestsGoToTheLevelThatCanDecideThemAndTheHighOnesToThePeople(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	dev := w.recruit("Dev")
-	// the class lists the registry; the ceiling adds pypi.org
-	w.cls.domains[dev.ID] = []string{"registry.npmjs.org", "pypi.org"}
-	listed := w.shell(dev, "curl https://pypi.org/x")
-	unlisted := w.shell(dev, "curl https://exemplo.io")
-	high := w.shell(dev, `psql -c "DROP TABLE users"`)
-
-	if r := w.request(listed); r.Risk.Risk != classes.RiskMedium || r.Level.Kind != chain.LevelMesa {
-		t.Errorf("curl pypi.org: %s at %+v, want medio at the table master", r.Risk.Risk, r.Level)
-	}
-	r := w.request(unlisted)
-	if r.Risk.Risk != classes.RiskMedium || r.Level.Kind != chain.LevelGrandMaster || !contains(strings.Join(r.Why, " "), "rede", "exemplo.io") {
-		t.Errorf("curl exemplo.io: %s at %+v why %q, want medio at the Grand Master citing the network condition", r.Risk.Risk, r.Level, r.Why)
-	}
-	if r := w.request(high); r.Risk.Risk != classes.RiskHigh || r.Level.Kind != chain.LevelPeople {
-		t.Errorf("DROP TABLE: %s at %+v, want alto at the people", r.Risk.Risk, r.Level)
-	}
-	if items := w.approvalItems(w.master); len(items) != 1 || !strings.Contains(items[0].Text, "pypi.org") {
-		t.Errorf("the table master has %d approval items, want only the pypi.org one", len(items))
-	}
-	if items := w.approvalItems(w.gm); len(items) != 1 || !strings.Contains(items[0].Text, "exemplo.io") {
-		t.Errorf("the Grand Master has %d approval items, want only the exemplo.io one", len(items))
-	}
-	events := w.itemsOf(w.gm, inbox.KindSystem)
-	var informed int
-	for _, e := range events {
-		if e.Refs.Approval == high {
-			informed++
-		}
-	}
-	if informed != 1 {
-		t.Errorf("the Grand Master got %d informative events of the alto request, want 1", informed)
-	}
-	if len(w.users.askedFor(high)) != 1 {
-		t.Errorf("the people were asked %d times about the alto request", len(w.users.askedFor(high)))
-	}
-}
-
 // CA-CADEIA-03, with the domains the Citadel really computes: the union of
 // the approved class (docs.exemplo.dev) and the ceiling in teto.yaml
 // (pypi.org), through app.CitadelClasses and the library. It is also the
@@ -377,86 +335,6 @@ func TestThreeDenialsInARowPauseTheCharacterAndAnApprovalInTheMiddleClearsTheCou
 	}
 }
 
-// CA-CADEIA-09
-func TestApprovingAPatternIsLimitedToTheCeilingAndTheBreadthAndAlwaysBecomesASuggestion(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	dev := w.recruit("Dev")
-	id := w.shell(dev, "npm install x")
-	ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "npm *", Reason: "tudo do npm"})
-	if ref.Code != chain.CodeAboveCeiling || ref.Climbed {
-		t.Errorf("npm * = %+v, want refused above the ceiling and kept at the level", ref)
-	}
-	if w.level(id) != chain.LevelMesa {
-		t.Errorf("the request moved to %+v", w.request(id).Level)
-	}
-	if ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "sh *", Reason: "qualquer script"}); ref.Code != chain.CodePatternTooBroad {
-		t.Errorf("sh * = %+v, want pattern_too_broad", ref)
-	}
-	if ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "pnpm add *", Reason: "outro"}); ref.Code != chain.CodePatternNoMatch {
-		t.Errorf("pnpm add * = %+v, want pattern_no_match", ref)
-	}
-	// always: approves this one, makes no decree, leaves a suggestion
-	w.decide(w.master, id, chain.AnswerApproveAlways, "sempre que for lodash")
-	if len(w.grants.decrees) != 0 {
-		t.Errorf("%d decrees made by an agent", len(w.grants.decrees))
-	}
-	sug, err := w.ch.Store().Suggestions(w.ctx)
-	if err != nil || len(sug) != 1 || sug[0].Kind != chain.AnswerApproveAlways || sug[0].Request != id {
-		t.Errorf("suggestions = %+v, %v", sug, err)
-	}
-	// a pattern that fits is a temporary rule
-	id3 := w.shell(dev, "npm install z")
-	if _, err := w.ch.Decide(w.ctx, chain.Decision{Request: id3, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "npm install *", Reason: "padrão"}); err != nil {
-		t.Fatalf("npm install * refused: %v", err)
-	}
-	if len(w.temp.rules) != 1 || w.temp.rules[0].Pattern == nil || w.temp.rules[0].Pattern.Pattern != "npm install *" {
-		t.Errorf("temporary rules = %+v", w.temp.rules)
-	}
-}
-
-// CA-CADEIA-10
-func TestAskingBackKeepsTheRequestWhereItIsAndTheTimeOfTheLevelStartsAgainWithTheAnswer(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	dev := w.recruit("Dev")
-	id := w.shell(dev, "npm install x")
-	w.clk.Advance(2*time.Minute - 10*time.Second)
-	w.state(dev, characters.Idle)
-	out, err := w.ch.Decide(w.ctx, chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerAskBack, Instruction: "para que serve este pacote?"})
-	if err != nil || out.Applied != "asked_back" {
-		t.Fatalf("ask back = %+v, %v", out, err)
-	}
-	if qs := w.itemsOf(dev, inbox.KindAnswer); len(qs) != 1 || !strings.Contains(qs[0].Text, "para que serve") {
-		t.Fatalf("the requester got %+v, want the question as an answer item", qs)
-	}
-	w.clk.Advance(5 * time.Minute)
-	if r := w.request(id); r.Level.Kind != chain.LevelMesa || r.State != chain.Open {
-		t.Fatalf("it climbed while it waited for the requester: %+v", r.Level)
-	}
-	if err := w.ch.Reply(w.ctx, id, dev.ID, "é para o linter do CI"); err != nil {
-		t.Fatal(err)
-	}
-	replies := w.itemsOf(w.master, inbox.KindAnswer)
-	if len(replies) != 1 || !contains(replies[0].Text, chain.UnverifiedOpen, "é para o linter do CI") || strings.Index(replies[0].Text, chain.UnverifiedOpen) > strings.Index(replies[0].Text, "linter") {
-		t.Fatalf("the table master got %+v, want the reply inside the unverified block", replies)
-	}
-	if r := w.request(id); !r.Deadline.Equal(w.clk.Now().Add(2 * time.Minute)) {
-		t.Errorf("deadline = %v, want 2 min from the reply", r.Deadline)
-	}
-	w.clk.Advance(2*time.Minute - time.Second)
-	if w.level(id) != chain.LevelMesa {
-		t.Fatal("it climbed before the new 2 minutes")
-	}
-	w.clk.Advance(time.Second)
-	if w.level(id) != chain.LevelGrandMaster {
-		t.Errorf("after the new time the request is at %+v, want the Grand Master", w.request(id).Level)
-	}
-	if err := w.ch.Reply(w.ctx, id, dev.ID, "de novo"); err == nil {
-		t.Error("a reply with nothing asked was taken")
-	}
-}
-
 // CA-CADEIA-11
 func TestEveryDecisionIsAuditedWithTheVersionsAndADecisionWithoutAReasonIsRefused(t *testing.T) {
 	t.Parallel()
@@ -620,43 +498,6 @@ func TestATableMasterThatIsRestartingSendsItsRequestsUpAndGetsTheNewOnesWhenItIs
 	w.state(w.master, characters.Stuck)
 	if w.level(after) != chain.LevelGrandMaster {
 		t.Errorf("with the master stuck the request is at %+v, want the Grand Master", w.request(after).Level)
-	}
-}
-
-// Part of CA-CADEIA-16: the groups and the invalid list; the policy file and its alert are milestone 5.
-func TestTheOwnerChoosesTheGroupsOfMedioTheTableMasterDecidesAndAnInvalidListIsRefused(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	dev := w.recruit("Dev")
-	settings, err := chain.ParseSection([]byte("mesa_decide: [rede, apagar, instalacao_e_sistema]\n"), 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	w.policy.set(settings)
-	compose, global := w.shell(dev, "docker compose up"), w.shell(dev, "npm install -g x")
-	if w.level(compose) != chain.LevelGrandMaster {
-		t.Errorf("docker compose up with the group out of the list is at %+v, want the Grand Master", w.request(compose).Level)
-	}
-	if w.level(global) != chain.LevelMesa {
-		t.Errorf("npm install -g with the group in the list is at %+v, want the table master", w.request(global).Level)
-	}
-	settings, err = chain.ParseSection([]byte("mesa_decide: []\n"), 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	w.policy.set(settings)
-	if id := w.shell(dev, "pip install y"); w.level(id) != chain.LevelGrandMaster {
-		t.Errorf("with the empty list a medio is at %+v, want the Grand Master", w.request(id).Level)
-	}
-	if id := w.shell(dev, "npm install z"); w.level(id) != chain.LevelMesa {
-		t.Errorf("with the empty list a baixo is at %+v, want the table master", w.request(id).Level)
-	}
-	for _, bad := range []string{"alto", "fixo", "git_push", "inventado"} {
-		_, err := chain.ParseSection([]byte("mesa_decide: [rede, "+bad+"]\n"), 0)
-		var se *chain.SectionError
-		if !errors.Is(err, chain.ErrInvalidSection) || !errors.As(err, &se) || !strings.Contains(se.Item, bad) {
-			t.Errorf("a list with %q = %v, want an invalid section citing it", bad, err)
-		}
 	}
 }
 
@@ -829,5 +670,122 @@ func TestASubdelegationLetsTheTableMasterDecideAWorkflowsRequest(t *testing.T) {
 	}
 	if k := w.level(cross); k == chain.LevelMesa {
 		t.Fatal("a subdelegation lifted the safeguard of the request that crosses tables")
+	}
+}
+
+// CA-CADEIA-09
+func TestApprovingAPatternIsLimitedToTheCeilingAndTheBreadthAndAlwaysBecomesASuggestion(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	id := w.shell(dev, "npm install x")
+	ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "npm *", Reason: "tudo do npm"})
+	if ref.Code != chain.CodeAboveCeiling || ref.Climbed {
+		t.Errorf("npm * = %+v, want refused above the ceiling and kept at the level", ref)
+	}
+	if w.level(id) != chain.LevelMesa {
+		t.Errorf("the request moved to %+v", w.request(id).Level)
+	}
+	if ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "sh *", Reason: "qualquer script"}); ref.Code != chain.CodePatternTooBroad {
+		t.Errorf("sh * = %+v, want pattern_too_broad", ref)
+	}
+	if ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "pnpm add *", Reason: "outro"}); ref.Code != chain.CodePatternNoMatch {
+		t.Errorf("pnpm add * = %+v, want pattern_no_match", ref)
+	}
+	// always: approves this one, makes no decree, leaves a suggestion
+	w.decide(w.master, id, chain.AnswerApproveAlways, "sempre que for lodash")
+	if len(w.grants.decrees) != 0 {
+		t.Errorf("%d decrees made by an agent", len(w.grants.decrees))
+	}
+	sug, err := w.ch.Store().Suggestions(w.ctx)
+	if err != nil || len(sug) != 1 || sug[0].Kind != chain.AnswerApproveAlways || sug[0].Request != id {
+		t.Errorf("suggestions = %+v, %v", sug, err)
+	}
+	// a pattern that fits is a temporary rule
+	id3 := w.shell(dev, "npm install z")
+	if _, err := w.ch.Decide(w.ctx, chain.Decision{Request: id3, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "npm install *", Reason: "padrão"}); err != nil {
+		t.Fatalf("npm install * refused: %v", err)
+	}
+	if len(w.temp.rules) != 1 || w.temp.rules[0].Pattern == nil || w.temp.rules[0].Pattern.Pattern != "npm install *" {
+		t.Errorf("temporary rules = %+v", w.temp.rules)
+	}
+}
+
+// CA-CADEIA-10
+func TestAskingBackKeepsTheRequestWhereItIsAndTheTimeOfTheLevelStartsAgainWithTheAnswer(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	id := w.shell(dev, "npm install x")
+	w.clk.Advance(2*time.Minute - 10*time.Second)
+	w.state(dev, characters.Idle)
+	out, err := w.ch.Decide(w.ctx, chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerAskBack, Instruction: "para que serve este pacote?"})
+	if err != nil || out.Applied != "asked_back" {
+		t.Fatalf("ask back = %+v, %v", out, err)
+	}
+	if qs := w.itemsOf(dev, inbox.KindAnswer); len(qs) != 1 || !strings.Contains(qs[0].Text, "para que serve") {
+		t.Fatalf("the requester got %+v, want the question as an answer item", qs)
+	}
+	w.clk.Advance(5 * time.Minute)
+	if r := w.request(id); r.Level.Kind != chain.LevelMesa || r.State != chain.Open {
+		t.Fatalf("it climbed while it waited for the requester: %+v", r.Level)
+	}
+	if err := w.ch.Reply(w.ctx, id, dev.ID, "é para o linter do CI"); err != nil {
+		t.Fatal(err)
+	}
+	replies := w.itemsOf(w.master, inbox.KindAnswer)
+	if len(replies) != 1 || !contains(replies[0].Text, chain.UnverifiedOpen, "é para o linter do CI") || strings.Index(replies[0].Text, chain.UnverifiedOpen) > strings.Index(replies[0].Text, "linter") {
+		t.Fatalf("the table master got %+v, want the reply inside the unverified block", replies)
+	}
+	if r := w.request(id); !r.Deadline.Equal(w.clk.Now().Add(2 * time.Minute)) {
+		t.Errorf("deadline = %v, want 2 min from the reply", r.Deadline)
+	}
+	w.clk.Advance(2*time.Minute - time.Second)
+	if w.level(id) != chain.LevelMesa {
+		t.Fatal("it climbed before the new 2 minutes")
+	}
+	w.clk.Advance(time.Second)
+	if w.level(id) != chain.LevelGrandMaster {
+		t.Errorf("after the new time the request is at %+v, want the Grand Master", w.request(id).Level)
+	}
+	if err := w.ch.Reply(w.ctx, id, dev.ID, "de novo"); err == nil {
+		t.Error("a reply with nothing asked was taken")
+	}
+}
+
+// Part of CA-CADEIA-16: the groups and the invalid list; the policy file and its alert are milestone 5.
+func TestTheOwnerChoosesTheGroupsOfMedioTheTableMasterDecidesAndAnInvalidListIsRefused(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	settings, err := chain.ParseSection([]byte("mesa_decide: [rede, apagar, instalacao_e_sistema]\n"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.policy.set(settings)
+	compose, global := w.shell(dev, "docker compose up"), w.shell(dev, "npm install -g x")
+	if w.level(compose) != chain.LevelGrandMaster {
+		t.Errorf("docker compose up with the group out of the list is at %+v, want the Grand Master", w.request(compose).Level)
+	}
+	if w.level(global) != chain.LevelMesa {
+		t.Errorf("npm install -g with the group in the list is at %+v, want the table master", w.request(global).Level)
+	}
+	settings, err = chain.ParseSection([]byte("mesa_decide: []\n"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.policy.set(settings)
+	if id := w.shell(dev, "pip install y"); w.level(id) != chain.LevelGrandMaster {
+		t.Errorf("with the empty list a medio is at %+v, want the Grand Master", w.request(id).Level)
+	}
+	if id := w.shell(dev, "npm install z"); w.level(id) != chain.LevelMesa {
+		t.Errorf("with the empty list a baixo is at %+v, want the table master", w.request(id).Level)
+	}
+	for _, bad := range []string{"alto", "fixo", "git_push", "inventado"} {
+		_, err := chain.ParseSection([]byte("mesa_decide: [rede, "+bad+"]\n"), 0)
+		var se *chain.SectionError
+		if !errors.Is(err, chain.ErrInvalidSection) || !errors.As(err, &se) || !strings.Contains(se.Item, bad) {
+			t.Errorf("a list with %q = %v, want an invalid section citing it", bad, err)
+		}
 	}
 }

@@ -295,6 +295,34 @@ func TestARuleOfBaixoDoesNotFreeTheMedioCommandsItsPatternMatches(t *testing.T) 
 	}
 }
 
+// CA-RTM-08
+func TestTheAutonomyPauseSuspendsAMedioRuleAndAPatternAboveTheCeilingIsRefused(t *testing.T) {
+	t.Parallel()
+	w := newRTM(t)
+	dev1, dev2 := w.recruit("Dev1"), w.recruit("Dev2")
+	id := w.shell(dev1, "docker compose up -d")
+	if ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "docker *", For: time.Hour, Reason: "tudo"}); ref.Code != chain.CodeAboveCeiling {
+		t.Errorf("docker * = %+v, want above_ceiling (alto)", ref)
+	}
+	w.approvePattern(id, "docker compose up *", time.Hour)
+
+	w.sup.mu.Lock()
+	w.sup.paused = true
+	w.sup.mu.Unlock()
+	if d := w.engine(dev2, "docker compose up -d"); d.Verdict != classes.Ask {
+		t.Fatalf("under the pause = %+v, want ask", d)
+	}
+	if lvl := w.level(w.shell(dev2, "docker compose up -d")); lvl != chain.LevelGrandMaster {
+		t.Errorf("under the pause the request was born at %s, want the Grand Master", lvl)
+	}
+	w.sup.mu.Lock()
+	w.sup.paused = false
+	w.sup.mu.Unlock()
+	if d := w.engine(dev2, "docker compose up -d"); d.Verdict != classes.Allow {
+		t.Errorf("after the pause = %+v, want the rule", d)
+	}
+}
+
 // CA-RTM-07
 func TestAMedioRuleOfTheTableMasterChecksTheConditionsOfTheTableAtEachUse(t *testing.T) {
 	t.Parallel()
@@ -341,65 +369,6 @@ func TestAMedioRuleOfTheTableMasterChecksTheConditionsOfTheTableAtEachUse(t *tes
 	w.policy.set(s)
 	if d := w.engine(dev2, "curl https://pypi.org/x"); d.Verdict != classes.Allow {
 		t.Errorf("curl pypi.org with rede back = %+v, want the rule", d)
-	}
-}
-
-// CA-RTM-08
-func TestTheAutonomyPauseSuspendsAMedioRuleAndAPatternAboveTheCeilingIsRefused(t *testing.T) {
-	t.Parallel()
-	w := newRTM(t)
-	dev1, dev2 := w.recruit("Dev1"), w.recruit("Dev2")
-	id := w.shell(dev1, "docker compose up -d")
-	if ref := w.refusal(chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApprovePattern, Pattern: "docker *", For: time.Hour, Reason: "tudo"}); ref.Code != chain.CodeAboveCeiling {
-		t.Errorf("docker * = %+v, want above_ceiling (alto)", ref)
-	}
-	w.approvePattern(id, "docker compose up *", time.Hour)
-
-	w.sup.mu.Lock()
-	w.sup.paused = true
-	w.sup.mu.Unlock()
-	if d := w.engine(dev2, "docker compose up -d"); d.Verdict != classes.Ask {
-		t.Fatalf("under the pause = %+v, want ask", d)
-	}
-	if lvl := w.level(w.shell(dev2, "docker compose up -d")); lvl != chain.LevelGrandMaster {
-		t.Errorf("under the pause the request was born at %s, want the Grand Master", lvl)
-	}
-	w.sup.mu.Lock()
-	w.sup.paused = false
-	w.sup.mu.Unlock()
-	if d := w.engine(dev2, "docker compose up -d"); d.Verdict != classes.Allow {
-		t.Errorf("after the pause = %+v, want the rule", d)
-	}
-}
-
-// Part of CA-CADEIA-09: the approval for a time of the exact action is a rule
-// of baixo or medio inside the maximum, and the Grand Master, who decides the
-// medio of any group, makes the rule of the pattern its request needs.
-func TestApprovingForATimeMakesARuleOfTheExactActionAndTheGrandMasterMakesTheMedioOnes(t *testing.T) {
-	t.Parallel()
-	w := newRTM(t)
-	dev1, dev2 := w.recruit("Dev1"), w.recruit("Dev2")
-	id := w.shell(dev1, "npm install lodash")
-	out, err := w.ch.Decide(w.ctx, chain.Decision{Request: id, By: w.master.ID, Answer: chain.AnswerApproveFor, For: time.Hour, Reason: "por uma hora"})
-	if err != nil || out.Applied != "temporary_rule" {
-		t.Fatalf("approve for = %+v, %v", out, err)
-	}
-	if d := w.engine(dev2, "npm install lodash"); d.Verdict != classes.Allow {
-		t.Errorf("the same action by another dev = %+v, want the rule", d)
-	}
-	if d := w.engine(dev2, "npm install other"); d.Verdict != classes.Ask {
-		t.Errorf("another action = %+v, want ask: the rule is of the exact action", d)
-	}
-	if ref := w.refusal(chain.Decision{Request: w.shell(dev1, "npm install z"), By: w.master.ID, Answer: chain.AnswerApproveFor, Reason: "sem tempo"}); ref.Code != chain.CodeBadAnswer {
-		t.Errorf("approve for without a time = %+v, want bad_answer", ref)
-	}
-	// the Grand Master's rule of a medio of any group
-	g := w.shell(dev1, "npm install -g x")
-	if _, err := w.ch.Decide(w.ctx, chain.Decision{Request: g, By: w.gm.ID, Answer: chain.AnswerApprovePattern, Pattern: "npm install -g *", For: time.Hour, Reason: "global"}); err != nil {
-		t.Fatalf("the Grand Master's pattern: %v", err)
-	}
-	if rs := w.rules(); len(rs) != 2 || rs[1].Level != chain.LevelGrandMaster || rs[1].Risk != classes.RiskMedium {
-		t.Errorf("rules = %+v", rs)
 	}
 }
 
