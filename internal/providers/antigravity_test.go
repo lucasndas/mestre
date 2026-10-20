@@ -120,6 +120,17 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 			if h["type"] != "command" || h["timeout"] != e.timeout || !strings.Contains(cmd, "hook --provider antigravity --event "+e.event) {
 				t.Fatalf("%s: %s handler = %v", goos, e.event, h)
 			}
+			// agy runs the Windows line by cmd /c with the quoting of Go, which
+			// breaks any " in it; and the line answers allow only when there is
+			// no MESTRE_AGENT_ID (agy run by hand without the Mestre): a guard
+			// that fails (the quotes of agy 1.4.2) or a binary that is gone
+			// must not let the tool through without the dispatcher.
+			if goos == "windows" {
+				_, afterGuard, _ := strings.Cut(cmd, ") else ")
+				if strings.Contains(cmd, `"`) || strings.Contains(afterGuard, "allow") {
+					t.Fatalf("windows: %s line has a quote or answers allow after the guard: %s", e.event, cmd)
+				}
+			}
 		}
 	}
 	// An invalid file is never rewritten, and a missing one is created.
@@ -140,6 +151,9 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 		{Root: "wt", OS: "linux", Binary: stableBinary},
 		{Root: "/wt", OS: "linux", Binary: "mestre"},
 		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\100%\mestre.exe`},
+		// Needs quotes and, not existing, has no 8.3 name.
+		{Root: "/wt", OS: "windows", Binary: `C:\Program Files\Mestre-nao-instalado\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\a(b)\mestre.exe`},
 	} {
 		if _, err := prov.HookFiles(bad); err == nil {
 			t.Errorf("%+v was accepted", bad)

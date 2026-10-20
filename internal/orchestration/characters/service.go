@@ -48,6 +48,8 @@ type ServiceOptions struct {
 	// Brief tells the Grand Master, in the message it gets when it restarts,
 	// where the workspace stands (nil: the message says only where it was).
 	Brief Briefer
+	// TableBrief does the same for a table master (nil: only where it was).
+	TableBrief TableBriefer
 	// Scrolls, Inbox and Usage may be nil: nothing is written, the inbox is
 	// empty, the use is not told.
 	Scrolls Scrolls
