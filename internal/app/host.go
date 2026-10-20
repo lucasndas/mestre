@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
@@ -57,12 +58,13 @@ func (unavailableEpics) ClosePR(context.Context, string, int) error {
 	return errMilestone5("the access to the pull requests of GitHub")
 }
 
-// unavailableBuilder is the session zero of a character before the stage of
-// the identities and the decrees: no character is born through it.
+// unavailableBuilder is the session zero of a character of a Citadel without
+// the people of the chain (the decrees, the users) and the classes: no
+// character is born through it (SessionBuilder is the real one).
 type unavailableBuilder struct{}
 
 func (unavailableBuilder) Build(context.Context, characters.BuildInput) (sessionzero.CharacterRequest, error) {
-	return sessionzero.CharacterRequest{}, errMilestone5("the session zero of a character (identities and decrees)")
+	return sessionzero.CharacterRequest{}, errors.New("the session zero of a character needs the decrees, the identities and the classes of the Citadel, and this run has none configured")
 }
 
 // logAlerts are the operational alerts before the bot: they go to the log, where
@@ -113,9 +115,18 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		integ.Extend(&opts)
 	}
 	var cc *CitadelClasses
+	var sb *SessionBuilder
 	if people, ok := integ.(chainPeople); ok {
-		if cc, err = e.hostChain(&opts, people, workspaces.Layout{Root: workspacesDir}); err != nil {
+		layout := workspaces.Layout{Root: workspacesDir}
+		if cc, err = e.hostChain(&opts, people, layout); err != nil {
 			return nil, err
+		}
+		if notes, ok := people.CharacterDecrees().(DecreeNotes); ok {
+			if sb, err = NewSessionBuilder(SessionBuilderOptions{Rules: cc.Rules, Notes: notes, Identities: github.Identities{Apps: &github.Registry{DB: db}},
+				Libraries: opts.ClassLibraries, Layout: layout, Machine: e.id.MachineID, Tables: tables.Store{DB: db}, Log: e.log}); err != nil {
+				return nil, err
+			}
+			opts.Builder = sb
 		}
 	}
 	orc, err := NewOrchestration(opts)
@@ -149,6 +160,15 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}}
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
+	}
+	if sb != nil {
+		ph.layers = func(ctx context.Context, id string) (sessionzero.Dynamic, error) {
+			c, err := orc.Registry.Get(ctx, id)
+			if err != nil {
+				return sessionzero.Dynamic{}, err
+			}
+			return sb.Refresh(ctx, c)
+		}
 	}
 	e.period.Store(ph)
 	return orc, nil
