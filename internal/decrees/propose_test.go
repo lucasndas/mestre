@@ -3,7 +3,6 @@ package decrees_test
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 	"testing"
 
@@ -81,7 +80,7 @@ func TestDecreeProposeBuildsTheProposalFromTheMessageAndNothingHoldsBeforeTheCli
 	t.Parallel()
 	w := newWorld(t)
 	admin := w.person("Ana", users.Administrator, "loja")
-	order := "o Dev pode rodar make deploy-teste"
+	order := "o Dev  pode rodar\n  make deploy-teste,\tcom ação e acentuação — já!"
 	h, off := proposeRig(w, map[string]decrees.Source{"m81": {Text: order, User: admin.ID, Channel: "telegram", MessageID: "m81"}})
 	before := w.count("decrees")
 	got := run(w, h, gm, "decree propose", ruleFlags(order))
@@ -91,13 +90,41 @@ func TestDecreeProposeBuildsTheProposalFromTheMessageAndNothingHoldsBeforeTheCli
 	if len(off.list) != 1 || off.list[0].Author != admin.ID {
 		t.Fatalf("offered = %+v, want one proposal to the author of the message", off.list)
 	}
-	for _, want := range []string{"make deploy-teste", "dev"} {
-		if !strings.Contains(strings.ToLower(off.list[0].Text), want) {
-			t.Errorf("the confirmation %q does not say %q", off.list[0].Text, want)
-		}
+	shown := off.list[0].Text
+	if want := "Entendi: permitir comandos make deploy-teste para a classe dev, permanente (workspace loja). Confirma?"; shown != want {
+		t.Errorf("the proposal shown to the author = %q, want %q (effect permission, target classe dev, scope)", shown, want)
+	}
+	if got.Data["text"] != shown {
+		t.Errorf("the reply text %v is not the proposal shown to the author %q", got.Data["text"], shown)
 	}
 	if w.count("decrees") != before {
 		t.Fatal("a decree held before the click of the author")
+	}
+	// the click of the author makes the decree with the effect, the target and
+	// the scope of the proposal and the text of the message byte for byte
+	pinID := ""
+	if off.list[0].PIN {
+		req, err := w.svc.BeginPIN(w.ctx, off.list[0].ID, admin.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.users.CheckPIN(w.ctx, req.ID, correctPIN); err != nil {
+			t.Fatal(err)
+		}
+		pinID = req.ID
+	}
+	d, err := w.svc.Confirm(w.ctx, off.list[0].ID, admin.ID, pinID)
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if d.Text != order {
+		t.Errorf("the text of the decree = %q, want the message byte for byte %q", d.Text, order)
+	}
+	if d.Effect.Kind != decrees.EffectPermission || d.Effect.Allow == nil || len(d.Effect.Allow.Commands) != 1 || d.Effect.Allow.Commands[0] != "make deploy-teste" {
+		t.Errorf("the effect of the decree = %+v, want permission allowing the command make deploy-teste", d.Effect)
+	}
+	if d.Target.Kind != decrees.TargetClass || d.Target.Name != "dev" {
+		t.Errorf("the target of the decree = %+v, want classe:dev", d.Target)
 	}
 	// the order must be the one of the message
 	if got := run(w, h, gm, "decree propose", ruleFlags("o Dev pode tudo")); got.OK || got.Code != "usage" {

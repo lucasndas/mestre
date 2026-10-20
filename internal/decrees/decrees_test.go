@@ -82,7 +82,9 @@ func (w *world) engine(t *testing.T) *engineFor {
 	return &engineFor{w: w, char: dev("d1"), worktr: t.TempDir()}
 }
 
-// CA-DEC-01
+// Part of CA-DEC-01 (the registration of the execution is made here by the
+// OnEvent of the test: the engine does not register it from the events of the
+// hooks yet)
 func TestAPermanentDecreeConfirmedWithPINIsAppliedAndRegistered(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -453,8 +455,8 @@ func TestADecreeThatChangesTheOrchestratorClassIsRefusedBeforeTheConfirmation(t 
 	}
 }
 
-// CA-DEC-09 (the part of the decree: the push stays denied, the engine
-// fulfils it and the unmeetable is refused)
+// Part of CA-DEC-09 (the part of the decree: the push stays denied, the engine
+// fulfils it and the unmeetable is refused with the explanation)
 func TestADecreeThatFreesAnInvariantIsKeptButTheAgentStillHasNoPush(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -473,6 +475,11 @@ func TestADecreeThatFreesAnInvariantIsKeptButTheAgentStillHasNoPush(t *testing.T
 	p.Text = "o dev pode ignorar a revisão obrigatória"
 	if ref := w.refusal(p); ref.Code != decrees.CodeInvariant {
 		t.Fatalf("%+v", ref)
+	} else {
+		contains(t, ref.Message, "contornar a proteção do GitHub (revisao_obrigatoria) nem o motor pode")
+	}
+	if n := w.count("decree_proposals"); n != 1 {
+		t.Fatalf("%d proposals: the refused one was kept to confirm", n)
 	}
 	for _, g := range []classes.Grant{{Files: []string{".mestre/regras/*"}}, {Commands: []string{"claude --resume x"}}, {Commands: []string{"mestre vault get x"}}} {
 		p := allowCmd(ana, "dev", "x")

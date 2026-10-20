@@ -16,26 +16,38 @@ func TestTheGrandMasterIsBornPinnedAndNothingEndsItNorUnpinsIt(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{})
 	tm := r.makeTM("3-login")
-	gm := r.grandMaster()
+	// a persistent sheet: the idle cycle would end any other character
+	res, err := r.create(characters.CreateRequest{Sheet: "Dev Persistente", Role: characters.RoleGrandMaster})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.ready(res.Character)
+	gm := res.Character
 	if !r.get(gm.ID).Pinned {
 		t.Fatal("the Grand Master was not born pinned")
 	}
 	proc := r.mach[gm.Machine].host.proc(gm.ID)
 
-	// The cycle of idleness.
+	refusals := func() int { return r.audited("character.end_refused_pinned") }
+	// The cycle of idleness: refused (it does not stop it) and recorded, once.
 	r.advance(5 * time.Hour)
-	if r.state(gm) != characters.Idle || len(proc.stopCalls()) != 0 {
-		t.Fatalf("idleness: state %s, %d stops", r.state(gm), len(proc.stopCalls()))
+	r.advance(time.Hour)
+	if r.state(gm) != characters.Idle || len(proc.stopCalls()) != 0 || refusals() != 1 {
+		t.Fatalf("idleness: state %s, %d stops, %d refusals recorded; want idle, none, 1", r.state(gm), len(proc.stopCalls()), refusals())
 	}
-	// Any agent, and the Owner, ask for the end.
-	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: gm.ID, By: byChar(tm)}); err == nil {
-		t.Error("dismiss by a table master of the Grand Master was accepted")
+	// Any agent asks for the end: refused as not allowed, and recorded.
+	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: gm.ID, By: byChar(tm)}); !errors.Is(err, characters.ErrLevelDenied) {
+		t.Errorf("dismiss by a table master of the Grand Master = %v; want level_denied", err)
 	}
+	if refusals() != 2 {
+		t.Errorf("refusals recorded after the agent = %d; want 2", refusals())
+	}
+	// The Owner asks for the end: refused as pinned, and recorded.
 	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: gm.ID, By: owner}); !errors.Is(err, characters.ErrPinned) {
 		t.Errorf("dismiss by the Owner = %v; want it refused as pinned", err)
 	}
-	if r.state(gm) != characters.Idle || len(proc.stopCalls()) != 0 || r.audited("character.end_refused_pinned") != 1 {
-		t.Errorf("dismiss: state %s, %d stops, %d refusals recorded", r.state(gm), len(proc.stopCalls()), r.audited("character.end_refused_pinned"))
+	if r.state(gm) != characters.Idle || len(proc.stopCalls()) != 0 || refusals() != 3 {
+		t.Errorf("dismiss: state %s, %d stops, %d refusals recorded; want idle, none, 3", r.state(gm), len(proc.stopCalls()), refusals())
 	}
 	// Not even a user unpins it.
 	if err := r.svc.Pin(r.ctx, gm.ID, false, owner); !errors.Is(err, characters.ErrLevelDenied) || !r.get(gm.ID).Pinned {

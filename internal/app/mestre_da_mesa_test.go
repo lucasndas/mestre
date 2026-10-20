@@ -1,9 +1,11 @@
 package app_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 )
@@ -19,10 +21,10 @@ func TestTheTableMasterCannotMakeAClassOfTheTableAboveTheCeilingAndTheErrorLists
 	w.classCreateAboveTheCeilingIsCeilingDeniedAndCitesTheNetworkItem(t)
 }
 
-// CA-MM-03: `mestre reply` and `mestre notify` are the Grand Master's and
-// their refusal comes from the gate of the CLI, with the code of the level;
-// an issue of another table is refused by the engine in the same way
-// (internal/ghcli, TestAnIssueOutsideTheEpicOfTheTableIsRefused).
+// Part of CA-MM-03: `mestre reply` and `mestre notify` are the Grand Master's and
+// their refusal comes from the gate of the CLI, with the code of the level
+// (the three commands together are in
+// TestTheTableMasterGetsAPermissionErrorOnReplyNotifyAndAnIssueOfAnotherTable).
 func TestTheTableMasterIsDeniedTheCommandsThatTalkToTheUsers(t *testing.T) {
 	t.Parallel()
 	w := newCommWorld(t)
@@ -35,6 +37,36 @@ func TestTheTableMasterIsDeniedTheCommandsThatTalkToTheUsers(t *testing.T) {
 		if r.code != 3 || v.OK || v.Error.Code != "level_denied" {
 			t.Errorf("%v by the table master = %d %+v, want exit 3 level_denied", args, r.code, v.Error)
 		}
+	}
+}
+
+// CA-MM-03: the table master calls `mestre reply`, `mestre notify` and `mestre
+// issue update` on an issue of another table, and each is refused with a
+// permission error (exit 3); nothing reaches GitHub and nothing changes.
+func TestTheTableMasterGetsAPermissionErrorOnReplyNotifyAndAnIssueOfAnotherTable(t *testing.T) {
+	t.Parallel()
+	m := &mm{}
+	w := newCommWorld(t, m.setup)
+	other := m.gh.AddIssue(mmRepo, "de outra mesa")
+	if err := m.objs.Register(w.ctx, github.Object{Repo: mmRepo, Kind: github.KindIssue, Number: other, Table: w.slug + "/43-outra", Op: github.NewOp()}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		args []string
+		code string
+	}{
+		{[]string{"reply", "Pronto"}, "level_denied"},
+		{[]string{"notify", "falta a chave", "--blocked", "credencial"}, "level_denied"},
+		{[]string{"issue", "update", fmt.Sprint(other), "--title", "sequestrada"}, "outside_epic"},
+	} {
+		r := w.run(w.master, append(tc.args, "--json")...)
+		v := decodeJSON(t, r)
+		if r.code != 3 || v.OK || v.Error.Code != tc.code {
+			t.Errorf("%v by the table master = %d ok=%v %+v; want exit 3 %s", tc.args, r.code, v.OK, v.Error, tc.code)
+		}
+	}
+	if title, _, _, _, _ := m.gh.Issue(mmRepo, other); title != "de outra mesa" {
+		t.Errorf("the issue of the other table was changed: %q", title)
 	}
 }
 

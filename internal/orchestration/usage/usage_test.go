@@ -244,7 +244,7 @@ func TestCodexReachedLimitBlocksForQuotaAndOffersAlternatives(t *testing.T) {
 	}
 }
 
-// CA-USO-05
+// Part of CA-USO-05 (the delivery of the queue is closed over the real characters and inbox in internal/orchestration/chain)
 func TestQuotaBackUnblocksAndDeliversTheQueue(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -322,7 +322,7 @@ func TestProviderWithoutTokensKeepsActiveTimeAndOneTurn(t *testing.T) {
 	}
 }
 
-// CA-USO-07
+// Part of CA-USO-07 (the join with the real chain is in internal/orchestration/chain)
 func TestExtraAboveTheCeilingIsNotForTheGrandMaster(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

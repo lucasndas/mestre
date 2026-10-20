@@ -163,24 +163,44 @@ func (r *reviewsRig) count(request int64, outcome string) int {
 	return n
 }
 
+// pinOwner gives the Owner a login on GitHub, as admin of the repository, and a PIN.
+func (r *reviewsRig) pinOwner(login string) users.User {
+	r.t.Helper()
+	if _, err := r.svc.Edit(r.ctx, r.owner, r.owner.ID, users.Edit{GitHubLogin: &login}); err != nil {
+		r.t.Fatal(err)
+	}
+	r.gh.AddUser(login, "User")
+	r.gh.SetPermission(loja, login, "admin")
+	if err := r.svc.SetPIN(r.ctx, r.owner.ID, "123456"); err != nil {
+		r.t.Fatal(err)
+	}
+	return r.owner
+}
+
 // CA-GH-APROV-09
 func TestAReviewMadeOnGitHubOnlyAnswersTheRequestUnderEveryCondition(t *testing.T) {
 	t.Parallel()
 	r := newReviewsRig(t)
 	ana := r.person("Ana", "ana-dev", users.Approver)
+	// a registered and active user whose account on GitHub is not of the type User
+	r.person("Robô", "robo-ci", users.Approver)
+	r.gh.AddUser("robo-ci", "Bot")
 	req := r.request(openOpts{})
 
 	// an account that is not registered
 	r.deliver(r.review("estranho", "APPROVED", r.sha))
 	// a review of another commit
 	r.deliver(r.review("ana-dev", "APPROVED", strings.Repeat("e", 40)))
-	if r.state(req.ID) != chain.Open {
+	// an account of the type Bot
+	r.deliver(r.review("robo-ci", "APPROVED", r.sha))
+	if r.state(req.ID) != chain.Open || r.count(req.ID, "counted") != 0 {
 		t.Fatalf("the request is %s after reviews that fail a condition; want it still waiting for the people", r.state(req.ID))
 	}
 	audit := r.audit(req.ID)
-	if len(audit) != 2 || !strings.Contains(audit[0], "estranho|APPROVED|ignored|") || !strings.Contains(audit[0], "não é um usuário ativo") ||
-		!strings.Contains(audit[1], "ana-dev|APPROVED|ignored|") || !strings.Contains(audit[1], "commit") {
-		t.Fatalf("audit = %q; want both reviews ignored, each with its reason", audit)
+	if len(audit) != 3 || !strings.Contains(audit[0], "estranho|APPROVED|ignored|") || !strings.Contains(audit[0], "não é um usuário ativo") ||
+		!strings.Contains(audit[1], "ana-dev|APPROVED|ignored|") || !strings.Contains(audit[1], "commit") ||
+		!strings.Contains(audit[2], "robo-ci|APPROVED|ignored|") || !strings.Contains(audit[2], "Bot, não User") {
+		t.Fatalf("audit = %q; want the three reviews ignored, each with its reason", audit)
 	}
 
 	// a review of a registered, active user, of type User, with write access, on the right commit
@@ -192,13 +212,61 @@ func TestAReviewMadeOnGitHubOnlyAnswersTheRequestUnderEveryCondition(t *testing.
 	if d := r.ch.Decisions(); len(d) != 1 || d[0].User != ana.ID || d[0].Answer != chain.AnswerApprove {
 		t.Fatalf("decisions = %+v; want the approval of Ana", d)
 	}
-	if got := r.audit(req.ID); len(got) != 3 || !strings.Contains(got[2], "ana-dev|APPROVED|counted|") {
-		t.Fatalf("audit = %q; want the third review counted", got)
+	if got := r.audit(req.ID); len(got) != 4 || !strings.Contains(got[3], "ana-dev|APPROVED|counted|") {
+		t.Fatalf("audit = %q; want the fourth review counted", got)
 	}
 	// the same event delivered again is the same review
 	r.deliver(good)
-	if got := r.audit(req.ID); len(got) != 3 {
+	if got := r.audit(req.ID); len(got) != 4 {
 		t.Fatalf("audit after a second delivery = %q", got)
+	}
+
+	// the same valid review once DISMISSED does not count (the event of the approval
+	// reaches the engine after the dismissal)
+	d := newReviewsRig(t)
+	d.person("Ana", "ana-dev", users.Approver)
+	dreq := d.request(openOpts{})
+	ev := d.review("ana-dev", "APPROVED", d.sha)
+	d.gh.DismissReview(loja, d.pr, "ana-dev")
+	d.deliver(ev)
+	d.deliver(d.event(ev.ID, "ana-dev", "DISMISSED"))
+	if d.state(dreq.ID) != chain.Open || d.count(dreq.ID, "counted") != 0 || len(d.ch.Decisions()) != 0 {
+		t.Fatalf("a dismissed review counted: %s, %q", d.state(dreq.ID), d.audit(dreq.ID))
+	}
+	if got := d.audit(dreq.ID); len(got) != 2 || !strings.Contains(got[0], "DISMISSED") || !strings.Contains(got[1], "|DISMISSED|dismissed|") {
+		t.Fatalf("audit = %q; want the dismissal as the reason", got)
+	}
+
+	// a request that asks the PIN and the valid review of the Owner: it stays waiting,
+	// the Owner is asked the PIN by the channel, and only the PIN concludes it
+	p := newReviewsRig(t)
+	owner := p.pinOwner("lucas-dono")
+	preq := p.request(openOpts{min: classes.LevelOwner, pin: true})
+	p.deliver(p.review("lucas-dono", "APPROVED", p.sha))
+	if p.state(preq.ID) != chain.Open || len(p.ch.Decisions()) != 0 {
+		t.Fatalf("a review concluded a request that asks the PIN: %s", p.state(preq.ID))
+	}
+	rep, ok := p.pin.get(owner.ID)
+	if !ok || rep.PIN == "" {
+		t.Fatalf("the PIN was not asked of the Owner: %+v", rep)
+	}
+	if got := p.audit(preq.ID); len(got) != 1 || !strings.Contains(got[0], "lucas-dono|APPROVED|pin_asked|") {
+		t.Fatalf("audit = %q; want the valid review registered with the PIN asked", got)
+	}
+	if err := p.svc.CheckPIN(p.ctx, rep.PIN, "000000"); err == nil {
+		t.Fatal("a wrong PIN was accepted")
+	}
+	if p.state(preq.ID) != chain.Open {
+		t.Fatalf("the request is %s without the PIN", p.state(preq.ID))
+	}
+	if err := p.svc.CheckPIN(p.ctx, rep.PIN, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.flow.ConfirmPIN(p.ctx, owner.ID, rep.PIN); err != nil || p.state(preq.ID) != chain.Approved {
+		t.Fatalf("with the PIN: %v, %s", err, p.state(preq.ID))
+	}
+	if dd := p.ch.Decisions(); len(dd) != 1 || dd[0].User != owner.ID {
+		t.Fatalf("decisions = %+v; want the one of the Owner, with the PIN", dd)
 	}
 }
 

@@ -68,7 +68,7 @@ func TestAnApprovalMakesAnExceptionOfTheExactAction(t *testing.T) {
 	}
 }
 
-// CA-DEC-11 (the decrees: the answers of the people)
+// Part of CA-DEC-11 (the decrees: the answers of the people)
 func TestTheAnswersOfAPersonMakeRulesAndDenyAlwaysAsksNoPIN(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -375,4 +375,30 @@ func TestADecreeOfPolicyReachesOnlyWhatItWasMadeForAndEndsWithItsAuthor(t *testi
 	bad(pol("mestre", true, workspace, ""))     // the areas of the engine are never opened
 	bad(pol("permissoes_e_segredos", true, workspace, ""))
 	bad(pol("tipo_que_nao_existe", true, workspace, ""))
+}
+
+// The chain names the person that answered "user:<id>" (chain.Service.DecideByPerson):
+// the decree and the exception are made for that user, at the level it has.
+func TestTheAnswerOfAPersonNamedByTheChainMakesTheDecreeOfThatUser(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.person("Ana", users.Administrator, "loja")
+	a := shell("curl https://exemplo.io/x")
+	r := w.request(1, classes.RequestClassPermission, &a)
+	people := chain.Level{Kind: chain.LevelPeople, Name: ana.ID}
+	if err := w.svc.Decree(w.ctx, chain.DecreeGrant{Request: r.ID, Answer: chain.AnswerDenyAlways, Character: "d1", Class: "dev", By: "user:" + ana.ID, Level: people, Pattern: "curl *"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.svc.Exception(w.ctx, chain.ExceptionGrant{Request: r.ID, Character: "d1", Action: a, By: "user:" + ana.ID, Level: people}); err != nil {
+		t.Fatal(err)
+	}
+	ds, err := w.svc.List(w.ctx, ana.ID)
+	if err != nil || len(ds) != 2 {
+		t.Fatalf("decrees of Ana = %+v, %v", ds, err)
+	}
+	for _, d := range ds {
+		if d.Author != ana.ID || d.Level != classes.LevelAdmin {
+			t.Fatalf("decree %+v, want Ana's at her level", d)
+		}
+	}
 }

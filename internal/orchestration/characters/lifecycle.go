@@ -215,6 +215,11 @@ func (s *Service) Dismiss(ctx context.Context, req DismissRequest) (DismissResul
 		return DismissResult{}, err
 	}
 	if err := s.mayDismiss(ctx, req.By, c); err != nil {
+		if c.Pinned && errors.Is(err, ErrLevelDenied) {
+			// a pinned character is never ended: the refusal is recorded even
+			// when who asks was not allowed to ask in the first place
+			s.refuse(ctx, c, "dismiss", req.By)
+		}
 		return DismissResult{}, err
 	}
 	retiring := c.Pinned && req.Retire && c.Role == RoleGrandMaster && (req.By.Kind == CreatedByEngine || req.By.Kind == CreatedByUser)
@@ -492,6 +497,15 @@ func (s *Service) Sweep(ctx context.Context) error {
 		return err
 	}
 	for _, c := range cs {
+		if c.Role == RoleGrandMaster && c.Pinned {
+			// the idle cycle never ends the pinned Grand Master: the refusal is recorded
+			if _, due, err := s.lifecycleDue(ctx, c, now); err != nil {
+				return err
+			} else if due {
+				s.refuse(ctx, c, "lifecycle", Creator{Kind: CreatedByEngine})
+			}
+			continue
+		}
 		if c.Role != RoleCharacter {
 			continue
 		}

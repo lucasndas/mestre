@@ -171,7 +171,7 @@ func TestGhApproveIsForTheCommitReadTheWorkspaceOfWhoAsksAndTellsTheRefusalsApar
 	}
 }
 
-// Part of CA-CLI-GM-04: `gh merge` opens the request of the merge when none is approved, bound
+// `gh merge` opens the request of the merge when none is approved, bound
 // to the PR, the commit and the base, and waits (9); once approved it merges with the
 // commit that was approved and the method asked.
 func TestGhMergeAsksFirstAndThenMergesTheApprovedCommitWithTheMethod(t *testing.T) {
@@ -218,7 +218,7 @@ func TestGhMergeAsksFirstAndThenMergesTheApprovedCommitWithTheMethod(t *testing.
 	}
 }
 
-// Part of CA-CLI-GM-04: the refusals of the merge are told apart and nothing is worked around.
+// The refusals of the merge are told apart and nothing is worked around.
 func TestGhMergeTellsApartWhatGitHubRefusesAndWhatTheChainRefuses(t *testing.T) {
 	t.Parallel()
 	r, _, mg, _, pr := approveRig(t)
@@ -289,7 +289,7 @@ func TestGhMergeTellsApartWhatGitHubRefusesAndWhatTheChainRefuses(t *testing.T) 
 	}
 }
 
-// CA-CLI-GM-05: `gh settings apply` changes nothing: it asks the Owner for the
+// Part of CA-CLI-GM-05: `gh settings apply` changes nothing: it asks the Owner for the
 // ruleset, in the workspace of who asks, and ends pending; a body that is not a ruleset
 // is a usage error; only the Grand Master.
 func TestGhSettingsApplyAsksTheOwnerAndEndsPending(t *testing.T) {
