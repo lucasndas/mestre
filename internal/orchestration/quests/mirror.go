@@ -140,7 +140,10 @@ func (s *Service) mirror(ctx context.Context, id string) {
 				_ = s.updateStep(ctx, st.UID, func(x *Step) { x.SubClosed = true })
 			}
 		}
-		if done {
+		if done && q.Def.Issue != 0 {
+			// the issue is the Master's, shared with the epic: it is not ours to close
+			_ = s.updateQuest(ctx, id, func(x *Quest) { x.IssueClosed = true })
+		} else if done {
 			if err := gh.Close(ctx, q.Workspace, q.Issue, ClosedNotPlanned); err != nil {
 				fail("the closing of the issue", err)
 			} else {
@@ -150,7 +153,7 @@ func (s *Service) mirror(ctx context.Context, id string) {
 	}
 	// The checklist, from the steps as they are now.
 	if fresh, err := s.st.Steps(ctx, id); err == nil {
-		if err := gh.UpdateBody(ctx, q.Workspace, q.Issue, s.issueBody(q, fresh)); err != nil {
+		if err := s.syncBody(ctx, q, fresh); err != nil {
 			fail("the checklist", err)
 		}
 	}
@@ -166,10 +169,53 @@ func (s *Service) mirror(ctx context.Context, id string) {
 	}
 }
 
+// syncBody brings the body of the issue to what the quest is. An issue the
+// engine made is written whole. One the Master of the table made keeps its
+// text: the checklist of the steps goes between its markers, and the
+// criteria with a proof are checked, with the line of the proof.
+func (s *Service) syncBody(ctx context.Context, q Quest, steps []Step) error {
+	gh := s.o.GitHub
+	if q.Def.Issue == 0 {
+		return gh.UpdateBody(ctx, q.Workspace, q.Issue, s.issueBody(q, steps))
+	}
+	cur, err := gh.IssueBody(ctx, q.Workspace, q.Issue)
+	if err != nil {
+		return err
+	}
+	crit, err := s.st.Criteria(ctx, q.ID)
+	if err != nil {
+		return err
+	}
+	proofs, err := s.st.Proofs(ctx, q.ID, q.Round)
+	if err != nil {
+		return err
+	}
+	body := mergeSteps(cur, s.stepsChecklist(q, steps))
+	body, checked := markCriteria(body, crit, proofs)
+	if body != cur {
+		if err := gh.UpdateBody(ctx, q.Workspace, q.Issue, body); err != nil {
+			return err
+		}
+	}
+	for _, c := range crit {
+		if c.Marked != checked[c.ID] {
+			if err := s.st.SetMarked(ctx, q.ID, c.ID, checked[c.ID]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // issueBody is the body of the issue of the quest: the steps as a checklist.
 func (s *Service) issueBody(q Quest, steps []Step) string {
+	return fmt.Sprintf("Missão **%s** da mesa `%s`, conduzida pelo Mestre.\n\n", q.Name, q.Table) + s.stepsChecklist(q, steps)
+}
+
+// stepsChecklist is the section `## Etapas`: the steps as a checklist.
+func (s *Service) stepsChecklist(q Quest, steps []Step) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Missão **%s** da mesa `%s`, conduzida pelo Mestre.\n\n## Etapas\n", q.Name, q.Table)
+	b.WriteString("## Etapas\n")
 	for i, sd := range q.Def.Steps {
 		mark := " "
 		sub := ""

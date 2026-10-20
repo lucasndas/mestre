@@ -11,16 +11,17 @@ Deixar as pessoas verem depois o que os agentes da [cadeia de aprovação](../or
 ### Resumo periódico
 
 - No horário da seção `resumo` do [arquivo de política](arquivo-de-politica.md) (padrão: diário, 18:00, no fuso do workspace), o motor coloca na caixa de entrada do Grão-Mestre a lista do que os agentes da cadeia (ele e os Mestres de mesa) aprovaram ou negaram desde o último resumo, com nível, risco e motivo. Ele escreve um resumo curto e envia aos usuários de `resumo.para`.
-- Sem nada no período, nada é enviado.
+- Sem nada no período, nada é enviado. Na primeira vez que o motor vê um workspace ele só anota o horário: nada de antes dele é enviado. `frequencia: semanal` junta sete dias; `desligado` não envia nada. O horário vale no fuso do workspace (até o workspace ter o seu, o da Guilda).
+- `resumo.para` aceita `dono`, `administradores` (Administrador ou acima do workspace) ou o nome de um usuário.
 - Junto com o resumo, o motor manda **direto**, sem passar pelo Grão-Mestre, duas partes montadas por ele: as sugestões de regra (só ao Dono) e a amostra (a todos de `resumo.para`). O agente não escolhe o que entra nelas, porque elas revisam também as decisões dele.
 
 ### Sugestões de regra
 
-- **Aprovações repetidas:** quando ações aprovadas na cadeia (por agentes ou pessoas) para a mesma classe e o mesmo tipo de ferramenta casam um mesmo padrão candidato `resumo.sugerir_apos` vezes (padrão: 3) em 7 dias, o motor sugere uma regra. O padrão candidato é o programa e o subcomando literais seguidos de ` *` (`npm install lodash` e `npm install react` dão `npm install *`), e só entra se for um [padrão aprovável](../classes/classificacao-de-risco.md#padrões-aprováveis).
+- **Aprovações repetidas:** quando ações aprovadas na cadeia (por agentes ou pessoas) para a mesma classe e o mesmo tipo de ferramenta casam um mesmo padrão candidato `resumo.sugerir_apos` vezes (padrão: 3) em 7 dias, o motor sugere uma regra. O padrão candidato é o programa e o subcomando literais seguidos de ` *` (`npm install lodash` e `npm install react` dão `npm install *`), e só entra se for um [padrão aprovável](../classes/classificacao-de-risco.md#padrões-aprováveis). Comando com menos de três palavras, encadeado (`;`, `&&`, `|`, redirecionamento, aspas, `$`) ou com opção no lugar do subcomando não gera candidato.
 - **"Sempre" de agentes:** as respostas "aprovar sempre" e "negar sempre" dos agentes ([respostas](../orquestracao/cadeia-de-aprovacao.md#respostas)) também viram sugestão, com o motivo deles.
 - Cada sugestão mostra o padrão, a classe, o escopo (a mesa, ou o workspace se veio de mais de uma), o risco do padrão, até 5 ações já aprovadas que ele casa e exemplos do que ele liberaria a mais (a forma geral, como `npm install <qualquer pacote>`, e o que a tabela de risco diz do padrão).
-- Botões ao Dono: **Aceitar**, **Recusar** e **Ver exemplos**. **Aceitar** cria um decreto `rule` de efeito `permission` (ou de negação, no "negar sempre") do Dono, na classe e no escopo da sugestão, com o PIN de todo decreto permanente ([decretos](../telegram/decretos.md#confirmação-reforçada-com-pin)). **Recusar** registra a recusa e o mesmo padrão não é sugerido de novo por 30 dias.
-- Sugestão sem resposta continua no resumo seguinte, até 7 dias; depois sai.
+- Botões ao Dono: **Aceitar**, **Recusar** e **Ver exemplos** (a forma geral que o padrão libera e o que a tabela de risco diz dele). **Aceitar** cria um decreto `rule` de efeito `permission` (ou de negação, no "negar sempre") do Dono, na classe e no escopo da sugestão, com o PIN de todo decreto permanente ([decretos](../telegram/decretos.md#confirmação-reforçada-com-pin)). **Recusar** registra a recusa e o mesmo padrão não é sugerido de novo por 30 dias.
+- Sugestão sem resposta continua no resumo seguinte, até 7 dias; depois sai. Uma sugestão igual a outra aberta não se repete.
 
 ### Amostra para revisão
 

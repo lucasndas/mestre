@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -52,12 +53,48 @@ func Refusal(err error) localchan.Response {
 		return localchan.Fail("no_return_step", err.Error(), "only a step with can_return_to hands the work back").WithExit(localchan.ExitConflict)
 	case errors.Is(err, ErrTooLong):
 		return localchan.Fail(localchan.CodeTooLarge, err.Error(), "use --file for a longer summary")
+	case errors.Is(err, ErrProofTooLong):
+		return localchan.Fail(localchan.CodeTooLarge, err.Error(), "a proof is a short text: the test, the command with its result, or the path of a committed capture")
+	case errors.Is(err, ErrNoCriterion):
+		return localchan.Fail(localchan.CodeNotFound, err.Error(), "the criteria are the items C<n> of the issue of the quest, as they were when it ran")
+	case errors.Is(err, ErrProofMissing):
+		return localchan.Fail("proof_missing", err.Error(), `give --proof "C<n>=<proof>" for each one that is missing`).WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrVerificationRunning):
+		return localchan.Fail("verification_running", err.Error(), "wait for the verification to end").WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrUncommitted):
+		return localchan.Fail("uncommitted_changes", err.Error(), "commit the changes and run `mestre done` again").WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrBaseMoved):
+		return localchan.Fail("conflict", err.Error(), "merge origin/<base> into the branch, commit, and run `mestre done` again").WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrNotIntegrated):
+		return localchan.Fail("conflict", err.Error(), "the engine tells the Master of the table").WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrUsage):
+		return localchan.Fail(localchan.CodeUsage, err.Error(), "see `mestre done --help`")
 	case errors.Is(err, ErrNotMaster):
 		return localchan.Fail("level_denied", err.Error(), "ask the Master of the table")
 	case errors.Is(err, characters.ErrTableClosed), errors.Is(err, tables.ErrBadTransition):
 		return localchan.Fail("invalid_state", err.Error(), "").WithExit(localchan.ExitConflict)
 	}
 	return localchan.Fail(localchan.CodeInternal, err.Error(), "")
+}
+
+// criterionID is the id of a criterion, `C1`.
+var criterionID = regexp.MustCompile(`^C\d+$`)
+
+// flagList reads a flag that may be repeated: a list of text once it crossed
+// the channel as JSON.
+func flagList(c *localchan.Call, name string) []string {
+	var out []string
+	switch v := c.Request.Flags[name].(type) {
+	case []string:
+		out = append(out, v...)
+	case []any:
+		for _, x := range v {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
 }
 
 func flagString(c *localchan.Call, name string) string {
@@ -260,7 +297,15 @@ func (s *Service) handleDone(ctx context.Context, c *localchan.Call) localchan.R
 	if !ok || len(args) != 1 {
 		return localchan.Fail(localchan.CodeUsage, `usage: mestre done "<summary>" [--return "<reason>"]`, "")
 	}
-	req := DoneRequest{Character: x, Text: args[0], Return: flagString(c, "return")}
+	req := DoneRequest{Character: x, Text: args[0], Return: flagString(c, "return"), Cause: flagString(c, "cause"), Where: flagList(c, "where")}
+	for _, p := range flagList(c, "proof") {
+		id, text, ok := strings.Cut(p, "=")
+		id = strings.TrimSpace(id)
+		if !ok || !criterionID.MatchString(id) || strings.TrimSpace(text) == "" {
+			return Refusal(fmt.Errorf("%w: --proof is \"C<n>=<proof>\", got %q", ErrUsage, p))
+		}
+		req.Proofs = append(req.Proofs, ProofInput{Criterion: id, Text: strings.TrimSpace(text)})
+	}
 	req.FromFile, _ = c.Request.Flags["from-file"].(bool)
 	if tooLong(req) {
 		return Refusal(fmt.Errorf("%w: %d characters at most (--file takes up to %d KiB)", ErrTooLong, MaxSummary, MaxSummaryFile>>10))
@@ -273,6 +318,9 @@ func (s *Service) handleDone(ctx context.Context, c *localchan.Call) localchan.R
 		return Refusal(err)
 	}
 	// No step: a task (the done answers it), or nothing to answer.
+	if len(req.Proofs) > 0 || req.Cause != "" || len(req.Where) > 0 {
+		return Refusal(fmt.Errorf("%w: --proof is for the step of a quest; %s has none", ErrUsage, x.Name))
+	}
 	if strings.TrimSpace(flagString(c, "return")) != "" {
 		return Refusal(fmt.Errorf("%w: %s has no step", ErrNoReturnStep, x.Name))
 	}

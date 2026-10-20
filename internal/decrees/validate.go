@@ -311,13 +311,31 @@ func checkDelegation(p Proposal, u users.User, now time.Time) (string, *Refusal)
 			return "", refuse(CodeDelegation, "cada ativação delegada vai até %d minutos", DefaultOperatorMinutes)
 		}
 	case highTypes[t]:
-		if p.Scope != "" && (!strings.HasPrefix(p.Scope, "repo:") || strings.Count(p.Scope, "/") != 1 || strings.HasSuffix(p.Scope, "/") || strings.HasPrefix(p.Scope, "repo:/")) {
-			return "", refuse(CodeDelegation, "o escopo de uma delegação é o workspace, a mesa ou `repo:<dono/nome>`; %q não se entende", p.Scope)
+		if p.Mesa == "" && p.Scope == "" {
+			return "", refuse(CodeDelegation, "a delegação precisa de escopo: a mesa, `classe:<nome>` ou `repo:<dono/nome>`")
+		}
+		if p.Scope != "" && !validDecisionScope(p.Scope) {
+			return "", refuse(CodeDelegation, "o escopo de uma delegação é a mesa, `classe:<nome>` ou `repo:<dono/nome>`; %q não se entende", p.Scope)
+		}
+		if !p.Until.IsZero() && p.Until.Sub(now) > MaxDelegation {
+			return "", refuse(CodeDelegation, "a delegação vale por no máximo 30 dias (pedida: até %s)", momentIn(p.Until, nil))
 		}
 	default:
 		return "", refuse(CodeDelegation, "o tipo %q não se delega: o Grão-Mestre decide só os tipos de risco alto sob um decreto `delegation` (a entrada na Guilda, a promoção da Cidadela e o custo acima do teto nunca)", t)
 	}
 	return "delegação", nil
+}
+
+// validDecisionScope says the scope of a delegation of decision is one the
+// engine understands: a repository or a class.
+func validDecisionScope(scope string) bool {
+	switch {
+	case strings.HasPrefix(scope, "repo:"):
+		return strings.Count(scope, "/") == 1 && !strings.HasSuffix(scope, "/") && !strings.HasPrefix(scope, "repo:/")
+	case strings.HasPrefix(scope, "classe:"):
+		return len(scope) > len("classe:")
+	}
+	return false
 }
 
 // describeEffect is the sentence of the confirmation and of /decretos.

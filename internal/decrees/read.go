@@ -397,14 +397,25 @@ func (s *Service) delegationFor(ctx context.Context, r chain.Request) (Decree, b
 			continue
 		}
 		if d.Scope != "" {
-			repo := scopeRepo(d.Scope)
-			if repo == "" || repo != requestRepo(r) {
+			if class := scopeClass(d.Scope); class != "" {
+				if class != r.Class {
+					continue
+				}
+			} else if repo := scopeRepo(d.Scope); repo == "" || repo != requestRepo(r) {
 				continue // a scope the engine does not understand covers nothing
 			}
 		}
 		return d, true, nil
 	}
 	return Decree{}, false, nil
+}
+
+func scopeClass(scope string) string {
+	const p = "classe:"
+	if len(scope) > len(p) && scope[:len(p)] == p {
+		return scope[len(p):]
+	}
+	return ""
 }
 
 func scopeRepo(scope string) string {

@@ -32,7 +32,8 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 ### Limites
 
 - Configuráveis por **missão**, por **mesa**, por **workspace** e **por dia** (por workspace e no total da instalação).
-- Cada limite tem uma **unidade**: custo estimado (USD), tokens ou horas ativas. Uso sem dado naquela unidade (ex.: Codex num limite em USD) não conta para ele, e o painel mostra essa lacuna ao lado do limite.
+- Cada limite tem uma **unidade**: custo estimado (USD), tokens (entrada, saída, cache lido e escrito e raciocínio, somados) ou horas ativas. Uso sem dado naquela unidade (ex.: Codex num limite em USD) não conta para ele, e o painel mostra essa lacuna ao lado do limite.
+- O limite diário recomeça a cada dia; o da missão e o da mesa valem pela vida delas e o do workspace é acumulado (a "rodada" não zera). O que o pedido `custo_extra` aprovado soma vale só para o período em que foi pedido.
 - O dia vira à meia-noite no [fuso da Guilda](../painel/administracao.md#fuso-da-guilda).
 - Quem configura: Administrador ou acima nos workspaces dele; o limite diário total, só o Dono. Nenhum limite pode passar o **teto de custo do workspace** ([teto](../classes/teto-do-workspace.md)).
 - Valores padrão: sem limites configurados (a instalação sugere configurar um limite diário por workspace no primeiro acesso).
@@ -50,10 +51,11 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 - O Grão-Mestre pode aprovar conforme a [política](../aprovacoes/politica.md). Se o extra fizer passar o teto de custo do workspace, só um Administrador ou acima aprova ([teto](../classes/teto-do-workspace.md)).
 - Aprovado: o limite daquele período sobe pelo valor aprovado e a pausa é retirada. Negado ou expirado: continua pausado, e os usuários e o Grão-Mestre são avisados.
 - A pausa nunca interrompe um turno: o motor confere o limite a cada registro de uso e a pausa vale a partir do fim do turno atual.
+- Só a aprovação do extra retira a pausa que o limite pôs: uma missão ou mesa pausada por outro motivo, ou que alguém retomou, não é mexida. O pedido de um extra que passaria o teto sai de risco alto sem delegação ([política](../aprovacoes/politica.md)); o diário total pausa todos os workspaces ativos e a aprovação retoma os mesmos.
 
 ### Limiar de início
 
-Para não perder um turno cortado no meio, o motor não espera o corte: com qualquer janela do plano de um provedor (5 h ou 7 d) **no limiar de início** ou acima (padrão 95%, configurável por workspace por um Administrador), ele não recruta nem entrega etapa nova que use aquele provedor e conta; o Administrador o ajusta na tela de consumo do painel ([administração](../painel/administracao.md)). Quem está no turno termina. A mesa fica aguardando cota até o `resets_at` da janela, e o Grão-Mestre e os usuários recebem `⏸ Mesa Login pausada · 5h 96% · volta às 14:05 · faltam 2 etapas`. Ao passar do `resets_at`, o motor entrega o que esperava (como em [aguardando cota](#aguardando-cota)).
+Para não perder um turno cortado no meio, o motor não espera o corte: com qualquer janela do plano de um provedor (5 h ou 7 d) **no limiar de início** ou acima (padrão 95%, configurável por workspace por um Administrador), ele não recruta nem entrega etapa nova que use aquele provedor e conta; o Administrador o ajusta na tela de consumo do painel ([administração](../painel/administracao.md)). Quem está no turno termina. A entrega a um personagem daquele provedor e conta fica na fila (qualquer entrega, não só de etapa nova; o personagem em turno não recebe nada de qualquer jeito). A mesa fica aguardando cota até o `resets_at` da janela, e o Grão-Mestre e os usuários recebem `⏸ Mesa Login pausada · 5h 96% · volta às 14:05 · faltam 2 etapas`. Ao passar do `resets_at`, o motor entrega o que esperava (como em [aguardando cota](#aguardando-cota)).
 
 - **Leitura antiga:** o uso só cresce dentro da janela. Uma leitura **acima** do limiar continua valendo até o `resets_at`, por velha que seja; uma **abaixo** não prova nada e, depois de 15 min, vira "desconhecido": a etapa é entregue com um aviso ao Mestre da mesa de que o uso não está confirmado, e a próxima leitura decide. Janela sem `resets_at` conhecido só vale enquanto a leitura é recente (menos de 15 min).
 - Os três informam `resets_at` por janela: o Claude Code pelo statusLine (só muda com turno em andamento), o Codex pelo `token_count` e o Antigravity pelo `/usage` (`used_pct = 1 − fração restante`, lido a cada 10 min). Por isso o corte da leitura antiga é de 15 min, acima do intervalo do Antigravity ([fontes](#de-onde-vem-o-uso-por-provedor)); provedor sem janela não tem limiar.
@@ -72,7 +74,8 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 
 ## Regras e erros
 
-- Fonte de uso indisponível (statusLine não roda, JSONL não encontrado) → registra só tempo ativo e turnos e abre o alerta ALL-23 do [checklist](checklist.md).
+- Fonte de uso indisponível (statusLine não roda, JSONL não encontrado) → registra só tempo ativo e turnos e abre o alerta ALL-23 do [checklist](checklist.md) (quem lê a fonte avisa o motor: `Service.SourceUnavailable`).
+- Evento de um personagem que o registro não conhece, ou sem ficha com provedor, é descartado com aviso no log: não há missão, mesa ou workspace onde pô-lo.
 - Formato de uso mudou numa versão nova do provedor → o [teste de conformidade](../provedores/conformidade.md) acusa; até a correção, valem tempo ativo e turnos.
 - Um limite configurado acima do teto é recusado na hora de salvar.
 

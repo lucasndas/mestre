@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/basesync"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
@@ -22,6 +23,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/lucasndas/mestre/internal/orchestration/usage"
 	"github.com/lucasndas/mestre/internal/orchestration/waits"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
@@ -105,6 +107,12 @@ type OrchestrationOptions struct {
 	QuestGitHub    quests.GitHub
 	QuestApprovals quests.Approvals
 	QuestCatalog   quests.Catalog
+	// QuestDone gives the done_requires of the class of a character (nil: from
+	// the libraries of classes, ClassLibraries).
+	QuestDone quests.DoneRules
+	// QuestVerifier runs the verification of the workspace (nil: nothing is
+	// confirmed, and a class with verify: true ends its steps unverified).
+	QuestVerifier quests.Verifier
 
 	// The chain of approval (stage 10). ChainClasses gives the effective rules,
 	// the environment and the domains of the characters; without it the chain
@@ -130,10 +138,21 @@ type OrchestrationOptions struct {
 	// in Orchestration.TableRules.
 	ChainTempRules   chain.TempRules
 	ChainDelegations chain.Delegations
+	// ChainSubDelegations lets a Mestre da mesa decide what a subdelegation of the Grão-Mestre gives it.
+	ChainSubDelegations chain.SubDelegations
 	// ChainPRs reads the PRs for the conditions of the approval policy.
 	ChainPRs         chain.PRSource
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
+
+	// The limits of use (milestone 5, stage 4). UsageChecklist opens the alert
+	// ALL-23 of the checklist when a source of use is not available (nil:
+	// only the log); UsageZone gives the time zone of the Guild, where the
+	// day turns (UTC by default). The users are told through ChainAlerts, and
+	// the extra the limits ask for goes through the chain of approval, which
+	// ChainClasses builds.
+	UsageChecklist usage.Checklist
+	UsageZone      func(ctx context.Context) *time.Location
 
 	// The rituals (stage 10). The pre-run on the machine of the target, the
 	// decision of permissions that holds it and the approval to delete a
@@ -172,8 +191,14 @@ type Orchestration struct {
 	Waits       *waits.Service
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
+	// BaseSync makes the step `sync` when the main branch moves
+	// (docs/orquestracao/sincronia-com-a-base.md).
+	BaseSync *basesync.Service
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
+	// Usage is the use and the limits on it (docs/plataforma/limites-de-uso.md).
+	// It is told the events of the characters (OnEvent) by the engine.
+	Usage *usage.Service
 	// Supervisor is the supervision of the chain: the summary of the
 	// decisions of the Mestres de mesa, the pause of the autonomy of a table
 	// and the queue metrics. Nil unless the chain was built without a
@@ -183,6 +208,8 @@ type Orchestration struct {
 	// built): the source of their decrees for the effective rules and the
 	// classes.TableRuleGate of the engine.
 	TableRules *tablerules.Service
+	// Policy is the approval policy the chain reads (nil unless the chain was built).
+	Policy chain.Policy
 	// ClassCommands are the commands of classes (nil without libraries).
 	ClassCommands *classes.Commands
 	Rituals       *rituals.Service
@@ -437,6 +464,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		rit   *rituals.Service
 		trl   *tablerules.Service
 		sup   *chain.Supervisor
+		us    *usage.Service
 	)
 	deactivate := o.Rituals
 	if deactivate == nil {
@@ -448,7 +476,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	ib, err := inbox.NewService(inbox.Options{DB: &inbox.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Deliverer: o.Machines, Pauses: tablesRef{&tbl},
-		Holds: lockedHolds{locked: o.Locked, then: chainRef{&ch}}, Channels: o.Channels, Users: o.Users, Logger: o.Logger})
+		Holds: lockedHolds{locked: o.Locked, then: usageHolds{p: &us, then: chainRef{&ch}}}, Channels: o.Channels, Users: o.Users, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
@@ -494,6 +522,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		if policy == nil {
 			policy = chain.StaticPolicy{}
 		}
+		orc.Policy = policy
 		temp := o.ChainTempRules
 		if temp == nil {
 			temp = tempRulesRef{p: &trl, pub: o.ChainRulesPublisher, log: o.Logger}
@@ -508,9 +537,9 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			supervision = sup
 		}
 		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
-			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, PRs: o.ChainPRs,
+			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
-			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}}, Logger: o.Logger})
+			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}, Logger: o.Logger})
 		if err != nil {
 			return nil, err
 		}
@@ -522,12 +551,22 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if catalog == nil {
 		catalog = presetsCatalog{o.Presets, o.ClassLibraries}
 	}
-	qs, err = quests.NewService(quests.Options{Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
+	var bsync *basesync.Service
+	qs, err = quests.NewService(quests.Options{BaseMoved: func(ctx context.Context, workspace, table string) (bool, error) {
+		return bsync.Moved(ctx, workspace, table)
+	},
+		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: questApprovals, Gate: gate, Logger: o.Logger})
+		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
+	bsync, err = basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Logger: o.Logger})
+	if err != nil {
+		return nil, err
+	}
+	ws.OnFetched(bsync.AfterFetch)
+	orc.BaseSync = bsync
 	if o.ChainClasses != nil {
 		policy := o.ChainPolicy
 		if policy == nil {
@@ -558,6 +597,21 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	uopts := usage.Options{Store: &usage.Store{DB: o.Guild}, Clock: o.Clock, Logger: o.Logger,
+		Directory: usageDirectory{reg: reg, presets: o.Presets, quests: &qs},
+		Pauser:    usagePauser{quests: &qs, tables: &tbl, ws: ws},
+		Ceilings:  usageCeilings{libs: o.ClassLibraries}, Characters: usageCharacters{svc: &chars, reg: reg, ib: &ib}, Pump: quotaPump{&ib}, Notifier: ib,
+		Checklist: o.UsageChecklist, Zone: o.UsageZone}
+	if o.ChainAlerts != nil {
+		uopts.Alerts = o.ChainAlerts
+	}
+	if ch != nil {
+		uopts.Extras = usageExtras{&ch}
+	}
+	if us, err = usage.NewService(uopts); err != nil {
+		return nil, err
+	}
+	orc.Usage = us
 	orc.Registry = reg
 	orc.Quests = qs
 	orc.Chain = ch
@@ -651,6 +705,7 @@ func (o *Orchestration) External() ExternalFunc {
 		run("characters", func(ctx context.Context) error { return o.Characters.Run(ctx, sweepEvery) })
 		run("tables", func(ctx context.Context) error { return o.Tables.Run(ctx, sweepEvery) })
 		run("quests", func(ctx context.Context) error { return o.Quests.Loop(ctx, sweepEvery) })
+		run("usage", func(ctx context.Context) error { return o.Usage.Loop(ctx, sweepEvery) })
 		run("rituals", func(ctx context.Context) error { return o.Rituals.Loop(ctx, ritualEvery) })
 		if o.Supervisor != nil {
 			run("supervision", func(ctx context.Context) error { return o.Supervisor.Loop(ctx, sweepEvery) })
@@ -741,4 +796,12 @@ func (g guildZone) Zone(ctx context.Context, _ string) *time.Location {
 		return nil
 	}
 	return loc
+}
+
+// questDone is the source of the done_requires of the quests.
+func questDone(o OrchestrationOptions) quests.DoneRules {
+	if o.QuestDone != nil {
+		return o.QuestDone
+	}
+	return doneRules{o.ClassLibraries}
 }

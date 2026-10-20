@@ -48,6 +48,15 @@ type Options struct {
 	Towers    Towers
 	GitHub    GitHub
 	Approvals Approvals
+	// Done gives the done_requires of the classes (nil: none asks for a proof).
+	Done DoneRules
+	// Verifier runs the verification of the workspace for a class with verify:
+	// true (nil: nothing is confirmed, so the step ends unverified).
+	Verifier Verifier
+	// BaseMoved says whether the base of the table moved past its branch
+	// (basesync): the step sync asks it again when its verification is green,
+	// and does not end while it is true. Nil: no such gate.
+	BaseMoved func(ctx context.Context, workspace, table string) (bool, error)
 	// EscalateAfter defaults to DefaultEscalateAfter.
 	EscalateAfter time.Duration
 	// Gate is asked before the outside is touched (GitHub); an error means
@@ -74,6 +83,9 @@ type Service struct {
 	// finishing serializes the done of a character: two dones of the same
 	// character at once record one.
 	finishing map[string]*sync.Mutex
+	// verifs are the steps whose verification runs; vwg waits for them.
+	verifs map[string]bool
+	vwg    sync.WaitGroup
 
 	// work is the queue of the loop (Run); until it runs, an advance asked for
 	// is made at once, in the call that asked for it.
@@ -110,7 +122,7 @@ func NewService(o Options) (*Service, error) {
 	if o.EscalateAfter <= 0 {
 		o.EscalateAfter = DefaultEscalateAfter
 	}
-	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, finishing: map[string]*sync.Mutex{}, work: make(chan string, 256)}, nil
+	return &Service{o: o, st: o.Store, clk: o.Clock, log: o.Logger, flights: map[string]*flight{}, finishing: map[string]*sync.Mutex{}, verifs: map[string]bool{}, work: make(chan string, 256)}, nil
 }
 
 // Store gives access to the tables.
@@ -252,7 +264,7 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (View, error) {
 		return View{}, err
 	}
 	now := s.clk.Now()
-	q := Quest{Workspace: r.Workspace, Table: r.Table, Name: def.Name, State: Draft, Def: def, MaxReturns: def.Max(), Designer: r.Designer,
+	q := Quest{Workspace: r.Workspace, Table: r.Table, Name: def.Name, State: Draft, Def: def, MaxReturns: def.Max(), Designer: r.Designer, Issue: def.Issue,
 		Dirty: 1, CreatedAt: now, UpdatedAt: now}
 	steps := make([]Step, len(def.Steps))
 	for i, sd := range def.Steps {
@@ -275,6 +287,7 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (View, error) {
 			return View{}, err
 		}
 	}
+	s.ensureReview(ctx, q)
 	s.link(ctx, q)
 	s.mirror(ctx, q.ID)
 	q, _ = s.st.Quest(ctx, q.ID)
@@ -340,6 +353,12 @@ func (s *Service) Run(ctx context.Context, id, input string) (Quest, error) {
 	if q.State != Draft && q.State != Completed {
 		return Quest{}, fmt.Errorf("%w: %s is %s", ErrInvalidState, q.Name, q.State)
 	}
+	// the criteria are read from the issue before the round starts and frozen
+	// for it; an issue that cannot be read refuses the run, which is tried again
+	crit, err := s.criteriaOf(ctx, q)
+	if err != nil {
+		return Quest{}, err
+	}
 	if _, err := s.o.Tables.MissionStarted(ctx, q.Workspace, q.Table); err != nil {
 		return Quest{}, err
 	}
@@ -362,6 +381,12 @@ func (s *Service) Run(ctx context.Context, id, input string) (Quest, error) {
 			if err := tx.SaveStep(st, now); err != nil {
 				return err
 			}
+		}
+		if err := tx.FreezeCriteria(id, crit); err != nil {
+			return err
+		}
+		if err := tx.ForgetFailures(id); err != nil {
+			return err
 		}
 		cur.State, cur.PausedReason, cur.Input = Running, "", input
 		cur.Dirty++
@@ -425,6 +450,13 @@ func (s *Service) pause(ctx context.Context, id, reason string) (bool, error) {
 		return tx.SaveQuest(cur, s.clk.Now())
 	})
 	return paused, err
+}
+
+// PauseFor pauses a running quest for a reason that something else lifts (the
+// limit of use, docs/plataforma/limites-de-uso.md). It says whether the quest
+// was running; the telling is the caller's.
+func (s *Service) PauseFor(ctx context.Context, id, reason string) (bool, error) {
+	return s.pause(ctx, id, reason)
 }
 
 // pauseAndTell pauses a running quest and tells the Master of the table why.
@@ -579,6 +611,15 @@ func (s *Service) link(ctx context.Context, q Quest) {
 			}
 		}
 	}
+	// the review scroll goes to the steps that return and to the ones they return to
+	review := map[string]scrolls.Note{}
+	if note, ok := s.ensureReview(ctx, q); ok {
+		for _, sd := range q.Def.Steps {
+			if sd.CanReturnTo != "" {
+				review[sd.ID], review[sd.CanReturnTo] = note, note
+			}
+		}
+	}
 	var pairs [][2]connections.Ref
 	for _, sd := range q.Def.Steps {
 		cb := who[sd.ID]
@@ -587,6 +628,9 @@ func (s *Service) link(ctx context.Context, q Quest) {
 		}
 		if q.Scroll != "" {
 			pairs = append(pairs, [2]connections.Ref{connections.Char(cb), connections.Scroll(q.Scroll)})
+		}
+		if rev, ok := review[sd.ID]; ok {
+			pairs = append(pairs, [2]connections.Ref{connections.Char(cb), connections.Scroll(rev.Key)})
 		}
 		prior := append([]string{}, sd.After...)
 		if sd.CanReturnTo != "" {

@@ -55,6 +55,7 @@ const (
 const (
 	ReasonPaused      = "pausada"
 	ReasonReturnLimit = "limite de voltas"
+	ReasonSameFailure = "mesma falha repetida"
 )
 
 // Quest is a quest of a table.
@@ -157,6 +158,22 @@ var (
 	ErrNoRequest = errors.New("no step waits for this request of approval")
 	// ErrTooLong: the summary of a done is over the limit.
 	ErrTooLong = errors.New("the summary is too long")
+	// ErrUsage: a done that asks for something that does not go together.
+	ErrUsage = errors.New("invalid use of done")
+	// ErrVerificationRunning: a done came while the verification of the step runs.
+	ErrVerificationRunning = errors.New("the verification of the step is running")
+	// ErrUncommitted: the class verifies the branch and the character left changes not committed.
+	ErrUncommitted = errors.New("changes not committed")
+	// ErrBaseMoved: the done of the step sync came with the branch still lacking the tip of the base.
+	ErrBaseMoved = errors.New("the branch does not have the tip of the base")
+	// ErrNotIntegrated: the commits of a Tower did not reach the Citadel.
+	ErrNotIntegrated = errors.New("the commits did not reach the Citadel")
+	// ErrNoCriterion: a proof for a criterion the quest does not have.
+	ErrNoCriterion = errors.New("the quest has no such criterion")
+	// ErrProofTooLong: a proof over the limit.
+	ErrProofTooLong = errors.New("the proof is too long")
+	// ErrProofMissing: the class asks for a proof of every criterion.
+	ErrProofMissing = errors.New("a criterion has no proof")
 	// ErrNotMaster: only the Master of the table, or a user, makes a quest.
 	ErrNotMaster = errors.New("only the Master of the table makes and conducts quests")
 )
@@ -167,3 +184,12 @@ const MaxSummary = 4000
 // MaxSummaryFile is the size, in bytes, of the summary of a done that came
 // from a file (`--file`).
 const MaxSummaryFile = 64 << 10
+
+// MaxProof is the size of the proof of a criterion, in characters.
+const MaxProof = 500
+
+// Causes of a failure a return may name.
+var Causes = []string{"test", "build", "lint", "conflict", "network", "auth", "quota", "other"}
+
+// MaxWhere is how many places a return may name.
+const MaxWhere = 3

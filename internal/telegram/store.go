@@ -3,10 +3,12 @@ package telegram
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -282,15 +284,15 @@ func (s *Store) Hold(ctx context.Context, in Inbound) error {
 		has = 1
 	}
 	return s.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_held (user_id, kind, text, chat_id, message_id, reply_to, reply_ws, reply_mesa, has_ws, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			in.User.ID, string(in.Kind), in.Text, in.ChatID, in.MessageID, in.ReplyToMessage, in.ReplyWorkspace, in.ReplyMesa, has, ms(s.Clock.Now()))
+		_, err := tx.ExecContext(ctx, `INSERT INTO telegram_held (user_id, kind, text, chat_id, message_id, reply_to, reply_ws, reply_mesa, has_ws, file, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			in.User.ID, string(in.Kind), in.Text, in.ChatID, in.MessageID, in.ReplyToMessage, in.ReplyWorkspace, in.ReplyMesa, has, fileJSON(in.File), ms(s.Clock.Now()))
 		return err
 	})
 }
 
 // Held lists the messages kept, the oldest first.
 func (s *Store) Held(ctx context.Context) ([]HeldMessage, error) {
-	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, user_id, kind, text, chat_id, message_id, reply_to, reply_ws, reply_mesa, has_ws FROM telegram_held ORDER BY id`)
+	rows, err := s.DB.Reader().QueryContext(ctx, `SELECT id, user_id, kind, text, chat_id, message_id, reply_to, reply_ws, reply_mesa, has_ws, file FROM telegram_held ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -300,10 +302,11 @@ func (s *Store) Held(ctx context.Context) ([]HeldMessage, error) {
 		var h HeldMessage
 		var kind string
 		var has int
-		if err := rows.Scan(&h.ID, &h.UserID, &kind, &h.Text, &h.ChatID, &h.MessageID, &h.ReplyToMessage, &h.ReplyWorkspace, &h.ReplyMesa, &has); err != nil {
+		var file string
+		if err := rows.Scan(&h.ID, &h.UserID, &kind, &h.Text, &h.ChatID, &h.MessageID, &h.ReplyToMessage, &h.ReplyWorkspace, &h.ReplyMesa, &has, &file); err != nil {
 			return nil, err
 		}
-		h.Kind, h.HasReplyWorkspace = Kind(kind), has == 1
+		h.Kind, h.HasReplyWorkspace, h.File = Kind(kind), has == 1, fileOf(file)
 		out = append(out, h)
 	}
 	return out, rows.Err()
@@ -315,4 +318,27 @@ func (s *Store) Unhold(ctx context.Context, id int64) error {
 		_, err := tx.ExecContext(ctx, `DELETE FROM telegram_held WHERE id = ?`, id)
 		return err
 	})
+}
+
+// fileJSON is the file of a message as it is kept with the message that waits.
+func fileJSON(f *attachments.Ref) string {
+	if f == nil {
+		return ""
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func fileOf(v string) *attachments.Ref {
+	if v == "" {
+		return nil
+	}
+	var f attachments.Ref
+	if json.Unmarshal([]byte(v), &f) != nil || f.ID == "" {
+		return nil
+	}
+	return &f
 }

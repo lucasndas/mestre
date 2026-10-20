@@ -58,6 +58,18 @@ type Options struct {
 	// Locked says the Mestre is locked (/travar): nothing is confirmed, revoked
 	// or reactivated meanwhile. nil: never.
 	Locked func(ctx context.Context) bool
+	// TableOpen says whether a table is open: a subdelegation never outlives
+	// its table. nil: every table is.
+	TableOpen func(ctx context.Context, workspace, table string) (bool, error)
+	// Reminder tells the author that a delegation is about to end, with
+	// Renovar and Deixar vencer (nil: a plain notice through Alerts).
+	Reminder Reminder
+	// Revoked is what the emergency button also takes away and whom it tells
+	// (nil: only the decrees).
+	Revoked RevokeHooks
+	// ReminderBefore is how long before its end a delegation is reminded
+	// (default 3 days).
+	ReminderBefore time.Duration
 	// ExceptionTTL is how long an exception not used stays valid.
 	ExceptionTTL time.Duration
 	Logger       *slog.Logger
@@ -121,12 +133,15 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 	}); err != nil {
 		return Pending{}, err
 	}
-	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p), Workspace: p.Workspace, Mesa: p.Mesa}, nil
+	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p, s.Moment(ctx, p.Until)), Workspace: p.Workspace, Mesa: p.Mesa}, nil
 }
 
 // normalize fills what an exception implies.
 func normalize(p Proposal) Proposal {
 	p.Text = strings.TrimSpace(p.Text)
+	// a limit is whole seconds (never later than asked), so what is shown is
+	// exactly the instant it ends
+	p.Until = p.Until.Truncate(time.Second)
 	if p.Kind == KindException && p.Effect.Kind == "" {
 		p.Effect.Kind = EffectPermission
 	}
@@ -136,12 +151,12 @@ func normalize(p Proposal) Proposal {
 	return p
 }
 
-func confirmationText(p Proposal) string {
+func confirmationText(p Proposal, moment string) string {
 	until := "permanente"
 	if p.Kind == KindException {
 		until = "uma vez"
 	} else if !p.Until.IsZero() {
-		until = "até " + p.Until.UTC().Format("02/01/2006 15:04 UTC")
+		until = "até " + moment
 	}
 	where := "workspace " + p.Workspace
 	if p.Mesa != "" {
@@ -312,6 +327,9 @@ func (s *Service) build(p Proposal, u users.User, pin bool, now time.Time) Decre
 		if imp, err := chain.Impress(p.TargetRef); err == nil {
 			d.Impression = imp
 		}
+	}
+	if d.Effect.Kind == EffectDelegation && highTypes[d.Effect.Setting] && d.Until.IsZero() {
+		d.Until = now.Add(MaxDelegation) // "até mudar ou 30 dias"
 	}
 	if d.Effect.Kind == EffectDelegation && d.Effect.Setting == string(classes.RequestOperator) && d.Effect.MaxMinutes == 0 {
 		d.Effect.MaxMinutes = DefaultOperatorMinutes
@@ -669,6 +687,9 @@ func (s *Service) InvalidateBy(ctx context.Context, userID string) error {
 // Sweep ends the decrees whose validity ran out, and tells the author. An
 // exception not used past its time expires too.
 func (s *Service) Sweep(ctx context.Context) error {
+	if err := s.remind(ctx); err != nil {
+		return err
+	}
 	var gone []Decree
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()

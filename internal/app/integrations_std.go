@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
@@ -20,6 +22,9 @@ import (
 	"github.com/lucasndas/mestre/internal/lockdown"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/digest"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/users"
@@ -40,6 +45,14 @@ type StandardIntegration struct {
 	// HTTP is the client of both (nil: one with a time limit).
 	TelegramBase, GitHubBase string
 	HTTP                     *http.Client
+	// WhisperURL is the whisper-server of this machine (http://127.0.0.1:<port>);
+	// empty: no machine transcribes, and every voice message is delivered with
+	// the reason. The installation sets it (docs/desenvolvimento/ligacao-de-producao.md).
+	WhisperURL string
+	// FFmpeg is the program that converts the audio (default "ffmpeg").
+	FFmpeg string
+	// AttachmentLimit is the biggest attachment (default 20 MB).
+	AttachmentLimit int64
 }
 
 // Open implements Integration. It reads nothing from the vault and writes nothing
@@ -91,6 +104,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.routing = &telegram.Routing{}
 	r.block = &telegram.BlockChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
+	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Logger: env.Log})
 	if err != nil {
@@ -124,8 +138,11 @@ type stdRun struct {
 	// routing decides the workspace of each message of a user.
 	routing *telegram.Routing
 	// block sends the messages that ask something of the users because a table is stopped.
-	block  *telegram.BlockChannel
-	dc     *telegram.DecreeChannel
+	block *telegram.BlockChannel
+	dc    *telegram.DecreeChannel
+	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
+	fetch  atomic.Pointer[telegram.Client]
+	dg     *telegram.DigestChannel
 	ac     *telegram.ApprovalChannel
 	alert  *telegram.OwnerAlerts
 	notice *guild.DownNotice
@@ -220,11 +237,13 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	case token == "":
 		return nil, fmt.Errorf("no token of the Telegram bot in the vault (%s)", TelegramTokenSecret)
 	}
+	client := &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP}
+	r.fetch.Store(client)
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
-		Client: &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP},
+		Client: client,
 		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
-		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.routing.Actions(), r.block.Actions()),
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
@@ -238,6 +257,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.ac.Bind(bot, r.flow)
 	r.lc.Bind(bot)
 	r.dc.Bind(bot)
+	r.dg.Bind(bot)
 	r.routing.Bind(bot)
 	r.block.Bind(bot)
 	r.alert.Bind(bot)
@@ -277,6 +297,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.ChainGrants == nil {
 		o.ChainGrants = r.decrees
 	}
+	if o.ChainSubDelegations == nil {
+		o.ChainSubDelegations = r.decrees
+	}
 	if o.ChainDelegations == nil {
 		o.ChainDelegations = r.decrees
 	}
@@ -306,15 +329,60 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	if orc.TableRules != nil {
 		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)
 	}
+	r.decrees.SetReminder(r.dc)
+	r.decrees.SetRevokeHooks(telegram.RevokeAllHooks{Rules: orc.TableRules, Users: r.users, Channel: r.dc,
+		GrandMaster: func(ctx context.Context, workspace, text string) {
+			gm, ok, err := orc.Registry.GrandMaster(ctx, workspace)
+			if err != nil || !ok {
+				return
+			}
+			if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
+				r.env.Log.Warn("app: the Grand Master was not told of the revocation", "workspace", workspace, "err", err)
+			}
+		},
+		RerouteFn: func(ctx context.Context, workspace string) error {
+			return orc.Chain.RerouteWorkspace(ctx, workspace, "o Dono revogou todas as delegações")
+		}})
+	r.decrees.SetTableOpen(func(ctx context.Context, workspace, table string) (bool, error) {
+		tb, err := orc.Tables.Get(ctx, workspace, table)
+		if errors.Is(err, tables.ErrNoTable) {
+			return false, nil
+		}
+		return err == nil && tb.State == tables.StateOpen, err
+	})
+	r.routing.Files = r.attachments(orc)
+	var dgst *digest.Service
+	if orc.Policy != nil && orc.Chain != nil {
+		var err error
+		dgst, err = digest.New(digest.Options{DB: r.env.DB, Clock: r.env.Clock, Source: &chain.Store{DB: r.env.DB}, Policy: orc.Policy, Inbox: digestInbox{orc},
+			Directory: digest.UsersDirectory{Users: r.users}, Sender: r.dg, Rand: rand.New(rand.NewPCG(uint64(r.env.Clock.Now().UnixNano()), 0x6d6573747265)),
+			Decrees: r.decrees, Rules: digestRules{orc}, Names: func(ctx context.Context, id string) string {
+				if c, err := orc.Registry.Get(ctx, id); err == nil {
+					return c.Name
+				}
+				return ""
+			}, Mask: r.env.Masker.Mask, Zone: guildZone{r.env.DB}.Zone, Logger: r.env.Log})
+		if err != nil {
+			r.env.Log.Warn("app: the periodic summary is off", "err", err)
+		} else {
+			r.dg.Svc = dgst
+		}
+	}
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
 		Executed: r.decrees.Fulfilled,
 	}
+	if orc.BaseSync != nil {
+		h.Send.Base = orc.BaseSync
+	}
 	h.Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
 		// the decrees whose validity ran out end while the Citadel acts
 		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()
+		if dgst != nil {
+			go func() { _ = dgst.Loop(ctx, time.Minute) }()
+		}
 		bot, err := r.startBot(ctx)
 		if err != nil {
 			r.env.Log.Warn("app: the bot of the Telegram is off", "err", err)
@@ -456,4 +524,87 @@ func (d inboxDeliverer) Deliver(ctx context.Context, m telegram.Delivery) error 
 	}
 	_, err = d.orc.Inbox.Enqueue(ctx, telegram.NewItem(m, gm.ID))
 	return err
+}
+
+// attachments is the reception of the files of the users: the Bot API through the
+// client of the bot, the main clone of each workspace, and the transcription of
+// the voice messages by the machines the installation names.
+func (r *stdRun) attachments(orc *Orchestration) telegram.Files {
+	var machines func(context.Context) []attachments.Machine
+	if r.s.WhisperURL != "" {
+		w := attachments.Whisper{BaseURL: r.s.WhisperURL, HTTP: r.s.HTTP, Prompt: "Conversa em português sobre desenvolvimento de software."}
+		machines = func(context.Context) []attachments.Machine {
+			return []attachments.Machine{{Name: "cidadela", Engine: w}}
+		}
+	}
+	tr := attachments.NewTranscription(r.env.Clock, attachments.FFmpeg{Path: r.s.FFmpeg}, machines, "")
+	svc, err := attachments.New(attachments.Options{DB: r.env.DB, Clock: r.env.Clock, Fetcher: lateFetcher{r}, Limit: r.s.AttachmentLimit, Transcriber: tr,
+		Root: func(_ context.Context, workspace string) (string, error) {
+			return orc.Workspaces.Layout().Principal(workspace), nil
+		},
+		Mask: r.env.Masker.Mask, Logger: r.env.Log})
+	if err != nil {
+		r.env.Log.Warn("app: the attachments are off", "err", err)
+		return nil
+	}
+	return svc
+}
+
+// lateFetcher is the client of the Bot API, which exists once the bot is made.
+type lateFetcher struct{ r *stdRun }
+
+var errNoBot = errors.New("app: the bot of the Telegram is not up")
+
+func (f lateFetcher) GetFile(ctx context.Context, id string) (string, int64, error) {
+	c := f.r.fetch.Load()
+	if c == nil {
+		return "", 0, errNoBot
+	}
+	return c.GetFile(ctx, id)
+}
+
+func (f lateFetcher) Download(ctx context.Context, path string, limit int64) ([]byte, error) {
+	c := f.r.fetch.Load()
+	if c == nil {
+		return nil, errNoBot
+	}
+	return c.Download(ctx, path, limit)
+}
+
+// digestInbox puts the list of the summary in the inbox of the Grão-Mestre.
+type digestInbox struct{ orc *Orchestration }
+
+func (d digestInbox) ToGrandMaster(ctx context.Context, workspace, text string) error {
+	gm, ok, err := d.orc.Registry.GrandMaster(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("app: the workspace %s has no Grand Master now", workspace)
+	}
+	_, err = d.orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text})
+	return err
+}
+
+// digestRules revokes the temporary table rules that a decision made.
+type digestRules struct{ orc *Orchestration }
+
+func (d digestRules) RevokeOfRequest(ctx context.Context, workspace, table string, request int64, by string) (int, error) {
+	if d.orc.TableRules == nil {
+		return 0, nil
+	}
+	rules, err := d.orc.TableRules.List(ctx, workspace, table)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, r := range rules {
+		if r.Request != request {
+			continue
+		}
+		if err := d.orc.TableRules.Revoke(ctx, r.ID, tablerules.Revoker{Administrator: true, ID: by}); err == nil {
+			n++
+		}
+	}
+	return n, nil
 }

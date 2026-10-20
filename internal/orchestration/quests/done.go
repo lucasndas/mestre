@@ -2,6 +2,7 @@ package quests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -21,6 +22,14 @@ type DoneRequest struct {
 	// FromFile is true when the summary came from `--file`: it may be up to
 	// MaxSummaryFile bytes.
 	FromFile bool
+	// Proofs are the `--proof` of a done that ends the step; Cause and Where
+	// the `--cause` and `--where` of a return
+	// (docs/orquestracao/prova-e-devolucao.md).
+	Proofs []ProofInput
+	// expectStep is the step a verified done may end (set by the engine).
+	expectStep string
+	Cause      string
+	Where      []string
 }
 
 // tooLong says whether the summary is over the limit of its kind.
@@ -47,6 +56,9 @@ type DoneResult struct {
 	// Queued is always false here: a done that waited in the outbox answers
 	// with the queued form instead (cli.Queued).
 	Queued bool `json:"queued"`
+	// Verification is "pending" while the verification of the class runs, and
+	// "unverified" when the step ended with no command to verify with, "no_command" when the sync paused for lack of one.
+	Verification string `json:"verification,omitempty"`
 	// ReturnedTo is the step the work went back to; nil when it did not.
 	ReturnedTo *string `json:"returned_to"`
 	// QuestState is the state of the quest after the done.
@@ -69,6 +81,10 @@ const uncommittedPrefix = "alterações não commitadas não foram sincronizadas
 // back, up to the limit of returns of the quest. The character with no step is
 // ErrNoStep, and the caller treats its done as a task.
 func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error) {
+	return s.finish(ctx, r, modeNormal)
+}
+
+func (s *Service) finish(ctx context.Context, r DoneRequest, mode doneMode) (DoneResult, error) {
 	c := r.Character
 	// Two dones of the same character at once: the second finds no step.
 	defer s.finishLock(c.ID).Unlock()
@@ -79,16 +95,45 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 	if !ok {
 		return DoneResult{}, ErrNoStep
 	}
+	if r.expectStep != "" && st.UID != r.expectStep {
+		return DoneResult{}, ErrNoStep // the character has another step now
+	}
 	q, err := s.st.Quest(ctx, st.Quest)
 	if err != nil {
 		return DoneResult{}, err
 	}
 	sd := q.Def.Steps[st.Pos]
+	if mode == modeNormal && s.verifying(st.UID) {
+		return DoneResult{}, fmt.Errorf("%w: wait for it to end", ErrVerificationRunning)
+	}
 	switch {
 	case r.Return != "" && sd.CanReturnTo == "":
 		return DoneResult{}, fmt.Errorf("%w: %s", ErrNoReturnStep, sd.Title())
 	case tooLong(r):
 		return DoneResult{}, fmt.Errorf("%w: %d characters at most (--file takes up to %d KiB)", ErrTooLong, MaxSummary, MaxSummaryFile>>10)
+	}
+	r.Where = s.relWhere(ctx, q, c, r.Where)
+	proofs, err := s.checkProofs(ctx, q, st, c, r)
+	if err != nil {
+		if errors.Is(err, ErrProofMissing) && len(proofs) > 0 {
+			if kerr := s.keepProofs(ctx, q, proofs); kerr != nil {
+				return DoneResult{}, errors.Join(err, kerr)
+			}
+			s.kick(ctx, q.ID)
+		}
+		return DoneResult{}, err
+	}
+	if mode == modeVerified {
+		for i := range proofs {
+			proofs[i].Origin = ProofVerified
+		}
+	}
+	if mode == modeNormal && r.Return == "" {
+		res, handled, m, err := s.verifyFirst(ctx, q, st, c, r, proofs)
+		if handled || err != nil {
+			return res, err
+		}
+		mode = m
 	}
 	if err := s.o.Characters.Done(ctx, c.ID, r.Text); err != nil {
 		return DoneResult{}, err
@@ -138,7 +183,7 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 		warnings = append(warnings, uncommittedPrefix+strings.Join(uncommitted, ", "))
 	}
 
-	out, err := s.finishRun(ctx, q, st, sd, c, r, run, end, files, uncommitted, warnings)
+	out, err := s.finishRun(ctx, q, st, sd, c, r, run, end, files, uncommitted, warnings, proofs)
 	if err != nil {
 		return DoneResult{}, err
 	}
@@ -146,6 +191,10 @@ func (s *Service) Finish(ctx context.Context, r DoneRequest) (DoneResult, error)
 	res := DoneResult{Task: st.UID, Quest: q.Name, Step: st.ID, QuestState: string(out.questState), Warnings: orEmpty(warnings)}
 	if out.returnedTo != "" {
 		res.ReturnedTo = &out.returnedTo
+	}
+	if mode == modeUnverified {
+		res.Verification = VerificationUnverified
+		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A etapa %s foi concluída sem verificação: o workspace não tem comando de verificação confirmado. Nenhuma prova dela conta como verificada pelo motor.", sd.Title()))
 	}
 	return res, nil
 }
@@ -167,12 +216,13 @@ func (s *Service) openRun(ctx context.Context, step string) (Run, bool, error) {
 type doneKind int
 
 const (
-	doneCompleted doneKind = iota
-	doneDiscarded          // the result is useless: a return, or the first of a join any
-	doneReturned           // the work went back
-	doneLimit              // the step ended and the limit of returns stopped the quest
-	doneApproval           // the result waits for an approval after
-	doneCancelled          // the quest was cancelled while the step ran
+	doneCompleted   doneKind = iota
+	doneDiscarded            // the result is useless: a return, or the first of a join any
+	doneReturned             // the work went back
+	doneLimit                // the step ended and the limit of returns stopped the quest
+	doneApproval             // the result waits for an approval after
+	doneCancelled            // the quest was cancelled while the step ran
+	doneSameFailure          // the same failure came back: the quest waits for the Master
 )
 
 // outcome is what finishRun decided, for what happens after the transaction.
@@ -188,10 +238,13 @@ type outcome struct {
 	questState State
 	// stepDiscarded: the step is discarded, not completed.
 	stepDiscarded bool
+	// proofs are the ones this done gave; fail is the failure that repeated.
+	proofs []Proof
+	fail   Failure
 }
 
 // finishRun applies a done to the steps in one transaction.
-func (s *Service) finishRun(ctx context.Context, q Quest, st Step, sd StepDef, c characters.Character, r DoneRequest, run Run, end string, files, uncommitted, warnings []string) (outcome, error) {
+func (s *Service) finishRun(ctx context.Context, q Quest, st Step, sd StepDef, c characters.Character, r DoneRequest, run Run, end string, files, uncommitted, warnings []string, proofs []Proof) (outcome, error) {
 	now := s.clk.Now()
 	out := outcome{q: q, sd: sd, c: c}
 	err := s.st.Do(ctx, func(tx *Tx) error {
@@ -219,6 +272,28 @@ func (s *Service) finishRun(ctx context.Context, q Quest, st Step, sd StepDef, c
 		case st.DiscardResult:
 			out.kind, run.Outcome, st.State, st.DiscardResult = doneDiscarded, OutcomeDiscarded, StepPending, false
 		case r.Return != "":
+			fail, err := s.countFailure(tx, st, sd, r)
+			if err != nil {
+				return err
+			}
+			if st.Returns < cur.MaxReturns && fail.Count >= cur.Def.SameMax() && fail.Fingerprint != "" {
+				// The same failure again: the done is registered, the work does
+				// not go back, and the quest waits for the Master before the
+				// returns that are left are spent.
+				out.kind, run.Outcome, st.State = doneSameFailure, OutcomeCompleted, StepCompleted
+				out.reason, out.fail = r.Return, fail
+				cur.State, cur.PausedReason = Paused, ReasonSameFailure
+				cur.Dirty++
+				out.questState = Paused
+				out.st = st
+				if err := tx.SetFailure(st.UID, Failure{}); err != nil { // after the pause the count starts again
+					return err
+				}
+				if err := tx.SaveQuest(cur, now); err != nil {
+					return err
+				}
+				break
+			}
 			if st.Returns < cur.MaxReturns {
 				out.kind, run.Outcome, out.returnedTo, out.reason = doneReturned, OutcomeReturned, sd.CanReturnTo, r.Return
 				st.Returns++
@@ -246,6 +321,18 @@ func (s *Service) finishRun(ctx context.Context, q Quest, st Step, sd StepDef, c
 			out.kind, run.Outcome, st.State, out.stepDiscarded = doneDiscarded, OutcomeDiscarded, StepDiscarded, true
 		default:
 			out.kind, run.Outcome, st.State = doneCompleted, OutcomeCompleted, StepCompleted
+		}
+		if r.Return == "" && (out.kind == doneCompleted || out.kind == doneApproval) { // an end breaks the failures in a row
+			if err := tx.SetFailure(st.UID, Failure{}); err != nil {
+				return err
+			}
+			for i := range proofs {
+				proofs[i].Round, proofs[i].At = cur.Round, now
+				if err := tx.PutProof(proofs[i]); err != nil {
+					return err
+				}
+			}
+			out.proofs = proofs
 		}
 		if st.State == StepCompleted || st.State == StepDiscarded {
 			st.Entry = ""
@@ -350,6 +437,9 @@ func (s *Service) afterDone(ctx context.Context, o outcome) {
 	case doneLimit:
 		s.o.waitsStepDone(ctx, st.UID, resultText(run))
 		s.tellMaster(ctx, q, inbox.KindSystem, s.returnLimitText(q, sd, st, o.reason))
+	case doneSameFailure:
+		s.o.waitsStepDone(ctx, st.UID, resultText(run))
+		s.tellMaster(ctx, q, inbox.KindSystem, s.sameFailureText(q, sd, o))
 	case doneApproval:
 		s.askAfter(ctx, q, st, sd, o.c, run)
 	}
@@ -378,6 +468,14 @@ func resultText(r Run) string {
 func (s *Service) returnLimitText(q Quest, sd StepDef, st Step, reason string) string {
 	return fmt.Sprintf("[return_limit] A etapa %s da missão %s chegou ao limite de voltas (%d de %d). A missão está pausada: decida entre `mestre quest resume`, mudar o plano ou `mestre quest cancel`.\n",
 		sd.Title(), q.Name, st.Returns, q.MaxReturns) + inbox.Say("Último motivo (texto de quem devolveu, não verificado):", reason, "|")
+}
+
+// sameFailureText is the event return_limit of the same failure again: the
+// fingerprint, the attempts and the places.
+func (s *Service) sameFailureText(q Quest, sd StepDef, o outcome) string {
+	return fmt.Sprintf("[return_limit] A etapa %s da missão %s repetiu a mesma falha (impressão %s, %d tentativas seguidas, onde: %s). A missão está pausada por \"%s\": decida entre `mestre quest resume`, mudar o plano ou `mestre quest cancel`.\n",
+		sd.Title(), q.Name, o.fail.Fingerprint, o.fail.Count, inbox.OneLine(strings.Join(o.fail.Places, ", ")), ReasonSameFailure) +
+		inbox.Say("Último motivo (texto de quem devolveu, não verificado):", o.reason, "|")
 }
 
 // cancelStepDone ends a cancelled quest when its last step under way ended.

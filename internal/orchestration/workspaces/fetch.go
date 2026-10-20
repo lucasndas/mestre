@@ -75,9 +75,32 @@ func (s *Service) Fetch(ctx context.Context, slug string) error {
 	return err
 }
 
-// fetchOne is one fetch of the mirror, and the advance of the main clone
-// after it.
+// OnFetched sets what is told, after a fetch of the mirror that worked, which
+// workspace it was (the base of the tables may have moved: basesync). It is
+// called outside the lock of the fetch; nil: nobody is told.
+func (s *Service) OnFetched(f func(ctx context.Context, slug string)) {
+	s.mu.Lock()
+	s.afterFetch = f
+	s.mu.Unlock()
+}
+
+// fetchOne is one fetch of the mirror, the advance of the main clone after it,
+// and then the tell of OnFetched.
 func (s *Service) fetchOne(ctx context.Context, w Workspace) error {
+	err := s.fetchLocked(ctx, w)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	f := s.afterFetch
+	s.mu.Unlock()
+	if f != nil {
+		f(ctx, w.Slug)
+	}
+	return nil
+}
+
+func (s *Service) fetchLocked(ctx context.Context, w Workspace) error {
 	defer s.lock("fetch/" + w.Slug)()
 	if s.o.Gate != nil {
 		if err := s.o.Gate(); err != nil {

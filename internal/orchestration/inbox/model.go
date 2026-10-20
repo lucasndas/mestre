@@ -238,13 +238,22 @@ func (it Item) Body() string {
 	if len(it.Attachments) == 0 {
 		return text
 	}
+	var listed []string
+	for _, a := range it.Attachments {
+		if !strings.Contains(it.Text, a) { // a path the text already names (the line [anexo]) is not listed twice
+			listed = append(listed, a)
+		}
+	}
+	if len(listed) == 0 {
+		return text
+	}
 	var b strings.Builder
 	b.WriteString(text)
 	if it.Text != "" {
 		b.WriteString("\n\n")
 	}
 	b.WriteString("Anexos:")
-	for _, a := range it.Attachments {
+	for _, a := range listed {
 		b.WriteString("\n- " + OneLine(a))
 	}
 	return b.String()

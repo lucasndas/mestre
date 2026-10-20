@@ -73,12 +73,16 @@ func (c *DecreeChannel) Bind(bot *Bot) {
 // Commands is /decretos, for Options.Commands. It only reads, so it is answered
 // while the Mestre is locked.
 func (c *DecreeChannel) Commands() []Command {
-	return []Command{{Name: "decretos", Description: "lista os decretos ativos e suspensos e as regras temporárias de mesa", Query: true, Capability: users.Status, Run: c.list}}
+	return []Command{
+		{Name: "decretos", Description: "lista os decretos ativos e suspensos e as regras temporárias de mesa", Query: true, Capability: users.Status, Run: c.list},
+		{Name: "revogar_tudo", Description: "revoga todas as delegações e regras temporárias de mesa (só o Dono)", Capability: users.DelegateHigh, Query: true, Run: c.revokeAllAsk},
+	}
 }
 
 // Actions are the buttons, for Options.Actions.
 func (c *DecreeChannel) Actions() map[string]Action {
-	return map[string]Action{DecreeAction: c.click, DecreeRevokeAction: c.revoke, TableRuleRevokeAction: c.revokeRule}
+	return map[string]Action{DecreeAction: c.click, DecreeRevokeAction: c.revoke, TableRuleRevokeAction: c.revokeRule,
+		DelegationRenewAction: c.renew, DelegationLapseAction: c.lapse, RevokeAllAction: c.revokeAll}
 }
 
 // Offer puts a proposal in front of its author with the buttons Confirmar and
@@ -118,7 +122,7 @@ func (c *DecreeChannel) click(ctx context.Context, k Click) (string, string, err
 	case err != nil:
 		return "", "", c.say(err)
 	}
-	return fmt.Sprintf("Decreto %d.", d.Number), c.confirmed(d), nil
+	return fmt.Sprintf("Decreto %d.", d.Number), c.confirmed(ctx, d), nil
 }
 
 // askPIN opens the request of PIN of the proposal and asks it.
@@ -170,10 +174,10 @@ func (c *DecreeChannel) say(err error) error {
 	return err
 }
 
-func (c *DecreeChannel) confirmed(d decrees.Decree) string {
+func (c *DecreeChannel) confirmed(ctx context.Context, d decrees.Decree) string {
 	text := fmt.Sprintf("Decreto %d ativo: %s.", d.Number, d.Summary())
 	if !d.Until.IsZero() {
-		text += " Vale até " + d.Until.UTC().Format("02/01/2006 15:04 UTC") + "."
+		text += " Vale até " + c.Svc.Moment(ctx, d.Until) + "."
 	}
 	if d.State == decrees.Suspended {
 		text += " Ficou suspenso: ele se opõe a outro decreto do mesmo nível, e os dois autores e o Dono foram avisados."
@@ -203,7 +207,7 @@ func (c *DecreeChannel) pinProposal(ctx context.Context, u users.User, requestID
 		c.tell(ctx, u, "Não gravei o decreto: "+c.say(cerr).Error())
 		return
 	}
-	c.tell(ctx, u, c.confirmed(d))
+	c.tell(ctx, u, c.confirmed(ctx, d))
 }
 
 func (c *DecreeChannel) tell(ctx context.Context, u users.User, text string) {
@@ -318,7 +322,7 @@ func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
 		case v.Until.IsZero():
 			line += " · permanente"
 		default:
-			line += " · até " + v.Until.UTC().Format("02/01 15:04 UTC")
+			line += " · até " + c.Svc.Moment(ctx, v.Until)
 		}
 		switch {
 		case v.State == decrees.Suspended:
@@ -344,7 +348,7 @@ func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
 			if r.Action != nil {
 				what = r.Action.String()
 			}
-			line := fmt.Sprintf("regra temporária de mesa %d · mesa %s · classe %s · %s · até %s", r.ID, r.Table, r.Class, what, r.Until.UTC().Format("02/01 15:04 UTC"))
+			line := fmt.Sprintf("regra temporária de mesa %d · mesa %s · classe %s · %s · até %s", r.ID, r.Table, r.Class, what, c.Svc.Moment(ctx, r.Until))
 			if r.State == tablerules.Suspended {
 				line += " · SUSPENSA"
 			}

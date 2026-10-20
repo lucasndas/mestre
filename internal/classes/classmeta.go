@@ -58,6 +58,36 @@ type Meta struct {
 	Provider    string         `yaml:"provider"`
 	Model       string         `yaml:"model"`
 	Requires    map[string]any `yaml:"requires"`
+	// DoneRequires is what the done that ends a step of this class needs
+	// (docs/orquestracao/prova-e-devolucao.md#o-done-que-a-classe-exige).
+	DoneRequires *DoneRequires `yaml:"done_requires"`
+}
+
+// DoneRequires is the done_requires of the frontmatter: Proof is "all" (each
+// criterion of the quest needs a proof in the step) or "none" (the default);
+// Verify makes the engine run the verification of the workspace before the
+// step ends.
+type DoneRequires struct {
+	Proof  string `yaml:"proof"`
+	Verify bool   `yaml:"verify"`
+}
+
+// Proof values of done_requires.
+const (
+	ProofAll  = "all"
+	ProofNone = "none"
+)
+
+// Done is the done_requires of the class, with the defaults.
+func (m Meta) Done() DoneRequires {
+	if m.DoneRequires == nil {
+		return DoneRequires{Proof: ProofNone}
+	}
+	d := *m.DoneRequires
+	if d.Proof == "" {
+		d.Proof = ProofNone
+	}
+	return d
 }
 
 // AppKind is how a class is linked to a GitHub App.
