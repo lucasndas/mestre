@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -93,6 +94,9 @@ type Runner interface {
 type SessionConfig struct {
 	Runner Runner
 	Clock  clock.Clock
+	// OS is the system the agents run on, for their environment and program
+	// lookup (agentEnv, resolveProgram); "" is the one running.
+	OS string
 	// BufferSize (1 MiB) and UnackedMax (64 MiB): see Buffer.
 	BufferSize, UnackedMax int
 	HistoryLines           int // default 5,000
@@ -188,7 +192,16 @@ func (s *Session) Start(ctx context.Context, spec StartSpec) (int, error) {
 	if spec.Rows == 0 {
 		spec.Rows = ptywire.DefaultRows
 	}
-	spec.Env = agentEnv(runtime.GOOS, spec.Env, spec.Dir)
+	osName := s.cfg.OS
+	if osName == "" {
+		osName = runtime.GOOS
+	}
+	spec.Env = agentEnv(osName, spec.Env, spec.Dir)
+	prog, err := resolveProgram(osName, spec.Path, spec.Env, isFile)
+	if err != nil {
+		return 0, err
+	}
+	spec.Path = prog
 	agent, err := s.cfg.Runner.Start(ctx, spec)
 	if err != nil {
 		return 0, err
@@ -463,4 +476,10 @@ func (s *Session) Close() {
 	if emu != nil {
 		emu.Close()
 	}
+}
+
+// isFile reports whether path is an existing file (not a folder).
+func isFile(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && !st.IsDir()
 }

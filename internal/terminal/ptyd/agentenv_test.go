@@ -48,3 +48,48 @@ func TestAgentEnvOnWindowsStopsTheCurrentFolderAndTheWorktreeFromLeadingThePath(
 		t.Errorf("linux changed the environment: %v", got)
 	}
 }
+
+// CA-WIN-03 (the spellings of the worktree that must not slip through)
+func TestAgentEnvRecognizesTheOtherSpellingsOfTheWorktree(t *testing.T) {
+	t.Parallel()
+	const wt = `D:\work\mesa-1`
+	for _, p := range []string{
+		`D:\work\x\..\mesa-1`, `D:\work\.\mesa-1\bin`, `D:\work\mesa-1.`, `D:\work\mesa-1 \bin`,
+		`\\?\D:\work\mesa-1\bin`, `d:/WORK/Mesa-1/`, `D:\work\mesa-1\a\..\..\mesa-1\z`,
+	} {
+		if !under(p, wt) {
+			t.Errorf("%q is not seen under %q", p, wt)
+		}
+	}
+	for _, p := range []string{`D:\work\mesa-10`, `D:\work`, `D:\work\mesa-2\mesa-1`, `\\srv\work\mesa-1`, `E:\work\mesa-1`} {
+		if under(p, wt) {
+			t.Errorf("%q is seen under %q", p, wt)
+		}
+	}
+}
+
+// CA-WIN-03 (the program of the agent comes from the cleaned PATH)
+func TestResolveProgramLooksOnlyInTheCleanedPathAndTrimsNothingElse(t *testing.T) {
+	t.Parallel()
+	have := map[string]bool{`c:\tools\claude.cmd`: true, `d:\wt\claude.exe`: true, `c:\windows\system32\cmd.exe`: true}
+	exists := func(p string) bool { return have[strings.ToLower(p)] } // the file system of Windows ignores case
+	env := agentEnv("windows", []string{`PATH=D:\wt;C:\tools;C:\Windows\System32`}, `D:\wt`)
+	got, err := resolveProgram("windows", "claude", env, exists)
+	if err != nil || !strings.EqualFold(got, `C:\tools\claude.cmd`) {
+		t.Errorf("claude = %q, %v: want the one of the PATH, not the planted D:\\wt\\claude.exe", got, err)
+	}
+	if got, err := resolveProgram("windows", "cmd.exe", env, exists); err != nil || got != `C:\Windows\System32\cmd.exe` {
+		t.Errorf("cmd.exe = %q, %v", got, err)
+	}
+	for _, bad := range []string{"", `.\claude`, `sub\claude`, "C:claude", "git"} {
+		if got, err := resolveProgram("windows", bad, env, exists); err == nil {
+			t.Errorf("%q resolved to %q", bad, got)
+		}
+	}
+	if got, err := resolveProgram("windows", `C:\a\b.exe`, env, exists); err != nil || got != `C:\a\b.exe` {
+		t.Errorf("an absolute path changed: %q, %v", got, err)
+	}
+	if got, err := resolveProgram("linux", "claude", nil, exists); err != nil || got != "claude" {
+		t.Errorf("linux changed the program: %q, %v", got, err)
+	}
+}
