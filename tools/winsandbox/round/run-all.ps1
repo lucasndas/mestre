@@ -4,7 +4,7 @@
 # prepares the machine and calls this script), or by hand in any disposable
 # Windows machine with Git, Go and Claude Code installed:
 #
-#   powershell -ExecutionPolicy Bypass -File run-all.ps1 [-Only 1,8] [-NoPause]
+#   powershell -ExecutionPolicy Bypass -File run-all.ps1 [-Only 1,8] [-NoPause] [-Force]
 #
 # Every check is a function of its own and a failure in one never stops the
 # others. The script never logs in by itself: where the Owner's login is needed
@@ -22,8 +22,16 @@ param(
     [string[]]$Only = @(),
     # Never pause: what needs a login of the Owner or a manual step is SKIP.
     [switch]$NoPause,
-    [string]$Out = 'C:\winsandbox\resultados\round'
+    [string]$Out = 'C:\winsandbox\resultados\round',
+    # Run outside the Windows Sandbox (a disposable machine of your own).
+    [switch]$Force
 )
+# The round makes local accounts, services and scheduled tasks, opens ACLs to
+# Everyone and removes profiles: only in the Sandbox, or with -Force.
+if ($env:USERNAME -ne 'WDAGUtilityAccount' -and -not $Force) {
+    Write-Host 'run-all.ps1 cria contas locais e serviços, abre ACLs e remove perfis: rode no Windows Sandbox (usuário WDAGUtilityAccount) ou, numa máquina descartável, com -Force.' -ForegroundColor Red
+    exit 2
+}
 $Wanted = [int[]]@($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_.Trim() -ne '' } | ForEach-Object { [int]$_.Trim() })
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -138,7 +146,8 @@ function Invoke-Native {
     $psi.RedirectStandardInput = $true
     $psi.CreateNoWindow = $true
     if ($Dir) { $psi.WorkingDirectory = $Dir }
-    foreach ($k in $Env.Keys) { $psi.EnvironmentVariables[$k] = [string]$Env[$k] }
+    # A $null value takes the variable out of the environment of the process.
+    foreach ($k in $Env.Keys) { if ($null -eq $Env[$k]) { $psi.EnvironmentVariables.Remove($k) } else { $psi.EnvironmentVariables[$k] = [string]$Env[$k] } }
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo = $psi
     try { [void]$p.Start() } catch { return [pscustomobject]@{ Exit = -1; Out = "não iniciou: $($_.Exception.Message)"; TimedOut = $false } }
@@ -664,8 +673,50 @@ function Test-Item4 {
     else { Add-Sub 4 'FAIL' ('agy --sandbox não rodou o comando (código ' + $r.Exit + $(if ($r.TimedOut) { ', estourou o prazo' } else { '' }) + '). Fim da saída:' + "`n" + (Tail $r.Out 6)) }
     $u2 = Invoke-Native -File $agy -Arguments @('-p', '/usage', '--output-format', 'json') -Env $e -TimeoutSec 90
     if ($u2.Exit -eq 0 -and $u2.Out -match '"buckets"') { Add-Sub 4 'PASS' 'depois do --sandbox o agy ainda acha o login' } else { Add-Sub 4 'FAIL' ('depois do --sandbox o agy perdeu o login: ' + (Tail $u2.Out 3)) }
+    Test-AgyNeutralBlocks $agy $e
     $c = Get-Conformance 'antigravity'
     if ($c) { Add-StepSub 4 'conformidade do agy (classe sem internet: --sandbox na base)' $c @(1, 4, 5, 6) } else { Add-NoConf 4 'antigravity' 'conformidade do agy' }
+}
+
+# The {} of the Windows hook line of agy (no MESTRE_AGENT_ID, or no mestre
+# binary) must block PreToolUse (docs/provedores/antigravity.md#hooks): the
+# generated hooks.json in a worktree, every command allowed natively for the
+# probe, so the hook is the only barrier; a control without hooks must run it.
+function Test-AgyNeutralBlocks([string]$Agy, [hashtable]$Env) {
+    if (-not (Get-BuiltBinaries)) { Add-Sub 4 'SKIP' ('bloqueio do {} do hook do agy: ' + $script:BuildWhy); return }
+    $settings = Join-Path (Get-ProfileDir 'antigravity') '.gemini\antigravity-cli\settings.json'
+    $before = $null
+    if (Test-Path $settings) { $before = [IO.File]::ReadAllBytes($settings) }
+    New-Item -ItemType Directory -Force -Path (Split-Path $settings) | Out-Null
+    $cases = @(
+        @{ Name = 'controle, sem hooks'; Hooks = $false; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $true },
+        @{ Name = 'sem MESTRE_AGENT_ID'; Hooks = $true; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $false },
+        @{ Name = 'sem o binário do mestre'; Hooks = $true; Id = 'rodada'; Bin = (Join-Path $Work 'nao-existe\mestre.exe'); Runs = $false })
+    $results = @()
+    try {
+        foreach ($c in $cases) {
+            $d = Join-Path $Work ('agyneutro\' + ($c.Name -replace '[^A-Za-z]', ''))
+            if (Test-Path $d) { Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Force -Path $d | Out-Null
+            & git -C $d init -q 2>&1 | Out-Null
+            if ($c.Hooks) {
+                $g = Invoke-Native -File (Join-Path $Bin 'conformance.exe') -Arguments @('hookfiles', '-provider', 'antigravity', '-root', $d, '-mestre', $c.Bin) -TimeoutSec 60
+                if ($g.Exit -ne 0) { $results += [pscustomobject]@{ Case = $c; Ran = $null; Out = 'hookfiles falhou: ' + (Tail $g.Out 2) }; continue }
+            }
+            Set-Content -LiteralPath $settings -Encoding ASCII -Value ('{"trustedWorkspaces":[' + (ConvertTo-Json $d) + '],"permissions":{"allow":["command(*)"]}}')
+            $ce = @{}; foreach ($k in $Env.Keys) { $ce[$k] = $Env[$k] }; $ce['MESTRE_AGENT_ID'] = $c.Id
+            $r = Invoke-Native -File $Agy -Env $ce -Dir $d -TimeoutSec 240 -Arguments @('-p', 'Rode no shell exatamente este comando e nada mais: echo marca > marca.txt')
+            $results += [pscustomobject]@{ Case = $c; Ran = (Test-Path (Join-Path $d 'marca.txt')); Out = (Tail $r.Out 2) }
+        }
+    } finally {
+        if ($before) { [IO.File]::WriteAllBytes($settings, $before) } else { Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue }
+    }
+    $control = $results | Where-Object { -not $_.Case.Hooks } | Select-Object -First 1
+    if (-not $control -or -not $control.Ran) { Add-Sub 4 'FAIL' ("bloqueio do {} do hook do agy: o controle sem hooks não rodou o comando, o teste não vale. Fim da saída:`n" + $control.Out); return }
+    foreach ($x in $results | Where-Object { $_.Case.Hooks }) {
+        if ($x.Ran -eq $false) { Add-Sub 4 'PASS' ("hook do agy no Windows, " + $x.Case.Name + ': o {} bloqueou o PreToolUse (o comando não rodou)') }
+        else { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': o comando RODOU (ou o teste falhou), o {} não bloqueou. Fim da saída:' + "`n" + $x.Out) }
+    }
 }
 
 # ---------------------------------------------------------------- item 5
@@ -754,6 +805,9 @@ function Test-Item8 {
     # Expect = the lines the stub must log (what the analyzer assumes runs); a
     # case with ExpectOut checks the text the code prints instead.
     $cases = @(
+        # The control must run the fake git: without it (git out of the PATH, a
+        # broken case) every "git did not run" would read as stricter.
+        @{ Id = 'controle-git-falso'; Code = 'git status'; Expect = @('status'); Control = $true },
         @{ Id = 'aspas-simples-tipograficas'; Code = "git ${LQ}push${RQ}"; Expect = @('push') },
         @{ Id = 'aspas-duplas-tipograficas'; Code = "git ${LDQ}push${RDQ}"; Expect = @('push') },
         @{ Id = 'aspas-baixas'; Code = "git ${LOW9}push${REV9}"; Expect = @('push') },
@@ -793,7 +847,7 @@ function Test-Item8 {
     if ($p7) { $hosts += , @('PowerShell 7', $p7) }
     $table = New-Object System.Collections.ArrayList
     foreach ($h in $hosts) {
-        $bad = @(); $stricter = @()
+        $bad = @(); $stricter = @(); $controlRan = $false
         foreach ($case in $cases) {
             $log = Join-Path $Work 'probe.log'
             if (Test-Path $log) { Remove-Item -Force $log }
@@ -806,11 +860,13 @@ function Test-Item8 {
             else { $ok = (($logged -join '|') -eq ($case.Expect -join '|')); $seen = $(if ($logged.Count) { 'git recebeu: ' + ($logged -join ' | ') } else { 'git NÃO rodou' }) }
             # git not run at all where the analyzer supposes it runs: the analyzer is
             # stricter than PowerShell (safe); git run with other arguments is the divergence.
-            $safe = (-not $ok -and -not $case.ContainsKey('ExpectOut') -and $logged.Count -eq 0)
+            $safe = (-not $ok -and -not $case.ContainsKey('ExpectOut') -and $logged.Count -eq 0 -and -not $case.Control)
+            if ($case.Control) { $controlRan = $ok }
             [void]$table.Add(("{0} | {1} | {2} | {3}" -f $h[0], $case.Id, $(if ($ok) { 'ok' } elseif ($safe) { 'MAIS-RIGIDO' } else { 'DIVERGE' }), $seen))
             if ($safe) { $stricter += ($case.Id + ' -> ' + $seen) }
             elseif (-not $ok) { $bad += ($case.Id + ' -> ' + $seen) }
         }
+        if (-not $controlRan) { Add-Sub 8 'FAIL' ($h[0] + ': o caso de controle (git status) não rodou o git falso: o teste não vale, nenhum "não rodou" conta como mais rígido'); continue }
         if ($bad.Count -eq 0) { Add-Sub 8 'PASS' ($h[0] + ': os ' + $cases.Count + ' casos leem como o analisador supõe' + $(if ($stricter) { ", ou ele é mais rígido que o PowerShell (seguro):`n    " + ($stricter -join "`n    ") } else { '' })) }
         else { Add-Sub 8 'FAIL' ($h[0] + ': ' + $bad.Count + ' de ' + $cases.Count + " casos DIVERGEM do que o analisador supõe:`n    " + ($bad -join "`n    ") + $(if ($stricter) { "`n  mais rígido que o PowerShell (seguro):`n    " + ($stricter -join "`n    ") } else { '' })) }
     }
