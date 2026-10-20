@@ -86,7 +86,7 @@ No Codex 0.162.1, com `-s workspace-write` e `network_access=false`, o `connect(
 
 ### Digitação
 
-Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](adaptador.md#digitação-de-mensagens)). Na caixa de entrada do Codex, `\r` envia e uma quebra de linha dentro da colagem só quebra a linha. No Windows, a 0.163.0 guardou sem enviar a primeira mensagem, digitada enquanto o Codex ainda iniciava (antes do primeiro quadro da TUI; rodada do Windows de 2026-10-19): se 2 s depois a linha `›` ainda começa com o texto e nenhum `turn_start` chegou, o motor manda só o `\r` mais uma vez ([confirmação](adaptador.md#digitação-de-mensagens)).
+Mensagens vão com colagem entre colchetes e `\r` ([digitação de mensagens](adaptador.md#digitação-de-mensagens)). Na caixa de entrada do Codex, `\r` envia e uma quebra de linha dentro da colagem só quebra a linha. No Windows, a 0.163.0 ignora o `\r` que vem no mesmo write da colagem e guarda a mensagem sem enviar (todas as entregas da conformidade, na rodada do Windows de 2026-10-19; um `\r` à parte, 150 ms depois, envia): só no Windows, a cada 2 s, até 4 vezes, se nenhum hook chegou desde a entrega e a última tela, estável e sem tela conhecida, é a linha `›` ainda começando com o texto, o motor manda só o `\r` mais uma vez ([confirmação](adaptador.md#digitação-de-mensagens)).
 
 ### Telas que o PTY precisa tratar
 
