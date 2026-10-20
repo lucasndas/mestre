@@ -14,6 +14,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/attachments"
+	"github.com/lucasndas/mestre/internal/blocking"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
@@ -302,6 +303,14 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		}
 	}
 	o.ChainUsers = r.flow
+	// the GitHub of the workspaces, with the App Grão-Mestre; a test that gives its own keeps it
+	gh := grandMasterGitHub{r}
+	if _, off := o.GitHub.(unavailableGitHub); off {
+		o.GitHub = gh
+	}
+	if o.Credentials == nil {
+		o.Credentials = gh
+	}
 	if o.ChainGrants == nil {
 		o.ChainGrants = r.decrees
 	}
@@ -403,6 +412,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		h.Deps = orc.EpicDeps
 	}
 	h.Register(fwd)
+	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
 		// the decrees whose validity ran out end while the Citadel acts
 		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()
@@ -420,6 +430,21 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		}
 		return bot.Run(ctx)
 	}}
+}
+
+// ownerName is the name of the Owner, who acts on a credential ("o Dono" when
+// the users cannot be read).
+func (r *stdRun) ownerName(ctx context.Context, _ string) string {
+	all, err := r.users.List(ctx)
+	if err != nil {
+		return "o Dono"
+	}
+	for _, u := range all {
+		if u.Level == users.Owner && u.State == users.Active {
+			return u.Name
+		}
+	}
+	return "o Dono"
 }
 
 // stdLease is the lease of the epoch over GitHub: the fence of the period.

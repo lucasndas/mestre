@@ -549,7 +549,7 @@ func (s *Session) runAcked(ctx context.Context, m *Message, h Handler) {
 	}
 	ack := Ack{Status: AckOK}
 	if reply != nil && reply.InAck {
-		raw, err := s.cfg.Registry.Marshal(reply.Type, reply.Payload, false)
+		raw, err := s.cfg.Registry.Marshal(reply.Type, reply.Payload, true)
 		if err != nil {
 			pe := asError(err)
 			s.finish(ctx, env.ID, Ack{Status: AckError, Error: pe})

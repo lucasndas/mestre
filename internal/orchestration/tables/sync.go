@@ -98,6 +98,14 @@ func (d dispatcher) Finalize(ctx context.Context, b protocol.XferBegin, file str
 	return d.pick(b).Finalize(ctx, b, file)
 }
 
+// Admit forwards the question to the receiver that would finalize the transfer.
+func (d dispatcher) Admit(ctx context.Context, b protocol.XferBegin) error {
+	if a, ok := d.pick(b).(protocol.Admitter); ok {
+		return a.Admit(ctx, b)
+	}
+	return nil
+}
+
 func (d dispatcher) Have(ctx context.Context, b protocol.XferBegin) bool {
 	if sk, ok := d.pick(b).(protocol.Skipper); ok {
 		return sk.Have(ctx, b)
@@ -307,6 +315,30 @@ func (s *Service) ReceiverFor(machine string) *Receiver { return &Receiver{s: s,
 func (r *Receiver) Have(ctx context.Context, b protocol.XferBegin) bool {
 	_, ok, err := r.s.store.Transferred(ctx, b.SHA256, r.machine, ToCitadel)
 	return err == nil && ok
+}
+
+// MaxBundle is the largest bundle of a table a Tower may send.
+const MaxBundle = 2 << 30
+
+// Admit refuses, at xfer.begin, the bundle of a table the Citadel does not have
+// or does not take that branch for, or one that is too big: nothing is stored
+// for a Tower that sends what could never be applied.
+func (r *Receiver) Admit(ctx context.Context, b protocol.XferBegin) error {
+	m, err := MetaOf(b.Meta)
+	if err != nil {
+		return protocol.NewError(protocol.CodeInvalidPayload, "%v", err)
+	}
+	if b.Size > MaxBundle {
+		return protocol.NewError(protocol.CodeTooLarge, "a bundle of a table is at most %d bytes", int64(MaxBundle))
+	}
+	t, err := r.s.store.Get(ctx, m.Workspace, m.Table)
+	if err != nil {
+		return protocol.NewError(protocol.CodeForbidden, "the table %s is not known here", m.Table)
+	}
+	if t.Branch != m.Branch || Over(t.State) {
+		return protocol.NewError(protocol.CodeForbidden, "the table %s does not take this branch", m.Table)
+	}
+	return nil
 }
 
 // Finalize implements protocol.Finalizer.
