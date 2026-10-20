@@ -25,6 +25,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/digest"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
+	"github.com/lucasndas/mestre/internal/orchestration/progress"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/telegram"
@@ -153,9 +154,11 @@ type stdRun struct {
 	quota  *github.Quota
 	tokens *github.Tokens
 
-	fence  atomic.Pointer[guild.Fence]
-	chain  atomic.Pointer[chain.Service]
-	closed atomic.Bool
+	fence atomic.Pointer[guild.Fence]
+	chain atomic.Pointer[chain.Service]
+	// progress is the message of progress of the workspaces, once the period has it.
+	progress atomic.Pointer[progress.Service]
+	closed   atomic.Bool
 
 	botMu sync.Mutex
 	bot   *telegram.Bot
@@ -294,6 +297,11 @@ func mergeCaptures(ms ...map[string]telegram.CaptureFunc) map[string]telegram.Ca
 
 // Extend implements IntegrationRun: the people of the chain of approval.
 func (r *stdRun) Extend(o *OrchestrationOptions) {
+	o.MissionCompleted = func(ctx context.Context, workspace, _, _ string) {
+		if p := r.progress.Load(); p != nil && !r.closed.Load() {
+			go p.MissionEnded(context.WithoutCancel(ctx), workspace) // the quest does not wait for the bot
+		}
+	}
 	o.ChainUsers = r.flow
 	if o.ChainGrants == nil {
 		o.ChainGrants = r.decrees
@@ -375,6 +383,14 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 			r.dg.Svc = dgst
 		}
 	}
+	prog, err := progress.New(progress.Options{Clock: r.env.Clock, Tables: tables.Store{DB: r.env.DB}, Requests: &chain.Store{DB: r.env.DB},
+		Workspaces: activeWorkspaces{orc}, Recipients: progressPeople{digest.UsersDirectory{Users: r.users}}, Sender: progressSender{r.dg},
+		Mask: r.env.Masker.Mask, Logger: r.env.Log})
+	if err != nil {
+		r.env.Log.Warn("app: the message of progress is off", "err", err)
+	} else {
+		r.progress.Store(prog)
+	}
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
@@ -390,6 +406,9 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()
 		if dgst != nil {
 			go func() { _ = dgst.Loop(ctx, time.Minute) }()
+		}
+		if p := r.progress.Load(); p != nil {
+			go func() { _ = p.Loop(ctx, time.Minute) }()
 		}
 		bot, err := r.startBot(ctx)
 		if err != nil {

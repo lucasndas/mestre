@@ -222,6 +222,6 @@ func (s *Server) deviceCode(w http.ResponseWriter, r *http.Request) {
 	case !on:
 		writeJSON(w, http.StatusOK, map[string]any{"error": "device_flow_disabled", "error_description": "Device flow must be explicitly enabled for this App"})
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"device_code": "fake-device-code", "user_code": "ABCD-1234", "verification_uri": "https://github.com/login/device", "expires_in": 900, "interval": 5})
+		writeJSON(w, http.StatusOK, s.registerDevice(id))
 	}
 }

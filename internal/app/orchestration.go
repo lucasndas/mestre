@@ -46,6 +46,10 @@ type OrchestrationMachines interface {
 // milestones 5 and 6 (GitHub, the Telegram, the users, the approvals, the
 // decrees) come in as small interfaces, each with its own document.
 type OrchestrationOptions struct {
+	// MissionCompleted is told when a mission ends with all its steps done: the
+	// message of progress of the workspace goes out (nil: nobody is told).
+	MissionCompleted func(ctx context.Context, workspace, table, quest string)
+
 	// Guild is the main Guild database, Machine the id of this Citadel.
 	Guild   *store.DB
 	Machine string
@@ -556,7 +560,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	tbl, err = tables.New(tables.Options{DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
+	tbl, err = tables.New(tables.Options{Proofs: questProofs{&quests.Store{DB: o.Guild}}, DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
 		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.Messages, Attachments: o.Attachments,
 		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Requests: chainRef{&ch}, Oversight: oversightRef{&sup}, Peers: o.Peers, Dependencies: depsRef{&deps}, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
 	if err != nil {
@@ -633,7 +637,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	},
 		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger})
+		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted})
 	if err != nil {
 		return nil, err
 	}
