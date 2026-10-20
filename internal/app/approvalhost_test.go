@@ -339,7 +339,21 @@ func TestGhMergeAndGhSettingsApplyOverTheRealCompositionWaitForTheOwner(t *testi
 	if len(w.gh.Merges("lucas/meu_app")) != 0 {
 		t.Fatal("merged before the approval")
 	}
+	// the command again waits for the same request: no other is opened
+	if again := w.call("gh merge", nil, itoa(w.pr)); again.OK || again.Error == nil || again.Error.Code != "approval_pending" || !strings.Contains(again.Error.Message, "#"+strconv.FormatInt(open[0].ID, 10)) {
+		t.Fatalf("the command again: %+v", again.Error)
+	}
+	if more, _ := (&chain.Store{DB: w.db}).OpenPR(w.ctx, w.ws.Slug, "lucas/meu_app", w.pr); len(more) != 1 {
+		t.Fatalf("%d open requests after the second command; want the one", len(more))
+	}
 	w.approve(open[0].ID)
+	// the base of the PR changes after the approval: it does not carry over to the new base
+	w.gh.SetPullState("lucas/meu_app", w.pr, "open", false, "release")
+	moved := w.call("gh merge", nil, itoa(w.pr))
+	if moved.OK || moved.Error == nil || moved.Error.Code != "approval_pending" || len(w.gh.Merges("lucas/meu_app")) != 0 {
+		t.Fatalf("merge after the base changed: %+v; want a new request and no merge", moved.Error)
+	}
+	w.gh.SetPullState("lucas/meu_app", w.pr, "open", false, "main")
 	got = w.call("gh merge", nil, itoa(w.pr))
 	if !got.OK {
 		t.Fatalf("merge after the approval: %+v", got.Error)

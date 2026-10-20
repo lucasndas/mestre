@@ -33,9 +33,9 @@ type PullMerger interface {
 type Merging interface {
 	// Merger gives the client for the repository of the workspace.
 	Merger(ctx context.Context, workspace string) (PullMerger, error)
-	// Approved is the number of the approved request of type merge that stands for
-	// the PR at the commit; 0 when there is none.
-	Approved(ctx context.Context, workspace, repo string, n int, sha string) (int64, error)
+	// Standing is the newest approved request of type merge that still stands for the PR
+	// at the commit and the base it goes into, and the newest open one (0: none).
+	Standing(ctx context.Context, workspace, repo string, n int, sha, base string) (approved, open int64, err error)
 	// Ask opens the request of the merge.
 	Ask(ctx context.Context, o chain.OpenRequest) (int64, error)
 	// Table is the table whose branch the PR comes from ("": none).
@@ -45,7 +45,7 @@ type Merging interface {
 // Rulesets makes the request to the Owner for a ruleset of the repository of the
 // workspace (*approvals.Settings).
 type Rulesets interface {
-	ProposeRuleset(ctx context.Context, workspace string, body map[string]any) (int64, error)
+	ProposeRuleset(ctx context.Context, workspace, proposer string, body map[string]any) (int64, error)
 }
 
 // prNumber reads the number of the PR, the only argument of approve and merge.
@@ -98,6 +98,8 @@ func (h *Handlers) approve(ctx context.Context, c *localchan.Call) localchan.Res
 	var ref *chain.Refusal
 	switch {
 	case err == nil:
+	case errors.As(err, &ref) && ref.Code == approvals.CodeNoDelegation:
+		return localchan.Fail(approvals.CodeNoDelegation, ref.Message, "the credential of a person is used only with a decree of delegation").WithExit(localchan.ExitDenied)
 	case errors.Is(err, approvals.ErrHeadChanged):
 		return localchan.Fail("head_changed", err.Error(), "read the pull request again with `mestre gh review <pr>`").WithExit(localchan.ExitConflict)
 	case errors.Is(err, approvals.ErrPRClosed):
@@ -105,11 +107,7 @@ func (h *Handlers) approve(ctx context.Context, c *localchan.Call) localchan.Res
 	case errors.Is(err, github.ErrNotFound):
 		return localchan.Fail("not_found", fmt.Sprintf("#%d does not exist", n), "").WithExit(localchan.ExitNotFound)
 	case errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired:
-		code, hint := "human_required", "ask the people with `mestre approval ask`; nothing was sent to GitHub"
-		if onBehalf != "" {
-			code, hint = "no_delegation", "the credential of a person is used only with a decree of delegation"
-		}
-		return localchan.Fail(code, ref.Message, hint).WithExit(localchan.ExitDenied)
+		return localchan.Fail("human_required", ref.Message, "ask the people with `mestre approval ask`; nothing was sent to GitHub").WithExit(localchan.ExitDenied)
 	default:
 		return refusal(err)
 	}
@@ -156,26 +154,29 @@ func (h *Handlers) merge(ctx context.Context, c *localchan.Call) localchan.Respo
 	case pr.State != "open" || pr.Merged:
 		return localchan.Fail("not_open", fmt.Sprintf("the pull request #%d is not open", n), "").WithExit(localchan.ExitConflict)
 	}
-	id, err := h.Merges.Approved(ctx, ws, who.repo, n, pr.HeadSHA)
+	id, open, err := h.Merges.Standing(ctx, ws, who.repo, n, pr.HeadSHA, pr.BaseRef)
 	if err != nil {
 		return localchan.Fail(localchan.CodeInternal, "the approvals of the pull request could not be looked up", "")
 	}
+	if id == 0 && open != 0 {
+		// the request is already with the people: no other is made (a repetition of the command)
+		return localchan.Fail("approval_pending", fmt.Sprintf("the merge of #%d waits for the approval of the request #%d", n, open), "run the command again after the approval").WithExit(localchan.ExitPending)
+	}
 	if id == 0 {
-		order := approvals.MergeOrder{Workspace: ws, Table: h.Merges.Table(ctx, ws, pr.HeadRef), Repo: who.repo, Number: n, Head: pr.HeadSHA, Base: pr.BaseRef, Method: method}
-		// no requester: the request is of the table the PR comes from, and a requester without a table would take it away
-		req, err := approvals.MergeRequest(order)
+		// the table is the one whose branch the PR comes from, and only a branch of the repository itself
+		table := ""
+		if strings.EqualFold(pr.HeadRepo, who.repo) {
+			table = h.Merges.Table(ctx, ws, pr.HeadRef)
+		}
+		req, err := approvals.MergeRequest(approvals.MergeOrder{Workspace: ws, Table: table, Repo: who.repo, Number: n, Head: pr.HeadSHA, Base: pr.BaseRef, Method: method, Proposer: who.char.ID})
 		if err != nil {
 			return usage("%v", err)
 		}
 		asked, err := h.Merges.Ask(ctx, req)
-		var ref *chain.Refusal
-		switch {
-		case errors.As(err, &ref):
-			return localchan.Fail("human_required", ref.Message, "the policy sends this merge to the people; nothing was merged").WithExit(localchan.ExitDenied)
-		case err != nil:
-			return refusal(err)
+		if bad := askRefusal(err); bad != nil {
+			return *bad
 		}
-		if id, err = h.Merges.Approved(ctx, ws, who.repo, n, pr.HeadSHA); err != nil {
+		if id, _, err = h.Merges.Standing(ctx, ws, who.repo, n, pr.HeadSHA, pr.BaseRef); err != nil {
 			return localchan.Fail(localchan.CodeInternal, "the approvals of the pull request could not be looked up", "")
 		}
 		if id == 0 {
@@ -229,16 +230,39 @@ func (h *Handlers) settingsApply(ctx context.Context, c *localchan.Call) localch
 	if err := json.Unmarshal([]byte(raw), &body); err != nil || body == nil {
 		return usage("the file is not a JSON object")
 	}
-	id, err := h.Rulesets.ProposeRuleset(ctx, who.char.Workspace, body)
-	var ref *chain.Refusal
-	switch {
-	case errors.Is(err, approvals.ErrBadRuleset):
+	id, err := h.Rulesets.ProposeRuleset(ctx, who.char.Workspace, who.char.ID, body)
+	if errors.Is(err, approvals.ErrBadRuleset) {
 		return usage("%v", err)
-	case errors.As(err, &ref):
-		return localchan.Fail("human_required", ref.Message, "").WithExit(localchan.ExitDenied)
-	case err != nil:
-		return refusal(err)
+	}
+	if bad := askRefusal(err); bad != nil {
+		return *bad
 	}
 	return localchan.Fail("approval_pending", fmt.Sprintf("the ruleset waits for the approval of the Owner (request #%d); it is applied when the Owner approves", id),
 		"nothing was changed on GitHub").WithExit(localchan.ExitPending)
+}
+
+// askRefusal turns what the chain answers to the opening of a request into the answer of
+// the command (nil when it opened): the gate of freshness with its reason, another
+// repository than the workspace's, a refusal with its own code, and a PR that comes from no
+// table.
+func askRefusal(err error) *localchan.Response {
+	if err == nil {
+		return nil
+	}
+	var fresh *chain.FreshnessError
+	var ref *chain.Refusal
+	var r localchan.Response
+	switch {
+	case errors.As(err, &fresh):
+		r = localchan.Fail("not_mergeable", fresh.Error(), "the gate of freshness refused it: fix what it says and ask again").WithExit(localchan.ExitConflict)
+	case errors.Is(err, chain.ErrWrongRepo):
+		r = localchan.Fail("wrong_repo", err.Error(), "the repository of the request is not the one of the workspace").WithExit(localchan.ExitDenied)
+	case errors.As(err, &ref):
+		r = localchan.Fail(ref.Code, ref.Message, "the policy sends this to the people; nothing was done").WithExit(localchan.ExitDenied)
+	case strings.Contains(err.Error(), "the request has no table"):
+		r = localchan.Fail("no_table", "the pull request does not come from a table of the workspace, so the gate of freshness has nothing to check", "its merge is a decision of the people, outside this command").WithExit(localchan.ExitDenied)
+	default:
+		r = refusal(err)
+	}
+	return &r
 }

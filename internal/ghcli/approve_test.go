@@ -39,11 +39,14 @@ func (a *approverFake) Approve(_ context.Context, o approvals.ApproveOrder) (app
 // mergesFake is the merge of the run: the REST of the Grão-Mestre over the double, and the
 // requests of the chain.
 type mergesFake struct {
-	r        *rig
-	mu       sync.Mutex
-	approved int64
-	asked    []chain.OpenRequest
-	askErr   error
+	r  *rig
+	mu sync.Mutex
+	// approved is the request approved for a commit and a base (0: none); open the one that waits.
+	approved, open int64
+	// stands are the arguments Standing was asked with.
+	stands []string
+	asked  []chain.OpenRequest
+	askErr error
 	// approveOnAsk makes the request approved at once, as a policy that lets the Grand Master decide.
 	approveOnAsk bool
 }
@@ -53,10 +56,11 @@ func (m *mergesFake) Merger(context.Context, string) (ghcli.PullMerger, error) {
 		Token: func(context.Context, string) (string, error) { return "tok_gm", nil }}, nil
 }
 
-func (m *mergesFake) Approved(context.Context, string, string, int, string) (int64, error) {
+func (m *mergesFake) Standing(_ context.Context, ws, repo string, n int, sha, base string) (int64, int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.approved, nil
+	m.stands = append(m.stands, strings.Join([]string{ws, repo, itoa(n), sha, base}, "|"))
+	return m.approved, m.open, nil
 }
 
 func (m *mergesFake) Ask(_ context.Context, o chain.OpenRequest) (int64, error) {
@@ -68,6 +72,8 @@ func (m *mergesFake) Ask(_ context.Context, o chain.OpenRequest) (int64, error) 
 	m.asked = append(m.asked, o)
 	if m.approveOnAsk {
 		m.approved = 90
+	} else {
+		m.open = 90
 	}
 	return 90, nil
 }
@@ -81,13 +87,15 @@ func (m *mergesFake) Table(_ context.Context, _, headRef string) string {
 
 // rulesetsFake is the settings of the Owner's approval.
 type rulesetsFake struct {
-	mu   sync.Mutex
-	ws   []string
-	body []map[string]any
-	err  error
+	mu        sync.Mutex
+	ws        []string
+	proposers []string
+	body      []map[string]any
+	err       error
 }
 
-func (s *rulesetsFake) ProposeRuleset(_ context.Context, ws string, body map[string]any) (int64, error) {
+func (s *rulesetsFake) ProposeRuleset(_ context.Context, ws, proposer string, body map[string]any) (int64, error) {
+	s.proposers = append(s.proposers, proposer)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
@@ -132,9 +140,13 @@ func TestGhApproveIsForTheCommitReadTheWorkspaceOfWhoAsksAndTellsTheRefusalsApar
 	}
 	// the policy does not let the Grand Master approve alone
 	ap.reply = &chain.Refusal{Code: chain.CodeHumanRequired, Message: "o PR precisa da aprovação de uma pessoa"}
-	if got = r.run("gm", "gh approve", map[string]any{"reason": "x"}, itoa(pr)); got.OK || got.Code != "human_required" || got.Exit != 3 {
-		t.Errorf("human required: %+v", got)
+	// even with --on-behalf, a refusal that is not about the delegation stays human_required
+	for _, flags := range []map[string]any{{"reason": "x"}, {"reason": "x", "on-behalf": "Ana"}} {
+		if got = r.run("gm", "gh approve", flags, itoa(pr)); got.OK || got.Code != "human_required" || got.Exit != 3 {
+			t.Errorf("human required (%v): %+v", flags, got)
+		}
 	}
+	ap.reply = &chain.Refusal{Code: approvals.CodeNoDelegation, Message: "Ana não delegou"}
 	if got = r.run("gm", "gh approve", map[string]any{"reason": "x", "on-behalf": "Ana"}, itoa(pr)); got.OK || got.Code != "no_delegation" || got.Exit != 3 {
 		t.Errorf("on behalf without a delegation: %+v", got)
 	}
@@ -169,12 +181,19 @@ func TestGhMergeAsksFirstAndThenMergesTheApprovedCommitWithTheMethod(t *testing.
 	if got.OK || got.Code != "approval_pending" || got.Exit != 9 {
 		t.Fatalf("merge without an approved request: %+v", got)
 	}
-	if len(mg.asked) != 1 || mg.asked[0].Type != classes.RequestMerge || mg.asked[0].Workspace != "meu-app" || mg.asked[0].Table != "42-login" || mg.asked[0].Requester != "" ||
+	if len(mg.asked) != 1 || mg.asked[0].Type != classes.RequestMerge || mg.asked[0].Workspace != "meu-app" || mg.asked[0].Table != "42-login" || mg.asked[0].Requester != "" || mg.asked[0].Proposer != "gm" ||
 		mg.asked[0].PR == nil || mg.asked[0].PR.Number != pr || mg.asked[0].PR.SHA != headA || string(mg.asked[0].Target) != string(approvals.PRTarget(repoFull, pr, headA, "main")) {
 		t.Fatalf("the request = %+v", mg.asked)
 	}
 	if len(r.gh.Merges(repoFull)) != 0 {
 		t.Fatal("merged before the approval")
+	}
+	// the same command again does not open another request: it waits for the one that is open
+	if got = r.run("gm", "gh merge", map[string]any{"method": "squash"}, itoa(pr)); got.OK || got.Code != "approval_pending" || len(mg.asked) != 1 || !strings.Contains(got.Error, "#90") {
+		t.Fatalf("the command again: %+v with %d requests; want the same one waiting", got, len(mg.asked))
+	}
+	if want := "meu-app|" + repoFull + "|" + itoa(pr) + "|" + headA + "|main"; mg.stands[0] != want {
+		t.Errorf("the approvals were looked up with %q; want %q (workspace of who asks, repository of the workspace, commit and base of the PR)", mg.stands[0], want)
 	}
 	mg.approved = 90 // the people approved
 	got = r.run("gm", "gh merge", map[string]any{"method": "squash"}, itoa(pr))
@@ -183,6 +202,13 @@ func TestGhMergeAsksFirstAndThenMergesTheApprovedCommitWithTheMethod(t *testing.
 	}
 	if ms := r.gh.Merges(repoFull); len(ms) != 1 || ms[0].SHA != headA || ms[0].Method != "squash" || ms[0].Number != pr {
 		t.Errorf("GitHub merged %+v; want the approved commit with squash", ms)
+	}
+	// a PR from a fork whose branch has the name of a table is not of that table
+	fork := r.gh.AddPR(repoFull, "feat: fork", "42-login", "someone/fork")
+	r.gh.SetPull(repoFull, fork, headB, false, "clean")
+	mg.approved, mg.open = 0, 0
+	if got = r.run("gm", "gh merge", nil, itoa(fork)); got.OK || got.Code != "approval_pending" || mg.asked[len(mg.asked)-1].Table != "" {
+		t.Errorf("merge of a PR from a fork: %+v; want a request with no table", got)
 	}
 	// a policy that approves at once: ask and merge in one command
 	r2, _, mg2, _, pr2 := approveRig(t)
@@ -230,6 +256,21 @@ func TestGhMergeTellsApartWhatGitHubRefusesAndWhatTheChainRefuses(t *testing.T) 
 	if got := r.run("gm", "gh merge", nil, itoa(pr)); got.OK || got.Code != "human_required" || got.Exit != 3 {
 		t.Errorf("the chain refuses: %+v", got)
 	}
+	for _, c := range []struct {
+		err  error
+		code string
+		exit int
+	}{
+		{&chain.FreshnessError{Reason: "a base andou e a verificação falhou"}, "not_mergeable", 7},
+		{chain.ErrWrongRepo, "wrong_repo", 3},
+		{errors.New("chain: the gate of freshness could not be checked: the request has no table"), "no_table", 3},
+		{&chain.Refusal{Code: "above_ceiling", Message: "acima do teto"}, "above_ceiling", 3},
+	} {
+		mg.askErr = c.err
+		if got := r.run("gm", "gh merge", nil, itoa(pr)); got.OK || got.Code != c.code || got.Exit != c.exit {
+			t.Errorf("the chain answers %v: %+v; want %s (%d)", c.err, got, c.code, c.exit)
+		}
+	}
 	mg.askErr = errors.New("boom")
 	if got := r.run("gm", "gh merge", nil, itoa(pr)); got.OK {
 		t.Errorf("an error of the chain: %+v", got)
@@ -261,6 +302,9 @@ func TestGhSettingsApplyAsksTheOwnerAndEndsPending(t *testing.T) {
 	got := r.run("gm", "gh settings", map[string]any{"body": body}, "apply")
 	if got.OK || got.Code != "approval_pending" || got.Exit != 9 || !strings.Contains(got.Error, "#55") {
 		t.Fatalf("apply: %+v", got)
+	}
+	if len(rs.proposers) != 1 || rs.proposers[0] != "gm" {
+		t.Errorf("the proposer is %v; want the Grand Master, who decides nothing of the request", rs.proposers)
 	}
 	if len(rs.ws) != 1 || rs.ws[0] != "meu-app" || rs.body[0]["name"] != "mestre" {
 		t.Errorf("the request was made for %v %v; want the workspace of who asks and the body", rs.ws, rs.body)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -250,12 +251,12 @@ func (l lateApprover) Approve(ctx context.Context, o approvals.ApproveOrder) (ap
 // lateRulesets gives `gh settings apply` the Settings the period makes after the handlers.
 type lateRulesets struct{ r *stdRun }
 
-func (l lateRulesets) ProposeRuleset(ctx context.Context, workspace string, body map[string]any) (int64, error) {
+func (l lateRulesets) ProposeRuleset(ctx context.Context, workspace, proposer string, body map[string]any) (int64, error) {
 	s := l.r.settings.Load()
 	if s == nil {
 		return 0, errNoApproval
 	}
-	return s.ProposeRuleset(ctx, workspace, body)
+	return s.ProposeRuleset(ctx, workspace, proposer, body)
 }
 
 // mergeHost is `gh merge` over the App "Grão-Mestre" and the chain of approval.
@@ -272,19 +273,53 @@ func (m mergeHost) Merger(ctx context.Context, _ string) (ghcli.PullMerger, erro
 	return m.r.gmRest(app, mergePermissions), nil
 }
 
-// Approved is the newest approved request of type merge for the PR at the commit.
-func (m mergeHost) Approved(ctx context.Context, workspace, repo string, n int, sha string) (int64, error) {
-	rs, err := (&chain.Store{DB: m.r.env.DB}).ApprovedPR(ctx, workspace, repo, n, sha)
+// Standing tells the merge requests of the PR at the commit and the base: the newest
+// approved one that still stands (its target has the same base branch and, when the gate
+// ran, the tip of the base it ran on is still the tip), and the newest open one.
+func (m mergeHost) Standing(ctx context.Context, workspace, repo string, n int, sha, base string) (approved, open int64, err error) {
+	st := &chain.Store{DB: m.r.env.DB}
+	rs, err := st.ApprovedPR(ctx, workspace, repo, n, sha)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	var id int64
 	for _, r := range rs {
-		if r.Type == classes.RequestMerge && r.ID > id {
-			id = r.ID
+		if r.Type != classes.RequestMerge || r.ID <= approved || !m.sameBase(ctx, r, base) {
+			continue
+		}
+		approved = r.ID
+	}
+	ops, err := st.OpenPR(ctx, workspace, repo, n)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, r := range ops {
+		var t struct {
+			Head string `json:"head"`
+			Base string `json:"base"`
+		}
+		if r.Type == classes.RequestMerge && r.ID > open && json.Unmarshal(r.Target, &t) == nil && t.Head == sha && t.Base == base {
+			open = r.ID
 		}
 	}
-	return id, nil
+	return approved, open, nil
+}
+
+// sameBase says an approved request was for the base the PR goes into now, and that the
+// base did not move since the gate ran on it (an approval of a merge into another branch,
+// or into a base that was never verified, does not carry over).
+func (m mergeHost) sameBase(ctx context.Context, r chain.Request, base string) bool {
+	var t struct {
+		Base string `json:"base"`
+	}
+	if json.Unmarshal(r.Target, &t) != nil || t.Base != base {
+		return false
+	}
+	sha := chain.BaseSHAOf(r.Target)
+	if sha == "" {
+		return true // the repository asks the branch to be up to date: the base moving changes nothing
+	}
+	tip, err := m.r.source().BaseTip(ctx, r.Workspace, r.Table)
+	return err == nil && tip == sha
 }
 
 // Ask opens the request of the merge in the chain.
