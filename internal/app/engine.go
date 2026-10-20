@@ -225,6 +225,8 @@ type Engine struct {
 	rt       *machineRuntime
 	orc      atomic.Pointer[Orchestration] // the orchestration of the period that acts
 	sheets   atomic.Pointer[machinesheet.Registry]
+	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
+	srvp     atomic.Pointer[protocol.Server] // the protocol server of the period of the Citadel
 	member   *guild.Member
 	id       guild.Identity
 	epochs   *guild.Epochs

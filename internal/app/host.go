@@ -107,7 +107,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}
 	opts := OrchestrationOptions{
 		Guild: db, Machine: e.id.MachineID, Clock: e.clk, Logger: e.log, WorkspacesDir: workspacesDir, TempDir: tmp,
-		Git: git, Machines: e.machines(), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
+		Git: git, Machines: e.machines(db), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
 		Limits: characters.DefaultLimits(),
 	}
@@ -139,6 +139,21 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		alive: orc.Registry.Alive, adapters: providers.NewRegistry(providers.Options{Exec: e.deps.UsageSources.Exec}), src: e.deps.UsageSources,
 		machine: e.id.MachineID, clk: e.clk, log: e.log})
 	orc.Loops = append(orc.Loops, func(ctx context.Context) error { return reader.Loop(ctx, usageEvery) })
+	if e.rt != nil {
+		// The characters this machine lost are resumed in the order of the
+		// document (the Grand Master first), and the Grand Master is kept up
+		// afterwards, with backoff, for as long as the Citadel acts.
+		keeper := orc.Characters.NewKeeper(e.id.MachineID, func(ctx context.Context, slug string) bool {
+			_, err := orc.Workspaces.Get(ctx, slug)
+			return !errors.Is(err, workspaces.ErrNotFound)
+		})
+		orc.Loops = append(orc.Loops, func(ctx context.Context) error {
+			if err := orc.Characters.ResumeMachine(ctx, e.id.MachineID); err != nil && ctx.Err() == nil {
+				e.log.Warn("app: some characters of this machine were not resumed", "err", err)
+			}
+			return keeper.Run(ctx)
+		})
+	}
 	ph := &periodHooks{usage: newHookUsage(orc.Usage, reader, e.log), agentMachine: func(ctx context.Context, id string) (string, bool) {
 		c, err := orc.Registry.Get(ctx, id)
 		return c.Machine, err == nil
@@ -193,6 +208,7 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 		pub.Local = &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
 	}
 	o.ChainClasses, o.ChainRulesPublisher = cc, pub
+	pub.Sender = towerRules{&e.srvp}
 	o.Machines = PublishingMachines(o.Machines, pub)
 	return cc, nil
 }
