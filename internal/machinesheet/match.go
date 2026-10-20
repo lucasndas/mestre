@@ -287,12 +287,12 @@ func matchProvider(s Sheet, r Requirements) string {
 	switch {
 	case !pr.LoggedIn:
 		return fmt.Sprintf("perfil de conta `%s` não está logado", pr.Name)
-	case r.CLI && pr.CLIUnreachable:
-		return fmt.Sprintf("a CLI `mestre` não alcança o motor com o perfil de conta `%s` (etapa 5 da conformidade)", pr.Name)
 	case !pr.Conformant && pr.Version != "":
 		return fmt.Sprintf("perfil de conta `%s` não é conforme na versão %s", pr.Name, pr.Version)
 	case !pr.Conformant:
 		return fmt.Sprintf("perfil de conta `%s` não é conforme", pr.Name)
+	case r.CLI && pr.CLIUnreachable:
+		return fmt.Sprintf("a CLI `mestre` não alcança o motor com o perfil de conta `%s` (etapa 5 da conformidade)", pr.Name)
 	}
 	return ""
 }

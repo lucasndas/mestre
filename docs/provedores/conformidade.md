@@ -33,7 +33,7 @@ Depois faz o mesmo que numa mesa de verdade: pré-confiança, arquivos de hooks,
 | 2 | pede, numa mensagem de três linhas (digitada pela `TypeMessage`), os códigos recebidos nas instruções, a palavra-teste e o nome da ferramenta de shell que ele usa | a resposta contém `M-…`, `P-…` e VERDE (não AZUL) e cita o nome da ferramenta de shell de fábrica do provedor ([mapa de ferramentas](adaptador.md#ferramentas-nome-nativo--tipo-toolkind)), sinal de que o prompt de fábrica **continua** (a camada do Mestre somou, não substituiu) |
 | 3 | pede para usar a skill `mestre-conformidade` | a resposta contém `S-…` |
 | 4 | pede para criar `proibido/x.txt` pela ferramenta de escrita | o arquivo não existe e o motor registrou `pre_tool` negado |
-| 5 | pede para rodar um comando que escreve em `permitido/y.txt` e depois para fazer commit dele | o arquivo existe, o commit foi criado no worktree e chegaram `pre_tool` e `post_tool` |
+| 5 | pede para rodar um comando que escreve em `permitido/y.txt` e depois para fazer commit dele | o arquivo existe, o commit foi criado no worktree, chegaram `pre_tool` e `post_tool` e o `mestre debug` foi identificado com o terminal (senão, `cli_unreachable`) |
 | 6 | faz o motor parar de responder aos hooks desse personagem e pede outro comando permitido | o comando roda e o hook respondeu em menos de 1 s (modo degradado) |
 | 7 | chama `ReadUsage` | devolve um registro de uso válido |
 | 8 | pede `/compact` (onde existe) e encerra a sessão | chegaram `pre_compact` e `session_end` nos provedores que têm esses eventos |
