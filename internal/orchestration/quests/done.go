@@ -433,6 +433,9 @@ func (s *Service) afterDone(ctx context.Context, o outcome) {
 	}
 	switch o.kind {
 	case doneCompleted:
+		if s.o.Delivered != nil {
+			s.o.Delivered(ctx, q.Workspace, q.Table)
+		}
 		s.o.waitsStepDone(ctx, st.UID, resultText(run))
 	case doneLimit:
 		s.o.waitsStepDone(ctx, st.UID, resultText(run))

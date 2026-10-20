@@ -159,6 +159,9 @@ type OrchestrationOptions struct {
 	FreshnessRules   basesync.Rules
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
+	// ChainStallPeople gets the warning of a table that works without delivering,
+	// with the button to pause it (nil: only the Grão-Mestre is told).
+	ChainStallPeople chain.StallPeople
 
 	// The limits of use (milestone 5, stage 4). UsageChecklist opens the alert
 	// ALL-23 of the checklist when a source of use is not available (nil:
@@ -653,7 +656,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		supervision := o.ChainSupervision
 		if supervision == nil {
 			sup, err = chain.NewSupervisor(chain.SupervisorOptions{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock),
-				Inbox: ib, Policy: policy, Alerts: o.ChainAlerts, Tables: supTables{&tbl}, Reroute: rerouteRef{&ch}, Rules: ruleListerRef{&trl}, Logger: o.Logger})
+				Inbox: ib, Policy: policy, Alerts: o.ChainAlerts, Tables: supTables{&tbl}, Reroute: rerouteRef{&ch}, Rules: ruleListerRef{&trl}, StallPeople: o.ChainStallPeople, Logger: o.Logger})
 			if err != nil {
 				return nil, err
 			}
@@ -684,7 +687,8 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	},
 		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Issues: o.QuestIssues, MaxCorrections: o.QuestMaxCorrections, Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted})
+		Issues: o.QuestIssues, MaxCorrections: o.QuestMaxCorrections, Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted,
+		Delivered: func(ctx context.Context, workspace, table string) { _ = tbl.Delivered(ctx, workspace, table) }})
 	if err != nil {
 		return nil, err
 	}
