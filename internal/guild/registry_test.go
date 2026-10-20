@@ -32,10 +32,11 @@ func renewMotor(t *testing.T, r *rig, id string) *x509.Certificate {
 
 func hasPanelName(c *x509.Certificate) bool { return slices.Contains(c.DNSNames, transport.PanelName) }
 
-// Part of CA-GUILDA-12 (it closes in M5), on the Guild's side: the erasure of the vault copy on the
-// excluded machine (vault.drop) and sending the vault again are the
-// replication's, and the Owner's PIN is the bot's; what the Guild does is the
-// flag, the hook those two plug into, the certificates and the promotion rule.
+// Part of CA-GUILDA-12, on the Guild's side: what the Guild does is the flag, the
+// hook the replication plugs into, the certificates and the promotion rule. The
+// composition with vault.drop and the vault sent again is in
+// internal/app/towerexclusion_full_test.go; the Owner's PIN is the caller's
+// (the panel and /guilda), as CA-ADM-10 says.
 func TestExcludingAMachineFiresTheHookDropsThePanelNameAndBarsThePromotionUntilItIsUndone(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, clock.NewFake(day0))
