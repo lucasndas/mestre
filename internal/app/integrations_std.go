@@ -588,6 +588,8 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 				r.env.Log.Warn("app: the answers kept for the Telegram were not sent", "err", err)
 			}
 		}()
+		// the owners of the site credentials are told of their validity by the bot
+		go func() { _ = r.expiryWatcher().Run(ctx) }()
 		return bot.Run(ctx)
 	}}
 }
