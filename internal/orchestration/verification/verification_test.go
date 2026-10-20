@@ -367,7 +367,7 @@ func TestASecretSplitByEscapesIsHiddenAndTheOutputHasNoEscapes(t *testing.T) {
 	}
 }
 
-// CA-SZ-WS-08: the stage analysis leaves a proposal that does not hold before an
+// Part of CA-SZ-WS-08 (the notice of an outside edit and the confirmation are the panel, M6): the stage analysis leaves a proposal that does not hold before an
 // Administrator confirms it, and a file with content is never overwritten.
 func TestTheProposalIsWrittenOnceAndHoldsNothingUntilConfirmed(t *testing.T) {
 	t.Parallel()
