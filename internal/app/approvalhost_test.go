@@ -320,7 +320,7 @@ func (w *approvalWorld) call(cmd string, flags map[string]any, args ...string) l
 		Caller:  localchan.Caller{Identified: true, AgentID: gm.ID, TerminalID: "t-" + gm.ID}})
 }
 
-// Part of CA-CLI-GM-04: over the real composition, `gh merge` opens the request of the merge in
+// Part of CA-CLI-GM-05: over the real composition, `gh merge` opens the request of the merge in
 // the chain (the commit and the base of the PR), waits, and merges the approved commit
 // when the Owner approves; `gh settings apply` asks the Owner and the ruleset appears only
 // when it approves.

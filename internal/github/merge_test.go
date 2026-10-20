@@ -29,7 +29,7 @@ func mergeRig(t *testing.T) (*github.REST, *fakegithub.Server, int, string) {
 	return rest, gh, n, "lucas/meu-app"
 }
 
-// Part of CA-CLI-GM-04: the merge goes with the commit that was approved, with the method
+// The merge goes with the commit that was approved, with the method
 // asked, and GitHub's answer is the merge commit; the PR then shows as merged.
 func TestMergePullSendsTheApprovedCommitAndTheMethodAndReturnsTheMergeCommit(t *testing.T) {
 	t.Parallel()
@@ -58,7 +58,7 @@ const (
 	moved    = "2222222222222222222222222222222222222222"
 )
 
-// Part of CA-CLI-GM-04: a PR that moved since the approval is not merged, a rule of the
+// A PR that moved since the approval is not merged, a rule of the
 // branch is told apart from a conflict, an outdated branch, a base that moved and a
 // method the repository does not allow, and a merge without the full hash of the commit,
 // with a method that does not exist or for no PR is refused before anything is sent.
@@ -131,7 +131,7 @@ func TestMergePullTellsApartTheReasonsGitHubRefusesAndSendsNothingWhenTheCallIsB
 	}
 }
 
-// Part of CA-CLI-GM-04: a merge whose answer was lost (a 502 after GitHub merged) is
+// A merge whose answer was lost (a 502 after GitHub merged) is
 // recognized when the call is repeated, and the PR is merged at the approved commit:
 // success, not a refusal; a PR merged at another commit is not ours.
 func TestMergePullRecognizesAMergeThatHappenedWhoseAnswerWasLost(t *testing.T) {

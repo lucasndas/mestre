@@ -24,6 +24,7 @@ func (s *Service) Exception(ctx context.Context, e chain.ExceptionGrant) error {
 	if e.Character == "" {
 		return errors.New("decrees: an exception needs the character that asked")
 	}
+	e.By = personOf(e.By)
 	now := s.clk.Now()
 	level, err := s.levelOfApprover(ctx, s.o.DB.Reader(), e.By, e.Level)
 	if err != nil {
@@ -44,6 +45,10 @@ func (s *Service) Exception(ctx context.Context, e chain.ExceptionGrant) error {
 		return err
 	})
 }
+
+// personOf is the id of the user of an approver the chain names "user:<id>"
+// (chain.Service.DecideByPerson); the id of a character is left as it is.
+func personOf(by string) string { return strings.TrimPrefix(by, "user:") }
 
 // workspaceOf is the workspace of the request that makes a decree ("" when the
 // requests are not known).
@@ -86,6 +91,7 @@ func (s *Service) levelOfApprover(ctx context.Context, q queryer, by string, l c
 // Owner's. The PIN of these answers is asked by the flow of approval before it
 // reaches here, and an answer that only denies asks none.
 func (s *Service) Decree(ctx context.Context, g chain.DecreeGrant) error {
+	g.By = personOf(g.By)
 	r, err := s.request(ctx, g.Request)
 	if err != nil {
 		return err

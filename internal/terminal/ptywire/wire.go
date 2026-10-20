@@ -48,7 +48,11 @@ const (
 	DefaultCols = 200
 	DefaultRows = 50
 	// HandshakeTimeout is how long a connection may take to prove the secret.
-	HandshakeTimeout = 5 * time.Second
+	HandshakeTimeout = 30 * time.Second
+	// EngineHandshakeTimeout is how long the engine waits for the mestre-pty to
+	// finish the handshake, counted from the connect: longer than the mestre-pty
+	// waits (counted from its accept), so the side that cuts is the one that knows why.
+	EngineHandshakeTimeout = HandshakeTimeout + 5*time.Second
 	// SecretSize is the size of the per-terminal secret in bytes.
 	SecretSize = 32
 )

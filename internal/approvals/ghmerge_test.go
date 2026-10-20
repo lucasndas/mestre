@@ -9,7 +9,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 )
 
-// Part of CA-CLI-GM-04: the request of a merge is of type merge, names the PR and the
+// The request of a merge is of type merge, names the PR and the
 // commit, and is bound to the exact target (repository in lower case, number, head and
 // base), the one GitHubSource reads again to see whether the PR moved.
 func TestTheMergeRequestIsBoundToTheExactTargetOfThePR(t *testing.T) {

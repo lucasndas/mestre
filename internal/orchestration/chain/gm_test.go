@@ -16,26 +16,68 @@ import (
 )
 
 // CA-GM-07: a policy that does not let the Grand Master approve a merge alone
-// (here, the merge touches a sensitive area of the policy): his approval is
-// human_required and nothing is approved; taking it to the people (`approval
-// ask`, the answer climb) puts the question to the users.
+// (the merge touches a sensitive area, lacks the review or the CI, or a quorum
+// rule covers it): his approval is human_required and nothing is approved;
+// taking it to the people (`approval ask`, the answer climb, or the question
+// the quorum rule already put) puts the question to the users.
 func TestAMergeThatThePolicyDoesNotLetTheGrandMasterApproveAloneIsHumanRequiredAndAskingTakesItToThePeople(t *testing.T) {
 	t.Parallel()
-	w := newWorld(t)
-	f := green(2)
-	f.Files = append(f.Files, chain.PRFile{Path: "src/billing/charge.go", Added: 5})
-	id := w.prRequest(classes.RequestMerge, 60, f)
+	sensitive := green(2)
+	sensitive.Files = append(sensitive.Files, chain.PRFile{Path: "src/billing/charge.go", Added: 5})
+	noReview := green(2)
+	noReview.ReviewDone = false
+	noCI := green(2)
+	noCI.CIGreen = false
+	for _, tc := range []struct {
+		name   string
+		facts  chain.PRFacts
+		quorum bool
+		why    string
+	}{
+		{"sensitive area", sensitive, false, "pagamentos"},
+		{"missing review", noReview, false, "revisão"},
+		{"missing CI", noCI, false, "CI"},
+		{"quorum rule", green(2), true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := newWorld(t)
+			if tc.quorum {
+				rules := chain.DefaultRules()
+				rules.QuorumRules = []chain.QuorumRule{{Type: classes.RequestMerge, Approvals: 2}}
+				w.policy.setRules(rules)
+			}
+			id := w.prRequest(classes.RequestMerge, 60, tc.facts)
 
-	w.humanRequired(id, "pagamentos")
-	if r := w.request(id); r.State != chain.Open || r.Decision != nil {
-		t.Fatalf("after the refusal the request is %s with decision %+v; nothing may be approved", r.State, r.Decision)
-	}
-	w.decide(w.gm, id, chain.AnswerClimb, "mexe em pagamentos")
-	if w.level(id) != chain.LevelPeople {
-		t.Fatalf("after asking, the request is at %+v; want the people", w.request(id).Level)
-	}
-	if asked := w.users.askedFor(id); len(asked) == 0 {
-		t.Fatal("the users were not asked")
+			if tc.quorum {
+				// born at the people: the Grand Master's approval is refused
+				ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "parece certo"})
+				if ref.Code != chain.CodeHumanRequired {
+					t.Fatalf("approval = %+v, want human_required", ref)
+				}
+			} else {
+				w.humanRequired(id, tc.why)
+			}
+			if r := w.request(id); r.State != chain.Open || r.Decision != nil {
+				t.Fatalf("after the refusal the request is %s with decision %+v; nothing may be approved", r.State, r.Decision)
+			}
+			if !tc.quorum {
+				w.decide(w.gm, id, chain.AnswerClimb, "a política não me deixa aprovar")
+			}
+			if w.level(id) != chain.LevelPeople {
+				t.Fatalf("after asking, the request is at %+v; want the people", w.request(id).Level)
+			}
+			asked := w.users.askedFor(id)
+			if len(asked) == 0 {
+				t.Fatal("the users were not asked")
+			}
+			if tc.quorum && asked[0].Approvals != 2 {
+				t.Errorf("question = %+v; want the 2 approvals of the quorum rule", asked)
+			}
+			if r := w.request(id); r.State != chain.Open || r.Decision != nil {
+				t.Errorf("after asking the request is %s with decision %+v; nothing may be approved", r.State, r.Decision)
+			}
+		})
 	}
 }
 

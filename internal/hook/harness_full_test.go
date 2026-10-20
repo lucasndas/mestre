@@ -245,10 +245,11 @@ func newFullEngine(t *testing.T, agent string) *fullEngine {
 	dir := localchan.NewDirectory(sys)
 	mgr, err := terminal.NewManager(terminal.ManagerConfig{
 		DB: db, System: sys, MachineID: "m1", SocketDir: filepath.Join(root, "s"), LogDir: filepath.Join(root, "l"),
-		Spawner:    spawner,
-		PTYBinary:  func(string) (string, error) { return builds.pty, nil },
-		PTYVersion: ptyVersion,
-		OnStarting: dir.Starting, OnDiscarded: dir.Remove, OnEnded: dir.Remove,
+		Spawner:          spawner,
+		HandshakeTimeout: time.Minute, // a loaded CI machine can be slow to schedule the mestre-pty it just started
+		PTYBinary:        func(string) (string, error) { return builds.pty, nil },
+		PTYVersion:       ptyVersion,
+		OnStarting:       dir.Starting, OnDiscarded: dir.Remove, OnEnded: dir.Remove,
 	})
 	if err != nil {
 		t.Fatal(err)

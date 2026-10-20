@@ -40,7 +40,7 @@ func TestAnEpicThatDependsOnATableInReviewIsHeldByAWaitOfTheGrandMaster(t *testi
 	}
 }
 
-// CA-DEPMESA-02
+// Part of CA-DEPMESA-02 (the whole criterion, with the merge read by the poller, is in internal/app)
 func TestTheMergeThatIsConfirmedSatisfiesTheWaitAndWakesTheGrandMasterAndOnlyThen(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -130,7 +130,7 @@ func TestTwoTablesOnTheSameAreaTheOneOfTheHigherNumberWaitsAndIsWokenByTheMerge(
 	}
 }
 
-// CA-DEPMESA-05
+// Part of CA-DEPMESA-05 (the whole criterion, with the command and the stalled notice, is in internal/app)
 func TestTheTableThatIsCancelledOrTheEpicClosedAsNotPlannedCancelsTheWaitAndKeepsTheOtherHeld(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
