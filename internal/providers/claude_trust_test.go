@@ -213,6 +213,26 @@ func TestPreTrustOnWindowsWritesTheKeyWithForwardSlashes(t *testing.T) {
 	}
 }
 
+// An empty OS is this machine's for the key too: the preparation of a table
+// passes none, and on Windows the key must still go with forward slashes.
+func TestPreTrustWithoutOSWritesTheKeyOfThisMachine(t *testing.T) {
+	t.Parallel()
+	wt := filepath.Join(t.TempDir(), "mesa")
+	keys := map[string]string{}
+	for _, goos := range []string{"", runtime.GOOS} {
+		profile, path := trustFile(t, `{}`)
+		if _, err := providers.NewClaudeCode(providers.Options{}).PreTrust(providers.PreTrustRequest{OS: goos, Profile: profile, Worktree: wt}); err != nil {
+			t.Fatal(err)
+		}
+		for k := range decodeNumbers(t, readFile(t, path))["projects"].(map[string]any) {
+			keys[goos] = k
+		}
+	}
+	if keys[""] != keys[runtime.GOOS] {
+		t.Errorf("key without OS = %q, with %s = %q", keys[""], runtime.GOOS, keys[runtime.GOOS])
+	}
+}
+
 // The trust of the mirror goes in every writing of its folder: the one with
 // forward slashes Claude Code writes and one with backslashes.
 func TestPreTrustOnWindowsClearsTheMirrorInEveryWriting(t *testing.T) {
