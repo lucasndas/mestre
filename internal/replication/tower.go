@@ -83,6 +83,7 @@ type Replica struct {
 	link        *protocol.Link
 	queue       []store.LogRow
 	queueBytes  int
+	beforeApply func() // test seam: runs in drain after the batch is taken, before it applies
 	queueGen    uint64 // bumped when the queue is dropped, so a drain in flight knows its batch is gone
 	lastQueued  uint64
 	applied     uint64
@@ -441,6 +442,9 @@ func (r *Replica) drain(ctx context.Context) {
 					batch[i] = row
 				}
 			}
+		}
+		if r.beforeApply != nil {
+			r.beforeApply()
 		}
 		r.applyMu.Lock()
 		_, err := r.cfg.DB.ApplyLog(ctx, batch)
