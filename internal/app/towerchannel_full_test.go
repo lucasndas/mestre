@@ -56,7 +56,7 @@ func newChannelRig(t *testing.T, gated ...bool) *channelRig {
 
 // channelOpts are the choices of a channelRig: gated holds the preparation of the
 // Tower until released; builder gives the Citadel a session zero of a character.
-type channelOpts struct{ gated, builder bool }
+type channelOpts struct{ gated, builder, chain, citadelTerminals bool }
 
 func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
 	t.Helper()
@@ -101,6 +101,19 @@ func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
 		e.deps.HostOrchestration = true
 		if o.builder {
 			e.deps.Integration = builderIntegration{}
+		}
+		if o.chain {
+			e.deps.Integration = chainIntegration{}
+		}
+	}
+	if o.citadelTerminals {
+		// the Citadel runs characters of its own too, in terminals of its mestre-pty
+		x.a.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
+		hostOnly := x.a.setup
+		x.a.setup = func(e *Engine) {
+			hostOnly(e)
+			e.deps.Spawner = &terminal.DirectSpawner{Suite: "full", System: terminal.NewSystem()}
+			e.deps.CharacterPrep = runtimePrep{cfg: filepath.Join(home, "cfg"), home: home, sock: x.a.paths.CLISocket}
 		}
 	}
 	x.b.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
@@ -151,6 +164,16 @@ func (x *channelRig) character(t *testing.T, id, name string, st characters.Stat
 		t.Fatal(err)
 	}
 	return c
+}
+
+// lastSignal is when the registry last heard of the character.
+func (x *channelRig) lastSignal(t *testing.T, id string) time.Time {
+	t.Helper()
+	c, err := x.orc.Registry.Get(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.LastSignalAt
 }
 
 func (x *channelRig) state(t *testing.T, id string) characters.State {

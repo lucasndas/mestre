@@ -75,6 +75,9 @@ func (s *Service) runAnalysis(ctx context.Context, w workspaces.Workspace) error
 	if err != nil {
 		return code("analysis_failed", err)
 	}
+	if err := s.proposeVerification(ctx, w.Slug, dir, a.Verification); err != nil {
+		return code("verification_proposal_failed", err)
+	}
 	if hasAgents {
 		return s.keepAgentsMD(ctx, w.Slug, st, a)
 	}

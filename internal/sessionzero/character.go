@@ -595,7 +595,7 @@ func (c *Character) writeCharacterFiles(p *CharacterPlan, req CharacterRequest, 
 		return fmt.Errorf("character %s: %w", req.ID, err)
 	}
 	conf := path.Join(rel, "gitconfig")
-	changed, err := writeIfChanged(filepath.Join(req.Dir, filepath.FromSlash(conf)), []byte(gitConfigText(c.gitInclude(), req.Identity)))
+	changed, err := writeIfChanged(filepath.Join(req.Dir, filepath.FromSlash(conf)), []byte(gitConfigText(c.gitInclude(), req.Identity, safeDirectories(req))))
 	if err != nil {
 		return fmt.Errorf("character %s: %s: %w", req.ID, conf, err)
 	}
@@ -651,16 +651,44 @@ func (c *Character) gitInclude() string {
 	return filepath.ToSlash(c.o.GlobalGitConfig)
 }
 
+// safeDirectories are the folders git must trust for the character: the main
+// clone (when it is on this machine) and its own worktree, one entry each and
+// never a wildcard. The worktrees belong to the account of the service, not to
+// the one of the agents, and git refuses a repository it does not trust
+// ("dubious ownership"; docs/arquitetura/windows.md#serviços-no-windows).
+func safeDirectories(req CharacterRequest) []string {
+	var out []string
+	for _, d := range []string{req.Vars.Workspace, req.Dir} {
+		if d == "" || strings.ContainsAny(d, "*?[\n\r") || !filepath.IsAbs(d) {
+			continue
+		}
+		// git compares with the real path: both spellings are trusted
+		for _, p := range []string{d, realPath(d)} {
+			p = filepath.ToSlash(filepath.Clean(p))
+			if !slices.Contains(out, p) {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
 // gitConfigText is the gitconfig of a character: it includes the global one
-// of the account and defines only the author
+// of the account and defines the author and the folders git trusts
 // (docs/github/identidades-e-apps.md#autoria-dos-commits).
-func gitConfigText(include string, id Identity) string {
+func gitConfigText(include string, id Identity, safe []string) string {
 	q := func(s string) string { return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"` }
 	var b strings.Builder
 	if include != "" {
 		b.WriteString("[include]\n\tpath = " + q(include) + "\n")
 	}
 	b.WriteString("[user]\n\tname = " + q(id.Name) + "\n\temail = " + q(id.Email) + "\n")
+	if len(safe) > 0 {
+		b.WriteString("[safe]\n")
+		for _, d := range safe {
+			b.WriteString("\tdirectory = " + q(d) + "\n")
+		}
+	}
 	return b.String()
 }
 
@@ -683,7 +711,7 @@ func (c *Character) UpdateIdentity(_ context.Context, agentID string, id Identit
 	if !id.valid() {
 		return false, fmt.Errorf("character %s: no valid git identity", agentID)
 	}
-	changed, err := writeIfChanged(st.gitconfig, []byte(gitConfigText(c.gitInclude(), id)))
+	changed, err := writeIfChanged(st.gitconfig, []byte(gitConfigText(c.gitInclude(), id, safeDirectories(st.req))))
 	if err != nil {
 		return false, fmt.Errorf("character %s: gitconfig: %w", agentID, err)
 	}

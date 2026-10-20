@@ -736,10 +736,13 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 // hookEngine is the engine side of the hook dispatcher over the rules kept on
 // this machine, with the gate of the temporary table rules.
 func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
-	approvals, tableRules := e.deps.Approvals, e.deps.TableRules
+	approvals, tableRules, classHooks := e.deps.Approvals, e.deps.TableRules, e.deps.ClassHooks
 	if e.deps.HostOrchestration {
-		// the chain and the temporary rules belong to the period of the
-		// Citadel, which comes and goes under this engine
+		// the chain, the temporary rules and the hooks of the classes belong
+		// to the period of the Citadel, which comes and goes under this engine
+		if classHooks == nil {
+			classHooks = periodClassHooks{e}
+		}
 		if approvals == nil {
 			approvals = periodApprovals{e}
 		}
@@ -750,7 +753,7 @@ func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
 	return &hook.Engine{
 		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
 		Characters: e.deps.Characters, Approvals: approvals, States: e.deps.States, Contexts: e.deps.Contexts,
-		ClassHooks: e.deps.ClassHooks, OnEvent: e.onHookEvent, TableRules: tableRules,
+		ClassHooks: classHooks, OnEvent: e.onHookEvent, TableRules: tableRules, Masker: e.deps.Masker,
 	}
 }
 

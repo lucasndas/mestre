@@ -113,6 +113,10 @@ type Analysis struct {
 	// Suggestions are the improvements to an existing AGENTS.md; the users
 	// apply them or not.
 	Suggestions []string
+	// Verification are the commands that prove the project is up (build and
+	// tests), proposed for .mestre/regras/verificacao.yaml: they hold only after
+	// an Administrator confirms them (docs/sessao-zero/workspace.md#comandos-de-verificação).
+	Verification []string
 }
 
 // Analyst is the Grand Master analysing the project

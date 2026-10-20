@@ -102,7 +102,9 @@ func (p runtimePrep) Prepare(_ context.Context, req sessionzero.CharacterRequest
 	script := filepath.Join(p.home, "quick.yaml")
 	env := append(os.Environ(),
 		localchan.EnvAgentID+"="+req.ID, localchan.EnvEndpoint+"="+localchan.EndpointURL(p.sock), localchan.EnvCLI+"="+runtimeBuilds.mestre,
-		"HOME="+p.home, "CLAUDE_CONFIG_DIR="+p.cfg, "FAKEAGENT_SCRIPT="+script, "GORACE=atexit_sleep_ms=0")
+		"HOME="+p.home, "CLAUDE_CONFIG_DIR="+p.cfg, "FAKEAGENT_SCRIPT="+script, "GORACE=atexit_sleep_ms=0",
+		"PATH="+filepath.Dir(runtimeBuilds.mestre)+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GIT_AUTHOR_NAME=Dev", "GIT_AUTHOR_EMAIL=dev@example.test", "GIT_COMMITTER_NAME=Dev", "GIT_COMMITTER_EMAIL=dev@example.test")
 	plan := sessionzero.CharacterPlan{ID: req.ID, Provider: providers.ClaudeCode, Tmp: filepath.Join(p.home, "tmp", req.ID)}
 	plan.Launch = providers.Launch{Path: runtimeBuilds.fakeagent, Env: env, Dir: req.Dir, SessionID: req.NewSessionID}
 	return plan, nil

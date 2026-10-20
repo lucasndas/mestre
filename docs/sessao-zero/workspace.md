@@ -1,6 +1,6 @@
 # Sessão zero do workspace
 
-> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** o que acontece, uma vez por repositório, quando um workspace é criado: Apps, espelho, análise, `AGENTS.md`, pasta `.mestre/`, comandos de verificação, versionamento e teste de aprovação de App · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -46,6 +46,7 @@ flowchart TD
 - É a **única fonte** do que o gate de frescor ([ações por nível](../github/acoes-por-nivel.md#merge)), a etapa `sync` ([sincronia com a base](../orquestracao/sincronia-com-a-base.md)) e o `done` de uma classe com `verify: true` ([prova e devolução](../orquestracao/prova-e-devolucao.md#o-done-que-a-classe-exige)) rodam. O motor os executa num worktree efêmero da mesa, como a conta `mestre-agente` e nunca como a do motor ([segurança](../arquitetura/seguranca.md#contas-do-sistema-e-isolamento-dos-agentes)), igual nos três provedores, porque a verificação é do motor e não de um agente. Lido sempre do clone principal, nunca da branch do PR: um PR não troca o que o verifica (CA-GH-ACOES-15).
 - **Sem comando confirmado, nada é aprovado sozinho:** o gate não conclui nada e o pedido de aprovação do PR do épico nasce `human_required`, com o aviso "sem comando de verificação configurado"; o Grão-Mestre lembra os usuários no resumo periódico. Seguir adiante sem verificar é o que essa regra impede. A `sync` sem comando volta ao Mestre da mesa, e o `done` com `verify: true` conclui "não verificada" ([prova e devolução](../orquestracao/prova-e-devolucao.md#o-done-que-a-classe-exige)).
 - Arquivo mudado por fora do painel: vale a última versão confirmada e os Administradores são avisados, como no [teto](../classes/teto-do-workspace.md#arquivo-mudado-por-fora).
+- Como o motor guarda: o `analysis` escreve a proposta só se o arquivo está vazio ou ausente (uma nova rodada não a sobrescreve) e avisa os Administradores; o que vale é a última versão confirmada, no banco (`verification_commands`, com o hash e quem a confirmou). Confirmar pede o hash que o Administrador viu (o arquivo que mudou depois é recusado) e o nível Administrador ou acima; cada versão mudada por fora é avisada uma vez. A tela do painel é do M6 e chama o mesmo serviço.
 
 ### Estrutura de `.mestre/`
 ```

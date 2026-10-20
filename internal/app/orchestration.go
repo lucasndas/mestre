@@ -631,7 +631,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	tbl, err = tables.New(tables.Options{Proofs: questProofs{&quests.Store{DB: o.Guild}}, DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
-		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.Messages, Attachments: o.Attachments,
+		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.messages(), Attachments: o.Attachments,
 		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Requests: chainRef{&ch}, Oversight: oversightRef{&sup}, Peers: o.Peers, Dependencies: depsRef{&deps}, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
 	if err != nil {
 		return nil, err

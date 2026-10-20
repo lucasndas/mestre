@@ -1,6 +1,6 @@
 # Classes
 
-> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** pacote da classe (instruções, permissões, hooks, skills, App), escopos e quem cria · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -13,7 +13,7 @@ A classe diz a um personagem **o que fazer e o que pode fazer** (ex.: Dev, QA, R
 | Escopo | Pasta (fonte na Cidadela) | Quem cria | Aprovação |
 |---|---|---|---|
 | global | `<dados da Cidadela>/classes-globais/<classe>/` ([persistência](../arquitetura/persistencia.md#arquivos)) | Dono ou Administrador, pelo painel | — |
-| workspace | `.mestre/classes/<classe>/` no clone principal | Dono ou Administrador; o Grão-Mestre pode propor | de um Administrador ou acima; o Grão-Mestre nunca aprova a própria proposta |
+| workspace | `.mestre/classes/<classe>/` no clone principal | Dono ou Administrador; o Grão-Mestre pode propor | de um Administrador ou acima, pelo pedido `classe_workspace` do [fluxo de aprovação](../aprovacoes/fluxo.md) (ligado ao hash do pacote) ou pelo painel; o Grão-Mestre nunca aprova a própria proposta |
 | mesa | `.mestre/mesas/<mesa>/classes/<classe>/` | Mestre da mesa (ou usuários) | nenhuma, desde que dentro do [teto do workspace](teto-do-workspace.md) |
 
 - As classes são arquivos, para poderem ser versionadas; o banco da Cidadela guarda o índice ([persistência](../arquitetura/persistencia.md)). As Torres recebem cópias materializadas pelo motor ([mesa](../sessao-zero/mesa.md)).

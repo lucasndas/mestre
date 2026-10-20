@@ -109,7 +109,7 @@ func TestClassCheckShowsAClassAboveACeilingThatNowDeniesIt(t *testing.T) {
 	if got := classes.CheckClass("dev", class, before); got.Above() {
 		t.Fatalf("before the change: %s", got)
 	}
-	restricted := "version: 1\npermissions: {files: {deny: [\"src/**\"]}, git: {request_push: false, workflows: never}, operator: false}\n"
+	restricted := "version: 1\npermissions: {files: {deny: [\"src/**\", \"**/.env*\", \"**/*.pem\", \"**/*.key\", \"**/id_rsa*\", \"**/id_ed25519*\", \"**/id_ecdsa*\", \"**/.npmrc\", \"**/credentials*.json\", \"**/service-account*.json\"]}, git: {request_push: false, workflows: never}, operator: false}\n"
 	if err := k.Change(ctx, []byte(restricted), classes.Authority{Level: classes.LevelAdmin, Via: classes.ViaPanel}); err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,9 @@ func TestAHandEditOnlyHoldsOnceApproved(t *testing.T) {
 	ctx := context.Background()
 	k := newKeeper(t)
 	admin := classes.Authority{Level: classes.LevelAdmin, Via: classes.ViaPanel}
-	if err := k.Change(ctx, []byte(docCeiling), admin); err != nil {
+	// the example of the doc lifts the secret globs of the default ceiling: a decree
+	decree := classes.Authority{Level: classes.LevelAdmin, Via: classes.ViaDecree, Decree: 1}
+	if err := k.Change(ctx, []byte(docCeiling), decree); err != nil {
 		t.Fatal(err)
 	}
 	approved := ceiling(t, docCeiling).Hash

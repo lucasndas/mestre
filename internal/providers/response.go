@@ -82,7 +82,7 @@ func formatHookSpecific(native string, kind EventKind, r Reply, maxContext int, 
 			out["permissionDecision"], out["permissionDecisionReason"] = "deny", r.Reason
 		}
 		return jsonOutput(map[string]any{"hookSpecificOutput": out})
-	case r.Kind == ReplyContext && r.Context != "" && (kind == EventSessionStart || kind == EventTurnStart):
+	case r.Kind == ReplyContext && r.Context != "" && (kind == EventSessionStart || kind == EventTurnStart || kind == EventPostTool):
 		ctx := r.Context
 		if maxContext > 0 {
 			ctx = cutRunes(ctx, maxContext)

@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/gitx"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
@@ -121,9 +123,10 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}
 	var cc *CitadelClasses
 	var sb *SessionBuilder
+	var classChain atomic.Pointer[chain.Service] // the chain of the period, for the requests of the classes
 	if people, ok := integ.(chainPeople); ok {
 		layout := workspaces.Layout{Root: workspacesDir}
-		if cc, err = e.hostChain(&opts, people, layout); err != nil {
+		if cc, err = e.hostChain(&opts, people, layout, &classChain); err != nil {
 			return nil, err
 		}
 		if notes, ok := people.CharacterDecrees().(DecreeNotes); ok {
@@ -138,6 +141,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if err != nil {
 		return nil, err
 	}
+	classChain.Store(orc.Chain)
 	// the use of the providers: the events of the characters and the sources
 	// read periodically (usagehost.go)
 	reader := newUsageReader(&usageReader{svc: orc.Usage, dir: usageDirectory{reg: orc.Registry, presets: opts.Presets, quests: &orc.Quests},
@@ -165,6 +169,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}}
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
+		e.hostClassHooks(orc, opts.ClassLibraries, ph)
 	}
 	if rp, ok := orc.Policy.(interface {
 		Risk(workspace string) *classes.RiskPolicy
@@ -198,9 +203,19 @@ func tableRuleGate(r *tablerules.Service) classes.TableRuleGate {
 // (published to this machine before a character starts and when a temporary
 // table rule is made), the policy file of each workspace, and the grimoires'
 // access by the users. The people it asks come from the integration.
-func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout workspaces.Layout) (*CitadelClasses, error) {
+func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout workspaces.Layout, periodChain *atomic.Pointer[chain.Service]) (*CitadelClasses, error) {
 	books := newClassBooks(o.Guild, e.clk, e.paths.ClassesGlobais, layout)
 	o.ClassLibraries = books.For
+	// the proposals of the Grand Master become requests of the type classe_workspace,
+	// and the "Aprovar" of an Administrator puts the class in use (classapproval.go)
+	ca := &classApprovals{chain: periodChain, books: books.For, users: people.Users, tell: people.OwnerAlert}
+	books.alerts = ca.alertsFor
+	if o.ChainSinks == nil {
+		o.ChainSinks = map[classes.RequestType]chain.Sink{}
+	}
+	if o.ChainSinks[classes.RequestWorkspaceClass] == nil {
+		o.ChainSinks[classes.RequestWorkspaceClass] = ca
+	}
 	o.ChainPolicy = policyFileFor(layout, people, e.log)
 	if o.ChainAlerts == nil {
 		o.ChainAlerts = chainOwnerAlerts{people}

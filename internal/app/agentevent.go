@@ -19,8 +19,13 @@ func (e *Engine) onHookEvent(ev providers.Event, ans hook.Answer) {
 	if e.deps.OnHookEvent != nil {
 		e.deps.OnHookEvent(ev, ans)
 	}
-	if p := e.period.Load(); p != nil && p.usage != nil && ev.AgentID != "" {
-		p.usage.onEvent(ev) // the Citadel takes the use of the characters of this machine
+	if p := e.period.Load(); p != nil && ev.AgentID != "" {
+		if p.usage != nil {
+			p.usage.onEvent(ev) // the Citadel takes the use of the characters of this machine
+		}
+		if p.async != nil {
+			p.async.OnEvent(ev, ans) // the asynchronous hooks of its class, after the answer
+		}
 	}
 	e.mu.Lock()
 	run := e.tow
