@@ -124,9 +124,13 @@ func (s *Service) Overlap(ctx context.Context, workspace string, globs []string)
 	if err != nil {
 		return Overlap{}, fmt.Errorf("a branch base origin/%s não foi lida: %w", w.DefaultBranch, err)
 	}
-	log, err := mirror.Log(ctx, string(tip))
+	// only the last commits are read: the range stops at overlapScan, and a
+	// history shorter than that is read whole
+	log, err := mirror.Log(ctx, fmt.Sprintf("%s~%d..%s", tip, overlapScan, tip))
 	if err != nil {
-		return Overlap{}, err
+		if log, err = mirror.Log(ctx, string(tip)); err != nil {
+			return Overlap{}, err
+		}
 	}
 	for i, c := range log {
 		if i >= overlapScan || len(out.Commits) >= overlapShow {
@@ -137,7 +141,7 @@ func (s *Service) Overlap(ctx context.Context, workspace string, globs []string)
 		}
 		changes, err := mirror.DiffNameStatus(ctx, string(c.Parents[0]), string(c.Hash))
 		if err != nil {
-			return Overlap{}, err
+			continue
 		}
 		if files := filesOf(changes, keep); len(files) > 0 {
 			out.Commits = append(out.Commits, BaseCommit{Hash: string(c.Hash), Subject: c.Subject(), Author: c.Author.Name, When: c.Author.When, Files: files})
@@ -157,7 +161,7 @@ func (s *Service) Overlap(ctx context.Context, workspace string, globs []string)
 		}
 		changes, err := mirror.DiffNameStatus(ctx, t.BaseCommit, string(head))
 		if err != nil {
-			return Overlap{}, err
+			continue // a base the mirror no longer has: the table shows nothing, the others do
 		}
 		if files := filesOf(changes, keep); len(files) > 0 {
 			out.Tables = append(out.Tables, TableOverlap{Table: t.ID, Epic: t.Epic, Files: files})
@@ -187,7 +191,10 @@ func (s *Service) handleOverlap(ctx context.Context, c *localchan.Call) localcha
 	}
 	res, err := s.Overlap(ctx, gm.Workspace, globs)
 	if err != nil {
-		return localchan.Fail(localchan.CodeUsage, err.Error(), "")
+		if strings.Contains(err.Error(), "is not a glob") {
+			return localchan.Fail(localchan.CodeUsage, err.Error(), "")
+		}
+		return localchan.Fail(localchan.CodeInternal, "the base and the tables could not be read from the mirror", "")
 	}
 	commits := make([]map[string]any, 0, len(res.Commits))
 	var text strings.Builder

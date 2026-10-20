@@ -92,6 +92,8 @@ var lockedRefuses = map[string]bool{
 	"class create": true, "class edit": true, "class assign": true,
 	"issue create": true, "issue update": true, "issue comment": true, "issue list": true,
 	"pr status": true, "pr comment": true, "pr reply": true, "pr note": true,
+	// creating an App acts on GitHub with the account of the Owner
+	"app create": true,
 	// no approval is applied while the Mestre is locked (docs/aprovacoes/fluxo.md):
 	// deciding makes an exception or a temporary rule, and resuming the
 	// autonomy of a table gives back what it had paused

@@ -31,8 +31,10 @@ type Offerer interface {
 
 // ProposeHandler is `mestre decree propose` and `mestre decree list`
 // (docs/cli/grao-mestre.md#mestre-decree): the Grand Master turns the order of a
-// user into a structured proposal; the engine checks the level of the author and
-// shows him what will hold, and only his click makes the decree.
+// user into a structured proposal. The author and the text are the ones of the
+// message; the effect, the target and the scope are what the agent understood, and
+// the engine checks the level of the author and shows him exactly what will hold:
+// only his click makes the decree.
 type ProposeHandler struct {
 	Service    *Service
 	Characters interface {

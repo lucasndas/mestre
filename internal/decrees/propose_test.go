@@ -148,6 +148,10 @@ func TestDecreeProposeKindsAndScopesAreChecked(t *testing.T) {
 	if got := run(w, h, gm, "decree propose", ruleFlags("ordem")); got.OK || got.Code != "not_delivered" {
 		t.Errorf("an author out of reach: %+v, want not_delivered", got)
 	}
+	var open int
+	if err := w.db.Reader().QueryRowContext(w.ctx, `SELECT COUNT(*) FROM decree_proposals WHERE state = 'open'`).Scan(&open); err != nil || open != 0 {
+		t.Errorf("%d proposals left open by one that could not be offered (%v)", open, err)
+	}
 }
 
 func TestDecreeListShowsTheDecreesOfTheWorkspaceAndAllWithTheEndedOnes(t *testing.T) {

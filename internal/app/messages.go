@@ -16,10 +16,11 @@ import (
 // ones of the channel, never the ones an agent says.
 type inboxMessages struct{ store *inbox.Store }
 
-// item is the message of a user of the workspace.
+// item is the message of a user of the workspace: what the user wrote, not the
+// answer to a button, whose text an agent wrote around the click.
 func (m inboxMessages) item(ctx context.Context, workspace, id string) (inbox.Item, error) {
 	it, err := m.store.Get(ctx, id)
-	if err != nil || it.Workspace != workspace || it.Kind != inbox.KindUser || it.Origin == nil {
+	if err != nil || it.Workspace != workspace || it.Kind != inbox.KindUser || it.Origin == nil || it.Origin.Choice != 0 {
 		return inbox.Item{}, decrees.ErrNoMessage
 	}
 	return it, nil
@@ -61,7 +62,7 @@ func (m inboxMessages) Current(ctx context.Context, workspace, grandMaster strin
 		return "", err
 	}
 	for i := len(all) - 1; i >= 0; i-- {
-		if it := all[i]; it.Workspace == workspace && it.Kind == inbox.KindUser && it.Origin != nil && it.Origin.User != "" {
+		if it := all[i]; it.Workspace == workspace && it.Kind == inbox.KindUser && it.Origin != nil && it.Origin.Choice == 0 && it.Origin.User != "" {
 			return it.Origin.User, nil
 		}
 	}
