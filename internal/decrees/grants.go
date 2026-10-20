@@ -36,7 +36,7 @@ func (s *Service) Exception(ctx context.Context, e chain.ExceptionGrant) error {
 	if d.Workspace == "" {
 		return errors.New("decrees: the workspace of the request is not known")
 	}
-	return s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
 		_, err := insertDecree(ctx, tx, d, fmt.Sprintf("aprovação do pedido %d", e.Request), now)
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 			return nil // the same approval, applied twice
@@ -95,7 +95,7 @@ func (s *Service) Decree(ctx context.Context, g chain.DecreeGrant) error {
 		return err
 	}
 	var d Decree
-	err = s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+	err = s.write(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()
 		u, err := readUser(ctx, tx, g.By)
 		if err != nil {

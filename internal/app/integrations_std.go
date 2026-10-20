@@ -112,7 +112,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	if env.SetLocked != nil {
 		env.SetLocked(r.lock.Locked)
 	}
-	r.decrees, err = decrees.New(decrees.Options{DB: env.DB, Clock: env.Clock, PINs: svc, Alerts: r.alert, Requests: lateChain{r}, Locked: r.lock.Locked, Logger: env.Log})
+	r.decrees, err = decrees.New(decrees.Options{DB: env.DB, Clock: env.Clock, PINs: svc, Alerts: r.alert, Requests: lateChain{r}, Targets: decreeTargets{live: lateTargets{r}, repos: r.workspaceRepo}, Locked: r.lock.Locked, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the decrees: %w", err)
 	}
@@ -263,6 +263,16 @@ func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMe
 		return req.Target, nil
 	}
 	return nil, fmt.Errorf("app: no live target for requests of type %q", req.Type)
+}
+
+// workspaceRepo is the repository of a workspace, from the orchestration of the
+// period.
+func (r *stdRun) workspaceRepo(ctx context.Context, workspace string) (string, error) {
+	orc := r.orc.Load()
+	if orc == nil {
+		return "", errors.New("app: the orchestration is not built")
+	}
+	return workspaceRepoOf{orc.Workspaces}.Repo(ctx, workspace)
 }
 
 type lateApprovals struct{ r *stdRun }
@@ -455,8 +465,13 @@ func (r *stdRun) GuildLock(ctx context.Context) (guild.Lock, error) {
 // OwnerAlert, CharacterDecrees and Users make the run the people of the chain
 // (chainPeople).
 func (r *stdRun) OwnerAlert(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }
-func (r *stdRun) CharacterDecrees() CharacterDecrees          { return r.decrees }
-func (r *stdRun) Users() *users.Service                       { return r.users }
+
+// DecreesChanged has the effective rules published again after the decrees in
+// force changed.
+func (r *stdRun) DecreesChanged(f func(context.Context)) { r.decrees.SetChanged(f) }
+
+func (r *stdRun) CharacterDecrees() CharacterDecrees { return r.decrees }
+func (r *stdRun) Users() *users.Service              { return r.users }
 
 // BindFence implements IntegrationRun.
 func (r *stdRun) BindFence(f *guild.Fence) { r.fence.Store(f) }

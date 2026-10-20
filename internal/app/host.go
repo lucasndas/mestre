@@ -169,6 +169,17 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		c, err := orc.Registry.Get(ctx, id)
 		return c.Machine, err == nil
 	}}
+	if dc, ok := integ.(interface{ DecreesChanged(func(context.Context)) }); ok && opts.ChainRulesPublisher != nil {
+		// the decrees in force are part of the effective rules: a decree made,
+		// revoked or suspended reaches the hooks without waiting for a restart
+		pub := opts.ChainRulesPublisher
+		dc.DecreesChanged(func(ctx context.Context) {
+			if err := pub.PublishAll(ctx); err != nil {
+				e.log.Warn("app: the effective rules were not sent after a change of the decrees", "err", err)
+			}
+		})
+	}
+	ph.decrees = hostDecreeUses(integ, orc, e.clk, e.log.Warn)
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
 		ph.siteRules = cc.Rules

@@ -267,6 +267,39 @@ func (s *Service) Executed(ctx context.Context, number int64, character, action 
 	})
 }
 
+// Applied registers that the hook let a call of the character through on the
+// strength of the decree (hook.Answer.Decree): an exception is spent (it is used
+// once), a rule that stays active gets the execution in its list. It registers
+// nothing, and says ErrEnded, when the decree is not one that reaches the
+// character now: another workspace or table, over (revoked, expired, suspended,
+// used), or of an author who lost the level; so a decree is never applied beyond
+// what it was made for, and the stale rules of a machine register no use.
+func (s *Service) Applied(ctx context.Context, c characters.Character, number int64, action string) error {
+	if number <= 0 {
+		return nil
+	}
+	d, err := getDecree(ctx, s.o.DB.Reader(), number)
+	if err != nil {
+		return err
+	}
+	now := s.clk.Now()
+	if d.State != Active || !reaches(d, c) || (!d.Until.IsZero() && !now.Before(d.Until)) {
+		return ErrEnded
+	}
+	if d.Kind == KindException {
+		if _, err := s.Use(ctx, c.ID, number); err != nil {
+			return err
+		}
+		return nil
+	}
+	if level, err := s.levelOf(ctx, s.o.DB.Reader(), d); err != nil {
+		return err
+	} else if level == "" {
+		return ErrEnded
+	}
+	return s.Executed(ctx, number, c.ID, action)
+}
+
 // Fulfilled registers, in each active decree that frees the push to the
 // character, that the engine sent the branch of its table for it (`mestre pr
 // open` and `mestre pr update`): the agent never has the push, and the decree

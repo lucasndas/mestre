@@ -15,6 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/users"
@@ -139,7 +140,9 @@ type periodHooks struct {
 	rules classes.TableRuleGate
 	// usage takes the events of the characters; agentMachine says where the
 	// registry puts a character (nil in a period without orchestration).
-	usage        *hookUsage
+	usage *hookUsage
+	// decrees registers the use of the decree an allow of the hook carries.
+	decrees      func(providers.Event, hook.Answer)
 	agentMachine func(ctx context.Context, id string) (string, bool)
 	// siteRules are the effective rules of a character, for the request of a
 	// site credential by a Tower (nil in a period without the classes).

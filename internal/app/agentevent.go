@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/logging"
@@ -21,6 +22,9 @@ func (e *Engine) onHookEvent(ev providers.Event, ans hook.Answer) {
 	}
 	if p := e.period.Load(); p != nil && p.usage != nil && ev.AgentID != "" {
 		p.usage.onEvent(ev) // the Citadel takes the use of the characters of this machine
+	}
+	if p := e.period.Load(); p != nil && p.decrees != nil {
+		p.decrees(ev, ans) // the decree that freed the call records its use
 	}
 	e.mu.Lock()
 	run := e.tow
@@ -72,7 +76,11 @@ func agentEventPayload(ev providers.Event, ans hook.Answer, mask *logging.Masker
 	if err != nil {
 		return nil, err
 	}
-	return protocol.Object{"event": evb, "answer": ab}, nil
+	obj := protocol.Object{"event": evb, "answer": ab}
+	if ans.Decree > 0 { // the answer never carries it (json:"-"); the Citadel registers the use
+		obj["decree"] = json.RawMessage(strconv.FormatInt(ans.Decree, 10))
+	}
+	return obj, nil
 }
 
 // handleAgentEvent is the handler of agent.event on the Citadel: the event of a
@@ -83,7 +91,7 @@ func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*pr
 		return nil, nil
 	}
 	period := e.period.Load()
-	if e.deps.OnAgentEvent == nil && (period == nil || period.usage == nil) {
+	if e.deps.OnAgentEvent == nil && (period == nil || (period.usage == nil && period.decrees == nil)) {
 		return nil, nil
 	}
 	var ev providers.Event
@@ -92,6 +100,9 @@ func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*pr
 		return nil, protocol.NewError(protocol.CodeInvalidPayload, "agent.event: the event is not readable: %v", err)
 	}
 	_ = json.Unmarshal((*obj)["answer"], &ans)
+	if raw, ok := (*obj)["decree"]; ok {
+		_ = json.Unmarshal(raw, &ans.Decree)
+	}
 	// The identity of the sender is the verified one of the connection; the
 	// character the event names must run there, or any Tower could forge the
 	// events of a character of another (and move its state).
@@ -106,6 +117,11 @@ func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*pr
 	}
 	if period != nil && period.usage != nil {
 		period.usage.onEvent(ev)
+	}
+	if period != nil && period.decrees != nil {
+		// the character runs on the machine that sent it (checked above); the
+		// decree must still reach it, which Applied checks
+		period.decrees(ev, ans)
 	}
 	return nil, nil
 }
