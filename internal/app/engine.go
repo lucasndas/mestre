@@ -173,7 +173,10 @@ type Deps struct {
 	// Binary is the stable absolute path of the mestre binary the hook files
 	// call (default: the running one).
 	HostOrchestration bool
-	Binary            string
+	// UsageSources are the account profiles and the command runner the
+	// periodic reading of the use needs (the installation gives them).
+	UsageSources UsageSources
+	Binary       string
 	// Integration opens, for each period of the Citadel that hosts the
 	// orchestration, the bot of the Telegram, the users, the flow of approval and
 	// the commands of GitHub (StandardIntegration); nil: none.
@@ -223,6 +226,7 @@ type Engine struct {
 	rt       *machineRuntime
 	orc      atomic.Pointer[Orchestration] // the orchestration of the period that acts
 	sheets   atomic.Pointer[machinesheet.Registry]
+	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
 	srvp     atomic.Pointer[protocol.Server] // the protocol server of the period of the Citadel
 	sent     replies                         // the ends of the table.done the Citadel waits for
 	tabs     atomic.Pointer[tables.Service]  // the tables of the period of the Citadel, for the bundles of the Towers

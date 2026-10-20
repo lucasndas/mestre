@@ -219,9 +219,34 @@ func (e *Engine) towerWorktree(dir string) error {
 	if e.paths.Workspaces == "" || err != nil {
 		return errors.New("this machine keeps no folder of workspaces")
 	}
-	rel, err := filepath.Rel(root, filepath.Clean(dir))
+	// links count: the worktree is judged by where its nearest existing folder really is
+	real, err := resolveExisting(filepath.Clean(dir))
+	if err != nil {
+		return err
+	}
+	if r, err := filepath.EvalSymlinks(root); err == nil {
+		root = r
+	}
+	rel, err := filepath.Rel(root, real)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return fmt.Errorf("the worktree %q is not in the workspaces of this machine", dir)
 	}
 	return nil
+}
+
+// resolveExisting resolves the links of the longest existing prefix of a path
+// and puts the rest back.
+func resolveExisting(p string) (string, error) {
+	rest := ""
+	for cur := p; ; {
+		if r, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(r, rest), nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", fmt.Errorf("the worktree %q has no folder that exists", p)
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
 }

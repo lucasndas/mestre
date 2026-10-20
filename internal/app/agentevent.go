@@ -19,6 +19,9 @@ func (e *Engine) onHookEvent(ev providers.Event, ans hook.Answer) {
 	if e.deps.OnHookEvent != nil {
 		e.deps.OnHookEvent(ev, ans)
 	}
+	if p := e.period.Load(); p != nil && p.usage != nil && ev.AgentID != "" {
+		p.usage.onEvent(ev) // the Citadel takes the use of the characters of this machine
+	}
 	e.mu.Lock()
 	run := e.tow
 	e.mu.Unlock()
@@ -73,7 +76,11 @@ func agentEventPayload(ev providers.Event, ans hook.Answer, mask *logging.Masker
 // character of a Tower, from the machine that sent it.
 func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
 	obj, ok := m.Payload.(*protocol.Object)
-	if !ok || e.deps.OnAgentEvent == nil {
+	if !ok {
+		return nil, nil
+	}
+	period := e.period.Load()
+	if e.deps.OnAgentEvent == nil && (period == nil || period.usage == nil) {
 		return nil, nil
 	}
 	var ev providers.Event
@@ -91,7 +98,12 @@ func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*pr
 	if err := e.runsOn(ctx, ev.AgentID, m.Peer.ID); err != nil {
 		return nil, protocol.NewError(protocol.CodeForbidden, "agent.event: %v", err)
 	}
-	e.deps.OnAgentEvent(m.Peer.ID, ev, ans)
+	if e.deps.OnAgentEvent != nil {
+		e.deps.OnAgentEvent(m.Peer.ID, ev, ans)
+	}
+	if period != nil && period.usage != nil {
+		period.usage.onEvent(ev)
+	}
 	return nil, nil
 }
 
@@ -99,10 +111,14 @@ func (e *Engine) handleAgentEvent(ctx context.Context, m *protocol.Message) (*pr
 // Citadel (Deps.AgentMachine). Without the registry nothing runs anywhere: the
 // answer is no.
 func (e *Engine) runsOn(ctx context.Context, agentID, machine string) error {
-	if e.deps.AgentMachine == nil {
+	where := e.deps.AgentMachine
+	if p := e.period.Load(); where == nil && p != nil {
+		where = p.agentMachine
+	}
+	if where == nil {
 		return errors.New("this Citadel does not know where the characters run")
 	}
-	if where, ok := e.deps.AgentMachine(ctx, agentID); !ok || where != machine {
+	if at, ok := where(ctx, agentID); !ok || at != machine {
 		return fmt.Errorf("the character %q does not run on %s", agentID, machine)
 	}
 	return nil

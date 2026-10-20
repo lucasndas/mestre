@@ -15,6 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/users"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -134,6 +135,13 @@ func (g userGrimoires) CanUse(ctx context.Context, actor grimoires.Actor, worksp
 type periodHooks struct {
 	chain *chain.Service
 	rules classes.TableRuleGate
+	// usage takes the events of the characters; agentMachine says where the
+	// registry puts a character (nil in a period without orchestration).
+	usage        *hookUsage
+	agentMachine func(ctx context.Context, id string) (string, bool)
+	// layers gives the dynamic part of the Mestre layer of a character as it
+	// is now (nil when the Citadel has no session zero of its own).
+	layers func(ctx context.Context, id string) (sessionzero.Dynamic, error)
 }
 
 // errNoPeriod is why an approval is not opened: this machine is not the

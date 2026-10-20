@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,10 +12,12 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
@@ -295,6 +298,19 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	cat := &presets.Catalog{DB: orcDB(t, a), Clock: clock.Real{}}
+	doc, err := presets.ParseDocument([]byte("kind: mestre/presets\nversion: 1\nbases:\n  - {name: claude-code, command: claude, platforms: [{os: linux}, {os: windows, command: claude.exe}], ready: hook}\n" +
+		"sheets:\n  - {name: Dev Claude, base: claude-code, agent: claude-code, class: Dev, max_copies: 200}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := cat.PlanImport(ctx, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.ApplyImport(ctx, plan, nil); err != nil {
+		t.Fatal(err)
+	}
 	mk := func(id, name, machine string, role characters.Role, st characters.State) characters.Character {
 		c := characters.Character{
 			ID: id, Name: name, Kind: characters.KindCharacter, Role: role, Workspace: "meu-app", Table: "t1", Machine: machine,
@@ -384,6 +400,119 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 	}
 	if got, _ := orc.Registry.Get(ctx, master.ID); got.State != characters.Idle {
 		t.Errorf("the master of the table is %s after the forged report", got.State)
+	}
+	// ... nor a notice of a kind the Tower does not tell, a report that names no
+	// character, one that names a character that does not exist, nor the
+	// confirmation of an item of a character of another machine
+	item, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: "meu-app", Target: master.ID, Kind: inbox.KindSystem, Sender: "Motor", Text: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct {
+		out  protocol.Outgoing
+		code string
+	}{
+		"notice of the kind system":                  {protocol.Outgoing{Type: protocol.TypeCharacterNotice, Payload: protocol.CharacterNotice{Kind: string(characters.NoticeSystem), Character: dev.ID, Text: "x"}}, protocol.CodeForbidden},
+		"report that names nobody":                   {protocol.Outgoing{Type: protocol.TypeTerminalStatus, Payload: protocol.TerminalStatus{TerminalID: "t0", State: "idle"}}, protocol.CodeInvalidPayload},
+		"report of a ghost":                          {protocol.Outgoing{Type: protocol.TypeTerminalStatus, Payload: protocol.TerminalStatus{TerminalID: "t0", State: "idle", AgentID: "ghost"}}, protocol.CodeForbidden},
+		"confirmation of an item of another machine": {protocol.Outgoing{Type: protocol.TypeInboxResult, Payload: protocol.InboxResult{ItemID: item.ID, Status: protocol.InboxConfirmed}}, protocol.CodeForbidden},
+	} {
+		if res, err := link.Call(ctx, c.out); err != nil || res.Status != protocol.AckError || res.Error == nil || res.Error.Code != c.code {
+			t.Errorf("%s: %+v, %v; want %s", name, res, err, c.code)
+		}
+	}
+
+	// the delivery that a change of state starts is made from inside the handler
+	// of that very report: its answer cannot wait behind the handler (the ack
+	// carries it), or the item would wait for the time out and be given twice
+	report := func(state string) {
+		t.Helper()
+		if res, err := link.Call(ctx, protocol.Outgoing{Type: protocol.TypeTerminalStatus, Payload: protocol.TerminalStatus{TerminalID: "t-c1", State: state, AgentID: dev.ID}}); err != nil || res.Status != protocol.AckOK {
+			t.Fatalf("report %s: %+v, %v", state, res, err)
+		}
+	}
+	report("busy")
+	queued, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: "meu-app", Target: dev.ID, Kind: inbox.KindSystem, Sender: "Motor", Text: "depois do turno"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := orc.Inbox.Pending(ctx, dev.ID); n != 1 {
+		t.Fatalf("the item of a busy character is not queued: %d", n)
+	}
+	// the report of the change of state is acked when its handler ends, and the
+	// handler asked the Tower to type the item: if the answer waited behind the
+	// handler the ack would come only after the time out
+	clk := clock.Real{}
+	start := clk.Now()
+	report("idle")
+	if took := clk.Now().Sub(start); took > 8*time.Second {
+		t.Errorf("the report of %s took %v: the answer of the delivery waited behind the handler", queued.ID, took)
+	}
+}
+
+// CA-CIDADELA-16: a Tower runs the commands of the characters only from the
+// Citadel it follows: a third machine, and the Citadel of an older epoch, are
+// refused whatever they ask.
+func TestATowerTakesTheCommandsOfTheCharactersOnlyFromItsCitadel(t *testing.T) {
+	t.Parallel()
+	buildRuntimeBinaries(t)
+	r := newRig(t)
+	root, err := os.MkdirTemp("", "mrt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rr, err := filepath.EvalSymlinks(root); err == nil {
+		root = rr
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	r.root = root
+	a := r.node("a")
+	b := r.node("b", a)
+	b.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
+	b.paths.CLISocket = filepath.Join(root, "b", "cli.sock")
+	a.setup = func(e *Engine) { e.deps.HostOrchestration = true }
+	b.setup = func(e *Engine) {
+		e.deps.Spawner = &terminal.DirectSpawner{Suite: "full", System: terminal.NewSystem()}
+		e.deps.CharacterPrep = runtimePrep{cfg: filepath.Join(root, "cfg"), home: root, sock: b.paths.CLISocket}
+	}
+	r.found(a, clock.Real{})
+	r.start(a, clock.Real{})
+	r.waitFor("a to act", a.acting)
+	r.join(b, a, clock.Real{})
+	r.start(b, clock.Real{})
+	r.waitFor("b to connect", func() bool { return b.connected(1) })
+
+	router := protocol.NewRouter()
+	b.e.registerTowerCharacters(router)
+	for _, from := range []protocol.Peer{
+		{Role: protocol.RoleMachine, ID: "a-third-machine"},
+		{Role: protocol.RoleMachine, ID: "a-citadel-of-an-older-epoch"},
+		{Role: protocol.RoleBrowser, ID: b.e.epochs.Citadel()},
+	} {
+		for typ, payload := range map[string]any{
+			protocol.TypeCharacterStart: &protocol.CharacterStart{Character: "c1", TerminalID: "t-c1", Kind: "character", Request: protocol.Object{}},
+			protocol.TypeInboxDeliver:   &protocol.InboxDeliver{TerminalID: "t-c1", ItemID: "m1", Text: "x"},
+			protocol.TypeTerminalInput:  &protocol.TerminalInput{TerminalID: "t-c1", Mode: protocol.InputRaw, Data: "x"},
+			protocol.TypeTerminalScreen: &protocol.TerminalScreen{TerminalID: "t-c1"},
+			protocol.TypeCharacterStop:  &protocol.CharacterStop{Character: "c1"},
+		} {
+			h, ok := router.Lookup(typ)
+			if !ok {
+				t.Fatalf("no handler of %s", typ)
+			}
+			_, err := h.Handle(t.Context(), &protocol.Message{Env: protocol.Envelope{Type: typ}, Payload: payload, Peer: from})
+			var pe *protocol.Error
+			if !errors.As(err, &pe) || pe.Code != protocol.CodeForbidden {
+				t.Errorf("%s from %+v: %v; want forbidden", typ, from, err)
+			}
+		}
+	}
+	// and the Citadel itself is heard (the character does not exist here: not forbidden)
+	h, _ := router.Lookup(protocol.TypeCharacterStop)
+	_, err = h.Handle(t.Context(), &protocol.Message{Env: protocol.Envelope{Type: protocol.TypeCharacterStop}, Payload: &protocol.CharacterStop{Character: "c1"}, Peer: protocol.Peer{Role: protocol.RoleMachine, ID: a.id}})
+	var pe *protocol.Error
+	if errors.As(err, &pe) && pe.Code == protocol.CodeForbidden {
+		t.Errorf("the Citadel of the epoch was refused: %v", err)
 	}
 }
 

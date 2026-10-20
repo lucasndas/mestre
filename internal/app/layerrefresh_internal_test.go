@@ -1,0 +1,94 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"runtime"
+	"testing"
+	"time"
+
+	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/lucasndas/mestre/pkg/clock"
+)
+
+type spyRefresher struct{ calls []string }
+
+func (s *spyRefresher) Refresh(_ context.Context, id string, d sessionzero.Dynamic) (sessionzero.RefreshReport, error) {
+	s.calls = append(s.calls, id+":"+d.Instructions)
+	return sessionzero.RefreshReport{}, nil
+}
+
+type spyInner struct{ calls int }
+
+func (s *spyInner) Context(context.Context, providers.Event) (string, error) {
+	s.calls++
+	return "inner", nil
+}
+
+func TestTheLayerIsBroughtUpToDateOnlyAtTheStartOfATurnAndNeverHoldsIt(t *testing.T) {
+	t.Parallel()
+	e := &Engine{log: slog.New(slog.DiscardHandler), clk: clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))}
+	r, in := &spyRefresher{}, &spyInner{}
+	c := &refreshingContexts{inner: in, r: r, e: e}
+	turn := providers.Event{Event: providers.EventTurnStart, AgentID: "gm"}
+
+	// No Citadel that acts: the turn goes on with the layer as it is.
+	if got, err := c.Context(t.Context(), turn); got != "inner" || err != nil || len(r.calls) != 0 {
+		t.Fatalf("without a period: %q, %v, refreshed %v", got, err, r.calls)
+	}
+	fail := true
+	e.period.Store(&periodHooks{layers: func(context.Context, string) (sessionzero.Dynamic, error) {
+		if fail {
+			return sessionzero.Dynamic{}, errors.New("db down")
+		}
+		return sessionzero.Dynamic{Instructions: "x"}, nil
+	}})
+	if got, err := c.Context(t.Context(), turn); got != "inner" || err != nil || len(r.calls) != 0 {
+		t.Fatalf("with a Citadel that cannot answer: %q, %v, refreshed %v", got, err, r.calls)
+	}
+	fail = false
+	if _, err := c.Context(t.Context(), providers.Event{Event: providers.EventPreTool, AgentID: "gm"}); err != nil || len(r.calls) != 0 {
+		t.Fatalf("an event in the middle of a turn refreshed: %v, %v", r.calls, err)
+	}
+	if got, err := c.Context(t.Context(), turn); got != "inner" || err != nil || len(r.calls) != 1 || r.calls[0] != "gm:x" {
+		t.Fatalf("the start of the turn: %q, %v, refreshed %v", got, err, r.calls)
+	}
+	if in.calls != 4 {
+		t.Errorf("the inner contexts were asked %d times; want every time", in.calls)
+	}
+}
+
+func TestAnUpdateThatHangsDoesNotHoldTheStartOfTheTurn(t *testing.T) {
+	t.Parallel()
+	e := &Engine{log: slog.New(slog.DiscardHandler), clk: clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))}
+	e.period.Store(&periodHooks{layers: func(ctx context.Context, _ string) (sessionzero.Dynamic, error) {
+		<-ctx.Done()
+		return sessionzero.Dynamic{}, ctx.Err()
+	}})
+	r, in := &spyRefresher{}, &spyInner{}
+	c := &refreshingContexts{inner: in, r: r, e: e}
+	type answer struct {
+		got string
+		err error
+	}
+	done := make(chan answer)
+	go func() {
+		got, err := c.Context(t.Context(), providers.Event{Event: providers.EventTurnStart, AgentID: "gm"})
+		done <- answer{got, err}
+	}()
+	var a answer
+	for waiting := true; waiting; {
+		e.clk.(*clock.Fake).Advance(time.Second)
+		select {
+		case a = <-done:
+			waiting = false
+		default:
+			runtime.Gosched()
+		}
+	}
+	if a.got != "inner" || a.err != nil || len(r.calls) != 0 {
+		t.Fatalf("got %q, %v, refreshed %v", a.got, a.err, r.calls)
+	}
+}

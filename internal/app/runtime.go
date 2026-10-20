@@ -197,6 +197,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 			return nil, err
 		}
 	}
+	prep = e.refreshingLayers(prep)
 	sk := sinks{e}
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
 		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}),
@@ -248,6 +249,7 @@ func (e *Engine) machines(db *store.DB) OrchestrationMachines {
 	if e.rt != nil {
 		m.rt = e.rt.rt
 	}
+	e.mach.Store(m)
 	return m
 }
 
