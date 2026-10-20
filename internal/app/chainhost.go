@@ -15,6 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/users"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -140,6 +141,9 @@ type periodHooks struct {
 	agentMachine func(ctx context.Context, id string) (string, bool)
 	// risk is the risk policy of a workspace, from its approval policy file.
 	risk func(workspace string) *classes.RiskPolicy
+	// layers gives the dynamic part of the Mestre layer of a character as it
+	// is now (nil when the Citadel has no session zero of its own).
+	layers func(ctx context.Context, id string) (sessionzero.Dynamic, error)
 }
 
 // errNoPeriod is why an approval is not opened: this machine is not the
