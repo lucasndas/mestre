@@ -16,7 +16,7 @@ Fazer cada provedor segurar o essencial das [permissões](permissoes.md) mesmo s
 | `files.deny` | `deny`: `Read(<glob>)`, `Edit(<glob>)` | — | — |
 | `commands.allow` / `deny` | `allow` / `deny`: `Bash(<padrão>)` | — (contido pelo sandbox) | — |
 | regras fixas | `deny`: `Bash(git push *)`, `Bash(git remote *)` | `.git` fora do alcance de escrita, menos a pasta git do worktree e `objects`, `refs` e `logs` do espelho, para o commit (abaixo) | `permissions.deny` no `settings.json` do perfil (só regras fixas, pois o arquivo é compartilhado) |
-| `network.internet: false` | `--disallowedTools WebFetch WebSearch` | sem `--search`; no Windows, `sandbox_workspace_write.network_access=false`; no Linux, `true`, pelo canal local (abaixo) | `--sandbox` no Windows; no Linux, sem a flag (abaixo) |
+| `network.internet: false` | `--disallowedTools WebFetch WebSearch` | sem `--search`; `network_access=true` nos dois sistemas (canal local no Linux; modo `unelevated` no Windows, sem barreira de rede; abaixo) | `--sandbox` no Windows; no Linux, sem a flag (abaixo) |
 | `network.domains` | `allow`: `WebFetch(domain:<d>)` | só liga/desliga | — |
 | ferramentas disponíveis | — | — | campo `tools` do arquivo de agente `mestre-<id>.md`: só as ferramentas nativas que as regras efetivas não negam por inteiro (sem escrita: sem as de escrita; sem internet: sem as de web) |
 | falha do despachante | `onFailure: block` | sandbox | falha fechada nativa |

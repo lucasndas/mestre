@@ -201,6 +201,11 @@ func checkCodexConfig(kv string, engine bool, found *codexArgs) error {
 	}
 	joined := strings.Join(key, ".")
 	if engine && slices.Contains(codexEngineKeys, joined) {
+		// Codex splits the raw key at the dots: the engine's keys must be
+		// spelled exactly, not only after the check normalizes them.
+		if rawKey != joined {
+			return fmt.Errorf("codex: -c %q: the keys of the engine are written exactly", kv)
+		}
 		if joined == CodexWindowsSandboxKey {
 			// Only this value, in the one form the engine writes: any other
 			// mode (elevated, mxc) or a value the check cannot read is no
@@ -392,7 +397,7 @@ func codexStartArgs(base, engine []string, model, goos string) ([]string, error)
 	// On Windows the start without the unelevated mode is refused: the
 	// default one would run the commands of every character through the
 	// same runner (fail closed).
-	if goos == "windows" && !found.winSandbox {
+	if machineOS(goos) == "windows" && !found.winSandbox {
 		return nil, fmt.Errorf("codex: no -c %s=%q among the flags on Windows; the native controls give it, and the base never starts without it", CodexWindowsSandboxKey, CodexWindowsSandboxMode)
 	}
 	out := slices.Concat(base, engine)

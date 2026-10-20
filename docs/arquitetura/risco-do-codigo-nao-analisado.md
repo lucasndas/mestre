@@ -24,7 +24,7 @@ Por provedor: o Codex roda com `-s workspace-write`, e o código do shell dele s
 
 ## O que reduz, e seus limites
 
-- **Classe sem internet** reduz a saída, mas **não a corta**: no Claude só entram `--disallowedTools WebFetch WebSearch`; no Codex e no Antigravity do Linux a rede do sandbox fica ligada e a barra é só do despachante, que vê a linha (`curl`) e não o código; só no Windows há corte nativo (Codex com `network_access=false`; Antigravity com `--sandbox`, ainda não verificado) ([reforço nativo](../classes/reforco-nativo.md)). Uma classe só fica contida se todas as da máquina estiverem sem rede, porque o que foi lido pode sair por outra classe, via `/tmp` ou a `MESTRE_TMP` alheia.
+- **Classe sem internet** reduz a saída, mas **não a corta**: no Claude só entram `--disallowedTools WebFetch WebSearch`; no Codex (nos dois sistemas) e no Antigravity do Linux a rede do sandbox fica ligada e a barra é só do despachante, que vê a linha (`curl`) e não o código; só o Antigravity no Windows tem corte nativo (`--sandbox`, ainda não verificado) ([reforço nativo](../classes/reforco-nativo.md)). Uma classe só fica contida se todas as da máquina estiverem sem rede, porque o que foi lido pode sair por outra classe, via `/tmp` ou a `MESTRE_TMP` alheia.
 - **A regravação da configuração** limita a persistência de uma mudança nela, não as credenciais, os binários nem o efeito na sessão em curso.
 - **A auditoria** registra só a linha que entrou (`npm test`), não o que o código fez; com os hooks desligados, as ações seguintes nem entram.
 

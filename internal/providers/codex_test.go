@@ -263,6 +263,7 @@ func TestCodexStartFlags(t *testing.T) {
 	req := providers.LaunchRequest{
 		Base:    providers.Base{Command: "codex"},
 		Env:     []string{"CODEX_HOME=/elsewhere"}, // a base may not set it at all (TestABaseMayNotSetTheVariablesOfTheSafety)
+		OS:      "linux",
 		Profile: "/profiles/codex-1", Model: "gpt-5.5-codex",
 		ProviderArgs: []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=false"},
 	}

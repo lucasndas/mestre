@@ -108,6 +108,12 @@ func TestCodexWindowsSandboxModeIsReservedAndMandatory(t *testing.T) {
 			t.Errorf("windows.sandbox=%s accepted", v)
 		}
 	}
+	// The engine's key is spelled exactly: Codex splits the raw key.
+	for _, k := range []string{`windows. sandbox`, `"windows".sandbox`, ` windows.sandbox`} {
+		if err := launch("windows", nil, append(slices.Clone(sandbox), "-c", k+`="unelevated"`)); err == nil {
+			t.Errorf("engine key %q accepted", k)
+		}
+	}
 	good := append(slices.Clone(sandbox), "-c", `windows.sandbox="unelevated"`)
 	for _, b := range [][]string{
 		{"-c", `windows.sandbox="elevated"`}, {"-c", `windows.sandbox="unelevated"`}, {"-cwindows.sandbox=\"elevated\""},
