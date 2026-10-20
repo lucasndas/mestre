@@ -20,9 +20,9 @@ Deixar as pessoas passarem ao Grão-Mestre, de forma explícita, com escopo e pr
 ### Delegação de decisão
 
 - **Quem cria:** só o Dono, com PIN, para tipos `alto` ([risco dos tipos](../classes/classificacao-de-risco.md#risco-dos-tipos-de-pedido)), inclusive `acao_destrutiva` (decisão do Dono, 2026-10-14: continua delegável, com escopo e prazo). Para tipos `medio`, que o Grão-Mestre já decide dentro da política, quem quer afrouxar usa um decreto `policy` ([política](politica.md#decretos-ajustam-a-política)); a resposta **Delegar** num pedido `medio` monta essa proposta, para um Administrador ou acima. Tipos `fixo` e `custo_extra` acima do teto nunca são delegáveis.
-- **Como nasce:** pela resposta **Delegar** a um pedido ([respostas](../orquestracao/cadeia-de-aprovacao.md#respostas)), que já traz o tipo e o escopo do pedido, ou por uma ordem ao Grão-Mestre (`mestre decree propose --effect delegation`, [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-decree)). O motor mostra o que vai valer e pede Confirmar e o PIN, como em todo decreto ([criação](../telegram/decretos.md#criação)).
-- **Escopo obrigatório:** o tipo e pelo menos um entre mesa, classe ou [padrão aprovável](../classes/classificacao-de-risco.md#padrões-aprováveis) (para `permissao_de_classe`); sem escopo, recusada.
-- **Validade:** "até mudar ou 30 dias": vale até ser revogada ou trocada, por no máximo 30 dias (padrão e máximo, `delegacao.validade_padrao` no [arquivo de política](arquivo-de-politica.md)). 3 dias antes do fim (`delegacao.aviso_antes`), o autor recebe um lembrete com **Renovar** (mais 30 dias, com PIN) e **Deixar vencer**.
+- **Como nasce:** pela resposta **Delegar** a um pedido ([respostas](../orquestracao/cadeia-de-aprovacao.md#respostas)), que já traz o tipo e o escopo do pedido, ou por uma ordem ao Grão-Mestre (`mestre decree propose --effect delegation`, [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-decree)). O motor mostra o que vai valer e pede Confirmar e o PIN, como em todo decreto ([criação](../telegram/decretos.md#criação)). **Renovar** propõe o mesmo decreto por mais 30 dias, que o autor confirma com o PIN; o antigo acaba na data dele.
+- **Escopo obrigatório:** o tipo e pelo menos um entre a mesa, `classe:<nome>` e `repo:<dono/nome>`; sem escopo, ou com um escopo que o motor não entende (`padrao:…`, por exemplo), é recusada. Um decreto só cobre o pedido que cai em todos os escopos dele: a mesa do pedido, a classe de quem pediu e o repositório do alvo.
+- **Validade:** "até mudar ou 30 dias": vale até ser revogada ou trocada, por no máximo 30 dias (padrão e máximo; o motor traz 30 dias e o aviso de 3 dias como constantes, e as chaves `delegacao.validade_padrao` e `delegacao.aviso_antes` do [arquivo de política](arquivo-de-politica.md) só passam a mandar quando a leitura delas for ligada, [ligação de produção](../desenvolvimento/ligacao-de-producao.md)). 3 dias antes do fim, o autor recebe um lembrete com **Renovar** (mais 30 dias, com PIN) e **Deixar vencer**.
 - **O que não muda:** regras de quórum e `exigir_usuarios` continuam mandando perguntar; as salvaguardas da cadeia continuam valendo; a delegação não libera ação nenhuma sozinha, só muda quem decide o pedido.
 - Cada decisão tomada com base nela fica registrada no decreto (pedido, decisão, quando).
 
@@ -30,14 +30,14 @@ Deixar as pessoas passarem ao Grão-Mestre, de forma explícita, com escopo e pr
 
 - O Grão-Mestre pode passar a um Mestre da mesa, só na mesa dele, uma parte **mais estreita** do que ele mesmo pode decidir: o teto dele (`medio`, dentro da política, inclusive o que falha nas [condições da mesa](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa)) ou uma delegação de decisão que ele tem. Mais estreita quer dizer: o mesmo tipo ou menos, o escopo dentro do da origem, a validade até a da origem e nunca depois do encerramento da mesa.
 - **Profundidade 1:** o Mestre da mesa não subdelega. A subdelegação estende o teto dele só no escopo dela, com as mesmas salvaguardas.
-- Sintaxe: `mestre approval delegate` ([CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)). Fica no banco com os decretos, `level: grand_master` e a origem; não é decreto de pessoa nem permanente.
+- Sintaxe: `mestre approval delegate` ([CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)). Fica no banco em `subdelegations`, com a origem (o decreto de delegação, ou nenhuma quando vem do teto `medio` do Grão-Mestre); não é decreto de pessoa nem permanente. A CLI `mestre approval delegate` é a porta dela e fica para a ligação do [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval) (o motor já recusa pelo serviço).
 - Acaba com a origem, com o encerramento da mesa, revogada pelo Grão-Mestre ou por um Administrador ou acima.
 
 ### Revogar tudo
 
 - **Só o Dono**, pelo botão **Revogar todas as delegações** no painel ([administração](../painel/administracao.md)) ou pelo `/revogar_tudo` no Telegram ([bot](../telegram/bot.md)), com uma confirmação por botão (sem PIN: só restringe).
 - Revoga na hora, em todos os workspaces, todas as delegações (de decisão, no GitHub, do Operador e subdelegações) e todas as [regras temporárias de mesa](../orquestracao/regras-temporarias-de-mesa.md). Não para os agentes; para isso há o `/travar` ([segurança do canal](../telegram/seguranca-do-canal.md)).
-- Fica na auditoria, com quem e quando, e avisa os Administradores e o Grão-Mestre de cada workspace. Pedidos abertos que estavam num nível que dependia de uma delegação sobem na hora.
+- Fica na auditoria (um registro de quem e quando, mais o histórico de cada decreto), e avisa os Administradores e o Grão-Mestre de cada workspace. Pedidos abertos que estavam num nível que dependia de uma delegação sobem na hora. As regras temporárias de mesa saem pelo serviço delas, logo depois da transação dos decretos e das subdelegações.
 
 ## Regras e erros
 

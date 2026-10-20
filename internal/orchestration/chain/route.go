@@ -156,12 +156,16 @@ func (s *Service) can(ctx context.Context, h hop, r Request, st Settings) verdic
 // groups the Owner lets it decide, whose conditions the engine checks.
 func (s *Service) mesaCan(ctx context.Context, c characters.Character, r Request, st Settings, perm bool) verdict {
 	switch {
-	case !perm:
-		return no(false, "o Mestre da mesa decide só permissão de classe")
 	case r.Cross:
 		return no(true, "o pedido cruza mesas")
 	case c.Table != r.Table:
 		return no(true, "o pedido não é de um personagem da mesa de %s", c.Table)
+	}
+	if s.subCovers(ctx, c, r) {
+		return yes()
+	}
+	if !perm {
+		return no(false, "o Mestre da mesa decide só permissão de classe")
 	}
 	switch r.Risk.Risk {
 	case classes.RiskLow:
@@ -183,6 +187,26 @@ func (s *Service) mesaCan(ctx context.Context, c characters.Character, r Request
 		return no(true, "%s", why)
 	}
 	return yes()
+}
+
+// subCovers says a subdelegation of the Grão-Mestre lets this Mestre da mesa
+// decide the request, above its own ceiling: the same safeguards hold (what the
+// policy sends to the people, a type no delegation opens) and nothing else is
+// widened.
+func (s *Service) subCovers(ctx context.Context, c characters.Character, r Request) bool {
+	if s.o.SubDelegations == nil || r.Risk.NoDelegation {
+		return false
+	}
+	if rules, _ := s.rulesOf(r.Workspace); rules.ForcesPeople(r) != "" {
+		return false
+	}
+	if s.o.Supervision != nil {
+		if paused, err := s.o.Supervision.AutonomyPaused(ctx, r.Workspace, r.Table); err != nil || paused {
+			return false // a paused table decides nothing above its own baixo
+		}
+	}
+	ok, err := s.o.SubDelegations.SubCovers(ctx, r, c.ID)
+	return err == nil && ok
 }
 
 // MesaGroupsHold says whether the Mestre da mesa may decide a medio whose

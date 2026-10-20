@@ -58,6 +58,18 @@ type Options struct {
 	// Locked says the Mestre is locked (/travar): nothing is confirmed, revoked
 	// or reactivated meanwhile. nil: never.
 	Locked func(ctx context.Context) bool
+	// TableOpen says whether a table is open: a subdelegation never outlives
+	// its table. nil: every table is.
+	TableOpen func(ctx context.Context, workspace, table string) (bool, error)
+	// Reminder tells the author that a delegation is about to end, with
+	// Renovar and Deixar vencer (nil: a plain notice through Alerts).
+	Reminder Reminder
+	// Revoked is what the emergency button also takes away and whom it tells
+	// (nil: only the decrees).
+	Revoked RevokeHooks
+	// ReminderBefore is how long before its end a delegation is reminded
+	// (default 3 days).
+	ReminderBefore time.Duration
 	// ExceptionTTL is how long an exception not used stays valid.
 	ExceptionTTL time.Duration
 	Logger       *slog.Logger
@@ -312,6 +324,9 @@ func (s *Service) build(p Proposal, u users.User, pin bool, now time.Time) Decre
 		if imp, err := chain.Impress(p.TargetRef); err == nil {
 			d.Impression = imp
 		}
+	}
+	if d.Effect.Kind == EffectDelegation && highTypes[d.Effect.Setting] && d.Until.IsZero() {
+		d.Until = now.Add(MaxDelegation) // "até mudar ou 30 dias"
 	}
 	if d.Effect.Kind == EffectDelegation && d.Effect.Setting == string(classes.RequestOperator) && d.Effect.MaxMinutes == 0 {
 		d.Effect.MaxMinutes = DefaultOperatorMinutes
@@ -669,6 +684,9 @@ func (s *Service) InvalidateBy(ctx context.Context, userID string) error {
 // Sweep ends the decrees whose validity ran out, and tells the author. An
 // exception not used past its time expires too.
 func (s *Service) Sweep(ctx context.Context) error {
+	if err := s.remind(ctx); err != nil {
+		return err
+	}
 	var gone []Decree
 	err := s.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
 		now := s.clk.Now()
