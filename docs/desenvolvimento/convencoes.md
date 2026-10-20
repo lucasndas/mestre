@@ -1,6 +1,6 @@
 # Convenções de desenvolvimento
 
-> **Assunto:** layout do código Go e do painel, idioma, estilo, código gerado, commits, branches, PRs e definição de pronto · **Componente:** Projeto · **Atualizado:** 2026-10-18
+> **Assunto:** layout do código Go e do painel, idioma, estilo, código gerado, commits, branches, PRs e definição de pronto · **Componente:** Projeto · **Atualizado:** 2026-10-20
 
 ## Layout do repositório
 
@@ -129,7 +129,7 @@ Conventional Commits 1.0.0, em inglês:
 
 - **`main`:** sempre verde; protegida por um ruleset que exige o CI (`.github/workflows/ci.yml`: rápida e completa em Linux e Windows) e só aceita PR com squash ([CI e ruleset](ambiente.md#ci-e-proteção-da-main)).
 - **Branches de trabalho:** `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `ci/<slug>` (CI) e `spike/<slug>` (spikes, ex.: `spike/m1-windows-3`; [ambiente](ambiente.md#windows-sandbox-para-os-spikes-do-m1)), com `slug` curto em inglês, kebab-case (ex.: `feat/table-lifecycle`). Testes, build e refatorações usam `fix/` quando corrigem algo e `feat/` nos demais casos.
-- **PR:** um assunto, pequeno. Título no formato de commit (vira a mensagem do squash). Descrição: o quê e por quê, documentos alterados, critérios de aceite cobertos (`CA-…`), tempos da rápida e da completa.
+- **PR:** uma unidade coerente (tamanho, revisão antes da fila e o trem em [fluxo de PRs](fluxo-de-prs.md)). Título no formato de commit (vira a mensagem do squash). Descrição: o quê e por quê, documentos alterados, critérios de aceite cobertos (`CA-…`), tempos da rápida e da completa.
 - **Merge:** squash. A branch é apagada depois.
 - **Versões:** SemVer. Uma tag e uma release por versão, `vX.Y.Z` (a versão do motor), com os três binários; as versões do Guardião e do `mestre-pty` vão só no manifesto `mestre-release.json` e no `version` de cada um, sem tag própria ([autoatualização](../plataforma/autoatualizacao.md)). As versões dos protocolos são independentes ([protocolo](../conectividade/protocolo.md)).
 
