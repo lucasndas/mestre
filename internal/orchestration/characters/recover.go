@@ -29,6 +29,10 @@ func (rt *Runtime) Stop(ctx context.Context, cmd StopCommand) error {
 	// where it is, in whatever state it reached by now (starting, or already busy
 	// with its first message): the character is taken as dead and discarded, and
 	// its terminal ended.
+	if cmd.Abandon && cmd.Terminal != "" && s.terminal != cmd.Terminal {
+		s.mu.Unlock()
+		return fmt.Errorf("%w: %s runs in %s, not in %s", ErrNotAtSafePoint, cmd.Character, s.terminal, cmd.Terminal)
+	}
 	if cmd.Abandon && s.st.State != Stopping && s.st.State != Interrupted {
 		s.applyLocked(TrigDied, "abandoned: "+cmd.Reason)
 		trig, abandoned = TrigDiscard, true

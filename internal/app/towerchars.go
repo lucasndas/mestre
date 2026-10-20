@@ -98,7 +98,7 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 		if !ok {
 			return nil, protocol.NewError(protocol.CodeInvalidPayload, "character.stop: %T", m.Payload)
 		}
-		if err := rt.Stop(ctx, characters.StopCommand{Character: p.Character, Final: p.Final, Reason: p.Reason, Abandon: p.Abandon}); err != nil {
+		if err := rt.Stop(ctx, characters.StopCommand{Character: p.Character, Final: p.Final, Reason: p.Reason, Abandon: p.Abandon, Terminal: p.TerminalID}); err != nil {
 			return nil, towerCharacterError("character.stop", err)
 		}
 		return nil, nil
@@ -190,11 +190,11 @@ func (e *Engine) resyncCharacters(ctx context.Context, link *protocol.Link) {
 	}
 	// one message, so the Citadel sees which characters the Tower does not have; only
 	// on this connection: a picture that waits in an outbox is no longer the truth
+	at := protocol.Timestamp{Time: e.clk.Now().UTC()} // before the picture: what changes meanwhile is not judged by it
 	live := e.rt.rt.Live()
 	if live == nil {
 		live = []protocol.TerminalState{}
 	}
-	at := protocol.Timestamp{Time: e.clk.Now().UTC()}
 	cctx, cancel := clock.WithTimeout(ctx, e.clk, towerCallWait)
 	defer cancel()
 	res, err := link.Call(cctx, protocol.Outgoing{Type: protocol.TypeCharacterResync, Payload: protocol.CharacterResync{Terminals: live, At: &at}, Transient: true})

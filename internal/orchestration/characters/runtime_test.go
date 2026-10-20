@@ -325,6 +325,26 @@ func TestAStartTheCitadelGaveUpOnIsEndedWhileStarting(t *testing.T) {
 	}
 }
 
+// An abandon names the terminal of the start that was given up on: a character that runs
+// in another (it was restarted since) is not touched.
+// Part of CA-CIDADELA-16
+func TestAnAbandonOnlyEndsTheTerminalOfTheStartItNames(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	c := r.make("Dev Claude", "Dev", "3-login")
+	rt := r.mach[c.Machine].rt
+	r.ready(c)
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Abandon: true, Terminal: "another-terminal"}); !errors.Is(err, characters.ErrNotAtSafePoint) {
+		t.Errorf("an abandon of another terminal: %v; want refused", err)
+	}
+	if _, err := rt.Env(r.ctx, c.ID); err != nil {
+		t.Errorf("the character was ended by the abandon of another terminal: %v", err)
+	}
+	if err := rt.Stop(r.ctx, characters.StopCommand{Character: c.ID, Abandon: true, Terminal: r.get(c.ID).TerminalID}); err != nil {
+		t.Errorf("an abandon of its own terminal, idle: %v", err)
+	}
+}
+
 // Part of CA-CIDADELA-16
 func TestAnAbandonedStartIsEndedWhenItIsAlreadyBusy(t *testing.T) {
 	t.Parallel()

@@ -362,7 +362,10 @@ type CharacterStop struct {
 	Final  bool   `json:"final,omitempty"`
 	Reason string `json:"reason,omitempty"`
 	// Abandon ends a character that is still starting (the Citadel gave up on the start).
-	Abandon bool `json:"abandon,omitempty"`
+	// TerminalID, when given, is the terminal of that start: a character that runs in
+	// another one (a restart that came after) is not touched.
+	Abandon    bool   `json:"abandon,omitempty"`
+	TerminalID string `json:"terminal_id,omitempty"`
 }
 
 // CharacterNotice is `character.notice`: a notice about a character of the

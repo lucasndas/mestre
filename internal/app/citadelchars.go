@@ -179,7 +179,7 @@ func (m *machineRouter) Start(ctx context.Context, machine string, cmd character
 		sctx, cancel := clock.WithTimeout(context.WithoutCancel(ctx), m.clk, towerCallWait)
 		defer cancel()
 		_, _ = m.call(sctx, machine, towerCallWait, protocol.Outgoing{Type: protocol.TypeCharacterStop,
-			Payload: protocol.CharacterStop{Character: cmd.Character, Final: !cmd.Resumed, Reason: "the Citadel gave up on the start", Abandon: true}})
+			Payload: protocol.CharacterStop{Character: cmd.Character, TerminalID: cmd.Terminal, Final: !cmd.Resumed, Reason: "the Citadel gave up on the start", Abandon: true}})
 	}
 	if err != nil {
 		return characters.StartResult{}, err
@@ -292,6 +292,9 @@ func (m *machineRouter) ScreenLines(ctx context.Context, machine, character stri
 // before the command goes, and the start takes the time it takes.
 const startGrace = towerStartWait + 30*time.Second
 
+// pictureSlack is how old the hour of a picture of a Tower may be taken to be.
+const pictureSlack = 2 * time.Minute
+
 // resyncFromTower takes the list of the terminals a Tower tells at each
 // connection (taken at `at`) as the truth about its processes: the characters
 // the registry has alive there that the list lacks are interrupted, except a
@@ -305,6 +308,13 @@ func (e *Engine) resyncFromTower(ctx context.Context, orc *Orchestration, machin
 		return nil, err
 	}
 	now := e.clk.Now()
+	// the hour of the picture is the Tower's clock: kept within a few minutes of ours
+	if at.Before(now.Add(-pictureSlack)) {
+		at = now.Add(-pictureSlack)
+	}
+	if at.After(now) {
+		at = now
+	}
 	mr := e.mach.Load()
 	inFlight := func(c characters.Character) bool {
 		return mr != nil && mr.inFlight(c.ID) || c.State == characters.Starting && now.Sub(c.CreatedAt) < startGrace
@@ -331,6 +341,9 @@ func (e *Engine) resyncFromTower(ctx context.Context, orc *Orchestration, machin
 			continue
 		}
 		c, err := orc.Registry.Get(ctx, t.AgentID)
+		if err != nil && !errors.Is(err, characters.ErrNoCharacter) {
+			e.log.Warn("app: the registry could not be read for a terminal of a Tower", "machine", machine, "id", t.AgentID, "err", err)
+		}
 		switch {
 		case err != nil || inFlight(c):
 		case c.State == characters.Stopped || c.Machine != machine:

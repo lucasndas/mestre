@@ -120,7 +120,9 @@ type StopCommand struct {
 	Final  bool
 	Reason string
 	// Abandon ends a character that is still starting: the Citadel gave up on the start.
-	Abandon bool
+	// Terminal, when given, is the one of that start; a character in another is not touched.
+	Abandon  bool
+	Terminal string
 }
 
 // Machines is the Citadel's way to the engine of each machine: in-process for
