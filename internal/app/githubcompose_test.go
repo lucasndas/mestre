@@ -209,6 +209,47 @@ func TestTheEventsOfGitHubReachTheGrandMasterAndAChangedPRWakesTheStepSync(t *te
 	}
 }
 
+// Part of CA-DEPMESA-05: an epic closed straight on GitHub is read by the poller of the
+// standard integration and tells the dependencies: closed as completed it releases
+// the epic that waited for it, closed as not planned it keeps it held for the Grand
+// Master to decide.
+func TestAnEpicClosedOnGitHubReachesTheDependenciesThroughThePoller(t *testing.T) {
+	t.Parallel()
+	c := newGHCompose(t)
+	poll, err := c.run.poller(c.orc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gm, _, err := c.orc.Registry.GrandMaster(c.ctx, c.ws.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const repo = "lucas/meu_app"
+	c.clk.Advance(time.Minute)
+	done, dropped := c.gh.AddIssue(repo, "Login", "epico"), c.gh.AddIssue(repo, "Busca", "epico")
+	waitsDone, waitsDropped := c.gh.AddIssue(repo, "Checkout", "epico"), c.gh.AddIssue(repo, "Painel", "epico")
+	for _, d := range [][2]int{{waitsDone, done}, {waitsDropped, dropped}} {
+		if _, err := c.orc.EpicDeps.Depend(c.ctx, gm, d[0], d[1]); err != nil {
+			t.Fatal(err)
+		}
+		if held, err := c.orc.EpicDeps.Held(c.ctx, c.ws.Slug, d[0]); err != nil || !held {
+			t.Fatalf("epic #%d waiting for #%d: held = %v, %v", d[0], d[1], held, err)
+		}
+	}
+	c.clk.Advance(time.Minute)
+	c.gh.CloseIssueAs(repo, done, "completed")
+	c.gh.CloseIssueAs(repo, dropped, "not_planned")
+	if err := poll.Tick(c.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if held, _ := c.orc.EpicDeps.Held(c.ctx, c.ws.Slug, waitsDone); held {
+		t.Errorf("the epic #%d is still held after the one it waited for was closed as completed", waitsDone)
+	}
+	if held, _ := c.orc.EpicDeps.Held(c.ctx, c.ws.Slug, waitsDropped); !held {
+		t.Errorf("the epic #%d was released by one closed as not planned: it stays held for the Grand Master", waitsDropped)
+	}
+}
+
 func TestWhatThePollerReadsWithStopsWorkingWhenThePeriodEnds(t *testing.T) {
 	t.Parallel()
 	c := newGHCompose(t)
