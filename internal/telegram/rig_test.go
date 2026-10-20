@@ -98,6 +98,7 @@ type world struct {
 	rules     *tablerules.Service
 	routing   *telegram.Routing
 	bc        *telegram.BlockChannel
+	dg        *telegram.DigestChannel
 	delivered *deliveries
 	// requests are the approval requests the decrees read.
 	requests requests
@@ -131,6 +132,8 @@ type rigOpts struct {
 	block bool
 	// decrees puts the decrees (/decretos, the confirmation, the PIN) over the bot.
 	decrees bool
+	// digest puts the summary buttons over the bot (it needs decrees).
+	digest bool
 }
 
 func newWorld(t *testing.T, ro ...rigOpts) *world {
@@ -264,6 +267,12 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 			w.opts.Actions[k] = v
 		}
 		w.opts.Captures = map[string]telegram.CaptureFunc{telegram.PINKind: pins.Capture()}
+		if ropt.digest {
+			w.dg = &telegram.DigestChannel{Users: w.users, Decrees: w.dc}
+			for k, v := range w.dg.Actions() {
+				w.opts.Actions[k] = v
+			}
+		}
 	}
 	w.bot, err = telegram.New(w.opts)
 	if err != nil {
@@ -274,6 +283,9 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	}
 	if w.dc != nil {
 		w.dc.Bind(w.bot)
+	}
+	if w.dg != nil {
+		w.dg.Bind(w.bot)
 	}
 	if w.routing != nil {
 		w.routing.Bind(w.bot)
