@@ -165,8 +165,16 @@ func TestAnAttachmentForACharacterOfTheTowerIsCopiedIntoItsTableBeforeTheRowsTha
 	if got, err := (messageAttachments{copies}).Forward(ctx, rwWS, rwTable, []string{first}); err != nil || len(got) != 1 || got[0] != first {
 		t.Fatalf("Forward = %v, %v", got, err)
 	}
-	if b, err := os.ReadFile(filepath.Join(w.towerDir, filepath.FromSlash(first))); err != nil || string(b) != "PNG" {
-		t.Fatalf("the worktree of the Tower: %q, %v", b, err)
+	// the Tower may be copying the same file for the replica at this moment: a read
+	// that meets the swap of the file (a sharing violation on Windows) is "not yet"
+	var onTower []byte
+	w.r.waitFor("the copy on the Tower to be readable", func() bool {
+		b, err := os.ReadFile(filepath.Join(w.towerDir, filepath.FromSlash(first)))
+		onTower = b
+		return err == nil
+	})
+	if string(onTower) != "PNG" {
+		t.Fatalf("the worktree of the Tower: %q", onTower)
 	}
 	if b, err := os.ReadFile(filepath.Join(w.citadel, filepath.FromSlash(first))); err != nil || string(b) != "PNG" {
 		t.Fatalf("the worktree of the Citadel: %q, %v", b, err)

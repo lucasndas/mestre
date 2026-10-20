@@ -86,6 +86,8 @@ type attachmentCopies struct {
 	// reads no attachment that is already there.
 	dirOf func(ctx context.Context, workspace, table string) string
 	log   *slog.Logger
+	// writing serializes the copies into the worktrees.
+	writing sync.Mutex
 }
 
 var _ sessionzero.AttachmentSource = (*attachmentCopies)(nil)
@@ -155,6 +157,12 @@ func (c *attachmentCopies) copyOne(ctx context.Context, workspace, dir, rel stri
 	if _, err := attachRel(rel); err != nil {
 		return err
 	}
+	// one copy at a time: the Citadel's order and the catch-up of the replica can ask
+	// for the same file together, and a file is written once, whole, by the rename
+	// of safefile; a second write over a file a character is reading is a sharing
+	// violation on Windows
+	c.writing.Lock()
+	defer c.writing.Unlock()
 	m := c.meta(ctx, workspace, rel)
 	if have(dir, rel, m) {
 		return nil
