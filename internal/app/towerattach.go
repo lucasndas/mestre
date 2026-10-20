@@ -32,7 +32,8 @@ func (e *Engine) towerAttachmentCopies(db *store.DB) (*attachmentCopies, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &attachmentCopies{db: db, layout: workspaces.Layout{Root: root}, machine: e.id.MachineID, log: e.log}, nil
+	return &attachmentCopies{db: db, layout: workspaces.Layout{Root: root}, machine: e.id.MachineID, log: e.log,
+		dirOf: func(_ context.Context, ws, table string) string { return e.towerWorktreeDir(ws, table) }}, nil
 }
 
 // towerCatchUp is what the Tower does with the rows the replica brings: the
@@ -56,7 +57,7 @@ func (e *Engine) towerCatchUp(copies *attachmentCopies, sync *attachSync) func(f
 // `table.attach`: the Citadel has sent the files to the main clone of this
 // machine and asks for the copy into the worktree of a table.
 func (e *Engine) registerTowerAttachments(router *protocol.Router, copies *attachmentCopies) {
-	router.HandleFunc(protocol.TypeTableAttach, func(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+	router.HandleFunc(protocol.TypeTableAttach, func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {
 		if !e.fromCitadel(m.Peer) {
 			return nil, protocol.NewError(protocol.CodeForbidden, "table.attach: only the Citadel gives this command")
 		}
@@ -74,7 +75,7 @@ func (e *Engine) registerTowerAttachments(router *protocol.Router, copies *attac
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 			return nil, protocol.NewError(protocol.CodeMissingPrerequisite, "table.attach: this machine has no worktree of the table %s", p.Table)
 		}
-		if err := copies.copyInto(p.Workspace, dir, p.Paths); err != nil {
+		if err := copies.copyInto(ctx, p.Workspace, dir, p.Paths); err != nil {
 			return nil, protocol.NewError(protocol.CodeMissingPrerequisite, "table.attach: %v", err)
 		}
 		return nil, nil

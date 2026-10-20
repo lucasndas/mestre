@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -79,22 +81,55 @@ type attachmentCopies struct {
 	layout  workspaces.Layout
 	machine string
 	towers  attachTowers
-	log     *slog.Logger
+	// dirOf gives the worktree of a table on this machine (empty: unknown); For
+	// reads no attachment that is already there.
+	dirOf func(ctx context.Context, workspace, table string) string
+	log   *slog.Logger
 }
 
 var _ sessionzero.AttachmentSource = (*attachmentCopies)(nil)
 
-// source reads an attachment of the main clone.
-func (c *attachmentCopies) source(workspace, rel string) ([]byte, error) {
+// meta is what the row of an attachment says of the file (zero: no row).
+type meta struct {
+	size   int64
+	sha256 string
+	known  bool
+}
+
+func (c *attachmentCopies) meta(ctx context.Context, workspace, rel string) meta {
+	var m meta
+	err := c.db.Reader().QueryRowContext(ctx, `SELECT size, sha256 FROM attachments WHERE workspace = ? AND path = ?`, workspace, rel).Scan(&m.size, &m.sha256)
+	m.known = err == nil
+	return m
+}
+
+// have says the copy in the worktree is there with the size the row gives (an
+// attachment never changes: its name has its id), without reading anything.
+func have(dir, rel string, m meta) bool {
+	if !m.known {
+		return false
+	}
+	info, err := safefile.Stat(filepath.Join(dir, filepath.FromSlash(rel)))
+	return err == nil && info.Exists && info.Size == m.size
+}
+
+// source reads an attachment of the main clone; when the row of the attachment
+// is known the file must be what it says (size and SHA-256), so a file that was
+// changed after the channel kept it is not spread to the tables.
+func (c *attachmentCopies) source(workspace, rel string, m meta) ([]byte, error) {
 	data, _, err := safefile.Read(filepath.Join(c.layout.Principal(workspace), filepath.FromSlash(rel)), maxAttachCopy)
 	if err != nil {
 		return nil, fmt.Errorf("o anexo %s não pôde ser lido: %w", rel, err)
 	}
+	if m.known && m.sha256 != "" {
+		if sum := sha256.Sum256(data); int64(len(data)) != m.size || hex.EncodeToString(sum[:]) != m.sha256 {
+			return nil, fmt.Errorf("o anexo %s não é mais o arquivo que o canal guardou", rel)
+		}
+	}
 	return data, nil
 }
 
-// put writes a copy into a worktree, unless it has the same size already (an
-// attachment never changes: its name has its id).
+// put writes a copy into a worktree, unless it has the same size already.
 func put(dir, rel string, data []byte) error {
 	p := filepath.Join(dir, filepath.FromSlash(rel))
 	if info, err := safefile.Stat(p); err == nil && info.Exists && info.Size == int64(len(data)) {
@@ -103,18 +138,30 @@ func put(dir, rel string, data []byte) error {
 	return safefile.Write(p, data, safefile.Options{Mode: attachMode})
 }
 
+// copyOne copies one attachment of the main clone into a worktree of this machine.
+func (c *attachmentCopies) copyOne(ctx context.Context, workspace, dir, rel string) error {
+	if _, err := attachRel(rel); err != nil {
+		return err
+	}
+	m := c.meta(ctx, workspace, rel)
+	if have(dir, rel, m) {
+		return nil
+	}
+	data, err := c.source(workspace, rel, m)
+	if err != nil {
+		return err
+	}
+	if err := put(dir, rel, data); err != nil {
+		return fmt.Errorf("o anexo %s não foi copiado: %w", rel, err)
+	}
+	return nil
+}
+
 // copyInto copies attachments of the main clone into a worktree of this machine.
-func (c *attachmentCopies) copyInto(workspace, dir string, rels []string) error {
+func (c *attachmentCopies) copyInto(ctx context.Context, workspace, dir string, rels []string) error {
 	for _, rel := range rels {
-		if _, err := attachRel(rel); err != nil {
+		if err := c.copyOne(ctx, workspace, dir, rel); err != nil {
 			return err
-		}
-		data, err := c.source(workspace, rel)
-		if err != nil {
-			return err
-		}
-		if err := put(dir, rel, data); err != nil {
-			return fmt.Errorf("o anexo %s não foi copiado: %w", rel, err)
 		}
 	}
 	return nil
@@ -142,7 +189,7 @@ func (c *attachmentCopies) deliver(ctx context.Context, workspace, table string,
 	}
 	for _, w := range wts {
 		if w.Machine == c.machine {
-			if err := c.copyInto(workspace, w.Dir, rels); err != nil {
+			if err := c.copyInto(ctx, workspace, w.Dir, rels); err != nil {
 				return err
 			}
 			continue
@@ -219,12 +266,19 @@ func (c *attachmentCopies) For(ctx context.Context, workspace, table string) ([]
 			c.log.Warn("app: an attachment with a path that is not one", "path", p)
 			continue
 		}
-		data, err := c.source(workspace, rel)
+		m := c.meta(ctx, workspace, rel)
+		if c.dirOf != nil {
+			if d := c.dirOf(ctx, workspace, table); d != "" && have(d, rel, m) {
+				continue // the copy is there: nothing to read
+			}
+		}
+		data, err := c.source(workspace, rel, m)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue // not here yet: the replication brings the file before the row, and the next start finds it
 		}
 		if err != nil {
-			return nil, err
+			c.log.Warn("app: an attachment was not copied into the table", "path", rel, "err", err) // one bad file does not keep the others, or the start of a character
+			continue
 		}
 		files = append(files, sessionzero.File{Path: strings.TrimPrefix(rel, attachDir), Data: data})
 	}
@@ -271,14 +325,10 @@ func (c *attachmentCopies) catchUp(ctx context.Context, dir func(workspace, tabl
 		if fi, err := os.Stat(d); err != nil || !fi.IsDir() {
 			continue
 		}
-		var ok []string
 		for _, rel := range rels {
-			if _, err := attachRel(rel); err == nil {
-				ok = append(ok, rel)
+			if err := c.copyOne(ctx, k.ws, d, rel); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				errs = append(errs, fmt.Errorf("%s/%s: %w", k.ws, k.table, err))
 			}
-		}
-		if err := c.copyInto(k.ws, d, ok); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			errs = append(errs, fmt.Errorf("%s/%s: %w", k.ws, k.table, err))
 		}
 	}
 	return errors.Join(errs...)
@@ -374,19 +424,18 @@ func joinCites(all ...replication.Cites) replication.Cites {
 }
 
 // mirrorCites says which mirror a change of the database cites: a table whose
-// row names a commit of the mirror of its workspace (the base, the head of the
-// pull request, the merged head) when the row is new or one of them changed.
+// row names a commit of the mirror of its workspace (the base, the merged head) when the row is new or one of them changed.
 // The mirror then reaches the Tower before the row does. workspaces is the
 // folder of the workspaces; a workspace with no mirror is not cited (the
 // sending of a mirror that cannot be opened would hold the replication back).
 func mirrorCites(workspaces string) func(c store.Change) []string {
-	const base, head, merged = 6, 13, 15 // columns of tables: base_commit, pr_head, merged_head
+	const base, merged = 6, 15 // columns of tables: base_commit, merged_head (the head of the pull request is in a branch of the table, which the bundles of the tables carry)
 	return func(c store.Change) []string {
 		if c.Table != "tables" || c.Op == store.OpDelete || len(c.New) <= merged {
 			return nil
 		}
 		moved := c.Op == store.OpInsert || len(c.Old) <= merged
-		for _, i := range []int{base, head, merged} {
+		for _, i := range []int{base, merged} {
 			if !moved && c.Old[i] != c.New[i] {
 				moved = true
 			}

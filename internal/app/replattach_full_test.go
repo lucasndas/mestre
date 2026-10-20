@@ -4,6 +4,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -135,7 +137,7 @@ func (w *replWorld) keep(t *testing.T, rel, content, tablesJSON string) {
 	t.Helper()
 	writeFile(t, filepath.Join(w.a.paths.Workspaces, rwWS, "principal", filepath.FromSlash(rel)), content)
 	if _, err := w.db.Writer().ExecContext(t.Context(), `INSERT INTO attachments (id, workspace, user_id, channel, name_original, mime_detected, size, sha256, path, tables, created_at)
-		VALUES (?, ?, 'u1', 'telegram', 'print.png', 'image/png', ?, 'x', ?, ?, 1)`, rel, rwWS, len(content), rel, tablesJSON); err != nil {
+		VALUES (?, ?, 'u1', 'telegram', 'print.png', 'image/png', ?, ?, ?, ?, 1)`, rel, rwWS, len(content), fmt.Sprintf("%x", sha256.Sum256([]byte(content))), rel, tablesJSON); err != nil {
 		t.Fatal(err)
 	}
 }

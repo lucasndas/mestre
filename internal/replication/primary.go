@@ -734,7 +734,9 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 						break
 					}
 					if err := pe.files.ensure(ctx, link, excluded, ref); err != nil {
-						return sent, err
+						if skip := p.skippable(ctx, link, "file", ref.Root+"/"+ref.Path, err); skip != nil {
+							return sent, skip
+						}
 					}
 				}
 				for _, id := range mirrors {
@@ -742,7 +744,9 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 						break
 					}
 					if err := p.cfg.Mirrors.sync(ctx, link, pe, id); err != nil {
-						return sent, err
+						if skip := p.skippable(ctx, link, "mirror", id, err); skip != nil {
+							return sent, skip
+						}
 					}
 				}
 			}
@@ -763,6 +767,18 @@ func (p *Primary) ship(ctx context.Context, link *protocol.Link, pe *peer, rows 
 		sent = row.LSN
 	}
 	return sent, flush()
+}
+
+// skippable decides what a failure to send a cited file or mirror does: it is
+// logged and the record goes on (as the sending of every mirror and folder does),
+// unless the context ended or the connection is gone, which stops the batch to
+// be sent again.
+func (p *Primary) skippable(ctx context.Context, link *protocol.Link, what, name string, err error) error {
+	if ctx.Err() != nil || !link.Connected() {
+		return err
+	}
+	p.cfg.Logger.Warn("replication: a cited "+what+" was not sent, the record goes on", "name", name, "err", err)
+	return nil
 }
 
 // cited lists the files and the mirrors a record cites.

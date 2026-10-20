@@ -100,7 +100,14 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	// the attachments of the messages: copied into the worktrees of the tables, here
 	// and on the Towers, and recorded in their rows (attachcopy.go)
 	attached := &attachmentCopies{db: db, tables: tables.Store{DB: db}, layout: workspaces.Layout{Root: workspacesDir}, machine: e.id.MachineID,
-		towers: towerAttachments{towerClient: e.towerClient(), send: e.sendFile}, log: e.log}
+		towers: towerAttachments{towerClient: e.towerClient(), send: e.sendFile}, log: e.log,
+		dirOf: func(ctx context.Context, ws, table string) string {
+			w, err := (tables.Store{DB: db}).Worktree(ctx, ws, table, e.id.MachineID)
+			if err != nil {
+				return ""
+			}
+			return w.Dir
+		}}
 	files, err := sessionzero.NewTable(sessionzero.TableOptions{Worktree: sessionzero.Worktree{Providers: reg, Binary: binary}, Attachments: attached})
 	if err != nil {
 		return nil, err

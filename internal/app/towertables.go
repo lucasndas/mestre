@@ -203,7 +203,11 @@ var names = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$`)
 
 // towerWorktreeDir is where this machine keeps the worktree of a table.
 func (e *Engine) towerWorktreeDir(workspace, table string) string {
-	return filepath.Join(e.paths.Workspaces, workspace, "mesas", table)
+	root, err := filepath.Abs(e.paths.Workspaces)
+	if err != nil {
+		root = e.paths.Workspaces
+	}
+	return filepath.Join(root, workspace, "mesas", table)
 }
 
 // newTowerTables makes the half of the tables of this Tower over its link to

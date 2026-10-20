@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -110,7 +112,7 @@ func (r *attachRig) keep(t *testing.T, rel, content string) {
 		t.Fatal(err)
 	}
 	if _, err := r.db.Writer().ExecContext(t.Context(), `INSERT INTO attachments (id, workspace, user_id, channel, name_original, mime_detected, size, sha256, path, created_at)
-		VALUES (?, ?, 'u1', 'telegram', 'print.png', 'image/png', ?, 'x', ?, 1)`, rel, attWS, len(content), rel); err != nil {
+		VALUES (?, ?, 'u1', 'telegram', 'print.png', 'image/png', ?, ?, ?, 1)`, rel, attWS, len(content), fmt.Sprintf("%x", sha256.Sum256([]byte(content))), rel); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -296,8 +298,11 @@ func TestTheRowsThatCiteAnAttachmentOrAMirror(t *testing.T) {
 	if got := m(store.Change{Table: "tables", Op: store.OpInsert, New: tbl("a", "", "")}); !slices.Equal(got, []string{attWS}) {
 		t.Errorf("a new table cites %v", got)
 	}
-	if got := m(store.Change{Table: "tables", Op: store.OpUpdate, Old: tbl("a", "", ""), New: tbl("a", "b", "")}); !slices.Equal(got, []string{attWS}) {
-		t.Errorf("a head that moved cites %v", got)
+	if got := m(store.Change{Table: "tables", Op: store.OpUpdate, Old: tbl("a", "", ""), New: tbl("a", "", "c")}); !slices.Equal(got, []string{attWS}) {
+		t.Errorf("a merged head that moved cites %v", got)
+	}
+	if got := m(store.Change{Table: "tables", Op: store.OpUpdate, Old: tbl("a", "", ""), New: tbl("a", "b", "")}); len(got) != 0 {
+		t.Errorf("the head of a pull request cites %v", got)
 	}
 	if got := m(store.Change{Table: "tables", Op: store.OpUpdate, Old: tbl("a", "b", ""), New: tbl("a", "b", "")}); len(got) != 0 {
 		t.Errorf("a row whose commits did not change cites %v", got)

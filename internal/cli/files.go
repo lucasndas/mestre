@@ -213,7 +213,7 @@ func checkAttachments(env Env, p *parsed) *localchan.Response {
 			r := localchan.Fail(localchan.CodeTooLarge, fmt.Sprintf("the attachment %q is over %d MB", path, MaxAttach>>20), "send a smaller file")
 			return &r
 		}
-		names = append(names, filepath.Base(real))
+		names = append(names, filepath.Base(path))
 	}
 	p.flags["attach"] = names
 	return nil
