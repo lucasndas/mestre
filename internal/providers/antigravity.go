@@ -14,6 +14,7 @@ import (
 // name their event: the dispatcher passes the --event of the command line.
 type antigravity struct {
 	paths   pathNormalizer
+	noFlush bool // NoFlush
 	screens screenSet
 	exec    ExecFunc
 	clk     clock.Clock
@@ -32,7 +33,7 @@ func NewAntigravity(opts Options) Adapter {
 	if clk == nil {
 		clk = clock.Real{}
 	}
-	return &antigravity{paths: opts.paths(), exec: opts.Exec, clk: clk, noPaste: opts.AntigravityNoPaste, screens: screenSet{
+	return &antigravity{paths: opts.paths(), noFlush: opts.NoFlush, exec: opts.Exec, clk: clk, noPaste: opts.AntigravityNoPaste, screens: screenSet{
 		prompt:   agentPrompt,
 		busy:     regexp.MustCompile(`(?i)esc to (interrupt|cancel)|Working…`),
 		box:      agyBox,

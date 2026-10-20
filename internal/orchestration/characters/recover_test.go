@@ -30,7 +30,7 @@ func (r *rig) restart(machine string, alive []characters.Character, dead []chara
 	m.host.mu.Unlock()
 	m.rt.Close()
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
-		Machine: machine, Clock: r.clk, DB: m.db, Host: m.host, Prep: m.prep, Providers: providers.NewRegistry(providers.Options{}),
+		Machine: machine, Clock: r.clk, DB: m.db, Host: m.host, Prep: m.prep, Providers: providers.NewRegistry(providers.Options{NoFlush: true}),
 		Reporter: r.tap, Notifier: r.notes, Waits: r.waits,
 	})
 	if err != nil {

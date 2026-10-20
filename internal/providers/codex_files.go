@@ -49,7 +49,7 @@ func (c *codex) PreTrust(req PreTrustRequest) (Trust, error) {
 		if before.Exists && bytes.Equal(cur, next) {
 			return Trust{Path: path}, nil
 		}
-		if err := replaceFile(path, next, before); err != nil {
+		if err := replaceFile(path, next, before, c.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}
@@ -146,7 +146,7 @@ func (c *codex) Untrust(req PreTrustRequest) (Trust, error) {
 		if bytes.Equal(cur, next) {
 			return Trust{Path: path}, nil
 		}
-		if err := replaceFile(path, next, before); err != nil {
+		if err := replaceFile(path, next, before, c.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}
