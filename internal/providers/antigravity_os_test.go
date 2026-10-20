@@ -26,9 +26,13 @@ func TestAntigravityHookLineOfTheMachineWhenTheOSIsEmpty(t *testing.T) {
 	}
 	want := `[ -n "$MESTRE_AGENT_ID" ]`
 	if runtime.GOOS == "windows" {
-		want = "if not defined MESTRE_AGENT_ID"
+		want = "if exist "
 	}
 	if !strings.Contains(string(doc), strings.ReplaceAll(want, `"`, `\"`)) {
 		t.Fatalf("the hook file does not have the line of %s (%s):\n%s", runtime.GOOS, want, doc)
+	}
+	// agy breaks the quotes of a line of cmd: the Windows line has none.
+	if runtime.GOOS == "windows" && strings.Contains(string(doc), `\"`) {
+		t.Fatalf("the Windows hook line has quotes:\n%s", doc)
 	}
 }

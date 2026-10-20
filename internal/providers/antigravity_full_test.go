@@ -121,8 +121,12 @@ func TestTheGeneratedHookPrintsTheNeutralAnswerWithoutTheMestreBinary(t *testing
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	// A stable path with a space and a quote, where nothing is installed.
+	// A stable path with a space and a quote, where nothing is installed; on
+	// Windows a bare one, the only kind the line of cmd takes.
 	binary := filepath.Join(t.TempDir(), "mestre bin it's", name)
+	if runtime.GOOS == "windows" {
+		binary = filepath.Join(t.TempDir(), "mestre-bin", name)
+	}
 	cmds := hookCommands(t, worktree, binary)
 	if len(cmds) != 5 {
 		t.Fatalf("commands = %v", cmds)
@@ -130,7 +134,9 @@ func TestTheGeneratedHookPrintsTheNeutralAnswerWithoutTheMestreBinary(t *testing
 	payload := string(recorded(t, "antigravity", "PreToolUse"))
 	for event, line := range cmds {
 		want := "{}"
-		if event == "PreToolUse" {
+		// On Windows {} for every event: cmd cannot print the allow of
+		// PreToolUse without quotes, so a missing binary blocks the tool there.
+		if event == "PreToolUse" && runtime.GOOS != "windows" {
 			want = `{"decision":"allow"}`
 		}
 		// With the agent id the command reaches the binary check, so a
@@ -155,7 +161,11 @@ func TestTheGeneratedHookRunsTheMestreBinaryAndKeepsItsExit(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	binary := stand(t, filepath.Join(t.TempDir(), "mestre bin it's"), "mestre")
+	folder := filepath.Join(t.TempDir(), "mestre bin it's")
+	if runtime.GOOS == "windows" {
+		folder = filepath.Join(t.TempDir(), "mestre-bin")
+	}
+	binary := stand(t, folder, "mestre")
 	cmds := hookCommands(t, worktree, binary)
 	payload := string(recorded(t, "antigravity", "PreToolUse"))
 
