@@ -425,6 +425,9 @@ func (s *Service) Pin(ctx context.Context, id string, pinned bool, by Creator) e
 	if !c.State.Alive() {
 		return fmt.Errorf("%w: %s", ErrNoCharacter, c.Name)
 	}
+	if !pinned && c.Role == RoleGrandMaster {
+		return fmt.Errorf("%w: o Grão-Mestre nasce fixado e não pode ser desafixado", ErrLevelDenied)
+	}
 	return s.o.Registry.SetPinned(ctx, id, pinned)
 }
 
@@ -693,6 +696,13 @@ func (s *Service) resumeMessage(ctx context.Context, c Character) string {
 		fmt.Fprintf(&b, " Your last done was: %s", dones[len(dones)-1].Text)
 	}
 	b.WriteString(" Go on from there; your inbox and your waits were kept.")
+	if c.Role == RoleGrandMaster && s.o.Brief != nil {
+		if brief, err := s.o.Brief.Brief(ctx, c.Workspace); err != nil {
+			s.log.Warn("characters: the state of the workspace was not read for the resumption message", "workspace", c.Workspace, "err", err)
+		} else if brief != "" {
+			b.WriteString("\n\n" + brief)
+		}
+	}
 	return b.String()
 }
 
