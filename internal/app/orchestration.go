@@ -551,13 +551,17 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if catalog == nil {
 		catalog = presetsCatalog{o.Presets, o.ClassLibraries}
 	}
-	qs, err = quests.NewService(quests.Options{Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
+	var bsync *basesync.Service
+	qs, err = quests.NewService(quests.Options{BaseMoved: func(ctx context.Context, workspace, table string) (bool, error) {
+		return bsync.Moved(ctx, workspace, table)
+	},
+		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
 		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}
-	bsync, err := basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Logger: o.Logger})
+	bsync, err = basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Logger: o.Logger})
 	if err != nil {
 		return nil, err
 	}

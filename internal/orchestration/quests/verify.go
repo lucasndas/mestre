@@ -106,15 +106,18 @@ func (s *Service) uncommittedOf(ctx context.Context, q Quest, st Step, c charact
 // the step. handled says the answer is final (the verification started, or it
 // was refused); otherwise the done goes on in the mode given.
 func (s *Service) verifyFirst(ctx context.Context, q Quest, st Step, c characters.Character, r DoneRequest, proofs []Proof) (res DoneResult, handled bool, mode doneMode, err error) {
-	if s.o.Done == nil {
-		return DoneResult{}, false, modeNormal, nil
-	}
-	need, err := s.o.Done.DoneRequires(ctx, q.Workspace, q.Table, c.Class)
-	if err != nil {
-		return DoneResult{}, true, modeNormal, fmt.Errorf("done_requires of the class %s: %w", c.Class, err)
-	}
-	if !need.Verify {
-		return DoneResult{}, false, modeNormal, nil
+	forced := forcesVerify(q, st)
+	if !forced {
+		if s.o.Done == nil {
+			return DoneResult{}, false, modeNormal, nil
+		}
+		need, err := s.o.Done.DoneRequires(ctx, q.Workspace, q.Table, c.Class)
+		if err != nil {
+			return DoneResult{}, true, modeNormal, fmt.Errorf("done_requires of the class %s: %w", c.Class, err)
+		}
+		if !need.Verify {
+			return DoneResult{}, false, modeNormal, nil
+		}
 	}
 	un, err := s.uncommittedOf(ctx, q, st, c)
 	if err != nil {
@@ -133,7 +136,21 @@ func (s *Service) verifyFirst(ctx context.Context, q Quest, st Step, c character
 		}
 	}
 	if !confirmed {
+		if forced {
+			res, err := s.noCommand(ctx, q, st, c)
+			return res, true, modeNormal, err
+		}
 		return DoneResult{}, false, modeUnverified, nil
+	}
+	if forced && s.o.BaseMoved != nil {
+		// the gate before the run: a done without the base integrated is not worth a verification
+		moved, err := s.o.BaseMoved(ctx, q.Workspace, q.Table)
+		if err != nil {
+			return DoneResult{}, true, modeNormal, fmt.Errorf("the base of the table could not be read: %w", err)
+		}
+		if moved {
+			return DoneResult{}, true, modeNormal, ErrBaseMoved
+		}
 	}
 	t, err := s.o.Tables.Table(ctx, q.Workspace, q.Table)
 	if err != nil {
@@ -155,7 +172,66 @@ func (s *Service) verifyFirst(ctx context.Context, q Quest, st Step, c character
 const (
 	VerificationPending    = "pending"
 	VerificationUnverified = "unverified"
+	// VerificationNoCommand: the step sync cannot prove its arrival without a
+	// command; the quest is paused and the Master of the table was asked.
+	VerificationNoCommand = "no_command"
 )
+
+// ReasonNoVerifyCommand is why a quest is paused when its step sync has no
+// verification command to arrive with.
+const ReasonNoVerifyCommand = "sem comando de verificação"
+
+// SyncStepID is the id of the step of the mission `sync`
+// (docs/orquestracao/sincronia-com-a-base.md): its done always goes through
+// the verification of the engine, whatever the class of the character.
+const SyncStepID = "sync"
+
+// IsSyncName says whether a quest name is one of the missions of the step sync
+// ("sync", "sync-2", ...).
+func IsSyncName(name string) bool {
+	rest, ok := strings.CutPrefix(strings.ToLower(name), SyncStepID)
+	if !ok {
+		return false
+	}
+	if rest == "" {
+		return true
+	}
+	n, ok := strings.CutPrefix(rest, "-")
+	if !ok || n == "" {
+		return false
+	}
+	for _, r := range n {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func forcesVerify(q Quest, st Step) bool {
+	return IsSyncName(q.Name) && st.ID == SyncStepID
+}
+
+// noCommand is the done of a step sync in a workspace with no command of
+// verification confirmed: the quest pauses and the Master of the table takes
+// the question of which commands to use to the Grand Master. The step stays
+// as it is, and the done is given again after the resume.
+func (s *Service) noCommand(ctx context.Context, q Quest, st Step, c characters.Character) (DoneResult, error) {
+	paused, err := s.pause(ctx, q.ID, ReasonNoVerifyCommand)
+	if err != nil {
+		return DoneResult{}, err
+	}
+	cur, err := s.st.Quest(ctx, q.ID)
+	if err != nil {
+		return DoneResult{}, err
+	}
+	state := cur.State
+	if paused { // told once: a done again before the resume does not ask again
+		s.tellMaster(ctx, q, inbox.KindSystem, fmt.Sprintf("A etapa %s da missão %s não pode provar a chegada: o workspace não tem comando de verificação confirmado. A missão está pausada por \"%s\". Leve ao Grão-Mestre a pergunta de quais comandos usar (build e testes do projeto), confirme-os e retome com `mestre quest resume`.",
+			st.ID, q.Name, ReasonNoVerifyCommand))
+	}
+	return DoneResult{Task: st.UID, Quest: q.Name, Step: st.ID, QuestState: string(state), Warnings: []string{}, Verification: VerificationNoCommand}, nil
+}
 
 // verified runs the verification and takes the result in: green ends the step
 // as the done asked, with the proofs of the done verified by the engine; red
@@ -191,6 +267,18 @@ func (s *Service) verified(ctx context.Context, q Quest, st Step, c characters.C
 		return // the step moved on while it ran
 	}
 	if res.OK {
+		if forcesVerify(q, cur) && s.o.BaseMoved != nil {
+			// the gate again, before the arrival: the base may have moved while it ran
+			moved, err := s.o.BaseMoved(ctx, q.Workspace, q.Table)
+			if err != nil {
+				failed(err)
+				return
+			}
+			if moved {
+				s.tellCharacter(ctx, q, c.ID, "A verificação passou, mas a branch principal andou de novo enquanto ela rodava. A etapa segue em andamento: integre a base outra vez (`git merge`), rode a verificação, commite e dê `mestre done` de novo.")
+				return
+			}
+		}
 		r.Where = nil
 		r.expectStep = st.UID
 		if _, err := s.finish(ctx, r, modeVerified); err != nil {

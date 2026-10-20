@@ -164,6 +164,8 @@ var (
 	ErrVerificationRunning = errors.New("the verification of the step is running")
 	// ErrUncommitted: the class verifies the branch and the character left changes not committed.
 	ErrUncommitted = errors.New("changes not committed")
+	// ErrBaseMoved: the done of the step sync came with the branch still lacking the tip of the base.
+	ErrBaseMoved = errors.New("the branch does not have the tip of the base")
 	// ErrNotIntegrated: the commits of a Tower did not reach the Citadel.
 	ErrNotIntegrated = errors.New("the commits did not reach the Citadel")
 	// ErrNoCriterion: a proof for a criterion the quest does not have.
