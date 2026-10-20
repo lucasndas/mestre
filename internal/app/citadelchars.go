@@ -467,6 +467,8 @@ func (e *Engine) registerCitadelCharacters(router *protocol.Router, run *citadel
 		if err != nil {
 			return nil, protocol.NewError(protocol.CodeInternal, "character.resync: %v", err)
 		}
+		// what the resync left interrupted is resumed once this answer is given
+		e.resumes.request(m.Peer.ID)
 		return &protocol.Reply{Type: protocol.TypeCharacterResync, InAck: true, Payload: protocol.CharacterResyncResult{End: end}}, nil
 	})
 	h(protocol.TypeCharacterTurn, func(ctx context.Context, orc *Orchestration, m *protocol.Message) (*protocol.Reply, error) {

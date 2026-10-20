@@ -6,7 +6,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/gitx"
@@ -16,6 +18,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/testkit/orcfakes"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -23,15 +26,50 @@ import (
 // builderIntegration gives a Citadel the session zero of a character with the
 // least it needs: the real one asks for the decrees, the identities and the
 // classes of a complete run, which the test of the channel does not have.
-type builderIntegration struct{}
+type builderIntegration struct{ resumed *resumeLog }
 
-func (builderIntegration) Open(context.Context, IntegrationEnv) (IntegrationRun, error) {
-	return builderRun{}, nil
+func (b builderIntegration) Open(context.Context, IntegrationEnv) (IntegrationRun, error) {
+	return builderRun{b.resumed}, nil
 }
 
-type builderRun struct{}
+// resumeLog keeps the session each character was built to resume (empty: a new one).
+type resumeLog struct {
+	mu   sync.Mutex
+	byID map[string][]string
+}
 
-func (builderRun) Extend(o *OrchestrationOptions) { o.Builder = orcfakes.Builder{} }
+func (l *resumeLog) add(id, session string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.byID == nil {
+		l.byID = map[string][]string{}
+	}
+	l.byID[id] = append(l.byID[id], session)
+}
+
+// of is the sessions the character was built with, in order.
+func (l *resumeLog) of(id string) []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.byID[id])
+}
+
+// recordingBuilder is the session zero of the test, which says what each build resumes.
+type recordingBuilder struct {
+	orcfakes.Builder
+	log *resumeLog
+}
+
+func (b recordingBuilder) Build(ctx context.Context, in characters.BuildInput) (sessionzero.CharacterRequest, error) {
+	if b.log != nil {
+		b.log.add(in.Character.ID, in.ResumeSessionID)
+	}
+	return b.Builder.Build(ctx, in)
+}
+
+type builderRun struct{ resumed *resumeLog }
+
+func (b builderRun) Extend(o *OrchestrationOptions) { o.Builder = recordingBuilder{log: b.resumed} }
 func (builderRun) Attach(*Orchestration, *localchan.LocalForwarder) []ExternalFunc {
 	return nil
 }
