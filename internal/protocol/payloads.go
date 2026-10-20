@@ -717,18 +717,34 @@ func (r *TranscribeResult) Validate() error {
 	if r.Text == "" && r.Error == "" {
 		return fmt.Errorf("neither text nor error")
 	}
+	if r.ErrorCode != "" && r.Error == "" {
+		return fmt.Errorf("error_code without error")
+	}
+	if r.ErrorCode != "" && r.ErrorCode != TranscribeTimeout && r.ErrorCode != TranscribeFailed {
+		return fmt.Errorf("error_code %q is not known", r.ErrorCode)
+	}
 	return nil
 }
 
 // TranscribeResult is `transcribe.result`: the end of a transcribe.request (its
-// id is the reply_to). Error is the reason the machine could not transcribe;
-// then Text is empty.
+// id is the reply_to). Error is the reason the machine could not transcribe, in
+// text, and ErrorCode its code (TranscribeTimeout, TranscribeFailed); then Text
+// is empty.
 type TranscribeResult struct {
 	Text      string  `json:"text"`
 	DurationS float64 `json:"duration_s"`
 	Language  string  `json:"language,omitempty"`
 	Error     string  `json:"error,omitempty"`
+	ErrorCode string  `json:"error_code,omitempty"`
 }
+
+// The codes of the failure of a transcription (TranscribeResult.ErrorCode).
+const (
+	// TranscribeTimeout: the transcription went past the time limit of the audio.
+	TranscribeTimeout = "timeout"
+	// TranscribeFailed: the whisper of the machine failed or refused the audio.
+	TranscribeFailed = "failed"
+)
 
 // CertRenew is `cert.renew`.
 type CertRenew struct {

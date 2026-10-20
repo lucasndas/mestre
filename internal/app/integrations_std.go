@@ -581,7 +581,7 @@ func (r *stdRun) ghHandlers(orc *Orchestration) *ghcli.Handlers {
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked, OnQueued: r.queuedToInbox(orc),
-		Refused: r.refusedSending(orc), Opened: r.tablePROpened(orc),
+		Refused: r.refusedSending(orc), Opened: r.tablePROpened(orc), Unreachable: r.unreachableTowers(orc),
 		Executed: r.decrees.Fulfilled, Heads: &github.ReviewedHeads{DB: r.env.DB, Clock: r.env.Clock}, Settings: stdSettings{r},
 		Approver: lateApprover{r}, Merges: mergeHost{r}, Rulesets: lateRulesets{r},
 	}
@@ -601,6 +601,24 @@ func (r *stdRun) ghHandlers(orc *Orchestration) *ghcli.Handlers {
 	// completed mission of the epic has a criterion with no proof
 	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
 	return h
+}
+
+// unreachableTowers are the Towers with a worktree of the table that have no connection now:
+// `mestre pr open` and `pr update` warn that the branch was sent without them. A failure to
+// read them is no failure of the command, which was done.
+func (r *stdRun) unreachableTowers(orc *Orchestration) func(ctx context.Context, key string) []string {
+	return func(ctx context.Context, key string) []string {
+		ws, id, ok := cutKey(key)
+		if !ok {
+			return nil
+		}
+		towers, err := orc.Tables.UnreachableTowers(ctx, ws, id)
+		if err != nil {
+			r.env.Log.Warn("app: the Towers of the table could not be listed", "table", key, "err", err)
+			return nil
+		}
+		return towers
+	}
 }
 
 // tablePROpened tells the table that its PR was opened or updated by the

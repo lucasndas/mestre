@@ -519,6 +519,23 @@ func TestTheSampleIsDrawnWithTheSeedSentByTheEngineAndAMistakeRevokes(t *testing
 	if len(buttons) != 10 {
 		t.Fatalf("buttons Foi um erro = %v, want one for each of the ten actions", buttons)
 	}
+	// and each message of the sample has the button Pausar autonomia of the table it names
+	pauses := 0
+	for _, m := range w.send.to(w.owner.ID) {
+		if !strings.HasPrefix(m.Text, "Amostra para revisão") {
+			continue
+		}
+		for _, row := range m.Buttons {
+			for _, b := range row {
+				if b.Action == digest.PauseAutonomyAction && b.Arg == "loja:42-login" {
+					pauses++
+				}
+			}
+		}
+	}
+	if pauses != 2 {
+		t.Fatalf("%d buttons Pausar autonomia in the two messages of the sample, want one in each", pauses)
+	}
 	var id int64
 	for _, got := range d.got["Mestre da mesa"] {
 		id = got // the sample is sorted: the last is a stable choice

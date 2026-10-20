@@ -173,7 +173,21 @@ func (h *Handlers) prOpen(ctx context.Context, c *localchan.Call) localchan.Resp
 		}
 	}
 	h.executed(ctx, who.char, "mestre pr open")
-	return localchan.OK(map[string]any{"number": got.Number, "url": got.URL, "head_sha": got.HeadSHA})
+	return h.sent(ctx, who.actor.Table, got.Number, got.URL, got.HeadSHA)
+}
+
+// sent is the answer of a command that sent the branch of the table: the PR and, when a
+// Tower with a worktree of the table is not connected, the warning that the branch went
+// from the Citadel without it (docs/orquestracao/mesas.md).
+func (h *Handlers) sent(ctx context.Context, tableKey string, number int, url, head string) localchan.Response {
+	data := map[string]any{"number": number, "url": url, "head_sha": head}
+	if h.Unreachable != nil {
+		if towers := h.Unreachable(ctx, tableKey); len(towers) > 0 {
+			data["unreachable_towers"] = towers
+			data["warning"] = fmt.Sprintf("a branch foi enviada da Cidadela sem as Torres desconectadas (%s); o que elas têm da mesa só chega ao reconectar", strings.Join(towers, ", "))
+		}
+	}
+	return localchan.OK(data)
 }
 
 // executed tells the decrees that the engine sent the branch for the character;
@@ -228,6 +242,7 @@ func (h *Handlers) prUpdate(ctx context.Context, c *localchan.Call) localchan.Re
 			// that can not take it (it is closing) does not undo what was sent.
 			_ = h.Opened(ctx, who.actor.Table, got.Number, got.HeadSHA)
 		}
+		return h.sent(ctx, who.actor.Table, got.Number, got.URL, got.HeadSHA)
 	}
 	return localchan.OK(map[string]any{"number": got.Number, "url": got.URL, "head_sha": got.HeadSHA})
 }

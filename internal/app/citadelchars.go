@@ -40,6 +40,9 @@ type machineRouter struct {
 
 var _ OrchestrationMachines = (*machineRouter)(nil)
 
+// errClassHooksOnTower is why a character whose class has hooks does not start on a Tower.
+var errClassHooksOnTower = errors.New("the class has hooks, which only run on the Citadel: the character does not start on a Tower")
+
 func (m *machineRouter) set() characters.MachineSet {
 	if m.rt == nil {
 		return characters.MachineSet{}
@@ -160,6 +163,12 @@ func (m *machineRouter) Start(ctx context.Context, machine string, cmd character
 			return characters.StartResult{}, errTerminalsNotWired
 		}
 		return m.rt.Start(ctx, cmd)
+	}
+	// The hooks of a class run where the library of the workspace is, in the Citadel: a Tower
+	// would let the character through without them, so a class that has hooks does not start
+	// there (fail closed; docs/desenvolvimento/ligacao-de-producao.md).
+	if c := cmd.Request.Class; c != nil && len(c.Hooks) > 0 {
+		return characters.StartResult{}, fmt.Errorf("%w: %s on %s", errClassHooksOnTower, c.Name, machine)
 	}
 	raw, err := json.Marshal(cmd.Request)
 	if err != nil {

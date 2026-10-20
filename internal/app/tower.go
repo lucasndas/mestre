@@ -210,7 +210,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		Heartbeat: func(ctx context.Context) (protocol.MachineHeartbeat, error) {
 			return towerHeartbeat(ctx, sys, replica.LagSeconds()), nil
 		},
-		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: withAudio(towerFinalizers(replica.Finalizers(), tableHalf), audio)},
+		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: withAudio(towerFinalizers(replica.Finalizers(), tableHalf), audio, e.epochs.Citadel)},
 		Hooks: protocol.Hooks{
 			OnConnect: func(*protocol.Session) {
 				locator.Connected(pctx)
