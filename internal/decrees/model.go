@@ -228,4 +228,7 @@ var (
 	// ErrLocked: the Mestre is locked (/travar); no decree is confirmed or revoked.
 	ErrLocked   = errors.New("decrees: the Mestre is locked")
 	ErrNoVerify = errors.New("decrees: the target could not be verified")
+	// ErrWrongRequest: the request offered is not the one the exception was
+	// made for (another workspace, another target).
+	ErrWrongRequest = errors.New("decrees: the request is not the one the exception was made for")
 )

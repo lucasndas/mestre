@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -449,6 +450,12 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 	report("idle")
 	if took := clk.Now().Sub(start); took > 8*time.Second {
 		t.Errorf("the report of %s took %v: the answer of the delivery waited behind the handler", queued.ID, took)
+	}
+	// the other half of the criterion: the Citadel runs without `terminais` here, so a start on its
+	// own machine is refused with the reason, and another machine is still the one that cannot be reached
+	_, err = a.e.mach.Load().Start(ctx, a.id, characters.StartCommand{Character: dev.ID})
+	if !errors.Is(err, errTerminalsNotWired) || !strings.Contains(err.Error(), "terminais") {
+		t.Errorf("a start on a machine without terminals: %v; want the refusal that says they are not wired", err)
 	}
 }
 

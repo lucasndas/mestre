@@ -64,7 +64,7 @@ func (g *guildFake) swapCitadel() {
 	}
 }
 
-// CA-GUILDA-12, the Owner's side: /guilda lists the machines, the Owner taps
+// Part of CA-GUILDA-12, the Owner's side: /guilda lists the machines, the Owner taps
 // Excluir and types the PIN, and only then SetExcluded is called; the Citadel has
 // no button; a wrong PIN calls nothing; Desfazer exclusão calls it again. What
 // the Tower does with SetExcluded (erases the vault, keeps certificates without

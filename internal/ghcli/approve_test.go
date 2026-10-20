@@ -2,6 +2,7 @@ package ghcli_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -47,6 +48,12 @@ type mergesFake struct {
 	stands []string
 	asked  []chain.OpenRequest
 	askErr error
+	// redeem is what the point exception answers: its number and whether it was spent, or an error;
+	// redeemed are the targets it was asked about.
+	redeemDecree int64
+	redeemUsed   bool
+	redeemErr    error
+	redeemed     []string
 	// approveOnAsk makes the request approved at once, as a policy that lets the Grand Master decide.
 	approveOnAsk bool
 }
@@ -61,6 +68,13 @@ func (m *mergesFake) Standing(_ context.Context, ws, repo string, n int, sha, ba
 	defer m.mu.Unlock()
 	m.stands = append(m.stands, strings.Join([]string{ws, repo, itoa(n), sha, base}, "|"))
 	return m.approved, m.open, nil
+}
+
+func (m *mergesFake) Redeem(_ context.Context, ws string, target json.RawMessage, character string) (int64, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.redeemed = append(m.redeemed, ws+"|"+character+"|"+string(target))
+	return m.redeemDecree, m.redeemUsed, m.redeemErr
 }
 
 func (m *mergesFake) Ask(_ context.Context, o chain.OpenRequest) (int64, error) {
@@ -320,5 +334,48 @@ func TestGhSettingsApplyAsksTheOwnerAndEndsPending(t *testing.T) {
 	}
 	if got = r.run("tm", "gh settings", map[string]any{"body": body}, "apply"); got.OK || got.Exit != 3 {
 		t.Errorf("apply by the Mestre da mesa: %+v", got)
+	}
+}
+
+// Part of CA-DEC-03: the point exception of an Approver is the approval of the merge: it is looked up for the exact target
+// of the PR (the repository of the workspace, the PR, the head and the base), after an approved request and before a new one
+// is opened; spent, the merge goes out with no request and the answer says the decree; one that expired unused (the head
+// moved) leaves the normal path with the reason; an approved request is preferred and the exception is not even asked.
+func TestGhMergeSpendsTheExceptionOfAnApproverInsteadOfOpeningARequest(t *testing.T) {
+	t.Parallel()
+	r, _, mg, _, pr := approveRig(t)
+	mg.redeemDecree, mg.redeemUsed = 17, true
+	got := r.run("gm", "gh merge", nil, itoa(pr))
+	if !got.OK || got.Data["decree"] != float64(17) || got.Data["head_sha"] != headA {
+		t.Fatalf("merge by exception: %+v", got)
+	}
+	want := "meu-app|gm|" + string(approvals.PRTarget(repoFull, pr, headA, "main"))
+	if len(mg.redeemed) != 1 || mg.redeemed[0] != want {
+		t.Errorf("the exception was looked up with %v; want %q (the repository of the workspace, the PR, the head and the base)", mg.redeemed, want)
+	}
+	if len(mg.asked) != 0 {
+		t.Errorf("a request was opened although an exception approved the merge: %v", mg.asked)
+	}
+	if ms := r.gh.Merges(repoFull); len(ms) != 1 || ms[0].SHA != headA {
+		t.Errorf("GitHub merged %+v; want the head of the exception", ms)
+	}
+	// the head moved: the exception expired unused and the merge waits for a request
+	r2, _, mg2, _, pr2 := approveRig(t)
+	mg2.redeemDecree, mg2.redeemErr = 18, ghcli.ErrExceptionExpired
+	got = r2.run("gm", "gh merge", nil, itoa(pr2))
+	if got.OK || got.Code != "approval_pending" || len(mg2.asked) != 1 || !strings.Contains(got.Error, "#90") || len(r2.gh.Merges(repoFull)) != 0 {
+		t.Fatalf("merge after the exception expired: %+v (asked %d)", got, len(mg2.asked))
+	}
+	// an approved request wins: the exception is not touched
+	r3, _, mg3, _, pr3 := approveRig(t)
+	mg3.approved, mg3.redeemDecree, mg3.redeemUsed = 90, 19, true
+	if got = r3.run("gm", "gh merge", nil, itoa(pr3)); !got.OK || got.Data["decree"] != float64(0) || len(mg3.redeemed) != 0 {
+		t.Errorf("merge with an approved request: %+v, exceptions asked %v", got, mg3.redeemed)
+	}
+	// an error looking the exception up is not a merge
+	r4, _, mg4, _, pr4 := approveRig(t)
+	mg4.redeemErr = errors.New("boom")
+	if got = r4.run("gm", "gh merge", nil, itoa(pr4)); got.OK || len(r4.gh.Merges(repoFull)) != 0 || len(mg4.asked) != 0 {
+		t.Errorf("an error of the exceptions: %+v", got)
 	}
 }

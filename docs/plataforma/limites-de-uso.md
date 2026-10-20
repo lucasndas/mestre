@@ -28,6 +28,7 @@ Como o Mestre cria agentes sozinho, proteger contra gasto descontrolado: registr
 
 - No Antigravity, o `/usage` roda a cada 10 min (padrão) para cada perfil de conta com personagem ativo. Tokens por turno no modo interativo não são lidos; valem tempo ativo e turnos ([Antigravity](../provedores/antigravity.md)).
 - Claude Code sem statusLine (pasta sem confiança): vale o monitoramento reduzido do [adaptador](../provedores/adaptador.md#monitoramento-reduzido).
+- **Personagem de uma Torre:** o transcript do Codex e o comando do Antigravity estão na máquina onde ele roda, então é a **Torre** que faz a leitura periódica (a cada minuto, só com a Cidadela conectada, com o mesmo leitor da Cidadela e o cursor guardado na Torre) e a conta à Cidadela em `usage.reading` ([mensagens](../conectividade/mensagens.md)); a Cidadela só a aceita de uma Torre onde o registro põe o personagem e a trata como a leitura do próprio período. Os eventos (`agent.event`) já chegavam de todas as máquinas.
 
 ### Limites
 
@@ -94,6 +95,7 @@ Consumo por personagem, missão, mesa, workspace, conta e dia; limites e quanto 
 - **CA-USO-11** · *rápida* — **Dado** um limite de mesa acima do teto de custo do workspace, **quando** o Administrador salva, **então** é recusado; **dado** um limite diário total salvo por um Administrador, **então** é recusado e só o Dono consegue.
 - **CA-USO-12** · *rápida* — **Dado** uma conformidade que grava 2 USD de origem `conformidade`, **quando** o motor soma, **então** o limite da mesa e o do workspace não mudam e o diário total sobe; **dado** a fonte de uso de um personagem indisponível, **então** só tempo ativo e turnos são gravados e o ALL-23 abre um aviso.
 - **CA-USO-13** · *rápida* — **Dado** uma Cidadela com um personagem Codex que tem perfil de conta, outro Codex sem perfil, um de outra máquina e um do Claude Code, **quando** a leitura periódica roda, **então** só o primeiro é lido do transcript (a leitura seguinte continua de onde a anterior parou e, sem nada novo, não grava) e o segundo vira `SourceUnavailable` (ALL-23), sem adivinhar pasta; **dado** um `agent.event` de uma Torre, **então** o evento chega ao uso se o registro põe o personagem naquela Torre e é recusado com `forbidden` se o põe em outra.
+- **CA-USO-14** · *rápida* — **Dado** uma Torre com um personagem Codex que tem perfil de conta e outro sem, **quando** a leitura periódica da Torre roda com a Cidadela conectada, **então** a Cidadela recebe um `usage.reading` com o uso do primeiro (a leitura seguinte continua de onde a anterior parou e, sem nada novo, não envia) e o segundo vira `SourceUnavailable` uma vez; **dado** a Torre sem a Cidadela, **então** nada é lido nem enviado; **dado** um `usage.reading` de uma Torre onde o registro não põe o personagem, **então** é recusado com `forbidden` e nada é gravado.
 
 ## Depende de
 

@@ -761,8 +761,12 @@ func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
 			tableRules = periodTableRules{e}
 		}
 	}
+	var ledger classes.ExceptionLedger = rules
+	if e.deps.HostOrchestration {
+		ledger = periodLedger{e: e, local: rules}
+	}
 	return &hook.Engine{
-		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
+		Clock: e.clk, Rules: rules, Ledger: ledger, Agents: e.paths.Agentes, Logger: e.log,
 		Characters: e.deps.Characters, Approvals: approvals, States: e.deps.States, Contexts: e.deps.Contexts,
 		ClassHooks: classHooks, OnEvent: e.onHookEvent, TableRules: tableRules, Masker: e.deps.Masker,
 	}

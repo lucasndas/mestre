@@ -308,6 +308,12 @@ type Repo interface {
 	// of the remote is ErrNotFastForward, ErrPushProtected, ErrPushWorkflow,
 	// ErrPushSignature or ErrPushRejected.
 	PushWithAuth(ctx context.Context, auth Auth, remote, branch, commit string, force bool) error
+	// PushWithLease is PushWithAuth that replaces a branch the commit is not a
+	// fast-forward of only if the remote still has expected (the lease of a
+	// forced push, with the commit named): whoever moved the branch since it was
+	// read is not overwritten (ErrNotFastForward or ErrPushRejected). An empty
+	// expected says the branch must not exist yet.
+	PushWithLease(ctx context.Context, auth Auth, remote, branch, commit, expected string) error
 	// AddedLinesEach lists the lines added by each commit of base..head (merges
 	// against their first parent): a line that one commit adds and a later one
 	// takes out is listed, since the push sends both. Like AddedLines, the files are

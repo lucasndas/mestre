@@ -172,8 +172,9 @@ type OrchestrationOptions struct {
 
 	// The limits of use (milestone 5, stage 4). UsageChecklist opens the alert
 	// ALL-23 of the checklist when a source of use is not available (nil:
-	// only the log); UsageZone gives the time zone of the Guild, where the
-	// day turns (UTC by default). The users are told through ChainAlerts, and
+	// only the log; the checklist itself is milestone 7); UsageZone gives the
+	// time zone where the day turns (nil: the one of the Guild, guild.timezone,
+	// and UTC when it keeps none). The users are told through ChainAlerts, and
 	// the extra the limits ask for goes through the chain of approval, which
 	// ChainClasses builds.
 	UsageChecklist usage.Checklist
@@ -776,7 +777,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		Directory: usageDirectory{reg: reg, presets: o.Presets, quests: &qs},
 		Pauser:    usagePauser{quests: &qs, tables: &tbl, ws: ws},
 		Ceilings:  usageCeilings{libs: o.ClassLibraries}, Characters: usageCharacters{svc: &chars, reg: reg, ib: &ib}, Pump: quotaPump{&ib}, Notifier: ib,
-		Checklist: o.UsageChecklist, Zone: o.UsageZone}
+		Checklist: o.UsageChecklist, Zone: usageZone(o.UsageZone, o.Guild)}
 	if o.ChainAlerts != nil {
 		uopts.Alerts = o.ChainAlerts
 	}
@@ -972,12 +973,25 @@ func ritualZones(given rituals.Zones, db *store.DB) rituals.Zones {
 	return guildZone{db}
 }
 
+// usageZone is the time zone the day of use turns in: the one given, or the
+// zone of the Guild (nil, which is UTC, when the Guild keeps none).
+func usageZone(given func(ctx context.Context) *time.Location, db *store.DB) func(ctx context.Context) *time.Location {
+	if given != nil {
+		return given
+	}
+	if db == nil {
+		return nil
+	}
+	z := guildZone{db}
+	return func(ctx context.Context) *time.Location { return z.Zone(ctx, "") }
+}
+
 type guildZone struct{ db *store.DB }
 
 // Zone implements rituals.Zones; an unknown name is UTC.
 func (g guildZone) Zone(ctx context.Context, _ string) *time.Location {
 	var name string
-	if err := g.db.Reader().QueryRowContext(ctx, `SELECT timezone FROM guild WHERE id = 1`).Scan(&name); err != nil || name == "" {
+	if err := g.db.Reader().QueryRowContext(ctx, `SELECT timezone FROM guild WHERE id = 1`).Scan(&name); err != nil || name == "" || name == "Local" { // "Local" is no zone of the Guild (decrees do the same)
 		return nil
 	}
 	loc, err := time.LoadLocation(name)

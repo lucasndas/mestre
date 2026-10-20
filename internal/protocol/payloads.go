@@ -434,6 +434,27 @@ type TableSent struct {
 	Error     string   `json:"error,omitempty"`
 }
 
+// UsageReading is `usage.reading`: what a Tower read, on its own machine, of the
+// use of a character whose provider keeps it outside the events (the transcript
+// of Codex, the command of Antigravity), or why it could not read it. Exactly
+// one of Usage (the normalized usage record of the adapter, as JSON) and
+// Unavailable (the cleaned reason) is given.
+type UsageReading struct {
+	Character   string          `json:"character" proto:"req"`
+	Source      string          `json:"source" proto:"req"`
+	Session     string          `json:"session,omitempty"`
+	Usage       json.RawMessage `json:"usage,omitempty"`
+	Unavailable string          `json:"unavailable,omitempty"`
+}
+
+// Validate checks that the message says one thing.
+func (u *UsageReading) Validate() error {
+	if (len(u.Usage) == 0) == (u.Unavailable == "") {
+		return fmt.Errorf("usage.reading: give either usage or unavailable")
+	}
+	return nil
+}
+
 // RitualPreRun is `ritual.prerun`: run Command as the character, in its
 // worktree, without interaction. The answer is RitualPreRunResult, in the ack.
 type RitualPreRun struct {

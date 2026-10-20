@@ -287,7 +287,7 @@ func (c *Character) Prepare(ctx context.Context, req CharacterRequest) (Characte
 	plan.MestreMD = filepath.Join(plan.AgentDir, "MESTRE.md")
 	plan.GitConfig = filepath.Join(plan.AgentDir, "gitconfig")
 	plan.MachineDir = filepath.Join(c.o.Agents, req.ID)
-	plan.Tmp = filepath.Join(plan.MachineDir, "tmp")
+	plan.Tmp = CharacterTmp(c.o.Agents, req.ID)
 
 	fb := providers.LayerFallbacks{}
 	if c.o.Channels != nil {
@@ -739,4 +739,10 @@ func (c *Character) prepareTerminal(ctx context.Context, req CharacterRequest, s
 		}
 	}
 	return plan, nil
+}
+
+// CharacterTmp is the MESTRE_TMP of a character: the tmp/ of its folder in
+// the agentes/ of the machine.
+func CharacterTmp(agents, id string) string {
+	return filepath.Join(agents, id, "tmp")
 }

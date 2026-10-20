@@ -63,8 +63,12 @@ type usageReader struct {
 	adapters *providers.Registry
 	src      UsageSources
 	machine  string
-	clk      clock.Clock
-	log      *slog.Logger
+	// noSheet reads the characters that come without a sheet (a Tower knows none)
+	noSheet bool
+	// pause, when it says true, skips the pass (a Tower without its Citadel)
+	pause func() bool
+	clk   clock.Clock
+	log   *slog.Logger
 
 	mu      sync.Mutex
 	last    map[string]providers.Event
@@ -111,6 +115,9 @@ func (u *usageReader) Loop(ctx context.Context, every time.Duration) error {
 // Pass reads the source of use of each living character of this machine whose
 // provider keeps it outside the events.
 func (u *usageReader) Pass(ctx context.Context) error {
+	if u.pause != nil && u.pause() {
+		return nil
+	}
 	alive, err := u.alive(ctx)
 	if err != nil {
 		return err
@@ -124,7 +131,7 @@ func (u *usageReader) Pass(ctx context.Context) error {
 	}
 	u.prune(mine)
 	for _, c := range alive {
-		if c.Machine != u.machine || c.Sheet == "" {
+		if c.Machine != u.machine || (c.Sheet == "" && !u.noSheet) {
 			continue
 		}
 		if err := u.read(ctx, c); err != nil {

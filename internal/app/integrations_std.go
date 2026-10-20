@@ -32,6 +32,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
+	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/users"
 )
@@ -112,7 +113,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	if env.SetLocked != nil {
 		env.SetLocked(r.lock.Locked)
 	}
-	r.decrees, err = decrees.New(decrees.Options{DB: env.DB, Clock: env.Clock, PINs: svc, Alerts: r.alert, Requests: lateChain{r}, Locked: r.lock.Locked, Logger: env.Log})
+	r.decrees, err = decrees.New(decrees.Options{DB: env.DB, Clock: env.Clock, PINs: svc, Alerts: r.alert, Requests: lateChain{r}, Targets: decreeTargets{live: lateTargets{r}, repos: r.workspaceRepo}, Locked: r.lock.Locked, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the decrees: %w", err)
 	}
@@ -123,6 +124,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.gc = &telegram.GuildChannel{Users: svc, PINs: r.pins, Machines: env.Machines, SetExcluded: env.SetExcluded, Pending: env.Pending}
+	r.gh = &telegram.GitHubChannel{Users: svc, Personal: r.personal, Clock: env.Clock, Logger: env.Log, Moment: r.decrees.Moment}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
 		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
@@ -166,6 +168,8 @@ type stdRun struct {
 	stall *telegram.StallChannel
 	dc    *telegram.DecreeChannel
 	gc    *telegram.GuildChannel
+	// gh is /github: the personal credential of the user by the device flow.
+	gh *telegram.GitHubChannel
 	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
 	fetch  atomic.Pointer[telegram.Client]
 	dg     *telegram.DigestChannel
@@ -185,6 +189,9 @@ type stdRun struct {
 	// when the orchestration exists.
 	approver atomic.Pointer[approvals.Approver]
 	settings atomic.Pointer[approvals.Settings]
+	// zero is the session zero of the workspaces (sessionzerohost.go), made when
+	// the host has the orchestration.
+	zero atomic.Pointer[sessionzero.Service]
 
 	fence atomic.Pointer[guild.Fence]
 	chain atomic.Pointer[chain.Service]
@@ -261,8 +268,32 @@ func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMe
 		return t.r.source().Current(ctx, req)
 	case classes.RequestRepoSettings:
 		return req.Target, nil
+	case classes.RequestAgentsMD:
+		// the text the session zero holds for this very request, as it is now
+		zero := t.r.zero.Load()
+		if zero == nil {
+			return nil, errors.New("app: the session zero is not composed in this period")
+		}
+		st, err := zero.State(ctx, req.Workspace)
+		if err != nil {
+			return nil, err
+		}
+		if st.AgentsMDRequest != fmt.Sprint(req.ID) {
+			return nil, fmt.Errorf("app: request %d is not the AGENTS.md proposal of workspace %s", req.ID, req.Workspace)
+		}
+		return agentsMDTarget(req.Workspace, st.AgentsMDText), nil
 	}
 	return nil, fmt.Errorf("app: no live target for requests of type %q", req.Type)
+}
+
+// workspaceRepo is the repository of a workspace, from the orchestration of the
+// period.
+func (r *stdRun) workspaceRepo(ctx context.Context, workspace string) (string, error) {
+	orc := r.orc.Load()
+	if orc == nil {
+		return "", errors.New("app: the orchestration is not built")
+	}
+	return workspaceRepoOf{orc.Workspaces}.Repo(ctx, workspace)
 }
 
 type lateApprovals struct{ r *stdRun }
@@ -274,7 +305,73 @@ func (a lateApprovals) InvalidateBy(ctx context.Context, id string) error {
 	if derr := a.r.decrees.InvalidateBy(ctx, id); derr != nil {
 		err = errors.Join(err, derr)
 	}
+	if perr := a.r.dropPersonal(ctx, id); perr != nil {
+		err = errors.Join(err, perr)
+	}
 	return err
+}
+
+// LevelsChanged is told when the level of a user changed without narrowing what
+// he may do (a promotion, the transfer of the post of Owner).
+func (a lateApprovals) LevelsChanged(ctx context.Context) { a.r.decrees.LevelsChanged(ctx) }
+
+// dropPersonal ends the personal GitHub credential of a user who no longer may
+// have one: suspended or removed, an Observer, or a user who acts in no workspace.
+// A user who only lost part of what he had (a lower level that still connects, a
+// shorter list of workspaces that is not empty) keeps it. A user that does not exist
+// loses it too.
+func (r *stdRun) dropPersonal(ctx context.Context, id string) error {
+	u, err := r.users.Get(ctx, id)
+	if err != nil && !errors.Is(err, users.ErrNoUser) {
+		return fmt.Errorf("app: the user %s was not read to settle his GitHub credential: %w", id, err)
+	}
+	if err == nil && u.MayHoldGitHub() {
+		return nil
+	}
+	r.gh.Cancel(id) // a code he was waiting to authorize must not connect him now
+	if rerr := r.personal.Remove(ctx, id); rerr != nil {
+		return fmt.Errorf("app: the personal GitHub credential of %s was not removed: %w", id, rerr)
+	}
+	return nil
+}
+
+// personalSweepEvery is how often the credentials of users without the right are
+// swept.
+const personalSweepEvery = 5 * time.Minute
+
+// PersonalSweepLoop runs the sweep until the period ends (a loop of the period of
+// the Citadel): the removal done when a user changed may have failed after the
+// commit, so it is settled again and again.
+func (r *stdRun) PersonalSweepLoop(ctx context.Context) error {
+	return r.sweepPersonalLoop(ctx, personalSweepEvery)
+}
+
+func (r *stdRun) sweepPersonalLoop(ctx context.Context, every time.Duration) error {
+	t := r.env.Clock.NewTicker(every)
+	defer t.Stop()
+	for {
+		r.sweepPersonal(ctx)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C():
+		}
+	}
+}
+
+// sweepPersonal removes the credentials of users who may no longer have one and
+// ends the waits for their authorization.
+func (r *stdRun) sweepPersonal(ctx context.Context) {
+	if r.personal == nil {
+		return
+	}
+	gone, err := r.personal.Sweep(ctx)
+	for _, id := range gone {
+		r.gh.Cancel(id)
+	}
+	if err != nil && ctx.Err() == nil {
+		r.env.Log.Warn("app: the sweep of the personal GitHub credentials failed", "err", err)
+	}
 }
 
 // startBot makes the bot, reading its token from the vault: it runs only when the
@@ -302,7 +399,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: client,
-		Router: r.routing, Commands: append(append(append(r.lc.Commands(), r.dc.Commands()...), r.gc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask, Machine: r.env.Machine,
+		Router: r.routing, Commands: append(append(append(append(r.lc.Commands(), r.dc.Commands()...), r.gc.Commands()...), r.routing.Commands()...), r.gh.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask, Machine: r.env.Machine,
 		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.gc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions(), r.stall.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
@@ -318,6 +415,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.lc.Bind(bot)
 	r.dc.Bind(bot)
 	r.gc.Bind(bot)
+	r.gh.Bind(bot, ctx)
 	r.dg.Bind(bot)
 	r.routing.Bind(bot)
 	r.replies.Bind(bot)
@@ -381,6 +479,7 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		classes.RequestPR:           lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
 		classes.RequestMerge:        lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
 		classes.RequestRepoSettings: lateSink{func() chain.Sink { return soft(r.settings.Load()) }, r.alert.OwnerAlert},
+		classes.RequestAgentsMD:     szDecisions{r},
 	}
 	for t, s := range o.ChainSinks { // a test that gives its own keeps it
 		sinks[t] = s
@@ -455,8 +554,13 @@ func (r *stdRun) GuildLock(ctx context.Context) (guild.Lock, error) {
 // OwnerAlert, CharacterDecrees and Users make the run the people of the chain
 // (chainPeople).
 func (r *stdRun) OwnerAlert(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }
-func (r *stdRun) CharacterDecrees() CharacterDecrees          { return r.decrees }
-func (r *stdRun) Users() *users.Service                       { return r.users }
+
+// DecreesChanged has the effective rules published again after the decrees in
+// force changed.
+func (r *stdRun) DecreesChanged(f func(context.Context)) { r.decrees.SetChanged(f) }
+
+func (r *stdRun) CharacterDecrees() CharacterDecrees { return r.decrees }
+func (r *stdRun) Users() *users.Service              { return r.users }
 
 // BindFence implements IntegrationRun.
 func (r *stdRun) BindFence(f *guild.Fence) { r.fence.Store(f) }
