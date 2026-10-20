@@ -315,6 +315,9 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		return 0, err
 	}
 	s.audit(ctx, r, AuditEntry{Answer: answerBorn, Outcome: "accepted", Level: lvl.Kind, Reason: joinWhy(why)})
+	if err := s.gateRecheck(ctx, r); err != nil {
+		return 0, err
+	}
 	s.arrive(ctx, r.ID, st)
 	if r.Type == classes.RequestClassPermission && s.o.Waits != nil && who.ID != "" {
 		if _, err := s.o.Waits.WaitApproval(ctx, who, r.ID, s.pathTime(ctx, r, st)); err != nil {

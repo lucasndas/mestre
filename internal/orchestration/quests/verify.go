@@ -39,6 +39,9 @@ type VerifyRequest struct {
 	// of the workspace confirmed, whatever Branch changes
 	// (docs/sessao-zero/workspace.md#comandos-de-verificação).
 	Base string
+	// Head is the commit Branch must be at (empty: the tip it has). The gate
+	// proves the head of the PR; a branch that moved is a red result.
+	Head string
 }
 
 // VerifyResult is what a verification gave.

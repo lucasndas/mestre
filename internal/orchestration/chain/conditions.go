@@ -234,7 +234,8 @@ func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
 		// a workspace with no command to verify with: nothing is approved alone
 		switch w, err := s.o.Freshness.Unverifiable(ctx, r); {
 		case err != nil:
-			why = append(why, "frescor: não foi possível conferir o gate ("+err.Error()+")")
+			s.log.Warn("chain: the gate of freshness could not be checked", "request", r.ID, "err", err)
+			why = append(why, "frescor: não foi possível conferir o gate (veja o log do motor)")
 		case w != "":
 			why = append(why, w)
 		}

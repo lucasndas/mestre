@@ -468,6 +468,13 @@ func (r freshnessRef) Open(ctx context.Context, req chain.Request) (chain.Freshn
 	return (*r.p).Open(ctx, req)
 }
 
+func (r freshnessRef) BaseTip(ctx context.Context, req chain.Request) (string, error) {
+	if *r.p == nil {
+		return "", errNoGate
+	}
+	return (*r.p).BaseTip(ctx, req)
+}
+
 func (r freshnessRef) Unverifiable(ctx context.Context, req chain.Request) (string, error) {
 	if *r.p == nil {
 		return "", errNoGate

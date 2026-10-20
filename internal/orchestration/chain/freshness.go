@@ -22,6 +22,9 @@ type Freshness interface {
 	// ("" when nothing stops him): a workspace with no verification command
 	// confirmed. An error is a decision for a person.
 	Unverifiable(ctx context.Context, r Request) (string, error)
+	// BaseTip is the tip of the base of the table of the request now: a gate
+	// that ran on another tip while the request was being stored is ended.
+	BaseTip(ctx context.Context, r Request) (string, error)
 }
 
 // FreshnessVerdict is what the gate found when a request opens.
@@ -101,7 +104,7 @@ func (s *Service) gateOpen(ctx context.Context, r *Request) error {
 
 // BaseMoved is told that the tip of the base of a table is now tip: an open
 // request of a PR whose gate ran on another tip is invalidated, so the gate
-// runs again on the request that replaces it (CA-GH-ACOES-13). A request whose
+// runs again on the request that replaces it. A request whose
 // target has no base_sha (the repository asks the branch to be up to date) is
 // not touched.
 func (s *Service) BaseMoved(ctx context.Context, workspace, table, tip string) error {
@@ -125,4 +128,29 @@ func (s *Service) BaseMoved(ctx context.Context, workspace, table, tip string) e
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// gateRecheck ends a request just stored whose gate ran on a tip of the base that
+// moved while the gate ran: the fetch that moved it came before the request
+// existed, so BaseMoved did not see it.
+func (s *Service) gateRecheck(ctx context.Context, r Request) error {
+	if s.o.Freshness == nil || !isPR(r.Type) {
+		return nil
+	}
+	gated := BaseSHAOf(r.Target)
+	if gated == "" {
+		return nil
+	}
+	tip, err := s.o.Freshness.BaseTip(ctx, r)
+	if err == nil && tip == gated {
+		return nil
+	}
+	why := "a branch principal andou enquanto o gate de frescor rodava"
+	if err != nil {
+		why = "a ponta da base não pôde ser conferida depois do gate de frescor"
+	}
+	if ierr := s.Invalidate(ctx, r.ID, why); ierr != nil {
+		s.log.Warn("chain: a request of a stale gate was not invalidated", "request", r.ID, "err", ierr)
+	}
+	return &FreshnessError{Reason: why + ": peça de novo"}
 }

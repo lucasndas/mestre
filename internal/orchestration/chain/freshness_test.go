@@ -207,6 +207,48 @@ func TestAGateThatCannotBeCheckedOpensNoRequestAndAFreshnessRefusalIsTyped(t *te
 	}
 }
 
+func TestARequestBornBeforeTheGateAppliedIsNotDecidedAloneAfterwards(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{freshness: true})
+	w.devWorks()
+	id := w.mustOpenPR(50) // no command confirmed: no gate
+	w.verifier.confirm(true)
+	w.humanRequired(id, "gate de frescor não rodou")
+	// the rule in the repository when it was born, gone now
+	w.ghRules.set(true)
+	id2 := w.mustOpenPR(51)
+	w.ghRules.set(false)
+	w.humanRequired(id2, "gate de frescor não rodou")
+}
+
+func TestABaseThatMovesWhileTheGateRunsLeavesNoRequest(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{freshness: true})
+	w.verifier.confirm(true)
+	w.devWorks()
+	moved := false
+	w.verifier.setRun(func(r quests.VerifyRequest) quests.VerifyResult {
+		if r.Head != w.refTip("refs/heads/"+w.table.Branch) {
+			t.Errorf("the gate asked for the head %q", r.Head)
+		}
+		if !moved {
+			moved = true
+			w.moveBase("while-gate.txt")
+		}
+		return quests.VerifyResult{OK: true}
+	})
+	id, err := w.openPR(60)
+	if _, ok := asFreshnessError(err); !ok || id != 0 {
+		t.Fatalf("open = #%d, %v; want the gate refusing: the base moved under it", id, err)
+	}
+	if open, _ := w.ch.Store().OpenOfTable(w.ctx, w.slug, w.table.ID); len(open) != 0 {
+		t.Fatalf("requests = %+v, want none open", open)
+	}
+	if _, err := w.openPR(60); err != nil {
+		t.Fatalf("the second try = %v, want it to pass on the new tip", err)
+	}
+}
+
 func TestTheTargetOfAPRCarriesTheTipOfTheBaseOnlyAsAnObject(t *testing.T) {
 	t.Parallel()
 	got, err := chain.WithBaseSHA([]byte(`{"pr":1,"head":"h"}`), "b1")

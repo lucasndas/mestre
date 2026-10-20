@@ -154,10 +154,10 @@ func (s *Service) AfterFetch(ctx context.Context, slug string) {
 		return
 	}
 	for _, t := range list {
+		s.baseMoved(ctx, t)
 		if t.State != tables.StateWorking && t.State != tables.StateInReview {
 			continue
 		}
-		s.baseMoved(ctx, t)
 		if _, err := s.Ensure(ctx, t.Workspace, t.ID); err != nil {
 			s.log.Warn("basesync: the base of a table was not checked", "workspace", slug, "table", t.ID, "err", err)
 		}

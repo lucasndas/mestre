@@ -24,6 +24,24 @@ const NoCommandWarning = "sem comando de verificação configurado"
 // ran on a tip of the base that is no longer the tip.
 const BaseMovedWarning = "a branch principal andou depois do gate de frescor: o pedido será invalidado e o gate roda de novo"
 
+// NotGatedWarning is why the Grão-Mestre does not decide a request that was born
+// when the gate did not apply and does now.
+const NotGatedWarning = "o gate de frescor não rodou neste pedido: abra o pedido de novo para a base ser verificada"
+
+// BaseTip implements chain.Freshness.
+func (g *Gate) BaseTip(ctx context.Context, r chain.Request) (string, error) {
+	t, err := g.o.Tables.Get(ctx, r.Workspace, r.Table)
+	if err != nil {
+		return "", err
+	}
+	mirror, err := g.o.Mirrors.OpenMirror(ctx, t.Workspace)
+	if err != nil {
+		return "", err
+	}
+	tip, err := mirror.ResolveRef(ctx, "refs/remotes/origin/"+t.BaseBranch)
+	return string(tip), err
+}
+
 // Rules reads what the branch of a repository asks of a PR
 // (github.REST.ReadRules, with the App of the workspace).
 type Rules interface {
@@ -127,7 +145,7 @@ func (g *Gate) Open(ctx context.Context, r chain.Request) (chain.FreshnessVerdic
 		// what is proved must be what GitHub merges
 		return chain.FreshnessVerdict{}, fmt.Errorf("the branch %s is at %.8s in the mirror, not at the %.8s of the PR", t.Branch, head, r.PR.SHA)
 	}
-	res, err := g.o.Verifier.Verify(ctx, quests.VerifyRequest{Workspace: t.Workspace, Table: t.ID, Branch: t.Branch, Base: string(tip)})
+	res, err := g.o.Verifier.Verify(ctx, quests.VerifyRequest{Workspace: t.Workspace, Table: t.ID, Branch: t.Branch, Base: string(tip), Head: string(head)})
 	if err != nil {
 		return chain.FreshnessVerdict{}, fmt.Errorf("the verification: %w", err)
 	}
@@ -206,10 +224,15 @@ func (g *Gate) Unverifiable(ctx context.Context, r chain.Request) (string, error
 	if err != nil {
 		return "", fmt.Errorf("the verification commands of %s: %w", r.Workspace, err)
 	}
-	if ok {
-		return "", nil
+	switch {
+	case !ok:
+		return NoCommandWarning, nil
+	case chain.BaseSHAOf(r.Target) == "":
+		// born with no command or with the rule in the repository, which is gone now:
+		// the base integrated was never proved for this request
+		return NotGatedWarning, nil
 	}
-	return NoCommandWarning, nil
+	return "", nil
 }
 
 // EventSink is the github.Sink that makes the step `sync` from the second
