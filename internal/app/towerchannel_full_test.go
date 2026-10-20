@@ -51,6 +51,15 @@ type channelRig struct {
 
 func newChannelRig(t *testing.T, gated ...bool) *channelRig {
 	t.Helper()
+	return newChannelRigWith(t, channelOpts{gated: len(gated) > 0 && gated[0]})
+}
+
+// channelOpts are the choices of a channelRig: gated holds the preparation of the
+// Tower until released; builder gives the Citadel a session zero of a character.
+type channelOpts struct{ gated, builder bool }
+
+func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
+	t.Helper()
 	buildRuntimeBinaries(t)
 	r := newRig(t)
 	root, err := os.MkdirTemp("", "mrt")
@@ -88,12 +97,17 @@ func newChannelRig(t *testing.T, gated ...bool) *channelRig {
 	if err := os.WriteFile(filepath.Join(x.work, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	x.a.setup = func(e *Engine) { e.deps.HostOrchestration = true }
+	x.a.setup = func(e *Engine) {
+		e.deps.HostOrchestration = true
+		if o.builder {
+			e.deps.Integration = builderIntegration{}
+		}
+	}
 	x.b.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
 	x.b.setup = func(e *Engine) {
 		e.deps.Spawner = &terminal.DirectSpawner{Suite: "full", System: terminal.NewSystem()}
 		var prep characters.Preparer = runtimePrep{cfg: filepath.Join(home, "cfg"), home: home, sock: x.b.paths.CLISocket}
-		if len(gated) > 0 && gated[0] {
+		if o.gated {
 			gate = &prepGate{Preparer: prep, entered: make(chan string, 1), release: make(chan struct{})}
 			x.gate = gate
 			prep = gate

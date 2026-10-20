@@ -74,7 +74,11 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 	prov := agy(t, providers.Options{})
 	other := `{"lint-checker": {"PostToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command": "./lint.sh", "timeout": 10}]}]}}`
 	for _, goos := range []string{"linux", "windows"} {
-		files, err := prov.HookFiles(providers.HookFilesRequest{Root: "/wt", OS: goos, Binary: stableBinary})
+		binary := stableBinary
+		if goos == "windows" {
+			binary = `C:\Mestre\bin\mestre.exe`
+		}
+		files, err := prov.HookFiles(providers.HookFilesRequest{Root: "/wt", OS: goos, Binary: binary})
 		if err != nil || len(files) != 1 || files[0].Path != filepath.Join("/wt", ".agents", "hooks.json") {
 			t.Fatalf("%s: files = %+v, %v", goos, files, err)
 		}
@@ -121,14 +125,14 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 				t.Fatalf("%s: %s handler = %v", goos, e.event, h)
 			}
 			// agy runs the Windows line by cmd /c with the quoting of Go, which
-			// breaks any " in it; and the line answers allow only when there is
-			// no MESTRE_AGENT_ID (agy run by hand without the Mestre): a guard
-			// that fails (the quotes of agy 1.4.2) or a binary that is gone
-			// must not let the tool through without the dispatcher.
+			// breaks any " in it; and the branch of a character (with
+			// MESTRE_AGENT_ID) never answers allow by itself: a guard that
+			// fails (the quotes of agy 1.4.2) must not let the tool through
+			// without the dispatcher.
 			if goos == "windows" {
-				_, afterGuard, _ := strings.Cut(cmd, ") else ")
-				if strings.Contains(cmd, `"`) || strings.Contains(afterGuard, "allow") {
-					t.Fatalf("windows: %s line has a quote or answers allow after the guard: %s", e.event, cmd)
+				_, character, _ := strings.Cut(cmd, ") else if exist ")
+				if strings.Contains(cmd, `"`) || character == "" || strings.Contains(character, "allow") {
+					t.Fatalf("windows: %s line has a quote, or its branch with MESTRE_AGENT_ID answers allow by itself: %s", e.event, cmd)
 				}
 			}
 		}
@@ -154,10 +158,54 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 		// Needs quotes and, not existing, has no 8.3 name.
 		{Root: "/wt", OS: "windows", Binary: `C:\Program Files\Mestre-nao-instalado\mestre.exe`},
 		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\a(b)\mestre.exe`},
+		// No drive or share: relative to the drive or to the folder of cmd.
+		{Root: "/wt", OS: "windows", Binary: stableBinary},
+		{Root: "/wt", OS: "windows", Binary: `\Mestre\bin\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:foo\mestre.exe`},
+		// Device and extended namespaces, an alternate data stream and ..
+		{Root: "/wt", OS: "windows", Binary: `\\?\C:\Mestre\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `\\.\C:\Mestre\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `\\.\GLOBALROOT\Device\x\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\a:b`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\mestre.exe:x`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\..\Other\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:/Mestre/../mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `\\srv\share\..\m.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\...\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\.\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\NUL`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\com1.exe`},
 	} {
 		if _, err := prov.HookFiles(bad); err == nil {
 			t.Errorf("%+v was accepted", bad)
 		}
+	}
+}
+
+// A share names its server and folder: accepted, bare.
+func TestTheWindowsHookLineOfAntigravityTakesAShare(t *testing.T) {
+	t.Parallel()
+	files, err := agy(t, providers.Options{}).HookFiles(providers.HookFilesRequest{Root: "/wt", OS: "windows", Binary: `\\srv\share\m.exe`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc := mergedM(t, files[0], ""); !strings.Contains(doc, `\\\\srv\\share\\m.exe`) {
+		t.Errorf("the share is not in the line:\n%s", doc)
+	}
+}
+
+// A Windows path written with forward slashes goes in the line of cmd with
+// backslashes, bare.
+func TestTheWindowsHookLineOfAntigravityTakesTheBinaryWithBackslashes(t *testing.T) {
+	t.Parallel()
+	files, err := agy(t, providers.Options{}).HookFiles(providers.HookFilesRequest{Root: "/wt", OS: "windows", Binary: "C:/Mestre/bin/mestre.exe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := mergedM(t, files[0], "")
+	want := quote(`if exist C:\Mestre\bin\mestre.exe (C:\Mestre\bin\mestre.exe hook`)
+	if !strings.Contains(doc, want[1:len(want)-1]) || strings.Contains(doc, "C:/Mestre") {
+		t.Errorf("the line does not call C:\\Mestre\\bin\\mestre.exe bare:\n%s", doc)
 	}
 }
 

@@ -222,6 +222,9 @@ func (r *stdRun) poller(orc *Orchestration) (*github.Poller, error) {
 	if orc.BaseSync != nil {
 		sinks = append(sinks, basesync.EventSink{Base: orc.BaseSync})
 	}
+	if orc.EpicDeps != nil { // an epic closed on GitHub tells the tables that wait for it
+		sinks = append(sinks, epicClosedSink{orc.EpicDeps})
+	}
 	app := r.gmApp(context.Background())
 	gm := r.gmRest(app, pollPermissions)
 	return github.NewPoller(github.PollerOptions{
