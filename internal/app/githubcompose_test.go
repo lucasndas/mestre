@@ -123,7 +123,7 @@ func newGHCompose(t *testing.T) *ghCompose {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, err := c.orc.Tables.Open(i.ctx, tables.OpenRequest{By: gm.Character, Epic: 42})
+	opened, err := c.orc.Tables.Open(i.ctx, tables.OpenRequest{By: gm.Character, Epic: double.AddIssue("lucas/meu_app", "Login de usuários", "epico")})
 	if err != nil {
 		t.Fatal(err)
 	}
