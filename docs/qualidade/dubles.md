@@ -1,6 +1,6 @@
 # Dublês de teste
 
-> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub, rede, PTY e git falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-19
+> **Assunto:** relógio injetável, agente falso por provedor, Telegram, GitHub, rede, PTY e git falsos, e as gravações que os alimentam · **Componente:** Projeto · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -74,6 +74,12 @@ Um único programa (`cmd/fakeagent`, [layout](../desenvolvimento/convencoes.md#l
 - **whisper-server falso:** devolve o texto configurado, erro ou demora.
 - **Trava falsa:** `internal/testkit/fakelock` implementa a trava da época (`guild.Lock`, [época e fencing](../guilda/cidadela-e-torres.md#época-e-fencing)) em memória: as refs `epoca-N` (criar uma que existe não vence), a trava fora para a Guilda inteira ou para uma máquina, uma conferência presa até o teste soltar (`Hold`, `Release`) e as contagens de conferências e de tentativas por máquina.
 - **Processos da completa:** além do relógio, binários com a tag `full` aceitam `MESTRE_TEST_LOCK=<pasta>` (a trava falsa dos processos: um arquivo `epoca-N` por época, criado com `O_EXCL`), `MESTRE_TEST_OWNER=accept` (o Dono falso aprova entradas e promoções), `MESTRE_TEST_EXTERNAL=<pasta>` (uma função externa falsa que, pela cerca, registra quando a Cidadela age para fora) e `MESTRE_TEST_CONTROL=<socket>` (estado, se as entradas estão abertas, promover, troca planejada e consultas ao banco da Guilda, uma linha JSON cada; a Cidadela "age" um instante antes de abrir as rotas de entrada, e o teste que entra na Guilda espera as entradas, não só o estado) (`internal/app/testhooks_full.go`).
+
+### Processos que o teste deixa
+
+- O `mestre-pty` foi feito para sobreviver ao motor (o terminal sobrevive ao reinício), então o fim do motor num teste não encerra os terminais que ele criou: o `mestre-pty` e o agente falso abaixo dele ficariam vivos, órfãos do init, até a máquina reiniciar. **Todo rig da completa que inicia terminais os encerra ao terminar** (em `t.Cleanup`, depois de parar os motores).
+- `internal/testkit/leakcheck` acha os processos de um teste pela linha de comando (a pasta do teste, onde fica o socket de cada terminal, ou a pasta dos binários que o binário de teste compilou) junto com os descendentes, e os encerra (`Reap`). Lê o `/proc`: só no Linux; no Windows o Job Object do `mestre-pty` encerra a árvore.
+- O guarda é o `TestMain` de cada pacote da completa que compila binários (`app`, `characters`, `terminal`, `launcher`, `localchan`, `hook`, `conformance`): depois de `m.Run`, `leakcheck.Main` falha o binário de teste, nomeando o processo, se algum processo daquelas pastas continua vivo, e o encerra.
 
 ### Quando cada dublê cresce
 
