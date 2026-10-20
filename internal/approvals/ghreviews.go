@@ -156,6 +156,10 @@ func (g *GitHubReviews) judge(ctx context.Context, rd ReviewReader, r chain.Requ
 		return ignore("o review não está mais no PR")
 	case rv.State != "APPROVED":
 		return ignore("o review está %s agora", rv.State)
+	case github.EndsWithMarker(rv.Body):
+		// the review the engine itself posted (the Approver, in the name of a person) is
+		// the application of an approval, not another vote
+		return ignore("o review foi postado pelo próprio Mestre")
 	case r.PR == nil || rv.Commit != r.PR.SHA:
 		return ignore("o review é do commit %.8s, não do commit atual do pedido", rv.Commit)
 	}

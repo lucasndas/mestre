@@ -105,7 +105,10 @@ type Approver struct {
 	Users       Directory
 	Modes       *Modes
 	Tell        Tell
-	Logger      *slog.Logger
+	// Repo gives the repository of a workspace: an order for another one is
+	// refused. Nil: not checked.
+	Repo   func(ctx context.Context, workspace string) (string, error)
+	Logger *slog.Logger
 }
 
 // ApproveOrder is `mestre gh approve`, or the application of an approval of
@@ -171,6 +174,9 @@ func (a *Approver) log() *slog.Logger {
 // commit. Without an approval of the Grão-Mestre under the policy or of a user
 // for that exact commit it refuses with human_required and sends nothing.
 func (a *Approver) Approve(ctx context.Context, o ApproveOrder) (Approval, error) {
+	if err := checkRepo(ctx, a.Repo, o.Workspace, o.Repo); err != nil {
+		return Approval{}, err
+	}
 	gm, gmLogin, err := a.GrandMaster(ctx, o.Workspace)
 	if err != nil {
 		return Approval{}, err
@@ -435,4 +441,20 @@ func (a *Approver) Decided(ctx context.Context, r chain.Result) error {
 		a.log().Warn("approvals: an approval of people was not applied on GitHub", "request", q.ID, "reason", ref.Message)
 	}
 	return err
+}
+
+// checkRepo refuses, closed, a repository other than the one of the workspace, or
+// a workspace whose repository cannot be read.
+func checkRepo(ctx context.Context, repoOf func(context.Context, string) (string, error), workspace, repo string) error {
+	if repoOf == nil {
+		return nil
+	}
+	want, err := repoOf(ctx, workspace)
+	if err != nil {
+		return fmt.Errorf("%w: the repository of %s could not be read: %v", chain.ErrWrongRepo, workspace, err)
+	}
+	if !chain.SameRepo(want, repo) {
+		return fmt.Errorf("%w: %q is not %q", chain.ErrWrongRepo, repo, want)
+	}
+	return nil
 }
