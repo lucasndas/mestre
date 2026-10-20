@@ -1,8 +1,10 @@
 package ghcli_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -139,8 +141,14 @@ func TestTheRefusalsOfGitHubAreToldApart(t *testing.T) {
 }
 
 // CA-CLI-GH-07
-func TestASecretInTheDiffStopsTheSendingAndIsNeverShown(t *testing.T) {
-	t.Parallel()
+//
+// Not parallel: it listens to the default logger of the process while the
+// commands run, and the parallel tests of the package wait for it.
+func TestASecretInTheDiffStopsTheSendingAndIsNeverShown(t *testing.T) { //nolint:paralleltest // it listens to the default logger of the process
+	var logged bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(prev)
 	r := newRig(t)
 	token := "ghp_" + strings.Repeat("a1B2", 9)
 	r.mirror.Commit("42-login", "feat: oops", map[string]string{"src/x.ts": "// l1\n// l2\n// l3\n// l4\n// l5\n// l6\n// l7\n// l8\n// l9\n// l10\n// l11\nconst token = \"" + token + "\"\n"})
@@ -148,8 +156,8 @@ func TestASecretInTheDiffStopsTheSendingAndIsNeverShown(t *testing.T) {
 	if got.OK || got.Exit != 3 || got.Code != "secret_detected" || !strings.Contains(got.Error, "src/x.ts:12 github_token") {
 		t.Fatalf("open: %+v, want exit 3 secret_detected citing src/x.ts:12 github_token", got)
 	}
-	if strings.Contains(got.Error, "a1B2") {
-		t.Errorf("the value is in the answer: %q", got.Error)
+	if strings.Contains(got.Raw, "a1B2") || strings.Contains(got.Raw, token) {
+		t.Errorf("the value is in the answer: %q", got.Raw)
 	}
 	if len(r.pushes()) != 0 {
 		t.Errorf("a secret was pushed: %q", r.pushes())
@@ -177,8 +185,16 @@ func TestASecretInTheDiffStopsTheSendingAndIsNeverShown(t *testing.T) {
 	r4 := newRig(t)
 	prOfTheTable(t, r4)
 	r4.mirror.Commit("42-login", "feat: oops", map[string]string{"src/z.ts": "const a = \"" + token + "\"\n"})
-	if got := r4.run("tm", "pr update", nil); got.Code != "secret_detected" || len(r4.pushes()) != 0 {
-		t.Errorf("update: %+v pushes %q", got, r4.pushes())
+	got4 := r4.run("tm", "pr update", nil)
+	if got4.Code != "secret_detected" || got4.Exit != 3 || !strings.Contains(got4.Error, "src/z.ts:1 github_token") || len(r4.pushes()) != 0 {
+		t.Errorf("update: %+v pushes %q", got4, r4.pushes())
+	}
+	if strings.Contains(got4.Raw, "a1B2") || len(got4.Data) != 0 {
+		t.Errorf("the update shows the value or data: %q", got4.Raw)
+	}
+	// the value is nowhere in the log of the process, whatever the command logged
+	if strings.Contains(logged.String(), "a1B2") {
+		t.Errorf("the secret is in the log: %q", logged.String())
 	}
 }
 
@@ -466,5 +482,32 @@ func TestThePrUpdateOfWorkflowsIsRefusedAndTellsTheGrandMasterOrWaitsForTheAppro
 	got := r.run("tm", "pr update", nil)
 	if got.OK || got.Exit != 9 || got.Code != "approval_pending" || len(r.pushes()) != 0 || len(r.wf.asked) == 0 {
 		t.Fatalf("ask: %+v pushes %q asked %q", got, r.pushes(), r.wf.asked)
+	}
+}
+
+// Part of CA-SYNC-02: the `pr update` that sent the branch tells the table (the
+// table in work goes to review again; the one in review learns the new head).
+func TestPRUpdateTellsTheTableThePRAndTheNewHead(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	var told []string
+	r.h.Opened = func(_ context.Context, key string, n int, head string) error {
+		told = append(told, key+" "+itoa(n)+" "+head)
+		return nil
+	}
+	r.mirror.Commit("42-login", "feat: more", map[string]string{"src/more.ts": "export const more = 1\n"})
+	got := r.run("tm", "pr update", nil)
+	if !got.OK {
+		t.Fatalf("update: %+v", got)
+	}
+	if want := "meu-app/42-login " + itoa(int(got.Data["number"].(float64))) + " " + got.Data["head_sha"].(string); len(told) != 1 || told[0] != want {
+		t.Errorf("the table was told %q, want %q", told, want)
+	}
+	// a refused update tells nobody
+	told = nil
+	r.mirror.Commit("42-login", "feat: oops", map[string]string{"src/z.ts": "const a = \"ghp_" + strings.Repeat("a1B2", 9) + "\"\n"})
+	if got := r.run("tm", "pr update", nil); got.OK || len(told) != 0 {
+		t.Errorf("a refused update: %+v told %q", got, told)
 	}
 }

@@ -77,6 +77,8 @@ func (e *Engine) citadelDebug() map[string]any {
 	switch {
 	case st.Failover:
 		return unreachable(localchan.CodeCitadelInFailover, "another machine is taking the place of the Citadel")
+	case st.Role == RoleCitadel && !st.Acting && st.Waiting != "":
+		return unreachable(localchan.CodeCitadelUnavailable, st.Waiting)
 	case st.Role == RoleCitadel && !st.Acting:
 		return unreachable(localchan.CodeCitadelUnavailable, fmt.Sprintf("this machine is the Citadel but does not act (%s)", st.Fence))
 	case st.Role == RoleCitadel:

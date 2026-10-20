@@ -354,6 +354,9 @@ type world struct {
 	owner users.User
 	// entries is told what became of the requests to enter the Guild.
 	entries *recordSink
+	// prs is told what became of the requests of a PR (in production, the
+	// sink that approves on GitHub); it stands for "what was approved there".
+	prSink *recordSink
 	// The doubles of the gate of freshness (worldOpts.freshness).
 	ghRules  *fakeRules
 	verifier *fakeVerifier
@@ -504,7 +507,8 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainStallPeople: w.stallers, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainPolicyDecrees: w.pdec, ChainSubDelegations: w.subs, ChainPRs: w.prs}
 	w.entries = &recordSink{}
-	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries}
+	w.prSink = &recordSink{}
+	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries, classes.RequestPR: w.prSink}
 	if opt.destructive {
 		oo.Destructive = nil
 	}

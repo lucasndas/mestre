@@ -66,6 +66,10 @@ func TestAQuorumNeedsTheRequiredUsersAndEachUserCountsOnce(t *testing.T) {
 	if w.state(r.ID) != chain.Open || len(w.ch.Decisions()) != 0 {
 		t.Fatalf("two approvals without Lucas decided: %s", w.state(r.ID))
 	}
+	// the state `aguardando_usuarios` is an open request at the level of the people
+	if got, err := w.ch.Get(w.ctx, r.ID); err != nil || got.State != chain.Open || got.Level.Kind != chain.LevelPeople {
+		t.Fatalf("after Ana and Bia the request is %+v (%v), want aguardando_usuarios (open, people)", got, err)
+	}
 	contains(t, w.textTo(lucas), "2 de 2 aprovações")
 	if _, err := w.answer(lucas, r.ID, chain.AnswerApprove); err != nil {
 		t.Fatal(err)
@@ -81,6 +85,10 @@ func TestAQuorumNeedsTheRequiredUsersAndEachUserCountsOnce(t *testing.T) {
 }
 
 // CA-APROV-FLUXO-05
+//
+// Part of CA-USR-05: the half of the criterion that needs the approvals (the
+// action is not executed after the suspension); the marker and the
+// invalidation by the Owner are in internal/users.
 func TestWhatASuspendedUserApprovedStopsCounting(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

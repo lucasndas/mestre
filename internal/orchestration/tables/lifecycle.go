@@ -58,6 +58,9 @@ func (s *Service) PROpened(ctx context.Context, workspace, id string, number int
 	default:
 		return t, fmt.Errorf("%w: pr_opened in %s", ErrBadTransition, t.State)
 	}
+	if head == "" {
+		head = t.PRHead // an unknown head does not erase the one known
+	}
 	if err := s.store.SetPR(ctx, workspace, id, s.clk.Now(), number, head); err != nil {
 		return t, err
 	}

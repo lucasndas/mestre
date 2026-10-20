@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -171,14 +172,45 @@ func TestAnInvalidFirstPolicyFileHoldsTheDefaultAndALinkIsNotFollowed(t *testing
 	if err := os.Remove(r.path); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(target, r.path); err != nil {
-		t.Skipf("no symbolic links here: %v", err)
+	before := len(r.alerts)
+	if err := os.Symlink(target, r.path); err == nil {
+		if st, _ := r.chain(); st.PeopleDeadline != 24*time.Hour {
+			t.Fatalf("the engine followed a link: %+v", st)
+		}
+		if len(r.alerts) != before+1 {
+			t.Fatalf("alerts %v; want the link told", r.alerts)
+		}
+	} else if runtime.GOOS != "windows" {
+		t.Fatalf("no symbolic link on %s: %v", runtime.GOOS, err)
 	}
+	// a folder on the way that is a link is not followed either; where a symbolic
+	// link takes a privilege (Windows), the junction of policyfile_full_test.go
+	// proves it
+	linkedFolderIsNotRead(t, func(target, link string) error { return os.Symlink(target, link) })
+}
+
+// linkedFolderIsNotRead puts the policy file behind a folder that is a link (made
+// by link) and checks that the engine keeps the default and tells it.
+func linkedFolderIsNotRead(t *testing.T, link func(target, link string) error) {
+	t.Helper()
+	r := newPolicyRig(t)
+	elsewhere := t.TempDir()
+	if err := os.WriteFile(filepath.Join(elsewhere, "politica-de-aprovacao.yaml"), []byte("versao: 1\nexpiracao: 1h\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(t.TempDir(), "pasta")
+	if err := link(elsewhere, folder); err != nil {
+		if runtime.GOOS == "windows" {
+			return // a symbolic link takes a privilege there: the full suite makes a junction
+		}
+		t.Fatal(err)
+	}
+	r.path = filepath.Join(folder, "politica-de-aprovacao.yaml")
 	if st, _ := r.chain(); st.PeopleDeadline != 24*time.Hour {
-		t.Fatalf("the engine followed a link: %+v", st)
+		t.Fatalf("the engine went through a linked folder: %+v", st)
 	}
-	if len(r.alerts) != 2 {
-		t.Fatalf("alerts %v; want the link told", r.alerts)
+	if len(r.alerts) != 1 {
+		t.Fatalf("alerts %v; want the linked folder told", r.alerts)
 	}
 }
 

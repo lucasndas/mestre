@@ -529,3 +529,18 @@ func (s *Server) AddIssueLabel(full string, n int, label string) {
 	is := s.repos[full].issues[n-1]
 	is["labels"] = labelMaps(append(labelNames(is), label))
 }
+
+// RemoveIssueLabel takes a label off an issue or PR as a person would, with no
+// App and no recorded action.
+func (s *Server) RemoveIssueLabel(full string, n int, label string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	is := s.repos[full].issues[n-1]
+	var left []string
+	for _, l := range labelNames(is) {
+		if !strings.EqualFold(l, label) {
+			left = append(left, l)
+		}
+	}
+	is["labels"] = labelMaps(left)
+}
