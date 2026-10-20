@@ -70,6 +70,32 @@ func (m *Manager) revokeAccess(id, sid string) {
 	}
 }
 
+// SweepAccess takes every grant of a terminal away from the socket and its
+// folder. The engine calls it before it makes the socket of the local
+// channel, so a folder that stayed open while it was stopped (terminals
+// outlive the engine) never lets a terminal create the socket's name.
+func (m *Manager) SweepAccess() error {
+	if m.cfg.Access == nil {
+		return nil
+	}
+	return m.cfg.Access.Only(nil)
+}
+
+// SyncAccess puts the grants back after the engine made the socket of the
+// local channel anew (it runs after Listen, and after Reconcile settled the
+// rows): the live terminals get their grant again and no other stays.
+func (m *Manager) SyncAccess(ctx context.Context) error {
+	if m.cfg.Access == nil {
+		return nil
+	}
+	rows, err := m.reg.list(ctx)
+	if err != nil {
+		return fmt.Errorf("list terminals: %w", err)
+	}
+	m.syncAccess(rows)
+	return nil
+}
+
 // syncAccess is the engine at start: the live terminals get their grant
 // again (the socket was made anew, with the base ACL) and every other grant
 // goes. A live terminal without a recorded SID keeps no grant: its CLI is

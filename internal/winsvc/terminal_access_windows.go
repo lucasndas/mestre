@@ -3,10 +3,12 @@
 package winsvc
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -36,11 +38,34 @@ type TerminalAccess struct {
 
 var _ terminal.Access = TerminalAccess{}
 
+// aclMu serializes every change of these DACLs: each one reads the DACL,
+// edits it and writes it back, and the terminals end and start on their own
+// goroutines, so two changes at once would lose one.
+var aclMu sync.Mutex
+
+// folderAccess is what the folder of the socket gets: read, list and
+// traverse, and nothing that creates or deletes there. The measurement that
+// asked for FILE_GENERIC_WRITE on the folder too would let a terminal create
+// the name of cli.sock in run\ while the engine is stopped (terminals outlive
+// the engine) and answer the CLI and the hooks of every other character, so
+// the folder gets the read side only; whether connect() still passes is on
+// the list of the real Windows round (docs/provedores/codex-no-windows.md).
+const folderAccess = windows.FILE_GENERIC_READ | windows.FILE_GENERIC_EXECUTE
+
 func (a TerminalAccess) paths() ([]string, error) {
 	if a.Socket == "" || !filepath.IsAbs(a.Socket) {
 		return nil, fmt.Errorf("local channel access: the socket path %q is not absolute", a.Socket)
 	}
 	return []string{a.Socket, filepath.Dir(a.Socket)}, nil
+}
+
+// maskOf is the right the ACE has on the i-th path of paths(): read and
+// write on the socket file, the read side on the folder.
+func maskOf(i int) uint32 {
+	if i == 0 {
+		return socketClientAccess
+	}
+	return folderAccess
 }
 
 // Grant adds the ACE of the logon SID on the socket and on its folder. If
@@ -54,12 +79,14 @@ func (a TerminalAccess) Grant(logonSID string) error {
 	if err != nil {
 		return err
 	}
+	aclMu.Lock()
+	defer aclMu.Unlock()
 	for i, p := range ps {
 		if err := editDACL(p, func(old *windows.ACL) (*windows.ACL, error) {
-			return windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{accessEntry(sid, windows.GRANT_ACCESS)}, old)
+			return windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{accessEntry(sid, windows.GRANT_ACCESS, maskOf(i))}, old)
 		}); err != nil {
 			for _, done := range ps[:i] {
-				_ = revokeOne(done, sid)
+				_ = revokeOne(done, sid, maskOf(0))
 			}
 			return fmt.Errorf("grant %s on %s: %w", logonSID, p, err)
 		}
@@ -78,9 +105,11 @@ func (a TerminalAccess) Revoke(logonSID string) error {
 	if err != nil {
 		return err
 	}
+	aclMu.Lock()
+	defer aclMu.Unlock()
 	var first error
-	for _, p := range ps {
-		if err := revokeOne(p, sid); err != nil && first == nil {
+	for i, p := range ps {
+		if err := revokeOne(p, sid, maskOf(i)); err != nil && first == nil {
 			first = fmt.Errorf("revoke %s on %s: %w", logonSID, p, err)
 		}
 	}
@@ -98,14 +127,19 @@ func (a TerminalAccess) Only(keep []string) error {
 	if err != nil {
 		return err
 	}
+	aclMu.Lock()
+	defer aclMu.Unlock()
 	var first error
-	for _, p := range ps {
+	for i, p := range ps {
 		if err := editDACL(p, func(old *windows.ACL) (*windows.ACL, error) {
 			var drop []windows.EXPLICIT_ACCESS
-			for i := uint32(0); old != nil && i < uint32(old.AceCount); i++ {
+			for k := uint32(0); old != nil && k < uint32(old.AceCount); k++ {
 				var ace *windows.ACCESS_ALLOWED_ACE
-				if err := windows.GetAce(old, i, &ace); err != nil {
+				if err := windows.GetAce(old, k, &ace); err != nil {
 					return nil, err
+				}
+				if t := ace.Header.AceType; t != windows.ACCESS_ALLOWED_ACE_TYPE && t != windows.ACCESS_DENIED_ACE_TYPE {
+					continue // object and callback ACEs lay the SID elsewhere
 				}
 				s := (*windows.SID)(unsafe.Pointer(&ace.SidStart)).String()
 				if strings.HasPrefix(s, logonPrefix) && !sliceHas(keep, s) {
@@ -113,14 +147,16 @@ func (a TerminalAccess) Only(keep []string) error {
 					if err != nil {
 						return nil, err
 					}
-					drop = append(drop, accessEntry(sid, windows.REVOKE_ACCESS))
+					drop = append(drop, accessEntry(sid, windows.REVOKE_ACCESS, maskOf(i)))
 				}
 			}
 			if len(drop) == 0 {
 				return old, nil
 			}
 			return windows.ACLFromEntries(drop, old)
-		}); err != nil && first == nil {
+		}); err != nil && first == nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) && !errors.Is(err, windows.ERROR_PATH_NOT_FOUND) {
+			// A socket or folder that is not there has no grant to sweep
+			// (the socket after a clean stop of the engine).
 			first = fmt.Errorf("sweep the grants on %s: %w", p, err)
 		}
 	}
@@ -136,9 +172,9 @@ func sliceHas(l []string, s string) bool {
 	return false
 }
 
-func revokeOne(path string, sid *windows.SID) error {
+func revokeOne(path string, sid *windows.SID, mask uint32) error {
 	return editDACL(path, func(old *windows.ACL) (*windows.ACL, error) {
-		return windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{accessEntry(sid, windows.REVOKE_ACCESS)}, old)
+		return windows.ACLFromEntries([]windows.EXPLICIT_ACCESS{accessEntry(sid, windows.REVOKE_ACCESS, mask)}, old)
 	})
 }
 
@@ -156,9 +192,9 @@ func parseLogonSID(s string) (*windows.SID, error) {
 
 // accessEntry is the ACE of a logon SID: read and write to this object only,
 // nothing inherited.
-func accessEntry(sid *windows.SID, mode windows.ACCESS_MODE) windows.EXPLICIT_ACCESS {
+func accessEntry(sid *windows.SID, mode windows.ACCESS_MODE, mask uint32) windows.EXPLICIT_ACCESS {
 	return windows.EXPLICIT_ACCESS{
-		AccessPermissions: socketClientAccess,
+		AccessPermissions: windows.ACCESS_MASK(mask),
 		AccessMode:        mode,
 		Inheritance:       windows.NO_INHERITANCE,
 		Trustee: windows.TRUSTEE{

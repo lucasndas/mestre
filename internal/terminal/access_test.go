@@ -180,3 +180,29 @@ func TestTheGrantLeavesWithTheTerminalAndTheEngineAtStartKeepsTheLiveOnes(t *tes
 		t.Errorf("revoked %v", fa.revoked)
 	}
 }
+
+// CA-CODEX-WIN-02
+//
+// The engine sweeps the grants before it makes the socket and puts them back
+// after it exists: SyncAccess, not Reconcile, repairs a socket made anew.
+func TestTheEngineSweepsBeforeTheSocketAndPutsTheGrantsBackAfter(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fa := &fakeAccess{}
+	m := accessManager(t, fa)
+	rec := row(t, m, "live")
+	if err := m.grantAccess(ctx, &rec, "S-1-5-5-0-7"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SweepAccess(); err != nil || len(fa.granted) != 0 {
+		t.Fatalf("after the sweep: granted %v, %v", fa.granted, err)
+	}
+	if err := m.SyncAccess(ctx); err != nil || !slices.Equal(fa.granted, []string{"S-1-5-5-0-7"}) {
+		t.Fatalf("after the sync: granted %v, %v", fa.granted, err)
+	}
+	// Without an Access (Linux) both are no-ops.
+	none := &Manager{}
+	if none.SweepAccess() != nil || none.SyncAccess(ctx) != nil {
+		t.Error("no Access configured: not a no-op")
+	}
+}
