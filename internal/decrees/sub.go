@@ -97,7 +97,7 @@ func (s *Service) Subdelegate(ctx context.Context, in SubRequest) (Sub, error) {
 			return Sub{}, refuse(CodeTooWide, "o Grão-Mestre não tem delegação do Dono para %q na mesa %q: não há o que subdelegar", in.Type, in.Mesa)
 		}
 		if !d.Until.IsZero() && in.Until.After(d.Until) {
-			return Sub{}, refuse(CodeTooWide, "a subdelegação não vai além da origem (decreto %d, até %s)", d.Number, d.Until.Format("2006-01-02"))
+			return Sub{}, refuse(CodeTooWide, "a subdelegação não vai além da origem (decreto %d, até %s)", d.Number, s.Moment(ctx, d.Until))
 		}
 		origin = d.Number
 	}

@@ -318,7 +318,7 @@ func checkDelegation(p Proposal, u users.User, now time.Time) (string, *Refusal)
 			return "", refuse(CodeDelegation, "o escopo de uma delegação é a mesa, `classe:<nome>` ou `repo:<dono/nome>`; %q não se entende", p.Scope)
 		}
 		if !p.Until.IsZero() && p.Until.Sub(now) > MaxDelegation {
-			return "", refuse(CodeDelegation, "a delegação vale por no máximo 30 dias (pedida: até %s)", p.Until.Format("2006-01-02"))
+			return "", refuse(CodeDelegation, "a delegação vale por no máximo 30 dias (pedida: até %s)", momentIn(p.Until, nil))
 		}
 	default:
 		return "", refuse(CodeDelegation, "o tipo %q não se delega: o Grão-Mestre decide só os tipos de risco alto sob um decreto `delegation` (a entrada na Guilda, a promoção da Cidadela e o custo acima do teto nunca)", t)

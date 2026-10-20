@@ -25,6 +25,9 @@ type appInfo struct {
 	key            *rsa.PublicKey
 	repos          []string // the repositories of the installation, `owner/name`
 	repoCreation   bool     // the Repository creation permission of the Grão-Mestre
+	account        string   // the account of the installation, when it has one
+	clientID       string
+	deviceFlow     bool
 }
 
 // TokenRequest is what the engine asked for when it asked for a token of an
@@ -96,6 +99,7 @@ func (s *Server) serveApps(w http.ResponseWriter, r *http.Request) bool {
 	switch {
 	case r.Method == http.MethodPost && len(parts) == 4 && parts[0] == "app" && parts[1] == "installations" && parts[3] == "access_tokens":
 		s.accessToken(w, r, parts[2])
+	case s.serveManifest(w, r, parts):
 	case r.Method == http.MethodGet && len(parts) == 2 && parts[0] == "users":
 		s.botUser(w, r, parts[1])
 	case r.Method == http.MethodPost && r.URL.Path == "/user/repos":
