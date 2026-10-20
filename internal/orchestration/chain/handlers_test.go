@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/lucasndas/mestre/internal/blocking"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -199,8 +200,14 @@ func TestApprovalAskTakesTheRequestToTheUsersAndRefusesAMotiveOutsideTheVocabula
 	for k, v := range flags {
 		bad[k] = v
 	}
-	if got := w.cli(w.gm, "approval ask", bad); got.OK || got.Code != "usage" || !strings.Contains(got.Msg, "decisao_humana") {
+	if got := w.cli(w.gm, "approval ask", bad); got.OK || got.Code != "usage" || got.Exit != 2 {
 		t.Fatalf("a motive outside the vocabulary: %+v, want usage with the values", got)
+	}
+	refused := w.cli(w.gm, "approval ask", bad)
+	for _, m := range blocking.Motives() {
+		if !strings.Contains(refused.Msg, string(m)) {
+			t.Errorf("the usage error does not list %s", m)
+		}
 	}
 	if w.level(id) != chain.LevelGrandMaster {
 		t.Fatal("a refused ask moved the request")

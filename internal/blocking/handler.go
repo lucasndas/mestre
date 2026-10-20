@@ -142,7 +142,7 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 			}
 		}
 	}
-	if n.Mesa != "" && h.Evidence != nil {
+	if n.Mesa != "" && h.Evidence != nil && (motive == Credential || motive == Permission) {
 		n.Evidence = h.Evidence(ctx, who.Workspace, n.Mesa)
 	}
 	var owner string

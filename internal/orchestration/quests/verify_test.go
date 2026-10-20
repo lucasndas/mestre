@@ -173,12 +173,12 @@ func TestAFileNotCommittedRefusesTheDoneOfAClassThatVerifies(t *testing.T) {
 	}
 	// an ignored file is not a change; the file that is a change, in a folder,
 	// is listed with the path the way git gives it
-	w.git.Handle(dir).SetFile("notes.md", "")
+	w.git.Handle(dir).RemoveFile("notes.md")
 	w.git.Handle(dir).Data().AddExclude("*.log")
 	w.git.Handle(dir).SetFile("run.log", "ruído")
 	w.git.Handle(dir).SetFile("docs/rascunho.md", "wip")
 	r = w.done("Dev Claude 1", nil, "pronto")
-	if r.OK || r.Error.Code != "uncommitted_changes" || !strings.Contains(r.Error.Message, "docs/rascunho.md") || strings.Contains(r.Error.Message, "run.log") {
+	if r.OK || r.Error.Code != "uncommitted_changes" || !strings.Contains(r.Error.Message, "docs/rascunho.md") || strings.Contains(r.Error.Message, "run.log") || strings.Contains(r.Error.Message, "notes.md") {
 		t.Fatalf("done with a file in a folder and an ignored one = %+v", r)
 	}
 }
@@ -246,6 +246,9 @@ func TestTheSameVerificationFailureThreeTimesPausesTheQuest(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		resultOf(t, w.done("Dev Claude 1", nil, fmt.Sprintf("tentativa %d", i+1)))
 		w.orc.Quests.WaitVerifications()
+		if st := w.quest(q.ID).State; i < 2 && st != quests.Running {
+			t.Fatalf("the quest is %s after %d failures, want it running until the third", st, i+1)
+		}
 	}
 	got := w.quest(q.ID)
 	if got.State != quests.Paused || got.PausedReason != "mesma falha repetida" {
