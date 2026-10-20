@@ -460,3 +460,39 @@ func requestRepo(r chain.Request) string {
 	}
 	return ""
 }
+
+var _ chain.PolicyDecrees = (*Service)(nil)
+
+// PolicyFor is the chain.PolicyDecrees: the active decrees of policy, still
+// valid, that reach the request by its workspace, its table or its class. A
+// decree aimed at a character reaches nothing here (it is read by name, and a
+// policy is not about a name).
+func (s *Service) PolicyFor(ctx context.Context, r chain.Request) (chain.PolicyAdjust, error) {
+	var a chain.PolicyAdjust
+	now := s.clk.Now()
+	ds, err := queryDecrees(ctx, s.o.DB.Reader(), `WHERE state = 'active' AND effect_kind = 'policy' AND workspace = ? AND (until = 0 OR until > ?) ORDER BY id`, r.Workspace, ms(now))
+	if err != nil {
+		return a, err
+	}
+	for _, d := range ds {
+		switch d.Target.Kind {
+		case TargetWorkspace:
+		case TargetTable:
+			if d.Mesa != r.Table && d.Target.Name != r.Table {
+				continue
+			}
+		case TargetClass:
+			if d.Target.Name != r.Class {
+				continue
+			}
+		default:
+			continue
+		}
+		if d.Effect.Loosens {
+			a.Loosen = append(a.Loosen, d.Effect.Setting)
+		} else {
+			a.Tighten = append(a.Tighten, d.Effect.Setting)
+		}
+	}
+	return a, nil
+}

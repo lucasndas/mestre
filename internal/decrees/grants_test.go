@@ -2,6 +2,7 @@ package decrees_test
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -240,8 +241,7 @@ func TestTheDelegationOfTheOperatorNeedsTheOwnerAScopeAndAValidity(t *testing.T)
 	}
 }
 
-// Part of CA-APROV-POL-13 (a policy decree is not consumed by the chain yet: only the
-// proposal is checked here): the policy decrees: a tightening reaches any type, a loosening only the
+// CA-APROV-POL-13: the policy decrees: a tightening reaches any type, a loosening only the
 // ones the Grand Master may decide.
 func TestAPolicyDecreeNeverLoosensAHighType(t *testing.T) {
 	t.Parallel()
@@ -264,6 +264,13 @@ func TestAPolicyDecreeNeverLoosensAHighType(t *testing.T) {
 	if d := w.confirm(pol("acao_destrutiva", false)); d.State != decrees.Active {
 		t.Fatalf("%+v", d)
 	}
+	// "me pergunte tudo" holds for a type alto: the rules the chain reads, with the
+	// decrees that reach the request, send it to the people
+	destructive := w.request(9, classes.RequestDestructive, nil)
+	adj, err := w.svc.PolicyFor(w.ctx, destructive)
+	if err != nil || chain.DefaultRules().WithDecrees(adj).AsksAlways(destructive) == "" {
+		t.Fatalf("the decree that tightens acao_destrutiva does not reach the request: %+v, %v", adj, err)
+	}
 	if d := w.confirm(pol("migracoes", true)); d.State != decrees.Active {
 		t.Fatalf("%+v", d)
 	}
@@ -276,5 +283,38 @@ func TestNewNeedsItsPieces(t *testing.T) {
 	t.Parallel()
 	if _, err := decrees.New(decrees.Options{}); err == nil {
 		t.Fatal("no database")
+	}
+}
+
+// The decrees of policy that reach a request are those of its workspace, its
+// table and its class, still valid: the chain reads them (chain.PolicyDecrees).
+func TestThePolicyDecreesThatReachARequestAreThoseOfItsWorkspaceTableAndClass(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	ana := w.person("Ana", users.Administrator, "loja")
+	pol := func(target decrees.Target, mesa, setting string, loosens bool, until time.Time) decrees.Proposal {
+		return decrees.Proposal{Author: ana.ID, Kind: decrees.KindRule, Workspace: "loja", Mesa: mesa, Target: target, Until: until,
+			Effect: decrees.Effect{Kind: decrees.EffectPolicy, Setting: setting, Loosens: loosens}, Text: "ajuste a política"}
+	}
+	r := w.request(1, classes.RequestPR, nil) // loja, 42-login, class dev
+	w.confirm(pol(decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"}, "", "migracoes", true, time.Time{}))
+	w.confirm(pol(decrees.Target{Kind: decrees.TargetTable, Name: "42-login"}, "42-login", "*", false, w.clk.Now().Add(time.Hour)))
+	w.confirm(pol(decrees.Target{Kind: decrees.TargetClass, Name: "dev"}, "", "pr", false, time.Time{}))
+	// not reaching this request: another table, another class
+	w.confirm(pol(decrees.Target{Kind: decrees.TargetTable, Name: "43-busca"}, "43-busca", "infraestrutura", true, time.Time{}))
+	w.confirm(pol(decrees.Target{Kind: decrees.TargetClass, Name: "qa"}, "", "pagamentos", true, time.Time{}))
+	got, err := w.svc.PolicyFor(w.ctx, r)
+	if err != nil || !slices.Equal(got.Loosen, []string{"migracoes"}) || !slices.Equal(got.Tighten, []string{"*", "pr"}) {
+		t.Fatalf("PolicyFor = %+v, %v", got, err)
+	}
+	w.clk.Advance(2 * time.Hour) // the decree with a validity ended
+	got, err = w.svc.PolicyFor(w.ctx, r)
+	if err != nil || !slices.Equal(got.Tighten, []string{"pr"}) {
+		t.Fatalf("after the validity: %+v, %v", got, err)
+	}
+	other := r
+	other.Workspace = "blog"
+	if got, _ := w.svc.PolicyFor(w.ctx, other); len(got.Loosen)+len(got.Tighten) != 0 {
+		t.Fatalf("another workspace: %+v", got)
 	}
 }
