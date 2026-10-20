@@ -52,7 +52,7 @@ type world struct {
 	master   characters.Character
 }
 
-func newWorld(t *testing.T) *world {
+func newWorld(t *testing.T, verifier ...quests.Verifier) *world {
 	t.Helper()
 	ctx := t.Context()
 	clk := clock.NewFake(time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC))
@@ -75,7 +75,7 @@ func newWorld(t *testing.T) *world {
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
-		QuestCatalog: catalog{}, Users: w.users, Destructive: orcfakes.Destructive{}}
+		QuestCatalog: catalog{}, QuestVerifier: firstVerifier(verifier), Users: w.users, Destructive: orcfakes.Destructive{}}
 	w.orc, err = app.NewOrchestration(oo)
 	if err != nil {
 		t.Fatal(err)
@@ -250,6 +250,13 @@ func (w *world) itemsOf(id string, kind inbox.Kind) []string {
 		}
 	}
 	return out
+}
+
+func firstVerifier(v []quests.Verifier) quests.Verifier {
+	if len(v) == 0 {
+		return nil
+	}
+	return v[0]
 }
 
 var _ = fmt.Sprintf
