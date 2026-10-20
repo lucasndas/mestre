@@ -60,6 +60,9 @@ func (d *DB) privileged(ctx context.Context, fn func(conn *sql.Conn) error) erro
 	defer conn.Close()
 	gate := func(open bool) error {
 		return conn.Raw(func(dc any) error {
+			if t, ok := dc.(*trackConn); ok {
+				dc = t.innerConn
+			}
 			g, ok := dc.(*guardConn)
 			if !ok {
 				return fmt.Errorf("store: the writer of a replica is a %T, not the guarded connection", dc)

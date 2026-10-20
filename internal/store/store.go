@@ -74,7 +74,8 @@ type DB struct {
 	mu     sync.RWMutex // guards the pools, which Replace swaps, and closed
 	writer *sql.DB
 	reader *sql.DB
-	closed bool // Close was called: Replace does not bring the file up again
+	live   *connTracker // the connections of the pools that are open
+	closed bool         // Close was called: Replace does not bring the file up again
 
 	infoMu sync.Mutex
 	infos  map[string]tableInfo // primary keys of the tables, for Apply
@@ -120,6 +121,7 @@ func Open(ctx context.Context, path string, set Set, opts Options) (*DB, error) 
 // openPools opens the writer, prepares the schema (unless it is a replica)
 // and opens the read-only pool. It is also how Replace brings a new file up.
 func (d *DB) openPools(ctx context.Context) error {
+	d.live = &connTracker{}
 	writer, err := d.openWriter()
 	if err != nil {
 		return fmt.Errorf("store: open %s: %w", d.path, err)
@@ -129,11 +131,12 @@ func (d *DB) openPools(ctx context.Context) error {
 		writer.Close()
 		return err
 	}
-	reader, err := sql.Open("sqlite", roDSN(d.path, readerPragmas(d.opts.BusyTimeout)))
+	rbase, err := sqlite.NewConnector(roDSN(d.path, readerPragmas(d.opts.BusyTimeout)))
 	if err != nil {
 		writer.Close()
 		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
 	}
+	reader := sql.OpenDB(trackConnector{Connector: rbase, t: d.live})
 	reader.SetMaxOpenConns(d.opts.ReadConns)
 	reader.SetMaxIdleConns(d.opts.ReadConns)
 	reader.SetConnMaxLifetime(0)
@@ -162,18 +165,19 @@ func (d *DB) openWriter() (*sql.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(logConnector{Connector: base, cap: d.capture})
+		w = sql.OpenDB(trackConnector{Connector: logConnector{Connector: base, cap: d.capture}, t: d.live})
 	case d.replica:
 		base, err := sqlite.NewConnector(conn)
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(guardConnector{Connector: base})
+		w = sql.OpenDB(trackConnector{Connector: guardConnector{Connector: base}, t: d.live})
 	default:
-		var err error
-		if w, err = sql.Open("sqlite", conn); err != nil {
+		base, err := sqlite.NewConnector(conn)
+		if err != nil {
 			return nil, err
 		}
+		w = sql.OpenDB(trackConnector{Connector: base, t: d.live})
 	}
 	w.SetMaxOpenConns(1)
 	w.SetMaxIdleConns(1)
@@ -367,6 +371,9 @@ func (d *DB) closePools() error {
 	if d.writer != nil {
 		werr = d.writer.Close()
 	}
+	// A query that was running keeps its connection, and the file with it,
+	// until it ends; the file is free only after that.
+	d.live.wait(d.clock)
 	return errors.Join(rerr, werr)
 }
 
