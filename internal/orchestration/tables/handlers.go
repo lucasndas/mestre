@@ -21,10 +21,11 @@ import (
 // own.
 func (s *Service) Handlers() map[string]localchan.Handler {
 	return map[string]localchan.Handler{
-		"table open":   localchan.HandlerFunc(s.handleOpen),
-		"table list":   localchan.HandlerFunc(s.handleList),
-		"table status": localchan.HandlerFunc(s.handleStatus),
-		"table close":  localchan.HandlerFunc(s.handleClose),
+		"table open":    localchan.HandlerFunc(s.handleOpen),
+		"table list":    localchan.HandlerFunc(s.handleList),
+		"table status":  localchan.HandlerFunc(s.handleStatus),
+		"table overlap": localchan.HandlerFunc(s.handleOverlap),
+		"table close":   localchan.HandlerFunc(s.handleClose),
 	}
 }
 
