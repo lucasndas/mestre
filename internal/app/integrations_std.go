@@ -30,6 +30,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/users"
 )
@@ -344,6 +345,10 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		o.ChainSinks = map[classes.RequestType]chain.Sink{}
 	}
 	o.ChainSinks[classes.RequestGuildEntry] = r.entries()
+
+	// the operational alerts of the workspaces reach the Administrators by the
+	// bot; the log of the engine keeps the record as it did before the bot
+	o.Alerts = adminAlerts{r: r, log: r.env.Log}
 	o.Epics = stdEpics{r: r, reg: characters.Registry{DB: r.env.DB}}
 }
 
@@ -744,3 +749,25 @@ var (
 	_ GuildApprover = (*stdRun)(nil)
 	_ GuildLocker   = (*stdRun)(nil)
 )
+
+// adminAlerts is workspaces.Alerts over the bot: the notice goes to the Owner and
+// to the Administrators who act in the workspace. While the bot is not up the alert
+// waits in the queue of the alerts of the bot and goes out when it starts; with
+// nobody to tell it stays in the log (workspace and kind only: the detail can carry
+// the output of git).
+type adminAlerts struct {
+	r   *stdRun
+	log *slog.Logger
+}
+
+func (a adminAlerts) Operational(ctx context.Context, al workspaces.Alert) error {
+	a.log.Warn("app: operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
+	told, err := a.r.alert.AdminAlert(ctx, al.Workspace, al.Detail)
+	switch {
+	case errors.Is(err, telegram.ErrQueued):
+		return nil // it waits for the bot, once: the caller does not send it again
+	case err == nil && told == 0:
+		a.log.Warn("app: no Administrator could be told of an operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
+	}
+	return err
+}
