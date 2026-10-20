@@ -173,6 +173,16 @@ func (s *Store) FindOpen(ctx context.Context, requester, fingerprint string) (Re
 	return rs[0], true, nil
 }
 
+// ApprovedFor lists the approved requests of a requester for a fingerprint, the
+// newest first.
+func (s *Store) ApprovedFor(ctx context.Context, requester, fingerprint string) ([]Request, error) {
+	rs, err := s.list(ctx, `state = 'approved' AND requester = ? AND fingerprint = ? AND fingerprint != ''`, requester, fingerprint)
+	for i, j := 0, len(rs)-1; i < j; i, j = i+1, j-1 {
+		rs[i], rs[j] = rs[j], rs[i]
+	}
+	return rs, err
+}
+
 // ApprovedPR lists the requests of a workspace approved for the commit of a PR
 // (a request of type pr or merge): the approvals that stand for that hash.
 func (s *Store) ApprovedPR(ctx context.Context, workspace, repo string, number int, sha string) ([]Request, error) {

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -328,8 +329,11 @@ func backoff(n int) time.Duration {
 // maxReason bounds the reason a failure keeps.
 const maxReason = 1000
 
+// urlUserinfo is the "user:password@" of a URL in the output of git.
+var urlUserinfo = regexp.MustCompile(`(?i)(\b[a-z][a-z0-9+.-]*://)[^/\s@]+@`)
+
 func reasonOf(err error) string {
-	r := err.Error()
+	r := urlUserinfo.ReplaceAllString(err.Error(), "${1}***@")
 	if len(r) > maxReason {
 		r = r[:maxReason] + "…"
 	}

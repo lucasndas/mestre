@@ -219,7 +219,8 @@ type innerConn interface {
 // it opens has the hooks and the log.
 type logConnector struct {
 	driver.Connector
-	cap *capture
+	cap   *capture
+	cache int // Options.StmtCache
 }
 
 func (c logConnector) Connect(ctx context.Context) (driver.Conn, error) {
@@ -237,7 +238,7 @@ func (c logConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	hooks.RegisterPreUpdateHook(st.preupdate)
 	hooks.RegisterCommitHook(st.commit)
 	hooks.RegisterRollbackHook(st.rollback)
-	return &logConn{inner: inner, st: st, cap: c.cap}, nil
+	return &logConn{inner: newCachedConn(inner, c.cache), st: st, cap: c.cap}, nil
 }
 
 // logConn is the write connection of a database that replicates.

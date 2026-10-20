@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 )
@@ -144,4 +145,85 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+// Asker takes a request to the people (*chain.Service).
+type Asker interface {
+	Ask(ctx context.Context, a chain.AskRequest) (chain.Outcome, error)
+}
+
+// AskHandler is the command `mestre approval ask` (docs/cli/grao-mestre.md#mestre-approval):
+// the Grão-Mestre takes to the users the request that waits at its level and that
+// the policy does not let it decide, with the fields of the request that blocks
+// (--motive, --checked, --why-not, --step). The level is checked by the chain.
+type AskHandler struct {
+	Characters Characters
+	Asker      Asker
+	// Requests reads a request, to see that it is of the workspace of who asks.
+	Requests interface {
+		Get(ctx context.Context, id int64) (chain.Request, error)
+	}
+}
+
+// Register registers the command.
+func (h *AskHandler) Register(fwd *localchan.LocalForwarder) {
+	fwd.Handle("approval ask", localchan.HandlerFunc(h.handle))
+}
+
+func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Response {
+	if !c.Caller.Identified {
+		return localchan.Fail(localchan.CodeNotIdentified, "the engine does not know this process as a process of a character", "run mestre debug")
+	}
+	who, err := h.Characters.Get(ctx, c.Caller.AgentID)
+	if err != nil {
+		return localchan.Fail(localchan.CodeNotIdentified, "the engine does not know this character", "run mestre debug")
+	}
+	if who.Role != characters.RoleGrandMaster {
+		return localchan.Fail("level_denied", "only the Grand Master of the workspace takes a request to the users", "")
+	}
+	usageMsg := `usage: mestre approval ask --action <request id> --summary "<summary>" (--details "<text>" | --details-file <file>) --recommend approve|deny --reason "<why you do not decide>" [--motive <value>] [--checked "<text>"] [--why-not "<text>"] [--step "<text>"]…`
+	if args, ok := c.Request.Strings(); !ok || len(args) != 0 {
+		return localchan.Fail(localchan.CodeUsage, usageMsg, "")
+	}
+	action := strings.TrimPrefix(strings.TrimSpace(flagText(c, "action")), "#")
+	id, err := strconv.ParseInt(action, 10, 64)
+	if err != nil || id <= 0 {
+		return localchan.Fail(localchan.CodeUsage, "--action is the number of the request that waits at your level (see `mestre approval list --mine`); asking about an action that is not a request yet is not available", "")
+	}
+	note := chain.AskNote{Summary: flagText(c, "summary"), Details: flagText(c, "details"), Recommend: flagText(c, "recommend"), Reason: flagText(c, "reason"),
+		Checked: flagText(c, "checked"), WhyNot: flagText(c, "why-not"), Steps: flagTexts(c, "step")}
+	for _, f := range []struct{ name, v string }{{"summary", note.Summary}, {"details", note.Details}, {"reason", note.Reason}, {"recommend", note.Recommend}} {
+		if strings.TrimSpace(f.v) == "" {
+			return localchan.Fail(localchan.CodeUsage, "--"+f.name+" is required", usageMsg)
+		}
+	}
+	if note.Recommend != "approve" && note.Recommend != "deny" {
+		return localchan.Fail(localchan.CodeUsage, "--recommend is approve or deny", "")
+	}
+	if m := flagText(c, "motive"); m != "" {
+		motive, err := ParseMotive(m)
+		if err != nil {
+			return localchan.Fail(localchan.CodeUsage, err.Error(), "")
+		}
+		note.Motive = string(motive)
+	}
+	// a request of another workspace is not there for this caller
+	if r, err := h.Requests.Get(ctx, id); err != nil || r.Workspace != who.Workspace {
+		return localchan.Fail("not_found", fmt.Sprintf("no request #%d", id), "see `mestre approval list`").WithExit(localchan.ExitNotFound)
+	}
+	out, err := h.Asker.Ask(ctx, chain.AskRequest{Request: id, By: who.ID, Note: note})
+	if err != nil {
+		var ref *chain.Refusal
+		switch {
+		case errors.As(err, &ref) && ref.Code == chain.CodeNotAtLevel:
+			return localchan.Fail("not_at_level", ref.Message, "see `mestre approval list --mine`").WithExit(localchan.ExitDenied)
+		case errors.As(err, &ref) && (ref.Code == chain.CodeAlreadyAsked || ref.Code == chain.CodeNoRequest || ref.Code == chain.CodeBusy):
+			code := map[string]string{chain.CodeAlreadyAsked: "already_asked", chain.CodeNoRequest: "already_decided", chain.CodeBusy: "busy"}[ref.Code]
+			return localchan.Fail(code, ref.Message, "").WithExit(localchan.ExitConflict)
+		}
+		return localchan.Fail(localchan.CodeInternal, "the request could not be taken to the users: "+err.Error(), "")
+	}
+	r := localchan.Fail("pending", fmt.Sprintf("the request #%d was taken to the users; the decision arrives in your inbox", out.Request), "").WithExit(localchan.ExitPending)
+	r.Data = localchan.OK(map[string]any{"request": out.Request, "level": out.Level.Label()}).Data
+	return r
 }

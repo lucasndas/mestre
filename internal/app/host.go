@@ -166,6 +166,11 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
 	}
+	if rp, ok := orc.Policy.(interface {
+		Risk(workspace string) *classes.RiskPolicy
+	}); ok {
+		ph.risk = rp.Risk
+	}
 	if sb != nil {
 		ph.layers = func(ctx context.Context, id string) (sessionzero.Dynamic, error) {
 			c, err := orc.Registry.Get(ctx, id)
