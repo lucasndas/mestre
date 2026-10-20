@@ -173,6 +173,10 @@ type stdRun struct {
 	// stage apps (githubcompose.go).
 	personal *github.Personal
 	installs *github.Installs
+	// approver and settings apply the approvals on GitHub (approvalhost.go), made
+	// when the orchestration exists.
+	approver atomic.Pointer[approvals.Approver]
+	settings atomic.Pointer[approvals.Settings]
 
 	fence atomic.Pointer[guild.Fence]
 	chain atomic.Pointer[chain.Service]
@@ -231,8 +235,10 @@ func (c lateChain) Invalidate(ctx context.Context, id int64, why string) error {
 }
 
 // lateTargets reads the live target of a request for the flow, from the
-// orchestration of the period. Only the destructive requests have one today; any
-// other type bound to a target is not approved (it cannot be verified).
+// orchestration of the period: the destructive requests, the PRs (the head and the
+// tip of the base) and the settings of a repository (what the Owner approves is
+// exactly what is applied). Any other type bound to a target is not approved (it
+// cannot be verified).
 type lateTargets struct{ r *stdRun }
 
 func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMessage, error) {
@@ -240,8 +246,13 @@ func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMe
 	if orc == nil {
 		return nil, errors.New("app: the orchestration is not built")
 	}
-	if req.Type == classes.RequestDestructive {
+	switch req.Type {
+	case classes.RequestDestructive:
 		return orc.DestructiveTarget(ctx, req)
+	case classes.RequestPR, classes.RequestMerge:
+		return t.r.source().Current(ctx, req)
+	case classes.RequestRepoSettings:
+		return req.Target, nil
 	}
 	return nil, fmt.Errorf("app: no live target for requests of type %q", req.Type)
 }
@@ -348,6 +359,19 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.FreshnessRules == nil {
 		o.FreshnessRules = stdRules{r}
 	}
+	// the facts of the PRs for the policy, and what applies on GitHub what people decide
+	if o.ChainPRs == nil {
+		o.ChainPRs = r.source()
+	}
+	sinks := map[classes.RequestType]chain.Sink{
+		classes.RequestPR:           lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
+		classes.RequestMerge:        lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
+		classes.RequestRepoSettings: lateSink{func() chain.Sink { return soft(r.settings.Load()) }, r.alert.OwnerAlert},
+	}
+	for t, s := range o.ChainSinks { // a test that gives its own keeps it
+		sinks[t] = s
+	}
+	o.ChainSinks = sinks
 	// the GitHub of the workspaces, with the App Grão-Mestre; a test that gives its own keeps it
 	gh := grandMasterGitHub{r}
 	if _, off := o.GitHub.(unavailableGitHub); off {
@@ -429,6 +453,7 @@ func (r *stdRun) Close() {
 func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []ExternalFunc {
 	r.chain.Store(orc.Chain)
 	r.orc.Store(orc)
+	r.approvalSetup(orc)
 	r.routing.To = inboxDeliverer{orc}
 	if orc.Supervisor != nil {
 		r.stall.Pauser = orc.Supervisor

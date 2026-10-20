@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -41,7 +42,10 @@ type ghCompose struct {
 	pr     int
 }
 
-func newGHCompose(t *testing.T) *ghCompose {
+func newGHCompose(t *testing.T) *ghCompose { return newGHComposeWith(t, false) }
+
+// newGHComposeWith can put the chain of approval in the orchestration.
+func newGHComposeWith(t *testing.T, withChain bool) *ghCompose {
 	t.Helper()
 	i := newInteg(t, false)
 	double, err := fakegithub.New(i.clk, t)
@@ -96,6 +100,9 @@ func newGHCompose(t *testing.T) *ghCompose {
 		Git: c.remote, Machines: machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: c.rdir},
 		Epics: orcfakes.Epics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}}
+	if withChain {
+		o.ChainClasses = stubClasses{}
+	}
 	c.run.Extend(&o)
 	if c.orc, err = NewOrchestration(o); err != nil {
 		t.Fatal(err)
@@ -303,4 +310,26 @@ func TestThePersonalCredentialsAndTheInstallationsAreMadeByTheIntegration(t *tes
 	if _, err := c.run.Installations().Missing(c.ctx, workspaces.Repo{Owner: "lucas", Name: "outro"}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// stubClasses gives every character the same class: it asks for what it does not
+// list. The chain of approval needs it to decide who may decide.
+type stubClasses struct{}
+
+const stubYAML = "version: 1\nfiles:\n  read: [\"**\"]\n  write: [\"**\"]\ncommands:\n  allow: [\"npm test\"]\n  default: ask\nnetwork:\n  domains: [\"registry.npmjs.org\"]\ntools:\n  default: ask\n"
+
+func (stubClasses) Rules(_ context.Context, id string) (*classes.Rules, error) {
+	p, err := classes.ParsePermissions([]byte(stubYAML))
+	if err != nil {
+		return nil, err
+	}
+	return classes.Build(classes.Layers{AgentID: id, Class: "dev", Permissions: p, Now: time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)})
+}
+
+func (stubClasses) Env(_ context.Context, id string) (classes.Env, error) {
+	return classes.Env{AgentID: id, Worktree: "/work/42-login", OS: "linux"}, nil
+}
+
+func (stubClasses) Domains(context.Context, string) ([]string, error) {
+	return []string{"registry.npmjs.org"}, nil
 }
