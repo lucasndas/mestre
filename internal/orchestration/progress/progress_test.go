@@ -126,7 +126,10 @@ func TestTheProgressMessageGoesAtTheEndOfAMissionAndEveryTwoHoursWhileATableWork
 	if r.out.count() != 1 {
 		t.Fatalf("sent twice in the same period: %d", r.out.count())
 	}
-	// the end of a mission sends at once and starts the 2 hours again
+	// the end of a mission sends at once and starts the 2 hours again; missions
+	// that end together are one message
+	r.clk.Advance(2 * time.Minute)
+	r.svc.MissionEnded(ctx, "loja")
 	r.svc.MissionEnded(ctx, "loja")
 	if r.out.count() != 2 {
 		t.Fatalf("the end of a mission did not send: %d", r.out.count())
@@ -145,6 +148,7 @@ func TestTheProgressMessageGoesAtTheEndOfAMissionAndEveryTwoHoursWhileATableWork
 	}
 	// no table at all: nothing to say
 	r.tables.ts = nil
+	r.clk.Advance(time.Hour)
 	r.svc.MissionEnded(ctx, "loja")
 	if r.out.count() != 2 || !strings.HasPrefix(r.out.sent[0], "u1: loja · 1 mesa\n") {
 		t.Errorf("sent = %q", r.out.sent)
@@ -167,5 +171,81 @@ func TestTheProgressMessageMasksAndLabelsWhatAgentsWrote(t *testing.T) {
 	if strings.Contains(m.Text, "s3cr3t") || strings.Contains(m.Text, "\nde uso") || !strings.Contains(m.Text, "espera o Grão-Mestre — rodar npm install [segredo removido]") ||
 		!strings.Contains(m.Text, "pausada — limite de uso [segredo removido]") {
 		t.Errorf("message:\n%s", m.Text)
+	}
+}
+
+// A secret is masked before the text is cut, a title is one safe line, and the
+// message stays under the size the bot takes.
+func TestTheProgressMessageMasksBeforeCuttingAndKeepsTheTitleToOneLine(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	secret := "ghp_" + strings.Repeat("a", 36)
+	svc, err := progress.New(progress.Options{Clock: r.clk, Tables: r.tables, Requests: r.reqs, Workspaces: fakeWorkspaces{"loja"}, Recipients: fakePeople{"u1"}, Sender: r.out,
+		Mask: func(s string) string { return strings.ReplaceAll(s, secret, "[segredo removido]") }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := table("41-checkout", "Check\nout "+secret+"\x1b[2J", tables.StateInReview, false)
+	r.tables.ts = []tables.Table{bad}
+	r.reqs["41-checkout"] = []chain.Request{{ID: 7, Level: chain.Level{Kind: chain.LevelPeople}, About: strings.Repeat("x", 150) + secret}}
+	m, _, _ := svc.Compose(t.Context(), "loja")
+	if strings.Contains(m.Text, "ghp_") || strings.Contains(m.Text, "\x1b") || strings.Contains(m.Text, "Check\nout") {
+		t.Errorf("message:\n%s", m.Text)
+	}
+	var many []tables.Table
+	for i := range 200 {
+		many = append(many, table("t"+strings.Repeat("x", i), strings.Repeat("título ", 10), tables.StateWorking, true))
+	}
+	r.tables.ts = many
+	if m, _, _ := svc.Compose(t.Context(), "loja"); len([]rune(m.Text)) > 3600 {
+		t.Errorf("the message has %d characters", len([]rune(m.Text)))
+	}
+}
+
+type flakySender struct {
+	fail map[string]bool
+	sent []string
+}
+
+func (f *flakySender) Send(_ context.Context, user, _, text string) error {
+	if f.fail[user] {
+		return context.DeadlineExceeded
+	}
+	f.sent = append(f.sent, user)
+	return nil
+}
+
+// A message nobody got does not use up the turn; one that reached some does.
+func TestAMessageThatReachedNobodyIsTriedAgainAndOneThatReachedSomeIsNot(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	snd := &flakySender{fail: map[string]bool{"u1": true, "u2": true}}
+	svc, err := progress.New(progress.Options{Clock: r.clk, Tables: r.tables, Requests: r.reqs, Workspaces: fakeWorkspaces{"loja"}, Recipients: fakePeople{"u1", "u2"}, Sender: snd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.tables.ts = []tables.Table{table("42-login", "Login", tables.StateWorking, false)}
+	if err := svc.Send(t.Context(), "loja"); err == nil {
+		t.Fatal("no error for a message nobody got")
+	}
+	snd.fail["u2"] = false
+	if err := svc.Send(t.Context(), "loja"); err == nil || len(snd.sent) != 1 {
+		t.Fatalf("second try: %v, sent %v; want the failure of u1 told and u2 reached", err, snd.sent)
+	}
+	snd.fail["u1"] = false
+	_ = svc.Send(t.Context(), "loja") // within the minute: the turn was used by the one that reached u2
+	if len(snd.sent) != 1 {
+		t.Errorf("sent again at once: %v", snd.sent)
+	}
+}
+
+// A workspace that does not act gets no message at the end of a mission.
+func TestNoMessageForAWorkspaceThatDoesNotAct(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.tables.ts = []tables.Table{table("42-login", "Login", tables.StateWorking, false)}
+	r.svc.MissionEnded(t.Context(), "outro")
+	if r.out.count() != 0 {
+		t.Errorf("sent for a workspace that is not active: %d", r.out.count())
 	}
 }
