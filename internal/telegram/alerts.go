@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -203,4 +204,38 @@ func (a *OwnerAlerts) Tell(ctx context.Context, userID, text string) {
 	if _, err := bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); err != nil {
 		bot.log.Warn("telegram: a notice was not queued", "err", err)
 	}
+}
+
+// ErrBotDown: the bot is not up, so a notice to the Administrators waits.
+var ErrBotDown = errors.New("telegram: the bot is not up")
+
+// AdminAlert tells the Owner and the Administrators who act in the workspace, one
+// message each, in the order of the registry. It returns ErrBotDown while the bot
+// is not up (the caller sends it again later), and the first failure to queue a
+// message; nobody to tell is not an error (the caller logs the notice).
+func (a *OwnerAlerts) AdminAlert(ctx context.Context, workspace, text string) (told int, err error) {
+	bot := a.bot.Load()
+	if bot == nil {
+		return 0, ErrBotDown
+	}
+	all, err := a.Users.List(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for _, u := range all {
+		if u.State != users.Active || u.TelegramID == 0 || !u.Acts(workspace) || u.Level != users.Owner && u.Level != users.Administrator {
+			continue
+		}
+		if _, serr := bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Text: text, Origin: "motor"}); serr != nil {
+			if err == nil {
+				err = serr
+			}
+			continue
+		}
+		told++
+	}
+	if told > 0 {
+		err = nil // the ones told are not told again: a retry would repeat it to them
+	}
+	return told, err
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
 	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
@@ -334,5 +335,71 @@ func TestTheEngineIsLockedByTheLockOfThePeriodAndByTheOneItWasGiven(t *testing.T
 	e.deps.Locked = func(context.Context) bool { return true }
 	if !e.locked(ctx) {
 		t.Fatal("the lock given in the dependencies is not seen")
+	}
+}
+
+// The operational alerts of a workspace reach the Owner and the Administrators who
+// act in it, by the bot, and nobody else; while the bot is not up the alert is an
+// error, so the workspaces send it again.
+func TestAnOperationalAlertReachesTheOwnerAndTheAdministratorsOfTheWorkspaceByTheBot(t *testing.T) {
+	t.Parallel()
+	i := newInteg(t, true)
+	run := i.open()
+	defer run.Close()
+	var o OrchestrationOptions
+	run.Extend(&o)
+	al := workspaces.Alert{Workspace: "loja", Kind: workspaces.AlertFetchFailing, Detail: "o espelho não atualiza há 10 min"}
+	if err := o.Alerts.Operational(i.ctx, al); err != nil {
+		t.Fatalf("with the bot down: %v", err) // it waits for the bot, the caller sends nothing again
+	}
+	owner, err := run.users.CreateOwner(i.ctx, "Lucas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair := func(u users.User, id int64) {
+		code, err := run.users.NewCode(i.ctx, owner, u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := run.users.Pair(i.ctx, users.PairRequest{Text: code.Code, TelegramID: id, Private: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pair(owner, 77)
+	for name, c := range map[string]struct {
+		level users.Level
+		ws    string
+		tg    int64
+	}{"Ana": {users.Administrator, "loja", 88}, "Bia": {users.Approver, "loja", 99}, "Cris": {users.Administrator, "blog", 66}} {
+		u, err := run.users.Create(i.ctx, owner, users.NewUser{Name: name, Level: c.level, Workspaces: []string{c.ws}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pair(u, c.tg)
+	}
+	if _, err := run.startBot(i.ctx); err != nil {
+		t.Fatal(err)
+	}
+	run.flushAlerts(i.ctx) // what waited for the bot goes out, once
+	run.flushAlerts(i.ctx)
+	rows, err := i.db.Reader().QueryContext(i.ctx, `SELECT chat_id, params FROM telegram_outbox ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	got, n := map[int64]string{}, 0
+	for rows.Next() {
+		var chat int64
+		var p string
+		if err := rows.Scan(&chat, &p); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(p, "o espelho") {
+			n++
+			got[chat] = p
+		}
+	}
+	if n != 2 || len(got) != 2 || !strings.Contains(got[77], "o espelho não atualiza") || !strings.Contains(got[88], "[loja]") {
+		t.Errorf("the alert reached %v, want only the Owner and Ana", got)
 	}
 }
