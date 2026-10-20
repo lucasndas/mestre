@@ -42,6 +42,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 - `status`: estado do PR, CI por verificação, revisões (quem, decisão), se pode fazer merge e o motivo quando não pode, comentários sem resposta. `--json` → `{number, state, draft, head_sha, checks: [{name, state}], reviews: [{by, state}], mergeable, blocked_by, unresolved_comments}`.
 - `comment`: comenta na conversa do PR; `reply`: responde a um comentário de revisão (o id vem de `pr status --json`).
 - Sem PR da mesa (`status`, `comment`, `reply`, `update`) → 4 `no_pr`.
+- **A mesa é avisada:** o `open` e o `update` que enviaram contam à mesa (uma mesa em `working` vai a `in_review`; em `in_review` só aprende a cabeça nova). Uma mesa que não pode receber o PR (`closing`, `cancelling`) não faz o comando falhar: o PR já está no GitHub, o motor registra o aviso no log e o comando segue (`executed` é registrado).
 
 ## Regras e erros
 

@@ -358,7 +358,7 @@ func TestTheRefusalOfTheSendingOfAGitHubReachesTheInboxOfTheGrandMaster(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.run.refusedSending(c.orc)(c.ctx, master, "workflow_permission", "o App Mestre não tem a permissão Workflows")
+	c.run.ghHandlers(c.orc).Refused(c.ctx, master, "workflow_permission", "o App Mestre não tem a permissão Workflows")
 	system := func(id string) []string {
 		items, err := c.orc.Inbox.Store().All(c.ctx, id)
 		if err != nil {
@@ -392,14 +392,28 @@ func TestThePRCommandsTellTheTableAndATableInWorkGoesToReview(t *testing.T) {
 	if now, err := c.orc.Tables.Get(c.ctx, c.ws.Slug, c.table.ID); err != nil || now.State != tables.StateWorking {
 		t.Fatalf("the table is %+v (%v), want working", now.State, err)
 	}
-	if err := tablePROpened(c.orc)(c.ctx, c.ws.Slug+"/"+c.table.ID, c.pr, "newhead"); err != nil {
+	if err := c.run.ghHandlers(c.orc).Opened(c.ctx, c.ws.Slug+"/"+c.table.ID, c.pr, "newhead"); err != nil {
 		t.Fatal(err)
 	}
 	now, err := c.orc.Tables.Get(c.ctx, c.ws.Slug, c.table.ID)
 	if err != nil || now.State != tables.StateInReview || now.PRNumber != c.pr || now.PRHead != "newhead" {
 		t.Fatalf("the table is %s with PR #%d head %q (%v); want in_review with the new head", now.State, now.PRNumber, now.PRHead, err)
 	}
-	if err := tablePROpened(c.orc)(c.ctx, "no-slash", 1, ""); err == nil {
+	if err := c.run.ghHandlers(c.orc).Opened(c.ctx, "no-slash", 1, ""); err == nil {
 		t.Error("a key that is no table was taken")
+	}
+}
+
+// A table that can not take its PR (it is closing) does not turn `pr open` or
+// `pr update` into a failure: the PR is on GitHub already, so the hook tells the
+// log and the command stands.
+func TestATableThatCannotTakeItsPRDoesNotFailThePRCommands(t *testing.T) {
+	t.Parallel()
+	c := newGHCompose(t)
+	if _, err := c.db.Writer().ExecContext(c.ctx, `UPDATE tables SET state = 'closing' WHERE workspace = ? AND id = ?`, c.ws.Slug, c.table.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.run.ghHandlers(c.orc).Opened(c.ctx, c.ws.Slug+"/"+c.table.ID, c.pr, "h"); err != nil {
+		t.Fatalf("a closing table failed the command: %v", err)
 	}
 }
