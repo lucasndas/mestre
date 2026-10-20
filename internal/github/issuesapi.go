@@ -32,6 +32,10 @@ type IssueData struct {
 	State  string
 	URL    string
 	Labels []string
+	// StateReason is why a closed issue was closed: completed or not_planned.
+	StateReason string
+	// IsPull says the "issue" is a pull request (the issues endpoint lists both).
+	IsPull bool
 }
 
 // IssueEdit is what `issue update` changes; nil is left as it is. Labels is the
@@ -43,19 +47,21 @@ type IssueEdit struct {
 }
 
 type issueJSON struct {
-	Number  int    `json:"number"`
-	ID      int64  `json:"id"`
-	Title   string `json:"title"`
-	Body    string `json:"body"`
-	State   string `json:"state"`
-	HTMLURL string `json:"html_url"`
+	Number  int       `json:"number"`
+	ID      int64     `json:"id"`
+	Title   string    `json:"title"`
+	Body    string    `json:"body"`
+	State   string    `json:"state"`
+	Reason  string    `json:"state_reason"`
+	Pull    *struct{} `json:"pull_request"`
+	HTMLURL string    `json:"html_url"`
 	Labels  []struct {
 		Name string `json:"name"`
 	} `json:"labels"`
 }
 
 func (v issueJSON) data() IssueData {
-	out := IssueData{Number: v.Number, ID: v.ID, Title: v.Title, Body: v.Body, State: v.State, URL: v.HTMLURL}
+	out := IssueData{Number: v.Number, ID: v.ID, Title: v.Title, Body: v.Body, State: v.State, URL: v.HTMLURL, StateReason: v.Reason, IsPull: v.Pull != nil}
 	for _, l := range v.Labels {
 		out.Labels = append(out.Labels, l.Name)
 	}

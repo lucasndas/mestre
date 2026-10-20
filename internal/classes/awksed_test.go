@@ -142,6 +142,18 @@ func TestOrdinaryAwkAndSedStayLow(t *testing.T) {
 	t.Parallel()
 	m := newMachine()
 	def := rules(t, "version: 1\n")
+	// a file write, not a command (on Windows the quote in the argument asks: PowerShell 5.1
+	// hands a program an argument with a quote as several, which the text does not show)
+	lin := m.env()
+	lin.OS = "linux"
+	if d := decide(lin, def, m.shell(`awk '{print $1 > "out.txt"}' f`)); d.Verdict != classes.Allow {
+		t.Errorf("a write to a file by awk on Linux = %s (%q); want allow", d.Verdict, d.Reason)
+	}
+	winq := m.env()
+	winq.OS = "windows"
+	if d := decide(winq, def, m.shell(`awk '{print $1 > "out.txt"}' f`)); d.Verdict != classes.Ask {
+		t.Errorf("a write to a file by awk on Windows = %s (%q); want ask", d.Verdict, d.Reason)
+	}
 	for _, goos := range []string{"linux", "windows"} {
 		env := m.env()
 		env.OS = goos
@@ -149,7 +161,6 @@ func TestOrdinaryAwkAndSedStayLow(t *testing.T) {
 			`awk '{print $1}'`,
 			`awk -F, '{print $2}' data.csv`,
 			`awk 'NR==1{print}' f`,
-			`awk '{print $1 > "out.txt"}' f`, // a file write, not a command
 			`gawk 'END{print NR}' f`,
 			`sed -n '1,5p' f`,
 			`sed 's/a/b/g' f`,

@@ -238,6 +238,23 @@ func (e *Engine) decide(ctx context.Context, ev providers.Event) Answer {
 	return ans
 }
 
+// Allows decides an action the engine itself runs for a character (the pre-run
+// of a ritual) like any action of the character's own: the same pipeline, the
+// same environment of the machine. What would ask for approval is refused, since
+// nobody can answer; so is whatever would still go through blocking hooks of the
+// class, which this action does not run.
+func (e *Engine) Allows(ctx context.Context, ev providers.Event) (bool, string) {
+	p := classes.Policy{Source: e.rules(), Env: e.env}
+	d := p.Decide(ctx, ev)
+	switch {
+	case d.Verdict != classes.Allow:
+		return false, d.Reason
+	case d.ClassHooks && e.hasBlocking(ctx, ev.AgentID):
+		return false, "a classe tem hooks que bloqueiam, que uma pré-execução não passa"
+	}
+	return true, ""
+}
+
 // ask opens the approval request, with its risk, and answers deny with its
 // number; the character waits for the approval.
 func (e *Engine) ask(ctx context.Context, ev providers.Event, d classes.Decision) Answer {

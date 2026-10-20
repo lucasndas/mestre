@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/rituals"
+	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -543,4 +545,63 @@ func (t towerRules) SendRules(ctx context.Context, machine string, msg protocol.
 	}
 	_, err := srv.Link(machine).Send(ctx, msg)
 	return err
+}
+
+// Run implements rituals.PreRunner: the command runs on the machine of the
+// target, as the target, in its folder.
+func (m *machineRouter) Run(ctx context.Context, r rituals.PreRunRequest) (rituals.PreRunResult, error) {
+	if r.Machine == m.local {
+		if m.rt == nil {
+			return rituals.PreRunResult{}, errTerminalsNotWired
+		}
+		out, err := m.rt.PreRun(ctx, r.Character, r.Command, preRunTimeout(r.Timeout), r.MaxOutput)
+		return rituals.PreRunResult{Output: out.Output, ExitCode: out.ExitCode, TimedOut: out.TimedOut, Stderr: out.Stderr}, err
+	}
+	// the Tower runs for the time asked, as bounded here, and the Citadel waits for it plus a margin
+	timeout := preRunTimeout(r.Timeout)
+	raw, err := m.call(ctx, r.Machine, timeout+towerCallWait, protocol.Outgoing{Type: protocol.TypeRitualPreRun, Payload: protocol.RitualPreRun{
+		Character: r.Character, Command: r.Command, TimeoutSeconds: int(timeout / time.Second), MaxOutput: r.MaxOutput}})
+	if err != nil {
+		return rituals.PreRunResult{}, err
+	}
+	var res protocol.RitualPreRunResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return rituals.PreRunResult{}, fmt.Errorf("%s answered the pre-run with something that is not a result", r.Machine)
+	}
+	return rituals.PreRunResult{Output: res.Output, ExitCode: res.ExitCode, Stderr: res.Stderr, TimedOut: res.TimedOut}, nil
+}
+
+var (
+	_ rituals.PreRunner = (*machineRouter)(nil)
+	_ scrolls.Copies    = (*machineRouter)(nil)
+)
+
+// Put implements scrolls.Copies: the copy of a scroll in the worktree of a
+// table, on this machine or on a Tower.
+func (m *machineRouter) Put(ctx context.Context, t scrolls.Target, rel string, data []byte) error {
+	if t.Machine == m.local {
+		return scrolls.LocalCopies{Machine: m.local}.Put(ctx, t, rel, data)
+	}
+	_, err := m.call(ctx, t.Machine, towerCallWait, protocol.Outgoing{Type: protocol.TypeScrollPut, Payload: protocol.ScrollPut{Dir: t.Dir, Rel: rel, Content: string(data)}})
+	return err
+}
+
+// Remove implements scrolls.Copies.
+func (m *machineRouter) Remove(ctx context.Context, t scrolls.Target, rel string) error {
+	if t.Machine == m.local {
+		return scrolls.LocalCopies{Machine: m.local}.Remove(ctx, t, rel)
+	}
+	_, err := m.call(ctx, t.Machine, towerCallWait, protocol.Outgoing{Type: protocol.TypeScrollRemove, Payload: protocol.ScrollRemove{Dir: t.Dir, Rel: rel}})
+	return err
+}
+
+// The time a pre-run may take: asked as a whole number of seconds, between one
+// second and ten minutes, the same on the Citadel and on the Tower.
+const (
+	preRunMin = time.Second
+	preRunMax = 10 * time.Minute
+)
+
+func preRunTimeout(d time.Duration) time.Duration {
+	return min(max(d.Round(time.Second), preRunMin), preRunMax)
 }

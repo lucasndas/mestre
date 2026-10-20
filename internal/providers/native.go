@@ -87,12 +87,6 @@ type NativeFallbacks struct {
 	// it is the default (docs/provedores/antigravity.md#flags): that
 	// combination has no native network barrier (AntigravityNoNativeNetwork).
 	AntigravityNoSandbox bool
-	// CodexOfflineNetwork runs Codex on Windows with the network of the
-	// sandbox on also for a class without internet, so the `mestre` CLI
-	// reaches the local channel, as on Linux, where it is the default
-	// (docs/provedores/codex.md#verificar-na-implementação): that
-	// combination has no native network barrier (CodexNoNativeNetwork).
-	CodexOfflineNetwork bool
 	// CodexHookTrust makes HookFiles of Codex also write, in the profile's
 	// config.toml, the trust entries (trusted_hash) of the Mestre hooks: the
 	// trust given once in /hooks did not hold for new worktrees

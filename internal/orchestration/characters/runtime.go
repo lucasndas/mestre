@@ -56,7 +56,10 @@ type RuntimeOptions struct {
 	// the edits of the table).
 	Layout   classes.Layout
 	Home, OS string
-	EnvExtra func(l Launch, env *classes.Env)
+	// PreRunGate decides the command of a pre-run on this machine, with the
+	// rules and the environment of the character here (nil: nothing runs).
+	PreRunGate func(ctx context.Context, c PreRunCheck) error
+	EnvExtra   func(l Launch, env *classes.Env)
 
 	// StartTimeout, StuckAfter and GracefulWait default to the document's;
 	// ScreenTimeout is how long a start screen that nothing knows may stay
