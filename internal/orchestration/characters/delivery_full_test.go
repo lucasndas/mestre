@@ -3,7 +3,6 @@
 package characters_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/providers"
+	"github.com/lucasndas/mestre/pkg/clock"
 )
 
 // CA-CLI-CONV-04: two characters on two machines of the Guild (the Citadel's
@@ -45,7 +45,7 @@ func TestAnAskBetweenCharactersOfTwoMachinesIsAnsweredWithoutSayingAMachine(t *t
 	// A wait that nothing ends would hold the whole test binary until its
 	// timeout: it ends with the test's own limit, or when the ask returns before
 	// the question was typed (then it says why).
-	wait, stop := context.WithTimeout(t.Context(), 30*time.Second)
+	wait, stop := clock.WithTimeout(t.Context(), clock.Real{}, 30*time.Second)
 	defer stop()
 	go func() {
 		// no machine anywhere in the call: the engine finds the target
