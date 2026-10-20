@@ -33,7 +33,7 @@ func (c *DecreeChannel) DelegationEnding(ctx context.Context, d decrees.Decree) 
 	}
 	n := strconv.FormatInt(d.Number, 10)
 	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Origin: "motor", Workspace: d.Workspace, Mesa: d.Mesa,
-		Text:    fmt.Sprintf("A delegação %d (%s) acaba em %s. Renovar vale por mais 30 dias, com o seu PIN.", d.Number, d.Summary(), d.Until.UTC().Format("02/01/2006 15:04 UTC")),
+		Text:    fmt.Sprintf("A delegação %d (%s) acaba em %s. Renovar vale por mais 30 dias, com o seu PIN.", d.Number, d.Summary(), c.Svc.Moment(ctx, d.Until)),
 		Buttons: [][]Button{{{Text: "Renovar", Action: DelegationRenewAction, Arg: n}, {Text: "Deixar vencer", Action: DelegationLapseAction, Arg: n}}}})
 	if err != nil {
 		c.bot.log.Warn("telegram: the reminder of a delegation was not queued", "decree", d.Number, "err", err)

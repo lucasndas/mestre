@@ -141,7 +141,10 @@ func refusal(err error) localchan.Response {
 	var pending *github.ApprovalPendingError
 	var crit *github.CriteriaError
 	var moved *github.HeadChangedError
+	var base *github.BaseMovedError
 	switch {
+	case errors.As(err, &base):
+		return localchan.Fail("conflict", base.Detail, "the step sync was made in your table; wait for it, then run mestre pr open again")
 	case errors.As(err, &sec):
 		return localchan.Fail("secret_detected", sec.Error(), "take the secret out of the files and commit again; it is not shown here")
 	case errors.Is(err, github.ErrWorkflowNotAllowed):

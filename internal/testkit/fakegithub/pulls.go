@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/testkit"
 )
@@ -17,6 +18,7 @@ import (
 
 type pullExtra struct {
 	headSHA, baseRef, state string
+	mergeSHA                string
 	draft, merged           bool
 	mergeableState          string
 	files                   []map[string]any
@@ -86,8 +88,9 @@ func (s *Server) AddReview(full string, n int, by, state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.repos[full].pull(n)
-	p.reviews = append(p.reviews, map[string]any{"id": s.nextID, "user": map[string]any{"login": by}, "state": state, "commit_id": p.headSHA})
+	p.reviews = append(p.reviews, s.reviewView(full, n, by, state, p.headSHA))
 	s.nextID++
+	s.touch(s.repos[full], n)
 }
 
 // AddReviewAt adds a review made on the commit sha.
@@ -95,8 +98,9 @@ func (s *Server) AddReviewAt(full string, n int, by, state, sha string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := s.repos[full].pull(n)
-	p.reviews = append(p.reviews, map[string]any{"id": s.nextID, "user": map[string]any{"login": by}, "state": state, "commit_id": sha})
+	p.reviews = append(p.reviews, s.reviewView(full, n, by, state, sha))
 	s.nextID++
+	s.touch(s.repos[full], n)
 }
 
 // AddStatus adds a legacy commit status (success, pending, failure, error).
@@ -108,6 +112,7 @@ func (s *Server) AddStatus(full, sha, context, state string) {
 		rp.statuses = map[string][]map[string]any{}
 	}
 	rp.statuses[sha] = append(rp.statuses[sha], map[string]any{"context": context, "state": state})
+	s.touchBySHA(rp, sha)
 }
 
 // AddCheck adds a check run to a commit; conclusion "" is one still running.
@@ -123,7 +128,11 @@ func (s *Server) AddCheck(full, sha, name, conclusion string) {
 	if conclusion == "" {
 		status, concl = "in_progress", nil
 	}
-	rp.checks[sha] = append(rp.checks[sha], map[string]any{"name": name, "status": status, "conclusion": concl})
+	id := s.nextID
+	s.nextID++
+	rp.checks[sha] = append(rp.checks[sha], map[string]any{"id": id, "name": name, "status": status, "conclusion": concl,
+		"html_url": fmt.Sprintf("https://github.com/%s/runs/%d", full, id)})
+	s.touchBySHA(rp, sha)
 }
 
 // PullBody is the body of a PR.
@@ -145,6 +154,8 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 	switch {
 	case parts[3] == "pulls" && len(parts) == 4 && r.Method == http.MethodPost:
 		return s.createPull(w, r, full)
+	case parts[3] == "pulls" && len(parts) == 4 && r.Method == http.MethodGet:
+		return s.listPulls(w, r, full)
 	case parts[3] == "pulls" && len(parts) == 5 && (r.Method == http.MethodGet || r.Method == http.MethodPatch):
 	case parts[3] == "pulls" && len(parts) == 6 && (parts[5] == "reviews" || parts[5] == "files") && r.Method == http.MethodGet:
 	case parts[3] == "pulls" && len(parts) == 6 && parts[5] == "comments" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
@@ -294,7 +305,7 @@ func (s *Server) pullView(rp *repo, full string, n int, head [2]string) map[stri
 	is := rp.issues[n-1]
 	return map[string]any{
 		"number": n, "node_id": fmt.Sprintf("PR_%s_%d", full, n), "title": is["title"], "body": is["body"], "user": is["user"], "state": px.state, "draft": px.draft, "merged": px.merged,
-		"mergeable_state": px.mergeableState, "html_url": fmt.Sprintf("https://github.com/%s/pull/%d", full, n),
+		"mergeable_state": px.mergeableState, "html_url": fmt.Sprintf("https://github.com/%s/pull/%d", full, n), "merge_commit_sha": px.mergeSHA,
 		"head": map[string]any{"ref": head[0], "sha": px.headSHA, "repo": map[string]any{"full_name": head[1]}},
 		"base": map[string]any{"ref": px.baseRef},
 	}
@@ -322,13 +333,15 @@ func paginate(list []map[string]any, r *http.Request) []map[string]any {
 func (s *Server) AddReviewComment(full string, n int, path string, line int, body string, replyTo int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c := map[string]any{"id": s.nextID, "body": body, "path": path, "line": line, "user": map[string]any{"login": "pessoa"}}
+	c := s.commentView(s.nextID, full, n, body, "pessoa")
+	c["path"], c["line"] = path, line
 	s.nextID++
 	if replyTo != 0 {
 		c["in_reply_to_id"] = replyTo
 	}
 	px := s.repos[full].pull(n)
 	px.comments = append(px.comments, c)
+	s.touch(s.repos[full], n)
 }
 
 // createPull is POST /repos/{r}/pulls: the PR of head into base, with the head
@@ -442,4 +455,12 @@ func (s *Server) SetPullState(full string, n int, state string, merged bool, bas
 	if base != "" {
 		p.baseRef = base
 	}
+	if pr, ok := s.repos[full].issues[n-1]["pull_request"].(map[string]any); ok {
+		if merged {
+			pr["merged_at"] = s.clk.Now().UTC().Format(time.RFC3339)
+		} else {
+			pr["merged_at"] = nil
+		}
+	}
+	s.touch(s.repos[full], n)
 }

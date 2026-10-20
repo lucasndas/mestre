@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/basesync"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
@@ -184,6 +185,9 @@ type Orchestration struct {
 	Waits       *waits.Service
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
+	// BaseSync makes the step `sync` when the main branch moves
+	// (docs/orquestracao/sincronia-com-a-base.md).
+	BaseSync *basesync.Service
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
 	// Usage is the use and the limits on it (docs/plataforma/limites-de-uso.md).
@@ -198,6 +202,8 @@ type Orchestration struct {
 	// built): the source of their decrees for the effective rules and the
 	// classes.TableRuleGate of the engine.
 	TableRules *tablerules.Service
+	// Policy is the approval policy the chain reads (nil unless the chain was built).
+	Policy chain.Policy
 	// ClassCommands are the commands of classes (nil without libraries).
 	ClassCommands *classes.Commands
 	Rituals       *rituals.Service
@@ -510,6 +516,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		if policy == nil {
 			policy = chain.StaticPolicy{}
 		}
+		orc.Policy = policy
 		temp := o.ChainTempRules
 		if temp == nil {
 			temp = tempRulesRef{p: &trl, pub: o.ChainRulesPublisher, log: o.Logger}
@@ -544,6 +551,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	bsync, err := basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Logger: o.Logger})
+	if err != nil {
+		return nil, err
+	}
+	ws.OnFetched(bsync.AfterFetch)
+	orc.BaseSync = bsync
 	if o.ChainClasses != nil {
 		policy := o.ChainPolicy
 		if policy == nil {

@@ -4,8 +4,8 @@
 // editMessageText and answerCallbackQuery, with injected failures. The bot of
 // M5 adds the buttons (reply_markup, callback clicks), parse modes, replies,
 // deleteMessage, deleteWebhook, setMyCommands, leaveChat and documents, and the
-// stickers a user may send; voice, photos and getFile arrive with the
-// attachments.
+// stickers a user may send, and the attachments: voice, photos and documents with
+// their file_size, getFile and the download of the file.
 package faketelegram
 
 import (
@@ -82,7 +82,8 @@ type Server struct {
 	pollGen  int // the long getUpdates in progress; a newer one aborts the older with 409
 	deleted  []Deleted
 	failures map[string][]Failure
-	notify   chan struct{} // closed and replaced on each new update
+	files    map[string][]byte // file_id → content, for getFile and the download
+	notify   chan struct{}     // closed and replaced on each new update
 }
 
 // New returns a server for the bot token, using the newest recordings.
@@ -95,7 +96,7 @@ func New(clk clock.Clock, rep testkit.Reporter, token string) (*Server, error) {
 	return &Server{
 		clk: clk, rep: rep, token: token, recs: recs, ver: ver,
 		nextUpd: 100000001, nextMsg: 1,
-		failures: map[string][]Failure{}, calls: map[string]int{}, notify: make(chan struct{}),
+		failures: map[string][]Failure{}, calls: map[string]int{}, files: map[string][]byte{}, notify: make(chan struct{}),
 	}, nil
 }
 
@@ -177,6 +178,10 @@ func (s *Server) FailNext(method string, f Failure) {
 
 // ServeHTTP routes /bot<token>/<method>.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if rest, ok := strings.CutPrefix(r.URL.Path, "/file/bot"); ok {
+		s.serveFile(w, rest)
+		return
+	}
 	rest, ok := strings.CutPrefix(r.URL.Path, "/bot")
 	tok, method, ok2 := strings.Cut(rest, "/")
 	if !ok || !ok2 {
@@ -218,6 +223,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.sendMessage(w, method, params)
 	case "sendDocument":
 		s.sendDocument(w, params)
+	case "getFile":
+		s.getFile(w, params)
 	case "answerCallbackQuery":
 		s.mu.Lock()
 		s.sent = append(s.sent, Sent{Method: method, Text: str(params["text"]), Params: params})
@@ -250,6 +257,7 @@ var knownParams = map[string]map[string]bool{
 	"setMyCommands":       {"commands": true},
 	"leaveChat":           {"chat_id": true},
 	"sendDocument":        {"chat_id": true, "document": true, "caption": true, "parse_mode": true},
+	"getFile":             {"file_id": true},
 }
 
 func sortedKeys(m map[string]any) []string {
@@ -512,6 +520,10 @@ func (s *Server) UserSendsVoice(u User) (int64, error) {
 }
 
 func (s *Server) userSendsMedia(u User, key string, media map[string]any) (int64, error) {
+	return s.userSendsMediaCaption(u, key, media, "")
+}
+
+func (s *Server) userSendsMediaCaption(u User, key string, media any, caption string) (int64, error) {
 	upd, err := s.template("update-message-sticker")
 	if err != nil {
 		return 0, err
@@ -523,6 +535,9 @@ func (s *Server) userSendsMedia(u User, key string, media map[string]any) (int64
 	ch, _ := msg["chat"].(map[string]any)
 	delete(msg, "sticker")
 	msg[key] = media
+	if caption != "" {
+		msg["caption"] = caption
+	}
 	id := s.nextUpd
 	s.nextUpd++
 	upd["update_id"] = id
@@ -565,4 +580,87 @@ func (s *Server) push(upd map[string]any) {
 	s.updates = append(s.updates, upd)
 	close(s.notify)
 	s.notify = make(chan struct{})
+}
+
+// AddFile makes a file the bot can get: getFile answers with its path and size, and
+// the download serves its content. The id is the file_id a message carries.
+func (s *Server) AddFile(id string, content []byte) {
+	s.mu.Lock()
+	s.files[id] = append([]byte(nil), content...)
+	s.mu.Unlock()
+}
+
+func (s *Server) getFile(w http.ResponseWriter, p map[string]any) {
+	id := str(p["file_id"])
+	s.mu.Lock()
+	content, ok := s.files[id]
+	s.mu.Unlock()
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error_code": 400, "description": "Bad Request: wrong file_id or the file is temporarily unavailable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "result": map[string]any{"file_id": id, "file_unique_id": "u-" + id, "file_size": len(content), "file_path": "files/" + id}})
+}
+
+// serveFile serves /file/bot<token>/files/<file_id>.
+func (s *Server) serveFile(w http.ResponseWriter, rest string) {
+	tok, path, ok := strings.Cut(rest, "/")
+	id, isFile := strings.CutPrefix(path, "files/")
+	if !ok || !isFile {
+		testkit.NotImplemented(s.rep, w, "telegram file "+path)
+		return
+	}
+	s.mu.Lock()
+	s.calls["download"]++
+	fail := s.failures["download"]
+	if len(fail) > 0 {
+		s.failures["download"] = fail[1:]
+	}
+	content, found := s.files[id]
+	s.mu.Unlock()
+	switch {
+	case tok != s.token:
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	case len(fail) > 0:
+		http.Error(w, http.StatusText(fail[0].Status), fail[0].Status)
+	case !found:
+		http.Error(w, "Not Found", http.StatusNotFound)
+	default:
+		_, _ = w.Write(content)
+	}
+}
+
+// Media is a file a user sends: the file_id the message carries, the size the
+// message declares (the content may be anything, or nothing), and the rest of what
+// the Bot API tells.
+type Media struct {
+	FileID   string
+	Name     string
+	MIME     string
+	Size     int64
+	Duration int
+	Caption  string
+}
+
+// UserSendsFile queues a message of u with a file of the kind document, voice or
+// photo. It is the same hand-made shape as UserSendsDocument.
+func (s *Server) UserSendsFile(u User, kind string, m Media) (int64, error) {
+	media := map[string]any{"file_id": m.FileID, "file_unique_id": "u-" + m.FileID, "file_size": m.Size}
+	if m.MIME != "" {
+		media["mime_type"] = m.MIME
+	}
+	if m.Name != "" {
+		media["file_name"] = m.Name
+	}
+	if m.Duration > 0 {
+		media["duration"] = m.Duration
+	}
+	var v any = media
+	if kind == "photo" {
+		// a photo comes in several sizes, the smallest first
+		small := map[string]any{"file_id": m.FileID + "-small", "file_unique_id": "u-" + m.FileID + "-small", "file_size": 100, "width": 90, "height": 90}
+		big := map[string]any{"file_id": m.FileID, "file_unique_id": "u-" + m.FileID, "file_size": m.Size, "width": 1280, "height": 960}
+		v = []any{small, big}
+	}
+	return s.userSendsMediaCaption(u, kind, v, m.Caption)
 }

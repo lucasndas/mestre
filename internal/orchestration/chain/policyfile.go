@@ -189,6 +189,13 @@ func parsePolicyFull(data []byte) (Settings, *classes.RiskPolicy, PolicyRules, e
 		}
 		st.PeopleDeadlines[rt] = d
 	}
+	if section, err = nodeYAML(&y.Resumo); err != nil {
+		return bad("resumo", err.Error())
+	} else if len(section) > 0 {
+		if st.Summary, err = ParseSummary(section); err != nil {
+			return Settings{}, nil, PolicyRules{}, err
+		}
+	}
 	risk := &classes.RiskPolicy{}
 	if section, err = nodeYAML(&y.Risco); err != nil {
 		return bad("risco", err.Error())
