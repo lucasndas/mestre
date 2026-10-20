@@ -104,6 +104,18 @@ func (s *Server) AddReviewAt(full string, n int, by, state, sha string) {
 	s.touch(s.repos[full], n)
 }
 
+// AddReviewBody adds a review with a text, as the engine marks its own.
+func (s *Server) AddReviewBody(full string, n int, by, state, sha, body string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.repos[full].pull(n)
+	v := s.reviewView(full, n, by, state, sha)
+	v["body"] = body
+	p.reviews = append(p.reviews, v)
+	s.nextID++
+	s.touch(s.repos[full], n)
+}
+
 // AddStatus adds a legacy commit status (success, pending, failure, error).
 func (s *Server) AddStatus(full, sha, context, state string) {
 	s.mu.Lock()

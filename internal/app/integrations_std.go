@@ -15,6 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/blocking"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
@@ -118,7 +119,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
-		Locked: r.lock.Locked, Logger: env.Log})
+		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
@@ -167,6 +168,11 @@ type stdRun struct {
 	// stage apps (githubcompose.go).
 	personal *github.Personal
 	installs *github.Installs
+	// orcp is the orchestration of the period, and approver and settings what
+	// applies the approvals on GitHub (approvalhost.go), made when it exists.
+	orcp     atomic.Pointer[Orchestration]
+	approver atomic.Pointer[approvals.Approver]
+	settings atomic.Pointer[approvals.Settings]
 
 	fence atomic.Pointer[guild.Fence]
 	chain atomic.Pointer[chain.Service]
@@ -321,6 +327,19 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.FreshnessRules == nil {
 		o.FreshnessRules = stdRules{r}
 	}
+	// the facts of the PRs for the policy, and what applies on GitHub what people decide
+	if o.ChainPRs == nil {
+		o.ChainPRs = r.source()
+	}
+	sinks := map[classes.RequestType]chain.Sink{
+		classes.RequestPR:           lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
+		classes.RequestMerge:        lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
+		classes.RequestRepoSettings: lateSink{func() chain.Sink { return soft(r.settings.Load()) }, r.alert.OwnerAlert},
+	}
+	for t, s := range o.ChainSinks { // a test that gives its own keeps it
+		sinks[t] = s
+	}
+	o.ChainSinks = sinks
 	// the GitHub of the workspaces, with the App Grão-Mestre; a test that gives its own keeps it
 	gh := grandMasterGitHub{r}
 	if _, off := o.GitHub.(unavailableGitHub); off {
@@ -367,6 +386,7 @@ func (r *stdRun) Close() {
 // Attach implements IntegrationRun.
 func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []ExternalFunc {
 	r.chain.Store(orc.Chain)
+	r.approvalSetup(orc)
 	r.routing.To = inboxDeliverer{orc}
 	if orc.TableRules != nil {
 		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)

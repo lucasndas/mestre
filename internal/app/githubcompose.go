@@ -40,16 +40,32 @@ func (r *stdRun) gmApp(ctx context.Context) string {
 // it got) for a repository and the permissions the reading uses; app is its name
 // for the quota ("" when it is not known yet: the quota is then followed apart).
 func (r *stdRun) gmRest(app string, perms map[string]string) *github.REST {
+	return r.restOf(github.RoleGrandMaster, app, perms)
+}
+
+// roleRest is the same for a fixed App by its role, named for the quota as it is
+// when the client is made.
+func (r *stdRun) roleRest(role string, perms map[string]string) *github.REST {
+	name := ""
+	if a, err := (&github.Registry{DB: r.env.DB}).Fixed(context.Background(), role); err == nil {
+		name = a.Name
+	}
+	return r.restOf(role, name, perms)
+}
+
+// restOf is the client of the fixed App of a role; its name is looked up at each
+// token, since the App may be made after the client.
+func (r *stdRun) restOf(role, app string, perms map[string]string) *github.REST {
 	return &github.REST{BaseURL: r.s.GitHubBase, HTTP: r.s.HTTP, Quota: r.quota, App: app,
 		Token: func(ctx context.Context, repo string) (string, error) {
 			if r.closed.Load() {
 				return "", errNoFence
 			}
-			id, err := github.Identities{Apps: &github.Registry{DB: r.env.DB}}.For(ctx, github.Who{Role: github.RoleGrandMaster})
+			a, err := (&github.Registry{DB: r.env.DB}).Fixed(ctx, role)
 			if err != nil {
-				return "", fmt.Errorf("the App Grão-Mestre: %w", err)
+				return "", fmt.Errorf("the fixed App %s: %w", role, err)
 			}
-			tok, err := r.tokens.Installation(ctx, github.Request{App: id.App, Repo: repo, Permissions: perms})
+			tok, err := r.tokens.Installation(ctx, github.Request{App: a.Name, Repo: repo, Permissions: perms})
 			if err != nil {
 				return "", err
 			}
@@ -218,7 +234,7 @@ func (r *stdRun) poller(orc *Orchestration) (*github.Poller, error) {
 	if orc.Workspaces == nil || orc.Tables == nil || orc.Inbox == nil {
 		return nil, errors.New("the orchestration has no workspaces, tables or inbox to read the events for")
 	}
-	sinks := github.Sinks{inbox.GitHubSink{S: orc.Inbox}}
+	sinks := github.Sinks{inbox.GitHubSink{S: orc.Inbox}, isolated{r.reviews(), r.env.Log, "reviews"}}
 	if orc.BaseSync != nil {
 		sinks = append(sinks, basesync.EventSink{Base: orc.BaseSync})
 	}

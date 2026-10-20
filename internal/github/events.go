@@ -617,6 +617,10 @@ func (p *Poller) eventOf(ctx context.Context, w Watch, repo string, spec listSpe
 	return ev, true, nil
 }
 
+// EndsWithMarker says the text ends with a marker of operation: what the Guild
+// itself wrote.
+func EndsWithMarker(body string) bool { return endsWithMarker(body) }
+
 // endsWithMarker says the text ends with a marker of operation, as what the
 // Guild writes does; a person who quotes one in the middle of a reply is not it.
 func endsWithMarker(body string) bool {

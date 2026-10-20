@@ -152,6 +152,10 @@ type OrchestrationOptions struct {
 	ChainSubDelegations chain.SubDelegations
 	// ChainPRs reads the PRs for the conditions of the approval policy.
 	ChainPRs chain.PRSource
+	// ChainSinks tell the owner of a type of request what became of it, besides
+	// the ones the orchestration makes (the points of approval and the extra
+	// costs): the application of an approval on GitHub.
+	ChainSinks map[classes.RequestType]chain.Sink
 	// FreshnessRules reads what the base branch of a repository asks of a PR:
 	// with it, the requests of a PR go through the gate of freshness
 	// (docs/github/acoes-por-nivel.md#merge), which proves the base integrated
@@ -666,7 +670,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
 			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
-			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}, Logger: o.Logger})
+			Sinks: chainSinks(o.ChainSinks, map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}), Logger: o.Logger})
 		if err != nil {
 			return nil, err
 		}
@@ -945,4 +949,17 @@ func questDone(o OrchestrationOptions) quests.DoneRules {
 		return o.QuestDone
 	}
 	return doneRules{o.ClassLibraries}
+}
+
+// chainSinks joins the sinks the orchestration makes with the ones it was given;
+// a type has one owner, and the ones of the orchestration win.
+func chainSinks(given, own map[classes.RequestType]chain.Sink) map[classes.RequestType]chain.Sink {
+	out := map[classes.RequestType]chain.Sink{}
+	for t, s := range given {
+		out[t] = s
+	}
+	for t, s := range own {
+		out[t] = s
+	}
+	return out
 }
