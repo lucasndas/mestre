@@ -695,7 +695,7 @@ function Test-Item2 {
     # Unix socket of ours, and who the server sees at the other end.
     if (-not (Initialize-Provider 'codex')) { Add-Sub 2 'SKIP' ('sonda direta do socket: ' + $script:ConfWhy['ready-codex']); return }
     $p7 = $null
-    try { $p7 = Get-Pwsh7 } catch { Add-Sub 2 'SKIP' ('sonda direta: PowerShell 7 indisponível: ' + $_.Exception.Message); return }
+    try { $p7 = Get-Pwsh7 } catch { Add-Sub 2 'SKIP' ('sonda direta: PowerShell 7 indisponível: ' + $_.Exception.Message); Test-CodexCrossIsolation; return }
     $dir = Join-Path $Work 'sock'
     if (Test-Path $dir) { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -703,7 +703,7 @@ function Test-Item2 {
     # and write on the socket file and read and execute on the folder (icacls does
     # not take that SID, so .NET).
     $logon = ((whoami.exe /groups) -join ' ') -match 'S-1-5-5-\d+-\d+'
-    if (-not $logon) { Add-Sub 2 'SKIP' 'sonda direta do socket: não achei o SID de logon desta sessão'; return }
+    if (-not $logon) { Add-Sub 2 'SKIP' 'sonda direta do socket: não achei o SID de logon desta sessão'; Test-CodexCrossIsolation; return }
     $logonSid = New-Object Security.Principal.SecurityIdentifier $Matches[0]
     $dacl = Get-Acl -LiteralPath $dir
     $dacl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($logonSid, 'ReadAndExecute', 'None', 'None', 'Allow')))
