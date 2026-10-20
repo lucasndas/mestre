@@ -1,12 +1,16 @@
 package chain_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
 
@@ -179,5 +183,59 @@ func TestTheTableMasterListsOnlyTheRequestsOfItsOwnTable(t *testing.T) {
 	gmList := w.cli(w.gm, "approval list", map[string]any{"state": "all"})
 	if all, _ := gmList.Data["text"].(string); !strings.Contains(all, "#"+itoa(foreign)) {
 		t.Errorf("the Grand Master lists %q, want the requests of every table", all)
+	}
+}
+
+// While the Mestre is locked no approval is applied (docs/aprovacoes/fluxo.md,
+// /travar): `approval decide` is refused by the gate, the request stays open and
+// no exception and no temporary rule is made; after the unlock it decides.
+// `approval reply` and `approval list` apply nothing and go on.
+func TestWhileTheMestreIsLockedApprovalDecideAppliesNothing(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	var locked atomic.Bool
+	gate := cli.NewGate(cli.GateConfig{
+		Profiles: cli.ProfilesFunc(func(_ context.Context, id string) cli.Profile {
+			switch id {
+			case w.master.ID:
+				return cli.Profile{Role: cli.RoleTableMaster}
+			case w.gm.ID:
+				return cli.Profile{Role: cli.RoleGrandMaster}
+			}
+			return cli.Profile{Role: cli.RoleCharacter}
+		}),
+		Next: w.fwd, Locked: func(context.Context) bool { return locked.Load() },
+	})
+	call := func(by characters.Character, cmd string, flags map[string]any, args ...string) localchan.Response {
+		if flags == nil {
+			flags = map[string]any{}
+		}
+		return gate.Forward(w.ctx, &localchan.Call{Request: localchan.Request{V: 1, ID: "x", AgentID: by.ID, Cmd: cmd, Args: localchan.TextArgs(args...), Flags: flags},
+			Caller: localchan.Caller{Identified: true, AgentID: by.ID}})
+	}
+	id := w.hookReq(t, dev, "npm install lodash", classes.RiskLow)
+	locked.Store(true)
+	for _, answer := range []string{"approve", "approve-pattern", "approve-for"} {
+		got := call(w.master, "approval decide", map[string]any{"reason": "ok", "for": "1h", "pattern": "npm install *"}, itoa(id), answer)
+		if got.OK || got.Error == nil || got.Error.Code != "locked" || got.ExitCode() != 3 {
+			t.Fatalf("%s while locked: %+v, want exit 3 locked", answer, got.Error)
+		}
+	}
+	if r := w.request(id); r.State != chain.Open || r.Decision != nil {
+		t.Fatalf("the request changed while locked: %+v", r)
+	}
+	if len(w.temp.rules) != 0 || len(w.cls.decrees[dev.ID]) != 0 || len(w.grants.decrees) != 0 {
+		t.Fatalf("something was granted while locked: rules %v, exceptions %v, decrees %v", w.temp.rules, w.cls.decrees[dev.ID], w.grants.decrees)
+	}
+	if got := call(w.gm, "approval autonomy", map[string]any{"table": w.table.ID, "reason": "voltar"}, "resume"); got.OK || got.Error == nil || got.Error.Code != "locked" {
+		t.Errorf("resume of the autonomy while locked: %+v, want locked", got.Error)
+	}
+	if got := call(w.master, "approval list", nil); !got.OK {
+		t.Errorf("list while locked: %+v, want it to go on", got.Error)
+	}
+	locked.Store(false)
+	if got := call(w.master, "approval decide", map[string]any{"reason": "ok"}, itoa(id), "approve"); !got.OK {
+		t.Fatalf("approve after the unlock: %+v", got.Error)
 	}
 }
