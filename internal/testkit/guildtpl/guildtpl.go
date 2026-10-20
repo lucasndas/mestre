@@ -46,6 +46,26 @@ func migrated() ([]byte, error) {
 	return template, tplErr
 }
 
+// Seed leaves the migrated database at path, creating its folder, unless a
+// file is there: for the code under test that opens the database itself
+// (app.Found), which then finds nothing left to apply.
+func Seed(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	b, err := migrated()
+	if err != nil {
+		return fmt.Errorf("guildtpl: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("guildtpl: %w", err)
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		return fmt.Errorf("guildtpl: %w", err)
+	}
+	return nil
+}
+
 // Open is guilddb.Open for a test: when no database exists at path yet (and
 // it is not a replica, which gets its schema from the replication), it starts
 // from the migrated copy, so Open only finds nothing left to apply.
@@ -60,6 +80,9 @@ func Open(ctx context.Context, path string, opts store.Options) (*store.DB, erro
 				return nil, fmt.Errorf("guildtpl: %w", err)
 			}
 		}
+	}
+	if opts.ReadConns <= 0 {
+		opts.ReadConns = 1
 	}
 	return guilddb.Open(ctx, path, opts)
 }
