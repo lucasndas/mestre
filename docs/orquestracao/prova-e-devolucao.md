@@ -80,6 +80,7 @@ done_requires:
 ## Regras e erros
 
 - `--proof` com critério que a missão não tem: 4 `not_found`, e o `done` não é registrado. Prova acima de 500 caracteres (padrão): 8 `too_large`. `--proof` junto de `--return`, ou numa tarefa sem missão: 2 `usage`.
+- Texto com cara de segredo em `--proof`, `--return` ou no resumo: 3 `secret_detected`, como nos demais comandos ([convenções da CLI](../cli/convencoes.md)); a prova vai para a issue e para o pergaminho.
 - `--cause` fora da lista, mais de 3 `--where`, ou `--cause`/`--where` sem `--return`: 2 `usage`.
 - Uma verificação por etapa de cada vez: um segundo `done` durante a verificação sai com 7 `verification_running`.
 - A verificação que estoura o `timeout` do comando conta como vermelha, com o motivo "tempo esgotado".

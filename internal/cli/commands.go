@@ -289,7 +289,7 @@ func Default() *Registry {
 			Usage:   `mestre done "<summary>" [--file <file | ->] [--proof "C<n>=<proof>"]… [--return "<reason>" [--cause <cause>] [--where <file:line>]…]`,
 			Example: `mestre done "Login implementado, testes passando"`,
 			Args:    []Arg{{"<summary>", "what you did, up to 4,000 characters; the engine takes the changed files from git"}},
-			MinArgs: 1, MaxArgs: 1, Who: WhoAnyone, Queueable: true,
+			MinArgs: 1, MaxArgs: 1, Who: WhoAnyone, Queueable: true, Secret: true,
 			Flags: []Flag{
 				{"file", FlagString, "a Markdown file (up to 64 KiB) with the summary, for one over 4,000 characters; `-` is the standard input"},
 				{"return", FlagString, "hand the work back to the earlier step the quest names, with the reason"},

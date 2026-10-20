@@ -153,6 +153,18 @@ func (s *Service) proposalOf(r chain.Request, g chain.DecreeGrant) (Proposal, er
 		}
 		p.Effect = Effect{Kind: EffectPermission, Deny: grant}
 	case chain.AnswerDelegate:
+		if r.Risk.Risk == classes.RiskMedium {
+			// The Grand Master already decides a medio inside the policy: whoever
+			// wants it looser makes a decree of policy, for an Administrator or
+			// above (docs/aprovacoes/delegacao.md#delegação-de-decisão).
+			p.Effect = Effect{Kind: EffectPolicy, Setting: string(r.Type), Loosens: true}
+			p.Target = Target{Kind: TargetWorkspace, Name: r.Workspace}
+			p.Mesa = r.Table
+			if g.For > 0 {
+				p.Until = s.clk.Now().Add(g.For)
+			}
+			break
+		}
 		p.Effect = Effect{Kind: EffectDelegation, Setting: string(r.Type)}
 		p.Target = Target{Kind: TargetWorkspace, Name: r.Workspace}
 		p.Mesa = r.Table

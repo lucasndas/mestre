@@ -25,8 +25,8 @@ type Edit struct {
 func (b *Bot) Edit(ctx context.Context, e Edit) error {
 	var chat, msg int64
 	var state string
-	var params string
-	err := b.o.DB.Reader().QueryRowContext(ctx, `SELECT chat_id, message_id, state, params FROM telegram_outbox WHERE id = ?`, e.Outbox).Scan(&chat, &msg, &state, &params)
+	var params, workspace, mesa string
+	err := b.o.DB.Reader().QueryRowContext(ctx, `SELECT chat_id, message_id, state, params, workspace, mesa FROM telegram_outbox WHERE id = ?`, e.Outbox).Scan(&chat, &msg, &state, &params, &workspace, &mesa)
 	if errors.Is(err, sql.ErrNoRows) {
 		return errors.New("telegram: no such message")
 	}
@@ -35,11 +35,13 @@ func (b *Bot) Edit(ctx context.Context, e Edit) error {
 	}
 	text := Split(b.maskText(e.Text), partSize)[0]
 	p := map[string]any{"chat_id": chat, "message_id": msg}
-	if h, err := ToHTML(text); err == nil {
+	h, plain, ok := render(headOf(e.UserID, workspace, mesa), text)
+	if ok {
 		p["text"], p["parse_mode"] = b.o.Mask(h), "HTML"
 	} else {
-		p["text"] = text
+		p["text"] = plain
 	}
+	text = plain
 	var markup any = map[string]any{"inline_keyboard": [][]map[string]string{}}
 	if len(e.Buttons) > 0 {
 		var rows [][]map[string]string
