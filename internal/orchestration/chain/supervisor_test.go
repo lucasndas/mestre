@@ -371,7 +371,14 @@ func TestThePauseIsAuditedWithWhoAndWhyAndTheLevelRulesHoldForPausingAndResuming
 	table43, master43, _ := w.otherTable()
 	call := func(by characters.Character, cmd string, flags map[string]any) localchan.Response {
 		t.Helper()
-		return w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: cmd, Flags: flags}, Caller: localchan.Caller{Identified: true, AgentID: by.ID}})
+		// the CLI resolves two words: pause or resume is the argument
+		args := localchan.TextArgs("pause")
+		if strings.HasSuffix(cmd, " resume") {
+			cmd, args = strings.TrimSuffix(cmd, " resume"), localchan.TextArgs("resume")
+		} else {
+			cmd = strings.TrimSuffix(cmd, " pause")
+		}
+		return w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: cmd, Args: args, Flags: flags}, Caller: localchan.Caller{Identified: true, AgentID: by.ID}})
 	}
 	// the Grand Master by the command
 	resp := call(w.gm, "approval autonomy pause", map[string]any{"table": w.table.ID, "reason": "muitas falhas"})

@@ -226,6 +226,7 @@ type Engine struct {
 	rt       *machineRuntime
 	orc      atomic.Pointer[Orchestration] // the orchestration of the period that acts
 	sheets   atomic.Pointer[machinesheet.Registry]
+	hk       atomic.Pointer[hook.Engine]     // the hook engine of this machine, which also decides the pre-runs
 	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
 	srvp     atomic.Pointer[protocol.Server] // the protocol server of the period of the Citadel
 	sent     replies                         // the ends of the table.done the Citadel waits for
@@ -698,6 +699,7 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 		profiles = rulesProfiles{src: rules}
 	}
 	hk := e.hookEngine(rules)
+	e.hk.Store(hk)
 	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker, Locked: e.locked})
 	srv := localchan.NewServer(localchan.Config{
 		Clock: e.clk, Identifier: id, Forwarder: gate, Instance: e.cfg.Instance, EngineVersion: e.deps.Version, Logger: e.log,
