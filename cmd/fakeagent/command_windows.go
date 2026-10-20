@@ -23,7 +23,11 @@ func command(ctx context.Context, line, dir string, env []string) *exec.Cmd {
 // hookCommand runs a hook line with the shell each provider uses on Windows
 // (docs/sessao-zero/mesa.md#verificar-na-implementação): Claude Code the
 // bash of Git for Windows, Codex PowerShell (-NoProfile -Command, the shell
-// it detects for the user), Antigravity cmd /c.
+// it detects for the user), Antigravity cmd /c. The Antigravity case is built
+// the way agy builds it, exec.Command("cmd", "/c", line): Go quotes the line
+// as one argument (backslash-escaping its own quotes) and there is no /s, so
+// a hook line that only works under the lenient cmd /s /c form fails here as
+// it fails in the real agy.
 func hookCommand(ctx context.Context, p fakeagent.Provider, line, dir string, env []string) *exec.Cmd {
 	var c *exec.Cmd
 	switch p {
@@ -31,6 +35,8 @@ func hookCommand(ctx context.Context, p fakeagent.Provider, line, dir string, en
 		c = exec.CommandContext(ctx, gitBash(), "-c", line)
 	case fakeagent.Codex:
 		c = exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", line)
+	case fakeagent.Antigravity:
+		c = exec.CommandContext(ctx, "cmd", "/c", line)
 	default:
 		return command(ctx, line, dir, env)
 	}
