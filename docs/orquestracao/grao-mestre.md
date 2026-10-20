@@ -54,7 +54,7 @@ loja · 3 mesas
 Próximo: Checkout volta ao trabalho quando você aprovar
 ```
 
-Cada pendência traz o dono (nunca "alguém") e o motivo, com o vocabulário do [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md); pausa por cota usa a mensagem de [limites de uso](../plataforma/limites-de-uso.md).
+Cada pendência traz o dono (nunca "alguém") e o motivo, com o vocabulário do [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md); pausa por cota usa a mensagem de [limites de uso](../plataforma/limites-de-uso.md). No código é `internal/orchestration/progress`: lê as mesas e os pedidos abertos do banco, vai ao Dono e aos Administradores pelo bot ao fim de cada missão e a cada 2 h com mesa em `working`; o painel a mostra quando existir (M6).
 
 ### Onde roda
 
