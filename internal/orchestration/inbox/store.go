@@ -327,6 +327,16 @@ func (s *Store) LastUserDelivered(ctx context.Context, target string) (Item, boo
 	return items[0], true, nil
 }
 
+// LastUser is the most recent message of a user to a character, whatever its
+// state.
+func (s *Store) LastUser(ctx context.Context, target string) (Item, bool, error) {
+	items, err := s.list(ctx, `target = ? AND kind = 'user' ORDER BY seq DESC LIMIT 1`, target)
+	if err != nil || len(items) == 0 {
+		return Item{}, false, err
+	}
+	return items[0], true, nil
+}
+
 // All lists every item of a character, oldest first (for tests and the panel).
 func (s *Store) All(ctx context.Context, target string) ([]Item, error) {
 	return s.list(ctx, `target = ? ORDER BY seq`, target)
