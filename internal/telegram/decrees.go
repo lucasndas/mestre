@@ -122,7 +122,7 @@ func (c *DecreeChannel) click(ctx context.Context, k Click) (string, string, err
 	case err != nil:
 		return "", "", c.say(err)
 	}
-	return fmt.Sprintf("Decreto %d.", d.Number), c.confirmed(d), nil
+	return fmt.Sprintf("Decreto %d.", d.Number), c.confirmed(ctx, d), nil
 }
 
 // askPIN opens the request of PIN of the proposal and asks it.
@@ -174,10 +174,10 @@ func (c *DecreeChannel) say(err error) error {
 	return err
 }
 
-func (c *DecreeChannel) confirmed(d decrees.Decree) string {
+func (c *DecreeChannel) confirmed(ctx context.Context, d decrees.Decree) string {
 	text := fmt.Sprintf("Decreto %d ativo: %s.", d.Number, d.Summary())
 	if !d.Until.IsZero() {
-		text += " Vale até " + d.Until.UTC().Format("02/01/2006 15:04 UTC") + "."
+		text += " Vale até " + c.Svc.Moment(ctx, d.Until) + "."
 	}
 	if d.State == decrees.Suspended {
 		text += " Ficou suspenso: ele se opõe a outro decreto do mesmo nível, e os dois autores e o Dono foram avisados."
@@ -207,7 +207,7 @@ func (c *DecreeChannel) pinProposal(ctx context.Context, u users.User, requestID
 		c.tell(ctx, u, "Não gravei o decreto: "+c.say(cerr).Error())
 		return
 	}
-	c.tell(ctx, u, c.confirmed(d))
+	c.tell(ctx, u, c.confirmed(ctx, d))
 }
 
 func (c *DecreeChannel) tell(ctx context.Context, u users.User, text string) {
@@ -322,7 +322,7 @@ func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
 		case v.Until.IsZero():
 			line += " · permanente"
 		default:
-			line += " · até " + v.Until.UTC().Format("02/01 15:04 UTC")
+			line += " · até " + c.Svc.Moment(ctx, v.Until)
 		}
 		switch {
 		case v.State == decrees.Suspended:
@@ -348,7 +348,7 @@ func (c *DecreeChannel) list(ctx context.Context, call Call) (string, error) {
 			if r.Action != nil {
 				what = r.Action.String()
 			}
-			line := fmt.Sprintf("regra temporária de mesa %d · mesa %s · classe %s · %s · até %s", r.ID, r.Table, r.Class, what, r.Until.UTC().Format("02/01 15:04 UTC"))
+			line := fmt.Sprintf("regra temporária de mesa %d · mesa %s · classe %s · %s · até %s", r.ID, r.Table, r.Class, what, c.Svc.Moment(ctx, r.Until))
 			if r.State == tablerules.Suspended {
 				line += " · SUSPENSA"
 			}
