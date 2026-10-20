@@ -57,7 +57,7 @@ type DoneResult struct {
 	// with the queued form instead (cli.Queued).
 	Queued bool `json:"queued"`
 	// Verification is "pending" while the verification of the class runs, and
-	// "unverified" when the step ended with no command to verify with.
+	// "unverified" when the step ended with no command to verify with, "no_command" when the sync paused for lack of one.
 	Verification string `json:"verification,omitempty"`
 	// ReturnedTo is the step the work went back to; nil when it did not.
 	ReturnedTo *string `json:"returned_to"`

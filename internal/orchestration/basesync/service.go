@@ -130,6 +130,17 @@ func (s *Service) Behind(ctx context.Context, t tables.Table) (bool, string, err
 	return !has, string(tip), nil
 }
 
+// Moved says whether the branch of the table still lacks the tip of the base:
+// the gate the step sync passes again before it ends (quests.Options.BaseMoved).
+func (s *Service) Moved(ctx context.Context, workspace, table string) (bool, error) {
+	t, err := s.o.Tables.Get(ctx, workspace, table)
+	if err != nil {
+		return false, err
+	}
+	behind, _, err := s.Behind(ctx, t)
+	return behind, err
+}
+
 // AfterFetch is told that the mirror of a workspace was fetched: every table at
 // work or in review that lacks the base gets its step `sync`.
 func (s *Service) AfterFetch(ctx context.Context, slug string) {
@@ -273,25 +284,7 @@ func (s *Service) syncs(ctx context.Context, t tables.Table) ([]quests.Quest, er
 	return out, nil
 }
 
-func isSyncName(name string) bool {
-	rest, ok := strings.CutPrefix(strings.ToLower(name), QuestName)
-	if !ok {
-		return false
-	}
-	if rest == "" {
-		return true
-	}
-	n, ok := strings.CutPrefix(rest, "-")
-	if !ok || n == "" {
-		return false
-	}
-	for _, r := range n {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
+func isSyncName(name string) bool { return quests.IsSyncName(name) }
 
 // dev finds the Dev of the table: the character that did the last step that
 // changed code and is still alive.
