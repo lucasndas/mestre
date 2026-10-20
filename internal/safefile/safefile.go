@@ -141,7 +141,9 @@ func Stat(path string) (Info, error) {
 // Options are the options of Write.
 type Options struct {
 	// Mode of the file on Linux (the group is the one of the folder); zero
-	// is Mode.
+	// is Mode. On Windows only the write bit counts: a mode without it makes
+	// the file READONLY (and a read-only file that is replaced or removed is
+	// made writable first).
 	Mode fs.FileMode
 	// Guard, if not nil, sees the state of the file right before the rename
 	// and stops the write with its error (the file was rewritten since it

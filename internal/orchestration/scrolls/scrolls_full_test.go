@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -48,13 +47,11 @@ func TestWhenAScrollChangesInTheCitadelTheCopyInTheWorktreeOfTheMachineIsUpdated
 	}
 	// the copy is read-only for the characters, and what they do to it has no
 	// effect: the next change writes it again
-	if runtime.GOOS != "windows" { // the mode is ignored on Windows, which uses the ACL of the folder
-		if fi, err := os.Stat(copyPath); err != nil || fi.Mode().Perm()&0o222 != 0 {
-			t.Errorf("the copy is writable: %v %v", fi, err)
-		}
-		if err := os.Chmod(copyPath, 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if fi, err := os.Stat(copyPath); err != nil || fi.Mode().Perm()&0o222 != 0 { // READONLY on Windows
+		t.Errorf("the copy is writable: %v %v", fi, err)
+	}
+	if err := os.Chmod(copyPath, 0o644); err != nil { // what an agent can do to its own copy
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(copyPath, []byte("editado por fora"), 0o644); err != nil {
 		t.Fatal(err)
@@ -70,6 +67,9 @@ func TestWhenAScrollChangesInTheCitadelTheCopyInTheWorktreeOfTheMachineIsUpdated
 		t.Errorf("source = %q", b)
 	}
 	// a copy lost is made again for the whole table
+	if err := os.Chmod(copyPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Remove(copyPath); err != nil {
 		t.Fatal(err)
 	}
