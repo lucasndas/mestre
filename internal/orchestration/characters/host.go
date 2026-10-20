@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -238,15 +239,37 @@ func (h *TerminalHost) Reconcile(ctx context.Context) (HostReport, error) {
 	if rep == nil {
 		return HostReport{}, err
 	}
-	out := HostReport{Interrupted: rep.Interrupted}
+	out := HostReport{}
+	for _, id := range rep.Interrupted {
+		if !strings.HasPrefix(id, VerificationTerminalPrefix) {
+			out.Interrupted = append(out.Interrupted, id)
+		}
+	}
 	for _, t := range rep.Reconnected {
+		if strings.HasPrefix(t.ID(), VerificationTerminalPrefix) {
+			// a command of a verification that the fall of the engine left running
+			// belongs to no character: it ends here, with its tree
+			if _, serr := t.Stop(ctx, terminal.StopPlan{}); serr != nil {
+				err = errors.Join(err, serr)
+			}
+			continue
+		}
 		if h.dir != nil {
 			h.dir.Add(t)
 		}
 		out.Reconnected = append(out.Reconnected, h.process(t))
 	}
+	// what the verifications left in the registry goes with them
+	if _, perr := h.mgr.Prune(ctx, VerificationTerminalPrefix); perr != nil {
+		err = errors.Join(err, perr)
+	}
 	return out, err
 }
+
+// VerificationTerminalPrefix starts the id of the terminal of a command of the
+// verification (no character): Reconcile ends and forgets the ones left by a
+// fall of the engine.
+const VerificationTerminalPrefix = "verifica-"
 
 // SetStatus implements Host.
 func (h *TerminalHost) SetStatus(ctx context.Context, terminalID, status string) error {

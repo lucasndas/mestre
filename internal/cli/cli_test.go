@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -40,6 +41,12 @@ type proc struct {
 	// files is the file system the CLI reads (nil: none), stdin its input.
 	files map[string][]byte
 	stdin string
+	// cwd is the current folder (default /work), links the links of the file system
+	// (path to target).
+	cwd   string
+	links map[string]string
+	// gitRoot, when set, is the only folder that has a .git.
+	gitRoot string
 }
 
 // newProc registers a process in the terminal of a character (or none) and
@@ -57,7 +64,7 @@ func (p *proc) run(ctx context.Context, args ...string) result {
 	var stdout, stderr bytes.Buffer
 	code := cli.Run(ctx, cli.Env{
 		Getenv: func(k string) string { return p.env[k] },
-		Stdout: &stdout, Stderr: &stderr, Clock: p.rig.Clock, Cwd: "/work", Version: "1.2.3",
+		Stdout: &stdout, Stderr: &stderr, Clock: p.rig.Clock, Cwd: cmp.Or(p.cwd, "/work"), Version: "1.2.3",
 		Dial: func(string) localchan.Dialer {
 			d := p.rig.Dialer(p.host)
 			return func(ctx context.Context) (net.Conn, error) {
@@ -65,9 +72,20 @@ func (p *proc) run(ctx context.Context, args ...string) result {
 				return d(ctx)
 			}
 		},
-		FileExists: func(string) bool { return true },
-		Commands:   p.commands,
-		Stdin:      strings.NewReader(p.stdin),
+		FileExists: func(path string) bool {
+			return p.gitRoot == "" || filepath.Base(path) != ".git" || filepath.ToSlash(filepath.Dir(path)) == p.gitRoot
+		},
+		RealPath: func(path string) (string, error) {
+			if p.files == nil {
+				return filepath.EvalSymlinks(path) // the folders of the test are real
+			}
+			if to, ok := p.links[filepath.ToSlash(path)]; ok {
+				return filepath.FromSlash(to), nil
+			}
+			return filepath.Clean(path), nil
+		},
+		Commands: p.commands,
+		Stdin:    strings.NewReader(p.stdin),
 		ReadFile: func(path string, max int64) ([]byte, error) {
 			b, ok := p.files[filepath.ToSlash(path)]
 			if !ok {

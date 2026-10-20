@@ -63,6 +63,7 @@ var exitByCode = map[string]int{
 	"class_denied":        ExitDenied,
 	"not_connected":       ExitDenied,
 	"secret_detected":     ExitDenied,
+	"path_not_allowed":    ExitDenied,
 	"pinned":              ExitDenied,
 	"permission_prompt":   ExitDenied,
 	"not_visible":         ExitNotFound,

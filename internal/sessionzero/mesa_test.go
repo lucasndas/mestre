@@ -560,7 +560,9 @@ func TestAClassNameCannotLeaveTheFolder(t *testing.T) {
 
 type attachFake struct{ files []sessionzero.File }
 
-func (a *attachFake) For(context.Context, string) ([]sessionzero.File, error) { return a.files, nil }
+func (a *attachFake) For(context.Context, string, string) ([]sessionzero.File, error) {
+	return a.files, nil
+}
 
 func TestAttachmentsAreCopiedAndKept(t *testing.T) {
 	t.Parallel()

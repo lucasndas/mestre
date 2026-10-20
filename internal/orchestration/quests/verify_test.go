@@ -150,6 +150,10 @@ func TestARedVerificationLeavesTheStepRunningWithTheOutputAndAGreenOneEndsIt(t *
 	if v.count() != 2 || v.runs[0].Branch != w.table.Branch {
 		t.Errorf("runs = %+v", v.runs)
 	}
+	// the done pins the commit it was given at: that is what the executor proves
+	if len(v.runs[0].Head) != 40 {
+		t.Errorf("the verification was not pinned to the head of the done: %+v", v.runs[0])
+	}
 }
 
 // CA-PROVA-04
@@ -283,5 +287,31 @@ func TestASecondDoneDuringTheVerificationIsRefusedAndATimeoutIsRed(t *testing.T)
 	}
 	if r := w.done("Dev Claude 1", map[string]any{"cause": "urgente"}, "x"); r.OK || r.ExitCode() != localchan.ExitUsage {
 		t.Errorf("--cause urgente = %+v", r)
+	}
+}
+
+// A green verification proves the commit the done was given at: a branch that
+// moved while it ran does not end the step.
+func TestAGreenVerificationOfACommitThatMovedDoesNotEndTheStep(t *testing.T) {
+	t.Parallel()
+	v := &fakeVerifier{confirmed: true, hold: make(chan struct{}), started: make(chan struct{})}
+	w := verifyWorld(t, v, verifyRules{})
+	n := w.issueOf("- [ ] C1 um\n")
+	q := w.run(w.create(devOnly(fmt.Sprintf("issue: %d\n", n))))
+	w.commit("feat: login", map[string]string{"login.go": "1"})
+
+	if res := resultOf(t, w.done("Dev Claude 1", map[string]any{"proof": []string{"C1=TestLogin"}}, "pronto")); res.Verification != "pending" {
+		t.Fatalf("verification = %q", res.Verification)
+	}
+	<-v.started
+	w.commit("feat: more", map[string]string{"more.go": "1"}) // the character goes on
+	close(v.hold)
+	w.orc.Quests.WaitVerifications()
+	if got := w.quest(q.ID); got.State == quests.Completed {
+		t.Fatal("the step ended on a green of a commit that is no longer the head")
+	}
+	w.wantStates(q, map[string]quests.StepState{"dev": quests.StepRunning})
+	if items := w.systemItems("Dev Claude 1"); !strings.Contains(items, "andou enquanto ela rodava") {
+		t.Errorf("the character was not told:\n%s", items)
 	}
 }

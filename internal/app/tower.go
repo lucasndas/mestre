@@ -137,6 +137,13 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
+	// the attachments the replica names for the tables of this Tower are copied into their
+	// worktrees (towerattach.go), after the files that came before the rows
+	attached, err := e.towerAttachmentCopies(db)
+	if err != nil {
+		return transition{err: err}
+	}
+	rcfg.OnApplied = e.towerCatchUp(attached, &attachSync{})
 	replica, err := replication.NewReplica(ctx, rcfg)
 	if err != nil {
 		return transition{err: err}
@@ -177,6 +184,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	e.registerTowerCharacters(router)
 	tableHalf := &lateTower{}
 	e.registerTowerTables(router, tableHalf)
+	e.registerTowerAttachments(router, attached)
 	e.registerTowerScrolls(router)
 	// The effective rules of the characters of this machine: kept in the
 	// machine database, with the snapshot for the degraded hook
@@ -228,7 +236,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		return transition{err: err}
 	}
 	replica.Attach(client.Link())
-	if half, err := e.newTowerTables(client.Link()); err != nil {
+	if half, err := e.newTowerTables(client.Link(), attached); err != nil {
 		e.log.Warn("app: this machine cannot keep worktrees of tables", "err", err)
 	} else {
 		tableHalf.p.Store(half)

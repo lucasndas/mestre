@@ -613,8 +613,9 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	}
 	var cites replication.Cites
 	if files != nil {
-		cites = replicationCites()
+		cites = joinCites(replicationCites(), attachCites(filesWorkspaces))
 	}
+	var citesMirrors func(store.Change) []string
 	var mirrors *replication.Mirrors
 	if hosted != nil {
 		// the mirror of each workspace goes to the Towers (docs/guilda/replicacao.md#arquivos-e-espelhos)
@@ -623,9 +624,12 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		}
 		sweepBundles(e.paths.mirrorBundles(), e.log)
 		mirrors = replication.NewMirrors(hosted.Workspaces.Mirrors(), e.paths.mirrorBundles())
+		if abs, err := filepath.Abs(e.paths.Workspaces); err == nil {
+			citesMirrors = mirrorCites(abs) // the rows that name a commit of a mirror wait for it
+		}
 	}
 	primary, err := replication.NewPrimary(ctx, replication.PrimaryConfig{
-		Files: files, Cites: cites, Mirrors: mirrors,
+		Files: files, Cites: cites, Mirrors: mirrors, CitesMirrors: citesMirrors,
 		DB: db, Clock: e.clk, Dir: e.paths.snapshots(), Logger: e.log,
 		Roster: replication.RosterFunc(func(ctx context.Context, id string) (bool, error) {
 			m, err := guild.MachineOf(ctx, db, id)
