@@ -442,7 +442,7 @@ func TestTheLockListsEveryPageAndNeverTrustsTheETagOfTheFirstOne(t *testing.T) {
 // of the fence, and a demotion cancels it (Part of CA-TRAVA-06).
 func TestTheReconciliationEndsAtTheLeaseAndIsCancelledByTheDemotion(t *testing.T) {
 	t.Parallel()
-	run := func(t *testing.T, stop func(f *guild.Fence)) (ended error, f *guild.Fence) {
+	run := func(t *testing.T, stop func(f *guild.Fence)) (f *guild.Fence, ended error) {
 		t.Helper()
 		clk := clock.Real{}
 		rig := newLockRig(t, clk)
@@ -472,23 +472,25 @@ func TestTheReconciliationEndsAtTheLeaseAndIsCancelledByTheDemotion(t *testing.T
 		synctest.Wait()
 		select {
 		case err := <-done:
-			return err, f
+			return f, err
 		default:
 			t.Fatal("the reconciliation was not ended")
-			return nil, f
+			return f, nil
 		}
 	}
 	t.Run("the lease", func(t *testing.T) {
+		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
-			err, f := run(t, func(*guild.Fence) { advance(guild.LeaseValidity) })
+			f, err := run(t, func(*guild.Fence) { advance(guild.LeaseValidity) })
 			if !errors.Is(err, context.DeadlineExceeded) || f.State() != guild.FenceWaiting {
 				t.Fatalf("ended with %v, fence %s; want the deadline and the fence still waiting", err, f.State())
 			}
 		})
 	})
 	t.Run("the demotion", func(t *testing.T) {
+		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
-			err, f := run(t, func(f *guild.Fence) { f.Demote() })
+			f, err := run(t, func(f *guild.Fence) { f.Demote() })
 			if !errors.Is(err, context.Canceled) || f.State() != guild.FenceDemoted {
 				t.Fatalf("ended with %v, fence %s; want it cancelled and the fence demoted", err, f.State())
 			}

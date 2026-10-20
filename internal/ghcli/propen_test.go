@@ -144,7 +144,7 @@ func TestTheRefusalsOfGitHubAreToldApart(t *testing.T) {
 //
 // Not parallel: it listens to the default logger of the process while the
 // commands run, and the parallel tests of the package wait for it.
-func TestASecretInTheDiffStopsTheSendingAndIsNeverShown(t *testing.T) {
+func TestASecretInTheDiffStopsTheSendingAndIsNeverShown(t *testing.T) { //nolint:paralleltest // it listens to the default logger of the process
 	var logged bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})))
