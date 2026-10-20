@@ -43,6 +43,12 @@ func TestChooseAsksWithTheRecommendedOptionFirstAndTheAnswerComesOnceAsAMessageO
 	if len(w.answers) != 0 {
 		t.Fatal("something was passed on before the answer")
 	}
+	// the click of another user, even of the same workspace, counts for nothing
+	_, biaTG := w.user("Bia", users.Administrator, "loja")
+	w.click(biaTG, msg, keys["Nova mesa"])
+	if len(w.answers) != 0 {
+		t.Fatalf("the click of another user was taken as the answer: %d answers", len(w.answers))
+	}
 	w.click(anaTG, msg, keys["Nova mesa"])
 	if len(w.answers) != 1 {
 		t.Fatalf("%d answers, want one", len(w.answers))

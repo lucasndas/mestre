@@ -1,12 +1,14 @@
 package ghcli_test
 
 import (
+	"context"
 	"database/sql"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
 
 // pushes are the refspecs sent to the remote of GitHub.
@@ -98,27 +100,40 @@ func TestAForcedPushIsOnlyForTheMasterOfTheTable(t *testing.T) {
 	}
 }
 
-// Part of CA-CLI-GH-05: the sending that GitHub refuses (the workflows
-// permission, signatures, a protection) is told apart, and nothing is worked around.
+// CA-GH-ACOES-07
+// Part of CA-CLI-GH-05 (the full suite has it with the event): the sending that GitHub refuses (the workflows
+// permission, signatures, a protection) is told apart, nothing is worked around
+// (the sending is tried once), and for the two that only the Owner or the Grand
+// Master can lift the Grand Master gets the event with the reason.
 func TestTheRefusalsOfGitHubAreToldApart(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		err   error
-		exit  int
-		code  string
-		field string
+		err    error
+		exit   int
+		code   string
+		toldGM bool
 	}{
-		"workflows permission": {gitxErr("workflow"), 3, "workflow_permission", ""},
-		"signatures":           {gitxErr("signature"), 3, "signature_required", ""},
-		"protection":           {gitxErr("protected"), 3, "protected", ""},
-		"history":              {gitxErr("ff"), 7, "conflict", ""},
+		"workflows permission": {gitxErr("workflow"), 3, "workflow_permission", true},
+		"signatures":           {gitxErr("signature"), 3, "signature_required", true},
+		"protection":           {gitxErr("protected"), 3, "protected", false},
+		"history":              {gitxErr("ff"), 7, "conflict", false},
 	} {
 		r := newRig(t)
 		prOfTheTable(t, r)
+		var told []string
+		r.h.Refused = func(_ context.Context, c characters.Character, code, reason string) {
+			told = append(told, c.Table+" "+code+": "+reason)
+		}
 		r.git.FailNextPush(tc.err)
 		got := r.run("tm", "pr update", nil)
 		if got.OK || got.Exit != tc.exit || got.Code != tc.code {
 			t.Errorf("%s: %+v, want exit %d %s", name, got, tc.exit, tc.code)
+		}
+		if len(r.pushes()) != 1 {
+			t.Errorf("%s: the sending was tried %d times, want once: %q", name, len(r.pushes()), r.pushes())
+		}
+		if tc.toldGM != (len(told) == 1) || tc.toldGM && (!strings.HasPrefix(told[0], "42-login "+tc.code+": ") || strings.HasSuffix(told[0], ": ")) {
+			t.Errorf("%s: the Grand Master was told %q, want told=%v with the code and a reason", name, told, tc.toldGM)
 		}
 	}
 }
@@ -202,18 +217,35 @@ func TestTheWorkflowsOfTheClassDecideTheSendingOfThemInTheDiff(t *testing.T) {
 	}
 }
 
-// Part of CA-CLI-GH-13: the criteria without proof stop the opening.
+// CA-CLI-GH-13: the criteria without proof stop the opening (exit 7
+// criteria_unproven citing C3, nothing sent); with C3 proved the pull request
+// opens, the marks of block that the agent wrote in the body are taken out, and
+// the block criterios is written only by `pr update --block criterios`.
 func TestCriteriaWithoutProofStopTheOpening(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	r.criteria.open = []string{"C3"}
-	got := r.run("tm", "pr open", nil)
+	body := "Login.\n\n<!-- mestre:bloco=criterios -->\nC1, C2 e C3 provados.\n<!-- /mestre:bloco -->"
+	got := r.run("tm", "pr open", map[string]any{"body": body})
 	if got.OK || got.Exit != 7 || got.Code != "criteria_unproven" || !strings.Contains(got.Error, "C3") || len(r.pushes()) != 0 {
 		t.Fatalf("open: %+v pushes %q", got, r.pushes())
 	}
 	r.criteria.open = nil
-	if got := r.run("tm", "pr open", nil); !got.OK {
-		t.Errorf("proved: %+v", got)
+	got = r.run("tm", "pr open", map[string]any{"body": body})
+	if !got.OK {
+		t.Fatalf("proved: %+v", got)
+	}
+	n := int(got.Data["number"].(float64))
+	if pb := r.gh.PullBody(repoFull, n); strings.Contains(pb, "<!-- mestre:bloco=criterios -->") {
+		t.Fatalf("the body written by the agent made a block: %q", pb)
+	}
+	head := strings.Repeat("c", 40)
+	r.gh.SetPull(repoFull, n, head, false, "clean")
+	if up := r.run("tm", "pr update", map[string]any{"block": "criterios", "expect-head": head}, "C1, C2 e C3 provados."); !up.OK {
+		t.Fatalf("pr update --block criterios: %+v", up)
+	}
+	if pb := r.gh.PullBody(repoFull, n); !strings.Contains(pb, "<!-- mestre:bloco=criterios -->") || !strings.Contains(pb, "C1, C2 e C3 provados.") {
+		t.Errorf("the block criterios is not in the body: %q", pb)
 	}
 }
 
@@ -409,5 +441,30 @@ func TestThePushSendsTheCommitThatWasReadNotWhatTheBranchBecame(t *testing.T) {
 	}
 	if content, err := r.git.Handle(r.remote).Data().ReadFile("42-login", "src/late.ts"); err == nil {
 		t.Errorf("a commit that was not read went out: %q", content)
+	}
+}
+
+// The sending of workflows by `pr update`: with git.workflows never it is refused
+// with workflow_not_allowed and the Grand Master is told; with ask nothing is
+// sent and the request waits for the approval bound to the head.
+func TestThePrUpdateOfWorkflowsIsRefusedAndTellsTheGrandMasterOrWaitsForTheApproval(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	var told []string
+	r.h.Refused = func(_ context.Context, c characters.Character, code, reason string) {
+		told = append(told, code+" "+c.Table+": "+reason)
+	}
+	r.mirror.Commit("42-login", "ci: change", map[string]string{".github/workflows/ci.yml": "name: ci2\n"})
+	if got := r.run("tm", "pr update", nil); got.OK || got.Exit != 3 || got.Code != "workflow_not_allowed" || len(r.pushes()) != 0 {
+		t.Fatalf("never: %+v pushes %q", got, r.pushes())
+	}
+	if len(told) != 1 || !strings.HasPrefix(told[0], "workflow_not_allowed 42-login: ") {
+		t.Errorf("the Grand Master was told %q", told)
+	}
+	r.wf.policy["mestre-da-mesa"] = classes.WorkflowsAsk
+	got := r.run("tm", "pr update", nil)
+	if got.OK || got.Exit != 9 || got.Code != "approval_pending" || len(r.pushes()) != 0 || len(r.wf.asked) == 0 {
+		t.Fatalf("ask: %+v pushes %q asked %q", got, r.pushes(), r.wf.asked)
 	}
 }

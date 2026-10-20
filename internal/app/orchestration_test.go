@@ -173,8 +173,9 @@ func call(t *testing.T, fwd *localchan.LocalForwarder, agent, cmd string, flags 
 // with `mestre table open`, the table master is recruited by the real Service of
 // the characters, connected to the Grand Master, and gets the request in its
 // inbox; the table is listed; and once the pull request is merged `mestre
-// table close` ends it, the table master last. (Part of CA-CLI-GM-02: the epic
-// comes from a fake GitHub, with the fake git.)
+// table close` ends it, the table master last. (Part of CA-CLI-GM-02, which is
+// closed with the real git in internal/orchestration/tables; here the epic comes
+// from a fake GitHub, with the fake git.)
 // orcWorld is the orchestration of a Citadel over the fakes of the pieces of
 // the other milestones.
 type orcWorld struct {

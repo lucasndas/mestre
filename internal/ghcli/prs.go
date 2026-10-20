@@ -164,6 +164,7 @@ func (h *Handlers) prOpen(ctx context.Context, c *localchan.Call) localchan.Resp
 		_ = h.Opened(ctx, who.actor.Table, part.Number, "")
 	}
 	if err != nil {
+		h.refused(ctx, who.char, err)
 		return refusal(err)
 	}
 	if h.Opened != nil {
@@ -216,6 +217,7 @@ func (h *Handlers) prUpdate(ctx context.Context, c *localchan.Call) localchan.Re
 	}
 	got, err := who.prs.Update(ctx, who.actor, who.repo, n, in)
 	if err != nil {
+		h.refused(ctx, who.char, err)
 		return refusal(err)
 	}
 	if in.Block == "" {

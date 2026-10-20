@@ -108,7 +108,7 @@ func (s *Service) Decree(ctx context.Context, g chain.DecreeGrant) error {
 		if ref != nil {
 			return ref
 		}
-		d = s.build(p, u, why != "", now)
+		d = s.build(ctx, p, u, why != "", now)
 		d.Request = g.Request
 		_, err = insertDecree(ctx, tx, d, fmt.Sprintf("resposta ao pedido %d: %s", g.Request, g.Answer), now)
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") {

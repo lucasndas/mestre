@@ -245,8 +245,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // knownParams are the methods the double serves and the parameters of each
-// that it honours. Anything else fails the test as not implemented (buttons,
-// replies, parse modes and files arrive with the bot in M5).
+// that it honours. Anything else fails the test as not implemented (a method
+// or a parameter the bot does not use yet is added when a test needs it).
 var knownParams = map[string]map[string]bool{
 	"getUpdates":          {"offset": true, "timeout": true, "allowed_updates": true},
 	"sendMessage":         {"chat_id": true, "text": true, "parse_mode": true, "reply_markup": true, "reply_to_message_id": true},

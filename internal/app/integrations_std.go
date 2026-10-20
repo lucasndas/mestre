@@ -497,6 +497,17 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		RerouteFn: func(ctx context.Context, workspace string) error {
 			return orc.Chain.RerouteWorkspace(ctx, workspace, "o Dono revogou todas as delegações")
 		}})
+	// the validity and the reminder of the delegations are those of the policy file of each workspace
+	if orc.Policy != nil {
+		pol := orc.Policy
+		r.decrees.SetDelegationTimes(func(ctx context.Context, workspace string) (time.Duration, time.Duration) {
+			st, _, err := pol.Chain(ctx, workspace)
+			if err != nil {
+				return 0, 0
+			}
+			return st.DelegationValidity, st.DelegationReminder
+		})
+	}
 	r.decrees.SetTableOpen(func(ctx context.Context, workspace, table string) (bool, error) {
 		tb, err := orc.Tables.Get(ctx, workspace, table)
 		if errors.Is(err, tables.ErrNoTable) {
@@ -533,6 +544,16 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
+		Refused: func(ctx context.Context, c characters.Character, code, reason string) {
+			gm, ok, err := orc.Registry.GrandMaster(ctx, c.Workspace)
+			if err != nil || !ok {
+				return
+			}
+			text := fmt.Sprintf("O envio da branch da mesa %s foi recusado (%s): %s. O motor não tenta outro caminho.", c.Table, code, reason)
+			if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: c.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
+				r.env.Log.Warn("app: the Grand Master was not told of the refusal of GitHub", "workspace", c.Workspace, "err", err)
+			}
+		},
 		Executed: r.decrees.Fulfilled, Heads: &github.ReviewedHeads{DB: r.env.DB, Clock: r.env.Clock}, Settings: stdSettings{r},
 		Approver: lateApprover{r}, Merges: mergeHost{r}, Rulesets: lateRulesets{r},
 	}

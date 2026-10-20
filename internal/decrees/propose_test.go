@@ -72,7 +72,8 @@ func ruleFlags(text string) map[string]any {
 	return map[string]any{"kind": "rule", "effect": "permission", "target": "classe:dev", "scope": "commands.allow:make deploy-teste", "text": text, "from-message": "m81"}
 }
 
-// CA-CLI-GM-09 and CA-CLI-GM-10: the proposal is made from the message of the user
+// CA-CLI-GM-09
+// CA-CLI-GM-10: the proposal is made from the message of the user
 // (its author and its text, not the ones the agent says), shows the effect, the
 // target and the scope, goes to the author with exit 9, and no decree holds
 // before his click.

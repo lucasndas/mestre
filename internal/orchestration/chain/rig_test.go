@@ -218,12 +218,30 @@ func (a *fakeAlerts) Notify(_ context.Context, _, text string) error {
 type fakeDelegations struct {
 	mu     sync.Mutex
 	covers bool
+	// onlyTable, when set, makes the delegation cover only the requests of that table.
+	onlyTable string
+	used      []int64
 }
 
-func (d *fakeDelegations) Covers(context.Context, chain.Request) (bool, error) {
+// Used records the use of the delegation by a decision of the Grand Master.
+func (d *fakeDelegations) Used(_ context.Context, r chain.Request, _ string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.covers, nil
+	d.used = append(d.used, r.ID)
+	return nil
+}
+
+// usedBy lists the requests decided under the delegation.
+func (d *fakeDelegations) usedBy() []int64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]int64(nil), d.used...)
+}
+
+func (d *fakeDelegations) Covers(_ context.Context, r chain.Request) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.covers && (d.onlyTable == "" || d.onlyTable == r.Table), nil
 }
 
 func (d *fakeDelegations) set(v bool) {
