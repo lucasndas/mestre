@@ -68,6 +68,10 @@ const (
 	EventPRChanged    EventKind = "pr_alterado"
 	EventPRMerged     EventKind = "pr_mergeado"
 	EventPRClosed     EventKind = "pr_fechado"
+	// EventWarning and EventAlert are the Mestre's own: a merge not yet in the
+	// mirror, and the alert when it never got there.
+	EventWarning EventKind = "aviso"
+	EventAlert   EventKind = "alerta"
 )
 
 // Event is something that changed at GitHub, normalized.
@@ -105,6 +109,9 @@ type Situation interface {
 	// Mode of the workspace from what is open (tables, PRs, CI), not counting the
 	// time since the last change, which the poller knows.
 	Mode(ctx context.Context, w Watch) Mode
+	// TablePRs are the open PRs of the tables of the workspace: their reviews
+	// and their CI are read.
+	TablePRs(ctx context.Context, w Watch) []TablePR
 	// TableOf is the table an issue or PR of the repository belongs to.
 	TableOf(ctx context.Context, repo string, number int) string
 }
@@ -130,6 +137,9 @@ type PollerOptions struct {
 	Token   func(ctx context.Context, repo string) (string, error)
 	Objects *Objects
 	Sink    Sink
+	// Merges confirms a merge in the mirror and marks the table; nil: a merge of
+	// a table is delivered as it comes.
+	Merges Merges
 	Situation
 	// Watches are the workspaces to read.
 	Watches func(ctx context.Context) ([]Watch, error)
@@ -143,8 +153,9 @@ type PollerOptions struct {
 type Poller struct {
 	o PollerOptions
 
-	mu sync.Mutex
-	by map[string]*watchState
+	mu     sync.Mutex
+	by     map[string]*watchState
+	ciDone map[string]time.Time
 }
 
 type watchState struct {
@@ -153,6 +164,7 @@ type watchState struct {
 	lastAction time.Time
 	fails      int
 	running    bool
+	ciRunning  bool
 }
 
 // NewPoller returns the poller.
@@ -194,7 +206,7 @@ func (p *Poller) Mode(ctx context.Context, w Watch) Mode {
 	p.mu.Lock()
 	st := p.state(w.Workspace)
 	now := p.o.Clock.Now()
-	recent := now.Sub(st.lastChange) < ActiveHold || now.Sub(st.lastAction) < ActiveHold
+	recent := now.Sub(st.lastChange) < ActiveHold || now.Sub(st.lastAction) < ActiveHold || st.ciRunning
 	p.mu.Unlock()
 	if recent {
 		return ModeActive
@@ -287,35 +299,63 @@ func (p *Poller) Cycle(ctx context.Context, w Watch) (changed bool, err error) {
 		}
 		got = append(got, f)
 	}
+	var events []Event
+	var keys []string
+	for _, f := range got {
+		events = append(events, f.events...)
+		keys = append(keys, f.keys...)
+	}
+	// the reviews and the CI of the PRs of the tables
+	pr, err := p.readTablePRs(ctx, w, repo)
+	if err != nil {
+		return false, err
+	}
+	events, keys = append(events, pr.events...), append(keys, pr.keys...)
+	// a merge counts when the commit is in the mirror
+	mg, err := p.confirmMerges(ctx, w, repo, events)
+	if err != nil {
+		return false, err
+	}
+	events = mg.events
 	byTable := map[string][]Event{}
 	var order []string
-	for _, f := range got {
-		for _, ev := range f.events {
-			if _, ok := byTable[ev.Table]; !ok {
-				order = append(order, ev.Table)
-			}
-			byTable[ev.Table] = append(byTable[ev.Table], ev)
-			changed = true
+	for _, ev := range events {
+		if _, ok := byTable[ev.Table]; !ok {
+			order = append(order, ev.Table)
 		}
+		byTable[ev.Table] = append(byTable[ev.Table], ev)
+		changed = true
 	}
 	for _, table := range order {
 		if err := p.o.Sink.Deliver(ctx, w, table, byTable[table]); err != nil {
 			return false, fmt.Errorf("github: delivering the events of %s: %w", w.Workspace, err)
 		}
 	}
+	// the tables learn of their merge before the cursor moves: if it fails, the
+	// events come again (the sink answers once for each key)
+	for _, m := range mg.merged {
+		if err := p.o.Merges.Merged(ctx, w, m.Table, m.Number); err != nil {
+			// the Grand Master was told of the merge; a table that can not be marked
+			// (it is gone, or already closed) must not stop the whole workspace
+			p.o.Logger.Error("github: a table was not marked merged", "workspace", w.Workspace, "table", m.Table, "pr", m.Number, "err", err)
+		}
+	}
 	now := p.o.Clock.Now()
 	err = p.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
-		for _, f := range got {
-			for _, k := range f.keys {
-				if _, err := tx.ExecContext(ctx, `INSERT INTO github_seen_events (key, at) VALUES (?, ?) ON CONFLICT (key) DO NOTHING`, k, now.UnixMilli()); err != nil {
-					return err
-				}
+		for _, k := range keys {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO github_seen_events (key, at) VALUES (?, ?) ON CONFLICT (key) DO NOTHING`, k, now.UnixMilli()); err != nil {
+				return err
 			}
+		}
+		for _, f := range got {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO github_poll_state (repo, list, etag, cursor) VALUES (?, ?, ?, ?)
 				ON CONFLICT (repo, list) DO UPDATE SET etag = excluded.etag, cursor = excluded.cursor`,
 				repo, f.spec.name, f.etag, f.cursor.UnixMilli()); err != nil {
 				return err
 			}
+		}
+		if err := mg.persist(ctx, tx, repo, now); err != nil {
+			return err
 		}
 		_, err := tx.ExecContext(ctx, `DELETE FROM github_seen_events WHERE at < ?`, now.Add(-SeenLife).UnixMilli())
 		return err
@@ -323,11 +363,14 @@ func (p *Poller) Cycle(ctx context.Context, w Watch) (changed bool, err error) {
 	if err != nil {
 		return false, err
 	}
+	pr.commit()
+	p.mu.Lock()
+	st := p.state(w.Workspace)
+	st.ciRunning = pr.running
 	if changed {
-		p.mu.Lock()
-		p.state(w.Workspace).lastChange = now
-		p.mu.Unlock()
+		st.lastChange = now
 	}
+	p.mu.Unlock()
 	return changed, nil
 }
 
