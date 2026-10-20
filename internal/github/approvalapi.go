@@ -27,7 +27,7 @@ func (e *APIError) Error() string {
 // apiFailed turns the answer of a call that did not give what was wanted into an
 // error: the ones failed knows, and a typed refusal for the other 4xx.
 func apiFailed(what string, st int, raw []byte, hdr http.Header) error {
-	if st >= 400 && st < 500 && st != http.StatusNotFound && st != http.StatusTooManyRequests && !(st == http.StatusForbidden && hdr.Get("Retry-After") != "") {
+	if st >= 400 && st < 500 && st != http.StatusNotFound && st != http.StatusTooManyRequests && (st != http.StatusForbidden || hdr.Get("Retry-After") == "") {
 		var v struct {
 			Message string   `json:"message"`
 			Errors  []string `json:"errors"`

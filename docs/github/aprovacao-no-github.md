@@ -1,6 +1,6 @@
 # Aprovação no GitHub
 
-> **Assunto:** como as aprovações viram reviews no GitHub, quando um review feito direto no GitHub conclui um pedido, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** como as aprovações viram reviews no GitHub, quando um review feito direto no GitHub conclui um pedido, o teste do App aprovador, o plano B por ruleset e a credencial pessoal dos usuários · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -89,6 +89,8 @@ Opcional por usuário (campo do cadastro em [usuários e níveis](../telegram/us
 - Mudar ruleset ou proteção só com a aprovação do tipo `configuracao_repositorio` ([política](../aprovacoes/politica.md#tipos-de-ação)).
 - `mestre gh approve` só aprova com uma aprovação vigente para aquele PR e aquele hash: a do próprio Grão-Mestre, quando a política deixa, ou a de um usuário ([o Grão-Mestre como aprovador delegado](../aprovacoes/politica.md#o-grão-mestre-como-aprovador-delegado)).
 - Review recusado com 422 (ex.: autor tentando aprovar o próprio PR): o motor registra e o Grão-Mestre pede aprovação humana.
+
+- **Implementação (etapa 5, parte 1):** `github.ReviewProbe` e `sessionzero.GitHubReview` (teste do App), `github.PlanBRuleset` e `approvals.Settings` (plano B e modo de aprovação humana, tabela `github_review_modes`), `approvals.Approver` (`gh approve`, os três casos da tabela e a delegação), `github.CodeOwners` (quem o repositório exige) e `approvals.GitHubReviews` (review feito no GitHub, auditoria em `approval_github_reviews`, PIN pelo canal). Ficam fora e na [ligação de produção](../desenvolvimento/ligacao-de-producao.md): a credencial pessoal pelo device flow (CA-GH-APPS-05, CA-GH-APROV-06), o gate de frescor (CA-GH-ACOES-11, 12, 13 e 15) e a composição no `mestre run` (poller, sinks, clientes dos Apps).
 
 ## Critérios de aceite
 

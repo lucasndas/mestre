@@ -240,7 +240,9 @@ func TestAReviewGitHubRefusesIsHumanRequired(t *testing.T) {
 	l.gh.SetPullAuthor("lucas/meu-app", l.pr, "mestre-grao-mestre[bot]")
 	// the login of the App is not known to the engine: GitHub itself says no
 	a := l.approver(func(a *approvals.Approver) {
-		a.GrandMaster = func(context.Context, string) (approvals.ReviewClient, string, error) { return l.grand, "outro[bot]", nil }
+		a.GrandMaster = func(context.Context, string) (approvals.ReviewClient, string, error) {
+			return l.grand, "outro[bot]", nil
+		}
 	})
 	if _, err := a.Approve(l.ctx, l.order()); !isHumanRequired(err) || !strings.Contains(err.Error(), "recusou") {
 		t.Fatalf("Approve = %v; want human_required with the refusal of GitHub", err)
