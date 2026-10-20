@@ -58,6 +58,9 @@ type Options struct {
 	Grants      Grants
 	TempRules   TempRules
 	Delegations Delegations
+	// PolicyDecrees gives the decrees of policy that adjust the rules of the
+	// file; nil: only the file rules.
+	PolicyDecrees PolicyDecrees
 	// SubDelegations may be nil: the Mestre da mesa decides only its own ceiling.
 	SubDelegations SubDelegations
 	// PRs reads the PRs the conditions of the policy check; without it a
