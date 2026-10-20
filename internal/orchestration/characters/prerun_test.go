@@ -12,10 +12,16 @@ import (
 func TestACommandOfAPreRunRunsInTheShellItWasDecidedFor(t *testing.T) {
 	t.Parallel()
 	cmd := `echo "a; b" | Out-String; $x = 'é'`
-	if got := shellLine("linux", cmd); got != cmd {
-		t.Errorf("on Linux: %q", got)
+	if got, err := shellLine("linux", cmd); err != nil || got != cmd {
+		t.Errorf("on Linux: %q, %v", got, err)
 	}
-	got := shellLine("windows", cmd)
+	got, err := shellLine("windows", cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := shellLine("windows", strings.Repeat("echo x; ", 500)); err == nil {
+		t.Error("a command of 4000 characters was given to cmd, whose line is at most 8191")
+	}
 	// the program is the PowerShell of the system by its full path, quoted: one
 	// planted in the worktree is not the one that runs
 	enc, ok := strings.CutPrefix(got, `"`+systemPowerShell()+`" -NoProfile -NonInteractive -EncodedCommand `)
