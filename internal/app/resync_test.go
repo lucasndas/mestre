@@ -47,11 +47,14 @@ func newResyncRig(t *testing.T) *resyncRig {
 	return &resyncRig{e: e, orc: orc, clk: clk, db: db, t: t}
 }
 
-func (r *resyncRig) add(id, machine string, st characters.State, created, signal time.Time) {
+func (r *resyncRig) add(id, machine string, st characters.State, created, signal time.Time, started ...time.Time) {
 	r.t.Helper()
 	c := characters.Character{ID: id, Name: id, Kind: characters.KindCharacter, Role: characters.RoleCharacter, Workspace: "meu-app", Table: "t1", Machine: machine,
 		Sheet: "S", Base: "claude-code", State: st, TerminalID: "t-" + id, CreatedBy: characters.Creator{Kind: characters.CreatedByEngine},
-		Lifecycle: characters.Ephemeral, CreatedAt: created, LastSignalAt: signal}
+		Lifecycle: characters.Ephemeral, CreatedAt: created, StartedAt: created, LastSignalAt: signal}
+	if len(started) > 0 {
+		c.StartedAt = started[0]
+	}
 	if err := r.orc.Registry.Insert(r.t.Context(), c); err != nil {
 		r.t.Fatal(err)
 	}
@@ -98,6 +101,20 @@ func TestTheResyncOfATowerInterruptsWhatItLacksAndOnlyThat(t *testing.T) {
 		if got := r.state(id); got != want {
 			t.Errorf("%s is %s after the resync; want %s", id, got, want)
 		}
+	}
+}
+
+// Part of CA-CIDADELA-11: the grace of a start counts from when it entered starting, not from
+// when the character was created: a resumed character is old but its restart is recent.
+func TestTheGraceOfAResumedStartCountsFromItsStartNotItsCreation(t *testing.T) {
+	t.Parallel()
+	r := newResyncRig(t)
+	now := r.clk.Now()
+	old := now.Add(-10 * time.Minute)
+	r.add("resumed", "torre", characters.Starting, old, old, now.Add(-time.Second))
+	r.resync(now)
+	if got := r.state("resumed"); got != characters.Starting {
+		t.Errorf("a restart of a second ago is %s after the resync; want starting", got)
 	}
 }
 

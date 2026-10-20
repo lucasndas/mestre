@@ -317,7 +317,7 @@ func (e *Engine) resyncFromTower(ctx context.Context, orc *Orchestration, machin
 	}
 	mr := e.mach.Load()
 	inFlight := func(c characters.Character) bool {
-		return mr != nil && mr.inFlight(c.ID) || c.State == characters.Starting && now.Sub(c.CreatedAt) < startGrace
+		return mr != nil && mr.inFlight(c.ID) || c.State == characters.Starting && now.Sub(c.StartedAt) < startGrace
 	}
 	listed := func(id string) bool {
 		return slices.ContainsFunc(live, func(t protocol.TerminalState) bool { return t.AgentID == id })
