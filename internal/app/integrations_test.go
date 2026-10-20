@@ -339,8 +339,8 @@ func TestTheEngineIsLockedByTheLockOfThePeriodAndByTheOneItWasGiven(t *testing.T
 }
 
 // The operational alerts of a workspace reach the Owner and the Administrators who
-// act in it, by the bot, and nobody else; while the bot is not up the alert is an
-// error, so the workspaces send it again.
+// act in it, by the bot, and nobody else; while the bot is not up the alert waits in the
+// queue of the bot and goes out, once, when it starts.
 func TestAnOperationalAlertReachesTheOwnerAndTheAdministratorsOfTheWorkspaceByTheBot(t *testing.T) {
 	t.Parallel()
 	i := newInteg(t, true)
@@ -350,7 +350,7 @@ func TestAnOperationalAlertReachesTheOwnerAndTheAdministratorsOfTheWorkspaceByTh
 	run.Extend(&o)
 	al := workspaces.Alert{Workspace: "loja", Kind: workspaces.AlertFetchFailing, Detail: "o espelho não atualiza há 10 min"}
 	if err := o.Alerts.Operational(i.ctx, al); err != nil {
-		t.Fatalf("with the bot down: %v", err) // it waits for the bot, the caller sends nothing again
+		t.Fatalf("with the bot down: %v", err) // it waits for the bot, once: the caller sends nothing again
 	}
 	owner, err := run.users.CreateOwner(i.ctx, "Lucas")
 	if err != nil {
@@ -380,8 +380,6 @@ func TestAnOperationalAlertReachesTheOwnerAndTheAdministratorsOfTheWorkspaceByTh
 	if _, err := run.startBot(i.ctx); err != nil {
 		t.Fatal(err)
 	}
-	run.flushAlerts(i.ctx) // what waited for the bot goes out, once
-	run.flushAlerts(i.ctx)
 	rows, err := i.db.Reader().QueryContext(i.ctx, `SELECT chat_id, params FROM telegram_outbox ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
@@ -399,7 +397,7 @@ func TestAnOperationalAlertReachesTheOwnerAndTheAdministratorsOfTheWorkspaceByTh
 			got[chat] = p
 		}
 	}
-	if n != 2 || len(got) != 2 || !strings.Contains(got[77], "o espelho não atualiza") || !strings.Contains(got[88], "[loja]") {
+	if n != 2 || len(got) != 2 || !strings.Contains(got[77], "o espelho não atualiza") || !strings.Contains(got[88], "o espelho") {
 		t.Errorf("the alert reached %v, want only the Owner and Ana", got)
 	}
 }

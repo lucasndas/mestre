@@ -177,9 +177,6 @@ type stdRun struct {
 
 	botMu sync.Mutex
 	bot   *telegram.Bot
-
-	pendMu        sync.Mutex
-	pendingAlerts []pendingAlert
 }
 
 var _ IntegrationRun = (*stdRun)(nil)
@@ -463,7 +460,6 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 			<-ctx.Done()
 			return nil
 		}
-		r.flushAlerts(ctx)
 		return bot.Run(ctx)
 	}}
 }
@@ -717,48 +713,23 @@ func (d digestRules) RevokeOfRequest(ctx context.Context, workspace, table strin
 }
 
 // adminAlerts is workspaces.Alerts over the bot: the notice goes to the Owner and
-// to the Administrators who act in the workspace. While the bot is not up the
-// alert waits here (bounded) and goes out when the bot starts, so it is neither
-// lost by a caller that does not send it again nor repeated by one that does;
-// with nobody to tell it stays in the log (workspace and kind only: the detail
-// can carry the output of git).
+// to the Administrators who act in the workspace. While the bot is not up the alert
+// waits in the queue of the alerts of the bot and goes out when it starts; with
+// nobody to tell it stays in the log (workspace and kind only: the detail can carry
+// the output of git).
 type adminAlerts struct {
 	r   *stdRun
 	log *slog.Logger
 }
 
-// maxPendingAdminAlerts is how many alerts wait for the bot.
-const maxPendingAdminAlerts = 20
-
 func (a adminAlerts) Operational(ctx context.Context, al workspaces.Alert) error {
 	a.log.Warn("app: operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
-	text := fmt.Sprintf("[%s] %s", al.Workspace, al.Detail)
-	told, err := a.r.alert.AdminAlert(ctx, al.Workspace, text)
+	told, err := a.r.alert.AdminAlert(ctx, al.Workspace, al.Detail)
 	switch {
-	case errors.Is(err, telegram.ErrBotDown):
-		a.r.pendMu.Lock()
-		if a.r.pendingAlerts = append(a.r.pendingAlerts, pendingAlert{al.Workspace, text}); len(a.r.pendingAlerts) > maxPendingAdminAlerts {
-			a.r.pendingAlerts = a.r.pendingAlerts[1:]
-		}
-		a.r.pendMu.Unlock()
-		return nil
+	case errors.Is(err, telegram.ErrQueued):
+		return nil // it waits for the bot, once: the caller does not send it again
 	case err == nil && told == 0:
 		a.log.Warn("app: no Administrator could be told of an operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
 	}
 	return err
-}
-
-type pendingAlert struct{ workspace, text string }
-
-// flushAlerts sends the alerts that waited for the bot.
-func (r *stdRun) flushAlerts(ctx context.Context) {
-	r.pendMu.Lock()
-	pend := r.pendingAlerts
-	r.pendingAlerts = nil
-	r.pendMu.Unlock()
-	for _, p := range pend {
-		if _, err := r.alert.AdminAlert(ctx, p.workspace, p.text); err != nil {
-			r.env.Log.Warn("app: an operational alert was not sent", "workspace", p.workspace, "err", err)
-		}
-	}
 }
