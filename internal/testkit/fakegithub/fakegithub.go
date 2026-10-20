@@ -65,6 +65,10 @@ type repo struct {
 	issues   []map[string]any
 	git      *gitData
 	merges   []MergeCall
+	// merge behaviors the test asks for
+	mergeFail   *mergeFailure
+	loseMerge   bool
+	noMergeKind map[string]bool
 }
 
 // Server is the fake API. Use it as an http.Handler.

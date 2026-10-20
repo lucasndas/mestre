@@ -15,7 +15,7 @@ import (
 func TestTheMergeRequestIsBoundToTheExactTargetOfThePR(t *testing.T) {
 	t.Parallel()
 	req, err := approvals.MergeRequest(approvals.MergeOrder{Workspace: "meu-app", Table: "42-login", Repo: "Lucas/Meu-App", Number: 7,
-		Head: "0123456789abcdef0123456789abcdef01234567", Base: "main", Requester: "gm1"})
+		Head: "0123456789abcdef0123456789abcdef01234567", Base: "main", Method: "squash", Requester: "gm1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestTheMergeRequestIsBoundToTheExactTargetOfThePR(t *testing.T) {
 	if string(req.Target) != string(approvals.PRTarget("Lucas/Meu-App", 7, req.PR.SHA, "main")) {
 		t.Errorf("the target is not the one PRTarget makes: %s", req.Target)
 	}
-	if !strings.Contains(req.About, "#7") || !strings.Contains(req.About, "0123456") {
+	if !strings.Contains(req.About, "#7") || !strings.Contains(req.About, "0123456") || !strings.Contains(req.About, "squash") {
 		t.Errorf("about = %q", req.About)
 	}
 	for _, bad := range []approvals.MergeOrder{
@@ -41,6 +41,11 @@ func TestTheMergeRequestIsBoundToTheExactTargetOfThePR(t *testing.T) {
 		{Workspace: "meu-app", Repo: "lucas/meu-app", Head: "abc", Base: "main"},
 		{Workspace: "meu-app", Repo: "lucas/meu-app", Number: 7, Base: "main"},
 		{Workspace: "meu-app", Repo: "lucas/meu-app", Number: 7, Head: "abc"},
+		{Workspace: "meu-app", Repo: "lucas/meu-app", Number: 7, Head: "0123456789abcdef0123456789abcdef01234567"},
+		{Workspace: "meu-app", Repo: "lucas/meu-app", Number: 7, Head: "main", Base: "main"},
+		{Workspace: "meu-app", Repo: "lucas/meu-app", Number: 7, Head: "0123456789ABCDEF0123456789ABCDEF01234567", Base: "main"},
+		{Workspace: "meu-app", Repo: "nao e repo", Number: 7, Head: "0123456789abcdef0123456789abcdef01234567", Base: "main"},
+		{Workspace: "meu-app", Repo: "lucas/meu-app", Number: 7, Head: "0123456789abcdef0123456789abcdef01234567", Base: "main", Method: "ff"},
 	} {
 		if _, err := approvals.MergeRequest(bad); err == nil {
 			t.Errorf("an incomplete order was accepted: %+v", bad)

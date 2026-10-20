@@ -2,9 +2,9 @@ package approvals
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 )
 
@@ -18,6 +18,9 @@ type MergeOrder struct {
 	Number int
 	Head   string
 	Base   string
+	// Method is the method of the merge (github.MergeMethod…; "" is merge), shown to who
+	// approves: it is the choice of who merges, not part of what the approval binds.
+	Method string
 	// Requester is the character that asked.
 	Requester string
 }
@@ -31,12 +34,25 @@ func MergeRequest(o MergeOrder) (chain.OpenRequest, error) {
 	switch {
 	case o.Workspace == "" || o.Repo == "" || o.Number <= 0:
 		return chain.OpenRequest{}, fmt.Errorf("approvals: a merge needs the workspace, the repository and the number of the PR")
-	case o.Head == "" || o.Base == "":
-		return chain.OpenRequest{}, fmt.Errorf("approvals: a merge needs the head of the PR and the branch it goes into")
+	case !github.ValidSHA(o.Head) || o.Base == "":
+		return chain.OpenRequest{}, fmt.Errorf("approvals: a merge needs the full hash of the head of the PR and the branch it goes into")
+	}
+	repo, err := github.NormalizeRepo(o.Repo)
+	if err != nil {
+		return chain.OpenRequest{}, err
+	}
+	o.Repo = repo
+	if o.Method == "" {
+		o.Method = github.MergeMethodMerge
+	}
+	switch o.Method {
+	case github.MergeMethodMerge, github.MergeMethodSquash, github.MergeMethodRebase:
+	default:
+		return chain.OpenRequest{}, fmt.Errorf("approvals: %q is not a method of merge", o.Method)
 	}
 	return chain.OpenRequest{
 		Type: classes.RequestMerge, Workspace: o.Workspace, Table: o.Table, Requester: o.Requester,
-		About:  fmt.Sprintf("merge do PR #%d de %s (%s) em %s", o.Number, strings.ToLower(o.Repo), shortSHA(o.Head), o.Base),
+		About:  fmt.Sprintf("merge do PR #%d de %s (%s) em %s, método %s", o.Number, o.Repo, shortSHA(o.Head), o.Base, o.Method),
 		PR:     &chain.PRRef{Repo: o.Repo, Number: o.Number, SHA: o.Head},
 		Target: PRTarget(o.Repo, o.Number, o.Head, o.Base),
 	}, nil

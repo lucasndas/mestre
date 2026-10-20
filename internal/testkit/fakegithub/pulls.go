@@ -533,6 +533,16 @@ func (s *Server) mergePull(w http.ResponseWriter, r *http.Request, inst *install
 	switch {
 	case in.Method != "" && in.Method != "merge" && in.Method != "squash" && in.Method != "rebase":
 		status, msg = http.StatusUnprocessableEntity, "Invalid merge method"
+	case rp.mergeFail != nil:
+		mf := rp.mergeFail
+		s.mu.Unlock()
+		for k, v := range mf.headers {
+			w.Header().Set(k, v)
+		}
+		s.write(w, r, inst, mf.status, map[string]any{"message": mf.message})
+		return
+	case rp.noMergeKind[in.Method] || (in.Method == "" && rp.noMergeKind["merge"]):
+		status, msg = http.StatusMethodNotAllowed, "Merge commits are not allowed on this repository."
 	case p.merged || p.state != "open":
 		status, msg = http.StatusMethodNotAllowed, "Pull Request is not mergeable"
 	case in.SHA != "" && in.SHA != p.headSHA:
@@ -540,7 +550,9 @@ func (s *Server) mergePull(w http.ResponseWriter, r *http.Request, inst *install
 	case p.draft:
 		status, msg = http.StatusMethodNotAllowed, "Draft pull requests cannot be merged"
 	case p.mergeableState == "blocked":
-		status, msg = http.StatusMethodNotAllowed, "Repository rule violations found: required status check is expected"
+		status, msg = http.StatusMethodNotAllowed, "Required status check \"ci\" is expected."
+	case p.mergeableState == "behind":
+		status, msg = http.StatusMethodNotAllowed, "Head branch is not up to date with the base branch."
 	case p.mergeableState == "dirty":
 		status, msg = http.StatusMethodNotAllowed, "Pull Request is not mergeable"
 	}
@@ -560,7 +572,51 @@ func (s *Server) mergePull(w http.ResponseWriter, r *http.Request, inst *install
 	s.touch(rp, n)
 	rp.merges = append(rp.merges, MergeCall{Number: n, SHA: in.SHA, Method: in.Method})
 	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
-	sha := p.mergeSHA
+	sha, lose := p.mergeSHA, rp.loseMerge
+	rp.loseMerge = false
 	s.mu.Unlock()
+	if lose { // the merge happened and the answer did not arrive
+		s.write(w, r, inst, http.StatusBadGateway, map[string]any{"message": "Bad Gateway"})
+		return
+	}
 	s.write(w, r, inst, http.StatusOK, map[string]any{"sha": sha, "merged": true, "message": "Pull Request successfully merged"})
+}
+
+type mergeFailure struct {
+	status  int
+	message string
+	headers map[string]string
+}
+
+// FailMerges makes every merge of the repository answer with this status, message and
+// headers (nil clears it): the reasons GitHub gives that the double does not
+// reproduce by itself (a 403 of permission or of a rate limit, "Base branch was
+// modified", the code owners).
+func (s *Server) FailMerges(full string, status int, message string, headers map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if status == 0 {
+		s.repos[full].mergeFail = nil
+		return
+	}
+	s.repos[full].mergeFail = &mergeFailure{status: status, message: message, headers: headers}
+}
+
+// LoseNextMerge makes the next merge happen on GitHub while its answer is a 502.
+func (s *Server) LoseNextMerge(full string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.repos[full].loseMerge = true
+}
+
+// DisallowMergeMethod makes the repository refuse a method of merge ("merge", "squash"
+// or "rebase"), as the settings of a repository do.
+func (s *Server) DisallowMergeMethod(full, method string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rp := s.repos[full]
+	if rp.noMergeKind == nil {
+		rp.noMergeKind = map[string]bool{}
+	}
+	rp.noMergeKind[method] = true
 }
