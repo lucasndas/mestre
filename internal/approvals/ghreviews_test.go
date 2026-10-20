@@ -323,6 +323,37 @@ func TestAReviewForARequestThatAsksThePINAsksItAndOnlyThePINConcludes(t *testing
 	}
 }
 
+// A review dismissed while its PIN is pending: the PIN that comes confirms nothing.
+func TestADismissalDropsThePINThatWasWaiting(t *testing.T) {
+	t.Parallel()
+	r := newReviewsRig(t)
+	owner := r.owner
+	login := "lucas-dono"
+	if _, err := r.svc.Edit(r.ctx, owner, owner.ID, users.Edit{GitHubLogin: &login}); err != nil {
+		t.Fatal(err)
+	}
+	r.gh.AddUser(login, "User")
+	r.gh.SetPermission(loja, login, "admin")
+	if err := r.svc.SetPIN(r.ctx, owner.ID, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	req := r.request(openOpts{min: classes.LevelOwner, pin: true})
+	ev := r.review(login, "APPROVED", r.sha)
+	r.deliver(ev)
+	rep, ok := r.pin.get(owner.ID)
+	if !ok {
+		t.Fatal("no PIN asked")
+	}
+	r.gh.DismissReview(loja, r.pr, login)
+	r.deliver(r.event(ev.ID, login, "DISMISSED"))
+	if err := r.svc.CheckPIN(r.ctx, rep.PIN, "123456"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.flow.ConfirmPIN(r.ctx, owner.ID, rep.PIN); err == nil || r.state(req.ID) != chain.Open {
+		t.Fatalf("the PIN of a dismissed review concluded the request: %v, %s", err, r.state(req.ID))
+	}
+}
+
 func TestReviewsOfNoRequestAreNobodysBusiness(t *testing.T) {
 	t.Parallel()
 	r := newReviewsRig(t)

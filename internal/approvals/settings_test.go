@@ -25,7 +25,7 @@ func (l *ghLab) settings() *approvals.Settings {
 }
 
 func oneReview() fakegithub.Rule {
-	return fakegithub.Rule{Type: "pull_request", Parameters: map[string]any{"required_approving_review_count": 2, "require_code_owner_review": true}}
+	return fakegithub.Rule{Type: "pull_request", Parameters: map[string]any{"required_approving_review_count": 2}}
 }
 
 // CA-GH-APROV-02
@@ -52,7 +52,7 @@ func TestThePlanBProposesARulesetWithOnlyTheReviewAndTheAppAsAnException(t *test
 	}
 	rule := rules[0].(map[string]any)
 	params := rule["parameters"].(map[string]any)
-	if rule["type"] != "pull_request" || params["required_approving_review_count"] != float64(2) || params["require_code_owner_review"] != true {
+	if rule["type"] != "pull_request" || params["required_approving_review_count"] != float64(2) {
 		t.Fatalf("the rule = %v; want the review as the repository asks it today", rule)
 	}
 	actors, _ := tg.Body["bypass_actors"].([]any)
@@ -93,6 +93,20 @@ func TestThePlanBSaysWhereTheReviewIsAskedTodayAndNeedsARequirement(t *testing.T
 	rules, _ := l.grand.ReadRules(l.ctx, "lucas/meu-app", "main")
 	if !rules.Classic || !strings.Contains(github.PlanBChange(rules), "Tirar a exigência de revisão da proteção clássica") {
 		t.Fatalf("rules = %+v", rules)
+	}
+}
+
+// A repository that asks a code owner review keeps it: the exception of the
+// ruleset would skip it, so there is no plan B and the mode is human approval.
+func TestThePlanBIsRefusedWhenTheExceptionWouldLoosenTheCodeOwnerReview(t *testing.T) {
+	t.Parallel()
+	l := newGHLab(t)
+	l.gh.SetBranchRules("lucas/meu-app", "main", fakegithub.Rule{Type: "pull_request", Parameters: map[string]any{"required_approving_review_count": 1, "require_code_owner_review": true}})
+	if _, err := l.settings().ProposePlanB(l.ctx, "loja"); !errors.Is(err, approvals.ErrNoPlanB) {
+		t.Fatalf("ProposePlanB = %v; want ErrNoPlanB", err)
+	}
+	if mode, _, _ := l.modes.Get(l.ctx, "loja"); mode != approvals.ModeHuman || len(l.open.all()) != 0 {
+		t.Fatalf("mode %q, requests %d", mode, len(l.open.all()))
 	}
 }
 

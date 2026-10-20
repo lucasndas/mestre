@@ -34,6 +34,7 @@ type OpenPRs interface {
 type Answerer interface {
 	Answer(ctx context.Context, userID string, in Input) (Reply, error)
 	RevokeVote(ctx context.Context, request int64, userID string) error
+	DropPIN(ctx context.Context, request int64, userID string) error
 }
 
 var _ Answerer = (*Flow)(nil)
@@ -222,7 +223,7 @@ func (g *GitHubReviews) canWrite(ctx context.Context, rd ReviewReader, repo stri
 	switch {
 	case err == nil:
 		return perm == "admin" || perm == "maintain" || perm == "write", nil
-	case errors.Is(err, github.ErrNotFound) || (errors.As(err, &api) && (api.Status == 403 || api.Status == 401)):
+	case errors.Is(err, github.ErrNotFound) || (errors.As(err, &api) && api.Status == 403):
 		return rv.Association == "OWNER" || rv.Association == "COLLABORATOR", nil
 	}
 	return false, err
@@ -232,12 +233,15 @@ func (g *GitHubReviews) canWrite(ctx context.Context, rd ReviewReader, repo stri
 // while the request is open.
 func (g *GitHubReviews) dismissed(ctx context.Context, r chain.Request, ev github.Event, state, commit string) error {
 	var userID string
-	err := g.DB.Reader().QueryRowContext(ctx, `SELECT user_id FROM approval_github_reviews WHERE request = ? AND review = ? AND state = 'APPROVED' AND outcome = ?`,
-		r.ID, ev.ID, outcomeCounted).Scan(&userID)
+	err := g.DB.Reader().QueryRowContext(ctx, `SELECT user_id FROM approval_github_reviews WHERE request = ? AND review = ? AND state = 'APPROVED' AND outcome IN (?, ?)`,
+		r.ID, ev.ID, outcomeCounted, outcomePIN).Scan(&userID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	if userID != "" {
+		if err := g.Flow.DropPIN(ctx, r.ID, userID); err != nil {
+			return err
+		}
 		if err := g.Flow.RevokeVote(ctx, r.ID, userID); err != nil {
 			return err
 		}

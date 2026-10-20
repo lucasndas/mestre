@@ -44,6 +44,9 @@ type SettingsTarget struct {
 // plan B to let through.
 var ErrNoRequirement = errors.New("approvals: the main branch asks for no review")
 
+// ErrNoPlanB: the plan B would loosen a rule, so the workspace went to human approval.
+var ErrNoPlanB = errors.New("approvals: the plan B would loosen a rule of the repository")
+
 // Settings is the change of the settings of a repository that only the Owner
 // approves, and the plan B of the approval test.
 type Settings struct {
@@ -77,6 +80,15 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 	}
 	if !rules.Requires() {
 		return 0, ErrNoRequirement
+	}
+	if rules.CodeOwners || rules.LastPush {
+		// the exception skips every rule of its ruleset: the code owner review and the
+		// approval of the last push would stop being enforced for the Grão-Mestre
+		why := "o repositório exige review de code owner ou aprovação do último push, que a exceção do ruleset deixaria de impor"
+		if err := s.human(ctx, workspace, why); err != nil {
+			return 0, err
+		}
+		return 0, ErrNoPlanB
 	}
 	target, err := json.Marshal(SettingsTarget{Kind: KindRuleset, Repo: repo, Branch: branch, Body: github.PlanBRuleset(rules, branch, appID), PlanB: true})
 	if err != nil {

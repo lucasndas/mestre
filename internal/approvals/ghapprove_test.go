@@ -88,8 +88,35 @@ func TestGhApproveInTheModeOfHumanApprovalNeedsAPerson(t *testing.T) {
 		t.Fatalf("Approve alone in the human mode = %v; want human_required", err)
 	}
 	l.approved("user:"+l.owner.ID, l.sha)
-	if _, err := a.Approve(l.ctx, l.order()); err != nil {
-		t.Fatalf("Approve with the approval of a person = %v", err)
+	// the review of the App does not count here: the person reviews, or gets the link
+	got, err := a.Approve(l.ctx, l.order())
+	if err != nil || got.As != approvals.AsLink {
+		t.Fatalf("Approve with the approval of a person = %+v, %v; want the link, not a review of the App", got, err)
+	}
+	if sent := l.sent(); len(sent) != 0 {
+		t.Fatalf("a review of the App was sent in the human mode: %+v", sent)
+	}
+}
+
+// A delegation never lets the Grão-Mestre approve a PR the App opened.
+func TestADelegationDoesNotLetTheGrandMasterApproveItsOwnPR(t *testing.T) {
+	t.Parallel()
+	l := newGHLab(t)
+	marina := l.person("Marina", "marina", users.Approver)
+	l.gh.IssueUserToken("ghu_marina", "marina")
+	l.gh.SetPullAuthor("lucas/meu-app", l.pr, "mestre-grao-mestre[bot]")
+	l.approved("character-gm", l.sha)
+	a := l.approver(func(a *approvals.Approver) {
+		a.Personal = credentials{clients: map[string]approvals.ReviewClient{marina.ID: l.client("ghu_marina")}}
+		a.Delegations = &delegations{author: marina.ID}
+	})
+	order := l.order()
+	order.OnBehalf = "marina"
+	if _, err := a.Approve(l.ctx, order); !isHumanRequired(err) {
+		t.Fatalf("Approve = %v; want human_required", err)
+	}
+	if sent := l.sent(); len(sent) != 0 {
+		t.Fatalf("reviews sent: %+v", sent)
 	}
 }
 

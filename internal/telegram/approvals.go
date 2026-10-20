@@ -164,7 +164,7 @@ func (c *ApprovalChannel) AskPIN(ctx context.Context, userID string, rep approva
 	if rep.PIN == "" {
 		return nil
 	}
-	err := c.bot.Ask(ctx, userID, PINKind, rep.PIN, "Seu review no GitHub vale como aprovação, mas este pedido exige o seu PIN. Digite o PIN para confirmar. A mensagem com o PIN é apagada.", promptTTL)
+	err := c.bot.Ask(ctx, userID, PINKind, rep.PIN, "Seu review no GitHub vale como aprovação de um pedido que exige o seu PIN. Se você não fez esse review, ignore esta mensagem. Para confirmar, digite o PIN (a mensagem com o PIN é apagada).", promptTTL)
 	if err != nil {
 		c.flow.PINFailed(ctx, userID, rep.PIN)
 	}

@@ -25,8 +25,8 @@ func PlanBRuleset(r ReviewRules, branch string, grandMasterAppID int64) map[stri
 			"parameters": map[string]any{
 				"required_approving_review_count":   max(r.Approvals, 1),
 				"dismiss_stale_reviews_on_push":     r.DismissStale,
-				"require_code_owner_review":         r.CodeOwners,
-				"require_last_push_approval":        r.LastPush,
+				"require_code_owner_review":         false, // a rule the exception skips is no rule: plan B is refused when the repository asks it
+				"require_last_push_approval":        false,
 				"required_review_thread_resolution": false,
 			},
 		}},

@@ -34,6 +34,7 @@ Se o resultado for `nao_conta`:
 - Repositório pessoal **não** aceita lista de exceção na proteção clássica de branch; só **rulesets** aceitam.
 - O Grão-Mestre propõe ao Dono um pedido de aprovação do tipo `configuracao_repositorio` (com PIN): criar o ruleset `mestre-aprovacao` na branch principal, contendo **só** a regra de PR com o mesmo número de aprovações exigido hoje, e com `bypass_actors: [{actor_id: <app_id do Grão-Mestre>, actor_type: "Integration", bypass_mode: "pull_request"}]`.
 - Quem está na lista de exceção **ignora todas as regras daquele ruleset**, não só a revisão. Por isso o ruleset novo tem só a regra de revisão. As outras regras (CI obrigatório etc.) continuam onde estão, sem exceção. Se a regra de revisão hoje está na proteção clássica ou num ruleset com outras regras, a proposta mostra a mudança completa: tirar a revisão de lá e criá-la no ruleset novo.
+- Se o repositório exige review de **code owner** ou a aprovação do **último push**, não há plano B: a exceção ignoraria essas regras do ruleset, então o workspace vai direto ao modo "aprovação humana".
 - Mesmo com a exceção, o Grão-Mestre envia o review `APPROVE` antes do merge, para registro.
 - Rulesets em **repositório privado** de conta pessoal exigem **GitHub Pro**. Sem isso, ou se o Dono negar, o repositório passa ao modo "aprovação humana": cada merge pede a aprovação de uma pessoa pelo Telegram, aplicada como abaixo.
 

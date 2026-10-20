@@ -778,6 +778,15 @@ func (f *Flow) RevokeVote(ctx context.Context, request int64, userID string) err
 	return nil
 }
 
+// DropPIN forgets the approval of a user that waits for the PIN of a request (the
+// review that made it was dismissed): the PIN that comes later confirms nothing.
+func (f *Flow) DropPIN(ctx context.Context, request int64, userID string) error {
+	return f.o.DB.WriteDurable(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM approval_pins WHERE request = ? AND user_id = ?`, request, userID)
+		return err
+	})
+}
+
 // Resend gives a user the buttons of an open request back: the ones they had
 // were used up by an answer that did not end (a PIN that failed, a text that
 // was refused).

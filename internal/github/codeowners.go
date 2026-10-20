@@ -61,6 +61,9 @@ func (c CodeOwners) Required(ctx context.Context, repo string, n int) ([]string,
 	if err != nil {
 		return nil, err
 	}
+	if len(files) >= 3000 { // GitHub cuts the list there: the owners of the rest are unknown
+		return nil, fmt.Errorf("the PR lists %d files, which GitHub may have cut", len(files))
+	}
 	var out []string
 	seen := map[string]bool{}
 	add := func(owners []string) {

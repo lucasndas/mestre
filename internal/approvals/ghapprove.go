@@ -179,19 +179,26 @@ func (a *Approver) Approve(ctx context.Context, o ApproveOrder) (Approval, error
 			break
 		}
 	}
-	if byPerson == "" && a.Modes != nil {
-		if mode, _, err := a.Modes.Get(ctx, o.Workspace); err != nil {
+	humanMode := false
+	if a.Modes != nil {
+		mode, _, err := a.Modes.Get(ctx, o.Workspace)
+		if err != nil {
 			return Approval{}, err
-		} else if mode == ModeHuman {
-			return Approval{}, human("o workspace está no modo de aprovação humana: só a aprovação de uma pessoa vale")
 		}
+		humanMode = mode == ModeHuman
+	}
+	if humanMode && byPerson == "" {
+		return Approval{}, human("o workspace está no modo de aprovação humana: só a aprovação de uma pessoa vale")
+	}
+	if gmLogin == "" {
+		return Approval{}, errors.New("approvals: the login of the App Grão-Mestre is not known")
 	}
 	openedByGM := strings.EqualFold(pr.Author, gmLogin)
 	required, err := a.required(ctx, o)
 	if err != nil {
 		return Approval{}, human("não foi possível saber quem o repositório exige para aprovar o PR #%d: %v", o.Number, err)
 	}
-	if !openedByGM && len(required) == 0 && o.OnBehalf == "" {
+	if !openedByGM && !humanMode && len(required) == 0 && o.OnBehalf == "" {
 		return a.asGrandMaster(ctx, gm, o, best, byPerson)
 	}
 	return a.asPerson(ctx, o, best, byPerson, required, openedByGM)
@@ -266,7 +273,7 @@ func (a *Approver) asPerson(ctx context.Context, o ApproveOrder, r chain.Request
 			if err != nil {
 				return Approval{}, err
 			}
-		case o.OnBehalf != "" && a.sameUser(p, o.OnBehalf):
+		case o.OnBehalf != "" && !openedByGM && a.sameUser(p, o.OnBehalf):
 			author, ok, err := a.delegation(ctx, r)
 			if err != nil {
 				return Approval{}, err
