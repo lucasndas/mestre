@@ -148,6 +148,10 @@ func (c *BlockChannel) Say(ctx context.Context, workspace, mesa, text string) (i
 			lines = append(lines, l)
 		}
 	}
+	// each line is quoted, so no line of the message imitates a line of the engine
+	for i := range lines {
+		lines[i] = "| " + lines[i]
+	}
 	body := strings.Join(lines, "\n")
 	if r := []rune(body); len(r) > maxSay {
 		body = string(r[:maxSay]) + "…"

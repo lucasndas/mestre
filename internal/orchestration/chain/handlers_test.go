@@ -348,6 +348,12 @@ func TestApprovalAskWithATextOfActionOpensAQuestionForThePeople(t *testing.T) {
 	if len(w.users.askedFor(id)) != 1 {
 		t.Fatal("the people were not asked")
 	}
+	for _, bad := range []string{"12abc", "0", "-5"} {
+		f := map[string]any{"action": bad, "summary": "x", "details": "x", "recommend": "approve", "reason": "x"}
+		if got := w.cli(w.gm, "approval ask", f); got.OK || got.Code != "usage" {
+			t.Errorf("--action %q: %+v, want usage (not a question to the people)", bad, got)
+		}
+	}
 	// a table master cannot ask, and a secret in the action is refused by the gate (see the Spec)
 	if got := w.cli(w.master, "approval ask", flags); got.OK || got.Code != "level_denied" {
 		t.Fatalf("a table master: %+v", got)

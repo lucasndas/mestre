@@ -209,6 +209,13 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 	action := strings.TrimPrefix(strings.TrimSpace(flagText(c, "action")), "#")
 	id, err := strconv.ParseInt(action, 10, 64)
 	asksAction := err != nil || id <= 0
+	if asksAction && (err == nil || strings.IndexFunc(action, func(r rune) bool { return r >= '0' && r <= '9' }) == 0) {
+		// something that starts as a number of a request but is not one
+		return localchan.Fail(localchan.CodeUsage, fmt.Sprintf("--action %q is not the number of a request; an action to ask about starts with a word", flagText(c, "action")), "")
+	}
+	if asksAction && len([]rune(action)) > 1000 {
+		return localchan.Fail(localchan.CodeUsage, "--action has at most 1000 characters; the rest goes in --details", "")
+	}
 	if asksAction && strings.TrimSpace(action) == "" {
 		return localchan.Fail(localchan.CodeUsage, "--action is the number of the request that waits at your level (see `mestre approval list --mine`), or the action you want to do", "")
 	}

@@ -656,7 +656,9 @@ func (s *Service) settle(ctx context.Context, r Request, st Settings, byName, in
 		s.o.Waits.ApprovalDecided(ctx, r.ID, text)
 	}
 	if r.Requester != "" {
-		s.breaker(ctx, r, st)
+		if r.Type != classes.RequestGMAction { // a question of the Grão-Mestre is no action that was denied
+			s.breaker(ctx, r, st)
+		}
 		// The wait is over: the status says what the character does again.
 		if err := s.o.Inbox.Pump(ctx, r.Requester); err != nil {
 			s.log.Debug("chain: the delivery to the requester was not pumped", "request", r.ID, "err", err)
