@@ -8,9 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/privdir"
@@ -110,5 +112,56 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if integ != nil {
 		integ.Extend(&opts)
 	}
-	return NewOrchestration(opts)
+	var cc *CitadelClasses
+	if people, ok := integ.(chainPeople); ok {
+		if cc, err = e.hostChain(&opts, people, workspaces.Layout{Root: workspacesDir}); err != nil {
+			return nil, err
+		}
+	}
+	orc, err := NewOrchestration(opts)
+	if err != nil {
+		return nil, err
+	}
+	if cc != nil {
+		e.period.Store(&periodHooks{chain: orc.Chain, rules: tableRuleGate(orc.TableRules)})
+	}
+	return orc, nil
+}
+
+// tableRuleGate is the gate of the temporary table rules, or none (not a gate
+// that is a nil pointer).
+func tableRuleGate(r *tablerules.Service) classes.TableRuleGate {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
+// hostChain puts in the options the chain of approval of the Citadel: the
+// libraries of classes of the workspaces, the effective rules built from them
+// (published to this machine before a character starts and when a temporary
+// table rule is made), the policy file of each workspace, and the grimoires'
+// access by the users. The people it asks come from the integration.
+func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout workspaces.Layout) (*CitadelClasses, error) {
+	books := newClassBooks(o.Guild, e.clk, e.paths.ClassesGlobais, layout)
+	o.ClassLibraries = books.For
+	o.ChainPolicy = policyFileFor(layout, people, e.log)
+	if o.ChainAlerts == nil {
+		o.ChainAlerts = chainOwnerAlerts{people}
+	}
+	if o.GrimoireAccess == nil {
+		o.GrimoireAccess = userGrimoires{people.Users()}
+	}
+	cc, err := NewCitadelClasses(CitadelClassesOptions{Registry: characters.Registry{DB: o.Guild}, Libraries: books.For, Presets: o.Presets,
+		Decrees: people.CharacterDecrees(), Locked: func(ctx context.Context, _ string) bool { return o.Locked != nil && o.Locked(ctx) }})
+	if err != nil {
+		return nil, err
+	}
+	pub := &RulesPublisher{Classes: cc, Machine: e.id.MachineID}
+	if e.mdb != nil {
+		pub.Local = &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
+	}
+	o.ChainClasses, o.ChainRulesPublisher = cc, pub
+	o.Machines = PublishingMachines(o.Machines, pub)
+	return cc, nil
 }
