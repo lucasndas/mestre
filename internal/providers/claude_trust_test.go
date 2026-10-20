@@ -190,6 +190,29 @@ func TestPreTrustKnowsTheKeyOfWindowsByAnyWriting(t *testing.T) {
 	}
 }
 
+// On Windows Claude Code reads the key only with forward slashes: PreTrust
+// writes it so, a key with backslashes (of an older Mestre) does not count as
+// the worktree's, and Untrust takes both out.
+func TestPreTrustOnWindowsWritesTheKeyWithForwardSlashes(t *testing.T) {
+	t.Parallel()
+	profile, path := trustFile(t, `{"projects": {"C:\\Mestre\\work\\3-login": {"hasTrustDialogAccepted": true}}}`)
+	claude := providers.NewClaudeCode(providers.Options{})
+	req := providers.PreTrustRequest{OS: "windows", Profile: profile, Worktree: `C:\Mestre\work\3-login`}
+	if _, err := claude.PreTrust(req); err != nil {
+		t.Fatal(err)
+	}
+	projects := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any)
+	if e, _ := projects["C:/Mestre/work/3-login"].(map[string]any); e["hasTrustDialogAccepted"] != true {
+		t.Fatalf("projects = %v, want the key C:/Mestre/work/3-login trusted", projects)
+	}
+	if _, err := claude.(providers.TrustRemover).Untrust(req); err != nil {
+		t.Fatal(err)
+	}
+	if projects := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any); len(projects) != 0 {
+		t.Errorf("projects after Untrust = %v, want none of the two writings", projects)
+	}
+}
+
 // Untrust takes back what PreTrust gave, when the worktree is removed.
 func TestUntrustTakesTheWorktreeOutAndNothingElse(t *testing.T) {
 	t.Parallel()

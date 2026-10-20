@@ -127,7 +127,7 @@ func startClaude(t *testing.T, clk clock.Clock, env ...string) *agentTerminal {
 		"work/.git/HEAD":        "ref: refs/heads/main\n",
 		"home/.keep":            "",
 		"cfg/.credentials.json": "{}",
-		"cfg/.claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, work),
+		"cfg/.claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(work)),
 	})
 	l := &fakeagent.MemLauncher{Clock: clk, Reporter: t}
 	p, err := l.Start(t.Context(), terminal.Spec{

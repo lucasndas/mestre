@@ -69,19 +69,25 @@ func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
 	})
 }
 
-// Untrust takes the worktree's entry out of the trust file: the worktree was
-// removed, or the conformance test ended.
+// Untrust takes the worktree's entries out of the trust file, in any writing
+// of the folder (on Windows also the one with backslashes an older Mestre
+// wrote): the worktree was removed, or the conformance test ended.
 func (c *claudeCode) Untrust(req PreTrustRequest) (Trust, error) {
 	return c.editTrust(req, func(projects map[string]any) (_, cleared []string) {
-		wt := entryKey(req.OS, projects, req.Worktree)
-		if _, ok := projects[wt]; ok {
-			delete(projects, wt)
-			cleared = append(cleared, wt)
+		for k := range projects {
+			if sameFolder(req.OS, k, req.Worktree) {
+				delete(projects, k)
+				cleared = append(cleared, k)
+			}
 		}
 		return nil, cleared
 	}, func(projects map[string]any) bool {
-		_, ok := projects[entryKey(req.OS, projects, req.Worktree)]
-		return !ok
+		for k := range projects {
+			if sameFolder(req.OS, k, req.Worktree) {
+				return false
+			}
+		}
+		return true
 	})
 }
 
@@ -211,14 +217,20 @@ func replaceFile(path string, data []byte, was fileState) error {
 
 // entryKey is the key of projects that stands for folder: the one already
 // there when it names the same folder (on Windows Claude Code may have
-// written it with other slashes or case), else the folder as given.
+// written it with another case), else the folder as Claude Code writes it.
+// On Windows that is with forward slashes: Claude Code 2.1.304 does not read
+// a key with backslashes, and the trust screen shows up anyway (the Windows
+// round, 2026-10-19), so such a key never stands for the folder.
 func entryKey(goos string, projects map[string]any, folder string) string {
 	folder = strings.TrimRight(folder, `/\`)
+	if goos == "windows" {
+		folder = strings.ReplaceAll(folder, `\`, "/")
+	}
 	if _, ok := projects[folder]; ok {
 		return folder
 	}
 	for k := range projects {
-		if sameFolder(goos, k, folder) {
+		if (goos != "windows" || !strings.Contains(k, `\`)) && sameFolder(goos, k, folder) {
 			return k
 		}
 	}
