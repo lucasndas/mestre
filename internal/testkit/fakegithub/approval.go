@@ -50,6 +50,7 @@ type approvalState struct {
 	refresh     map[string]string // refresh token → login
 	secrets     map[string]string // client id → client secret
 	revoked     []string
+	revokePaths []string
 	tokenLife   time.Duration
 	refreshFail bool
 }
@@ -214,6 +215,14 @@ func (s *Server) SlowDown(userCode string, times int) {
 	}
 }
 
+// RevokePaths are the paths the revocations came by: /grant takes every token of
+// the account of the App, /token only the one named.
+func (s *Server) RevokePaths() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.approval().revokePaths...)
+}
+
 // RevokedTokens are the user tokens the engine revoked.
 func (s *Server) RevokedTokens() []string {
 	s.mu.Lock()
@@ -255,7 +264,7 @@ func (s *Server) serveApproval(w http.ResponseWriter, r *http.Request) bool {
 		s.accessTokenUser(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/user":
 		s.currentUser(w, r)
-	case r.Method == http.MethodDelete && len(parts) == 3 && parts[0] == "applications" && parts[2] == "grant":
+	case r.Method == http.MethodDelete && len(parts) == 3 && parts[0] == "applications" && (parts[2] == "grant" || parts[2] == "token"):
 		s.revokeGrant(w, r, parts[1])
 	case r.Method == http.MethodPut && len(parts) == 5 && parts[0] == "user" && parts[1] == "installations" && parts[3] == "repositories":
 		s.addToInstallation(w, r, parts[2], parts[4])
@@ -801,6 +810,7 @@ func (s *Server) revokeGrant(w http.ResponseWriter, r *http.Request, clientID st
 	if _, known := s.tokens[in.AccessToken]; known {
 		delete(s.tokens, in.AccessToken)
 		s.approval().revoked = append(s.approval().revoked, in.AccessToken)
+		s.approval().revokePaths = append(s.approval().revokePaths, r.URL.Path)
 	}
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)

@@ -49,6 +49,10 @@ type ManagerConfig struct {
 	Clock   clock.Clock
 	System  System
 	Spawner Spawner
+	// Access, when set (Windows), grants the logon SID of each terminal on
+	// the socket of the local channel while the terminal lives; a terminal
+	// whose grant fails does not start (access.go).
+	Access Access
 	// MachineID is written to the registry rows of this machine.
 	MachineID string
 	// SocketDir and LogDir hold <id>.sock and <id>.log of the terminals.
@@ -186,12 +190,18 @@ func (m *Manager) Create(ctx context.Context, spec CreateSpec) (*Terminal, error
 	}
 	rec.PTY = sp.ProcID
 	started := false
+	// The grant of the local channel comes before anything of the agent
+	// runs, and a failure ends the terminal (fail closed).
+	grantErr := m.grantAccess(ctx, &rec, sp.LogonSID)
 	abort := func(err error) (*Terminal, error) {
 		if started && m.cfg.OnDiscarded != nil {
 			m.cfg.OnDiscarded(rec.ID)
 		}
 		m.discard(rec, sp.ProcID)
 		return nil, err
+	}
+	if grantErr != nil {
+		return abort(grantErr)
 	}
 	if err := m.reg.setProcess(ctx, rec.ID, sp.ProcID); err != nil { // 3
 		return abort(err)
@@ -231,6 +241,7 @@ func (m *Manager) discard(rec Record, p ProcID) {
 		_ = m.killTree(ctx, rec.ID, p, nil)
 	}
 	_ = m.cfg.Spawner.KillCgroup(ctx, rec.ID)
+	m.revokeAccess(rec.ID, rec.LogonSID)
 	_ = os.Remove(rec.SocketPath)
 	_ = m.reg.delete(ctx, rec.ID)
 }
@@ -282,6 +293,7 @@ func (m *Manager) connectionLost(t *Terminal) {
 	gone := !Alive(m.cfg.System, t.proc)
 	if gone {
 		_ = m.cfg.Spawner.KillCgroup(ctx, t.id)
+		m.revokeAccess(t.id, t.rec.LogonSID)
 		_ = m.reg.setStatus(ctx, t.id, StatusInterrupted, m.clk.Now())
 	}
 	if f := m.cfg.OnEvent; f != nil {
