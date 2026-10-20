@@ -43,6 +43,10 @@ func Refusal(err error) localchan.Response {
 	switch {
 	case errors.As(err, &ve):
 		return localchan.Fail("invalid_quest", ve.Error(), "fix the definition; `mestre quest create` checks it again").WithExit(localchan.ExitUsage)
+	case errors.Is(err, ErrCorrectionLimit):
+		return localchan.Fail("correction_limit", err.Error(), `ask the Grand Master: mestre ask "Grão-Mestre" "<what is still unproved and why>"`).WithExit(localchan.ExitConflict)
+	case errors.Is(err, ErrOtherIssue):
+		return localchan.Fail("outside_epic", err.Error(), "use an issue of your epic").WithExit(localchan.ExitDenied)
 	case errors.Is(err, ErrNoQuest):
 		return localchan.Fail("not_found", err.Error(), "see `mestre quest status`")
 	case errors.Is(err, ErrNameTaken):
