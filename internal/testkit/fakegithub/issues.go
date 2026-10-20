@@ -453,6 +453,17 @@ func (s *Server) SetIssueState(full string, n int, state string) {
 	s.touch(s.repos[full], n)
 }
 
+// CloseIssueAs closes an issue with the reason GitHub gives ("completed" or
+// "not_planned") and the instant of the change.
+func (s *Server) CloseIssueAs(full string, n int, reason string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	issue := s.repos[full].issues[n-1]
+	issue["state"], issue["state_reason"] = "closed", reason
+	issue["closed_at"] = s.clk.Now().UTC().Format(time.RFC3339)
+	s.touch(s.repos[full], n)
+}
+
 // Parent is the parent of a sub-issue (0: none).
 func (s *Server) Parent(full string, n int) int {
 	s.mu.Lock()

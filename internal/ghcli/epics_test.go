@@ -20,6 +20,8 @@ type fakeDeps struct {
 	// notPlanned are the closings told as not planned
 	notPlanned []int
 	released   [][2]int
+	// releaseErr is what Release answers (nil: it released)
+	releaseErr error
 	err        error
 	// failOn makes the dependency on that epic fail
 	failOn int
@@ -44,6 +46,9 @@ func (f *fakeDeps) Depend(_ context.Context, by characters.Character, epic, on i
 func (f *fakeDeps) Release(_ context.Context, _ characters.Character, epic, on int) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.releaseErr != nil {
+		return f.releaseErr
+	}
 	f.released = append(f.released, [2]int{epic, on})
 	return nil
 }
@@ -218,5 +223,41 @@ func TestAPullRequestWithTheLabelOfTheEpicsIsNotAnEpic(t *testing.T) {
 		if int(e.(map[string]any)["number"].(float64)) == pr {
 			t.Fatal("the pull request is listed as an epic")
 		}
+	}
+}
+
+// Part of CA-DEPMESA-05: `gh epic update --release <m>` drops the wait of the epic for
+// another one (the Grão-Mestre decided to go on without it); what GitHub is asked to
+// change goes first, an epic that does not wait for that one is not_found, and it needs
+// the dependencies of the run.
+func TestReleaseDropsTheWaitOfAnEpicForAnotherAndRefusesWhatDoesNotWait(t *testing.T) {
+	t.Parallel()
+	r, deps := epicRig(t)
+	e12 := int(r.run("gm", "gh epic", map[string]any{"title": "Login"}, "create").Data["number"].(float64))
+	e15 := int(r.run("gm", "gh epic", map[string]any{"title": "Checkout"}, "create").Data["number"].(float64))
+	got := r.run("gm", "gh epic", map[string]any{"release": []any{"#" + itoa(e12)}, "title": "Checkout 2"}, "update", itoa(e15))
+	if !got.OK || !slices.Equal(deps.released, [][2]int{{e15, e12}}) {
+		t.Fatalf("update --release: %+v, released %v", got, deps.released)
+	}
+	if title, _, _, _, _ := r.gh.Issue(repoFull, e15); title != "Checkout 2" {
+		t.Errorf("the title was not changed: %q", title)
+	}
+	// it does not wait for that one
+	deps.releaseErr = epicdeps.ErrNoDependency
+	if got = r.run("gm", "gh epic", map[string]any{"release": []any{itoa(e12)}}, "update", itoa(e15)); got.OK || got.Code != "not_found" {
+		t.Errorf("release of a wait that does not exist: %+v", got)
+	}
+	// to wait and to be released in one command makes no sense
+	deps.releaseErr = nil
+	if got = r.run("gm", "gh epic", map[string]any{"release": []any{itoa(e12)}, "depends-on": []any{itoa(e12)}}, "update", itoa(e15)); got.OK {
+		t.Errorf("depends-on and release of the same epic: %+v", got)
+	}
+	if got = r.run("gm", "gh epic", map[string]any{"release": []any{"x"}}, "update", itoa(e15)); got.OK {
+		t.Errorf("a release that is not a number: %+v", got)
+	}
+	// without the dependencies of the run nothing is changed
+	r.h.Deps = nil
+	if got = r.run("gm", "gh epic", map[string]any{"release": []any{itoa(e12)}}, "update", itoa(e15)); got.OK {
+		t.Errorf("release with no dependencies in the run: %+v", got)
 	}
 }
