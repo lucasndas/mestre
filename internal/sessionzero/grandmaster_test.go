@@ -18,8 +18,8 @@ func TestTheModelOfTheGrandMasterHasTheEightLinesOfTheDecisionRuleInOrderTheThre
 	text := all.String()
 	at := -1
 	for i, line := range []string{
-		"  1. already served", "  2. a reply threaded to a message of table #12", "  3. about what an open table does", "  4. same as 3 with the table `in_review`",
-		"  5. about something of a table already merged", "  6. same area as an open table but another subject", "  7. unrelated to any table", "  8. more than one table serves",
+		"  1. already served", "  2. reply threaded to a message of table #12", "  3. about what an open table does", "  4. as 3 but `in_review`",
+		"  5. about a table already merged", "  6. same area as an open table", "  7. unrelated to any table", "  8. several tables fit",
 	} {
 		j := strings.Index(text, line)
 		if j <= at {
@@ -27,7 +27,7 @@ func TestTheModelOfTheGrandMasterHasTheEightLinesOfTheDecisionRuleInOrderTheThre
 		}
 		at = j
 	}
-	for _, want := range []string{"ask up to 3 questions, each with the recommended answer as the first button", "`## Critérios`", "ready with proof", "`mestre choose`", "--from-message <id> --no-wait", "\"Nova mesa\""} {
+	for _, want := range []string{"ask up to 3 questions, the recommended answer as the first button", "`## Critérios`", "ready with proof", "`mestre choose`", "--from-message <id> --no-wait", "\"Nova mesa\""} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the instructions lack %q", want)
 		}
@@ -39,9 +39,8 @@ func TestTheLayerOfTheGrandMasterWithTheTriageFitsTheLimitInEveryProvider(t *tes
 	for _, agent := range threeAgents {
 		r := newCharRig(t, nil)
 		plan := r.prepare(r.req("gm", agent, sessionzero.RoleGrandMaster))
-		if n := len(plan.Layer.Text); n > 8000 {
-			t.Errorf("%s: the layer of the Grand Master has %d characters", agent, n)
+		if n := len(plan.Layer.Text); n > 8000 || len(plan.Layer.Files) != 0 {
+			t.Errorf("%s: the layer of the Grand Master has %d characters and sends %d section(s) to files", agent, n, len(plan.Layer.Files))
 		}
-		t.Logf("%s: %d characters, over target %v", agent, len(plan.Layer.Text), plan.Layer.OverTarget)
 	}
 }
