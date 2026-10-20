@@ -266,6 +266,9 @@ func (s *Service) transcribe(ctx context.Context, data []byte, f Ref) *Transcrip
 	if s.o.Transcriber == nil {
 		return &Transcript{Duration: f.Duration, Err: "o motor não tem como transcrever"}
 	}
+	if f.Duration > MaxAudio {
+		return &Transcript{Duration: f.Duration, Err: fmt.Sprintf("áudio longo demais para transcrever (até %d min)", int(MaxAudio/time.Minute))}
+	}
 	t := s.o.Transcriber.Transcribe(ctx, data, f.Duration)
 	t.Text = s.o.Mask(t.Text)
 	return &t
@@ -365,6 +368,10 @@ func sameType(declared, detected string) bool {
 	return false
 }
 
+// maxNameBytes is the most bytes of a name, with room for the id and the dash in front of it
+// (255 on Linux and NTFS).
+const maxNameBytes = 200
+
 // SafeName is the name a file is kept under: no path separators, no control
 // characters, at most 100 characters (the extension is kept); a photo without a
 // name is foto-<id>.jpg and a voice message without one is audio-<id>.ogg.
@@ -392,13 +399,21 @@ func SafeName(name string, kind Kind, id, detected string) string {
 		}
 		return "arquivo-" + id + extOf(detected)
 	}
-	if r := []rune(name); len(r) > 100 {
+	if len([]rune(name)) > 100 || len(name) > maxNameBytes {
 		ext := path.Ext(name)
-		if len([]rune(ext)) > 20 {
+		if len([]rune(ext)) > 20 || len(ext) > 40 {
 			ext = ""
 		}
-		keep := 100 - len([]rune(ext))
-		name = string([]rune(strings.TrimSuffix(name, ext))[:keep]) + ext
+		stem := []rune(strings.TrimSuffix(name, ext))
+		if len(stem) > 100-len([]rune(ext)) {
+			stem = stem[:100-len([]rune(ext))]
+		}
+		// the bytes too: a name of 100 characters of a script of three bytes each
+		// would pass the 255 bytes a file system allows
+		for len(string(stem))+len(ext) > maxNameBytes && len(stem) > 0 {
+			stem = stem[:len(stem)-1]
+		}
+		name = string(stem) + ext
 	}
 	return name
 }

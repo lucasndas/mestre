@@ -263,6 +263,9 @@ func (r *Routing) choose(ctx context.Context, k Click) (string, string, error) {
 	if !contains(allowed, k.Arg) {
 		return "", "", errors.New("você não atua nesse workspace")
 	}
+	if users.Require(u.Level, users.TalkToGrandMaster) != nil {
+		return "", "", errors.New("com o seu nível você não fala com o Grão-Mestre")
+	}
 	if err := st.SetActive(ctx, u.ID, k.Arg); err != nil {
 		return "", "", err
 	}

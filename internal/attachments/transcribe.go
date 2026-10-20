@@ -76,6 +76,7 @@ func NewTranscription(clk clock.Clock, conv Converter, machines func(ctx context
 
 // Timeout is the limit of a transcription of an audio of that length.
 func Timeout(duration time.Duration) time.Duration {
+	duration = min(duration, MaxAudio) // the duration is what the sender declared
 	if d := 2 * duration; d > MinTimeout {
 		return d
 	}
@@ -171,9 +172,28 @@ type FFmpeg struct {
 	Run func(ctx context.Context, name string, args []string, stdin []byte) ([]byte, error)
 }
 
-// Args are the arguments of the conversion.
-func (FFmpeg) Args() []string {
-	return []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"}
+// MaxAudio is the longest audio the engine transcribes: a longer one is kept and
+// delivered without a transcript, and ffmpeg is told to stop there.
+const MaxAudio = 15 * time.Minute
+
+// formats are the containers ffmpeg may read, by what the content says it is;
+// anything else is refused, so ffmpeg never guesses the format of a hostile file
+// (a playlist or a manifest could make it open a network address or a local file).
+var formats = map[string]string{
+	"audio/ogg":  "ogg",
+	"audio/mpeg": "mp3",
+	"audio/wave": "wav",
+	"audio/aiff": "aiff",
+	"video/mp4":  "mov",
+	"video/webm": "matroska,webm",
+}
+
+// Args are the arguments of the conversion of an input of the container format:
+// only the pipe is a protocol, the format is named, and the output is cut at
+// MaxAudio.
+func (FFmpeg) Args(format string) []string {
+	return []string{"-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "pipe", "-f", format, "-i", "pipe:0",
+		"-t", fmt.Sprint(int(MaxAudio / time.Second)), "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"}
 }
 
 // ToWAV implements Converter.
@@ -182,11 +202,15 @@ func (f FFmpeg) ToWAV(ctx context.Context, in []byte) ([]byte, error) {
 	if name == "" {
 		name = "ffmpeg"
 	}
+	format, ok := formats[Detect(in)]
+	if !ok {
+		return nil, fmt.Errorf("attachments: ffmpeg: the format of the audio (%s) is not accepted", Detect(in))
+	}
 	run := f.Run
 	if run == nil {
 		run = ffmpeg.Run
 	}
-	out, err := run(ctx, name, f.Args(), in)
+	out, err := run(ctx, name, f.Args(format), in)
 	if err != nil {
 		return nil, fmt.Errorf("attachments: ffmpeg: %w", err)
 	}
@@ -254,11 +278,15 @@ func (w Whisper) Transcribe(ctx context.Context, wav []byte, lang string) (Resul
 		return Result{}, err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	hc := w.HTTP
-	if hc == nil {
-		hc = http.DefaultClient
+	// The audio never leaves the loopback: no redirect is followed, and the time
+	// limit is the context's (a transcription on a CPU takes longer than a request).
+	client := http.Client{}
+	if w.HTTP != nil {
+		client = *w.HTTP
 	}
-	resp, err := hc.Do(req)
+	client.Timeout = 0
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
 			return Result{}, ctx.Err()

@@ -105,18 +105,18 @@ func TestFFmpegConvertsToWAV16kMonoThroughThePipes(t *testing.T) {
 		gotName, gotArgs, gotIn = name, args, stdin
 		return []byte("RIFFwav"), nil
 	}}
-	out, err := f.ToWAV(t.Context(), []byte("ogg"))
-	if err != nil || string(out) != "RIFFwav" || gotName != "/usr/bin/ffmpeg" || string(gotIn) != "ogg" {
+	out, err := f.ToWAV(t.Context(), []byte("OggS\x00audio"))
+	if err != nil || string(out) != "RIFFwav" || gotName != "/usr/bin/ffmpeg" || string(gotIn) != "OggS\x00audio" {
 		t.Fatalf("out %q, %v", out, err)
 	}
 	joined := strings.Join(gotArgs, " ")
-	for _, want := range []string{"-ar 16000", "-ac 1", "-f wav", "-i pipe:0", "pipe:1"} {
+	for _, want := range []string{"-ar 16000", "-ac 1", "-f wav", "-f ogg -i pipe:0", "pipe:1", "-protocol_whitelist pipe", "-t 900"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args %q lack %q", joined, want)
 		}
 	}
 	empty := attachments.FFmpeg{Run: func(context.Context, string, []string, []byte) ([]byte, error) { return nil, nil }}
-	if _, err := empty.ToWAV(t.Context(), nil); err == nil {
+	if _, err := empty.ToWAV(t.Context(), []byte("OggS")); err == nil {
 		t.Fatal("an empty conversion was accepted")
 	}
 }
@@ -277,5 +277,74 @@ func TestACaptionAndATranscriptAreMasked(t *testing.T) {
 	row, _ := svc.Get(ctx, st.ID)
 	if strings.Contains(row.Caption+row.Transcript.Text, token) {
 		t.Fatal("a secret reached the database")
+	}
+}
+
+// ffmpeg never guesses the format of a hostile file: a playlist or a manifest is refused
+// before the program starts.
+func TestFFmpegRefusesAFormatItDoesNotKnow(t *testing.T) {
+	t.Parallel()
+	ran := false
+	f := attachments.FFmpeg{Run: func(context.Context, string, []string, []byte) ([]byte, error) { ran = true; return []byte("x"), nil }}
+	for _, in := range []string{"#EXTM3U\nhttp://10.0.0.1/x.ts", "<?xml version=\"1.0\"?><MPD>", "ffconcat version 1.0\nfile '/etc/passwd'"} {
+		if _, err := f.ToWAV(t.Context(), []byte(in)); err == nil {
+			t.Errorf("accepted %q", in)
+		}
+	}
+	if ran {
+		t.Fatal("ffmpeg started for a format that is not accepted")
+	}
+}
+
+func TestTheWhisperClientDoesNotFollowARedirect(t *testing.T) {
+	t.Parallel()
+	hit := false
+	other := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit = true }))
+	defer other.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL, http.StatusTemporaryRedirect)
+	}))
+	defer srv.Close()
+	if _, err := (attachments.Whisper{BaseURL: srv.URL}).Transcribe(t.Context(), []byte("RIFF"), "pt"); err == nil {
+		t.Fatal("a redirect was taken as an answer")
+	}
+	if hit {
+		t.Fatal("the audio followed a redirect")
+	}
+}
+
+func TestALongNameInAMultiByteScriptFitsTheFileSystem(t *testing.T) {
+	t.Parallel()
+	name := attachments.SafeName(strings.Repeat("漢", 100)+".pdf", attachments.KindDocument, "abcd1234", "application/pdf")
+	if len(name)+len("abcd1234-") > 255 || !strings.HasSuffix(name, ".pdf") {
+		t.Fatalf("name of %d bytes: %q", len(name), name)
+	}
+}
+
+func TestAnAudioOverTheLimitIsKeptWithoutATranscript(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	clk := clock.NewFake(time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC))
+	db, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF", Clock: clk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+		VALUES ('loja', 'lucas/loja', 'lucas/loja', 'https://example.test/x.git', 'main', 'active', '', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	e := &engine{res: attachments.Result{Text: "x"}}
+	tr := attachments.NewTranscription(clk, conv{}, func(context.Context) []attachments.Machine { return []attachments.Machine{{Engine: e}} }, "")
+	svc, err := attachments.New(attachments.Options{DB: db, Clock: clk, Fetcher: &fetcher{size: 4, data: []byte("OggS")}, Transcriber: tr, Root: func(context.Context, string) (string, error) { return t.TempDir(), nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := svc.Receive(ctx, attachments.Request{Workspace: "loja", File: attachments.Ref{ID: "a", Size: 4, Kind: attachments.KindVoice, Duration: 2 * time.Hour}})
+	if err != nil || st.Transcript == nil || !strings.Contains(st.Transcript.Err, "longo demais") || e.calls != 0 {
+		t.Fatalf("stored %+v, %v (calls %d)", st, err, e.calls)
+	}
+	if got := attachments.Timeout(2 * time.Hour); got != 2*attachments.MaxAudio {
+		t.Fatalf("timeout of a declared 2 h = %v", got)
 	}
 }

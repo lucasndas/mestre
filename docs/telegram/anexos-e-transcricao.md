@@ -63,6 +63,7 @@ Deixar o usuário mandar áudio, imagem ou documento pelo Telegram (ou pelo pain
   - Se a máquina preferida estiver offline, a próxima capaz assume.
   - O motor da Cidadela manda o áudio já convertido ao motor da máquina escolhida pela conexão WSS (`transcribe.request`) e recebe o texto de volta (`transcribe.result`) ([protocolo](../conectividade/protocolo.md)); o motor dela chama o `whisper-server` local. Quando é a própria Cidadela, a chamada é direta, sem WSS.
   - Numa troca de Cidadela, o padrão passa a ser a nova Cidadela.
+- **Áudio longo e formato:** o motor transcreve até 15 minutos (o `ffmpeg` corta aí e a conversão que passa do teto é recusada); um áudio declarado mais longo é guardado e entregue sem transcrição, com o motivo. O `ffmpeg` só lê o contêiner que o conteúdo diz ser (ogg, mp3, wav, aiff, mp4/m4a, webm), só pelo pipe e sem protocolos de rede; qualquer outro formato é recusado antes de iniciar o programa.
 - **Conversão:**
   - A voz do Telegram vem em OGG/Opus, e o `whisper-server` aceita WAV.
   - O motor **da Cidadela** converte com `ffmpeg` (dependência do pacote no Ubuntu e do instalador do Windows, presente em toda máquina) para WAV 16 kHz mono antes de enviar à máquina que transcreve, seja ela qual for. Assim a máquina que transcreve nunca converte. O servidor não roda com `--convert`.
