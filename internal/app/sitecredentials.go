@@ -172,8 +172,8 @@ func (e *CredentialError) Error() string { return e.Code + ": " + e.Message }
 // returns the value, which the caller holds only in memory. It is a request that
 // needs the answer now: it is never kept in the outbox, so with the Citadel away it
 // fails with citadel_unavailable (and a Citadel that does not act, the same).
-func RequestSiteCredential(ctx context.Context, link *protocol.Link, agentID, secret, purpose string) (protocol.Secret, error) {
-	ctx, cancel := context.WithTimeout(ctx, credentialWait) // a request that is not kept does not wait for ever
+func RequestSiteCredential(ctx context.Context, clk clock.Clock, link *protocol.Link, agentID, secret, purpose string) (protocol.Secret, error) {
+	ctx, cancel := clock.WithTimeout(ctx, clk, credentialWait) // a request that is not kept does not wait for ever
 	defer cancel()
 	away := &CredentialError{Code: localchan.CodeCitadelUnavailable, Message: "the Citadel is not available, the credential was not requested"}
 	if link == nil {
@@ -244,7 +244,7 @@ func (e *Engine) RequestSiteCredential(ctx context.Context, agentID, secret, pur
 	e.mu.Unlock()
 	switch {
 	case tow != nil:
-		v, err := RequestSiteCredential(ctx, tow.client.Link(), agentID, secret, purpose)
+		v, err := RequestSiteCredential(ctx, e.clk, tow.client.Link(), agentID, secret, purpose)
 		if err == nil && e.deps.Masker != nil {
 			e.deps.Masker.Register(string(v)) // what the machine holds is masked in what it writes
 		}

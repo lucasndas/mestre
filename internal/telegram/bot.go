@@ -496,7 +496,7 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 	// to the Grand Master. The answer of the PIN is the one thing that is no text.
 	var kind secretKind
 	var clean string
-	if !(armed && c.Kind == PINKind) {
+	if !armed || c.Kind != PINKind {
 		kind, clean = b.screenMessage(u, m, true)
 	}
 	if kind != secretNone {

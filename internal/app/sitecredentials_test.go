@@ -161,7 +161,7 @@ func TestATowerGetsASiteCredentialOnlyForACharacterWhoseClassReleasesItAndEveryt
 
 		// a character whose class does not list the credential: refused, nothing given
 		for _, who := range []string{"dev1", "ops1"} { // ops1: its class lists it, the credential does not list the class
-			got, err := RequestSiteCredential(w.ctx, link, who, siteName, "login em loja.example")
+			got, err := RequestSiteCredential(w.ctx, clock.Real{}, link, who, siteName, "login em loja.example")
 			var ce *CredentialError
 			if !errors.As(err, &ce) || ce.Code != protocol.CodeForbidden || got != "" {
 				t.Fatalf("%s got %q, %v; want forbidden and no value", who, got, err)
@@ -171,7 +171,7 @@ func TestATowerGetsASiteCredentialOnlyForACharacterWhoseClassReleasesItAndEveryt
 			}
 		}
 		// a character of a class that releases it: the value, in memory
-		got, err := RequestSiteCredential(w.ctx, link, "qa1", siteName, "login em loja.example")
+		got, err := RequestSiteCredential(w.ctx, clock.Real{}, link, "qa1", siteName, "login em loja.example")
 		if err != nil || got.Reveal() != siteValue {
 			t.Fatalf("qa1 got %v, %v; want the credential", got, err)
 		}
@@ -179,7 +179,7 @@ func TestATowerGetsASiteCredentialOnlyForACharacterWhoseClassReleasesItAndEveryt
 			t.Errorf("the value prints as %v", got)
 		}
 		// a Tower speaks only of its own characters: a character that is not on that machine
-		if _, err := RequestSiteCredential(w.ctx, link, "ghost", siteName, "x"); err == nil {
+		if _, err := RequestSiteCredential(w.ctx, clock.Real{}, link, "ghost", siteName, "x"); err == nil {
 			t.Error("a character the registry does not put on the machine got the credential")
 		}
 
@@ -217,7 +217,7 @@ func TestATowerGetsASiteCredentialOnlyForACharacterWhoseClassReleasesItAndEveryt
 		w.stopS()
 		w.wgS.Wait()
 		synctest.Wait()
-		_, err = RequestSiteCredential(w.ctx, link, "qa1", siteName, "login em loja.example")
+		_, err = RequestSiteCredential(w.ctx, clock.Real{}, link, "qa1", siteName, "login em loja.example")
 		var ce *CredentialError
 		if !errors.As(err, &ce) || ce.Code != localchan.CodeCitadelUnavailable {
 			t.Fatalf("with the Citadel away: %v, want citadel_unavailable", err)
@@ -237,7 +237,7 @@ func TestACredentialIsNotGivenToAnExcludedMachineADeadCharacterAnExpiredCredenti
 	synctest.Test(t, func(t *testing.T) {
 		w := newCredWorld(t)
 		defer w.stop()
-		past := time.Now().Add(-time.Hour)
+		past := clock.Real{}.Now().Add(-time.Hour)
 		if err := w.vault.Put(w.ctx, "site_velho", vault.TypeSiteCredential, []byte(siteValue),
 			&vault.SiteMeta{OwnerUser: "ana", Classes: []string{"qa"}, Domains: []string{"loja.example"}, Kind: vault.KindAppPassword, ExpiresAt: &past}); err != nil {
 			t.Fatal(err)
@@ -268,7 +268,7 @@ func TestACredentialIsNotGivenToAnExcludedMachineADeadCharacterAnExpiredCredenti
 		check("an excluded machine", "qa1", siteName, "login")
 		w.broker.Excluded = func(context.Context, string) (bool, error) { return false, nil }
 		for _, st := range []characters.State{characters.Stopped, characters.Interrupted, characters.Stopping} {
-			if _, _, err := w.reg.Transition(w.ctx, "qa1", st, characters.Change{Reason: "test", At: time.Now()}); err != nil {
+			if _, _, err := w.reg.Transition(w.ctx, "qa1", st, characters.Change{Reason: "test", At: clock.Real{}.Now()}); err != nil {
 				// the transition graph does not go there from idle: set it straight
 				if _, err := w.db.Writer().ExecContext(w.ctx, `UPDATE characters SET state = ? WHERE id = 'qa1'`, string(st)); err != nil {
 					t.Fatal(err)
