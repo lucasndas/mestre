@@ -34,7 +34,10 @@ type Machines struct {
 	// are made.
 	Chars   func() *characters.Service
 	Confirm func(ctx context.Context, id string) error
-	clk     clock.Clock
+	// Check, when set, runs before each start, as the CheckStart of the runtime
+	// does; its error is the refusal of the start.
+	Check func(ctx context.Context, cmd characters.StartCommand) error
+	clk   clock.Clock
 
 	mu      sync.Mutex
 	started []characters.StartCommand
@@ -57,6 +60,11 @@ func (m *Machines) Report(ctx context.Context, id string, st characters.State) {
 
 // Start implements characters.Machines: the character is ready at once.
 func (m *Machines) Start(ctx context.Context, _ string, cmd characters.StartCommand) (characters.StartResult, error) {
+	if m.Check != nil {
+		if err := m.Check(ctx, cmd); err != nil {
+			return characters.StartResult{}, err
+		}
+	}
 	m.mu.Lock()
 	m.started = append(m.started, cmd)
 	m.mu.Unlock()

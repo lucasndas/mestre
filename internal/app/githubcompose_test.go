@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"net/http"
@@ -40,6 +38,9 @@ type ghCompose struct {
 	table  tables.Table
 	master characters.Character
 	pr     int
+	// machines are the machines of the orchestration (their start can be made to check).
+	machines *orcfakes.Machines
+	gm       characters.Character
 }
 
 func newGHCompose(t *testing.T) *ghCompose { return newGHComposeWith(t, false) }
@@ -60,10 +61,7 @@ func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose
 	}
 	srv := httptest.NewServer(double)
 	t.Cleanup(srv.Close)
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
+	key := testRSAKey(t) // one for the binary: generating a key is the slow part
 	pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 	apps := &github.Registry{DB: i.db, Clock: i.clk}
 	for n, a := range []github.App{{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster}, {Name: "lucas-mestre-mestre", Role: github.RoleMestre}} {
@@ -101,6 +99,7 @@ func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose
 	c.rdir = remote.Dir()
 	c.remote.Handle(c.rdir).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 	machines := orcfakes.NewMachines(i.clk)
+	c.machines = machines
 	machines.Chars = func() *characters.Service { return c.orc.Characters }
 	o := OrchestrationOptions{Guild: i.db, Machine: "cidadela", Clock: i.clk, WorkspacesDir: filepath.Join(root, "workspaces"), TempDir: filepath.Join(root, "tmp"),
 		Git: c.remote, Machines: machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: c.rdir},
@@ -143,7 +142,7 @@ func newGHComposeCfg(t *testing.T, withChain, integrationPeople bool) *ghCompose
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.table, c.master = opened.Table, opened.Master
+	c.table, c.master, c.gm = opened.Table, opened.Master, gm.Character
 	machines.Report(i.ctx, c.master.ID, characters.Idle)
 	machines.Report(i.ctx, gm.Character.ID, characters.Idle)
 	// the PR of the table, opened after the workspace

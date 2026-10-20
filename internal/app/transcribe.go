@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -43,6 +44,17 @@ const (
 	// transcribeWatch is how often the Citadel checks that the Tower is still connected.
 	transcribeWatch = 2 * time.Second
 )
+
+// errTranscribeTimeout is the transcription that went past the limit of its audio.
+var errTranscribeTimeout = errors.New("time out")
+
+// failureOf is the reason and the code of transcribe.result for a transcription that failed.
+func failureOf(err error) (reason, code string) {
+	if errors.Is(err, errTranscribeTimeout) {
+		return err.Error(), protocol.TranscribeTimeout
+	}
+	return err.Error(), protocol.TranscribeFailed
+}
 
 // ---- the Tower ----
 
@@ -148,7 +160,7 @@ func (a *towerAudio) transcribe(ctx context.Context, wav []byte, lang string) (a
 	defer cancel()
 	res, err := a.whisper.Transcribe(ctx, wav, lang)
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return attachments.Result{}, errors.New("time out")
+		return attachments.Result{}, errTranscribeTimeout
 	}
 	return res, err
 }
@@ -187,7 +199,7 @@ func (e *Engine) registerTowerTranscription(ctx context.Context, router *protoco
 			out := protocol.TranscribeResult{DurationS: seconds(wav).Seconds()}
 			res, err := audio.transcribe(ctx, wav, lang)
 			if err != nil {
-				out.Error = err.Error()
+				out.Error, out.ErrorCode = failureOf(err)
 			} else {
 				out.Text, out.Language = res.Text, res.Lang
 			}
@@ -258,7 +270,7 @@ func (r remoteTranscriber) Transcribe(ctx context.Context, wav []byte, lang stri
 	case v := <-ch:
 		res, _ := v.(protocol.TranscribeResult)
 		if res.Error != "" {
-			return attachments.Result{}, fmt.Errorf("%s: %s", r.machine, res.Error)
+			return attachments.Result{}, fmt.Errorf("%s: %s (%s)", r.machine, res.Error, cmp.Or(res.ErrorCode, protocol.TranscribeFailed))
 		}
 		return attachments.Result{Text: res.Text, Lang: res.Language}, nil
 	case <-ctx.Done():

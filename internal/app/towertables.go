@@ -197,11 +197,42 @@ func towerFinalizers(base map[string]protocol.Finalizer, tower *lateTower) map[s
 	return base
 }
 
-// withAudio adds the receiver of the audios to transcribe (kind `audio`).
-func withAudio(fin map[string]protocol.Finalizer, audio *towerAudio) map[string]protocol.Finalizer {
-	fin[protocol.KindAudio] = audio
+// withAudio adds the receiver of the audios to transcribe (kind `audio`), which takes the
+// transfer only from the Citadel, the machine the connection authenticated.
+func withAudio(fin map[string]protocol.Finalizer, audio *towerAudio, citadel func() string) map[string]protocol.Finalizer {
+	fin[protocol.KindAudio] = citadelAudio{audio: audio, citadel: citadel}
 	return fin
 }
+
+// citadelAudio is the receiver of the audios of a Tower for the peer of the connection: the
+// Citadel gets the one that holds the WAV, anybody else is refused at xfer.begin.
+type citadelAudio struct {
+	audio   *towerAudio
+	citadel func() string
+}
+
+var _ protocol.PeerFinalizer = citadelAudio{}
+
+func (citadelAudio) Finalize(context.Context, protocol.XferBegin, string) error {
+	return protocol.NewError(protocol.CodeForbidden, "an audio to transcribe is taken from the Citadel")
+}
+
+// FinalizerFor implements protocol.PeerFinalizer.
+func (c citadelAudio) FinalizerFor(machine string) protocol.Finalizer {
+	// on a Tower the link of the Citadel is the one with the key protocol.CitadelKey; any other
+	// peer is a machine that connected to it
+	if machine != protocol.CitadelKey && (machine == "" || machine != c.citadel()) {
+		return refusedAudio{refusing{protocol.NewError(protocol.CodeForbidden, "an audio to transcribe is taken only from the Citadel")}}
+	}
+	return c.audio
+}
+
+// refusedAudio refuses an audio at xfer.begin, before any part is sent.
+type refusedAudio struct{ refusing }
+
+var _ protocol.Admitter = refusedAudio{}
+
+func (r refusedAudio) Admit(context.Context, protocol.XferBegin) error { return r.err }
 
 // names are the names of a workspace and of a table in the path of a worktree:
 // nothing that leaves the folder.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/digest"
 	"github.com/lucasndas/mestre/internal/users"
 )
 
@@ -22,7 +23,7 @@ type TablePauser interface {
 
 // PauseAutonomyAction is the button **Pausar autonomia** of the warning of a
 // queue that accumulates; its argument is "<workspace>:<table>".
-const PauseAutonomyAction = "pause_autonomy"
+const PauseAutonomyAction = digest.PauseAutonomyAction
 
 // AutonomyPauser pauses the autonomy of a table on the word of a person
 // (*chain.Supervisor).

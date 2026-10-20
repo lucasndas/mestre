@@ -37,11 +37,18 @@ func (l *Library) CharacterRules(ctx context.Context, c CharacterLayers) (*Rules
 	if err != nil {
 		return nil, err
 	}
-	return Build(Layers{
+	r, err := Build(Layers{
 		AgentID: c.AgentID, Class: cls.Name, Permissions: cls.Permissions,
 		Ceiling: ceil.Maximum(), Sheet: c.Sheet, DenyTools: c.DenyTools, Decrees: c.Decrees,
 		Placeholders: c.Placeholders, Locked: c.Locked, Now: l.Clock.Now(),
 	})
+	if err != nil {
+		return nil, err
+	}
+	// the hooks of the approved class travel with the rules, to the machine where the
+	// character runs, which has no library of classes
+	r.ClassHooks = &ShippedHooks{Hash: cls.Hash, Hooks: cls.Hooks}
+	return r, nil
 }
 
 // Domains are the network.domains of the approved class and of the ceiling of

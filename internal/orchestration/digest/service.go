@@ -426,10 +426,20 @@ func (s *Service) sample(ctx context.Context, workspace string, people []Person,
 			}
 			rows = append(rows, []Button{{Text: fmt.Sprintf("Foi um erro #%d", d.Request), Action: MistakeAction, Arg: fmt.Sprint(d.Request)}})
 		}
+		// Pausar autonomia, one per table of the sample: whoever reads what the agents
+		// decided can stop the decisions of that table there (docs/orquestracao/supervisao-da-cadeia.md)
+		var pauses [][]Button
+		seen := map[string]bool{}
+		for _, d := range pool {
+			if d.Table != "" && !seen[d.Table] {
+				seen[d.Table] = true
+				pauses = append(pauses, []Button{{Text: "Pausar autonomia " + d.Table, Action: PauseAutonomyAction, Arg: workspace + ":" + d.Table}})
+			}
+		}
 		for _, p := range people {
-			m := Message{UserID: p.ID, Workspace: workspace, Text: s.o.Mask(b.String())}
+			m := Message{UserID: p.ID, Workspace: workspace, Text: s.o.Mask(b.String()), Buttons: pauses}
 			if s.o.Directory.MayMark(ctx, p.ID, workspace) {
-				m.Buttons = rows
+				m.Buttons = append(append([][]Button(nil), rows...), pauses...)
 			}
 			if err := s.o.Sender.Send(ctx, m); err != nil {
 				s.log.Warn("digest: the sample was not sent", "user", p.ID, "err", err)
@@ -444,6 +454,10 @@ const (
 	AcceptAction   = "digest_accept"
 	DeclineAction  = "digest_decline"
 	ExamplesAction = "digest_examples"
+	// PauseAutonomyAction is the button **Pausar autonomia** of a table of the sample
+	// (the same of the warning of a queue, telegram.PauseAutonomyAction); its argument is
+	// "<workspace>:<table>".
+	PauseAutonomyAction = "pause_autonomy"
 )
 
 // Mark is the click on "Foi um erro": the mark goes to the audit of the decision

@@ -94,11 +94,16 @@ func (l *Library) OrchestratorRules(ctx context.Context, o OrchestratorLayers) (
 	if err != nil {
 		return nil, err
 	}
-	return Build(Layers{
+	r, err := Build(Layers{
 		AgentID: o.AgentID, Class: ReservedOrchestrator, Permissions: c.Permissions,
 		Ceiling: ceil.Maximum(), Sheet: o.Sheet, DenyTools: o.DenyTools, Decrees: o.Decrees,
 		Placeholders: o.Placeholders, Locked: o.Locked, Now: l.Clock.Now(),
 	})
+	if err != nil {
+		return nil, err
+	}
+	r.ClassHooks = &ShippedHooks{Hash: c.Hash} // the orchestrators have no extra hooks
+	return r, nil
 }
 
 // Attenuates is the attenuation of the approval chain

@@ -21,6 +21,7 @@ import (
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
@@ -50,6 +51,8 @@ type towerRun struct {
 	tables *lateTower
 	// usage reads the use of the characters of this Tower (nil without terminals).
 	usage *usageReader
+	// async runs the asynchronous hooks of the classes of the characters of this Tower.
+	async *hook.AsyncRunner
 }
 
 func (e *Engine) sheetBuilder() (*machinesheet.Builder, error) {
@@ -210,7 +213,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		Heartbeat: func(ctx context.Context) (protocol.MachineHeartbeat, error) {
 			return towerHeartbeat(ctx, sys, replica.LagSeconds()), nil
 		},
-		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: withAudio(towerFinalizers(replica.Finalizers(), tableHalf), audio)},
+		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: withAudio(towerFinalizers(replica.Finalizers(), tableHalf), audio, e.epochs.Citadel)},
 		Hooks: protocol.Hooks{
 			OnConnect: func(*protocol.Session) {
 				locator.Connected(pctx)
@@ -280,7 +283,9 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer, tables: tableHalf, usage: e.newTowerUsage()}
+	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer, tables: tableHalf, usage: e.newTowerUsage(), async: e.newTowerAsyncHooks(rulesStore)}
+	run.async.Start(pctx)
+	wg.Go(func() { <-pctx.Done(); run.async.Wait() })
 	e.setGuildDB(db)
 	e.mu.Lock()
 	e.role, e.tow, e.cit, e.unknown = RoleTower, run, nil, unknown

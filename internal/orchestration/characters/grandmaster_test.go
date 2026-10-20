@@ -48,7 +48,7 @@ func (f checkFunc) CheckStart(ctx context.Context, workspace, table, dir string,
 	return f(ctx, workspace, table, dir, p)
 }
 
-// Part of CA-GM-17 (the "Sistema" sender is not observable here: inbox.Users carries no sender, the header is the Telegram's): the Grand Master starts through the CheckStart of the session zero
+// The Runtime half of CA-GM-17 (the criterion, with the "Sistema" over the real bot, is in internal/app/gmunavailable_test.go): the Grand Master starts through the CheckStart of the session zero
 // like every character: with the files of its provider not generated in the
 // main clone (and the ones of another provider generated) the start is refused
 // with the provider and the problems, the messages of the users stay queued and

@@ -690,6 +690,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	e.registerCitadelCharacters(router, run)
 	e.registerCitadelTranscription(router, run)
 	router.HandleFunc(protocol.TypeAgentEvent, run.gated(e.handleAgentEvent))
+	router.HandleFunc(protocol.TypeHookOutput, run.gated(e.handleHookOutput))
 	router.HandleFunc(protocol.TypeUsageReading, run.gated(e.handleUsageReading))
 	router.HandleFunc(protocol.TypeVaultRequest, run.gated(e.handleVaultRequest(run)))
 	router.HandleFunc(protocol.TypeMachineHeartbeat, beats.Handle)

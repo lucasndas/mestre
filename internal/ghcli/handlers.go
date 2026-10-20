@@ -52,6 +52,11 @@ type Handlers struct {
 	// character (`pr open`, `pr update`), so the decrees that free the push to
 	// it register the execution; nil: nobody is told.
 	Executed func(ctx context.Context, c characters.Character, action string) error
+	// Unreachable lists the Towers with a worktree of the table that are not
+	// connected now (Tables.UnreachableTowers): the answer of `pr open` and
+	// `pr update` warns that the branch went from the Citadel without them; nil:
+	// no warning.
+	Unreachable func(ctx context.Context, tableKey string) []string
 	// Refused is told that GitHub refused the sending of the branch of a table for a
 	// reason only the Owner or the Grand Master can lift (`workflow_permission`,
 	// `signature_required`), or that the class does not allow (`workflow_not_allowed`): it puts the event, with the reason, in the inbox of the

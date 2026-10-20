@@ -18,7 +18,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// Part of CA-GM-17 over the real composition of `mestre run`: the Runtime the engine
+// The terminals half of CA-GM-17 over the real composition of `mestre run`: the Runtime the engine
 // builds from `terminais` runs the CheckStart of the session zero for the Grand
 // Master in the main clone (the table ""), and a provider whose files were not
 // generated there does not start it.

@@ -410,8 +410,11 @@ func TestNothingIsDoneOnGitHubWhileTheMestreIsLocked(t *testing.T) {
 	}
 }
 
-// Part of CA-DEC-09 (the push goes with the credentials of Sending.Auth, which take
-// no class: "com o App da classe" is not asserted)
+// CA-DEC-09: with the decree "o Dev pode enviar a branch da mesa" the hook still
+// denies the git push; `mestre pr update` makes the engine send the branch of the table
+// with the credentials asked for the character and its class (the App of the class:
+// app.stdPush gives the token of the App of who asks) and registers it in the decree;
+// a decree to ignore the required review is refused before the confirmation.
 func TestADecreeThatFreesThePushIsFulfilledByTheEngineAndRegisteredInTheDecree(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
@@ -482,6 +485,12 @@ func TestADecreeThatFreesThePushIsFulfilledByTheEngineAndRegisteredInTheDecree(t
 	}
 	if want := []string{r.remote + " refs/heads/42-login:refs/heads/42-login"}; !slices.Equal(r.pushes(), want) {
 		t.Fatalf("pushes = %q, want the branch of the table %q", r.pushes(), want)
+	}
+	r.auth.mu.Lock()
+	askers := slices.Clone(r.auth.askers)
+	r.auth.mu.Unlock()
+	if want := (github.Asker{Character: "qa", Class: "qa", Table: "meu-app/42-login"}); len(askers) != 1 || askers[0] != want {
+		t.Fatalf("the credentials of the push were asked for %+v, want the character and the class that asked %+v", askers, want)
 	}
 	uses, err := ds.Uses(r.ctx, d.Number)
 	if err != nil || len(uses) != 1 || uses[0].Character != "qa" || uses[0].Action != "mestre pr update" {

@@ -52,6 +52,8 @@ func (c *DigestChannel) Send(ctx context.Context, m digest.Message) error {
 			switch b.Action {
 			case digest.MistakeAction:
 				btn.Capability = users.RevokeTemporaryRules
+			case digest.PauseAutonomyAction:
+				btn.Capability = users.PauseButtons
 			default:
 				btn.Capability = users.DelegateHigh // the suggestions are the Owner's
 			}

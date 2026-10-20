@@ -79,6 +79,10 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 		if err := e.towerWorktree(req.Dir); err != nil {
 			return nil, protocol.NewError(protocol.CodeForbidden, "character.start: %v", err)
 		}
+		hooksHash, err := e.towerClassHooksReady(ctx, req)
+		if err != nil {
+			return nil, protocol.NewError(protocol.CodeMissingPrerequisite, "character.start: %v", err)
+		}
 		// the Citadel gives up at towerStartWait: the Tower gives up first, so
 		// what the Citadel took for a failure is not left running here
 		sctx, cancel := clock.WithTimeout(ctx, e.clk, towerStartWait-10*time.Second)
@@ -91,7 +95,8 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 		if err != nil {
 			return nil, towerCharacterError("character.start", err)
 		}
-		return nil, nil
+		// the Tower says which hooks it applies: the Citadel starts nothing it cannot confirm
+		return &protocol.Reply{Type: protocol.TypeCharacterStart, InAck: true, Payload: protocol.CharacterStartResult{ClassHooks: hooksHash}}, nil
 	})
 	guard(protocol.TypeCharacterStop, func(ctx context.Context, rt *characters.Runtime, m *protocol.Message) (*protocol.Reply, error) {
 		p, ok := m.Payload.(*protocol.CharacterStop)

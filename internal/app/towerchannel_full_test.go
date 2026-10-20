@@ -58,6 +58,8 @@ func newChannelRig(t *testing.T, gated ...bool) *channelRig {
 // Tower until released; builder gives the Citadel a session zero of a character.
 type channelOpts struct {
 	gated, builder, chain, citadelTerminals bool
+	// towerHosts sets Deps.HostOrchestration on the Tower too, as `mestre run` does
+	towerHosts bool
 	// resumed records the session each build of the session zero resumes (with builder)
 	resumed *resumeLog
 }
@@ -123,6 +125,7 @@ func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
 	x.b.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
 	x.b.setup = func(e *Engine) {
 		e.deps.Spawner = &terminal.DirectSpawner{Suite: "full", System: terminal.NewSystem()}
+		e.deps.HostOrchestration = o.towerHosts // as `mestre run` sets it on every machine
 		var prep characters.Preparer = runtimePrep{cfg: filepath.Join(home, "cfg"), home: home, sock: x.b.paths.CLISocket}
 		if o.gated {
 			gate = &prepGate{Preparer: prep, entered: make(chan string, 1), release: make(chan struct{})}
