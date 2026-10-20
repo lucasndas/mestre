@@ -264,8 +264,8 @@ func startTurn(t *testing.T, f *fixture) {
 	}
 }
 
-// Part of CA-CLASSES-06 (it closes in M5, with the approval flow and the
-// Grand Master): the rule the flow applies, that the Grand Master only
+// Part of CA-CLASSES-06 (the flow of approval and the Grand Master that
+// apply it are tested in internal/orchestration/chain): the rule the flow applies, that the Grand Master only
 // proposes a workspace class, never approves what he proposed, and that the
 // class only comes into use with the approval of an Administrator.
 func TestTheGrandMasterProposesAWorkspaceClassAndOnlyAnAdministratorApprovesIt(t *testing.T) {

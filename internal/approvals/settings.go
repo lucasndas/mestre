@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/github"
@@ -98,6 +99,151 @@ func (s *Settings) ProposePlanB(ctx context.Context, workspace string) (int64, e
 		About: "plano B da aprovação: " + github.PlanBChange(rules)})
 }
 
+// ErrBadRuleset: the body is not the body of a ruleset of the API of GitHub.
+var ErrBadRuleset = errors.New("approvals: the change is not a ruleset (a JSON object with name, enforcement and rules)")
+
+// maxRulesetBytes is the largest body of a ruleset that is put to the Owner.
+const maxRulesetBytes = 32 << 10
+
+// rulesetKeys are the fields of the body of a ruleset the Grão-Mestre may propose: what
+// is not here is not put to the Owner.
+var rulesetKeys = map[string]bool{"name": true, "target": true, "enforcement": true, "rules": true, "bypass_actors": true, "conditions": true}
+
+// bypassActorTypes are the kinds of actor a ruleset may let bypass it.
+var bypassActorTypes = map[string]bool{"Integration": true, "OrganizationAdmin": true, "RepositoryRole": true, "Team": true, "DeployKey": true}
+
+// checkRuleset validates the body of a ruleset by an allow list, so that what the Owner
+// reads (summarized) is all there is in it.
+func checkRuleset(body map[string]any) error {
+	for k := range body {
+		if !rulesetKeys[k] {
+			return fmt.Errorf("%w: the field %q is not accepted", ErrBadRuleset, k)
+		}
+	}
+	if name, _ := body["name"].(string); strings.TrimSpace(name) == "" || len(name) > 100 {
+		return ErrBadRuleset
+	}
+	if enf, _ := body["enforcement"].(string); enf != "active" && enf != "evaluate" && enf != "disabled" {
+		return fmt.Errorf("%w: enforcement is active, evaluate or disabled", ErrBadRuleset)
+	}
+	if t, ok := body["target"]; ok && t != "branch" && t != "tag" {
+		return fmt.Errorf("%w: target is branch or tag", ErrBadRuleset)
+	}
+	rules, ok := body["rules"].([]any)
+	if !ok {
+		return ErrBadRuleset
+	}
+	for _, r := range rules {
+		m, ok := r.(map[string]any)
+		if t, _ := m["type"].(string); !ok || t == "" {
+			return fmt.Errorf("%w: every rule has a type", ErrBadRuleset)
+		}
+	}
+	if ba, ok := body["bypass_actors"]; ok {
+		list, ok := ba.([]any)
+		if !ok {
+			return ErrBadRuleset
+		}
+		for _, x := range list {
+			m, ok := x.(map[string]any)
+			if !ok {
+				return ErrBadRuleset
+			}
+			id, isNum := m["actor_id"].(float64)
+			typ, _ := m["actor_type"].(string)
+			mode, _ := m["bypass_mode"].(string)
+			if !isNum || id != float64(int64(id)) || !bypassActorTypes[typ] || (mode != "always" && mode != "pull_request") {
+				return fmt.Errorf("%w: a bypass actor has an integer actor_id, a known actor_type and a bypass_mode always or pull_request", ErrBadRuleset)
+			}
+		}
+	}
+	if c, ok := body["conditions"]; ok {
+		m, ok := c.(map[string]any)
+		if !ok {
+			return ErrBadRuleset
+		}
+		for k, v := range m {
+			rn, ok := v.(map[string]any)
+			if k != "ref_name" || !ok {
+				return fmt.Errorf("%w: only conditions.ref_name is accepted", ErrBadRuleset)
+			}
+			for k2, v2 := range rn {
+				list, ok := v2.([]any)
+				if k2 != "include" && k2 != "exclude" || !ok {
+					return fmt.Errorf("%w: ref_name takes include and exclude lists", ErrBadRuleset)
+				}
+				for _, p := range list {
+					if _, ok := p.(string); !ok {
+						return ErrBadRuleset
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// describeRuleset is the text the Owner reads of the body he approves: every rule, the
+// conditions and every exception with its type, id and mode (it is text of an agent, not
+// verified: the body itself is the target he approves).
+func describeRuleset(body map[string]any) string {
+	var rules []string
+	for _, r := range body["rules"].([]any) {
+		rules = append(rules, r.(map[string]any)["type"].(string))
+	}
+	out := fmt.Sprintf("ruleset %q (%v, aplicação %v): regras [%s]", body["name"], orDefault(body["target"], "branch"), body["enforcement"], strings.Join(rules, ", "))
+	if c, ok := body["conditions"].(map[string]any); ok {
+		raw, _ := json.Marshal(c["ref_name"])
+		out += "; refs " + string(raw)
+	} else {
+		out += "; refs: as do GitHub por padrão (nenhuma condição dada)"
+	}
+	if ba, _ := body["bypass_actors"].([]any); len(ba) > 0 {
+		var ex []string
+		for _, x := range ba {
+			m := x.(map[string]any)
+			ex = append(ex, fmt.Sprintf("%v #%.0f (%v)", m["actor_type"], m["actor_id"], m["bypass_mode"]))
+		}
+		out += "; exceções: " + strings.Join(ex, ", ")
+	} else {
+		out += "; sem exceções"
+	}
+	return out
+}
+
+func orDefault(v any, d string) any {
+	if v == nil {
+		return d
+	}
+	return v
+}
+
+// ProposeRuleset makes the request to the Owner for a ruleset the Grão-Mestre wants in
+// the repository of the workspace (`mestre gh settings apply`). The body is checked by an
+// allow list; the target is the exact body, so what the Owner approves, with the PIN, is
+// what is created, and the text he reads says every rule, the conditions and each
+// exception. The repository is the one of the workspace, never one the caller names, and
+// proposer (the Grão-Mestre) decides nothing of the request. It returns the number of the
+// request; nothing is changed until the Owner approves.
+func (s *Settings) ProposeRuleset(ctx context.Context, workspace, proposer string, body map[string]any) (int64, error) {
+	if err := checkRuleset(body); err != nil {
+		return 0, err
+	}
+	if raw, err := json.Marshal(body); err != nil || len(raw) > maxRulesetBytes {
+		return 0, fmt.Errorf("%w: it is too large", ErrBadRuleset)
+	}
+	repo, branch, err := s.Workspace(ctx, workspace)
+	if err != nil {
+		return 0, err
+	}
+	target, err := json.Marshal(SettingsTarget{Kind: KindRuleset, Repo: repo, Branch: branch, Body: body})
+	if err != nil {
+		return 0, err
+	}
+	return s.Requests.Request(ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: workspace, Proposer: proposer, Target: target,
+		About: describeRuleset(body) + " no repositório " + repo})
+}
+
 // Decided implements chain.Sink for the requests of settings: an approved ruleset
 // is created; a refusal of the Owner, or of GitHub because the account has no Pro
 // for a private repository, leaves the workspace in the mode of human approval.
@@ -130,7 +276,8 @@ func (s *Settings) Decided(ctx context.Context, r chain.Result) error {
 	var api *github.APIError
 	switch {
 	case err == nil:
-		s.tell(ctx, ws, fmt.Sprintf("O ruleset %q foi criado no repositório %s.", github.RulesetName, t.Repo))
+		name, _ := t.Body["name"].(string)
+		s.tell(ctx, ws, fmt.Sprintf("O ruleset %q foi criado no repositório %s.", name, t.Repo))
 		return nil
 	case t.PlanB && errors.As(err, &api) && api.Status == http.StatusForbidden:
 		return s.human(ctx, ws, "o GitHub não aceita rulesets em repositório privado sem o plano Pro ("+api.Message+")")

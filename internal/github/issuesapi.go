@@ -157,17 +157,23 @@ func (c *REST) AddSubIssue(ctx context.Context, repo string, parent int, childID
 	return c.send(ctx, http.MethodPost, repo, fmt.Sprintf("/issues/%d/sub_issues", parent), map[string]int64{"sub_issue_id": childID}, http.StatusCreated, nil, "linking a sub-issue")
 }
 
-// SubIssues lists the sub-issues of an issue.
+// SubIssues lists the sub-issues of an issue, page after page (more than
+// maxListPages pages is an error, not a truncated list).
 func (c *REST) SubIssues(ctx context.Context, repo string, n int) ([]IssueData, error) {
-	var raw []issueJSON
-	if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/issues/%d/sub_issues?per_page=100", n), nil, http.StatusOK, &raw, "listing sub-issues"); err != nil {
-		return nil, err
+	var out []IssueData
+	for page := 1; page <= maxListPages; page++ {
+		var raw []issueJSON
+		if err := c.send(ctx, http.MethodGet, repo, fmt.Sprintf("/issues/%d/sub_issues?per_page=100&page=%d", n, page), nil, http.StatusOK, &raw, "listing sub-issues"); err != nil {
+			return nil, err
+		}
+		for _, v := range raw {
+			out = append(out, v.data())
+		}
+		if len(raw) < 100 {
+			return out, nil
+		}
 	}
-	out := make([]IssueData, 0, len(raw))
-	for _, v := range raw {
-		out = append(out, v.data())
-	}
-	return out, nil
+	return nil, errTooMany
 }
 
 // Issues lists the issues of the repository in a state (open, closed, all), the

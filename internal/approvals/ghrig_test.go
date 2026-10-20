@@ -224,7 +224,17 @@ func (l *ghLab) sent() []fakegithub.SentReview {
 	return rs
 }
 
+// isHumanRequired says the Approver asks the people: with --on-behalf, the refusal that is about
+// the delegation carries its own code (CodeNoDelegation), which is the same demand.
 func isHumanRequired(err error) bool {
+	var ref *chain.Refusal
+	if errors.As(err, &ref) && ref.Code == approvals.CodeNoDelegation {
+		return true
+	}
+	return isHumanRequiredOnly(err)
+}
+
+func isHumanRequiredOnly(err error) bool {
 	var ref *chain.Refusal
 	return errors.As(err, &ref) && ref.Code == chain.CodeHumanRequired
 }

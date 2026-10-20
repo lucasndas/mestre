@@ -52,6 +52,11 @@ type Handlers struct {
 	// character (`pr open`, `pr update`), so the decrees that free the push to
 	// it register the execution; nil: nobody is told.
 	Executed func(ctx context.Context, c characters.Character, action string) error
+	// Refused is told that GitHub refused the sending of the branch of a table for a
+	// reason only the Owner or the Grand Master can lift (`workflow_permission`,
+	// `signature_required`), or that the class does not allow (`workflow_not_allowed`): it puts the event, with the reason, in the inbox of the
+	// Grand Master. nil: nobody is told.
+	Refused func(ctx context.Context, c characters.Character, code, reason string)
 	// Send is what `pr open` and `pr update` need to send the branch.
 	Send github.Sending
 	// Quota, when set, holds what changes data back while the App is low.
@@ -67,6 +72,11 @@ type Handlers struct {
 	Heads Heads
 	// Settings is what `gh settings show` reads besides GitHub (nil: it is not available).
 	Settings Settings
+	// Approver, Merges and Rulesets are what `gh approve`, `gh merge` and `gh settings apply`
+	// need (nil: the command is not available).
+	Approver Approving
+	Merges   Merging
+	Rulesets Rulesets
 	Objects  *github.Objects
 	Clock    clock.Clock
 }
@@ -78,6 +88,7 @@ func (h *Handlers) Register(fwd *localchan.LocalForwarder) {
 		"issue create": h.write("issue create", h.issueCreate), "issue update": h.write("issue update", h.issueUpdate), "issue comment": h.write("issue comment", h.issueComment),
 		"pr open": h.write("pr open", h.prOpen), "pr update": h.write("pr update", h.prUpdate),
 		"gh epic": h.epic, "gh review": h.reviewCmd, "gh settings": h.settings,
+		"gh approve": h.write("gh approve", h.approve), "gh merge": h.write("gh merge", h.merge),
 		"pr comment": h.write("pr comment", h.prComment), "pr reply": h.write("pr reply", h.prReply), "pr note": h.write("pr note", h.prNote),
 	} {
 		fwd.Handle(name, localchan.HandlerFunc(f))
@@ -138,6 +149,22 @@ func (h *Handlers) caller(ctx context.Context, c *localchan.Call) (caller, *loca
 	out.svc = &github.IssueService{API: api, Objects: h.Objects, Tables: h.Tables, Clock: h.Clock}
 	out.prs = &github.PRService{API: api, Objects: h.Objects, Tables: h.Tables, Send: h.Send}
 	return out, nil
+}
+
+// refused tells the Grand Master of a sending that GitHub refused for a reason
+// that is not the table's to lift; the sending is not tried by another way.
+func (h *Handlers) refused(ctx context.Context, c characters.Character, err error) {
+	if h.Refused == nil {
+		return
+	}
+	switch {
+	case errors.Is(err, github.ErrWorkflowNotAllowed):
+		h.Refused(ctx, c, "workflow_not_allowed", "a classe do personagem tem git.workflows: never e a branch muda .github/workflows; nada foi enviado")
+	case errors.Is(err, github.ErrWorkflowPermission), errors.Is(err, gitx.ErrPushWorkflow):
+		h.Refused(ctx, c, "workflow_permission", "o App não tem a permissão Workflows no GitHub; o Dono a aceita no GitHub")
+	case errors.Is(err, gitx.ErrPushSignature):
+		h.Refused(ctx, c, "signature_required", "as regras do repositório pedem commits assinados, e os commits do Mestre não são")
+	}
 }
 
 // refusal turns the error of an action into the answer of the CLI.

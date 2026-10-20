@@ -143,10 +143,10 @@ func (i *instance) restart(t *testing.T) {
 	i.member = guild.NewMember(i.mach, i.keys, clock.Real{})
 }
 
-// Part of CA-GUILDA-09 (it closes in M5, with the approval by the Telegram), on Linux and on Windows: a second instance on the same
+// Part of CA-GUILDA-09 (the approval by the Telegram is tested in internal/telegram), on Linux and on Windows: a second instance on the same
 // machine finds the Guild by broadcast, enters it (the Owner's answer is the
 // double of the bot), connects by mTLS only, and connects again after a
-// restart. The approval through the real bot is milestone 5.
+// restart. The approval through the bot is not part of this test.
 func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnectsAfterARestart(t *testing.T) {
 	t.Parallel()
 	port := freeUDPPort(t)

@@ -32,7 +32,7 @@ func renewMotor(t *testing.T, r *rig, id string) *x509.Certificate {
 
 func hasPanelName(c *x509.Certificate) bool { return slices.Contains(c.DNSNames, transport.PanelName) }
 
-// Part of CA-GUILDA-12 (it closes in M5), on the Guild's side: the erasure of the vault copy on the
+// Part of CA-GUILDA-12 (the PIN of the Owner is tested with the bot), on the Guild's side: the erasure of the vault copy on the
 // excluded machine (vault.drop) and sending the vault again are the
 // replication's, and the Owner's PIN is the bot's; what the Guild does is the
 // flag, the hook those two plug into, the certificates and the promotion rule.

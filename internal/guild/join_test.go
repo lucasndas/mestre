@@ -67,7 +67,7 @@ func (r *rig) ask(t *testing.T, name, ip string) (guild.JoinTicket, guild.Approv
 	return ticket, <-r.approver.asked
 }
 
-// Part of CA-GUILDA-02, which closes in M5 with the button and the PIN of the bot.
+// Part of CA-GUILDA-02 (the button and the PIN of the bot are tested in internal/telegram).
 func TestBothSidesComputeTheSameCodeAndTheOwnerAcceptingIssuesTheCertificates(t *testing.T) {
 	t.Parallel()
 	clk := clock.NewFake(day0)
@@ -144,7 +144,7 @@ func TestBothSidesComputeTheSameCodeAndTheOwnerAcceptingIssuesTheCertificates(t 
 	}
 }
 
-// Part of CA-GUILDA-02, which closes in M5 with the button and the PIN of the bot.
+// Part of CA-GUILDA-02 (the button and the PIN of the bot are tested in internal/telegram).
 func TestAnOwnerWhoRefusesIssuesNothingAndTheMachineKeepsNoCA(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, clock.NewFake(day0))

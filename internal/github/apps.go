@@ -137,6 +137,32 @@ func (r *Registry) Taken(ctx context.Context, name string) bool {
 	return n > 0
 }
 
+// Repos are the repositories an App is installed in.
+func (r *Registry) Repos(ctx context.Context, name string) ([]string, error) {
+	rows, err := r.DB.Reader().QueryContext(ctx, `SELECT repo FROM app_installations WHERE app = ? ORDER BY repo`, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var repo string
+		if err := rows.Scan(&repo); err != nil {
+			return nil, err
+		}
+		out = append(out, repo)
+	}
+	return out, rows.Err()
+}
+
+// OpenRequest says whether the creation of an App has a request that is still
+// open (a link that was not used or a code under exchange).
+func (r *Registry) OpenRequest(ctx context.Context, name string) (bool, error) {
+	var n int
+	err := r.DB.Reader().QueryRowContext(ctx, `SELECT COUNT(*) FROM github_app_requests WHERE app = ? AND status IN ('link', 'opened', 'exchanging')`, name).Scan(&n)
+	return n > 0, err
+}
+
 // Others is how many Apps of the account are not the Mestre's, as the Owner
 // informed (the Mestre does not read the page of Apps of the account).
 func (r *Registry) Others(ctx context.Context) (int, error) {

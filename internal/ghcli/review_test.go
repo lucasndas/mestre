@@ -128,7 +128,7 @@ func (fakeSettings) Mode(context.Context, string) (string, string, error) {
 }
 func (fakeSettings) Apps(context.Context) ([]string, error) { return []string{"Mestre (ready)"}, nil }
 
-func TestGhSettingsShowReadsTheRulesAndApplyChangesNothing(t *testing.T) {
+func TestGhSettingsShowReadsTheRulesAndApplyChangesNothingWithoutTheSettingsOfTheRun(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	r.h.Settings = fakeSettings{}
@@ -137,7 +137,7 @@ func TestGhSettingsShowReadsTheRulesAndApplyChangesNothing(t *testing.T) {
 	if !got.OK || got.Data["approvals"] != float64(2) || got.Data["branch"] != "main" || got.Data["approval_mode"] != "app" {
 		t.Fatalf("settings show: %+v", got)
 	}
-	if got := r.run("gm", "gh settings", map[string]any{"file": "r.json"}, "apply"); got.OK || got.Code != "github_unavailable" {
+	if got := r.run("gm", "gh settings", map[string]any{"body": `{"name":"x"}`}, "apply"); got.OK || got.Code != "github_unavailable" {
 		t.Fatalf("apply: %+v, want it refused and nothing changed", got)
 	}
 	if len(r.gh.Rulesets(repoFull)) != 0 {

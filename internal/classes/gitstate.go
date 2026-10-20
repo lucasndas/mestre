@@ -191,42 +191,54 @@ func sameText(a, b []byte) bool {
 	return bytes.Equal(bytes.ReplaceAll(a, crlf, lf), bytes.ReplaceAll(b, crlf, lf))
 }
 
-// Branch implements GitState: the branch of the worktree in git worktree
-// list.
+// Branch implements GitState: the branch checked out in the worktree, read
+// anew from the recorded git folder of the worktree.
 func (g GitxState) Branch(ctx context.Context, worktree string) (string, error) {
-	r, err := g.open(ctx, worktree)
+	st, err := g.tracked(ctx, worktree)
 	if err != nil {
 		return "", err
 	}
-	wts, err := r.ListWorktrees(ctx)
-	if err != nil {
-		return "", g.alert(err)
-	}
-	want := pathKey(resolved(worktree))
-	for _, w := range wts {
-		if pathKey(resolved(w.Path)) == want {
-			if w.Detached || w.Branch == "" {
-				return "", errDetached
-			}
-			return w.Branch, nil
-		}
-	}
-	return "", errNoWorktree
+	return st.branch()
 }
 
 // Committed implements GitState from git status: the staged entries and,
 // with all, every changed tracked file.
 func (g GitxState) Committed(ctx context.Context, worktree string, all bool) ([]string, error) {
-	r, err := g.open(ctx, worktree)
+	st, err := g.tracked(ctx, worktree)
 	if err != nil {
 		return nil, err
 	}
-	st, err := r.Status(ctx)
+	return st.files(all), nil
+}
+
+// CommitState implements CommitStater: the branch and the files the next
+// commit takes, from one git status of the recorded worktree. Nothing of it
+// is kept between decisions: the branch and the index are read at the moment
+// of the decision, because what is staged is what the decision judges.
+func (g GitxState) CommitState(ctx context.Context, worktree string, all bool) (CommitState, error) {
+	st, err := g.tracked(ctx, worktree)
 	if err != nil {
-		return nil, g.alert(err)
+		return CommitState{}, err
 	}
+	var cs CommitState
+	cs.Branch, cs.BranchErr = st.branch()
+	cs.Files = st.files(all)
+	return cs, nil
+}
+
+// trackedStatus is one reading of git status.
+type trackedStatus gitx.TrackedStatus
+
+func (st trackedStatus) branch() (string, error) {
+	if st.Detached || st.Branch == "" {
+		return "", errDetached
+	}
+	return st.Branch, nil
+}
+
+func (st trackedStatus) files(all bool) []string {
 	var out []string
-	for _, e := range st {
+	for _, e := range st.Entries {
 		if e.Untracked() {
 			continue
 		}
@@ -237,7 +249,21 @@ func (g GitxState) Committed(ctx context.Context, worktree string, all bool) ([]
 			}
 		}
 	}
-	return out, nil
+	return out
+}
+
+// tracked opens the worktree of the record (one open per call) and reads its
+// status, branch included.
+func (g GitxState) tracked(ctx context.Context, worktree string) (trackedStatus, error) {
+	r, err := g.open(ctx, worktree)
+	if err != nil {
+		return trackedStatus{}, err
+	}
+	ts, err := r.TrackedStatus(ctx)
+	if err != nil {
+		return trackedStatus{}, g.alert(err)
+	}
+	return trackedStatus(ts), nil
 }
 
 type gitStateError string
@@ -245,11 +271,10 @@ type gitStateError string
 func (e gitStateError) Error() string { return string(e) }
 
 const (
-	errDetached   gitStateError = "HEAD is detached"
-	errNoWorktree gitStateError = "the worktree is not in git worktree list"
-	errNoMain     gitStateError = "the main branch of the repository is not known"
-	errNotScript  gitStateError = "not a regular file of at most 1 MiB"
-	errNoGit      gitStateError = "no git to open the worktree by its record"
+	errDetached  gitStateError = "HEAD is detached"
+	errNoMain    gitStateError = "the main branch of the repository is not known"
+	errNotScript gitStateError = "not a regular file of at most 1 MiB"
+	errNoGit     gitStateError = "no git to open the worktree by its record"
 	// errOtherWorktree is a call for a folder that is not the recorded
 	// worktree of the table.
 	errOtherWorktree gitStateError = "the folder is not the recorded worktree of the table"

@@ -4,9 +4,8 @@
 // 304 without spending quota, rate-limit headers per installation,
 // installation tokens that expire after one hour by the clock, and the App
 // that did each action. The rest of the API (sub-issues, PRs, reviews,
-// rulesets, manifests, device flow, releases, the App pages) arrives with
-// the GitHub documents in M5; until then it fails the test as not
-// implemented.
+// rulesets, manifests, device flow, releases, the App pages) is served as
+// the tests need it; what is not implemented fails the test.
 package fakegithub
 
 import (
@@ -175,9 +174,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		testkit.NotImplemented(s.rep, w, route)
 		return
 	}
-	// No query parameter is implemented yet (state, labels, per_page and
-	// the like arrive with the poller in M5); ignoring one would answer a
-	// different question than the caller asked.
+	// A query parameter that is not implemented fails the test; ignoring
+	// one would answer a different question than the caller asked.
 	// The list of issues takes state, per_page and page (the first page is
 	// the whole list here).
 	state := "all"

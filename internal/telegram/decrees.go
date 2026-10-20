@@ -88,6 +88,9 @@ func (c *DecreeChannel) Actions() map[string]Action {
 // Offer puts a proposal in front of its author with the buttons Confirmar and
 // Cancelar: the Grand Master proposed, and only his click makes the decree.
 func (c *DecreeChannel) Offer(ctx context.Context, p decrees.Pending) error {
+	if c.bot == nil {
+		return errors.New("telegram: the bot is not running")
+	}
 	u, err := c.Users.Get(ctx, p.Author)
 	if err != nil {
 		return err

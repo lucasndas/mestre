@@ -74,12 +74,12 @@ var (
 
 	// highTypes are the types of risk alto: the Grand Master opens them only by
 	// delegation, so the file cannot let them be decided alone.
-	highTypes = []classes.RequestType{classes.RequestWorkflows, classes.RequestRepoSettings, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD}
+	highTypes = []classes.RequestType{classes.RequestWorkflows, classes.RequestRepoSettings, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD, classes.RequestGMAction}
 
 	// knownTypes are the types the file may configure.
 	knownTypes = []classes.RequestType{
 		classes.RequestPR, classes.RequestMerge, classes.RequestMissionPoint, classes.RequestClassPermission, classes.RequestExtraCost,
-		classes.RequestWorkflows, classes.RequestRepoSettings, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD,
+		classes.RequestWorkflows, classes.RequestRepoSettings, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD, classes.RequestGMAction,
 	}
 )
 
@@ -193,6 +193,13 @@ func parsePolicyFull(data []byte) (Settings, *classes.RiskPolicy, PolicyRules, e
 		return bad("resumo", err.Error())
 	} else if len(section) > 0 {
 		if st.Summary, err = ParseSummary(section); err != nil {
+			return Settings{}, nil, PolicyRules{}, err
+		}
+	}
+	if section, err = nodeYAML(&y.Delegacao); err != nil {
+		return bad("delegacao", err.Error())
+	} else if len(section) > 0 {
+		if st.DelegationValidity, st.DelegationReminder, err = ParseDelegation(section); err != nil {
 			return Settings{}, nil, PolicyRules{}, err
 		}
 	}
