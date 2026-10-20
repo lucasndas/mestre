@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -197,11 +196,6 @@ func (s *Session) Start(ctx context.Context, spec StartSpec) (int, error) {
 		osName = runtime.GOOS
 	}
 	spec.Env = agentEnv(osName, spec.Env, spec.Dir)
-	prog, err := resolveProgram(osName, spec.Path, spec.Env, isFile)
-	if err != nil {
-		return 0, err
-	}
-	spec.Path = prog
 	agent, err := s.cfg.Runner.Start(ctx, spec)
 	if err != nil {
 		return 0, err
@@ -476,10 +470,4 @@ func (s *Session) Close() {
 	if emu != nil {
 		emu.Close()
 	}
-}
-
-// isFile reports whether path is an existing file (not a folder).
-func isFile(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && !st.IsDir()
 }

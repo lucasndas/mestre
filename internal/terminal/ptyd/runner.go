@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -47,7 +48,14 @@ func (r *PTYRunner) Start(ctx context.Context, spec StartSpec) (Agent, error) {
 		return nil, fmt.Errorf("size pty: %w", err)
 	}
 	// Not CommandContext: ctx only governs the start, the agent outlives it.
-	cmd := p.Command(spec.Path, spec.Args...)
+	// spec.Env is the cleaned one (Session.Start): a bare name is looked up in
+	// its PATH, never in spec.Dir, where the PTY library would look first.
+	prog, err := resolveProgram(runtime.GOOS, spec.Path, spec.Env, isFile)
+	if err != nil {
+		_ = p.Close()
+		return nil, fmt.Errorf("start %s: %w", spec.Path, err)
+	}
+	cmd := p.Command(prog, spec.Args...)
 	cmd.Env = withTerm(spec.Env)
 	cmd.Dir = spec.Dir
 	sys, err := prepare(cmd, r.SweepLogonSession)
@@ -132,4 +140,10 @@ func (a *ptyAgent) Close() error {
 	_ = a.closePTY()
 	a.sys.release()
 	return nil
+}
+
+// isFile reports whether path is an existing file (not a folder).
+func isFile(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && !st.IsDir()
 }
