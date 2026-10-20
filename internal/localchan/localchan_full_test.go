@@ -32,7 +32,7 @@ func TestAFakeAgentCallsListThroughTheSocket(t *testing.T) {
 	testkit.WriteFiles(t, e.root, map[string]string{
 		"work/.git/HEAD":        "ref: refs/heads/main\n",
 		"cfg/.credentials.json": "{}",
-		"cfg/.claude.json":      fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, work),
+		"cfg/.claude.json":      fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(work)),
 	})
 	env := e.env(agent, "HOME="+e.root, "CLAUDE_CONFIG_DIR="+cfg, "FAKEAGENT_SCRIPT="+script)
 	term := e.spawn("t7", agent, builds.fakeagent, []string{"--provider", "claude"}, env, work)

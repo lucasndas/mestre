@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -114,6 +115,15 @@ func writeJSONMap(path string, m map[string]any) error {
 	return nil
 }
 
+// claudeKey is a folder as Claude Code keys it in projects: on Windows with
+// forward slashes (2.1.304 reads no key with backslashes).
+func claudeKey(p string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.ToSlash(p)
+	}
+	return p
+}
+
 // folderTrusted reads the same trust file the real CLI reads.
 func (a *agent) folderTrusted() (bool, error) {
 	if a.dir == a.env["HOME"] {
@@ -127,7 +137,7 @@ func (a *agent) folderTrusted() (bool, error) {
 		}
 		projects, _ := m["projects"].(map[string]any)
 		for _, c := range trustCandidates(a.dir) {
-			if p, ok := projects[c].(map[string]any); ok && p["hasTrustDialogAccepted"] == true {
+			if p, ok := projects[claudeKey(c)].(map[string]any); ok && p["hasTrustDialogAccepted"] == true {
 				return true, nil
 			}
 		}
@@ -170,6 +180,7 @@ func (a *agent) trustFolder() error {
 		if r := gitRoot(a.dir); r != "" {
 			key = r
 		}
+		key = claudeKey(key)
 		entry, _ := projects[key].(map[string]any)
 		if entry == nil {
 			entry = map[string]any{}

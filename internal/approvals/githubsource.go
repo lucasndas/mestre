@@ -39,6 +39,11 @@ type GitHubSource struct {
 	// it opened is flagged, because the same App can not approve it. Nil: the
 	// engine has no such App and nobody is flagged.
 	GrandMasterLogin func(ctx context.Context) (string, error)
+	// BaseTip is the tip of the base of a table in the mirror: the live value of
+	// the `base_sha` of a target the gate of freshness ran on
+	// (docs/github/acoes-por-nivel.md#merge). Nil: such a target can not be
+	// verified and the request is not approved.
+	BaseTip func(ctx context.Context, workspace, table string) (string, error)
 }
 
 var (
@@ -190,5 +195,18 @@ func (g GitHubSource) Current(ctx context.Context, r chain.Request) (json.RawMes
 	if err != nil {
 		return nil, err
 	}
-	return PRTarget(r.PR.Repo, r.PR.Number, p.HeadSHA, p.BaseRef), nil
+	target := PRTarget(r.PR.Repo, r.PR.Number, p.HeadSHA, p.BaseRef)
+	if chain.BaseSHAOf(r.Target) == "" {
+		// the gate did not run (the repository asks the branch to be up to date):
+		// the base moving changes nothing
+		return target, nil
+	}
+	if g.BaseTip == nil {
+		return nil, errors.New("approvals: no way to read the tip of the base")
+	}
+	tip, err := g.BaseTip(ctx, r.Workspace, r.Table)
+	if err != nil {
+		return nil, err
+	}
+	return chain.WithBaseSHA(target, tip)
 }

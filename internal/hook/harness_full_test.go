@@ -297,7 +297,7 @@ func (e *fullEngine) claude(id, agent, hookCommand, script string) (*terminal.Te
 		"work/.git/HEAD":                   "ref: refs/heads/main\n",
 		"work/.claude/settings.local.json": hooks,
 		"cfg/.credentials.json":            "{}",
-		"cfg/.claude.json":                 fmt.Sprintf(`{"numStartups": 3, "projects": {%s: {"hasTrustDialogAccepted": true}}}`, quoteJSON(work)),
+		"cfg/.claude.json":                 fmt.Sprintf(`{"numStartups": 3, "projects": {%s: {"hasTrustDialogAccepted": true}}}`, quoteJSON(filepath.ToSlash(work))),
 		"script.yaml":                      script,
 	} {
 		p := filepath.Join(e.root, filepath.FromSlash(rel))
