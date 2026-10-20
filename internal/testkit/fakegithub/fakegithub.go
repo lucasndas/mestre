@@ -64,6 +64,7 @@ type repo struct {
 	labels   map[string]string
 	issues   []map[string]any
 	git      *gitData
+	merges   []MergeCall
 }
 
 // Server is the fake API. Use it as an http.Handler.

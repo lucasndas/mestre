@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // PullData is a PR as the commands read it.
@@ -301,4 +302,92 @@ func (c *REST) CommitStatus(ctx context.Context, repo, sha string) (string, erro
 		return "", nil
 	}
 	return v.State, nil
+}
+
+// The methods of a merge.
+const (
+	MergeMethodMerge  = "merge"
+	MergeMethodSquash = "squash"
+	MergeMethodRebase = "rebase"
+)
+
+// The refusals of a merge. ErrHeadChanged (prs.go) is the PR having moved since the
+// commit that was approved; ErrMergeProtected a rule of the branch that says no (checks,
+// reviews, rulesets); ErrNotMergeable the PR that can not be merged for another
+// reason (a conflict, a draft, closed or merged already).
+var (
+	ErrMergeProtected = errors.New("github: a rule of the branch does not let the PR be merged")
+	ErrNotMergeable   = errors.New("github: the PR is not mergeable")
+)
+
+// MergeResult is what GitHub answers to a merge.
+type MergeResult struct {
+	// SHA is the merge commit.
+	SHA    string
+	Merged bool
+}
+
+// MergePull merges a PR with the commit that was approved: GitHub refuses with
+// ErrHeadChanged if the PR has moved since. The rules of the repository apply to
+// the App that merges (ErrMergeProtected carries GitHub's reason). method is
+// MergeMethodMerge, MergeMethodSquash or MergeMethodRebase ("" is merge).
+func (c *REST) MergePull(ctx context.Context, repo string, n int, sha, method string) (MergeResult, error) {
+	switch method {
+	case "":
+		method = MergeMethodMerge
+	case MergeMethodMerge, MergeMethodSquash, MergeMethodRebase:
+	default:
+		return MergeResult{}, fmt.Errorf("github: %q is not a method of merge", method)
+	}
+	if sha == "" {
+		return MergeResult{}, errors.New("github: a merge needs the commit that was approved")
+	}
+	st, hdr, raw, err := c.doHeader(ctx, http.MethodPut, repo, fmt.Sprintf("/pulls/%d/merge", n), map[string]string{"sha": sha, "merge_method": method})
+	if err != nil {
+		return MergeResult{}, err
+	}
+	switch st {
+	case http.StatusOK:
+		var v struct {
+			SHA    string `json:"sha"`
+			Merged bool   `json:"merged"`
+		}
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return MergeResult{}, err
+		}
+		return MergeResult{SHA: v.SHA, Merged: v.Merged}, nil
+	case http.StatusConflict:
+		return MergeResult{}, ErrHeadChanged
+	case http.StatusMethodNotAllowed, http.StatusForbidden:
+		if st == http.StatusForbidden && hdr.Get("Retry-After") != "" {
+			break
+		}
+		var v struct {
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(raw, &v)
+		why := strings.Join(strings.Fields(v.Message), " ")
+		if len(why) > 300 {
+			why = why[:300]
+		}
+		if st == http.StatusForbidden || mergeRuleMessage(why) {
+			return MergeResult{}, fmt.Errorf("%w: %s", ErrMergeProtected, why)
+		}
+		return MergeResult{}, fmt.Errorf("%w: %s", ErrNotMergeable, why)
+	case http.StatusUnprocessableEntity:
+		return MergeResult{}, fmt.Errorf("%w: GitHub does not allow this method of merge in the repository", ErrNotMergeable)
+	}
+	return MergeResult{}, failed("merging a PR", st, raw, hdr)
+}
+
+// mergeRuleMessage says GitHub's reason for a refusal is a rule of the branch (a
+// protected branch, a ruleset, a check or a review that is missing).
+func mergeRuleMessage(m string) bool {
+	m = strings.ToLower(m)
+	for _, k := range []string{"protected branch", "rule violation", "repository rule", "required status", "required review", "review is required", "required check", "ruleset", "branch protection"} {
+		if strings.Contains(m, k) {
+			return true
+		}
+	}
+	return false
 }

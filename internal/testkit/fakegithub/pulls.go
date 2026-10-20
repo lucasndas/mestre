@@ -158,6 +158,7 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 	case parts[3] == "pulls" && len(parts) == 4 && r.Method == http.MethodGet:
 		return s.listPulls(w, r, full)
 	case parts[3] == "pulls" && len(parts) == 5 && (r.Method == http.MethodGet || r.Method == http.MethodPatch):
+	case parts[3] == "pulls" && len(parts) == 6 && parts[5] == "merge" && r.Method == http.MethodPut:
 	case parts[3] == "pulls" && len(parts) == 6 && (parts[5] == "reviews" || parts[5] == "files") && r.Method == http.MethodGet:
 	case parts[3] == "pulls" && len(parts) == 6 && parts[5] == "comments" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 	case parts[3] == "pulls" && len(parts) == 8 && parts[5] == "comments" && parts[7] == "replies" && r.Method == http.MethodPost:
@@ -254,6 +255,8 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 		out := s.pullView(rp, full, n, head)
 		s.mu.Unlock()
 		s.write(w, r, inst, http.StatusOK, out)
+	case parts[5] == "merge":
+		s.mergePull(w, r, inst, rp, full, n)
 	case parts[5] == "reviews":
 		s.mu.Lock()
 		list := append([]map[string]any(nil), rp.pull(n).reviews...)
@@ -492,4 +495,72 @@ func (s *Server) SetPullState(full string, n int, state string, merged bool, bas
 		}
 	}
 	s.touch(s.repos[full], n)
+}
+
+// MergeCall is a merge the double received: the PR, the commit the caller said it
+// was merging and the method.
+type MergeCall struct {
+	Number int
+	SHA    string
+	Method string
+}
+
+// Merges lists the merges the double accepted, in order.
+func (s *Server) Merges(full string) []MergeCall {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]MergeCall(nil), s.repos[full].merges...)
+}
+
+// mergePull is PUT /repos/{r}/pulls/{n}/merge as GitHub answers it: 409 when the sha
+// is not the head of the PR, 405 when the PR can not be merged ("blocked" is a rule
+// of the branch that says no, "dirty" a conflict) or is already merged, 422 for a
+// method the repository does not allow, and 200 with the merge commit otherwise.
+func (s *Server) mergePull(w http.ResponseWriter, r *http.Request, inst *installation, rp *repo, full string, n int) {
+	var in struct {
+		SHA    string `json:"sha"`
+		Method string `json:"merge_method"`
+	}
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if dec.Decode(&in) != nil {
+		s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	s.mu.Lock()
+	p := rp.pull(n)
+	status, msg := http.StatusOK, ""
+	switch {
+	case in.Method != "" && in.Method != "merge" && in.Method != "squash" && in.Method != "rebase":
+		status, msg = http.StatusUnprocessableEntity, "Invalid merge method"
+	case p.merged || p.state != "open":
+		status, msg = http.StatusMethodNotAllowed, "Pull Request is not mergeable"
+	case in.SHA != "" && in.SHA != p.headSHA:
+		status, msg = http.StatusConflict, "Head branch was modified. Review and try the merge again."
+	case p.draft:
+		status, msg = http.StatusMethodNotAllowed, "Draft pull requests cannot be merged"
+	case p.mergeableState == "blocked":
+		status, msg = http.StatusMethodNotAllowed, "Repository rule violations found: required status check is expected"
+	case p.mergeableState == "dirty":
+		status, msg = http.StatusMethodNotAllowed, "Pull Request is not mergeable"
+	}
+	if status != http.StatusOK {
+		s.mu.Unlock()
+		s.write(w, r, inst, status, map[string]any{"message": msg})
+		return
+	}
+	p.merged, p.state = true, "closed"
+	p.mergeSHA = fmt.Sprintf("%040x", 0xabc000+n)
+	now := s.clk.Now().UTC().Format(time.RFC3339)
+	is := rp.issues[n-1]
+	is["state"], is["closed_at"] = "closed", now
+	if pr, ok := is["pull_request"].(map[string]any); ok {
+		pr["merged_at"] = now
+	}
+	s.touch(rp, n)
+	rp.merges = append(rp.merges, MergeCall{Number: n, SHA: in.SHA, Method: in.Method})
+	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
+	sha := p.mergeSHA
+	s.mu.Unlock()
+	s.write(w, r, inst, http.StatusOK, map[string]any{"sha": sha, "merged": true, "message": "Pull Request successfully merged"})
 }
