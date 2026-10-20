@@ -7,6 +7,7 @@ import (
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/lucasndas/mestre/internal/telegram"
 )
 
 // inboxMessages reads the messages of the users from the inbox of the Grão-Mestre:
@@ -41,4 +42,35 @@ func (m inboxMessages) Source(ctx context.Context, workspace, id string) (decree
 		return decrees.Source{}, err
 	}
 	return decrees.Source{Text: it.Text, User: it.Origin.User, Channel: it.Origin.Channel, MessageID: it.ID, Audio: it.Origin.Transcribed}, nil
+}
+
+// User is the user who wrote a message.
+func (m inboxMessages) User(ctx context.Context, workspace, id string) (string, error) {
+	it, err := m.item(ctx, workspace, id)
+	if err != nil {
+		return "", err
+	}
+	return it.Origin.User, nil
+}
+
+// Current is the user of the last message of a user in the inbox of the Grão-Mestre:
+// the one it is handling.
+func (m inboxMessages) Current(ctx context.Context, workspace, grandMaster string) (string, error) {
+	all, err := m.store.All(ctx, grandMaster)
+	if err != nil {
+		return "", err
+	}
+	for i := len(all) - 1; i >= 0; i-- {
+		if it := all[i]; it.Workspace == workspace && it.Kind == inbox.KindUser && it.Origin != nil && it.Origin.User != "" {
+			return it.Origin.User, nil
+		}
+	}
+	return "", decrees.ErrNoMessage
+}
+
+// chooser asks the questions of `mestre choose` through the bot.
+type chooser struct{ ch *telegram.ChooseChannel }
+
+func (c chooser) Ask(ctx context.Context, workspace, mesa, asker, userID, question string, options []string, recommend int) (int64, error) {
+	return c.ch.Ask(ctx, telegram.ChoiceQuestion{Workspace: workspace, Mesa: mesa, Asker: asker, UserID: userID, Question: question, Options: options}, recommend)
 }

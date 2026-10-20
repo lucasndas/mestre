@@ -145,3 +145,105 @@ func orEmpty(s []string) []string {
 	}
 	return s
 }
+
+// The refusals of a question to a user.
+var (
+	// ErrNoLevel: the user has no level to give orders.
+	ErrNoLevel = errors.New("blocking: the user has no level to give orders")
+	// ErrNotReachable: the user can not be asked (no Telegram, suspended, or not of
+	// the workspace).
+	ErrNotReachable = errors.New("blocking: the user can not be reached")
+)
+
+// Chooser asks a user a question with a button for each option
+// (telegram.ChooseChannel, through an adapter).
+type Chooser interface {
+	Ask(ctx context.Context, workspace, mesa, asker, userID, question string, options []string, recommend int) (int64, error)
+}
+
+// ChooseHandler is the command `mestre choose` (docs/cli/grao-mestre.md#mestre-choose).
+// It asks the user of the message in handling, or of --from-message, and passes on
+// nothing before the answer; the answer comes to the inbox of the Grand Master as a
+// message of the user who clicked.
+type ChooseHandler struct {
+	Characters Characters
+	Chooser    Chooser
+	// User gives the user who wrote a message of the workspace (--from-message).
+	User func(ctx context.Context, workspace, message string) (string, error)
+	// Current gives the user of the message the Grand Master is handling.
+	Current func(ctx context.Context, workspace, grandMaster string) (string, error)
+	// Table finds a table of the workspace by its name or the number of its epic.
+	Table func(ctx context.Context, workspace, name string) (tables.Table, error)
+}
+
+// Register registers the command.
+func (h *ChooseHandler) Register(fwd *localchan.LocalForwarder) {
+	fwd.Handle("choose", localchan.HandlerFunc(h.handle))
+}
+
+func (h *ChooseHandler) handle(ctx context.Context, c *localchan.Call) localchan.Response {
+	if !c.Caller.Identified {
+		return localchan.Fail(localchan.CodeNotIdentified, "the engine does not know this process as a process of a character", "run mestre debug")
+	}
+	who, err := h.Characters.Get(ctx, c.Caller.AgentID)
+	if err != nil {
+		return localchan.Fail(localchan.CodeNotIdentified, "the engine does not know this character", "run mestre debug")
+	}
+	if who.Role != characters.RoleGrandMaster {
+		return localchan.Fail("level_denied", "only the Grand Master of the workspace asks the users", "").WithExit(localchan.ExitDenied)
+	}
+	usageMsg := `usage: mestre choose "<question>" --option "<label>" --option "<label>"… [--recommend <n>] [--from-message <id>] [--table "<table>"]`
+	args, ok := c.Request.Strings()
+	if !ok || len(args) != 1 || strings.TrimSpace(args[0]) == "" {
+		return localchan.Fail(localchan.CodeUsage, usageMsg, "")
+	}
+	options := flagTexts(c, "option")
+	if len(options) < 2 || len(options) > 6 {
+		return localchan.Fail("bad_options", fmt.Sprintf("a question has 2 to 6 options, not %d", len(options)), "").WithExit(localchan.ExitUsage)
+	}
+	for i, o := range options {
+		if strings.TrimSpace(o) == "" {
+			return localchan.Fail("bad_options", fmt.Sprintf("the option %d is empty", i+1), "").WithExit(localchan.ExitUsage)
+		}
+	}
+	recommend := 1
+	if r := flagText(c, "recommend"); r != "" {
+		n, err := strconv.Atoi(r)
+		if err != nil || n < 1 || n > len(options) {
+			return localchan.Fail(localchan.CodeUsage, fmt.Sprintf("--recommend is the number of an option, from 1 to %d", len(options)), "")
+		}
+		recommend = n
+	}
+	var user string
+	if from := flagText(c, "from-message"); from != "" {
+		user, err = h.User(ctx, who.Workspace, from)
+		if err != nil {
+			return localchan.Fail("not_found", fmt.Sprintf("the message %s is not a message of a user of this workspace", from), "see `mestre inbox`").WithExit(localchan.ExitNotFound)
+		}
+	} else if user, err = h.Current(ctx, who.Workspace, who.ID); err != nil || user == "" {
+		return localchan.Fail(localchan.CodeUsage, "there is no message of a user in handling: say which one with --from-message", usageMsg)
+	}
+	mesa := ""
+	if name := flagText(c, "table"); name != "" {
+		t, err := h.Table(ctx, who.Workspace, name)
+		if errors.Is(err, tables.ErrNoTable) {
+			return localchan.Fail("not_found", err.Error(), "see `mestre table list`").WithExit(localchan.ExitNotFound)
+		}
+		if err != nil {
+			return localchan.Fail(localchan.CodeInternal, "the table could not be read", "")
+		}
+		mesa = t.ID
+	}
+	id, err := h.Chooser.Ask(ctx, who.Workspace, mesa, who.ID, user, args[0], options, recommend)
+	switch {
+	case errors.Is(err, ErrNoLevel):
+		return localchan.Fail("level_denied", "the user has no level to give orders to the Grand Master", "").WithExit(localchan.ExitDenied)
+	case errors.Is(err, ErrNotReachable):
+		return localchan.Fail("not_delivered", "the user can not be asked now (no Telegram, suspended or not of this workspace)", "ask in the channel of the message").WithExit(localchan.ExitConflict)
+	case err != nil:
+		return localchan.Fail(localchan.CodeInternal, "the question was not sent", "")
+	}
+	r := localchan.Fail("pending", fmt.Sprintf("the question %d was sent; nothing goes on before the answer, which arrives in your inbox", id), "").WithExit(localchan.ExitPending)
+	r.Data = localchan.OK(map[string]any{"question": id}).Data
+	return r
+}

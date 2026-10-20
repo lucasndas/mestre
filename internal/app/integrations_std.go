@@ -115,6 +115,7 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	}
 	r.routing = &telegram.Routing{}
 	r.block = &telegram.BlockChannel{Users: svc}
+	r.choose = &telegram.ChooseChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
@@ -151,7 +152,9 @@ type stdRun struct {
 	routing *telegram.Routing
 	// block sends the messages that ask something of the users because a table is stopped.
 	block *telegram.BlockChannel
-	dc    *telegram.DecreeChannel
+	// choose asks a user a question with buttons (`mestre choose`).
+	choose *telegram.ChooseChannel
+	dc     *telegram.DecreeChannel
 	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
 	fetch  atomic.Pointer[telegram.Client]
 	dg     *telegram.DigestChannel
@@ -261,7 +264,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: client,
 		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
-		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions()),
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
@@ -278,6 +281,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.dg.Bind(bot)
 	r.routing.Bind(bot)
 	r.block.Bind(bot)
+	r.choose.Bind(bot)
 	r.alert.Bind(bot)
 	r.bot = bot
 	return bot, nil
@@ -442,6 +446,18 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	if perr != nil {
 		r.env.Log.Warn("app: the reading of the events of GitHub is off", "err", perr)
 	}
+	msgs := inboxMessages{&inbox.Store{DB: r.env.DB}}
+	r.choose.Answered = func(ctx context.Context, q telegram.ChoiceQuestion, by users.User, option string) error {
+		gm, ok, err := orc.Registry.GrandMaster(ctx, q.Workspace)
+		if err != nil || !ok {
+			return errors.New("the workspace has no Grand Master")
+		}
+		it := telegram.AnswerItem(q, by, option)
+		it.Target = gm.ID
+		_, err = orc.Inbox.Enqueue(ctx, it)
+		return err
+	}
+	(&blocking.ChooseHandler{Characters: orc.Registry, Chooser: chooser{r.choose}, User: msgs.User, Current: msgs.Current, Table: orc.Tables.Find}).Register(fwd)
 	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
 		// the decrees whose validity ran out end while the Citadel acts
