@@ -42,6 +42,10 @@ type Config struct {
 	Addresses []string `json:"addresses,omitempty"`
 	// Synchronous is the synchronous level of the databases ("" is NORMAL).
 	Synchronous string `json:"synchronous,omitempty"`
+	// Terminais is where the terminals of the characters come from (the
+	// folder of the mestre-pty, the socket of the launcher); nil starts none,
+	// and the start of a character says so.
+	Terminais *Terminals `json:"terminais,omitempty"`
 }
 
 // PortBlock is the engine port of the instance with this index: 7443 for the
@@ -208,6 +212,9 @@ func (c Config) check() error {
 		return fmt.Errorf("app: invalid engine port %d", c.EnginePort)
 	case c.Name == "" && c.Hostname == "":
 		return errors.New("app: the configuration names no machine")
+	}
+	if c.Terminais != nil {
+		return c.Terminais.check()
 	}
 	return nil
 }
