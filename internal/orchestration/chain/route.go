@@ -103,6 +103,13 @@ func (s *Service) can(ctx context.Context, h hop, r Request, st Settings) verdic
 		return yes()
 	}
 	c := h.char
+	if why := s.rulesFor(ctx, r).AsksAlways(r); why != "" {
+		return no(true, "%s", why)
+	}
+	if r.Type == classes.RequestGMAction {
+		// a question of the Grão-Mestre to the people: no agent decides it, whoever asked
+		return no(false, "a pergunta do Grão-Mestre às pessoas só as pessoas respondem")
+	}
 	switch {
 	case c.ID == r.Requester:
 		return no(true, "%s é quem pediu: ninguém decide em causa própria", c.Name)
@@ -130,7 +137,7 @@ func (s *Service) can(ctx context.Context, h hop, r Request, st Settings) verdic
 		// What the policy sends to the people whatever the conditions find (a
 		// type that is not decided alone, a rule of quorum): the request is
 		// born with them.
-		rules, _ := s.rulesOf(r.Workspace)
+		rules := s.rulesFor(ctx, r)
 		if why := rules.ForcesPeople(r); why != "" {
 			return no(true, "%s", why)
 		}
@@ -197,7 +204,7 @@ func (s *Service) subCovers(ctx context.Context, c characters.Character, r Reque
 	if s.o.SubDelegations == nil || r.Risk.NoDelegation {
 		return false
 	}
-	if rules, _ := s.rulesOf(r.Workspace); rules.ForcesPeople(r) != "" {
+	if s.rulesFor(ctx, r).ForcesPeople(r) != "" {
 		return false
 	}
 	if s.o.Supervision != nil {

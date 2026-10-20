@@ -290,7 +290,7 @@ func (g *Guard) PostOnce(ctx context.Context, a Actor, repo string, issue int, b
 	if obj, found, err := g.Objects.ByOp(ctx, op); err != nil {
 		return CommentInfo{}, err
 	} else if found {
-		if obj.Repo != repo || obj.ParentNumber != issue || obj.Table != table {
+		if obj.Repo != repo || obj.ParentNumber != issue || (obj.Table != table && obj.Table != "") {
 			return CommentInfo{}, fmt.Errorf("github: the operation %s was made for something else", op)
 		}
 		return CommentInfo{ID: obj.GitHubID}, nil

@@ -218,17 +218,53 @@ func (a *fakeAlerts) Notify(_ context.Context, _, text string) error {
 type fakeDelegations struct {
 	mu     sync.Mutex
 	covers bool
+	// onlyTable, when set, makes the delegation cover only the requests of that table.
+	onlyTable string
+	used      []int64
 }
 
-func (d *fakeDelegations) Covers(context.Context, chain.Request) (bool, error) {
+// Used records the use of the delegation by a decision of the Grand Master.
+func (d *fakeDelegations) Used(_ context.Context, r chain.Request, _ string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.covers, nil
+	d.used = append(d.used, r.ID)
+	return nil
+}
+
+// usedBy lists the requests decided under the delegation.
+func (d *fakeDelegations) usedBy() []int64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]int64(nil), d.used...)
+}
+
+func (d *fakeDelegations) Covers(_ context.Context, r chain.Request) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.covers && (d.onlyTable == "" || d.onlyTable == r.Table), nil
 }
 
 func (d *fakeDelegations) set(v bool) {
 	d.mu.Lock()
 	d.covers = v
+	d.mu.Unlock()
+}
+
+// fakePolicyDecrees gives the decrees of policy that reach every request.
+type fakePolicyDecrees struct {
+	mu  sync.Mutex
+	adj chain.PolicyAdjust
+}
+
+func (d *fakePolicyDecrees) PolicyFor(context.Context, chain.Request) (chain.PolicyAdjust, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.adj, nil
+}
+
+func (d *fakePolicyDecrees) set(loosen, tighten []string) {
+	d.mu.Lock()
+	d.adj = chain.PolicyAdjust{Loosen: loosen, Tighten: tighten}
 	d.mu.Unlock()
 }
 
@@ -297,6 +333,7 @@ type world struct {
 	stallers *fakeStallPeople
 	sup      *fakeSupervision
 	deleg    *fakeDelegations
+	pdec     *fakePolicyDecrees
 	subs     *fakeSubs
 	prs      *fakePRs
 	// supervisor is the real supervision, with worldOpts.realSup.
@@ -317,6 +354,9 @@ type world struct {
 	owner users.User
 	// entries is told what became of the requests to enter the Guild.
 	entries *recordSink
+	// prs is told what became of the requests of a PR (in production, the
+	// sink that approves on GitHub); it stands for "what was approved there".
+	prSink *recordSink
 	// The doubles of the gate of freshness (worldOpts.freshness).
 	ghRules  *fakeRules
 	verifier *fakeVerifier
@@ -458,7 +498,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, stallers: &fakeStallPeople{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, subs: &fakeSubs{}, prs: &fakePRs{},
+	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, stallers: &fakeStallPeople{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, pdec: &fakePolicyDecrees{}, subs: &fakeSubs{}, prs: &fakePRs{},
 		policy: &policy{s: chain.DefaultSettings(), rules: chain.DefaultRules()}}
 	w.git, w.remote = git, remote.Dir()
 	w.grants = &fakeGrants{f: w.cls}
@@ -468,12 +508,13 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}, Restrictions: opt.restrictions}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
-		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainStallPeople: w.stallers, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainSubDelegations: w.subs, ChainPRs: w.prs}
+		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainStallPeople: w.stallers, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainPolicyDecrees: w.pdec, ChainSubDelegations: w.subs, ChainPRs: w.prs}
 	if opt.policyFile != nil {
 		oo.ChainPolicy = opt.policyFile
 	}
 	w.entries = &recordSink{}
-	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries}
+	w.prSink = &recordSink{}
+	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries, classes.RequestPR: w.prSink}
 	if opt.destructive {
 		oo.Destructive = nil
 	}

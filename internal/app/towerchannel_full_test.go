@@ -56,7 +56,11 @@ func newChannelRig(t *testing.T, gated ...bool) *channelRig {
 
 // channelOpts are the choices of a channelRig: gated holds the preparation of the
 // Tower until released; builder gives the Citadel a session zero of a character.
-type channelOpts struct{ gated, builder, chain, citadelTerminals bool }
+type channelOpts struct {
+	gated, builder, chain, citadelTerminals bool
+	// resumed records the session each build of the session zero resumes (with builder)
+	resumed *resumeLog
+}
 
 func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
 	t.Helper()
@@ -100,7 +104,7 @@ func newChannelRigWith(t *testing.T, o channelOpts) *channelRig {
 	x.a.setup = func(e *Engine) {
 		e.deps.HostOrchestration = true
 		if o.builder {
-			e.deps.Integration = builderIntegration{}
+			e.deps.Integration = builderIntegration{resumed: o.resumed}
 		}
 		if o.chain {
 			e.deps.Integration = chainIntegration{}

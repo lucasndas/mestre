@@ -2,6 +2,9 @@ package chain
 
 import (
 	"context"
+
+	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
 
 // AskRequest is `mestre approval ask`: the Grão-Mestre takes a request that waits
@@ -63,4 +66,18 @@ func (s *Service) Ask(ctx context.Context, a AskRequest) (Outcome, error) {
 	}
 	s.audit(ctx, cur, AuditEntry{Approver: a.By, Level: level.Kind, Answer: AnswerClimb, Outcome: "accepted", Reason: "approval ask: " + oneLine(note.Summary)})
 	return out, nil
+}
+
+// AskAction opens a question of the Grão-Mestre to the people about an action that is
+// not a request yet (`mestre approval ask --action "<text>"`): the request is of the
+// type acao_do_grao_mestre, which nobody decides alone and no delegation opens, so
+// it goes straight to the people. Approving it only answers the Grão-Mestre, who
+// then acts by the normal commands; the engine does nothing else.
+func (s *Service) AskAction(ctx context.Context, by characters.Character, tableID string, note AskNote) (int64, error) {
+	if by.Role != characters.RoleGrandMaster || by.Workspace == "" {
+		return 0, refuse(CodeNotAtLevel, "only the Grand Master asks the people about an action")
+	}
+	note.By = by.ID
+	return s.Request(ctx, OpenRequest{Type: classes.RequestGMAction, Workspace: by.Workspace, Table: tableID, Requester: by.ID, About: "pergunta do Grão-Mestre sobre uma ação",
+		Ask: &note, Task: note.Summary})
 }

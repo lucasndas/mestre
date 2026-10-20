@@ -209,15 +209,15 @@ type rulesReader interface {
 }
 
 // settings is `mestre gh settings show|apply` (docs/cli/grao-mestre.md#mestre-gh).
-// `apply` changes the repository and needs the approval of the type
-// configuracao_repositorio: until the request exists it changes nothing and says so.
+// `apply` changes the repository only through the approval of the type
+// configuracao_repositorio (settingsApply).
 func (h *Handlers) settings(ctx context.Context, c *localchan.Call) localchan.Response {
 	args, ok := c.Request.Strings()
 	if !ok || len(args) != 1 || (args[0] != "show" && args[0] != "apply") {
 		return usage("usage: mestre gh settings show | apply --file <file.json>")
 	}
 	if args[0] == "apply" {
-		return unavailable("gh settings apply needs the request of the type configuracao_repositorio, which is not available yet: nothing was changed")
+		return h.write("gh settings apply", h.settingsApply)(ctx, c)
 	}
 	return h.read(h.settingsShow)(ctx, c)
 }

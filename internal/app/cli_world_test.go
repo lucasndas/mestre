@@ -143,19 +143,6 @@ func (m *commMachines) typedRaw(id string) []byte {
 	return append([]byte(nil), m.raw[id]...)
 }
 
-// commAttachments copies the attachments of a message into the table of the
-// target.
-type commAttachments struct{ table string }
-
-func (a *commAttachments) Forward(_ context.Context, _, table string, paths []string) ([]string, error) {
-	a.table = table
-	out := make([]string, len(paths))
-	for i, p := range paths {
-		out[i] = ".mestre/anexos/" + filepath.Base(p)
-	}
-	return out, nil
-}
-
 type commOperator struct{ got []characters.OperatorRequest }
 
 func (o *commOperator) Request(_ context.Context, r characters.OperatorRequest) (string, error) {
@@ -204,9 +191,9 @@ type commWorld struct {
 	clk    *clock.Fake
 	orc    *app.Orchestration
 	mach   *commMachines
-	atts   *commAttachments
 	oper   *commOperator
 	rig    *localrig.Rig
+	dir    string // the folder of the workspaces
 	slug   string
 	gm     characters.Character
 	master characters.Character
@@ -284,17 +271,19 @@ func newCommWorld(t *testing.T, setup ...func(*commWorld, *app.OrchestrationOpti
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &commWorld{t: t, ctx: ctx, clk: clk, files: map[string][]byte{}, atts: &commAttachments{}, oper: &commOperator{}, tmp: t.TempDir(),
+	w := &commWorld{t: t, ctx: ctx, clk: clk, dir: filepath.Join(root, "workspaces"), files: map[string][]byte{}, oper: &commOperator{}, tmp: t.TempDir(),
 		trees: map[string]map[string]string{}, pre: &commPreRun{}}
 	w.lib = &classes.Library{Roots: classes.DefaultRoots(filepath.Join(root, "classes-globais"), filepath.Join(root, "clone")), Records: classes.ClassDB{DB: db, Clock: clk},
 		Ceiling: commCeiling{classes.DefaultCeiling()}, Clock: clk, OS: "linux", Skill: func(string) bool { return false }}
 	w.mach = &commMachines{Machines: orcfakes.NewMachines(clk), raw: map[string][]byte{}, screen: map[string]string{}}
 	w.mach.Chars = func() *characters.Service { return w.orc.Characters }
+	// the copy of the attachments is the real one, over the folders of the test
+	msgAtts, _ := app.NewAttachmentsForTest(db, filepath.Join(root, "workspaces"), "cidadela", nil)
 	oo := app.OrchestrationOptions{Guild: db, Machine: "cidadela", Clock: clk, WorkspacesDir: filepath.Join(root, "workspaces"),
 		TempDir: filepath.Join(root, "tmp"), Git: git, Machines: w.mach, Presets: characters.Presets(commPresets{}), Builder: orcfakes.Builder{},
 		GitHub: orcfakes.Hub{URL: remote.Dir()}, Epics: commEpics{}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{},
 		Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")}, Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{},
-		MessageAttachments: w.atts, Operator: w.oper,
+		MessageAttachments: msgAtts, Operator: w.oper,
 		ClassLibraries: func(string) *classes.Library { return w.lib }, ClassTmp: func(context.Context, string) (string, error) { return w.tmp, nil },
 		ClassDestructive: func(_ context.Context, d classes.DeleteRequest) (bool, error) {
 			w.deleted = append(w.deleted, d)

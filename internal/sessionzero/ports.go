@@ -125,6 +125,13 @@ type Analyst interface {
 	Analyze(ctx context.Context, in AnalysisInput) (Analysis, error)
 }
 
+// VerificationProposer keeps the proposal of the commands of verification in
+// .mestre/regras/verificacao.yaml of the main clone dir, without confirming it
+// (orchestration/verification.Keeper).
+type VerificationProposer interface {
+	Propose(ctx context.Context, workspace, dir string, commands []string) error
+}
+
 // PullRequest is the pull request of the session zero.
 type PullRequest struct {
 	Repo workspaces.Repo

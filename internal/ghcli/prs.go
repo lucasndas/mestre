@@ -164,6 +164,7 @@ func (h *Handlers) prOpen(ctx context.Context, c *localchan.Call) localchan.Resp
 		_ = h.Opened(ctx, who.actor.Table, part.Number, "")
 	}
 	if err != nil {
+		h.refused(ctx, who.char, err)
 		return refusal(err)
 	}
 	if h.Opened != nil {
@@ -216,10 +217,17 @@ func (h *Handlers) prUpdate(ctx context.Context, c *localchan.Call) localchan.Re
 	}
 	got, err := who.prs.Update(ctx, who.actor, who.repo, n, in)
 	if err != nil {
+		h.refused(ctx, who.char, err)
 		return refusal(err)
 	}
 	if in.Block == "" {
 		h.executed(ctx, who.char, "mestre pr update")
+		if h.Opened != nil {
+			// the branch was sent: a table in work (the step sync took it back from
+			// review) is in review again, one in review learns the new head. A table
+			// that can not take it (it is closing) does not undo what was sent.
+			_ = h.Opened(ctx, who.actor.Table, got.Number, got.HeadSHA)
+		}
 	}
 	return localchan.OK(map[string]any{"number": got.Number, "url": got.URL, "head_sha": got.HeadSHA})
 }

@@ -52,11 +52,10 @@ type File struct {
 	Data []byte
 }
 
-// AttachmentSource gives the attachments forwarded to a table
-// (docs/telegram/anexos-e-transcricao.md, milestone 5), relative to
-// .mestre/anexos/.
+// AttachmentSource gives the attachments forwarded to a table of a workspace
+// (docs/telegram/anexos-e-transcricao.md), relative to .mestre/anexos/.
 type AttachmentSource interface {
-	For(ctx context.Context, table string) ([]File, error)
+	For(ctx context.Context, workspace, table string) ([]File, error)
 }
 
 // SkillConformance says whether the conformance test found that Claude Code
@@ -346,7 +345,7 @@ func (t *Table) copyAttachments(ctx context.Context, req TableRequest, rep *Tabl
 	if t.o.Attachments == nil {
 		return
 	}
-	files, err := t.o.Attachments.For(ctx, req.Table)
+	files, err := t.o.Attachments.For(ctx, req.Workspace, req.Table)
 	if err != nil {
 		rep.Problems = append(rep.Problems, Problem{Path: path.Join(MestreDir, "anexos"), Reason: "os anexos não foram copiados: " + err.Error()})
 		return

@@ -229,3 +229,32 @@ func TestNothingThatComesAfterAViolationOfTheProtocolIsHandled(t *testing.T) {
 		})
 	}
 }
+
+// An exit announced with no code is not an exit with code 0: whoever decides on
+// success (the verification) must be able to tell the two apart.
+func TestAnExitWithNoCodeIsNotAnExitWithCodeZero(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		code   *int
+		noCode bool
+	}{{"no code", nil, true}, {"code zero", new(int), false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := peerWith(t, func(conn *ptywire.Conn, req *ptywire.Msg) bool {
+				_ = conn.WriteMsg(&ptywire.Msg{T: ptywire.TypeExit, ExitCode: tc.code})
+				_ = conn.WriteMsg(&ptywire.Msg{T: ptywire.TypeReplay, ID: req.ID})
+				return false
+			})
+			_, _ = c.Replay(within(t), 0)
+			select {
+			case <-c.Exited():
+			case <-within(t).Done():
+				t.Fatal("the exit was not seen")
+			}
+			if ex := c.Exit(); ex.NoCode != tc.noCode || ex.Code != 0 {
+				t.Fatalf("exit = %+v, want NoCode %v", ex, tc.noCode)
+			}
+		})
+	}
+}

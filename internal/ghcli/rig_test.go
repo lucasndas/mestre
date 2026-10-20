@@ -226,6 +226,8 @@ func (q quotaOf) Low(_ context.Context, ch characters.Character) (time.Time, boo
 }
 
 type rig struct {
+	// tbl is the epic of each table the engine knows.
+	tbl   tables
 	t     *testing.T
 	ctx   context.Context
 	gh    *fakegithub.Server
@@ -247,6 +249,7 @@ type rig struct {
 	// onFiles: see clients.
 	onFiles *func()
 	h       *ghcli.Handlers
+	fwd     *localchan.LocalForwarder
 	db      *store.DB
 	chars   chars
 	quota   *github.Quota
@@ -281,6 +284,7 @@ func newRig(t *testing.T) *rig {
 		"dev": {ID: "dev", Role: characters.RoleCharacter, Workspace: "meu-app", Table: "42-login", Class: "dev"},
 		"gm":  {ID: "gm", Role: characters.RoleGrandMaster, Workspace: "meu-app"},
 	}
+	tbl := tables{"meu-app/42-login": {Repo: repoFull, Epic: 1}}
 	pr := prs{}
 	quota := &github.Quota{Clock: clk}
 	onFiles := new(func())
@@ -302,7 +306,7 @@ func newRig(t *testing.T) *rig {
 	branch := new(string)
 	auth, wf, crit := &pushAuth{}, &workflowsFake{policy: map[string]classes.Workflows{}, approved: map[string]bool{}}, &criteriaFake{}
 	send := github.Sending{Branches: branches{git: git, mirror: mirrorDir, remote: remoteDir, name: branch}, Auth: auth, Workflows: wf, Criteria: crit}
-	h := &ghcli.Handlers{PRs: pr, Lease: ls, Send: send, Opened: func(_ context.Context, key string, n int, _ string) error { pr[key] = n; return nil }, Characters: cs, Quota: quotaOf{quota}, Clients: clients{gh, onFiles, quota}, Repos: repos{}, Tables: tables{"meu-app/42-login": {Repo: repoFull, Epic: 1}}, Objects: objs, Clock: clk}
+	h := &ghcli.Handlers{PRs: pr, Lease: ls, Send: send, Opened: func(_ context.Context, key string, n int, _ string) error { pr[key] = n; return nil }, Characters: cs, Quota: quotaOf{quota}, Clients: clients{gh, onFiles, quota}, Repos: repos{}, Tables: tbl, Objects: objs, Clock: clk}
 	fwd := localchan.NewLocalForwarder()
 	h.Register(fwd)
 	profiles := cli.ProfilesFunc(func(_ context.Context, id string) cli.Profile {
@@ -316,7 +320,7 @@ func newRig(t *testing.T) *rig {
 		}
 		return cli.Profile{Role: cli.RoleCharacter}
 	})
-	rg := &rig{t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, git: git, mirror: mirror, remote: remoteDir, auth: auth, wf: wf, criteria: crit, branch: branch, h: h, db: db, chars: cs, quota: quota, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
+	rg := &rig{tbl: tbl, t: t, ctx: ctx, gh: gh, objs: objs, prs: pr, lease: ls, clk: clk, onFiles: onFiles, git: git, mirror: mirror, remote: remoteDir, auth: auth, wf: wf, criteria: crit, branch: branch, h: h, fwd: fwd, db: db, chars: cs, quota: quota, gate: cli.NewGate(cli.GateConfig{Profiles: profiles, Next: fwd})}
 	h.Locked = func(context.Context) bool { return rg.locked.Load() }
 	return rg
 }
@@ -328,6 +332,8 @@ type result struct {
 	Code  string
 	Data  map[string]any
 	Error string
+	// Raw is the whole answer as it goes to the CLI (message, hint and data).
+	Raw string
 }
 
 // run sends a command of a character through the gate, as the CLI would.
@@ -351,10 +357,13 @@ func (r *rig) runID(id, who, cmd string, flags map[string]any, args ...string) r
 		Caller:  localchan.Caller{Identified: true, AgentID: who, TerminalID: "t-" + who},
 	})
 	out := result{OK: resp.OK, Exit: resp.ExitCode()}
+	if raw, err := json.Marshal(resp); err == nil {
+		out.Raw = string(raw)
+	}
 	if resp.Error != nil {
 		out.Code, out.Error = resp.Error.Code, resp.Error.Message
 	}
-	if resp.OK {
+	if len(resp.Data) > 0 {
 		var m map[string]any
 		_ = json.Unmarshal(resp.Data, &m)
 		out.Data = m

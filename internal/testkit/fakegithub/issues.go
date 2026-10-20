@@ -230,7 +230,16 @@ func (s *Server) serveIssues(w http.ResponseWriter, r *http.Request) bool {
 			list = append(list, rp.issues[c-1])
 		}
 		s.mu.Unlock()
-		s.write(w, r, inst, http.StatusOK, list)
+		// GitHub pages the list: page (from 1) of per_page (at most 100).
+		per, page := 30, 1
+		if v, err := strconv.Atoi(r.URL.Query().Get("per_page")); err == nil && v > 0 {
+			per = min(v, 100)
+		}
+		if v, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && v > 0 {
+			page = v
+		}
+		lo := min((page-1)*per, len(list))
+		s.write(w, r, inst, http.StatusOK, list[lo:min(lo+per, len(list))])
 	case parts[5] == "sub_issues" && r.Method == http.MethodPost:
 		s.mu.Lock()
 		fail := s.subIssueFail
@@ -519,4 +528,19 @@ func (s *Server) AddIssueLabel(full string, n int, label string) {
 	defer s.mu.Unlock()
 	is := s.repos[full].issues[n-1]
 	is["labels"] = labelMaps(append(labelNames(is), label))
+}
+
+// RemoveIssueLabel takes a label off an issue or PR as a person would, with no
+// App and no recorded action.
+func (s *Server) RemoveIssueLabel(full string, n int, label string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	is := s.repos[full].issues[n-1]
+	var left []string
+	for _, l := range labelNames(is) {
+		if !strings.EqualFold(l, label) {
+			left = append(left, l)
+		}
+	}
+	is["labels"] = labelMaps(left)
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
@@ -37,6 +38,38 @@ var (
 // Machines lists the registry, oldest entry first.
 func (c *Citadel) Machines(ctx context.Context) ([]Machine, error) {
 	return listMachines(ctx, c.db.Reader())
+}
+
+// PendingJoin is an entry request that still waits for the Owner, as /guilda
+// shows it.
+type PendingJoin struct {
+	ID string
+	// Name is what the machine said about itself (never trusted as markup).
+	Name string
+	// Code is the code to compare with the installer screen ("" until the
+	// machine revealed its nonce).
+	Code      string
+	CreatedAt time.Time
+}
+
+// PendingJoins lists the entry requests in state pending that have not expired,
+// oldest first.
+func (c *Citadel) PendingJoins(ctx context.Context) ([]PendingJoin, error) {
+	rows, err := c.db.Reader().QueryContext(ctx,
+		`SELECT `+joinColumns+` FROM join_requests WHERE state = 'pending' AND expires_at > ? ORDER BY created_at, join_id`, c.clk.Now().UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PendingJoin
+	for rows.Next() {
+		j, err := scanJoin(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, PendingJoin{ID: j.ID, Name: j.Name, Code: j.Code, CreatedAt: j.CreatedAt})
+	}
+	return out, rows.Err()
 }
 
 // Machine reads one machine.

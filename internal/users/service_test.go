@@ -202,10 +202,16 @@ func TestFivePinErrorsInFifteenMinutesLockThePinAndTheSixthIsRefusedWithoutVerif
 	t.Parallel()
 	w := newWorld(t)
 	w.pin(w.owner, "123456")
+	var open users.PINRequest // a request opened before the fifth error
 	for i := range users.PINLockErrors {
 		r, err := w.svc.StartPIN(w.ctx, w.owner.ID, "cofre")
 		if err != nil {
 			t.Fatalf("request %d: %v", i, err)
+		}
+		if i == users.PINLockErrors-1 {
+			if open, err = w.svc.StartPIN(w.ctx, w.owner.ID, "cofre"); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if err := w.svc.CheckPIN(w.ctx, r.ID, "000000"); !errors.Is(err, users.ErrBadPIN) {
 			t.Fatalf("wrong pin %d = %v", i, err)
@@ -218,7 +224,18 @@ func TestFivePinErrorsInFifteenMinutesLockThePinAndTheSixthIsRefusedWithoutVerif
 	if _, err := w.svc.StartPIN(w.ctx, w.owner.ID, "cofre"); !errors.Is(err, users.ErrPINLocked) {
 		t.Errorf("a new request while locked = %v", err)
 	}
-	// the right PIN, in the request that was open before the lock, is refused too
+	// the right PIN, in the request that was open before the lock, is refused
+	// without verification and the request is not spent
+	if err := w.svc.CheckPIN(w.ctx, open.ID, "123456"); !errors.Is(err, users.ErrPINLocked) {
+		t.Errorf("the right PIN during the lock = %v, want ErrPINLocked", err)
+	}
+	if err := w.svc.Consume(w.ctx, open.ID, w.owner.ID, "cofre"); !errors.Is(err, users.ErrPINRequest) {
+		t.Errorf("the request answered during the lock was spent: %v", err)
+	}
+	w.clk.Advance(20 * time.Minute) // still inside the 30 minutes
+	if err := w.svc.CheckPIN(w.ctx, open.ID, "123456"); !errors.Is(err, users.ErrPINLocked) {
+		t.Errorf("the right PIN inside the 30 minutes = %v, want ErrPINLocked", err)
+	}
 	w.clk.Advance(time.Hour) // the lock is over
 	r, err := w.svc.StartPIN(w.ctx, w.owner.ID, "cofre")
 	if err != nil {

@@ -3,6 +3,7 @@ package telegram_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/lucasndas/mestre/internal/glossary"
 	"github.com/lucasndas/mestre/internal/lockdown"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/telegram"
@@ -84,6 +86,8 @@ type world struct {
 	router *router
 	alerts *alerts
 	opts   telegram.Options
+	gc     *telegram.GuildChannel
+	gf     *guildFake
 	next   int64
 	// The flow of approval over the bot (rigOpts.approvals).
 	lock  *lockdown.Service
@@ -98,6 +102,8 @@ type world struct {
 	rules     *tablerules.Service
 	routing   *telegram.Routing
 	bc        *telegram.BlockChannel
+	cc        *telegram.ChooseChannel
+	answers   []inbox.NewItem
 	sc        *telegram.StallChannel
 	pauser    *fakeTablePauser
 	dg        *telegram.DigestChannel
@@ -134,6 +140,8 @@ type rigOpts struct {
 	block bool
 	// decrees puts the decrees (/decretos, the confirmation, the PIN) over the bot.
 	decrees bool
+	// guild puts /guilda over the bot, over a fake Guild (guildFake).
+	guild bool
 	// digest puts the summary buttons over the bot (it needs decrees).
 	digest bool
 }
@@ -229,11 +237,18 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 			}
 		}
 		w.bc = &telegram.BlockChannel{Users: w.users, PanelURL: "https://painel.test/cofre"}
+		w.cc = &telegram.ChooseChannel{Users: w.users, Answered: func(_ context.Context, q telegram.ChoiceQuestion, by users.User, option string) error {
+			w.answers = append(w.answers, telegram.AnswerItem(q, by, option))
+			return nil
+		}}
 		acts := map[string]telegram.Action{}
 		for k, v := range w.opts.Actions {
 			acts[k] = v
 		}
 		for k, v := range w.bc.Actions() {
+			acts[k] = v
+		}
+		for k, v := range w.cc.Actions() {
 			acts[k] = v
 		}
 		w.pauser = &fakeTablePauser{}
@@ -245,7 +260,7 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	}
 	if ropt.decrees {
 		for _, slug := range []string{"loja", "blog"} {
-			if _, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+			if _, err := db.Writer().ExecContext(ctx, `INSERT OR IGNORE INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
 				VALUES (?, ?, ?, 'https://example.test/x.git', 'main', 'active', '', 1, 1)`, slug, "lucas/"+slug, "lucas/"+slug); err != nil {
 				t.Fatal(err)
 			}
@@ -266,7 +281,10 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		pins := &telegram.PINRouter{Users: w.users}
 		w.dc = &telegram.DecreeChannel{Svc: w.ds, Users: w.users, PINs: pins, Rules: telegram.TableRulesOf(w.rules)}
 		w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.dc.Commands()...)
-		w.opts.Actions = map[string]telegram.Action{}
+		w.opts.Actions = maps.Clone(w.opts.Actions) // the actions of the other parts stay
+		if w.opts.Actions == nil {
+			w.opts.Actions = map[string]telegram.Action{}
+		}
 		for k, v := range ropt.actions {
 			w.opts.Actions[k] = v
 		}
@@ -281,6 +299,21 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 			}
 		}
 	}
+	if ropt.guild {
+		pins := &telegram.PINRouter{Users: w.users}
+		w.gf = &guildFake{machines: []telegram.GuildMachine{{ID: "m-a", Name: "casa", Citadel: true}, {ID: "m-b", Name: "notebook"}}}
+		w.gc = &telegram.GuildChannel{Users: w.users, PINs: pins, Machines: w.gf.list, SetExcluded: w.gf.set, Pending: w.gf.waiting}
+		w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.gc.Commands()...)
+		acts := map[string]telegram.Action{}
+		for k, v := range w.opts.Actions {
+			acts[k] = v
+		}
+		for k, v := range w.gc.Actions() {
+			acts[k] = v
+		}
+		w.opts.Actions = acts
+		w.opts.Captures = map[string]telegram.CaptureFunc{telegram.PINKind: pins.Capture()}
+	}
 	w.bot, err = telegram.New(w.opts)
 	if err != nil {
 		t.Fatal(err)
@@ -291,6 +324,9 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if w.dc != nil {
 		w.dc.Bind(w.bot)
 	}
+	if w.gc != nil {
+		w.gc.Bind(w.bot)
+	}
 	if w.dg != nil {
 		w.dg.Bind(w.bot)
 	}
@@ -300,6 +336,9 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if w.bc != nil {
 		w.bc.Bind(w.bot)
 		w.sc.Bind(w.bot)
+	}
+	if w.cc != nil {
+		w.cc.Bind(w.bot)
 	}
 	if w.lc != nil {
 		w.lc.Bind(w.bot)

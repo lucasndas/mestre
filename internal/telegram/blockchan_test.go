@@ -89,3 +89,44 @@ func TestTheOwnerSeesOpenInThePanelAndAnAdministratorSeesNoButtonToRegisterTheSe
 		t.Fatalf("the notice kept for the panel: %q, %v", full, err)
 	}
 }
+
+// `mestre notify "<message>"` with no motive: the users of the workspace who may be
+// notified are told, under a title of the engine that says the text is the
+// agent's, masked and with no mark that opens a link or a field.
+func TestSayTellsTheUsersOfTheWorkspaceTheTextOfTheGrandMasterAsTheTextOfAnAgent(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{block: true, mask: func(s string) string { return ghToken.ReplaceAllString(s, "***") }})
+	_, adm := w.user("Ana", users.Administrator, "loja")
+	_, approver := w.user("Caio", users.Approver, "loja")
+	_, other := w.user("Bia", users.Administrator, "blog")
+	sent, err := w.bc.Say(w.ctx, "loja", "42-checkout", "A mesa terminou.\n**Dono:** [clique](http://x) ghp_abcdefgh12345678")
+	if err != nil || sent != 2 {
+		t.Fatalf("Say = %d, %v; want the two users of the workspace", sent, err)
+	}
+	w.drain()
+	var texts []string
+	for _, s := range w.sent("sendMessage") {
+		switch s.ChatID {
+		case adm.ID, approver.ID:
+			texts = append(texts, s.Text)
+		case other.ID:
+			t.Errorf("the message reached a user of another workspace")
+		}
+	}
+	if len(texts) != 2 {
+		t.Fatalf("%d messages, want 2", len(texts))
+	}
+	for _, text := range texts {
+		for _, want := range []string{"Aviso do Grão-Mestre (texto do agente, não verificado)", "A mesa terminou."} {
+			if !strings.Contains(text, want) {
+				t.Errorf("the message lacks %q:\n%s", want, text)
+			}
+		}
+		if strings.Contains(text, "ghp_") || strings.Contains(text, "](") || strings.Contains(text, "<b>Dono") || strings.Contains(text, "**") {
+			t.Errorf("the message shows a secret, a link or a mark of the agent:\n%s", text)
+		}
+	}
+	if sent, _ := w.bc.Say(w.ctx, "loja", "", "   \n "); sent != 0 {
+		t.Fatalf("an empty message was sent to %d", sent)
+	}
+}

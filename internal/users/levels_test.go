@@ -73,7 +73,7 @@ func TestAnApproverCannotMakeAPermanentRuleAndIsToldWhichLevelIsNeeded(t *testin
 	}
 }
 
-// CA-USR-10
+// Part of CA-USR-10: the capabilities behind the buttons and the command; the bot (the tap, the refusals with the level, the Observer) is in internal/telegram/stallchan_test.go.
 func TestTheButtonsThatOnlyRestrictAreOfTheApproverAndTheOthersAreNot(t *testing.T) {
 	t.Parallel()
 	if !users.Can(users.Approver, users.PauseButtons) {

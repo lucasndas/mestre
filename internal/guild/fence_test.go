@@ -41,8 +41,8 @@ func (r *record) list() []string {
 	return slices.Clone(r.out)
 }
 
-// Part of CA-CIDADELA-03 (fecha no M5; falta: o comentário do GitHub que fica
-// na fila e sai uma vez, e o "GitHub fora" no painel).
+// The fence of CA-CIDADELA-03, which closes in internal/app/githubfence_test.go with the
+// comment of GitHub that waits in the queue and goes out once.
 // The Citadel acts outside only with its epoch confirmed by the lock: nothing
 // before the first check, the GitHub only with the lease of 60 s, the
 // Telegram also with the lock unreachable, and nothing ever again once the

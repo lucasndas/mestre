@@ -49,6 +49,9 @@ type Options struct {
 	Env []string
 	// MinVersion overrides gitx.MinVersion (tests).
 	MinVersion Version
+	// Trace hears the arguments of every git process right before it starts
+	// (tests and benchmarks that count processes); nil in production.
+	Trace func(args []string)
 }
 
 // Real implements Git over the system git binary. Every process runs with a
@@ -70,6 +73,12 @@ type Real struct {
 
 	lockMu sync.Mutex
 	locks  map[string]chan struct{}
+
+	// checked remembers the worktrees whose own view git resolved to their
+	// record (CheckWorktree), so a decision does not ask again what the
+	// in-process verify of every call already keeps checking.
+	checkMu sync.Mutex
+	checked map[WorktreeRecord]time.Time
 }
 
 var _ Git = (*Real)(nil)
@@ -93,7 +102,7 @@ func New(opts Options) (*Real, error) {
 	if opts.MinVersion == (Version{}) {
 		opts.MinVersion = MinVersion
 	}
-	g := &Real{opts: opts, clk: opts.Clock, masker: opts.Masker, locks: map[string]chan struct{}{}}
+	g := &Real{opts: opts, clk: opts.Clock, masker: opts.Masker, locks: map[string]chan struct{}{}, checked: map[WorktreeRecord]time.Time{}}
 	if g.clk == nil {
 		g.clk = clock.Real{}
 	}
@@ -266,6 +275,9 @@ func (g *Real) exec(ctx context.Context, ro runOpts, args ...string) ([]byte, er
 	full := globalArgs()
 	for _, c := range ro.config {
 		full = append(full, "-c", c)
+	}
+	if g.opts.Trace != nil {
+		g.opts.Trace(args)
 	}
 	cmd := exec.CommandContext(ctx, g.opts.Binary, append(full, args...)...)
 	cmd.Dir = ro.dir

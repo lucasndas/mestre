@@ -191,9 +191,10 @@ func TestATextTheAdapterRefusesGoesThroughTheFileToo(t *testing.T) {
 	}
 }
 
-// Part of CA-PROTO-08 (the part of the machine and its router; the ack over the
-// live connection is the protocol's): a terminal that became busy answers busy,
-// types nothing, and the item goes back to the queue of the Citadel.
+// Part of CA-PROTO-08 (the machine and its router; the criterion itself is closed
+// over the live connection in internal/app/towerinbox_full_test.go): a terminal
+// that became busy answers busy, types nothing, and the item goes back to the
+// queue of the Citadel.
 func TestATerminalThatBecameBusyAnswersBusyAndNothingIsTyped(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{stage7: true})

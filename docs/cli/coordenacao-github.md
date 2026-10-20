@@ -42,6 +42,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 - `status`: estado do PR, CI por verificação, revisões (quem, decisão), se pode fazer merge e o motivo quando não pode, comentários sem resposta. `--json` → `{number, state, draft, head_sha, checks: [{name, state}], reviews: [{by, state}], mergeable, blocked_by, unresolved_comments}`.
 - `comment`: comenta na conversa do PR; `reply`: responde a um comentário de revisão (o id vem de `pr status --json`).
 - Sem PR da mesa (`status`, `comment`, `reply`, `update`) → 4 `no_pr`.
+- **A mesa é avisada:** o `open` e o `update` que enviaram contam à mesa (uma mesa em `working` vai a `in_review`; em `in_review` só aprende a cabeça nova). Uma mesa que não pode receber o PR (`closing`, `cancelling`) não faz o comando falhar: o PR já está no GitHub, o motor registra o aviso no log e o comando segue (`executed` é registrado).
 
 ## Regras e erros
 
@@ -79,7 +80,7 @@ mestre pr reply <id-comentário> ("<texto>" | --body-file <arq>)
 - **CA-CLI-GH-10** · *rápida* — **Dado** `mestre issue create --title "Login lento" --fingerprint "auth: login lento"`, **quando** roda, **então** cria a issue com a impressão no corpo; **quando** roda de novo com `--fingerprint "Auth:  login LENTO"`, **então** não cria outra, comenta "visto de novo" na primeira e devolve `seen_again: true`; **dado** a primeira fechada, **quando** roda de novo, **então** cria uma nova com "Recorrência de #<n>", o rótulo `recorrencia` (criado no GitHub falso, que não o tinha) e `recurrence_of`.
 - **CA-CLI-GH-11** · *rápida* — **Dado** o GitHub falso com a cota em zero e o aluguel válido, **quando** o Mestre da mesa roda `mestre issue comment 50 "x"`, **então** sai com 0 e `queued: true`, e `mestre pr status` sai com 5 `github_unavailable`; **dado** um limite secundário (`403` com `retry-after`), **então** o comentário sai com 5 `github_unavailable` e não é repetido sozinho.
 - **CA-CLI-GH-12** · *rápida* — **Dado** `mestre issue update 42 --remove-label mestre:humano` (ou `--add-label epico`) pedido por um personagem da mesa, **quando** o motor avalia, **então** sai com 3 `reserved_label` e o GitHub falso não recebe nada.
-- **CA-CLI-GH-13** · *rápida* — **Dado** uma missão `completed` do épico com o critério C3 sem prova, **quando** o Mestre da mesa roda `mestre pr open --body-file corpo.md`, **então** sai com 7 `criteria_unproven` citando C3 e nada é enviado; **dado** C3 marcado, **então** o PR abre com o bloco `criterios` do corpo.
+- **CA-CLI-GH-13** · *rápida* — **Dado** uma missão `completed` do épico com o critério C3 sem prova, **quando** o Mestre da mesa roda `mestre pr open --body-file corpo.md`, **então** sai com 7 `criteria_unproven` citando C3 e nada é enviado; **dado** C3 marcado, **então** o PR abre; o bloco `criterios` do corpo sai por `mestre pr update --block criterios`, nunca pelo `--body-file` (o motor tira as marcas de bloco do texto do agente).
 
 ## Depende de
 

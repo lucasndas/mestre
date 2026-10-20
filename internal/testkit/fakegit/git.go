@@ -870,6 +870,21 @@ func (h *Handle) Status(context.Context) ([]gitx.StatusEntry, error) {
 	return h.statusLocked(), nil
 }
 
+// TrackedStatus implements gitx.Repo.
+func (h *Handle) TrackedStatus(context.Context) (gitx.TrackedStatus, error) {
+	if err := h.needTree(); err != nil {
+		return gitx.TrackedStatus{}, err
+	}
+	defer h.lock()()
+	ts := gitx.TrackedStatus{Branch: h.branch, Detached: h.branch == ""}
+	for _, e := range h.statusLocked() {
+		if !e.Untracked() {
+			ts.Entries = append(ts.Entries, e)
+		}
+	}
+	return ts, nil
+}
+
 // Stage implements gitx.Repo.
 func (h *Handle) Stage(_ context.Context, paths ...string) error {
 	if err := h.needTree(); err != nil {
@@ -1013,6 +1028,74 @@ func (h *Handle) MergeFFOnly(_ context.Context, ref string) (gitx.Hash, error) {
 	}
 	h.r.branches[h.branch] = target
 	return target, nil
+}
+
+// Merge implements gitx.Repo. The fake keeps one parent per commit: a merge
+// commit has the checked-out one as its only parent, and its tree is the
+// file-level three-way merge (a file both sides changed differently is a
+// conflict).
+func (h *Handle) Merge(_ context.Context, ref string, who gitx.Signature) (gitx.Hash, error) {
+	if err := h.needTree(); err != nil {
+		return "", err
+	}
+	if err := gitx.ValidateRef(ref); err != nil {
+		return "", err
+	}
+	if who.Name == "" || who.Email == "" {
+		return "", fmt.Errorf("%w: merge needs an identity", gitx.ErrInvalidArgument)
+	}
+	defer h.lock()()
+	theirs, err := h.resolveLocked(ref)
+	if err != nil {
+		return "", fmt.Errorf("merge %s: %w", ref, err)
+	}
+	cur := h.r.branches[h.branch]
+	if cur == theirs || (cur != "" && h.r.isAncestorLocked(theirs, cur)) {
+		return cur, nil
+	}
+	if cur != "" && h.r.isAncestorLocked(cur, theirs) {
+		h.r.branches[h.branch] = theirs
+		return theirs, nil
+	}
+	var base map[string]string
+	anc := h.r.ancestorsLocked(theirs)
+	for c := cur; c != ""; c = h.r.commits[c].Parent {
+		if anc[c] {
+			base = h.r.commits[c].Files
+			break
+		}
+	}
+	ours, their := h.r.commits[cur].Files, h.r.commits[theirs].Files
+	set := map[string]string{}
+	var del []string
+	for _, p := range slices.Sorted(maps.Keys(mergedPaths(ours, their, base))) {
+		o, oin := ours[p]
+		t, tin := their[p]
+		b, bin := base[p]
+		switch {
+		case oin == tin && o == t:
+		case oin == bin && o == b:
+			if tin {
+				set[p] = t
+			} else {
+				del = append(del, p)
+			}
+		case tin == bin && t == b:
+		default:
+			return "", fmt.Errorf("merge %s: %w: %s", ref, gitx.ErrMergeConflict, p)
+		}
+	}
+	return h.r.commitLocked(h.branch, "Merge "+ref, set, del, h.stamp(who), h.stamp(who)), nil
+}
+
+func mergedPaths(maps_ ...map[string]string) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range maps_ {
+		for p := range m {
+			out[p] = true
+		}
+	}
+	return out
 }
 
 // SetSkipWorktree implements gitx.Repo.

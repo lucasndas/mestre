@@ -35,6 +35,10 @@ type PolicyRules struct {
 	// Alone says which types the Grão-Mestre decides alone when the conditions
 	// pass (sozinho: se_condicoes).
 	Alone map[classes.RequestType]bool
+	// AskAlways and AskAll are the types (or all of them) that a decree of policy
+	// sends to the people, whatever the risk and any delegation.
+	AskAlways map[classes.RequestType]bool
+	AskAll    bool
 	// MinLevel is the nivel_minimo of each type.
 	MinLevel map[classes.RequestType]classes.Level
 	// Pin says which types ask the PIN of the user after the button (the
@@ -90,7 +94,7 @@ func DefaultRules() PolicyRules {
 	for _, t := range []classes.RequestType{classes.RequestPR, classes.RequestMerge, classes.RequestMissionPoint, classes.RequestClassPermission, classes.RequestExtraCost} {
 		r.Alone[t], r.MinLevel[t] = true, classes.LevelApprover
 	}
-	for _, t := range []classes.RequestType{classes.RequestWorkflows, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD} {
+	for _, t := range []classes.RequestType{classes.RequestWorkflows, classes.RequestWorkspaceClass, classes.RequestDestructive, classes.RequestAgentsMD, classes.RequestGMAction} {
 		r.Alone[t], r.MinLevel[t] = false, classes.LevelAdmin
 	}
 	r.Alone[classes.RequestRepoSettings], r.MinLevel[classes.RequestRepoSettings] = false, classes.LevelOwner
@@ -119,6 +123,9 @@ func (r PolicyRules) ForcesPeople(req Request) string {
 	if t == "" {
 		t = classes.RequestClassPermission
 	}
+	if why := r.AsksAlways(req); why != "" {
+		return why
+	}
 	if req.Risk.Risk != classes.RiskHigh && !r.Alone[t] {
 		return fmt.Sprintf("a política manda %s para as pessoas (sozinho: nunca)", t)
 	}
@@ -129,6 +136,19 @@ func (r PolicyRules) ForcesPeople(req Request) string {
 			}
 			return fmt.Sprintf("regra de quórum: %d aprovações", q.Approvals)
 		}
+	}
+	return ""
+}
+
+// AsksAlways says why a decree of policy sends the request to the people, at any
+// level and whatever the risk ("me pergunte tudo", or a type), and "" when none does.
+func (r PolicyRules) AsksAlways(req Request) string {
+	t := req.Type
+	if t == "" {
+		t = classes.RequestClassPermission
+	}
+	if r.AskAll || r.AskAlways[t] {
+		return fmt.Sprintf("um decreto de política manda perguntar sobre %s", t)
 	}
 	return ""
 }

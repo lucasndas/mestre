@@ -3,6 +3,7 @@ package decrees_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -481,5 +482,47 @@ func TestASubdelegationIsNeverWiderThanTheGrandMaster(t *testing.T) {
 	}
 	if covers(w.risky(2, classes.RequestMerge, classes.RiskHigh)) {
 		t.Fatal("a medio subdelegation covers an alto request")
+	}
+}
+
+// The validity a delegation gets and the time of its reminder are those of the
+// policy file of its workspace (`delegacao`), never more than 30 days; another
+// workspace keeps the constants.
+func TestTheValidityAndTheReminderOfADelegationComeFromThePolicyOfItsWorkspace(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	rem := &reminders{}
+	svc := w.withHooks(rem, nil, nil)
+	times := func(_ context.Context, ws string) (time.Duration, time.Duration) {
+		if ws == "loja" {
+			return 10 * day, 2 * day
+		}
+		return 90 * day, 0 // more than the 30 is not given
+	}
+	svc.SetDelegationTimes(times)
+	w.svc.SetDelegationTimes(times)
+	d := w.confirm(decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "loja", Mesa: "42-login",
+		Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "loja"}, Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: "envio_workflows"}, Text: "delegue os workflows"})
+	if want := w.clk.Now().Add(10 * day); !d.Until.Equal(want) {
+		t.Fatalf("until = %v, want %v", d.Until, want)
+	}
+	// another workspace asks for more than the 30 days the file may give: it gets 30
+	other := w.confirm(decrees.Proposal{Author: w.owner.ID, Kind: decrees.KindRule, Workspace: "blog", Mesa: "7-post",
+		Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: "blog"}, Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: "envio_workflows"}, Text: "delegue os workflows"})
+	if want := w.clk.Now().Add(30 * day); !other.Until.Equal(want) {
+		t.Fatalf("another workspace: until = %v, want the 30 days at most (%v)", other.Until, want)
+	}
+	// the renewal gives the validity of the workspace
+	pend, err := svc.Renew(w.ctx, d.Number, w.owner.ID)
+	if err != nil || !strings.Contains(pend.Text, "29/10/2026") {
+		t.Fatalf("renew = %+v, %v; want the 10 days of the workspace", pend, err)
+	}
+	w.clk.Advance(7 * day) // 3 days left: the reminder of the workspace is 2
+	if err := svc.Sweep(w.ctx); err != nil || rem.n() != 0 {
+		t.Fatalf("reminded too early: %d, %v", rem.n(), err)
+	}
+	w.clk.Advance(1 * day)
+	if err := svc.Sweep(w.ctx); err != nil || rem.n() != 1 {
+		t.Fatalf("reminders = %d, %v", rem.n(), err)
 	}
 }

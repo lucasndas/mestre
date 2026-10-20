@@ -1,6 +1,7 @@
 package chain_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -133,5 +134,150 @@ func TestTheGrandMasterRevokesARuleOfTheSummaryAndPausesTheAutonomyOfTheTable(t 
 	}
 	if lvl := w.level(w.shell(dev2, "pip install y")); lvl != chain.LevelGrandMaster {
 		t.Errorf("the next medio of the table was born at %s, want the Grand Master", lvl)
+	}
+}
+
+// repoSettings opens a request of a change of the repository settings, born at
+// the Grão-Mestre when a delegation covers it.
+func (w *world) repoSettings(about string) int64 {
+	w.t.Helper()
+	id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: w.slug, About: about,
+		Target: json.RawMessage(`{"kind":"ruleset","repo":"lucas/Meu_App","branch":"main"}`)})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return id
+}
+
+// CA-APROV-POL-06: a change of the repository settings is the Owner's: without a
+// delegation decree the approval of the Grand Master is human_required; with one
+// that covers it the approval is accepted, needs no PIN, and the use of the
+// decree is registered.
+func TestTheGrandMasterApprovesRepositorySettingsOnlyWithADelegationOfTheOwner(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	id := w.repoSettings("regra da branch main")
+	if w.level(id) != chain.LevelPeople {
+		t.Fatalf("without a delegation the request is at %+v, want the people", w.request(id).Level)
+	}
+	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired {
+		t.Fatalf("approval without a delegation = %+v, want human_required", ref)
+	}
+	w.deleg.set(true)
+	covered := w.repoSettings("outra regra")
+	if w.level(covered) != chain.LevelGrandMaster {
+		t.Fatalf("with a delegation the request is at %+v, want the Grand Master", w.request(covered).Level)
+	}
+	if out := w.decide(w.gm, covered, chain.AnswerApprove, "dentro da delegação"); out.State != chain.Approved {
+		t.Fatalf("outcome = %+v, want approved", out)
+	}
+	if got := w.deleg.usedBy(); len(got) != 1 || got[0] != covered {
+		t.Fatalf("uses of the delegation = %v, want the request %d", got, covered)
+	}
+}
+
+// workflowsRequest opens a request of sending workflows for a table.
+func (w *world) workflowsRequest(table string) int64 {
+	w.t.Helper()
+	id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestWorkflows, Workspace: w.slug, Table: table, About: "workflows da mesa " + table,
+		Target: json.RawMessage(`{"files":[".github/workflows/ci.yml"]}`)})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return id
+}
+
+// CA-APROV-POL-14: with a delegation of the Owner for envio_workflows in the
+// table 42-login, the Grand Master's decision on a request of that table is
+// accepted; on a request of another table it is human_required; and a quorum rule
+// for the type sends the request to the people even inside the delegation.
+func TestADelegationForWorkflowsCoversOnlyItsTableAndAQuorumRuleStillSendsItToThePeople(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.deleg.set(true)
+	w.deleg.mu.Lock()
+	w.deleg.onlyTable = "42-login"
+	w.deleg.mu.Unlock()
+	inside := w.workflowsRequest("42-login")
+	if w.level(inside) != chain.LevelGrandMaster {
+		t.Fatalf("the request of the table is at %+v, want the Grand Master", w.request(inside).Level)
+	}
+	if out := w.decide(w.gm, inside, chain.AnswerApprove, "dentro da delegação"); out.State != chain.Approved {
+		t.Fatalf("outcome = %+v, want approved", out)
+	}
+	outside := w.workflowsRequest("43-busca")
+	if w.level(outside) != chain.LevelPeople {
+		t.Fatalf("the request of another table is at %+v, want the people", w.request(outside).Level)
+	}
+	if ref := w.refusal(chain.Decision{Request: outside, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired {
+		t.Fatalf("approval outside the delegation = %+v, want human_required", ref)
+	}
+	rules := chain.DefaultRules()
+	rules.QuorumRules = []chain.QuorumRule{{Type: classes.RequestWorkflows, Approvals: 1}}
+	w.policy.setRules(rules)
+	quorum := w.workflowsRequest("42-login")
+	if w.level(quorum) != chain.LevelPeople {
+		t.Fatalf("with the quorum rule the request is at %+v, want the people", w.request(quorum).Level)
+	}
+}
+
+// CA-APROV-POL-05: with a decree of policy active that loosens "migracoes", a PR
+// on **/migrations/** with everything green is the Grand Master's to approve alone;
+// without it, human_required. A decree never opens the areas of the engine and the
+// secrets, nor a type of risk alto.
+func TestADecreeOfPolicyThatLoosensMigrationsLetsTheGrandMasterApproveAMigrationPR(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	f := green(2)
+	f.Files = append(f.Files, chain.PRFile{Path: "db/migrations/0003.sql", Added: 12})
+	before := w.prRequest(classes.RequestPR, 70, f)
+	w.humanRequired(before, "migracoes")
+
+	w.pdec.set([]string{"migracoes"}, nil)
+	id := w.prRequest(classes.RequestPR, 71, f)
+	if out := w.decide(w.gm, id, chain.AnswerApprove, "o decreto libera migrações"); out.State != chain.Approved {
+		t.Fatalf("outcome = %+v, want approved", out)
+	}
+	// the decree is read when the Grand Master decides: the one opened before is his now too
+	if out := w.decide(w.gm, before, chain.AnswerApprove, "o decreto libera migrações"); out.State != chain.Approved {
+		t.Fatalf("outcome of the request opened before = %+v, want approved", out)
+	}
+
+	// what no decree loosens
+	w.pdec.set([]string{"mestre", "permissoes_e_segredos", "destrutiva", string(classes.RequestDestructive), string(classes.RequestRepoSettings)}, nil)
+	sensitive := green(1)
+	sensitive.Files = append(sensitive.Files, chain.PRFile{Path: classes.DefaultMestrePaths[0], Added: 3})
+	m := w.prRequest(classes.RequestPR, 72, sensitive)
+	w.humanRequired(m)
+}
+
+// Part of CA-APROV-POL-13 (the proposal and the reach of the decree are in
+// internal/decrees): a decree of policy "me pergunte tudo" sends to the people a
+// green PR the Grand Master would approve alone, and it holds for the types alto
+// too: a request of a type that a delegation of the Owner covers is asked of the
+// people while it stands. (The proposal that loosens an alto type is refused before
+// the confirmation: internal/decrees.)
+func TestADecreeOfPolicyThatTightensEverythingSendsToThePeopleEvenWhatADelegationCovers(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.deleg.set(true)
+	w.pdec.set(nil, []string{"*"})
+	pr := w.prRequest(classes.RequestPR, 80, green(2))
+	if w.level(pr) != chain.LevelPeople {
+		t.Fatalf("a green PR is at %+v, want the people", w.request(pr).Level)
+	}
+	alto := w.workflowsRequest("42-login")
+	if w.level(alto) != chain.LevelPeople {
+		t.Fatalf("an alto covered by a delegation is at %+v, want the people", w.request(alto).Level)
+	}
+	// only one type tightened: the others keep their rules
+	w.pdec.set(nil, []string{string(classes.RequestWorkflows)})
+	other := w.prRequest(classes.RequestPR, 81, green(2))
+	if w.level(other) != chain.LevelGrandMaster {
+		t.Fatalf("a PR with only workflows tightened is at %+v, want the Grand Master", w.request(other).Level)
+	}
+	covered := w.workflowsRequest("42-login")
+	if w.level(covered) != chain.LevelPeople {
+		t.Fatalf("workflows tightened: %+v, want the people", w.request(covered).Level)
 	}
 }

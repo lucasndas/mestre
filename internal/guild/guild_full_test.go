@@ -7,22 +7,32 @@ import (
 	"errors"
 	"math/rand/v2"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/app"
+	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/discovery"
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/telegram"
+	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/lucasndas/mestre/internal/testkit/faketelegram"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/protorig"
 	"github.com/lucasndas/mestre/internal/transport"
+	"github.com/lucasndas/mestre/internal/users"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -143,10 +153,12 @@ func (i *instance) restart(t *testing.T) {
 	i.member = guild.NewMember(i.mach, i.keys, clock.Real{})
 }
 
-// Part of CA-GUILDA-09 (it closes in M5, with the approval by the Telegram), on Linux and on Windows: a second instance on the same
-// machine finds the Guild by broadcast, enters it (the Owner's answer is the
-// double of the bot), connects by mTLS only, and connects again after a
-// restart. The approval through the real bot is milestone 5.
+// CA-GUILDA-09, on Linux and on Windows: a second instance on the same machine
+// finds the Guild by broadcast and enters it, with the Owner asked as in
+// production: a request entrada_na_guilda in the chain of approval, the flow of
+// approval over the real bot of the Telegram (the fake one), the Owner clicking
+// the button and giving the PIN in the chat. It then connects by mTLS only, and
+// connects again after a restart.
 func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnectsAfterARestart(t *testing.T) {
 	t.Parallel()
 	port := freeUDPPort(t)
@@ -174,7 +186,6 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 	if err != nil {
 		t.Fatal(err)
 	}
-	approver := newApprover()
 	creds, err := guild.LoadCredentials(ctx, a.guildDB)
 	if err != nil {
 		t.Fatal(err)
@@ -204,8 +215,9 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 		t.Fatal(err)
 	}
 	var citadel *guild.Citadel
+	ow := newTelegramOwner(t, ctx, a.guildDB, clk, func() *guild.Citadel { return citadel })
 	citadel, err = guild.NewCitadel(ctx, guild.CitadelConfig{
-		DB: a.guildDB, CA: founded.CA, Clock: clk, Cert: src, Approver: approver, Credentials: creds,
+		DB: a.guildDB, CA: founded.CA, Clock: clk, Cert: src, Approver: ow.approver, Credentials: creds,
 		Peers: guild.ProtocolPeers{Server: protoSrv, Transport: tlsSrv, Clock: clk},
 	})
 	if err != nil {
@@ -228,13 +240,7 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 		t.Fatal(err)
 	}
 	defer responder.Close()
-	approver.mu.Lock()
-	approver.auto = func(req guild.ApprovalRequest) {
-		if err := (owner{c: citadel, pin: "1234"}).answer(req.JoinID, "1234", guild.Decision{Accept: true}); err != nil {
-			t.Errorf("accept: %v", err)
-		}
-	}
-	approver.mu.Unlock()
+	go ow.answerEntry(t, ctx) // the Owner of the Telegram: the button and the PIN
 
 	// instance B is installed: nothing configured, nothing cached
 	b := newInstance(t, "b")
@@ -253,8 +259,17 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 	if res.Plan.Action != guild.PlanJoin || res.Joined == nil || res.Plan.Join.GuildID != founded.GuildID {
 		t.Fatalf("install = %+v", res)
 	}
-	if q := <-approver.asked; q.Code != <-codes {
+	if q := <-ow.asked; q.Code != <-codes {
 		t.Errorf("the Owner saw %q on the question and the installer showed another code", q.Code)
+	}
+	// who let it in is the Owner, by the PIN, through a request of the chain
+	var approved int
+	if err := a.guildDB.Reader().QueryRow(`SELECT count(*) FROM join_requests WHERE state = 'approved' AND decided_by = ?`, ow.ownerID).Scan(&approved); err != nil || approved != 1 {
+		t.Errorf("%d entries approved by the Owner (%v), want 1", approved, err)
+	}
+	var viaChain int
+	if err := a.guildDB.Reader().QueryRow(`SELECT count(*) FROM approval_requests WHERE type = ? AND state = 'approved'`, string(classes.RequestGuildEntry)).Scan(&viaChain); err != nil || viaChain != 1 {
+		t.Errorf("%d requests entrada_na_guilda approved in the chain (%v), want 1", viaChain, err)
 	}
 
 	// B connects as a Tower, by mTLS and nothing else, and again after a restart
@@ -327,6 +342,140 @@ func TestASecondInstanceFindsTheGuildByBroadcastEntersConnectsByMTLSAndReconnect
 		if _, err := tc.Dial(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(tcpPort)), transport.RouteTower); err == nil {
 			t.Error("a removed machine connected over real sockets")
 		}
+	}
+}
+
+// telegramOwner is the Owner of the Guild answering through the production path:
+// the real approver of the engine, the chain of approval, the flow with the PIN and
+// the real bot, over the fake Telegram on the real clock.
+type telegramOwner struct {
+	approver guild.Approver
+	asked    chan guild.ApprovalRequest
+	fake     *faketelegram.Server
+	user     faketelegram.User
+	ownerID  string
+}
+
+const ownerPIN = "123456"
+
+type noAlerts struct{}
+
+func (noAlerts) Unauthorized(context.Context, int64, string) {}
+func (noAlerts) OwnerAlert(context.Context, string)          {}
+func (noAlerts) Tell(context.Context, string, string)        {}
+
+type noRouter struct{}
+
+func (noRouter) Deliver(context.Context, telegram.Inbound) error { return nil }
+
+func newTelegramOwner(t *testing.T, ctx context.Context, db *store.DB, clk clock.Clock, citadel func() *guild.Citadel) *telegramOwner {
+	t.Helper()
+	svc, err := users.New(users.Options{DB: db, Clock: clk, Alerts: noAlerts{}, PIN: users.PINCost{MemoryKiB: 8, Time: 1, Threads: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := svc.CreateOwner(ctx, "Lucas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetPIN(ctx, owner.ID, ownerPIN); err != nil {
+		t.Fatal(err)
+	}
+	code, err := svc.NewCode(ctx, owner, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := &telegramOwner{ownerID: owner.ID, asked: make(chan guild.ApprovalRequest, 8), user: faketelegram.User{ID: 77, FirstName: "Lucas", Username: "lucas"}}
+	if _, err := svc.Pair(ctx, users.PairRequest{Text: code.Code, TelegramID: o.user.ID, Private: true}); err != nil {
+		t.Fatal(err)
+	}
+	const token = "123456:fake-bot-token"
+	if o.fake, err = faketelegram.New(clk, t, token); err != nil {
+		t.Fatal(err)
+	}
+	ac := &telegram.ApprovalChannel{Users: svc}
+	bot, err := telegram.New(telegram.Options{
+		DB: db, Clock: clk, Users: svc, Alerts: noAlerts{}, Router: noRouter{}, Actions: ac.Actions(), Captures: ac.Captures(),
+		Client: &telegram.Client{Token: token, HTTP: &http.Client{Transport: fakenet.HandlerTransport(o.fake)}}, PollTimeout: 50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var svcChain *chain.Service
+	flow, err := approvals.New(approvals.Options{DB: db, Clock: clk, Chain: lateFlowChain{&svcChain}, Users: svc, PINs: svc, Messenger: ac,
+		Locked: func(context.Context) bool { return false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ac.Bind(bot, flow)
+	entry := app.EntryApprover{Chain: func() *chain.Service { return svcChain },
+		Decide: func(ctx context.Context, id string, d guild.Decision) error { return citadel().Decide(ctx, id, d) },
+		Tell:   func(context.Context, string) {}}
+	if svcChain, err = chain.NewService(chain.Options{Store: &chain.Store{DB: db}, Clock: clk, Characters: noCharacters{}, Inbox: noInbox{}, Classes: noClasses{},
+		Policy: chain.StaticPolicy{}, Users: flow, Sinks: map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: entry}}); err != nil {
+		t.Fatal(err)
+	}
+	o.approver = watched{Approver: entry, asked: o.asked}
+	go func() { _ = bot.Run(ctx) }()
+	return o
+}
+
+// answerEntry is the Owner on the phone: it waits for the question with the button
+// in the chat, taps "Aprovar agora", waits for the bot to ask the PIN and types it.
+func (o *telegramOwner) answerEntry(t *testing.T, ctx context.Context) {
+	clk := clock.Real{}
+	until := func(what string, ok func() bool) bool {
+		dl, stop := clock.WithTimeout(ctx, clk, wait)
+		defer stop()
+		for !ok() {
+			if err := clock.Sleep(dl, clk, 20*time.Millisecond); err != nil {
+				if ctx.Err() == nil {
+					t.Errorf("the Owner waited for %s in vain", what)
+				}
+				return false
+			}
+		}
+		return true
+	}
+	var msg int64
+	var key string
+	if !until("the question about the entry", func() bool {
+		for _, s := range o.fake.Sent() {
+			kb, ok := s.Params["reply_markup"].(map[string]any)
+			if s.Method != "sendMessage" || s.ChatID != o.user.ID || !ok || kb["inline_keyboard"] == nil {
+				continue
+			}
+			for _, row := range kb["inline_keyboard"].([]any) {
+				for _, b := range row.([]any) {
+					if bt := b.(map[string]any); bt["text"] == "Aprovar agora" {
+						msg, key = s.MessageID, bt["callback_data"].(string)
+					}
+				}
+			}
+		}
+		return key != ""
+	}) {
+		return
+	}
+	asked := func() int {
+		n := 0
+		for _, s := range o.fake.Sent() {
+			if s.Method == "sendMessage" && s.ChatID == o.user.ID && strings.Contains(s.Text, "PIN") {
+				n++
+			}
+		}
+		return n
+	}
+	before := asked()
+	if _, err := o.fake.UserClicks(o.user, msg, key); err != nil {
+		t.Errorf("the button: %v", err)
+		return
+	}
+	if !until("the bot to ask the PIN", func() bool { return asked() > before }) {
+		return
+	}
+	if _, err := o.fake.UserSendsText(o.user, faketelegram.Private(o.user), ownerPIN); err != nil {
+		t.Errorf("the PIN: %v", err)
 	}
 }
 

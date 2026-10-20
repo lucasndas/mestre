@@ -203,6 +203,28 @@ func (s *Service) List(ctx context.Context, userID string) ([]View, error) {
 	return out, nil
 }
 
+// ListWorkspace lists the decrees of a workspace: the ones in force, or, with all,
+// the revoked, expired and used ones too.
+func (s *Service) ListWorkspace(ctx context.Context, workspace string, all bool) ([]View, error) {
+	r := s.o.DB.Reader()
+	ds, err := queryDecrees(ctx, r, `ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	var out []View
+	for _, d := range ds {
+		if d.Workspace != workspace || (!all && d.State != Active && d.State != Suspended) {
+			continue
+		}
+		v := View{Decree: d, AuthorName: d.Author}
+		if a, err := readUser(ctx, r, d.Author); err == nil {
+			v.AuthorName = a.Name
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
 // Use is the classes.ExceptionLedger of the exceptions the hook lets through:
 // true only the first time, atomically. It records the use in the decree.
 func (s *Service) Use(ctx context.Context, agentID string, id int64) (bool, error) {
@@ -437,4 +459,53 @@ func requestRepo(r chain.Request) string {
 		return r.PR.Repo
 	}
 	return ""
+}
+
+var _ chain.PolicyDecrees = (*Service)(nil)
+
+// PolicyFor is the chain.PolicyDecrees: the active decrees of policy, still
+// valid, that reach the request by its workspace, its table or its class. A
+// decree aimed at a character reaches nothing here (it is read by name, and a
+// policy is not about a name).
+func (s *Service) PolicyFor(ctx context.Context, r chain.Request) (chain.PolicyAdjust, error) {
+	var a chain.PolicyAdjust
+	now := s.clk.Now()
+	ds, err := queryDecrees(ctx, s.o.DB.Reader(), `WHERE state = 'active' AND effect_kind = 'policy' AND workspace = ? AND (until = 0 OR until > ?) ORDER BY id`, r.Workspace, ms(now))
+	if err != nil {
+		return a, err
+	}
+	for _, d := range ds {
+		// a decree made for one table reaches only that table, whatever it aims at
+		if d.Mesa != "" && d.Mesa != r.Table {
+			continue
+		}
+		switch d.Target.Kind {
+		case TargetWorkspace:
+		case TargetTable:
+			if r.Table == "" || d.Mesa == "" && d.Target.Name != r.Table {
+				continue
+			}
+		case TargetClass:
+			if d.Target.Name != r.Class {
+				continue
+			}
+		default:
+			continue
+		}
+		if d.Effect.Loosens {
+			// only the decree of someone who still can make it loosens: an author who is gone,
+			// suspended or below an Administrator leaves the policy as it was (tightening needs no check)
+			level, err := s.levelOf(ctx, s.o.DB.Reader(), d)
+			if err != nil {
+				return a, err
+			}
+			if level == "" || !level.AtLeast(classes.LevelAdmin) {
+				continue
+			}
+			a.Loosen = append(a.Loosen, d.Effect.Setting)
+		} else {
+			a.Tighten = append(a.Tighten, d.Effect.Setting)
+		}
+	}
+	return a, nil
 }

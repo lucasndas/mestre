@@ -264,10 +264,10 @@ func startTurn(t *testing.T, f *fixture) {
 	}
 }
 
-// Part of CA-CLASSES-06 (the criterion is closed through the approval flow in
-// internal/app/classapproval_full_test.go): the rule the flow applies, that the
-// Grand Master only proposes a workspace class, never approves what he proposed,
-// and that the class only comes into use with the approval of an Administrator.
+// Part of CA-CLASSES-06 (the flow of approval and the Grand Master that
+// apply it are tested in internal/orchestration/chain): the rule the flow applies, that the Grand Master only
+// proposes a workspace class, never approves what he proposed, and that the
+// class only comes into use with the approval of an Administrator.
 func TestTheGrandMasterProposesAWorkspaceClassAndOnlyAnAdministratorApprovesIt(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
