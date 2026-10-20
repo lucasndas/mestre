@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -184,36 +183,34 @@ func TestAnInvalidFirstPolicyFileHoldsTheDefaultAndALinkIsNotFollowed(t *testing
 	} else if runtime.GOOS != "windows" {
 		t.Fatalf("no symbolic link on %s: %v", runtime.GOOS, err)
 	}
-	// a folder on the way that is a link is not followed either: a symbolic link,
-	// or, where that takes a privilege (Windows), a junction, which any account makes
+	// a folder on the way that is a link is not followed either; where a symbolic
+	// link takes a privilege (Windows), the junction of policyfile_full_test.go
+	// proves it
+	linkedFolderIsNotRead(t, func(target, link string) error { return os.Symlink(target, link) })
+}
+
+// linkedFolderIsNotRead puts the policy file behind a folder that is a link (made
+// by link) and checks that the engine keeps the default and tells it.
+func linkedFolderIsNotRead(t *testing.T, link func(target, link string) error) {
+	t.Helper()
+	r := newPolicyRig(t)
 	elsewhere := t.TempDir()
 	if err := os.WriteFile(filepath.Join(elsewhere, "politica-de-aprovacao.yaml"), []byte("versao: 1\nexpiracao: 1h\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	folder := filepath.Join(t.TempDir(), "pasta")
-	linkDir(t, elsewhere, folder)
+	if err := link(elsewhere, folder); err != nil {
+		if runtime.GOOS == "windows" {
+			return // a symbolic link takes a privilege there: the full suite makes a junction
+		}
+		t.Fatal(err)
+	}
 	r.path = filepath.Join(folder, "politica-de-aprovacao.yaml")
-	before = len(r.alerts)
 	if st, _ := r.chain(); st.PeopleDeadline != 24*time.Hour {
 		t.Fatalf("the engine went through a linked folder: %+v", st)
 	}
-	if len(r.alerts) != before+1 {
+	if len(r.alerts) != 1 {
 		t.Fatalf("alerts %v; want the linked folder told", r.alerts)
-	}
-}
-
-// linkDir makes a link to a folder: a symbolic link or, on Windows, a junction.
-func linkDir(t *testing.T, target, link string) {
-	t.Helper()
-	err := os.Symlink(target, link)
-	if err == nil {
-		return
-	}
-	if runtime.GOOS != "windows" {
-		t.Fatal(err)
-	}
-	if out, jerr := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); jerr != nil {
-		t.Fatalf("mklink /J: %v: %s", jerr, out)
 	}
 }
 
