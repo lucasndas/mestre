@@ -109,19 +109,26 @@ func (c *REST) CheckRuns(ctx context.Context, repo, sha string) ([]Check, error)
 
 // Review is a review of a PR.
 type Review struct {
+	ID        int64
 	By, State string
 	// Commit is the commit the review was made on.
 	Commit string
+	// ByType is the type of the account that reviewed (User, Bot, Organization)
+	// and Association what the repository says of it (OWNER, COLLABORATOR, NONE…).
+	ByType, Association string
 }
 
 // Reviews lists the reviews of a PR.
 func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error) {
 	type item struct {
+		ID   int64 `json:"id"`
 		User struct {
 			Login string `json:"login"`
+			Type  string `json:"type"`
 		} `json:"user"`
-		State    string `json:"state"`
-		CommitID string `json:"commit_id"`
+		State       string `json:"state"`
+		CommitID    string `json:"commit_id"`
+		Association string `json:"author_association"`
 	}
 	raw, err := pages[item](ctx, c, repo, fmt.Sprintf("/pulls/%d/reviews", n), "reading the reviews")
 	if err != nil {
@@ -129,7 +136,7 @@ func (c *REST) Reviews(ctx context.Context, repo string, n int) ([]Review, error
 	}
 	out := make([]Review, 0, len(raw))
 	for _, r := range raw {
-		out = append(out, Review{By: r.User.Login, State: r.State, Commit: r.CommitID})
+		out = append(out, Review{ID: r.ID, By: r.User.Login, State: r.State, Commit: r.CommitID, ByType: r.User.Type, Association: r.Association})
 	}
 	return out, nil
 }
