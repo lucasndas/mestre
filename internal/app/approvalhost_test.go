@@ -195,6 +195,49 @@ func TestTheGrandMasterIsNotAnotherCharacterWhoReviewedAndTheSettingsTargetIsThe
 	}
 }
 
+func TestARequestNeverAppliesReviewMergeOrRulesetInAnotherRepositoryThanItsWorkspace(t *testing.T) {
+	t.Parallel()
+	w := newApprovalWorld(t)
+	other := "lucas/outro"
+	w.gh.AddRepo("lucas", "outro")
+	// at the creation: PR, merge and settings of another repository are refused
+	for _, typ := range []classes.RequestType{classes.RequestPR, classes.RequestMerge} {
+		_, err := w.orc.Chain.Request(w.ctx, chain.OpenRequest{Type: typ, Workspace: w.ws.Slug, Table: w.table.ID, About: "PR de outro repositório",
+			PR: &chain.PRRef{Repo: other, Number: w.pr, SHA: w.head}, Target: approvals.PRTarget(other, w.pr, w.head, "main")})
+		if !errors.Is(err, chain.ErrWrongRepo) {
+			t.Fatalf("%s of another repository = %v, want ErrWrongRepo", typ, err)
+		}
+	}
+	target, err := jsonOf(approvals.SettingsTarget{Kind: approvals.KindRuleset, Repo: other, Branch: "main", Body: map[string]any{"name": github.RulesetName}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.orc.Chain.Request(w.ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: w.ws.Slug, About: "ruleset", Target: target}); !errors.Is(err, chain.ErrWrongRepo) {
+		t.Fatalf("settings of another repository = %v, want ErrWrongRepo", err)
+	}
+	if open, _ := w.orc.Chain.Store().Open(w.ctx); len(open) != 0 {
+		t.Fatalf("requests = %+v, want none", open)
+	}
+
+	// at the decision: a request that got in some other way is refused too, and GitHub is not touched
+	before := len(w.gh.Requests())
+	forged := chain.Request{ID: 99, Workspace: w.ws.Slug, Type: classes.RequestPR, PR: &chain.PRRef{Repo: other, Number: w.pr, SHA: w.head}, Target: target,
+		Decision: &chain.Closing{State: chain.Approved, By: "user:" + w.owner.ID}}
+	if err := w.run.approver.Load().Decided(w.ctx, chain.Result{Request: forged, Approved: true}); !errors.Is(err, chain.ErrWrongRepo) {
+		t.Fatalf("approver = %v, want ErrWrongRepo", err)
+	}
+	forged.Type = classes.RequestRepoSettings
+	if err := w.run.settings.Load().Decided(w.ctx, chain.Result{Request: forged, Approved: true}); !errors.Is(err, chain.ErrWrongRepo) {
+		t.Fatalf("settings = %v, want ErrWrongRepo", err)
+	}
+	if n := len(w.gh.Requests()); n != before {
+		t.Fatalf("GitHub got %d requests while refusing", n-before)
+	}
+	if got := w.gh.Rulesets("lucas/outro"); len(got) != 0 {
+		t.Fatalf("rulesets = %v", got)
+	}
+}
+
 type failingSink struct{}
 
 func (failingSink) Deliver(context.Context, github.Watch, string, []github.Event) error {

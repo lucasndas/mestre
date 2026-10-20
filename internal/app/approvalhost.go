@@ -201,6 +201,9 @@ func (r *stdRun) approvalSetup(orc *Orchestration) {
 		Approved: &chain.Store{DB: r.env.DB}, Opener: orc.Chain, GrandMaster: r.grandMasterReview,
 		Personal: approvals.PersonalCredentials{Source: r.personal}, Required: ownersFor{r}, Delegations: decreeDelegations{r.decrees},
 		Users: r.users, Modes: modes, Tell: tellUser{r}, Logger: r.env.Log,
+		Repo: func(ctx context.Context, workspace string) (string, error) {
+			return workspaceRepoOf{orc.Workspaces}.Repo(ctx, workspace)
+		},
 	})
 	r.settings.Store(&approvals.Settings{
 		Requests: orc.Chain, Modes: modes,

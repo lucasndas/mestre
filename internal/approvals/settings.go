@@ -113,6 +113,15 @@ func (s *Settings) Decided(ctx context.Context, r chain.Result) error {
 		}
 		return nil
 	}
+	if s.Workspace != nil {
+		want, _, werr := s.Workspace(ctx, ws)
+		if werr != nil {
+			return fmt.Errorf("%w: the repository of %s could not be read: %v", chain.ErrWrongRepo, ws, werr)
+		}
+		if !chain.SameRepo(want, t.Repo) {
+			return fmt.Errorf("%w: %q is not %q", chain.ErrWrongRepo, t.Repo, want)
+		}
+	}
 	gm, _, err := s.GrandMaster(ctx, ws)
 	if err != nil {
 		return err

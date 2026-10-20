@@ -671,7 +671,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			freshness = freshnessRef{&fresh}
 		}
 		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
-			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
+			Classes: o.ChainClasses, Policy: policy, Repos: workspaceRepoOf{ws}, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: chainSinks(o.ChainSinks, map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}), Logger: o.Logger})
 		if err != nil {
@@ -974,4 +974,15 @@ func chainSinks(given, own map[classes.RequestType]chain.Sink) map[classes.Reque
 		out[t] = s
 	}
 	return out
+}
+
+// workspaceRepoOf gives the chain the repository of a workspace.
+type workspaceRepoOf struct{ ws *workspaces.Service }
+
+func (w workspaceRepoOf) Repo(ctx context.Context, workspace string) (string, error) {
+	x, err := w.ws.Get(ctx, workspace)
+	if err != nil {
+		return "", err
+	}
+	return x.Repo.String(), nil
 }
