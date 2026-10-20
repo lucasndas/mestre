@@ -133,12 +133,15 @@ func (s *Service) Propose(ctx context.Context, p Proposal) (Pending, error) {
 	}); err != nil {
 		return Pending{}, err
 	}
-	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p), Workspace: p.Workspace, Mesa: p.Mesa}, nil
+	return Pending{ID: id, Author: u.ID, PIN: why != "", Why: why, Text: confirmationText(p, s.Moment(ctx, p.Until)), Workspace: p.Workspace, Mesa: p.Mesa}, nil
 }
 
 // normalize fills what an exception implies.
 func normalize(p Proposal) Proposal {
 	p.Text = strings.TrimSpace(p.Text)
+	// a limit is whole seconds (never later than asked), so what is shown is
+	// exactly the instant it ends
+	p.Until = p.Until.Truncate(time.Second)
 	if p.Kind == KindException && p.Effect.Kind == "" {
 		p.Effect.Kind = EffectPermission
 	}
@@ -148,12 +151,12 @@ func normalize(p Proposal) Proposal {
 	return p
 }
 
-func confirmationText(p Proposal) string {
+func confirmationText(p Proposal, moment string) string {
 	until := "permanente"
 	if p.Kind == KindException {
 		until = "uma vez"
 	} else if !p.Until.IsZero() {
-		until = "até " + p.Until.UTC().Format("02/01/2006 15:04 UTC")
+		until = "até " + moment
 	}
 	where := "workspace " + p.Workspace
 	if p.Mesa != "" {
