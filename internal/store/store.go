@@ -71,6 +71,7 @@ type DB struct {
 	replica bool
 	capture *capture
 
+	swapMu sync.Mutex   // serializes Close and Replace, which wait outside mu
 	mu     sync.RWMutex // guards the pools, which Replace swaps, and closed
 	writer *sql.DB
 	reader *sql.DB
@@ -356,12 +357,24 @@ func (d *DB) WriteDurable(ctx context.Context, fn func(tx *sql.Tx) error) error 
 // that is still using it (a handler that was running when the process shut
 // down) gets "sql: database is closed" from the pools, not a nil pointer.
 func (d *DB) Close() error {
+	d.swapMu.Lock()
+	defer d.swapMu.Unlock()
 	d.mu.Lock()
-	defer d.mu.Unlock()
+	if d.closed { // already closed (and waited for): nothing left to wait for
+		d.mu.Unlock()
+		return nil
+	}
 	d.closed = true
-	return d.closePools()
+	err := d.closePools()
+	live := d.live
+	d.mu.Unlock()
+	// The wait is outside the lock: a goroutine that still holds a query may
+	// ask for the pools (Writer, Reader) before it ends.
+	return errors.Join(err, live.wait(d.clock))
 }
 
+// closePools closes both pools, with d.mu held. The files are free only after
+// d.live.wait: a query that was running keeps its connection until it ends.
 func (d *DB) closePools() error {
 	var rerr error
 	if d.reader != nil {
@@ -371,9 +384,6 @@ func (d *DB) closePools() error {
 	if d.writer != nil {
 		werr = d.writer.Close()
 	}
-	// A query that was running keeps its connection, and the file with it,
-	// until it ends; the file is free only after that.
-	d.live.wait(d.clock)
 	return errors.Join(rerr, werr)
 }
 

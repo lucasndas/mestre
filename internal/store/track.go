@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql/driver"
+	"fmt"
 	"sync"
 	"time"
 
@@ -40,12 +41,13 @@ func (t *connTracker) done() {
 	t.mu.Unlock()
 }
 
-// wait returns when every connection is closed, or after closeWait.
-func (t *connTracker) wait(clk clock.Clock) {
+// wait returns nil when every connection is closed, and an error with the
+// count that is still open after closeWait.
+func (t *connTracker) wait(clk clock.Clock) error {
 	t.mu.Lock()
 	if t.n == 0 {
 		t.mu.Unlock()
-		return
+		return nil
 	}
 	idle := make(chan struct{})
 	t.idle = idle
@@ -54,7 +56,16 @@ func (t *connTracker) wait(clk clock.Clock) {
 	defer tm.Stop()
 	select {
 	case <-idle:
+		return nil
 	case <-tm.C():
+		t.mu.Lock()
+		n := t.n
+		t.idle = nil
+		t.mu.Unlock()
+		if n == 0 {
+			return nil
+		}
+		return fmt.Errorf("store: %d connection(s) still open after %s: a query or transaction was not ended", n, closeWait)
 	}
 }
 
@@ -66,15 +77,18 @@ type trackConnector struct {
 }
 
 func (c trackConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	c.t.add()
 	raw, err := c.Connector.Connect(ctx)
 	if err != nil {
+		c.t.done()
 		return nil, err
 	}
 	inner, ok := raw.(innerConn)
 	if !ok {
-		return raw, nil // not one this package knows how to follow
+		_ = raw.Close()
+		c.t.done()
+		return nil, fmt.Errorf("store: the sqlite connection %T cannot be followed", raw)
 	}
-	c.t.add()
 	return &trackConn{innerConn: inner, t: c.t}, nil
 }
 
