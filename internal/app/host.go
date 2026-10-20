@@ -109,7 +109,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		Guild: db, Machine: e.id.MachineID, Clock: e.clk, Logger: e.log, WorkspacesDir: workspacesDir, TempDir: tmp,
 		Git: git, Machines: e.machines(db), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
-		Limits: characters.DefaultLimits(),
+		Limits: characters.DefaultLimits(), Peers: towerTables{e.towerClient()}, QuestTowers: towerTables{e.towerClient()},
 	}
 	if integ != nil {
 		integ.Extend(&opts)
