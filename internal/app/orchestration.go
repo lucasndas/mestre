@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/basesync"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
@@ -174,6 +175,9 @@ type Orchestration struct {
 	Waits       *waits.Service
 	Scrolls     *scrolls.Service
 	Quests      *quests.Service
+	// BaseSync makes the step `sync` when the main branch moves
+	// (docs/orquestracao/sincronia-com-a-base.md).
+	BaseSync *basesync.Service
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
 	// Supervisor is the supervision of the chain: the summary of the
@@ -530,6 +534,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	bsync, err := basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Logger: o.Logger})
+	if err != nil {
+		return nil, err
+	}
+	ws.OnFetched(bsync.AfterFetch)
+	orc.BaseSync = bsync
 	if o.ChainClasses != nil {
 		policy := o.ChainPolicy
 		if policy == nil {

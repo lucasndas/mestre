@@ -94,12 +94,31 @@ type HeadChangedError struct{ Head string }
 
 func (e *HeadChangedError) Error() string { return "the head of the PR is now " + e.Head }
 
+// BaseGuard says whether the branch of a table has the tip of the base: `pr open`
+// is refused when it does not (docs/orquestracao/sincronia-com-a-base.md). The
+// guard also has the step `sync` made. It returns a *BaseMovedError when the
+// base moved, and any other error when it could not tell: the sending is not
+// made either way.
+type BaseGuard interface {
+	Check(ctx context.Context, tableKey string) error
+}
+
+// BaseMovedError: the main branch moved since the table opened.
+type BaseMovedError struct {
+	// Base is the tip of the base the branch lacks; Detail what the Master hears.
+	Base, Detail string
+}
+
+func (e *BaseMovedError) Error() string { return "the base moved: " + e.Detail }
+
 // Sending is what `pr open` and `pr update` need besides the GitHub API.
 type Sending struct {
 	Branches  Branches
 	Auth      PushAuth
 	Workflows Workflows
 	Criteria  Criteria
+	// Base, when set, refuses `pr open` for a branch that lacks the base.
+	Base BaseGuard
 }
 
 // scanAndCheck reads the change before it is sent: the secrets in the added
@@ -208,6 +227,11 @@ func (s *PRService) Open(ctx context.Context, a Actor, repo string, in POpen) (P
 	}
 	if in.Existing != 0 {
 		return POpened{}, ErrPRExists
+	}
+	if s.Send.Base != nil {
+		if err := s.Send.Base.Check(ctx, a.Table); err != nil {
+			return POpened{}, err
+		}
 	}
 	if s.Send.Branches == nil {
 		return POpened{}, ErrNoPushSetup
