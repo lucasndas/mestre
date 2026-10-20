@@ -124,6 +124,8 @@ Os itens de M3 e M4 que só o Windows real responde rodam num único script, `to
 
 A conformidade roda aqui como o usuário do Sandbox (administrador), não como `mestre-agente`: o que ela confere (hooks, nomes, telas, subagentes) não depende da conta; a conta dos agentes é do item 9.
 
+**Triagem com o Claude no Sandbox:** depois do `run-all.ps1`, abra `tools/winsandbox/round/mestre-triage.wsb`: o preparo mostra o comando `claude --model opus --effort high "Leia e execute o arquivo tools/winsandbox/round/rodada-4-prompt.md"`. O Claude lê o `RESULTADO.txt`, separa erro do script, achado real do produto, caso do item 8 e limite do Sandbox, conserta só os scripts da rodada, repete os itens afetados e escreve `C:\winsandbox\resultados\relatorio-4.md` (sem push). O login do Claude pede-se de novo no Sandbox novo.
+
 ## Critérios de aceite
 
 - **CA-WIN-01** · *completa* — **Dado** um worktree de um personagem criado pela Cidadela (dono `NT SERVICE\Mestre` no Windows, `mestre` no Linux) e o agente falso, **quando** o motor inicia o personagem, **então** o `gitconfig` dele traz um `safe.directory` para o clone principal e um para esse worktree (nunca curinga), repetir o início não duplica as entradas, e o commit do agente falso nesse worktree passa nos dois sistemas.
