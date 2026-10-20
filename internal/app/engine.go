@@ -206,6 +206,9 @@ type Engine struct {
 
 	// lockFn is the lock of the period of the Citadel that acts (setLocked).
 	lockFn atomic.Pointer[func(ctx context.Context) bool]
+	// period is what the Citadel of the period gives the hook engine
+	// (periodHooks); nil on a Tower and between periods.
+	period atomic.Pointer[periodHooks]
 
 	mdb      *store.DB
 	member   *guild.Member
@@ -681,10 +684,21 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 // hookEngine is the engine side of the hook dispatcher over the rules kept on
 // this machine, with the gate of the temporary table rules.
 func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
+	approvals, tableRules := e.deps.Approvals, e.deps.TableRules
+	if e.deps.HostOrchestration {
+		// the chain and the temporary rules belong to the period of the
+		// Citadel, which comes and goes under this engine
+		if approvals == nil {
+			approvals = periodApprovals{e}
+		}
+		if tableRules == nil {
+			tableRules = periodTableRules{e}
+		}
+	}
 	return &hook.Engine{
 		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
-		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States, Contexts: e.deps.Contexts,
-		ClassHooks: e.deps.ClassHooks, OnEvent: e.onHookEvent, TableRules: e.deps.TableRules,
+		Characters: e.deps.Characters, Approvals: approvals, States: e.deps.States, Contexts: e.deps.Contexts,
+		ClassHooks: e.deps.ClassHooks, OnEvent: e.onHookEvent, TableRules: tableRules,
 	}
 }
 
