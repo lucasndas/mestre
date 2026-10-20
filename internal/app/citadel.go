@@ -627,6 +627,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		return transition{err: err}
 	}
 	run.srv = srv
+	e.srvp.Store(srv) // what the machines of the orchestration reach the Towers by
+	defer e.srvp.Store(nil)
 	primary.Attach(srv)
 	// The handlers of what changes the Guild pass the gate of the handover;
 	// those that need the CA wait for the Citadel to act.
@@ -635,6 +637,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	registry.Register(router)
 	router.HandleFunc(protocol.TypeCertRenew, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleCertRenew }))
 	router.HandleFunc(protocol.TypeGuildLeave, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
+	e.registerCitadelCharacters(router, run)
 	router.HandleFunc(protocol.TypeAgentEvent, run.gated(e.handleAgentEvent))
 	router.HandleFunc(protocol.TypeMachineHeartbeat, beats.Handle)
 	router.HandleFunc(protocol.TypeMachineSheet, run.gated(registry.Handler().Handle))

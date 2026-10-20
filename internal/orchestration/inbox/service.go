@@ -461,6 +461,16 @@ func (s *Service) OnResult(ctx context.Context, r protocol.InboxResult) error {
 	return s.st.Requeue(ctx, r.ItemID)
 }
 
+// TargetOf is the character an item is for: the Citadel checks that the machine
+// that confirms a delivery is the one the character runs on.
+func (s *Service) TargetOf(ctx context.Context, id string) (string, error) {
+	it, err := s.st.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return it.Target, nil
+}
+
 // ResultHandler is the handler of inbox.result in the router of the Citadel.
 func (s *Service) ResultHandler() protocol.Handler {
 	return protocol.HandlerFunc(func(ctx context.Context, m *protocol.Message) (*protocol.Reply, error) {

@@ -16,6 +16,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
@@ -179,7 +180,7 @@ func TestMestreRunStartsACharacterInATerminalAndReportsToTheCitadel(t *testing.T
 		Character: c.ID, Terminal: "t-c1", Kind: characters.KindCharacter,
 		Request: sessionzero.CharacterRequest{
 			ID: c.ID, Name: c.Name, Role: c.Role, Workspace: c.Workspace, Machine: a.id, Dir: c.Dir,
-			Snapshot: presets.Snapshot{Sheet: presets.Sheet{Name: c.Sheet, Agent: "claude-code", Class: "Dev"}, Base: presets.Base{Name: "claude-code"}},
+			Snapshot: presets.Snapshot{Sheet: presets.Sheet{Name: c.Sheet, Agent: "claude-code", Class: "Dev"}, Base: presets.Base{Name: "claude-code", Ready: presets.Ready{Mode: presets.ReadyHook}}},
 		},
 	})
 	if err != nil {
@@ -219,12 +220,178 @@ func TestMestreRunStartsACharacterInATerminalAndReportsToTheCitadel(t *testing.T
 	}
 
 	// a notice of the machine reaches the inbox of the Citadel of the period
-	sinks := periodSinks{&a.e.orc}
-	if err := sinks.Notify(ctx, characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToCreator}, Workspace: "meu-app",
+	sk := sinks{a.e}
+	if err := sk.Notify(ctx, characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToCreator}, Workspace: "meu-app",
 		Character: c.ID, Name: c.Name, Creator: characters.Creator{Kind: characters.CreatedByCharacter, ID: c.ID}, Text: "aviso de teste"}); err != nil {
 		t.Fatalf("the notice of the machine: %v", err)
 	}
 	if n, err := orc.Inbox.Pending(ctx, c.ID); err != nil || n == 0 {
 		t.Errorf("the inbox of %s has %d items (err %v), want the notice", c.ID, n, err)
 	}
+}
+
+// CA-CIDADELA-16: the Citadel starts a character on a Tower. The request of the
+// session zero crosses the connection; the Runtime of the Tower prepares it,
+// starts the fake agent in a terminal of its mestre-pty and reports every
+// transition to the registry of the Citadel; the Citadel types into it, reads
+// its screen and hears the notices of the Tower for the master of the table,
+// and refuses what a Tower says about a character that runs elsewhere.
+func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
+	t.Parallel()
+	buildRuntimeBinaries(t)
+	r := newRig(t)
+	root, err := os.MkdirTemp("", "mrt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rr, err := filepath.EvalSymlinks(root); err == nil {
+		root = rr
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	r.root = root
+	a := r.node("a")
+	b := r.node("b", a)
+	a.paths.CLISocket = filepath.Join(root, "a", "cli.sock")
+	b.paths.CLISocket = filepath.Join(root, "b", "cli.sock")
+	b.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
+	home := filepath.Join(root, "home")
+	for rel, content := range map[string]string{
+		"cfg/.credentials.json": "{}",
+		"quick.yaml":            "prompts:\n  - match: \".*\"\n    steps:\n      - say: \"feito\"\n",
+	} {
+		p := filepath.Join(home, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	work := filepath.Join(b.paths.Workspaces, "meu-app", "work")
+	if err := os.MkdirAll(filepath.Join(work, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.setup = func(e *Engine) { e.deps.HostOrchestration = true }
+	b.setup = func(e *Engine) {
+		e.deps.Spawner = &terminal.DirectSpawner{Suite: "full", System: terminal.NewSystem()}
+		e.deps.CharacterPrep = runtimePrep{cfg: filepath.Join(home, "cfg"), home: home, sock: b.paths.CLISocket}
+	}
+	r.found(a, clock.Real{})
+	r.start(a, clock.Real{})
+	r.waitFor("a to act and host the orchestration", func() bool { return a.acting() && a.e.orc.Load() != nil })
+	r.join(b, a, clock.Real{})
+	r.start(b, clock.Real{})
+	r.waitFor("b to connect", func() bool { return b.connected(1) })
+
+	orc := a.e.orc.Load()
+	ctx := t.Context()
+	if err := a.e.withGuildDB(func(db *store.DB) error {
+		_, err := db.Writer().ExecContext(ctx, `INSERT INTO workspaces (slug, repo, repo_key, clone_url, default_branch, state, stage, created_at, updated_at)
+			VALUES ('meu-app', 'lucas/meu-app', 'lucas/meu-app', 'https://example.test/x.git', 'main', 'active', '', 1, 1)`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mk := func(id, name, machine string, role characters.Role, st characters.State) characters.Character {
+		c := characters.Character{
+			ID: id, Name: name, Kind: characters.KindCharacter, Role: role, Workspace: "meu-app", Table: "t1", Machine: machine,
+			Sheet: "Dev Claude", Base: "claude-code", Class: "Dev", Dir: work, State: st, Reason: "start",
+			CreatedBy: characters.Creator{Kind: characters.CreatedByEngine}, Lifecycle: characters.Ephemeral,
+		}
+		if err := orc.Registry.Insert(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	master := mk("c0", "Mestre", a.id, characters.RoleTableMaster, characters.Idle)
+	dev := mk("c1", "Dev-1", b.id, characters.RoleCharacter, characters.Starting)
+	m := &machineRouter{local: a.id, srv: &a.e.srvp, reg: characters.Registry{DB: orcDB(t, a)}, clk: clock.Real{}}
+	req := sessionzero.CharacterRequest{
+		ID: dev.ID, Name: dev.Name, Role: dev.Role, Workspace: dev.Workspace, Machine: b.id, Dir: dev.Dir,
+		Snapshot: presets.Snapshot{Sheet: presets.Sheet{Name: dev.Sheet, Agent: "claude-code", Class: "Dev"}, Base: presets.Base{Name: "claude-code", Ready: presets.Ready{Mode: presets.ReadyHook}}},
+	}
+	// the Tower refuses a request that is for another machine
+	if _, err := m.Start(ctx, b.id, characters.StartCommand{Character: dev.ID, Terminal: "t-c1", Kind: characters.KindCharacter, Request: sessionzero.CharacterRequest{ID: dev.ID, Machine: a.id}}); err == nil {
+		t.Fatal("the Tower started a character from a request for another machine")
+	}
+	// nor a worktree outside the workspaces of the Tower
+	outside := req
+	outside.Dir = filepath.Join(home, "work")
+	if _, err := m.Start(ctx, b.id, characters.StartCommand{Character: dev.ID, Terminal: "t-c1", Kind: characters.KindCharacter, Request: outside}); err == nil {
+		t.Fatal("the Tower started a character in a worktree outside its workspaces")
+	}
+	res, err := m.Start(ctx, b.id, characters.StartCommand{Character: dev.ID, Terminal: "t-c1", Kind: characters.KindCharacter, Request: req})
+	if err != nil {
+		t.Fatalf("the Citadel did not start the character on the Tower: %v", err)
+	}
+	if res.Terminal != "t-c1" {
+		t.Errorf("terminal = %q", res.Terminal)
+	}
+	r.waitFor("the registry of the Citadel to hear the Tower's character idle", func() bool {
+		got, err := orc.Registry.Get(ctx, dev.ID)
+		return err == nil && got.State == characters.Idle
+	})
+	if got, _ := orc.Registry.Get(ctx, dev.ID); got.TerminalID != "t-c1" || got.PTY.PID == 0 {
+		t.Errorf("the registry has the terminal %q and the mestre-pty %+v", got.TerminalID, got.PTY)
+	}
+
+	// the Citadel reaches the terminal of the Tower
+	sc, err := m.ScreenLines(ctx, b.id, dev.ID, 0)
+	if err != nil || sc.Text == "" {
+		t.Errorf("the screen of the Tower's terminal: %q, %v", sc.Text, err)
+	}
+	if err := m.Input(ctx, b.id, dev.ID, []byte("x")); err != nil {
+		t.Errorf("raw input into the Tower's terminal: %v", err)
+	}
+	// the result of a delivery comes in the ack, from inside a handler too, and
+	// an item given again is not typed again
+	for i := 0; i < 2; i++ {
+		if res, err := m.Deliver(ctx, b.id, protocol.InboxDeliver{TerminalID: "t-c1", ItemID: "m1", Text: "olá", Header: "[de Motor]"}); err != nil || res.ItemID != "m1" || res.Status != protocol.InboxDelivered {
+			t.Errorf("the delivery %d to the Tower: %+v, %v", i, res, err)
+		}
+	}
+
+	// the notice of the Tower reaches the master of the table, as the registry says
+	sk := sinks{b.e}
+	if err := sk.Notify(ctx, characters.Notice{Kind: characters.NoticeStuck, To: characters.Recipient{Kind: characters.ToTableMaster}, Character: dev.ID, Name: "outro nome", Text: "Dev-1 travou"}); err != nil {
+		t.Fatalf("the notice of the Tower: %v", err)
+	}
+	r.waitFor("the master of the table to hear the Tower", func() bool {
+		n, err := orc.Inbox.Pending(ctx, master.ID)
+		return err == nil && n > 0
+	})
+	// a Tower tells nothing else to anyone else
+	if err := sk.Notify(ctx, characters.Notice{Kind: characters.NoticeSystem, To: characters.Recipient{Kind: characters.ToOwner}, Character: dev.ID, Text: "x"}); err == nil {
+		t.Error("a Tower sent a notice to the Owner")
+	}
+
+	// and says nothing about a character that runs elsewhere
+	link := b.e.towerLink()
+	forged, err := link.Call(ctx, protocol.Outgoing{Type: protocol.TypeTerminalStatus, Payload: protocol.TerminalStatus{TerminalID: "t0", State: "stopped", AgentID: master.ID, Seq: 1 << 60}})
+	if err != nil || forged.Status != protocol.AckError || forged.Error == nil || forged.Error.Code != protocol.CodeForbidden {
+		t.Errorf("a report of a character of another machine: %+v, %v", forged, err)
+	}
+	for _, forged := range []protocol.Outgoing{
+		{Type: protocol.TypeCharacterTurn, Payload: protocol.CharacterTurn{AgentID: master.ID, LastMessage: "x"}},
+		{Type: protocol.TypeCharacterNotice, Payload: protocol.CharacterNotice{Kind: string(characters.NoticeStuck), Character: master.ID, Text: "x"}},
+	} {
+		if res, err := link.Call(ctx, forged); err != nil || res.Status != protocol.AckError || res.Error == nil || res.Error.Code != protocol.CodeForbidden {
+			t.Errorf("%s about a character of another machine: %+v, %v", forged.Type, res, err)
+		}
+	}
+	if got, _ := orc.Registry.Get(ctx, master.ID); got.State != characters.Idle {
+		t.Errorf("the master of the table is %s after the forged report", got.State)
+	}
+}
+
+func orcDB(t *testing.T, n *inproc) *store.DB {
+	t.Helper()
+	var db *store.DB
+	if err := n.e.withGuildDB(func(d *store.DB) error { db = d; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	return db
 }

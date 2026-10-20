@@ -105,7 +105,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}
 	opts := OrchestrationOptions{
 		Guild: db, Machine: e.id.MachineID, Clock: e.clk, Logger: e.log, WorkspacesDir: workspacesDir, TempDir: tmp,
-		Git: git, Machines: e.machines(), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
+		Git: git, Machines: e.machines(db), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
 		Limits: characters.DefaultLimits(),
 	}
@@ -162,6 +162,7 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 		pub.Local = &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
 	}
 	o.ChainClasses, o.ChainRulesPublisher = cc, pub
+	pub.Sender = towerRules{&e.srvp}
 	o.Machines = PublishingMachines(o.Machines, pub)
 	return cc, nil
 }
