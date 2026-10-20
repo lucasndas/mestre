@@ -1,6 +1,6 @@
 # Criação e instalação de Apps
 
-> **Assunto:** como o Grão-Mestre prepara um GitHub App pelo fluxo de manifesto e o Dono o cria e instala com um clique, por link no próprio navegador · **Componente:** Motor · **Atualizado:** 2026-10-13
+> **Assunto:** como o Grão-Mestre prepara um GitHub App pelo fluxo de manifesto e o Dono o cria e instala com um clique, por link no próprio navegador · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -95,6 +95,8 @@ sequenceDiagram
 - O endpoint de conversão tem limite de uso; em erro 403/429 o motor respeita `retry-after` dentro da janela de 1 hora.
 - Toda criação e instalação fica na auditoria (quem pediu, quem abriu o link, App, repositórios, horários).
 
+- **Implementação:** `github.Installs` (`internal/github/installs.go`) e `sessionzero.GitHubInstallations` são o lado do GitHub da etapa `apps`: `Missing` relê a lista de repositórios da instalação de cada App fixo (o Dono pode ter marcado o repositório no GitHub) e é assim que a etapa conclui sozinha; `AddRepository` faz o `PUT` com a [credencial pessoal](aprovacao-no-github.md#credencial-pessoal-user-access-token-pelo-device-flow) do Dono (`github.ErrNoCredential` vira `sessionzero.ErrNoPersonalCredential`); `InstallLink` é a página de configuração da instalação, ou a da primeira instalação se o App ainda não está instalado. A conversão do manifesto guarda no cofre o segredo de cliente do App "Grão-Mestre", que renova e revoga os tokens de usuário.
+
 ## Critérios de aceite
 
 - **CA-GH-APPS-01** · *rápida* — **Dado** um pedido com `state` X, **quando** chega um callback com `state` Y, **então** a Cidadela recusa e não troca o `code`.
@@ -118,7 +120,7 @@ sequenceDiagram
 Os itens são conferidos na primeira criação real, a dos Apps fixos no [primeiro acesso](../operacao/primeiro-acesso.md), e no primeiro workspace com mais de um repositório; as respostas reais viram gravações do [GitHub falso](../qualidade/dubles.md).
 
 - **Verificar na implementação:** o GitHub aceita `redirect_url` e `setup_url` com o endereço da Cidadela na rede local (nome `.local` ou IP, certificado da CA interna); a documentação não exige endereço público. **Padrão:** aceita, como acima. **Se falhar:** o manifesto usa `http://localhost/…`, a navegação de volta falha no aparelho, e a página do link pede ao Dono para colar no painel o endereço que o navegador mostrou (ele traz o `code` e o `state`), a tempo da janela de 1 hora. **Onde:** à mão, na criação dos Apps fixos no primeiro acesso.
-- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal). **Padrão:** aceita. **Se falhar:** repositório novo vai sempre pelo link da configuração da instalação. **Onde:** à mão, no primeiro workspace criado com a credencial pessoal do Dono conectada.
+- **Verificar na implementação:** `PUT /user/installations/{installation_id}/repositories/{repository_id}` aceita o user access token do App "Grão-Mestre" (a documentação cita token pessoal), que o `GET /repos/{dono}/{repo}` com esse token enxerga um repositório privado ainda fora da instalação (para ler o `repository_id`) e que o mesmo token serve à instalação do App "Mestre". **Padrão:** tudo isso funciona. **Se falhar:** o `repository_id` vem de outra leitura; sem outra, repositório novo vai sempre pelo link da configuração da instalação. **Onde:** à mão, no primeiro workspace criado com a credencial pessoal do Dono conectada.
 
 ## Fontes
 

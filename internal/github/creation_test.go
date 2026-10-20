@@ -217,6 +217,32 @@ func TestTheCodeIsExchangedTheKeyGoesToTheVaultAndOnlyThere(t *testing.T) {
 	}
 }
 
+func TestTheClientSecretOfTheGrandMasterGoesToTheVaultAndOnlyThereAndNoOtherAppKeepsOne(t *testing.T) {
+	t.Parallel()
+	r := newCreation(t)
+	gm := r.request(github.App{Name: "Grão-Mestre", Role: github.RoleGrandMaster})
+	_, state := r.opened(gm)
+	r.conversion("c1", gm, 41, "lucas")
+	if _, err := r.c.Callback(r.ctx, "c1", state, r.owner); err != nil {
+		t.Fatal(err)
+	}
+	if !r.kv.has(github.ClientSecretName(gm.Name)) {
+		t.Fatal("the client secret of the App is not in the vault")
+	}
+	if dbContains(t, r.world, "fake-client-secret") || strings.Contains(r.logs.String(), "fake-client-secret") {
+		t.Error("the client secret reached the database or a log")
+	}
+	app := r.request(dev)
+	_, state = r.opened(app)
+	r.conversion("c2", app, 42, "lucas")
+	if _, err := r.c.Callback(r.ctx, "c2", state, r.owner); err != nil {
+		t.Fatal(err)
+	}
+	if r.kv.has(github.ClientSecretName(app.Name)) {
+		t.Error("an App without the device flow kept a client secret")
+	}
+}
+
 // CA-GH-APPS-03
 func TestALinkNobodyOpenedExpiresAfter24HoursAndTheOwnerCanAskAnother(t *testing.T) {
 	t.Parallel()

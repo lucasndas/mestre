@@ -149,13 +149,18 @@ func randomToken(n int) (string, error) {
 func stateOf(token string) string { return hex.EncodeToString(hashOf("state:" + token)[:24]) }
 
 func (c *Creation) audit(ctx context.Context, app, action, user, detail string) {
-	err := c.db.WriteDurable(ctx, func(tx *sql.Tx) error {
+	writeAudit(ctx, c.db, c.clk, c.o.Logger, app, action, user, detail)
+}
+
+// writeAudit appends a row to the audit of the Apps and credentials.
+func writeAudit(ctx context.Context, db *store.DB, clk clock.Clock, log *slog.Logger, app, action, user, detail string) {
+	err := db.WriteDurable(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO github_app_audit (at, app, action, user_id, detail) VALUES (?, ?, ?, ?, ?)`,
-			c.clk.Now().UnixMilli(), app, action, user, detail)
+			clk.Now().UnixMilli(), app, action, user, detail)
 		return err
 	})
 	if err != nil {
-		c.o.Logger.Error("github: the audit of an App was not written", "app", app, "action", action, "err", err)
+		log.Error("github: the audit of an App was not written", "app", app, "action", action, "err", err)
 	}
 }
 
@@ -428,7 +433,10 @@ type conversion struct {
 	Slug     string `json:"slug"`
 	ClientID string `json:"client_id"`
 	PEM      string `json:"pem"`
-	Owner    struct {
+	// ClientSecret renews and revokes the user tokens of the App (kept only for
+	// the App "Grão-Mestre", the one with the device flow).
+	ClientSecret string `json:"client_secret"`
+	Owner        struct {
 		Login string `json:"login"`
 	} `json:"owner"`
 }
@@ -495,8 +503,27 @@ func (c *Creation) Callback(ctx context.Context, code, state string, who users.U
 		c.abort(bg, r, who.ID, "a chave não foi guardada no cofre")
 		return "", fmt.Errorf("github: the key of the App %q did not go to the vault: %w", r.app, err)
 	}
+	app, err := c.o.Apps.Get(bg, r.app)
+	if err != nil {
+		_ = c.o.Vault.Delete(bg, KeySecret(r.app))
+		c.abort(bg, r, who.ID, "o App não foi lido")
+		return "", err
+	}
+	if app.Role == RoleGrandMaster {
+		if conv.ClientSecret == "" {
+			_ = c.o.Vault.Delete(bg, KeySecret(r.app))
+			c.abort(bg, r, who.ID, "a resposta do GitHub veio sem o segredo do cliente")
+			return "", errors.New("github: the answer of the conversion has no client secret")
+		}
+		if err := c.o.Vault.Put(bg, ClientSecretName(r.app), vault.TypeGitHubAppKey, []byte(conv.ClientSecret), nil); err != nil {
+			_ = c.o.Vault.Delete(bg, KeySecret(r.app))
+			c.abort(bg, r, who.ID, "o segredo do cliente não foi guardado no cofre")
+			return "", fmt.Errorf("github: the client secret of the App %q did not go to the vault: %w", r.app, err)
+		}
+	}
 	if err := c.o.Apps.Created(bg, r.app, conv.Slug, conv.ID, conv.ClientID); err != nil {
 		_ = c.o.Vault.Delete(bg, KeySecret(r.app))
+		_ = c.o.Vault.Delete(bg, ClientSecretName(r.app))
 		c.abort(bg, r, who.ID, "o App não foi registrado")
 		return "", err
 	}
