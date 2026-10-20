@@ -82,7 +82,7 @@ type reply struct {
 
 // NewClient runs the handshake on nc as the engine and returns the
 // client; on failure it closes nc. A handshake that takes longer than
-// timeout (the default 5 s) fails, measured by clk.
+// timeout (the default ptywire.EngineHandshakeTimeout, 35 s) fails, measured by clk.
 func NewClient(nc net.Conn, secret []byte, clk clock.Clock, timeout time.Duration) (*Client, error) {
 	if timeout == 0 {
 		timeout = ptywire.EngineHandshakeTimeout

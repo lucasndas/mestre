@@ -57,7 +57,7 @@ func handshakeWithASlowPty(t *testing.T, clk *clock.Fake, timeout time.Duration)
 }
 
 // The cause of the "use of closed network connection" the full suite got on
-// Windows: the 5 s of the handshake run from the connect, so a mestre-pty the
+// Windows: the handshake timeout of the engine runs from the connect, so a mestre-pty the
 // machine is too busy to schedule is cut by the engine's own timer, which
 // closes the socket under the read of the hello.
 func TestAnEngineThatWaitsForTheHelloLongerThanItsTimeoutClosesItsOwnSocket(t *testing.T) {
