@@ -18,19 +18,42 @@ const closeWait = 10 * time.Second
 // is serving a query is closed only when the query ends: on Windows the file
 // (and its -wal) stays open until then, and neither Replace nor the Wipe of a
 // Tower can remove it. wait is how they know the file is free.
-type connTracker struct{ open sync.WaitGroup }
+type connTracker struct {
+	mu   sync.Mutex
+	n    int
+	idle chan struct{} // closed when n reaches 0 while wait is waiting
+}
+
+func (t *connTracker) add() {
+	t.mu.Lock()
+	t.n++
+	t.mu.Unlock()
+}
+
+func (t *connTracker) done() {
+	t.mu.Lock()
+	t.n--
+	if t.n == 0 && t.idle != nil {
+		close(t.idle)
+		t.idle = nil
+	}
+	t.mu.Unlock()
+}
 
 // wait returns when every connection is closed, or after closeWait.
 func (t *connTracker) wait(clk clock.Clock) {
-	done := make(chan struct{})
-	go func() {
-		t.open.Wait()
-		close(done)
-	}()
+	t.mu.Lock()
+	if t.n == 0 {
+		t.mu.Unlock()
+		return
+	}
+	idle := make(chan struct{})
+	t.idle = idle
+	t.mu.Unlock()
 	tm := clk.NewTimer(closeWait)
 	defer tm.Stop()
 	select {
-	case <-done:
+	case <-idle:
 	case <-tm.C():
 	}
 }
@@ -51,7 +74,7 @@ func (c trackConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	if !ok {
 		return raw, nil // not one this package knows how to follow
 	}
-	c.t.open.Add(1)
+	c.t.add()
 	return &trackConn{innerConn: inner, t: c.t}, nil
 }
 
@@ -63,6 +86,6 @@ type trackConn struct {
 
 func (c *trackConn) Close() error {
 	err := c.innerConn.Close()
-	c.once.Do(c.t.open.Done)
+	c.once.Do(c.t.done)
 	return err
 }
