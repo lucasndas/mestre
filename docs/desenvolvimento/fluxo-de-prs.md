@@ -1,6 +1,6 @@
 # Fluxo de PRs
 
-> **Assunto:** tamanho de um PR, revisão antes da fila, trem de PRs, quem atualiza com a `main` e o que fazer quando o CI falha · **Componente:** Projeto · **Atualizado:** 2026-10-20
+> **Assunto:** tamanho de um PR, revisão antes da fila, trem de PRs, a fila de merge do GitHub do M5+, quem atualiza com a `main` e o que fazer quando o CI falha · **Componente:** Projeto · **Atualizado:** 2026-10-20
 
 ## Por que existe
 
@@ -42,6 +42,19 @@ Um PR com conflito grande, ou que pede renumeração que mexe em outro, fica for
 - **Falha só por orçamento de tempo** (rápida ou completa acima do limite, nenhum teste quebrado): rodar de novo só o job que falhou (`gh run rerun <id> --failed`), até duas vezes; se continuar, o orçamento ou o custo da suíte é um assunto à parte ([testes](../qualidade/testes.md)).
 - **Teste quebrado no trem:** achar o PR culpado pelos merges do trem, tirá-lo (o trem é refeito sem ele) e devolvê-lo a quem o fez; o resto segue.
 - **Teste instável** (passa e falha sem mudança): não é motivo para tirar o PR; vira uma tarefa própria, com a causa e a correção, nunca um retry no teste.
+
+## Fila de merge do GitHub (M5+)
+
+O trem manual é a ponte até a fila de merge do GitHub, que só existe para repositório público de uma organização (o plano Pro da conta pessoal não a libera). O [M5+](ordem-de-implementacao.md#marcos) faz a troca, depois da auditoria do M5:
+
+1. **Dono:** cria uma organização gratuita no GitHub, transfere o repositório para ela (rulesets, secrets, workflows, issues e PRs vão junto; o endereço antigo redireciona) e garante que o `gh` e os tokens da máquina de desenvolvimento têm acesso à organização.
+2. **Dono:** reinstala na organização os GitHub Apps que o repositório usa e confere os secrets dos workflows de contas reais.
+3. **Um PR mecânico, sozinho na fila:** o caminho do módulo Go (`go.mod`, imports, `-ldflags`, ferramentas e links dos documentos) passa a ser o da organização; nada mais muda nesse PR.
+4. **CI:** o `.github/workflows/ci.yml` passa a rodar também no evento `merge_group`, e o job de corrida (`race`) roda nele em vez de só no push da `main`.
+5. **Ruleset da `main`:** troca "branch em dia antes do merge" por "exigir fila de merge" (squash, lotes de até 5 PRs, o CI de Linux e Windows como verificação do lote); o `tools/rulesetcheck` passa a esperar essa configuração ([CI e ruleset](ambiente.md#ci-e-proteção-da-main)).
+6. **Este documento:** a seção do trem vira a da fila: um PR revisado entra com `gh pr merge --auto`, e o GitHub monta os lotes, roda o CI uma vez por lote e tira o PR que quebra.
+
+Critério de pronto do M5+: um lote com dois PRs entra pela fila com uma só execução do CI, e a `main` continua protegida.
 
 ## Ver também
 
