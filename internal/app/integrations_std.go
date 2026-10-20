@@ -304,6 +304,14 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		}
 	}
 	o.ChainUsers = r.flow
+	// the GitHub of the workspaces, with the App Grão-Mestre; a test that gives its own keeps it
+	gh := grandMasterGitHub{r}
+	if _, off := o.GitHub.(unavailableGitHub); off {
+		o.GitHub = gh
+	}
+	if o.Credentials == nil {
+		o.Credentials = gh
+	}
 	if o.ChainGrants == nil {
 		o.ChainGrants = r.decrees
 	}
