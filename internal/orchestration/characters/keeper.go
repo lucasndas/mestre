@@ -105,7 +105,7 @@ func (k *Keeper) Tick(ctx context.Context) error {
 			continue
 		}
 		if err := k.s.resume(ctx, c); err != nil {
-			k.s.log.Warn("characters: the Grand Master was not started again", "workspace", c.Workspace, "err", err)
+			k.s.log.Warn("characters: the master was not started again", "role", string(c.Role), "workspace", c.Workspace, "character", c.ID, "err", err)
 		}
 	}
 	k.mu.Lock()
@@ -121,7 +121,11 @@ func (k *Keeper) Tick(ctx context.Context) error {
 // tableOpen says whether the table of a table master still takes work.
 func (k *Keeper) tableOpen(ctx context.Context, c Character) bool {
 	t, err := k.s.o.Tables.Table(ctx, c.Workspace, c.Table)
-	return err == nil && t.State.Accepts()
+	if err != nil {
+		k.s.log.Warn("characters: the table of a table master was not read; it is not started again now", "workspace", c.Workspace, "table", c.Table, "character", c.ID, "err", err)
+		return false
+	}
+	return t.State.Accepts()
 }
 
 // notifyFailing gives the alert of a master that keeps failing: the users for
@@ -133,10 +137,17 @@ func (k *Keeper) notifyFailing(ctx context.Context, c Character, text string) er
 		return k.s.o.Notifier.Notify(ctx, n)
 	}
 	n.Kind, n.Table = NoticeTableMasterFailing, c.Table
-	if err := k.s.o.Notifier.Notify(ctx, n); err != nil {
+	// The Grand Master first: the users are told last, once, and only if a
+	// live Grand Master got it (the inbox falls back to the users otherwise).
+	if gm, ok, err := k.s.o.Registry.GrandMaster(ctx, c.Workspace); err != nil {
 		return err
+	} else if ok && gm.State.Alive() {
+		n.To = Recipient{Kind: ToGrandMaster}
+		if err := k.s.o.Notifier.Notify(ctx, n); err != nil {
+			return err
+		}
 	}
-	n.To = Recipient{Kind: ToGrandMaster}
+	n.To = Recipient{Kind: ToOwner}
 	return k.s.o.Notifier.Notify(ctx, n)
 }
 
@@ -182,7 +193,7 @@ func (k *Keeper) observe(c Character, now time.Time) (due bool, alert string) {
 			st.alerted, st.alertedAt = true, now
 			who := "O Grão-Mestre de " + c.Workspace
 			if c.Role == RoleTableMaster {
-				who = "O Mestre da mesa " + c.Table + " de " + c.Workspace
+				who = "O Mestre da mesa " + untrustedReason(c.Table) + " de " + c.Workspace
 			}
 			alert = fmt.Sprintf("%s caiu %d vezes em %d minutos (%s). O motor continua tentando iniciá-lo de novo a cada 2 minutos.",
 				who, len(st.fails), int(KeepWindow/time.Minute), untrustedReason(c.Reason))

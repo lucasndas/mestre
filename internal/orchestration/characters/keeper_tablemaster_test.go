@@ -17,6 +17,7 @@ import (
 func TestTheTableMasterThatDiesIsStartedAgainWithBackoffAndTheGrandMasterIsAlertedOnce(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, rigOptions{})
+	r.makeGM()
 	tm := r.makeTM("3-login")
 	keeper := r.svc.NewKeeper(tm.Machine, func(context.Context, string) bool { return true })
 	die := func() {
@@ -70,8 +71,8 @@ func TestTheTableMasterThatDiesIsStartedAgainWithBackoffAndTheGrandMasterIsAlert
 		}
 	}
 	got := alerts()
-	if len(got) != 2 || got[0].To.Kind != characters.ToOwner || got[1].To.Kind != characters.ToGrandMaster || got[1].Table != "3-login" ||
-		!strings.Contains(got[1].Text, "Mestre da mesa 3-login") {
+	if len(got) != 2 || got[0].To.Kind != characters.ToGrandMaster || got[1].To.Kind != characters.ToOwner || got[0].Table != "3-login" ||
+		!strings.Contains(got[0].Text, "Mestre da mesa 3-login") {
 		t.Errorf("alerts = %+v; want one to the users and one to the Grand Master, about the table master", got)
 	}
 
