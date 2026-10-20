@@ -50,6 +50,10 @@ type PRFacts struct {
 	// CIGreen says the checks of the hash are green; ReviewDone that another
 	// character finished a review with nothing pending.
 	CIGreen, ReviewDone bool
+	// OpenedByGrandMaster says the PR was opened by the App "Grão-Mestre": the
+	// same App can not approve it, so only a person does
+	// (docs/github/aprovacao-no-github.md#quem-abre-e-quem-aprova).
+	OpenedByGrandMaster bool
 }
 
 // PRSource reads a PR for the conditions of the policy. An error is a
@@ -133,6 +137,9 @@ func (r PolicyRules) conditions(req Request, f PRFacts, hasFacts, thresholds boo
 		if strings.EqualFold(l, HumanLabel) {
 			out = append(out, "o PR tem o rótulo "+HumanLabel)
 		}
+	}
+	if f.OpenedByGrandMaster {
+		out = append(out, "o PR foi aberto pelo App Grão-Mestre, que não pode aprová-lo")
 	}
 	if f.Incomplete || len(f.Files) == 0 {
 		out = append(out, ReasonIncompleteDiff+": o GitHub cortou a lista de arquivos")
