@@ -517,6 +517,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		if err != nil {
 			return transition{err: fmt.Errorf("app: the orchestration: %w", err)}
 		}
+		defer e.period.Store(nil) // the chain and the rules of a period are not the next one's
 		orc.Register(e.local, nil)
 		run.external = append(slices.Clone(run.external), orc.External())
 		if integ != nil {

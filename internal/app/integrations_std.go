@@ -306,6 +306,12 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	o.Locked = r.lock.Locked
 }
 
+// OwnerAlert, CharacterDecrees and Users make the run the people of the chain
+// (chainPeople).
+func (r *stdRun) OwnerAlert(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }
+func (r *stdRun) CharacterDecrees() CharacterDecrees          { return r.decrees }
+func (r *stdRun) Users() *users.Service                       { return r.users }
+
 // BindFence implements IntegrationRun.
 func (r *stdRun) BindFence(f *guild.Fence) { r.fence.Store(f) }
 

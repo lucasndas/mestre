@@ -187,6 +187,8 @@ type answer struct {
 	Rows   [][]any    `json:"rows"`
 	// Call is the response of a command of the CLI, op call.
 	Call *localchan.Response `json:"call"`
+	// Request is the approval request of op approval.
+	Request int64 `json:"request"`
 }
 
 func (w *world) ask(p *proc, req map[string]string) (answer, error) {
