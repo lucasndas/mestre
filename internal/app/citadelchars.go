@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,12 +26,11 @@ const (
 // machine that runs characters: the Runtime of this machine in process, a
 // Tower over its connection.
 type machineRouter struct {
+	towerClient
 	local string
 	// rt is the Runtime of this machine; nil when its terminals are not wired.
 	rt  *characters.Runtime
-	srv *atomic.Pointer[protocol.Server]
 	reg characters.Registry
-	clk clock.Clock
 }
 
 var _ OrchestrationMachines = (*machineRouter)(nil)
@@ -42,9 +42,63 @@ func (m *machineRouter) set() characters.MachineSet {
 	return characters.MachineSet{m.local: m.rt}
 }
 
+// replies are the answers the Citadel waits for that come as messages of
+// their own (reply_to the id of the command): the end of a table.done. Each is
+// kept with the machine it must come from.
+type replies struct {
+	mu sync.Mutex
+	m  map[string]reply
+}
+
+type reply struct {
+	machine string
+	ch      chan any
+}
+
+func (r *replies) expect(id, machine string) (<-chan any, func()) {
+	ch := make(chan any, 1)
+	r.mu.Lock()
+	if r.m == nil {
+		r.m = map[string]reply{}
+	}
+	r.m[id] = reply{machine: machine, ch: ch}
+	r.mu.Unlock()
+	return ch, func() {
+		r.mu.Lock()
+		delete(r.m, id)
+		r.mu.Unlock()
+	}
+}
+
+// deliver gives the answer to whoever waits for it, once, and says whether
+// someone did; an answer from another machine than the one asked is nobody's.
+func (r *replies) deliver(id, machine string, v any) bool {
+	r.mu.Lock()
+	w, ok := r.m[id]
+	if ok && w.machine == machine {
+		delete(r.m, id)
+	} else {
+		ok = false
+	}
+	r.mu.Unlock()
+	if ok {
+		w.ch <- v // buffered: nobody else sends
+	}
+	return ok
+}
+
+// towerClient reaches the Towers of the Citadel of the period.
+type towerClient struct {
+	srv *atomic.Pointer[protocol.Server]
+	clk clock.Clock
+	// ids make the ids of the commands whose end comes as a message; rep waits for it.
+	ids *protocol.IDGen
+	rep *replies
+}
+
 // link is the open connection to a Tower, or the error of a machine that cannot
 // be reached.
-func (m *machineRouter) link(machine string) (*protocol.Link, error) {
+func (m towerClient) link(machine string) (*protocol.Link, error) {
 	srv := m.srv.Load()
 	if srv == nil {
 		return nil, &characters.MachineUnreachableError{Machine: machine}
@@ -59,7 +113,7 @@ func (m *machineRouter) link(machine string) (*protocol.Link, error) {
 // call sends a command that asks for an ack, now and only on the open
 // connection (a command that waits for a Tower to come back would run after
 // the Citadel gave up on it), and turns the refusal into the error it means.
-func (m *machineRouter) call(ctx context.Context, machine string, wait time.Duration, o protocol.Outgoing) (json.RawMessage, error) {
+func (m towerClient) call(ctx context.Context, machine string, wait time.Duration, o protocol.Outgoing) (json.RawMessage, error) {
 	l, err := m.link(machine)
 	if err != nil {
 		return nil, err
@@ -229,6 +283,13 @@ func (e *Engine) registerCitadelCharacters(router *protocol.Router, run *citadel
 	h := func(typ string, f func(ctx context.Context, orc *Orchestration, m *protocol.Message) (*protocol.Reply, error)) {
 		router.HandleFunc(typ, run.gated(protocol.HandlerFunc(e.citadelHandler(f))))
 	}
+	h(protocol.TypeTableNotice, e.handleTableNotice)
+	h(protocol.TypeTableSent, func(_ context.Context, _ *Orchestration, m *protocol.Message) (*protocol.Reply, error) {
+		if p, ok := m.Payload.(*protocol.TableSent); ok && e.sent.deliver(m.Env.ReplyTo, m.Peer.ID, *p) {
+			return nil, nil
+		}
+		return nil, protocol.NewError(protocol.CodeForbidden, "table.sent: nobody asked for it from %s", m.Peer.ID)
+	})
 	h(protocol.TypeTerminalStatus, func(ctx context.Context, orc *Orchestration, m *protocol.Message) (*protocol.Reply, error) {
 		p, ok := m.Payload.(*protocol.TerminalStatus)
 		if !ok || p.AgentID == "" {

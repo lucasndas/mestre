@@ -245,7 +245,7 @@ func (e *Engine) characterPrep() (characters.Preparer, error) {
 // machines are the engines the Citadel of a period reaches: this machine's
 // Runtime (or the refusal that says its terminals are not wired) and the Towers.
 func (e *Engine) machines(db *store.DB) OrchestrationMachines {
-	m := &machineRouter{local: e.id.MachineID, srv: &e.srvp, reg: characters.Registry{DB: db}, clk: e.clk}
+	m := &machineRouter{towerClient: e.towerClient(), local: e.id.MachineID, reg: characters.Registry{DB: db}}
 	if e.rt != nil {
 		m.rt = e.rt.rt
 	}
@@ -279,4 +279,9 @@ func (e *Engine) reconcileLocal(ctx context.Context, orc *Orchestration) {
 	if err := orc.Characters.Reconcile(ctx, e.id.MachineID, e.rt.rt.Live()); err != nil {
 		e.log.Warn("app: the characters of this machine were not reconciled with the registry", "err", err)
 	}
+}
+
+// towerClient is how this machine, as the Citadel of a period, reaches the Towers.
+func (e *Engine) towerClient() towerClient {
+	return towerClient{srv: &e.srvp, clk: e.clk, ids: protocol.NewIDGen(e.clk), rep: &e.sent}
 }

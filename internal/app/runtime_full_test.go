@@ -324,7 +324,7 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 	}
 	master := mk("c0", "Mestre", a.id, characters.RoleTableMaster, characters.Idle)
 	dev := mk("c1", "Dev-1", b.id, characters.RoleCharacter, characters.Starting)
-	m := &machineRouter{local: a.id, srv: &a.e.srvp, reg: characters.Registry{DB: orcDB(t, a)}, clk: clock.Real{}}
+	m := &machineRouter{towerClient: a.e.towerClient(), local: a.id, reg: characters.Registry{DB: orcDB(t, a)}}
 	req := sessionzero.CharacterRequest{
 		ID: dev.ID, Name: dev.Name, Role: dev.Role, Workspace: dev.Workspace, Machine: b.id, Dir: dev.Dir,
 		Snapshot: presets.Snapshot{Sheet: presets.Sheet{Name: dev.Sheet, Agent: "claude-code", Class: "Dev"}, Base: presets.Base{Name: "claude-code", Ready: presets.Ready{Mode: presets.ReadyHook}}},
@@ -484,6 +484,7 @@ func TestATowerTakesTheCommandsOfTheCharactersOnlyFromItsCitadel(t *testing.T) {
 
 	router := protocol.NewRouter()
 	b.e.registerTowerCharacters(router)
+	b.e.registerTowerTables(router, &lateTower{})
 	for _, from := range []protocol.Peer{
 		{Role: protocol.RoleMachine, ID: "a-third-machine"},
 		{Role: protocol.RoleMachine, ID: "a-citadel-of-an-older-epoch"},
@@ -495,6 +496,9 @@ func TestATowerTakesTheCommandsOfTheCharactersOnlyFromItsCitadel(t *testing.T) {
 			protocol.TypeTerminalInput:  &protocol.TerminalInput{TerminalID: "t-c1", Mode: protocol.InputRaw, Data: "x"},
 			protocol.TypeTerminalScreen: &protocol.TerminalScreen{TerminalID: "t-c1"},
 			protocol.TypeCharacterStop:  &protocol.CharacterStop{Character: "c1"},
+			protocol.TypeTableWhere:     &protocol.TableRef{Workspace: "meu-app", Table: "3-login"},
+			protocol.TypeTableRemove:    &protocol.TableRef{Workspace: "meu-app", Table: "3-login"},
+			protocol.TypeTableDone:      &protocol.TableRef{Workspace: "meu-app", Table: "3-login"},
 		} {
 			h, ok := router.Lookup(typ)
 			if !ok {

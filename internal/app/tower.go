@@ -44,6 +44,8 @@ type towerRun struct {
 	locator *discovery.Locator
 	agent   *machinesheet.Agent
 	renewer *guild.Renewer
+	// tables is the half of the tables of this Tower (worktrees, bundles).
+	tables *lateTower
 }
 
 func (e *Engine) sheetBuilder() (*machinesheet.Builder, error) {
@@ -171,6 +173,8 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	}
 	router.HandleFunc(protocol.TypeGuildConfig, e.handleGuildConfig(db, locator, kickRenew))
 	e.registerTowerCharacters(router)
+	tableHalf := &lateTower{}
+	e.registerTowerTables(router, tableHalf)
 	// The effective rules of the characters of this machine: kept in the
 	// machine database, with the snapshot for the degraded hook
 	// (docs/classes/permissoes.md#regras-efetivas).
@@ -191,13 +195,17 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		Heartbeat: func(ctx context.Context) (protocol.MachineHeartbeat, error) {
 			return towerHeartbeat(ctx, sys, replica.LagSeconds()), nil
 		},
-		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: replica.Finalizers()},
+		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: towerFinalizers(replica.Finalizers(), tableHalf)},
 		Hooks: protocol.Hooks{
 			OnConnect: func(*protocol.Session) {
 				locator.Connected(pctx)
 				go func() {
 					if link := e.towerLink(); link != nil {
 						e.resyncCharacters(pctx, link)
+						// the commits a done could not send while the Citadel was away
+						if err := tableHalf.Resend(pctx); err != nil {
+							e.log.Warn("app: the commits of the tables were not sent again", "err", err)
+						}
 					}
 				}()
 				e.setConnected(true)
@@ -215,6 +223,11 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		return transition{err: err}
 	}
 	replica.Attach(client.Link())
+	if half, err := e.newTowerTables(client.Link()); err != nil {
+		e.log.Warn("app: this machine cannot keep worktrees of tables", "err", err)
+	} else {
+		tableHalf.p.Store(half)
+	}
 	agent.Attach(client.Link())
 	// The engine certificate renews over the connection to the Citadel, 30
 	// days before it expires and when the registry gives it other names
@@ -250,7 +263,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	if err != nil {
 		return transition{err: err}
 	}
-	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer}
+	run := &towerRun{db: db, client: client, replica: replica, locator: locator, agent: agent, renewer: renewer, tables: tableHalf}
 	e.setGuildDB(db)
 	e.mu.Lock()
 	e.role, e.tow, e.cit, e.unknown = RoleTower, run, nil, unknown
