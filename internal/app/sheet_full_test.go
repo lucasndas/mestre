@@ -1,3 +1,5 @@
+//go:build full
+
 package app_test
 
 import (
@@ -16,7 +18,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// CA-FMAQ-01: the Citadel's own sheet is checked every five minutes like the
+// Part of CA-FMAQ-01: the Citadel's own sheet is checked every five minutes like the
 // others, not written once.
 func TestTheCitadelKeepsItsOwnSheetFreshEveryFiveMinutes(t *testing.T) {
 	t.Parallel()

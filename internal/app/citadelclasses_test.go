@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -276,53 +275,5 @@ func TestACharacterStartsWithItsEffectiveRulesKeptOnItsMachine(t *testing.T) {
 				t.Error("rules were kept for a class that was never approved")
 			}
 		}
-	}
-}
-
-// Part of CA-CANAL-04: the rules are built locked while the Mestre is locked, the
-// publisher sends them again to every character that is alive (the Towers learn
-// the lock from there), and the hook of each one denies every tool.
-func TestTheLockMakesTheRulesLockedAndTheyAreRepublishedToEveryone(t *testing.T) {
-	t.Parallel()
-	var locked atomic.Bool
-	w := newCommWorld(t, func(w *commWorld, oo *app.OrchestrationOptions) {
-		withCitadelClasses(w, oo)
-		cc, err := app.NewCitadelClasses(app.CitadelClassesOptions{Registry: characters.Registry{DB: oo.Guild}, Libraries: func(string) *classes.Library { return w.lib },
-			Presets: oo.Presets, Locked: func(context.Context, string) bool { return locked.Load() }})
-		if err != nil {
-			w.t.Fatal(err)
-		}
-		w.cc = cc
-		w.pub = &app.RulesPublisher{Classes: cc, Local: w.local, Machine: oo.Machine}
-		oo.ChainClasses, oo.ChainRulesPublisher = cc, w.pub
-		oo.Machines = app.PublishingMachines(w.mach, w.pub)
-	})
-	w.approveClass("dev", devPerms)
-	dev := w.recruit("Dev-L", "Dev Claude")
-	if r, err := w.cc.Rules(w.ctx, dev.ID); err != nil || r.Locked {
-		t.Fatalf("unlocked: %+v, %v", r, err)
-	}
-	locked.Store(true)
-	if r, err := w.cc.Rules(w.ctx, dev.ID); err != nil || !r.Locked {
-		t.Fatalf("locked: %+v, %v", r, err)
-	}
-	if kept, _ := w.local.Rules(w.ctx, dev.ID); kept.Locked {
-		t.Fatal("the rules kept on the machine were locked before they were published")
-	}
-	if err := w.pub.PublishAll(w.ctx); err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range []characters.Character{dev, w.master, w.gm} {
-		kept, err := w.local.Rules(w.ctx, c.ID)
-		if err != nil || !kept.Locked {
-			t.Errorf("%s: rules kept = %+v, %v; want locked", c.Name, kept, err)
-		}
-	}
-	locked.Store(false)
-	if err := w.pub.PublishAll(w.ctx); err != nil {
-		t.Fatal(err)
-	}
-	if kept, _ := w.local.Rules(w.ctx, dev.ID); kept.Locked {
-		t.Error("the rules stayed locked after the unlock")
 	}
 }

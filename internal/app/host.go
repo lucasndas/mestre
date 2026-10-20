@@ -111,6 +111,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
 		Limits: characters.DefaultLimits(), Peers: towerTables{e.towerClient()}, QuestTowers: towerTables{e.towerClient()},
 	}
+	opts.QuestIssues = issueOwner{db: db, clk: e.clk}
 	if integ != nil {
 		integ.Extend(&opts)
 	}

@@ -129,3 +129,41 @@ func TestARestoredGrimoireBringsTheTeamConnectedTheScrollsFilledAndTheQuestAsADr
 		t.Errorf("steps of the second quest = %+v; want them to follow the new names", q2.Def.Steps)
 	}
 }
+
+// CA-GRIM-04: with a character "Dev" already in the destination, when a
+// grimoire with "Dev" is restored, the new one is called "Dev (2)" and the
+// summary of the confirmation says so.
+func TestANameThatExistsInTheDestinationGetsASuffixShownInTheSummary(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev, qa, scroll, _, _ := w.team("")
+	w.save(w.a, "Time", grimoires.Selection{Characters: picks(dev.ID, qa.ID), Scrolls: picks(scroll)})
+
+	plan, err := w.orc.Grimoires.Plan(w.ctx, w.restoreReq(w.a, "Time", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Characters) != 2 || plan.Characters[0] != (grimoires.Rename{From: "Dev", To: "Dev (2)"}) || plan.Characters[1] != (grimoires.Rename{From: "QA", To: "QA (2)"}) {
+		t.Fatalf("characters = %+v", plan.Characters)
+	}
+	if len(plan.Scrolls) != 1 || plan.Scrolls[0].To != "Plano (2)" {
+		t.Errorf("scrolls = %+v; want Plano (2)", plan.Scrolls)
+	}
+	if s := plan.Summary(); !strings.Contains(s, "Dev -> Dev (2)") || !strings.Contains(s, "Plano -> Plano (2)") {
+		t.Errorf("summary = %q; want the new names", s)
+	}
+	rep, err := w.orc.Grimoires.Restore(w.ctx, w.restoreReq(w.a, "Time", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.has(w.a, "Dev (2)") || !w.has(w.a, "QA (2)") || !w.has(w.a, "Dev") {
+		t.Errorf("the characters are not Dev, QA, Dev (2) and QA (2): %+v", rep)
+	}
+	// A third time: the limit of 6 holds exactly, and the names go on.
+	if _, err := w.orc.Grimoires.Restore(w.ctx, w.restoreReq(w.a, "Time", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if !w.has(w.a, "Dev (3)") || !w.has(w.a, "QA (3)") {
+		t.Error("the third restoration did not make Dev (3) and QA (3)")
+	}
+}
