@@ -140,7 +140,7 @@ func (c *claudeCode) editTrust(req PreTrustRequest, edit func(projects map[strin
 		if err != nil {
 			return Trust{}, err
 		}
-		if err := replaceFile(path, data, before); err != nil {
+		if err := replaceFile(path, data, before, c.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}
@@ -205,9 +205,10 @@ func readShared(path string) ([]byte, error) {
 // the group of the folder: the CLI, running as the account of the agents,
 // reads and rewrites it; never the mode the old file had, which agy and
 // Claude Code create 0600). If the file is not what the caller read any
-// more, it does not write (errRewritten).
-func replaceFile(path string, data []byte, was fileState) error {
-	return safefile.Write(path, data, safefile.Options{Sync: true, Guard: func(now safefile.Info) error {
+// more, it does not write (errRewritten). The write is flushed unless noFlush
+// (Options.NoFlush).
+func replaceFile(path string, data []byte, was fileState, noFlush bool) error {
+	return safefile.Write(path, data, safefile.Options{Sync: !noFlush, Guard: func(now safefile.Info) error {
 		if !now.Same(was) {
 			return errRewritten
 		}

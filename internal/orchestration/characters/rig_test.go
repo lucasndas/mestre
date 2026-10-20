@@ -602,6 +602,8 @@ type rigOptions struct {
 	classes characters.ClassCheck
 	// scrolls gets the call that copies the scrolls of the table of a new character.
 	scrolls characters.ScrollCopies
+	// users tells the people for the inbox of the stage7 rig.
+	users inbox.Users
 }
 
 type machineRig struct {
@@ -659,6 +661,9 @@ type rig struct {
 	wt       *waits.Service
 	mach     map[string]*machineRig
 	machines characters.MachineSet
+	// root holds the worktrees of the stage7 rig: <root>/<machine>/<table>,
+	// the main clone being <root>/<machine>.
+	root string
 }
 
 const workspace = "meu-app"
@@ -679,6 +684,7 @@ func newRig(t *testing.T, o rigOptions) *rig {
 	r := &rig{t: t, ctx: context.Background(), clk: clock.NewFake(day0), sheets: &fakeMachineSheets{sheets: map[string]machinesheet.Sheet{}},
 		notes: &noticeLog{}, scrolls: &fakeScrolls{}, inbox: &fakeInbox{pending: map[string]int{}}, waits: &fakeWaits{by: map[string]string{}},
 		builder: &fakeBuilder{last: map[string]characters.BuildInput{}}, mach: map[string]*machineRig{}, machines: characters.MachineSet{}}
+	r.root = root
 	r.tables = &fakeTables{root: root, tables: map[string]characters.TableInfo{
 		"3-login": {ID: "3-login", Workspace: workspace, State: characters.TableWorking, Worktrees: map[string]string{}},
 		"4-api":   {ID: "4-api", Workspace: workspace, State: characters.TableWorking, Worktrees: map[string]string{}},
@@ -720,7 +726,7 @@ func newRig(t *testing.T, o rigOptions) *rig {
 	var inboxProbe providers.Inbox
 	var waitProbe characters.WaitProbe = r.waits
 	if o.stage7 {
-		r.ib, err = inbox.NewService(inbox.Options{DB: &inbox.Store{DB: r.gdb}, Clock: r.clk, Registry: r.reg, Deliverer: r.machines})
+		r.ib, err = inbox.NewService(inbox.Options{DB: &inbox.Store{DB: r.gdb}, Clock: r.clk, Registry: r.reg, Deliverer: r.machines, Users: o.users})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -742,7 +748,7 @@ func newRig(t *testing.T, o rigOptions) *rig {
 		mr := &machineRig{id: m.id, host: newFakeHost(), prep: &fakePrep{first: o.first}}
 		mr.db = openCopy(t, "maquina.db", machineTemplate, machinedb.Open)
 		mr.rt, err = characters.NewRuntime(characters.RuntimeOptions{
-			Machine: m.id, Clock: r.clk, DB: mr.db, Host: mr.host, Prep: mr.prep, Providers: providers.NewRegistry(providers.Options{}),
+			Machine: m.id, Clock: r.clk, DB: mr.db, Host: mr.host, Prep: mr.prep, Providers: providers.NewRegistry(providers.Options{NoFlush: true}),
 			Reporter: r.tap, Notifier: r.notes, Waits: waitProbe, Tables: o.tables, Inbox: inboxProbe, Turns: r.turnObserver(o.stage7), LongText: o.longText,
 		})
 		if err != nil {

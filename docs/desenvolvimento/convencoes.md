@@ -18,7 +18,7 @@ internal/
   localchan/         canal local CLI e hook ↔ motor (ver canal-local.md)
   hook/              despachante `mestre hook`
   providers/         adaptadores: claude, codex, antigravity e o nulo (terminal sem agente, como as bases de shell)
-  orchestration/     workspaces, tables (com a sincronização de worktrees Torre ↔ Cidadela por bundle, em `sync.go`), characters, quests, waits, inbox, connections, scrolls (pergaminhos e tomos), grimoires, rituals, chain (cadeia de aprovação), tablerules (regras temporárias de mesa), accounts (perfis de conta), presets (bases e fichas)
+  orchestration/     workspaces, tables (com a sincronização de worktrees Torre ↔ Cidadela por bundle, em `sync.go`), characters, quests, waits, inbox, connections, scrolls (pergaminhos e tomos), grimoires, rituals, chain (cadeia de aprovação), epicdeps (dependência entre épicos: a mesa retida até o merge da outra), tablerules (regras temporárias de mesa), accounts (perfis de conta), presets (bases e fichas)
   sessionzero/       geração de arquivos de workspace, mesa e personagem
   classes/           pacotes de classe, permissions.yaml, teto, regras efetivas
   decrees/ approvals/ users/ audit/   (M5; o login e as sessões chegam no M6) decretos e aprovação pelas pessoas (a cadeia de aprovação do M4 é `orchestration/chain`); usuários, níveis, login, sessões e PIN; trilha de auditoria

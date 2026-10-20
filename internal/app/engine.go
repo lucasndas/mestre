@@ -25,11 +25,13 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/terminal"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -113,6 +115,12 @@ type Deps struct {
 	// nobody (no terminal runs until the engine hosts the terminals of the
 	// characters: "M5, antes da etapa 1" in docs/desenvolvimento/ordem-de-implementacao.md).
 	Identifier localchan.Identifier
+	// Spawner starts the mestre-pty of the terminals when Config.Terminais has
+	// no launcher socket (the direct spawner of the full suite and of
+	// development); CharacterPrep is the session zero of the characters of the
+	// machine (nil: sessionzero.Character over the accounts of the machine).
+	Spawner       terminal.Spawner
+	CharacterPrep characters.Preparer
 	// Commands is the definition of the commands of the CLI the engine
 	// checks every call against (nil: cli.Default). Profiles gives the level
 	// and the class of a character (nil: an ordinary character, with the
@@ -164,7 +172,10 @@ type Deps struct {
 	// Binary is the stable absolute path of the mestre binary the hook files
 	// call (default: the running one).
 	HostOrchestration bool
-	Binary            string
+	// UsageSources are the account profiles and the command runner the
+	// periodic reading of the use needs (the installation gives them).
+	UsageSources UsageSources
+	Binary       string
 	// Integration opens, for each period of the Citadel that hosts the
 	// orchestration, the bot of the Telegram, the users, the flow of approval and
 	// the commands of GitHub (StandardIntegration); nil: none.
@@ -206,8 +217,14 @@ type Engine struct {
 
 	// lockFn is the lock of the period of the Citadel that acts (setLocked).
 	lockFn atomic.Pointer[func(ctx context.Context) bool]
+	// period is what the Citadel of the period gives the hook engine
+	// (periodHooks); nil on a Tower and between periods.
+	period atomic.Pointer[periodHooks]
 
 	mdb      *store.DB
+	rt       *machineRuntime
+	orc      atomic.Pointer[Orchestration] // the orchestration of the period that acts
+	sheets   atomic.Pointer[machinesheet.Registry]
 	member   *guild.Member
 	id       guild.Identity
 	epochs   *guild.Epochs
@@ -353,6 +370,14 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.stop = cancel
 	e.mu.Unlock()
 	var wg sync.WaitGroup
+	// the Runtime of the machine closes last, after the local channel and the
+	// loops that call it have stopped
+	var closeRuntime func()
+	defer func() {
+		if closeRuntime != nil {
+			closeRuntime()
+		}
+	}()
 	// the deferred calls run backwards: cancel first, so that returning an
 	// error does not wait for goroutines that only end with ctx
 	defer wg.Wait()
@@ -410,6 +435,15 @@ func (e *Engine) Run(ctx context.Context) error {
 	defer func() { _ = e.tls.Close(transport.StatusGoingAway, "the engine is stopping") }()
 	if e.tcli, err = transport.NewClient(transport.ClientConfig{CA: id.CA, Cert: e.cert, Network: e.deps.Network, Clock: e.clk, Credentials: e.creds}); err != nil {
 		return err
+	}
+	// The terminals of the characters come before the local channel serves
+	// anyone: it identifies callers by them, and the terminals that survived
+	// the last engine are found again first.
+	if e.rt, err = e.openRuntime(ctx); err != nil {
+		return err
+	}
+	if e.rt != nil {
+		closeRuntime = e.rt.close
 	}
 	if err := e.serveCLI(ctx, &wg); err != nil {
 		return err
@@ -681,10 +715,21 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 // hookEngine is the engine side of the hook dispatcher over the rules kept on
 // this machine, with the gate of the temporary table rules.
 func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
+	approvals, tableRules := e.deps.Approvals, e.deps.TableRules
+	if e.deps.HostOrchestration {
+		// the chain and the temporary rules belong to the period of the
+		// Citadel, which comes and goes under this engine
+		if approvals == nil {
+			approvals = periodApprovals{e}
+		}
+		if tableRules == nil {
+			tableRules = periodTableRules{e}
+		}
+	}
 	return &hook.Engine{
 		Clock: e.clk, Rules: rules, Ledger: rules, Agents: e.paths.Agentes, Logger: e.log,
-		Characters: e.deps.Characters, Approvals: e.deps.Approvals, States: e.deps.States, Contexts: e.deps.Contexts,
-		ClassHooks: e.deps.ClassHooks, OnEvent: e.onHookEvent, TableRules: e.deps.TableRules,
+		Characters: e.deps.Characters, Approvals: approvals, States: e.deps.States, Contexts: e.deps.Contexts,
+		ClassHooks: e.deps.ClassHooks, OnEvent: e.onHookEvent, TableRules: tableRules,
 	}
 }
 

@@ -17,8 +17,11 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/guild"
+	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -227,6 +230,8 @@ type controlRequest struct {
 	// is told about (op call).
 	Cmd   string `json:"cmd,omitempty"`
 	Agent string `json:"agent,omitempty"`
+	// Command is the shell command of an approval request (op approval).
+	Command string `json:"command,omitempty"`
 }
 
 type controlAnswer struct {
@@ -237,6 +242,8 @@ type controlAnswer struct {
 	Rows   [][]any `json:"rows,omitempty"`
 	// Call is the response of the command of op call.
 	Call *localchan.Response `json:"call,omitempty"`
+	// Request is the number of the approval request of op approval.
+	Request int64 `json:"request,omitempty"`
 }
 
 func serveControl(ctx context.Context, e *Engine, ln net.Listener) {
@@ -318,6 +325,16 @@ func control(ctx context.Context, e *Engine, req controlRequest) controlAnswer {
 			Caller:  localchan.Caller{Identified: true, AgentID: req.Agent},
 		})
 		return controlAnswer{OK: true, Call: &resp}
+	case "approval":
+		// what the hook engine does when the rules of a character say ask: it
+		// opens the request through the approvals of the machine, which are the
+		// chain of the period of the Citadel
+		id, err := periodApprovals{e}.Open(ctx, hook.ApprovalRequest{AgentID: req.Agent, About: "teste",
+			Action: classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: req.Command}})
+		if err != nil {
+			return fail(err)
+		}
+		return controlAnswer{OK: true, Request: id}
 	case "query":
 		var out [][]any
 		if err := e.withGuildDB(func(db *store.DB) error {

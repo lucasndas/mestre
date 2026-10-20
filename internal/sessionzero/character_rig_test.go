@@ -157,7 +157,7 @@ func newCharRig(t *testing.T, tweak func(*sessionzero.CharacterOptions)) *charRi
 	te := newTableEnv(t, nil, nil)
 	te.req.Profiles = te.profiles()
 	te.prepare()
-	reg := providers.NewRegistry(providers.Options{})
+	reg := providers.NewRegistry(providers.Options{NoFlush: true})
 	r := &charRig{tableEnv: te, agents: filepath.Join(t.TempDir(), "agentes"), profiles: map[providers.ID]string{},
 		births: &memBirths{m: map[string]sessionzero.Birth{}}, channels: channelsFake{}, mestre: filepath.Join(t.TempDir(), "bin", "mestre")}
 	for _, p := range te.profiles() {

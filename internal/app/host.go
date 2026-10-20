@@ -8,9 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/privdir"
@@ -82,7 +84,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if err != nil {
 		return nil, err
 	}
-	reg := providers.NewRegistry(providers.Options{})
+	reg := providers.NewRegistry(providers.Options{NoFlush: e.cfg.Synchronous == "OFF"}) // the files follow the databases (Synchronous OFF: tests)
 	binary := e.deps.Binary
 	if binary == "" {
 		if binary, err = os.Executable(); err != nil {
@@ -103,12 +105,74 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}
 	opts := OrchestrationOptions{
 		Guild: db, Machine: e.id.MachineID, Clock: e.clk, Logger: e.log, WorkspacesDir: workspacesDir, TempDir: tmp,
-		Git: git, Machines: characters.MachineSet{}, Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk}},
+		Git: git, Machines: e.machines(), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
 		Limits: characters.DefaultLimits(),
 	}
 	if integ != nil {
 		integ.Extend(&opts)
 	}
-	return NewOrchestration(opts)
+	var cc *CitadelClasses
+	if people, ok := integ.(chainPeople); ok {
+		if cc, err = e.hostChain(&opts, people, workspaces.Layout{Root: workspacesDir}); err != nil {
+			return nil, err
+		}
+	}
+	orc, err := NewOrchestration(opts)
+	if err != nil {
+		return nil, err
+	}
+	// the use of the providers: the events of the characters and the sources
+	// read periodically (usagehost.go)
+	reader := newUsageReader(&usageReader{svc: orc.Usage, dir: usageDirectory{reg: orc.Registry, presets: opts.Presets, quests: &orc.Quests},
+		alive: orc.Registry.Alive, adapters: providers.NewRegistry(providers.Options{Exec: e.deps.UsageSources.Exec}), src: e.deps.UsageSources,
+		machine: e.id.MachineID, clk: e.clk, log: e.log})
+	orc.Loops = append(orc.Loops, func(ctx context.Context) error { return reader.Loop(ctx, usageEvery) })
+	ph := &periodHooks{usage: newHookUsage(orc.Usage, reader, e.log), agentMachine: func(ctx context.Context, id string) (string, bool) {
+		c, err := orc.Registry.Get(ctx, id)
+		return c.Machine, err == nil
+	}}
+	if cc != nil {
+		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
+	}
+	e.period.Store(ph)
+	return orc, nil
+}
+
+// tableRuleGate is the gate of the temporary table rules, or none (not a gate
+// that is a nil pointer).
+func tableRuleGate(r *tablerules.Service) classes.TableRuleGate {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
+// hostChain puts in the options the chain of approval of the Citadel: the
+// libraries of classes of the workspaces, the effective rules built from them
+// (published to this machine before a character starts and when a temporary
+// table rule is made), the policy file of each workspace, and the grimoires'
+// access by the users. The people it asks come from the integration.
+func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout workspaces.Layout) (*CitadelClasses, error) {
+	books := newClassBooks(o.Guild, e.clk, e.paths.ClassesGlobais, layout)
+	o.ClassLibraries = books.For
+	o.ChainPolicy = policyFileFor(layout, people, e.log)
+	if o.ChainAlerts == nil {
+		o.ChainAlerts = chainOwnerAlerts{people}
+	}
+	if o.GrimoireAccess == nil {
+		o.GrimoireAccess = userGrimoires{people.Users()}
+	}
+	cc, err := NewCitadelClasses(CitadelClassesOptions{Registry: characters.Registry{DB: o.Guild}, Libraries: books.For, Presets: o.Presets,
+		Decrees: people.CharacterDecrees(), Locked: func(ctx context.Context, _ string) bool { return o.Locked != nil && o.Locked(ctx) }})
+	if err != nil {
+		return nil, err
+	}
+	pub := &RulesPublisher{Classes: cc, Machine: e.id.MachineID}
+	if e.mdb != nil {
+		pub.Local = &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
+	}
+	o.ChainClasses, o.ChainRulesPublisher = cc, pub
+	o.Machines = PublishingMachines(o.Machines, pub)
+	return cc, nil
 }

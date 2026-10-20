@@ -194,7 +194,7 @@ func (a *antigravity) PreTrust(req PreTrustRequest) (Trust, error) {
 		if !changed {
 			return out, nil
 		}
-		if err := replaceFile(path, next, before); err != nil {
+		if err := replaceFile(path, next, before, a.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}
@@ -287,7 +287,7 @@ func (a *antigravity) Untrust(req PreTrustRequest) (Trust, error) {
 		if err != nil {
 			return Trust{}, err
 		}
-		if err := replaceFile(path, next, before); err != nil {
+		if err := replaceFile(path, next, before, a.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -84,6 +85,15 @@ func (s *Service) OnFetched(f func(ctx context.Context, slug string)) {
 	s.mu.Unlock()
 }
 
+// OnMirrorMoved adds one more to tell, with the same call as OnFetched, that
+// the mirror of a workspace was fetched (the replication sends it to the
+// Towers). Unlike OnFetched it does not replace what was set.
+func (s *Service) OnMirrorMoved(f func(ctx context.Context, slug string)) {
+	s.mu.Lock()
+	s.afterMirror = append(s.afterMirror, f)
+	s.mu.Unlock()
+}
+
 // fetchOne is one fetch of the mirror, the advance of the main clone after it,
 // and then the tell of OnFetched.
 func (s *Service) fetchOne(ctx context.Context, w Workspace) error {
@@ -92,10 +102,13 @@ func (s *Service) fetchOne(ctx context.Context, w Workspace) error {
 		return err
 	}
 	s.mu.Lock()
-	f := s.afterFetch
+	f, more := s.afterFetch, slices.Clone(s.afterMirror)
 	s.mu.Unlock()
 	if f != nil {
 		f(ctx, w.Slug)
+	}
+	for _, g := range more {
+		g(ctx, w.Slug)
 	}
 	return nil
 }

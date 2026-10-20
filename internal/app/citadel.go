@@ -9,12 +9,14 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/machinesheet"
+	"github.com/lucasndas/mestre/internal/privdir"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
@@ -501,6 +503,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	}()
 
 	var integ IntegrationRun
+	var hosted *Orchestration
 	if e.deps.HostOrchestration {
 		if e.deps.Integration != nil {
 			var err error
@@ -517,6 +520,15 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		if err != nil {
 			return transition{err: fmt.Errorf("app: the orchestration: %w", err)}
 		}
+		defer func() { // the chain, the rules and the use of a period are not the next one's
+			if p := e.period.Swap(nil); p != nil && p.usage != nil {
+				p.usage.close()
+			}
+		}()
+		hosted = orc
+		e.orc.Store(orc) // what the characters of this machine report to
+		defer e.orc.Store(nil)
+		e.reconcileLocal(ctx, orc)
 		orc.Register(e.local, nil)
 		run.external = append(slices.Clone(run.external), orc.External())
 		if integ != nil {
@@ -579,8 +591,17 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	if files != nil {
 		cites = replicationCites()
 	}
+	var mirrors *replication.Mirrors
+	if hosted != nil {
+		// the mirror of each workspace goes to the Towers (docs/guilda/replicacao.md#arquivos-e-espelhos)
+		if err := privdir.Ensure(e.paths.mirrorBundles()); err != nil {
+			return transition{err: err}
+		}
+		sweepBundles(e.paths.mirrorBundles(), e.log)
+		mirrors = replication.NewMirrors(hosted.Workspaces.Mirrors(), e.paths.mirrorBundles())
+	}
 	primary, err := replication.NewPrimary(ctx, replication.PrimaryConfig{
-		Files: files, Cites: cites,
+		Files: files, Cites: cites, Mirrors: mirrors,
 		DB: db, Clock: e.clk, Dir: e.paths.snapshots(), Logger: e.log,
 		Roster: replication.RosterFunc(func(ctx context.Context, id string) (bool, error) {
 			m, err := guild.MachineOf(ctx, db, id)
@@ -595,6 +616,9 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		return transition{err: err}
 	}
 	run.primary = primary
+	if hosted != nil {
+		hosted.Workspaces.OnMirrorMoved(func(_ context.Context, slug string) { primary.MirrorChanged(slug) })
+	}
 	beats := newHeartbeats()
 	registry, err := machinesheet.NewRegistry(machinesheet.RegistryConfig{
 		DB: db, Presence: heartbeatPresence{lazyPresence{&srv}, beats}, Self: func() string { return e.id.MachineID }, Names: citadelNames{e: e, run: run}, Logger: e.log,
@@ -602,6 +626,8 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	if err != nil {
 		return transition{err: err}
 	}
+	e.sheets.Store(registry) // the machines the characters are placed on
+	defer e.sheets.Store(nil)
 	pcfg.Hooks = primary.Hooks(protocol.Hooks{
 		OnHello: func(ctx context.Context, peer protocol.Peer, h *protocol.Hello) error {
 			// the sheet of the hello is a write: during the handover the
@@ -958,4 +984,15 @@ func checkJoinSheet(raw json.RawMessage) error {
 	}
 	_, err := machinesheet.Merge(machinesheet.Sheet{}, obj, true)
 	return err
+}
+
+// sweepBundles removes the bundles a crash left in the folder where the mirrors
+// are written while they are sent (nothing is being sent when a period starts).
+func sweepBundles(dir string, log *slog.Logger) {
+	old, _ := filepath.Glob(filepath.Join(dir, "mirror-*.bundle"))
+	for _, f := range old {
+		if err := os.Remove(f); err != nil {
+			log.Warn("app: a leftover bundle of a mirror was not removed", "err", err)
+		}
+	}
 }
