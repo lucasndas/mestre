@@ -25,6 +25,7 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit"
 	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
+	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -59,6 +60,8 @@ func TestMain(m *testing.M) {
 		}
 	}
 	code := m.Run()
+	// A test that left a process of these binaries alive fails the run.
+	code = leakcheck.Main(os.Stderr, code, dir)
 	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }
