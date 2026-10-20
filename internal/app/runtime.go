@@ -14,8 +14,10 @@ import (
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/accounts"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
+	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/terminal"
 )
 
@@ -67,85 +69,83 @@ func (t Terminals) ptyBinary(version string) (string, error) {
 // character.
 var errTerminalsNotWired = errors.New("the terminals of the characters are not wired on this machine: the configuration has no `terminais` (the folder of the mestre-pty and the socket of the launcher, which the installation brings)")
 
-// unwiredMachines are the machines of a Citadel whose own machine has no
-// terminals: the start of a character there refuses with the reason.
-type unwiredMachines struct {
-	characters.MachineSet
-	local string
-}
+// sinks are where the Runtime of the machine, which outlives the periods,
+// tells what happens to its characters: the services of the orchestration of
+// the period that acts when this machine is the Citadel, the connection to the
+// Citadel when it is a Tower, and nobody in between.
+type sinks struct{ e *Engine }
 
-func (u unwiredMachines) Start(ctx context.Context, machine string, cmd characters.StartCommand) (characters.StartResult, error) {
-	if machine == u.local {
-		return characters.StartResult{}, errTerminalsNotWired
-	}
-	return u.MachineSet.Start(ctx, machine, cmd)
-}
-
-// periodSinks are the Citadel of the period seen from the Runtime of the
-// machine, which outlives the periods: what a character reports, the notices,
-// the waits, the inbox and the end of a turn go to the services of the period
-// that acts, and to nobody between periods.
-type periodSinks struct {
-	orc *atomic.Pointer[Orchestration]
-}
-
-// errNoCitadelHere: this machine does not host the Citadel's orchestration now.
-var errNoCitadelHere = errors.New("app: this machine hosts no orchestration now")
+// errNoCitadelHere: this machine hosts no orchestration and is no Tower now.
+var errNoCitadelHere = errors.New("app: this machine hosts no orchestration now and has no Citadel to tell")
 
 var (
-	_ characters.Reporter     = periodSinks{}
-	_ characters.Notifier     = periodSinks{}
-	_ characters.WaitProbe    = periodSinks{}
-	_ characters.TurnObserver = periodSinks{}
-	_ providers.Inbox         = periodSinks{}
+	_ characters.Reporter     = sinks{}
+	_ characters.Notifier     = sinks{}
+	_ characters.WaitProbe    = sinks{}
+	_ characters.TurnObserver = sinks{}
+	_ providers.Inbox         = sinks{}
 )
 
-func (p periodSinks) Report(ctx context.Context, r characters.Report) error {
-	orc := p.orc.Load()
-	if orc == nil {
-		return errNoCitadelHere
+func (p sinks) Report(ctx context.Context, r characters.Report) error {
+	if orc := p.e.orc.Load(); orc != nil {
+		return orc.Characters.Report(ctx, r)
 	}
-	return orc.Characters.Report(ctx, r)
+	if link := p.e.towerLink(); link != nil {
+		return p.e.towerSend(ctx, link, protocol.TypeTerminalStatus, reportPayload(r))
+	}
+	return errNoCitadelHere
 }
 
-func (p periodSinks) Notify(ctx context.Context, n characters.Notice) error {
-	orc := p.orc.Load()
-	if orc == nil {
-		return errNoCitadelHere
+func (p sinks) Notify(ctx context.Context, n characters.Notice) error {
+	if orc := p.e.orc.Load(); orc != nil {
+		return orc.Inbox.Notify(ctx, n)
 	}
-	return orc.Inbox.Notify(ctx, n)
+	if link := p.e.towerLink(); link != nil {
+		cn, err := towerNotice(n)
+		if err != nil {
+			return err
+		}
+		return p.e.towerSend(ctx, link, protocol.TypeCharacterNotice, cn)
+	}
+	return errNoCitadelHere
 }
 
-func (p periodSinks) Active(ctx context.Context, id string) (string, bool, error) {
-	orc := p.orc.Load()
-	if orc == nil {
-		return "", false, nil
+// Active: the waits live in the database of the Citadel; a Tower's turn ends in
+// idle and the Citadel, which hears of the turn, puts a character that waits
+// where it belongs.
+func (p sinks) Active(ctx context.Context, id string) (string, bool, error) {
+	if orc := p.e.orc.Load(); orc != nil {
+		return orc.Waits.Active(ctx, id)
 	}
-	return orc.Waits.Active(ctx, id)
+	return "", false, nil
 }
 
-func (p periodSinks) TurnEnded(ctx context.Context, id, last string) error {
-	orc := p.orc.Load()
-	if orc == nil {
-		return errNoCitadelHere
+func (p sinks) TurnEnded(ctx context.Context, id, last string) error {
+	if orc := p.e.orc.Load(); orc != nil {
+		return orc.Characters.TurnEnded(ctx, id, last)
 	}
-	return orc.Characters.TurnEnded(ctx, id, last)
+	if link := p.e.towerLink(); link != nil {
+		return p.e.towerSend(ctx, link, protocol.TypeCharacterTurn, protocol.CharacterTurn{AgentID: id, LastMessage: last})
+	}
+	return errNoCitadelHere
 }
 
-func (p periodSinks) Confirmed(ctx context.Context, delivery string) error {
-	orc := p.orc.Load()
-	if orc == nil {
-		return errNoCitadelHere
+func (p sinks) delivery(ctx context.Context, delivery, status string, local func(*Orchestration) error) error {
+	if orc := p.e.orc.Load(); orc != nil {
+		return local(orc)
 	}
-	return orc.Inbox.Confirmed(ctx, delivery)
+	if link := p.e.towerLink(); link != nil {
+		return p.e.towerSend(ctx, link, protocol.TypeInboxResult, protocol.InboxResult{ItemID: delivery, Status: status})
+	}
+	return errNoCitadelHere
 }
 
-func (p periodSinks) Unconfirmed(ctx context.Context, delivery string) error {
-	orc := p.orc.Load()
-	if orc == nil {
-		return errNoCitadelHere
-	}
-	return orc.Inbox.Unconfirmed(ctx, delivery)
+func (p sinks) Confirmed(ctx context.Context, delivery string) error {
+	return p.delivery(ctx, delivery, protocol.InboxConfirmed, func(o *Orchestration) error { return o.Inbox.Confirmed(ctx, delivery) })
+}
+
+func (p sinks) Unconfirmed(ctx context.Context, delivery string) error {
+	return p.delivery(ctx, delivery, protocol.InboxUnconfirmed, func(o *Orchestration) error { return o.Inbox.Unconfirmed(ctx, delivery) })
 }
 
 // machineRuntime is the Runtime of this machine with what must be closed with it.
@@ -197,10 +197,11 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 			return nil, err
 		}
 	}
-	sinks := periodSinks{&e.orc}
+	prep = e.refreshingLayers(prep)
+	sk := sinks{e}
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
 		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}),
-		Reporter: sinks, Notifier: sinks, Waits: sinks, Inbox: sinks, Turns: sinks, OS: runtime.GOOS, Logger: e.log,
+		Reporter: sk, Notifier: sk, Waits: sk, Inbox: sk, Turns: sk, OS: runtime.GOOS, Logger: e.log,
 	})
 	if err != nil {
 		host.Close()
@@ -242,12 +243,14 @@ func (e *Engine) characterPrep() (characters.Preparer, error) {
 }
 
 // machines are the engines the Citadel of a period reaches: this machine's
-// Runtime, or the refusal that says its terminals are not wired.
-func (e *Engine) machines() OrchestrationMachines {
-	if e.rt == nil {
-		return unwiredMachines{MachineSet: characters.MachineSet{}, local: e.id.MachineID}
+// Runtime (or the refusal that says its terminals are not wired) and the Towers.
+func (e *Engine) machines(db *store.DB) OrchestrationMachines {
+	m := &machineRouter{towerClient: e.towerClient(), local: e.id.MachineID, reg: characters.Registry{DB: db}}
+	if e.rt != nil {
+		m.rt = e.rt.rt
 	}
-	return characters.MachineSet{e.id.MachineID: e.rt.rt}
+	e.mach.Store(m)
+	return m
 }
 
 // machineSheets are the sheets of the machines of the Guild the Citadel of the
@@ -273,7 +276,12 @@ func (e *Engine) reconcileLocal(ctx context.Context, orc *Orchestration) {
 	if e.rt == nil {
 		return
 	}
-	if err := orc.Characters.Reconcile(ctx, e.id.MachineID, e.rt.rt.Live()); err != nil {
+	if err := orc.Characters.Reconcile(ctx, e.id.MachineID, e.liveWithWaits(ctx, orc, e.rt.rt.Live())); err != nil {
 		e.log.Warn("app: the characters of this machine were not reconciled with the registry", "err", err)
 	}
+}
+
+// towerClient is how this machine, as the Citadel of a period, reaches the Towers.
+func (e *Engine) towerClient() towerClient {
+	return towerClient{srv: &e.srvp, clk: e.clk, ids: protocol.NewIDGen(e.clk), rep: &e.sent}
 }

@@ -181,8 +181,13 @@ func (t *Table) Prepare(ctx context.Context, req TableRequest) (TableReport, err
 			rep.Blocked[id] = append(rep.Blocked[id], p)
 		}
 	}
-	t.copyClasses(ctx, req, &rep)
-	t.copyAttachments(ctx, req, &rep)
+	// The main clone (the table "") has no classes of a table and no attachments:
+	// they are the tables'. Asking the sources for the table "" would copy what
+	// belongs to no table into the clone of the project.
+	if req.Table != "" {
+		t.copyClasses(ctx, req, &rep)
+		t.copyAttachments(ctx, req, &rep)
+	}
 	t.trust(req, &rep)
 	t.tell(ctx, req, rep)
 	return rep, nil

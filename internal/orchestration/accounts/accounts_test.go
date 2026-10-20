@@ -13,7 +13,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/accounts"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	path := filepath.Join(dir, "maquina.db")
-	db, err := machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.OpenMachine(context.Background(), path, store.Options{Synchronous: "OFF"})
 	if err == nil {
 		err = db.Close()
 	}
@@ -68,7 +68,7 @@ func newFixture(t *testing.T, osName string) *fixture {
 	if err := os.WriteFile(path, machineTemplate, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := machinedb.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.OpenMachine(context.Background(), path, store.Options{Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -76,8 +76,11 @@ const (
 
 // Event is something that changed at GitHub, normalized.
 type Event struct {
-	Kind      EventKind
-	Key       string
+	Kind EventKind
+	Key  string
+	// ID is the id at GitHub of what changed, when it has one (a review): the
+	// state of the object is read again by whoever acts on it.
+	ID        int64
 	Workspace string
 	Repo      string
 	Number    int
@@ -102,6 +105,22 @@ type Watch struct {
 // batches delivers them again, and not always grouped the same way.
 type Sink interface {
 	Deliver(ctx context.Context, w Watch, table string, events []Event) error
+}
+
+// Sinks hands the same batch to every sink in order. One that fails does not
+// stop the others; the error comes back so that the cursor does not move and the
+// batch is delivered again, which each sink takes once (the rule of Sink).
+type Sinks []Sink
+
+// Deliver implements Sink.
+func (ss Sinks) Deliver(ctx context.Context, w Watch, table string, events []Event) error {
+	var errs []error
+	for _, s := range ss {
+		if err := s.Deliver(ctx, w, table, events); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Situation says how busy a workspace is.

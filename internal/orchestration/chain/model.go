@@ -194,6 +194,9 @@ type Request struct {
 	Mission *Mission `json:"mission,omitempty"`
 	// PR is the PR of a request of type pr or merge.
 	PR *PRRef `json:"pr,omitempty"`
+	// Require are users, by id, whose approval this request needs besides what
+	// the policy asks (the person a repository requires to review a PR).
+	Require []string `json:"require,omitempty"`
 	// Decision is how it closed.
 	Decision *Closing `json:"decision,omitempty"`
 	// Deciding is the claim of a decision under way: the request stays open
