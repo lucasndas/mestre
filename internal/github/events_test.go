@@ -320,20 +320,21 @@ func TestALimitOfGitHubStopsTheReadingsOfTheWorkspaceUntilTheTimeItSaid(t *testi
 func TestOnlyWhatChangedAfterTheWorkspaceWasMadeBecomesAnEventAndAllPagesAreRead(t *testing.T) {
 	t.Parallel()
 	r := newPoll(t)
-	old := r.gh.AddIssue(pollRepo, "antiga") // made at the moment of the Watch: not before it
-	_ = old
+	r.gh.AddIssue(pollRepo, "antiga") // the history of the repository, before the workspace
 	r.clk.Advance(10 * time.Second)
+	r.watch.Since = r.clk.Now() // the workspace is made now: the cursor starts here
+	r.clk.Advance(time.Second)
 	for i := range 120 {
 		r.gh.AddIssue(pollRepo, fmt.Sprintf("issue %d", i))
 		r.clk.Advance(time.Second)
 	}
 	r.cycle()
-	if got := len(r.sink.events()); got != 121 { // the 120 and the old one, touched at the cursor itself
-		t.Logf("events: %d", got)
-	}
 	seen := map[int]bool{}
 	for _, e := range r.sink.events() {
 		seen[e.Number] = true
+	}
+	if seen[1] {
+		t.Error("the history from before the workspace became an event")
 	}
 	for n := 2; n <= 121; n++ {
 		if !seen[n] {
@@ -387,3 +388,130 @@ func TestTheEventsOfACycleGoInOneBatchForEachTable(t *testing.T) {
 		t.Errorf("batches by table: %v", perTable)
 	}
 }
+
+func TestAPersonQuotingAMarkerInTheMiddleOfAReplyIsStillAnEvent(t *testing.T) {
+	t.Parallel()
+	r := newPoll(t)
+	r.clk.Advance(10 * time.Second)
+	n := r.gh.AddIssue(pollRepo, "bug")
+	r.gh.AddIssueComment(pollRepo, n, "pessoa", "> "+github.Marker("abc")+"\nconcordo com o motor")
+	r.cycle()
+	if len(r.sink.events()) == 0 {
+		t.Fatal("a reply that quotes a marker was taken for the engine's")
+	}
+}
+
+func TestAWorkspaceWithoutAMomentToStartFromDoesNotTurnTheHistoryIntoEvents(t *testing.T) {
+	t.Parallel()
+	r := newPoll(t)
+	for range 3 {
+		n := r.gh.AddIssue(pollRepo, "antiga")
+		r.gh.AddIssueComment(pollRepo, n, "pessoa", "velho")
+	}
+	r.clk.Advance(time.Minute)
+	r.watch.Since = time.Time{}
+	r.cycle()
+	if got := r.sink.events(); len(got) != 0 {
+		t.Fatalf("%d events from the history", len(got))
+	}
+}
+
+func TestAHundredPagesOfChangesInOneCycleAreAllRead(t *testing.T) {
+	t.Parallel()
+	r := newPoll(t)
+	r.clk.Advance(time.Second)
+	for i := range 2100 {
+		r.gh.AddIssue(pollRepo, fmt.Sprintf("i%d", i))
+	}
+	seen := map[int]bool{}
+	for range 4 {
+		r.cycle()
+	}
+	for _, e := range r.sink.events() {
+		seen[e.Number] = true
+	}
+	if len(seen) != 2100 {
+		t.Fatalf("%d of 2100 issues became events", len(seen))
+	}
+}
+
+func TestRetryAfterIsKeptBetweenOneSecondAndOneHour(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		hdr  map[string]string
+		want time.Duration
+	}{
+		{map[string]string{"Retry-After": "0"}, time.Second},
+		{map[string]string{"Retry-After": "99999999"}, time.Hour},
+		{map[string]string{"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1"}, time.Second},
+	} {
+		r := newPoll(t)
+		r.gh.FailNextRead(http.StatusForbidden, tc.hdr)
+		start := r.clk.Now()
+		if err := r.p.Tick(r.ctx); err != nil {
+			t.Fatal(err)
+		}
+		reads := len(r.gh.Reads())
+		r.gh.IssueToken("tok", "grao-mestre") // the token of the double lives one hour
+		r.clk.Advance(tc.want - time.Millisecond)
+		_ = r.p.Tick(r.ctx)
+		if len(r.gh.Reads()) != reads {
+			t.Errorf("%v: asked before %v (from %v)", tc.hdr, tc.want, start)
+		}
+		r.clk.Advance(time.Millisecond)
+		r.gh.IssueToken("tok", "grao-mestre")
+		_ = r.p.Tick(r.ctx)
+		if len(r.gh.Reads()) == reads {
+			t.Errorf("%v: not asked after %v", tc.hdr, tc.want)
+		}
+	}
+}
+
+func TestAWorkspaceIsNeverReadTwiceAtTheSameTime(t *testing.T) {
+	t.Parallel()
+	r := newPoll(t)
+	block := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	slow := &slowSink{inner: r.sink, block: block, entered: entered}
+	p, err := github.NewPoller(github.PollerOptions{
+		DB: r.db, Clock: r.clk, API: r.srv.URL, HTTP: r.srv.Client(),
+		Token: func(context.Context, string) (string, error) { return "tok", nil }, Sink: slow, Situation: r.sit,
+		Watches: func(context.Context) ([]github.Watch, error) { return []github.Watch{r.watch}, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.clk.Advance(10 * time.Second)
+	n := r.gh.AddIssue(pollRepo, "bug")
+	r.gh.AddIssueComment(pollRepo, n, "pessoa", "oi")
+	done := make(chan struct{})
+	go func() { _ = p.Tick(r.ctx); close(done) }()
+	<-entered
+	_ = p.Tick(r.ctx) // the first is still delivering: this one does nothing
+	if slow.calls() != 1 {
+		t.Errorf("%d deliveries while one was in flight", slow.calls())
+	}
+	close(block)
+	<-done
+}
+
+type slowSink struct {
+	inner          *sinkFake
+	block, entered chan struct{}
+	mu             sync.Mutex
+	n              int
+}
+
+func (s *slowSink) Deliver(ctx context.Context, w github.Watch, table string, evs []github.Event) error {
+	s.mu.Lock()
+	s.n++
+	first := s.n == 1
+	s.mu.Unlock()
+	if first {
+		s.entered <- struct{}{}
+		<-s.block
+	}
+	return s.inner.Deliver(ctx, w, table, evs)
+}
+
+func (s *slowSink) calls() int { s.mu.Lock(); defer s.mu.Unlock(); return s.n }

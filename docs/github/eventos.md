@@ -54,8 +54,9 @@ Cada mudança recebe uma chave única, guardada na tabela `github_seen_events` (
 | Tipo | Chave |
 |---|---|
 | issue ou PR alterado | `issue:<id>:<updated_at>` |
-| comentário (novo ou editado) | `comentario:<id>:<updated_at>` |
+| comentário (novo ou editado) | `comentario:<id>:<updated_at>` (de revisão no código: `comentario:r<id>:<updated_at>`) |
 | revisão | `revisao:<id>:<state>` |
+| PR mesclado ou fechado | `merge:<id>:<merged_at>` e `fechado:<id>:<closed_at>` (uma mudança posterior no PR já mesclado não repete o evento) |
 | check run | `check:<id>:<status>:<conclusion>` |
 | status combinado | `status:<sha>:<state>` |
 

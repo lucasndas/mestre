@@ -19,7 +19,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// The numbers of the periodic reading (docs/github/eventos.md#intervalo-adaptativo).
+// The numbers of the periodic reading (docs/github/eventos.md#intervalo-adaptativo-padrão-configurável-por-workspace).
 const (
 	IntervalActive    = 30 * time.Second
 	IntervalAttentive = 2 * time.Minute
@@ -33,8 +33,13 @@ const (
 	// SeenLife is how long the key of a change is kept.
 	SeenLife = 30 * 24 * time.Hour
 	// pollMaxPages caps the pages read of a list in one cycle.
-	pollMaxPages = 20
-	perPage  = 100
+	pollMaxPages = 100
+	perPage      = 100
+	// requestTimeout ends a request that hangs: one workspace does not hold the others.
+	requestTimeout = 30 * time.Second
+	// The retry-after is kept between these.
+	minRetry = time.Second
+	maxRetry = time.Hour
 )
 
 // Mode is how often a workspace is read.
@@ -88,8 +93,9 @@ type Watch struct {
 }
 
 // Sink takes the events of a cycle, one batch for each table (Table "" for the
-// ones with no table). It must be idempotent for the keys of the events: the
-// cursor moves only after it answered.
+// ones with no table). It must be idempotent for each Event.Key, not for the
+// batch: the cursor moves only after it answered, so a failure after some
+// batches delivers them again, and not always grouped the same way.
 type Sink interface {
 	Deliver(ctx context.Context, w Watch, table string, events []Event) error
 }
@@ -146,6 +152,7 @@ type watchState struct {
 	lastChange time.Time
 	lastAction time.Time
 	fails      int
+	running    bool
 }
 
 // NewPoller returns the poller.
@@ -192,7 +199,7 @@ func (p *Poller) Mode(ctx context.Context, w Watch) Mode {
 	if recent {
 		return ModeActive
 	}
-	return p.o.Situation.Mode(ctx, w)
+	return p.o.Mode(ctx, w)
 }
 
 // Interval is the time to the next reading of the workspace, with the jitter.
@@ -228,6 +235,9 @@ func (p *Poller) row(ctx context.Context, repo, list string, since time.Time) (p
 	err := p.o.DB.Reader().QueryRowContext(ctx, `SELECT etag, cursor FROM github_poll_state WHERE repo = ? AND list = ?`, repo, list).Scan(&etag, &cur)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
+		if since.IsZero() { // no moment to start from: the history is not events
+			since = p.o.Clock.Now()
+		}
 		return pollRow{cursor: since}, nil
 	case err != nil:
 		return pollRow{}, err
@@ -244,14 +254,15 @@ type fetched struct {
 }
 
 type item struct {
-	ID        int64     `json:"id"`
-	Number    int       `json:"number"`
-	Body      string    `json:"body"`
-	Title     string    `json:"title"`
-	State     string    `json:"state"`
-	UpdatedAt time.Time `json:"updated_at"`
-	HTMLURL   string    `json:"html_url"`
-	IssueURL  string    `json:"issue_url"`
+	ID        int64      `json:"id"`
+	Number    int        `json:"number"`
+	Body      string     `json:"body"`
+	Title     string     `json:"title"`
+	State     string     `json:"state"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	ClosedAt  *time.Time `json:"closed_at"`
+	HTMLURL   string     `json:"html_url"`
+	IssueURL  string     `json:"issue_url"`
 	User      struct {
 		Login string `json:"login"`
 	} `json:"user"`
@@ -400,11 +411,17 @@ func (p *Poller) fetch(ctx context.Context, w Watch, repo string, spec listSpec)
 			return out, nil
 		}
 	}
+	// the cap was reached with changes still unread. The lists come newest first,
+	// so reading again would only find the same pages: what is beyond is lost, and
+	// the log says it (with ten thousand changes in one cycle, something is wrong)
+	p.o.Logger.Error("github: more changes than the pages the cycle reads; the oldest were not read", "workspace", w.Workspace, "list", spec.name, "pages", pollMaxPages)
 	return out, nil
 }
 
 // get is a GET with the token, and If-None-Match when there is an ETag.
 func (p *Poller) get(ctx context.Context, path, token, etag string) (int, http.Header, []byte, error) {
+	ctx, cancel := clock.WithTimeout(ctx, p.o.Clock, requestTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(p.o.API, "/")+path, nil)
 	if err != nil {
 		return 0, nil, nil, errors.New("github: bad request")
@@ -432,18 +449,33 @@ func (p *Poller) get(ctx context.Context, path, token, etag string) (int, http.H
 // when to ask again. A 403 that is no limit is a plain refusal.
 func (p *Poller) limited(status int, h http.Header) error {
 	now := p.o.Clock.Now()
-	if v, err := strconv.Atoi(h.Get("Retry-After")); err == nil && v >= 0 {
-		return &RetryAfterError{At: now.Add(time.Duration(v) * time.Second), Status: status}
-	}
-	if h.Get("x-ratelimit-remaining") == "0" {
-		if v, err := strconv.ParseInt(h.Get("x-ratelimit-reset"), 10, 64); err == nil {
-			return &RetryAfterError{At: time.Unix(v, 0), Status: status}
+	at := time.Time{}
+	if v := h.Get("Retry-After"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			at = now.Add(time.Duration(n) * time.Second)
+		} else if t, err := http.ParseTime(v); err == nil {
+			at = t
 		}
 	}
-	if status == http.StatusTooManyRequests {
-		return &RetryAfterError{At: now.Add(time.Minute), Status: status}
+	if at.IsZero() && h.Get("x-ratelimit-remaining") == "0" {
+		if v, err := strconv.ParseInt(h.Get("x-ratelimit-reset"), 10, 64); err == nil {
+			at = time.Unix(v, 0)
+		}
 	}
-	return fmt.Errorf("github: reading was refused (%d)", status)
+	if at.IsZero() && status == http.StatusTooManyRequests {
+		at = now.Add(time.Minute)
+	}
+	if at.IsZero() {
+		return fmt.Errorf("github: reading was refused (%d)", status)
+	}
+	// never a loop of requests (a time already past), never a stop of hours
+	if lo := now.Add(minRetry); at.Before(lo) {
+		at = lo
+	}
+	if hi := now.Add(maxRetry); at.After(hi) {
+		at = hi
+	}
+	return &RetryAfterError{At: at, Status: status}
 }
 
 // eventOf turns an item into an event; ok is false for what is not an event
@@ -453,7 +485,7 @@ func (p *Poller) eventOf(ctx context.Context, w Watch, repo string, spec listSpe
 	ev := Event{Workspace: w.Workspace, Repo: repo, Author: it.User.Login, Link: it.HTMLURL, At: it.UpdatedAt}
 	if spec.comment {
 		// what the Guild wrote is no external event: its marker, or its own record of the comment
-		if len(Markers(it.Body)) > 0 {
+		if endsWithMarker(it.Body) {
 			return Event{}, false, nil
 		}
 		if p.o.Objects != nil {
@@ -464,12 +496,15 @@ func (p *Poller) eventOf(ctx context.Context, w Watch, repo string, spec listSpe
 			}
 		}
 		ev.Kind, ev.Key = EventComment, fmt.Sprintf("comentario:%d:%s", it.ID, stamp)
+		if spec.name == "review_comments" { // the ids of the two lists are separate spaces
+			ev.Key = fmt.Sprintf("comentario:r%d:%s", it.ID, stamp)
+		}
 		ev.Number = numberOf(it.IssueURL, it.HTMLURL)
 		ev.Summary = shorten(it.Body)
-		ev.Table = p.o.Situation.TableOf(ctx, repo, ev.Number)
+		ev.Table = p.o.TableOf(ctx, repo, ev.Number)
 		return ev, true, nil
 	}
-	if len(Markers(it.Body)) > 0 {
+	if endsWithMarker(it.Body) {
 		return Event{}, false, nil
 	}
 	ev.Number = it.Number
@@ -479,14 +514,24 @@ func (p *Poller) eventOf(ctx context.Context, w Watch, repo string, spec listSpe
 	case it.PullRequest == nil:
 		ev.Kind = EventIssueChanged
 	case it.PullRequest.MergedAt != nil:
-		ev.Kind = EventPRMerged
+		// the fact is the merge: a label put on the merged PR later is not another one
+		ev.Kind, ev.Key = EventPRMerged, fmt.Sprintf("merge:%d:%s", it.ID, it.PullRequest.MergedAt.UTC().Format(time.RFC3339))
+	case it.State == "closed" && it.ClosedAt != nil:
+		ev.Kind, ev.Key = EventPRClosed, fmt.Sprintf("fechado:%d:%s", it.ID, it.ClosedAt.UTC().Format(time.RFC3339))
 	case it.State == "closed":
 		ev.Kind = EventPRClosed
 	default:
 		ev.Kind = EventPRChanged
 	}
-	ev.Table = p.o.Situation.TableOf(ctx, repo, ev.Number)
+	ev.Table = p.o.TableOf(ctx, repo, ev.Number)
 	return ev, true, nil
+}
+
+// endsWithMarker says the text ends with a marker of operation, as what the
+// Guild writes does; a person who quotes one in the middle of a reply is not it.
+func endsWithMarker(body string) bool {
+	ms := Markers(body)
+	return len(ms) > 0 && strings.HasSuffix(strings.TrimRight(body, " \n\r\t"), strings.TrimLeft(ms[len(ms)-1], "\n"))
 }
 
 // numberOf finds the number of the issue of a comment from its addresses.
@@ -523,55 +568,44 @@ func shorten(s string) string {
 
 // Tick reads the workspaces that are due: after a limit nothing is asked before
 // the time GitHub said, after another error the interval grows up to the idle one.
+// A workspace is never read twice at the same time.
 func (p *Poller) Tick(ctx context.Context) error {
 	ws, err := p.o.Watches(ctx)
 	if err != nil {
 		return err
 	}
-	now := p.o.Clock.Now()
 	for _, w := range ws {
 		p.mu.Lock()
 		st := p.state(w.Workspace)
-		due := st.due
-		p.mu.Unlock()
-		if now.Before(due) {
+		if st.running || p.o.Clock.Now().Before(st.due) {
+			p.mu.Unlock()
 			continue
 		}
+		st.running = true
+		p.mu.Unlock()
+
 		_, err := p.Cycle(ctx, w)
+		iv := p.Interval(ctx, w) // outside the lock: it asks the situation
+		now := p.o.Clock.Now()
+
 		p.mu.Lock()
-		st = p.state(w.Workspace)
+		st.running = false
+		var lim *RetryAfterError
 		switch {
 		case err == nil:
 			st.fails = 0
-			st.due = now.Add(p.interval(ctx, w, st))
+			st.due = now.Add(iv)
+		case errors.As(err, &lim):
+			st.due = lim.At
+		case ctx.Err() != nil: // leaving: not a failure of GitHub
 		default:
-			var lim *RetryAfterError
-			if errors.As(err, &lim) {
-				st.due = lim.At
-			} else {
-				st.fails++
-				back := IntervalActive << min(st.fails, 4)
-				st.due = now.Add(min(back, IntervalIdle))
-				p.o.Logger.Warn("github: reading a workspace failed", "workspace", w.Workspace, "err", err)
-			}
+			st.fails++
+			st.due = now.Add(min(IntervalActive<<min(st.fails, 4), IntervalIdle))
+			p.o.Logger.Warn("github: reading a workspace failed", "workspace", w.Workspace, "err", err)
 		}
 		p.mu.Unlock()
 	}
 	return nil
-}
-
-// interval is Interval with the lock held by the caller.
-func (p *Poller) interval(ctx context.Context, w Watch, st *watchState) time.Duration {
-	now := p.o.Clock.Now()
-	mode := p.o.Situation.Mode(ctx, w)
-	if now.Sub(st.lastChange) < ActiveHold || now.Sub(st.lastAction) < ActiveHold {
-		mode = ModeActive
-	}
-	base := map[Mode]time.Duration{ModeActive: IntervalActive, ModeAttentive: IntervalAttentive, ModeIdle: IntervalIdle}[mode]
-	if p.o.Rand == nil {
-		return base
-	}
-	return time.Duration(float64(base) * (1 + Jitter*(2*p.o.Rand()-1)))
 }
 
 // Run does Tick every second until ctx ends.
