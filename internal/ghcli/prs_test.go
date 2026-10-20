@@ -2,6 +2,8 @@ package ghcli_test
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -408,7 +410,8 @@ func TestNothingIsDoneOnGitHubWhileTheMestreIsLocked(t *testing.T) {
 	}
 }
 
-// CA-DEC-09
+// Part of CA-DEC-09 (the push goes with the credentials of Sending.Auth, which take
+// no class: "com o App da classe" is not asserted)
 func TestADecreeThatFreesThePushIsFulfilledByTheEngineAndRegisteredInTheDecree(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
@@ -477,8 +480,8 @@ func TestADecreeThatFreesThePushIsFulfilledByTheEngineAndRegisteredInTheDecree(t
 	if got := r.run("qa", "pr update", map[string]any{"title": "Novo título"}); !got.OK {
 		t.Fatalf("pr update: %+v", got)
 	}
-	if len(r.pushes()) != 1 {
-		t.Fatalf("pushes = %q", r.pushes())
+	if want := []string{r.remote + " refs/heads/42-login:refs/heads/42-login"}; !slices.Equal(r.pushes(), want) {
+		t.Fatalf("pushes = %q, want the branch of the table %q", r.pushes(), want)
 	}
 	uses, err := ds.Uses(r.ctx, d.Number)
 	if err != nil || len(uses) != 1 || uses[0].Character != "qa" || uses[0].Action != "mestre pr update" {
@@ -495,7 +498,8 @@ func TestADecreeThatFreesThePushIsFulfilledByTheEngineAndRegisteredInTheDecree(t
 	// what nobody can do is refused before the confirmation
 	bad := decrees.Proposal{Author: ana.ID, Kind: decrees.KindRule, Workspace: "meu-app", Target: decrees.Target{Kind: decrees.TargetClass, Name: "qa"},
 		Effect: decrees.Effect{Kind: decrees.EffectPolicy, Setting: "revisao_obrigatoria", Loosens: true}, Text: "o dev pode ignorar a revisão obrigatória"}
-	if _, err := ds.Propose(r.ctx, bad); err == nil {
-		t.Fatal("a decree to ignore the required review was proposed")
+	var ref *decrees.Refusal
+	if _, err := ds.Propose(r.ctx, bad); !errors.As(err, &ref) || ref.Code != decrees.CodeInvariant || !strings.Contains(ref.Message, "revisao_obrigatoria") {
+		t.Fatalf("a decree to ignore the required review = %v, want the refusal with the explanation", err)
 	}
 }

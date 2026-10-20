@@ -332,9 +332,18 @@ func TestTheTableMasterMakesTheBugASubIssueOfTheEpicAndTheMissionTakesItWhileThe
 	original := "O login aceita senha vazia.\n\n  Só acontece com e-mail — não com OAuth.\r\nObrigado!\n"
 	n := w.issueNumber(w.run(w.master, "issue", "create", "--title", "Bug: senha vazia", "--body", original+mmCriteria, "--json"))
 	title, body, state, _, ok := m.gh.Issue(mmRepo, n)
-	if !ok || title != "Bug: senha vazia" || state != "open" || !strings.HasPrefix(body, original) || !strings.Contains(body, "- [ ] C1 aceita a senha correta") ||
-		!strings.Contains(body, "- [ ] C3 bloqueia depois de cinco erros") {
+	if !ok || title != "Bug: senha vazia" || state != "open" {
 		t.Fatalf("the issue on GitHub: %q %q %q", title, state, body)
+	}
+	// the original text is intact and the three criteria C1, C2 and C3 follow it
+	// (the engine only appends its own operation marker at the end)
+	if rest, found := strings.CutPrefix(body, original+mmCriteria); !found || !strings.HasPrefix(strings.TrimSpace(rest), "<!-- mestre:op=") {
+		t.Errorf("the body of the issue is not the original text followed by the criteria:\n got %q\nwant prefix %q", body, original+mmCriteria)
+	}
+	for _, c := range []string{"- [ ] C1 aceita a senha correta", "- [ ] C2 recusa a senha vazia", "- [ ] C3 bloqueia depois de cinco erros"} {
+		if !strings.Contains(body, c) {
+			t.Errorf("the issue lacks the criterion %q:\n%s", c, body)
+		}
 	}
 	if parent := m.gh.Parent(mmRepo, n); parent != w.table.Epic {
 		t.Errorf("the issue is under #%d, want the epic #%d", parent, w.table.Epic)
@@ -404,6 +413,14 @@ func TestThePullRequestWaitsForTheProofOfEveryCriterionAndTheFourthFixMissionIsA
 		t.Error("the branch was sent although a criterion has no proof")
 	}
 
+	// the two marks of the proofs that came are already on the issue; the third is not
+	_, before, _, _, _ := m.gh.Issue(mmRepo, n)
+	for _, want := range []string{"- [x] C1 aceita a senha correta", "- [x] C2 recusa a senha vazia", "- [ ] C3 bloqueia depois de cinco erros"} {
+		if !strings.Contains(before, want) {
+			t.Errorf("before the fix mission the issue lacks %q:\n%s", want, before)
+		}
+	}
+
 	// the fix mission, with the same issue and only the step that is missing
 	if r := w.run(w.master, "issue", "comment", fmt.Sprint(n), "Aceite: C3 sem prova; missão de correção criada.", "--json"); r.code != 0 {
 		t.Fatalf("issue comment = %+v", r)
@@ -453,8 +470,16 @@ func TestThePullRequestWaitsForTheProofOfEveryCriterionAndTheFourthFixMissionIsA
 
 	// the fourth fix mission is not made: the Master of the table asks the Grand Master
 	for i := 2; i <= 3; i++ {
-		if r := w.createQuest(fmt.Sprintf("Correção %d", i), fmt.Sprintf(fix, fmt.Sprintf("Correção %d", i), n)); r.code != 0 {
+		name := fmt.Sprintf("Correção %d", i)
+		if r := w.createQuest(name, fmt.Sprintf(fix, name, n)); r.code != 0 {
 			t.Fatalf("fix mission %d = %+v", i, r)
+		}
+		if r := w.run(w.master, "quest", "run", name, "--json"); r.code != 0 {
+			t.Fatalf("fix run %d = %+v", i, r)
+		}
+		w.stepDone(w.questNamed(name), "rev", "C3=login_test.go:TestBloqueio")
+		if got := w.questNamed(name); got.State != quests.Completed {
+			t.Fatalf("the fix mission %d is %s, want completed", i, got.State)
 		}
 	}
 	r = w.createQuest("Correção 4", fmt.Sprintf(fix, "Correção 4", n))

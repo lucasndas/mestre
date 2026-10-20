@@ -3,6 +3,7 @@ package decrees
 import (
 	"context"
 	"time"
+	_ "time/tzdata" // the zones of the Guild are embedded: an installed Windows has no zoneinfo of its own
 )
 
 // guildZone is the time zone of the Guild (guild.timezone); nil when it is not

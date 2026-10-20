@@ -6,12 +6,14 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/cli"
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 )
 
 type cliResult struct {
@@ -94,6 +96,19 @@ func TestApprovalDecideApprovesAPatternForAWhileAndRefusesTheOnesTooBroadOrTooLo
 	if !got.OK || got.Data["applied"] != "temporary_rule" {
 		t.Fatalf("approve-pattern for 2h: %+v, want a temporary rule", got)
 	}
+	if got.Exit != 0 {
+		t.Errorf("approve-pattern exit = %d, want 0", got.Exit)
+	}
+	w.temp.mu.Lock()
+	rules := append([]chain.TempRule(nil), w.temp.rules...)
+	w.temp.mu.Unlock()
+	if len(rules) != 1 {
+		t.Fatalf("temporary rules = %+v, want exactly the one of the approval", rules)
+	}
+	if r := rules[0]; r.Request != id || r.Pattern == nil || r.Pattern.Pattern != "npm install *" || r.Table != w.table.ID || r.Class != dev.Class ||
+		r.By != w.master.ID || r.Risk != classes.RiskLow || !r.Until.Equal(w.clk.Now().Add(2*time.Hour)) || r.UntilMissionEnd {
+		t.Errorf("the temporary rule = %+v, want pattern \"npm install *\" of table %s, class %s, by the table master, low risk, for 2h from now", r, w.table.ID, dev.Class)
+	}
 	id2 := w.hookReq(t, dev, "npm install left-pad", classes.RiskLow)
 	if got := w.cli(w.master, "approval decide", map[string]any{"reason": "deps", "pattern": "npm install *"}, itoa(id2), "approve-pattern"); got.OK || got.Code != "usage" {
 		t.Errorf("a pattern with no duration: %+v, want usage", got)
@@ -114,12 +129,32 @@ func TestApprovalDecideApprovesAPatternForAWhileAndRefusesTheOnesTooBroadOrTooLo
 		t.Errorf("a duration that is not one: %+v, want usage", got)
 	}
 	always := w.cli(w.master, "approval decide", map[string]any{"reason": "sempre"}, itoa(id2), "always")
-	if !always.OK || always.Data["suggested"] != true {
-		t.Errorf("always: %+v, want suggested", always)
+	if !always.OK || always.Exit != 0 || always.Data["suggested"] != true {
+		t.Errorf("always: %+v, want exit 0 and suggested", always)
+	}
+	if len(w.temp.rules) != 1 {
+		t.Errorf("temporary rules after always = %d, want only the one of the pattern", len(w.temp.rules))
+	}
+	w.grants.mu.Lock()
+	granted := len(w.grants.decrees)
+	w.grants.mu.Unlock()
+	// the only thing in the rules of the classes is the exception of this one
+	// action, which is the approval itself (not a rule: it frees nothing else)
+	w.cls.mu.Lock()
+	var kept []classes.Decree
+	for _, ds := range w.cls.decrees {
+		kept = append(kept, ds...)
+	}
+	w.cls.mu.Unlock()
+	if granted != 0 {
+		t.Errorf("always created %d permanent decrees, want none (it is only a suggestion)", granted)
+	}
+	if len(kept) != 1 || kept[0].Kind != classes.DecreeException || kept[0].Action == nil || kept[0].Action.Command != "npm install left-pad" {
+		t.Errorf("decrees in the rules of the classes = %+v, want only the exception of the approved action", kept)
 	}
 }
 
-// CA-CLI-GM-16 and `approval list`
+// CA-CLI-GM-16: the reply of the requester reaches the level that asked, marked as not verified, and its time restarts; also `approval list`.
 func TestApprovalReplyAnswersTheQuestionOfALevelOnlyForWhoAsked(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -138,8 +173,30 @@ func TestApprovalReplyAnswersTheQuestionOfALevelOnlyForWhoAsked(t *testing.T) {
 	if got := w.cli(dev, "approval reply", nil, itoa(id), "  "); got.OK || got.Code != "usage" {
 		t.Errorf("an empty text: %+v, want usage", got)
 	}
-	if got := w.cli(dev, "approval reply", nil, itoa(id), "é só o teste local"); !got.OK {
-		t.Fatalf("reply: %+v", got)
+	asked := w.request(id)
+	if !asked.AskedBack {
+		t.Fatalf("the request is not waiting for the answer: %+v", asked)
+	}
+	w.clk.Advance(90 * time.Second)
+	answer := "é só o teste local\nsem tocar no resto"
+	before := len(w.itemsOf(w.master, inbox.KindAnswer))
+	if got := w.cli(dev, "approval reply", nil, itoa(id), answer); !got.OK || got.Exit != 0 {
+		t.Fatalf("reply: %+v, want exit 0", got)
+	}
+	answers := w.itemsOf(w.master, inbox.KindAnswer)
+	if len(answers) != before+1 {
+		t.Fatalf("the level that asked got %d answer items, want %d", len(answers), before+1)
+	}
+	body := answers[len(answers)-1].Text
+	if want := chain.Unverified(answer); !strings.Contains(body, want) || !strings.Contains(body, chain.UnverifiedOpen) {
+		t.Errorf("the answer that reached the level = %q, want the text marked as not verified: %q", body, want)
+	}
+	if got := answers[len(answers)-1].Refs.Approval; got != id {
+		t.Errorf("the answer item refers to approval %d, want #%d", got, id)
+	}
+	after := w.request(id)
+	if after.AskedBack || !after.Deadline.Equal(w.clk.Now().Add(chain.DefaultSettings().AgentDeadline)) {
+		t.Errorf("after the reply: asked_back=%v deadline=%v, want the time of the level restarted from now (%v + %v)", after.AskedBack, after.Deadline, w.clk.Now(), chain.DefaultSettings().AgentDeadline)
 	}
 	if got := w.cli(dev, "approval reply", nil, "9999", "x"); got.OK || got.Code != "not_found" || got.Exit != 4 {
 		t.Errorf("a request that does not exist: %+v", got)
