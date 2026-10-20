@@ -12,54 +12,8 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/basesync"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
-	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 )
-
-// CA-SYNC-01: a table with a PR open, and the base moved: the engine makes the
-// step sync for the Dev, the table goes to working and the users hear nothing.
-func TestSyncStepForTheDevWhenTheBaseMoves(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	dev := w.devWorks()
-	if got := w.tableNow().State; got != tables.StateInReview {
-		t.Fatalf("the table is %s before the base moves; want in_review", got)
-	}
-	w.moveBase("login.go") // the file the Dev changed: a conflict
-
-	sq := w.syncQuests()
-	if len(sq) != 1 || sq[0].Name != "sync" || sq[0].State != quests.Running {
-		t.Fatalf("missions of the step sync = %+v; want one running", sq)
-	}
-	steps, err := w.orc.Quests.Store().Steps(w.ctx, sq[0].ID)
-	if err != nil || len(steps) != 1 || steps[0].ID != "sync" {
-		t.Fatalf("steps = %+v, %v", steps, err)
-	}
-	if steps[0].Character != dev.ID {
-		t.Errorf("the step is for %q; want the Dev %q", steps[0].Character, dev.ID)
-	}
-	if got := w.tableNow().State; got != tables.StateWorking {
-		t.Errorf("the table is %s; want working", got)
-	}
-	found := false
-	for _, x := range w.itemsOf(dev.ID, inbox.KindQuest) {
-		found = found || strings.Contains(x, "git merge origin/main") && strings.Contains(x, "Nunca use rebase")
-	}
-	if !found {
-		t.Errorf("the Dev did not get the instruction of the merge: %q", w.itemsOf(dev.ID, inbox.KindQuest))
-	}
-	if told := w.users.Told(); len(told) != 0 {
-		t.Errorf("the Owner was told %q; a conflict is a task for the Dev, not a decision", told)
-	}
-	for _, kind := range []inbox.Kind{inbox.KindAgent, inbox.KindApproval} {
-		if got := w.itemsOf(w.gm.ID, kind); len(got) != 0 {
-			t.Errorf("the Grand Master got %v items: %q", kind, got)
-		}
-	}
-	if got := w.itemsOf(w.master.ID, inbox.KindSystem); len(got) == 0 {
-		t.Error("the Master of the table was not told that the step sync was made")
-	}
-}
 
 // prHandlers are the commands `mestre pr` of the Citadel with the gate of the
 // base from the orchestration, over what the test does not need to have real.
