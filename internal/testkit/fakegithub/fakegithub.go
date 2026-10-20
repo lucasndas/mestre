@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"sort"
 	"strconv"
@@ -97,6 +98,9 @@ type Server struct {
 	failWriteAfter string
 	subIssueFail   int // status the next POST of a sub-issue answers (0: as usual)
 	requests       []Request
+	reads          []Request
+	readFail       int
+	readFailHdr    map[string]string
 }
 
 // New returns an empty server using the newest recordings.
@@ -144,6 +148,9 @@ func (s *Server) Actions() []Action {
 // ServeHTTP serves the REST API.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := r.Method + " " + r.URL.Path
+	if r.Method == http.MethodGet && s.failRead(w, r) {
+		return
+	}
 	if r.URL.Path == "/graphql" && r.Method == http.MethodPost {
 		s.serveGraphQL(w, r)
 		return
@@ -166,9 +173,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// The list of issues takes state, per_page and page (the first page is
 	// the whole list here).
 	state := "all"
+	ordered := false
 	for k, v := range r.URL.Query() {
 		switch {
 		case len(parts) == 4 && r.Method == http.MethodGet && (k == "per_page" || k == "page"):
+		case len(parts) == 4 && r.Method == http.MethodGet && (k == "sort" && len(v) == 1 && v[0] == "updated" || k == "direction" && len(v) == 1 && v[0] == "desc"):
+			ordered = true
 		case len(parts) == 4 && r.Method == http.MethodGet && k == "state" && len(v) == 1 && (v[0] == "open" || v[0] == "closed" || v[0] == "all"):
 			state = v[0]
 		default:
@@ -192,11 +202,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		list := make([]map[string]any, 0, len(rp.issues))
 		for _, is := range rp.issues {
+			is := maps.Clone(is) // a copy: it is written after mu is released
+			s.viewPull(rp, is)
 			if st, _ := is["state"].(string); state == "all" || st == state || st == "" && state == "open" {
 				list = append(list, is)
 			}
 		}
 		s.mu.Unlock()
+		if ordered {
+			sortByUpdated(list)
+		}
+		if r.URL.Query().Get("per_page") != "" || r.URL.Query().Get("page") != "" {
+			list = paginate(list, r)
+		}
 		s.write(w, r, inst, http.StatusOK, list)
 	case len(parts) == 4 && r.Method == http.MethodPost:
 		s.createIssue(w, r, inst, rp, parts[1]+"/"+parts[2])
@@ -323,6 +341,11 @@ func (s *Server) write(w http.ResponseWriter, r *http.Request, inst *installatio
 	h.Set("x-ratelimit-resource", "core")
 	if r.Method == http.MethodGet {
 		h.Set("ETag", etag)
+	}
+	if r.Method == http.MethodGet {
+		s.mu.Lock()
+		s.reads = append(s.reads, Request{Method: r.Method, Path: r.URL.RequestURI(), IfNoneMatch: r.Header.Get("If-None-Match") != "", Status: map[bool]int{true: http.StatusNotModified, false: status}[notModified]})
+		s.mu.Unlock()
 	}
 	if notModified {
 		w.WriteHeader(http.StatusNotModified)
