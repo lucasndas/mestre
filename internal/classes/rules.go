@@ -136,6 +136,17 @@ type Rules struct {
 	Decrees           []Decree         `json:"decrees"`
 	Origin            map[string]Layer `json:"origin"`
 	Locked            bool             `json:"locked"`
+	// ClassHooks are the extra hooks of the approved class, for the machine that has no
+	// library of classes (a Tower): nil means they were not sent, and the machine must not
+	// run the character as if its class had none.
+	ClassHooks *ShippedHooks `json:"class_hooks,omitempty"`
+}
+
+// ShippedHooks are the hooks of a class as the Citadel sends them with the rules, with the
+// hash of the approved package they come from.
+type ShippedHooks struct {
+	Hash  string `json:"hash"`
+	Hooks Hooks  `json:"hooks,omitempty"`
 }
 
 // FileRules are globs relative to the worktree root; read and deny may also

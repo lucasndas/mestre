@@ -37,6 +37,9 @@ func (e *Engine) onHookEvent(ev providers.Event, ans hook.Answer) {
 	if run == nil || run.client == nil || ev.AgentID == "" {
 		return
 	}
+	if run.async != nil {
+		run.async.OnEvent(ev, ans) // the asynchronous hooks of its class run here, in its terminal
+	}
 	if run.usage != nil {
 		run.usage.Note(ev) // where the transcript of the character is, for its periodic reading
 	}

@@ -757,7 +757,7 @@ func (e *Engine) hookEngine(rules *classes.Store) *hook.Engine {
 		// the chain, the temporary rules and the hooks of the classes belong
 		// to the period of the Citadel, which comes and goes under this engine
 		if classHooks == nil {
-			classHooks = periodClassHooks{e}
+			classHooks = periodClassHooks{e: e, local: &hook.ClassHookSource{FromRules: true, Rules: rules, Characters: e.deps.Characters}}
 		}
 		if approvals == nil {
 			approvals = periodApprovals{e}

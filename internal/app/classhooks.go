@@ -80,9 +80,14 @@ func (c *classHooks) Async(ctx context.Context, ev providers.Event) ([]hook.Asyn
 }
 
 // periodClassHooks is the hook.ClassHooks of the machine: the hooks of the
-// classes of the period of the Citadel, and none while there is no period (a
-// Tower, or a Citadel between periods).
-type periodClassHooks struct{ e *Engine }
+// classes of the period of the Citadel; while there is none (a Tower, or a Citadel
+// between periods) the hooks the Citadel sent with the effective rules of the
+// character (local), and when they were not sent the hooks are unknown: the call is
+// denied, never let through without them.
+type periodClassHooks struct {
+	e     *Engine
+	local *hook.ClassHookSource
+}
 
 var (
 	_ hook.ClassHooks     = periodClassHooks{}
@@ -93,12 +98,18 @@ func (h periodClassHooks) Sync(ctx context.Context, ev providers.Event) ([]hook.
 	if p := h.e.period.Load(); p != nil && p.classHooks != nil {
 		return p.classHooks.Sync(ctx, ev)
 	}
+	if h.e.period.Load() == nil && h.local != nil {
+		return h.local.Sync(ctx, ev)
+	}
 	return nil, nil
 }
 
 func (h periodClassHooks) HasBlocking(ctx context.Context, agentID string) (bool, error) {
 	if p := h.e.period.Load(); p != nil && p.classHooks != nil {
 		return p.classHooks.HasBlocking(ctx, agentID)
+	}
+	if h.e.period.Load() == nil && h.local != nil {
+		return h.local.HasBlocking(ctx, agentID)
 	}
 	return false, nil
 }
@@ -126,6 +137,7 @@ func (e *Engine) hostClassHooks(orc *Orchestration, books func(string) *classes.
 		chars: func() hook.Characters { return e.deps.Characters }}
 	runner := &hook.AsyncRunner{Source: ph.classHooks, Exec: terminalHookExec{e}, Out: orc.HookOutputs(), Clock: e.clk, Logger: e.log}
 	ph.async = runner
+	ph.hookOut = orc.HookOutputs()
 	orc.Loops = append(orc.Loops, func(ctx context.Context) error {
 		runner.Start(ctx)
 		<-ctx.Done()

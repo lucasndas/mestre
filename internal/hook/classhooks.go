@@ -2,6 +2,7 @@ package hook
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -26,6 +27,9 @@ type ClassSource interface {
 // character name, always its approved version.
 type ClassHookSource struct {
 	Classes ClassSource
+	// FromRules is the source of a machine with no library of classes (a Tower): the hooks
+	// are the ones the Citadel sent with the effective rules, and Classes is not used.
+	FromRules bool
 	// Rules are the effective rules of the characters: the class of the
 	// character and what its `run` lines are judged by.
 	Rules classes.RulesSource
@@ -67,7 +71,7 @@ type selected struct {
 
 func (s *ClassHookSource) pick(ctx context.Context, ev providers.Event, mode classes.HookMode) (selected, error) {
 	var sel selected
-	if s.Classes == nil || s.Rules == nil || s.Characters == nil || ev.AgentID == "" {
+	if (s.Classes == nil && !s.FromRules) || s.Rules == nil || s.Characters == nil || ev.AgentID == "" {
 		return sel, nil
 	}
 	rules, err := s.Rules.Rules(ctx, ev.AgentID)
@@ -77,19 +81,16 @@ func (s *ClassHookSource) pick(ctx context.Context, ev providers.Event, mode cla
 	if rules.Class == "" {
 		return sel, nil // a character with no class (the Grand Master, a Master of a table)
 	}
-	// A class changed outside the Mestre is noticed when the character
-	// starts a turn (or a session); the other events do not read the disk.
-	get := s.Classes.Approved
-	if ev.Event == providers.EventTurnStart || ev.Event == providers.EventSessionStart {
-		get = s.Classes.Use
-	}
 	env, err := s.Characters.Env(ctx, ev.AgentID)
 	if err != nil {
 		return sel, err
 	}
+	// A class changed outside the Mestre is noticed when the character
+	// starts a turn (or a session); the other events do not read the disk.
+	disk := ev.Event == providers.EventTurnStart || ev.Event == providers.EventSessionStart
 	// The table of the class is the registry's, not the one the event
 	// claims (the MESTRE_MESA of the caller).
-	class, err := get(ctx, rules.Class, env.TableID)
+	class, err := s.class(ctx, rules, env.TableID, disk)
 	if err != nil {
 		return sel, err
 	}
@@ -105,12 +106,32 @@ func (s *ClassHookSource) pick(ctx context.Context, ev providers.Event, mode cla
 	return sel, nil
 }
 
+// ErrHooksNotSent is why a machine without the library of classes does not know the hooks of
+// a character: its effective rules came without them (an old Citadel). The hooks are then
+// unknown, never none.
+var ErrHooksNotSent = errors.New("the effective rules of the character carry no hooks of its class")
+
+// class is the approved class of the rules. With FromRules the hooks are the ones the
+// Citadel sent with the rules (the hash of the package they come from is in them).
+func (s *ClassHookSource) class(ctx context.Context, rules *classes.Rules, table string, disk bool) (*classes.Class, error) {
+	if s.FromRules {
+		if rules.ClassHooks == nil {
+			return nil, ErrHooksNotSent
+		}
+		return &classes.Class{Name: rules.Class, Hooks: rules.ClassHooks.Hooks, Hash: rules.ClassHooks.Hash}, nil
+	}
+	if disk {
+		return s.Classes.Use(ctx, rules.Class, table)
+	}
+	return s.Classes.Approved(ctx, rules.Class, table)
+}
+
 var _ BlockingSource = (*ClassHookSource)(nil)
 
 // HasBlocking implements BlockingSource: whether the approved class of the
 // character has a blocking pre_tool hook, whatever its `when`.
 func (s *ClassHookSource) HasBlocking(ctx context.Context, agentID string) (bool, error) {
-	if s.Classes == nil || s.Rules == nil || s.Characters == nil {
+	if (s.Classes == nil && !s.FromRules) || s.Rules == nil || s.Characters == nil {
 		return false, nil
 	}
 	rules, err := s.Rules.Rules(ctx, agentID)
@@ -124,7 +145,7 @@ func (s *ClassHookSource) HasBlocking(ctx context.Context, agentID string) (bool
 	if err != nil {
 		return true, err
 	}
-	class, err := s.Classes.Approved(ctx, rules.Class, env.TableID)
+	class, err := s.class(ctx, rules, env.TableID, false)
 	if err != nil {
 		return true, err
 	}

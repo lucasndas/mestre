@@ -706,6 +706,42 @@ func (r *TranscribeRequest) Validate() error {
 	return nil
 }
 
+// HookOutput is `hook.output`: what an asynchronous hook of a class wrote, run in the
+// terminal of a character of a Tower, for an output that lives in the Citadel (the scroll of
+// the quest, the inbox of the character). The log of the hook stays on the Tower.
+type HookOutput struct {
+	// Kind is the output the class asked for: HookOutputScroll or HookOutputAgent.
+	Kind    string `json:"kind" proto:"req"`
+	AgentID string `json:"agent_id" proto:"req"`
+	TableID string `json:"table_id,omitempty"`
+	TurnID  string `json:"turn_id,omitempty"`
+	Event   string `json:"event,omitempty"`
+	Hook    string `json:"hook" proto:"req"`
+	Output  string `json:"output,omitempty"`
+	Exit    int    `json:"exit,omitempty"`
+	// Error is a hook that could not run or ran out of time.
+	Error string `json:"error,omitempty"`
+}
+
+// The outputs of a hook that travel in hook.output.
+const (
+	HookOutputScroll = "scroll"
+	HookOutputAgent  = "agent"
+	// MaxHookOutput is the most output of a hook that travels.
+	MaxHookOutput = 256 << 10
+)
+
+// Validate checks the output asked for and the size.
+func (h *HookOutput) Validate() error {
+	if h.Kind != HookOutputScroll && h.Kind != HookOutputAgent {
+		return fmt.Errorf("kind %q is not scroll or agent", h.Kind)
+	}
+	if len(h.Output) > MaxHookOutput || len(h.Error) > MaxHookOutput {
+		return fmt.Errorf("output over %d bytes", MaxHookOutput)
+	}
+	return nil
+}
+
 // MaxTranscribeText is the most text or reason a transcribe.result may carry.
 const MaxTranscribeText = 512 << 10
 

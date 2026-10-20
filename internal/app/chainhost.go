@@ -174,6 +174,8 @@ type periodHooks struct {
 	// runner of the asynchronous ones (nil without the libraries of classes).
 	classHooks *classHooks
 	async      *hook.AsyncRunner
+	// hookOut writes the outputs the hooks of the characters of the Towers send (hook.output).
+	hookOut hook.HookOutputs
 }
 
 // errNoPeriod is why an approval is not opened: this machine is not the

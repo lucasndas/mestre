@@ -79,6 +79,9 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 		if err := e.towerWorktree(req.Dir); err != nil {
 			return nil, protocol.NewError(protocol.CodeForbidden, "character.start: %v", err)
 		}
+		if err := e.towerClassHooksReady(ctx, req); err != nil {
+			return nil, protocol.NewError(protocol.CodeMissingPrerequisite, "character.start: %v", err)
+		}
 		// the Citadel gives up at towerStartWait: the Tower gives up first, so
 		// what the Citadel took for a failure is not left running here
 		sctx, cancel := clock.WithTimeout(ctx, e.clk, towerStartWait-10*time.Second)
