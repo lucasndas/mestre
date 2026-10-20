@@ -41,14 +41,18 @@ func TestTheOrchestrationOfTheCitadelIsBuiltAndWhatWaitsForMilestone5Refuses(t *
 
 	ctx := context.Background()
 	for what, err := range map[string]error{
-		"github":  func() error { _, err := unavailableGitHub{}.Repository(ctx, workspaces.Repo{}); return err }(),
-		"epic":    func() error { _, err := unavailableEpics{}.Epic(ctx, "w", 1); return err }(),
-		"close":   unavailableEpics{}.CloseEpic(ctx, "w", 1),
-		"pr":      unavailableEpics{}.ClosePR(ctx, "w", 1),
-		"builder": func() error { _, err := unavailableBuilder{}.Build(ctx, characters.BuildInput{}); return err }(),
+		"github": func() error { _, err := unavailableGitHub{}.Repository(ctx, workspaces.Repo{}); return err }(),
+		"epic":   func() error { _, err := unavailableEpics{}.Epic(ctx, "w", 1); return err }(),
+		"close":  unavailableEpics{}.CloseEpic(ctx, "w", 1),
+		"pr":     unavailableEpics{}.ClosePR(ctx, "w", 1),
 	} {
 		if err == nil || !strings.Contains(err.Error(), "milestone 5") {
 			t.Errorf("%s: %v; want a refusal that names milestone 5", what, err)
 		}
+	}
+	// The session zero of a character refuses with what a run without the people
+	// of the chain lacks (SessionBuilder is the real one).
+	if _, err := (unavailableBuilder{}).Build(ctx, characters.BuildInput{}); err == nil || !strings.Contains(err.Error(), "decrees") {
+		t.Errorf("builder: %v; want a refusal that names what is missing", err)
 	}
 }
