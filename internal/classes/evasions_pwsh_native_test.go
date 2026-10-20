@@ -52,6 +52,17 @@ func TestNativeProgramsThatAliasesAndHyphensHideStillAsk(t *testing.T) {
 			`Set-Alias sort git; sort 'a" b "c'`,
 			`Set-Alias Get-Item git; Get-Item 'a" b "c'`,
 			`Set-Item Alias:foo git; foo 'a" b "c'`,
+			". .\\x.ps1; sort 'a\" b \"c'",
+			"Import-Module .\\x.psm1; sort 'a\" b \"c'",
+			"rg 'x y\\' 'z --pre=calc.exe' .",
+			"rg 'a＂ --pre=calc.exe ＂b' .",
+			`npm test 'x&git push --force'`,
+			`npx vitest 'x&git push'`,
+			`rg.cmd 'a&calc.exe'`,
+			`yarn '%COMSPEC%'`,
+			"git @'\npush\n'@ --force",
+			"git -c @'\n'@ core.fsmonitor='git push' status",
+			"Remove-Item -Recurse -Force @'\n.git\n'@",
 		} {
 			if d := judgeAs(win.env, r, tool, c); d.Verdict != classes.Ask {
 				t.Errorf("%s: %q = %s by %s (%q); want ask", tool, c, d.Verdict, d.Layer, d.Reason)
@@ -61,6 +72,7 @@ func TestNativeProgramsThatAliasesAndHyphensHideStillAsk(t *testing.T) {
 		for _, c := range []string{
 			`sort 'a"b'`, `Sort-Object 'a"b'`, `Select-String -Pattern 'a"b' x.txt`, `echo 'say "hi"'`,
 			`Get-ChildItem 'a b\'`, `rg 'a b' .`, `rg 'a\' .`, `git log 'a b'`, `.\build.ps1 'a"b'`,
+			`npm test`, `npm run lint -- --fix`, `yarn build`,
 		} {
 			if d := judgeAs(win.env, r, tool, c); d.Verdict != classes.Allow {
 				t.Errorf("%s: %q = %s (%q); want allow", tool, c, d.Verdict, d.Reason)

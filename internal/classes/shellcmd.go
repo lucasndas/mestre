@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 )
 
@@ -278,10 +279,27 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
 	}
 	if d == dialectPwsh {
-		if st != nil && redefinesAlias(cn, argText) {
+		if st != nil && (redefinesAlias(cn, argText) || loadsDefinitions(name.text, cn)) {
 			st.aliased = true
 		}
+		// A here-string (@'…'@) is read as its content by PowerShell, not as the word the
+		// lexer sees: for a cmdlet as well as for a program.
+		for _, a := range argText {
+			if isHereString(a) {
+				res.atLeastAsk("here-string de PowerShell: o argumento é o conteúdo dela, que não é analisado")
+				break
+			}
+		}
 		if nativeProgram(name.text, st != nil && st.aliased) {
+			if batchProgram(name.text) {
+				// a batch file is run by cmd.exe, which reads & | < > ^ and %VAR% in what it is given
+				for _, a := range argText {
+					if strings.ContainsAny(a, "&|<>^%") {
+						res.atLeastAsk(fmt.Sprintf("um argumento de %s tem caractere que o cmd.exe interpreta", cn))
+						break
+					}
+				}
+			}
 			// Windows PowerShell 5.1 hands an argument to a program that is not a cmdlet
 			// in its own legacy way: it does not escape the quotes inside (rg 'a" --pre=x "b'
 			// reaches the program as several arguments), a space followed by a final
@@ -1328,12 +1346,37 @@ func legacyArgument(a string) string {
 	switch {
 	case a == "":
 		return "é vazio, que o 5.1 descarta"
-	case strings.ContainsAny(a, "\"\U0000201c\U0000201d\U0000201e"):
+	case strings.ContainsAny(a, "\"\U0000201c\U0000201d\U0000201e\U0000ff02"):
 		return "tem aspas, que o 5.1 não escapa"
-	case strings.HasSuffix(a, `\`) && strings.ContainsAny(a, " \t\r\n\v\f\U000000a0"):
+	case strings.HasSuffix(a, `\`) && strings.IndexFunc(a, unicode.IsSpace) >= 0:
 		return "tem espaço e termina em barra invertida, que o 5.1 junta à aspa de fechamento"
 	}
 	return ""
+}
+
+// isHereString says whether a word is a PowerShell here-string, which the lexer keeps whole.
+func isHereString(a string) bool {
+	return len(a) >= 3 && a[0] == '@' && a[len(a)-1] == '@' && strings.ContainsAny(a[1:2], "\r\n") && strings.ContainsAny(a[len(a)-2:len(a)-1], "\r\n")
+}
+
+// loadsDefinitions says whether a command brings in aliases and functions the line does not
+// show: a dot-sourced script or an imported module.
+func loadsDefinitions(raw, cn string) bool {
+	return raw == "." || cn == "import-module" || cn == "ipmo"
+}
+
+// batchProgram says whether a program is a batch file or one that is a batch shim on Windows
+// (npm, npx, yarn, pnpm, code), which cmd.exe runs.
+func batchProgram(raw string) bool {
+	n := strings.ToLower(raw)
+	if strings.HasSuffix(n, ".cmd") || strings.HasSuffix(n, ".bat") {
+		return true
+	}
+	switch canonical(raw) {
+	case "npm", "npx", "yarn", "pnpm", "code", "corepack":
+		return true
+	}
+	return false
 }
 
 // redefinesAlias says whether a PowerShell command sets an alias: from then on any name in
