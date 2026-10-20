@@ -175,6 +175,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	e.registerTowerCharacters(router)
 	tableHalf := &lateTower{}
 	e.registerTowerTables(router, tableHalf)
+	e.registerTowerScrolls(router)
 	// The effective rules of the characters of this machine: kept in the
 	// machine database, with the snapshot for the degraded hook
 	// (docs/classes/permissoes.md#regras-efetivas).

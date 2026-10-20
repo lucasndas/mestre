@@ -128,6 +128,21 @@ func (e *Engine) registerTowerCharacters(router *protocol.Router) {
 		}
 		return nil, nil
 	})
+	guard(protocol.TypeRitualPreRun, func(ctx context.Context, rt *characters.Runtime, m *protocol.Message) (*protocol.Reply, error) {
+		p, ok := m.Payload.(*protocol.RitualPreRun)
+		if !ok {
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "ritual.prerun: %T", m.Payload)
+		}
+		timeout := preRunTimeout(time.Duration(p.TimeoutSeconds) * time.Second)
+		ctx, cancel := clock.WithTimeout(ctx, e.clk, timeout+10*time.Second)
+		defer cancel()
+		out, err := rt.PreRun(ctx, p.Character, p.Command, timeout, p.MaxOutput)
+		if err != nil {
+			return nil, towerCharacterError("ritual.prerun", err)
+		}
+		return &protocol.Reply{Type: protocol.TypeRitualPreRun, InAck: true, Payload: protocol.RitualPreRunResult{
+			Output: out.Output, ExitCode: out.ExitCode, TimedOut: out.TimedOut, Stderr: out.Stderr}}, nil
+	})
 	guard(protocol.TypeTerminalScreen, func(ctx context.Context, rt *characters.Runtime, m *protocol.Message) (*protocol.Reply, error) {
 		p, ok := m.Payload.(*protocol.TerminalScreen)
 		if !ok {

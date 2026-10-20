@@ -160,6 +160,9 @@ type OrchestrationOptions struct {
 	// ritual belong to milestone 5 (the Towers, the flow); nil refuses a
 	// pre-run and a delete by a character. RitualZones gives the time zone of
 	// a workspace (the Guild's, UTC by default).
+	// ScrollCopies writes the copies of the scrolls in the worktrees (nil: the
+	// ones of this machine only).
+	ScrollCopies      scrolls.Copies
 	RitualPreRun      rituals.PreRunner
 	RitualPermissions rituals.Permissions
 	RitualApprovals   rituals.Approvals
@@ -564,7 +567,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	}
 	scr, err = scrolls.NewService(scrolls.Options{Store: &scrolls.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Tables: tbl, Connections: conns,
 		Principal: ws.Layout().Principal, Quests: questsRef{&qs}, Logger: o.Logger,
-		Targets: scrolls.CharacterTargets{Registry: reg, Tables: tbl}, Copies: scrolls.LocalCopies{Machine: o.Machine}})
+		Targets: scrolls.CharacterTargets{Registry: reg, Tables: tbl}, Copies: scrollCopies(o)})
 	if err != nil {
 		return nil, err
 	}
@@ -884,4 +887,13 @@ func questDone(o OrchestrationOptions) quests.DoneRules {
 		return o.QuestDone
 	}
 	return doneRules{o.ClassLibraries}
+}
+
+// scrollCopies are the writers of the copies of the scrolls: the given ones, or
+// the ones of this machine.
+func scrollCopies(o OrchestrationOptions) scrolls.Copies {
+	if o.ScrollCopies != nil {
+		return o.ScrollCopies
+	}
+	return scrolls.LocalCopies{Machine: o.Machine}
 }
