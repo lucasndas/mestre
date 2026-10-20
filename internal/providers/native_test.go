@@ -3,6 +3,7 @@ package providers_test
 import (
 	"encoding/json"
 	"errors"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -173,7 +174,11 @@ func TestCodexFlagsFollowWriteAndNetwork(t *testing.T) {
 	p := policy()
 	p.NoWrite = true
 	nc, _ := nativeOf(t, providers.Codex).Native(p)
-	if !slices.Equal(nc.Args, []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true", "-c", "sandbox_workspace_write.writable_roots=[]", "--search"}) {
+	want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true", "-c", "sandbox_workspace_write.writable_roots=[]", "--search"}
+	if p.OS == "windows" || runtime.GOOS == "windows" {
+		want = slices.Insert(want, 4, "-c", `windows.sandbox="unelevated"`)
+	}
+	if !slices.Equal(nc.Args, want) {
 		t.Fatalf("args = %q", nc.Args)
 	}
 	if !providers.CodexNoNativeWrite(p) {

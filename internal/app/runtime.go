@@ -183,7 +183,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 	dir := localchan.NewDirectory(sys)
 	run := filepath.Join(e.paths.Maquina, "terminais")
 	host, err := characters.NewTerminalHost(terminal.ManagerConfig{
-		DB: e.mdb, Clock: e.clk, System: sys, Spawner: spawner, MachineID: e.id.MachineID,
+		DB: e.mdb, Clock: e.clk, System: sys, Spawner: spawner, Access: e.paths.TerminalAccess, MachineID: e.id.MachineID,
 		SocketDir: filepath.Join(run, "s"), LogDir: filepath.Join(run, "l"),
 		PTYBinary: t.ptyBinary, PTYVersion: t.Version, Masker: e.deps.Masker, Logger: e.log,
 	}, dir)
@@ -197,6 +197,7 @@ func (e *Engine) openRuntime(ctx context.Context) (*machineRuntime, error) {
 			return nil, err
 		}
 	}
+	prep = e.refreshingLayers(prep)
 	sinks := periodSinks{&e.orc}
 	rt, err := characters.NewRuntime(characters.RuntimeOptions{
 		Machine: e.id.MachineID, Clock: e.clk, DB: e.mdb, Host: host, Prep: prep, Providers: providers.NewRegistry(providers.Options{}),
