@@ -69,9 +69,12 @@ func TestEverydayCommandsAreLowOnBothReadings(t *testing.T) {
 	if d := decideOn(t, tableEnvs()["linux"], def, "awk '{print $1 | \"sort\"}' a.txt"); d.Verdict != classes.Allow {
 		t.Errorf("linux: awk with a quote = %s (%s)", d.Verdict, d.Reason)
 	}
+	win := tableEnvs()["windows"]
+	if d := decideOn(t, win, def, "awk '{print $1 | \"sort\"}' a.txt"); d.Verdict != classes.Ask {
+		t.Errorf("windows: awk with a quote = %s (%s); want ask", d.Verdict, d.Reason)
+	}
 	// A PowerShell script of the worktree, and the call operator that a
 	// POSIX shell refuses as a syntax error.
-	win := tableEnvs()["windows"]
 	for _, cmd := range []string{`& .\script.ps1`, `& .\scripts\build.ps1 -Fast`, "Get-ChildItem -Recurse | Select-String foo"} {
 		if d := decideOn(t, win, def, cmd); d.Verdict != classes.Allow {
 			t.Errorf("windows: %q = %s/%s (%s %s); want allow", cmd, d.Verdict, d.Risk.Risk, d.Risk.Rule, d.Reason)

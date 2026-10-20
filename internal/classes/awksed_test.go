@@ -149,6 +149,11 @@ func TestOrdinaryAwkAndSedStayLow(t *testing.T) {
 	if d := decide(lin, def, m.shell(`awk '{print $1 > "out.txt"}' f`)); d.Verdict != classes.Allow {
 		t.Errorf("a write to a file by awk on Linux = %s (%q); want allow", d.Verdict, d.Reason)
 	}
+	winq := m.env()
+	winq.OS = "windows"
+	if d := decide(winq, def, m.shell(`awk '{print $1 > "out.txt"}' f`)); d.Verdict != classes.Ask {
+		t.Errorf("a write to a file by awk on Windows = %s (%q); want ask", d.Verdict, d.Reason)
+	}
 	for _, goos := range []string{"linux", "windows"} {
 		env := m.env()
 		env.OS = goos

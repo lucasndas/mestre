@@ -29,6 +29,9 @@ type shellState struct {
 	// feed is the legible literal a pipe feeds the current part, which a
 	// shell reading its input runs (pipefeed.go); nil otherwise.
 	feed *string
+	// aliased is set once the PowerShell line sets an alias: from then on every name may
+	// stand for a program.
+	aliased bool
 }
 
 // shell analyses a command line. On Windows it is analysed as POSIX and as
@@ -274,15 +277,21 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	case agentRunner(cn, args):
 		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
 	}
-	if d == dialectPwsh && nativeProgram(cn) {
-		// Windows PowerShell 5.1 hands an argument to a program that is not a cmdlet
-		// between double quotes it does not escape inside: one that holds a quote
-		// reaches the program as several arguments (rg 'a" --pre=calc.exe "b c' .).
-		// What the text shows is not what the program is given.
-		for _, a := range argText {
-			if strings.ContainsAny(a, "\"\u201c\u201d\u201e") {
-				res.atLeastAsk(fmt.Sprintf("um argumento de %s tem aspas, que o PowerShell 5.1 repassa sem escapar: o programa recebe outros argumentos", cn))
-				break
+	if d == dialectPwsh {
+		if st != nil && redefinesAlias(cn, argText) {
+			st.aliased = true
+		}
+		if nativeProgram(name.text, st != nil && st.aliased) {
+			// Windows PowerShell 5.1 hands an argument to a program that is not a cmdlet
+			// in its own legacy way: it does not escape the quotes inside (rg 'a" --pre=x "b'
+			// reaches the program as several arguments), a space followed by a final
+			// backslash eats the closing quote, and an empty argument is dropped. What
+			// the text shows is not what the program is given.
+			for _, a := range argText {
+				if why := legacyArgument(a); why != "" {
+					res.atLeastAsk(fmt.Sprintf("um argumento de %s %s: o PowerShell 5.1 o repassa de outro jeito, e o programa recebe outros argumentos", cn, why))
+					break
+				}
 			}
 		}
 	}
@@ -1313,22 +1322,86 @@ func findActs(args []string) bool {
 	return false
 }
 
-// nativeProgram says whether a PowerShell command is a program and not a cmdlet:
-// a cmdlet is Verb-Noun, and the aliases of the common ones (echo, ls, cat…) are
-// cmdlets too, which take their arguments as they are.
-func nativeProgram(cn string) bool {
-	if strings.Contains(cn, "-") || pwshAlias[cn] {
-		return false
+// legacyArgument says why Windows PowerShell 5.1 does not hand a program the argument as
+// the text shows it; it is empty when it does.
+func legacyArgument(a string) string {
+	switch {
+	case a == "":
+		return "é vazio, que o 5.1 descarta"
+	case strings.ContainsAny(a, "\"\U0000201c\U0000201d\U0000201e"):
+		return "tem aspas, que o 5.1 não escapa"
+	case strings.HasSuffix(a, `\`) && strings.ContainsAny(a, " \t\r\n\v\f\U000000a0"):
+		return "tem espaço e termina em barra invertida, que o 5.1 junta à aspa de fechamento"
 	}
-	return true
+	return ""
 }
 
-// pwshAlias are the aliases of cmdlets PowerShell has by default.
+// redefinesAlias says whether a PowerShell command sets an alias: from then on any name in
+// the line can stand for another program, the name of a cmdlet included.
+func redefinesAlias(cn string, args []string) bool {
+	switch cn {
+	case "set-alias", "sal", "new-alias", "nal", "import-alias", "ipal":
+		return true
+	}
+	for _, a := range args {
+		if strings.HasPrefix(strings.ToLower(strings.Trim(a, `"'`)), "alias:") {
+			return true
+		}
+	}
+	return false
+}
+
+// nativeProgram says whether the command a PowerShell line names is a program and not a
+// cmdlet, by the name as it was written: a name with an extension or a path is a program
+// whatever its base is (sort.exe is not Sort-Object, rm.exe is not Remove-Item); a bare
+// word is a cmdlet only when it is the alias of one or a Verb-Noun with an approved verb,
+// and a hyphen alone does not make one (git-lfs, cross-env, pre-commit). Once the line
+// sets an alias every name may be a program. A script of PowerShell (.ps1) is not.
+func nativeProgram(raw string, aliased bool) bool {
+	if aliased {
+		return true
+	}
+	n := strings.ToLower(raw)
+	if strings.HasSuffix(n, ".ps1") {
+		return false
+	}
+	if strings.ContainsAny(n, `/\.`) {
+		return true
+	}
+	return !pwshAlias[n] && !isCmdletName(n)
+}
+
+// isCmdletName says whether a name is Verb-Noun with an approved verb (Get-Verb).
+func isCmdletName(n string) bool {
+	verb, noun, ok := strings.Cut(n, "-")
+	return ok && noun != "" && pwshVerb[verb]
+}
+
+// pwshVerb are the approved verbs of PowerShell, lower case.
+var pwshVerb = func() map[string]bool {
+	m := map[string]bool{}
+	for _, v := range strings.Fields(`add clear close copy enter exit find format get hide join lock move new open optimize
+		push pop redo remove rename reset resize search select set show skip split step switch undo unlock watch
+		connect disconnect read receive send write
+		backup checkpoint compare compress convert convertfrom convertto dismount edit expand export group import
+		initialize limit merge mount out publish restore save sync unpublish update
+		debug measure ping repair resolve test trace
+		approve assert build complete confirm deny deploy disable enable install invoke register request restart resume
+		start stop submit suspend uninstall unregister wait
+		block grant protect revoke unblock unprotect use
+		sort where foreach tee`) { // the last four are the verbs of Sort-Object, Where-Object, ForEach-Object, Tee-Object
+		m[v] = true
+	}
+	return m
+}()
+
+// pwshAlias are the aliases of cmdlets PowerShell 5.1 has by default (curl and wget are
+// those of Invoke-WebRequest there).
 var pwshAlias = map[string]bool{
 	"echo": true, "write": true, "ls": true, "dir": true, "gci": true, "cat": true, "type": true, "gc": true, "pwd": true, "gl": true,
 	"cd": true, "sl": true, "cp": true, "copy": true, "cpi": true, "mv": true, "move": true, "mi": true, "rm": true, "del": true, "ri": true,
 	"rd": true, "rmdir": true, "mkdir": true, "md": true, "ni": true, "sls": true, "select": true, "where": true, "foreach": true, "sort": true,
 	"measure": true, "group": true, "ft": true, "fl": true, "fw": true, "oh": true, "clear": true, "cls": true, "man": true, "help": true,
-	"ps": true, "kill": true, "sleep": true, "iex": true, "icm": true, "ipcsv": true, "epcsv": true, "ConvertTo-Json": true, "sc": true,
+	"ps": true, "kill": true, "sleep": true, "iex": true, "icm": true, "ipcsv": true, "epcsv": true, "sc": true, "curl": true, "wget": true, "%": true, "?": true,
 	"ac": true, "si": true, "sv": true, "gv": true, "set": true, "diff": true, "compare": true, "tee": true, "gm": true, "gal": true, "h": true, "r": true,
 }
