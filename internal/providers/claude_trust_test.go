@@ -190,6 +190,29 @@ func TestPreTrustKnowsTheKeyOfWindowsByAnyWriting(t *testing.T) {
 	}
 }
 
+// On Windows Claude Code reads the key only with forward slashes: PreTrust
+// writes it so, a key with backslashes (of an older Mestre) does not count as
+// the worktree's, and Untrust takes both out.
+func TestPreTrustOnWindowsWritesTheKeyWithForwardSlashes(t *testing.T) {
+	t.Parallel()
+	profile, path := trustFile(t, `{"projects": {"C:\\Mestre\\work\\3-login": {"hasTrustDialogAccepted": true}}}`)
+	claude := providers.NewClaudeCode(providers.Options{})
+	req := providers.PreTrustRequest{OS: "windows", Profile: profile, Worktree: `C:\Mestre\work\3-login`}
+	if _, err := claude.PreTrust(req); err != nil {
+		t.Fatal(err)
+	}
+	projects := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any)
+	if e, _ := projects["C:/Mestre/work/3-login"].(map[string]any); e["hasTrustDialogAccepted"] != true {
+		t.Fatalf("projects = %v, want the key C:/Mestre/work/3-login trusted", projects)
+	}
+	if _, err := claude.(providers.TrustRemover).Untrust(req); err != nil {
+		t.Fatal(err)
+	}
+	if projects := decodeNumbers(t, readFile(t, path))["projects"].(map[string]any); len(projects) != 0 {
+		t.Errorf("projects after Untrust = %v, want none of the two writings", projects)
+	}
+}
+
 // Untrust takes back what PreTrust gave, when the worktree is removed.
 func TestUntrustTakesTheWorktreeOutAndNothingElse(t *testing.T) {
 	t.Parallel()
@@ -212,5 +235,33 @@ func TestUntrustTakesTheWorktreeOutAndNothingElse(t *testing.T) {
 	want := map[string]any{"numStartups": json.Number("1"), "projects": map[string]any{"/srv/outro": map[string]any{"hasTrustDialogAccepted": true}}}
 	if got := decodeNumbers(t, readFile(t, path)); !reflect.DeepEqual(got, want) {
 		t.Errorf("file after Untrust = %v, want %v", got, want)
+	}
+}
+
+// A request without OS means the system of the machine, in every closure of
+// PreTrust and Untrust: the same key, and the same removal, as with
+// runtime.GOOS (a closure that captured the request kept the empty OS and
+// wrote the key with backslashes on Windows).
+func TestTrustWithoutOSActsAsTheSystemOfTheMachine(t *testing.T) {
+	t.Parallel()
+	wt, mirror := filepath.Join(t.TempDir(), "wt"), filepath.Join(t.TempDir(), "mirror")
+	run := func(osName string) (afterTrust, afterUntrust []byte) {
+		profile, path := trustFile(t, `{"projects": {}}`)
+		req := providers.PreTrustRequest{OS: osName, Profile: profile, Worktree: wt, RepoRoot: mirror}
+		cc := providers.NewClaudeCode(providers.Options{})
+		if _, err := cc.PreTrust(req); err != nil {
+			t.Fatal(err)
+		}
+		afterTrust = readFile(t, path)
+		if _, err := cc.(providers.TrustRemover).Untrust(req); err != nil {
+			t.Fatal(err)
+		}
+		return afterTrust, readFile(t, path)
+	}
+	// The profile folder differs per run, but the file has only the keys.
+	t1, u1 := run("")
+	t2, u2 := run(runtime.GOOS)
+	if !bytes.Equal(t1, t2) || !bytes.Equal(u1, u2) {
+		t.Errorf("OS \"\" and %q differ:\n%s\n--\n%s\n==\n%s\n--\n%s", runtime.GOOS, t1, t2, u1, u2)
 	}
 }

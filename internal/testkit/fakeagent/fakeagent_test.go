@@ -153,7 +153,7 @@ func TestClaudeTrustScreenAndPreTrustedSessionStart(t *testing.T) {
 		}
 		_ = stop(t, p)
 
-		trust := fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, e.dir)
+		trust := fmt.Sprintf(`{"numStartups": 3, "projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(e.dir))
 		testkit.WriteFiles(t, cfgDir, map[string]string{".claude.json": trust})
 		p = start(t, l, "claude", e, "--session-id", "11111111-2222-4333-8444-555555555555")
 		synctest.Wait()
@@ -266,7 +266,7 @@ func TestScriptStepsWaitCrashAndInterrupt(t *testing.T) {
 		e := newEnv(t, "CLAUDE_CONFIG_DIR="+cfgDir, "FAKEAGENT_SCRIPT=s.yaml")
 		testkit.WriteFiles(t, cfgDir, map[string]string{
 			".credentials.json": "{}",
-			".claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, e.dir),
+			".claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(e.dir)),
 		})
 		testkit.WriteFiles(t, e.dir, map[string]string{"s.yaml": `
 prompts:

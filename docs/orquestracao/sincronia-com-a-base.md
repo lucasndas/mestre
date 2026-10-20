@@ -13,7 +13,7 @@ Impedir que o PR da mesa trave por conflito de rotina ou chegue ao merge com a b
 O motor cria a etapa `sync` quando:
 
 1. o [gate de frescor](../github/acoes-por-nivel.md#merge) falha: a base integrada num worktree efêmero não passa na verificação;
-2. a base andou depois do PR aberto: o motor deduz isso a cada `fetch` do espelho (a ponta da base mudou desde a abertura da mesa ou desde a última `sync`; na prática, a ponta de `origin/<base>` no espelho não está na branch da mesa, sem estado guardado para esquecer) e, como segundo sinal, do `pr_alterado` com o PR atrás da base ou em conflito ([eventos](../github/eventos.md)); nenhum evento novo do GitHub é preciso;
+2. a base andou depois do PR aberto: o motor deduz isso a cada `fetch` do espelho (a ponta da base mudou desde a abertura da mesa ou desde a última `sync`; na prática, a ponta de `origin/<base>` no espelho não está na branch da mesa, sem estado guardado para esquecer) e, como segundo sinal, do `pr_alterado` com o PR atrás da base ou em conflito ([eventos](../github/eventos.md)): o `basesync.EventSink` chama a mesma checagem, que lê o espelho e ignora o evento se a branch tem a base; nenhum evento novo do GitHub é preciso;
 3. o Mestre da mesa pede `mestre pr open` e a base andou desde a abertura da mesa: o envio é recusado com 7 `conflict` e a dica de que a etapa `sync` foi criada ([CLI](../cli/coordenacao-github.md)).
 
 Nenhum dos três depende de a mesa ter conflito de texto: a base ter andado basta para o motor conferir.
