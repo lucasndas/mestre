@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/basesync"
@@ -255,22 +256,36 @@ func (r *stdRun) poller(orc *Orchestration) (*github.Poller, error) {
 // last 30 minutes (with the App Grão-Mestre) and records the operations it does
 // not know.
 func (r *stdRun) GuildReconcile(orc *Orchestration) func(ctx context.Context) error {
+	var rec *github.Reconciler
+	var once sync.Once
 	return func(ctx context.Context) error {
 		if orc.Workspaces == nil {
 			return errors.New("the orchestration has no workspaces to reconcile")
 		}
-		rec := &github.Reconciler{
-			Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock,
-			API: r.gmRest(r.gmApp(ctx), pollPermissions),
-			Repos: func(ctx context.Context) ([]string, error) {
-				var out []string
-				ws, err := watches(orc)(ctx)
-				for _, w := range ws {
-					out = append(out, w.Repo)
-				}
-				return out, err
-			},
-		}
+		once.Do(func() {
+			rec = &github.Reconciler{
+				Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock,
+				API: r.gmRest(r.gmApp(ctx), pollPermissions),
+				Repos: func(ctx context.Context) ([]string, error) {
+					var out []string
+					ws, err := watches(orc)(ctx)
+					for _, w := range ws {
+						out = append(out, w.Repo)
+					}
+					return out, err
+				},
+				Authors: func(ctx context.Context) (map[string]bool, error) {
+					all, err := (&github.Registry{DB: r.env.DB}).List(ctx)
+					out := map[string]bool{}
+					for _, a := range all {
+						if a.Slug != "" {
+							out[strings.ToLower(a.Slug)+"[bot]"] = true
+						}
+					}
+					return out, err
+				},
+			}
+		})
 		return rec.Reconcile(ctx)
 	}
 }
