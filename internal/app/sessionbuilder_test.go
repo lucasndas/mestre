@@ -180,10 +180,11 @@ func TestTheBuilderRefusesWhenAnyPieceIsMissingAndNeverGivesARequestWithoutIt(t 
 	if err := os.Remove(p); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(target, p); err == nil {
-		refused("link", "extra instructions")
-		_ = os.Remove(p)
+	if err := os.Symlink(target, p); err != nil {
+		t.Fatal(err)
 	}
+	refused("link", "extra instructions")
+	_ = os.Remove(p)
 
 	// A character the registry does not know has no rules: it does not start.
 	ghost := gm

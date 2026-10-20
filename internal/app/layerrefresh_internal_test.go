@@ -28,7 +28,7 @@ func TestTheLayerIsBroughtUpToDateOnlyAtTheStartOfATurnAndNeverHoldsIt(t *testin
 	t.Parallel()
 	e := &Engine{log: slog.New(slog.DiscardHandler)}
 	r, in := &spyRefresher{}, &spyInner{}
-	c := refreshingContexts{inner: in, r: r, e: e}
+	c := &refreshingContexts{inner: in, r: r, e: e}
 	turn := providers.Event{Event: providers.EventTurnStart, AgentID: "gm"}
 
 	// No Citadel that acts: the turn goes on with the layer as it is.
@@ -54,5 +54,19 @@ func TestTheLayerIsBroughtUpToDateOnlyAtTheStartOfATurnAndNeverHoldsIt(t *testin
 	}
 	if in.calls != 4 {
 		t.Errorf("the inner contexts were asked %d times; want every time", in.calls)
+	}
+}
+
+func TestAnUpdateThatHangsDoesNotHoldTheStartOfTheTurn(t *testing.T) {
+	t.Parallel()
+	e := &Engine{log: slog.New(slog.DiscardHandler)}
+	e.period.Store(&periodHooks{layers: func(ctx context.Context, _ string) (sessionzero.Dynamic, error) {
+		<-ctx.Done()
+		return sessionzero.Dynamic{}, ctx.Err()
+	}})
+	r, in := &spyRefresher{}, &spyInner{}
+	c := &refreshingContexts{inner: in, r: r, e: e}
+	if got, err := c.Context(t.Context(), providers.Event{Event: providers.EventTurnStart, AgentID: "gm"}); got != "inner" || err != nil || len(r.calls) != 0 {
+		t.Fatalf("got %q, %v, refreshed %v", got, err, r.calls)
 	}
 }

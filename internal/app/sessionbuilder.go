@@ -87,7 +87,7 @@ var _ characters.Builder = (*SessionBuilder)(nil)
 
 // NewSessionBuilder returns the builder, or the reason it cannot be built.
 func NewSessionBuilder(o SessionBuilderOptions) (*SessionBuilder, error) {
-	if o.Rules == nil || o.Notes == nil || o.Identities == nil || o.Libraries == nil || o.Layout.Root == "" || o.Machine == "" {
+	if o.Rules == nil || o.Notes == nil || o.Identities == nil || o.Libraries == nil || o.Layout.Root == "" || o.Machine == "" || o.Tables.DB == nil {
 		return nil, errors.New("app: the session zero of a character needs the rules, the decrees, the identities, the libraries, the layout and the machine")
 	}
 	if o.Log == nil {
@@ -123,6 +123,9 @@ func (b *SessionBuilder) Build(ctx context.Context, in characters.BuildInput) (s
 	}
 	if c.Machine == b.o.Machine && plainName(c.Workspace) {
 		req.Vars.Workspace = b.o.Layout.Principal(c.Workspace)
+	}
+	if c.Table != in.Table.ID {
+		return sessionzero.CharacterRequest{}, fmt.Errorf("the table of %s is %q, not %q", c.Name, c.Table, in.Table.ID)
 	}
 	if c.Table != "" {
 		w, err := b.o.Tables.Worktree(ctx, c.Workspace, c.Table, c.Machine)
@@ -170,6 +173,10 @@ func (b *SessionBuilder) dynamic(ctx context.Context, c characters.Character) (s
 	return d, nil
 }
 
+// Refresh does not carry the quest of the character (nothing in production
+// gives its context to the layer yet), so a refresh leaves it as the layer has it
+// only while that stays true.
+//
 // Refresh is the dynamic part of the layer of a living character as it is now
 // (including its class, which may have changed): what the machine writes in
 // the MESTRE.md at the start of its next turn.
