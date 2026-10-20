@@ -631,21 +631,41 @@ func (e *evaluator) gitCommit(res *result, rest []word, st *shellState) {
 		res.rule(e.unverifiable("sem acesso ao git para conferir a branch e os arquivos preparados"))
 		return
 	}
-	branch, err := e.env.Git.Branch(e.ctx, e.env.Worktree)
-	if err != nil {
-		res.rule(e.unverifiable("não foi possível ler a branch: " + err.Error()))
-		return
-	}
-	if !e.ownBranch(branch) {
-		res.rule(e.deny(e.r.originField("git.branches"), fmt.Sprintf("commit na branch %s, fora de git.branches %v", branch, e.r.Git.Branches)))
-		return
-	}
 	all := hasShortFlag(rest, 'a') || hasAny(rest, "--all", "-i", "--include", "-o", "--only") ||
 		len(positionals(rest, map[string]bool{"-m": true, "--message": true, "-F": true, "--file": true, "-C": true, "-c": true, "--reuse-message": true, "--reedit-message": true, "--fixup": true, "--squash": true, "--author": true, "--date": true, "-t": true, "--template": true, "--cleanup": true, "-u": true, "--trailer": true})) > 0
-	files, err := e.env.Git.Committed(e.ctx, e.env.Worktree, all)
-	if err != nil {
-		res.rule(e.unverifiable("não foi possível ler os arquivos preparados: " + err.Error()))
-		return
+	var files []string
+	if cs, ok := e.env.Git.(CommitStater); ok {
+		// One reading of the real state (one git process); the branch is
+		// judged first, as below.
+		state, err := cs.CommitState(e.ctx, e.env.Worktree, all)
+		if err != nil {
+			res.rule(e.unverifiable("não foi possível ler o estado do git: " + err.Error()))
+			return
+		}
+		if state.BranchErr != nil {
+			res.rule(e.unverifiable("não foi possível ler a branch: " + state.BranchErr.Error()))
+			return
+		}
+		if !e.ownBranch(state.Branch) {
+			res.rule(e.deny(e.r.originField("git.branches"), fmt.Sprintf("commit na branch %s, fora de git.branches %v", state.Branch, e.r.Git.Branches)))
+			return
+		}
+		files = state.Files
+	} else {
+		branch, err := e.env.Git.Branch(e.ctx, e.env.Worktree)
+		if err != nil {
+			res.rule(e.unverifiable("não foi possível ler a branch: " + err.Error()))
+			return
+		}
+		if !e.ownBranch(branch) {
+			res.rule(e.deny(e.r.originField("git.branches"), fmt.Sprintf("commit na branch %s, fora de git.branches %v", branch, e.r.Git.Branches)))
+			return
+		}
+		files, err = e.env.Git.Committed(e.ctx, e.env.Worktree, all)
+		if err != nil {
+			res.rule(e.unverifiable("não foi possível ler os arquivos preparados: " + err.Error()))
+			return
+		}
 	}
 	var outside []string
 	for _, f := range files {

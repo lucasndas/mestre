@@ -106,6 +106,27 @@ type GitState interface {
 	Committed(ctx context.Context, worktree string, all bool) ([]string, error)
 }
 
+// CommitState is what a decision on a commit needs of the git state, read at
+// the moment of the decision.
+type CommitState struct {
+	// Branch is the branch checked out; BranchErr is why it is not known
+	// (detached, unreadable), and Branch is then empty.
+	Branch    string
+	BranchErr error
+	// Files are the paths the next commit takes (see GitState.Committed).
+	Files []string
+}
+
+// CommitStater is the part of a GitState that answers the branch and the
+// files of a commit in one reading (one git process). The decision uses it
+// when the GitState has it, and asks Branch and Committed otherwise; the
+// answer is the same. An implementation must read the real state each time:
+// the index at the moment of the decision is what the decision judges, so it
+// is never kept between decisions.
+type CommitStater interface {
+	CommitState(ctx context.Context, worktree string, all bool) (CommitState, error)
+}
+
 // TableScripts is the part of a GitState that tells a script of the
 // repository from one created or changed at the table, for the risk of
 // running it (docs/classes/classificacao-de-risco.md#sinais-de-risco). With
