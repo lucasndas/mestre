@@ -3,12 +3,12 @@ package ghcli_test
 import (
 	"context"
 	"database/sql"
-	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
 
 // pushes are the refspecs sent to the remote of GitHub.
@@ -100,7 +100,8 @@ func TestAForcedPushIsOnlyForTheMasterOfTheTable(t *testing.T) {
 	}
 }
 
-// CA-CLI-GH-05 and CA-GH-ACOES-07: the sending that GitHub refuses (the workflows
+// CA-GH-ACOES-07
+// Part of CA-CLI-GH-05 (the full suite has it with the event): the sending that GitHub refuses (the workflows
 // permission, signatures, a protection) is told apart, nothing is worked around
 // (the sending is tried once), and for the two that only the Owner or the Grand
 // Master can lift the Grand Master gets the event with the reason.
