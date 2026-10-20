@@ -126,15 +126,19 @@ func (a *antigravity) hookCommand(goos, binary, event string) (string, error) {
 		// " turned into \" (1.4.2, the Windows round of 2026-10-19), and cmd
 		// reads \"C:\…\" as a path that does not exist: so the line has no
 		// quote at all. The path goes bare (or by its 8.3 name). Without
-		// MESTRE_AGENT_ID or without the binary the line prints {}, the
-		// neutral answer of every event but PreToolUse, which it blocks: no
-		// JSON string can be printed without quotes, and the line never
-		// answers allow by itself.
+		// MESTRE_AGENT_ID (not a character: a clone without the Mestre) it
+		// prints the neutral answer, built with no quote in the line; with it
+		// and without the binary it prints {}, which blocks PreToolUse: a
+		// character never gets an allow the dispatcher did not give.
 		p, err := cmdBarePath(binary)
 		if err != nil {
 			return "", err
 		}
-		return `if not defined MESTRE_AGENT_ID (echo {}) else if exist ` + p + ` (` + p + args + `) else (echo {})`, nil
+		say, err := cmdPrint(neutral)
+		if err != nil {
+			return "", err
+		}
+		return `if not defined MESTRE_AGENT_ID (` + say + `) else if exist ` + p + ` (` + p + args + `) else (echo {})`, nil
 	}
 	q := "'" + strings.ReplaceAll(binary, "'", `'\''`) + "'"
 	return `if [ -n "$MESTRE_AGENT_ID" ] && [ -e ` + q + ` ]; then exec ` + q + args + "; else printf '%s\\n' '" + neutral + "'; fi", nil

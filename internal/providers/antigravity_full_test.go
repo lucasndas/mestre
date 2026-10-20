@@ -133,16 +133,16 @@ func TestTheGeneratedHookPrintsTheNeutralAnswerWithoutTheMestreBinary(t *testing
 	}
 	payload := string(recorded(t, "antigravity", "PreToolUse"))
 	for event, line := range cmds {
-		want := "{}"
-		// On Windows {} for every event: cmd cannot print the allow of
-		// PreToolUse without quotes, so a missing binary blocks the tool there.
-		if event == "PreToolUse" && runtime.GOOS != "windows" {
-			want = `{"decision":"allow"}`
-		}
 		// With the agent id the command reaches the binary check, so a
 		// missing binary is what yields the neutral answer; without it the
-		// first condition already does.
+		// first condition already does. On Windows a character (with the id)
+		// gets {} there, which blocks PreToolUse: the line of cmd gives no
+		// allow the dispatcher did not give.
 		for _, env := range [][]string{{"MESTRE_AGENT_ID=agy-1"}, {"MESTRE_AGENT_ID="}} {
+			want := "{}"
+			if event == "PreToolUse" && (runtime.GOOS != "windows" || env[0] == "MESTRE_AGENT_ID=") {
+				want = `{"decision":"allow"}`
+			}
 			out, exit := runHook(t, line, dir, payload, env...)
 			if exit != 0 || strings.TrimSpace(out) != want {
 				t.Errorf("%s with %v: exit %d, stdout %q; want exit 0 and %s", event, env, exit, out, want)
