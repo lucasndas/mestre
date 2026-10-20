@@ -21,7 +21,9 @@ func (s *Service) Report(ctx context.Context, r Report) error {
 		s.mu.Unlock()
 		return nil
 	}
-	s.seq[r.Character] = r.Seq
+	if r.Seq != 0 { // a resync (Seq 0) is applied but does not reset what was seen
+		s.seq[r.Character] = r.Seq
+	}
 	s.mu.Unlock()
 	c, err := s.o.Registry.Get(ctx, r.Character)
 	if err != nil {
@@ -735,6 +737,13 @@ func (s *Service) resumeMessage(ctx context.Context, c Character) string {
 	if c.Role == RoleGrandMaster && s.o.Brief != nil {
 		if brief, err := s.o.Brief.Brief(ctx, c.Workspace); err != nil {
 			s.log.Warn("characters: the state of the workspace was not read for the resumption message", "workspace", c.Workspace, "err", err)
+		} else if brief != "" {
+			b.WriteString("\n\n" + brief)
+		}
+	}
+	if c.Role == RoleTableMaster && s.o.TableBrief != nil {
+		if brief, err := s.o.TableBrief.BriefTable(ctx, c); err != nil {
+			s.log.Warn("characters: the state of the table was not read for the resumption message", "workspace", c.Workspace, "table", c.Table, "err", err)
 		} else if brief != "" {
 			b.WriteString("\n\n" + brief)
 		}

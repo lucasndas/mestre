@@ -404,7 +404,40 @@ func (c *character) command(ctx context.Context, text string) error {
 	c.mu.Lock()
 	c.ready = false // the next ready screen is after the command
 	c.mu.Unlock()
-	return c.sess.Input(ctx, b)
+	if err := c.sess.Input(ctx, b); err != nil {
+		return err
+	}
+	if r, ok := c.ru.adapter.(providers.SendRetrier); ok {
+		go c.resendCommand(ctx, text, r)
+	}
+	return nil
+}
+
+// resendCommand types the send key once more while the input line still
+// holds the command, as the supervision does for a delivery: Codex on
+// Windows can keep what it was given without sending it
+// (providers.SendRetrier). It stops at the first look that finds the line
+// without the command, or after providers.SendRetries looks.
+func (c *character) resendCommand(ctx context.Context, text string, r providers.SendRetrier) {
+	for range providers.SendRetries {
+		t := c.ru.r.clk().NewTimer(providers.DefaultSendRetry)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-c.sess.Ended():
+			t.Stop()
+			return
+		case <-t.C():
+		}
+		screen, err := c.sess.Screen(ctx)
+		if err != nil || !r.InputHolds(screen, text) {
+			return
+		}
+		if err := c.sess.Input(ctx, r.SendKey()); err != nil {
+			return
+		}
+	}
 }
 
 // stop ends the terminal and its supervision.

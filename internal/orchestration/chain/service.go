@@ -62,7 +62,9 @@ type Options struct {
 	SubDelegations SubDelegations
 	// PRs reads the PRs the conditions of the policy check; without it a
 	// request of a PR is for the people (diff_incompleto).
-	PRs         PRSource
+	PRs PRSource
+	// Freshness is the gate of freshness of the requests of a PR; nil: none.
+	Freshness   Freshness
 	Supervision Supervision
 	Alerts      Alerts
 	Tasks       Tasks
@@ -296,6 +298,11 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	if r.Workspace == "" {
 		return 0, errors.New("chain: a request needs a workspace")
 	}
+	// The gate runs before anything is stored or asked of anyone: a red one
+	// leaves no request (only a PR is gated, and a PR never takes the lock).
+	if err := s.gateOpen(ctx, &r); err != nil {
+		return 0, err
+	}
 	st, _ := s.settings(ctx, r.Workspace)
 	lvl, why, err := s.initial(ctx, r, st)
 	if err != nil {
@@ -308,6 +315,9 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		return 0, err
 	}
 	s.audit(ctx, r, AuditEntry{Answer: answerBorn, Outcome: "accepted", Level: lvl.Kind, Reason: joinWhy(why)})
+	if err := s.gateRecheck(ctx, r); err != nil {
+		return 0, err
+	}
 	s.arrive(ctx, r.ID, st)
 	if r.Type == classes.RequestClassPermission && s.o.Waits != nil && who.ID != "" {
 		if _, err := s.o.Waits.WaitApproval(ctx, who, r.ID, s.pathTime(ctx, r, st)); err != nil {

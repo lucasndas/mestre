@@ -14,6 +14,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/attachments"
+	"github.com/lucasndas/mestre/internal/blocking"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
@@ -25,6 +26,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/digest"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/progress"
+	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/telegram"
@@ -302,6 +304,14 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		}
 	}
 	o.ChainUsers = r.flow
+	// the GitHub of the workspaces, with the App Grão-Mestre; a test that gives its own keeps it
+	gh := grandMasterGitHub{r}
+	if _, off := o.GitHub.(unavailableGitHub); off {
+		o.GitHub = gh
+	}
+	if o.Credentials == nil {
+		o.Credentials = gh
+	}
 	if o.ChainGrants == nil {
 		o.ChainGrants = r.decrees
 	}
@@ -398,7 +408,11 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	if orc.BaseSync != nil {
 		h.Send.Base = orc.BaseSync
 	}
+	// the acceptance of the Master of the table: no pull request while a
+	// completed mission of the epic has a criterion with no proof
+	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
 	h.Register(fwd)
+	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
 		// the decrees whose validity ran out end while the Citadel acts
 		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()
@@ -416,6 +430,21 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		}
 		return bot.Run(ctx)
 	}}
+}
+
+// ownerName is the name of the Owner, who acts on a credential ("o Dono" when
+// the users cannot be read).
+func (r *stdRun) ownerName(ctx context.Context, _ string) string {
+	all, err := r.users.List(ctx)
+	if err != nil {
+		return "o Dono"
+	}
+	for _, u := range all {
+		if u.Level == users.Owner && u.State == users.Active {
+			return u.Name
+		}
+	}
+	return "o Dono"
 }
 
 // stdLease is the lease of the epoch over GitHub: the fence of the period.
@@ -465,6 +494,23 @@ func (c stdClients) For(ctx context.Context, ch characters.Character, _ string) 
 		}
 		return tok.Secret(), nil
 	}}, nil
+}
+
+// issueBody reads the body of an issue as the App "Mestre", for the acceptance
+// of the table master: what the Master took out of the issue stops being asked.
+func (r *stdRun) issueBody(orc *Orchestration) func(ctx context.Context, workspace string, number int) (string, error) {
+	return func(ctx context.Context, workspace string, number int) (string, error) {
+		repo, err := workspaceRepos{orc}.Repo(ctx, workspace)
+		if err != nil {
+			return "", err
+		}
+		api, err := stdClients{r}.For(ctx, characters.Character{Role: characters.RoleTableMaster, Workspace: workspace}, repo)
+		if err != nil {
+			return "", err
+		}
+		d, err := api.IssueData(ctx, repo, number)
+		return d.Body, err
+	}
 }
 
 // stdQuota says whether the App of a character is under its quota.
