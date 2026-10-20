@@ -22,6 +22,10 @@ type Characters interface {
 // number of the notice and how many users it was sent to.
 type Channel interface {
 	Notify(ctx context.Context, n Notice) (id int64, sent int, err error)
+	// Say tells the users of the workspace a plain message of the Grand Master (the
+	// text of an agent, shown as such), each one by his level; it returns how many
+	// were told.
+	Say(ctx context.Context, workspace, mesa, text string) (sent int, err error)
 }
 
 // Handler is the command `mestre notify "<message>" --blocked <motive>`
@@ -90,10 +94,25 @@ func (h *Handler) handle(ctx context.Context, c *localchan.Call) localchan.Respo
 				return localchan.Fail(localchan.CodeUsage, "--"+f+" goes with --blocked", "")
 			}
 		}
-		// The plain notice to the panel and the Telegram has no sender yet
-		// (docs/desenvolvimento/ligacao-de-producao.md): nobody is told, and the
-		// Grand Master hears it.
-		return localchan.Fail("unavailable", "notify without --blocked is not available yet: nobody was told", "use --blocked <motive> for a table that can not go on, or `mestre reply` to answer a user")
+		mesa := ""
+		if name := flagText(c, "table"); name != "" {
+			t, err := h.Table(ctx, who.Workspace, name)
+			if errors.Is(err, tables.ErrNoTable) {
+				return localchan.Fail("not_found", err.Error(), "see `mestre table list`").WithExit(localchan.ExitNotFound)
+			}
+			if err != nil {
+				return localchan.Fail(localchan.CodeInternal, "the table could not be read", "")
+			}
+			mesa = t.ID
+		}
+		sent, err := h.Channel.Say(ctx, who.Workspace, mesa, args[0])
+		if err != nil {
+			return localchan.Fail(localchan.CodeInternal, "the notice was not sent: "+err.Error(), "")
+		}
+		if sent == 0 {
+			return localchan.Fail("not_delivered", "no user of this workspace could be told now", "try again, or tell the user in the channel of his message").WithExit(localchan.ExitConflict)
+		}
+		return localchan.OK(map[string]any{"text": fmt.Sprintf("aviso enviado a %d usuário(s)", sent), "delivered": map[string]any{"panel": 0, "telegram": sent}, "queued": false})
 	}
 	motive, err := ParseMotive(blocked)
 	if err != nil {
@@ -150,6 +169,8 @@ func orEmpty(s []string) []string {
 // Asker takes a request to the people (*chain.Service).
 type Asker interface {
 	Ask(ctx context.Context, a chain.AskRequest) (chain.Outcome, error)
+	// AskAction opens a question about an action that is not a request yet.
+	AskAction(ctx context.Context, by characters.Character, table string, note chain.AskNote) (int64, error)
 }
 
 // AskHandler is the command `mestre approval ask` (docs/cli/grao-mestre.md#mestre-approval):
@@ -187,8 +208,9 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 	}
 	action := strings.TrimPrefix(strings.TrimSpace(flagText(c, "action")), "#")
 	id, err := strconv.ParseInt(action, 10, 64)
-	if err != nil || id <= 0 {
-		return localchan.Fail(localchan.CodeUsage, "--action is the number of the request that waits at your level (see `mestre approval list --mine`); asking about an action that is not a request yet is not available", "")
+	asksAction := err != nil || id <= 0
+	if asksAction && strings.TrimSpace(action) == "" {
+		return localchan.Fail(localchan.CodeUsage, "--action is the number of the request that waits at your level (see `mestre approval list --mine`), or the action you want to do", "")
 	}
 	note := chain.AskNote{Summary: flagText(c, "summary"), Details: flagText(c, "details"), Recommend: flagText(c, "recommend"), Reason: flagText(c, "reason"),
 		Checked: flagText(c, "checked"), WhyNot: flagText(c, "why-not"), Steps: flagTexts(c, "step")}
@@ -206,6 +228,17 @@ func (h *AskHandler) handle(ctx context.Context, c *localchan.Call) localchan.Re
 			return localchan.Fail(localchan.CodeUsage, err.Error(), "")
 		}
 		note.Motive = string(motive)
+	}
+	if asksAction {
+		// not a request yet: the question goes to the people as the type acao_do_grao_mestre
+		note.Action = flagText(c, "action")
+		rid, err := h.Asker.AskAction(ctx, who, "", note)
+		if err != nil {
+			return localchan.Fail(localchan.CodeInternal, "the question could not be put to the users", "")
+		}
+		r := localchan.Fail("pending", fmt.Sprintf("the question #%d was put to the users; their answer arrives in your inbox and the engine does nothing else", rid), "").WithExit(localchan.ExitPending)
+		r.Data = localchan.OK(map[string]any{"request": rid, "level": "das pessoas"}).Data
+		return r
 	}
 	// a request of another workspace is not there for this caller
 	if r, err := h.Requests.Get(ctx, id); err != nil || r.Workspace != who.Workspace {

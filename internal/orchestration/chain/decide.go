@@ -202,6 +202,10 @@ func (s *Service) attenuation(ctx context.Context, r Request, approver string) *
 // agent is true for the decision of an agent: an answer that only people give
 // becomes a suggestion for the Owner.
 func (s *Service) effect(ctx context.Context, r Request, st Settings, by string, level Level, ans Answer, pattern string, dur time.Duration, untilEnd, agent bool) (string, *Refusal) {
+	if r.Type == classes.RequestGMAction && ans != AnswerApprove && !ans.Denies() || r.Type == classes.RequestGMAction && ans == AnswerDenyAlways {
+		// a question of the Grão-Mestre makes no rule, no decree and no delegation
+		return "", refuse(CodeBadAnswer, "this question is answered with approve or deny: it makes no rule and no decree")
+	}
 	switch ans {
 	case AnswerApprove, AnswerApproveAlways:
 		applied := "approved"
@@ -499,7 +503,7 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	if _, _, min := rules.Need(r); !peopleLevel(d.Level).AtLeast(min) {
 		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeHumanRequired, "the level of the user is below the minimum of this request (%s)", min))
 	}
-	if IsSystem(r.Type) && !slices.Contains(AnswersFor(LevelPeople, r), d.Answer) {
+	if (IsSystem(r.Type) || r.Type == classes.RequestGMAction) && !slices.Contains(AnswersFor(LevelPeople, r), d.Answer) {
 		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "a request of the engine is approved or denied, nothing else"))
 	}
 	switch d.Answer {
@@ -642,6 +646,12 @@ func (s *Service) settle(ctx context.Context, r Request, st Settings, byName, in
 		if err := sink.Decided(ctx, Result{Request: r, Approved: approved, By: by, Reason: reason}); err != nil {
 			s.log.Warn("chain: the owner of the request was not told", "request", r.ID, "type", r.Type, "err", err)
 		}
+	} else if r.Type == classes.RequestGMAction && r.Requester != "" {
+		// the Grão-Mestre is not waiting in a command: the word comes to its inbox
+		if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: r.Workspace, Target: r.Requester, Kind: inbox.KindApproval, Sender: inbox.SystemSender, Text: text,
+			Refs: inbox.Refs{Approval: r.ID, Table: r.Table}}); err != nil {
+			s.log.Warn("chain: the Grand Master was not told what the people answered", "request", r.ID, "err", err)
+		}
 	} else if s.o.Waits != nil && r.Requester != "" {
 		s.o.Waits.ApprovalDecided(ctx, r.ID, text)
 	}
@@ -665,6 +675,24 @@ func (s *Service) resultText(r Request, byName, instruction string) string {
 	by := ""
 	if byName != "" {
 		by = " por " + byName
+	}
+	if r.Type == classes.RequestGMAction {
+		switch r.State {
+		case Approved:
+			return fmt.Sprintf("As pessoas responderam SIM ao pedido #%d (ação do Grão-Mestre)%s. O motor não fez nada: aja pelos comandos de sempre.", r.ID, by)
+		case Expired:
+			return fmt.Sprintf("O pedido #%d (ação do Grão-Mestre) expirou sem resposta: considere negado.", r.ID)
+		case Cancelled, Invalidated:
+			return fmt.Sprintf("O pedido #%d (ação do Grão-Mestre) foi cancelado.", r.ID)
+		}
+		text := fmt.Sprintf("As pessoas responderam NÃO ao pedido #%d (ação do Grão-Mestre)%s.", r.ID, by)
+		if r.Decision != nil && r.Decision.Reason != "" {
+			text += "\n" + inbox.Say("Motivo:", r.Decision.Reason, "|")
+			if inbox.Multiline(r.Decision.Reason) {
+				text += "\n" + inbox.QuoteNote
+			}
+		}
+		return text
 	}
 	switch r.State {
 	case Approved:

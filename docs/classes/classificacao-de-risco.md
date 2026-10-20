@@ -80,7 +80,7 @@ Só `shell`, `web`, `mcp`, `subagent` e `other` chegam a `ask` (arquivos não t�
 | `permissao_de_classe` | o da ação, pelas tabelas acima |
 | `ponto_de_missao`, `pr`, `merge` | `medio` (com as condições do motor da política) |
 | `custo_extra` | `medio` dentro do teto de custo; acima dele, `alto` sem delegação possível: só um Administrador ou acima ([teto](teto-do-workspace.md#onde-o-teto-age)) |
-| `envio_workflows`, `configuracao_repositorio`, `classe_workspace`, `acao_destrutiva`, `proposta_agents_md` | `alto` |
+| `envio_workflows`, `configuracao_repositorio`, `classe_workspace`, `acao_destrutiva`, `proposta_agents_md`, `acao_do_grao_mestre` | `alto` |
 | `ativacao_operador`, `atualizacao_mestre`, `entrada_na_guilda`, `promocao_cidadela` | `fixo`: fora da cadeia, com a regra própria do tipo na política |
 | tipo desconhecido | `alto` |
 

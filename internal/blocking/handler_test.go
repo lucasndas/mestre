@@ -26,6 +26,7 @@ func (f fakeChars) Get(_ context.Context, id string) (characters.Character, erro
 
 type fakeChannel struct {
 	mu   sync.Mutex
+	said []string
 	got  []blocking.Notice
 	sent int
 	err  error
@@ -36,6 +37,13 @@ func (f *fakeChannel) Notify(_ context.Context, n blocking.Notice) (int64, int, 
 	defer f.mu.Unlock()
 	f.got = append(f.got, n)
 	return int64(len(f.got)), f.sent, f.err
+}
+
+func (f *fakeChannel) Say(_ context.Context, workspace, mesa, text string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.said = append(f.said, workspace+"|"+mesa+"|"+text)
+	return f.sent, f.err
 }
 
 func handlerRig() (*blocking.Handler, *fakeChannel) {
@@ -155,8 +163,11 @@ func TestNotifyIsForTheGrandMasterAndSaysWhenNobodyWasTold(t *testing.T) {
 	if r := notify(h, "gm", map[string]any{"why-not": "x"}, "oi"); r.OK || r.Error.Code != localchan.CodeUsage {
 		t.Fatalf("--why-not without --blocked = %+v", r.Error)
 	}
-	if r := notify(h, "gm", nil, "um aviso comum"); r.OK || r.Error.Code != "unavailable" {
-		t.Fatalf("a plain notice is not wired yet and must say so: %+v", r.Error)
+	if r := notify(h, "gm", nil, "um aviso comum"); !r.OK || len(ch.said) != 1 || ch.said[0] != "loja||um aviso comum" {
+		t.Fatalf("a plain notice: %+v, said %q", r.Error, ch.said)
+	}
+	if r := notify(h, "gm", map[string]any{"table": "43"}, "da mesa"); !r.OK || ch.said[1] != "loja|43-checkout|da mesa" {
+		t.Fatalf("a plain notice of a table: %+v, said %q", r.Error, ch.said)
 	}
 	ch.sent = 0
 	if r := notify(h, "gm", map[string]any{"blocked": "espera"}, "ninguém"); r.OK || r.Error.Code != "not_delivered" {

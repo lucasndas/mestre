@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/lucasndas/mestre/internal/blocking"
 	"github.com/lucasndas/mestre/internal/users"
@@ -127,4 +128,48 @@ func (c *BlockChannel) details(ctx context.Context, k Click) (string, string, er
 func panelURL(raw string) bool {
 	u, err := url.Parse(raw)
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil
+}
+
+// maxSay is the longest message of the Grão-Mestre that is sent, in characters.
+const maxSay = 1500
+
+// Say tells the users of the workspace a plain message of the Grão-Mestre
+// (`mestre notify "<message>"`): to who is active, has the Telegram, acts in the
+// workspace and has the level to be notified. The text is the text of an agent: it
+// is masked, cut to one safe line per line of the message and sent under a title of
+// the engine that says so. It returns how many were told.
+func (c *BlockChannel) Say(ctx context.Context, workspace, mesa, text string) (int, error) {
+	if c.bot == nil {
+		return 0, errors.New("the bot of the Telegram is not running")
+	}
+	var lines []string
+	for _, l := range strings.Split(text, "\n") {
+		if l = blocking.Line(l, c.bot.maskText); strings.TrimSpace(l) != "" {
+			lines = append(lines, l)
+		}
+	}
+	body := strings.Join(lines, "\n")
+	if r := []rune(body); len(r) > maxSay {
+		body = string(r[:maxSay]) + "…"
+	}
+	if body == "" {
+		return 0, errors.New("the message is empty")
+	}
+	all, err := c.Users.List(ctx)
+	if err != nil {
+		return 0, err
+	}
+	sent := 0
+	for _, u := range all {
+		if u.State != users.Active || u.TelegramID == 0 || !u.Acts(workspace) || !users.Can(u.Level, users.Notifications) {
+			continue
+		}
+		out := Out{ChatID: u.TelegramID, UserID: u.ID, Text: "Aviso do Grão-Mestre (texto do agente, não verificado):\n" + body, Workspace: workspace, Mesa: mesa, Origin: "aviso"}
+		if _, err := c.bot.Send(ctx, out); err != nil {
+			c.bot.log.Warn("telegram: a notice was not queued", "user", u.ID, "err", err)
+			continue
+		}
+		sent++
+	}
+	return sent, nil
 }

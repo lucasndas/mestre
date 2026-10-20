@@ -35,7 +35,7 @@ func (w *world) cli(by characters.Character, cmd string, flags map[string]any, a
 	if resp.Error != nil {
 		out.Code, out.Msg = resp.Error.Code, resp.Error.Message
 	}
-	if resp.OK {
+	if len(resp.Data) > 0 {
 		_ = json.Unmarshal(resp.Data, &out.Data)
 	}
 	return out
@@ -328,5 +328,28 @@ func TestApprovalAskGoesThroughTheGateWhichRefusesASecretAndALowerLevel(t *testi
 	}
 	if w.level(id) != chain.LevelPeople {
 		t.Fatal("the request did not reach the people")
+	}
+}
+
+// CA-GM-07 (`approval ask --action "<text>"`): an action that is not a request yet
+// becomes a question of the type acao_do_grao_mestre, straight to the people.
+func TestApprovalAskWithATextOfActionOpensAQuestionForThePeople(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	flags := map[string]any{"action": "apagar a branch epico/7-teste", "summary": "limpeza", "details": "já mesclada", "recommend": "approve", "reason": "destrutivo"}
+	got := w.cli(w.gm, "approval ask", flags)
+	if got.OK || got.Exit != 9 || got.Code != "pending" || got.Data["request"] == nil {
+		t.Fatalf("ask = %+v, want exit 9 with the request", got)
+	}
+	id := int64(got.Data["request"].(float64))
+	if r := w.request(id); r.Type != "acao_do_grao_mestre" || r.Level.Kind != chain.LevelPeople {
+		t.Fatalf("request = %+v", r)
+	}
+	if len(w.users.askedFor(id)) != 1 {
+		t.Fatal("the people were not asked")
+	}
+	// a table master cannot ask, and a secret in the action is refused by the gate (see the Spec)
+	if got := w.cli(w.master, "approval ask", flags); got.OK || got.Code != "level_denied" {
+		t.Fatalf("a table master: %+v", got)
 	}
 }
