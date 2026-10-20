@@ -42,6 +42,8 @@ type IntegrationEnv struct {
 	// PIN); both are of the acting Citadel. Nil: this machine cannot.
 	Machines    func(ctx context.Context) ([]telegram.GuildMachine, uint64, error)
 	SetExcluded func(ctx context.Context, machineID string, excluded bool) error
+	// Pending lists the entry and promotion requests that wait for the Owner.
+	Pending func(ctx context.Context) ([]telegram.GuildPending, error)
 }
 
 // GuildApprover is what an IntegrationRun may also be: the question to the Owner

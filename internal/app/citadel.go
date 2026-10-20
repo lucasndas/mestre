@@ -512,7 +512,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		if e.deps.Integration != nil {
 			var err error
 			integ, err = e.deps.Integration.Open(ctx, IntegrationEnv{DB: db, Vault: take.vault, Clock: e.clk, Log: e.log, Machine: e.id.MachineID, Masker: e.deps.Masker, SetLocked: e.setLocked,
-				GuildID: e.id.GuildID, DecideJoin: e.DecideEntry, Machines: e.GuildMachines, SetExcluded: e.SetExcluded})
+				GuildID: e.id.GuildID, DecideJoin: e.DecideEntry, Machines: e.GuildMachines, SetExcluded: e.SetExcluded, Pending: e.GuildPending})
 			if err != nil {
 				return transition{err: fmt.Errorf("app: the integrations: %w", err)}
 			}

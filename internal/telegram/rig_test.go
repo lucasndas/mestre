@@ -298,7 +298,7 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if ropt.guild {
 		pins := &telegram.PINRouter{Users: w.users}
 		w.gf = &guildFake{machines: []telegram.GuildMachine{{ID: "m-a", Name: "casa", Citadel: true}, {ID: "m-b", Name: "notebook"}}}
-		w.gc = &telegram.GuildChannel{Users: w.users, PINs: pins, Machines: w.gf.list, SetExcluded: w.gf.set}
+		w.gc = &telegram.GuildChannel{Users: w.users, PINs: pins, Machines: w.gf.list, SetExcluded: w.gf.set, Pending: w.gf.waiting}
 		w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.gc.Commands()...)
 		acts := map[string]telegram.Action{}
 		for k, v := range w.opts.Actions {

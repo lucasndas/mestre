@@ -17,7 +17,14 @@ import (
 type guildFake struct {
 	mu       sync.Mutex
 	machines []telegram.GuildMachine
+	pending  []telegram.GuildPending
 	calls    []string
+}
+
+func (g *guildFake) waiting(context.Context) ([]telegram.GuildPending, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]telegram.GuildPending(nil), g.pending...), nil
 }
 
 func (g *guildFake) list(context.Context) ([]telegram.GuildMachine, uint64, error) {
@@ -168,5 +175,42 @@ func TestGuildListingHasNoButtonsForANonOwnerAndTheCitadelIsRefused(t *testing.T
 	}
 	if got := strings.Join(texts(w, owner.ID), "\n"); !strings.Contains(got, "Não mudei a exclusão") {
 		t.Errorf("the Owner was not told: %q", got)
+	}
+}
+
+// /guilda shows online or offline of each machine; the pending entry and
+// promotion requests only to the Owner; and a hostile machine name comes out
+// without the marks the Telegram turns into links or bold.
+func TestGuildListingShowsOnlineAndThePendingRequestsOnlyToTheOwner(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, rigOpts{guild: true})
+	w.gf.machines = []telegram.GuildMachine{
+		{ID: "m-a", Name: "casa", Citadel: true, Online: true},
+		{ID: "m-b", Name: "notebook"},
+		{ID: "m-c", Name: "[clique](http://x.io)*", Online: true},
+	}
+	w.gf.pending = []telegram.GuildPending{
+		{Kind: telegram.PendingEntry, Name: "[x](http://evil.io) _novo_", Code: "482 913", At: w.clk.Now()},
+		{Kind: telegram.PendingPromotion, Name: "notebook", At: w.clk.Now()},
+	}
+	owner := w.pairOwnerTelegram()
+	w.say(owner, "/guilda")
+	w.drain()
+	text := strings.Join(texts(w, owner.ID), "\n")
+	for _, want := range []string{"casa · Cidadela · online", "notebook · Torre · offline", "cliquehttp://x.io · Torre · online", "Pedido de entrada: xhttp://evil.io novo, desde 19/10 12:00, código 482 913", "Pedido de promoção a Cidadela: notebook, desde 19/10 12:00"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("the Owner's listing lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.ContainsAny(text, "[]*_`") || strings.Contains(text, "](") {
+		t.Fatalf("the listing keeps marks of the Telegram:\n%s", text)
+	}
+
+	_, adm := w.user("Ana", users.Administrator)
+	w.say(adm, "/guilda")
+	w.drain()
+	got := strings.Join(texts(w, adm.ID), "\n")
+	if !strings.Contains(got, "notebook · Torre · offline") || strings.Contains(got, "Pedido") || strings.Contains(got, "482") {
+		t.Fatalf("the Administrator's listing = %q", got)
 	}
 }

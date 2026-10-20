@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/users"
 )
@@ -24,12 +25,36 @@ type GuildMachine struct {
 	// never excluded.
 	Citadel  bool
 	Excluded bool
+	// Online says the machine is connected to the Citadel now (the Citadel
+	// itself is online).
+	Online bool
+}
+
+// The kinds of a GuildPending.
+const (
+	// PendingEntry is a machine that asks to enter the Guild.
+	PendingEntry = "entrada"
+	// PendingPromotion is a request to promote a Tower to Citadel.
+	PendingPromotion = "promocao"
+)
+
+// GuildPending is something that waits for the Owner in the Guild. Name is text
+// of another machine: the source strips the marks of the Telegram from it, and
+// the channel strips them again.
+type GuildPending struct {
+	Kind string
+	Name string
+	// Code is the code of an entry to compare with the installer screen.
+	Code string
+	At   time.Time
 }
 
 // GuildChannel is /guilda over the bot (docs/telegram/bot.md): the machines of
 // the Guild with their role and whether they are excluded and, to the Owner,
-// the Excluir and Desfazer exclusão of each Tower, with the PIN. The pending
-// requests, online/offline and Passar a Cidadela are not here yet.
+// the online or offline of each, and, to the Owner, the pending requests of
+// entry and promotion (text only: they are answered in their own approval) and
+// the Excluir and Desfazer exclusão of each Tower, with the PIN. Passar a
+// Cidadela is not here yet (M7).
 type GuildChannel struct {
 	Users *users.Service
 	// PINs routes the answer of the PIN of an exclusion.
@@ -39,6 +64,9 @@ type GuildChannel struct {
 	// Citadel). Either may fail while this machine is not the acting Citadel.
 	Machines    func(ctx context.Context) ([]GuildMachine, uint64, error)
 	SetExcluded func(ctx context.Context, machineID string, excluded bool) error
+	// Pending lists the entry and promotion requests that wait; only the Owner
+	// sees them. Nil, or an error, leaves them out.
+	Pending func(ctx context.Context) ([]GuildPending, error)
 
 	bot *Bot
 }
@@ -76,10 +104,15 @@ func (c *GuildChannel) list(ctx context.Context, call Call) (string, error) {
 		if m.Citadel {
 			role = "Cidadela"
 		}
-		line := fmt.Sprintf("%s · %s", m.Name, role)
+		state := "offline"
+		if m.Online {
+			state = "online"
+		}
+		line := fmt.Sprintf("%s · %s", plainGuildText(m.Name), role)
 		if m.Excluded {
 			line += " · excluída"
 		}
+		line += " · " + state
 		lines = append(lines, line)
 		switch {
 		case !owner || m.Citadel || len(buttons) >= maxListed:
@@ -89,8 +122,46 @@ func (c *GuildChannel) list(ctx context.Context, call Call) (string, error) {
 			buttons = append(buttons, []Button{{Text: "Excluir " + m.Name, Action: GuildExcludeAction, Arg: "x:" + m.ID, Capability: users.ManageMachines}})
 		}
 	}
+	if owner && c.Pending != nil {
+		if ps, perr := c.Pending(ctx); perr == nil {
+			lines = append(lines, c.pendingLines(ps)...)
+		}
+	}
 	_, err = c.bot.Send(ctx, Out{ChatID: call.ChatID, UserID: call.User.ID, Origin: "motor", Text: strings.Join(lines, "\n"), Buttons: buttons})
 	return "", err
+}
+
+// pendingLines is the text of what waits for the Owner, oldest first as given.
+func (c *GuildChannel) pendingLines(ps []GuildPending) []string {
+	var out []string
+	for _, p := range ps {
+		at := p.At.Format("02/01 15:04")
+		switch p.Kind {
+		case PendingEntry:
+			line := fmt.Sprintf("Pedido de entrada: %s, desde %s", plainGuildText(p.Name), at)
+			if p.Code != "" {
+				line += ", código " + plainGuildText(p.Code)
+			}
+			out = append(out, line)
+		case PendingPromotion:
+			out = append(out, fmt.Sprintf("Pedido de promoção a Cidadela: %s, desde %s", plainGuildText(p.Name), at))
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return append([]string{"", "Esperam o Dono (a resposta é no pedido de aprovação):"}, out...)
+}
+
+// plainGuildText drops the marks the Telegram turns into links, bold or code,
+// so the name another machine chose cannot dress as text of the engine.
+func plainGuildText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune("[]()*_`<>~|\\#", r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // click asks the PIN: the exclusion is made when it is right.
