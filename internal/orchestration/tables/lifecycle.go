@@ -61,6 +61,9 @@ func (s *Service) PROpened(ctx context.Context, workspace, id string, number int
 	if err := s.store.SetPR(ctx, workspace, id, s.clk.Now(), number, head); err != nil {
 		return t, err
 	}
+	if err := s.Delivered(ctx, workspace, id); err != nil {
+		s.log.Warn("tables: the delivery of the pull request was not recorded", "table", id, "err", err)
+	}
 	return s.store.Get(ctx, workspace, id)
 }
 

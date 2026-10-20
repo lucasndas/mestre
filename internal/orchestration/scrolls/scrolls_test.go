@@ -790,3 +790,24 @@ func TestTheSummaryOfACharacterThatEndsCannotOpenASectionOfTheScroll(t *testing.
 		t.Errorf("the summary is not quoted under its label:\n%s", hist)
 	}
 }
+
+// An approval is for the scroll and the revision it was given for: the name may
+// have moved to another scroll, or the scroll may have changed, in between.
+func TestAnApprovedDeleteIsRefusedForAScrollOrARevisionOtherThanTheApprovedOne(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOptions{})
+	dev := w.dev("Dev")
+	n := w.create(dev, "# Plano", stacked("Docs"))
+	req := scrolls.DeleteRequest{Workspace: workspace, Table: table, Actor: by(dev), Name: "Plano", Approved: true, ExpectKey: n.Key + "x", ExpectRevision: n.Revision}
+	if err := w.svc.Delete(w.ctx, req); !errors.Is(err, scrolls.ErrRevision) {
+		t.Fatalf("another scroll = %v", err)
+	}
+	req.ExpectKey, req.ExpectRevision = n.Key, n.Revision+1
+	if err := w.svc.Delete(w.ctx, req); !errors.Is(err, scrolls.ErrRevision) {
+		t.Fatalf("another revision = %v", err)
+	}
+	req.ExpectRevision = n.Revision
+	if err := w.svc.Delete(w.ctx, req); err != nil {
+		t.Fatalf("the approved scroll = %v", err)
+	}
+}

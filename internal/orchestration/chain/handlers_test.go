@@ -186,6 +186,55 @@ func TestTheTableMasterListsOnlyTheRequestsOfItsOwnTable(t *testing.T) {
 	}
 }
 
+// CA-BLOQ-02 (`approval ask`) and CA-GM-07: the command takes the request to the
+// users and answers 9 with the number; the motive outside the vocabulary is a
+// usage error with the ten values.
+func TestApprovalAskTakesTheRequestToTheUsersAndRefusesAMotiveOutsideTheVocabulary(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	id := w.shell(dev, "npm install -g x")
+	flags := map[string]any{"action": itoa(id), "summary": "global", "details": "npm install -g x", "recommend": "approve", "reason": "sistema"}
+	bad := map[string]any{"motive": "urgente"}
+	for k, v := range flags {
+		bad[k] = v
+	}
+	if got := w.cli(w.gm, "approval ask", bad); got.OK || got.Code != "usage" || !strings.Contains(got.Msg, "decisao_humana") {
+		t.Fatalf("a motive outside the vocabulary: %+v, want usage with the values", got)
+	}
+	if w.level(id) != chain.LevelGrandMaster {
+		t.Fatal("a refused ask moved the request")
+	}
+	flags["motive"] = "decisao_humana"
+	got := w.cli(w.gm, "approval ask", flags)
+	if got.OK || got.Exit != 9 || got.Code != "pending" {
+		t.Fatalf("ask = %+v, want exit 9 pending", got)
+	}
+	if w.level(id) != chain.LevelPeople || len(w.users.askedFor(id)) != 1 {
+		t.Fatal("the request did not reach the people")
+	}
+	if again := w.cli(w.gm, "approval ask", flags); again.OK || again.Code != "already_asked" || again.Exit != 7 {
+		t.Fatalf("the second ask = %+v, want exit 7 already_asked", again)
+	}
+	if got := w.cli(w.master, "approval ask", flags); got.OK || got.Code != "level_denied" {
+		t.Fatalf("a table master = %+v, want level_denied", got)
+	}
+	for _, drop := range []string{"summary", "details", "reason", "recommend"} {
+		less := map[string]any{}
+		for k, v := range flags {
+			if k != drop {
+				less[k] = v
+			}
+		}
+		if got := w.cli(w.gm, "approval ask", less); got.OK || got.Code != "usage" {
+			t.Errorf("without --%s: %+v, want usage", drop, got)
+		}
+	}
+	if got := w.cli(w.gm, "approval ask", map[string]any{"action": "9999", "summary": "x", "details": "x", "recommend": "deny", "reason": "x"}); got.OK || got.Code != "not_found" || got.Exit != 4 {
+		t.Fatalf("a request that does not exist: %+v", got)
+	}
+}
+
 // While the Mestre is locked no approval is applied (docs/aprovacoes/fluxo.md,
 // /travar): `approval decide` is refused by the gate, the request stays open and
 // no exception and no temporary rule is made; after the unlock it decides.
@@ -237,5 +286,47 @@ func TestWhileTheMestreIsLockedApprovalDecideAppliesNothing(t *testing.T) {
 	locked.Store(false)
 	if got := call(w.master, "approval decide", map[string]any{"reason": "ok"}, itoa(id), "approve"); !got.OK {
 		t.Fatalf("approve after the unlock: %+v", got.Error)
+	}
+}
+
+// The command is in the definition of the CLI and goes through the gate: a text
+// that looks like a secret is refused before the engine sees it, and the level is
+// the Grand Master's.
+func TestApprovalAskGoesThroughTheGateWhichRefusesASecretAndALowerLevel(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	dev := w.recruit("Dev")
+	id := w.shell(dev, "npm install -g x")
+	gate := cli.NewGate(cli.GateConfig{
+		Profiles: cli.ProfilesFunc(func(_ context.Context, who string) cli.Profile {
+			if who == w.gm.ID {
+				return cli.Profile{Role: cli.RoleGrandMaster}
+			}
+			return cli.Profile{Role: cli.RoleTableMaster}
+		}),
+		Next: w.fwd,
+	})
+	call := func(by characters.Character, flags map[string]any) localchan.Response {
+		return gate.Forward(w.ctx, &localchan.Call{Request: localchan.Request{V: 1, ID: "x", AgentID: by.ID, Cmd: "approval ask", Flags: flags},
+			Caller: localchan.Caller{Identified: true, AgentID: by.ID}})
+	}
+	flags := func(summary string) map[string]any {
+		return map[string]any{"action": itoa(id), "summary": summary, "details": "npm install -g x", "recommend": "approve", "reason": "sistema"}
+	}
+	fakeToken := "ghp_" + "0123456789abcdefghijklmnopqrstuvwxyz"
+	if got := call(w.gm, flags("a chave é "+fakeToken)); got.OK || got.Error == nil || got.Error.Code != "secret_detected" {
+		t.Fatalf("a secret in the summary: %+v, want secret_detected", got.Error)
+	}
+	if got := call(w.master, flags("x")); got.OK || got.Error == nil || got.Error.Code != "level_denied" {
+		t.Fatalf("a table master: %+v, want level_denied", got.Error)
+	}
+	if w.level(id) != chain.LevelGrandMaster {
+		t.Fatal("a refused ask moved the request")
+	}
+	if got := call(w.gm, flags("instalar global")); got.OK || got.ExitCode() != 9 {
+		t.Fatalf("ask through the gate: %+v, want exit 9", got)
+	}
+	if w.level(id) != chain.LevelPeople {
+		t.Fatal("the request did not reach the people")
 	}
 }

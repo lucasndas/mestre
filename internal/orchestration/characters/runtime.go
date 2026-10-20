@@ -344,7 +344,7 @@ func joinText(a, b string) string {
 func (rt *Runtime) supervisor(s *session) *providers.Supervisor {
 	return providers.NewSupervisor(providers.SupervisorConfig{
 		Clock: rt.clk, Adapter: s.adapter, AgentID: s.id, TableID: s.launch.Table, ReadyPattern: s.readyRe,
-		Keyboard: sessionKeyboard{s}, Characters: sessionChars{s}, TableMaster: sessionMaster{s}, Checklist: rt.o.Checklist,
+		Keyboard: sessionKeyboard{s}, Reader: sessionReader{s}, Characters: sessionChars{s}, TableMaster: sessionMaster{s}, Checklist: rt.o.Checklist,
 		Inbox: sessionInbox{s}, Decisions: rt.o.Decisions, Trust: rt, TrustRetried: s.starts > 1, Log: rt.log,
 		StartTimeout: rt.o.ScreenTimeout,
 	})

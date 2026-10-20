@@ -47,6 +47,24 @@ type githubWorld struct {
 	api *github.REST
 }
 
+var (
+	rsaOnce sync.Once
+	rsaKey  *rsa.PrivateKey
+)
+
+// testRSAKey is one RSA key for the whole binary: generating it is the slow part.
+func testRSAKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	rsaOnce.Do(func() {
+		k, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsaKey = k
+	})
+	return rsaKey
+}
+
 func newGitHubWorld(t *testing.T) *githubWorld {
 	t.Helper()
 	ctx := t.Context()
@@ -62,10 +80,7 @@ func newGitHubWorld(t *testing.T) *githubWorld {
 	}
 	srv := httptest.NewServer(double)
 	t.Cleanup(srv.Close)
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
+	key := testRSAKey(t)
 	apps := &github.Registry{DB: db, Clock: clk}
 	a := github.App{Name: "lucas-mestre-grao-mestre", Role: github.RoleGrandMaster, Slug: github.Slug("lucas-mestre-grao-mestre")}
 	if _, err := apps.Request(ctx, a); err != nil {

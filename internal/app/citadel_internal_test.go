@@ -14,6 +14,7 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/testkit/fakelock"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -111,7 +112,7 @@ func TestACitadelWithAClosedVaultSendsNoCopyOfItsKeyToTheTowers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(ctx, paths.guildDB(), store.Options{Clock: clk, Synchronous: "OFF"})
+	db, err := guilddb.Open(ctx, paths.guildDB(), store.Options{StmtCache: guildtpl.StmtCache, Clock: clk, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +213,7 @@ func TestAPromotionWhoseVaultDoesNotServeIsRefusedBeforeTheEpochIsClaimed(t *tes
 // a machine whose exclusion was undone holds until the full copy arrives.
 func noSecrets(t *testing.T, paths Paths) {
 	t.Helper()
-	db, err := guilddb.Open(t.Context(), paths.guildDB(), store.Options{Clock: clock.Real{}, Synchronous: "OFF"})
+	db, err := guilddb.Open(t.Context(), paths.guildDB(), store.Options{StmtCache: guildtpl.StmtCache, Clock: clock.Real{}, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +247,7 @@ func TestATowerIsPromotableOnlyWithAVaultThatServes(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.id.MachineID = founded.MachineID
-	db, err := guilddb.Open(ctx, paths.guildDB(), store.Options{Clock: clk, Synchronous: "OFF"})
+	db, err := guilddb.Open(ctx, paths.guildDB(), store.Options{StmtCache: guildtpl.StmtCache, Clock: clk, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

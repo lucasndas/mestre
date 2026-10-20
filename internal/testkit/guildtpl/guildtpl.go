@@ -16,6 +16,11 @@ import (
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 )
 
+// StmtCache is how many prepared statements each connection of a test database
+// keeps (store.Options.StmtCache): a world runs a few dozen texts hundreds of
+// times, and preparing is most of what each costs.
+const StmtCache = 256
+
 var (
 	once     sync.Once
 	template []byte
@@ -83,6 +88,9 @@ func Open(ctx context.Context, path string, opts store.Options) (*store.DB, erro
 	}
 	if opts.ReadConns <= 0 {
 		opts.ReadConns = 1
+	}
+	if opts.StmtCache == 0 {
+		opts.StmtCache = StmtCache
 	}
 	return guilddb.Open(ctx, path, opts)
 }

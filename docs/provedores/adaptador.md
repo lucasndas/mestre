@@ -100,7 +100,7 @@ Cada adaptador traz uma lista de telas conhecidas: id, padrão de texto na tela 
 | nulo (shell) | não: cada linha é digitada seguida de `\r` | `\r` |
 
 - Texto acima de 8 KiB (padrão) não é digitado: vai para um arquivo e o agente recebe a linha que manda lê-lo ([esperas](../orquestracao/esperas-e-caixa-de-entrada.md)).
-- **Confirmação:** depois da tecla de envio, o motor espera `turn_start` (ou a tela ocupada, onde o evento não existe) por até 10 s (padrão). Sem sinal, registra a entrega como não confirmada e avisa o Mestre da mesa; o texto nunca é digitado de novo sozinho. Só a **tecla de envio** pode ir mais uma vez, num adaptador que declara isso (`SendRetrier`, hoje só o Codex): 2 s depois da entrega, ainda sem `turn_start`, se a tela é a área de entrada (nenhuma tela conhecida) e ela ainda guarda o começo do texto ([Codex](codex.md#digitação)).
+- **Confirmação:** depois da tecla de envio, o motor espera `turn_start` (ou a tela ocupada, onde o evento não existe) por até 10 s (padrão). Sem sinal, registra a entrega como não confirmada e avisa o Mestre da mesa; o texto nunca é digitado de novo sozinho. Só a **tecla de envio** pode ir mais uma vez, num adaptador que declara isso (`SendRetrier`, hoje só o Codex no Windows): a cada 2 s depois da entrega, até 4 vezes, ainda sem `turn_start` e sem nenhum hook desde a entrega, se a última tela, estável, é a área de entrada (nenhuma tela conhecida: um diálogo tomaria a tecla como resposta) e ela ainda guarda o começo do texto; a conferência e a tecla vão sem outra tela no meio ([Codex](codex.md#digitação)).
 
 ### Retomada de sessão
 

@@ -20,7 +20,10 @@ import (
 // outside the replication.
 var ErrReplicaWrite = errors.New("store: a replica takes writes from the replication only")
 
-type guardConnector struct{ driver.Connector }
+type guardConnector struct {
+	driver.Connector
+	cache int // Options.StmtCache
+}
 
 func (c guardConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	raw, err := c.Connector.Connect(ctx)
@@ -32,7 +35,7 @@ func (c guardConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		_ = raw.Close()
 		return nil, fmt.Errorf("store: the sqlite connection %T lacks what the guard needs", raw)
 	}
-	return &guardConn{inner: inner}, nil
+	return &guardConn{inner: newCachedConn(inner, c.cache)}, nil
 }
 
 type guardConn struct {

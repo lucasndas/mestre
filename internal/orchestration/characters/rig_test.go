@@ -24,6 +24,7 @@ import (
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	machinedb "github.com/lucasndas/mestre/internal/store/machine"
 	"github.com/lucasndas/mestre/internal/terminal"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -61,15 +62,16 @@ func TestMain(m *testing.M) {
 	}
 	code := m.Run()
 	for _, f := range exitHooks {
-		f()
+		code = f(code)
 	}
 	os.RemoveAll(dir)
 	os.Exit(code)
 }
 
-// exitHooks are run when the tests are over (the full suite removes what it
-// built).
-var exitHooks []func()
+// exitHooks are run when the tests are over, each with the exit code so far and
+// returning the code to go on with (the full suite removes what it built and
+// fails when a test left a process alive).
+var exitHooks []func(code int) int
 
 func openCopy(t *testing.T, name string, template []byte, open func(context.Context, string, store.Options) (*store.DB, error)) *store.DB {
 	t.Helper()
@@ -77,7 +79,7 @@ func openCopy(t *testing.T, name string, template []byte, open func(context.Cont
 	if err := os.WriteFile(path, template, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := open(context.Background(), path, store.Options{Synchronous: "OFF", StmtCache: guildtpl.StmtCache})
 	if err != nil {
 		t.Fatal(err)
 	}

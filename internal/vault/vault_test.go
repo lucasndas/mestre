@@ -99,7 +99,7 @@ func buildGuildTemplate() error {
 	}
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "mestre.db")
-	db, err := guildtpl.Open(context.Background(), path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(context.Background(), path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func newFixtureWith(t *testing.T, keys KeyStore, durable bool) *fixture {
 		t.Fatal(err)
 	}
 	clk := clock.NewFake(time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC))
-	opts := store.Options{Clock: clk, Synchronous: "OFF"}
+	opts := store.Options{StmtCache: guildtpl.StmtCache, Clock: clk, Synchronous: "OFF"}
 	if durable {
 		opts.Synchronous = ""
 	}
@@ -982,7 +982,7 @@ func TestCheckSaysWhetherTheKeyWouldOpenTheVaultAndChangesNothing(t *testing.T) 
 	v := f.create(t)
 	putSamples(t, v)
 	// the database as a Tower holds it: a replica, which cannot open the vault
-	replica, err := guilddb.Open(f.ctx, f.db.Path(), store.Options{Replica: true, Synchronous: "OFF"})
+	replica, err := guilddb.Open(f.ctx, f.db.Path(), store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

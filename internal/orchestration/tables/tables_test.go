@@ -399,8 +399,8 @@ func TestAMissionTakesAReviewedTableBackToWork(t *testing.T) {
 	}
 }
 
-// Part of CA-SUPCAD-06 (fecha no M5; falta: o aviso de 3 h sem entrega, o botão
-// Pausar mesa e a auditoria de quem pausou).
+// Part of CA-SUPCAD-06 (the warning, the button and the audit are in
+// supervisor_stall_test.go of the chain).
 // The pause is a mark over the state: the inbox does not deliver to the
 // characters of the table, the other tables go on, a paused workspace pauses
 // every table, and resume delivers what waited in the order of the queue.

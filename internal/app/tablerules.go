@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -98,6 +99,50 @@ func (t supTables) Over(ctx context.Context, workspace, table string) (bool, err
 	}
 	return over, err
 }
+
+// Stalled implements chain.TableStalls.
+func (t supTables) Stalled(ctx context.Context, after time.Duration) ([]chain.StalledTable, error) {
+	if *t.p == nil {
+		return nil, nil
+	}
+	list, err := (*t.p).Stalled(ctx, after)
+	out := make([]chain.StalledTable, 0, len(list))
+	for _, s := range list {
+		out = append(out, chain.StalledTable{Workspace: s.Table.Workspace, Table: s.Table.ID, Since: s.Since})
+	}
+	return out, err
+}
+
+// StallWarned implements chain.TableStalls.
+func (t supTables) StallWarned(ctx context.Context, workspace, table string, since time.Time) error {
+	if *t.p == nil {
+		return nil
+	}
+	return (*t.p).StallWarned(ctx, workspace, table, since)
+}
+
+// PauseTable implements chain.TableStalls: the pause of the table itself.
+func (t supTables) PauseTable(ctx context.Context, workspace, table, reason, by string) (bool, error) {
+	if *t.p == nil {
+		return false, errors.New("app: the tables are not built")
+	}
+	cur, err := (*t.p).Get(ctx, workspace, table)
+	if err != nil {
+		if errors.Is(err, tables.ErrNoTable) {
+			return false, chain.ErrNoTable
+		}
+		return false, err
+	}
+	if cur.Paused {
+		return false, nil
+	}
+	if err := (*t.p).Pause(ctx, workspace, table, tables.PauseRequest{Reason: reason, By: by}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+var _ chain.TableStalls = supTables{}
 
 // rerouteRef is the chain seen by the supervision, which is made before it.
 type rerouteRef struct{ p **chain.Service }
