@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -42,6 +43,10 @@ type credWorld struct {
 	wgS    sync.WaitGroup
 	stopC  context.CancelFunc
 	wgC    sync.WaitGroup
+	// broker is the one of the Citadel; reg its registry and vault its vault.
+	broker *CredentialBroker
+	reg    characters.Registry
+	vault  *vault.Vault
 }
 
 func newCredWorld(t *testing.T) *credWorld {
@@ -92,7 +97,7 @@ func newCredWorld(t *testing.T) *credWorld {
 			}
 			return r, nil
 		}}
-	w := &credWorld{t: t, ctx: ctx, db: db, nw: protorig.Network{Net: fakenet.New(clk)}}
+	w := &credWorld{t: t, ctx: ctx, db: db, nw: protorig.Network{Net: fakenet.New(clk)}, broker: broker, reg: reg, vault: v}
 	cfgC, _ := protorig.Config(clk, "citadel", 1, "citadel")
 	cfgC.Router = protocol.NewRouter()
 	cfgC.Router.HandleFunc(protocol.TypeVaultRequest, broker.Handle)
@@ -219,6 +224,86 @@ func TestATowerGetsASiteCredentialOnlyForACharacterWhoseClassReleasesItAndEveryt
 		}
 		if n := len(w.audit()); n != 4 {
 			t.Errorf("the request that never arrived is in the audit: %d rows", n)
+		}
+	})
+}
+
+// Part of CA-COFRE-21: a Tower gets nothing when its machine is excluded (it keeps no secrets), when the
+// character is not alive (stopped or interrupted), when the credential expired or when no purpose
+// is given; every request leaves a row of the audit, also the refusals and the errors of the engine,
+// and the refusal says the same words whatever the reason.
+func TestACredentialIsNotGivenToAnExcludedMachineADeadCharacterAnExpiredCredentialOrWithoutPurpose(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		w := newCredWorld(t)
+		defer w.stop()
+		past := time.Now().Add(-time.Hour)
+		if err := w.vault.Put(w.ctx, "site_velho", vault.TypeSiteCredential, []byte(siteValue),
+			&vault.SiteMeta{OwnerUser: "ana", Classes: []string{"qa"}, Domains: []string{"loja.example"}, Kind: vault.KindAppPassword, ExpiresAt: &past}); err != nil {
+			t.Fatal(err)
+		}
+		rules := w.broker.Rules
+		w.broker.Rules = func(ctx context.Context, id string) (*classes.Rules, error) {
+			r, err := rules(ctx, id)
+			r.Network.Credentials = append(r.Network.Credentials, "site_velho")
+			return r, err
+		}
+		ask := func(who, secret, purpose string) (string, error) {
+			return w.broker.Release(w.ctx, "tower1", protocol.VaultRequest{AgentID: who, Secret: secret, Purpose: purpose})
+		}
+		words := map[string]bool{}
+		check := func(what, who, secret, purpose string) {
+			t.Helper()
+			v, err := ask(who, secret, purpose)
+			var pe *protocol.Error
+			if err == nil || v != "" || !errors.As(err, &pe) || pe.Code != protocol.CodeForbidden {
+				t.Errorf("%s: got %q, %v; want forbidden and no value", what, v, err)
+				return
+			}
+			words[pe.Message] = true
+		}
+		check("the credential expired", "qa1", "site_velho", "login")
+		check("no purpose", "qa1", siteName, "  ")
+		w.broker.Excluded = func(context.Context, string) (bool, error) { return true, nil }
+		check("an excluded machine", "qa1", siteName, "login")
+		w.broker.Excluded = func(context.Context, string) (bool, error) { return false, nil }
+		for _, st := range []characters.State{characters.Stopped, characters.Interrupted, characters.Stopping} {
+			if _, _, err := w.reg.Transition(w.ctx, "qa1", st, characters.Change{Reason: "test", At: time.Now()}); err != nil {
+				// the transition graph does not go there from idle: set it straight
+				if _, err := w.db.Writer().ExecContext(w.ctx, `UPDATE characters SET state = ? WHERE id = 'qa1'`, string(st)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			check("a character that is "+string(st), "qa1", siteName, "login")
+		}
+		if len(words) != 1 {
+			t.Errorf("the refusals have %d different texts %v; want one", len(words), words)
+		}
+		if _, err := w.db.Writer().ExecContext(w.ctx, `UPDATE characters SET state = 'idle' WHERE id = 'qa1'`); err != nil {
+			t.Fatal(err)
+		}
+		if v, err := ask("qa1", siteName, "login"); err != nil || v != siteValue {
+			t.Fatalf("a live character of a machine that is not excluded: %q, %v", v, err)
+		}
+		// an error of the engine is a row too
+		w.broker.Excluded = func(context.Context, string) (bool, error) { return false, errors.New("boom") }
+		if _, err := ask("qa1", siteName, "login"); err == nil {
+			t.Fatal("an error of the engine let the request through")
+		}
+		rows := w.audit() // the rows of one instant have no order of their own
+		var errs, released, refused int
+		for _, r := range rows {
+			switch {
+			case strings.Contains(r, `"outcome":"error"`):
+				errs++
+			case strings.Contains(r, `"outcome":"released"`):
+				released++
+			case strings.Contains(r, `"outcome":"refused"`):
+				refused++
+			}
+		}
+		if len(rows) != 8 || errs != 1 || released != 1 || refused != 6 {
+			t.Errorf("audit = %q; want a row for each of the 8 requests: 6 refused, 1 released, 1 error", rows)
 		}
 	})
 }

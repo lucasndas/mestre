@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -25,6 +27,9 @@ import (
 // machine that asked, the character, the credential and the purpose, never the value.
 const AuditVaultRequest = "vault.request"
 
+// credentialWait is how long a Tower waits for the answer of a request of a credential.
+const credentialWait = 20 * time.Second
+
 // maxPurpose bounds the purpose that goes in the audit.
 const maxPurpose = 200
 
@@ -38,6 +43,8 @@ type CredentialBroker struct {
 	Clock clock.Clock
 	// Mask hides in the audit anything the Tower wrote in the purpose.
 	Mask *logging.Masker
+	// Excluded says whether a machine is excluded: it keeps no secrets, so it is given none.
+	Excluded func(ctx context.Context, machine string) (bool, error)
 }
 
 func (b *CredentialBroker) clk() clock.Clock {
@@ -80,35 +87,59 @@ func (b *CredentialBroker) Release(ctx context.Context, machine string, p protoc
 		}
 		return "", protocol.NewError(protocol.CodeForbidden, "vault.request: the credential is not released to this character")
 	}
-	c, err := b.Registry.Get(ctx, p.AgentID)
+	// an error of the engine is audited too: every request leaves a row
+	fail := func(what string, err error) (string, error) {
+		_ = b.audit(ctx, machine, p.AgentID, p.Secret, purpose, "error", what)
+		return "", protocol.NewError(protocol.CodeInternal, "vault.request: %s: %v", what, err)
+	}
+	if strings.TrimSpace(p.Purpose) == "" {
+		return refuse("a purpose is required")
+	}
+	// every lookup is made before the decision, so the answer does not tell by its
+	// time which of the reasons it was
+	c, cerr := b.Registry.Get(ctx, p.AgentID)
+	info, ierr := b.Vault.Info(ctx, p.Secret)
+	var rules *classes.Rules
+	var rerr error
+	if cerr == nil {
+		rules, rerr = b.Rules(ctx, c.ID)
+	}
+	excluded, xerr := false, error(nil)
+	if b.Excluded != nil {
+		excluded, xerr = b.Excluded(ctx, machine)
+	}
 	switch {
-	case errors.Is(err, characters.ErrNoCharacter):
+	case cerr != nil && !errors.Is(cerr, characters.ErrNoCharacter):
+		return fail("the registry", cerr)
+	case ierr != nil && !errors.Is(ierr, vault.ErrNotFound):
+		return fail("the vault", ierr)
+	case rerr != nil:
+		return fail("the rules of the character", rerr)
+	case xerr != nil:
+		return fail("the state of the machine", xerr)
+	case excluded:
+		return refuse("the machine is excluded: it keeps no secrets")
+	case errors.Is(cerr, characters.ErrNoCharacter):
 		return refuse("the character is unknown")
-	case err != nil:
-		return "", protocol.NewError(protocol.CodeInternal, "vault.request: the registry: %v", err)
 	case c.Machine != machine:
 		return refuse("the character does not run on that machine")
-	}
-	info, err := b.Vault.Info(ctx, p.Secret)
-	switch {
-	case errors.Is(err, vault.ErrNotFound):
+	case !c.State.Alive() || c.State == characters.Stopping || c.State == characters.Interrupted:
+		return refuse("the character is not alive")
+	case errors.Is(ierr, vault.ErrNotFound):
 		return refuse("no such credential")
-	case err != nil:
-		return "", protocol.NewError(protocol.CodeInternal, "vault.request: %v", err)
-	}
-	rules, err := b.Rules(ctx, c.ID)
-	if err != nil {
-		return "", protocol.NewError(protocol.CodeInternal, "vault.request: the rules of the character: %v", err)
 	}
 	if err := vault.SiteCredentialAllowed(info, c.Class, rules.Network.Credentials); err != nil {
 		return refuse(err.Error())
+	}
+	if exp := info.Site.ExpiresAt; exp != nil && !b.clk().Now().Before(*exp) {
+		return refuse("the credential expired")
 	}
 	var value string
 	if err := b.Vault.Use(ctx, p.Secret, purpose, func(v []byte) error { value = string(v); return nil }); err != nil {
 		if errors.Is(err, vault.ErrClosed) {
 			return refuse("the vault is closed")
 		}
-		return "", protocol.NewError(protocol.CodeInternal, "vault.request: %v", err)
+		return fail("the vault", err)
 	}
 	if err := b.audit(ctx, machine, p.AgentID, p.Secret, purpose, "released", ""); err != nil {
 		return "", protocol.NewError(protocol.CodeInternal, "vault.request: the audit: %v", err) // nothing was given: the Tower asks again
@@ -142,6 +173,8 @@ func (e *CredentialError) Error() string { return e.Code + ": " + e.Message }
 // needs the answer now: it is never kept in the outbox, so with the Citadel away it
 // fails with citadel_unavailable (and a Citadel that does not act, the same).
 func RequestSiteCredential(ctx context.Context, link *protocol.Link, agentID, secret, purpose string) (protocol.Secret, error) {
+	ctx, cancel := context.WithTimeout(ctx, credentialWait) // a request that is not kept does not wait for ever
+	defer cancel()
 	away := &CredentialError{Code: localchan.CodeCitadelUnavailable, Message: "the Citadel is not available, the credential was not requested"}
 	if link == nil {
 		return "", away
@@ -189,7 +222,17 @@ func (e *Engine) credentialBroker(run *citadelRun) (*CredentialBroker, error) {
 	case orc == nil || p == nil || p.siteRules == nil:
 		return nil, protocol.NewError(protocol.CodeUnavailable, "vault.request: this Citadel hosts no orchestration")
 	}
-	return &CredentialBroker{Vault: run.vault, Registry: orc.Registry, Rules: p.siteRules, Clock: e.clk, Mask: e.deps.Masker}, nil
+	excluded := func(ctx context.Context, machine string) (bool, error) {
+		run.mu.Lock()
+		c := run.citadel
+		run.mu.Unlock()
+		if c == nil {
+			return false, errors.New("the Citadel has not acted yet")
+		}
+		m, err := c.Machine(ctx, machine)
+		return m.Excluded, err
+	}
+	return &CredentialBroker{Vault: run.vault, Registry: orc.Registry, Rules: p.siteRules, Clock: e.clk, Mask: e.deps.Masker, Excluded: excluded}, nil
 }
 
 // RequestSiteCredential is what a character of this machine asks when it needs a
@@ -201,12 +244,19 @@ func (e *Engine) RequestSiteCredential(ctx context.Context, agentID, secret, pur
 	e.mu.Unlock()
 	switch {
 	case tow != nil:
-		return RequestSiteCredential(ctx, tow.client.Link(), agentID, secret, purpose)
+		v, err := RequestSiteCredential(ctx, tow.client.Link(), agentID, secret, purpose)
+		if err == nil && e.deps.Masker != nil {
+			e.deps.Masker.Register(string(v)) // what the machine holds is masked in what it writes
+		}
+		return v, err
 	case cit != nil:
 		b, err := e.credentialBroker(cit)
 		if err == nil {
 			var v string
 			if v, err = b.Release(ctx, e.id.MachineID, protocol.VaultRequest{AgentID: agentID, Secret: secret, Purpose: purpose}); err == nil {
+				if e.deps.Masker != nil {
+					e.deps.Masker.Register(v)
+				}
 				return protocol.Secret(v), nil
 			}
 		}
