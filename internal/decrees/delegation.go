@@ -73,7 +73,7 @@ func (s *Service) remind(ctx context.Context) error {
 		case s.o.Reminder != nil:
 			s.o.Reminder.DelegationEnding(ctx, d)
 		case s.o.Alerts != nil:
-			s.o.Alerts.Tell(ctx, d.Author, fmt.Sprintf("A delegação %d (%s) acaba em %s.", d.Number, d.Summary(), d.Until.Format("2006-01-02")))
+			s.o.Alerts.Tell(ctx, d.Author, fmt.Sprintf("A delegação %d (%s) acaba em %s.", d.Number, d.Summary(), s.Moment(ctx, d.Until)))
 		}
 	}
 	return nil
