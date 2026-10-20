@@ -67,6 +67,12 @@ func (s *Service) advanceOnce(ctx context.Context, id string) {
 	if paused, err := s.o.Tables.Paused(ctx, q.Workspace, q.Table); err != nil || paused {
 		return
 	}
+	// So does a table that waits for another table to be merged.
+	if s.o.Held != nil {
+		if held, err := s.o.Held(ctx, q.Workspace, q.Table); err != nil || held {
+			return
+		}
+	}
 	// An approval after that could not be asked (the flow was not there) is
 	// asked again.
 	for _, st := range steps {

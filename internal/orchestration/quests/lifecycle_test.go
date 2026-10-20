@@ -406,6 +406,27 @@ func TestAPausedTableStartsNoStep(t *testing.T) {
 	w.wantStates(q, map[string]quests.StepState{"a": quests.StepRunning})
 }
 
+// A table that waits for the merge of another one begins no step, even one
+// that is at work, and goes on when the other epic is done
+// (docs/orquestracao/dependencia-entre-mesas.md).
+// CA-DEPMESA-01
+func TestATableThatWaitsForAnotherTableStartsNoStepUntilItIsMerged(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{epics: []int{43}})
+	res, err := w.orc.EpicDeps.Depend(w.ctx, w.gm, 42, 43)
+	if err != nil || !res.Waiting {
+		t.Fatalf("Depend = %+v, %v; want waiting", res, err)
+	}
+	q := w.run(w.create(oneStep))
+	w.wantStates(q, map[string]quests.StepState{"a": quests.StepPending})
+	// The epic #43 is closed as completed: the table goes on at once, with no
+	// sweep to wake the quest.
+	if err := w.orc.EpicDeps.EpicClosed(w.ctx, w.slug, 43, false); err != nil {
+		t.Fatal(err)
+	}
+	w.wantStates(q, map[string]quests.StepState{"a": quests.StepRunning})
+}
+
 // Part of CA-CIDADELA-11 (the promotion itself is the Guild's: the full suite
 // runs it with instances): with characters on the Tower and others on the
 // machine of the old Citadel, each with a step under way, when the new Citadel

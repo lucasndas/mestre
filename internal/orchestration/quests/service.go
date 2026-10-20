@@ -57,6 +57,10 @@ type Options struct {
 	// (basesync): the step sync asks it again when its verification is green,
 	// and does not end while it is true. Nil: no such gate.
 	BaseMoved func(ctx context.Context, workspace, table string) (bool, error)
+	// Held says whether the table waits for the merge of another one
+	// (docs/orquestracao/dependencia-entre-mesas.md): no step begins until it is
+	// merged. nil: no table waits.
+	Held func(ctx context.Context, workspace, table string) (bool, error)
 	// EscalateAfter defaults to DefaultEscalateAfter.
 	EscalateAfter time.Duration
 	// Gate is asked before the outside is touched (GitHub); an error means

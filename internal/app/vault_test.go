@@ -56,6 +56,7 @@ func TestACitadelWhoseVaultDoesNotOpenGoesOnAndSaysWhatStopped(t *testing.T) {
 			paths := app.DirPaths(dir)
 			paths.CLISocket = ""
 			ctx, cancel := context.WithCancel(t.Context())
+			seedGuild(t, paths)
 			_, rk, err := app.Found(ctx, cfg, paths, clk)
 			if err != nil {
 				t.Fatal(err)

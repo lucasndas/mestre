@@ -40,6 +40,8 @@ type Epic struct {
 	Title  string
 	Labels []string
 	Open   bool
+	// NotPlanned: the epic was closed as "not planned" (false for an open one).
+	NotPlanned bool
 }
 
 // HasLabel says whether the epic carries the label.
@@ -188,6 +190,27 @@ type Peers interface {
 	Inspect(ctx context.Context, machine, workspace, table string) (Inspection, error)
 	// RemoveWorktree asks the Tower to remove its worktree of the table.
 	RemoveWorktree(ctx context.Context, machine, workspace, table string) error
+}
+
+// Dependencies is the dependency between epics
+// (docs/orquestracao/dependencia-entre-mesas.md, *epicdeps.Service; nil: no table
+// waits for another).
+type Dependencies interface {
+	// Opened is told that a table was made, before its first message is
+	// queued; an error keeps the table from opening.
+	Opened(ctx context.Context, workspace string, t Table) error
+	// Held says whether the epic waits for another one.
+	Held(ctx context.Context, workspace string, epic int) (bool, error)
+	// Waiting gives the epics the epic waits for.
+	Waiting(ctx context.Context, workspace string, epic int) ([]int, error)
+	// Merged is told that the pull request of the table was merged and its
+	// commit is in the base.
+	Merged(ctx context.Context, workspace string, t Table) error
+	// Dropped is told that a table is gone, because it did not open or was
+	// cancelled: the waits made for it end.
+	Dropped(ctx context.Context, workspace string, t Table) error
+	// Cancelled is told that the table was cancelled.
+	Cancelled(ctx context.Context, workspace string, t Table) error
 }
 
 // Actor is who asked for a pause or a resume.

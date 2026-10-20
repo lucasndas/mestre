@@ -436,7 +436,7 @@ func TestTableFilesNeedsTheSessionZeroOfTheTable(t *testing.T) {
 	if err := (characters.TableFiles{}).Retrust(ctx, "w", "t", "/d"); err == nil {
 		t.Error("Retrust without the table")
 	}
-	table, err := sessionzero.NewTable(sessionzero.TableOptions{Worktree: sessionzero.Worktree{Providers: providers.NewRegistry(providers.Options{})}})
+	table, err := sessionzero.NewTable(sessionzero.TableOptions{Worktree: sessionzero.Worktree{Providers: providers.NewRegistry(providers.Options{NoFlush: true})}})
 	if err != nil {
 		t.Fatal(err)
 	}
