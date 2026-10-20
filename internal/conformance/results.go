@@ -65,6 +65,9 @@ type StepResult struct {
 	// Notes are what the step observed for the items of "Verificar na
 	// implementação" (a native screen, a tool name, a path field).
 	Notes []string `json:"notes,omitempty"`
+	// CLIUnreachable (step 5): `mestre debug` did not reach the engine
+	// identified with the terminal.
+	CLIUnreachable bool `json:"cli_unreachable,omitempty"`
 }
 
 // Flags are what a result switches on beyond the conformance itself.
@@ -81,6 +84,11 @@ type Flags struct {
 	DenySubagent bool `json:"deny_subagent,omitempty"`
 	// NoDiagnosis: the AI diagnosis does not use the provider here (step 11).
 	NoDiagnosis bool `json:"no_diagnosis,omitempty"`
+	// CLIUnreachable: the `mestre` CLI, called by the shell tool of the
+	// provider, did not reach the engine identified as the terminal (step 5).
+	// The provider stays conformant (the hooks work), but a class that calls
+	// the CLI is not recruited on this profile and the checklist shows it.
+	CLIUnreachable bool `json:"cli_unreachable,omitempty"`
 }
 
 // Origin is who asked for the run.
@@ -157,6 +165,7 @@ func (r *Result) decide() {
 	r.Flags.ResumeReborn = ran(StepResume)
 	r.Flags.DenySubagent = ran(StepSubagent)
 	r.Flags.NoDiagnosis = ran(StepDiagnosis)
+	r.Flags.CLIUnreachable = r.Step(StepCommandCommit).CLIUnreachable
 }
 
 func orNotRun(s StepResult) string {
@@ -268,6 +277,7 @@ func (p Probe) Providers(ctx context.Context) ([]machinesheet.Provider, error) {
 				return nil, err
 			}
 			pr.Conformant = ok && r.Conformant && r.Version == pr.Version
+			pr.CLIUnreachable = ok && r.Flags.CLIUnreachable && r.Version == pr.Version
 		}
 	}
 	return out, nil

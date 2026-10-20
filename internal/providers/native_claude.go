@@ -41,15 +41,25 @@ func (c *claudeCode) Native(p NativePolicy) (NativeControls, error) {
 			*l = append(*l, r)
 		}
 	}
+	// The shell tool of Claude Code is Bash on Linux and, on Windows, both
+	// Bash (Git Bash) and PowerShell, which the model may choose: a command
+	// rule that named only Bash would leave the PowerShell tool to the
+	// dispatcher alone.
+	shells := []string{"Bash"}
+	if machineOS(p.OS) == "windows" {
+		shells = append(shells, "PowerShell")
+	}
 	bash := func(l *[]string, pattern string, bare bool) {
-		if pattern == "*" {
-			add(l, "Bash", true)
-			return
-		}
-		add(l, "Bash("+pattern+")", true)
-		// Our "curl *" also takes "curl" alone; a deny says both.
-		if b, ok := strings.CutSuffix(pattern, " *"); ok && bare {
-			add(l, "Bash("+b+")", true)
+		for _, sh := range shells {
+			if pattern == "*" {
+				add(l, sh, true)
+				continue
+			}
+			add(l, sh+"("+pattern+")", true)
+			// Our "curl *" also takes "curl" alone; a deny says both.
+			if b, ok := strings.CutSuffix(pattern, " *"); ok && bare {
+				add(l, sh+"("+b+")", true)
+			}
 		}
 	}
 

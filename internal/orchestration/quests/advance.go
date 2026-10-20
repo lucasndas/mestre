@@ -163,6 +163,9 @@ func (s *Service) complete(ctx context.Context, q Quest) {
 	s.appendScroll(ctx, q, fmt.Sprintf("## Rodada %d · concluída — %s\nTodas as etapas terminaram.\n", q.Round, s.stamp()))
 	s.endResources(ctx, q)
 	s.tellMaster(ctx, q, inbox.KindQuest, fmt.Sprintf("A missão %s (rodada %d) foi concluída: todas as etapas terminaram.", q.Name, q.Round))
+	if s.o.Completed != nil {
+		s.o.Completed(ctx, q.Workspace, q.Table, q.ID)
+	}
 }
 
 // prepare takes a step in preparing as far as it goes: the approval before,
