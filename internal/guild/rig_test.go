@@ -48,7 +48,7 @@ func buildTemplates() (g, m []byte, err error) {
 	}
 	defer os.RemoveAll(dir)
 	ctx := context.Background()
-	opts := store.Options{Synchronous: "OFF"}
+	opts := store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"}
 	gdb, err := guildtpl.Open(ctx, filepath.Join(dir, "mestre.db"), opts)
 	if err != nil {
 		return nil, nil, err
@@ -374,7 +374,7 @@ func openDB(t *testing.T, template []byte, file string, clk clock.Clock, open fu
 	if err := os.WriteFile(path, template, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := open(context.Background(), path, store.Options{Clock: clk, Synchronous: "OFF"})
+	db, err := open(context.Background(), path, store.Options{StmtCache: guildtpl.StmtCache, Clock: clk, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
