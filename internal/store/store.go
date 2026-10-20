@@ -59,6 +59,10 @@ type Options struct {
 	// the same transaction, for the replication to ship (the Guild database
 	// on the Citadel). See capture.go.
 	Capture bool
+	// StmtCache is how many prepared statements each connection keeps to run
+	// again; zero (production) keeps none. Tests that open many databases turn
+	// it on: preparing is most of what a short statement costs (stmtcache.go).
+	StmtCache int
 }
 
 // DB is an open database: one writer connection and a read-only pool.
@@ -137,7 +141,7 @@ func (d *DB) openPools(ctx context.Context) error {
 		writer.Close()
 		return fmt.Errorf("store: open %s for reading: %w", d.path, err)
 	}
-	reader := sql.OpenDB(trackConnector{Connector: rbase, t: d.live})
+	reader := sql.OpenDB(trackConnector{Connector: d.cachedReader(rbase), t: d.live})
 	reader.SetMaxOpenConns(d.opts.ReadConns)
 	reader.SetMaxIdleConns(d.opts.ReadConns)
 	reader.SetConnMaxLifetime(0)
@@ -148,6 +152,15 @@ func (d *DB) openPools(ctx context.Context) error {
 	}
 	d.reader = reader
 	return nil
+}
+
+// cachedReader wraps the read connector in the prepared-statement cache when
+// the options ask for one.
+func (d *DB) cachedReader(base driver.Connector) driver.Connector {
+	if d.opts.StmtCache > 0 {
+		return cachedConnector{Connector: base, max: d.opts.StmtCache}
+	}
+	return base
 }
 
 func (d *DB) openWriter() (*sql.DB, error) {
@@ -166,13 +179,19 @@ func (d *DB) openWriter() (*sql.DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(trackConnector{Connector: logConnector{Connector: base, cap: d.capture}, t: d.live})
+		w = sql.OpenDB(trackConnector{Connector: logConnector{Connector: base, cap: d.capture, cache: d.opts.StmtCache}, t: d.live})
 	case d.replica:
 		base, err := sqlite.NewConnector(conn)
 		if err != nil {
 			return nil, err
 		}
-		w = sql.OpenDB(trackConnector{Connector: guardConnector{Connector: base}, t: d.live})
+		w = sql.OpenDB(trackConnector{Connector: guardConnector{Connector: base, cache: d.opts.StmtCache}, t: d.live})
+	case d.opts.StmtCache > 0:
+		base, err := sqlite.NewConnector(conn)
+		if err != nil {
+			return nil, err
+		}
+		w = sql.OpenDB(trackConnector{Connector: cachedConnector{Connector: base, max: d.opts.StmtCache}, t: d.live})
 	default:
 		base, err := sqlite.NewConnector(conn)
 		if err != nil {

@@ -94,6 +94,9 @@ var lockedRefuses = map[string]bool{
 	"pr status": true, "pr comment": true, "pr reply": true, "pr note": true,
 	// creating an App acts on GitHub with the account of the Owner
 	"app create": true,
+	// the subdelegation gives the Mestre of a table the power to decide, and no
+	// approval is applied while the Mestre is locked (docs/aprovacoes/fluxo.md)
+	"approval delegate": true,
 	// no approval is applied while the Mestre is locked (docs/aprovacoes/fluxo.md):
 	// deciding makes an exception or a temporary rule, and resuming the
 	// autonomy of a table gives back what it had paused

@@ -608,6 +608,10 @@ type DeleteRequest struct {
 	// Approved is set by the flow of approval when an authorized user asked for
 	// the deletion explicitly (milestone 5).
 	Approved bool
+	// ExpectKey and ExpectRevision, when set, are the scroll and the revision the
+	// approval was given for: any other is refused (ErrRevision).
+	ExpectKey      string
+	ExpectRevision int64
 }
 
 // Delete removes a scroll. Only on the explicit request of an authorized user
@@ -639,6 +643,9 @@ func (s *Service) deleteLocked(ctx context.Context, r DeleteRequest) (Note, erro
 	n, err := s.find(ctx, r.Workspace, r.Table, r.Actor, r.Name)
 	if err != nil {
 		return Note{}, err
+	}
+	if r.ExpectKey != "" && (n.Key != r.ExpectKey || n.Revision != r.ExpectRevision) {
+		return Note{}, ErrRevision
 	}
 	var emptied []string
 	err = s.st.exec(ctx, func(tx *sql.Tx) error {

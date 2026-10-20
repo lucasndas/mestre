@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -114,4 +115,31 @@ func (appCreator) Available(context.Context) string {
 
 func (appCreator) Begin(context.Context, string, string) (ghcli.AppLink, error) {
 	return ghcli.AppLink{}, errors.New("the creation of Apps needs the panel")
+}
+
+// stdSettings is what `gh settings show` reads of the Mestre: the main branch of
+// the workspace, the mode of approval of its reviews and the Apps.
+type stdSettings struct{ r *stdRun }
+
+func (s stdSettings) Branch(ctx context.Context, workspace string) (string, error) {
+	var branch string
+	err := s.r.env.DB.Reader().QueryRowContext(ctx, `SELECT default_branch FROM workspaces WHERE slug = ?`, workspace).Scan(&branch)
+	return branch, err
+}
+
+func (s stdSettings) Mode(ctx context.Context, workspace string) (string, string, error) {
+	mode, why, err := (&approvals.Modes{DB: s.r.env.DB, Clock: s.r.env.Clock}).Get(ctx, workspace)
+	return string(mode), why, err
+}
+
+func (s stdSettings) Apps(ctx context.Context) ([]string, error) {
+	apps, err := (&github.Registry{DB: s.r.env.DB}).List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(apps))
+	for _, a := range apps {
+		out = append(out, fmt.Sprintf("%s (%s)", a.Name, a.State))
+	}
+	return out, nil
 }
