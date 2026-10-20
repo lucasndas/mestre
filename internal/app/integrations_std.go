@@ -457,6 +457,17 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		RerouteFn: func(ctx context.Context, workspace string) error {
 			return orc.Chain.RerouteWorkspace(ctx, workspace, "o Dono revogou todas as delegações")
 		}})
+	// the validity and the reminder of the delegations are those of the policy file of each workspace
+	if orc.Policy != nil {
+		pol := orc.Policy
+		r.decrees.SetDelegationTimes(func(ctx context.Context, workspace string) (time.Duration, time.Duration) {
+			st, _, err := pol.Chain(ctx, workspace)
+			if err != nil {
+				return 0, 0
+			}
+			return st.DelegationValidity, st.DelegationReminder
+		})
+	}
 	r.decrees.SetTableOpen(func(ctx context.Context, workspace, table string) (bool, error) {
 		tb, err := orc.Tables.Get(ctx, workspace, table)
 		if errors.Is(err, tables.ErrNoTable) {
