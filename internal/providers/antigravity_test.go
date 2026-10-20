@@ -74,7 +74,11 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 	prov := agy(t, providers.Options{})
 	other := `{"lint-checker": {"PostToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command": "./lint.sh", "timeout": 10}]}]}}`
 	for _, goos := range []string{"linux", "windows"} {
-		files, err := prov.HookFiles(providers.HookFilesRequest{Root: "/wt", OS: goos, Binary: stableBinary})
+		binary := stableBinary
+		if goos == "windows" {
+			binary = `C:\Mestre\bin\mestre.exe`
+		}
+		files, err := prov.HookFiles(providers.HookFilesRequest{Root: "/wt", OS: goos, Binary: binary})
 		if err != nil || len(files) != 1 || files[0].Path != filepath.Join("/wt", ".agents", "hooks.json") {
 			t.Fatalf("%s: files = %+v, %v", goos, files, err)
 		}
@@ -150,10 +154,28 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 		// Needs quotes and, not existing, has no 8.3 name.
 		{Root: "/wt", OS: "windows", Binary: `C:\Program Files\Mestre-nao-instalado\mestre.exe`},
 		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\a(b)\mestre.exe`},
+		// No drive or share: relative to the drive or to the folder of cmd.
+		{Root: "/wt", OS: "windows", Binary: stableBinary},
+		{Root: "/wt", OS: "windows", Binary: `\Mestre\bin\mestre.exe`},
 	} {
 		if _, err := prov.HookFiles(bad); err == nil {
 			t.Errorf("%+v was accepted", bad)
 		}
+	}
+}
+
+// A Windows path written with forward slashes goes in the line of cmd with
+// backslashes, bare.
+func TestTheWindowsHookLineOfAntigravityTakesTheBinaryWithBackslashes(t *testing.T) {
+	t.Parallel()
+	files, err := agy(t, providers.Options{}).HookFiles(providers.HookFilesRequest{Root: "/wt", OS: "windows", Binary: "C:/Mestre/bin/mestre.exe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := mergedM(t, files[0], "")
+	want := quote(`if exist C:\Mestre\bin\mestre.exe (C:\Mestre\bin\mestre.exe hook`)
+	if !strings.Contains(doc, want[1:len(want)-1]) || strings.Contains(doc, "C:/Mestre") {
+		t.Errorf("the line does not call C:\\Mestre\\bin\\mestre.exe bare:\n%s", doc)
 	}
 }
 
