@@ -13,17 +13,13 @@ import (
 // engine with PROCESS_QUERY_LIMITED_INFORMATION and nothing else; calling it
 // again adds nothing; the ACEs that were there stay.
 func TestTheCLIAllowsTheEngineToQueryItselfAndNothingMore(t *testing.T) {
+	t.Parallel()
 	sid, err := windows.StringToSid("S-1-5-80-9-8-7-6-5")
 	if err != nil {
 		t.Fatal(err)
 	}
 	read := func() (n int, mine []uint32) {
-		h, err := windows.OpenProcess(windows.READ_CONTROL, false, windows.GetCurrentProcessId())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer windows.CloseHandle(h)
-		sd, err := windows.GetSecurityInfo(h, windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
+		sd, err := windows.GetSecurityInfo(windows.CurrentProcess(), windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
 		if err != nil {
 			t.Fatal(err)
 		}
