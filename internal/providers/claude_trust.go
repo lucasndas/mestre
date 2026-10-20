@@ -223,6 +223,7 @@ func replaceFile(path string, data []byte, was fileState, noFlush bool) error {
 // a key with backslashes, and the trust screen shows up anyway (the Windows
 // round, 2026-10-19), so such a key never stands for the folder.
 func entryKey(goos string, projects map[string]any, folder string) string {
+	goos = machineOS(goos)
 	folder = strings.TrimRight(folder, `/\`)
 	if goos == "windows" {
 		folder = strings.ReplaceAll(folder, `\`, "/")
@@ -241,6 +242,7 @@ func entryKey(goos string, projects map[string]any, folder string) string {
 // sameFolder compares two folders: after Clean on Linux; without difference
 // of case or of slash on Windows.
 func sameFolder(goos, a, b string) bool {
+	goos = machineOS(goos)
 	a, b = strings.TrimRight(a, `/\`), strings.TrimRight(b, `/\`)
 	if goos == "windows" {
 		return strings.EqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
