@@ -232,7 +232,7 @@ var _ SendRetrier = (*codex)(nil)
 // update is StartOnly and the model switch and the rate limit have no entry.
 // A numbered menu option (› 1. …) is a dialog too. Refusing on a quote of the
 // model is the safe side: the delivery then waits for its timeout.
-var codexModal = regexp.MustCompile(`Update available|Update now|Skip until next version|Switch to |Keep current model|Switch model|Approaching rate limits?|rate limit|usage limit|Would you like to run the following command\?|approve network access to|Trust this folder\?|Hooks need review|Trust all and continue|Set up the Codex agent sandbox|Sign in with ChatGPT|(?m:^\s*[›❯>]\s*\d+\.\s)`)
+var codexModal = regexp.MustCompile(`(?i)Press enter to|Enable full access|Continue anyway|make the following edits|world-writable|Try new model|Use existing model|Update available|Update now|Skip until next version|Switch to |Keep current model|Switch model|Approaching rate limits?|rate limit|usage limit|Would you like to run the following command\?|approve network access to|Trust this folder\?|Hooks need review|Trust all and continue|Set up the Codex agent sandbox|Sign in with ChatGPT|(?m:^[\s│┃|]*[›❯>]\s*\d+\.\s)`)
 
 // InputHolds: the input line of Codex (the last line that starts with ›)
 // starts with the first line of text. On Windows, 0.163.0 keeps there a
@@ -252,9 +252,17 @@ func (c *codex) InputHolds(screen, text string) bool {
 		want = want[:20]
 	}
 	lines := strings.Split(screen, "\n")
+	below := 0 // non-empty lines from the candidate to the end of the screen
 	for i := len(lines) - 1; i >= 0; i-- {
-		if rest, ok := strings.CutPrefix(strings.TrimSpace(lines[i]), "›"); ok {
-			return strings.HasPrefix(strings.TrimSpace(rest), string(want))
+		t := strings.TrimSpace(lines[i])
+		if t != "" {
+			below++
+		}
+		if rest, ok := strings.CutPrefix(t, "›"); ok {
+			// The input line sits in the bottom lines, above the footer: a
+			// › line higher up is the history (the message of an earlier
+			// delivery), with a modal without the box below it.
+			return below <= bottomLines && strings.HasPrefix(strings.TrimSpace(rest), string(want))
 		}
 	}
 	return false

@@ -69,6 +69,65 @@ func TestCodexDoesNotSendAgainOverAModal(t *testing.T) {
 	}
 }
 
+// A modal above the still-held input line, with the screen unchanged since it
+// was stable, is the case only the modal list decides (the last › line is
+// still the text): on the last screen and on the Reader alike.
+func TestCodexModalAboveTheHeldInputLineGetsNoKey(t *testing.T) {
+	t.Parallel()
+	text := "Teste de conformidade do Mestre. Sem usar nenhuma ferramenta, responda só com estas duas linhas, preenchidas:"
+	a := providers.NewCodex(providers.Options{OS: "windows"})
+	r := a.(providers.SendRetrier)
+	if !r.InputHolds(codexHeldScreen, text) {
+		t.Fatal("the control: the held screen must hold the text")
+	}
+	for name, modal := range map[string]string{
+		"update":       "Update available! 0.163.0 -> 0.164.0\nUpdate now / Skip until next version",
+		"rate limit":   "Rate limit reached, try later",
+		"usage":        "Usage limit",
+		"switch":       "Switch to gpt-6.1-mini for lower credit usage?",
+		"enter":        "Press Enter to continue",
+		"patch":        "Would you like to make the following edits?",
+		"bordered":     "│ › 1. Yes, proceed",
+		"migration":    "Try new model",
+		"full access":  "Enable full access?",
+		"world-writes": "Some folders are world-writable",
+	} {
+		screen := modal + "\n\n" + codexHeldScreen
+		if r.InputHolds(screen, text) {
+			t.Errorf("%s: InputHolds accepted a modal above the input line", name)
+		}
+		clk := clock.NewFake(at)
+		w := &world{}
+		sup := providers.NewSupervisor(providers.SupervisorConfig{
+			Clock: clk, Adapter: a, AgentID: "a1", TableID: "3-login",
+			Keyboard: w, Reader: fixedScreen(screen), Characters: w, TableMaster: w, Checklist: w, Inbox: w, Decisions: w,
+		})
+		sup.Start(t.Context())
+		sup.Screen("› Ask Codex to do anything\n\n  GPT-6.1-Sol default · ? for shortcuts", true)
+		if err := sup.Deliver(t.Context(), "d1", text); err != nil {
+			t.Fatal(err)
+		}
+		sup.Screen(screen, true) // the Reader agrees with the last stable screen
+		clk.Advance(providers.DefaultSendRetry * providers.SendRetries)
+		if typed := w.snapshot().typed; len(typed) != 1 {
+			t.Errorf("%s: typed %q, want only the delivery", name, typed)
+		}
+		sup.Close()
+	}
+}
+
+// The line of the history that starts like the delivery is not the input
+// line: the box is gone (a dialog without a menu), and nothing is sent.
+func TestCodexHistoryLineIsNotTheInputLine(t *testing.T) {
+	t.Parallel()
+	text := "Teste de conformidade do Mestre. Sem usar nenhuma ferramenta"
+	r := providers.NewCodex(providers.Options{OS: "windows"}).(providers.SendRetrier)
+	screen := "› " + text + "\n\n• ok\n" + "linha\nlinha\nlinha\nlinha\nlinha\nlinha\nlinha\nlinha\n\nAlgo novo, sem menu"
+	if r.InputHolds(screen, text) {
+		t.Error("a history line far above the footer was taken as the input line")
+	}
+}
+
 // The control: the same held input, with the Reader showing the same screen,
 // gets the key.
 func TestCodexSendsAgainWhenTheReaderAgrees(t *testing.T) {

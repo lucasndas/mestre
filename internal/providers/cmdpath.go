@@ -3,7 +3,6 @@ package providers
 import (
 	"fmt"
 	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -30,8 +29,20 @@ func plainWindowsPath(p string) bool {
 	if strings.Contains(rest, ":") {
 		return false
 	}
-	return !slices.Contains(strings.Split(p, `\`), "..")
+	for _, seg := range strings.Split(p, `\`) {
+		if seg != "" && strings.Trim(seg, ".") == "" {
+			return false // "..", "..." and the like: dots only
+		}
+		if cmdDevice.MatchString(seg) {
+			return false
+		}
+	}
+	return true
 }
+
+// cmdDevice is the name of a DOS device, with or without an extension, as a
+// segment of a path (NUL, COM1.exe).
+var cmdDevice = regexp.MustCompile(`(?i)^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\..*)?$`)
 
 // cmdBarePath is binary in the form a line of cmd takes without quotes,
 // with backslashes: as it is, or by its 8.3 name on this machine (only on

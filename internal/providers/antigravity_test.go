@@ -171,6 +171,10 @@ func TestHookFilesKeepOtherHooksAndWriteTheMestreGroupOnce(t *testing.T) {
 		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\..\Other\mestre.exe`},
 		{Root: "/wt", OS: "windows", Binary: `C:/Mestre/../mestre.exe`},
 		{Root: "/wt", OS: "windows", Binary: `\\srv\share\..\m.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\...\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\.\mestre.exe`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\NUL`},
+		{Root: "/wt", OS: "windows", Binary: `C:\Mestre\com1.exe`},
 	} {
 		if _, err := prov.HookFiles(bad); err == nil {
 			t.Errorf("%+v was accepted", bad)
