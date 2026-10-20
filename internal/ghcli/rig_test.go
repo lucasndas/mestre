@@ -77,18 +77,21 @@ func (b branches) Prepare(ctx context.Context, _ string) (github.Branch, error) 
 type pushAuth struct {
 	mu        sync.Mutex
 	workflows []bool
+	// askers are who the credentials were asked for: the App is the one of its class.
+	askers []github.Asker
 	// onAuth runs when the credentials are asked, after the change was read and
 	// before the push (another sync of the table).
 	onAuth func()
 }
 
-func (p *pushAuth) PushAuth(_ context.Context, _ github.Asker, _ string, workflows bool) (gitx.Auth, error) {
+func (p *pushAuth) PushAuth(_ context.Context, who github.Asker, _ string, workflows bool) (gitx.Auth, error) {
 	if p.onAuth != nil {
 		p.onAuth()
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.workflows = append(p.workflows, workflows)
+	p.askers = append(p.askers, who)
 	return gitx.BasicAuth("https://github.com/", "x-access-token", "ghs_pushTokenOfTheTestRig0123456789"), nil
 }
 

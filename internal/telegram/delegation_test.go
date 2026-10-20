@@ -145,7 +145,7 @@ func (w *world) rawExec(stmt string) {
 	}
 }
 
-// Part of CA-DELEG-05 over the bot (the temporary table rules are revoked
+// CA-DELEG-05: over the bot and the real rules (the temporary table rules are revoked
 // after the transaction of the delegations, not in it): /revogar_tudo is the
 // Owner's, asks one button and no PIN; the delegations, the subdelegations and
 // the real temporary table rules of two workspaces end, the delegations in one

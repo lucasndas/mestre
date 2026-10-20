@@ -55,8 +55,10 @@ func (e *engineFor) run(t *testing.T, command string) hook.Answer {
 	eng := &hook.Engine{Clock: e.w.clk, Rules: e, Ledger: e.w.svc, Characters: e,
 		OnEvent: func(ev providers.Event, ans hook.Answer) {
 			inProcess = ans
+			// what the engine does with the events of the hooks (app.decreeUses)
 			if ans.Decree != 0 {
-				if err := e.w.svc.Executed(context.Background(), ans.Decree, ev.AgentID, ev.Tool.Command); err != nil {
+				use := decrees.AppliedUse{Tool: ev.Tool, Action: ev.Tool.Command, At: ev.ReceivedAt}
+				if err := e.w.svc.Applied(context.Background(), e.char, ans.Decree, use); err != nil {
 					t.Error(err)
 				}
 			}
@@ -83,9 +85,10 @@ func (w *world) engine(t *testing.T) *engineFor {
 	return &engineFor{w: w, char: dev("d1"), worktr: t.TempDir()}
 }
 
-// Part of CA-DEC-01 (the registration of the execution is made here by the
-// OnEvent of the test: the engine does not register it from the events of the
-// hooks yet)
+// CA-DEC-01: a permanent decree confirmed with the PIN lets the hook allow the
+// action to the character of the target class, and the execution is registered in
+// the decree (by decrees.Service.Applied, which the engine calls with the events
+// of the hooks: internal/app/decreeuse_test.go).
 func TestAPermanentDecreeConfirmedWithPINIsAppliedAndRegistered(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -487,7 +490,7 @@ func TestADecreeThatChangesTheOrchestratorClassIsRefusedBeforeTheConfirmation(t 
 	}
 }
 
-// Part of CA-DEC-09 (the part of the decree: the push stays denied, the engine
+// The decree half of CA-DEC-09 (the criterion, with pr update, is in internal/ghcli/prs_test.go: the push stays denied, the engine
 // fulfils it and the unmeetable is refused with the explanation)
 func TestADecreeThatFreesAnInvariantIsKeptButTheAgentStillHasNoPush(t *testing.T) {
 	t.Parallel()

@@ -13,7 +13,8 @@ import (
 	"github.com/lucasndas/mestre/internal/users"
 )
 
-// Part of CA-APROV-POL-09 (the engine rule; the CLI mestre gh approve is stage 6)
+// The engine rule behind CA-APROV-POL-09 (the criterion, through the command
+// mestre gh approve, is in internal/ghcli/approve_flow_test.go).
 func TestGhApproveOnlyMakesTheReviewWithAnApprovalThatStandsForTheCommit(t *testing.T) {
 	t.Parallel()
 	l := newGHLab(t)

@@ -193,6 +193,46 @@ func TestDelegarConfirmedWithThePINLetsTheGrandMasterDecideTheTableAndNoOther(t 
 	}
 }
 
+// CA-DELEG-02: an Administrator's delegation of envio_workflows is refused
+// before any confirmation (nothing is pending, no decree); "Delegar" on a merge
+// request of risk medio, through the real flow and the PIN, makes a decree of
+// policy in the type and the table of the request, and no delegation.
+func TestAnAdministratorDelegatesNoHighTypeAndDelegarOnAMergeMedioIsAPolicyOfItsTable(t *testing.T) {
+	t.Parallel()
+	w := newDelegWorld(t)
+	ana, err := w.usvc.Create(w.ctx, w.owner, users.NewUser{Name: "Ana", Level: users.Administrator, Workspaces: []string{w.slug}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = w.ds.Propose(w.ctx, decrees.Proposal{Author: ana.ID, Kind: decrees.KindRule, Workspace: w.slug, Mesa: "42-login",
+		Target: decrees.Target{Kind: decrees.TargetWorkspace, Name: w.slug}, Effect: decrees.Effect{Kind: decrees.EffectDelegation, Setting: string(classes.RequestWorkflows)}, Text: "delegue os workflows"})
+	var ref *decrees.Refusal
+	if !errors.As(err, &ref) || ref.Code != decrees.CodeLevel {
+		t.Fatalf("the Administrator's delegation = %v; want a refusal for the level", err)
+	}
+	if ds, _ := w.ds.List(w.ctx, w.owner.ID); len(ds) != 0 {
+		t.Fatalf("a refused proposal left decrees: %+v", ds)
+	}
+	id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestMerge, Workspace: w.slug, Table: "42-login", About: "mesclar a branch da mesa",
+		Risk: classes.RiskResult{Risk: classes.RiskMedium, TableVersion: classes.RiskTableVersion, Rule: string(classes.RequestMerge)}, Target: delegTarget})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the Grand Master takes it up to the people, who are the ones to tap Delegar
+	if _, err := w.ch.Decide(w.ctx, chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerClimb, Reason: "quero a decisão das pessoas"}); err != nil {
+		t.Fatal(err)
+	}
+	w.delegate(id)
+	ds, err := w.ds.List(w.ctx, w.owner.ID)
+	if err != nil || len(ds) != 1 {
+		t.Fatalf("decrees = %+v, %v", ds, err)
+	}
+	d := ds[0]
+	if d.Effect.Kind != decrees.EffectPolicy || d.Effect.Setting != string(classes.RequestMerge) || !d.Effect.Loosens || d.Mesa != "42-login" || d.Author != w.owner.ID {
+		t.Fatalf("decree = %+v; want a policy of merge in 42-login", d)
+	}
+}
+
 // nopAlerts are the alerts of the bot, which these tests do not read.
 type nopAlerts struct{}
 

@@ -132,8 +132,8 @@ func TestDelegarMakesADelegationOfThirtyDaysForTheTable(t *testing.T) {
 	_ = r
 }
 
-// Part of CA-DELEG-02 (no proposal is shown: the flow makes the decree after the
-// PIN): an Administrator can not delegate a type alto; "Delegar" on a medio
+// Part of CA-DELEG-02 (the whole criterion, through the real flow and the PIN,
+// is in internal/orchestration/chain/delegation_audit_test.go): an Administrator can not delegate a type alto; "Delegar" on a medio
 // request makes a decree of policy in that type and table.
 func TestAnAdministratorDelegatesNoHighTypeAndDelegarOnAMedioIsAPolicy(t *testing.T) {
 	t.Parallel()
