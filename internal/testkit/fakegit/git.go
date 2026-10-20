@@ -870,6 +870,21 @@ func (h *Handle) Status(context.Context) ([]gitx.StatusEntry, error) {
 	return h.statusLocked(), nil
 }
 
+// TrackedStatus implements gitx.Repo.
+func (h *Handle) TrackedStatus(context.Context) (gitx.TrackedStatus, error) {
+	if err := h.needTree(); err != nil {
+		return gitx.TrackedStatus{}, err
+	}
+	defer h.lock()()
+	ts := gitx.TrackedStatus{Branch: h.branch, Detached: h.branch == ""}
+	for _, e := range h.statusLocked() {
+		if !e.Untracked() {
+			ts.Entries = append(ts.Entries, e)
+		}
+	}
+	return ts, nil
+}
+
 // Stage implements gitx.Repo.
 func (h *Handle) Stage(_ context.Context, paths ...string) error {
 	if err := h.needTree(); err != nil {

@@ -2,14 +2,18 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/decrees"
+	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 )
 
@@ -227,4 +231,120 @@ func (r *stdRun) AppReview() sessionzero.AppReview {
 		Mestre:      r.roleRest(github.RoleMestre, probeMestrePermissions),
 		GrandMaster: r.roleRest(github.RoleGrandMaster, probeGMPermissions),
 	}}
+}
+
+// mergePermissions are the permissions of the token of a merge: the merge is a write
+// in the contents of the repository and in its pull request, and nothing else.
+var mergePermissions = map[string]string{"metadata": "read", "contents": "write", "pull_requests": "write"}
+
+// lateApprover gives `gh approve` the Approver the period makes after the handlers.
+type lateApprover struct{ r *stdRun }
+
+func (l lateApprover) Approve(ctx context.Context, o approvals.ApproveOrder) (approvals.Approval, error) {
+	a := l.r.approver.Load()
+	if a == nil {
+		return approvals.Approval{}, errNoApproval
+	}
+	return a.Approve(ctx, o)
+}
+
+// lateRulesets gives `gh settings apply` the Settings the period makes after the handlers.
+type lateRulesets struct{ r *stdRun }
+
+func (l lateRulesets) ProposeRuleset(ctx context.Context, workspace, proposer string, body map[string]any) (int64, error) {
+	s := l.r.settings.Load()
+	if s == nil {
+		return 0, errNoApproval
+	}
+	return s.ProposeRuleset(ctx, workspace, proposer, body)
+}
+
+// mergeHost is `gh merge` over the App "Grão-Mestre" and the chain of approval.
+type mergeHost struct{ r *stdRun }
+
+var _ ghcli.Merging = mergeHost{}
+
+// Merger gives the REST of the Grão-Mestre with the token of a merge.
+func (m mergeHost) Merger(ctx context.Context, _ string) (ghcli.PullMerger, error) {
+	app := m.r.gmApp(ctx)
+	if app == "" {
+		return nil, errors.New("the App Grão-Mestre is not made yet")
+	}
+	return m.r.gmRest(app, mergePermissions), nil
+}
+
+// Standing tells the merge requests of the PR at the commit and the base: the newest
+// approved one that still stands (its target has the same base branch and, when the gate
+// ran, the tip of the base it ran on is still the tip), and the newest open one.
+func (m mergeHost) Standing(ctx context.Context, workspace, repo string, n int, sha, base string) (approved, open int64, err error) {
+	st := &chain.Store{DB: m.r.env.DB}
+	rs, err := st.ApprovedPR(ctx, workspace, repo, n, sha)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, r := range rs {
+		if r.Type != classes.RequestMerge || r.ID <= approved || !m.sameBase(ctx, r, base) {
+			continue
+		}
+		approved = r.ID
+	}
+	ops, err := st.OpenPR(ctx, workspace, repo, n)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, r := range ops {
+		var t struct {
+			Head string `json:"head"`
+			Base string `json:"base"`
+		}
+		if r.Type == classes.RequestMerge && r.ID > open && json.Unmarshal(r.Target, &t) == nil && t.Head == sha && t.Base == base {
+			open = r.ID
+		}
+	}
+	return approved, open, nil
+}
+
+// sameBase says an approved request was for the base the PR goes into now, and that the
+// base did not move since the gate ran on it (an approval of a merge into another branch,
+// or into a base that was never verified, does not carry over).
+func (m mergeHost) sameBase(ctx context.Context, r chain.Request, base string) bool {
+	var t struct {
+		Base string `json:"base"`
+	}
+	if json.Unmarshal(r.Target, &t) != nil || t.Base != base {
+		return false
+	}
+	sha := chain.BaseSHAOf(r.Target)
+	if sha == "" {
+		return true // the repository asks the branch to be up to date: the base moving changes nothing
+	}
+	tip, err := m.r.source().BaseTip(ctx, r.Workspace, r.Table)
+	return err == nil && tip == sha
+}
+
+// Ask opens the request of the merge in the chain.
+func (m mergeHost) Ask(ctx context.Context, o chain.OpenRequest) (int64, error) {
+	c := m.r.chain.Load()
+	if c == nil {
+		return 0, errNoApproval
+	}
+	return c.Request(ctx, o)
+}
+
+// Table is the table whose branch is the head of the PR.
+func (m mergeHost) Table(ctx context.Context, workspace, headRef string) string {
+	orc := m.r.orc.Load()
+	if orc == nil || headRef == "" {
+		return ""
+	}
+	all, err := orc.Tables.List(ctx, workspace)
+	if err != nil {
+		return ""
+	}
+	for _, t := range all {
+		if t.Branch == headRef && !tables.Over(t.State) {
+			return t.ID
+		}
+	}
+	return ""
 }

@@ -185,3 +185,79 @@ func TestSettingsDoNotApplyWhatTheyDoNotKnow(t *testing.T) {
 		t.Fatalf("Decided = %v with %d writes; want nothing", err, len(l.gh.Actions()))
 	}
 }
+
+// Part of CA-CLI-GM-04: a ruleset proposed by `gh settings apply` is a request to the Owner
+// for the exact body, in the repository of the workspace; nothing is created before the
+// answer, and when the Owner approves that body, and only that, is created; a body that
+// is not a ruleset or is too large is refused.
+func TestARulesetProposedByTheGrandMasterIsCreatedOnlyWhenTheOwnerApprovesItsExactBody(t *testing.T) {
+	t.Parallel()
+	l := newGHLab(t)
+	l.gh.SetPro("lucas/meu-app", true)
+	s := l.settings()
+	body := map[string]any{"name": "mestre-extra", "target": "branch", "enforcement": "active",
+		"rules":         []any{map[string]any{"type": "required_linear_history"}, map[string]any{"type": "non_fast_forward"}},
+		"bypass_actors": []any{map[string]any{"actor_id": float64(777), "actor_type": "Integration", "bypass_mode": "always"}},
+		"conditions":    map[string]any{"ref_name": map[string]any{"include": []any{"~ALL"}, "exclude": []any{}}}}
+	id, err := s.ProposeRuleset(l.ctx, "loja", "gm1", body)
+	if err != nil || id == 0 {
+		t.Fatalf("ProposeRuleset = %d, %v", id, err)
+	}
+	made := l.open.all()
+	if len(made) != 1 || made[0].Type != classes.RequestRepoSettings || made[0].Workspace != "loja" || made[0].Proposer != "gm1" {
+		t.Fatalf("requests = %+v", made)
+	}
+	// the Owner reads every rule, the conditions and each exception, not a count
+	for _, want := range []string{"mestre-extra", "required_linear_history", "non_fast_forward", "~ALL", "Integration #777 (always)", "active"} {
+		if !strings.Contains(made[0].About, want) {
+			t.Errorf("the text of the request lacks %q: %s", want, made[0].About)
+		}
+	}
+	tg := decodeTarget(t, made[0].Target)
+	if tg.Kind != approvals.KindRuleset || tg.Repo != "lucas/meu-app" || tg.PlanB || tg.Body["name"] != "mestre-extra" {
+		t.Fatalf("target = %+v; want the ruleset of the repository of the workspace, not the plan B", tg)
+	}
+	if got := l.gh.Rulesets("lucas/meu-app"); len(got) != 0 {
+		t.Fatalf("a ruleset was created before the approval: %v", got)
+	}
+	if err := s.Decided(l.ctx, chain.Result{Request: chain.Request{Workspace: "loja", Type: classes.RequestRepoSettings, Target: made[0].Target}, Approved: false}); err != nil {
+		t.Fatalf("a denial: %v", err)
+	}
+	if got := l.gh.Rulesets("lucas/meu-app"); len(got) != 0 {
+		t.Fatalf("a ruleset was created after a denial: %v", got)
+	}
+	if mode, _, _ := l.modes.Get(l.ctx, "loja"); mode != approvals.ModeApp {
+		t.Errorf("a denied ruleset that is not the plan B changed the mode to %q", mode)
+	}
+	if err := s.Decided(l.ctx, chain.Result{Request: chain.Request{Workspace: "loja", Type: classes.RequestRepoSettings, Target: made[0].Target}, Approved: true}); err != nil {
+		t.Fatalf("the approval: %v", err)
+	}
+	if got := l.gh.Rulesets("lucas/meu-app"); len(got) != 1 {
+		t.Fatalf("rulesets after the approval = %v; want the one approved", got)
+	}
+	ok := func(extra map[string]any) map[string]any {
+		m := map[string]any{"name": "x", "enforcement": "active", "rules": []any{map[string]any{"type": "pull_request"}}}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	for _, bad := range []map[string]any{
+		nil, {}, {"name": "x"}, {"name": "x", "enforcement": "active"}, {"name": "x", "enforcement": "active", "rules": "no"},
+		{"name": "x", "enforcement": "active", "rules": []any{}, "blob": strings.Repeat("a", 40<<10)},
+		ok(map[string]any{"enforcement": map[string]any{"a": 1}}), ok(map[string]any{"enforcement": "maybe"}), ok(map[string]any{"target": "push"}),
+		ok(map[string]any{"unknown_field": 1}), ok(map[string]any{"rules": []any{"pull_request"}}), ok(map[string]any{"rules": []any{map[string]any{}}}),
+		ok(map[string]any{"bypass_actors": []any{map[string]any{"actor_id": "7", "actor_type": "Integration", "bypass_mode": "always"}}}),
+		ok(map[string]any{"bypass_actors": []any{map[string]any{"actor_id": float64(7), "actor_type": "Anyone", "bypass_mode": "always"}}}),
+		ok(map[string]any{"bypass_actors": []any{map[string]any{"actor_id": float64(7), "actor_type": "Team", "bypass_mode": "sometimes"}}}),
+		ok(map[string]any{"conditions": map[string]any{"repository_name": map[string]any{}}}),
+		ok(map[string]any{"conditions": map[string]any{"ref_name": map[string]any{"include": "~ALL"}}}),
+	} {
+		if _, err := s.ProposeRuleset(l.ctx, "loja", "gm1", bad); !errors.Is(err, approvals.ErrBadRuleset) {
+			t.Errorf("ProposeRuleset(%v) = %v; want ErrBadRuleset", len(bad), err)
+		}
+	}
+	if n := len(l.open.all()); n != 1 {
+		t.Errorf("%d requests; a refused body opened one", n)
+	}
+}
