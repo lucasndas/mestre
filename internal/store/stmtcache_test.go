@@ -2,6 +2,8 @@ package store_test
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -76,6 +78,25 @@ func TestTheStatementCacheRunsTheSameTextAgainAndNeverSharesARunningStatement(t 
 			var c int
 			if err := db.Reader().QueryRowContext(ctx, `SELECT count(*) FROM items WHERE id > ?`, 4).Scan(&c); err != nil || c != 2 {
 				t.Fatalf("count = %d, %v", c, err)
+			}
+			if !opts.Capture {
+				// A schema change after cached uses: the statements prepare again, and
+				// closing the database finalizes them, so the WAL is checkpointed away.
+				if _, err := db.Writer().ExecContext(ctx, `ALTER TABLE items ADD COLUMN extra TEXT`); err != nil {
+					t.Fatal(err)
+				}
+				if err := db.Reader().QueryRowContext(ctx, `SELECT count(*) FROM items WHERE id > ?`, 4).Scan(&c); err != nil || c != 2 {
+					t.Fatalf("count after the ALTER = %d, %v", c, err)
+				}
+				if _, err := db.Writer().ExecContext(ctx, `INSERT INTO items (id, name, extra) VALUES (?, ?, ?)`, 7, "n", "x"); err != nil {
+					t.Fatal(err)
+				}
+				if err := db.Close(); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := os.Stat(db.Path() + "-wal"); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("the WAL is left after Close: %v", err)
+				}
 			}
 			if opts.Capture {
 				if lsn, err := db.LastLSN(ctx); err != nil || lsn == 0 {
