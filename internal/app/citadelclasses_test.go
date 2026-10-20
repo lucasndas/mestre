@@ -18,7 +18,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
-	machinedb "github.com/lucasndas/mestre/internal/store/machine"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 )
 
 // withCitadelClasses gives the world the Citadel side of the effective rules
@@ -32,7 +32,7 @@ func withCitadelClasses(w *commWorld, oo *app.OrchestrationOptions) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mdb, err := machinedb.Open(t.Context(), filepath.Join(t.TempDir(), "maquina.db"), store.Options{Synchronous: "OFF", Clock: w.clk})
+	mdb, err := guildtpl.OpenMachine(t.Context(), filepath.Join(t.TempDir(), "maquina.db"), store.Options{Synchronous: "OFF", Clock: w.clk})
 	if err != nil {
 		t.Fatal(err)
 	}

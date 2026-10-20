@@ -3,6 +3,7 @@ package fakegithub
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -220,6 +221,7 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 		var in struct {
 			Title *string `json:"title"`
 			Body  *string `json:"body"`
+			State *string `json:"state"`
 		}
 		dec := json.NewDecoder(r.Body)
 		dec.DisallowUnknownFields()
@@ -234,6 +236,19 @@ func (s *Server) servePulls(w http.ResponseWriter, r *http.Request, full string,
 		}
 		if in.Body != nil {
 			is["body"] = *in.Body
+		}
+		if in.State != nil { // closing a PR without merging it
+			switch *in.State {
+			case "closed":
+				if !rp.pull(n).merged {
+					rp.pull(n).state = "closed"
+					is["state"] = "closed"
+					is["closed_at"] = s.clk.Now().UTC().Format(time.RFC3339)
+				}
+			case "open":
+				rp.pull(n).state, is["state"] = "open", "open"
+			}
+			s.touch(rp, n)
 		}
 		s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
 		out := s.pullView(rp, full, n, head)
@@ -371,8 +386,8 @@ func (s *Server) createPull(w http.ResponseWriter, r *http.Request, full string)
 		s.write(w, r, inst, http.StatusNotFound, map[string]any{"message": "Not Found"})
 		return true
 	}
-	for _, h := range rp.pulls {
-		if h[0] == in.Head {
+	for n, h := range rp.pulls {
+		if h[0] == in.Head && rp.pull(n).state == "open" {
 			s.mu.Unlock()
 			s.write(w, r, inst, http.StatusUnprocessableEntity, map[string]any{"message": "A pull request already exists for " + in.Head})
 			return true
@@ -388,6 +403,11 @@ func (s *Server) createPull(w http.ResponseWriter, r *http.Request, full string)
 	rp.pulls[n] = [2]string{in.Head, full}
 	px := rp.pull(n)
 	px.draft, px.baseRef = in.Draft, in.Base
+	if rp.git != nil { // the PR starts at the tip of its branch when the double has the branch
+		if sha, ok := rp.git.refs["refs/heads/"+in.Head]; ok {
+			px.headSHA = sha
+		}
+	}
 	s.actions = append(s.actions, Action{App: inst.app, Method: r.Method, Path: r.URL.Path})
 	out := s.pullView(rp, full, n, rp.pulls[n])
 	s.mu.Unlock()
@@ -401,11 +421,20 @@ func (s *Server) serveGraphQL(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	raw, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	var q struct {
+		Query     string         `json:"query"`
+		Variables map[string]any `json:"variables"`
+	}
+	if json.Unmarshal(raw, &q) == nil && strings.Contains(q.Query, "reviewDecision") {
+		s.reviewDecision(w, r, inst, q.Variables)
+		return
+	}
 	var in struct {
 		Query     string            `json:"query"`
 		Variables map[string]string `json:"variables"`
 	}
-	if json.NewDecoder(r.Body).Decode(&in) != nil || !strings.Contains(in.Query, "markPullRequestReadyForReview") {
+	if json.Unmarshal(raw, &in) != nil || !strings.Contains(in.Query, "markPullRequestReadyForReview") {
 		testkit.NotImplemented(s.rep, w, "POST /graphql "+firstWord(in.Query))
 		return
 	}
