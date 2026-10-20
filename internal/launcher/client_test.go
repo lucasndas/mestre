@@ -34,6 +34,10 @@ func (r *rig) spec(id string) terminal.SpawnSpec {
 	}
 }
 
+// CA-CODEX-WIN-02
+//
+// The logon SID the launcher read from the token it made reaches the engine
+// with the process (TestClientSpawnAndKill checks the value).
 func TestClientSpawnAndKill(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
@@ -42,7 +46,7 @@ func TestClientSpawnAndKill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.PID != 4242 || got.Start != "t0" || got.CgroupDir != "/cg/term-t1" {
+	if got.PID != 4242 || got.Start != "t0" || got.CgroupDir != "/cg/term-t1" || got.LogonSID != "S-1-5-5-0-4242" {
 		t.Errorf("Spawned = %+v", got)
 	}
 	if len(r.be.starts) != 1 || r.be.starts[0].Binary != filepath.Join(r.bin, "1.0.0", ptyName()) {

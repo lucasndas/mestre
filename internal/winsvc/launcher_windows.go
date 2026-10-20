@@ -259,6 +259,17 @@ func (b *backend) Start(_ context.Context, r launcher.StartRequest) (launcher.St
 	if err != nil {
 		return launcher.Started{}, err
 	}
+	// The logon SID of the terminal comes from the token this launcher made;
+	// the engine grants it on the socket of the local channel.
+	var logon string
+	if sess.Token != 0 {
+		sid, err := logonSID(sess.Token)
+		if err != nil {
+			sess.Release()
+			return launcher.Started{}, fmt.Errorf("logon SID of the terminal %s: %w", r.ID, err)
+		}
+		logon = sid.String()
+	}
 	proc, pid, err := b.create(sess, r)
 	if err != nil {
 		sess.Release()
@@ -276,7 +287,7 @@ func (b *backend) Start(_ context.Context, r launcher.StartRequest) (launcher.St
 		b.log.Warn("list of mestre-pty not written", "terminal", r.ID, "error", err.Error())
 	}
 	b.watch(r.ID, proc, sess)
-	return launcher.Started{PID: int(pid), Start: start}, nil
+	return launcher.Started{PID: int(pid), Start: start, Logon: logon}, nil
 }
 
 // create is CreateProcessAsUser with everything the docs list: outside any
