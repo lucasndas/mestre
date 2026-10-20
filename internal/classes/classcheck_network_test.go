@@ -20,7 +20,7 @@ func TestCheckSaysWhichProvidersRunWithoutTheNativeNetworkBarrier(t *testing.T) 
 		gap   []providers.ID
 	}{
 		{"linux", offline, []providers.ID{providers.Codex, providers.Antigravity}},
-		{"windows", offline, nil},
+		{"windows", offline, []providers.ID{providers.Codex}},
 		{"linux", "version: 1\n", nil},
 	}
 	for _, tt := range tests {
@@ -81,9 +81,9 @@ func TestCheckSaysCodexRunsWithoutTheNativeWriteBarrier(t *testing.T) {
 // CA-NATIVO-13
 //
 // `class check` translates the controls with the plans B of the machine, as
-// a character of it starts: on Windows, with the plans B that keep the
-// provider network on, Codex and Antigravity run a class without internet
-// with no native network barrier, and the check says so.
+// a character of it starts: on Windows, Codex always runs with the network on
+// (unelevated mode), so the check always says it has no native network
+// barrier; Antigravity says so only with the plan B that turns its sandbox off.
 func TestCheckUsesThePlansBOfTheMachine(t *testing.T) {
 	t.Parallel()
 	const offline = "version: 1\nnetwork: {internet: false}\n"
@@ -92,9 +92,8 @@ func TestCheckUsesThePlansBOfTheMachine(t *testing.T) {
 		fb   providers.NativeFallbacks
 		gap  []providers.ID
 	}{
-		{"default", providers.NativeFallbacks{}, nil},
-		{"codex offline network", providers.NativeFallbacks{CodexOfflineNetwork: true}, []providers.ID{providers.Codex}},
-		{"antigravity no sandbox", providers.NativeFallbacks{AntigravityNoSandbox: true}, []providers.ID{providers.Antigravity}},
+		{"default", providers.NativeFallbacks{}, []providers.ID{providers.Codex}},
+		{"antigravity no sandbox", providers.NativeFallbacks{AntigravityNoSandbox: true}, []providers.ID{providers.Codex, providers.Antigravity}},
 	} {
 		f := newFixture(t)
 		f.lib.OS, f.lib.Fallbacks = "windows", tt.fb

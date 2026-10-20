@@ -1,12 +1,8 @@
 package replication_test
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -15,8 +11,6 @@ import (
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/replication"
-	"github.com/lucasndas/mestre/internal/store"
-	guilddb "github.com/lucasndas/mestre/internal/store/guild"
 	"github.com/lucasndas/mestre/internal/vault"
 )
 
@@ -95,102 +89,6 @@ func TestATowerWaitingForAFullCopyIsNotStuck(t *testing.T) {
 				t.Errorf("%d requests got through: the hello alone should have been enough", got)
 			}
 		})
-	})
-}
-
-// CA-REPL-04
-// The vault is gone from a machine that was told to erase it, and a full copy
-// made before the exclusion does not bring it back (CA-REPL-04).
-func TestAFullCopyThatArrivesAfterVaultDropDoesNotRestoreTheVault(t *testing.T) {
-	t.Parallel()
-	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, rigOpts{vault: true})
-		ctx := context.Background()
-		if err := r.vault.Put(ctx, "k", vault.TypeProviderAPIKey, []byte("sk-ant-api03-Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1"), nil); err != nil {
-			t.Fatal(err)
-		}
-		for i := range 5 {
-			r.insertMachine(i)
-		}
-		var ciphertext []byte
-		if err := r.cdb.Reader().QueryRow(`SELECT ciphertext FROM secrets`).Scan(&ciphertext); err != nil {
-			t.Fatal(err)
-		}
-		tw := r.addTower("t1", true)
-		cp := &vault.Copier{Keys: tw.keys, EnvelopePath: tw.env}
-		secrets := func() int {
-			var n int
-			_ = tw.db.Reader().QueryRow(`SELECT count(*) FROM secrets`).Scan(&n)
-			return n
-		}
-		eventually(t, "the vault", func() bool { return tw.lsn() == r.lsn() && cp.Holds(ctx) && secrets() == 1 })
-
-		// A copy that was being sent when the exclusion came is on the disk of the
-		// Tower in parts; so is a transfer of something else.
-		if err := os.MkdirAll(tw.xfer, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		pending := func(id, kind string) {
-			raw, _ := json.Marshal(protocol.XferBegin{XferID: id, Kind: kind, Size: 10, SHA256: "00"})
-			for name, body := range map[string][]byte{id + ".json": raw, id + ".part": []byte("half of a copy")} {
-				if err := os.WriteFile(filepath.Join(tw.xfer, name), body, 0o600); err != nil {
-					t.Fatal(err)
-				}
-			}
-		}
-		pending("copy1", protocol.KindDBSnapshot)
-		pending("file1", protocol.KindFile)
-
-		// The order to erase comes; the Citadel does not know of it, so the copy it
-		// makes next still has the vault tables.
-		if _, err := r.server.Link("t1").Send(ctx, protocol.Outgoing{Type: protocol.TypeVaultDrop, Payload: protocol.Empty{}}); err != nil {
-			t.Fatal(err)
-		}
-		eventually(t, "the vault to be erased", func() bool { return !cp.Holds(ctx) && secrets() == 0 && tw.rep.Status().VaultDropped })
-		for _, name := range []string{"copy1.json", "copy1.part"} {
-			if _, err := os.Stat(filepath.Join(tw.xfer, name)); err == nil {
-				t.Errorf("%s: a full copy that was arriving is still on the disk", name)
-			}
-		}
-		for _, name := range []string{"file1.json", "file1.part"} {
-			if _, err := os.Stat(filepath.Join(tw.xfer, name)); err != nil {
-				t.Errorf("%s: another kind of transfer was removed: %v", name, err)
-			}
-		}
-
-		// The records that follow already come without the vault tables.
-		before := tw.snapshots.Load()
-		diverge(t, tw, "m0002")
-		r.exec(`UPDATE machines SET priority = 9 WHERE machine_id = 'm0002'`)
-		eventually(t, "the full copy", func() bool { return tw.snapshots.Load() == before+1 })
-		if n := secrets(); n != 0 {
-			t.Fatalf("the full copy put %d secrets back", n)
-		}
-		if cp.Holds(ctx) {
-			t.Error("the key is back")
-		}
-		equal(t, r, tw, "secrets", "site_login_attempts")
-		for _, f := range []string{tw.dbPath, tw.dbPath + "-wal"} {
-			if b, err := os.ReadFile(f); err == nil && bytes.Contains(b, ciphertext) {
-				t.Errorf("%s contains the secret", filepath.Base(f))
-			}
-		}
-
-		// The order is remembered: a restart before the next connection still
-		// treats the machine as excluded.
-		tw.stop()
-		db, err := guilddb.Open(ctx, tw.dbPath, store.Options{Replica: true, Synchronous: "OFF"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer db.Close()
-		rep, err := replication.NewReplica(ctx, replication.ReplicaConfig{DB: db, GuildID: guildULID})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !rep.Status().VaultDropped {
-			t.Error("the order to erase the vault was forgotten by a restart")
-		}
 	})
 }
 

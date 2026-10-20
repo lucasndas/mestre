@@ -99,40 +99,6 @@ func (w *world) pin(u users.User) string {
 	return req.ID
 }
 
-// Part of CA-CANAL-04: the lock holds, every user is told who locked it and when,
-// and the session of the Operator ends. The hook, the decrees, the inbox and the
-// GitHub are the pieces that read it.
-func TestAnAdministratorLocksAndEveryoneIsTold(t *testing.T) {
-	t.Parallel()
-	w := newWorld(t)
-	adm := w.add("Ana", users.Administrator)
-	obs := w.add("Otto", users.Observer)
-	if w.svc.Locked(w.ctx) {
-		t.Fatal("locked from the start")
-	}
-	if err := w.svc.Lock(w.ctx, adm); err != nil {
-		t.Fatal(err)
-	}
-	if !w.svc.Locked(w.ctx) {
-		t.Fatal("not locked")
-	}
-	for _, u := range []users.User{w.owner, adm, obs} {
-		if got := w.told[u.ID]; len(got) != 1 || !strings.Contains(got[0], "Ana travou o Mestre às 14:30") {
-			t.Errorf("%s was told %q", u.Name, got)
-		}
-	}
-	if w.ended != 1 {
-		t.Errorf("the session of the Operator was ended %d times", w.ended)
-	}
-	// locking again says nothing again
-	if err := w.svc.Lock(w.ctx, adm); err != nil {
-		t.Fatal(err)
-	}
-	if len(w.told[obs.ID]) != 1 || w.ended != 1 || !slices.Equal(w.flips, []bool{true}) {
-		t.Errorf("a second lock changed things: told %v, ended %d, flips %v", w.told[obs.ID], w.ended, w.flips)
-	}
-}
-
 func TestALevelBelowDoesNotLockAndTheAttemptIsRecorded(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
@@ -241,5 +207,39 @@ func TestTheLockSurvivesARestartAndAnErrorCountsAsLocked(t *testing.T) {
 	_ = other.db.Close()
 	if !other.svc.Locked(other.ctx) {
 		t.Error("an error reading the lock counted as unlocked")
+	}
+}
+
+// Part of CA-CANAL-04: the lock holds, every user is told who locked it and when,
+// and the session of the Operator ends. The hook, the decrees, the inbox and the
+// GitHub are the pieces that read it.
+func TestAnAdministratorLocksAndEveryoneIsTold(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	adm := w.add("Ana", users.Administrator)
+	obs := w.add("Otto", users.Observer)
+	if w.svc.Locked(w.ctx) {
+		t.Fatal("locked from the start")
+	}
+	if err := w.svc.Lock(w.ctx, adm); err != nil {
+		t.Fatal(err)
+	}
+	if !w.svc.Locked(w.ctx) {
+		t.Fatal("not locked")
+	}
+	for _, u := range []users.User{w.owner, adm, obs} {
+		if got := w.told[u.ID]; len(got) != 1 || !strings.Contains(got[0], "Ana travou o Mestre às 14:30") {
+			t.Errorf("%s was told %q", u.Name, got)
+		}
+	}
+	if w.ended != 1 {
+		t.Errorf("the session of the Operator was ended %d times", w.ended)
+	}
+	// locking again says nothing again
+	if err := w.svc.Lock(w.ctx, adm); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.told[obs.ID]) != 1 || w.ended != 1 || !slices.Equal(w.flips, []bool{true}) {
+		t.Errorf("a second lock changed things: told %v, ended %d, flips %v", w.told[obs.ID], w.ended, w.flips)
 	}
 }

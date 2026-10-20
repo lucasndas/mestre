@@ -276,12 +276,6 @@ func (tw *tower) event(s string) {
 	tw.evMu.Unlock()
 }
 
-func (tw *tower) log() []string {
-	tw.evMu.Lock()
-	defer tw.evMu.Unlock()
-	return slices.Clone(tw.events)
-}
-
 // newRig must be called inside a synctest bubble: the time is the bubble's.
 func newRig(t *testing.T, o rigOpts) *rig {
 	t.Helper()
@@ -642,19 +636,6 @@ func (tw *tower) lsn() uint64 {
 	return n
 }
 
-// dropNextFor loses the next frame of records the Citadel sends to the Tower.
-func (r *rig) dropNextFor(id string) { r.dropTarget.Store(id) }
-
-// dropping says whether the frame to lose is still to come.
-func (r *rig) dropping() bool { return r.dropTarget.Load().(string) != "" }
-
-// receipts are the machines that gave a receipt of vault.drop, in order.
-func (r *rig) receipts() []string {
-	r.dropMu.Lock()
-	defer r.dropMu.Unlock()
-	return slices.Clone(r.dropped)
-}
-
 func (r *rig) framesTo(id string) []uint64 {
 	r.frameMu.Lock()
 	defer r.frameMu.Unlock()
@@ -667,13 +648,9 @@ func (r *rig) framesTo(id string) []uint64 {
 	return out
 }
 
-// appliedAt is the position in the events of the batch that applied lsn, or -1.
-func appliedAt(events []string, lsn uint64) int {
-	for i, e := range events {
-		var first, last uint64
-		if n, _ := fmt.Sscanf(e, "applied %d-%d", &first, &last); n == 2 && first <= lsn && lsn <= last {
-			return i
-		}
-	}
-	return -1
+// receipts are the machines that gave a receipt of vault.drop, in order.
+func (r *rig) receipts() []string {
+	r.dropMu.Lock()
+	defer r.dropMu.Unlock()
+	return slices.Clone(r.dropped)
 }

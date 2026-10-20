@@ -24,9 +24,10 @@ import (
 // on, for the `mestre` CLI to reach the engine, and its internet is blocked
 // only by the rules of the dispatcher, without the native barrier
 // (CodexNoNativeNetwork, which the panel shows). On Windows the sandbox
-// blocks only IP traffic, so the network stays off; the conformance test
-// checks that the socket is reached, and its fallback (CodexOfflineNetwork)
-// turns the network on there too.
+// runs in the unelevated mode (windows.sandbox, CodexWindowsSandboxKey): the
+// command runs as the user of the terminal, so two characters do not share a
+// runner, and the network of that mode is open, so a class without internet
+// has no native network barrier there either (CodexNoNativeNetwork).
 func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 	if err := p.check(); err != nil {
 		return NativeControls{}, err
@@ -35,11 +36,12 @@ func (c *codex) Native(p NativePolicy) (NativeControls, error) {
 	// network, and the `mestre` CLI would not reach the local channel. The
 	// class without write runs in workspace-write with no extra writable
 	// root, and the dispatcher denies its writes (CodexNoNativeWrite).
-	network := "true"
-	if p.Offline && !CodexNoNativeNetwork(p) {
-		network = "false"
+	args := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"}
+	if machineOS(p.OS) == "windows" {
+		// Reserved to the engine (the base and the repository cannot set
+		// it), and never danger-full-access.
+		args = append(args, "-c", CodexWindowsSandboxKey+`="`+CodexWindowsSandboxMode+`"`)
 	}
-	args := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=" + network}
 	roots, err := codexGitRoots(p)
 	if err != nil {
 		return NativeControls{}, err
@@ -74,12 +76,11 @@ func CodexNoNativeWrite(p NativePolicy) bool { return p.NoWrite }
 
 // CodexNoNativeNetwork reports whether a Codex character of this policy
 // runs without the native network barrier its class asks for: no internet,
-// and the network of the sandbox on for the local channel (always on Linux;
-// on Windows, with the fallback). The panel shows it on the sheet and the
-// class check warns (docs/classes/reforco-nativo.md).
-func CodexNoNativeNetwork(p NativePolicy) bool {
-	return p.Offline && (machineOS(p.OS) != "windows" || p.Fallbacks.CodexOfflineNetwork)
-}
+// and the network of the sandbox on (on Linux for the local channel; on
+// Windows because the unelevated mode has no network barrier at all). The
+// panel shows it on the sheet and the class check warns, on both systems
+// (docs/classes/reforco-nativo.md).
+func CodexNoNativeNetwork(p NativePolicy) bool { return p.Offline }
 
 // codexGitRoots are the folders of the mirror a commit in a linked worktree
 // writes: the git folder of the worktree (index, HEAD) and the objects, refs

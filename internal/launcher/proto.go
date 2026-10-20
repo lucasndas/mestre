@@ -101,6 +101,9 @@ type Response struct {
 	Start string `json:"start,omitempty"`
 	// CgroupDir is the cgroup of the terminal (Linux with a delegated one).
 	CgroupDir string `json:"cgroup,omitempty"`
+	// Logon is the logon SID of the terminal (Windows): what the engine
+	// grants on the socket of the local channel while the terminal lives.
+	Logon string `json:"logon,omitempty"`
 }
 
 // ErrRefused is wrapped by the error of a request the launcher refused.
