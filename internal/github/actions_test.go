@@ -5,11 +5,15 @@ import (
 	"errors"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit/fakegithub"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
@@ -32,6 +36,9 @@ type actionsRig struct {
 	gh    *fakegithub.Server
 	guard *github.Guard
 	objs  *github.Objects
+	rest  *github.REST
+	// issues is `mestre issue` over the same GitHub and the same objects.
+	issues *github.IssueService
 }
 
 func newActionsRig(t *testing.T, tb tables) *actionsRig {
@@ -51,7 +58,8 @@ func newActionsRig(t *testing.T, tb tables) *actionsRig {
 	gh.IssueToken("ghs_tok", "grand_master")
 	rest := &github.REST{BaseURL: "https://api.github.com", HTTP: &http.Client{Transport: fakenet.HandlerTransport(gh)}, Token: func(context.Context, string) (string, error) { return "ghs_tok", nil }}
 	objs := &github.Objects{DB: db, Clock: clk}
-	return &actionsRig{t: t, ctx: ctx, gh: gh, objs: objs, guard: &github.Guard{Objects: objs, GH: rest, Tables: tb}}
+	return &actionsRig{t: t, ctx: ctx, gh: gh, objs: objs, rest: rest, guard: &github.Guard{Objects: objs, GH: rest, Tables: tb},
+		issues: &github.IssueService{API: rest, Objects: objs, Tables: tb, Clock: clk}}
 }
 
 func refusalCode(err error) string {
@@ -150,6 +158,32 @@ func TestTheEpicLabelIsCreatedBeforeTheFirstEpic(t *testing.T) {
 	if err := r.guard.EnsureLabels(r.ctx, repoFull, []string{github.EpicLabel}); err != nil || len(r.gh.Actions()) != acts {
 		t.Fatalf("an existing label is reused: %v", err)
 	}
+	// the first epic, end to end: the Grão-Mestre creates the issue with the
+	// label in a repository that has none, and GitHub sees the label created
+	// first and the issue after it
+	e := newActionsRig(t, tables{})
+	made, err := e.issues.Create(e.ctx, github.Actor{Kind: github.ActorGrandMaster}, repoFull, github.IssueCreate{Title: "Primeiro épico", Labels: []string{github.EpicLabel}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, a := range e.gh.Actions() {
+		switch a.Path {
+		case "/repos/" + repoFull + "/labels":
+			order = append(order, "label")
+		case "/repos/" + repoFull + "/issues":
+			order = append(order, "issue")
+		}
+	}
+	if strings.Join(order, ",") != "label,issue" {
+		t.Fatalf("GitHub received %v, want the label created and then the issue", order)
+	}
+	if _, _, _, labels, _ := e.gh.Issue(repoFull, made.Number); !slices.Contains(labels, github.EpicLabel) {
+		t.Errorf("the first epic has the labels %v", labels)
+	}
+	if e.gh.Labels(repoFull)[github.EpicLabel] == "" {
+		t.Errorf("the label was not created: %v", e.gh.Labels(repoFull))
+	}
 }
 
 // CA-GH-ACOES-05
@@ -230,6 +264,56 @@ func TestTheHumanLabelIsTakenOnlyByThePeople(t *testing.T) {
 	}
 	if r.gh.Labels(repoFull)[github.HumanLabel] != "Só uma pessoa aprova" {
 		t.Fatalf("the label was not created: %v", r.gh.Labels(repoFull))
+	}
+
+	// end to end on a PR that carries the label: the refusals leave it on
+	// GitHub, and when a person takes it off there the PR is back to the
+	// normal conditions of the Grão-Mestre
+	g := newActionsRig(t, tables{"1-a": {Repo: repoFull, Epic: 1}})
+	sha := strings.Repeat("a", 40)
+	pr := g.gh.AddPR(repoFull, "Login", "42-login", repoFull)
+	g.gh.SetPullAuthor(repoFull, pr, "dev[bot]")
+	g.gh.SetPull(repoFull, pr, sha, false, "clean")
+	g.gh.AddPullFile(repoFull, pr, "internal/pkg/file.go", "@@ -1 +1 @@\n-a\n+b\n")
+	g.gh.AddCheck(repoFull, sha, "build", "success")
+	g.gh.AddReview(repoFull, pr, "revisor[bot]", "APPROVED")
+	g.gh.AddIssueLabel(repoFull, pr, github.HumanLabel)
+	if err := g.objs.Register(g.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: pr, Table: "1-a"}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(g.gh.Actions())
+	for name, a := range map[string]github.Actor{
+		"a character of the table": {Kind: github.ActorTable, Table: "1-a", MestreDaMesa: true},
+		"the Grão-Mestre":          {Kind: github.ActorGrandMaster},
+	} {
+		_, err := g.issues.Update(g.ctx, a, repoFull, pr, github.IssueUpdate{RemoveLabel: []string{github.HumanLabel}})
+		if refusalCode(err) != github.CodeReservedLabel {
+			t.Errorf("%s taking the label from the PR: %v, want reserved_label", name, err)
+		}
+	}
+	if len(g.gh.Actions()) != before {
+		t.Errorf("GitHub received %d writes from the refused attempts", len(g.gh.Actions())-before)
+	}
+	src := approvals.GitHubSource{
+		Reader: func(context.Context, string) (approvals.PullReader, error) { return g.rest, nil },
+		Characters: func(context.Context) (map[string]bool, error) {
+			return map[string]bool{"dev[bot]": true, "revisor[bot]": true}, nil
+		},
+	}
+	conditions := func() []string {
+		t.Helper()
+		f, err := src.PullRequest(g.ctx, "meu-app", chain.PRRef{Repo: repoFull, Number: pr, SHA: sha})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return chain.DefaultRules().Conditions(chain.Request{Type: classes.RequestPR}, f, true)
+	}
+	if got := conditions(); len(got) != 1 || !strings.Contains(got[0], github.HumanLabel) {
+		t.Fatalf("with the label the conditions say %v, want only mestre:humano", got)
+	}
+	g.gh.RemoveIssueLabel(repoFull, pr, github.HumanLabel)
+	if got := conditions(); len(got) != 0 {
+		t.Errorf("after a person took the label the conditions say %v, want the normal ones (none)", got)
 	}
 }
 

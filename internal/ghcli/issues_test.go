@@ -9,10 +9,13 @@ import (
 )
 
 // CA-CLI-GH-01
+// Part of CA-GH-ACOES-01: `mestre issue comment` end to end, refused with the epic that owns the issue.
 // Part of CA-MM-03: the table master is refused the issue of another table (the commands reply and notify are in internal/app)
 func TestAnIssueOutsideTheEpicOfTheTableIsRefused(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
+	otherEpic := r.gh.AddIssue(repoFull, "épico 43", github.EpicLabel)
+	r.tbl["meu-app/43-outra"] = github.TableRef{Repo: repoFull, Epic: otherEpic}
 	other := r.gh.AddIssue(repoFull, "de outra mesa")
 	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: other, Table: "meu-app/43-outra"}); err != nil {
 		t.Fatal(err)
@@ -27,6 +30,9 @@ func TestAnIssueOutsideTheEpicOfTheTableIsRefused(t *testing.T) {
 		got := r.run("tm", cmd, flags, args...)
 		if got.OK || got.Exit != 3 || got.Code != "outside_epic" {
 			t.Errorf("%s: %+v, want exit 3 outside_epic", cmd, got)
+		}
+		if !strings.Contains(got.Error, "#"+itoa(otherEpic)) {
+			t.Errorf("%s: %q does not cite the epic #%d that owns the issue", cmd, got.Error, otherEpic)
 		}
 	}
 	if n := len(r.gh.Comments(repoFull, other)); n != 0 {
@@ -143,6 +149,7 @@ func TestTheReservedLabelsAreNotChangedByATable(t *testing.T) {
 	if err := r.objs.Register(r.ctx, github.Object{Repo: repoFull, Kind: github.KindIssue, Number: n, Table: "meu-app/42-login"}); err != nil {
 		t.Fatal(err)
 	}
+	r.gh.AddIssueLabel(repoFull, n, "mestre:humano") // a person put it
 	before := len(r.gh.Actions())
 	for name, flags := range map[string]map[string]any{
 		"remove mestre:humano": {"remove-label": []any{"mestre:humano"}},
@@ -160,12 +167,23 @@ func TestTheReservedLabelsAreNotChangedByATable(t *testing.T) {
 	if len(r.gh.Actions()) != before {
 		t.Errorf("GitHub received %d writes", len(r.gh.Actions())-before)
 	}
+	if _, _, _, labels, _ := r.gh.Issue(repoFull, n); !slices.Contains(labels, "mestre:humano") {
+		t.Errorf("the label mestre:humano did not stay: %v", labels)
+	}
 	// the Grão-Mestre puts epico and mestre:humano, never takes mestre:humano
 	if got := r.run("gm", "issue update", map[string]any{"add-label": []any{"mestre:humano"}}, itoa(n)); !got.OK {
 		t.Errorf("GM adds mestre:humano: %+v", got)
 	}
 	if got := r.run("gm", "issue update", map[string]any{"remove-label": []any{"mestre:humano"}}, itoa(n)); got.Code != "reserved_label" {
 		t.Errorf("GM removes mestre:humano: %+v", got)
+	}
+	if _, _, _, labels, _ := r.gh.Issue(repoFull, n); !slices.Contains(labels, "mestre:humano") {
+		t.Errorf("the Grão-Mestre took the label: %v", labels)
+	}
+	// and a person takes it on GitHub: the issue is then free of it
+	r.gh.RemoveIssueLabel(repoFull, n, "mestre:humano")
+	if _, _, _, labels, _ := r.gh.Issue(repoFull, n); slices.Contains(labels, "mestre:humano") {
+		t.Errorf("a person could not take the label: %v", labels)
 	}
 }
 

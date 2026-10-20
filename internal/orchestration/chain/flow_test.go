@@ -33,13 +33,21 @@ func peopleRequest(t *testing.T, w *world) (id int64, ana users.User) {
 func TestARequestThatNobodyAnswersExpiresAndTheQuestionsSayIt(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOpts{flow: true})
+	// the time of the people is 24 h, as the criterion says (the default file
+	// gives 2 h only to the permission of a command)
+	st, _, _ := w.policy.Chain(w.ctx, w.slug)
+	st.PeopleDeadlines = map[classes.RequestType]time.Duration{}
+	w.policy.set(st)
 	id, ana := peopleRequest(t, w)
+	if got := w.request(id).Deadline.Sub(w.clk.Now()); got != 24*time.Hour {
+		t.Fatalf("the time of the people = %s, want 24h", got)
+	}
 	ref, _, ok := w.chn.To(ana.ID)
 	if !ok {
 		t.Fatal("Ana was not asked")
 	}
 	asked := w.chn.Sent()
-	w.clk.Advance(2*time.Hour - time.Second)
+	w.clk.Advance(24*time.Hour - time.Second)
 	if w.request(id).State != chain.Open {
 		t.Fatal("it expired before the time of the people")
 	}

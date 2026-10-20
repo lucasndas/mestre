@@ -3,6 +3,7 @@ package github_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -184,10 +185,16 @@ func TestTheLeaseIsRenewedByAConditionalListingEvery30SecondsAndNothingElseLists
 		if rig.gh.Used(lairToken) != used {
 			t.Fatal("the 304 spent quota")
 		}
-		// the lease runs from the sending of the check at 30 s
+		// the lease runs 60 s from the sending of the check at 30 s: with GitHub
+		// out, no later check renews it, so it is valid at 59 s and gone at 60 s
+		rig.gh.DownGit(http.StatusServiceUnavailable)
 		advance(59 * time.Second)
 		if !f.LeaseValid() {
 			t.Fatal("the lease is gone 59 s after the check")
+		}
+		advance(time.Second)
+		if f.LeaseValid() {
+			t.Fatal("the lease is still valid 60 s after the check that renewed it")
 		}
 	})
 	// the wall clock that jumped (the machine slept) ends the lease
@@ -300,7 +307,32 @@ func TestThePromotedMachineWaits60SecondsBeforeAnyActionAndThenChecksTheLock(t *
 			t.Fatalf("claim = %v, %v", won, err)
 		}
 		claimed := len(rig.gh.Requests())
-		f := guild.NewFence(guild.FenceConfig{Lock: l, Clock: clk, Epoch: func() uint64 { return 4 }, Promoted: true})
+		// the steps after the wait, in the order they happen: the check of the
+		// lock (a listing of the refs), the reconciliation, and the first read of
+		// the bot (the Telegram turned on by the fence)
+		var mu sync.Mutex
+		var steps []string
+		step := func(s string) { mu.Lock(); steps = append(steps, s); mu.Unlock() }
+		reconcileFails := true
+		var f *guild.Fence
+		f = guild.NewFence(guild.FenceConfig{Lock: l, Clock: clk, Epoch: func() uint64 { return 4 }, Promoted: true,
+			Reconcile: func(context.Context) error {
+				step(fmt.Sprintf("lock checked: %d listings", len(rig.listings())))
+				if f.Allow(guild.ExternalTelegram) == nil || f.Allow(guild.ExternalGitHub) == nil {
+					t.Error("the fence allowed an action while it reconciled")
+				}
+				step("reconcile")
+				if reconcileFails {
+					reconcileFails = false
+					return errors.New("github: 502")
+				}
+				return nil
+			},
+			OnChange: func(s guild.FenceState) {
+				if s == guild.FenceConfirmed {
+					step("bot read")
+				}
+			}})
 		go func() { _ = f.Run(ctx) }()
 		synctest.Wait()
 		advance(59 * time.Second)
@@ -312,9 +344,28 @@ func TestThePromotedMachineWaits60SecondsBeforeAnyActionAndThenChecksTheLock(t *
 		if len(rig.gh.Requests()) != claimed {
 			t.Fatal("a request to GitHub during the wait")
 		}
+		mu.Lock()
+		if len(steps) != 0 {
+			t.Fatalf("steps during the wait: %v", steps)
+		}
+		mu.Unlock()
 		advance(time.Second)
-		if len(rig.gh.Requests()) != claimed+1 || f.State() != guild.FenceConfirmed || f.Allow(guild.ExternalTelegram) != nil || f.Allow(guild.ExternalGitHub) != nil {
-			t.Fatalf("at 60 s: %d requests (was %d), state %s", len(rig.gh.Requests()), claimed, f.State())
+		// at 60 s: the lock is checked and the reconciliation runs (and fails
+		// here): the Telegram and the GitHub stay off, the fence keeps waiting
+		if len(rig.gh.Requests()) != claimed+1 || f.State() != guild.FenceWaiting || f.Allow(guild.ExternalTelegram) == nil || f.Allow(guild.ExternalGitHub) == nil {
+			t.Fatalf("at 60 s with the reconciliation failing: %d requests (was %d), state %s", len(rig.gh.Requests()), claimed, f.State())
+		}
+		// the next check (30 s later) reconciles again and only then the bot is read
+		advance(30 * time.Second)
+		if f.State() != guild.FenceConfirmed || f.Allow(guild.ExternalTelegram) != nil || f.Allow(guild.ExternalGitHub) != nil {
+			t.Fatalf("after the reconciliation worked: state %s", f.State())
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		// the listing of the claim is the first one
+		want := []string{"lock checked: 2 listings", "reconcile", "lock checked: 3 listings", "reconcile", "bot read"}
+		if strings.Join(steps, "|") != strings.Join(want, "|") {
+			t.Fatalf("steps = %q, want %q", steps, want)
 		}
 	})
 }

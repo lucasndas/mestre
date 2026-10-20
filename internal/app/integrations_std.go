@@ -461,6 +461,36 @@ func (r *stdRun) Users() *users.Service                       { return r.users }
 // BindFence implements IntegrationRun.
 func (r *stdRun) BindFence(f *guild.Fence) { r.fence.Store(f) }
 
+// tablePROpened tells the table that its PR was opened or updated by the
+// engine: a table in work goes to review, one in review learns the new head
+// (docs/orquestracao/mesas.md#estados, CA-SYNC-02).
+func tablePROpened(orc *Orchestration) func(ctx context.Context, key string, number int, head string) error {
+	return func(ctx context.Context, key string, number int, head string) error {
+		ws, id, ok := cutKey(key)
+		if !ok {
+			return fmt.Errorf("app: %q is not the key of a table", key)
+		}
+		_, err := orc.Tables.PROpened(ctx, ws, id, number, head)
+		return err
+	}
+}
+
+// refusedSending tells the Grand Master of the workspace that GitHub refused the
+// sending of the branch of a table (docs/cli/coordenacao-github.md, CA-CLI-GH-05):
+// the word comes to its inbox, and the engine tries no other way.
+func (r *stdRun) refusedSending(orc *Orchestration) func(ctx context.Context, c characters.Character, code, reason string) {
+	return func(ctx context.Context, c characters.Character, code, reason string) {
+		gm, ok, err := orc.Registry.GrandMaster(ctx, c.Workspace)
+		if err != nil || !ok {
+			return
+		}
+		text := fmt.Sprintf("O envio da branch da mesa %s foi recusado (%s): %s. O motor não tenta outro caminho.", c.Table, code, reason)
+		if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: c.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
+			r.env.Log.Warn("app: the Grand Master was not told of the refusal of GitHub", "workspace", c.Workspace, "err", err)
+		}
+	}
+}
+
 // FenceChanged implements IntegrationRun.
 func (r *stdRun) FenceChanged(s guild.FenceState) { r.notice.Changed(s) }
 
@@ -547,16 +577,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
-		Refused: func(ctx context.Context, c characters.Character, code, reason string) {
-			gm, ok, err := orc.Registry.GrandMaster(ctx, c.Workspace)
-			if err != nil || !ok {
-				return
-			}
-			text := fmt.Sprintf("O envio da branch da mesa %s foi recusado (%s): %s. O motor não tenta outro caminho.", c.Table, code, reason)
-			if _, err := orc.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: c.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: inbox.SystemSender, Text: text}); err != nil {
-				r.env.Log.Warn("app: the Grand Master was not told of the refusal of GitHub", "workspace", c.Workspace, "err", err)
-			}
-		},
+		Refused: r.refusedSending(orc), Opened: tablePROpened(orc),
 		Executed: r.decrees.Fulfilled, Heads: &github.ReviewedHeads{DB: r.env.DB, Clock: r.env.Clock}, Settings: stdSettings{r},
 		Approver: lateApprover{r}, Merges: mergeHost{r}, Rulesets: lateRulesets{r},
 	}
