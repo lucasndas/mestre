@@ -173,7 +173,10 @@ func (rt *Runtime) Start(ctx context.Context, cmd StartCommand) (StartResult, er
 		rt.mu.Unlock()
 	}()
 	provider := providerOfAgent(req.Snapshot.Sheet.Agent)
-	if cmd.Request.Role != RoleGrandMaster && req.Table.ID != "" && rt.o.Tables != nil {
+	// The files of the worktree are checked before every character, the Grand
+	// Master included: its worktree is the main clone (the table ""), and a
+	// provider whose files were not generated there does not start it.
+	if rt.o.Tables != nil && (req.Role == RoleGrandMaster || req.Table.ID != "") {
 		if err := rt.o.Tables.CheckStart(ctx, req.Workspace, req.Table.ID, req.Dir, provider); err != nil {
 			return StartResult{}, err
 		}
