@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/approvals"
+	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
@@ -44,6 +45,14 @@ type StandardIntegration struct {
 	// HTTP is the client of both (nil: one with a time limit).
 	TelegramBase, GitHubBase string
 	HTTP                     *http.Client
+	// WhisperURL is the whisper-server of this machine (http://127.0.0.1:<port>);
+	// empty: no machine transcribes, and every voice message is delivered with
+	// the reason. The installation sets it (docs/desenvolvimento/ligacao-de-producao.md).
+	WhisperURL string
+	// FFmpeg is the program that converts the audio (default "ffmpeg").
+	FFmpeg string
+	// AttachmentLimit is the biggest attachment (default 20 MB).
+	AttachmentLimit int64
 }
 
 // Open implements Integration. It reads nothing from the vault and writes nothing
@@ -129,8 +138,10 @@ type stdRun struct {
 	// routing decides the workspace of each message of a user.
 	routing *telegram.Routing
 	// block sends the messages that ask something of the users because a table is stopped.
-	block  *telegram.BlockChannel
-	dc     *telegram.DecreeChannel
+	block *telegram.BlockChannel
+	dc    *telegram.DecreeChannel
+	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
+	fetch  atomic.Pointer[telegram.Client]
 	dg     *telegram.DigestChannel
 	ac     *telegram.ApprovalChannel
 	alert  *telegram.OwnerAlerts
@@ -226,9 +237,11 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	case token == "":
 		return nil, fmt.Errorf("no token of the Telegram bot in the vault (%s)", TelegramTokenSecret)
 	}
+	client := &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP}
+	r.fetch.Store(client)
 	bot, err := telegram.New(telegram.Options{
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
-		Client: &telegram.Client{Token: token, BaseURL: r.s.TelegramBase, HTTP: r.s.HTTP},
+		Client: client,
 		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
 		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
@@ -337,6 +350,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		}
 		return err == nil && tb.State == tables.StateOpen, err
 	})
+	r.routing.Files = r.attachments(orc)
 	var dgst *digest.Service
 	if orc.Policy != nil && orc.Chain != nil {
 		var err error
@@ -510,6 +524,51 @@ func (d inboxDeliverer) Deliver(ctx context.Context, m telegram.Delivery) error 
 	}
 	_, err = d.orc.Inbox.Enqueue(ctx, telegram.NewItem(m, gm.ID))
 	return err
+}
+
+// attachments is the reception of the files of the users: the Bot API through the
+// client of the bot, the main clone of each workspace, and the transcription of
+// the voice messages by the machines the installation names.
+func (r *stdRun) attachments(orc *Orchestration) telegram.Files {
+	var machines func(context.Context) []attachments.Machine
+	if r.s.WhisperURL != "" {
+		w := attachments.Whisper{BaseURL: r.s.WhisperURL, HTTP: r.s.HTTP, Prompt: "Conversa em português sobre desenvolvimento de software."}
+		machines = func(context.Context) []attachments.Machine {
+			return []attachments.Machine{{Name: "cidadela", Engine: w}}
+		}
+	}
+	tr := attachments.NewTranscription(r.env.Clock, attachments.FFmpeg{Path: r.s.FFmpeg}, machines, "")
+	svc, err := attachments.New(attachments.Options{DB: r.env.DB, Clock: r.env.Clock, Fetcher: lateFetcher{r}, Limit: r.s.AttachmentLimit, Transcriber: tr,
+		Root: func(_ context.Context, workspace string) (string, error) {
+			return orc.Workspaces.Layout().Principal(workspace), nil
+		},
+		Mask: r.env.Masker.Mask, Logger: r.env.Log})
+	if err != nil {
+		r.env.Log.Warn("app: the attachments are off", "err", err)
+		return nil
+	}
+	return svc
+}
+
+// lateFetcher is the client of the Bot API, which exists once the bot is made.
+type lateFetcher struct{ r *stdRun }
+
+var errNoBot = errors.New("app: the bot of the Telegram is not up")
+
+func (f lateFetcher) GetFile(ctx context.Context, id string) (string, int64, error) {
+	c := f.r.fetch.Load()
+	if c == nil {
+		return "", 0, errNoBot
+	}
+	return c.GetFile(ctx, id)
+}
+
+func (f lateFetcher) Download(ctx context.Context, path string, limit int64) ([]byte, error) {
+	c := f.r.fetch.Load()
+	if c == nil {
+		return nil, errNoBot
+	}
+	return c.Download(ctx, path, limit)
 }
 
 // digestInbox puts the list of the summary in the inbox of the Grão-Mestre.

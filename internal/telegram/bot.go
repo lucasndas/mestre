@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/glossary"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/users"
@@ -36,6 +37,9 @@ type Inbound struct {
 	ReplyWorkspace    string
 	ReplyMesa         string
 	HasReplyWorkspace bool
+	// File is the file the message carries (a voice message, a photo, a document);
+	// the routing receives it once the workspace is known.
+	File *attachments.Ref
 }
 
 // Stranger is an update of someone who is not a user, as the Owner reads it in
@@ -478,7 +482,7 @@ func (b *Bot) message(ctx context.Context, m *Message) {
 		b.say(ctx, m.Chat.ID, u.ID, "Com o seu nível você não fala com o Grão-Mestre. "+b.allowedCommands(u))
 		return
 	}
-	in := Inbound{User: u, Kind: m.Kind(), Text: text, ChatID: m.Chat.ID, MessageID: m.MessageID}
+	in := Inbound{User: u, Kind: m.Kind(), Text: text, ChatID: m.Chat.ID, MessageID: m.MessageID, File: m.FileOf()}
 	if in.Text == "" {
 		in.Text = strings.TrimSpace(m.Caption)
 	}
