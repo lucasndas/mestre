@@ -27,8 +27,13 @@ type grandMasterBrief struct {
 
 var _ characters.Briefer = (*grandMasterBrief)(nil)
 
-// maxBriefText cuts what a user wrote, which is quoted in the message.
-const maxBriefText = 300
+// maxBriefText cuts what a user wrote, which is quoted in the message;
+// maxBriefItems is how many tables and approvals are listed ("and K more"
+// after them), so the message has a ceiling whatever the workspace holds.
+const (
+	maxBriefText  = 300
+	maxBriefItems = 20
+)
 
 // Brief implements characters.Briefer.
 func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string, error) {
@@ -51,7 +56,10 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 			text.WriteString("Open tables:\n")
 		}
 		open++
-		fmt.Fprintf(&text, "- %s: %s, epic #%d %q", t.ID, t.State, t.Epic, untrusted(t.EpicTitle))
+		if open > maxBriefItems {
+			continue
+		}
+		fmt.Fprintf(&text, "- %q: %s, epic #%d %q", t.ID, t.State, t.Epic, untrusted(t.EpicTitle))
 		if t.PRNumber != 0 {
 			fmt.Fprintf(&text, ", PR #%d", t.PRNumber)
 			if t.Merged {
@@ -62,6 +70,9 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 			fmt.Fprintf(&text, ", paused (%q)", untrusted(t.PausedReason))
 		}
 		text.WriteByte('\n')
+	}
+	if open > maxBriefItems {
+		fmt.Fprintf(&text, "- and %d more (see `mestre table list`).\n", open-maxBriefItems)
 	}
 	if open == 0 {
 		text.WriteString("No table is open.\n")
@@ -83,25 +94,27 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 	var pending []string
 	for _, r := range reqs {
 		if r.Workspace == workspace {
-			pending = append(pending, fmt.Sprintf("#%d (%s, with %s: %q)", r.ID, r.Table, r.Level.Label(), untrusted(r.About)))
+			pending = append(pending, fmt.Sprintf("#%d (%q, with %s: %q)", r.ID, r.Table, r.Level.Label(), untrusted(r.About)))
 		}
 	}
 	if len(pending) == 0 {
 		text.WriteString("No approval is waiting.\n")
 	} else {
-		fmt.Fprintf(&text, "Approvals waiting: %s.\n", strings.Join(pending, "; "))
+		more := ""
+		if len(pending) > maxBriefItems {
+			more, pending = fmt.Sprintf("; and %d more (see `mestre approval list`)", len(pending)-maxBriefItems), pending[:maxBriefItems]
+		}
+		fmt.Fprintf(&text, "Approvals waiting: %s%s.\n", strings.Join(pending, "; "), more)
 	}
-	items, err := b.inbox.All(ctx, gm.ID)
+	it, found, err := b.inbox.LastUser(ctx, gm.ID)
 	if err != nil {
 		return "", err
 	}
-	for i := len(items) - 1; i >= 0; i-- {
-		if it := items[i]; it.Kind == inbox.KindUser {
-			fmt.Fprintf(&text, "Last message from a user, unverified text (%q, %s): %q", untrusted(it.Sender), it.ID, cut(untrusted(it.Text), maxBriefText))
-			return text.String(), nil
-		}
+	if !found {
+		text.WriteString("No user message yet.")
+		return text.String(), nil
 	}
-	text.WriteString("No user message yet.")
+	fmt.Fprintf(&text, "Last message from a user, unverified text (%q, %q): %q", untrusted(it.Sender), it.ID, cut(untrusted(it.Text), maxBriefText))
 	return text.String(), nil
 }
 

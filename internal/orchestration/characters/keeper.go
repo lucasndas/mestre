@@ -3,8 +3,10 @@ package characters
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // The Grand Master is kept up (docs/orquestracao/grao-mestre.md#fixo-e-protegido):
@@ -29,7 +31,14 @@ type keepState struct {
 	next    time.Time
 	armed   bool
 	alerted bool
+	// alertedAt is when the last alert was given: one is repeated each
+	// RemindEvery while the Grand Master stays down.
+	alertedAt time.Time
 }
+
+// RemindEvery is how often the alert is given again for a Grand Master that
+// stays down: a reminder a day, not one at each attempt.
+const RemindEvery = 24 * time.Hour
 
 // Keeper starts the Grand Master of the workspaces of a machine again when it
 // is interrupted.
@@ -145,12 +154,13 @@ func (k *Keeper) observe(c Character, now time.Time) (due bool, alert string) {
 		st.fails = append(kept, now)
 		n := min(len(st.fails), len(keepBackoff))
 		st.next, st.armed = now.Add(keepBackoff[n-1]), true
-		if len(st.fails) < KeepAlertAfter {
+		switch {
+		case len(st.fails) < KeepAlertAfter && now.Sub(st.alertedAt) >= RemindEvery:
 			st.alerted = false
-		} else if !st.alerted {
-			st.alerted = true
+		case len(st.fails) >= KeepAlertAfter && (!st.alerted || now.Sub(st.alertedAt) >= RemindEvery):
+			st.alerted, st.alertedAt = true, now
 			alert = fmt.Sprintf("O Grão-Mestre de %s caiu %d vezes em %d minutos (%s). O motor continua tentando iniciá-lo de novo a cada 2 minutos.",
-				c.Workspace, len(st.fails), int(KeepWindow/time.Minute), c.Reason)
+				c.Workspace, len(st.fails), int(KeepWindow/time.Minute), untrustedReason(c.Reason))
 		}
 	}
 	if now.Before(st.next) {
@@ -158,6 +168,22 @@ func (k *Keeper) observe(c Character, now time.Time) (due bool, alert string) {
 	}
 	st.armed = false
 	return true, alert
+}
+
+// untrustedReason is the reason of a failure as the users may read it: one line
+// without control or format characters, cut.
+func untrustedReason(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && !unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 200 {
+		s = string(r[:200]) + "…"
+	}
+	return s
 }
 
 func (st *keepState) last() time.Time {

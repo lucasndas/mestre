@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/providers"
 )
 
 // CA-GM-01
@@ -78,12 +79,19 @@ func TestTheGrandMasterThatDiesAtOnceIsStartedAgainWithBackoffAndAlertedOnce(t *
 		return at
 	}
 
+	alerts := func() int { return len(r.notes.of(characters.NoticeGrandMasterFailing)) }
 	die()
 	tick() // the first failure: at once
-	for _, delay := range []time.Duration{5 * time.Second, 30 * time.Second, 2 * time.Minute} {
+	if alerts() != 0 {
+		t.Fatalf("alert after the 1st failure: %d", alerts())
+	}
+	for i, delay := range []time.Duration{5 * time.Second, 30 * time.Second, 2 * time.Minute} {
 		before := len(starts())
 		die()
 		tick() // the failure is seen; the start waits
+		if want := []int{0, 1, 1}[i]; alerts() != want {
+			t.Fatalf("alerts after the %dth failure = %d; want %d (none on the 2nd, one on the 3rd, no more)", i+2, alerts(), want)
+		}
 		r.clk.Advance(delay - time.Second)
 		tick()
 		if len(starts()) != before {
@@ -181,5 +189,70 @@ func TestReplacingTheGrandMasterRetiresItWhilePinningStillHoldsForEveryoneElse(t
 	}
 	if r.state(old) != characters.Stopped || res.Character.ID == old.ID || !res.Character.Pinned || r.audited("character.retired") != 1 {
 		t.Errorf("old %s, new %+v, retired %d", r.state(old), res.Character, r.audited("character.retired"))
+	}
+}
+
+func TestAGrandMasterThatStaysDownIsRemindedOncePerDayNotAtEachAttempt(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	gm := r.grandMaster()
+	keeper := r.svc.NewKeeper(gm.Machine, nil)
+	for range 24*30 + 40 { // every 2 min for a day and a bit
+		r.mach[gm.Machine].host.emit(characters.HostEvent{Terminal: r.get(gm.ID).TerminalID, Kind: characters.HostExit})
+		if err := keeper.Tick(r.ctx); err != nil {
+			t.Fatal(err)
+		}
+		r.clk.Advance(2 * time.Minute)
+		if err := keeper.Tick(r.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := len(r.notes.of(characters.NoticeGrandMasterFailing)); n != 2 {
+		t.Errorf("alerts in a day and a bit = %d; want the first and one reminder", n)
+	}
+}
+
+func TestReplacingABusyGrandMasterEndsTheOldOneAtItsSafePointAndOnlyWhoMayDoesIt(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	tm := r.makeTM("3-login")
+	gm := r.grandMaster()
+	r.busy(gm)
+	if _, err := r.svc.Replace(r.ctx, characters.ReplaceRequest{Workspace: workspace, Name: gm.Name, Sheet: "Dev Claude", By: byChar(tm)}); !errors.Is(err, characters.ErrLevelDenied) {
+		t.Fatalf("a table master replacing the Grand Master = %v; want level_denied", err)
+	}
+	if _, err := r.svc.Replace(r.ctx, characters.ReplaceRequest{Workspace: workspace, Name: gm.Name, Sheet: "Dev Claude", By: owner}); err != nil {
+		t.Fatal(err)
+	}
+	if r.state(gm) == characters.Stopped {
+		t.Fatal("a busy Grand Master was ended at once")
+	}
+	r.hook(gm, providers.EventTurnEnd)
+	if r.state(gm) != characters.Stopped {
+		t.Fatalf("at its safe point the old Grand Master is %s; want it ended (the retirement is kept in the scheduled end)", r.state(gm))
+	}
+	// the same for one whose process is gone
+	r2 := newRig(t, rigOptions{})
+	gm2 := r2.grandMaster()
+	r2.mach[gm2.Machine].host.emit(characters.HostEvent{Terminal: r2.get(gm2.ID).TerminalID, Kind: characters.HostExit})
+	if _, err := r2.svc.Replace(r2.ctx, characters.ReplaceRequest{Workspace: workspace, Name: gm2.Name, Sheet: "Dev Claude", By: owner}); err != nil {
+		t.Fatal(err)
+	}
+	if r2.state(gm2) != characters.Stopped {
+		t.Errorf("an interrupted Grand Master replaced is %s; want it ended", r2.state(gm2))
+	}
+}
+
+func TestTheKeeperStopsWhenItsContextEnds(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	gm := r.grandMaster()
+	keeper := r.svc.NewKeeper(gm.Machine, nil)
+	ctx, cancel := context.WithCancel(r.ctx)
+	done := make(chan error, 1)
+	go func() { done <- keeper.Run(ctx) }()
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("Run = %v", err)
 	}
 }

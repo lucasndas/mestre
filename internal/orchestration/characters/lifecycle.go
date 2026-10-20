@@ -215,7 +215,8 @@ func (s *Service) Dismiss(ctx context.Context, req DismissRequest) (DismissResul
 	if err := s.mayDismiss(ctx, req.By, c); err != nil {
 		return DismissResult{}, err
 	}
-	if c.Pinned && req.Retire && c.Role == RoleGrandMaster && (req.By.Kind == CreatedByEngine || req.By.Kind == CreatedByUser) {
+	retiring := c.Pinned && req.Retire && c.Role == RoleGrandMaster && (req.By.Kind == CreatedByEngine || req.By.Kind == CreatedByUser)
+	if retiring {
 		s.audit(ctx, c, "character.retired", map[string]string{"by": encodeBy(req.By), "reason": req.Reason})
 	} else if c.Pinned {
 		s.refuse(ctx, c, "dismiss", req.By)
@@ -224,6 +225,11 @@ func (s *Service) Dismiss(ctx context.Context, req DismissRequest) (DismissResul
 	reason := req.Reason
 	if reason == "" {
 		reason = "dismiss"
+	}
+	if retiring {
+		// the mark stays in the scheduled end: a pinned Grand Master is ended at
+		// its safe point only when the end is a retirement (runScheduled)
+		reason = retirePrefix + reason
 	}
 	switch c.State {
 	case Stopped:
@@ -257,6 +263,17 @@ func (s *Service) Dismiss(ctx context.Context, req DismissRequest) (DismissResul
 	}
 	c.StopRequestedAt = s.clk.Now()
 	return DismissResult{Status: Scheduled, Character: c}, nil
+}
+
+// retirePrefix marks the reason of the end of a Grand Master that is retired:
+// only Dismiss with Retire, which the engine, the Owner and the Administrators
+// make, writes it (a pinned character is refused before the end is scheduled).
+const retirePrefix = "retire: "
+
+// retired says the scheduled end of c is the retirement of a Grand Master.
+func retired(c Character) bool {
+	by := decodeBy(c.StopRequestedBy)
+	return c.Role == RoleGrandMaster && strings.HasPrefix(c.StopReason, retirePrefix) && (by.Kind == CreatedByEngine || by.Kind == CreatedByUser)
 }
 
 func encodeBy(by Creator) string { return string(by.Kind) + ":" + by.ID }
@@ -373,7 +390,7 @@ func (s *Service) runScheduled(ctx context.Context, c Character) error {
 	if c.StopRequestedAt.IsZero() {
 		return nil
 	}
-	if c.Pinned {
+	if c.Pinned && !retired(c) {
 		s.refuse(ctx, c, "scheduled", decodeBy(c.StopRequestedBy))
 		return nil
 	}
