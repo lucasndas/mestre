@@ -75,16 +75,32 @@ var codexConfigKeys = []string{
 // layer (DeliverMestreLayer) and the native controls (Native).
 var codexEngineKeys = []string{
 	"developer_instructions", "sandbox_workspace_write.network_access", "sandbox_workspace_write.writable_roots",
+	CodexWindowsSandboxKey,
 }
+
+// CodexWindowsSandboxKey is the key that picks the sandbox of Codex on
+// Windows, reserved to the native controls: the default mode (elevated)
+// runs every command through one runner of the machine, as the sandbox
+// user, which does not separate two characters. The only mode the base uses
+// is CodexWindowsSandboxMode, which runs the command as the user of the
+// terminal, with a DACL that names the logon session of the process that
+// called codex.exe (docs/provedores/codex-no-windows.md#modo-do-sandbox).
+const CodexWindowsSandboxKey = "windows.sandbox"
+
+// CodexWindowsSandboxMode is the one value of CodexWindowsSandboxKey a start
+// may have.
+const CodexWindowsSandboxMode = "unelevated"
 
 // codexDeepRefused are segments refused at any depth of a key or of an
 // inline table of its value, also under a key a start may give.
 var codexDeepRefused = []string{"features", "hooks", "writable_roots", "trust_level", "sandbox_mode",
-	"approval_policy", "permissions", "profile", "profiles", "model_instructions_file", "developer_instructions"}
+	"approval_policy", "permissions", "profile", "profiles", "model_instructions_file", "developer_instructions", "windows"}
 
 // codexArgs is what the check found in the arguments of a start.
 type codexArgs struct {
 	sandbox, approval, noDaemon, model bool
+	// winSandbox: the engine gave windows.sandbox="unelevated".
+	winSandbox bool
 }
 
 // checkCodexArgs checks the arguments of a start: the base's, or the
@@ -185,6 +201,15 @@ func checkCodexConfig(kv string, engine bool, found *codexArgs) error {
 	}
 	joined := strings.Join(key, ".")
 	if engine && slices.Contains(codexEngineKeys, joined) {
+		if joined == CodexWindowsSandboxKey {
+			// Only this value, in the one form the engine writes: any other
+			// mode (elevated, mxc) or a value the check cannot read is no
+			// isolation between characters.
+			if strings.TrimSpace(value) != `"`+CodexWindowsSandboxMode+`"` {
+				return fmt.Errorf("codex: -c %s=%s; the only mode of the base is %q", joined, value, CodexWindowsSandboxMode)
+			}
+			found.winSandbox = true
+		}
 		return nil
 	}
 	if !slices.Contains(codexConfigKeys, key[0]) {
@@ -353,7 +378,7 @@ func walkTOMLTable(s string, depth int) (string, [][]string, error) {
 
 // codexStartArgs checks the arguments of a start (the base's and the
 // engine's) and adds what the base always has, the hooks switched on last.
-func codexStartArgs(base, engine []string, model string) ([]string, error) {
+func codexStartArgs(base, engine []string, model, goos string) ([]string, error) {
 	var found codexArgs
 	if err := checkCodexArgs(base, false, &found); err != nil {
 		return nil, err
@@ -363,6 +388,12 @@ func codexStartArgs(base, engine []string, model string) ([]string, error) {
 	}
 	if !found.sandbox {
 		return nil, errors.New("codex: no sandbox (-s) among the flags; the native controls give it, and the base never starts without it")
+	}
+	// On Windows the start without the unelevated mode is refused: the
+	// default one would run the commands of every character through the
+	// same runner (fail closed).
+	if goos == "windows" && !found.winSandbox {
+		return nil, fmt.Errorf("codex: no -c %s=%q among the flags on Windows; the native controls give it, and the base never starts without it", CodexWindowsSandboxKey, CodexWindowsSandboxMode)
 	}
 	out := slices.Concat(base, engine)
 	if !found.noDaemon {

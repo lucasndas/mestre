@@ -42,41 +42,80 @@ func TestMultilineFallbackSendsByTheFile(t *testing.T) {
 	}
 }
 
-// A class without internet: on Linux the network of the sandbox is on, for
-// the `mestre` CLI to reach the local channel, and the gap of the native
-// barrier is reported; on Windows it stays off unless the conformance
-// switched its fallback on. The socket folder is never freed for writing,
-// and the hosted search never runs.
+// CA-CODEX-WIN-01
+//
+// A class without internet: the network of the sandbox is on in both
+// systems (on Linux the local channel needs it; on Windows the unelevated
+// mode has no network barrier), so both report the gap of the native
+// barrier. On Windows the sandbox mode is unelevated, given by the engine
+// alone. The socket folder is never freed for writing, and the hosted search
+// never runs.
 func TestCodexNetworkOfAClassWithoutInternet(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		os       string
-		fallback bool
-		network  string
-		gap      bool
-	}{
-		{"linux", false, "true", true},
-		{"windows", false, "false", false},
-		{"windows", true, "true", true},
-	}
-	for _, tt := range tests {
-		p := providers.NativePolicy{AgentID: "a1", OS: tt.os, Worktree: "/srv/w", Offline: true}
-		p.Fallbacks.CodexOfflineNetwork = tt.fallback
+	for _, goos := range []string{"linux", "windows"} {
+		p := providers.NativePolicy{AgentID: "a1", OS: goos, Worktree: "/srv/w", Offline: true}
 		nc, err := providers.NewCodex(providers.Options{}).(providers.NativeTranslator).Native(p)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// No folder is freed for writing, and the empty list is pinned.
-		want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=" + tt.network, "-c", "sandbox_workspace_write.writable_roots=[]"}
-		if !slices.Equal(nc.Args, want) {
-			t.Errorf("%s (fallback %v): args = %q, want %q", tt.os, tt.fallback, nc.Args, want)
+		want := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"}
+		if goos == "windows" {
+			want = append(want, "-c", `windows.sandbox="unelevated"`)
 		}
-		if providers.CodexNoNativeNetwork(p) != tt.gap {
-			t.Errorf("%s (fallback %v): no native network barrier = %v, want %v", tt.os, tt.fallback, !tt.gap, tt.gap)
+		want = append(want, "-c", "sandbox_workspace_write.writable_roots=[]")
+		if !slices.Equal(nc.Args, want) {
+			t.Errorf("%s: args = %q, want %q", goos, nc.Args, want)
+		}
+		if !providers.CodexNoNativeNetwork(p) {
+			t.Errorf("%s: a class without internet did not report the lack of a native network barrier", goos)
+		}
+		// The arguments the policy gives start the Codex of that system.
+		if _, err := providers.NewCodex(providers.Options{}).BuildLaunch(providers.LaunchRequest{
+			Base: providers.Base{Command: "codex"}, OS: goos, AgentID: "a1", Profile: "/p", ProviderArgs: nc.Args,
+		}); err != nil {
+			t.Errorf("%s: start with the native arguments: %v", goos, err)
 		}
 	}
 	// With internet there is no gap to report.
 	if providers.CodexNoNativeNetwork(providers.NativePolicy{AgentID: "a1", OS: "linux", Worktree: "/srv/w"}) {
 		t.Error("a class with internet reported without the native network barrier")
+	}
+}
+
+// Part of CA-CODEX-WIN-01
+//
+// The sandbox mode of Codex on Windows is the engine's: a Windows start
+// without it is refused (the default mode shares one runner), no other mode
+// is accepted (not elevated, not mxc, not a table or a bypass), and the
+// base and the repository's config cannot set it.
+func TestCodexWindowsSandboxModeIsReservedAndMandatory(t *testing.T) {
+	t.Parallel()
+	codex := providers.NewCodex(providers.Options{})
+	sandbox := []string{"-s", "workspace-write", "-c", "sandbox_workspace_write.network_access=true"}
+	launch := func(os string, base, engine []string) error {
+		_, err := codex.BuildLaunch(providers.LaunchRequest{Base: providers.Base{Command: "codex", Args: base}, OS: os, AgentID: "a1", Profile: "/p", ProviderArgs: engine})
+		return err
+	}
+	if err := launch("windows", nil, sandbox); err == nil {
+		t.Error("a Windows start without windows.sandbox was accepted")
+	}
+	if err := launch("windows", nil, append(slices.Clone(sandbox), "-c", `windows.sandbox="unelevated"`)); err != nil {
+		t.Errorf("the unelevated mode was refused: %v", err)
+	}
+	for _, v := range []string{`"elevated"`, `"mxc"`, `elevated`, `"danger-full-access"`, `{mode="unelevated"}`, `"unelevated" # x`, `'unelevated'`, `""`} {
+		if err := launch("windows", nil, append(slices.Clone(sandbox), "-c", "windows.sandbox="+v)); err == nil {
+			t.Errorf("windows.sandbox=%s accepted", v)
+		}
+	}
+	good := append(slices.Clone(sandbox), "-c", `windows.sandbox="unelevated"`)
+	for _, b := range [][]string{
+		{"-c", `windows.sandbox="elevated"`}, {"-c", `windows.sandbox="unelevated"`}, {"-cwindows.sandbox=\"elevated\""},
+		{"--config", `windows.sandbox="elevated"`}, {"-c", `windows={sandbox="elevated"}`}, {"-c", `tui={windows={sandbox="elevated"}}`},
+		{"-c", `windows.sandbox.mode="elevated"`}, {"-c", `windows="elevated"`},
+	} {
+		if err := launch("windows", b, good); err == nil {
+			t.Errorf("base %q accepted", b)
+		}
 	}
 }

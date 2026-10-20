@@ -20,7 +20,7 @@ func TestCheckSaysWhichProvidersRunWithoutTheNativeNetworkBarrier(t *testing.T) 
 		gap   []providers.ID
 	}{
 		{"linux", offline, []providers.ID{providers.Codex, providers.Antigravity}},
-		{"windows", offline, nil},
+		{"windows", offline, []providers.ID{providers.Codex}},
 		{"linux", "version: 1\n", nil},
 	}
 	for _, tt := range tests {
