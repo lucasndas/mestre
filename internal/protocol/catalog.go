@@ -48,6 +48,9 @@ const (
 	TypeTableDone            = "table.done"
 	TypeTableSent            = "table.sent"
 	TypeTableNotice          = "table.notice"
+	TypeRitualPreRun         = "ritual.prerun"
+	TypeScrollPut            = "scroll.put"
+	TypeScrollRemove         = "scroll.remove"
 	TypeAgentRules           = "agent.rules"
 	TypeAgentSiteLogin       = "agent.site_login"
 	TypeAgentSiteLoginStatus = "agent.site_login_status"
@@ -128,6 +131,9 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeTableDone, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
 		Spec{Type: TypeTableSent, Dir: TowerToCitadel, Ack: true, Payload: TableSent{}},
 		Spec{Type: TypeTableNotice, Dir: TowerToCitadel, Ack: true, Payload: TableNotice{}},
+		Spec{Type: TypeRitualPreRun, Dir: CitadelToTower, Ack: true, Payload: RitualPreRun{}, Reply: RitualPreRunResult{}},
+		Spec{Type: TypeScrollPut, Dir: CitadelToTower, Ack: true, Payload: ScrollPut{}},
+		Spec{Type: TypeScrollRemove, Dir: CitadelToTower, Ack: true, Payload: ScrollRemove{}},
 		Spec{Type: TypeAgentRules, Dir: CitadelToTower, Ack: true, Payload: Object{}},
 		Spec{Type: TypeAgentSiteLogin, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: AgentSiteLogin{}},
 		Spec{Type: TypeAgentSiteLoginStatus, Dir: TowerToCitadel, Ack: true, Payload: AgentSiteLoginStatus{}},

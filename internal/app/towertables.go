@@ -15,6 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/scrolls"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
@@ -342,4 +343,70 @@ func (e *Engine) handleTableNotice(ctx context.Context, orc *Orchestration, m *p
 		}
 	}
 	return nil, protocol.NewError(protocol.CodeForbidden, "table.notice: %s has no character in the table %s", m.Peer.ID, p.Table)
+}
+
+// scrollRel is the only path of a copy of a scroll: nothing else is written
+// into a worktree by the Citadel's scrolls.
+var scrollRel = regexp.MustCompile(`^\.mestre/mesas/([A-Za-z0-9][A-Za-z0-9_.-]{0,200})/pergaminhos/[A-Za-z0-9_-]{1,32}\.md$`)
+
+// registerTowerScrolls puts in the router of a Tower the handlers of the copies
+// of the scrolls: read-only files in a worktree under the workspaces of this
+// machine, at the one path the scrolls use.
+func (e *Engine) registerTowerScrolls(router *protocol.Router) {
+	check := func(typ, dir, rel string, from protocol.Peer) error {
+		switch {
+		case !e.fromCitadel(from):
+			return protocol.NewError(protocol.CodeForbidden, "%s: only the Citadel gives this command", typ)
+		case !scrollRel.MatchString(rel):
+			return protocol.NewError(protocol.CodeInvalidPayload, "%s: %q is not the path of the copy of a scroll", typ, rel)
+		}
+		if err := e.towerWorktree(dir); err != nil {
+			return protocol.NewError(protocol.CodeForbidden, "%s: %v", typ, err)
+		}
+		// the worktree of that very table: <workspaces>/<workspace>/mesas/<table>
+		table := scrollRel.FindStringSubmatch(rel)[1]
+		clean := filepath.Clean(dir)
+		if filepath.Base(clean) != table || filepath.Base(filepath.Dir(clean)) != "mesas" ||
+			filepath.Dir(filepath.Dir(filepath.Dir(clean))) != absWorkspaces(e.paths.Workspaces) {
+			return protocol.NewError(protocol.CodeForbidden, "%s: %q is not the worktree of the table %s", typ, dir, table)
+		}
+		return nil
+	}
+	router.HandleFunc(protocol.TypeScrollPut, func(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+		p, ok := m.Payload.(*protocol.ScrollPut)
+		if !ok {
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "scroll.put: %T", m.Payload)
+		}
+		if err := check(protocol.TypeScrollPut, p.Dir, p.Rel, m.Peer); err != nil {
+			return nil, err
+		}
+		if err := (scrolls.LocalCopies{Machine: e.id.MachineID}).Put(context.Background(), scrolls.Target{Machine: e.id.MachineID, Dir: p.Dir}, p.Rel, []byte(p.Content)); err != nil {
+			return nil, protocol.NewError(protocol.CodeMissingPrerequisite, "scroll.put: %v", err)
+		}
+		return nil, nil
+	})
+	router.HandleFunc(protocol.TypeScrollRemove, func(_ context.Context, m *protocol.Message) (*protocol.Reply, error) {
+		p, ok := m.Payload.(*protocol.ScrollRemove)
+		if !ok {
+			return nil, protocol.NewError(protocol.CodeInvalidPayload, "scroll.remove: %T", m.Payload)
+		}
+		if err := check(protocol.TypeScrollRemove, p.Dir, p.Rel, m.Peer); err != nil {
+			return nil, err
+		}
+		if err := (scrolls.LocalCopies{Machine: e.id.MachineID}).Remove(context.Background(), scrolls.Target{Machine: e.id.MachineID, Dir: p.Dir}, p.Rel); err != nil {
+			return nil, protocol.NewError(protocol.CodeMissingPrerequisite, "scroll.remove: %v", err)
+		}
+		return nil, nil
+	})
+}
+
+func absWorkspaces(p string) string {
+	a, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	if r, err := filepath.EvalSymlinks(a); err == nil {
+		return r
+	}
+	return a
 }
