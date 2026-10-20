@@ -79,7 +79,7 @@ func (a Acceptance) Unproven(ctx context.Context, tableKey string) ([]string, er
 		if err != nil {
 			return nil, err
 		}
-		if len(cs) > 0 && (g.latest == nil || !q.UpdatedAt.Before(g.latest.UpdatedAt)) {
+		if len(cs) > 0 && (g.latest == nil || !q.CreatedAt.Before(g.latest.CreatedAt)) {
 			g.latest, g.frozen = &q, cs
 		}
 	}
@@ -100,6 +100,10 @@ func (a Acceptance) Unproven(ctx context.Context, tableKey string) ([]string, er
 				return nil, fmt.Errorf("the issue #%d could not be read for its criteria: %w", n, err)
 			}
 			cs = parseCriteria(body)
+			if len(cs) == 0 && len(g.frozen) > 0 {
+				// an issue emptied of its criteria is not an acceptance: ask the Grand Master
+				return nil, fmt.Errorf("the issue #%d has no criteria left although its missions had some", n)
+			}
 		}
 		slices.SortStableFunc(cs, func(x, y Criterion) int { return criterionNumber(x.ID) - criterionNumber(y.ID) })
 		for _, c := range cs {

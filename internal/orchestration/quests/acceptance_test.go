@@ -104,6 +104,21 @@ func TestACriterionTakenOutOfTheIssueIsNotAskedWhenTheBodyIsReadAndAFailingReadS
 	}
 }
 
+func TestAnIssueEmptiedOfItsCriteriaIsNotAnAcceptance(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	n := w.issueOf(criteriaBody)
+	w.run(w.create(proofQuest(n)))
+	w.finish("Dev Claude 1", "feito", map[string]string{"login.go": "1"}, "")
+	w.done("QA Antigravity 1", map[string]any{"proof": []string{"C1=a"}}, "ok")
+	w.hub.mu.Lock()
+	w.hub.issues[n].Body = "nada aqui\n"
+	w.hub.mu.Unlock()
+	if got, err := w.acceptance(true).Unproven(w.ctx, w.slug+"/"+w.table.ID); err == nil || len(got) != 0 {
+		t.Errorf("an emptied issue = %v, %v; want an error", got, err)
+	}
+}
+
 func TestOnlyThreeFixMissionsPerEpicAreMadeAndTheFourthIsAskedToTheGrandMaster(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
