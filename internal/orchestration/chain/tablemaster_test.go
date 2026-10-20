@@ -13,8 +13,8 @@ import (
 // `baixo` of its party and the `medio` of the groups it was given; a request
 // that went to the Grand Master, one of another table and one of its own are
 // `not_at_level` and the request does not change. (The command
-// `mestre approval decide` is the CLI of the Grand Master, milestone 5 step
-// 6; it answers with what the service below answers.)
+// `mestre approval decide` answers with what the service below answers: see
+// handlers_test.go.)
 func TestTheTableMasterDecidesTheBaixoAndTheMedioOfItsPartyAndNothingElse(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

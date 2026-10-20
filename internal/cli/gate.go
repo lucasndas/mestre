@@ -95,6 +95,10 @@ var lockedRefuses = map[string]bool{
 	// the subdelegation gives the Mestre of a table the power to decide, and no
 	// approval is applied while the Mestre is locked (docs/aprovacoes/fluxo.md)
 	"approval delegate": true,
+	// no approval is applied while the Mestre is locked (docs/aprovacoes/fluxo.md):
+	// deciding makes an exception or a temporary rule, and resuming the
+	// autonomy of a table gives back what it had paused
+	"approval decide": true, "approval autonomy": true,
 }
 
 // LockedResponse is the answer of a command the lock refuses.
