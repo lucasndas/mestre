@@ -1,6 +1,6 @@
 # Mestre da mesa
 
-> **Assunto:** papel do Mestre da mesa (o PO da mesa: classifica o pedido, cria a issue com critérios, devolve o que não é da mesa e faz o aceite), liberdade dentro do teto, as decisões `baixo` e `medio` da party, proteção, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** papel do Mestre da mesa (o PO da mesa: classifica o pedido, cria a issue com critérios, devolve o que não é da mesa e faz o aceite), liberdade dentro do teto, as decisões `baixo` e `medio` da party, proteção, instruções do sistema e instruções extras do usuário · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
