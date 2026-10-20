@@ -61,6 +61,15 @@ func (m *Manager) Reconcile(ctx context.Context) (*Report, error) {
 			rep.Interrupted = append(rep.Interrupted, rec.ID)
 		}
 	}
+	if m.cfg.Access != nil {
+		// After the rows were settled: the live ones get their grant again
+		// (the socket of the CLI was made anew) and no other stays.
+		if now, err := m.reg.list(ctx); err == nil {
+			m.syncAccess(now)
+		} else {
+			errs = append(errs, err)
+		}
+	}
 	socks, err := filepath.Glob(filepath.Join(m.cfg.SocketDir, "*.sock"))
 	if err != nil {
 		return rep, err
@@ -147,6 +156,7 @@ func (m *Manager) markDead(ctx context.Context, rec Record) error {
 	if err := m.cfg.Spawner.KillCgroup(ctx, rec.ID); err != nil {
 		m.log.Warn("cgroup of a dead terminal", "terminal", rec.ID, "error", err)
 	}
+	m.revokeAccess(rec.ID, rec.LogonSID)
 	_ = os.Remove(rec.SocketPath)
 	return m.reg.setStatus(ctx, rec.ID, StatusInterrupted, m.clk.Now())
 }
