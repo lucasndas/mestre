@@ -76,8 +76,11 @@ const (
 
 // Event is something that changed at GitHub, normalized.
 type Event struct {
-	Kind      EventKind
-	Key       string
+	Kind EventKind
+	Key  string
+	// ID is the id at GitHub of what changed, when it has one (a review): the
+	// state of the object is read again by whoever acts on it.
+	ID        int64
 	Workspace string
 	Repo      string
 	Number    int
@@ -87,6 +90,11 @@ type Event struct {
 	Link    string
 	Summary string
 	At      time.Time
+	// Closed, NotPlanned and Labels describe an issue that changed (EventIssueChanged):
+	// whether it is closed, whether it was closed as "not planned", and its labels
+	// (the epics are the issues with the label `epico`).
+	Closed, NotPlanned bool
+	Labels             []string
 }
 
 // Watch is a workspace read: its repository and the moment it was made, from
@@ -102,6 +110,22 @@ type Watch struct {
 // batches delivers them again, and not always grouped the same way.
 type Sink interface {
 	Deliver(ctx context.Context, w Watch, table string, events []Event) error
+}
+
+// Sinks hands the same batch to every sink in order. One that fails does not
+// stop the others; the error comes back so that the cursor does not move and the
+// batch is delivered again, which each sink takes once (the rule of Sink).
+type Sinks []Sink
+
+// Deliver implements Sink.
+func (ss Sinks) Deliver(ctx context.Context, w Watch, table string, events []Event) error {
+	var errs []error
+	for _, s := range ss {
+		if err := s.Deliver(ctx, w, table, events); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Situation says how busy a workspace is.
@@ -289,9 +313,14 @@ type item struct {
 	State     string     `json:"state"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	ClosedAt  *time.Time `json:"closed_at"`
-	HTMLURL   string     `json:"html_url"`
-	IssueURL  string     `json:"issue_url"`
-	User      struct {
+	// StateReason is why a closed issue was closed: completed or not_planned.
+	StateReason string `json:"state_reason"`
+	Labels      []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
+	HTMLURL  string `json:"html_url"`
+	IssueURL string `json:"issue_url"`
+	User     struct {
 		Login string `json:"login"`
 	} `json:"user"`
 	PullRequest *struct {
@@ -584,6 +613,10 @@ func (p *Poller) eventOf(ctx context.Context, w Watch, repo string, spec listSpe
 	switch {
 	case it.PullRequest == nil:
 		ev.Kind = EventIssueChanged
+		ev.Closed, ev.NotPlanned = it.State == "closed", it.State == "closed" && it.StateReason == "not_planned"
+		for _, l := range it.Labels {
+			ev.Labels = append(ev.Labels, l.Name)
+		}
 	case it.PullRequest.MergedAt != nil:
 		// the fact is the merge: a label put on the merged PR later is not another one
 		ev.Kind, ev.Key = EventPRMerged, fmt.Sprintf("merge:%d:%s", it.ID, it.PullRequest.MergedAt.UTC().Format(time.RFC3339))

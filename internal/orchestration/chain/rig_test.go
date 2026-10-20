@@ -314,6 +314,12 @@ type world struct {
 	flow  *approvals.Flow
 	chn   *fakechannel.Channel
 	owner users.User
+	// The doubles of the gate of freshness (worldOpts.freshness).
+	ghRules  *fakeRules
+	verifier *fakeVerifier
+	// git and remote are the fake GitHub repository the mirror fetches.
+	git    *fakegit.Git
+	remote string
 }
 
 // policy is the policy file of the tests: the settings change under it.
@@ -401,6 +407,9 @@ type worldOpts struct {
 	classYAML string
 	// flow puts the real flow of approval in the place of the fake people.
 	flow bool
+	// freshness puts the gate of freshness in the chain, over fakes of the
+	// rules of the branch and of the verification (freshness_rig_test.go).
+	freshness bool
 }
 
 func newWorld(t *testing.T, o ...worldOpts) *world {
@@ -426,6 +435,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 
 	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, subs: &fakeSubs{}, prs: &fakePRs{},
 		policy: &policy{s: chain.DefaultSettings(), rules: chain.DefaultRules()}}
+	w.git, w.remote = git, remote.Dir()
 	w.grants = &fakeGrants{f: w.cls}
 	w.machines = orcfakes.NewMachines(clk)
 	w.machines.Chars = func() *characters.Service { return w.orc.Characters }
@@ -439,6 +449,10 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	}
 	if opt.realSup {
 		oo.ChainSupervision = nil
+	}
+	if opt.freshness {
+		w.ghRules, w.verifier = &fakeRules{}, &fakeVerifier{}
+		oo.FreshnessRules, oo.QuestVerifier, oo.QuestCatalog = w.ghRules, w.verifier, devCatalog{}
 	}
 	if opt.flow {
 		w.chn = fakechannel.New()

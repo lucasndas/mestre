@@ -26,14 +26,10 @@ func futureCommands() []cli.Spec {
 	mk := func(name, group string, who cli.Who) cli.Spec {
 		return cli.Spec{Name: name, Group: group, Summary: "test " + name, Usage: "mestre " + name, Who: who, MaxArgs: -1}
 	}
-	notify := mk("notify", cli.GroupGrandMaster, cli.WhoGrandMaster)
-	notify.Secret = true
-	notify.Flags = []cli.Flag{{Name: "table", Kind: cli.FlagString, Desc: "the table of the notice"}}
 	return []cli.Spec{
 		mk("table", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		mk("gh", cli.GroupGrandMaster, cli.WhoGrandMaster),
 		mk("app", cli.GroupGrandMaster, cli.WhoGrandMaster),
-		notify,
 	}
 }
 
@@ -428,6 +424,9 @@ func TestATextThatLooksLikeASecretIsRefusedAndNothingIsSent(t *testing.T) {
 			{"reply", "use this token: " + fakeToken},
 			{"notify", "the token is " + fakeToken, "--json"},
 			{"notify", "ok", "--table", "key " + fakeToken},
+			{"notify", "ok", "--blocked", "espera", "--checked", "tried " + fakeToken},
+			{"notify", "ok", "--blocked", "espera", "--why-not", fakeToken},
+			{"notify", "ok", "--blocked", "espera", "--step", fakeToken},
 		} {
 			got := p.runWith(t.Context(), reg, append(args, "--json")...)
 			v := decode(t, got)

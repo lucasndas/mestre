@@ -26,6 +26,7 @@ import (
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/store"
@@ -227,6 +228,11 @@ type Engine struct {
 	// edits keeps who edited what in the turns in progress (the hook reads it).
 	edits    *classes.EditTracker
 	sheets   atomic.Pointer[machinesheet.Registry]
+	hk       atomic.Pointer[hook.Engine]     // the hook engine of this machine, which also decides the pre-runs
+	mach     atomic.Pointer[machineRouter]   // the machines of the orchestration of the period
+	srvp     atomic.Pointer[protocol.Server] // the protocol server of the period of the Citadel
+	sent     replies                         // the ends of the table.done the Citadel waits for
+	tabs     atomic.Pointer[tables.Service]  // the tables of the period of the Citadel, for the bundles of the Towers
 	member   *guild.Member
 	id       guild.Identity
 	epochs   *guild.Epochs
@@ -697,6 +703,7 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 		profiles = rulesProfiles{src: rules}
 	}
 	hk := e.hookEngine(rules)
+	e.hk.Store(hk)
 	gate := cli.NewGate(cli.GateConfig{Commands: commands, Profiles: profiles, Next: forwarder{e}, Masker: e.deps.Masker, Locked: e.locked})
 	srv := localchan.NewServer(localchan.Config{
 		Clock: e.clk, Identifier: id, Forwarder: gate, Instance: e.cfg.Instance, EngineVersion: e.deps.Version, Logger: e.log,
@@ -704,9 +711,22 @@ func (e *Engine) serveCLI(ctx context.Context, wg *sync.WaitGroup) error {
 		DebugExtra: func() map[string]any { return map[string]any{"citadel": e.citadelDebug()} },
 		OnAudit:    e.auditCall,
 	})
+	// The grants of the terminals leave the folder before the socket is made
+	// (terminals outlive the engine) and come back after it exists.
+	if e.rt != nil {
+		if err := e.rt.host.Manager().SweepAccess(); err != nil {
+			return fmt.Errorf("app: the grants of the terminals on the local channel were not swept: %w", err)
+		}
+	}
 	ln, err := localchan.Listen(e.paths.CLISocket, e.paths.cliAccess())
 	if err != nil {
 		return err
+	}
+	if e.rt != nil {
+		if err := e.rt.host.Manager().SyncAccess(ctx); err != nil {
+			_ = ln.Close()
+			return fmt.Errorf("app: the grants of the terminals on the local channel were not put back: %w", err)
+		}
 	}
 	wg.Go(func() { _ = srv.Serve(ctx, ln) })
 	if e.paths.HookQueue != "" {

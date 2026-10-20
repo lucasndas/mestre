@@ -62,7 +62,9 @@ type Options struct {
 	SubDelegations SubDelegations
 	// PRs reads the PRs the conditions of the policy check; without it a
 	// request of a PR is for the people (diff_incompleto).
-	PRs         PRSource
+	PRs PRSource
+	// Freshness is the gate of freshness of the requests of a PR; nil: none.
+	Freshness   Freshness
 	Supervision Supervision
 	Alerts      Alerts
 	Tasks       Tasks
@@ -188,6 +190,9 @@ type OpenRequest struct {
 	Mission *Mission
 	// PR is the PR of a request of type pr or merge.
 	PR *PRRef
+	// Require are users, by id, whose approval the request needs besides what
+	// the policy asks.
+	Require []string
 	// Task overrides the original task of the requester.
 	Task string
 	// Target is the exact target (JSON); the request is bound to its
@@ -238,7 +243,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		o.Type = classes.RequestClassPermission
 	}
 	r := Request{Workspace: o.Workspace, Table: o.Table, Type: o.Type, State: Open, Requester: o.Requester, Designer: o.Designer, Proposer: o.Proposer,
-		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Task: o.Task,
+		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Require: o.Require, Task: o.Task,
 		CreatedAt: s.clk.Now()}
 	if len(o.Target) > 0 {
 		imp, err := Impress(o.Target)
@@ -307,6 +312,11 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	if r.Workspace == "" {
 		return 0, errors.New("chain: a request needs a workspace")
 	}
+	// The gate runs before anything is stored or asked of anyone: a red one
+	// leaves no request (only a PR is gated, and a PR never takes the lock).
+	if err := s.gateOpen(ctx, &r); err != nil {
+		return 0, err
+	}
 	st, _ := s.settings(ctx, r.Workspace)
 	lvl, why, err := s.initial(ctx, r, st)
 	if err != nil {
@@ -319,6 +329,9 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		return 0, err
 	}
 	s.audit(ctx, r, AuditEntry{Answer: answerBorn, Outcome: "accepted", Level: lvl.Kind, Reason: joinWhy(why)})
+	if err := s.gateRecheck(ctx, r); err != nil {
+		return 0, err
+	}
 	s.arrive(ctx, r.ID, st)
 	if r.Type == classes.RequestClassPermission && s.o.Waits != nil && who.ID != "" {
 		if _, err := s.o.Waits.WaitApproval(ctx, who, r.ID, s.pathTime(ctx, r, st)); err != nil {

@@ -119,6 +119,10 @@ type StopCommand struct {
 	// is a restart that resumes.
 	Final  bool
 	Reason string
+	// Abandon ends a character that is still starting: the Citadel gave up on the start.
+	// Terminal, when given, is the one of that start; a character in another is not touched.
+	Abandon  bool
+	Terminal string
 }
 
 // Machines is the Citadel's way to the engine of each machine: in-process for
@@ -266,7 +270,27 @@ const (
 	NoticeWaitTimeout NoticeKind = "wait_timeout"
 	// NoticeSystem is a system item for the recipient.
 	NoticeSystem NoticeKind = "system"
+	// NoticeGrandMasterFailing: the Grand Master keeps failing to stay up.
+	NoticeGrandMasterFailing NoticeKind = "grand_master_failing"
+	// NoticeTableMasterFailing: a table master keeps failing to stay up.
+	NoticeTableMasterFailing NoticeKind = "table_master_failing"
 )
+
+// Briefer gives the state of a workspace for the resumption message of its
+// Grand Master: the tables that are open, its waits, the size of its inbox, the
+// approvals that wait and the last message of a user
+// (docs/orquestracao/grao-mestre.md#retomada-de-contexto).
+type Briefer interface {
+	Brief(ctx context.Context, workspace string) (string, error)
+}
+
+// TableBriefer gives the state of a table for the resumption message of its
+// table master: the missions with their state and current step, the
+// characters of the table with their states, its waits and the size of its
+// inbox (docs/orquestracao/mestre-da-mesa.md#fixo-enquanto-a-mesa-estiver-aberta).
+type TableBriefer interface {
+	BriefTable(ctx context.Context, master Character) (string, error)
+}
 
 // Notice is a message to someone about a character.
 type Notice struct {

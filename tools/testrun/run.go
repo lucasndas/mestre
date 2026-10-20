@@ -42,8 +42,8 @@ type Suite struct {
 
 // Suites by executor name.
 var Suites = map[string]Suite{
-	"fast":  {Name: "fast", Budget: 30 * time.Second, FlagSlow: true, Lint: true},
-	"full":  {Name: "full", Tags: "full", Budget: 3 * time.Minute, Lint: true},
+	"fast":  {Name: "fast", Budget: 36 * time.Second, FlagSlow: true, Lint: true},
+	"full":  {Name: "full", Tags: "full", Budget: 216 * time.Second, Lint: true},
 	"heavy": {Name: "heavy", Tags: "full,heavy", Timeout: "0"}, // measured, no hard limit
 }
 

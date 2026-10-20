@@ -285,3 +285,28 @@ func TestNoMachinesInTheGuildIsAlsoARefusal(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// CA-CONF-07
+//
+// A profile whose conformance found that the CLI does not reach the engine
+// does not meet a character that calls the CLI, and meets one that does not.
+func TestAProfileWhoseCLIDoesNotReachTheEngineDoesNotMeetACharacterThatCallsIt(t *testing.T) {
+	t.Parallel()
+	m := sheetfake.Windows("windows-pc")
+	m.SetProviders(machinesheet.Provider{Provider: machinesheet.ProviderCodex, Profiles: []machinesheet.Profile{
+		{Name: "codex-pessoal", Version: "0.9.0", LoggedIn: true, Conformant: true, CLIUnreachable: true},
+	}})
+	sheet := online(t, m, "m2", "windows-pc", true)
+	req, err := machinesheet.Requirements{}.WithAgent("codex", "codex-pessoal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := machinesheet.Match(sheet, req); !v.OK {
+		t.Errorf("a character that does not call the CLI: %q", v)
+	}
+	req.CLI = true
+	want := "windows-pc: a CLI `mestre` não alcança o motor com o perfil de conta `codex-pessoal` (etapa 5 da conformidade)"
+	if v := machinesheet.Match(sheet, req); v.OK || v.String() != want {
+		t.Errorf("a character that calls the CLI: %q (ok %v), want %q", v, v.OK, want)
+	}
+}

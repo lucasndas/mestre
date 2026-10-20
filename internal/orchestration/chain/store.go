@@ -183,6 +183,20 @@ func (s *Store) ApprovedFor(ctx context.Context, requester, fingerprint string) 
 	return rs, err
 }
 
+// ApprovedPR lists the requests of a workspace approved for the commit of a PR
+// (a request of type pr or merge): the approvals that stand for that hash.
+func (s *Store) ApprovedPR(ctx context.Context, workspace, repo string, number int, sha string) ([]Request, error) {
+	return s.list(ctx, `state = 'approved' AND workspace = ? AND type IN ('pr', 'merge')
+		AND lower(json_extract(body, '$.pr.repo')) = lower(?) AND json_extract(body, '$.pr.number') = ? AND json_extract(body, '$.pr.sha') = ?`,
+		workspace, repo, number, sha)
+}
+
+// OpenPR lists the open requests of type pr or merge for a PR.
+func (s *Store) OpenPR(ctx context.Context, workspace, repo string, number int) ([]Request, error) {
+	return s.list(ctx, `state = 'open' AND workspace = ? AND type IN ('pr', 'merge')
+		AND lower(json_extract(body, '$.pr.repo')) = lower(?) AND json_extract(body, '$.pr.number') = ?`, workspace, repo, number)
+}
+
 // Audit appends a row of the audit.
 func (s *Store) Audit(ctx context.Context, e AuditEntry) error {
 	body, err := json.Marshal(e)

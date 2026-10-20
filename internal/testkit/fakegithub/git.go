@@ -260,7 +260,10 @@ func (s *Server) serveRepo(w http.ResponseWriter, r *http.Request, full string) 
 	if branch == "" {
 		branch = "main"
 	}
-	s.write(w, r, inst, http.StatusOK, map[string]any{"full_name": full, "private": !s.public[full], "default_branch": branch})
+	s.mu.Lock()
+	id := s.approval().repoIDs[full]
+	s.mu.Unlock()
+	s.write(w, r, inst, http.StatusOK, map[string]any{"full_name": full, "id": id, "private": !s.public[full], "default_branch": branch})
 	return true
 }
 

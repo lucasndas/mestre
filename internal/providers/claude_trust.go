@@ -34,6 +34,7 @@ func claudeTrustFile(profile string) string { return filepath.Join(profile, ".cl
 // rewrites this file, so a lost race is done again, up to three times.
 // Idempotent.
 func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
+	req.OS = machineOS(req.OS) // before the closures below, which capture req
 	return c.editTrust(req, func(projects map[string]any) (trusted, cleared []string) {
 		wt := entryKey(req.OS, projects, req.Worktree)
 		entry, _ := projects[wt].(map[string]any)
@@ -69,19 +70,26 @@ func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
 	})
 }
 
-// Untrust takes the worktree's entry out of the trust file: the worktree was
-// removed, or the conformance test ended.
+// Untrust takes the worktree's entries out of the trust file, in any writing
+// of the folder (on Windows also the one with backslashes an older Mestre
+// wrote): the worktree was removed, or the conformance test ended.
 func (c *claudeCode) Untrust(req PreTrustRequest) (Trust, error) {
+	req.OS = machineOS(req.OS) // before the closures below, which capture req
 	return c.editTrust(req, func(projects map[string]any) (_, cleared []string) {
-		wt := entryKey(req.OS, projects, req.Worktree)
-		if _, ok := projects[wt]; ok {
-			delete(projects, wt)
-			cleared = append(cleared, wt)
+		for k := range projects {
+			if sameFolder(req.OS, k, req.Worktree) {
+				delete(projects, k)
+				cleared = append(cleared, k)
+			}
 		}
 		return nil, cleared
 	}, func(projects map[string]any) bool {
-		_, ok := projects[entryKey(req.OS, projects, req.Worktree)]
-		return !ok
+		for k := range projects {
+			if sameFolder(req.OS, k, req.Worktree) {
+				return false
+			}
+		}
+		return true
 	})
 }
 
@@ -212,14 +220,21 @@ func replaceFile(path string, data []byte, was fileState, noFlush bool) error {
 
 // entryKey is the key of projects that stands for folder: the one already
 // there when it names the same folder (on Windows Claude Code may have
-// written it with other slashes or case), else the folder as given.
+// written it with another case), else the folder as Claude Code writes it.
+// On Windows that is with forward slashes: Claude Code 2.1.304 does not read
+// a key with backslashes, and the trust screen shows up anyway (the Windows
+// round, 2026-10-19), so such a key never stands for the folder.
 func entryKey(goos string, projects map[string]any, folder string) string {
+	goos = machineOS(goos)
 	folder = strings.TrimRight(folder, `/\`)
+	if goos == "windows" {
+		folder = strings.ReplaceAll(folder, `\`, "/")
+	}
 	if _, ok := projects[folder]; ok {
 		return folder
 	}
 	for k := range projects {
-		if sameFolder(goos, k, folder) {
+		if (goos != "windows" || !strings.Contains(k, `\`)) && sameFolder(goos, k, folder) {
 			return k
 		}
 	}
@@ -229,9 +244,32 @@ func entryKey(goos string, projects map[string]any, folder string) string {
 // sameFolder compares two folders: after Clean on Linux; without difference
 // of case or of slash on Windows.
 func sameFolder(goos, a, b string) bool {
+	goos = machineOS(goos)
 	a, b = strings.TrimRight(a, `/\`), strings.TrimRight(b, `/\`)
 	if goos == "windows" {
-		return strings.EqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
+		return asciiEqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
 	}
 	return a == b
+}
+
+// asciiEqualFold compares without difference of case in ASCII only: the
+// Unicode folding of strings.EqualFold would equate the Kelvin sign (U+212A)
+// with "k", two names that are different folders.
+func asciiEqualFold(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		x, y := a[i], b[i]
+		if 'A' <= x && x <= 'Z' {
+			x += 'a' - 'A'
+		}
+		if 'A' <= y && y <= 'Z' {
+			y += 'a' - 'A'
+		}
+		if x != y {
+			return false
+		}
+	}
+	return true
 }

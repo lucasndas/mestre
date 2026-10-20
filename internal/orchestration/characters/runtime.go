@@ -56,7 +56,10 @@ type RuntimeOptions struct {
 	// the edits of the table).
 	Layout   classes.Layout
 	Home, OS string
-	EnvExtra func(l Launch, env *classes.Env)
+	// PreRunGate decides the command of a pre-run on this machine, with the
+	// rules and the environment of the character here (nil: nothing runs).
+	PreRunGate func(ctx context.Context, c PreRunCheck) error
+	EnvExtra   func(l Launch, env *classes.Env)
 
 	// StartTimeout, StuckAfter and GracefulWait default to the document's;
 	// ScreenTimeout is how long a start screen that nothing knows may stay
@@ -80,6 +83,11 @@ type Runtime struct {
 	byTerm   map[string]*session
 	lastSeq  uint64
 	starting map[string]bool // characters a Start is preparing: one Start at a time
+	// typed are the items of the inbox already typed into a terminal (the last
+	// few hundred): an item the Citadel gives again, because it gave up waiting
+	// for the answer, is not typed twice.
+	typed      map[string]bool
+	typedOrder []string
 }
 
 var (
@@ -117,7 +125,7 @@ func NewRuntime(o RuntimeOptions) (*Runtime, error) {
 	if o.Checklist == nil {
 		o.Checklist = nopChecklist{}
 	}
-	rt := &Runtime{o: o, clk: o.Clock, local: LocalStore{DB: o.DB}, log: o.Logger, sessions: map[string]*session{}, byTerm: map[string]*session{}, starting: map[string]bool{}}
+	rt := &Runtime{o: o, clk: o.Clock, local: LocalStore{DB: o.DB}, log: o.Logger, sessions: map[string]*session{}, byTerm: map[string]*session{}, starting: map[string]bool{}, typed: map[string]bool{}}
 	o.Host.Events(rt.onHostEvent)
 	return rt, nil
 }
@@ -158,6 +166,17 @@ func (rt *Runtime) Live() []protocol.TerminalState {
 	return out
 }
 
+// AgentOf is the character that runs in a terminal of this machine.
+func (rt *Runtime) AgentOf(terminal string) (string, bool) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	s := rt.byTerm[terminal]
+	if s == nil {
+		return "", false
+	}
+	return s.id, true
+}
+
 func (rt *Runtime) session(id string) *session {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
@@ -185,6 +204,10 @@ func (rt *Runtime) Start(ctx context.Context, cmd StartCommand) (StartResult, er
 	if old != nil && old.status().State.Alive() && old.status().State != Interrupted {
 		rt.mu.Unlock()
 		return StartResult{}, fmt.Errorf("characters: %s already runs on this machine", cmd.Character)
+	}
+	if other := rt.byTerm[cmd.Terminal]; other != nil && other.id != cmd.Character {
+		rt.mu.Unlock()
+		return StartResult{}, fmt.Errorf("characters: the terminal %s is already %s's", cmd.Terminal, other.id)
 	}
 	rt.starting[cmd.Character] = true
 	rt.mu.Unlock()
