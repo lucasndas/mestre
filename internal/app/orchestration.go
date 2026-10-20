@@ -660,7 +660,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			supervision = sup
 		}
 		var freshness chain.Freshness
-		if o.FreshnessRules != nil {
+		if o.FreshnessRules != nil { // the chain exists in this branch
 			freshness = freshnessRef{&fresh}
 		}
 		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
@@ -696,10 +696,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	if o.FreshnessRules != nil {
-		if ch == nil {
-			return nil, errors.New("app: the gate of freshness needs the chain of approval")
-		}
+	if o.FreshnessRules != nil && ch != nil { // without the chain of approval there is no request to gate
 		if fresh, err = basesync.NewGate(basesync.GateOptions{Rules: o.FreshnessRules, Verifier: o.QuestVerifier, Tables: tbl, Mirrors: ws, Base: bsync, Logger: o.Logger}); err != nil {
 			return nil, err
 		}
