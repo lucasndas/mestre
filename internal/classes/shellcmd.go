@@ -274,6 +274,18 @@ func (e *evaluator) command(ws []word, d dialect, st *shellState, depth int, out
 	case agentRunner(cn, args):
 		res.fixedDeny("um CLI de agente só nasce pelo motor, nunca pelo shell")
 	}
+	if d == dialectPwsh && nativeProgram(cn) {
+		// Windows PowerShell 5.1 hands an argument to a program that is not a cmdlet
+		// between double quotes it does not escape inside: one that holds a quote
+		// reaches the program as several arguments (rg 'a" --pre=calc.exe "b c' .).
+		// What the text shows is not what the program is given.
+		for _, a := range argText {
+			if strings.ContainsAny(a, "\"\u201c\u201d\u201e") {
+				res.atLeastAsk(fmt.Sprintf("um argumento de %s tem aspas, que o PowerShell 5.1 repassa sem escapar: o programa recebe outros argumentos", cn))
+				break
+			}
+		}
+	}
 	for _, inner := range runnerCommands(cn, args) {
 		// npx git push: what a package runner runs is a command, and a fixed
 		// rule on it denies (the rest is for the class to decide).
@@ -1299,4 +1311,24 @@ func findActs(args []string) bool {
 		}
 	}
 	return false
+}
+
+// nativeProgram says whether a PowerShell command is a program and not a cmdlet:
+// a cmdlet is Verb-Noun, and the aliases of the common ones (echo, ls, cat…) are
+// cmdlets too, which take their arguments as they are.
+func nativeProgram(cn string) bool {
+	if strings.Contains(cn, "-") || pwshAlias[cn] {
+		return false
+	}
+	return true
+}
+
+// pwshAlias are the aliases of cmdlets PowerShell has by default.
+var pwshAlias = map[string]bool{
+	"echo": true, "write": true, "ls": true, "dir": true, "gci": true, "cat": true, "type": true, "gc": true, "pwd": true, "gl": true,
+	"cd": true, "sl": true, "cp": true, "copy": true, "cpi": true, "mv": true, "move": true, "mi": true, "rm": true, "del": true, "ri": true,
+	"rd": true, "rmdir": true, "mkdir": true, "md": true, "ni": true, "sls": true, "select": true, "where": true, "foreach": true, "sort": true,
+	"measure": true, "group": true, "ft": true, "fl": true, "fw": true, "oh": true, "clear": true, "cls": true, "man": true, "help": true,
+	"ps": true, "kill": true, "sleep": true, "iex": true, "icm": true, "ipcsv": true, "epcsv": true, "ConvertTo-Json": true, "sc": true,
+	"ac": true, "si": true, "sv": true, "gv": true, "set": true, "diff": true, "compare": true, "tee": true, "gm": true, "gal": true, "h": true, "r": true,
 }
