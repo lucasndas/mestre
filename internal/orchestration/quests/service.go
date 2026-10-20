@@ -287,6 +287,15 @@ func (s *Service) Create(ctx context.Context, r CreateRequest) (View, error) {
 	}
 	err := s.st.Do(ctx, func(tx *Tx) error {
 		var err error
+		if def.Issue != 0 {
+			all, err := tx.OfTable(q.Workspace, q.Table)
+			if err != nil {
+				return err
+			}
+			if err := s.checkCorrections(all, def.Issue); err != nil {
+				return err
+			}
+		}
 		q, err = tx.Insert(q, steps)
 		return err
 	})

@@ -365,7 +365,7 @@ func createAgentAccount(ctx context.Context, out io.Writer) (string, error) {
 	name := realaccount.WindowsAgentUser
 	script := `$pw = ConvertTo-SecureString $env:RA_PW -AsPlainText -Force
 New-LocalUser -Name '` + name + `' -Password $pw -PasswordNeverExpires -UserMayNotChangePassword -AccountNeverExpires -Description 'Mestre real-account tests' | Out-Null
-Add-LocalGroupMember -Group 'Users' -Member '` + name + `'`
+Add-LocalGroupMember -SID 'S-1-5-32-545' -Member '` + name + `'`
 	cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
 	cmd.Env = append(os.Environ(), "RA_PW="+pw)
 	if b, err := cmd.CombinedOutput(); err != nil {
