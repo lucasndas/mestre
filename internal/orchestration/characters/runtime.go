@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
@@ -135,6 +136,26 @@ func (rt *Runtime) nextSeq(prev uint64) uint64 {
 	}
 	rt.lastSeq = n
 	return n
+}
+
+// Live is the state of every terminal this machine knows, as the Citadel
+// reconciles its registry with it (Service.Reconcile) when it takes over the
+// reports a machine could not make while no Citadel was there.
+func (rt *Runtime) Live() []protocol.TerminalState {
+	rt.mu.Lock()
+	all := make([]*session, 0, len(rt.sessions))
+	for _, s := range rt.sessions {
+		all = append(all, s)
+	}
+	rt.mu.Unlock()
+	out := make([]protocol.TerminalState, 0, len(all))
+	for _, s := range all {
+		st := s.status()
+		s.mu.Lock()
+		out = append(out, protocol.TerminalState{TerminalID: s.terminal, AgentID: s.id, State: string(st.State), SessionID: s.sessionID})
+		s.mu.Unlock()
+	}
+	return out
 }
 
 func (rt *Runtime) session(id string) *session {
