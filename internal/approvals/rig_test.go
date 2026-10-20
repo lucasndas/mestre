@@ -123,6 +123,7 @@ func (w *world) open(o openOpts) chain.Request {
 	if o.late {
 		r.Deadline = w.clk.Now().Add(-time.Second)
 	}
+	r.PR = o.pr
 	if o.target != "" {
 		imp, err := chain.Impress(json.RawMessage(o.target))
 		if err != nil {
@@ -154,6 +155,7 @@ type openOpts struct {
 	pin     bool
 	target  string
 	late    bool // the time of the level is over
+	pr      *chain.PRRef
 }
 
 func (w *world) answer(u users.User, request int64, a chain.Answer) (approvals.Reply, error) {
