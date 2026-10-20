@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/localchan"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/users"
@@ -139,6 +140,37 @@ func TestRevokingTheDecreeDeniesTheSameActionAtTheNextDecision(t *testing.T) {
 	}
 }
 
+// reqOf is the request an exception was made for.
+func reqOf(d decrees.Decree) chain.Request {
+	return chain.Request{Workspace: d.Workspace, Target: d.TargetRef, Impression: d.Impression}
+}
+
+func TestRedeemSpendsNothingForARequestOfAnotherWorkspaceOrTarget(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	bia := w.person("Bia", users.Approver, "loja")
+	w.heads.set("lucas/loja", 42, "abc")
+	d := w.confirm(decrees.Proposal{Author: bia.ID, Kind: decrees.KindException, Workspace: "loja", Target: decrees.Target{Kind: decrees.TargetCharacter, Name: "d1"},
+		Action: &classes.Action{Kind: providers.KindShell, Tool: "Bash", Command: "gh pr merge 42"}, Text: "aprovo o merge do PR #42", RequestType: "merge",
+		TargetRef: json.RawMessage(`{"repo":"lucas/loja","pr":42,"head":"abc","base":"main"}`)})
+	other := reqOf(d)
+	other.Workspace = "outra"
+	if err := w.svc.Redeem(w.ctx, d.Number, other, "mestre", "gh pr merge 42"); !errors.Is(err, decrees.ErrWrongRequest) {
+		t.Fatalf("another workspace: %v", err)
+	}
+	pr43 := reqOf(d)
+	pr43.Target, pr43.Impression = json.RawMessage(`{"repo":"lucas/loja","pr":43,"head":"abc","base":"main"}`), ""
+	if err := w.svc.Redeem(w.ctx, d.Number, pr43, "mestre", "gh pr merge 43"); !errors.Is(err, decrees.ErrWrongRequest) {
+		t.Fatalf("another target: %v", err)
+	}
+	if got, _ := w.svc.Get(w.ctx, d.Number); got.State != decrees.Active {
+		t.Fatalf("state %s; the refused redeems spent it", got.State)
+	}
+	if err := w.svc.Redeem(w.ctx, d.Number, reqOf(d), "mestre", "gh pr merge 42"); err != nil {
+		t.Fatalf("the right request: %v", err)
+	}
+}
+
 // CA-DEC-03
 func TestAnExceptionExpiresUnusedWhenTheHeadOfThePRMoves(t *testing.T) {
 	t.Parallel()
@@ -152,7 +184,7 @@ func TestAnExceptionExpiresUnusedWhenTheHeadOfThePRMoves(t *testing.T) {
 	}
 	moved := w.confirm(exc())
 	w.heads.set("lucas/loja", 42, "def")
-	if err := w.svc.Redeem(w.ctx, moved.Number, "mestre", "gh pr merge 42"); !errors.Is(err, decrees.ErrTargetChanged) {
+	if err := w.svc.Redeem(w.ctx, moved.Number, reqOf(moved), "mestre", "gh pr merge 42"); !errors.Is(err, decrees.ErrTargetChanged) {
 		t.Fatalf("redeem after the new commit: %v", err)
 	}
 	got, _ := w.svc.Get(w.ctx, moved.Number)
@@ -165,17 +197,17 @@ func TestAnExceptionExpiresUnusedWhenTheHeadOfThePRMoves(t *testing.T) {
 	// the same exception, with the head as it was approved, is spent once
 	w.heads.set("lucas/loja", 42, "abc")
 	ok := w.confirm(exc())
-	if err := w.svc.Redeem(w.ctx, ok.Number, "mestre", "gh pr merge 42"); err != nil {
+	if err := w.svc.Redeem(w.ctx, ok.Number, reqOf(ok), "mestre", "gh pr merge 42"); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.svc.Redeem(w.ctx, ok.Number, "mestre", "gh pr merge 42"); !errors.Is(err, decrees.ErrEnded) {
+	if err := w.svc.Redeem(w.ctx, ok.Number, reqOf(ok), "mestre", "gh pr merge 42"); !errors.Is(err, decrees.ErrEnded) {
 		t.Fatalf("a second use: %v", err)
 	}
 	// and a target that can not be read is not trusted
 	w.heads.set("lucas/loja", 42, "abc")
 	blind := w.confirm(exc())
 	w.heads.set("lucas/loja", 42, "xyz")
-	if err := w.svc.Redeem(w.ctx, blind.Number, "mestre", "x"); err == nil {
+	if err := w.svc.Redeem(w.ctx, blind.Number, reqOf(blind), "mestre", "x"); err == nil {
 		t.Fatal("redeemed against a different head")
 	}
 }

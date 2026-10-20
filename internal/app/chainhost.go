@@ -142,7 +142,10 @@ type periodHooks struct {
 	// registry puts a character (nil in a period without orchestration).
 	usage *hookUsage
 	// decrees registers the use of the decree an allow of the hook carries.
-	decrees      func(providers.Event, hook.Answer)
+	decrees func(providers.Event, hook.Answer)
+	// exceptions is the ledger of the decrees (the single authority of the
+	// exceptions used once, for every character they reach).
+	exceptions   classes.ExceptionLedger
 	agentMachine func(ctx context.Context, id string) (string, bool)
 	// siteRules are the effective rules of a character, for the request of a
 	// site credential by a Tower (nil in a period without the classes).

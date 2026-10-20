@@ -185,7 +185,13 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 			}
 		})
 	}
-	ph.decrees = hostDecreeUses(integ, orc, e.clk, e.log.Warn)
+	if q := hostDecreeUses(integ, orc, e.clk, e.log.Warn); q != nil {
+		ph.decrees = q.Enqueue
+		orc.Loops = append(orc.Loops, q.Loop)
+		if people, ok := integ.(chainPeople); ok {
+			ph.exceptions, _ = people.CharacterDecrees().(classes.ExceptionLedger)
+		}
+	}
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
 		ph.siteRules = cc.Rules
