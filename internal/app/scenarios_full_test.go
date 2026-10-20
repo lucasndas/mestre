@@ -65,7 +65,8 @@ func TestTheLockMakesTheRulesLockedAndTheyAreRepublishedToEveryone(t *testing.T)
 	}
 }
 
-// Part of CA-CLASSES-04 (fecha no M5, com o HookExec e o runner no mestre run)
+// Part of CA-CLASSES-04 (the runner here is put together by the test; the one of
+// `mestre run`, with the HookExec of the terminal, is in classhooks_full_test.go)
 func TestAnAsyncTurnEndHookOfTheClassOfACharacterInAQuestWritesToTheScrollOfTheQuest(t *testing.T) {
 	t.Parallel()
 	w := newCitadelWorld(t)

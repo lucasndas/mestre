@@ -1,6 +1,6 @@
 # Despachante de hooks (`mestre hook`)
 
-> **Assunto:** o comando `mestre hook`: fluxo de cada chamada, prazos, modo degradado, erro interno e formato das respostas por provedor · **Componente:** Todos · **Atualizado:** 2026-10-19
+> **Assunto:** o comando `mestre hook`: fluxo de cada chamada, prazos, modo degradado, erro interno e formato das respostas por provedor · **Componente:** Todos · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -38,6 +38,7 @@ Em `pre_tool` e `permission_request`, bloqueia (Claude e Codex: exit 2 com o mot
 | negar | exit 0, `permissionDecision: deny` + motivo | exit 0, `permissionDecision: deny` + motivo | `{"decision":"deny","reason":…}` |
 | permissão nativa | `decision.behavior` no PermissionRequest | `decision.behavior` no PermissionRequest | — |
 | contexto do turno | `additionalContext` | `additionalContext` | `injectSteps[{ephemeralMessage}]` no PreInvocation |
+| aviso depois da ferramenta (`post_tool`, desde o M5: [chave escrita em arquivo](../classes/permissoes.md#regras-e-erros)) | `additionalContext` | `additionalContext` | `{}` (o PostToolUse não fala; o motor guarda o aviso e o leva no `injectSteps` do PreInvocation seguinte, uma vez) |
 | fim de turno | exit 0, sem saída | exit 0, sem saída | `{}` |
 
 No Claude, nunca usar exit 1 para bloquear: exit 1 não bloqueia. No Antigravity, toda resposta precisa ser JSON válido com decisão explícita no PreToolUse, porque `{}`, saída inválida, exit diferente de 0 ou tempo esgotado bloqueiam.

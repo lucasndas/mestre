@@ -113,12 +113,23 @@ type Analysis struct {
 	// Suggestions are the improvements to an existing AGENTS.md; the users
 	// apply them or not.
 	Suggestions []string
+	// Verification are the commands that prove the project is up (build and
+	// tests), proposed for .mestre/regras/verificacao.yaml: they hold only after
+	// an Administrator confirms them (docs/sessao-zero/workspace.md#comandos-de-verificação).
+	Verification []string
 }
 
 // Analyst is the Grand Master analysing the project
 // (docs/orquestracao/grao-mestre.md, milestone 5).
 type Analyst interface {
 	Analyze(ctx context.Context, in AnalysisInput) (Analysis, error)
+}
+
+// VerificationProposer keeps the proposal of the commands of verification in
+// .mestre/regras/verificacao.yaml of the main clone dir, without confirming it
+// (orchestration/verification.Keeper).
+type VerificationProposer interface {
+	Propose(ctx context.Context, workspace, dir string, commands []string) error
 }
 
 // PullRequest is the pull request of the session zero.

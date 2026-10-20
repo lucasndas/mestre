@@ -630,6 +630,9 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
+	if o.Messages == nil {
+		o.Messages = inboxMessages{&inbox.Store{DB: o.Guild}}
+	}
 	ws, err := workspaces.New(workspaces.Options{DB: o.Guild, Git: o.Git, Layout: workspaces.Layout{Root: o.WorkspacesDir}, Clock: o.Clock, GitHub: o.GitHub,
 		Credentials: o.Credentials, Alerts: o.Alerts, GrandMaster: inbox.GrandMaster{S: ib}, Log: o.Logger, Gate: gate})
 	if err != nil {

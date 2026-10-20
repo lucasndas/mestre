@@ -59,6 +59,11 @@ type Handlers struct {
 	Refused func(ctx context.Context, c characters.Character, code, reason string)
 	// Send is what `pr open` and `pr update` need to send the branch.
 	Send github.Sending
+	// OnQueued is told the result of a command that was answered `queued` (the
+	// lease was not valid, or the App was under its quota) once it went out: the
+	// op_id is the one the caller was given (the inbox of the caller gets it,
+	// docs/cli/convencoes.md); nil: nobody is told.
+	OnQueued func(ctx context.Context, opID, agentID, cmd string, resp localchan.Response)
 	// Quota, when set, holds what changes data back while the App is low.
 	Quota      Quota
 	Characters Characters

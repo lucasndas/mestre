@@ -132,6 +132,8 @@ type spyGit struct {
 	// failOpen is the number of the call of OpenWorktree that fails (1 is the
 	// first); zero fails none.
 	failOpen, opens int
+	// onDelete is called when git is asked to delete a branch, before it does.
+	onDelete func(branch string)
 }
 
 func (g *spyGit) wrap(r gitx.Repo, err error) (gitx.Repo, error) {
@@ -185,7 +187,11 @@ func (r spyRepo) RemoveWorktree(ctx context.Context, path string, force bool) er
 func (r spyRepo) DeleteBranch(ctx context.Context, name string) error {
 	r.g.mu.Lock()
 	r.g.deleted = append(r.g.deleted, name)
+	onDelete := r.g.onDelete
 	r.g.mu.Unlock()
+	if onDelete != nil {
+		onDelete(name)
+	}
 	return r.Repo.DeleteBranch(ctx, name)
 }
 
@@ -606,6 +612,8 @@ type worldOpts struct {
 	deps tables.Dependencies
 	// proofs says which criteria of the missions are proved.
 	proofs tables.Proofs
+	// audit replaces the writing of the audit trail (nil: the Guild database).
+	audit func(ctx context.Context, id string, at time.Time, machine, action string, detail []byte) error
 }
 
 func newWorld(t *testing.T, o worldOpts) *world {
@@ -664,6 +672,7 @@ func newWorld(t *testing.T, o worldOpts) *world {
 	opts.Settings = o.settings
 	opts.Dependencies = o.deps
 	opts.Proofs = o.proofs
+	opts.Audit = o.audit
 	w.svc, err = tables.New(opts)
 	if err != nil {
 		t.Fatal(err)

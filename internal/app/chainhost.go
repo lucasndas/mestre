@@ -48,6 +48,9 @@ type classBooks struct {
 	clk    clock.Clock
 	global string
 	layout workspaces.Layout
+	// alerts gives the library of a workspace the one who is told of its
+	// proposals (nil: they are dropped); set before the first library is made.
+	alerts func(workspace string) classes.ClassAlerts
 
 	mu   sync.Mutex
 	libs map[string]*classes.Library
@@ -85,6 +88,9 @@ func (b *classBooks) For(workspace string) *classes.Library {
 			st, err := os.Lstat(filepath.Join(clone, ".agents", "skills", name))
 			return err == nil && st.IsDir()
 		},
+	}
+	if b.alerts != nil {
+		lib.Alerts = b.alerts(workspace)
 	}
 	b.libs[workspace] = lib
 	return lib
@@ -149,6 +155,10 @@ type periodHooks struct {
 	// layers gives the dynamic part of the Mestre layer of a character as it
 	// is now (nil when the Citadel has no session zero of its own).
 	layers func(ctx context.Context, id string) (sessionzero.Dynamic, error)
+	// classHooks are the hooks of the classes of the workspaces, and async the
+	// runner of the asynchronous ones (nil without the libraries of classes).
+	classHooks *classHooks
+	async      *hook.AsyncRunner
 }
 
 // errNoPeriod is why an approval is not opened: this machine is not the

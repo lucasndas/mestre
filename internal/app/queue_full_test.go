@@ -49,8 +49,8 @@ func (a *applied) count(id string) int {
 	return a.runs[id]
 }
 
-// Part of CA-CLI-CONV-05 and CA-CLI-CONV-11 (they close with `done` in
-// milestone 4 and `pr open` in milestone 5): with the Citadel away, the Tower
+// Part of CA-CLI-CONV-05 and CA-CLI-CONV-11 (CONV-11 is closed with `pr open` in queued_lease_test.go; CONV-05 closes with `done` in
+// milestone 4): with the Citadel away, the Tower
 // answers a command that needs no answer now with queued and an op_id, the
 // call waits in its outbox, and the Citadel applies it once when it is back;
 // the result, with the same op_id, goes to OnQueuedResult (the inbox of the

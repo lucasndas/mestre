@@ -366,3 +366,32 @@ func TestASecretSplitByEscapesIsHiddenAndTheOutputHasNoEscapes(t *testing.T) {
 		t.Errorf("places = %q", got)
 	}
 }
+
+// Part of CA-SZ-WS-08 (the notice of an outside edit and the confirmation are the panel, M6): the stage analysis leaves a proposal that does not hold before an
+// Administrator confirms it, and a file with content is never overwritten.
+func TestTheProposalIsWrittenOnceAndHoldsNothingUntilConfirmed(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	var told []string
+	k := verification.Keeper{Notify: func(_ context.Context, _, text string) error { told = append(told, text); return nil }}
+	if err := k.Propose(context.Background(), "ws", dir, []string{"go build ./...", "go test ./..."}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, filepath.FromSlash(verification.File))
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verification.Parse(b); err != nil || !strings.Contains(string(b), "go test ./...") {
+		t.Fatalf("proposal %q: %v", b, err)
+	}
+	if len(told) != 1 {
+		t.Fatalf("Administrators told %d times", len(told))
+	}
+	if err := k.Propose(context.Background(), "ws", dir, []string{"make"}); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := os.ReadFile(path); string(again) != string(b) || len(told) != 1 {
+		t.Fatal("a second run rewrote or told again")
+	}
+}

@@ -39,11 +39,25 @@ func (e *Engine) riskOf(workspace string) *classes.RiskPolicy {
 	return nil
 }
 
-// errNoRecord: the engine has no record of the worktree (this machine is not the
+// errNoRecord: the engine has no record of the worktree (this machine did not make it and is not the
 // Citadel of a period), so nothing opens it and a commit is denied.
 var errNoRecord = errors.New("app: no record of the worktree of the table on this machine")
 
-// worktreeInfo is what the Citadel recorded of the worktree of a table here.
+// localWorktree is the record the machine itself keeps of the worktree it made of
+// a table (a Tower, local_worktrees): the one git opens it by, which the Citadel
+// does not have for a worktree of another machine.
+func (e *Engine) localWorktree(ctx context.Context, workspace, table string) (gitx.WorktreeRecord, bool) {
+	if e.mdb == nil {
+		return gitx.WorktreeRecord{}, false
+	}
+	var rec gitx.WorktreeRecord
+	err := e.mdb.Reader().QueryRowContext(ctx, `SELECT dir, git_dir, common_dir FROM local_worktrees WHERE workspace = ? AND table_id = ?`, workspace, table).
+		Scan(&rec.Dir, &rec.GitDir, &rec.Common)
+	return rec, err == nil && rec.Dir != "" && rec.GitDir != "" && rec.Common != ""
+}
+
+// worktreeInfo is what the machine recorded of the worktree of a table here: its
+// own record when it made the worktree (a Tower), else what the Citadel recorded.
 func (e *Engine) worktreeInfo(ctx context.Context, workspace, table string) (WorktreeInfo, error) {
 	var info WorktreeInfo
 	err := e.withGuildDB(func(db *store.DB) error {
@@ -52,11 +66,15 @@ func (e *Engine) worktreeInfo(ctx context.Context, workspace, table string) (Wor
 		if err != nil {
 			return err
 		}
-		w, err := st.Worktree(ctx, workspace, table, e.id.MachineID)
-		if err != nil {
-			return err
+		rec, ok := e.localWorktree(ctx, workspace, table)
+		if !ok {
+			w, err := st.Worktree(ctx, workspace, table, e.id.MachineID)
+			if err != nil {
+				return err
+			}
+			rec = gitx.WorktreeRecord{Dir: w.Dir, GitDir: w.GitDir, Common: w.Common}
 		}
-		info = WorktreeInfo{Record: gitx.WorktreeRecord{Dir: w.Dir, GitDir: w.GitDir, Common: w.Common}, BaseCommit: t.BaseCommit, Main: "refs/remotes/origin/" + t.BaseBranch}
+		info = WorktreeInfo{Record: rec, BaseCommit: t.BaseCommit, Main: "refs/remotes/origin/" + t.BaseBranch}
 		return nil
 	})
 	if err != nil {

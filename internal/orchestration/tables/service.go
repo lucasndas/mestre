@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -54,6 +55,9 @@ type Options struct {
 	// Proofs says which criteria of the missions of a table are proved (nil: none).
 	Proofs Proofs
 	Peers  Peers
+	// Audit writes a line of the audit trail of the Guild; nil writes it in the
+	// Guild database (Registry.Audit).
+	Audit func(ctx context.Context, id string, at time.Time, machine, action string, detail []byte) error
 	// Dependencies holds a table that waits for another (nil: none does).
 	Dependencies Dependencies
 	// TempDir is a private folder for the bundles while they are sent
