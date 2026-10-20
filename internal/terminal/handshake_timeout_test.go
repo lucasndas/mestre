@@ -65,21 +65,34 @@ func TestAnEngineThatWaitsForTheHelloLongerThanItsTimeoutClosesItsOwnSocket(t *t
 	clk := clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))
 	release, result := handshakeWithASlowPty(t, clk, 0)
 	defer release()
-	clk.Advance(ptywire.HandshakeTimeout)
+	clk.Advance(ptywire.EngineHandshakeTimeout)
 	err := <-result
 	if !errors.Is(err, ptywire.ErrAuth) || !strings.Contains(err.Error(), "reading hello") || !strings.Contains(err.Error(), "closed") {
 		t.Fatalf("NewClient = %v, want a refused handshake reading the hello from a closed connection", err)
 	}
 }
 
+// The defaults are 30 s for the mestre-pty and 35 s for the engine: a busy user
+// machine is slow to schedule the process it just started, and the engine,
+// which counts from the connect, never gives up before the mestre-pty does.
+func TestTheHandshakeDefaultsAre30SecondsAndTheEngineWaitsLongerThanThePty(t *testing.T) {
+	t.Parallel()
+	if ptywire.HandshakeTimeout != 30*time.Second {
+		t.Errorf("HandshakeTimeout = %v, want 30s", ptywire.HandshakeTimeout)
+	}
+	if ptywire.EngineHandshakeTimeout != 35*time.Second || ptywire.EngineHandshakeTimeout < ptywire.HandshakeTimeout {
+		t.Errorf("EngineHandshakeTimeout = %v, want 35s and not shorter than the mestre-pty's", ptywire.EngineHandshakeTimeout)
+	}
+}
+
 // The timeout is the engine's to choose (Deps.TerminalHandshake): a mestre-pty
-// that answers after the 5 s of the protocol, within the one given, is accepted.
+// that answers after the default, within the one given, is accepted.
 func TestAnEngineWithALongerHandshakeTimeoutWaitsForASlowMestrePty(t *testing.T) {
 	t.Parallel()
 	clk := clock.NewFake(time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))
-	release, result := handshakeWithASlowPty(t, clk, time.Minute)
+	release, result := handshakeWithASlowPty(t, clk, 2*ptywire.EngineHandshakeTimeout)
 	defer release()
-	clk.Advance(ptywire.HandshakeTimeout + time.Second) // past the 5 s: nothing is closed
+	clk.Advance(ptywire.EngineHandshakeTimeout + time.Second) // past the default: nothing is closed
 	release()
 	if err := <-result; err != nil {
 		t.Fatalf("NewClient = %v, want the slow mestre-pty accepted", err)

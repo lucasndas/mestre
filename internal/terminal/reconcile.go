@@ -33,7 +33,7 @@ type Report struct {
 //     reconnect, read the screen and the output since the last offset the
 //     log confirmed;
 //  2. in the registry and dead (no process, a reused PID, or a socket that
-//     does not complete the handshake in 5 s): interrupted; the cgroup of
+//     does not complete the handshake in 30 s): interrupted; the cgroup of
 //     the terminal is killed and removed;
 //  3. alive and not in the registry (a socket in the folder with no row, for
 //     instance after a restored backup): without a row there is no secret

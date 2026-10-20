@@ -123,7 +123,7 @@ type Deps struct {
 	Spawner       terminal.Spawner
 	CharacterPrep characters.Preparer
 	// TerminalHandshake is how long the engine waits for a mestre-pty to answer
-	// the handshake (zero: the 5 s of the protocol). The full suite lengthens
+	// the handshake (zero: ptywire.EngineHandshakeTimeout). The full suite lengthens
 	// it: a starved CI machine can take longer than that to schedule a process
 	// it just started, and that says nothing about the engine.
 	TerminalHandshake time.Duration

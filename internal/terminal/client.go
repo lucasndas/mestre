@@ -85,7 +85,7 @@ type reply struct {
 // timeout (the default 5 s) fails, measured by clk.
 func NewClient(nc net.Conn, secret []byte, clk clock.Clock, timeout time.Duration) (*Client, error) {
 	if timeout == 0 {
-		timeout = ptywire.HandshakeTimeout
+		timeout = ptywire.EngineHandshakeTimeout
 	}
 	conn := ptywire.NewConn(nc)
 	timer := clk.AfterFunc(timeout, func() { _ = nc.Close() })
@@ -114,7 +114,7 @@ func NewClient(nc net.Conn, secret []byte, clk clock.Clock, timeout time.Duratio
 // starting), it tries again until timeout; a failed handshake is final.
 func Dial(ctx context.Context, clk clock.Clock, path string, secret []byte, timeout time.Duration) (*Client, error) {
 	if timeout == 0 {
-		timeout = ptywire.HandshakeTimeout
+		timeout = ptywire.EngineHandshakeTimeout
 	}
 	ctx, cancel := clock.WithTimeout(ctx, clk, timeout)
 	defer cancel()
