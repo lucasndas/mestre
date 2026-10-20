@@ -96,7 +96,7 @@ mestre decree list [--all]
 - `list`: decretos ativos (número, autor e nível, texto, escopo, validade); `--all` inclui revogados e expirados.
 
 ### `mestre notify`
-`mestre notify "<mensagem>" [--table "<mesa>"] [--blocked <motivo> [--checked …] [--why-not …] [--step …]…]` — avisa os usuários do workspace no painel e no Telegram, conforme o nível de cada um; `--table` põe a mesa no cabeçalho. `--json` → `{delivered: {panel, telegram}, queued}`. Com `--blocked` é um aviso de bloqueio, nos campos de [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md#como-o-agente-envia). Texto com cara de segredo → 3 `secret_detected`. Para responder a uma mensagem use `reply` ([comunicacao](comunicacao.md)).
+`mestre notify "<mensagem>" [--table "<mesa>"] [--blocked <motivo> [--checked …] [--why-not …] [--step …]…]` — avisa os usuários do workspace no painel e no Telegram, conforme o nível de cada um; `--table` põe a mesa no cabeçalho. `--json` → `{delivered: {panel, telegram}, queued}`. Com `--blocked` é um aviso de bloqueio, nos campos de [pedido que bloqueia](../aprovacoes/pedido-que-bloqueia.md#como-o-agente-envia). Texto com cara de segredo → 3 `secret_detected`. Motivo fora do vocabulário → 2 `usage`; ninguém avisado → 7 `not_delivered`; sem `--blocked` o comando ainda não tem remetente e sai com `unavailable` ([ligação de produção](../desenvolvimento/ligacao-de-producao.md)). Para responder a uma mensagem use `reply` ([comunicacao](comunicacao.md)).
 
 ## Regras e erros
 
