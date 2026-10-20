@@ -455,8 +455,11 @@ func (r *stdRun) GuildLock(ctx context.Context) (guild.Lock, error) {
 // OwnerAlert, CharacterDecrees and Users make the run the people of the chain
 // (chainPeople).
 func (r *stdRun) OwnerAlert(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }
-func (r *stdRun) CharacterDecrees() CharacterDecrees          { return r.decrees }
-func (r *stdRun) Users() *users.Service                       { return r.users }
+func (r *stdRun) OwnerWorkspaceAlert(ctx context.Context, workspace, text string) {
+	r.alert.OwnerWorkspaceAlert(ctx, workspace, text)
+}
+func (r *stdRun) CharacterDecrees() CharacterDecrees { return r.decrees }
+func (r *stdRun) Users() *users.Service              { return r.users }
 
 // BindFence implements IntegrationRun.
 func (r *stdRun) BindFence(f *guild.Fence) { r.fence.Store(f) }
@@ -589,7 +592,14 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 		return err
 	}
 	(&blocking.ChooseHandler{Characters: orc.Registry, Chooser: chooser{r.choose}, User: msgs.User, Current: msgs.Current, Table: orc.Tables.Find}).Register(fwd)
-	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
+	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName,
+		Evidence: func(_ context.Context, workspace, mesa string) string {
+			red, ok := orc.Quests.LastRed(workspace, mesa)
+			if !ok {
+				return ""
+			}
+			return blocking.TestEvidence(red.Command, red.Output, red.Places)
+		}}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
 		// the decrees whose validity ran out end while the Citadel acts
 		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()

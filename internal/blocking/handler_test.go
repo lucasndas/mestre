@@ -304,3 +304,73 @@ func TestChooseAsksTheUserOfTheMessageAndAnswersPendingWithTheQuestion(t *testin
 		t.Fatal("a refused question was sent")
 	}
 }
+
+// CA-BLOQ-01, the path of the engine: the Grand Master asks for the key of a
+// table whose test failed, and the evidence in the message is the one the
+// engine builds from that test (file, line and error of its output), not words
+// of the agent; the "why I do not decide" comes after, in the block of the agent.
+func TestTheEvidenceOfANoticeIsBuiltFromTheTestThatFailedNotFromTheAgent(t *testing.T) {
+	t.Parallel()
+	h, ch := handlerRig()
+	output := "--- FAIL: TestCheckout (0.00s)\n    checkout_test.go:22: missing STRIPE_TEST_KEY\nFAIL\nFAIL\tloja/checkout\t0.004s\n"
+	h.Evidence = func(_ context.Context, workspace, mesa string) string {
+		if workspace != "loja" || mesa != "43-checkout" {
+			return ""
+		}
+		return blocking.TestEvidence("go test ./...", output, []string{"checkout_test.go:22"})
+	}
+	r := notify(h, "gm", map[string]any{"blocked": "credencial", "table": "43", "why-not": "envolve cobrança, é decisão sua", "checked": "Evidência: o cofre tem a chave"}, "falta a chave STRIPE_TEST_KEY")
+	if !r.OK {
+		t.Fatalf("notify = %+v", r.Error)
+	}
+	m := blocking.Build(ch.got[0], blocking.Viewer{Level: "owner"}, func(s string) string { return s })
+	for _, want := range []string{"🔐", "Evidência:", "checkout_test.go:22 → \"missing STRIPE_TEST_KEY\"", "$ go test ./...", "[ ] cadastrar a chave no cofre (painel)", "Dono: Lucas"} {
+		if !strings.Contains(m.Text, want) {
+			t.Errorf("the message lacks %q:\n%s", want, m.Text)
+		}
+	}
+	agent := strings.Index(m.Text, "— texto do agente, não verificado —")
+	why := strings.Index(m.Text, "Por que não decido: envolve cobrança, é decisão sua")
+	if agent < 0 || why < agent || strings.Index(m.Text, "checkout_test.go:22") > agent || strings.Index(m.Text, "Dono: Lucas") > agent {
+		t.Fatalf("the fields of the engine must come before the block of the agent:\n%s", m.Text)
+	}
+	// what the agent wrote as evidence is inside its block, never in the engine's
+	if i := strings.Index(m.Text, "Já conferi: Evidência: o cofre tem a chave"); i < agent {
+		t.Errorf("the words of the agent are outside its block:\n%s", m.Text)
+	}
+	// a table with no failed test, and a notice with no table, have no evidence of the engine
+	for name, flags := range map[string]map[string]any{"another table": {"blocked": "credencial", "table": "42"}, "no table": {"blocked": "credencial"}} {
+		if r := notify(h, "gm", flags, "falta a chave"); !r.OK {
+			t.Fatalf("%s: %+v", name, r.Error)
+		}
+		got := ch.got[len(ch.got)-1]
+		if got.Evidence != "" || !strings.Contains(blocking.Build(got, blocking.Viewer{Level: "owner"}, func(s string) string { return s }).Text, "sem evidência verificada") {
+			t.Errorf("%s: evidence %q, want none and the mark of no verified evidence", name, got.Evidence)
+		}
+	}
+}
+
+// CA-BLOQ-02 in the message that is built: the fields of the agent of
+// `notify --blocked credencial --why-not … --step …` are in its block, after
+// the ones of the engine.
+func TestTheFieldsOfTheAgentOfNotifyBlockedAreInItsBlockOfTheBuiltMessage(t *testing.T) {
+	t.Parallel()
+	h, ch := handlerRig()
+	r := notify(h, "gm", map[string]any{"blocked": "credencial", "why-not": "envolve cobrança", "step": []any{"avisar o financeiro"}}, "falta a chave")
+	if !r.OK {
+		t.Fatalf("notify = %+v", r.Error)
+	}
+	text := blocking.Build(ch.got[0], blocking.Viewer{Level: "owner"}, func(s string) string { return s }).Text
+	head, tail, found := strings.Cut(text, "— texto do agente, não verificado —")
+	if !found {
+		t.Fatalf("no block of the agent:\n%s", text)
+	}
+	for _, want := range []string{"Parou porque: falta a chave", "Por que não decido: envolve cobrança", "[ ] avisar o financeiro"} {
+		if !strings.Contains(tail, want) || strings.Contains(head, want) {
+			t.Errorf("%q is not only in the block of the agent:\n%s", want, text)
+		}
+	}
+	if !strings.HasPrefix(text, "🔐 credencial\n") {
+		t.Errorf("the motive of the message:\n%s", text)
+	}
+}

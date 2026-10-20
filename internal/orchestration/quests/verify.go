@@ -274,6 +274,7 @@ func (s *Service) verified(ctx context.Context, q Quest, st Step, c characters.C
 		failed(err)
 		return
 	}
+	s.noteVerification(q, res)
 	cur, err := s.st.Step(ctx, st.UID)
 	if err != nil || !cur.State.Active() || cur.Character != c.ID {
 		return // the step moved on while it ran

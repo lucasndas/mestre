@@ -72,6 +72,34 @@ func TestTheOwnerSeesOpenInThePanelAndAnAdministratorSeesNoButtonToRegisterTheSe
 			t.Errorf("%s: the evidence is not cut or masked:\n%s", name, text)
 		}
 	}
+	// no button registers the secret through Telegram: the only buttons of the
+	// notice are the link to the panel (the Owner's) and Ver detalhes, and the
+	// step of the vault is marked "(painel)" only for who can do it there
+	for _, s := range w.sent("sendMessage") {
+		if s.ChatID != owner.ID && s.ChatID != adm.ID {
+			continue
+		}
+		var panels int
+		kb, _ := s.Params["reply_markup"].(map[string]any)["inline_keyboard"].([]any)
+		for _, row := range kb {
+			for _, b := range row.([]any) {
+				bt := b.(map[string]any)
+				switch {
+				case bt["text"] == "Abrir no painel" && bt["url"] != nil && bt["callback_data"] == nil:
+					panels++
+				case bt["text"] == "Ver detalhes" && bt["url"] == nil:
+				default:
+					t.Errorf("a button that is neither the link to the panel nor the details: %v", bt)
+				}
+			}
+		}
+		if want := map[bool]int{true: 1, false: 0}[s.ChatID == owner.ID]; panels != want {
+			t.Errorf("%d links to the panel for chat %d, want %d", panels, s.ChatID, want)
+		}
+	}
+	if !strings.Contains(ownerMsg, "[ ] cadastrar a chave no cofre (painel)") || strings.Contains(admMsg, "(painel)") || !strings.Contains(admMsg, "[ ] cadastrar a chave no cofre") {
+		t.Errorf("the step of the vault: Owner %q, Administrator %q", ownerMsg, admMsg)
+	}
 	// Ver detalhes: the whole evidence, masked, only to who acts in the workspace
 	msg, keys := w.buttons(adm)
 	w.click(adm, msg, keys["Ver detalhes"])

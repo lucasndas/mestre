@@ -2,6 +2,7 @@ package approvals_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/lucasndas/mestre/internal/approvals"
@@ -270,7 +271,7 @@ func TestAskingAgainUpdatesTheQuestionAndAskBackKeepsItOpen(t *testing.T) {
 	if w.msg.Sent() != n {
 		t.Error("a second Ask sent the question again")
 	}
-	if got := w.textTo(ana); got != "Texto novo" {
+	if got := w.textTo(ana); !strings.Contains(got, "\nTexto novo\n") {
 		t.Errorf("the question = %q", got)
 	}
 	if _, err := w.answer(ana, r.ID, chain.AnswerAskBack); err != nil || w.state(r.ID) != chain.Open {

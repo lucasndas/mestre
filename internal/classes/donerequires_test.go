@@ -44,6 +44,24 @@ func TestDoneRequiresIsReadAndAClassThatVerifiesMustBeAbleToCommit(t *testing.T)
 	if ex.OK() || !strings.Contains(problems(ex), "git.commit") {
 		t.Errorf("verify: true with git.commit: false was accepted: %s", problems(ex))
 	}
+	// the effective git.commit is deny also when a commands.deny pattern takes git commit
+	for name, perms := range map[string]string{
+		"git commit *":     "version: 1\ncommands: {deny: [\"git commit *\"]}\n",
+		"git *":            "version: 1\ncommands: {allow: [\"npm test\"], deny: [\"git *\"], default: ask}\n",
+		"git commit and -": "version: 1\ngit: {commit: true}\ncommands: {deny: [\"git commit*\"]}\n",
+	} {
+		ex = doneClass(t, "done_requires: {verify: true}\n", perms)
+		if ex.OK() || !strings.Contains(problems(ex), "commands.deny") {
+			t.Errorf("verify: true with commands.deny %s was accepted: %s", name, problems(ex))
+		}
+		if ex = doneClass(t, "done_requires: {proof: all}\n", perms); !ex.OK() {
+			t.Errorf("proof: all with commands.deny %s was refused: %s", name, problems(ex))
+		}
+	}
+	// a deny that does not take git commit is fine
+	if ex = doneClass(t, "done_requires: {verify: true}\n", "version: 1\ncommands: {deny: [\"git push *\", \"rm *\"]}\n"); !ex.OK() {
+		t.Errorf("verify: true with an unrelated deny was refused: %s", problems(ex))
+	}
 	// without verification a class that does not commit is fine
 	if ex = doneClass(t, "done_requires: {proof: all}\n", "version: 1\ngit: {commit: false}\n"); !ex.OK() {
 		t.Errorf("proof: all with no commits was refused: %s", problems(ex))
