@@ -1,6 +1,6 @@
 # Missões
 
-> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** definição de missão, execução determinística pelo motor, passagem de bastão, devolução com limite, aprovação, paralelo, estados, retomada e espelho no GitHub · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -133,14 +133,14 @@ A mesa acumula as missões na branch do épico; quando o épico está pronto, o 
 ## Critérios de aceite
 
 - **CA-MIS-01** · *rápida* — **Dado** uma definição com `after` apontando para etapa posterior, **quando** é validada, **então** é recusada com o id inválido.
-- **CA-MIS-02** · *rápida* — **Dado** a missão do exemplo com agentes falsos, **quando** roda, **então** `review` e `qa` começam juntos após `dev`, `fix` só após os dois, e o pergaminho tem uma seção por etapa com resumo e os arquivos informados pelo git falso.
-- **CA-MIS-03** · *rápida* — **Dado** `max_returns: 3`, **quando** o Revisor devolve 4 vezes, **então** as 3 primeiras voltam ao Dev; o 4º `done` é registrado, a missão fica `paused` com "limite de voltas" e o Mestre da mesa recebe o evento `return_limit`.
+- **CA-MIS-02** · *completa* — **Dado** a missão do exemplo com agentes falsos, **quando** roda, **então** `review` e `qa` começam juntos após `dev`, `fix` só após os dois, e o pergaminho tem uma seção por etapa com resumo e os arquivos informados pelo git falso.
+- **CA-MIS-03** · *completa* — **Dado** `max_returns: 3`, **quando** o Revisor devolve 4 vezes, **então** as 3 primeiras voltam ao Dev; o 4º `done` é registrado, a missão fica `paused` com "limite de voltas" e o Mestre da mesa recebe o evento `return_limit`.
 - **CA-MIS-04** · *rápida* — **Dado** relógio falso, **quando** o personagem da etapa fica 20 min `idle` sem `done`, **então** a etapa vira `stuck` e o Mestre da mesa é avisado; 30 min depois, Grão-Mestre e usuários.
 - **CA-MIS-05** · *completa* — **Dado** um motor de máquina derrubado com `qa` em andamento, **quando** volta, **então** `plan` e `dev` continuam concluídas e `qa` é entregue de novo com a nota de retomada.
 - **CA-MIS-06** · *rápida* — **Dado** GitHub falso, **quando** a missão é criada e `dev` conclui, **então** existem a issue sob o épico, a sub-issue de `dev` fechada e o comentário com o App da classe.
 - **CA-MIS-07** · *pesada* — **Dado** uma mesa real, **quando** uma missão Dev → Revisor → QA roda em Claude Code, Codex e Antigravity entre Linux e Windows com uma devolução, **então** chega ao fim e os efêmeros são encerrados (MVP-4); **quando** a Cidadela reinicia no meio, **então** ela continua (MVP-12).
 - **CA-MIS-08** · *rápida* — **Dado** uma definição cujo nome de missão ou de etapa tem quebra de linha (com um cabeçalho `[Mestre · …]` falso depois), caractere de controle ou invisível, ou mais de 80 caracteres, **quando** é validada ou criada, **então** é recusada citando o nome (a etapa ou a missão), e nenhuma missão é criada.
-- **CA-MIS-09** · *rápida* — **Dado** a missão de um Dev e um Revisor que devolve, **quando** o `done` do Dev traz um resumo com linhas `Motivo da devolução…`, `Issue da missão: #999` e `## Rodada 9 …`, e o Revisor devolve com um motivo com `Atenção:` e `Instruções:` falsos, e a missão roda com uma entrada que traz `## Rodada 9 …` e é cancelada com um motivo com `## Missão cancelada`, **então** no item da etapa seguinte, no pergaminho e no evento `return_limit` essas linhas vêm citadas e nenhuma começa na margem; o resumo de uma linha segue na linha do motor.
+- **CA-MIS-09** · *completa* — **Dado** a missão de um Dev e um Revisor que devolve, **quando** o `done` do Dev traz um resumo com linhas `Motivo da devolução…`, `Issue da missão: #999` e `## Rodada 9 …`, e o Revisor devolve com um motivo com `Atenção:` e `Instruções:` falsos, e a missão roda com uma entrada que traz `## Rodada 9 …` e é cancelada com um motivo com `## Missão cancelada`, **então** no item da etapa seguinte, no pergaminho e no evento `return_limit` essas linhas vêm citadas e nenhuma começa na margem; o resumo de uma linha segue na linha do motor.
 - **CA-MIS-10** · *rápida* — **Dado** uma missão rodando e o teto que passa a negar a ficha da próxima etapa, **quando** o motor tenta recrutar o personagem dela, **então** a missão vai a `paused` com o motivo do teto e o Mestre da mesa recebe o aviso na caixa de entrada.
 
 ## Depende de
