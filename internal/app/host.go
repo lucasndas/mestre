@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/lucasndas/mestre/internal/classes"
+	"github.com/lucasndas/mestre/internal/github"
 	"github.com/lucasndas/mestre/internal/gitx"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
@@ -57,12 +58,13 @@ func (unavailableEpics) ClosePR(context.Context, string, int) error {
 	return errMilestone5("the access to the pull requests of GitHub")
 }
 
-// unavailableBuilder is the session zero of a character before the stage of
-// the identities and the decrees: no character is born through it.
+// unavailableBuilder is the session zero of a character of a Citadel without
+// the people of the chain (the decrees, the users) and the classes: no
+// character is born through it (SessionBuilder is the real one).
 type unavailableBuilder struct{}
 
 func (unavailableBuilder) Build(context.Context, characters.BuildInput) (sessionzero.CharacterRequest, error) {
-	return sessionzero.CharacterRequest{}, errMilestone5("the session zero of a character (identities and decrees)")
+	return sessionzero.CharacterRequest{}, errors.New("the session zero of a character needs the decrees, the identities and the classes of the Citadel, and this run has none configured")
 }
 
 // logAlerts are the operational alerts before the bot: they go to the log, where
@@ -84,7 +86,7 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	if err != nil {
 		return nil, err
 	}
-	reg := providers.NewRegistry(providers.Options{})
+	reg := providers.NewRegistry(providers.Options{NoFlush: e.cfg.Synchronous == "OFF"}) // the files follow the databases (Synchronous OFF: tests)
 	binary := e.deps.Binary
 	if binary == "" {
 		if binary, err = os.Executable(); err != nil {
@@ -105,17 +107,26 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 	}
 	opts := OrchestrationOptions{
 		Guild: db, Machine: e.id.MachineID, Clock: e.clk, Logger: e.log, WorkspacesDir: workspacesDir, TempDir: tmp,
-		Git: git, Machines: e.machines(), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
+		Git: git, Machines: e.machines(db), Presets: characters.CatalogPresets{Catalog: &presets.Catalog{DB: db, Clock: e.clk, Machines: machineSheets{&e.sheets}}},
 		Builder: unavailableBuilder{}, GitHub: unavailableGitHub{}, Epics: unavailableEpics{}, Alerts: logAlerts{e.log}, Files: files,
-		Limits: characters.DefaultLimits(),
+		Limits: characters.DefaultLimits(), Peers: towerTables{e.towerClient()}, QuestTowers: towerTables{e.towerClient()},
 	}
 	if integ != nil {
 		integ.Extend(&opts)
 	}
 	var cc *CitadelClasses
+	var sb *SessionBuilder
 	if people, ok := integ.(chainPeople); ok {
-		if cc, err = e.hostChain(&opts, people, workspaces.Layout{Root: workspacesDir}); err != nil {
+		layout := workspaces.Layout{Root: workspacesDir}
+		if cc, err = e.hostChain(&opts, people, layout); err != nil {
 			return nil, err
+		}
+		if notes, ok := people.CharacterDecrees().(DecreeNotes); ok {
+			if sb, err = NewSessionBuilder(SessionBuilderOptions{Rules: cc.Rules, Notes: notes, Identities: github.Identities{Apps: &github.Registry{DB: db}},
+				Libraries: opts.ClassLibraries, Layout: layout, Machine: e.id.MachineID, Tables: tables.Store{DB: db}, Log: e.log}); err != nil {
+				return nil, err
+			}
+			opts.Builder = sb
 		}
 	}
 	orc, err := NewOrchestration(opts)
@@ -128,12 +139,36 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		alive: orc.Registry.Alive, adapters: providers.NewRegistry(providers.Options{Exec: e.deps.UsageSources.Exec}), src: e.deps.UsageSources,
 		machine: e.id.MachineID, clk: e.clk, log: e.log})
 	orc.Loops = append(orc.Loops, func(ctx context.Context) error { return reader.Loop(ctx, usageEvery) })
+	if e.rt != nil {
+		// The characters this machine lost are resumed in the order of the
+		// document (the Grand Master first), and the Grand Master is kept up
+		// afterwards, with backoff, for as long as the Citadel acts.
+		keeper := orc.Characters.NewKeeper(e.id.MachineID, func(ctx context.Context, slug string) bool {
+			_, err := orc.Workspaces.Get(ctx, slug)
+			return !errors.Is(err, workspaces.ErrNotFound)
+		})
+		orc.Loops = append(orc.Loops, func(ctx context.Context) error {
+			if err := orc.Characters.ResumeMachine(ctx, e.id.MachineID); err != nil && ctx.Err() == nil {
+				e.log.Warn("app: some characters of this machine were not resumed", "err", err)
+			}
+			return keeper.Run(ctx)
+		})
+	}
 	ph := &periodHooks{usage: newHookUsage(orc.Usage, reader, e.log), agentMachine: func(ctx context.Context, id string) (string, bool) {
 		c, err := orc.Registry.Get(ctx, id)
 		return c.Machine, err == nil
 	}}
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
+	}
+	if sb != nil {
+		ph.layers = func(ctx context.Context, id string) (sessionzero.Dynamic, error) {
+			c, err := orc.Registry.Get(ctx, id)
+			if err != nil {
+				return sessionzero.Dynamic{}, err
+			}
+			return sb.Refresh(ctx, c)
+		}
 	}
 	e.period.Store(ph)
 	return orc, nil
@@ -173,6 +208,7 @@ func (e *Engine) hostChain(o *OrchestrationOptions, people chainPeople, layout w
 		pub.Local = &classes.Store{DB: e.mdb, Clock: e.clk, Agents: e.paths.Agentes}
 	}
 	o.ChainClasses, o.ChainRulesPublisher = cc, pub
+	pub.Sender = towerRules{&e.srvp}
 	o.Machines = PublishingMachines(o.Machines, pub)
 	return cc, nil
 }

@@ -1,6 +1,6 @@
 # Pedido que bloqueia
 
-> **Assunto:** os campos da mensagem que pede algo ao usuário porque uma mesa não segue sem ele: por que parou, evidência, o que já foi conferido, por que o agente não decide, o que fazer, quem age e o motivo no vocabulário fixo · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** os campos da mensagem que pede algo ao usuário porque uma mesa não segue sem ele: por que parou, evidência, o que já foi conferido, por que o agente não decide, o que fazer, quem age e o motivo no vocabulário fixo · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -65,7 +65,7 @@ Por que não decido: envolve cobrança, é decisão sua
 - Pedido sem evidência que o motor possa montar (só texto do agente) vai marcado "sem evidência verificada".
 - O vocabulário e os campos não mudam quem decide nem o risco: isso é da [política](politica.md) e da [classificação de risco](../classes/classificacao-de-risco.md).
 
-- **Implementação:** `internal/blocking` faz a mensagem (`Build` para cada nível, `Full` para o painel e o **Ver detalhes**), o vocabulário (`ParseMotive`, que devolve o erro de uso com os dez valores) e o dono (`OwnerOf`, `NoticeOwner`); `telegram.BlockChannel` guarda o aviso mascarado (`blocking_notices`) e o manda ao Dono e aos Administradores do workspace, cada um com os botões do seu nível (o **Abrir no painel** é um link, só do Dono). O texto do agente sai numa linha por campo, sem negrito, código nem link. As flags `--motive`, `--checked`, `--why-not` e `--step`, o `blocked-by` vindo das dependências entre mesas e a montagem dos pedidos de aprovação por este formato chegam com a CLI do Grão-Mestre e a dependência entre mesas (etapa 5): [ligação de produção](../desenvolvimento/ligacao-de-producao.md).
+- **Implementação:** `internal/blocking` faz a mensagem (`Build` para cada nível, `Full` para o painel e o **Ver detalhes**), o vocabulário (`ParseMotive`, que devolve o erro de uso com os dez valores) e o dono (`OwnerOf`, `NoticeOwner`); `telegram.BlockChannel` guarda o aviso mascarado (`blocking_notices`) e o manda ao Dono e aos Administradores do workspace, cada um com os botões do seu nível (o **Abrir no painel** é um link, só do Dono). O texto do agente sai numa linha por campo, sem negrito, código nem link. `mestre notify "<mensagem>" --blocked <motivo>` (`blocking.Handler`, só o Grão-Mestre) manda o aviso pelo `BlockChannel` com as flags `--checked`, `--why-not` e `--step`; a mensagem do agente vai no bloco dele ("Parou porque"), o dono do `credencial` é o Dono (com o passo do cofre) e o dos outros é um Administrador, e `--table` põe a mesa e o `blocked-by` das dependências entre mesas ([dependência entre mesas](../orquestracao/dependencia-entre-mesas.md)). Sem `--blocked` o `notify` ainda não tem remetente e responde `unavailable`. As flags no `mestre approval ask` e a montagem dos pedidos de aprovação por este formato chegam com o `approval ask` (CLI do Grão-Mestre, etapa 6): [ligação de produção](../desenvolvimento/ligacao-de-producao.md).
 
 ## Critérios de aceite
 

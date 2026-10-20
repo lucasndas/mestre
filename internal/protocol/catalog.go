@@ -38,6 +38,15 @@ const (
 	TypeTerminalScreenResult = "terminal.screen_result"
 	TypeInboxDeliver         = "inbox.deliver"
 	TypeInboxResult          = "inbox.result"
+	TypeCharacterStart       = "character.start"
+	TypeCharacterStop        = "character.stop"
+	TypeCharacterNotice      = "character.notice"
+	TypeCharacterTurn        = "character.turn"
+	TypeTableWhere           = "table.where"
+	TypeTableRemove          = "table.remove"
+	TypeTableDone            = "table.done"
+	TypeTableSent            = "table.sent"
+	TypeTableNotice          = "table.notice"
 	TypeAgentRules           = "agent.rules"
 	TypeAgentSiteLogin       = "agent.site_login"
 	TypeAgentSiteLoginStatus = "agent.site_login_status"
@@ -104,10 +113,19 @@ func DefaultRegistry() *Registry {
 		Spec{Type: TypeTerminalStatus, Dir: TowerToCitadel, Ack: true, Payload: TerminalStatus{}},
 		Spec{Type: TypeTerminalReplay, Dir: CitadelToTower, Payload: TerminalReplay{}},
 		Spec{Type: TypeTerminalReplayed, Dir: TowerToCitadel, Payload: TerminalReplayed{}},
-		Spec{Type: TypeTerminalScreen, Dir: CitadelToTower, Payload: TerminalScreen{}},
+		Spec{Type: TypeTerminalScreen, Dir: CitadelToTower, Ack: true, Payload: TerminalScreen{}},
 		Spec{Type: TypeTerminalScreenResult, Dir: TowerToCitadel, Payload: TerminalScreenResult{}},
 		Spec{Type: TypeInboxDeliver, Dir: CitadelToTower, Ack: true, Payload: InboxDeliver{}},
 		Spec{Type: TypeInboxResult, Dir: TowerToCitadel, Ack: true, Payload: InboxResult{}},
+		Spec{Type: TypeCharacterStart, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: CharacterStart{}},
+		Spec{Type: TypeCharacterStop, Dir: CitadelToTower, Ack: true, Payload: CharacterStop{}},
+		Spec{Type: TypeCharacterNotice, Dir: TowerToCitadel, Ack: true, Payload: CharacterNotice{}},
+		Spec{Type: TypeCharacterTurn, Dir: TowerToCitadel, Ack: true, Payload: CharacterTurn{}},
+		Spec{Type: TypeTableWhere, Dir: CitadelToTower, Ack: true, Payload: TableRef{}, Reply: TableWhere{}},
+		Spec{Type: TypeTableRemove, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
+		Spec{Type: TypeTableDone, Dir: CitadelToTower, Ack: true, Payload: TableRef{}},
+		Spec{Type: TypeTableSent, Dir: TowerToCitadel, Ack: true, Payload: TableSent{}},
+		Spec{Type: TypeTableNotice, Dir: TowerToCitadel, Ack: true, Payload: TableNotice{}},
 		Spec{Type: TypeAgentRules, Dir: CitadelToTower, Ack: true, Payload: Object{}},
 		Spec{Type: TypeAgentSiteLogin, Dir: CitadelToTower, Ack: true, Volatile: true, Payload: AgentSiteLogin{}},
 		Spec{Type: TypeAgentSiteLoginStatus, Dir: TowerToCitadel, Ack: true, Payload: AgentSiteLoginStatus{}},

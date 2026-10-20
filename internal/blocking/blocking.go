@@ -135,9 +135,11 @@ type Notice struct {
 	// BlockedBy are the numbers of the epics that must move first; empty: only
 	// a person unblocks it.
 	BlockedBy []string
-	// Checked, WhyNot and AgentSteps are the text of the agent.
-	Checked, WhyNot string
-	AgentSteps      []string
+	// Message, Checked, WhyNot and AgentSteps are the text of the agent: what it
+	// says is stopped (when the engine does not know it), what it checked, why
+	// it does not decide and the steps it adds.
+	Message, Checked, WhyNot string
+	AgentSteps               []string
 	// Request is the approval request the notice is about, 0 for a plain notice.
 	Request int64
 }
@@ -206,7 +208,7 @@ func Build(n Notice, v Viewer, mask func(string) string) Message {
 		motive = HumanDecision
 	}
 	if n.Stopped != "" {
-		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), clip(engineLine(mask(n.Stopped)), MaxField))
+		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), clip(maskedLine(n.Stopped, mask), MaxField))
 	} else {
 		fmt.Fprintf(&b, "%s %s\n", motive.Icon(), motive)
 	}
@@ -217,7 +219,7 @@ func Build(n Notice, v Viewer, mask func(string) string) Message {
 	if len(n.Steps) > 0 {
 		b.WriteString("Para destravar:\n")
 		for _, s := range n.Steps {
-			text := engineLine(mask(s.Text))
+			text := maskedLine(s.Text, mask)
 			if s.Kind == StepVault && v.Level == users.Owner {
 				text += " (painel)"
 				buttons = append(buttons, Button{Text: "Abrir no painel", Panel: true})
@@ -244,7 +246,7 @@ func Build(n Notice, v Viewer, mask func(string) string) Message {
 func Full(n Notice, mask func(string) string) string {
 	var b strings.Builder
 	if n.Stopped != "" {
-		b.WriteString(engineLine(mask(n.Stopped)) + "\n")
+		b.WriteString(maskedLine(n.Stopped, mask) + "\n")
 	}
 	if ls := lines(mask(n.Evidence)); len(ls) > 0 {
 		b.WriteString("Evidência:\n```\n" + safeBlock(strings.Join(ls, "\n")) + "\n```\n")
@@ -307,8 +309,16 @@ func safeBlock(s string) string { return strings.ReplaceAll(s, "```", "'''") }
 // or a link.
 func engineLine(s string) string { return plain(inbox.OneLine(s)) }
 
+// maskedLine is a line of the engine with the secrets taken out. The marks of
+// the bot are taken away before the mask looks (a secret split by an asterisk
+// would pass it) and the mask looks once more after, for what the cleaning put
+// together.
+func maskedLine(s string, mask func(string) string) string {
+	return engineLine(mask(engineLine(s)))
+}
+
 // Line is a text of the engine or of an agent as one safe line, masked.
-func Line(s string, mask func(string) string) string { return clip(engineLine(mask(s)), MaxField) }
+func Line(s string, mask func(string) string) string { return clip(maskedLine(s, mask), MaxField) }
 
 // plain takes away the marks of the Markdown of the bot (bold, code, links).
 func plain(s string) string {
@@ -321,14 +331,15 @@ func agentBlock(n Notice, mask func(string) string) string {
 	var b strings.Builder
 	add := func(title, text string) {
 		if strings.TrimSpace(text) != "" {
-			fmt.Fprintf(&b, "%s: %s\n", title, clip(engineLine(mask(text)), MaxField))
+			fmt.Fprintf(&b, "%s: %s\n", title, clip(maskedLine(text, mask), MaxField))
 		}
 	}
+	add("Parou porque", n.Message)
 	add("Já conferi", n.Checked)
 	add("Por que não decido", n.WhyNot)
 	for _, s := range n.AgentSteps {
 		if strings.TrimSpace(s) != "" {
-			fmt.Fprintf(&b, "[ ] %s\n", clip(engineLine(mask(s)), MaxField))
+			fmt.Fprintf(&b, "[ ] %s\n", clip(maskedLine(s, mask), MaxField))
 		}
 	}
 	return b.String()

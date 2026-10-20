@@ -35,6 +35,10 @@ type GitHubSource struct {
 	// characters): only a review by one of them is "another character"
 	// (docs/aprovacoes/politica.md); without it no review counts.
 	Characters func(ctx context.Context) (map[string]bool, error)
+	// GrandMasterLogin is the login of the bot of the App "Grão-Mestre": a PR
+	// it opened is flagged, because the same App can not approve it. Nil: the
+	// engine has no such App and nobody is flagged.
+	GrandMasterLogin func(ctx context.Context) (string, error)
 }
 
 var (
@@ -123,6 +127,13 @@ func (g GitHubSource) PullRequest(ctx context.Context, workspace string, ref cha
 		}
 	}
 	facts.ReviewDone = reviewDone(p.Author, p.HeadSHA, mine, reviews)
+	if g.GrandMasterLogin != nil {
+		login, err := g.GrandMasterLogin(ctx)
+		if err != nil {
+			return chain.PRFacts{}, err
+		}
+		facts.OpenedByGrandMaster = login == "" || strings.EqualFold(p.Author, login)
+	}
 	// the PR may have moved while it was read: the facts are of one commit
 	if again, err := rd.PullData(ctx, ref.Repo, ref.Number); err != nil || again.HeadSHA != p.HeadSHA {
 		return chain.PRFacts{}, fmt.Errorf("the head of #%d moved while it was read", ref.Number)

@@ -16,6 +16,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
+	"github.com/lucasndas/mestre/internal/orchestration/epicdeps"
 	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
@@ -45,6 +46,10 @@ type OrchestrationMachines interface {
 // milestones 5 and 6 (GitHub, the Telegram, the users, the approvals, the
 // decrees) come in as small interfaces, each with its own document.
 type OrchestrationOptions struct {
+	// MissionCompleted is told when a mission ends with all its steps done: the
+	// message of progress of the workspace goes out (nil: nobody is told).
+	MissionCompleted func(ctx context.Context, workspace, table, quest string)
+
 	// Guild is the main Guild database, Machine the id of this Citadel.
 	Guild   *store.DB
 	Machine string
@@ -214,6 +219,10 @@ type Orchestration struct {
 	ClassCommands *classes.Commands
 	Rituals       *rituals.Service
 	Grimoires     *grimoires.Service
+	// EpicDeps is the dependency between epics: the Grand Master declares it and
+	// the table of the dependent epic waits for the other to be merged
+	// (docs/orquestracao/dependencia-entre-mesas.md).
+	EpicDeps *epicdeps.Service
 	// Registry is the registry of the characters of the Guild.
 	Registry characters.Registry
 	// Observers are told of every change of state of a character, in the
@@ -246,6 +255,68 @@ func (r tablesRef) Worktree(ctx context.Context, ws, table, machine string) (str
 
 func (r tablesRef) Paused(ctx context.Context, ws, table string) (bool, error) {
 	return (*r.p).Paused(ctx, ws, table)
+}
+
+// depsRef is the view of the dependencies between epics that the tables have of
+// them, since they are made after the tables.
+type depsRef struct{ p **epicdeps.Service }
+
+func (r depsRef) Opened(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Opened(ctx, ws, t)
+}
+
+func (r depsRef) Held(ctx context.Context, ws string, epic int) (bool, error) {
+	if *r.p == nil {
+		return false, nil
+	}
+	return (*r.p).Held(ctx, ws, epic)
+}
+
+func (r depsRef) Waiting(ctx context.Context, ws string, epic int) ([]int, error) {
+	if *r.p == nil {
+		return nil, nil
+	}
+	return (*r.p).Waiting(ctx, ws, epic)
+}
+
+func (r depsRef) Merged(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Merged(ctx, ws, t)
+}
+
+func (r depsRef) Dropped(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Dropped(ctx, ws, t)
+}
+
+func (r depsRef) Cancelled(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Cancelled(ctx, ws, t)
+}
+
+// advanceTable has the running quests of a table that was released go on.
+func advanceTable(ctx context.Context, qs *quests.Service, t tables.Table) {
+	if qs == nil {
+		return
+	}
+	list, err := qs.List(ctx, t.Workspace, t.ID)
+	if err != nil {
+		return
+	}
+	for _, q := range list {
+		if q.State == quests.Running {
+			qs.Advance(ctx, q.ID)
+		}
+	}
 }
 
 func (r charactersRef) Create(ctx context.Context, req characters.CreateRequest) (characters.CreateResult, error) {
@@ -468,6 +539,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		trl   *tablerules.Service
 		sup   *chain.Supervisor
 		us    *usage.Service
+		deps  *epicdeps.Service
 	)
 	deactivate := o.Rituals
 	if deactivate == nil {
@@ -488,9 +560,9 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	tbl, err = tables.New(tables.Options{DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
+	tbl, err = tables.New(tables.Options{Proofs: questProofs{&quests.Store{DB: o.Guild}}, DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
 		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.Messages, Attachments: o.Attachments,
-		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Requests: chainRef{&ch}, Oversight: oversightRef{&sup}, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
+		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Requests: chainRef{&ch}, Oversight: oversightRef{&sup}, Peers: o.Peers, Dependencies: depsRef{&deps}, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
 	if err != nil {
 		return nil, err
 	}
@@ -512,10 +584,16 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	ib.SetAskProgress(wt)
+	deps, err = epicdeps.New(epicdeps.Options{DB: o.Guild, Clock: o.Clock, Tables: tbl.Store(), Epics: o.Epics, Characters: reg, Waits: wt, Inbox: ib, Log: o.Logger,
+		Released: func(ctx context.Context, _ string, t tables.Table) { advanceTable(ctx, qs, t) }})
+	if err != nil {
+		return nil, err
+	}
 	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}, ritualsRef{&rit}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
-		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger})
+		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger,
+		Brief: &grandMasterBrief{reg: reg, tables: tables.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}, chain: &chain.Store{DB: o.Guild}}})
 	if err != nil {
 		return nil, err
 	}
@@ -555,12 +633,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		catalog = presetsCatalog{o.Presets, o.ClassLibraries}
 	}
 	var bsync *basesync.Service
-	qs, err = quests.NewService(quests.Options{BaseMoved: func(ctx context.Context, workspace, table string) (bool, error) {
+	qs, err = quests.NewService(quests.Options{Held: tbl.Held, BaseMoved: func(ctx context.Context, workspace, table string) (bool, error) {
 		return bsync.Moved(ctx, workspace, table)
 	},
 		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger})
+		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted})
 	if err != nil {
 		return nil, err
 	}
@@ -620,6 +698,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	orc.Chain = ch
 	orc.Supervisor = sup
 	orc.Rituals, orc.Grimoires = rit, grims
+	orc.EpicDeps = deps
 	orc.ClassCommands = classCommands(o, reg, ib)
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
 	if a, ok := o.ChainClasses.(interface{ attach(*Orchestration) }); ok {

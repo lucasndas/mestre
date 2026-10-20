@@ -18,11 +18,12 @@ type claudeCode struct {
 	// afterTrustWrite runs after PreTrust wrote the trust file: tests rewrite
 	// the file as Claude Code does.
 	afterTrustWrite func(path string)
+	noFlush         bool // NoFlush
 }
 
 // NewClaudeCode returns the Claude Code adapter.
 func NewClaudeCode(opts Options) Adapter {
-	return &claudeCode{paths: opts.paths(), multilineViaFile: opts.ClaudeMultilineViaFile, screens: screenSet{
+	return &claudeCode{paths: opts.paths(), noFlush: opts.NoFlush, multilineViaFile: opts.ClaudeMultilineViaFile, screens: screenSet{
 		prompt:   agentPrompt,
 		busy:     regexp.MustCompile(`(?i)esc to interrupt|Working…`),
 		known:    claudeScreens,

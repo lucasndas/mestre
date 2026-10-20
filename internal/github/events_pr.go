@@ -117,7 +117,7 @@ func (p *Poller) readTablePRs(ctx context.Context, w Watch, repo string) (*prRea
 			if rv.SubmittedAt.Before(w.Since) || rv.SubmittedAt.Before(p.o.Clock.Now().Add(-SeenLife)) || rv.State == "PENDING" {
 				continue
 			}
-			ev := Event{Kind: EventReview, Key: fmt.Sprintf("revisao:%d:%s", rv.ID, rv.State), Workspace: w.Workspace, Repo: repo, Number: pr.Number,
+			ev := Event{Kind: EventReview, ID: rv.ID, Key: fmt.Sprintf("revisao:%d:%s", rv.ID, rv.State), Workspace: w.Workspace, Repo: repo, Number: pr.Number,
 				Table: pr.Table, Author: rv.User.Login, Link: rv.HTMLURL, At: rv.SubmittedAt, Summary: strings.ToLower(rv.State) + shortSuffix(rv.Body)}
 			if err := add(ev); err != nil {
 				return nil, err

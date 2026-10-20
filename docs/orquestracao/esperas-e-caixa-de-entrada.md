@@ -51,6 +51,7 @@ Usuários com nível para isso ainda podem digitar direto num terminal pelo canv
 | Horário | chega o horário | `mestre wait --until` |
 | Vaga (`waiting_slot`) | abre vaga ([limites](personagens.md#limites)) | motor, para etapas e para `recruit`/`spawn` diretos |
 | Sincronização | sincronização concluída ([mesas](mesas.md#worktree-por-máquina-e-sincronização)) | motor, só para etapas |
+| Épico | PR da mesa do outro épico mesclado e o commit na base ([dependência entre mesas](dependencia-entre-mesas.md)) | motor, para o Grão-Mestre; sem tempo limite |
 
 A espera de uma mesa por outra mesa (tipo "épico", M5) é de [dependência entre mesas](dependencia-entre-mesas.md).
 
@@ -76,7 +77,7 @@ stateDiagram-v2
 
 ### Status "aguardando"
 
-Quem tem espera ativa (ou está `blocked`) aparece no canvas e no `mestre list` com o motivo e uma linha tracejada até o que espera ([canvas](../painel/canvas.md)). Textos: "aguardando Revisor", "aguardando QA e Revisor (todas)", "aguardando aprovação do Mestre" (o texto acompanha a [subida](cadeia-de-aprovacao.md#subida): do Grão-Mestre, das pessoas, do Lucas), "aguardando 14:00", "aguardando vaga", "aguardando sincronização", e, para `blocked`, conforme o motivo ([estados](personagens.md#estados)): "aguardando permissão" (`permission`), "aguardando cota" (`quota`), "aguardando entrada" (`input`). Os dois não se confundem: "aguardando aprovação" é a espera de um pedido aberto pelo despachante (`ask` das regras) ou por outro tipo de ação, com o personagem `waiting` e livre para receber entregas; "aguardando permissão" é só o pedido de permissão nativo do provedor na tela (`blocked` por `permission`), que nunca se responde por teclas. Aguardar não conta como ocioso ([ciclo de vida](personagens.md#ciclo-de-vida-definido-na-ficha)).
+Quem tem espera ativa (ou está `blocked`) aparece no canvas e no `mestre list` com o motivo e uma linha tracejada até o que espera ([canvas](../painel/canvas.md)). Textos: "aguardando Revisor", "aguardando QA e Revisor (todas)", "aguardando aprovação do Mestre" (o texto acompanha a [subida](cadeia-de-aprovacao.md#subida): do Grão-Mestre, das pessoas, do Lucas), "aguardando 14:00", "aguardando vaga", "aguardando sincronização", "aguardando a mesa #12", e, para `blocked`, conforme o motivo ([estados](personagens.md#estados)): "aguardando permissão" (`permission`), "aguardando cota" (`quota`), "aguardando entrada" (`input`). Os dois não se confundem: "aguardando aprovação" é a espera de um pedido aberto pelo despachante (`ask` das regras) ou por outro tipo de ação, com o personagem `waiting` e livre para receber entregas; "aguardando permissão" é só o pedido de permissão nativo do provedor na tela (`blocked` por `permission`), que nunca se responde por teclas. Aguardar não conta como ocioso ([ciclo de vida](personagens.md#ciclo-de-vida-definido-na-ficha)).
 
 ### Tempos limite
 
