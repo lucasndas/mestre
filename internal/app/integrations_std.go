@@ -26,6 +26,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/digest"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/progress"
+	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/telegram"
@@ -407,6 +408,9 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	if orc.BaseSync != nil {
 		h.Send.Base = orc.BaseSync
 	}
+	// the acceptance of the Master of the table: no pull request while a
+	// completed mission of the epic has a criterion with no proof
+	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}}
 	h.Register(fwd)
 	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
