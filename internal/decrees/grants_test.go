@@ -240,7 +240,7 @@ func TestTheDelegationOfTheOperatorNeedsTheOwnerAScopeAndAValidity(t *testing.T)
 	}
 }
 
-// The policy decrees: a tightening reaches any type, a loosening only the
+// CA-APROV-POL-13: the policy decrees: a tightening reaches any type, a loosening only the
 // ones the Grand Master may decide.
 func TestAPolicyDecreeNeverLoosensAHighType(t *testing.T) {
 	t.Parallel()

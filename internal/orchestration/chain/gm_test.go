@@ -1,6 +1,7 @@
 package chain_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -133,5 +134,89 @@ func TestTheGrandMasterRevokesARuleOfTheSummaryAndPausesTheAutonomyOfTheTable(t 
 	}
 	if lvl := w.level(w.shell(dev2, "pip install y")); lvl != chain.LevelGrandMaster {
 		t.Errorf("the next medio of the table was born at %s, want the Grand Master", lvl)
+	}
+}
+
+// repoSettings opens a request of a change of the repository settings, born at
+// the Grão-Mestre when a delegation covers it.
+func (w *world) repoSettings(about string) int64 {
+	w.t.Helper()
+	id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestRepoSettings, Workspace: w.slug, About: about,
+		Target: json.RawMessage(`{"ruleset":"main"}`)})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return id
+}
+
+// CA-APROV-POL-06: a change of the repository settings is the Owner's: without a
+// delegation decree the approval of the Grand Master is human_required; with one
+// that covers it the approval is accepted, needs no PIN, and the use of the
+// decree is registered.
+func TestTheGrandMasterApprovesRepositorySettingsOnlyWithADelegationOfTheOwner(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	id := w.repoSettings("regra da branch main")
+	if w.level(id) != chain.LevelPeople {
+		t.Fatalf("without a delegation the request is at %+v, want the people", w.request(id).Level)
+	}
+	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired && ref.Code != chain.CodeNotAtLevel {
+		t.Fatalf("approval without a delegation = %+v, want human_required", ref)
+	}
+	w.deleg.set(true)
+	covered := w.repoSettings("outra regra")
+	if w.level(covered) != chain.LevelGrandMaster {
+		t.Fatalf("with a delegation the request is at %+v, want the Grand Master", w.request(covered).Level)
+	}
+	if out := w.decide(w.gm, covered, chain.AnswerApprove, "dentro da delegação"); out.State != chain.Approved {
+		t.Fatalf("outcome = %+v, want approved", out)
+	}
+	if got := w.deleg.usedBy(); len(got) != 1 || got[0] != covered {
+		t.Fatalf("uses of the delegation = %v, want the request %d", got, covered)
+	}
+}
+
+// workflowsRequest opens a request of sending workflows for a table.
+func (w *world) workflowsRequest(table string) int64 {
+	w.t.Helper()
+	id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestWorkflows, Workspace: w.slug, Table: table, About: "workflows da mesa " + table,
+		Target: json.RawMessage(`{"files":[".github/workflows/ci.yml"]}`)})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return id
+}
+
+// CA-APROV-POL-14: with a delegation of the Owner for envio_workflows in the
+// table 42-login, the Grand Master's decision on a request of that table is
+// accepted; on a request of another table it is human_required; and a quorum rule
+// for the type sends the request to the people even inside the delegation.
+func TestADelegationForWorkflowsCoversOnlyItsTableAndAQuorumRuleStillSendsItToThePeople(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.deleg.set(true)
+	w.deleg.mu.Lock()
+	w.deleg.onlyTable = "42-login"
+	w.deleg.mu.Unlock()
+	inside := w.workflowsRequest("42-login")
+	if w.level(inside) != chain.LevelGrandMaster {
+		t.Fatalf("the request of the table is at %+v, want the Grand Master", w.request(inside).Level)
+	}
+	if out := w.decide(w.gm, inside, chain.AnswerApprove, "dentro da delegação"); out.State != chain.Approved {
+		t.Fatalf("outcome = %+v, want approved", out)
+	}
+	outside := w.workflowsRequest("43-busca")
+	if w.level(outside) != chain.LevelPeople {
+		t.Fatalf("the request of another table is at %+v, want the people", w.request(outside).Level)
+	}
+	if ref := w.refusal(chain.Decision{Request: outside, By: w.gm.ID, Answer: chain.AnswerApprove, Reason: "ok"}); ref.Code != chain.CodeHumanRequired && ref.Code != chain.CodeNotAtLevel {
+		t.Fatalf("approval outside the delegation = %+v, want human_required", ref)
+	}
+	rules := chain.DefaultRules()
+	rules.QuorumRules = []chain.QuorumRule{{Type: classes.RequestWorkflows, Approvals: 1}}
+	w.policy.setRules(rules)
+	quorum := w.workflowsRequest("42-login")
+	if w.level(quorum) != chain.LevelPeople {
+		t.Fatalf("with the quorum rule the request is at %+v, want the people", w.request(quorum).Level)
 	}
 }
