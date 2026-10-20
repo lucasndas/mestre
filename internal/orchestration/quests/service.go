@@ -427,6 +427,13 @@ func (s *Service) pause(ctx context.Context, id, reason string) (bool, error) {
 	return paused, err
 }
 
+// PauseFor pauses a running quest for a reason that something else lifts (the
+// limit of use, docs/plataforma/limites-de-uso.md). It says whether the quest
+// was running; the telling is the caller's.
+func (s *Service) PauseFor(ctx context.Context, id, reason string) (bool, error) {
+	return s.pause(ctx, id, reason)
+}
+
 // pauseAndTell pauses a running quest and tells the Master of the table why.
 func (s *Service) pauseAndTell(ctx context.Context, q Quest, reason string) {
 	paused, err := s.pause(ctx, q.ID, reason)
