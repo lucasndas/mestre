@@ -232,6 +232,14 @@ func (g *fakeGitHub) add(n int, title string, labels ...string) {
 	g.epics[n] = tables.Epic{Number: n, Title: title, Labels: labels, Open: true}
 }
 
+func (g *fakeGitHub) setBody(n int, body string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	e := g.epics[n]
+	e.Body = body
+	g.epics[n] = e
+}
+
 type fakeMessages struct {
 	mu   sync.Mutex
 	msgs map[string]tables.Message

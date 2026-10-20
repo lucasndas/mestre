@@ -289,7 +289,7 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 		text.WriteString("- ninguém\n")
 	}
 	data := map[string]any{"name": t.ID, "state": string(t.State), "paused": t.Paused,
-		"pause_reason": t.PausedReason, "epic": t.Epic, "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "waiting_for": waiting, "characters": chars,
+		"pause_reason": t.PausedReason, "epic": s.epicOf(ctx, t), "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "waiting_for": waiting, "characters": chars,
 		"missions": []string{}, "waits": []string{}, "usage": "-"}
 	if s.o.Oversight != nil {
 		paused, reason, queue, err := s.o.Oversight.Status(ctx, t.Workspace, t.ID)
@@ -306,6 +306,29 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	}
 	data["text"] = strings.TrimRight(text.String(), "\n")
 	return localchan.OK(data)
+}
+
+// epicOf is the epic of a table for `table status`: its number, its title and
+// the criteria written in the section `## Critérios` of its body, read from
+// the repository host now. When it cannot be read the criteria are empty and
+// criteria_error says why: the Grand Master must not take that for an epic
+// without criteria.
+func (s *Service) epicOf(ctx context.Context, t Table) map[string]any {
+	e := map[string]any{"number": t.Epic, "title": t.EpicTitle, "criteria": []string{}}
+	if err := s.gate("table status"); err != nil {
+		e["criteria_error"] = err.Error()
+		return e
+	}
+	epic, err := s.o.GitHub.Epic(ctx, t.Workspace, t.Epic)
+	if err != nil {
+		e["criteria_error"] = err.Error()
+		return e
+	}
+	if epic.Title != "" {
+		e["title"] = epic.Title
+	}
+	e["criteria"] = ParseCriteria(epic.Body)
+	return e
 }
 
 func (s *Service) handleClose(ctx context.Context, c *localchan.Call) localchan.Response {

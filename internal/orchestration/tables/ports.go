@@ -38,6 +38,8 @@ type Workspaces interface {
 type Epic struct {
 	Number int
 	Title  string
+	// Body is the text of the issue; the criteria are read from it (ParseCriteria).
+	Body   string
 	Labels []string
 	Open   bool
 	// NotPlanned: the epic was closed as "not planned" (false for an open one).
