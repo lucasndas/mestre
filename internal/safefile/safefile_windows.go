@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -193,34 +194,47 @@ func remove(dir, base string, guard func(Info) error) error {
 	return nil
 }
 
+// fileBasicInfo is FILE_BASIC_INFO: zero times are left as they are.
+type fileBasicInfo struct {
+	CreationTime, LastAccessTime, LastWriteTime, ChangeTime int64
+	FileAttributes                                          uint32
+	_                                                       uint32
+}
+
+// fileBasicInfoClass is FileBasicInfo of FILE_INFO_BY_HANDLE_CLASS.
+const fileBasicInfoClass = 0
+
 // clearReadOnly takes the READONLY attribute off a file, if it has it (Windows
-// replaces and deletes no read-only file). On a link it is the link that
-// changes, not its target; a path that is not there, or an attribute that
-// cannot change, is left to the operation that follows.
+// replaces and deletes no read-only file). The file is opened itself, never
+// through a link: a reparse point (a link or a junction an agent put there) is
+// left alone, and what replaces or removes it afterwards takes the link, not its
+// target. A path that is not there, or an attribute that cannot change, is left
+// to the operation that follows.
 func clearReadOnly(path string) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return
 	}
-	attrs, err := windows.GetFileAttributes(p)
-	if err != nil || attrs&windows.FILE_ATTRIBUTE_READONLY == 0 {
+	// mestre:allow nil-sa: only attributes are opened; no file is created
+	h, err := windows.CreateFile(p, windows.FILE_READ_ATTRIBUTES|windows.FILE_WRITE_ATTRIBUTES,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING,
+		windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
 		return
 	}
-	_ = windows.SetFileAttributes(p, attrs&^windows.FILE_ATTRIBUTE_READONLY)
-}
-
-// setReadOnly puts the READONLY attribute on a file: the Windows form of the
-// mode without the write bit.
-func setReadOnly(path string) error {
-	p, err := windows.UTF16PtrFromString(path)
-	if err != nil {
-		return err
+	defer func() { _ = windows.CloseHandle(h) }()
+	var info windows.ByHandleFileInformation
+	if err := windows.GetFileInformationByHandle(h, &info); err != nil {
+		return
 	}
-	attrs, err := windows.GetFileAttributes(p)
-	if err != nil {
-		return err
+	if info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || info.FileAttributes&windows.FILE_ATTRIBUTE_READONLY == 0 {
+		return
 	}
-	return windows.SetFileAttributes(p, attrs|windows.FILE_ATTRIBUTE_READONLY)
+	b := fileBasicInfo{FileAttributes: info.FileAttributes &^ windows.FILE_ATTRIBUTE_READONLY}
+	if b.FileAttributes == 0 {
+		b.FileAttributes = windows.FILE_ATTRIBUTE_NORMAL
+	}
+	_ = windows.SetFileInformationByHandle(h, fileBasicInfoClass, (*byte)(unsafe.Pointer(&b)), uint32(unsafe.Sizeof(b)))
 }
 
 func removeEntry(dir, base string) error {
@@ -294,9 +308,15 @@ func write(dir, base string, data []byte, o Options) error {
 		return err
 	}
 	// CREATE_NEW is the O_EXCL of Windows; the file takes the ACL of the
-	// folder, so the mode does not apply.
+	// folder, so the mode does not apply, except that a mode without the write
+	// bit is the READONLY attribute, set at the creation (the handle still writes).
+	readOnly := o.Mode != 0 && o.Mode&0o200 == 0
+	attrs := uint32(windows.FILE_ATTRIBUTE_NORMAL)
+	if readOnly {
+		attrs = windows.FILE_ATTRIBUTE_READONLY
+	}
 	// mestre:allow nil-sa: a native file takes the ACL its folder passes on (the ACL of the workspace or profile), as os.Create would give it
-	h, err := windows.CreateFile(p, windows.GENERIC_WRITE, 0, nil, windows.CREATE_NEW, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	h, err := windows.CreateFile(p, windows.GENERIC_WRITE, 0, nil, windows.CREATE_NEW, attrs, 0)
 	if err != nil {
 		return &os.PathError{Op: "create", Path: tmp, Err: err}
 	}
@@ -317,14 +337,6 @@ func write(dir, base string, data []byte, o Options) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	// a mode without the write bit is the READONLY attribute of Windows
-	readOnly := o.Mode != 0 && o.Mode&0o200 == 0
-	if readOnly {
-		if err := setReadOnly(tmp); err != nil {
-			_ = os.Remove(tmp)
-			return err
-		}
-	}
 	target := filepath.Join(d.path, base)
 	if o.Guard != nil {
 		cur, err := statIn(d, base)
@@ -341,9 +353,7 @@ func write(dir, base string, data []byte, o Options) error {
 	// read-only target (the copy it replaces) is made writable to be replaced.
 	clearReadOnly(target)
 	if err := os.Rename(tmp, target); err != nil {
-		if readOnly {
-			clearReadOnly(tmp)
-		}
+		clearReadOnly(tmp)
 		_ = os.Remove(tmp)
 		return err
 	}

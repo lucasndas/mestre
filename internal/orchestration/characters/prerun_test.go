@@ -16,8 +16,10 @@ func TestACommandOfAPreRunRunsInTheShellItWasDecidedFor(t *testing.T) {
 		t.Errorf("on Linux: %q", got)
 	}
 	got := shellLine("windows", cmd)
-	enc, ok := strings.CutPrefix(got, "powershell.exe -NoProfile -NonInteractive -EncodedCommand ")
-	if !ok || strings.ContainsAny(enc, ` "&|<>^%`) {
+	// the program is the PowerShell of the system by its full path, quoted: one
+	// planted in the worktree is not the one that runs
+	enc, ok := strings.CutPrefix(got, `"`+systemPowerShell()+`" -NoProfile -NonInteractive -EncodedCommand `)
+	if !ok || !strings.HasSuffix(systemPowerShell(), `\WindowsPowerShell\v1.0\powershell.exe`) || strings.ContainsAny(enc, ` "&|<>^%`) {
 		t.Fatalf("on Windows: %q", got)
 	}
 	raw, err := base64.StdEncoding.DecodeString(enc)

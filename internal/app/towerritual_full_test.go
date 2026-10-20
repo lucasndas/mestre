@@ -294,7 +294,7 @@ func TestThePreRunOfARitualRunsOnTheTowerOfItsTarget(t *testing.T) {
 	// the effective rules of the character on the Tower decide the pre-run there
 	rules := &classes.Rules{Version: 2, AgentID: dev.ID, Class: "dev", GeneratedAt: x.now,
 		Files:    classes.FileRules{Read: []string{"**"}, Write: []string{"src/**"}},
-		Commands: classes.PatternRules{Allow: []string{"echo *", "pwd", "exit *"}, Default: classes.Deny},
+		Commands: classes.PatternRules{Allow: []string{"echo *", "pwd", "ls *"}, Default: classes.Deny},
 		Git:      classes.GitRules{Commit: classes.Allow, RequestPush: classes.Ask, Workflows: classes.WorkflowsNever},
 		Tools:    classes.PatternRules{Default: classes.Ask}}
 	if err := (&classes.Store{DB: x.b.e.mdb, Clock: clock.Real{}, Agents: x.b.paths.Agentes}).Save(ctx, rules); err != nil {
@@ -363,9 +363,10 @@ func TestThePreRunOfARitualRunsOnTheTowerOfItsTarget(t *testing.T) {
 		})
 		return f
 	}
-	failing := create("falha", "echo erro-da-torre; exit 3")
+	// a failure valid in both shells (sh and PowerShell): a listing of what is not there
+	failing := create("falha", "echo erro-da-torre; ls nao-existe-nada")
 	f, err = x.orc.Rituals.Run(ctx, failing.ID, by)
-	if f = settled(f); err != nil || f.State != rituals.Failed || !strings.Contains(f.Reason, "código 3") || !strings.Contains(f.Output, "erro-da-torre") {
+	if f = settled(f); err != nil || f.State != rituals.Failed || !strings.Contains(f.Reason, "código") || !strings.Contains(f.Output, "erro-da-torre") {
 		t.Errorf("a pre-run that fails on the Tower: %+v, %v", f, err)
 	}
 

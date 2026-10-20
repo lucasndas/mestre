@@ -63,8 +63,10 @@ func (rt *Runtime) PreRun(ctx context.Context, agentID, command string, timeout 
 // shellLine is the line the terminal runs for a command of a pre-run. On Windows
 // the runner of the terminal is cmd, and a command of an agent there is
 // PowerShell's (the permissions read it as POSIX and as PowerShell, never as
-// cmd): it runs in PowerShell, with the command as the text it was decided on
-// (-EncodedCommand carries it with no quoting at all).
+// cmd): it runs in the PowerShell of the system, by its full path (cmd looks in
+// the current folder first, which is the worktree), with the command as the text
+// it was decided on (-EncodedCommand carries it with no quoting at all). cmd runs
+// with /d, so the AutoRun of the account of the agent does not run first.
 func shellLine(goos, command string) string {
 	if goos != "windows" {
 		return command
@@ -74,5 +76,5 @@ func shellLine(goos, command string) string {
 	for _, c := range u {
 		b = append(b, byte(c), byte(c>>8))
 	}
-	return "powershell.exe -NoProfile -NonInteractive -EncodedCommand " + base64.StdEncoding.EncodeToString(b)
+	return `"` + systemPowerShell() + `" -NoProfile -NonInteractive -EncodedCommand ` + base64.StdEncoding.EncodeToString(b)
 }
