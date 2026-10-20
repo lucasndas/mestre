@@ -433,6 +433,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	// completed mission of the epic has a criterion with no proof
 	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
 	h.Register(fwd)
+	(&decrees.SubHandler{Service: r.decrees, Characters: orc.Registry}).Register(fwd)
 	poll, perr := r.poller(orc)
 	if perr != nil {
 		r.env.Log.Warn("app: the reading of the events of GitHub is off", "err", perr)

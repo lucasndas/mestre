@@ -30,7 +30,7 @@ Deixar as pessoas passarem ao Grão-Mestre, de forma explícita, com escopo e pr
 
 - O Grão-Mestre pode passar a um Mestre da mesa, só na mesa dele, uma parte **mais estreita** do que ele mesmo pode decidir: o teto dele (`medio`, dentro da política, inclusive o que falha nas [condições da mesa](../orquestracao/cadeia-de-aprovacao.md#condições-da-mesa)) ou uma delegação de decisão que ele tem. Mais estreita quer dizer: o mesmo tipo ou menos, o escopo dentro do da origem, a validade até a da origem e nunca depois do encerramento da mesa.
 - **Profundidade 1:** o Mestre da mesa não subdelega. A subdelegação estende o teto dele só no escopo dela, com as mesmas salvaguardas.
-- Sintaxe: `mestre approval delegate` ([CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)). Fica no banco em `subdelegations`, com a origem (o decreto de delegação, ou nenhuma quando vem do teto `medio` do Grão-Mestre); não é decreto de pessoa nem permanente. A CLI `mestre approval delegate` é a porta dela e fica para a ligação do [CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval) (o motor já recusa pelo serviço).
+- Sintaxe: `mestre approval delegate` ([CLI do Grão-Mestre](../cli/grao-mestre.md#mestre-approval)). Fica no banco em `subdelegations`, com a origem (o decreto de delegação, ou nenhuma quando vem do teto `medio` do Grão-Mestre); não é decreto de pessoa nem permanente. A CLI `mestre approval delegate` é a porta dela (`decrees.SubHandler`; o `--until` leva fuso e `--pattern` ainda não vale).
 - Acaba com a origem, com o encerramento da mesa, revogada pelo Grão-Mestre ou por um Administrador ou acima.
 
 ### Revogar tudo
