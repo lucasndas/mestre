@@ -41,6 +41,9 @@ type Started struct {
 	PID       int
 	Start     string
 	CgroupDir string
+	// Logon is the logon SID (text) of the token the mestre-pty was created
+	// with (Windows), read from the token by the launcher itself.
+	Logon string
 }
 
 // Backend does what differs by system: creating the mestre-pty with the
@@ -228,7 +231,7 @@ func (s *Server) start(ctx context.Context, ev Event, req Request, files []*os.F
 		return s.fail(ev, err)
 	}
 	s.record(withOutcome(ev, OutcomeOK, fmt.Sprintf("pid %d", st.PID)))
-	return Response{OK: true, PID: st.PID, Start: st.Start, CgroupDir: st.CgroupDir}
+	return Response{OK: true, PID: st.PID, Start: st.Start, CgroupDir: st.CgroupDir, Logon: st.Logon}
 }
 
 // checkStart is the part of a start-pty request that decides whether any
