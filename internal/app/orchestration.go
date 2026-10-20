@@ -166,6 +166,9 @@ type OrchestrationOptions struct {
 	// ChainStallPeople gets the warning of a table that works without delivering,
 	// with the button to pause it (nil: only the Grão-Mestre is told).
 	ChainStallPeople chain.StallPeople
+	// ChainQueuePeople gets the warning of a queue that accumulates, with the
+	// button to pause the autonomy of the table (nil: only the Grão-Mestre is told).
+	ChainQueuePeople chain.QueuePeople
 	// ChainSinks are told what became of the requests of the types they own,
 	// besides the quests' and the usage's (the entry in the Guild).
 	ChainSinks map[classes.RequestType]chain.Sink
@@ -684,7 +687,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		supervision := o.ChainSupervision
 		if supervision == nil {
 			sup, err = chain.NewSupervisor(chain.SupervisorOptions{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock),
-				Inbox: ib, Policy: policy, Alerts: o.ChainAlerts, Tables: supTables{&tbl}, Reroute: rerouteRef{&ch}, Rules: ruleListerRef{&trl}, StallPeople: o.ChainStallPeople, Logger: o.Logger})
+				Inbox: ib, Policy: policy, Alerts: o.ChainAlerts, Tables: supTables{&tbl}, Reroute: rerouteRef{&ch}, Rules: ruleListerRef{&trl}, StallPeople: o.ChainStallPeople, QueuePeople: o.ChainQueuePeople, Logger: o.Logger})
 			if err != nil {
 				return nil, err
 			}

@@ -643,7 +643,8 @@ func TestASubdelegationLetsTheTableMasterDecideAWorkflowsRequest(t *testing.T) {
 	dev := w.recruit("Dev")
 	open := func() int64 {
 		id, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestWorkflows, Workspace: w.slug, Requester: dev.ID, About: "enviar o workflow",
-			Risk: classes.RiskResult{Risk: classes.RiskHigh, TableVersion: classes.RiskTableVersion, Rule: "workflows"}})
+			Target: chain.WorkflowsTarget{Repo: "lucas/Meu_App", Branch: "mestre/1-login", Head: "abc123"}.JSON(),
+			Risk:   classes.RiskResult{Risk: classes.RiskHigh, TableVersion: classes.RiskTableVersion, Rule: "workflows"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -664,7 +665,8 @@ func TestASubdelegationLetsTheTableMasterDecideAWorkflowsRequest(t *testing.T) {
 	}
 	// a request that crosses tables is never the Mestre da mesa's, subdelegation or not
 	cross, err := w.ch.Request(w.ctx, chain.OpenRequest{Type: classes.RequestWorkflows, Workspace: w.slug, Requester: dev.ID, Cross: true, About: "cruza",
-		Risk: classes.RiskResult{Risk: classes.RiskHigh, TableVersion: classes.RiskTableVersion, Rule: "workflows"}})
+		Target: chain.WorkflowsTarget{Repo: "lucas/Meu_App", Branch: "mestre/1-login", Head: "abc123"}.JSON(),
+		Risk:   classes.RiskResult{Risk: classes.RiskHigh, TableVersion: classes.RiskTableVersion, Rule: "workflows"}})
 	if err != nil {
 		t.Fatal(err)
 	}

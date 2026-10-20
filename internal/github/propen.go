@@ -37,16 +37,22 @@ type Branches interface {
 // App of who asks, with the permission to write contents (and workflows, when
 // the change touches them).
 type PushAuth interface {
-	PushAuth(ctx context.Context, repo string, workflows bool) (gitx.Auth, error)
+	PushAuth(ctx context.Context, who Asker, repo string, workflows bool) (gitx.Auth, error)
 }
 
 // Workflows says the policy of a class and, for ask, whether a user approved the
 // sending of this branch at this commit.
 type Workflows interface {
-	Policy(ctx context.Context, class string) (classes.Workflows, error)
+	Policy(ctx context.Context, who Asker) (classes.Workflows, error)
 	// Approved says the sending of the branch at the commit was approved; when
 	// not, it makes sure the request exists and gives its number.
-	Approved(ctx context.Context, tableKey, branch, head string) (ok bool, request int64, err error)
+	Approved(ctx context.Context, who Asker, branch, head string) (ok bool, request int64, err error)
+}
+
+// Asker is the character that asks for a sending: its id, its class and the key
+// of its table ("<workspace>/<table>"). The policy and the request are its own.
+type Asker struct {
+	Character, Class, Table string
 }
 
 // Criteria tells the criteria of the issues of the epic that have no proof, when a
@@ -123,7 +129,7 @@ type Sending struct {
 
 // scanAndCheck reads the change before it is sent: the secrets in the added
 // lines, and the workflows. It says whether the change touches workflows.
-func (s *PRService) scanAndCheck(ctx context.Context, tableKey, class string, b Branch) (workflows bool, err error) {
+func (s *PRService) scanAndCheck(ctx context.Context, who Asker, b Branch) (workflows bool, err error) {
 	// every commit that goes: the push sends the history, not the final diff
 	lines, err := b.Repo.AddedLinesEach(ctx, b.Base, b.Head)
 	if err != nil {
@@ -140,12 +146,17 @@ func (s *PRService) scanAndCheck(ctx context.Context, tableKey, class string, b 
 	for _, c := range changes {
 		paths = append(paths, c.Path)
 	}
+	// a workflow added in one commit and undone in the next is in the history the
+	// push sends, though not in the final diff
+	for _, l := range lines {
+		paths = append(paths, l.Path)
+	}
 	if !TouchesWorkflows(paths) {
 		return false, nil
 	}
 	policy := classes.WorkflowsNever
 	if s.Send.Workflows != nil {
-		if policy, err = s.Send.Workflows.Policy(ctx, class); err != nil {
+		if policy, err = s.Send.Workflows.Policy(ctx, who); err != nil {
 			return true, err
 		}
 	}
@@ -154,7 +165,7 @@ func (s *PRService) scanAndCheck(ctx context.Context, tableKey, class string, b 
 		return true, err
 	}
 	if decision == PushNeedsApproval {
-		ok, req, err := s.Send.Workflows.Approved(ctx, tableKey, b.Name, b.Head)
+		ok, req, err := s.Send.Workflows.Approved(ctx, who, b.Name, b.Head)
 		if err != nil {
 			return true, err
 		}
@@ -166,7 +177,7 @@ func (s *PRService) scanAndCheck(ctx context.Context, tableKey, class string, b 
 }
 
 // push sends the branch with the token of the App of who asks.
-func (s *PRService) push(ctx context.Context, repo string, b Branch, workflows, force bool) error {
+func (s *PRService) push(ctx context.Context, who Asker, repo string, b Branch, workflows, force bool) error {
 	if s.Send.Auth == nil {
 		return ErrNoPushSetup
 	}
@@ -174,7 +185,10 @@ func (s *PRService) push(ctx context.Context, repo string, b Branch, workflows, 
 	if strings.EqualFold(b.Name, b.BaseBranch) || strings.EqualFold(b.Name, "main") || strings.EqualFold(b.Name, "master") {
 		return refuse(CodeForce, "o envio na branch principal não é feito: a mesa trabalha na sua branch")
 	}
-	auth, err := s.Send.Auth.PushAuth(ctx, repo, workflows)
+	auth, err := s.Send.Auth.PushAuth(ctx, who, repo, workflows)
+	if errors.Is(err, ErrWorkflowPermission) {
+		return err
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrNoPushSetup, err)
 	}
@@ -186,11 +200,12 @@ func (s *PRService) push(ctx context.Context, repo string, b Branch, workflows, 
 type POpen struct {
 	Title, Body string
 	Draft       bool
-	// Class is the class of who asks (its policy of workflows), Existing the PR
+	// Character and Class are who asks (its policy of workflows), Existing the PR
 	// the table already has (0: none) and Op the id of the request.
-	Class    string
-	Existing int
-	Op       string
+	Character string
+	Class     string
+	Existing  int
+	Op        string
 }
 
 // POpened is what `pr open` answers.
@@ -247,11 +262,12 @@ func (s *PRService) Open(ctx context.Context, a Actor, repo string, in POpen) (P
 	if err != nil {
 		return POpened{}, err
 	}
-	wf, err := s.scanAndCheck(ctx, a.Table, in.Class, b)
+	who := Asker{Character: in.Character, Class: in.Class, Table: a.Table}
+	wf, err := s.scanAndCheck(ctx, who, b)
 	if err != nil {
 		return POpened{}, err
 	}
-	if err := s.push(ctx, repo, b, wf, false); err != nil {
+	if err := s.push(ctx, who, repo, b, wf, false); err != nil {
 		return POpened{}, err
 	}
 	title, body := in.Title, agentText(in.Body)
@@ -284,6 +300,8 @@ type PUpdate struct {
 	// Block, BlockText and ExpectHead are `--block <name> <text> --expect-head`.
 	Block, BlockText, ExpectHead string
 	Class                        string
+	// Character is who asks (its policy of workflows).
+	Character string
 }
 
 // allBlocks matches every block of a body.
@@ -350,11 +368,12 @@ func (s *PRService) Update(ctx context.Context, a Actor, repo string, n int, in 
 			return POpened{}, err
 		}
 	}
-	wf, err := s.scanAndCheck(ctx, a.Table, in.Class, b)
+	who := Asker{Character: in.Character, Class: in.Class, Table: a.Table}
+	wf, err := s.scanAndCheck(ctx, who, b)
 	if err != nil {
 		return POpened{}, err
 	}
-	if err := s.push(ctx, repo, b, wf, in.Force); err != nil {
+	if err := s.push(ctx, who, repo, b, wf, in.Force); err != nil {
 		return POpened{}, err
 	}
 	var title, body *string

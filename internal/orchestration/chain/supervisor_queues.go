@@ -237,19 +237,43 @@ func (s *Supervisor) warn(ctx context.Context, m QueueMetric) {
 	switch m.Level {
 	case LevelAgent, LevelMesa:
 		text += fmt.Sprintf("\nSe os pedidos médios da mesa não deveriam ficar com o Mestre da mesa, pause a autonomia dela: mestre approval autonomy pause --table %q --reason \"<motivo>\".", m.Table)
+		told := false
 		if gm, ok, err := s.o.Characters.GrandMaster(ctx, m.Workspace); err == nil && ok {
+			told = true
 			if _, err := s.o.Inbox.Enqueue(ctx, inbox.NewItem{Workspace: m.Workspace, Target: gm.ID, Kind: inbox.KindSystem, Sender: "Motor", Text: text,
 				Refs: inbox.Refs{Table: m.Table}}); err != nil {
 				s.log.Warn("supervision: the Grand Master was not warned", "table", m.Table, "err", err)
 			}
-			return
 		}
-		s.tellPeople(ctx, m.Workspace, "Administradores e Dono: "+text)
+		// the people who may pause it get the same warning with the button
+		// **Pausar autonomia** (the Telegram; the panel, M6)
+		if s.o.QueuePeople != nil {
+			if err := s.o.QueuePeople.QueueAccumulating(ctx, QueueNotice{Workspace: m.Workspace, Table: m.Table, Text: text}); err != nil {
+				s.log.Warn("supervision: the people were not warned of the queue", "table", m.Table, "err", err)
+			} else {
+				told = true
+			}
+		}
+		if !told {
+			s.tellPeople(ctx, m.Workspace, "Administradores e Dono: "+text)
+		}
 	case LevelGrandMaster:
 		s.tellPeople(ctx, m.Workspace, "Administradores e Dono: "+text)
 	default:
 		s.tellPeople(ctx, m.Workspace, "Dono: "+text)
 	}
+}
+
+// QueueNotice is the warning of a queue of a table that accumulates, for the
+// people who may pause the autonomy of the table (an Approver or above).
+type QueueNotice struct {
+	Workspace, Table string
+	Text             string
+}
+
+// QueuePeople delivers that warning with the button **Pausar autonomia**.
+type QueuePeople interface {
+	QueueAccumulating(ctx context.Context, n QueueNotice) error
 }
 
 func (s *Supervisor) tellPeople(ctx context.Context, workspace, text string) {

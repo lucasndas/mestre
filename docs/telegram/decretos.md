@@ -1,6 +1,6 @@
 # Decretos
 
-> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** ordens de usuários autorizados que valem acima das regras: tipos, vínculo ao estado, validade, conflitos, revogação, PIN e registro · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -93,7 +93,7 @@ Transformar uma decisão de um usuário autorizado, dada pelo Telegram ou pelo p
 
 - **Exceções pontuais** ainda não usadas: são invalidadas ([usuários](usuarios-e-niveis.md#suspensão-e-remoção)).
 - **Regras permanentes:** passam a **suspensas**, e o Dono recebe a lista. Ele pode reativar cada uma, e então ela passa a ser dele, ou revogar.
-- `/travar` suspende todos os decretos de uma vez ([segurança do canal](seguranca-do-canal.md)).
+- `/travar` suspende todos os decretos de uma vez ([segurança do canal](seguranca-do-canal.md)): a lista mostra todos como suspensos, e o `/destravar` os devolve ao estado que tinham.
 
 ### Registro
 

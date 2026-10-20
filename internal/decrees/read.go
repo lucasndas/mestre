@@ -173,12 +173,13 @@ func (s *Service) List(ctx context.Context, userID string) ([]View, error) {
 	if err != nil {
 		return nil, err
 	}
+	frozen := s.locked(ctx)
 	var out []View
 	for _, d := range ds {
 		if !u.Acts(d.Workspace) {
 			continue
 		}
-		v := View{Decree: d, AuthorName: d.Author}
+		v := View{Decree: d, AuthorName: d.Author, Frozen: frozen}
 		if a, err := readUser(ctx, r, d.Author); err == nil {
 			v.AuthorName = a.Name
 		}
@@ -211,12 +212,13 @@ func (s *Service) ListWorkspace(ctx context.Context, workspace string, all bool)
 	if err != nil {
 		return nil, err
 	}
+	frozen := s.locked(ctx)
 	var out []View
 	for _, d := range ds {
 		if d.Workspace != workspace || (!all && d.State != Active && d.State != Suspended) {
 			continue
 		}
-		v := View{Decree: d, AuthorName: d.Author}
+		v := View{Decree: d, AuthorName: d.Author, Frozen: frozen && (d.State == Active || d.State == Suspended)}
 		if a, err := readUser(ctx, r, d.Author); err == nil {
 			v.AuthorName = a.Name
 		}

@@ -1,6 +1,6 @@
 # Identidades e GitHub Apps
 
-> **Assunto:** quais Apps existem, com que nome e permissões, e como cada ação sai com o App de quem fez · **Componente:** Motor · **Atualizado:** 2026-10-19
+> **Assunto:** quais Apps existem, com que nome e permissões, e como cada ação sai com o App de quem fez · **Componente:** Motor · **Atualizado:** 2026-10-20
 
 ## Objetivo
 
@@ -89,6 +89,7 @@ Enquanto o App de uma classe está em criação, as ações dela saem com o App 
   - `ask` ou `allow`: o App é criado **com** a permissão. Como a chave do App nunca chega ao agente, a permissão é só a capacidade técnica; quem decide se ela é usada é o motor, pela regra da classe (`ask` = só depois do "Aprovar" de um usuário, no hash aprovado).
 - O Grão-Mestre e o "Mestre" não têm a permissão. Uma classe que **herda** o App de outra (`herdar:<classe>`) só pode ter `git.workflows` igual ou menor que a da classe de origem; se precisar de mais, recebe App próprio ([classes](../classes/classes.md)).
 - Antes de enviar, o motor confere os arquivos alterados. Mudança em `.github/workflows/` com classe `never`: o motor não envia, explica o motivo ao Grão-Mestre, que pergunta aos usuários se querem mudar a classe ou passar a tarefa a uma classe que pode.
+- **Implementação:** o envio passa por `github.Workflows` (`internal/app/prsend.go`). A política é o `git.workflows` das regras efetivas de quem pede (a classe limitada pelo teto, `chain.Service.WorkflowsPolicy`). Com `ask`, o primeiro envio abre um pedido `envio_workflows` (`chain.Service.Workflows`, risco `alto`) preso ao repositório do workspace (`chain.Options.Repos`, nunca um que o chamador diga), à branch e à cabeça que iria; repetir o comando com o pedido aberto é o mesmo pedido. A aprovação vale só para essa cabeça (um commit novo a invalida e nasce outro pedido) e dentro do prazo das pessoas depois da decisão; não é gasta, então o reenvio de um envio que falhou depois do push não pergunta de novo. Na aprovação das pessoas o motor relê a cabeça da branch no espelho (`Orchestration.WorkflowsTarget`). Com `never`, o `mestre pr` recusa com `workflow_not_allowed` e põe um item `system` na caixa do Grão-Mestre. O token do envio (`contents` em escrita, e `workflows` só quando a branch muda o CI e o App tem a permissão; senão `workflow_permission`) é o do App de quem pede. O motor olha o diff líquido e os arquivos de cada commit enviado; só `.github/workflows/` conta (uma action local em `.github/actions/` não é protegida, nem pelo motor nem pelo GitHub).
 - Mudar uma classe de `never` para `ask`/`allow` acrescenta a permissão ao App já instalado: o Grão-Mestre manda ao Dono o link da página de permissões do App e o do aceite na instalação ([criação de Apps](criacao-de-apps.md#repositórios-novos-e-permissões-novas)). Até o aceite, o envio sai com erro `workflow_permission` ([coordenação no GitHub](../cli/coordenacao-github.md)).
 
 ## Regras e erros

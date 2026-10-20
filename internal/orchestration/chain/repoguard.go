@@ -20,14 +20,14 @@ type WorkspaceRepos interface {
 // or a ruleset in another repository.
 var ErrWrongRepo = errors.New("chain: the target of the request is not the repository of its workspace")
 
-// TargetRepo is the repository a request of PR, merge or settings is about.
+// TargetRepo is the repository a request of PR, merge, settings or workflows is about.
 func TargetRepo(r Request) string {
 	switch r.Type {
 	case classes.RequestPR, classes.RequestMerge:
 		if r.PR != nil {
 			return r.PR.Repo
 		}
-	case classes.RequestRepoSettings:
+	case classes.RequestRepoSettings, classes.RequestWorkflows:
 		var t struct {
 			Repo string `json:"repo"`
 		}
@@ -39,7 +39,7 @@ func TargetRepo(r Request) string {
 }
 
 func bindsRepo(t classes.RequestType) bool {
-	return t == classes.RequestPR || t == classes.RequestMerge || t == classes.RequestRepoSettings
+	return t == classes.RequestPR || t == classes.RequestMerge || t == classes.RequestRepoSettings || t == classes.RequestWorkflows
 }
 
 // SameRepo says two names are the same repository (GitHub spells it in any case).

@@ -181,8 +181,10 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if ropt.terms {
 		w.opts.Terms = glossary.Terms
 	}
+	var sharedPINs *telegram.PINRouter
 	if ropt.lockdown {
 		router := &telegram.PINRouter{Users: w.users}
+		sharedPINs = router
 		var err error
 		w.lock, err = lockdown.New(lockdown.Options{DB: db, Clock: clk, Users: w.users, Tell: func(ctx context.Context, id, text string) { w.tell(ctx, id, text) }})
 		if err != nil {
@@ -265,7 +267,8 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 			alerts = w.oa
 		}
 		w.requests = requests{}
-		w.ds, err = decrees.New(decrees.Options{DB: db, Clock: clk, PINs: w.users, Alerts: alerts, Requests: w.requests})
+		w.ds, err = decrees.New(decrees.Options{DB: db, Clock: clk, PINs: w.users, Alerts: alerts, Requests: w.requests,
+			Locked: func(ctx context.Context) bool { return w.lock != nil && w.lock.Locked(ctx) }})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -273,11 +276,18 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 		if err != nil {
 			t.Fatal(err)
 		}
-		pins := &telegram.PINRouter{Users: w.users}
+		pins := sharedPINs
+		if pins == nil {
+			pins = &telegram.PINRouter{Users: w.users}
+		}
 		w.dc = &telegram.DecreeChannel{Svc: w.ds, Users: w.users, PINs: pins, Rules: telegram.TableRulesOf(w.rules)}
 		w.opts.Commands = append(append([]telegram.Command(nil), w.opts.Commands...), w.dc.Commands()...)
+		kept := w.opts.Actions
 		w.opts.Actions = map[string]telegram.Action{}
 		for k, v := range ropt.actions {
+			w.opts.Actions[k] = v
+		}
+		for k, v := range kept {
 			w.opts.Actions[k] = v
 		}
 		for k, v := range w.dc.Actions() {

@@ -82,7 +82,7 @@ type pushAuth struct {
 	onAuth func()
 }
 
-func (p *pushAuth) PushAuth(_ context.Context, _ string, workflows bool) (gitx.Auth, error) {
+func (p *pushAuth) PushAuth(_ context.Context, _ github.Asker, _ string, workflows bool) (gitx.Auth, error) {
 	if p.onAuth != nil {
 		p.onAuth()
 	}
@@ -100,13 +100,13 @@ type workflowsFake struct {
 	asked    []string
 }
 
-func (w *workflowsFake) Policy(_ context.Context, class string) (classes.Workflows, error) {
+func (w *workflowsFake) Policy(_ context.Context, who github.Asker) (classes.Workflows, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.policy[class], nil // never by default
+	return w.policy[who.Class], nil // never by default
 }
 
-func (w *workflowsFake) Approved(_ context.Context, _, _, head string) (bool, int64, error) {
+func (w *workflowsFake) Approved(_ context.Context, _ github.Asker, _, head string) (bool, int64, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.asked = append(w.asked, head)

@@ -183,6 +183,11 @@ type View struct {
 	// OverriddenBy is the number of the decree of a higher level that takes
 	// the same point, if one does.
 	OverriddenBy int64
+	// Frozen says the Mestre is locked (/travar): every decree is shown as
+	// suspended while the lock lasts. The state kept in the database is not
+	// touched, so the unlock brings back each decree as it was (the ones a
+	// conflict suspended stay suspended).
+	Frozen bool
 }
 
 // Summary is the one line of /decretos.
