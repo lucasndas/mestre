@@ -54,7 +54,7 @@ type Handlers struct {
 	Executed func(ctx context.Context, c characters.Character, action string) error
 	// Refused is told that GitHub refused the sending of the branch of a table for a
 	// reason only the Owner or the Grand Master can lift (`workflow_permission`,
-	// `signature_required`): it puts the event, with the reason, in the inbox of the
+	// `signature_required`), or that the class does not allow (`workflow_not_allowed`): it puts the event, with the reason, in the inbox of the
 	// Grand Master. nil: nobody is told.
 	Refused func(ctx context.Context, c characters.Character, code, reason string)
 	// Send is what `pr open` and `pr update` need to send the branch.
@@ -152,6 +152,8 @@ func (h *Handlers) refused(ctx context.Context, c characters.Character, err erro
 		return
 	}
 	switch {
+	case errors.Is(err, github.ErrWorkflowNotAllowed):
+		h.Refused(ctx, c, "workflow_not_allowed", "a classe do personagem tem git.workflows: never e a branch muda .github/workflows; nada foi enviado")
 	case errors.Is(err, github.ErrWorkflowPermission), errors.Is(err, gitx.ErrPushWorkflow):
 		h.Refused(ctx, c, "workflow_permission", "o App não tem a permissão Workflows no GitHub; o Dono a aceita no GitHub")
 	case errors.Is(err, gitx.ErrPushSignature):

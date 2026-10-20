@@ -425,3 +425,28 @@ func TestThePushSendsTheCommitThatWasReadNotWhatTheBranchBecame(t *testing.T) {
 		t.Errorf("a commit that was not read went out: %q", content)
 	}
 }
+
+// The sending of workflows by `pr update`: with git.workflows never it is refused
+// with workflow_not_allowed and the Grand Master is told; with ask nothing is
+// sent and the request waits for the approval bound to the head.
+func TestThePrUpdateOfWorkflowsIsRefusedAndTellsTheGrandMasterOrWaitsForTheApproval(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	var told []string
+	r.h.Refused = func(_ context.Context, c characters.Character, code, reason string) {
+		told = append(told, code+" "+c.Table+": "+reason)
+	}
+	r.mirror.Commit("42-login", "ci: change", map[string]string{".github/workflows/ci.yml": "name: ci2\n"})
+	if got := r.run("tm", "pr update", nil); got.OK || got.Exit != 3 || got.Code != "workflow_not_allowed" || len(r.pushes()) != 0 {
+		t.Fatalf("never: %+v pushes %q", got, r.pushes())
+	}
+	if len(told) != 1 || !strings.HasPrefix(told[0], "workflow_not_allowed 42-login: ") {
+		t.Errorf("the Grand Master was told %q", told)
+	}
+	r.wf.policy["mestre-da-mesa"] = classes.WorkflowsAsk
+	got := r.run("tm", "pr update", nil)
+	if got.OK || got.Exit != 9 || got.Code != "approval_pending" || len(r.pushes()) != 0 || len(r.wf.asked) == 0 {
+		t.Fatalf("ask: %+v pushes %q asked %q", got, r.pushes(), r.wf.asked)
+	}
+}
