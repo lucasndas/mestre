@@ -157,7 +157,11 @@ func (s *Service) proposalOf(r chain.Request, g chain.DecreeGrant) (Proposal, er
 			// The Grand Master already decides a medio inside the policy: whoever
 			// wants it looser makes a decree of policy, for an Administrator or
 			// above (docs/aprovacoes/delegacao.md#delegação-de-decisão).
-			p.Effect = Effect{Kind: EffectPolicy, Setting: string(r.Type), Loosens: true}
+			setting := string(r.Type)
+			if setting == "" {
+				setting = string(classes.RequestClassPermission)
+			}
+			p.Effect = Effect{Kind: EffectPolicy, Setting: setting, Loosens: true}
 			p.Target = Target{Kind: TargetWorkspace, Name: r.Workspace}
 			p.Mesa = r.Table
 			if g.For > 0 {

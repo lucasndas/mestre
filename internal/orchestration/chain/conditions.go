@@ -211,7 +211,7 @@ func (r PolicyRules) wordsIn(file PRFile) []string {
 // must pass: a refusal human_required that leaves the request where it is (he
 // takes it to the people with `mestre approval ask`, or his time runs out).
 func (s *Service) policyGate(ctx context.Context, r Request) *Refusal {
-	rules, _ := s.rulesOf(r.Workspace)
+	rules := s.rulesFor(ctx, r)
 	if why := rules.ForcesPeople(r); why != "" {
 		return refuse(CodeHumanRequired, "%s", oneLine(why))
 	}

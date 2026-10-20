@@ -390,6 +390,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 	if o.ChainSubDelegations == nil {
 		o.ChainSubDelegations = r.decrees
 	}
+	if o.ChainPolicyDecrees == nil {
+		o.ChainPolicyDecrees = r.decrees
+	}
 	if o.ChainDelegations == nil {
 		o.ChainDelegations = r.decrees
 	}
