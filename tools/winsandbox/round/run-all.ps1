@@ -678,8 +678,10 @@ function Test-Item4 {
     if ($c) { Add-StepSub 4 'conformidade do agy (classe sem internet: --sandbox na base)' $c @(1, 4, 5, 6) } else { Add-NoConf 4 'antigravity' 'conformidade do agy' }
 }
 
-# The {} of the Windows hook line of agy (no MESTRE_AGENT_ID, or no mestre
-# binary) must block PreToolUse (docs/provedores/antigravity.md#hooks): the
+# The Windows hook line of agy without the Mestre (docs/provedores/antigravity.md#hooks):
+# a character (MESTRE_AGENT_ID) without the mestre binary gets {}, which must
+# block PreToolUse; without MESTRE_AGENT_ID (a clone without the Mestre) the
+# neutral allow, built with no quote in the line, must let the tool run. The
 # generated hooks.json in a worktree, every command allowed natively for the
 # probe, so the hook is the only barrier; a control without hooks must run it.
 function Test-AgyNeutralBlocks([string]$Agy, [hashtable]$Env) {
@@ -690,7 +692,7 @@ function Test-AgyNeutralBlocks([string]$Agy, [hashtable]$Env) {
     New-Item -ItemType Directory -Force -Path (Split-Path $settings) | Out-Null
     $cases = @(
         @{ Name = 'controle, sem hooks'; Hooks = $false; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $true },
-        @{ Name = 'sem MESTRE_AGENT_ID'; Hooks = $true; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $false },
+        @{ Name = 'sem MESTRE_AGENT_ID'; Hooks = $true; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $true },
         @{ Name = 'sem o binário do mestre'; Hooks = $true; Id = 'rodada'; Bin = (Join-Path $Work 'nao-existe\mestre.exe'); Runs = $false })
     $results = @()
     try {
@@ -714,8 +716,11 @@ function Test-AgyNeutralBlocks([string]$Agy, [hashtable]$Env) {
     $control = $results | Where-Object { -not $_.Case.Hooks } | Select-Object -First 1
     if (-not $control -or -not $control.Ran) { Add-Sub 4 'FAIL' ("bloqueio do {} do hook do agy: o controle sem hooks não rodou o comando, o teste não vale. Fim da saída:`n" + $control.Out); return }
     foreach ($x in $results | Where-Object { $_.Case.Hooks }) {
-        if ($x.Ran -eq $false) { Add-Sub 4 'PASS' ("hook do agy no Windows, " + $x.Case.Name + ': o {} bloqueou o PreToolUse (o comando não rodou)') }
-        else { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': o comando RODOU (ou o teste falhou), o {} não bloqueou. Fim da saída:' + "`n" + $x.Out) }
+        if ($null -eq $x.Ran) { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': ' + $x.Out) }
+        elseif ($x.Case.Runs -and $x.Ran) { Add-Sub 4 'PASS' ("hook do agy no Windows, " + $x.Case.Name + ': a resposta neutra liberou o PreToolUse (um clone sem o Mestre não é atrapalhado)') }
+        elseif (-not $x.Case.Runs -and -not $x.Ran) { Add-Sub 4 'PASS' ("hook do agy no Windows, " + $x.Case.Name + ': o {} bloqueou o PreToolUse (o comando não rodou)') }
+        elseif ($x.Case.Runs) { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': o comando NÃO rodou: a resposta neutra atrapalha quem clona. Fim da saída:' + "`n" + $x.Out) }
+        else { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': o comando RODOU, o {} não bloqueou. Fim da saída:' + "`n" + $x.Out) }
     }
 }
 
