@@ -237,3 +237,31 @@ func TestUntrustTakesTheWorktreeOutAndNothingElse(t *testing.T) {
 		t.Errorf("file after Untrust = %v, want %v", got, want)
 	}
 }
+
+// A request without OS means the system of the machine, in every closure of
+// PreTrust and Untrust: the same key, and the same removal, as with
+// runtime.GOOS (a closure that captured the request kept the empty OS and
+// wrote the key with backslashes on Windows).
+func TestTrustWithoutOSActsAsTheSystemOfTheMachine(t *testing.T) {
+	t.Parallel()
+	wt, mirror := filepath.Join(t.TempDir(), "wt"), filepath.Join(t.TempDir(), "mirror")
+	run := func(osName string) (afterTrust, afterUntrust []byte) {
+		profile, path := trustFile(t, `{"projects": {}}`)
+		req := providers.PreTrustRequest{OS: osName, Profile: profile, Worktree: wt, RepoRoot: mirror}
+		cc := providers.NewClaudeCode(providers.Options{})
+		if _, err := cc.PreTrust(req); err != nil {
+			t.Fatal(err)
+		}
+		afterTrust = readFile(t, path)
+		if _, err := cc.(providers.TrustRemover).Untrust(req); err != nil {
+			t.Fatal(err)
+		}
+		return afterTrust, readFile(t, path)
+	}
+	// The profile folder differs per run, but the file has only the keys.
+	t1, u1 := run("")
+	t2, u2 := run(runtime.GOOS)
+	if !bytes.Equal(t1, t2) || !bytes.Equal(u1, u2) {
+		t.Errorf("OS \"\" and %q differ:\n%s\n--\n%s\n==\n%s\n--\n%s", runtime.GOOS, t1, t2, u1, u2)
+	}
+}

@@ -34,6 +34,7 @@ func claudeTrustFile(profile string) string { return filepath.Join(profile, ".cl
 // rewrites this file, so a lost race is done again, up to three times.
 // Idempotent.
 func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
+	req.OS = machineOS(req.OS) // before the closures below, which capture req
 	return c.editTrust(req, func(projects map[string]any) (trusted, cleared []string) {
 		wt := entryKey(req.OS, projects, req.Worktree)
 		entry, _ := projects[wt].(map[string]any)
@@ -73,6 +74,7 @@ func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
 // of the folder (on Windows also the one with backslashes an older Mestre
 // wrote): the worktree was removed, or the conformance test ended.
 func (c *claudeCode) Untrust(req PreTrustRequest) (Trust, error) {
+	req.OS = machineOS(req.OS) // before the closures below, which capture req
 	return c.editTrust(req, func(projects map[string]any) (_, cleared []string) {
 		for k := range projects {
 			if sameFolder(req.OS, k, req.Worktree) {
@@ -245,7 +247,29 @@ func sameFolder(goos, a, b string) bool {
 	goos = machineOS(goos)
 	a, b = strings.TrimRight(a, `/\`), strings.TrimRight(b, `/\`)
 	if goos == "windows" {
-		return strings.EqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
+		return asciiEqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
 	}
 	return a == b
+}
+
+// asciiEqualFold compares without difference of case in ASCII only: the
+// Unicode folding of strings.EqualFold would equate the Kelvin sign (U+212A)
+// with "k", two names that are different folders.
+func asciiEqualFold(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		x, y := a[i], b[i]
+		if 'A' <= x && x <= 'Z' {
+			x += 'a' - 'A'
+		}
+		if 'A' <= y && y <= 'Z' {
+			y += 'a' - 'A'
+		}
+		if x != y {
+			return false
+		}
+	}
+	return true
 }

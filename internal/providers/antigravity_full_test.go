@@ -232,3 +232,45 @@ func compact(t *testing.T, raw []byte) string {
 	}
 	return b.String()
 }
+
+// CA-AGY-06
+//
+// Without MESTRE_AGENT_ID at all (the variable removed from the environment,
+// not set empty) and with the mestre in place, the line prints the neutral
+// answer and does not run the mestre (the stand-in would print its arguments).
+func TestTheGeneratedHookWithoutTheAgentIDNeverRunsTheMestreBinary(t *testing.T) {
+	t.Parallel()
+	worktree := t.TempDir()
+	dir := filepath.Join(worktree, ".agents")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(t.TempDir(), "mestre bin it's")
+	if runtime.GOOS == "windows" {
+		folder = filepath.Join(t.TempDir(), "mestre-bin")
+	}
+	binary := stand(t, folder, "mestre")
+	payload := string(recorded(t, "antigravity", "PreToolUse"))
+	var env []string
+	for _, kv := range os.Environ() {
+		if k, _, _ := strings.Cut(kv, "="); !strings.EqualFold(k, "MESTRE_AGENT_ID") {
+			env = append(env, kv)
+		}
+	}
+	env = append(env, "AGYSTUB_STUB=hook")
+	for event, line := range hookCommands(t, worktree, binary) {
+		want := "{}"
+		if event == "PreToolUse" {
+			want = `{"decision":"allow"}`
+		}
+		var out, errb bytes.Buffer
+		c := hookShell(t.Context(), line, dir, env)
+		c.Stdin, c.Stdout, c.Stderr = strings.NewReader(payload), &out, &errb
+		if err := c.Run(); err != nil || strings.TrimSpace(out.String()) != want {
+			t.Errorf("%s without the agent id: stdout %q, stderr %q, %v; want %s and exit 0", event, out.String(), errb.String(), err, want)
+		}
+		if strings.Contains(out.String(), `"args"`) {
+			t.Errorf("%s ran the mestre without the agent id: %s", event, out.String())
+		}
+	}
+}
