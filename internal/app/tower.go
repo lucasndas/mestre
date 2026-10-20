@@ -188,6 +188,8 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 	e.registerTowerTables(router, tableHalf)
 	e.registerTowerAttachments(router, attached)
 	e.registerTowerScrolls(router)
+	audio := newTowerAudio(e.clk, e.deps.Whisper)
+	e.registerTowerTranscription(pctx, router, audio)
 	// The effective rules of the characters of this machine: kept in the
 	// machine database, with the snapshot for the degraded hook
 	// (docs/classes/permissoes.md#regras-efetivas).
@@ -208,7 +210,7 @@ func (e *Engine) runTower(ctx context.Context, unknown bool) (next transition) {
 		Heartbeat: func(ctx context.Context) (protocol.MachineHeartbeat, error) {
 			return towerHeartbeat(ctx, sys, replica.LagSeconds()), nil
 		},
-		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: towerFinalizers(replica.Finalizers(), tableHalf)},
+		Xfer: &protocol.XferConfig{Dir: e.paths.transfers(), Finalizers: withAudio(towerFinalizers(replica.Finalizers(), tableHalf), audio)},
 		Hooks: protocol.Hooks{
 			OnConnect: func(*protocol.Session) {
 				locator.Connected(pctx)

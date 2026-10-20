@@ -515,7 +515,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 		if e.deps.Integration != nil {
 			var err error
 			integ, err = e.deps.Integration.Open(ctx, IntegrationEnv{DB: db, Vault: take.vault, Clock: e.clk, Log: e.log, Machine: e.id.MachineID, Masker: e.deps.Masker, SetLocked: e.setLocked,
-				GuildID: e.id.GuildID, DecideJoin: e.DecideEntry, Machines: e.GuildMachines, SetExcluded: e.SetExcluded, Pending: e.GuildPending})
+				GuildID: e.id.GuildID, DecideJoin: e.DecideEntry, Machines: e.GuildMachines, SetExcluded: e.SetExcluded, Pending: e.GuildPending, Transcribers: e.transcribers})
 			if err != nil {
 				return transition{err: fmt.Errorf("app: the integrations: %w", err)}
 			}
@@ -688,6 +688,7 @@ func (e *Engine) runCitadel(ctx context.Context, take *takeover) (next transitio
 	router.HandleFunc(protocol.TypeCertRenew, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleCertRenew }))
 	router.HandleFunc(protocol.TypeGuildLeave, run.needsCitadel(func(c *guild.Citadel) protocol.HandlerFunc { return c.HandleLeave }))
 	e.registerCitadelCharacters(router, run)
+	e.registerCitadelTranscription(router, run)
 	router.HandleFunc(protocol.TypeAgentEvent, run.gated(e.handleAgentEvent))
 	router.HandleFunc(protocol.TypeUsageReading, run.gated(e.handleUsageReading))
 	router.HandleFunc(protocol.TypeVaultRequest, run.gated(e.handleVaultRequest(run)))

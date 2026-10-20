@@ -691,16 +691,43 @@ type SyncMessage struct {
 	TipCommit  string `json:"tip_commit" proto:"req"`
 }
 
-// TranscribeRequest is `transcribe.request`.
+// TranscribeRequest is `transcribe.request`: AudioXferID is the xfer_id of the
+// WAV (kind `audio`) the machine already holds.
 type TranscribeRequest struct {
 	AudioXferID string `json:"audio_xfer_id" proto:"req"`
 	Language    string `json:"language,omitempty"`
 }
 
-// TranscribeResult is `transcribe.result`.
+// Validate checks the id of the transfer.
+func (r *TranscribeRequest) Validate() error {
+	if _, err := ParseULID(r.AudioXferID); err != nil {
+		return fmt.Errorf("audio_xfer_id: %w", err)
+	}
+	return nil
+}
+
+// MaxTranscribeText is the most text or reason a transcribe.result may carry.
+const MaxTranscribeText = 512 << 10
+
+// Validate checks the size and that there is a text or a reason.
+func (r *TranscribeResult) Validate() error {
+	if len(r.Text) > MaxTranscribeText || len(r.Error) > MaxTranscribeText {
+		return fmt.Errorf("text or error over %d bytes", MaxTranscribeText)
+	}
+	if r.Text == "" && r.Error == "" {
+		return fmt.Errorf("neither text nor error")
+	}
+	return nil
+}
+
+// TranscribeResult is `transcribe.result`: the end of a transcribe.request (its
+// id is the reply_to). Error is the reason the machine could not transcribe;
+// then Text is empty.
 type TranscribeResult struct {
-	Text      string  `json:"text" proto:"req"`
-	DurationS float64 `json:"duration_s" proto:"req"`
+	Text      string  `json:"text"`
+	DurationS float64 `json:"duration_s"`
+	Language  string  `json:"language,omitempty"`
+	Error     string  `json:"error,omitempty"`
 }
 
 // CertRenew is `cert.renew`.
@@ -743,6 +770,9 @@ const (
 	KindFile       = "file"
 	KindDBSnapshot = "db-snapshot"
 	KindRelease    = "release"
+	// KindAudio is the WAV of a voice message, held in memory by the machine
+	// that transcribes until the transcribe.request that names it.
+	KindAudio = "audio"
 )
 
 // DefaultChunkSize is the size of a part unless the sender says otherwise.
@@ -790,7 +820,7 @@ func (b *XferBegin) Validate() error {
 	if _, err := ParseULID(b.XferID); err != nil {
 		return fmt.Errorf("xfer_id: %w", err)
 	}
-	if !slices.Contains([]string{KindGitBundle, KindFile, KindDBSnapshot, KindRelease}, b.Kind) {
+	if !slices.Contains([]string{KindGitBundle, KindFile, KindDBSnapshot, KindRelease, KindAudio}, b.Kind) {
 		return fmt.Errorf("kind %q is unknown", b.Kind)
 	}
 	if b.Size < 0 || b.Size > MaxXferSize {
