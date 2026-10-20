@@ -144,7 +144,7 @@ func TestTheEvidenceIsCutInThreeLinesAndMaskedButTheWholeIsKeptMasked(t *testing
 	}
 }
 
-// Part of CA-BLOQ-06 (the dependencies between tables come with their document)
+// The machine line of the notice (CA-BLOQ-06 is the command: handler_test.go)
 func TestTheMachineLineSaysWhichEpicsMustMoveFirst(t *testing.T) {
 	t.Parallel()
 	n := stripe()

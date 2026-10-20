@@ -336,3 +336,19 @@ func TestTheEngineIsLockedByTheLockOfThePeriodAndByTheOneItWasGiven(t *testing.T
 		t.Fatal("the lock given in the dependencies is not seen")
 	}
 }
+
+// Part of CA-BLOQ-02 (the command `notify` is in the local channel of the Citadel and
+// asks who calls before anything: the handler and its cases are in internal/blocking)
+func TestTheCommandNotifyIsInTheLocalChannelOfTheCitadel(t *testing.T) {
+	t.Parallel()
+	i := newInteg(t, false)
+	run := i.open()
+	defer run.Close()
+	fwd := localchan.NewLocalForwarder()
+	run.Attach(&Orchestration{Registry: characters.Registry{DB: i.db}}, fwd)
+	got := fwd.Forward(i.ctx, &localchan.Call{Request: localchan.Request{V: 1, ID: "x", AgentID: "ghost", Cmd: "notify", Args: localchan.TextArgs("x"), Flags: map[string]any{"blocked": "espera"}},
+		Caller: localchan.Caller{Identified: true, AgentID: "ghost"}})
+	if got.OK || got.Error == nil || got.Error.Code != localchan.CodeNotIdentified {
+		t.Fatalf("notify from a character the engine does not know = %+v, want not_identified", got.Error)
+	}
+}
