@@ -159,12 +159,16 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 			return keeper.Run(ctx)
 		})
 	}
+	// the characters a Tower that came back lost (its resync left them interrupted)
+	// are resumed too, while the Citadel acts
+	orc.Loops = append(orc.Loops, func(ctx context.Context) error { return e.resumeTowers(ctx, orc) })
 	ph := &periodHooks{usage: newHookUsage(orc.Usage, reader, e.log), agentMachine: func(ctx context.Context, id string) (string, bool) {
 		c, err := orc.Registry.Get(ctx, id)
 		return c.Machine, err == nil
 	}}
 	if cc != nil {
 		ph.chain, ph.rules = orc.Chain, tableRuleGate(orc.TableRules)
+		ph.siteRules = cc.Rules
 	}
 	if rp, ok := orc.Policy.(interface {
 		Risk(workspace string) *classes.RiskPolicy

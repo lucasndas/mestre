@@ -560,7 +560,15 @@ func (s *Session) runAcked(ctx context.Context, m *Message, h Handler) {
 	} else if reply != nil {
 		s.sendReply(ctx, env.ID, reply)
 	}
-	s.finish(ctx, env.ID, ack)
+	kept := ack
+	if reply != nil && reply.InAck {
+		// A volatile type carries a secret (vault.credential): the idempotency
+		// store keeps that the id was answered, never the answer.
+		if spec, ok := s.cfg.Registry.Spec(reply.Type); ok && spec.Volatile {
+			kept.Result = nil
+		}
+	}
+	s.finish(ctx, env.ID, kept)
 	s.sendAck(env.ID, ack)
 }
 

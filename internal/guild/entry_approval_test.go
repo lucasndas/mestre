@@ -256,3 +256,30 @@ func TestAnEntryThatNobodyAnswersIsTakenDownAfterTheHour(t *testing.T) {
 	}
 	ew.expectNothingIssued()
 }
+
+// What /guilda lists to the Owner as an entry that waits for him is the request in
+// state pending that has not expired, with the name and the code of the machine; once it is answered
+// or expired it is not listed.
+func TestThePendingEntriesAreTheOnesThatWaitAndHaveNotExpired(t *testing.T) {
+	t.Parallel()
+	clk := clock.NewFake(day0)
+	ew := newEntryWorld(t, clk)
+	if got, err := ew.citadel.PendingJoins(t.Context()); err != nil || len(got) != 0 {
+		t.Fatalf("pending before any request: %v, %v", got, err)
+	}
+	n := ew.newNode("desktop-ana")
+	j := ew.startJoin(n)
+	<-ew.asked
+	code := <-j.code
+	got, err := ew.citadel.PendingJoins(t.Context())
+	if err != nil || len(got) != 1 || got[0].Name != "desktop-ana" || got[0].Code != code {
+		t.Fatalf("pending = %+v, %v; want the machine and its code %q", got, err, code)
+	}
+	id, _ := ew.pending(t)
+	if _, err := ew.flow.Answer(t.Context(), ew.owner.ID, approvals.Input{Request: id, Answer: chain.AnswerDeny}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = ew.citadel.PendingJoins(t.Context()); err != nil || len(got) != 0 {
+		t.Fatalf("pending after the denial: %+v, %v; want none", got, err)
+	}
+}
