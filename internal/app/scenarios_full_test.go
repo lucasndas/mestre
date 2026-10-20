@@ -1,10 +1,14 @@
+//go:build full
+
 package app_test
 
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/lucasndas/mestre/internal/app"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -13,29 +17,53 @@ import (
 	"github.com/lucasndas/mestre/internal/providers"
 )
 
-// asyncExec is the process of an asynchronous hook: it starts, waits to be
-// released and prints.
-type asyncExec struct {
-	started chan string
-	release chan struct{}
-}
-
-func (e *asyncExec) Exec(ctx context.Context, agentID string, h hook.AsyncHook, _ providers.EventKind, _ []byte) (hook.HookResult, error) {
-	e.started <- agentID + "/" + h.Name
-	select {
-	case <-e.release:
-	case <-ctx.Done():
-		return hook.HookResult{}, ctx.Err()
+// Part of CA-CANAL-04: the rules are built locked while the Mestre is locked, the
+// publisher sends them again to every character that is alive (the Towers learn
+// the lock from there), and the hook of each one denies every tool.
+func TestTheLockMakesTheRulesLockedAndTheyAreRepublishedToEveryone(t *testing.T) {
+	t.Parallel()
+	var locked atomic.Bool
+	w := newCommWorld(t, func(w *commWorld, oo *app.OrchestrationOptions) {
+		withCitadelClasses(w, oo)
+		cc, err := app.NewCitadelClasses(app.CitadelClassesOptions{Registry: characters.Registry{DB: oo.Guild}, Libraries: func(string) *classes.Library { return w.lib },
+			Presets: oo.Presets, Locked: func(context.Context, string) bool { return locked.Load() }})
+		if err != nil {
+			w.t.Fatal(err)
+		}
+		w.cc = cc
+		w.pub = &app.RulesPublisher{Classes: cc, Local: w.local, Machine: oo.Machine}
+		oo.ChainClasses, oo.ChainRulesPublisher = cc, w.pub
+		oo.Machines = app.PublishingMachines(w.mach, w.pub)
+	})
+	w.approveClass("dev", devPerms)
+	dev := w.recruit("Dev-L", "Dev Claude")
+	if r, err := w.cc.Rules(w.ctx, dev.ID); err != nil || r.Locked {
+		t.Fatalf("unlocked: %+v, %v", r, err)
 	}
-	return hook.HookResult{Output: "ok  3 testes"}, nil
+	locked.Store(true)
+	if r, err := w.cc.Rules(w.ctx, dev.ID); err != nil || !r.Locked {
+		t.Fatalf("locked: %+v, %v", r, err)
+	}
+	if kept, _ := w.local.Rules(w.ctx, dev.ID); kept.Locked {
+		t.Fatal("the rules kept on the machine were locked before they were published")
+	}
+	if err := w.pub.PublishAll(w.ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []characters.Character{dev, w.master, w.gm} {
+		kept, err := w.local.Rules(w.ctx, c.ID)
+		if err != nil || !kept.Locked {
+			t.Errorf("%s: rules kept = %+v, %v; want locked", c.Name, kept, err)
+		}
+	}
+	locked.Store(false)
+	if err := w.pub.PublishAll(w.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if kept, _ := w.local.Rules(w.ctx, dev.ID); kept.Locked {
+		t.Error("the rules stayed locked after the unlock")
+	}
 }
-
-const questOneStep = `
-name: Sozinha
-steps:
-  - {id: a, sheet: Dev Claude, instructions: "Faça"}
-  - {id: b, sheet: Revisor Codex, after: [a]}
-`
 
 // Part of CA-CLASSES-04 (fecha no M5, com o HookExec e o runner no mestre run)
 func TestAnAsyncTurnEndHookOfTheClassOfACharacterInAQuestWritesToTheScrollOfTheQuest(t *testing.T) {
@@ -87,6 +115,30 @@ func TestAnAsyncTurnEndHookOfTheClassOfACharacterInAQuestWritesToTheScrollOfTheQ
 		}
 	}
 }
+
+// asyncExec is the process of an asynchronous hook: it starts, waits to be
+// released and prints.
+type asyncExec struct {
+	started chan string
+	release chan struct{}
+}
+
+func (e *asyncExec) Exec(ctx context.Context, agentID string, h hook.AsyncHook, _ providers.EventKind, _ []byte) (hook.HookResult, error) {
+	e.started <- agentID + "/" + h.Name
+	select {
+	case <-e.release:
+	case <-ctx.Done():
+		return hook.HookResult{}, ctx.Err()
+	}
+	return hook.HookResult{Output: "ok  3 testes"}, nil
+}
+
+const questOneStep = `
+name: Sozinha
+steps:
+  - {id: a, sheet: Dev Claude, instructions: "Faça"}
+  - {id: b, sheet: Revisor Codex, after: [a]}
+`
 
 func questScroll(t *testing.T, w *commWorld, q quests.Quest) string {
 	t.Helper()
