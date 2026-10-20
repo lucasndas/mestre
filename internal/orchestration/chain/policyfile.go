@@ -196,6 +196,13 @@ func parsePolicyFull(data []byte) (Settings, *classes.RiskPolicy, PolicyRules, e
 			return Settings{}, nil, PolicyRules{}, err
 		}
 	}
+	if section, err = nodeYAML(&y.Delegacao); err != nil {
+		return bad("delegacao", err.Error())
+	} else if len(section) > 0 {
+		if st.DelegationValidity, st.DelegationReminder, err = ParseDelegation(section); err != nil {
+			return Settings{}, nil, PolicyRules{}, err
+		}
+	}
 	risk := &classes.RiskPolicy{}
 	if section, err = nodeYAML(&y.Risco); err != nil {
 		return bad("risco", err.Error())

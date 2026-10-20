@@ -37,7 +37,7 @@ const (
 
 // VaultTables are the tables of the vault: they go to every machine but the
 // excluded one, which has them empty.
-var VaultTables = []string{"secrets", "site_login_attempts"}
+var VaultTables = []string{"secrets", "site_login_attempts", "vault_notices"}
 
 // The frame 0x03 (docs/conectividade/protocolo.md#multiplexação-e-prioridade):
 // the ID is the guild_id, the position the lsn of the first record, and the

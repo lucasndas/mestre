@@ -1,6 +1,7 @@
 package chain_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -200,4 +201,48 @@ func mustOpen(t *testing.T, w *world) []int64 {
 		}
 	}
 	return out
+}
+
+// CA-APROV-POL-08: a destructive action without an exception opens a request of
+// type acao_destrutiva with the command and the object as its target, asked only
+// of the Administrators and the Owner (an Approver is not asked), and the answer
+// of the Grand Master to it is human_required.
+func TestADestructiveRequestHasTheCommandAsTargetAsksOnlyAdministratorsAndIsNotTheGrandMasters(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{flow: true})
+	ana, err := w.usvc.Create(w.ctx, w.owner, users.NewUser{Name: "Ana", Level: users.Approver, Workspaces: []string{w.slug}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bia, err := w.usvc.Create(w.ctx, w.owner, users.NewUser{Name: "Bia", Level: users.Administrator, Workspaces: []string{w.slug}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev := w.recruit("Dev")
+	ok, id, err := w.ch.Destructive(w.ctx, destroy(dev.ID, "4"))
+	if err != nil || ok || id == 0 {
+		t.Fatalf("ask = %v, %d, %v", ok, id, err)
+	}
+	r := w.request(id)
+	var tg chain.DestructiveTarget
+	if err := json.Unmarshal(r.Target, &tg); err != nil || tg.Command != "note delete" || tg.Object != "loja/42-login/p0003" {
+		t.Fatalf("target = %s (%v); want the command and the scroll", r.Target, err)
+	}
+	// it goes to the people at once, and the Grand Master has no say
+	got := w.cli(w.gm, "approval decide", map[string]any{"reason": "ok"}, itoa(id), "approve")
+	if got.OK || got.Code != "human_required" || got.Exit != 3 {
+		t.Fatalf("decide by the Grand Master = %+v, want exit 3 human_required", got)
+	}
+	if w.request(id).State != chain.Open {
+		t.Fatalf("the request is %s after the refusal", w.request(id).State)
+	}
+	if _, _, asked := w.chn.To(ana.ID); asked {
+		t.Error("an Approver was asked about a destructive action")
+	}
+	if _, _, asked := w.chn.To(bia.ID); !asked {
+		t.Error("the Administrator was not asked")
+	}
+	if _, _, asked := w.chn.To(w.owner.ID); !asked {
+		t.Error("the Owner was not asked")
+	}
 }

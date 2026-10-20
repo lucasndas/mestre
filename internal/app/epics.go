@@ -21,7 +21,10 @@ type stdEpics struct {
 	reg characters.Registry
 }
 
-var _ tables.GitHub = stdEpics{}
+var (
+	_ tables.GitHub  = stdEpics{}
+	_ tables.Details = stdEpics{}
+)
 
 // api gives the GitHub of the Grão-Mestre of the workspace, and its repository.
 func (e stdEpics) api(ctx context.Context, workspace string) (github.PullAPI, string, error) {
@@ -142,4 +145,83 @@ func (s stdSettings) Apps(ctx context.Context) ([]string, error) {
 		out = append(out, fmt.Sprintf("%s (%s)", a.Name, a.State))
 	}
 	return out, nil
+}
+
+// OpenIssues implements tables.Details: the open issues under the epic.
+func (e stdEpics) OpenIssues(ctx context.Context, workspace string, epic int) ([]tables.IssueRef, error) {
+	api, repo, err := e.api(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	subs, err := api.SubIssues(ctx, repo, epic)
+	if err != nil {
+		return nil, err
+	}
+	var out []tables.IssueRef
+	for _, i := range subs {
+		if i.State == "open" && !i.IsPull {
+			out = append(out, tables.IssueRef{Number: i.Number, Title: i.Title})
+		}
+	}
+	return out, nil
+}
+
+// PullStats implements tables.Details: the files and lines of the pull request and
+// what its checks say (failure if any failed, pending if any is not over, success
+// if all passed, none if it has none).
+func (e stdEpics) PullStats(ctx context.Context, workspace string, number int) (tables.PullStats, error) {
+	api, repo, err := e.api(ctx, workspace)
+	if err != nil {
+		return tables.PullStats{}, err
+	}
+	pr, err := api.PullData(ctx, repo, number)
+	if err != nil {
+		return tables.PullStats{}, err
+	}
+	files, err := api.PullFiles(ctx, repo, number)
+	if err != nil {
+		return tables.PullStats{}, err
+	}
+	st := tables.PullStats{Files: len(files), CI: "none"}
+	for _, f := range files {
+		st.Lines += f.Additions + f.Deletions
+	}
+	checks, err := api.CheckRuns(ctx, repo, pr.HeadSHA)
+	if err != nil {
+		return tables.PullStats{}, err
+	}
+	// The legacy commit statuses count too: a CI that reports by them is not "none".
+	if ss, ok := api.(interface {
+		CommitStatuses(ctx context.Context, repo, sha string) ([]github.Check, error)
+	}); ok {
+		statuses, err := ss.CommitStatuses(ctx, repo, pr.HeadSHA)
+		if err != nil {
+			return tables.PullStats{}, err
+		}
+		for _, s := range statuses {
+			if s.State == "error" {
+				s.State = "failure"
+			}
+			checks = append(checks, s)
+		}
+	}
+	failed, pending := false, false
+	for _, c := range checks {
+		switch c.State {
+		case "success", "neutral", "skipped":
+		case "failure", "cancelled", "timed_out", "action_required", "startup_failure":
+			failed = true
+		default:
+			pending = true
+		}
+	}
+	switch {
+	case failed:
+		st.CI = "failure"
+	case pending:
+		st.CI = "pending"
+	case len(checks) > 0:
+		st.CI = "success"
+	}
+	return st, nil
 }

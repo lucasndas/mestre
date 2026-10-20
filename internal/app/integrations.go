@@ -8,6 +8,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/store"
+	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
 )
@@ -36,6 +37,13 @@ type IntegrationEnv struct {
 	// the Citadel of the period; GuildID is the id of the Guild.
 	DecideJoin func(ctx context.Context, joinID string, d guild.Decision) error
 	GuildID    string
+	// Machines lists the machines of the Guild and its epoch, and SetExcluded
+	// excludes one from the secrets or undoes it (/guilda, after the Owner's
+	// PIN); both are of the acting Citadel. Nil: this machine cannot.
+	Machines    func(ctx context.Context) ([]telegram.GuildMachine, uint64, error)
+	SetExcluded func(ctx context.Context, machineID string, excluded bool) error
+	// Pending lists the entry and promotion requests that wait for the Owner.
+	Pending func(ctx context.Context) ([]telegram.GuildPending, error)
 }
 
 // GuildApprover is what an IntegrationRun may also be: the question to the Owner

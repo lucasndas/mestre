@@ -193,6 +193,8 @@ func (r spyRepo) DeleteBranch(ctx context.Context, name string) error {
 
 type fakeGitHub struct {
 	mu       sync.Mutex
+	issues   map[int][]tables.IssueRef
+	stats    map[int]tables.PullStats
 	epics    map[int]tables.Epic
 	created  int
 	closedPR []int
@@ -220,6 +222,18 @@ func (g *fakeGitHub) Epic(ctx context.Context, _ string, n int) (tables.Epic, er
 		return tables.Epic{}, fmt.Errorf("%w: #%d", tables.ErrEpicNotFound, n)
 	}
 	return e, nil
+}
+
+func (g *fakeGitHub) OpenIssues(_ context.Context, _ string, epic int) ([]tables.IssueRef, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.issues[epic], nil
+}
+
+func (g *fakeGitHub) PullStats(_ context.Context, _ string, n int) (tables.PullStats, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.stats[n], nil
 }
 
 func (g *fakeGitHub) CloseEpic(_ context.Context, _ string, n int) error {
@@ -630,7 +644,7 @@ func newWorld(t *testing.T, o worldOpts) *world {
 		t.Fatal(err)
 	}
 	w.chars = &fakeChars{w: w, schedule: map[string]bool{}}
-	w.gh = &fakeGitHub{epics: map[int]tables.Epic{}}
+	w.gh = &fakeGitHub{epics: map[int]tables.Epic{}, issues: map[int][]tables.IssueRef{}, stats: map[int]tables.PullStats{}}
 	w.msgs = &fakeMessages{msgs: map[string]tables.Message{}}
 	w.atts = &fakeAttachments{got: map[string][]sessionzero.File{}}
 	w.files = &fakeFiles{}

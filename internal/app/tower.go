@@ -23,10 +23,12 @@ import (
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/machinesheet"
+	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/replication"
 	"github.com/lucasndas/mestre/internal/store"
 	guilddb "github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/internal/vault"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -349,6 +351,98 @@ func (e *Engine) DecideEntry(ctx context.Context, joinID string, d guild.Decisio
 		return guild.ErrSuspended
 	}
 	return c.Decide(ctx, joinID, d)
+}
+
+// actingCitadel is the Citadel of the Guild of the period that runs, or why
+// this machine has none now (the guild operations belong to the acting one).
+func (e *Engine) actingCitadel() (*guild.Citadel, error) {
+	e.mu.Lock()
+	run := e.cit
+	e.mu.Unlock()
+	if run == nil {
+		return nil, errors.New("app: only the Citadel changes the Guild")
+	}
+	c := run.guild()
+	if c == nil {
+		if why := run.whyDown(); why != "" {
+			return nil, fmt.Errorf("app: the Citadel cannot act, %s: %w", why, vault.ErrClosed)
+		}
+		return nil, guild.ErrSuspended
+	}
+	return c, nil
+}
+
+// SetExcluded is the Owner's exclusion of a machine from the secrets, or its
+// undoing, given by /guilda after the PIN. The Citadel refuses itself.
+func (e *Engine) SetExcluded(ctx context.Context, machineID string, excluded bool) error {
+	c, err := e.actingCitadel()
+	if err != nil {
+		return err
+	}
+	return c.SetExcluded(ctx, machineID, excluded)
+}
+
+// GuildMachines lists the active machines of the Guild with the epoch, for
+// /guilda.
+func (e *Engine) GuildMachines(ctx context.Context) ([]telegram.GuildMachine, uint64, error) {
+	c, err := e.actingCitadel()
+	if err != nil {
+		return nil, 0, err
+	}
+	all, err := c.Machines(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	citadel, err := c.CitadelID(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	e.mu.Lock()
+	run := e.cit
+	e.mu.Unlock()
+	var out []telegram.GuildMachine
+	for _, m := range all {
+		if m.State == guild.MachineActive {
+			online := m.ID == citadel // the Citadel that answers is online
+			if !online && run != nil && run.srv != nil {
+				online = run.srv.Link(m.ID).Connected()
+			}
+			out = append(out, telegram.GuildMachine{ID: m.ID, Name: m.Name, Citadel: m.ID == citadel, Excluded: m.Excluded, Online: online})
+		}
+	}
+	return out, e.epochs.Epoch(), nil
+}
+
+// GuildPending lists what waits for the Owner in the Guild, for /guilda: the
+// entry requests and the open requests of promotion to Citadel. The names are
+// the machines' own words: they leave without the marks the Telegram turns into
+// links or bold.
+func (e *Engine) GuildPending(ctx context.Context) ([]telegram.GuildPending, error) {
+	c, err := e.actingCitadel()
+	if err != nil {
+		return nil, err
+	}
+	joins, err := c.PendingJoins(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []telegram.GuildPending
+	for _, j := range joins {
+		out = append(out, telegram.GuildPending{Kind: telegram.PendingEntry, Name: plainText(j.Name), Code: j.Code, At: j.CreatedAt})
+	}
+	err = e.withGuildDB(func(db *store.DB) error {
+		open, err := (&chain.Store{DB: db}).Open(ctx)
+		if err != nil {
+			return err
+		}
+		for _, r := range open {
+			if r.Type == classes.RequestCitadelPromotion {
+				out = append(out, telegram.GuildPending{Kind: telegram.PendingPromotion, Name: plainText(r.About), At: r.CreatedAt})
+			}
+		}
+		return nil
+	})
+	return out, err
 }
 
 // DecidePromotion is the Owner's answer to the request of Promote, given by

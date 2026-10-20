@@ -108,7 +108,7 @@ func (s *Service) Decree(ctx context.Context, g chain.DecreeGrant) error {
 		if ref != nil {
 			return ref
 		}
-		d = s.build(p, u, why != "", now)
+		d = s.build(ctx, p, u, why != "", now)
 		d.Request = g.Request
 		_, err = insertDecree(ctx, tx, d, fmt.Sprintf("resposta ao pedido %d: %s", g.Request, g.Answer), now)
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") {
@@ -157,7 +157,11 @@ func (s *Service) proposalOf(r chain.Request, g chain.DecreeGrant) (Proposal, er
 			// The Grand Master already decides a medio inside the policy: whoever
 			// wants it looser makes a decree of policy, for an Administrator or
 			// above (docs/aprovacoes/delegacao.md#delegação-de-decisão).
-			p.Effect = Effect{Kind: EffectPolicy, Setting: string(r.Type), Loosens: true}
+			setting := string(r.Type)
+			if setting == "" {
+				setting = string(classes.RequestClassPermission)
+			}
+			p.Effect = Effect{Kind: EffectPolicy, Setting: setting, Loosens: true}
 			p.Target = Target{Kind: TargetWorkspace, Name: r.Workspace}
 			p.Mesa = r.Table
 			if g.For > 0 {

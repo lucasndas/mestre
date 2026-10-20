@@ -3,9 +3,12 @@
 package ghcli_test
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 )
 
 // CA-CLI-GH-03
@@ -48,5 +51,29 @@ func TestAPRIsMergeableOnlyWhenGitHubSaysClean(t *testing.T) {
 		if got.Data["mergeable"] != want {
 			t.Errorf("%q: mergeable %v, want %v (%v)", state, got.Data["mergeable"], want, got.Data["blocked_by"])
 		}
+	}
+}
+
+// CA-CLI-GH-05: a GitHub that refuses the sending for the lack of the permission
+// "Workflows": `mestre pr update` is exit 3 workflow_permission, the sending is
+// tried once, and the Grand Master gets the event with the reason.
+func TestPRUpdateRefusedForTheWorkflowsPermissionIsExit3AndTheGrandMasterIsTold(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	prOfTheTable(t, r)
+	var told []string
+	r.h.Refused = func(_ context.Context, c characters.Character, code, reason string) {
+		told = append(told, c.Table+" "+code+": "+reason)
+	}
+	r.git.FailNextPush(gitxErr("workflow"))
+	got := r.run("tm", "pr update", nil)
+	if got.OK || got.Exit != 3 || got.Code != "workflow_permission" {
+		t.Fatalf("update: %+v, want exit 3 workflow_permission", got)
+	}
+	if len(r.pushes()) != 1 {
+		t.Errorf("the sending was tried %d times, want once: %q", len(r.pushes()), r.pushes())
+	}
+	if len(told) != 1 || !strings.HasPrefix(told[0], "42-login workflow_permission: ") {
+		t.Errorf("the Grand Master was told %q", told)
 	}
 }

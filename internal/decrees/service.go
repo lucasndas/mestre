@@ -82,6 +82,9 @@ type Service struct {
 	ids *protocol.IDGen
 	log *slog.Logger
 	ttl time.Duration
+	// delegation gives the validity and the reminder of a workspace (nil: the
+	// constants).
+	delegation func(ctx context.Context, workspace string) (validity, reminder time.Duration)
 }
 
 // New returns the Service.
@@ -246,7 +249,7 @@ func (s *Service) Confirm(ctx context.Context, proposal, userID, pinRequest stri
 		if again != "" && why == "" {
 			return ErrPINRequired // the effect became stricter while it waited
 		}
-		d := s.build(sp.p, u, why != "", now)
+		d := s.build(ctx, sp.p, u, why != "", now)
 		n, err := insertDecree(ctx, tx, d, "confirmado pelo autor", now)
 		if err != nil {
 			return err
@@ -316,7 +319,7 @@ func (s *Service) cancelProposal(ctx context.Context, proposal string) {
 }
 
 // build makes the decree of a proposal.
-func (s *Service) build(p Proposal, u users.User, pin bool, now time.Time) Decree {
+func (s *Service) build(ctx context.Context, p Proposal, u users.User, pin bool, now time.Time) Decree {
 	d := Decree{Kind: p.Kind, State: Active, Effect: p.Effect, Target: p.Target, Workspace: p.Workspace, Mesa: p.Mesa, Scope: p.Scope,
 		Author: u.ID, AuthorLevel: classLevel(u.Level), Text: p.Text, Origin: p.Origin, PIN: pin, Action: p.Action, RequestType: p.RequestType,
 		TargetRef: p.TargetRef, Until: p.Until}
@@ -329,7 +332,8 @@ func (s *Service) build(p Proposal, u users.User, pin bool, now time.Time) Decre
 		}
 	}
 	if d.Effect.Kind == EffectDelegation && highTypes[d.Effect.Setting] && d.Until.IsZero() {
-		d.Until = now.Add(MaxDelegation) // "até mudar ou 30 dias"
+		validity, _ := s.delegationTimes(ctx, d.Workspace)
+		d.Until = now.Add(validity) // "até mudar ou 30 dias" (the file may shorten the 30)
 	}
 	if d.Effect.Kind == EffectDelegation && d.Effect.Setting == string(classes.RequestOperator) && d.Effect.MaxMinutes == 0 {
 		d.Effect.MaxMinutes = DefaultOperatorMinutes

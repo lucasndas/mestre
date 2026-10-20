@@ -23,8 +23,10 @@ func (w *world) entry() int64 {
 	return id
 }
 
-// The request to enter the Guild is the engine's own: no workspace, no agent in
-// front, only the Owner is asked, with two answers, and the PIN after the button.
+// CA-APROV-POL-12: the request to enter the Guild is the engine's own: no
+// workspace, no agent in front, only the Owner is asked, with two answers, and the
+// PIN after the button; not even a delegation of the Owner lets the Grand Master
+// decide it, and a policy file that cites promocao_cidadela is invalid.
 func TestARequestToEnterTheGuildGoesOnlyToTheOwnerWhoApprovesOrDeniesWithThePIN(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t, worldOpts{flow: true})
@@ -52,6 +54,14 @@ func TestARequestToEnterTheGuildGoesOnlyToTheOwnerWhoApprovesOrDeniesWithThePIN(
 	}
 	if !strings.Contains(msg.Text, "123 456") && !strings.Contains(msg.Text, "notebook") {
 		t.Errorf("the question does not say what is asked: %q", msg.Text)
+	}
+	// a delegation of the Owner does not give it to the Grand Master
+	w.deleg.set(true)
+	if ref := w.refusal(chain.Decision{Request: id, By: w.gm.ID, Answer: chain.AnswerApprove}); ref.Code != chain.CodeHumanRequired {
+		t.Errorf("the Grand Master deciding the entry: %+v", ref)
+	}
+	if _, _, err := chain.ParsePolicyFile([]byte("versao: 1\ntipos:\n  promocao_cidadela: { sozinho: nunca }\n")); err == nil {
+		t.Error("a policy file that cites promocao_cidadela was accepted")
 	}
 	// nobody else answers it, and the Owner answers nothing else
 	if _, err := w.flow.Answer(w.ctx, ana.ID, approvals.Input{Request: id, Answer: chain.AnswerApprove}); !errors.Is(err, approvals.ErrNotYours) {

@@ -14,6 +14,7 @@ import (
 	"github.com/lucasndas/mestre/internal/localchan"
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
 	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -138,7 +139,41 @@ func TestRealAnAdvanceThatConflictsWithTheWorktreeChangesNothing(t *testing.T) {
 	}
 }
 
-// Part of CA-CLI-GM-07: with the real git, the merge of the pull request
+// CA-CLI-GM-02: with the real git, `mestre table open --epic 42 --from-message`
+// makes the branch epico/42-login, the worktree, the table master, and puts the
+// original text of the message, byte for byte, in the inbox of the table master.
+func TestRealTheCommandOpenMakesTheTableWithTheOriginalMessage(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, worldOpts{be: realBackend{}})
+	w.activate()
+	w.gh.add(42, "Login", "epico")
+	original := "Quero login com e-mail e senha.\n\n  Sem OAuth.\n"
+	w.msgs.msgs["m81"] = tables.Message{ID: "m81", Text: original, Origin: inbox.Origin{Channel: inbox.ChannelTelegram, User: "u1", UserName: "Lucas", Level: characters.LevelOwner}}
+	r := w.run(w.gm.ID, "table open", map[string]any{"epic": "42", "from-message": "m81"})
+	if !r.OK {
+		t.Fatalf("table open = %+v", r.Error)
+	}
+	tbl, err := w.svc.Get(w.ctx, w.slug(), "42-login")
+	if err != nil || tbl.Branch != "epico/42-login" {
+		t.Fatalf("table = %+v, %v", tbl, err)
+	}
+	if _, err := w.mirror().ResolveRef(w.ctx, "refs/heads/"+tbl.Branch); err != nil {
+		t.Errorf("the branch is not in the mirror: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(w.wss.Layout().Tables(w.slug()), tbl.ID, "README.md")); err != nil {
+		t.Errorf("the worktree has no checkout: %v", err)
+	}
+	master, ok, err := w.reg.TableMaster(w.ctx, w.slug(), tbl.ID)
+	if err != nil || !ok {
+		t.Fatalf("table master = %+v, %v, %v", master, ok, err)
+	}
+	items, err := w.inb.Store().All(w.ctx, master.ID)
+	if err != nil || len(items) != 1 || items[0].Text != original {
+		t.Errorf("inbox of the table master = %+v, %v", items, err)
+	}
+}
+
+// CA-CLI-GM-07: with the real git, the merge of the pull request
 // confirmed and a local commit that was not sent, `table close` leaves with 7
 // unmerged_changes, the table stays closing and the worktree stays.
 func TestRealCloseWithACommitThatIsNotInThePullRequest(t *testing.T) {

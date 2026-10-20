@@ -24,8 +24,8 @@ const (
 )
 
 // DelegationEnding implements decrees.Reminder: the author is told, 3 days
-// before the end, that the delegation is about to expire, with Renovar (30 more
-// days, with the PIN) and Deixar vencer.
+// before the end, that the delegation is about to expire, with Renovar (the default
+// validity of the workspace, up to 30 days, with the PIN) and Deixar vencer.
 func (c *DecreeChannel) DelegationEnding(ctx context.Context, d decrees.Decree) {
 	u, err := c.Users.Get(ctx, d.Author)
 	if err != nil || u.State != users.Active || u.TelegramID == 0 || c.bot == nil {
@@ -33,14 +33,14 @@ func (c *DecreeChannel) DelegationEnding(ctx context.Context, d decrees.Decree) 
 	}
 	n := strconv.FormatInt(d.Number, 10)
 	_, err = c.bot.Send(ctx, Out{ChatID: u.TelegramID, UserID: u.ID, Origin: "motor", Workspace: d.Workspace, Mesa: d.Mesa,
-		Text:    fmt.Sprintf("A delegação %d (%s) acaba em %s. Renovar vale por mais 30 dias, com o seu PIN.", d.Number, d.Summary(), c.Svc.Moment(ctx, d.Until)),
+		Text:    fmt.Sprintf("A delegação %d (%s) acaba em %s. Renovar vale pela validade padrão do workspace (até 30 dias), com o seu PIN.", d.Number, d.Summary(), c.Svc.Moment(ctx, d.Until)),
 		Buttons: [][]Button{{{Text: "Renovar", Action: DelegationRenewAction, Arg: n}, {Text: "Deixar vencer", Action: DelegationLapseAction, Arg: n}}}})
 	if err != nil {
 		c.bot.log.Warn("telegram: the reminder of a delegation was not queued", "decree", d.Number, "err", err)
 	}
 }
 
-// renew is the Renovar: it proposes the same delegation for 30 more days, and
+// renew is the Renovar: it proposes the same delegation for the default validity of the workspace (up to 30 days), and
 // the author confirms it like any decree.
 func (c *DecreeChannel) renew(ctx context.Context, k Click) (string, string, error) {
 	n, err := strconv.ParseInt(k.Arg, 10, 64)

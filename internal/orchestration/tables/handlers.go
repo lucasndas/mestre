@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -249,16 +250,56 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 		return *refused
 	}
 	args, ok := c.Request.Strings()
-	if !ok || len(args) != 1 {
-		return localchan.Fail(localchan.CodeUsage, `usage: mestre table status "<table>"`, "")
+	if !ok || len(args) > 1 {
+		return localchan.Fail(localchan.CodeUsage, `usage: mestre table status ["<table>"]`, "")
+	}
+	if len(args) == 0 {
+		// every table that is not over, to route a request without guessing
+		ts, err := s.store.List(ctx, gm.Workspace)
+		if err != nil {
+			return Refusal(err)
+		}
+		rows := []map[string]any{}
+		var text strings.Builder
+		for _, t := range ts {
+			if Over(t.State) {
+				continue
+			}
+			data, line, resp := s.statusOf(ctx, t)
+			if resp != nil {
+				return *resp
+			}
+			delete(data, "text")
+			rows = append(rows, data)
+			text.WriteString(line + "\n\n")
+		}
+		if len(rows) == 0 {
+			text.WriteString("nenhuma mesa aberta")
+		}
+		return localchan.OK(map[string]any{"tables": rows, "text": strings.TrimRight(text.String(), "\n")})
 	}
 	t, err := s.Find(ctx, gm.Workspace, args[0])
 	if err != nil {
 		return Refusal(err)
 	}
+	data, _, resp := s.statusOf(ctx, t)
+	if resp != nil {
+		return *resp
+	}
+	return localchan.OK(data)
+}
+
+// statusOf is the status of a table: its state, its epic with the criteria and
+// the open issues, its pull request with the size and the CI, the folders its
+// branch changes, its characters and the last useful delivery.
+func (s *Service) statusOf(ctx context.Context, t Table) (map[string]any, string, *localchan.Response) {
+	fail := func(err error) (map[string]any, string, *localchan.Response) {
+		r := Refusal(err)
+		return nil, "", &r
+	}
 	cs, err := s.o.Registry.AliveOf(ctx, t.Workspace)
 	if err != nil {
-		return Refusal(err)
+		return fail(err)
 	}
 	type charRow struct {
 		Name    string `json:"name"`
@@ -291,13 +332,23 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 	if len(chars) == 0 {
 		text.WriteString("- ninguém\n")
 	}
+	issues, pr, folders := s.issuesOf(ctx, t), s.prOf(ctx, t), s.foldersOf(ctx, t)
+	if list, ok := issues.([]map[string]any); ok {
+		fmt.Fprintf(&text, "\nIssues abertas: %d", len(list))
+	}
+	if pr["error"] == nil && t.PRNumber != 0 {
+		fmt.Fprintf(&text, "\nPR: %v arquivos, %v linhas, CI %v", pr["files"], pr["lines"], pr["ci"])
+	}
+	if len(folders) > 0 {
+		fmt.Fprintf(&text, "\nPastas alteradas: %s", strings.Join(folders, ", "))
+	}
 	data := map[string]any{"name": t.ID, "state": string(t.State), "paused": t.Paused,
-		"pause_reason": t.PausedReason, "epic": s.epicOf(ctx, t), "branch": t.Branch, "pr": t.PRNumber, "merged": t.Merged, "waiting_for": waiting, "characters": chars,
-		"missions": []string{}, "waits": []string{}, "usage": "-"}
+		"pause_reason": t.PausedReason, "epic": s.epicOf(ctx, t), "issues_open": issues, "branch": t.Branch, "pr": pr, "merged": t.Merged,
+		"folders": folders, "waiting_for": waiting, "characters": chars, "missions": []string{}, "waits": []string{}, "usage": "-"}
 	if s.o.Oversight != nil {
 		paused, reason, queue, err := s.o.Oversight.Status(ctx, t.Workspace, t.ID)
 		if err != nil {
-			return Refusal(err)
+			return fail(err)
 		}
 		data["autonomy_paused"], data["autonomy_reason"], data["approval_queue"] = paused, reason, queue
 		if paused {
@@ -307,13 +358,112 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 			fmt.Fprintf(&text, "\n%s", queue)
 		}
 	}
+	data["last_delivery_at"] = ""
 	if at, err := s.LastDelivery(ctx, t.Workspace, t.ID); err == nil && !at.IsZero() {
-		data["last_delivery"] = at.UTC().Format(time.RFC3339)
+		data["last_delivery_at"] = at.UTC().Format(time.RFC3339)
 		fmt.Fprintf(&text, "\nÚltima entrega útil: %s", at.UTC().Format("2006-01-02 15:04 UTC"))
 	}
 	data["proofs"] = s.proofsOf(ctx, t)
-	data["text"] = strings.TrimRight(text.String(), "\n")
-	return localchan.OK(data)
+	line := strings.TrimRight(text.String(), "\n")
+	data["text"] = line
+	return data, line, nil
+}
+
+// issuesOf are the open issues under the epic of the table; an error says
+// why they could not be read, which is not the same as having none
+// (a map with the key error instead of the list).
+func (s *Service) issuesOf(ctx context.Context, t Table) any {
+	d, ok := s.o.GitHub.(Details)
+	if !ok {
+		return map[string]string{"error": "the repository host of this run does not list issues"}
+	}
+	if err := s.gate("table status"); err != nil {
+		return map[string]string{"error": CleanText(err.Error())}
+	}
+	rctx, cancel := clock.WithTimeout(ctx, s.clk, epicReadTimeout)
+	defer cancel()
+	issues, err := d.OpenIssues(rctx, t.Workspace, t.Epic)
+	if err != nil {
+		return map[string]string{"error": CleanText(err.Error())}
+	}
+	out := make([]map[string]any, 0, len(issues))
+	for _, i := range issues {
+		out = append(out, map[string]any{"number": i.Number, "title": CleanText(i.Title)})
+	}
+	return out
+}
+
+// prOf is the pull request of the table: its number and, when the repository
+// host answers, the files, the lines and the CI.
+func (s *Service) prOf(ctx context.Context, t Table) map[string]any {
+	pr := map[string]any{"number": t.PRNumber, "files": 0, "lines": 0, "ci": "none"}
+	if t.PRNumber == 0 {
+		return pr
+	}
+	d, ok := s.o.GitHub.(Details)
+	if !ok {
+		pr["error"] = "the repository host of this run does not read pull requests"
+		return pr
+	}
+	if err := s.gate("table status"); err != nil {
+		pr["error"] = CleanText(err.Error())
+		return pr
+	}
+	rctx, cancel := clock.WithTimeout(ctx, s.clk, epicReadTimeout)
+	defer cancel()
+	st, err := d.PullStats(rctx, t.Workspace, t.PRNumber)
+	if err != nil {
+		pr["error"] = CleanText(err.Error())
+		return pr
+	}
+	pr["files"], pr["lines"], pr["ci"] = st.Files, st.Lines, st.CI
+	return pr
+}
+
+// maxFolders is how many folders `table status` shows.
+const maxFolders = 20
+
+// foldersOf are the folders the branch of the table changes against the commit
+// it started from, read from the mirror (first the ones with more files, then by
+// name), at most maxFolders.
+func (s *Service) foldersOf(ctx context.Context, t Table) []string {
+	out := []string{}
+	if t.BaseCommit == "" {
+		return out
+	}
+	mirror, err := s.o.Workspaces.OpenMirror(ctx, t.Workspace)
+	if err != nil {
+		return out
+	}
+	head, err := mirror.ResolveRef(ctx, "refs/heads/"+t.Branch)
+	if err != nil {
+		return out
+	}
+	changes, err := mirror.DiffNameStatus(ctx, t.BaseCommit, string(head))
+	if err != nil {
+		return out
+	}
+	count := map[string]int{}
+	for _, c := range changes {
+		dir := "."
+		if i := strings.LastIndexByte(c.Path, '/'); i >= 0 {
+			dir = c.Path[:i]
+		}
+		count[CleanText(dir)]++
+	}
+	for dir := range count {
+		out = append(out, dir)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if count[out[i]] != count[out[j]] {
+			return count[out[i]] > count[out[j]]
+		}
+		return out[i] < out[j]
+	})
+	if len(out) > maxFolders {
+		out = out[:maxFolders]
+	}
+	return out
 }
 
 // proofsOf is the proof of each criterion of the missions of the table, as the
@@ -327,7 +477,7 @@ func (s *Service) proofsOf(ctx context.Context, t Table) any {
 	}
 	ps, err := s.o.Proofs.Of(ctx, t.Workspace, t.ID)
 	if err != nil {
-		return map[string]string{"error": err.Error()}
+		return map[string]string{"error": CleanText(err.Error())}
 	}
 	if ps == nil {
 		ps = []ProofState{}

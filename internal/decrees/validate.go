@@ -278,14 +278,24 @@ func checkPolicy(p Proposal) *Refusal {
 	if strings.TrimSpace(e.Setting) == "" {
 		return refuse(CodeInvalid, "um decreto de política diz o tipo de pedido ou a condição que ajusta")
 	}
+	if p.Target.Kind == TargetCharacter {
+		return refuse(CodeInvalid, "um decreto de política vale para o workspace, a mesa ou a classe, não para um personagem")
+	}
 	if !e.Loosens {
-		return nil // a decree of policy tightens any type, the high ones too
+		// a decree of policy tightens any type, the high ones too ("*" is all of them)
+		if e.Setting != "*" && e.Setting != "tudo" && !chain.KnownPolicyType(e.Setting) {
+			return refuse(CodeInvalid, "apertar a política precisa de um tipo de pedido (como acao_destrutiva) ou de * para todos; %q não é um", e.Setting)
+		}
+		return nil
 	}
 	if protections[e.Setting] {
 		return refuse(CodeInvariant, "contornar a proteção do GitHub (%s) nem o motor pode: o decreto é recusado", e.Setting)
 	}
 	if highTypes[e.Setting] || fixedTypes[e.Setting] {
 		return refuse(CodePolicy, "um decreto de política não afrouxa o tipo %q (risco alto ou fixo); para o Grão-Mestre decidir um tipo alto, só um decreto `delegation` do Dono (docs/aprovacoes/delegacao.md)", e.Setting)
+	}
+	if !chain.LoosenablePolicySetting(e.Setting) {
+		return refuse(CodeInvalid, "afrouxar a política precisa de uma área sensível (como migracoes) ou de um tipo de risco medio; %q não é um (as áreas do motor e dos segredos nunca são abertas)", e.Setting)
 	}
 	return nil
 }

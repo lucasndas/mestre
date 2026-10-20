@@ -70,6 +70,29 @@ type GitHub interface {
 	ClosePR(ctx context.Context, workspace string, number int) error
 }
 
+// IssueRef is an issue of an epic.
+type IssueRef struct {
+	Number int
+	Title  string
+}
+
+// PullStats is the size of a pull request and what its checks say.
+type PullStats struct {
+	Files, Lines int
+	// CI is success, failure, pending or none.
+	CI string
+}
+
+// Details is what `table status` reads from the repository host besides the epic
+// (the GitHub of a run may implement it; without it those fields say they could
+// not be read).
+type Details interface {
+	// OpenIssues are the open issues under the epic.
+	OpenIssues(ctx context.Context, workspace string, epic int) ([]IssueRef, error)
+	// PullStats are the files, the lines and the CI of a pull request.
+	PullStats(ctx context.Context, workspace string, number int) (PullStats, error)
+}
+
 // Message is a message of a user, as the channel kept it.
 type Message struct {
 	ID string

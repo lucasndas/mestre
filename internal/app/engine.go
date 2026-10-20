@@ -249,7 +249,9 @@ type Engine struct {
 	joins    *joinMux
 	kick     chan struct{}
 	statusCh chan struct{}
-	up       atomic.Bool // Run set up the parts above
+	// resumes are the Towers that came back and whose interrupted characters wait to be resumed.
+	resumes towerResumes
+	up      atomic.Bool // Run set up the parts above
 
 	// dbMu keeps the Guild database of the period open while someone reads
 	// it: a period clears gdb under the write lock before it closes it.

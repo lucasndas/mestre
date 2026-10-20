@@ -49,6 +49,10 @@ type Settings struct {
 	// Summary is the periodic summary of what the agents decided (the file's
 	// `resumo`, docs/aprovacoes/resumo-e-sugestoes.md).
 	Summary SummarySettings
+	// DelegationValidity is the validity a delegation gets by default and
+	// DelegationReminder how long before its end the author is reminded (the
+	// file's `delegacao`, docs/aprovacoes/delegacao.md).
+	DelegationValidity, DelegationReminder time.Duration
 }
 
 // SummarySettings are the `resumo` of the policy file.
@@ -166,7 +170,8 @@ func DefaultSettings() Settings {
 	return Settings{AgentDeadline: 2 * time.Minute, GrandMasterDeadline: 10 * time.Minute, PeopleDeadline: 24 * time.Hour,
 		PeopleDeadlines: map[classes.RequestType]time.Duration{classes.RequestClassPermission: 2 * time.Hour},
 		TempRuleMax:     24 * time.Hour, MesaDecides: slices.Clone(classes.DefaultMesaGroups), DenialsToPause: 3,
-		SummaryEvery: 30 * time.Minute, QueueAlertOpen: 10, QueueAlertFactor: 2, Summary: DefaultSummary()}
+		SummaryEvery: 30 * time.Minute, QueueAlertOpen: 10, QueueAlertFactor: 2, Summary: DefaultSummary(),
+		DelegationValidity: MaxDelegationValidity, DelegationReminder: 3 * 24 * time.Hour}
 }
 
 // WithDefaults fills what the policy file leaves out with the defaults.
@@ -195,6 +200,12 @@ func (s Settings) WithDefaults() Settings {
 	}
 	if s.SummaryEvery <= 0 {
 		s.SummaryEvery = d.SummaryEvery
+	}
+	if s.DelegationValidity <= 0 {
+		s.DelegationValidity = d.DelegationValidity
+	}
+	if s.DelegationReminder <= 0 {
+		s.DelegationReminder = d.DelegationReminder
 	}
 	if s.Summary.Frequency == "" {
 		s.Summary = d.Summary

@@ -923,10 +923,10 @@ func TestEnvelopeRefusesAWrongRecoveryKey(t *testing.T) {
 	}
 }
 
-// Part of CA-COFRE-21 and CA-COFRE-16 (fecham no M5): the release decision
-// from metadata alone. The Tower request over the protocol and the audit of
-// the use close in M5 (ordem-de-implementacao.md, "Critérios em marcos
-// posteriores").
+// Part of CA-COFRE-16 and CA-COFRE-21: the release decision from metadata alone.
+// The request of a Tower over the protocol, with the audit, is CA-COFRE-21 in
+// internal/app (sitecredentials_test.go); the session state that only the QA
+// receives closes CA-COFRE-16 in M7.
 func TestSiteCredentialReleasedOnlyToListedClasses(t *testing.T) {
 	t.Parallel()
 	cred := Info{Name: "site_loja", Type: TypeSiteCredential, Site: sampleSite}
