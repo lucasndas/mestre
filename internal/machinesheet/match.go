@@ -46,6 +46,11 @@ type Requirements struct {
 	// OperatorBase is true when the requirements come from the Operator of
 	// the PC base or its sheets, the only ones that may ask for a GUI.
 	OperatorBase bool
+	// CLI is true when the character calls the `mestre` CLI (the sheet gives
+	// it the skills of the Mestre). Like Account, it is not declared by the
+	// author: the sheet sets it. A profile whose conformance found that the
+	// CLI does not reach the engine (Profile.CLIUnreachable) does not fit.
+	CLI bool
 }
 
 // Scope says where the requirements are declared.
@@ -192,6 +197,7 @@ func Combine(all ...Requirements) (Requirements, error) {
 		out.Operator = out.Operator || r.Operator
 		out.GUI = out.GUI || r.GUI
 		out.OperatorBase = out.OperatorBase || r.OperatorBase
+		out.CLI = out.CLI || r.CLI
 	}
 	return out, nil
 }
@@ -285,6 +291,8 @@ func matchProvider(s Sheet, r Requirements) string {
 		return fmt.Sprintf("perfil de conta `%s` não é conforme na versão %s", pr.Name, pr.Version)
 	case !pr.Conformant:
 		return fmt.Sprintf("perfil de conta `%s` não é conforme", pr.Name)
+	case r.CLI && pr.CLIUnreachable:
+		return fmt.Sprintf("a CLI `mestre` não alcança o motor com o perfil de conta `%s` (etapa 5 da conformidade)", pr.Name)
 	}
 	return ""
 }
