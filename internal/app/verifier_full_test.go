@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/verification"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/terminal"
@@ -99,6 +100,52 @@ func TestTheVerificationRunsACommandInATerminalOfTheMestrePtyAndReadsItsExit(t *
 		slow, err := run.Run(t.Context(), verification.Run{Dir: work, Home: home, Command: "sleep 60", Timeout: 2 * time.Second})
 		if err != nil || !slow.TimedOut {
 			t.Fatalf("a command over its time = %+v, %v", slow, err)
+		}
+	}
+}
+
+// A command of a verification that the fall of the engine left running belongs
+// to no character: the Reconcile of the host ends it with its tree and forgets
+// its row, and hands nothing to the characters.
+func TestAVerificationTerminalLeftByAFallIsEndedAndForgottenAtTheNextStart(t *testing.T) {
+	t.Parallel()
+	buildRuntimeBinaries(t)
+	r := newRig(t)
+	root, err := os.MkdirTemp("", "mvg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rr, err := filepath.EvalSymlinks(root); err == nil {
+		root = rr
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	r.root = root
+	a := r.node("a")
+	a.paths.CLISocket = filepath.Join(root, "a", "cli.sock")
+	a.cfg.Terminais = &Terminals{Dir: runtimeBuilds.ptyFolde, Version: runtimePTYVersion}
+	a.setup = func(e *Engine) {
+		e.deps.HostOrchestration = true
+		e.deps.Spawner = &terminal.DirectSpawner{Suite: "full", System: terminal.NewSystem()}
+	}
+	r.found(a, clock.Real{})
+	r.start(a, clock.Real{})
+	r.waitFor("a to act and host the orchestration", func() bool { return a.acting() && a.e.orc.Load() != nil })
+
+	host := a.e.rt.host
+	id := characters.VerificationTerminalPrefix + "fall"
+	tm, err := host.Manager().Create(t.Context(), terminal.CreateSpec{ID: id, Dir: root, Path: "/bin/sh", Args: []string{"-c", "sleep 300"}, Env: []string{"PATH=" + os.Getenv("PATH")}, WorkDir: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm.Detach() // the engine "fell": the process stays, nobody holds it
+	rep, err := host.Reconcile(t.Context())
+	if err != nil || len(rep.Reconnected) != 0 || len(rep.Interrupted) != 0 {
+		t.Fatalf("Reconcile = %+v, %v: a verification terminal was handed to the characters", rep, err)
+	}
+	rows, _ := host.Manager().Records(t.Context())
+	for _, row := range rows {
+		if row.ID == id {
+			t.Errorf("the row of the left terminal stayed: %+v", row)
 		}
 	}
 }

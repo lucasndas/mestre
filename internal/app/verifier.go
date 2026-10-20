@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/lucasndas/mestre/internal/gitx"
@@ -80,7 +81,7 @@ func (r terminalRunner) Run(ctx context.Context, run verification.Run) (verifica
 	if _, err := rand.Read(b[:]); err != nil {
 		return verification.Result{}, err
 	}
-	id := "verifica-" + hex.EncodeToString(b[:])
+	id := characters.VerificationTerminalPrefix + hex.EncodeToString(b[:])
 	path, args := shellFor(runtime.GOOS, run.Command)
 	env := verifyEnv(runtime.GOOS, run.Home, os.Getenv)
 	t, err := r.host.Manager().Create(ctx, terminal.CreateSpec{ID: id, Dir: run.Dir, Path: path, Args: args, Env: env, WorkDir: run.Dir})
@@ -122,8 +123,8 @@ func (r terminalRunner) Run(ctx context.Context, run verification.Run) (verifica
 		return verification.Result{}, fmt.Errorf("the output of the command could not be read: %w", rerr)
 	}
 	code := exit.Code
-	if exit.Signal != "" && code == 0 {
-		code = -1 // ended by a signal: never a green
+	if (exit.Signal != "" || exit.NoCode) && code == 0 {
+		code = -1 // ended by a signal, or with no code announced: never a green
 	}
 	return verification.Result{ExitCode: code, Output: string(rep.Data), TimedOut: timedOut}, nil
 }
@@ -152,6 +153,17 @@ type mirrorWorktrees struct {
 }
 
 var _ verification.Worktrees = mirrorWorktrees{}
+
+// verifyBoot starts the name of every ephemeral worktree of this run of the
+// engine ("verifica-<run>-"): the sweep of the start removes what other runs
+// left and never what a verification of this one is using.
+var verifyBoot = func() string {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	return "verifica-" + hex.EncodeToString(b[:]) + "-"
+}()
 
 // mergeIdentity signs the merge of the base in the worktree: it is never
 // pushed, and the branch of the table is not moved by it.
@@ -192,8 +204,8 @@ func (w mirrorWorktrees) Add(ctx context.Context, req verification.TreeRequest) 
 	if _, err := rand.Read(b[:]); err != nil {
 		return verification.Tree{}, nil, err
 	}
-	name := "verifica-" + hex.EncodeToString(b[:])
-	tables := orc.Workspaces.Layout().Tables(req.Workspace)
+	name := verifyBoot + hex.EncodeToString(b[:])
+	tables := orc.Workspaces.Layout().Verifications(req.Workspace)
 	dir, home := filepath.Join(tables, name), filepath.Join(tables, name+".home")
 	branch := "mestre/" + name
 	remove := func() {
@@ -206,18 +218,22 @@ func (w mirrorWorktrees) Add(ctx context.Context, req verification.TreeRequest) 
 			}
 		}
 	}
+	// verificacoes/ is made here, before git does it with whatever mode it has, and
+	// it must be a real folder: what lets the account of the agents into it is the
+	// installation's, as for mesas/ (the group and the ACL of the folders of the workspace)
+	if err := os.MkdirAll(tables, 0o770); err != nil {
+		return verification.Tree{}, nil, err
+	}
+	if st, err := os.Lstat(tables); err != nil || !st.IsDir() {
+		return verification.Tree{}, nil, fmt.Errorf("%s is not a folder", tables)
+	}
 	// the worktree is made at the commit that was read, not at the name of the branch
 	_, err = mirror.AddWorktree(ctx, dir, gitx.WorktreeOptions{Branch: branch, Create: true, StartPoint: string(tip)})
 	if err != nil {
 		remove() // the branch may have been made before the failure
 		return verification.Tree{}, nil, err
 	}
-	// written by the account of the agents through the group of the folder of
-	// the tables; no chmod, which a link planted there could turn on another folder
-	if err := os.MkdirAll(tables, 0o770); err != nil {
-		remove()
-		return verification.Tree{}, nil, err
-	}
+	// no chmod, which a link planted there could turn on another folder
 	if err := os.Mkdir(home, 0o770); err != nil {
 		remove()
 		return verification.Tree{}, nil, err
@@ -257,4 +273,62 @@ func (e *Engine) verifier(db *store.DB, git tables.Git, orc func() *Orchestratio
 		ex.Runner = terminalRunner{host: e.rt.host, clk: e.clk}
 	}
 	return ex
+}
+
+// sweepVerifications ends what a fall of the engine left of the verifications:
+// the ephemeral worktrees and the folders of verificacoes/, and the branches
+// mestre/verifica-* of the mirrors. (The terminals verifica-* are ended and
+// forgotten by the Reconcile of the host.) It runs when the period starts, // of the runs before this one (a verification of this run is left alone, whenever
+// the sweep runs); what cannot be removed is told, not hidden.
+func ours(name string) bool { return strings.HasPrefix(name, verifyBoot) }
+
+func (o *Orchestration) sweepVerifications(ctx context.Context) {
+	list, err := o.Workspaces.List(ctx)
+	if err != nil {
+		o.log.Warn("verification: the workspaces were not listed for the sweep", "err", err)
+		return
+	}
+	for _, ws := range list {
+		dir := o.Workspaces.Layout().Verifications(ws.Slug)
+		mirror, err := o.Workspaces.OpenMirror(ctx, ws.Slug)
+		if err == nil {
+			if wts, err := mirror.ListWorktrees(ctx); err == nil {
+				for _, wt := range wts {
+					// the path comes from a file an agent can write: it is a verification only
+					// if its branch and its name say so too
+					if filepath.Clean(filepath.Dir(wt.Path)) == filepath.Clean(dir) && !ours(filepath.Base(wt.Path)) &&
+						strings.HasPrefix(filepath.Base(wt.Path), "verifica-") && strings.HasPrefix(wt.Branch, "mestre/verifica-") {
+						if err := mirror.RemoveWorktree(ctx, wt.Path, true); err != nil && !errors.Is(err, gitx.ErrNoSuchWorktree) {
+							o.log.Warn("verification: a worktree left by a fall was not removed", "dir", wt.Path, "err", err)
+						}
+					}
+				}
+			}
+		}
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, e := range entries {
+				if !strings.HasPrefix(e.Name(), "verifica-") || ours(e.Name()) {
+					continue
+				}
+				if p := filepath.Join(dir, e.Name()); os.RemoveAll(p) != nil {
+					o.log.Warn("verification: a folder left by a fall was not removed", "dir", p)
+				}
+			}
+		}
+		if mirror == nil {
+			continue
+		}
+		refs, err := mirror.ListRefs(ctx, "refs/heads/mestre/")
+		if err != nil {
+			continue
+		}
+		for _, r := range refs {
+			if !strings.HasPrefix(r.Name, "refs/heads/mestre/verifica-") || ours(strings.TrimPrefix(r.Name, "refs/heads/mestre/")) {
+				continue
+			}
+			if err := mirror.DeleteBranch(ctx, strings.TrimPrefix(r.Name, "refs/heads/")); err != nil {
+				o.log.Warn("verification: a branch left by a fall was not removed", "branch", r.Name, "err", err)
+			}
+		}
+	}
 }

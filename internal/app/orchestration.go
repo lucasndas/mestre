@@ -868,6 +868,9 @@ func (o *Orchestration) External() ExternalFunc {
 				o.log.Warn("app: the chain of approval was not recovered", "err", err)
 			}
 		}
+		if o.Verifier != nil {
+			o.sweepVerifications(ctx)
+		}
 		var wg sync.WaitGroup
 		errs := make(chan error, 8)
 		run := func(name string, f func(context.Context) error) {

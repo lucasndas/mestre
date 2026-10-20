@@ -207,7 +207,10 @@ type Executor struct {
 
 // MaxTotal is the longest a whole verification may take, whatever the sum of the
 // times of its commands.
-const MaxTotal = 2 * time.Hour
+//
+// It is a little under quests.VerifyTimeout, so that the executor gives up (a red,
+// "timed out") before the engine of the quests does (an error, "try again").
+const MaxTotal = quests.VerifyTimeout - 5*time.Minute
 
 var _ quests.Verifier = (*Executor)(nil)
 
@@ -235,6 +238,7 @@ func (e *Executor) Verify(ctx context.Context, r quests.VerifyRequest) (quests.V
 	if !ok {
 		return quests.VerifyResult{}, errors.New("verification: the workspace has no confirmed commands")
 	}
+	parent := ctx
 	ctx, cancel := clock.WithTimeout(ctx, e.Store.Clock, MaxTotal)
 	defer cancel()
 	tree, remove, err := e.Worktrees.Add(ctx, TreeRequest{Workspace: r.Workspace, Table: r.Table, Branch: r.Branch, Head: r.Head, Base: r.Base})
@@ -250,6 +254,12 @@ func (e *Executor) Verify(ctx context.Context, r quests.VerifyRequest) (quests.V
 	for _, c := range doc.Commands {
 		res, err := e.Runner.Run(ctx, Run{Dir: tree.Dir, Home: tree.Home, Command: c, Timeout: doc.Timeout})
 		if err != nil {
+			if ctx.Err() != nil && parent.Err() == nil {
+				// the time of the whole ran out: a suite that never ends is red, not "try again"
+				r := e.red(c, "o tempo total da verificação esgotou ("+MaxTotal.String()+")", tree.Dir)
+				r.TimedOut = true
+				return r, nil
+			}
 			return quests.VerifyResult{}, fmt.Errorf("verification: %q could not run: %w", c, err)
 		}
 		if res.ExitCode != 0 || res.TimedOut {
@@ -265,6 +275,9 @@ func (e *Executor) Verify(ctx context.Context, r quests.VerifyRequest) (quests.V
 // and the end of the output, masked whole and then cut, so that a cut in the
 // middle of a secret would not leave a piece the mask no longer recognizes.
 func (e *Executor) red(command, output, dir string) quests.VerifyResult {
+	// the terminal prints escapes: one in the middle of a secret would keep the
+	// mask from recognizing it
+	output = stripEscapes(output)
 	out := output
 	cmd := command
 	if e.Mask != nil {
@@ -272,9 +285,31 @@ func (e *Executor) red(command, output, dir string) quests.VerifyResult {
 	}
 	res := quests.VerifyResult{Command: cmd, Output: tail(out, quests.MaxVerifyOutput)}
 	if dir != "" {
-		res.Places = places(output, dir)
+		res.Places = places(out, dir) // from the masked text
 	}
 	return res
+}
+
+// escapeRe has the sequences that are closed: CSI, OSC and the strings (DCS, SOS,
+// PM, APC) with their terminator. One that is not closed is not swallowed with
+// the rest of the output: only its introducer goes, with the control characters.
+var escapeRe = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[PX^_][^\x1b]*\x1b\\`)
+
+// stripEscapes takes the terminal escape sequences (CSI, OSC, DCS and the like)
+// out of what a command printed.
+func stripEscapes(s string) string {
+	s = escapeRe.ReplaceAllString(s, "")
+	// what is left of the controls (a lone ESC, the C1 controls, CR, backspace,
+	// shift in and out) could split a secret the mask would otherwise know
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // tail is the last n bytes of s, from the start of a character.

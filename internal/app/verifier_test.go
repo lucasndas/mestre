@@ -156,7 +156,7 @@ func TestTheEphemeralWorktreeOfTheVerificationIsMadeAtTheTipOfTheBranchAndRemove
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := rg.orc.Workspaces.Layout().Tables(rg.ws.Slug); filepath.Dir(tree.Dir) != want || !strings.HasPrefix(filepath.Base(tree.Dir), "verifica-") || tree.Home != tree.Dir+".home" {
+	if want := rg.orc.Workspaces.Layout().Verifications(rg.ws.Slug); filepath.Dir(tree.Dir) != want || !strings.HasPrefix(filepath.Base(tree.Dir), "verifica-") || tree.Home != tree.Dir+".home" {
 		t.Errorf("the worktree is %+v, want a verifica-* folder in %s", tree, want)
 	}
 	if st, err := os.Stat(tree.Home); err != nil || !st.IsDir() {
@@ -355,5 +355,70 @@ func TestTheExecutorHonorsTheBaseAndTheHeadOfTheRequest(t *testing.T) {
 	res, err = ex.Verify(ctx, quests.VerifyRequest{Workspace: rg.ws.Slug, Table: rg.opened.Table.ID, Branch: branch})
 	if err != nil || res.OK || res.Command != "make check" {
 		t.Fatalf("a red command: %+v, %v", res, err)
+	}
+}
+
+// What a fall of the engine left of the verifications (the worktree and its
+// folders, the branches of the mirror) is removed when the period starts; a
+// folder or a branch of anything else is left alone.
+func TestTheSweepRemovesWhatAFallLeftOfTheVerificationsAndNothingElse(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	rg := newVerifyRig(t)
+	rg.orc.log = slog.New(slog.DiscardHandler)
+	mirror := rg.mirror(t)
+	// a verification of this run of the engine, under way: the sweep leaves it alone
+	live, remove, err := rg.w.Add(ctx, rg.req())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// what an earlier run left: a worktree with its branch, a folder, a branch
+	dir := rg.orc.Workspaces.Layout().Verifications(rg.ws.Slug)
+	old := filepath.Join(dir, "verifica-deadbeef-1")
+	if _, err := mirror.AddWorktree(ctx, old, gitx.WorktreeOptions{Branch: "mestre/verifica-deadbeef-1", Create: true, StartPoint: "refs/heads/" + rg.opened.Table.Branch}); err != nil {
+		t.Fatal(err)
+	}
+	stray := filepath.Join(dir, "verifica-deadbeef-2.home")
+	if err := os.MkdirAll(filepath.Join(stray, "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(dir, "not-a-verification")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range []string{"mestre/verifica-orphan", "mestre/other"} {
+		if err := mirror.CreateBranch(ctx, b, "refs/heads/"+rg.opened.Table.Branch); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rg.orc.sweepVerifications(ctx)
+	for _, p := range []string{stray} {
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("%s was left", p)
+		}
+	}
+	for _, p := range []string{live.Home, other} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s was removed: %v", p, err)
+		}
+	}
+	var names []string
+	refs, _ := mirror.ListRefs(ctx, "refs/heads/mestre")
+	for _, r := range refs {
+		names = append(names, strings.TrimPrefix(r.Name, "refs/heads/mestre/"))
+	}
+	if len(names) != 2 || !slices.Contains(names, "other") || !slices.ContainsFunc(names, func(n string) bool { return strings.HasPrefix(n, verifyBoot) }) {
+		t.Errorf("branches after the sweep: %v", names)
+	}
+	wts, _ := mirror.ListWorktrees(ctx)
+	if slices.ContainsFunc(wts, func(w gitx.Worktree) bool { return filepath.Base(w.Path) == "verifica-deadbeef-1" }) {
+		t.Errorf("the worktree of an earlier run stayed: %v", wts)
+	}
+	if !slices.ContainsFunc(wts, func(w gitx.Worktree) bool { return strings.HasPrefix(filepath.Base(w.Path), verifyBoot) }) {
+		t.Errorf("the worktree of this run was removed: %v", wts)
+	}
+	remove()
+	if tip, err := mirror.ResolveRef(ctx, "refs/heads/"+rg.opened.Table.Branch); err != nil || tip == "" {
+		t.Errorf("the branch of the table: %v", err)
 	}
 }

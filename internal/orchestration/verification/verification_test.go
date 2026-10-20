@@ -307,3 +307,62 @@ type runnerFunc func(context.Context, verification.Run) (verification.Result, er
 func (f runnerFunc) Run(ctx context.Context, r verification.Run) (verification.Result, error) {
 	return f(ctx, r)
 }
+
+// The limits agree: a command is bounded by the time of the whole, and the whole
+// by a little less than the bound the engine of the quests gives a verification,
+// so the executor is the one to give up (red), never the engine of the quests.
+func TestTheTimeLimitsAgree(t *testing.T) {
+	t.Parallel()
+	if verification.MaxTimeout > verification.MaxTotal || verification.MaxTotal >= quests.VerifyTimeout {
+		t.Errorf("per command %s, whole %s, bound of the quests %s", verification.MaxTimeout, verification.MaxTotal, quests.VerifyTimeout)
+	}
+}
+
+// Escapes that are not closed do not swallow the output, and what a terminal can
+// put inside a secret (a lone ESC, overstrike, C1) does not keep it from the mask.
+func TestOddControlsDoNotHideOutputOrASecret(t *testing.T) {
+	t.Parallel()
+	out := "a\x1b]0;aberto sem fim\nSEG\x1bREDO e SE\rGR\u009bED\x08O\nfim\n"
+	e, _, _ := newExecutor(t, goodDoc, step{res: verification.Result{ExitCode: 1, Output: out}})
+	res, err := e.Verify(t.Context(), req)
+	if err != nil || res.OK {
+		t.Fatal(res, err)
+	}
+	if !strings.Contains(res.Output, "fim") || strings.Contains(res.Output, "SEGREDO") || strings.ContainsAny(res.Output, "\x1b\r\x08") {
+		t.Errorf("output = %q", res.Output)
+	}
+}
+
+// A suite that runs out of the time of the whole is red, not an error to try again.
+func TestTheTimeOfTheWholeRunningOutIsRed(t *testing.T) {
+	t.Parallel()
+	e, _, _ := newExecutor(t, goodDoc)
+	e.Runner = runnerFunc(func(ctx context.Context, _ verification.Run) (verification.Result, error) {
+		clk := e.Store.Clock.(*clock.Fake)
+		clk.Advance(verification.MaxTotal + time.Second)
+		<-ctx.Done()
+		return verification.Result{}, ctx.Err()
+	})
+	res, err := e.Verify(t.Context(), req)
+	if err != nil || res.OK || !res.TimedOut {
+		t.Fatalf("Verify = %+v, %v", res, err)
+	}
+}
+
+// A secret that the terminal broke with escapes is still hidden, and the output
+// that reaches the character has no escapes.
+func TestASecretSplitByEscapesIsHiddenAndTheOutputHasNoEscapes(t *testing.T) {
+	t.Parallel()
+	out := "\x1b[31merro\x1b[0m SEG\x1b[1mRE\x1b]0;titulo\x07DO e \x1b[2Ksrc/a.go:12: x\n"
+	e, _, _ := newExecutor(t, goodDoc, step{res: verification.Result{ExitCode: 1, Output: out}})
+	res, err := e.Verify(t.Context(), req)
+	if err != nil || res.OK {
+		t.Fatal(res, err)
+	}
+	if strings.Contains(res.Output, "SEGREDO") || strings.Contains(res.Output, "\x1b") || strings.Contains(res.Output, "titulo") || !strings.Contains(res.Output, "erro *** e src/a.go:12: x") {
+		t.Errorf("output = %q", res.Output)
+	}
+	if got := strings.Join(res.Places, ","); got != "src/a.go:12" {
+		t.Errorf("places = %q", got)
+	}
+}
