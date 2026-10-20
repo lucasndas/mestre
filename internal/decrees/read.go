@@ -203,6 +203,28 @@ func (s *Service) List(ctx context.Context, userID string) ([]View, error) {
 	return out, nil
 }
 
+// ListWorkspace lists the decrees of a workspace: the ones in force, or, with all,
+// the revoked, expired and used ones too.
+func (s *Service) ListWorkspace(ctx context.Context, workspace string, all bool) ([]View, error) {
+	r := s.o.DB.Reader()
+	ds, err := queryDecrees(ctx, r, `ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	var out []View
+	for _, d := range ds {
+		if d.Workspace != workspace || (!all && d.State != Active && d.State != Suspended) {
+			continue
+		}
+		v := View{Decree: d, AuthorName: d.Author}
+		if a, err := readUser(ctx, r, d.Author); err == nil {
+			v.AuthorName = a.Name
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
 // Use is the classes.ExceptionLedger of the exceptions the hook lets through:
 // true only the first time, atomically. It records the use in the decree.
 func (s *Service) Use(ctx context.Context, agentID string, id int64) (bool, error) {

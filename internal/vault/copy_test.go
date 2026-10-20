@@ -11,6 +11,7 @@ import (
 	"github.com/lucasndas/mestre/internal/logging"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/store/guild"
+	"github.com/lucasndas/mestre/internal/testkit/guildtpl"
 )
 
 // deletableKeys is memKeys that can forget the key.
@@ -126,7 +127,7 @@ func TestADropNeedsAKeyStoreThatCanForget(t *testing.T) {
 func TestTheVaultDoesNotOpenOnAReplicaOfTheDatabase(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Replica: true, Synchronous: "OFF"})
+	db, err := guild.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}

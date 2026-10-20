@@ -10,13 +10,17 @@ import (
 
 // Handlers are the commands of the supervision to register in the local
 // forwarder of the Citadel: `approval autonomy pause|resume`
-// (docs/cli/grao-mestre.md#mestre-approval). The CLI definition of `approval`
-// comes with milestone 5, with the rest of the commands of the Grão-Mestre;
-// the engine already answers these two.
+// (docs/cli/grao-mestre.md#mestre-approval). The CLI resolves two words, so the
+// command is `approval autonomy` and pause or resume is its argument.
 func (s *Supervisor) Handlers() map[string]localchan.Handler {
 	return map[string]localchan.Handler{
-		"approval autonomy pause":  localchan.HandlerFunc(func(ctx context.Context, c *localchan.Call) localchan.Response { return s.handle(ctx, c, true) }),
-		"approval autonomy resume": localchan.HandlerFunc(func(ctx context.Context, c *localchan.Call) localchan.Response { return s.handle(ctx, c, false) }),
+		"approval autonomy": localchan.HandlerFunc(func(ctx context.Context, c *localchan.Call) localchan.Response {
+			args, ok := c.Request.Strings()
+			if !ok || len(args) != 1 || (args[0] != "pause" && args[0] != "resume") {
+				return localchan.Fail(localchan.CodeUsage, `usage: mestre approval autonomy pause|resume --table "<table>" --reason "<reason>"`, "")
+			}
+			return s.handle(ctx, c, args[0] == "pause")
+		}),
 	}
 }
 

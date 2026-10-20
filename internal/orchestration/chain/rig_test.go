@@ -294,6 +294,7 @@ type world struct {
 	temp     *fakeTemp
 	users    *fakeUsers
 	alerts   *fakeAlerts
+	stallers *fakeStallPeople
 	sup      *fakeSupervision
 	deleg    *fakeDelegations
 	subs     *fakeSubs
@@ -314,12 +315,33 @@ type world struct {
 	flow  *approvals.Flow
 	chn   *fakechannel.Channel
 	owner users.User
+	// entries is told what became of the requests to enter the Guild.
+	entries *recordSink
 	// The doubles of the gate of freshness (worldOpts.freshness).
 	ghRules  *fakeRules
 	verifier *fakeVerifier
 	// git and remote are the fake GitHub repository the mirror fetches.
 	git    *fakegit.Git
 	remote string
+}
+
+// recordSink keeps the results it is told.
+type recordSink struct {
+	mu  sync.Mutex
+	got []chain.Result
+}
+
+func (s *recordSink) Decided(_ context.Context, r chain.Result) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.got = append(s.got, r)
+	return nil
+}
+
+func (s *recordSink) results() []chain.Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]chain.Result(nil), s.got...)
 }
 
 // policy is the policy file of the tests: the settings change under it.
@@ -394,6 +416,9 @@ func (p *policy) set(s chain.Settings) {
 
 type worldOpts struct {
 	noGrants, noTemp, realTemp, realSup bool
+	// destructive leaves the destructive commands to the chain of approval, as
+	// production does, instead of the fake that lets them run.
+	destructive bool
 	// realClasses builds the rules of the approvers (and the domains) with
 	// the production builder of the Citadel (app.CitadelClasses) over a real
 	// library; restrictions are the restrictions of sheets, by name.
@@ -430,7 +455,7 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 	}
 	git.Handle(remote.Dir()).Data().Commit("main", "chore: initial commit", map[string]string{"README.md": "# Meu App\n"})
 
-	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, subs: &fakeSubs{}, prs: &fakePRs{},
+	w := &world{t: t, ctx: ctx, clk: clk, cls: newFakeClasses(clk.Now()), temp: &fakeTemp{}, users: &fakeUsers{}, alerts: &fakeAlerts{}, stallers: &fakeStallPeople{}, sup: &fakeSupervision{}, deleg: &fakeDelegations{}, subs: &fakeSubs{}, prs: &fakePRs{},
 		policy: &policy{s: chain.DefaultSettings(), rules: chain.DefaultRules()}}
 	w.git, w.remote = git, remote.Dir()
 	w.grants = &fakeGrants{f: w.cls}
@@ -440,7 +465,12 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Git: git, Machines: w.machines, Presets: orcfakes.Presets{Persistent: map[string]bool{"Dev Claude": true}, Restrictions: opt.restrictions}, Builder: orcfakes.Builder{}, GitHub: orcfakes.Hub{URL: remote.Dir()},
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
-		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainSubDelegations: w.subs, ChainPRs: w.prs}
+		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainStallPeople: w.stallers, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainSubDelegations: w.subs, ChainPRs: w.prs}
+	w.entries = &recordSink{}
+	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries}
+	if opt.destructive {
+		oo.Destructive = nil
+	}
 	if opt.realSup {
 		oo.ChainSupervision = nil
 	}

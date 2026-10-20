@@ -56,7 +56,7 @@ func buildTemplate() error {
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "mestre.db")
 	ctx := context.Background()
-	db, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func (tw *tower) start(startReplica bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	tw.cancel = cancel
 	var err error
-	tw.db, err = guilddb.Open(ctx, tw.dbPath, store.Options{Replica: true, Synchronous: "OFF", Clock: r.clk, BusyTimeout: r.opts.busy})
+	tw.db, err = guilddb.Open(ctx, tw.dbPath, store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF", Clock: r.clk, BusyTimeout: r.opts.busy})
 	if err != nil {
 		t.Fatal(err)
 	}

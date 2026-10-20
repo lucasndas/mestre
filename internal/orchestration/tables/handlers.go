@@ -21,10 +21,11 @@ import (
 // own.
 func (s *Service) Handlers() map[string]localchan.Handler {
 	return map[string]localchan.Handler{
-		"table open":   localchan.HandlerFunc(s.handleOpen),
-		"table list":   localchan.HandlerFunc(s.handleList),
-		"table status": localchan.HandlerFunc(s.handleStatus),
-		"table close":  localchan.HandlerFunc(s.handleClose),
+		"table open":    localchan.HandlerFunc(s.handleOpen),
+		"table list":    localchan.HandlerFunc(s.handleList),
+		"table status":  localchan.HandlerFunc(s.handleStatus),
+		"table overlap": localchan.HandlerFunc(s.handleOverlap),
+		"table close":   localchan.HandlerFunc(s.handleClose),
 	}
 }
 
@@ -305,6 +306,10 @@ func (s *Service) handleStatus(ctx context.Context, c *localchan.Call) localchan
 		if queue != "" {
 			fmt.Fprintf(&text, "\n%s", queue)
 		}
+	}
+	if at, err := s.LastDelivery(ctx, t.Workspace, t.ID); err == nil && !at.IsZero() {
+		data["last_delivery"] = at.UTC().Format(time.RFC3339)
+		fmt.Fprintf(&text, "\nÚltima entrega útil: %s", at.UTC().Format("2006-01-02 15:04 UTC"))
 	}
 	data["proofs"] = s.proofsOf(ctx, t)
 	data["text"] = strings.TrimRight(text.String(), "\n")

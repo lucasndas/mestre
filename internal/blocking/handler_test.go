@@ -26,6 +26,7 @@ func (f fakeChars) Get(_ context.Context, id string) (characters.Character, erro
 
 type fakeChannel struct {
 	mu   sync.Mutex
+	said []string
 	got  []blocking.Notice
 	sent int
 	err  error
@@ -36,6 +37,13 @@ func (f *fakeChannel) Notify(_ context.Context, n blocking.Notice) (int64, int, 
 	defer f.mu.Unlock()
 	f.got = append(f.got, n)
 	return int64(len(f.got)), f.sent, f.err
+}
+
+func (f *fakeChannel) Say(_ context.Context, workspace, mesa, text string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.said = append(f.said, workspace+"|"+mesa+"|"+text)
+	return f.sent, f.err
 }
 
 func handlerRig() (*blocking.Handler, *fakeChannel) {
@@ -155,8 +163,11 @@ func TestNotifyIsForTheGrandMasterAndSaysWhenNobodyWasTold(t *testing.T) {
 	if r := notify(h, "gm", map[string]any{"why-not": "x"}, "oi"); r.OK || r.Error.Code != localchan.CodeUsage {
 		t.Fatalf("--why-not without --blocked = %+v", r.Error)
 	}
-	if r := notify(h, "gm", nil, "um aviso comum"); r.OK || r.Error.Code != "unavailable" {
-		t.Fatalf("a plain notice is not wired yet and must say so: %+v", r.Error)
+	if r := notify(h, "gm", nil, "um aviso comum"); !r.OK || len(ch.said) != 1 || ch.said[0] != "loja||um aviso comum" {
+		t.Fatalf("a plain notice: %+v, said %q", r.Error, ch.said)
+	}
+	if r := notify(h, "gm", map[string]any{"table": "43"}, "da mesa"); !r.OK || ch.said[1] != "loja|43-checkout|da mesa" {
+		t.Fatalf("a plain notice of a table: %+v, said %q", r.Error, ch.said)
 	}
 	ch.sent = 0
 	if r := notify(h, "gm", map[string]any{"blocked": "espera"}, "ninguém"); r.OK || r.Error.Code != "not_delivered" {
@@ -196,5 +207,100 @@ func TestWhatTheAgentSaysIsStoppedStaysInTheBlockOfTheAgent(t *testing.T) {
 		if full := blocking.Full(ch.got[0], mask); strings.Contains(full, "abcdefghijklmnopqrstuv") {
 			t.Fatalf("%s: the whole text shows the secret:\n%s", name, full)
 		}
+	}
+}
+
+type fakeChooser struct {
+	asked []string
+	err   error
+}
+
+func (f *fakeChooser) Ask(_ context.Context, workspace, mesa, asker, userID, question string, options []string, recommend int) (int64, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
+	f.asked = append(f.asked, workspace+"|"+mesa+"|"+userID+"|"+question+"|"+strings.Join(options, ",")+"|"+string(rune('0'+recommend)))
+	return 7, nil
+}
+
+func chooseRig() (*blocking.ChooseHandler, *fakeChooser) {
+	ch := &fakeChooser{}
+	return &blocking.ChooseHandler{
+		Characters: fakeChars{"gm": {ID: "gm", Role: characters.RoleGrandMaster, Workspace: "loja"}, "tm": {ID: "tm", Role: characters.RoleTableMaster, Workspace: "loja", Table: "43-checkout"}},
+		Chooser:    ch,
+		User: func(_ context.Context, _, id string) (string, error) {
+			if id == "m81" {
+				return "u-ana", nil
+			}
+			return "", errors.New("no such message")
+		},
+		Current: func(context.Context, string, string) (string, error) { return "u-bia", nil },
+		Table: func(_ context.Context, _, name string) (tables.Table, error) {
+			if name == "43" {
+				return tables.Table{ID: "43-checkout", Epic: 43}, nil
+			}
+			return tables.Table{}, tables.ErrNoTable
+		},
+	}, ch
+}
+
+func choose(h *blocking.ChooseHandler, who string, flags map[string]any, args ...string) localchan.Response {
+	fwd := localchan.NewLocalForwarder()
+	h.Register(fwd)
+	if flags == nil {
+		flags = map[string]any{}
+	}
+	return fwd.Forward(context.Background(), &localchan.Call{Request: localchan.Request{Cmd: "choose", AgentID: who, Args: localchan.TextArgs(args...), Flags: flags},
+		Caller: localchan.Caller{Identified: true, AgentID: who}})
+}
+
+// CA-CLI-GM-15: the question goes to the user of the message, the recommended
+// option is the one named, the command answers 9 with the number, and nothing
+// else happens; fewer than 2 or more than 6 options is 2 bad_options.
+func TestChooseAsksTheUserOfTheMessageAndAnswersPendingWithTheQuestion(t *testing.T) {
+	t.Parallel()
+	h, ch := chooseRig()
+	r := choose(h, "gm", map[string]any{"option": []any{"Mesa #12 Login", "Nova mesa", "Mesa #15 Relatórios"}, "recommend": "1", "from-message": "m81", "table": "43"}, "Esse ajuste é do Login?")
+	if r.OK || r.ExitCode() != 9 || r.Error.Code != "pending" {
+		t.Fatalf("choose = %+v (exit %d), want exit 9 pending", r.Error, r.ExitCode())
+	}
+	var data map[string]any
+	_ = json.Unmarshal(r.Data, &data)
+	if data["question"] != float64(7) || len(ch.asked) != 1 || ch.asked[0] != "loja|43-checkout|u-ana|Esse ajuste é do Login?|Mesa #12 Login,Nova mesa,Mesa #15 Relatórios|1" {
+		t.Fatalf("asked %q with %v", ch.asked, data)
+	}
+	// with no --from-message: the user of the message in handling
+	choose(h, "gm", map[string]any{"option": []any{"a", "b"}}, "x?")
+	if len(ch.asked) != 2 || !strings.Contains(ch.asked[1], "|u-bia|") {
+		t.Fatalf("asked = %q, want the user of the message in handling", ch.asked)
+	}
+	for name, opts := range map[string][]any{"one option": {"a"}, "seven options": {"a", "b", "c", "d", "e", "f", "g"}, "an empty one": {"a", " "}} {
+		if got := choose(h, "gm", map[string]any{"option": opts}, "x?"); got.OK || got.Error.Code != "bad_options" || got.ExitCode() != 2 {
+			t.Errorf("%s: %+v, want exit 2 bad_options", name, got.Error)
+		}
+	}
+	if got := choose(h, "gm", map[string]any{"option": []any{"a", "b"}, "recommend": "3"}, "x?"); got.OK || got.Error.Code != localchan.CodeUsage {
+		t.Errorf("a recommendation out of range: %+v", got.Error)
+	}
+	if got := choose(h, "gm", map[string]any{"option": []any{"a", "b"}, "from-message": "m99"}, "x?"); got.OK || got.Error.Code != "not_found" {
+		t.Errorf("a message that is not there: %+v", got.Error)
+	}
+	if got := choose(h, "gm", map[string]any{"option": []any{"a", "b"}, "table": "99"}, "x?"); got.OK || got.Error.Code != "not_found" {
+		t.Errorf("a table that is not there: %+v", got.Error)
+	}
+	if got := choose(h, "tm", map[string]any{"option": []any{"a", "b"}}, "x?"); got.OK || got.Error.Code != "level_denied" {
+		t.Errorf("a table master: %+v", got.Error)
+	}
+	n := len(ch.asked)
+	ch.err = blocking.ErrNoLevel
+	if got := choose(h, "gm", map[string]any{"option": []any{"a", "b"}}, "x?"); got.OK || got.Error.Code != "level_denied" || got.ExitCode() != 3 {
+		t.Errorf("a user with no level: %+v, want exit 3 level_denied", got.Error)
+	}
+	ch.err = blocking.ErrNotReachable
+	if got := choose(h, "gm", map[string]any{"option": []any{"a", "b"}}, "x?"); got.OK || got.Error.Code != "not_delivered" {
+		t.Errorf("a user out of reach: %+v, want not_delivered", got.Error)
+	}
+	if len(ch.asked) != n {
+		t.Fatal("a refused question was sent")
 	}
 }

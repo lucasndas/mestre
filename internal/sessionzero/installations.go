@@ -24,7 +24,8 @@ type GitHubInstallations struct{ Source InstallationSource }
 
 var _ Installations = GitHubInstallations{}
 
-var fixedApps = []string{AppGrandMaster, AppMestre}
+// the fixed Apps are asked for by role: their names carry the prefix of the Owner
+var fixedApps = []string{github.RoleGrandMaster, github.RoleMestre}
 
 // Missing implements Installations.
 func (g GitHubInstallations) Missing(ctx context.Context, repo workspaces.Repo) ([]string, error) {

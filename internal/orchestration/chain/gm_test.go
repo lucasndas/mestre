@@ -120,7 +120,7 @@ func TestTheGrandMasterRevokesARuleOfTheSummaryAndPausesTheAutonomyOfTheTable(t 
 	if err := w.orc.TableRules.Revoke(w.ctx, rule.ID, tablerules.Revoker{Character: &gm}); err != nil {
 		t.Fatal(err)
 	}
-	resp := w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: "approval autonomy pause", Flags: map[string]any{"table": w.table.ID, "reason": "revisar"}},
+	resp := w.fwd.Forward(w.ctx, &localchan.Call{Request: localchan.Request{Cmd: "approval autonomy", Args: localchan.TextArgs("pause"), Flags: map[string]any{"table": w.table.ID, "reason": "revisar"}},
 		Caller: localchan.Caller{Identified: true, AgentID: gm.ID}})
 	if !resp.OK {
 		t.Fatalf("approval autonomy pause: %+v", resp.Error)

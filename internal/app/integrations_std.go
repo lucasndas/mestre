@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/attachments"
 	"github.com/lucasndas/mestre/internal/blocking"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
@@ -29,6 +31,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/orchestration/tables"
+	"github.com/lucasndas/mestre/internal/orchestration/workspaces"
 	"github.com/lucasndas/mestre/internal/telegram"
 	"github.com/lucasndas/mestre/internal/users"
 )
@@ -47,7 +50,10 @@ type StandardIntegration struct {
 	// TelegramBase and GitHubBase are the base URLs (empty: the real ones);
 	// HTTP is the client of both (nil: one with a time limit).
 	TelegramBase, GitHubBase string
-	HTTP                     *http.Client
+	// GitHubWeb is github.com (empty: the real one), where the device flow and the
+	// pages of the installations are.
+	GitHubWeb string
+	HTTP      *http.Client
 	// WhisperURL is the whisper-server of this machine (http://127.0.0.1:<port>);
 	// empty: no machine transcribes, and every voice message is delivered with
 	// the reason. The installation sets it (docs/desenvolvimento/ligacao-de-producao.md).
@@ -65,6 +71,9 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	if s.GitHubBase == "" {
 		s.GitHubBase = DefaultGitHubBase
 	}
+	if s.GitHubWeb == "" {
+		s.GitHubWeb = DefaultGitHubWeb
+	}
 	if s.HTTP == nil {
 		s.HTTP = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -79,6 +88,9 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 		return nil, fmt.Errorf("app: the users: %w", err)
 	}
 	r.users = svc
+	if err := r.githubSetup(); err != nil {
+		return nil, err
+	}
 	r.alert.Users = svc
 	r.lock, err = lockdown.New(lockdown.Options{DB: env.DB, Clock: env.Clock, Users: svc, Tell: r.alert.Tell, Logger: env.Log})
 	if err != nil {
@@ -106,10 +118,12 @@ func (s StandardIntegration) Open(_ context.Context, env IntegrationEnv) (Integr
 	}
 	r.routing = &telegram.Routing{}
 	r.block = &telegram.BlockChannel{Users: svc}
+	r.choose = &telegram.ChooseChannel{Users: svc}
+	r.stall = &telegram.StallChannel{Users: svc}
 	r.dc = &telegram.DecreeChannel{Svc: r.decrees, Users: svc, PINs: r.pins}
 	r.dg = &telegram.DigestChannel{Users: svc, Decrees: r.dc}
 	flow, err := approvals.New(approvals.Options{DB: env.DB, Clock: env.Clock, Chain: lateChain{r}, Users: svc, PINs: svc, Messenger: r.ac,
-		Locked: r.lock.Locked, Logger: env.Log})
+		Locked: r.lock.Locked, Targets: lateTargets{r}, Logger: env.Log})
 	if err != nil {
 		return nil, fmt.Errorf("app: the flow of approval: %w", err)
 	}
@@ -142,6 +156,10 @@ type stdRun struct {
 	routing *telegram.Routing
 	// block sends the messages that ask something of the users because a table is stopped.
 	block *telegram.BlockChannel
+	// choose asks a user a question with buttons (`mestre choose`).
+	choose *telegram.ChooseChannel
+	// stall warns the people of a table that works without delivering, with the button to pause it.
+	stall *telegram.StallChannel
 	dc    *telegram.DecreeChannel
 	// fetch is the client of the Bot API the attachments are downloaded with, once the bot is made.
 	fetch  atomic.Pointer[telegram.Client]
@@ -154,9 +172,18 @@ type stdRun struct {
 	lc     *telegram.LockChannel
 	quota  *github.Quota
 	tokens *github.Tokens
+	// personal and installs are the personal credentials and GitHub's side of the
+	// stage apps (githubcompose.go).
+	personal *github.Personal
+	installs *github.Installs
+	// approver and settings apply the approvals on GitHub (approvalhost.go), made
+	// when the orchestration exists.
+	approver atomic.Pointer[approvals.Approver]
+	settings atomic.Pointer[approvals.Settings]
 
 	fence atomic.Pointer[guild.Fence]
 	chain atomic.Pointer[chain.Service]
+	orc   atomic.Pointer[Orchestration]
 	// progress is the message of progress of the workspaces, once the period has it.
 	progress atomic.Pointer[progress.Service]
 	closed   atomic.Bool
@@ -210,6 +237,29 @@ func (c lateChain) Invalidate(ctx context.Context, id int64, why string) error {
 	return s.Invalidate(ctx, id, why)
 }
 
+// lateTargets reads the live target of a request for the flow, from the
+// orchestration of the period: the destructive requests, the PRs (the head and the
+// tip of the base) and the settings of a repository (what the Owner approves is
+// exactly what is applied). Any other type bound to a target is not approved (it
+// cannot be verified).
+type lateTargets struct{ r *stdRun }
+
+func (t lateTargets) Current(ctx context.Context, req chain.Request) (json.RawMessage, error) {
+	orc := t.r.orc.Load()
+	if orc == nil {
+		return nil, errors.New("app: the orchestration is not built")
+	}
+	switch req.Type {
+	case classes.RequestDestructive:
+		return orc.DestructiveTarget(ctx, req)
+	case classes.RequestPR, classes.RequestMerge:
+		return t.r.source().Current(ctx, req)
+	case classes.RequestRepoSettings:
+		return req.Target, nil
+	}
+	return nil, fmt.Errorf("app: no live target for requests of type %q", req.Type)
+}
+
 type lateApprovals struct{ r *stdRun }
 
 // InvalidateBy is what happens to what a user left when he is suspended,
@@ -248,7 +298,7 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 		DB: r.env.DB, Clock: r.env.Clock, Users: r.users, Alerts: r.alert, Strangers: r.alert, Gate: lateGate{r}, Logger: r.env.Log,
 		Client: client,
 		Router: r.routing, Commands: append(append(r.lc.Commands(), r.dc.Commands()...), r.routing.Commands()...), Lock: r.lock, Mask: r.env.Masker.Mask,
-		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions()),
+		Actions:  mergeActions(r.ac.Actions(), r.lc.Actions(), r.dc.Actions(), r.dg.Actions(), r.routing.Actions(), r.block.Actions(), r.choose.Actions(), r.stall.Actions()),
 		Captures: mergeCaptures(r.ac.Captures(), map[string]telegram.CaptureFunc{telegram.PINKind: r.pins.Capture()}),
 		OnConflict: func(context.Context) {
 			if f := r.fence.Load(); f != nil {
@@ -265,6 +315,8 @@ func (r *stdRun) startBot(ctx context.Context) (*telegram.Bot, error) {
 	r.dg.Bind(bot)
 	r.routing.Bind(bot)
 	r.block.Bind(bot)
+	r.choose.Bind(bot)
+	r.stall.Bind(bot)
 	r.alert.Bind(bot)
 	r.bot = bot
 	return bot, nil
@@ -304,6 +356,26 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		}
 	}
 	o.ChainUsers = r.flow
+	if o.ChainStallPeople == nil {
+		o.ChainStallPeople = r.stall
+	}
+	// the gate of freshness reads the rules of the base branch as the Grand Master
+	if o.FreshnessRules == nil {
+		o.FreshnessRules = stdRules{r}
+	}
+	// the facts of the PRs for the policy, and what applies on GitHub what people decide
+	if o.ChainPRs == nil {
+		o.ChainPRs = r.source()
+	}
+	sinks := map[classes.RequestType]chain.Sink{
+		classes.RequestPR:           lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
+		classes.RequestMerge:        lateSink{func() chain.Sink { return soft(r.approver.Load()) }, r.alert.OwnerAlert},
+		classes.RequestRepoSettings: lateSink{func() chain.Sink { return soft(r.settings.Load()) }, r.alert.OwnerAlert},
+	}
+	for t, s := range o.ChainSinks { // a test that gives its own keeps it
+		sinks[t] = s
+	}
+	o.ChainSinks = sinks
 	// the GitHub of the workspaces, with the App Grão-Mestre; a test that gives its own keeps it
 	gh := grandMasterGitHub{r}
 	if _, off := o.GitHub.(unavailableGitHub); off {
@@ -322,7 +394,44 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		o.ChainDelegations = r.decrees
 	}
 	o.Locked = r.lock.Locked
+	if o.Messages == nil {
+		o.Messages = inboxMessages{&inbox.Store{DB: r.env.DB}}
+	}
+	if o.ChainSinks == nil {
+		o.ChainSinks = map[classes.RequestType]chain.Sink{}
+	}
+	o.ChainSinks[classes.RequestGuildEntry] = r.entries()
+
+	// the operational alerts of the workspaces reach the Administrators by the
+	// bot; the log of the engine keeps the record as it did before the bot
+	o.Alerts = adminAlerts{r: r, log: r.env.Log}
 	o.Epics = stdEpics{r: r, reg: characters.Registry{DB: r.env.DB}}
+}
+
+// entries is the question to the Owner about the entry of a machine, over the
+// chain the orchestration makes later and the Citadel the engine starts later.
+func (r *stdRun) entries() EntryApprover {
+	errNoCitadelYet := errors.New("app: no Citadel to take the answer about an entry")
+	decide := r.env.DecideJoin
+	if decide == nil {
+		decide = func(context.Context, string, guild.Decision) error { return errNoCitadelYet }
+	}
+	return EntryApprover{Chain: r.chain.Load, Decide: decide, Log: r.env.Log,
+		Tell: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }}
+}
+
+// GuildApprover implements GuildApprover: the Citadel asks the Owner about an
+// entry through the flow of approval.
+func (r *stdRun) GuildApprover() guild.Approver { return r.entries() }
+
+// GuildLock implements GuildLocker: the lock of the epoch over the repository of
+// the Guild in GitHub, once the repository was recorded; nil before.
+func (r *stdRun) GuildLock(ctx context.Context) (guild.Lock, error) {
+	l, err := github.NewLairLock(ctx, r.tokens, r.env.GuildID, r.s.GitHubBase, r.s.HTTP)
+	if l == nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // OwnerAlert, CharacterDecrees and Users make the run the people of the chain
@@ -350,7 +459,12 @@ func (r *stdRun) Close() {
 // Attach implements IntegrationRun.
 func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []ExternalFunc {
 	r.chain.Store(orc.Chain)
+	r.orc.Store(orc)
+	r.approvalSetup(orc)
 	r.routing.To = inboxDeliverer{orc}
+	if orc.Supervisor != nil {
+		r.stall.Pauser = orc.Supervisor
+	}
 	if orc.TableRules != nil {
 		r.dc.Rules = telegram.TableRulesOf(orc.TableRules)
 	}
@@ -404,7 +518,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	h := &ghcli.Handlers{
 		Characters: orc.Registry, Clients: stdClients{r: r}, Repos: workspaceRepos{orc}, Tables: tableRefs{orc}, PRs: tablePRs{orc},
 		Objects: &github.Objects{DB: r.env.DB, Clock: r.env.Clock}, Clock: r.env.Clock, Lease: stdLease{r}, Quota: stdQuota{r}, Locked: r.lock.Locked,
-		Executed: r.decrees.Fulfilled,
+		Executed: r.decrees.Fulfilled, Heads: &github.ReviewedHeads{DB: r.env.DB, Clock: r.env.Clock}, Settings: stdSettings{r},
 	}
 	if orc.BaseSync != nil {
 		h.Send.Base = orc.BaseSync
@@ -416,10 +530,32 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	// completed mission of the epic has a criterion with no proof
 	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
 	h.Register(fwd)
+	(&ghcli.Apps{Characters: orc.Registry, Store: &github.Registry{DB: r.env.DB}, Creator: appCreator{}}).Register(fwd)
+	(&decrees.ProposeHandler{Service: r.decrees, Characters: orc.Registry, Message: inboxMessages{&inbox.Store{DB: r.env.DB}}.Source, Offer: r.dc}).Register(fwd)
+	(&decrees.SubHandler{Service: r.decrees, Characters: orc.Registry}).Register(fwd)
+	poll, perr := r.poller(orc)
+	if perr != nil {
+		r.env.Log.Warn("app: the reading of the events of GitHub is off", "err", perr)
+	}
+	msgs := inboxMessages{&inbox.Store{DB: r.env.DB}}
+	r.choose.Answered = func(ctx context.Context, q telegram.ChoiceQuestion, by users.User, option string) error {
+		gm, ok, err := orc.Registry.GrandMaster(ctx, q.Workspace)
+		if err != nil || !ok {
+			return errors.New("the workspace has no Grand Master")
+		}
+		it := telegram.AnswerItem(q, by, option)
+		it.Target = gm.ID
+		_, err = orc.Inbox.Enqueue(ctx, it)
+		return err
+	}
+	(&blocking.ChooseHandler{Characters: orc.Registry, Chooser: chooser{r.choose}, User: msgs.User, Current: msgs.Current, Table: orc.Tables.Find}).Register(fwd)
 	(&blocking.Handler{Characters: orc.Registry, Channel: r.block, Table: orc.Tables.Find, BlockedBy: orc.EpicDeps.Waiting, Owner: r.ownerName}).Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
 		// the decrees whose validity ran out end while the Citadel acts
 		go func() { _ = r.decrees.Loop(ctx, time.Minute) }()
+		if poll != nil {
+			go poll.Run(ctx) // the events of GitHub, only while the lease holds
+		}
 		if dgst != nil {
 			go func() { _ = dgst.Loop(ctx, time.Minute) }()
 		}
@@ -682,4 +818,31 @@ func (d digestRules) RevokeOfRequest(ctx context.Context, workspace, table strin
 		}
 	}
 	return n, nil
+}
+
+var (
+	_ GuildApprover = (*stdRun)(nil)
+	_ GuildLocker   = (*stdRun)(nil)
+)
+
+// adminAlerts is workspaces.Alerts over the bot: the notice goes to the Owner and
+// to the Administrators who act in the workspace. While the bot is not up the alert
+// waits in the queue of the alerts of the bot and goes out when it starts; with
+// nobody to tell it stays in the log (workspace and kind only: the detail can carry
+// the output of git).
+type adminAlerts struct {
+	r   *stdRun
+	log *slog.Logger
+}
+
+func (a adminAlerts) Operational(ctx context.Context, al workspaces.Alert) error {
+	a.log.Warn("app: operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
+	told, err := a.r.alert.AdminAlert(ctx, al.Workspace, al.Detail)
+	switch {
+	case errors.Is(err, telegram.ErrQueued):
+		return nil // it waits for the bot, once: the caller does not send it again
+	case err == nil && told == 0:
+		a.log.Warn("app: no Administrator could be told of an operational alert", "workspace", al.Workspace, "kind", string(al.Kind))
+	}
+	return err
 }

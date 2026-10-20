@@ -25,6 +25,7 @@ import (
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/testkit/fakelock"
 	"github.com/lucasndas/mestre/internal/testkit/fakenet"
+	"github.com/lucasndas/mestre/internal/testkit/leakcheck"
 	"github.com/lucasndas/mestre/internal/testkit/sheetfake"
 	"github.com/lucasndas/mestre/internal/transport"
 	"github.com/lucasndas/mestre/pkg/clock"
@@ -171,6 +172,11 @@ func (r *rig) start(n *inproc, clk clock.Clock) {
 	}
 	r.t.Cleanup(func() {
 		n.stop()
+		// The engine leaves its terminals running, as it must when it dies: the
+		// test ends the ones it started (their sockets are in the folder of n).
+		if ps := leakcheck.Reap(n.paths.Maquina); len(ps) > 0 {
+			r.t.Logf("%s: ended %d process(es) of its terminals", n.name, len(ps))
+		}
 		if r.t.Failed() {
 			r.t.Logf("---- log of %s ----\n%s", n.name, n.log.String())
 		}

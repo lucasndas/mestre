@@ -10,7 +10,7 @@ O motor passa `-c windows.sandbox="unelevated"` em todo início de personagem Co
 
 No modo `unelevated` não há `codex-command-runner`: o comando roda como o usuário do terminal, com uma DACL que dá controle só ao **SID de logon do processo que chamou o `codex.exe`** (mais leitura da DACL ao dono). Como o [launcher](../arquitetura/windows.md#iniciador-mestre-launcher) faz um logon em lote por terminal, cada terminal tem o seu SID de logon, e o isolamento entre personagens Codex é o mesmo dos outros provedores.
 
-## Medições (Codex 0.163.0, Windows 10.0.26100, rodada de 2026-10-20)
+## Medições (Codex 0.163.0, Windows 10.0.26100, medições de 2026-10-19 e 20)
 
 | Modo | Resultado |
 |---|---|
@@ -26,9 +26,13 @@ A CLI `mestre` que a ferramenta de shell do Codex chama roda no token restrito d
 
 No `unelevated` o sandbox não tem barreira de rede, como no Linux ([canal local](codex.md#canal-local-dentro-do-sandbox)): `sandbox_workspace_write.network_access` vai sempre `true`, a internet de uma classe sem internet fica barrada só pelas regras do despachante, que no Codex falha aberto, e a ficha e o `mestre class check` mostram `CodexNoNativeNetwork` nos dois sistemas ([reforço nativo](../classes/reforco-nativo.md)). O plano B antigo de ligar a rede só como reserva (`CodexOfflineNetwork`) deixou de existir: não resolvia, e a rede é aberta de qualquer modo.
 
+## A verificar no Windows real
+
+Tudo o que o CI não alcança. Os pontos 1 e 2 (e a sonda de `connect()` num socket de teste) são do round do Windows, item 2 de `tools/winsandbox/round/run-all.ps1`; os pontos 3 a 7, que precisam do launcher e do motor de verdade, são das [contas reais](../qualidade/contas-reais.md) e da conformidade (CA-CODEX-WIN-05 reúne os dois): (1) dois personagens Codex, logons distintos, `OpenProcess` de um sobre o outro negado; (2) escrita no worktree alheio e fora dos workspaces negada, no próprio permitida; (3) o `connect()` da CLI passa com a pasta `run\` só em leitura e execução e com a ACE da CLI no próprio processo, e o `mestre list` volta com o terminal certo; (4) um `.codex/config.toml` com perfil ou recurso antigo não devolve o modo a `elevated`; (5) a ACE do terminal sai ao fim dele; (6) o processo da CLI no sandbox tem mesmo `WRITE_DAC` sobre si pela SID de logon, e o `mestre-pty` o abre para o `IsProcessInJob`; (7) o limite de conexões por usuário do canal local: o token do comando do Codex provavelmente não nomeia o motor, então a SID do chamador não é lida e só valem os limites por processo e globais.
+
 ## Evolução: `mxc` (M7)
 
-O modo `mxc` dá a barreira de rede e o isolamento que o `unelevated` não dá. Entra quando o Codex expuser o SID do pacote por execução, para o motor pôr a ACE do socket na hora (hoje só `ALL APPLICATION PACKAGES` conecta, o que abriria o socket a qualquer pacote). Destino: M7 ([ordem de implementação](../desenvolvimento/ordem-de-implementacao.md#marcos)).
+O modo `mxc` dá a barreira de rede e o isolamento que o `unelevated` não dá. Entra quando o Codex expuser o SID do pacote por execução, para o motor pôr a ACE do socket na hora (hoje só `ALL APPLICATION PACKAGES` conecta, o que abriria o socket a qualquer pacote). Destino: M7 ([critérios em marcos posteriores](../desenvolvimento/ordem-de-implementacao.md#critérios-em-marcos-posteriores)).
 
 ## Critérios de aceite
 
@@ -36,3 +40,4 @@ O modo `mxc` dá a barreira de rede e o isolamento que o `unelevated` não dá. 
 - **CA-CODEX-WIN-02** · *rápida* — **Dado** um launcher que informa o SID de logon do terminal e um acesso falso, **quando** o motor cria o terminal, o encerra, volta depois de um reinício ou recebe um SID que não é de logon (`S-1-5-18`, grupo, texto com SDDL) ou um acesso que falha, **então** a ACE é pedida com o SID do launcher e gravada na linha, é retirada ao fim, é varrida antes de o socket ser refeito e reposta depois, só para os terminais vivos, e o terminal com SID inválido ou acesso que falha não inicia.
 - **CA-CODEX-WIN-03** · *completa* — **Dado** um arquivo de socket e a pasta dele no Windows, **quando** o motor concede, revoga e varre a ACE de SIDs de logon, **então** cada SID tem uma só ACE, sem herança, no arquivo (leitura e escrita) e na pasta (só leitura e execução), com as edições serializadas, a retirada e a varredura tiram só ACEs de SID de logon, a DACL base e a proteção contra herança ficam como estavam, e o que não é SID de logon é recusado sem tocar na ACL.
 - **CA-CODEX-WIN-04** · *rápida* — **Dado** a `mestre` CLI iniciando no Windows com o `MESTRE_ENDPOINT` de uma instância, **quando** ela acrescenta a ACE ao próprio processo, **então** a DACL ganha uma só ACE de permissão com exatamente `PROCESS_QUERY_LIMITED_INFORMATION` para a conta do serviço daquela instância (lida do caminho do socket, nos dois tipos de barra; a principal se o caminho não tiver a forma), repetir não acrescenta outra e as ACEs que havia ficam.
+- **CA-CODEX-WIN-05** · *pesada* — **Dado** dois personagens Codex na mesma máquina Windows real, cada um num terminal com o seu logon em lote, **quando** cada um roda a ferramenta de shell do Codex (`unelevated`) para abrir um processo do terminal do outro (`OpenProcess`), escrever no worktree do outro e fora de qualquer workspace, escrever no próprio worktree e chamar `mestre list`, **então** o `OpenProcess` e as escritas alheias são negados, a escrita própria passa, o `connect()` da CLI ao `cli.sock` passa, o motor identifica cada chamador com o terminal certo e a ACE de cada terminal some do socket e da pasta quando ele termina (MVP-6).

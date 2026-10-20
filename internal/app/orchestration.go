@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lucasndas/mestre/internal/blocking"
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/guild"
 	"github.com/lucasndas/mestre/internal/localchan"
@@ -159,6 +161,12 @@ type OrchestrationOptions struct {
 	FreshnessRules   basesync.Rules
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
+	// ChainStallPeople gets the warning of a table that works without delivering,
+	// with the button to pause it (nil: only the Grão-Mestre is told).
+	ChainStallPeople chain.StallPeople
+	// ChainSinks are told what became of the requests of the types they own,
+	// besides the quests' and the usage's (the entry in the Guild).
+	ChainSinks map[classes.RequestType]chain.Sink
 
 	// The limits of use (milestone 5, stage 4). UsageChecklist opens the alert
 	// ALL-23 of the checklist when a source of use is not available (nil:
@@ -249,8 +257,20 @@ type Orchestration struct {
 	// Loops are the periodic readers the host adds; External runs them.
 	Loops []func(ctx context.Context) error
 
+	// destructive reads the live state of what a destructive request is about
+	// (nil unless the chain was built).
+	destructive *destructiveBroker
+
 	fence atomic.Pointer[guild.Fence]
 	log   *slog.Logger
+}
+
+// DestructiveTarget is approvals.Targets for the requests of type acao_destrutiva.
+func (o *Orchestration) DestructiveTarget(ctx context.Context, r chain.Request) (json.RawMessage, error) {
+	if o == nil || o.destructive == nil {
+		return nil, errors.New("app: this period has no chain of approval")
+	}
+	return o.destructive.Live(ctx, r)
 }
 
 // Lazy references break the loops of the construction: the tables are asked by
@@ -585,6 +605,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		us    *usage.Service
 		deps  *epicdeps.Service
 	)
+	if o.ChainClasses != nil {
+		// the destructive commands of the characters ask the people through the chain
+		b := destructiveBroker{chain: &ch, scrolls: &scr, rituals: &rit, tables: &tbl, classes: o.ClassLibraries}
+		o.withDestructive(b)
+		orc.destructive = &b
+	}
 	deactivate := o.Rituals
 	if deactivate == nil {
 		deactivate = ritualsRef{&rit}
@@ -656,20 +682,20 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		supervision := o.ChainSupervision
 		if supervision == nil {
 			sup, err = chain.NewSupervisor(chain.SupervisorOptions{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock),
-				Inbox: ib, Policy: policy, Alerts: o.ChainAlerts, Tables: supTables{&tbl}, Reroute: rerouteRef{&ch}, Rules: ruleListerRef{&trl}, Logger: o.Logger})
+				Inbox: ib, Policy: policy, Alerts: o.ChainAlerts, Tables: supTables{&tbl}, Reroute: rerouteRef{&ch}, Rules: ruleListerRef{&trl}, StallPeople: o.ChainStallPeople, Logger: o.Logger})
 			if err != nil {
 				return nil, err
 			}
 			supervision = sup
 		}
 		var freshness chain.Freshness
-		if o.FreshnessRules != nil {
+		if o.FreshnessRules != nil { // the chain exists in this branch
 			freshness = freshnessRef{&fresh}
 		}
 		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
-			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
+			Classes: o.ChainClasses, Policy: policy, Repos: workspaceRepoOf{ws}, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
-			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}, Logger: o.Logger})
+			Sinks: o.chainSinks(&qs, &us), Logger: o.Logger})
 		if err != nil {
 			return nil, err
 		}
@@ -687,7 +713,8 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	},
 		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Issues: o.QuestIssues, MaxCorrections: o.QuestMaxCorrections, Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted})
+		Issues: o.QuestIssues, MaxCorrections: o.QuestMaxCorrections, Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted,
+		Delivered: func(ctx context.Context, workspace, table string) { _ = tbl.Delivered(ctx, workspace, table) }})
 	if err != nil {
 		return nil, err
 	}
@@ -699,10 +726,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	if o.FreshnessRules != nil {
-		if ch == nil {
-			return nil, errors.New("app: the gate of freshness needs the chain of approval")
-		}
+	if o.FreshnessRules != nil && ch != nil { // without the chain of approval there is no request to gate
 		if fresh, err = basesync.NewGate(basesync.GateOptions{Rules: o.FreshnessRules, Verifier: o.QuestVerifier, Tables: tbl, Mirrors: ws, Base: bsync, Logger: o.Logger}); err != nil {
 			return nil, err
 		}
@@ -774,6 +798,9 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 // scrolls, the tables and the quests. The commands of later stages and milestones are
 // added where they are built.
 func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scrolls.Approvals) {
+	if approvals == nil && o.destructive != nil {
+		approvals = noteGate{*o.destructive}
+	}
 	o.Connections.Register(fwd)
 	o.Inbox.Register(fwd)
 	o.Characters.Register(fwd)
@@ -797,6 +824,10 @@ func (o *Orchestration) Register(fwd *localchan.LocalForwarder, approvals scroll
 	}
 	if o.Supervisor != nil {
 		o.Supervisor.Register(fwd)
+	}
+	if o.Chain != nil {
+		o.Chain.Register(fwd)
+		(&blocking.AskHandler{Characters: o.Registry, Asker: o.Chain, Requests: o.Chain}).Register(fwd)
 	}
 }
 
@@ -953,6 +984,18 @@ func questDone(o OrchestrationOptions) quests.DoneRules {
 	return doneRules{o.ClassLibraries}
 }
 
+// chainSinks are the owners of the types of request: the quests' points, the
+// usage's extra cost and what the integration brings (the entry in the Guild).
+func (o OrchestrationOptions) chainSinks(qs **quests.Service, us **usage.Service) map[classes.RequestType]chain.Sink {
+	sinks := map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{qs}, classes.RequestExtraCost: usageSink{us}}
+	for t, s := range o.ChainSinks {
+		if _, own := sinks[t]; !own && s != nil {
+			sinks[t] = s
+		}
+	}
+	return sinks
+}
+
 // scrollCopies are the writers of the copies of the scrolls: the given ones, or
 // the ones of this machine.
 func scrollCopies(o OrchestrationOptions) scrolls.Copies {
@@ -960,4 +1003,15 @@ func scrollCopies(o OrchestrationOptions) scrolls.Copies {
 		return o.ScrollCopies
 	}
 	return scrolls.LocalCopies{Machine: o.Machine}
+}
+
+// workspaceRepoOf gives the chain the repository of a workspace.
+type workspaceRepoOf struct{ ws *workspaces.Service }
+
+func (w workspaceRepoOf) Repo(ctx context.Context, workspace string) (string, error) {
+	x, err := w.ws.Get(ctx, workspace)
+	if err != nil {
+		return "", err
+	}
+	return x.Repo.String(), nil
 }

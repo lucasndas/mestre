@@ -64,7 +64,10 @@ type Options struct {
 	// request of a PR is for the people (diff_incompleto).
 	PRs PRSource
 	// Freshness is the gate of freshness of the requests of a PR; nil: none.
-	Freshness   Freshness
+	Freshness Freshness
+	// Repos gives the repository of a workspace: a request of PR, merge or settings
+	// is refused when its target is another one. Nil: not checked.
+	Repos       WorkspaceRepos
 	Supervision Supervision
 	Alerts      Alerts
 	Tasks       Tasks
@@ -88,6 +91,7 @@ type Service struct {
 	mu     sync.Mutex // short critical sections on a request; never held over a call out
 	tmu    sync.Mutex
 	omu    sync.Mutex // FindOpen and Insert of a request, as one step
+	dmu    sync.Mutex // the use of an approved destructive request
 	bmu    sync.Mutex // the counter of the circuit breaker
 	timers map[int64]clock.Timer
 	pol    policyReader
@@ -194,9 +198,14 @@ type OpenRequest struct {
 	Require []string
 	// Task overrides the original task of the requester.
 	Task string
+	// Ask is the text of the Grão-Mestre that goes with a question of its own.
+	Ask *AskNote
 	// Target is the exact target (JSON); the request is bound to its
 	// impression.
 	Target json.RawMessage
+	// Fingerprint, for a request that is not a class permission, finds the
+	// open request for the same thing (a destructive action).
+	Fingerprint string
 }
 
 // Open implements hook.Approvals: the requests of permissao_de_classe the
@@ -239,7 +248,7 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 		o.Type = classes.RequestClassPermission
 	}
 	r := Request{Workspace: o.Workspace, Table: o.Table, Type: o.Type, State: Open, Requester: o.Requester, Designer: o.Designer, Proposer: o.Proposer,
-		Cross: o.Cross, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Require: o.Require, Task: o.Task,
+		Cross: o.Cross, Ask: o.Ask, Action: o.Action, Event: o.Event, About: o.About, Justification: o.Justification, Risk: o.Risk, Mission: o.Mission, PR: o.PR, Require: o.Require, Task: o.Task,
 		CreatedAt: s.clk.Now()}
 	if len(o.Target) > 0 {
 		imp, err := Impress(o.Target)
@@ -280,6 +289,16 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 				r.Task = t
 			}
 		}
+		if o.Fingerprint != "" && r.Type == classes.RequestDestructive {
+			r.Fingerprint = o.Fingerprint
+			s.omu.Lock()
+			locked = true
+			if found, ok, err := s.st.FindOpen(ctx, c.ID, r.Fingerprint); err != nil {
+				return 0, err
+			} else if ok {
+				return found.ID, nil
+			}
+		}
 		if r.Type == classes.RequestClassPermission && r.Action != nil {
 			dir := ""
 			if env, err := s.o.Classes.Env(ctx, c.ID); err == nil {
@@ -297,6 +316,9 @@ func (s *Service) Request(ctx context.Context, o OpenRequest) (int64, error) {
 	}
 	if r.Workspace == "" {
 		return 0, errors.New("chain: a request needs a workspace")
+	}
+	if err := s.guardRepo(ctx, r); err != nil {
+		return 0, err
 	}
 	// The gate runs before anything is stored or asked of anyone: a red one
 	// leaves no request (only a PR is gated, and a PR never takes the lock).

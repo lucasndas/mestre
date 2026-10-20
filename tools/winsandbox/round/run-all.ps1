@@ -4,7 +4,7 @@
 # prepares the machine and calls this script), or by hand in any disposable
 # Windows machine with Git, Go and Claude Code installed:
 #
-#   powershell -ExecutionPolicy Bypass -File run-all.ps1 [-Only 1,8] [-NoPause]
+#   powershell -ExecutionPolicy Bypass -File run-all.ps1 [-Only 1,8] [-NoPause] [-Force]
 #
 # Every check is a function of its own and a failure in one never stops the
 # others. The script never logs in by itself: where the Owner's login is needed
@@ -22,8 +22,16 @@ param(
     [string[]]$Only = @(),
     # Never pause: what needs a login of the Owner or a manual step is SKIP.
     [switch]$NoPause,
-    [string]$Out = 'C:\winsandbox\resultados\round'
+    [string]$Out = 'C:\winsandbox\resultados\round',
+    # Run outside the Windows Sandbox (a disposable machine of your own).
+    [switch]$Force
 )
+# The round makes local accounts, services and scheduled tasks, opens ACLs to
+# Everyone and removes profiles: only in the Sandbox, or with -Force.
+if ($env:USERNAME -ne 'WDAGUtilityAccount' -and -not $Force) {
+    Write-Host 'run-all.ps1 cria contas locais e serviços, abre ACLs e remove perfis: rode no Windows Sandbox (usuário WDAGUtilityAccount) ou, numa máquina descartável, com -Force.' -ForegroundColor Red
+    exit 2
+}
 $Wanted = [int[]]@($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_.Trim() -ne '' } | ForEach-Object { [int]$_.Trim() })
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -46,7 +54,7 @@ Start-Transcript -Path (Join-Path $Out 'run-all.log') -Force | Out-Null
 
 $Titles = @{
     1 = 'Linha do hook: Codex no PowerShell e Claude no Git Bash'
-    2 = 'Codex: sandbox alcança o socket local (rede desligada) e identificação do chamador'
+    2 = 'Codex: sandbox alcança o socket local (modo unelevated) e identificação do chamador'
     3 = 'Nomes das ferramentas de shell (PowerShell) do Claude e do Codex'
     4 = 'agy: Gerenciador de Credenciais e --sandbox (AppContainer)'
     5 = 'Hooks dentro de subagentes nativos (etapa 12 da conformidade)'
@@ -138,7 +146,8 @@ function Invoke-Native {
     $psi.RedirectStandardInput = $true
     $psi.CreateNoWindow = $true
     if ($Dir) { $psi.WorkingDirectory = $Dir }
-    foreach ($k in $Env.Keys) { $psi.EnvironmentVariables[$k] = [string]$Env[$k] }
+    # A $null value takes the variable out of the environment of the process.
+    foreach ($k in $Env.Keys) { if ($null -eq $Env[$k]) { $psi.EnvironmentVariables.Remove($k) } else { $psi.EnvironmentVariables[$k] = [string]$Env[$k] } }
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo = $psi
     try { [void]$p.Start() } catch { return [pscustomobject]@{ Exit = -1; Out = "não iniciou: $($_.Exception.Message)"; TimedOut = $false } }
@@ -255,6 +264,28 @@ function Get-CliPath([string]$Provider) {
 
 function Get-ProfileDir([string]$Provider) {
     switch ($Provider) { 'claude-code' { return "$Profiles\claude" } 'codex' { return "$Profiles\codex" } 'antigravity' { return "$Profiles\agy" } }
+}
+
+# The probes that swap the settings.json of the agy profile of the round (its
+# own folder, never the profile of the user) save it to disk first, so a run
+# that dies in the middle does not lose it: the next one restores it. A file
+# that was empty goes back empty (an empty byte array is "false" in PowerShell,
+# so the test is against $null); one that did not exist is removed.
+function Save-AgySettings([string]$Settings) {
+    $bak = $Settings + '.mestre-bak'
+    $none = $Settings + '.mestre-none'
+    if (Test-Path -LiteralPath $bak) { Copy-Item -LiteralPath $bak -Destination $Settings -Force; Remove-Item -LiteralPath $bak -Force }
+    elseif (Test-Path -LiteralPath $none) { Remove-Item -LiteralPath $Settings -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $none -Force }
+    New-Item -ItemType Directory -Force -Path (Split-Path $Settings) | Out-Null
+    if (Test-Path -LiteralPath $Settings) { Copy-Item -LiteralPath $Settings -Destination $bak -Force }
+    else { [IO.File]::WriteAllBytes($none, [byte[]]@()) }
+}
+
+function Restore-AgySettings([string]$Settings) {
+    $bak = $Settings + '.mestre-bak'
+    $none = $Settings + '.mestre-none'
+    if (Test-Path -LiteralPath $bak) { Copy-Item -LiteralPath $bak -Destination $Settings -Force; Remove-Item -LiteralPath $bak -Force }
+    elseif (Test-Path -LiteralPath $none) { Remove-Item -LiteralPath $Settings -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $none -Force }
 }
 
 function Install-Cli([string]$Provider) {
@@ -549,6 +580,108 @@ if (-not $got) { [void]$lines.Add('conectou=nao') }
 Set-Content -LiteralPath $Out -Value $lines
 '@
 
+# CA-CODEX-WIN-05: the isolation between two Codex characters of the same
+# machine in the unelevated mode (docs/provedores/codex-no-windows.md). Two
+# Codex run, each in its own logon session (a scheduled task of this user with
+# S4U makes a new one per run) and in its own worktree. The command B runs
+# holds a process; the command A runs tries to open it, to write in the worktree
+# of B and outside any workspace, and to write in its own. What the DACL of the
+# command of B and the sandbox of A answer is what the engine will rely on.
+# The connect() of the CLI to the socket of the engine and the ACE of the
+# terminal are the part of the real accounts (tools/realaccount), which makes
+# the launcher and the engine.
+function Test-CodexCrossIsolation {
+    if (-not (Initialize-Provider 'codex')) { Add-Sub 2 'SKIP' ('isolamento entre dois Codex: ' + $script:ConfWhy['ready-codex']); return }
+    $x = Join-Path $Work 'cx'
+    $wa = Join-Path $x 'wa'; $wb = Join-Path $x 'wb'; $probe = Join-Path $x 'probe'; $out = Join-Path $x 'out'
+    if (Test-Path $x) { Remove-Item -Recurse -Force $x -ErrorAction SilentlyContinue }
+    if (Test-Path $x) { Add-Sub 2 'FAIL' 'isolamento entre dois Codex: não consegui limpar C:\rodada\cx de uma rodada anterior'; return }
+    New-Item -ItemType Directory -Force -Path $wa, $wb, $probe, $out | Out-Null
+    $codex = Get-CliPath 'codex'
+    $home7 = (Get-CliEnv 'codex').CODEX_HOME
+    $envLines = @("`$env:CODEX_HOME = '$home7'", "`$env:USERPROFILE = '$env:USERPROFILE'", "`$env:LOCALAPPDATA = '$env:LOCALAPPDATA'", "`$env:APPDATA = '$env:APPDATA'", "`$env:TEMP = '$env:TEMP'", "`$env:TMP = '$env:TEMP'")
+    Set-Content -LiteralPath (Join-Path $probe 'hold.ps1') -Encoding UTF8 -Value @"
+`$PID | Set-Content -LiteralPath '$wb\bpid.txt'
+Start-Sleep -Seconds 240
+"@
+    Set-Content -LiteralPath (Join-Path $probe 'attack.ps1') -Encoding UTF8 -Value @"
+param([int]`$Target)
+function Probe(`$name, [scriptblock]`$b) {
+    try { & `$b | Out-Null; "`$name=ok" }
+    catch {
+        `$e = `$_.Exception
+        while (`$e.InnerException) { `$e = `$e.InnerException }
+        if (`$e -is [ArgumentException]) { "`$name=ausente" }
+        elseif (`$e -is [ComponentModel.Win32Exception] -and `$e.NativeErrorCode -eq 5) { "`$name=negado" }
+        elseif (`$e -is [UnauthorizedAccessException]) { "`$name=negado" }
+        else { "`$name=erro" }
+    }
+}
+Probe 'OPEN' { `$p = [Diagnostics.Process]::GetProcessById(`$Target); `$null = `$p.StartTime }
+Probe 'HANDLE' { `$p = [Diagnostics.Process]::GetProcessById(`$Target); `$null = `$p.Handle }
+Probe 'WB' { Set-Content -LiteralPath '$wb\x.txt' -Value 'x' -ErrorAction Stop }
+Probe 'FORA' { Set-Content -LiteralPath '$x\fora.txt' -Value 'x' -ErrorAction Stop }
+Probe 'WA' { Set-Content -LiteralPath '$wa\own.txt' -Value 'x' -ErrorAction Stop }
+'FIM'
+"@
+    function New-CodexRun([string]$Name, [string]$Dir, [string]$Command) {
+        $prompt = "Use a ferramenta de shell para rodar exatamente este comando e mostre so a saida dele, sem comentar: $Command"
+        $body = ($envLines -join "`r`n") + "`r`n" + @"
+Set-Location -LiteralPath '$Dir'
+((whoami.exe /groups) -join ' ') -match 'S-1-5-5-\d+-\d+' | Out-Null
+`$Matches[0] | Set-Content -LiteralPath '$out\$Name.sid'
+& '$codex' exec --skip-git-repo-check -s workspace-write -c sandbox_workspace_write.network_access=true -c 'windows.sandbox="unelevated"' '$prompt' *> '$out\$Name.log'
+'' | Set-Content -LiteralPath '$out\$Name.done'
+"@
+        Set-Content -LiteralPath (Join-Path $probe "$Name.ps1") -Value $body -Encoding UTF8
+    }
+    New-CodexRun 'b' $wb ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File $probe\hold.ps1")
+    $tasks = @()
+    $user = "$env:USERDOMAIN\$env:USERNAME"
+    function Start-AsOwnLogon([string]$Name) {
+        $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$probe\$Name.ps1`""
+        $pri = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Limited
+        $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        Register-ScheduledTask -TaskName "MestreRodadaCx$Name" -Action $act -Principal $pri -Settings $set -Force | Out-Null
+        Start-ScheduledTask -TaskName "MestreRodadaCx$Name"
+    }
+    try {
+        $tasks += 'MestreRodadaCxb'; Start-AsOwnLogon 'b'
+        $t0 = Get-Date
+        $bpid = 0
+        while ($bpid -le 0 -and ((Get-Date) - $t0).TotalSeconds -lt 300) {
+            Start-Sleep -Seconds 2
+            if (Test-Path "$wb\bpid.txt") { $bpid = [int](('0' + ((Get-Content -LiteralPath "$wb\bpid.txt" -Raw) -replace '\D', ''))) }
+        }
+        if ($bpid -le 0) { Add-Sub 2 'FAIL' ('isolamento entre dois Codex: o comando do Codex B não segurou o processo. Saída:' + "`n" + (Tail (Get-Content -LiteralPath "$out\b.log" -Raw -ErrorAction SilentlyContinue) 8)); return }
+        if (-not (Get-Process -Id $bpid -ErrorAction SilentlyContinue)) { Add-Sub 2 'FAIL' 'isolamento entre dois Codex: o processo do comando de B já tinha acabado antes de A começar'; return }
+        New-CodexRun 'a' $wa ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File $probe\attack.ps1 -Target $bpid")
+        $tasks += 'MestreRodadaCxa'; Start-AsOwnLogon 'a'
+        $t0 = Get-Date
+        while (-not (Test-Path "$out\a.done") -and ((Get-Date) - $t0).TotalSeconds -lt 420) { Start-Sleep -Seconds 2 }
+        $log = if (Test-Path "$out\a.log") { Get-Content -LiteralPath "$out\a.log" -Raw } else { '' }
+        Save-Detail 'item2-cx-a.log' $log
+        Save-Detail 'item2-cx-b.log' (Get-Content -LiteralPath "$out\b.log" -Raw -ErrorAction SilentlyContinue)
+        $want = [ordered]@{ 'OPEN' = 'negado'; 'HANDLE' = 'negado'; 'WB' = 'negado'; 'FORA' = 'negado'; 'WA' = 'ok' }
+        $bad = @()
+        $sidA = (Get-Content -LiteralPath "$out\a.sid" -ErrorAction SilentlyContinue | Select-Object -First 1)
+        $sidB = (Get-Content -LiteralPath "$out\b.sid" -ErrorAction SilentlyContinue | Select-Object -First 1)
+        if (-not $sidA -or -not $sidB) { $bad += 'não li o SID de logon de uma das tarefas' }
+        elseif ($sidA -eq $sidB) { Add-Sub 2 'SKIP' "isolamento entre dois Codex: as duas tarefas caíram na mesma sessão de logon ($sidA); o cenário não foi medido"; return }
+        if (-not (Get-Process -Id $bpid -ErrorAction SilentlyContinue)) { $bad += 'o processo de B acabou durante a sonda (o resultado OPEN não vale)' }
+        foreach ($k in $want.Keys) {
+            if ($log -match "(?m)^$k=(ok|negado)") {
+                if ($Matches[1] -ne $want[$k]) { $bad += "$k`: obtido $($Matches[1]), esperado $($want[$k])" }
+            } else { $bad += "$k`: sem resultado" }
+        }
+        if ($bad.Count -eq 0) { Add-Sub 2 'PASS' "isolamento entre dois Codex (unelevated, logons $sidA e $sidB): o comando de A não abriu o processo do comando de B, não escreveu no worktree de B nem fora de um workspace, e escreveu no próprio" }
+        else { Add-Sub 2 'FAIL' ("isolamento entre dois Codex diverge:`n    " + ($bad -join "`n    ") + "`n  fim da saída do Codex A:`n" + (Tail $log 8)) }
+    } finally {
+        foreach ($t in $tasks) { Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $t -Confirm:$false -ErrorAction SilentlyContinue }
+        if ($bpid -gt 0) { & taskkill.exe /T /F /PID $bpid 2>&1 | Out-Null }
+    }
+}
+
 function Test-Item2 {
     $c = Get-Conformance 'codex'
     if ($c) {
@@ -558,7 +691,7 @@ function Test-Item2 {
         else { Add-Sub 2 'FAIL' ("conformidade do Codex, etapa 5: " + $(if ($note) { $note } else { 'sem a nota do mestre debug' }) + " (resultado da etapa: " + (Format-Step $c 5) + ")") }
     } else { Add-NoConf 2 'codex' 'conformidade do Codex' }
 
-    # A direct probe: the shell of a Codex with network_access=false reaches a
+    # A direct probe: the shell of a Codex in the unelevated mode (the one the engine uses) reaches a
     # Unix socket of ours, and who the server sees at the other end.
     if (-not (Initialize-Provider 'codex')) { Add-Sub 2 'SKIP' ('sonda direta do socket: ' + $script:ConfWhy['ready-codex']); return }
     $p7 = $null
@@ -566,7 +699,16 @@ function Test-Item2 {
     $dir = Join-Path $Work 'sock'
     if (Test-Path $dir) { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    & icacls.exe $dir /grant 'Everyone:(OI)(CI)M' | Out-Null
+    # What the engine does for a terminal: the logon SID of this session with read
+    # and write on the socket file and read and execute on the folder (icacls does
+    # not take that SID, so .NET).
+    $logon = ((whoami.exe /groups) -join ' ') -match 'S-1-5-5-\d+-\d+'
+    if (-not $logon) { Add-Sub 2 'SKIP' 'sonda direta do socket: não achei o SID de logon desta sessão'; return }
+    $logonSid = New-Object Security.Principal.SecurityIdentifier $Matches[0]
+    $dacl = Get-Acl -LiteralPath $dir
+    $dacl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($logonSid, 'ReadAndExecute', 'None', 'None', 'Allow')))
+    $dacl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($logonSid, 'Read, Write', 'ObjectInherit', 'InheritOnly', 'Allow')))
+    Set-Acl -LiteralPath $dir -AclObject $dacl
     $work = Join-Path $Work 'sockwork'
     if (Test-Path $work) { Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue }
     New-Item -ItemType Directory -Force -Path $work | Out-Null
@@ -586,7 +728,7 @@ function Test-Item2 {
         if (-not (Test-Path "$res.ready")) { Add-Sub 2 'SKIP' "o servidor do socket ($($w.Name)) não subiu"; if (-not $srv.HasExited) { $srv.Kill() }; continue }
         $prompt = "Use a ferramenta de shell para rodar exatamente este comando e mostre só a saída dele, sem comentar: curl.exe --silent --show-error --unix-socket $sock http://localhost/ping; echo EXIT=`$LASTEXITCODE; whoami"
         $r = Invoke-Native -File (Get-CliPath 'codex') -Env (Get-CliEnv 'codex') -Dir $work -TimeoutSec 420 -Arguments @(
-            'exec', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=false', '-c', 'windows.sandbox=elevated', $prompt)
+            'exec', '--skip-git-repo-check', '-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=true', '-c', 'windows.sandbox="unelevated"', $prompt)
         Save-Detail $w.Log $r.Out
         # A connection ends the server after it describes the caller; without one it waits.
         [void]$srv.WaitForExit($(if ((Get-Content -LiteralPath $res -ErrorAction SilentlyContinue) -match 'conectou=sim') { 30000 } else { 5000 }))
@@ -596,13 +738,14 @@ function Test-Item2 {
         $curl = (@($r.Out -split "`r?`n" | Where-Object { $_ -match '^(curl: |EXIT=|\S+\\codexsandbox)' } | Select-Object -Unique) -join "`n    ")
         if ($peer -match 'conectou=sim') {
             $chainsToCodex = ($peer -match 'codex')
-            Add-Sub 2 'PASS' ("sandbox do Codex (rede desligada), socket $($w.Name): ALCANÇOU. Quem o servidor viu (PID, dono e cadeia de pais):`n" + $peer + "`n  cadeia chega a um processo 'codex': " + $(if ($chainsToCodex) { 'sim' } else { 'não (a identificação tem de ser pelo Job Object do terminal)' }))
+            Add-Sub 2 'PASS' ("sandbox do Codex (modo unelevated), socket $($w.Name): ALCANÇOU. Quem o servidor viu (PID, dono e cadeia de pais):`n" + $peer + "`n  cadeia chega a um processo 'codex': " + $(if ($chainsToCodex) { 'sim' } else { 'não (a identificação tem de ser pelo Job Object do terminal)' }))
         } elseif ($peer -match 'conectou=nao') {
-            Add-Sub 2 'FAIL' ("sandbox do Codex (rede desligada), socket $($w.Name): NÃO alcançou. O que o curl disse:`n    " + $(if ($curl) { $curl } else { Tail $r.Out 8 }))
+            Add-Sub 2 'FAIL' ("sandbox do Codex (modo unelevated), socket $($w.Name): NÃO alcançou. O que o curl disse:`n    " + $(if ($curl) { $curl } else { Tail $r.Out 8 }))
         } else {
             Add-Sub 2 'FAIL' ("sonda do socket ($($w.Name)) sem resultado. Fim da saída do codex:`n" + (Tail $r.Out 8))
         }
     }
+    Test-CodexCrossIsolation
 }
 
 # ---------------------------------------------------------------- item 3
@@ -650,22 +793,65 @@ function Test-Item4 {
     # for this command alone stands in for the answer, only for this probe
     # (--dangerously-skip-permissions would undo --sandbox, docs/provedores/antigravity.md).
     $settings = Join-Path (Get-ProfileDir 'antigravity') '.gemini\antigravity-cli\settings.json'
-    $before = $null
-    if (Test-Path $settings) { $before = [IO.File]::ReadAllBytes($settings) }
-    New-Item -ItemType Directory -Force -Path (Split-Path $settings) | Out-Null
+    Save-AgySettings $settings
     Set-Content -LiteralPath $settings -Encoding ASCII -Value '{"permissions":{"allow":["command(git --version)"]}}'
     try {
         $r = Invoke-Native -File $agy -Env $e -Dir $w -TimeoutSec 240 -Arguments @('--sandbox', '-p', 'Rode o comando git --version no shell e responda só com a saída dele.')
     } finally {
-        if ($before) { [IO.File]::WriteAllBytes($settings, $before) } else { Remove-Item -LiteralPath $settings -Force -ErrorAction SilentlyContinue }
+        Restore-AgySettings $settings
     }
     Save-Detail 'item4-agy-sandbox.log' $r.Out
     if ($r.Out -match 'git version') { Add-Sub 4 'PASS' 'agy --sandbox rodou git --version no worktree (AppContainer deixou rodar comando)' }
     else { Add-Sub 4 'FAIL' ('agy --sandbox não rodou o comando (código ' + $r.Exit + $(if ($r.TimedOut) { ', estourou o prazo' } else { '' }) + '). Fim da saída:' + "`n" + (Tail $r.Out 6)) }
     $u2 = Invoke-Native -File $agy -Arguments @('-p', '/usage', '--output-format', 'json') -Env $e -TimeoutSec 90
     if ($u2.Exit -eq 0 -and $u2.Out -match '"buckets"') { Add-Sub 4 'PASS' 'depois do --sandbox o agy ainda acha o login' } else { Add-Sub 4 'FAIL' ('depois do --sandbox o agy perdeu o login: ' + (Tail $u2.Out 3)) }
+    Test-AgyNeutralBlocks $agy $e
     $c = Get-Conformance 'antigravity'
     if ($c) { Add-StepSub 4 'conformidade do agy (classe sem internet: --sandbox na base)' $c @(1, 4, 5, 6) } else { Add-NoConf 4 'antigravity' 'conformidade do agy' }
+}
+
+# The Windows hook line of agy without the Mestre (docs/provedores/antigravity.md#hooks):
+# a character (MESTRE_AGENT_ID) without the mestre binary gets {}, which must
+# block PreToolUse; without MESTRE_AGENT_ID (a clone without the Mestre) the
+# neutral allow, built with no quote in the line, must let the tool run. The
+# generated hooks.json in a worktree, every command allowed natively for the
+# probe, so the hook is the only barrier; a control without hooks must run it.
+function Test-AgyNeutralBlocks([string]$Agy, [hashtable]$Env) {
+    if (-not (Get-BuiltBinaries)) { Add-Sub 4 'SKIP' ('bloqueio do {} do hook do agy: ' + $script:BuildWhy); return }
+    $settings = Join-Path (Get-ProfileDir 'antigravity') '.gemini\antigravity-cli\settings.json'
+    Save-AgySettings $settings
+    $cases = @(
+        @{ Name = 'controle, sem hooks'; Hooks = $false; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $true },
+        @{ Name = 'sem MESTRE_AGENT_ID'; Hooks = $true; Id = $null; Bin = (Join-Path $Bin 'mestre.exe'); Runs = $true },
+        @{ Name = 'sem o binário do mestre'; Hooks = $true; Id = 'rodada'; Bin = (Join-Path $Work 'nao-existe\mestre.exe'); Runs = $false })
+    $results = @()
+    try {
+        foreach ($c in $cases) {
+            $d = Join-Path $Work ('agyneutro\' + ($c.Name -replace '[^A-Za-z]', ''))
+            if (Test-Path $d) { Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Force -Path $d | Out-Null
+            & git -C $d init -q 2>&1 | Out-Null
+            if ($c.Hooks) {
+                $g = Invoke-Native -File (Join-Path $Bin 'conformance.exe') -Arguments @('hookfiles', '-provider', 'antigravity', '-root', $d, '-mestre', $c.Bin) -TimeoutSec 60
+                if ($g.Exit -ne 0) { $results += [pscustomobject]@{ Case = $c; Ran = $null; Out = 'hookfiles falhou: ' + (Tail $g.Out 2) }; continue }
+            }
+            Set-Content -LiteralPath $settings -Encoding ASCII -Value ('{"trustedWorkspaces":[' + (ConvertTo-Json $d) + '],"permissions":{"allow":["command(*)"]}}')
+            $ce = @{}; foreach ($k in $Env.Keys) { $ce[$k] = $Env[$k] }; $ce['MESTRE_AGENT_ID'] = $c.Id
+            $r = Invoke-Native -File $Agy -Env $ce -Dir $d -TimeoutSec 240 -Arguments @('-p', 'Rode no shell exatamente este comando e nada mais: echo marca > marca.txt')
+            $results += [pscustomobject]@{ Case = $c; Ran = (Test-Path (Join-Path $d 'marca.txt')); Out = (Tail $r.Out 2) }
+        }
+    } finally {
+        Restore-AgySettings $settings
+    }
+    $control = $results | Where-Object { -not $_.Case.Hooks } | Select-Object -First 1
+    if (-not $control -or -not $control.Ran) { Add-Sub 4 'FAIL' ("bloqueio do {} do hook do agy: o controle sem hooks não rodou o comando, o teste não vale. Fim da saída:`n" + $control.Out); return }
+    foreach ($x in $results | Where-Object { $_.Case.Hooks }) {
+        if ($null -eq $x.Ran) { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': ' + $x.Out) }
+        elseif ($x.Case.Runs -and $x.Ran) { Add-Sub 4 'PASS' ("hook do agy no Windows, " + $x.Case.Name + ': a resposta neutra liberou o PreToolUse (um clone sem o Mestre não é atrapalhado)') }
+        elseif (-not $x.Case.Runs -and -not $x.Ran) { Add-Sub 4 'PASS' ("hook do agy no Windows, " + $x.Case.Name + ': o {} bloqueou o PreToolUse (o comando não rodou)') }
+        elseif ($x.Case.Runs) { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': o comando NÃO rodou: a resposta neutra atrapalha quem clona. Fim da saída:' + "`n" + $x.Out) }
+        else { Add-Sub 4 'FAIL' ("hook do agy no Windows, " + $x.Case.Name + ': o comando RODOU, o {} não bloqueou. Fim da saída:' + "`n" + $x.Out) }
+    }
 }
 
 # ---------------------------------------------------------------- item 5
@@ -754,6 +940,9 @@ function Test-Item8 {
     # Expect = the lines the stub must log (what the analyzer assumes runs); a
     # case with ExpectOut checks the text the code prints instead.
     $cases = @(
+        # The control must run the fake git: without it (git out of the PATH, a
+        # broken case) every "git did not run" would read as stricter.
+        @{ Id = 'controle-git-falso'; Code = 'git status'; Expect = @('status'); Control = $true },
         @{ Id = 'aspas-simples-tipograficas'; Code = "git ${LQ}push${RQ}"; Expect = @('push') },
         @{ Id = 'aspas-duplas-tipograficas'; Code = "git ${LDQ}push${RDQ}"; Expect = @('push') },
         @{ Id = 'aspas-baixas'; Code = "git ${LOW9}push${REV9}"; Expect = @('push') },
@@ -793,7 +982,7 @@ function Test-Item8 {
     if ($p7) { $hosts += , @('PowerShell 7', $p7) }
     $table = New-Object System.Collections.ArrayList
     foreach ($h in $hosts) {
-        $bad = @(); $stricter = @()
+        $bad = @(); $stricter = @(); $controlRan = $false
         foreach ($case in $cases) {
             $log = Join-Path $Work 'probe.log'
             if (Test-Path $log) { Remove-Item -Force $log }
@@ -806,11 +995,13 @@ function Test-Item8 {
             else { $ok = (($logged -join '|') -eq ($case.Expect -join '|')); $seen = $(if ($logged.Count) { 'git recebeu: ' + ($logged -join ' | ') } else { 'git NÃO rodou' }) }
             # git not run at all where the analyzer supposes it runs: the analyzer is
             # stricter than PowerShell (safe); git run with other arguments is the divergence.
-            $safe = (-not $ok -and -not $case.ContainsKey('ExpectOut') -and $logged.Count -eq 0)
+            $safe = (-not $ok -and -not $case.ContainsKey('ExpectOut') -and $logged.Count -eq 0 -and -not $case.Control)
+            if ($case.Control) { $controlRan = $ok }
             [void]$table.Add(("{0} | {1} | {2} | {3}" -f $h[0], $case.Id, $(if ($ok) { 'ok' } elseif ($safe) { 'MAIS-RIGIDO' } else { 'DIVERGE' }), $seen))
             if ($safe) { $stricter += ($case.Id + ' -> ' + $seen) }
             elseif (-not $ok) { $bad += ($case.Id + ' -> ' + $seen) }
         }
+        if (-not $controlRan) { Add-Sub 8 'FAIL' ($h[0] + ': o caso de controle (git status) não rodou o git falso: o teste não vale, nenhum "não rodou" conta como mais rígido'); continue }
         if ($bad.Count -eq 0) { Add-Sub 8 'PASS' ($h[0] + ': os ' + $cases.Count + ' casos leem como o analisador supõe' + $(if ($stricter) { ", ou ele é mais rígido que o PowerShell (seguro):`n    " + ($stricter -join "`n    ") } else { '' })) }
         else { Add-Sub 8 'FAIL' ($h[0] + ': ' + $bad.Count + ' de ' + $cases.Count + " casos DIVERGEM do que o analisador supõe:`n    " + ($bad -join "`n    ") + $(if ($stricter) { "`n  mais rígido que o PowerShell (seguro):`n    " + ($stricter -join "`n    ") } else { '' })) }
     }

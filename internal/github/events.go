@@ -90,6 +90,11 @@ type Event struct {
 	Link    string
 	Summary string
 	At      time.Time
+	// Closed, NotPlanned and Labels describe an issue that changed (EventIssueChanged):
+	// whether it is closed, whether it was closed as "not planned", and its labels
+	// (the epics are the issues with the label `epico`).
+	Closed, NotPlanned bool
+	Labels             []string
 }
 
 // Watch is a workspace read: its repository and the moment it was made, from
@@ -308,9 +313,14 @@ type item struct {
 	State     string     `json:"state"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	ClosedAt  *time.Time `json:"closed_at"`
-	HTMLURL   string     `json:"html_url"`
-	IssueURL  string     `json:"issue_url"`
-	User      struct {
+	// StateReason is why a closed issue was closed: completed or not_planned.
+	StateReason string `json:"state_reason"`
+	Labels      []struct {
+		Name string `json:"name"`
+	} `json:"labels"`
+	HTMLURL  string `json:"html_url"`
+	IssueURL string `json:"issue_url"`
+	User     struct {
 		Login string `json:"login"`
 	} `json:"user"`
 	PullRequest *struct {
@@ -603,6 +613,10 @@ func (p *Poller) eventOf(ctx context.Context, w Watch, repo string, spec listSpe
 	switch {
 	case it.PullRequest == nil:
 		ev.Kind = EventIssueChanged
+		ev.Closed, ev.NotPlanned = it.State == "closed", it.State == "closed" && it.StateReason == "not_planned"
+		for _, l := range it.Labels {
+			ev.Labels = append(ev.Labels, l.Name)
+		}
 	case it.PullRequest.MergedAt != nil:
 		// the fact is the merge: a label put on the merged PR later is not another one
 		ev.Kind, ev.Key = EventPRMerged, fmt.Sprintf("merge:%d:%s", it.ID, it.PullRequest.MergedAt.UTC().Format(time.RFC3339))
@@ -616,6 +630,10 @@ func (p *Poller) eventOf(ctx context.Context, w Watch, repo string, spec listSpe
 	ev.Table = p.o.TableOf(ctx, repo, ev.Number)
 	return ev, true, nil
 }
+
+// EndsWithMarker says the text ends with a marker of operation: what the Guild
+// itself wrote.
+func EndsWithMarker(body string) bool { return endsWithMarker(body) }
 
 // endsWithMarker says the text ends with a marker of operation, as what the
 // Guild writes does; a person who quotes one in the middle of a reply is not it.

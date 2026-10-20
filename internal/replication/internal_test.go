@@ -24,14 +24,14 @@ func TestAMigrationThatSeedsTheVaultTablesOfAnExcludedReplicaIsUndone(t *testing
 	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mestre.db")
-	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := primary.Close(); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	db, err := guilddb.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestAMigrationThatSeedsTheVaultTablesOfAnExcludedReplicaIsUndone(t *testing
 func TestAResyncThatComesBeforeTheStreamIsKept(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	db, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{Synchronous: "OFF"})
+	db, err := guildtpl.Open(ctx, filepath.Join(t.TempDir(), "mestre.db"), store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,14 +101,14 @@ func TestTheOrderToEraseDoesNotRemoveTheFullCopyThatBeginsAfterIt(t *testing.T) 
 	ctx := context.Background()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mestre.db")
-	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := primary.Close(); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	db, err := guilddb.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,14 +165,14 @@ func TestWipeErasesWhatTheMachineKeptFromWhenItWasTheCitadel(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mestre.db")
-	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := primary.Close(); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	db, err := guilddb.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,14 +230,14 @@ func TestAMachineThatLeftTakesNothingMoreOfTheGuild(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mestre.db")
-	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := primary.Close(); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	db, err := guilddb.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,14 +291,14 @@ func TestTheOrderToEraseTheVaultAlsoErasesWhatTheMachineKeptFromWhenItWasTheCita
 	ctx := context.Background()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mestre.db")
-	primary, err := guildtpl.Open(ctx, path, store.Options{Synchronous: "OFF"})
+	primary, err := guildtpl.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := primary.Close(); err != nil {
 		t.Fatal(err)
 	}
-	db, err := guilddb.Open(ctx, path, store.Options{Replica: true, Synchronous: "OFF"})
+	db, err := guilddb.Open(ctx, path, store.Options{StmtCache: guildtpl.StmtCache, Replica: true, Synchronous: "OFF"})
 	if err != nil {
 		t.Fatal(err)
 	}
