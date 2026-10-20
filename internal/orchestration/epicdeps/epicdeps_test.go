@@ -182,8 +182,8 @@ func TestTheTableThatIsCancelledOrTheEpicClosedAsNotPlannedCancelsTheWaitAndKeep
 	}
 }
 
-// Part of CA-DEPMESA-05 (the service refuses everybody but the Grand Master; the
-// `level_denied` of the command `gh epic update` closes with the command, M5 stage 6)
+// The service refuses everybody but the Grand Master (the `level_denied` of the
+// command `gh epic` is in internal/ghcli, CA-DEPMESA-05)
 func TestOnlyTheGrandMasterDeclaresADependency(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)

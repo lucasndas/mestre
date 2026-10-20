@@ -1,0 +1,99 @@
+package app
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+
+	"github.com/lucasndas/mestre/internal/github"
+	"github.com/lucasndas/mestre/internal/orchestration/characters"
+	"github.com/lucasndas/mestre/internal/orchestration/tables"
+)
+
+// stdEpics is GitHub's side of the tables (tables.GitHub): the epics and the
+// pull requests, read and closed with the App of the Grão-Mestre of the
+// workspace.
+type stdEpics struct {
+	r   *stdRun
+	reg characters.Registry
+}
+
+var _ tables.GitHub = stdEpics{}
+
+// api gives the GitHub of the Grão-Mestre of the workspace, and its repository.
+func (e stdEpics) api(ctx context.Context, workspace string) (github.PullAPI, string, error) {
+	var repo string
+	err := e.r.env.DB.Reader().QueryRowContext(ctx, `SELECT repo FROM workspaces WHERE slug = ?`, workspace).Scan(&repo)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, "", fmt.Errorf("the workspace %s has no repository", workspace)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	gm, ok, err := e.reg.GrandMaster(ctx, workspace)
+	if err != nil {
+		return nil, "", err
+	}
+	if !ok {
+		return nil, "", errors.New("the workspace has no Grand Master to act on GitHub")
+	}
+	api, err := stdClients{e.r}.For(ctx, gm, repo)
+	return api, repo, err
+}
+
+// Epic implements tables.GitHub; an issue that does not exist is
+// tables.ErrEpicNotFound.
+func (e stdEpics) Epic(ctx context.Context, workspace string, number int) (tables.Epic, error) {
+	api, repo, err := e.api(ctx, workspace)
+	if err != nil {
+		return tables.Epic{}, err
+	}
+	d, err := api.IssueData(ctx, repo, number)
+	if errors.Is(err, github.ErrNotFound) {
+		return tables.Epic{}, fmt.Errorf("%w: #%d", tables.ErrEpicNotFound, number)
+	}
+	if err != nil {
+		return tables.Epic{}, err
+	}
+	if d.IsPull {
+		// the issues endpoint answers for a pull request too
+		return tables.Epic{}, fmt.Errorf("%w: #%d is a pull request", tables.ErrEpicNotFound, number)
+	}
+	return tables.Epic{Number: d.Number, Title: d.Title, Body: github.HideMarkers(d.Body), Labels: d.Labels, Open: d.State == "open", NotPlanned: d.State != "open" && d.StateReason == "not_planned"}, nil
+}
+
+// errLocked is what a write on GitHub answers while the Mestre is locked
+// (/travar): the engine acts on nothing outside.
+var errLocked = errors.New("the Mestre is locked: no action on GitHub is made")
+
+// CloseEpic implements tables.GitHub: the epic is closed as "not planned".
+func (e stdEpics) CloseEpic(ctx context.Context, workspace string, number int) error {
+	if e.r.lock.Locked(ctx) {
+		return errLocked
+	}
+	api, repo, err := e.api(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	closed := "closed"
+	return api.UpdateIssue(ctx, repo, number, github.IssueEdit{State: &closed, StateReason: "not_planned"})
+}
+
+// ClosePR implements tables.GitHub: the pull request is closed without merge.
+func (e stdEpics) ClosePR(ctx context.Context, workspace string, number int) error {
+	if e.r.lock.Locked(ctx) {
+		return errLocked
+	}
+	api, repo, err := e.api(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	c, ok := api.(interface {
+		ClosePull(ctx context.Context, repo string, n int) error
+	})
+	if !ok {
+		return errors.New("the GitHub of this run cannot close a pull request")
+	}
+	return c.ClosePull(ctx, repo, number)
+}

@@ -312,6 +312,7 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		o.ChainDelegations = r.decrees
 	}
 	o.Locked = r.lock.Locked
+	o.Epics = stdEpics{r: r, reg: characters.Registry{DB: r.env.DB}}
 }
 
 // OwnerAlert, CharacterDecrees and Users make the run the people of the chain
@@ -397,6 +398,9 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	}
 	if orc.BaseSync != nil {
 		h.Send.Base = orc.BaseSync
+	}
+	if orc.EpicDeps != nil {
+		h.Deps = orc.EpicDeps
 	}
 	h.Register(fwd)
 	return []ExternalFunc{func(ctx context.Context, _ *guild.Fence) error {
