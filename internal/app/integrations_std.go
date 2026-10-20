@@ -339,6 +339,9 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		o.ChainDelegations = r.decrees
 	}
 	o.Locked = r.lock.Locked
+	if o.Messages == nil {
+		o.Messages = inboxMessages{&inbox.Store{DB: r.env.DB}}
+	}
 	o.Epics = stdEpics{r: r, reg: characters.Registry{DB: r.env.DB}}
 }
 
@@ -433,6 +436,7 @@ func (r *stdRun) Attach(orc *Orchestration, fwd *localchan.LocalForwarder) []Ext
 	// completed mission of the epic has a criterion with no proof
 	h.Send.Criteria = quests.Acceptance{Store: &quests.Store{DB: r.env.DB}, Body: r.issueBody(orc)}
 	h.Register(fwd)
+	(&decrees.ProposeHandler{Service: r.decrees, Characters: orc.Registry, Message: inboxMessages{&inbox.Store{DB: r.env.DB}}.Source, Offer: r.dc}).Register(fwd)
 	poll, perr := r.poller(orc)
 	if perr != nil {
 		r.env.Log.Warn("app: the reading of the events of GitHub is off", "err", perr)
