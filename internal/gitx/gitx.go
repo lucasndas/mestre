@@ -161,6 +161,15 @@ type StatusEntry struct {
 	OrigPath string // source of a rename or copy
 }
 
+// TrackedStatus is what one `git status --branch` says about a worktree, for
+// the decision on a commit: the branch checked out and the tracked entries
+// (staged and, in the worktree, changed). Untracked files are not read.
+type TrackedStatus struct {
+	Branch   string // short name; "" when detached
+	Detached bool
+	Entries  []StatusEntry // never untracked
+}
+
 // Untracked reports whether the file is new to git.
 func (e StatusEntry) Untracked() bool { return e.Index == '?' && e.Worktree == '?' }
 
@@ -335,6 +344,9 @@ type Repo interface {
 	// Status lists changed and untracked files, honoring info/exclude and
 	// leaving out skip-worktree files; empty means clean.
 	Status(ctx context.Context) ([]StatusEntry, error)
+	// TrackedStatus reads the branch and the tracked entries of the worktree
+	// at this moment, in one git call (the index is always read anew).
+	TrackedStatus(ctx context.Context) (TrackedStatus, error)
 	// Stage stages the paths, deletions included; no paths stages all.
 	Stage(ctx context.Context, paths ...string) error
 	// Commit commits the staged changes (ErrNothingToCommit) and returns the

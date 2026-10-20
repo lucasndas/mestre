@@ -103,6 +103,10 @@ func (s *Service) can(ctx context.Context, h hop, r Request, st Settings) verdic
 		return yes()
 	}
 	c := h.char
+	if r.Type == classes.RequestGMAction {
+		// a question of the Grão-Mestre to the people: no agent decides it, whoever asked
+		return no(false, "a pergunta do Grão-Mestre às pessoas só as pessoas respondem")
+	}
 	switch {
 	case c.ID == r.Requester:
 		return no(true, "%s é quem pediu: ninguém decide em causa própria", c.Name)

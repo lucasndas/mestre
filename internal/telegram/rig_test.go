@@ -15,6 +15,7 @@ import (
 	"github.com/lucasndas/mestre/internal/glossary"
 	"github.com/lucasndas/mestre/internal/lockdown"
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
+	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/tablerules"
 	"github.com/lucasndas/mestre/internal/store"
 	"github.com/lucasndas/mestre/internal/telegram"
@@ -98,6 +99,8 @@ type world struct {
 	rules     *tablerules.Service
 	routing   *telegram.Routing
 	bc        *telegram.BlockChannel
+	cc        *telegram.ChooseChannel
+	answers   []inbox.NewItem
 	sc        *telegram.StallChannel
 	pauser    *fakeTablePauser
 	dg        *telegram.DigestChannel
@@ -229,11 +232,18 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 			}
 		}
 		w.bc = &telegram.BlockChannel{Users: w.users, PanelURL: "https://painel.test/cofre"}
+		w.cc = &telegram.ChooseChannel{Users: w.users, Answered: func(_ context.Context, q telegram.ChoiceQuestion, by users.User, option string) error {
+			w.answers = append(w.answers, telegram.AnswerItem(q, by, option))
+			return nil
+		}}
 		acts := map[string]telegram.Action{}
 		for k, v := range w.opts.Actions {
 			acts[k] = v
 		}
 		for k, v := range w.bc.Actions() {
+			acts[k] = v
+		}
+		for k, v := range w.cc.Actions() {
 			acts[k] = v
 		}
 		w.pauser = &fakeTablePauser{}
@@ -300,6 +310,9 @@ func newWorld(t *testing.T, ro ...rigOpts) *world {
 	if w.bc != nil {
 		w.bc.Bind(w.bot)
 		w.sc.Bind(w.bot)
+	}
+	if w.cc != nil {
+		w.cc.Bind(w.bot)
 	}
 	if w.lc != nil {
 		w.lc.Bind(w.bot)
