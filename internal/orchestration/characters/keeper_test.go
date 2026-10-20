@@ -1,6 +1,7 @@
 package characters_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -47,7 +48,8 @@ func TestTheGrandMasterThatDiesAtOnceIsStartedAgainWithBackoffAndAlertedOnce(t *
 	t.Parallel()
 	r := newRig(t, rigOptions{})
 	gm := r.grandMaster()
-	keeper := r.svc.NewKeeper(gm.Machine)
+	alive := true
+	keeper := r.svc.NewKeeper(gm.Machine, func(context.Context, string) bool { return alive })
 	t0 := r.clk.Now()
 
 	die := func() {
@@ -106,5 +108,78 @@ func TestTheGrandMasterThatDiesAtOnceIsStartedAgainWithBackoffAndAlertedOnce(t *
 	tick()
 	if n := len(starts()); n != 5 || len(r.notes.of(characters.NoticeGrandMasterFailing)) != 1 {
 		t.Errorf("after the alert: %d starts, %d alerts", n, len(r.notes.of(characters.NoticeGrandMasterFailing)))
+	}
+}
+
+func TestTheKeeperDoesNotStartAgainAGrandMasterWhoseEndWasAskedForOrWhoseWorkspaceIsGone(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	gm := r.grandMaster()
+	alive := true
+	keeper := r.svc.NewKeeper(gm.Machine, func(context.Context, string) bool { return alive })
+	r.mach[gm.Machine].host.emit(characters.HostEvent{Terminal: r.get(gm.ID).TerminalID, Kind: characters.HostExit})
+	alive = false
+	if err := keeper.Tick(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r.state(gm) != characters.Interrupted {
+		t.Fatalf("a Grand Master of a workspace that is gone was started again: %s", r.state(gm))
+	}
+	alive = true
+	if err := r.reg.SetStop(r.ctx, gm.ID, r.clk.Now(), "user:lucas", "retire"); err != nil {
+		t.Fatal(err)
+	}
+	if err := keeper.Tick(r.ctx); err != nil || r.state(gm) != characters.Interrupted {
+		t.Fatalf("a Grand Master whose end was asked for was started again: %s, %v", r.state(gm), err)
+	}
+}
+
+func TestTheFailuresOfTheGrandMasterExpireAfterTheWindow(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	gm := r.grandMaster()
+	keeper := r.svc.NewKeeper(gm.Machine, nil)
+	die := func() {
+		r.mach[gm.Machine].host.emit(characters.HostEvent{Terminal: r.get(gm.ID).TerminalID, Kind: characters.HostExit})
+	}
+	for range 3 { // three failures: the alert, and a long wait
+		die()
+		if err := keeper.Tick(r.ctx); err != nil {
+			t.Fatal(err)
+		}
+		r.clk.Advance(2 * time.Minute)
+		if err := keeper.Tick(r.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := len(r.notes.of(characters.NoticeGrandMasterFailing)); n != 1 {
+		t.Fatalf("alerts = %d", n)
+	}
+	// it stays up for longer than the window: the count starts again, and a new
+	// death is started at once
+	r.clk.Advance(characters.KeepWindow + time.Minute)
+	if err := keeper.Tick(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	die()
+	if err := keeper.Tick(r.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r.state(gm) != characters.Starting {
+		t.Errorf("after the window the Grand Master is %s; want it started at once", r.state(gm))
+	}
+}
+
+func TestReplacingTheGrandMasterRetiresItWhilePinningStillHoldsForEveryoneElse(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, rigOptions{})
+	gm := r.grandMaster()
+	old := r.get(gm.ID)
+	res, err := r.svc.Replace(r.ctx, characters.ReplaceRequest{Workspace: workspace, Name: old.Name, Sheet: "Dev Claude", By: owner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.state(old) != characters.Stopped || res.Character.ID == old.ID || !res.Character.Pinned || r.audited("character.retired") != 1 {
+		t.Errorf("old %s, new %+v, retired %d", r.state(old), res.Character, r.audited("character.retired"))
 	}
 }

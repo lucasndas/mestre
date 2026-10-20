@@ -132,7 +132,10 @@ func (e *Engine) hostOrchestration(db *store.DB, integ IntegrationRun) (*Orchest
 		// The characters this machine lost are resumed in the order of the
 		// document (the Grand Master first), and the Grand Master is kept up
 		// afterwards, with backoff, for as long as the Citadel acts.
-		keeper := orc.Characters.NewKeeper(e.id.MachineID)
+		keeper := orc.Characters.NewKeeper(e.id.MachineID, func(ctx context.Context, slug string) bool {
+			_, err := orc.Workspaces.Get(ctx, slug)
+			return !errors.Is(err, workspaces.ErrNotFound)
+		})
 		orc.Loops = append(orc.Loops, func(ctx context.Context) error {
 			if err := orc.Characters.ResumeMachine(ctx, e.id.MachineID); err != nil && ctx.Err() == nil {
 				e.log.Warn("app: some characters of this machine were not resumed", "err", err)

@@ -419,9 +419,8 @@ func TestTheSuperiorComesFromWhoCreatedTheCharacter(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.ready(gm)
-	// the Grand Master is pinned and cannot be dismissed: it is gone for good
-	// (a workspace removed), which the registry says by its state
-	if _, _, err := r.reg.Transition(r.ctx, gm.ID, characters.Stopped, characters.Change{Reason: "workspace removed", At: r.clk.Now()}); err != nil {
+	// the Grand Master is pinned: only the retirement of the replacement ends it
+	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: gm.ID, By: engine, Retire: true, Reason: "retired"}); err != nil {
 		t.Fatal(err)
 	}
 	want(canvas, "", true) // no Grand Master either: the people

@@ -36,14 +36,18 @@ type keepState struct {
 type Keeper struct {
 	s       *Service
 	machine string
+	// live says whether the workspace still exists (nil: it does); a Grand
+	// Master of a workspace that is gone is not started again.
+	live func(ctx context.Context, workspace string) bool
 
 	mu sync.Mutex
 	st map[string]*keepState
 }
 
 // NewKeeper returns the Keeper of the Grand Masters that run on a machine.
-func (s *Service) NewKeeper(machine string) *Keeper {
-	return &Keeper{s: s, machine: machine, st: map[string]*keepState{}}
+// live is optional: see Keeper.
+func (s *Service) NewKeeper(machine string, live func(ctx context.Context, workspace string) bool) *Keeper {
+	return &Keeper{s: s, machine: machine, live: live, st: map[string]*keepState{}}
 }
 
 // Run looks at the Grand Masters every second of the clock until the context
@@ -70,14 +74,24 @@ func (k *Keeper) Tick(ctx context.Context) error {
 		return err
 	}
 	now := k.s.clk.Now()
+	known := map[string]bool{}
 	for _, c := range all {
 		if c.Role != RoleGrandMaster {
 			continue
 		}
+		known[c.ID] = true
+		// One whose end was asked for, or whose workspace is gone, is not ours
+		// to start again.
+		if !c.StopRequestedAt.IsZero() || k.live != nil && !k.live(ctx, c.Workspace) {
+			continue
+		}
 		due, alert := k.observe(c, now)
 		if alert != "" {
-			_ = k.s.o.Notifier.Notify(ctx, Notice{Kind: NoticeGrandMasterFailing, To: Recipient{Kind: ToOwner}, Workspace: c.Workspace,
-				Character: c.ID, Name: c.Name, Text: alert})
+			if err := k.s.o.Notifier.Notify(ctx, Notice{Kind: NoticeGrandMasterFailing, To: Recipient{Kind: ToOwner}, Workspace: c.Workspace,
+				Character: c.ID, Name: c.Name, Text: alert}); err != nil {
+				k.s.log.Warn("characters: the alert of the Grand Master that keeps failing was not given", "workspace", c.Workspace, "err", err)
+				k.unalert(c.ID) // the next failure of the window tells it
+			}
 		}
 		if !due {
 			continue
@@ -86,7 +100,23 @@ func (k *Keeper) Tick(ctx context.Context) error {
 			k.s.log.Warn("characters: the Grand Master was not started again", "workspace", c.Workspace, "err", err)
 		}
 	}
+	k.mu.Lock()
+	for id := range k.st {
+		if !known[id] {
+			delete(k.st, id) // stopped, or gone with its workspace
+		}
+	}
+	k.mu.Unlock()
 	return nil
+}
+
+// unalert lets the alert be given again, when it could not be given.
+func (k *Keeper) unalert(id string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if st := k.st[id]; st != nil {
+		st.alerted = false
+	}
 }
 
 // observe updates what is known of a Grand Master and says whether it is time

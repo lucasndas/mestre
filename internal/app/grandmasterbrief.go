@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
@@ -50,7 +51,7 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 			text.WriteString("Open tables:\n")
 		}
 		open++
-		fmt.Fprintf(&text, "- %s: %s, epic #%d %q", t.ID, t.State, t.Epic, t.EpicTitle)
+		fmt.Fprintf(&text, "- %s: %s, epic #%d %q", t.ID, t.State, t.Epic, untrusted(t.EpicTitle))
 		if t.PRNumber != 0 {
 			fmt.Fprintf(&text, ", PR #%d", t.PRNumber)
 			if t.Merged {
@@ -58,7 +59,7 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 			}
 		}
 		if t.Paused {
-			fmt.Fprintf(&text, ", paused (%s)", oneLine(t.PausedReason))
+			fmt.Fprintf(&text, ", paused (%q)", untrusted(t.PausedReason))
 		}
 		text.WriteByte('\n')
 	}
@@ -82,7 +83,7 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 	var pending []string
 	for _, r := range reqs {
 		if r.Workspace == workspace {
-			pending = append(pending, fmt.Sprintf("#%d (%s, with %s: %s)", r.ID, r.Table, r.Level.Label(), oneLine(r.About)))
+			pending = append(pending, fmt.Sprintf("#%d (%s, with %s: %q)", r.ID, r.Table, r.Level.Label(), untrusted(r.About)))
 		}
 	}
 	if len(pending) == 0 {
@@ -96,7 +97,7 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 	}
 	for i := len(items) - 1; i >= 0; i-- {
 		if it := items[i]; it.Kind == inbox.KindUser {
-			fmt.Fprintf(&text, "Last message from a user (%s, %s): %q", it.Sender, it.ID, cut(oneLine(it.Text), maxBriefText))
+			fmt.Fprintf(&text, "Last message from a user, unverified text (%q, %s): %q", untrusted(it.Sender), it.ID, cut(untrusted(it.Text), maxBriefText))
 			return text.String(), nil
 		}
 	}
@@ -104,7 +105,17 @@ func (b *grandMasterBrief) Brief(ctx context.Context, workspace string) (string,
 	return text.String(), nil
 }
 
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+// untrusted makes the text somebody else wrote safe to quote: no control or
+// format character (an escape, a bidirectional mark), one line.
+func untrusted(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && !unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
+	return cut(strings.Join(strings.Fields(s), " "), maxBriefText)
+}
 
 func cut(s string, n int) string {
 	if r := []rune(s); len(r) > n {
