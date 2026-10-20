@@ -14,8 +14,8 @@ Fazer cada provedor segurar o essencial das [permissões](permissoes.md) mesmo s
 |---|---|---|---|
 | `files.write` | `allow`: `Edit(<glob>)`, que vale para todas as ferramentas que gravam (o Claude Code ignora uma regra de caminho `Write(…)`, e avisa); sem escrita: `--disallowedTools Edit Write NotebookEdit` | sempre `-s workspace-write` (sem regra por caminho); sem escrita, sem raízes extras e sem barreira nativa (abaixo) | sem regra por caminho |
 | `files.deny` | `deny`: `Read(<glob>)`, `Edit(<glob>)` | — | — |
-| `commands.allow` / `deny` | `allow` / `deny`: `Bash(<padrão>)` | — (contido pelo sandbox) | — |
-| regras fixas | `deny`: `Bash(git push *)`, `Bash(git remote *)` | `.git` fora do alcance de escrita, menos a pasta git do worktree e `objects`, `refs` e `logs` do espelho, para o commit (abaixo) | `permissions.deny` no `settings.json` do perfil (só regras fixas, pois o arquivo é compartilhado) |
+| `commands.allow` / `deny` | `allow` / `deny`: `Bash(<padrão>)` (no Windows, também `PowerShell(<padrão>)`: o modelo escolhe a ferramenta de shell) | — (contido pelo sandbox) | — |
+| regras fixas | `deny`: `Bash(git push *)`, `Bash(git remote *)` (e as `PowerShell(…)` no Windows) | `.git` fora do alcance de escrita, menos a pasta git do worktree e `objects`, `refs` e `logs` do espelho, para o commit (abaixo) | `permissions.deny` no `settings.json` do perfil (só regras fixas, pois o arquivo é compartilhado) |
 | `network.internet: false` | `--disallowedTools WebFetch WebSearch` | sem `--search`; no Windows, `sandbox_workspace_write.network_access=false`; no Linux, `true`, pelo canal local (abaixo) | `--sandbox` no Windows; no Linux, sem a flag (abaixo) |
 | `network.domains` | `allow`: `WebFetch(domain:<d>)` | só liga/desliga | — |
 | ferramentas disponíveis | — | — | campo `tools` do arquivo de agente `mestre-<id>.md`: só as ferramentas nativas que as regras efetivas não negam por inteiro (sem escrita: sem as de escrita; sem internet: sem as de web) |
@@ -64,6 +64,7 @@ Quando um decreto ou uma mudança de classe libera algo bloqueado no nível nati
 - **CA-NATIVO-11** · *rápida* — **Dado** um `--settings` com `disableAllHooks: true`, `hooks` e `env` plantados, um arquivo de agente com chaves plantadas no frontmatter e um `settings.json` do perfil com `permissions.allow` e `allowNonWorkspaceAccess`, **quando** o adaptador os gera, **então** nenhuma dessas chaves fica, o `--settings` leva `disableAllHooks: false` e o `settings.json` mantém `trustedWorkspaces`, `theme` e `permissions.deny` e `ask`.
 - **CA-NATIVO-12** · *rápida* — **Dado** os parâmetros de um worktree com o arquivo `.git` apontando para outra pasta, **quando** o adaptador do Codex traduz, **então** as `writable_roots` são só as do registro do motor (nenhuma sem registro), e um registro fora de `<espelho>/worktrees/` ou com link é recusado.
 - **CA-NATIVO-13** · *rápida* — **Dado** uma máquina Windows com o plano B `CodexOfflineNetwork` (ou `AntigravityNoSandbox`) ligado pela conformidade e uma classe sem internet, **quando** `mestre class check` roda, **então** traduz com os planos B da máquina, como o personagem inicia nela, e o Codex (ou o Antigravity) traz "sem reforço nativo de rede" em "só no despachante"; sem plano B ligado, nenhum dos dois.
+- **CA-NATIVO-14** · *rápida* — **Dado** uma classe com comandos permitidos e negados e as regras fixas, **quando** o adaptador do Claude Code traduz para o Windows, **então** cada regra de comando sai como `Bash(…)` e como `PowerShell(…)` (inclusive a forma sem o ` *` final nas negações e a negação total), e no Linux só como `Bash(…)`.
 
 ## Depende de
 

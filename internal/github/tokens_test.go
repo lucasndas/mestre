@@ -142,3 +142,19 @@ func TestTheTokenIsRedactedInEveryVerb(t *testing.T) {
 		}
 	}
 }
+
+// The installations are kept as GitHub spells the repositories and the requests
+// go in lower case: the App is found in either.
+func TestTheInstallationIsFoundWhateverTheCaseOfTheRepository(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.ready(github.App{Name: "lucas-mestre-mestre", Role: github.RoleMestre}, 2, 12, 101, false, "Lucas/Meu_App")
+	for _, repo := range []string{"Lucas/Meu_App", "lucas/meu_app"} {
+		if id, err := w.apps.Installation(w.ctx, "lucas-mestre-mestre", repo); err != nil || id != 12 {
+			t.Errorf("%s: %d, %v", repo, id, err)
+		}
+	}
+	if _, err := w.apps.Installation(w.ctx, "lucas-mestre-mestre", "lucas/outro"); !errors.Is(err, github.ErrNotInstalled) {
+		t.Errorf("another repository: %v", err)
+	}
+}

@@ -531,7 +531,7 @@ func (s *Session) runAcked(ctx context.Context, m *Message, h Handler) {
 		if prev != nil {
 			_ = json.Unmarshal(prev, &first)
 		}
-		s.sendAck(env.ID, Ack{Status: AckDuplicate, Error: first.Error})
+		s.sendAck(env.ID, Ack{Status: AckDuplicate, Error: first.Error, Result: first.Result})
 		return
 	}
 	reply, herr := h.Handle(ctx, m)
@@ -547,11 +547,21 @@ func (s *Session) runAcked(ctx context.Context, m *Message, h Handler) {
 		s.sendAck(env.ID, Ack{Status: AckError, Error: pe})
 		return
 	}
-	if reply != nil {
+	ack := Ack{Status: AckOK}
+	if reply != nil && reply.InAck {
+		raw, err := s.cfg.Registry.Marshal(reply.Type, reply.Payload, true)
+		if err != nil {
+			pe := asError(err)
+			s.finish(ctx, env.ID, Ack{Status: AckError, Error: pe})
+			s.sendAck(env.ID, Ack{Status: AckError, Error: pe})
+			return
+		}
+		ack.Result = raw
+	} else if reply != nil {
 		s.sendReply(ctx, env.ID, reply)
 	}
-	s.finish(ctx, env.ID, Ack{Status: AckOK})
-	s.sendAck(env.ID, Ack{Status: AckOK})
+	s.finish(ctx, env.ID, ack)
+	s.sendAck(env.ID, ack)
 }
 
 func (s *Session) finish(ctx context.Context, id string, a Ack) {

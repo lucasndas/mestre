@@ -241,6 +241,10 @@ type Ack struct {
 	Status string `json:"status" proto:"req"`
 	// Error says why the status is "error".
 	Error *Error `json:"error,omitempty"`
+	// Result is the answer of a command that has one (the result of a
+	// delivery, the screen of a terminal): it goes in the ack, which does not
+	// wait behind the messages the receiver is still running.
+	Result json.RawMessage `json:"result,omitempty"`
 }
 
 // Validate checks the status.
@@ -313,13 +317,104 @@ func (t *TerminalClose) Validate() error {
 }
 
 // TerminalStatus is `terminal.status`. The states are owned by the
-// characters (docs/orquestracao/personagens.md), so they are not checked.
+// characters (docs/orquestracao/personagens.md), so they are not checked. The
+// last fields are the report of a character a Tower makes to the Citadel
+// (characters.Report): the Citadel takes it only from the machine the
+// registry puts the character on.
 type TerminalStatus struct {
 	TerminalID string `json:"terminal_id" proto:"req"`
 	State      string `json:"state" proto:"req"`
 	Reason     string `json:"reason,omitempty"`
 	ExitCode   *int   `json:"exit_code,omitempty"`
 	SessionID  string `json:"session_id,omitempty"`
+	// AgentID is the character; Seq grows with every report of it, so a late
+	// one is dropped; At is when the Tower saw the change.
+	AgentID string     `json:"agent_id,omitempty"`
+	Seq     uint64     `json:"seq,omitempty"`
+	At      *Timestamp `json:"at,omitempty"`
+	// PTYPid, PTYStarted and PTYVersion identify the mestre-pty of the terminal.
+	PTYPid     int    `json:"pty_pid,omitempty"`
+	PTYStarted string `json:"pty_started,omitempty"`
+	PTYVersion string `json:"pty_version,omitempty"`
+	// Reduced is why the monitoring is reduced ("" clears it); nil leaves it.
+	Reduced *string `json:"reduced,omitempty"`
+	// Resync marks the states a machine reports when it reconnects.
+	Resync bool `json:"resync,omitempty"`
+}
+
+// CharacterStart is `character.start`: the Citadel renders the request of the
+// session zero of a character and the Tower prepares it and starts the
+// terminal. Request is the JSON of sessionzero.CharacterRequest; it can carry
+// the API key of the provider, so the message is volatile.
+type CharacterStart struct {
+	Character     string `json:"character" proto:"req"`
+	TerminalID    string `json:"terminal_id" proto:"req"`
+	Kind          string `json:"kind" proto:"req"`
+	Resumed       bool   `json:"resumed,omitempty"`
+	ResumeMessage string `json:"resume_message,omitempty"`
+	Request       Object `json:"request" proto:"req"`
+}
+
+// CharacterStop is `character.stop`: the end of a character on its machine.
+type CharacterStop struct {
+	Character string `json:"character" proto:"req"`
+	// Final ends for good (the files go away); false is a restart that resumes.
+	Final  bool   `json:"final,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// CharacterNotice is `character.notice`: a notice about a character of the
+// Tower, to the master of its table. The Citadel takes the workspace, the
+// table and the name from its registry, never from the message.
+type CharacterNotice struct {
+	Kind      string `json:"kind" proto:"req"`
+	Character string `json:"character" proto:"req"`
+	Text      string `json:"text,omitempty"`
+	// Screen is the screen that waits for input (kind blocked_input).
+	Screen string `json:"screen,omitempty"`
+}
+
+// TableRef names the worktree of a table on a Tower (`table.where`,
+// `table.remove`, `table.done`).
+type TableRef struct {
+	Workspace string `json:"workspace" proto:"req"`
+	Table     string `json:"table" proto:"req"`
+}
+
+// TableWhere is the answer to `table.where`, in the ack: where the Tower keeps
+// (or would keep) the worktree of the table and, when it exists, its state.
+type TableWhere struct {
+	Dir    string   `json:"dir" proto:"req"`
+	Exists bool     `json:"exists"`
+	Tip    string   `json:"tip,omitempty"`
+	Dirty  []string `json:"dirty,omitempty"`
+}
+
+// TableSent is `table.sent`, the end of a `table.done` (its reply_to): the
+// Tower sent its commits to the Citadel (Sent), up to Tip; Warnings lists what
+// did not travel; Error says why it could not send.
+type TableSent struct {
+	Workspace string   `json:"workspace" proto:"req"`
+	Table     string   `json:"table" proto:"req"`
+	Sent      bool     `json:"sent"`
+	Tip       string   `json:"tip,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
+	Error     string   `json:"error,omitempty"`
+}
+
+// TableNotice is `table.notice`: a Tower tells the master of a table something
+// about its worktree (a branch that diverged, a worktree that conflicts).
+type TableNotice struct {
+	Workspace string `json:"workspace" proto:"req"`
+	Table     string `json:"table" proto:"req"`
+	Text      string `json:"text" proto:"req"`
+}
+
+// CharacterTurn is `character.turn`: a turn of a character of the Tower ended,
+// with the last message of the agent in it.
+type CharacterTurn struct {
+	AgentID     string `json:"agent_id" proto:"req"`
+	LastMessage string `json:"last_message,omitempty"`
 }
 
 // TerminalReplay is `terminal.replay`.
@@ -348,6 +443,8 @@ type TerminalScreenResult struct {
 	Text       string    `json:"text" proto:"req"`
 	Cursor     Object    `json:"cursor,omitempty"`
 	CapturedAt Timestamp `json:"captured_at" proto:"req"`
+	// History is the lines that scrolled off, when `lines` asked for them.
+	History string `json:"history,omitempty"`
 }
 
 // InboxDeliver is `inbox.deliver`.
@@ -362,6 +459,11 @@ type InboxDeliver struct {
 const (
 	InboxDelivered = "delivered"
 	InboxBusy      = "busy"
+	// InboxConfirmed and InboxUnconfirmed come later, in a message of their
+	// own: the turn that the delivery began was seen (or was not, within the
+	// time the supervision waits).
+	InboxConfirmed   = "confirmed"
+	InboxUnconfirmed = "unconfirmed"
 )
 
 // InboxResult is `inbox.result`; busy gives the item back to the queue of
@@ -373,10 +475,11 @@ type InboxResult struct {
 
 // Validate checks the status.
 func (r *InboxResult) Validate() error {
-	if r.Status != InboxDelivered && r.Status != InboxBusy {
-		return fmt.Errorf("status %q is not delivered or busy", r.Status)
+	switch r.Status {
+	case InboxDelivered, InboxBusy, InboxConfirmed, InboxUnconfirmed:
+		return nil
 	}
-	return nil
+	return fmt.Errorf("status %q is not delivered, busy, confirmed or unconfirmed", r.Status)
 }
 
 // AgentSiteLogin is `agent.site_login`; the machine keeps the secret only in

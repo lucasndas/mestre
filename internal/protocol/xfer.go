@@ -44,6 +44,29 @@ type Skipper interface {
 	Have(ctx context.Context, begin XferBegin) bool
 }
 
+// PeerFinalizer is a Finalizer that depends on who sent the transfer: on the
+// Citadel, the machine the connection authenticated (never what the meta says).
+// The receiving side asks it for the Finalizer of that peer.
+type PeerFinalizer interface {
+	FinalizerFor(machine string) Finalizer
+}
+
+// finalizerOf is the Finalizer of a kind for the peer of this link.
+func (h *xferHub) finalizerOf(kind string) (Finalizer, bool) {
+	f, ok := h.l.cfg.Xfer.Finalizers[kind]
+	if pf, isPeer := f.(PeerFinalizer); ok && isPeer {
+		f = pf.FinalizerFor(h.l.key)
+	}
+	return f, ok && f != nil
+}
+
+// Admitter is an optional part of a Finalizer: asked at xfer.begin, it refuses
+// a transfer that cannot be finalized (a bundle of a table that does not exist,
+// one that is too big), before any part is sent and any disk is reserved.
+type Admitter interface {
+	Admit(ctx context.Context, begin XferBegin) error
+}
+
 // FinalizerFunc adapts a function to Finalizer.
 type FinalizerFunc func(ctx context.Context, begin XferBegin, file string) error
 
@@ -260,9 +283,14 @@ func (h *xferHub) onBegin(ctx context.Context, b *XferBegin) (*Reply, error) {
 	if h.isStopped() {
 		return nil, errStopped
 	}
-	finalizer, known := cfg.Finalizers[b.Kind]
+	finalizer, known := h.finalizerOf(b.Kind)
 	if !known {
 		return nil, NewError(CodeUnavailable, "this machine has no receiver for transfers of kind %s", b.Kind)
+	}
+	if a, ok := finalizer.(Admitter); ok {
+		if err := a.Admit(ctx, *b); err != nil {
+			return nil, asError(err)
+		}
 	}
 	h.mu.Lock()
 	fin, ok := h.finished[b.XferID]
@@ -495,7 +523,8 @@ func (h *xferHub) finalize(ctx context.Context, r *recvXfer, endID string) {
 		h.fail(ctx, r, endID, NewError(CodeHashMismatch, "SHA-256 of transfer %s is %s, expected %s", r.begin.XferID, sum, r.begin.SHA256))
 		return
 	}
-	if err := h.l.cfg.Xfer.Finalizers[r.begin.Kind].Finalize(ctx, r.begin, r.path); err != nil {
+	fin, _ := h.finalizerOf(r.begin.Kind)
+	if err := fin.Finalize(ctx, r.begin, r.path); err != nil {
 		h.fail(ctx, r, endID, asError(err))
 		return
 	}
