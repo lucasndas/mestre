@@ -38,6 +38,8 @@ type Workspaces interface {
 type Epic struct {
 	Number int
 	Title  string
+	// Body is the text of the issue; the criteria are read from it (ParseCriteria).
+	Body   string
 	Labels []string
 	Open   bool
 	// NotPlanned: the epic was closed as "not planned" (false for an open one).
@@ -154,6 +156,26 @@ type Oversight interface {
 	// Status says whether the autonomy of the table is paused (with the
 	// reason) and gives the line of its queue of approvals ("" for none).
 	Status(ctx context.Context, workspace, table string) (paused bool, reason, queue string, err error)
+}
+
+// ProofState is a criterion of a mission and what the engine knows of its
+// proof (docs/orquestracao/prova-e-devolucao.md#prova-por-critério).
+type ProofState struct {
+	Quest     string `json:"quest"`
+	Criterion string `json:"criterion"`
+	Text      string `json:"text"`
+	// Marked: the engine checked the item on the issue.
+	Marked bool `json:"marked"`
+	// Origin is "verificada pelo motor", "declarada por <personagem>" or "sem
+	// prova"; Proof the text of the proof, which is the words of an agent.
+	Origin string `json:"origin"`
+	Proof  string `json:"proof,omitempty"`
+}
+
+// Proofs gives the proofs of the criteria of the missions of a table
+// (quests.Store).
+type Proofs interface {
+	Of(ctx context.Context, workspace, table string) ([]ProofState, error)
 }
 
 // Inspection is the state of a worktree on a machine.
