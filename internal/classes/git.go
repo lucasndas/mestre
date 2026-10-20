@@ -637,7 +637,7 @@ func (e *evaluator) gitCommit(res *result, rest []word, st *shellState) {
 	if cs, ok := e.env.Git.(CommitStater); ok {
 		// One reading of the real state (one git process); the branch is
 		// judged first, as below.
-		state, err := cs.CommitState(e.ctx, e.env.Worktree, all)
+		state, err := e.commitState(cs, all)
 		if err != nil {
 			res.rule(e.unverifiable("não foi possível ler o estado do git: " + err.Error()))
 			return

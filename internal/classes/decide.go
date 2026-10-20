@@ -517,6 +517,29 @@ type evaluator struct {
 	// analysed (a prefix, env): a git that runs under either is a fixed denial
 	// (gitenv.go).
 	homeSet, homeScope string
+	// commitStates are the readings of the git state this one decision made
+	// (by all): the analysis may reach the same git commit more than once
+	// (the two readings of a line on Windows), and the decision reads the
+	// real state once. It lives and dies with the decision.
+	commitStates map[bool]commitReading
+}
+
+type commitReading struct {
+	state CommitState
+	err   error
+}
+
+// commitState reads the branch and the files of a commit once per decision.
+func (e *evaluator) commitState(cs CommitStater, all bool) (CommitState, error) {
+	if r, ok := e.commitStates[all]; ok {
+		return r.state, r.err
+	}
+	state, err := cs.CommitState(e.ctx, e.env.Worktree, all)
+	if e.commitStates == nil {
+		e.commitStates = map[bool]commitReading{}
+	}
+	e.commitStates[all] = commitReading{state, err}
+	return state, err
 }
 
 func newEvaluator(ctx context.Context, env Env, r *Rules, ev providers.Event, degraded bool) *evaluator {

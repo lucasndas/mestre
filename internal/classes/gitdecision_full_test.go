@@ -126,7 +126,18 @@ const maxGitProcsPerCommitDecision = 2
 // decision changes the next one, so nothing the status says is kept.
 func TestCommitDecisionStartsFewGitProcessesAndReadsTheRealIndex(t *testing.T) {
 	t.Parallel()
-	rg := newCommitRig(t, commitRules)
+	for _, goos := range []string{"", "windows", "linux"} {
+		t.Run("os="+goos, func(t *testing.T) {
+			t.Parallel()
+			rg := newCommitRig(t, commitRules)
+			rg.env.OS = goos
+			checkCommitDecision(t, rg)
+		})
+	}
+}
+
+func checkCommitDecision(t *testing.T, rg *commitRig) {
+	t.Helper()
 	rg.write(t, "tests/a.test.ts")
 	if err := rg.repo.Stage(rg.ctx, "tests/a.test.ts"); err != nil {
 		t.Fatal(err)
