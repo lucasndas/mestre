@@ -324,7 +324,7 @@ func TestTheCitadelStartsACharacterOnATowerAndHearsItBack(t *testing.T) {
 	}
 	master := mk("c0", "Mestre", a.id, characters.RoleTableMaster, characters.Idle)
 	dev := mk("c1", "Dev-1", b.id, characters.RoleCharacter, characters.Starting)
-	m := &machineRouter{local: a.id, srv: &a.e.srvp, reg: characters.Registry{DB: orcDB(t, a)}, clk: clock.Real{}}
+	m := &machineRouter{towerClient: a.e.towerClient(), local: a.id, reg: characters.Registry{DB: orcDB(t, a)}}
 	req := sessionzero.CharacterRequest{
 		ID: dev.ID, Name: dev.Name, Role: dev.Role, Workspace: dev.Workspace, Machine: b.id, Dir: dev.Dir,
 		Snapshot: presets.Snapshot{Sheet: presets.Sheet{Name: dev.Sheet, Agent: "claude-code", Class: "Dev"}, Base: presets.Base{Name: "claude-code", Ready: presets.Ready{Mode: presets.ReadyHook}}},
