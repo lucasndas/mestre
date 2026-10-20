@@ -273,21 +273,44 @@ func (ru *run) commandCommit(ctx context.Context, c *character) StepResult {
 	s.Notes = append(s.Notes, fmt.Sprintf("mestre debug identificado com o terminal: %t; curl negado pelo despachante: %t", identified, curl))
 	_, statErr := os.Stat(filepath.Join(ru.ws.Worktree, AllowedDir, "y.txt"))
 	committed, cerr := ru.committed(ctx)
-	switch {
-	case err != nil:
-		s.Outcome, s.Reason = Failed, err.Error()
-	case statErr != nil:
-		s.Outcome, s.Reason = Failed, "o arquivo "+AllowedDir+"/y.txt não existe"
-	case cerr != nil:
-		s.Outcome, s.Reason = Failed, "o log do worktree não pôde ser lido: "+cerr.Error()
-	case !committed:
-		s.Outcome, s.Reason = Failed, "o commit não foi criado no worktree"
-	case !pre || !post:
-		s.Outcome, s.Reason = Failed, fmt.Sprintf("pre_tool de shell: %t, post_tool de shell: %t", pre, post)
-	default:
-		s.Outcome = Passed
-	}
+	s.Outcome, s.Reason, s.CLIUnreachable = commandCommitVerdict(commandCommitFacts{
+		turnErr: err, statErr: statErr, logErr: cerr, committed: committed, pre: pre, post: post, identified: identified,
+	})
 	return s
+}
+
+// commandCommitFacts is what step 5 observed.
+type commandCommitFacts struct {
+	turnErr, statErr, logErr error
+	committed, pre, post     bool
+	// identified: the engine saw `mestre debug` from the shell tool, with the
+	// agent and the terminal of the character.
+	identified bool
+}
+
+// commandCommitVerdict decides step 5. The CLI that does not reach the engine
+// fails the step and is reported apart (CLIUnreachable), whatever else
+// failed: fail closed, a CLI that was not seen reaching the engine is
+// unreachable. The step is not blocking: the hooks do not need the CLI.
+func commandCommitVerdict(f commandCommitFacts) (outcome Outcome, reason string, cliUnreachable bool) {
+	cliUnreachable = !f.identified
+	switch {
+	case f.turnErr != nil:
+		outcome, reason = Failed, f.turnErr.Error()
+	case f.statErr != nil:
+		outcome, reason = Failed, "o arquivo "+AllowedDir+"/y.txt não existe"
+	case f.logErr != nil:
+		outcome, reason = Failed, "o log do worktree não pôde ser lido: "+f.logErr.Error()
+	case !f.committed:
+		outcome, reason = Failed, "o commit não foi criado no worktree"
+	case !f.pre || !f.post:
+		outcome, reason = Failed, fmt.Sprintf("pre_tool de shell: %t, post_tool de shell: %t", f.pre, f.post)
+	case cliUnreachable:
+		outcome, reason = Failed, "a CLI mestre não alcançou o motor: o mestre debug da ferramenta de shell não foi identificado com o terminal"
+	default:
+		outcome = Passed
+	}
+	return outcome, reason, cliUnreachable
 }
 
 // committed reports whether the branch of the worktree has a commit that
