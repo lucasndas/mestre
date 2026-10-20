@@ -91,10 +91,15 @@ func EndpointFromEnv(getenv func(string) string) (string, error) {
 func InstanceOfSocket(sock string) (string, bool) {
 	p := strings.FieldsFunc(sock, func(r rune) bool { return r == '/' || r == '\\' })
 	n := len(p)
-	if n < 4 || p[n-1] != "cli.sock" || p[n-2] != "run" || !strings.EqualFold(p[n-4], "Mestre") || !ValidInstance(p[n-3]) {
+	if n < 4 || p[n-1] != "cli.sock" || p[n-2] != "run" || !strings.EqualFold(p[n-4], "Mestre") {
 		return "", false
 	}
-	return p[n-3], true
+	// Windows paths ignore the case: the folder of instance x may be spelled X.
+	inst := strings.ToLower(p[n-3])
+	if !ValidInstance(inst) {
+		return "", false
+	}
+	return inst, true
 }
 
 // Access sets who may connect to the socket of the engine. The engine

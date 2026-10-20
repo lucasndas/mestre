@@ -18,12 +18,7 @@ func TestTheCLIAllowsTheEngineToQueryItselfAndNothingMore(t *testing.T) {
 		t.Fatal(err)
 	}
 	read := func() (n int, mine []uint32) {
-		h, err := windows.OpenProcess(windows.READ_CONTROL, false, windows.GetCurrentProcessId())
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer windows.CloseHandle(h)
-		sd, err := windows.GetSecurityInfo(h, windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
+		sd, err := windows.GetSecurityInfo(windows.CurrentProcess(), windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
 		if err != nil {
 			t.Fatal(err)
 		}

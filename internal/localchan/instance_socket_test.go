@@ -18,7 +18,7 @@ func TestTheInstanceIsReadFromTheSocketPath(t *testing.T) {
 		`C:/ProgramData/Mestre/x/run/cli.sock`:           "x",
 		`D:\Data\mestre\ci_1\run\cli.sock`:               "ci_1",
 		`C:\ProgramData\Mestre\longer-name\run\cli.sock`: "",
-		`C:\ProgramData\Mestre\Principal\run\cli.sock`:   "",
+		`C:\ProgramData\Mestre\Principal\run\cli.sock`:   "principal",
 		`C:\ProgramData\Mestre\x\pty\cli.sock`:           "",
 		`C:\ProgramData\Other\x\run\cli.sock`:            "",
 		`/run/mestre/x/cli.sock`:                         "",

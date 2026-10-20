@@ -5,6 +5,7 @@ package winsvc
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
 	"golang.org/x/sys/windows"
 )
@@ -32,16 +33,17 @@ func AllowEngineToIdentify(instance string) error {
 	if err != nil {
 		return fmt.Errorf("account of service %s: %w", name, err)
 	}
+	if !strings.HasPrefix(sid.String(), "S-1-5-80-") {
+		return fmt.Errorf("account of service %s is %s, not a service SID", name, sid)
+	}
 	return allowQueryOfSelf(sid)
 }
 
 // allowQueryOfSelf adds the ACE of sid to the DACL of this process.
 func allowQueryOfSelf(sid *windows.SID) error {
-	h, err := windows.OpenProcess(windows.READ_CONTROL|windows.WRITE_DAC, false, windows.GetCurrentProcessId())
-	if err != nil {
-		return fmt.Errorf("open this process to change its DACL: %w", err)
-	}
-	defer func() { _ = windows.CloseHandle(h) }()
+	// The pseudo-handle of this process: no access check against the
+	// restricted token of the sandbox, which OpenProcess would make.
+	h := windows.CurrentProcess()
 	sd, err := windows.GetSecurityInfo(h, windows.SE_KERNEL_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		return fmt.Errorf("read the DACL of this process: %w", err)
