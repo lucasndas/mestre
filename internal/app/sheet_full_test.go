@@ -1,3 +1,5 @@
+//go:build full
+
 package app_test
 
 import (
@@ -16,7 +18,7 @@ import (
 	"github.com/lucasndas/mestre/pkg/clock"
 )
 
-// CA-FMAQ-01: the Citadel's own sheet is checked every five minutes like the
+// Part of CA-FMAQ-01: the Citadel's own sheet is checked every five minutes like the
 // others, not written once.
 func TestTheCitadelKeepsItsOwnSheetFreshEveryFiveMinutes(t *testing.T) {
 	t.Parallel()
@@ -27,6 +29,7 @@ func TestTheCitadelKeepsItsOwnSheetFreshEveryFiveMinutes(t *testing.T) {
 		cfg := app.Config{Instance: "a", Name: "a", Hostname: "a", Bind: "a", EnginePort: 7443, NoDiscovery: true, Synchronous: "OFF"}
 		paths := app.DirPaths(dir)
 		paths.CLISocket = ""
+		seedGuild(t, paths)
 		founded, rk, err := app.Found(ctx, cfg, paths, clk)
 		if err != nil {
 			t.Fatal(err)

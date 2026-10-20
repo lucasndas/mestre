@@ -12,6 +12,7 @@ import (
 	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/hook"
 	"github.com/lucasndas/mestre/internal/orchestration/presets"
+	"github.com/lucasndas/mestre/internal/protocol"
 	"github.com/lucasndas/mestre/internal/providers"
 	"github.com/lucasndas/mestre/internal/sessionzero"
 	"github.com/lucasndas/mestre/internal/store"
@@ -79,6 +80,11 @@ type Runtime struct {
 	byTerm   map[string]*session
 	lastSeq  uint64
 	starting map[string]bool // characters a Start is preparing: one Start at a time
+	// typed are the items of the inbox already typed into a terminal (the last
+	// few hundred): an item the Citadel gives again, because it gave up waiting
+	// for the answer, is not typed twice.
+	typed      map[string]bool
+	typedOrder []string
 }
 
 var (
@@ -116,7 +122,7 @@ func NewRuntime(o RuntimeOptions) (*Runtime, error) {
 	if o.Checklist == nil {
 		o.Checklist = nopChecklist{}
 	}
-	rt := &Runtime{o: o, clk: o.Clock, local: LocalStore{DB: o.DB}, log: o.Logger, sessions: map[string]*session{}, byTerm: map[string]*session{}, starting: map[string]bool{}}
+	rt := &Runtime{o: o, clk: o.Clock, local: LocalStore{DB: o.DB}, log: o.Logger, sessions: map[string]*session{}, byTerm: map[string]*session{}, starting: map[string]bool{}, typed: map[string]bool{}}
 	o.Host.Events(rt.onHostEvent)
 	return rt, nil
 }
@@ -135,6 +141,37 @@ func (rt *Runtime) nextSeq(prev uint64) uint64 {
 	}
 	rt.lastSeq = n
 	return n
+}
+
+// Live is the state of every terminal this machine knows, as the Citadel
+// reconciles its registry with it (Service.Reconcile) when it takes over the
+// reports a machine could not make while no Citadel was there.
+func (rt *Runtime) Live() []protocol.TerminalState {
+	rt.mu.Lock()
+	all := make([]*session, 0, len(rt.sessions))
+	for _, s := range rt.sessions {
+		all = append(all, s)
+	}
+	rt.mu.Unlock()
+	out := make([]protocol.TerminalState, 0, len(all))
+	for _, s := range all {
+		st := s.status()
+		s.mu.Lock()
+		out = append(out, protocol.TerminalState{TerminalID: s.terminal, AgentID: s.id, State: string(st.State), SessionID: s.sessionID})
+		s.mu.Unlock()
+	}
+	return out
+}
+
+// AgentOf is the character that runs in a terminal of this machine.
+func (rt *Runtime) AgentOf(terminal string) (string, bool) {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	s := rt.byTerm[terminal]
+	if s == nil {
+		return "", false
+	}
+	return s.id, true
 }
 
 func (rt *Runtime) session(id string) *session {
@@ -164,6 +201,10 @@ func (rt *Runtime) Start(ctx context.Context, cmd StartCommand) (StartResult, er
 	if old != nil && old.status().State.Alive() && old.status().State != Interrupted {
 		rt.mu.Unlock()
 		return StartResult{}, fmt.Errorf("characters: %s already runs on this machine", cmd.Character)
+	}
+	if other := rt.byTerm[cmd.Terminal]; other != nil && other.id != cmd.Character {
+		rt.mu.Unlock()
+		return StartResult{}, fmt.Errorf("characters: the terminal %s is already %s's", cmd.Terminal, other.id)
 	}
 	rt.starting[cmd.Character] = true
 	rt.mu.Unlock()

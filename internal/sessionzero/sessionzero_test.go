@@ -215,7 +215,7 @@ func newWT(t *testing.T, committed map[string]string) *wtEnv {
 		write(t, filepath.Join(dir, filepath.FromSlash(p)), body)
 	}
 	return &wtEnv{t: t, ctx: t.Context(), dir: dir, repo: repo, data: h.Data(),
-		wt: sessionzero.Worktree{Providers: providers.NewRegistry(providers.Options{}), Binary: filepath.Join(t.TempDir(), "mestre")}}
+		wt: sessionzero.Worktree{Providers: providers.NewRegistry(providers.Options{NoFlush: true}), Binary: filepath.Join(t.TempDir(), "mestre")}}
 }
 
 func (w *wtEnv) ensure(excludeMestre bool) sessionzero.WorktreeReport {

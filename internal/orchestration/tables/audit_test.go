@@ -428,32 +428,26 @@ func (p prefixSettings) CancelRetention(string) time.Duration {
 	return p.retention
 }
 
-// The settings that make a branch name or a retention are checked.
-func TestTheBranchPrefixAndTheRetentionOfTheWorkspaceAreValidated(t *testing.T) {
+// The settings that make a branch name or a retention are checked (one bad
+// prefix and one bad retention; the whole list is in the full suite).
+func TestABadBranchPrefixAndABadRetentionOfTheWorkspaceAreRefused(t *testing.T) {
 	t.Parallel()
-	for _, prefix := range []string{"-x/", "a..b/", "a b/", "refs/", "/x/"} {
-		w := newWorld(t, worldOpts{settings: prefixSettings{prefix: prefix, retention: time.Hour}})
-		w.activate()
-		w.gh.add(42, "Login", "epico")
-		if _, err := w.svc.Open(w.ctx, tables.OpenRequest{By: w.gm, Epic: 42}); err == nil {
-			t.Errorf("the prefix %q was accepted", prefix)
-		}
-		if ts, _ := w.svc.List(w.ctx, w.slug()); len(ts) != 0 {
-			t.Errorf("the prefix %q left a table: %+v", prefix, ts)
-		}
+	w := newWorld(t, worldOpts{settings: prefixSettings{prefix: "a..b/", retention: time.Hour}})
+	w.activate()
+	w.gh.add(42, "Login", "epico")
+	if _, err := w.svc.Open(w.ctx, tables.OpenRequest{By: w.gm, Epic: 42}); err == nil {
+		t.Error("the prefix a..b/ was accepted")
 	}
-	for _, d := range []time.Duration{0, -time.Hour} {
-		w := newWorld(t, worldOpts{settings: prefixSettings{prefix: "epico/", retention: d}})
-		w.activate()
-		w.gh.add(42, "Login", "epico")
-		tbl := w.open(42).Table
-		w.dest.allowed = true
-		if _, err := w.svc.Close(w.ctx, tables.CloseRequest{By: w.gm, Table: tbl.ID, Cancel: true, Reason: "x"}); err == nil {
-			t.Errorf("the retention %v was accepted", d)
-		}
-		if got, _ := w.svc.Get(w.ctx, w.slug(), tbl.ID); got.State != tables.StateWorking && got.State != tables.StateOpen {
-			t.Errorf("the table moved to %s with a retention of %v", got.State, d)
-		}
+	if ts, _ := w.svc.List(w.ctx, w.slug()); len(ts) != 0 {
+		t.Errorf("the prefix a..b/ left a table: %+v", ts)
+	}
+	w = newWorld(t, worldOpts{settings: prefixSettings{prefix: "epico/", retention: 0}})
+	w.activate()
+	w.gh.add(42, "Login", "epico")
+	tbl := w.open(42).Table
+	w.dest.allowed = true
+	if _, err := w.svc.Close(w.ctx, tables.CloseRequest{By: w.gm, Table: tbl.ID, Cancel: true, Reason: "x"}); err == nil {
+		t.Error("a retention of 0 was accepted")
 	}
 }
 

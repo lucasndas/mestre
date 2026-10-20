@@ -126,22 +126,32 @@ func (a *antigravity) hookCommand(goos, binary, event string) (string, error) {
 		// " turned into \" (1.4.2, the Windows round of 2026-10-19), and cmd
 		// reads \"C:\…\" as a path that does not exist: so the line has no
 		// quote at all. The path goes bare (or by its 8.3 name). Without
-		// MESTRE_AGENT_ID (not a character: a clone without the Mestre) it
-		// prints the neutral answer, built with no quote in the line; with it
-		// and without the binary it prints {}, which blocks PreToolUse: a
-		// character never gets an allow the dispatcher did not give.
+		// MESTRE_AGENT_ID (someone ran agy by hand in a clone without the
+		// Mestre) the line prints the neutral answer of the event without
+		// running the mestre; where it has a quote (PreToolUse: allow, the
+		// only answer agy 1.4.2 lets through) Windows PowerShell builds the
+		// string from [char]34. Without the binary the line prints {}, which
+		// blocks PreToolUse in agy 1.4.2: a character whose mestre is gone
+		// must not run tools.
 		p, err := cmdBarePath(binary)
 		if err != nil {
 			return "", err
 		}
-		say, err := cmdPrint(neutral)
-		if err != nil {
-			return "", err
-		}
-		return `if not defined MESTRE_AGENT_ID (` + say + `) else if exist ` + p + ` (` + p + args + `) else (echo {})`, nil
+		return `if not defined MESTRE_AGENT_ID (` + cmdPrint(neutral) + `) else if exist ` + p + ` (` + p + args + `) else (echo {})`, nil
 	}
 	q := "'" + strings.ReplaceAll(binary, "'", `'\''`) + "'"
 	return `if [ -n "$MESTRE_AGENT_ID" ] && [ -e ` + q + ` ]; then exec ` + q + args + "; else printf '%s\\n' '" + neutral + "'; fi", nil
+}
+
+// cmdPrint is a cmd command that prints the JSON text s with no quote in the
+// line (agy breaks every " of the line): s without quotes goes by echo; s with
+// quotes by Windows PowerShell, which joins the pieces with [char]34.
+func cmdPrint(s string) string {
+	if !strings.Contains(s, `"`) {
+		return "echo " + s
+	}
+	expr := "'" + strings.ReplaceAll(s, `"`, "'+[char]34+'") + "'"
+	return `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -Command ` + expr
 }
 
 // mergeKey puts value under key in the JSON object of cur, keeping every
@@ -198,7 +208,7 @@ func (a *antigravity) PreTrust(req PreTrustRequest) (Trust, error) {
 		if !changed {
 			return out, nil
 		}
-		if err := replaceFile(path, next, before); err != nil {
+		if err := replaceFile(path, next, before, a.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}
@@ -291,7 +301,7 @@ func (a *antigravity) Untrust(req PreTrustRequest) (Trust, error) {
 		if err != nil {
 			return Trust{}, err
 		}
-		if err := replaceFile(path, next, before); err != nil {
+		if err := replaceFile(path, next, before, a.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}

@@ -373,7 +373,7 @@ func hookLines(t *testing.T, dir string) (claude, agy string) { //nolint:unused 
 // neutral reply of the event otherwise; the call comes only after the test.
 func TestHookLinesTestTheAgentIDBeforeCallingTheMestre(t *testing.T) {
 	t.Parallel()
-	reg := providers.NewRegistry(providers.Options{})
+	reg := providers.NewRegistry(providers.Options{NoFlush: true})
 	for _, c := range []struct {
 		goos, binary string
 	}{{"linux", "/opt/mestre/bin/mestre"}, {"windows", `C:\mestre\bin\mestre.exe`}} {
@@ -580,6 +580,28 @@ func TestAttachmentsAreCopiedAndKept(t *testing.T) {
 	e.prepare()
 	if _, err := os.Stat(filepath.Join(e.dir, ".mestre", "anexos", "2026-10-15", "print.png")); err != nil {
 		t.Fatalf("a copied attachment was removed: %v", err)
+	}
+}
+
+func TestThePreparationOfTheMainCloneCopiesNoClassNorAttachment(t *testing.T) {
+	t.Parallel()
+	cls := &classFake{files: map[string]classes.Files{"revisor": {{Path: "CLASS.md", Data: []byte("# revisor\n")}}}}
+	att := &attachFake{files: []sessionzero.File{{Path: "2026-10-15/print.png", Data: []byte{1}}}}
+	e := newTableEnv(t, nil, func(o *sessionzero.TableOptions) { o.Classes, o.Attachments = cls, att })
+	e.req.Table, e.req.Classes = "", []string{"revisor"}
+	if rep := e.prepare(); len(rep.Problems) != 0 {
+		t.Fatalf("problems = %v", rep.Problems)
+	}
+	for _, dir := range []string{"anexos", "run"} {
+		if _, err := os.Stat(filepath.Join(e.dir, ".mestre", dir)); err == nil {
+			t.Errorf(".mestre/%s was made in the main clone", dir)
+		}
+	}
+	// the same preparation for a table copies them
+	e.req.Table = "3-login"
+	e.prepare()
+	if _, err := os.Stat(filepath.Join(e.dir, ".mestre", "anexos", "2026-10-15", "print.png")); err != nil {
+		t.Errorf("a table gets its attachments: %v", err)
 	}
 }
 

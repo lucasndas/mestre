@@ -42,6 +42,10 @@ type Config struct {
 	Addresses []string `json:"addresses,omitempty"`
 	// Synchronous is the synchronous level of the databases ("" is NORMAL).
 	Synchronous string `json:"synchronous,omitempty"`
+	// Terminais is where the terminals of the characters come from (the
+	// folder of the mestre-pty, the socket of the launcher); nil starts none,
+	// and the start of a character says so.
+	Terminais *Terminals `json:"terminais,omitempty"`
 }
 
 // PortBlock is the engine port of the instance with this index: 7443 for the
@@ -125,15 +129,16 @@ func DirPaths(dir string) Paths {
 }
 
 // The files of an instance.
-func (p Paths) configFile() string { return filepath.Join(p.Config, "config.json") }
-func (p Paths) engineKey() string  { return filepath.Join(p.Config, "motor.key") }
-func (p Paths) pendingKey() string { return filepath.Join(p.Config, "motor.key.nova") }
-func (p Paths) vaultKey() string   { return filepath.Join(p.Config, "cofre.key") }
-func (p Paths) guildDB() string    { return filepath.Join(p.Banco, "mestre.db") }
-func (p Paths) envelope() string   { return filepath.Join(p.Banco, "cofre-envelope.bin") }
-func (p Paths) snapshots() string  { return filepath.Join(p.Banco, "copias") }
-func (p Paths) transfers() string  { return filepath.Join(p.Banco, "transferencias") }
-func (p Paths) machineDB() string  { return filepath.Join(p.Maquina, "maquina.db") }
+func (p Paths) configFile() string    { return filepath.Join(p.Config, "config.json") }
+func (p Paths) engineKey() string     { return filepath.Join(p.Config, "motor.key") }
+func (p Paths) pendingKey() string    { return filepath.Join(p.Config, "motor.key.nova") }
+func (p Paths) vaultKey() string      { return filepath.Join(p.Config, "cofre.key") }
+func (p Paths) guildDB() string       { return filepath.Join(p.Banco, "mestre.db") }
+func (p Paths) envelope() string      { return filepath.Join(p.Banco, "cofre-envelope.bin") }
+func (p Paths) mirrorBundles() string { return filepath.Join(p.Banco, "espelhos") }
+func (p Paths) snapshots() string     { return filepath.Join(p.Banco, "copias") }
+func (p Paths) transfers() string     { return filepath.Join(p.Banco, "transferencias") }
+func (p Paths) machineDB() string     { return filepath.Join(p.Maquina, "maquina.db") }
 func (p Paths) discarded(e uint64) string {
 	return filepath.Join(p.Banco, fmt.Sprintf("descartado-%d.db", e))
 }
@@ -208,6 +213,9 @@ func (c Config) check() error {
 		return fmt.Errorf("app: invalid engine port %d", c.EnginePort)
 	case c.Name == "" && c.Hostname == "":
 		return errors.New("app: the configuration names no machine")
+	}
+	if c.Terminais != nil {
+		return c.Terminais.check()
 	}
 	return nil
 }

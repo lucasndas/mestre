@@ -197,9 +197,18 @@ type fakeGitHub struct {
 	closedPR []int
 	closedEp []int
 	err      error
+	// hang makes Epic wait for its context to end.
+	hang bool
 }
 
-func (g *fakeGitHub) Epic(_ context.Context, _ string, n int) (tables.Epic, error) {
+func (g *fakeGitHub) Epic(ctx context.Context, _ string, n int) (tables.Epic, error) {
+	g.mu.Lock()
+	hang := g.hang
+	g.mu.Unlock()
+	if hang {
+		<-ctx.Done()
+		return tables.Epic{}, ctx.Err()
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.err != nil {
@@ -230,6 +239,14 @@ func (g *fakeGitHub) add(n int, title string, labels ...string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.epics[n] = tables.Epic{Number: n, Title: title, Labels: labels, Open: true}
+}
+
+func (g *fakeGitHub) setBody(n int, body string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	e := g.epics[n]
+	e.Body = body
+	g.epics[n] = e
 }
 
 type fakeMessages struct {
@@ -570,6 +587,10 @@ type worldOpts struct {
 	noPeers bool
 	// settings replaces the defaults of the workspace.
 	settings tables.Settings
+	// deps replaces the absence of dependencies between the epics.
+	deps tables.Dependencies
+	// proofs says which criteria of the missions are proved.
+	proofs tables.Proofs
 }
 
 func newWorld(t *testing.T, o worldOpts) *world {
@@ -626,6 +647,8 @@ func newWorld(t *testing.T, o worldOpts) *world {
 		opts.Peers = w.peers
 	}
 	opts.Settings = o.settings
+	opts.Dependencies = o.deps
+	opts.Proofs = o.proofs
 	w.svc, err = tables.New(opts)
 	if err != nil {
 		t.Fatal(err)

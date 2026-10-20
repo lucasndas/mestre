@@ -129,6 +129,12 @@ type Options struct {
 	// empty is this machine's. It decides what only one system needs at
 	// run time: the send key of Codex typed again, on Windows.
 	OS string
+	// NoFlush writes the trust files of the providers without flushing them
+	// to the disk (the default flushes). Only tests that are not about
+	// durability set it, as they open the database with Synchronous OFF
+	// (docs/qualidade/testes.md): a flush costs tens of milliseconds on a
+	// Windows runner.
+	NoFlush bool
 }
 
 // NormalizePath normalizes a path the way the adapters do with the paths of

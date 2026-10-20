@@ -34,6 +34,7 @@ func claudeTrustFile(profile string) string { return filepath.Join(profile, ".cl
 // rewrites this file, so a lost race is done again, up to three times.
 // Idempotent.
 func (c *claudeCode) PreTrust(req PreTrustRequest) (Trust, error) {
+	req.OS = machineOS(req.OS) // before the closures below, which capture req
 	return c.editTrust(req, func(projects map[string]any) (trusted, cleared []string) {
 		wt := entryKey(req.OS, projects, req.Worktree)
 		entry, _ := projects[wt].(map[string]any)
@@ -82,6 +83,7 @@ func trustedWritings(goos string, projects map[string]any, folder string) []stri
 // of the folder (on Windows also the one with backslashes an older Mestre
 // wrote): the worktree was removed, or the conformance test ended.
 func (c *claudeCode) Untrust(req PreTrustRequest) (Trust, error) {
+	req.OS = machineOS(req.OS) // before the closures below, which capture req
 	return c.editTrust(req, func(projects map[string]any) (_, cleared []string) {
 		for k := range projects {
 			if sameFolder(req.OS, k, req.Worktree) {
@@ -149,7 +151,7 @@ func (c *claudeCode) editTrust(req PreTrustRequest, edit func(projects map[strin
 		if err != nil {
 			return Trust{}, err
 		}
-		if err := replaceFile(path, data, before); err != nil {
+		if err := replaceFile(path, data, before, c.noFlush); err != nil {
 			if errors.Is(err, errRewritten) {
 				continue
 			}
@@ -214,9 +216,10 @@ func readShared(path string) ([]byte, error) {
 // the group of the folder: the CLI, running as the account of the agents,
 // reads and rewrites it; never the mode the old file had, which agy and
 // Claude Code create 0600). If the file is not what the caller read any
-// more, it does not write (errRewritten).
-func replaceFile(path string, data []byte, was fileState) error {
-	return safefile.Write(path, data, safefile.Options{Sync: true, Guard: func(now safefile.Info) error {
+// more, it does not write (errRewritten). The write is flushed unless noFlush
+// (Options.NoFlush).
+func replaceFile(path string, data []byte, was fileState, noFlush bool) error {
+	return safefile.Write(path, data, safefile.Options{Sync: !noFlush, Guard: func(now safefile.Info) error {
 		if !now.Same(was) {
 			return errRewritten
 		}
@@ -231,7 +234,7 @@ func replaceFile(path string, data []byte, was fileState) error {
 // a key with backslashes, and the trust screen shows up anyway (the Windows
 // round, 2026-10-19), so such a key never stands for the folder.
 func entryKey(goos string, projects map[string]any, folder string) string {
-	goos = machineOS(goos) // an empty OS is this machine's, here too
+	goos = machineOS(goos)
 	folder = strings.TrimRight(folder, `/\`)
 	if goos == "windows" {
 		folder = strings.ReplaceAll(folder, `\`, "/")
@@ -250,9 +253,32 @@ func entryKey(goos string, projects map[string]any, folder string) string {
 // sameFolder compares two folders: after Clean on Linux; without difference
 // of case or of slash on Windows.
 func sameFolder(goos, a, b string) bool {
+	goos = machineOS(goos)
 	a, b = strings.TrimRight(a, `/\`), strings.TrimRight(b, `/\`)
-	if machineOS(goos) == "windows" {
-		return strings.EqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
+	if goos == "windows" {
+		return asciiEqualFold(strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(b, `\`, "/"))
 	}
 	return a == b
+}
+
+// asciiEqualFold compares without difference of case in ASCII only: the
+// Unicode folding of strings.EqualFold would equate the Kelvin sign (U+212A)
+// with "k", two names that are different folders.
+func asciiEqualFold(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		x, y := a[i], b[i]
+		if 'A' <= x && x <= 'Z' {
+			x += 'a' - 'A'
+		}
+		if 'A' <= y && y <= 'Z' {
+			y += 'a' - 'A'
+		}
+		if x != y {
+			return false
+		}
+	}
+	return true
 }

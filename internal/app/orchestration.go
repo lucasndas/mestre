@@ -16,6 +16,7 @@ import (
 	"github.com/lucasndas/mestre/internal/orchestration/chain"
 	"github.com/lucasndas/mestre/internal/orchestration/characters"
 	"github.com/lucasndas/mestre/internal/orchestration/connections"
+	"github.com/lucasndas/mestre/internal/orchestration/epicdeps"
 	"github.com/lucasndas/mestre/internal/orchestration/grimoires"
 	"github.com/lucasndas/mestre/internal/orchestration/inbox"
 	"github.com/lucasndas/mestre/internal/orchestration/quests"
@@ -45,6 +46,10 @@ type OrchestrationMachines interface {
 // milestones 5 and 6 (GitHub, the Telegram, the users, the approvals, the
 // decrees) come in as small interfaces, each with its own document.
 type OrchestrationOptions struct {
+	// MissionCompleted is told when a mission ends with all its steps done: the
+	// message of progress of the workspace goes out (nil: nobody is told).
+	MissionCompleted func(ctx context.Context, workspace, table, quest string)
+
 	// Guild is the main Guild database, Machine the id of this Citadel.
 	Guild   *store.DB
 	Machine string
@@ -107,6 +112,11 @@ type OrchestrationOptions struct {
 	QuestGitHub    quests.GitHub
 	QuestApprovals quests.Approvals
 	QuestCatalog   quests.Catalog
+	// QuestIssues checks that the `issue` of a mission is one of its table
+	// (nil: not checked); QuestMaxCorrections is how many fix missions an
+	// epic may have (zero: quests.DefaultMaxCorrections).
+	QuestIssues         quests.IssueOwner
+	QuestMaxCorrections int
 	// QuestDone gives the done_requires of the class of a character (nil: from
 	// the libraries of classes, ClassLibraries).
 	QuestDone quests.DoneRules
@@ -141,7 +151,12 @@ type OrchestrationOptions struct {
 	// ChainSubDelegations lets a Mestre da mesa decide what a subdelegation of the Grão-Mestre gives it.
 	ChainSubDelegations chain.SubDelegations
 	// ChainPRs reads the PRs for the conditions of the approval policy.
-	ChainPRs         chain.PRSource
+	ChainPRs chain.PRSource
+	// FreshnessRules reads what the base branch of a repository asks of a PR:
+	// with it, the requests of a PR go through the gate of freshness
+	// (docs/github/acoes-por-nivel.md#merge), which proves the base integrated
+	// with QuestVerifier. Nil: no gate.
+	FreshnessRules   basesync.Rules
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
 
@@ -194,6 +209,9 @@ type Orchestration struct {
 	// BaseSync makes the step `sync` when the main branch moves
 	// (docs/orquestracao/sincronia-com-a-base.md).
 	BaseSync *basesync.Service
+	// Gate is the gate of freshness of the requests of a PR (nil without
+	// OrchestrationOptions.FreshnessRules).
+	Gate *basesync.Gate
 	// Chain is the chain of approval (nil unless ChainClasses was given).
 	Chain *chain.Service
 	// Usage is the use and the limits on it (docs/plataforma/limites-de-uso.md).
@@ -214,12 +232,19 @@ type Orchestration struct {
 	ClassCommands *classes.Commands
 	Rituals       *rituals.Service
 	Grimoires     *grimoires.Service
+	// EpicDeps is the dependency between epics: the Grand Master declares it and
+	// the table of the dependent epic waits for the other to be merged
+	// (docs/orquestracao/dependencia-entre-mesas.md).
+	EpicDeps *epicdeps.Service
 	// Registry is the registry of the characters of the Guild.
 	Registry characters.Registry
 	// Observers are told of every change of state of a character, in the
 	// order the document asks: the inbox first, then the waits, then the
 	// tables.
 	Observers characters.Observers
+
+	// Loops are the periodic readers the host adds; External runs them.
+	Loops []func(ctx context.Context) error
 
 	fence atomic.Pointer[guild.Fence]
 	log   *slog.Logger
@@ -243,6 +268,68 @@ func (r tablesRef) Worktree(ctx context.Context, ws, table, machine string) (str
 
 func (r tablesRef) Paused(ctx context.Context, ws, table string) (bool, error) {
 	return (*r.p).Paused(ctx, ws, table)
+}
+
+// depsRef is the view of the dependencies between epics that the tables have of
+// them, since they are made after the tables.
+type depsRef struct{ p **epicdeps.Service }
+
+func (r depsRef) Opened(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Opened(ctx, ws, t)
+}
+
+func (r depsRef) Held(ctx context.Context, ws string, epic int) (bool, error) {
+	if *r.p == nil {
+		return false, nil
+	}
+	return (*r.p).Held(ctx, ws, epic)
+}
+
+func (r depsRef) Waiting(ctx context.Context, ws string, epic int) ([]int, error) {
+	if *r.p == nil {
+		return nil, nil
+	}
+	return (*r.p).Waiting(ctx, ws, epic)
+}
+
+func (r depsRef) Merged(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Merged(ctx, ws, t)
+}
+
+func (r depsRef) Dropped(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Dropped(ctx, ws, t)
+}
+
+func (r depsRef) Cancelled(ctx context.Context, ws string, t tables.Table) error {
+	if *r.p == nil {
+		return nil
+	}
+	return (*r.p).Cancelled(ctx, ws, t)
+}
+
+// advanceTable has the running quests of a table that was released go on.
+func advanceTable(ctx context.Context, qs *quests.Service, t tables.Table) {
+	if qs == nil {
+		return
+	}
+	list, err := qs.List(ctx, t.Workspace, t.ID)
+	if err != nil {
+		return
+	}
+	for _, q := range list {
+		if q.State == quests.Running {
+			qs.Advance(ctx, q.ID)
+		}
+	}
 }
 
 func (r charactersRef) Create(ctx context.Context, req characters.CreateRequest) (characters.CreateResult, error) {
@@ -373,6 +460,33 @@ func (h lockedHolds) Held(ctx context.Context, id string) (bool, error) {
 // characters as an Observer.
 type chainRef struct{ p **chain.Service }
 
+// freshnessRef is the gate of freshness seen by the chain, which is made before
+// the base sync the gate needs.
+type freshnessRef struct{ p **basesync.Gate }
+
+var errNoGate = errors.New("app: the gate of freshness is not composed")
+
+func (r freshnessRef) Open(ctx context.Context, req chain.Request) (chain.FreshnessVerdict, error) {
+	if *r.p == nil {
+		return chain.FreshnessVerdict{}, errNoGate
+	}
+	return (*r.p).Open(ctx, req)
+}
+
+func (r freshnessRef) BaseTip(ctx context.Context, req chain.Request) (string, error) {
+	if *r.p == nil {
+		return "", errNoGate
+	}
+	return (*r.p).BaseTip(ctx, req)
+}
+
+func (r freshnessRef) Unverifiable(ctx context.Context, req chain.Request) (string, error) {
+	if *r.p == nil {
+		return "", errNoGate
+	}
+	return (*r.p).Unverifiable(ctx, req)
+}
+
 func (r chainRef) Held(ctx context.Context, id string) (bool, error) {
 	if *r.p == nil {
 		return false, nil
@@ -461,10 +575,12 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		scr   *scrolls.Service
 		qs    *quests.Service
 		ch    *chain.Service
+		fresh *basesync.Gate
 		rit   *rituals.Service
 		trl   *tablerules.Service
 		sup   *chain.Supervisor
 		us    *usage.Service
+		deps  *epicdeps.Service
 	)
 	deactivate := o.Rituals
 	if deactivate == nil {
@@ -485,9 +601,9 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	if err != nil {
 		return nil, err
 	}
-	tbl, err = tables.New(tables.Options{DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
+	tbl, err = tables.New(tables.Options{Proofs: questProofs{&quests.Store{DB: o.Guild}}, DB: o.Guild, Git: o.Git, Workspaces: ws, Clock: o.Clock, Machine: o.Machine, GitHub: o.Epics, Characters: charactersRef{&chars},
 		Registry: reg, Inbox: ib, Notifier: ib, Alerts: o.Alerts, Files: o.Files, Settings: o.Settings, Messages: o.Messages, Attachments: o.Attachments,
-		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Requests: chainRef{&ch}, Oversight: oversightRef{&sup}, Peers: o.Peers, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
+		Profiles: o.Profiles, Destructive: o.Destructive, Rituals: deactivate, Requests: chainRef{&ch}, Oversight: oversightRef{&sup}, Peers: o.Peers, Dependencies: depsRef{&deps}, TempDir: o.TempDir, Log: o.Logger, Gate: gate})
 	if err != nil {
 		return nil, err
 	}
@@ -509,10 +625,17 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		return nil, err
 	}
 	ib.SetAskProgress(wt)
+	deps, err = epicdeps.New(epicdeps.Options{DB: o.Guild, Clock: o.Clock, Tables: tbl.Store(), Epics: o.Epics, Characters: reg, Waits: wt, Inbox: ib, Log: o.Logger,
+		Released: func(ctx context.Context, _ string, t tables.Table) { advanceTable(ctx, qs, t) }})
+	if err != nil {
+		return nil, err
+	}
 	obs := characters.Observers{ib, wt, tbl, questsRef{&qs}, chainRef{&ch}, ritualsRef{&rit}}
 	chars, err = characters.NewService(characters.ServiceOptions{Registry: reg, Clock: o.Clock, Presets: o.Presets, Tables: tbl, Machines: o.Machines, Builder: o.Builder,
 		Notifier: ib, Scrolls: scr, Inbox: ib, Usage: o.Usage, Connections: conns, Observer: obs, Limits: o.Limits,
-		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger})
+		Ceiling: ceilingOf(o.Ceiling, o.ClassLibraries), Operator: o.Operator, Settings: o.Settings, Classes: classCheck(o.ClassLibraries), ScrollCopies: scrollsRef{&scr}, Logger: o.Logger,
+		Brief:      &grandMasterBrief{reg: reg, tables: tables.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}, chain: &chain.Store{DB: o.Guild}},
+		TableBrief: &tableMasterBrief{reg: reg, quests: &quests.Store{DB: o.Guild}, inbox: &inbox.Store{DB: o.Guild}, waits: &waits.Store{DB: o.Guild}}})
 	if err != nil {
 		return nil, err
 	}
@@ -536,7 +659,11 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 			}
 			supervision = sup
 		}
-		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
+		var freshness chain.Freshness
+		if o.FreshnessRules != nil {
+			freshness = freshnessRef{&fresh}
+		}
+		ch, err = chain.NewService(chain.Options{Freshness: freshness, Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
 			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
 			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}, Logger: o.Logger})
@@ -552,18 +679,31 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		catalog = presetsCatalog{o.Presets, o.ClassLibraries}
 	}
 	var bsync *basesync.Service
-	qs, err = quests.NewService(quests.Options{BaseMoved: func(ctx context.Context, workspace, table string) (bool, error) {
+	qs, err = quests.NewService(quests.Options{Held: tbl.Held, BaseMoved: func(ctx context.Context, workspace, table string) (bool, error) {
 		return bsync.Moved(ctx, workspace, table)
 	},
 		Store: &quests.Store{DB: o.Guild}, Clock: o.Clock, Registry: reg, Machine: o.Machine, Characters: chars, Inbox: ib,
 		Notifier: ib, Scrolls: scr, Connections: conns, Tables: tbl, Waits: wt, Catalog: catalog, Towers: o.QuestTowers, GitHub: o.QuestGitHub,
-		Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger})
+		Issues: o.QuestIssues, MaxCorrections: o.QuestMaxCorrections, Approvals: questApprovals, Done: questDone(o), Verifier: o.QuestVerifier, Gate: gate, Logger: o.Logger, Completed: o.MissionCompleted})
 	if err != nil {
 		return nil, err
 	}
-	bsync, err = basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Logger: o.Logger})
+	var requests basesync.Requests
+	if ch != nil {
+		requests = ch
+	}
+	bsync, err = basesync.New(basesync.Options{Tables: tbl, Mirrors: ws, Quests: qs, Registry: reg, Inbox: ib, Notifier: ib, Requests: requests, Logger: o.Logger})
 	if err != nil {
 		return nil, err
+	}
+	if o.FreshnessRules != nil {
+		if ch == nil {
+			return nil, errors.New("app: the gate of freshness needs the chain of approval")
+		}
+		if fresh, err = basesync.NewGate(basesync.GateOptions{Rules: o.FreshnessRules, Verifier: o.QuestVerifier, Tables: tbl, Mirrors: ws, Base: bsync, Logger: o.Logger}); err != nil {
+			return nil, err
+		}
+		orc.Gate = fresh
 	}
 	ws.OnFetched(bsync.AfterFetch)
 	orc.BaseSync = bsync
@@ -617,6 +757,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 	orc.Chain = ch
 	orc.Supervisor = sup
 	orc.Rituals, orc.Grimoires = rit, grims
+	orc.EpicDeps = deps
 	orc.ClassCommands = classCommands(o, reg, ib)
 	orc.Workspaces, orc.Tables, orc.Characters, orc.Connections, orc.Inbox, orc.Waits, orc.Scrolls, orc.Observers = ws, tbl, chars, conns, ib, wt, scr, obs
 	if a, ok := o.ChainClasses.(interface{ attach(*Orchestration) }); ok {
@@ -707,6 +848,9 @@ func (o *Orchestration) External() ExternalFunc {
 		run("quests", func(ctx context.Context) error { return o.Quests.Loop(ctx, sweepEvery) })
 		run("usage", func(ctx context.Context) error { return o.Usage.Loop(ctx, sweepEvery) })
 		run("rituals", func(ctx context.Context) error { return o.Rituals.Loop(ctx, ritualEvery) })
+		for i, loop := range o.Loops {
+			run(fmt.Sprintf("loop %d", i), loop)
+		}
 		if o.Supervisor != nil {
 			run("supervision", func(ctx context.Context) error { return o.Supervisor.Loop(ctx, sweepEvery) })
 		}

@@ -419,7 +419,8 @@ func TestTheSuperiorComesFromWhoCreatedTheCharacter(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.ready(gm)
-	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: gm.ID, By: engine}); err != nil {
+	// the Grand Master is pinned: only the retirement of the replacement ends it
+	if _, err := r.svc.Dismiss(r.ctx, characters.DismissRequest{ID: gm.ID, By: engine, Retire: true, Reason: "retired"}); err != nil {
 		t.Fatal(err)
 	}
 	want(canvas, "", true) // no Grand Master either: the people

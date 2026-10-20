@@ -14,24 +14,6 @@ var cmdBare = regexp.MustCompile(`^[A-Za-z0-9_.~:\\-]+$`)
 // (\\server\share): no path relative to the drive or the folder of cmd.
 var cmdRooted = regexp.MustCompile(`^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+)`)
 
-// cmdPrint is a command of cmd that prints text with no " in the line,
-// which agy would break: echo where text has none, else Windows PowerShell
-// building each " with [char]34. A text with a character cmd reads (or a ')
-// is an error.
-func cmdPrint(text string) (string, error) {
-	if strings.ContainsAny(text, "&|<>^()%!'\r\n") {
-		return "", fmt.Errorf("antigravity hook files: the neutral answer %q has a character the line of cmd cannot carry", text)
-	}
-	if !strings.Contains(text, `"`) {
-		return "echo " + text, nil
-	}
-	parts := strings.Split(text, `"`)
-	for i, s := range parts {
-		parts[i] = "'" + s + "'"
-	}
-	return `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -Command ` + strings.Join(parts, "+[char]34+"), nil
-}
-
 // cmdBarePath is binary in the form a line of cmd takes without quotes,
 // with backslashes: as it is, or by its 8.3 name on this machine (only on
 // Windows, and only where the volume keeps short names). It must name its

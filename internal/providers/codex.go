@@ -12,13 +12,14 @@ type codex struct {
 	paths     pathNormalizer
 	failure   func(Event) (StopReason, string, bool)
 	multiline bool // CodexMultilineViaFile
+	noFlush   bool // NoFlush
 	screens   screenSet
 	windows   bool // Options.OS: the send key typed again (SendRetrier)
 }
 
 // NewCodex returns the Codex adapter.
 func NewCodex(opts Options) Adapter {
-	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, windows: machineOS(opts.OS) == "windows", screens: screenSet{
+	return &codex{paths: opts.paths(), failure: opts.CodexTurnFailure, multiline: opts.CodexMultilineViaFile, noFlush: opts.NoFlush, windows: machineOS(opts.OS) == "windows", screens: screenSet{
 		prompt:   agentPrompt,
 		busy:     regexp.MustCompile(`(?i)esc to interrupt|Working…`),
 		known:    codexScreens(),
