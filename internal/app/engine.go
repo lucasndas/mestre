@@ -105,7 +105,7 @@ type Deps struct {
 	Masker *logging.Masker
 	// Lock is the lock of the epoch (milestone 5); nil means no promotion.
 	Lock guild.Lock
-	// Approver asks the Owner about an entry; Promotions about a promotion.
+	// Approver asks the Owner about an entry (nil: the one of the integration of the period, the flow of approval); Promotions about a promotion.
 	// Both arrive with the bot (milestone 5); nil refuses.
 	Approver   guild.Approver
 	Promotions guild.PromotionApprover
@@ -285,9 +285,6 @@ func New(cfg Config, paths Paths, deps Deps) (*Engine, error) {
 	}
 	if deps.Masker == nil {
 		deps.Masker = logging.NewMasker()
-	}
-	if deps.Approver == nil {
-		deps.Approver = noOwner{}
 	}
 	if deps.Version == "" {
 		deps.Version = "dev"

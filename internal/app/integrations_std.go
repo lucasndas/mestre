@@ -14,6 +14,7 @@ import (
 
 	"github.com/lucasndas/mestre/internal/approvals"
 	"github.com/lucasndas/mestre/internal/attachments"
+	"github.com/lucasndas/mestre/internal/classes"
 	"github.com/lucasndas/mestre/internal/decrees"
 	"github.com/lucasndas/mestre/internal/ghcli"
 	"github.com/lucasndas/mestre/internal/github"
@@ -304,6 +305,36 @@ func (r *stdRun) Extend(o *OrchestrationOptions) {
 		o.ChainDelegations = r.decrees
 	}
 	o.Locked = r.lock.Locked
+	if o.ChainSinks == nil {
+		o.ChainSinks = map[classes.RequestType]chain.Sink{}
+	}
+	o.ChainSinks[classes.RequestGuildEntry] = r.entries()
+}
+
+// entries is the question to the Owner about the entry of a machine, over the
+// chain the orchestration makes later and the Citadel the engine starts later.
+func (r *stdRun) entries() EntryApprover {
+	errNoCitadelYet := errors.New("app: no Citadel to take the answer about an entry")
+	decide := r.env.DecideJoin
+	if decide == nil {
+		decide = func(context.Context, string, guild.Decision) error { return errNoCitadelYet }
+	}
+	return EntryApprover{Chain: r.chain.Load, Decide: decide, Log: r.env.Log,
+		Tell: func(ctx context.Context, text string) { r.alert.OwnerAlert(ctx, text) }}
+}
+
+// GuildApprover implements GuildApprover: the Citadel asks the Owner about an
+// entry through the flow of approval.
+func (r *stdRun) GuildApprover() guild.Approver { return r.entries() }
+
+// GuildLock implements GuildLocker: the lock of the epoch over the repository of
+// the Guild in GitHub, once the repository was recorded; nil before.
+func (r *stdRun) GuildLock(ctx context.Context) (guild.Lock, error) {
+	l, err := github.NewLairLock(ctx, r.tokens, r.env.GuildID, r.s.GitHubBase, r.s.HTTP)
+	if l == nil {
+		return nil, err
+	}
+	return l, nil
 }
 
 // OwnerAlert, CharacterDecrees and Users make the run the people of the chain
@@ -614,3 +645,8 @@ func (d digestRules) RevokeOfRequest(ctx context.Context, workspace, table strin
 	}
 	return n, nil
 }
+
+var (
+	_ GuildApprover = (*stdRun)(nil)
+	_ GuildLocker   = (*stdRun)(nil)
+)

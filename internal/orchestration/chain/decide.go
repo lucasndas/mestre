@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -492,6 +493,9 @@ func (s *Service) DecideByPerson(ctx context.Context, d PersonDecision) (Outcome
 	rules, _ := s.rulesOf(r.Workspace)
 	if _, _, min := rules.Need(r); !peopleLevel(d.Level).AtLeast(min) {
 		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeHumanRequired, "the level of the user is below the minimum of this request (%s)", min))
+	}
+	if IsSystem(r.Type) && !slices.Contains(AnswersFor(LevelPeople, r), d.Answer) {
+		return Outcome{}, s.refused(ctx, r, who, d.Answer, refuse(CodeBadAnswer, "a request of the engine is approved or denied, nothing else"))
 	}
 	switch d.Answer {
 	case AnswerClimb:

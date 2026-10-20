@@ -314,6 +314,27 @@ type world struct {
 	flow  *approvals.Flow
 	chn   *fakechannel.Channel
 	owner users.User
+	// entries is told what became of the requests to enter the Guild.
+	entries *recordSink
+}
+
+// recordSink keeps the results it is told.
+type recordSink struct {
+	mu  sync.Mutex
+	got []chain.Result
+}
+
+func (s *recordSink) Decided(_ context.Context, r chain.Result) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.got = append(s.got, r)
+	return nil
+}
+
+func (s *recordSink) results() []chain.Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]chain.Result(nil), s.got...)
 }
 
 // policy is the policy file of the tests: the settings change under it.
@@ -431,6 +452,8 @@ func newWorld(t *testing.T, o ...worldOpts) *world {
 		Epics: orcfakes.Epics{Also: []int{43}}, Alerts: orcfakes.Alerts{}, Files: orcfakes.Files{}, Messages: orcfakes.Messages{}, Peers: &orcfakes.Peers{Root: filepath.Join(root, "towers")},
 		Users: &orcfakes.Users{}, Destructive: orcfakes.Destructive{}, Limits: characters.Limits{PerMachine: 40, PerTable: 20, PerWorkspace: 40},
 		ChainClasses: w.cls, ChainPolicy: w.policy, ChainUsers: w.users, ChainAlerts: w.alerts, ChainSupervision: w.sup, ChainDelegations: w.deleg, ChainSubDelegations: w.subs, ChainPRs: w.prs}
+	w.entries = &recordSink{}
+	oo.ChainSinks = map[classes.RequestType]chain.Sink{classes.RequestGuildEntry: w.entries}
 	if opt.realSup {
 		oo.ChainSupervision = nil
 	}

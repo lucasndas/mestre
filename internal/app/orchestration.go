@@ -144,6 +144,9 @@ type OrchestrationOptions struct {
 	ChainPRs         chain.PRSource
 	ChainSupervision chain.Supervision
 	ChainAlerts      chain.Alerts
+	// ChainSinks are told what became of the requests of the types they own,
+	// besides the quests' and the usage's (the entry in the Guild).
+	ChainSinks map[classes.RequestType]chain.Sink
 
 	// The limits of use (milestone 5, stage 4). UsageChecklist opens the alert
 	// ALL-23 of the checklist when a source of use is not available (nil:
@@ -542,7 +545,7 @@ func NewOrchestration(o OrchestrationOptions) (*Orchestration, error) {
 		ch, err = chain.NewService(chain.Options{Store: &chain.Store{DB: o.Guild}, Clock: o.Clock, Characters: chain.CharactersFrom(chars, reg, o.Clock), Inbox: ib, Waits: wt,
 			Classes: o.ChainClasses, Policy: policy, Users: o.ChainUsers, Grants: o.ChainGrants, TempRules: temp, Delegations: o.ChainDelegations, SubDelegations: o.ChainSubDelegations, PRs: o.ChainPRs,
 			Supervision: supervision, Alerts: o.ChainAlerts, Tasks: chain.InboxTasks{Inbox: ib},
-			Sinks: map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{&qs}, classes.RequestExtraCost: usageSink{&us}}, Logger: o.Logger})
+			Sinks: o.chainSinks(&qs, &us), Logger: o.Logger})
 		if err != nil {
 			return nil, err
 		}
@@ -810,4 +813,16 @@ func questDone(o OrchestrationOptions) quests.DoneRules {
 		return o.QuestDone
 	}
 	return doneRules{o.ClassLibraries}
+}
+
+// chainSinks are the owners of the types of request: the quests' points, the
+// usage's extra cost and what the integration brings (the entry in the Guild).
+func (o OrchestrationOptions) chainSinks(qs **quests.Service, us **usage.Service) map[classes.RequestType]chain.Sink {
+	sinks := map[classes.RequestType]chain.Sink{classes.RequestMissionPoint: questsSink{qs}, classes.RequestExtraCost: usageSink{us}}
+	for t, s := range o.ChainSinks {
+		if _, own := sinks[t]; !own && s != nil {
+			sinks[t] = s
+		}
+	}
+	return sinks
 }
