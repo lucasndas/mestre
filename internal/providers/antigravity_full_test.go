@@ -133,16 +133,21 @@ func TestTheGeneratedHookPrintsTheNeutralAnswerWithoutTheMestreBinary(t *testing
 	}
 	payload := string(recorded(t, "antigravity", "PreToolUse"))
 	for event, line := range cmds {
-		want := "{}"
-		// On Windows {} for every event: cmd cannot print the allow of
-		// PreToolUse without quotes, so a missing binary blocks the tool there.
-		if event == "PreToolUse" && runtime.GOOS != "windows" {
-			want = `{"decision":"allow"}`
+		neutral := "{}"
+		if event == "PreToolUse" {
+			neutral = `{"decision":"allow"}`
 		}
 		// With the agent id the command reaches the binary check, so a
-		// missing binary is what yields the neutral answer; without it the
-		// first condition already does.
+		// missing binary is what yields the answer; without it the first
+		// condition already does. On Windows a character whose mestre is gone
+		// gets {} (agy 1.4.2 blocks PreToolUse on it: no tool runs without the
+		// dispatcher), while agy run by hand, with no agent id, gets the
+		// neutral answer of the event, printed with no quote in the line.
 		for _, env := range [][]string{{"MESTRE_AGENT_ID=agy-1"}, {"MESTRE_AGENT_ID="}} {
+			want := neutral
+			if runtime.GOOS == "windows" && env[0] == "MESTRE_AGENT_ID=agy-1" {
+				want = "{}"
+			}
 			out, exit := runHook(t, line, dir, payload, env...)
 			if exit != 0 || strings.TrimSpace(out) != want {
 				t.Errorf("%s with %v: exit %d, stdout %q; want exit 0 and %s", event, env, exit, out, want)

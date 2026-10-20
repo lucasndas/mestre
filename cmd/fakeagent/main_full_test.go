@@ -81,7 +81,7 @@ func TestFakeAgentBinaryAsClaudeRunsRealHooks(t *testing.T) {
 	}
 	testkit.WriteFiles(t, root, map[string]string{
 		"cfg/.credentials.json": "{}",
-		"cfg/.claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, work),
+		"cfg/.claude.json":      fmt.Sprintf(`{"projects": {%q: {"hasTrustDialogAccepted": true}}}`, filepath.ToSlash(work)),
 		"work/.claude/settings.local.json": fmt.Sprintf(
 			`{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": %s}]}]}}`, hook),
 	})
